@@ -238,8 +238,8 @@ Overridden if EEPROM activated.*/
 #define EXT0_STEPS_PER_MM					(8.75 * RF_MICRO_STEPS)
 
 /** \brief What type of sensor is used?
-3 is mendel-parts thermistor (EPCOS G550) */
-#define EXT0_TEMPSENSOR_TYPE				3
+3 is mendel-parts thermistor (EPCOS G550) - Wessix Hier Aenderung wegen E3D V6   Thermistor auf type 8 umgestellt zuvor 3  */
+#define EXT0_TEMPSENSOR_TYPE				8
 
 /** \brief Analog input pin for reading temperatures or pin enabling SS for MAX6675 */
 #define EXT0_TEMPSENSOR_PIN					TEMP_0_PIN
@@ -536,8 +536,8 @@ The codes are only executed for multiple extruder when changing the extruder. */
 #define SKIP_M190_IF_WITHIN					3
 
 /** \brief Select type of your heated bed. It's the same as for EXT0_TEMPSENSOR_TYPE
-set to 0 if you don't have a heated bed */
-#define HEATED_BED_SENSOR_TYPE				3
+set to 0 if you don't have a heated bed  -   Wessix hier geaendert Wert von 3 = Orgninale Heizmatte mit 100k auf 4 , was einem 10k Thermistor wie in der Austauschmatte entspricht */
+#define HEATED_BED_SENSOR_TYPE				4
 
 /** \brief Analog pin of analog sensor to read temperature of heated bed.  */
 #define HEATED_BED_SENSOR_PIN				TEMP_2_PIN
