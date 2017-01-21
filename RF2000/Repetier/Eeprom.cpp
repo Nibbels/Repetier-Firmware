@@ -597,7 +597,8 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted)
 #endif // FEATURE_24V_FET_OUTPUTS
 
 #if FEATURE_230V_OUTPUT
-	HAL::eprSetByte( EPR_RF_230V_OUTPUT_MODE, Printer::enable230VOutput );
+	// after a power-on, the 230 V plug always shall be turned off - thus, we do not store this setting to the EEPROM
+	// HAL::eprSetByte( EPR_RF_230V_OUTPUT_MODE, Printer::enable230VOutput );
 #endif // FEATURE_230V_OUTPUT
 
 #if FEATURE_CONFIGURABLE_Z_ENDSTOPS
@@ -780,7 +781,8 @@ void EEPROM::readDataFromEEPROM()
 #endif // FEATURE_24V_FET_OUTPUTS
 
 #if FEATURE_230V_OUTPUT
-	Printer::enable230VOutput = HAL::eprGetByte( EPR_RF_230V_OUTPUT_MODE );
+	// after a power-on, the 230 V plug always shall be turned off - thus, we do not store this setting to the EEPROM
+	// Printer::enable230VOutput = HAL::eprGetByte( EPR_RF_230V_OUTPUT_MODE );
 #endif // FEATURE_230V_OUTPUT
 
 #if FEATURE_CONFIGURABLE_Z_ENDSTOPS
@@ -1138,7 +1140,8 @@ void EEPROM::writeSettings()
 #endif // FEATURE_24V_FET_OUTPUTS
 
 #if FEATURE_230V_OUTPUT
-	writeByte(EPR_RF_230V_OUTPUT_MODE,Com::tEPR230VOutputMode);
+	// after a power-on, the 230 V plug always shall be turned off - thus, we do not store this setting to the EEPROM
+	// writeByte(EPR_RF_230V_OUTPUT_MODE,Com::tEPR230VOutputMode);
 #endif // FEATURE_230V_OUTPUT
 
 #if FEATURE_CONFIGURABLE_HOTEND_TYPE

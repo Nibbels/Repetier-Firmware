@@ -527,17 +527,18 @@ void Extruder::setHeatedBedTemperature(float temperatureInCelsius,bool beep)
 
 } // setHeatedBedTemperature
 
+#if FEATURE_BEDTEMP_DECREASE
 void Extruder::decreaseHeatedBedTemperature(float min_temperatureInCelsius)
 {
 #if HAVE_HEATED_BED
-#if FEATURE_BEDTEMP_DECREASE
     if(heatedBedController.targetTemperatureC > HEATED_BED_MIN_TEMP && heatedBedController.targetTemperatureC > min_temperatureInCelsius){
 		Extruder::setHeatedBedTemperature( heatedBedController.targetTemperatureC - 1, false );
 	} 
-#endif // FEATURE_BEDTEMP_DECREASE
 #endif // HAVE_HEATED_BED
+	(void)min_temperatureInCelsius;
 return; 
 } // decreaseHeatedBedTemperature
+#endif // FEATURE_BEDTEMP_DECREASE
 
 float Extruder::getHeatedBedTemperature()
 {

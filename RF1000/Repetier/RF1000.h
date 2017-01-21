@@ -23,6 +23,11 @@
 // this file contains all definitions which are specific to the RF1000 hardware
 #define UI_PRINTER_NAME						"RF1000"
 
+// ##########################################################################################
+// ##	Nibbels Kram Config
+// ##########################################################################################
+
+#define	FEATURE_BEDTEMP_DECREASE				1													// 1 = on, 0 = off
 
 // ##########################################################################################
 // ##	main hardware configuration
@@ -761,6 +766,9 @@ can set it on for safety. */
 /** \brief Automatic filament change, mounting of the filament without heating - ensure that G1 does not attempt to extrude more than EXTRUDE_MAXLENGTH */
 #define	MOUNT_FILAMENT_SCRIPT_WITHOUT_HEATING		"G21\nG90\nG92 E0\nG1 E90 F100"
 
+/** \brief speed of the PWM signal, 0 = 15.25Hz, 1 = 30.51Hz, 2 = 61.03Hz, 3 = 122.06Hz */
+#define HEATER_PWM_SPEED					1
+#define COOLER_PWM_SPEED					0
 
 // ##########################################################################################
 // ##	Movement settings

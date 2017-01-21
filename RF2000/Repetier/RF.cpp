@@ -5467,7 +5467,8 @@ void loopRF( void )
 		{
 			// show that we are idle for a while already
 			showIdle();
-			g_uStartOfIdle = 0;
+			g_uStartOfIdle  = 0;
+			g_nPrinterReady = 1;
 		}
 	}
  
@@ -9536,8 +9537,9 @@ void processCommand( GCode* pCommand )
 					}
 
 #if FEATURE_AUTOMATIC_EEPROM_UPDATE
-					HAL::eprSetByte( EPR_RF_230V_OUTPUT_MODE, Printer::enable230VOutput );
-					EEPROM::updateChecksum();
+					// after a power-on, the 230 V plug always shall be turned off - thus, we do not store this setting to the EEPROM
+					// HAL::eprSetByte( EPR_RF_230V_OUTPUT_MODE, Printer::enable230VOutput );
+					// EEPROM::updateChecksum();
 #endif // FEATURE_AUTOMATIC_EEPROM_UPDATE
 				}
 				else

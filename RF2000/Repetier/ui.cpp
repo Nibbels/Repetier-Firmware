@@ -41,7 +41,7 @@ millis_t g_nAutoReturnTime		 = 0;
 char	g_nYesNo				 = 0;		// 0 = no, 1 = yes
 char	g_nContinueButtonPressed = 0;
 char	g_nServiceRequest		 = 0;
-
+char	g_nPrinterReady			 = 0;
 
 void beep(uint8_t duration,uint8_t count)
 {
@@ -870,6 +870,13 @@ void UIDisplay::parse(char *txt,bool ram)
 				}
 #endif // FEATURE_MILLING_MODE
 
+				if( !g_nPrinterReady )
+ 				{
+ 					// avoid to show the current temperatures before we have measured them
+ 					addStringP( PSTR( "   " ));
+ 					break;
+ 				}
+				
 				ivalue = UI_TEMP_PRECISION;
 				if(Printer::flag0 & PRINTER_FLAG0_TEMPSENSOR_DEFECT)
 				{
@@ -3723,8 +3730,9 @@ void UIDisplay::executeAction(int action)
 				WRITE(OUTPUT_230V_PIN, Printer::enable230VOutput);
 
 #if FEATURE_AUTOMATIC_EEPROM_UPDATE
-				HAL::eprSetByte( EPR_RF_230V_OUTPUT_MODE, Printer::enable230VOutput );
-				EEPROM::updateChecksum();
+				// after a power-on, the 230 V plug always shall be turned off - thus, we do not store this setting to the EEPROM
+				// HAL::eprSetByte( EPR_RF_230V_OUTPUT_MODE, Printer::enable230VOutput );
+				// EEPROM::updateChecksum();
 #endif // FEATURE_AUTOMATIC_EEPROM_UPDATE
 
 				break;

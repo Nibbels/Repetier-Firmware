@@ -24,6 +24,10 @@ M107 ; Lüfter aus
 G92 E0 ; Filamentwegreset
 G1 E-10 F200 ; Retract
 
+; Aufwärmphase:
+;--------------------------------------
+G4 S600 ;10, besser 20 Minuten warten und nichts tun. Evtl. etwas lang...
+
 ; Extrudertemperatur für Z-Scan auf Drucktemperatur stellen:
 ;--------------------------------------
 
@@ -62,6 +66,10 @@ M3013 P1
 
 M400 ; Warten bis Idle
 
+; Optional, but not for everydays start-code! aber nicht wirklich für den täglichen Startcode!
+;--------------------------------------
+; M3902 S9 ;Save corrected zMatrix to Position 9
+
 ; Diverses, wichtig
 ;--------------------------------------
 G90 ; use absolute coordinates
@@ -73,6 +81,7 @@ G28 ; home all axes
 M3007 Z0.25 ; Minimale Höhe für Z-Kompensation festlegen Std:0.2mm
 ;M3008 Z3.0 ; Maximale Z-Kompensationshöhe festlegen Std:3.0mm
 M3001 ; activate Z-Compensation 
+M3909 P7000 S130 ; activate "SensiblePressure": Autocompensate thermal expansion if digits go higher than 7000.
 M400 ; Warten bis Idle
 
 ; Startpositionierung

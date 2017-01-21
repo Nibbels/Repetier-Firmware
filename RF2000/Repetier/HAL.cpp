@@ -20,6 +20,11 @@
 #include <compat/twi.h>
 
 
+#if FEATURE_WATCHDOG
+unsigned char	g_bPingWatchdog		= 0;
+#endif // FEATURE_WATCHDOG
+
+
 HAL::HAL()
 {
 } // HAL

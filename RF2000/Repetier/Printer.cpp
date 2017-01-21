@@ -1114,12 +1114,6 @@ void Printer::setup()
 	enableCaseLight = CASE_LIGHTS_DEFAULT_ON;
 #endif // FEATURE_CASE_LIGHT
 
-#if FEATURE_230V_OUTPUT
-	enable230VOutput = OUTPUT_230V_DEFAULT_ON;
-	SET_OUTPUT(OUTPUT_230V_PIN);
-	WRITE(OUTPUT_230V_PIN, enable230VOutput);
-#endif // FEATURE_230V_OUTPUT
-
 #if FEATURE_24V_FET_OUTPUTS
 	enableFET1 = FET1_DEFAULT_ON;
 	enableFET2 = FET2_DEFAULT_ON;
@@ -1167,19 +1161,17 @@ void Printer::setup()
 	    Com::printFLN(Com::tStart);
 	}
 
-#if FEATURE_WATCHDOG
-	if( Printer::debugInfo() )
-	{
-	    Com::printFLN(Com::tStartWatchdog);
-	}
-    HAL::startWatchdog();
-#endif // FEATURE_WATCHDOG
-
 	UI_INITIALIZE;
 
     HAL::showStartReason();
     Extruder::initExtruder();
     EEPROM::init(); // Read settings from eeprom if wanted
+
+#if FEATURE_230V_OUTPUT
+	enable230VOutput = OUTPUT_230V_DEFAULT_ON;
+	SET_OUTPUT(OUTPUT_230V_PIN);
+	WRITE(OUTPUT_230V_PIN, enable230VOutput);
+#endif // FEATURE_230V_OUTPUT
 
 #if FEATURE_CASE_LIGHT
     SET_OUTPUT(CASE_LIGHT_PIN);
@@ -1246,6 +1238,14 @@ void Printer::setup()
 		}
 	}
 #endif // FEATURE_RGB_LIGHT_EFFECTS
+
+#if FEATURE_WATCHDOG
+	if( Printer::debugInfo() )
+	{
+	    Com::printFLN(Com::tStartWatchdog);
+	}
+    HAL::startWatchdog();
+#endif // FEATURE_WATCHDOG
 
 } // setup
 

@@ -56,6 +56,12 @@ All known arduino boards use 64. This value is needed for the extruder timing. *
 
 #include "fastio.h"
 
+
+#if FEATURE_WATCHDOG
+extern	unsigned char	g_bPingWatchdog;
+#endif // FEATURE_WATCHDOG
+
+
 #define BEGIN_INTERRUPT_PROTECTED {uint8_t sreg=SREG;__asm volatile( "cli" ::: "memory" );
 #define END_INTERRUPT_PROTECTED SREG=sreg;}
 #define ESCAPE_INTERRUPT_PROTECTED SREG=sreg;
@@ -759,10 +765,14 @@ public:
         //wdt_enable(WDTO_1S);
 #endif // FEATURE_WATCHDOG && WATCHDOG_PIN>-1
 
+		g_bPingWatchdog = 1;
+	
     } // startWatchdog
 
     inline static void stopWatchdog()
     {
+		g_bPingWatchdog = 0;
+		
 #if FEATURE_WATCHDOG && WATCHDOG_PIN>-1
 		// external watchdog
 		SET_INPUT(WATCHDOG_PIN);
@@ -775,6 +785,12 @@ public:
 
     inline static void pingWatchdog()
     {
+		if( !g_bPingWatchdog )
+		{
+			// do not trigger the watchdog in case it is not enabled
+			return;
+		}
+
 #if FEATURE_WATCHDOG && WATCHDOG_PIN>-1
 		// external watchdog
 		WRITE(WATCHDOG_PIN,READ(WATCHDOG_PIN) ? 0 : 1);

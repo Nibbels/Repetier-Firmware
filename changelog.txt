@@ -1,41 +1,48 @@
-V RF.01.35d.mod
-added a new Feature called "SensiblePressure" 
+V RF.01.37.mod (2017-01-20) pulling changes to mod: https://github.com/RF1000/Repetier-Firmware/commit/fcfd9b8c11d85a5099f675351aae3502d67d1738
+- On some boards the watchdog could fire during the startup of the firmware, in which case the firmware ended in an endless restart loop.
+- The PWM speed for the fan of the RF1000 has been changed from 122 Hz to 15 Hz.
+  - The PWM speed for the fan of the RF2000 remains unchanged at 122 Hz.
+- Directly after the start of the firmware, wrong values could be shown for the current temperatures of the heat bed and of the extruder.
+- After a restart of the firmware, the menu of the RF2000 could show that the 230 V plug is on although it is always turned off during the start of the firmware.
+
+V RF.01.35d.mod (2017-01-16)
+- added a new Feature called "SensiblePressure" 
 It is a pressure-sense-function ment for the first layer. Wessix told me about this idea.
 Syntax: M3909 P[max.digits] S[max.offset]
 The printer will adjust the heat-bed if z < g_minZCompensationSteps, whenever the digits rise atop [max.digits]. 
-The adjustment-offset is fixed to positive values (bed does never go closer to the nozzle than without M3909). the adjustment will not violate the [max.offset] restriction in order to avoid unwanted offsets (not caused by too close nozzle).
+The adjustment-offset is fixed to positive values (bed does never go closer to the nozzle than without M3909). the adjustment will not violate the [max.offset] restriction in order to avoid  unwanted offsets (not caused by too close nozzle).
 When choosing [max.digits] you should already know how much digits your printer normally has (Same Material, same Temperatures) and then add some 20%+.
 When the z-Compensation gets deactivated the pressure-sense-function is deactivated as well.
 Use "M3909 P0" for manual shutdown of the feature, but normally this is not necessary.
 You cannot activate the Feature if zCompensation is not active already.
 
-M3902 Z-0.02 ;will add an offset to the zMatrix
-M3902 R1 ;will now repair/smoothen the zMatrix at its lowest extrema (change of syntax)
-M3902 S2 ;will save the currently chosen (see M3009) zMatrix to "zMatrix-2" in EEPROM
-added volatile Markers to variable definitions on several variables which could be changed by an interrupt.
-see http://barrgroup.com/Embedded-Systems/How-To/C-Volatile-Keyword
+- M3902 Z-0.02 ;will add an offset to the zMatrix
+- M3902 R1 ;will now repair/smoothen the zMatrix at its lowest extrema (change of syntax)
+- M3902 S2 ;will save the currently chosen (see M3009) zMatrix to "zMatrix-2" in EEPROM
+- added volatile Markers to variable definitions on several variables which could be changed by an interrupt.
+- see http://barrgroup.com/Embedded-Systems/How-To/C-Volatile-Keyword
 
 V RF.01.35c.mod
-ZOS-Bugfix
-Message Cleanup for ZOS
-Sidejob-and-Wait-Strategy for ZOS
-Included StarTonys Fan-Mod http://www.rf1000.de/viewtopic.php?f=7&t=1638
+- ZOS-Bugfix
+- Message Cleanup for ZOS
+- Sidejob-and-Wait-Strategy for ZOS
+- Included StarTonys Fan-Mod http://www.rf1000.de/viewtopic.php?f=7&t=1638
 
 V RF.01.35c
-Changed ZOS Strategy to a "switch"-Type triggered by loopRF for better communication.
-ZOS Message cleanup
-ZOS now reloads Matrix on +z-Matrix-Entry
-Fixed almost all Compiler-Warnings
-Fixed missing Init-Value für "enable" in Extruder::
+- Changed ZOS Strategy to a "switch"-Type triggered by loopRF for better communication.
+- ZOS Message cleanup
+- ZOS now reloads Matrix on +z-Matrix-Entry
+- Fixed almost all Compiler-Warnings
+- Fixed missing Init-Value für "enable" in Extruder::
 
 V RF.01.35b
-Fix for several compiler warnings and wrong init-values.
-Fix for several //comments after #defines
-Fix for several redeclarations of #defines
+- Fix for several compiler warnings and wrong init-values.
+- Fix for several //comments after #defines
+- Fix for several redeclarations of #defines
 
 V RF.01.35a
-Fix für pins.h according to rf_42
-Source: http://www.rf1000.de/viewtopic.php?f=7&t=1610&p=16000
+- Fix für pins.h according to rf_42
+- Source: http://www.rf1000.de/viewtopic.php?f=7&t=1610&p=16000
 
 V RF.01.35 (2016-12-23) by RF1000
 - In case the heat bed scan is started and the extruder is warmer than the target temperature, the firmware waits until the extruder has cooled down.
@@ -52,7 +59,7 @@ V RF.01.33 mod by mhier
 - Added Parameter to give more weight to added near offsets by Nibbels
 - Added M3902 for fixing bad headbeds with holes by Nibbels
 - Added M3901 for G-Code configuration of mhier's scan by Nibbels
-- fixed M116's temperature range.
+- fixed M116's temperature range. (@2017-01-20 pulled by RF1000 to official 1.37)
 
 V RF.01.33 (2016-08-17)
 - The emergency stop because of too high pressure values from the strain gauge stops all axes (instead of only the z-axis) now.
