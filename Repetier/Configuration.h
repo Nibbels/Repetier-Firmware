@@ -43,7 +43,7 @@ To override EEPROM settings with config settings, set EEPROM_MODE 0 */
 // ##########################################################################################
 
 /** \brief Define the type of your device */
-#define MOTHERBOARD                         DEVICE_TYPE_RF1000
+//#define MOTHERBOARD                         DEVICE_TYPE_RF1000
 //#define MOTHERBOARD                         DEVICE_TYPE_RF2000
 #define PROTOTYPE_PCB                       0                                                   // 1 = first PCB's / 0 = Final
 

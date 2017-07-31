@@ -7,6 +7,7 @@ V RF.01.37r5.Mod (2017-07-31)
 - Removed FEATURE_CONFIGURABLE_HOTEND because it was bogus on Dual and not really missed at RF1000 Single setup.
 - Extruder Sensor Type is now configurable within EEPROM
 - Cleanup, deleted unnecessary text and defines
+- Added Thermistor-Types description as Comment to RFx000.h configurations
 
 V RF.01.37r4.Mod (2017-07-29)
 - Bugfix for Z-Matrix-Invalidation

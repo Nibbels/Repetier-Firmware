@@ -724,7 +724,7 @@ void EEPROM::readDataFromEEPROM()
         e->tempControl.pidDGain    = HAL::eprGetFloat(o+EPR_EXTRUDER_PID_DGAIN);
         e->tempControl.pidMax      = HAL::eprGetByte(o+EPR_EXTRUDER_PID_MAX);
         uint8_t sensortype_temp = HAL::eprGetByte(o+EPR_EXTRUDER_SENSOR_TYPE);
-        if(sensortype_temp > 0 && sensortype_temp < 100){
+        if(sensortype_temp > 0 && sensortype_temp <= 100){
             e->tempControl.sensorType = sensortype_temp;
         }
 

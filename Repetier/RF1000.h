@@ -222,7 +222,31 @@ Overridden if EEPROM activated.*/
 #define EXT0_STEPS_PER_MM                   (8.75 * RF_MICRO_STEPS)
 
 /** \brief What type of sensor is used?
-3 is mendel-parts thermistor (EPCOS G550) */
+NTC-Thermistors
+1: Epcos B57560G0107F000
+2: 200k Thermistor
+3: Hotend V2 Sensor Conrad Renkforce / mendel-parts thermistor (EPCOS G550) = NTC mit 100kOhm
+4: 10k Thermistor
+5: USER_THERMISTORTABLE0 als NTC
+6: USER_THERMISTORTABLE1 als NTC
+7: USER_THERMISTORTABLE2 als NTC
+8: E3D Thermistor ATC Semitec 104-GT2 (300°C)
+9: 100k Honeywell 135-104LAG-J01
+10: 100k 0603 SMD Vishay NTCS0603E3104FXT (4.7k pullup)
+11: 100k GE Sensing AL03006-58.2K-97-G1 (4.7k pullup)
+12: 100k RS Thermistor 198-961 (4.7k pullup)
+14: Thermistor NTC 3950 100k Ohm (Version 1)
+15: Thermistor NTC 3950 100k Ohm (Version 2)
+97: USE_GENERIC_THERMISTORTABLE_1 and GENERIC_THERM_NUM_ENTRIES Define Raw Thermistor and Resistor-Settings within configuration.h
+98: USE_GENERIC_THERMISTORTABLE_2 and GENERIC_THERM_NUM_ENTRIES Define Raw Thermistor and Resistor-Settings within configuration.h
+99: USE_GENERIC_THERMISTORTABLE_3 and GENERIC_THERM_NUM_ENTRIES Define Raw Thermistor and Resistor-Settings within configuration.h
+PTC-Thermistors
+13: E3D PT100 (externe Platine, 500°C)
+50: USER_THERMISTORTABLE0 als PTC
+51: USER_THERMISTORTABLE1 als PTC
+52: USER_THERMISTORTABLE2 als PTC
+60: HEATER_USES_AD8495 (Delivers 5mV/degC)
+100: AD595 */
 #define EXT0_TEMPSENSOR_TYPE                3
 
 /** \brief Analog input pin for reading temperatures or pin enabling SS for MAX6675 */
@@ -361,7 +385,31 @@ The codes are only executed for multiple extruder when changing the extruder. */
 #define EXT1_STEPS_PER_MM                   (8.75 * RF_MICRO_STEPS)
 
 /** \brief What type of sensor is used?
-3 is mendel-parts thermistor (EPCOS G550) */
+NTC-Thermistors
+1: Epcos B57560G0107F000
+2: 200k Thermistor
+3: Hotend V2 Sensor Conrad Renkforce / mendel-parts thermistor (EPCOS G550) = NTC mit 100kOhm
+4: 10k Thermistor
+5: USER_THERMISTORTABLE0 als NTC
+6: USER_THERMISTORTABLE1 als NTC
+7: USER_THERMISTORTABLE2 als NTC
+8: E3D Thermistor ATC Semitec 104-GT2 (300°C)
+9: 100k Honeywell 135-104LAG-J01
+10: 100k 0603 SMD Vishay NTCS0603E3104FXT (4.7k pullup)
+11: 100k GE Sensing AL03006-58.2K-97-G1 (4.7k pullup)
+12: 100k RS Thermistor 198-961 (4.7k pullup)
+14: Thermistor NTC 3950 100k Ohm (Version 1)
+15: Thermistor NTC 3950 100k Ohm (Version 2)
+97: USE_GENERIC_THERMISTORTABLE_1 and GENERIC_THERM_NUM_ENTRIES Define Raw Thermistor and Resistor-Settings within configuration.h
+98: USE_GENERIC_THERMISTORTABLE_2 and GENERIC_THERM_NUM_ENTRIES Define Raw Thermistor and Resistor-Settings within configuration.h
+99: USE_GENERIC_THERMISTORTABLE_3 and GENERIC_THERM_NUM_ENTRIES Define Raw Thermistor and Resistor-Settings within configuration.h
+PTC-Thermistors
+13: E3D PT100 (externe Platine, 500°C)
+50: USER_THERMISTORTABLE0 als PTC
+51: USER_THERMISTORTABLE1 als PTC
+52: USER_THERMISTORTABLE2 als PTC
+60: HEATER_USES_AD8495 (Delivers 5mV/degC)
+100: AD595 */
 #define EXT1_TEMPSENSOR_TYPE                3
 
 /** \brief Analog input pin for reading temperatures or pin enabling SS for MAX6675 */
