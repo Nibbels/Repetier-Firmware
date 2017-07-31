@@ -20,7 +20,7 @@
 #define CONSTANTS_H
 
 
-#define REPETIER_VERSION                    "RF.01.37r4.Mod"
+#define REPETIER_VERSION                    "RF.01.37r5.Mod"
 #define UI_PRINTER_COMPANY                  "Conrad Community"
 #define UI_VERSION_STRING                   "V " REPETIER_VERSION
 
@@ -35,10 +35,8 @@
 #define OPERATING_MODE_PRINT                1   // the firmware works in mode "print"
 #define OPERATING_MODE_MILL                 2   // the firmware works in mode "mill"
 
-#define HOTEND_TYPE_1                       1   // hotend V1 + messing ring
 #define HOTEND_TYPE_V1                      2   // hotend V1
-#define HOTEND_TYPE_V2_SINGLE               3   // hotend V2 for single extruder
-#define HOTEND_TYPE_V2_DUAL                 4   // hotend V2 for dual extruder
+#define HOTEND_TYPE_V2                      3   // hotend V2 for single extruder
 
 #define MILLER_TYPE_ONE_TRACK               1   // one track in x- and y-direction
 #define MILLER_TYPE_TWO_TRACKS              2   // two tracks in x- and y-direction

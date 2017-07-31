@@ -526,7 +526,6 @@ extern const char   ui_text_delete_file[]           PROGMEM;
 extern const char   ui_text_z_compensation[]        PROGMEM;
 extern const char   ui_text_change_mode[]           PROGMEM;
 extern const char   ui_text_change_z_type[]         PROGMEM;
-extern const char   ui_text_change_hotend_type[]    PROGMEM;
 extern const char   ui_text_change_miller_type[]    PROGMEM;
 extern const char   ui_text_x_axis[]                PROGMEM;
 extern const char   ui_text_y_axis[]                PROGMEM;

@@ -1000,18 +1000,7 @@ void UIDisplay::parse(char *txt,bool ram)
             }
             case 'h':
             {
-                if(c2=='t')                                                                             // %ht : hotend type                                                     
-                {
-#if FEATURE_CONFIGURABLE_HOTEND_TYPE
-                    switch(Printer::HotendType)
-                    {
-                        case HOTEND_TYPE_V1:        addStringP(ui_text_hotend_v1);  break;
-                        case HOTEND_TYPE_V2_SINGLE: addStringP(ui_text_hotend_v2);  break;
-                        case HOTEND_TYPE_V2_DUAL:   addStringP(ui_text_hotend_v2);  break;
-                    }               
-#endif // FEATURE_CONFIGURABLE_HOTEND_TYPE
-                }
-                else if(c2=='x' && col<MAX_COLS)                                                                             // %hx : x homed      
+                if(c2=='x' && col<MAX_COLS)                                                                             // %hx : x homed      
                 {
                     if(Printer::flag2 & PRINTER_FLAG2_HOMED_X) printCols[col++]='*';
                 }
@@ -4152,106 +4141,6 @@ void UIDisplay::executeAction(int action)
 #endif // FEATURE_AUTOMATIC_EEPROM_UPDATE
                 break;
             }
-
-#if FEATURE_CONFIGURABLE_HOTEND_TYPE
-            case UI_ACTION_HOTEND_TYPE:
-            {
-                Extruder *e;
-
-
-                if( PrintLine::linesCount ) 
-                {
-                    // the hotend type can not be switched while the printing is in progress
-                    if( Printer::debugErrors() )
-                    {
-                        Com::printFLN( PSTR( "executeAction(): The hotend type can not be switched while the printing is in progress" ) );
-                    }
-
-                    showError( (void*)ui_text_change_hotend_type, (void*)ui_text_operation_denied );
-                    break;
-                }
-
-                if( Printer::HotendType == HOTEND_TYPE_V1 )
-                {
-#if MOTHERBOARD == DEVICE_TYPE_RF1000
-                    Printer::HotendType = HOTEND_TYPE_V2_SINGLE;
-#endif // #if MOTHERBOARD == DEVICE_TYPE_RF1000
-
-#if MOTHERBOARD == DEVICE_TYPE_RF2000
-                    Printer::HotendType = HOTEND_TYPE_V2_DUAL;
-#endif // #if MOTHERBOARD == DEVICE_TYPE_RF2000
-
-#if NUM_EXTRUDER>0
-                    e = &extruder[0];
-
-                    e->tempControl.pidDriveMax = HT3_PID_INTEGRAL_DRIVE_MAX;
-                    e->tempControl.pidDriveMin = HT3_PID_INTEGRAL_DRIVE_MIN;
-                    e->tempControl.pidPGain    = HT3_PID_P;
-                    e->tempControl.pidIGain    = HT3_PID_I;
-                    e->tempControl.pidDGain    = HT3_PID_D;
-                    e->tempControl.pidMax      = EXT0_PID_MAX;
-#endif // #if NUM_EXTRUDER>0
-
-#if NUM_EXTRUDER>1
-                    e = &extruder[1];
-
-                    e->tempControl.pidDriveMax = HT3_PID_INTEGRAL_DRIVE_MAX;
-                    e->tempControl.pidDriveMin = HT3_PID_INTEGRAL_DRIVE_MIN;
-                    e->tempControl.pidPGain    = HT3_PID_P;
-                    e->tempControl.pidIGain    = HT3_PID_I;
-                    e->tempControl.pidDGain    = HT3_PID_D;
-                    e->tempControl.pidMax      = EXT0_PID_MAX;
-#endif // #if NUM_EXTRUDER>1
-                }
-                else
-                {
-                    Printer::HotendType = HOTEND_TYPE_V1;
-
-#if NUM_EXTRUDER>0
-                    e = &extruder[0];
-
-                    e->tempControl.pidDriveMax = HT2_PID_INTEGRAL_DRIVE_MAX;
-                    e->tempControl.pidDriveMin = HT2_PID_INTEGRAL_DRIVE_MIN;
-                    e->tempControl.pidPGain    = HT2_PID_P;
-                    e->tempControl.pidIGain    = HT2_PID_I;
-                    e->tempControl.pidDGain    = HT2_PID_D;
-                    e->tempControl.pidMax      = EXT0_PID_MAX;
-#endif // NUM_EXTRUDER>0
-
-#if NUM_EXTRUDER>1
-                    e = &extruder[1];
-
-                    e->tempControl.pidDriveMax = HT2_PID_INTEGRAL_DRIVE_MAX;
-                    e->tempControl.pidDriveMin = HT2_PID_INTEGRAL_DRIVE_MIN;
-                    e->tempControl.pidPGain    = HT2_PID_P;
-                    e->tempControl.pidIGain    = HT2_PID_I;
-                    e->tempControl.pidDGain    = HT2_PID_D;
-                    e->tempControl.pidMax      = EXT0_PID_MAX;
-#endif // NUM_EXTRUDER>1
-                }
-
-#if FEATURE_AUTOMATIC_EEPROM_UPDATE
-                HAL::eprSetByte( EPR_RF_HOTEND_TYPE, Printer::HotendType );
-
-                for(uint8_t i=0; i<NUM_EXTRUDER; i++)
-                {
-                    int o=i*EEPROM_EXTRUDER_LENGTH+EEPROM_EXTRUDER_OFFSET;
-
-
-                    e = &extruder[i];
-                    HAL::eprSetByte(  o+EPR_EXTRUDER_DRIVE_MAX, e->tempControl.pidDriveMax );
-                    HAL::eprSetByte(  o+EPR_EXTRUDER_DRIVE_MIN, e->tempControl.pidDriveMin );
-                    HAL::eprSetFloat( o+EPR_EXTRUDER_PID_PGAIN, e->tempControl.pidPGain );
-                    HAL::eprSetFloat( o+EPR_EXTRUDER_PID_IGAIN, e->tempControl.pidIGain );
-                    HAL::eprSetFloat( o+EPR_EXTRUDER_PID_DGAIN, e->tempControl.pidDGain );
-                    HAL::eprSetByte(  o+EPR_EXTRUDER_PID_MAX,   e->tempControl.pidMax );
-                }
-
-                EEPROM::updateChecksum();
-#endif // FEATURE_AUTOMATIC_EEPROM_UPDATE
-                break;
-            }
-#endif // FEATURE_CONFIGURABLE_HOTEND_TYPE
 
 #if FEATURE_CONFIGURABLE_MILLER_TYPE
             case UI_ACTION_MILLER_TYPE:

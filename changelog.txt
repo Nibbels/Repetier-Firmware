@@ -1,6 +1,13 @@
 TODO: Pause-Back-Drive-Bug in original RF1.37
 TODO: Possible Z-Lift Bug in original RF1.37
 
+
+V RF.01.37r5.Mod (2017-07-31)
+- "PID drive max = 40"-Fix.
+- Removed FEATURE_CONFIGURABLE_HOTEND because it was bogus on Dual and not really missed at RF1000 Single setup.
+- Extruder Sensor Type is now configurable within EEPROM
+- Cleanup, deleted unnecessary text and defines
+
 V RF.01.37r4.Mod (2017-07-29)
 - Bugfix for Z-Matrix-Invalidation
 - Extruder 2 Z-Offset got eeprom support

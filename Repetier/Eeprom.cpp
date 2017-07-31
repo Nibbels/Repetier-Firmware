@@ -95,15 +95,6 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration()
     Printer::homingFeedrate[Z_AXIS] = HOMING_FEEDRATE_Z_PRINT;
 #endif // FEATURE_MILLING_MODE
 
-#if FEATURE_CONFIGURABLE_HOTEND_TYPE
-#if MOTHERBOARD == DEVICE_TYPE_RF1000
-    Printer::HotendType = HOTEND_TYPE_V2_SINGLE;
-#endif // MOTHERBOARD == DEVICE_TYPE_RF1000
-#if MOTHERBOARD == DEVICE_TYPE_RF2000
-    Printer::HotendType = HOTEND_TYPE_V2_DUAL;
-#endif // MOTHERBOARD == DEVICE_TYPE_RF2000
-#endif // FEATURE_CONFIGURABLE_HOTEND_TYPE
-
     Printer::maxJerk = MAX_JERK;
     Printer::maxZJerk = MAX_ZJERK;
 
@@ -511,6 +502,7 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted)
         HAL::eprSetFloat(o+EPR_EXTRUDER_PID_IGAIN,e->tempControl.pidIGain);
         HAL::eprSetFloat(o+EPR_EXTRUDER_PID_DGAIN,e->tempControl.pidDGain);
         HAL::eprSetByte(o+EPR_EXTRUDER_PID_MAX,e->tempControl.pidMax);
+        HAL::eprSetByte(o+EPR_EXTRUDER_SENSOR_TYPE,e->tempControl.sensorType);
 
         HAL::eprSetFloat(o+EPR_EXTRUDER_X_OFFSET,e->xOffset/XAXIS_STEPS_PER_MM);
         HAL::eprSetFloat(o+EPR_EXTRUDER_Y_OFFSET,e->yOffset/YAXIS_STEPS_PER_MM);
@@ -601,10 +593,6 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted)
 #if FEATURE_MILLING_MODE
     HAL::eprSetByte( EPR_RF_OPERATING_MODE, Printer::operatingMode );
 #endif // FEATURE_MILLING_MODE > 0
-
-#if FEATURE_CONFIGURABLE_HOTEND_TYPE
-    HAL::eprSetByte( EPR_RF_HOTEND_TYPE, Printer::HotendType );
-#endif // FEATURE_CONFIGURABLE_HOTEND_TYPE
 
 #if FEATURE_CONFIGURABLE_MILLER_TYPE
     HAL::eprSetByte( EPR_RF_MILLER_TYPE, Printer::MillerType );
@@ -735,6 +723,10 @@ void EEPROM::readDataFromEEPROM()
         e->tempControl.pidIGain    = HAL::eprGetFloat(o+EPR_EXTRUDER_PID_IGAIN);
         e->tempControl.pidDGain    = HAL::eprGetFloat(o+EPR_EXTRUDER_PID_DGAIN);
         e->tempControl.pidMax      = HAL::eprGetByte(o+EPR_EXTRUDER_PID_MAX);
+        uint8_t sensortype_temp = HAL::eprGetByte(o+EPR_EXTRUDER_SENSOR_TYPE);
+        if(sensortype_temp > 0 && sensortype_temp < 100){
+            e->tempControl.sensorType = sensortype_temp;
+        }
 
         e->xOffset = int32_t(HAL::eprGetFloat(o+EPR_EXTRUDER_X_OFFSET)*Printer::axisStepsPerMM[X_AXIS]);
         e->yOffset = int32_t(HAL::eprGetFloat(o+EPR_EXTRUDER_Y_OFFSET)*Printer::axisStepsPerMM[Y_AXIS]);
@@ -819,20 +811,6 @@ void EEPROM::readDataFromEEPROM()
     Printer::homingFeedrate[Y_AXIS] = HAL::eprGetFloat(EPR_Y_HOMING_FEEDRATE_PRINT);
     Printer::homingFeedrate[Z_AXIS] = HAL::eprGetFloat(EPR_Z_HOMING_FEEDRATE_PRINT);
 #endif // FEATURE_MILLING_MODE
-
-#if FEATURE_CONFIGURABLE_HOTEND_TYPE
-    Printer::HotendType = HAL::eprGetByte( EPR_RF_HOTEND_TYPE );
-    if( Printer::HotendType < HOTEND_TYPE_1 || Printer::HotendType == HOTEND_TYPE_V2_DUAL )
-    {
-#if MOTHERBOARD == DEVICE_TYPE_RF1000
-        Printer::HotendType = HOTEND_TYPE_V2_SINGLE;
-#endif // MOTHERBOARD == DEVICE_TYPE_RF1000
-
-#if MOTHERBOARD == DEVICE_TYPE_RF2000
-        Printer::HotendType = HOTEND_TYPE_V2_DUAL;
-#endif // MOTHERBOARD == DEVICE_TYPE_RF2000
-    }
-#endif // FEATURE_CONFIGURABLE_HOTEND_TYPE
 
 #if FEATURE_CONFIGURABLE_MILLER_TYPE
     Printer::MillerType = HAL::eprGetByte( EPR_RF_MILLER_TYPE ) == MILLER_TYPE_ONE_TRACK ? MILLER_TYPE_ONE_TRACK : MILLER_TYPE_TWO_TRACKS;
@@ -1127,6 +1105,7 @@ void EEPROM::writeSettings()
         writeFloat(o+EPR_EXTRUDER_PID_IGAIN,Com::tEPRIGain,4);
         writeFloat(o+EPR_EXTRUDER_PID_DGAIN,Com::tEPRDGain,4);
         writeByte(o+EPR_EXTRUDER_PID_MAX,Com::tEPRPIDMaxValue);
+        writeByte(o+EPR_EXTRUDER_SENSOR_TYPE,Com::tEPRsensorType);
 
         writeFloat(o+EPR_EXTRUDER_X_OFFSET,Com::tEPRXOffset);
         writeFloat(o+EPR_EXTRUDER_Y_OFFSET,Com::tEPRYOffset);
@@ -1174,10 +1153,6 @@ void EEPROM::writeSettings()
     writeByte(EPR_RF_FET2_MODE,Com::tEPRFET2Mode);
     writeByte(EPR_RF_FET3_MODE,Com::tEPRFET3Mode);
 #endif // FEATURE_24V_FET_OUTPUTS
-
-#if FEATURE_CONFIGURABLE_HOTEND_TYPE
-    writeByte(EPR_RF_HOTEND_TYPE,Com::tEPRHotendType);
-#endif // FEATURE_CONFIGURABLE_HOTEND_TYPE
 
 #if FEATURE_CONFIGURABLE_MILLER_TYPE
     writeByte(EPR_RF_MILLER_TYPE,Com::tEPRMillerType);

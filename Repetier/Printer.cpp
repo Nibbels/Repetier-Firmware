@@ -158,10 +158,6 @@ char            Printer::endstopZMinHit;
 char            Printer::endstopZMaxHit;
 #endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
 
-#if FEATURE_CONFIGURABLE_HOTEND_TYPE
-char            Printer::HotendType;
-#endif // FEATURE_CONFIGURABLE_HOTEND_TYPE
-
 #if FEATURE_CONFIGURABLE_MILLER_TYPE
 char            Printer::MillerType;
 #endif // FEATURE_CONFIGURABLE_MILLER_TYPE

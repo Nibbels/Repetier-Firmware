@@ -160,10 +160,6 @@ public:
     static char             endstopZMaxHit;
 #endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
 
-#if FEATURE_CONFIGURABLE_HOTEND_TYPE
-    static char             HotendType;
-#endif // FEATURE_CONFIGURABLE_HOTEND_TYPE
-
 #if FEATURE_CONFIGURABLE_MILLER_TYPE
     static char             MillerType;
 #endif // FEATURE_CONFIGURABLE_MILLER_TYPE

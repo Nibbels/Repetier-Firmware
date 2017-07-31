@@ -86,7 +86,7 @@ have problems with other modules using the eeprom */
 #define EPR_Y_HOMING_FEEDRATE_MILL      1008
 #define EPR_Z_HOMING_FEEDRATE_MILL      1012
 #define EPR_RF_Z_ENDSTOP_TYPE           1016
-#define EPR_RF_HOTEND_TYPE              1017
+#define EPR_RF_HOTEND_TYPE              1017 //depreached 30 07 2017 Nibbels : Die Funktion war nur für RF1000, nur Single, in der Falschen Klasse, wenn nötig, dann in Class Extruder einbauen. Hat beim RF2000 keiner vermisst: Ersatz ist EPR_EXTRUDER_SENSOR_TYPE
 #define EPR_RF_MILLER_TYPE              1018
 #define EPR_RF_RGB_LIGHT_MODE           1019
 #define EPR_RF_FET1_MODE                1020
@@ -157,6 +157,7 @@ have problems with other modules using the eeprom */
 #define EPR_EXTRUDER_WAIT_RETRACT_TEMP  50
 #define EPR_EXTRUDER_WAIT_RETRACT_UNITS 52
 #define EPR_EXTRUDER_COOLER_SPEED       54 //byte
+#define EPR_EXTRUDER_SENSOR_TYPE        94 //uint8 
 #define EPR_EXTRUDER_Z_OFFSET           95 //int32_t -> +96+97+98
 
 class EEPROM

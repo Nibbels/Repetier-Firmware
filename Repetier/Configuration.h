@@ -43,7 +43,7 @@ To override EEPROM settings with config settings, set EEPROM_MODE 0 */
 // ##########################################################################################
 
 /** \brief Define the type of your device */
-//#define MOTHERBOARD                         DEVICE_TYPE_RF1000
+#define MOTHERBOARD                         DEVICE_TYPE_RF1000
 //#define MOTHERBOARD                         DEVICE_TYPE_RF2000
 #define PROTOTYPE_PCB                       0                                                   // 1 = first PCB's / 0 = Final
 
@@ -181,9 +181,6 @@ to print an object two times at the speed of one. Works only with dual extruder 
 /** \brief A watchdog resets the printer, if a signal is not send within predifined time limits. That way we can be sure that the board
 is always running and is not hung up for some unknown reason. */
 #define FEATURE_WATCHDOG                    1                                                   // 1 = on, 0 = off
-
-/** \brief Enables/disables the menu entry which allows to choose the currently installed hotend type */
-#define FEATURE_CONFIGURABLE_HOTEND_TYPE    1                                                   // 1 = on, 0 = off
 
 /** \brief Defines whether the complete EEPROM shall be reset and filled with the values from Configuration.h whenever the EEPROM becomes corruped or its EEPROM_MODE is different to the value from Configuration.h. */
 #define FEATURE_FULL_EEPROM_RESET           1                                                   // 1 = on, 0 = off
