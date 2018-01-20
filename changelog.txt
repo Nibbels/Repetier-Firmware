@@ -1,6 +1,11 @@
 TODO: Z-Lift-Bug seems to be still present! Avoid Z-Lift: Todo @Conrad -> Has this possibly been fixed by removing halfstepping in 1.37u4?
 TODO: Testing, testing ..
 
+V RF.01.38.16.Mod (2018-01-20)
+- fixed typo in text
+- changed homing functions to use one central home-directions-function
+- removed logic to set global homing flag which was not used anymore -> simplifying code
+
 V RF.01.38.16.Mod (2018-01-15)
 - fixed some extruder inits
 - removed all heat managers except PID because they work for all RFx000.

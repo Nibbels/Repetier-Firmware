@@ -673,10 +673,8 @@ on this endstop. */
 /** \brief Sets direction of endstops when homing; 1=MAX, -1=MIN */
 #define X_HOME_DIR                          -1
 #define Y_HOME_DIR                          -1
-
-#if !FEATURE_MILLING_MODE
+//gets inverted when searching home dir in milling mode:
 #define Z_HOME_DIR                          -1
-#endif // !FEATURE_MILLING_MODE
 
 /** \brief If true, axis won't move to coordinates less than zero. */
 #define min_software_endstop_x              false

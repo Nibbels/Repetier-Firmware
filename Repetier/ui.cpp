@@ -1167,7 +1167,7 @@ void UIDisplay::parse(char *txt,bool ram)
                 }
                 else if(c2=='a' && col<MAX_COLS)                                                                             // %ha : all homed      
                 {
-                    if(Printer::flag3 & PRINTER_FLAG3_X_HOMED && Printer::flag3 & PRINTER_FLAG3_Y_HOMED && Printer::flag3 & PRINTER_FLAG3_Z_HOMED && Printer::flag1 & PRINTER_FLAG1_HOMED) printCols[col++]='*';
+                    if(Printer::flag3 & PRINTER_FLAG3_X_HOMED && Printer::flag3 & PRINTER_FLAG3_Y_HOMED && Printer::flag3 & PRINTER_FLAG3_Z_HOMED) printCols[col++]='*';
                 }
                 break;
             }

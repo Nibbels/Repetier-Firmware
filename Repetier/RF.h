@@ -976,10 +976,10 @@ extern void startFindZOrigin( void );
 extern void findZOrigin( void );
 #endif // FEATURE_FIND_Z_ORIGIN
 
-
-#if FEATURE_MILLING_MODE
 // switchOperatingMode()
 extern void switchOperatingMode( char newOperatingMode );
+
+#if FEATURE_MILLING_MODE
 
 // switchActiveWorkPart()
 extern void switchActiveWorkPart( char newActiveWorkPart );
