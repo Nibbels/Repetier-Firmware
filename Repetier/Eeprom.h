@@ -51,7 +51,7 @@ have problems with other modules using the eeprom */
 #define EPR_EXTRUDER_SPEED              95
 #define EPR_INTEGRITY_BYTE              104   // Here the xored sum over eeprom is stored
 #define EPR_VERSION                     105   // Version id for updates in EEPROM storage
-#define EPR_BED_HEAT_MANAGER            106
+//#define EPR_BED_HEAT_MANAGER            106
 #define EPR_BED_DRIVE_MAX               107
 #define EPR_BED_PID_PGAIN               108
 #define EPR_BED_PID_IGAIN               112
@@ -62,7 +62,7 @@ have problems with other modules using the eeprom */
 #define EPR_PRINTING_DISTANCE           129  // Filament length printed
 #define EPR_X_HOME_OFFSET               133
 #define EPR_Y_HOME_OFFSET               137
-#define EPR_Z_HOME_OFFSET               141
+//#define EPR_Z_HOME_OFFSET               141 //z home pos removed by nibbels
 #define EPR_X_LENGTH                    145
 #define EPR_Y_LENGTH                    149
 #define EPR_Z_LENGTH                    153
@@ -161,7 +161,7 @@ have problems with other modules using the eeprom */
 
 // Acceleration in mm/s^2
 #define EPR_EXTRUDER_MAX_ACCELERATION   12
-#define EPR_EXTRUDER_HEAT_MANAGER       16
+//#define EPR_EXTRUDER_HEAT_MANAGER       16
 #define EPR_EXTRUDER_DRIVE_MAX          17
 #define EPR_EXTRUDER_PID_PGAIN          18
 #define EPR_EXTRUDER_PID_IGAIN          22

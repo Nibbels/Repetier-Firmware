@@ -90,7 +90,7 @@
 #define UI_ACTION_EXTR_ACCELERATION         1066
 #define UI_ACTION_EXTR_MAX_FEEDRATE         1067
 #define UI_ACTION_EXTR_START_FEEDRATE       1068
-#define UI_ACTION_EXTR_HEATMANAGER          1069
+//#define UI_ACTION_EXTR_HEATMANAGER          1069
 #define UI_ACTION_EXTR_WATCH_PERIOD         1070
 #define UI_ACTION_ADVANCE_K                 1072
 #define UI_ACTION_DEBUG_ECHO                1074
@@ -480,8 +480,9 @@ public:
 extern UIDisplay uid;
 
 // initializeLCD()
-void initializeLCD();
-
+void initializeLCD(bool normal = true);
+void initCspecchars();
+void initNSpecchars();
 
 #if MOTHERBOARD == DEVICE_TYPE_RF1000
 #define UI_HAS_KEYS                       1        // 1 = Some keys attached
@@ -491,6 +492,7 @@ void initializeLCD();
 #define UI_COLS                          16        //check MAX_COLS when changed
 #define UI_ROWS                           4        //do not change for RF1000 or RF2000!
 #define UI_DELAYPERCHAR                 320
+#define UI_SPACER                        ""
 #define UI_INVERT_MENU_DIRECTION        false
 #define UI_INVERT_INCREMENT_DIRECTION   true
 
@@ -550,6 +552,7 @@ void ui_check_slow_keys(int &action) {
 #define UI_COLS                          20        //check MAX_COLS when changed
 #define UI_ROWS                           4        //do not change for RF1000 or RF2000!
 #define UI_DELAYPERCHAR                 320
+#define UI_SPACER                        "    "
 #define UI_INVERT_MENU_DIRECTION        false
 #define UI_INVERT_INCREMENT_DIRECTION   true
 

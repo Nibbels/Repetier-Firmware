@@ -196,6 +196,8 @@ WARNING: Servos can draw a considerable amount of current. Make sure your system
 /** \brief Allows to choose whether pressing of the right menu button shall enter the file menu directly */
 #define FEATURE_RIGHT_BUTTON_MENU           0                                                   // 1 = on, 0 = off
 
+/** \brief Allows to use M42 pin change GCODE. I did not like the Gcode because Functions should be programmed and not written to pins. */
+#define FEATURE_M42_TEMPER_WITH_PINS        0                                                   // 1 = on, 0 = off
 
 // ##########################################################################################
 // ##   common configuration
@@ -608,9 +610,6 @@ Select the language to use.
 
 /** \brief How many ms should a single page be shown, until it is switched to the next one.*/
 #define UI_PAGES_DURATION                   4000
-
-/** \brief Delay of start screen in milliseconds */
-#define UI_START_SCREEN_DELAY               1000
 
 /** \brief Uncomment if you don't want automatic page switching. You can still switch the
 info pages with next/previous button/click-encoder */

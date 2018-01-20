@@ -1,6 +1,48 @@
 TODO: Z-Lift-Bug seems to be still present! Avoid Z-Lift: Todo @Conrad -> Has this possibly been fixed by removing halfstepping in 1.37u4?
 TODO: Testing, testing ..
 
+V RF.01.38.16.Mod (2018-01-15)
+- fixed some extruder inits
+- removed all heat managers except PID because they work for all RFx000.
+
+V RF.01.38.15.Mod (2018-01-15)
+- New Startscreen
+
+V RF.01.38.14.Mod (2018-01-15)
+- Testing FEATURE_SEE_DISPLAY which can steer the printers button via GCODE and show whats display in the menu.
+- improved display cache for output as serial string.
+
+V RF.01.38.13.Mod (2018-01-15)
+- Fix Fix Tyreus Lyben was never used but No Overshoot was.
+
+V RF.01.38.12.Mod (2018-01-13)
+- read repetier 1.0.1 and synced some code (mostly gcode parsing)
+- send better readable log message if Heat Bed Scan fails because of endstop limit Z_ENDSTOP_DRIVE_OVER
+- removed while in highest commands loop
+- tiny fix for 01.38.11 @ two extruders
+
+V RF.01.38.11.Mod (2018-01-07)
+- Testcleanup on stepperdirections
+- Cleanup (maybe to discuss) on Do-Step-Functions like startZStep / ...
+- standardization of functions to prepare z-direction (prepareBedUp / prepareBedDown vs. setZdirection)
+- pinned moveZ to real z direction / pinned performMove to real z direction / pinned directSteps to real z direction -> A test!
+- Tweak for zCMP to dismiss steps in Z when zCMP would do otherwise. We just ignore steps in special cases when queue and zCMP are contra-rotating. I have to think about if this is great or to harsh in some situations.
+- some standardization on port Writes
+- removed minMM[Z_AXIS] because it might be malicious.
+- disabled M42 because it might be dangerous somehow and is not really usefull except you really need it and you are not able to edit the firmware
+- removed blockall where it was bogus.
+- compensatedPositionPushE moved to a private static inside queuemove function
+
+V RF.01.38.10.Mod (2018-01-06)
+- FEATURE_CHECK_HOME, first beta.
+
+V RF.01.38.09.Mod (2018-01-04)
+- clean up disable / enable steppers
+- disable feature define "disableAllowedStepper()"
+- force zCMP to respect Z_ENDSTOP_DRIVE_OVER  / Z_OVERRIDE_MAX as a limit so no further movement into the z-endstop is made by zCMP
+- increased Z Current to 105 to avoid lost step problems on some printers with mod firmware whose spindles need heavy torque.
+- force zCMP to add an extra offset and move the bed down if the loaded zMatrix is positive while homed(Z). This might avoid crashes when we are homed, not using zCMP, and move X-Y.
+
 V RF.01.38.08.Mod (2018-01-03)
 - addFloat overlow bugfix for 4+ digits.
 

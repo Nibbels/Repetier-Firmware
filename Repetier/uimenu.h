@@ -114,12 +114,11 @@ List of placeholder:
 %Xw : Extruder watch period in seconds
 %XT : Extruder wait retract temperature
 %XU : Extruder wait retract unit
-%Xh : Extruder heat manager (BangBang/PID)
 %Xa : Advance K value
 %Xl : Advance L value
- %Xb : E0 Advance L value
- %Xc : E1 Advance L value
- %Xg : Printer::stepsDoublerFrequency
+%Xb : E0 Advance L value
+%Xc : E1 Advance L value
+%Xg : Printer::stepsDoublerFrequency
 %Xf : Extruder max. start feedrate
 %XF : Extruder max. feedrate
 %XA : Extruder max. acceleration

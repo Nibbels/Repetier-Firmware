@@ -18,7 +18,10 @@
 
 #include "Repetier.h"
 
+#if FEATURE_M42_TEMPER_WITH_PINS
 const int   sensitive_pins[] PROGMEM     = SENSITIVE_PINS;  // Sensitive pin list for M42
+#endif //FEATURE_M42_TEMPER_WITH_PINS
+
 int         Commands::lowestRAMValue     = MAX_RAM;
 int         Commands::lowestRAMValueSend = MAX_RAM;
 
@@ -28,41 +31,31 @@ uint16_t    BedTemp      = 1;       // 0 = Heatbed temperature is lower HEATED_B
 
 void Commands::commandLoop()
 {
-    while(true)
-    {
 #ifdef DEBUG_PRINT
-        debugWaitLoop = 1;
+    debugWaitLoop = 1;
 #endif
-        GCode::readFromSerial();
-        GCode *code = GCode::peekCurrentCommand();
-        UI_MEDIUM; // do check encoder
-
-        if(code)
-        {
-
+    GCode::readFromSerial();
+    GCode *code = GCode::peekCurrentCommand();
+    UI_MEDIUM; // do check encoder
+    if(code)
+    {
 #if SDSUPPORT
-            if(sd.savetosd)
-            {
-                if(!(code->hasM() && code->M == 29))   // still writing to file
-                {
-                    sd.writeCommand(code);
-                }
-                else
-                {
-                    sd.finishWrite();
-                }
-#ifdef ECHO_ON_EXECUTE
-                code->echoCommand();
-#endif
-            }
+        if(sd.savetosd)
+        {
+            if(!(code->hasM() && code->M == 29))   // still writing to file
+                sd.writeCommand(code);
             else
+                sd.finishWrite();
+#ifdef ECHO_ON_EXECUTE
+            code->echoCommand();
 #endif
-                Commands::executeGCode(code);
-            code->popCurrentCommand();
         }
-        Printer::defaultLoopActions();
+        else
+#endif
+            Commands::executeGCode(code);
+        code->popCurrentCommand();
     }
-
+    Printer::defaultLoopActions();
 } // commandLoop
 
 
@@ -122,17 +115,23 @@ void Commands::waitUntilEndOfAllMoves()
 
     while( bWait )
     {
-        GCode::readFromSerial();
         Commands::checkForPeriodicalActions();
         GCode::keepAlive( Processing );
         UI_MEDIUM;
 
         bWait = 0;
         if( PrintLine::hasLines() )     bWait = 1;
-
+        else                            GCode::readFromSerial(); //normalerweise braucht repetiert hier bei PrintLine::haslines kein readserial! aber wenn wir für die anderen wait=1 readserial wollen, evtl. schon. 
+        
 #if FEATURE_FIND_Z_ORIGIN
         if( g_nFindZOriginStatus )      bWait = 1;
 #endif // FEATURE_FIND_Z_ORIGIN
+
+#if FEATURE_HEAT_BED_Z_COMPENSATION
+        //weiß nicht ob wir das brauchen: test
+        if( abs( Printer::compensatedPositionCurrentStepsZ - Printer::compensatedPositionTargetStepsZ ) )      bWait = 1;
+#endif // FEATURE_HEAT_BED_Z_COMPENSATION
+
     }
 
 } // waitUntilEndOfAllMoves
@@ -148,7 +147,7 @@ void Commands::waitUntilEndOfAllBuffers(unsigned int maxcodes)
 
     while(PrintLine::hasLines() || (code != NULL))
     {
-        GCode::readFromSerial();
+        //GCode::readFromSerial();
         code = GCode::peekCurrentCommand();
         UI_MEDIUM; // do check encoder
         if(code)
@@ -691,9 +690,8 @@ void Commands::executeGCode(GCode *com)
 
             while((uint32_t)(codenum-HAL::timeInMilliseconds())  < 2000000000 )
             {
-                GCode::readFromSerial();
-                Commands::checkForPeriodicalActions();
                 GCode::keepAlive( Processing );
+                Commands::checkForPeriodicalActions();
             }
             break;
         }
@@ -841,14 +839,16 @@ void Commands::executeGCode(GCode *com)
 
         case 90: // G90
         {
-            //Commands::waitUntilEndOfAllMoves(); https://github.com/RF1000community/Repetier-Firmware/commit/986a246b5faf625357e3202a93b7e8cb38916ce1 evtl. blöd! interne scripte mit G90 gehen dann evtl. nicht mehr.
             Printer::relativeCoordinateMode = false;
+            if(com->internalCommand)
+                Com::printInfoFLN(PSTR("Absolute positioning"));
             break;
         }
         case 91: // G91
         {
-            //Commands::waitUntilEndOfAllMoves(); https://github.com/RF1000community/Repetier-Firmware/commit/986a246b5faf625357e3202a93b7e8cb38916ce1 evtl. blöd! interne scripte mit G91 gehen dann evtl. nicht mehr.
             Printer::relativeCoordinateMode = true;
+            if(com->internalCommand)
+                Com::printInfoFLN(PSTR("Absolute positioning"));
             break;
         }
         case 92: // G92
@@ -974,6 +974,7 @@ void Commands::executeGCode(GCode *com)
                 break;
 #endif // SDSUPPORT
 
+#if FEATURE_M42_TEMPER_WITH_PINS
             case 42: // M42 - Change pin status via gcode
             {
                 if (com->hasS() && com->hasP() && com->S>=0 && com->S<=255)
@@ -989,8 +990,8 @@ void Commands::executeGCode(GCode *com)
                     }
                     if (pin_number > -1)
                     {
-                        pinMode(pin_number, OUTPUT);
-                        digitalWrite(pin_number, com->S);
+                        HAL::pinMode(pin_number, OUTPUT);
+                        HAL::digitalWrite(pin_number, com->S);
                         analogWrite(pin_number, com->S);
 
                         if( Printer::debugInfo() )
@@ -1002,6 +1003,8 @@ void Commands::executeGCode(GCode *com)
                 }
                 break;
             }
+#endif //FEATURE_M42_TEMPER_WITH_PINS
+
             case 104: // M104 - set extruder temp
             {
                 if( isSupportedMCommand( com->M, OPERATING_MODE_PRINT ) )
@@ -1346,7 +1349,8 @@ void Commands::executeGCode(GCode *com)
                     maxInactiveTime = 0;
                 break;
             }
-            case 99:    // M99 S<time>
+            case 99:    // M99 S<time> 
+            //Nibbels: 050118 Ich halte den Befehl für tendentiell gefährlich. Man sollte nicht abschalten, sondern Strom senken, oder hat das einen sinn? Vermutlich muss danach Homing und CMP deaktiviert werden!
             {
                 millis_t wait = 10000L;
                 if(com->hasS())
