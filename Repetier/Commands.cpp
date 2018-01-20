@@ -848,7 +848,7 @@ void Commands::executeGCode(GCode *com)
         {
             Printer::relativeCoordinateMode = true;
             if(com->internalCommand)
-                Com::printInfoFLN(PSTR("Absolute positioning"));
+                Com::printInfoFLN(PSTR("Relative positioning"));
             break;
         }
         case 92: // G92
