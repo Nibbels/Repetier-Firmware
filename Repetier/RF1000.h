@@ -127,7 +127,6 @@ If EEPROM is enabled these values will be overidden with the values in the EEPRO
 of the bed. Maximum coordinate is given by adding the above MAX_LENGTH values. */
 #define X_MIN_POS                           0
 #define Y_MIN_POS                           0
-#define Z_MIN_POS                           0
 
 /** \brief Drive settings for printers with cartesian drive systems */
 /** \brief Number of steps for a 1mm move in x direction.
@@ -288,13 +287,6 @@ Overridden if EEPROM activated. */
 /** \brief Acceleration in mm/s^2
 Overridden if EEPROM activated. */
 #define EXT0_MAX_ACCELERATION               6000
-
-/** \brief Type of heat manager for this extruder.
-- 0 = Simply switch on/off if temperature is reached. Works always.
-- 1 = PID Temperature control. Is better but needs good PID values. Defaults are a good start for most extruder.
-- 3 = Dead-time control. PID_P becomes dead-time in seconds.
- Overridden if EEPROM activated. */
-#define EXT0_HEAT_MANAGER                   1
 
 /** \brief Wait x seconds, after reaching target temperature. Only used for M109.  Overridden if EEPROM activated. */
 #define EXT0_WATCHPERIOD                    20
@@ -457,12 +449,6 @@ Overridden if EEPROM activated. */
 Overridden if EEPROM activated. */
 #define EXT1_MAX_ACCELERATION               6000
 
-/** \brief Type of heat manager for this extruder.
-- 0 = Simply switch on/off if temperature is reached. Works always.
-- 1 = PID Temperature control. Is better but needs good PID values. Defaults are a good start for most extruder.
- Overridden if EEPROM activated. */
-#define EXT1_HEAT_MANAGER                   1
-
 /** \brief Wait x seconds, after reaching target temperature. Only used for M109.  Overridden if EEPROM activated. */
 #define EXT1_WATCHPERIOD                    20
 
@@ -577,14 +563,6 @@ set to 0 if you don't have a heated bed */
 
 /** \brief How often the temperature of the heated bed is set (msec) */
 #define HEATED_BED_SET_INTERVAL             5000
-
-/** \brief 
-Heat manager for heated bed:
-0 = Bang Bang, fast update
-1 = PID controlled
-2 = Bang Bang, limited check every HEATED_BED_SET_INTERVAL. Use this with relay-driven beds to save life time
-3 = dead time control */
-#define HEATED_BED_HEAT_MANAGER             1
 
 /** \brief The maximum value, I-gain can contribute to the output.
 The precise values may differ for different nozzle/resistor combination.
@@ -713,7 +691,7 @@ on this endstop. */
 /** \brief If during homing the endstop is reached, how many mm should the printer move back for the second try */
 #define ENDSTOP_X_BACK_MOVE                 5
 #define ENDSTOP_Y_BACK_MOVE                 5
-#define ENDSTOP_Z_BACK_MOVE                 float(0.3f+Z_ENDSTOP_DRIVE_OVER) //0.3mm sind theoretische maximale hysterese beim Schalter loslassen. Original RF2000: 0.01
+#define ENDSTOP_Z_BACK_MOVE                 float(0.3f+Z_ENDSTOP_DRIVE_OVER) //0.3mm sind theoretische maximale hysterese beim Schalter loslassen. Original RF1000: 0.01
 
 /** \brief For higher precision you can reduce the speed for the second test on the endstop
 during homing operation. The homing speed is divided by the value. 1 = same speed, 2 = half speed */
@@ -764,9 +742,6 @@ can set it on for safety. */
 #define Z_ENABLE_ON                         1
 
 /** \brief Disables axis when it's not being used. */
-#define DISABLE_X                           false
-#define DISABLE_Y                           false
-#define DISABLE_Z                           false
 #define DISABLE_E                           false
 
 /** \brief Inverting axis direction */
@@ -1251,5 +1226,9 @@ Above this value the z compensation will distribute the roughness of the surface
 
 #endif // FEATURE_MILLING_MODE
 
+/** beta!!! Nibbels/PeterKA only!!! */
+#define FEATURE_CHECK_HOME 0
+/** beta!!! Nibbels/Wessix only!!! */
+#define FEATURE_SEE_DISPLAY 1
 
 #endif // RF1000_H

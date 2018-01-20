@@ -107,7 +107,6 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration()
 #endif // RAMP_ACCELERATION
 
 #if HAVE_HEATED_BED
-    heatedBedController.heatManager= HEATED_BED_HEAT_MANAGER;
     heatedBedController.pidDriveMax = HEATED_BED_PID_INTEGRAL_DRIVE_MAX;
     heatedBedController.pidDriveMin = HEATED_BED_PID_INTEGRAL_DRIVE_MIN;
     heatedBedController.pidPGain = HEATED_BED_PID_PGAIN;
@@ -134,7 +133,6 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration()
     Printer::lengthMM[Z_AXIS] = Z_MAX_LENGTH;
     Printer::minMM[X_AXIS] = X_MIN_POS;
     Printer::minMM[Y_AXIS] = Y_MIN_POS;
-    Printer::minMM[Z_AXIS] = Z_MIN_POS;
 
 #if ENABLE_BACKLASH_COMPENSATION
     Printer::backlash[X_AXIS] = X_BACKLASH;
@@ -151,7 +149,6 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration()
     e->maxStartFeedrate = EXT0_MAX_START_FEEDRATE;
     e->maxAcceleration = EXT0_MAX_ACCELERATION;
 
-    e->tempControl.heatManager = EXT0_HEAT_MANAGER;
     e->tempControl.pidDriveMax = EXT0_PID_INTEGRAL_DRIVE_MAX;
     e->tempControl.pidDriveMin = EXT0_PID_INTEGRAL_DRIVE_MIN;
     e->tempControl.pidPGain = EXT0_PID_P;
@@ -187,7 +184,6 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration()
     e->maxStartFeedrate = EXT1_MAX_START_FEEDRATE;
     e->maxAcceleration = EXT1_MAX_ACCELERATION;
 
-    e->tempControl.heatManager = EXT1_HEAT_MANAGER;
     e->tempControl.pidDriveMax = EXT1_PID_INTEGRAL_DRIVE_MAX;
     e->tempControl.pidDriveMin = EXT1_PID_INTEGRAL_DRIVE_MIN;
     e->tempControl.pidPGain = EXT1_PID_P;
@@ -224,7 +220,6 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration()
     e->maxStartFeedrate = EXT2_MAX_START_FEEDRATE;
     e->maxAcceleration = EXT2_MAX_ACCELERATION;
 
-    e->tempControl.heatManager = EXT2_HEAT_MANAGER;
     e->tempControl.pidDriveMax = EXT2_PID_INTEGRAL_DRIVE_MAX;
     e->tempControl.pidDriveMin = EXT2_PID_INTEGRAL_DRIVE_MIN;
     e->tempControl.pidPGain = EXT2_PID_P;
@@ -260,7 +255,6 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration()
     e->maxStartFeedrate = EXT3_MAX_START_FEEDRATE;
     e->maxAcceleration = EXT3_MAX_ACCELERATION;
 
-    e->tempControl.heatManager = EXT3_HEAT_MANAGER;
     e->tempControl.pidDriveMax = EXT3_PID_INTEGRAL_DRIVE_MAX;
     e->tempControl.pidDriveMin = EXT3_PID_INTEGRAL_DRIVE_MIN;
     e->tempControl.pidPGain = EXT3_PID_P;
@@ -296,7 +290,6 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration()
     e->maxStartFeedrate = EXT4_MAX_START_FEEDRATE;
     e->maxAcceleration = EXT4_MAX_ACCELERATION;
 
-    e->tempControl.heatManager = EXT4_HEAT_MANAGER;
     e->tempControl.pidDriveMax = EXT4_PID_INTEGRAL_DRIVE_MAX;
     e->tempControl.pidDriveMin = EXT4_PID_INTEGRAL_DRIVE_MIN;
     e->tempControl.pidPGain = EXT4_PID_P;
@@ -331,8 +324,7 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration()
     e->maxFeedrate = EXT5_MAX_FEEDRATE;
     e->maxStartFeedrate = EXT5_MAX_START_FEEDRATE;
     e->maxAcceleration = EXT5_MAX_ACCELERATION;
-	
-    e->tempControl.heatManager = EXT5_HEAT_MANAGER;
+
     e->tempControl.pidDriveMax = EXT5_PID_INTEGRAL_DRIVE_MAX;
     e->tempControl.pidDriveMin = EXT5_PID_INTEGRAL_DRIVE_MIN;
     e->tempControl.pidPGain = EXT5_PID_P;
@@ -519,12 +511,6 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted)
 #endif //FEATURE_READ_CALIPER
 
 #if HAVE_HEATED_BED
-    HAL::eprSetByte(EPR_BED_HEAT_MANAGER,heatedBedController.heatManager);
-#else
-    HAL::eprSetByte(EPR_BED_HEAT_MANAGER,HEATED_BED_HEAT_MANAGER);
-#endif // HAVE_HEATED_BED
-
-#if HAVE_HEATED_BED
     HAL::eprSetByte(EPR_BED_DRIVE_MAX,heatedBedController.pidDriveMax);
     HAL::eprSetByte(EPR_BED_DRIVE_MIN,heatedBedController.pidDriveMin);
     HAL::eprSetFloat(EPR_BED_PID_PGAIN,heatedBedController.pidPGain);
@@ -544,7 +530,7 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted)
 
     HAL::eprSetFloat(EPR_X_HOME_OFFSET,Printer::minMM[X_AXIS]);
     HAL::eprSetFloat(EPR_Y_HOME_OFFSET,Printer::minMM[Y_AXIS]);
-    HAL::eprSetFloat(EPR_Z_HOME_OFFSET,Printer::minMM[Z_AXIS]);
+
 #if FEATURE_MILLING_MODE
     if( Printer::operatingMode == OPERATING_MODE_PRINT )
     {
@@ -578,7 +564,6 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted)
         HAL::eprSetFloat(o+EPR_EXTRUDER_MAX_START_FEEDRATE,e->maxStartFeedrate);
         HAL::eprSetFloat(o+EPR_EXTRUDER_MAX_ACCELERATION,e->maxAcceleration);
 
-        HAL::eprSetByte(o+EPR_EXTRUDER_HEAT_MANAGER,e->tempControl.heatManager);
         HAL::eprSetByte(o+EPR_EXTRUDER_DRIVE_MAX,e->tempControl.pidDriveMax);
         HAL::eprSetByte(o+EPR_EXTRUDER_DRIVE_MIN,e->tempControl.pidDriveMin);
         HAL::eprSetFloat(o+EPR_EXTRUDER_PID_PGAIN,e->tempControl.pidPGain);
@@ -797,7 +782,6 @@ void EEPROM::readDataFromEEPROM()
 #endif // RAMP_ACCELERATION
 
 #if HAVE_HEATED_BED
-    heatedBedController.heatManager= HAL::eprGetByte(EPR_BED_HEAT_MANAGER);
     heatedBedController.pidDriveMax = HAL::eprGetByte(EPR_BED_DRIVE_MAX);
     heatedBedController.pidDriveMin = HAL::eprGetByte(EPR_BED_DRIVE_MIN);
     heatedBedController.pidPGain = HAL::eprGetFloat(EPR_BED_PID_PGAIN);
@@ -809,7 +793,6 @@ void EEPROM::readDataFromEEPROM()
 
     Printer::minMM[X_AXIS] = HAL::eprGetFloat(EPR_X_HOME_OFFSET);
     Printer::minMM[Y_AXIS] = HAL::eprGetFloat(EPR_Y_HOME_OFFSET);
-    Printer::minMM[Z_AXIS] = HAL::eprGetFloat(EPR_Z_HOME_OFFSET);
     
 #if FEATURE_MILLING_MODE
     if( Printer::operatingMode == OPERATING_MODE_PRINT )
@@ -849,7 +832,6 @@ void EEPROM::readDataFromEEPROM()
         e->maxFeedrate = HAL::eprGetFloat(o+EPR_EXTRUDER_MAX_FEEDRATE);
         e->maxStartFeedrate = HAL::eprGetFloat(o+EPR_EXTRUDER_MAX_START_FEEDRATE);
         e->maxAcceleration = HAL::eprGetFloat(o+EPR_EXTRUDER_MAX_ACCELERATION);
-        e->tempControl.heatManager = HAL::eprGetByte(o+EPR_EXTRUDER_HEAT_MANAGER);
 
         e->tempControl.pidDriveMax = HAL::eprGetByte(o+EPR_EXTRUDER_DRIVE_MAX);
         e->tempControl.pidDriveMin = HAL::eprGetByte(o+EPR_EXTRUDER_DRIVE_MIN);
@@ -1299,7 +1281,6 @@ void EEPROM::writeSettings()
     writeFloat(EPR_MAX_ZJERK,Com::tEPRMaxZJerk);
     writeFloat(EPR_X_HOME_OFFSET,Com::tEPRXHomePos);
     writeFloat(EPR_Y_HOME_OFFSET,Com::tEPRYHomePos);
-    writeFloat(EPR_Z_HOME_OFFSET,Com::tEPRZHomePos);
     
 #if FEATURE_MILLING_MODE
     if( Printer::operatingMode == OPERATING_MODE_PRINT )
@@ -1351,7 +1332,6 @@ void EEPROM::writeSettings()
 #endif // FEATURE_DIGIT_Z_COMPENSATION
 
 #if HAVE_HEATED_BED
-    writeByte(EPR_BED_HEAT_MANAGER,Com::tEPRBedHeatManager);
     writeByte(EPR_BED_DRIVE_MAX,Com::tEPRBedPIDDriveMax);
     writeByte(EPR_BED_DRIVE_MIN,Com::tEPRBedPIDDriveMin);
     writeFloat(EPR_BED_PID_PGAIN,Com::tEPRBedPGain);
@@ -1370,7 +1350,6 @@ void EEPROM::writeSettings()
         writeFloat(o+EPR_EXTRUDER_MAX_START_FEEDRATE,Com::tEPRStartFeedrate);
         writeFloat(o+EPR_EXTRUDER_MAX_ACCELERATION,Com::tEPRAcceleration);
 
-        writeByte(o+EPR_EXTRUDER_HEAT_MANAGER,Com::tEPRHeatManager);
         writeByte(o+EPR_EXTRUDER_DRIVE_MAX,Com::tEPRDriveMax);
         writeByte(o+EPR_EXTRUDER_DRIVE_MIN,Com::tEPRDriveMin);
         writeFloat(o+EPR_EXTRUDER_PID_PGAIN,Com::tEPRPGain,4);

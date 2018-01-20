@@ -47,6 +47,7 @@ public:
     float           R;
     char*           text;
 
+    bool internalCommand;
 
     inline bool hasM()
     {
@@ -172,8 +173,8 @@ public:
     } // hasFormatError
 
     void printCommand();
-    bool parseBinary(uint8_t *buffer);
-    bool parseAscii(char *line);
+    bool parseBinary(uint8_t *buffer,bool fromSerial);
+    bool parseAscii(char *line,bool fromSerial);
     void popCurrentCommand();
     void echoCommand();
     static GCode *peekCurrentCommand();

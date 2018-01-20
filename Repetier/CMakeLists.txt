@@ -25,13 +25,17 @@ set(${PROJECT_NAME}_BOARD mega)
 # choose compiling for RF1000 or RF2000
 option(RF1000 "Build for the RF1000 printer" OFF)
 option(RF2000 "Build for the RF2000 printer" OFF)
-if( (RF1000 AND RF2000) OR (NOT RF1000 AND NOT RF2000) )
-  message(FATAL_ERROR "Please select to build either for RF1000 or RF2000 by setting either '-DRF1000=ON' or '-DRF2000=ON'.")
+option(RF2000v2 "Build for the RF2000v2 printer" OFF)
+
+if( (RF1000 AND RF2000) OR (RF1000 AND RF2000v2) OR (RF2000 AND RF2000v2) OR (RF1000 AND RF2000 AND RF2000v2) OR (NOT RF1000 AND NOT RF2000 AND NOT RF2000v2) )
+  message(FATAL_ERROR "Please select to build either for RF1000 or RF2000 / RF2000v2 by setting either '-DRF1000=ON' or '-DRF2000=ON' or '-DRF2000v2=ON'.")
 endif()
 if(RF1000)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DMOTHERBOARD=DEVICE_TYPE_RF1000")
 elseif(RF2000)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DMOTHERBOARD=DEVICE_TYPE_RF2000")
+elseif(RF2000v2)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DMOTHERBOARD=DEVICE_TYPE_RF2000v2")
 endif()
 
 # Define the source code

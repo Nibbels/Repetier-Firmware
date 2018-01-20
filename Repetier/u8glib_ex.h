@@ -4384,16 +4384,16 @@ void u8g_arduino_sw_spi_shift_out(uint8_t dataPin, uint8_t clockPin, uint8_t val
   do
   {
     if ( val & 128 )
-      digitalWrite(dataPin, HIGH);
+      WRITE(dataPin, HIGH);
     else
-      digitalWrite(dataPin, LOW);
+      WRITE(dataPin, LOW);
     val <<= 1;
     u8g_MicroDelay();       /* 23 Sep 2012 */
     //delay(1);
-    digitalWrite(clockPin, HIGH);
+    WRITE(clockPin, HIGH);
     u8g_MicroDelay();       /* 23 Sep 2012 */
     //delay(1);
-    digitalWrite(clockPin, LOW);
+    WRITE(clockPin, LOW);
     u8g_MicroDelay();       /* 23 Sep 2012 */
     //delay(1);
     i--;
@@ -6515,23 +6515,23 @@ static void u8g_com_arduino_do_shift_out_msb_first(uint8_t val)
     WRITE(UI_SPI_MOSI,val & 128);
 #else
     if ( val & 128 )
-    digitalWrite(u8g_data_pin, HIGH);
+    WRITE(u8g_data_pin, HIGH);
     else
-    digitalWrite(u8g_data_pin, LOW);
+    WRITE(u8g_data_pin, LOW);
 #endif
     val <<= 1;
     //u8g_MicroDelay();
 #ifdef UI_SPI_SCK
     WRITE(UI_SPI_SCK,LOW);
 #else
-    digitalWrite(u8g_clock_pin, LOW);
+    WRITE(u8g_clock_pin, LOW);
 #endif
     cnt--;
     u8g_MicroDelay();
 #ifdef UI_SPI_SCK
     WRITE(UI_SPI_SCK,HIGH);
 #else
-    digitalWrite(u8g_clock_pin, HIGH);
+    WRITE(u8g_clock_pin, HIGH);
 #endif
     u8g_MicroDelay();
   } while( cnt != 0 );
@@ -6731,7 +6731,7 @@ void u8g_com_arduino_digital_write(u8g_t *u8g, uint8_t pin_index, uint8_t value)
   uint8_t pin;
   pin = u8g->pin_list[pin_index];
   if ( pin != U8G_PIN_NONE )
-    digitalWrite(pin, value);
+    WRITE(pin, value);
 }
 
 /* this procedure does not set the RW pin */
@@ -6744,7 +6744,7 @@ void u8g_com_arduino_assign_pin_output_high(u8g_t *u8g)
     if ( u8g->pin_list[i] != U8G_PIN_NONE )
     {
       pinMode(u8g->pin_list[i], OUTPUT);
-      digitalWrite(u8g->pin_list[i], HIGH);
+      WRITE(u8g->pin_list[i], HIGH);
     }
   }
 }

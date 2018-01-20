@@ -197,11 +197,6 @@ void SDCard::abortPrint()
 
     PrintLine::resetLineBuffer();
 
-    Printer::stepperDirection[X_AXIS]   = 0;
-    Printer::stepperDirection[Y_AXIS]   = 0;
-    Printer::stepperDirection[Z_AXIS]   = 0;
-    Extruder::current->stepperDirection = 0;
-
     // we have to tell the firmware about its real current position
     Printer::queuePositionLastSteps[X_AXIS] = Printer::queuePositionCurrentSteps[X_AXIS];
     Printer::queuePositionLastSteps[Y_AXIS] = Printer::queuePositionCurrentSteps[Y_AXIS];
