@@ -97,14 +97,12 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration()
     Printer::maxJerk = MAX_JERK;
     Printer::maxZJerk = MAX_ZJERK;
 
-#ifdef RAMP_ACCELERATION
     Printer::maxAccelerationMMPerSquareSecond[X_AXIS] = MAX_ACCELERATION_UNITS_PER_SQ_SECOND_X;
     Printer::maxAccelerationMMPerSquareSecond[Y_AXIS] = MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Y;
     Printer::maxAccelerationMMPerSquareSecond[Z_AXIS] = MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Z;
     Printer::maxTravelAccelerationMMPerSquareSecond[X_AXIS] = MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_X;
     Printer::maxTravelAccelerationMMPerSquareSecond[Y_AXIS] = MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Y;
     Printer::maxTravelAccelerationMMPerSquareSecond[Z_AXIS] = MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Z;
-#endif // RAMP_ACCELERATION
 
 #if HAVE_HEATED_BED
     heatedBedController.pidDriveMax = HEATED_BED_PID_INTEGRAL_DRIVE_MAX;
@@ -487,7 +485,7 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted)
 
     HAL::eprSetFloat(EPR_MAX_JERK,Printer::maxJerk);
     HAL::eprSetFloat(EPR_MAX_ZJERK,Printer::maxZJerk);
-#ifdef RAMP_ACCELERATION
+    
 #if FEATURE_MILLING_MODE
     if( Printer::operatingMode == OPERATING_MODE_PRINT )
     {
@@ -503,7 +501,6 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted)
       HAL::eprSetInt16(EPR_RF_MILL_ACCELERATION,Printer::max_milling_all_axis_acceleration);
     }
 #endif  // FEATURE_MILLING_MODE
-#endif // RAMP_ACCELERATION
 
 #if FEATURE_READ_CALIPER
     HAL::eprSetInt16( EPR_RF_CAL_STANDARD, caliper_filament_standard );
@@ -772,14 +769,12 @@ void EEPROM::readDataFromEEPROM()
     Printer::maxJerk = HAL::eprGetFloat(EPR_MAX_JERK);
     Printer::maxZJerk = HAL::eprGetFloat(EPR_MAX_ZJERK);
 
-#ifdef RAMP_ACCELERATION
     Printer::maxAccelerationMMPerSquareSecond[X_AXIS] = HAL::eprGetFloat(EPR_X_MAX_ACCEL);
     Printer::maxAccelerationMMPerSquareSecond[Y_AXIS] = HAL::eprGetFloat(EPR_Y_MAX_ACCEL);
     Printer::maxAccelerationMMPerSquareSecond[Z_AXIS] = HAL::eprGetFloat(EPR_Z_MAX_ACCEL);
     Printer::maxTravelAccelerationMMPerSquareSecond[X_AXIS] = HAL::eprGetFloat(EPR_X_MAX_TRAVEL_ACCEL);
     Printer::maxTravelAccelerationMMPerSquareSecond[Y_AXIS] = HAL::eprGetFloat(EPR_Y_MAX_TRAVEL_ACCEL);
     Printer::maxTravelAccelerationMMPerSquareSecond[Z_AXIS] = HAL::eprGetFloat(EPR_Z_MAX_TRAVEL_ACCEL);
-#endif // RAMP_ACCELERATION
 
 #if HAVE_HEATED_BED
     heatedBedController.pidDriveMax = HAL::eprGetByte(EPR_BED_DRIVE_MAX);
@@ -981,7 +976,7 @@ void EEPROM::readDataFromEEPROM()
 #endif // FEATURE_EMERGENCY_PAUSE
 
 #if FEATURE_DIGIT_FLOW_COMPENSATION && FEATURE_DIGIT_Z_COMPENSATION
-    //Standardgrenzen hängen von Pause-Digits ab! Das macht sinn ;)
+    //Standardgrenzen hängen von Pause-Digits ab
     g_nDigitFlowCompensation_Fmin = short(abs(g_nEmergencyPauseDigitsMax)*0.7);  //mögliche Standardwerte
     g_nDigitFlowCompensation_Fmax = short(abs(g_nEmergencyPauseDigitsMax)); //mögliche Standardwerte -> z.b. gut wenn das die pause-digits sind.
 #endif // FEATURE_DIGIT_FLOW_COMPENSATION && FEATURE_DIGIT_Z_COMPENSATION
@@ -1301,7 +1296,6 @@ void EEPROM::writeSettings()
     writeFloat(EPR_BACKLASH_Z,Com::tEPRZBacklash);
 #endif // ENABLE_BACKLASH_COMPENSATION
 
-#ifdef RAMP_ACCELERATION
 #if FEATURE_MILLING_MODE
     if( Printer::operatingMode == OPERATING_MODE_PRINT )
     {
@@ -1317,7 +1311,6 @@ void EEPROM::writeSettings()
       writeInt(EPR_RF_MILL_ACCELERATION,Com::tEPRZMillingAcceleration);
     }
 #endif // FEATURE_MILLING_MODE
-#endif // RAMP_ACCELERATION
 
 #if FEATURE_READ_CALIPER
     writeInt( EPR_RF_CAL_STANDARD, Com::tEPRZCallStandard );

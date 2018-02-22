@@ -37,7 +37,6 @@ public:
     FSTRINGVAR(tOkSpace)
     FSTRINGVAR(tWrongChecksum)
     FSTRINGVAR(tMissingChecksum)
-    FSTRINGVAR(tFormatError)
     FSTRINGVAR(tDonePrinting)
     FSTRINGVAR(tX)
     FSTRINGVAR(tY)

@@ -78,9 +78,6 @@ A MCP23017 can run also with 400000 Hz */
 /** Uncomment this, if you have keys connected via i2c to a PCF8574 chip. */
 //#define UI_HAS_I2C_KEYS
 
-// Do you have a I2C connected encoder?
-#define UI_HAS_I2C_ENCODER                  0
-
 // Under which address can the key status requested. This is the address of your PCF8574 where the keys are connected.
 // If you use a MCP23017 the address from display is used also for keys.
 #define UI_I2C_KEY_ADDRESS                  0x40

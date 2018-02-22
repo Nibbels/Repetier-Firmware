@@ -162,86 +162,10 @@ void SDCard::startPrint()
 {
     if(!sdactive) return;
     sdmode = true;
-    Printer::setMenuMode(MENU_MODE_SD_PRINTING,true);
-    Printer::setMenuMode(MENU_MODE_PAUSED,false);
-    Printer::setMenuMode(MENU_MODE_PRINTING,false);
-
+    Printer::setPrinting(true);
+    Printer::setMenuMode(MENU_MODE_SD_PRINTING, true);
+    Printer::setMenuMode(MENU_MODE_PAUSED, false);
 } // startPrint
-
-
-void SDCard::abortPrint()
-{
-    if( !sd.sdactive )
-    {
-        Printer::setMenuMode(MENU_MODE_PRINTING,false);
-        //return;
-    }else{
-        Com::printFLN(PSTR("SD print aborted."));
-        Printer::setMenuMode(MENU_MODE_SD_PRINTING,false);
-    }
-    Printer::setMenuMode(MENU_MODE_PAUSED,false);
-
-    g_uBlockSDCommands = 1;
-
-    HAL::delayMilliseconds( 250 );
-
-    InterruptProtectedBlock noInts; //HAL::forbidInterrupts();
-
-    sdmode   = false;
-    sdpos    = 0;
-    filesize = 0;
-
-    GCode::resetBuffer();
-
-    PrintLine::resetPathPlanner();
-
-    PrintLine::resetLineBuffer();
-
-    // we have to tell the firmware about its real current position
-    Printer::queuePositionLastSteps[X_AXIS] = Printer::queuePositionCurrentSteps[X_AXIS];
-    Printer::queuePositionLastSteps[Y_AXIS] = Printer::queuePositionCurrentSteps[Y_AXIS];
-    Printer::queuePositionLastSteps[Z_AXIS] = Printer::queuePositionCurrentSteps[Z_AXIS];
-    Printer::updateCurrentPosition( true );
-
-    noInts.unprotect();
-
-    BEEP_ABORT_PRINTING
-
-#if FEATURE_PAUSE_PRINTING
-    if( g_pauseStatus != PAUSE_STATUS_NONE )
-    {
-        // the printing is paused at the moment
-        noInts.protect();
-
-        g_uPauseTime  = 0;
-        g_pauseStatus = PAUSE_STATUS_NONE;
-        g_pauseMode   = PAUSE_MODE_NONE;
-
-        g_nContinueSteps[X_AXIS] = 0;
-        g_nContinueSteps[Y_AXIS] = 0;
-        g_nContinueSteps[Z_AXIS] = 0;
-        g_nContinueSteps[E_AXIS] = 0;
-
-        noInts.unprotect();
-    }
-#endif // FEATURE_PAUSE_PRINTING
-
-    // wait until all moves are done
-    while( PrintLine::linesCount )
-    {
-        HAL::delayMilliseconds( 1 );
-        Commands::checkForPeriodicalActions();
-    }
-
-    if( Printer::debugInfo() )
-    {
-        Com::printFLN(PSTR("Abort complete"));
-    }
-
-    g_uStopTime = HAL::timeInMilliseconds();
-
-} // abortPrint
-
 
 void SDCard::writeCommand(GCode *code)
 {

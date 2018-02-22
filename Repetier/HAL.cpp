@@ -703,7 +703,7 @@ ISR(WDT_vect)
     #endif // FEATURE_WATCHDOG
 
     WDTCSR |= (1<<WDIE); //Nibbels: nächstes mal kein Reset durch internen Watchdog, sondern wieder dieser interrupt.
-    
+    DEBUG_MEMORY
     execute16msPeriodical = 1; //Tell commandloop that 16ms have passed 
 }
 

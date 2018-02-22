@@ -20,7 +20,7 @@
 #define CONSTANTS_H
 
 
-#define REPETIER_VERSION                    "RF.01.38.17"
+#define REPETIER_VERSION                    "RF.01.38.35"
 #define UI_PRINTER_COMPANY                  "Conrad Community"
 #define UI_VERSION_STRING                   "V " REPETIER_VERSION
 
@@ -84,6 +84,7 @@
 #define TASK_PAUSE_PRINT                    4
 #define TASK_PAUSE_PRINT_AND_MOVE           5
 #define TASK_MOVE_FROM_BUTTON               10
+#define TASK_ENABLE_SENSE_OFFSET            100
 
 #define PAUSE_STATUS_NONE                   0   // we are not paused at the moment
 #define PAUSE_STATUS_PAUSED                 1   // we have paused the print (= pause position reached)

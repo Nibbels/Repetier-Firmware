@@ -37,7 +37,6 @@ uint32_t GCode::actLineNumber; ///< Line number of current command.
 int8_t   GCode::waitingForResend=-1; ///< Waiting for line to be resend. -1 = no wait.
 volatile uint8_t GCode::bufferLength=0; ///< Number of commands stored in gcode_buffer
 millis_t GCode::timeOfLastDataPacket=0; ///< Time, when we got the last data packet. Used to detect missing uint8_ts.
-uint8_t  GCode::formatErrors=0;
 millis_t GCode::lastBusySignal = 0; ///< When was the last busy signal
 uint32_t GCode::keepAliveInterval = KEEP_ALIVE_INTERVAL;
 
@@ -249,6 +248,8 @@ void GCode::checkAndPushCommand()
 
 void GCode::pushCommand()
 {
+    if(g_uBlockCommands) return;                           // no further commands from the SD card/Host shall be processed
+
 #if !ECHO_ON_EXECUTE
     commandsBuffered[bufferWriteIndex].echoCommand();
 #endif
@@ -263,7 +264,6 @@ GCode *GCode::peekCurrentCommand()
 {
     if(bufferLength==0) return NULL; // No more data
     return &commandsBuffered[bufferReadIndex];
-
 } // peekCurrentCommand
 
 
@@ -514,9 +514,6 @@ void GCode::readFromSD()
     if(!sd.sdmode || commandsReceivingWritePosition!=0)     // not reading or incoming serial command
         return;
 
-    if(g_uBlockSDCommands)                                  // no further commands from the SD card shall be processed
-        return;
-
     if(!PrintLine::checkForXFreeLines(2))
     {
         // we do not read G-Codes from the SD card until the cache is full -
@@ -606,12 +603,10 @@ void GCode::readFromSD()
             }
         }
     }
-    sd.sdmode = false;
     Com::printFLN(Com::tDonePrinting);
     commandsReceivingWritePosition = 0;
     commentDetected = false;
-    Printer::setMenuMode(MENU_MODE_SD_PRINTING,false);
-    BEEP_STOP_PRINTING
+    Printer::stopPrint();
 #endif // SDSUPPORT
 
 } // readFromSD
@@ -765,9 +760,7 @@ bool GCode::parseBinary(uint8_t *buffer, bool fromSerial)
             waitUntilAllCommandsAreParsed = true; // Don't destroy string until executed
         }
     }
-    formatErrors = 0;
     return true;
-
 } // parseBinary
 
 
@@ -944,14 +937,6 @@ bool GCode::parseAscii(char *line,bool fromSerial)
         Com::printErrorFLN("Checksum required when switching back to ASCII protocol.");
         return false;
     }
-    if(hasFormatError() /*|| (params & 518) == 0*/)   // Must contain G, M or T command and parameter need to have variables!
-    {
-        formatErrors++;
-        if(Printer::debugErrors())
-            Com::printErrorFLN(Com::tFormatError);
-        if(formatErrors < 3) return false;
-    }
-    else formatErrors = 0;
     return true;
 }
 

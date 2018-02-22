@@ -1,10 +1,107 @@
 TODO: Z-Lift-Bug seems to be still present! Avoid Z-Lift: Todo @Conrad -> Has this possibly been fixed by removing halfstepping in 1.37u4?
 TODO: Testing, testing ..
 
-V RF.01.38.16.Mod (2018-01-20)
+V RF.01.38.35.Mod (2018-02-10) 
+- https://github.com/foosel/OctoPrint/issues/2367#issuecomment-357554341 changed upstream command "disconnect" to "stop" when canceling a print. The new octoprint will support this.
+- added octostep as an 8x double/quad-stepping. I saw that moving Z fast still caused lags.
+- decreased MAX_FEEDRATE_X _Y _Z in RF1000.h and RF2000.h to avoid way to fast speeds.
+
+V RF.01.38.34.Mod (2018-02-10) 
+- RAMP_ACCELERATION is the set standard and cannot be switched off. Nobody would want that, thatwhy I removed the setting and some tiny pieces of alternative code.
+- saved 4 bytes of Ram per Printline.
+
+V RF.01.38.33.Mod (2018-02-08) 
+- AlignExtruders: Remove Z-Home over bed / unnecessary error handling.
+- replaced RF.cpp's tab chars with spaces
+- cleaned up copied code
+
+V RF.01.38.32.Mod (2018-02-08) 
+- HBS: additional maximum delta for moving back very slow
+- HBS: If testIdlePressure() fails while scanning then g_scanRetries are used up (homing, driving Y, retry ...) instead of canceling the scan.
+
+V RF.01.38.31.Mod (2018-02-08) 
+- big Heat Bed Scan Update. If an error occurs the HBS is not allowed to home Z over heated bed anymore. (Wanted this for a long time now.)
+  The HBS Scan now has to move the bed down, home Y, home Z, Move the bed down again and then move back to the right Y position.
+  We should avoid crashing the heated bed several (3x?) times if the HBS wants to retry homing on to high beds.
+  These faulty Z-homings have been happening whenever the measurement goes out of range. Typically this is wrong z screw or a bed which is not aligned within the PEEK holders correctly.
+- removed all MAX_FEEDRATE settings within moves and replaced them with "homingFeedrate" which might be some more moderate.
+- made all MAX_FEEDRATE feedrates adjustable due to the fact that "homingFeedrate" is adjustable. Removed the Constants. (HBS, ...)
+
+V RF.01.38.30.Mod (2018-02-07) 
+- cleaned up "StopPrint" to make one single function responsible for SD and USB prints which stop or get aborted.
+- faster "StopPrint" if you abort via menu Quicksettings -> Stop Print (I now reset the line buffer and block new codes after you told the printer to stop)
+- removed isPositionAllowed instead of patching it to repetiers state. Because we have constrain-functions for queue and direct. Therefore this function was not necessary anymore and never had any effect at all.
+- always reset E-Axis before executing output object retract.
+- Extruder::setTemperatureForAllExtruders() now replaced a dozen of places where all extruders have been deactivated by multiple Extruder::setTemperatureForExtruder().
+- Fix: if you switch to milling mode all extruders are set to 0°C, not only the first.
+- Fix: Printer::kill() does not iterate too high anymore when turning off heaters.
+
+V RF.01.38.29.Mod (2018-02-07) 
+- insert decrease of flow (with high digits) to M3912 auto start line. Ninjaflex likes that alot. PETG might like that too. (prevent overpressure because of startline)
+
+V RF.01.38.27.Mod (2018-02-06) 
+- hypothetical patch for being able to crash the z-min-endstop when you are homed + lower than Z=0 and driving moveZ into minus-Z. This prevention is only suitable for "z-homed" use and only for printing mode. Maybe it helps some day.
+- removed senseless dir change delay XYZ_DIRECTION_CHANGE_DELAY which was only used in one point and did not make much sense there.
+- New M3912 auto start line got a new switch: Y23 which would make the start line starting at y = 23mm. (Some beds dont start at Y=23 but Y=20 or else.)
+
+V RF.01.38.26.Mod (2018-02-05) 
+- FEATURE_Z_MIN_OVERRIDE_VIA_GCODE cannot be switched off anymore. This feature is mandatory for safe printing.
+- added z-check for driving down Z against bottom. "Printer::currentZSteps > Printer::maxSteps[Z_AXIS] + 2x length of Z_OVERRIDE_MAX" is now a softlimit for moves which check endstop.
+
+V RF.01.38.25.Mod (2018-02-05) 
+- only adjust print speed according to Digit-Flow-CMP setting if the move is for Gcode queue
+- clean up acceleration/deceleration code
+- clean up new menu with ecmp
+- ecmp value now got factor *100 (in display) to show up as fill-up % while compensating z. Formerly the number was a plain add_steps_per_step and looked like 0.0234, now it is displayed as 2.34%
+- show printing speed beneath layer height in ecmp-menu
+- g_maxZCompensationSteps got one more space in display
+- limit start line speed decrease to minimum 10% (-90%) instead of 5%
+- removed ALLOW_QUADSTEPPING from RFx000.h because it is just there to be used.
+- cleanup Printer::unmarkAllSteppersDisabled(); into "stepper.enable"
+- removed one allow-interrupt because it was double.
+
+V RF.01.38.24.Mod (2018-02-01) 
+- GCODE-Pause: automatically wait for queue position of "pause" and block further Gcodes until continue was pressed.
+- Tweaking setOrigin (Origin of gcode coordinates / G92 XYZ) so that it can origin axes that are homed without the need of having everything homed.
+- removed M3071 because it doesnt seem to be needed anymore. (-> integrated into M3070)
+
+V RF.01.38.23.Mod (2018-01-31) 
+- Strange behaviour of ZOS Scan: Debugging and one idea for a fix: Limit going up to retry if digits drive away on cold printers with filament warming up.
+(2018-02-05: at least until now we did not see the bug anymore, means that we still dont know if we fixed the bug with 01.38.23 but it looks good.)
+
+V RF.01.38.22.Mod (2018-01-29) 
+- Extruder pause delay changed from 30 to 60 s
+- some cleanup 
+- some security measures for M3912 and tweaks for M3001 Gcode (removed M400)
+
+V RF.01.38.21.Mod (2018-01-28) 
+- New M3912 to automatically draw a start line to clean nozzle within start code.
+  Example: M3912 I2 E20 F18
+  I2 -> 2 Lines
+  E20 -> Extrusion width value
+  F18 -> 18mm/s
+  The nice feature is that high digits slow down the speed automatically. This startline adopts to your type of filaments/nozzle.
+- DMS-Features: Digit-Flow-CMP -> dFeed now has an instant effect on your printers speed. The problem that the speed was set with the path cache is now gone.
+- Enabling SenseOffset now happens in move cache queue (, not instantly as it was). Thatwhy we can drop some M400 in our startcodes.
+
+V RF.01.38.20.Mod (2018-01-27) (Alpha!)
+- Test: Better Z-Naht? (due to changed slow speed constraint at E<->YXZAxis transitions and E-direction transitions)
+- Test: do we need "direct.start"? -> removed it. Added it again for safer upload. -> Pause is way faster with "started". So it stays for now.
+- Test: changed #define EXT1_MAX_START_FEEDRATE 18 to #define EXT1_MAX_START_FEEDRATE 12 (Repetier uses 10 or 12 as standard within his configuration.h. If you wanna test this values against 18 then change it in your eeprom as well!)
+- Added Printer::updateAdvanceFlags(); to Advance menu function
+- removed old advanceL and advanceK menu hooks
+- some more tiny cleanup and sync of syntax to repetier 1.0.1
+
+V RF.01.38.18.Mod (2018-01-20)
+- some checks and comments
+- FEATURE_CHECK_HOME and FEATURE_SEE_DISPLAY are now in configuration.h instead of RF1000.h / RF2000.h
+- FEATURE_SEE_DISPLAY is not beta anymore, it seems to work so far. (More tests will follow.)
+
+V RF.01.38.17.Mod (2018-01-20)
 - fixed typo in text
 - changed homing functions to use one central home-directions-function
 - removed logic to set global homing flag which was not used anymore -> simplifying code
+- removed var "formaterrors" from gcode parsing because it was not used anywhere.
 
 V RF.01.38.16.Mod (2018-01-15)
 - fixed some extruder inits

@@ -118,7 +118,7 @@ void Extruder::manageTemperatures()
             act->setAlarm(false);  //reset alarm
         }
 
-        act->tempArray[act->tempPointer++] = act->currentTemperatureC;
+        act->tempArray[act->tempPointer++] = act->currentTemperatureC; //ist in jedem fall voll mit gültigen temperaturen, wenn der regelbereich erreicht wird.
         //act->tempPointer &= 3; // 3 = springe von 4 = 100b auf 0 zurück,    wenn 3. -> 1/300ms  -> 3.33 = reciproke     !!tempArray needs [4] ...
         //act->tempPointer &= 7; // 7 = springe von 8 = 1000b auf 0 zurück,   wenn 7. -> 1/700ms  -> 1.42 = reciproke     !!tempArray needs [8] ...
         act->tempPointer &= 15; // 15 = springe von 16 = 10000b zurück auf 0, wenn 15 -> 1/1500ms -> 0.666 = reciproke    !!tempArray needs [16] ...
@@ -150,7 +150,7 @@ void Extruder::manageTemperatures()
             act->tempIState = constrain(act->tempIState + error, act->tempIStateLimitMin, act->tempIStateLimitMax);
             float igain = act->pidIGain * act->tempIState * 0.1;  // 0.1 = 10Hz
             pidTerm += igain;
-            float dgain = act->pidDGain * (act->tempArray[act->tempPointer] - act->currentTemperatureC)*0.666f; // raising dT/dt, 3.33 = reciproke of time interval (300 ms) -> temparray greift weiter zurück als letzte messung.
+            float dgain = act->pidDGain * (act->tempArray[act->tempPointer] - act->currentTemperatureC) * 0.666f; // raising dT/dt, 0.666 = reciproke of time interval (1500 ms) -> temparray greift weiter zurück als letzte messung.
             pidTerm += dgain;
 
 #if SCALE_PID_TO_MAX==1
@@ -495,6 +495,9 @@ void Extruder::setTemperatureForExtruder(float temperatureInCelsius,uint8_t extr
 
 } // setTemperatureForExtruder
 
+void Extruder::setTemperatureForAllExtruders(float temperatureInCelsius, bool beep){
+    for(uint8_t extrNr = 0; extrNr < NUM_EXTRUDER; extrNr++) Extruder::setTemperatureForExtruder(temperatureInCelsius, extrNr, beep);
+}
 
 void Extruder::setHeatedBedTemperature(float temperatureInCelsius,bool beep)
 {
@@ -1241,16 +1244,15 @@ void Extruder::disableAllHeater()
 void TemperatureController::waitForTargetTemperature(uint8_t plus_temp_tolerance) {
     if(targetTemperatureC < 30) return;
     if(Printer::debugDryrun()) return;
-    g_uStartOfIdle = 0;
     if(targetTemperatureC < currentTemperatureC){
         UI_STATUS_UPD( UI_TEXT_COOLING_DOWN );
     }else{
         UI_STATUS_UPD( UI_TEXT_HEATING_UP );
     }
+    g_uStartOfIdle = 0;
     while(true) {
         Commands::printTemperatures();
-        Commands::checkForPeriodicalActions();
-        GCode::keepAlive(WaitHeater);
+        Commands::checkForPeriodicalActions( WaitHeater );
         if( fabs(targetTemperatureC - currentTemperatureC) <= TEMP_TOLERANCE + plus_temp_tolerance ) {
             return;
         }
@@ -1309,8 +1311,7 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
 
     for(;;)
     {
-        Commands::checkForPeriodicalActions(); // update heaters etc. https://github.com/repetier/Repetier-Firmware/commit/241c550ac004023842d6886c6e0db15a1f6b56d7
-        GCode::keepAlive( WaitHeater );
+        Commands::checkForPeriodicalActions( WaitHeater ); // update heaters etc. https://github.com/repetier/Repetier-Firmware/commit/241c550ac004023842d6886c6e0db15a1f6b56d7
         updateCurrentTemperature();
         currentTemp = currentTemperatureC;
 
@@ -1367,13 +1368,13 @@ KP = Ku * Maßzahl lt. Tabelle
 see also: http://www.mstarlabs.com/control/znrule.html
 */
                         switch(method){
-                            case 4: //PID Tyreus-Lyben
+                            case 4: //PID Tyreus-Lyben ("lazy--" -> Heated Bed!)
                                 Kp = 0.4545f*Ku;      //1/2.2 KRkrit
                                 Ki = Kp/Tu/2.2f;        //2.2 Tkrit
                                 Kd = Kp*Tu/6.3f;      //1/6.3 Tkrit[/code]
                                 Com::printFLN(Com::tAPIDTyreusLyben);
                             break;
-                            case 3: //PID no overshoot
+                            case 3: //PID no overshoot ("lazy-" -> Heated Bed!)
                                Kp = 0.2f*Ku;          //0.2 KRkrit
                                Ki = 2.0f*Kp/Tu;       //0.5 Tkrit
                                Kd = Kp*Tu/3.0f;       //0.333 Tkrit
@@ -1385,13 +1386,13 @@ see also: http://www.mstarlabs.com/control/znrule.html
                                Kd = Kp*Tu/3.0f;       //0.333 Tkrit
                                Com::printFLN(Com::tAPIDSome);
                             break;
-                            case 1: //PID Pessen Integral Rule
+                            case 1: //PID Pessen Integral Rule ("dynamic++" -> fast Hotend!)
                                Kp = 0.7f*Ku;          //0.7 KRkrit
                                Ki = 2.5f*Kp/Tu;       //0.4 Tkrit
                                Kd = Kp*Tu*3.0f/20.0f; //0.15 Tkrit
                                Com::printFLN(Com::tAPIDPessen);
                             break;
-                            default: //PID classic Ziegler-Nichols
+                            default: //PID classic Ziegler-Nichols  ("dynamic+" -> Hotend!)
                                Kp = 0.6f*Ku;          //0.6 KRkrit
                                Ki = 2.0f*Kp/Tu;       //0.5 Tkrit
                                Kd = Kp*Tu/8.0f;       //0.125 Tkrit
@@ -1441,8 +1442,6 @@ see also: http://www.mstarlabs.com/control/znrule.html
             }
             return;
         }
-        UI_MEDIUM;
-        UI_SLOW;
     }
 } // autotunePID
 

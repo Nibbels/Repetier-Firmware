@@ -406,9 +406,10 @@ class Extruder   // Size: 12*1 Byte+12*4 Byte+4*2Byte = 68 Byte
     static void disableAllHeater();
     static void initExtruder();
     static void initHeatedBed();
-    static void setHeatedBedTemperature(float temp_celsius,bool beep = false);
+    static void setHeatedBedTemperature(float temperatureInCelsius,bool beep = false);
     static float getHeatedBedTemperature();
-    static void setTemperatureForExtruder(float temp_celsius,uint8_t extr,bool beep = false);
+    static void setTemperatureForExtruder(float temperatureInCelsius,uint8_t extr,bool beep = false);
+    static void setTemperatureForAllExtruders(float temperatureInCelsius, bool beep);
 
 }; // Extruder
 

@@ -589,11 +589,11 @@ extern  long            g_maxZCompensationSteps;
 extern  bool            g_auto_minmaxZCompensationSteps;
 #endif //AUTOADJUST_MIN_MAX_ZCOMP
 extern  long            g_diffZCompensationSteps;
-extern  volatile unsigned char  g_nHeatBedScanStatus;
+extern  volatile unsigned char g_nHeatBedScanStatus;
 extern  char            g_nActiveHeatBed;
 //ZOS:
-extern  volatile unsigned char  g_ZOSScanStatus;
-extern  unsigned char            g_ZOSTestPoint[2];
+extern  volatile unsigned char g_nZOSScanStatus;
+extern  unsigned char          g_ZOSTestPoint[2];
 extern  float           g_ZOSlearningRate;
 extern  float           g_ZOSlearningGradient;
 extern  long            g_min_nZScanZPosition;
@@ -603,7 +603,7 @@ extern  volatile unsigned char  g_ZMatrixChangedInRam;
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
 #if FEATURE_WORK_PART_Z_COMPENSATION
-extern  char            g_nWorkPartScanStatus;
+extern volatile unsigned char g_nWorkPartScanStatus;
 extern  char            g_nWorkPartScanMode;        // 0 = do not home z-axis, 1 = home z-axis
 extern  char            g_nActiveWorkPart;
 #endif // FEATURE_WORK_PART_Z_COMPENSATION
@@ -635,7 +635,7 @@ extern  char            g_debugLog;
 //extern    short           g_debugCounter[12];
 //extern    short           g_debugCounter[6];
 extern  unsigned long   g_uStopTime;
-extern  unsigned long   g_uBlockSDCommands;
+extern  unsigned long   g_uBlockCommands;
 //extern    short           g_debugInt16;
 //extern    unsigned short  g_debugUInt16;
 //extern    long            g_debugInt32;
@@ -647,7 +647,7 @@ extern  unsigned long   g_nManualSteps[4];
 
 
 #if FEATURE_PAUSE_PRINTING
-extern  volatile long    g_nPauseSteps[4];
+extern  volatile long   g_nPauseSteps[4];
 extern  volatile long   g_nContinueSteps[4];
 extern  volatile char   g_pauseStatus;
 extern  volatile char   g_pauseMode;
@@ -689,14 +689,21 @@ extern bool             g_nDigitZCompensationDigits_active;
  #endif // FEATURE_DIGIT_FLOW_COMPENSATION
 #endif // FEATURE_DIGIT_Z_COMPENSATION
 
+#if FEATURE_STARTLINE
+extern volatile unsigned char g_nDrawStartLineStatus;
+#endif // FEATURE_STARTLINE
+
 #if FEATURE_FIND_Z_ORIGIN
-extern  volatile char   g_nFindZOriginStatus;
-extern  long            g_nZOriginPosition[3];
-extern  int             g_nZOriginSet;
+extern volatile unsigned char g_nFindZOriginStatus;
+extern long            g_nZOriginPosition[3];
+extern int             g_nZOriginSet;
 #endif // FEATURE_FIND_Z_ORIGIN
 
-#if FEATURE_RGB_LIGHT_EFFECTS
+#if FEATURE_ALIGN_EXTRUDERS
+extern volatile unsigned char g_nAlignExtrudersStatus;
+#endif // FEATURE_ALIGN_EXTRUDERS
 
+#if FEATURE_RGB_LIGHT_EFFECTS
 extern unsigned char    g_uRGBHeatingR;
 extern unsigned char    g_uRGBHeatingG;
 extern unsigned char    g_uRGBHeatingB;
@@ -719,11 +726,6 @@ extern unsigned char    g_uRGBTargetR;
 extern unsigned char    g_uRGBTargetG;
 extern unsigned char    g_uRGBTargetB;
 #endif // FEATURE_RGB_LIGHT_EFFECTS
-
-#if FEATURE_ALIGN_EXTRUDERS
-extern unsigned char    g_nAlignExtrudersStatus;
-extern char             g_abortAlignExtruders;
-#endif // FEATURE_ALIGN_EXTRUDERS
 
 // initRF()
 extern void initRF( void );
@@ -886,7 +888,7 @@ extern void loopRF( void );
 
 #if FEATURE_OUTPUT_FINISHED_OBJECT
 // outputObject()
-extern void outputObject( void );
+extern void outputObject( bool showerrors = true );
 #endif // FEATURE_OUTPUT_FINISHED_OBJECT
 
 #if FEATURE_PARK
@@ -895,7 +897,6 @@ extern void parkPrinter( void );
 #endif // FEATURE_PARK
 
 #if FEATURE_PAUSE_PRINTING
-
 extern bool processingDirectMove();
 extern void checkPauseStatus_fromTask();
 extern void waitforPauseStatus_fromButton();
@@ -913,9 +914,6 @@ extern void determineZPausePositionForPrint( void );
 
 // determineZPausePositionForMill()
 extern void determineZPausePositionForMill( void );
-
-// waitUntilContinue
-extern void waitUntilContinue( void );
 #endif // FEATURE_PAUSE_PRINTING
 
 // setExtruderCurrent()

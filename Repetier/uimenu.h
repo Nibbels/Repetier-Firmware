@@ -41,6 +41,7 @@ List of placeholder:
 %os : Status message
 %oB : Buffer length
 %om : Speed multiplier
+%ov : active Speed
 %op : Is double or quadstepping?
 %of : flow multiplier
 %oc : Connection baudrate
@@ -271,16 +272,16 @@ for 2 row displays. You can add additional pages or change the default pages lik
     #define UI_MOD_COUNT 1
     
     #if UI_COLS<=16
-        UI_PAGE4(ui_page_mod2,  "LayerHeight:%LH",
-                                "ECMP%%%:   %LP",
-                                "Max:%LMMin:%Lm",
-                                "Z:%x2/%LC"
+        UI_PAGE4(ui_page_mod2,  "LayerHeight:%LH", /*12+LH(4)*/
+                                "Speed:%ovmm/s",   /*10+%ov(6)*/
+                                "zCMP:%Lm..%LM",   /*7+5+4*/
+                                "eCMP%LP%%%@%LC"   /*4+LP%5+@1+6*/
                                 )
     #else
-        UI_PAGE4(ui_page_mod2,  "LayerHeight:%LH",
-                                "ECMP%%%:   %LP",
-                                "CMPMax:%LM Min:%Lm",
-                                "Z:%x2 Z:%LC"
+        UI_PAGE4(ui_page_mod2,  "Layer Height: %LHmm",
+                                "Speed:    %ovmm/s",
+                                "zCMP: %Lm..%LM mm",   /*7+5+4*/
+                                "eCMP: %LP%%%@Z:%LC" /*6+LP%5+"@Z:"3+6:*/
                                 )
     #endif
     #define UI_MOD2_PAGES , &ui_page_mod2
@@ -317,11 +318,9 @@ UI_MENU_ACTION4(ui_menu_message,UI_ACTION_DUMMY,"%m1","%m2","%m3","%m4")
 UI_MENU_ACTION4C(ui_menu_xpos,UI_ACTION_XPOSITION,UI_TEXT_ACTION_XPOSITION4)
 UI_MENU_ACTION4C(ui_menu_ypos,UI_ACTION_YPOSITION,UI_TEXT_ACTION_YPOSITION4)
 UI_MENU_ACTION4C(ui_menu_zpos,UI_ACTION_ZPOSITION,UI_TEXT_ACTION_ZPOSITION4)
-UI_MENU_ACTION4C(ui_menu_zpos_notest,UI_ACTION_ZPOSITION,UI_TEXT_ACTION_ZPOSITION4)
 UI_MENU_ACTION4C(ui_menu_xpos_fast,UI_ACTION_XPOSITION_FAST,UI_TEXT_ACTION_XPOSITION_FAST4)
 UI_MENU_ACTION4C(ui_menu_ypos_fast,UI_ACTION_YPOSITION_FAST,UI_TEXT_ACTION_YPOSITION_FAST4)
 UI_MENU_ACTION4C(ui_menu_zpos_fast,UI_ACTION_ZPOSITION_FAST,UI_TEXT_ACTION_ZPOSITION_FAST4)
-UI_MENU_ACTION4C(ui_menu_zpos_fast_notest,UI_ACTION_ZPOSITION_FAST_NOTEST,UI_TEXT_ACTION_ZPOSITION_FAST4)
 #endif // UI_ROWS>=4
 
 UI_MENU_ACTION2C(ui_menu_epos,UI_ACTION_EPOSITION,UI_TEXT_ACTION_EPOSITION_FAST2)
@@ -354,7 +353,6 @@ UI_MENU_ACTIONCOMMAND(ui_menu_home_z,UI_TEXT_HOME_Z,UI_ACTION_HOME_Z)
 UI_MENU_ACTIONSELECTOR(ui_menu_go_xpos,UI_TEXT_X_POSITION,ui_menu_xpos)
 UI_MENU_ACTIONSELECTOR(ui_menu_go_ypos,UI_TEXT_Y_POSITION,ui_menu_ypos)
 UI_MENU_ACTIONSELECTOR(ui_menu_go_zpos,UI_TEXT_Z_POSITION,ui_menu_zpos)
-UI_MENU_ACTIONSELECTOR(ui_menu_go_zpos_notest,UI_TEXT_Z_POSITION,ui_menu_zpos_notest)
 UI_MENU_ACTIONSELECTOR_FILTER(ui_menu_go_epos,UI_TEXT_E_POSITION,ui_menu_epos,MENU_MODE_PRINTER, MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING | MENU_MODE_PAUSED)
 
 //Nibbels: Das Einstellmenü für die Z-Step-Höhe:
@@ -371,18 +369,15 @@ UI_MENU_ACTIONCOMMAND(ui_menu_config_single_steps,UI_TEXT_CONFIG_SINGLE_STEPS,UI
 UI_MENU_ACTIONSELECTOR(ui_menu_go_xfast,UI_TEXT_X_POS_FAST,ui_menu_xpos_fast)
 UI_MENU_ACTIONSELECTOR(ui_menu_go_yfast,UI_TEXT_Y_POS_FAST,ui_menu_ypos_fast)
 UI_MENU_ACTIONSELECTOR(ui_menu_go_zfast,UI_TEXT_Z_POS_FAST,ui_menu_zpos_fast)
-UI_MENU_ACTIONSELECTOR(ui_menu_go_zfast_notest,UI_TEXT_Z_POS_FAST,ui_menu_zpos_fast_notest)
 #define UI_SPEED 2
 #define UI_SPEED_X ,&ui_menu_go_xfast,&ui_menu_go_xpos
 #define UI_SPEED_Y ,&ui_menu_go_yfast,&ui_menu_go_ypos
 #define UI_SPEED_Z ,&ui_menu_go_zfast,&ui_menu_go_zpos
-#define UI_SPEED_Z_NOTEST ,&ui_menu_go_zfast_notest,&ui_menu_go_zpos_notest
 #else
 #define UI_SPEED 1
 #define UI_SPEED_X ,&ui_menu_go_xpos
 #define UI_SPEED_Y ,&ui_menu_go_ypos
 #define UI_SPEED_Z ,&ui_menu_go_zpos
-#define UI_SPEED_Z_NOTEST ,&ui_menu_go_zpos_notest
 #endif // UI_SPEEDDEPENDENT_POSITIONING
 
 #define UI_MENU_POSITIONS {UI_MENU_ADDCONDBACK &ui_menu_home_all,&ui_menu_home_x,&ui_menu_home_y,&ui_menu_home_z UI_SPEED_X UI_SPEED_Y UI_SPEED_Z UI_CONFIG_SINGLE_STEPS SET_TO_XY_ORIGIN_ENTRY  ,&ui_menu_go_epos}
@@ -566,10 +561,10 @@ UI_MENU_ACTIONCOMMAND(ui_menu_quick_power,UI_TEXT_POWER,UI_ACTION_POWER)
 #define MENU_PSON_ENTRY
 #endif // PS_ON_PIN>=0
 
-UI_MENU_ACTION4C(ui_menu_quick_stop_print_ack, UI_ACTION_SD_STOP_ACK, UI_TEXT_STOP_PRINT_ACK)
+UI_MENU_ACTION4C(ui_menu_quick_stop_print_ack, UI_ACTION_STOP_ACK, UI_TEXT_STOP_PRINT_ACK)
 //das stoppen kann auch über den repetierserver laufen, wenn man dem "RequestStop:" schickt, also parallel machen!! und für normale drucke das menü auch zulassen:
 UI_MENU_ACTIONSELECTOR_FILTER(ui_menu_quick_stop_print, UI_TEXT_STOP_PRINT, ui_menu_quick_stop_print_ack, MENU_MODE_SD_PRINTING | MENU_MODE_PRINTING, MENU_MODE_MILLER)
-UI_MENU_ACTION4C(ui_menu_quick_stop_mill_ack, UI_ACTION_SD_STOP_ACK, UI_TEXT_STOP_MILL_ACK)
+UI_MENU_ACTION4C(ui_menu_quick_stop_mill_ack, UI_ACTION_STOP_ACK, UI_TEXT_STOP_MILL_ACK)
 UI_MENU_ACTIONSELECTOR_FILTER(ui_menu_quick_stop_mill, UI_TEXT_STOP_MILL, ui_menu_quick_stop_mill_ack, MENU_MODE_SD_PRINTING | MENU_MODE_PRINTING, MENU_MODE_PRINTER)
 
 
@@ -695,13 +690,13 @@ UI_MENU_FILESELECT(ui_menu_sd_fileselector,UI_MENU_SD_FILESELECTOR,1)
 UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_sd_print_file,     UI_TEXT_PRINT_FILE,     UI_ACTION_SD_PRINT, MENU_MODE_SD_MOUNTED, MENU_MODE_MILLER | MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING | MENU_MODE_PAUSED)
 UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_sd_pause_print,    UI_TEXT_PAUSE_PRINT,    UI_ACTION_SD_PAUSE, MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING, MENU_MODE_PAUSED | MENU_MODE_MILLER)
 UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_sd_continue_print, UI_TEXT_CONTINUE_PRINT, UI_ACTION_SD_CONTINUE, MENU_MODE_PAUSED, MENU_MODE_MILLER)
-UI_MENU_ACTION4C(ui_menu_sd_stop_print_ack, UI_ACTION_SD_STOP_ACK, UI_TEXT_STOP_PRINT_ACK)
+UI_MENU_ACTION4C(ui_menu_sd_stop_print_ack, UI_ACTION_STOP_ACK, UI_TEXT_STOP_PRINT_ACK)
 UI_MENU_ACTIONSELECTOR_FILTER(ui_menu_sd_stop_print, UI_TEXT_STOP_PRINT, ui_menu_sd_stop_print_ack, MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING, MENU_MODE_MILLER)
 
 UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_sd_mill_file,     UI_TEXT_MILL_FILE,     UI_ACTION_SD_PRINT, MENU_MODE_SD_MOUNTED, MENU_MODE_PRINTER | MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING | MENU_MODE_PAUSED)
 UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_sd_pause_mill,    UI_TEXT_PAUSE_MILL,    UI_ACTION_SD_PAUSE, MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING, MENU_MODE_PAUSED | MENU_MODE_PRINTER)
 UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_sd_continue_mill, UI_TEXT_CONTINUE_MILL, UI_ACTION_SD_CONTINUE, MENU_MODE_PAUSED, MENU_MODE_PRINTER)
-UI_MENU_ACTION4C(ui_menu_sd_stop_mill_ack, UI_ACTION_SD_STOP_ACK, UI_TEXT_STOP_MILL_ACK)
+UI_MENU_ACTION4C(ui_menu_sd_stop_mill_ack, UI_ACTION_STOP_ACK, UI_TEXT_STOP_MILL_ACK)
 UI_MENU_ACTIONSELECTOR_FILTER(ui_menu_sd_stop_mill, UI_TEXT_STOP_MILL, ui_menu_sd_stop_mill_ack, MENU_MODE_SD_PRINTING, MENU_MODE_PRINTER)
 
 #if defined(SDCARDDETECT) && SDCARDDETECT>-1

@@ -23,7 +23,7 @@ class Commands
 {
 public:
     static void commandLoop();
-    static void checkForPeriodicalActions();
+    static void checkForPeriodicalActions( enum FirmwareState state = NotBusy );
     static void executeGCode(GCode *com);
     static void waitUntilEndOfAllMoves();
     static void waitUntilEndOfAllBuffers(unsigned int maxcodes = 0);

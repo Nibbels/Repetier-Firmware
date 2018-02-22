@@ -36,7 +36,6 @@ void Commands::commandLoop()
 #endif
     GCode::readFromSerial();
     GCode *code = GCode::peekCurrentCommand();
-    UI_MEDIUM; // do check encoder
     if(code)
     {
 #if SDSUPPORT
@@ -59,10 +58,14 @@ void Commands::commandLoop()
 } // commandLoop
 
 
-void Commands::checkForPeriodicalActions()
+void Commands::checkForPeriodicalActions(enum FirmwareState state)
 {
     bool buttonactive = ((HAL::timeInMilliseconds() - uid.lastButtonStart < 15000) ? true : false);
-
+    
+    if( state != NotBusy ){
+        GCode::keepAlive( state );
+    }
+    
     if(execute10msPeriodical){ //set by PWM-Timer
       execute10msPeriodical=0;
 
@@ -72,8 +75,8 @@ void Commands::checkForPeriodicalActions()
     }
 
     if(execute16msPeriodical){ //set by internal Watchdog-Timer
-       execute16msPeriodical = 0;
-       if(buttonactive) UI_SLOW;
+      execute16msPeriodical = 0;
+      if(buttonactive) UI_SLOW;
 
     }
 
@@ -115,9 +118,7 @@ void Commands::waitUntilEndOfAllMoves()
 
     while( bWait )
     {
-        Commands::checkForPeriodicalActions();
-        GCode::keepAlive( Processing );
-        UI_MEDIUM;
+        Commands::checkForPeriodicalActions( Processing );
 
         bWait = 0;
         if( PrintLine::hasLines() )     bWait = 1;
@@ -147,9 +148,7 @@ void Commands::waitUntilEndOfAllBuffers(unsigned int maxcodes)
 
     while(PrintLine::hasLines() || (code != NULL))
     {
-        //GCode::readFromSerial();
         code = GCode::peekCurrentCommand();
-        UI_MEDIUM; // do check encoder
         if(code)
         {
 #if SDSUPPORT
@@ -178,8 +177,7 @@ void Commands::waitUntilEndOfAllBuffers(unsigned int maxcodes)
                 break;
             }
         }
-        Commands::checkForPeriodicalActions();
-        UI_MEDIUM;
+        Commands::checkForPeriodicalActions( Processing );
     }
 
 } // waitUntilEndOfAllBuffers
@@ -189,17 +187,15 @@ void Commands::waitUntilEndOfZOS()
 {
     char    bWait = 0;
 
-    if( g_ZOSScanStatus )       bWait = 1;
+    if( g_nZOSScanStatus )       bWait = 1;
 
     while( bWait )
     {
         GCode::readFromSerial();
-        Commands::checkForPeriodicalActions();
-        GCode::keepAlive( Processing );
-        UI_MEDIUM;
-        
+        Commands::checkForPeriodicalActions( Processing );
+
         bWait = 0;
-        if( g_ZOSScanStatus )       bWait = 1;
+        if( g_nZOSScanStatus )       bWait = 1;
     }
 
 } // waitUntilEndOfZOS
@@ -690,8 +686,7 @@ void Commands::executeGCode(GCode *com)
 
             while((uint32_t)(codenum-HAL::timeInMilliseconds())  < 2000000000 )
             {
-                GCode::keepAlive( Processing );
-                Commands::checkForPeriodicalActions();
+                Commands::checkForPeriodicalActions( Processing );
             }
             break;
         }
@@ -869,15 +864,16 @@ void Commands::executeGCode(GCode *com)
             {
                 Printer::queuePositionLastSteps[E_AXIS] = Printer::convertToMM(com->E)*Printer::axisStepsPerMM[E_AXIS];
                 
+                //?? Printer::queuePositionCurrentSteps[E_AXIS] = Printer::queuePositionTargetSteps[E_AXIS] = Printer::queuePositionLastSteps[E_AXIS] = Printer::convertToMM(com->E)*Printer::axisStepsPerMM[E_AXIS];
+                
                 /* Repetier: https://github.com/repetier/Repetier-Firmware/commit/a63c660289b760faf033fdfd86bbc69c1050cfc9 ?
                   Printer::destinationSteps[E_AXIS] = Printer::currentPositionSteps[E_AXIS] = Printer::convertToMM(com->E) * Printer::axisStepsPerMM[E_AXIS];
                 wissen:
                 Printer::queuePositionTargetSteps[axis] <---> Printer::destinationSteps[axis]
-                Printer::currentPositionSteps[axis] <---> Printer::directPositionCurrentSteps[axis]
+                Printer::currentPositionSteps[axis] <---> Printer::queuePositionCurrentSteps[axis]
                 -> vermutlich in dieser firmware korrekt:
 
                 Printer::queuePositionCurrentSteps[E_AXIS] = Printer::queuePositionTargetSteps[E_AXIS] = Printer::queuePositionLastSteps[E_AXIS] = Printer::convertToMM(com->E) * Printer::axisStepsPerMM[E_AXIS];
-
                 */
             }
         }
@@ -1116,8 +1112,7 @@ void Commands::executeGCode(GCode *com)
                     {
                         currentTime = HAL::timeInMilliseconds();
                         Commands::printTemperatures();
-                        Commands::checkForPeriodicalActions();
-                        GCode::keepAlive( WaitHeater );
+                        Commands::checkForPeriodicalActions( WaitHeater );
 #if RETRACT_DURING_HEATUP
                         if (actExtruder == Extruder::current && actExtruder->waitRetractUnits > 0 && !retracted && dirRising && actExtruder->tempControl.currentTemperatureC > actExtruder->waitRetractTemperature)
                         {
@@ -1192,8 +1187,7 @@ void Commands::executeGCode(GCode *com)
                     while(heatedBedController.currentTemperatureC+TEMP_TOLERANCE < heatedBedController.targetTemperatureC)
                     {
                         Commands::printTemperatures();
-                        Commands::checkForPeriodicalActions();
-                        GCode::keepAlive( WaitHeater );
+                        Commands::checkForPeriodicalActions( WaitHeater );
                     }
 
 #if FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
@@ -1217,8 +1211,7 @@ void Commands::executeGCode(GCode *com)
                         {
                             allReached = true;
                             Commands::printTemperatures();
-                            Commands::checkForPeriodicalActions();
-                            GCode::keepAlive( WaitHeater );
+                            Commands::checkForPeriodicalActions( WaitHeater );
 
                             for( uint8_t h=0; h<NUM_TEMPERATURE_LOOPS; h++ )
                             {
@@ -1387,13 +1380,7 @@ void Commands::executeGCode(GCode *com)
                 }
                 if(Printer::debugDryrun())   // simulate movements without printing
                 {
-                    Extruder::setTemperatureForExtruder(0,0);
-#if NUM_EXTRUDER>1
-                    Extruder::setTemperatureForExtruder(0,1);
-#endif // NUM_EXTRUDER>1
-#if HEATED_BED_TYPE!=0
-                    target_bed_raw = 0;
-#endif // HEATED_BED_TYPE!=0
+                    Extruder::setTemperatureForAllExtruders(0, false);
                 }
                 break;
             }
@@ -1531,7 +1518,6 @@ void Commands::executeGCode(GCode *com)
             }
 #endif // BEEPER_TYPE>0
 
-#ifdef RAMP_ACCELERATION
             case 201:   // M201
             {
 #if FEATURE_MILLING_MODE
@@ -1564,7 +1550,6 @@ void Commands::executeGCode(GCode *com)
 #endif  // FEATURE_MILLING_MODE
                 break;
             }
-#endif // RAMP_ACCELERATION
 
             case 203:   // M203 - Temperature monitor
             {
@@ -1679,26 +1664,13 @@ void Commands::executeGCode(GCode *com)
             {
                 if(com->hasY())
                     Extruder::current->advanceL = com->Y;
-
-                if( Printer::debugInfo() )
-                {
-                    Com::printF(Com::tLinearLColon,Extruder::current->advanceL);
-                }
+                Com::printF(Com::tLinearLColon,Extruder::current->advanceL);
 #ifdef ENABLE_QUADRATIC_ADVANCE
                 if(com->hasX())
                     Extruder::current->advanceK = com->X;
-
-                if( Printer::debugInfo() )
-                {
-                    Com::printF(Com::tQuadraticKColon,Extruder::current->advanceK);
-                }
+                Com::printF(Com::tQuadraticKColon,Extruder::current->advanceK);
 #endif // ENABLE_QUADRATIC_ADVANCE
-
-                if( Printer::debugInfo() )
-                {
-                    Com::println();
-                }
-
+                Com::println();
                 Printer::updateAdvanceFlags();
                 break;
             }

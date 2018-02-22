@@ -139,13 +139,7 @@ extern int              maxadv2;
 extern float            maxadvspeed;
 #endif // USE_ADVANCE
 
-
 #include "Extruder.h"
-
-void manage_inactivity(uint8_t debug);
-
-extern void finishNextSegment();
-extern void linear_move(long steps_remaining[]);
 
 #ifndef FEATURE_DITTO_PRINTING
 #define FEATURE_DITTO_PRINTING false
@@ -155,12 +149,10 @@ extern void linear_move(long steps_remaining[]);
 #error Ditto printing requires exactly 2 extruder.
 #endif // FEATURE_DITTO_PRINTING && NUM_EXTRUDER!=2
 
-
 extern millis_t previousMillisCmd;
 extern millis_t maxInactiveTime;
 extern millis_t stepperInactiveTime;
 
-extern void setupTimerInterrupt();
 extern void motorCurrentControlInit();
 
 #include "Printer.h"
@@ -178,8 +170,6 @@ extern volatile uint osAnalogInputValues[OS_ANALOG_INPUTS];
 extern volatile uint8_t     execute100msPeriodical;
 extern volatile uint8_t     execute16msPeriodical;
 extern volatile uint8_t     execute10msPeriodical;
-
-extern void writeMonitor();
 
 #if FAN_PIN>-1 && FEATURE_FAN_CONTROL
 extern uint8_t fanKickstart;
@@ -215,7 +205,6 @@ public:
     void mount();
     void unmount();
     void startPrint();
-    void abortPrint();
 
     inline void setIndex(uint32_t  newpos)
     {

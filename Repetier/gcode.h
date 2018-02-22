@@ -162,15 +162,6 @@ public:
         return (hasP() ? P : def);
     } // getP
 
-    inline void setFormatError()
-    {
-        params2 |= 32768;
-    } // setFormatError
-
-    inline bool hasFormatError()
-    {
-        return ((params2 & 32768)!=0);
-    } // hasFormatError
 
     void printCommand();
     bool parseBinary(uint8_t *buffer,bool fromSerial);
@@ -228,7 +219,6 @@ private:
     static uint32_t actLineNumber;                      ///< Line number of current command.
     static volatile uint8_t bufferLength;               ///< Number of commands stored in gcode_buffer
     static millis_t timeOfLastDataPacket;               ///< Time, when we got the last data packet. Used to detect missing uint8_ts.
-    static uint8_t formatErrors;                        ///< Number of sequential format errors
     static millis_t lastBusySignal;                     ///< When was the last busy signal
 
 public:

@@ -92,7 +92,7 @@
 #define UI_ACTION_EXTR_START_FEEDRATE       1068
 //#define UI_ACTION_EXTR_HEATMANAGER          1069
 #define UI_ACTION_EXTR_WATCH_PERIOD         1070
-#define UI_ACTION_ADVANCE_K                 1072
+//#define UI_ACTION_ADVANCE_K                 1072
 #define UI_ACTION_DEBUG_ECHO                1074
 #define UI_ACTION_DEBUG_INFO                1075
 #define UI_ACTION_DEBUG_ERROR               1076
@@ -113,7 +113,7 @@
 #define UI_ACTION_SET_E_ORIGIN              1091
 #define UI_ACTION_EXTRUDER_RELATIVE         1092
 #define UI_ACTION_SELECT_EXTRUDER0          1093
-#define UI_ACTION_ADVANCE_L                 1094
+//#define UI_ACTION_ADVANCE_L                 1094
 #define UI_ACTION_PREHEAT_ABS               1095
 #define UI_ACTION_FLOWRATE_MULTIPLY         1096
 #define UI_ACTION_EXTR_WAIT_RETRACT_TEMP    1100
@@ -124,10 +124,10 @@
 #define UI_ACTION_WRITE_DEBUG               1105
 #define UI_ACTION_FANSPEED                  1106
 #define UI_ACTION_LIGHTS_ONOFF              1107
-#define UI_ACTION_SD_STOP                   1108
-#define UI_ACTION_SD_STOP_ACK               1109
-#define UI_ACTION_ZPOSITION_NOTEST          1110
-#define UI_ACTION_ZPOSITION_FAST_NOTEST     1111
+//#define UI_ACTION_SD_STOP                   1108
+#define UI_ACTION_STOP_ACK                  1109
+//#define UI_ACTION_ZPOSITION_NOTEST          1110
+//#define UI_ACTION_ZPOSITION_FAST_NOTEST     1111
 #define UI_ACTION_MAX_INACTIVE              1113
 #define UI_ACTION_BEEPER                    1114
 #define UI_ACTION_UNMOUNT_FILAMENT          1115
@@ -446,7 +446,6 @@ public:
     void finishAction(int action);
     void slowAction();
     void fastAction();
-    void mediumAction();
     void showMessage(bool refresh);
     void pushMenu(void *men,bool refresh);
     void adjustMenuPos();
@@ -639,7 +638,6 @@ void ui_check_slow_keys(int &action) {
 
 #define UI_INITIALIZE uid.initialize();
 #define UI_FAST if(pwm_count_heater & 4) {uid.fastAction();}
-#define UI_MEDIUM uid.mediumAction();
 #define UI_SLOW uid.slowAction();
 #define UI_STATUS(status) uid.setStatusP(PSTR(status));
 #define UI_STATUS_UPD(status) {uid.setStatusP(PSTR(status));uid.refreshPage();}
@@ -653,7 +651,6 @@ void ui_check_slow_keys(int &action) {
 #else
 #define UI_INITIALIZE {}
 #define UI_FAST {}
-#define UI_MEDIUM {}
 #define UI_SLOW {}
 #define UI_STATUS(status) {}
 #define UI_STATUS_RAM(status) {}
@@ -671,7 +668,6 @@ void ui_check_slow_keys(int &action) {
 #define BEEP_SHORT {}
 #define BEEP_LONG {}
 #define BEEP_START_PRINTING {}
-#define BEEP_ABORT_PRINTING {}
 #define BEEP_STOP_PRINTING {}
 #define BEEP_PAUSE {}
 #define BEEP_CONTINUE {}
@@ -694,7 +690,6 @@ void ui_check_slow_keys(int &action) {
 #define BEEP_SHORT beep(BEEPER_SHORT_SEQUENCE);
 #define BEEP_LONG beep(BEEPER_LONG_SEQUENCE);
 #define BEEP_START_PRINTING beep(BEEPER_START_PRINTING_SEQUENCE);
-#define BEEP_ABORT_PRINTING beep(BEEPER_ABORT_PRINTING_SEQUENCE);
 #define BEEP_STOP_PRINTING beep(BEEPER_STOP_PRINTING_SEQUENCE);
 #define BEEP_PAUSE beep(BEEPER_PAUSE_SEQUENCE);
 #define BEEP_CONTINUE beep(BEEPER_CONTINUE_SEQUENCE);
