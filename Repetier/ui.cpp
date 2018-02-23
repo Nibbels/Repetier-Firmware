@@ -3679,7 +3679,7 @@ void UIDisplay::nextPreviousAction(int8_t next)
         }
         case UI_ACTION_HOMING_FEEDRATE_X:
         {
-            INCREMENT_MIN_MAX(Printer::homingFeedrate[X_AXIS],5,5,1000);
+            INCREMENT_MIN_MAX(Printer::homingFeedrate[X_AXIS],5,5,MAX_FEEDRATE_X);
 
 #if FEATURE_AUTOMATIC_EEPROM_UPDATE
 #if FEATURE_MILLING_MODE
@@ -3701,7 +3701,7 @@ void UIDisplay::nextPreviousAction(int8_t next)
         }
         case UI_ACTION_HOMING_FEEDRATE_Y:
         {
-            INCREMENT_MIN_MAX(Printer::homingFeedrate[Y_AXIS],5,5,1000);
+            INCREMENT_MIN_MAX(Printer::homingFeedrate[Y_AXIS],5,5,MAX_FEEDRATE_Y);
 
 #if FEATURE_AUTOMATIC_EEPROM_UPDATE
 #if FEATURE_MILLING_MODE
@@ -3723,7 +3723,7 @@ void UIDisplay::nextPreviousAction(int8_t next)
         }
         case UI_ACTION_HOMING_FEEDRATE_Z:
         {
-            INCREMENT_MIN_MAX(Printer::homingFeedrate[Z_AXIS],5,5,1000);
+            INCREMENT_MIN_MAX(Printer::homingFeedrate[Z_AXIS],1,1,MAX_FEEDRATE_Z);
 
 #if FEATURE_AUTOMATIC_EEPROM_UPDATE
 #if FEATURE_MILLING_MODE
@@ -3745,7 +3745,7 @@ void UIDisplay::nextPreviousAction(int8_t next)
         }
         case UI_ACTION_MAX_FEEDRATE_X:
         {
-            INCREMENT_MIN_MAX(Printer::maxFeedrate[X_AXIS],5,1,1000);
+            INCREMENT_MIN_MAX(Printer::maxFeedrate[X_AXIS],5,1,MAX_FEEDRATE_X);
 
 #if FEATURE_AUTOMATIC_EEPROM_UPDATE
             HAL::eprSetFloat(EPR_X_MAX_FEEDRATE,Printer::maxFeedrate[X_AXIS]);
@@ -3756,7 +3756,7 @@ void UIDisplay::nextPreviousAction(int8_t next)
         }
         case UI_ACTION_MAX_FEEDRATE_Y:
         {
-            INCREMENT_MIN_MAX(Printer::maxFeedrate[Y_AXIS],5,1,1000);
+            INCREMENT_MIN_MAX(Printer::maxFeedrate[Y_AXIS],5,1,MAX_FEEDRATE_Y);
 
 #if FEATURE_AUTOMATIC_EEPROM_UPDATE
         HAL::eprSetFloat(EPR_Y_MAX_FEEDRATE,Printer::maxFeedrate[Y_AXIS]);
@@ -3767,7 +3767,7 @@ void UIDisplay::nextPreviousAction(int8_t next)
         }
         case UI_ACTION_MAX_FEEDRATE_Z:
         {
-            INCREMENT_MIN_MAX(Printer::maxFeedrate[Z_AXIS],5,1,1000);
+            INCREMENT_MIN_MAX(Printer::maxFeedrate[Z_AXIS],1,1,MAX_FEEDRATE_Z);
 
 #if FEATURE_AUTOMATIC_EEPROM_UPDATE
             HAL::eprSetFloat(EPR_Z_MAX_FEEDRATE,Printer::maxFeedrate[Z_AXIS]);

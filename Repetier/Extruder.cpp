@@ -1368,35 +1368,40 @@ KP = Ku * Maßzahl lt. Tabelle
 see also: http://www.mstarlabs.com/control/znrule.html
 */
                         switch(method){
-                            case 4: //PID Tyreus-Lyben ("lazy--" -> Heated Bed!)
-                                Kp = 0.4545f*Ku;      //1/2.2 KRkrit
-                                Ki = Kp/Tu/2.2f;        //2.2 Tkrit
-                                Kd = Kp*Tu/6.3f;      //1/6.3 Tkrit[/code]
-                                Com::printFLN(Com::tAPIDTyreusLyben);
-                            break;
-                            case 3: //PID no overshoot ("lazy-" -> Heated Bed!)
+                            case 4: { //PID Tyreus-Lyben ("lazy--" -> Heated Bed!)
+                               Kp = 0.4545f*Ku;      //1/2.2 KRkrit
+                               Ki = Kp/Tu/2.2f;        //2.2 Tkrit
+                               Kd = Kp*Tu/6.3f;      //1/6.3 Tkrit[/code]
+                               Com::printFLN(Com::tAPIDTyreusLyben);
+                               break;
+                            }
+                            case 3: { //PID no overshoot ("lazy-" -> Heated Bed!)
                                Kp = 0.2f*Ku;          //0.2 KRkrit
                                Ki = 2.0f*Kp/Tu;       //0.5 Tkrit
                                Kd = Kp*Tu/3.0f;       //0.333 Tkrit
                                Com::printFLN(Com::tAPIDNone);
-                            break;
-                            case 2: //PID some overshoot
+                               break;
+                            }
+                            case 2: { //PID some overshoot
                                Kp = 0.33f*Ku;         //0.33 KRkrit
                                Ki = 2.0f*Kp/Tu;       //0.5 Tkrit
                                Kd = Kp*Tu/3.0f;       //0.333 Tkrit
                                Com::printFLN(Com::tAPIDSome);
-                            break;
-                            case 1: //PID Pessen Integral Rule ("dynamic++" -> fast Hotend!)
+                               break;
+                            }
+                            case 1: { //PID Pessen Integral Rule ("dynamic++" -> fast Hotend!)
                                Kp = 0.7f*Ku;          //0.7 KRkrit
                                Ki = 2.5f*Kp/Tu;       //0.4 Tkrit
                                Kd = Kp*Tu*3.0f/20.0f; //0.15 Tkrit
                                Com::printFLN(Com::tAPIDPessen);
-                            break;
-                            default: //PID classic Ziegler-Nichols  ("dynamic+" -> Hotend!)
+                               break;
+                            }
+                            default: { //PID classic Ziegler-Nichols  ("dynamic+" -> Hotend!)
                                Kp = 0.6f*Ku;          //0.6 KRkrit
                                Ki = 2.0f*Kp/Tu;       //0.5 Tkrit
                                Kd = Kp*Tu/8.0f;       //0.125 Tkrit
                                Com::printFLN(Com::tAPIDClassic);
+                            }
                         }
                         Com::printFLN(Com::tAPIDKp,Kp);
                         Com::printFLN(Com::tAPIDKi,Ki);

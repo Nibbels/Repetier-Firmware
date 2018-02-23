@@ -1,7 +1,14 @@
 TODO: Z-Lift-Bug seems to be still present! Avoid Z-Lift: Todo @Conrad -> Has this possibly been fixed by removing halfstepping in 1.37u4?
 TODO: Testing, testing ..
 
-V RF.01.38.35.Mod (2018-02-10) 
+V RF.01.38.36.Mod (2018-02-22) 
+- via menu the homing feedrate and maximum feedrate can now be adjusted better: 
+    - Z increments 1, not 5. 
+    - Maximum is MAX_FEEDRATE_X _Y _Z not 1000.
+ (For Z-Axis 12mm/s is fast! That is because we use 2560steps/mm. XY on the other hand only uses 152 Steps/mm. That is a factor of 16.84!
+ So 200mm/s at X/Y-Axis fits 12mm/s in Z-Axis when it comes to interrupt amounts and calculation time.)
+
+V RF.01.38.35.Mod (2018-02-21) 
 - https://github.com/foosel/OctoPrint/issues/2367#issuecomment-357554341 changed upstream command "disconnect" to "stop" when canceling a print. The new octoprint will support this.
 - added octostep as an 8x double/quad-stepping. I saw that moving Z fast still caused lags.
 - decreased MAX_FEEDRATE_X _Y _Z in RF1000.h and RF2000.h to avoid way to fast speeds.
@@ -14,7 +21,7 @@ V RF.01.38.33.Mod (2018-02-08)
 - AlignExtruders: Remove Z-Home over bed / unnecessary error handling.
 - replaced RF.cpp's tab chars with spaces
 - cleaned up copied code
-
+ 
 V RF.01.38.32.Mod (2018-02-08) 
 - HBS: additional maximum delta for moving back very slow
 - HBS: If testIdlePressure() fails while scanning then g_scanRetries are used up (homing, driving Y, retry ...) instead of canceling the scan.
