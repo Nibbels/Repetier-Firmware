@@ -390,7 +390,7 @@ void Printer::kill(uint8_t only_steppers)
 
 #if FAN_PIN>-1 && FEATURE_FAN_CONTROL
     // disable the fan
-    Commands::setFanSpeed(0,false);
+    Commands::setFanSpeed(0);
 #endif // FAN_PIN>-1 && FEATURE_FAN_CONTROL
 
     disableAllSteppersNow();
@@ -971,26 +971,6 @@ void Printer::setup()
     WRITE(EXT1_HEATER_PIN,HEATER_PINS_INVERTED);
 #endif // defined(EXT1_HEATER_PIN) && EXT1_HEATER_PIN>-1 && NUM_EXTRUDER>1
 
-#if defined(EXT2_HEATER_PIN) && EXT2_HEATER_PIN>-1 && NUM_EXTRUDER>2
-    SET_OUTPUT(EXT2_HEATER_PIN);
-    WRITE(EXT2_HEATER_PIN,HEATER_PINS_INVERTED);
-#endif // defined(EXT2_HEATER_PIN) && EXT2_HEATER_PIN>-1 && NUM_EXTRUDER>2
-
-#if defined(EXT3_HEATER_PIN) && EXT3_HEATER_PIN>-1 && NUM_EXTRUDER>3
-    SET_OUTPUT(EXT3_HEATER_PIN);
-    WRITE(EXT3_HEATER_PIN,HEATER_PINS_INVERTED);
-#endif // defined(EXT3_HEATER_PIN) && EXT3_HEATER_PIN>-1 && NUM_EXTRUDER>3
-
-#if defined(EXT4_HEATER_PIN) && EXT4_HEATER_PIN>-1 && NUM_EXTRUDER>4
-    SET_OUTPUT(EXT4_HEATER_PIN);
-    WRITE(EXT4_HEATER_PIN,HEATER_PINS_INVERTED);
-#endif // defined(EXT4_HEATER_PIN) && EXT4_HEATER_PIN>-1 && NUM_EXTRUDER>4
-
-#if defined(EXT5_HEATER_PIN) && EXT5_HEATER_PIN>-1 && NUM_EXTRUDER>5
-    SET_OUTPUT(EXT5_HEATER_PIN);
-    WRITE(EXT5_HEATER_PIN,HEATER_PINS_INVERTED);
-#endif // defined(EXT5_HEATER_PIN) && EXT5_HEATER_PIN>-1 && NUM_EXTRUDER>5
-
 #if EXT0_EXTRUDER_COOLER_PIN>-1
     SET_OUTPUT(EXT0_EXTRUDER_COOLER_PIN);
     WRITE(EXT0_EXTRUDER_COOLER_PIN,LOW);
@@ -1000,26 +980,6 @@ void Printer::setup()
     SET_OUTPUT(EXT1_EXTRUDER_COOLER_PIN);
     WRITE(EXT1_EXTRUDER_COOLER_PIN,LOW);
 #endif // defined(EXT1_EXTRUDER_COOLER_PIN) && EXT1_EXTRUDER_COOLER_PIN>-1 && NUM_EXTRUDER>1
-
-#if defined(EXT2_EXTRUDER_COOLER_PIN) && EXT2_EXTRUDER_COOLER_PIN>-1 && NUM_EXTRUDER>2
-    SET_OUTPUT(EXT2_EXTRUDER_COOLER_PIN);
-    WRITE(EXT2_EXTRUDER_COOLER_PIN,LOW);
-#endif // defined(EXT2_EXTRUDER_COOLER_PIN) && EXT2_EXTRUDER_COOLER_PIN>-1 && NUM_EXTRUDER>2
-
-#if defined(EXT3_EXTRUDER_COOLER_PIN) && EXT3_EXTRUDER_COOLER_PIN>-1 && NUM_EXTRUDER>3
-    SET_OUTPUT(EXT3_EXTRUDER_COOLER_PIN);
-    WRITE(EXT3_EXTRUDER_COOLER_PIN,LOW);
-#endif // defined(EXT3_EXTRUDER_COOLER_PIN) && EXT3_EXTRUDER_COOLER_PIN>-1 && NUM_EXTRUDER>3
-
-#if defined(EXT4_EXTRUDER_COOLER_PIN) && EXT4_EXTRUDER_COOLER_PIN>-1 && NUM_EXTRUDER>4
-    SET_OUTPUT(EXT4_EXTRUDER_COOLER_PIN);
-    WRITE(EXT4_EXTRUDER_COOLER_PIN,LOW);
-#endif // defined(EXT4_EXTRUDER_COOLER_PIN) && EXT4_EXTRUDER_COOLER_PIN>-1 && NUM_EXTRUDER>4
-
-#if defined(EXT5_EXTRUDER_COOLER_PIN) && EXT5_EXTRUDER_COOLER_PIN>-1 && NUM_EXTRUDER>5
-    SET_OUTPUT(EXT5_EXTRUDER_COOLER_PIN);
-    WRITE(EXT5_EXTRUDER_COOLER_PIN,LOW);
-#endif // defined(EXT5_EXTRUDER_COOLER_PIN) && EXT5_EXTRUDER_COOLER_PIN>-1 && NUM_EXTRUDER>5
 
     motorCurrentControlInit(); // Set current if it is firmware controlled
 
@@ -1846,7 +1806,11 @@ void Printer::homeZAxis()
         // if we have circuit-type Z endstops and we don't know at which endstop we currently are, first move down a bit
 #if FEATURE_CONFIGURABLE_Z_ENDSTOPS
         if( Printer::ZEndstopUnknown ) {
+            //verzweifelter rausfahrversuch beim RF1000, ohne ahnung ob man den schalter quetscht oder entlastet.
+            //stimmt hier überhaupt homedir * -1 ?? sollte der drucker nicht besser immer nach unten das rausfahren testen?
+            //sollte man nicht für diese aktion evtl. den motorstrom in z runternehmen und während hin und herfahren schrittweise anheben bis man frei ist?
             PrintLine::moveRelativeDistanceInSteps(0,0,axisStepsPerMM[Z_AXIS] * -1 * ENDSTOP_Z_BACK_MOVE * nHomeDir,0,homingFeedrate[Z_AXIS]/ENDSTOP_Z_RETEST_REDUCTION_FACTOR,true,false);
+            //evtl. am besten: Stop und Meldung "Please release Z-Endstop and restart printer"
         }
 #endif
         UI_STATUS_UPD( UI_TEXT_HOME_Z );
@@ -1956,10 +1920,33 @@ void Printer::homeAxis(bool xaxis,bool yaxis,bool zaxis) // home non-delta print
     homingOrder = HOMING_ORDER_PRINT;
 #endif // FEATURE_MILLING_MODE
 
+#if FEATURE_CONFIGURABLE_Z_ENDSTOPS
+    //ich weiß nicht ob das überhaupt ein gutes verhalten ist. Es ist nicht gut, wenn die z-schraube zu weit reingeschraubt ist und daher z-homing über dem bett verboten sein sollte.
+    //Printer::ZEndstopUnknown = 1 gibts nur, wenn der RF1000 mit Circuitschaltung mit einem der z-endstops gedrückt aufwacht, oder man in dieser position auf den endstop umstellt.
+    //super wäre, wenn die düse dann nicht über dem bett wäre. -> test sollte erst nach unten stattfinden, dann ist nur ein schalter am ende, wenn was schief geht, niemals aber die düse oder das hotend -> emergency-block hilft aber.
+    
+    //evtl. am besten: Stop und Meldung "Please release Z-Endstop and restart printer"
+    
+    //if( Printer::ZEndstopUnknown && homingOrder < 5 /*not z first -> do z first*/ ) )
+    /*{
+        if(homingOrder == HOME_ORDER_XYZ
+        || homingOrder == HOME_ORDER_XZY)
+        {
+            homingOrder = HOME_ORDER_ZXY;
+        }
+        else if(homingOrder == HOME_ORDER_YXZ
+             || homingOrder == HOME_ORDER_YZX)
+        {
+                homingOrder = HOME_ORDER_ZYX;
+        }
+    }
+    */
+#endif //FEATURE_CONFIGURABLE_Z_ENDSTOPS
+    
 #if FEATURE_MILLING_MODE
-    if(operatingMode == OPERATING_MODE_PRINT){
+    if(operatingMode == OPERATING_MODE_PRINT){ //wollte nicht milling mode, weil ich die mechanik da nicht kenne, dieses if ist unter umständen nutzlos.
 #endif // FEATURE_MILLING_MODE
-      if( (!yaxis && zaxis) || ( homingOrder == HOME_ORDER_XZY && homingOrder == HOME_ORDER_ZXY && homingOrder == HOME_ORDER_ZYX ) )
+      if( (!yaxis && zaxis) || ( /* z vor y */ homingOrder == HOME_ORDER_XZY || homingOrder == HOME_ORDER_ZXY || homingOrder == HOME_ORDER_ZYX ) )
       {
        // do not allow homing Z-Only within menu, when the Extruder is configured < 0 and over bed.
        if( !Printer::isZHomeSafe() ) 
@@ -2267,23 +2254,27 @@ void Printer::performZCompensation( void )
 
 void Printer::stopPrint() //function for aborting USB and SD-Prints
 {
-    g_uBlockCommands = 1; //keine gcodes mehr ausführen bis beenden beendet.
-    g_uStartOfIdle = 0;     //jetzt nicht in showidle() gehen; output object setzt das wieder
-    UI_STATUS_UPD( UI_TEXT_STOP_PRINT );
+    if( !Printer::isPrinting() ) return;
+    g_uStartOfIdle = 0; //jetzt nicht mehr in showidle() gehen;
 
-    if( Printer::isPrinting() && !Printer::isMenuMode(MENU_MODE_SD_PRINTING) ) //prüfung auf !sdmode sollte hier eigenlicht nicht mehr nötig sein, aber ..
+    if( sd.sdmode ) //prüfung auf !sdmode sollte hier eigenlicht nicht mehr nötig sein, aber ..
     {
+         //block sdcard from reading more.
+        Com::printFLN( PSTR("SD print stopped.") );
+        sd.sdmode = false;
+    }else{
+         //block some of the usb sources from sending more data
         Com::printFLN( PSTR( "RequestStop:" ) ); //tell repetierserver to stop.
         Com::printFLN( PSTR( "// action:cancel" ) ); //tell octoprint to cancel print. > 1.3.7  https://github.com/foosel/OctoPrint/issues/2367#issuecomment-357554341
         Com::printFLN( PSTR("USB print stopped.") );
-    }else{
-        Com::printFLN( PSTR("SD print stopped.") );
-        sd.sdmode = false;
-        sd.filesize = 0;
-        sd.sdpos    = 0;
     }
 
     InterruptProtectedBlock noInts;
+    g_uBlockCommands = 1; //keine gcodes mehr ausführen bis beenden beendet.
+    //now mark the print to get cleaned up after some time:
+    g_uStopTime = HAL::timeInMilliseconds(); //starts output object in combination with g_uBlockCommands
+
+    //erase the coordinates and kill the current tastkplaner:
     PrintLine::resetPathPlanner();
     PrintLine::cur = NULL;
     // we have to tell the firmware about its real current position
@@ -2291,48 +2282,10 @@ void Printer::stopPrint() //function for aborting USB and SD-Prints
     Printer::queuePositionLastSteps[Y_AXIS] = Printer::queuePositionTargetSteps[Y_AXIS] = Printer::queuePositionCurrentSteps[Y_AXIS];
     Printer::queuePositionLastSteps[Z_AXIS] = Printer::queuePositionTargetSteps[Z_AXIS] = Printer::queuePositionCurrentSteps[Z_AXIS];
     //G92 E0:
-    Printer::queuePositionCurrentSteps[E_AXIS] = Printer::queuePositionTargetSteps[E_AXIS] = Printer::queuePositionLastSteps[E_AXIS] = 0;
+    Printer::queuePositionTargetSteps[E_AXIS] = Printer::queuePositionLastSteps[E_AXIS] = 0;
     Printer::updateCurrentPosition(true);
     noInts.unprotect();
+
     Commands::printCurrentPosition();
-
-#if FEATURE_PAUSE_PRINTING
-    if( g_pauseStatus != PAUSE_STATUS_NONE )
-    {
-        // the printing is paused at the moment
-        noInts.protect();
-
-        g_uPauseTime  = 0;
-        g_pauseStatus = PAUSE_STATUS_NONE;
-        g_pauseMode   = PAUSE_MODE_NONE;
-
-        g_nContinueSteps[X_AXIS] = 0;
-        g_nContinueSteps[Y_AXIS] = 0;
-        g_nContinueSteps[Z_AXIS] = 0;
-        g_nContinueSteps[E_AXIS] = 0;
-
-        noInts.unprotect();
-    }
-    Printer::setMenuMode(MENU_MODE_PAUSED,false);
-#endif // FEATURE_PAUSE_PRINTING
-
-    //unaufgeräumtes beenden: Es wird sowieso der Stepper deaktiviert.
-    g_nZOSScanStatus = 0;
-    g_nHeatBedScanStatus = 0;
-    //g_nAlignExtrudersStatus = 0;
-    g_nDrawStartLineStatus = 0;
-#if FEATURE_FIND_Z_ORIGIN
-    g_nFindZOriginStatus = 0;
-#endif // FEATURE_FIND_Z_ORIGIN
-#if FEATURE_MILLING_MODE && FEATURE_WORK_PART_Z_COMPENSATION
-    g_nWorkPartScanStatus = 0;
-#endif // FEATURE_MILLING_MODE && FEATURE_WORK_PART_Z_COMPENSATION
-
-    Com::printFLN(PSTR("Stop complete"));
-    Printer::setPrinting(false);
-
-    BEEP_STOP_PRINTING
-
-    g_uStopTime = HAL::timeInMilliseconds(); //starts output object in combination with g_uBlockCommands
-
+    UI_STATUS_UPD( UI_TEXT_STOP_PRINT );
 } // stopPrint

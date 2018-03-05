@@ -684,7 +684,7 @@
 #define E1_PINS
 #endif
 
-#if NUM_EXTRUDER<3
+#if NUM_EXTRUDER<=2
 #undef E2_PINS
 #define E2_PINS
 #endif

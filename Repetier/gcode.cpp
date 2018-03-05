@@ -521,7 +521,7 @@ void GCode::readFromSD()
         return;
     }
 
-    while( sd.filesize > sd.sdpos && commandsReceivingWritePosition < MAX_CMD_SIZE)    // consume data until no data or buffer full
+    while( sd.sdmode && sd.filesize > sd.sdpos && commandsReceivingWritePosition < MAX_CMD_SIZE)    // consume data until no data or buffer full
     {
         timeOfLastDataPacket = HAL::timeInMilliseconds();
         int n = sd.file.read();
@@ -563,7 +563,7 @@ void GCode::readFromSD()
             if(commandsReceivingWritePosition==binaryCommandSize)
             {
                 GCode *act = &commandsBuffered[bufferWriteIndex];
-                if(act->parseBinary(commandReceiving, false))
+                if(sd.sdmode && act->parseBinary(commandReceiving, false))
                     pushCommand();
                 commandsReceivingWritePosition = 0;
                 /*
@@ -590,7 +590,7 @@ void GCode::readFromSD()
                     continue;
                 }
                 GCode *act = &commandsBuffered[bufferWriteIndex];
-                if(act->parseAscii((char *)commandReceiving, false))
+                if(sd.sdmode && act->parseAscii((char *)commandReceiving, false))
                     pushCommand();
                 commandsReceivingWritePosition = 0;
                 /*repetier 1.0.1  : if(sd.sdmode == 2)                     sd.sdmode = 0; -> wir haben noch false und true drin, brauchen wir das also?*/

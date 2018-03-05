@@ -689,10 +689,6 @@ extern bool             g_nDigitZCompensationDigits_active;
  #endif // FEATURE_DIGIT_FLOW_COMPENSATION
 #endif // FEATURE_DIGIT_Z_COMPENSATION
 
-#if FEATURE_STARTLINE
-extern volatile unsigned char g_nDrawStartLineStatus;
-#endif // FEATURE_STARTLINE
-
 #if FEATURE_FIND_Z_ORIGIN
 extern volatile unsigned char g_nFindZOriginStatus;
 extern long            g_nZOriginPosition[3];
@@ -886,10 +882,8 @@ extern void doZCompensation( void );
 // loopRF()
 extern void loopRF( void );
 
-#if FEATURE_OUTPUT_FINISHED_OBJECT
 // outputObject()
 extern void outputObject( bool showerrors = true );
-#endif // FEATURE_OUTPUT_FINISHED_OBJECT
 
 #if FEATURE_PARK
 // parkPrinter()

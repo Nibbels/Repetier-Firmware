@@ -518,14 +518,9 @@ void SDCard::deleteFile(char *filename)
 {
     if(!sdactive) return;
 
-    if(Printer::isMenuMode(MENU_MODE_SD_PRINTING))
+    if(sdmode)
     {
         // we do not allow to delete a file while we are printing/milling from the SD card
-        if( Printer::debugErrors() )
-        {
-            Com::printFLN(PSTR("It is not possible to delete a file from the SD card until the current processing has finished."));
-        }
-
         showError( (void*)ui_text_delete_file, (void*)ui_text_operation_denied );
         return;
     }

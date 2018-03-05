@@ -162,38 +162,6 @@ class Extruder   // Size: 12*1 Byte+12*4 Byte+4*2Byte = 68 Byte
                 break;
             }
 #endif // defined(EXT1_STEP_PIN) && NUM_EXTRUDER>1
-
-#if defined(EXT2_STEP_PIN) && NUM_EXTRUDER>2
-            case 2:
-            {
-                WRITE(EXT2_STEP_PIN,HIGH);
-                break;
-            }
-#endif // defined(EXT2_STEP_PIN) && NUM_EXTRUDER>2
-
-#if defined(EXT3_STEP_PIN) && NUM_EXTRUDER>3
-            case 3:
-            {
-                WRITE(EXT3_STEP_PIN,HIGH);
-                break;
-            }
-#endif // defined(EXT3_STEP_PIN) && NUM_EXTRUDER>3
-
-#if defined(EXT4_STEP_PIN) && NUM_EXTRUDER>4
-            case 4:
-            {
-                WRITE(EXT4_STEP_PIN,HIGH);
-                break;
-            }
-#endif // defined(EXT4_STEP_PIN) && NUM_EXTRUDER>4
-
-#if defined(EXT5_STEP_PIN) && NUM_EXTRUDER>5
-            case 5:
-            {
-                WRITE(EXT5_STEP_PIN,HIGH);
-                break;
-            }
-#endif // defined(EXT5_STEP_PIN) && NUM_EXTRUDER>5
         }
 #endif
     } // step
@@ -230,38 +198,6 @@ class Extruder   // Size: 12*1 Byte+12*4 Byte+4*2Byte = 68 Byte
                 break;
             }
 #endif // defined(EXT1_STEP_PIN) && NUM_EXTRUDER>1
-
-#if defined(EXT2_STEP_PIN) && NUM_EXTRUDER>2
-            case 2:
-            {
-                WRITE(EXT2_STEP_PIN,LOW);
-                break;
-            }
-#endif // defined(EXT2_STEP_PIN) && NUM_EXTRUDER>2
-
-#if defined(EXT3_STEP_PIN) && NUM_EXTRUDER>3
-            case 3:
-            {
-                WRITE(EXT3_STEP_PIN,LOW);
-                break;
-            }
-#endif // defined(EXT3_STEP_PIN) && NUM_EXTRUDER>3
-
-#if defined(EXT4_STEP_PIN) && NUM_EXTRUDER>4
-            case 4:
-            {
-                WRITE(EXT4_STEP_PIN,LOW);
-                break;
-            }
-#endif // defined(EXT4_STEP_PIN) && NUM_EXTRUDER>4
-
-#if defined(EXT5_STEP_PIN) && NUM_EXTRUDER>5
-            case 5:
-            {
-                WRITE(EXT5_STEP_PIN,LOW);
-                break;
-            }
-#endif // defined(EXT5_STEP_PIN) && NUM_EXTRUDER>5
         }
 #endif // NUM_EXTRUDER==1
 
@@ -321,50 +257,6 @@ class Extruder   // Size: 12*1 Byte+12*4 Byte+4*2Byte = 68 Byte
                 break;
             }
 #endif // defined(EXT1_DIR_PIN) && NUM_EXTRUDER>1
-
-#if defined(EXT2_DIR_PIN) && NUM_EXTRUDER>2
-            case 2:
-            {
-                if(dir)
-                    WRITE(EXT2_DIR_PIN,!EXT2_INVERSE);
-                else
-                    WRITE(EXT2_DIR_PIN,EXT2_INVERSE);
-                break;
-            }
-#endif // defined(EXT2_DIR_PIN) && NUM_EXTRUDER>2
-
-#if defined(EXT3_DIR_PIN) && NUM_EXTRUDER>3
-            case 3:
-            {
-                if(dir)
-                    WRITE(EXT3_DIR_PIN,!EXT3_INVERSE);
-                else
-                    WRITE(EXT3_DIR_PIN,EXT3_INVERSE);
-                break;
-            }
-#endif // defined(EXT3_DIR_PIN) && NUM_EXTRUDER>3
-
-#if defined(EXT4_DIR_PIN) && NUM_EXTRUDER>4
-            case 4:
-            {
-                if(dir)
-                    WRITE(EXT4_DIR_PIN,!EXT4_INVERSE);
-                else
-                    WRITE(EXT4_DIR_PIN,EXT4_INVERSE);
-                break;
-            }
-#endif // defined(EXT4_DIR_PIN) && NUM_EXTRUDER>4
-
-#if defined(EXT5_DIR_PIN) && NUM_EXTRUDER>5
-            case 5:
-            {
-                if(dir)
-                    WRITE(EXT5_DIR_PIN,!EXT5_INVERSE);
-                else
-                    WRITE(EXT5_DIR_PIN,EXT5_INVERSE);
-                break;
-            }
-#endif // defined(EXT5_DIR_PIN) && NUM_EXTRUDER>5
         }
 #endif // NUM_EXTRUDER>0
 

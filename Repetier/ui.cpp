@@ -1698,10 +1698,9 @@ void UIDisplay::parse(char *txt,bool ram)
 #endif // NUM_EXTRUDER>0
                 else if(c2 == 'g')                                                                      // %Xg : Printer::stepsDoublerFrequency 
                 {
-                    addInt(Printer::stepsDoublerFrequency,5);
+                    addInt(Printer::stepsDoublerFrequency,4);
                     addStringP( PSTR(" ") );
-                    addFloat(Printer::stepsDoublerFrequency/RMath::max(XAXIS_STEPS_PER_MM,YAXIS_STEPS_PER_MM),3,0);
-                    addStringP( PSTR("mm/s") );
+                    addInt(int(Printer::stepsDoublerFrequency/RMath::max(XAXIS_STEPS_PER_MM,YAXIS_STEPS_PER_MM)),2);
                 }
 #if FEATURE_MILLING_MODE
                 else if(c2=='Z')                                                                        // %XZ : Milling special max. acceleration
@@ -1836,9 +1835,9 @@ void UIDisplay::parse(char *txt,bool ram)
             }
             case 'S':
             {
-                if(c2=='0')      addFloat(extruder[0].stepsPerMM,4,0);                                                // %S0 : Steps per mm extruder0
-                else if(c2=='1') addFloat(extruder[1].stepsPerMM,4,0);                                                // %S1 : Steps per mm extruder1
-                else if(c2=='e') addFloat(Extruder::current->stepsPerMM,3,1);                                         // %Se : Steps per mm current extruder
+                if(c2=='0')      addFloat(extruder[0].stepsPerMM,3,0);                                                // %S0 : Steps per mm extruder0
+                else if(c2=='1') addFloat(extruder[1].stepsPerMM,3,0);                                                // %S1 : Steps per mm extruder1
+                else if(c2=='e') addFloat(Extruder::current->stepsPerMM,3,0);                                         // %Se : Steps per mm current extruder
                 else if(c2=='z') addFloat(g_nManualSteps[Z_AXIS] * Printer::invAxisStepsPerMM[Z_AXIS] * 1000,4,0);    // %Sz : Mikrometer per Z-Single_Step (Z_Axis)
                 else if(c2=='M' && col<MAX_COLS) if(g_ZMatrixChangedInRam) printCols[col++]='*';                      // %SM : Matrix has changed in Ram and is ready to Save. -> *)
                 break;
@@ -3288,7 +3287,7 @@ void UIDisplay::nextPreviousAction(int8_t next)
 #if FAN_PIN>-1 && FEATURE_FAN_CONTROL
         case UI_ACTION_FANSPEED:
         {
-            Commands::setFanSpeed(Printer::getFanSpeed()+increment,false);
+            Commands::setFanSpeed(Printer::getFanSpeed()+increment);
             break;
         }
 #endif // FAN_PIN>-1 && FEATURE_FAN_CONTROL
@@ -4518,11 +4517,7 @@ void UIDisplay::executeAction(int action)
                 if( PrintLine::linesCount )
                 {
                     // do not allow homing via the menu while we are printing
-                    if( Printer::debugErrors() )
-                    {
-                        Com::printFLN( Com::tPrintingIsInProcessError );
-                    }
-
+                    Com::printFLN( Com::tPrintingIsInProcessError );
                     showError( (void*)ui_text_home, (void*)ui_text_operation_denied );
                     break;
                 }
@@ -4530,21 +4525,7 @@ void UIDisplay::executeAction(int action)
                 {
                     break;
                 }
-
-#if FEATURE_CONFIGURABLE_Z_ENDSTOPS
-                if( Printer::ZEndstopUnknown )
-                {
-                    // in case the z-endstop is unknown, we home only in z-direction //Nibbels 08.02.2018 warum??
-                    Printer::homeAxis(false,false,true);
-                }
-                else
-                {
-                    Printer::homeAxis(true,true,true);
-                }
-#else
                 Printer::homeAxis(true,true,true);
-#endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
-
                 Commands::printCurrentPosition();
                 break;
             }
@@ -4654,7 +4635,7 @@ void UIDisplay::executeAction(int action)
             case UI_ACTION_POWER:
             {
 #if PS_ON_PIN>=0 // avoid compiler errors when the power supply pin is disabled
-                Commands::waitUntilEndOfAllMoves();
+                Commands::waitUntilEndOfAllMoves(); //M80/M81 UI_ACTION_POWER toggle
                 SET_OUTPUT(PS_ON_PIN); //GND
                 TOGGLE(PS_ON_PIN);
 #endif // PS_ON_PIN>=0
@@ -4931,13 +4912,6 @@ void UIDisplay::executeAction(int action)
 #endif // NUM_EXTRUDER>1
                 break;
             }
-            case UI_ACTION_EXTRUDER2_OFF:
-            {
-#if NUM_EXTRUDER>2
-                Extruder::setTemperatureForExtruder(0,2);
-#endif // NUM_EXTRUDER>2
-                break;
-            }
             case UI_ACTION_DISABLE_STEPPER:
             {
                 Printer::kill( true );
@@ -5070,16 +5044,7 @@ void UIDisplay::executeAction(int action)
 
                 break;
             }
-            case UI_ACTION_SELECT_EXTRUDER2:
-            {
-#if NUM_EXTRUDER>2
-                Extruder::selectExtruderById(2);
-#endif // NUM_EXTRUDER>2
-                
-                break;
-            }
-
-#if NUM_EXTRUDER == 2
+#if NUM_EXTRUDER >= 1
             case UI_ACTION_ACTIVE_EXTRUDER:
             {
                 if( Extruder::current->id == 0 )    Extruder::selectExtruderById( 1 );
@@ -5183,27 +5148,27 @@ void UIDisplay::executeAction(int action)
 #if FAN_PIN>-1 && FEATURE_FAN_CONTROL
             case UI_ACTION_FAN_OFF:
             {
-                Commands::setFanSpeed(0,false);
+                Commands::setFanSpeed(0);
                 break;
             }
             case UI_ACTION_FAN_25:
             {
-                Commands::setFanSpeed(64,false);
+                Commands::setFanSpeed(64);
                 break;
             }
             case UI_ACTION_FAN_50:
             {
-                Commands::setFanSpeed(128,false);
+                Commands::setFanSpeed(128);
                 break;
             }
             case UI_ACTION_FAN_75:
             {
-                Commands::setFanSpeed(192,false);
+                Commands::setFanSpeed(192);
                 break;
             }
             case UI_ACTION_FAN_FULL:
             {
-                Commands::setFanSpeed(255,false);
+                Commands::setFanSpeed(255);
                 break;
             }
             case UI_ACTION_FAN_MODE:

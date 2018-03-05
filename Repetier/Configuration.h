@@ -75,9 +75,6 @@ IMPORTANT: With mode <>0 some changes in Configuration.h are not set any more, a
 /** \brief Enables automatic compensation in z direction for the operationg mode "print" */
 #define FEATURE_HEAT_BED_Z_COMPENSATION     1                                                   // 1 = on, 0 = off
 
-/** \brief Enables/disables the output of the finished object feature */
-#define FEATURE_OUTPUT_FINISHED_OBJECT      1                                                   // 1 = on, 0 = off
-
 /** \brief Allows to pause the processing of G-Codes */
 #define FEATURE_PAUSE_PRINTING              1                                                   // 1 = on, 0 = off
 
@@ -307,13 +304,9 @@ usage or for seraching for memory induced errors. Switch it off for production, 
 // ##   configuration of the output object functionality
 // ##########################################################################################
 
-#if FEATURE_OUTPUT_FINISHED_OBJECT
-
 /** \brief The following script allows to configure the exact behavior of the automatic object output */
 #define OUTPUT_OBJECT_SCRIPT_PRINT          "G21\nG91\nG1 E-" xstr(SCRIPT_RETRACT_MM) "\nG90\nG1 Z200 F5000\nG1 Y245 F7500"
 #define OUTPUT_OBJECT_SCRIPT_MILL           "G28 Z0\nG21\nG91\nG1 Y245 F7500"
-
-#endif // FEATURE_OUTPUT_FINISHED_OBJECT
 
 // ##########################################################################################
 // ##   configuration of the pause functionality
@@ -787,6 +780,9 @@ we use blocks of 2 kByte size for the structure of our EEPROM
 
 /** \brief Defines the Z-Offset stepsize in um */
 #define Z_OFFSET_STEP                       25
+
+/** \brief Minimal temperature which can be reached by cooling */
+#define MAX_ROOM_TEMPERATURE                40
 
 /** \brief Specifies the interval which is used for the manual moves (from the hardware buttons and from the pause functionality) */
 #define MANUAL_MOVE_INTERVAL                1                                                   // [ms]

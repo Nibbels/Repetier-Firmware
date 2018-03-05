@@ -99,7 +99,7 @@ void PrintLine::moveRelativeDistanceInSteps(long x,long y,long z,long e,float fe
 
     Printer::updateCurrentPosition();
     if(waitEnd)
-        Commands::waitUntilEndOfAllMoves();
+        Commands::waitUntilEndOfAllMoves(); //moveRelativeDistanceInSteps + wait
 
     previousMillisCmd = HAL::timeInMilliseconds();
 } // moveRelativeDistanceInSteps
@@ -115,7 +115,7 @@ void PrintLine::moveRelativeDistanceInStepsReal(long x,long y,long z,long e,floa
                         (Printer::queuePositionLastSteps[E_AXIS] + e) * Printer::invAxisStepsPerMM[E_AXIS],feedrate);
     Printer::updateCurrentPosition();
     if(waitEnd)
-        Commands::waitUntilEndOfAllMoves();
+        Commands::waitUntilEndOfAllMoves(); //moveRelativeDistanceInStepsReal + wait
 
     previousMillisCmd = HAL::timeInMilliseconds();
 
