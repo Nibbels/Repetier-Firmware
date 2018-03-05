@@ -49,7 +49,7 @@
 #endif // FEATURE_MILLING_MODE
 
 /** \brief Number of extruders */
-#define NUM_EXTRUDER                        2   //Digibike Change
+#define NUM_EXTRUDER                        1
 
 /** \brief Allows to use the 230V output */
 #define FEATURE_230V_OUTPUT                 0                                                   // the RF1000 does not support the 230 V output
