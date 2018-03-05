@@ -49,7 +49,7 @@
 #endif // FEATURE_MILLING_MODE
 
 /** \brief Number of extruders */
-#define NUM_EXTRUDER                        1                                                   // 1 = Single, 2 = Dual
+#define NUM_EXTRUDER                        2                                                   // 1 = Single, 2 = Dual //Digibike Change
 
 #if NUM_EXTRUDER > 2 || NUM_EXTRUDER < 0
  #error This Firmware supports up to 2 Extruders. You might have to reimplement the 3+ code or "request it" if you really got hands on a RFx000 board with 3+ Extruders.
