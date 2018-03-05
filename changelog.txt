@@ -11,6 +11,9 @@ V RF.01.39+.Mod (2018-03-05)
 - small fix for waitForTargetTemperature
 - small fix for wrong display information (UI_TEXT_HEATING_UP instead of UI_TEXT_COOLING_DOWN) when waiting for temperature while processing a heat bed scan.
 - we now use MAX_ROOM_TEMPERATURE at synonymous positions (hbs scan wait for temperatures)
+- Feature RETRACT_DURING_HEATUP now only makes a retract when the temperature destination is > 40°C away from starting temperature.
+- increased standard acceleration to 1500 for x/y. Accerleration for Z stays at 100.
+- set standard Jerk to XY=13 and Z=0.3
 
 V RF.01.38.39.Mod (2018-03-05) 
 - maybe improved HBS scan tolerance for uneven ceramic beds.

@@ -346,6 +346,7 @@ The codes are only executed for multiple extruder when changing the extruder. */
 
 
 #if NUM_EXTRUDER>0 && EXT0_TEMPSENSOR_TYPE<101
+
 #define EXT0_ANALOG_INPUTS                  1
 #define EXT0_SENSOR_INDEX                   0
 #define EXT0_ANALOG_CHANNEL                 EXT0_TEMPSENSOR_PIN
@@ -906,13 +907,13 @@ if you are printing many very short segments at high speed. Higher delays here a
 
 /** \brief X, Y, Z max acceleration in mm/s^2 for printing moves or retracts. Make sure your printer can go that high!
  Overridden if EEPROM activated. */
-#define MAX_ACCELERATION_UNITS_PER_SQ_SECOND_X                  1000
-#define MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Y                  1000
+#define MAX_ACCELERATION_UNITS_PER_SQ_SECOND_X                  1500
+#define MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Y                  1500
 #define MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Z                  100
 
 /** \brief X, Y, Z max acceleration in mm/s^2 for travel moves.  Overridden if EEPROM activated.*/
-#define MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_X           1000
-#define MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Y           1000
+#define MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_X           1500
+#define MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Y           1500
 #define MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Z           100
 
 /** \brief Maximum allowable jerk.
@@ -935,8 +936,8 @@ v_diff = sqrt((50-35.36)^2+(0-35.36)^2) = 38.27 < jerk
 Corner can be printed with full speed of 50 mm/s
 
 Overridden if EEPROM activated. */
-#define MAX_JERK                            10                 //std: 20, aber RFx000 sieht zwischen ca. 7 und 18 am besten aus: Renkforce sagt 10
-#define MAX_ZJERK                           0.28               //std: 0.3
+#define MAX_JERK                            13.0                 //std: 20, aber RFx000 sieht zwischen ca. 7 und 18 am besten aus: Renkforce sagt 10
+#define MAX_ZJERK                           0.3                  //std: 0.3
 
 //that will slowdown if you have sever direction changes in a short distance which is nearly the same as adding several jerks in a short sequence.
 #define REDUCE_ON_SMALL_SEGMENTS            1

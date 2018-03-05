@@ -1070,7 +1070,8 @@ void Commands::executeGCode(GCode *com)
                     millis_t    waituntil   = 0;
                     millis_t    currentTime;
                     bool        isTempReached;
-                    bool        dirRising   = actExtruder->tempControl.targetTemperature > actExtruder->tempControl.currentTemperature;
+                    bool        dirRising    = actExtruder->tempControl.targetTemperature > actExtruder->tempControl.currentTemperature;
+                    bool        longTempTime = (fabs(actExtruder->tempControl.targetTemperature - actExtruder->tempControl.currentTemperature) > 40 ? true : false);
 
                     if( dirRising ){
                         UI_STATUS_UPD(UI_TEXT_HEATING_EXTRUDER);
@@ -1089,6 +1090,7 @@ void Commands::executeGCode(GCode *com)
 #if RETRACT_DURING_HEATUP
                         if( dirRising ){
                             if (!retracted 
+                                && longTempTime
                                 && actExtruder == Extruder::current
                                 && actExtruder->waitRetractUnits > 0
                                 && actExtruder->tempControl.currentTemperatureC >= actExtruder->waitRetractTemperature)
