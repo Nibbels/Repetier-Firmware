@@ -1222,20 +1222,19 @@ void Extruder::disableAllHeater()
 } // disableAllHeater
 
 void TemperatureController::waitForTargetTemperature(uint8_t plus_temp_tolerance) {
-    if(targetTemperatureC < 30) return;
     if(Printer::debugDryrun()) return;
-    if(targetTemperatureC < currentTemperatureC){
-        UI_STATUS_UPD( UI_TEXT_COOLING_DOWN );
-    }else{
+    bool dirRising = targetTemperatureC > currentTemperatureC;
+    if(dirRising){
         UI_STATUS_UPD( UI_TEXT_HEATING_UP );
+    }else{
+        UI_STATUS_UPD( UI_TEXT_COOLING_DOWN );
     }
     g_uStartOfIdle = 0;
     while(true) {
         Commands::printTemperatures();
         Commands::checkForPeriodicalActions( WaitHeater );
-        if( fabs(targetTemperatureC - currentTemperatureC) <= TEMP_TOLERANCE + plus_temp_tolerance ) {
-            return;
-        }
+        if( fabs(targetTemperatureC - currentTemperatureC) <= TEMP_TOLERANCE + plus_temp_tolerance ) break;
+        if( !dirRising && currentTemperatureC < MAX_ROOM_TEMPERATURE ) break;
     }
     g_uStartOfIdle = HAL::timeInMilliseconds();
 }

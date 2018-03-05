@@ -3331,50 +3331,31 @@ void configureMANUAL_STEPS_Z( int8_t increment )
 /**************************************************************************************************************************************/
 
 
-short testExtruderTemperature( void )
+short testExtruderTemperature( void ) //Funktion ist speziell für HBS Scan.
 {
-    if( Extruder::current->tempControl.targetTemperatureC > 40 )
+    if( Extruder::current->tempControl.targetTemperatureC > MAX_ROOM_TEMPERATURE )
     {
         // we have to wait until the target temperature is reached
         if( (Extruder::current->tempControl.currentTemperatureC + TEMP_TOLERANCE) < Extruder::current->tempControl.targetTemperatureC )
         {
             // wait until the extruder has reached its target temperature
-            if( Printer::debugInfo() )
-            {
-                Com::printF( PSTR( "heating: " ), Extruder::current->tempControl.currentTemperatureC, 1 );
-                Com::printF( PSTR( " C / " ), Extruder::current->tempControl.targetTemperatureC, 1 );
-                Com::printFLN( PSTR( " C" ) );
-            }
-
             UI_STATUS_UPD( UI_TEXT_HEATING_UP );
             return -1;
         }
         if( (Extruder::current->tempControl.currentTemperatureC - TEMP_TOLERANCE) > Extruder::current->tempControl.targetTemperatureC )
         {
             // wait until the extruder has reached its target temperature
-            if( Printer::debugInfo() )
-            {
-                Com::printF( PSTR( "cooling: " ), Extruder::current->tempControl.currentTemperatureC, 1 );
-                Com::printF( PSTR( " C / " ), Extruder::current->tempControl.targetTemperatureC, 1 );
-                Com::printFLN( PSTR( " C" ) );
-            }
-
             UI_STATUS_UPD( UI_TEXT_COOLING_DOWN );
             return -1;
         }
+        /* else (inside temp_tolerance), return 0, dont wait anymore */
     }
     else
     {
         // we have to wait until the current temperatur is below something which would be too warm
-        if( Extruder::current->tempControl.currentTemperatureC > 65 )
+        if( Extruder::current->tempControl.currentTemperatureC > MAX_ROOM_TEMPERATURE + 20 /*orig: 65+*/ )
         {
             // wait until the extruder has reached its target temperature
-            if( Printer::debugInfo() )
-            {
-                Com::printF( PSTR( "cooling: " ),Extruder::current->tempControl.currentTemperatureC, 1 );
-                Com::printFLN( PSTR( " C" ) );
-            }
-
             UI_STATUS_UPD( UI_TEXT_COOLING_DOWN );
             return -1;
         }
@@ -3386,51 +3367,35 @@ short testExtruderTemperature( void )
 } // testExtruderTemperature
 
 
-short testHeatBedTemperature( void )
+short testHeatBedTemperature( void ) //Funktion ist speziell für HBS Scan.
 {
 #if HAVE_HEATED_BED
-    if( heatedBedController.targetTemperatureC > 40 )
+    if( heatedBedController.targetTemperatureC > (MAX_ROOM_TEMPERATURE >= PRECISE_HEAT_BED_SCAN_BED_TEMP_PLA - TEMP_TOLERANCE 
+                                                                    ? PRECISE_HEAT_BED_SCAN_BED_TEMP_PLA - TEMP_TOLERANCE 
+                                                                    : MAX_ROOM_TEMPERATURE) ) ) 
+                                                                    /* Evtl. sollte man abfangen, fallst die MAX_ROOM_TEMPERATURE hier höher als die PLA-Scan-TEMP eingestellt ist. Darum der Ternary */
     {
         // we have to wait until the target temperature is reached
         if( (Extruder::getHeatedBedTemperature() + TEMP_TOLERANCE) < heatedBedController.targetTemperatureC )
         {
             // wait until the heat bed has reached its target temperature
-            if( Printer::debugInfo() )
-            {
-                Com::printF( PSTR( "testHeatBedTemperature(): heating: " ), Extruder::getHeatedBedTemperature(), 1 );
-                Com::printF( PSTR( " C / " ), heatedBedController.targetTemperatureC, 1 );
-                Com::printFLN( PSTR( " C" ) );
-            }
-
             UI_STATUS_UPD( UI_TEXT_HEATING_UP );
             return -1;
         }
         if( (Extruder::getHeatedBedTemperature() - TEMP_TOLERANCE) > heatedBedController.targetTemperatureC )
         {
             // wait until the heat bed has reached its target temperature
-            if( Printer::debugInfo() )
-            {
-                Com::printF( PSTR( "testHeatBedTemperature(): cooling: " ), Extruder::getHeatedBedTemperature(), 1 );
-                Com::printF( PSTR( " C / " ), heatedBedController.targetTemperatureC, 1 );
-                Com::printFLN( PSTR( " C" ) );
-            }
-
-            UI_STATUS_UPD( UI_TEXT_HEATING_UP );
+            UI_STATUS_UPD( UI_TEXT_COOLING_DOWN );
             return -1;
         }
+        /* else (inside temp_tolerance), return 0, dont wait anymore */
     }
     else
     {
         // we have to wait until the current temperatur is below something which would be too warm
-        if( Extruder::getHeatedBedTemperature() > 50 )
+        if( Extruder::getHeatedBedTemperature() > MAX_ROOM_TEMPERATURE + 10 /*orig: 50+*/ )
         {
             // wait until the heat bed has reached its target temperature
-            if( Printer::debugInfo() )
-            {
-                Com::printF( PSTR( "testHeatBedTemperature(): cooling: " ), Extruder::getHeatedBedTemperature(), 1 );
-                Com::printFLN( PSTR( " C" ) );
-            }
-
             UI_STATUS_UPD( UI_TEXT_COOLING_DOWN );
             return -1;
         }
@@ -3439,7 +3404,6 @@ short testHeatBedTemperature( void )
 
     // at this point we have reached the proper temperature
     return 0;
-
 } // testHeatBedTemperature
 
 long getZMatrixDepth(long x, long y){
