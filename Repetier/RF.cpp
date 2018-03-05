@@ -3372,7 +3372,7 @@ short testHeatBedTemperature( void ) //Funktion ist speziell für HBS Scan.
 #if HAVE_HEATED_BED
     if( heatedBedController.targetTemperatureC > (MAX_ROOM_TEMPERATURE >= PRECISE_HEAT_BED_SCAN_BED_TEMP_PLA - TEMP_TOLERANCE 
                                                                     ? PRECISE_HEAT_BED_SCAN_BED_TEMP_PLA - TEMP_TOLERANCE 
-                                                                    : MAX_ROOM_TEMPERATURE) ) ) 
+                                                                    : MAX_ROOM_TEMPERATURE) ) 
                                                                     /* Evtl. sollte man abfangen, fallst die MAX_ROOM_TEMPERATURE hier höher als die PLA-Scan-TEMP eingestellt ist. Darum der Ternary */
     {
         // we have to wait until the target temperature is reached
