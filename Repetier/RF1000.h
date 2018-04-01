@@ -232,7 +232,7 @@ Overridden if EEPROM activated.*/
 #define EXT0_Z_OFFSET_MM                       0.0f //to support Nozzle-Tip-Down-Hotends
 
 /** \brief for skeinforge 40 and later, steps to pull the plasic 1 mm inside the extruder, not out.  Overridden if EEPROM activated. */
-#define EXT0_STEPS_PER_MM                   (300 / 91.17 * 8.75 * RF_MICRO_STEPS)   //Digibike Change
+#define EXT0_STEPS_PER_MM                   (300 / 91.17 * 8.75 * RF_MICRO_STEPS_E)   //Digibike Change
 
 /** \brief What type of sensor is used?
 NTC-Thermistors
@@ -392,7 +392,7 @@ The codes are only executed for multiple extruder when changing the extruder. */
 #define EXT1_Z_OFFSET_MM                         0.0f                           // [mm] //to support Nozzle-Tip-Down-Hotends
 
 /** \brief for skeinforge 40 and later, steps to pull the plasic 1 mm inside the extruder, not out.  Overridden if EEPROM activated. */
-#define EXT1_STEPS_PER_MM                     (300 / 91.17 * 8.75 * RF_MICRO_STEPS)   //Digibike Change
+#define EXT1_STEPS_PER_MM                     (300 / 91.17 * 8.75 * RF_MICRO_STEPS_E)   //Digibike Change
 
 /** \brief What type of sensor is used?
 NTC-Thermistors
