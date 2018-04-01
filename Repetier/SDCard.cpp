@@ -58,7 +58,7 @@ void SDCard::automount()
                 Com::printFLN(PSTR("SD card removed"));
             }
 #if UI_DISPLAY_TYPE!=0
-            uid.executeAction(UI_ACTION_TOP_MENU);
+            uid.exitmenu();
 #endif // UI_DISPLAY_TYPE!=0
 
             unmount();
@@ -112,14 +112,6 @@ void SDCard::initsd()
         return;
     }
     sdactive = true;
-
-    /* Das kann gar nicht mehr stimmen...
-    if( uid.menuPos[uid.menuLevel] == 9 && uid.menuLevel == 2 )
-    {
-        // we are within the SD card menu at the moment - after the successful mounting, the menu shall point to the "print"/"mill" item and not to the "delete" item
-        uid.menuPos[uid.menuLevel] = 0;
-    }
-    */
 
     Printer::setMenuMode(MENU_MODE_SD_MOUNTED,true);
 
@@ -504,13 +496,9 @@ void SDCard::finishWrite()
     file.close();
     savetosd = false;
 
-    if( Printer::debugInfo() )
-    {
-        Com::printFLN(Com::tDoneSavingFile);
-    }
+    Com::printFLN(Com::tDoneSavingFile);
 
-    g_uStartOfIdle = HAL::timeInMilliseconds();
-
+    g_uStartOfIdle = HAL::timeInMilliseconds(); //SDCard::finishWrite() tDoneSavingFile
 } // finishWrite
 
 

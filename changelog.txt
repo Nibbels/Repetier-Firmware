@@ -1,5 +1,133 @@
-TODO: Z-Lift-Bug seems to be still present! Avoid Z-Lift: Todo @Conrad -> Has this possibly been fixed by removing halfstepping in 1.37u4?
 TODO: Testing, testing ..
+
+V RF.01.41.16.Mod alpha (2018-04-01) 
+- Hid the menu for "Right hotend tipdown support". This menu only makes sense for very special hotends and shouldnt distract the user on 99% of all printers.
+
+V RF.01.41.15.Mod alpha (2018-03-29) 
+- added Menusupport and EEPROM Support for HEAT_BED_SCAN_Z_START_MM which sets the z-lift for moving onto the bed at every start of zscans like Z-Offset-Scan or Heat-Bed-Scan. This value needs to be high, if someone wants to work with positive matrix (/ to low zscrew). That is not recommended but helps if you have interchangeable heated beds with different heights.
+
+V RF.01.41.14.Mod alpha (2018-03-29) 
+- removed "PID autotune some overshoot" from menu
+- gave the PID autotune submenus a description for what autotune methods are good
+- reordered PID autotune methods to start with pessen, then classic then noovershoot and finally tyreus lyben. 
+- added "heated bed off" to Extruder Menu. (At least I use this alot for testing)
+
+V RF.01.41.13.Mod alpha (2018-03-28) 
+- We can now skip the rest of the M3912 startline by pressing play while printing the start line. (Might save some tiny amounts of plastic from time to time.)
+- the eeproms max feedrates are dropped and overwritten if they are bigger than configuration max values.
+- the eeproms homing feedrates are dropped and overwritten if they are higher than configuration max values.
+- extruder steps/mm are corrected to default if they are set > 5540steps/mm 
+- if we press the 3 keys "Back", "OK" and "Play" while boot time the eeprom values are reset to defaults before being loaded.
+- some reordering in boot time configuration to prevent to early use of things.
+- compiling without SDSUPPORT is possible again. (~+1kb ram frei -> ~+8 MOVE_CACHE möglich)
+
+V RF.01.41.12.Mod alpha (2018-03-26) 
+- cleaned up the thermistor functions
+- depreached the use of int16_t targetTemperature and crushed void TemperatureController::setTargetTemperature(float target, float offset) to very few lines.
+- added PT100 support on temperature sensor number 53 again. (This PT100 sensor board is sensortype no. 13 in original repetier but conrad dropped their V3 hotends sensor to this number.)
+- inserted MAX_ROOM_TEMPERATURE as the default low constraint in some locations where a temperature has to wait for the target temperature.
+- heater off now means targetTemperature=0 (not <15 or whatever in some locations).
+- added sensortype 0 as 25°C dummy (like repetier did)
+
+V RF.01.41.11.Mod alpha (2018-03-16) 
+- added a microsteps reset to the function that resets the configuration to defaults (Werksreset)
+- fixed that EEPROM::initializeAllOperatingModes() did not update checksum. (Had been forgotten when using M502 and UI_ACTION_RESTORE_DEFAULTS )
+- fixed EEPROM::updatePrinterUsage() to 1.39 version when not using FEATURE_MILLING_MODE
+- cleaned up all the double coded code for "#else //FEATURE_MILLING_MODE" to one version.
+
+V RF.01.41.10.Mod alpha (2018-03-16) 
+- tweaks and fixes for the case that M190 / M109 is running(/waiting for temperature) and meanwhile the user changes temperatures using Menu->Extruder-> at the printers display.
+
+V RF.01.41.09.Mod alpha (2018-03-15) 
+- making the Z-Offset-Scan faster.
+- small fix for M3913 / M3914 abort.
+- implemented digit homing for M3913 / M3914
+
+V RF.01.41.08.Mod alpha (2018-03-15) 
+- abort M3913 / M3914 (when moving) by ok-Button and back-Button
+- commented all g_uStartOfIdle to find bugs -> adjusted some idle-times for better usability
+- some more tweaks around checks if zCMP is blocked
+- removed matrix-version check within calculateZScrewCorrection. the reason for this was an overflow we already corrected months ago.
+- checked all uid.lock / unlocks
+- cleaned up uid. object references within the UIDisplay itself. (but it didn't change rom size)
+
+V RF.01.41.07.Mod alpha (2018-03-14) 
+- Support for REPETIER_PROTOCOL:3
+- MoveZ now releases Z correctly. Printer::stepperDirection[Z_AXIS] = 0; (It was possible that the printer hung with the wrong combination of moveZ directions + waitUntilEndOfAllMoves)
+- Stability: Commands::waitUntilEndOfAllMoves() now checks if zCMP is blocked by stepper direction and ignores wait in that case.
+- cleanup of HomeY und HomeX
+- ENDSTOP_X_RETEST_REDUCTION_FACTOR is not used at homeY anymore. -> ENDSTOP_Y_RETEST_REDUCTION_FACTOR instead.
+- tuned Z_ENDSTOP_MAX_HYSTERESIS to 0.35f
+- The rule that the bed tunes down by zCMP if homed and matrix>0 is bad if you want to scan anything. -> REMOVED!
+- Preheat PLA/ABS does not block status line in display anymore.
+
+V RF.01.41.06.Mod alpha (2018-03-13) 
+- more testing on serial -> Fletcher error correction really seems to work flawless.
+- re-/implemented some debugging gode for serial errors
+- fixed formats in GCode::printCommand()
+- fixed sending Com::tWrongChecksum when using parseBinary (I once forgot newline)
+- we temporarily set Z_ENDSTOP_MAX_HYSTERESIS 0.5f for mhiers tests
+
+V RF.01.41.05.Mod alpha (2018-03-12) 
+- corrected unit calculation in void Printer::MemoryPosition()
+- rise of LOW_TICKS_PER_MOVE to 500k (It might not have a big effect but maybe on some parts)
+- removed some old TODOs on which I am now absolut sure how to handle them.
+- dont show "setTemperatureForExtruder(): cant set Temp for Extr." when it is set to 0°C.
+- switched MOVE_CACHE back to 17 for testing reasons.
+- update void Printer::MemoryPosition() close towards repetier
+- fix missing PSTR -> https://github.com/repetier/Repetier-Firmware/issues/763
+- deleted UI_ANIMATION and some unused functions
+
+V RF.01.41.04.Mod alpha (2018-03-12) 
+- added FEATURE_DEBUG_MOVE_CACHE_TIMING to debug movecache fill while printing.
+    if you want to adjust LOW_TICKS_PER_MOVE to default: M3993 P300000 (LOW_TICKS_PER_MOVE is 300000)
+    if you want to read and drop statistics:             M3993
+
+V RF.01.41.03.Mod alpha (2018-03-10) 
+- some tiny tweaks
+- cleanup of homeZ for better reading. Inserted a lot of casts.
+- removed some functions which are not needed anymore because their purpose already got removed.
+
+V RF.01.41.02.Mod alpha (2018-03-10) 
+This is the "intelligent filament load update"
+- new M3913 P[digits] which mounts/extrudes filament until Pxxxx digits are reached then stops. 
+- new M3914 P[digits] which unmounts the extruder by slowly heating and checking force. It is/was quite hard to test out good settings for unmount. This might be updated in future, but I like it.
+- inserted M3913 and M3914 into MOUNT_FILAMENT_SCRIPT_... and UNMOUNT_FILAMENT_SCRIPT_... to vastly improve "Menu->Extruder->(Un)Load Filament"
+- compressed functions for MOUNT_FILAMENT_SCRIPT_WITH_HEATING and MOUNT_FILAMENT_SCRIPT_WITHOUT_HEATING functions to one, because they where quite identical.
+
+V RF.01.41.01.Mod alpha (2018-03-10) 
+- output object speeds are now limited to normal homing speeds. OctaStepping made that too fast. Thx@ AtlonXP
+- MOUNT and UNMOUNT Scripts got an extra G92 E0 to in some cases prevent undo afterwards. Thx@ easygo25
+- sync of UNMOUNT_FILAMENT_SCRIPTs and MOUNT_FILAMENT_SCRIPTs for both devices (RF2000/RF1000)
+
+V RF.01.41.00.Mod alpha (2018-03-09) 
+- deleted M3002 and M3003 because they are not needed anymore. (We use M3007 and M3008 for this functionality. Not using M3007/M3008 it is even better because this mod has an automatic mode for placing those two values right :D)
+- deleted M3100 because we have a smart menu point (Menu->Position->Z-Step: XXX um) for that and this functionality is only used in menu.
+- deleted M3101 because there is no real need for this adjustment. Normal extrusion is not "directsteps over button"
+- deleted M3102 because we have M3105 to configure Pause-Position in [mm]
+- made the automatic startline a bit shorter when having dual hotend (i always forget to change x-axis-length when testswitching)
+- the automatic startline only shifts in y when having a dual hotend, not on single anymore.
+- split RF_MICRO_STEPS to {RF_MICRO_STEPS_XY, RF_MICRO_STEPS_Z, RF_MICRO_STEPS_E}
+- added menu for changing Micro Steps: 
+    XY is unlocked for 16,32,64 Microsteps
+    Z is unlocked for 16,32 Microsteps
+    E is unlocked for 16,32,64,128 Microsteps.
+  (High Microsteps are only usefull if you have low steps/mm. Otherwise you just get a slow printer. My testprint worked fine on E=64, Z=32, XY=64.
+   Using 128+ Microsteps on XY sounds horrible and is slower than 128=65mm/s or 256=32mm/s -> not a good choice!
+   I think E shouldnt have more Steps/mm than ~1200 max. that corresponds to a speed < 25mm/s for retracts.)
+- changed some minor details to unhook RF_MICRO_STEPS from (some) places of use without inheritance.
+- Z_OVERRIDE_MAX is now Printer::ZOverrideMax.
+- reduced automatic startline spacing (for multiple lines) to 1.5mm instead of 2.0mm.
+- removed and replaced some configuration with STEPS inside, because they are not good for configurable Micro_Steps and bad for EEPROM-configurable steps/mm. This totally cleaned up HBS-Scan configuration. :)
+- removed static XAXIS_STEPS_PER_MM, YAXIS_STEPS_PER_MM, ZAXIS_STEPS_PER_MM from places which are no pre-initialisers.
+- removed some configuration lines which had no effect anywhere
+- disabled FEATURE_VISCOSITY_TEST by default to save rom space.
+- included mhiers push https://github.com/Nibbels/Repetier-Firmware/commit/8c4a33112d4323a205822558c1870ae9309ab808 of changing WORK_PART_SCAN_X_STEP_SIZE_MIN_MM 5 (etc.) into Nibbels branch too.
+- g_nManualSteps[E_AXIS] and g_nPauseSteps[E_AXIS] are now updated according to active steps/mm when choosing an extruder. Extruder Button speed should now stay the same when changing steps/mm.
+- investigating g_nManualSteps[E_AXIS] and PrintLine::performDirectSteps(); 
+    1) i found a second reason for the E_Axis to have a time lag using PrintLine::performDirectSteps() -> Hal.cpp OCR1A = too high at the end of the function.
+    2) i found a third reason for the E_Axis to have a time lag using 128 Microsteps / 0.9° Stepper = 2560Steps/s: Advance might just fill up working too slow. -> Stay beneath 1280 Steps/mm
+- fixed RF2000 optional temperature sensor. We removed Temptable 15 and renamed it to 14. I forgot to change this default Tempsensor as well. (See V RF.01.38.Mod (2017-12-28))
 
 V RF.01.39+.Mod (2018-03-05) 
 - fixing rf1k-mhj11's bug that M109 cannot shut down temperature in some situations.

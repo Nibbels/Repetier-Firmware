@@ -26,7 +26,6 @@ public:
     static void checkForPeriodicalActions( enum FirmwareState state = NotBusy );
     static void executeGCode(GCode *com);
     static void waitUntilEndOfAllMoves();
-    static void waitUntilEndOfAllBuffers(unsigned int maxcodes = 0);
     static void waitUntilEndOfZOS();
     static void printCurrentPosition();
     static void printTemperatures(bool showRaw = false);

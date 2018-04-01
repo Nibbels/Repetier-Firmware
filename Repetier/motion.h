@@ -218,7 +218,7 @@ public:
                 }
                 Printer::updateCurrentPosition(true);
             }
-            if(isZPositiveMove() && (Printer::isZMaxEndstopHit() || Printer::currentZSteps > (Printer::maxSteps[Z_AXIS] /*- Printer::minSteps[Z_AXIS]*/) + abs(Z_OVERRIDE_MAX * 2) ))
+            if(isZPositiveMove() && (Printer::isZMaxEndstopHit() || Printer::currentZSteps > (Printer::maxSteps[Z_AXIS] /*- Printer::minSteps[Z_AXIS]*/) + abs(long(Printer::ZOverrideMax) * 2) ))
             {
                 setZMoveFinished();
                 if(forQueue){
@@ -235,7 +235,7 @@ public:
         {
             if( Printer::isAxisHomed(Z_AXIS) && PrintLine::direct.task != TASK_MOVE_FROM_BUTTON)
             {
-                if( Printer::currentZSteps <= -Z_OVERRIDE_MAX )
+                if( Printer::currentZSteps <= -1*long(Printer::ZOverrideMax) )
                 {
                     // --> setZMoveFinished(); //-> some lines down!
                 }else{

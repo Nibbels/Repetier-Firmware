@@ -845,9 +845,9 @@ ISR(TIMER1_COMPA_vect)
         if(Printer::advanceStepsSet)
         {
             Printer::extruderStepsNeeded -= Printer::advanceStepsSet;
-#ifdef ENABLE_QUADRATIC_ADVANCE
+ #ifdef ENABLE_QUADRATIC_ADVANCE
             Printer::advanceExecuted = 0;
-#endif // ENABLE_QUADRATIC_ADVANCE
+ #endif // ENABLE_QUADRATIC_ADVANCE
             Printer::advanceStepsSet = 0;
         }
 
@@ -859,7 +859,7 @@ ISR(TIMER1_COMPA_vect)
     else waitRelax--;
 
     stepperWait = 0;        // Important because of optimization in asm at begin
-    OCR1A = 65500;        //1000 like repetier does  // Wait for next move
+    OCR1A = 3000;           // Nicht zu hohe Werte, weil sonst die DirectSteps limitiert werden. Ansonsten hoch.
 
     DEBUG_MEMORY;
     sbi(TIMSK1, OCIE1A);
@@ -1288,79 +1288,78 @@ inline void rf_store_char(unsigned char c, ring_buffer_rx *buffer)
 
 
 #if !defined(USART0_RX_vect) && defined(USART1_RX_vect)
-// do nothing - on the 32u4 the first USART is USART1
+ // do nothing - on the 32u4 the first USART is USART1
 #else
-void rfSerialEvent() __attribute__((weak));
-void rfSerialEvent() {}
-#define serialEvent_implemented
-#if defined(USART_RX_vect)
-SIGNAL(USART_RX_vect)
-#elif defined(USART0_RX_vect)
-SIGNAL(USART0_RX_vect)
-#else
-#if defined(SIG_USART0_RECV)
-SIGNAL(SIG_USART0_RECV)
-#elif defined(SIG_UART0_RECV)
-SIGNAL(SIG_UART0_RECV)
-#elif defined(SIG_UART_RECV)
-SIGNAL(SIG_UART_RECV)
-#else
-#error "Don't know what the Data Received vector is called for the first UART"
-#endif // defined(SIG_USART0_RECV)
-#endif // defined(USART_RX_vect)
-{
-#if defined(UDR0)
+ void rfSerialEvent() __attribute__((weak));
+ void rfSerialEvent() {}
+ #define serialEvent_implemented
+ #if defined(USART_RX_vect)
+  SIGNAL(USART_RX_vect)
+ #elif defined(USART0_RX_vect)
+  SIGNAL(USART0_RX_vect)
+ #else
+  #if defined(SIG_USART0_RECV)
+   SIGNAL(SIG_USART0_RECV)
+  #elif defined(SIG_UART0_RECV)
+   SIGNAL(SIG_UART0_RECV)
+  #elif defined(SIG_UART_RECV)
+   SIGNAL(SIG_UART_RECV)
+  #else
+   #error "Don't know what the Data Received vector is called for the first UART"
+  #endif // defined(SIG_USART0_RECV)
+ #endif // defined(USART_RX_vect)
+ {
+ #if defined(UDR0)
     unsigned char c  =  UDR0;
-#elif defined(UDR)
+ #elif defined(UDR)
     unsigned char c  =  UDR;
-#else
-#error UDR not defined
-#endif // defined(UDR0)
+ #else
+  #error UDR not defined
+ #endif // defined(UDR0)
     rf_store_char(c, &rx_buffer);
-}
+ }
 #endif // !defined(USART0_RX_vect) && defined(USART1_RX_vect)
 
 #if !defined(USART0_UDRE_vect) && defined(USART1_UDRE_vect)
-// do nothing - on the 32u4 the first USART is USART1
+ // do nothing - on the 32u4 the first USART is USART1
 #else
-#if !defined(UART0_UDRE_vect) && !defined(UART_UDRE_vect) && !defined(USART0_UDRE_vect) && !defined(USART_UDRE_vect)
-#error "Don't know what the Data Register Empty vector is called for the first UART"
-#else
-#if defined(UART0_UDRE_vect)
-ISR(UART0_UDRE_vect)
-#elif defined(UART_UDRE_vect)
-ISR(UART_UDRE_vect)
-#elif defined(USART0_UDRE_vect)
-ISR(USART0_UDRE_vect)
-#elif defined(USART_UDRE_vect)
-ISR(USART_UDRE_vect)
-#endif // defined(UART0_UDRE_vect)
-{
+ #if !defined(UART0_UDRE_vect) && !defined(UART_UDRE_vect) && !defined(USART0_UDRE_vect) && !defined(USART_UDRE_vect)
+  #error "Don't know what the Data Register Empty vector is called for the first UART"
+ #else
+  #if defined(UART0_UDRE_vect)
+   ISR(UART0_UDRE_vect)
+  #elif defined(UART_UDRE_vect)
+   ISR(UART_UDRE_vect)
+  #elif defined(USART0_UDRE_vect)
+   ISR(USART0_UDRE_vect)
+  #elif defined(USART_UDRE_vect)
+   ISR(USART_UDRE_vect)
+  #endif // defined(UART0_UDRE_vect)
+  {
     if (tx_buffer.head == tx_buffer.tail)
     {
         // Buffer empty, so disable interrupts
-#if defined(UCSR0B)
+   #if defined(UCSR0B)
         bit_clear(UCSR0B, UDRIE0);
-#else
+   #else
         bit_clear(UCSRB, UDRIE);
-#endif // defined(UCSR0B)
+   #endif // defined(UCSR0B)
     }
     else
     {
         // There is more data in the output buffer. Send the next byte
         uint8_t c = tx_buffer.buffer[tx_buffer.tail];
         tx_buffer.tail = (tx_buffer.tail + 1) & SERIAL_TX_BUFFER_MASK;
-
-#if defined(UDR0)
+   #if defined(UDR0)
         UDR0 = c;
-#elif defined(UDR)
+   #elif defined(UDR)
         UDR = c;
-#else
-#error UDR not defined
-#endif // defined(UDR0)
+   #else
+    #error UDR not defined
+   #endif // defined(UDR0)
     }
-}
-#endif // !defined(UART0_UDRE_vect) && !defined(UART_UDRE_vect) && !defined(USART0_UDRE_vect) && !defined(USART_UDRE_vect)
+  }
+ #endif // !defined(UART0_UDRE_vect) && !defined(UART_UDRE_vect) && !defined(USART0_UDRE_vect) && !defined(USART_UDRE_vect)
 #endif // !defined(USART0_UDRE_vect) && defined(USART1_UDRE_vect)
 
 
@@ -1462,7 +1461,7 @@ int RFHardwareSerial::available(void)
 
 int RFHardwareSerial::outputUnused(void)
 {
-    return SERIAL_TX_BUFFER_SIZE-(unsigned int)((SERIAL_TX_BUFFER_SIZE + _tx_buffer->head - _tx_buffer->tail) & SERIAL_TX_BUFFER_MASK);
+    return SERIAL_TX_BUFFER_SIZE - (unsigned int)((SERIAL_TX_BUFFER_SIZE + _tx_buffer->head - _tx_buffer->tail) & SERIAL_TX_BUFFER_MASK);
 
 } // outputUnused
 
@@ -1520,19 +1519,19 @@ size_t RFHardwareSerial::write(uint8_t c)
 
 
 #if defined(UBRRH) && defined(UBRRL)
-RFHardwareSerial RFSerial(&rx_buffer, &tx_buffer, &UBRRH, &UBRRL, &UCSRA, &UCSRB, &UDR, RXEN, TXEN, RXCIE, UDRIE, U2X);
+ RFHardwareSerial RFSerial(&rx_buffer, &tx_buffer, &UBRRH, &UBRRL, &UCSRA, &UCSRB, &UDR, RXEN, TXEN, RXCIE, UDRIE, U2X);
 #elif defined(UBRR0H) && defined(UBRR0L)
-RFHardwareSerial RFSerial(&rx_buffer, &tx_buffer, &UBRR0H, &UBRR0L, &UCSR0A, &UCSR0B, &UDR0, RXEN0, TXEN0, RXCIE0, UDRIE0, U2X0);
+ RFHardwareSerial RFSerial(&rx_buffer, &tx_buffer, &UBRR0H, &UBRR0L, &UCSR0A, &UCSR0B, &UDR0, RXEN0, TXEN0, RXCIE0, UDRIE0, U2X0);
 #elif defined(USBCON)
-// do nothing - Serial object and buffers are initialized in CDC code
+ // do nothing - Serial object and buffers are initialized in CDC code
 #else
-#error no serial port defined  (port 0)
+ #error no serial port defined  (port 0)
 #endif // defined(UBRRH) && defined(UBRRL)
 
 #if FEATURE_CASE_LIGHT
-#if !defined CASE_LIGHT_PIN || CASE_LIGHT_PIN < 0
+ #if !defined CASE_LIGHT_PIN || CASE_LIGHT_PIN < 0
     #error The case light pin must be defined in case the case light feature shall be used.
-#endif //!defined CASE_LIGHT_PIN || CASE_LIGHT_PIN < 0
+ #endif //!defined CASE_LIGHT_PIN || CASE_LIGHT_PIN < 0
 #endif // FEATURE_CASE_LIGHT
 
 #endif // EXTERNALSERIAL

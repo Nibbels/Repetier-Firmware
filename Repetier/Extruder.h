@@ -40,7 +40,6 @@ public:
     uint8_t     sensorType;             ///< Type of temperature sensor.
     uint8_t     sensorPin;              ///< Pin to read extruder temperature.
     int16_t     currentTemperature;     ///< Currenttemperature value read from sensor.
-    int16_t     targetTemperature;      ///< Target temperature value in units of sensor.
     float       currentTemperatureC;    ///< Current temperature in degC.
     float       targetTemperatureC;     ///< Target temperature in degC.
 

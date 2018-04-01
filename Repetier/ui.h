@@ -40,7 +40,6 @@
 #define UI_ACTION_BACK                      1000
 #define UI_ACTION_OK                        1001
 #define UI_ACTION_MENU_UP                   1002
-#define UI_ACTION_TOP_MENU                  1003
 #define UI_ACTION_EMERGENCY_STOP            1004
 #define UI_ACTION_XPOSITION                 1005
 #define UI_ACTION_YPOSITION                 1006
@@ -159,7 +158,6 @@
 
 #define UI_ACTION_CHOOSE_CLASSICPID         1674 //pid kram
 #define UI_ACTION_CHOOSE_LESSERINTEGRAL     1675 //pid kram
-#define UI_ACTION_CHOOSE_SOME               1676 //pid kram
 #define UI_ACTION_CHOOSE_NO                 1677 //pid kram
 #define UI_ACTION_CHOOSE_TYREUS_LYBEN       1701 //pid kram
 
@@ -198,6 +196,10 @@
 
 //FEATURE_ALIGN_EXTRUDERS
 #define UI_ACTION_ALIGN_EXTRUDERS           1706
+
+#define UI_ACTION_MICROSTEPS_XY             1707
+#define UI_ACTION_MICROSTEPS_Z              1708
+#define UI_ACTION_MICROSTEPS_E              1709
 
 #define UI_ACTION_FET1_OUTPUT               2001
 #define UI_ACTION_FET2_OUTPUT               2002
@@ -434,7 +436,6 @@ public:
     UIDisplay();
     void createChar(uint8_t location,const uint8_t charmap[]);
     void initialize(); // Initialize display and keys
-    void waitForKey();
     void printRow(uint8_t r,char *txt,char *txt2,uint8_t changeAtCol); // Print row on display
     void printRowP(uint8_t r,PGM_P txt);
     void parse(char *txt,bool ram); /// Parse output and write to printCols;
@@ -470,6 +471,7 @@ public:
 
     void lock();
     void unlock();
+    void exitmenu();
 
 };
 
@@ -531,11 +533,6 @@ void ui_check_keys(int &action)
 #endif // FEATURE_EXTENDED_BUTTONS
 
 } // ui_check_keys
-
-inline void ui_check_slow_encoder() {}
-void ui_check_slow_keys(int &action) {
-    (void)action;
-}
 #endif // UI_MAIN
 #endif // MOTHERBOARD == DEVICE_TYPE_RF1000
 
@@ -591,11 +588,6 @@ void ui_check_keys(int &action)
 #endif // FEATURE_EXTENDED_BUTTONS
 
 } // ui_check_keys
-
-inline void ui_check_slow_encoder() {}
-void ui_check_slow_keys(int &action) {
-    (void)action;
-}
 #endif // UI_MAIN
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000_V2
 

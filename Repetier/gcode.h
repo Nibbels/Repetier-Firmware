@@ -19,7 +19,7 @@
 #ifndef GCODE_H
 #define GCODE_H
 
-#define MAX_CMD_SIZE 128
+#define MAX_CMD_SIZE 96
 
 enum FirmwareState { NotBusy=0, Processing, Paused, WaitHeater };
 
@@ -28,25 +28,43 @@ class SDCard;
 
 class GCode   // 52 uint8_ts per command needed
 {
+    uint16_t        params;
+    uint16_t        params2;
 public:
-    unsigned int    params;
-    unsigned int    params2;
-    unsigned int    N; // Line number
-    unsigned int    M;
-    unsigned int    G;
-    float           X;
-    float           Y;
-    float           Z;
-    float           E;
-    float           F;
-    uint8_t         T;
-    long            S;
-    long            P;
-    float           I;
-    float           J;
-    float           R;
-    char*           text;
-
+    uint16_t        N; ///< Line number reduced to 16 bit
+    uint16_t        M; ///< G-code M value if set
+    uint16_t        G; ///< G-code G value if set
+    float           X; ///< G-code X value if set
+    float           Y; ///< G-code Y value if set
+    float           Z; ///< G-code Z value if set
+    float           E; ///< G-code E value if set
+    float           F; ///< G-code F value if set
+    int32_t         S; ///< G-code S value if set
+    int32_t         P; ///< G-code P value if set
+    float           I; ///< G-code I value if set
+    float           J; ///< G-code J value if set
+    float           R; ///< G-code R value if set
+    //protocol version 3:
+    float           D; ///< G-code D value if set
+    float           C; ///< G-code C value if set
+    float           H; ///< G-code H value if set
+    float           A; ///< G-code A value if set
+    float           B; ///< G-code B value if set
+    float           K; ///< G-code K value if set
+    float           L; ///< G-code L value if set
+    float           O; ///< G-code O value if set
+    
+    char*           text; ///< Text message of g-code if present.
+    //moved the byte to the end and aligned ints on short boundary
+    // Old habit from PC, which require alignments for data types such as int and long to be on 2 or 4 byte boundary
+    // Otherwise, the compiler adds padding, wasted space.
+    
+    // Old habit from PC, which require alignments for data types such as int and long to be on 2 or 4 byte boundary
+    // Otherwise, the compiler adds padding, wasted space.
+    uint8_t T; // This may not matter on any of these controllers, but it can't hurt
+    
+    // True if origin did not come from serial console. That way we can send status messages to
+    // a host only if he would normally not know about the mode switch.
     bool internalCommand;
 
     inline bool hasM()
@@ -107,6 +125,8 @@ public:
         return ((params & 64)!=0);
     } // hasE
 
+     //(params & 128) param1 Bit 7 :  always set to distinguish binary from ASCII line.
+
     inline bool hasF()
     {
         return ((params & 256)!=0);
@@ -152,6 +172,41 @@ public:
         return ((params2 & 4)!=0);
     } // hasR
 
+    //new identifiers
+    inline bool hasD()
+    {
+        return ((params2 & 8)!=0);
+    }
+    inline bool hasC()
+    {
+        return ((params2 & 16)!=0);
+    }
+    inline bool hasH()
+    {
+        return ((params2 & 32)!=0);
+    }
+    inline bool hasA()
+    {
+        return ((params2 & 64)!=0);
+    }
+    inline bool hasB()
+    {
+        return ((params2 & 128)!=0);
+    }
+    inline bool hasK()
+    {
+        return ((params2 & 256)!=0);
+    }
+    inline bool hasL()
+    {
+        return ((params2 & 512)!=0);
+    }
+    inline bool hasO()
+    {
+        return ((params2 & 1024)!=0);
+    }
+
+
     inline long getS(long def)
     {
         return (hasS() ? S : def);
@@ -175,7 +230,6 @@ public:
     static void executeFString(FSTRINGPARAM(cmd));
     static void executeString(char *cmd);
     static uint8_t computeBinarySize(char *ptr);
-    static void resetBuffer();
     static void keepAlive(enum FirmwareState state);
     static uint32_t keepAliveInterval;
 
@@ -183,7 +237,8 @@ public:
     friend class UIDisplay;
 
 private:
-    void debugCommandBuffer();
+    void outputCommandBuffer();
+    void outputGCommand();
     void checkAndPushCommand();
     static void requestResend();
 

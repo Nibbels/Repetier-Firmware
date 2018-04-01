@@ -76,6 +76,13 @@ float               maxadvspeed         = 0;
 uint8_t             pwm_pos[NUM_EXTRUDER+3];                // 0-NUM_EXTRUDER = Heater 0-NUM_EXTRUDER of extruder, NUM_EXTRUDER = Heated bed, NUM_EXTRUDER+1 Board fan, NUM_EXTRUDER+2 = Fan
 volatile int        waitRelax           = 0;                // Delay filament relax at the end of print, could be a simple timeout
 
+#if FEATURE_DEBUG_MOVE_CACHE_TIMING
+float               low_ticks_per_move  = LOW_TICKS_PER_MOVE; //float weil vergleichsparameter timeForMove auch float ist und ich da nichts ändern will. 4 byte ram bleiben gleich.
+uint32_t            move_cache_stats[MOVE_CACHE_SIZE] = {0};  //0 als ungefüllt kommt dazu.
+uint32_t            move_cache_stats_count = 0;
+uint32_t            move_cache_stats_count_limited = 0;
+#endif //FEATURE_DEBUG_MOVE_CACHE_TIMING
+
 PrintLine PrintLine::lines[MOVE_CACHE_SIZE];            // Cache for print moves.
 PrintLine *PrintLine::cur = 0;                          // Current printing line
 
@@ -371,9 +378,9 @@ void PrintLine::stopDirectMove( void ) //Funktion ist bereits zur ausführzeit v
     if( PrintLine::direct.isXYZMove() )
     {
         // decelerate and stop
-        if( PrintLine::direct.stepsRemaining > RF_MICRO_STEPS )
+        if( PrintLine::direct.stepsRemaining > 32 ) //die genaue anzahl der Decelerate Steps sollte hier eigentlich fast egal sein. Besser evtl. die Microsteps der Hauptachse?
         {
-            PrintLine::direct.stepsRemaining = RF_MICRO_STEPS;
+            PrintLine::direct.stepsRemaining = 32;
         }
     }
     return;
@@ -384,19 +391,29 @@ void PrintLine::stopDirectMove( void ) //Funktion ist bereits zur ausführzeit v
 void PrintLine::calculateQueueMove(float axisDistanceMM[],uint8_t pathOptimize, fast8_t drivingAxis, float feedrate)
 {
     long    axisInterval[4];
-    float timeForMove = (float)(F_CPU) * distance / feedrate; // time is in ticks
-    
+    float   timeForMove = (float)(F_CPU) * distance / feedrate; // time is in ticks
+
+#if FEATURE_DEBUG_MOVE_CACHE_TIMING
+    move_cache_stats_count++;
+    move_cache_stats[ (linesCount < MOVE_CACHE_SIZE ? linesCount : MOVE_CACHE_SIZE-1) ]++;
+    if(linesCount < MOVE_CACHE_LOW && timeForMove < low_ticks_per_move)   // Limit speed to keep cache full.
+#else
     if(linesCount < MOVE_CACHE_LOW && timeForMove < LOW_TICKS_PER_MOVE)   // Limit speed to keep cache full.
+#endif //FEATURE_DEBUG_MOVE_CACHE_TIMING
+    
     {
-        //OUT_P_I("L:",lines_count);
-        timeForMove += (3 * (LOW_TICKS_PER_MOVE - timeForMove)) / (linesCount + 1); // Increase time if queue gets empty. Add more time if queue gets smaller.
-        //OUT_P_F_LN("Slow ",time_for_move);
+#if FEATURE_DEBUG_MOVE_CACHE_TIMING
+        move_cache_stats_count_limited++;
+        timeForMove += ((low_ticks_per_move - timeForMove)) * 3 / (linesCount + 1); // Increase time if queue gets empty. Add more time if queue gets smaller.
+#else
+        timeForMove += ((LOW_TICKS_PER_MOVE - timeForMove)) * 3 / (linesCount + 1); // Increase time if queue gets empty. Add more time if queue gets smaller.
+#endif //FEATURE_DEBUG_MOVE_CACHE_TIMING
     }
     timeInTicks = timeForMove;
     // Compute the solwest allowed interval (ticks/step), so maximum feedrate is not violated
     int32_t limitInterval0;
     int32_t limitInterval = limitInterval0 = timeForMove/stepsRemaining; // until not violated by other constraints it is your target speed
-    float toTicks = static_cast<float>(F_CPU) / stepsRemaining;
+    float   toTicks = static_cast<float>(F_CPU) / stepsRemaining;
     if(isXMove())
     {
         axisInterval[X_AXIS] = axisDistanceMM[X_AXIS] * toTicks / (Printer::maxFeedrate[X_AXIS]); // mm*ticks/s/(mm/s*steps) = ticks/step
@@ -1110,7 +1127,6 @@ void PrintLine::waitForXFreeLines(uint8_t b)
 {
     while(linesCount + b > MOVE_CACHE_SIZE)     // wait for a free entry in movement cache
     {
-        //GCode::readFromSerial();
         Commands::checkForPeriodicalActions( Processing );
     }
 
@@ -1315,16 +1331,14 @@ long PrintLine::performPauseCheck(){
                 case PAUSE_STATUS_PREPARE_CONTINUE2_1: //Move back
                 {
 #if FEATURE_MILLING_MODE
-                    bool modeprint = ( Printer::operatingMode == OPERATING_MODE_PRINT );
-#else
-                    bool modeprint = true;
-#endif // FEATURE_MILLING_MODE
-                    if( modeprint )
+                    if( Printer::operatingMode == OPERATING_MODE_PRINT )
                     {
+#endif // FEATURE_MILLING_MODE
                         Printer::directPositionTargetSteps[X_AXIS] += g_nContinueSteps[X_AXIS];
                         Printer::directPositionTargetSteps[Y_AXIS] += g_nContinueSteps[Y_AXIS];
                         Printer::directPositionTargetSteps[Z_AXIS] += g_nContinueSteps[Z_AXIS];
                         Printer::directPositionTargetSteps[E_AXIS] += g_nContinueSteps[E_AXIS];
+#if FEATURE_MILLING_MODE
                     }
                     else
                     {
@@ -1332,6 +1346,7 @@ long PrintLine::performPauseCheck(){
                         Printer::directPositionTargetSteps[X_AXIS] += g_nContinueSteps[X_AXIS];
                         Printer::directPositionTargetSteps[Y_AXIS] += g_nContinueSteps[Y_AXIS];
                     }
+#endif // FEATURE_MILLING_MODE
                     PrintLine::prepareDirectMove();
                     g_pauseStatus = PAUSE_STATUS_PAUSED;
                     break;
@@ -1353,16 +1368,19 @@ long PrintLine::performPauseCheck(){
 #endif //FEATURE_PAUSE_PRINTING
 
         // Pause a bit, if z-compensation is way out of line: this is usefull when starting prints using very deep bed-leveling and custom z-endstop switches which can override a lot.
-        short ZcmpNachlauf = abs( Printer::compensatedPositionCurrentStepsZ - Printer::compensatedPositionTargetStepsZ );
+        uint16_t ZcmpNachlauf = abs( Printer::compensatedPositionCurrentStepsZ - Printer::compensatedPositionTargetStepsZ );
 
-        if( ZcmpNachlauf > ZAXIS_STEPS_PER_MM * 0.25f && Printer::compensatedPositionTargetStepsZ ){
+        //wenn die zkompensation wegen z.B. Startposition über 0.25mm hinterherhängt: pause und warten.
+        if( ZcmpNachlauf > (uint16_t(Printer::axisStepsPerMM[Z_AXIS]) >> 2) && Printer::compensatedPositionTargetStepsZ ){
             HAL::forbidInterrupts();
             return true;
         }
 
         if( ZcmpNachlauf && !Printer::doHeatBedZCompensation ){
-            HAL::forbidInterrupts();
-            return true;
+            if(!Printer::checkCMPblocked()){ //wenn blocked, kann die nächste bewegung das aufheben. Hier gehts nur um wenige steps in Z, da ist das egal, wenn mal nicht kurz pausiert wird.
+                HAL::forbidInterrupts();
+                return true;
+            }
         }
     }
     return false; //ignore this.
@@ -1606,16 +1624,63 @@ long PrintLine::performDirectMove()
 void PrintLine::performDirectSteps( void )
 {
     static unsigned long g_uLastDirectStepTime = 0;
-    if( (HAL::timeInMilliseconds() - g_uLastDirectStepTime) >= MANUAL_MOVE_INTERVAL )
+    uint16_t moveinterval = 1000; //ns default.
+    
+    //fix that microstepping and steps/mm settings are not constraining speed of buttons/.. extrusion.
+    bool x_needed = Printer::directPositionCurrentSteps[X_AXIS] != Printer::directPositionTargetSteps[X_AXIS];
+    bool y_needed = Printer::directPositionCurrentSteps[Y_AXIS] != Printer::directPositionTargetSteps[Y_AXIS];
+    bool z_needed = Printer::directPositionCurrentSteps[Z_AXIS] != Printer::directPositionTargetSteps[Z_AXIS];
+    bool e_needed = Printer::directPositionCurrentSteps[E_AXIS] != Printer::directPositionTargetSteps[E_AXIS];
+    bool some_needed = x_needed || y_needed || z_needed || e_needed;
+    
+    if(some_needed){
+        //suche den gröbsten beteiligten stepper, denn der braucht ein limit. -> STEPS/s
+        uint16_t fastest = 65535; //steps/mm*1 -> steps/s sind im bereich um 150 bis 3000 -> man kann bis grob 10mm/s per uint16_t rechnen.
+        uint8_t axis = 255;
+        if(e_needed){
+            if(uint16_t(Printer::axisStepsPerMM[E_AXIS]) /* x 1mm/s = Steps/s */ < fastest){
+                fastest = uint16_t(Printer::axisStepsPerMM[E_AXIS]/* x 1mm/s = Steps/s */);
+                axis = E_AXIS;
+            }
+        }
+        if(x_needed){
+            if(uint16_t(Printer::axisStepsPerMM[X_AXIS]) /* x 1mm/s = Steps/s */ < fastest){
+                fastest = uint16_t(Printer::axisStepsPerMM[X_AXIS]/* x 1mm/s = Steps/s */);
+                axis = X_AXIS;
+            }
+        }
+        if(y_needed){
+            if(uint16_t(Printer::axisStepsPerMM[Y_AXIS]) /* x 1mm/s = Steps/s */ < fastest){
+                fastest = uint16_t(Printer::axisStepsPerMM[Y_AXIS]/* x 1mm/s = Steps/s */);
+                axis = Y_AXIS;
+            }
+        }
+        if(z_needed){
+            if(uint16_t(Printer::axisStepsPerMM[Z_AXIS]) /* x 1mm/s = Steps/s */ < fastest){
+                fastest = uint16_t(Printer::axisStepsPerMM[Z_AXIS]/* x 1mm/s = Steps/s */);
+                axis = Z_AXIS;
+            }
+        }
+        //fastest: 150..6000 Steps/s -> 0.15 bis 6 Steps/ms
+        if(axis < 255){
+            moveinterval = uint16_t(Printer::invAxisStepsPerMM[axis]*262144); //bei 1mm/s sind das sekunden/Step -> *1000000 -> microsekunden/Step -> etwas schneller ist besser.
+        }
+    }else{
+        return;
+    }
+    
+    
+    if( abs(HAL::timeInMicroseconds() - g_uLastDirectStepTime) >= moveinterval /*ns*/ )
     {
         bool bDone = false;
-        g_uLastDirectStepTime = HAL::timeInMilliseconds();
+        g_uLastDirectStepTime = HAL::timeInMicroseconds();
         
         if( Printer::directPositionCurrentSteps[E_AXIS] > Printer::directPositionTargetSteps[E_AXIS] )
         {
             bDone = true;
 #if USE_ADVANCE
-            if( Printer::isAdvanceActivated() ) // Use interrupt for movement
+            //Advance ist bei Directsteps nicht so gut wenn man extrem viele Steps/mm hat. Dann läuft das nach!
+            if( Printer::isAdvanceActivated() && abs(Printer::extruderStepsNeeded) < 500 ) // Use interrupt for movement but dont just sum up the advance too fast.
             {
                 Printer::extruderStepsNeeded--;
                 Printer::directPositionCurrentSteps[E_AXIS] --;
@@ -1817,7 +1882,7 @@ void PrintLine::performDirectSteps( void )
             if( Printer::directPositionCurrentSteps[E_AXIS] < Printer::directPositionTargetSteps[E_AXIS] )
             {
 #if USE_ADVANCE
-                if( Printer::isAdvanceActivated() ) // Use interrupt for movement
+                if( Printer::isAdvanceActivated() && abs(Printer::extruderStepsNeeded) < 500 ) // Use interrupt for movement but dont just sum up the advance too fast.
                 {
                     Printer::extruderStepsNeeded++;
                     Printer::directPositionCurrentSteps[E_AXIS] ++;
@@ -1850,7 +1915,6 @@ void PrintLine::performDirectSteps( void )
             }
         }
     }
-
 } // performDirectSteps
 #endif // FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
 
@@ -2027,7 +2091,7 @@ long PrintLine::performMove(PrintLine* move, char forQueue)
     interval          -> actual sent interval that might be manipulated 
     v                 -> not manipulated active speed
     ***/
-    unsigned int v;
+    speed_t v;
 
     Printer::stepNumber += max_loops;
     Printer::timer      += (max_loops == 1 ?  Printer::interval       : 
@@ -2146,7 +2210,7 @@ long PrintLine::performMove(PrintLine* move, char forQueue)
 #endif // FEATURE_MILLING_MODE
 
         if(linesCount == 0 && nIdle) {
-            g_uStartOfIdle = HAL::timeInMilliseconds();
+            g_uStartOfIdle = HAL::timeInMilliseconds(); //end a move from performMove
             Printer::v = 0;
         }
 

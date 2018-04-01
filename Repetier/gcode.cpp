@@ -84,36 +84,60 @@ Gcode Letter to Bit and Datatype:
 - P : Bit 11 : 32 Bit Integer
 - V2 : Bit 12 : Version 2 command for additional commands/sizes
 - Ext : Bit 13 : There are 2 more uint8_ts following with Bits, only for future versions
-- Int :Bit 14 : Marks it as internal command,
+- Int : Bit 14 : Marks it as internal command,
 - Text : Bit 15 : 16 Byte ASCII String terminated with 0
 Second word if V2:
 - I : Bit 0 : 32-Bit float
 - J : Bit 1 : 32-Bit float
 - R : Bit 2 : 32-Bit float
+- D : Bit 3 : 32-Bit float
+- C : Bit 4 : 32-Bit float
+- H : Bit 5 : 32-Bit float
+- A : Bit 6 : 32-Bit float
+- B : Bit 7 : 32-Bit float
+- K : Bit 8 : 32-Bit float
+- L : Bit 9 : 32-Bit float
+- O : Bit 0 : 32-Bit float
 */
 uint8_t GCode::computeBinarySize(char *ptr)  // unsigned int bitfield) {
 {
     uint8_t s = 4; // include checksum and bitfield
     uint16_t bitfield = *(uint16_t*)ptr;
-    if(bitfield & 1) s+=2;
-    if(bitfield & 8) s+=4;
-    if(bitfield & 16) s+=4;
-    if(bitfield & 32) s+=4;
-    if(bitfield & 64) s+=4;
-    if(bitfield & 256) s+=4;
-    if(bitfield & 512) s+=1;
-    if(bitfield & 1024) s+=4;
-    if(bitfield & 2048) s+=4;
+    if(bitfield & 1) s += 2;
+    if(bitfield & 8) s += 4;
+    if(bitfield & 16) s += 4;
+    if(bitfield & 32) s += 4;
+    if(bitfield & 64) s += 4;
+    //128 Bit 7 :  always set to distinguish binary from ASCII line.
+    if(bitfield & 256) s += 4;
+    if(bitfield & 512) s += 1;
+    if(bitfield & 1024) s += 4;
+    if(bitfield & 2048) s += 4;
     if(bitfield & 4096)   // Version 2 or later
     {
-        s+=2; // for bitfield 2
+        s += 2; // for bitfield 2
         uint16_t bitfield2 = *(uint16_t*)(ptr+2);
-        if(bitfield & 2) s+=2;
-        if(bitfield & 4) s+=2;
-        if(bitfield2 & 1) s+= 4;
-        if(bitfield2 & 2) s+= 4;
-        if(bitfield2 & 4) s+= 4;
-        if(bitfield & 32768) s+=RMath::min((uint8_t)80,(uint8_t)ptr[4]+1);
+        if(bitfield  & 2) s += 2;
+        if(bitfield  & 4) s += 2;
+        if(bitfield2 & 1) s += 4;
+        if(bitfield2 & 2) s += 4;
+        if(bitfield2 & 4) s += 4;
+        // START ich rechne len nach dem aktuellsten Stand aus aber nutze diesen nicht.
+        if(bitfield2 & 8) s += 4;
+        if(bitfield2 & 16) s += 4;
+        if(bitfield2 & 32) s += 4;
+        if(bitfield2 & 64) s += 4;
+        if(bitfield2 & 128) s += 4;
+        if(bitfield2 & 256) s += 4;
+        if(bitfield2 & 512) s += 4;
+        if(bitfield2 & 1024) s += 4;
+        if(bitfield2 & 2048) s += 4;
+        if(bitfield2 & 4096) s += 4;
+        if(bitfield2 & 8192) s += 4;
+        if(bitfield2 & 16384) s += 4;
+        if(bitfield2 & 32768) s += 4;
+        // ENDE ich rechne len nach dem aktuellsten Stand aus aber nutze diesen nicht.
+        if(bitfield  & 32768) s += RMath::min((uint8_t)80,(uint8_t)ptr[4] + 1);
     }
     else
     {
@@ -122,7 +146,6 @@ uint8_t GCode::computeBinarySize(char *ptr)  // unsigned int bitfield) {
         if(bitfield & 32768) s+=16;
     }
     return s;
-
 } // computeBinarySize
 
 
@@ -191,13 +214,13 @@ void GCode::checkAndPushCommand()
         {
             Commands::emergencyStop();
         }
-#ifdef DEBUG_COM_ERRORS
+#ifdef DEBUG_FORCE_COM_ERROR
         if(M==666)
         {
             lastLineNumber++; // force an communication error
             return;
         }
-#endif // DEBUG_COM_ERRORS
+#endif // DEBUG_FORCE_COM_ERROR
     }
     if(hasN())
     {
@@ -233,7 +256,7 @@ void GCode::checkAndPushCommand()
     }
     pushCommand();
 
-#ifdef ACK_WITH_LINENUMBER
+#if ACK_WITH_LINENUMBER
     Com::printFLN(Com::tOkSpace,actLineNumber);
 #else
     Com::printFLN(Com::tOk);
@@ -291,24 +314,6 @@ void GCode::echoCommand()
     }
 
 } // echoCommand
-
-
-void GCode::debugCommandBuffer()
-{
-    Com::printF(PSTR("CommandBuffer"));
-    for(int i=0; i<commandsReceivingWritePosition; i++)
-        Com::printF(Com::tColon,(int)commandReceiving[i]);
-    Com::println();
-    Com::printFLN(PSTR("Binary:"),(int)sendAsBinary);
-
-    if(!sendAsBinary)
-    {
-        Com::print((char*)commandReceiving);
-        Com::println();
-    }
-
-} // debugCommandBuffer
-
 
 /** \brief Execute commands in progmem stored string. Multiple commands are seperated by \n */
 void GCode::executeFString(FSTRINGPARAM(cmd))
@@ -421,9 +426,8 @@ void GCode::readFromSerial()
             requestResend(); // Something is wrong, a started line was not continued in the last second
             timeOfLastDataPacket = time;
         }
-
 #ifdef WAITING_IDENTIFIER
-        else if(bufferLength == 0 && time-timeOfLastDataPacket>1000)   // Don't do it if buffer is not empty. It may be a slow executing command.
+        else if(bufferLength == 0 && time - timeOfLastDataPacket > 1000)   // Don't do it if buffer is not empty. It may be a slow executing command.
         {
             Com::printFLN(Com::tWait); // Unblock communication in case the last ok was not received correct.
             timeOfLastDataPacket = time;
@@ -451,7 +455,7 @@ void GCode::readFromSerial()
                 commandsReceivingWritePosition = 0;
                 continue;
             }
-            sendAsBinary = (commandReceiving[0] & 128)!=0;
+            sendAsBinary = (commandReceiving[0] & 128) != 0; //128 param1 Bit 7 :  always set to distinguish binary from ASCII line.
         }
         if(sendAsBinary)
         {
@@ -637,13 +641,13 @@ bool GCode::parseBinary(uint8_t *buffer, bool fromSerial)
     }
     sum1 -= *p++;
     sum2 -= *p;
+
+    bool corrupted = false;
     if(sum1 | sum2)
     {
-        if(Printer::debugErrors())
-        {
-            Com::printErrorF(Com::tWrongChecksum);
-        }
-        return false;
+        Com::printErrorFLN(Com::tWrongChecksum);
+        GCode::outputCommandBuffer();
+        corrupted = true;
     }
 
     p = buffer;
@@ -694,71 +698,116 @@ bool GCode::parseBinary(uint8_t *buffer, bool fromSerial)
         {
             text = (char*)p;
             text[textlen] = 0; // Terminate string overwriting checksum
-            waitUntilAllCommandsAreParsed = true; // Don't destroy string until executed
+            if(!corrupted) waitUntilAllCommandsAreParsed = true; // Don't destroy string until executed
         }
     }
     else
     {
         if(hasX())
         {
-            X=*(float *)p;
-            p+=4;
+            X = *(float *)p;
+            p += 4;
         }
         if(hasY())
         {
-            Y=*(float *)p;
-            p+=4;
+            Y = *(float *)p;
+            p += 4;
         }
         if(hasZ())
         {
-            Z =*(float *)p;
-            p+=4;
+            Z  = *(float *)p;
+            p += 4;
         }
         if(hasE())
         {
-            E=*(float *)p;
-            p+=4;
+            E = *(float *)p;
+            p += 4;
         }
         if(hasF())
         {
-            F=*(float *)p;
-            p+=4;
+            F = *(float *)p;
+            p += 4;
         }
         if(hasT())
         {
-            T=*p++;
+            T = *p++;
         }
         if(hasS())
         {
-            S=*(int32_t*)p;
-            p+=4;
+            S = *(int32_t*)p;
+            p += 4;
         }
         if(hasP())
         {
-            P=*(int32_t*)p;
-            p+=4;
+            P = *(int32_t*)p;
+            p += 4;
         }
         if(hasI())
         {
-            I=*(float *)p;
-            p+=4;
+            I = *(float *)p;
+            p += 4;
         }
         if(hasJ())
         {
-            J=*(float *)p;
-            p+=4;
+            J = *(float *)p;
+            p += 4;
         }
         if(hasR())
         {
-            R=*(float *)p;
-            p+=4;
+            R = *(float *)p;
+            p += 4;
+        }
+        if(hasD())
+        {
+            D = *(float *)p;
+            p += 4;
+        }
+        if(hasC())
+        {
+            C = *(float *)p;
+            p += 4;
+        }
+        if(hasH())
+        {
+            H = *(float *)p;
+            p += 4;
+        }
+        if(hasA())
+        {
+            A = *(float *)p;
+            p += 4;
+        }
+        if(hasB())
+        {
+            B = *(float *)p;
+            p += 4;
+        }
+        if(hasK())
+        {
+            K = *(float *)p;
+            p += 4;
+        }
+        if(hasL())
+        {
+            L = *(float *)p;
+            p += 4;
+        }
+        if(hasO())
+        {
+            O = *(float *)p;
+            p += 4;
         }
         if(hasString())   // set text pointer to string
         {
             text = (char*)p;
             text[textlen] = 0; // Terminate string overwriting checksum
-            waitUntilAllCommandsAreParsed = true; // Don't destroy string until executed
+            if(!corrupted) waitUntilAllCommandsAreParsed = true; // Don't destroy string until executed
         }
+    }
+    if(corrupted)
+    {
+        GCode::outputGCommand();
+        return false;
     }
     return true;
 } // parseBinary
@@ -910,6 +959,70 @@ bool GCode::parseAscii(char *line,bool fromSerial)
             params |= 4096; // Needs V2 for saving
             break;
         }
+        case 'D':
+        case 'd':
+        {
+            D = parseFloatValue(pos);
+            params2 |= 8;
+            params |= 4096; // Needs V2 for saving
+            break;
+        }
+        case 'C':
+        case 'c':
+        {
+            C = parseFloatValue(pos);
+            params2 |= 16;
+            params |= 4096; // Needs V2 for saving
+            break;
+        }
+        case 'H':
+        case 'h':
+        {
+            H = parseFloatValue(pos);
+            params2 |= 32;
+            params |= 4096; // Needs V2 for saving
+            break;
+        }
+        case 'A':
+        case 'a':
+        {
+            A = parseFloatValue(pos);
+            params2 |= 64;
+            params |= 4096; // Needs V2 for saving
+            break;
+        }
+        case 'B':
+        case 'b':
+        {
+            B = parseFloatValue(pos);
+            params2 |= 128;
+            params |= 4096; // Needs V2 for saving
+            break;
+        }
+        case 'K':
+        case 'k':
+        {
+            K = parseFloatValue(pos);
+            params2 |= 256;
+            params |= 4096; // Needs V2 for saving
+            break;
+        }
+        case 'L':
+        case 'l':
+        {
+            L = parseFloatValue(pos);
+            params2 |= 512;
+            params |= 4096; // Needs V2 for saving
+            break;
+        }
+        case 'O':
+        case 'o':
+        {
+            O = parseFloatValue(pos);
+            params2 |= 1024;
+            params |= 4096; // Needs V2 for saving
+            break;
+        }
         case '*' : //checksum
         {
             uint8_t checksum_given = parseLongValue(pos);
@@ -920,13 +1033,12 @@ bool GCode::parseAscii(char *line,bool fromSerial)
 #endif
             if(checksum != checksum_given)
             {
-                if(Printer::debugErrors())
-                {
-                    Com::printErrorFLN(Com::tWrongChecksum);
-                }
+                Com::printErrorFLN(Com::tWrongChecksum);
+                GCode::outputCommandBuffer();
+                GCode::outputGCommand();
                 return false; // mismatch
             }
-			hasChecksum = true;
+            hasChecksum = true;
             break;
         }
         default:
@@ -934,7 +1046,7 @@ bool GCode::parseAscii(char *line,bool fromSerial)
         }// end switch
     }// end while
     if(wasLastCommandReceivedAsBinary && !hasChecksum && fromSerial && !waitUntilAllCommandsAreParsed) {
-        Com::printErrorFLN("Checksum required when switching back to ASCII protocol.");
+        Com::printErrorFLN(PSTR("Checksum required when switching back to ASCII protocol."));
         return false;
     }
     return true;
@@ -946,19 +1058,19 @@ void GCode::printCommand()
     if(hasN())
     {
         Com::print('N');
-        Com::print((int)N);
+        Com::print(int32_t(N)); //65536 wäre max, nicht 32768 -> sonst sind N-xxx in der Log
         Com::print(' ');
     }
     if(hasM())
     {
         Com::print('M');
-        Com::print((int)M);
+        Com::print(int32_t(M));
         Com::print(' ');
     }
     if(hasG())
     {
         Com::print('G');
-        Com::print((int)G);
+        Com::print(int32_t(G));
         Com::print(' ');
     }
     if(hasT())
@@ -969,15 +1081,15 @@ void GCode::printCommand()
     }
     if(hasX())
     {
-        Com::printF(Com::tX,X);
+        Com::printF(Com::tX,X,3);
     }
     if(hasY())
     {
-        Com::printF(Com::tY,Y);
+        Com::printF(Com::tY,Y,3);
     }
     if(hasZ())
     {
-        Com::printF(Com::tZ,Z);
+        Com::printF(Com::tZ,Z,3);
     }
     if(hasE())
     {
@@ -985,7 +1097,7 @@ void GCode::printCommand()
     }
     if(hasF())
     {
-        Com::printF(Com::tF,F);
+        Com::printF(Com::tF,F,3);
     }
     if(hasS())
     {
@@ -997,15 +1109,47 @@ void GCode::printCommand()
     }
     if(hasI())
     {
-        Com::printF(Com::tI,I);
+        Com::printF(Com::tI,I,3);
     }
     if(hasJ())
     {
-        Com::printF(Com::tJ,J);
+        Com::printF(Com::tJ,J,3);
     }
     if(hasR())
     {
-        Com::printF(Com::tR,R);
+        Com::printF(Com::tR,R,3);
+    }
+    if(hasD())
+    {
+        Com::printF(Com::tD,D,3);
+    }
+    if(hasC())
+    {
+        Com::printF(Com::tC,C,3);
+    }
+    if(hasH())
+    {
+        Com::printF(Com::tH,H,3);
+    }
+    if(hasA())
+    {
+        Com::printF(Com::tA,A,3);
+    }
+    if(hasB())
+    {
+        Com::printF(Com::tB,B,3);
+    }
+    if(hasK())
+    {
+        Com::printF(Com::tK,K,3);
+    }
+    if(hasL())
+    {
+        Com::printF(Com::tL,L,3);
+    }
+    if(hasO())
+    {
+        Com::printF(Com::tO,O,3);
     }
     if(hasString())
     {
@@ -1015,13 +1159,25 @@ void GCode::printCommand()
 
 } // printCommand
 
-
-void GCode::resetBuffer()
+void GCode::outputCommandBuffer()
 {
-    bufferLength     = 0;
-    bufferWriteIndex = 0;
-    bufferReadIndex  = 0;
+    if((int)sendAsBinary){
+        Com::printF(PSTR("B "));
+    }else{
+        Com::printF(PSTR("A "));
+    }
+    Com::printF(PSTR("ComBuffer"));
+    for(int i=0; i<commandsReceivingWritePosition; i++) Com::printF(Com::tColon,(int)commandReceiving[i]);
+    Com::println();
+} // outputCommandBuffer
 
-    memset( commandsBuffered, 0, sizeof( GCode ) * GCODE_BUFFER_SIZE );
-
-} // resetBuffer
+void GCode::outputGCommand()
+{
+    Com::printF(PSTR("Corrupted: "));
+    if((int)sendAsBinary){
+        GCode::printCommand();
+    }else{
+        Com::print((char*)commandReceiving);
+        Com::println();
+    }
+} // outputCommandBuffer

@@ -117,7 +117,7 @@ public:
 #define ANALOG_REDUCE_BITS          0
 #define ANALOG_REDUCE_FACTOR        1
 
-#define MAX_RAM                     32767
+#define MAX_RAM                     8192
 
 #define bit_clear(x,y)              x&= ~(1<<y)
 #define bit_set(x,y)                x|= (1<<y)
@@ -193,8 +193,16 @@ void FEATURE_READ_CALIPER_HOOK(); //read in calipers 48bit protocol bitwise!
 //undef fix gegen compiler warning   
 #define SERIAL_RX_BUFFER_SIZE   128
 #define SERIAL_RX_BUFFER_MASK   127
-#define SERIAL_TX_BUFFER_SIZE    64
-#define SERIAL_TX_BUFFER_MASK    63
+
+#undef SERIAL_TX_BUFFER_SIZE
+#undef SERIAL_TX_BUFFER_MASK
+#ifdef BIG_OUTPUT_BUFFER
+  #define SERIAL_TX_BUFFER_SIZE 128
+  #define SERIAL_TX_BUFFER_MASK 127
+#else
+  #define SERIAL_TX_BUFFER_SIZE 64
+  #define SERIAL_TX_BUFFER_MASK 63
+#endif
 
 struct ring_buffer_rx
 {
@@ -272,10 +280,6 @@ class HAL
 public:
     HAL();
     virtual ~HAL();
-    
-    static inline void hwSetup(void)
-    {
-    } // hwSetup
 
     // return val'val
     static uint16_t integerSqrt(int32_t a);
@@ -395,7 +399,7 @@ public:
 
     } // U16SquaredToU32
 
-    static inline unsigned int ComputeV(long timer,long accel)
+    static inline speed_t ComputeV(long timer,long accel)
     {
         unsigned int res;
 

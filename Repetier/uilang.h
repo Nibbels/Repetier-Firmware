@@ -109,6 +109,7 @@
 #define UI_TEXT_NO                      "No"
 #define UI_TEXT_OK                      "Ok"
 #define UI_TEXT_FAIL                    "Fail"
+#define UI_TEXT_ABORT_KEYPRESSED        "Aborted by keys"
 #define UI_TEXT_NEEDFIX                 "too high"
 #define UI_TEXT_UP                      "Up"
 #define UI_TEXT_DOWN                    "Down"
@@ -157,10 +158,7 @@
 #define UI_TEXT_EXTR2_TEMP              "Temp. 2  :%E2\002C"
 #define UI_TEXT_EXTR0_OFF               "Extruder 0 off"
 #define UI_TEXT_EXTR1_OFF               "Extruder 1 off"
-#define UI_TEXT_EXTR2_OFF               "Extruder 2 off"
-#define UI_TEXT_EXTR0_SELECT            "%X0 Select Extr.0"
-#define UI_TEXT_EXTR1_SELECT            "%X1 Select Extr.1"
-#define UI_TEXT_EXTR2_SELECT            "%X2 Select Extr.2"
+#define UI_TEXT_BED_OFF                 "Heated Bed off"
 #define UI_TEXT_SET_E_ORIGIN            "Set E Origin"
 #define UI_TEXT_PRINT_X                 "Print X :%ax"
 #define UI_TEXT_PRINT_Y                 "Print Y :%ay"
@@ -173,9 +171,7 @@
 #define UI_TEXT_JERK                    "X/Y-Jerk:%aj"
 #define UI_TEXT_ZJERK                   "Z-Jerk  :%aJ"
 #define UI_TEXT_ACCELERATION            "Acceleration"
-#if FEATURE_MILLING_MODE
- #define UI_TEXT_ACCEL_MILL              "Accelerat.: %XZ"
-#endif //FEATURE_MILLING_MODE
+#define UI_TEXT_ACCEL_MILL              "Accelerat.: %XZ"
 #define UI_TEXT_DBG_ECHO                "Echo   : %do"
 #define UI_TEXT_DBG_INFO                "Info   : %di"
 #define UI_TEXT_DBG_ERROR               "Errors : %de"
@@ -292,7 +288,6 @@
 #define UI_TEXT_ALIGN_EXTRUDERS_ABORTED "Align aborted"
 #define UI_TEXT_ALIGN_EXTRUDERS_DONE    "Align completed"
 #define UI_TEXT_ALIGN_EXTRUDERS         "Align Extruders"
-#define UI_TEXT_HEAT_BED_SCAN_OFFSET_MIN "mOffset: %HO um"
 #define UI_TEXT_PRINT_MODE              "Printer"
 #define UI_TEXT_MILL_MODE               "Miller"
 #define UI_TEXT_Z_SINGLE                "Single"
@@ -333,7 +328,7 @@
 #define UI_TEXT_SET_ORIGIN              "Set Origin"
 #define UI_TEXT_SAVING_SUCCESS          "Saved to EEPROM"
 #define UI_TEXT_AUTODETECT_PID          "Determine PID"
-#define UI_TEXT_PID_ACK                 UI_TEXT_AUTODETECT_PID "?","(" UI_TEXT_SAVING_SUCCESS ")","%mYYes","%mNNo"
+#define UI_TEXT_PID_ACK                 UI_TEXT_AUTODETECT_PID "?","%Xt","%mYYes","%mNNo"
 #define UI_TEXT_HOME_UNKNOWN            "Home unknown"
 #define UI_TEXT_SAVING_NEEDLESS         "Saving needless"
 #define UI_TEXT_EMERGENCY_PAUSE         "Emergency Pause"
@@ -372,7 +367,6 @@
 
 #define UI_ACTION_TEXT_CLASSICPID "PID ZieglerNichols"
 #define UI_ACTION_TEXT_PESSEN "PID Pessen-Rule"
-#define UI_ACTION_TEXT_SOME "PID Some-Overshoot"
 #define UI_ACTION_TEXT_NO "PID No-Overshoot"
 #define UI_ACTION_TEXT_TYREUS_LYBEN "PID Tyreus-Lyben"
 
@@ -398,7 +392,17 @@
 #define UI_TEXT_FLOW_DF                "dFlow:   :%CF%%%"
 #define UI_TEXT_FLOW_DV                "dFeed:   :%CE%%%"
 
+#define UI_TEXT_MICRO_STEPS_XY         "MicroStepXY:%Xx"
+#define UI_TEXT_MICRO_STEPS_Z          "MicroStepsZ:%Xz"
+#define UI_TEXT_MICRO_STEPS_E          "MicroStepsE:%XE"
+
+#define UI_ACTION_TEXT_PESSEN_TIPP          "(choose for hotends)"
+#define UI_ACTION_TEXT_CLASSICPID_TIPP      "(alternat. for hotends)"
+#define UI_ACTION_TEXT_NO_TIPP              "(alternat. for beds)"
+#define UI_ACTION_TEXT_TYREUS_LYBEN_TIPP    "(choose for highpower bed)"
+
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000_V2
+    #define UI_TEXT_SCAN_START_HEIGHT       "Scan Z-Lift: %Ss mm"
     #define UI_TEXT_DO_MHIER_AUTO_MATRIX_LEVELING "Auto-Matr.-Leveling"
     #define UI_TEXT_FREQ_DBL                "DblFq:%Xgmm/s"
     #define UI_TEXT_EXTR_ADVANCE_L_E0       "E0-Advance L:%Xb"
@@ -445,6 +449,7 @@
     #define UI_TEXT_OPERATION_DENIED        "Operation denied"
     #define UI_TEXT_TEMPERATURE_WRONG       "Temperature wrong"
 #else
+    #define UI_TEXT_SCAN_START_HEIGHT       "ScanZLift:%Ssmm"
     #define UI_TEXT_DO_MHIER_AUTO_MATRIX_LEVELING "Auto-Matr.-Leveling"
     #define UI_TEXT_FREQ_DBL                "DblF:%Xgmm/s"
     #define UI_TEXT_EXTR_ADVANCE_L_E0       "E0-AdvanceL:%Xb"
@@ -510,6 +515,7 @@
 #define UI_TEXT_OK                      "Ok"
 #define UI_TEXT_NEEDFIX                 "zu hoch"
 #define UI_TEXT_FAIL                    "Fail"
+#define UI_TEXT_ABORT_KEYPRESSED        "Aborted by keys"
 #define UI_TEXT_UP                      "Hoch"
 #define UI_TEXT_DOWN                    "Runter"
 #define UI_TEXT_SEL                     "\003"
@@ -551,10 +557,7 @@
 #define UI_TEXT_Z_POS_FAST              "Pos. Z schnell"
 #define UI_TEXT_EXTR0_OFF               "Extruder 0 aus"
 #define UI_TEXT_EXTR1_OFF               "Extruder 1 aus"
-#define UI_TEXT_EXTR2_OFF               "Extruder 2 aus"
-#define UI_TEXT_EXTR0_SELECT            "W" STR_auml "hle Extr. 0"
-#define UI_TEXT_EXTR1_SELECT            "W" STR_auml "hle Extr. 1"
-#define UI_TEXT_EXTR2_SELECT            "W" STR_auml "hle Extr. 2"
+#define UI_TEXT_BED_OFF                 "Heizbett aus"
 #define UI_TEXT_PRINT_X                 "Drucken X:%ax"
 #define UI_TEXT_PRINT_Y                 "Drucken Y:%ay"
 #define UI_TEXT_PRINT_Z                 "Drucken Z:%az"
@@ -564,9 +567,7 @@
 #define UI_TEXT_MOVE_Z                  "Bewegen Z:%aZ"
 #define UI_TEXT_MOVE_Z_DELTA            "Bewegen:%aZ"
 #define UI_TEXT_ACCELERATION            "Beschleunigung"
-#if FEATURE_MILLING_MODE
- #define UI_TEXT_ACCEL_MILL              "Fr" STR_auml "sbeschl.:%XZ"
-#endif // FEATURE_MILLING_MODE
+#define UI_TEXT_ACCEL_MILL              "Fr" STR_auml "sbeschl.:%XZ"
 #define UI_TEXT_DBG_ECHO                "Echo       :%do"
 #define UI_TEXT_DBG_INFO                "Info       :%di"
 #define UI_TEXT_DBG_ERROR               "Fehler     :%de"
@@ -669,7 +670,6 @@
 // FEATURE_ALIGN_EXTRUDERS
 #define UI_TEXT_ALIGN_EXTRUDERS_ABORTED "Ausr. abgebr."
 #define UI_TEXT_ALIGN_EXTRUDERS_DONE    "Ausr. beendet"
-#define UI_TEXT_HEAT_BED_SCAN_OFFSET_MIN "mOffset: %HO um"
 #define UI_TEXT_PRINT_MODE              "Drucker"
 #define UI_TEXT_MILL_MODE               "Fr" STR_auml "ser"
 #define UI_TEXT_Z_SINGLE                "Einfach"
@@ -707,7 +707,7 @@
 #define UI_TEXT_INFORMATION             "Information:"
 #define UI_TEXT_SET_ORIGIN              "Setze Ursprung"
 #define UI_TEXT_AUTODETECT_PID          "PID ermitteln"
-#define UI_TEXT_PID_ACK                 UI_TEXT_AUTODETECT_PID "?","","%mYJa","%mNNein"
+#define UI_TEXT_PID_ACK                 UI_TEXT_AUTODETECT_PID "?","%Xt","%mYJa","%mNNein"
 // Temp. = Temperatur
 #define UI_TEXT_HOME_UNKNOWN            "Home unbekannt"
 #define UI_TEXT_SAVING_NEEDLESS         "Sichern sinnlos"
@@ -742,9 +742,8 @@
 #define UI_TEXT_PRINTTIME_MINUTES       ""
 #define UI_TEXT_POWER                   "ATX Netzteil an/aus"
 
-#define UI_ACTION_TEXT_CLASSICPID "PID Ziegler-Nichols"
 #define UI_ACTION_TEXT_PESSEN "PID Pessen-Rule"
-#define UI_ACTION_TEXT_SOME "PID Some-Overshoot"
+#define UI_ACTION_TEXT_CLASSICPID "PID Ziegler-Nichols"
 #define UI_ACTION_TEXT_NO "PID No-Overshoot"
 #define UI_ACTION_TEXT_TYREUS_LYBEN "PID Tyreus-Lyben"
 
@@ -770,7 +769,22 @@
 #define UI_TEXT_FLOW_DF                "dFlow:   :%CF%%%"
 #define UI_TEXT_FLOW_DV                "dFeed:   :%CE%%%"
 
+#define UI_TEXT_MICRO_STEPS_XY         "MicroStepXY:%Xx"
+#define UI_TEXT_MICRO_STEPS_Z          "MicroStepsZ:%Xz"
+#define UI_TEXT_MICRO_STEPS_E          "MicroStepsE:%XE"
+
+#define UI_ACTION_TEXT_PESSEN_TIPP "(schnelle+ Hotends)" //19
+#define UI_ACTION_TEXT_CLASSICPID_TIPP "(schnelle Hotends)" //18
+#define UI_ACTION_TEXT_NO_TIPP "(hochleist. Bett)" //17
+#define UI_ACTION_TEXT_TYREUS_LYBEN_TIPP "(hochleist.+ Bett)" //18
+
+#define UI_ACTION_TEXT_PESSEN_TIPP          "(empf. f" STR_uuml "r Hotends)"
+#define UI_ACTION_TEXT_CLASSICPID_TIPP      "(alternat. f" STR_uuml "r Hotends)"
+#define UI_ACTION_TEXT_NO_TIPP              "(alternat. f" STR_uuml "r Bett)"
+#define UI_ACTION_TEXT_TYREUS_LYBEN_TIPP    "(empf. f" STR_uuml "r highpower Bett)"
+
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000_V2
+    #define UI_TEXT_SCAN_START_HEIGHT       "Scan Z-Hub: %Ss mm"
     #define UI_TEXT_DO_MHIER_AUTO_MATRIX_LEVELING "Auto-Matr.-Leveling"
     #define UI_TEXT_FREQ_DBL                "DblFq:%Xgmm/s"
     #define UI_TEXT_EXTR_ADVANCE_L_E0       "E0-Advance L:%Xb"
@@ -848,6 +862,7 @@
     #define UI_TEXT_INVALID_MATRIX          "Ung" STR_uuml" ltige Matrix"
     #define UI_TEXT_TEMPERATURE_WRONG       "Temperatur falsch"    
 #else
+    #define UI_TEXT_SCAN_START_HEIGHT       "Scan-ZHub:%Ssmm"
     #define UI_TEXT_DO_MHIER_AUTO_MATRIX_LEVELING "Auto-Matr.-Leveling"
     #define UI_TEXT_FREQ_DBL                "DblF:%Xgmm/s"
     #define UI_TEXT_EXTR_ADVANCE_L_E0       "E0-AdvanceL:%Xb"

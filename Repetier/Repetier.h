@@ -29,15 +29,15 @@
 
 
 #if MOTHERBOARD == DEVICE_TYPE_RF1000
-#include "RF1000.h"
+    #include "RF1000.h"
 #endif // MOTHERBOARD == DEVICE_TYPE_RF1000
 
 #if MOTHERBOARD == DEVICE_TYPE_RF2000
-#include "RF2000.h"
+    #include "RF2000.h"
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000
 
 #if MOTHERBOARD == DEVICE_TYPE_RF2000_V2
-#include "RF2000V2.h"
+    #include "RF2000V2.h"
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000_V2
  
 #include "pins.h"
@@ -130,6 +130,13 @@ extern volatile uint8   osAnalogInputPos; // Current sampling position
 extern volatile uint    osAnalogInputValues[ANALOG_INPUTS];
 extern uint8_t          pwm_pos[NUM_EXTRUDER+3]; // 0-NUM_EXTRUDER = Heater 0-NUM_EXTRUDER of extruder, NUM_EXTRUDER = Heated bed, NUM_EXTRUDER+1 Board fan, NUM_EXTRUDER+2 = Fan
 
+#if FEATURE_DEBUG_MOVE_CACHE_TIMING
+extern float            low_ticks_per_move;
+extern uint32_t         move_cache_stats[MOVE_CACHE_SIZE];
+extern uint32_t         move_cache_stats_count;
+extern uint32_t         move_cache_stats_count_limited;
+#endif //FEATURE_DEBUG_MOVE_CACHE_TIMING
+
 #if USE_ADVANCE
 #ifdef ENABLE_QUADRATIC_ADVANCE
 extern int              maxadv;
@@ -160,10 +167,6 @@ extern void motorCurrentControlInit();
 
 
 extern long baudrate;
-#if OS_ANALOG_INPUTS>0
-// Get last result for pin x
-extern volatile uint osAnalogInputValues[OS_ANALOG_INPUTS];
-#endif // OS_ANALOG_INPUTS>0
 
 #include "HAL.h"
 

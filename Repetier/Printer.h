@@ -40,7 +40,7 @@
 #define PRINTER_FLAG1_Z_ORIGIN_SET              64
 
 #define PRINTER_FLAG2_RESET_FILAMENT_USAGE      4
-#define PRINTER_FLAG2_HOMING                    64
+//#define PRINTER_FLAG2_HOMING                    64
  
 #define PRINTER_FLAG3_X_HOMED                   1 // flag3 alike original repetier
 #define PRINTER_FLAG3_Y_HOMED                   2 // flag3 alike original repetier
@@ -127,6 +127,7 @@ public:
     static float            memoryY;
     static float            memoryZ;
     static float            memoryE;
+    static float            memoryF;
 #endif // FEATURE_MEMORY_POSITION
 
 #if FEATURE_HEAT_BED_Z_COMPENSATION
@@ -143,6 +144,7 @@ public:
     static volatile char    blockAll;
 
     static volatile long    currentZSteps;
+    static uint16_t         ZOverrideMax;
 
 #if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
     static volatile long    compensatedPositionTargetStepsZ;
@@ -226,12 +228,16 @@ public:
     static unsigned char    g_unlock_movement;
 #endif //FEATURE_UNLOCK_MOVEMENT
 
-    static uint8_t          motorCurrent[5];
+    static uint8_t          motorCurrent[DRV8711_NUM_CHANNELS];
 
 #if FEATURE_ZERO_DIGITS
     static bool             g_pressure_offset_active;
     static short            g_pressure_offset;
 #endif // FEATURE_ZERO_DIGITS
+
+#if FEATURE_ADJUSTABLE_MICROSTEPS
+    static uint8_t          motorMicroStepsModeValue[DRV8711_NUM_CHANNELS]; //1=2MS, 2=4MS, 3=8MS, 4=16MS, 5=32MS, 6=64MS, 7=128MS, 8=256MS
+#endif // FEATURE_ADJUSTABLE_MICROSTEPS
 
     static INLINE void setMenuMode(uint8_t mode,bool on)
     {
@@ -294,7 +300,7 @@ public:
 #endif // STEPPER_ON_DELAY
 
         // when the stepper is disabled we loose our home position because somebody else can move our mechanical parts
-        setHomed( /*false ,*/ false , -1 , -1 );
+        setHomed( false , -1 , -1 );
         cleanupXPositions();
 
     } // disableXStepper
@@ -315,7 +321,7 @@ public:
 #endif // STEPPER_ON_DELAY
 
         // when the stepper is disabled we loose our home position because somebody else can move our mechanical parts
-        setHomed( /*false ,*/ -1, false , -1 );
+        setHomed( -1, false , -1 );
         cleanupYPositions();
 
     } // disableYStepper
@@ -324,7 +330,7 @@ public:
     static INLINE void disableZStepper()
     {
         // when the stepper is disabled we loose our home position because somebody else can move our mechanical parts
-        setHomed( /*false ,*/ -1 , -1 , false ); // disable CMP mit wait ist bei unhome Z mit drin. //Printer::disableCMPnow(true); //fahre vom heizbett auf 0 bevor stepper aus.
+        setHomed( -1 , -1 , false ); // disable CMP mit wait ist bei unhome Z mit drin. //Printer::disableCMPnow(true); //fahre vom heizbett auf 0 bevor stepper aus.
 
 #if (Z_ENABLE_PIN > -1)
         WRITE(Z_ENABLE_PIN,!Z_ENABLE_ON);
@@ -342,9 +348,7 @@ public:
         Printer::lastZDirection = 0;
 #endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
 
-        setZOriginSet(false);
         cleanupZPositions();
-
     } // disableZStepper
 
     /** \brief Enable stepper motor for x direction. */
@@ -614,14 +618,11 @@ public:
         return (bool)(Printer::isAxisHomed(Z_AXIS) && Printer::isAxisHomed(Y_AXIS) && Printer::isAxisHomed(X_AXIS));
     } // areAxisHomed
 
-    static inline void setHomed(/*uint8_t b,*/ int8_t x = -1, int8_t y = -1, int8_t z = -1)
+    static inline void setHomed(int8_t x = -1, int8_t y = -1, int8_t z = -1)
     {
-        //flag1 = (b ? flag1 | PRINTER_FLAG1_HOMED : flag1 & ~PRINTER_FLAG1_HOMED);
         if(x != -1) flag3 = (x ? flag3 | PRINTER_FLAG3_X_HOMED : flag3 & ~PRINTER_FLAG3_X_HOMED);
         if(y != -1) flag3 = (y ? flag3 | PRINTER_FLAG3_Y_HOMED : flag3 & ~PRINTER_FLAG3_Y_HOMED);
         if(z != -1) flag3 = (z ? flag3 | PRINTER_FLAG3_Z_HOMED : flag3 & ~PRINTER_FLAG3_Z_HOMED);  
-        //if((flag3 & PRINTER_FLAG3_X_HOMED) && (flag3 & PRINTER_FLAG3_Y_HOMED) && (flag3 & PRINTER_FLAG3_Z_HOMED)) flag1 |= PRINTER_FLAG1_HOMED;
-        //if(!(flag3 & PRINTER_FLAG3_X_HOMED) && !(flag3 & PRINTER_FLAG3_Y_HOMED) && !(flag3 & PRINTER_FLAG3_Z_HOMED)) flag1 &= ~PRINTER_FLAG1_HOMED;
         
 #if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
         if( !isAxisHomed(Z_AXIS) ){
@@ -743,15 +744,16 @@ public:
 #if FEATURE_MILLING_MODE
             if( operatingMode == OPERATING_MODE_PRINT )
             {
+#endif // FEATURE_MILLING_MODE
                 // in case there is only one z-endstop and we are in operating mode "print", the z-min endstop must be connected
                 return READ(Z_MIN_PIN) != ENDSTOP_Z_MIN_INVERTING;
+#if FEATURE_MILLING_MODE
             }
-
-            // in case there is only one z-endstop and we are in operating mode "mill", the z-min endstop is not connected and can not be detected
-            return false;
-#else // FEATURE_MILLING_MODE
-            // in case there is only one z-endstop and we are in operating mode "print", the z-min endstop must be connected
-            return READ(Z_MIN_PIN) != ENDSTOP_Z_MIN_INVERTING;
+            else
+            {
+                // in case there is only one z-endstop and we are in operating mode "mill", the z-min endstop is not connected and can not be detected
+                return false;
+            }
 #endif // FEATURE_MILLING_MODE
         }
 
@@ -784,10 +786,6 @@ public:
             }
 
             // the last z-direction is unknown or the heat bed has been moved upwards, thus we have to assume that the z-min endstop is hit
-#if FEATURE_CONFIGURABLE_Z_ENDSTOPS && DEBUG_CONFIGURABLE_Z_ENDSTOPS
-            Com::printF( PSTR( "Z-Min hit") );
-#endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS && DEBUG_CONFIGURABLE_Z_ENDSTOPS
-
             endstopZMinHit = ENDSTOP_IS_HIT;
             endstopZMaxHit = ENDSTOP_NOT_HIT;
             return true;
@@ -881,21 +879,14 @@ public:
 
             if( Printer::isAxisHomed(Z_AXIS) )
             {
-                if( currentZSteps < Z_MIN_DISTANCE )
+                if( currentZSteps < long(Printer::axisStepsPerMM[Z_AXIS])*5 )
                 {
-                    // we are close to z-min, so z-max can not become hit right now
-  #if DEBUG_CONFIGURABLE_Z_ENDSTOPS
-                    Com::printF( PSTR( "Z-Max not hit") );
-  #endif // DEBUG_CONFIGURABLE_Z_ENDSTOPS
+                    // we are close to z-min, so z-max can not become hit right now -> Nibbels: was wenn der drucker unten aufwacht? dann ist erst currentZSteps 0 und .. ??? TODO
                     return false;
                 }
             }
 
             // the last z-direction is unknown or the heat bed has been moved downwards, thus we have to assume that the z-max endstop is hit
-  #if FEATURE_CONFIGURABLE_Z_ENDSTOPS && DEBUG_CONFIGURABLE_Z_ENDSTOPS
-            Com::printF( PSTR( "Z-Max hit") );
-  #endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS && DEBUG_CONFIGURABLE_Z_ENDSTOPS
-
             endstopZMinHit = ENDSTOP_NOT_HIT;
             endstopZMaxHit = ENDSTOP_IS_HIT;
             return true;
@@ -930,10 +921,8 @@ public:
     static INLINE void markAllSteppersDisabled()
     {
         flag0 |= PRINTER_FLAG0_STEPPER_DISABLED;
-
         // when the stepper is disabled we loose our home position because somebody else can move our mechanical parts
-        setHomed( /*false ,*/ false, false, false ); //mag sein, dass wir das nicht brauchen, weil sowieso die einzelnen stepper deaktiviert werden müssen.
-        setZOriginSet(false);
+        setHomed( false, false, false ); //mag sein, dass wir das nicht brauchen, weil sowieso die einzelnen stepper deaktiviert werden müssen.
     } // markAllSteppersDisabled
 
     static INLINE void unmarkAllSteppersDisabled()
@@ -944,7 +933,7 @@ public:
         pwm_pos[NUM_EXTRUDER+1] = 255;
 #endif // FAN_BOARD_PIN
     } // unmarkAllSteppersDisabled
-    
+
     static void disableAllSteppersNow()
     {
         markAllSteppersDisabled();
@@ -953,16 +942,6 @@ public:
         disableZStepper();
         Extruder::disableAllExtruders();
     } // disableAllSteppersNow
-    
-    static INLINE uint8_t isHoming()
-    {
-        return flag2 & PRINTER_FLAG2_HOMING;
-    }
-
-    static INLINE void setHoming(uint8_t b)
-    {
-        flag2 = (b ? flag2 | PRINTER_FLAG2_HOMING : flag2 & ~PRINTER_FLAG2_HOMING);
-    }
 
     static INLINE bool isAnyTempsensorDefect()
     {
@@ -987,30 +966,12 @@ public:
         flag0 = (on ? flag0 | PRINTER_FLAG0_MANUAL_MOVE_MODE : flag0 & ~PRINTER_FLAG0_MANUAL_MOVE_MODE);
     } // setManualMoveMode
 
-    static INLINE float lastCalculatedXPosition()
-    {
-        // return all values in [mm]
-        return queuePositionLastMM[X_AXIS];
-    } // lastCalculatedXPosition
-
-    static INLINE float lastCalculatedYPosition()
-    {
-        // return all values in [mm]
-        return queuePositionLastMM[Y_AXIS];
-    } // lastCalculatedYPosition
-
-    static INLINE float lastCalculatedZPosition()
-    {
-        // return all values in [mm]
-        return queuePositionLastMM[Z_AXIS];
-    } // lastCalculatedZPosition
-
     static INLINE void lastCalculatedPosition(float &xp,float &yp,float &zp)
     {
         // return all values in [mm]
-        xp = lastCalculatedXPosition();
-        yp = lastCalculatedYPosition();
-        zp = lastCalculatedZPosition();
+        xp = queuePositionLastMM[X_AXIS];
+        yp = queuePositionLastMM[Y_AXIS];
+        zp = queuePositionLastMM[Z_AXIS];
     } // lastCalculatedPosition
 
     static INLINE float targetXPosition()
@@ -1180,8 +1141,8 @@ public:
     static void defaultLoopActions();
     static uint8_t setDestinationStepsFromGCode(GCode *com);
     static uint8_t setDestinationStepsFromMenu( float relativeX, float relativeY, float relativeZ );
-    static void moveTo(float x,float y,float z,float e,float feedrate);
     static void moveToReal(float x,float y,float z,float e,float feedrate);
+    static void homeDigits();
     static void homeAxis(bool xaxis,bool yaxis,bool zaxis); /// Home axis
     static void setOrigin(float xOff,float yOff,float zOff);
 
@@ -1204,7 +1165,6 @@ public:
     static bool allowDirectMove( void );
     static bool allowDirectSteps( void );
     static bool processAsDirectSteps( void );
-    static void resetDirectPosition( void );
 #endif // FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
 
 #if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
@@ -1212,11 +1172,15 @@ public:
 #if FEATURE_SENSIBLE_PRESSURE
     static void enableSenseOffsetnow( void );
 #endif // FEATURE_SENSIBLE_PRESSURE
+    static bool needsCMPwait( void );
+    static bool checkCMPblocked( void );
     static void enableCMPnow( void );
     static void disableCMPnow( bool wait = false );
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
 
     static void stopPrint();
+    static bool checkAbortKeys( void );
+    static bool checkPlayKey( void );
     
 private:
     static void homeXAxis();
