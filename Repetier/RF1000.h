@@ -48,6 +48,7 @@
 
 #endif // FEATURE_MILLING_MODE
 
+
 /** \brief Allows to use the 230V output */
 #define FEATURE_230V_OUTPUT                 0                                                   // the RF1000 does not support the 230 V output
 
