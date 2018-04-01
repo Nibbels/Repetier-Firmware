@@ -1070,14 +1070,9 @@ void Commands::executeGCode(GCode *com)
                     millis_t    waituntil   = 0;
                     millis_t    currentTime;
                     bool        isTempReached;
-                    bool        dirRising    = actExtruder->tempControl.targetTemperature > actExtruder->tempControl.currentTemperature;
-                    bool        longTempTime = (fabs(actExtruder->tempControl.targetTemperature - actExtruder->tempControl.currentTemperature) > 40 ? true : false);
-
-                    if( dirRising ){
-                        UI_STATUS_UPD(UI_TEXT_HEATING_EXTRUDER);
-                    }else{
-                        UI_STATUS_UPD(UI_TEXT_COOLING_DOWN);
-                    }
+                    bool        longTempTime = false; // random init
+                    bool        dirRising = true;     // random init
+                    float       settarget = -1;       // random init in °C
 
                     do
                     {

@@ -48,13 +48,6 @@
 
 #endif // FEATURE_MILLING_MODE
 
-/** \brief Number of extruders */
-#define NUM_EXTRUDER                        2                                                   // 1 = Single, 2 = Dual //Digibike Change
-
-#if NUM_EXTRUDER > 2 || NUM_EXTRUDER < 0
- #error This Firmware supports up to 2 Extruders. You might have to reimplement the 3+ code or "request it" if you really got hands on a RFx000 board with 3+ Extruders.
-#endif // FEATURE_DITTO_PRINTING && NUM_EXTRUDER!=2
-
 /** \brief Allows to use the 230V output */
 #define FEATURE_230V_OUTPUT                 0                                                   // the RF1000 does not support the 230 V output
 
@@ -231,7 +224,7 @@ Overridden if EEPROM activated.*/
 #define EXT0_Z_OFFSET                       0 //to support Nozzle-Tip-Down-Hotends
 
 /** \brief for skeinforge 40 and later, steps to pull the plasic 1 mm inside the extruder, not out.  Overridden if EEPROM activated. */
-#define EXT0_STEPS_PER_MM                   (300 / 91.17 * 8.75 * RF_MICRO_STEPS)   //Digibike Change
+#define EXT0_STEPS_PER_MM                   (8.75 * RF_MICRO_STEPS_E)
 
 /** \brief What type of sensor is used?
 NTC-Thermistors
@@ -385,12 +378,12 @@ The codes are only executed for multiple extruder when changing the extruder. */
 // ##   Configuration of the 2. extruder
 // ##########################################################################################
 
-#define EXT1_X_OFFSET                       (int32_t)(27.5 * XAXIS_STEPS_PER_MM)        // [steps] //Digibike Change
-#define EXT1_Y_OFFSET                       (int32_t)( 0.0 * YAXIS_STEPS_PER_MM)        // [steps] //Digibike Change
-#define EXT1_Z_OFFSET                       (int32_t)( 0.0 * YAXIS_STEPS_PER_MM)        // [steps] //to support Nozzle-Tip-Down-Hotends
+#define EXT1_X_OFFSET_MM                        33.9f                           // [mm]
+#define EXT1_Y_OFFSET_MM                         0.1f                           // [mm]
+#define EXT1_Z_OFFSET_MM                         0.0f                           // [mm] //to support Nozzle-Tip-Down-Hotends
 
 /** \brief for skeinforge 40 and later, steps to pull the plasic 1 mm inside the extruder, not out.  Overridden if EEPROM activated. */
-#define EXT1_STEPS_PER_MM                   (300 / 91.17 * 8.75 * RF_MICRO_STEPS)   //Digibike Change
+#define EXT1_STEPS_PER_MM                   (8.75 * RF_MICRO_STEPS_E)
 
 /** \brief What type of sensor is used?
 NTC-Thermistors
@@ -932,7 +925,7 @@ v_diff = sqrt((50-35.36)^2+(0-35.36)^2) = 38.27 < jerk
 Corner can be printed with full speed of 50 mm/s
 
 Overridden if EEPROM activated. */
-#define MAX_JERK                            13.0                 //std: 20, aber RFx000 sieht zwischen ca. 7 und 18 am besten aus: Renkforce sagt 10
+#define MAX_JERK                            13.5                 //std: 20, aber RFx000 sieht zwischen ca. 7 und 18 am besten aus: Renkforce sagt 10
 #define MAX_ZJERK                           0.3                  //std: 0.3
 
 //that will slowdown if you have sever direction changes in a short distance which is nearly the same as adding several jerks in a short sequence.
