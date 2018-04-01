@@ -674,7 +674,7 @@ Values must be in range 1..255 */
 #define SPEED_MAGNIFICATION                 100.0f
 
 /** \brief Specifies if you want to see the TipDown Support within Z-Configuration Menu. This is only usefull if you have a dual hotend with possible servo or spring z-offset-shift.*/
-#define UI_SHOW_TIPDOWN_IN_ZCONFIGURATION   0                                                   // 1 = show, 0 = hide
+#define UI_SHOW_TIPDOWN_IN_ZCONFIGURATION   1                                                   // 1 = show, 0 = hide //Digibike change
 
 
 // ##########################################################################################
