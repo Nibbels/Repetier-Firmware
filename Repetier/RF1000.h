@@ -24,7 +24,7 @@
 #define UI_PRINTER_NAME                     "RF1000"
 
 /** \brief Number of extruders */
-#define NUM_EXTRUDER                        1                                                   // 1 = Single, 2 = Dual
+#define NUM_EXTRUDER                        2                                                   // 1 = Single, 2 = Dual //Digibike Change
 
 // ##########################################################################################
 // ##   main hardware configuration
@@ -232,7 +232,7 @@ Overridden if EEPROM activated.*/
 #define EXT0_Z_OFFSET_MM                       0.0f //to support Nozzle-Tip-Down-Hotends
 
 /** \brief for skeinforge 40 and later, steps to pull the plasic 1 mm inside the extruder, not out.  Overridden if EEPROM activated. */
-#define EXT0_STEPS_PER_MM                   (8.75 * RF_MICRO_STEPS_E)
+#define EXT0_STEPS_PER_MM                   (300 / 91.17 * 8.75 * RF_MICRO_STEPS)   //Digibike Change
 
 /** \brief What type of sensor is used?
 NTC-Thermistors
@@ -387,12 +387,12 @@ The codes are only executed for multiple extruder when changing the extruder. */
 // ##   Configuration of the 2. extruder
 // ##########################################################################################
 
-#define EXT1_X_OFFSET_MM                        33.9f                           // [mm]
-#define EXT1_Y_OFFSET_MM                         0.1f                           // [mm]
+#define EXT1_X_OFFSET_MM                        27.5f                           // [mm]
+#define EXT1_Y_OFFSET_MM                         0.0f                           // [mm]
 #define EXT1_Z_OFFSET_MM                         0.0f                           // [mm] //to support Nozzle-Tip-Down-Hotends
 
 /** \brief for skeinforge 40 and later, steps to pull the plasic 1 mm inside the extruder, not out.  Overridden if EEPROM activated. */
-#define EXT1_STEPS_PER_MM                   (8.75 * RF_MICRO_STEPS_E)
+#define EXT1_STEPS_PER_MM                     (300 / 91.17 * 8.75 * RF_MICRO_STEPS)   //Digibike Change
 
 /** \brief What type of sensor is used?
 NTC-Thermistors
