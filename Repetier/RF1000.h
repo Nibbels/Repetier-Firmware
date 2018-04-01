@@ -316,7 +316,7 @@ Overridden if EEPROM activated. */
 /** \brief The maximum value, I-gain can contribute to the output. Overridden if EEPROM activated. */
 #define EXT0_PID_INTEGRAL_DRIVE_MAX         130   //Digibike Change for new pid control
 /** \brief lower value for integral part. Overridden if EEPROM activated. */
-#define EXT0_PID_INTEGRAL_DRIVE_MIN         5   //Digibike Change for new pid control
+#define EXT0_PID_INTEGRAL_DRIVE_MIN         20   //Digibike Change for new pid control
 /** \brief P-gain. Overridden if EEPROM activated. */
 #define EXT0_PID_P                          11.5f   //Digibike Change
 /** \brief I-gain. Overridden if EEPROM activated. */
@@ -479,7 +479,7 @@ Overridden if EEPROM activated. */
 /** \brief The maximum value, I-gain can contribute to the output. Overridden if EEPROM activated. */
 #define EXT1_PID_INTEGRAL_DRIVE_MAX         130  //Digibike Change for new pid control
 /** \brief lower value for integral part. Overridden if EEPROM activated. */
-#define EXT1_PID_INTEGRAL_DRIVE_MIN         5  //Digibike Change for new pid control
+#define EXT1_PID_INTEGRAL_DRIVE_MIN         20  //Digibike Change for new pid control
 /** \brief P-gain.  Overridden if EEPROM activated. */
 #define EXT1_PID_P                          11.5f  //Digibike Change
 /** \brief I-gain. Overridden if EEPROM activated. */
