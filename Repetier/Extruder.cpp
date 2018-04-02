@@ -93,20 +93,23 @@ void Extruder::manageTemperatures()
                     extruder[controller].coolerPWM = extruder[controller].coolerSpeed;
         }
 
-        if(!Printer::isAnyTempsensorDefect() && (act->currentTemperatureC < MIN_DEFECT_TEMPERATURE || act->currentTemperatureC > MAX_DEFECT_TEMPERATURE))   // no temp sensor or short in sensor, disable heater
+        if(!act->isDefect() && (act->currentTemperatureC < MIN_DEFECT_TEMPERATURE || act->currentTemperatureC > MAX_DEFECT_TEMPERATURE))   // no temp sensor or short in sensor, disable heater
         {
-            extruderTempErrors++;
+            extruderTempErrors++; //pro sensor. max +10+1+1+1.... bleibt also < 255
             errorDetected = 1;
 
             if(extruderTempErrors > 10)   // Ignore short temporary failures
             {
-                Printer::flag0 |= PRINTER_FLAG0_TEMPSENSOR_DEFECT;
-                reportTempsensorError();
+                act->setDefect(true);
+                if(!Printer::isAnyTempsensorDefect()){
+                    Printer::flag0 |= PRINTER_FLAG0_TEMPSENSOR_DEFECT; // "setAnyTempsensorDefect(true)"
 
-                Com::printFLN( PSTR( "RequestStop:" ) ); //tell repetier-host / server to stop printing
-                Com::printFLN( PSTR( "// action:disconnect" ) ); //tell octoprint to disconnect
-                
-                showError( (void*)ui_text_temperature_manager, (void*)ui_text_sensor_error );
+                    reportTempsensorError();
+                    Com::printFLN( PSTR( "RequestStop:" ) ); //tell repetier-host / server to stop printing
+                    Com::printFLN( PSTR( "// action:disconnect" ) ); //tell octoprint to disconnect
+
+                    showError( (void*)ui_text_temperature_manager, (void*)ui_text_sensor_error );
+                }
             }
         }
         if(Printer::isAnyTempsensorDefect()) continue;

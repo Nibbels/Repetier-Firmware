@@ -968,6 +968,27 @@ void UIDisplay::parse(char *txt,bool ram)
                     break;
                 }
 
+                if( c2 == 'w' ){                                                                        //%ew : tell me which sensor(s) are defect.
+                    bool addone = false;
+                    for(uint8_t controller = 0; controller < NUM_TEMPERATURE_LOOPS; controller++)
+                    {
+                        TemperatureController *act = tempController[controller];
+                        if(act->isDefect()){
+                            if(addone) addStringP(Com::tSlash);
+                            addone = true;
+                            if(controller < NUM_EXTRUDER){
+                                if(col<MAX_COLS) printCols[col++] = 'E';
+                                addInt(controller, 1);
+                            }else if(controller <= NUM_EXTRUDER){
+                                addStringP(PSTR("Bed"));
+                            }else{
+                                addStringP(PSTR("Opt"));
+                            }
+                        }
+                    }
+                    break;
+                }
+
                 ivalue = UI_TEMP_PRECISION;
                 if(Printer::flag0 & PRINTER_FLAG0_TEMPSENSOR_DEFECT)
                 {

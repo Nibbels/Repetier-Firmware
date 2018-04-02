@@ -31,6 +31,7 @@ always make sense.
 List of placeholder:
 %11 : Kill Line if Millingmode
 
+%ew : tell me which sensor is defect.
 %ec : Current extruder temperature
 %eb : Current heated bed temperature
 %e0..9 : Temp. of extruder 0..9

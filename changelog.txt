@@ -1,18 +1,21 @@
 TODO: Testing, testing ..
 
-V RF.01.41.16.Mod alpha (2018-04-01) 
+V RF.01.41.17.Mod (2018-04-02) 
+- if any sensor fails/disconnects show the specific sensor which failed within the display message.
+
+V RF.01.41.16.Mod (2018-04-01) 
 - Hid the menu for "Right hotend tipdown support". This menu only makes sense for very special hotends and shouldnt distract the user on 99% of all printers.
 
-V RF.01.41.15.Mod alpha (2018-03-29) 
+V RF.01.41.15.Mod (2018-03-29) 
 - added Menusupport and EEPROM Support for HEAT_BED_SCAN_Z_START_MM which sets the z-lift for moving onto the bed at every start of zscans like Z-Offset-Scan or Heat-Bed-Scan. This value needs to be high, if someone wants to work with positive matrix (/ to low zscrew). That is not recommended but helps if you have interchangeable heated beds with different heights.
 
-V RF.01.41.14.Mod alpha (2018-03-29) 
+V RF.01.41.14.Mod (2018-03-29) 
 - removed "PID autotune some overshoot" from menu
 - gave the PID autotune submenus a description for what autotune methods are good
 - reordered PID autotune methods to start with pessen, then classic then noovershoot and finally tyreus lyben. 
 - added "heated bed off" to Extruder Menu. (At least I use this alot for testing)
 
-V RF.01.41.13.Mod alpha (2018-03-28) 
+V RF.01.41.13.Mod beta (2018-03-28) 
 - We can now skip the rest of the M3912 startline by pressing play while printing the start line. (Might save some tiny amounts of plastic from time to time.)
 - the eeproms max feedrates are dropped and overwritten if they are bigger than configuration max values.
 - the eeproms homing feedrates are dropped and overwritten if they are higher than configuration max values.

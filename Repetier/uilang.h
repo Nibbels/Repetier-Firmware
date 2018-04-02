@@ -338,7 +338,7 @@
 #define UI_TEXT_MAX_REACHED             "Max reached"
 #define UI_TEXT_TIMEOUT                 "Timeout"
 #define UI_TEXT_AUTODETECT_PID_DONE     "PID determined"
-#define UI_TEXT_SENSOR_ERROR            "Sensor Error"
+#define UI_TEXT_SENSOR_ERROR            "Sensor %ew Error"
 #define UI_TEXT_HEAT_BED_ZOFFSET_SEARCH_STATUS "Scan %zF"
 #define UI_TEXT_HEAT_BED_ZOFFSET_FIX_Z1 "Screw: %zsmm"
 #define UI_TEXT_HEAT_BED_ZOFFSET_FIX_Z2 "%zS[U] (%zD)"
@@ -723,7 +723,7 @@
 // Temp. = Temperatur
 #define UI_TEXT_TIMEOUT                 "Timeout"
 #define UI_TEXT_AUTODETECT_PID_DONE     "PID ermittelt"
-#define UI_TEXT_SENSOR_ERROR            "Sensorfehler"
+#define UI_TEXT_SENSOR_ERROR            "Sensor %ew Fehler"
 #define UI_TEXT_HEAT_BED_ZOFFSET_SEARCH_STATUS "Scan %zF"
 #define UI_TEXT_HEAT_BED_ZOFFSET_FIX_Z1  "Screw: %zsmm"
 #define UI_TEXT_HEAT_BED_ZOFFSET_FIX_Z2  "%zS[U] (%zD)"
