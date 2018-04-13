@@ -158,15 +158,11 @@ unsigned short  g_nScanPressureReadDelay     = 0;
 short           g_nScanPressureTolerance     = 0;
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
 
-#if DEBUG_REMEMBER_SCAN_PRESSURE
-short           g_ScanPressure[COMPENSATION_MATRIX_MAX_X][COMPENSATION_MATRIX_MAX_Y];
-#endif // DEBUG_REMEMBER_SCAN_PRESSURE
-
 long            g_staticZSteps              = 0;
 char            g_debugLevel                = 0;
 char            g_debugLog                  = 0;
 unsigned long   g_uStopTime                 = 0;
-unsigned long   g_uBlockCommands          = 0;
+volatile unsigned long g_uBlockCommands          = 0;
 
 #if FEATURE_EXTENDED_BUTTONS
 // other configurable parameters
@@ -832,10 +828,6 @@ void scanHeatBed( void )
                 adjustPressureLimits(g_nFirstIdlePressure);
 
                 // store also the version of this heat bed compensation matrix
-#if DEBUG_REMEMBER_SCAN_PRESSURE
-                g_ScanPressure[0][0]        = EEPROM_FORMAT;
-#endif // DEBUG_REMEMBER_SCAN_PRESSURE
-
                 g_ZCompensationMatrix[0][0] = EEPROM_FORMAT;
 
                 g_nHeatBedScanStatus = 40;
@@ -915,10 +907,6 @@ void scanHeatBed( void )
                 if( nX <= g_nScanXMaxPositionSteps )
                 {
                     // remember also the exact x-position of this row/column
-#if DEBUG_REMEMBER_SCAN_PRESSURE
-                    g_ScanPressure[nIndexX][0] = nX;
-#endif // DEBUG_REMEMBER_SCAN_PRESSURE
-
                     g_ZCompensationMatrix[nIndexX][0] = (short)((float)nX / Printer::axisStepsPerMM[X_AXIS] + 0.5); // convert to mm
 
                     g_nHeatBedScanStatus = 49;
@@ -1117,12 +1105,6 @@ void scanHeatBed( void )
                 g_ZCompensationMatrix[nIndexX][nIndexY] = (short)g_nZScanZPosition;
                 g_ZCompensationMatrix[0][nIndexY]       = (short)((float)nY / Printer::axisStepsPerMM[Y_AXIS] + 0.5);   // convert to mm
 
-#if DEBUG_REMEMBER_SCAN_PRESSURE
-                // remember the pressure and the exact y-position of this row/column
-                g_ScanPressure[nIndexX][nIndexY] = nContactPressure;
-                g_ScanPressure[0][nIndexY]       = nY;
-#endif // DEBUG_REMEMBER_SCAN_PRESSURE
-
                 if( nIndexX > g_uZMatrixMax[X_AXIS] )
                 {
                     g_uZMatrixMax[X_AXIS] = nIndexX;
@@ -1274,11 +1256,6 @@ void scanHeatBed( void )
             }
             case 70:
             {
-#if DEBUG_REMEMBER_SCAN_PRESSURE
-                // output the determined pressure
-                outputPressureMatrix();
-#endif // DEBUG_REMEMBER_SCAN_PRESSURE
-
                 g_nHeatBedScanStatus = 75;
 
 #if DEBUG_HEAT_BED_SCAN == 2
@@ -4090,10 +4067,6 @@ void scanWorkPart( void )
                 nIndexY          = 2;
 
                 // store also the version of this work part compensation matrix
-#if DEBUG_REMEMBER_SCAN_PRESSURE
-                g_ScanPressure[0][0] = EEPROM_FORMAT;
-#endif // DEBUG_REMEMBER_SCAN_PRESSURE
-
                 g_ZCompensationMatrix[0][0] = EEPROM_FORMAT;
 
                 g_nWorkPartScanStatus = 32;
@@ -4307,10 +4280,6 @@ void scanWorkPart( void )
                 if( nX <= g_nScanXMaxPositionSteps )
                 {
                     // remember also the exact x-position of this row/column
-#if DEBUG_REMEMBER_SCAN_PRESSURE
-                    g_ScanPressure[nIndexX][0] = nX;
-#endif // DEBUG_REMEMBER_SCAN_PRESSURE
-
                     g_ZCompensationMatrix[nIndexX][0] = (short)((float)nX / Printer::axisStepsPerMM[X_AXIS] + 0.5); // convert to mm
 
                     g_nWorkPartScanStatus = 49;
@@ -4506,12 +4475,6 @@ void scanWorkPart( void )
                 g_ZCompensationMatrix[nIndexX][nIndexY] = (short)g_nZScanZPosition;
                 g_ZCompensationMatrix[0][nIndexY]       = (short)((float)nY / Printer::axisStepsPerMM[Y_AXIS] + 0.5);   // convert to mm
 
-#if DEBUG_REMEMBER_SCAN_PRESSURE
-                // remember the pressure and the exact y-position of this row/column
-                g_ScanPressure[nIndexX][nIndexY] = nContactPressure;
-                g_ScanPressure[0][nIndexY]       = nY;
-#endif // DEBUG_REMEMBER_SCAN_PRESSURE
-
                 if( nIndexX > g_uZMatrixMax[X_AXIS] )
                 {
                     g_uZMatrixMax[X_AXIS] = nIndexX;
@@ -4657,11 +4620,6 @@ void scanWorkPart( void )
             }
             case 70:
             {
-#if DEBUG_REMEMBER_SCAN_PRESSURE
-                // output the determined pressure
-                outputPressureMatrix();
-#endif // DEBUG_REMEMBER_SCAN_PRESSURE
-
                 g_nWorkPartScanStatus = 75;
 
 #if DEBUG_WORK_PART_SCAN == 2
@@ -5933,13 +5891,7 @@ char loadCompensationMatrix( unsigned int uAddress )
         // the current z-compensation matrix has been determined with the current micro step setting, there is nothing to recalculate
         fMicroStepCorrection = 1.0;
     }
-    else if( uMicroSteps != 
-#if FEATURE_ADJUSTABLE_MICROSTEPS
-            drv8711ModeValue_2_MicroSteps(Printer::motorMicroStepsModeValue[Z_AXIS])
-#else
-            RF_MICRO_STEPS_Z
-#endif // FEATURE_ADJUSTABLE_MICROSTEPS
-          )
+    else
     {
         // the current z-compensation matrix has been determined with a higher than the current micro step setting, we must divide all z-correction values
         fMicroStepCorrection = (float)
@@ -6023,31 +5975,6 @@ void clearCompensationMatrix( unsigned int uAddress )
     }
 } // clearCompensationMatrix
 
-
-#if DEBUG_REMEMBER_SCAN_PRESSURE
-void outputPressureMatrix( void )
-{
-    if( Printer::debugInfo() )
-    {
-        short   i;
-        short   j;
-
-
-        Com::printFLN( PSTR( "Pressure matrix:" ) );
-        Com::printFLN( PSTR( "front left ... front right" ) );
-        Com::printFLN( PSTR( "...        ...         ..." ) );
-        Com::printFLN( PSTR( "back left  ...  back right" ) );
-        for( i=0; i<COMPENSATION_MATRIX_MAX_Y; i++ )
-        {
-            for( j=0; j<COMPENSATION_MATRIX_MAX_X; j++ )
-            {
-                Com::printF( Com::tSemiColon, g_ScanPressure[j][i] );
-            }
-            Com::printFLN( PSTR( " " ) );
-        }
-    }
-} // outputPressureMatrix
-#endif // DEBUG_REMEMBER_SCAN_PRESSURE
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
 
 
@@ -6185,7 +6112,6 @@ void loopRF( void ) //wird so aufgerufen, dass es ein ~100ms takt sein sollte.
                 // show that we are idle for a while already
                 showIdle();
                 g_uStartOfIdle  = 0;
-                g_nPrinterReady = 1;
                 Printer::setPrinting(false);
             }
         } 
@@ -6561,7 +6487,8 @@ void loopRF( void ) //wird so aufgerufen, dass es ein ~100ms takt sein sollte.
 
     if( g_uStopTime )
     {
-        if( (uTime - g_uStopTime) > CLEAN_UP_DELAY_AFTER_STOP_PRINT ) //jede 1 sekunden  wäre standard nach config
+        GCode::readFromSerial(); //consume gcode buffers but dont put gcodes into queue rightnow, because of g_uBlockCommands
+        if( (uTime - g_uStopTime) > 2000 ) //jede 1 sekunden  wäre standard nach config
         {
             // we have stopped the printing a few moments ago, output the object now
             if( PrintLine::linesCount )
@@ -6589,26 +6516,6 @@ void loopRF( void ) //wird so aufgerufen, dass es ein ~100ms takt sein sollte.
                 }
 #endif // FEATURE_MILLING_MODE
 
-#if FEATURE_PAUSE_PRINTING
-                if( g_pauseStatus != PAUSE_STATUS_NONE )
-                {
-                    // the printing is paused at the moment
-                    InterruptProtectedBlock noInts;
-
-                    g_uPauseTime  = 0;
-                    g_pauseStatus = PAUSE_STATUS_NONE;
-                    g_pauseMode   = PAUSE_MODE_NONE;
-
-                    g_nContinueSteps[X_AXIS] = 0;
-                    g_nContinueSteps[Y_AXIS] = 0;
-                    g_nContinueSteps[Z_AXIS] = 0;
-                    g_nContinueSteps[E_AXIS] = 0;
-
-                    noInts.unprotect();
-                }
-                Printer::setMenuMode(MENU_MODE_PAUSED,false);
-#endif // FEATURE_PAUSE_PRINTING
-
                 //unaufgeräumtes beenden: Es wird sowieso der Stepper deaktiviert.
                 g_nZOSScanStatus = 0;
                 g_nHeatBedScanStatus = 0;
@@ -6632,22 +6539,20 @@ void loopRF( void ) //wird so aufgerufen, dass es ein ~100ms takt sein sollte.
     }
     if( g_uBlockCommands > 1 ) //=1 scheint zu blocken, dann muss g_uStopTime aktiv sein und hier drüber erst eine Uhrzeit reinsetzen.
     {
-        if( (uTime - g_uBlockCommands) > COMMAND_BLOCK_DELAY ) //jede 1 sekunden wäre standard nach config
+        if( (uTime - g_uBlockCommands) > 1000 ) //jede 1 sekunden wäre standard nach config
         {
             g_uBlockCommands = 0;
             // output the object
             outputObject(false); //in g_uBlockCommands > 1
         }
     }
-    
-#if FEATURE_ABORT_PRINT_AFTER_TEMPERATURE_ERROR
+
     if( Printer::isAnyTempsensorDefect() && Printer::isPrinting() )
     {
         // we are printing from the SD card and a temperature sensor got defect - abort the current printing
         Com::printFLN( PSTR( "ERROR: a temperature sensor defect. aborting print" ) );
         Printer::stopPrint();
     }
-#endif // FEATURE_ABORT_PRINT_AFTER_TEMPERATURE_ERROR
 
 #if FEATURE_SERVICE_INTERVAL
     if ( !g_nEnteredService )
@@ -12089,10 +11994,16 @@ void drv8711Init( void )
 #endif // DRV_RESET2
 
     HAL::delayMicroseconds( 5000 );
-  
+
     // configure all registers except the motor current (= no register 01)
-        
+
     //DRV8711_REGISTER_00:
+#if FEATURE_ADJUSTABLE_MICROSTEPS
+    //init to stock settings: update in eeprom init.
+    for(uint8_t axis = 0 ; axis < DRV8711_NUM_CHANNELS ; axis++){
+        Printer::motorMicroStepsModeValue[axis] = drv8711MicroSteps_2_ModeValue(drv8711Axis_2_InitMicrosteps(axis)); //init
+    }
+#endif // FEATURE_ADJUSTABLE_MICROSTEPS
     for( uint8_t driver=1 ; driver<=DRV8711_NUM_CHANNELS ; driver++ )
     {
         drv8711adjustMicroSteps(driver);
@@ -12134,6 +12045,19 @@ void drv8711Init( void )
     drv8711Transmit( DRV8711_REGISTER_07 );
     drv8711DisableAll();
 
+    // set all motor currents
+    const unsigned short  uMotorCurrentUse[] = MOTOR_CURRENT_NORMAL; //--> {x,y,z,e1,e2} siehe RFx000.h
+    Printer::motorCurrent[X_AXIS]   = uMotorCurrentUse[X_AXIS];
+    Printer::motorCurrent[Y_AXIS]   = uMotorCurrentUse[Y_AXIS];
+    Printer::motorCurrent[Z_AXIS]   = uMotorCurrentUse[Z_AXIS];
+    Printer::motorCurrent[E_AXIS+0] = uMotorCurrentUse[E_AXIS+0];
+    Printer::motorCurrent[E_AXIS+1] = uMotorCurrentUse[E_AXIS+1]; //egal ob NUM_EXTRUDER == 1 oder 2
+
+    for( uint8_t axis=0 ; axis<DRV8711_NUM_CHANNELS ; axis++ )
+    {
+        if(axis < 3+NUM_EXTRUDER) setMotorCurrent( axis+1, Printer::motorCurrent[axis] );
+    }
+
 } // drv8711Init
 
 
@@ -12165,46 +12089,6 @@ void setMotorCurrent( unsigned char driver, uint8_t level )
 
 } // setMotorCurrent
 
-
-void motorCurrentControlInit( void )
-{
-    const unsigned short  uMotorCurrentUse[] = MOTOR_CURRENT_NORMAL; //--> {x,y,z,e1,e2} siehe RFx000.h
-    Printer::motorCurrent[X_AXIS]   = uMotorCurrentUse[X_AXIS];
-    Printer::motorCurrent[Y_AXIS]   = uMotorCurrentUse[Y_AXIS];
-    Printer::motorCurrent[Z_AXIS]   = uMotorCurrentUse[Z_AXIS];
-    Printer::motorCurrent[E_AXIS+0] = uMotorCurrentUse[E_AXIS+0];
-    Printer::motorCurrent[E_AXIS+1] = uMotorCurrentUse[E_AXIS+1]; //egal ob NUM_EXTRUDER == 1 oder 2
-
-#if FEATURE_ADJUSTABLE_MICROSTEPS
-    //init here:
-    
-    //man könnte sich hier noch 2 byte ram sparen. ^^
-    for(int ax = 0 ; ax < DRV8711_NUM_CHANNELS ; ax++){
-        Printer::motorMicroStepsModeValue[ax] = drv8711MicroSteps_2_ModeValue(drv8711Axis_2_InitMicrosteps(ax)); //init
-    }
-    //does EEPROM have valid values for microsteps?
-    if (HAL::eprGetByte( EPR_RF_MICRO_STEPS_USED ) == 0xAB ){
-        for(int i = 0; i <= E_AXIS+1; i++){
-         /* #define EPR_RF_MICRO_STEPS_X              1943 //[1byte]
-            #define EPR_RF_MICRO_STEPS_Y              1944 //[1byte]
-            #define EPR_RF_MICRO_STEPS_Z              1945 //[1byte]
-            #define EPR_RF_MICRO_STEPS_E0             1946 //[1byte]
-            #define EPR_RF_MICRO_STEPS_E1             1947 //[1byte] */
-            uint8_t epr = HAL::eprGetByte( EPR_RF_MICRO_STEPS_X + i );
-            if(epr <= 8) Printer::motorMicroStepsModeValue[i] = epr;
-        }
-    }
-#endif // FEATURE_ADJUSTABLE_MICROSTEPS
-
-    // configure all DRV8711
-    drv8711Init();
-    // set all motor currents
-    for( uint8_t i=0 ; i<DRV8711_NUM_CHANNELS ; i++ )
-    {
-        if(i < 3+NUM_EXTRUDER) setMotorCurrent( i+1, Printer::motorCurrent[i] );
-        else setMotorCurrent( i+1, MOTOR_CURRENT_MIN );
-    }
-} // motorCurrentControlInit
 
 #if FEATURE_READ_STEPPER_STATUS
 unsigned short readMotorStatus( unsigned char driver )
@@ -13465,15 +13349,6 @@ float getHeatBedTemperatureOffset( float temperatureInCelsius )
 
         temp =  (deltaHigh - deltaLow) / float(setpointTemperatures[0]);
         temp *= temperatureInCelsius;
-
-#if DEBUG_HEAT_BED_TEMP_COMPENSATION
-        if( temperatureInCelsius > 50 )
-        {
-            Com::printF( PSTR( "getHeatBedTemperatureOffset(): " ), temperatureInCelsius );
-            Com::printFLN( PSTR( ", " ), temp );
-        }
-#endif // DEBUG_HEAT_BED_TEMP_COMPENSATION
-
         return temp;
     }
 
@@ -13481,12 +13356,6 @@ float getHeatBedTemperatureOffset( float temperatureInCelsius )
     {
         // the specified temperature is above our known, measured values
         temp = measuredTemperatures[BED_TEMP_COMPENSATION_INDEX_MAX] - setpointTemperatures[BED_TEMP_COMPENSATION_INDEX_MAX];
-
-#if DEBUG_HEAT_BED_TEMP_COMPENSATION
-        Com::printF( PSTR( "getHeatBedTemperatureOffset(): " ), temperatureInCelsius );
-        Com::printFLN( PSTR( ", " ), temp );
-#endif // DEBUG_HEAT_BED_TEMP_COMPENSATION
-
         return temp;
     }
 
@@ -13499,12 +13368,6 @@ float getHeatBedTemperatureOffset( float temperatureInCelsius )
 
             temp =  (deltaHigh - deltaLow) / float(setpointTemperatures[i] - setpointTemperatures[i-1]);
             temp *= (temperatureInCelsius - setpointTemperatures[i-1]);
-
-#if DEBUG_HEAT_BED_TEMP_COMPENSATION
-            Com::printF( PSTR( "getHeatBedTemperatureOffset(): " ), temperatureInCelsius );
-            Com::printFLN( PSTR( ", " ), temp + deltaLow );
-#endif // DEBUG_HEAT_BED_TEMP_COMPENSATION
-
             return (temp + deltaLow);
         }
     }

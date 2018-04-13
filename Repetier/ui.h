@@ -112,18 +112,18 @@
 #define UI_ACTION_SET_E_ORIGIN              1091
 #define UI_ACTION_EXTRUDER_RELATIVE         1092
 #define UI_ACTION_SELECT_EXTRUDER0          1093
-//#define UI_ACTION_ADVANCE_L                 1094
+
 #define UI_ACTION_PREHEAT_ABS               1095
 #define UI_ACTION_FLOWRATE_MULTIPLY         1096
 #define UI_ACTION_EXTR_WAIT_RETRACT_TEMP    1100
 #define UI_ACTION_EXTR_WAIT_RETRACT_UNITS   1101
-#define UI_ACTION_WRITE_DEBUG               1105
+
 #define UI_ACTION_FANSPEED                  1106
 #define UI_ACTION_LIGHTS_ONOFF              1107
-//#define UI_ACTION_SD_STOP                   1108
+
 #define UI_ACTION_STOP_ACK                  1109
-//#define UI_ACTION_ZPOSITION_NOTEST          1110
-//#define UI_ACTION_ZPOSITION_FAST_NOTEST     1111
+
+
 #define UI_ACTION_MAX_INACTIVE              1113
 #define UI_ACTION_BEEPER                    1114
 #define UI_ACTION_UNMOUNT_FILAMENT          1115
@@ -270,7 +270,6 @@ extern bool     g_nAutoReturnMessage;
 extern  char    g_nYesNo;
 extern volatile char    g_nContinueButtonPressed;
 extern  char    g_nServiceRequest;
-extern  char    g_nPrinterReady;
 
 // Key codes
 #define UI_KEYS_INIT_CLICKENCODER_LOW(pinA,pinB)        SET_INPUT(pinA);SET_INPUT(pinB); PULLUP(pinA,HIGH);PULLUP(pinB,HIGH);

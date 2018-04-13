@@ -54,7 +54,7 @@ To override EEPROM settings with config settings, set EEPROM_MODE 0 */
     #error This Firmware does not support RF2000v2 yet. Renkforce did not release any validated RF2000V2.h yet.
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000_V2
 
-#define PROTOTYPE_PCB                       0                                                   // 1 = first PCB's / 0 = Final
+
 
 /** \brief EEPROM storage mode
 Set the EEPROM_MODE to 0 if you always want to use the settings in this configuration file. If not,
@@ -96,9 +96,6 @@ IMPORTANT: With mode <>0 some changes in Configuration.h are not set any more, a
 /** \brief Enables the precise heat bed scan */
 #if FEATURE_HEAT_BED_Z_COMPENSATION
   #define FEATURE_PRECISE_HEAT_BED_SCAN       1                                                 // 1 = on, 0 = off
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
-/** \brief Specifies the number of pressure values which shall be averaged for inprint live z-adjustment */
-#if FEATURE_HEAT_BED_Z_COMPENSATION
   #define FEATURE_DIGIT_Z_COMPENSATION           1                                               // 1 = on, 0 = off
   #define FEATURE_DIGIT_FLOW_COMPENSATION        1                                               // 1 = on, 0 = off
   #define FEATURE_SENSIBLE_PRESSURE              1                                               // 1 = on, 0 = off
@@ -109,6 +106,8 @@ IMPORTANT: With mode <>0 some changes in Configuration.h are not set any more, a
     #define SENSIBLE_PRESSURE_MAX_OFFSET                180
     #define SENSIBLE_PRESSURE_INTERVAL                  100                                      //weniger macht keinen sinn. ob diese einschränkung sinn macht, aber sie bleibt vorerst mal da!
   #endif // FEATURE_SENSIBLE_PRESSURE
+  /** \brief Enables debug outputs from the heat bed scan */
+  #define DEBUG_HEAT_BED_SCAN                 0                                                   // 0 = off, 1 = on, 2 = on with more debug outputs
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
 /** \brief The Firmwares disalowes movement before you at least: pressed a printers button, set a temperature, homed once 
@@ -124,9 +123,6 @@ XYZ_POSITION_BUTTON_DIRECTION = 1 : This fits more if you want to stick to stand
 
 /** \brief Enables/disables the emergency stop in case of too high pressure */
 #define FEATURE_EMERGENCY_STOP_ALL          1                                                   // 1 = on, 0 = off
-
-/** \brief Specifies whether the current print shall be aborted in case a temperature sensor is defect */
-#define FEATURE_ABORT_PRINT_AFTER_TEMPERATURE_ERROR     1                                       // 1 = abort, 0 = do not abort
 
 /** \brief Enables/disables the set to x/y origin feature */
 #define FEATURE_SET_TO_XY_ORIGIN            1                                                   // 1 = on, 0 = off
@@ -202,32 +198,6 @@ Change your EEPROMs Steps/mm accordingly if you change RF_MICRO_STEPS_ in this c
 // ##   debugging
 // ##########################################################################################
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION 
-
-/** \brief Enables debug outputs from the heat bed scan */
-#define DEBUG_HEAT_BED_SCAN                 0                                                   // 0 = off, 1 = on, 2 = on with more debug outputs
-
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
-
-
-#if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
-
-/** \brief Enables debug outputs about the pressure which is detected during the heat bed or work part scan */
-#define DEBUG_REMEMBER_SCAN_PRESSURE        0                                                   // 1 = on, 0 = off
-
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
-
-/** \brief Enables debug outputs about the heat bed temperature compensation */
-#define DEBUG_HEAT_BED_TEMP_COMPENSATION    0                                                   // 1 = on, 0 = off
-
-/** \brief Allows M111 to set bit 5 (16) which disables all commands except M111. This can be used
-to test your data througput or search for communication problems. */
-//#define INCLUDE_DEBUG_COMMUNICATION
-
-/** \brief Allows M111 so set bit 6 (32) which disables moves, at the first tried step. In combination
-with a dry run, you can test the speed of path computations, which are still performed. */
-//#define INCLUDE_DEBUG_NO_MOVE
-
 /** \brief Writes the free RAM to output, if it is less then at the last test. Should always return
 values >500 for safety, since it doesn't catch every function call. Nice to tweak cache
 usage or for seraching for memory induced errors. Switch it off for production, it costs execution time. */
@@ -238,47 +208,6 @@ usage or for seraching for memory induced errors. Switch it off for production, 
 #else
  #define DEBUG_MEMORY
 #endif // DEBUG_FREE_MEMORY
-
-/** \brief If enabled, writes the created generic table to serial port at startup. */
-//#define DEBUG_GENERIC_TEMP_TABLE
-
-/** \brief This enables code to make M666 drop an ok, so you get problems with communication. It is to test host robustness. */
-//#define DEBUG_FORCE_COM_ERROR
-
-/** \brief Adds a menu point in quick settings to write debg informations to the host in case of hangs where the ui still works. */
-//#define DEBUG_PRINT
-//#define DEBUG_SPLIT
-
-// Uncomment the following line to enable debugging. You can better control debugging below the following line
-//#define DEBUG
-
-// Uncomment if no analyzer is connected
-//#define ANALYZER
-
-// Channel->pin assignments
-#define ANALYZER_CH0                        63 // New move
-#define ANALYZER_CH1                        40 // Step loop
-#define ANALYZER_CH2                        53 // X Step
-#define ANALYZER_CH3                        65 // Y Step
-#define ANALYZER_CH4                        59 // X Direction
-#define ANALYZER_CH5                        64 // Y Direction
-#define ANALYZER_CH6                        58 // xsig
-#define ANALYZER_CH7                        57 // ysig
-
-#ifdef ANALYZER
-
-#define ANALYZER_ON(a)                      {WRITE(a,HIGH);}
-#define ANALYZER_OFF(a)                     {WRITE(a,LOW);}
-
-#else
-
-#define ANALYZER_ON(a)
-#define ANALYZER_OFF(a)
-
-#endif // ANALYZER
-
-/** \brief Adds a M3993 / or like "M3993 P300000" to set another or default LOW_TICKS_PER_MOVE and gather statistics about the fill level of the MOVE_CACHE while printing */
-#define FEATURE_DEBUG_MOVE_CACHE_TIMING              0
 
 // ##########################################################################################
 // ##   configuration of the extended buttons
@@ -509,6 +438,9 @@ See http://reprap.org/wiki/MeasuringThermistorBeta for more details.
 /** \brief Number of entries in generated table. One entry takes 4 bytes. Higher number of entries increase computation time too.
 Value is used for all generic tables created. */
 #define GENERIC_THERM_NUM_ENTRIES           33
+
+/** \brief If enabled, writes the created generic table to serial port at startup. */
+//#define PRINT_GENERIC_TEMP_TABLE
 
 
 // ##########################################################################################
@@ -792,12 +724,6 @@ we use blocks of 2 kByte size for the structure of our EEPROM
 Without this special handling, the firmware may complain about checksum errors from non-Repetier PC applications (e.g. Cura, ...) and
 non-Repetier PC applications may fall over the debug outputs of the firmware. */
 #define ALLOW_EXTENDED_COMMUNICATION        2                                                   // 0 = do not allow, 1 = allow "Wait", 2 = allow "Wait" and debug outputs
-
-/** \brief Configures the delay between the stop of a print and the clean-up like disabling of heaters, disabling of steppers and the outputting of the object */
-#define CLEAN_UP_DELAY_AFTER_STOP_PRINT     1000                                                // [ms]
-
-/** \brief Configures the duration for which the processing of commands shall be blocked. */
-#define COMMAND_BLOCK_DELAY                 1000                                                // [ms]
 
 /** \brief Configuration of the external watchdog
 The TPS3820 of the RF1000/RF2000 resets about 112/200/310 (min/typical/max) ms after the last time when it was triggered

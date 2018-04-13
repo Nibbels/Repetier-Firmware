@@ -115,10 +115,6 @@ float           Printer::memoryE;
 float           Printer::memoryF;
 #endif // FEATURE_MEMORY_POSITION
 
-#ifdef DEBUG_PRINT
-int             debugWaitLoop = 0;
-#endif // DEBUG_PRINT
-
 #if FEATURE_HEAT_BED_Z_COMPENSATION
 volatile char   Printer::doHeatBedZCompensation = false;
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION
@@ -742,41 +738,6 @@ void Printer::setup()
     }
 #endif // FEATURE_TYPE_EEPROM
 
-#ifdef ANALYZER
-// Channel->pin assignments
-#if ANALYZER_CH0>=0
-    SET_OUTPUT(ANALYZER_CH0);
-#endif // ANALYZER_CH0>=0
-
-#if ANALYZER_CH1>=0
-    SET_OUTPUT(ANALYZER_CH1);
-#endif // ANALYZER_CH1>=0
-
-#if ANALYZER_CH2>=0
-    SET_OUTPUT(ANALYZER_CH2);
-#endif // ANALYZER_CH2>=0
-
-#if ANALYZER_CH3>=0
-    SET_OUTPUT(ANALYZER_CH3);
-#endif // ANALYZER_CH3>=0
-
-#if ANALYZER_CH4>=0
-    SET_OUTPUT(ANALYZER_CH4);
-#endif // ANALYZER_CH4>=0
-
-#if ANALYZER_CH5>=0
-    SET_OUTPUT(ANALYZER_CH5);
-#endif // ANALYZER_CH5>=0
-
-#if ANALYZER_CH6>=0
-    SET_OUTPUT(ANALYZER_CH6);
-#endif // ANALYZER_CH6>=0
-
-#if ANALYZER_CH7>=0
-    SET_OUTPUT(ANALYZER_CH7);
-#endif // ANALYZER_CH7>=0
-#endif // ANALYZER
-
 #if defined(ENABLE_POWER_ON_STARTUP) && PS_ON_PIN>-1
     SET_OUTPUT(PS_ON_PIN); //GND
     WRITE(PS_ON_PIN, (POWER_INVERTING ? HIGH : LOW));
@@ -1121,9 +1082,13 @@ void Printer::setup()
 
     HAL::showStartReason();
     Extruder::initExtruder();
-    EEPROM::init(); // Read settings from eeprom if wanted [readDataFromEEPROM or destroy corrupted eeprom]
+    
+    // configure all DRV8711
+    drv8711Init();
+    
+    // Read settings from eeprom if wanted [readDataFromEEPROM or destroy corrupted eeprom]
+    EEPROM::init(); 
 
-    motorCurrentControlInit(); // Set current if it is firmware controlled
 
 #if FEATURE_230V_OUTPUT
     enable230VOutput = OUTPUT_230V_DEFAULT_ON;
@@ -2214,8 +2179,24 @@ void Printer::stopPrint() //function for aborting USB and SD-Prints
     g_uBlockCommands = 1; //keine gcodes mehr ausführen bis beenden beendet.
     //now mark the print to get cleaned up after some time:
     g_uStopTime = HAL::timeInMilliseconds(); //starts output object in combination with g_uBlockCommands
+    
+#if FEATURE_PAUSE_PRINTING
+    if( g_pauseStatus != PAUSE_STATUS_NONE )
+    {
+        // the printing is paused at the moment
+        g_nContinueSteps[X_AXIS] = 0;
+        g_nContinueSteps[Y_AXIS] = 0;
+        g_nContinueSteps[Z_AXIS] = 0;
+        g_nContinueSteps[E_AXIS] = 0;
 
-    //erase the coordinates and kill the current tastkplaner:
+        g_uPauseTime  = 0;
+        g_pauseStatus = PAUSE_STATUS_NONE;
+        g_pauseMode   = PAUSE_MODE_NONE;
+    }
+    Printer::setMenuMode(MENU_MODE_PAUSED,false); //egal ob nicht gesetzt.
+#endif // FEATURE_PAUSE_PRINTING
+
+    //erase the coordinates and kill the current taskplaner:
     PrintLine::resetPathPlanner();
     PrintLine::cur = NULL;
     // we have to tell the firmware about its real current position

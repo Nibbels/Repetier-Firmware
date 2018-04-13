@@ -143,9 +143,9 @@ FSTRINGVALUE(Com::tPrintingTimeService,"Printing time since last Service:")
 FSTRINGVALUE(Com::tMillingTimeService,"Milling time since last Service:")
 #endif // FEATURE_SERVICE_INTERVAL
 
-#ifdef DEBUG_GENERIC_TEMP_TABLE
+#ifdef PRINT_GENERIC_TEMP_TABLE
 FSTRINGVALUE(Com::tGenTemp,"GenTemp:")
-#endif // DEBUG_GENERIC_TEMP_TABLE
+#endif // PRINT_GENERIC_TEMP_TABLE
 
 FSTRINGVALUE(Com::tTargetExtr,"TargetExtr")
 FSTRINGVALUE(Com::tTargetBedColon,"TargetBed:")
@@ -173,17 +173,6 @@ FSTRINGVALUE(Com::tExtruderSpace,"extruder ")
 FSTRINGVALUE(Com::tTempSensorDefect,": temp sensor defect")
 FSTRINGVALUE(Com::tTempSensorWorking,": working")
 FSTRINGVALUE(Com::tDryModeUntilRestart,"Printer set into dry run mode until restart!")
-
-#ifdef DEBUG_SPLIT
-FSTRINGVALUE(Com::tDBGDeltaSeconds,"Seconds:")
-FSTRINGVALUE(Com::tDBGDeltaZDelta,"Z delta:")
-FSTRINGVALUE(Com::tDBGDeltaSegments,"Segments:")
-FSTRINGVALUE(Com::tDBGDeltaNumLines,"Num lines:")
-FSTRINGVALUE(Com::tDBGDeltaSegmentsPerLine,"segments_per_line:")
-FSTRINGVALUE(Com::tDBGDeltaMaxDS,"Max DS:")
-FSTRINGVALUE(Com::tDBGDeltaStepsPerSegment,"Steps Per Segment:")
-FSTRINGVALUE(Com::tDBGDeltaVirtualAxisSteps,"Virtual axis steps:")
-#endif // DEBUG_SPLIT
 
 #ifdef WAITING_IDENTIFIER
 FSTRINGVALUE(Com::tWait,WAITING_IDENTIFIER)

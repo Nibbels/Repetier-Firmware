@@ -39,19 +39,27 @@
 
 #if FEATURE_MILLING_MODE
 
-/** \brief Enables automatic compensation in z direction for the operationg mode "mill" */
-#define FEATURE_WORK_PART_Z_COMPENSATION    1                                                   // 1 = on, 0 = off
+  /** \brief Enables automatic compensation in z direction for the operationg mode "mill" */
+  #define FEATURE_WORK_PART_Z_COMPENSATION    1                                                   // 1 = on, 0 = off
 
-/** \brief This feature allows to move the milling bed upwards automatically until the miller is hit. The found position is taken over as Z=0 automatically.
+  /** \brief This feature allows to move the milling bed upwards automatically until the miller is hit. The found position is taken over as Z=0 automatically.
      Be aware that mis-using of this functionality can ruin the tool (e.g. in case the tool is placed above the milling bed and not above the to-be-milled object). */
-#define FEATURE_FIND_Z_ORIGIN               1                                                   // 1 = on, 0 = off
+  #define FEATURE_FIND_Z_ORIGIN               1                                                   // 1 = on, 0 = off
 
-/** \brief Enables/disables the menu entry which allows to choose the currently installed miller type */
-#define FEATURE_CONFIGURABLE_MILLER_TYPE    1                                                   // 1 = on, 0 = off
+  /** \brief Enables/disables the menu entry which allows to choose the currently installed miller type */
+  #define FEATURE_CONFIGURABLE_MILLER_TYPE    1                                                   // 1 = on, 0 = off
 
-#if FEATURE_WORK_PART_Z_COMPENSATION && !FEATURE_FIND_Z_ORIGIN
+  #if FEATURE_WORK_PART_Z_COMPENSATION && !FEATURE_FIND_Z_ORIGIN
     #error It does not make sense to enable the work part z-compensation without enabling of the automatic detection of the z-origin
-#endif // FEATURE_WORK_PART_Z_COMPENSATION && !FEATURE_FIND_Z_ORIGIN
+  #endif // FEATURE_WORK_PART_Z_COMPENSATION && !FEATURE_FIND_Z_ORIGIN
+
+  /** \brief Define the type of the present miller hardware */
+  #define MILLER_TYPE                         MILLER_TYPE_ONE_TRACK
+  /** \brief Define lower acceleration to reach very small speeds */
+  #define MILLER_ACCELERATION                 15
+
+  /** \brief Default operating mode */
+  #define DEFAULT_OPERATING_MODE              OPERATING_MODE_PRINT
 
 #endif // FEATURE_MILLING_MODE
 
@@ -77,23 +85,6 @@
 
 /** \brief Define the type Z-Endstop-Installation */
 #define FEATURE_CONFIGURABLE_Z_ENDSTOPS     0                                                   // the RF2000 does not support to use the z-min and z-max endstops within one circle
-
-#if FEATURE_MILLING_MODE
-
-/** \brief Define the type of the present miller hardware */
-#define MILLER_TYPE                         MILLER_TYPE_ONE_TRACK
-/** \brief Define lower acceleration to reach very small speeds */
-#define MILLER_ACCELERATION                 15
-
-/** \brief Default operating mode */
-#define DEFAULT_OPERATING_MODE              OPERATING_MODE_PRINT
-
-#endif // FEATURE_MILLING_MODE
-
-
-/** \brief Allows to choose whether the setpoint and the current value of the heat bed temperature shall be compensated so that the temperature offset which is caused by the printing plate is reduced */
-#define FEATURE_HEAT_BED_TEMP_COMPENSATION  1                                                   // 1 = on, 0 = off
-
 
 // ##########################################################################################
 // ##   Calibration
@@ -599,17 +590,16 @@ A good start is 30 lower then the optimal value. You need to leave room for cool
 
 #endif // HAVE_HEATED_BED==true && HEATED_BED_SENSOR_TYPE<101
 
+/** \brief Allows to choose whether the setpoint and the current value of the heat bed temperature shall be compensated so that the temperature offset which is caused by the printing plate is reduced */
+#define FEATURE_HEAT_BED_TEMP_COMPENSATION  1                                                   // 1 = on, 0 = off
+
 #if FEATURE_HEAT_BED_TEMP_COMPENSATION
-
-/** \brief The following vlaue must be NumberOfTemperatures -1 */
-#define BED_TEMP_COMPENSATION_INDEX_MAX     5
-
-/** \brief The following values represent the setpoint temperatures */
-#define BED_SETPOINT_TEMPERATURES           {60, 80, 100, 120, 140, 160}
-
-/** \brief The following values represent the real temperature which is measured at the surface of the printing bed in case the temperature sensor delivers the setpoint temperatures */
-#define BED_MEASURED_TEMPERATURES           {58, 76, 94, 112, 130, 150}
-
+  /** \brief The following vlaue must be NumberOfTemperatures -1 */
+  #define BED_TEMP_COMPENSATION_INDEX_MAX     5
+  /** \brief The following values represent the setpoint temperatures */
+  #define BED_SETPOINT_TEMPERATURES           {60, 80, 100, 120, 140, 160}
+  /** \brief The following values represent the real temperature which is measured at the surface of the printing bed in case the temperature sensor delivers the setpoint temperatures */
+  #define BED_MEASURED_TEMPERATURES           {58, 76, 94, 112, 130, 150}
 #endif // FEATURE_HEAT_BED_TEMP_COMPENSATION
 
 
@@ -742,8 +732,8 @@ can set it on for safety. */
 #define INVERT_Y_DIR                        false
 #define INVERT_Z_DIR                        false
 
-#define XYZ_STEPPER_HIGH_DELAY              100                                                 // [us]
-#define XYZ_STEPPER_LOW_DELAY               100                                                 // [us]
+#define XYZ_STEPPER_HIGH_DELAY              100                                                 // [us] speed for moveZ
+#define XYZ_STEPPER_LOW_DELAY               100                                                 // [us] speed for moveZ
 
 /** \brief Automatic filament change, unmounting of the filament - ensure that G1 does not attempt to extrude more than EXTRUDE_MAXLENGTH */
 #define UNMOUNT_FILAMENT_SCRIPT_WITH_HEATING        "M3914 P4500"
@@ -870,6 +860,9 @@ This value must be high enough, that the buffer has time to fill up. The problem
 if you are printing many very short segments at high speed.*/
 #define LOW_TICKS_PER_MOVE                  500000
 
+/** \brief Adds a M3993 / or like "M3993 P300000" to set another or default LOW_TICKS_PER_MOVE and gather statistics about the fill level of the MOVE_CACHE while printing */
+#define FEATURE_DEBUG_MOVE_CACHE_TIMING              0
+
 //For configuration of speed vs. cpu RF_MICRO_STEPS_ @ CONFIGURATION.h as well!
 
 // ##########################################################################################
@@ -928,9 +921,9 @@ extruder steps are executed. This is to prevent your extruder to move unless the
 is at least molten. After havong some complains that the extruder does not work, I leave
 it 0 as default. */
 #if EXTRUDER_ALLOW_COLD_MOVE
-#define MIN_EXTRUDER_TEMP                   0
+  #define MIN_EXTRUDER_TEMP                   0
 #else
-#define MIN_EXTRUDER_TEMP                   80
+  #define MIN_EXTRUDER_TEMP                   80
 #endif
 /** \brief Enable advance algorithm.
 Without a correct adjusted advance algorithm, you get blobs at points, where acceleration changes. The

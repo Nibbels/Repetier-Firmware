@@ -31,7 +31,6 @@
 #define PRINTER_FLAG0_MANUAL_MOVE_MODE          16
 #define PRINTER_FLAG0_LARGE_MACHINE             128
 
-//#define PRINTER_FLAG1_HOMED                     1 -> egal geworden.
 #define PRINTER_FLAG1_AUTOMOUNT                 2
 #define PRINTER_FLAG1_ANIMATION                 4
 #define PRINTER_FLAG1_ALLKILLED                 8
@@ -40,7 +39,7 @@
 #define PRINTER_FLAG1_Z_ORIGIN_SET              64
 
 #define PRINTER_FLAG2_RESET_FILAMENT_USAGE      4
-//#define PRINTER_FLAG2_HOMING                    64
+#define PRINTER_FLAG2_GOT_TEMPS                 32
  
 #define PRINTER_FLAG3_X_HOMED                   1 // flag3 alike original repetier
 #define PRINTER_FLAG3_Y_HOMED                   2 // flag3 alike original repetier
@@ -271,18 +270,6 @@ public:
     {
         return ((debugLevel & 8)!=0);
     } // debugDryrun
-
-    static INLINE bool debugCommunication()
-    {
-        return ((debugLevel & 16)!=0);
-    } // debugCommunication
-    
-#ifdef INCLUDE_DEBUG_NO_MOVE
-    static INLINE bool debugNoMoves()
-    {
-        return ((debugLevel & 32)!=0);
-    }// debugNoMoves
-#endif // INCLUDE_DEBUG_NO_MOVE
 
     /** \brief Disable stepper motor for x direction. */
     static INLINE void disableXStepper()
@@ -937,6 +924,9 @@ public:
     static void disableAllSteppersNow()
     {
         markAllSteppersDisabled();
+#if FEATURE_UNLOCK_MOVEMENT
+        //Printer::g_unlock_movement = 0; //again lock movement until homing or keypress or another print happens. --> toooooo much?
+#endif //FEATURE_UNLOCK_MOVEMENT
         disableXStepper();
         disableYStepper();
         disableZStepper();

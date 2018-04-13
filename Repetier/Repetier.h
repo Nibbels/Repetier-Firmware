@@ -160,7 +160,7 @@ extern millis_t previousMillisCmd;
 extern millis_t maxInactiveTime;
 extern millis_t stepperInactiveTime;
 
-extern void motorCurrentControlInit();
+extern void drv8711Init();
 
 #include "Printer.h"
 #include "motion.h"
@@ -242,10 +242,6 @@ extern SDCard sd;
 extern volatile int waitRelax; // Delay filament relax at the end of print, could be a simple timeout
 
 extern void updateStepsParameter(PrintLine *p);
-
-#ifdef DEBUG_PRINT
-extern int                  debugWaitLoop;
-#endif // DEBUG_PRINT
 
 #define STR(s)      #s
 #define XSTR(s)     STR(s)

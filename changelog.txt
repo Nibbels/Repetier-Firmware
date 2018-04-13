@@ -1,5 +1,23 @@
 TODO: Testing, testing ..
 
+V RF.01.41.20.Mod (2018-04-14) 
+- fix that the printer forgot to load eeprom saved stepper currents since ~1.41.13
+
+V RF.01.41.19.Mod (2018-04-10) 
+- fix tilt when stopping USB sourced print in paused state. (thx @ easygo25)
+- fix Temperatures do not show when starting print within 500ms after boottime.
+
+V RF.01.41.18.Mod (2018-04-08) 
+- removed INCLUDE_DEBUG_COMMUNICATION
+- FEATURE_ABORT_PRINT_AFTER_TEMPERATURE_ERROR is mandatory and removed from configuration.h
+- removed INCLUDE_DEBUG_NO_MOVE
+- removed DEBUG_FORCE_COM_ERROR
+- removed DEBUG_SPLIT
+- removed DEBUG_PRINT
+- removed ANALYZER defines
+- removed DEBUG_REMEMBER_SCAN_PRESSURE
+- removed DEBUG_HEAT_BED_TEMP_COMPENSATION
+
 V RF.01.41.17.Mod (2018-04-02) 
 - if any sensor fails/disconnects show the specific sensor which failed within the display message.
 

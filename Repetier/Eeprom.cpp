@@ -961,18 +961,35 @@ void EEPROM::readDataFromEEPROM()
     const unsigned short    uMotorCurrentMax[] = MOTOR_CURRENT_MAX; //oberes Amperelimit
     const unsigned short    uMotorCurrentUse[] = MOTOR_CURRENT_NORMAL; //Standardwert
     uint8_t current = 0;
-    for(uint8_t stp=0; stp<3+NUM_EXTRUDER; stp++){ //0..4 bei 5 steppern.
-        current = HAL::eprGetByte(EPR_RF_MOTOR_CURRENT+stp);
-        if(MOTOR_CURRENT_MIN <= current && current <= uMotorCurrentMax[stp]){
-            Printer::motorCurrent[stp] = current;
-            setMotorCurrent( stp+1, current ); //driver ist 1-basiert
+    for(uint8_t axis=0; axis < DRV8711_NUM_CHANNELS; axis++){ //0..4 bei 5 steppern.
+        current = HAL::eprGetByte(EPR_RF_MOTOR_CURRENT+axis);
+        if(MOTOR_CURRENT_MIN <= current && current <= uMotorCurrentMax[axis]){
+            Printer::motorCurrent[axis] = current;
+            setMotorCurrent( axis+1, current ); //driver ist 1-basiert
         }else{
 #if FEATURE_AUTOMATIC_EEPROM_UPDATE
-            HAL::eprSetByte( EPR_RF_MOTOR_CURRENT+stp, uMotorCurrentUse[stp] ); //wenn mist im EEPROM, dann Silent-Wert reinschreiben.
+            HAL::eprSetByte( EPR_RF_MOTOR_CURRENT+axis, uMotorCurrentUse[axis] ); //wenn mist im EEPROM, dann Silent-Wert reinschreiben.
             change = true;
 #endif // FEATURE_AUTOMATIC_EEPROM_UPDATE
         }
     }
+#if FEATURE_ADJUSTABLE_MICROSTEPS
+    //does EEPROM have valid values for microsteps?
+    if (HAL::eprGetByte( EPR_RF_MICRO_STEPS_USED ) == 0xAB ){
+        for(uint8_t axis = 0; axis < DRV8711_NUM_CHANNELS; axis++){
+         /* #define EPR_RF_MICRO_STEPS_X              1943 //[1byte]
+            #define EPR_RF_MICRO_STEPS_Y              1944 //[1byte]
+            #define EPR_RF_MICRO_STEPS_Z              1945 //[1byte]
+            #define EPR_RF_MICRO_STEPS_E0             1946 //[1byte]
+            #define EPR_RF_MICRO_STEPS_E1             1947 //[1byte] */
+            uint8_t epr = HAL::eprGetByte( EPR_RF_MICRO_STEPS_X + axis );
+            if(epr <= 8 && Printer::motorMicroStepsModeValue[axis] != epr){
+                Printer::motorMicroStepsModeValue[axis] = epr;
+                drv8711adjustMicroSteps(axis+1);
+            }
+        }
+    }
+#endif // FEATURE_ADJUSTABLE_MICROSTEPS
 
     if(!HAL::eprGetInt16( EPR_RF_FREQ_DBL )){
 #if FEATURE_AUTOMATIC_EEPROM_UPDATE

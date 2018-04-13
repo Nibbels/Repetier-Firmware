@@ -612,7 +612,7 @@ extern  char            g_debugLog;
 //extern    short           g_debugCounter[12];
 //extern    short           g_debugCounter[6];
 extern  unsigned long   g_uStopTime;
-extern  unsigned long   g_uBlockCommands;
+extern volatile unsigned long   g_uBlockCommands;
 //extern    short           g_debugInt16;
 //extern    unsigned short  g_debugUInt16;
 //extern    long            g_debugInt32;
@@ -832,11 +832,6 @@ extern char loadCompensationMatrix( unsigned int uAddress );
 // clearCompensationMatrix()
 extern void clearCompensationMatrix( unsigned int uAddress );
 
-#if DEBUG_REMEMBER_SCAN_PRESSURE
-// outputPressureMatrix()
-extern void outputPressureMatrix( void );
-#endif // DEBUG_REMEMBER_SCAN_PRESSURE
-
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
 
 // clearExternalEEPROM()
@@ -921,7 +916,7 @@ extern uint8_t        drv8711MicroSteps_2_ModeValue(unsigned short microsteps);
 extern void           drv8711adjustMicroSteps(unsigned char driver);
 
 // motorCurrentControlInit()
-extern void motorCurrentControlInit( void );
+extern void drv8711Init( void );
 #if FEATURE_READ_STEPPER_STATUS
 extern unsigned short readMotorStatus( unsigned char driver );
 #endif //FEATURE_READ_STEPPER_STATUS

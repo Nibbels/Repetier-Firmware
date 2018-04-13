@@ -185,6 +185,8 @@ void Extruder::manageTemperatures()
             pwm_pos[tempController[i]->pwmIndex] = 0;
         }
         Printer::debugLevel |= 8; // Go into dry mode
+    }else{
+        if(!errorDetected) Printer::flag2 |= PRINTER_FLAG2_GOT_TEMPS;
     }
 
 } // manageTemperatures
@@ -226,10 +228,10 @@ void createGenericTable(short table[GENERIC_THERM_NUM_ENTRIES][2],short minTemp,
         if(adc > 4092) adc = 4092;
         table[i][0] = (adc >> (ANALOG_REDUCE_BITS));
         table[i][1] = static_cast<int>(t);
-#ifdef DEBUG_GENERIC_TEMP_TABLE
+#ifdef PRINT_GENERIC_TEMP_TABLE
         Com::printF(Com::tGenTemp,table[i][0]);
         Com::printFLN(Com::tComma,table[i][1]);
-#endif
+#endif // PRINT_GENERIC_TEMP_TABLE
     }
 }
 #endif
@@ -497,11 +499,6 @@ void Extruder::setHeatedBedTemperature(float temperatureInCelsius,bool beep)
 
 #if FEATURE_HEAT_BED_TEMP_COMPENSATION
     offset = -getHeatBedTemperatureOffset( temperatureInCelsius );
-
-#if DEBUG_HEAT_BED_TEMP_COMPENSATION
-    Com::printF( PSTR( "setHeatedBedTemperature(): " ), temperatureInCelsius );
-    Com::printFLN( PSTR( ", " ), offset );
-#endif // DEBUG_HEAT_BED_TEMP_COMPENSATION
 #endif // FEATURE_HEAT_BED_TEMP_COMPENSATION
 
     heatedBedController.setTargetTemperature(temperatureInCelsius, offset);

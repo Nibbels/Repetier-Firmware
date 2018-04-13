@@ -1530,14 +1530,6 @@ long PrintLine::performQueueMove()
         }
         HAL::allowInterrupts();
 
-#ifdef INCLUDE_DEBUG_NO_MOVE
-        if(Printer::debugNoMoves())   // simulate a move, but do nothing in reality
-        {
-            removeCurrentLineForbidInterrupt();
-            return 1000;
-        }
-#endif // INCLUDE_DEBUG_NO_MOVE
-
         if(cur->isWarmUp())
         {
             // This is a warmup move to initalize the path planner correctly. Just waste

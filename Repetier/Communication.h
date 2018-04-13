@@ -135,9 +135,9 @@ public:
     FSTRINGVAR(tMillingTimeService)
 #endif // FEATURE_SERVICE_INTERVAL
 
-#ifdef DEBUG_GENERIC_TEMP_TABLE
+#ifdef PRINT_GENERIC_TEMP_TABLE
     FSTRINGVAR(tGenTemp)
-#endif // DEBUG_GENERIC_TEMP_TABLE
+#endif // PRINT_GENERIC_TEMP_TABLE
 
     FSTRINGVAR(tTargetExtr)
     FSTRINGVAR(tTargetBedColon)
@@ -165,17 +165,6 @@ public:
     FSTRINGVAR(tTempSensorDefect)
     FSTRINGVAR(tTempSensorWorking)
     FSTRINGVAR(tDryModeUntilRestart)
-
-#ifdef DEBUG_SPLIT
-    FSTRINGVAR(tDBGDeltaSeconds)
-    FSTRINGVAR(tDBGDeltaZDelta)
-    FSTRINGVAR(tDBGDeltaSegments)
-    FSTRINGVAR(tDBGDeltaNumLines)
-    FSTRINGVAR(tDBGDeltaSegmentsPerLine)
-    FSTRINGVAR(tDBGDeltaMaxDS)
-    FSTRINGVAR(tDBGDeltaStepsPerSegment)
-    FSTRINGVAR(tDBGDeltaVirtualAxisSteps)
-#endif // DEBUG_SPLIT
 
 #ifdef WAITING_IDENTIFIER
     FSTRINGVAR(tWait)

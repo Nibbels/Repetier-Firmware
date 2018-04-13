@@ -105,7 +105,7 @@
 #define LED_PIN                 13  
 // PINB.7, 26, LED13
 
-#if PROTOTYPE_PCB == 1 
+#if PROTOTYPE_PCB == 1 // 1 = first PCB's / 0 = Final
   #define ORIG_FAN_PIN          25  
 // PINA.3, 75, OUT1
 #else
