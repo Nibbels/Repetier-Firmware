@@ -587,8 +587,8 @@ Values must be in range 1..255 */
 
 /** \brief Values used for unload(unmount)/load(mount) filament */
 #define UI_SET_EXTRUDER_MIN_TEMP_UNMOUNT     90                                                 //hat anfangs hohe toleranz.
-#define UI_SET_EXTRUDER_MAX_TEMP_UNMOUNT    180
-#define UI_SET_EXTRUDER_TEMP_MOUNT          200
+#define UI_SET_EXTRUDER_MAX_TEMP_UNMOUNT    240
+#define UI_SET_EXTRUDER_TEMP_MOUNT          210
 
 /** \brief Extreme values */
 #define UI_SET_MIN_HEATED_BED_TEMP          55
@@ -870,5 +870,8 @@ You can activate this to 1 and connect some Button. If you connect ground to pul
 
 /** \brief Automatic Startline */
 #define FEATURE_STARTLINE                   1
+
+/** \brief Automatic Startline */
+#define FEATURE_Kurt67_WOBBLE_FIX           0
 
 #endif // CONFIGURATION_H

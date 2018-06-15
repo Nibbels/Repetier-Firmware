@@ -102,7 +102,8 @@ void Extruder::manageTemperatures()
             {
                 act->setDefect(true);
                 if(!Printer::isAnyTempsensorDefect()){
-                    Printer::flag0 |= PRINTER_FLAG0_TEMPSENSOR_DEFECT; // "setAnyTempsensorDefect(true)"
+                    Printer::setSomeTempsensorDefect(true);
+                    Printer::flag2 |= PRINTER_FLAG2_GOT_TEMPS; //we are not waiting for first temp measurements anymore.
 
                     reportTempsensorError();
                     Com::printFLN( PSTR( "RequestStop:" ) ); //tell repetier-host / server to stop printing
@@ -186,7 +187,7 @@ void Extruder::manageTemperatures()
         }
         Printer::debugLevel |= 8; // Go into dry mode
     }else{
-        if(!errorDetected) Printer::flag2 |= PRINTER_FLAG2_GOT_TEMPS;
+        if(!errorDetected) Printer::flag2 |= PRINTER_FLAG2_GOT_TEMPS; //we are not waiting for first temp measurements anymore.
     }
 
 } // manageTemperatures

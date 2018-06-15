@@ -1,4 +1,43 @@
 TODO: Testing, testing ..
+TODO: Zaldo said that he experienced a hard reset while starting some Z-Calibration. (Awaiting further information about this bug)
+
+V RF.01.41.27.Mod (2018-06-15)
+- additional automatic checks for zeroes within extruder eeprom
+- autocheck that eeprom value extruder start speed is not bigger than extruder max speed
+- prevent the menu to switch some settings to 0
+- added "if FEATURE_AUTOMATIC_EEPROM_UPDATE" on some more locations
+
+V RF.01.41.26.Mod (2018-06-07)
+- not yet available temp measurements have been blocking the printer to show which sensor is defect after a restart.
+- some refactoring and cleanup of code
+
+V RF.01.41.25.Mod (2018-05-23)
+- FEATURE_Kurt67_WOBBLE_FIX: switched direction of phase from - to +. That means that a +Phase will move some synthetic wobble downwards in +Z
+- FEATURE_Kurt67_WOBBLE_FIX: x direction now has a cosinus and y direction has a sinus.
+- Extruder->"Load Filament" and "Unload Filament" now have two presents and a submenu (thx. @Zaldo)
+- unload filament can now rise up to 240°C to try to pull ABS loosened (thx. @Zaldo)
+- load filament now has a second present that ignores digits. you can abort this via key press (thx. @Zaldo)
+
+V RF.01.41.24.Mod (2018-05-20)
+- fixes for two things that jenkins complained
+
+V RF.01.41.23.Mod (2018-05-19)
+- First version of kurt67 wobblefix. This feature allows you to simulate wobble and therefore experts in measurement might be able to compensate z-wobble on RFx000 printers.
+  Z-wobble is here defined as a shaking in the x-y-plane. this shaking is caused by the faulty rotation of the z-spindles.
+- disabling steppers now reactivates the movement-lock (if FEATURE_UNLOCK_MOVEMENT == 1). See http://www.rf1000.de/viewtopic.php?f=70&t=2282#p23501 .
+
+V RF.01.41.22.Mod (2018-05-12)
+- SenseOffset EEPROM-Values can now be adjusted in Menu -> Configuration -> DMS-Features.
+- SenseOffset now has an "Auto-Start" within Menu->Configuration->DMS-Features->SenseOffset. This means that if you home and activate M3001 Z-Compensation then SenseOffset will automatically start. It then uses the last chosen values within EEPROM. (As Example: 3300 digits and 150um max. drivedown). Using that "Auto-Start" in your startcode M3909 is not necessary anymore. 
+
+V RF.01.41.21.Mod (2018-05-10) 
+- We now use the sdfat library with SD_FAT_VERSION "1.0.5" instead of the old "20130629". This new library has long filename support. https://github.com/greiman/SdFat/tree/master/src
+- The navigation down at the most bottom of a folder now leads to the top of the folder and otherwise around.
+- This special bug with the automount loop on failed mount attempts is now gone.
+- We now have plausible error messages when SD-Cards do not work.
+- Now all my SD-Cards work if they are formatted with FAT16 or FAT32. If you need FAT12_SUPPORT activate it in SdFatConfig.h (and pay some rom and ram). (Because Fat12/16/32 is examined by cluster count small cards <=16MB are identified as FAT12 -> They are not working.)
+# Deleting SD-files within menu is disabled for now. There was too much code confusion to make it right (using long filename support). [-> Who does really need this?]
+- Rightnow the RF2000 hides the static menu folder called "SD CARD" because we already have the automounted "Print File". And "Delete File" is not visible anymore.
 
 V RF.01.41.20.Mod (2018-04-14) 
 - fix that the printer forgot to load eeprom saved stepper currents since ~1.41.13

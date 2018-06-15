@@ -780,7 +780,7 @@ void Commands::executeGCode(GCode *com)
                 if(com->hasString())
                 {
                     sd.fat.chdir();
-                    sd.selectFile(com->text);
+                    sd.selectFileByName(com->text);
                 }
                 break;
             }

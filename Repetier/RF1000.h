@@ -732,13 +732,12 @@ can set it on for safety. */
 #define XYZ_STEPPER_LOW_DELAY               100                                                 // [us] speed for moveZ
 
 /** \brief Automatic filament change, unmounting of the filament - ensure that G1 does not attempt to extrude more than EXTRUDE_MAXLENGTH */
-#define UNMOUNT_FILAMENT_SCRIPT_WITH_HEATING        "M3914 P4500"
+#define UNMOUNT_FILAMENT_SCRIPT_SOFT        "M3914 P4500"
+#define UNMOUNT_FILAMENT_SCRIPT_HARD        "M3914 P7000"
 
-/** \brief Automatic filament mount, mounting of the filament with heating. Stop @ 3500 digits */
-#define MOUNT_FILAMENT_SCRIPT_WITH_HEATING          "M3913 P3500 F3"
-
-/** \brief Automatic filament mount, mounting of the filament without heating. Stop @ 3500 digits */
-#define MOUNT_FILAMENT_SCRIPT_WITHOUT_HEATING       "M3913 P3500 F3"
+/** \brief Automatic filament mount, mounting of the filament with heating. Stop @ XXXX digits */
+#define MOUNT_FILAMENT_SCRIPT_SOFT          "M3913 P3500 F3"
+#define MOUNT_FILAMENT_SCRIPT_HARD          "M3913 P20000 F6"
 
 /** \brief speed of the PWM signal, 0 = 15.25Hz, 1 = 30.51Hz, 2 = 61.03Hz, 3 = 122.06Hz, 4 = 244.12Hz */
 #define HEATER_PWM_SPEED                    1

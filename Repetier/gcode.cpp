@@ -502,7 +502,7 @@ This function is the main function to read the commands from sdcard. */
 void GCode::readFromSD()
 {
 #if SDSUPPORT
-    if(!sd.sdmode || commandsReceivingWritePosition!=0)     // not reading or incoming serial command
+    if(sd.sdmode == 0 || sd.sdmode >= 100 || commandsReceivingWritePosition!=0)     // not reading or incoming serial command
         return;
 
     if(!PrintLine::checkForXFreeLines(2))
@@ -516,24 +516,18 @@ void GCode::readFromSD()
     {
         timeOfLastDataPacket = HAL::timeInMilliseconds();
         int n = sd.file.read();
-        if(n==-1)
+        if(n == -1)
         {
-            if( Printer::debugErrors() )
-                {
-                        Com::printFLN(Com::tSDReadError);
-                }
-                UI_ERROR("SD Read Error");
-
-                // Second try in case of recoverable errors
-                sd.file.seekSet(sd.sdpos);
-                n = sd.file.read();
-            if(n==-1)
+            Com::printFLN(Com::tSDReadError);
+            UI_ERROR("SD Read Error");
+            
+            // Second try in case of recoverable errors
+            sd.file.seekSet(sd.sdpos);
+            n = sd.file.read();
+            if(n == -1)
             {
-                if( Printer::debugErrors() )
-                {
-                    Com::printErrorFLN(PSTR("SD error did not recover!"));
-                }
-                sd.sdmode = false;
+                Com::printErrorFLN(PSTR("SD error did not recover!"));
+                sd.sdmode = 0;
                 break;
             }
             UI_ERROR("SD error fixed");
@@ -584,7 +578,7 @@ void GCode::readFromSD()
                 if(sd.sdmode && act->parseAscii((char *)commandReceiving, false))
                     pushCommand();
                 commandsReceivingWritePosition = 0;
-                /*repetier 1.0.1  : if(sd.sdmode == 2)                     sd.sdmode = 0; -> wir haben noch false und true drin, brauchen wir das also?*/
+                /*repetier 1.0.1  : if(sd.sdmode == 2)      //Das ist diese Pause->haben wir nicht so               sd.sdmode = 0; -> wir haben noch false und true drin, brauchen wir das also?*/
                 return;
             }
             else
@@ -597,7 +591,7 @@ void GCode::readFromSD()
     Com::printFLN(Com::tDonePrinting);
     commandsReceivingWritePosition = 0;
     commentDetected = false;
-    Printer::stopPrint();
+    Printer::stopPrint(); //hier drin ist auch repetiers sd.mode = 0
 #endif // SDSUPPORT
 
 } // readFromSD

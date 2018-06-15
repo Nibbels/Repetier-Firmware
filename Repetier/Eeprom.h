@@ -154,6 +154,15 @@ have problems with other modules using the eeprom */
 
 #define EPR_ZSCAN_START_MM                1949 //[+1950+1951+1952 4byte float]
 
+#define EPR_RF_MOD_SENSEOFFSET_AUTOSTART  1953 //[1byte]
+
+#define EPR_RF_MOD_WOBBLE_FIX_PHASEXY     1954 //[1byte]
+#define EPR_RF_MOD_WOBBLE_FIX_AMPX        1955 //[+1956 2byte short]
+#define EPR_RF_MOD_WOBBLE_FIX_AMPY1       1957 //[+1958 2byte short]
+#define EPR_RF_MOD_WOBBLE_FIX_AMPY2       1959 //[+1960 2byte short]
+
+
+
 //Nibbels: Computechecksum geht bis 2047
 
 #define EEPROM_EXTRUDER_OFFSET          200

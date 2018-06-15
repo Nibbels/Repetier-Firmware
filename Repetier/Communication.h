@@ -338,9 +338,10 @@ public:
 
     FSTRINGVAR(tOutputObjectPrint)
     FSTRINGVAR(tOutputObjectMill)
-    FSTRINGVAR(tUnmountFilamentWithHeating)
-    FSTRINGVAR(tMountFilamentWithHeating)
-    FSTRINGVAR(tMountFilamentWithoutHeating)
+    FSTRINGVAR(tUnmountFilamentSoft)
+    FSTRINGVAR(tUnmountFilamentHard)
+    FSTRINGVAR(tMountFilamentSoft)
+    FSTRINGVAR(tMountFilamentHard)
 
 #if FEATURE_FIND_Z_ORIGIN
     FSTRINGVAR(tFindZOrigin)

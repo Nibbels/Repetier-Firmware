@@ -7240,6 +7240,10 @@ void processCommand( GCode* pCommand )
                     }
 
                     queueTask( TASK_ENABLE_Z_COMPENSATION );
+                    
+                    //wenn der nutzer im menü "autostart" gewählt hat, dann senseoffset sofort mit M3001 mitstarten.
+                    //Die Einstellwerte kommen dann aus dem EEPROM
+                    if(Printer::g_senseoffset_autostart) queueTask( TASK_ENABLE_SENSE_OFFSET );
                 }
                 break;
             }
@@ -9168,7 +9172,7 @@ void processCommand( GCode* pCommand )
                         {
                             // simulate a temp sensor error
                             Com::printFLN( PSTR( "M3200: simulating a defect temperature sensor" ) );
-                            Printer::flag0 |= PRINTER_FLAG0_TEMPSENSOR_DEFECT;
+                            Printer::setSomeTempsensorDefect(true);
                             reportTempsensorError();
                             break;
                         }
@@ -10617,7 +10621,7 @@ void processCommand( GCode* pCommand )
                 uint8_t eFeedrate = 1;
                 if ( pCommand->hasF() ) eFeedrate = constrain( abs( static_cast<uint8_t>(pCommand->F) ) , 1 , 50 );
                 short maxP = 2000; //to overwrite .. safety.
-                if ( pCommand->hasP() ) maxP = constrain( abs( static_cast<short>(pCommand->P) ) , EMERGENCY_PAUSE_DIGITS_MIN , EMERGENCY_PAUSE_DIGITS_MAX );
+                if ( pCommand->hasP() ) maxP = constrain( abs( static_cast<short>(pCommand->P) ) , 0 , 20000 );
                 bool save_relativeExtruderCoordinateMode = Printer::relativeExtruderCoordinateMode;
                 Printer::relativeExtruderCoordinateMode = false; //M82:
                 uint8_t saveunitIsInches = Printer::unitIsInches;
@@ -10656,7 +10660,7 @@ void processCommand( GCode* pCommand )
                 uint8_t outputLength = 100; //9cm max Output, wenn kein übertriebener wiederstand. Unser Hotend ist nicht ganz so lang.
                 float   eFeedrate = 0.3f;   /*mm/s*/
                 short   maxForce = 4000;    //3500+ might work well! You should stay underneath the force causing step loss.
-                if ( pCommand->hasP() ) maxForce = constrain( abs( static_cast<short>(pCommand->P) ) , EMERGENCY_PAUSE_DIGITS_MIN , EMERGENCY_PAUSE_DIGITS_MAX );
+                if ( pCommand->hasP() ) maxForce = constrain( abs( static_cast<short>(pCommand->P) ) , 0 , EMERGENCY_PAUSE_DIGITS_MAX );
                 float t = float(UI_SET_EXTRUDER_MIN_TEMP_UNMOUNT);
                 
                 //preheat / precool
@@ -12811,7 +12815,7 @@ void updateRGBLightStatus( void )
 
 void setupForPrinting( void )
 {
-    Printer::flag0 &= ~PRINTER_FLAG0_TEMPSENSOR_DEFECT;
+    Printer::setSomeTempsensorDefect(false);
 
 #if FEATURE_HEAT_BED_Z_COMPENSATION
     

@@ -67,6 +67,9 @@ List of placeholder:
 %sC : State of the z compensation
 %sS : State of the z compensation -> SensiblePressure
 %sM : State of the z compensation -> SensiblePressureDigits
+%sm : State of the sensible pressure in eeprom 
+%so : State of the sensible pressure maxoffset in eeprom
+%sa : State of the sensible pressure autostarter
 %do : Debug echo state
 %di : Debug info state
 %de : Debug error state
@@ -172,6 +175,16 @@ List of placeholder:
 %Z1-Z4: Page5 service intervall
 %Z5-Z8: Page4 printing/milling time
 
+%wx : current wobblefix offset in x [um] (Bauchtanz)
+%wy : current wobblefix offset in y [um] (Bauchtanz)
+%wz : current wobblefix offset in z [um] (Hub)
+%wa : current wobblefix amplitude for X
+%wb : current wobblefix amplitude for Y(x_0)
+%wc : current wobblefix amplitude for Y(x_245)
+%wd : current wobblefix amplitude for Z-lift
+%wp : current wobblefix phase for Z-lift (Hub)
+%wP : current wobblefix phase for YX-wobble (Bauchtanz)
+
 %MX : Motorcurrent X
 %MY : Motorcurrent Y
 %MZ : Motorcurrent Z
@@ -198,21 +211,10 @@ List of placeholder:
 %LP : ECMP %
 %Lm : g_minZCompensationSteps
 %LM : g_maxZCompensationSteps
-
 */
-
-// Define precision for temperatures. With small displays only integer values fit.
-#ifndef UI_TEMP_PRECISION
-#if UI_COLS>16
-#define UI_TEMP_PRECISION 1
-#else
-#define UI_TEMP_PRECISION 0
-#endif // UI_COLS>16
-#endif // UI_TEMP_PRECISION
 
 
 /* ============= PAGES DEFINITION =============
-
 If you are not iside a menu, the firmware displays pages with information.
 Especially if you have only a small display it is convenient to have
 more then one information page.
@@ -228,9 +230,9 @@ for 2 row displays. You can add additional pages or change the default pages lik
 #if UI_ROWS>=4
     #if HAVE_HEATED_BED==true
         #if UI_COLS<=16
-            UI_PAGE4(ui_page1,"%U1%ec/%EcB%eB/%Eb%U2","Z:%x2 mm %sC%hz",UI_TEXT_STRAIN_GAUGE,"%os")
+            UI_PAGE4(ui_page1,"%U1%ec/%EcB%eb/%Eb%U2","Z:%x2 mm %sC%hz",UI_TEXT_STRAIN_GAUGE,"%os")
         #else
-            UI_PAGE4(ui_page1,"%U1%ec/%Ec\002 B%eB/%Eb\002%U2","Z:%x2 mm %sC%hz",UI_TEXT_STRAIN_GAUGE,"%os")
+            UI_PAGE4(ui_page1,"%U1%ec/%Ec\002 B%eb/%Eb\002%U2","Z:%x2 mm %sC%hz",UI_TEXT_STRAIN_GAUGE,"%os")
         #endif // UI_COLS<=16
     #else
         UI_PAGE4(ui_page1,UI_TEXT_PAGE_EXTRUDER,"Z:%x2 mm %sC%hz",UI_TEXT_STRAIN_GAUGE,"%os")
@@ -290,15 +292,37 @@ for 2 row displays. You can add additional pages or change the default pages lik
                                 "eCMP: %LP%%%@Z:%LC" /*6+LP%5+"@Z:"3+6:*/
                                 )
     #endif
+    
     #define UI_MOD2_PAGES , &ui_page_mod2
     #define UI_MOD2_COUNT 1
     
+    #if FEATURE_Kurt67_WOBBLE_FIX
+        #if UI_COLS<=16
+            UI_PAGE4(ui_page_mod_wobble,  "Off:X%wxY%wy", /*%wz*/
+                                          "X:A%waum ",
+                                          "Y:A%wb..%wcum",
+                                          "Phase:%wP%%%Pi"/* "Z:A%wdumP%wp%%%"*/
+                                    )
+        #else
+            UI_PAGE4(ui_page_mod_wobble,  "OffsetX:%wxY:%wyum", /* %wz*/
+                                          "X:A%waum",
+                                          "Y:A%wb..%wcum",
+                                          "PhaseXY:%wP%%%Pi"/* "Z:A%wdum Pz:%wp%%%" */
+                                    )
+        #endif
+        #define UI_MODWobble_PAGE , &ui_page_mod_wobble
+        #define UI_MODWobble_COUNT 1
+    #else
+        #define UI_MODWobble_PAGE 
+        #define UI_MODWobble_COUNT 0
+    #endif
+    
     /* Merge pages together. Use the following pattern:
     #define UI_PAGES {&name1,&name2,&name3} */
-    #define UI_PAGES {&ui_page1 UI_MOD_PAGES, &ui_page2, &ui_page3 UI_PRINTTIME_PAGES UI_SERVICE_PAGES UI_MOD2_PAGES}
+    #define UI_PAGES {&ui_page1 UI_MOD_PAGES, &ui_page2, &ui_page3 UI_PRINTTIME_PAGES UI_SERVICE_PAGES UI_MOD2_PAGES UI_MODWobble_PAGE}
 
     // How many pages do you want to have. Minimum is 1.
-    #define UI_NUM_PAGES 3+UI_PRINTTIME_COUNT+UI_SERVICE_COUNT+UI_MOD_COUNT+UI_MOD2_COUNT
+    #define UI_NUM_PAGES 3+UI_PRINTTIME_COUNT+UI_SERVICE_COUNT+UI_MOD_COUNT+UI_MOD2_COUNT+UI_MODWobble_COUNT
 #endif // UI_ROWS>=4
 
 /* ============ MENU definition ================
@@ -527,8 +551,25 @@ UI_MENU_ACTIONCOMMAND(ui_menu_bed_off, UI_TEXT_BED_OFF  ,UI_ACTION_HEATED_BED_OF
 
 UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_ext_origin,UI_TEXT_SET_E_ORIGIN,UI_ACTION_SET_E_ORIGIN,MENU_MODE_PRINTER, MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING | MENU_MODE_PAUSED )
 
-UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_extruder_unmount_filament,UI_TEXT_UNMOUNT_FILAMENT,UI_ACTION_UNMOUNT_FILAMENT,MENU_MODE_PRINTER, MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING | MENU_MODE_PAUSED)
-UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_extruder_mount_filament,UI_TEXT_MOUNT_FILAMENT,UI_ACTION_MOUNT_FILAMENT,MENU_MODE_PRINTER, MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING | MENU_MODE_PAUSED)
+/** \brief Extruder->Load Filament-> */
+/** \brief Extruder->Unload Filament-> */
+
+UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_extruder_mount_filament1,UI_TEXT_MOUNT_FILAMENT_SOFT,UI_ACTION_MOUNT_FILAMENT_SOFT,MENU_MODE_PRINTER, MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING | MENU_MODE_PAUSED)
+UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_extruder_mount_filament2,UI_TEXT_MOUNT_FILAMENT_HARD,UI_ACTION_MOUNT_FILAMENT_HARD,MENU_MODE_PRINTER, MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING | MENU_MODE_PAUSED)
+#define UI_MENU_LOAD {UI_MENU_ADDCONDBACK &ui_menu_extruder_mount_filament1, &ui_menu_extruder_mount_filament2 }
+UI_MENU(ui_menu_extruder_mount,UI_MENU_LOAD,UI_MENU_BACKCNT+2)
+UI_MENU_SUBMENU(ui_submenu_extruder_mount, UI_TEXT_MOUNT_FILAMENT, ui_menu_extruder_mount)
+
+UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_extruder_unmount_filament1,UI_TEXT_UNMOUNT_FILAMENT_SOFT,UI_ACTION_UNMOUNT_FILAMENT_SOFT,MENU_MODE_PRINTER, MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING | MENU_MODE_PAUSED)
+UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_extruder_unmount_filament2,UI_TEXT_UNMOUNT_FILAMENT_HARD,UI_ACTION_UNMOUNT_FILAMENT_HARD,MENU_MODE_PRINTER, MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING | MENU_MODE_PAUSED)
+#define UI_MENU_UNLOAD {UI_MENU_ADDCONDBACK &ui_menu_extruder_unmount_filament1, &ui_menu_extruder_unmount_filament2 }
+UI_MENU(ui_menu_extruder_unmount,UI_MENU_UNLOAD,UI_MENU_BACKCNT+2)
+UI_MENU_SUBMENU(ui_submenu_extruder_unmount, UI_TEXT_UNMOUNT_FILAMENT, ui_menu_extruder_unmount)
+
+#define UI_MENU_EXTRUDER_MOUNT_COND &ui_submenu_extruder_mount, &ui_submenu_extruder_unmount,
+#define UI_MENU_EXTRUDER_MOUNT_COUNT 2
+
+/** End load unload */
 
 #if NUM_EXTRUDER>1
 #define UI_MENU_EXTCOND &ui_menu_ext_temp0,&ui_menu_ext_temp1,&ui_menu_ext_off0,&ui_menu_ext_off1,&ui_menu_bed_off,&ui_menu_active_extruder,
@@ -546,8 +587,8 @@ UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_extruder_mount_filament,UI_TEXT_MOUNT_FILAM
 #define UI_MENU_BEDCNT 0
 #endif // HAVE_HEATED_BED==true
 
-#define UI_MENU_EXTRUDER {UI_MENU_ADDCONDBACK UI_MENU_BEDCOND UI_MENU_EXTCOND &ui_menu_go_epos, &ui_menu_quick_preheat_pla, &ui_menu_quick_preheat_abs, &ui_menu_quick_cooldown, &ui_menu_extruder_mount_filament, &ui_menu_extruder_unmount_filament, &ui_menu_quick_flowmultiply, &ui_menu_ext_origin}
-UI_MENU(ui_menu_extruder,UI_MENU_EXTRUDER,UI_MENU_BACKCNT+UI_MENU_BEDCNT+UI_MENU_EXTCNT+4+3+1)
+#define UI_MENU_EXTRUDER {UI_MENU_ADDCONDBACK UI_MENU_BEDCOND UI_MENU_EXTCOND &ui_menu_go_epos, &ui_menu_quick_preheat_pla, &ui_menu_quick_preheat_abs, &ui_menu_quick_cooldown, UI_MENU_EXTRUDER_MOUNT_COND &ui_menu_quick_flowmultiply, &ui_menu_ext_origin}
+UI_MENU(ui_menu_extruder,UI_MENU_EXTRUDER,UI_MENU_BACKCNT+UI_MENU_BEDCNT+UI_MENU_EXTCNT+4+1+UI_MENU_EXTRUDER_MOUNT_COUNT+1)
 
 /** \brief Caliper Filament Reader menu */
 #if FEATURE_READ_CALIPER
@@ -681,41 +722,44 @@ UI_MENU_SUBMENU_FILTER(ui_menu_conf_fan, UI_TEXT_FAN_CONF_MENU, ui_menu_settings
 #define UI_MENU_CONFIGURATION_FAN_COUNT 1
 
 /** \brief SD card menu */
-
 #if SDSUPPORT
-#define UI_MENU_SD_FILESELECTOR {&ui_menu_back}
-UI_MENU_FILESELECT(ui_menu_sd_fileselector,UI_MENU_SD_FILESELECTOR,1)
-UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_sd_print_file,     UI_TEXT_PRINT_FILE,     UI_ACTION_SD_PRINT, MENU_MODE_SD_MOUNTED, MENU_MODE_MILLER | MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING | MENU_MODE_PAUSED)
-UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_sd_pause_print,    UI_TEXT_PAUSE_PRINT,    UI_ACTION_SD_PAUSE, MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING, MENU_MODE_PAUSED | MENU_MODE_MILLER)
-UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_sd_continue_print, UI_TEXT_CONTINUE_PRINT, UI_ACTION_SD_CONTINUE, MENU_MODE_PAUSED, MENU_MODE_MILLER)
-UI_MENU_ACTION4C(ui_menu_sd_stop_print_ack, UI_ACTION_STOP_ACK, UI_TEXT_STOP_PRINT_ACK)
-UI_MENU_ACTIONSELECTOR_FILTER(ui_menu_sd_stop_print, UI_TEXT_STOP_PRINT, ui_menu_sd_stop_print_ack, MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING, MENU_MODE_MILLER)
+ /* Things that are needed for RF1000 mount/unmount and RF2000 automount */
+ #define UI_MENU_SD_FILESELECTOR {&ui_menu_back}
+ UI_MENU_FILESELECT(ui_menu_sd_fileselector,UI_MENU_SD_FILESELECTOR,1)
+ UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_sd_print_file,     UI_TEXT_PRINT_FILE,     UI_ACTION_SD_PRINT, MENU_MODE_SD_MOUNTED, MENU_MODE_MILLER | MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING | MENU_MODE_PAUSED)
+ UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_sd_mill_file,     UI_TEXT_MILL_FILE,     UI_ACTION_SD_PRINT, MENU_MODE_SD_MOUNTED, MENU_MODE_PRINTER | MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING | MENU_MODE_PAUSED)
+#endif // SDSUPPORT
 
-UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_sd_mill_file,     UI_TEXT_MILL_FILE,     UI_ACTION_SD_PRINT, MENU_MODE_SD_MOUNTED, MENU_MODE_PRINTER | MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING | MENU_MODE_PAUSED)
-UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_sd_pause_mill,    UI_TEXT_PAUSE_MILL,    UI_ACTION_SD_PAUSE, MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING, MENU_MODE_PAUSED | MENU_MODE_PRINTER)
-UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_sd_continue_mill, UI_TEXT_CONTINUE_MILL, UI_ACTION_SD_CONTINUE, MENU_MODE_PAUSED, MENU_MODE_PRINTER)
-UI_MENU_ACTION4C(ui_menu_sd_stop_mill_ack, UI_ACTION_STOP_ACK, UI_TEXT_STOP_MILL_ACK)
-UI_MENU_ACTIONSELECTOR_FILTER(ui_menu_sd_stop_mill, UI_TEXT_STOP_MILL, ui_menu_sd_stop_mill_ack, MENU_MODE_SD_PRINTING, MENU_MODE_PRINTER)
+#if SDSUPPORT && (MOTHERBOARD == DEVICE_TYPE_RF1000)
+ UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_sd_pause_print,    UI_TEXT_PAUSE_PRINT,    UI_ACTION_SD_PAUSE, MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING, MENU_MODE_PAUSED | MENU_MODE_MILLER)
+ UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_sd_continue_print, UI_TEXT_CONTINUE_PRINT, UI_ACTION_SD_CONTINUE, MENU_MODE_PAUSED, MENU_MODE_MILLER)
+ UI_MENU_ACTION4C(ui_menu_sd_stop_print_ack, UI_ACTION_STOP_ACK, UI_TEXT_STOP_PRINT_ACK)
+ UI_MENU_ACTIONSELECTOR_FILTER(ui_menu_sd_stop_print, UI_TEXT_STOP_PRINT, ui_menu_sd_stop_print_ack, MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING, MENU_MODE_MILLER)
 
-#if defined(SDCARDDETECT) && SDCARDDETECT>-1
-#define UI_MOUNT_CNT 0
-#define UI_MOUNT_CMD
+ UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_sd_pause_mill,    UI_TEXT_PAUSE_MILL,    UI_ACTION_SD_PAUSE, MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING, MENU_MODE_PAUSED | MENU_MODE_PRINTER)
+ UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_sd_continue_mill, UI_TEXT_CONTINUE_MILL, UI_ACTION_SD_CONTINUE, MENU_MODE_PAUSED, MENU_MODE_PRINTER)
+ UI_MENU_ACTION4C(ui_menu_sd_stop_mill_ack, UI_ACTION_STOP_ACK, UI_TEXT_STOP_MILL_ACK)
+ UI_MENU_ACTIONSELECTOR_FILTER(ui_menu_sd_stop_mill, UI_TEXT_STOP_MILL, ui_menu_sd_stop_mill_ack, MENU_MODE_SD_PRINTING, MENU_MODE_PRINTER)
+
+ #if defined(SDCARDDETECT) && SDCARDDETECT>-1
+  #define UI_MOUNT_CNT 0
+  #define UI_MOUNT_CMD
+ #else
+  UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_sd_unmount,UI_TEXT_UNMOUNT_CARD,UI_ACTION_SD_UNMOUNT,MENU_MODE_SD_MOUNTED, MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING | MENU_MODE_PAUSED)
+  UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_sd_mount,UI_TEXT_MOUNT_CARD,UI_ACTION_SD_MOUNT,0,MENU_MODE_SD_MOUNTED)
+  #define UI_MOUNT_CNT 2
+  #define UI_MOUNT_CMD ,&ui_menu_sd_mount,&ui_menu_sd_unmount
+ #endif // (SDCARDDETECT) && SDCARDDETECT>-1
+//UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_sd_delete,UI_TEXT_DELETE_FILE,UI_ACTION_SD_DELETE,MENU_MODE_SD_MOUNTED, MENU_MODE_SD_PRINTING | MENU_MODE_PAUSED)
+ #define UI_MENU_SD {UI_MENU_ADDCONDBACK &ui_menu_sd_print_file,&ui_menu_sd_mill_file,&ui_menu_sd_pause_print,&ui_menu_sd_pause_mill,&ui_menu_sd_stop_print,&ui_menu_sd_stop_mill,&ui_menu_sd_continue_print,&ui_menu_sd_continue_mill /*,&ui_menu_sd_delete*/ UI_MOUNT_CMD}
+ UI_MENU(ui_menu_sd,UI_MENU_SD,UI_MENU_BACKCNT+8/*+1*/+UI_MOUNT_CNT)
+ UI_MENU_SUBMENU_FILTER(ui_menu_sd_sub,UI_TEXT_SD_CARD,ui_menu_sd,0, MENU_MODE_PRINTING)
+
+ #define UI_MENU_SD_COND &ui_menu_sd_sub,
+ #define UI_MENU_SD_CNT 1
 #else
-UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_sd_unmount,UI_TEXT_UNMOUNT_CARD,UI_ACTION_SD_UNMOUNT,MENU_MODE_SD_MOUNTED, MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING | MENU_MODE_PAUSED)
-UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_sd_mount,UI_TEXT_MOUNT_CARD,UI_ACTION_SD_MOUNT,0,MENU_MODE_SD_MOUNTED)
-#define UI_MOUNT_CNT 2
-#define UI_MOUNT_CMD ,&ui_menu_sd_mount,&ui_menu_sd_unmount
-#endif // (SDCARDDETECT) && SDCARDDETECT>-1
-UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_sd_delete,UI_TEXT_DELETE_FILE,UI_ACTION_SD_DELETE,MENU_MODE_SD_MOUNTED, MENU_MODE_SD_PRINTING | MENU_MODE_PAUSED)
-#define UI_MENU_SD {UI_MENU_ADDCONDBACK &ui_menu_sd_print_file,&ui_menu_sd_mill_file,&ui_menu_sd_pause_print,&ui_menu_sd_pause_mill,&ui_menu_sd_stop_print,&ui_menu_sd_stop_mill,&ui_menu_sd_continue_print,&ui_menu_sd_continue_mill,&ui_menu_sd_delete UI_MOUNT_CMD}
-UI_MENU(ui_menu_sd,UI_MENU_SD,UI_MENU_BACKCNT+9+UI_MOUNT_CNT)
-UI_MENU_SUBMENU_FILTER(ui_menu_sd_sub,UI_TEXT_SD_CARD,ui_menu_sd,0, MENU_MODE_PRINTING)
-
-#define UI_MENU_SD_COND &ui_menu_sd_sub,
-#define UI_MENU_SD_CNT 1
-#else
-#define UI_MENU_SD_COND
-#define UI_MENU_SD_CNT 0
+ #define UI_MENU_SD_COND
+ #define UI_MENU_SD_CNT 0
 #endif // SDSUPPORT
 
 #if SHOW_DEBUGGING_MENU
@@ -824,6 +868,46 @@ UI_MENU_ACTIONSELECTOR_FILTER(ui_menu_extruder_offset_y,UI_TEXT_EXTRUDER_OFFSET_
 #define EXTRUDER_OFFSET_TYPE_COUNT_XY 0
 #endif // NUM_EXTRUDER>1
 
+/** \brief Configuration->WobbleFix-> */
+#if FEATURE_Kurt67_WOBBLE_FIX
+
+ UI_MENU_CHANGEACTION( ui_menu_wobble_fix_pxy , UI_TEXT_WOBBLE_FIX_PHASEXY, UI_ACTION_WOBBLE_FIX_PHASEXY )
+ UI_MENU_CHANGEACTION( ui_menu_wobble_fix_ax  , UI_TEXT_WOBBLE_FIX_AMPX,    UI_ACTION_WOBBLE_FIX_AMPX )
+ UI_MENU_CHANGEACTION( ui_menu_wobble_fix_ay1 , UI_TEXT_WOBBLE_FIX_AMPY1,   UI_ACTION_WOBBLE_FIX_AMPY1 )
+ UI_MENU_CHANGEACTION( ui_menu_wobble_fix_ay2 , UI_TEXT_WOBBLE_FIX_AMPY2,   UI_ACTION_WOBBLE_FIX_AMPY2 )
+ /*
+ UI_MENU_CHANGEACTION( ui_menu_wobble_fix_pz  , UI_TEXT_WOBBLE_FIX_PHASEZ,  UI_ACTION_WOBBLE_FIX_PHASEZ )
+ UI_MENU_CHANGEACTION( ui_menu_wobble_fix_az  , UI_TEXT_WOBBLE_FIX_AMPZ,    UI_ACTION_WOBBLE_FIX_AMPZ )
+*/
+ #define UI_MENU_WOBBLE {UI_MENU_ADDCONDBACK &ui_menu_wobble_fix_pxy, &ui_menu_wobble_fix_ax, &ui_menu_wobble_fix_ay1, &ui_menu_wobble_fix_ay2 /*, &ui_menu_wobble_fix_pz, &ui_menu_wobble_fix_az*/  }
+ UI_MENU(ui_menu_wobble_fix,UI_MENU_WOBBLE,UI_MENU_BACKCNT+4 /*+2*/)
+
+ /** \brief Configuration->WobbleFix menu */
+ UI_MENU_SUBMENU(ui_menu_conf_wobble, UI_TEXT_WOBBLE, ui_menu_wobble_fix)
+ #define UI_MENU_CONFIGURATION_WOBBLE_COND &ui_menu_conf_wobble,
+ #define UI_MENU_CONFIGURATION_WOBBLE_COUNT 1
+#else //not FEATURE_Kurt67_WOBBLE_FIX
+ #define UI_MENU_CONFIGURATION_WOBBLE_COND 
+ #define UI_MENU_CONFIGURATION_WOBBLE_COUNT 0
+#endif //FEATURE_Kurt67_WOBBLE_FIX
+
+/** \brief Configuration->DMS-Features->SenseOffset */
+#if FEATURE_SENSIBLE_PRESSURE
+ UI_MENU_CHANGEACTION( ui_menu_senseoffset_digits, UI_TEXT_SENSEOFFSET_DIGITS,    UI_ACTION_SENSEOFFSET_DIGITS )
+ UI_MENU_CHANGEACTION( ui_menu_senseoffset_max,    UI_TEXT_SENSEOFFSET_MAX,       UI_ACTION_SENSEOFFSET_MAX )
+ UI_MENU_ACTIONCOMMAND(ui_menu_senseoffset_auto,   UI_TEXT_SENSEOFFSET_AUTOSTART, UI_ACTION_SENSEOFFSET_AUTOSTART )
+
+ #define UI_MENU_CONF_SENSIBLE_PRESSURE {UI_MENU_ADDCONDBACK &ui_menu_senseoffset_digits, &ui_menu_senseoffset_max, &ui_menu_senseoffset_auto}
+ UI_MENU(ui_submenu_settings_sense_offset,UI_MENU_CONF_SENSIBLE_PRESSURE,UI_MENU_BACKCNT+3)
+
+ UI_MENU_SUBMENU_FILTER(ui_menu_conf_senseoffset, UI_TEXT_SENSE_OFFSET_MENU, ui_submenu_settings_sense_offset, MENU_MODE_PRINTER,0)
+ #define UI_MENU_CONFIGURATION_SENSIBLE_PRESSURE_COND &ui_menu_conf_senseoffset, 
+ #define UI_MENU_CONFIGURATION_SENSIBLE_PRESSURE_COUNT 1
+ 
+#else //FEATURE_SENSIBLE_PRESSURE
+ #define UI_MENU_CONFIGURATION_SENSIBLE_PRESSURE_COND 
+ #define UI_MENU_CONFIGURATION_SENSIBLE_PRESSURE_COUNT 0
+#endif //FEATURE_SENSIBLE_PRESSURE
 
 /** \brief Configuration->DMS-Features->Emergency Pause */
 #if FEATURE_EMERGENCY_PAUSE
@@ -841,7 +925,6 @@ UI_MENU_ACTIONSELECTOR_FILTER(ui_menu_extruder_offset_y,UI_TEXT_EXTRUDER_OFFSET_
  #define UI_MENU_CONFIGURATION_EMERGENCY_PAUSE_COND 
  #define UI_MENU_CONFIGURATION_EMERGENCY_PAUSE_COUNT 0
 #endif //FEATURE_EMERGENCY_PAUSE
-
 
 /** \brief Configuration->DMS-Features->Emergency Z-Stop */
 #if FEATURE_EMERGENCY_STOP_ALL
@@ -899,8 +982,8 @@ UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_digits_cmp,UI_TEXT_DO_DIGIT_COMPENSATION,UI
  #define UI_MENU_CONFIGURATION_FLOW_COMPENSATION_COUNT 0
 #endif //FEATURE_DIGIT_FLOW_COMPENSATION
 
-#define UI_MENU_DMS {UI_MENU_ADDCONDBACK UI_MENU_CONFIGURATION_EMERGENCY_PAUSE_COND UI_MENU_CONFIGURATION_EMERGENCY_ZSTOP_COND UI_MENU_CONFIGURATION_FLOW_COMPENSATION_COND UI_MENU_FEATURE_ZERO_DIGITS UI_MENU_FEATURE_DIGITS_CMP }
-UI_MENU(ui_menu_dms,UI_MENU_DMS,UI_MENU_BACKCNT+UI_MENU_CONFIGURATION_EMERGENCY_PAUSE_COUNT+UI_MENU_CONFIGURATION_EMERGENCY_ZSTOP_COUNT+UI_MENU_CONFIGURATION_FLOW_COMPENSATION_COUNT+UI_MENU_FEATURE_ZERO_DIGITS_COUNT+UI_MENU_FEATURE_DIGITS_CMP_COUNT)
+#define UI_MENU_DMS {UI_MENU_ADDCONDBACK UI_MENU_CONFIGURATION_SENSIBLE_PRESSURE_COND UI_MENU_CONFIGURATION_EMERGENCY_PAUSE_COND UI_MENU_CONFIGURATION_EMERGENCY_ZSTOP_COND UI_MENU_CONFIGURATION_FLOW_COMPENSATION_COND UI_MENU_FEATURE_ZERO_DIGITS UI_MENU_FEATURE_DIGITS_CMP }
+UI_MENU(ui_menu_dms,UI_MENU_DMS,UI_MENU_BACKCNT+UI_MENU_CONFIGURATION_SENSIBLE_PRESSURE_COUNT+UI_MENU_CONFIGURATION_EMERGENCY_PAUSE_COUNT+UI_MENU_CONFIGURATION_EMERGENCY_ZSTOP_COUNT+UI_MENU_CONFIGURATION_FLOW_COMPENSATION_COUNT+UI_MENU_FEATURE_ZERO_DIGITS_COUNT+UI_MENU_FEATURE_DIGITS_CMP_COUNT)
 
 /** \brief Configuration->DMS Features menu */
 UI_MENU_SUBMENU_FILTER(ui_menu_conf_dms, UI_TEXT_DMS, ui_menu_dms, MENU_MODE_PRINTER, 0)
@@ -1028,8 +1111,8 @@ UI_MENU_SUBMENU(ui_menu_z_calibration, UI_TEXT_ZCALIB,         ui_menu_z)
 UI_MENU_ACTION4C(ui_menu_restore_defaults_ack,UI_ACTION_RESTORE_DEFAULTS,UI_TEXT_RESTORE_DEFAULTS4)
 UI_MENU_ACTIONSELECTOR_FILTER(ui_menu_restore_defaults,UI_TEXT_RESTORE_DEFAULTS,ui_menu_restore_defaults_ack, 0, MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING | MENU_MODE_PAUSED)
 
-#define UI_MENU_CONFIGURATION {UI_MENU_ADDCONDBACK &ui_menu_conf_general, &ui_menu_z_calibration, UI_MENU_CONFIGURATION_DMS_COND UI_MENU_CONFIGURATION_FAN_COND &ui_menu_conf_pid, &ui_menu_conf_motor, &ui_menu_conf_accel, UI_MENU_ACCEL_MILL_COND &ui_menu_conf_feed,  &ui_menu_restore_defaults }
-UI_MENU(ui_menu_configuration,UI_MENU_CONFIGURATION,UI_MENU_BACKCNT+1+1+UI_MENU_CONFIGURATION_DMS_COUNT+UI_MENU_CONFIGURATION_FAN_COUNT+5+UI_MENU_ACCEL_MILL_COUNT)
+#define UI_MENU_CONFIGURATION {UI_MENU_ADDCONDBACK &ui_menu_conf_general, &ui_menu_z_calibration, UI_MENU_CONFIGURATION_DMS_COND UI_MENU_CONFIGURATION_WOBBLE_COND UI_MENU_CONFIGURATION_FAN_COND &ui_menu_conf_pid, &ui_menu_conf_motor, &ui_menu_conf_accel, UI_MENU_ACCEL_MILL_COND &ui_menu_conf_feed,  &ui_menu_restore_defaults }
+UI_MENU(ui_menu_configuration,UI_MENU_CONFIGURATION,UI_MENU_BACKCNT+1+1+UI_MENU_CONFIGURATION_DMS_COUNT+UI_MENU_CONFIGURATION_FAN_COUNT+5+UI_MENU_ACCEL_MILL_COUNT+UI_MENU_CONFIGURATION_WOBBLE_COUNT)
 
 /** \brief Main menu */
 UI_MENU_SUBMENU(ui_menu_main1, UI_TEXT_QUICK_SETTINGS,  ui_menu_quick)

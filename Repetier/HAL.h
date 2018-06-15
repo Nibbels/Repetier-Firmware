@@ -51,6 +51,7 @@ All known arduino boards use 64. This value is needed for the extruder timing. *
 #endif
 
 #include <inttypes.h>
+#include "Stream.h"
 #include "Print.h"
 
 #include "Arduino.h"
