@@ -21,6 +21,7 @@
 
 
 #define REPETIER_VERSION                    "RF.01.42.03"
+
 #define UI_PRINTER_COMPANY                  "Conrad Community"
 #define UI_VERSION_STRING                   "V " REPETIER_VERSION
 
