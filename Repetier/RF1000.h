@@ -35,7 +35,7 @@
 #endif // NUM_EXTRUDER > 2 || NUM_EXTRUDER < 0
 
 /** \brief Allows to use the device for milling */
-#define FEATURE_MILLING_MODE                  1                                                   // 1 = on, 0 = off
+#define FEATURE_MILLING_MODE                  0                                                   // 1 = on, 0 = off //Digibike Change
 
 #if FEATURE_MILLING_MODE
 
@@ -249,9 +249,9 @@ Overridden if EEPROM activated. */
 /** \brief P-gain. Overridden if EEPROM activated. */
 #define EXT0_PID_P                          11.5f   //Digibike Change
 /** \brief I-gain. Overridden if EEPROM activated. */
-#define EXT0_PID_I                          HT3_PID_I
+#define EXT0_PID_I                          0.45f   //Digibike Change
 /** \brief D-gain. Overridden if EEPROM activated.*/
-#define EXT0_PID_D                          HT3_PID_D
+#define EXT0_PID_D                          100.0f  //Digibike Change
 
 #endif // EXT0_HOTEND_TYPE == HOTEND_TYPE_V2
 
@@ -424,13 +424,13 @@ Overridden if EEPROM activated. */
 /** \brief The maximum value, I-gain can contribute to the output. Overridden if EEPROM activated. */
 #define EXT1_PID_INTEGRAL_DRIVE_MAX         130  //Digibike Change for new pid control
 /** \brief lower value for integral part. Overridden if EEPROM activated. */
-#define EXT1_PID_INTEGRAL_DRIVE_MIN         HT3_PID_INTEGRAL_DRIVE_MIN
+#define EXT1_PID_INTEGRAL_DRIVE_MIN         20  //Digibike Change for new pid control
 /** \brief P-gain. Overridden if EEPROM activated. */
-#define EXT1_PID_P                          HT3_PID_P
+#define EXT1_PID_P                          11.5f  //Digibike Change
 /** \brief I-gain. Overridden if EEPROM activated. */
-#define EXT1_PID_I                          HT3_PID_I
+#define EXT1_PID_I                          0.45f  //Digibike Change
 /** \brief D-gain. Overridden if EEPROM activated.*/
-#define EXT1_PID_D                          HT3_PID_D
+#define EXT1_PID_D                          100.0f  //Digibike Change
 
 #endif // EXT1_HOTEND_TYPE == HOTEND_TYPE_V2
 
@@ -673,13 +673,14 @@ can set it on for safety. */
 // ##########################################################################################
 
 /** \brief Motor Current MAX setting */
-#define MOTOR_CURRENT_MAX                       {150,150,126,126,126}                               // Values 0-255 (126 = ~2A), order: driver 1 (x), driver 2 (y), driver 3 (z), driver 4 (extruder 1), driver 5 (reserved)
+//Digibike Change
+#define MOTOR_CURRENT_MAX                       {150,150,126,70,70}                                 // Values 0-255 (126 = ~2A), order: driver 1 (x), driver 2 (y), driver 3 (z), driver 4 (extruder 1), driver 5 (reserved)
 
 /** \brief Motor Current settings at start: Tweak with menu for better silence <-> stability
 // The RF2000 has one more stepper and the same 8A-24V power supply as RF1000. We think that this is the reason for lower stepper currents set by conrad renkforce - but dont know.
 // I increased MAX a little bit over stock settings, but decreased normal settings to fairly low power and noise. Take that into account when tuning in your steppers according your needs.
 */
-#define MOTOR_CURRENT_NORMAL                    {110,110,105,110,110}
+#define MOTOR_CURRENT_NORMAL                    {110,110,105,53,53}                                 //Digibike Change
 #define MOTOR_CURRENT_MIN                       EXTRUDER_CURRENT_PAUSED
 
 /** \brief Specifies whether the firmware shall wait a short time after turning on of the stepper motors - this shall avoid that the first steps are sent to the stepper before it is ready */
