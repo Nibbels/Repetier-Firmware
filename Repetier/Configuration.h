@@ -43,7 +43,7 @@ To override EEPROM settings with config settings, set EEPROM_MODE 0 */
 // ##########################################################################################
 
 /** \brief Define the type of your device */
-//#define MOTHERBOARD                         DEVICE_TYPE_RF1000
+#define MOTHERBOARD                         DEVICE_TYPE_RF1000   //Digibike Change
 //#define MOTHERBOARD                         DEVICE_TYPE_RF2000
 //#define MOTHERBOARD                         DEVICE_TYPE_RF2000v2
 
@@ -544,7 +544,7 @@ instead of driving both with a single stepper. The same works for the other axis
 Select the language to use.
 0 = English
 1 = German */
-#define UI_LANGUAGE                         0
+#define UI_LANGUAGE                         1   //Digibike Change
 
 /** \brief How many ms should a single page be shown, until it is switched to the next one.*/
 #define UI_PAGES_DURATION                   4000
@@ -636,7 +636,7 @@ Values must be in range 1..255 */
 #define SPEED_MAGNIFICATION                 100.0f
 
 /** \brief Specifies if you want to see the TipDown Support within Z-Configuration Menu. This is only usefull if you have a dual hotend with possible servo or spring z-offset-shift.*/
-#define UI_SHOW_TIPDOWN_IN_ZCONFIGURATION   0                                                   // 1 = show, 0 = hide
+#define UI_SHOW_TIPDOWN_IN_ZCONFIGURATION   1                                                   // 1 = show, 0 = hide //Digibike change
 
 
 // ##########################################################################################
