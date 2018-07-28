@@ -20,13 +20,13 @@
 #define CONSTANTS_H
 
 
-#define REPETIER_VERSION                    "RF.01.41.27"
+#define REPETIER_VERSION                    "RF.01.42.03"
 #define UI_PRINTER_COMPANY                  "Conrad Community"
 #define UI_VERSION_STRING                   "V " REPETIER_VERSION
 
 #define BIGC0 "\001\002\003    " UI_SPACER "Renkforce"
-#define BIGC1 "\004         " UI_SPACER UI_PRINTER_NAME 
-#define BIGC2 "\005\006\007ommunity Mod" 
+#define BIGC1 "\004         " UI_SPACER UI_PRINTER_NAME
+#define BIGC2 "\005\006\007ommunity Mod"
 #define BIGC3 UI_SPACER REPETIER_VERSION
 
 // ##########################################################################################
@@ -35,7 +35,7 @@
 
 #define DEVICE_TYPE_RF1000                  13
 #define DEVICE_TYPE_RF2000                  14
-#define DEVICE_TYPE_RF2000_V2               15
+#define DEVICE_TYPE_RF2000v2                15
 
 #define OPERATING_MODE_PRINT                1   // the firmware works in mode "print"
 #define OPERATING_MODE_MILL                 2   // the firmware works in mode "mill"

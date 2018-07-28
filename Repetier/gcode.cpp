@@ -18,10 +18,6 @@
 
 #include "Repetier.h"
 
-#ifndef FEATURE_CHECKSUM_FORCED
-#define FEATURE_CHECKSUM_FORCED false
-#endif
-
 GCode    GCode::commandsBuffered[GCODE_BUFFER_SIZE]; ///< Buffer for received commands.
 uint8_t  GCode::bufferReadIndex=0; ///< Read position in gcode_buffer.
 uint8_t  GCode::bufferWriteIndex=0; ///< Write position in gcode_buffer.
@@ -184,7 +180,7 @@ void GCode::requestResend()
 {
     HAL::serialFlush();
     commandsReceivingWritePosition=0;
-    
+
     if(sendAsBinary)
         waitingForResend = 30;
     else
@@ -192,7 +188,7 @@ void GCode::requestResend()
 
     Com::println();
     Com::printFLN(Com::tResend,lastLineNumber+1);
-    
+
     Com::printFLN(Com::tOk);
 } // requestResend
 
@@ -520,7 +516,7 @@ void GCode::readFromSD()
         {
             Com::printFLN(Com::tSDReadError);
             UI_ERROR("SD Read Error");
-            
+
             // Second try in case of recoverable errors
             sd.file.seekSet(sd.sdpos);
             n = sd.file.read();
@@ -530,7 +526,7 @@ void GCode::readFromSD()
                 sd.sdmode = 0;
                 break;
             }
-            UI_ERROR("SD error fixed");
+            UI_ERROR("SD Error fixed");
         }
         sd.sdpos++; // = file.curPosition();
         commandReceiving[commandsReceivingWritePosition++] = (uint8_t)n;

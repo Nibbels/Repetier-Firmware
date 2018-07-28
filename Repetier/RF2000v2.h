@@ -16,12 +16,12 @@
 */
 
 
-#ifndef RF2000_H
-#define RF2000_H
+#ifndef RF2000_V2_H
+#define RF2000_V2_H
 
 
 // this file contains all definitions which are specific to the RF2000 hardware
-#define UI_PRINTER_NAME                     "RF2000"
+#define UI_PRINTER_NAME                     "RF2000v2"
 
 /** \brief Number of extruders */
 #define NUM_EXTRUDER                        2                                                   // 1 = Single, 2 = Dual
@@ -35,7 +35,7 @@
 #endif // NUM_EXTRUDER > 2 || NUM_EXTRUDER < 0
 
 /** \brief Allows to use the device for milling */
-#define FEATURE_MILLING_MODE                  1                                                   // 1 = on, 0 = off
+#define FEATURE_MILLING_MODE                  0                                                   // 1 = on, 0 = off -> RF2000v2 : OFF
 
 #if FEATURE_MILLING_MODE
 
@@ -80,8 +80,8 @@
 #define FEATURE_CASE_FAN                    1                                                   // 0 = off, 1 = on
 
 /** \brief Define the type of the present extruders */
-#define EXT0_HOTEND_TYPE                    HOTEND_TYPE_V2
-#define EXT1_HOTEND_TYPE                    HOTEND_TYPE_V2
+#define EXT0_HOTEND_TYPE                    HOTEND_TYPE_V3
+#define EXT1_HOTEND_TYPE                    HOTEND_TYPE_V3
 
 /** \brief Define the type Z-Endstop-Installation */
 #define FEATURE_CONFIGURABLE_Z_ENDSTOPS     0                                                   // the RF2000 does not support to use the z-min and z-max endstops within one circle
@@ -95,14 +95,14 @@ For delta robot Z_MAX_LENGTH is the maximum travel of the towers and should be s
 and the platform when the printer is at its home position.
 If EEPROM is enabled these values will be overidden with the values in the EEPROM */
 #if NUM_EXTRUDER == 2
-#define X_MAX_LENGTH_PRINT                  (long)180
+#define X_MAX_LENGTH_PRINT                  (long)170
 #else
 #define X_MAX_LENGTH_PRINT                  (long)230
 #endif // NUM_EXTRUDER == 2
 
-#define X_MAX_LENGTH_MILL                   (long)230
-#define Y_MAX_LENGTH                        (long)245
-#define Z_MAX_LENGTH                        (long)200 //RF2000 von Nibbels: ~194,86 -> PAUSE_Z_MAX_SPACING_MM großzügig einplanen
+#define X_MAX_LENGTH_MILL                   (long)200
+#define Y_MAX_LENGTH                        (long)290
+#define Z_MAX_LENGTH                        (long)185 //RF2000 von Nibbels: ~194,86 -> PAUSE_Z_MAX_SPACING_MM großzügig einplanen
 
 /** \brief Coordinates for the minimum axis. Can also be negative if you want to have the bed start at 0 and the printer can go to the left side
 of the bed. Maximum coordinate is given by adding the above MAX_LENGTH values. */
@@ -148,7 +148,7 @@ Overridden if EEPROM activated.*/
 #define EXT0_Z_OFFSET_MM                       0.0f //to support Nozzle-Tip-Down-Hotends
 
 /** \brief for skeinforge 40 and later, steps to pull the plasic 1 mm inside the extruder, not out.  Overridden if EEPROM activated. */
-#define EXT0_STEPS_PER_MM                   (8.75 * RF_MICRO_STEPS_E)
+#define EXT0_STEPS_PER_MM                   (8.0 * RF_MICRO_STEPS_E)
 
 /** \brief What type of sensor is used?
 NTC-Thermistors
@@ -176,7 +176,7 @@ PTC-Thermistors
 53: E3D PT100 Board (direct AD voltage in)
 60: HEATER_USES_AD8495 (Delivers 5mV/degC)
 100: AD595 */
-#define EXT0_TEMPSENSOR_TYPE                3
+#define EXT0_TEMPSENSOR_TYPE                13 /* RF2000v2: V3 Hotend */
 
 /** \brief Analog input pin for reading temperatures or pin enabling SS for MAX6675 */
 #define EXT0_TEMPSENSOR_PIN                 TEMP_0_PIN
@@ -319,12 +319,12 @@ The codes are only executed for multiple extruder when changing the extruder. */
 // ##   Configuration of the 2. extruder
 // ##########################################################################################
 
-#define EXT1_X_OFFSET_MM                        33.9f                           // [mm]
-#define EXT1_Y_OFFSET_MM                         0.1f                           // [mm]
+#define EXT1_X_OFFSET_MM                        33.6f                           // [mm]
+#define EXT1_Y_OFFSET_MM                         0.0f                           // [mm]
 #define EXT1_Z_OFFSET_MM                         0.0f                           // [mm] //to support Nozzle-Tip-Down-Hotends
 
 /** \brief for skeinforge 40 and later, steps to pull the plasic 1 mm inside the extruder, not out.  Overridden if EEPROM activated. */
-#define EXT1_STEPS_PER_MM                   (8.75 * RF_MICRO_STEPS_E)
+#define EXT1_STEPS_PER_MM                   (8.00 * RF_MICRO_STEPS_E)
 
 /** \brief What type of sensor is used?
 NTC-Thermistors
@@ -352,7 +352,7 @@ PTC-Thermistors
 53: E3D PT100 Board (direct AD voltage in)
 60: HEATER_USES_AD8495 (Delivers 5mV/degC)
 100: AD595 */
-#define EXT1_TEMPSENSOR_TYPE                3
+#define EXT1_TEMPSENSOR_TYPE                13 /* RF2000v2: V3 Hotend */
 
 /** \brief Analog input pin for reading temperatures or pin enabling SS for MAX6675 */
 #define EXT1_TEMPSENSOR_PIN                 TEMP_1_PIN
@@ -393,11 +393,11 @@ Overridden if EEPROM activated. */
 #define EXT1_PID_INTEGRAL_DRIVE_MAX         HT2_PID_INTEGRAL_DRIVE_MAX
 /** \brief lower value for integral part. Overridden if EEPROM activated. */
 #define EXT1_PID_INTEGRAL_DRIVE_MIN         HT2_PID_INTEGRAL_DRIVE_MIN
-/** \brief P-gain.  Overridden if EEPROM activated. */
+/** \brief P-gain. Overridden if EEPROM activated. */
 #define EXT1_PID_P                          HT2_PID_P
 /** \brief I-gain. Overridden if EEPROM activated. */
 #define EXT1_PID_I                          HT2_PID_I
-/** \brief Dgain.  Overridden if EEPROM activated.*/
+/** \brief D-gain. Overridden if EEPROM activated.*/
 #define EXT1_PID_D                          HT2_PID_D
 
 #endif // EXT1_HOTEND_TYPE == HOTEND_TYPE_V1
@@ -409,11 +409,11 @@ Overridden if EEPROM activated. */
 #define EXT1_PID_INTEGRAL_DRIVE_MAX         HT3_PID_INTEGRAL_DRIVE_MAX
 /** \brief lower value for integral part. Overridden if EEPROM activated. */
 #define EXT1_PID_INTEGRAL_DRIVE_MIN         HT3_PID_INTEGRAL_DRIVE_MIN
-/** \brief P-gain.  Overridden if EEPROM activated. */
+/** \brief P-gain. Overridden if EEPROM activated. */
 #define EXT1_PID_P                          HT3_PID_P
 /** \brief I-gain. Overridden if EEPROM activated. */
 #define EXT1_PID_I                          HT3_PID_I
-/** \brief D-gain.  Overridden if EEPROM activated.*/
+/** \brief D-gain. Overridden if EEPROM activated.*/
 #define EXT1_PID_D                          HT3_PID_D
 
 #endif // EXT1_HOTEND_TYPE == HOTEND_TYPE_V2
@@ -524,13 +524,13 @@ A good start is 30 lower then the optimal value. You need to leave room for cool
 #define HEATED_BED_PID_INTEGRAL_DRIVE_MIN   5
 
 /** \brief P-gain.  Overridden if EEPROM activated. */
-#define HEATED_BED_PID_PGAIN                53.74
+#define HEATED_BED_PID_PGAIN                34.0
 
 /** \brief I-gain  Overridden if EEPROM activated.*/
-#define HEATED_BED_PID_IGAIN                7.48
+#define HEATED_BED_PID_IGAIN                0.015
 
 /** \brief Dgain.  Overridden if EEPROM activated.*/
-#define HEATED_BED_PID_DGAIN                96.52
+#define HEATED_BED_PID_DGAIN                110.0
 
 /** \brief maximum time the heater can be switched on. Max = 255.  Overridden if EEPROM activated.*/
 #define HEATED_BED_PID_MAX                  255
@@ -739,10 +739,10 @@ included delay is already enough. */
 // ##########################################################################################
 
 /** \brief Part Fan:                                  1 = 15.3Hz,  2 = 7.62Hz, 3 = 5.1Hz, 4 = 3.82Hz,  5 = 3.06Hz,  6 = 2.55Hz, 7 = 2.1Hz */
-#define PART_FAN_DEFAULT_PWM_SPEED_DIVISOR  3
+#define PART_FAN_DEFAULT_PWM_SPEED_DIVISOR  5
 /** \brief the following values can be used in order to fine-tune the operating range of the cooler: */
-#define PART_FAN_PWM_MIN                    1                                                     // 1 ... 254 equals 1 ... 99 %
-#define PART_FAN_PWM_MAX                    160                                                   // 1 ... 254 equals 1 ... 99 %
+#define PART_FAN_PWM_MIN                    90                                                    // 1 ... 254 equals 1 ... 99 %
+#define PART_FAN_PWM_MAX                    193                                                   // 1 ... 254 equals 1 ... 99 %
 
 /** Some fans won't start for low values, but would run if started with higher power at the beginning.
 This defines the full power duration before returning to set value. Time is in milliseconds
@@ -1196,4 +1196,4 @@ Above this value the z compensation will distribute the roughness of the surface
 
 #endif // FEATURE_RGB_LIGHT_EFFECTS
 
-#endif // RF2000_H
+#endif // RF2000_V2_H

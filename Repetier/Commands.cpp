@@ -50,11 +50,11 @@ void Commands::commandLoop()
 void Commands::checkForPeriodicalActions(enum FirmwareState state)
 {
     bool buttonactive = ((HAL::timeInMilliseconds() - uid.lastButtonStart < 15000) ? true : false);
-    
+
     if( state != NotBusy ){
         GCode::keepAlive( state );
     }
-    
+
     if(execute10msPeriodical){ //set by PWM-Timer
       execute10msPeriodical=0;
 
@@ -106,8 +106,8 @@ void Commands::waitUntilEndOfAllMoves()
 
         bWait = false;
         if( PrintLine::hasLines() )     bWait = true;
-        else                            GCode::readFromSerial(); //normalerweise braucht repetiert hier bei PrintLine::haslines kein readserial! aber wenn wir für die anderen wait=1 readserial wollen, evtl. schon. 
-        
+        else                            GCode::readFromSerial(); //normalerweise braucht repetiert hier bei PrintLine::haslines kein readserial! aber wenn wir für die anderen wait=1 readserial wollen, evtl. schon.
+
 #if FEATURE_FIND_Z_ORIGIN
         if( g_nFindZOriginStatus )      bWait = true;
 #endif // FEATURE_FIND_Z_ORIGIN
@@ -244,44 +244,70 @@ void Commands::changeFlowrateMultiply(float factorpercent)
     if(factorpercent < 25.0f)   factorpercent = 25.0f;
     if(factorpercent > 200.0f)  factorpercent = 200.0f;
     Printer::extrudeMultiply = static_cast<int>(factorpercent);
-    
+
     //if(Extruder::current->diameter <= 0)
         Printer::extrusionFactor = 0.01f * static_cast<float>(factorpercent);
     //else
     //    Printer::extrusionFactor = 0.01f * static_cast<float>(factor) * 4.0f / (Extruder::current->diameter * Extruder::current->diameter * 3.141592654f);
 
-    Com::printFLN(Com::tFlowMultiply,factorpercent);
+    Com::printFLN(Com::tFlowMultiply,(int)factorpercent);
 } // changeFlowrateMultiply
 
 
 #if FAN_PIN>-1 && FEATURE_FAN_CONTROL
 uint8_t fanKickstart = 0;
-void Commands::setFanSpeed(int speed)
+void Commands::setFanSpeed(uint8_t speed, bool recalc)
 {
-    uint8_t trimmedSpeed = TRIM_FAN_PWM(speed);
-    if(pwm_pos[NUM_EXTRUDER+2] == trimmedSpeed)
-        return;
-    
-    Printer::setMenuMode(MENU_MODE_FAN_RUNNING,trimmedSpeed!=0);
-    Com::printFLN(Com::tFanspeed,(trimmedSpeed == 1) ? 2 : trimmedSpeed ); //bei 1 zeigt repetierserver / repetierhost 0% an, was nicht stimmt. Das ist etwas Pfusch, aber nun funktionierts.
-    if(fanKickstart == 0 && trimmedSpeed > pwm_pos[NUM_EXTRUDER+2] && trimmedSpeed < 85) {
-        if(pwm_pos[NUM_EXTRUDER+2]) fanKickstart = FAN_KICKSTART_TIME / 100;
-        else                        fanKickstart = FAN_KICKSTART_TIME / 25;
+    speed = constrain(speed,0,255);
+
+    //do nothing if the fan speed does not change at all
+    if(fanSpeed == speed && !recalc) return;
+
+    //the new fan speed value is being remembered unchanged
+    //the output of the speed within display etc. stays unscaled
+    fanSpeed = speed;
+
+    //output the new setting unscaled to repetier-host/server UI
+    Printer::setMenuMode(MENU_MODE_FAN_RUNNING, (fanSpeed > 0) );
+    Com::printFLN(Com::tFanspeed, (fanSpeed == 1) ? 2 : fanSpeed ); //bei 1 zeigt repetierserver / repetierhost 0% an, was nicht stimmt. Das ist etwas Pfusch, aber nun funktionierts.
+
+    //wenn speed > 0 und < 255, dann wird der wertebereich eingegrenzt, sonst === 0 oder full power
+    if( speed > 0 && speed < 255 )
+    {
+        //scale the input speed value within MIN and MAX
+        long temp = speed;
+        temp *= (part_fan_pwm_max - part_fan_pwm_min);
+        temp /= 255;
+        temp += part_fan_pwm_min;
+        speed = constrain(temp,0,255);
+        /*
+        from here "speed" is scaled to a set boundary. It will be the same scale like pwm_pos[NUM_EXTRUDER+2] has.
+        Commanded (and user ui) speed is "fanSpeed", which stays unscaled.
+        */
     }
-    pwm_pos[NUM_EXTRUDER+2] = trimmedSpeed;
+
+#if FAN_KICKSTART_TIME
+    //if specified calculate a kickstart time when the fan speed is commanded to rise
+    //use fanSpeed (not "speed") to compare with PART_FAN_KICKSTART_THRESHOLD so we dont have to recalculate the threshold according min-max.
+    if (fanKickstart == 0 && speed > pwm_pos[NUM_EXTRUDER+2] && fanSpeed < PART_FAN_KICKSTART_THRESHOLD) {
+        if(speed) fanKickstart = PART_FAN_KICKSTART_TIME_BOOST / 10;
+        else      fanKickstart = PART_FAN_KICKSTART_TIME_OFF_ON / 10;
+    }
+#endif // FAN_KICKSTART_TIME
+
+    pwm_pos[NUM_EXTRUDER+2] = speed;
 } // setFanSpeed
 #endif // FAN_PIN>-1 && FEATURE_FAN_CONTROL
 
 #if FAN_PIN>-1 && FEATURE_FAN_CONTROL
-void Commands::adjustFanFrequency(uint8_t speed_mode = COOLER_PWM_SPEED){ //0 = ~15hz, ~1=30hz, ... 4=240hz.
+void Commands::adjustFanFrequency(uint8_t speed_divisor = PART_FAN_DEFAULT_PWM_SPEED_DIVISOR){ //1 = ~15.3hz, ~2=7.62hz, ...
     InterruptProtectedBlock noInts;
-    cooler_pwm_speed = (speed_mode <= COOLER_MODE_MAX ? speed_mode : COOLER_PWM_SPEED); // > 4 should not happen, only if you change code and want that. 
-    cooler_pwm_step = (1 << cooler_pwm_speed);
-    cooler_pwm_mask = (255 << cooler_pwm_speed) & 0xff;
+    if(!speed_divisor) speed_divisor = 1;
+    part_fan_pwm_speed = (speed_divisor <= PART_FAN_MODE_MAX ? speed_divisor : PART_FAN_DEFAULT_PWM_SPEED_DIVISOR);
 }
 void Commands::adjustFanMode(uint8_t output_mode){ //0 = pwm, 1 = pdm
-    cooler_mode = (output_mode ? COOLER_MODE_PDM : COOLER_MODE_PWM);
-    Printer::setMenuMode(MENU_MODE_FAN_MODE_PDM, (bool)cooler_mode);
+    part_fan_frequency_modulation = (output_mode ? PART_FAN_MODE_PDM : PART_FAN_MODE_PWM);
+    Printer::setMenuMode(MENU_MODE_FAN_MODE_PDM, (bool)part_fan_frequency_modulation);
 }
 #endif // FAN_PIN>-1 && FEATURE_FAN_CONTROL
 
@@ -395,7 +421,7 @@ void Commands::executeGCode(GCode *com)
             {
                 break;
             }
-            
+
             // fall through
         }
         case 1: // G1
@@ -422,7 +448,7 @@ void Commands::executeGCode(GCode *com)
             {
                 break;
             }
-            
+
             // fall through
         }
         case 3: // G3 - Counter-clockwise Arc
@@ -786,13 +812,11 @@ void Commands::executeGCode(GCode *com)
             }
             case 24: // M24 - Start SD print
             {
-#if FEATURE_PAUSE_PRINTING
-                if( g_pauseStatus == PAUSE_STATUS_PAUSED ) 
+                if( g_pauseStatus == PAUSE_STATUS_PAUSED )
                 {
                     continuePrint();
                 }
                 else
-#endif // FEATURE_PAUSE_PRINTING
                 {
                     sd.startPrint();
                 }
@@ -800,9 +824,7 @@ void Commands::executeGCode(GCode *com)
             }
             case 25: // M25 - Pause SD print
             {
-#if FEATURE_PAUSE_PRINTING
                 pausePrint();
-#endif // FEATURE_PAUSE_PRINTING
                 break;
             }
             case 26: // M26 - Set SD index
@@ -891,11 +913,7 @@ void Commands::executeGCode(GCode *com)
                     if(reportTempsensorError()) break;
                     previousMillisCmd = HAL::timeInMilliseconds();
                     if(Printer::debugDryrun()) break;
-
-#if FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
                     Printer::waitMove = 1; //brauche ich das, wenn ich sowieso warte bis der movecache leer ist?
-#endif // FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
-
                     g_uStartOfIdle = 0; //M109
                     Commands::waitUntilEndOfAllMoves(); //M109
                     Extruder *actExtruder = Extruder::current;
@@ -905,9 +923,7 @@ void Commands::executeGCode(GCode *com)
                     if (fabs(actExtruder->tempControl.targetTemperatureC - actExtruder->tempControl.currentTemperatureC) < TEMP_TOLERANCE)
                     {
                         // we are already in range
-#if FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
                         Printer::waitMove = 0;
-#endif // FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
                         break;
                     }
 
@@ -944,7 +960,7 @@ void Commands::executeGCode(GCode *com)
 
 #if RETRACT_DURING_HEATUP
                         if( dirRising ){
-                            if (!retracted 
+                            if (!retracted
                                 && longTempTime
                                 && actExtruder == Extruder::current
                                 && actExtruder->waitRetractUnits > 0
@@ -958,7 +974,7 @@ void Commands::executeGCode(GCode *com)
                         if( !dirRising ){
                             if( actExtruder->tempControl.currentTemperatureC <= MAX_ROOM_TEMPERATURE ){
                                 isTempReached = true;
-                                //never wait longer than reaching lowest allowed temperature. 
+                                //never wait longer than reaching lowest allowed temperature.
                                 //This might still be a long-run-bug if you have heated chamber/hot summer and wrong settings in MAX_ROOM_TEMPERATURE!
                             }
                         }
@@ -978,9 +994,7 @@ void Commands::executeGCode(GCode *com)
 #endif // RETRACT_DURING_HEATUP
 #endif // NUM_EXTRUDER>0
 
-#if FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
                     Printer::waitMove = 0;
-#endif // FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
                     g_uStartOfIdle    = HAL::timeInMilliseconds(); //end of M109
                 }
                 previousMillisCmd = HAL::timeInMilliseconds();
@@ -992,11 +1006,7 @@ void Commands::executeGCode(GCode *com)
                 {
 #if HAVE_HEATED_BED
                     if(Printer::debugDryrun()) break;
-
-#if FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
                     Printer::waitMove = 1; //brauche ich das, wenn ich sowieso warte bis der movecache leer ist?
-#endif // FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
-
                     g_uStartOfIdle = 0; //M190
                     Commands::waitUntilEndOfAllMoves(); //M190
                     if (com->hasS()) Extruder::setHeatedBedTemperature(com->S,com->hasF() && com->F>0);
@@ -1022,9 +1032,7 @@ void Commands::executeGCode(GCode *com)
                         if( !dirRising && heatedBedController.currentTemperatureC <= MAX_ROOM_TEMPERATURE ) break;
                     }
 
-#if FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
                     Printer::waitMove = 0;
-#endif // FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
                     g_uStartOfIdle    = HAL::timeInMilliseconds()+5000; //end of M190
 #endif // HAVE_HEATED_BED
                 }
@@ -1110,7 +1118,7 @@ void Commands::executeGCode(GCode *com)
             {
                 if( isSupportedMCommand( com->M, OPERATING_MODE_PRINT ) )
                 {
-                    setFanSpeed(com->hasS()?com->S:255);
+                    setFanSpeed(com->hasS() ? (uint8_t)constrain(com->S,0,255) : (uint8_t)255);
                 }
                 break;
             }
@@ -1174,7 +1182,7 @@ void Commands::executeGCode(GCode *com)
                     maxInactiveTime = 0;
                 break;
             }
-            case 99:    // M99 S<time> 
+            case 99:    // M99 S<time>
             //Nibbels: 050118 Ich halte den Befehl für tendentiell gefährlich. Man sollte nicht abschalten, sondern Strom senken, oder hat das einen sinn? Vermutlich muss danach Homing und CMP deaktiviert werden!
             {
                 millis_t wait = 10000L;
@@ -1320,11 +1328,11 @@ void Commands::executeGCode(GCode *com)
 #endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
 #endif // MOTHERBOARD == DEVICE_TYPE_RF1000
 
-#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000_V2
+#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
                 // the RF2000 uses the max endstop in all operating modes
                 Com::printF(Com::tZMaxColon);
                 Com::printF(Printer::isZMaxEndstopHit()?Com::tHSpace:Com::tLSpace);
-#endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000_V2
+#endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 #endif // (Z_MAX_PIN > -1) && MAX_HARDWARE_ENDSTOP_Z
 
                 Com::println();
@@ -1498,8 +1506,8 @@ void Commands::executeGCode(GCode *com)
             }
 #endif // USE_ADVANCE
 #if FEATURE_CASE_LIGHT
-// Idee und Teilcode und Vorarbeit von WESSIX 
-            //Code schaltet X19, nicht zwingend das licht! 
+// Idee und Teilcode und Vorarbeit von WESSIX
+            //Code schaltet X19, nicht zwingend das licht!
                 case 355: // M355  - Turn case light on/off / Turn X19 on and off.
                 if(com->hasS()){
                     if(com->S == 1 || com->S == 0){
@@ -1514,7 +1522,7 @@ void Commands::executeGCode(GCode *com)
                 WRITE(CASE_LIGHT_PIN, Printer::enableCaseLight);
                 Com::printFLN(PSTR("M355: X19 set to "),Printer::enableCaseLight);
                 break;
-// Ende Idee und Teilcode von WESSIX 
+// Ende Idee und Teilcode von WESSIX
 #endif // FEATURE_CASE_LIGHT
             case 400:   // M400 - Finish all moves
             {
@@ -1609,7 +1617,7 @@ void Commands::executeGCode(GCode *com)
             }
 #endif // FEATURE_SERVO && MOTHERBOARD == DEVICE_TYPE_RF1000
 
-#if FEATURE_SERVO && (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000_V2)
+#if FEATURE_SERVO && (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2)
             case 340:   // M340
             {
                 if( com->hasP() )
@@ -1675,7 +1683,7 @@ void Commands::executeGCode(GCode *com)
                 }
                 break;
             }
-#endif // FEATURE_SERVO && (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000_V2)
+#endif // FEATURE_SERVO && (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2)
 
             default:
             {

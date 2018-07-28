@@ -76,6 +76,8 @@ float               maxadvspeed         = 0;
 uint8_t             pwm_pos[NUM_EXTRUDER+3];                // 0-NUM_EXTRUDER = Heater 0-NUM_EXTRUDER of extruder, NUM_EXTRUDER = Heated bed, NUM_EXTRUDER+1 Board fan, NUM_EXTRUDER+2 = Fan
 volatile int        waitRelax           = 0;                // Delay filament relax at the end of print, could be a simple timeout
 
+uint8_t				fanSpeed			= 0;
+
 #if FEATURE_DEBUG_MOVE_CACHE_TIMING
 float               low_ticks_per_move  = LOW_TICKS_PER_MOVE; //float weil vergleichsparameter timeForMove auch float ist und ich da nichts ändern will. 4 byte ram bleiben gleich.
 uint32_t            move_cache_stats[MOVE_CACHE_SIZE] = {0};  //0 als ungefüllt kommt dazu.
@@ -83,12 +85,9 @@ uint32_t            move_cache_stats_count = 0;
 uint32_t            move_cache_stats_count_limited = 0;
 #endif //FEATURE_DEBUG_MOVE_CACHE_TIMING
 
-PrintLine PrintLine::lines[MOVE_CACHE_SIZE];            // Cache for print moves.
-PrintLine *PrintLine::cur = 0;                          // Current printing line
-
-#if FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
-PrintLine           PrintLine::direct;                          // direct movement
-#endif // FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
+PrintLine           PrintLine::lines[MOVE_CACHE_SIZE];  // Cache for print moves.
+PrintLine          *PrintLine::cur = 0;                 // Current printing line
+PrintLine           PrintLine::direct;                  // direct movement
 
 uint8_t             PrintLine::linesWritePos    = 0;    // Position where we write the next cached line move.
 volatile uint8_t    PrintLine::linesCount       = 0;    // Number of lines cached 0 = nothing to do.
@@ -157,16 +156,14 @@ void PrintLine::prepareQueueMove(uint8_t check_endstops,uint8_t pathOptimize, fl
     for(uint8_t axis=0; axis < 4; axis++)
     {
         p->delta[axis] = Printer::queuePositionTargetSteps[axis] - Printer::queuePositionLastSteps[axis];
-        
+
 #if FEATURE_HEAT_BED_Z_COMPENSATION
         //find highest Z layer with extrusion beneath g_maxZCompensationSteps for calculating the bordercrossing infill additions
         if(axis == Z_AXIS){
             if(p->delta[axis] != 0){ //z achsen aufstieg/abstieg -> wir müssen durch erkennung von extrusion mögliche zlifts filtern!
                 InterruptProtectedBlock noInts;
                 Printer::queuePositionZLayerCurrent_cand = Printer::queuePositionTargetSteps[Z_AXIS] + Extruder::current->zOffset;
-    #if FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
                 Printer::queuePositionZLayerCurrent_cand += Printer::directPositionCurrentSteps[Z_AXIS];
-    #endif // FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
                 noInts.unprotect();
                 if(Printer::queuePositionZLayerCurrent_cand == Printer::queuePositionZLayerCurrent) Printer::queuePositionZLayerCurrent_cand = 0; //nach zlift nicht neu bestimmen.
             }
@@ -189,9 +186,7 @@ void PrintLine::prepareQueueMove(uint8_t check_endstops,uint8_t pathOptimize, fl
                 if(p->delta[axis] > 0){
                     InterruptProtectedBlock noInts;
                     long nCurrentPositionStepsZ = Printer::queuePositionTargetSteps[Z_AXIS] + Extruder::current->zOffset;
-#if FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
                     nCurrentPositionStepsZ += Printer::directPositionCurrentSteps[Z_AXIS];
-#endif // FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
                     noInts.unprotect();
                     if(Printer::queuePositionZLayerCurrent_cand == nCurrentPositionStepsZ){
                         Printer::queuePositionZLayerLast = Printer::queuePositionZLayerCurrent;
@@ -202,7 +197,7 @@ void PrintLine::prepareQueueMove(uint8_t check_endstops,uint8_t pathOptimize, fl
                             }
                         }
 #if AUTOADJUST_MIN_MAX_ZCOMP
-                        //Problemfall Startmade: Wenn die Startmade aus etwas weniger als 16 od. MOVE_CACHE_SIZE Teilstücken besteht, was man annehmen kann, dann springt der Pfadplaner über die Startmade einfach drüber und nimmt den ersten Layer als neue Referenz. Das hier ist Preprocessing mit Blick in die Zukunft. Kurz steht in g_minZCompensationSteps z.B. 0.35, anschließend aber z.B. korrekte 0.2mm als g_minZCompensationSteps. 
+                        //Problemfall Startmade: Wenn die Startmade aus etwas weniger als 16 od. MOVE_CACHE_SIZE Teilstücken besteht, was man annehmen kann, dann springt der Pfadplaner über die Startmade einfach drüber und nimmt den ersten Layer als neue Referenz. Das hier ist Preprocessing mit Blick in die Zukunft. Kurz steht in g_minZCompensationSteps z.B. 0.35, anschließend aber z.B. korrekte 0.2mm als g_minZCompensationSteps.
                         //würde das nicht klappen, hätten wir SenseOffset in der Startmade was maximal schlecht sein kann, weil evtl. die Digits zu hoch sind. -> Sollte mit dieser Automatik hier nicht vorkommen!
                         if(g_auto_minmaxZCompensationSteps && !Printer::queuePositionZLayerLast && Printer::queuePositionZLayerCurrent < Printer::axisStepsPerMM[Z_AXIS]){ //1mm
                             //hiermit hätten wir immer exakt 1 Lage, die der Drucker komplett mit dem Bettprofil abfährt, anschließend ab Layer 2 wird ausgeschlichen +ECMP.
@@ -256,11 +251,11 @@ void PrintLine::prepareQueueMove(uint8_t check_endstops,uint8_t pathOptimize, fl
             if(p->delta[i]) p->dir |= 16<<i;
         }
         // Define variables that are needed for the Bresenham algorithm. Please note that  Z is not currently included in the Bresenham algorithm.
-        if(p->delta[Y_AXIS] > p->delta[X_AXIS] && p->delta[Y_AXIS] > p->delta[Z_AXIS]) 
+        if(p->delta[Y_AXIS] > p->delta[X_AXIS] && p->delta[Y_AXIS] > p->delta[Z_AXIS])
             p->primaryAxis = Y_AXIS;
-        else if (p->delta[X_AXIS] > p->delta[Z_AXIS] ) 
+        else if (p->delta[X_AXIS] > p->delta[Z_AXIS] )
             p->primaryAxis = X_AXIS;
-        else 
+        else
             p->primaryAxis = Z_AXIS;
         p->stepsRemaining = p->delta[p->primaryAxis];
         // Feedrate calc based on XYZ travel distance
@@ -276,13 +271,13 @@ void PrintLine::prepareQueueMove(uint8_t check_endstops,uint8_t pathOptimize, fl
 #endif // ENABLE_BACKLASH_COMPENSATION
 
     // Define variables that are needed for the Bresenham algorithm. Please note that Z is not currently included in the Bresenham algorithm.
-    if(p->delta[Y_AXIS] > p->delta[X_AXIS] && p->delta[Y_AXIS] > p->delta[Z_AXIS] && p->delta[Y_AXIS] > p->delta[E_AXIS]) 
+    if(p->delta[Y_AXIS] > p->delta[X_AXIS] && p->delta[Y_AXIS] > p->delta[Z_AXIS] && p->delta[Y_AXIS] > p->delta[E_AXIS])
         p->primaryAxis = Y_AXIS;
-    else if (p->delta[X_AXIS] > p->delta[Z_AXIS] && p->delta[X_AXIS] > p->delta[E_AXIS]) 
+    else if (p->delta[X_AXIS] > p->delta[Z_AXIS] && p->delta[X_AXIS] > p->delta[E_AXIS])
         p->primaryAxis = X_AXIS;
-    else if (p->delta[Z_AXIS] > p->delta[E_AXIS]) 
+    else if (p->delta[Z_AXIS] > p->delta[E_AXIS])
         p->primaryAxis = Z_AXIS;
-    else 
+    else
         p->primaryAxis = E_AXIS;
     p->stepsRemaining = p->delta[p->primaryAxis];
     if(p->isXYZMove())
@@ -300,7 +295,6 @@ void PrintLine::prepareQueueMove(uint8_t check_endstops,uint8_t pathOptimize, fl
 } // prepareQueueMove
 
 
-#if FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
 void PrintLine::prepareDirectMove(void)
 {
     Printer::unmarkAllSteppersDisabled(); // ??? hier wird nichts enabled. Nur markiert, auch wenn später oder früher "enablestepper" passiert.
@@ -349,13 +343,13 @@ void PrintLine::prepareDirectMove(void)
     float xydist2;
 
     // Define variables that are needed for the Bresenham algorithm. Please note that Z is not currently included in the Bresenham algorithm.
-    if(p->delta[Y_AXIS] > p->delta[X_AXIS] && p->delta[Y_AXIS] > p->delta[Z_AXIS] && p->delta[Y_AXIS] > p->delta[E_AXIS]) 
+    if(p->delta[Y_AXIS] > p->delta[X_AXIS] && p->delta[Y_AXIS] > p->delta[Z_AXIS] && p->delta[Y_AXIS] > p->delta[E_AXIS])
         p->primaryAxis = Y_AXIS;
-    else if (p->delta[X_AXIS] > p->delta[Z_AXIS] && p->delta[X_AXIS] > p->delta[E_AXIS]) 
+    else if (p->delta[X_AXIS] > p->delta[Z_AXIS] && p->delta[X_AXIS] > p->delta[E_AXIS])
         p->primaryAxis = X_AXIS;
-    else if (p->delta[Z_AXIS] > p->delta[E_AXIS]) 
+    else if (p->delta[Z_AXIS] > p->delta[E_AXIS])
         p->primaryAxis = Z_AXIS;
-    else 
+    else
         p->primaryAxis = E_AXIS;
     p->stepsRemaining = p->delta[p->primaryAxis];
     if(p->isXYZMove())
@@ -385,7 +379,6 @@ void PrintLine::stopDirectMove( void ) //Funktion ist bereits zur ausführzeit v
     }
     return;
 } // stopDirectMove
-#endif // FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
 
 
 void PrintLine::calculateQueueMove(float axisDistanceMM[],uint8_t pathOptimize, fast8_t drivingAxis, float feedrate)
@@ -400,7 +393,7 @@ void PrintLine::calculateQueueMove(float axisDistanceMM[],uint8_t pathOptimize, 
 #else
     if(linesCount < MOVE_CACHE_LOW && timeForMove < LOW_TICKS_PER_MOVE)   // Limit speed to keep cache full.
 #endif //FEATURE_DEBUG_MOVE_CACHE_TIMING
-    
+
     {
 #if FEATURE_DEBUG_MOVE_CACHE_TIMING
         move_cache_stats_count_limited++;
@@ -477,7 +470,7 @@ void PrintLine::calculateQueueMove(float axisDistanceMM[],uint8_t pathOptimize, 
     // t = (v_end-v_start)/a
     float slowestAxisPlateauTimeRepro = 1e15; // repro to reduce division Unit: 1/s
     uint32_t* accel = (isEPositiveMove() ?  Printer::maxPrintAccelerationStepsPerSquareSecond : Printer::maxTravelAccelerationStepsPerSquareSecond);
-    
+
     for(uint8_t i=0; i < 4 ; i++)
     {
         if(isMoveOfAxis(i))
@@ -550,7 +543,6 @@ void PrintLine::calculateQueueMove(float axisDistanceMM[],uint8_t pathOptimize, 
 } // calculateQueueMove
 
 
-#if FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
 void PrintLine::calculateDirectMove(float axisDistanceMM[],uint8_t pathOptimize, fast8_t drivingAxis)
 {
     long    axisInterval[4];
@@ -727,7 +719,6 @@ void PrintLine::calculateDirectMove(float axisDistanceMM[],uint8_t pathOptimize,
     task    = TASK_NO_TASK;
 
 } // calculateDirectMove
-#endif // FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
 
 
 /** \brief
@@ -745,7 +736,7 @@ void PrintLine::updateTrapezoids()
     PrintLine*  firstLine;
     PrintLine*  act = &lines[linesWritePos];
     InterruptProtectedBlock noInts; //BEGIN_INTERRUPT_PROTECTED;
-    
+
     // First we find out how far back we could go with optimization.
 
     uint8_t maxfirst = linesPos;            // first non fixed segment
@@ -760,13 +751,13 @@ void PrintLine::updateTrapezoids()
 
     // Skip as many stored moves as needed to gain enough time for computation
     //millis_t minTime = 4500L * RMath::min(MOVE_CACHE_SIZE,10);
-    
+
 #if MOVE_CACHE_SIZE < 10
  #define minTime 4500L * MOVE_CACHE_SIZE
 #else
  #define minTime 45000L
 #endif
-    
+
     while(timeleft < minTime && maxfirst != linesWritePos)
     {
         timeleft += lines[maxfirst].timeInTicks;
@@ -816,7 +807,7 @@ void PrintLine::updateTrapezoids()
     }
     */
 
-    //Retract: 
+    //Retract:
     if( previous->isEOnlyMove() != act->isEOnlyMove() )
     {
         previous->maxJunctionSpeed = previous->safeSpeed(previous->primaryAxis);
@@ -829,7 +820,7 @@ void PrintLine::updateTrapezoids()
     // if we start/stop extrusion we need to do so with lowest possible end speed
     // or advance would leave a drolling extruder and can not adjust fast enough.
     } else if(  Printer::isAdvanceActivated() && (previous->isEMove() != act->isEMove() || previous->isEPositiveMove() != act->isEPositiveMove() )  ) {
-        
+
         previous->maxJunctionSpeed = previous->safeSpeed(previous->primaryAxis);
         previous->setEndSpeedFixed(true);
         act->setStartSpeedFixed(true);
@@ -838,12 +829,12 @@ void PrintLine::updateTrapezoids()
         return;
 #endif // USE_ADVANCE
     }
-    
+
     computeMaxJunctionSpeed(previous, act);  // Set maximum junction speed if we have a real move before
 
         // Increase speed if possible neglecting current speed
     backwardPlanner(linesWritePos,first);
-    
+
     // Reduce speed to reachable speeds
     forwardPlanner(first);
 
@@ -1089,11 +1080,11 @@ inline float PrintLine::safeSpeed(fast8_t drivingAxis)
         else
             safe = 0.5f * Extruder::current->maxStartFeedrate; // This is a retraction move
     }
-    
+
     // enforce minimum speed for numerical stability of explicit speed integration
     if(drivingAxis == X_AXIS || drivingAxis == Y_AXIS) safe = RMath::max(xyMin, safe);
     else if(drivingAxis == Z_AXIS)                     safe = RMath::max(mz, safe);
- 
+
     return RMath::min(safe, fullSpeed);
 } // safeSpeed
 
@@ -1273,11 +1264,11 @@ void PrintLine::arc(float *position, float *target, float *offset, float radius,
         arc_target[1] = center_axis1 + r_axis1;
         //arc_target[axis_linear] += linear_per_segment;
         arc_target[3] += extruder_per_segment;
-        
+
         Printer::moveToReal(arc_target[0],arc_target[1],IGNORE_COORDINATE,arc_target[3],IGNORE_COORDINATE);
     }
     // Ensure last segment arrives at target location.
-    
+
     Printer::moveToReal(target[0],target[1],IGNORE_COORDINATE,target[3],IGNORE_COORDINATE);
 
 } // arc
@@ -1287,7 +1278,6 @@ void PrintLine::arc(float *position, float *target, float *offset, float radius,
 long PrintLine::performPauseCheck(){
     if(cur == NULL)
     {
-#if FEATURE_PAUSE_PRINTING
         if( g_pauseStatus > PAUSE_STATUS_PAUSED && g_pauseStatus <= PAUSE_STATUS_HEATING ) //siehe gate in Printer::allowQueueMove
         {
             // pause the print now
@@ -1365,7 +1355,6 @@ long PrintLine::performPauseCheck(){
             HAL::forbidInterrupts();
             return true;
         }
-#endif //FEATURE_PAUSE_PRINTING
 
         // Pause a bit, if z-compensation is way out of line: this is usefull when starting prints using very deep bed-leveling and custom z-endstop switches which can override a lot.
         uint16_t ZcmpNachlauf = abs( Printer::compensatedPositionCurrentStepsZ - Printer::compensatedPositionTargetStepsZ );
@@ -1406,7 +1395,6 @@ long PrintLine::performQueueMove()
         {
             switch( cur->task )
             {
-#if FEATURE_PAUSE_PRINTING
                 case TASK_PAUSE_PRINT:
                 {
                     if( g_pauseMode >= PAUSE_MODE_PAUSED )
@@ -1445,7 +1433,7 @@ long PrintLine::performQueueMove()
                     removeCurrentLineForbidInterrupt();
                     return 1000;
                 }
-                
+
                 case TASK_PAUSE_PRINT_AND_MOVE:
                 {
                     if( g_pauseMode >= PAUSE_MODE_PAUSED_AND_MOVED )
@@ -1486,7 +1474,6 @@ long PrintLine::performQueueMove()
                     removeCurrentLineForbidInterrupt();
                     return 1000;
                 }
-#endif // FEATURE_PAUSE_PRINTING
 
 #if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
                 case TASK_ENABLE_Z_COMPENSATION: //M3001 M3141
@@ -1499,7 +1486,7 @@ long PrintLine::performQueueMove()
                 case TASK_DISABLE_Z_COMPENSATION: //M3000 M3140
                 {
                     // disable the z compensation
-                    Printer::disableCMPnow(); //hier nicht unbedingt warten, das soll im fluss der queue einfach abgeschaltet werden. zu große abstände regelt die performPauseCheck 
+                    Printer::disableCMPnow(); //hier nicht unbedingt warten, das soll im fluss der queue einfach abgeschaltet werden. zu große abstände regelt die performPauseCheck
                     removeCurrentLineForbidInterrupt();
                     return 1000;
                 }
@@ -1573,7 +1560,6 @@ long PrintLine::performQueueMove()
 } // performQueueMove
 
 
-#if FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
 /**
   Processes the one-and-only direct move and moves the stepper motors one step.
   The function must be called from a timer loop. It returns the time for the next call. */
@@ -1589,7 +1575,7 @@ long PrintLine::performDirectMove()
         direct.fixStartAndEndSpeed();
 
         HAL::allowInterrupts();
-        
+
         directError = direct.delta[direct.primaryAxis];
         if(!direct.areParameterUpToDate()) direct.updateStepsParameter(); // should never happen, but with bad timings???
         Printer::vMaxReached = direct.vStart;
@@ -1617,14 +1603,14 @@ void PrintLine::performDirectSteps( void )
 {
     static unsigned long g_uLastDirectStepTime = 0;
     uint16_t moveinterval = 1000; //ns default.
-    
+
     //fix that microstepping and steps/mm settings are not constraining speed of buttons/.. extrusion.
     bool x_needed = Printer::directPositionCurrentSteps[X_AXIS] != Printer::directPositionTargetSteps[X_AXIS];
     bool y_needed = Printer::directPositionCurrentSteps[Y_AXIS] != Printer::directPositionTargetSteps[Y_AXIS];
     bool z_needed = Printer::directPositionCurrentSteps[Z_AXIS] != Printer::directPositionTargetSteps[Z_AXIS];
     bool e_needed = Printer::directPositionCurrentSteps[E_AXIS] != Printer::directPositionTargetSteps[E_AXIS];
     bool some_needed = x_needed || y_needed || z_needed || e_needed;
-    
+
     if(some_needed){
         //suche den gröbsten beteiligten stepper, denn der braucht ein limit. -> STEPS/s
         uint16_t fastest = 65535; //steps/mm*1 -> steps/s sind im bereich um 150 bis 3000 -> man kann bis grob 10mm/s per uint16_t rechnen.
@@ -1660,13 +1646,13 @@ void PrintLine::performDirectSteps( void )
     }else{
         return;
     }
-    
-    
+
+
     if( abs(HAL::timeInMicroseconds() - g_uLastDirectStepTime) >= moveinterval /*ns*/ )
     {
         bool bDone = false;
         g_uLastDirectStepTime = HAL::timeInMicroseconds();
-        
+
         if( Printer::directPositionCurrentSteps[E_AXIS] > Printer::directPositionTargetSteps[E_AXIS] )
         {
             bDone = true;
@@ -1704,7 +1690,7 @@ void PrintLine::performDirectSteps( void )
               }
             }
         }
-        
+
         if( !bDone )
         {
             char    nDirectionX = 0;
@@ -1742,7 +1728,7 @@ void PrintLine::performDirectSteps( void )
                 {
                     // move the extruder to the right
                     if( !Printer::stepperDirection[X_AXIS] ) Printer::setXDirection(true);
-                    
+
                     if( Printer::getXDirectionIsPos() ){
                         nDirectionX = 1;
                         bDone       = true;
@@ -1752,7 +1738,7 @@ void PrintLine::performDirectSteps( void )
                 {
                     // move the extruder to the left
                     if( !Printer::stepperDirection[X_AXIS] ) Printer::setXDirection(false);
-                    
+
                     if( !Printer::getXDirectionIsPos() ){
                         nDirectionX = -1;
                         bDone       = true;
@@ -1765,7 +1751,7 @@ void PrintLine::performDirectSteps( void )
                 {
                     // move the heat bed to the front
                     if( !Printer::stepperDirection[Y_AXIS] ) Printer::setYDirection(true);
-                    
+
                     if( Printer::getYDirectionIsPos() )
                     {
                         nDirectionY = 1;
@@ -1776,7 +1762,7 @@ void PrintLine::performDirectSteps( void )
                 {
                     // move the heat bed to the back
                     if( !Printer::stepperDirection[Y_AXIS] ) Printer::setYDirection(false);
-                    
+
                     if( !Printer::getYDirectionIsPos() ){
                         nDirectionY = -1;
                         bDone       = true;
@@ -1785,7 +1771,7 @@ void PrintLine::performDirectSteps( void )
                     if( !isQueueYMove() ) Printer::stepperDirection[Y_AXIS] = 0; //setYMoveFinished() für einzel-directsteps
                 }
             }
-    
+
             if( !Printer::blockAll && !zLast )
             {
                 // we have to move into z-direction
@@ -1793,7 +1779,7 @@ void PrintLine::performDirectSteps( void )
                 {
                     // move the heat bed to the bottom
                     if( !Printer::stepperDirection[Z_AXIS] ) Printer::setZDirection(true);
-                    
+
                     if( Printer::getZDirectionIsPos() )
                     {
                         nDirectionZ = 1;
@@ -1804,7 +1790,7 @@ void PrintLine::performDirectSteps( void )
                 {
                     // move the heat bed to the top
                     if( !Printer::stepperDirection[Z_AXIS] ) Printer::setZDirection(false);
-                    
+
                     if( !Printer::getZDirectionIsPos() )
                     {
                         nDirectionZ = -1;
@@ -1868,7 +1854,7 @@ void PrintLine::performDirectSteps( void )
                 }
             }
         }
-        
+
         if( !bDone )
         {
             if( Printer::directPositionCurrentSteps[E_AXIS] < Printer::directPositionTargetSteps[E_AXIS] )
@@ -1908,14 +1894,13 @@ void PrintLine::performDirectSteps( void )
         }
     }
 } // performDirectSteps
-#endif // FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
 
 
 long PrintLine::performMove(PrintLine* move, char forQueue)
 {
     static bool compensatedPositionPushE = false;
     //static bool compensatedPositionPushZ = false;
-    
+
     HAL::allowInterrupts();
     move->checkEndstops(forQueue);
     fast8_t max_loops = Printer::stepsPerTimerCall;
@@ -2014,8 +1999,8 @@ long PrintLine::performMove(PrintLine* move, char forQueue)
         }
         if(move->isZMove())
         {
-            if( Printer::blockAll 
-            || ( Printer::stepperDirection[Z_AXIS] < 0 && move->task == TASK_MOVE_FROM_BUTTON && Printer::isZMinEndstopHit() ) 
+            if( Printer::blockAll
+            || ( Printer::stepperDirection[Z_AXIS] < 0 && move->task == TASK_MOVE_FROM_BUTTON && Printer::isZMinEndstopHit() )
             || ( Printer::stepperDirection[Z_AXIS] > 0 && move->task == TASK_MOVE_FROM_BUTTON && Printer::isZMaxEndstopHit() ) )
             {
                 // as soon as the z-axis is blocked, we must finish all z-axis moves
@@ -2042,7 +2027,7 @@ long PrintLine::performMove(PrintLine* move, char forQueue)
                     //070118 einfügen von zusätzlichen Z-steps macht evtl. zu wenig sinn, weil Z normalerweise die Hauptachse ist. würde nur bei einer art ständigem vasenmodus was bringen?? Ich kann nicht mehr als 100% Z-Steps einmogeln. Bei E war das kein Problem, weils normalerweise nicht die Hauptachse ist.
                     /*
                     if((move->error[Z_AXIS] -= move->delta[Z_AXIS]) < 0 || compensatedPositionPushZ) {
-                    
+
                     if (!compensatedPositionPushZ && (dir > 0 && cmpup || dir < 0 && cmpdown)){
                         compensatedPositionPushZ = true;
                     }
@@ -2077,19 +2062,19 @@ long PrintLine::performMove(PrintLine* move, char forQueue)
         Printer::endXYZSteps();
     } // for loop
     HAL::allowInterrupts(); // Allow interrupts for other types, timer1 is still disabled
-    
+
     /***
     Printer::interval -> printers interval
-    interval          -> actual sent interval that might be manipulated 
+    interval          -> actual sent interval that might be manipulated
     v                 -> not manipulated active speed
     ***/
     speed_t v;
 
     Printer::stepNumber += max_loops;
-    Printer::timer      += (max_loops == 1 ?  Printer::interval       : 
-                           (max_loops == 2 ? (Printer::interval << 1) : 
-                           (max_loops == 4 ? (Printer::interval << 2) : 
-                           (max_loops == 8 ? (Printer::interval << 3) : 
+    Printer::timer      += (max_loops == 1 ?  Printer::interval       :
+                           (max_loops == 2 ? (Printer::interval << 1) :
+                           (max_loops == 4 ? (Printer::interval << 2) :
+                           (max_loops == 8 ? (Printer::interval << 3) :
                                              (Printer::interval * max_loops)
                             ))));
 
@@ -2168,7 +2153,7 @@ long PrintLine::performMove(PrintLine* move, char forQueue)
         if( move->stepsRemaining <= 0 ) { //Wenn keine Steps mehr da, sollten alle Achsen die benutzt wurden wieder freigegeben werden. Bei Z ist der Sonderfall, dass die Z-Kompensation sich reinschummeln könnte.
             move->setXMoveFinished();
             move->setYMoveFinished();
-            move->setZMoveFinished(); //Wichtig, das die Z-Kompensation wieder weiterarbeiten kann, auch wichtig bei PrintLine::direct! 
+            move->setZMoveFinished(); //Wichtig, das die Z-Kompensation wieder weiterarbeiten kann, auch wichtig bei PrintLine::direct!
             //Auch wenn kein Z-Move, könnte die Z-Kompensation die Achse Z benutzt haben.
             //gesetztes endZCompensationStep bei Z finish wäre egal, beendet wird auch ohne Richtung.
             move->setEMoveFinished();

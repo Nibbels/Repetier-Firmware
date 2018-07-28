@@ -227,7 +227,7 @@
   - M3076 P5000 ; sets the max emergency stop digits to 5000 [digits]
   - M3076 S-5000 P5000 ; sets the min emergency stop digits to -5000 [digits] and the max emergency stop digits to 5000 [digits]
   - M3076 S0 P0 ; disables the emergency stop
- 
+
 - M3079 - output the printed object
   - Examples:
   - M3079 ; outputs the printed object
@@ -305,7 +305,7 @@
 - M3150 [S] - start/abort the work part scan
   - Examples:
   - M3130 ; starts the work part scan without homning of the z-axis or aborts the currently performed work part scan
-  - M3130 S1 ; starts the work part scan with homing of the z-axis 
+  - M3130 S1 ; starts the work part scan with homing of the z-axis
 
 - M3151 [S] - clear the specified z-compensation matrix from the EEPROM
   - Examples:
@@ -360,7 +360,7 @@
 
 
 // ##########################################################################################
-// ##   the following M codes are supported only by the RF2000 and RF2000 V2
+// ##   the following M codes are supported only by the RF2000 and RF2000v2
 // ##########################################################################################
 
 - M3300 [P] [S] - configure the 24V FET outputs ( on/off )
@@ -406,13 +406,18 @@
   - M3307 P1 S0 ; when the RGB light mode is "Manual", the red led shows a brightness of 0, allowed range = 0 (min) ... 255 (max)
   - M3307 P2 S100 ; when the RGB light mode is "Manual", the green led shows a brightness of 100, allowed range = 0 (min) ... 255 (max)
   - M3307 P3 S200 ; when the RGB light mode is "Manual", the blue led shows a brightness of 200, allowed range = 0 (min) ... 255 (max)
-  
+
 - M3308 [P] - configure the RGB light mode
   - Examples:
   - M3308 P0 ; sets the RGB light mode to "off"
   - M3308 P1 ; sets the RGB light mode to "White"
   - M3308 P2 ; sets the RGB light mode to "Auto"
   - M3308 P3 ; sets the RGB light mode to "Manual"
+
+- M3309 - start/abort to align the two extruders
+  - Examples:
+  - M3309 ; moves the heat bed up until it touches the first extruder and beeps afterwards in order to indicate that the extruders can be aligned manually
+
 */
 
 
@@ -592,9 +597,7 @@ extern  short           g_ZCompensationMatrix[COMPENSATION_MATRIX_MAX_X][COMPENS
 extern  unsigned char   g_uZMatrixMax[2];
 extern  long            g_nZScanZPosition;
 
-#if FEATURE_PRECISE_HEAT_BED_SCAN
 extern  char            g_nHeatBedScanMode;         // 0 = oldScan, 1 = PLA, 2 = ABS
-#endif // FEATURE_PRECISE_HEAT_BED_SCAN
 
 extern  long            g_nScanXStepSizeMm;
 extern  long            g_nScanXStepSizeSteps;
@@ -608,29 +611,17 @@ extern  unsigned short  g_nScanRetryPressureDelta;
 extern  long            g_staticZSteps;
 extern  char            g_debugLevel;
 extern  char            g_debugLog;
-//extern    long            g_debugCounter[20];
-//extern    short           g_debugCounter[12];
-//extern    short           g_debugCounter[6];
 extern  unsigned long   g_uStopTime;
 extern volatile unsigned long   g_uBlockCommands;
-//extern    short           g_debugInt16;
-//extern    unsigned short  g_debugUInt16;
-//extern    long            g_debugInt32;
 
 // other configurable parameters
-#if FEATURE_EXTENDED_BUTTONS
 extern  unsigned long   g_nManualSteps[4];
-#endif // FEATURE_EXTENDED_BUTTONS
-
-
-#if FEATURE_PAUSE_PRINTING
 extern  volatile long   g_nPauseSteps[4];
 extern  volatile long   g_nContinueSteps[4];
 extern  volatile char   g_pauseStatus;
 extern  volatile char   g_pauseMode;
 extern  volatile unsigned long  g_uPauseTime;
 extern  volatile char   g_pauseBeepDone;
-#endif // FEATURE_PAUSE_PRINTING
 
 #if FEATURE_EMERGENCY_PAUSE
 extern long             g_nEmergencyPauseDigitsMin;  //short reicht eigentlich
@@ -757,7 +748,7 @@ extern void switchActiveHeatBed( char newActiveHeatBed );
 #if FEATURE_ALIGN_EXTRUDERS
 // startAlignExtruders()
 extern void startAlignExtruders( void );
- 
+
 // alignExtruders()
 extern void alignExtruders( void );
 #endif // FEATURE_ALIGN_EXTRUDERS
@@ -863,7 +854,6 @@ extern void outputObject( bool showerrors = true );
 extern void parkPrinter( void );
 #endif // FEATURE_PARK
 
-#if FEATURE_PAUSE_PRINTING
 extern bool processingDirectMove();
 extern void checkPauseStatus_fromTask();
 extern void waitforPauseStatus_fromButton();
@@ -881,7 +871,6 @@ extern void determineZPausePositionForPrint( void );
 
 // determineZPausePositionForMill()
 extern void determineZPausePositionForMill( void );
-#endif // FEATURE_PAUSE_PRINTING
 
 // setExtruderCurrent()
 extern void setExtruderCurrent( uint8_t nr, uint8_t current );

@@ -50,9 +50,9 @@ To override EEPROM settings with config settings, set EEPROM_MODE 0 */
 #ifndef MOTHERBOARD
     #error Device type (RF1000 / RF2000 / RF2000v2) is not defined. Edit Configuration.h or pass the corresponding option to the compiler.
 #endif
-#if MOTHERBOARD == DEVICE_TYPE_RF2000_V2
-    #error This Firmware does not support RF2000v2 yet. Renkforce did not release any validated RF2000V2.h yet.
-#endif // MOTHERBOARD == DEVICE_TYPE_RF2000_V2
+#if MOTHERBOARD == DEVICE_TYPE_RF2000v2
+    #error This Mod-Firmware has not been tested on a RF2000v2 yet. But the firmware has been created with care. Please remove this message if you acknowledged this.
+#endif // MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
 
 
@@ -72,33 +72,25 @@ IMPORTANT: With mode <>0 some changes in Configuration.h are not set any more, a
 // ##    supported features
 // ##########################################################################################
 
-/** \brief Allows to use 6 additional hardware buttons */
-#define FEATURE_EXTENDED_BUTTONS            1                                                   // 1 = on, 0 = off
-
-/** \brief Allows to pause the processing of G-Codes */
-#define FEATURE_PAUSE_PRINTING              1                                                   // 1 = on, 0 = off
-/** \brief Enables/diables the emergency pause in case of too high pressure ... the emergency pause can be turned on only in case the general pause functionality is available */
-#if FEATURE_PAUSE_PRINTING
-  #define FEATURE_EMERGENCY_PAUSE           1                                                   // 1 = on, 0 = off
-#endif // FEATURE_PAUSE_PRINTING
+/** \brief Enables/diables the emergency pause in case of too high pressure */
+#define FEATURE_EMERGENCY_PAUSE           1                                                    // 1 = on, 0 = off
 
 /** \brief Specifies if you want to see the pressure digits within the repetier-server/repetier-host temperature message */
-#define FEATURE_PRINT_PRESSURE              1                                                   // 1 = on, 0 = off
+#define FEATURE_PRINT_PRESSURE              1                                                    // 1 = on, 0 = off
 
 /** \brief Specifies if you want to adjust your average pressure to zero digits after homing. This pushes the weight-scale to zero by adding the idle pressure as an offset. */
 #define FEATURE_ZERO_DIGITS                 1
 
 /** \brief Auto-Retract within hardcoded scripts: Pause / Output_Object / ... Vom Hotend abhängig! V2: 10mm, E3D: 1-2mm (?) */
-#define SCRIPT_RETRACT_MM                   1                                                   //[mm] Firmwares E-Retract */
+#define SCRIPT_RETRACT_MM                   1                                                    //[mm] Firmwares E-Retract */
 
 /** \brief Enables automatic compensation in z direction for the operationg mode "print" */
-#define FEATURE_HEAT_BED_Z_COMPENSATION     1                                                   // 1 = on, 0 = off
+#define FEATURE_HEAT_BED_Z_COMPENSATION     1                                                    // 1 = on, 0 = off
 /** \brief Enables the precise heat bed scan */
 #if FEATURE_HEAT_BED_Z_COMPENSATION
-  #define FEATURE_PRECISE_HEAT_BED_SCAN       1                                                 // 1 = on, 0 = off
-  #define FEATURE_DIGIT_Z_COMPENSATION           1                                               // 1 = on, 0 = off
-  #define FEATURE_DIGIT_FLOW_COMPENSATION        1                                               // 1 = on, 0 = off
-  #define FEATURE_SENSIBLE_PRESSURE              1                                               // 1 = on, 0 = off
+  #define FEATURE_DIGIT_Z_COMPENSATION      1                                                    // 1 = on, 0 = off
+  #define FEATURE_DIGIT_FLOW_COMPENSATION   1                                                    // 1 = on, 0 = off
+  #define FEATURE_SENSIBLE_PRESSURE         1                                                    // 1 = on, 0 = off
   #if FEATURE_SENSIBLE_PRESSURE
     // mittels SENSIBLE_PRESSURE soll im grunde ausschließlich die wärmeausdehnung in einem perfekt kalibrierten system (HBS,mhier) kompensiert werden:
     // Max lift in [um]; Standard: 180um=0,18mm, darf nie 0 sein!! größer 0.2 macht normalerweise keinen Sinn.
@@ -110,8 +102,8 @@ IMPORTANT: With mode <>0 some changes in Configuration.h are not set any more, a
   #define DEBUG_HEAT_BED_SCAN                 0                                                   // 0 = off, 1 = on, 2 = on with more debug outputs
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
-/** \brief The Firmwares disalowes movement before you at least: pressed a printers button, set a temperature, homed once 
-If you did not do this, a previous watchdog reset is assumed and fail-drive against some border without homing is blocked thatway. 
+/** \brief The Firmwares disalowes movement before you at least: pressed a printers button, set a temperature, homed once
+If you did not do this, a previous watchdog reset is assumed and fail-drive against some border without homing is blocked thatway.
 This is a fix for repetier-server not knowing that the printer reset and still sending commands
 */
 #define FEATURE_UNLOCK_MOVEMENT             1
@@ -129,11 +121,6 @@ XYZ_POSITION_BUTTON_DIRECTION = 1 : This fits more if you want to stick to stand
 
 /** \brief Enables/disables the park feature */
 #define FEATURE_PARK                        0                                                   // 1 = on, 0 = off
-
-/** \brief Specifies whether the x, y and z-positions can be changed manually (e.g. via the "Position X/Y/Z" menus or via the hardware buttons) in case the according axis is unknown.
-The position of an axis is unknown until the axis has been homed. The position of an axis becomes unknown in case its stepper is disabled.
-Enabling of the following feature can be dangerous because it allows to manually drive the printer above its max x/y/z position. */
-#define FEATURE_ALLOW_UNKNOWN_POSITIONS     1                                                   // 1 = allow, 0 = do not allow
 
 /** \brief Ditto printing allows 2 extruders to do the same action. This effectively allows
 to print an object two times at the speed of one. Works only with dual extruder setup. */
@@ -154,10 +141,6 @@ to print an object two times at the speed of one. Works only with dual extruder 
 /** \brief Enables/disables the beeper */
 #define FEATURE_BEEPER                      1                                                   // 1 = on, 0 = off
 
-/** \brief A watchdog resets the printer, if a signal is not send within predifined time limits. That way we can be sure that the board
-is always running and is not hung up for some unknown reason. */
-#define FEATURE_WATCHDOG                    1                                                   // 1 = on, 0 = off
-
 /** \brief Defines whether a change within the menu shall be stored to the EEPROM automatically or not. */
 #define FEATURE_AUTOMATIC_EEPROM_UPDATE     1                                                   // 1 = the EEPROM is updated automatically after each change via the menu, 0 = the EEPROM must be updated manually via the "Store to EEPROM" menu item
 
@@ -173,6 +156,64 @@ WARNING: Servos can draw a considerable amount of current. Make sure your system
 #define FEATURE_SERVO                       1                                                   // 1 = on, 0 = off
 
 // ##########################################################################################
+// ##   Common extruder configuration
+// ##########################################################################################
+
+/** \brief for each extruder, fan will stay on until extruder temperature is below this value */
+#define EXTRUDER_FAN_COOL_TEMP              50
+
+/** \brief Maximal temperature which can be set for the extruder */
+#define EXTRUDER_MAX_TEMP                   275
+
+/** \brief Extruder allow cold movement which can be set for the extruder */
+#define EXTRUDER_ALLOW_COLD_MOVE            0
+
+// ##########################################################################################
+// ##   Hotend V1
+// ##########################################################################################
+
+/** \brief The maximum value, I-gain can contribute to the output. */
+#define HT2_PID_INTEGRAL_DRIVE_MAX          130
+/** \brief lower value for integral part. */
+#define HT2_PID_INTEGRAL_DRIVE_MIN          30
+/** \brief P-gain. */
+#define HT2_PID_P                           37.52
+/** \brief I-gain. */
+#define HT2_PID_I                           10
+/** \brief Dgain. */
+#define HT2_PID_D                           35.18
+
+// ##########################################################################################
+// ##   Hotend V2
+// ##########################################################################################
+
+/** \brief The maximum value, I-gain can contribute to the output. */
+#define HT3_PID_INTEGRAL_DRIVE_MAX          120
+/** \brief lower value for integral part. */
+#define HT3_PID_INTEGRAL_DRIVE_MIN          30
+/** \brief P-gain. */
+#define HT3_PID_P                           12.5
+/** \brief I-gain. */
+#define HT3_PID_I                           3.2
+/** \brief Dgain. */
+#define HT3_PID_D                           18
+
+// ##########################################################################################
+// ##	Hotend V3
+// ##########################################################################################
+
+/** \brief The maximum value, I-gain can contribute to the output. */
+#define HT4_PID_INTEGRAL_DRIVE_MAX          120
+/** \brief lower value for integral part. */
+#define HT4_PID_INTEGRAL_DRIVE_MIN          30
+/** \brief P-gain. */
+#define HT4_PID_P                           98.0
+/** \brief I-gain. */
+#define HT4_PID_I                           0.63
+/** \brief Dgain. */
+#define HT4_PID_D                           132.0
+
+// ##########################################################################################
 // ##   common configuration
 // ##########################################################################################
 
@@ -186,7 +227,7 @@ High microstepping make your speed low. Dont use 256, avoid 128.
 Better dont rise Z because it is already slow with 2560steps/mm @32 Microsteps.
 Change your EEPROMs Steps/mm accordingly if you change RF_MICRO_STEPS_ in this configuration. Steps/mm are autoadjusted if you use FEATURE_ADJUSTABLE_MICROSTEPSs Menu!
  */
- 
+
 #define RF_MICRO_STEPS_Z                    32                                                   // standard/best 32 or 16
 #define RF_MICRO_STEPS_XY                   32                                                   // standard/best 32 or 64
 #define RF_MICRO_STEPS_E                    32                                                   // standard/best 32 or 64 (or 128?? --> untested!)
@@ -213,13 +254,9 @@ usage or for seraching for memory induced errors. Switch it off for production, 
 // ##   configuration of the extended buttons
 // ##########################################################################################
 
-#if FEATURE_EXTENDED_BUTTONS
-
 #define EXTENDED_BUTTONS_COUNTER_NORMAL     4                                                   // 39 ~ run 100 times per second, 4 ~ run 1000 times per second
 #define EXTENDED_BUTTONS_COUNTER_FAST       4                                                   // 39 ~ run 100 times per second, 4 ~ run 1000 times per second
 #define EXTENDED_BUTTONS_STEPPER_DELAY      1                                                   // [us]
-
-#endif // FEATURE_EXTENDED_BUTTONS
 
 
 // ##########################################################################################
@@ -234,15 +271,12 @@ usage or for seraching for memory induced errors. Switch it off for production, 
 // ##   configuration of the pause functionality
 // ##########################################################################################
 
-#if FEATURE_PAUSE_PRINTING 
-
 #if !FEATURE_HEAT_BED_Z_COMPENSATION && !FEATURE_WORK_PART_Z_COMPENSATION
     #error FEATURE_PAUSE_PRINTING can not be used without FEATURE_HEAT_BED_Z_COMPENSATION or FEATURE_WORK_PART_Z_COMPENSATION
 #endif // !FEATURE_HEAT_BED_Z_COMPENSATION && !FEATURE_WORK_PART_Z_COMPENSATION
 
 /** \brief Specifies the time interval after the pausing of the print at which the extruder current is reduced */
 #define EXTRUDER_CURRENT_PAUSE_DELAY        60000                                                // [ms] or 0, in order to disable the lowering of the extruder current
-#endif // FEATURE_PAUSE_PRINTING
 
 /** \brief Specifies the extruder current which shall be use after pausing of the print and before continuing of the print */
 #define EXTRUDER_CURRENT_PAUSED             32                                                  // ~0.5A
@@ -267,7 +301,7 @@ usage or for seraching for memory induced errors. Switch it off for production, 
 
 #if FEATURE_EMERGENCY_PAUSE
 
-/** \brief Specifies the pressure at which the emergency pause shall be performed, in [digits] 
+/** \brief Specifies the pressure at which the emergency pause shall be performed, in [digits]
 @ ca. +- 15000 the sensors tend to start bending
 With RF1.37r2.Mod the Emergency-Pause-Features limits can be changed in EEPROM and Printers Menu. Here are the absolute maximum limits:
 */
@@ -289,7 +323,7 @@ With RF1.37r2.Mod the Emergency-Pause-Features limits can be changed in EEPROM a
 
 #if FEATURE_EMERGENCY_STOP_ALL
 
-/** \brief Specifies the pressure at which the emergency stop shall be performed, in [digits] 
+/** \brief Specifies the pressure at which the emergency stop shall be performed, in [digits]
 With RF1.37r6.Mod the Emergency-ZStop-Features limits can be changed in EEPROM and Printers Menu. Here are the absolute maximum limits:
 Do not set them to Zero.
 */
@@ -310,7 +344,7 @@ Do not set them to Zero.
 // ##########################################################################################
 
 #if FEATURE_SERVICE_INTERVAL
-/** \brief Wie setzte ich den Interval wieder zurück, ohne die Firmware neu aufzuspielen? 
+/** \brief Wie setzte ich den Interval wieder zurück, ohne die Firmware neu aufzuspielen?
 Um diese Meldung zurück zu setzen muss man den RFx000 ausschalten, die Knöpfe "links", "rauf" und "runter" drücken (und alle drei gedrückt halten), den RFx000 einschalten und die Knöpfe ca. 5-10 Sekunden danach loslassen.
 Damit werden die Service-Zähler wieder auf 0 zurück gestellt. */
 
@@ -490,8 +524,6 @@ instead of driving both with a single stepper. The same works for the other axis
 // ##   configuration of the manual steps
 // ##########################################################################################
 
-#if FEATURE_EXTENDED_BUTTONS
-
 /** \brief Configuration of the manual steps */
 #define DEFAULT_MANUAL_MM_X                    0.1f                            // [mm]
 #define DEFAULT_MANUAL_MM_Y                    0.1f                            // [mm]
@@ -503,14 +535,12 @@ instead of driving both with a single stepper. The same works for the other axis
 //Dieser statische Ansatz wird evtl. mal umgebaut. Man könnte auch eine Funktion schreiben, die sinnvolle Einstellwerte automatisch anhand Microsteps und Mikrometertabelle sucht.
 #define NUM_ACCEPTABLE_STEP_SIZE_TABLE    7
 #define ACCEPTABLE_STEP_SIZE_TABLE { 5,13,26,51,64,128,256 }
-#endif // FEATURE_EXTENDED_BUTTONS
-
 
 // ###############################################################################
 // ##   Values for menu settings
 // ###############################################################################
 
-/** \brief 
+/** \brief
 Select the language to use.
 0 = English
 1 = German */
@@ -727,7 +757,7 @@ non-Repetier PC applications may fall over the debug outputs of the firmware. */
 
 /** \brief Configuration of the external watchdog
 The TPS3820 of the RF1000/RF2000 resets about 112/200/310 (min/typical/max) ms after the last time when it was triggered
-http://pdf1.alldatasheet.com/datasheet-pdf/view/29215/TI/TPS3820-50DBVT.html 
+http://pdf1.alldatasheet.com/datasheet-pdf/view/29215/TI/TPS3820-50DBVT.html
 t_d in datasheet is delay time: how long reset is triggered after timeout: 15...25...37ms for TPS3820.
 */
 #define WATCHDOG_MAIN_LOOP_TIMEOUT          20000UL                                             // [ms] -> uhrzeit intern scheint nicht immer zu stimmen!
@@ -737,7 +767,7 @@ t_d in datasheet is delay time: how long reset is triggered after timeout: 15...
 
 /** \brief The display shows that the device is idle after no new commands were processed for longer than the minimal idle time */
 #define MINIMAL_IDLE_TIME                   500                                                 // [ms]
-    
+
 /** \brief If enabled you can select the distance your filament gets retracted during a M140 command, after a given temperature is reached. */
 #define RETRACT_DURING_HEATUP               true
 
@@ -820,7 +850,7 @@ and it is elsewise difficult to know, what your reprap is currently doing. */
 #define ECHO_ON_EXECUTE                     1
 
 /** \brief If the firmware is busy, it will send a busy signal to host signaling that
- everything is fine and it only takes a bit longer to finish. That way the 
+ everything is fine and it only takes a bit longer to finish. That way the
  host can keep timeout short so in case of communication errors the resulting
  blobs are much smaller. Set to 0 to disable it. */
 #define KEEP_ALIVE_INTERVAL                 2000                                                // [ms]
@@ -848,7 +878,7 @@ and it is elsewise difficult to know, what your reprap is currently doing. */
  #error You cannot use RESERVE_DIGITAL_PIN_PE4 on an RF1000, please connect and choose another one.
 #endif
 
-/** \brief For Nibbels external interrupt 3 button at RF1000 X25.8 und RF2000 X34.2 "EXT_IRQ"/INT3 
+/** \brief For Nibbels external interrupt 3 button at RF1000 X25.8 und RF2000 X34.2 "EXT_IRQ"/INT3
 You can activate this to 1 and connect some Button. If you connect ground to pull the pullup down you will let the firmware jump into interrupt routine */
 #define FEATURE_USER_INT3                   0                                                   // 0 = OFF, 1 = ON
 

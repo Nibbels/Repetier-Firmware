@@ -53,16 +53,16 @@ public:
     float           K; ///< G-code K value if set
     float           L; ///< G-code L value if set
     float           O; ///< G-code O value if set
-    
+
     char*           text; ///< Text message of g-code if present.
     //moved the byte to the end and aligned ints on short boundary
     // Old habit from PC, which require alignments for data types such as int and long to be on 2 or 4 byte boundary
     // Otherwise, the compiler adds padding, wasted space.
-    
+
     // Old habit from PC, which require alignments for data types such as int and long to be on 2 or 4 byte boundary
     // Otherwise, the compiler adds padding, wasted space.
     uint8_t T; // This may not matter on any of these controllers, but it can't hurt
-    
+
     // True if origin did not come from serial console. That way we can send status messages to
     // a host only if he would normally not know about the mode switch.
     bool internalCommand;

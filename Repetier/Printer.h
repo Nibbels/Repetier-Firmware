@@ -40,7 +40,7 @@
 
 #define PRINTER_FLAG2_RESET_FILAMENT_USAGE      4
 #define PRINTER_FLAG2_GOT_TEMPS                 32
- 
+
 #define PRINTER_FLAG3_X_HOMED                   1 // flag3 alike original repetier
 #define PRINTER_FLAG3_Y_HOMED                   2 // flag3 alike original repetier
 #define PRINTER_FLAG3_Z_HOMED                   4 // flag3 alike original repetier
@@ -150,7 +150,7 @@ public:
     static volatile long    compensatedPositionCurrentStepsZ;
     static volatile float   compensatedPositionOverPercE;
     static volatile float   compensatedPositionCollectTinyE;
-    
+
     static volatile long    queuePositionZLayerCurrent_cand;
     static volatile long    queuePositionZLayerCurrent;
     static volatile long    queuePositionZLayerLast;
@@ -158,12 +158,10 @@ public:
     static volatile char    endZCompensationStep;
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
 
-#if FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
     static volatile long    directPositionTargetSteps[4];
     static volatile long    directPositionCurrentSteps[4];
     static long             directPositionLastSteps[4];
     static char             waitMove;
-#endif // FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
 
 #if FEATURE_MILLING_MODE
     static char             operatingMode;
@@ -197,7 +195,7 @@ public:
 
 #if FEATURE_RGB_LIGHT_EFFECTS
     static char             RGBLightMode;
-    static char             RGBLightStatus;  
+    static char             RGBLightStatus;
     static  unsigned long   RGBLightIdleStart;
     static char             RGBButtonBackPressed;
     static char             RGBLightModeForceWhite;
@@ -499,7 +497,7 @@ public:
         WRITE( Y2_STEP_PIN, HIGH );
     #endif // FEATURE_TWO_YSTEPPER
     } // startYStep
-        
+
     static INLINE void startZStep()
     {
         WRITE( Z_STEP_PIN, HIGH );
@@ -533,7 +531,7 @@ public:
         endYStep();
         endZStep();
     } // endXYZSteps
-    
+
     static INLINE bool getZDirectionIsPos()
     {
         return ((READ(Z_DIR_PIN)!=0) ^ INVERT_Z_DIR);
@@ -581,7 +579,7 @@ public:
             case Z_AXIS: {
                 return (flag3 & PRINTER_FLAG3_Z_HOMED);
                 }
-        } 
+        }
         return 0;
     } // isAxisHomed
 
@@ -620,8 +618,8 @@ public:
     {
         if(x != -1) flag3 = (x ? flag3 | PRINTER_FLAG3_X_HOMED : flag3 & ~PRINTER_FLAG3_X_HOMED);
         if(y != -1) flag3 = (y ? flag3 | PRINTER_FLAG3_Y_HOMED : flag3 & ~PRINTER_FLAG3_Y_HOMED);
-        if(z != -1) flag3 = (z ? flag3 | PRINTER_FLAG3_Z_HOMED : flag3 & ~PRINTER_FLAG3_Z_HOMED);  
-        
+        if(z != -1) flag3 = (z ? flag3 | PRINTER_FLAG3_Z_HOMED : flag3 & ~PRINTER_FLAG3_Z_HOMED);
+
 #if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
         if( !isAxisHomed(Z_AXIS) ){
             Printer::disableCMPnow(true); //true == wait for move while HOMING
@@ -868,7 +866,7 @@ public:
                 // we remember that the z-max endstop is hit at the moment
                 return true;
             }
-                
+
             if( lastZDirection < 0 )
             {
                 // z-max was not hit and we are moving upwards, so z-max can not become hit right now
@@ -948,7 +946,7 @@ public:
     {
         Printer::flag0 = (defect ? flag0 | PRINTER_FLAG0_TEMPSENSOR_DEFECT : flag0 & ~PRINTER_FLAG0_TEMPSENSOR_DEFECT);
     } // setSomeTempsensorDefect
-    
+
     static INLINE bool isAnyTempsensorDefect()
     {
 #if FEATURE_MILLING_MODE
@@ -983,23 +981,13 @@ public:
     static INLINE float targetXPosition()
     {
         // return all values in [mm]
-#if FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
         return ((float)queuePositionTargetSteps[X_AXIS] + (float)directPositionTargetSteps[X_AXIS]) * invAxisStepsPerMM[X_AXIS];
-#else
-        return (float)queuePositionTargetSteps[X_AXIS] * invAxisStepsPerMM[X_AXIS];
-#endif // FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
-
     } // targetXPosition
 
     static INLINE float targetYPosition()
     {
         // return all values in [mm]
-#if FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
         return ((float)queuePositionTargetSteps[Y_AXIS] + (float)directPositionTargetSteps[Y_AXIS]) * invAxisStepsPerMM[Y_AXIS];
-#else
-        return (float)queuePositionTargetSteps[Y_AXIS] * invAxisStepsPerMM[Y_AXIS];
-#endif // FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
-
     } // targetYPosition
 
     static inline float targetZPosition()
@@ -1018,10 +1006,8 @@ public:
         fvalue += (float)g_nZOriginPosition[Z_AXIS];
 #endif // FEATURE_FIND_Z_ORIGIN
 
-#if FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
         // add the current manual z-steps
         fvalue += (float)Printer::directPositionTargetSteps[Z_AXIS];
-#endif // FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
 
         fvalue *= Printer::invAxisStepsPerMM[Z_AXIS];
         return fvalue;
@@ -1036,27 +1022,17 @@ public:
         zp = targetZPosition();
 
     } // targetPosition
-    
+
     static inline float currentXPosition()
     {
         // return all values in [mm]
-#if FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
         return ((float)queuePositionCurrentSteps[X_AXIS] + (float)directPositionCurrentSteps[X_AXIS]) * invAxisStepsPerMM[X_AXIS];
-#else
-        return (float)queuePositionCurrentSteps[X_AXIS] * invAxisStepsPerMM[X_AXIS];
-#endif // FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
-
     } // currentXPosition
 
     static INLINE float currentYPosition()
     {
         // return all values in [mm]
-#if FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
         return ((float)queuePositionCurrentSteps[Y_AXIS] + (float)directPositionCurrentSteps[Y_AXIS]) * invAxisStepsPerMM[Y_AXIS];
-#else
-        return (float)queuePositionCurrentSteps[Y_AXIS] * invAxisStepsPerMM[Y_AXIS];
-#endif // FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
-
     } // currentYPosition
 
     static inline long currentZPositionSteps()
@@ -1075,10 +1051,8 @@ public:
         value += g_nZOriginPosition[Z_AXIS];
 #endif // FEATURE_FIND_Z_ORIGIN
 
-#if FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
         // add the current manual z-steps
         value += Printer::directPositionCurrentSteps[Z_AXIS];
-#endif // FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
 
         return value;
 
@@ -1101,7 +1075,7 @@ public:
 
             // When we see Z-Min the Extruder::current->zOffset (negative number) is not what we want to see. We want to see the diff with sensor-zeroing.
             fvalue -= (float)Extruder::current->zOffset; //adds z-Offset for T1 again to really show the axis-scale towards z-min hardware switch.
-            
+
         }
 
         else if (Printer::ZMode == Z_VALUE_MODE_SURFACE)
@@ -1152,12 +1126,12 @@ public:
     static void homeAxis(bool xaxis,bool yaxis,bool zaxis); /// Home axis
     static void setOrigin(float xOff,float yOff,float zOff);
 
-    static INLINE int getFanSpeed(bool percent = false)
+    static INLINE uint8_t getFanSpeed(bool percent = false)
     {
-        if(!percent) return (int)pwm_pos[NUM_EXTRUDER+2]; //int
-        if(!pwm_pos[NUM_EXTRUDER+2]) return 0; //%
-        if(pwm_pos[NUM_EXTRUDER+2] <= 3) return 1; //%
-        return (int)(pwm_pos[NUM_EXTRUDER+2]*100/255); //%
+        if(!percent) return fanSpeed; //int
+        if(!fanSpeed) return 0; //0%
+        if(fanSpeed <= 3) return 1; //1%
+        return (uint8_t)(((uint16_t)fanSpeed * 100) / 255); //%
     } // getFanSpeed
 
 #if FEATURE_MEMORY_POSITION
@@ -1166,12 +1140,9 @@ public:
 #endif // FEATURE_MEMORY_POSITION
 
     static bool allowQueueMove( void );
-
-#if FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
     static bool allowDirectMove( void );
     static bool allowDirectSteps( void );
     static bool processAsDirectSteps( void );
-#endif // FEATURE_EXTENDED_BUTTONS || FEATURE_PAUSE_PRINTING
 
 #if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
     static void performZCompensation( void );
@@ -1187,7 +1158,7 @@ public:
     static void stopPrint();
     static bool checkAbortKeys( void );
     static bool checkPlayKey( void );
-    
+
 private:
     static void homeXAxis();
     static void homeYAxis();

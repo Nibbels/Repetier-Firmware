@@ -309,7 +309,9 @@ FSTRINGVALUE(Com::tEPRPrinter_FREQ_DBL,"Step Double Frequency [1/s]")
 
 #if FAN_PIN>-1 && FEATURE_FAN_CONTROL
 FSTRINGVALUE(Com::tEPRPrinter_FAN_MODE,"Fan Modulation [0=PWM/1=PDM]")
-FSTRINGVALUE(Com::tEPRPrinter_FAN_SPEED,"Fan PWM Mode (15.3..245Hz) [15.3*2^x Hz]")
+FSTRINGVALUE(Com::tEPRPrinter_FAN_SPEED,"Fan PWM Divisor [15.3Hz/x]")
+FSTRINGVALUE(Com::tEPRPrinter_FAN_PART_FAN_PWM_MIN,"Partfan 1% Level [1..239]")
+FSTRINGVALUE(Com::tEPRPrinter_FAN_PART_FAN_PWM_MAX,"Partfan 99% Level [16..254]")
 #endif // FAN_PIN>-1 && FEATURE_FAN_CONTROL
 
 #endif // EEPROM_MODE
@@ -571,8 +573,8 @@ void Com::printFloat(float number, uint8_t digits, bool komma_as_dot)
     // Extract the integer part of the number and print it
     unsigned long   int_part  = (unsigned long)number;
     float           remainder = number - (float)int_part;
-  
-    
+
+
     printNumber(int_part);
 
     // Print the decimal point, but only if there are digits beyond

@@ -36,10 +36,10 @@
     #include "RF2000.h"
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000
 
-#if MOTHERBOARD == DEVICE_TYPE_RF2000_V2
-    #include "RF2000V2.h"
-#endif // MOTHERBOARD == DEVICE_TYPE_RF2000_V2
- 
+#if MOTHERBOARD == DEVICE_TYPE_RF2000v2
+    #include "RF2000v2.h"
+#endif // MOTHERBOARD == DEVICE_TYPE_RF2000v2
+
 #include "pins.h"
 #include "HAL.h"
 #include "gcode.h"
@@ -129,6 +129,7 @@ extern volatile uint    osAnalogInputBuildup[ANALOG_INPUTS];
 extern volatile uint8   osAnalogInputPos; // Current sampling position
 extern volatile uint    osAnalogInputValues[ANALOG_INPUTS];
 extern uint8_t          pwm_pos[NUM_EXTRUDER+3]; // 0-NUM_EXTRUDER = Heater 0-NUM_EXTRUDER of extruder, NUM_EXTRUDER = Heated bed, NUM_EXTRUDER+1 Board fan, NUM_EXTRUDER+2 = Fan
+extern uint8_t          fanSpeed; //remember user input fan speed at a 0..255 scale.
 
 #if FEATURE_DEBUG_MOVE_CACHE_TIMING
 extern float            low_ticks_per_move;
@@ -148,12 +149,8 @@ extern float            maxadvspeed;
 
 #include "Extruder.h"
 
-#ifndef FEATURE_DITTO_PRINTING
-#define FEATURE_DITTO_PRINTING false
-#endif // FEATURE_DITTO_PRINTING
-
 #if FEATURE_DITTO_PRINTING && NUM_EXTRUDER!=2
-#error Ditto printing requires exactly 2 extruder.
+    #error Ditto printing requires exactly 2 extruder.
 #endif // FEATURE_DITTO_PRINTING && NUM_EXTRUDER!=2
 
 extern millis_t previousMillisCmd;

@@ -98,7 +98,7 @@ void SDCard::initsd()
                                "Does another SPI device need to be disabled?\n"
                                "Is there a wiring/soldering problem?"));
             Com::printFLN(PSTR("errorCode: "), int(fat.card()->errorCode()));
-            
+
             char szStatus[21];
             strcpy( szStatus, UI_TEXT_SD_ERROR );
             addLong( szStatus, int(fat.card()->errorCode()), 3 );
@@ -184,12 +184,12 @@ void SDCard::writeCommand(GCode *code)
     file.clearWriteError();
     uint16_t        params = 128 | (code->params & ~1);
     memcopy2(buf, &params);
-    
+
     if(code->isV2())   // Read G,M as 16 bit value
-    {        
+    {
         memcopy2(&buf[p],&code->params2);
         //*(int*)&buf[p] = code->params2;
-        
+
         p+=2;
         if(code->hasString())
             buf[p++] = strlen(code->text);
@@ -259,7 +259,7 @@ void SDCard::writeCommand(GCode *code)
         p+=4;
     }
     if(code->hasP())
-    {       
+    {
         memcopy4(&buf[p],&code->P);
         //*(int32_t*)&buf[p] = code->P;
         //*(long int*)&buf[p] = code->P;
@@ -273,7 +273,7 @@ void SDCard::writeCommand(GCode *code)
         p+=4;
     }
     if(code->hasJ())
-    {       
+    {
         memcopy4(&buf[p],&code->J);
         //*(float*)&buf[p] = code->J;
         //*(float*)&buf[p] = code->J;
@@ -333,7 +333,7 @@ char *SDCard::createFilename(char *buffer, const dir_t &p) {
         *pos++ = *src;
     }
     *pos = 0;
-    
+
     return pos;
 } // createFilename
 

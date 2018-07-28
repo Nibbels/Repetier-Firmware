@@ -134,7 +134,7 @@ void Extruder::manageTemperatures()
         {
             output = 0; // off is off, even if damping term wants a heat peak!
             act->tempIState = 0;
-        } 
+        }
         else if( error > PID_CONTROL_RANGE )
         {
             output = act->pidMax;
@@ -361,9 +361,9 @@ void Extruder::selectExtruderById(uint8_t extruderId)
     Printer::extruderOffset[X_AXIS] = -Extruder::current->xOffset*Printer::invAxisStepsPerMM[X_AXIS];
     Printer::extruderOffset[Y_AXIS] = -Extruder::current->yOffset*Printer::invAxisStepsPerMM[Y_AXIS];
     Printer::extruderOffset[Z_AXIS] = -Extruder::current->zOffset*Printer::invAxisStepsPerMM[Z_AXIS];
-    
+
     //uncomment when inserting diameter for hotend x // Commands::changeFlowrateMultiply(static_cast<float>(Printer::extrudeMultiply)); // needed to adjust extrusionFactor to possibly different diameter
-    
+
     if(Printer::areAxisHomed())
     {
         Printer::moveToReal(IGNORE_COORDINATE,IGNORE_COORDINATE,IGNORE_COORDINATE,IGNORE_COORDINATE,Printer::homingFeedrate[X_AXIS]);
@@ -479,8 +479,8 @@ void Extruder::setTemperatureForExtruder(float temperatureInCelsius,uint8_t extr
     if(alloffs && !alloff) // heaters are turned on, start measuring printing time
     {
         Printer::msecondsPrinting = HAL::timeInMilliseconds();
-        Printer::filamentPrinted = 0;  // new print, new counter  
-        Printer::flag2 &= ~PRINTER_FLAG2_RESET_FILAMENT_USAGE;  
+        Printer::filamentPrinted = 0;  // new print, new counter
+        Printer::flag2 &= ~PRINTER_FLAG2_RESET_FILAMENT_USAGE;
     }
 
 } // setTemperatureForExtruder
@@ -592,7 +592,7 @@ const short temptable_2[NUMTEMPS_2][2] PROGMEM =
 };
 
 // mendel-parts thermistor (EPCOS G550) = NTC mit 100kOhm
-#define NUMTEMPS_3 28 
+#define NUMTEMPS_3 28
 
 const short temptable_3[NUMTEMPS_3][2] PROGMEM =
 {
@@ -611,7 +611,7 @@ const short temptable_4[NUMTEMPS_4][2] PROGMEM =
 };
 
 // ATC Semitec 104GT-2 / E3D Hotend Thermistor
-#define NUMTEMPS_8 34 
+#define NUMTEMPS_8 34
 const short temptable_8[NUMTEMPS_8][2] PROGMEM =
 {
     {0,8000},{69,2400},{79,2320},{92,2240},{107,2160},{125,2080},{146,2000},{172,1920},{204,1840},{244,1760},{291,1680},{350,1600},
@@ -620,7 +620,7 @@ const short temptable_8[NUMTEMPS_8][2] PROGMEM =
 };
 
 // 100k Honeywell 135-104LAG-J01
-#define NUMTEMPS_9 67 
+#define NUMTEMPS_9 67
 const short temptable_9[NUMTEMPS_9][2] PROGMEM =
 {
     {1*4, 941*8},{19*4, 362*8},{37*4, 299*8}, //top rating 300C
@@ -634,7 +634,7 @@ const short temptable_9[NUMTEMPS_9][2] PROGMEM =
 };
 
 // 100k 0603 SMD Vishay NTCS0603E3104FXT (4.7k pullup)
-#define NUMTEMPS_10 20 
+#define NUMTEMPS_10 20
 const short temptable_10[NUMTEMPS_10][2] PROGMEM =
 {
     {1*4, 704*8},{54*4, 216*8},{107*4, 175*8},{160*4, 152*8},{213*4, 137*8},{266*4, 125*8},{319*4, 115*8},{372*4, 106*8},{425*4, 99*8},
@@ -643,7 +643,7 @@ const short temptable_10[NUMTEMPS_10][2] PROGMEM =
 };
 
 // 100k GE Sensing AL03006-58.2K-97-G1 (4.7k pullup)
-#define NUMTEMPS_11 31 
+#define NUMTEMPS_11 31
 const short temptable_11[NUMTEMPS_11][2] PROGMEM =
 {
     {1*4, 936*8},{36*4, 300*8},{71*4, 246*8},{106*4, 218*8},{141*4, 199*8},{176*4, 185*8},{211*4, 173*8},{246*4, 163*8},{281*4, 155*8},
@@ -653,7 +653,7 @@ const short temptable_11[NUMTEMPS_11][2] PROGMEM =
 };
 
 // 100k RS thermistor 198-961 (4.7k pullup)
-#define NUMTEMPS_12 31 
+#define NUMTEMPS_12 31
 const short temptable_12[NUMTEMPS_12][2] PROGMEM =
 {
     {1*4, 929*8},{36*4, 299*8},{71*4, 246*8},{106*4, 217*8},{141*4, 198*8},{176*4, 184*8},{211*4, 173*8},{246*4, 163*8},{281*4, 154*8},{316*4, 147*8},
@@ -663,7 +663,7 @@ const short temptable_12[NUMTEMPS_12][2] PROGMEM =
 
 /*
 // PT100 E3D
-#define NUMTEMPS_13 19 
+#define NUMTEMPS_13 19
 const short temptable_13[NUMTEMPS_13][2] PROGMEM =
 {
     {0,0},{908,8},{942,10*8},{982,20*8},{1015,8*30},{1048,8*40},{1080,8*50},{1113,8*60},{1146,8*70},{1178,8*80},{1211,8*90},{1276,8*110},{1318,8*120}
@@ -685,7 +685,7 @@ const short temptable_13[NUMTEMPS_13][2] PROGMEM =
 };
 
 // Thermistor NTC 3950 100k Ohm (other source)
-#define NUMTEMPS_14 103 
+#define NUMTEMPS_14 103
 const short temptable_14[NUMTEMPS_14][2] PROGMEM = {
     {1*4,938*8},{11*4,423*8},{21*4,351*8},{31*4,314*8},{41*4,290*8},{51*4,272*8},{61*4,258*8},{71*4,247*8},\
 {81*4,237*8},{91*4,229*8},{101*4,221*8},{111*4,215*8},{121*4,209*8},{131*4,204*8},{141*4,199*8},{151*4,195*8},\
@@ -792,9 +792,9 @@ void TemperatureController::updateCurrentTemperature()
         case 12: // 100k RS thermistor 198-961 (4.7k pullup)
         case 13: // NTC 3950 100k thermistor - Conrad V3
         case 14: // Thermistor NTC 3950 100k Ohm
-        case 97: // Define Raw Thermistor and Restistor-Settings within configuration.h see USE_GENERIC_THERMISTORTABLE_1 and GENERIC_THERM_NUM_ENTRIES 
-        case 98: // Define Raw Thermistor and Restistor-Settings within configuration.h see USE_GENERIC_THERMISTORTABLE_2 and GENERIC_THERM_NUM_ENTRIES 
-        case 99: // Define Raw Thermistor and Restistor-Settings within configuration.h see USE_GENERIC_THERMISTORTABLE_3 and GENERIC_THERM_NUM_ENTRIES 
+        case 97: // Define Raw Thermistor and Restistor-Settings within configuration.h see USE_GENERIC_THERMISTORTABLE_1 and GENERIC_THERM_NUM_ENTRIES
+        case 98: // Define Raw Thermistor and Restistor-Settings within configuration.h see USE_GENERIC_THERMISTORTABLE_2 and GENERIC_THERM_NUM_ENTRIES
+        case 99: // Define Raw Thermistor and Restistor-Settings within configuration.h see USE_GENERIC_THERMISTORTABLE_3 and GENERIC_THERM_NUM_ENTRIES
         {
             currentTemperature = (1023 << (2 - ANALOG_REDUCE_BITS)) - (osAnalogInputValues[sensorPin] >> (ANALOG_REDUCE_BITS)); // Convert to 10 bit result
             break;
@@ -810,7 +810,7 @@ void TemperatureController::updateCurrentTemperature()
             break;
         }
 #endif // ANALOG_INPUTS>0
-    
+
         default:
         {
             currentTemperature = 4095; // unknown method, return high value to switch heater off for safety
@@ -838,7 +838,7 @@ void TemperatureController::updateCurrentTemperature()
         case 12:
         case 13: // Conrad V3
         case 14: // Thermistor NTC 3950 100k Ohm
-        //PTC 
+        //PTC
         case 50: // User defined PTC thermistor 0
         case 51: // user defined PTC thermistor 1
         case 52: // user defined PTC thermistor 2
@@ -850,7 +850,7 @@ void TemperatureController::updateCurrentTemperature()
             bool thermistortype = NTC_thermistor;
 
             if(type >= 50 && type <= 52){
-                type -= 45; //50 -> 5 .. 52 -> 7 :: das heißt verwende user thermistor position 5..7, aber als PTC statt NTC 
+                type -= 45; //50 -> 5 .. 52 -> 7 :: das heißt verwende user thermistor position 5..7, aber als PTC statt NTC
                 thermistortype = PTC_thermistor;
             }
             else if(type == 53){
@@ -858,7 +858,7 @@ void TemperatureController::updateCurrentTemperature()
                 thermistortype = PTC_thermistor;
             }
             type--; //num to index
-            
+
             uint8_t num = pgm_read_byte(&temptables_num[type]) << 1;
             uint8_t i = 2;
             const int16_t *temptable = (const int16_t *)pgm_read_word(&temptables[type]);
@@ -1033,31 +1033,43 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
     int32_t d = pidMax>>1;
     float Ku, Tu;
     float Kp = 0, Ki = 0, Kd = 0;
-    float maxTemp=20, minTemp=20; 
-    if(maxCycles < 5)
+    float maxTemp=20, minTemp=20;
+    if(maxCycles < 5){
         maxCycles = 5;
-    if(maxCycles > 20)
+    }
+    if(maxCycles > 20){
         maxCycles = 20;
+    }
     Com::printInfoFLN(Com::tPIDAutotuneStart);
     Com::printF( PSTR("Ruleset: "), (int)method );
     switch(method){
         case 4: //Tyreus-Lyben
+        {
             Com::printFLN(Com::tAPIDTyreusLyben);
-        break;
+            break;
+        }
         case 3: //PID no overshoot
+        {
             Com::printFLN(Com::tAPIDNone);
-        break;
+            break;
+        }
         case 2: //PID some overshoot
+        {
             Com::printFLN(Com::tAPIDSome);
-        break;
+            break;
+        }
         case 1: //PID Pessen Integral Rule
+        {
             Com::printFLN(Com::tAPIDPessen);
-        break;
+            break;
+        }
         default: //PID classic Ziegler-Nichols
+        {
             Com::printFLN(Com::tAPIDClassic);
             method = 0; //filter not available methods.
+        }
     }
-    //Extruder::disableAllHeater(); // switch off all heaters. https://github.com/repetier/Repetier-Firmware/commit/241c550ac004023842d6886c6e0db15a1f6b56d7
+
     autotuneIndex = controllerId;
     pwm_pos[pwmIndex] = pidMax;
     if(controllerId<NUM_EXTRUDER)
@@ -1179,7 +1191,7 @@ see also: http://www.mstarlabs.com/control/znrule.html
         }
 
         Commands::printTemperatures();
-        
+
         if(((time - t1) + (time - t2)) > (10L*60L*1000L*2L))   // 20 Minutes
         {
             Com::printErrorFLN(Com::tAPIDFailedTimeout);
@@ -1290,9 +1302,7 @@ Extruder extruder[NUM_EXTRUDER] =
 #if STEPPER_ON_DELAY
         , '\x0'
 #endif // STEPPER_ON_DELAY by Nibbels gegen xtruder.cpp:1620:1: warning: missing initializer for member 'Extruder::enabled'
-#if FEATURE_PAUSE_PRINTING
         ,0 //uint8_t paused
-#endif // FEATURE_PAUSE_PRINTING
     }
 #endif // NUM_EXTRUDER>0
 
@@ -1323,9 +1333,7 @@ Extruder extruder[NUM_EXTRUDER] =
 #if STEPPER_ON_DELAY
         , '\x0'
 #endif // STEPPER_ON_DELAY by Nibbels gegen xtruder.cpp:1620:1: warning: missing initializer for member 'Extruder::enabled'
-#if FEATURE_PAUSE_PRINTING
         ,0 //uint8_t paused
-#endif // FEATURE_PAUSE_PRINTING
     }
 #endif // NUM_EXTRUDER>1
 };

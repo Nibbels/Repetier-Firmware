@@ -128,9 +128,7 @@ class Extruder   // Size: 12*1 Byte+12*4 Byte+4*2Byte = 68 Byte
     char        enabled;
 #endif // STEPPER_ON_DELAY
 
-#if FEATURE_PAUSE_PRINTING
     uint8_t     paused;
-#endif // FEATURE_PAUSE_PRINTING
 
     /** \brief Sends the high-signal to the stepper for next extruder step.
     Call this function only, if interrupts are disabled.

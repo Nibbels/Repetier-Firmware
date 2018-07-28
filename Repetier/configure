@@ -140,20 +140,20 @@ case $1 in
         echo "                 to the chosen CMake binary, by default"
         echo "                 cmake is used (if -x or -c not used)"
         echo
-        
+
         exit 1
         ;;
     "-x")
         if [ ! -e "${CMAKEGUI_PATH}" ]; then
             echo "${CMAKEGUI_NAME} is not available"
             echo "Aborting...'"
-            
+
             exit -1
         fi
-        
+
         # Setting executable to cmake-gui
         CMAKE_EXECUTABLE="${CMAKEGUI_PATH}"
-        
+
         # Shift argument list, getting rid of script name
         # and first command line argument
         shift
@@ -162,14 +162,14 @@ case $1 in
         if [ ! -e "${CCMAKE_PATH}" ]; then
             echo "${CCMAKE_NAME} is not available"
             echo "Aborting...'"
-            
+
             exit -1
 
         fi
-        
+
         # Setting executable to ccmake
         CMAKE_EXECUTABLE="${CCMAKE_PATH}"
-        
+
         # Shift argument list, getting rid of script name
         # and first command line argument
         shift
@@ -203,7 +203,7 @@ if [ "${IN_BASE}X" != "X" ]; then
             echo
             echo
             echo "This warning will only apear once..."
-            echo 
+            echo
             echo
             echo
             echo -n "Continuing in 15"
@@ -237,7 +237,7 @@ else
 fi
 
 if [ "${?}" -eq 0 ]; then
-    echo 
+    echo
     echo "To build project:    make"
     echo "To install project:  make install"
     echo "Generate packages:   make package"
