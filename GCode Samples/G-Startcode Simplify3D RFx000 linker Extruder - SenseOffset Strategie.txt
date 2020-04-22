@@ -1,0 +1,36 @@
+;--------------------------------------
+; Start Code T0-only header
+;
+; Notiz: Bei diesem Startcode wird davon ausgegangen, dass die Z-Matrix bereits stimmt und das Offset so gewählt, ist dass es bei einem nicht durchgewärmten Drucker ca. perfekt ist.
+; Tipp: Man kann vorher mit M3900 das Rest-Offset zur gegebenen Temperatur erfassen und dann mit M3902 Sx an die Matrix x=1..9 speichern. M3009 Sx mit Matrix x=1..9 wählt eine Matrix aus.
+
+; Abluft und Wakue an @X19
+;--------------------------------------
+;M355 S1 ; Port X19 anschalten: Daran kann Licht, Wasserpumpe oder sonstiges angeklemmt sein.
+
+; Bei Bett sofort mit vorheizen starten, ohne darauf zu warten. Bett ist träge.
+;--------------------------------------
+;M140 S[first_layer_bed_temperature] ; M140 - Setze Betttemperatur OHNE Warten -> bei Simplify3D nicht nutzen! Bei Slic3r schon.
+
+; Extrudertemperatur für Z-Scan auf Drucktemperatur stellen:
+;--------------------------------------
+;M109 S[first_layer_temperature_0] ; M109 - Setze Extrudertemperatur und warte -> bei Simplify3D nicht nutzen! Bei Slic3r schon.
+
+; Diverses wichtig
+;--------------------------------------
+G90 ; use absolute coordinates
+M82 ; use absolute distances for extrusion
+G28 ; home all axes
+
+; Activate Z-Compensation
+;--------------------------------------
+M3001 ; activate Z-Compensation 
+M3909 P3333; activate SensiblePressure -> Digitlimit bei 3333 für Filament das normalerweise ca. bei 2800 digits druckt. Nachdehnungskompensation.
+
+; Altes Filament und Luft in Duese ausstossen
+;--------------------------------------
+M3912 I2
+
+;--------------------------------------
+; Start Code T0-only header end
+;--------------------------------------

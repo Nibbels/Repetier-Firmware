@@ -1,5 +1,660 @@
-TODO: Testing, testing ..
-TODO: Zaldo said that he experienced a hard reset while starting some Z-Calibration. (Awaiting further information about this bug)
+V 01.45.01.Mod (2020-04-19)
+- Z-Matrix Output: M3013 with parameter S does switch back the matrix after console output. (Thx @thecky)
+- Output object: In milling mode, the script is no longer executed automatically after an sd print (/menu stop print).
+  Add M3079 to the end of your gcodes if you want the old behaviour.
+- Feature emergency pause: When automatic pause is triggered due to high extruder pressure the extruder is now correctly send to standby after 1 minute. (-100°C)
+
+V 01.45.00.Mod (2020-01-03)
+- reinserted the whole SD support with rollback to original sd library. (but upgraded code)
+   CRC-CCITT on
+   512byte fat cache off
+   multi block IO off (paranoia setting, doesn`t happen)
+- adjusted error code output to original sdfat
+
+V 01.44.00.Mod (2019-12-28)
+- reformatted code using "clang format"
+- added two missing optional breaks
+- removed useless debugging menu option
+- removed all sdcard code
+- RF2000: added active temperature at the end of the extruder temperature settings line (Menu->Extruder->Temps)
+
+V 01.43.99.Mod (2019-05-26)
+- fixed a bug that sometimes caused the zcompensation to "hang" when the printlines were long.
+  The problem was that the compensation was only able to drive into one direction per move
+  because it did not free Z direction afterwards and blocked itself on direction changes.
+  That produced some weired looking first layers when printing some gcodes.
+
+V 01.43.98.Mod (2019-05-01)
+- At the end of a M3912 startline the speed adjustment is now reset to 100%
+  to gain a faster travel to the start point (instead of auto accelerating due to normal digits).
+
+V 01.43.97.Mod (2019-04-28)
+- Fixed the loading of the eeprom saved state for FET1 and FET2 at boot time
+- The menus for switching FET1 and FET2 or M3300 Gcode are now hidden, if FET1 and FET2 pins are defined as -1
+- If FEATURE_CASE_FAN is 1 and its CASE_FAN_PIN is set then the FET3 state is not being loaded from eeprom at boot time.
+- More comments in RF2000.h and RF2000v2.h for usage of the case fan pin and fet3
+- If FEATURE_CASE_FAN is 1 and its CASE_FAN_PIN is NOT set (-1), then the feature is now considered to be off.
+- Moved EXT0_EXTRUDER_COOLER_PIN and EXT1_EXTRUDER_COOLER_PIN definition to pins.h
+
+V 01.43.96.Mod (2019-04-22)
+- Apply the same min-Jerk constraint to E-Jerk and M207 XY-Z-E Jerks as applied to XYJerk and ZJerk eeprom values. Now noone can set too small values by accident.
+
+V 01.43.95.Mod (2019-04-14)
+- Now scanfeatures like HeatbedScan, FindZOrigin, HeatBedScan, AlignExtruder cannot continue if the pause flag has been set.
+  They now have wait until pause is over. This should fix that findZOrigin might start after M3070.
+- M3070 S2 is degraded to S1 if the axis are not homed. Reaching pause without homing is still possible 
+  but automatic driving is not allowed then because this might ignore axis length. The user still can manually drive the head in pause mode.
+- M3911 Digit Flow Compensation now has set 4000 digits or 70% of emergendy pause digits as default minimum value.
+- Added the F-Code http://linuxcnc.org/docs/html/gcode/other-code.html#sec:set-feed-rate to set feedrate without using "G1" in front of Fxxx.
+  Now F100 in its own line is enough to set the printers Feedrate to 100unit/min. This is helpfull while milling and using some types of CAM software.
+
+V 01.43.94.Mod (2019-04-09)
+- Fixed M3070
+
+V 01.43.93.Mod (2019-04-06)
+- Fix compiling issues caused by the forgotten "#if SDSUPPORT" in \src\SdFat\FatLib\FatFilePrint.cpp (Original Repetier has this too.)
+
+V 01.43.92.Mod (2019-04-06)
+- Disabled SD-Support (default setting: 0) for now. The home drive bug is still present.
+  Dont know why or how I should find the bug in an acceptable time.
+- Disabled SD-Support now automatically increases move cache.
+
+V 01.43.91.Mod (2019-04-06)
+- Fix drive free offset has not been reset in milling mode z homing
+- After homing any axis the status message in 4. row is now set to empty string
+
+V 01.43.90.Mod (2019-03-31)
+- Fixed SD file/directory list functions to avoid serial print pointer pr->xx. Octoprint uses that.
+- Removed auto-print of "init.g" file at sd mount time.
+- Set SD_SCK_MHZ(4) like Repetier
+
+V 01.43.89.Mod (2019-03-31)
+- Prettier heater error message which is <16 chars for RF1000 displays
+- M3117 is now put to move queue to avoid race time condition with prior commands
+- M3070 pause always blocks further commands until pause is reached
+- M20 SD File list checks on a mounted sdcard before trying to output a file listing.
+- Menu for extruder mount and unmount is now hidden if the printer is in pause mode
+
+V 01.43.88.Mod (2019-03-10)
+- complete reintegration of SdFat-lib 1.1.0 downloaded from https://github.com/greiman/SdFat in order to avoid possible transcription errors.
+- #define USE_MULTI_BLOCK_IO 0
+
+V 01.43.87.Mod (2019-03-10)
+- prepare fresh integration of SD-Fat-Lib by overwriting whole library.
+
+V 01.43.86.Mod (2019-03-10)
+- Refactoring to understand and cleanup action-"switch case" definitions 
+- Replaced some pgm_read_word_near (which had definition to pgm_read_word) by pgm_read_word to prevent error markers showing up
+
+V 01.43.85.Mod (2019-02-27)
+- Make any sethomed impossible if we are in g_uBlockCommands!=0 state. So Aborting a print while homing cannot shift axis.
+  Without that fix soft-endstops can be in an undefined state when we abort while homing. OutputObject() might crash then.
+- Removed NEW_COMMUNICATION define flag within the code because there is no old communication anywhere anymore.
+
+V 01.43.84.Mod (2019-02-27)
+- Added M360 Printer::showConfiguration()
+- Added OutputObject to SDCardGCodeSource::close()
+
+V 01.43.83.Mod (2019-02-26)
+- Pulled a huge lot of code from Repetier: NEW_COMMUNICATION, GCodeSource Classes. More sync with repetier 1.0.x
+- Disabled SD-Card CRC mode again, because it did not fix our problems.
+- Set fat.begin back to SPI_FULL_SPEED to maybe fix a possible slowdown reported from mattbenscho.
+
+V 01.43.82.Mod (2019-02-17)
+- fix possible workpart matrix shift when directpositioning was used after homing. + comments.
+
+V 01.43.81.Mod (2019-02-17)
+- fix displayed layer height and compensation limit choice when first layer height is higher than start line M3912.
+- adjusted standard zcompensation upper limit to a better fallback value
+   (fallback in case someone decides to use a low height manual startline in combination with a very high first layer.)
+
+V 01.43.80.Mod (2019-02-17)
+- fixed menu action for Beeper-on-off when SD-Support was disabled.
+- reactivated arc support becaus it does not cost ram.
+- implemented a radius constraint validation for arcs which are drawn by start coordinates, end coordinates and center position. https://github.com/repetier/Repetier-Firmware/issues/850
+(- broke very long changelog lines into next lines.)
+
+V 01.43.79.Mod (2019-02-16)
+- tested arc support. It seems to work however I might have not understood details. 
+  I tested relative and absolut coordinates full circles in a row using I+J (Not R). Extrusion works too.
+   -> Extrusion is possible
+   -> I did not mix up coordinate SI units / steps
+- refactored arc support into a seperate commands-function like todays repetier branch has it.
+- Full circles and other partly circles are no problem, 
+  but the person which has knowledge about milling should really look over the correctness of circle calculations. 
+  -> Disabled the feature until I got reports about arcs.
+
+V 01.43.78.Mod (2019-02-16)
+- Changed UI_SET_MIN_HEATED_BED_TEMP from 55 to 50.
+- Fixed Extruders not working after OutputObject
+
+V 01.43.77.Mod (2019-02-15)
+- added a new option in menu->position: "Pos-Feedrate: Std. or Gcode".
+   Here we can choose if we want to use standard feedrate for positioning or the last set gcode feedrate (Printer::feedrate)
+   The second choice might be usefull in milling mode because since 01.43.73 we (only in milling mode) can adjust the "gcode" feedrate using our hardware extrusion buttons.
+- menu->Position->X/Y/Z Position: replaced the two lines "Endstop Min..." and "Endstop Max: xxx" with one Line "Min:xxx Max:xxx"
+- menu->Position->X/Y/Z Position: added active feedrate in line 3 of the position menus. This feedrate depends on "Pos-Feedrate: Std. or Gcode".
+- menu->Position->X/Y/Z Position: Standard-Feedrates STANDARD_POSITION_FEEDRATE_XY, STANDARD_POSITION_FEEDRATE_Z, STANDARD_POSITION_FEEDRATE_E 
+   are set for Gcode and Offset drives when "Pos-Feedrate: Std." is set.
+   (Moves with the hardware buttons z-up and z-down have always the same configured feedrate as menu->Position->Z Position->...)
+   (If we have chosen Pos-Feedrate = "Gcode" then a Z feedrate is always limited to the value in STANDARD_POSITION_FEEDRATE_Z and configured max feedrate.)
+- cleanup in function prepareDirectMove()
+- reactivated FAN_KICKSTART_TIME by removing old configuration definition which had no "#define FAN_KICKSTART_TIME 1" anywhere. Tests seemed to work flawlessly.
+
+V 01.43.76.Mod (2019-02-14)
+- Added a fast way to the third pause mode: If you press pause after being "paused and moved" the printer will reach standby cooldown faster.
+   I added this feature because sometimes I want the printer to go to sleep instantly with minimal oozing.
+- If your printer dropped temperatures in pause mode 
+  and you press the continue button the temperatures will recover
+   and the printer will now wait for another click on the continue button instead of auto-continuing.
+  Thus we can still move and place the nozzle after temperatures are recovered.
+- Default RF2000v1/v2 light mode after eeprom reset is now "white" instead of "rgb automatic". Change this in menu Configuration->General if you want.
+
+V 01.43.75.Mod (2019-02-14)
+- repair pauseTime to sink Temperatures when getting into pause by button.
+- some lineendings fixed
+- removed octoprint upstream command for pause because octoprint 1.3.10 is not auto continuing again (without pressing the button in web ui)
+   I have to recheck https://github.com/foosel/OctoPrint/issues/2581 on this error.
+
+V 01.43.74.Mod (2019-02-13)
+- rewrite of axisInterval handling to float calculation. See and thx to https://github.com/repetier/Repetier-Firmware/issues/837#issuecomment-463218592
+- removed (now) unnecessary checks
+- changed F for digits to P like "pressure". Because F is Feedrate not Force.
+
+V 01.43.73.Mod (2019-02-13)
+- Adjust feedrate (set by GCode) with extrusion buttons when milling mode is active.
+   However those menu positioning (=pause) feedrate is still standard and not live adjustable. See DIRECT_FEEDRATE_XY and DIRECT_FEEDRATE_Z for procompile adjustment.
+
+V 01.43.72.Mod (2019-02-12)
+- fixed decouple error after PID autotune by stopping decoupling test before tuning start. This error has been shown when someone startet PID autotune when a heater was turned on. (But autotune always worked)
+
+V 01.43.71.Mod (2019-02-11)
+- changed is?Move()-Strategy to check float value of axis difference
+- added checks to not use integer move->delta[axis] as 0 value at critical positions.
+- reimplemented slowdown rule for extrusion after travel moves because after 0-step rounded moves can now be "isAxisMove" we can correctly check on that case again.
+
+V 01.43.70.Mod (2019-02-10)
+- removed always 0 MULTI_STEP_DELAY
+- removed ENABLE_BACKLASH_COMPENSATION because RFx000 do not ever need that for xyz.
+
+V 01.43.69.Mod (2019-02-09)
+- fixed mixup in relative/absolute coordinate system parameter for Kurt's Wobblefix. Wobblefix works now and is tested.
+- decreased automatic spacing for Z while going into move-away-pause because we can easily drive down more by Z-buttons while paused.
+
+V 01.43.68.Mod (2019-02-07)
+- resolved some error marks in visual studio. (they were no bug, the fix is just for better precompiler compatibility and should change nothing)
+- fixed some translation yes/no
+
+V 01.43.67.Mod (2019-02-07)
+- added last GCode feedrate, feed multiplier and active feedrate to 3rd menu underneath XYZ positions
+
+V 01.43.66.Mod (2019-02-07)
+- changed emergency pause function to a nonblocking version
+
+V 01.43.65.Mod (2019-02-07)
+- going back to repetiers way of keeping extrusion errors collected.
+- test: inserted some allow-disallow interrupt lines into move interrupt.
+- probably fixed advance issue
+
+V 01.43.64.Mod (2019-02-03)
+- fix Gcode coordinate shift when moving out of endstop or softendstop boundaries. (The following commands in queue caused drive-backs where not needed)
+- x+- y+- z+ axis: we now have two endstop modes: stop+virtualize and stop+abort.
+- we have no extrusion when the printer prints at any endstop or softendstop 
+- readded path planning limit with extrusion disable to prevent unaccelerated/undeccelerated stops while printing in queue mode.
+
+V 01.43.63.Mod (2019-02-02)
+- fixed harmless but wrong read of z-step-size from eeprom (removed microstep correction)
+- changed variable for manual_steps to int which saves 8 bytes of ram.
+
+V 01.43.62.Mod (2019-02-01)
+- removed X and Y axis offsets (which I just cleaned up) because if used there are a lot traps.
+  (Why? X-Axis does not really need an offset, Y-Axis could be usefull but z homing next to the bed is quite nice and safe.
+  changing that values would cause the need of new z matrix scans
+  changing that values would rise the need for decreasing axis length, otherwise soft endstops are useless.
+  we all have the same setting when it comes to slicer adjustment: Y offset ~-18
+  removing saves 8 bytes of ram)
+
+V 01.43.61.Mod (2019-02-01)
+- miling: fixed scan depth limit to prevent workpart matrix overflow after -12,79mm. Removed needless parameter WORK_PART_Z_COMPENSATION_MAX_MM from config.
+- matrix x+y scan max-limits are now initialised with eeprom axis length. 
+  (AFAIK: using an X- or Y-Axis-Offset should work with printer mode zcompensation, but changing offsets cause the need for new matrix scan.)
+- matrix scan/workpart scan: adjusted wrong long-conversion to short.
+- when matrix steps are autoconverted because of adjusted microsteps it is now checked for overflows. (paranoiacheck for heavy endstop modders)
+- tested: softendstop for max-z works according to set axis length. (If eeprom Z axis length is too big the soft-endstop is useless.)
+- tested: milling mode without configurable endstop and no max-endstop does not home=crash z. Z stays where it is and y+x home correctly.
+- merged endstop configuration into one point, cleanup of M119 "output endstop status"
+- removed some unnecessary configurations and dead code
+- new pause positions and pause config cleanup
+- FEATURE_MEMORY_POSITION is now default off to save 20 bytes of ram. This might be handy for milling but is unnecessary for printing.
+- removed config for FEATURE_AUTOMATIC_EEPROM_UPDATE to gain more cleaner code. this option was useless anyways
+- improved syntax for M908 a bit however setting amps via gcode is not the normal procedure
+
+V 01.43.60.Mod (2019-02-01)
+- Fixed M3070 GCode pausing by updating the code to the new pause system.
+- M3912 Autostartmade will have a bit more left and right space to prevent my heated bed holes from being filled up
+- optimized some code in movement function
+
+V 01.43.59.Mod (2019-01-31)
+- because undamped zcompensation might sometimes sound awful we now have some sort of numeric acceleration. That made zCmp noise a lot better.
+
+V 01.43.58.Mod (2019-01-31)
+- moved Z-compensation into class Printline::
+- Most of the Z-compensation steps are now driven parallel to other moves not prior them.
+- To have an independend z-compensation drive: a solo compensation is still implemented to work when no planned move is driving other axes
+
+V 01.43.57.Mod (2019-01-31)
+- removed all code for quadratic advance because this is not necessary
+- some cleanup
+- found one unneeded variable and removed it from extruder
+- removed this disableExtruder functionality
+- configuration cleanup
+
+V 01.43.56.Mod (2019-01-30)
+- cleanup of pause modi, simplification of code
+- directMove is now priority before queueMove
+- directMove and queueMove do not disturb each others stepper direction anymore
+- removed directSteps, replaced all usages by directMove
+- rewrote divided z-compensation steps into "start+end" and "pause"
+- possible extrusion/nozzle fill while continuing after print pause is now done when the print position is again reached.
+
+V 01.43.55.Mod (2019-01-29)
+- updated SdFat to 1.0.16 but probably nothing changed for us.
+
+V 01.43.54.Mod (2019-01-28)
+- Default microsteps setting for Z axis is now 16 instead of 32. Therefore the resolution is now 1280 steps/mm = 0.8um instead of 2560 steps/mm.
+- Changed EEPROM-Mode to 44 to prevent wrong microsteps vs. steps/mm settings.
+- The strategy for finding back from printing pause is now changed
+   in a way that we can move the bed and print head while being paused
+   and the printer will find back to continue its print.
+- Support for free for positioning while a print ist paused.
+   We dont allow to move the print head lower than the startposition of the pause to avoid crashes with the unfinished part.
+- New Menu "Pause Position" -> X Position, Y-Position, Z-Position, Z-Step size
+
+V 01.43.53.Mod (2019-01-27)
+- endstop hardening for directStepping
+
+V 01.43.52.Mod (2019-01-27)
+- removed M3007 and M3008 because we have a well working automatic adjustment for zcompensation limits
+- removed options for automatic adjustments of zcompensation borders - it has to be always on
+- changed startline height to 0.352mm to prevent using this special height as first layer height. (which might corrupt senseoffset results for new users)
+
+V 01.43.51.Mod (2019-01-27)
+- repair of function isExtrusionAllowed() in respect to absolute or relative coordinates
+
+V 01.43.50.Mod (2019-01-27)
+- some tweaking for printTemperatures();
+
+V 01.43.49.Mod (2019-01-27)
+- Reset z-compensation scale shift when disabling z-Steppers before(!) z-unhome to prevent moving back to the uncompensated position. Thx @AtlonXP
+
+V 01.43.48.Mod (2019-01-25)
+- Limit advanceL to 0 or more than 20 to prevent possible numeric problemes https://github.com/repetier/Repetier-Firmware/issues/837#issuecomment-455852008
+- added 10% more interval spacing
+- Add 512 interval spacing when advance is activated
+- Advance extrusion interrupt is now able to multistep 4x of active normal stepping. That should speed up extrusion alot.
+- minor cleanup
+
+V 01.43.47.Mod (2019-01-25)
+- The pressure value of the "z-emergency stop" limit now controls if extrusion is allowed
+- The minimum extrusion temperature (80°C) has been totally removed and replaced by digit/pressure control
+- This output object hack that z-emergency block is disabled while executing the output object script has been removed 
+   because in the meanwhile we have a proper retract to lower any high pressure before driving z down.
+- Added 100ms wait (\nG4 P100) after pressure release within output object script before driving the bed down
+
+V 01.43.46.Mod (2019-01-25)
+- removed constant waiting time after heatup. We have nice pid control which does not need that. This avoids too much oozing at print start.
+- defect temp sensors now abort waiting for temp in M109 and M190
+- removed autoprint for temperatures as hosts send M105 for this
+
+V 01.43.45.Mod (2019-01-25)
+- some minor refactoring
+- some interrupt protection
+- some more cleancode
+
+V 01.43.44.Mod (2019-01-13)
+- fix compilation errors when sdsupport is disabled with enabled sensibleviscosity feature. Thx @zero K
+
+V 01.43.43.Mod (2019-01-13)
+- fixed german translation text
+- fixed redefinition of some text (old version was not deleted once)
+- added hint to extruder switch message that a change of num_extruder raises the need of a new matrix scan.
+- cleanup of z-coordinate menu
+- cleanup of printCurrentPosition() function to show any host where the head is located
+- added printCurrentPosition() to gcode axis menu positioning (not to offset axis)
+
+V 01.43.42.Mod (2019-01-13)
+- fixed coordinate shift in zMatrix evaluation
+- removed a redundant function
+
+V 01.43.41.Mod (2019-01-13)
+- Update from SdFat 1.0.14 to 1.0.15 (however those changes wont affect us)
+
+V 01.43.40.Mod (2019-01-12)
+- Hardening against user interaction while scans are working. Thx @nikibalboa
+- Added a check for "align extruders" to prevent homing while aligning
+- Added a check for all scans to prevent manual movement over menu / z-up-down-buttons
+- Z-Offset-Scan and other scans will now cleanly abort if z coordinates go underneath allowed Z-Overdrive (endstop protection). Thx @nikibalboa
+- All possible scan (Z-Offset, Matrix, Origin, Workpart, Align Extruders) errors should now have an error specific full screen display message
+
+V 01.43.39.Mod (2019-01-12)
+- z positioning using menu is always direct/offset move
+- xy positioning is now configurable via menu Position -> XY-Kosys: "GCODE" or "OFFSET"
+   use GCODE for choosing a position for setting an GCODE Origin position; an Origin stays when homing
+   use OFFSET for choosing a new 0 position; this offset vanishes when homing
+- single step moves now stick to the kosys setting just described
+- single move / free move is allways a direct/offset move
+   this move mode now is at the end of options because it is not an option between steps and 1mm. It is a totally special move mode.
+- the move koordinate system ist now shown within positioning menu
+- the single steps positioning within menu now shows the distance of a single step in mikrometers
+   you can configure the Z distance within menu -> Position -> Z-Steps: xxxx um
+   (x- and y- single step size is still configurable via configuration.h prior compiling and flashing)
+- Z-Offset-Scan might now printing "Screw too low" instead of "Scan too high" because this should be a much better description for the actual problem.
+
+V 01.43.38.Mod (2019-01-09)
+- simplified constraining functions for target coordinates because we can trust soft endstop limits.
+- all menu position movements are now driven by directPosition System and therefore handled like an offset.
+- slightly increased positioning feedrate becuase 70 felt slow while pausing etc.
+- fixed continue after pausing
+
+V 01.43.37.Mod (2019-01-09)
+- Fix crash while going into pause
+- Prepare some rework on pause steps auto-limiting
+
+V 01.43.36.Mod (2019-01-08)
+- fix automatic layer detection for senseoffset and epercent compensation
+- set Z-Mode for displayed z-millimeters to Z_VALUE_MODE_LAYER per default.
+
+V 01.43.35.Mod (2019-01-07)
+- M3912 autostartmade now chooses it start-Y to 0mm if a nonzero Y-Axis-Minimum is set in EEPROM
+- increased some axis limits to the length of soft endstop mm.
+- wobblefix now scales its x-position between real 0 and soft-endstop-mm to make it a bit more precise and num-extruder independend.
+- FEATURE_SEE_DISPLAY M3029 does not show olddated sd-card-bytes anymore if the display is now switched back to normal menu.
+- FEATURE_SEE_DISPLAY M3029 L1 now shows the displays output line by line for better human readability.
+
+V 01.43.34.Mod (2019-01-07)
+- Updated SdFat 1.0.12 to 1.0.13 Avoid MISO missing pull-up problem
+- Updated SdFat 1.0.13 to 1.0.14 Improved card re-initialization
+
+V 01.43.33.Mod (2019-01-07)
+- added max extruder offset 1x to soft endstop limit to prevent early stop at dual extruders
+- removed z-mode surface until someone misses it (was probably broken anyways)
+- removed (uncommented) z-mode origin until someone misses it (was probably broken anyways)
+
+V 01.43.32.Mod (2019-01-07)
+- introduced x and y stepcounter beginning from endstop
+- directSteps are now responsible for extruder offset and position menu
+- unhomed axes are now marked with an ?. Homed axes are not marked at all.
+- displayed position coordinates are now shown divided into "Gcode commanded" and "other offset stuff"
+- hitting max endstop or soft endstop limit stops extrusion too.
+- auto increase xaxis length to configuration value if a printer is changed from 2 to 1 extruders.
+- auto decrease xaxis length to configuration value if a printer is changed from 1 to 2 extruders.
+
+V 01.43.31.Mod (2019-01-05)
+- auto update extruder 1 configuration into eeprom on num_extruders changing from 1 to 2. (This should avoid stupid errors when all extruder settings are 0.)
+- more refactoring
+- removed unused variables
+- fixed mixed variable usage like destinationMM vs. destinationMMLast
+- more sense for extrusion while drawing arc
+- the float axis system now keeps track of its error
+
+V 01.43.30.Mod (2019-01-03)
+- eliminated extrudeMultiplyError
+- optimized some code
+- cleanup of axis minima / homing min position
+- cleanup of homing
+- cleanup of extrusion factor variables
+
+V 01.43.29.Mod (2019-01-03)
+- eliminated all extruder offset steps -> mm calculations
+- switch extruderoffsetmm
+- refactoring
+
+V 01.43.28.Mod (2019-01-02)
+- removed most of steps axis computation
+- cleanup of steps to mm and mm to step recalculations
+- wobblefix should now be able to handle relative moves
+- removed alot of code duplication
+
+V 01.43.27.Mod (2019-01-01)
+- complete axis variable refactoring
+- major cleanup
+
+V 01.43.26.Mod (2019-01-01)
+- fix broken positioning for XY
+- moved feedrate limits to Configuration.h
+- fixed feedrate limitation for negative moves
+- change in JunctionSpeed strategy for advance vs. nonadvance retract/extrusion startstop
+- fix copy paste bug (from 1.43.22 refactoring)
+
+V 01.43.25.Mod (2019-01-01)
+- udpate SdFat Library to 1.0.12 https://github.com/greiman/SdFat/commit/356c5e417c2a06e7853dedef2580857dcd3d2ae0
+- fix include path twice (SdFatConfig.h) because we dont use the arduino standard library
+
+V 01.43.24.Mod (2019-01-01)
+- udpate SdFat Library to 1.0.11 https://github.com/greiman/SdFat/commit/7417ee943ccebbaf27f51042e2b3ae41e9defa45
+
+V 01.43.23.Mod (2019-01-01)
+- udpate SdFat Library to 1.0.8 https://github.com/greiman/SdFat/commit/f0c65da00060fcc8c4ac9667d29b2d46557de42e
+
+V 01.43.22.Mod (2018-12-30)
+- Cleanup for implementing more precise advance
+- removed SEPERATE_EXTRUDER_POSITIONS
+- removed UI_SPEEDDEPENDENT_POSITIONING, removed function moveRelativeDistanceInStepsReal
+- some cleanup in position menu definition
+- moved PrintLine::moveRelativeDistanceInSteps to class Printer
+- removed function setDestinationStepsFromMenu replaced this code duplication by function moveRelativeDistanceInSteps
+- replaced some casted rouding using lroundf
+- prepared Printer::queuePositionLastMM[3] -> [4]
+- some other minor refactoring
+
+V 01.43.21.Mod (2018-12-30)
+- Calculate AdvanceL using 32bit. See Repetier 535b994ceda17b6f4bb3b9b9eaa4959112023b7c
+
+V 01.43.20.Mod (2018-12-10)
+- fixed Octoprint > 1.3.7 throws a security warning because of wrong firmware version parsing
+
+V RF.01.43.19.Mod (2018-12-09)
+- cleanup of EEPROM-Settings
+   fixed old naming
+   better descriptive names
+   better order
+   added port descriptions to mosfet default options
+- removed some unused string constants
+
+V RF.01.43.18.Mod (2018-12-05)
+- moved menu point "shift frequency" to menu "Feedrate"
+- moved menu point "extruder advance L" from "Stepper" to menu "Acceleration"
+- added extruder max speed to menu "Feedrate"
+- added extruder jerks to menu "Acceleration"
+- added extruder acceleration to menu "Acceleration"
+- sort feedrate and acceleration menu items according to axis to prevent confusion
+- removed speedmultiply menu point from menu->configuration->feedrate because this is not a persistent feedrate setting
+- improved some action-case code blocks to avoid dual extruder code duplication
+- some refactoring for better variable naming
+- tiny feedrate limitation fix for extrusion feature ViscositySense
+- removed a lot of old/unused text definitions
+
+V RF.01.43.17.Mod (2018-12-04)
+- removed parameter watchperiod and all helper functions from extruder object, set watchperiod to 15s as default.
+- removed unused menu-action for current-extruder feedrate, because we use extruder0-feedrate and extruder1-feedrate non parametric.
+- removed unused menu-actions from feature RETRACT_DURING_HEATUP
+
+V RF.01.43.16.Mod (2018-12-02)
+- merged calculateQueueMove and calculateDirectMove into one clean function calculateMove
+- corrected direct move speed settings to lower values
+- added one digit to zJerk float in menu settings
+
+V RF.01.43.15.Mod (2018-12-02)
+- xyzJerk and eJerk refactoring + cleanup
+- more intelligent limits for setting jerk by gcode
+- better limits for setting extruder speeds and ejerk (=maxstartspeed)
+
+V RF.01.43.14.Mod (2018-11-30)
+- Limit definitions for Acceleration and Jerk reworked.
+- Introduced one single place for xy / z acceleration settings in configuration.h instead of 3 places in RFx000.h's
+- Limits for Gcode set acceleration values are now in sync with menu and eeprom limits.
+- FEATURE_CHECK_HOME is now on per default
+
+V RF.01.43.13.Mod (2018-11-29)
+- FEATURE_MILLING_MODE is now switched off by default, because most of the people dont need it.
+
+V RF.01.43.12.Mod (2018-11-25)
+- some reset-fix for improved heat bed scan stability
+- some code cleanup commits
+
+V RF.01.43.11.Mod (2018-11-19)
+- enabled SD-Card CRC check by setting USE_SD_CRC to 2
+- small fix to equalize function prototype with function parameters.
+
+V RF.01.43.10.Mod (2018-11-19)
+- removed old double-quad-octa-stepping system.
+- added an improved shift-stepping system which can make single, double, tripple, (...,) sixes steps.
+- fixed that homing speed does not remember settings higher than homing speed nevertheless they have been settable via menu.
+
+V RF.01.43.09.Mod (2018-11-18)
+- Decreased maximum speed settings within Configuration.h/RFx000.h
+- Switched off DEBUG_FREE_MEMORY as default.
+
+V RF.01.43.08.Mod (2018-11-11)
+- Fixed small log output Z-axis bug in function "Checkhome" when having z-compensation turned on.
+
+V RF.01.43.07.Mod (2018-11-11)
+- RF2000v2: Z_ENDSTOP_DRIVE_OVER to 3.0f, because this is possible on stock printers.
+- Fixed inkonsistent line endings in RF.cpp
+
+V RF.01.43.06.Mod (2018-11-07)
+- hardening for correct saving of the workpart number and heatbed number
+- autocorrection for wrong workpart numbers and heatbed numbers
+- some small fix for RF.01.43.05 refactoring
+
+V RF.01.43.05.Mod (2018-11-04)
+- more intuitive limits for EEPROM acceleration settings (5 and 6000 are included)
+- some minor refactoring
+
+V RF.01.43.04.Mod (2018-11-03)
+- removed old Mod-FEATURE_DEBUG_MOVE_CACHE_TIMING
+- added a check for EEPROM read acceleration settings (for print and travel acc)
+- minor changes
+
+V RF.01.43.03.Mod (2018-11-02)
+- some refactoring and cleanup
+
+V RF.01.43.02.Mod (2018-11-01)
+- cleanup of display-code
+
+V RF.01.43.01.Mod (2018-11-01)
+- cleanup of beeper-code
+
+V RF.01.43.00.Mod (2018-11-01)
+- added Visual Studio 2015 Project files using Arduino IDE for Visual Studio / https://www.visualmicro.com/
+- fixed some small compatibility details
+- removed some not needed functions and variables within ui code.
+
+V RF.01.42.24.Mod (2018-11-01)
+- the firmware shows long filenames in menu (for all very long filenames) again. (No more short filenames, but they are cut at 26-char-limit)
+- increased Z_ENDSTOP_MAX_HYSTERESIS on all printers to have a better compatibility to some special community members machines
+- set all HEAT_BED_SCAN_DOWN_FAST_MM to 0.2mm because AtlonXP stated that the former 0.1mm is already on the edge for some print beds.
+- some cleanup for the keepAlive-function
+- some other code and comments cleanup
+
+V RF.01.42.23.Mod (2018-09-27)
+- updated the file write functions to fit SdFat Lib 1.07
+- cleanup in repetier.h, removed double declarations
+
+V RF.01.42.22.Mod (2018-09-27)
+- Fix for Z-Offset-Scan: When the nozzle gets out of range in the uncritical direction we do not have to abort.
+- Fix for Z-Offset-Scan: When we move the bed up into minus z we first check the coordinates and then move.
+- Fixed help comment for Wobble-Fix in configuration.h.
+- Security fix: Instant switch off the heater output if temperature is set smaller than old temperature or set to zero.
+
+V RF.01.42.21.Mod (2018-09-25)
+- Pull of repetiers motion patch for a non smooth movement in some situations (Which was depending on retract settings).
+  https://github.com/repetier/Repetier-Firmware/issues/824 / https://github.com/repetier/Repetier-Firmware/commit/ec9f2deb79ff0886378adfaef52360a21762928b
+
+V RF.01.42.20.Mod (2018-09-23)
+- Changed phase formula for Kurts Wobblefix: We now use the z coordinate from z-min endstop instead of print coordinates. That should avoid that the wobblefix moves within z axis when we change the matrix or z-offset values.
+
+V RF.01.42.19.Mod (2018-09-23)
+- Changed phase formula for Kurts Wobblefix: This is a possible fix for wrong phase angles.
+
+V RF.01.42.18.Mod (2018-09-23)
+- Kurt Wobble Fix: The phase value will now jump from negative to positive.
+- Kurt Wobble Fix: The phase value within menu will now have +-180° (degree) instead of "+-100% Pi"
+- Movement: I reverted our MOVE_CACHE_LOW settings to the settings that repetier nowadays uses.
+  I think my testfile now produces more smooth movements, because the throttling was too early when it wasnt needed.
+- Pulled some fix from repetier to have better support for long filenames.
+- Removed SD-Card now prints a message through serial/usb.
+
+V RF.01.42.17.Mod (2018-09-06)
+- Fix for Heater-Decoupled-Error if the printer drops temperature within pause.
+- Removed all places where Temperatures are set by manipulating the targetTemperatureC
+- Removed some unused code
+- Removed extra check for printing status and defect Thermistors, because it was unnecessary and faulty.
+- When the printer pauses, it drops the temperatures which are auto recovered at resume.
+  If the temperatures are changed within pause, the old temperature does not auto recover anymore. 
+  This is an improvement in usability for the pause feature.
+- We have 2 methods/systems which look for a printers sleep/standby/idle-state. I put them togehther into one handleStartStandby() function.
+  (previousMillisCmd vs. g_uStartOfIdle. Both are triggering something quite similar except the time span is another.)
+
+V RF.01.42.16.Mod (2018-09-05)
+- Hotfix for disabling steppers because of unsigned time calculation bug.
+
+V RF.01.42.15.Mod (2018-09-01)
+- M3912 Auto-Startmade can now be configured by parameter Y. Standard start Y is 23 mm.
+
+V RF.01.42.13.Mod (2018-09-01)
+- some tempering with code and order
+
+V RF.01.42.12.Mod (2018-09-01)
+- cleanup of disable-things-functions: Removed this horribly chosen function name "Printer::kill" and removed that Printer::kill(true) is intended to switch off steppers.
+- M84 does not shut down Fan anymore, only steppers as intended.
+- finally split GCode::readFromSerial() and GCode::readFromSD() into two independend functions.
+- removed defaultLoopActions() and moved its functionality to alot better place.
+- removed GCode::readFromSerial() from places where the printer waits for some processing.
+
+V RF.01.42.11.Mod (2018-08-31)
+- Patch SdFat Lib to 1.0.7
+- removed the wrong hint that we support Arduino 1.6.5. 
+  Since the time we included the SdFat library which is not located within the main directory next to the Repetier.ino that is not true anymore. 
+  Because this "file not found" error is highly arduino version specific. 1.6.5 is not supporting subdirectory includes.
+  I dont think I will put much more work into supporting 1.6.5 anymore.
+- moved comments in pins.h prior to the pin definitions
+- fixed some bug in M908.
+
+V RF.01.42.10.Mod (2018-08-25)
+- Fix: Oldstyle Load Filament on all printers
+- Rename Load/Unload Filament text within menu
+- emergency pause is only triggered when all axis are homed, because pausing works homed only and we print homed only.
+
+V RF.01.42.09.Mod (2018-08-25)
+- Load und Unload-Filament in mode "hard" should now behave like in version 1.39+
+- fix missing line break after loading of factory defaults
+- increase LOW_TICKS_PER_MOVE to 1,5mio as a test
+
+V RF.01.42.08.Mod (2018-08-12)
+- refactoring for the feature loop function
+- zcompensation is calculated a bit more often to see if that prevents snoring noise
+- some rework on stopprint because of defect sensors
+- some codestyle
+
+V RF.01.42.07.Mod (2018-08-12)
+- changed SD-Card communication Mhz to a more reasonable correct value which is not "just limited" by ATMega speed.
+- partly support for Repetier/Marlins M218 to change Extruder-Offsets by Gcode (only for compatibility reasons, repetier just added it)
+- sensor-heater-decoupling-test got better output- and UI-information messages
+
+V RF.01.42.06.Mod (2018-08-11)
+- improved thermal safety:
+   Added the sensor-heater-decoupling test to the temperature manager.
+   This test is 3D-Printer standard today, but has not been the content of this firmware so far.
+- changed gcode description within Repetier.ino
+- suppress compilation error because of missing watchdog pin if no motherboard (/ printer type) is defined.
+- cleanup of comment annotation within configuration.h
+
+V RF.01.42.05.Mod (2018-08-10)
+- SD-Card Mount is now "silent" at boottime to prevent the RF1000 print errors with missing sd-card. (RF1000 has no automount pin)
+
+V RF.01.42.04.Mod (2018-07-10)
+- replaced PID-Parameters for RF2000v2 with Parameters found by zero_k.
 
 V RF.01.42.03.Mod (2018-07-10)
 - some cleanup and merging of mandatory features
@@ -1138,7 +1793,7 @@ V RF.01.35c.mod
 - Included StarTonys Fan-Mod http://www.rf1000.de/viewtopic.php?f=7&t=1638
 
 V RF.01.35c
-- Changed ZOS Strategy to a "switch"-Type triggered by loopRF for better communication.
+- Changed ZOS Strategy to a "switch"-Type triggered by loopFeatures for better communication.
 - ZOS Message cleanup
 - ZOS now reloads Matrix on +z-Matrix-Entry
 - Fixed almost all Compiler-Warnings

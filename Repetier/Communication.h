@@ -15,12 +15,12 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-
 #ifndef COMMUNICATION_H
 #define COMMUNICATION_H
 
-class Com
-{
+extern const char* const axisNames[] PROGMEM;
+
+class Com {
 public:
     FSTRINGVAR(tDebug)
     FSTRINGVAR(tFirmware)
@@ -30,12 +30,14 @@ public:
     FSTRINGVAR(tNAN)
     FSTRINGVAR(tINF)
     FSTRINGVAR(tError)
+    FSTRINGVAR(tFatal)
     FSTRINGVAR(tInfo)
     FSTRINGVAR(tWarning)
     FSTRINGVAR(tResend)
     FSTRINGVAR(tEcho)
     FSTRINGVAR(tOkSpace)
     FSTRINGVAR(tWrongChecksum)
+    FSTRINGVAR(tFormatError)
     FSTRINGVAR(tMissingChecksum)
     FSTRINGVAR(tDonePrinting)
     FSTRINGVAR(tX)
@@ -111,13 +113,14 @@ public:
     FSTRINGVAR(tSpaceCAtColon)
     FSTRINGVAR(tHSpace)
     FSTRINGVAR(tLSpace)
+    FSTRINGVAR(tSoftDash)
     FSTRINGVAR(tXMinColon)
     FSTRINGVAR(tXMaxColon)
     FSTRINGVAR(tYMinColon)
     FSTRINGVAR(tYMaxColon)
     FSTRINGVAR(tZMinColon)
     FSTRINGVAR(tZMaxColon)
-    FSTRINGVAR(tJerkColon)
+    FSTRINGVAR(tXYJerkColon)
     FSTRINGVAR(tZJerkColon)
     FSTRINGVAR(tLinearStepsColon)
     FSTRINGVAR(tQuadraticStepsColon)
@@ -163,6 +166,7 @@ public:
     FSTRINGVAR(tHeatedBed)
     FSTRINGVAR(tExtruderSpace)
     FSTRINGVAR(tTempSensorDefect)
+    FSTRINGVAR(tTempHeaterDefect)
     FSTRINGVAR(tTempSensorWorking)
     FSTRINGVAR(tDryModeUntilRestart)
 
@@ -170,7 +174,7 @@ public:
     FSTRINGVAR(tWait)
 #endif // WAITING_IDENTIFIER
 
-#if EEPROM_MODE==0
+#if EEPROM_MODE == 0
     FSTRINGVAR(tNoEEPROMSupport)
 #else
     FSTRINGVAR(tConfigStoredEEPROM)
@@ -191,9 +195,7 @@ public:
     FSTRINGVAR(tEPRMillerActiveService)
     FSTRINGVAR(tEPRMaxInactiveTime)
     FSTRINGVAR(tEPRStopAfterInactivty)
-    FSTRINGVAR(tEPRMaxJerk)
-    FSTRINGVAR(tEPRXHomePos)
-    FSTRINGVAR(tEPRYHomePos)
+    FSTRINGVAR(tEPRMaxXYJerk)
     FSTRINGVAR(tEPRXMaxLength)
     FSTRINGVAR(tEPRXMaxLengthMilling)
     FSTRINGVAR(tEPRYMaxLength)
@@ -233,20 +235,15 @@ public:
     FSTRINGVAR(tEPRYAcceleration)
     FSTRINGVAR(tEPRXTravelAcceleration)
     FSTRINGVAR(tEPRYTravelAcceleration)
-    FSTRINGVAR(tEPROPSMode)
-    FSTRINGVAR(tEPROPSMoveAfter)
-    FSTRINGVAR(tEPROPSMinDistance)
-    FSTRINGVAR(tEPROPSRetractionLength)
-    FSTRINGVAR(tEPROPSRetractionBacklash)
     FSTRINGVAR(tEPRBedPIDDriveMax)
     FSTRINGVAR(tEPRBedPIDDriveMin)
     FSTRINGVAR(tEPRBedPGain)
     FSTRINGVAR(tEPRBedIGain)
     FSTRINGVAR(tEPRBedDGain)
-    FSTRINGVAR(tEPRBedPISMaxValue)
+    FSTRINGVAR(tEPRBedPIDMaxValue)
     FSTRINGVAR(tEPRStepsPerMM)
     FSTRINGVAR(tEPRMaxFeedrate)
-    FSTRINGVAR(tEPRStartFeedrate)
+    FSTRINGVAR(tEPReJerk)
     FSTRINGVAR(tEPRAcceleration)
     FSTRINGVAR(tEPRDriveMax)
     FSTRINGVAR(tEPRDriveMin)
@@ -261,7 +258,6 @@ public:
     FSTRINGVAR(tEPRZOffset)
     FSTRINGVAR(tEPRZOffsetmm)
     FSTRINGVAR(tEPRZMode)
-    FSTRINGVAR(tEPRStabilizeTime)
     FSTRINGVAR(tEPRRetractionWhenHeating)
     FSTRINGVAR(tEPRDistanceRetractHeating)
     FSTRINGVAR(tEPRExtruderCoolerSpeed)
@@ -292,10 +288,10 @@ public:
     FSTRINGVAR(tEPRPrinterEPR_RF_EmergencyPauseDigitsMax)
 #endif //FEATURE_EMERGENCY_PAUSE
 
-#if FEATURE_EMERGENCY_STOP_ALL
+#if FEATURE_EMERGENCY_STOP_Z_AND_E
     FSTRINGVAR(tEPRPrinterEPR_RF_EmergencyStopAllMin)
     FSTRINGVAR(tEPRPrinterEPR_RF_EmergencyStopAllMax)
-#endif //FEATURE_EMERGENCY_STOP_ALL
+#endif //FEATURE_EMERGENCY_STOP_Z_AND_E
 
     FSTRINGVAR(tEPRPrinter_STEPPER_X)
     FSTRINGVAR(tEPRPrinter_STEPPER_Y)
@@ -304,9 +300,9 @@ public:
 #if NUM_EXTRUDER > 1
     FSTRINGVAR(tEPRPrinter_STEPPER_E1)
 #endif //NUM_EXTRUDER > 1
-    FSTRINGVAR(tEPRPrinter_FREQ_DBL)
+    FSTRINGVAR(tEPRInterruptSpacingInterval)
 
-#if FAN_PIN>-1 && FEATURE_FAN_CONTROL
+#if FAN_PIN > -1 && FEATURE_FAN_CONTROL
     FSTRINGVAR(tEPRPrinter_FAN_MODE)
     FSTRINGVAR(tEPRPrinter_FAN_SPEED)
     FSTRINGVAR(tEPRPrinter_FAN_PART_FAN_PWM_MIN)
@@ -338,6 +334,7 @@ public:
     FSTRINGVAR(tSDErrorCode)
 #endif // SDSUPPORT
 
+    FSTRINGVAR(tHeaterDecoupledWarning)
     FSTRINGVAR(tOutputObjectPrint)
     FSTRINGVAR(tOutputObjectMill)
     FSTRINGVAR(tUnmountFilamentSoft)
@@ -348,7 +345,16 @@ public:
 #if FEATURE_FIND_Z_ORIGIN
     FSTRINGVAR(tFindZOrigin)
 #endif // FEATURE_FIND_Z_ORIGIN
+    FSTRINGVAR(tCap)
+    FSTRINGVAR(tConfig)
 
+    static void cap(FSTRINGPARAM(text));
+    static void config(FSTRINGPARAM(text));
+    static void config(FSTRINGPARAM(text), int value);
+    static void config(FSTRINGPARAM(text), const char* msg);
+    static void config(FSTRINGPARAM(text), int32_t value);
+    static void config(FSTRINGPARAM(text), uint32_t value);
+    static void config(FSTRINGPARAM(text), float value, uint8_t digits = 2);
     static void printNumber(uint32_t n);
     static void printWarningF(FSTRINGPARAM(text));
     static void printInfoF(FSTRINGPARAM(text));
@@ -358,28 +364,32 @@ public:
     static void printErrorFLN(FSTRINGPARAM(text));
     static void printFLN(FSTRINGPARAM(text));
     static void printF(FSTRINGPARAM(ptr));
-    static void printF(FSTRINGPARAM(text),int value);
-    static void printF(FSTRINGPARAM(text),const char *msg);
-    static void printF(FSTRINGPARAM(text),int32_t value);
-    static void printF(FSTRINGPARAM(text),uint32_t value);
-    static void printF(FSTRINGPARAM(text),float value,uint8_t digits=2,bool komma_as_dot=false);
-    static void printFLN(FSTRINGPARAM(text),int value);
-    static void printFLN(FSTRINGPARAM(text),int32_t value);
-    static void printFLN(FSTRINGPARAM(text),uint32_t value);
-    static void printFLN(FSTRINGPARAM(text),const char *msg);
-    static void printFLN(FSTRINGPARAM(text),float value,uint8_t digits=2,bool komma_as_dot=false);
-    static void printArrayFLN(FSTRINGPARAM(text),float *arr,uint8_t n=4,uint8_t digits=2);
-    static void printArrayFLN(FSTRINGPARAM(text),int32_t *arr,uint8_t n=4);
+    static void printF(FSTRINGPARAM(text), int value);
+    static void printF(FSTRINGPARAM(text), const char* msg);
+    static void printF(FSTRINGPARAM(text), int32_t value);
+    static void printF(FSTRINGPARAM(text), uint32_t value);
+    static void printF(FSTRINGPARAM(text), float value, uint8_t digits = 2, bool komma_as_dot = false);
+    static void printFLN(FSTRINGPARAM(text), int value);
+    static void printFLN(FSTRINGPARAM(text), int32_t value);
+    static void printFLN(FSTRINGPARAM(text), uint32_t value);
+    static void printFLN(FSTRINGPARAM(text), const char* msg);
+    static void printFLN(FSTRINGPARAM(text), float value, uint8_t digits = 2, bool komma_as_dot = false);
+    static void printArrayFLN(FSTRINGPARAM(text), float* arr, uint8_t n = 4, uint8_t digits = 2);
+    static void printArrayFLN(FSTRINGPARAM(text), int32_t* arr, uint8_t n = 4);
     static void printSharpLine();
-    static void print(long value);
-    static inline void print(uint32_t value) {printNumber(value);}
-    static inline void print(int value) {print((int32_t)value);}
-    static void print(const char *text);
-    static inline void print(char c) {HAL::serialWriteByte(c);}
-    static void printFloat(float number, uint8_t digits, bool komma_as_dot=false);
-    static inline void println() {HAL::serialWriteByte('\r');HAL::serialWriteByte('\n');}
-
+    static void print(int32_t value);
+    static inline void print(uint32_t value) { printNumber(value); }
+    static inline void print(int value) { print((int32_t)value); }
+    static void print(const char* text);
+    static inline void print(char c) {
+        GCodeSource::writeToAll(c);
+    }
+    static void printFloat(float number, uint8_t digits, bool komma_as_dot = false);
+    static inline void println() {
+        GCodeSource::writeToAll('\r');
+        GCodeSource::writeToAll('\n');
+    }
+    static bool writeToAll;
 }; // Com
-
 
 #endif // COMMUNICATION_H

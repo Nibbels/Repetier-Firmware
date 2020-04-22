@@ -28,7 +28,7 @@
  * Speed           is in   mm/s
  * Acceleration    in in   mm/s^2
  * Temperature     is in   degrees celsius
- * 
+ *
  * For easy configuration, the default settings enable parameter storage in EEPROM.
  * This means, after the first upload many variables can only be changed using the special
  * M commands as described in the documentation. Changing these values in the configuration.h
@@ -61,7 +61,7 @@
  * EEPROM settings with configuration defaults, just select an other value. On the first call to epr_init()
  * it will detect a mismatch of the first byte and copy default values into EEPROM. If the first byte
  * matches, the stored values are used to overwrite the settings.
- * 
+ *
  * IMPORTANT: With mode <>0 some changes in Configuration.h are not set any more, as they are
  *            taken from the EEPROM.
  */
@@ -134,7 +134,7 @@
 /** \brief Enables/disables the support for the fan control */
 #define FEATURE_FAN_CONTROL                 1                                                   // 1 = on, 0 = off
 
-/** \brief Enables/disables the support for G2/G3 arc commands 
+/** \brief Enables/disables the support for G2/G3 arc commands
 Arc gcodes can have valid and invalid parameters because of the arcs math and radius/start/endpoint constraints we set by gcode params.
 a) Examples for valid arcs:
 - Full circles seem to be always working and their behaviour seems to be good.
@@ -227,7 +227,7 @@ b) Examples for impossible arcs:
  * \brief Define the to-be-used micro steps.
  * Note that high MICRO_STEPS limit your speed because of the limit in 8bit-CPU calculation power.
  * See "configuration of the speed vs. cpu usage" within RF1000.h / RF2000.h
- * 
+ *
  * Your way to high microsteps is dual-stepping, quadstepping, octostepping. On high speeds that packs steps together to save CPU. Read rf1000.de for the downside. Menu->Stepper->DblFQ: is the setting for the shifting speed.
  * High microstepping make your speed low. Dont use 256, avoid 128.
  * 256 Microsteps sound very bad and is slower 30mm/s in X and Y. Avoid it! 128 is not much better. 64 might be ok for XY.
@@ -452,11 +452,11 @@ Overridden if EEPROM activated. */
 #if FEATURE_EMERGENCY_STOP_Z_AND_E
 
 /**
- * \brief 
- * Specifies the pressure at which 
+ * \brief
+ * Specifies the pressure at which
  * - the z emergency stop shall be performed
  * - extrusion is forbidden
- * 
+ *
  * Do not set them to Zero.
  */
 #define EMERGENCY_STOP_DIGITS_MIN           -12500                                 // [digits]
@@ -504,11 +504,11 @@ Overridden if EEPROM activated. */
  * each line, except the last, with a backslash. The table format is {{adc1,temp1},{adc2,temp2}...} with
  * increasing adc values. For more informations, read
  * http://hydraraptor.blogspot.com/2007/10/measuring-temperature-easy-way.html
- * 
+ *
  * If you have a sprinter temperature table, you have to multiply the first value with 4 and the second with 8.
  * This firmware works with increased precision, so the value reads go from 0 to 4095 and the temperature is
  * temperature*8.
- * 
+ *
  * If you have a PTC thermistor instead of a NTC thermistor, keep the adc values increasing and use themistor types 50-52 instead of 5-7!
  */
 
@@ -529,7 +529,7 @@ Overridden if EEPROM activated. */
 
 /**
  * \brief If defined, creates a thermistor table at startup.
- * 
+ *
  * If you don't feel like computing the table on your own, you can use this generic method. It is
  * a simple approximation which may be not as accurate as a good table computed from the reference
  * values in the datasheet. You can increase precision if you use a temperature/resistance for
@@ -544,10 +544,10 @@ Overridden if EEPROM activated. */
  *                 |
  *                 V measured
  * @endcode
- * 
+ *
  * If you don't have R1, set it to 0.
  * The capacitor is for reducing noise from long thermistor cable. If you don't have one, it's OK.
- * 
+ *
  * If you need the generic table, uncomment the following define.
  */
 //#define USE_GENERIC_THERMISTORTABLE_1
@@ -605,9 +605,9 @@ Honeywell 100K Thermistor (135-104LAG-J01)  : R0 = 100000  T0 = 25  Beta = 3974
 /** \brief Supply voltage to ADC, can be changed by setting ANALOG_REF below to different value. */
 #define GENERIC_THERM_VREF                  5
 
-/** 
+/**
  * \brief Number of entries in generated table. One entry takes 4 bytes. Higher number of entries increase computation time too.
- * Value is used for all generic tables created. 
+ * Value is used for all generic tables created.
  */
 #define GENERIC_THERM_NUM_ENTRIES           33
 
@@ -618,11 +618,11 @@ Honeywell 100K Thermistor (135-104LAG-J01)  : R0 = 100000  T0 = 25  Beta = 3974
 // ##   sensor heater decoupling
 // ##########################################################################################
 
-/** 
+/**
  * \brief The firmware checks if the heater and sensor got decoupled, which is dangerous. Since it will never reach target
  * temperature, the heater will stay on for every which can burn your printer or house.
  * As an additional barrier to your smoke detectors (I hope you have one above your printer) we now
- * do some more checks to detect if something got wrong. 
+ * do some more checks to detect if something got wrong.
  */
 
 // If the temp. is on hold target, it may not sway more then this degrees celsius, or we mark sensor as defect.
@@ -634,8 +634,8 @@ Honeywell 100K Thermistor (135-104LAG-J01)  : R0 = 100000  T0 = 25  Beta = 3974
 // then you have 3 seconds of increased heating to reach 1°C.
 #define DECOUPLING_TEST_MIN_TEMP_RISE              1                   //°C
 
-// Time in ms between a heater action and test of success. Must be more then time between turning heater on and first temp. rise! 
-// 0 will disable decoupling test 
+// Time in ms between a heater action and test of success. Must be more then time between turning heater on and first temp. rise!
+// 0 will disable decoupling test
 #define EXT0_DECOUPLE_TEST_PERIOD                  12000
 #define EXT1_DECOUPLE_TEST_PERIOD                  12000
 #define BED_DECOUPLE_TEST_PERIOD                   12000
@@ -644,9 +644,9 @@ Honeywell 100K Thermistor (135-104LAG-J01)  : R0 = 100000  T0 = 25  Beta = 3974
 // ##   duplicate motor drivers
 // ##########################################################################################
 
-/** 
+/**
  * \brief If you have an unused extruder stepper free, you could use it to drive the second z motor
- * instead of driving both with a single stepper. The same works for the other axis if needed. 
+ * instead of driving both with a single stepper. The same works for the other axis if needed.
  */
 
 #define FEATURE_TWO_XSTEPPER                false
@@ -679,7 +679,7 @@ Honeywell 100K Thermistor (135-104LAG-J01)  : R0 = 100000  T0 = 25  Beta = 3974
 #define SD_EXTENDED_DIR                     true
 
 /** \brief Total size of the buffer used to store the long filenames */
-// If you need more maximum file name length than 26 chars 
+// If you need more maximum file name length than 26 chars
 // - For SD-Printing using a Gcode / using Octoprints sd file listing
 // - Or for seeing the full filenames within the SD-Card file menu
 // then increase MAX_VFAT_ENTRIES to 3. But that has to be payed with ~65bytes of Ram.
@@ -721,7 +721,7 @@ Select the language to use.
 /** \brief How many ms should a single page be shown, until it is switched to the next one.*/
 #define UI_PAGES_DURATION                   4000
 
-/** 
+/**
  * \brief Uncomment if you don't want automatic page switching. You can still switch the
  * info pages with next/previous button/click-encoder
  */
@@ -927,7 +927,7 @@ we use blocks of 2 kByte size for the structure of our EEPROM
  */
 #define ALLOW_EXTENDED_COMMUNICATION        2                                                   // 0 = do not allow, 1 = allow "Wait", 2 = allow "Wait" and debug outputs
 
-/** 
+/**
  * \brief Configuration of the external watchdog
  * The TPS3820 of the RF1000/RF2000 resets about 112/200/310 (min/typical/max) ms after the last time when it was triggered
  * http://pdf1.alldatasheet.com/datasheet-pdf/view/29215/TI/TPS3820-50DBVT.html
@@ -1059,9 +1059,9 @@ we use blocks of 2 kByte size for the structure of our EEPROM
 /** \brief For Nibbels external interrupt 3 plus an extra pin is used for reading digital calipers. You will have to solder some logic-converter from 1.8v to 5v see http://www.instructables.com/id/Reading-Digital-Callipers-with-an-Arduino-USB/ */
 #define FEATURE_READ_CALIPER               0                                                   // 0 = OFF, 1 = ON
 // RF2000/RF1000: RESERVE_DIGITAL_PIN_PD3 is INT3 for having clocks falling edges collected
-#define FEATURE_READ_CALIPER_INT_PIN       RESERVE_DIGITAL_PIN_PD3                             
+#define FEATURE_READ_CALIPER_INT_PIN       RESERVE_DIGITAL_PIN_PD3
 // RF2000: RESERVE_DIGITAL_PIN_PE4 is some reserve pin for reading off data while clocks falling edge.
-#define FEATURE_READ_CALIPER_DATA_PIN      RESERVE_DIGITAL_PIN_PE4                             
+#define FEATURE_READ_CALIPER_DATA_PIN      RESERVE_DIGITAL_PIN_PE4
 #if FEATURE_READ_CALIPER && MOTHERBOARD == DEVICE_TYPE_RF1000 && FEATURE_READ_CALIPER_DATA_PIN == RESERVE_DIGITAL_PIN_PE4
  #error You cannot use RESERVE_DIGITAL_PIN_PE4 on an RF1000, please connect and choose another one.
 #endif
@@ -1092,7 +1092,7 @@ we use blocks of 2 kByte size for the structure of our EEPROM
 /** \brief Automatic Startline */
 #define FEATURE_STARTLINE                   1
 
-/** 
+/**
  * \brief Z-Wobble elimination tool
  * Two offsets [dx, dy] = f(z) in x and y direction can simulate hardware z-wobble.
  * With much care you can adjust this software z-wobble as an opposite to the hardware introduced z-wobble.

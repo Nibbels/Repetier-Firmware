@@ -1,0 +1,11 @@
+Merke:
+
+Decompile:
+avr-objdump.exe -S Repetier.ino.elf > blablabla.txt
+avr-objdump.exe -t -S Repetier.ino.elf > blablabla_map.txt
+
+Ram-Listing:
+avr-nm.exe -Crtd --numeric-sort Repetier.ino.elf > blablabla_ram_addresses.txt
+
+https://arduino.stackexchange.com/questions/31190/detailed-analyse-of-memory-usage/
+http://forum.arduino.cc/index.php?topic=72948.15

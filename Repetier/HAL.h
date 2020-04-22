@@ -15,7 +15,6 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-
 #ifndef HAL_H
 #define HAL_H
 
@@ -27,13 +26,13 @@
 
 #include <avr/pgmspace.h>
 #include <avr/io.h>
-#define prog_char   char
+#define prog_char char
 
 #define INLINE __attribute__((always_inline))
 
 #define PACK
 
-#define FSTRINGVALUE(var,value) const char var[] PROGMEM = value;
+#define FSTRINGVALUE(var, value) const char var[] PROGMEM = value;
 #define FSTRINGVAR(var) static const char var[] PROGMEM;
 #define FSTRINGPARAM(var) PGM_P var
 
@@ -44,10 +43,11 @@
 All known arduino boards use 64. This value is needed for the extruder timing. */
 #define TIMER0_PRESCALE 64
 
-#define ANALOG_PRESCALER _BV(ADPS0)|_BV(ADPS1)|_BV(ADPS2)
+#define ANALOG_PRESCALER _BV(ADPS0) | _BV(ADPS1) | _BV(ADPS2)
 
 #ifndef EXTERNALSERIAL
-#define  HardwareSerial_h // Don't use standard serial console
+#undef HardwareSerial_h
+#define HardwareSerial_h // Don't use standard serial console
 #endif
 
 #include <inttypes.h>
@@ -55,15 +55,16 @@ All known arduino boards use 64. This value is needed for the extruder timing. *
 #include "Print.h"
 
 #include "Arduino.h"
-#define COMPAT_PRE1
-
 #include "fastio.h"
 
 // FEATURE_WATCHDOG
-extern  unsigned char g_bPingWatchdog;
-extern  unsigned long g_uLastCommandLoop;
+extern unsigned char g_bPingWatchdog;
+extern unsigned long g_uLastCommandLoop;
+
+#ifdef MOTHERBOARD
 #ifndef WATCHDOG_PIN
-    #error Watchdog pin not defined. We really need some Watchdog pin with a working watchdogtimer!
+#error Watchdog pin not defined. We really need some Watchdog pin with a working watchdogtimer!
+#endif
 #endif
 
 //7 means down till 2.1hz is possible:
@@ -71,71 +72,66 @@ extern  unsigned long g_uLastCommandLoop;
 
 #define PART_FAN_MODE_PWM 0
 #define PART_FAN_MODE_PDM 1
-extern  uint8_t part_fan_frequency_modulation;
-extern  uint8_t part_fan_pwm_speed;
-extern  uint8_t part_fan_pwm_max; //this is calculated as 99%
-extern  uint8_t part_fan_pwm_min; //this is calculated as 1%
+extern uint8_t part_fan_frequency_modulation;
+extern uint8_t part_fan_pwm_speed;
+extern uint8_t part_fan_pwm_max; //this is calculated as 99%
+extern uint8_t part_fan_pwm_min; //this is calculated as 1%
 
-class InterruptProtectedBlock
-{
+class InterruptProtectedBlock {
 private:
     uint8_t sreg;
+
 public:
-    inline void protect(bool save = false)
-    {
-        if(save) sreg = SREG;
+    inline void protect() {
         cli();
     }
 
-    inline void unprotect()
-    {
+    inline void unprotect() {
         SREG = sreg;
     }
 
-    inline InterruptProtectedBlock(bool later = false)
-    {
+    inline InterruptProtectedBlock(bool later = false) {
         sreg = SREG;
-        if(!later)
+        if (!later)
             cli();
     }
 
-    inline ~InterruptProtectedBlock()
-    {
+    inline ~InterruptProtectedBlock() {
         SREG = sreg;
     }
 };
 
-#define EEPROM_OFFSET               0
-#define SECONDS_TO_TICKS(s)         (unsigned long)(s*(float)F_CPU)
-#define ANALOG_REDUCE_BITS          0
-#define ANALOG_REDUCE_FACTOR        1
+#define EEPROM_OFFSET 0
+#define SECONDS_TO_TICKS(s) (unsigned long)(s * (float)F_CPU)
+#define ANALOG_REDUCE_BITS 0
+#define ANALOG_REDUCE_FACTOR 1
 
-#define MAX_RAM                     8192
+#define MAX_RAM 8192
 
-#define bit_clear(x,y)              x&= ~(1<<y)
-#define bit_set(x,y)                x|= (1<<y)
+#define bit_clear(x, y) x &= ~(1 << y)
+#define bit_set(x, y) x |= (1 << y)
 
 /** defines the data direction (reading from I2C device) in i2cStart(),i2cRepStart() */
-#define I2C_READ                    1
+#define I2C_READ 1
 
 /** defines the data direction (writing to I2C device) in i2cStart(),i2cRepStart() */
-#define I2C_WRITE                   0
+#define I2C_WRITE 0
 
-#define LIMIT_INTERVAL              ((F_CPU/40000)+1)
+#define LIMIT_INTERVAL ((F_CPU / 40000) + 1)
 
 #ifndef cbi
-  #define cbi(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
+#define cbi(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
 #endif
 #ifndef sbi
-  #define sbi(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))
+#define sbi(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))
 #endif
 
-typedef uint16_t    speed_t;
-typedef uint32_t    ticks_t;
-typedef uint32_t    millis_t;
-typedef uint8_t     flag8_t;
-typedef int8_t      fast8_t;
-typedef uint8_t     ufast8_t;
+typedef uint16_t speed_t;
+typedef uint32_t ticks_t;
+typedef uint32_t millis_t;
+typedef uint8_t flag8_t;
+typedef int8_t fast8_t;
+typedef uint8_t ufast8_t;
 
 #define FAST_INTEGER_SQRT
 
@@ -143,7 +139,7 @@ typedef uint8_t     ufast8_t;
 extern volatile unsigned long g_uCOUNT_INT3; //dummy variable for dummy function!
 
 void USER_INTERRUPT3_HOOK(); //dummy function!
-#endif //FEATURE_USER_INT3
+#endif                       //FEATURE_USER_INT3
 
 #if FEATURE_READ_CALIPER
 extern volatile long caliper_um; //last valid readout
@@ -152,10 +148,10 @@ extern volatile long caliper_um; //last valid readout
 extern uint16_t caliper_filament_standard;
 extern uint32_t caliper_collect_um;
 extern uint32_t caliper_collect_count;
-extern int8_t   caliper_collect_adjust;
+extern int8_t caliper_collect_adjust;
 
 void FEATURE_READ_CALIPER_HOOK(); //read in calipers 48bit protocol bitwise!
-#endif //FEATURE_READ_CALIPER
+#endif                            //FEATURE_READ_CALIPER
 
 #ifndef EXTERNALSERIAL
 // Implement serial communication for one stream only!
@@ -182,55 +178,51 @@ void FEATURE_READ_CALIPER_HOOK(); //read in calipers 48bit protocol bitwise!
   Modified to use only 1 queue with fixed length by Repetier
 */
 
-#undef SERIAL_RX_BUFFER_SIZE
-//undef fix gegen compiler warning
-#define SERIAL_RX_BUFFER_SIZE   128
-#define SERIAL_RX_BUFFER_MASK   127
+#define SERIAL_BUFFER_SIZE 128
+#define SERIAL_BUFFER_MASK 127
 
 #undef SERIAL_TX_BUFFER_SIZE
 #undef SERIAL_TX_BUFFER_MASK
 #ifdef BIG_OUTPUT_BUFFER
-  #define SERIAL_TX_BUFFER_SIZE 128
-  #define SERIAL_TX_BUFFER_MASK 127
+#define SERIAL_TX_BUFFER_SIZE 128
+#define SERIAL_TX_BUFFER_MASK 127
 #else
-  #define SERIAL_TX_BUFFER_SIZE 64
-  #define SERIAL_TX_BUFFER_MASK 63
+#define SERIAL_TX_BUFFER_SIZE 64
+#define SERIAL_TX_BUFFER_MASK 63
 #endif
 
-struct ring_buffer_rx
-{
-    unsigned char buffer[SERIAL_RX_BUFFER_SIZE];
+struct ring_buffer_rx {
+    unsigned char buffer[SERIAL_BUFFER_SIZE];
     volatile uint8_t head;
     volatile uint8_t tail;
 };
 
-struct ring_buffer_tx
-{
+struct ring_buffer_tx {
     unsigned char buffer[SERIAL_TX_BUFFER_SIZE];
     volatile uint8_t head;
     volatile uint8_t tail;
 };
 
-class RFHardwareSerial : public Print
-{
+class RFHardwareSerial : public Stream {
 public:
-    ring_buffer_rx      *_rx_buffer;
-    ring_buffer_tx      *_tx_buffer;
-    volatile uint8_t    *_ubrrh;
-    volatile uint8_t    *_ubrrl;
-    volatile uint8_t    *_ucsra;
-    volatile uint8_t    *_ucsrb;
-    volatile uint8_t    *_udr;
-    uint8_t             _rxen;
-    uint8_t             _txen;
-    uint8_t             _rxcie;
-    uint8_t             _udrie;
-    uint8_t             _u2x;
+    ring_buffer_rx* _rx_buffer;
+    ring_buffer_tx* _tx_buffer;
+    volatile uint8_t* _ubrrh;
+    volatile uint8_t* _ubrrl;
+    volatile uint8_t* _ucsra;
+    volatile uint8_t* _ucsrb;
+    volatile uint8_t* _udr;
+    uint8_t _rxen;
+    uint8_t _txen;
+    uint8_t _rxcie;
+    uint8_t _udrie;
+    uint8_t _u2x;
+
 public:
-    RFHardwareSerial(ring_buffer_rx *rx_buffer, ring_buffer_tx *tx_buffer,
-                     volatile uint8_t *ubrrh, volatile uint8_t *ubrrl,
-                     volatile uint8_t *ucsra, volatile uint8_t *ucsrb,
-                     volatile uint8_t *udr,
+    RFHardwareSerial(ring_buffer_rx* rx_buffer, ring_buffer_tx* tx_buffer,
+                     volatile uint8_t* ubrrh, volatile uint8_t* ubrrl,
+                     volatile uint8_t* ucsra, volatile uint8_t* ucsrb,
+                     volatile uint8_t* udr,
                      uint8_t rxen, uint8_t txen, uint8_t rxcie, uint8_t udrie, uint8_t u2x);
     void begin(unsigned long);
     void end();
@@ -246,30 +238,45 @@ public:
 
 extern RFHardwareSerial RFSerial;
 #define RFSERIAL RFSerial
-#define WAIT_OUT_EMPTY while(tx_buffer.head != tx_buffer.tail) {}
+#define WAIT_OUT_EMPTY \
+    while (tx_buffer.head != tx_buffer.tail) { }
 #else // EXTERNALSERIAL
 #define RFSERIAL Serial
+#if defined(BLUETOOTH_SERIAL) && BLUETOOTH_SERIAL > 0
+#if BLUETOOTH_SERIAL == 1
+#define RFSERIAL2 Serial1
+#elif BLUETOOTH_SERIAL == 2
+#define RFSERIAL2 Serial2
+#elif BLUETOOTH_SERIAL == 3
+#define RFSERIAL2 Serial3
+#elif BLUETOOTH_SERIAL == 4
+#define RFSERIAL2 Serial4
+#elif BLUETOOTH_SERIAL == 5
+#define RFSERIAL2 Serial5
+#endif
+#endif
 #endif // EXTERNALSERIAL
 
-#define OUT_P_I(p,i)        Com::printF(PSTR(p),(int)(i))
-#define OUT_P_I_LN(p,i)     Com::printFLN(PSTR(p),(int)(i))
-#define OUT_P_L(p,i)        Com::printF(PSTR(p),(long)(i))
-#define OUT_P_L_LN(p,i)     Com::printFLN(PSTR(p),(long)(i))
-#define OUT_P_F(p,i)        Com::printF(PSTR(p),(float)(i))
-#define OUT_P_F_LN(p,i)     Com::printFLN(PSTR(p),(float)(i))
-#define OUT_P_FX(p,i,x)     Com::printF(PSTR(p),(float)(i),x)
-#define OUT_P_FX_LN(p,i,x)  Com::printFLN(PSTR(p),(float)(i),x)
-#define OUT_P(p)            Com::printF(PSTR(p))
-#define OUT_P_LN(p)         Com::printFLN(PSTR(p))
-#define OUT_ERROR_P(p)      Com::printErrorF(PSTR(p))
-#define OUT_ERROR_P_LN(p)   {Com::printErrorF(PSTR(p));Com::println();}
-#define OUT(v)              Com::print(v)
-#define OUT_LN              Com::println()
+#define OUT_P_I(p, i) Com::printF(PSTR(p), (int)(i))
+#define OUT_P_I_LN(p, i) Com::printFLN(PSTR(p), (int)(i))
+#define OUT_P_L(p, i) Com::printF(PSTR(p), (long)(i))
+#define OUT_P_L_LN(p, i) Com::printFLN(PSTR(p), (long)(i))
+#define OUT_P_F(p, i) Com::printF(PSTR(p), (float)(i))
+#define OUT_P_F_LN(p, i) Com::printFLN(PSTR(p), (float)(i))
+#define OUT_P_FX(p, i, x) Com::printF(PSTR(p), (float)(i), x)
+#define OUT_P_FX_LN(p, i, x) Com::printFLN(PSTR(p), (float)(i), x)
+#define OUT_P(p) Com::printF(PSTR(p))
+#define OUT_P_LN(p) Com::printFLN(PSTR(p))
+#define OUT_ERROR_P(p) Com::printErrorF(PSTR(p))
+#define OUT_ERROR_P_LN(p) \
+    { \
+        Com::printErrorF(PSTR(p)); \
+        Com::println(); \
+    }
+#define OUT(v) Com::print(v)
+#define OUT_LN Com::println()
 
-
-
-class HAL
-{
+class HAL {
 public:
     HAL();
     virtual ~HAL();
@@ -283,11 +290,10 @@ public:
     of a 24 bit and 16 bit dividend, which offen, but not always occur in updating the
     interval.
     */
-    static inline int32_t Div4U2U(uint32_t a,uint16_t b)
-    {
+    static inline int32_t Div4U2U(uint32_t a, uint16_t b) {
         // r14/r15 remainder
         // r16 counter
-        __asm__ __volatile__ (
+        __asm volatile(
             "clr r14 \n\t"
             "sub r15,r15 \n\t"
             "tst %D0 \n\t"
@@ -295,13 +301,16 @@ public:
             "tst %C0 \n\t"
             "breq donot24%= \n\t"
             "rjmp do24%= \n\t"
-            "donot24%=:" "ldi r16,17 \n\t" // 16 Bit divide
-            "d16u_1%=:" "rol %A0 \n\t"
+            "donot24%=:"
+            "ldi r16,17 \n\t" // 16 Bit divide
+            "d16u_1%=:"
+            "rol %A0 \n\t"
             "rol %B0 \n\t"
             "dec r16 \n\t"
             "brne   d16u_2%= \n\t"
             "rjmp end%= \n\t"
-            "d16u_2%=:" "rol r14 \n\t"
+            "d16u_2%=:"
+            "rol r14 \n\t"
             "rol r15 \n\t"
             "sub r14,%A2 \n\t"
             "sbc r15,%B2 \n\t"
@@ -310,20 +319,23 @@ public:
             "adc r15,%B2 \n\t"
             "clc \n\t"
             "rjmp d16u_1%= \n\t"
-            "d16u_3%=:" "sec \n\t"
+            "d16u_3%=:"
+            "sec \n\t"
             "rjmp d16u_1%= \n\t"
             "do32%=:" // divide full 32 bit
             "rjmp do32B%= \n\t"
             "do24%=:" // divide 24 bit
 
             "ldi r16,25 \n\t" // 24 Bit divide
-            "d24u_1%=:" "rol %A0 \n\t"
+            "d24u_1%=:"
+            "rol %A0 \n\t"
             "rol %B0 \n\t"
             "rol %C0 \n\t"
             "dec r16 \n\t"
             "brne   d24u_2%= \n\t"
             "rjmp end%= \n\t"
-            "d24u_2%=:" "rol r14 \n\t"
+            "d24u_2%=:"
+            "rol r14 \n\t"
             "rol r15 \n\t"
             "sub r14,%A2 \n\t"
             "sbc r15,%B2 \n\t"
@@ -332,20 +344,23 @@ public:
             "adc r15,%B2 \n\t"
             "clc \n\t"
             "rjmp d24u_1%= \n\t"
-            "d24u_3%=:" "sec \n\t"
+            "d24u_3%=:"
+            "sec \n\t"
             "rjmp d24u_1%= \n\t"
 
             "do32B%=:" // divide full 32 bit
 
             "ldi r16,33 \n\t" // 32 Bit divide
-            "d32u_1%=:" "rol %A0 \n\t"
+            "d32u_1%=:"
+            "rol %A0 \n\t"
             "rol %B0 \n\t"
             "rol %C0 \n\t"
             "rol %D0 \n\t"
             "dec r16 \n\t"
             "brne   d32u_2%= \n\t"
             "rjmp end%= \n\t"
-            "d32u_2%=:" "rol r14 \n\t"
+            "d32u_2%=:"
+            "rol r14 \n\t"
             "rol r15 \n\t"
             "sub r14,%A2 \n\t"
             "sbc r15,%B2 \n\t"
@@ -354,24 +369,22 @@ public:
             "adc r15,%B2 \n\t"
             "clc \n\t"
             "rjmp d32u_1%= \n\t"
-            "d32u_3%=:" "sec \n\t"
+            "d32u_3%=:"
+            "sec \n\t"
             "rjmp d32u_1%= \n\t"
 
             "end%=:" // end
-            :"=&r"(a)
-            :"0"(a),"r"(b)
-            :"r14","r15","r16"
-        );
+            : "=&r"(a)
+            : "0"(a), "r"(b)
+            : "r14", "r15", "r16");
         return a;
 
     } // Div4U2U
 
-    static inline unsigned long U16SquaredToU32(unsigned int val)
-    {
+    static inline unsigned long U16SquaredToU32(unsigned int val) {
         long res;
 
-
-        __asm__ __volatile__ ( // 15 Ticks
+        __asm volatile( // 15 Ticks
             "mul %A1,%A1 \n\t"
             "movw %A0,r0 \n\t"
             "mul %B1,%B1 \n\t"
@@ -385,20 +398,17 @@ public:
             "adc %C0,r1 \n\t"
             "adc %D0,%A1 \n\t"
             "clr r1 \n\t"
-            : "=&r"(res),"=r"(val)
-            : "1"(val)
-        );
+            : "=&r"(res), "=r"(val)
+            : "1"(val));
         return res;
 
     } // U16SquaredToU32
 
-    static inline speed_t ComputeV(long timer,long accel)
-    {
+    static inline speed_t ComputeV(long timer, long accel) {
         unsigned int res;
 
-
         // 38 Ticks
-        __asm__ __volatile__ ( // 0 = res, 1 = timer, 2 = accel %D2=0 ,%A1 are unused is free
+        __asm volatile( // 0 = res, 1 = timer, 2 = accel %D2=0 ,%A1 are unused is free
             // Result LSB first: %A0, %B0, %A1
             "mul %B1,%A2 \n\t"
             "mov %A0,r1 \n\t"
@@ -430,90 +440,26 @@ public:
             "ror %B0 \n\t"
             "ror %A0 \n\t"
             "clr r1 \n\t"
-            :"=&r"(res),"=r"(timer),"=r"(accel)
-            :"1"(timer),"2"(accel)
-            : );
+            : "=&r"(res), "=r"(timer), "=r"(accel)
+            : "1"(timer), "2"(accel)
+            :);
         // unsigned int v = ((timer>>8)*cur->accel)>>10;
         return res;
 
     } // ComputeV
 
-    // Multiply two 16 bit values and return 32 bit result
-    static inline uint32_t mulu16xu16to32(unsigned int a,unsigned int b)
-    {
-        uint32_t res;
-
-
-        // 18 Ticks = 1.125 us
-        __asm__ __volatile__ ( // 0 = res, 1 = timer, 2 = accel %D2=0 ,%A1 are unused is free
-            // Result LSB first: %A0, %B0, %A1
-            "clr r18 \n\t"
-            "mul %B2,%B1 \n\t" // mul hig bytes
-            "movw %C0,r0 \n\t"
-            "mul %A1,%A2 \n\t" // mul low bytes
-            "movw %A0,r0 \n\t"
-            "mul %A1,%B2 \n\t"
-            "add %B0,r0 \n\t"
-            "adc %C0,r1 \n\t"
-            "adc %D0,r18 \n\t"
-            "mul %B1,%A2 \n\t"
-            "add %B0,r0 \n\t"
-            "adc %C0,r1 \n\t"
-            "adc %D0,r18 \n\t"
-            "clr r1 \n\t"
-            :"=&r"(res),"=r"(a),"=r"(b)
-            :"1"(a),"2"(b)
-            :"r18" );
-        // return (long)a*b;
-        return res;
-
-    } // mulu16xu16to32
-
-    // Multiply two 16 bit values and return 16 bit result
-    static inline unsigned int mulu6xu16shift16(unsigned int a,unsigned int b)
-    {
-        unsigned int res;
-
-
-        // 18 Ticks = 1.125 us
-        __asm__ __volatile__ ( // 0 = res, 1 = timer, 2 = accel %D2=0 ,%A1 are unused is free
-            // Result LSB first: %A0, %B0, %A1
-            "clr r18 \n\t"
-            "mul %B2,%B1 \n\t" // mul hig bytes
-            "movw %A0,r0 \n\t"
-            "mul %A1,%A2 \n\t" // mul low bytes
-            "mov r19,r1 \n\t"
-            "mul %A1,%B2 \n\t"
-            "add r19,r0 \n\t"
-            "adc %A0,r1 \n\t"
-            "adc %B0,r18 \n\t"
-            "mul %B1,%A2 \n\t"
-            "add r19,r0 \n\t"
-            "adc %A0,r1 \n\t"
-            "adc %B0,r18 \n\t"
-            "clr r1 \n\t"
-            :"=&r"(res),"=r"(a),"=r"(b)
-            :"1"(a),"2"(b)
-            :"r18","r19" );
-        return res;
-
-    } // mulu6xu16shift16
-
-    static inline void digitalWrite(uint8_t pin,uint8_t value)
-    {
-        ::digitalWrite(pin,value);
+    static inline void digitalWrite(uint8_t pin, uint8_t value) {
+        ::digitalWrite(pin, value);
 
     } // digitalWrite
 
-    static inline uint8_t digitalRead(uint8_t pin)
-    {
+    static inline uint8_t digitalRead(uint8_t pin) {
         return ::digitalRead(pin);
 
     } // digitalRead
 
-    static inline void pinMode(uint8_t pin,uint8_t mode)
-    {
-        ::pinMode(pin,mode);
+    static inline void pinMode(uint8_t pin, uint8_t mode) {
+        ::pinMode(pin, mode);
 
     } // pinMode
 
@@ -524,73 +470,66 @@ public:
         ::delayMicroseconds(delayUs);
     } // delayMicroseconds
 
-    static inline void delayMilliseconds(unsigned int delayMs)
-    {
+    static inline void delayMilliseconds(unsigned int delayMs) {
         ::delay(delayMs);
     } // delayMilliseconds
 
-    static inline void tone(uint8_t pin,int duration)
-    {
-        ::tone(pin,duration);
+    static inline void tone(uint8_t pin, int duration) {
+        ::tone(pin, duration);
 
     } // tone
 
-    static inline void noTone(uint8_t pin)
-    {
+    static inline void noTone(uint8_t pin) {
         ::noTone(pin);
 
     } // noTone
 
-    static inline void eprSetByte(unsigned int pos,uint8_t value)
-    {
+    static inline void eprSetByte(unsigned int pos, uint8_t value) {
         uint8_t oldval = eprGetByte(pos);
-        if(oldval != value) eeprom_write_byte((unsigned char *)(EEPROM_OFFSET+pos), value);
+        if (oldval != value)
+            eeprom_write_byte((uint8_t*)(EEPROM_OFFSET + pos), value);
 
     } // eprSetByte
 
-    static inline void eprSetInt16(unsigned int pos,int16_t value)
-    {
+    static inline void eprSetInt16(unsigned int pos, int16_t value) {
         int16_t oldval = eprGetInt16(pos);
-        if(oldval != value) eeprom_write_word((unsigned int*)(EEPROM_OFFSET+pos),value);
+        if (oldval != value)
+            eeprom_write_word((unsigned int*)(EEPROM_OFFSET + pos), value);
 
     } // eprSetInt16
 
-    static inline void eprSetInt32(unsigned int pos,int32_t value)
-    {
+    static inline void eprSetInt32(unsigned int pos, int32_t value) {
         int32_t oldval = eprGetInt32(pos);
-        if(oldval != value) eeprom_write_dword((uint32_t*)(EEPROM_OFFSET+pos),value);
+        if (oldval != value)
+            eeprom_write_dword((uint32_t*)(EEPROM_OFFSET + pos), value);
 
     } // eprSetInt32
 
-    static inline void eprSetFloat(unsigned int pos,float value)
-    {
+    static inline void eprSetFloat(unsigned int pos, float value) {
         float oldval = eprGetFloat(pos);
-        if(oldval != value) eeprom_write_block(&value,(void*)(EEPROM_OFFSET+pos), 4);
+        if (oldval != value)
+            eeprom_write_block(&value, (void*)(EEPROM_OFFSET + pos), 4);
 
     } // eprSetFloat
 
-    static inline uint8_t eprGetByte(unsigned int pos)
-    {
-        return eeprom_read_byte ((unsigned char *)(EEPROM_OFFSET+pos));
+    static inline uint8_t eprGetByte(unsigned int pos) {
+        return eeprom_read_byte((uint8_t*)(EEPROM_OFFSET + pos));
 
     } // eprGetByte
 
-    static inline int16_t eprGetInt16(unsigned int pos)
-    {
-        return eeprom_read_word((uint16_t *)(EEPROM_OFFSET+pos));
+    static inline int16_t eprGetInt16(unsigned int pos) {
+        return eeprom_read_word((uint16_t*)(EEPROM_OFFSET + pos));
 
     } // eprGetInt16
 
-    static inline int32_t eprGetInt32(unsigned int pos)
-    {
-        return eeprom_read_dword((uint32_t*)(EEPROM_OFFSET+pos));
+    static inline int32_t eprGetInt32(unsigned int pos) {
+        return eeprom_read_dword((uint32_t*)(EEPROM_OFFSET + pos));
 
     } // eprGetInt32
 
-    static inline float eprGetFloat(unsigned int pos)
-    {
+    static inline float eprGetFloat(unsigned int pos) {
         float v;
-        eeprom_read_block(&v,(void *)(EEPROM_OFFSET+pos),4); // newer gcc have eeprom_read_block but not arduino 22
+        eeprom_read_block(&v, (void*)(EEPROM_OFFSET + pos), 4); // newer gcc have eeprom_read_block but not arduino 22
         return v;
 
     } // eprGetFloat
@@ -598,58 +537,48 @@ public:
     // Faster version of InterruptProtectedBlock.
     // For safety it may only be called from within an
     // interrupt handler.
-    static inline void allowInterrupts()
-    {
+    static inline void allowInterrupts() {
         sei();
     } // allowInterrupts
 
-    static inline void forbidInterrupts()
-    {
+    static inline void forbidInterrupts() {
         cli();
     } // forbidInterrupts
 
-    static inline unsigned long timeInMilliseconds()
-    {
+    static inline unsigned long timeInMilliseconds() {
         return millis();
     } // timeInMilliseconds
 
-    static inline unsigned long timeInMicroseconds()
-    {
+    static inline unsigned long timeInMicroseconds() {
         return micros();
     } // timeInMicroseconds
 
-    static inline char readFlashByte(PGM_P ptr)
-    {
+    static inline char readFlashByte(PGM_P ptr) {
         return pgm_read_byte(ptr);
 
     } // readFlashByte
 
-    static inline void serialSetBaudrate(long baud)
-    {
+    static inline void serialSetBaudrate(long baud) {
         RFSERIAL.begin(baud);
 
     } // serialSetBaudrate
 
-    static inline bool serialByteAvailable()
-    {
-        return RFSERIAL.available()>0;
+    static inline bool serialByteAvailable() {
+        return RFSERIAL.available() > 0;
 
     } // serialByteAvailable
 
-    static inline uint8_t serialReadByte()
-    {
+    static inline uint8_t serialReadByte() {
         return RFSERIAL.read();
 
     } // serialReadByte
 
-    static inline void serialWriteByte(char b)
-    {
+    static inline void serialWriteByte(char b) {
         RFSERIAL.write(b);
 
     } // serialWriteByte
 
-    static inline void serialFlush()
-    {
+    static inline void serialFlush() {
         RFSERIAL.flush();
 
     } // serialFlush
@@ -660,17 +589,15 @@ public:
     static void resetHardware();
 
     // SPI related functions
-    static void spiBegin()
-    {
-#if SDSS>=0
+    static void spiBegin() {
+#if SDSS >= 0
         SET_INPUT(MISO_PIN);
         SET_OUTPUT(MOSI_PIN);
         SET_OUTPUT(SCK_PIN);
-
         // SS must be in output mode even it is not chip select
         SET_OUTPUT(SDSS);
 
-#if SDSSORIG >- 1
+#if SDSSORIG > -1
         SET_OUTPUT(SDSSORIG);
 #endif // SDSSORIG >- 1
 
@@ -686,18 +613,19 @@ public:
     {
         //spiRate = spiRate > 12 ? 6 : spiRate/2;
         uint8_t r = 0;
-        for (uint8_t b = 2; spiRate > b && r < 6; b <<= 1, r++);
+        for (uint8_t b = 2; spiRate > b && r < 6; b <<= 1, r++)
+            ;
 
         SET_OUTPUT(SS);
-        WRITE(SS,HIGH);
+        WRITE(SS, HIGH);
         SET_OUTPUT(SCK);
         SET_OUTPUT(MOSI_PIN);
         SET_INPUT(MISO_PIN);
 
-#ifdef  PRR
-        PRR &= ~(1<<PRSPI);
+#ifdef PRR
+        PRR &= ~(1 << PRSPI);
 #elif defined PRR0
-        PRR0 &= ~(1<<PRSPI);
+        PRR0 &= ~(1 << PRSPI);
 #endif // PRR
 
         // See avr processor documentation
@@ -708,67 +636,69 @@ public:
         SPSR = (r & 1 || r == 6 ? 0 : 1) << SPI2X;
     } // spiInit
 
-    static inline uint8_t spiReceive(uint8_t send=0xff)
-    {
+    static inline uint8_t spiReceive(uint8_t send = 0xff) {
         SPDR = send;
-        while (!(SPSR & (1 << SPIF)));
+        while (!(SPSR & (1 << SPIF)))
+            ;
         return SPDR;
     } // spiReceive
 
-    static inline void spiReadBlock(uint8_t*buf,size_t nbyte)
-    {
-        if (nbyte-- == 0) return;
+    static inline void spiReadBlock(uint8_t* buf, size_t nbyte) {
+        if (nbyte-- == 0)
+            return;
         SPDR = 0XFF;
-        for (size_t i = 0; i < nbyte; i++)
-        {
-            while (!(SPSR & (1 << SPIF)));
+        for (size_t i = 0; i < nbyte; i++) {
+            while (!(SPSR & (1 << SPIF)))
+                ;
             buf[i] = SPDR;
             SPDR = 0XFF;
         }
-        while (!(SPSR & (1 << SPIF)));
+        while (!(SPSR & (1 << SPIF)))
+            ;
         buf[nbyte] = SPDR;
 
     } // spiReadBlock
 
-    static inline void spiSend(uint8_t b)
-    {
+    static inline void spiSend(uint8_t b) {
         SPDR = b;
-        while (!(SPSR & (1 << SPIF)));
+        while (!(SPSR & (1 << SPIF)))
+            ;
 
     } // spiSend
 
-    static inline void spiSend(const uint8_t* buf , size_t n)
-    {
-        if (n == 0) return;
+    static inline void spiSend(const uint8_t* buf, size_t n) {
+        if (n == 0)
+            return;
         SPDR = buf[0];
-        if (n > 1)
-        {
+        if (n > 1) {
             uint8_t b = buf[1];
             size_t i = 2;
-            while (1)
-            {
-                while (!(SPSR & (1 << SPIF)));
+            while (1) {
+                while (!(SPSR & (1 << SPIF)))
+                    ;
                 SPDR = b;
-                if (i == n) break;
+                if (i == n)
+                    break;
                 b = buf[i++];
             }
         }
-        while (!(SPSR & (1 << SPIF)));
+        while (!(SPSR & (1 << SPIF)))
+            ;
 
     } // spiSend
 
-    static inline __attribute__((always_inline))
-    void spiSendBlock(uint8_t token, const uint8_t* buf)
-    {
+    static inline __attribute__((always_inline)) void spiSendBlock(uint8_t token, const uint8_t* buf) {
         SPDR = token;
-        for (uint16_t i = 0; i < 512; i += 2)
-        {
-            while (!(SPSR & (1 << SPIF)));
+        for (uint16_t i = 0; i < 512; i += 2) {
+            while (!(SPSR & (1 << SPIF)))
+                ;
             SPDR = buf[i];
-            while (!(SPSR & (1 << SPIF)));
+            while (!(SPSR & (1 << SPIF)))
+                ;
             SPDR = buf[i + 1];
         }
-        while (!(SPSR & (1 << SPIF)));
+        while (!(SPSR & (1 << SPIF)))
+            ;
 
     } // spiSendBlock
 
@@ -777,7 +707,7 @@ public:
     static unsigned char i2cStart(unsigned char address);
     static void i2cStartWait(unsigned char address);
     static void i2cStop(void);
-    static void i2cWrite( unsigned char data );
+    static void i2cWrite(unsigned char data);
     static unsigned char i2cReadAck(void);
     static unsigned char i2cReadNak(void);
 
@@ -785,81 +715,52 @@ public:
     static void WDT_Init(void);
 
     // Watchdog support FEATURE_WATCHDOG
-    inline static void startWatchdog()
-    {
-        // external watchdog
-        SET_OUTPUT(WATCHDOG_PIN);
-        g_bPingWatchdog = 1; //allow pinging
-        tellWatchdogOk(); //Nibbels: Init für g_nCommandloop
-        pingWatchdog(); //Nibbels: Hier macht der mehr sinn!
-        HAL::WDT_Init(); //Nibbels: use watchdogtimer to test var and trigger
-    } // startWatchdog
-
-    inline static void stopWatchdog()
-    {
-        g_bPingWatchdog = 0; //disallow pinging
-        // external watchdog
-        WRITE(WATCHDOG_PIN,LOW); //Nibbels: In case you stop the watchdog it has to be set floating. thatwhy disable internal pullup as this will make the state like OUTPUT-high. This is not really needed as this function does not do anything when starting the arduino. rightnow at start it sets a pin to input which is already input.
-        SET_INPUT(WATCHDOG_PIN);
-    } // stopWatchdog
-
-    inline static void tellWatchdogOk()
-    {
-        g_uLastCommandLoop = HAL::timeInMilliseconds();
-    } // pingWatchdog
-
-    inline static void pingWatchdog()
-    {
-        if( !g_bPingWatchdog )
-        {
+    static void startWatchdog();
+    static void stopWatchdog();
+    static void tellWatchdogOk();
+    inline static void pingWatchdog() {
+        if (!g_bPingWatchdog) {
             // do not trigger the watchdog in case it is not enabled
             return;
         }
         // external watchdog
-        if( (HAL::timeInMilliseconds() - g_uLastCommandLoop) < WATCHDOG_MAIN_LOOP_TIMEOUT )
-        {
+        if ((HAL::timeInMilliseconds() - g_uLastCommandLoop) < WATCHDOG_MAIN_LOOP_TIMEOUT) {
             // ping the watchdog only in case the mainloop is still being called
-            WRITE(WATCHDOG_PIN,READ(WATCHDOG_PIN) ? 0 : 1);
+            WRITE(WATCHDOG_PIN, READ(WATCHDOG_PIN) ? 0 : 1);
         }
-
     } // pingWatchdog
 
-    inline static void testWatchdog()
-    {
-        while( 1 )
-        {
+    inline static void testWatchdog() {
+        while (1) {
         }
     } // testWatchdog
-// END FEATURE_WATCHDOG
+      // END FEATURE_WATCHDOG
 
-    inline static float maxExtruderTimerFrequency()
-    {
-        return (float)F_CPU/TIMER0_PRESCALE;
+    inline static float maxExtruderTimerFrequency() {
+        return (float)F_CPU / TIMER0_PRESCALE;
 
     } // maxExtruderTimerFrequency
 
 #if FEATURE_SERVO && MOTHERBOARD == DEVICE_TYPE_RF1000
-    static unsigned int     servoTimings[4];
-    static void             servoMicroseconds(uint8_t servo,int ms);
+    static unsigned int servoTimings[4];
+    static void servoMicroseconds(uint8_t servo, int ms);
 #endif // FEATURE_SERVO && MOTHERBOARD == DEVICE_TYPE_RF1000
 
     static void analogStart();
 #if USE_ADVANCE
     static void resetExtruderDirection();
 #endif // USE_ADVANCE
-protected:
-private:
 };
 
-#define EXTRUDER_TIMER_VECTOR   TIMER0_COMPA_vect
-#define EXTRUDER_OCR            OCR0A
-#define EXTRUDER_TCCR           TCCR0A
-#define EXTRUDER_TIMSK          TIMSK0
-#define EXTRUDER_OCIE           OCIE0A
-#define PWM_TIMER_VECTOR        TIMER0_COMPB_vect
-#define PWM_OCR                 OCR0B
-#define PWM_TCCR                TCCR0A
-#define PWM_TIMSK               TIMSK0
-#define PWM_OCIE                OCIE0B
+#define EXTRUDER_TIMER_VECTOR TIMER0_COMPA_vect
+#define EXTRUDER_OCR OCR0A
+#define EXTRUDER_TCCR TCCR0A
+#define EXTRUDER_TIMSK TIMSK0
+#define EXTRUDER_OCIE OCIE0A
+#define PWM_TIMER_VECTOR TIMER0_COMPB_vect
+#define PWM_OCR OCR0B
+#define PWM_TCCR TCCR0A
+#define PWM_TIMSK TIMSK0
+#define PWM_OCIE OCIE0B
 
 #endif // HAL_H

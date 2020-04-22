@@ -46,7 +46,6 @@ Overflow in Z-Matrix: >12.7f
 /** \brief Allows to use the device for milling */
 #define FEATURE_MILLING_MODE 0 // 1 = on, 0 = off
 
-
 #if FEATURE_MILLING_MODE
 #error REMOVE THIS LINE TO SHOW THAT YOU UNDERSTOOD THAT MILLING WITH A COMMUNITY-MOD-FW HIGHER THAN 1.43.20 HAS TO BE ALPHA-TESTED BY SOMEONE. WE CHANGED ALOT AND STILL DID NOT TEST MILLING.
 
@@ -516,7 +515,6 @@ A good start is 30 lower then the optimal value. You need to leave room for cool
 /** \brief Extreme values to detect defect thermistors. */
 #define MIN_DEFECT_TEMPERATURE              -10
 #define MAX_DEFECT_TEMPERATURE              325  //Digibike Change
-
 
 #if HAVE_HEATED_BED == true && HEATED_BED_SENSOR_TYPE < 101
 
