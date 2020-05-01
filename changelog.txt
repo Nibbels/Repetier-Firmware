@@ -1,3 +1,6 @@
+V 01.45.02.Mod (2020-05-01)
+- Possible fix for a watchdog trigger when changing microsteps in menu (on sensible mainboards)
+
 V 01.45.01.Mod (2020-04-19)
 - Z-Matrix Output: M3013 with parameter S does switch back the matrix after console output. (Thx @thecky)
 - Output object: In milling mode, the script is no longer executed automatically after an sd print (/menu stop print).

@@ -4057,8 +4057,8 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
                 Extruder::selectExtruderById(Extruder::current->id);
             if (updateall)
                 HAL::eprSetByte(EPR_RF_MICRO_STEPS_USED, 0xAB); //erstes schreiben markiert eepromwerte als gültig
-            EEPROM::updateChecksum();
             noInts.unprotect();
+            EEPROM::updateChecksum();
         }
         break;
     }

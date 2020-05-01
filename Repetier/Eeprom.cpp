@@ -1412,8 +1412,8 @@ uint8_t EEPROM::computeChecksum() {
             lastTime = currentTime;
         }
     }
-    return checksum;
 
+    return checksum;
 } // computeChecksum
 
 void EEPROM::writeExtruderPrefix(uint pos) {
