@@ -4596,7 +4596,7 @@ short readAveragePressure(short* pnAveragePressure) {
 } // readAveragePressure
 
 //Spacing Schnell:
-void moveZPlusDownFast() {
+short moveZPlusDownFast() {
     short nTempPressure;
 
     // move the heat bed down so that we won't hit it when we move to the next position
@@ -4615,6 +4615,7 @@ void moveZPlusDownFast() {
     if (Printer::debugInfo())
         Com::printFLN(PSTR("moveZPlusDownFast(): "), (int)nTempPressure);
 #endif // DEBUG_HEAT_BED_SCAN || DEBUG_WORK_PART_SCAN
+    return 0;
 } // moveZPlusDownFast
 
 //Spacing Langsam:
