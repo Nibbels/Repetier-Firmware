@@ -1667,7 +1667,6 @@ void Printer::homeDigits() {
             }
         } else {
             Com::printFLN(PSTR("DigitOffset failed reading "));
-            g_abortZScan = 0;
         }
     }
 #endif // FEATURE_ZERO_DIGITS

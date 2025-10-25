@@ -720,6 +720,7 @@ void scanHeatBed(void) {
             }
 
             if (readIdlePressure(&g_nFirstIdlePressure)) {
+                g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
                 // we were unable to determine the idle pressure
                 break;
             }
@@ -888,6 +889,7 @@ void scanHeatBed(void) {
             }
 
             if (readIdlePressure(&g_nFirstIdlePressure)) {
+                g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
                 // we were unable to determine the idle pressure
                 break;
             } else {
@@ -923,7 +925,8 @@ void scanHeatBed(void) {
                 // the current idle pressure is not plausible
                 if (g_scanRetries) {
                     g_retryZScan = 1;
-                    g_abortZScan = 0; //cancel abort which was already triggered inside readAveragePressure
+                } else {
+                    g_abortZScan = SCAN_ABORT_REASON_IDLE_PRESSURE;
                 }
                 break;
             }
@@ -1011,7 +1014,9 @@ void scanHeatBed(void) {
         }
         case 55: {
             // move away from the surface
-            moveZPlusDownFast();
+            if (moveZPlusDownFast()) {
+                g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
+            }
 
             if (nYDirection > 0) {
                 nTempPosition = nY + nYDirection;
@@ -1169,7 +1174,9 @@ void scanHeatBed(void) {
             }
 
             // compare the idle pressure at the beginning and at the end
-            readAveragePressure(&nTempPressure);
+            if (readAveragePressure(&nTempPressure)) {
+                g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
+            }
 
             if (Printer::debugInfo()) {
                 Com::printF(Com::tscanHeatBed);
@@ -1283,6 +1290,7 @@ void scanHeatBed(void) {
             }
 
             if (readIdlePressure(&g_nFirstIdlePressure)) {
+                g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
                 // we were unable to determine the idle pressure
                 break;
             } else {
@@ -1305,7 +1313,8 @@ void scanHeatBed(void) {
                 // the current idle pressure is not plausible
                 if (g_scanRetries) {
                     g_retryZScan = 1;
-                    g_abortZScan = 0; //cancel abort which was already triggered inside readAveragePressure
+                } else {
+                    g_abortZScan = SCAN_ABORT_REASON_IDLE_PRESSURE;
                 }
                 break;
             }
@@ -1618,6 +1627,7 @@ void scanHeatBed(void) {
             }
 
             if (readIdlePressure(&g_nFirstIdlePressure)) {
+                g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
                 // we were unable to determine the idle pressure
                 break;
             } else {
@@ -1641,7 +1651,8 @@ void scanHeatBed(void) {
                 // the current idle pressure is not plausible
                 if (g_scanRetries) {
                     g_retryZScan = 1;
-                    g_abortZScan = 0; //cancel abort which was already triggered inside readAveragePressure
+                } else {
+                    g_abortZScan = SCAN_ABORT_REASON_IDLE_PRESSURE;
                 }
                 break;
             }
@@ -1904,6 +1915,7 @@ void alignExtruders(void) {
 
             // scan this point
             if (testIdlePressure()) {
+                g_abortZScan = SCAN_ABORT_REASON_IDLE_PRESSURE;
                 // the current idle pressure is not plausible
                 // g_retryZScan = 1; //not really needed, already set.
                 break;
@@ -2310,7 +2322,9 @@ void searchZOScan(void) {
         case 7: //ab hier bei Fehler:
         {
             HAL::delayMilliseconds(HEAT_BED_SCAN_DELAY);
-            moveZPlusDownFast();
+            if (moveZPlusDownFast()) {
+				g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
+			}
             g_nZOSScanStatus = 9;
             break;
         }
@@ -2322,6 +2336,7 @@ void searchZOScan(void) {
                 //Problem mit Digits, die wackeln:
                 if (g_scanRetries-- > 0) {
                     g_nZOSScanStatus = 7;
+                    g_abortZScan = 0;
                     break;
                 } else {
                     Com::printFLN(PSTR("ERROR::the idle pressure could not be determined"));
@@ -2329,8 +2344,7 @@ void searchZOScan(void) {
                     abortSearchHeatBedZOffset(false);
                 }
                 break;
-            }                 //egal was readIdlePressure zurückgibt, g_abortZScan könnte 1 sein und muss genullt werden.
-            g_abortZScan = 0; // will be set in case of error inside moveZMinusUpFast/Slow -> != 0 AFTER RETURN would temper with normal HBS-Scan function @ABORT
+            }
 
             g_nMinPressureContact = g_nCurrentIdlePressure - SEARCH_HEAT_BED_OFFSET_CONTACT_PRESSURE_DELTA;
             g_nMaxPressureContact = g_nCurrentIdlePressure + SEARCH_HEAT_BED_OFFSET_CONTACT_PRESSURE_DELTA;
@@ -2363,8 +2377,9 @@ void searchZOScan(void) {
             //Wenn Filament langsam nachgibt, wandert evtl. die Kraft langsam. Hier prüfen, ob idle digits gültig.
             short nTempPressure;
             if (readAveragePressure(&nTempPressure)) {
-                if (g_scanRetries > 0)
-                    g_abortZScan = 0; //funktion soll wenn retrys übrig sind nie abbrechen, das g_abortZScan kommt aus readAveragePressure() -> hat einfluss auf HBS-Abort!!
+                if (g_scanRetries <= 0) {
+                    g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
+                }
                 g_retryZScan = 1;
             }
 
@@ -2380,14 +2395,14 @@ void searchZOScan(void) {
             //rescan force and look if you reverted the contact pressure to the old state:
             short nTempPressureUp;
             if (readAveragePressure(&nTempPressureUp)) {
-                if (g_scanRetries > 0)
-                    g_abortZScan = 0; //funktion soll wenn retrys übrig sind nie abbrechen, das g_abortZScan kommt aus readAveragePressure() -> hat einfluss auf HBS-Abort!!
+                if (g_scanRetries <= 0) {
+                    g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
+                }
                 g_retryZScan = 1;
             }
             //check if the old pressure state is reached again, retry if not. If not you measured some melted plastic or your DMS is driving away.
             if (abs(nTempPressureUp - nTempPressure) < SEARCH_HEAT_BED_OFFSET_CONTACT_PRESSURE_DELTA) {
-                if (g_scanRetries > 0)
-                    g_abortZScan = 0; //funktion soll wenn retrys übrig sind nie abbrechen, das g_abortZScan kommt aus readAveragePressure() -> hat einfluss auf HBS-Abort!!
+                if (g_scanRetries > 0) g_abortZScan = 0;
                 g_retryZScan = 1;
             }
             Com::printF(PSTR("RevertPdelta:"), abs(nTempPressureUp - nTempPressure));
@@ -3811,6 +3826,7 @@ void scanWorkPart(void) {
             }
 
             if (readIdlePressure(&g_nFirstIdlePressure)) {
+                g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
                 // we were unable to determine the idle pressure
                 break;
             }
@@ -3901,7 +3917,9 @@ void scanWorkPart(void) {
                     setZOrigin();
 
                     // move away from the surface
-                    moveZPlusDownFast();
+                    if (moveZPlusDownFast()) {
+                        g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
+                    }
 
                     g_nWorkPartScanStatus = 35;
 
@@ -4054,6 +4072,7 @@ void scanWorkPart(void) {
 
             // try to determine the idle pressure again
             if (readIdlePressure(&g_nFirstIdlePressure)) {
+                g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
                 // we were unable to determine the idle pressure
                 break;
             }
@@ -4192,7 +4211,9 @@ void scanWorkPart(void) {
         }
         case 55: {
             // move away from the surface
-            moveZPlusDownFast();
+            if (moveZPlusDownFast()) {
+                g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
+            }
 
             if (nYDirection > 0) {
                 nTempPosition = nY + nYDirection;
@@ -4355,7 +4376,9 @@ void scanWorkPart(void) {
             }
 
             // compare the idle pressure at the beginning and at the end
-            readAveragePressure(&nTempPressure);
+            if (readAveragePressure(&nTempPressure)) {
+                g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
+            }
 
             if (Printer::debugInfo()) {
                 Com::printF(Com::tscanWorkPart);
@@ -4507,7 +4530,6 @@ short readIdlePressure(short* pnIdlePressure) {
 
     // at this point we know the idle pressure
     return 0;
-
 } // readIdlePressure
 
 short testIdlePressure(void) {
@@ -4547,8 +4569,11 @@ short readAveragePressure(short* pnAveragePressure) {
         if ((nMaxPressure - nMinPressure) < g_nScanPressureTolerance) {
             // we have good results
             *pnAveragePressure = nTempPressure;
+
             return 0;
         }
+
+        Commands::checkForPeriodicalActions(Processing);
 
         nTemp++;
         if (nTemp >= 5) {
@@ -4565,10 +4590,9 @@ short readAveragePressure(short* pnAveragePressure) {
     }
 
     Com::printFLN(PSTR("readAveragePressure(): the pressure is not plausible"));
-    g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
     *pnAveragePressure = 0;
-    return -1;
 
+    return -1;
 } // readAveragePressure
 
 //Spacing Schnell:
@@ -4584,16 +4608,13 @@ void moveZPlusDownFast() {
     Commands::checkForPeriodicalActions(Processing);
 
     if (readAveragePressure(&nTempPressure)) {
-        // some error has occurred
-        g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
-        return;
+        return -1;
     }
 
 #if DEBUG_HEAT_BED_SCAN || DEBUG_WORK_PART_SCAN
     if (Printer::debugInfo())
         Com::printFLN(PSTR("moveZPlusDownFast(): "), (int)nTempPressure);
 #endif // DEBUG_HEAT_BED_SCAN || DEBUG_WORK_PART_SCAN
-
 } // moveZPlusDownFast
 
 //Spacing Langsam:
@@ -4606,6 +4627,7 @@ void moveZPlusDownSlow(uint8_t acuteness) {
         HAL::delayMilliseconds(g_nScanSlowStepDelay);
         if (readAveragePressure(&nTempPressure)) {
             // some error has occurred
+            g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
             break;
         }
 
@@ -4669,6 +4691,7 @@ void moveZMinusUpFast() {
         HAL::delayMilliseconds(g_nScanFastStepDelay);
 
         if (readAveragePressure(&nTempPressure)) {
+            g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
             // some error has occurred
             break;
         }
@@ -4709,6 +4732,7 @@ void moveZMinusUpSlow(short* pnContactPressure, uint8_t acuteness) {
         HAL::delayMilliseconds(g_nScanSlowStepDelay);
 
         if (readAveragePressure(&nTempPressure)) {
+            g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
             // some error has occurred
             break;
         }
