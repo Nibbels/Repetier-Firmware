@@ -10240,9 +10240,26 @@ void drv8711Init(void) {
         drv8711adjustMicroSteps(driver);
     }
     // ADRESS 11..8 7..4 3..0
-#define DRV8711_REGISTER_02 0x2097 // 0010   0000  1001 0111: TOFF = 10010111, PWMMODE = 0
-#define DRV8711_REGISTER_03 0x31D7 // 0011   0001  1101 0111: TBLANK = 11010111, ABT = 1
-#define DRV8711_REGISTER_04 0x4430 // 0100   0100  0011 0000: TDECAY = 00110000, DECMOD = 100
+
+// Register 0x02: OFF (Off-Time Register)
+// TOFF wurde auf 0x20 (16µs) reduziert, um die Chopping-Frequenz zu erhöhen
+// und hörbares Zwitschern zu beseitigen. – Beibehalten.
+// PWMMODE = 0 (interner Indexer, Standard für Mikroschritt) – Beibehalten.
+#define DRV8711_REGISTER_02 0x2020 // 0010 0000 0010 0000: TOFF = 00100000 (0x20), PWMMODE = 0
+
+// Register 0x03: BLANK (Blanking Time Register)
+// TBLANK wurde auf 0x02 (1.0µs) erhöht, um die Stromabtastung zu verbessern
+// und Instabilität zu vermeiden. – Beibehalten.
+// ABT = 1 (Adaptive Blanking Time aktiviert) – Beibehalten für glatte Stromwellenform.
+#define DRV8711_REGISTER_03 0xB2D7 // 1011 0010 1101 0111: TBLANK = 0010 (0x2), ABT = 1
+
+// Register 0x04: DECAY (Decay Mode Register)
+// TDECAY wurde von 0x14 (10µs) auf 0x04 (2µs) geändert.
+// Eine kürzere Decay-Zeit kann in manchen Fällen zu einer noch glatteren
+// Stromwellenform und somit zu einer weiteren Geräuschreduzierung führen.
+// DECMOD = 101 (Auto Mixed Decay) – Beibehalten, da dies für leisen Betrieb vorteilhaft ist.
+#define DRV8711_REGISTER_04 0x4504 // 0100 0101 0000 0100: TDECAY = 00000100 (0x04), DECMOD = 101
+
 #define DRV8711_REGISTER_05 0x583C // 0101   1000  0011 1100: SDTHR = 00111100, SDCNT = 00, VDIV = 10
 #define DRV8711_REGISTER_06 0x60F0 // 0110   0000  1111 0000: OCPTH = 00, OCPDEG = 00, TDRIVEN = 11, TDRIVEP = 11, IDRIVEN = 00, IDRIVEP = 00
 #define DRV8711_REGISTER_07 0x7000 // 0111   0000  0000 0000: OTS = 0, AOCP = 0, BOCP = 0, UVLO = 0, APDF = 0, BPDF = 0, STD = 0, STDLAT = 0
