@@ -66,7 +66,7 @@ Suppose the slicer is at absolute `E10`, then calls `M3912`, whose internal prim
 | --- | --- | --- |
 | Current implementation: force logical E0 | +11 E units | **Wrong if M3912 was called after E10** |
 | Proposed: restore entry logical E10 | +1 E unit | **Correct** |
-| Conventional start script with pre-prime E0 | +11? No: typically next slicer E starts near 0 | Existing reset works for this restricted case |
+| Conventional start script: entry E0, next slicer command E1 | +1 E unit | Both reset-to-E0 and restore-entry-E0 produce the correct result |
 
 **Design recommendation:** after the entry queue drain, snapshot the *logical* `destinationMM[E_AXIS]`, use a local zero-based E timeline for priming, then restore the snapshotted logical E **after all priming moves have completed**. This is backward-compatible with the normal E0 case, and handles arbitrary nonzero entry coordinates. Restore the M82/M83 flag as before. Careful atomic handling and step-vs-float precision should be verified before implementing.
 
@@ -79,6 +79,21 @@ In relative E mode, firmware-generated absolute E coordinates remain internal to
 - `Printer::menuExtrusionFactor` (user flow%) and `Printer::dynamicExtrusionFactor` (DMS flow) likewise remain separate; the planner multiplies them when generating physical E steps.
 - `M3912` uses explicit mm/s for its internal queue moves; it does not change or save the general user speed override. Consequently, don't assume that the start-line's configured XY feedrate always applies M220 in exactly the same way as a slicer G1 F move. Pressure-derived step slowdown remains an additional mechanism.
 - Returning `dynamicFeedrateFactor` to 1.0 is correct **but derived `interval_mod` should also be neutralized** after priming to avoid a stale timer-scale effect.
+
+## Two fractional E-step accumulators also cross the priming boundary
+
+- `Printer::extrudeMultiplyErrorSteps` is the **sub-step remainder** from mapping logical E movement (with menu flow and dynamic DMS flow multipliers) into integer motor steps during queue planning.
+- `Printer::compensatedPositionCollectTinyE` is the **sub-step remainder** from adding geometric ECMP extrusion during step execution.
+
+Both exist across moves and are **not reset or snapshotted by M3912 today**. Although each remainder is small, they are state that can spill from the priming transaction into the first model layer. For a fully isolated internal routine we should **consider saving both fractional remainders at entry and restoring them only after the prime queue has completely drained**, so the model's fractional E accounting resumes where it left off. **This is a design proposal**: review ISR concurrency and whether the first model layer expects fresh ECMP fractional state before implementing.
+
+## ECMP and partial bed fade also run during the current priming line
+
+At a normal freshly homed default `g_min=0.33 mm`, M3912 prints at `0.352 mm`. That is **22 µm into the fade region**, not strictly inside the full-bed-following region. Since `recalculateHeatBedZCompensation()` has no semantic 'priming' exception, it can apply a small amount of shape fade and compute geometric E compensation for priming. The stepper may add ECMP material even though those extruded lines are not part of the model.
+
+With the dynamic fade span determined from `(O-minB)*20`, the shape loss at the special priming height is generally very small, but **ECMP may still follow the corresponding fade slope**. Whether future M3912 should force full bed-shape following and suppress geometric model-only ECMP during priming deserves an explicit test. Do not disable ECMP globally: only isolate it for semantically tagged prime moves if the physical output warrants it.
+
+[Source: ECMP percent during fade](../../Repetier/RF.cpp#L3199-L3254) · [additional E-step accumulation](../../Repetier/motion.cpp#L1468-L1492) · [fractional E rounding](../../Repetier/motion.cpp#L125-L136).
 
 ## Another DMS-to-Z mechanism must not be confused with SenseOffset
 

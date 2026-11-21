@@ -10,7 +10,7 @@ This design review applies to RF1000/RF2000/RF2000v2 shared code on `ai-firmware
 | `g_nDigitFlowCompensation_intense` | Cache; set −75% flow | Restore | Already implemented |
 | `g_nDigitFlowCompensation_speed_intense` | Cache; set −90% speed | Restore | Already implemented |
 | `Printer::relativeExtruderCoordinateMode` (M82/M83) | Cache, force absolute mode | Restore | Already implemented in normal feature configuration |
-| E-coordinate reference | Current: `setEAxisSteps(0)` before and after | **Propose cache/restore the incoming logical E coordinate** (E0 remains E0) | **Confirmed limitation**: current behavior fails for an M3912 call at pre-existing nonzero absolute E (e.g. E10 → M3912 → E11 extrudes 11 rather than 1). See [coordinate-frame tests](coordinate-frames-and-extrusion.md). |
+| E-coordinate reference | Current: `setEAxisSteps(0)` before and after | **Propose cache/restore incoming logical E coordinate** (E0 remains E0) | A nonzero absolute-E entry E10 followed by E11 otherwise extrudes +11 instead of +1; restored logical E gives +1. See [coordinate-frame tests](coordinate-frames-and-extrusion.md). |
 | `Printer::dynamicExtrusionFactor` / `dynamicFeedrateFactor` | Force-adjusted during prime | Set 1.0 | Correct: **discard derived prime response** rather than restoring stale pre-prime pressure |
 | `Printer::interval_mod` (step timing) | Force-derived during prime | **Not explicitly cleared** | **Cleanup gap**: neutralize after queue drain to prevent prime slowdown affecting next XY move |
 | `queuePositionZLayerLast/Current` | Can be contaminated by prime Z=0.352 | Both reset | Keep, and ideally exclude M3912 from layer detection altogether |
@@ -27,6 +27,12 @@ This design review applies to RF1000/RF2000/RF2000v2 shared code on `ai-firmware
 **During prime:** require pressure-based Digit Flow (less E and slower XY) instead of relying solely on the `currentZ > g_min` heuristic. As currently written, if a previous print left `g_min=0.40 mm` without rehoming, priming at 0.352 mm can incorrectly allow SenseOffset and block Digit Flow. An explicit phase flag can isolate the **pressure-control policy**; it does not automatically repair stale geometric fade bounds for no-homing prints. Exclude M3912-generated moves from the first-model-layer detector; the numeric 0.352 mm exclusion can remain for legacy manual start lines.
 
 **Exit:** wait for or abort remaining priming moves. Restore all four temporary Digit Flow settings and original extruder-coordinate mode through a single cleanup path (normal / play-key skip / print cancel). **Restore the incoming logical E reference**, not the physical filament position; when entry E=0, the existing E0 behavior is unchanged. Neutralize derived speed/extrusion factors **and `interval_mod`**; clear all three layer markers (especially `GuessNew`). Drop any priming-specific SenseOffset pressure averages so real first-layer pressure control begins with fresh samples; then clear the priming phase flag. Do not restore obsolete layer-boundary snapshots or physical Z offsets.
+
+## Additional extrusion and geometry state
+
+The code has two more fractional E-step variables: `Printer::extrudeMultiplyErrorSteps` (planner E-rounding carry) and `Printer::compensatedPositionCollectTinyE` (ECMP extra-step carry). Consider **cache/restore around the completed priming queue** for transparent logical E accounting; unlike a whole E position, these are sub-step remainders and require an ISR-safe policy. It is not yet established that their tiny spillover causes visible defects.
+
+With `g_min=0.33 mm`, the priming height `0.352 mm` already lies **22 µm inside the matrix-profile fade**, so geometric ECMP can run during prime even though it is not a model layer. An explicit priming mode could instead use full scanned-bed following with model-only ECMP suppressed; decide that separately based on output and motor behavior. See [coordinate-frame and ECMP analysis](coordinate-frames-and-extrusion.md).
 
 ## Source-backed issues to test
 
