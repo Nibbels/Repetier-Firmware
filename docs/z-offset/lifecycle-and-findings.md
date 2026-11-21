@@ -20,27 +20,22 @@
 
 `handleStartPrint()` is not a reliable new-print initialization event: it marks 'printing' when queue depth exceeds two. `Printer::stopPrint()` and the later `handleStopPrint()` clean up the move queue/heaters/print markers but do not explicitly zero SenseOffset or reinitialize the learned Z boundaries.
 
-### Finding F1 (HIGH): M3006 temporarily drops a live SenseOffset correction
+### Finding F1 (FIXED ON REVIEW BRANCH): M3006 must preserve live SenseOffset
 
-**Direct source proof:** `M3006` writes `g_staticZSteps` from **only the new requested menu offset**, but leaves `g_nSensiblePressureOffset` unchanged.
+**Fixed in [b4ae1dc](https://github.com/Nibbels/Repetier-Firmware/commit/b4ae1dc53a184c7a866db987f4419413912a58d5)** on `ai-firmware-review`. Before this patch, both `M3006 Z<mm>` and `M3006 S<um>` set `g_staticZSteps` from only the requested manual offset even when `g_nSensiblePressureOffset` was nonzero. The dynamic variable remained unchanged, causing the effective Z correction to temporarily omit the accumulated SenseOffset until another update recomputed the full sum.
 
-```cpp
-// M3006 Z branch: omits dynamic SenseOffset
-g_staticZSteps = long(pCommand->Z * Printer::axisStepsPerMM[Z_AXIS]);
-Printer::ZOffset = long(pCommand->Z * 1000);
+The patch sets `Printer::ZOffset` first, then calculates `g_staticZSteps` using the same combined `(Printer::ZOffset + g_nSensiblePressureOffset)` expression already used in the Mod Menu and pressure controller. The `#if FEATURE_SENSIBLE_PRESSURE` fallback preserves the original calculation when this feature is compiled out. EEPROM persistence of *only the manual offset* is unchanged; the dynamic portion remains in RAM.
 
-// M3006 S branch: also omits dynamic SenseOffset
-g_staticZSteps = (nTemp * Printer::axisStepsPerMM[Z_AXIS]) / 1000;
-Printer::ZOffset = nTemp;
-```
+**Regression scenarios (static source checks done; firmware/hardware tests pending):**
+- `Printer::ZOffset=40 µm`, `g_nSensiblePressureOffset=100 µm`, `M3006 S50` → effective combined correction `150 µm`, EEPROM manual `50 µm`.
+- Same initial state, `M3006 Z0.05` → same result, subject to normal micrometre and motor-step truncation.
+- `g_nSensiblePressureOffset=0` → ordinary `M3006` semantics unchanged.
+- With `FEATURE_SENSIBLE_PRESSURE=0` → code retains original M3006 calculation without accessing unavailable SenseOffset globals.
+- The Z-up/down **live transfer** of dynamic offset into EEPROM manual offset remains unchanged.
 
-Example: menu +0 µm, accumulated SenseOffset +50 µm. Send `M3006 S10`. The stored menu offset becomes +10 µm and `g_staticZSteps` is recomputed as **+10 µm**, not +60 µm. The dynamic variable still says +50 µm; a later high-pressure SenseOffset update recomputes the full sum and can restore a **sudden +50 µm** without an obvious menu change. This is a **real inconsistent derived-state update**, though a specific physical Z jump still depends on whether compensation is active/eligible at that moment.
+**Still open:** all other writers of `g_staticZSteps` and the print lifecycle, particularly `setupForPrinting()`, `M3909 P0`, sequential prints, and stale `g_min` / `g_max` state. Do not mark the broader Z-offset symptom fixed without hardware evidence.
 
-The menu's `UI_ACTION_ZOFFSET` and the separate plus/minus key handlers **do** include the dynamic component. Thus adjusting offset via G-code and via menu can have different results during an active SenseOffset correction. `setupForPrinting()` likewise rebuilds `g_staticZSteps` from manual only and is another mode-transition risk if a live SenseOffset correction survives.
-
-**Proposed future solution:** one authoritative helper for combining manual + dynamic offsets. Use it on all setter paths and validate disabled-CMP/milling semantics; no changes made in this audit.
-
-[Source: M3006](../../Repetier/RF.cpp#L6587-L6635) · [SenseOffset formula](../../Repetier/RF.cpp#L5748-L5760) · [Menu formula](../../Repetier/ui.cpp#L3166-L3176) · [mode setup](../../Repetier/RF.cpp#L10855-L10868).
+[Source: patched M3006](../../Repetier/RF.cpp#L6587-L6642) · [menu calculation](../../Repetier/ui.cpp#L2821-L2878) · [SenseOffset controller](../../Repetier/RF.cpp#L5748-L5760).
 
 ### Finding F2 (HIGH): M3909 P0 disables control but does not clear its accumulated correction
 

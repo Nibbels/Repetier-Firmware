@@ -41,7 +41,7 @@ This describes **the compensation target** rather than absolute physical nozzle 
 
 ## Operator's intended live transfer
 
-In the Mod Menu (page 2), **alternating the Z/bed DOWN and UP buttons transfers 5 µm per completed pair from RAM SenseOffset to EEPROM-backed `Printer::ZOffset`** while maintaining approximately the same total correction. This was explicitly documented in the original January 2017 changelog, and is a key workflow for persistent live calibration. See [exact example and edge cases](history-and-workflows.md). Ordinary menu editing and `M3006` behave differently; do not remove this feature during lifecycle fixes.
+In the Mod Menu (page 2), **alternating the Z/bed DOWN and UP buttons transfers 5 µm per completed pair from RAM SenseOffset to EEPROM-backed `Printer::ZOffset`** while maintaining approximately the same total correction. This was explicitly documented in the original January 2017 changelog, and is a key workflow for persistent live calibration. See [exact example and edge cases](history-and-workflows.md). Ordinary menu editing and `M3006` both retain the combined correction after [M3006 fix b4ae1dc](https://github.com/Nibbels/Repetier-Firmware/commit/b4ae1dc53a184c7a866db987f4419413912a58d5), but `M3006` assigns a manual offset directly rather than performing the deliberate transfer. Do not remove this feature during lifecycle fixes.
 
 ## Examples of 'same look, different stored state'
 

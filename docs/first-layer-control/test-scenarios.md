@@ -1,6 +1,6 @@
 # Validation matrix and open questions
 
-Also review the newly traced [Z-offset lifecycle issues](../z-offset/lifecycle-and-findings.md), particularly M3006 omitting accumulated SenseOffset and M3909 P0 retaining it.
+Also review the [Z-offset lifecycle risk register](../z-offset/lifecycle-and-findings.md). The M3006 omission of accumulated SenseOffset was **fixed in [b4ae1dc](https://github.com/Nibbels/Repetier-Firmware/commit/b4ae1dc53a184c7a866db987f4419413912a58d5)** on the review branch; M3909 P0 retaining the existing correction and cross-print state remain open for validation.
 
 This is **analysis, not confirmation from a physical printer**.
 
