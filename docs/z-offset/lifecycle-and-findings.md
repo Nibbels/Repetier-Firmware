@@ -1,0 +1,97 @@
+# Z state lifecycle and source-backed risk register
+
+**Status:** code-traced observations, not reproduced physical-print failures. These findings are candidate explanations for reports that the effective total Z-offset sometimes changes unexpectedly. Do not casually fix any of them in the motor-control path; see safe validation steps below.
+
+## Lifecycle: where values begin and when they change
+
+| Event | Persistent manual `Printer::ZOffset` | Dynamic `g_nSensiblePressureOffset` | Learned `g_min` / `g_max` | Bed matrix |
+| --- | --- | --- | --- | --- |
+| **Power-up / firmware reset** | Restored from MCU EEPROM; `g_staticZSteps` reconstructed | RAM initializes **0** | Restored to header defaults (0.33/10 mm with live steps/mm) by EEPROM load | Selected sector loaded from external I²C EEPROM; extrema recalculated |
+| **Home / Z stepper disable** | Preserved | No dedicated reset in inspected path | Current/last layer markers reset; learned boundaries **not** reset | Preserved |
+| **M3001 enable compensation** | Preserved | Auto-enable from EEPROM threshold possible | Preserved | Valid matrix required |
+| **M3912 adaptive priming** | Preserved | No dedicated reset | Prime deliberately excluded from learning; current/last markers reset afterward, not learned limits | Preserved |
+| **First real layer recognized** | Preserved | Potentially increasing, if active and eligible | Newly learned from model first-layer height | Preserved |
+| **Normal printing finishes / stopPrint()** | Preserved | **No unconditional cleanup** | **No unconditional cleanup** | Preserved |
+| **M3000 (compensation disabled)** | Preserved | Controller can reset offset only if its stored live digit threshold is **nonzero** when the background check sees CMP off | No boundary reset | Matrix remains |
+| **M3909 P0** | Preserved | **Current positive offset remains**; P0 clears active threshold only | Preserved | Preserved |
+| **M3006 change** | Updates and immediately saves | Variable unchanged | Preserved | Preserved |
+| **M3902 Z0 then matrix save** | Sets and saves menu offset to 0 | Variable unchanged | Preserved | Transfers former manual offset to RAM matrix; external save is separate |
+
+`handleStartPrint()` is not a reliable new-print initialization event: it marks 'printing' when queue depth exceeds two. `Printer::stopPrint()` and the later `handleStopPrint()` clean up the move queue/heaters/print markers but do not explicitly zero SenseOffset or reinitialize the learned Z boundaries.
+
+### Finding F1 (HIGH): M3006 temporarily drops a live SenseOffset correction
+
+**Direct source proof:** `M3006` writes `g_staticZSteps` from **only the new requested menu offset**, but leaves `g_nSensiblePressureOffset` unchanged.
+
+```cpp
+// M3006 Z branch: omits dynamic SenseOffset
+g_staticZSteps = long(pCommand->Z * Printer::axisStepsPerMM[Z_AXIS]);
+Printer::ZOffset = long(pCommand->Z * 1000);
+
+// M3006 S branch: also omits dynamic SenseOffset
+g_staticZSteps = (nTemp * Printer::axisStepsPerMM[Z_AXIS]) / 1000;
+Printer::ZOffset = nTemp;
+```
+
+Example: menu +0 µm, accumulated SenseOffset +50 µm. Send `M3006 S10`. The stored menu offset becomes +10 µm and `g_staticZSteps` is recomputed as **+10 µm**, not +60 µm. The dynamic variable still says +50 µm; a later high-pressure SenseOffset update recomputes the full sum and can restore a **sudden +50 µm** without an obvious menu change. This is a **real inconsistent derived-state update**, though a specific physical Z jump still depends on whether compensation is active/eligible at that moment.
+
+The menu's `UI_ACTION_ZOFFSET` and the separate plus/minus key handlers **do** include the dynamic component. Thus adjusting offset via G-code and via menu can have different results during an active SenseOffset correction. `setupForPrinting()` likewise rebuilds `g_staticZSteps` from manual only and is another mode-transition risk if a live SenseOffset correction survives.
+
+**Proposed future solution:** one authoritative helper for combining manual + dynamic offsets. Use it on all setter paths and validate disabled-CMP/milling semantics; no changes made in this audit.
+
+[Source: M3006](../../Repetier/RF.cpp#L6587-L6635) · [SenseOffset formula](../../Repetier/RF.cpp#L5748-L5760) · [Menu formula](../../Repetier/ui.cpp#L3166-L3176) · [mode setup](../../Repetier/RF.cpp#L10855-L10868).
+
+### Finding F2 (HIGH): M3909 P0 disables control but does not clear its accumulated correction
+
+`M3909 P0` sets `g_nSensiblePressureDigits=0` and logs disabled. It does **not** zero `g_nSensiblePressureOffset` and does not recompute `g_staticZSteps`. The periodic cleanup in the SenseOffset controller is gated on `if (g_nSensiblePressureDigits && !doHeatBedZCompensation)`; after P0 the first condition is false, so even disabling heat-bed compensation does not trigger that cleanup. The positive correction can therefore remain in live derived Z state and its underlying RAM variable. **Some retention might have been intentional to avoid an unsafe downward Z jump**, but the state semantics are not explicit and are important between prints.
+
+`M3000` on its own may clear the dynamic offset **only if** the threshold is still nonzero and the periodic SenseOffset code runs after bed compensation is off. Never replace this with an abrupt reset during printing.
+
+[Source: M3909 P0](../../Repetier/RF.cpp#L8975-L9037) · [conditional clear](../../Repetier/RF.cpp#L5660-L5677).
+
+### Finding F3 (HIGH): stopping/finishing a print is not a full Z-state reset
+
+On boot, `g_nSensiblePressureOffset=0` and EEPROM load sets default `g_min`/`g_max`. No equivalent universal reset was found in `stopPrint()`, `handleStopPrint()`, `handleStartPrint()` or `M3912`. This gives two classes of consecutive-print state leakage:
+
+1. Accumulated positive clearance correction may carry into the next print, depending on end-G-code/compensation deactivation.
+2. Learned `g_minZCompensationSteps` may remain from the prior print. With prior first layer 0.40 mm, a new 0.352 mm M3912 line can satisfy SenseOffset's `Z<=g_min` gate but fail Digit Flow's opposite `Z>g_min` gate — the wrong feedback mechanism for priming.
+
+The first is a **clear missing unconditional reset** (not necessarily a bug without defining desired retention); the second is a **concrete code-path hazard**, not yet a demonstrated field failure. Do not reset bounds in the middle of an active print or invalidate a genuine new layer in a sequential object.
+
+[Source: print stop](../../Repetier/Printer.cpp#L1788-L1840) · [stop completion](../../Repetier/RF.cpp#L5970-L6060) · [M3912 end](../../Repetier/RF.cpp#L9230-L9254) · [boot bound reset](../../Repetier/Eeprom.cpp#L615-L624).
+
+### Finding F4 (HIGH): matrix-offset transfer is not an atomic persistent transaction
+
+`M3902 Z0` transfers the current *manual menu* offset to the **RAM** bed matrix and immediately sets/saves `Printer::ZOffset=0` in **internal MCU EEPROM**. The matrix remains only marked `g_ZMatrixChangedInRam=1` until `M3902 S<sector>` or the Save Matrix UI explicitly writes the **external I²C EEPROM**.
+
+If the printer resets or power is lost before that external write, the persistent pair is inconsistent: old matrix + zero manual offset. If the matrix is deliberately saved to a sector that is **not** the active boot sector, restart can also pick up a different effective baseline. Even a normal ZOS scan can change the RAM matrix without committing it automatically.
+
+No implicit transaction or rollback makes both stores atomic. **Treat an offset transfer as an unsafe two-step operation unless both parts are verified saved.**
+
+[Source: M3902 Z0](../../Repetier/RF.cpp#L8850-L8953) · [save operation](../../Repetier/RF.cpp#L8953-L8965) · [external write](../../Repetier/RF.cpp#L5184-L5284).
+
+### Finding F5 (MEDIUM): Z-minus buttons preferentially consume SenseOffset, unlike menu edit
+
+`UIDisplay::zOffsetMinusAction()` deliberately subtracts the button increment from `g_nSensiblePressureOffset` first (if positive), then only decreases persistent menu offset after that has been exhausted. This preserves correct **total** movement for the button, but changing 'Z offset' with different controls may modify different parts of the state ledger. This appears **intentional**, not a bug, but must be documented.
+
+[Source: plus/minus key behavior](../../Repetier/ui.cpp#L2821-L2878).
+
+### Finding F6 (MEDIUM): Z-offset scan uses volatile RAM matrix state
+
+The point Z-offset scan (`M3900`) updates the current RAM matrix, not directly `Printer::ZOffset`. For a full learning rate, it first reloads the unmodified matrix from external EEPROM; unsaved RAM edits can be discarded on the next scan. After a successful scan, the matrix is marked dirty and must be **explicitly saved**. `g_offsetZCompensationSteps` and `g_ZCompensationMax` are recomputed, affecting the current Z baseline even if menu Z-offset stays constant.
+
+[Source: ZOS load](../../Repetier/RF.cpp#L2255-L2277) · [edit and dirty flag](../../Repetier/RF.cpp#L2483-L2561) · [successful finish](../../Repetier/RF.cpp#L2585-L2606).
+
+## What has *not* been established
+
+- No evidence yet identifies which of F1–F6 caused the user's historical intermittent Z changes.
+- No direct runtime instrumentation of the combined Z target, sensor digits, matrix sector, EEPROM offset and active state.
+- No hardware verification of the motor's physical clearance after specific transitions.
+
+## Safe diagnostic plan before modifying behavior
+
+Instrument **events**, not high-rate ISR cycles: after boot, after EEPROM/matrix load, after homing, before and after M3001/M3000, before/after M3912, upon M3909/M3006, on print stop/finish, after ZOS and matrix save. Report:
+
+`Printer::ZOffset` [µm]; `g_nSensiblePressureOffset` [µm]; `g_staticZSteps` [steps]; `g_offsetZCompensationSteps` and `g_ZCompensationMax` [steps]; `g_min`/`g_max` [steps]; active matrix sector and dirty flag; current nominal Z; target and current compensation steps; enabled CMP/SenseOffset; selected tool; DMS readings; bed/nozzle temperature.
+
+A test must not abruptly remove a stored positive clearance correction near the bed. First define the safe new-print boundary and whether controlled Z retraction/homing/compensation-off is needed. Develop isolated commits only after the state transitions are understood.

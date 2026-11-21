@@ -1,5 +1,7 @@
 # Validation matrix and open questions
 
+Also review the newly traced [Z-offset lifecycle issues](../z-offset/lifecycle-and-findings.md), particularly M3006 omitting accumulated SenseOffset and M3909 P0 retaining it.
+
 This is **analysis, not confirmation from a physical printer**.
 
 ## Invariants
