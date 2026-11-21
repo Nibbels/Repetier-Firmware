@@ -46,8 +46,9 @@ uint32_t Printer::maxTravelAccelerationStepsPerSquareSecond[4];
 uint8_t Printer::relativeCoordinateMode = false;         // Determines absolute (false) or relative Coordinates (true).
 uint8_t Printer::relativeExtruderCoordinateMode = false; // Determines Absolute or Relative E Codes while in Absolute Coordinates mode. E is always relative in Relative Coordinates mode.
 
-volatile float Printer::destinationMM[4] = { 0, 0, 0, 0 }; // planned precise mm.
-float Printer::destinationMMLast[4] = { 0, 0, 0, 0 };      // rounded-queued mm.
+volatile float Printer::destinationMM[4] = { 0, 0, 0, 0 };
+int32_t Printer::queuedPositionSteps[3] = { 0, 0, 0 };
+float Printer::queuedEPositionMM = 0;
 float Printer::originOffsetMM[3] = { 0, 0, 0 };
 uint8_t Printer::flag0 = 0;
 uint8_t Printer::flag1 = 0;
@@ -240,7 +241,13 @@ void Printer::updateDerivedParameter() {
     maxSoftEndstopSteps[Z_AXIS] = (long)(axisStepsPerMM[Z_AXIS] * axisLengthMM[Z_AXIS]);
 
     for (uint8_t axis = 0; axis < 4; axis++) {
-        axisMMPerSteps[axis] = 1.0f / axisStepsPerMM[axis];
+        const float mmPerStep = 1.0f / axisStepsPerMM[axis];
+        if (axis < E_AXIS && mmPerStep != axisMMPerSteps[axis]) {
+            // Express the queued endpoint in the new steps/mm calibration.
+            const float queuedMM = queuedPositionSteps[axis] * axisMMPerSteps[axis];
+            queuedPositionSteps[axis] = lroundf(queuedMM * axisStepsPerMM[axis]);
+        }
+        axisMMPerSteps[axis] = mmPerStep;
 
 #if FEATURE_MILLING_MODE
         if (Printer::operatingMode == OPERATING_MODE_PRINT) {
@@ -1860,7 +1867,7 @@ void Printer::stopPrint() //function for aborting USB and SD-Prints
     Printer::setXAxisSteps(Printer::currentSteps[X_AXIS]);
     Printer::setYAxisSteps(Printer::currentSteps[Y_AXIS]);
     Printer::setZAxisSteps(Printer::currentSteps[Z_AXIS]);
-    Printer::setEAxisSteps(0); //G92 E0:
+    Printer::setEPositionMM(0); // G92 E0
 
     noInts.unprotect();
 

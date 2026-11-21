@@ -9212,7 +9212,7 @@ void processSpecialGCode(GCode* pCommand) {
                 Printer::relativeExtruderCoordinateMode = false;
 #endif // FEATURE_DIGIT_FLOW_COMPENSATION
 
-                Printer::setEAxisSteps(0); //G92 E0
+                Printer::setEPositionMM(0); // G92 E0
 
                 //Abstand links und rechts.
                 const float spacerX = 15.0f;
@@ -9301,7 +9301,7 @@ void processSpecialGCode(GCode* pCommand) {
                         // Physical filament stays extruded; restore only the
                         // slicer's logical E timeline, including its substeps.
                         Printer::destinationMM[E_AXIS] = save_logicalE;
-                        Printer::destinationMMLast[E_AXIS] = save_logicalE;
+                        Printer::queuedEPositionMM = save_logicalE;
                         Printer::extrudeMultiplyErrorSteps = save_extrudeMultiplyErrorSteps;
                         Printer::compensatedPositionCollectTinyE = save_compensatedPositionCollectTinyE;
                     }
@@ -9345,7 +9345,7 @@ void processSpecialGCode(GCode* pCommand) {
             uint8_t saveunitIsInches = Printer::unitIsInches;
             Printer::unitIsInches = 0; //to save possible G21 .. weiß net ob das so wichtig wäre ^^.
 
-            Printer::setEAxisSteps(0); //G92 E0
+            Printer::setEPositionMM(0); // G92 E0
 
             float e = 0.0f;
             while (e < float(Extrusion)) {
@@ -9363,7 +9363,7 @@ void processSpecialGCode(GCode* pCommand) {
                 Printer::queueFloatCoordinates(IGNORE_COORDINATE, IGNORE_COORDINATE, IGNORE_COORDINATE, e, eFeedrate);
             }
 
-            Printer::setEAxisSteps(0); //G92 E0
+            Printer::setEPositionMM(0); // G92 E0
 
             Printer::relativeExtruderCoordinateMode = save_relativeExtruderCoordinateMode;
             Printer::unitIsInches = saveunitIsInches;
@@ -9393,7 +9393,7 @@ void processSpecialGCode(GCode* pCommand) {
             Printer::relativeExtruderCoordinateMode = false; //M82:
             uint8_t saveunitIsInches = Printer::unitIsInches;
             Printer::unitIsInches = 0; //to save possible G21 .. weiß net ob das so wichtig wäre ^^.
-            Printer::setEAxisSteps(0); //G92 E0
+            Printer::setEPositionMM(0); // G92 E0
 
 #if FEATURE_ZERO_DIGITS
                 //normalize dms sensor values to 0 if allowed in options and not already done
@@ -9459,7 +9459,7 @@ void processSpecialGCode(GCode* pCommand) {
             Extruder::setTemperatureForExtruder(0, Extruder::current->id, false);
             //cleanup
 
-            Printer::setEAxisSteps(0); //G92 E0
+            Printer::setEPositionMM(0); // G92 E0
 
             Printer::relativeExtruderCoordinateMode = save_relativeExtruderCoordinateMode;
             Printer::unitIsInches = saveunitIsInches;
@@ -10540,7 +10540,7 @@ Write a 0 to this bit to clear the fault and resume operation
 void cleanupEPositions(void) {
     InterruptProtectedBlock noInts;
 
-    Printer::setEAxisSteps(0);
+    Printer::setEPositionMM(0);
     Printer::resetDirectAxis(E_AXIS);
 
     noInts.unprotect();

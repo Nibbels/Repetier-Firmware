@@ -118,45 +118,47 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
     // Find direction
     bool isNoStepsMove = true;
     for (uint8_t axis = 0; axis < 4; axis++) {
-        //error zwischen soll und ist.
-        float axisDistanceUnscaledMM = Printer::destinationMM[axis] - Printer::destinationMMLast[axis];
-
+        int32_t steps;
         if (axis == E_AXIS) {
+            const float targetE = Printer::destinationMM[E_AXIS];
+            const float requestedMM = targetE - Printer::queuedEPositionMM;
 #if FEATURE_DIGIT_FLOW_COMPENSATION
-            float axisDistanceFactor = Printer::menuExtrusionFactor * Printer::dynamicExtrusionFactor;
+            const float flow = Printer::menuExtrusionFactor * Printer::dynamicExtrusionFactor;
 #else
-            float axisDistanceFactor = Printer::menuExtrusionFactor;
+            const float flow = Printer::menuExtrusionFactor;
 #endif // FEATURE_DIGIT_FLOW_COMPENSATION
 
-            axisDistanceMM[E_AXIS] = axisDistanceUnscaledMM * axisDistanceFactor;
-            Printer::extrudeMultiplyErrorSteps += axisDistanceMM[E_AXIS] * Printer::axisStepsPerMM[E_AXIS];
-            p->delta[E_AXIS] = lroundf(Printer::extrudeMultiplyErrorSteps);
-            Printer::extrudeMultiplyErrorSteps -= p->delta[E_AXIS];
-
-            Printer::filamentPrinted += p->delta[E_AXIS] * Printer::axisMMPerSteps[E_AXIS];
-
-            Printer::destinationMMLast[E_AXIS] = Printer::destinationMM[E_AXIS];
+            const float requestedSteps = requestedMM * flow * Printer::axisStepsPerMM[E_AXIS];
+            steps = lroundf(requestedSteps);
+            // Add the fractional parts at step scale. Keep the remainder in [-0.5, 0.5).
+            float remainder = (requestedSteps - steps) + Printer::extrudeMultiplyErrorSteps;
+            if (remainder >= 0.5f) {
+                ++steps;
+                remainder -= 1.0f;
+            } else if (remainder < -0.5f) {
+                --steps;
+                remainder += 1.0f;
+            }
+            Printer::extrudeMultiplyErrorSteps = remainder;
+            Printer::queuedEPositionMM = targetE;
         } else {
-            p->delta[axis] = lroundf(axisDistanceUnscaledMM * Printer::axisStepsPerMM[axis]);
-            axisDistanceMM[axis] = float(p->delta[axis]) * Printer::axisMMPerSteps[axis];
-
-            //Update calculated coordinate by move distance.
-            Printer::destinationMMLast[axis] += axisDistanceMM[axis];
+            const int32_t targetSteps = Printer::getDestinationSteps(axis);
+            steps = targetSteps - Printer::queuedPositionSteps[axis];
+            Printer::queuedPositionSteps[axis] = targetSteps;
         }
 
-        if (axisDistanceMM[axis] >= 0)
+        const float distanceMM = steps * Printer::axisMMPerSteps[axis];
+        if (axis == E_AXIS)
+            Printer::filamentPrinted += distanceMM;
+        axisDistanceMM[axis] = fabs(distanceMM);
+        p->delta[axis] = abs(steps);
+
+        if (steps >= 0)
             p->setPositiveDirectionForAxis(axis);
-        if (axisDistanceMM[axis] != 0)
+        if (steps) {
             p->setMoveOfAxis(axis);
-
-        // remove the sign from all driving length
-        p->delta[axis] = abs(p->delta[axis]);
-        axisDistanceMM[axis] = fabs(axisDistanceMM[axis]);
-
-        // signal that we at least found some steps to queue in move cache
-        // The other option is, that we only summed up parts steps for a possible next move which are stored as rounding errors
-        if (p->delta[axis])
             isNoStepsMove = false;
+        }
     }
 
     // need to delete dummy elements, otherwise commands can get locked.
@@ -175,7 +177,7 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
         // Remember a Z change until extrusion confirms a layer. Returning
         // from a Z hop to the current layer cancels the candidate.
         if (p->isZMove()) {
-            const long newZ = Printer::getDestinationSteps(Z_AXIS);
+            const long newZ = Printer::queuedPositionSteps[Z_AXIS];
             Printer::queuePositionZLayerGuessNew = (newZ == Printer::queuePositionZLayerCurrent) ? 0 : newZ;
         }
 
@@ -183,7 +185,7 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
             long layerZ = Printer::queuePositionZLayerGuessNew;
             if (!layerZ && !Printer::queuePositionZLayerCurrent && p->isXOrYMove()) {
                 // The first printed move can share the Z of the generated prime.
-                layerZ = RMath::max(Printer::getDestinationSteps(Z_AXIS), 0L);
+                layerZ = RMath::max(Printer::queuedPositionSteps[Z_AXIS], 0L);
             }
             Printer::queuePositionZLayerGuessNew = 0;
             if (layerZ) {
@@ -411,8 +413,9 @@ void PrintLine::calculateMove(float axisDistanceMM[], fast8_t drivingAxis, float
         }
     }
 
-    // Errors for delta move are initialized in timer (except extruder)
+    // Initialize every segment, including when reusing a slot from an aborted move.
     error[X_AXIS] = error[Y_AXIS] = error[Z_AXIS] = delta[primaryAxis] >> 1;
+    error[E_AXIS] = 0;
 
     invFullSpeed = 1.0 / fullSpeed;
     accelerationPrim = slowestAxisPlateauTimeRepro / axisInterval[primaryAxis]; // a = v/t = F_CPU/(c*t): Steps/s^2
@@ -921,10 +924,6 @@ void PrintLine::arc(float* position, float* target, float* offset, float radius,
     // Initialize the linear axis
     //arc_target[axis_linear] = position[axis_linear];
 
-    // Initialize the extruder axis
-    arc_target[E_AXIS] = Printer::destinationMM[E_AXIS];
-    //arc_target[E_AXIS] = Printer::currentPositionSteps[E_AXIS] * Printer::invAxisStepsPerMM[E_AXIS];
-
     for (i = 1; i < segments; i++) {
         // Increment (segments-1)
 
@@ -954,7 +953,7 @@ void PrintLine::arc(float* position, float* target, float* offset, float radius,
         arc_target[X_AXIS] = center_axis0 + r_axis0;
         arc_target[Y_AXIS] = center_axis1 + r_axis1;
         //arc_target[axis_linear] += linear_per_segment;
-        arc_target[E_AXIS] += extruder_per_segment;
+        arc_target[E_AXIS] = position[E_AXIS] + i * extruder_per_segment;
         Printer::queueFloatCoordinates(arc_target[X_AXIS], arc_target[Y_AXIS], IGNORE_COORDINATE, arc_target[E_AXIS], IGNORE_COORDINATE);
     }
     // Ensure last segment arrives at target location.

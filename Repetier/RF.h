@@ -429,11 +429,11 @@ The following variables are used for movements in x/y/z direction:
   - this is the precise target coordinate which might not be fully reachable by full steps
   - add set and subtract positions here.
 
-- Printer::destinationMMLast[x/y/z]
-  - unit is [mm]
-  - this coordinate keeps track of the real coordinates which where commanded by using full output steps.
-  - Printer::destinationMMLast - Printer::destinationMM is the step rounding error of the current axis.
-  - change this variable only if you want to define a new error delta free axis scale. -> Printer::destinationMM = Printer::destinationMMLast = blubb.
+- Printer::queuedPositionSteps[x/y/z]
+  - unit is [steps]
+  - holds the rounded nominal endpoint of the last queued move.
+  - the next move uses the difference between two integer endpoints.
+  - coordinate resets update the queued steps, current steps and millimetre target together.
 
 - Printer::currentSteps[x/y/z]
   - unit is [steps]

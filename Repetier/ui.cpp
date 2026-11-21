@@ -4592,7 +4592,7 @@ void UIDisplay::mainSwitchCase(int action) {
         break;
     }
     case UI_ACTION_SET_E_ORIGIN: {
-        Printer::setEAxisSteps(0); //G92 E0
+        Printer::setEPositionMM(0); // G92 E0
         break;
     }
     case UI_ACTION_EXTRUDER_RELATIVE: {

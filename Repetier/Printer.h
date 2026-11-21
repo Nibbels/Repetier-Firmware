@@ -93,8 +93,9 @@ public:
 #endif                                  // FEATURE_DIGIT_FLOW_COMPENSATION
     static int8_t lastDirectionSovereignty;
     static float originOffsetMM[3];
-    static volatile float destinationMM[4]; // Target in mm from origin.
-    static float destinationMMLast[4];      // Position in mm from origin.
+    static volatile float destinationMM[4]; // Requested target in mm from origin.
+    static int32_t queuedPositionSteps[3];  // Last queued XYZ endpoints in nominal steps.
+    static float queuedEPositionMM;        // Last queued logical E coordinate in mm.
 
     static long maxSoftEndstopSteps[3];     // For software endstops, limit of move in positive direction. (=Homing-Offset + Achsenlänge)
     static float axisLengthMM[3];           // Länge des überfahrbaren Bereichs im positiven Homing. (=Schienen-Fahrweg - Homing-Offset - 2x ExtruderOffset)
@@ -1013,30 +1014,25 @@ public:
 
     static INLINE void setXAxisSteps(int32_t x) {
         InterruptProtectedBlock noInts;
-        //G92 Xx:
-        Printer::currentSteps[X_AXIS] = x;
-        Printer::destinationMMLast[X_AXIS] = Printer::destinationMM[X_AXIS] = x * axisMMPerSteps[X_AXIS];
+        Printer::currentSteps[X_AXIS] = Printer::queuedPositionSteps[X_AXIS] = x;
+        Printer::destinationMM[X_AXIS] = x * axisMMPerSteps[X_AXIS];
         noInts.unprotect();
     }
     static INLINE void setYAxisSteps(int32_t y) {
         InterruptProtectedBlock noInts;
-        //G92 Yx:
-        Printer::currentSteps[Y_AXIS] = y;
-        Printer::destinationMMLast[Y_AXIS] = Printer::destinationMM[Y_AXIS] = y * axisMMPerSteps[Y_AXIS];
+        Printer::currentSteps[Y_AXIS] = Printer::queuedPositionSteps[Y_AXIS] = y;
+        Printer::destinationMM[Y_AXIS] = y * axisMMPerSteps[Y_AXIS];
         noInts.unprotect();
     }
     static INLINE void setZAxisSteps(int32_t z) {
         InterruptProtectedBlock noInts;
-        //G92 Zx:
-        Printer::currentSteps[Z_AXIS] = z;
-        Printer::destinationMMLast[Z_AXIS] = Printer::destinationMM[Z_AXIS] = z * axisMMPerSteps[Z_AXIS];
+        Printer::currentSteps[Z_AXIS] = Printer::queuedPositionSteps[Z_AXIS] = z;
+        Printer::destinationMM[Z_AXIS] = z * axisMMPerSteps[Z_AXIS];
         noInts.unprotect();
     }
-    static INLINE void setEAxisSteps(int32_t e) {
+    static INLINE void setEPositionMM(float e) {
         InterruptProtectedBlock noInts;
-        //G92 Ex:
-        // Vorsicht, currentSteps[E_AXIS] wäre Overflow.
-        Printer::destinationMMLast[E_AXIS] = Printer::destinationMM[E_AXIS] = e * axisMMPerSteps[E_AXIS];
+        Printer::queuedEPositionMM = Printer::destinationMM[E_AXIS] = e;
         noInts.unprotect();
     }
 

@@ -605,7 +605,7 @@ void Commands::processGCode(GCode* com) {
         }
         uint8_t home_all_axis = (com->hasNoXYZ() && !com->hasE());
         if (com->hasE()) {
-            Printer::setEAxisSteps(0); // Wie G92 E0
+            Printer::setEPositionMM(0); // G92 E0
         }
         if (home_all_axis || !com->hasNoXYZ())
             Printer::homeAxis(home_all_axis || com->hasX(), home_all_axis || com->hasY(), home_all_axis || com->hasZ());
@@ -746,7 +746,7 @@ void Commands::processGCode(GCode* com) {
             Printer::setOrigin(xOff, yOff, zOff);
         }
         if (com->hasE()) {
-            Printer::setEAxisSteps(Printer::convertToMM(com->E) * Printer::axisStepsPerMM[E_AXIS]);
+            Printer::setEPositionMM(Printer::convertToMM(com->E));
         }
         break;
     }

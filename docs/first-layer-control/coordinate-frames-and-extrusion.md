@@ -1,15 +1,28 @@
 # Coordinate frames, bed-profile fade-out and the extrusion timeline
 
-> Verified against the shared source for RF1000/RF2000/RF2000v2 on `ai-firmware-review`, 2026-11-21. Conceptual source review plus small arithmetic checks; **not a firmware simulation or physical test**.
+> Based on the shared RF1000, RF2000 and RF2000v2 source on `ai-firmware-review`. Host tests replayed the planner arithmetic with binary32 floats and simulated motors. AVR builds passed for all three models.
 
 ## Z: four different layers of meaning
 
 1. **Theoretical slicer G-code**: `G1 Z0.20` requests a nominal layer height in the G-code's current work origin, G90/G91 mode and units. This number is not necessarily physical Z motor steps.
-2. **Uncompensated planned firmware position**: `Printer::queueGCodeCoordinates()` converts units and uses relative or absolute positioning; in absolute G-code mode it subtracts `Printer::originOffsetMM[Z_AXIS]`. `Printer::destinationMM[Z_AXIS]` is then mapped by `getDestinationSteps(Z_AXIS) = lroundf(destinationMM[Z]*axisStepsPerMM[Z])`. The planner later executes this value as `Printer::currentSteps[Z_AXIS]`. **The learned `g_min`/`g_max` boundaries live in this nominal planned step-coordinate frame.** Normally with zero G-code origin shift, they numerically match the slicer's Z height.
+2. **Uncompensated planned firmware position.** `Printer::queueGCodeCoordinates()` converts units and subtracts the work-origin offset in absolute mode. The planner rounds the float target with `getDestinationSteps(Z_AXIS)` and records the resulting integer in `queuedPositionSteps[Z_AXIS]`. `currentSteps[Z_AXIS]` tracks execution. The learned `g_min` and `g_max` use the nominal planned steps.
 3. **Compensation/Z motor target**: `recalculateHeatBedZCompensation()` uses the *executing nominal* `currentSteps[Z_AXIS]` to select the height-dependent shape compensation and adds `g_staticZSteps` (menu Z + accumulated SenseOffset). A separate optional **Digit-Z** force correction and endstop rules may also apply. Target is `compensatedPositionTargetStepsZ`; actual motor correction `compensatedPositionCurrentStepsZ` can lag behind the target.
 4. **Real nozzle-to-bed clearance and printed geometry**: combines nominal Z motion, actual compensation motor steps, tool offsets, physical thermal drift and the real bed surface. This is not directly identical to any one planned variable.
 
 The source intentionally avoids including extruder-specific Z displacement in the nominal fade-height coordinate. Both the layer detector and fade calculation reason in the nominal planned axis, even though extruder/tool offsets or manual direct moves can change real nozzle clearance.
+
+## Why segment rounding cannot accumulate in XYZ
+
+For a fixed calibration, define `P(i)` as the rounded integer endpoint of segment `i`. The planner queues `P(i) - P(i-1)`. Adding those deltas cancels the intermediate endpoints and leaves `P(last) - P(start)`. Returning to the same represented target therefore returns to the same nominal step, regardless of segment size and direction. Homing and print cancellation set the queued endpoint and executing position together. [Planner](../../Repetier/motion.cpp#L117-L168) · [Coordinate resets](../../Repetier/Printer.h#L1015-L1041)
+
+The previous planner repeatedly added step-sized distances to an XYZ float. The float could drift relative to the integer pulse total. A half-step target could also shift on a later move that left the target unchanged.
+
+| Host replay | Previous planner | Integer endpoints |
+| --- | --- | --- |
+| Z0 to Z200 in 0.001 mm targets, then one move to Z0, at 1,280 steps/mm | 459 steps from zero | 0 steps from zero |
+| Z at 2.5 steps, followed by Y moves | Z shifted from step 3 to step 2 | Z stayed at step 3 |
+
+This invariant applies to the float targets the planner receives. The regular `G91` and `M83` inputs still accumulate in binary32. In the host replay, 200,000 relative `Z0.0005` commands followed by `Z-100` left a float target of +0.2253 mm. Likewise, 100,000 relative `E0.008` commands produced about 799.654 mm. The planner rounded those targets consistently. Absolute endpoints avoid the repeated addition. Actual motor position also depends on limits, direct moves, compensation and the motor following its pulses. [G-code coordinate update](../../Repetier/Printer.cpp#L465-L497)
 
 ## What `g_min` and `g_max` really mean
 
@@ -54,9 +67,11 @@ As `C(x,y,z)` changes during fade-out, the true vertical separation between succ
 
 ## E: logical coordinate is not physical filament pushed
 
-For absolute-E G-code, the slicer has a **logical E timeline** (for example, 10 → 11), while the firmware planner calculates *actual E steps* from successive internal logical destinations. `PrintLine::prepareQueueMove()` multiplies each E delta by `menuExtrusionFactor * dynamicExtrusionFactor`, accumulates step rounding, then ECMP can add more E steps as needed. Physical extruded filament thus need not equal the logical numeric difference exactly.
+For absolute-E G-code, the slicer's **logical E timeline** gives a requested change in filament length. The planner applies the flow multipliers and computes base E steps. It carries the fractional step in `[-0.5, 0.5)` and initializes each segment's pulse accumulator, including reused queue slots. Motion direction and distance use the resulting integer step count. ECMP and advance can add their own pulses during execution. [Extrusion quantization](../../Repetier/motion.cpp#L120-L161)
 
-`Printer::setEAxisSteps(...)` changes **only the logical E coordinate pair** `destinationMM[E_AXIS]` and `destinationMMLast[E_AXIS]`. It does **not** unextrude filament or reset an actual counted E motor position. This is precisely the operation needed for firmware-generated priming.
+`G92 E` sets the float E origin through `Printer::setEPositionMM()`. Both `destinationMM[E_AXIS]` and `queuedEPositionMM` receive the new logical value. The setter preserves the fractional-step carry, so setting a fractional E origin followed by a move to the same E value produces zero new base pulses. A push followed by an equal undo at an exact half-step also returns to the same count with constant flow. [G92 dispatch](../../Repetier/Commands.cpp#L731-L751)
+
+Arc extrusion interpolates E from the start of the arc, using the segment index. A host replay verified that an arc from E10 to E11 at 256 steps/mm emitted 256 forward base steps without a corrective retract at the endpoint. [Arc interpolation](../../Repetier/motion.cpp#L945-L960)
 
 ### Arithmetic test: restore the logical timeline
 

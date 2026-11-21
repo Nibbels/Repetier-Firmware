@@ -23,3 +23,7 @@ The host replay used the firmware's pause handlers, foreground UI, and key polli
 | Play held across release of Bed DOWN during a settled pause | The downward jog continued to the simulated Z maximum before the return began. |
 
 The firmware restricted Play to a completed pause in 1.37t2. The 1.43.56 pause rewrite removed that check. The 1.43.76 standby change added checks for heating and the initial return request. [1.37t2](https://github.com/Nibbels/Repetier-Firmware/commit/c9b3a88) · [1.43.56](https://github.com/Nibbels/Repetier-Firmware/commit/391cedb) · [1.43.76](https://github.com/Nibbels/Repetier-Firmware/commit/6f5167d)
+
+## G-code coordinates
+
+- [ ] **Preserve precision when accumulating long relative moves.** `G91` and `M83` add to a binary32 target before the planner converts it to steps. The host stress replay left +0.2253 mm after 200,000 relative `Z0.0005` commands and one `Z-100`. Check precision across absolute and relative mode switches, logical origin changes and generated priming. [Endpoint proof and replay](first-layer-control/coordinate-frames-and-extrusion.md#why-segment-rounding-cannot-accumulate-in-xyz)
