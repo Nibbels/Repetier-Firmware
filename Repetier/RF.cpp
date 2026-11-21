@@ -9287,7 +9287,6 @@ void processSpecialGCode(GCode* pCommand) {
                 // Reset only DMS-specific throttling, not M220 or M221.
                 Printer::dynamicExtrusionFactor = 1.0f;
                 Printer::dynamicFeedrateFactor = 1.0f;
-                Printer::interval_mod = 0;
                 g_nDigitFlowCompensation_Fmin = save_g_nDigitFlowCompensation_Fmin;
                 g_nDigitFlowCompensation_Fmax = save_g_nDigitFlowCompensation_Fmax;
                 g_nDigitFlowCompensation_speed_intense = save_g_nDigitFlowCompensation_speed_intense;
@@ -9295,6 +9294,8 @@ void processSpecialGCode(GCode* pCommand) {
 
                 {
                     InterruptProtectedBlock noInts;
+                    // On AVR, a uint16_t timer modifier must be updated atomically.
+                    Printer::interval_mod = 0;
                     if (!g_uBlockCommands) {
                         // Physical filament stays extruded; restore only the
                         // slicer's logical E timeline, including its substeps.
