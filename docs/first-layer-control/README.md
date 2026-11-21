@@ -45,6 +45,6 @@ Positions named *Steps* are motor steps, SenseOffset and manual Z offsets are in
 
 ### Current research question
 
-The numeric Z=0.352 mm exclusion protects dynamic first-layer learning. **The review branch now resets learned min/max and all layer markers during Z homing**, after safely disabling CMP. However, a second print **without Z homing** can still inherit the previous bounds because `M3912` itself does not reset them. A fork's RF2000v2-only reset-after-priming is not a suitable substitute. [Lifecycle patch and remaining cases](../z-offset/lifecycle-homing-fix.md).
+The unusual Z=0.352 mm is a **deliberate near-unique priming sentinel**, now supported by an explicit `M3912` phase flag for its generated moves. **During prime, high DMS force applies the speed/E brake, not accumulated SenseOffset**. Z homing clears old learned geometry; without homing, stale `g_min/g_max` may still affect the fade although the M3912 pressure policy is now isolated. A real first layer at exactly 0.352 mm remains the rare collision. [M3912 implementation](m3912-state-boundary.md).
 
 Continue with [SenseOffset](sense-offset.md), [fade-out / ECMP](z-compensation-and-ecmp.md), [M3912](automatic-start-line.md), [test scenarios](test-scenarios.md), [history](history.md).

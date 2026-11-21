@@ -1,10 +1,14 @@
 # M3912: pressure-responsive automatic priming/start line
 
-**Pending design:** [M3912 state transaction: cache, restore and discard](m3912-state-boundary.md). Not yet implemented.
+**Implemented on the review branch:** [M3912 priming transaction, pressure-brake intent and regression tests](m3912-state-boundary.md). AVR/printer validation pending.
 
 **Coordinate reference and verified limitations:** [G-code Z, physical Z compensation and E logical timeline](coordinate-frames-and-extrusion.md). Normal speed override and DMS speed control are separate.
 
 ## Intent
+
+**Mechanical interpretation:** high DMS force produces an audible, simulated **braking effect**—like a chainsaw entering wood—because firmware progressively lowers the XY stepping speed and, as necessary, E flow. This is not an indication that the stepper motors are out of power. The intent is to relieve nozzle load **without learning a new Z-offset from priming force**.
+
+**Why 0.352 mm:** its non-round height above common first layers was chosen deliberately as an almost-unique sentinel, not an arbitrary constant. It remains supported for manually scripted priming. A generated M3912 also has an explicit runtime phase flag; a genuine model layer exactly 0.352 mm is the known rare collision.
 
 The priming line fills/cleans the nozzle before the first **model** layer. Heavy priming can intentionally generate high DMS force. `M3912` temporarily activates Digit Flow Compensation so excessive measured force causes **slower movement and less extrusion**, rather than treating priming as an incorrect first-layer gap.
 
@@ -26,7 +30,7 @@ Before priming, the command waits for the move queue; saves current flow/feed co
 
 It then generates alternating lines and advances E. Each line is broken up with a `0.0025` fractional increment (approximately **400 queue segments per line**, not '100' as the old code comment states). This allows new segments to incorporate updated pressure-dependent extrusion multipliers. Feedrate adjustment is applied at runtime in the stepper timing path, not only to newly enqueued segments. The play key and command-block path can interrupt the priming sequence.
 
-After waiting for the queued prime moves, `M3912` restores previous Digit Flow settings, sets the dynamic factors to 1.0, resets E reference and restores E coordinate mode. It also clears `queuePositionZLayerLast` and `Current` so the real model layer can be detected.
+After waiting for the queued prime moves, `M3912` restores the previous Digit Flow configuration, resets both dynamic factors and `interval_mod`, restores the **incoming logical E reference** and both sub-step E remainders, and restores the E mode. It clears `queuePositionZLayerGuessNew`, `Current`, and `Last` so the real model layer can be detected. Skip/cancel paths clean up the temporary phase; a skip no longer queues an additional Y move.
 
 ## How pressure changes flow vs speed
 
@@ -36,14 +40,14 @@ After waiting for the queued prime moves, `M3912` restores previous Digit Flow s
 
 The adaptations depend on DMS processing and queue timing; they are not guarantees of a precise physical flow or pressure.
 
-**Critical code gate:** pressure-based Digit Flow effects in `readStrainGauge()` are enabled only when `Printer::currentSteps[Z_AXIS] > g_minZCompensationSteps`. With the baseline `g_min=0.33 mm` and prime `Z=0.352 mm`, this works. If `g_min` has persisted above 0.352 mm from a previous print, pressure-adaptive priming can be blocked **while SenseOffset's opposite Z<=g_min gate becomes eligible**. This is the central lifecycle hypothesis.
+**Updated pressure gate:** ordinary Digit Flow uses `currentZ > g_min`; SenseOffset uses the opposite gate. The generated `M3912` flag now **forces Digit Flow eligibility and suppresses SenseOffset growth** regardless of `g_min`, retaining the intentionally rare 0.352 mm sentinel for other uses. No-homing **geometric** fade-state inheritance is still a separate issue.
 
 ## Distinctions to preserve
 - Priming line: **pressure → reduce speed / reduce E**.
 - True first model layer: **pressure above limit → bounded increase of clearance via SenseOffset**.
 - Heat-bed matrix applies in both cases; adaptive first-layer height must refer to the **model**, not the priming line.
 - Normal emergency pause/stop thresholds are additional independent protections.
-- A genuine model layer near 0.352 mm risks matching the existing magic-height exclusion; explicit semantic priming tagging may eventually be safer.
+- The 0.352-mm numeric sentinel is intentionally retained. A genuine model layer at the exact sentinel (±5 steps) can still be excluded; generated M3912 moves are additionally tagged explicitly.
 
 ## Source
 - [M3912 generation, overrides, save/restore](../../Repetier/RF.cpp#L9085-L9255)

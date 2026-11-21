@@ -1,63 +1,60 @@
-# M3912 priming: state transaction design (not yet implemented)
+# M3912: implemented pressure-braked priming transaction
 
-This design review applies to RF1000/RF2000/RF2000v2 shared code on `ai-firmware-review` as of November 2026. See [current automatic start line](automatic-start-line.md) and [implemented Z-homing reset](../z-offset/lifecycle-homing-fix.md). **The following M3912 changes remain proposals; no start-line firmware code was modified.**
+> **Status:** [Firmware patch 5f848c9](https://github.com/Nibbels/Repetier-Firmware/commit/5f848c9a5cd0347c6d45fd9d3f13afd7344cb775) and [atomic timer cleanup b793cd8](https://github.com/Nibbels/Repetier-Firmware/commit/b793cd8203e7ed71154728412a03d4e9f4d7fb67) on `ai-firmware-review`; source and arithmetic checks passed. **An AVR build and a physical printer test have not been performed.**
 
-## Rule: cache configuration, discard priming state, preserve physical offsets
+## Intent: DMS-controlled braking, not insufficient motor power
 
-| State | Before prime | After prime | Decision |
-| --- | --- | --- | --- |
-| `g_nDigitFlowCompensation_Fmin/Fmax` | Cache, override with 1500/4500 digits or M3912 S/P | Restore caller values | Already implemented correctly |
-| `g_nDigitFlowCompensation_intense` | Cache; set −75% flow | Restore | Already implemented |
-| `g_nDigitFlowCompensation_speed_intense` | Cache; set −90% speed | Restore | Already implemented |
-| `Printer::relativeExtruderCoordinateMode` (M82/M83) | Cache, force absolute mode | Restore | Already implemented in normal feature configuration |
-| E-coordinate reference | Current: `setEAxisSteps(0)` before and after | **Propose cache/restore incoming logical E coordinate** (E0 remains E0) | A nonzero absolute-E entry E10 followed by E11 otherwise extrudes +11 instead of +1; restored logical E gives +1. See [coordinate-frame tests](coordinate-frames-and-extrusion.md). |
-| `Printer::dynamicExtrusionFactor` / `dynamicFeedrateFactor` | Force-adjusted during prime | Set 1.0 | Correct: **discard derived prime response** rather than restoring stale pre-prime pressure |
-| `Printer::interval_mod` (step timing) | Force-derived during prime | **Not explicitly cleared** | **Cleanup gap**: neutralize after queue drain to prevent prime slowdown affecting next XY move |
-| `queuePositionZLayerLast/Current` | Can be contaminated by prime Z=0.352 | Both reset | Keep, and ideally exclude M3912 from layer detection altogether |
-| `queuePositionZLayerGuessNew` | Can hold priming Z move | **Not reset** | Clear at start/end, including on early skip |
-| `g_minZCompensationSteps / g_maxZCompensationSteps` | Should be defaults after fresh G28 Z | Unchanged | **Never restore old learned bounds from snapshot**; printing without homing remains a separate unresolved lifecycle case |
-| `g_nSensiblePressureOffset` and saved `Printer::ZOffset` | Already-applied physical clearance / operator transfer | Must remain | **Do not cache/restore or zero them** merely because M3912 runs |
-| Matrix/slot/temperatures/tool offsets, XYZ position | Normal print setup | Normal print setup | **Leave untouched** (XYZ intentionally ends at prime line) |
-| User `feedrateMultiply` (M220), `Printer::feedrate`, G90/G91, G20/G21, menu flow multiplier | Not modified by M3912 | Unmodified | No need to cache; DMS `dynamicFeedrateFactor` and `interval_mod` are **separate** and should return to neutral. Internal M3912 moves use explicit mm/s. |
+The operator's **chainsaw-under-load analogy** describes the audible effect: while a chainsaw slows under wood load, here the printer **deliberately applies a simulated, gradually increasing brake** when DMS detects high extrusion force. The motors are not necessarily at their power limit. The firmware primarily slows XY/filament throughput to relieve resistance, and additionally reduces extrusion amount. This is the original intended pressure-response mode for `M3912`; it is fundamentally different from changing permanent or dynamic Z clearance.
 
-## Proposed M3912 lifecycle
+Default thresholds are **1500–4500 DMS digits** (overridable by `M3912 S/P`), with speed intensity −90% and extrusion intensity −75%. At high force the target speed factor reaches **0.10** and the E factor **0.25**. The speed factor approaches its target by small 0.01 steps per update; planned E segments use the instantaneous E factor. These are not direct pressure measurements.
 
-**Entry:** drain prior queued moves; verify homed axes and enabled bed compensation. For the normal print sequence `G28 Z → M3001 → M3912`, homing has already reset learned min/max and dynamic SenseOffset. Start a short-lived **explicit priming phase** before the first priming move, and temporarily apply special Digit Flow config. While this phase is active, **prevent SenseOffset from incrementing** regardless of nominal Z, but do not erase already-applied clearance.
+**Never change the user's normal M220 speed override** (`Printer::feedrateMultiply`) or M221 flow multiplier (`Printer::menuExtrusionFactor`). The DMS speed factor is `Printer::dynamicFeedrateFactor`, applied through `Printer::interval_mod` to live XY-primary step timing. The DMS E factor is `Printer::dynamicExtrusionFactor`, applied during E planning.
 
-**During prime:** require pressure-based Digit Flow (less E and slower XY) instead of relying solely on the `currentZ > g_min` heuristic. As currently written, if a previous print left `g_min=0.40 mm` without rehoming, priming at 0.352 mm can incorrectly allow SenseOffset and block Digit Flow. An explicit phase flag can isolate the **pressure-control policy**; it does not automatically repair stale geometric fade bounds for no-homing prints. Exclude M3912-generated moves from the first-model-layer detector; the numeric 0.352 mm exclusion can remain for legacy manual start lines.
+## Deliberate Z=0.352 mm sentinel
 
-**Exit:** wait for or abort remaining priming moves. Restore all four temporary Digit Flow settings and original extruder-coordinate mode through a single cleanup path (normal / play-key skip / print cancel). **Restore the incoming logical E reference**, not the physical filament position; when entry E=0, the existing E0 behavior is unchanged. Neutralize derived speed/extrusion factors **and `interval_mod`**; clear all three layer markers (especially `GuessNew`). Drop any priming-specific SenseOffset pressure averages so real first-layer pressure control begins with fresh samples; then clear the priming phase flag. Do not restore obsolete layer-boundary snapshots or physical Z offsets.
+The unusual **0.352 mm** start height was intentionally chosen above typical first-layer heights and unlikely to match a slicer's first-layer Z. The legacy planner exclusion (±5 Z steps) remains intact for manually generated start lines. A real model layer exactly at that special height is the acknowledged rare collision.
 
-## Additional extrusion and geometry state
+The firmware-generated `M3912` now also uses a temporary `g_startLineActive` flag:
+- During priming, enable DMS feed/E braking **regardless of stale `g_min`** from earlier prints.
+- Suppress **new SenseOffset increments**, while preserving the already applied positive correction and the EEPROM-backed manual Z-offset.
+- Keep priming movement out of the first-model-layer detector, and clear its pressure sample history.
+- After the prime queue has completely finished, clear the flag and permit regular first-layer learning.
 
-The code has two more fractional E-step variables: `Printer::extrudeMultiplyErrorSteps` (planner E-rounding carry) and `Printer::compensatedPositionCollectTinyE` (ECMP extra-step carry). Consider **cache/restore around the completed priming queue** for transparent logical E accounting; unlike a whole E position, these are sub-step remainders and require an ISR-safe policy. It is not yet established that their tiny spillover causes visible defects.
+This additional signal does **not** reset the bed matrix or stale `g_min/g_max` geometry. Starting a second print without Z homing can still leave the old spatial fade thresholds; see [Z homing lifecycle](../z-offset/lifecycle-homing-fix.md).
 
-With `g_min=0.33 mm`, the priming height `0.352 mm` already lies **22 µm inside the matrix-profile fade**, so geometric ECMP can run during prime even though it is not a model layer. An explicit priming mode could instead use full scanned-bed following with model-only ECMP suppressed; decide that separately based on output and motor behavior. See [coordinate-frame and ECMP analysis](coordinate-frames-and-extrusion.md).
+## Cache/restore ledger
 
-## Source-backed issues to test
+| State | Action at entry | Action at exit |
+| --- | --- | --- |
+| `g_nDigitFlowCompensation_Fmin/Fmax` | Save, override with 1500/4500 or S/P | Restore |
+| DMS speed and extrusion intensities | Save, set −90% and −75% | Restore |
+| M82/M83 E-coordinate mode | Save, force absolute | Restore |
+| Logical slicer E coordinate | Save incoming value, use local E0 for prime | Restore incoming E unless print was cancelled |
+| `extrudeMultiplyErrorSteps` | Save planner sub-step E remainder | Restore on normal/skip completion |
+| `compensatedPositionCollectTinyE` | Save ECMP fractional E remainder under interrupt protection | Restore on normal/skip completion |
+| DMS `dynamicFeedrateFactor` and `dynamicExtrusionFactor` | Continuously adapt to DMS force | Reset both to 1.0 |
+| DMS `interval_mod` | Continuously computed from DMS speed | Reset to 0 atomically; no lingering XY brake |
+| `queuePositionZLayerGuessNew/Current/Last` | Clear and exclude prime movement from learning | Clear all three |
+| `g_startLineActive` | Set before first prime move | Clear after queue drain |
+| User `feedrateMultiply`, `menuExtrusionFactor`, `Printer::feedrate` | **Never modified** | Unchanged |
+| `Printer::ZOffset`, existing SenseOffset, matrix, `g_min/g_max`, XY/Z position | **Preserve** | Unchanged by reset logic |
 
-1. **Missing `GuessNew` reset:** M3912 currently resets `Last` and `Current` only. If play skips before first extrusion, the Z travel can leave an unaccepted guess.
-2. **Stale timer modifier:** at exit the code sets `dynamicFeedrateFactor=1` but does not set `interval_mod=0`; the timer uses the latter for XY slowdown until a strain-gauge update recomputes it.
-3. **Play-key skip can queue another Y move** after exiting the segment loop. No new priming travel should be queued following an explicit skip or stop.
-4. **Compile guard inconsistency:** M3912 declares/copies `g_nDigitFlowCompensation_*` even though that configuration can be compiled off while `FEATURE_STARTLINE` remains enabled. Check alternative feature builds.
-5. **Extruder-coordinate semantics:** internal `queueFloatCoordinates()` uses explicit absolute E coordinates regardless of G90/G91 and M82/M83, but M3912 changes the M82/M83 flag and forces logical E0 twice. **The robust transparent-subroutine contract is to save/restore logical E.** This fixes the E10 → M3912 → E11 case while preserving E0 entry behavior. Test existing slicer start codes before implementing.
-6. **Pressure history:** current SenseOffset low-Z exit clears samples only if pressure sum is >0; negative DMS force can leave stale history. Use a priming-specific fresh-history policy rather than relying on that condition.
-7. **No-homing print:** the G28 Z lifecycle reset solves the ordinary start-code sequence. M3912 alone is not necessarily a safe moment to zero positive SenseOffset or redefine faded Z compensation while the nozzle is close to the bed.
-8. **Digit-Z is distinct:** `FEATURE_DIGIT_Z_COMPENSATION` is enabled and can add an instantaneous DMS-dependent Z correction during priming. Suspending SenseOffset alone will **not** disable all pressure-related Z movement. Choose Digit-Z policy separately after hardware evidence.
+**Logical E example:** if the slicer has already reached absolute **E10**, the internal prime can physically push many additional millimetres of filament using its own temporary E0-based coordinates. Afterwards the firmware **restores logical E10**; the next slicer `E11` requests only 1 mm. With conventional entry E0, restoring E0 behaves like the original start code. On cancellation the stop handler's intentional E0 reset is preserved; play-key skip is treated as successful cleanup without extra Y travel.
 
-## Tests before a code patch
+## What the change deliberately does not touch
 
-- Normal `G28 Z → M3001 → M3912` with SenseOffset autostart and high DMS: **Digit Flow adapts**, SenseOffset never increases during prime.
-- First model layers Z0.20 and Z0.40: fresh layer detection, full bed shape and correct fade/ECMP after priming.
-- Skip before first positive extrusion; skip midway; stop/cancel with moves queued: no extra movements, all configs restored, all three markers cleared.
-- Custom M3911 settings before prime: exact restoration, normal speed after prime (no stale `interval_mod`), valid pressure response on subsequent model extrusion.
-- M82/M83 and G90/G91 modes; E-axis **logical entry-coordinate restoration**. Explicitly test absolute E10 → M3912 → E11 (expect +1 E), and entry E0 (expect unchanged behavior).
-- Saved manual Z transfer performed with Mod Menu: remains valid; no rollback of positive RAM correction during priming.
-- Compile with `FEATURE_STARTLINE=1` and `FEATURE_DIGIT_FLOW_COMPENSATION=0` or explicitly reject that combination.
-- Consecutive prints with and without `G28 Z`; a negative-polarity DMS sensor.
+The original DMS-to-feed/E control equation, E intensity and step-based XY speed modulation are unchanged. Bed Z compensation continues to follow the 2D matrix and fade as before; at Z0.352 and baseline g_min0.33 the line is 22 µm into the fade. Geometric ECMP and **instantaneous Digit-Z force correction** remain active as before. They are distinct from accumulated SenseOffset. No additional EEPROM writes, automatic Z-offset transfers or user speed changes were introduced.
 
-**Coordinate system deep dive:** [nominal G-code Z vs machine compensation, E timeline and force-driven controls](coordinate-frames-and-extrusion.md).
+If `FEATURE_STARTLINE` is compiled but `FEATURE_DIGIT_FLOW_COMPENSATION` is disabled, M3912 emits an explicit error instead of invoking unavailable Digit Flow settings or running unbraked priming.
+
+## Tests performed and remaining tests
+
+**Static/source checks passed:** active flag before queued moves and cleared after queue drain, SenseOffset disabled only during generated prime, Digit Flow bypass of stale first-layer gate, numeric 0.352 sentinel preserved, all three layer markers cleared, no user speed/flow assignments, E reference restored, fractional E state preserved, and no extra Y move after skip.
+
+**Arithmetic cases passed:** E10→M3912→E11 requests +1 E; E0→M3912→E1 requests +1 E. At DMS 1500 the speed/E factors are 1.0/1.0, at 3000 the speed **goal**/E factor are 0.55/0.625, and at ≥4500 they are 0.10/0.25. Actual speed ramps toward the goal rather than jumping.
+
+**Required before production:** AVR builds for RF1000, RF2000 and RF2000v2, high-force/low-force real priming, live user M220/M221 overrides, M82/M83 and absolute/nonzero E cases, play-key skip and print cancellation, first model layers at 0.20 and 0.40 mm, and consecutive prints with/without Z homing. Verify the physical speed/force response audibly and via logging without assuming high DMS means insufficient motor torque.
 
 ## Source
 
-[M3912](../../Repetier/RF.cpp#L9103-L9275) · [Digit Flow factor and interval](../../Repetier/RF.cpp#L315-L398) · [SenseOffset](../../Repetier/RF.cpp#L5623-L5780) · [Layer detector](../../Repetier/motion.cpp#L173-L220) · [Timer consumer](../../Repetier/motion.cpp#L1645-L1654) · [Direct coordinate queue](../../Repetier/Printer.cpp#L522-L544).
+[M3912, the DMS controller and SenseOffset](../../Repetier/RF.cpp) · [first-layer planner](../../Repetier/motion.cpp) · [shared priming flag](../../Repetier/RF.h) · [coordinate frames and ECMP](coordinate-frames-and-extrusion.md).

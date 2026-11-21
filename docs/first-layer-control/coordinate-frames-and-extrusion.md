@@ -25,7 +25,7 @@ g_maxZCompensationSteps = g_minZCompensationSteps
 - **`g_max` = the nominal Z at which XY-dependent bed-shape variation has completely faded**. It depends on matrix relief, not a fixed number of model layers.
 - These are **boundaries in the *input* nominal Z frame**, not Z corrections themselves or already-compensated physical positions. Their values are stored in motor **steps**, not mm or raw G-code strings.
 - The default 0.33 mm/10 mm are fallbacks; the first model layer dynamically replaces the lower limit and the formula sets the upper.
-- The current special 0.352 mm exclusion is numeric; a true model layer at that height can be misclassified. A future explicit priming phase would be more reliable.
+- The special 0.352 mm exclusion is **deliberately numeric**: a rarely used layer height, chosen to distinguish start lines from normal first layers. The generated M3912 now also carries an explicit temporary phase flag; a genuine model first layer at 0.352 mm remains the rare collision.
 
 ### Why the model can become physically higher in bed valleys
 
@@ -64,11 +64,11 @@ Suppose the slicer is at absolute `E10`, then calls `M3912`, whose internal prim
 
 | End of M3912 | Next slicer E11 interpreted as | Result |
 | --- | --- | --- |
-| Current implementation: force logical E0 | +11 E units | **Wrong if M3912 was called after E10** |
-| Proposed: restore entry logical E10 | +1 E unit | **Correct** |
+| Old implementation before 5f848c9: force logical E0 | +11 E units | **Wrong if M3912 was called after E10** |
+| Patched M3912: restore entry logical E10 | +1 E unit | **Correct** |
 | Conventional start script: entry E0, next slicer command E1 | +1 E unit | Both reset-to-E0 and restore-entry-E0 produce the correct result |
 
-**Design recommendation:** after the entry queue drain, snapshot the *logical* `destinationMM[E_AXIS]`, use a local zero-based E timeline for priming, then restore the snapshotted logical E **after all priming moves have completed**. This is backward-compatible with the normal E0 case, and handles arbitrary nonzero entry coordinates. Restore the M82/M83 flag as before. Careful atomic handling and step-vs-float precision should be verified before implementing.
+**Implemented in [5f848c9](https://github.com/Nibbels/Repetier-Firmware/commit/5f848c9a5cd0347c6d45fd9d3f13afd7344cb775):** after the queue is drained, M3912 saves the incoming logical E, primes on its own E0 timeline, and restores the logical E value after the generated line finishes (unless print cancellation has taken ownership of E0). It also restores the E mode and fractional step accounting. No AVR build or printer test yet.
 
 In relative E mode, firmware-generated absolute E coordinates remain internal to `queueFloatCoordinates()`; restoring logical E is still harmless and preserves later G-code interpretation. Retracts cause occasional decreases in the logical E timeline, but do not invalidate this model.
 
@@ -85,7 +85,7 @@ In relative E mode, firmware-generated absolute E coordinates remain internal to
 - `Printer::extrudeMultiplyErrorSteps` is the **sub-step remainder** from mapping logical E movement (with menu flow and dynamic DMS flow multipliers) into integer motor steps during queue planning.
 - `Printer::compensatedPositionCollectTinyE` is the **sub-step remainder** from adding geometric ECMP extrusion during step execution.
 
-Both exist across moves and are **not reset or snapshotted by M3912 today**. Although each remainder is small, they are state that can spill from the priming transaction into the first model layer. For a fully isolated internal routine we should **consider saving both fractional remainders at entry and restoring them only after the prime queue has completely drained**, so the model's fractional E accounting resumes where it left off. **This is a design proposal**: review ISR concurrency and whether the first model layer expects fresh ECMP fractional state before implementing.
+Both previously spilled into M3912. The patched code **saves and restores both fractional E-step remainders** after the queue drains, with interrupt protection for the ECMP remainder. Hardware validation remains necessary.
 
 ## ECMP and partial bed fade also run during the current priming line
 
