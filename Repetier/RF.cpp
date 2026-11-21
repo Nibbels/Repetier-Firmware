@@ -5892,13 +5892,13 @@ void handlePauseTime(millis_t uTime) {
                     // we have paused a few moments ago - reduce the current of the extruder motor in order to avoid unwanted heating of the filament for use cases where the printing is paused for several minutes
                     for (uint8_t i = 0; i < NUM_EXTRUDER; i++) {
                         setExtruderCurrent(i, EXTRUDER_CURRENT_PAUSED);
-                        if (!extruder[i].tempControl.paused) { // Temperatur-Senk-Differenz in .tempControl.paused ablegen. maximal -255 °C als Zahl 255. Config aktuell nur über RFx000.h bei PAUSE_COOLDOWN
-                            uint8_t coolDownSetting = constrain(PAUSE_COOLDOWN, 0, 255);
-                            coolDownSetting = ((uint8_t)extruder[i].tempControl.targetTemperatureC > coolDownSetting ? coolDownSetting : (uint8_t)extruder[i].tempControl.targetTemperatureC);
-                            //Zieltemperatur: z.B. 230 - 100 = 130°C Pausetemperatur.
-                            Extruder::setTemperatureForExtruder(extruder[i].tempControl.targetTemperatureC - float(coolDownSetting), i);
-                            extruder[i].tempControl.paused = coolDownSetting; // Merke nach Set-Temp sonst wird .paused genullt.
-                            //laden bei continuePrintLoadTemperatures()
+                        if (!extruder[i].tempControl.paused) {
+                            const float target = extruder[i].tempControl.targetTemperatureC;
+                            const float maxCooldown = constrain(PAUSE_COOLDOWN, 0, 255);
+                            const uint8_t cooldown = static_cast<uint8_t>(constrain(target, 0.0f, maxCooldown));
+                            Extruder::setTemperatureForExtruder(target - cooldown, i);
+                            // Store the drop for resume after the setter clears it.
+                            extruder[i].tempControl.paused = cooldown;
                         }
                     }
                     g_pauseStatus = PAUSE_STATUS_PAUSED_STANDBY;

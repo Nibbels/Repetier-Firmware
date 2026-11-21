@@ -1493,7 +1493,8 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
                 if (forQueue) {
                     move->error[X_AXIS] += queueError;
                     Printer::currentSteps[X_AXIS] += dir;
-                } else {
+                } else if (move->isXMove()) {
+                    // Endstop handling clears the axis flag when it rejects a direct step and stops the axis.
                     move->error[X_AXIS] += directError;
                     g_nContinueSteps[X_AXIS] -= dir;
                     Printer::directCurrentSteps[X_AXIS] += dir;
@@ -1513,7 +1514,7 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
                 if (forQueue) {
                     move->error[Y_AXIS] += queueError;
                     Printer::currentSteps[Y_AXIS] += dir;
-                } else {
+                } else if (move->isYMove()) {
                     move->error[Y_AXIS] += directError;
                     g_nContinueSteps[Y_AXIS] -= dir;
                     Printer::directCurrentSteps[Y_AXIS] += dir;
@@ -1548,7 +1549,7 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
                 if (forQueue) {
                     move->error[Z_AXIS] += queueError;
                     Printer::currentSteps[Z_AXIS] += dir;
-                } else {
+                } else if (move->isZMove()) {
                     move->error[Z_AXIS] += directError;
                     g_nContinueSteps[Z_AXIS] -= dir;
                     Printer::directCurrentSteps[Z_AXIS] += dir;

@@ -791,15 +791,15 @@ public:
     }  // isZMinEndstopHit
 
     static inline bool isXMaxSoftEndstopHit() {
-        return Printer::currentXSteps > Printer::maxSoftEndstopSteps[X_AXIS];
+        return Printer::currentXSteps >= Printer::maxSoftEndstopSteps[X_AXIS];
     }
 
     static inline bool isYMaxSoftEndstopHit() {
-        return Printer::currentYSteps > Printer::maxSoftEndstopSteps[Y_AXIS];
+        return Printer::currentYSteps >= Printer::maxSoftEndstopSteps[Y_AXIS];
     }
 
     static inline bool isZMaxSoftEndstopHit() {
-        return Printer::currentZSteps > Printer::maxSoftEndstopSteps[Z_AXIS];
+        return Printer::currentZSteps >= Printer::maxSoftEndstopSteps[Z_AXIS];
     }
 
     static INLINE bool isXMaxEndstopHit() {
