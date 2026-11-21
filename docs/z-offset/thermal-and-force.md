@@ -37,6 +37,10 @@ The nozzle/hotend is held through DMS strain gauges, but the filament strand, he
 
 A good calibration requires stable heat distribution, minimal side loading and a clean, firm contact interface. `readAveragePressure()` checks short-window repeatability, not a fundamental guarantee of exact zero distance. Repeat readings, temperature logs and carefully managed cable/filament routing are better evidence than assuming every stable digit value means firm contact.
 
+## Operator capitalization of a learned correction
+
+If SenseOffset accumulates significant positive correction and the operator concludes the **persistent manual** Z baseline is miscalibrated (for example after swapping magnetic build plates or slight mechanical movement when removing a print), the firmware has a deliberate Mod Menu Z-up/down procedure to **transfer** this correction into EEPROM-backed `Printer::ZOffset` while approximately maintaining total clearance. This is a manual decision, **not automatic thermal compensation**. Material/temperature-dependent force changes should not automatically become a permanent offset. See [Mod Menu live transfer](history-and-workflows.md).
+
 ## Observational troubleshooting
 
 Record **temperature and elapsed time** alongside the Z ledger: bed/nozzle actual and target temps, time since heating started, last HBS/ZOS temperature profile, tool, scanned matrix slot, menu ZOffset, dynamic SenseOffset, active compensation and measured DMS digits. Distinguish (1) software state jump, (2) continuous thermal drift, and (3) a bad scan that installed a biased matrix.

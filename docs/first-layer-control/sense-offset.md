@@ -25,6 +25,10 @@ This is deliberately **not** a bidirectional PID loop. It is a bounded, positive
 
 Extruder-specific Z offsets and different coordinate origins require care; current source has a TODO about which Z quantity should be used for SenseOffset eligibility.
 
+## Intentional manual persistence of learned clearance
+
+The operator can use alternating Z/bed DOWN and UP buttons in Mod Menu page 2 to transfer the positive SenseOffset adjustment into the saved manual `Printer::ZOffset` in 5 µm increments while approximately maintaining the combined correction. This is explicitly documented in the original 2017 changelog and must survive future fixes. See [live transfer procedure and conditions](../z-offset/history-and-workflows.md).
+
 ## Relevant source
 - [Globals, names and defaults](../../Repetier/RF.cpp#L193-L199)
 - [Strain-gauge reads and controller](../../Repetier/RF.cpp#L5622-L5775)

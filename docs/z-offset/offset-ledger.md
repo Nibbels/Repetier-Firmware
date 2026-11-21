@@ -39,6 +39,10 @@ This describes **the compensation target** rather than absolute physical nozzle 
 
 **Sign:** positive menu Z offset / positive SenseOffset raises nozzle-to-bed clearance by moving the bed away in printing convention. An edit to a matrix shifts the baseline and may change clearance without changing the menu Z-offset.
 
+## Operator's intended live transfer
+
+In the Mod Menu (page 2), **alternating the Z/bed DOWN and UP buttons transfers 5 µm per completed pair from RAM SenseOffset to EEPROM-backed `Printer::ZOffset`** while maintaining approximately the same total correction. This was explicitly documented in the original January 2017 changelog, and is a key workflow for persistent live calibration. See [exact example and edge cases](history-and-workflows.md). Ordinary menu editing and `M3006` behave differently; do not remove this feature during lifecycle fixes.
+
 ## Examples of 'same look, different stored state'
 
 - A +50 µm manual offset plus +30 µm SenseOffset produces a nominal **+80 µm derived static correction**.

@@ -71,11 +71,15 @@ No implicit transaction or rollback makes both stores atomic. **Treat an offset 
 
 [Source: M3902 Z0](../../Repetier/RF.cpp#L8850-L8953) · [save operation](../../Repetier/RF.cpp#L8953-L8965) · [external write](../../Repetier/RF.cpp#L5184-L5284).
 
-### Finding F5 (MEDIUM): Z-minus buttons preferentially consume SenseOffset, unlike menu edit
+### Finding F5 (INTENTIONAL FEATURE, NOT A BUG): repeated Z-up/down transfers transient SenseOffset into saved manual Z-offset
 
-`UIDisplay::zOffsetMinusAction()` deliberately subtracts the button increment from `g_nSensiblePressureOffset` first (if positive), then only decreases persistent menu offset after that has been exhausted. This preserves correct **total** movement for the button, but changing 'Z offset' with different controls may modify different parts of the state ledger. This appears **intentional**, not a bug, but must be documented.
+This behavior is explicitly documented in **RF.01.37.mod (2017-01-25)**: the Mod Menu lets the operator “push SenseOffset to your Z-Offset with the Z-Up and Z-Down Button.”
 
-[Source: plus/minus key behavior](../../Repetier/ui.cpp#L2821-L2878).
+Within Mod Menu page 2, bed DOWN adds +5 µm to **saved** `Printer::ZOffset`; bed UP preferentially consumes 5 µm from **dynamic** `g_nSensiblePressureOffset` rather than reducing saved offset. Therefore a completed pair transfers 5 µm into EEPROM and restores approximately the original total clearance. For example: static 0 / dynamic 200 / total 200 → DOWN static +5 / dynamic 200 / total 205 → UP static +5 / dynamic 195 / total 200. This is an intentional live calibration technique for sheet-thickness differences or small physical shifts, and must be retained.
+
+The invariant is approximate around clamps, zero snapping and concurrently rising SenseOffset. Each persistent increment writes internal EEPROM. The real risk is **changing or resetting either component without preserving this operator-controlled state transfer**, not the asymmetric button mapping itself.
+
+[Detailed workflow, pitfalls and test cases](history-and-workflows.md) · [Button implementation](../../Repetier/ui.cpp#L2821-L2879) · [Button mapping](../../Repetier/ui.cpp#L4100-L4126) · [Original 2017 changelog](../../changelog.txt#L1760-L1768).
 
 ### Finding F6 (MEDIUM): Z-offset scan uses volatile RAM matrix state
 
@@ -88,6 +92,12 @@ The point Z-offset scan (`M3900`) updates the current RAM matrix, not directly `
 `homeZAxis()` uses `setHomed(-1,-1,false)`, `resetDirectAxis(Z)`, a homing sequence and `setZAxisSteps(...)`, but does **not** explicitly clear `queuePositionZLayerCurrent`, `Last`, `GuessNew`, or learned `g_min`/`g_max`. By contrast, `disableZStepper()` resets `Current`/`Last`, omitting `GuessNew` and learned limits. Whether the stepper was disabled *before* homing can therefore change logical layer state while leaving the same apparent Z home position. This may affect a second print's first-layer detection.
 
 [Source: homeZAxis](../../Repetier/Printer.cpp#L1556-L1653) · [setHomed](../../Repetier/Printer.h#L621-L650) · [disableZStepper](../../Repetier/Printer.h#L333-L370) · [setZAxisSteps](../../Repetier/Printer.h#L1028-L1035).
+
+### Finding F8 (DESIGN CONSTRAINT): future lifecycle reset must distinguish durable takeover from disposable correction
+
+Because an operator can intentionally transfer 5 µm increments from the dynamic SenseOffset to EEPROM-backed manual offset **while the machine is printing**, it would be incorrect for a new print lifecycle fix to assume all observed positive clearance is temporary. At the next verified safe print boundary, preserving `Printer::ZOffset` is mandatory; clearing any remaining `g_nSensiblePressureOffset` must be coordinated with live Z motion and bed distance. Do not couple transfer to scan-matrix saves or automatically shift EEPROM offset when force rises.
+
+[Documented live transfer](history-and-workflows.md).
 
 ## What has *not* been established
 
