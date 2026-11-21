@@ -615,6 +615,9 @@ extern unsigned short g_nScanRetryPressureDelta;
 #endif // #if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
 
 extern long g_staticZSteps;
+#if FEATURE_STARTLINE
+extern volatile uint8_t g_startLineActive;
+#endif // FEATURE_STARTLINE
 extern char g_debugLevel;
 extern char g_debugLog;
 extern millis_t g_uStopTime;

@@ -168,6 +168,9 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
     }
 
 #if FEATURE_HEAT_BED_Z_COMPENSATION
+#if FEATURE_STARTLINE
+    if (!g_startLineActive) {
+#endif // FEATURE_STARTLINE
     // MAIN RULE:
     /* IF there is an extrusion move
           after a Z move
@@ -217,6 +220,13 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
         }
         Printer::queuePositionZLayerGuessNew = 0;
     }
+#if FEATURE_STARTLINE
+    } else {
+        // Internal 0.352 mm priming is not a model layer. The height
+        // sentinel remains in the normal path for older manual start lines.
+        Printer::queuePositionZLayerGuessNew = 0;
+    }
+#endif // FEATURE_STARTLINE
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
     // Define variables that are needed for the Bresenham algorithm. Please note that Z is not currently included in the Bresenham algorithm.

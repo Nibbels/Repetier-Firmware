@@ -152,6 +152,10 @@ short g_nScanPressureTolerance = 0;
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
 
 long g_staticZSteps = 0;
+#if FEATURE_STARTLINE
+// Enabled only while firmware-generated M3912 moves are planned/executed.
+volatile uint8_t g_startLineActive = 0;
+#endif // FEATURE_STARTLINE
 char g_debugLevel = 0;
 char g_debugLog = 0;
 millis_t g_uStopTime = 0;
@@ -330,6 +334,12 @@ short readStrainGauge(unsigned char uAddress) //readStrainGauge dauert etwas unt
             nSensibleCompensationSum = (long)g_nDigitZCompensationDigits * 3; //(nSensibleCompensationSum >> 1) + (nSensibleCompensationSum >> 2);--> sign-extension?? //nSensibleCompensationSum*0.75
             nSensibleCompensationChecks -= 1;                                 //*=0.75 bei 4 ist 3
 #if FEATURE_DIGIT_FLOW_COMPENSATION
+            // M3912 feeds high DMS force into a progressive speed/E brake,
+            // irrespective of the previous print's first-layer boundary.
+            bool digitFlowAllowed = Printer::currentSteps[Z_AXIS] > g_minZCompensationSteps;
+#if FEATURE_STARTLINE
+            digitFlowAllowed = digitFlowAllowed || g_startLineActive;
+#endif // FEATURE_STARTLINE
             if (g_nDigitFlowCompensation_intense != 0) {
                 short active_summed_digits = abs(static_cast<short>(g_nDigitZCompensationDigits));
                 /*
@@ -340,12 +350,12 @@ short readStrainGauge(unsigned char uAddress) //readStrainGauge dauert etwas unt
                 if (active_summed_digits <= g_nDigitFlowCompensation_Fmin) {
                     Printer::dynamicExtrusionFactor = 1.0f;
                 } else if (active_summed_digits >= g_nDigitFlowCompensation_Fmax) {
-                    if (Printer::currentSteps[Z_AXIS] > g_minZCompensationSteps)
+                    if (digitFlowAllowed)
                         Printer::dynamicExtrusionFactor = 1.0f + 0.01f * g_nDigitFlowCompensation_intense;
                     else
                         Printer::dynamicExtrusionFactor = 1.0f;
                 } else {
-                    if (Printer::currentSteps[Z_AXIS] > g_minZCompensationSteps)
+                    if (digitFlowAllowed)
                         Printer::dynamicExtrusionFactor = 1.0f + 0.01f * g_nDigitFlowCompensation_intense * (active_summed_digits - g_nDigitFlowCompensation_Fmin) / (g_nDigitFlowCompensation_Fmax - g_nDigitFlowCompensation_Fmin);
                     else
                         Printer::dynamicExtrusionFactor = 1.0f;
@@ -364,10 +374,10 @@ short readStrainGauge(unsigned char uAddress) //readStrainGauge dauert etwas unt
                 if (active_summed_digits <= g_nDigitFlowCompensation_Fmin) {
                     goal = 1.0f;
                 } else if (active_summed_digits >= g_nDigitFlowCompensation_Fmax) {
-                    if (Printer::currentSteps[Z_AXIS] > g_minZCompensationSteps)
+                    if (digitFlowAllowed)
                         goal = 1.0f + 0.01f * g_nDigitFlowCompensation_speed_intense;
                 } else {
-                    if (Printer::currentSteps[Z_AXIS] > g_minZCompensationSteps)
+                    if (digitFlowAllowed)
                         goal = 1.0f + 0.01f * g_nDigitFlowCompensation_speed_intense * (active_summed_digits - g_nDigitFlowCompensation_Fmin) / (g_nDigitFlowCompensation_Fmax - g_nDigitFlowCompensation_Fmin);
                 }
                 Printer::dynamicFeedrateFactor += (goal == Printer::dynamicFeedrateFactor ? 0.0f : (goal > Printer::dynamicFeedrateFactor ? 0.010f : -0.010f));
@@ -5677,7 +5687,12 @@ void handleStrainGaugeFeatures(millis_t uTime) {
 
     // M3909 P0 keeps the already applied offset while compensation is still
     // active, but its old pressure samples must not leak into a new session.
-    if (!g_nSensiblePressureDigits) {
+    if (!g_nSensiblePressureDigits
+#if FEATURE_STARTLINE
+        || g_startLineActive
+#endif // FEATURE_STARTLINE
+    ) {
+        // Priming force belongs to the speed/E brake, not SenseOffset.
         nSensiblePressureSum = 0;
         nSensiblePressureChecks = 0;
         g_nSensibleLastPressure = 0;
@@ -5688,7 +5703,11 @@ void handleStrainGaugeFeatures(millis_t uTime) {
         nSensiblePressureTime = uTime;
         /* brief: This is for correcting too close Z at first layer // Idee Wessix, coded by Nibbels  */
 
-        if (g_nSensiblePressureDigits && Printer::doHeatBedZCompensation) { //activate feature with G-Code.
+        if (g_nSensiblePressureDigits && Printer::doHeatBedZCompensation
+#if FEATURE_STARTLINE
+            && !g_startLineActive
+#endif // FEATURE_STARTLINE
+        ) { //activate feature with G-Code.
             /*
             Still testing: Gesucht ist ein Limit des der Abstands zum Druckbett, also die jeweils richtige Layerbegrenzung::
 
@@ -9103,8 +9122,9 @@ void processSpecialGCode(GCode* pCommand) {
 #if FEATURE_STARTLINE
         case 3912: //M3912 lay down automatic startmade which you can abort (when the hotend is moving) by pressing play
         {
+#if FEATURE_DIGIT_FLOW_COMPENSATION
             Commands::waitUntilEndOfAllMoves(); //feature startline
-            if (Printer::areAxisHomed() && Printer::doHeatBedZCompensation) {
+            if (Printer::areAxisHomed() && Printer::doHeatBedZCompensation && !g_uBlockCommands) {
 
                 Com::printFLN(PSTR("Auto-Startmade"));
                 short min = 1500;
@@ -9116,6 +9136,19 @@ void processSpecialGCode(GCode* pCommand) {
                 short save_g_nDigitFlowCompensation_speed_intense = g_nDigitFlowCompensation_speed_intense;
                 short save_g_nDigitFlowCompensation_intense = g_nDigitFlowCompensation_intense;
                 bool save_relativeExtruderCoordinateMode = Printer::relativeExtruderCoordinateMode;
+                float save_logicalE;
+                float save_extrudeMultiplyErrorSteps;
+                float save_compensatedPositionCollectTinyE;
+                {
+                    InterruptProtectedBlock noInts;
+                    save_logicalE = Printer::destinationMM[E_AXIS];
+                    save_extrudeMultiplyErrorSteps = Printer::extrudeMultiplyErrorSteps;
+                    save_compensatedPositionCollectTinyE = Printer::compensatedPositionCollectTinyE;
+                    Printer::queuePositionZLayerGuessNew = 0;
+                    Printer::queuePositionZLayerCurrent = 0;
+                    Printer::queuePositionZLayerLast = 0;
+                    g_startLineActive = 1;
+                }
 
                 if (pCommand->hasS() && pCommand->hasP()) {
                     min = abs(static_cast<short>(pCommand->S));
@@ -9207,9 +9240,10 @@ void processSpecialGCode(GCode* pCommand) {
 
                 bool skip_by_keys = false;
 
-                Printer::queueFloatCoordinates(x, y, AUTOADJUST_STARTMADEN_AUSSCHLUSS, IGNORE_COORDINATE, RMath::min(Printer::homingFeedrate[X_AXIS], Printer::homingFeedrate[Y_AXIS]));
+                if (!g_uBlockCommands)
+                    Printer::queueFloatCoordinates(x, y, AUTOADJUST_STARTMADEN_AUSSCHLUSS, IGNORE_COORDINATE, RMath::min(Printer::homingFeedrate[X_AXIS], Printer::homingFeedrate[Y_AXIS]));
 
-                for (uint8_t i = 1; i <= Lines; i++) {
+                for (uint8_t i = 1; i <= Lines && !g_uBlockCommands; i++) {
                     float x_0 = x;
                     float y_0 = y;
                     float e_0 = e;
@@ -9224,22 +9258,21 @@ void processSpecialGCode(GCode* pCommand) {
                     }
                     for (float i = 0.0025f; i <= 1.0f; i += 0.0025f) {
                         Commands::checkForPeriodicalActions(Processing);
-                        //split full line into 100 small pieces so that we can adjust flow like speed.
+                        if (g_uBlockCommands)
+                            break; // No further moves after cancellation.
+                        if (Printer::checkPlayKey()) {
+                            BEEP_LONG //start Printing
+                            skip_by_keys = true;
+                            break;
+                        }
+                        // Short segments let the DMS brake respond to nozzle load.
                         Printer::queueFloatCoordinates(x_0 + (x - x_0) * i,
                                                        y_0 + (y - y_0) * i,
                                                        IGNORE_COORDINATE,
                                                        e_0 + (e - e_0) * i, lineFeedrate);
-                        if (Printer::checkPlayKey()) {
-                            BEEP_LONG //start Printing
-                                skip_by_keys
-                                = true;
-                            break;
-                        } else if (g_uBlockCommands) {
-                            break; //mache die funktion abbrechbar.
-                        }
                     }
-                    if (g_uBlockCommands)
-                        break; //mache die funktion abbrechbar.
+                    if (g_uBlockCommands || skip_by_keys)
+                        break; // No extra Y travel after skip/abort.
                     y += 1.5f;
 #if NUM_EXTRUDER > 0
                     //if you use T1 then dont make the start line ontop of the startline of T0
@@ -9250,28 +9283,38 @@ void processSpecialGCode(GCode* pCommand) {
                     if (skip_by_keys)
                         break; //mache die Startmade überspringbar -> weiter zum Druck.
                 }
-                Commands::waitUntilEndOfAllMoves(); //feature startline
-#if FEATURE_DIGIT_FLOW_COMPENSATION
-                    // reset speed adjustment after start line.
-                    // -> after start line we want to travel to the start of print as fast as possible.
+                Commands::waitUntilEndOfAllMoves(); // Prime queue fully drained.
+                // Reset only DMS-specific throttling, not M220 or M221.
                 Printer::dynamicExtrusionFactor = 1.0f;
                 Printer::dynamicFeedrateFactor = 1.0f;
+                Printer::interval_mod = 0;
                 g_nDigitFlowCompensation_Fmin = save_g_nDigitFlowCompensation_Fmin;
                 g_nDigitFlowCompensation_Fmax = save_g_nDigitFlowCompensation_Fmax;
                 g_nDigitFlowCompensation_speed_intense = save_g_nDigitFlowCompensation_speed_intense;
                 g_nDigitFlowCompensation_intense = save_g_nDigitFlowCompensation_intense;
-#endif // FEATURE_DIGIT_FLOW_COMPENSATION
 
-                Printer::setEAxisSteps(0); //G92 E0
-
-                // Fix layer height if first layer is higher than start line
-                Printer::queuePositionZLayerLast = 0;
-                Printer::queuePositionZLayerCurrent = 0;
-
+                {
+                    InterruptProtectedBlock noInts;
+                    if (!g_uBlockCommands) {
+                        // Physical filament stays extruded; restore only the
+                        // slicer's logical E timeline, including its substeps.
+                        Printer::destinationMM[E_AXIS] = save_logicalE;
+                        Printer::destinationMMLast[E_AXIS] = save_logicalE;
+                        Printer::extrudeMultiplyErrorSteps = save_extrudeMultiplyErrorSteps;
+                        Printer::compensatedPositionCollectTinyE = save_compensatedPositionCollectTinyE;
+                    }
+                    Printer::queuePositionZLayerGuessNew = 0;
+                    Printer::queuePositionZLayerCurrent = 0;
+                    Printer::queuePositionZLayerLast = 0;
+                    g_startLineActive = 0;
+                }
                 Printer::relativeExtruderCoordinateMode = save_relativeExtruderCoordinateMode;
             } else {
                 Com::printFLN(PSTR("M3912 error missing homing or zCMP"));
             }
+#else
+            Com::printFLN(PSTR("M3912 requires FEATURE_DIGIT_FLOW_COMPENSATION"));
+#endif // FEATURE_DIGIT_FLOW_COMPENSATION
             break;
         }
 #endif //FEATURE_STARTLINE
