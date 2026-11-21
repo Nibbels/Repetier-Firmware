@@ -2,6 +2,8 @@
 
 **Pending design:** [M3912 state transaction: cache, restore and discard](m3912-state-boundary.md). Not yet implemented.
 
+**Coordinate reference and verified limitations:** [G-code Z, physical Z compensation and E logical timeline](coordinate-frames-and-extrusion.md). Normal speed override and DMS speed control are separate.
+
 ## Intent
 
 The priming line fills/cleans the nozzle before the first **model** layer. Heavy priming can intentionally generate high DMS force. `M3912` temporarily activates Digit Flow Compensation so excessive measured force causes **slower movement and less extrusion**, rather than treating priming as an incorrect first-layer gap.

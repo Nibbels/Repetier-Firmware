@@ -1,5 +1,7 @@
 # Bed-profile following, dynamic fade-out, ECMP and layer tracking
 
+**Coordinate frames and physical geometry:** [how nominal slicer coordinates become the compensated Z surface, why valleys require additional height/material](coordinate-frames-and-extrusion.md).
+
 ## Bed-scan profile vs absolute offset
 
 `recalculateHeatBedZCompensation()` reads the interpolated XY bed matrix and calculates an additional Z motor target. Define `B(x,y)` as matrix correction and `O=g_offsetZCompensationSteps` as the common compensation offset. There are three regions in **nominal Z motor steps**:

@@ -5,6 +5,9 @@ These are source-grounded design documents, complementary to [README.md](../READ
 ## Z-offset, calibration and persistence
 Start at [Z-offset subsystem: engineering map](z-offset/README.md) for the offset ledger, boot/print lifecycle audit, HBS/ZOS, two EEPROM stores, physical thermal drift and source-backed candidate causes of sudden Z shifts. See [Mod Menu live transfer](z-offset/history-and-workflows.md): alternating Z-up/down deliberately converts SenseOffset into the saved manual Z-offset.
 
+## Coordinate geometry and extrusion
+[Nominal G-code vs machine-step Z, fade-out geometry and the logical E timeline](first-layer-control/coordinate-frames-and-extrusion.md), including the case where M3912 is called at nonzero absolute E.
+
 ## First-layer control
 Start with [**System overview and future-chat handover**](first-layer-control/README.md).
 

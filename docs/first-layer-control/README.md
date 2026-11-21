@@ -4,6 +4,8 @@
 
 **Related deep dive:** [Z-offset and compensation subsystem](../z-offset/README.md) — manual+dynamic offsets, matrix storage, boot/print lifecycle, scanning and thermal effects.
 
+**Coordinate interpretation:** [nominal G-code Z → planned steps → bed-corrected motor steps, plus E logical timeline](coordinate-frames-and-extrusion.md). In particular, learned `g_min`/`g_max` are nominal planner Z steps, not physically compensated machine positions.
+
 ## Problem being solved
 
 A heat-bed scan supplies the bed's geometric shape. It cannot fully predict real nozzle-to-bed clearance at printing temperature: thermal expansion, offsets, nozzle differences and mechanical variability change the true gap. A very narrow first-layer gap creates strong extrusion resistance. DMS strain gauges infer **force** associated with extrusion; this is *not* a direct measurement of melt pressure and cannot uniquely distinguish insufficient gap from a clog, wrong temperature, material viscosity or excessive feed.

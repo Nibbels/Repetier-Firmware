@@ -1,5 +1,7 @@
 # Firmware maintenance handover
 
+**Verified coordinate semantics:** [coordinate frames, E timeline and geometric material correction](docs/first-layer-control/coordinate-frames-and-extrusion.md). `g_min/g_max` use nominal planner Z steps after origin transforms, **not** bed-compensated physical position. M3912's current logical E0 reset fails on nonzero entry absolute E; robust state isolation should restore the incoming logical E, while physical extrusion remains already executed. M220/feedrateMultiply and dynamicFeedrateFactor/interval_mod are separate. Instantaneous Digit-Z pressure correction is also distinct from accumulated SenseOffset.
+
 **Pending M3912 design:** [start-line state transaction](docs/first-layer-control/m3912-state-boundary.md) specifies which settings must be restored and which priming state must be discarded. No firmware patch for these specific M3912 changes exists yet.
 
 **Start with [docs/first-layer-control/README.md](docs/first-layer-control/README.md) before editing first-layer, Z compensation, DMS or priming behavior. For the full Z-offset sum, boot/print lifecycle, matrix EEPROM and thermal/scanning risks, read [docs/z-offset/README.md](docs/z-offset/README.md).** The linked documentation explains original intent, actual execution paths, risks and test scenarios.
