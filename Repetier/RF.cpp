@@ -10247,11 +10247,14 @@ void drv8711Init(void) {
 // PWMMODE = 0 (interner Indexer, Standard für Mikroschritt) – Beibehalten.
 #define DRV8711_REGISTER_02 0x2020 // 0010 0000 0010 0000: TOFF = 00100000 (0x20), PWMMODE = 0
 
-// Register 0x03: BLANK (Blanking Time Register)
-// TBLANK wurde auf 0x02 (1.0µs) erhöht, um die Stromabtastung zu verbessern
-// und Instabilität zu vermeiden. – Beibehalten.
-// ABT = 1 (Adaptive Blanking Time aktiviert) – Beibehalten für glatte Stromwellenform.
-#define DRV8711_REGISTER_03 0xB2D7 // 1011 0010 1101 0111: TBLANK = 0010 (0x2), ABT = 1
+// Register 0x03: BLANK (Blanking Time Register) -- intentionally NOT written.
+// drv8711Init() hardware-resets the drivers above, leaving the DRV8711 default:
+// TBLANK = 0x80 (2.56 us), ABT = 0 (adaptive blanking disabled).
+// The previously copied 0xB2D7 has SPI bit 15 set (READ), so the old
+// drv8711Transmit(0xB2D7) never applied the intended blanking settings.
+// Do not silently replace it with a write such as 0x3102 (1.0 us, ABT on):
+// blanking/decay timing can affect motor current, torque and missed steps.
+// Keeping BLANK at its reset default preserves the existing motor behavior.
 
 // Register 0x04: DECAY (Decay Mode Register)
 // TDECAY wurde von 0x14 (10µs) auf 0x04 (2µs) geändert.
@@ -10266,11 +10269,6 @@ void drv8711Init(void) {
 
     drv8711EnableAll();
     drv8711Transmit(DRV8711_REGISTER_02);
-    drv8711DisableAll();
-    HAL::delayMicroseconds(1);
-
-    drv8711EnableAll();
-    drv8711Transmit(DRV8711_REGISTER_03);
     drv8711DisableAll();
     HAL::delayMicroseconds(1);
 
