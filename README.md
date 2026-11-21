@@ -65,6 +65,10 @@ http://www.rf1000.de/viewtopic.php?f=7&t=1610 (rf1000s developement version thre
 http://www.rf1000.de/viewtopic.php?f=7&t=1665 (rf1000s developement version thread to 1.37)  
 https://github.com/Nibbels/Repetier-Firmware/commits/heat_bed_z_offset_scan-%26-heat_bed_decrease (all the commits)
 
+## Engineering and maintainer documentation
+
+Read the [first-layer control documentation](docs/first-layer-control/README.md) for how SenseOffset, M3912 adaptive priming, scanned-bed fade-out, automatic layer detection and E-material compensation interact. Future development chats can start with [AGENTS.md](AGENTS.md) and the [documentation index](docs/README.md).
+
 ## Main Features of this Mod:
 * mhier Z-Offset-Scan
 * Nibbels/Wessix SensiblePressure Adjustment

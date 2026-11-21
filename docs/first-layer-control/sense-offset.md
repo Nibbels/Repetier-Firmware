@@ -1,0 +1,34 @@
+# SenseOffset / SensiblePressure (M3909)
+
+## Why it exists
+
+Wessix proposed, and Nibbels coded, a safeguard for printing very close to the heated bed. If a nozzle-to-bed gap is too small, material must flow radially through a thin opening. This can create substantially more resistance than the nozzle outlet alone. For a 0.4 mm nozzle, the nominal circular outlet is `pi*r^2 ~= 0.126 mm^2` (`r=0.2 mm`). A crude annular side-area comparison `2*pi*r*dz` gives `~0.025 mm^2` at `dz=0.02 mm` and `~0.126 mm^2` at `dz=0.10 mm`. **This is geometrical intuition, not a hydrodynamic law**; real viscous/non-Newtonian resistance depends on gap geometry, flow and temperature. The strain gauges measure force, not direct fluid pressure.
+
+SenseOffset responds to **excessive DMS digits** by increasing nozzle clearance incrementally and never reducing it again just because measured force fell. High readings may also be caused by a clog or temperature/material/feed problems; thus changes must be limited.
+
+## Input, gating and response
+
+- Current `Configuration.h` enables `FEATURE_SENSIBLE_PRESSURE` and sets `SENSIBLE_PRESSURE_INTERVAL=50 ms` and `SENSIBLE_PRESSURE_MAX_OFFSET=180 um` as defaults.
+- `M3909 P<digits> S<max_um>` sets threshold and maximum additional offset; source bounds `S` to **1..300 um**. `M3909 P0` disables control. EEPROM may retain thresholds. `M3001` may queue an auto-enable of SenseOffset if configured.
+- SenseOffset needs active bed Z compensation and an enabled positive force threshold.
+- It can react only when **`Printer::currentSteps[Z_AXIS] <= g_minZCompensationSteps`**. That is a **nominal step-coordinate condition**, not a measurement of actual gap.
+- About every 50 ms the code can gather a reading; first decision after **10 samples**, then it carries half the averaging window forward.
+- It takes the **absolute** average reading. Above the configured limit it increases `g_nSensiblePressureOffset` by at least **1 um** when correction is warranted; larger pressure deviations can increase the increment, with tapering as offset approaches the maximum.
+- The result changes `g_staticZSteps = ((Printer::ZOffset + g_nSensiblePressureOffset) * axisStepsPerMM[Z]) / 1000`.
+- Below the pressure threshold, the additional offset **does not decrease**. It persists when leaving the low-Z region; loss/disable of bed compensation is a separate deactivation/reset path.
+
+This is deliberately **not** a bidirectional PID loop. It is a bounded, positive-only first-layer clearance correction; the cap limits inappropriate reactions to a clogged nozzle or sensor error.
+
+## Coupling to learned layer height
+
+`g_minZCompensationSteps` simultaneously controls (a) where full scanned-bed following ends and (b) where SenseOffset may regulate. Original baseline is **0.33 mm**, so the intentional priming height **0.352 mm** is above that limit and ordinarily excluded. If `g_min` was learned as >0.352 mm by a previous model layer and persists, the next priming line may be eligible for SenseOffset. **That is the lifecycle hazard under investigation.**
+
+Extruder-specific Z offsets and different coordinate origins require care; current source has a TODO about which Z quantity should be used for SenseOffset eligibility.
+
+## Relevant source
+- [Globals, names and defaults](../../Repetier/RF.cpp#L193-L199)
+- [Strain-gauge reads and controller](../../Repetier/RF.cpp#L5622-L5775)
+- [M3909 and EEPROM handling](../../Repetier/RF.cpp#L8975-L9035)
+- [Enable via queue task](../../Repetier/Printer.cpp#L1098-L1109)
+- [Config](../../Repetier/Configuration.h#L87-L100)
+- [Original intention in changelog](../../changelog.txt#L1775-L1784)
