@@ -5623,6 +5623,7 @@ void handleStrainGaugeFeatures(millis_t uTime) {
     static millis_t nSensiblePressureTime = 0;
     static long nSensiblePressureSum = 0;
     static char nSensiblePressureChecks = 0;
+    static short g_nSensibleLastPressure = 0;
     if ((uTime - nSensiblePressureTime) > SENSIBLE_PRESSURE_INTERVAL) //max. jede 50ms
     {
         i_need_strain_value = 1;
@@ -5658,20 +5659,29 @@ void handleStrainGaugeFeatures(millis_t uTime) {
 
     short nPressure;
 #if FEATURE_SENSIBLE_PRESSURE
-    //ohne Z-Kompensation kein SensiblePressure!
-    if (g_nSensiblePressureDigits && !Printer::doHeatBedZCompensation) {
-
+    // When bed compensation is disabled, any remaining live SenseOffset is
+    // safe to discard, including after M3909 P0 disabled its threshold.
+    if (!Printer::doHeatBedZCompensation) {
+        bool wasEnabled = g_nSensiblePressureDigits != 0;
         g_nSensiblePressureDigits = 0;
-        nSensiblePressureSum = 0; //close down counters if function deactivated.
-        nSensiblePressureChecks = 0;
         if (g_nSensiblePressureOffset) {
             Com::printF(PSTR("SensiblePressure(): offset reverted from "), g_nSensiblePressureOffset);
             Com::printFLN(PSTR(" [um] to 0 [um] "));
-            //OFFSET-RESET nur in SAFE-Zustand!! -> Wenn z-Compensation sowieso deaktiviert. oder per G-Code.
+            // Preserve the EEPROM-backed manual offset.
             g_nSensiblePressureOffset = 0;
-            g_staticZSteps = ((Printer::ZOffset + g_nSensiblePressureOffset) * Printer::axisStepsPerMM[Z_AXIS]) / 1000;
+            g_staticZSteps = (Printer::ZOffset * Printer::axisStepsPerMM[Z_AXIS]) / 1000;
         }
-        Com::printFLN(PSTR("SensiblePressure(): now disabled because of no z-CMP. "), g_nSensiblePressureOffset);
+        if (wasEnabled)
+            Com::printFLN(PSTR("SensiblePressure(): now disabled because of no z-CMP. "), g_nSensiblePressureOffset);
+    }
+
+    // M3909 P0 keeps the already applied offset while compensation is still
+    // active, but its old pressure samples must not leak into a new session.
+    if (!g_nSensiblePressureDigits) {
+        nSensiblePressureSum = 0;
+        nSensiblePressureChecks = 0;
+        g_nSensibleLastPressure = 0;
+        g_nSensiblePressure1stMarke = 0;
     }
 
     if ((uTime - nSensiblePressureTime) > SENSIBLE_PRESSURE_INTERVAL) {
@@ -5696,7 +5706,6 @@ void handleStrainGaugeFeatures(millis_t uTime) {
 
                     nPressure = (short)(nSensiblePressureSum / nSensiblePressureChecks);
 
-                    static short g_nSensibleLastPressure = 0;
                     //half interval, remember old values 50% -> gibt etwas value-trägheit in den regler -> aber verursacht doppelte schrittgeschwindigkeit bei 0,5
                     nSensiblePressureSum *= 0.5;
                     nSensiblePressureChecks *= 0.5;
