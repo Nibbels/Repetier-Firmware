@@ -10,7 +10,7 @@
 | **Ordinary Z homing (`homeZAxis`)** | **Preserved** | **Reset to 0 after CMP is disabled**; threshold deactivated | **FIXED:** all 3 markers and learned min/max reset to defaults in print mode | **Preserved** |
 | **Disable Z stepper (`disableZStepper`)** | Preserved | No dedicated reset | Current/last markers reset, but **GuessNew and learned min/max are not** | Preserved |
 | **M3001 enable compensation** | Preserved | Auto-enable from EEPROM threshold possible | Preserved | Valid matrix required |
-| **M3912 adaptive priming** | Preserved | No dedicated reset | Prime deliberately excluded from learning; current/last markers reset afterward, not learned limits | Preserved |
+| **M3912 adaptive priming** | Preserved | Applied correction retained and new SenseOffset increments suspended | Phase flag suspends learning and all three markers are reset. Learned limits stay in effect during priming | Preserved |
 | **First real layer recognized** | Preserved | Potentially increasing, if active and eligible | Newly learned from model first-layer height | Preserved |
 | **Normal printing finishes / stopPrint()** | Preserved | **No unconditional cleanup** | **No unconditional cleanup** | Preserved |
 | **M3000 (compensation disabled)** | Preserved | **FIXED:** remaining SenseOffset cleared regardless of active digits, with pressure history reset | **No boundary reset** | Matrix remains |
@@ -51,7 +51,7 @@ Tests still required on a physical printer: `M3909 P0` during a first layer, sub
 
 **Fixed on [ba93708](https://github.com/Nibbels/Repetier-Firmware/commit/ba93708d41c84fcce16872720b6b954da70ea157) for sequences that home Z.** `homeZAxis()` disables CMP through `setHomed(-1,-1,false)` and waits for compensation to return to zero. Then it resets `queuePositionZLayerGuessNew`, `Current`, `Last`, `g_minZCompensationSteps`, `g_maxZCompensationSteps` and `g_diffZCompensationSteps`, using live Z steps/mm for the default bounds. It clears the transient SenseOffset and active pressure threshold, then reconstructs `g_staticZSteps` from the **preserved EEPROM-backed** `Printer::ZOffset`. The matrix remains untouched. Printing-mode guard also covers combined print/mill firmware.
 
-**Still open:** prints begun without a fresh Z home may retain learned boundaries. `handleStartPrint()` merely infers printing from queue depth; `stopPrint()`/`handleStopPrint()` and `M3912` do not reset learned min/max. Without an intervening `G28 Z`, a former 0.40 mm first layer could make a subsequent 0.352 mm priming line eligible for SenseOffset but ineligible for Digit Flow. Even `M3000` now clears the **dynamic** offset, not the learned bounds. If CMP is never disabled, the dynamic offset may also persist. No automatic reset was added to ambiguous print/SD/host status callbacks.
+Prints begun without a fresh Z home may retain learned fade boundaries during priming. The `M3912` phase flag controls the transition to the DMS brake even with inherited limits. `M3000` clears the dynamic offset. `G28 Z` resets the learned bounds as well.
 
 **Conclusion:** Z home is the implemented safe primary lifecycle boundary. Separate analysis is required for no-homing workflows; do not reset fade limits while a real layer is being printed.
 

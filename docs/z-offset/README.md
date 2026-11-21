@@ -21,7 +21,7 @@ Commanded Z (the print's planned geometric height)
 
 The **nominal Z** is also used to decide the fade region. The source does *not* simply sum all these terms at all heights: below `g_min` it follows the full matrix, above `g_max` it retains the matrix baseline, and there are endstop checks. Tool-specific Z offsets have their own coordinate path; see [offset ledger](offset-ledger.md).
 
-**Critical dual use:** `g_minZCompensationSteps` is both the full-profile fade boundary **and** the SenseOffset eligibility height. It also determines whether high-force priming runs Digit Flow Compensation (`currentZ > g_min`), the opposite of the SenseOffset low-Z gate (`currentZ <= g_min`). A stale `g_min` can change which controller reacts **if no Z home is performed between prints**. `homeZAxis()` now resets these limits on the review branch.
+`g_minZCompensationSteps` is both the full-profile fade boundary and the SenseOffset eligibility height. Ordinary Digit Flow is eligible at `currentZ > g_min`; SenseOffset is eligible at `currentZ <= g_min`. The `M3912` phase flag enables Digit Flow and suspends SenseOffset during generated priming independently of these limits. `homeZAxis()` resets the learned limits.
 
 ## Files to read
 

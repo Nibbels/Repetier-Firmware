@@ -169,64 +169,39 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
 
 #if FEATURE_HEAT_BED_Z_COMPENSATION
 #if FEATURE_STARTLINE
-    if (!g_startLineActive) {
+    if (!g_startLineActive)
 #endif // FEATURE_STARTLINE
-    // MAIN RULE:
-    /* IF there is an extrusion move
-          after a Z move
-          to different layer height than before
-          which is not 0
-       THEN
-          accept the z height value as new layer */
+    {
+        // Remember a Z change until extrusion confirms a layer. Returning
+        // from a Z hop to the current layer cancels the candidate.
+        if (p->isZMove()) {
+            const long newZ = Printer::getDestinationSteps(Z_AXIS);
+            Printer::queuePositionZLayerGuessNew = (newZ == Printer::queuePositionZLayerCurrent) ? 0 : newZ;
+        }
 
-    // The following two move conditions might not follow each other in one move but in serveral queued moves.
-    if (p->isZMove()) {
-        int32_t newZ = Printer::getDestinationSteps(Z_AXIS);
-        // Z achsen aufstieg/abstieg -> The ternary condition is there to filter out zlifts
-        Printer::queuePositionZLayerGuessNew = (newZ == Printer::queuePositionZLayerCurrent) ? 0 : newZ;
-    }
-
-    if (p->isEPositiveMove()) {
-        // We extrude. Do we have a new z layer height too?
-        if (Printer::queuePositionZLayerGuessNew) {
-            // It seems we have a new layer height, so shift layers down
-            // Set current layer as last layer.
-            Printer::queuePositionZLayerLast = Printer::queuePositionZLayerCurrent;
-            // Set new layer as current layer
-            Printer::queuePositionZLayerCurrent = Printer::queuePositionZLayerGuessNew;
-
-            // If the new layer ist underneath the old layer (near the bed)
-            // then this means we can assume the last-layer as 0 after some sort of startline.
-            // We need this info to possibly have senseoffset running again for sequential multipart prints
-            if (Printer::queuePositionZLayerLast > Printer::queuePositionZLayerCurrent) {
-                if (Printer::queuePositionZLayerCurrent < Printer::axisStepsPerMM[Z_AXIS]) { //1mm
-                    Printer::queuePositionZLayerLast = 0;
-                }
+        if (p->isEPositiveMove()) {
+            long layerZ = Printer::queuePositionZLayerGuessNew;
+            if (!layerZ && !Printer::queuePositionZLayerCurrent && p->isXOrYMove()) {
+                // The first printed move can share the Z of the generated prime.
+                layerZ = RMath::max(Printer::getDestinationSteps(Z_AXIS), 0L);
             }
+            Printer::queuePositionZLayerGuessNew = 0;
+            if (layerZ) {
+                Printer::queuePositionZLayerLast = Printer::queuePositionZLayerCurrent;
+                Printer::queuePositionZLayerCurrent = layerZ;
+                if (layerZ < Printer::axisStepsPerMM[Z_AXIS]) {
+                    // A descent near the bed can begin a new object after a manual start line or a previous object.
+                    if (Printer::queuePositionZLayerLast > layerZ)
+                        Printer::queuePositionZLayerLast = 0;
 
-            // Problemfall Startmade: Wenn die Startmade aus etwas weniger als 16 od. MOVE_CACHE_SIZE Teilstücken besteht,
-            // was man annehmen kann, dann springt der Pfadplaner über die Startmade einfach drüber und nimmt den ersten Layer als neue Referenz.
-            // Das hier ist Preprocessing mit Blick in die Zukunft. Kurz steht in g_minZCompensationSteps z.B. 0.35, anschließend aber z.B. korrekte 0.2mm als g_minZCompensationSteps.
-            // würde das nicht klappen, hätten wir SenseOffset in der Startmade was maximal schlecht sein kann, weil evtl. die Digits zu hoch sind.
-            //-> Sollte mit dieser Automatik hier nicht vorkommen!
-            if (!Printer::queuePositionZLayerLast && Printer::queuePositionZLayerCurrent < Printer::axisStepsPerMM[Z_AXIS]) {
-                // < 1mm
-                //hiermit hätten wir immer exakt 1 Lage, die der Drucker komplett mit dem Bettprofil abfährt, anschließend ab Layer 2 wird ausgeschlichen +ECMP.
-                if (abs(Printer::queuePositionZLayerCurrent - Printer::axisStepsPerMM[Z_AXIS] * AUTOADJUST_STARTMADEN_AUSSCHLUSS) > 5 /* 2um um startmadenhöhe herum nichts tun */) {
-                    g_minZCompensationSteps = Printer::queuePositionZLayerCurrent;
-                    g_maxZCompensationSteps = g_minZCompensationSteps + (g_offsetZCompensationSteps - g_ZCompensationMax) * 20; //max zulässige kompensation pro lage: 1/20 = 5%
+                    if (!Printer::queuePositionZLayerLast) {
+                        g_minZCompensationSteps = layerZ;
+                        g_maxZCompensationSteps = layerZ + (g_offsetZCompensationSteps - g_ZCompensationMax) * 20;
+                    }
                 }
             }
         }
-        Printer::queuePositionZLayerGuessNew = 0;
     }
-#if FEATURE_STARTLINE
-    } else {
-        // Internal 0.352 mm priming is not a model layer. The height
-        // sentinel remains in the normal path for older manual start lines.
-        Printer::queuePositionZLayerGuessNew = 0;
-    }
-#endif // FEATURE_STARTLINE
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
     // Define variables that are needed for the Bresenham algorithm. Please note that Z is not currently included in the Bresenham algorithm.

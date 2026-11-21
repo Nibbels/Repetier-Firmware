@@ -161,6 +161,8 @@ Wird aus irgendeinem Grund die Z-Kompensation ausgeschaltet wird SenseOffset ebe
 Abschließend, sobald das Druckobjekt ausgegeben wird, wird M3909 inaktiv und vollständig deaktiviert.
 Ohne Z-Kompensation kann SenseOffset nicht aktiviert werden, es wird sofort deaktiviert.
 
+Bei einer manuell programmierten Startmade SenseOffset-AutoStart ausschalten und `M3909 P…` nach der letzten Bewegung der Startmade einfügen. [Reihenfolge im Startcode](docs/first-layer-control/automatic-start-line.md#manual-start-lines)
+
 Während des Drucks kann man während des ersten Layers diese Funktion aktivieren oder das Limit ändern, indem man die "links"- und "rechts"-Navigationstasten an Bedienfeld des Druckers nutzt, solange man sich im "Mod-Menü" des Druckers befindet. (Seite 2 auf dem Display des Druckers. Seite 2 kann über die Pfeil nach unten Taste vom Hauptbildschirm aus aufgerufen werden).  
 
 ## Filament Viskositätsmessung = SensibleViscosity  

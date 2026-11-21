@@ -11,7 +11,7 @@ These two changes preserve the Mod Menu transfer: any portion of SenseOffset del
 
 ## What is NOT fixed
 
-- A second print started without `G28 Z` or full `G28` can inherit old learned `g_min`/`g_max`. `M3000` clears SenseOffset but not layer bounds; `M3912` only clears some markers **after** priming. Resetting min/max during an already-active print or only after M3912 would be risky. A future explicit new-print boundary may be needed.
+- A second print started without `G28 Z` or full `G28` can inherit old learned `g_min`/`g_max` during priming. `M3000` clears SenseOffset. `M3912` clears all layer markers and uses its phase flag to select the DMS brake, with fade geometry inherited until the next layer is learned.
 - X-only/Y-only homing must not reset Z state.
 - `M3902 Z0` moves a manual offset into RAM matrix with separate EEPROM persistence; not addressed.
 - `stopPrint()` and SD/host print flags are not reliable new-print boundaries.
@@ -29,4 +29,4 @@ These two changes preserve the Mod Menu transfer: any portion of SenseOffset del
 | Print A, Print B **without** Z home or CMP disable | **Still an open state-leak scenario** |
 | Build with milling enabled | Z home in printing mode resets first-layer state; milling mode does not alter it |
 
-Review Z-compensation current/target motor steps before attempting physical tests; do not remove a positive clearance correction while CMP is active near the bed. AVR compilation and actual printer operation have **not** been validated.
+Review Z-compensation current and target motor steps before physical tests. Keep positive clearance corrections applied while CMP is active near the bed. Physical printer testing is pending.

@@ -16,16 +16,16 @@ A heat-bed scan supplies the bed's geometric shape. It cannot fully predict real
 | --- | --- | --- | --- |
 | [**SenseOffset**](sense-offset.md), `M3909` | DMS force above limit | Incrementally adds a **positive Z clearance offset**, with a maximum; never drives closer in response to low pressure | Eligible near-bed first-layer Z only, with heat-bed compensation on |
 | [**Bed-profile fade / ECMP**](z-compensation-and-ecmp.md) | Scanned XY matrix, detected layer height | Follow measured bed shape on first layer; gradually fade the variable correction to a common offset; compensate E material for layer-thickness changes | First layer through fade-out height |
-| [**Adaptive M3912 start line**](automatic-start-line.md) | DMS force during priming | Temporarily reduces **travel speed and E extrusion**, not just one or the other | Special Z=0.352 mm priming line before the actual model |
+| [**Adaptive M3912 start line**](automatic-start-line.md) | DMS force during priming | Temporarily reduces **travel speed and E extrusion** | Priming at nominal Z=0.35 mm |
 
 Optional `FEATURE_DIGIT_Z_COMPENSATION` adds another force-dependent Z adjustment; emergency stop/pause is separate again.
 
 ### Intended print sequence
 
-1. Home, load scanned bed data, enable Z compensation via `M3001`. SenseOffset may auto-start as an independently queued task based on EEPROM preference.
-2. `M3912` primes at Z=0.352 mm, using short queued line segments so force can influence subsequent extrusion and speed. The priming line **still follows the scanned bed**.
-3. Prime is deliberately **not** the first real printed layer. High priming force should slow/reduce extrusion, not activate SenseOffset's height correction.
-4. When positive extrusion follows a real Z change, the shared planner identifies the model's first layer. Its height becomes `g_minZCompensationSteps`; `g_maxZCompensationSteps` sets the fade-out span.
+1. Home, then enable scanned-bed compensation with `M3001`.
+2. `M3912` primes at nominal Z=0.35 mm using short segments. The prime follows the scanned bed and uses the DMS speed and E brake. The active priming flag suspends layer learning and SenseOffset.
+3. Enable SenseOffset with `M3909` after the start line. For a manual line, keep SenseOffset AutoStart off so `M3001` only enables bed compensation.
+4. The planner learns the first model layer when positive extrusion confirms a new Z or when the first XY extrusion begins at the current Z. The layer height sets `g_minZCompensationSteps`. `g_maxZCompensationSteps` sets the fade-out span.
 5. Full scanned-bed tracking and the bounded SenseOffset controller operate near that real layer. Higher up, bed-profile variation fades away while corresponding E-material correction helps maintain suitable deposited volume.
 
 ### Important units/state
@@ -43,8 +43,8 @@ Optional `FEATURE_DIGIT_Z_COMPENSATION` adds another force-dependent Z adjustmen
 
 Positions named *Steps* are motor steps, SenseOffset and manual Z offsets are in **um**, DMS forces in **digits**.
 
-### Current research question
+### Priming and consecutive prints
 
-The unusual Z=0.352 mm is a **deliberate near-unique priming sentinel**, now supported by an explicit `M3912` phase flag for its generated moves. **During prime, high DMS force applies the speed/E brake, not accumulated SenseOffset**. Z homing clears old learned geometry; without homing, stale `g_min/g_max` may still affect the fade although the M3912 pressure policy is now isolated. A real first layer at exactly 0.352 mm remains the rare collision. [M3912 implementation](m3912-state-boundary.md).
+`M3912` identifies the generated prime through its phase flag. The ordinary layer detector can learn a model layer at 0.352 mm or at the priming height of 0.35 mm. Z homing resets the learned geometry. If it is skipped, the previous print's `g_min/g_max` can still affect the bed-profile fade during priming. [M3912 implementation](m3912-state-boundary.md)
 
 Continue with [SenseOffset](sense-offset.md), [fade-out / ECMP](z-compensation-and-ecmp.md), [M3912](automatic-start-line.md), [test scenarios](test-scenarios.md), [history](history.md).

@@ -9,8 +9,8 @@ This is **analysis, not confirmation from a physical printer**.
 ## Invariants
 
 - The RF1000/RF2000/RF2000v2 share first-layer and DMS logic. Keep general fixes general.
-- Prime at 0.352 mm must follow bed scan but **not** count as first model layer. Strong prime force should activate feed/material reduction, **not** SenseOffset lift.
-- True model first layer, whichever positive height, should determine learned full-bed-following limit. SenseOffset may then increase gap within its max.
+- Generated priming at nominal Z=0.35 mm uses scanned-bed compensation, suspends layer learning and SenseOffset, and responds to force with the DMS speed and E brake.
+- The first model layer below 1 mm determines the learned full-bed-following limit when detected. SenseOffset can then increase clearance up to its cap.
 - Fade-out and **ECMP E steps** must remain consistent and not exhibit discontinuities.
 - SenseOffset can only increase its bounded offset; lowering force must not drive nozzle closer.
 - Distinguish *planner-ahead* layer updates from *currently executed Z*.
@@ -24,7 +24,7 @@ This is **analysis, not confirmation from a physical printer**.
 
 **H3: wrong fix scope/time.** [r3dacto fork patch](https://github.com/r3dacto/Repetier-FirmwareCodex/commit/d59ca5e53c1351c47a9ab67606806968c82f976e) clears `GuessNew` then resets fade bounds after M3912 **only on RF2000v2**. That would occur *after* a potentially wrong prime-force response. We found no special RF2000v2 dependency in shared layer logic.
 
-**H4: numerical sentinel.** A real first model layer at 0.352 mm (±5 steps) could be incorrectly excluded from dynamic boundary learning. Likewise, manual start lines at another height are not semantically tagged.
+**H4: manual start-line ordering.** Keep SenseOffset disabled until after the manual prime. With a manual line above the model's first layer, the descent lets the planner relearn the limit. A line below the model's first layer can be learned as the first layer.
 
 **H5: geometry and mode.** Sequential objects, prints without M3912, changing tools, manual offsets and printer-specific Z origins may challenge the present height checks. The `g_max` dynamic formula assumes a valid positive fade span; validate sign/zero handling and ECMP denominators.
 
@@ -33,10 +33,12 @@ This is **analysis, not confirmation from a physical printer**.
 | Scenario | Verify |
 | --- | --- |
 | Fresh home + M3001 + M3912 + model Z0.20 | Pressure controls prime feed/E only; real first layer learned at 0.20; SenseOffset available there |
-| Same with model Z0.40 | 0.352 mm prime excluded, then valid 0.40 mm first-layer boundary |
+| Same with model Z0.40 | Generated prime bypasses layer learning. The model learns the 0.40 mm boundary |
 | Print A Z0.40 → **G28 Z** → Print B Z0.20 | Fresh geometric bounds and force-braked prime; model layer correctly relearned |
 | Print A Z0.40 → Print B Z0.20 **without** Z homing | Prime DMS policy correct, but old g_min/g_max geometry may remain |
-| Genuine model first layer Z0.352 | Known rare sentinel collision: it remains excluded by legacy numerical logic |
+| Genuine model first layer Z0.352 and neighbouring Z steps | Normal first-layer learning across the former exclusion window |
+| Model first layer Z0.35 immediately after M3912 | Without a Z step, the first XY extrusion sets the 0.35 mm boundary |
+| Manual prime above the first layer, with AutoStart off and `M3909` after priming | SenseOffset activates after the prime. Descending to the first layer establishes its boundary |
 | Play-key skip in M3912 | No extra Y move; E timeline, Digit Flow policy and layer markers restored/cleared |
 | Print cancellation during M3912 | Stop further prime moves; reset phase and pressure policy; preserve stop-handler E0 |
 | M3909 P0 and M3000 | Correct controller deactivation and offset behavior |

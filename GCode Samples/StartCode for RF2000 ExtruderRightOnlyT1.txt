@@ -52,11 +52,11 @@ G28 ; home all axes
 ; Activate Z-Compensation
 ;--------------------------------------
 M3001 ; activate Z-Compensation 
-M3909 P5000 ; activate "SensiblePressure": Autocompensate thermal expansion if digits go higher than 5000.
 
 ; Altes Filament und Luft in Düse ausstoßen
 ;--------------------------------------
 M3912 I2
+M3909 P5000 ; Enable SenseOffset after the start line. Compensate thermal expansion above 5000 digits.
 
 ;--------------------------------------
 ; Start Code T1-only header end

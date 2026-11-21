@@ -761,9 +761,6 @@ For more informations, read the wiki. */
 
 #if FEATURE_HEAT_BED_Z_COMPENSATION
 
-/** \brief Specifies if you want to adjust minimal and maximum compensation steps to first layer */
-#define AUTOADJUST_STARTMADEN_AUSSCHLUSS 0.352f
-
 /** \brief Specifies until which height the z compensation must complete */
 #define HEAT_BED_Z_COMPENSATION_MAX_MM 10 // [mm]
 

@@ -13,7 +13,7 @@ The source intentionally avoids including extruder-specific Z displacement in th
 
 ## What `g_min` and `g_max` really mean
 
-`motion.cpp::PrintLine::prepareQueueMove()` accepts a prospective first layer after a Z move followed by **positive physical E steps** in the queue. It records `Printer::queuePositionZLayerCurrent`, then:
+`PrintLine::prepareQueueMove()` accepts a prospective layer when positive extrusion follows a Z move. With no tracked layer, an XY extrusion move can also establish the first layer at the current nominal Z. The planner records `Printer::queuePositionZLayerCurrent` and computes the following boundaries.
 
 ```cpp
 g_minZCompensationSteps = Printer::queuePositionZLayerCurrent;
@@ -25,7 +25,7 @@ g_maxZCompensationSteps = g_minZCompensationSteps
 - **`g_max` = the nominal Z at which XY-dependent bed-shape variation has completely faded**. It depends on matrix relief, not a fixed number of model layers.
 - These are **boundaries in the *input* nominal Z frame**, not Z corrections themselves or already-compensated physical positions. Their values are stored in motor **steps**, not mm or raw G-code strings.
 - The default 0.33 mm/10 mm are fallbacks; the first model layer dynamically replaces the lower limit and the formula sets the upper.
-- The special 0.352 mm exclusion is **deliberately numeric**: a rarely used layer height, chosen to distinguish start lines from normal first layers. The generated M3912 now also carries an explicit temporary phase flag; a genuine model first layer at 0.352 mm remains the rare collision.
+- The `M3912` phase flag suspends learning while generated prime moves are queued. The model can establish a first layer at the same height as the prime.
 
 ### Why the model can become physically higher in bed valleys
 
@@ -68,7 +68,7 @@ Suppose the slicer is at absolute `E10`, then calls `M3912`, whose internal prim
 | Patched M3912: restore entry logical E10 | +1 E unit | **Correct** |
 | Conventional start script: entry E0, next slicer command E1 | +1 E unit | Both reset-to-E0 and restore-entry-E0 produce the correct result |
 
-**Implemented in [5f848c9](https://github.com/Nibbels/Repetier-Firmware/commit/5f848c9a5cd0347c6d45fd9d3f13afd7344cb775):** after the queue is drained, M3912 saves the incoming logical E, primes on its own E0 timeline, and restores the logical E value after the generated line finishes (unless print cancellation has taken ownership of E0). It also restores the E mode and fractional step accounting. No AVR build or printer test yet.
+At entry, M3912 drains the queue, saves the incoming logical E and primes on its own E0 timeline. After the line it restores logical E, E mode and fractional step accounting. Print cancellation retains the stop handler's E0. [Implementation in 5f848c9](https://github.com/Nibbels/Repetier-Firmware/commit/5f848c9a5cd0347c6d45fd9d3f13afd7344cb775)
 
 In relative E mode, firmware-generated absolute E coordinates remain internal to `queueFloatCoordinates()`; restoring logical E is still harmless and preserves later G-code interpretation. Retracts cause occasional decreases in the logical E timeline, but do not invalidate this model.
 
@@ -89,9 +89,9 @@ Both previously spilled into M3912. The patched code **saves and restores both f
 
 ## ECMP and partial bed fade also run during the current priming line
 
-At a normal freshly homed default `g_min=0.33 mm`, M3912 prints at `0.352 mm`. That is **22 µm into the fade region**, not strictly inside the full-bed-following region. Since `recalculateHeatBedZCompensation()` has no semantic 'priming' exception, it can apply a small amount of shape fade and compute geometric E compensation for priming. The stepper may add ECMP material even though those extruded lines are not part of the model.
+At the freshly homed default `g_min=0.33 mm`, M3912 primes at nominal Z=0.35 mm, about **20 µm into the fade region**. `recalculateHeatBedZCompensation()` can apply that small fade and compute geometric E compensation during priming.
 
-With the dynamic fade span determined from `(O-minB)*20`, the shape loss at the special priming height is generally very small, but **ECMP may still follow the corresponding fade slope**. Whether future M3912 should force full bed-shape following and suppress geometric model-only ECMP during priming deserves an explicit test. Do not disable ECMP globally: only isolate it for semantically tagged prime moves if the physical output warrants it.
+With the dynamic fade span determined from `(O-minB)*20`, the shape loss at the priming height is generally small. ECMP may still follow the corresponding fade slope. A physical test can quantify its effect on deposited material during priming.
 
 [Source: ECMP percent during fade](../../Repetier/RF.cpp#L3199-L3254) · [additional E-step accumulation](../../Repetier/motion.cpp#L1468-L1492) · [fractional E rounding](../../Repetier/motion.cpp#L125-L136).
 

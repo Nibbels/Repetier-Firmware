@@ -22,15 +22,15 @@ Additionally applied: `g_staticZSteps`, optional force-dependent Digit-Z correct
 
 ## Why g_min and g_max are dynamic
 
-All three models currently declare the same nominal fallback settings: `MIN_MM=0.33`, `MAX_MM=10`, special priming exclusion `AUTOADJUST_STARTMADEN_AUSSCHLUSS=0.352`.
+All three models use nominal fallback settings of 0.33 mm and 10 mm for the start and end of the fade.
 
 `PrintLine::prepareQueueMove()` detects a prospective layer:
 1. A Z change sets `queuePositionZLayerGuessNew`.
 2. A subsequent positive E move accepts it into `queuePositionZLayerCurrent` and moves the previous current to `Last`.
 3. When a new layer is below the old one and within the first millimetre, `Last` may reset to zero (including sequential prints).
 4. When `Last==0` and the candidate is <1 mm, the firmware can make `g_min` equal the **real first layer height**.
-5. It excludes Z values within **5 steps** of `0.352 mm` so priming does not set those boundaries.
-6. `GuessNew` is cleared after positive extrusion.
+5. With no tracked layer or Z candidate, an XY move with positive extrusion can establish a layer at the current positive Z. This covers a model that starts at the height of its `M3912` prime.
+6. The planner clears `GuessNew` after processing positive extrusion.
 
 The dynamic fade limit is:
 
@@ -53,14 +53,14 @@ Following an uneven first-layer surface then gradually printing flat upper layer
 
 ## Interaction with M3912 and lifecycle
 
-The priming line at Z=0.352 mm can pass through the layer detector, but that exact height is excluded from **dynamic boundary learning**. `M3912` subsequently clears `queuePositionZLayerCurrent` and `Last`; it does **not** itself reset `GuessNew` or restore `g_min`/`g_max`. **Z homing now clears all three layer markers and restores min/max after disabling CMP.** Z-stepper disable alone still clears only `Current`/`Last`.
+`M3912` clears all three layer markers at entry and exit. Its phase flag bypasses the layer detector while queuing generated priming moves. Z homing also restores the default `g_min/g_max` after disabling bed compensation. Disabling the Z stepper clears `Current` and `Last`.
 
 An untested fork's RF2000v2-only reset-after-M3912 is not backed by model-specific differences in this shared algorithm. The *when* of resetting boundaries (particularly **before** priming) matters more than the model name.
 
 ## Source
-- [Layer detector and dynamic boundaries](../../Repetier/motion.cpp#L173-L219)
+- [Layer detector and dynamic boundaries](../../Repetier/motion.cpp#L170-L203)
 - [Fade interpolation, material correction, offsets](../../Repetier/RF.cpp#L3192-L3302)
 - [Stepper E compensation](../../Repetier/motion.cpp#L1385-L1500)
-- [M3912 reset](../../Repetier/RF.cpp#L9245-L9253)
+- [M3912 reset](../../Repetier/RF.cpp#L9288-L9313)
 - [Z-stepper reset](../../Repetier/Printer.h#L355-L371)
 - [Same three machine configurations](../../Repetier/RF1000.h#L762-L773) · [RF2000](../../Repetier/RF2000.h#L769-L780) · [RF2000v2](../../Repetier/RF2000v2.h#L769-L780)

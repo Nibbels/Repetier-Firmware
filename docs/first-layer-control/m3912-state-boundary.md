@@ -1,6 +1,6 @@
 # M3912: implemented pressure-braked priming transaction
 
-> **Status:** [Firmware patch 5f848c9](https://github.com/Nibbels/Repetier-Firmware/commit/5f848c9a5cd0347c6d45fd9d3f13afd7344cb775) and [atomic timer cleanup b793cd8](https://github.com/Nibbels/Repetier-Firmware/commit/b793cd8203e7ed71154728412a03d4e9f4d7fb67) on `ai-firmware-review`; source and arithmetic checks passed. **An AVR build and a physical printer test have not been performed.**
+The [priming state fix](https://github.com/Nibbels/Repetier-Firmware/commit/5f848c9a5cd0347c6d45fd9d3f13afd7344cb775) and [atomic timer cleanup](https://github.com/Nibbels/Repetier-Firmware/commit/b793cd8203e7ed71154728412a03d4e9f4d7fb67) are on `ai-firmware-review`. AVR builds and planner checks passed with the height exclusion removed. Physical printer testing is pending.
 
 ## Intent: DMS-controlled braking, not insufficient motor power
 
@@ -10,17 +10,17 @@ Default thresholds are **1500–4500 DMS digits** (overridable by `M3912 S/P`), 
 
 **Never change the user's normal M220 speed override** (`Printer::feedrateMultiply`) or M221 flow multiplier (`Printer::menuExtrusionFactor`). The DMS speed factor is `Printer::dynamicFeedrateFactor`, applied through `Printer::interval_mod` to live XY-primary step timing. The DMS E factor is `Printer::dynamicExtrusionFactor`, applied during E planning.
 
-## Deliberate Z=0.352 mm sentinel
+## Generated priming phase
 
-The unusual **0.352 mm** start height was intentionally chosen above typical first-layer heights and unlikely to match a slicer's first-layer Z. The legacy planner exclusion (±5 Z steps) remains intact for manually generated start lines. A real model layer exactly at that special height is the acknowledged rare collision.
-
-The firmware-generated `M3912` now also uses a temporary `g_startLineActive` flag:
+`M3912` primes at nominal Z=0.35 mm. The temporary `g_startLineActive` flag sets the policy for generated priming.
 - During priming, enable DMS feed/E braking **regardless of stale `g_min`** from earlier prints.
 - Suppress **new SenseOffset increments**, while preserving the already applied positive correction and the EEPROM-backed manual Z-offset.
 - Keep priming movement out of the first-model-layer detector, and clear its pressure sample history.
 - After the prime queue has completely finished, clear the flag and permit regular first-layer learning.
 
-This additional signal does **not** reset the bed matrix or stale `g_min/g_max` geometry. Starting a second print without Z homing can still leave the old spatial fade thresholds; see [Z homing lifecycle](../z-offset/lifecycle-homing-fix.md).
+The first XY extrusion can establish the model layer at Z=0.35 mm without an intervening Z move. A layer at the former 0.352 mm exclusion height is also eligible. Manual lines use [explicit SenseOffset activation after priming](automatic-start-line.md#manual-start-lines).
+
+The previous print's spatial fade thresholds can still affect the generated prime when Z homing is skipped. [Z homing lifecycle](../z-offset/lifecycle-homing-fix.md)
 
 ## Cache/restore ledger
 
@@ -41,19 +41,21 @@ This additional signal does **not** reset the bed matrix or stale `g_min/g_max` 
 
 **Logical E example:** if the slicer has already reached absolute **E10**, the internal prime can physically push many additional millimetres of filament using its own temporary E0-based coordinates. Afterwards the firmware **restores logical E10**; the next slicer `E11` requests only 1 mm. With conventional entry E0, restoring E0 behaves like the original start code. On cancellation the stop handler's intentional E0 reset is preserved; play-key skip is treated as successful cleanup without extra Y travel.
 
-## What the change deliberately does not touch
+## Bed compensation and Digit-Z
 
-The original DMS-to-feed/E control equation, E intensity and step-based XY speed modulation are unchanged. Bed Z compensation continues to follow the 2D matrix and fade as before; at Z0.352 and baseline g_min0.33 the line is 22 µm into the fade. Geometric ECMP and **instantaneous Digit-Z force correction** remain active as before. They are distinct from accumulated SenseOffset. No additional EEPROM writes, automatic Z-offset transfers or user speed changes were introduced.
+Bed compensation uses the scanned matrix. The nominal 0.35 mm prime is about 20 µm into the fade at the default `g_min` of 0.33 mm. Geometric ECMP and instantaneous Digit-Z force correction can both apply during priming.
 
 If `FEATURE_STARTLINE` is compiled but `FEATURE_DIGIT_FLOW_COMPENSATION` is disabled, M3912 emits an explicit error instead of invoking unavailable Digit Flow settings or running unbraked priming.
 
 ## Tests performed and remaining tests
 
-**Static/source checks passed:** active flag before queued moves and cleared after queue drain, SenseOffset disabled only during generated prime, Digit Flow bypass of stale first-layer gate, numeric 0.352 sentinel preserved, all three layer markers cleared, no user speed/flow assignments, E reference restored, fractional E state preserved, and no extra Y move after skip.
+**AVR builds passed** for RF1000, RF2000 and RF2000v2 with Arduino AVR core 1.8.6 and avr-gcc 7.3.0. The RF2000v2 build bypassed its existing acknowledgement `#error` in a temporary copy. RF1000 also built with `FEATURE_STARTLINE` and `FEATURE_DIGIT_FLOW_COMPENSATION` turned off in separate builds.
+
+**Planner checks passed** for generated priming with a stale limit, a model starting at the same Z as the prime after an E-only unretract, real layers across the former 0.352 mm exclusion window, a descent from a manual line, and a Z hop back to the current layer. Both bundled start-code samples place `M3909` after `M3912`.
 
 **Arithmetic cases passed:** E10→M3912→E11 requests +1 E; E0→M3912→E1 requests +1 E. At DMS 1500 the speed/E factors are 1.0/1.0, at 3000 the speed **goal**/E factor are 0.55/0.625, and at ≥4500 they are 0.10/0.25. Actual speed ramps toward the goal rather than jumping.
 
-**Required before production:** AVR builds for RF1000, RF2000 and RF2000v2, high-force/low-force real priming, live user M220/M221 overrides, M82/M83 and absolute/nonzero E cases, play-key skip and print cancellation, first model layers at 0.20 and 0.40 mm, and consecutive prints with/without Z homing. Verify the physical speed/force response audibly and via logging without assuming high DMS means insufficient motor torque.
+**Physical tests pending.** Check high- and low-force priming, live M220/M221 overrides, M82/M83 and nonzero absolute E, play-key skip and print cancellation, first model layers at 0.20, 0.35, 0.352 and 0.40 mm, and consecutive prints with and without Z homing. Use the motor sound and DMS logs to check the physical brake response.
 
 ## Source
 

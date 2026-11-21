@@ -9240,8 +9240,9 @@ void processSpecialGCode(GCode* pCommand) {
 
                 bool skip_by_keys = false;
 
+                const float startLineZ = 0.35f;
                 if (!g_uBlockCommands)
-                    Printer::queueFloatCoordinates(x, y, AUTOADJUST_STARTMADEN_AUSSCHLUSS, IGNORE_COORDINATE, RMath::min(Printer::homingFeedrate[X_AXIS], Printer::homingFeedrate[Y_AXIS]));
+                    Printer::queueFloatCoordinates(x, y, startLineZ, IGNORE_COORDINATE, RMath::min(Printer::homingFeedrate[X_AXIS], Printer::homingFeedrate[Y_AXIS]));
 
                 for (uint8_t i = 1; i <= Lines && !g_uBlockCommands; i++) {
                     float x_0 = x;

@@ -1,6 +1,6 @@
 # M3912: pressure-responsive automatic priming/start line
 
-**Implemented on the review branch:** [M3912 priming transaction, pressure-brake intent and regression tests](m3912-state-boundary.md). AVR/printer validation pending.
+See the [M3912 state ledger and verification results](m3912-state-boundary.md).
 
 **Coordinate reference and verified limitations:** [G-code Z, physical Z compensation and E logical timeline](coordinate-frames-and-extrusion.md). Normal speed override and DMS speed control are separate.
 
@@ -8,11 +8,9 @@
 
 **Mechanical interpretation:** high DMS force produces an audible, simulated **braking effect**—like a chainsaw entering wood—because firmware progressively lowers the XY stepping speed and, as necessary, E flow. This is not an indication that the stepper motors are out of power. The intent is to relieve nozzle load **without learning a new Z-offset from priming force**.
 
-**Why 0.352 mm:** its non-round height above common first layers was chosen deliberately as an almost-unique sentinel, not an arbitrary constant. It remains supported for manually scripted priming. A generated M3912 also has an explicit runtime phase flag; a genuine model layer exactly 0.352 mm is the known rare collision.
+The priming line fills and clears the nozzle before the first model layer. `M3912` temporarily activates Digit Flow Compensation so high measured force causes **slower movement and less extrusion**.
 
-The priming line fills/cleans the nozzle before the first **model** layer. Heavy priming can intentionally generate high DMS force. `M3912` temporarily activates Digit Flow Compensation so excessive measured force causes **slower movement and less extrusion**, rather than treating priming as an incorrect first-layer gap.
-
-The priming line is *not* uncompensated: it still gets the normal scanned-bed correction. It uses the special Z=**0.352 mm** to avoid being learned as the real first layer and to stay above the default 0.33 mm SenseOffset region.
+Generated priming runs at nominal Z=0.35 mm with scanned-bed compensation. The runtime phase flag identifies its moves. The former 0.352 mm exclusion was chosen to distinguish priming from common first-layer heights. Any otherwise eligible model layer can now be learned at that height.
 
 ## G-code and generated moves
 
@@ -40,19 +38,24 @@ After waiting for the queued prime moves, `M3912` restores the previous Digit Fl
 
 The adaptations depend on DMS processing and queue timing; they are not guarantees of a precise physical flow or pressure.
 
-**Updated pressure gate:** ordinary Digit Flow uses `currentZ > g_min`; SenseOffset uses the opposite gate. The generated `M3912` flag now **forces Digit Flow eligibility and suppresses SenseOffset growth** regardless of `g_min`, retaining the intentionally rare 0.352 mm sentinel for other uses. No-homing **geometric** fade-state inheritance is still a separate issue.
+Outside `M3912`, Digit Flow uses `currentZ > g_min` and SenseOffset uses `currentZ <= g_min`. During generated priming the flag enables Digit Flow eligibility and pauses SenseOffset correction regardless of `g_min`. Without Z homing, previous `g_min/g_max` values can still affect the scanned-bed fade during priming.
 
 ## Distinctions to preserve
 - Priming line: **pressure → reduce speed / reduce E**.
 - True first model layer: **pressure above limit → bounded increase of clearance via SenseOffset**.
 - Heat-bed matrix applies in both cases; adaptive first-layer height must refer to the **model**, not the priming line.
 - Normal emergency pause/stop thresholds are additional independent protections.
-- The 0.352-mm numeric sentinel is intentionally retained. A genuine model layer at the exact sentinel (±5 steps) can still be excluded; generated M3912 moves are additionally tagged explicitly.
+
+## Manual start lines
+
+Place `M3909` with a positive `P` threshold after the final priming move and before the model starts. The enable task runs in motion-queue order. Turn off AutoStart in **Configuration → DMS Features → SenseOffset** to keep `M3001` from enabling it before the line. To override AutoStart from G-code, put `M400` and then `M3909 P0` after `M3001` and before the manual prime.
+
+The layer detector sees manual priming as regular extrusion. A manual line above the model's first layer lets the descent to that layer establish the new compensation boundary.
 
 ## Source
-- [M3912 generation, overrides, save/restore](../../Repetier/RF.cpp#L9085-L9255)
+- [M3912 generation, overrides, save/restore](../../Repetier/RF.cpp#L9122-L9322)
 - [DMS → E/feed factors](../../Repetier/RF.cpp#L319-L398)
 - [E factor at planner time](../../Repetier/motion.cpp#L118-L138)
 - [Feed factor at ISR timer interval](../../Repetier/motion.cpp#L1625-L1671)
-- [Prime-height exclusion](../../Repetier/motion.cpp#L202-L219)
+- [Phase flag and first-layer detection](../../Repetier/motion.cpp#L170-L203)
 - [Original changelog explanation](../../changelog.txt#L1005-L1013)

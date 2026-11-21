@@ -155,6 +155,8 @@ Feature called "Nibbels/Wessix SenseOffset". This is a digit limiter which decre
  When the z-compensation gets deactivated the senseoffset-function is deactivated as well.  
  Use "M3909 P0" for manual shutdown of the feature, but normally this is not necessary.  
  You cannot activate the Feature if zCompensation is not active already.  
+
+ For a manually scripted start line, turn off SenseOffset AutoStart and place `M3909 P…` after the last priming move. [Manual start-line ordering](docs/first-layer-control/automatic-start-line.md#manual-start-lines)
  
  While Printing you can adjust or activate this feature with the "Left"- and "Right"-Button, while being in the "Mod-Menu" which is page 2 on the printers display.  
 

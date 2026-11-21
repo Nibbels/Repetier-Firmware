@@ -21,7 +21,7 @@ This is deliberately **not** a bidirectional PID loop. It is a bounded, positive
 
 ## Coupling to learned layer height
 
-`g_minZCompensationSteps` simultaneously controls (a) where full scanned-bed following ends and (b) where SenseOffset may regulate. Original baseline is **0.33 mm**, so the intentional priming height **0.352 mm** is above that limit and ordinarily excluded. If `g_min` was learned as >0.352 mm by a previous model layer and persists, the next priming line may be eligible for SenseOffset. **That is the lifecycle hazard under investigation.**
+`g_minZCompensationSteps` controls both where full scanned-bed following ends and where SenseOffset may regulate. The fallback limit is 0.33 mm. Generated `M3912` priming suspends SenseOffset for the entire line, including with a higher limit inherited from an earlier print. For a manually scripted prime, enable SenseOffset after priming and account for `M3001` AutoStart. [Manual start-line ordering](automatic-start-line.md#manual-start-lines)
 
 Extruder-specific Z offsets and different coordinate origins require care; current source has a TODO about which Z quantity should be used for SenseOffset eligibility.
 
@@ -32,7 +32,7 @@ The operator can use alternating Z/bed DOWN and UP buttons in Mod Menu page 2 to
 ## Relevant source
 - [Globals, names and defaults](../../Repetier/RF.cpp#L193-L199)
 - [Strain-gauge reads and controller](../../Repetier/RF.cpp#L5622-L5775)
-- [M3909 and EEPROM handling](../../Repetier/RF.cpp#L8975-L9035)
+- [M3909 and EEPROM handling](../../Repetier/RF.cpp#L9012-L9076)
 - [Enable via queue task](../../Repetier/Printer.cpp#L1098-L1109)
 - [Config](../../Repetier/Configuration.h#L87-L100)
 - [Original intention in changelog](../../changelog.txt#L1775-L1784)
