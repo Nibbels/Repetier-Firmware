@@ -6595,14 +6595,19 @@ void processSpecialGCode(GCode* pCommand) {
                     if (pCommand->Z > HEAT_BED_Z_COMPENSATION_MAX_MM)
                         pCommand->Z = HEAT_BED_Z_COMPENSATION_MAX_MM;
 
+                    Printer::ZOffset = long(pCommand->Z * 1000);
+#if FEATURE_SENSIBLE_PRESSURE
+                    // Preserve the live SenseOffset when changing the EEPROM-backed manual offset.
+                    g_staticZSteps = long(((Printer::ZOffset + g_nSensiblePressureOffset) * Printer::axisStepsPerMM[Z_AXIS]) / 1000);
+#else
                     g_staticZSteps = long(pCommand->Z * Printer::axisStepsPerMM[Z_AXIS]);
+#endif // FEATURE_SENSIBLE_PRESSURE
                     if (Printer::debugInfo()) {
                         Com::printF(PSTR("M3006: new static z-offset: "), pCommand->Z);
                         Com::printF(PSTR(" [mm]"));
                         Com::printF(PSTR(" / "), g_staticZSteps);
                         Com::printFLN(PSTR(" [steps]"));
                     }
-                    Printer::ZOffset = long(pCommand->Z * 1000);
 
                     if (HAL::eprGetInt32(EPR_RF_Z_OFFSET) != Printer::ZOffset) {
                         HAL::eprSetInt32(EPR_RF_Z_OFFSET, Printer::ZOffset);
@@ -6617,14 +6622,19 @@ void processSpecialGCode(GCode* pCommand) {
                     if (nTemp > (HEAT_BED_Z_COMPENSATION_MAX_MM * 1000))
                         nTemp = (HEAT_BED_Z_COMPENSATION_MAX_MM * 1000);
 
+                    Printer::ZOffset = nTemp;
+#if FEATURE_SENSIBLE_PRESSURE
+                    // Match the menu and SenseOffset controller's combined correction.
+                    g_staticZSteps = long(((Printer::ZOffset + g_nSensiblePressureOffset) * Printer::axisStepsPerMM[Z_AXIS]) / 1000);
+#else
                     g_staticZSteps = (nTemp * Printer::axisStepsPerMM[Z_AXIS]) / 1000;
+#endif // FEATURE_SENSIBLE_PRESSURE
                     if (Printer::debugInfo()) {
                         Com::printF(PSTR("M3006: new static z-offset: "), nTemp);
                         Com::printF(PSTR(" [um]"));
                         Com::printF(PSTR(" / "), g_staticZSteps);
                         Com::printFLN(PSTR(" [steps]"));
                     }
-                    Printer::ZOffset = nTemp;
 
                     if (HAL::eprGetInt32(EPR_RF_Z_OFFSET) != Printer::ZOffset) {
                         HAL::eprSetInt32(EPR_RF_Z_OFFSET, Printer::ZOffset);
