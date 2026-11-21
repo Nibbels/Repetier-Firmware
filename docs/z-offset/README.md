@@ -26,7 +26,7 @@ The **nominal Z** is also used to decide the fade region. The source does *not* 
 ## Files to read
 
 1. [Offset ledger and actual formulas](offset-ledger.md) — persistent vs live and what contributes.
-2. [Lifecycle and possible Z jumps](lifecycle-and-findings.md) — boot, consecutive prints, M3006, M3909, menu, matrix save; prioritized source-backed findings.
+2. [Lifecycle and possible Z jumps](lifecycle-and-findings.md) — boot, Z homing versus stepper disable, consecutive prints, M3006, M3909, menu, matrix save; prioritized source-backed findings.
 3. [Full heat-bed scan, point Z-offset scan and storage](scans-and-persistence.md) — calibration procedures, what is committed and when.
 4. [Thermal drift and strain-gauge uncertainty](thermal-and-force.md) — historical coefficients, approximate physical behavior, error sources.
 5. [First-layer fade-out and ECMP](../first-layer-control/z-compensation-and-ecmp.md), [SenseOffset](../first-layer-control/sense-offset.md), [adaptive M3912 priming](../first-layer-control/automatic-start-line.md) — allied mechanisms.

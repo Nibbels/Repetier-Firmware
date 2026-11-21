@@ -7,7 +7,8 @@
 | Event | Persistent manual `Printer::ZOffset` | Dynamic `g_nSensiblePressureOffset` | Learned `g_min` / `g_max` | Bed matrix |
 | --- | --- | --- | --- | --- |
 | **Power-up / firmware reset** | Restored from MCU EEPROM; `g_staticZSteps` reconstructed | RAM initializes **0** | Restored to header defaults (0.33/10 mm with live steps/mm) by EEPROM load | Selected sector loaded from external I²C EEPROM; extrema recalculated |
-| **Home / Z stepper disable** | Preserved | No dedicated reset in inspected path | Current/last layer markers reset; learned boundaries **not** reset | Preserved |
+| **Ordinary Z homing (`homeZAxis`)** | Preserved | No dedicated reset | **Neither layer markers nor learned min/max boundaries are explicitly reset**; homing disables CMP and re-establishes coordinates | Preserved |
+| **Disable Z stepper (`disableZStepper`)** | Preserved | No dedicated reset | Current/last markers reset, but **GuessNew and learned min/max are not** | Preserved |
 | **M3001 enable compensation** | Preserved | Auto-enable from EEPROM threshold possible | Preserved | Valid matrix required |
 | **M3912 adaptive priming** | Preserved | No dedicated reset | Prime deliberately excluded from learning; current/last markers reset afterward, not learned limits | Preserved |
 | **First real layer recognized** | Preserved | Potentially increasing, if active and eligible | Newly learned from model first-layer height | Preserved |
@@ -82,6 +83,12 @@ The point Z-offset scan (`M3900`) updates the current RAM matrix, not directly `
 
 [Source: ZOS load](../../Repetier/RF.cpp#L2255-L2277) · [edit and dirty flag](../../Repetier/RF.cpp#L2483-L2561) · [successful finish](../../Repetier/RF.cpp#L2585-L2606).
 
+### Finding F7 (MEDIUM): ordinary homing is not equivalent to disabling Z steppers
+
+`homeZAxis()` uses `setHomed(-1,-1,false)`, `resetDirectAxis(Z)`, a homing sequence and `setZAxisSteps(...)`, but does **not** explicitly clear `queuePositionZLayerCurrent`, `Last`, `GuessNew`, or learned `g_min`/`g_max`. By contrast, `disableZStepper()` resets `Current`/`Last`, omitting `GuessNew` and learned limits. Whether the stepper was disabled *before* homing can therefore change logical layer state while leaving the same apparent Z home position. This may affect a second print's first-layer detection.
+
+[Source: homeZAxis](../../Repetier/Printer.cpp#L1556-L1653) · [setHomed](../../Repetier/Printer.h#L621-L650) · [disableZStepper](../../Repetier/Printer.h#L333-L370) · [setZAxisSteps](../../Repetier/Printer.h#L1028-L1035).
+
 ## What has *not* been established
 
 - No evidence yet identifies which of F1–F6 caused the user's historical intermittent Z changes.
@@ -90,7 +97,7 @@ The point Z-offset scan (`M3900`) updates the current RAM matrix, not directly `
 
 ## Safe diagnostic plan before modifying behavior
 
-Instrument **events**, not high-rate ISR cycles: after boot, after EEPROM/matrix load, after homing, before and after M3001/M3000, before/after M3912, upon M3909/M3006, on print stop/finish, after ZOS and matrix save. Report:
+Instrument **events**, not high-rate ISR cycles: after boot, after EEPROM/matrix load, after homing, before and after M3001/M3000, before/after M3912, upon M3909/M3006, on ordinary Z homing (with vs. without prior stepper disable), on print stop/finish, after ZOS and matrix save. Report:
 
 `Printer::ZOffset` [µm]; `g_nSensiblePressureOffset` [µm]; `g_staticZSteps` [steps]; `g_offsetZCompensationSteps` and `g_ZCompensationMax` [steps]; `g_min`/`g_max` [steps]; active matrix sector and dirty flag; current nominal Z; target and current compensation steps; enabled CMP/SenseOffset; selected tool; DMS readings; bed/nozzle temperature.
 
