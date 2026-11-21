@@ -16,9 +16,9 @@ This is **analysis, not confirmation from a physical printer**.
 
 ## Suspected faults (not yet demonstrated)
 
-**H1: previous-print threshold leak.** A prior 0.40 mm first layer may leave `g_min=0.40 mm`. A new M3912 at 0.352 mm would then be **below** the SenseOffset gate and **not above** the Digit Flow gate. The M3912 and Z reset paths we inspected do not restore the learned `g_min`/`g_max`. Determine precisely when a print/homing/compensation reset should reinitialize them.
+**H1: previous-print threshold leak WITHOUT Z homing.** A prior 0.40 mm first layer may leave `g_min=0.40 mm`; the next 0.352 mm M3912 may then enable the wrong controller. **Fixed for `G28 Z` / full `G28`** by restoring learned boundaries during Z home. No-homing workflows still need a safe new-print boundary.
 
-**H2: incomplete layer-state reset.** Ordinary `homeZAxis()` does not explicitly reset layer markers or learned boundaries; disabling Z steppers resets current/last markers only. M3912 clears `Current` and `Last` but not `GuessNew`. Z-stepper disable/reset also leaves `GuessNew` untouched. Establish whether queued Z moves can leave a stale candidate despite queue-drain waits.
+**H2: incomplete layer-state reset OUTSIDE Z home.** `homeZAxis()` now clears `Current`, `Last`, `GuessNew` and min/max. `M3912` still clears only `Current`/`Last`; disabling steppers alone leaves `GuessNew`/learned bounds. Check if a no-homing sequence can retain a stale guess.
 
 **H3: wrong fix scope/time.** [r3dacto fork patch](https://github.com/r3dacto/Repetier-FirmwareCodex/commit/d59ca5e53c1351c47a9ab67606806968c82f976e) clears `GuessNew` then resets fade bounds after M3912 **only on RF2000v2**. That would occur *after* a potentially wrong prime-force response. We found no special RF2000v2 dependency in shared layer logic.
 

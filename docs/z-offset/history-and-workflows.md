@@ -46,7 +46,7 @@ After 40 completed pairs, approximately +200 µm has moved from dynamic to manua
 
 - **Intentional:** `zOffsetMinusAction()` preferentially decreases dynamic SenseOffset instead of the saved manual offset; alternating UP/DOWN transfers it to EEPROM. The earlier risk register called this “intentional but surprising”; this document specifies the engineering purpose.
 - **Fixed on `ai-firmware-review`:** before [commit b4ae1dc](https://github.com/Nibbels/Repetier-Firmware/commit/b4ae1dc53a184c7a866db987f4419413912a58d5), `M3006` omitted the current dynamic offset when recomputing `g_staticZSteps`. The patched `M3006` preserves the sum. It still *sets the manual offset absolutely* rather than performing the operator's button-driven transfer, as intended.
-- **Still under investigation:** dynamic and learned-boundary values after ending a print. A future new-print reset must **preserve the newly saved manual correction**, should not accidentally erase an ongoing intentional transfer, and must only remove any remaining transient dynamic offset at a safe time, away from the bed.
+- **Partially fixed:** Z homing now removes only the dynamic remainder **after disabling CMP**, preserving the EEPROM-backed portion deliberately transferred by the operator ([ba93708](https://github.com/Nibbels/Repetier-Firmware/commit/ba93708d41c84fcce16872720b6b954da70ea157)). CMP-off also clears dynamic offset even after `M3909 P0` ([733833a](https://github.com/Nibbels/Repetier-Firmware/commit/733833a7c062b461c9fbb9de8a72ea202a65c812)). **Consecutive prints without Z homing remain open.**
 
 ## Source and history
 

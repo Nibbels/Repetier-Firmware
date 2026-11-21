@@ -51,7 +51,7 @@ Following an uneven first-layer surface then gradually printing flat upper layer
 
 ## Interaction with M3912 and lifecycle
 
-The priming line at Z=0.352 mm can pass through the layer detector, but that exact height is excluded from **dynamic boundary learning**. `M3912` subsequently clears `queuePositionZLayerCurrent` and `Last`; it does **not** currently reset `GuessNew` or restore `g_min`/`g_max`. Z-stepper disable/reset similarly clears `Current`/`Last` only.
+The priming line at Z=0.352 mm can pass through the layer detector, but that exact height is excluded from **dynamic boundary learning**. `M3912` subsequently clears `queuePositionZLayerCurrent` and `Last`; it does **not** itself reset `GuessNew` or restore `g_min`/`g_max`. **Z homing now clears all three layer markers and restores min/max after disabling CMP.** Z-stepper disable alone still clears only `Current`/`Last`.
 
 An untested fork's RF2000v2-only reset-after-M3912 is not backed by model-specific differences in this shared algorithm. The *when* of resetting boundaries (particularly **before** priming) matters more than the model name.
 

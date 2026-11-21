@@ -7,14 +7,14 @@
 | Event | Persistent manual `Printer::ZOffset` | Dynamic `g_nSensiblePressureOffset` | Learned `g_min` / `g_max` | Bed matrix |
 | --- | --- | --- | --- | --- |
 | **Power-up / firmware reset** | Restored from MCU EEPROM; `g_staticZSteps` reconstructed | RAM initializes **0** | Restored to header defaults (0.33/10 mm with live steps/mm) by EEPROM load | Selected sector loaded from external I²C EEPROM; extrema recalculated |
-| **Ordinary Z homing (`homeZAxis`)** | Preserved | No dedicated reset | **Neither layer markers nor learned min/max boundaries are explicitly reset**; homing disables CMP and re-establishes coordinates | Preserved |
+| **Ordinary Z homing (`homeZAxis`)** | **Preserved** | **Reset to 0 after CMP is disabled**; threshold deactivated | **FIXED:** all 3 markers and learned min/max reset to defaults in print mode | **Preserved** |
 | **Disable Z stepper (`disableZStepper`)** | Preserved | No dedicated reset | Current/last markers reset, but **GuessNew and learned min/max are not** | Preserved |
 | **M3001 enable compensation** | Preserved | Auto-enable from EEPROM threshold possible | Preserved | Valid matrix required |
 | **M3912 adaptive priming** | Preserved | No dedicated reset | Prime deliberately excluded from learning; current/last markers reset afterward, not learned limits | Preserved |
 | **First real layer recognized** | Preserved | Potentially increasing, if active and eligible | Newly learned from model first-layer height | Preserved |
 | **Normal printing finishes / stopPrint()** | Preserved | **No unconditional cleanup** | **No unconditional cleanup** | Preserved |
-| **M3000 (compensation disabled)** | Preserved | Controller can reset offset only if its stored live digit threshold is **nonzero** when the background check sees CMP off | No boundary reset | Matrix remains |
-| **M3909 P0** | Preserved | **Current positive offset remains**; P0 clears active threshold only | Preserved | Preserved |
+| **M3000 (compensation disabled)** | Preserved | **FIXED:** remaining SenseOffset cleared regardless of active digits, with pressure history reset | **No boundary reset** | Matrix remains |
+| **M3909 P0** | Preserved | Applied positive offset **intentionally remains** while CMP is enabled; pressure-history cleared; CMP disable then removes offset | Preserved | Preserved |
 | **M3006 change** | Updates and immediately saves | Variable unchanged | Preserved | Preserved |
 | **M3902 Z0 then matrix save** | Sets and saves menu offset to 0 | Variable unchanged | Preserved | Transfers former manual offset to RAM matrix; external save is separate |
 
@@ -37,24 +37,25 @@ The patch sets `Printer::ZOffset` first, then calculates `g_staticZSteps` using 
 
 [Source: patched M3006](../../Repetier/RF.cpp#L6587-L6642) · [menu calculation](../../Repetier/ui.cpp#L2821-L2878) · [SenseOffset controller](../../Repetier/RF.cpp#L5748-L5760).
 
-### Finding F2 (HIGH): M3909 P0 disables control but does not clear its accumulated correction
+### Finding F2 (FIXED): previously disabled SenseOffset can now be cleaned up
 
-`M3909 P0` sets `g_nSensiblePressureDigits=0` and logs disabled. It does **not** zero `g_nSensiblePressureOffset` and does not recompute `g_staticZSteps`. The periodic cleanup in the SenseOffset controller is gated on `if (g_nSensiblePressureDigits && !doHeatBedZCompensation)`; after P0 the first condition is false, so even disabling heat-bed compensation does not trigger that cleanup. The positive correction can therefore remain in live derived Z state and its underlying RAM variable. **Some retention might have been intentional to avoid an unsafe downward Z jump**, but the state semantics are not explicit and are important between prints.
+Before [733833a](https://github.com/Nibbels/Repetier-Firmware/commit/733833a7c062b461c9fbb9de8a72ea202a65c812), `M3909 P0` disabled the threshold without clearing the live dynamic offset. Later `M3000` could not clear that offset because the cleanup required a **nonzero** threshold. The periodic handler now clears any remaining `g_nSensiblePressureOffset` whenever bed CMP is disabled, regardless of whether `M3909 P0` was already issued.
 
-`M3000` on its own may clear the dynamic offset **only if** the threshold is still nonzero and the periodic SenseOffset code runs after bed compensation is off. Never replace this with an abrupt reset during printing.
+**Intentional safety:** `M3909 P0` alone still retains the already-applied clearance **while CMP is active**; it only stops new corrections. Once CMP is off, cleanup reconstructs `g_staticZSteps` from the saved manual offset. The pressure average, sample count and previous pressure are also cleared whenever regulation is inactive, so stale readings do not influence the next activation. No additional EEPROM writes.
 
-[Source: M3909 P0](../../Repetier/RF.cpp#L8975-L9037) · [conditional clear](../../Repetier/RF.cpp#L5660-L5677).
+Tests still required on a physical printer: `M3909 P0` during a first layer, subsequent `M3000`, re-enable with `M3001`/autostart, and cancellation.
 
-### Finding F3 (HIGH): stopping/finishing a print is not a full Z-state reset
+[Source](../../Repetier/RF.cpp#L5623-L5710).
 
-On boot, `g_nSensiblePressureOffset=0` and EEPROM load sets default `g_min`/`g_max`. No equivalent universal reset was found in `stopPrint()`, `handleStopPrint()`, `handleStartPrint()` or `M3912`. This gives two classes of consecutive-print state leakage:
+### Finding F3 (PARTIALLY FIXED): consecutive-print lifecycle
 
-1. Accumulated positive clearance correction may carry into the next print, depending on end-G-code/compensation deactivation.
-2. Learned `g_minZCompensationSteps` may remain from the prior print. With prior first layer 0.40 mm, a new 0.352 mm M3912 line can satisfy SenseOffset's `Z<=g_min` gate but fail Digit Flow's opposite `Z>g_min` gate — the wrong feedback mechanism for priming.
+**Fixed on [ba93708](https://github.com/Nibbels/Repetier-Firmware/commit/ba93708d41c84fcce16872720b6b954da70ea157) for sequences that home Z.** `homeZAxis()` disables CMP through `setHomed(-1,-1,false)` and waits for compensation to return to zero. Then it resets `queuePositionZLayerGuessNew`, `Current`, `Last`, `g_minZCompensationSteps`, `g_maxZCompensationSteps` and `g_diffZCompensationSteps`, using live Z steps/mm for the default bounds. It clears the transient SenseOffset and active pressure threshold, then reconstructs `g_staticZSteps` from the **preserved EEPROM-backed** `Printer::ZOffset`. The matrix remains untouched. Printing-mode guard also covers combined print/mill firmware.
 
-The first is a **clear missing unconditional reset** (not necessarily a bug without defining desired retention); the second is a **concrete code-path hazard**, not yet a demonstrated field failure. Do not reset bounds in the middle of an active print or invalidate a genuine new layer in a sequential object.
+**Still open:** prints begun without a fresh Z home may retain learned boundaries. `handleStartPrint()` merely infers printing from queue depth; `stopPrint()`/`handleStopPrint()` and `M3912` do not reset learned min/max. Without an intervening `G28 Z`, a former 0.40 mm first layer could make a subsequent 0.352 mm priming line eligible for SenseOffset but ineligible for Digit Flow. Even `M3000` now clears the **dynamic** offset, not the learned bounds. If CMP is never disabled, the dynamic offset may also persist. No automatic reset was added to ambiguous print/SD/host status callbacks.
 
-[Source: print stop](../../Repetier/Printer.cpp#L1788-L1840) · [stop completion](../../Repetier/RF.cpp#L5970-L6060) · [M3912 end](../../Repetier/RF.cpp#L9230-L9254) · [boot bound reset](../../Repetier/Eeprom.cpp#L615-L624).
+**Conclusion:** Z home is the implemented safe primary lifecycle boundary. Separate analysis is required for no-homing workflows; do not reset fade limits while a real layer is being printed.
+
+[Patched Z home](../../Repetier/Printer.cpp#L1556-L1657) · [print-state heuristics](../../Repetier/RF.cpp#L5969-L6098) · [M3912](../../Repetier/RF.cpp#L9094-L9263).
 
 ### Finding F4 (HIGH): matrix-offset transfer is not an atomic persistent transaction
 
@@ -82,15 +83,15 @@ The point Z-offset scan (`M3900`) updates the current RAM matrix, not directly `
 
 [Source: ZOS load](../../Repetier/RF.cpp#L2255-L2277) · [edit and dirty flag](../../Repetier/RF.cpp#L2483-L2561) · [successful finish](../../Repetier/RF.cpp#L2585-L2606).
 
-### Finding F7 (MEDIUM): ordinary homing is not equivalent to disabling Z steppers
+### Finding F7 (FIXED FOR Z HOME): homing resets all layer markers
 
-`homeZAxis()` uses `setHomed(-1,-1,false)`, `resetDirectAxis(Z)`, a homing sequence and `setZAxisSteps(...)`, but does **not** explicitly clear `queuePositionZLayerCurrent`, `Last`, `GuessNew`, or learned `g_min`/`g_max`. By contrast, `disableZStepper()` resets `Current`/`Last`, omitting `GuessNew` and learned limits. Whether the stepper was disabled *before* homing can therefore change logical layer state while leaving the same apparent Z home position. This may affect a second print's first-layer detection.
+The pre-patch `homeZAxis()` did not clear layer markers or learned min/max. **It now does** after disabling CMP, whether or not the stepper was disabled first ([ba93708](https://github.com/Nibbels/Repetier-Firmware/commit/ba93708d41c84fcce16872720b6b954da70ea157)). `disableZStepper()` still clears only `Current` and `Last`; a subsequent Z home resolves this discrepancy. X-only and Y-only homing deliberately do not reset Z first-layer state.
 
-[Source: homeZAxis](../../Repetier/Printer.cpp#L1556-L1653) · [setHomed](../../Repetier/Printer.h#L621-L650) · [disableZStepper](../../Repetier/Printer.h#L333-L370) · [setZAxisSteps](../../Repetier/Printer.h#L1028-L1035).
+[Source: homeZAxis](../../Repetier/Printer.cpp#L1556-L1657) · [disableZStepper](../../Repetier/Printer.h#L333-L370).
 
 ### Finding F8 (DESIGN CONSTRAINT): future lifecycle reset must distinguish durable takeover from disposable correction
 
-Because an operator can intentionally transfer 5 µm increments from the dynamic SenseOffset to EEPROM-backed manual offset **while the machine is printing**, it would be incorrect for a new print lifecycle fix to assume all observed positive clearance is temporary. At the next verified safe print boundary, preserving `Printer::ZOffset` is mandatory; clearing any remaining `g_nSensiblePressureOffset` must be coordinated with live Z motion and bed distance. Do not couple transfer to scan-matrix saves or automatically shift EEPROM offset when force rises.
+Because the operator may transfer dynamic SenseOffset into EEPROM-backed manual Z-offset while printing, Z homing **preserves `Printer::ZOffset`** and discards only the untransferred RAM remainder after disabling CMP. No automatic EEPROM/matrix writes occur. Any future no-homing reset must honor the same physical safety and manual-transfer invariants.
 
 [Documented live transfer](history-and-workflows.md).
 

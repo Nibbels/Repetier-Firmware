@@ -43,6 +43,6 @@ Positions named *Steps* are motor steps, SenseOffset and manual Z offsets are in
 
 ### Current research question
 
-The numeric Z=0.352 mm exclusion protects dynamic first-layer learning, but current `M3912` and Z-axis reset paths clear only some layer markers, **not** learned `g_min` / `g_max`. A previous first layer higher than 0.352 mm could leave the next prime in SenseOffset's height range and outside the Digit Flow response range. This is a **static-code hypothesis pending test**, not a verified field failure. A fork has a model-specific **after-priming** reset; do not port it uncritically.
+The numeric Z=0.352 mm exclusion protects dynamic first-layer learning. **The review branch now resets learned min/max and all layer markers during Z homing**, after safely disabling CMP. However, a second print **without Z homing** can still inherit the previous bounds because `M3912` itself does not reset them. A fork's RF2000v2-only reset-after-priming is not a suitable substitute. [Lifecycle patch and remaining cases](../z-offset/lifecycle-homing-fix.md).
 
 Continue with [SenseOffset](sense-offset.md), [fade-out / ECMP](z-compensation-and-ecmp.md), [M3912](automatic-start-line.md), [test scenarios](test-scenarios.md), [history](history.md).
