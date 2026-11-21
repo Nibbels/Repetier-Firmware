@@ -1570,7 +1570,41 @@ void Printer::homeZAxis() {
         //homing ausschalten und zCMP (...) auch.
         setHomed(-1, -1, false);
 
+#if FEATURE_HEAT_BED_Z_COMPENSATION
+        // The Z reference has been invalidated and CMP has returned to zero.
+        // Do the unit conversions outside the interrupt-protected block.
+        const long defaultMinZCompensationSteps = long(HEAT_BED_Z_COMPENSATION_MIN_MM * Printer::axisStepsPerMM[Z_AXIS]);
+        const long defaultMaxZCompensationSteps = long(HEAT_BED_Z_COMPENSATION_MAX_MM * Printer::axisStepsPerMM[Z_AXIS]);
+#if FEATURE_SENSIBLE_PRESSURE
+        const long manualZOffsetSteps = long((Printer::ZOffset * Printer::axisStepsPerMM[Z_AXIS]) / 1000);
+#endif // FEATURE_SENSIBLE_PRESSURE
+#endif // FEATURE_HEAT_BED_Z_COMPENSATION
+
         InterruptProtectedBlock noInts;
+#if FEATURE_HEAT_BED_Z_COMPENSATION
+#if FEATURE_MILLING_MODE
+        if (Printer::operatingMode == OPERATING_MODE_PRINT) {
+#endif // FEATURE_MILLING_MODE
+            // Each Z home starts a fresh first-layer reference. In particular,
+            // do not let a previous print's learned g_min/g_max affect M3912.
+            Printer::queuePositionZLayerGuessNew = 0;
+            Printer::queuePositionZLayerCurrent = 0;
+            Printer::queuePositionZLayerLast = 0;
+            g_minZCompensationSteps = defaultMinZCompensationSteps;
+            g_maxZCompensationSteps = defaultMaxZCompensationSteps;
+            g_diffZCompensationSteps = defaultMaxZCompensationSteps - defaultMinZCompensationSteps;
+#if FEATURE_SENSIBLE_PRESSURE
+            // CMP is already disabled: discard only the volatile correction,
+            // never the user's EEPROM-backed manual offset / Mod Menu transfer.
+            g_nSensiblePressureDigits = 0;
+            g_nSensiblePressureOffset = 0;
+            g_nSensiblePressure1stMarke = 0;
+            g_staticZSteps = manualZOffsetSteps;
+#endif // FEATURE_SENSIBLE_PRESSURE
+#if FEATURE_MILLING_MODE
+        }
+#endif // FEATURE_MILLING_MODE
+#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 #if FEATURE_FIND_Z_ORIGIN
         //das ist die Z-Origin-Höhe und ihre XY-Scan-Stelle.
         g_nZOriginPosition[X_AXIS] = 0;
