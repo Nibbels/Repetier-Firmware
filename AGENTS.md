@@ -1,5 +1,7 @@
 # Firmware maintenance handover
 
+**Pending M3912 design:** [start-line state transaction](docs/first-layer-control/m3912-state-boundary.md) specifies which settings must be restored and which priming state must be discarded. No firmware patch for these specific M3912 changes exists yet.
+
 **Start with [docs/first-layer-control/README.md](docs/first-layer-control/README.md) before editing first-layer, Z compensation, DMS or priming behavior. For the full Z-offset sum, boot/print lifecycle, matrix EEPROM and thermal/scanning risks, read [docs/z-offset/README.md](docs/z-offset/README.md).** The linked documentation explains original intent, actual execution paths, risks and test scenarios.
 
 This is shared AVR/ATmega2560 Repetier firmware for **RF1000, RF2000 and RF2000v2**. Motion planning, SenseOffset and bed correction are common code. Do not apply model-only changes without a demonstrated model-specific cause. Stepper timing and SRAM/flash limits matter; avoid expensive arithmetic in ISRs.
