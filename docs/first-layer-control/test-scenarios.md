@@ -18,7 +18,7 @@ This is **analysis, not confirmation from a physical printer**.
 
 ## Suspected faults (not yet demonstrated)
 
-**H1: previous-print threshold leak.** A fresh Z home or `M3921` before priming restores the geometric `g_min/g_max` defaults. The generated `M3912` phase forces the DMS brake and suspends SenseOffset during priming, independently of the learned layer.
+**H1: previous-print threshold leak when Z homing is skipped.** A fresh Z home before priming restores the geometric `g_min/g_max` defaults. The generated `M3912` phase forces the DMS brake and suspends SenseOffset during priming, independently of the learned layer.
 
 **H2: layer-state cleanup.** `homeZAxis()` and the patched `M3912` now clear `Current`, `Last` and `GuessNew`. Generated priming moves cannot be accepted as model layers. Motor-disable-only paths still do not reset all learned geometric bounds.
 
@@ -35,9 +35,8 @@ This is **analysis, not confirmation from a physical printer**.
 | Fresh home + M3001 + M3912 + model Z0.20 | Pressure controls prime feed/E only; real first layer learned at 0.20; SenseOffset available there |
 | Same with model Z0.40 | Generated prime bypasses layer learning. The model learns the 0.40 mm boundary |
 | Print A Z0.40 → **G28 Z** → Print B Z0.20 | Fresh geometric bounds and force-braked prime; model layer correctly relearned |
-| Print A Z0.40 → `M3921` → Print B Z0.20 with the original home reference | Default fade bounds during priming, then a 0.20 mm first-layer boundary |
-| `M3921` → model XY extrusion at Z0.352 with a valid home reference | Learn the first model layer without an automatic prime or a separate Z move |
-| A pause arrives while `M3921` waits for queued motion | The marker reports a blocked start and the paused print retains its layer and offset state |
+| Print A Z0.40 → `M3079` → `G28` → Print B Z0.20 | Output disables the motors and bed compensation. Z homing clears the learned state before Print B |
+| `G28` → `M3001` → model XY extrusion at Z0.352 without `M3912` | Learn the first model layer even when extrusion begins at the current Z |
 | Genuine model first layer Z0.352 and neighbouring Z steps | Normal first-layer learning across the former exclusion window |
 | Model first layer Z0.35 immediately after M3912 | Without a Z step, the first XY extrusion sets the 0.35 mm boundary |
 | Manual prime above the first layer, with AutoStart off and `M3909` after priming | SenseOffset activates after the prime. Descending to the first layer establishes its boundary |

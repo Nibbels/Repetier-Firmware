@@ -34,20 +34,18 @@ def main():
         section(rf, "long g_nEmergencyPauseDigitsMin", "\n#ifdef RGB_LIGHT_R_PIN"),
         section(rf, "static short readStrainGauge()", "\nvoid adjustPressureLimits("),
         section(rf, "long getZMatrixDepth_CurrentXY(", "\nvoid showAbortScanReason("),
-        section(rf, "void recalculateZCompensation(", "\nvoid handleScanWorkTasks("),
+        section(rf, "namespace {\nstruct SenseOffsetSamples", "\nvoid handleScanWorkTasks("),
         pause.removeprefix('#include "Repetier.h"\n'),
         stop.removeprefix('#include "Repetier.h"\n'),
         section(printer, "void Printer::stopPrint()", "\n#define START_EXTRUDER_CONFIG"),
         section(printer, "void Printer::resetLayerTracking()", "\nvoid Printer::enableSenseOffsetnow("),
+        section(printer, "void Printer::homeZAxis()", "\nvoid Printer::homeDigits("),
         section(rf, "bool isAnyScanRunning()", "\nvoid moveXAction("),
         section(rf, "void moveZAction(int8_t direction) {", "} // moveZAction") + "}",
         section(ui, "void UIDisplay::pressPlay()", "\nvoid UIDisplay::mainSwitchCase("),
         section(ui, "void UIDisplay::fastAction()", "} // fastAction") + "}",
         "void extrudeFromPanel() { const int action = UI_ACTION_RF_EXTRUDER_OUTPUT; switch (action) {\n"
         + section(ui, "case UI_ACTION_RF_EXTRUDER_OUTPUT:", "case UI_ACTION_RF_PAUSE:")
-        + "} }",
-        "void dispatchPrintStart(uint16_t command) { switch (command) {\n"
-        + section(rf, "case 3921:", "\n#ifdef X35_ADC_CHANNEL")
         + "} }",
         "void trackPlannedLayer(PrintLine* p) {\n"
         + section(move_planner, "    if (!g_startLineActive)", "\n    // Define variables that are needed")
@@ -63,8 +61,7 @@ def main():
             "-o", str(executable),
         ], check=True)
         for scenario in (
-            "park", "short-pause", "interrupt", "panel", "return", "jog", "cancel", "queue",
-            "serial-start", "serial-start-blocked",
+            "park", "short-pause", "interrupt", "panel", "return", "jog", "cancel", "queue", "home",
         ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
 

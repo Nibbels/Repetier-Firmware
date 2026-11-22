@@ -45,18 +45,12 @@ Positions named *Steps* are motor steps, SenseOffset and manual Z offsets are in
 
 ### Priming and consecutive prints
 
-`M3912` identifies the generated prime through its phase flag. The ordinary layer detector can learn a model layer at 0.352 mm or at the priming height of 0.35 mm. A Z home or `M3921` resets the learned geometry before priming. [M3912 implementation](m3912-state-boundary.md)
+`M3912` identifies the generated prime through its phase flag. The ordinary layer detector can learn a model layer at 0.352 mm or at the priming height of 0.35 mm. [M3912 implementation](m3912-state-boundary.md)
 
 ### USB print start
 
-Add `M3921` to the slicer's start G-code at a position with clearance from the nozzle to the bed or part, before the first prime or model move. In a sequence that homes and then enables bed compensation, put it after `G28` and before `M3001`.
+Start the print with `G28` before enabling bed compensation with `M3001`. Z homing restores the full-compensation and fade heights to 0.33 mm and 10 mm using the current Z steps/mm. It clears layer tracking, geometric extrusion correction, live SenseOffset and the SenseOffset sample window. SenseOffset can start again through AutoStart when `M3001` enables bed compensation, or through `M3909` after priming.
 
-```gcode
-M3921 ; Reset first-layer state for the new print
-```
-
-The command waits for queued and direct motion. It restores the initial full-compensation and fade heights to 0.33 mm and 10 mm using the current Z steps/mm. It clears the layer markers, geometric extrusion correction, and live SenseOffset and its sample history. The saved manual Z offset and the selected bed matrix are retained. When bed compensation is active, the new target can move Z through the usual compensation path. A print started without a fresh Z home still needs a valid homing reference for `M3001` and `M3912`.
-
-SenseOffset can start again through AutoStart when `M3001` enables bed compensation, or through `M3909` after priming. Wait for `M3921: First-layer state reset` when testing the sequence. A pause, stop, scan, or active generated start line blocks the reset.
+At the end of the print, `M3079` runs the output move and disables the steppers and bed compensation. The next `G28` initializes the first-layer state even when the previous print ended before reaching `M3079`.
 
 Continue with [SenseOffset](sense-offset.md), [fade-out / ECMP](z-compensation-and-ecmp.md), [M3912](automatic-start-line.md), [test scenarios](test-scenarios.md), [history](history.md).

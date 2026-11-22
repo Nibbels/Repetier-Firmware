@@ -62,7 +62,7 @@ The firmware restricted Play to a completed pause in 1.37t2. The 1.43.56 pause r
 
 ### Z lifecycle
 
-- [x] **Give serial prints an explicit first-layer reset.** `M3921` waits for queued and direct moves to finish and initializes the next print's layer and SenseOffset state. The host replay covers consecutive prints with first layers of 0.40 mm and 0.20 mm, model extrusion without `M3912`, and a pause during the wait. Physical verification remains open. [USB print start](first-layer-control/README.md#usb-print-start)
+- [x] **Initialize first-layer state with Z homing.** The host replay covers Z homing between first layers of 0.40 mm and 0.20 mm, a fresh SenseOffset sample window, and model extrusion without `M3912`. Physical verification remains open. [USB print start](first-layer-control/README.md#usb-print-start)
 
 ### SD print completion
 

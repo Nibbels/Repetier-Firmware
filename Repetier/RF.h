@@ -558,7 +558,6 @@ extern unsigned short readWord24C256(int addressI2C, unsigned int addressEEPROM)
 
 extern void recalculateZCompensation(void);
 extern void resetSenseOffsetForPrint();
-extern bool isAnyScanRunning();
 extern void loopFeatures(void);
 extern void outputObject(bool showerrors = true);
 

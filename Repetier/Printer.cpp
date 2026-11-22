@@ -788,40 +788,6 @@ void Printer::resetLayerTracking() {
     queuePositionZLayerLast = 0;
 }
 
-void Printer::resetPrintZState() {
-    const float stepsPerMm = axisStepsPerMM[Z_AXIS];
-    const long minSteps = long(heatBedZCompensationMinMm * stepsPerMm);
-    const long maxSteps = long(heatBedZCompensationMaxMm * stepsPerMm);
-    resetSenseOffsetForPrint();
-
-    InterruptProtectedBlock noInts;
-    resetLayerTracking();
-    g_minZCompensationSteps = minSteps;
-    g_maxZCompensationSteps = maxSteps;
-    compensatedPositionOverPercE = 0.0f;
-    compensatedPositionCollectTinyE = 0.0f;
-}
-
-bool Printer::canBeginPrintJob() {
-    if (blockAll || printStop.commandsBlocked() || pause.isPaused())
-        return false;
-    return !g_startLineActive && !isAnyScanRunning();
-}
-
-bool Printer::beginPrintJob() {
-    // The command at the front of the G-code buffer fences planning for the new job.
-    while (canBeginPrintJob()) {
-        if (!PrintLine::hasLines() && !PrintLine::direct.task) {
-            resetPrintZState();
-            recalculateZCompensation();
-            return true;
-        }
-
-        Commands::checkForPeriodicalActions(Processing);
-    }
-    return false;
-}
-
 void Printer::enableSenseOffsetnow(void) {
     short oldval = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS);
     if (oldval > 0 && oldval < EMERGENCY_PAUSE_DIGITS_MAX) {
@@ -1163,8 +1129,18 @@ void Printer::homeZAxis() {
         //homing ausschalten und zCMP (...) auch.
         setHomed(-1, -1, false);
 
-        resetPrintZState();
+        const float stepsPerMm = axisStepsPerMM[Z_AXIS];
+        const long defaultMinSteps = long(heatBedZCompensationMinMm * stepsPerMm);
+        const long defaultMaxSteps = long(heatBedZCompensationMaxMm * stepsPerMm);
+        resetSenseOffsetForPrint();
+
         InterruptProtectedBlock noInts;
+        // Establish the first-layer defaults for the print that follows this Z home.
+        resetLayerTracking();
+        g_minZCompensationSteps = defaultMinSteps;
+        g_maxZCompensationSteps = defaultMaxSteps;
+        compensatedPositionOverPercE = 0.0f;
+        compensatedPositionCollectTinyE = 0.0f;
         zMotion.resetDirectPosition();
 
         // Homing replaces the reference, including any correction that could not unwind at a limit.

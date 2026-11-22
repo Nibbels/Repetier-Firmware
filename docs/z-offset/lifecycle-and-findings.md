@@ -8,8 +8,7 @@
 | --- | --- | --- | --- | --- |
 | **Power-up / firmware reset** | Restored from MCU EEPROM and converted to steps | RAM initializes **0** | Restored to header defaults (0.33/10 mm with live steps/mm) by EEPROM load | Selected sector loaded from external I²C EEPROM; extrema recalculated |
 | **EEPROM reload (`M501` / `M206`)** | Reloaded from EEPROM and combined with live SenseOffset using the loaded Z steps/mm | Preserved | Restored to the scaled defaults | Preserved |
-| **Ordinary Z homing (`homeZAxis`)** | **Preserved** | **Reset to 0 after CMP is disabled**; threshold deactivated | **FIXED:** all 3 markers and learned min/max reset to defaults in print mode | **Preserved** |
-| **Explicit print start (`M3921`)** | Preserved | Cleared with sample history and the active threshold | Defaults restored and all three markers cleared once prior moves finish | Preserved |
+| **Ordinary Z homing (`homeZAxis`)** | Preserved | Cleared with sample history and the active threshold after bed compensation is disabled | Defaults restored and all three layer markers and ECMP cleared | Preserved |
 | **Disable Z stepper (`disableZStepper`)** | Preserved | No dedicated reset | Current/last markers reset, but **GuessNew and learned min/max are not** | Preserved |
 | **M3001 enable compensation** | Preserved | Auto-enable from EEPROM threshold possible | Preserved | Valid matrix required |
 | **M3912 adaptive priming** | Preserved | Applied correction retained and new SenseOffset increments suspended | Phase flag suspends learning and all three markers are reset. Learned limits stay in effect during priming | Preserved |
@@ -20,7 +19,7 @@
 | **M3006 change** | Updates and immediately saves | Variable unchanged | Preserved | Preserved |
 | **M3902 Z0 then matrix save** | Sets and saves menu offset to 0 | Variable unchanged | Preserved | Transfers former manual offset to RAM matrix; external save is separate |
 
-`handleStartPrint()` marks printing status when queue depth exceeds two. `Printer::stopPrint()` and the stop sequence clear job motion and turn off the heaters. `M3921` and Z homing initialize layer and live SenseOffset state for the next print.
+`handleStartPrint()` marks printing status when queue depth exceeds two. `Printer::stopPrint()` and the stop sequence clear job motion and turn off the heaters. Z homing initializes layer and live SenseOffset state for the next print.
 
 ### Finding F1 (FIXED ON REVIEW BRANCH): M3006 must preserve live SenseOffset
 
@@ -51,7 +50,7 @@ Tests still required on a physical printer: `M3909 P0` during a first layer, sub
 
 ### Finding F3 (PARTIALLY FIXED): consecutive-print lifecycle
 
-Previously, only Z homing restored the learned fade bounds. A serial print now has an explicit boundary at `M3921`. It shares the first-layer reset with `homeZAxis()` and recalculates the compensation target for the existing position. Put the marker at a position with nozzle clearance before priming. The host replay covers a second job with a different first-layer height and skips automatic priming in a separate case. [USB print start](../first-layer-control/README.md#usb-print-start)
+The standard serial workflow uses `G28` as its start boundary and `M3079` as its end sequence. Output finishes its move and disables the motors and bed compensation. Z homing restores the fade defaults and clears the learned state before the next prime or model move. The host replay checks homing between different first-layer heights and model extrusion without automatic priming. A workflow that skips Z homing can still carry learned fade bounds into a subsequent print. [USB print start](../first-layer-control/README.md#usb-print-start)
 
 ### Finding F4 (HIGH): matrix-offset transfer is not an atomic persistent transaction
 

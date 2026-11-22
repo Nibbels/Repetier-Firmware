@@ -5757,13 +5757,6 @@ void processSpecialGCode(GCode* pCommand) {
             break;
         }
 
-        case 3921: // M3921 - initialize compensation state for a new print.
-            if (Printer::beginPrintJob())
-                Com::printFLN(PSTR("M3921: First-layer state reset"));
-            else
-                Com::printErrorFLN(PSTR("M3921: Print start blocked"));
-            break;
-
 #ifdef X35_ADC_CHANNEL
         case 3941: // 3941 reading optional temperature port X35 - Testfunction || by Nibbels
         {
