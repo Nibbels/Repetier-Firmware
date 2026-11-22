@@ -132,25 +132,19 @@ char Printer::RGBButtonBackPressed;
 char Printer::RGBLightModeForceWhite;
 #endif // RGB_LIGHT_R_PIN
 
-#if FEATURE_230V_OUTPUT
+#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 char Printer::enable230VOutput;
-#endif // FEATURE_230V_OUTPUT
 
-#if FEATURE_24V_FET_OUTPUTS
 char Printer::enableFET1 = FET1_DEFAULT_ON;
 char Printer::enableFET2 = FET2_DEFAULT_ON;
 char Printer::enableFET3 = FET3_DEFAULT_ON;
-#endif // FEATURE_24V_FET_OUTPUTS
 
-#if FEATURE_CASE_FAN
 bool Printer::ignoreFanOn = false;
 millis_t Printer::prepareFanOff = 0;
 unsigned long Printer::fanOffDelay = 0;
-#endif // FEATURE_CASE_FAN
+#endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
-#if FEATURE_TYPE_EEPROM
 unsigned char Printer::wrongType;
-#endif // FEATURE_TYPE_EEPROM
 
 //When the printer resets, we should not do movement, because it would not be homed. At least some interaction with buttons or temperature-commands are needed to allow movement.
 unsigned char Printer::g_unlock_movement = 0;
@@ -162,10 +156,8 @@ uint8_t Printer::motorCurrent[DRV8711_NUM_CHANNELS] = { 0 };
 bool Printer::g_pressure_offset_active = true;
 short Printer::g_pressure_offset = 0;
 
-#if FEATURE_ADJUSTABLE_MICROSTEPS
 //RF_MICRO_STEPS_ have values 0=FULL 1=2MS, 2=4MS, 3=8MS, 4=16MS, 5=32MS, 6=64MS, 7=128MS, 8=256MS
 uint8_t Printer::motorMicroStepsModeValue[DRV8711_NUM_CHANNELS] = { 0 }; //init later because of recalculation of value
-#endif                                                                   // FEATURE_ADJUSTABLE_MICROSTEPS
 
 #if FEATURE_Kurt67_WOBBLE_FIX
 int8_t Printer::wobblePhaseXY = 0;             //+100 = +PI | -100 = -PI
@@ -242,10 +234,10 @@ void Printer::switchEverythingOff() {
     if (Printer::isAllSwitchedOff())
         return;
 
-#if FAN_PIN > -1 && FEATURE_FAN_CONTROL
+#if FAN_PIN > -1
     // disable the fan
     Commands::setFanSpeed((uint8_t)0);
-#endif // FAN_PIN>-1 && FEATURE_FAN_CONTROL
+#endif // FAN_PIN > -1
 
     Printer::disableAllSteppersNow();
 
@@ -574,7 +566,6 @@ void Printer::setup() {
 
     Wire.begin();
 
-#if FEATURE_TYPE_EEPROM
     determineHardwareType();
 
     if (wrongType) {
@@ -586,7 +577,6 @@ void Printer::setup() {
         while (1) {
         }
     }
-#endif // FEATURE_TYPE_EEPROM
 
     //Initialize Step Pins
     SET_OUTPUT(X_STEP_PIN);
@@ -701,10 +691,10 @@ void Printer::setup() {
 #endif // Z_MAX_PIN>-1
 #endif // MAX_HARDWARE_ENDSTOP_Z
 
-#if FAN_PIN > -1 && FEATURE_FAN_CONTROL
+#if FAN_PIN > -1
     SET_OUTPUT(FAN_PIN);
     WRITE(FAN_PIN, LOW);
-#endif // FAN_PIN>-1 && FEATURE_FAN_CONTROL
+#endif // FAN_PIN > -1
 
 #if FAN_BOARD_PIN > -1
     SET_OUTPUT(FAN_BOARD_PIN);
@@ -757,9 +747,9 @@ void Printer::setup() {
     Printer::axisLengthMM[Y_AXIS] = Y_MAX_LENGTH;
     Printer::axisLengthMM[Z_AXIS] = Z_MAX_LENGTH;
 
-#if FEATURE_CASE_FAN
+#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
     fanOffDelay = CASE_FAN_OFF_DELAY;
-#endif // FEATURE_CASE_FAN
+#endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
 #ifdef RGB_LIGHT_R_PIN
     RGBLightMode = RGB_LIGHT_DEFAULT_MODE;
@@ -803,13 +793,11 @@ void Printer::setup() {
     // Read settings from eeprom if wanted [readDataFromEEPROM or destroy corrupted eeprom]
     EEPROM::init();
 
-#if FEATURE_230V_OUTPUT
+#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
     enable230VOutput = OUTPUT_230V_DEFAULT_ON;
     SET_OUTPUT(OUTPUT_230V_PIN);
     WRITE(OUTPUT_230V_PIN, enable230VOutput);
-#endif // FEATURE_230V_OUTPUT
 
-#if FEATURE_24V_FET_OUTPUTS
 #if FET1 > -1
     SET_OUTPUT(FET1);
     WRITE(FET1, enableFET1);
@@ -818,13 +806,12 @@ void Printer::setup() {
     SET_OUTPUT(FET2);
     WRITE(FET2, enableFET2);
 #endif // FET2
-#if FET3 > -1 && !(FEATURE_CASE_FAN && CASE_FAN_PIN > -1)
+#if FET3 > -1 && CASE_FAN_PIN < 0
     SET_OUTPUT(FET3);
     WRITE(FET3, enableFET3);
 #endif // FET3
-#endif // FEATURE_24V_FET_OUTPUTS
 
-#if FEATURE_CASE_FAN && CASE_FAN_PIN > -1
+#if CASE_FAN_PIN > -1
     SET_OUTPUT(CASE_FAN_PIN);
 
 #if CASE_FAN_ALWAYS_ON
@@ -832,7 +819,8 @@ void Printer::setup() {
 #else
     WRITE(CASE_FAN_PIN, 0);
 #endif // CASE_FAN_ALWAYS_ON
-#endif // FEATURE_CASE_FAN && CASE_FAN_PIN > -1
+#endif // CASE_FAN_PIN > -1
+#endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
     SET_OUTPUT(CASE_LIGHT_PIN);
     WRITE(CASE_LIGHT_PIN, enableCaseLight);
@@ -1513,7 +1501,7 @@ void Printer::showConfiguration() {
     Com::config(PSTR("MixingExtruder:"), 0);
     Com::config(PSTR("HeatedBed:"), HAVE_HEATED_BED);
     Com::config(PSTR("SDCard:"), SDSUPPORT);
-    Com::config(PSTR("Fan:"), FAN_PIN > -1 && FEATURE_FAN_CONTROL);
+    Com::config(PSTR("Fan:"), FAN_PIN > -1);
     Com::config(PSTR("Fan2:0"));
     Com::config(PSTR("LCD:"), 0);
     Com::config(PSTR("SoftwarePowerSwitch:"), 0);

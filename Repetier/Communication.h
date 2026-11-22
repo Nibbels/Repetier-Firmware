@@ -263,12 +263,12 @@ public:
 #endif //NUM_EXTRUDER > 1
     FSTRINGVAR(tEPRInterruptSpacingInterval)
 
-#if FAN_PIN > -1 && FEATURE_FAN_CONTROL
+#if FAN_PIN > -1
     FSTRINGVAR(tEPRPrinter_FAN_MODE)
     FSTRINGVAR(tEPRPrinter_FAN_SPEED)
     FSTRINGVAR(tEPRPrinter_FAN_PART_FAN_PWM_MIN)
     FSTRINGVAR(tEPRPrinter_FAN_PART_FAN_PWM_MAX)
-#endif // FAN_PIN>-1 && FEATURE_FAN_CONTROL
+#endif // FAN_PIN > -1
 
 #endif // EEPROM_MODE==0
 

@@ -43,21 +43,6 @@ Overflow in Z-Matrix: >12.7f
 #error This Firmware supports up to 2 Extruders. You might have to reimplement the 3+ code or "request it" if you really got hands on a RFx000 board with 3+ Extruders.
 #endif // NUM_EXTRUDER > 2 || NUM_EXTRUDER < 0
 
-
-/** \brief Allows to use the 230V output */
-#define FEATURE_230V_OUTPUT 0 // the RF1000 does not support the 230 V output
-
-/** \brief Allows to use the 24V FET outputs */
-#define FEATURE_24V_FET_OUTPUTS 0 // the RF1000 does not support the 24V FET outputs
-
-/** \brief Allows to use the case fan
-WARNING: Do not enable the case fan feature in case you have a second extruder attached to the HZ2 pin (X8) - this could heat up the extruder endlessly and could destroy it */
-#define FEATURE_CASE_FAN 0 // 0 = off, 1 = on
-
-#if FEATURE_CASE_FAN && NUM_EXTRUDER > 1
-#error The case fan and the 2. extruder use the same output, they can not be used simultaneously.
-#endif // FEATURE_CASE_FAN && NUM_EXTRUDER > 1
-
 /** \brief Define the type of the present extruders */
 #if NUM_EXTRUDER == 2
 #define EXT0_HOTEND_TYPE HOTEND_TYPE_V2
@@ -65,9 +50,6 @@ WARNING: Do not enable the case fan feature in case you have a second extruder a
 #else
 #define EXT0_HOTEND_TYPE HOTEND_TYPE_V2
 #endif // NUM_EXTRUDER == 2
-
-/** \brief Checks the board type before initializing hardware outputs. */
-#define FEATURE_TYPE_EEPROM 1 // 1 = on, 0 = off
 
 // ##########################################################################################
 // ##   Calibration
@@ -253,8 +235,6 @@ The codes are only executed for multiple extruder when changing the extruder. */
 #endif // NUM_EXTRUDER>0 && EXT0_TEMPSENSOR_TYPE<101
 
 #if NUM_EXTRUDER == 2
-
-#define FEATURE_ALIGN_EXTRUDERS 1
 
 // ##########################################################################################
 // ##   Configuration of the 2. extruder
@@ -750,7 +730,6 @@ Above this value the z compensation will distribute the roughness of the surface
 #define HEAT_BED_SCAN_PRESSURE_TOLERANCE 15                           // [digits]
 #define HEAT_BED_SCAN_PRESSURE_READ_DELAY_MS 15                       // [ms]
 #define HEAT_BED_SCAN_DELAY 1000                                      // [ms]
-#define HEAT_BED_SCAN_ALIGN_EXTRUDERS_ABORT_DELAY (unsigned long)3600 // [s]
 
 #define PRECISE_HEAT_BED_SCAN_WARMUP_DELAY (uint32_t)600      // [s]
 #define PRECISE_HEAT_BED_SCAN_CALIBRATION_DELAY (uint32_t)600 // [s]

@@ -181,9 +181,6 @@
 #define UI_ACTION_FLOW_DF 1704
 #define UI_ACTION_FLOW_DV 1705
 
-//FEATURE_ALIGN_EXTRUDERS
-#define UI_ACTION_ALIGN_EXTRUDERS 1706
-
 #define UI_ACTION_MICROSTEPS_XY 1707
 #define UI_ACTION_MICROSTEPS_Z 1708
 #define UI_ACTION_MICROSTEPS_E 1709
@@ -293,7 +290,6 @@ extern bool g_nAutoReturnMessage;
 #endif // UI_PRINT_AUTORETURN_TO_MENU_AFTER
 
 extern char g_nYesNo;
-extern volatile char g_nContinueButtonPressed;
 
 // Key codes
 #define UI_KEYS_INIT_CLICKENCODER_LOW(pinA, pinB) \

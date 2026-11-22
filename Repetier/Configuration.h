@@ -90,9 +90,6 @@
 /** \brief If a checksum is sent, all future comamnds must also contain a checksum. Increases reliability especially for binary protocol. */
 #define FEATURE_CHECKSUM_FORCED             0                                                   // 1 = on, 0 = off
 
-/** \brief Enables/disables the support for the fan control */
-#define FEATURE_FAN_CONTROL                 1                                                   // 1 = on, 0 = off
-
 // ##########################################################################################
 // ##   Common extruder configuration
 // ##########################################################################################
@@ -161,15 +158,12 @@
  * High microstepping make your speed low. Dont use 256, avoid 128.
  * 256 Microsteps sound very bad and is slower 30mm/s in X and Y. Avoid it! 128 is not much better. 64 might be ok for XY.
  * Better dont rise Z because it is already slow with 2560steps/mm @32 Microsteps.
- * Change your EEPROMs Steps/mm accordingly if you change RF_MICRO_STEPS_ in this configuration. Steps/mm are autoadjusted if you use FEATURE_ADJUSTABLE_MICROSTEPSs Menu!
+ * Change your EEPROMs Steps/mm accordingly if you change RF_MICRO_STEPS_ in this configuration. The Stepper menu adjusts steps/mm when you change the microstep setting there.
  */
 
 #define RF_MICRO_STEPS_Z                    16                                                   // standard/best 32 or 16
 #define RF_MICRO_STEPS_XY                   32                                                   // standard/best 32 or 64
 #define RF_MICRO_STEPS_E                    32                                                   // standard/best 32 or 64 (or 128?? --> untested!)
-
-/** \brief Enables/disables that you can switch the micro step setting within Menu->Configuration->Stepper and it is saved in hidden EEPROM */
-#define FEATURE_ADJUSTABLE_MICROSTEPS       1
 
 // ##########################################################################################
 // ##   Feedrate and Movement settings
@@ -842,12 +836,6 @@ we use blocks of 2 kByte size for the structure of our EEPROM
 
 /** \brief Nibbels/PeterKA Testfeature: It can check if you lost steps and test your buttons hysteresis and give a good hint if your printer lost steps by hardware fault */
 #define FEATURE_CHECK_HOME                  1
-
-/** \brief This adds some GCode M3029 to simulate Key-Press by GCode and to read whats inside the printers Display rightnow. */
-#define FEATURE_SEE_DISPLAY                 1
-
-/** \brief This is some testing function for reading the stepper drivers status bits while operation */
-#define FEATURE_READ_STEPPER_STATUS         0
 
 /** 
  * \brief Z-Wobble elimination tool

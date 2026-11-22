@@ -153,25 +153,19 @@ public:
     static char RGBLightModeForceWhite;
 #endif // RGB_LIGHT_R_PIN
 
-#if FEATURE_230V_OUTPUT
+#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
     static char enable230VOutput;
-#endif // FEATURE_230V_OUTPUT
 
-#if FEATURE_24V_FET_OUTPUTS
     static char enableFET1;
     static char enableFET2;
     static char enableFET3;
-#endif // FEATURE_24V_FET_OUTPUTS
 
-#if FEATURE_CASE_FAN
     static bool ignoreFanOn;
     static millis_t prepareFanOff;
     static unsigned long fanOffDelay;
-#endif // FEATURE_CASE_FAN
+#endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
-#if FEATURE_TYPE_EEPROM
     static unsigned char wrongType;
-#endif // FEATURE_TYPE_EEPROM
 
     static unsigned char g_unlock_movement;
 
@@ -182,9 +176,7 @@ public:
     static bool g_pressure_offset_active;
     static short g_pressure_offset;
 
-#if FEATURE_ADJUSTABLE_MICROSTEPS
     static uint8_t motorMicroStepsModeValue[DRV8711_NUM_CHANNELS]; //1=2MS, 2=4MS, 3=8MS, 4=16MS, 5=32MS, 6=64MS, 7=128MS, 8=256MS
-#endif                                                             // FEATURE_ADJUSTABLE_MICROSTEPS
 
 #if FEATURE_Kurt67_WOBBLE_FIX
     static int8_t wobblePhaseXY;
@@ -464,10 +456,6 @@ public:
             problematisch = true; //wenn matrix positiv, dann evtl. problem
         if (isAxisHomed(Y_AXIS) && Printer::currentYSteps <= 5 * YAXIS_STEPS_PER_MM)
             problematisch = false; //vorherige Probleme egal, wenn bett nach hinten gefahren
-#if FEATURE_ALIGN_EXTRUDERS
-        if (g_nAlignExtrudersStatus)
-            problematisch = false; //das homing passiert in Z einzeln, liegt aber neben dem Bett.
-#endif                             // FEATURE_ALIGN_EXTRUDERS
         if (g_nHeatBedScanStatus)
             problematisch = false; //das homing passiert in Z einzeln, liegt aber neben dem Bett.
         if (problematisch)

@@ -427,7 +427,7 @@ void Extruder::setTemperatureForExtruder(float temperatureInCelsius, uint8_t ext
         Com::printFLN(Com::tColon, temperatureInCelsius, 0);
     }
 
-#if FEATURE_CASE_FAN && !CASE_FAN_ALWAYS_ON && CASE_FAN_PIN > -1
+#if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && !CASE_FAN_ALWAYS_ON && CASE_FAN_PIN > -1
     if (Printer::ignoreFanOn) {
         //ignore the case fan whenever there is another cooling solution available // Nibbels
         //the fan should still be connected within the rf2000 but might be avoided to suppress noise.
@@ -456,7 +456,7 @@ void Extruder::setTemperatureForExtruder(float temperatureInCelsius, uint8_t ext
             }
         }
     }
-#endif // FEATURE_CASE_FAN && !CASE_FAN_ALWAYS_ON && CASE_FAN_PIN > -1
+#endif // (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && !CASE_FAN_ALWAYS_ON && CASE_FAN_PIN > -1
 
     bool alloff = true;
     for (uint8_t i = 0; i < NUM_EXTRUDER; i++)

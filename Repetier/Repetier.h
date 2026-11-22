@@ -140,9 +140,9 @@ extern volatile uint8_t execute50msPeriodical;
 extern volatile uint8_t execute16msPeriodical;
 extern volatile uint8_t execute10msPeriodical;
 
-#if FAN_PIN > -1 && FEATURE_FAN_CONTROL
+#if FAN_PIN > -1
 extern uint8_t fanKickstart;
-#endif // FAN_PIN>-1 && FEATURE_FAN_CONTROL
+#endif // FAN_PIN > -1
 
 #if SDSUPPORT
 #define SHORT_FILENAME_LENGTH 14

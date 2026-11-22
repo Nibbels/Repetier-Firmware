@@ -43,30 +43,9 @@ Overflow in Z-Matrix: >12.7f
 #error This Firmware supports up to 2 Extruders. You might have to reimplement the 3+ code or "request it" if you really got hands on a RFx000 board with 3+ Extruders.
 #endif // NUM_EXTRUDER > 2 || NUM_EXTRUDER < 0
 
-
-/** \brief Allows to use the 230V output */
-#define FEATURE_230V_OUTPUT 1 // 1 = on, 0 = off
-
-/**
- *\brief Allows to use the 24V FET outputs
- * Also set the FET1 FET2 pins. They have menu support and their state is remembered using eeprom.
- * Set FET3 pin if you want to be able to switch it by gcode M3300.
- *
- * @RF2000 FET3 per default is the case fan pin CASE_FAN_PIN as well. -> See M3120 / M3121.
- * -> Set FET3 and/or FEATURE_CASE_FAN for working with X45.
- * -> If FEATURE_CASE_FAN is 1 and its CASE_FAN_PIN is set then the FET3 state is not being loaded from eeprom at boot time.
- */
-#define FEATURE_24V_FET_OUTPUTS 1 // 1 = on, 0 = off
-
-/** \brief Allows to use the case fan */
-#define FEATURE_CASE_FAN 1 // 0 = off, 1 = on
-
 /** \brief Define the type of the present extruders */
 #define EXT0_HOTEND_TYPE HOTEND_TYPE_V3
 #define EXT1_HOTEND_TYPE HOTEND_TYPE_V3
-
-/** \brief Checks the board type before initializing hardware outputs. */
-#define FEATURE_TYPE_EEPROM 1 // 1 = on, 0 = off
 
 // ##########################################################################################
 // ##   Calibration
@@ -253,8 +232,6 @@ The codes are only executed for multiple extruder when changing the extruder. */
 #endif // NUM_EXTRUDER>0 && EXT0_TEMPSENSOR_TYPE<101
 
 #if NUM_EXTRUDER == 2
-
-#define FEATURE_ALIGN_EXTRUDERS 1
 
 // ##########################################################################################
 // ##   Configuration of the 2. extruder
@@ -765,7 +742,6 @@ Above this value the z compensation will distribute the roughness of the surface
 #define HEAT_BED_SCAN_PRESSURE_TOLERANCE 15                           // [digits]
 #define HEAT_BED_SCAN_PRESSURE_READ_DELAY_MS 15                       // [ms]
 #define HEAT_BED_SCAN_DELAY 1000                                      // [ms]
-#define HEAT_BED_SCAN_ALIGN_EXTRUDERS_ABORT_DELAY (unsigned long)3600 // [s]
 
 #define PRECISE_HEAT_BED_SCAN_WARMUP_DELAY (uint32_t)600      // [s]
 #define PRECISE_HEAT_BED_SCAN_CALIBRATION_DELAY (uint32_t)600 // [s]
@@ -808,25 +784,18 @@ Above this value the z compensation will distribute the roughness of the surface
 // ##   configuration of the 230V output
 // ##########################################################################################
 
-#if FEATURE_230V_OUTPUT
-
 /** \brief Set the 230V output default  */
 #define OUTPUT_230V_DEFAULT_ON 0 // 1 = on, 0 = off
-
-#endif // FEATURE_230V_OUTPUT
 
 // ##########################################################################################
 // ##   configuration of the FET outputs
 // ##########################################################################################
 
-#if FEATURE_24V_FET_OUTPUTS
-
 /** \brief Set the 24V FET output defaults  */
 #define FET1_DEFAULT_ON 0 // 1 = on, 0 = off
 #define FET2_DEFAULT_ON 0 // 1 = on, 0 = off
+// The case fan uses FET3 on X45. Its startup state is set by the fan configuration.
 #define FET3_DEFAULT_ON 0 // 1 = on, 0 = off
-
-#endif // FEATURE_24V_FET_OUTPUTS
 
 // ##########################################################################################
 // ##   configuration of the RGB light effects

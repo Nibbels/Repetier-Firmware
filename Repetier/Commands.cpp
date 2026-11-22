@@ -206,7 +206,7 @@ void Commands::changeFlowrateMultiply(float newExtrusionFactor) {
     Com::printFLN(Com::tFlowMultiply, (int)lroundf(100 * newExtrusionFactor));
 } // changeFlowrateMultiply
 
-#if FAN_PIN > -1 && FEATURE_FAN_CONTROL
+#if FAN_PIN > -1
 uint8_t fanKickstart = 0;
 void Commands::setFanSpeed(uint8_t speed, bool recalc) {
     //speed = constrain(speed,0,255); nichts anderes passt in uint8_t hinein.
@@ -248,9 +248,9 @@ void Commands::setFanSpeed(uint8_t speed, bool recalc) {
 
     pwm_pos[NUM_EXTRUDER + 2] = speed;
 } // setFanSpeed
-#endif // FAN_PIN>-1 && FEATURE_FAN_CONTROL
+#endif // FAN_PIN > -1
 
-#if FAN_PIN > -1 && FEATURE_FAN_CONTROL
+#if FAN_PIN > -1
 void Commands::adjustFanFrequency(uint8_t speed_divisor = PART_FAN_DEFAULT_PWM_SPEED_DIVISOR) { //1 = ~15.3hz, ~2=7.62hz, ...
     InterruptProtectedBlock noInts;
     if (!speed_divisor)
@@ -261,7 +261,7 @@ void Commands::adjustFanMode(uint8_t output_mode) { //0 = pwm, 1 = pdm
     part_fan_frequency_modulation = (output_mode ? PART_FAN_MODE_PDM : PART_FAN_MODE_PWM);
     Printer::setMenuMode(MENU_MODE_FAN_MODE_PDM, (bool)part_fan_frequency_modulation);
 }
-#endif // FAN_PIN>-1 && FEATURE_FAN_CONTROL
+#endif // FAN_PIN > -1
 
 void Commands::reportPrinterUsage() {
 #if EEPROM_MODE != 0
@@ -713,7 +713,7 @@ void Commands::processMCode(GCode* com) {
         break;
     }
 
-#if FAN_PIN > -1 && FEATURE_FAN_CONTROL
+#if FAN_PIN > -1
     case 106: // M106 - Fan On
     {
         setFanSpeed(com->hasS() ? (uint8_t)constrain(com->S, 0, 255) : (uint8_t)255);
@@ -724,7 +724,7 @@ void Commands::processMCode(GCode* com) {
         setFanSpeed(0);
         break;
     }
-#endif // FAN_PIN>-1 && FEATURE_FAN_CONTROL
+#endif // FAN_PIN > -1
 
     case 82: // M82
     {

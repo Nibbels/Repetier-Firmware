@@ -30,7 +30,6 @@ bool g_nAutoReturnMessage = false;
 #endif // UI_PRINT_AUTORETURN_TO_MENU_AFTER
 
 char g_nYesNo = 0; // 0 = no, 1 = yes
-volatile char g_nContinueButtonPressed = 0;
 
 bool UIMenuEntry::showEntry() const {
     bool ret = true;
@@ -479,8 +478,8 @@ void UIDisplay::initializeLCD(bool normal) {
 // ----------- end direct LCD driver
 
 void UIDisplay::printRow(uint8_t r, char* txt, char* txt2, uint8_t changeAtCol) {
-#if MAX_COLS < UI_COLS && FEATURE_SEE_DISPLAY
-#error if you set MAX_COLS to a tiny value you risk overflows. Probably not only within FEATURE_SEE_DISPLAY
+#if MAX_COLS < UI_COLS
+#error MAX_COLS must accommodate the LCD columns and the display report
 #endif
     changeAtCol = RMath::min((uint8_t)UI_COLS, changeAtCol);
     uint8_t col = 0;
@@ -494,18 +493,14 @@ void UIDisplay::printRow(uint8_t r, char* txt, char* txt2, uint8_t changeAtCol) 
     while ((c = *txt) != 0x00 && col < changeAtCol) {
         txt++;
         lcdPutChar(c);
-#if FEATURE_SEE_DISPLAY
         //cache whatever you write to the display!
         displayCache[r][col] = c;
-#endif //FEATURE_SEE_DISPLAY
         col++;
     }
     while (col < changeAtCol) {
         lcdPutChar(' ');
-#if FEATURE_SEE_DISPLAY
         //cache whatever you write to the display!
         displayCache[r][col] = ' ';
-#endif //FEATURE_SEE_DISPLAY
         col++;
     }
 
@@ -513,25 +508,19 @@ void UIDisplay::printRow(uint8_t r, char* txt, char* txt2, uint8_t changeAtCol) 
         while ((c = *txt2) != 0x00 && col < UI_COLS) {
             txt2++;
             lcdPutChar(c);
-#if FEATURE_SEE_DISPLAY
             //cache whatever you write to the display!
             displayCache[r][col] = c;
-#endif //FEATURE_SEE_DISPLAY
             col++;
         }
         while (col < UI_COLS) {
             lcdPutChar(' ');
-#if FEATURE_SEE_DISPLAY
             //cache whatever you write to the display!
             displayCache[r][col] = ' ';
-#endif //FEATURE_SEE_DISPLAY
             col++;
         }
     }
-#if FEATURE_SEE_DISPLAY
     //if we had sdcard files last we would see more than 20 bytes. Keep 0 at end.
     displayCache[r][col] = 0;
-#endif //FEATURE_SEE_DISPLAY
 } // printRow
 #endif // UI_DISPLAY_TYPE==1 || UI_DISPLAY_TYPE==2
 
@@ -923,7 +912,7 @@ void UIDisplay::parse(char* txt, bool ram) {
 
         case 'F': // FAN speed
         {
-#if FAN_PIN > -1 && FEATURE_FAN_CONTROL
+#if FAN_PIN > -1
             if (c2 == 's') { // %Fs : Fan speed in Percent
                 addFloat(Printer::getFanSpeed(false) / 2.55f, 3, 1);
             } else if (c2 == 'h') { // %Fh : Fan frequency in Hz/Teiler
@@ -938,7 +927,7 @@ void UIDisplay::parse(char* txt, bool ram) {
             } else if (c2 == 'O') { // %FO : Fan modulation maximum = 100% FanSpeed
                 addInt(part_fan_pwm_max, 3);
             }
-#endif // FAN_PIN>-1 && FEATURE_FAN_CONTROL
+#endif // FAN_PIN > -1
             if (c2 == 'H') // %FH : Digit Homing to Zero ON/OFF
             {
                 addStringP(Printer::g_pressure_offset_active ? ui_text_on : ui_text_off);
@@ -1239,26 +1228,22 @@ void UIDisplay::parse(char* txt, bool ram) {
                 break;
             }
 
-#if FEATURE_230V_OUTPUT
+#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
             if (c2 == 'u') {
                 addStringP(Printer::enable230VOutput ? ui_text_on : ui_text_off); // %ou : 230V output on/off
                 break;
             }
-#endif // FEATURE_230V_OUTPUT
 
-#if FEATURE_24V_FET_OUTPUTS
             if (c2 == 'l') {
                 addStringP(Printer::enableFET1 ? ui_text_on : ui_text_off); // %ol : FET 1 X42 output on/off
                 break;
             }
-#endif // FEATURE_24V_FET_OUTPUTS
 
-#if FEATURE_24V_FET_OUTPUTS
             if (c2 == 'n') {
                 addStringP(Printer::enableFET2 ? ui_text_on : ui_text_off); // %on : FET 2 X44 output on/off
                 break;
             }
-#endif // FEATURE_24V_FET_OUTPUTS
+#endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
             // Extruder output level
             if (c2 >= '0' && c2 <= '9') // %o0..9 : Output level extruder 0..9 is % including %sign
@@ -1523,18 +1508,15 @@ void UIDisplay::parse(char* txt, bool ram) {
             }
 #endif //NUM_EXTRUDER>1
 
-#if FEATURE_ADJUSTABLE_MICROSTEPS
             else if (c2 == 'E') // %XE : Extruder Stepper Microsteps
             {
                 addInt(drv8711ModeValue_2_MicroSteps(Printer::motorMicroStepsModeValue[E_AXIS]), 3);
             }
-#endif                          //FEATURE_ADJUSTABLE_MICROSTEPS
 #endif                          // NUM_EXTRUDER>0
             else if (c2 == 'g') // %Xg : Printer::stepsPackingMinInterval
             {
                 addInt(Printer::stepsPackingMinInterval, 4);
             }
-#if FEATURE_ADJUSTABLE_MICROSTEPS
             else if (c2 == 'x') // %Xx : XY Stepper Microsteps
             {
                 addInt(drv8711ModeValue_2_MicroSteps(Printer::motorMicroStepsModeValue[X_AXIS]), 3);
@@ -1542,7 +1524,6 @@ void UIDisplay::parse(char* txt, bool ram) {
             {
                 addInt(drv8711ModeValue_2_MicroSteps(Printer::motorMicroStepsModeValue[Z_AXIS]), 3);
             }
-#endif //FEATURE_ADJUSTABLE_MICROSTEPS
             break;
         }
         case 's': // Endstop positions
@@ -2719,7 +2700,7 @@ void UIDisplay::finishAction(int action) {
 
 void UIDisplay::changeSwitchCase(int action, int8_t increment) {
     switch (action) {
-#if FAN_PIN > -1 && FEATURE_FAN_CONTROL
+#if FAN_PIN > -1
     case UI_ACTION_FANSPEED: {
         int speed = (int)Printer::getFanSpeed() + (int)increment;
         if (speed > 255)
@@ -2765,7 +2746,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         EEPROM::updateChecksum();
         break;
     }
-#endif // FAN_PIN>-1 && FEATURE_FAN_CONTROL
+#endif // FAN_PIN > -1
     case UI_ACTION_XPOSITION: {
         /*
         XYZ_POSITION_BUTTON_DIRECTION = -1 : This fits to you if you want more intuitivity when choosing the Up-Down-Buttons.
@@ -3492,7 +3473,6 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         EEPROM::updateChecksum();
         break;
     }
-#if FEATURE_ADJUSTABLE_MICROSTEPS
     case UI_ACTION_MICROSTEPS_XY:
     case UI_ACTION_MICROSTEPS_Z:
     case UI_ACTION_MICROSTEPS_E: {
@@ -3592,7 +3572,6 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         }
         break;
     }
-#endif //FEATURE_ADJUSTABLE_MICROSTEPS
     }
 } //changeSwitchCase
 
@@ -3815,7 +3794,7 @@ void UIDisplay::mainSwitchCase(int action) {
         break;
     }
 
-#if FEATURE_230V_OUTPUT
+#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
     case UI_ACTION_230V_OUTPUT: {
         if (Printer::enable230VOutput)
             Printer::enable230VOutput = 0;
@@ -3829,9 +3808,7 @@ void UIDisplay::mainSwitchCase(int action) {
 
         break;
     }
-#endif // FEATURE_230V_OUTPUT
 
-#if FEATURE_24V_FET_OUTPUTS
 #if FET1 > -1
     case UI_ACTION_FET1_OUTPUT: {
         if (Printer::enableFET1)
@@ -3858,7 +3835,7 @@ void UIDisplay::mainSwitchCase(int action) {
         break;
     }
 #endif // FET2
-#endif // FEATURE_24V_FET_OUTPUTS
+#endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
     case UI_ACTION_CONFIG_SINGLE_STEPS: {
         configureMANUAL_STEPS_Z(1);
@@ -4036,7 +4013,7 @@ void UIDisplay::mainSwitchCase(int action) {
     }
 #endif // SDSUPPORT
 
-#if FAN_PIN > -1 && FEATURE_FAN_CONTROL
+#if FAN_PIN > -1
     case UI_ACTION_FAN_OFF: {
         Commands::setFanSpeed((uint8_t)0);
         break;
@@ -4063,7 +4040,7 @@ void UIDisplay::mainSwitchCase(int action) {
         EEPROM::updateChecksum();
         break;
     }
-#endif // FAN_PIN>-1 && FEATURE_FAN_CONTROL
+#endif // FAN_PIN > -1
 
     case UI_ACTION_MENU_XPOS: {
         pushMenu((void*)&ui_menu_xpos, false);
@@ -4136,13 +4113,6 @@ void UIDisplay::mainSwitchCase(int action) {
         }
         break;
     }
-#if FEATURE_ALIGN_EXTRUDERS
-    case UI_ACTION_ALIGN_EXTRUDERS: {
-        exitmenu();
-        startAlignExtruders();
-        break;
-    }
-#endif // FEATURE_ALIGN_EXTRUDERS
 
     case UI_ACTION_RF_SCAN_HEAT_BED: {
         g_nHeatBedScanMode = 0;
@@ -4165,13 +4135,6 @@ void UIDisplay::mainSwitchCase(int action) {
         uid.exitmenu();
         break;
     }
-
-#if FEATURE_ALIGN_EXTRUDERS
-    case UI_ACTION_RF_ALIGN_EXTRUDERS: {
-        startAlignExtruders();
-        break;
-    }
-#endif // FEATURE_ALIGN_EXTRUDERS
 
     case UI_ACTION_RF_OUTPUT_OBJECT: {
         outputObject(); //als UI_ACTION_RF_OUTPUT_OBJECT
@@ -4462,9 +4425,6 @@ void UIDisplay::fastAction() {
             lastButtonStart = HAL::timeInMilliseconds();
             lastButtonAction = nextAction;
             flags |= UI_FLAG_FAST_KEY_ACTION;
-            if (nextAction == UI_ACTION_RF_CONTINUE) {
-                g_nContinueButtonPressed = 1;
-            }
         }
 
         if ((PrintLine::direct.task == DIRECT_RUNNING_STOPPABLE || PrintLine::direct.task == DIRECT_PREPARED_STOPPABLE)

@@ -31,9 +31,6 @@ FSTRINGVALUE(ui_text_z_compensation, UI_TEXT_Z_COMPENSATION)
 FSTRINGVALUE(ui_text_x_axis, UI_TEXT_X_AXIS)
 FSTRINGVALUE(ui_text_y_axis, UI_TEXT_Y_AXIS)
 FSTRINGVALUE(ui_text_z_axis, UI_TEXT_Z_AXIS)
-#if FEATURE_ALIGN_EXTRUDERS
-FSTRINGVALUE(ui_text_align_extruders, UI_TEXT_ALIGN_EXTRUDERS);
-#endif // FEATURE_ALIGN_EXTRUDERS
 FSTRINGVALUE(ui_text_extruder, UI_TEXT_EXTRUDER)
 FSTRINGVALUE(ui_text_autodetect_pid, UI_TEXT_AUTODETECT_PID)
 FSTRINGVALUE(ui_text_temperature_manager, UI_TEXT_TEMPERATURE_MANAGER)
@@ -180,10 +177,6 @@ int8_t g_nDigitFlowCompensation_intense = 0;                                    
 int8_t g_nDigitFlowCompensation_speed_intense = 0;                                  // +- % Standard 0 heißt feedmulti wird zu 1.0f
 short g_nDigitFlowCompensation_Fmin = short(abs(EMERGENCY_PAUSE_DIGITS_MAX) * 0.7); //mögliche Standardwerte
 short g_nDigitFlowCompensation_Fmax = short(abs(EMERGENCY_PAUSE_DIGITS_MAX));       //mögliche Standardwerte -> z.b. gut wenn das die pause-digits sind.
-
-#if FEATURE_ALIGN_EXTRUDERS
-volatile unsigned char g_nAlignExtrudersStatus = 0;
-#endif // FEATURE_ALIGN_EXTRUDERS
 
 #ifdef RGB_LIGHT_R_PIN
 unsigned char g_uRGBHeatingR = RGB_HEATING_R;
@@ -340,10 +333,6 @@ void adjustPressureLimits(short IdlePressure) {
 }
 
 void startHeatBedScan(void) {
-#if FEATURE_ALIGN_EXTRUDERS
-    if (g_nAlignExtrudersStatus)
-        return;
-#endif //FEATURE_ALIGN_EXTRUDERS
     //if( g_nHeatBedScanStatus ) return;
     if (g_nZOSScanStatus)
         return;
@@ -372,10 +361,6 @@ void startHeatBedScan(void) {
 } // startHeatBedScan
 
 void scanHeatBed(void) {
-#if FEATURE_ALIGN_EXTRUDERS
-    if (g_nAlignExtrudersStatus)
-        return;
-#endif //FEATURE_ALIGN_EXTRUDERS
     //if( g_nHeatBedScanStatus ) return;
     if (g_nZOSScanStatus)
         return;
@@ -445,7 +430,7 @@ void scanHeatBed(void) {
         previousMillisCmd = HAL::timeInMilliseconds(); //prevent inactive shutdown of steppers/temps
         GCode::keepAlive(Calibrating);
 
-        if (g_nHeatBedScanStatus != 15 && g_nHeatBedScanStatus != 20 && g_nHeatBedScanStatus != 22 && g_nHeatBedScanStatus != 123 && g_nHeatBedScanStatus != 125 && g_nHeatBedScanStatus != 136 && g_nHeatBedScanStatus != 137) {
+        if (g_nHeatBedScanStatus != 15 && g_nHeatBedScanStatus != 20 && g_nHeatBedScanStatus != 22 && g_nHeatBedScanStatus != 136 && g_nHeatBedScanStatus != 137) {
             // there are a few cases where we do not want to change the current status text
             UI_STATUS(UI_TEXT_HEAT_BED_SCAN);
         }
@@ -746,7 +731,7 @@ void scanHeatBed(void) {
 #endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
-        //############################################################### ERROR HANDLING Case 45 105 139 + 132
+        //############################################################### Scan retry
         case 45: {
             moveZ(long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM)); //spacing for bed
             Printer::homeAxis(false, true, false);                             //Home Y
@@ -1092,17 +1077,6 @@ void scanHeatBed(void) {
                 Com::printFLN(PSTR("idle pressure at stop: "), nTempPressure);
             }
 
-#if NUM_EXTRUDER == 2
-            // we have to align the two extruders
-            g_nHeatBedScanStatus = 100;
-
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("80->100"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
-#else  // NUM_EXTRUDER == 2
             if (g_nHeatBedScanMode) {
                 // we have to determine the z-offset which is caused by different extruder temperatures
                 g_nHeatBedScanStatus = 130;
@@ -1124,220 +1098,8 @@ void scanHeatBed(void) {
                 }
 #endif // DEBUG_HEAT_BED_SCAN == 2
             }
-#endif // NUM_EXTRUDER == 2
             break;
         }
-        //################################ JUMP 100 / 130 / 150 >>
-        case 100: {
-            // we are homed at the moment - move to the position where both extruders shall be aligned to the same z position
-            Printer::queueRelativeMMCoordinates(HEAT_BED_SCAN_X_CALIBRATION_POINT_MM, HEAT_BED_SCAN_Y_CALIBRATION_POINT_MM, 0, 0, RMath::min(Printer::homingFeedrate[X_AXIS], Printer::homingFeedrate[Y_AXIS]), true, true);
-
-            g_lastScanTime = HAL::timeInMilliseconds();
-            g_scanRetries = HEAT_BED_SCAN_RETRIES;
-            g_retryStatus = 105;
-            g_nHeatBedScanStatus = 110;
-
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("100->110"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
-            break;
-        }
-        //############################################################### ERROR HANDLING Case 45 105 139 + 132
-        case 105: {
-            moveZ(long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM)); //spacing for bed
-            Printer::homeAxis(false, true, false);                             //Home Y
-
-            g_scanRetries--;
-            g_nHeatBedScanStatus = 106;
-            g_lastScanTime = HAL::timeInMilliseconds();
-
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("105"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
-            break;
-        }
-        case 106: {
-            // home the z-axis in order to find the starting point again
-            Printer::homeAxis(false, false, true); //Neben Bett: Home Z
-            // ensure that there is no z endstop hit before we perform the z-axis homing
-            moveZ(long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM)); //spacing for bed - wird von moveUpFast() später korrigiert.
-            g_nLastZScanZPosition = 0;                                         //Reset last scan position to avoid abort due to this limitter
-
-            g_nHeatBedScanStatus = 107;
-            g_lastScanTime = HAL::timeInMilliseconds();
-
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo())
-                Com::printFLN(PSTR("106"));
-#endif // DEBUG_HEAT_BED_SCAN == 2
-            break;
-        }
-        case 107: {
-            Printer::queueRelativeMMCoordinates(0, HEAT_BED_SCAN_Y_CALIBRATION_POINT_MM, 0, 0, Printer::homingFeedrate[Y_AXIS], true, true);
-            g_nHeatBedScanStatus = 108;
-            g_lastScanTime = HAL::timeInMilliseconds();
-
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo())
-                Com::printFLN(PSTR("107"));
-#endif // DEBUG_HEAT_BED_SCAN == 2
-            break;
-        }
-        case 108: // Remeasure inconsistent pressure values to have new clean fence levels
-        {
-            if ((HAL::timeInMilliseconds() - g_lastScanTime) < HEAT_BED_SCAN_DELAY) {
-                // do not check too early
-                break;
-            }
-
-            if (readIdlePressure(&g_nFirstIdlePressure)) {
-                g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
-                // we were unable to determine the idle pressure
-                break;
-            } else {
-                adjustPressureLimits(g_nFirstIdlePressure);
-            }
-            g_nHeatBedScanStatus = 110;
-            g_lastScanTime = HAL::timeInMilliseconds();
-
-            break;
-        }
-        //############################################################### /ERROR HANDLING
-        case 110: {
-            if ((HAL::timeInMilliseconds() - g_lastScanTime) < g_nScanIdleDelay) {
-                // do not check too early
-                break;
-            }
-
-            // scan this point
-            if (testIdlePressure()) {
-                // the current idle pressure is not plausible
-                if (g_scanRetries) {
-                    g_retryZScan = 1;
-                } else {
-                    g_abortZScan = SCAN_ABORT_REASON_IDLE_PRESSURE;
-                }
-                break;
-            }
-
-            // we should consider that the idle presse can change slightly
-            adjustPressureLimits(g_nCurrentIdlePressure);
-
-            g_nHeatBedScanStatus = 120;
-
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("110->120"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
-            break;
-        }
-        case 120: {
-            // move to the surface
-            moveZMinusUpFast();
-
-            g_nHeatBedScanStatus = 121;
-
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("120->121"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
-            break;
-        }
-        case 121: {
-            // ensure that we do not remember any previous z-position at this moment
-            g_nLastZScanZPosition = 0;
-
-            // move a little bit away from the surface
-            moveZPlusDownSlow();
-
-            g_nHeatBedScanStatus = 122;
-
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("121->122"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
-            break;
-        }
-        case 122: {
-            // move slowly to the surface
-            moveZMinusUpSlow(&nTempPressure);
-            moveZPlusDownSlow(8); //and slowslowly back near idle pressure
-
-            g_nHeatBedScanStatus = 123;
-
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("122->123"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
-            break;
-        }
-        case 123: {
-            // the left extruder is at the surface now - show that the user must move also the right extruder to the surface in order to get them to the same z-height
-            UI_STATUS_UPD(UI_TEXT_ALIGN_EXTRUDERS);
-
-            g_lastScanTime = HAL::timeInMilliseconds();
-
-            g_nContinueButtonPressed = 0;
-            g_nHeatBedScanStatus = 125;
-
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("123->125"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
-            break;
-        }
-        case 125: {
-            // wait until the continue button has been pressed
-            if (!g_nContinueButtonPressed) {
-                unsigned long uRemainingSeconds;
-                uRemainingSeconds = (HAL::timeInMilliseconds() - g_lastScanTime) / 1000;
-                if (uRemainingSeconds > HEAT_BED_SCAN_ALIGN_EXTRUDERS_ABORT_DELAY + 4) {
-                    g_nHeatBedScanStatus = 149;
-                    break;
-                }
-                break;
-            }
-
-            if (g_nHeatBedScanMode) {
-                // we have to determine the z-offset which is caused by different extruder temperatures
-                g_nHeatBedScanStatus = 132;
-
-#if DEBUG_HEAT_BED_SCAN == 2
-                if (Printer::debugInfo()) {
-                    Com::printF(Com::tscanHeatBed);
-                    Com::printFLN(PSTR("125->132"));
-                }
-#endif // DEBUG_HEAT_BED_SCAN == 2
-            } else {
-                // we are done
-                g_nHeatBedScanStatus = 149;
-
-#if DEBUG_HEAT_BED_SCAN == 2
-                if (Printer::debugInfo()) {
-                    Com::printF(Com::tscanHeatBed);
-                    Com::printFLN(PSTR("125->149"));
-                }
-#endif // DEBUG_HEAT_BED_SCAN == 2
-            }
-            break;
-        }
-        //################################ JUMP 132 / 149 >>
         case 130: {
             // we are homed at the moment - move to the position where we shall determine the length offset which is caused by the heated up extruder
             Printer::queueRelativeMMCoordinates(HEAT_BED_SCAN_X_CALIBRATION_POINT_MM, HEAT_BED_SCAN_Y_CALIBRATION_POINT_MM, 0, 0, RMath::min(Printer::homingFeedrate[X_AXIS], Printer::homingFeedrate[Y_AXIS]), true, true);
@@ -1349,27 +1111,6 @@ void scanHeatBed(void) {
             if (Printer::debugInfo()) {
                 Com::printF(Com::tscanHeatBed);
                 Com::printFLN(PSTR("130->133"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
-            break;
-        }
-        case 132: // we have to determine the z-offset which is caused by different extruder temperatures
-        {
-            // determine the z-home position
-            //if (Printer::currentZSteps < 0){
-            //Printer::homeAxis( false, false, true); //Nibbels: wäre schädlich für zu hohe druckbetten.
-            // -> Warum homen, wir fahren nun zum Heizen sowieso 10mm weg. Vorher waren wir direkt am Bett. Unter oder Über Zschalter ist egal.
-            // -> Wills nicht rausmachen, könnte ich aber. Schlädlich wenn Bett zuuu tief wegen watchdog - glaube nicht?
-            // -> Wenn Extruder unter 0, dann homen, sonst nicht.
-            // -> 08.02.2018: wir haben ein homing von case 60, scanposition ist konsistent, warum homen ...
-            //}
-            g_lastScanTime = HAL::timeInMilliseconds();
-            g_nHeatBedScanStatus = 133;
-
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("132->133"));
             }
 #endif // DEBUG_HEAT_BED_SCAN == 2
             break;
@@ -1478,7 +1219,7 @@ void scanHeatBed(void) {
 #endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
-        //############################################################### ERROR HANDLING Case 45 105 139 + 132
+        //############################################################### Scan retry
         case 139: {
             moveZ(long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM)); //spacing for bed
             Printer::homeAxis(false, true, false);                             //Home Y
@@ -1704,243 +1445,8 @@ void scanHeatBed(void) {
     }
 } // scanHeatBed
 
-#if FEATURE_ALIGN_EXTRUDERS
-void startAlignExtruders(void) {
-    if (g_nAlignExtrudersStatus) {
-        // abort the alignment of the extruders
-        g_abortZScan = SCAN_ABORT_REASON_CANCELED;
-        return;
-    } else {
-        if (Printer::isPrinting()) {
-            // there is some printing in progress at the moment - do not start to align the extruders in this case
-            if (Printer::debugErrors()) {
-                Com::printFLN(Com::tPrintingIsInProcessError);
-            }
-            showError((void*)ui_text_align_extruders, (void*)ui_text_operation_denied);
-            return;
-        }
-        if (abs(extruder[0].tempControl.currentTemperatureC - extruder[1].tempControl.currentTemperatureC) > 10
-            /* Diese Delta-Prüfung ist irrelevant, wenn ein Sensor defekt markiert ist. Ich brauch das ab und an beim Testen als Ausnahme: */
-            && !extruder[0].tempControl.isSensorDefect()
-            && !extruder[1].tempControl.isSensorDefect()) {
-            if (Printer::debugErrors()) {
-                Com::printFLN(PSTR("startAlignExtruders(): error temperature difference too big"));
-            }
-            showError((void*)ui_text_align_extruders, (void*)ui_text_temperature_wrong);
-            return;
-        }
-
-        if (Printer::doHeatBedZCompensation
-            || !Printer::areAxisHomed()
-            || Printer::currentXSteps * Printer::axisMMPerSteps[X_AXIS] < HEAT_BED_SCAN_X_START_MM
-            || Printer::currentYSteps * Printer::axisMMPerSteps[Y_AXIS] < HEAT_BED_SCAN_Y_START_MM
-            || Printer::currentZSteps) {
-            Printer::homeAxis(true, true, true);
-            Printer::queueRelativeMMCoordinates(HEAT_BED_SCAN_X_CALIBRATION_POINT_MM, HEAT_BED_SCAN_Y_CALIBRATION_POINT_MM, 0, 0, RMath::min(Printer::homingFeedrate[X_AXIS], Printer::homingFeedrate[Y_AXIS]), true, true);
-        }
-
-        // we are ready to align the extruders at the current x and y position with the current temperature
-        // the user can choose the x and y position as well as the to-be-used temperatures of the extruders
-        g_nAlignExtrudersStatus = 100;
-        g_abortZScan = 0; //dont kill job on start
-    }
-} // startAlignExtruders
-
-void alignExtruders(void) {
-#if FEATURE_ALIGN_EXTRUDERS
-    //if( g_nAlignExtrudersStatus ) return;
-#endif //FEATURE_ALIGN_EXTRUDERS
-    if (g_nHeatBedScanStatus)
-        return;
-    if (g_nZOSScanStatus)
-        return;
-
-    if (g_abortZScan) {
-        showAbortScanReason((void*)ui_text_align_extruders, g_abortZScan);
-        // the alignment has been aborted
-        g_abortZScan = 0;
-
-        // avoid to crash the extruder against the heat bed during a following move
-        moveZ(int(Printer::axisStepsPerMM[Z_AXIS] * 5));
-
-        Com::printFLN(PSTR("alignExtruders(): aborted"));
-
-        g_nAlignExtrudersStatus = 0;
-        g_uStartOfIdle = HAL::timeInMilliseconds() + 30000; //alignExtruders aborted
-        return;
-    }
-
-    if (g_nAlignExtrudersStatus) {
-        // show that we are active
-        previousMillisCmd = HAL::timeInMilliseconds(); //prevent inactive shutdown of steppers/temps
-        GCode::keepAlive(Calibrating);
-
-        if (g_nAlignExtrudersStatus != 123 && g_nAlignExtrudersStatus != 125) {
-            // there are a few cases where we do not want to change the current status text
-            UI_STATUS(UI_TEXT_ALIGN_EXTRUDERS);
-        }
-
-        switch (g_nAlignExtrudersStatus) {
-        case 100: {
-            // when we are here we assume that all preconditions for the alignment of the extruders are fulfilled already
-            g_lastScanTime = HAL::timeInMilliseconds();
-            g_scanRetries = HEAT_BED_SCAN_RETRIES;
-            g_retryStatus = 105;
-            g_nLastZScanZPosition = 0; //sodass dass bei mehreren scans nicht die letzte position als abstands limit feststeht.
-            g_nAlignExtrudersStatus = 110;
-            g_uStartOfIdle = 0; //align extruders
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo())
-                Com::printFLN(PSTR("alignExtruders(): 100 -> 110"));
-#endif // DEBUG_HEAT_BED_SCAN == 2
-            break;
-        }
-        case 110: {
-            if ((HAL::timeInMilliseconds() - g_lastScanTime) < g_nScanIdleDelay) {
-                // do not check too early
-                break;
-            }
-
-            // scan this point
-            if (testIdlePressure()) {
-                g_abortZScan = SCAN_ABORT_REASON_IDLE_PRESSURE;
-                // the current idle pressure is not plausible
-                // g_retryZScan = 1; //not really needed, already set.
-                break;
-            }
-
-            // we should consider that the idle presse can change slightly
-            adjustPressureLimits(g_nCurrentIdlePressure);
-
-            g_nAlignExtrudersStatus = 120;
-
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo())
-                Com::printFLN(PSTR("110 -> 120"));
-#endif // DEBUG_HEAT_BED_SCAN == 2
-            break;
-        }
-        case 120: {
-            // move to the surface
-            moveZMinusUpFast();
-
-            g_nAlignExtrudersStatus = 121;
-
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo())
-                Com::printFLN(PSTR("120 -> 121"));
-#endif // DEBUG_HEAT_BED_SCAN == 2
-            break;
-        }
-        case 121: {
-            // ensure that we do not remember any previous z-position at this moment
-            g_nLastZScanZPosition = 0;
-
-            // move a little bit away from the surface
-            moveZPlusDownSlow();
-
-            g_nAlignExtrudersStatus = 122;
-
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo())
-                Com::printFLN(PSTR("121 -> 122"));
-#endif // DEBUG_HEAT_BED_SCAN == 2
-            break;
-        }
-        case 122: {
-            // move slowly to the surface
-            short nTempPressure = 0;
-            moveZMinusUpSlow(&nTempPressure);
-            moveZPlusDownSlow(8); // entspannen
-
-            g_nAlignExtrudersStatus = 123;
-
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo())
-                Com::printFLN(PSTR("122 -> 123"));
-#endif // DEBUG_HEAT_BED_SCAN == 2
-            break;
-        }
-        case 123: {
-            // the left extruder is at the surface now - show that the user must move also the right extruder to the surface in order to get them to the same z-height
-            UI_STATUS_UPD(UI_TEXT_ALIGN_EXTRUDERS);
-
-            g_lastScanTime = HAL::timeInMilliseconds();
-
-            g_nContinueButtonPressed = 0;
-            g_nAlignExtrudersStatus = 125;
-
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo())
-                Com::printFLN(PSTR("123 -> 125"));
-#endif // DEBUG_HEAT_BED_SCAN == 2
-            break;
-        }
-        case 125: {
-            // wait until the continue button has been pressed
-            if (!g_nContinueButtonPressed) {
-                unsigned long uRemainingSeconds;
-                uRemainingSeconds = (HAL::timeInMilliseconds() - g_lastScanTime) / 1000;
-                if (uRemainingSeconds > HEAT_BED_SCAN_ALIGN_EXTRUDERS_ABORT_DELAY + 4) {
-                    g_abortZScan = SCAN_ABORT_REASON_PRINTER_LONELY;
-                    Extruder::setTemperatureForAllExtruders(0);
-                    Extruder::setHeatedBedTemperature(0);
-                    break;
-                }
-                break;
-            }
-
-            // we are done
-            g_nAlignExtrudersStatus = 145;
-
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo())
-                Com::printFLN(PSTR("125 -> 145"));
-#endif // DEBUG_HEAT_BED_SCAN == 2
-            break;
-        }
-        case 145: {
-            // avoid to crash the extruder against the heat bed during the following moves
-            moveZ(int(Printer::axisStepsPerMM[Z_AXIS] * 5));
-
-            Printer::homeAxis(true, true, true);
-
-            g_nAlignExtrudersStatus = 160;
-
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo())
-                Com::printFLN(PSTR("145 -> 160"));
-#endif // DEBUG_HEAT_BED_SCAN == 2
-            break;
-        }
-        case 160: {
-            if (Printer::debugInfo()) {
-                Com::printFLN(PSTR("alignExtruders(): the alignment has been completed"));
-            }
-
-            showInformation(PSTR(UI_TEXT_ALIGN_EXTRUDERS_DONE));
-            g_uStartOfIdle = HAL::timeInMilliseconds() + 30000; //alignExtruders ended
-
-            g_nAlignExtrudersStatus = 0;
-
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo())
-                Com::printFLN(PSTR("160 -> 0"));
-#endif // DEBUG_HEAT_BED_SCAN == 2
-            break;
-        }
-        }
-    }
-    return;
-} // alignExtruders
-#endif // FEATURE_ALIGN_EXTRUDERS
-
 /**************************************************************************************************************************************/
 void startZOScan(bool automatrixleveling) {
-#if FEATURE_ALIGN_EXTRUDERS
-    if (g_nAlignExtrudersStatus)
-        return;
-#endif //FEATURE_ALIGN_EXTRUDERS
     if (g_nHeatBedScanStatus)
         return;
         //if( g_nZOSScanStatus ) return;
@@ -1961,10 +1467,6 @@ void startZOScan(bool automatrixleveling) {
 } // startZOScan
 
 void searchZOScan(void) {
-#if FEATURE_ALIGN_EXTRUDERS
-    if (g_nAlignExtrudersStatus)
-        return;
-#endif //FEATURE_ALIGN_EXTRUDERS
     if (g_nHeatBedScanStatus)
         return;
         //if( g_nZOSScanStatus ) return;
@@ -2967,10 +2469,6 @@ void showAbortScanReason(const void* scanName, char abortScanIdentifier) {
         showError(scanName, PSTR(UI_TEXT_SCAN_ABORTED));
         break;
     }
-    case SCAN_ABORT_REASON_PRINTER_LONELY: {
-        showError(scanName, PSTR("Unoccupied"), PSTR(UI_TEXT_SCAN_ABORTED));
-        break;
-    }
 
     // Kabelbruch, Extruder verspannt, Stecker wackelig, Ingress,...
     case SCAN_ABORT_REASON_START_PRESSURE: {
@@ -3704,11 +3202,7 @@ void saveCompensationMatrix(unsigned int uAddress) {
 
         // write the current micro steps
         writeWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_MICRO_STEPS,
-#if FEATURE_ADJUSTABLE_MICROSTEPS
                         drv8711ModeValue_2_MicroSteps(Printer::motorMicroStepsModeValue[Z_AXIS])
-#else
-                        RF_MICRO_STEPS_Z
-#endif // FEATURE_ADJUSTABLE_MICROSTEPS
         );
 
         uOffset = uAddress + EEPROM_OFFSET_MATRIX_START;
@@ -3862,32 +3356,20 @@ char loadCompensationMatrix(unsigned int uAddress) {
     uMicroSteps = readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_MICRO_STEPS);
 
     if (uMicroSteps ==
-#if FEATURE_ADJUSTABLE_MICROSTEPS
         drv8711ModeValue_2_MicroSteps(Printer::motorMicroStepsModeValue[Z_AXIS])
-#else
-        RF_MICRO_STEPS_Z
-#endif // FEATURE_ADJUSTABLE_MICROSTEPS
     ) {
         // the current z-compensation matrix has been determined with the current micro step setting, there is nothing to recalculate
         fMicroStepCorrection = 1.0;
     } else {
         // the current z-compensation matrix has been determined with a higher than the current micro step setting, we must divide all z-correction values
         fMicroStepCorrection = (float)
-#if FEATURE_ADJUSTABLE_MICROSTEPS
                                    drv8711ModeValue_2_MicroSteps(Printer::motorMicroStepsModeValue[Z_AXIS])
-#else
-                                   RF_MICRO_STEPS_Z
-#endif // FEATURE_ADJUSTABLE_MICROSTEPS
             / (float)uMicroSteps;
 
         Com::printF(PSTR("loadMatrix(): micro step correction = "), fMicroStepCorrection);
         Com::printF(PSTR(" (stored="), (int)uMicroSteps);
         Com::printF(PSTR(", current="), (int)
-#if FEATURE_ADJUSTABLE_MICROSTEPS
                                             drv8711ModeValue_2_MicroSteps(Printer::motorMicroStepsModeValue[Z_AXIS])
-#else
-                                            RF_MICRO_STEPS_Z
-#endif // FEATURE_ADJUSTABLE_MICROSTEPS
         );
         Com::printFLN(PSTR(")"));
     }
@@ -4282,11 +3764,6 @@ void handleScanWorkTasks() {
     if (g_nZOSScanStatus) {
         searchZOScan();
     }
-#if FEATURE_ALIGN_EXTRUDERS
-    if (g_nAlignExtrudersStatus) {
-        alignExtruders();
-    }
-#endif // FEATURE_ALIGN_EXTRUDERS
 }
 
 void handleStartPrint() {
@@ -4328,8 +3805,6 @@ void handleStopPrint(millis_t uTime) {
                 //unaufgeräumtes beenden: Es wird sowieso der Stepper deaktiviert.
                 g_nZOSScanStatus = 0;
                 g_nHeatBedScanStatus = 0;
-                //g_nAlignExtrudersStatus = 0;
-
 
                 Com::printFLN(PSTR("Stop complete"));
                 Printer::setPrinting(false);
@@ -4359,7 +3834,7 @@ void handleStartStandby(millis_t uTime) {
     /**
      * Check if the Fan shall be turned off.
      */
-#if FEATURE_CASE_FAN && !CASE_FAN_ALWAYS_ON && CASE_FAN_PIN > -1
+#if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && !CASE_FAN_ALWAYS_ON && CASE_FAN_PIN > -1
     if (Printer::prepareFanOff) {
         if (Printer::prepareFanOff > uTime) {
             return;
@@ -4372,7 +3847,7 @@ void handleStartStandby(millis_t uTime) {
                 WRITE(CASE_FAN_PIN, 0);
         }
     }
-#endif // FEATURE_CASE_FAN && !CASE_FAN_ALWAYS_ON && CASE_FAN_PIN > -1
+#endif // (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && !CASE_FAN_ALWAYS_ON && CASE_FAN_PIN > -1
 
     /**
      * Check if the Printer should reset the printing flag
@@ -4410,9 +3885,9 @@ void handleStartStandby(millis_t uTime) {
 
         if (stepperInactiveTime != 0 && uTime > stepperInactiveTime && !Printer::areAllSteppersDisabled()) {
             Printer::disableAllSteppersNow();
-#if FAN_PIN > -1 && FEATURE_FAN_CONTROL
+#if FAN_PIN > -1
             Commands::setFanSpeed((uint8_t)0);
-#endif // FAN_PIN>-1 && FEATURE_FAN_CONTROL
+#endif // FAN_PIN > -1
         }
     }
 }
@@ -4434,10 +3909,10 @@ void outputObject(bool showerrors) {
     Com::printFLN(PSTR("outputObject"));
     Commands::printCurrentPosition();
 
-#if FAN_PIN > -1 && FEATURE_FAN_CONTROL
+#if FAN_PIN > -1
     // disable the fan
     Commands::setFanSpeed((uint8_t)0);
-#endif // FAN_PIN>-1 && FEATURE_FAN_CONTROL
+#endif // FAN_PIN > -1
 
     {
         GCode::executeFString(Com::tOutputObjectPrint);
@@ -4650,9 +4125,6 @@ void continuePrint(void) {
     static char countplays = 1;
     if (!g_pauseMode) {
         if (!g_nHeatBedScanStatus
-#if FEATURE_ALIGN_EXTRUDERS
-            && !g_nAlignExtrudersStatus
-#endif // FEATURE_ALIGN_EXTRUDERS
         ) {
             if (countplays++ >= 10) {
                 Com::printFLN(PSTR("LCD re-init"));
@@ -5129,7 +4601,6 @@ void processSpecialGCode(GCode* pCommand) {
         }
 #endif // FEATURE_CHECK_HOME
 
-#if FEATURE_SEE_DISPLAY
         case 3029: // M3029 [P] - See the display text or send Button press per gcode to the printer via [P]Code.
         {
             if (pCommand->hasP()) {
@@ -5207,7 +4678,6 @@ void processSpecialGCode(GCode* pCommand) {
             }
             break;
         }
-#endif // FEATURE_SEE_DISPLAY
 
         case 3030: // M3030 [S] - configure the fast step size for moving of the heat bed up during the heat-bed scan
         {
@@ -5709,7 +5179,7 @@ void processSpecialGCode(GCode* pCommand) {
             break;
         }
 
-#if FEATURE_CASE_FAN && !CASE_FAN_ALWAYS_ON && CASE_FAN_PIN > -1
+#if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && !CASE_FAN_ALWAYS_ON && CASE_FAN_PIN > -1
         case 3120: // M3120 - turn on the case fan
         {
             //disable fan-temp-ignore to original state // Nibbels
@@ -5758,9 +5228,7 @@ void processSpecialGCode(GCode* pCommand) {
             }
             break;
         }
-#endif // FEATURE_CASE_FAN && !CASE_FAN_ALWAYS_ON && CASE_FAN_PIN > -1
-
-
+#endif // (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && !CASE_FAN_ALWAYS_ON && CASE_FAN_PIN > -1
 
         case 3200: // M3200 - reserved for test and debug
         {
@@ -5821,7 +5289,7 @@ void processSpecialGCode(GCode* pCommand) {
             break;
         }
 
-#if FEATURE_24V_FET_OUTPUTS
+#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
         case 3300: // M3300 [P] [S] - configure the 24V FET outputs ( on/off )
         {
             if (pCommand->hasP()) {
@@ -5887,9 +5355,7 @@ void processSpecialGCode(GCode* pCommand) {
 
             break;
         }
-#endif // FEATURE_24V_FET_OUTPUTS
 
-#if FEATURE_230V_OUTPUT
         case 3301: // M3301 [S] - configure the 230V output ( on/off )
         {
             if (pCommand->hasS()) {
@@ -5907,7 +5373,7 @@ void processSpecialGCode(GCode* pCommand) {
             }
             break;
         }
-#endif // FEATURE_230V_OUTPUT
+#endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
 #ifdef RGB_LIGHT_R_PIN
         case 3303: // M3303 [P] [S] - configure the RGB light effects for heating
@@ -6292,14 +5758,6 @@ void processSpecialGCode(GCode* pCommand) {
             break;
         }
 #endif // RGB_LIGHT_R_PIN
-
-#if FEATURE_ALIGN_EXTRUDERS
-        case 3309: // start/abort to align the two extruders
-        {
-            startAlignExtruders();
-            break;
-        }
-#endif // FEATURE_ALIGN_EXTRUDERS
 
         case 3901: // 3901 [X] [Y] - configure the Matrix-Position to Scan, [S] confugure learningrate, [P] configure dist weight || by Nibbels
         case 3900: // 3900 direct preconfig, no break;->next is M3900.
@@ -7070,17 +6528,6 @@ void processSpecialGCode(GCode* pCommand) {
         }
 #endif // RESERVE_ANALOG_INPUTS
 
-#if FEATURE_READ_STEPPER_STATUS
-        case 3987: // M3987 reading motor driver and stall pins - Testfunction || by Nibbels
-        {
-            Com::printFLN(PSTR("M3987 MotorStatus X-Y-Z-E0-E1 ..."));
-            for (uint8_t driver = 1; driver <= 5; driver++) {
-                readMotorStatus(driver);
-            }
-            break;
-        }
-#endif //FEATURE_READ_STEPPER_STATUS
-
    
         }
     }
@@ -7093,10 +6540,6 @@ void queueTask(char task) {
 } // queueTask
 
 bool isAnyScanRunning() {
-#if FEATURE_ALIGN_EXTRUDERS
-    if (g_nAlignExtrudersStatus)
-        return true;
-#endif //FEATURE_ALIGN_EXTRUDERS
     if (g_nHeatBedScanStatus)
         return true;
     if (g_nZOSScanStatus)
@@ -7468,45 +6911,6 @@ void drv8711Transmit(unsigned short command) {
 
 } // drv8711Transmit
 
-unsigned short drv8711Receive(unsigned char address) {
-    unsigned short acknowledge = 0;
-    unsigned short temp;
-    char i;
-
-    if (address > 7)
-        return 0;
-
-    acknowledge = address;
-    acknowledge = acknowledge << 12;
-    acknowledge |= 0x8000;
-
-    // transfer the read request plus the register address (4 bits)
-    InterruptProtectedBlock noInts; //HAL::forbidInterrupts();
-    for (i = 15; i >= 12; i--) {
-        WRITE(DRV_SDATI, acknowledge & (0x01 << i));
-        HAL::delayMicroseconds(1);
-        WRITE(DRV_SCLK, 1);
-        HAL::delayMicroseconds(5);
-        WRITE(DRV_SCLK, 0);
-    }
-
-    HAL::delayMicroseconds(20);
-
-    // read the acknowledge (12 bits)
-    for (i = 11; i >= 0; i--) {
-        temp = READ(DRV_SDATO);
-        acknowledge = acknowledge | (temp << i);
-        WRITE(DRV_SCLK, 1);
-        HAL::delayMicroseconds(25);
-        WRITE(DRV_SCLK, 0);
-        HAL::delayMicroseconds(25);
-    }
-    noInts.unprotect(); //HAL::allowInterrupts();
-
-    return acknowledge;
-
-} // drv8711Receive
-
 void drv8711EnableAll(void) {
     // enable the chip select of all present DRV8711
     switch (DRV8711_NUM_CHANNELS) {
@@ -7695,11 +7099,7 @@ void drv8711adjustMicroSteps(unsigned char driver) {
     //Z = 3
     //E0 = 4
     //E1 = 5
-#if FEATURE_ADJUSTABLE_MICROSTEPS
     unsigned short reg00bytes = drv8711MicroSteps_2_Register00Hex(drv8711ModeValue_2_MicroSteps(Printer::motorMicroStepsModeValue[driver - 1 /*=axis*/]));
-#else
-    unsigned short reg00bytes = drv8711MicroSteps_2_Register00Hex(drv8711Axis_2_InitMicrosteps(driver - 1));
-#endif // FEATURE_ADJUSTABLE_MICROSTEPS
     if (reg00bytes)
         drv8711Transmit(reg00bytes);
     drv8711Disable(driver);
@@ -7749,12 +7149,10 @@ void drv8711Init(void) {
     // configure all registers except the motor current (= no register 01)
 
     //DRV8711_REGISTER_00:
-#if FEATURE_ADJUSTABLE_MICROSTEPS
     //init to stock settings: update in eeprom init.
     for (uint8_t axis = 0; axis < DRV8711_NUM_CHANNELS; axis++) {
         Printer::motorMicroStepsModeValue[axis] = drv8711MicroSteps_2_ModeValue(drv8711Axis_2_InitMicrosteps(axis)); //init
     }
-#endif // FEATURE_ADJUSTABLE_MICROSTEPS
     for (uint8_t driver = 1; driver <= DRV8711_NUM_CHANNELS; driver++) {
         drv8711adjustMicroSteps(driver);
     }
@@ -7851,144 +7249,6 @@ void setMotorCurrent(unsigned char driver, uint8_t level) {
     drv8711Disable(driver);
 
 } // setMotorCurrent
-
-#if FEATURE_READ_STEPPER_STATUS
-unsigned short readMotorStatus(unsigned char driver) {
-    //driver:
-    //X = 1
-    //Y = 2
-    //Z = 3
-    //E0 = 4
-    //E1 = 5
-
-    /*
-0    OTS    1    R/W    0    0: Normal operation
-1: Device has entered overtemperature shutdown
-Write a 0 to this bit to clear the fault.
-Operation automatically resumes when the temperature has fallen to safe levels.
-1    AOCP    1    R/W    0    0: Normal operation
-1: Channel A overcurrent shutdown
-Write a 0 to this bit to clear the fault and resume operation
-2    BOCP    1    R/W    0    0: Normal operation
-1: Channel B overcurrent shutdown
-Write a 0 to this bit to clear the fault and resume operation
-3    APDF    1    R/W    0    0: Normal operation
-1: Channel A predriver fault
-Write a 0 to this bit to clear the fault and resume operation.
-4    BPDF    1    R/W    0    0: Normal operation
-1: Channel B predriver fault
-Write a 0 to this bit to clear the fault and resume operation
-5    UVLO    1    R/W    0    0: Normal operation
-1: Undervoltage lockout
-Write a 0 to this bit to clear the fault. The UVLO bit cannot be cleared in sleep mode. Operation automatically resumes when VM has increased above VUVLO
-6    STD    1    R    0    0: Normal operation
-1: Stall detected
-7    STDLAT    1    R/W    0    0: Normal operation
-1: Latched stall detect
-Write a 0 to this bit to clear the fault and resume operation
-11-8    Reserved    4    -    -    Reserved
-*/
-
-    // configure the pins
-    WRITE(DRV_SCLK, LOW);
-    SET_OUTPUT(DRV_SCLK);
-    WRITE(DRV_SDATI, LOW);
-    SET_OUTPUT(DRV_SDATI);
-
-    drv8711Enable(driver);
-    unsigned short status = drv8711Receive(7); //7.6.9 STATUS Register (Address = 0x07)
-    drv8711Disable(driver);
-
-    Com::printF(PSTR("Driver: "), driver);
-    switch (driver) {
-    case 1: {
-        Com::printFLN(PSTR("X"));
-        break;
-    }
-    case 2: {
-        Com::printFLN(PSTR("Y"));
-        break;
-    }
-    case 3: {
-        Com::printFLN(PSTR("Z"));
-        break;
-    }
-    case 4: {
-        Com::printFLN(PSTR("E0"));
-        break;
-    }
-    case 5: {
-        Com::printFLN(PSTR("E1"));
-        break;
-    }
-    }
-
-    uint8_t bit = 0;
-    for (uint8_t n = 0; n <= 7; n++) {
-        bit = status & (1 << n) ? 1 : 0;
-        switch (n) {
-        case 0: {
-            Com::printFLN(PSTR("OTS OverTemp "), bit);
-            break;
-        }
-        case 1: {
-            Com::printFLN(PSTR("AOCP Channel A Overcurrent "), bit);
-            break;
-        }
-        case 2: {
-            Com::printFLN(PSTR("BOCP Channel B Overcurrent "), bit);
-            break;
-        }
-        case 3: {
-            Com::printFLN(PSTR("APDF Channel A predriver fault "), bit);
-            break;
-        }
-        case 4: {
-            Com::printFLN(PSTR("BPDF Channel B predriver fault "), bit);
-            break;
-        }
-        case 5: {
-            Com::printFLN(PSTR("UVLO Undervoltage lockout "), bit);
-            break;
-        }
-        case 6: {
-            Com::printFLN(PSTR("STD Stall detected "), bit);
-            break;
-        }
-        case 7: {
-            Com::printFLN(PSTR("STDLAT Latched stall detect "), bit);
-            break;
-        }
-        }
-    }
-
-    switch (driver) {
-    case 5: {
-        bit = READ(O1_STALL_PIN);
-        break;
-    }
-    case 4: {
-        bit = READ(O0_STALL_PIN);
-        break;
-    }
-    case 3: {
-        bit = READ(Z_STALL_PIN);
-        break;
-    }
-    case 2: {
-        bit = READ(Y_STALL_PIN);
-        break;
-    }
-    case 1: {
-        bit = READ(X_STALL_PIN);
-        break;
-    }
-    }
-
-    Com::printFLN(PSTR("Stall Pin: "), !bit);
-    return (status & (bit << 8));
-} // readMotorStatus
-#endif // FEATURE_READ_STEPPER_STATUS
 
 #endif // CURRENT_CONTROL_DRV8711
 
@@ -8277,9 +7537,6 @@ unsigned char isMovingAllowed(const char* pszCommand, char outputLog) {
     }
 
     if (g_nHeatBedScanStatus || g_nZOSScanStatus
-#if FEATURE_ALIGN_EXTRUDERS
-        || g_nAlignExtrudersStatus
-#endif //FEATURE_ALIGN_EXTRUDERS
     ) {
         // do not allow manual movements while the heat bed scan is in progress
         if (Printer::debugErrors() && outputLog) {
@@ -8295,17 +7552,6 @@ unsigned char isMovingAllowed(const char* pszCommand, char outputLog) {
 } // isMovingAllowed
 
 unsigned char isHomingAllowed(GCode* com, char outputLog) {
-#if FEATURE_ALIGN_EXTRUDERS
-    if (g_nAlignExtrudersStatus) {
-        // do not allow homing while the align is in progress
-        if (Printer::debugErrors() && outputLog) {
-            Com::printFLN(PSTR("G28: homing can not be performed while alignment is in progress"));
-        }
-        showError((void*)ui_text_home, (void*)ui_text_operation_denied);
-
-        return 0;
-    }
-#endif //FEATURE_ALIGN_EXTRUDERS
 
     if (g_nHeatBedScanStatus || g_nZOSScanStatus) {
         // do not allow homing while the heat bed scan is in progress
@@ -8452,7 +7698,6 @@ float getHeatBedTemperatureOffset(float temperatureInCelsius) {
 } // getHeatBedTemperatureOffset
 #endif // FEATURE_HEAT_BED_TEMP_COMPENSATION
 
-#if FEATURE_TYPE_EEPROM
 void determineHardwareType(void) {
     unsigned short uTemp;
 
@@ -8503,8 +7748,6 @@ void determineHardwareType(void) {
     return;
 
 } // determineHardwareType
-
-#endif // FEATURE_TYPE_EEPROM
 
 void showIdle(void) {
     UI_STATUS(UI_TEXT_PRINTER_READY);

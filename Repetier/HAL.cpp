@@ -825,7 +825,7 @@ ISR(PWM_TIMER_VECTOR) {
     // run alle the secondary cooler PWM speed like we were used to:
     pwm_count_cooler += COOLER_PWM_STEP;
 
-#if FAN_PIN > -1 && FEATURE_FAN_CONTROL
+#if FAN_PIN > -1
     /**
     PART FAN SPEED CONTROL
     */
@@ -856,7 +856,7 @@ ISR(PWM_TIMER_VECTOR) {
     /**
     END PART FAN SPEED CONTROL
     */
-#endif // FAN_PIN>-1 && FEATURE_FAN_CONTROL
+#endif // FAN_PIN > -1
 
     static int counter100Periodical = 0; // Approximate a 100ms timer :: blocks pingwatchdog s commandloop if not working
     counter100Periodical++;
@@ -882,12 +882,12 @@ ISR(PWM_TIMER_VECTOR) {
         rgb_10ms_change_should_be_now = true;
 #endif // RGB_LIGHT_R_PIN
 
-#if FAN_PIN > -1 && FEATURE_FAN_CONTROL
+#if FAN_PIN > -1
         //hier her versetzt, um 10ms einstell-auflösung zu erhalten. Darum /10 statt bisher /100 beim Init in setFanSpeed().
         //fan anfangs auf high zum anlaufen, aber das muss beendet werden:
         if (fanKickstart)
             fanKickstart--;
-#endif // FAN_PIN>-1 && FEATURE_FAN_CONTROL
+#endif // FAN_PIN > -1
     }
 
     // read analog values

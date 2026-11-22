@@ -202,17 +202,15 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
 
     Printer::ZMode = DEFAULT_Z_SCALE_MODE; //wichtig, weils im Mod einen dritten Mode gibt. Für Zurückmigration
 
-#if FEATURE_230V_OUTPUT
+#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
     //hier nur config laden nicht mosfets schalten!
     Printer::enable230VOutput = OUTPUT_230V_DEFAULT_ON;
-#endif //FEATURE_230V_OUTPUT
 
-#if FEATURE_24V_FET_OUTPUTS
     //hier nur config laden nicht mosfets schalten!
     Printer::enableFET1 = FET1_DEFAULT_ON;
     Printer::enableFET2 = FET2_DEFAULT_ON;
     Printer::enableFET3 = FET3_DEFAULT_ON;
-#endif //FEATURE_24V_FET_OUTPUTS
+#endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
     g_ZOSTestPoint[X_AXIS] = SEARCH_HEAT_BED_OFFSET_SCAN_POSITION_INDEX_X;
     g_ZOSTestPoint[Y_AXIS] = SEARCH_HEAT_BED_OFFSET_SCAN_POSITION_INDEX_Y;
@@ -341,13 +339,13 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     }
     HAL::eprSetInt16(EPR_RF_STEP_PACKING_MIN_INTERVAL, Printer::stepsPackingMinInterval);
 
-#if FAN_PIN > -1 && FEATURE_FAN_CONTROL
+#if FAN_PIN > -1
     HAL::eprSetByte(EPR_RF_FAN_MODE, part_fan_frequency_modulation);
 
     HAL::eprSetByte(EPR_RF_PART_FAN_SPEED, part_fan_pwm_speed);
     HAL::eprSetByte(EPR_RF_PART_FAN_PWM_MIN, part_fan_pwm_min);
     HAL::eprSetByte(EPR_RF_PART_FAN_PWM_MAX, part_fan_pwm_max);
-#endif // FAN_PIN>-1 && FEATURE_FAN_CONTROL
+#endif // FAN_PIN > -1
 
     if (corrupted) {
         HAL::eprSetInt32(EPR_PRINTING_TIME, 0);
@@ -360,16 +358,14 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     HAL::eprSetByte(EPR_RF_RGB_LIGHT_MODE, Printer::RGBLightMode);
 #endif // RGB_LIGHT_R_PIN
 
-#if FEATURE_24V_FET_OUTPUTS
+#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
     HAL::eprSetByte(EPR_RF_FET1_MODE, Printer::enableFET1);
     HAL::eprSetByte(EPR_RF_FET2_MODE, Printer::enableFET2);
     HAL::eprSetByte(EPR_RF_FET3_MODE, Printer::enableFET3);
-#endif // FEATURE_24V_FET_OUTPUTS
 
-#if FEATURE_230V_OUTPUT
     // after a power-on, the 230 V plug always shall be turned off - thus, we do not store this setting to the EEPROM
     // HAL::eprSetByte( EPR_RF_230V_OUTPUT_MODE, Printer::enable230VOutput );
-#endif // FEATURE_230V_OUTPUT
+#endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
     HAL::eprSetInt16(EPR_RF_MOD_Z_STEP_SIZE, g_nManualSteps[Z_AXIS]);
     HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_X, g_ZOSTestPoint[0]);
@@ -666,19 +662,17 @@ void EEPROM::readDataFromEEPROM() {
     }
 #endif // RGB_LIGHT_R_PIN
 
-#if FEATURE_24V_FET_OUTPUTS
+#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
     Printer::enableFET1 = HAL::eprGetByte(EPR_RF_FET1_MODE);
     Printer::enableFET2 = HAL::eprGetByte(EPR_RF_FET2_MODE);
-#if !(FEATURE_CASE_FAN && CASE_FAN_PIN > -1)
+#if CASE_FAN_PIN < 0
     // Do not load the FET3 EEPROM state if it is being used as case fan
     Printer::enableFET3 = HAL::eprGetByte(EPR_RF_FET3_MODE);
-#endif // !(FEATURE_CASE_FAN && CASE_FAN_PIN > -1)
-#endif // FEATURE_24V_FET_OUTPUTS
+#endif // CASE_FAN_PIN < 0
 
-#if FEATURE_230V_OUTPUT
     // after a power-on, the 230 V plug always shall be turned off - thus, we do not store this setting to the EEPROM
     // Printer::enable230VOutput = HAL::eprGetByte( EPR_RF_230V_OUTPUT_MODE );
-#endif // FEATURE_230V_OUTPUT
+#endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
     //reinit for check if eeprom values are too high.
     unsigned int eeprom_homing_feedrate_position;
@@ -783,7 +777,6 @@ void EEPROM::readDataFromEEPROM() {
             change = true;
         }
     }
-#if FEATURE_ADJUSTABLE_MICROSTEPS
     //does EEPROM have valid values for microsteps?
     if (HAL::eprGetByte(EPR_RF_MICRO_STEPS_USED) == 0xAB) {
         for (uint8_t axis = 0; axis < DRV8711_NUM_CHANNELS; axis++) {
@@ -799,7 +792,6 @@ void EEPROM::readDataFromEEPROM() {
             }
         }
     }
-#endif // FEATURE_ADJUSTABLE_MICROSTEPS
 
     if (!HAL::eprGetInt16(EPR_RF_STEP_PACKING_MIN_INTERVAL)) {
         Printer::stepsPackingMinInterval = STEP_PACKING_MIN_INTERVAL;
@@ -809,7 +801,7 @@ void EEPROM::readDataFromEEPROM() {
         Printer::stepsPackingMinInterval = constrain(HAL::eprGetInt16(EPR_RF_STEP_PACKING_MIN_INTERVAL), MIN_STEP_PACKING_MIN_INTERVAL, MAX_STEP_PACKING_MIN_INTERVAL);
     }
 
-#if FAN_PIN > -1 && FEATURE_FAN_CONTROL
+#if FAN_PIN > -1
     uint8_t temp_min = HAL::eprGetByte(EPR_RF_PART_FAN_PWM_MIN);
     uint8_t temp_max = HAL::eprGetByte(EPR_RF_PART_FAN_PWM_MAX);
     if ((int)temp_max - (int)temp_min >= 16 && temp_min > 0 && temp_max < 255) {
@@ -826,7 +818,7 @@ void EEPROM::readDataFromEEPROM() {
         Commands::adjustFanFrequency(tempfs);
     }
     Commands::adjustFanMode((HAL::eprGetByte(EPR_RF_FAN_MODE) == PART_FAN_MODE_PDM ? PART_FAN_MODE_PDM : PART_FAN_MODE_PWM));
-#endif // FAN_PIN>-1 && FEATURE_FAN_CONTROL
+#endif // FAN_PIN > -1
 
     if (change)
         EEPROM::updateChecksum();
@@ -1052,18 +1044,18 @@ void EEPROM::writeSettings() {
         writeByte(o + EPR_EXTRUDER_COOLER_SPEED, Com::tEPRExtruderCoolerSpeed);
     }
 
-#if FAN_PIN > -1 && FEATURE_FAN_CONTROL
+#if FAN_PIN > -1
     writeByte(EPR_RF_FAN_MODE, Com::tEPRPrinter_FAN_MODE);
     writeByte(EPR_RF_PART_FAN_SPEED, Com::tEPRPrinter_FAN_SPEED);
     writeByte(EPR_RF_PART_FAN_PWM_MIN, Com::tEPRPrinter_FAN_PART_FAN_PWM_MIN);
     writeByte(EPR_RF_PART_FAN_PWM_MAX, Com::tEPRPrinter_FAN_PART_FAN_PWM_MAX);
-#endif // FAN_PIN>-1 && FEATURE_FAN_CONTROL
+#endif // FAN_PIN > -1
 
-#if FEATURE_24V_FET_OUTPUTS
+#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
     writeByte(EPR_RF_FET1_MODE, Com::tEPRFET1Mode);
     writeByte(EPR_RF_FET2_MODE, Com::tEPRFET2Mode);
     writeByte(EPR_RF_FET3_MODE, Com::tEPRFET3Mode);
-#endif // FEATURE_24V_FET_OUTPUTS
+#endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
     writeByte(EPR_RF_CASE_LIGHT_MODE, Com::tEPRCaseLightsMode);
 

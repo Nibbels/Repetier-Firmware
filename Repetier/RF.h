@@ -50,8 +50,6 @@
 #define UI_ACTION_RF_OUTPUT_OBJECT 1526
 #define UI_ACTION_RF_SET_SCAN_XY_START 1529
 #define UI_ACTION_RF_SET_SCAN_XY_END 1530
-//FEATURE_ALIGN_EXTRUDERS
-#define UI_ACTION_RF_ALIGN_EXTRUDERS 1531
 
 #define UI_ACTION_RF_MAX_SINGLE 1600
 
@@ -325,10 +323,6 @@
   - M3308 P2 ; sets the RGB light mode to "Auto"
   - M3308 P3 ; sets the RGB light mode to "Manual"
 
-- M3309 - start/abort to align the two extruders
-  - Examples:
-  - M3309 ; moves the heat bed up until it touches the first extruder, then waits while the operator aligns the extruders
-
 */
 
 // ##########################################################################################
@@ -399,9 +393,6 @@ extern const char ui_text_z_compensation[] PROGMEM;
 extern const char ui_text_x_axis[] PROGMEM;
 extern const char ui_text_y_axis[] PROGMEM;
 extern const char ui_text_z_axis[] PROGMEM;
-#if FEATURE_ALIGN_EXTRUDERS
-extern const char ui_text_align_extruders[] PROGMEM;
-#endif // FEATURE_ALIGN_EXTRUDERS
 extern const char ui_text_extruder[] PROGMEM;
 extern const char ui_text_autodetect_pid[] PROGMEM;
 extern const char ui_text_temperature_manager[] PROGMEM;
@@ -421,7 +412,6 @@ extern const char ui_text_saving_success[] PROGMEM;
 
 // Geplantes Canceling
 #define SCAN_ABORT_REASON_CANCELED 1
-#define SCAN_ABORT_REASON_PRINTER_LONELY 2
 
 // Kabelbruch, Extruder verspannt, Stecker wackelig, Ingress,...
 #define SCAN_ABORT_REASON_START_PRESSURE 3
@@ -534,10 +524,6 @@ extern int8_t g_nDigitFlowCompensation_speed_intense;
 extern short g_nDigitFlowCompensation_Fmin;
 extern short g_nDigitFlowCompensation_Fmax;
 
-#if FEATURE_ALIGN_EXTRUDERS
-extern volatile unsigned char g_nAlignExtrudersStatus;
-#endif // FEATURE_ALIGN_EXTRUDERS
-
 #ifdef RGB_LIGHT_R_PIN
 extern unsigned char g_uRGBHeatingR;
 extern unsigned char g_uRGBHeatingG;
@@ -591,11 +577,6 @@ extern long getZMatrixDepth_CurrentXY(void);
 extern void recalculateHeatBedZCompensation(void);
 
 extern void switchActiveHeatBed(char newActiveHeatBed);
-
-#if FEATURE_ALIGN_EXTRUDERS
-extern void startAlignExtruders(void);
-extern void alignExtruders(void);
-#endif // FEATURE_ALIGN_EXTRUDERS
 
 extern short readIdlePressure(short* pnIdlePressure);
 extern short testIdlePressure(void);
@@ -651,9 +632,6 @@ extern uint8_t drv8711MicroSteps_2_ModeValue(unsigned short microsteps);
 extern void drv8711adjustMicroSteps(unsigned char driver);
 
 extern void drv8711Init(void);
-#if FEATURE_READ_STEPPER_STATUS
-extern unsigned short readMotorStatus(unsigned char driver);
-#endif //FEATURE_READ_STEPPER_STATUS
 #endif // CURRENT_CONTROL_DRV8711
 
 extern void cleanupEPositions(void);
@@ -675,9 +653,7 @@ extern void addFloat(char* pszString, float fNumber, uint8_t uDigits);
 extern float getHeatBedTemperatureOffset(float temperatureInCelsius);
 #endif // FEATURE_HEAT_BED_TEMP_COMPENSATION
 
-#if FEATURE_TYPE_EEPROM
 extern void determineHardwareType(void);
-#endif // FEATURE_TYPE_EEPROM
 extern void showIdle(void);
 extern void showError(const void* line2, const void* line3 = NULL, const void* line4 = NULL);
 extern void showWarning(const void* line2, const void* line3 = NULL, const void* line4 = NULL);
