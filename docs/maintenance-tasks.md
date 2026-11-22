@@ -57,7 +57,7 @@ The firmware restricted Play to a completed pause in 1.37t2. The 1.43.56 pause r
 ## Calibration and persistence
 
 - [ ] **Make the `M3902 Z0` offset transfer durable.** The command saves zero for the manual offset immediately. A reset before saving the RAM bed matrix can lose the transferred correction. [Matrix persistence](z-offset/scans-and-persistence.md#critical-transfer-operation-m3902-z0)
-- **Deferred.** The fork's Auto-touch and workpiece-origin routines refine contact detection and widen the origin search from 0.25 to 0.50 mm. [Probe routine](https://github.com/afriess/RFx000x-Firmware/blob/0e11752/Repetier/RF.cpp#L3382-L3405) · [Search range](https://github.com/afriess/RFx000x-Firmware/commit/0dd35e4)
+- **Deferred pending the milling scope decision.** The fork's Auto-touch and workpiece-origin routines refine contact detection and widen the origin search from 0.25 to 0.50 mm. [Probe routine](https://github.com/afriess/RFx000x-Firmware/blob/0e11752/Repetier/RF.cpp#L3382-L3405) · [Search range](https://github.com/afriess/RFx000x-Firmware/commit/0dd35e4)
 
 ## Motion smoothness and performance
 
@@ -67,6 +67,8 @@ The firmware restricted Play to a completed pause in 1.37t2. The 1.43.56 pause r
 ## Firmware structure and hardware variants
 
 Work through the [architecture review and migration](development-roadmap.md#5-firmware-structure-and-hardware-variants) as the blocks establish which state, algorithms and hardware differences belong together.
+
+- [ ] **Propose which optional features to retire.** Start with milling mode and identify its shared print paths, compatibility implications and removable variants. [Feature retirement](development-roadmap.md#feature-retirement)
 
 ## Fork candidates
 

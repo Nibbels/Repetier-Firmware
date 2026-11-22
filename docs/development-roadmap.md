@@ -8,9 +8,9 @@ The current block is **coordinate systems and motion compensation**. The aim is 
 | [Print lifecycle and DMS controls](#2-print-lifecycle-and-dms-controls) | Explicit job and phase transitions, with consistent pressure control and reset behavior. |
 | [Calibration and persistence](#3-calibration-and-persistence) | A traceable path from measured contact to the active and saved calibration. |
 | [Motion smoothness and performance](#4-motion-smoothness-and-performance) | A timing baseline and measured improvements. Step packing belongs here. |
-| [Firmware structure and hardware variants](#5-firmware-structure-and-hardware-variants) | Clear boundaries between shared machine logic, operator interfaces and hardware-specific code. |
+| [Firmware structure and hardware variants](#5-firmware-structure-and-hardware-variants) | Fewer supported combinations and clear boundaries between machine logic, operator interfaces and hardware. |
 
-Use the architecture below throughout the blocks. Calibration can progress independently once the live and saved offset semantics are clear. Evaluate timing changes after the coordinate behavior has a repeatable baseline. Clean up boundaries as each block clarifies them.
+Use the architecture below throughout the blocks. Calibration can progress independently once the live and saved offset semantics are clear. Evaluate timing changes after the coordinate behavior has a repeatable baseline. Review the scope of optional features before restructuring the paths that serve them.
 
 ## Architecture to test against the code
 
@@ -57,7 +57,7 @@ Use short, statically bound methods on the interrupt path, including the separat
 
 - **Trace measurement to activation.** Follow full-bed scans and point Z-offset scans through contact detection, the working RAM matrix, the active sector and reload. Keep the current operator workflows as compatibility cases, including explicit matrix saves and transferring roughly 5 µm from SenseOffset to the saved offset with each Mod Menu DOWN/UP pair. [Scans and matrix storage](z-offset/scans-and-persistence.md) · [Mod Menu transfer](z-offset/history-and-workflows.md)
 - **Make `M3902 Z0` recoverable.** Define how the internal EEPROM offset and external EEPROM matrix are committed and recovered as a pair. Verify the active sector and test a restart after each write and recovery step, including a second interruption during recovery. Reload either the complete previous pair or the complete new pair, with the expected effective correction in either case. Verify that the ordinary load path still reads existing matrix sectors and stored offsets. [Current transfer sequence](z-offset/scans-and-persistence.md#critical-transfer-operation-m3902-z0)
-- **Evaluate milling probing separately.** Keep the fork's Auto-touch and workpiece origin changes deferred until the shared scan and coordinate behavior are understood. Check the broader probing range against actual contact traces and milling-mode limits before adopting it. [Fork probing candidates](maintenance-tasks.md#calibration-and-persistence)
+- **Park the milling probing candidates.** Revisit the fork's Auto-touch, workpiece origin and expanded probing range only if milling has a maintenance case. [Milling scope review](#feature-retirement) · [Fork probing candidates](maintenance-tasks.md#calibration-and-persistence)
 
 ## 4. Motion smoothness and performance
 
@@ -68,5 +68,11 @@ Use short, statically bound methods on the interrupt path, including the separat
 ## 5. Firmware structure and hardware variants
 
 - **Split responsibilities where the workflows cross.** As each block settles its state and callers, bring G-code and panel actions through the same machine operations where they request the same behavior. Review which parts of `RF.cpp` belong to motion policy, print lifecycle, calibration or peripherals. Review periodic and nested waits for explicit completion conditions and a single owner of each transition. Expose small interfaces that eliminate direct cross-module writes.
-- **Review model and feature differences.** Compare board pins, driver and timer behavior, endstop topology, calibration data and print/mill feature switches. Keep model differences at the hardware or configuration boundary where they express real capabilities. Review duplicated or obsolete paths against supported configurations and actual usage before consolidating them. Use the same exercise for heater, watchdog and peripheral hooks when those boundaries are touched. [Board selection](../Repetier/Configuration.h#L45) · [Pin mappings](../Repetier/pins.h)
+- **Review actual hardware differences.** Compare board pins, driver and timer behavior, endstop topology and calibration data. Keep model differences at the hardware or configuration boundary where they express real capabilities. Use the same exercise for heater, watchdog and peripheral hooks when those boundaries are touched. [Board selection](../Repetier/Configuration.h#L45) · [Pin mappings](../Repetier/pins.h)
 - **Make refactoring verifiable.** Move in small slices with a stated state owner, call path and expected behavior. Keep structural changes and intentional behavior changes in separate commits where practical. Bring representative host replays into the repository as the shared interfaces take shape. Run the relevant replays and AVR builds for RF1000, RF2000 and RF2000v2, track flash and SRAM, and record physical verification separately for motion, sensors and persistence. [Existing printer scenarios](first-layer-control/test-scenarios.md)
+
+### Feature retirement
+
+Inventory optional features and combinations before reorganizing their callers. For each, record actual usage, hardware and G-code dependencies, and the cost of keeping the alternate path. Decide whether to retain it, fold overlapping behavior into one path, or retire it. Prioritize features that add branches across several subsystems. Review the resulting number of supported configurations and the branches removed from shared code.
+
+**Milling mode is the first retirement candidate.** All three model defaults already compile with `FEATURE_MILLING_MODE=0`. The source still has milling branches in homing and endstop handling, motion and workpiece compensation, G-code and menus, and EEPROM. Map shared paths such as the heat-bed scans and print endstop behavior, then estimate the simplification from removing the milling-only code and flags. Before a removal, check how a previously stored milling mode and legacy milling commands would be handled, and identify the last revision supporting that mode. [Model defaults](../Repetier/RF1000.h#L47) · [RF2000](../Repetier/RF2000.h#L47) · [RF2000v2](../Repetier/RF2000v2.h#L47) · [Mode in EEPROM](../Repetier/Eeprom.cpp#L839)
