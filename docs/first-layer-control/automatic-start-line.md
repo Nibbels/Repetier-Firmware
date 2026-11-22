@@ -28,7 +28,7 @@ Before priming, the command waits for the move queue; saves current flow/feed co
 
 It then generates alternating lines and advances E. Each line is broken up with a `0.0025` fractional increment (approximately **400 queue segments per line**, not '100' as the old code comment states). This allows new segments to incorporate updated pressure-dependent extrusion multipliers. Feedrate adjustment is applied at runtime in the stepper timing path, not only to newly enqueued segments. The play key and command-block path can interrupt the priming sequence.
 
-After waiting for the queued prime moves, `M3912` restores the previous Digit Flow configuration, resets both dynamic factors and `interval_mod`, restores the **incoming logical E reference** and both sub-step E remainders, and restores the E mode. It clears `queuePositionZLayerGuessNew`, `Current`, and `Last` so the real model layer can be detected. Skip/cancel paths clean up the temporary phase; a skip no longer queues an additional Y move.
+After waiting for the queued prime moves, `M3912` restores the previous Digit Flow configuration, resets both dynamic factors and `interval_mod`, restores the **incoming logical E reference** and both sub-step E remainders, and restores the E mode. It resets layer tracking so the real model layer can be detected. A skip finishes the queued prime moves before cleaning up the phase.
 
 ## How pressure changes flow vs speed
 

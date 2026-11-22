@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -12,6 +13,7 @@
 #include "Configuration.h"
 #include "RF2000.h"
 #include "ZOffset.h"
+#include "PrintLayers.h"
 #include "PrintPause.h"
 #include "PrintStop.h"
 
@@ -28,7 +30,6 @@ millis_t clockMs = 0, g_uStartOfIdle = 0, previousMillisCmd = 0;
 volatile uint8_t g_startLineActive = 0;
 char g_nHeatBedScanStatus = 0, g_nZOSScanStatus = 0;
 unsigned short g_nManualSteps[4] = { 1, 1, 1, 28 };
-long g_minZCompensationSteps = 256, g_maxZCompensationSteps = 12800;
 long g_offsetZCompensationSteps = 250;
 short g_ZCompensationMax = 200;
 short forceDigits = 0;
@@ -113,6 +114,7 @@ extern PrintPause pause;
 extern PrintStop printStop;
 ZOffset zOffset;
 ZMotion zMotion(zStepsPerMm);
+PrintLayers layers{zStepsPerMm};
 long currentXYSteps[2] = { 6400, 12800 };
 long directCurrentSteps[4] = { 0, 16, 8, 0 };
 struct DirectDisplacement {
@@ -120,8 +122,7 @@ struct DirectDisplacement {
     long steps() const { return displacement; }
 };
 DirectDisplacement directPosition(uint8_t axis) { return {directCurrentSteps[axis]}; }
-long queuePositionZLayerGuessNew = 0, queuePositionZLayerLast = 0, queuePositionZLayerCurrent = 256;
-long queuedPositionSteps[3] = {};
+int32_t queuedPositionSteps[3] = {};
 float axisStepsPerMM[3] = { 160.0f, 160.0f, zStepsPerMm };
 float axisMMPerSteps[3] = { 1.0f / 160, 1.0f / 160, 1.0f / zStepsPerMm };
 float homingFeedrate[3] = { 60.0f, 60.0f, 5.0f };
@@ -149,7 +150,6 @@ void setMenuMode(int mode, bool active) {
     menuPaused = active;
 }
 void stopPrint();
-void resetLayerTracking();
 void homeZAxis();
 char anyHomeDir(uint8_t axis) {
     assert(axis == Z_AXIS);
@@ -187,10 +187,6 @@ bool READ(int pin) {
         return motor > 0;
     assert(pin == Z_MAX_PIN);
     return motor < 200000;
-}
-
-namespace RMath {
-long max(long a, long b) { return std::max(a, b); }
 }
 
 template<class T, class A, class B>
@@ -603,31 +599,32 @@ void queuedPause() {
     assert(PrintLine::queuedTask == TASK_NO_TASK);
 }
 
-void planLayer(long z, bool hasZMove) {
+void planMove(long z, bool hasZMove, bool extrudes = true, bool hasXYMove = true) {
     PrintLine move;
     move.moveZ = hasZMove;
-    move.positiveE = true;
-    move.moveXY = true;
+    move.positiveE = extrudes;
+    move.moveXY = hasXYMove;
     Printer::queuedPositionSteps[Z_AXIS] = z;
     trackPlannedLayer(&move);
 }
 
 void homeBetweenPrints() {
+    auto& layers = Printer::layers;
     const long oldLayer = 512; // 0.40 mm
     const long newLayer = 256; // 0.20 mm
     const long primeZ = 448; // 0.35 mm
-    const long defaultMin = long(heatBedZCompensationMinMm * zStepsPerMm);
+    const long defaultMin = 422;
     const long fadeSpan = (g_offsetZCompensationSteps - g_ZCompensationMax) * 20;
     PrintLine::linesCount = 0;
-    Printer::resetLayerTracking();
-    planLayer(oldLayer, true);
-    assert(g_minZCompensationSteps == oldLayer && g_maxZCompensationSteps == oldLayer + fadeSpan);
+    layers.resetTracking();
+    planMove(oldLayer, true);
+    assert(layers.fadeStartSteps() == oldLayer && layers.fadeEndSteps() == oldLayer + fadeSpan);
     sample(printingForce, 9);
     assert(Printer::zOffset.senseMicrometers() == initialClearance);
 
     const long manualZ = Printer::zOffset.manualMicrometers();
-    Printer::queuePositionZLayerLast = oldLayer - 128;
-    Printer::queuePositionZLayerGuessNew = oldLayer + 128;
+    planMove(oldLayer + 64, true);
+    planMove(oldLayer + 128, true, false, false);
     Printer::compensatedPositionOverPercE = 12.5f;
     Printer::compensatedPositionCollectTinyE = 0.75f;
 
@@ -638,17 +635,18 @@ void homeBetweenPrints() {
     assert(Printer::zMotion.correctionTarget() == 0);
     assert(Printer::compensatedPositionOverPercE == 0.0f && Printer::compensatedPositionCollectTinyE == 0.0f);
     assert(g_nSensiblePressureDigits == 0 && !g_nSensiblePressure1stMarke);
-    assert(g_minZCompensationSteps == defaultMin && g_maxZCompensationSteps == heatBedZCompensationMaxMm * zStepsPerMm);
-    assert(!Printer::queuePositionZLayerGuessNew && !Printer::queuePositionZLayerCurrent && !Printer::queuePositionZLayerLast);
+    assert(layers.fadeStartSteps() == defaultMin && layers.fadeEndSteps() == 12800);
+    planMove(0, false, true, false); // An E-only move must not confirm the pre-home candidate.
+    assert(!layers.currentLayerSteps() && !layers.previousLayerSteps());
 
     Printer::doHeatBedZCompensation = true;
     g_startLineActive = true;
-    planLayer(primeZ, true);
-    assert(g_minZCompensationSteps == defaultMin && !Printer::queuePositionZLayerCurrent);
+    planMove(primeZ, true);
+    assert(layers.fadeStartSteps() == defaultMin && !layers.currentLayerSteps());
     g_startLineActive = false;
-    planLayer(newLayer, true);
-    assert(g_minZCompensationSteps == newLayer && g_maxZCompensationSteps == newLayer + fadeSpan);
-    assert(Printer::queuePositionZLayerCurrent == newLayer && !Printer::queuePositionZLayerLast);
+    planMove(newLayer, true);
+    assert(layers.fadeStartSteps() == newLayer && layers.fadeEndSteps() == newLayer + fadeSpan);
+    assert(layers.currentLayerSteps() == newLayer && !layers.previousLayerSteps());
 
     // Re-enable SenseOffset before the first DMS poll of the new job.
     Printer::zMotion.setNominalSteps(newLayer);
@@ -660,14 +658,81 @@ void homeBetweenPrints() {
 
     // A print without M3912 can learn the model layer even with no separate Z move.
     Printer::homeZAxis();
-    assert(g_minZCompensationSteps == defaultMin);
+    assert(layers.fadeStartSteps() == defaultMin);
     const long layerWithoutPrime = 451; // 0.352 mm rounded to steps
-    planLayer(layerWithoutPrime, false);
-    assert(g_minZCompensationSteps == layerWithoutPrime);
-    assert(Printer::queuePositionZLayerCurrent == layerWithoutPrime && !Printer::queuePositionZLayerLast);
+    planMove(layerWithoutPrime, false);
+    assert(layers.fadeStartSteps() == layerWithoutPrime);
+    assert(layers.currentLayerSteps() == layerWithoutPrime && !layers.previousLayerSteps());
+}
+
+void expectCompensation(long nominalZ, long bedCorrection, float extraExtrusion) {
+    Printer::zMotion.setNominalSteps(nominalZ);
+    recalculateHeatBedZCompensation();
+    assert(Printer::zMotion.correctionTarget() == bedCorrection + Printer::zOffset.effectiveSteps());
+    assert(std::abs(Printer::compensatedPositionOverPercE - extraExtrusion) < 0.000001f);
+}
+
+void layerFadeAndZHop() {
+    auto& layers = Printer::layers;
+    const long primeZ = 448; // 0.35 mm
+    const long fadeEnd = primeZ + 1000; // 50 steps of matrix relief.
+    layers.resetTracking();
+    Printer::currentXYSteps[X_AXIS] = 5280; // Interpolated bed depth of 202 steps.
+    Printer::currentXYSteps[Y_AXIS] = 0;
+    g_nDigitZCompensationDigits_active = false;
+
+    g_startLineActive = true;
+    planMove(primeZ, true);
+    g_startLineActive = false;
+    assert(!layers.currentLayerSteps());
+
+    planMove(primeZ, false, true, false); // E-only unretract.
+    assert(!layers.currentLayerSteps());
+    planMove(primeZ, false);
+    assert(layers.currentLayerSteps() == primeZ && !layers.previousLayerSteps());
+    assert(layers.fadeStartSteps() == primeZ && layers.fadeEndSteps() == fadeEnd);
+    expectCompensation(primeZ, 202, 0.0f);
+
+    // Travel and return to the same layer before XY extrusion resumes.
+    planMove(primeZ + 128, true, false, false);
+    planMove(primeZ, true, false, false);
+    planMove(primeZ, false);
+    assert(layers.currentLayerSteps() == primeZ && !layers.previousLayerSteps());
+    assert(layers.fadeStartSteps() == primeZ && layers.fadeEndSteps() == fadeEnd);
+
+    planMove(fadeEnd - 50, true);
+    // The executor is still within the fade even though the planner is farther ahead.
+    expectCompensation(primeZ + 500, 226, 0.048f);
+    planMove(fadeEnd + 50, true);
+    expectCompensation(fadeEnd, 250, 0.024f);
+}
+
+void layerScaleTransitions() {
+    auto& layers = Printer::layers;
+    planMove(253, true); // A near-bed descent starts a new model layer sequence.
+    assert(layers.currentLayerSteps() == 253 && !layers.previousLayerSteps());
+    assert(layers.fadeStartSteps() == 253 && layers.fadeEndSteps() == 1253);
+    planMove(511, true);
+    planMove(601, true, false, false);
+
+    Printer::axisStepsPerMM[Z_AXIS] = 640.0f;
+    layers.rescaleFadeBounds(0.5f);
+    assert(layers.fadeStartSteps() == 126 && layers.fadeEndSteps() == 626);
+    assert(layers.currentLayerSteps() == 511 && layers.previousLayerSteps() == 253);
+
+    layers.resetFadeBounds(Printer::axisStepsPerMM[Z_AXIS]);
+    assert(layers.fadeStartSteps() == 211 && layers.fadeEndSteps() == 6400);
+    assert(layers.currentLayerSteps() == 511 && layers.previousLayerSteps() == 253);
+
+    // Motor disable clears the confirmed layers and retains the candidate.
+    layers.clearConfirmedLayers();
+    assert(!layers.currentLayerSteps() && !layers.previousLayerSteps());
+    planMove(601, false, true, false);
+    assert(layers.currentLayerSteps() == 601 && !layers.previousLayerSteps());
 }
 
 void initializeOffsets() {
+    planMove(256, true);
     Printer::zMotion.setNominalSteps(256);
     Printer::zMotion.setMotorReference(256 + Printer::directCurrentSteps[Z_AXIS]);
     Printer::zOffset.setManualMicrometers(50, zStepsPerMm);
@@ -705,6 +770,10 @@ int main(int argc, char** argv) {
         queuedPause();
     else if (!std::strcmp(argv[1], "home"))
         homeBetweenPrints();
+    else if (!std::strcmp(argv[1], "layer-fade"))
+        layerFadeAndZHop();
+    else if (!std::strcmp(argv[1], "layer-scale"))
+        layerScaleTransitions();
     else
         return 1;
     std::printf("Print lifecycle replay passed (%s)\n", argv[1]);

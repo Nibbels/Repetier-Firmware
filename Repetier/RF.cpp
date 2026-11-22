@@ -88,8 +88,6 @@ millis_t g_uStartOfIdle = 0;
 
 long g_offsetZCompensationSteps = 0;
 short g_ZCompensationMax = 0;
-long g_minZCompensationSteps = long(heatBedZCompensationMinMm * ZAXIS_STEPS_PER_MM); //pre init
-long g_maxZCompensationSteps = long(heatBedZCompensationMaxMm * ZAXIS_STEPS_PER_MM); //pre init
 volatile unsigned char g_nHeatBedScanStatus = 0;
 char g_nActiveHeatBed = 1;
 
@@ -270,7 +268,7 @@ static short readStrainGauge() //readStrainGauge dauert etwas unter einer Millis
             nSensibleCompensationChecks -= 1;                                 //*=0.75 bei 4 ist 3
             // M3912 feeds high DMS force into a progressive speed/E brake,
             // irrespective of the previous print's first-layer boundary.
-            bool digitFlowAllowed = Printer::zMotion.nominalSteps() > g_minZCompensationSteps;
+            bool digitFlowAllowed = Printer::zMotion.nominalSteps() > Printer::layers.fadeStartSteps();
             digitFlowAllowed = digitFlowAllowed || g_startLineActive;
             if (g_nDigitFlowCompensation_intense != 0) {
                 short active_summed_digits = abs(static_cast<short>(g_nDigitZCompensationDigits));
@@ -2036,15 +2034,20 @@ void recalculateHeatBedZCompensation(void) {
     float nNeededZEPerc = 0.0f;
 
     if (Printer::doHeatBedZCompensation) {
-        long nCurrentPositionStepsZ = Printer::zMotion.nominalSteps(); // Use the executing nominal Z for the fade limits.
-        if (nCurrentPositionStepsZ >= 0) {
+        const long nominalZSteps = Printer::zMotion.nominalSteps();
+        const auto& layers = Printer::layers;
+        const long fadeStartSteps = layers.fadeStartSteps();
+        const long fadeEndSteps = layers.fadeEndSteps();
+        const long previousLayerSteps = layers.previousLayerSteps();
+        const long currentLayerSteps = layers.currentLayerSteps();
+        if (nominalZSteps >= 0) {
             // check whether we have to perform a compensation in z-direction
-            if (nCurrentPositionStepsZ < g_maxZCompensationSteps) {
+            if (nominalZSteps < fadeEndSteps) {
                 nNeededZCompensation = getZMatrixDepth_CurrentXY(); //Das ist hier der Zeiger auf den interpolierten Z-Matrix-Wert.
 
-                if (nCurrentPositionStepsZ <= g_minZCompensationSteps) {
+                if (nominalZSteps <= fadeStartSteps) {
                     // the printer is very close to the surface - we shall print a layer of exactly the desired thickness
-                    if (nCurrentPositionStepsZ == 0) {
+                    if (nominalZSteps == 0) {
                         nNeededZCompensation += 13; //G1 Z0 shall not hit the bed: +5um -> this is better than not compensating at all because it makes tests weired.
                     }
                     //nNeededZEPerc = 0.0f;
@@ -2052,13 +2055,13 @@ void recalculateHeatBedZCompensation(void) {
                     long zl;
                     long div;
                     // Compensate Extrusion within ZCMP: Add and sum up this amount for every step extruded in move interrupt. Extrude the step if we have some full >=1.0 in interrupt.
-                    if (Printer::queuePositionZLayerLast < g_minZCompensationSteps && g_minZCompensationSteps < Printer::queuePositionZLayerCurrent) {
+                    if (previousLayerSteps < fadeStartSteps && fadeStartSteps < currentLayerSteps) {
                         //geschmälert um Anteil innerhalb CMP-Ausschleichbereich:
-                        zl = (g_offsetZCompensationSteps - nNeededZCompensation) * (Printer::queuePositionZLayerCurrent - g_minZCompensationSteps);
-                        div = (g_maxZCompensationSteps - g_minZCompensationSteps) * (Printer::queuePositionZLayerCurrent - Printer::queuePositionZLayerLast);
+                        zl = (g_offsetZCompensationSteps - nNeededZCompensation) * (currentLayerSteps - fadeStartSteps);
+                        div = (fadeEndSteps - fadeStartSteps) * (currentLayerSteps - previousLayerSteps);
                     } else {
                         zl = (g_offsetZCompensationSteps - nNeededZCompensation);
-                        div = (g_maxZCompensationSteps - g_minZCompensationSteps);
+                        div = (fadeEndSteps - fadeStartSteps);
                     }
                     if (div && zl) {
                         nNeededZEPerc = float(zl) / float(div);
@@ -2066,18 +2069,18 @@ void recalculateHeatBedZCompensation(void) {
                         nNeededZEPerc = 0.0f;
                     }
                     // the printer is already a bit away from the surface - do the actual compensation -> Hier ist nNeededZCompensation dann nicht mehr der Zeiger auf die Oberfläche, sondern der Zeiger auf die kompensationshöhe:
-                    nNeededZCompensation = ((nNeededZCompensation - g_offsetZCompensationSteps) * (g_maxZCompensationSteps - nCurrentPositionStepsZ))
-                        / (g_maxZCompensationSteps - g_minZCompensationSteps);
+                    nNeededZCompensation = ((nNeededZCompensation - g_offsetZCompensationSteps) * (fadeEndSteps - nominalZSteps))
+                        / (fadeEndSteps - fadeStartSteps);
                     nNeededZCompensation += g_offsetZCompensationSteps;
                 }
             } else {
                 // after the first layers, only the static offset to the surface must be compensated
                 nNeededZCompensation = g_offsetZCompensationSteps;
 
-                if (Printer::queuePositionZLayerLast < g_maxZCompensationSteps && g_maxZCompensationSteps <= Printer::queuePositionZLayerCurrent) {
+                if (previousLayerSteps < fadeEndSteps && fadeEndSteps <= currentLayerSteps) {
                     //Volle E-Kompensation: geschmälert um Anteil innerhalb CMP-Ausschleichbereich:
-                    long zl = (g_offsetZCompensationSteps - getZMatrixDepth_CurrentXY()) * (g_maxZCompensationSteps - Printer::queuePositionZLayerLast);
-                    long div = (g_maxZCompensationSteps - g_minZCompensationSteps) * (Printer::queuePositionZLayerCurrent - Printer::queuePositionZLayerLast);
+                    long zl = (g_offsetZCompensationSteps - getZMatrixDepth_CurrentXY()) * (fadeEndSteps - previousLayerSteps);
+                    long div = (fadeEndSteps - fadeStartSteps) * (currentLayerSteps - previousLayerSteps);
                     if (div && zl) {
                         nNeededZEPerc = float(zl) / float(div);
                     } else {
@@ -3199,14 +3202,8 @@ void handleStrainGaugeFeatures(millis_t uTime) {
         /* brief: This is for correcting too close Z at first layer // Idee Wessix, coded by Nibbels  */
 
         if (learnSenseOffset) {
-            /*
-            Still testing: Gesucht ist ein Limit des der Abstands zum Druckbett, also die jeweils richtige Layerbegrenzung::
-
-            #das Extruder::current->zOffset ist negativ und in Steps. Ist ein Extruder weiter unten, per T1-Offset, muss das bedacht werden.
-            #Die Höhe über Grund, kompensiert sollte unterhalb g_maxZCompensationSteps sein.
-            #currentSteps = Achsenziel + Achsenoffset, aber g_minZCompensationSteps/g_maxZCompensationSteps kennen das Achsenoffset nicht ohne Hilfe: Das gehört hier her, wenn man die Layerhöhe abgleichen will.
-            */
-            if (Printer::zMotion.nominalSteps() <= g_minZCompensationSteps) {
+            // SenseOffset learns within the full bed-profile range in nominal Z steps.
+            if (Printer::zMotion.nominalSteps() <= Printer::layers.fadeStartSteps()) {
                 g_nSensiblePressure1stMarke = 1; //marker für display: wir sind in regelhöhe
                 //wenn durch Gcode gefüllt, prüfe, ob Z-Korrektur (weg vom Bett) notwendig ist, in erstem Layer.
                 senseOffsetSamples.sum += pressure;
@@ -3561,7 +3558,8 @@ void processSpecialGCode(GCode* pCommand) {
         case 3006: { // S in micrometers, Z in millimeters
             const bool inMillimeters = pCommand->hasZ();
             if (inMillimeters) {
-                pCommand->Z = constrain(pCommand->Z, -heatBedZCompensationMaxMm, heatBedZCompensationMaxMm);
+                constexpr float maxOffsetMm = maxManualZOffsetMicrometers / 1000.0f;
+                pCommand->Z = constrain(pCommand->Z, -maxOffsetMm, maxOffsetMm);
                 nTemp = long(pCommand->Z * 1000);
             } else if (pCommand->hasS()) {
                 nTemp = constrain(pCommand->S, -maxManualZOffsetMicrometers, maxManualZOffsetMicrometers);
@@ -5457,7 +5455,7 @@ void processSpecialGCode(GCode* pCommand) {
                     save_logicalERemainder = Printer::destinationRemainderMM[E_AXIS];
                     save_extrudeMultiplyErrorSteps = Printer::extrudeMultiplyErrorSteps;
                     save_compensatedPositionCollectTinyE = Printer::compensatedPositionCollectTinyE;
-                    Printer::resetLayerTracking();
+                    Printer::layers.resetTracking();
                     g_startLineActive = 1;
                 }
 
@@ -5608,7 +5606,7 @@ void processSpecialGCode(GCode* pCommand) {
                         Printer::extrudeMultiplyErrorSteps = save_extrudeMultiplyErrorSteps;
                         Printer::compensatedPositionCollectTinyE = save_compensatedPositionCollectTinyE;
                     }
-                    Printer::resetLayerTracking();
+                    Printer::layers.resetTracking();
                     g_startLineActive = 0;
                 }
                 Printer::relativeExtruderCoordinateMode = save_relativeExtruderCoordinateMode;

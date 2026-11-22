@@ -20,7 +20,7 @@ This is **analysis, not confirmation from a physical printer**.
 
 **H1: previous-print threshold leak when Z homing is skipped.** A fresh Z home before priming restores the geometric `g_min/g_max` defaults. The generated `M3912` phase forces the DMS brake and suspends SenseOffset during priming, independently of the learned layer.
 
-**H2: layer-state cleanup.** `homeZAxis()` and the patched `M3912` now clear `Current`, `Last` and `GuessNew`. Generated priming moves cannot be accepted as model layers. Motor-disable-only paths still do not reset all learned geometric bounds.
+**H2: layer-state cleanup.** `homeZAxis()` and `M3912` reset pending and confirmed layer tracking through `Printer::layers`. The priming phase bypasses model-layer detection. Disabling the motor clears the confirmed layers.
 
 **H3: wrong fix scope/time.** [r3dacto fork patch](https://github.com/r3dacto/Repetier-FirmwareCodex/commit/d59ca5e53c1351c47a9ab67606806968c82f976e) clears `GuessNew` then resets fade bounds after M3912 **only on RF2000v2**. That would occur *after* a potentially wrong prime-force response. We found no special RF2000v2 dependency in shared layer logic.
 
@@ -50,4 +50,4 @@ This is **analysis, not confirmation from a physical printer**.
 
 ### Patch strategy
 
-First instrument or simulate state transitions for `Current`, `Last`, `GuessNew`, `g_min`, `g_max`, current Z, DMS force, active SenseOffset and Digit Flow factors. Do not reset learned bounds after an active layer was identified. Decide separately when to reset *layer markers* and *learned compensation boundaries*; do not conflate them. Change one lifecycle event at a time and test all shared models/configurations. Keep live EEPROM settings in view: compiled defaults may not be active on a real printer.
+Trace the planned layer candidate, both confirmed layers, the fade boundaries, executing nominal Z, DMS force, active SenseOffset and Digit Flow factors. Check tracking resets and boundary resets at each lifecycle event, then replay them on all three models. Use the printer's loaded EEPROM settings for physical checks.

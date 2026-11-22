@@ -10,14 +10,14 @@
 | `g_ZCompensationMatrix[x][y]` | signed Z motor steps (header XY in other units) | Working RAM; saved separately to **external I²C EEPROM** matrix sector | Heat-bed scan, Z-offset scan M3900, M3902 matrix manipulation, matrix load | Interpolated bed topography `B(x,y)` |
 | `g_offsetZCompensationSteps` | steps | Derived RAM from maximum matrix value, *not* a separate user offset | `determineCompensationOffsetZ()` on matrix load/edit | Baseline `O` at and above fade end |
 | `g_ZCompensationMax` | steps | Derived RAM from minimum matrix value | Same matrix-extrema routine | Sets fade span with `g_offsetZCompensationSteps` |
-| `g_minZCompensationSteps` | steps | RAM: initial/fallback config; **dynamically replaced** by first-layer detector | Boot EEPROM read; `motion.cpp` model layer learning | Full bed-following limit, SenseOffset low-Z gate, Digit Flow high-Z gate |
-| `g_maxZCompensationSteps` | steps | RAM: fallback config then dynamically learned | Boot EEPROM read; `motion.cpp` | End of scanned-profile fade and ECMP transition |
+| `Printer::layers.fadeStartSteps()` | nominal Z steps | RAM, fallback then learned from the first model layer | `PrintLayers` on planning, homing, EEPROM load and microstep changes | Full bed-following limit, SenseOffset low-Z gate, Digit Flow high-Z gate |
+| `Printer::layers.fadeEndSteps()` | nominal Z steps | RAM, fallback then derived from the first model layer and matrix relief | `PrintLayers` on planning, homing, EEPROM load and microstep changes | End of scanned-profile fade and ECMP transition |
 | `g_nDigitZCompensationDigits` | force digits (stored float) | RAM | DMS readings | Optional additional force-dependent Z target term |
 | `ZMotion` correction target and applied correction | Z motor steps | RAM/live stepper state | Bed and DMS calculation publishes the target. `ZMotion` updates the applied correction. | Applied correction can lag behind the target during motion |
 
 ### Simplified formula for printing (normal Z >= 0)
 
-Let `z` be nominal Z in motor steps, `B(x,y)` the interpolated matrix value, `O=g_offsetZCompensationSteps`, `a=g_minZCompensationSteps` and `b=g_maxZCompensationSteps`.
+Let `z` be the executing nominal Z in motor steps, `B(x,y)` the interpolated matrix value, and `O=g_offsetZCompensationSteps`. The bounds `a` and `b` are `layers.fadeStartSteps()` and `layers.fadeEndSteps()`.
 
 ```text
 BedPart =

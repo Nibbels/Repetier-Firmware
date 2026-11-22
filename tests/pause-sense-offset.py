@@ -25,7 +25,6 @@ def main():
     stop = (firmware / "PrintStop.cpp").read_text(encoding="utf-8")
     fragments = [
         section(rf_header, "#define UI_ACTION_RF_HEAT_BED_UP", "#define UI_ACTION_RF_PAUSE"),
-        section(rf_header, "constexpr float heatBedZCompensationMinMm", "constexpr int32_t maxManualZOffsetMicrometers"),
         section(ui_header, "#define UI_FLAG_FAST_KEY_ACTION", "#define UI_FLAG_KEY_TEST_RUNNING")
         + section(ui_header, "#define UI_FLAG_KEY_TEST_RUNNING", "\n"),
         section(motion, "#define DIRECT_IDLE", "#define FOR_DIRECT"),
@@ -38,7 +37,6 @@ def main():
         pause.removeprefix('#include "Repetier.h"\n'),
         stop.removeprefix('#include "Repetier.h"\n'),
         section(printer, "void Printer::stopPrint()", "\n#define START_EXTRUDER_CONFIG"),
-        section(printer, "void Printer::resetLayerTracking()", "\nvoid Printer::enableSenseOffsetnow("),
         section(printer, "void Printer::homeZAxis()", "\nvoid Printer::homeDigits("),
         section(rf, "bool isAnyScanRunning()", "\nvoid moveXAction("),
         section(rf, "void moveZAction(int8_t direction) {", "} // moveZAction") + "}",
@@ -61,7 +59,8 @@ def main():
             "-o", str(executable),
         ], check=True)
         for scenario in (
-            "park", "short-pause", "interrupt", "panel", "return", "jog", "cancel", "queue", "home",
+            "park", "short-pause", "interrupt", "panel", "return", "jog", "cancel", "queue", "home", "layer-fade",
+            "layer-scale",
         ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
 

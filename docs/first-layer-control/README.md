@@ -25,17 +25,17 @@ Digit-Z adds a force-dependent Z adjustment when enabled in the DMS menu. Emerge
 1. Home, then enable scanned-bed compensation with `M3001`.
 2. `M3912` primes at nominal Z=0.35 mm using short segments. The prime follows the scanned bed and uses the DMS speed and E brake. The active priming flag suspends layer learning and SenseOffset.
 3. Enable SenseOffset with `M3909` after the start line. For a manual line, keep SenseOffset AutoStart off so `M3001` only enables bed compensation.
-4. The planner learns the first model layer when positive extrusion confirms a new Z or when the first XY extrusion begins at the current Z. The layer height sets `g_minZCompensationSteps`. `g_maxZCompensationSteps` sets the fade-out span.
+4. `Printer::layers` learns the first model layer when planned positive extrusion confirms a new Z or when the first XY extrusion begins at the current Z. The layer height sets the fade start. Matrix relief sets the distance to the fade end.
 5. Full scanned-bed tracking and the bounded SenseOffset controller operate near that real layer. Higher up, bed-profile variation fades away while corresponding E-material correction helps maintain suitable deposited volume.
 
 ### Important units/state
 
 | Name | Meaning |
 | --- | --- |
-| `Printer::queuePositionZLayerGuessNew` | Candidate Z layer after a Z move, pending positive extrusion |
-| `queuePositionZLayerCurrent` / `Last` | Accepted current/previous model layers |
-| `g_minZCompensationSteps` | Full bed-profile limit **also used to gate SenseOffset** |
-| `g_maxZCompensationSteps` | End of fade-out of spatial bed shape |
+| Pending layer in `Printer::layers` | Candidate Z layer after a Z move, pending positive extrusion |
+| `layers.currentLayerSteps()` / `previousLayerSteps()` | Accepted current and previous planned layers |
+| `layers.fadeStartSteps()` | Full bed-profile limit **also used to gate SenseOffset** |
+| `layers.fadeEndSteps()` | End of fade-out of spatial bed shape |
 | `g_offsetZCompensationSteps` | Matrix-derived baseline |
 | `Printer::zOffset.effectiveSteps()` | Manual menu Z offset + SenseOffset (converted from micrometres to steps) |
 | `Printer::compensatedPositionOverPercE` | Geometric extrusion correction from changing layer thickness |

@@ -4,13 +4,13 @@
 
 ## Bed-scan profile vs absolute offset
 
-`recalculateHeatBedZCompensation()` reads the interpolated XY bed matrix and calculates an additional Z motor target. Define `B(x,y)` as matrix correction and `O=g_offsetZCompensationSteps` as the common compensation offset. There are three regions in **nominal Z motor steps**:
+`recalculateHeatBedZCompensation()` reads the interpolated XY bed matrix and calculates an additional Z motor target. Define `B(x,y)` as matrix correction and `O=g_offsetZCompensationSteps` as the common compensation offset. The regions use the executing nominal Z in motor steps and the bounds from `Printer::layers`.
 
 | Height | Bed-profile behavior |
 | --- | --- |
-| `Z <= g_minZCompensationSteps` | Full XY-dependent scanned-bed correction to preserve nozzle gap |
-| `g_minZCompensationSteps < Z < g_maxZCompensationSteps` | Linearly fade XY-dependent variation toward baseline |
-| `Z >= g_maxZCompensationSteps` | No *spatial* variation remains; common offset persists |
+| `Z <= fadeStartSteps()` | Full XY-dependent scanned-bed correction to preserve nozzle gap |
+| `fadeStartSteps() < Z < fadeEndSteps()` | Linearly fade XY-dependent variation toward baseline |
+| `Z >= fadeEndSteps()` | Common bed-profile offset |
 
 In the middle region the conceptual calculation from source is:
 
@@ -24,21 +24,15 @@ Above the fade end, the target still includes `Printer::zOffset.effectiveSteps()
 
 All three models use nominal fallback settings of 0.33 mm and 10 mm for the start and end of the fade.
 
-`PrintLine::prepareQueueMove()` detects a prospective layer:
-1. A Z change sets `queuePositionZLayerGuessNew`.
-2. A subsequent positive E move accepts it into `queuePositionZLayerCurrent` and moves the previous current to `Last`.
-3. When a new layer is below the old one and within the first millimetre, `Last` may reset to zero (including sequential prints).
-4. When `Last==0` and the candidate is <1 mm, the firmware can make `g_min` equal the **real first layer height**.
-5. With no tracked layer or Z candidate, an XY move with positive extrusion can establish a layer at the current positive Z. This covers a model that starts at the height of its `M3912` prime.
-6. The planner clears `GuessNew` after processing positive extrusion.
+`PrintLayers` detects model layers as the planner queues moves.
 
-The dynamic fade limit is:
+1. A Z change proposes a candidate. Returning to the current layer clears the candidate.
+2. Positive extrusion confirms the candidate and shifts the former current layer to the previous layer. The first XY extrusion at a positive Z can also establish a layer, including at the height of its `M3912` prime.
+3. A descent within the first millimetre clears the previous layer. The first confirmed layer below 1 mm defines the fade start and the matrix relief defines its span.
 
-```cpp
-g_minZCompensationSteps = Printer::queuePositionZLayerCurrent;
-g_maxZCompensationSteps =
-    g_minZCompensationSteps +
-    (g_offsetZCompensationSteps - g_ZCompensationMax) * 20;
+```text
+fade start = first model layer in steps
+fade end = fade start + (maximum matrix value - minimum matrix value) * 20
 ```
 
 The 2018 changelog describes this as spreading bed-profile correction out so it changes by no more than roughly **5% per layer**. Interpret this as an original engineering heuristic; actual outcome depends on real layer thickness and matrix values. Do not replace it with the 10 mm fallback unconditionally. Check that the computed fade interval stays valid and nonzero.
@@ -53,14 +47,15 @@ Following an uneven first-layer surface then gradually printing flat upper layer
 
 ## Interaction with M3912 and lifecycle
 
-`M3912` clears all three layer markers at entry and exit. Its phase flag bypasses the layer detector while queuing generated priming moves. Z homing also restores the default `g_min/g_max` after disabling bed compensation. Disabling the Z stepper clears `Current` and `Last`.
+`M3912` resets layer tracking at entry and exit. Its phase flag bypasses the layer detector while queuing generated priming moves. Z homing also restores the default fade boundaries after disabling bed compensation. Disabling the Z stepper clears the confirmed current and previous layers.
 
 An untested fork's RF2000v2-only reset-after-M3912 is not backed by model-specific differences in this shared algorithm. The *when* of resetting boundaries (particularly **before** priming) matters more than the model name.
 
 ## Source
-- [Layer detector and dynamic boundaries](../../Repetier/motion.cpp#L170-L203)
-- [Fade interpolation, material correction, offsets](../../Repetier/RF.cpp#L3192-L3302)
-- [Stepper E compensation](../../Repetier/motion.cpp#L1385-L1500)
-- [M3912 reset](../../Repetier/RF.cpp#L9288-L9313)
+
+- [Layer detector and dynamic boundaries](../../Repetier/PrintLayers.h)
+- [Fade interpolation, material correction, offsets](../../Repetier/RF.cpp#L2032)
+- [Stepper E compensation](../../Repetier/motion.cpp#L1093)
+- [M3912 reset](../../Repetier/RF.cpp#L5608)
 - [Z-stepper reset](../../Repetier/Printer.h#L355-L371)
 - [RF1000](../../Repetier/RF1000.h) · [RF2000 family](../../Repetier/RF2000.h)

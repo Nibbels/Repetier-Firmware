@@ -34,7 +34,7 @@ The previous print's spatial fade thresholds can still affect the generated prim
 | `compensatedPositionCollectTinyE` | Save ECMP fractional E remainder under interrupt protection | Restore on normal/skip completion |
 | DMS `dynamicFeedrateFactor` and `dynamicExtrusionFactor` | Continuously adapt to DMS force | Reset both to 1.0 |
 | DMS `interval_mod` | Continuously computed from DMS speed | Reset to 0 atomically; no lingering XY brake |
-| `queuePositionZLayerGuessNew/Current/Last` | Clear and exclude prime movement from learning | Clear all three |
+| Planned layer tracking in `Printer::layers` | Reset tracking and exclude prime movement from learning | Reset tracking |
 | `g_startLineActive` | Set before first prime move | Clear after queue drain |
 | User `feedrateMultiply`, `menuExtrusionFactor`, `Printer::feedrate` | **Never modified** | Unchanged |
 | Manual offset, existing SenseOffset, matrix, `g_min/g_max`, XY/Z position | **Preserve** | Unchanged by reset logic |

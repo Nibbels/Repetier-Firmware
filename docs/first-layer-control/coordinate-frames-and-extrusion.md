@@ -35,12 +35,11 @@ WobbleFix adds an XY correction at the step endpoint. Omitted axes and relative 
 
 ## What `g_min` and `g_max` really mean
 
-`PrintLine::prepareQueueMove()` accepts a prospective layer when positive extrusion follows a Z move. With no tracked layer, an XY extrusion move can also establish the first layer at the current nominal Z. The planner records `Printer::queuePositionZLayerCurrent` and computes the following boundaries.
+`PrintLine::prepareQueueMove()` reports the planned move to `Printer::layers`. Positive extrusion confirms a candidate created by a Z move. With no tracked layer, an XY extrusion move can also establish the first layer at the same nominal Z. The first layer defines the fade start, and the equations call the two boundaries `g_min` and `g_max`. [Layer state](../../Repetier/PrintLayers.h)
 
-```cpp
-g_minZCompensationSteps = Printer::queuePositionZLayerCurrent;
-g_maxZCompensationSteps = g_minZCompensationSteps
-    + (g_offsetZCompensationSteps - g_ZCompensationMax) * 20;
+```text
+g_min = layers.currentLayerSteps()
+g_max = g_min + (g_offsetZCompensationSteps - g_ZCompensationMax) * 20
 ```
 
 - **`g_min` = actual first model layer's nominal planned Z** (not the distance from the *physically uneven* bed at every XY point). Full bed-shape following extends through that nominal layer.

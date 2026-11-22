@@ -405,10 +405,7 @@ constexpr uint8_t defaultZOffsetScanIndex = 5; // One-based matrix index, for bo
 constexpr int heatBedScanPlaBedC = 60;
 constexpr int heatBedScanPlaNozzleC = 210;
 
-// Above the minimum height, gradually fade the bed profile through the maximum height.
-constexpr float heatBedZCompensationMinMm = 0.33f;
-constexpr int heatBedZCompensationMaxMm = 10;
-constexpr int32_t maxManualZOffsetMicrometers = heatBedZCompensationMaxMm * 1000L;
+constexpr int32_t maxManualZOffsetMicrometers = 10000;
 
 // determine the maximal needed size for the heat bed compensation
 #define COMPENSATION_MATRIX_MAX_X long((X_MAX_LENGTH_PRINT - heatBedScanXStartMm - heatBedScanXEndMm) / heatBedScanMinStepMm + 4)
@@ -419,8 +416,6 @@ extern millis_t g_uStartOfIdle;
 
 extern long g_offsetZCompensationSteps; // this is the minimal distance between the heat bed and the extruder at the moment when the z-min endstop is hit
 extern short g_ZCompensationMax;
-extern long g_minZCompensationSteps;
-extern long g_maxZCompensationSteps;
 extern volatile unsigned char g_nHeatBedScanStatus;
 extern char g_nActiveHeatBed;
 //ZOS:

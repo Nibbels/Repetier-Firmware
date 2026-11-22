@@ -9,7 +9,7 @@
 | **Power-up / firmware reset** | Restored from MCU EEPROM and converted to steps | RAM initializes **0** | Restored to header defaults (0.33/10 mm with live steps/mm) by EEPROM load | Selected sector loaded from external I²C EEPROM; extrema recalculated |
 | **EEPROM reload (`M501` / `M206`)** | Reloaded from EEPROM and combined with live SenseOffset using the loaded Z steps/mm | Preserved | Restored to the scaled defaults | Preserved |
 | **Ordinary Z homing (`homeZAxis`)** | Preserved | Cleared with sample history and the active threshold after bed compensation is disabled | Defaults restored and all three layer markers and ECMP cleared | Preserved |
-| **Disable Z stepper (`disableZStepper`)** | Preserved | No dedicated reset | Current/last markers reset, but **GuessNew and learned min/max are not** | Preserved |
+| **Disable Z stepper (`disableZStepper`)** | Preserved | No dedicated reset | Confirmed layers cleared. The pending candidate and fade bounds persist across motor disable | Preserved |
 | **M3001 enable compensation** | Preserved | Auto-enable from EEPROM threshold possible | Preserved | Valid matrix required |
 | **M3912 adaptive priming** | Preserved | Applied correction retained and new SenseOffset increments suspended | Phase flag suspends learning and all three markers are reset. Learned limits stay in effect during priming | Preserved |
 | **First real layer recognized** | Preserved | Potentially increasing, if active and eligible | Newly learned from model first-layer height | Preserved |

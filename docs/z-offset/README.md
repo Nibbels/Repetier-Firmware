@@ -21,7 +21,7 @@ Commanded Z (the print's planned geometric height)
 
 The **nominal Z** selects the fade region. Below `g_min` the correction follows the full matrix, and above `g_max` it uses the matrix baseline. Z endstops constrain the result. [Offset ledger](offset-ledger.md)
 
-`g_minZCompensationSteps` is both the full-profile fade boundary and the SenseOffset eligibility height. Ordinary Digit Flow is eligible at `currentZ > g_min`; SenseOffset is eligible at `currentZ <= g_min`. The `M3912` phase flag enables Digit Flow and suspends SenseOffset during generated priming independently of these limits. `homeZAxis()` resets the learned limits.
+`Printer::layers.fadeStartSteps()` is both the full-profile fade boundary and the SenseOffset eligibility height. Ordinary Digit Flow is eligible above this boundary. SenseOffset is eligible at or below it. The `M3912` phase flag enables Digit Flow and suspends SenseOffset during generated priming independently of these limits. `homeZAxis()` resets the learned limits.
 
 ## Files to read
 

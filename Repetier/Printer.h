@@ -22,6 +22,7 @@
 
 #include "ZOffset.h"
 #include "ZMotion.h"
+#include "PrintLayers.h"
 #include "PrintPause.h"
 #include "PrintStop.h"
 
@@ -108,6 +109,7 @@ public:
     static float filamentPrinted;           // mm of filament printed since counting started
     static ZOffset zOffset;
     static ZMotion zMotion;
+    static PrintLayers layers;
     static PrintPause pause;
     static PrintStop printStop;
     static char ZMode;                      // Z Scale
@@ -127,10 +129,6 @@ public:
     static volatile long currentYSteps;
     static volatile float compensatedPositionOverPercE;
     static volatile float compensatedPositionCollectTinyE;
-
-    static long queuePositionZLayerGuessNew;
-    static volatile long queuePositionZLayerCurrent;
-    static volatile long queuePositionZLayerLast;
 
     static char enabledStepper[3];
 
@@ -267,8 +265,7 @@ public:
         zMotion.setMotorReference(0);
         zMotion.resetDirectPosition();
 
-        Printer::queuePositionZLayerLast = 0;
-        Printer::queuePositionZLayerCurrent = 0;
+        layers.clearConfirmedLayers();
 
         pause.cancel();
 
@@ -710,7 +707,6 @@ public:
     static bool needsCMPwait(void);
     static void enableCMPnow(void);
     static void disableCMPnow(bool wait = false);
-    static void resetLayerTracking();
 
     static void stopPrint();
     static bool checkAbortKeys(void);

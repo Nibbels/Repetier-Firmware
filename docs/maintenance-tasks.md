@@ -20,6 +20,12 @@ Firmware changes are tracked on `ai-firmware-review` against `community_developm
 
 - [x] **Give the effective Z offset one owner.** `Printer::zOffset` owns the manual and live values and calculates their combined steps. A reload through `M501` or `M206` preserves the live contribution. The host regression covers reload, Mod Menu transfer, clearing the live portion, and changes to steps per mm. [Offset ledger and regression command](z-offset/offset-ledger.md)
 
+### Layer geometry and fade boundaries
+
+- [x] **Give planned layer tracking and fade boundaries one owner.** `Printer::layers` handles layer detection, resets and fade scaling. The host replay compares consecutive prints, model extrusion at the priming height, a Z hop, and correction and ECMP values across the fade. It also exercises the reset and scale operations used after EEPROM load and microstep changes. [Layer state](../Repetier/PrintLayers.h) · [Host replay](../tests/pause-sense-offset.py)
+
+The four AVR builds matched the previous revision's CPU cycles and Z step counts in nine instruction traces per build. These cover idle compensation, queued X and Z, opposing Z correction and direct moves. Flash changed by −30 bytes on RF1000, +60 on RF2000 and RF2000v2, and +66 on the RF2000 X44 retrofit. RF1000 uses four fewer bytes of global SRAM. Physical tests remain open.
+
 ### Z travel and scanning
 
 - [x] **Give Z step execution one owner.** `ZMotion` tracks nominal progress, direct displacement, scan travel, requested and applied correction, missed queued steps and emitted motor steps. The host replay covers endstop clipping, overtravel repayment, opposing correction, compensation waits, scan retreat and microstep scale changes. Run `python3 tests/z-motion.py` for all three model policies. [Execution and limits](development-roadmap.md#z-step-execution)

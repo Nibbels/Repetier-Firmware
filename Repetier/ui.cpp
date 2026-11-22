@@ -1708,29 +1708,30 @@ void UIDisplay::parse(char* txt, bool ram) {
             break;
         }
         case 'L': {
+            const auto& layers = Printer::layers;
             if (c2 == 'L') // %LL : Last Layer (Queue)
             {
-                addFloat(float(Printer::queuePositionZLayerLast * Printer::axisMMPerSteps[Z_AXIS]), 3, 2);
+                addFloat(layers.previousLayerSteps() * Printer::axisMMPerSteps[Z_AXIS], 3, 2);
                 break;
             } else if (c2 == 'C') // %LC : Current Layer (Queue)
             {
-                addFloat(float(Printer::queuePositionZLayerCurrent * Printer::axisMMPerSteps[Z_AXIS]), 3, 2);
+                addFloat(layers.currentLayerSteps() * Printer::axisMMPerSteps[Z_AXIS], 3, 2);
                 break;
             } else if (c2 == 'H') // %LH : Layer Height
             {
-                addFloat(float(Printer::queuePositionZLayerCurrent - Printer::queuePositionZLayerLast) * Printer::axisMMPerSteps[Z_AXIS], 1, 2);
+                addFloat((layers.currentLayerSteps() - layers.previousLayerSteps()) * Printer::axisMMPerSteps[Z_AXIS], 1, 2);
                 break;
             } else if (c2 == 'P') // %LP : ECMP %
             {
                 addFloat(Printer::compensatedPositionOverPercE * 100, 1, 2);
                 break;
-            } else if (c2 == 'm') // %Lm : g_minZCompensationSteps
+            } else if (c2 == 'm') // %Lm : Fade start
             {
-                addFloat(float(g_minZCompensationSteps * Printer::axisMMPerSteps[Z_AXIS]), 1, 2);
+                addFloat(layers.fadeStartSteps() * Printer::axisMMPerSteps[Z_AXIS], 1, 2);
                 break;
-            } else if (c2 == 'M') // %LM : g_maxZCompensationSteps
+            } else if (c2 == 'M') // %LM : Fade end
             {
-                addFloat(float(g_maxZCompensationSteps * Printer::axisMMPerSteps[Z_AXIS]), 2, 2);
+                addFloat(layers.fadeEndSteps() * Printer::axisMMPerSteps[Z_AXIS], 2, 2);
                 break;
             }
             break;
@@ -3115,8 +3116,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
                         Printer::pause.scaleParkSteps(i, stepsmm_korrekturfactor);
                         if (i == Z_AXIS) {
                             Printer::zMotion.rescaleMotorReference(stepsmm_korrekturfactor);
-                            g_maxZCompensationSteps *= stepsmm_korrekturfactor; //preadjust max compensation steps for z-CMP (gets autoadjusted but the user might override autoadjustement)
-                            g_minZCompensationSteps *= stepsmm_korrekturfactor; //preadjust max compensation steps for z-CMP (gets autoadjusted but the user might override autoadjustement)
+                            Printer::layers.rescaleFadeBounds(stepsmm_korrekturfactor);
                             g_nManualSteps[Z_AXIS] *= stepsmm_korrekturfactor;
                             HAL::eprSetInt16(EPR_RF_MOD_Z_STEP_SIZE, g_nManualSteps[Z_AXIS]);
                             g_ZCompensationMatrix[0][0] = EEPROM_FORMAT - 1; //force the zmatrix in ram to be invalid and to reload it later.

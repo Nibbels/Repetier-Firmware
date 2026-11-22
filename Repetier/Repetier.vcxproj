@@ -128,6 +128,7 @@
     <ClInclude Include="motion.h" />
     <ClInclude Include="pins.h" />
     <ClInclude Include="Printer.h" />
+    <ClInclude Include="PrintLayers.h" />
     <ClInclude Include="ZOffset.h" />
     <ClInclude Include="Repetier.h" />
     <ClInclude Include="RF.h" />

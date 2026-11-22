@@ -160,37 +160,10 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
         return;
     }
 
-    if (!g_startLineActive)
-    {
-        // Remember a Z change until extrusion confirms a layer. Returning
-        // from a Z hop to the current layer cancels the candidate.
-        if (p->isZMove()) {
-            const long newZ = Printer::queuedPositionSteps[Z_AXIS];
-            Printer::queuePositionZLayerGuessNew = (newZ == Printer::queuePositionZLayerCurrent) ? 0 : newZ;
-        }
-
-        if (p->isEPositiveMove()) {
-            long layerZ = Printer::queuePositionZLayerGuessNew;
-            if (!layerZ && !Printer::queuePositionZLayerCurrent && p->isXOrYMove()) {
-                // The first printed move can share the Z of the generated prime.
-                layerZ = RMath::max(Printer::queuedPositionSteps[Z_AXIS], 0L);
-            }
-            Printer::queuePositionZLayerGuessNew = 0;
-            if (layerZ) {
-                Printer::queuePositionZLayerLast = Printer::queuePositionZLayerCurrent;
-                Printer::queuePositionZLayerCurrent = layerZ;
-                if (layerZ < Printer::axisStepsPerMM[Z_AXIS]) {
-                    // A descent near the bed can begin a new object after a manual start line or a previous object.
-                    if (Printer::queuePositionZLayerLast > layerZ)
-                        Printer::queuePositionZLayerLast = 0;
-
-                    if (!Printer::queuePositionZLayerLast) {
-                        g_minZCompensationSteps = layerZ;
-                        g_maxZCompensationSteps = layerZ + (g_offsetZCompensationSteps - g_ZCompensationMax) * 20;
-                    }
-                }
-            }
-        }
+    if (!g_startLineActive) {
+        const PrintLayers::PlannedMove move{
+            Printer::queuedPositionSteps[Z_AXIS], p->isZMove(), p->isXOrYMove(), p->isEPositiveMove()};
+        Printer::layers.recordPlannedMove(move, Printer::axisStepsPerMM[Z_AXIS], g_offsetZCompensationSteps, g_ZCompensationMax);
     }
 
     // Define variables that are needed for the Bresenham algorithm. Please note that Z is not currently included in the Bresenham algorithm.

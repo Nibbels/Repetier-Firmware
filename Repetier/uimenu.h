@@ -199,8 +199,8 @@ List of placeholder:
 %LC : Current Layer (Queue)
 %LH : Layer Height
 %LP : ECMP %
-%Lm : g_minZCompensationSteps
-%LM : g_maxZCompensationSteps
+%Lm : Fade start
+%LM : Fade end
 */
 
 

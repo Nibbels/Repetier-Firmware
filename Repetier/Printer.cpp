@@ -80,6 +80,7 @@ unsigned long Printer::msecondsPrinting = 0;                      // Millisecond
 float Printer::filamentPrinted = 0.0f;                            // mm of filament printed since counting started
 ZOffset Printer::zOffset;
 ZMotion Printer::zMotion{ZAXIS_STEPS_PER_MM};
+PrintLayers Printer::layers{ZAXIS_STEPS_PER_MM};
 char Printer::ZMode = DEFAULT_Z_SCALE_MODE;                       // Z-min distance or nominal layer height
 char Printer::moveMode[3];                                        // move mode which is applied within the Position X/Y/Z menus
 bool Printer::moveKosys = KOSYS_GCODE;                            // true = GCode, false = DirectMove / OffsetMove
@@ -98,10 +99,6 @@ volatile long Printer::currentYSteps = 0;                                       
 
 volatile float Printer::compensatedPositionOverPercE = 0.0f;
 volatile float Printer::compensatedPositionCollectTinyE = 0.0f;
-
-long Printer::queuePositionZLayerGuessNew = 0;
-volatile long Printer::queuePositionZLayerCurrent = 0;
-volatile long Printer::queuePositionZLayerLast = 0;
 
 DirectPosition Printer::xyDirect[2];
 DirectPosition Printer::extruderDirect;
@@ -778,12 +775,6 @@ void Printer::setup() {
     HAL::startWatchdog();
 } // setup()
 
-void Printer::resetLayerTracking() {
-    queuePositionZLayerGuessNew = 0;
-    queuePositionZLayerCurrent = 0;
-    queuePositionZLayerLast = 0;
-}
-
 void Printer::enableSenseOffsetnow(void) {
     short oldval = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS);
     if (oldval > 0 && oldval < EMERGENCY_PAUSE_DIGITS_MAX) {
@@ -1125,16 +1116,12 @@ void Printer::homeZAxis() {
         //homing ausschalten und zCMP (...) auch.
         setHomed(-1, -1, false);
 
-        const float stepsPerMm = axisStepsPerMM[Z_AXIS];
-        const long defaultMinSteps = long(heatBedZCompensationMinMm * stepsPerMm);
-        const long defaultMaxSteps = long(heatBedZCompensationMaxMm * stepsPerMm);
+        // Establish the first-layer defaults for the print that follows this Z home.
+        layers.resetFadeBounds(axisStepsPerMM[Z_AXIS]);
+        layers.resetTracking();
         resetSenseOffsetForPrint();
 
         InterruptProtectedBlock noInts;
-        // Establish the first-layer defaults for the print that follows this Z home.
-        resetLayerTracking();
-        g_minZCompensationSteps = defaultMinSteps;
-        g_maxZCompensationSteps = defaultMaxSteps;
         compensatedPositionOverPercE = 0.0f;
         compensatedPositionCollectTinyE = 0.0f;
         zMotion.resetDirectPosition();
