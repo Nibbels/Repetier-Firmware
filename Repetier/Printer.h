@@ -146,16 +146,6 @@ public:
     static volatile long directDestinationSteps[4];
     static volatile long directCurrentSteps[4];
 
-
-#if FEATURE_CONFIGURABLE_Z_ENDSTOPS
-    static char ZEndstopType;
-    static char ZEndstopUnknown;
-    static char lastZDirection;
-    static char endstopZMinHit;
-    static char endstopZMaxHit;
-#endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
-
-
 #if STEPPER_ON_DELAY
     static char enabledStepper[3];
 #endif // STEPPER_ON_DELAY
@@ -319,10 +309,6 @@ public:
         Printer::enabledStepper[Z_AXIS] = 0;
 #endif // STEPPER_ON_DELAY
 
-#if FEATURE_CONFIGURABLE_Z_ENDSTOPS
-        Printer::lastZDirection = 0;
-#endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
-
         noInts.protect();
         Printer::setZAxisSteps(0);
         Printer::currentZSteps = 0;
@@ -410,15 +396,9 @@ public:
         if (positive) {
             // heat bed moves to the bottom
             WRITE(Z_DIR_PIN, !INVERT_Z_DIR);
-#if FEATURE_CONFIGURABLE_Z_ENDSTOPS
-            lastZDirection = 1;
-#endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
         } else {
             // heat bed moves to the top
             WRITE(Z_DIR_PIN, INVERT_Z_DIR);
-#if FEATURE_CONFIGURABLE_Z_ENDSTOPS
-            lastZDirection = -1;
-#endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
         }
     } // setZDirection
 
@@ -634,58 +614,7 @@ public:
     static INLINE bool isZMinEndstopHit() {
 #if Z_MIN_PIN > -1 && MIN_HARDWARE_ENDSTOP_Z
 
-#if FEATURE_CONFIGURABLE_Z_ENDSTOPS
-
-        if (ZEndstopType == ENDSTOP_TYPE_SINGLE) {
-
-            // A single connected Z endstop is the Z-min switch.
-            return READ(Z_MIN_PIN) != ENDSTOP_Z_MIN_INVERTING;
-        }
-
-        // we end up here in case the z-min and z-max endstops are connected in a circuit
-        if (READ(Z_MIN_PIN) != ENDSTOP_Z_MIN_INVERTING) {
-            // either the min or the max endstop is hit
-            if (ZEndstopUnknown) {
-                // this is save as long as we do not allow any movement except the z-homing while ZEndstopUnknown is != 0
-                return false;
-            }
-
-            if (endstopZMaxHit == ENDSTOP_IS_HIT) {
-                // when the z-max endstop is hit already we know that the z-min endstop is not hit
-                return false;
-            }
-
-            if (endstopZMinHit == ENDSTOP_IS_HIT) {
-                // we remember that the z-min endstop is hit at the moment
-                return true;
-            }
-
-            if (lastZDirection > 0) {
-                // z-min was not hit and we are moving downwards, so z-min can not become hit right now
-                return false;
-            }
-
-            // the last z-direction is unknown or the heat bed has been moved upwards, thus we have to assume that the z-min endstop is hit
-            endstopZMinHit = ENDSTOP_IS_HIT;
-            endstopZMaxHit = ENDSTOP_NOT_HIT;
-            return true;
-        }
-
-        // no z endstop is hit
-        if (endstopZMinHit == ENDSTOP_IS_HIT) {
-            endstopZMinHit = ENDSTOP_WAS_HIT;
-        }
-        if (endstopZMaxHit == ENDSTOP_IS_HIT) {
-            endstopZMaxHit = ENDSTOP_WAS_HIT;
-        }
-        ZEndstopUnknown = 0;
-        return false;
-
-#else // FEATURE_CONFIGURABLE_Z_ENDSTOPS
-
         return READ(Z_MIN_PIN) != ENDSTOP_Z_MIN_INVERTING;
-
-#endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
 
 #else  //Z_MIN_PIN>-1 && MIN_HARDWARE_ENDSTOP_Z
         return false;
@@ -727,63 +656,7 @@ public:
     static inline bool isZMaxEndstopHit() {
 #if Z_MAX_PIN > -1 && MAX_HARDWARE_ENDSTOP_Z
 
-#if FEATURE_CONFIGURABLE_Z_ENDSTOPS
-
-        if (ZEndstopType == ENDSTOP_TYPE_SINGLE) {
-
-            // Use the software maximum when only the Z-min switch is connected.
-            return isZMaxSoftEndstopHit();
-        }
-
-        // we end up here in case the z-min and z-max endstops are connected in a circuit
-        if (READ(Z_MAX_PIN) != ENDSTOP_Z_MAX_INVERTING) {
-            // either the min or the max endstop is hit
-            if (ZEndstopUnknown) {
-                // this is save as long as we do not allow any movement except the z-homing while ZEndstopUnknown is != 0
-                return false;
-            }
-
-            if (endstopZMinHit == ENDSTOP_IS_HIT) {
-                // when the z-min endstop is hit already we know that the z-max endstop is not hit
-                return false;
-            }
-
-            if (endstopZMaxHit == ENDSTOP_IS_HIT) {
-                // we remember that the z-max endstop is hit at the moment
-                return true;
-            }
-
-            if (lastZDirection < 0) {
-                // z-max was not hit and we are moving upwards, so z-max can not become hit right now
-                return false;
-            }
-
-            if (Printer::isAxisHomed(Z_AXIS)) {
-                if (currentZSteps < long(Printer::axisStepsPerMM[Z_AXIS]) * 5) {
-                    // we are close to z-min, so z-max can not become hit right now -> Nibbels: was wenn der drucker unten aufwacht? dann ist erst currentZSteps 0 und .. ??? TODO
-                    return false;
-                }
-            }
-
-            // the last z-direction is unknown or the heat bed has been moved downwards, thus we have to assume that the z-max endstop is hit
-            endstopZMinHit = ENDSTOP_NOT_HIT;
-            endstopZMaxHit = ENDSTOP_IS_HIT;
-            return true;
-        }
-
-        // no z endstop is hit
-        if (endstopZMinHit == ENDSTOP_IS_HIT) {
-            endstopZMinHit = ENDSTOP_WAS_HIT;
-        }
-        if (endstopZMaxHit == ENDSTOP_IS_HIT) {
-            endstopZMaxHit = ENDSTOP_WAS_HIT;
-        }
-        ZEndstopUnknown = 0;
-        return false;
-
-#else
         return READ(Z_MAX_PIN) != ENDSTOP_Z_MAX_INVERTING;
-#endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
 
 #else
         return isZMaxSoftEndstopHit();

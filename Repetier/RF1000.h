@@ -87,7 +87,7 @@ If EEPROM is enabled these values will be overidden with the values in the EEPRO
 #endif                         // NUM_EXTRUDER == 2
 
 #define Y_MAX_LENGTH 245      // [mm]
-#define Z_MAX_LENGTH 200      // [mm]
+#define Z_MAX_LENGTH 195      // [mm], EEPROM can override the software Z maximum
 
 /** \brief Drive settings for printers with cartesian drive systems */
 /** \brief Number of steps for a 1mm move in x direction.
@@ -510,7 +510,6 @@ on this endstop. */
 #define ENDSTOP_PULLUP_Z_MIN true
 #define ENDSTOP_PULLUP_X_MAX true
 #define ENDSTOP_PULLUP_Y_MAX true
-#define ENDSTOP_PULLUP_Z_MAX true
 
 /** \brief set to true to invert the logic of the endstops */
 #define ENDSTOP_X_MIN_INVERTING true
@@ -518,7 +517,6 @@ on this endstop. */
 #define ENDSTOP_Z_MIN_INVERTING true
 #define ENDSTOP_X_MAX_INVERTING true
 #define ENDSTOP_Y_MAX_INVERTING true
-#define ENDSTOP_Z_MAX_INVERTING true
 
 /** \brief Set the values true where you have a hardware endstop. The Pin number is taken from pins.h. */
 #define MIN_HARDWARE_ENDSTOP_X true
@@ -527,17 +525,7 @@ on this endstop. */
 #define MAX_HARDWARE_ENDSTOP_X false
 #define MAX_HARDWARE_ENDSTOP_Y false
 
-// the z-max endstop is optional for the RF1000
-// 1 = the z-endstop type can be switched between z-min (= single) and z-min + z-max in one circuit (= circuit), 0 = only the z-min endstop is installed
-#define FEATURE_CONFIGURABLE_Z_ENDSTOPS 1
-
-#if FEATURE_CONFIGURABLE_Z_ENDSTOPS
-/** \brief Define Default z-endstop type */
-#define DEFAULT_Z_ENDSTOP_TYPE ENDSTOP_TYPE_SINGLE
-#define MAX_HARDWARE_ENDSTOP_Z true
-#else
 #define MAX_HARDWARE_ENDSTOP_Z false
-#endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
 
 /** \brief Set order of axis homing. Use HOME_ORDER_XYZ and replace XYZ with your order. */
 #define HOMING_ORDER_PRINT HOME_ORDER_XYZ //if you work with springloaded hotend or positive Z-Matrix home Z last!! You might otherwise hit the surface.
@@ -557,9 +545,6 @@ during homing operation. The homing speed is divided by the value. 1 = same spee
 #define ENDSTOP_X_RETEST_REDUCTION_FACTOR 20
 #define ENDSTOP_Y_RETEST_REDUCTION_FACTOR 20
 #define ENDSTOP_Z_RETEST_REDUCTION_FACTOR 20
-
-/** \brief When you have several endstops in one circuit you need to disable it after homing by moving a
-small amount back. This is also the case with H-belt systems. */
 
 // ##########################################################################################
 // ##   Motor Current & Stepper configurations

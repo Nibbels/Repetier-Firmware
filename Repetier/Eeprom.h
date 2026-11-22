@@ -71,7 +71,7 @@ have problems with other modules using the eeprom */
 #define EPR_RF_BEEPER_MODE 1000
 #define EPR_RF_CASE_LIGHT_MODE 1001
 #define EPR_RF_230V_OUTPUT_MODE 1002
-#define EPR_RF_Z_ENDSTOP_TYPE 1016
+// 1016 is reserved for the former RF1000 endstop setting.
 #define EPR_RF_HOTEND_TYPE 1017 //depreached 30 07 2017 Nibbels : Die Funktion war nur für RF1000, nur Single, in der Falschen Klasse, wenn nötig, dann in Class Extruder einbauen. Hat beim RF2000 keiner vermisst: Ersatz ist EPR_EXTRUDER_SENSOR_TYPE
 #define EPR_RF_RGB_LIGHT_MODE 1019
 #define EPR_RF_FET1_MODE 1020

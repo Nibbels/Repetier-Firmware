@@ -148,7 +148,6 @@ List of placeholder:
 %ou : 230V output on/off
 %ol : FET1 output on/off
 %on : FET2 output on/off
-%OZ : z endstop type
 %z0 : Z Offset
 %zm : Z Scale
 %zs : Z-Schraube korrektur mm

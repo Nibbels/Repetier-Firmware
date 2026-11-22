@@ -125,16 +125,6 @@ volatile long Printer::queuePositionZLayerLast = 0;
 volatile long Printer::directDestinationSteps[4] = { 0, 0, 0, 0 };
 volatile long Printer::directCurrentSteps[4] = { 0, 0, 0, 0 };
 
-
-#if FEATURE_CONFIGURABLE_Z_ENDSTOPS
-char Printer::ZEndstopType;
-char Printer::ZEndstopUnknown;
-char Printer::lastZDirection;
-char Printer::endstopZMinHit;
-char Printer::endstopZMaxHit;
-#endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
-
-
 #if STEPPER_ON_DELAY
 char Printer::enabledStepper[3] = { 0, 0, 0 };
 #endif // STEPPER_ON_DELAY
@@ -800,14 +790,6 @@ void Printer::setup() {
     Printer::axisLengthMM[Y_AXIS] = Y_MAX_LENGTH;
     Printer::axisLengthMM[Z_AXIS] = Z_MAX_LENGTH;
 
-#if FEATURE_CONFIGURABLE_Z_ENDSTOPS
-    ZEndstopType = DEFAULT_Z_ENDSTOP_TYPE;
-    ZEndstopUnknown = 0;
-    lastZDirection = 0;
-    endstopZMinHit = ENDSTOP_NOT_HIT;
-    endstopZMaxHit = ENDSTOP_NOT_HIT;
-#endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
-
 #if FEATURE_CASE_FAN
     fanOffDelay = CASE_FAN_OFF_DELAY;
 #endif // FEATURE_CASE_FAN
@@ -966,20 +948,6 @@ bool Printer::isZCompensationLimited(bool positive) {
     if (positive ? isZMaxSoftEndstopHit() : allowMinOverride && isZMinOverrideReached()) {
         return true;
     }
-
-#if FEATURE_CONFIGURABLE_Z_ENDSTOPS
-    if (ZEndstopType == ENDSTOP_TYPE_CIRCUIT) {
-        if (ZEndstopUnknown) {
-            return true;
-        }
-        // Latch the shared switch before a compensation pulse changes direction.
-        if (isZMaxEndstopHit()) {
-            return positive;
-        }
-        const bool minHit = isZMinEndstopHit();
-        return !positive && !allowMinOverride && minHit;
-    }
-#endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
 
     return positive ? isZMaxEndstopHit() : !allowMinOverride && isZMinEndstopHit();
 }
@@ -1347,14 +1315,6 @@ void Printer::homeZAxis() {
     if (nHomeDir) {
         UI_STATUS_UPD(UI_TEXT_HOME_Z);
 
-        // if we have circuit-type Z endstops and we don't know at which endstop we currently are, first move down a bit
-#if FEATURE_CONFIGURABLE_Z_ENDSTOPS
-        if (Printer::ZEndstopUnknown) {
-            //RF1000 und Min-oder-Max gedrückt - nicht klar welcher. Man fährt immer nach unten! Der Schalter hält das aus.
-            Printer::queueRelativeMMCoordinates(0, 0, ENDSTOP_Z_BACK_MOVE, 0, homingFeedrate[Z_AXIS] / ENDSTOP_Z_RETEST_REDUCTION_FACTOR, true); //drucker muss immer nach
-        }
-#endif
-
         //homing ausschalten und zCMP (...) auch.
         setHomed(-1, -1, false);
 
@@ -1443,9 +1403,6 @@ void Printer::homeZAxis() {
         setHomed(-1, -1, true);
         // show that we are active
         previousMillisCmd = HAL::timeInMilliseconds(); //prevent inactive shutdown of steppers/temps
-#if FEATURE_CONFIGURABLE_Z_ENDSTOPS
-        ZEndstopUnknown = false;
-#endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
         UI_STATUS_UPD("");
     }
 } // homeZAxis
@@ -1481,21 +1438,6 @@ void Printer::homeAxis(bool xaxis, bool yaxis, bool zaxis) // home non-delta pri
 
     char homingOrder;
     homingOrder = HOMING_ORDER_PRINT;
-
-#if FEATURE_CONFIGURABLE_Z_ENDSTOPS
-    //ich weiß nicht ob das überhaupt ein gutes verhalten ist. Es ist nicht gut, wenn die z-schraube zu weit reingeschraubt ist und daher z-homing über dem bett verboten sein sollte.
-    //Printer::ZEndstopUnknown == 1 gibts nur, wenn der RF1000 mit Circuitschaltung mit einem der z-endstops gedrückt aufwacht, oder man in dieser position auf den endstop umstellt.
-    //Ein Z-Homing mit EndstopUnknown == 1 fährt immer erst nach unten, also ist unsere Druckerdüse safe, wenn wir erst Z homen bevor X und Y gehomed werden darf.
-    if (Printer::ZEndstopUnknown && homingOrder < 5 /*not z first -> do z first*/) {
-        if (homingOrder == HOME_ORDER_XYZ
-            || homingOrder == HOME_ORDER_XZY) {
-            homingOrder = HOME_ORDER_ZXY;
-        } else if (homingOrder == HOME_ORDER_YXZ
-                   || homingOrder == HOME_ORDER_YZX) {
-            homingOrder = HOME_ORDER_ZYX;
-        }
-    }
-#endif //FEATURE_CONFIGURABLE_Z_ENDSTOPS
 
     if ((!yaxis && zaxis) || (/* z vor y */ homingOrder == HOME_ORDER_XZY || homingOrder == HOME_ORDER_ZXY || homingOrder == HOME_ORDER_ZYX)) {
         // do not allow homing Z-Only within menu, when the Extruder is configured < 0 and over bed.

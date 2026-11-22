@@ -396,7 +396,6 @@ extern const char ui_text_output_object[] PROGMEM;
 extern const char ui_text_pause[] PROGMEM;
 extern const char ui_text_home[] PROGMEM;
 extern const char ui_text_z_compensation[] PROGMEM;
-extern const char ui_text_change_z_type[] PROGMEM;
 extern const char ui_text_x_axis[] PROGMEM;
 extern const char ui_text_y_axis[] PROGMEM;
 extern const char ui_text_z_axis[] PROGMEM;

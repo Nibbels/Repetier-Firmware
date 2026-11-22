@@ -69,11 +69,9 @@
 #define ORIG_Z_ENABLE_PIN 62
 // PINK.0, 89, ENA_DRV3
 
-// The RF1000 can wire both Z endstops to the same input.
 #define ORIG_Z_MIN_PIN 31
 // PINC.6, 59, ES3
-#define ORIG_Z_MAX_PIN 31
-// PINC.6, 59, ES3
+#define ORIG_Z_MAX_PIN -1
 
 #define ORIG_E0_STEP_PIN 26
 // PINA.4, 74, STP_DRV4

@@ -40,14 +40,6 @@
 #define HOTEND_TYPE_V2 3 // hotend V2 for single extruder
 #define HOTEND_TYPE_V3 5 // hotend V3
 
-
-#define ENDSTOP_TYPE_SINGLE 1  // there is only one endstop attached (either the min- or the max-endstop)
-#define ENDSTOP_TYPE_CIRCUIT 2 // the min- and max-endstops are attached in a single circuit
-
-#define ENDSTOP_NOT_HIT 0
-#define ENDSTOP_IS_HIT 1
-#define ENDSTOP_WAS_HIT 2
-
 #define X_AXIS 0
 #define Y_AXIS 1
 #define Z_AXIS 2

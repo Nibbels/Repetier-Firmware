@@ -772,7 +772,6 @@ UI_STRING(ui_text_1, UI_TEXT_1)
 UI_STRING(ui_text_white, UI_TEXT_WHITE)
 UI_STRING(ui_text_color, UI_TEXT_COLOR)
 UI_STRING(ui_text_manual, UI_TEXT_MANUAL)
-UI_STRING(ui_text_unknown, UI_TEXT_UNKNOWN)
 UI_STRING(ui_text_na, UI_TEXT_NA)
 UI_STRING(ui_yes, UI_TEXT_YES)
 UI_STRING(ui_no, UI_TEXT_NO)
@@ -783,8 +782,6 @@ UI_STRING(ui_up, UI_TEXT_UP)
 UI_STRING(ui_down, UI_TEXT_DOWN)
 UI_STRING(ui_selected, UI_TEXT_SEL)
 UI_STRING(ui_unselected, UI_TEXT_NOSEL)
-UI_STRING(ui_text_z_single, UI_TEXT_Z_SINGLE)
-UI_STRING(ui_text_z_circuit, UI_TEXT_Z_CIRCUIT)
 UI_STRING(ui_text_z_mode_min, UI_TEXT_Z_MODE_MIN)
 UI_STRING(ui_text_z_mode_surface, UI_TEXT_Z_MODE_SURFACE)
 UI_STRING(ui_text_z_mode_gcode, UI_TEXT_Z_MODE_GCODE)
@@ -1045,14 +1042,6 @@ void UIDisplay::parse(char* txt, bool ram) {
             }
 #endif // NUM_EXTRUDER>1
 
-            if (c2 == 'Z') // %OZ : z endstop type
-            {
-#if FEATURE_CONFIGURABLE_Z_ENDSTOPS
-                addStringP(Printer::ZEndstopType == ENDSTOP_TYPE_SINGLE ? ui_text_z_single : ui_text_z_circuit);
-#else
-                addStringP(ui_text_z_single);
-#endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
-            }
             break;
         }
         case 'h': {
@@ -1638,17 +1627,7 @@ void UIDisplay::parse(char* txt, bool ram) {
             if (c2 == 'z') // %sz : State of z min endstop
             {
 #if (Z_MIN_PIN > -1) && MIN_HARDWARE_ENDSTOP_Z
-
-#if FEATURE_CONFIGURABLE_Z_ENDSTOPS
-                if (Printer::ZEndstopUnknown) {
-                    addStringP(ui_text_unknown);
-                } else {
-                    addStringP(Printer::isZMinEndstopHit() ? ui_text_on : ui_text_off);
-                }
-#else
                 addStringP(Printer::isZMinEndstopHit() ? ui_text_on : ui_text_off);
-#endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
-
 #else
                 addStringP(ui_text_na);
 #endif // (Z_MIN_PIN > -1) && MIN_HARDWARE_ENDSTOP_Z
@@ -1656,17 +1635,7 @@ void UIDisplay::parse(char* txt, bool ram) {
             if (c2 == 'Z') // %sZ : State of z max endstop
             {
 #if (Z_MAX_PIN > -1) && MAX_HARDWARE_ENDSTOP_Z
-
-#if FEATURE_CONFIGURABLE_Z_ENDSTOPS
-                if (Printer::ZEndstopUnknown) {
-                    addStringP(ui_text_unknown);
-                } else {
-                    addStringP(Printer::isZMaxEndstopHit() ? ui_text_on : ui_text_off);
-                }
-#else
                 addStringP(Printer::isZMaxEndstopHit() ? ui_text_on : ui_text_off);
-#endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
-
 #else
                 addStringP(ui_text_na);
 #endif // (Z_MAX_PIN > -1) && MAX_HARDWARE_ENDSTOP_Z
@@ -4029,46 +3998,6 @@ void UIDisplay::mainSwitchCase(int action) {
         EEPROM::updateChecksum();
         break;
     }
-
-
-#if FEATURE_CONFIGURABLE_Z_ENDSTOPS
-    case UI_ACTION_Z_ENDSTOP_TYPE: {
-        if (PrintLine::linesCount) {
-            // the z-endstop type can not be switched while the printing is in progress
-            if (Printer::debugErrors()) {
-                Com::printFLN(Com::tPrintingIsInProcessError);
-            }
-
-            showError((void*)ui_text_change_z_type, (void*)ui_text_operation_denied);
-            break;
-        }
-
-        Printer::lastZDirection = 0;
-        Printer::endstopZMinHit = ENDSTOP_NOT_HIT;
-        Printer::endstopZMaxHit = ENDSTOP_NOT_HIT;
-
-        if (Printer::ZEndstopType == ENDSTOP_TYPE_SINGLE) {
-            Printer::ZEndstopType = ENDSTOP_TYPE_CIRCUIT;
-
-            if (Printer::isZMinEndstopHit() || Printer::isZMaxEndstopHit()) {
-                // a z-endstop is active at the moment, but both z-endstops are within one circuit so we do not know which one is the pressed one
-                // in this situation we do not allow any moving into z-direction before a z-homing has been performed
-                Printer::ZEndstopUnknown = 1;
-            }
-        } else {
-            Printer::ZEndstopType = ENDSTOP_TYPE_SINGLE;
-            Printer::ZEndstopUnknown = 0;
-        }
-
-        // update our information about the currently active Z-endstop
-        Printer::isZMinEndstopHit();
-        Printer::isZMaxEndstopHit();
-
-        HAL::eprSetByte(EPR_RF_Z_ENDSTOP_TYPE, Printer::ZEndstopType);
-        EEPROM::updateChecksum();
-        break;
-    }
-#endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
 
     case UI_ACTION_ZMODE: {
         if (Printer::ZMode == 1)

@@ -540,10 +540,6 @@ on this endstop. */
 #define MAX_HARDWARE_ENDSTOP_X false
 #define MAX_HARDWARE_ENDSTOP_Y false
 
-/** \brief Define the type Z-Endstop-Installation */
-// the RF2000 does not support to use the z-min and z-max endstops within one circle
-#define FEATURE_CONFIGURABLE_Z_ENDSTOPS 0
-// the RF2000 always has the z-min and z-max endstops
 #define MAX_HARDWARE_ENDSTOP_Z true
 
 /** \brief Set order of axis homing. Use HOME_ORDER_XYZ and replace XYZ with your order. */
@@ -564,9 +560,6 @@ during homing operation. The homing speed is divided by the value. 1 = same spee
 #define ENDSTOP_X_RETEST_REDUCTION_FACTOR 20
 #define ENDSTOP_Y_RETEST_REDUCTION_FACTOR 20
 #define ENDSTOP_Z_RETEST_REDUCTION_FACTOR 20
-
-/** \brief When you have several endstops in one circuit you need to disable it after homing by moving a
-small amount back. This is also the case with H-belt systems. */
 
 // ##########################################################################################
 // ##   Motor Current & Stepper configurations

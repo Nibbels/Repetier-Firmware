@@ -1050,7 +1050,7 @@ void Commands::processMCode(GCode* com) {
         Com::printF(Printer::isZMinEndstopHit() ? Com::tHSpace : Com::tLSpace);
 #endif // (Z_MIN_PIN > -1) && MIN_HARDWARE_ENDSTOP_Z
 
-        // The RF1000 uses a software maximum if only a Z-min switch is configured.
+        // The RF1000 reports its software Z maximum here.
 #if (Z_MAX_PIN > -1) && MAX_HARDWARE_ENDSTOP_Z
         Com::printF(Com::tZMaxColon);
         Com::printF(Printer::isZMaxEndstopHit() ? Com::tHSpace : Com::tLSpace);

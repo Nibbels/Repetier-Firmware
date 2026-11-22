@@ -383,12 +383,6 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     // HAL::eprSetByte( EPR_RF_230V_OUTPUT_MODE, Printer::enable230VOutput );
 #endif // FEATURE_230V_OUTPUT
 
-#if FEATURE_CONFIGURABLE_Z_ENDSTOPS
-    HAL::eprSetByte(EPR_RF_Z_ENDSTOP_TYPE, Printer::ZEndstopType);
-#endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
-
-
-
     HAL::eprSetInt16(EPR_RF_MOD_Z_STEP_SIZE, g_nManualSteps[Z_AXIS]);
 #if FEATURE_HEAT_BED_Z_COMPENSATION
     HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_X, g_ZOSTestPoint[0]);
@@ -717,10 +711,6 @@ void EEPROM::readDataFromEEPROM() {
     // after a power-on, the 230 V plug always shall be turned off - thus, we do not store this setting to the EEPROM
     // Printer::enable230VOutput = HAL::eprGetByte( EPR_RF_230V_OUTPUT_MODE );
 #endif // FEATURE_230V_OUTPUT
-
-#if FEATURE_CONFIGURABLE_Z_ENDSTOPS
-    Printer::ZEndstopType = HAL::eprGetByte(EPR_RF_Z_ENDSTOP_TYPE) == ENDSTOP_TYPE_CIRCUIT ? ENDSTOP_TYPE_CIRCUIT : ENDSTOP_TYPE_SINGLE;
-#endif //FEATURE_CONFIGURABLE_Z_ENDSTOPS
 
     //reinit for check if eeprom values are too high.
     unsigned int eeprom_homing_feedrate_position;
@@ -1152,9 +1142,6 @@ void EEPROM::writeSettings() {
 #if FEATURE_BEEPER
     writeByte(EPR_RF_BEEPER_MODE, Com::tEPRBeeperMode);
 #endif // FEATURE_BEEPER
-#if FEATURE_CONFIGURABLE_Z_ENDSTOPS
-    writeByte(EPR_RF_Z_ENDSTOP_TYPE, Com::tEPRZEndstopType);
-#endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
 
     writeFloat(EPR_PRINTING_DISTANCE, Com::tEPRFilamentPrinted);
     writeLong(EPR_PRINTING_TIME, Com::tEPRPrinterActive);

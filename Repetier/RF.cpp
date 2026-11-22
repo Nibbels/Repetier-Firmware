@@ -28,7 +28,6 @@ FSTRINGVALUE(ui_text_set_origin, UI_TEXT_SET_ORIGIN)
 FSTRINGVALUE(ui_text_pause, UI_TEXT_PAUSE)
 FSTRINGVALUE(ui_text_home, UI_TEXT_HOME)
 FSTRINGVALUE(ui_text_z_compensation, UI_TEXT_Z_COMPENSATION)
-FSTRINGVALUE(ui_text_change_z_type, UI_TEXT_CHANGE_Z_TYPE)
 FSTRINGVALUE(ui_text_x_axis, UI_TEXT_X_AXIS)
 FSTRINGVALUE(ui_text_y_axis, UI_TEXT_Y_AXIS)
 FSTRINGVALUE(ui_text_z_axis, UI_TEXT_Z_AXIS)
@@ -238,17 +237,6 @@ void initRF(void) {
 
     Printer::disableCMPnow(true);
     setupForPrinting();
-
-#if FEATURE_CONFIGURABLE_Z_ENDSTOPS
-    if (Printer::ZEndstopType != ENDSTOP_TYPE_SINGLE) {
-        if (Printer::isZMinEndstopHit() || Printer::isZMaxEndstopHit()) {
-            // a z-endstop is active at the moment of the startup of the firmware, but both z-endstops are within one circuit so we do not know which one is the pressed one
-            // in this situation we do not allow any moving into z-direction before a z-homing has been performed
-            Printer::ZEndstopUnknown = 1;
-        }
-    }
-#endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
-
 } // initRF
 
 void initStrainGauge(void) {
@@ -4803,7 +4791,7 @@ void continuePrint(void) {
             if (countplays++ >= 10) {
                 Com::printFLN(PSTR("LCD re-init"));
                 countplays = 1;
-                showInformation(PSTR(UI_TEXT_MANUAL), PSTR(UI_TEXT_Z_CIRCUIT), PSTR(UI_TEXT_RESET));
+                showInformation(PSTR(UI_TEXT_MANUAL), PSTR(UI_TEXT_LCD_CIRCUIT), PSTR(UI_TEXT_RESET));
                 uid.initializeLCD();
             }
         }
@@ -7541,13 +7529,6 @@ void moveZAction(int8_t direction) {
         return;
     }
 
-#if FEATURE_CONFIGURABLE_Z_ENDSTOPS
-    if (Printer::ZEndstopUnknown) {
-        showError((void*)ui_text_z_axis, (void*)ui_text_home_unknown);
-        return;
-    }
-#endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
-
     // show that we are active
     previousMillisCmd = HAL::timeInMilliseconds(); //prevent inactive shutdown of steppers/temps
 
@@ -8548,19 +8529,6 @@ unsigned char isMovingAllowed(const char* pszCommand, char outputLog) {
     }
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
-
-
-#if FEATURE_CONFIGURABLE_Z_ENDSTOPS
-    if (Printer::ZEndstopUnknown) {
-        // in case we do not know which Z-endstop is active at the moment, we do not allow to move until a z-homing has been performed
-        if (Printer::debugErrors() && outputLog) {
-            Com::printF(pszCommand);
-            Com::printFLN(PSTR(": this command can not be used until a z-homing has been performed"));
-        }
-        return 0;
-    }
-#endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
-
     // we allow the manual movements at the moment
     return 1;
 
@@ -8597,33 +8565,6 @@ unsigned char isHomingAllowed(GCode* com, char outputLog) {
         // there is nothing more which we can check
         return 1;
     }
-
-#if FEATURE_CONFIGURABLE_Z_ENDSTOPS
-    if (Printer::ZEndstopUnknown && (com->hasX() || com->hasY() || com->hasNoXYZ())) {
-        // in case we do not know which Z-endstop is active at the moment, we do not allow any homing except the z-homing
-        if (Printer::debugErrors() && outputLog) {
-            Com::printFLN(PSTR("G28: x/y homing can not be performed until a z-homing has been performed"));
-        }
-
-        // turn off the homing in x- and y-direction
-        com->setX(0);
-        com->setY(0);
-
-        if (com->hasZ() || com->hasNoXYZ()) {
-            com->setZ(1);
-
-            if (Printer::debugInfo()) {
-                Com::printF(PSTR("isHomingAllowed(): x="), com->hasX());
-                Com::printF(PSTR(", y="), com->hasY());
-                Com::printFLN(PSTR(", z="), com->hasZ());
-            }
-            return 1;
-        }
-
-        showError((void*)ui_text_home, (void*)ui_text_operation_denied);
-        return 0;
-    }
-#endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
 
     // we allow the homing at the moment
     return 1;

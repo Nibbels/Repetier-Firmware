@@ -245,7 +245,6 @@ public:
     FSTRINGVAR(tEPRAdvanceL)
     FSTRINGVAR(tEPRBeeperMode)
     FSTRINGVAR(tEPRCaseLightsMode)
-    FSTRINGVAR(tEPRZEndstopType)
     FSTRINGVAR(tEPRRGBLightMode)
     FSTRINGVAR(tEPRFET1Mode)
     FSTRINGVAR(tEPRFET2Mode)
