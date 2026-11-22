@@ -18,11 +18,9 @@
 #include "Repetier.h"
 #include <Wire.h>
 
-#if USE_ADVANCE
 uint8_t Printer::maxExtruderSpeed;         // Timer delay for end extruder speed
 volatile int Printer::extruderStepsNeeded; // This many extruder steps are still needed, <0 = reverse steps needed.
 volatile int Printer::advanceStepsSet;
-#endif // USE_ADVANCE
 
 uint8_t Printer::unitIsInches = 0; // 0 = Units are mm, 1 = units are inches.
 
@@ -118,9 +116,7 @@ volatile long Printer::queuePositionZLayerLast = 0;
 volatile long Printer::directDestinationSteps[4] = { 0, 0, 0, 0 };
 volatile long Printer::directCurrentSteps[4] = { 0, 0, 0, 0 };
 
-#if STEPPER_ON_DELAY
 char Printer::enabledStepper[3] = { 0, 0, 0 };
-#endif // STEPPER_ON_DELAY
 
 char Printer::enableCaseLight = CASE_LIGHTS_DEFAULT_ON;
 
@@ -249,13 +245,11 @@ void Printer::switchEverythingOff() {
 
 void Printer::updateAdvanceActivated() {
     Printer::setAdvanceActivated(false);
-#if USE_ADVANCE
     for (uint8_t i = 0; i < NUM_EXTRUDER; i++) {
         if (extruder[i].advanceL != 0) {
             Printer::setAdvanceActivated(true);
         }
     }
-#endif // USE_ADVANCE
 } // updateAdvanceActivated
 
 void Printer::updateWobbleFixOffsets() {
@@ -714,9 +708,7 @@ void Printer::setup() {
     WRITE(EXT1_EXTRUDER_COOLER_PIN, LOW);
 #endif // defined(EXT1_EXTRUDER_COOLER_PIN) && EXT1_EXTRUDER_COOLER_PIN >- 1 && NUM_EXTRUDER > 1
 
-#if USE_ADVANCE
     advanceStepsSet = 0;
-#endif // USE_ADVANCE
 
     maxXYJerk = MAX_JERK;
     maxZJerk = MAX_ZJERK;
@@ -756,9 +748,7 @@ void Printer::setup() {
     RGBLightModeForceWhite = 0;
 #endif // RGB_LIGHT_R_PIN
 
-#if USE_ADVANCE
     extruderStepsNeeded = 0;
-#endif // USE_ADVANCE
 
     UI_INITIALIZE;
 
@@ -807,11 +797,7 @@ void Printer::setup() {
 #if CASE_FAN_PIN > -1
     SET_OUTPUT(CASE_FAN_PIN);
 
-#if CASE_FAN_ALWAYS_ON
-    WRITE(CASE_FAN_PIN, 1);
-#else
     WRITE(CASE_FAN_PIN, 0);
-#endif // CASE_FAN_ALWAYS_ON
 #endif // CASE_FAN_PIN > -1
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
@@ -1485,9 +1471,7 @@ void Printer::stopPrint() //function for aborting USB and SD-Prints
     Com::print(':');
 void Printer::showConfiguration() {
     Com::config(PSTR("Baudrate:"), baudrate);
-#ifndef EXTERNALSERIAL
     Com::config(PSTR("InputBuffer:"), SERIAL_BUFFER_SIZE - 1);
-#endif
     Com::config(PSTR("NumExtruder:"), NUM_EXTRUDER);
     Com::config(PSTR("MixingExtruder:"), 0);
     Com::config(PSTR("HeatedBed:"), HAVE_HEATED_BED);

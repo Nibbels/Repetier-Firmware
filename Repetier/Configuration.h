@@ -78,9 +78,6 @@
 #define SENSIBLE_PRESSURE_MAX_OFFSET        180
 #define SENSIBLE_PRESSURE_INTERVAL          50
 
-/** \brief Enables debug outputs from the heat bed scan */
-#define DEBUG_HEAT_BED_SCAN                 0                                                   // 0 = off, 1 = on, 2 = on with more debug outputs
-
 /**
  * XYZ_POSITION_BUTTON_DIRECTION = -1 : This fits to you if you want more intuitivity when choosing the Up-Down-Buttons within "Menu:Position->X-/Y-/Z-Position".
  * XYZ_POSITION_BUTTON_DIRECTION = 1 : This fits more if you want to stick to standard coordinates direction.
@@ -272,28 +269,8 @@ Overridden if EEPROM activated. */
 #define MAX_JERK                            13.0                 //std: 20, aber RFx000 sieht zwischen ca. 7 und 18 am besten aus: Renkforce sagt 10
 #define MAX_ZJERK                           0.3                  //std: 0.3
 
-//that will slowdown if you have sever direction changes in a short distance which is nearly the same as adding several jerks in a short sequence.
-#define REDUCE_ON_SMALL_SEGMENTS            1
+// Length below which the junction planner slows closely spaced direction changes.
 #define MAX_JERK_DISTANCE                   0.6
-//for a more logical jerk computation.
-#define ALTERNATIVE_JERK                    1
-
-// ##########################################################################################
-// ##   debugging
-// ##########################################################################################
-
-/**
- * \brief Writes the free RAM to output, if it is less then at the last test. Should always return
- * values >500 for safety, since it doesn't catch every function call. Nice to tweak cache
- * usage or for seraching for memory induced errors. Switch it off for production, it costs execution time.
- */
-#define DEBUG_FREE_MEMORY                   0                                                   // 1 = on, 0 = off
-
-#if DEBUG_FREE_MEMORY
- #define DEBUG_MEMORY                        Commands::checkFreeMemory();
-#else
- #define DEBUG_MEMORY
-#endif // DEBUG_FREE_MEMORY
 
 // ##########################################################################################
 // ##   configuration of the extended buttons
@@ -517,9 +494,6 @@ Honeywell 100K Thermistor (135-104LAG-J01)  : R0 = 100000  T0 = 25  Beta = 3974
 /** \brief  Change to true if you get a inserted message on removal. */
 #define SDCARDDETECTINVERTED                false
 
-/** \brief Show extended directory including file length. Don't use this with Pronterface! */
-#define SD_EXTENDED_DIR                     true
-
 /** \brief Total size of the buffer used to store the long filenames */
 // If you need more maximum file name length than 26 chars 
 // - For SD-Printing using a Gcode / using Octoprints sd file listing
@@ -560,17 +534,8 @@ Honeywell 100K Thermistor (135-104LAG-J01)  : R0 = 100000  T0 = 25  Beta = 3974
  */
 #define UI_LANGUAGE                         0
 
-/** \brief How many ms should a single page be shown, until it is switched to the next one.*/
+/** \brief Periodic redraw interval for the selected status page.*/
 #define UI_PAGES_DURATION                   4000
-
-/** 
- * \brief Uncomment if you don't want automatic page switching. You can still switch the
- * info pages with next/previous button/click-encoder
- */
-#define UI_DISABLE_AUTO_PAGESWITCH          true
-
-/** \brief Time to return to info menu if x millisconds no key was pressed. Set to 0 to disable it. */
-#define UI_PRINT_AUTORETURN_TO_MENU_AFTER   120000
 
 /**
  * \brief Normally cou want a next/previous actions with every click of your encoder.
@@ -688,7 +653,7 @@ we use blocks of 2 kByte size for the structure of our EEPROM
 #define DEFAULT_Z_SCALE_MODE                Z_VALUE_MODE_LAYER
 
 /** \brief Minimal temperature which can be reached by cooling */
-#define MAX_ROOM_TEMPERATURE                40                                                  // [°C]
+#define MAX_ROOM_TEMPERATURE                33                                                  // [°C]
 
 /** \brief Defines the I2C address for the strain gauge */
 #define I2C_ADDRESS_STRAIN_GAUGE            0x49
@@ -702,12 +667,8 @@ we use blocks of 2 kByte size for the structure of our EEPROM
 /** \brief Defines the I2C address for the external EEPROM which stores type information */
 #define I2C_ADDRESS_TYPE_EEPROM             0x51
 
-/**
- * \brief Allows to use this firmware together with the non-Repetier PC applications
- * Without this special handling, the firmware may complain about checksum errors from non-Repetier PC applications (e.g. Cura, ...) and
- * non-Repetier PC applications may fall over the debug outputs of the firmware.
- */
-#define ALLOW_EXTENDED_COMMUNICATION        2                                                   // 0 = do not allow, 1 = allow "Wait", 2 = allow "Wait" and debug outputs
+/** \brief Default diagnostic level at boot. Values >= 2 enable info and error messages. */
+#define ALLOW_EXTENDED_COMMUNICATION        2
 
 /** 
  * \brief Configuration of the external watchdog
@@ -723,7 +684,7 @@ we use blocks of 2 kByte size for the structure of our EEPROM
 /** \brief The display shows that the device is idle after no new commands were processed for longer than the minimal idle time */
 #define MINIMAL_IDLE_TIME                   500                                                 // [ms]
 
-/** \brief If enabled you can select the distance your filament gets retracted during a M140 command, after a given temperature is reached. */
+/** \brief Allow a configurable filament retract while M109 waits for the selected nozzle to heat. */
 #define RETRACT_DURING_HEATUP               true
 
 /**
@@ -741,15 +702,6 @@ we use blocks of 2 kByte size for the structure of our EEPROM
  * extrusion position might be at any value like 23344. If you then have an G1 E-2 it will roll back 23 meter!
  */
 #define EXTRUDE_MAXLENGTH                   100.0f
-
-/**
- * \brief Set PID scaling
- * PID values assume a usable range from 0-255. This can be further limited to EXT0_PID_MAX by two methods.
- * Set the value to 0: Normal computation, just clip output to EXT0_PID_MAX if computed value is too high.
- * Set value to 1: Scale PID by EXT0_PID_MAX/256 and then clip to EXT0_PID_MAX.
- * If your EXT0_PID_MAX is low, you should prefer the second method.
- */
-#define SCALE_PID_TO_MAX                    0
 
 /**
  * \brief Temperature range for target temperature to hold in M109 command. 5 means +/-5 degC
@@ -785,28 +737,11 @@ we use blocks of 2 kByte size for the structure of our EEPROM
 #define GCODE_BUFFER_SIZE                   2
 
 /**
- * \brief Appends the linenumber after every ok send, to acknowledge the received command.
- * Uncomment for plain ok ACK if your host has problems with this
- */
-#define ACK_WITH_LINENUMBER                 1
-
-/**
  * \brief Communication errors can swollow part of the ok, which tells the host software to send
  * the next command. Not receiving it will cause your printer to stop. Sending this string every
  * second, if our queue is empty should prevent this. Comment it, if you don't wan't this feature.
  */
 #define WAITING_IDENTIFIER                  "wait"
-
-/**
- * \brief Sets time for echo debug
- * You can set M111 1 which enables ECHO of commands sent. This define specifies the position,
- * when it will be executed. In the original FiveD software, echo is done after receiving the
- * command. With checksum you know, how it looks from the sending string. With this define
- * uncommented, you will see the last command executed. To be more specific: It is written after
- * execution. This helps tracking errors, because there may be 8 or more commands in the queue
- * and it is elsewise difficult to know, what your reprap is currently doing.
- */
-#define ECHO_ON_EXECUTE                     1
 
 /**
  * \brief If the firmware is busy, it will send a busy signal to host signaling that
@@ -822,9 +757,6 @@ we use blocks of 2 kByte size for the structure of our EEPROM
 /** \brief Define the on temperature and the off delay for the fan */
 #define CASE_FAN_ON_TEMPERATURE             50                                                  // [°C]
 #define CASE_FAN_OFF_DELAY                  60000                                               // [ms]
-
-/** \brief Specify whether the case fan all be always on */
-#define CASE_FAN_ALWAYS_ON                  0                                                   // 1 = always on, 0 = automatic switching and switching via G-Code
 
 /** \brief Defines the default behavior of the Position X/Y/Z menus */
 #define DEFAULT_MOVE_MODE_X                 MOVE_MODE_SINGLE_STEPS

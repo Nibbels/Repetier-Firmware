@@ -729,9 +729,7 @@ uint8_t SdBaseFile::lsRecursive(SdBaseFile* parent, uint8_t level, char* findFil
                     Com::printF(Com::tSlash);
                 }
                 Com::print(tempLongFilename);
-#if SD_EXTENDED_DIR
                 Com::printF(Com::tSpace, (long)p->fileSize);
-#endif
                 Com::println();
             }
         }

@@ -31,7 +31,7 @@ Relative moves keep the rounding remainder from each float addition and fold it 
 
 The Z residual reflects the precision of each parsed binary32 input. Actual motor position also depends on the configured limits, direct moves, compensation and the motor following its pulses.
 
-WobbleFix adds an XY correction at the step endpoint. Omitted axes and relative moves use the retained target in millimetres. E-only moves reuse the queued XY correction, and homing or setting an explicit machine X/Y target clears the correction on that axis. The software limit constrains the retained target and the corrected endpoint independently. [Conversion to steps](../../Repetier/Printer.cpp#L291)
+WobbleFix adds an XY correction at the step endpoint. Omitted axes and relative moves use the retained target in millimetres. E-only moves reuse the queued XY correction, and homing or setting an explicit machine X/Y target clears the correction on that axis. The software limit constrains the retained target and the corrected endpoint independently. [Conversion to steps](../../Repetier/Printer.cpp#L285)
 
 ## What `g_min` and `g_max` really mean
 

@@ -45,10 +45,8 @@ All known arduino boards use 64. This value is needed for the extruder timing. *
 
 #define ANALOG_PRESCALER _BV(ADPS0) | _BV(ADPS1) | _BV(ADPS2)
 
-#ifndef EXTERNALSERIAL
 #undef HardwareSerial_h
 #define HardwareSerial_h // Don't use standard serial console
-#endif
 
 #include <inttypes.h>
 #include "Stream.h"
@@ -57,7 +55,6 @@ All known arduino boards use 64. This value is needed for the extruder timing. *
 #include "Arduino.h"
 #include "fastio.h"
 
-// FEATURE_WATCHDOG
 extern unsigned char g_bPingWatchdog;
 extern unsigned long g_uLastCommandLoop;
 
@@ -135,7 +132,6 @@ typedef uint8_t ufast8_t;
 
 #define FAST_INTEGER_SQRT
 
-#ifndef EXTERNALSERIAL
 // Implement serial communication for one stream only!
 /*
   HardwareSerial.h - Hardware serial library for Wiring
@@ -219,25 +215,8 @@ public:
 };
 
 extern RFHardwareSerial RFSerial;
-#define RFSERIAL RFSerial
 #define WAIT_OUT_EMPTY \
     while (tx_buffer.head != tx_buffer.tail) { }
-#else // EXTERNALSERIAL
-#define RFSERIAL Serial
-#if defined(BLUETOOTH_SERIAL) && BLUETOOTH_SERIAL > 0
-#if BLUETOOTH_SERIAL == 1
-#define RFSERIAL2 Serial1
-#elif BLUETOOTH_SERIAL == 2
-#define RFSERIAL2 Serial2
-#elif BLUETOOTH_SERIAL == 3
-#define RFSERIAL2 Serial3
-#elif BLUETOOTH_SERIAL == 4
-#define RFSERIAL2 Serial4
-#elif BLUETOOTH_SERIAL == 5
-#define RFSERIAL2 Serial5
-#endif
-#endif
-#endif // EXTERNALSERIAL
 
 #define OUT_P_I(p, i) Com::printF(PSTR(p), (int)(i))
 #define OUT_P_I_LN(p, i) Com::printFLN(PSTR(p), (int)(i))
@@ -531,27 +510,27 @@ public:
     } // readFlashByte
 
     static inline void serialSetBaudrate(long baud) {
-        RFSERIAL.begin(baud);
+        RFSerial.begin(baud);
 
     } // serialSetBaudrate
 
     static inline bool serialByteAvailable() {
-        return RFSERIAL.available() > 0;
+        return RFSerial.available() > 0;
 
     } // serialByteAvailable
 
     static inline uint8_t serialReadByte() {
-        return RFSERIAL.read();
+        return RFSerial.read();
 
     } // serialReadByte
 
     static inline void serialWriteByte(char b) {
-        RFSERIAL.write(b);
+        RFSerial.write(b);
 
     } // serialWriteByte
 
     static inline void serialFlush() {
-        RFSERIAL.flush();
+        RFSerial.flush();
 
     } // serialFlush
 
@@ -686,7 +665,7 @@ public:
     //Nibbels: Use watchdog to trigger external watchdog with constant time function according to command loop.
     static void WDT_Init(void);
 
-    // Watchdog support FEATURE_WATCHDOG
+    // Watchdog support
     static void startWatchdog();
     static void stopWatchdog();
     static void tellWatchdogOk();
@@ -706,7 +685,6 @@ public:
         while (1) {
         }
     } // testWatchdog
-      // END FEATURE_WATCHDOG
 
     inline static float maxExtruderTimerFrequency() {
         return (float)F_CPU / TIMER0_PRESCALE;
@@ -714,9 +692,7 @@ public:
     } // maxExtruderTimerFrequency
 
     static void analogStart();
-#if USE_ADVANCE
     static void resetExtruderDirection();
-#endif // USE_ADVANCE
 };
 
 #define EXTRUDER_TIMER_VECTOR TIMER0_COMPA_vect

@@ -168,9 +168,7 @@ public:
     int16_t waitRetractUnits;       ///< Units to retract the filament when waiting for heatup
     volatile int8_t stepperDirection;
 
-#if USE_ADVANCE
     float advanceL;
-#endif // USE_ADVANCE
 
     TemperatureController tempControl;
     const char* PROGMEM selectCommands;
@@ -178,9 +176,7 @@ public:
     uint8_t coolerSpeed; ///< Speed to use when enabled
     uint8_t coolerPWM;   ///< current PWM setting
 
-#if STEPPER_ON_DELAY
     char enabled;
-#endif // STEPPER_ON_DELAY
 
     /** \brief Sends the high-signal to the stepper for next extruder step.
     Call this function only, if interrupts are disabled.
@@ -287,12 +283,10 @@ public:
 
 #endif // NUM_EXTRUDER==1
 
-#if STEPPER_ON_DELAY
         if (!Extruder::current->enabled) {
             Extruder::current->enabled = 1;
-            HAL::delayMilliseconds(STEPPER_ON_DELAY);
+            HAL::delayMilliseconds(stepperEnableDelayMs);
         }
-#endif // STEPPER_ON_DELAY
 
     } // enable
     static void manageTemperatures();

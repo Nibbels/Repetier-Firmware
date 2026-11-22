@@ -115,12 +115,10 @@ extern volatile uint osAnalogInputValues[ANALOG_INPUTS];
 extern uint8_t pwm_pos[NUM_EXTRUDER + 3]; // 0-NUM_EXTRUDER = Heater 0-NUM_EXTRUDER of extruder, NUM_EXTRUDER = Heated bed, NUM_EXTRUDER+1 Board fan, NUM_EXTRUDER+2 = Fan
 extern uint8_t fanSpeed;                  //remember user input fan speed at a 0..255 scale.
 
-#if USE_ADVANCE
 extern int maxadv2;
 extern float maxadvspeed;
 // Delay filament relax at the end of print, could be a simple timeout
 extern volatile int waitRelax;
-#endif // USE_ADVANCE
 
 #include "Extruder.h"
 

@@ -47,7 +47,7 @@ have problems with other modules using the eeprom */
 #define EPR_MAX_INACTIVE_TIME 79
 #define EPR_STEPPER_INACTIVE_TIME 83
 #define EPR_EXTRUDER_SPEED 95
-#define EPR_INTEGRITY_BYTE 104 // Here the xored sum over eeprom is stored
+#define EPR_INTEGRITY_BYTE 104 // Byte sum modulo 256 over the settings area, excluding this cell.
 #define EPR_VERSION 105        // Version id for updates in EEPROM storage
 //#define EPR_BED_HEAT_MANAGER            106
 #define EPR_BED_DRIVE_MAX 107

@@ -35,6 +35,8 @@
 #define DEVICE_TYPE_RF2000 14
 #define DEVICE_TYPE_RF2000v2 15
 
+// Give an enabled stepper driver time to settle before the first step.
+constexpr unsigned int stepperEnableDelayMs = 25;
 
 #define HOTEND_TYPE_V1 2 // hotend V1
 #define HOTEND_TYPE_V2 3 // hotend V2 for single extruder

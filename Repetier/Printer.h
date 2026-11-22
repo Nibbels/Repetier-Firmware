@@ -54,11 +54,9 @@
 
 class Printer {
 public:
-#if USE_ADVANCE
     static volatile int extruderStepsNeeded; // This many extruder steps are still needed, <0 = reverse steps needed.
     static uint8_t maxExtruderSpeed;         // Timer delay for end extruder speed
     static volatile int advanceStepsSet;
-#endif // USE_ADVANCE
 
     static uint8_t menuMode;
     static float axisStepsPerMM[];
@@ -138,9 +136,7 @@ public:
     static volatile long directDestinationSteps[4];
     static volatile long directCurrentSteps[4];
 
-#if STEPPER_ON_DELAY
     static char enabledStepper[3];
-#endif // STEPPER_ON_DELAY
 
     static char enableCaseLight;
 
@@ -214,9 +210,7 @@ public:
         WRITE(X_ENABLE_PIN, !X_ENABLE_ON);
 #endif // (X_ENABLE_PIN > -1)
 
-#if STEPPER_ON_DELAY
         Printer::enabledStepper[X_AXIS] = 0;
-#endif // STEPPER_ON_DELAY
 
         // when the stepper is disabled we loose our home position because somebody else can move our mechanical parts
         setHomed(false, -1, -1);
@@ -239,9 +233,7 @@ public:
         WRITE(Y_ENABLE_PIN, !Y_ENABLE_ON);
 #endif // (Y_ENABLE_PIN > -1)
 
-#if STEPPER_ON_DELAY
         Printer::enabledStepper[Y_AXIS] = 0;
-#endif // STEPPER_ON_DELAY
 
         // when the stepper is disabled we loose our home position because somebody else can move our mechanical parts
         setHomed(-1, false, -1);
@@ -272,9 +264,7 @@ public:
         WRITE(Z_ENABLE_PIN, !Z_ENABLE_ON);
 #endif // (Z_ENABLE_PIN > -1)
 
-#if STEPPER_ON_DELAY
         Printer::enabledStepper[Z_AXIS] = 0;
-#endif // STEPPER_ON_DELAY
 
         noInts.protect();
         Printer::setZAxisSteps(0);
@@ -298,12 +288,10 @@ public:
         WRITE(X_ENABLE_PIN, X_ENABLE_ON);
 #endif // (X_ENABLE_PIN > -1)
 
-#if STEPPER_ON_DELAY
         if (!Printer::enabledStepper[X_AXIS]) {
             Printer::enabledStepper[X_AXIS] = 1;
-            HAL::delayMilliseconds(STEPPER_ON_DELAY);
+            HAL::delayMilliseconds(stepperEnableDelayMs);
         }
-#endif // STEPPER_ON_DELAY
     }  // enableXStepper
 
     /** \brief Enable stepper motor for y direction. */
@@ -313,12 +301,10 @@ public:
         WRITE(Y_ENABLE_PIN, Y_ENABLE_ON);
 #endif // (Y_ENABLE_PIN > -1)
 
-#if STEPPER_ON_DELAY
         if (!Printer::enabledStepper[Y_AXIS]) {
             Printer::enabledStepper[Y_AXIS] = 1;
-            HAL::delayMilliseconds(STEPPER_ON_DELAY);
+            HAL::delayMilliseconds(stepperEnableDelayMs);
         }
-#endif // STEPPER_ON_DELAY
     }  // enableYStepper
 
     /** \brief Enable stepper motor for z direction. */
@@ -328,12 +314,10 @@ public:
         WRITE(Z_ENABLE_PIN, Z_ENABLE_ON);
 #endif // (Z_ENABLE_PIN > -1)
 
-#if STEPPER_ON_DELAY
         if (!Printer::enabledStepper[Z_AXIS]) {
             Printer::enabledStepper[Z_AXIS] = 1;
-            HAL::delayMilliseconds(STEPPER_ON_DELAY);
+            HAL::delayMilliseconds(stepperEnableDelayMs);
         }
-#endif // STEPPER_ON_DELAY
     }  // enableZStepper
 
     static INLINE void setXDirection(bool positive) {

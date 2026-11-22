@@ -31,9 +31,7 @@ void Commands::commandLoop() {
                 sd.writeCommand(code);
             else
                 sd.finishWrite();
-#ifdef ECHO_ON_EXECUTE
             code->echoCommand();
-#endif
         } else
 #endif //SDSUPPORT
         {
@@ -91,7 +89,6 @@ void Commands::checkForPeriodicalActions(enum FirmwareState state) {
         loopFeatures();
     }
 
-    DEBUG_MEMORY;
 } // checkForPeriodicalActions
 
 /** \brief Waits until movement cache is empty.
@@ -1024,7 +1021,6 @@ void Commands::processMCode(GCode* com) {
         break;
     }
 
-#if USE_ADVANCE
     case 223: // M223 - Extruder interrupt test
     {
         if (com->hasS()) {
@@ -1052,7 +1048,6 @@ void Commands::processMCode(GCode* com) {
         Printer::updateAdvanceActivated();
         break;
     }
-#endif // USE_ADVANCE
 
     case 360: // M360 - show configuration
         Com::writeToAll = false;

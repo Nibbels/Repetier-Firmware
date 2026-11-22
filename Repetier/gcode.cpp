@@ -253,11 +253,7 @@ void GCode::checkAndPushCommand() {
         pushCommand();
     }
 
-#if ACK_WITH_LINENUMBER
     Com::printFLN(Com::tOkSpace, actLineNumber);
-#else
-    Com::printFLN(Com::tOk);
-#endif // ACK_WITH_LINENUMBER
 
     GCodeSource::activeSource->wasLastCommandReceivedAsBinary = sendAsBinary;
     keepAlive(NotBusy);
@@ -268,9 +264,6 @@ void GCode::pushCommand() {
     if (g_uBlockCommands)
         return; // no further commands from the SD card/Host shall be processed
 
-#if !ECHO_ON_EXECUTE
-    commandsBuffered[bufferWriteIndex].echoCommand();
-#endif
     if (++bufferWriteIndex >= GCODE_BUFFER_SIZE)
         bufferWriteIndex = 0;
     bufferLength++;
@@ -290,9 +283,7 @@ GCode* GCode::peekCurrentCommand() {
 void GCode::popCurrentCommand() {
     if (!bufferLength)
         return; // Should not happen, but safety first
-#ifdef ECHO_ON_EXECUTE
     echoCommand();
-#endif // ECHO_ON_EXECUTE
     if (++bufferReadIndex == GCODE_BUFFER_SIZE)
         bufferReadIndex = 0;
     bufferLength--;
@@ -474,11 +465,6 @@ void GCode::readFromSerial() {
             if (ch == 0 || ch == '\n' || ch == '\r' || !GCodeSource::activeSource->isOpen() /*|| (!commentDetected && ch == ':')*/) // complete line read
             {
                 commandReceiving[commandsReceivingWritePosition - 1] = 0;
-#ifdef DEBUG_ECHO_ASCII
-                Com::printF(PSTR("Got:"));
-                Com::print((char*)commandReceiving);
-                Com::println();
-#endif
                 commentDetected = false;
                 if (commandsReceivingWritePosition == 1) // empty line ignore
                 {
@@ -1004,22 +990,12 @@ void GCode::outputGCommand() {
     }
 } // outputGCommand
 
-SerialGCodeSource serial0Source(&RFSERIAL);
-#if BLUETOOTH_SERIAL > 0
-SerialGCodeSource serial1Source(&RFSERIAL2);
-#endif
+SerialGCodeSource serial0Source(&RFSerial);
 
-#if BLUETOOTH_SERIAL > 0
-fast8_t GCodeSource::numSources = 2; ///< Number of data sources available
-fast8_t GCodeSource::numWriteSources = 2;
-GCodeSource* GCodeSource::sources[MAX_DATA_SOURCES] = { &serial0Source, &serial1Source };
-GCodeSource* GCodeSource::writeableSources[MAX_DATA_SOURCES] = { &serial0Source, &serial1Source };
-#else
 fast8_t GCodeSource::numSources = 1; ///< Number of data sources available
 fast8_t GCodeSource::numWriteSources = 1;
 GCodeSource* GCodeSource::sources[MAX_DATA_SOURCES] = { &serial0Source };
 GCodeSource* GCodeSource::writeableSources[MAX_DATA_SOURCES] = { &serial0Source };
-#endif
 GCodeSource* GCodeSource::activeSource = &serial0Source;
 
 void GCodeSource::registerSource(GCodeSource* newSource) {

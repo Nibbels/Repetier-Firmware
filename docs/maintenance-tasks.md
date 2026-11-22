@@ -18,19 +18,19 @@ Firmware changes are tracked on `ai-firmware-review` against `community_developm
 
 ### Z travel and scanning
 
-- [x] **Allow scan retreat from the exact lower bound.** `moveZ()` stops a further approach at `-maxZOverrideSteps` and allows the bed to move away. The scan keeps control of the Z motor for the duration of its move. [Scan step output](../Repetier/RF.cpp#L2830)
+- [x] **Allow scan retreat from the exact lower bound.** `moveZ()` stops a further approach at `-maxZOverrideSteps` and allows the bed to move away. The scan keeps control of the Z motor for the duration of its move. [Scan step output](../Repetier/RF.cpp#L2499)
 
-- [x] **Apply travel limits to compensation-only Z pulses.** Each pulse checks the motor position in the requested direction. Z-max uses the configured limit and, where present, the hardware switch. Z-min allows the model-specific overtravel after homing. An unreachable target stays pending, leaving the next retreat step available. Host replays covered idle and XY movement, queued and direct retreat, and disabling compensation at a limit. Physical verification remains open. [Compensation pulses](../Repetier/motion.cpp#L822) · [Travel limit check](../Repetier/Printer.cpp#L885) · [Scan reach](z-offset/scans-and-persistence.md#z-min-screw-adjustment-and-scan-reach)
+- [x] **Apply travel limits to compensation-only Z pulses.** Each pulse checks the motor position in the requested direction. Z-max uses the configured limit and, where present, the hardware switch. Z-min allows the model-specific overtravel after homing. An unreachable target stays pending, leaving the next retreat step available. Host replays covered idle and XY movement, queued and direct retreat, and disabling compensation at a limit. Physical verification remains open. [Compensation pulses](../Repetier/motion.cpp#L802) · [Travel limit check](../Repetier/Printer.cpp#L871) · [Scan reach](z-offset/scans-and-persistence.md#z-min-screw-adjustment-and-scan-reach)
 
 - [x] **Use the configured Z maximum on the RF1000.** The RF1000 homes on its physical Z-min switch and limits travel toward Z-max in software. The factory setting is 195 mm and the stored Z height takes precedence. RF2000 and RF2000v2 use their separate Z-min and Z-max inputs. [Endstop configurations](development-roadmap.md#feature-retirement)
 
 ### Wobble correction
 
-- [x] **Keep the WobbleFix offset out of the retained G-code target.** Previously, each absolute `G1 Y…` added another 100 µm to X with an X amplitude of 100 µm at machine Z=0 and phase zero. The planner now adds the correction to the step endpoint. In a host replay, all 50 Y-only moves retained the same X after the first corrected target. Relative moves, `G92`, E-only moves, homing resets and software limits also passed. Physical verification remains open. [Correction](../Repetier/Printer.cpp#L261) · [Step endpoint](../Repetier/Printer.cpp#L291)
+- [x] **Keep the WobbleFix offset out of the retained G-code target.** Previously, each absolute `G1 Y…` added another 100 µm to X with an X amplitude of 100 µm at machine Z=0 and phase zero. The planner now adds the correction to the step endpoint. In a host replay, all 50 Y-only moves retained the same X after the first corrected target. Relative moves, `G92`, E-only moves, homing resets and software limits also passed. Physical verification remains open. [Correction](../Repetier/Printer.cpp#L255) · [Step endpoint](../Repetier/Printer.cpp#L285)
 
 ### Pause and resume
 
-- [ ] **Suspend automatic SenseOffset learning during pause.** Bed-matrix lookup and fade use the frozen print XYZ. In a host replay, pre-pause samples raised SenseOffset by 10 µm after the reading fell to zero. Stop learning and clear sample history while retaining applied clearance, manual offset adjustment and live Digit-Z force tracking. The pause guard passed a host trial. Check the return at equal force and after manual extrusion while parked. [Print matrix coordinates](../Repetier/RF.cpp#L2359) · [Pressure handler](../Repetier/RF.cpp#L3501)
+- [ ] **Suspend automatic SenseOffset learning during pause.** Bed-matrix lookup and fade use the frozen print XYZ. In a host replay, pre-pause samples raised SenseOffset by 10 µm after the reading fell to zero. Stop learning and clear sample history while retaining applied clearance, manual offset adjustment and live Digit-Z force tracking. The pause guard passed a host trial. Check the return at equal force and after manual extrusion while parked. [Print matrix coordinates](../Repetier/RF.cpp#L2032) · [Pressure handler](../Repetier/RF.cpp#L3170)
 
 The updated host replay covers early Pause and Play on pressure, queued and panel requests, ordinary and overlapping jog releases, a blocked return and retry, cancellation, and the two-press wake and resume sequence. The step replay covers clipped direct moves, preservation of queued overtravel, and direct extrusion with the pressure guard. AVR builds passed for all three models. Physical verification remains open.
 
@@ -66,8 +66,15 @@ The firmware restricted Play to a completed pause in 1.37t2. The 1.43.56 pause r
 
 ## Motion smoothness and performance
 
+- [ ] **Review Pressure Advance.** Compare `advanceL=0` with a nonzero per-tool value from `M233 Y…` or EEPROM. Trace queued and direct E steps, pending advance steps and their timer through accelerations, decelerations, pauses, tool changes and print cancellation. Check total E pulses and remaining advance steps at the end of each run before evaluating step packing. [Advance calculation](../Repetier/motion.cpp#L420) · [E timer](../Repetier/HAL.cpp#L957)
+- [ ] **Review the junction-speed formula.** Replay straight joins at equal and unequal feedrates, sharp corners and reversals, plus mixed XYZ/E and pure E. Trace the XY, Z and E limits through lookahead to the resulting junction speed. [Junction planner](../Repetier/motion.cpp#L586)
+- [ ] **Measure the slowdown on short segments.** Use repeated direction changes and equivalent paths with different segment lengths around 0.6 mm. Compare measured speed, queue depth and pulse spacing. Evaluate the distance weighting alongside the junction-speed limits. [Junction planner](../Repetier/motion.cpp#L586)
 - [ ] **Evaluate Z-CMP wait between queued segments.** The review branch skips waits for corrections held at a travel limit and keeps idle compensation active with a paused queue. Compare the fork's change to waits between buffered moves in the timing review. [Timer patch](https://github.com/afriess/RFx000x-Firmware/commit/e51f9bc)
 - [ ] **Evaluate step packing.** Check the computed `minInterval` with the extra 64 ticks for pressure advance. Measure removing the 512-tick interval floor separately. [Step-packing patch](https://github.com/afriess/RFx000x-Firmware/commit/0e11752)
+
+## Heating and filament
+
+- [ ] **Review the optional M109 retract.** The factory distance is 0 mm. With a positive stored distance, the loop can enqueue the matching prime after a timeout or a sensor fault. Check successful heating, cooldown and target edits, cancellation and sensor faults with both tools. Track the original retract amount, the active tool and the logical and motor E positions. Require successful heating before returning filament. [Heat-up wait](../Repetier/Commands.cpp#L537)
 
 ## Firmware structure and hardware variants
 
@@ -79,6 +86,7 @@ Work through the [architecture review and migration](development-roadmap.md#5-fi
 - [x] **Retire sound and fix the build configuration for Digit Homing and movement unlock.** Both print functions compile on all three models. Boot diagnostics use the serial port for a board-type mismatch. [Feature retirement](development-roadmap.md#feature-retirement)
 - [x] **Fold board outputs and core controls into the model builds.** Removed guided nozzle alignment and the optional driver status command. AVR builds cover all three models. A host replay of the bed scan completion states covers the standard, PLA and ABS paths through matrix save. [Feature retirement](development-roadmap.md#feature-retirement)
 - [x] **Remove the remaining `FEATURE_*` switches.** Use model temperature curves, compile homing diagnostics and WobbleFix on all models, and remove the unused checksum bit. Host tests compared sensor conversion and zero-amplitude move targets. [Feature retirement](development-roadmap.md#feature-retirement)
+- [x] **Fold the shared motion, display and serial defaults into the firmware.** Pressure Advance, the current junction and short-segment calculations, the 25 ms driver enable wait and the 120 s menu timeout are built in. SD builds include file sizes in `M20`. Automatic trace builds, alternate serial ports and the early RF1000 fan-pin variant are retired. [Shared build defaults](development-roadmap.md#feature-retirement)
 
 ## Fork candidates
 

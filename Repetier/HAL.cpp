@@ -18,7 +18,6 @@
 #include "Repetier.h"
 #include <compat/twi.h>
 
-// FEATURE_WATCHDOG
 unsigned long g_uLastCommandLoop = 0;
 unsigned char g_bPingWatchdog = 0;
 
@@ -213,10 +212,8 @@ int32_t HAL::CPUDivU2(unsigned int divisor) {
 } // CPUDivU2
 
 void HAL::setupTimer() {
-#if USE_ADVANCE
     EXTRUDER_TCCR = 0;                      // need Normal not fastPWM set by arduino init
     EXTRUDER_TIMSK |= (1 << EXTRUDER_OCIE); // Activate compa interrupt on timer 0
-#endif                                      // USE_ADVANCE
 
     PWM_TCCR = 0; // Setup PWM interrupt
     PWM_OCR = 64;
@@ -508,11 +505,10 @@ void HAL::WDT_Init(void) {
 ISR(WDT_vect) {
     HAL::pingWatchdog();
     WDTCSR |= (1 << WDIE); //Nibbels: nächstes mal kein Reset durch internen Watchdog, sondern wieder dieser interrupt.
-    DEBUG_MEMORY
     execute16msPeriodical = 1; //Tell commandloop that 16ms have passed
 }
 
-// Watchdog support FEATURE_WATCHDOG
+// Watchdog support
 void HAL::startWatchdog() {
     Com::printFLN(Com::tStartWatchdog);
     // external watchdog
@@ -635,7 +631,6 @@ ISR(TIMER1_COMPA_vect) {
         if (PrintLine::needCmpWait()) {
             HAL::forbidInterrupts();
             setTimer(3000);
-            DEBUG_MEMORY;
             sbi(TIMSK1, OCIE1A);
 
             return;
@@ -644,7 +639,6 @@ ISR(TIMER1_COMPA_vect) {
 
     if (PrintLine::direct.task) {
         setTimer(PrintLine::performDirectMove());
-        DEBUG_MEMORY;
         sbi(TIMSK1, OCIE1A);
 
         return;
@@ -652,13 +646,11 @@ ISR(TIMER1_COMPA_vect) {
 
     if (PrintLine::hasLines() && !g_pauseMode) {
         setTimer(PrintLine::performQueueMove());
-        DEBUG_MEMORY;
         sbi(TIMSK1, OCIE1A);
 
         return;
     }
 
-#if USE_ADVANCE
     if (waitRelax == 0) {
         if (Printer::advanceStepsSet) {
             Printer::extruderStepsNeeded -= Printer::advanceStepsSet;
@@ -666,12 +658,10 @@ ISR(TIMER1_COMPA_vect) {
         }
     } else
         waitRelax--;
-#endif // USE_ADVANCE
 
     stepperWait = 0; // Important because of optimization in asm at begin
     OCR1A = 3000;
 
-    DEBUG_MEMORY;
     sbi(TIMSK1, OCIE1A);
 } // ISR(TIMER1_COMPA_vect)
 
@@ -964,7 +954,6 @@ ISR(PWM_TIMER_VECTOR) {
 #endif // RGB_LIGHT_R_PIN
 } // ISR(PWM_TIMER_VECTOR)
 
-#if USE_ADVANCE
 static int8_t extruderLastDirection = 0;
 #ifndef ADVANCE_DIR_FILTER_STEPS
 #define ADVANCE_DIR_FILTER_STEPS 2
@@ -1008,9 +997,7 @@ ISR(EXTRUDER_TIMER_VECTOR) {
     }
     EXTRUDER_OCR = timer + Printer::maxExtruderSpeed;
 }
-#endif // USE_ADVANCE
 
-#ifndef EXTERNALSERIAL
 // Implement serial communication for one stream only!
 /*
   HardwareSerial.h - Hardware serial library for Wiring
@@ -1123,87 +1110,6 @@ ISR(USART_UDRE_vect)
 #endif // !defined(UART0_UDRE_vect) && !defined(UART_UDRE_vect) && !defined(USART0_UDRE_vect) && !defined(USART_UDRE_vect)
 #endif // !defined(USART0_UDRE_vect) && defined(USART1_UDRE_vect)
 
-#if defined(BLUETOOTH_SERIAL) && BLUETOOTH_SERIAL > 0
-#if !(defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__) || defined(__AVR_ATmega1284P__) || defined(__AVR_ATmega1284__) || defined(__AVR_ATmega2561__) || defined(__AVR_ATmega1281__) || defined(__AVR_ATmega644__) || defined(__AVR_ATmega644P__))
-#error BlueTooth option cannot be used with your mainboard
-#endif
-#if BLUETOOTH_SERIAL > 1 && !(defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__))
-#error BlueTooth serial 2 or 3 can be used only with boards based on ATMega2560 or ATMega1280
-#endif
-#if (BLUETOOTH_SERIAL == 1)
-#if defined(USART1_RX_vect)
-#define SIG_USARTx_RECV USART1_RX_vect
-#define USARTx_UDRE_vect USART1_UDRE_vect
-#else
-#define SIG_USARTx_RECV SIG_USART1_RECV
-#define USARTx_UDRE_vect SIG_USART1_DATA
-#endif
-#define UDRx UDR1
-#define UCSRxA UCSR1A
-#define UCSRxB UCSR1B
-#define UBRRxH UBRR1H
-#define UBRRxL UBRR1L
-#define U2Xx U2X1
-#define UARTxENABLE ((1 << RXEN1) | (1 << TXEN1) | (1 << RXCIE1) | (1 << UDRIE1))
-#define UDRIEx UDRIE1
-#define RXxPIN 19
-#elif (BLUETOOTH_SERIAL == 2)
-#if defined(USART2_RX_vect)
-#define SIG_USARTx_RECV USART2_RX_vect
-#define USARTx_UDRE_vect USART2_UDRE_vect
-#else
-#define SIG_USARTx_RECV SIG_USART2_RECV
-#define USARTx_UDRE_vect SIG_USART2_DATA
-#endif
-#define UDRx UDR2
-#define UCSRxA UCSR2A
-#define UCSRxB UCSR2B
-#define UBRRxH UBRR2H
-#define UBRRxL UBRR2L
-#define U2Xx U2X2
-#define UARTxENABLE ((1 << RXEN2) | (1 << TXEN2) | (1 << RXCIE2) | (1 << UDRIE2))
-#define UDRIEx UDRIE2
-#define RXxPIN 17
-#elif (BLUETOOTH_SERIAL == 3)
-#if defined(USART3_RX_vect)
-#define SIG_USARTx_RECV USART3_RX_vect
-#define USARTx_UDRE_vect USART3_UDRE_vect
-#else
-#define SIG_USARTx_RECV SIG_USART3_RECV
-#define USARTx_UDRE_vect SIG_USART3_DATA
-#endif
-#define UDRx UDR3
-#define UCSRxA UCSR3A
-#define UCSRxB UCSR3B
-#define UBRRxH UBRR3H
-#define UBRRxL UBRR3L
-#define U2Xx U2X3
-#define UARTxENABLE ((1 << RXEN3) | (1 << TXEN3) | (1 << RXCIE3) | (1 << UDRIE3))
-#define UDRIEx UDRIE3
-#define RXxPIN 15
-#else
-#error Wrong serial port number for BlueTooth
-#endif
-
-SIGNAL(SIG_USARTx_RECV) {
-    uint8_t c = UDRx;
-    rf_store_char(c, &rx_buffer);
-}
-
-volatile uint8_t txx_buffer_tail = 0;
-
-ISR(USARTx_UDRE_vect) {
-    if (tx_buffer.head == txx_buffer_tail) {
-        // Buffer empty, so disable interrupts
-        bit_clear(UCSRxB, UDRIEx);
-    } else {
-        // There is more data in the output buffer. Send the next byte
-        uint8_t c = tx_buffer.buffer[txx_buffer_tail];
-        txx_buffer_tail = (txx_buffer_tail + 1) & SERIAL_TX_BUFFER_MASK;
-        UDRx = c;
-    }
-}
-#endif
 
 // Constructors ////////////////////////////////////////////////////////////////
 
@@ -1265,15 +1171,6 @@ try_again:
     bit_set(*_ucsrb, _txen);
     bit_set(*_ucsrb, _rxcie);
     bit_clear(*_ucsrb, _udrie);
-#if defined(BLUETOOTH_SERIAL) && BLUETOOTH_SERIAL > 0
-#define BLUETOOTH_BAUD 115200 // communication speed
-
-    WRITE(RXxPIN, 1); // Pullup on RXDx
-    UCSRxA = (1 << U2Xx);
-    UBRRxH = (uint8_t)(((F_CPU / 4 / BLUETOOTH_BAUD - 1) / 2) >> 8);
-    UBRRxL = (uint8_t)(((F_CPU / 4 / BLUETOOTH_BAUD - 1) / 2) & 0xFF);
-    UCSRxB |= UARTxENABLE;
-#endif
 } // begin
 
 void RFHardwareSerial::end() {
@@ -1286,9 +1183,6 @@ void RFHardwareSerial::end() {
     bit_clear(*_ucsrb, _rxcie);
     bit_clear(*_ucsrb, _udrie);
 
-#if defined(BLUETOOTH_SERIAL) && BLUETOOTH_SERIAL > 0
-    UCSRxB = 0;
-#endif
 
     // clear a  ny received data
     _rx_buffer->head = _rx_buffer->tail;
@@ -1326,10 +1220,6 @@ void RFHardwareSerial::flush() {
     while (_tx_buffer->head != _tx_buffer->tail)
         ;
 
-#if defined(BLUETOOTH_SERIAL) && BLUETOOTH_SERIAL > 0
-    while (_tx_buffer->head != txx_buffer_tail)
-        ;
-#endif
 } // flush
 
 size_t RFHardwareSerial::write(uint8_t c) {
@@ -1339,17 +1229,11 @@ size_t RFHardwareSerial::write(uint8_t c) {
     // wait for the interrupt handler to empty it a bit
     while (i == _tx_buffer->tail)
         ;
-#if defined(BLUETOOTH_SERIAL) && BLUETOOTH_SERIAL > 0
-    while (i == txx_buffer_tail) { }
-#endif
 
     _tx_buffer->buffer[_tx_buffer->head] = c;
     _tx_buffer->head = i;
 
     bit_set(*_ucsrb, _udrie);
-#if defined(BLUETOOTH_SERIAL) && BLUETOOTH_SERIAL > 0
-    bit_set(UCSRxB, UDRIEx);
-#endif
 
     return 1;
 } // write
@@ -1366,7 +1250,6 @@ RFHardwareSerial RFSerial(&rx_buffer, &tx_buffer, &UBRR0H, &UBRR0L, &UCSR0A, &UC
 #error no serial port defined (port 0)
 #endif // defined(UBRRH) && defined(UBRRL)
 
-#endif // EXTERNALSERIAL
 
 #if !defined CASE_LIGHT_PIN || CASE_LIGHT_PIN < 0
 #error The case light pin must be defined in case the case light feature shall be used.

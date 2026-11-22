@@ -85,9 +85,7 @@ private:
     speed_t vStart;            ///< Starting speed in steps/s.
     speed_t vEnd;              ///< End speed in steps/s
 
-#if USE_ADVANCE
     uint32_t advanceL; ///< Recomputated L value
-#endif                 // USE_ADVANCE
 
 public:
     int32_t stepsRemaining; ///< Remaining steps, until move is finished
@@ -299,7 +297,6 @@ public:
         linesPos = linesWritePos;
     } // resetPathPlanner
 
-#if USE_ADVANCE
     inline void updateAdvanceSteps(speed_t v) {
         if (!Printer::isAdvanceActivated())
             return;
@@ -310,7 +307,6 @@ public:
         Printer::advanceStepsSet = tred;
         HAL::allowInterrupts();
     }  // updateAdvanceSteps
-#endif // USE_ADVANCE
 
     INLINE bool moveDecelerating(uint8_t forQueue) {
         if (stepsRemaining <= static_cast<int32_t>(decelSteps)) {
@@ -450,9 +446,7 @@ public:
             Printer::setZDirection(isZPositiveMove());
         }
         if (isEMove()) {
-#if USE_ADVANCE
             if (!Printer::isAdvanceActivated()) // Set direction if no advance/OPS enabled
-#endif
                 Extruder::setDirection(isEPositiveMove());
         }
     } // adjustDirections

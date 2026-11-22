@@ -198,9 +198,6 @@ void Extruder::manageTemperatures() {
             float dgain = act->pidDGain * (act->tempArray[act->tempPointer] - act->currentTemperatureC) * 0.666f; // raising dT/dt, 0.666 = reciproke of time interval (1500 ms) -> temparray greift weiter zurück als letzte messung.
             pidTerm += dgain;
 
-#if SCALE_PID_TO_MAX == 1
-            pidTerm = (pidTerm * act->pidMax) * 0.0039062;
-#endif // SCALE_PID_TO_MAX==1
 
             output = constrain((int)pidTerm, 0, act->pidMax);
         }
@@ -348,9 +345,7 @@ void Extruder::selectExtruderById(uint8_t extruderId) {
     // Shift the extruder-offset negatively to stay at the same point after switch
     Printer::offsetRelativeStepsCoordinates(-dOffset[X_AXIS], -dOffset[Y_AXIS], -dOffset[Z_AXIS], 0);
 
-#if STEPPER_ON_DELAY
     Extruder::current->enabled = 0;
-#endif // STEPPER_ON_DELAY
 
     Extruder::current = &extruder[extruderId];
 
@@ -369,7 +364,6 @@ void Extruder::selectExtruderById(uint8_t extruderId) {
     g_nManualSteps[E_AXIS] = (unsigned short)lroundf(Printer::axisStepsPerMM[E_AXIS] * DEFAULT_MANUAL_MM_E);
     g_nPauseSteps[E_AXIS] = long(Printer::axisStepsPerMM[E_AXIS] * DEFAULT_PAUSE_MM_E);
 
-#if USE_ADVANCE
     Printer::maxExtruderSpeed = (uint8_t)floor(HAL::maxExtruderTimerFrequency() / (Extruder::current->maxFeedrate * Extruder::current->stepsPerMM));
     if (Printer::maxExtruderSpeed > 15)
         Printer::maxExtruderSpeed = 15;
@@ -378,7 +372,6 @@ void Extruder::selectExtruderById(uint8_t extruderId) {
     if (fmax < Printer::maxFeedrate[E_AXIS])
         Printer::maxFeedrate[E_AXIS] = fmax;
     HAL::resetExtruderDirection();
-#endif // USE_ADVANCE
 
     Extruder::current->tempControl.updateTempControlVars();
 
@@ -427,7 +420,7 @@ void Extruder::setTemperatureForExtruder(float temperatureInCelsius, uint8_t ext
         Com::printFLN(Com::tColon, temperatureInCelsius, 0);
     }
 
-#if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && !CASE_FAN_ALWAYS_ON && CASE_FAN_PIN > -1
+#if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
     if (Printer::ignoreFanOn) {
         //ignore the case fan whenever there is another cooling solution available // Nibbels
         //the fan should still be connected within the rf2000 but might be avoided to suppress noise.
@@ -456,7 +449,7 @@ void Extruder::setTemperatureForExtruder(float temperatureInCelsius, uint8_t ext
             }
         }
     }
-#endif // (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && !CASE_FAN_ALWAYS_ON && CASE_FAN_PIN > -1
+#endif // (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
 
     bool alloff = true;
     for (uint8_t i = 0; i < NUM_EXTRUDER; i++)
@@ -521,9 +514,7 @@ void Extruder::disableAllExtruders() {
         if (e->enablePin > -1)
             HAL::digitalWrite(e->enablePin, !e->enableOn);
 
-#if STEPPER_ON_DELAY
         e->enabled = 0;
-#endif // STEPPER_ON_DELAY
     }
 
     cleanupEPositions();
@@ -1206,9 +1197,7 @@ Extruder extruder[NUM_EXTRUDER] = {
       EXT0_WAIT_RETRACT_TEMP,
       EXT0_WAIT_RETRACT_UNITS,
       0,
-#if USE_ADVANCE
       EXT0_ADVANCE_L,
-#endif // USE_ADVANCE
       {
           0, EXT0_TEMPSENSOR_TYPE, EXT0_SENSOR_INDEX, 0, 0, 0,
           0,
@@ -1232,11 +1221,8 @@ Extruder extruder[NUM_EXTRUDER] = {
       ext0_select_cmd,
       ext0_deselect_cmd,
       EXT0_EXTRUDER_COOLER_SPEED,
+      0,
       0
-#if STEPPER_ON_DELAY
-      ,
-      0
-#endif // STEPPER_ON_DELAY by Nibbels gegen xtruder.cpp:1620:1: warning: missing initializer for member 'Extruder::enabled'
     }
 #endif // NUM_EXTRUDER>0
 
@@ -1253,9 +1239,7 @@ Extruder extruder[NUM_EXTRUDER] = {
       EXT1_WAIT_RETRACT_TEMP,
       EXT1_WAIT_RETRACT_UNITS,
       0,
-#if USE_ADVANCE
       EXT1_ADVANCE_L,
-#endif // USE_ADVANCE
       {
           1, EXT1_TEMPSENSOR_TYPE, EXT1_SENSOR_INDEX, 0, 0, 0,
           0,
@@ -1279,11 +1263,8 @@ Extruder extruder[NUM_EXTRUDER] = {
       ext1_select_cmd,
       ext1_deselect_cmd,
       EXT1_EXTRUDER_COOLER_SPEED,
+      0,
       0
-#if STEPPER_ON_DELAY
-      ,
-      0
-#endif // STEPPER_ON_DELAY by Nibbels gegen xtruder.cpp:1620:1: warning: missing initializer for member 'Extruder::enabled'
     }
 #endif // NUM_EXTRUDER>1
 };

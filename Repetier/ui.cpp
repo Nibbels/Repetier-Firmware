@@ -24,10 +24,10 @@ extern const int8_t encoder_table[16] PROGMEM;
 #include <inttypes.h>
 #include <ctype.h>
 
-#if UI_PRINT_AUTORETURN_TO_MENU_AFTER
+constexpr millis_t menuAutoReturnDelayMs = 120000;
+
 millis_t g_nAutoReturnTime = 0;
 bool g_nAutoReturnMessage = false;
-#endif // UI_PRINT_AUTORETURN_TO_MENU_AFTER
 
 char g_nYesNo = 0; // 0 = no, 1 = yes
 
@@ -1474,7 +1474,6 @@ void UIDisplay::parse(char* txt, bool ram) {
             }
 #endif // RETRACT_DURING_HEATUP
 
-#if USE_ADVANCE
             else if (c2 == 'l') // %Xl : Advance L value
             {
                 addFloat(Extruder::current->advanceL, 3, 0);
@@ -1485,7 +1484,6 @@ void UIDisplay::parse(char* txt, bool ram) {
             {
                 addFloat(extruder[1].advanceL, 3, 0);
             }
-#endif // USE_ADVANCE
 
             else if (c2 == 'f') // %Xf : Extruder 0 Acceleration
             {
@@ -2136,11 +2134,9 @@ void UIDisplay::refreshPage() {
     char cache[UI_ROWS][MAX_COLS + 1];
     adjustMenuPos();
 
-#if UI_PRINT_AUTORETURN_TO_MENU_AFTER
     // Reset timeout on menu back when user active on menu
     if (encoderLast != encoderStartScreen)
-        g_nAutoReturnTime = HAL::timeInMilliseconds() + UI_PRINT_AUTORETURN_TO_MENU_AFTER;
-#endif // UI_PRINT_AUTORETURN_TO_MENU_AFTER
+        g_nAutoReturnTime = HAL::timeInMilliseconds() + menuAutoReturnDelayMs;
 
     encoderStartScreen = encoderLast;
 
@@ -3096,7 +3092,6 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         break;
     }
 
-#if USE_ADVANCE
     case UI_ACTION_ADVANCE_L_E0:
     case UI_ACTION_ADVANCE_L_E1: {
 #if NUM_EXTRUDER > 1
@@ -3121,7 +3116,6 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         EEPROM::updateChecksum();
         break;
     }
-#endif //USE_ADVANCE
 
     case UI_ACTION_EXTR_ACCELERATION_E0:
     case UI_ACTION_EXTR_ACCELERATION_E1: {
@@ -4263,9 +4257,7 @@ void UIDisplay::nextPreviousAction(int8_t next) {
     changeSwitchCase(action, next);
 #endif // UI_INVERT_INCREMENT_DIRECTION
 
-#if UI_PRINT_AUTORETURN_TO_MENU_AFTER != 0
-        g_nAutoReturnTime = HAL::timeInMilliseconds() + UI_PRINT_AUTORETURN_TO_MENU_AFTER;
-#endif // UI_PRINT_AUTORETURN_TO_MENU_AFTER!=0
+    g_nAutoReturnTime = HAL::timeInMilliseconds() + menuAutoReturnDelayMs;
 } // nextPreviousAction
 
 // Actions are events from user input. Depending on the current state, each
@@ -4291,9 +4283,7 @@ void UIDisplay::executeAction(int action) {
 
     refreshPage();
 
-#if UI_PRINT_AUTORETURN_TO_MENU_AFTER != 0
-        g_nAutoReturnTime = HAL::timeInMilliseconds() + UI_PRINT_AUTORETURN_TO_MENU_AFTER;
-#endif // UI_PRINT_AUTORETURN_TO_MENU_AFTER!=0
+    g_nAutoReturnTime = HAL::timeInMilliseconds() + menuAutoReturnDelayMs;
 } // executeAction
 
 void UIDisplay::slowAction() {
@@ -4352,7 +4342,6 @@ void UIDisplay::slowAction() {
     }
     noInts.unprotect(); //HAL::allowInterrupts();
 
-#if UI_PRINT_AUTORETURN_TO_MENU_AFTER
     if (menuLevel > 0 && g_nAutoReturnTime && g_nAutoReturnTime < time) {
         if (menu[menuLevel] != &ui_menu_message || g_nAutoReturnMessage) {
             lastSwitch = time;
@@ -4362,16 +4351,10 @@ void UIDisplay::slowAction() {
         }
         g_nAutoReturnTime = 0;
     }
-#endif // UI_PRINT_AUTORETURN_TO_MENU_AFTER
 
     if (menuLevel == 0 && time > 4000) {
         if (time - lastSwitch > UI_PAGES_DURATION) {
             lastSwitch = time;
-#if !defined(UI_DISABLE_AUTO_PAGESWITCH) || !UI_DISABLE_AUTO_PAGESWITCH
-            menuPos[0]++;
-            if (menuPos[0] >= UI_NUM_PAGES)
-                menuPos[0] = 0;
-#endif // !defined(UI_DISABLE_AUTO_PAGESWITCH) || !UI_DISABLE_AUTO_PAGESWITCH
             refresh = 1;
         } else if (time - lastRefresh >= 1000)
             refresh = 1;

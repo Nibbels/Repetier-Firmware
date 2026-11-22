@@ -528,9 +528,6 @@ during homing operation. The homing speed is divided by the value. 1 = same spee
     { 110, 110, 105, 110, 110 }
 #define MOTOR_CURRENT_MIN EXTRUDER_CURRENT_PAUSED
 
-/** \brief Specifies whether the firmware shall wait a short time after turning on of the stepper motors - this shall avoid that the first steps are sent to the stepper before it is ready */
-#define STEPPER_ON_DELAY 25 // [ms]
-
 /** \brief If your stepper needs a longer high signal then given, you can add a delay here.
 The delay is realized as a simple loop wasting time, which is not available for other
 computations. So make it as low as possible. For the most common drivers no delay is needed, as the
@@ -644,16 +641,6 @@ if you are printing many very short segments at high speed.*/
 #define LOW_TICKS_PER_MOVE 250000
 
 //For configuration of speed vs. cpu RF_MICRO_STEPS_ @ CONFIGURATION.h as well!
-
-// ##########################################################################################
-// ##   Extruder control
-// ##########################################################################################
-
-/** \brief Enable advance algorithm.
-Without a correct adjusted advance algorithm, you get blobs at points, where acceleration changes. The
-effect increases with speed and acceleration difference. Using the advance method decreases this effect.
-For more informations, read the wiki. */
-#define USE_ADVANCE 1
 
 // ##########################################################################################
 // ##   Configuration of the heat bed z compensation

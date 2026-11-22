@@ -63,11 +63,9 @@ millis_t maxInactiveTime = MAX_INACTIVE_TIME * 1000L;
 millis_t stepperInactiveTime = STEPPER_INACTIVE_TIME * 1000L;
 long baudrate = BAUDRATE; // Communication speed rate.
 
-#if USE_ADVANCE
 int maxadv2 = 0;
 float maxadvspeed = 0;
 volatile int waitRelax = 0; // Delay filament relax at the end of print, could be a simple timeout
-#endif                      // USE_ADVANCE
 
 uint8_t pwm_pos[NUM_EXTRUDER + 3]; // 0-NUM_EXTRUDER = Heater 0-NUM_EXTRUDER of extruder, NUM_EXTRUDER = Heated bed, NUM_EXTRUDER+1 Board fan, NUM_EXTRUDER+2 = Fan
 
@@ -219,10 +217,8 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
     p->calculateMove(axisDistanceMM, p->primaryAxis, feedrate);
 
     updateTrapezoids();
-#if USE_ADVANCE
     if (pathOptimize)
         waitRelax = 70;
-#endif // USE_ADVANCE
 
     // Make result permanent
     pushLine();
@@ -420,7 +416,6 @@ void PrintLine::calculateMove(float axisDistanceMM[], fast8_t drivingAxis, float
     // p->vMax = 46000;
     // p->plateauN = (p->vMax*p->vMax/p->accelerationPrim)>>1;
 
-#if USE_ADVANCE
     if (!isXYZMove() || !isEPositiveMove()) { // No head move or E move only or sucking filament back
         advanceL = 0;
     } else {
@@ -431,9 +426,7 @@ void PrintLine::calculateMove(float axisDistanceMM[], fast8_t drivingAxis, float
             maxadvspeed = fabs(speedE);
         }
     }
-#endif // USE_ADVANCE
 
-    DEBUG_MEMORY;
 } // calculateMove
 
 /** \brief
@@ -528,7 +521,6 @@ void PrintLine::updateTrapezoids() {
         return;
     }
 
-#if USE_ADVANCE
     /**
      * If we start/stop extrusion we need to do so with lowest possible end speed
      * or advance would leave a drolling extruder and can not adjust fast enough.
@@ -546,7 +538,6 @@ void PrintLine::updateTrapezoids() {
         firstLine->unblock();
         return;
     }
-#endif // USE_ADVANCE
 
     // Set maximum junction speed if we have a real move before
     computeMaxJunctionSpeed(previous, act);
@@ -574,8 +565,7 @@ void PrintLine::updateTrapezoids() {
 /* Computes the maximum junction speed of the newly added segment under
 optimal conditions. There is no guarantee that the previous move will be able to reach the
 speed at all, but if it could exceed it will never exceed this theoretical limit.
-if you define ALTERNATIVE_JERK the new jerk computations are used. These
-use the cosine of the angle and the maximum speed
+The XY junction calculation uses the cosine of the angle and the lower segment speed.
 Jerk = (1-cos(alpha))*min(v1,v2)
 This sets jerk to 0 on zero angle change.
         Old               New
@@ -601,19 +591,11 @@ inline void PrintLine::computeMaxJunctionSpeed(PrintLine* previous, PrintLine* c
 
     float factor = 1.0;
     float lengthFactor = 1.0;
-#if REDUCE_ON_SMALL_SEGMENTS
     if (previous->distance < MAX_JERK_DISTANCE)
         lengthFactor = static_cast<float>(MAX_JERK_DISTANCE * MAX_JERK_DISTANCE) / (previous->distance * previous->distance);
-#endif
     float maxJoinSpeed = RMath::min(current->fullSpeed, previous->fullSpeed);
 
-#if ALTERNATIVE_JERK
     float calculatedJerk = maxJoinSpeed * lengthFactor * (1.0 - (current->speedX * previous->speedX + current->speedY * previous->speedY + current->speedZ * previous->speedZ) / (current->fullSpeed * previous->fullSpeed));
-#else
-    float dx = current->speedX - previous->speedX;
-    float dy = current->speedY - previous->speedY;
-    float calculatedJerk = sqrt(dx * dx + dy * dy) * lengthFactor;
-#endif // ALTERNATIVE_JERK
 
     if (calculatedJerk > Printer::maxXYJerk) {
         factor = Printer::maxXYJerk / calculatedJerk; // always < 1.0!
@@ -792,9 +774,7 @@ processing.
 */
 uint8_t PrintLine::insertWaitMovesIfNeeded(uint8_t pathOptimize, uint8_t waitExtraLines) {
     if (linesCount == 0
-#if USE_ADVANCE
         && waitRelax == 0
-#endif                   // USE_ADVANCE
         && pathOptimize) // First line after some time - warmup needed
     {
         uint8_t w = 4;
@@ -981,9 +961,7 @@ long PrintLine::performQueueMove() {
 
         HAL::forbidInterrupts();
 
-#if USE_ADVANCE
         cur->updateAdvanceSteps(cur->vStart); //startet advance extruder "etwas" vor der ersten bewegung: gut? ist Printer::interval immer klein genug?
-#endif                                        // USE_ADVANCE
 
         return (Printer::interval >> 1); //wait 50% to next interrupt.
     }
@@ -992,9 +970,7 @@ long PrintLine::performQueueMove() {
         Printer::lastDirectionSovereignty = DIR_QUEUE;
         Printer::v = cur->fullSpeed;
         cur->adjustDirections();
-#if USE_ADVANCE
         cur->updateAdvanceSteps(Printer::vMaxReached[DIR_QUEUE]);
-#endif // USE_ADVANCE
     }
 
     return performMove(cur, FOR_QUEUE);
@@ -1181,9 +1157,7 @@ long PrintLine::performDirectMove() {
         Printer::timer[FOR_DIRECT] = 0;
         Printer::v = direct.fullSpeed;
 
-#if USE_ADVANCE
         direct.updateAdvanceSteps(direct.vStart); //startet advance extruder "etwas" vor der ersten bewegung: gut? ist Printer::interval immer klein genug?
-#endif                                            // USE_ADVANCE
 
         return (Printer::interval >> 1); //wait 50% to next interrupt.
     }
@@ -1192,9 +1166,7 @@ long PrintLine::performDirectMove() {
         Printer::lastDirectionSovereignty = DIR_DIRECT;
         Printer::v = direct.fullSpeed;
         direct.adjustDirections();
-#if USE_ADVANCE
         direct.updateAdvanceSteps(Printer::vMaxReached[FOR_DIRECT]);
-#endif // USE_ADVANCE
     }
 
     return performMove(&direct, FOR_DIRECT);
@@ -1233,11 +1205,9 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
 
             if (doESteps) {
                 int8_t dir = (move->isEPositiveMove() ? 1 : -1);
-#if USE_ADVANCE
                 if (Printer::isAdvanceActivated())
                     Printer::extruderStepsNeeded += dir;
                 else
-#endif // USE_ADVANCE
                 {
                     Extruder::step();
                 }
@@ -1249,14 +1219,12 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
                 if (forQueue && Printer::compensatedPositionOverPercE != 0) {
                     Printer::compensatedPositionCollectTinyE += Printer::compensatedPositionOverPercE;
                     if (Printer::compensatedPositionCollectTinyE >= 1) {
-#if USE_ADVANCE
                         if (Printer::isAdvanceActivated()) {
                             Printer::extruderStepsNeeded += dir;
                             while (Printer::compensatedPositionCollectTinyE >= 1) {
                                 Printer::compensatedPositionCollectTinyE--; //notfalls bei überkompensation - sollte nicht vorkommen.
                             }
                         } else
-#endif // USE_ADVANCE
                         {
                             Extruder::unstep();
                             // this is a steps spacer, not a double code from some lines above.
@@ -1348,9 +1316,7 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
         HAL::delayMicroseconds(STEPPER_HIGH_DELAY);
 #endif // #if STEPPER_HIGH_DELAY>0
 
-#if USE_ADVANCE
         if (!Printer::isAdvanceActivated()) // Use interrupt for movement
-#endif                                      // USE_ADVANCE
             Extruder::unstep();
 
         Printer::endXYZSteps();
@@ -1394,9 +1360,7 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
         // If we started full speed, we need to use move->fullInterval and vMax
         v = (!move->accelSteps ? move->vMax : Printer::vMaxReached[forQueue]);
     }
-#if USE_ADVANCE
     move->updateAdvanceSteps(v);
-#endif // USE_ADVANCE
 
     Printer::interval = HAL::CPUDivU2(v);
 
@@ -1460,7 +1424,6 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
         }
 
         interval >>= 1; // 50% of time to next call to do cur=0, which will fire another interrupt at 50% of the active Printer::interval step time. This works like "move 1 end -> 50% -> prepare move 2 -> 50% -> move 2 begin"
-        DEBUG_MEMORY;
     } // line finished
 
     return interval;

@@ -83,9 +83,7 @@ void EEPROM::restoreEEPROMExtruderSettingsFromConfiguration(uint8_t extruderId) 
 #endif // RETRACT_DURING_HEATUP
 
         e->coolerSpeed = EXT0_EXTRUDER_COOLER_SPEED;
-#if USE_ADVANCE
         e->advanceL = EXT0_ADVANCE_L;
-#endif // USE_ADVANCE
     }
 #endif // NUM_EXTRUDER>0
 
@@ -116,9 +114,7 @@ void EEPROM::restoreEEPROMExtruderSettingsFromConfiguration(uint8_t extruderId) 
 
         e->coolerSpeed = EXT1_EXTRUDER_COOLER_SPEED;
 
-#if USE_ADVANCE
         e->advanceL = EXT1_ADVANCE_L;
-#endif // USE_ADVANCE
     }
 #endif // NUM_EXTRUDER > 1
 }
@@ -433,11 +429,7 @@ void EEPROM::storeExtruderDataIntoEEPROM(uint8_t extruderId) {
 
     HAL::eprSetByte(o + EPR_EXTRUDER_COOLER_SPEED, e->coolerSpeed);
 
-#if USE_ADVANCE
     HAL::eprSetFloat(o + EPR_EXTRUDER_ADVANCE_L, e->advanceL);
-#else
-    HAL::eprSetFloat(o + EPR_EXTRUDER_ADVANCE_L, 0);
-#endif // USE_ADVANCE
 }
 
 void EEPROM::updateChecksum() {
@@ -635,12 +627,10 @@ void EEPROM::readDataFromEEPROM() {
         e->waitRetractUnits = HAL::eprGetInt16(o + EPR_EXTRUDER_WAIT_RETRACT_UNITS);
 #endif // RETRACT_DURING_HEATUP
 
-#if USE_ADVANCE
         e->advanceL = HAL::eprGetFloat(o + EPR_EXTRUDER_ADVANCE_L);
         if (e->advanceL > 0 && e->advanceL < 20) {
             e->advanceL = 20;
         }
-#endif // USE_ADVANCE
 
         if (version > 1)
             e->coolerSpeed = HAL::eprGetByte(o + EPR_EXTRUDER_COOLER_SPEED);
@@ -1014,9 +1004,7 @@ void EEPROM::writeSettings() {
         writeFloat(o + EPR_EXTRUDER_MAX_ACCELERATION, Com::tEPRAcceleration);
         writeFloat(o + EPR_EXTRUDER_MAX_START_FEEDRATE, Com::tEPReJerk);
 
-#if USE_ADVANCE
         writeFloat(o + EPR_EXTRUDER_ADVANCE_L, Com::tEPRAdvanceL);
-#endif // USE_ADVANCE
 
         writeByte(o + EPR_EXTRUDER_SENSOR_TYPE, Com::tEPRsensorType);
         writeFloat(o + EPR_EXTRUDER_PID_PGAIN, Com::tEPRPGain, 4);

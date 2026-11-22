@@ -371,9 +371,6 @@ void scanHeatBed(void) {
     static long nX;
     static long nY;
     static long nYDirection;
-#if DEBUG_HEAT_BED_SCAN
-    static short nContactPressure;
-#endif // DEBUG_HEAT_BED_SCAN
     //unsigned char         nLastHeatBedScanStatus = g_nHeatBedScanStatus;
     short nTempPressure;
     long nTempPosition;
@@ -440,12 +437,6 @@ void scanHeatBed(void) {
             g_nHeatBedScanStatus = g_retryStatus;
             g_retryZScan = 0;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("retry -> "), g_retryStatus);
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
         }
 
         switch (g_nHeatBedScanStatus) {
@@ -453,9 +444,6 @@ void scanHeatBed(void) {
             g_uStartOfIdle = 0; // scanHeatBed
             g_scanStartTime = HAL::timeInMilliseconds();
             g_abortZScan = 0;
-#if DEBUG_HEAT_BED_SCAN
-            nContactPressure = 0;
-#endif // DEBUG_HEAT_BED_SCAN
             g_retryStatus = 0;
             g_nLastZScanZPosition = 0; //sodass dass bei mehreren scans nicht die letzte position als abstands limit feststeht.
 
@@ -474,12 +462,6 @@ void scanHeatBed(void) {
 
             g_nHeatBedScanStatus = 10;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("1->10"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 10: {
@@ -497,11 +479,6 @@ void scanHeatBed(void) {
             g_nHeatBedScanStatus = 15;
             g_lastScanTime = HAL::timeInMilliseconds();
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printFLN(PSTR("scanHeatBed(): 10->15"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 15: {
@@ -518,12 +495,6 @@ void scanHeatBed(void) {
             g_nHeatBedScanStatus = 20;
             g_lastScanTime = HAL::timeInMilliseconds();
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("15->20"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 20: {
@@ -547,12 +518,6 @@ void scanHeatBed(void) {
                 }
             }
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("20->22"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 22: {
@@ -581,12 +546,6 @@ void scanHeatBed(void) {
             g_nHeatBedScanStatus = 25;
             g_lastScanTime = HAL::timeInMilliseconds();
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("22->25"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 25: {
@@ -597,12 +556,6 @@ void scanHeatBed(void) {
             g_nHeatBedScanStatus = 30;
             g_lastScanTime = HAL::timeInMilliseconds();
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("25->30"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 30: {
@@ -620,12 +573,6 @@ void scanHeatBed(void) {
             g_nHeatBedScanStatus = 35;
             g_lastScanTime = HAL::timeInMilliseconds();
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("30->35"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 35: {
@@ -643,12 +590,6 @@ void scanHeatBed(void) {
 
             g_nHeatBedScanStatus = 40;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("35->40"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 39: {
@@ -657,12 +598,6 @@ void scanHeatBed(void) {
                 // we end up here when the scan is complete
                 g_nHeatBedScanStatus = 60;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-                if (Printer::debugInfo()) {
-                    Com::printF(Com::tscanHeatBed);
-                    Com::printFLN(PSTR("39->60"));
-                }
-#endif // DEBUG_HEAT_BED_SCAN == 2
                 break;
             }
 
@@ -672,12 +607,6 @@ void scanHeatBed(void) {
             nIndexX++;
 
             if (nIndexX > COMPENSATION_MATRIX_MAX_X) {
-#if DEBUG_HEAT_BED_SCAN == 2
-                if (Printer::debugErrors()) {
-                    Com::printF(Com::tscanHeatBed);
-                    Com::printFLN(PSTR("x-dimension of the z matrix became too big: "), nIndexX);
-                }
-#endif // DEBUG_HEAT_BED_SCAN == 2
                 g_abortZScan = SCAN_ABORT_REASON_MATRIX_DIMENSION;
                 break;
             }
@@ -694,12 +623,6 @@ void scanHeatBed(void) {
 
             g_nHeatBedScanStatus = 40;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("39->40"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 40: {
@@ -711,24 +634,12 @@ void scanHeatBed(void) {
                 g_nHeatBedScanStatus = 49;
                 g_lastScanTime = HAL::timeInMilliseconds();
 
-#if DEBUG_HEAT_BED_SCAN == 2
-                if (Printer::debugInfo()) {
-                    Com::printF(Com::tscanHeatBed);
-                    Com::printFLN(PSTR("40->49"));
-                }
-#endif // DEBUG_HEAT_BED_SCAN == 2
                 break;
             }
 
             // we end up here when the scan is complete
             g_nHeatBedScanStatus = 60;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("40->60"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         //############################################################### Scan retry
@@ -740,10 +651,6 @@ void scanHeatBed(void) {
             g_nHeatBedScanStatus = 46;
             g_lastScanTime = HAL::timeInMilliseconds();
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo())
-                Com::printFLN(PSTR("45"));
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 46: {
@@ -755,10 +662,6 @@ void scanHeatBed(void) {
             g_nHeatBedScanStatus = 47;
             g_lastScanTime = HAL::timeInMilliseconds();
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo())
-                Com::printFLN(PSTR("46"));
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 47: {
@@ -767,10 +670,6 @@ void scanHeatBed(void) {
             g_nHeatBedScanStatus = 48;
             g_lastScanTime = HAL::timeInMilliseconds();
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo())
-                Com::printFLN(PSTR("47"));
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 48: // Remeasure inconsistent pressure values to have new clean fence levels
@@ -798,12 +697,6 @@ void scanHeatBed(void) {
             g_retryStatus = 45;
             g_nHeatBedScanStatus = 50;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("49->50"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 50: {
@@ -828,12 +721,6 @@ void scanHeatBed(void) {
 
             g_nHeatBedScanStatus = 51;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("50->51"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 51: {
@@ -841,12 +728,6 @@ void scanHeatBed(void) {
             moveZMinusUpFast();
             g_nHeatBedScanStatus = 52;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("51->52"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 52: {
@@ -855,30 +736,15 @@ void scanHeatBed(void) {
 
             g_nHeatBedScanStatus = 53;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("52->53"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 53: {
             // move slowly to the surface
             moveZMinusUpSlow(&nTempPressure);
             moveZPlusDownSlow(8); //and slowslowly back near idle pressure
-#if DEBUG_HEAT_BED_SCAN
-            nContactPressure = nTempPressure;
-#endif // DEBUG_HEAT_BED_SCAN
 
             g_nHeatBedScanStatus = 54;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("53->54"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 54: {
@@ -896,12 +762,6 @@ void scanHeatBed(void) {
 
             g_nHeatBedScanStatus = 55;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("54->55"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 55: {
@@ -917,12 +777,6 @@ void scanHeatBed(void) {
                     // we have reached the end of this column
                     g_nHeatBedScanStatus = 39;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-                    if (Printer::debugInfo()) {
-                        Com::printF(Com::tscanHeatBed);
-                        Com::printFLN(PSTR("55->39"));
-                    }
-#endif // DEBUG_HEAT_BED_SCAN == 2
                     break;
                 }
             } else {
@@ -932,12 +786,6 @@ void scanHeatBed(void) {
                     // we have reached the end of this column
                     g_nHeatBedScanStatus = 39;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-                    if (Printer::debugInfo()) {
-                        Com::printF(Com::tscanHeatBed);
-                        Com::printFLN(PSTR("55->39"));
-                    }
-#endif // DEBUG_HEAT_BED_SCAN == 2
                     break;
                 }
             }
@@ -948,12 +796,6 @@ void scanHeatBed(void) {
             nIndexY += nIndexYDirection;
 
             if (nIndexY > COMPENSATION_MATRIX_MAX_Y) {
-#if DEBUG_HEAT_BED_SCAN == 2
-                if (Printer::debugErrors()) {
-                    Com::printF(Com::tscanHeatBed);
-                    Com::printFLN(PSTR("y-dimension of the z matrix became too big: "), nIndexY);
-                }
-#endif // DEBUG_HEAT_BED_SCAN == 2
                 g_abortZScan = SCAN_ABORT_REASON_MATRIX_DIMENSION;
                 break;
             }
@@ -961,12 +803,6 @@ void scanHeatBed(void) {
             g_nHeatBedScanStatus = 49;
             g_lastScanTime = HAL::timeInMilliseconds();
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("55->49"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 60: {
@@ -984,12 +820,6 @@ void scanHeatBed(void) {
 
             g_nHeatBedScanStatus = 65;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("60->65"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 65: {
@@ -1003,23 +833,11 @@ void scanHeatBed(void) {
 
             g_nHeatBedScanStatus = 70;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("65->70"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 70: {
             g_nHeatBedScanStatus = 75;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("70->75"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 75: {
@@ -1051,12 +869,6 @@ void scanHeatBed(void) {
             g_nHeatBedScanStatus = 80;
             g_lastScanTime = HAL::timeInMilliseconds();
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("75->80"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 80: {
@@ -1081,22 +893,10 @@ void scanHeatBed(void) {
                 // we have to determine the z-offset which is caused by different extruder temperatures
                 g_nHeatBedScanStatus = 130;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-                if (Printer::debugInfo()) {
-                    Com::printF(Com::tscanHeatBed);
-                    Com::printFLN(PSTR("80->130"));
-                }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             } else {
                 // we are done
                 g_nHeatBedScanStatus = 150;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-                if (Printer::debugInfo()) {
-                    Com::printF(Com::tscanHeatBed);
-                    Com::printFLN(PSTR("80->150"));
-                }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             }
             break;
         }
@@ -1107,12 +907,6 @@ void scanHeatBed(void) {
             g_lastScanTime = HAL::timeInMilliseconds();
             g_nHeatBedScanStatus = 133;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("130->133"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 133: {
@@ -1121,12 +915,6 @@ void scanHeatBed(void) {
             g_lastScanTime = HAL::timeInMilliseconds();
             g_nHeatBedScanStatus = 134;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("133->134"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 134: {
@@ -1135,12 +923,6 @@ void scanHeatBed(void) {
             g_lastScanTime = HAL::timeInMilliseconds();
             g_nHeatBedScanStatus = 135;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("134->135"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 135: {
@@ -1154,12 +936,6 @@ void scanHeatBed(void) {
 
             g_nHeatBedScanStatus = 136;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("135->136"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 136: {
@@ -1177,12 +953,6 @@ void scanHeatBed(void) {
             g_nHeatBedScanStatus = 137;
             g_lastScanTime = HAL::timeInMilliseconds();
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("136->137"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
 
             if (Printer::debugInfo()) {
                 Com::printF(Com::tscanHeatBed);
@@ -1211,12 +981,6 @@ void scanHeatBed(void) {
             g_nHeatBedScanStatus = 144;
             g_lastScanTime = HAL::timeInMilliseconds();
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("137->144"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         //############################################################### Scan retry
@@ -1228,10 +992,6 @@ void scanHeatBed(void) {
             g_nHeatBedScanStatus = 140;
             g_lastScanTime = HAL::timeInMilliseconds();
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo())
-                Com::printFLN(PSTR("139"));
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
 
@@ -1244,10 +1004,6 @@ void scanHeatBed(void) {
             g_nHeatBedScanStatus = 141;
             g_lastScanTime = HAL::timeInMilliseconds();
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo())
-                Com::printFLN(PSTR("140"));
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 141: {
@@ -1256,10 +1012,6 @@ void scanHeatBed(void) {
             g_nHeatBedScanStatus = 142;
             g_lastScanTime = HAL::timeInMilliseconds();
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo())
-                Com::printFLN(PSTR("141"));
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 142: // Remeasure inconsistent pressure values to have new clean fence levels
@@ -1305,12 +1057,6 @@ void scanHeatBed(void) {
 
             g_nHeatBedScanStatus = 145;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("144->145"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 145: {
@@ -1319,12 +1065,6 @@ void scanHeatBed(void) {
 
             g_nHeatBedScanStatus = 146;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("145->146"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 146: {
@@ -1336,12 +1076,6 @@ void scanHeatBed(void) {
 
             g_nHeatBedScanStatus = 147;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("146->147"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 147: {
@@ -1351,12 +1085,6 @@ void scanHeatBed(void) {
 
             g_nHeatBedScanStatus = 148;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("147->148"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 148: {
@@ -1372,12 +1100,6 @@ void scanHeatBed(void) {
 
             g_nHeatBedScanStatus = 149;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("148->149"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 149: {
@@ -1388,12 +1110,6 @@ void scanHeatBed(void) {
             Printer::homeAxis(true, true, true);
             g_nHeatBedScanStatus = 150;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("149->150"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 150: {
@@ -1406,12 +1122,6 @@ void scanHeatBed(void) {
 
             g_nHeatBedScanStatus = 160;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("150->160"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         case 160: {
@@ -1433,12 +1143,6 @@ void scanHeatBed(void) {
 
             g_nHeatBedScanStatus = 0;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("160->0"));
-            }
-#endif // DEBUG_HEAT_BED_SCAN == 2
             break;
         }
         }
@@ -1499,9 +1203,6 @@ void searchZOScan(void) {
             break;
         }
         case 2: {
-#if DEBUG_HEAT_BED_SCAN == 2
-            Com::printFLN(PSTR("Home"));
-#endif // DEBUG_HEAT_BED_SCAN == 2
 
             //bissel übertrieben, sollte aber jede eventualität abfangen: Wir brauchen die maximale Matrix-Dimension auch schon hier (ganz grob) und wollen nicht so lange warten.
             unsigned short uDimensionX, uDimensionY;
@@ -1603,10 +1304,6 @@ void searchZOScan(void) {
             break;
         }
         case 3: {
-#if DEBUG_HEAT_BED_SCAN == 2
-            Com::printF(PSTR("Spacing Z"), g_min_nZScanZPosition);
-            Com::printFLN(PSTR(" [Steps]"));
-#endif // DEBUG_HEAT_BED_SCAN == 2
 
             moveZ(g_min_nZScanZPosition); //Wenn man hier mit queueRelativeStepsCoordinates über die queue Z verfährt, zeigt das display 10mm statt 5mm an. Weil currentZPositionSteps addiert und man die hier braucht. Also während dem Scan immer nur die moveZ verwenden.
 
@@ -1616,9 +1313,6 @@ void searchZOScan(void) {
             break;
         }
         case 4: {
-#if DEBUG_HEAT_BED_SCAN == 2
-            Com::printFLN(PSTR("Load Matrix"));
-#endif // DEBUG_HEAT_BED_SCAN == 2
 
             // load the unaltered compensation matrix from the EEPROM
             if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT || g_ZOSlearningRate == 1.0) {
@@ -1634,9 +1328,6 @@ void searchZOScan(void) {
             // safety check on the current matrix
             if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
                 Com::printFLN(PSTR("ERROR::prev. matrix invalid!"));
-#if DEBUG_HEAT_BED_SCAN == 2
-                Com::printFLN(PSTR("Neuen HBS machen!"));
-#endif // DEBUG_HEAT_BED_SCAN == 2
                 g_abortZScan = SCAN_ABORT_REASON_MISSING_MATRIX;
                 abortSearchHeatBedZOffset(false);
                 break;
@@ -1663,12 +1354,6 @@ void searchZOScan(void) {
             yScanPosition += random(-1 * SEARCH_HEAT_BED_OFFSET_SCAN_POSITION_RAND_MM, SEARCH_HEAT_BED_OFFSET_SCAN_POSITION_RAND_MM);
 #endif //SEARCH_HEAT_BED_OFFSET_SCAN_POSITION_RAND_MM
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            Com::printF(PSTR("Scan Position X+Y"));
-            Com::printF(PSTR("= ("), xScanPosition);
-            Com::printF(PSTR(", "), yScanPosition);
-            Com::printFLN(PSTR(") [(x,y) Steps]"));
-#endif // DEBUG_HEAT_BED_SCAN == 2
             Printer::queueRelativeMMCoordinates(xScanPosition, yScanPosition, 0, 0, RMath::min(Printer::homingFeedrate[X_AXIS], Printer::homingFeedrate[Y_AXIS]), true, true);
             g_nZOSScanStatus = 6;
             break;
@@ -1689,9 +1374,6 @@ void searchZOScan(void) {
             break;
         }
         case 9: {
-#if DEBUG_HEAT_BED_SCAN == 2
-            Com::printFLN(PSTR("Idle Pressure"));
-#endif // DEBUG_HEAT_BED_SCAN == 2
             if (readIdlePressure(&g_nCurrentIdlePressure)) {
                 //Problem mit Digits, die wackeln:
                 if (g_scanRetries-- > 0) {
@@ -1713,15 +1395,6 @@ void searchZOScan(void) {
             g_nMinPressureIdle = g_nCurrentIdlePressure - SEARCH_HEAT_BED_OFFSET_IDLE_PRESSURE_DELTA;
             g_nMaxPressureIdle = g_nCurrentIdlePressure + SEARCH_HEAT_BED_OFFSET_IDLE_PRESSURE_DELTA;
 
-#if DEBUG_HEAT_BED_SCAN == 2
-            Com::printFLN(PSTR("Idle Values:"));
-            Com::printFLN(PSTR(" g_nMinPressureContact = "), g_nMinPressureContact);
-            Com::printFLN(PSTR(" g_nMaxPressureContact = "), g_nMaxPressureContact);
-            Com::printFLN(PSTR(" g_nMinPressureRetry = "), g_nMinPressureRetry);
-            Com::printFLN(PSTR(" g_nMaxPressureRetry = "), g_nMaxPressureRetry);
-            Com::printFLN(PSTR(" g_nMinPressureIdle = "), g_nMinPressureIdle);
-            Com::printFLN(PSTR(" g_nMaxPressureIdle = "), g_nMaxPressureIdle);
-#endif // DEBUG_HEAT_BED_SCAN == 2
             g_nZOSScanStatus = 10;
             break;
         }
@@ -2685,10 +2358,6 @@ short moveZPlusDownFast() {
         return -1;
     }
 
-#if DEBUG_HEAT_BED_SCAN
-    if (Printer::debugInfo())
-        Com::printFLN(PSTR("moveZPlusDownFast(): "), (int)nTempPressure);
-#endif // DEBUG_HEAT_BED_SCAN
     return 0;
 } // moveZPlusDownFast
 
@@ -3834,7 +3503,7 @@ void handleStartStandby(millis_t uTime) {
     /**
      * Check if the Fan shall be turned off.
      */
-#if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && !CASE_FAN_ALWAYS_ON && CASE_FAN_PIN > -1
+#if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
     if (Printer::prepareFanOff) {
         if (Printer::prepareFanOff > uTime) {
             return;
@@ -3847,7 +3516,7 @@ void handleStartStandby(millis_t uTime) {
                 WRITE(CASE_FAN_PIN, 0);
         }
     }
-#endif // (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && !CASE_FAN_ALWAYS_ON && CASE_FAN_PIN > -1
+#endif // (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
 
     /**
      * Check if the Printer should reset the printing flag
@@ -5058,7 +4727,6 @@ void processSpecialGCode(GCode* pCommand) {
             break;
         }
 
-        // FEATURE_WATCHDOG
         case 3090: // M3090 - test the watchdog (this command resets the firmware)
         {
             if (pCommand->hasS()) {
@@ -5177,7 +4845,7 @@ void processSpecialGCode(GCode* pCommand) {
             break;
         }
 
-#if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && !CASE_FAN_ALWAYS_ON && CASE_FAN_PIN > -1
+#if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
         case 3120: // M3120 - turn on the case fan
         {
             //disable fan-temp-ignore to original state // Nibbels
@@ -5226,7 +4894,7 @@ void processSpecialGCode(GCode* pCommand) {
             }
             break;
         }
-#endif // (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && !CASE_FAN_ALWAYS_ON && CASE_FAN_PIN > -1
+#endif // (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
 
         case 3200: // M3200 - reserved for test and debug
         {
