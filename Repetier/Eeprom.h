@@ -66,12 +66,7 @@ have problems with other modules using the eeprom */
 #define EPR_BACKLASH_X 157
 #define EPR_BACKLASH_Y 161
 #define EPR_BACKLASH_Z 165
-
-#if FEATURE_SERVICE_INTERVAL
-#define EPR_PRINTING_TIME_SERVICE 169     // Time in seconds printing since last service intervall
-#define EPR_PRINTING_DISTANCE_SERVICE 173 // Filament length printed since last service intervall
-#endif                                    // FEATURE_SERVICE_INTERVAL
-
+// 169-176 are reserved for the former service counters.
 
 #define EPR_RF_BEEPER_MODE 1000
 #define EPR_RF_CASE_LIGHT_MODE 1001
@@ -128,8 +123,7 @@ have problems with other modules using the eeprom */
 //#define EPR_RF_FREQ_DBL                   1928 //1929 2byte für uint16 -> frequenz double grenze -> ALT, das ist jetzt StepPackingMinInterval EPR_RF_STEP_PACKING_MIN_INTERVAL!
 #define EPR_RF_FAN_MODE 1930 //[1byte]
 
-#define EPR_RF_CAL_STANDARD 1934      //+1935 u short
-#define EPR_RF_CAL_ADJUST 1936        //[1byte]
+// 1934-1936 are reserved for the former filament caliper settings.
 #define EPR_RF_ZERO_DIGIT_STATE 1937  //[1byte]
 #define EPR_RF_DIGIT_CMP_STATE 1938   //[1byte]
 

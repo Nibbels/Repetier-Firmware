@@ -130,11 +130,6 @@ public:
     FSTRINGVAR(tscanHeatBed)
     FSTRINGVAR(tAutoMatrixLeveling)
 
-#if FEATURE_SERVICE_INTERVAL
-    FSTRINGVAR(tPrintedFilamentService)
-    FSTRINGVAR(tPrintingTimeService)
-#endif // FEATURE_SERVICE_INTERVAL
-
 #ifdef PRINT_GENERIC_TEMP_TABLE
     FSTRINGVAR(tGenTemp)
 #endif // PRINT_GENERIC_TEMP_TABLE
@@ -185,9 +180,7 @@ public:
     FSTRINGVAR(tEPR3)
     FSTRINGVAR(tEPRBaudrate)
     FSTRINGVAR(tEPRFilamentPrinted)
-    FSTRINGVAR(tEPRFilamentPrintedService)
     FSTRINGVAR(tEPRPrinterActive)
-    FSTRINGVAR(tEPRPrinterActiveService)
     FSTRINGVAR(tEPRMaxInactiveTime)
     FSTRINGVAR(tEPRStopAfterInactivty)
     FSTRINGVAR(tEPRMaxXYJerk)
@@ -202,10 +195,6 @@ public:
 #if FEATURE_HEAT_BED_Z_COMPENSATION
     FSTRINGVAR(tEPRZScanStartLift)
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION
-#if FEATURE_READ_CALIPER
-    FSTRINGVAR(tEPRZCallStandard)
-    FSTRINGVAR(tEPRZCallAdjust)
-#endif //FEATURE_READ_CALIPER
 #if FEATURE_ZERO_DIGITS
     FSTRINGVAR(tEPRZERO_DIGIT_STATE)
 #endif // FEATURE_ZERO_DIGITS

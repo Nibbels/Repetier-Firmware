@@ -135,24 +135,6 @@ typedef uint8_t ufast8_t;
 
 #define FAST_INTEGER_SQRT
 
-#if FEATURE_USER_INT3
-extern volatile unsigned long g_uCOUNT_INT3; //dummy variable for dummy function!
-
-void USER_INTERRUPT3_HOOK(); //dummy function!
-#endif                       //FEATURE_USER_INT3
-
-#if FEATURE_READ_CALIPER
-extern volatile long caliper_um; //last valid readout
-
-//auswertevariablen:
-extern uint16_t caliper_filament_standard;
-extern uint32_t caliper_collect_um;
-extern uint32_t caliper_collect_count;
-extern int8_t caliper_collect_adjust;
-
-void FEATURE_READ_CALIPER_HOOK(); //read in calipers 48bit protocol bitwise!
-#endif                            //FEATURE_READ_CALIPER
-
 #ifndef EXTERNALSERIAL
 // Implement serial communication for one stream only!
 /*

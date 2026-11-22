@@ -124,10 +124,6 @@ extern volatile int waitRelax;
 
 #include "Extruder.h"
 
-#if FEATURE_DITTO_PRINTING && NUM_EXTRUDER != 2
-#error Ditto printing requires exactly 2 extruder.
-#endif // FEATURE_DITTO_PRINTING && NUM_EXTRUDER!=2
-
 extern millis_t previousMillisCmd;
 extern millis_t maxInactiveTime;
 extern millis_t stepperInactiveTime;

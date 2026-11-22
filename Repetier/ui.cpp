@@ -31,7 +31,6 @@ bool g_nAutoReturnMessage = false;
 
 char g_nYesNo = 0; // 0 = no, 1 = yes
 volatile char g_nContinueButtonPressed = 0;
-char g_nServiceRequest = 0;
 
 void beep(uint8_t duration, uint8_t count) {
 #if FEATURE_BEEPER && defined(BEEPER_PIN) && BEEPER_PIN >= 0
@@ -629,9 +628,6 @@ void UIDisplay::initialize() {
     printRowP(UI_ROWS - 1, PSTR(BIGC3));
 #endif // UI_ROWS>2
 
-    if (READ(5) == 0 && READ(11) == 0 && READ(42) == 0) {
-        g_nServiceRequest = 1;
-    }
 } // initialize
 
 #if UI_DISPLAY_TYPE == 1 || UI_DISPLAY_TYPE == 2
@@ -1952,30 +1948,6 @@ void UIDisplay::parse(char* txt, bool ram) {
             break;
         }
         case 'C': {
-#if FEATURE_READ_CALIPER
-            if (c2 == 'a') // %Ca : Caliper Active Reading
-            {
-                addLong(abs(caliper_um) + caliper_collect_adjust, 5);
-            } else if (c2 == 'm') // %Cm : Caliper Average in mm
-            {
-                addFloat(0.001f * caliper_collect_um / caliper_collect_count, 2, 3);
-            } else if (c2 == 's') // %Cs : Caliper Filament Standard
-            {
-                addFloat(0.001f * caliper_filament_standard, 2, 3);
-            } else if (c2 == 'c') // %Cc : Caliper Correction
-            {
-                addInt(caliper_collect_adjust, 4);
-            } else if (c2 == 'n') // %Cn : needed flow multi for measurement
-            {
-                if (caliper_collect_um && caliper_collect_count) {
-                    float dim = (float)caliper_filament_standard / (caliper_collect_um / caliper_collect_count);
-                    float multi = 100.0f * dim * dim;
-                    addInt((int)multi, 3);
-                } else {
-                    addInt(100, 3);
-                }
-            }
-#endif //FEATURE_READ_CALIPER
 #if FEATURE_DIGIT_FLOW_COMPENSATION
             if (c2 == 'U') // %CU : digit flow lower limit
             {
@@ -2055,55 +2027,9 @@ void UIDisplay::parse(char* txt, bool ram) {
             break;
         }
 #endif            //FEATURE_Kurt67_WOBBLE_FIX
-        case 'Z': // %Z1-Z4: Page5 service intervall, %Z5-Z8: Page4 printing time
+        case 'Z': // %Z5-Z8: Printing statistics
         {
-            if (c2 == '1') // Shows text printing time since last service
-            {
-#if FEATURE_SERVICE_INTERVAL
-                addStringP(PSTR(UI_TEXT_SERVICE_TIME));
-#endif                            // FEATURE_SERVICE_INTERVAL
-            } else if (c2 == '2') // Shows printing time since last service
-            {
-#if FEATURE_SERVICE_INTERVAL
-#if EEPROM_MODE != 0
-                bool alloff = true;
-                for (uint8_t i = 0; i < NUM_EXTRUDER; i++)
-                    if (tempController[i]->targetTemperatureC > 0)
-                        alloff = false;
-
-                long uSecondsServicePrint = (alloff ? 0 : (HAL::timeInMilliseconds() - Printer::msecondsPrinting) / 1000) + HAL::eprGetInt32(EPR_PRINTING_TIME_SERVICE);
-                long tmp_service = uSecondsServicePrint / 86400;
-                uSecondsServicePrint -= tmp_service * 86400;
-                addInt(tmp_service, 5);
-                addStringP(PSTR(UI_TEXT_PRINTTIME_DAYS));
-                tmp_service = uSecondsServicePrint / 3600;
-                addInt(tmp_service, 2);
-                addStringP(PSTR(UI_TEXT_PRINTTIME_HOURS));
-                uSecondsServicePrint -= tmp_service * 3600;
-                tmp_service = uSecondsServicePrint / 60;
-                addInt(tmp_service, 2, '0');
-                addStringP(PSTR(UI_TEXT_PRINTTIME_MINUTES));
-#endif                            // EEPROM_MODE
-#endif                            // FEATURE_SERVICE_INTERVAL
-            } else if (c2 == '3') // Shows text printed filament since last service
-            {
-#if FEATURE_SERVICE_INTERVAL
-                {
-                    addStringP(PSTR(UI_TEXT_PRINT_FILAMENT));
-                }
-#endif                            // FEATURE_SERVICE_INTERVAL
-            } else if (c2 == '4') // Shows printed filament since last service
-            {
-#if FEATURE_SERVICE_INTERVAL
-                {
-#if EEPROM_MODE != 0
-                    float dist_service = Printer::filamentPrinted * 0.001 + HAL::eprGetFloat(EPR_PRINTING_DISTANCE_SERVICE);
-                    addFloat(dist_service, 6, 1);
-                    addStringP(PSTR(" m"));
-#endif // EEPROM_MODE
-                }
-#endif                            // FEATURE_SERVICE_INTERVAL
-            } else if (c2 == '5') // Shows text printing time
+            if (c2 == '5') // Shows text printing time
             {
                 addStringP(PSTR(UI_TEXT_PRINT_TIME));
             } else if (c2 == '6') // Shows printing time
@@ -3182,31 +3108,6 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         EEPROM::updateChecksum();
         break;
     }
-#if FEATURE_READ_CALIPER
-    case UI_ACTION_CAL_STANDARD: {
-        if (caliper_filament_standard >= 2600) {
-            INCREMENT_MIN_MAX(caliper_filament_standard, 10, 2590, 3000);
-            if (caliper_filament_standard == 2590) {
-                caliper_filament_standard = 1750;
-            }
-        } else {
-            INCREMENT_MIN_MAX(caliper_filament_standard, 10, 1600, 1910);
-            if (caliper_filament_standard == 1910) {
-                caliper_filament_standard = 2850;
-            }
-        }
-
-        HAL::eprSetInt16(EPR_RF_CAL_STANDARD, caliper_filament_standard);
-        EEPROM::updateChecksum();
-        break;
-    }
-    case UI_ACTION_CAL_CORRECT: {
-        INCREMENT_MIN_MAX(caliper_collect_adjust, 1, -127, 127);
-        HAL::eprSetByte(EPR_RF_CAL_ADJUST, caliper_collect_adjust);
-        EEPROM::updateChecksum();
-        break;
-    }
-#endif //FEATURE_READ_CALIPER
     case UI_ACTION_HOMING_FEEDRATE_X: {
         INCREMENT_MIN_MAX(Printer::homingFeedrate[X_AXIS], 5, 5, MAX_FEEDRATE_X);
 
@@ -4331,29 +4232,6 @@ void UIDisplay::mainSwitchCase(int action) {
     }
 #endif // SDSUPPORT
 
-#if FEATURE_READ_CALIPER
-    case UI_ACTION_CAL_RESET: {
-        InterruptProtectedBlock noInts;
-        caliper_collect_um = 0;
-        caliper_collect_count = 0;
-        noInts.unprotect();
-        BEEP_ACCEPT_SET_POSITION
-        skipBeep = true; // Prevent double beep
-        break;
-    }
-    case UI_ACTION_CAL_SET: {
-        if (caliper_collect_um && caliper_collect_count) {
-            float dim = (float)caliper_filament_standard / (caliper_collect_um / caliper_collect_count);
-            float newExtrusionFactor = dim * dim;
-            Commands::changeFlowrateMultiply(newExtrusionFactor);
-            Com::printFLN(PSTR("Set Flowrate Multiplier: "), uint8_t(newExtrusionFactor * 100));
-            BEEP_ACCEPT_SET_POSITION
-            skipBeep = true; // Prevent double beep
-        }
-        break;
-    }
-#endif //FEATURE_READ_CALIPER
-
 #if FAN_PIN > -1 && FEATURE_FAN_CONTROL
     case UI_ACTION_FAN_OFF: {
         Commands::setFanSpeed((uint8_t)0);
@@ -4506,14 +4384,6 @@ void UIDisplay::mainSwitchCase(int action) {
         outputObject(); //als UI_ACTION_RF_OUTPUT_OBJECT
         break;
     }
-
-
-#if FEATURE_PARK
-    case UI_ACTION_RF_PARK: {
-        parkPrinter();
-        break;
-    }
-#endif // FEATURE_PARK
     }
 
     if (!skipBeep)

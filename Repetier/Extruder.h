@@ -171,10 +171,6 @@ class Extruder // Size: 12*1 Byte+12*4 Byte+4*2Byte = 68 Byte
 public:
     static Extruder* current;
 
-#if FEATURE_DITTO_PRINTING
-    static uint8_t dittoMode;
-#endif // FEATURE_DITTO_PRINTING
-
     uint8_t id;
     float offsetMM[3];
     float stepsPerMM; ///< Steps per mm.
@@ -213,11 +209,6 @@ public:
 #if NUM_EXTRUDER > 0
             WRITE(EXT0_STEP_PIN, HIGH);
 
-#if FEATURE_DITTO_PRINTING
-            if (Extruder::dittoMode) {
-                WRITE(EXT1_STEP_PIN, HIGH);
-            }
-#endif // FEATURE_DITTO_PRINTING
 #endif // NUM_EXTRUDER>0
             break;
         }
@@ -244,11 +235,6 @@ public:
 #if NUM_EXTRUDER > 0
             WRITE(EXT0_STEP_PIN, LOW);
 
-#if FEATURE_DITTO_PRINTING
-            if (Extruder::dittoMode) {
-                WRITE(EXT1_STEP_PIN, LOW);
-            }
-#endif // FEATURE_DITTO_PRINTING
 #endif // NUM_EXTRUDER>0
             break;
         }
@@ -287,14 +273,6 @@ public:
             else
                 WRITE(EXT0_DIR_PIN, EXT0_INVERSE);
 
-#if FEATURE_DITTO_PRINTING
-            if (Extruder::dittoMode) {
-                if (dir)
-                    WRITE(EXT1_DIR_PIN, !EXT1_INVERSE);
-                else
-                    WRITE(EXT1_DIR_PIN, EXT1_INVERSE);
-            }
-#endif // FEATURE_DITTO_PRINTING
             break;
         }
 #endif // NUM_EXTRUDER>0
@@ -322,12 +300,6 @@ public:
         if (Extruder::current->enablePin > -1)
             HAL::digitalWrite(Extruder::current->enablePin, Extruder::current->enableOn);
 
-#if FEATURE_DITTO_PRINTING
-        if (Extruder::dittoMode) {
-            if (extruder[1].enablePin > -1)
-                HAL::digitalWrite(extruder[1].enablePin, extruder[1].enableOn);
-        }
-#endif // FEATURE_DITTO_PRINTING
 #endif // NUM_EXTRUDER==1
 
 #if STEPPER_ON_DELAY

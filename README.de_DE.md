@@ -96,7 +96,6 @@ _von Nibbels_:
 **M3902 Sn** - Speichere die aktuell im RAM liegende zMatrix unter der Postion n = {1..9}  
 **M3911 S6000 P9000 E-30 - Bei hohen Kraftwerten wegen Überextrusion wird die Filamentförderung zurückgefahren (-10% pro 1000 digits, beginnend bei 6000 digits)  
 **M3911 S6000 P9000 F-30 - Bei hohen Kraftwerten wird die Druckgeschwindigkeit eingeschränkt (Example: -10% Geschwindigkeit pro 1000 digits, beginnend bei 6000 digits) M3911 ist im Menü unter Configuration -> DMS Features -> Digit Flow CMP zur Laufzeit einstellbar (Kein EEPROM-Support!)  
-**M3939 Fn St1 Pt2 Ex Iy Rm** - um ein Diagramm über die Filamentextrusionsgeschwindigkeit und die korrelierende Digit Zahl aufzuzeichnen -> ermöglicht Rückschlüsse zur Viskosität des Filaments. Siehe unten.
 **M3920 Sb** - Flüstermodus ein oder ausschalten. (Diese Funktion vermindert den Strom der Steppermotoren auf ein in der Firmware definiertes alternatives Strom-Profil MOTOR\_CURRENT\_SILENT = [110/110/90/90/90] ).  
 Es wurden **alle Compilerwarnungen und Compilerfehler eliminiert**.  
 Weitere (passende) **Verbesserungen/Bugfixes/Commits der Entwickler der originalen RepetierFirmware** wurden auch in diesen Mod übernommen, obwohl die original RF2000/RF1000 Firmware diese nicht übernommen hatte.  
@@ -164,29 +163,6 @@ Ohne Z-Kompensation kann SenseOffset nicht aktiviert werden, es wird sofort deak
 Bei einer manuell programmierten Startmade SenseOffset-AutoStart ausschalten und `M3909 P…` nach der letzten Bewegung der Startmade einfügen. [Reihenfolge im Startcode](docs/first-layer-control/automatic-start-line.md#manual-start-lines)
 
 Während des Drucks kann man während des ersten Layers diese Funktion aktivieren oder das Limit ändern, indem man die "links"- und "rechts"-Navigationstasten an Bedienfeld des Druckers nutzt, solange man sich im "Mod-Menü" des Druckers befindet. (Seite 2 auf dem Display des Druckers. Seite 2 kann über die Pfeil nach unten Taste vom Hauptbildschirm aus aufgerufen werden).  
-
-## Filament Viskositätsmessung = SensibleViscosity  
-* M3939 Fn St1 Pt2 Ex Iy Rm  
-**S** = Starttemperatur für den Test in °C  
-**P** = Enddemperatur für den Test in °C  
-**F** = maximaler Wert für die Digits = 10000 oder {1...12000} [digits]  
-**E** = maximale Extrusionsgeschwindigkeit = 5 oder {0,05 .... max.StartFeedrate} [mm/s]  
-optional:  
-**I** = Extrusionsgeschwindigkeitssteigerungsrate = 0.1 oder {0.02.....0.4} [mm/s]  
-**R** = maximaler Digitunterschied welche angenommen wird um eine "gefüllte" Düse anzunehmen = 800 [digits]  
-
-Der Drucker wird automatisch in die Luft extrudieren und die dabei entstehende Kraft messen. Nach jeder Messung wird die Geschwindigkeit der Extrusion erhöht.  
-Man bekommt eine CSV-formatierte Ausgabe im Konsolenfenster des Slicers oder Printservers angezeigt, welche sich dann kopieren und anschließend in eine Textdatei (\*.CSV) einfügen lässt. Diese kann dann z.B. in MS Exel importiert und in einen Graphen umgewandelt werden. 
-Der Sinn dieses Features ist, dass man Filamente und ihre Viskosität zu gegebener Temperatur erfassen vergleichen kann. Kennt man sein Filament aus bisherigen Diagrammen gut, kann man durch einen solchen Test z.B. auch den Verstopfungsgrad der Düse nachvollziehen.
-
-(Mein) länger angebratenes ABS: http://www.rf1000.de/viewtopic.php?f=62&t=1549&p=16617#p16617  
- ![ ](https://downfight.de/picproxy.php?url=http://image.prntscr.com/image/3508699873f7431489d1df9344110e7f.png "Angebratenes ABS")  
-(Mein) ABS: http://www.rf1000.de/viewtopic.php?f=23&t=1620&p=16613#p16605  
- ![ ](https://downfight.de/picproxy.php?url=http://image.prntscr.com/image/610de7720945474590668b20c05d7652.png "ABS")  
- Das ist dasselbe ABS bei mehr und mehr verstopfter Düse:
- ![ ](https://downfight.de/picproxy.php?url=http://image.prntscr.com/image/c00ac11b3a384994b37ce8bc3cf03bd9.png "Clogged Nozzle ABS")  
- Das ist rotes PLA:
- ![ ](https://downfight.de/picproxy.php?url=http://image.prntscr.com/image/2a3253c930794afc81e4fa4d4b2a4261.png "PLA red")  
 
 ## Konfigurierbarer Z-Notaus- und Notpause-Digits in Menü und EEPROM  
 Menü -> Configuration -> General  

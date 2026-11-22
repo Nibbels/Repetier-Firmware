@@ -116,16 +116,6 @@
 /** \brief Enables/disables the emergency stop in case of too high pressure */
 #define FEATURE_EMERGENCY_STOP_Z_AND_E          1                                                   // 1 = on, 0 = off
 
-
-/**
- * \brief Ditto printing allows 2 extruders to do the same action. This effectively allows
- * to print an object two times at the speed of one. Works only with dual extruder setup.
- */
-#define FEATURE_DITTO_PRINTING              0                                                   // 1 = on, 0 = off
-
-/** \brief You can store the current position with M401 and go back to it with M402. This works only if feature is set to true. */
-#define FEATURE_MEMORY_POSITION             0                                                   // 1 = on, 0 = off
-
 /** \brief If a checksum is sent, all future comamnds must also contain a checksum. Increases reliability especially for binary protocol. */
 #define FEATURE_CHECKSUM_FORCED             0                                                   // 1 = on, 0 = off
 
@@ -148,9 +138,6 @@ b) Examples for impossible arcs:
 
 /** \brief Enables/disables the beeper */
 #define FEATURE_BEEPER                      1                                                   // 1 = on, 0 = off
-
-/** \brief Allows to use the service interval */
-#define FEATURE_SERVICE_INTERVAL            0                                                   // 1 = on, 0 = off
 
 /** \brief Allows to use the case light @ X19 */
 #define FEATURE_CASE_LIGHT                  1                                                   // 1 = on, 0 = off
@@ -404,19 +391,6 @@ Overridden if EEPROM activated. */
 #define EXTRUDER_CURRENT_PAUSED             32                                                  // ~0.5A
 
 // ##########################################################################################
-// ##   configuration of the park functionality
-// ##########################################################################################
-
-/** \brief Enables/disables the park feature */
-#define FEATURE_PARK                        0                                                   // 1 = on, 0 = off
-
-/** \brief Specifies the park position, in [mm] */
-#define PARK_POSITION_X                     0                                                  // [mm]
-#define PARK_POSITION_Y                     120                                                // [mm]
-#define PARK_POSITION_Z                     175                                                // [mm]
-
-
-// ##########################################################################################
 // ##   configuration of the emergency pause functionality
 // ##########################################################################################
 
@@ -464,26 +438,6 @@ Overridden if EEPROM activated. */
 
 #endif // FEATURE_EMERGENCY_STOP_Z_AND_E
 
-
-// ##########################################################################################
-// ##   configuration of the service intervall
-// ##########################################################################################
-
-#if FEATURE_SERVICE_INTERVAL
-/**
- * \brief Wie setze ich den Interval wieder zurück, ohne die Firmware neu aufzuspielen?
- * Um diese Meldung zurück zu setzen muss man den RFx000 ausschalten, die Knöpfe "links", "rauf" und "runter" drücken (und alle drei gedrückt halten), den RFx000 einschalten und die Knöpfe ca. 5-10 Sekunden danach loslassen.
- * Damit werden die Service-Zähler wieder auf 0 zurück gestellt.
- */
-
-/** \brief Specifies the max printed hours [h] */
-#define HOURS_PRINTED_UNTIL_SERVICE         100
-
-
-/** \brief Specifies the max printed filament [m] */
-#define FILAMENT_PRINTED_UNTIL_SERVICE      50000
-
-#endif // FEATURE_SERVICE_INTERVAL
 
 // ##########################################################################################
 // ##   configuration of user-defined thermistor tables
@@ -633,31 +587,6 @@ Honeywell 100K Thermistor (135-104LAG-J01)  : R0 = 100000  T0 = 25  Beta = 3974
 #define BED_DECOUPLE_TEST_PERIOD                   12000
 
 // ##########################################################################################
-// ##   duplicate motor drivers
-// ##########################################################################################
-
-/** 
- * \brief If you have an unused extruder stepper free, you could use it to drive the second z motor
- * instead of driving both with a single stepper. The same works for the other axis if needed. 
- */
-
-#define FEATURE_TWO_XSTEPPER                false
-#define X2_STEP_PIN                         E1_STEP_PIN
-#define X2_DIR_PIN                          E1_DIR_PIN
-#define X2_ENABLE_PIN                       E1_ENABLE_PIN
-
-#define FEATURE_TWO_YSTEPPER                false
-#define Y2_STEP_PIN                         E1_STEP_PIN
-#define Y2_DIR_PIN                          E1_DIR_PIN
-#define Y2_ENABLE_PIN                       E1_ENABLE_PIN
-
-#define FEATURE_TWO_ZSTEPPER                false
-#define Z2_STEP_PIN                         E1_STEP_PIN
-#define Z2_DIR_PIN                          E1_DIR_PIN
-#define Z2_ENABLE_PIN                       E1_ENABLE_PIN
-
-
-// ##########################################################################################
 // ##   configure the SD Card
 // ##########################################################################################
 
@@ -763,8 +692,6 @@ Honeywell 100K Thermistor (135-104LAG-J01)  : R0 = 100000  T0 = 25  Beta = 3974
  #define BEEPER_START_ALIGN_EXTRUDERS_SEQUENCE  100,2
  #define BEEPER_ABORT_ALIGN_EXTRUDERS_SEQUENCE  250,5
  #define BEEPER_STOP_ALIGN_EXTRUDERS_SEQUENCE   100,3
-#define BEEPER_ACCEPT_SET_POSITION_SEQUENCE     100,2
-#define BEEPER_SERVICE_INTERVALL_SEQUNCE        100,3
 #define BEEPER_ALIGN_EXTRUDERS_SEQUNCE          50,5
 #define BEEPER_WRONG_FIRMWARE_SEQUNCE           255,16
 
@@ -1015,35 +942,11 @@ we use blocks of 2 kByte size for the structure of our EEPROM
 #define DEFAULT_MOVE_MODE_Y                 MOVE_MODE_SINGLE_STEPS
 #define DEFAULT_MOVE_MODE_Z                 MOVE_MODE_SINGLE_STEPS
 
-/** \brief For Nibbels external interrupt 3 plus an extra pin is used for reading digital calipers. You will have to solder some logic-converter from 1.8v to 5v see http://www.instructables.com/id/Reading-Digital-Callipers-with-an-Arduino-USB/ */
-#define FEATURE_READ_CALIPER               0                                                   // 0 = OFF, 1 = ON
-// RF2000/RF1000: RESERVE_DIGITAL_PIN_PD3 is INT3 for having clocks falling edges collected
-#define FEATURE_READ_CALIPER_INT_PIN       RESERVE_DIGITAL_PIN_PD3                             
-// RF2000: RESERVE_DIGITAL_PIN_PE4 is some reserve pin for reading off data while clocks falling edge.
-#define FEATURE_READ_CALIPER_DATA_PIN      RESERVE_DIGITAL_PIN_PE4                             
-#if FEATURE_READ_CALIPER && MOTHERBOARD == DEVICE_TYPE_RF1000 && FEATURE_READ_CALIPER_DATA_PIN == RESERVE_DIGITAL_PIN_PE4
- #error You cannot use RESERVE_DIGITAL_PIN_PE4 on an RF1000, please connect and choose another one.
-#endif
-
-/**
- * \brief For Nibbels external interrupt 3 button at RF1000 X25.8 und RF2000 X34.2 "EXT_IRQ"/INT3
- * You can activate this to 1 and connect some Button.
- * If you connect ground to pull the pullup down you will let the firmware jump into interrupt routine
- */
-#define FEATURE_USER_INT3                   0                                                   // 0 = OFF, 1 = ON
-
-#if FEATURE_READ_CALIPER && FEATURE_USER_INT3
- #error You cannot use FEATURE_READ_CALIPER and FEATURE_USER_INT3 at the same time with stock programming. Please change pins/etc. and remove this errorcheck
-#endif
-
 /** \brief Nibbels/PeterKA Testfeature: It can check if you lost steps and test your buttons hysteresis and give a good hint if your printer lost steps by hardware fault */
 #define FEATURE_CHECK_HOME                  1
 
 /** \brief This adds some GCode M3029 to simulate Key-Press by GCode and to read whats inside the printers Display rightnow. */
 #define FEATURE_SEE_DISPLAY                 1
-
-/** \brief This feature allows you to extrude into thin air to messure the filaments viscosity value using dms sensors */
-#define FEATURE_VISCOSITY_TEST              0
 
 /** \brief This is some testing function for reading the stepper drivers status bits while operation */
 #define FEATURE_READ_STEPPER_STATUS         0

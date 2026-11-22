@@ -96,10 +96,6 @@ FSTRINGVALUE(Com::tSlash, "/")
 FSTRINGVALUE(Com::tSpaceSlash, " /")
 FSTRINGVALUE(Com::tSpeedMultiply, "SpeedMultiply:")
 FSTRINGVALUE(Com::tFlowMultiply, "FlowMultiply:")
-#if FEATURE_READ_CALIPER
-FSTRINGVALUE(Com::tEPRZCallStandard, "Messschieber: Filamentdicke in Slicer [um]")
-FSTRINGVALUE(Com::tEPRZCallAdjust, "Messschieber: Korrektur [um]")
-#endif //FEATURE_READ_CALIPER
 FSTRINGVALUE(Com::tPrintingIsInProcessError, "Error: printing is in progress")
 FSTRINGVALUE(Com::tFanspeed, "Fanspeed:")
 FSTRINGVALUE(Com::tPrintedFilament, "Printed filament:")
@@ -137,10 +133,6 @@ FSTRINGVALUE(Com::tLinearLColon, "linear L:")
 FSTRINGVALUE(Com::tQuadraticKColon, " quadratic K:")
 FSTRINGVALUE(Com::tscanHeatBed, "scanHeatBed(): ")
 FSTRINGVALUE(Com::tAutoMatrixLeveling, "Auto-Matrix-Leveling @X:")
-#if FEATURE_SERVICE_INTERVAL
-FSTRINGVALUE(Com::tPrintedFilamentService, "Printed filament since last Service:")
-FSTRINGVALUE(Com::tPrintingTimeService, "Printing time since last Service:")
-#endif // FEATURE_SERVICE_INTERVAL
 
 #ifdef PRINT_GENERIC_TEMP_TABLE
 FSTRINGVALUE(Com::tGenTemp, "GenTemp:")
@@ -192,9 +184,7 @@ FSTRINGVALUE(Com::tEPR2, "EPR:2 ")
 FSTRINGVALUE(Com::tEPR3, "EPR:3 ")
 FSTRINGVALUE(Com::tEPRBaudrate, "Baudrate")
 FSTRINGVALUE(Com::tEPRFilamentPrinted, "Filament printed [m]")
-FSTRINGVALUE(Com::tEPRFilamentPrintedService, "Filament printed since last Service [m]")
 FSTRINGVALUE(Com::tEPRPrinterActive, "Printer active [s]")
-FSTRINGVALUE(Com::tEPRPrinterActiveService, "Printer active since last Service [s]")
 FSTRINGVALUE(Com::tEPRMaxInactiveTime, "Max. inactive time [ms 0=off]")
 FSTRINGVALUE(Com::tEPRStopAfterInactivty, "Stop stepper after inactivity [ms 0=off]")
 FSTRINGVALUE(Com::tEPRXMaxLength, "X max print length [mm]")

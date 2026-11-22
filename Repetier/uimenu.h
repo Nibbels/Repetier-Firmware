@@ -174,7 +174,6 @@ List of placeholder:
 %pH : g_nEmergencyStopZAndEMax [1700/kg]
 %HB : active heat bed z matrix
 %HO : active heat bed min z offset in um
-%Z1-Z4: Page5 service intervall
 %Z5-Z8: Page4 printing time
 
 %wx : current wobblefix offset in x [um] (Bauchtanz)
@@ -192,12 +191,6 @@ List of placeholder:
 %MZ : Motorcurrent Z
 %M0 : Motorcurrent T0
 %M1 : Motorcurrent T1
-
-%Ca : Caliper Active Reading
-%Cm : Caliper Average
-%Cs : Caliper Filament Standard
-%Cc : Caliper Correction
-%Cn : needed flow multi for measurement
 
 %CU : digit flow lower limit
 %CO : digit flow higher limit
@@ -258,15 +251,6 @@ for 2 row displays. You can add additional pages or change the default pages lik
         #define UI_PRINTTIME_COUNT 0
     #endif // EEPROM_MODE!=0
 
-    #if EEPROM_MODE!=0 && FEATURE_SERVICE_INTERVAL
-        UI_PAGE4(ui_page5,"%Z1","%Z2","%Z3","%Z4")
-        #define UI_SERVICE_PAGES ,&ui_page5
-        #define UI_SERVICE_COUNT 1
-    #else
-        #define UI_SERVICE_PAGES
-        #define UI_SERVICE_COUNT 0
-    #endif // EEPROM_MODE && FEATURE_SERVICE_INTERVAL
-
     #if UI_COLS<=16
         UI_PAGE4(ui_page_mod,UI_TEXT_STRAIN_GAUGE_SPEED,
                         "zO:%z0um zM: %HB",
@@ -321,10 +305,10 @@ for 2 row displays. You can add additional pages or change the default pages lik
 
     /* Merge pages together. Use the following pattern:
     #define UI_PAGES {&name1,&name2,&name3} */
-    #define UI_PAGES {&ui_page1 UI_MOD_PAGES, &ui_page2, &ui_page3 UI_PRINTTIME_PAGES UI_SERVICE_PAGES UI_MOD2_PAGES UI_MODWobble_PAGE}
+    #define UI_PAGES {&ui_page1 UI_MOD_PAGES, &ui_page2, &ui_page3 UI_PRINTTIME_PAGES UI_MOD2_PAGES UI_MODWobble_PAGE}
 
     // How many pages do you want to have. Minimum is 1.
-    #define UI_NUM_PAGES 3+UI_PRINTTIME_COUNT+UI_SERVICE_COUNT+UI_MOD_COUNT+UI_MOD2_COUNT+UI_MODWobble_COUNT
+    #define UI_NUM_PAGES 3+UI_PRINTTIME_COUNT+UI_MOD_COUNT+UI_MOD2_COUNT+UI_MODWobble_COUNT
 #endif // UI_ROWS>=4
 
 /* ============ MENU definition ================
@@ -538,25 +522,6 @@ UI_MENU_SUBMENU_FILTER(ui_submenu_extruder_unmount, UI_TEXT_UNMOUNT_FILAMENT, ui
 #define UI_MENU_EXTRUDER {UI_MENU_ADDCONDBACK UI_MENU_BEDCOND UI_MENU_EXTCOND &ui_menu_go_epos, &ui_menu_quick_preheat_pla, &ui_menu_quick_preheat_abs, &ui_menu_quick_cooldown, UI_MENU_EXTRUDER_MOUNT_COND &ui_menu_quick_flowmultiply, &ui_menu_ext_origin}
 UI_MENU(ui_menu_extruder,UI_MENU_EXTRUDER,UI_MENU_BACKCNT+UI_MENU_BEDCNT+UI_MENU_EXTCNT+4+1+UI_MENU_EXTRUDER_MOUNT_COUNT+1)
 
-/** \brief Caliper Filament Reader menu */
-#if FEATURE_READ_CALIPER
- UI_MENU_ACTIONCOMMAND( ui_menu_cal_directread,UI_TEXT_CAL_DIRECT_READ,UI_ACTION_CAL_RESET)
- UI_MENU_CHANGEACTION ( ui_menu_cal_correct,   UI_TEXT_CAL_CORRECT,    UI_ACTION_CAL_CORRECT)
- UI_MENU_ACTIONCOMMAND( ui_menu_cal_showreset, UI_TEXT_CAL_SHOW,       UI_ACTION_CAL_SET)
- UI_MENU_CHANGEACTION ( ui_menu_cal_standard,  UI_TEXT_CAL_STANDARD,   UI_ACTION_CAL_STANDARD)
-
- #define UI_MENU_CONF_CALIPER {UI_MENU_ADDCONDBACK &ui_menu_cal_directread, &ui_menu_cal_correct, &ui_menu_cal_showreset, &ui_menu_cal_standard}
- UI_MENU(ui_menu_settings_cal,UI_MENU_CONF_CALIPER,UI_MENU_BACKCNT+4)
-
- UI_MENU_SUBMENU(ui_menu_conf_cal, UI_TEXT_CAL_CONF_MENU, ui_menu_settings_cal)
- #define UI_MENU_CONFIGURATION_CAL_COND &ui_menu_conf_cal,
- #define UI_MENU_CONFIGURATION_CAL_COUNT 1
-
-#else //FEATURE_READ_CALIPER
- #define UI_MENU_CONFIGURATION_CAL_COND
- #define UI_MENU_CONFIGURATION_CAL_COUNT 0
-#endif //FEATURE_READ_CALIPER
-
 /** \brief Quick menu */
 
 UI_MENU_ACTION4(ui_menu_quick_stop_print_ack, UI_ACTION_STOP_ACK, UI_TEXT_STOP_PRINT_ACK, "", UI_ACTION_TEXT_YES, UI_ACTION_TEXT_NO)
@@ -571,15 +536,6 @@ UI_MENU_CHANGEACTION(ui_menu_quick_speedmultiply,UI_TEXT_SPEED_MULTIPLY,UI_ACTIO
 UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_quick_output_object,UI_TEXT_OUTPUT_OBJECT,UI_ACTION_RF_OUTPUT_OBJECT,0, MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING | MENU_MODE_PAUSED)
 #define OUTPUT_OBJECT_COUNT 1
 #define OUTPUT_OBJECT_ENTRY , &ui_menu_quick_output_object
-
-#if FEATURE_PARK
-UI_MENU_ACTIONCOMMAND(ui_menu_quick_park,UI_TEXT_PARK_HEAT_BED,UI_ACTION_RF_PARK)
-#define PARK_COUNT 1
-#define PARK_ENTRY ,&ui_menu_quick_park
-#else
-#define PARK_COUNT 0
-#define PARK_ENTRY
-#endif // FEATURE_PARK
 
 #if FEATURE_230V_OUTPUT
 UI_MENU_ACTIONCOMMAND(ui_menu_toggle_230V_output, UI_TEXT_230V_OUTPUT, UI_ACTION_230V_OUTPUT)
@@ -623,8 +579,8 @@ UI_MENU_ACTIONSELECTOR(ui_menu_quick_reset,UI_TEXT_RESET,ui_menu_quick_reset_ack
 #define RESET_VIA_MENU_ENTRY , &ui_menu_quick_reset
 
 //das LIGHT_MODE_ENTRY ist der X19! Könnte verwirrend sein... RGB-Light gibts in Configuration->General
-#define UI_MENU_QUICK {UI_MENU_ADDCONDBACK &ui_menu_quick_stop_print, &ui_menu_home_all, &ui_menu_quick_stopstepper OUTPUT_OBJECT_ENTRY ,&ui_menu_quick_speedmultiply, UI_MENU_CONFIGURATION_CAL_COND &ui_menu_quick_flowmultiply  PARK_ENTRY OUTPUT_230V_ENTRY LIGHT_MODE_ENTRY OUTPUT_FET1_ENTRY OUTPUT_FET2_ENTRY RESET_VIA_MENU_ENTRY }
-UI_MENU(ui_menu_quick,UI_MENU_QUICK,5+UI_MENU_BACKCNT+OUTPUT_OBJECT_COUNT+UI_MENU_CONFIGURATION_CAL_COUNT+PARK_COUNT+OUTPUT_230V_COUNT+LIGHT_MODE_COUNT+OUTPUT_FET1_COUNT+OUTPUT_FET2_COUNT+RESET_VIA_MENU_COUNT)
+#define UI_MENU_QUICK {UI_MENU_ADDCONDBACK &ui_menu_quick_stop_print, &ui_menu_home_all, &ui_menu_quick_stopstepper OUTPUT_OBJECT_ENTRY ,&ui_menu_quick_speedmultiply, &ui_menu_quick_flowmultiply OUTPUT_230V_ENTRY LIGHT_MODE_ENTRY OUTPUT_FET1_ENTRY OUTPUT_FET2_ENTRY RESET_VIA_MENU_ENTRY }
+UI_MENU(ui_menu_quick,UI_MENU_QUICK,5+UI_MENU_BACKCNT+OUTPUT_OBJECT_COUNT+OUTPUT_230V_COUNT+LIGHT_MODE_COUNT+OUTPUT_FET1_COUNT+OUTPUT_FET2_COUNT+RESET_VIA_MENU_COUNT)
 
 /** \brief Fan menu */
 

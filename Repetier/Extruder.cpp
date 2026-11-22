@@ -28,10 +28,6 @@ volatile uint8_t execute50msPeriodical = 0;
 volatile uint8_t execute16msPeriodical = 0;
 volatile uint8_t execute10msPeriodical = 0;
 
-#if FEATURE_DITTO_PRINTING
-uint8_t Extruder::dittoMode = 0;
-#endif // FEATURE_DITTO_PRINTING
-
 #if ANALOG_INPUTS > 0
 const uint8 osAnalogInputChannels[] PROGMEM = ANALOG_INPUT_CHANNELS;
 volatile uint8 osAnalogInputCounter[ANALOG_INPUTS] = { 0 };
@@ -468,16 +464,6 @@ void Extruder::setTemperatureForExtruder(float temperatureInCelsius, uint8_t ext
         }
     }
 #endif // FEATURE_CASE_FAN && !CASE_FAN_ALWAYS_ON && CASE_FAN_PIN > -1
-
-#if FEATURE_DITTO_PRINTING
-    if (Extruder::dittoMode && extr == 0) {
-        TemperatureController* tc2 = tempController[1];
-        tc2->setTargetTemperature(temperatureInCelsius, 0);
-        tc2->updateTempControlVars();
-        if (temperatureInCelsius >= EXTRUDER_FAN_COOL_TEMP)
-            extruder[1].coolerPWM = extruder[1].coolerSpeed;
-    }
-#endif // FEATURE_DITTO_PRINTING
 
     bool alloff = true;
     for (uint8_t i = 0; i < NUM_EXTRUDER; i++)

@@ -301,26 +301,6 @@ void Commands::reportPrinterUsage() {
         Com::printF(Com::tSpaceHoursSpace, tmp);
         Com::printFLN(Com::tSpaceMin);
     }
-#if FEATURE_SERVICE_INTERVAL
-    if (Printer::debugInfo()) {
-        float dist_service = Printer::filamentPrinted * 0.001 + HAL::eprGetFloat(EPR_PRINTING_DISTANCE_SERVICE);
-        Com::printF(Com::tPrintedFilamentService, dist_service, 2);
-        Com::printF(Com::tSpacem);
-
-        int32_t uSecondsServicePrint = (alloff ? 0 : (HAL::timeInMilliseconds() - Printer::msecondsPrinting) / 1000) + HAL::eprGetInt32(EPR_PRINTING_TIME_SERVICE);
-        int32_t tmp_service = uSecondsServicePrint / 86400;
-        uSecondsServicePrint -= tmp_service * 86400;
-
-        Com::printF(Com::tPrintingTimeService, tmp_service);
-        tmp_service = uSecondsServicePrint / 3600;
-        Com::printF(Com::tSpaceDaysSpace, tmp_service);
-        uSecondsServicePrint -= tmp_service * 3600;
-        tmp_service = uSecondsServicePrint / 60;
-
-        Com::printF(Com::tSpaceHoursSpace, tmp_service);
-        Com::printFLN(Com::tSpaceMin);
-    }
-#endif // FEATURE_SERVICE_INTERVAL
 #endif // EEPROM_MODE
 } // reportPrinterUsage
 
@@ -884,17 +864,6 @@ void Commands::processMCode(GCode* com) {
         break;
     }
 
-#if FEATURE_DITTO_PRINTING
-    case 280: // M280
-    {
-        if (com->hasS()) // Set ditto mode S: 0 = off, 1 = on
-        {
-            Extruder::dittoMode = com->S;
-        }
-        break;
-    }
-#endif // FEATURE_DITTO_PRINTING
-
 #if BEEPER_PIN >= 0
     case 300: // M300
     {
@@ -1317,19 +1286,6 @@ void Commands::processMCode(GCode* com) {
         Commands::waitUntilEndOfAllMoves(); //M400 (normal gcode wait)
         break;
     }
-
-#if FEATURE_MEMORY_POSITION
-    case 401: // M401 - Memory position
-    {
-        Printer::MemoryPosition();
-        break;
-    }
-    case 402: // M402 - Go to stored position
-    {
-        Printer::GoToMemoryPosition(com->hasX(), com->hasY(), com->hasZ(), com->hasE(), (com->hasF() ? com->F : Printer::feedrate));
-        break;
-    }
-#endif // FEATURE_MEMORY_POSITION
 
     case 908: // M908 - Control digital trimpot directly.
     {

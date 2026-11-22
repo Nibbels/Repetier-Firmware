@@ -45,7 +45,6 @@
 #define UI_ACTION_RF_SCAN_HEAT_BED 1520
 #define UI_ACTION_RF_SCAN_HEAT_BED_PLA 1521
 #define UI_ACTION_RF_SCAN_HEAT_BED_ABS 1522
-#define UI_ACTION_RF_PARK 1523
 #define UI_ACTION_RF_RESET 1524
 #define UI_ACTION_RF_RESET_ACK 1525
 #define UI_ACTION_RF_OUTPUT_OBJECT 1526
@@ -227,10 +226,6 @@
   - Examples:
   - M3079 ; outputs the printed object
 
-- M3080 - park the printer
-  - Examples:
-  - M3080 ; parks the printer
-
 - M3090 - test the watchdog ( this command resets the firmware )
   - Examples:
   - M3090 ; tests the watchdog (and resets the firmware)
@@ -238,13 +233,6 @@
 - M3091 - erase the external EEPROM
   - Examples:
   - M3091 ; erases the external EEPROM
-
-- M3103 [X] [Y] [Z] - configure the x, y and z position which shall set when the printer is parked ( units are [mm] )
-  - Examples:
-  - M3103 X10 ; sets the x-position when the printer is parked to 10 [mm]
-  - M3103 Y10 ; sets the y-position when the printer is parked to 10 [mm]
-  - M3103 Z10 ; sets the z-position when the printer is parked to 10 [mm]
-  - M3103 X10 Y10 Z10 ; sets the x-/y-/z-position when the printer is parked to 10/10/10 [mm]
 
 - M3105 [X] [Y] [Z] [E] - configure the offset in x, y, z and e direction which shall be applied in case the "Pause Printing" button has been pressed ( units are [mm] )
   - Examples:
@@ -405,7 +393,6 @@ extern const char ui_text_set_origin[] PROGMEM;
 extern const char ui_text_information[] PROGMEM;
 extern const char ui_text_heat_bed_scan[] PROGMEM;
 extern const char ui_text_output_object[] PROGMEM;
-extern const char ui_text_park_heat_bed[] PROGMEM;
 extern const char ui_text_pause[] PROGMEM;
 extern const char ui_text_home[] PROGMEM;
 extern const char ui_text_z_compensation[] PROGMEM;
@@ -673,10 +660,6 @@ extern unsigned short readWord24C256(int addressI2C, unsigned int addressEEPROM)
 extern void recalculateZCompensation(void);
 extern void loopFeatures(void);
 extern void outputObject(bool showerrors = true);
-
-#if FEATURE_PARK
-extern void parkPrinter(void);
-#endif // FEATURE_PARK
 
 extern void pausePrint(void);
 extern void requestPrintPause(bool moveAway);

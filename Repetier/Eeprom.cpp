@@ -319,11 +319,6 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     HAL::eprSetFloat(EPR_Y_MAX_TRAVEL_ACCEL, Printer::maxTravelAccelerationMMPerSquareSecond[Y_AXIS]);
     HAL::eprSetFloat(EPR_Z_MAX_TRAVEL_ACCEL, Printer::maxTravelAccelerationMMPerSquareSecond[Z_AXIS]);
 
-#if FEATURE_READ_CALIPER
-    HAL::eprSetInt16(EPR_RF_CAL_STANDARD, caliper_filament_standard);
-    HAL::eprSetByte(EPR_RF_CAL_ADJUST, caliper_collect_adjust);
-#endif //FEATURE_READ_CALIPER
-
 #if HAVE_HEATED_BED
     HAL::eprSetByte(EPR_BED_DRIVE_MAX, heatedBedController.pidDriveMax);
     HAL::eprSetByte(EPR_BED_DRIVE_MIN, heatedBedController.pidDriveMin);
@@ -363,10 +358,6 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     if (corrupted) {
         HAL::eprSetInt32(EPR_PRINTING_TIME, 0);
         HAL::eprSetFloat(EPR_PRINTING_DISTANCE, 0);
-#if FEATURE_SERVICE_INTERVAL
-        HAL::eprSetInt32(EPR_PRINTING_TIME_SERVICE, 0);
-        HAL::eprSetFloat(EPR_PRINTING_DISTANCE_SERVICE, 0);
-#endif // FEATURE_SERVICE_INTERVAL
     }
 
 #if FEATURE_BEEPER
@@ -805,15 +796,6 @@ void EEPROM::readDataFromEEPROM() {
     g_nDigitFlowCompensation_Fmax = short(abs(g_nEmergencyPauseDigitsMax));                         //mögliche Standardwerte -> z.b. gut wenn das die pause-digits sind.
 #endif                                                                                              // FEATURE_DIGIT_FLOW_COMPENSATION && FEATURE_DIGIT_Z_COMPENSATION
 
-
-#if FEATURE_READ_CALIPER
-    caliper_filament_standard = HAL::eprGetInt16(EPR_RF_CAL_STANDARD);
-    if (caliper_filament_standard <= 1500 || caliper_filament_standard >= 3100)
-        caliper_filament_standard = 2850;
-
-    caliper_collect_adjust = HAL::eprGetByte(EPR_RF_CAL_ADJUST);
-#endif //FEATURE_READ_CALIPER
-
 #if FEATURE_EMERGENCY_STOP_Z_AND_E
     g_nEmergencyStopZAndEMin = (short)constrain(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN), EMERGENCY_STOP_DIGITS_MIN, EMERGENCY_STOP_DIGITS_MAX); //limit to value in config.
     g_nEmergencyStopZAndEMax = (short)constrain(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX), EMERGENCY_STOP_DIGITS_MIN, EMERGENCY_STOP_DIGITS_MAX); //limit to value in config.
@@ -1006,13 +988,6 @@ void EEPROM::updatePrinterUsage() {
     HAL::eprSetInt32(EPR_PRINTING_TIME, seconds);
     HAL::eprSetFloat(EPR_PRINTING_DISTANCE, HAL::eprGetFloat(EPR_PRINTING_DISTANCE) + Printer::filamentPrinted * 0.001);
 
-#if FEATURE_SERVICE_INTERVAL
-    uint32_t uSecondsServicePrint = (HAL::timeInMilliseconds() - Printer::msecondsPrinting) / 1000;
-    uSecondsServicePrint += HAL::eprGetInt32(EPR_PRINTING_TIME_SERVICE);
-    HAL::eprSetInt32(EPR_PRINTING_TIME_SERVICE, uSecondsServicePrint);
-    HAL::eprSetFloat(EPR_PRINTING_DISTANCE_SERVICE, HAL::eprGetFloat(EPR_PRINTING_DISTANCE_SERVICE) + Printer::filamentPrinted * 0.001);
-#endif // FEATURE_SERVICE_INTERVAL
-
     Printer::flag2 |= PRINTER_FLAG2_RESET_FILAMENT_USAGE;
     Printer::msecondsPrinting = HAL::timeInMilliseconds();
     EEPROM::updateChecksum();
@@ -1181,17 +1156,8 @@ void EEPROM::writeSettings() {
     writeByte(EPR_RF_Z_ENDSTOP_TYPE, Com::tEPRZEndstopType);
 #endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
 
-#if FEATURE_READ_CALIPER
-    writeInt(EPR_RF_CAL_STANDARD, Com::tEPRZCallStandard);
-    writeByte(EPR_RF_CAL_ADJUST, Com::tEPRZCallAdjust);
-#endif //FEATURE_READ_CALIPER
-
     writeFloat(EPR_PRINTING_DISTANCE, Com::tEPRFilamentPrinted);
     writeLong(EPR_PRINTING_TIME, Com::tEPRPrinterActive);
-#if FEATURE_SERVICE_INTERVAL
-    writeFloat(EPR_PRINTING_DISTANCE_SERVICE, Com::tEPRFilamentPrintedService);
-    writeLong(EPR_PRINTING_TIME_SERVICE, Com::tEPRPrinterActiveService);
-#endif // FEATURE_SERVICE_INTERVAL
 
 #else
     if (Printer::debugErrors()) {

@@ -118,12 +118,6 @@ public:
     static volatile int16_t outOfPrintVolume[2];
     static volatile int32_t outOfPrintVolumeZ;
 
-#if FEATURE_MEMORY_POSITION
-    static float memoryPositionMM[4];
-    static float memoryRemainderMM[4];
-    static float memoryF;
-#endif // FEATURE_MEMORY_POSITION
-
 #if FEATURE_HEAT_BED_Z_COMPENSATION
     static volatile char doHeatBedZCompensation;
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION
@@ -261,10 +255,6 @@ public:
         WRITE(X_ENABLE_PIN, !X_ENABLE_ON);
 #endif // (X_ENABLE_PIN > -1)
 
-#if FEATURE_TWO_XSTEPPER && (X2_ENABLE_PIN > -1)
-        WRITE(X2_ENABLE_PIN, !X_ENABLE_ON);
-#endif // FEATURE_TWO_XSTEPPER && (X2_ENABLE_PIN > -1)
-
 #if STEPPER_ON_DELAY
         Printer::enabledStepper[X_AXIS] = 0;
 #endif // STEPPER_ON_DELAY
@@ -289,10 +279,6 @@ public:
 #if (Y_ENABLE_PIN > -1)
         WRITE(Y_ENABLE_PIN, !Y_ENABLE_ON);
 #endif // (Y_ENABLE_PIN > -1)
-
-#if FEATURE_TWO_YSTEPPER && (Y2_ENABLE_PIN > -1)
-        WRITE(Y2_ENABLE_PIN, !Y_ENABLE_ON);
-#endif // FEATURE_TWO_YSTEPPER && (Y2_ENABLE_PIN > -1)
 
 #if STEPPER_ON_DELAY
         Printer::enabledStepper[Y_AXIS] = 0;
@@ -329,10 +315,6 @@ public:
         WRITE(Z_ENABLE_PIN, !Z_ENABLE_ON);
 #endif // (Z_ENABLE_PIN > -1)
 
-#if FEATURE_TWO_ZSTEPPER && (Z2_ENABLE_PIN > -1)
-        WRITE(Z2_ENABLE_PIN, !Z_ENABLE_ON);
-#endif // FEATURE_TWO_ZSTEPPER && (Z2_ENABLE_PIN > -1)
-
 #if STEPPER_ON_DELAY
         Printer::enabledStepper[Z_AXIS] = 0;
 #endif // STEPPER_ON_DELAY
@@ -366,10 +348,6 @@ public:
         WRITE(X_ENABLE_PIN, X_ENABLE_ON);
 #endif // (X_ENABLE_PIN > -1)
 
-#if FEATURE_TWO_XSTEPPER && (X2_ENABLE_PIN > -1)
-        WRITE(X2_ENABLE_PIN, X_ENABLE_ON);
-#endif // FEATURE_TWO_XSTEPPER && (X2_ENABLE_PIN > -1)
-
 #if STEPPER_ON_DELAY
         if (!Printer::enabledStepper[X_AXIS]) {
             Printer::enabledStepper[X_AXIS] = 1;
@@ -384,10 +362,6 @@ public:
 #if (Y_ENABLE_PIN > -1)
         WRITE(Y_ENABLE_PIN, Y_ENABLE_ON);
 #endif // (Y_ENABLE_PIN > -1)
-
-#if FEATURE_TWO_YSTEPPER && (Y2_ENABLE_PIN > -1)
-        WRITE(Y2_ENABLE_PIN, Y_ENABLE_ON);
-#endif // FEATURE_TWO_YSTEPPER && (Y2_ENABLE_PIN > -1)
 
 #if STEPPER_ON_DELAY
         if (!Printer::enabledStepper[Y_AXIS]) {
@@ -404,10 +378,6 @@ public:
         WRITE(Z_ENABLE_PIN, Z_ENABLE_ON);
 #endif // (Z_ENABLE_PIN > -1)
 
-#if FEATURE_TWO_ZSTEPPER && (Z2_ENABLE_PIN > -1)
-        WRITE(Z2_ENABLE_PIN, Z_ENABLE_ON);
-#endif // FEATURE_TWO_ZSTEPPER && (Z2_ENABLE_PIN > -1)
-
 #if STEPPER_ON_DELAY
         if (!Printer::enabledStepper[Z_AXIS]) {
             Printer::enabledStepper[Z_AXIS] = 1;
@@ -420,15 +390,9 @@ public:
         if (positive) {
             // extruder moves to the right
             WRITE(X_DIR_PIN, !INVERT_X_DIR);
-#if FEATURE_TWO_XSTEPPER
-            WRITE(X2_DIR_PIN, !INVERT_X_DIR);
-#endif // FEATURE_TWO_XSTEPPER
         } else {
             // extruder moves to the left
             WRITE(X_DIR_PIN, INVERT_X_DIR);
-#if FEATURE_TWO_XSTEPPER
-            WRITE(X2_DIR_PIN, INVERT_X_DIR);
-#endif // FEATURE_TWO_XSTEPPER
         }
     } // setXDirection
 
@@ -436,15 +400,9 @@ public:
         if (positive) {
             // heat bed moves to the front
             WRITE(Y_DIR_PIN, !INVERT_Y_DIR);
-#if FEATURE_TWO_YSTEPPER
-            WRITE(Y2_DIR_PIN, !INVERT_Y_DIR);
-#endif // FEATURE_TWO_YSTEPPER
         } else {
             // heat bed moves to the back
             WRITE(Y_DIR_PIN, INVERT_Y_DIR);
-#if FEATURE_TWO_YSTEPPER
-            WRITE(Y2_DIR_PIN, INVERT_Y_DIR);
-#endif // FEATURE_TWO_YSTEPPER
         }
     } // setYDirection
 
@@ -452,18 +410,12 @@ public:
         if (positive) {
             // heat bed moves to the bottom
             WRITE(Z_DIR_PIN, !INVERT_Z_DIR);
-#if FEATURE_TWO_ZSTEPPER
-            WRITE(Z2_DIR_PIN, !INVERT_Z_DIR);
-#endif // FEATURE_TWO_YSTEPPER
 #if FEATURE_CONFIGURABLE_Z_ENDSTOPS
             lastZDirection = 1;
 #endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
         } else {
             // heat bed moves to the top
             WRITE(Z_DIR_PIN, INVERT_Z_DIR);
-#if FEATURE_TWO_ZSTEPPER
-            WRITE(Z2_DIR_PIN, INVERT_Z_DIR);
-#endif // FEATURE_TWO_YSTEPPER
 #if FEATURE_CONFIGURABLE_Z_ENDSTOPS
             lastZDirection = -1;
 #endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
@@ -472,33 +424,21 @@ public:
 
     static INLINE void startXStep(int8_t dir = (Printer::getXDirectionIsPos() ? 1 : -1)) {
         WRITE(X_STEP_PIN, HIGH);
-#if FEATURE_TWO_XSTEPPER
-        WRITE(X2_STEP_PIN, HIGH);
-#endif // FEATURE_TWO_XSTEPPER
         Printer::currentXSteps += dir;
     } // startXStep
 
     static INLINE void startYStep(int8_t dir = (Printer::getYDirectionIsPos() ? 1 : -1)) {
         WRITE(Y_STEP_PIN, HIGH);
-#if FEATURE_TWO_YSTEPPER
-        WRITE(Y2_STEP_PIN, HIGH);
-#endif // FEATURE_TWO_YSTEPPER
         Printer::currentYSteps += dir;
     } // startYStep
 
     static INLINE void startZStep(int8_t dir = (Printer::getZDirectionIsPos() ? 1 : -1)) {
         WRITE(Z_STEP_PIN, HIGH);
-#if FEATURE_TWO_ZSTEPPER
-        WRITE(Z2_STEP_PIN, HIGH);
-#endif // FEATURE_TWO_ZSTEPPER
         Printer::currentZSteps += dir;
     } // startZStep
 
     static INLINE void endZStep(void) {
         WRITE(Z_STEP_PIN, LOW);
-#if FEATURE_TWO_ZSTEPPER
-        WRITE(Z2_STEP_PIN, LOW);
-#endif // FEATURE_TWO_ZSTEPPER
     }  // endZStep
 
     static INLINE void endYStep(void) {
@@ -1023,11 +963,6 @@ public:
             return 1;                                       //1%
         return (uint8_t)(((uint16_t)fanSpeed * 100) / 255); //%
     }                                                       // getFanSpeed
-
-#if FEATURE_MEMORY_POSITION
-    static void MemoryPosition();
-    static void GoToMemoryPosition(bool x, bool y, bool z, bool e, float feed);
-#endif // FEATURE_MEMORY_POSITION
 
 #if FEATURE_HEAT_BED_Z_COMPENSATION
 #if FEATURE_SENSIBLE_PRESSURE

@@ -96,12 +96,6 @@ bool Printer::movePositionFeedrateChoice = FEEDRATE_DIRECTCONFIG; // select the 
 volatile int16_t Printer::outOfPrintVolume[2] = { 0 };
 volatile int32_t Printer::outOfPrintVolumeZ = 0;
 
-#if FEATURE_MEMORY_POSITION
-float Printer::memoryPositionMM[4];
-float Printer::memoryRemainderMM[4];
-float Printer::memoryF;
-#endif // FEATURE_MEMORY_POSITION
-
 #if FEATURE_HEAT_BED_Z_COMPENSATION
 volatile char Printer::doHeatBedZCompensation = false;
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION
@@ -615,30 +609,7 @@ void Printer::setup() {
     for (uint8_t i = 0; i < NUM_EXTRUDER + 3; i++)
         pwm_pos[i] = 0;
 
-#if FEATURE_USER_INT3
-    SET_INPUT(RESERVE_DIGITAL_PIN_PD3);
-    PULLUP(RESERVE_DIGITAL_PIN_PD3, HIGH);
-#endif //FEATURE_USER_INT3
-
-#if FEATURE_READ_CALIPER
-    // read for using pins : https://www.arduino.cc/en/Tutorial/DigitalPins
-    //where the clock comes in and triggers an interrupt which reads data then:
-    SET_INPUT(FEATURE_READ_CALIPER_INT_PIN);     //input as default already this is here for explaination more than really having an input.
-    PULLUP(FEATURE_READ_CALIPER_INT_PIN, HIGH);  //do I need this pullup??
-                                                 //where data is to read when Int triggers because of clock from caliper:
-    SET_INPUT(FEATURE_READ_CALIPER_DATA_PIN);    //input as default already this is here for explaination more than really having an input.
-    PULLUP(FEATURE_READ_CALIPER_DATA_PIN, HIGH); //do I need this pullup??
-#endif                                           //FEATURE_READ_CALIPER
-
     HAL::allowInterrupts();
-
-#if FEATURE_USER_INT3
-    attachInterrupt(digitalPinToInterrupt(RESERVE_DIGITAL_PIN_PD3), USER_INTERRUPT3_HOOK, FALLING);
-#endif //FEATURE_USER_INT3
-
-#if FEATURE_READ_CALIPER
-    attachInterrupt(digitalPinToInterrupt(FEATURE_READ_CALIPER_INT_PIN), FEATURE_READ_CALIPER_HOOK, FALLING);
-#endif //FEATURE_READ_CALIPER
 
 #if FEATURE_BEEPER
     enableBeeper = BEEPER_MODE;
@@ -696,39 +667,6 @@ void Printer::setup() {
         WRITE(Z_ENABLE_PIN, HIGH);
     disableZStepper();
 #endif // Z_ENABLE_PIN > -1
-
-#if FEATURE_TWO_XSTEPPER
-    SET_OUTPUT(X2_STEP_PIN);
-    SET_OUTPUT(X2_DIR_PIN);
-
-#if X2_ENABLE_PIN > -1
-    SET_OUTPUT(X2_ENABLE_PIN);
-    if (!X_ENABLE_ON)
-        WRITE(X2_ENABLE_PIN, HIGH);
-#endif // X2_ENABLE_PIN > -1
-#endif // FEATURE_TWO_XSTEPPER
-
-#if FEATURE_TWO_YSTEPPER
-    SET_OUTPUT(Y2_STEP_PIN);
-    SET_OUTPUT(Y2_DIR_PIN);
-
-#if Y2_ENABLE_PIN > -1
-    SET_OUTPUT(Y2_ENABLE_PIN);
-    if (!Y_ENABLE_ON)
-        WRITE(Y2_ENABLE_PIN, HIGH);
-#endif // Y2_ENABLE_PIN > -1
-#endif // FEATURE_TWO_YSTEPPER
-
-#if FEATURE_TWO_ZSTEPPER
-    SET_OUTPUT(Z2_STEP_PIN);
-    SET_OUTPUT(Z2_DIR_PIN);
-
-#if X2_ENABLE_PIN > -1
-    SET_OUTPUT(Z2_ENABLE_PIN);
-    if (!Z_ENABLE_ON)
-        WRITE(Z2_ENABLE_PIN, HIGH);
-#endif // X2_ENABLE_PIN > -1
-#endif // FEATURE_TWO_ZSTEPPER
 
         //endstop pullups
 #if MIN_HARDWARE_ENDSTOP_X
@@ -992,29 +930,6 @@ void Printer::setup() {
 
     HAL::startWatchdog();
 } // setup()
-
-#if FEATURE_MEMORY_POSITION
-void Printer::MemoryPosition() {
-    Commands::waitUntilEndOfAllMoves();
-
-    for (uint8_t axis = X_AXIS; axis <= E_AXIS; axis++) {
-        memoryPositionMM[axis] = destinationMM[axis];
-        memoryRemainderMM[axis] = destinationRemainderMM[axis];
-    }
-    memoryF = feedrate;
-} // MemoryPosition
-
-void Printer::GoToMemoryPosition(bool x, bool y, bool z, bool e, float feed) {
-    const bool allXYZ = !(x || y || z);
-    const bool restore[] = { allXYZ || x, allXYZ || y, allXYZ || z, e };
-    for (uint8_t axis = X_AXIS; axis <= E_AXIS; axis++) {
-        if (restore[axis])
-            setDestinationMM(axis, memoryPositionMM[axis], memoryRemainderMM[axis]);
-    }
-    queueFloatCoordinates(IGNORE_COORDINATE, IGNORE_COORDINATE, IGNORE_COORDINATE, IGNORE_COORDINATE, feed);
-    feedrate = memoryF;
-} // GoToMemoryPosition
-#endif // FEATURE_MEMORY_POSITION
 
 #if FEATURE_HEAT_BED_Z_COMPENSATION
 

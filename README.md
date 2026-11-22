@@ -100,7 +100,6 @@ M3902 Sn            - to save the active Matrix to position n = {1..9}
 M3902 Z0 S1         - to shift the zOffset to your zMatrix and save the Matrix at position 1. This is an example to show that the options of M3902 can be combined.  
 M3911 S6000 P9000 E-30 - to limit extrusion when getting high digits because of overextrusion (Example: -10% per 1000 digits starting from 6000 digits)  
 M3911 S6000 P9000 F-30 - to limit speed when getting high digits (Example: -10% per 1000 digits starting from 6000 digits) M3911 is adjustable at runtime within menus Configuration -> DMS Features -> Digit Flow CMP (No EEPROM-support!)  
-M3939 Fn St1 Pt2 Ex Iy Rm   - to messure a curve of your Filaments velocity over digits -> viscosity.  
 
 M3920 Sb - to go into or switch back from SilentMode (This will lower your steppers current to an alternative profile)  
 Removed all compiler warnings and errors within the original Firmware.  
@@ -160,32 +159,6 @@ Feature called "Nibbels/Wessix SenseOffset". This is a digit limiter which decre
  
  While Printing you can adjust or activate this feature with the "Left"- and "Right"-Button, while being in the "Mod-Menu" which is page 2 on the printers display.  
 
-## SensibleViscosity  
-* M3939 Fn St1 Pt2   Ex Iy Rm  
-S = Starting Temperature for the Test in [°C]  
-P = Final Temperature for the Test in [°C]  
-F = max. test digits = 10000 or {1...12000} [digits]  
-E = max. test extrusion velocity = 5 or {0.05...maxStartFeedrate} [mm/s]  
-optional:  
-I = test velocity increment = 0.1 or {0.02...0.4} [mm/s]  
-R = max. digit change needed to consider having a filled nozzle. = 800 [digits] 
-
-Feature called "SensibleViscosity"  
- The printer will automaticly extrude into the thin air and messure the resulting force. 
- After every messurement the velocity of extrusion is increased.  
- You will get a CSV-Output within your Console-Window (Repetierserver/Repetierhost/Octoprint/...) which you can easily copy and paste to some text file. Excel can then read the Data and you can put it into some Chart with 2 Clicks.
- You might ask why you need this feature, but in case you know your Filament quite well you can compare these resulting chars to really see how your filament extrusion behaves under different circumstances or when your nozzle is or gets clogged.
- For longer heated/boiled (my) ABS: http://www.rf1000.de/viewtopic.php?f=62&t=1549&p=16617#p16617  
- ![ ](https://downfight.de/picproxy.php?url=http://image.prntscr.com/image/3508699873f7431489d1df9344110e7f.png "Boiled ABS")  
- For the general viscosity of (my) ABS: http://www.rf1000.de/viewtopic.php?f=23&t=1620&p=16613#p16605  
- ![ ](https://downfight.de/picproxy.php?url=http://image.prntscr.com/image/610de7720945474590668b20c05d7652.png "Temperature ABS")  
- That is a clogged nozzle with the same ABS:
- ![ ](https://downfight.de/picproxy.php?url=http://image.prntscr.com/image/c00ac11b3a384994b37ce8bc3cf03bd9.png "Clogged Nozzle ABS")  
- That is red PLA:
- ![ ](https://downfight.de/picproxy.php?url=http://image.prntscr.com/image/2a3253c930794afc81e4fa4d4b2a4261.png "Clogged Nozzle ABS")  
-
- Have fun finally seeing your Filaments behaviour over time, temp, nozzles ;)  
- 
 ## Configurable emergency zStop and emergency pause digits within menu and EEPROM  
 Menü -> Configuration -> General  
 

@@ -24,7 +24,6 @@ FSTRINGVALUE(ui_text_warning, UI_TEXT_WARNING)
 FSTRINGVALUE(ui_text_information, UI_TEXT_INFORMATION)
 FSTRINGVALUE(ui_text_heat_bed_scan, UI_TEXT_HEAT_BED_SCAN)
 FSTRINGVALUE(ui_text_output_object, UI_TEXT_OUTPUT_OBJECT)
-FSTRINGVALUE(ui_text_park_heat_bed, UI_TEXT_PARK_HEAT_BED)
 FSTRINGVALUE(ui_text_set_origin, UI_TEXT_SET_ORIGIN)
 FSTRINGVALUE(ui_text_pause, UI_TEXT_PAUSE)
 FSTRINGVALUE(ui_text_home, UI_TEXT_HOME)
@@ -171,10 +170,6 @@ volatile char g_pauseMode = PAUSE_MODE_NONE;
 volatile millis_t g_uPauseTime = 0;
 volatile char g_pauseBeepDone = 0;
 
-#if FEATURE_PARK
-long g_nParkPosition[3] = { PARK_POSITION_X, PARK_POSITION_Y, PARK_POSITION_Z };
-#endif // FEATURE_PARK
-
 #if FEATURE_EMERGENCY_PAUSE
 long g_nEmergencyPauseDigitsMin = EMERGENCY_PAUSE_DIGITS_MIN; //short reicht eigentlich
 long g_nEmergencyPauseDigitsMax = EMERGENCY_PAUSE_DIGITS_MAX; //short reicht eigentlich
@@ -235,11 +230,6 @@ unsigned char g_uRGBTargetG = 0;
 unsigned char g_uRGBTargetB = 0;
 #endif // FEATURE_RGB_LIGHT_EFFECTS
 
-#if FEATURE_SERVICE_INTERVAL
-unsigned long g_nlastServiceTime = 0;
-int g_nEnteredService = 0;
-#endif // FEATURE_SERVICE_INTERVAL
-
 static void setupForPrinting();
 
 void initRF(void) {
@@ -259,17 +249,6 @@ void initRF(void) {
     }
 #endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
 
-#if FEATURE_SERVICE_INTERVAL
-    float fDistanceService = Printer::filamentPrinted * 0.001 + HAL::eprGetFloat(EPR_PRINTING_DISTANCE_SERVICE);
-    int32_t uSecondsServicePrint = ((HAL::timeInMilliseconds() - Printer::msecondsPrinting) / 1000) + HAL::eprGetInt32(EPR_PRINTING_TIME_SERVICE);
-    int32_t uHoursServicePrint = uSecondsServicePrint / 3600;
-
-    if (fDistanceService >= FILAMENT_PRINTED_UNTIL_SERVICE || uHoursServicePrint >= HOURS_PRINTED_UNTIL_SERVICE) {
-        UI_STATUS(UI_TEXT_SERVICE);
-        BEEP_SERVICE_INTERVALL
-        g_nlastServiceTime = HAL::timeInMilliseconds();
-    }
-#endif // FEATURE_SERVICE_INTERVAL
 } // initRF
 
 void initStrainGauge(void) {
@@ -2799,182 +2778,6 @@ void setMatrixNull(void) {
 /**************************************************************************************************************************************/
 
 /**************************************************************************************************************************************/
-#if FEATURE_VISCOSITY_TEST
-void startViscosityTest(int maxdigits = 10000, float maxfeedrate = 5.0f, float incrementfeedrate = 0.05f, short StartTemp = 0, short EndTemp = 0, int refill_digit_limit = 800) {
-    previousMillisCmd = HAL::timeInMilliseconds(); //prevent inactive shutdown of steppers/temps
-    Com::printFLN(PSTR("startViscosityTest(): started"));
-
-    if (refill_digit_limit > (int)(g_nEmergencyStopZAndEMax * 0.8))
-        refill_digit_limit = (int)(g_nEmergencyStopZAndEMax * 0.2);
-    if (refill_digit_limit < 50)
-        refill_digit_limit = 50;
-    Com::printFLN(PSTR("Refill NozzleDigitsDelta = "), refill_digit_limit);
-
-    if (maxdigits > (int)(g_nEmergencyStopZAndEMax * 0.8))
-        maxdigits = (int)(g_nEmergencyStopZAndEMax * 0.8);
-    if (maxdigits < 1000)
-        maxdigits = 1000;
-    Com::printFLN(PSTR("Test DigitsMax = "), maxdigits);
-
-    if (maxfeedrate > Extruder::current->maxFeedrate)
-        maxfeedrate = Extruder::current->maxFeedrate;
-    if (maxfeedrate < 0.05)
-        maxfeedrate = 0.05;
-    Com::printFLN(PSTR("Test FeedrateMax = "), maxfeedrate, 1);
-
-    if (StartTemp > UI_SET_MAX_EXTRUDER_TEMP)
-        StartTemp = UI_SET_MAX_EXTRUDER_TEMP;
-    if (StartTemp < UI_SET_MIN_EXTRUDER_TEMP && StartTemp != 0)
-        StartTemp = UI_SET_MIN_EXTRUDER_TEMP;
-    if (EndTemp > UI_SET_MAX_EXTRUDER_TEMP)
-        EndTemp = UI_SET_MAX_EXTRUDER_TEMP;
-    if (EndTemp < UI_SET_MIN_EXTRUDER_TEMP && EndTemp != 0)
-        EndTemp = UI_SET_MIN_EXTRUDER_TEMP;
-    if (EndTemp < StartTemp || StartTemp == 0)
-        EndTemp = StartTemp; //even if starttemp has some number and endtemp is 0, then one cycle is driven.
-
-    if (EndTemp > StartTemp) {
-        Com::printFLN(PSTR("Multitest StartTemp = "), StartTemp);
-        Com::printFLN(PSTR("Multitest EndTemp = "), EndTemp);
-    } else if (EndTemp == StartTemp) {
-        Com::printFLN(PSTR("SingleTest Temperature = "), StartTemp);
-    } else if (StartTemp == 0 || EndTemp == 0) {
-        Com::printFLN(PSTR("SingleTest Temperature = No Adjustment!"));
-    }
-
-    if (incrementfeedrate > 0.4)
-        incrementfeedrate = 0.4;
-    if (incrementfeedrate < 0.02)
-        incrementfeedrate = 0.02;
-    Com::printFLN(PSTR("FeedrateIncrement = "), incrementfeedrate, 2);
-
-    if (!Printer::areAxisHomed()) {
-        Printer::homeAxis(true, true, true);
-    }
-
-    //if [S,P] "go to temp" then do so...
-    if (StartTemp > 0) {
-        Extruder::setTemperatureForExtruder((float)StartTemp, Extruder::current->id, true);
-        bool allReached = false;
-        while (!allReached) {
-            allReached = true;
-            Commands::checkForPeriodicalActions(WaitHeater);
-
-            for (uint8_t h = 0; h < NUM_TEMPERATURE_LOOPS; h++) {
-                TemperatureController* act = tempController[h];
-                if (act->targetTemperatureC > MAX_ROOM_TEMPERATURE && fabs(act->targetTemperatureC - act->currentTemperatureC) > TEMP_TOLERANCE) {
-                    allReached = false;
-                }
-            }
-        }
-    }
-
-    if (Extruder::current->tempControl.currentTemperatureC < (float)UI_SET_MIN_EXTRUDER_TEMP) {
-        Com::printF(PSTR("ERROR::Temperature:OFF or lower "), (float)UI_SET_MIN_EXTRUDER_TEMP);
-        Com::printFLN(PSTR(".0°C = "), Extruder::current->tempControl.currentTemperatureC);
-        return;
-    }
-
-    //drive up the Bed 100mm -> if to low then filament will pile up to fast on the z-plattform
-    Printer::queueFloatCoordinates(IGNORE_COORDINATE, IGNORE_COORDINATE, 100, IGNORE_COORDINATE, Printer::homingFeedrate[Z_AXIS]);
-    Printer::queueFloatCoordinates(0, 0, IGNORE_COORDINATE, IGNORE_COORDINATE, Printer::homingFeedrate[Z_AXIS]);
-    Commands::waitUntilEndOfAllMoves(); //startViscosityTest
-
-    //wait and test idle pressure
-    HAL::delayMilliseconds(HEAT_BED_SCAN_DELAY);
-    int err = readIdlePressure(&g_nCurrentIdlePressure);
-    if (err != 0) {
-        HAL::delayMilliseconds(HEAT_BED_SCAN_DELAY);
-        err = readIdlePressure(&g_nCurrentIdlePressure);
-        if (err != 0) {
-            HAL::delayMilliseconds(HEAT_BED_SCAN_DELAY);
-            err = readIdlePressure(&g_nCurrentIdlePressure);
-            if (err != 0) {
-                Com::printFLN(PSTR("error idle pressure"));
-                return;
-            }
-        }
-    }
-
-    long extrudedigits = 0;
-    //REFILL EXTRUDER
-    Com::printFLN(PSTR("Replenish Hotend..."), extrudedigits);
-    for (float e = 0.1; e <= maxfeedrate; e += 0.05) {                  //iterate to fill extruder with filament.
-        Printer::queueRelativeMMCoordinates(0, 0, 0, e, e, true, true); //extrude slow until reaction.
-        extrudedigits = (int)readStrainGauge(ACTIVE_STRAIN_GAUGE);
-        Printer::queueRelativeMMCoordinates(0, 0, 0, e, e, true, true); //extrude slow until reaction.
-        extrudedigits = (int)readStrainGauge(ACTIVE_STRAIN_GAUGE);
-        extrudedigits *= 0.5;
-
-        Com::printFLN(PSTR("force = "), extrudedigits);
-        Commands::printTemperatures();
-        Commands::checkForPeriodicalActions(Processing);
-
-        //refill_digit_limit = n guter Wert fürs Füllen des Hotends nach nem Retract. Zu wenig = noch Luft in Nozzle, zu viel = materialverschwendung bei sehr viskosen materialien.
-        if (extrudedigits < g_nCurrentIdlePressure - refill_digit_limit || extrudedigits > g_nCurrentIdlePressure + refill_digit_limit) {
-            break;
-        }
-    }
-
-    Com::printFLN(PSTR("CSV-Logfile:START"));
-
-    Com::printFLN(PSTR(";Testing Filament..."));
-    Com::printFLN(PSTR(";Temperature [°C];e [mm/s];digits [1]"));
-
-    for (float T = (float)StartTemp; T <= EndTemp;) {
-        //@Init the Temp is reached by preheat!
-        for (float e = 0.05; e <= maxfeedrate; e += incrementfeedrate) { //iterate all points
-            Commands::checkForPeriodicalActions(Processing);
-            //test extrusion speed and get average digits:
-            Printer::queueRelativeMMCoordinates(0, 0, 0, e, e, true, true); //extrude only. time should be constant!
-            extrudedigits = (int)readStrainGauge(ACTIVE_STRAIN_GAUGE);
-            Printer::queueRelativeMMCoordinates(0, 0, 0, e, e, true, true); //extrude only. time should be constant!
-            extrudedigits += (int)readStrainGauge(ACTIVE_STRAIN_GAUGE);
-            Printer::queueRelativeMMCoordinates(0, 0, 0, e, e, true, true); //extrude only. time should be constant!
-            extrudedigits += (int)readStrainGauge(ACTIVE_STRAIN_GAUGE);
-            Printer::queueRelativeMMCoordinates(0, 0, 0, e, e, true, true); //extrude only. time should be constant!
-            extrudedigits += (int)readStrainGauge(ACTIVE_STRAIN_GAUGE);
-            extrudedigits *= 0.25;
-
-            Com::printF(Com::tSemiColon, Extruder::current->tempControl.currentTemperatureC, 1, true); //true = dezimalkomma, nicht punkt. Wegen Excel.
-            Com::printF(Com::tSemiColon, e, 3, true);                                                  //true = dezimalkomma, nicht punkt. Wegen Excel.
-            Com::printFLN(Com::tSemiColon, extrudedigits);
-
-            if (extrudedigits < g_nCurrentIdlePressure - maxdigits || extrudedigits > g_nCurrentIdlePressure + maxdigits || extrudedigits < -maxdigits || extrudedigits > maxdigits) {
-                Printer::queueRelativeMMCoordinates(0, 0, 0, -0.5, 10, true, true); //loose some force on dms
-                break;
-            }
-        }
-
-        //Now we did reach Max-Digits, go one Tempstep higher and retest.
-        T += 5;
-        if (T <= EndTemp) { //nur erhöhen wenn sinnvoll, nicht wenn abbruch.
-            Extruder::setTemperatureForExtruder(T, Extruder::current->id, true);
-            //Wait until all the Temperatures are reached and stable.
-            bool allReached = false;
-            while (!allReached) {
-                allReached = true;
-                Commands::checkForPeriodicalActions(WaitHeater);
-
-                for (uint8_t h = 0; h < NUM_TEMPERATURE_LOOPS; h++) {
-                    TemperatureController* act = tempController[h];
-                    if (act->targetTemperatureC > MAX_ROOM_TEMPERATURE && fabs(act->targetTemperatureC - act->currentTemperatureC) > TEMP_TOLERANCE) {
-                        allReached = false;
-                    }
-                }
-            }
-        }
-    }
-
-    Com::printFLN(PSTR("CSV-Logfile:ENDE"));
-    Com::printFLN(PSTR("Copy and save this Log to *.csv-File for Excel."));
-
-    if (StartTemp > 0)
-        Extruder::setTemperatureForExtruder(0, Extruder::current->id, true); //wir schalten aus, aber auch wieder an.
-    UI_STATUS_UPD(UI_TEXT_TEST_STRAIN_GAUGE_DONE);                           //gives "Test Completed"
-    previousMillisCmd = HAL::timeInMilliseconds();                           //prevent inactive shutdown of steppers/temps
-} // startViscosityTest()
-#endif //FEATURE_VISCOSITY_TEST
 /**************************************************************************************************************************************/
 
 /**************************************************************************************************************************************/
@@ -4628,34 +4431,6 @@ void handleScanWorkTasks() {
 #endif // FEATURE_ALIGN_EXTRUDERS
 }
 
-#if FEATURE_SERVICE_INTERVAL
-void handleServiceInterval(millis_t uTime) {
-    if (!g_nEnteredService) {
-        /*
-        Eigentlich überall so, aber hier völlig unnötig.
-        if( g_nlastServiceTime > uTime ){
-            return;
-        }*/
-        if ((uTime - g_nlastServiceTime) > 5000) {
-            g_uStartOfIdle = uTime; //enter FEATURE_SERVICE_INTERVAL
-
-            if (READ(5) == 0 && READ(11) == 0 && READ(42) == 0) {
-                if (g_nServiceRequest == 1) {
-                    HAL::eprSetInt32(EPR_PRINTING_TIME_SERVICE, 0);
-                    EEPROM::updateChecksum();
-                    HAL::eprSetFloat(EPR_PRINTING_DISTANCE_SERVICE, 0);
-                    EEPROM::updateChecksum();
-                    Com::printF(PSTR("Service Reset"));
-                }
-            } else {
-                g_nServiceRequest = 0;
-            }
-            g_nEnteredService = 1;
-        }
-    }
-}
-#endif // FEATURE_SERVICE_INTERVAL
-
 void handleStartPrint() {
     if (PrintLine::linesCount > 2 && !g_uStopTime && !g_uBlockCommands) {
         // this check shall be done only during the printing (for example, it shall not be done in case filament is extruded manually)
@@ -4916,10 +4691,6 @@ void loopFeatures() //wird so aufgerufen, dass es ein ~100ms Takt sein sollte.
         handleStartStandby(uTime);
         handleStrainGaugeFeatures(uTime);
 
-#if FEATURE_SERVICE_INTERVAL
-        handleServiceInterval(uTime);
-#endif // FEATURE_SERVICE_INTERVAL
-
         handlePauseTime(uTime);
 
 #if FEATURE_RGB_LIGHT_EFFECTS
@@ -4935,32 +4706,6 @@ void loopFeatures() //wird so aufgerufen, dass es ein ~100ms Takt sein sollte.
     // Direct-move waits can re-enter this loop. Only pending requests start a transition.
     handlePauseStatus();
 } // loopFeatures
-
-#if FEATURE_PARK
-void parkPrinter(void) {
-    if (PrintLine::linesCount) {
-        // there is some printing in progress at the moment - do not park the printer in this case
-        if (Printer::debugErrors()) {
-            Com::printFLN(PSTR("parkPrinter(): the printer can not be parked while the printing is in progress"));
-        }
-
-        showError((void*)ui_text_park_heat_bed, (void*)ui_text_operation_denied);
-        return;
-    }
-
-    // it does not make sense to update the status here because the following homing operations will update the status by themselves
-    //UI_STATUS_UPD( );
-
-    if (Printer::debugInfo()) {
-        Com::printFLN(PSTR("parkPrinter()"));
-    }
-
-    Printer::homeAxis(true, true, true);
-
-    Printer::queueFloatCoordinates(g_nParkPosition[X_AXIS], g_nParkPosition[Y_AXIS], g_nParkPosition[Z_AXIS], IGNORE_COORDINATE, Printer::homingFeedrate[X_AXIS]);
-
-} // parkPrinter
-#endif // FEATURE_PARK
 
 static void waitForPauseTransition() {
     while (g_pauseMode && !isPauseSettled() && !Printer::blockAll) {
@@ -6013,14 +5758,6 @@ void processSpecialGCode(GCode* pCommand) {
             break;
         }
 
-#if FEATURE_PARK
-        case 3080: // M3080 - park the printer
-        {
-            parkPrinter();
-            break;
-        }
-#endif // FEATURE_PARK
-
         // FEATURE_WATCHDOG
         case 3090: // M3090 - test the watchdog (this command resets the firmware)
         {
@@ -6111,59 +5848,6 @@ void processSpecialGCode(GCode* pCommand) {
             }
             break;
         }
-
-#if FEATURE_PARK
-        case 3103: // M3103 [X] [Y] [Z] - configure the x, y and z position which shall set when the printer is parked ( units are [mm] )
-        {
-            if (pCommand->hasNoXYZ()) {
-                showInvalidSyntax(pCommand->M);
-            } else {
-                if (pCommand->hasX()) {
-                    // test and take over the specified value
-                    nTemp = pCommand->X;
-                    if (nTemp < 0)
-                        nTemp = 0;
-                    if (nTemp > Printer::maxSoftEndstopSteps[X_AXIS] * Printer::axisMMPerSteps[X_AXIS])
-                        nTemp = Printer::maxSoftEndstopSteps[X_AXIS] * Printer::axisMMPerSteps[X_AXIS];
-
-                    g_nParkPosition[X_AXIS] = nTemp;
-                    if (Printer::debugInfo()) {
-                        Com::printF(PSTR("M3103: new x park position: "), g_nParkPosition[X_AXIS]);
-                        Com::printFLN(PSTR(" [mm]"));
-                    }
-                }
-                if (pCommand->hasY()) {
-                    // test and take over the specified value
-                    nTemp = pCommand->Y;
-                    if (nTemp < 0)
-                        nTemp = 0;
-                    if (nTemp > Printer::maxSoftEndstopSteps[Y_AXIS] * Printer::axisMMPerSteps[Y_AXIS])
-                        nTemp = Printer::maxSoftEndstopSteps[Y_AXIS] * Printer::axisMMPerSteps[Y_AXIS];
-
-                    g_nParkPosition[Y_AXIS] = nTemp;
-                    if (Printer::debugInfo()) {
-                        Com::printF(PSTR("M3103: new y park position: "), g_nParkPosition[Y_AXIS]);
-                        Com::printFLN(PSTR(" [mm]"));
-                    }
-                }
-                if (pCommand->hasZ()) {
-                    // test and take over the specified value
-                    nTemp = pCommand->Z;
-                    if (nTemp < 0)
-                        nTemp = 0;
-                    if (nTemp > Printer::maxSoftEndstopSteps[Z_AXIS] * Printer::axisMMPerSteps[Z_AXIS])
-                        nTemp = Printer::maxSoftEndstopSteps[Z_AXIS] * Printer::axisMMPerSteps[Z_AXIS];
-
-                    g_nParkPosition[Z_AXIS] = nTemp;
-                    if (Printer::debugInfo()) {
-                        Com::printF(PSTR("M3103: new z park position: "), g_nParkPosition[Z_AXIS]);
-                        Com::printFLN(PSTR(" [mm]"));
-                    }
-                }
-            }
-            break;
-        }
-#endif // FEATURE_PARK
 
         case 3115: // M3115 - set the x/y origin to the current x/y position
         {
@@ -6289,8 +5973,6 @@ void processSpecialGCode(GCode* pCommand) {
                             BEEP_ABORT_HEAT_BED_SCAN break;
                         case 10:
                             BEEP_STOP_HEAT_BED_SCAN break;
-                        case 11:
-                            BEEP_SERVICE_INTERVALL break;
                         case 12:
                             BEEP_ALIGN_EXTRUDERS break;
                         case 13:
@@ -7612,67 +7294,6 @@ void processSpecialGCode(GCode* pCommand) {
             break;
         }
 
-#if FEATURE_VISCOSITY_TEST
-        case 3939: // 3939 startViscosityTest - Testfunction to determine the digits over extrusion speed || by Nibbels
-        {
-            Com::printFLN(PSTR("M3939 ViscosityTest starting ..."));
-
-            int maxD = 10000;
-            float maxE = 5.0f;
-            float Inc = 0.1f;
-            int maxRFill = 800;
-            short StartTemp = 0; //0=aus, der user muss das dann einstellen.
-            short EndTemp = 0;
-
-            if (pCommand->hasF()) {
-                if (pCommand->F < 32767 && pCommand->F > 0 && pCommand->F < (g_nEmergencyPauseDigitsMax * 0.8)) {
-                    maxD = (int)pCommand->F;
-                } else {
-                    Com::printFLN(PSTR("M3939 [F] Digits ERROR"));
-                }
-            }
-            if (pCommand->hasE()) {
-                maxE = (float)pCommand->E;
-            }
-            if (pCommand->hasI()) {
-                Inc = (float)pCommand->I;
-            }
-            if (pCommand->hasR()) {
-                maxRFill = (float)pCommand->R;
-            }
-            if (pCommand->hasS()) {
-                if (pCommand->S > UI_SET_MAX_EXTRUDER_TEMP)
-                    pCommand->S = UI_SET_MAX_EXTRUDER_TEMP;
-                if (pCommand->S < UI_SET_MIN_EXTRUDER_TEMP)
-                    pCommand->S = UI_SET_MIN_EXTRUDER_TEMP;
-                StartTemp = (short)pCommand->S;
-            }
-            if (pCommand->hasP()) {
-                if (pCommand->P > UI_SET_MAX_EXTRUDER_TEMP)
-                    pCommand->P = UI_SET_MAX_EXTRUDER_TEMP;
-                if (pCommand->P < UI_SET_MIN_EXTRUDER_TEMP)
-                    pCommand->P = UI_SET_MIN_EXTRUDER_TEMP;
-
-                if (pCommand->P < StartTemp)
-                    pCommand->P = StartTemp;
-                EndTemp = (short)pCommand->P;
-            }
-            /*
-            Com::printFLN( PSTR( "M3939 [F] Digits_max_in = " ) , maxD );
-            Com::printFLN( PSTR( "M3939 [E] Extrusionspeed_max_in = " ) , maxE , 1 );
-            Com::printFLN( PSTR( "M3939 [I] Extr. Increment_in = " ) , Inc , 2 );
-            Com::printFLN( PSTR( "M3939 [R] RefillLimit Digits_in = " ) , maxRFill );
-            Com::printFLN( PSTR( "M3939 [S] StartTemp = " ) , StartTemp );
-            Com::printFLN( PSTR( "M3939 [P] EndTemp = " ) , EndTemp );
-            Com::printFLN( PSTR( "M3939 If [S] and [P] = 0, then no temperature is set." ) );
-            */
-            startViscosityTest(maxD, maxE, Inc, StartTemp, EndTemp, maxRFill); //E ist float, constraint in funktion!
-
-            Com::printFLN(PSTR("M3939 Ended!"));
-            break;
-        }
-#endif // FEATURE_VISCOSITY_TEST
-
 #if RESERVE_ANALOG_INPUTS
         case 3941: // 3941 reading optional temperature port X35 - Testfunction || by Nibbels
         {
@@ -7696,22 +7317,7 @@ void processSpecialGCode(GCode* pCommand) {
         }
 #endif //FEATURE_READ_STEPPER_STATUS
 
-#if FEATURE_USER_INT3
-        case 3989: // M3989 : proof that dummy function/additional hardware button works! || by Nibbels
-        {
-            Com::printFLN(PSTR("Request INT3:"), g_uCOUNT_INT3); //evtl. je nach Anwendung entprellen nötig: wenn entprellen nötig, hilft evtl. interrupt nach ausführung sperren und mit dem watchdog-timer erneut entsperren.
-            break;
-        }
-#endif //FEATURE_USER_INT3
    
-#if FEATURE_READ_CALIPER
-        case 3999: // M3999 : proof that dummy function/additional hardware button works! || by Nibbels
-        {
-            Com::printF(PSTR("Caliper: "), caliper_um);
-            Com::printFLN(PSTR("[um]"));
-            break;
-        }
-#endif //FEATURE_READ_CALIPER
         }
     }
 } // processSpecialGCode
