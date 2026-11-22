@@ -4585,7 +4585,6 @@ void processSpecialGCode(GCode* pCommand) {
             break;
         }
 
-#if FEATURE_CHECK_HOME
         case 3028: // M3028
         {
             if (pCommand->hasX()) {
@@ -4599,7 +4598,6 @@ void processSpecialGCode(GCode* pCommand) {
             }
             break;
         }
-#endif // FEATURE_CHECK_HOME
 
         case 3029: // M3029 [P] - See the display text or send Button press per gcode to the printer via [P]Code.
         {
@@ -7656,47 +7654,6 @@ void addFloat(char* pszString, float fNumber, uint8_t uDigits) {
     }
 
 } // addFloat
-
-#if FEATURE_HEAT_BED_TEMP_COMPENSATION
-float getHeatBedTemperatureOffset(float temperatureInCelsius) {
-    const unsigned char setpointTemperatures[] = BED_SETPOINT_TEMPERATURES;
-    const unsigned char measuredTemperatures[] = BED_MEASURED_TEMPERATURES;
-    float deltaLow, deltaHigh;
-    float temp;
-    unsigned char i;
-
-    if (temperatureInCelsius <= setpointTemperatures[0]) {
-        // the specified temperature is below our known, measured values
-        deltaLow = 0;
-        deltaHigh = measuredTemperatures[0] - setpointTemperatures[0];
-
-        temp = (deltaHigh - deltaLow) / float(setpointTemperatures[0]);
-        temp *= temperatureInCelsius;
-        return temp;
-    }
-
-    if (temperatureInCelsius >= setpointTemperatures[BED_TEMP_COMPENSATION_INDEX_MAX]) {
-        // the specified temperature is above our known, measured values
-        temp = measuredTemperatures[BED_TEMP_COMPENSATION_INDEX_MAX] - setpointTemperatures[BED_TEMP_COMPENSATION_INDEX_MAX];
-        return temp;
-    }
-
-    for (i = 1; i <= BED_TEMP_COMPENSATION_INDEX_MAX; i++) {
-        if (temperatureInCelsius < setpointTemperatures[i]) {
-            deltaLow = measuredTemperatures[i - 1] - setpointTemperatures[i - 1];
-            deltaHigh = measuredTemperatures[i] - setpointTemperatures[i];
-
-            temp = (deltaHigh - deltaLow) / float(setpointTemperatures[i] - setpointTemperatures[i - 1]);
-            temp *= (temperatureInCelsius - setpointTemperatures[i - 1]);
-            return (temp + deltaLow);
-        }
-    }
-
-    // we should never end up here
-    return 0;
-
-} // getHeatBedTemperatureOffset
-#endif // FEATURE_HEAT_BED_TEMP_COMPENSATION
 
 void determineHardwareType(void) {
     unsigned short uTemp;

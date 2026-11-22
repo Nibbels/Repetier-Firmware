@@ -222,7 +222,7 @@ void Extruder::manageTemperatures() {
 
     if (Printer::isAnyTempsensorDefect()) {
         for (uint8_t controller = 0; controller < NUM_TEMPERATURE_LOOPS; controller++) {
-            tempController[controller]->setTargetTemperature(0, 0);
+            tempController[controller]->setTargetTemperature(0);
         }
         Printer::debugLevel |= 8; // Go into dry mode
     } else {
@@ -416,7 +416,7 @@ void Extruder::setTemperatureForExtruder(float temperatureInCelsius, uint8_t ext
         temperatureInCelsius = 0;
     if (tc->sensorType == 0)
         temperatureInCelsius = 0;
-    tc->setTargetTemperature(temperatureInCelsius, 0);
+    tc->setTargetTemperature(temperatureInCelsius);
     tc->updateTempControlVars();
 
     if (temperatureInCelsius >= EXTRUDER_FAN_COOL_TEMP)
@@ -485,8 +485,6 @@ void Extruder::setTemperatureForAllExtruders(float temperatureInCelsius) {
 
 void Extruder::setHeatedBedTemperature(float temperatureInCelsius) {
 #if HAVE_HEATED_BED
-    float offset = 0.0;
-
     if (temperatureInCelsius > HEATED_BED_MAX_TEMP)
         temperatureInCelsius = HEATED_BED_MAX_TEMP;
     if (temperatureInCelsius < 0)
@@ -497,11 +495,7 @@ void Extruder::setHeatedBedTemperature(float temperatureInCelsius) {
     if (heatedBedController.targetTemperatureC == temperatureInCelsius)
         return; // don't flood log with messages if killed
 
-#if FEATURE_HEAT_BED_TEMP_COMPENSATION
-    offset = -getHeatBedTemperatureOffset(temperatureInCelsius);
-#endif // FEATURE_HEAT_BED_TEMP_COMPENSATION
-
-    heatedBedController.setTargetTemperature(temperatureInCelsius, offset);
+    heatedBedController.setTargetTemperature(temperatureInCelsius);
 
     if (Printer::debugInfo()) {
         Com::printFLN(Com::tTargetBedColon, heatedBedController.targetTemperatureC, 0);
@@ -730,6 +724,40 @@ const uint8_t temptables_num[15] PROGMEM = {
     NUMTEMPS_15
 };
 
+namespace {
+constexpr uint8_t temperatureCalibrationPoints[] = { 60, 80, 100, 120, 140, 160 };
+constexpr int8_t temperatureCalibrationOffsets[] = SENSOR_TEMPERATURE_OFFSETS_C;
+constexpr uint8_t temperatureCalibrationCount = sizeof(temperatureCalibrationPoints);
+static_assert(temperatureCalibrationCount == sizeof(temperatureCalibrationOffsets), "Each temperature point needs one offset");
+
+constexpr bool hasTemperatureCalibration(uint8_t point = 0) {
+    return point < temperatureCalibrationCount
+        && (temperatureCalibrationOffsets[point] != 0 || hasTemperatureCalibration(point + 1));
+}
+
+float calibratedSensorTemperature(float sensorCelsius) {
+    constexpr bool needsCorrection = hasTemperatureCalibration();
+    if (!needsCorrection)
+        return sensorCelsius;
+
+    // The curve starts at (0 °C, 0 °C offset) and keeps the last offset above the final point.
+    uint8_t low = 0;
+    int8_t lowOffset = 0;
+    for (uint8_t point = 0; point < temperatureCalibrationCount; ++point) {
+        const uint8_t high = temperatureCalibrationPoints[point];
+        const int8_t highOffset = temperatureCalibrationOffsets[point];
+        if (sensorCelsius < high) {
+            const float slope = (highOffset - lowOffset) / float(high - low);
+            const float offset = slope * (sensorCelsius - low) + lowOffset;
+            return sensorCelsius + offset;
+        }
+        low = high;
+        lowOffset = highOffset;
+    }
+    return sensorCelsius + lowOffset;
+}
+}
+
 void TemperatureController::updateCurrentTemperature() {
     uint8_t type = sensorType;
     // get raw temperature
@@ -831,39 +859,27 @@ void TemperatureController::updateCurrentTemperature() {
             int16_t newraw = pgm_read_word(&temptable[i++]);
             newtemp = pgm_read_word(&temptable[i++]);
             if (newraw > currentTemperature) {
-                currentTemperatureC = TEMP_INT_TO_FLOAT(oldtemp + (float)(currentTemperature - oldraw) * (float)(newtemp - oldtemp) / (newraw - oldraw));
-#if FEATURE_HEAT_BED_TEMP_COMPENSATION
-                currentTemperatureC += getHeatBedTemperatureOffset(currentTemperatureC);
-#endif // FEATURE_HEAT_BED_TEMP_COMPENSATION
-
+                const float sensorCelsius = TEMP_INT_TO_FLOAT(oldtemp + (float)(currentTemperature - oldraw) * (float)(newtemp - oldtemp) / (newraw - oldraw));
+                currentTemperatureC = calibratedSensorTemperature(sensorCelsius);
                 return;
             }
             oldtemp = newtemp;
             oldraw = newraw;
         }
         // Overflow: Set to last value in the table
-        currentTemperatureC = TEMP_INT_TO_FLOAT(newtemp);
-#if FEATURE_HEAT_BED_TEMP_COMPENSATION
-        currentTemperatureC += getHeatBedTemperatureOffset(currentTemperatureC);
-#endif // FEATURE_HEAT_BED_TEMP_COMPENSATION
+        currentTemperatureC = calibratedSensorTemperature(TEMP_INT_TO_FLOAT(newtemp));
 
         break;
     }
     case 60: // AD8495 (Delivers 5mV/degC vs the AD595's 10mV)
     {
-        currentTemperatureC = ((float)currentTemperature * 1000.0f / (1024 << (2 - ANALOG_REDUCE_BITS)));
-#if FEATURE_HEAT_BED_TEMP_COMPENSATION
-        currentTemperatureC += getHeatBedTemperatureOffset(currentTemperatureC);
-#endif // FEATURE_HEAT_BED_TEMP_COMPENSATION
+        currentTemperatureC = calibratedSensorTemperature((float)currentTemperature * 1000.0f / (1024 << (2 - ANALOG_REDUCE_BITS)));
 
         break;
     }
     case 100: // AD595
     {
-        currentTemperatureC = ((float)currentTemperature * 500.0f / (1024 << (2 - ANALOG_REDUCE_BITS)));
-#if FEATURE_HEAT_BED_TEMP_COMPENSATION
-        currentTemperatureC += getHeatBedTemperatureOffset(currentTemperatureC);
-#endif // FEATURE_HEAT_BED_TEMP_COMPENSATION
+        currentTemperatureC = calibratedSensorTemperature((float)currentTemperature * 500.0f / (1024 << (2 - ANALOG_REDUCE_BITS)));
 
         break;
     }
@@ -900,21 +916,15 @@ void TemperatureController::updateCurrentTemperature() {
             int16_t newraw = temptable[i++];
             newtemp = temptable[i++];
             if (newraw > currentTemperature) {
-                currentTemperatureC = TEMP_INT_TO_FLOAT(oldtemp + (float)(currentTemperature - oldraw) * (float)(newtemp - oldtemp) / (newraw - oldraw));
-#if FEATURE_HEAT_BED_TEMP_COMPENSATION
-                currentTemperatureC += getHeatBedTemperatureOffset(currentTemperatureC);
-#endif // FEATURE_HEAT_BED_TEMP_COMPENSATION
-
+                const float sensorCelsius = TEMP_INT_TO_FLOAT(oldtemp + (float)(currentTemperature - oldraw) * (float)(newtemp - oldtemp) / (newraw - oldraw));
+                currentTemperatureC = calibratedSensorTemperature(sensorCelsius);
                 return;
             }
             oldtemp = newtemp;
             oldraw = newraw;
         }
         // Overflow: Set to last value in the table
-        currentTemperatureC = TEMP_INT_TO_FLOAT(newtemp);
-#if FEATURE_HEAT_BED_TEMP_COMPENSATION
-        currentTemperatureC += getHeatBedTemperatureOffset(currentTemperatureC);
-#endif // FEATURE_HEAT_BED_TEMP_COMPENSATION
+        currentTemperatureC = calibratedSensorTemperature(TEMP_INT_TO_FLOAT(newtemp));
 
         break;
     }
@@ -923,16 +933,11 @@ void TemperatureController::updateCurrentTemperature() {
 
 } // updateCurrentTemperature
 
-void TemperatureController::setTargetTemperature(float target, float offset) {
+void TemperatureController::setTargetTemperature(float target) {
     if (target <= 0.0f || target < targetTemperatureC)
         pwm_pos[pwmIndex] = 0;
     targetTemperatureC = target;
     stopDecouple();
-#if FEATURE_HEAT_BED_TEMP_COMPENSATION
-    offsetC = offset; //this->offsetC
-#else
-    (void)offset;
-#endif // FEATURE_HEAT_BED_TEMP_COMPENSATION
 
     //do not set back temperatures to "not idle temperatures" after pause, if they have been changed manually within the pause.
     paused = 0;
@@ -1206,9 +1211,6 @@ Extruder extruder[NUM_EXTRUDER] = {
 #endif // USE_ADVANCE
       {
           0, EXT0_TEMPSENSOR_TYPE, EXT0_SENSOR_INDEX, 0, 0, 0,
-#if FEATURE_HEAT_BED_TEMP_COMPENSATION
-          0,
-#endif // FEATURE_HEAT_BED_TEMP_COMPENSATION
           0,
           0,
           EXT0_PID_INTEGRAL_DRIVE_MAX,
@@ -1256,9 +1258,6 @@ Extruder extruder[NUM_EXTRUDER] = {
 #endif // USE_ADVANCE
       {
           1, EXT1_TEMPSENSOR_TYPE, EXT1_SENSOR_INDEX, 0, 0, 0,
-#if FEATURE_HEAT_BED_TEMP_COMPENSATION
-          0,
-#endif // FEATURE_HEAT_BED_TEMP_COMPENSATION
           0,
           0,
           EXT1_PID_INTEGRAL_DRIVE_MAX,
@@ -1293,9 +1292,6 @@ Extruder extruder[NUM_EXTRUDER] = {
 #define NUM_TEMPERATURE_LOOPS NUM_EXTRUDER + 1
 TemperatureController heatedBedController = {
     NUM_EXTRUDER, HEATED_BED_SENSOR_TYPE, BED_SENSOR_INDEX, 0, 0, 0,
-#if FEATURE_HEAT_BED_TEMP_COMPENSATION
-    0,
-#endif // FEATURE_HEAT_BED_TEMP_COMPENSATION
     0,
     0,
     HEATED_BED_PID_INTEGRAL_DRIVE_MAX,
@@ -1326,9 +1322,6 @@ TODO: Making a totally clean class, without the logic to controll something.
 */
 TemperatureController optTempController = {
     0, RESERVE_ANALOG_SENSOR_TYPE, RESERVE_SENSOR_INDEX, 0, 0, 0,
-#if FEATURE_HEAT_BED_TEMP_COMPENSATION
-    0,
-#endif // FEATURE_HEAT_BED_TEMP_COMPENSATION
     0,
     0,
     0,

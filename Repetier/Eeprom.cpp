@@ -218,12 +218,10 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     g_nSensiblePressureOffsetMax = (short)SENSIBLE_PRESSURE_MAX_OFFSET;
     Printer::g_senseoffset_autostart = false;
 
-#if FEATURE_Kurt67_WOBBLE_FIX
     Printer::wobblePhaseXY = 0;
     Printer::wobbleAmplitudes[0] = 0;
     Printer::wobbleAmplitudes[1] = 0;
     Printer::wobbleAmplitudes[2] = 0;
-#endif //FEATURE_Kurt67_WOBBLE_FIX
 
     g_nEmergencyPauseDigitsMax = EMERGENCY_PAUSE_DIGITS_MAX;
     g_nEmergencyPauseDigitsMin = EMERGENCY_PAUSE_DIGITS_MIN;
@@ -374,12 +372,10 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX, g_nSensiblePressureOffsetMax);
     HAL::eprSetByte(EPR_RF_MOD_SENSEOFFSET_AUTOSTART, Printer::g_senseoffset_autostart);
 
-#if FEATURE_Kurt67_WOBBLE_FIX
     HAL::eprSetByte(EPR_RF_MOD_WOBBLE_FIX_PHASEXY, Printer::wobblePhaseXY);
     HAL::eprSetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPX, Printer::wobbleAmplitudes[0]);
     HAL::eprSetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPY1, Printer::wobbleAmplitudes[1]);
     HAL::eprSetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPY2, Printer::wobbleAmplitudes[2]);
-#endif //FEATURE_Kurt67_WOBBLE_FIX
 
     HAL::eprSetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMIN, g_nEmergencyPauseDigitsMin);
     HAL::eprSetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMAX, g_nEmergencyPauseDigitsMax);
@@ -725,12 +721,10 @@ void EEPROM::readDataFromEEPROM() {
     g_nSensiblePressureOffsetMax = (HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX) == 0) ? (short)SENSIBLE_PRESSURE_MAX_OFFSET : (short)constrain(HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX), 1, 300);
     Printer::g_senseoffset_autostart = HAL::eprGetByte(EPR_RF_MOD_SENSEOFFSET_AUTOSTART);
 
-#if FEATURE_Kurt67_WOBBLE_FIX
     Printer::wobblePhaseXY = HAL::eprGetByte(EPR_RF_MOD_WOBBLE_FIX_PHASEXY);
     Printer::wobbleAmplitudes[0] = HAL::eprGetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPX);
     Printer::wobbleAmplitudes[1] = HAL::eprGetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPY1);
     Printer::wobbleAmplitudes[2] = HAL::eprGetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPY2);
-#endif //FEATURE_Kurt67_WOBBLE_FIX
 
     g_nEmergencyPauseDigitsMin = (long)constrain(HAL::eprGetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMIN), EMERGENCY_PAUSE_DIGITS_MIN, EMERGENCY_PAUSE_DIGITS_MAX); //limit to value in config.
     g_nEmergencyPauseDigitsMax = (long)constrain(HAL::eprGetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMAX), EMERGENCY_PAUSE_DIGITS_MIN, EMERGENCY_PAUSE_DIGITS_MAX); //limit to value in config.

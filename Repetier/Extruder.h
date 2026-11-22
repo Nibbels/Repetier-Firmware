@@ -42,10 +42,6 @@ public:
     float currentTemperatureC;  ///< Current temperature in degC.
     float targetTemperatureC;   ///< Target temperature in degC.
 
-#if FEATURE_HEAT_BED_TEMP_COMPENSATION
-    float offsetC; ///< offset in degC.
-#endif             // FEATURE_HEAT_BED_TEMP_COMPENSATION
-
     uint32_t lastTemperatureUpdate; ///< Time in millis of the last temperature update.
 
     float tempIState;    ///< Temp. var. for PID computation.
@@ -68,7 +64,7 @@ public:
 
     uint8_t paused;
 
-    void setTargetTemperature(float target, float offset);
+    void setTargetTemperature(float target);
     void updateCurrentTemperature();
     void updateTempControlVars();
     void waitForTargetTemperature(uint8_t plus_temp_tolerance = 0, bool resumingPause = false);

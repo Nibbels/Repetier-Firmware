@@ -159,11 +159,9 @@ short Printer::g_pressure_offset = 0;
 //RF_MICRO_STEPS_ have values 0=FULL 1=2MS, 2=4MS, 3=8MS, 4=16MS, 5=32MS, 6=64MS, 7=128MS, 8=256MS
 uint8_t Printer::motorMicroStepsModeValue[DRV8711_NUM_CHANNELS] = { 0 }; //init later because of recalculation of value
 
-#if FEATURE_Kurt67_WOBBLE_FIX
-int8_t Printer::wobblePhaseXY = 0;             //+100 = +PI | -100 = -PI
-int16_t Printer::wobbleAmplitudes[3] = { 0 };  //X, Y(X_0), Y(X_max), /*Z*/
-float Printer::lastWobbleFixOffset[2] = { 0 }; ///< last calculated target wobbleFixOffsets for relative coordinates and display output.
-#endif                                         // FEATURE_Kurt67_WOBBLE_FIX
+int8_t Printer::wobblePhaseXY = 0; // +100 = +pi, -100 = -pi.
+int16_t Printer::wobbleAmplitudes[3] = { 0 };
+float Printer::lastWobbleFixOffset[2] = { 0 };
 
 void Printer::updateDerivedParameter() {
     // das extruder offset dürfen wir zur achslänge addieren, weil in dem Axis-Length von z.b. 180 mm schon angenommen wird, dass der extruder mit beiden nozzles jeden punkt erreicht.
@@ -259,7 +257,6 @@ void Printer::updateAdvanceActivated() {
 #endif // USE_ADVANCE
 } // updateAdvanceActivated
 
-#if FEATURE_Kurt67_WOBBLE_FIX
 void Printer::addKurtWobbleFixOffset() {
     /*
     Zielkoordinate in Z ist: "z"
@@ -308,7 +305,6 @@ void Printer::addKurtWobbleFixOffset() {
         Printer::lastWobbleFixOffset[Y_AXIS] = wOffsetY;
     }
 } // addKurtWobbleFixOffset
-#endif // FEATURE_Kurt67_WOBBLE_FIX
 
 inline bool isExtrusionAllowed(float e) {
     // calculate total amount of extrusion respecting coordinate mode
@@ -402,11 +398,10 @@ bool Printer::queueGCodeCoordinates(GCode* com) {
         Printer::setFeedrate(com->F);
     }
 
-#if FEATURE_Kurt67_WOBBLE_FIX
-    if (isXYZMove) {
+    // Test the three integer amplitudes together before entering the float calculations.
+    if (isXYZMove && (wobbleAmplitudes[0] | wobbleAmplitudes[1] | wobbleAmplitudes[2])) {
         addKurtWobbleFixOffset();
     }
-#endif // FEATURE_Kurt67_WOBBLE_FIX
 
     if (isXYZMove || isEMove) {
         PrintLine::prepareQueueMove(false, true, Printer::feedrate);
@@ -944,7 +939,6 @@ int8_t Printer::anyHomeDir(uint8_t axis) {
     return nHomeDir;
 }
 
-#if FEATURE_CHECK_HOME
 bool Printer::anyEndstop(uint8_t axis) {
     int endstop = 0;
     for (uint8_t i = 1; i <= 3; i++) {
@@ -1172,7 +1166,6 @@ int8_t Printer::checkHome(int8_t axis) //X_AXIS 0, Y_AXIS 1, Z_AXIS 2
 
     return 1;
 } // checkHome
-#endif // FEATURE_CHECK_HOME
 
 void Printer::homeXAxis() {
     char nHomeDir = Printer::anyHomeDir(X_AXIS);

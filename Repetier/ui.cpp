@@ -1875,7 +1875,6 @@ void UIDisplay::parse(char* txt, bool ram) {
             }
             break;
         }
-#if FEATURE_Kurt67_WOBBLE_FIX
         case 'w': //wobblefix
         {
             if (c2 == 'x') // %wx : current wobblefix offset in x [um] (Bauchtanz)
@@ -1908,7 +1907,6 @@ void UIDisplay::parse(char* txt, bool ram) {
 
             break;
         }
-#endif            //FEATURE_Kurt67_WOBBLE_FIX
         case 'Z': // %Z5-Z8: Printing statistics
         {
             if (c2 == '5') // Shows text printing time
@@ -3244,7 +3242,6 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         break;
     }
 
-#if FEATURE_Kurt67_WOBBLE_FIX
     //Antibauchtanz:
     case UI_ACTION_WOBBLE_FIX_PHASEXY: {
         INCREMENT_MIN_MAX(Printer::wobblePhaseXY, 1, -100, 101);
@@ -3276,19 +3273,6 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         EEPROM::updateChecksum();
         break;
     }
-    //Antikippeln:
-    /*
-    case UI_ACTION_WOBBLE_FIX_PHASEZ:
-    {
-    INCREMENT_MIN_MAX(Printer::wobblePhaseZ,1,-100,100);
-    break;
-    }
-    case UI_ACTION_WOBBLE_FIX_AMPZ:
-    {
-    INCREMENT_MIN_MAX(Printer::wobbleAmplitudes[3],5,-995,995);
-    break;
-    }*/
-#endif //FEATURE_Kurt67_WOBBLE_FIX
 
     case UI_ACTION_CHOOSE_DMIN: {
         if (menuLevel == 4) {                        //identifikation des temperaturzyklus anhand der position im menü. Das ist nicht 100% sauber, aber funktioniert.

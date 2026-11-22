@@ -875,9 +875,6 @@ bool GCode::parseAscii(char* line, bool fromSerial) {
             uint8_t checksum = 0;
             while (line != (pos - 1))
                 checksum ^= *line++;
-#if FEATURE_CHECKSUM_FORCED
-            Printer::flag0 |= PRINTER_FLAG0_FORCE_CHECKSUM;
-#endif
             if (checksum != checksum_given) {
                 Com::printErrorFLN(Com::tWrongChecksum);
                 GCode::outputGCommand();

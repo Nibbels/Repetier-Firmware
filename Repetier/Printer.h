@@ -27,7 +27,6 @@
 #define PRINTER_FLAG0_STEPPER_DISABLED 1
 #define PRINTER_FLAG0_SEPERATE_EXTRUDER_INT 2
 #define PRINTER_FLAG0_TEMPSENSOR_DEFECT 4
-#define PRINTER_FLAG0_FORCE_CHECKSUM 8
 #define PRINTER_FLAG0_MANUAL_MOVE_MODE 16
 #define PRINTER_FLAG0_LARGE_MACHINE 128
 
@@ -178,12 +177,9 @@ public:
 
     static uint8_t motorMicroStepsModeValue[DRV8711_NUM_CHANNELS]; //1=2MS, 2=4MS, 3=8MS, 4=16MS, 5=32MS, 6=64MS, 7=128MS, 8=256MS
 
-#if FEATURE_Kurt67_WOBBLE_FIX
     static int8_t wobblePhaseXY;
-    //static int8_t           wobblePhaseZ;
-    static int16_t wobbleAmplitudes[3 /*4*/];  //X, Y(X_0), Y(X_max), /*Z*/
-    static float lastWobbleFixOffset[2 /*3*/]; //< last calculated target wobbleFixOffsets for display output.
-#endif                                         // FEATURE_Kurt67_WOBBLE_FIX
+    static int16_t wobbleAmplitudes[3]; // X, Y at X-min, Y at X-max, in micrometres.
+    static float lastWobbleFixOffset[2]; // Last X/Y correction in millimetres.
 
     static INLINE void setMenuMode(uint8_t mode, bool on) {
         if (on)
@@ -465,14 +461,12 @@ public:
     } // isZHomeSafe
 
     static int8_t anyHomeDir(uint8_t axis);
-#if FEATURE_CHECK_HOME
     static bool anyEndstop(uint8_t axis);
     static void changeAxisDirection(uint8_t axis, int8_t direction);
     static void startAxisStep(uint8_t axis);
     static void endAxisStep(uint8_t axis);
     static void stepAxisStep(uint8_t axis, uint8_t slower = 1);
-    static int8_t checkHome(int8_t axis);
-#endif //FEATURE_CHECK_HOME
+    static int8_t checkHome(int8_t axis); // M3028 homing repeatability test.
 
     static INLINE bool areAxisHomed() //X_AXIS && Y_AXIS && Z_AXIS
     {

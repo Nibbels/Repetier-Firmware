@@ -649,10 +649,6 @@ extern void showInvalidSyntax(unsigned int currentMCode);
 extern void addUInt32(char* pszString, uint32_t uNumber);
 extern void addFloat(char* pszString, float fNumber, uint8_t uDigits);
 
-#if FEATURE_HEAT_BED_TEMP_COMPENSATION
-extern float getHeatBedTemperatureOffset(float temperatureInCelsius);
-#endif // FEATURE_HEAT_BED_TEMP_COMPENSATION
-
 extern void determineHardwareType(void);
 extern void showIdle(void);
 extern void showError(const void* line2, const void* line3 = NULL, const void* line4 = NULL);

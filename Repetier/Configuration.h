@@ -87,9 +87,6 @@
  */
 #define XYZ_POSITION_BUTTON_DIRECTION       1                                                   // 1 = on, 0 = off
 
-/** \brief If a checksum is sent, all future comamnds must also contain a checksum. Increases reliability especially for binary protocol. */
-#define FEATURE_CHECKSUM_FORCED             0                                                   // 1 = on, 0 = off
-
 // ##########################################################################################
 // ##   Common extruder configuration
 // ##########################################################################################
@@ -833,22 +830,5 @@ we use blocks of 2 kByte size for the structure of our EEPROM
 #define DEFAULT_MOVE_MODE_X                 MOVE_MODE_SINGLE_STEPS
 #define DEFAULT_MOVE_MODE_Y                 MOVE_MODE_SINGLE_STEPS
 #define DEFAULT_MOVE_MODE_Z                 MOVE_MODE_SINGLE_STEPS
-
-/** \brief Nibbels/PeterKA Testfeature: It can check if you lost steps and test your buttons hysteresis and give a good hint if your printer lost steps by hardware fault */
-#define FEATURE_CHECK_HOME                  1
-
-/** 
- * \brief Z-Wobble elimination tool
- * Two offsets [dx, dy] = f(z) in x and y direction can simulate hardware z-wobble.
- * With much care you can adjust this software z-wobble as an opposite to the hardware introduced z-wobble.
- * The underlying principle is the same principle used for noise suppression.
- *
- * This Feature activates a new configuration menu wherin you can adjust parameters to produce the sinodial offset.
- * The simulated wobbles frequency (on z-axis) is always 5mm which fits the spindles thread of 5mm.
- * Within the menu you can configure the amplitude for X, Y-left and Y-right and the shift (phase) within Z.
- *
- * Read here for more information: http://www.rf1000.de/viewtopic.php?f=7&t=2281
- */
-#define FEATURE_Kurt67_WOBBLE_FIX           0
 
 #endif // CONFIGURATION_H
