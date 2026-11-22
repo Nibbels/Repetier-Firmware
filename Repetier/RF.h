@@ -524,8 +524,6 @@ extern short g_nEmergencyStopZAndEMax;
 extern bool g_nEmergencyESkip;
 
 // SenseOffset adds clearance when DMS force is high on the first layer.
-extern long nSensiblePressureSum;
-extern char nSensiblePressureChecks;
 extern short g_nSensiblePressureDigits;
 extern short g_nSensiblePressureOffsetMax;
 extern char g_nSensiblePressure1stMarke; //sagt, ob regelung aktiv oder inaktiv, wegen Z-Limits

@@ -180,6 +180,8 @@ volatile long g_nContinueExtruderSteps = 0;
 volatile char g_pauseStatus = PAUSE_STATUS_NONE;
 volatile char g_pauseMode = PAUSE_MODE_NONE;
 volatile millis_t g_uPauseTime = 0;
+// A pause can start in the stepper ISR and finish between foreground DMS polls.
+static volatile bool senseOffsetPauseStarted = false;
 
 long g_nEmergencyPauseDigitsMin = EMERGENCY_PAUSE_DIGITS_MIN; //short reicht eigentlich
 long g_nEmergencyPauseDigitsMax = EMERGENCY_PAUSE_DIGITS_MAX; //short reicht eigentlich
@@ -3169,6 +3171,15 @@ void recalculateZCompensation(void) {
 } // recalculateZCompensation
 
 void handleStrainGaugeFeatures(millis_t uTime) {
+    bool wasPaused;
+    bool discardSenseOffsetHistory;
+    {
+        InterruptProtectedBlock noInts;
+        wasPaused = g_pauseMode != PAUSE_MODE_NONE;
+        discardSenseOffsetHistory = senseOffsetPauseStarted;
+        senseOffsetPauseStarted = false;
+    }
+
     // Share one scheduled DMS reading among SenseOffset, emergency pause and emergency stop.
     bool i_need_strain_value = 0;
 
@@ -3217,10 +3228,10 @@ void handleStrainGaugeFeatures(millis_t uTime) {
             Com::printFLN(PSTR("SensiblePressure(): now disabled because of no z-CMP. "), Printer::zOffset.senseMicrometers());
     }
 
-    // M3909 P0 keeps the already applied offset while compensation is still
-    // active, but its old pressure samples must not leak into a new session.
-    if (!g_nSensiblePressureDigits || g_startLineActive) {
-        // Priming force belongs to the speed/E brake, not SenseOffset.
+    const bool learnSenseOffset = g_nSensiblePressureDigits && Printer::doHeatBedZCompensation
+        && !g_startLineActive && !wasPaused && !senseOffsetPauseStarted;
+    // Start a fresh window after a pause, even if it ended before this poll.
+    if (!learnSenseOffset || discardSenseOffsetHistory) {
         nSensiblePressureSum = 0;
         nSensiblePressureChecks = 0;
         g_nSensibleLastPressure = 0;
@@ -3231,7 +3242,7 @@ void handleStrainGaugeFeatures(millis_t uTime) {
         nSensiblePressureTime = uTime;
         /* brief: This is for correcting too close Z at first layer // Idee Wessix, coded by Nibbels  */
 
-        if (g_nSensiblePressureDigits && Printer::doHeatBedZCompensation && !g_startLineActive) { //activate feature with G-Code.
+        if (learnSenseOffset) {
             /*
             Still testing: Gesucht ist ein Limit des der Abstands zum Druckbett, also die jeweils richtige Layerbegrenzung::
 
@@ -3287,8 +3298,15 @@ void handleStrainGaugeFeatures(millis_t uTime) {
                             }
                         }
 
-                        if (step > 0)
-                            Printer::zOffset.addSenseMicrometers(step, g_nSensiblePressureOffsetMax, Printer::axisStepsPerMM[Z_AXIS]);
+                        if (step > 0) {
+                            const auto increment = Printer::zOffset.prepareSenseIncrement(step, g_nSensiblePressureOffsetMax, Printer::axisStepsPerMM[Z_AXIS]);
+                            // Finish the conversion before masking step interrupts.
+                            asm volatile("" : : "m"(increment));
+                            // The queue can request a pause while the increment is calculated.
+                            InterruptProtectedBlock noInts;
+                            if (!senseOffsetPauseStarted && !g_pauseMode && Printer::doHeatBedZCompensation)
+                                Printer::zOffset.applySenseIncrement(increment);
+                        }
                     } else {
                         //kleinere digits sind natürlich zugelassen, runtergeregelt wird nicht wegen kleinerer digits bei z.B. retracts
                     }
@@ -3575,6 +3593,7 @@ void requestPrintPause(bool moveAway) {
     if (g_pauseMode || g_uBlockCommands || Printer::blockAll)
         return;
 
+    senseOffsetPauseStarted = true;
     g_pauseMode = moveAway ? PAUSE_MODE_PAUSED_AND_MOVED : PAUSE_MODE_PAUSED;
     g_pauseStatus = moveAway ? PAUSE_STATUS_GOTO_PAUSE_AND_MOVE : PAUSE_STATUS_GOTO_PAUSE;
 }

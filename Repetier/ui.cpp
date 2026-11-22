@@ -1487,7 +1487,7 @@ void UIDisplay::parse(char* txt, bool ram) {
             if (c2 == 'M') // %sM : State of the sensible offset
             {
                 if (Printer::doHeatBedZCompensation && g_nSensiblePressureDigits > 0) {
-                    if (g_nSensiblePressure1stMarke)
+                    if (g_nSensiblePressure1stMarke && !g_pauseMode)
                         addStringP(PSTR("^"));
                     else
                         addStringP(PSTR("@"));

@@ -27,6 +27,18 @@ This is deliberately **not** a bidirectional PID loop. It is a bounded, positive
 
 SenseOffset checks the executing nominal Z against the learned limit. The G-code origin is resolved before this check.
 
+## Pause and resume
+
+An accepted pause suspends automatic SenseOffset learning through the retract, park, jog, reheat and return. It discards the pressure average, sample count and previous average even if the pause ends between DMS polls. The live offset and threshold are retained while bed compensation is active. The Mod Menu can still adjust the offset manually.
+
+The bed profile and fade use the frozen print position. Digit-Z continues to follow live force, including force from parked manual extrusion. After return, SenseOffset needs ten fresh eligible samples before it can add clearance. [Pressure handler](../../Repetier/RF.cpp)
+
+Run the host replay from the repository root with Python 3 and a C++11 compiler.
+
+```sh
+python3 tests/pause-sense-offset.py
+```
+
 ## Intentional manual persistence of learned clearance
 
 The operator can use alternating Z/bed DOWN and UP buttons in Mod Menu page 2 to transfer the positive SenseOffset adjustment into the saved manual Z offset in 5 µm increments while approximately maintaining the combined correction. This is explicitly documented in the original 2017 changelog and must survive future fixes. See [live transfer procedure and conditions](../z-offset/history-and-workflows.md).

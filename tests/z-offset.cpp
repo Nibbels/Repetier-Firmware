@@ -9,13 +9,17 @@ constexpr int16_t senseLimit = 300;
 constexpr int32_t manualLimit = 10000;
 constexpr int16_t buttonStep = 5;
 
+void learn(ZOffset& offset, uint8_t increment, int16_t limit = senseLimit) {
+    offset.applySenseIncrement(offset.prepareSenseIncrement(increment, limit, stepsPerMm));
+}
+
 void reloadPreservesSenseOffset() {
     ZOffset offset;
     const int32_t savedManual = 50;
     offset.setManualMicrometers(savedManual, stepsPerMm);
     assert(offset.effectiveSteps() == 64);
 
-    offset.addSenseMicrometers(30, senseLimit, stepsPerMm);
+    learn(offset, 30);
     assert(offset.effectiveSteps() == 102);
 
     offset.setManualMicrometers(savedManual, stepsPerMm);
@@ -31,7 +35,7 @@ void reloadPreservesSenseOffset() {
 
 void bedButtonsTransferLiveOffset() {
     ZOffset offset;
-    offset.addSenseMicrometers(200, senseLimit, stepsPerMm);
+    learn(offset, 200);
     const int32_t initialSteps = offset.effectiveSteps();
 
     for (int16_t transferred = buttonStep; transferred <= 200; transferred += buttonStep) {
@@ -44,7 +48,7 @@ void bedButtonsTransferLiveOffset() {
     }
 
     offset.setManualMicrometers(10, stepsPerMm);
-    offset.addSenseMicrometers(2, senseLimit, stepsPerMm);
+    learn(offset, 2);
     offset.adjustWithBedButton(-buttonStep, manualLimit, stepsPerMm);
     assert(offset.manualMicrometers() == 7);
     assert(offset.senseMicrometers() == 0);
@@ -53,7 +57,7 @@ void bedButtonsTransferLiveOffset() {
     offset.adjustWithBedButton(buttonStep, manualLimit, stepsPerMm);
     assert(offset.manualMicrometers() == 0);
     offset.setManualMicrometers(2, stepsPerMm);
-    offset.addSenseMicrometers(2, senseLimit, stepsPerMm);
+    learn(offset, 2);
     offset.adjustWithBedButton(-buttonStep, manualLimit, stepsPerMm);
     assert(offset.manualMicrometers() == 2);
     assert(offset.senseMicrometers() == 0);
@@ -69,7 +73,7 @@ void bedButtonsTransferLiveOffset() {
 void clearAndTransferUseTheExpectedPortion() {
     ZOffset offset;
     offset.setManualMicrometers(50, stepsPerMm);
-    offset.addSenseMicrometers(100, 30, stepsPerMm);
+    learn(offset, 100, 30);
     assert(offset.senseMicrometers() == 30);
     assert(offset.manualSteps(stepsPerMm) == 64);
 

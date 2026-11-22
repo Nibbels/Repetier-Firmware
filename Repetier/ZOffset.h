@@ -24,10 +24,23 @@ public:
         refreshSteps(stepsPerMm);
     }
 
-    void addSenseMicrometers(uint8_t increment, int16_t limit, float stepsPerMm) {
+    class SenseIncrement {
+        friend class ZOffset;
+        SenseIncrement(int16_t micrometers, int32_t steps) : micrometers(micrometers), steps(steps) {}
+
+        int16_t micrometers;
+        int32_t steps;
+    };
+
+    SenseIncrement prepareSenseIncrement(uint8_t increment, int16_t limit, float stepsPerMm) const {
         const int16_t next = senseMicrometers_ + increment;
-        senseMicrometers_ = next < limit ? next : limit;
-        refreshSteps(stepsPerMm);
+        const int16_t bounded = next < limit ? next : limit;
+        return SenseIncrement(bounded, toSteps(manualMicrometers_ + bounded, stepsPerMm));
+    }
+
+    void applySenseIncrement(const SenseIncrement& increment) {
+        senseMicrometers_ = increment.micrometers;
+        effectiveSteps_ = increment.steps;
     }
 
     void clearSenseOffset(float stepsPerMm) {

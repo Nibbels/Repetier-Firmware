@@ -34,7 +34,7 @@ Firmware changes are tracked on `ai-firmware-review` against `community_developm
 
 ### Pause and resume
 
-- [ ] **Suspend automatic SenseOffset learning during pause.** Bed-matrix lookup and fade use the frozen print XYZ. In a host replay, pre-pause samples raised SenseOffset by 10 µm after the reading fell to zero. Stop learning and clear sample history while retaining applied clearance, manual offset adjustment and live Digit-Z force tracking. The pause guard passed a host trial. Check the return at equal force and after manual extrusion while parked. [Print matrix coordinates](../Repetier/RF.cpp#L2032) · [Pressure handler](../Repetier/RF.cpp#L3167)
+- [x] **Suspend automatic SenseOffset learning during pause.** The previous handler could add 10 µm of clearance from pre-pause samples after the DMS reading fell to zero. A pause now invalidates the learning window as soon as it is accepted. The host replay tests park, jog, manual extrusion, reheating, return at equal force, a pause between polls and a queued pause during the offset update. It also verifies live Digit-Z response. Physical verification remains open. [SenseOffset during pause](first-layer-control/sense-offset.md#pause-and-resume)
 
 The updated host replay covers early Pause and Play on pressure, queued and panel requests, ordinary and overlapping jog releases, a blocked return and retry, cancellation, and the two-press wake and resume sequence. The step replay covers clipped direct moves, preservation of queued overtravel, and direct extrusion with the pressure guard. AVR builds passed for all three models. Physical verification remains open.
 
