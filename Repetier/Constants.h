@@ -45,8 +45,6 @@ constexpr unsigned int stepperEnableDelayMs = 25;
 #define VIRTUAL_AXIS 4
 
 
-#define MENU_MODE_SD_MOUNTED 1
-#define MENU_MODE_SD_PRINTING 2
 #define MENU_MODE_PAUSED 4
 #define MENU_MODE_FAN_RUNNING 8
 #define MENU_MODE_PRINTING 16

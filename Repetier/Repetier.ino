@@ -37,7 +37,6 @@ Implemented Codes
 */
 
 #include "Repetier.h"
-#include <SPI.h>
 #include <Wire.h>
 
 void setup() {

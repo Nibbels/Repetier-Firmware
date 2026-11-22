@@ -14,7 +14,7 @@ These two changes preserve the Mod Menu transfer: any portion of SenseOffset del
 - A second print started without `G28 Z` or full `G28` can inherit old learned `g_min`/`g_max` during priming. `M3000` clears SenseOffset. `M3912` clears all layer markers and uses its phase flag to select the DMS brake, with fade geometry inherited until the next layer is learned.
 - X-only/Y-only homing must not reset Z state.
 - `M3902 Z0` moves a manual offset into RAM matrix with separate EEPROM persistence; not addressed.
-- `stopPrint()` and SD/host print flags are not reliable new-print boundaries.
+- `stopPrint()` marks cancellation. The queue-depth printing flag tracks activity.
 
 ## Regression tests to run on hardware
 

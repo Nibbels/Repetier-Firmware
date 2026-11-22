@@ -64,10 +64,6 @@ The firmware restricted Play to a completed pause in 1.37t2. The 1.43.56 pause r
 
 - [x] **Initialize first-layer state with Z homing.** The host replay covers Z homing between first layers of 0.40 mm and 0.20 mm, a fresh SenseOffset sample window, and model extrusion without `M3912`. Physical verification remains open. [USB print start](first-layer-control/README.md#usb-print-start)
 
-### SD print completion
-
-- [ ] **Drain queued work at normal SD file end.** `SDCardGCodeSource::dataAvailable()` calls `close()` at EOF, which enters `Printer::stopPrint()`. The host reproduction on `351dd60` cleared all three buffered movement entries and the active move. On normal EOF, close input and execute buffered G-codes and their planned motion before reporting completion. Cover a pause and resume while draining, the final line without a newline, and a real cancellation or read error. Deferred while the main workflow uses USB. [SD input](../Repetier/gcode.cpp#L1120) · [Stop sequence](../Repetier/PrintStop.cpp)
-
 ### Digit-Z
 
 - [ ] **Recover the same elastic correction at the same steady DMS reading.** Retain the integer filter remainder to eliminate the one-microstep difference reproduced at 5,530 digits. Verify rising and falling force, then measure the force-to-deflection slope and the delay from load change to applied Z on the printer. [Formula, timing and replay](z-offset/thermal-and-force.md#elastic-hotend-deflection-and-digit-z)
@@ -94,9 +90,9 @@ Work through the [architecture review and migration](development-roadmap.md#5-fi
 - [x] **Retire sound and fix the build configuration for Digit Homing and movement unlock.** Both print functions compile on all three models. Boot diagnostics use the serial port for a board-type mismatch. [Feature retirement](development-roadmap.md#feature-retirement)
 - [x] **Fold board outputs and core controls into the model builds.** Removed guided nozzle alignment and the optional driver status command. AVR builds cover all three models. A host replay of the bed scan completion states covers the standard, PLA and ABS paths through matrix save. [Feature retirement](development-roadmap.md#feature-retirement)
 - [x] **Remove the remaining `FEATURE_*` switches.** Use model temperature curves, compile homing diagnostics and WobbleFix on all models, and remove the unused checksum bit. Host tests compared sensor conversion and zero-amplitude move targets. [Feature retirement](development-roadmap.md#feature-retirement)
-- [x] **Fold the shared motion, display and serial defaults into the firmware.** Pressure Advance, the current junction and short-segment calculations, the 25 ms driver enable wait and the 120 s menu timeout are built in. SD builds include file sizes in `M20`. Automatic trace builds, alternate serial ports and the early RF1000 fan-pin variant are retired. [Shared build defaults](development-roadmap.md#feature-retirement)
-- [x] **Retire TipDown and fix the UART transmit ring at 64 bytes.** Removed the per-tool Z displacement from tool changes, homing and EEPROM settings. The movement planner keeps the existing cache sizes of 17 with SD and 24 without SD. [Feature retirement](development-roadmap.md#feature-retirement)
-- [x] **Retire the M109 retract and obsolete build variants.** The heat-up wait leaves extrusion to the print's G-code. Board selection determines the physical Z-max input. The heater, LCD and SdFat code use their stock variants. [Feature retirement](development-roadmap.md#feature-retirement)
+- [x] **Fold the shared motion, display and serial defaults into the firmware.** Pressure Advance, the current junction and short-segment calculations, the 25 ms driver enable wait and the 120 s menu timeout are built in. Automatic trace builds, alternate serial ports and the early RF1000 fan-pin variant are retired. [Shared build defaults](development-roadmap.md#feature-retirement)
+- [x] **Retire TipDown and fix the UART transmit ring at 64 bytes.** Removed the per-tool Z displacement from tool changes, homing and EEPROM settings. [Feature retirement](development-roadmap.md#feature-retirement)
+- [x] **Retire the M109 retract and obsolete build variants.** The heat-up wait leaves extrusion to the print's G-code. Board selection determines the physical Z-max input. The heater and LCD use their stock variants. [Feature retirement](development-roadmap.md#feature-retirement)
 - [x] **Share the RF2000 family profile and pin map.** Compile the stock defaults for each model, keep named connectors for retrofits and reserve X19, X42 or X44 for automatic cooling when assigned there. EEPROM support is built in with the existing persisted layout. [Board reference](board-connectors.md)
 
 ## Fork candidates

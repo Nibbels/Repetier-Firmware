@@ -162,61 +162,6 @@ extern volatile uint8_t execute10msPeriodical;
 
 extern uint8_t fanKickstart;
 
-#if SDSUPPORT
-#define SHORT_FILENAME_LENGTH 14
-extern char tempLongFilename[LONG_FILENAME_LENGTH + 1];
-extern char fullName[LONG_FILENAME_LENGTH * SD_MAX_FOLDER_DEPTH + SD_MAX_FOLDER_DEPTH + 1];
-#include "SdFat.h"
-
-inline void memcopy2(void* dest, void* source) {
-    *((int16_t*)dest) = *((int16_t*)source);
-}
-inline void memcopy4(void* dest, void* source) {
-    *((int32_t*)dest) = *((int32_t*)source);
-}
-
-class SDCard {
-public:
-    SdFat fat;
-    SdFile file;
-    uint32_t filesize;
-    uint32_t sdpos;
-    char* shortname; // Pointer to start of filename itself
-    char* pathend;   // File to char where pathname in fullname ends
-    uint8_t sdmode;  // 1 if we are printing from sd card, 2 = stop accepting new commands
-    bool sdactive;
-    bool savetosd;
-
-    SDCard();
-    void initsd(bool silent = false);
-    void writeCommand(GCode* code);
-    bool selectFile(char *filename, bool silent = false);
-    void mount(bool silent = false);
-    void unmount();
-    void startPrint();
-
-    inline void setIndex(uint32_t newpos) {
-        if (!sdactive)
-            return;
-        sdpos = newpos;
-        file.seekSet(sdpos);
-    }
-
-    void printStatus();
-    void ls();
-    void startWrite(char* filename);
-    void deleteFile(char* filename);
-    void finishWrite();
-    void writePSTR(FSTRINGPARAM(str));
-    char* createFilename(char* buffer, const dir_t& p);
-    void makeDirectory(char* filename);
-    bool showFilename(const uint8_t* name);
-    void automount();
-};
-
-extern SDCard sd;
-#endif // SDSUPPORT
-
 #include "Commands.h"
 #include "Eeprom.h"
 

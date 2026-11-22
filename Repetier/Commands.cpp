@@ -25,18 +25,7 @@ void Commands::commandLoop() {
 
     GCode* code = GCode::peekCurrentCommand();
     if (code) {
-#if SDSUPPORT
-        if (sd.savetosd) {
-            if (!(code->hasM() && code->M == 29)) // still writing to file
-                sd.writeCommand(code);
-            else
-                sd.finishWrite();
-            code->echoCommand();
-        } else
-#endif //SDSUPPORT
-        {
-            Commands::executeGCode(code);
-        }
+        Commands::executeGCode(code);
         code->popCurrentCommand();
         Commands::checkForPeriodicalActions(Processing); //check heater and other stuff every n milliseconds
     } else {
@@ -78,9 +67,6 @@ void Commands::checkForPeriodicalActions(enum FirmwareState state) {
         Extruder::manageTemperatures();
         if (state == WaitHeater)
             Commands::printTemperatures(); //selfcontrolling timediff
-#if SDSUPPORT && SDCARDDETECT >= 0
-        sd.automount();
-#endif
         UI_SLOW;
     }
 
@@ -284,11 +270,6 @@ void Commands::reportPrinterUsage() {
 
 /** \brief Execute the command stored in com. */
 void Commands::executeGCode(GCode* com) {
-    // Set return channel for private commands. By default all commands send to all receivers.
-    GCodeSource* actSource = GCodeSource::activeSource;
-    GCodeSource::activeSource = com->source;
-    Com::writeToAll = true;
-
     if (com->hasG()) {
         Commands::processGCode(com);
     } else if (com->hasM()) // Process M Code
@@ -303,13 +284,10 @@ void Commands::executeGCode(GCode* com) {
         Printer::setFeedrate(com->F);
     } else {
         if (Printer::debugErrors()) {
-            Com::writeToAll = false;
             Com::printF(Com::tUnknownCommand);
             com->printCommand();
         }
     }
-
-    GCodeSource::activeSource = actSource;
 } // executeGCode
 
 /**
@@ -411,77 +389,6 @@ void Commands::processGCode(GCode* com) {
 */
 void Commands::processMCode(GCode* com) {
     switch (com->M) {
-#if SDSUPPORT
-    case 20: // M20 - list SD card
-    {
-        if (sd.sdactive)
-            sd.ls();
-        break;
-    }
-    case 21: // M21 - init SD card
-    {
-        sd.mount(/*not silent mount*/);
-        break;
-    }
-    case 22: // M22 - release SD card
-    {
-        sd.unmount();
-        break;
-    }
-    case 23: // M23 - Select file
-    {
-        if (!sd.sdactive)
-            break;
-        if (com->hasString()) {
-            sd.fat.chdir();
-            sd.selectFile(com->text);
-        }
-        break;
-    }
-    case 24: // M24 - Start SD print
-    {
-        if (Printer::pause.isPaused()) {
-            uid.pressPlay();
-        } else {
-            sd.startPrint();
-        }
-        break;
-    }
-    case 25: // M25 - Pause (SD) print
-    {
-        Printer::pause.queueRequest(PrintPause::Destination::InPlace);
-        break;
-    }
-    case 26: // M26 - Set SD index
-    {
-        Com::printFLN(PSTR("M26: not supported"));
-        break;
-    }
-    case 27: // M27 - Get SD status
-        sd.printStatus();
-        break;
-    case 28: // M28 - Start SD write
-        if (com->hasString())
-            sd.startWrite(com->text);
-        break;
-    case 29: // M29 - Stop SD write
-             //processed in write to file routine above
-             //savetosd = false;
-        break;
-    case 30: // M30 - filename - Delete file
-        if (com->hasString()) {
-            sd.fat.chdir();
-            sd.deleteFile(com->text);
-        }
-        break;
-    case 32: // M32 - directoryname
-        if (com->hasString()) {
-            sd.fat.chdir();
-            sd.makeDirectory(com->text);
-        }
-        break;
-#endif // SDSUPPORT
-
     case 104: // M104 - set extruder temp
     {
         if (Printer::isAnyTempsensorDefect()) {
@@ -506,7 +413,6 @@ void Commands::processMCode(GCode* com) {
     }
     case 105: // M105 - get temperature. Always returns the current temperature, doesn't wait until move stopped
     {
-        Com::writeToAll = false;
         printTemperatures(com->hasX());
         break;
     }
@@ -754,7 +660,6 @@ void Commands::processMCode(GCode* com) {
     }
     case 115: // M115
     {
-        Com::writeToAll = false;
         if (Printer::debugInfo()) {
             Com::printFLN(Com::tFirmware);
         }
@@ -780,7 +685,6 @@ void Commands::processMCode(GCode* com) {
             break;
         }
 
-        Com::writeToAll = false;
         Commands::waitUntilEndOfAllMoves(); //M119
 
         Com::printF(Com::tXMinColon);
@@ -870,13 +774,11 @@ void Commands::processMCode(GCode* com) {
     case 503: // M503 (fall through)
     case 205: // M205 - Show EEPROM settings
     {
-        Com::writeToAll = false;
         EEPROM::writeSettings();
         break;
     }
     case 206: // M206 - T[type] P[pos] [Sint(long] [Xfloat]  Set eeprom value
     {
-        Com::writeToAll = false;
         EEPROM::update(com);
         break;
     }
@@ -981,7 +883,6 @@ void Commands::processMCode(GCode* com) {
     }
 
     case 360: // M360 - show configuration
-        Com::writeToAll = false;
         Printer::showConfiguration();
         break;
 

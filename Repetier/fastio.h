@@ -91,12 +91,6 @@
 #define RXD                 DIO0
 #define TXD                 DIO1
 
-// SPI
-#define SCK                 52
-#define MISO                DIO50
-#define MOSI                DIO51
-#define SS                  53
-
 // TWI (I2C)
 #define SCL                 DIO21
 #define SDA                 DIO20

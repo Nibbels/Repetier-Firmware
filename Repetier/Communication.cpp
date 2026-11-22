@@ -42,7 +42,6 @@ FSTRINGVALUE(Com::tOkSpace, "ok ")
 FSTRINGVALUE(Com::tWrongChecksum, "Wrong checksum")
 FSTRINGVALUE(Com::tFormatError, "Format error")
 FSTRINGVALUE(Com::tMissingChecksum, "Missing checksum")
-FSTRINGVALUE(Com::tDonePrinting, "Done printing file")
 FSTRINGVALUE(Com::tX, " X")
 FSTRINGVALUE(Com::tY, " Y")
 FSTRINGVALUE(Com::tZ, " Z")
@@ -61,7 +60,6 @@ FSTRINGVALUE(Com::tB, " B")
 FSTRINGVALUE(Com::tK, " K")
 FSTRINGVALUE(Com::tL, " L")
 FSTRINGVALUE(Com::tO, " O")
-FSTRINGVALUE(Com::tSDReadError, "SD read error")
 FSTRINGVALUE(Com::tExpectedLine, "Error:expected line ")
 FSTRINGVALUE(Com::tGot, " got ")
 FSTRINGVALUE(Com::tSkip, "skip ")
@@ -260,30 +258,6 @@ FSTRINGVALUE(Com::tEPRPrinter_FAN_SPEED, "Fan PWM divisor [15.3Hz/x]")
 FSTRINGVALUE(Com::tEPRPrinter_FAN_PART_FAN_PWM_MIN, "Partfan 1% level [1..239]")
 FSTRINGVALUE(Com::tEPRPrinter_FAN_PART_FAN_PWM_MAX, "Partfan 99% level [16..254]")
 
-
-#if SDSUPPORT
-FSTRINGVALUE(Com::tSDRemoved, UI_TEXT_SD_REMOVED)
-FSTRINGVALUE(Com::tSDInserted, UI_TEXT_SD_INSERTED)
-FSTRINGVALUE(Com::tSDInitFail, "SD init fail")
-FSTRINGVALUE(Com::tErrorWritingToFile, "error writing to file")
-FSTRINGVALUE(Com::tBeginFileList, "Begin file list")
-FSTRINGVALUE(Com::tEndFileList, "End file list")
-FSTRINGVALUE(Com::tFileOpened, "File opened:")
-FSTRINGVALUE(Com::tSpaceSizeColon, " Size:")
-FSTRINGVALUE(Com::tFileSelected, "File selected")
-FSTRINGVALUE(Com::tFileOpenFailed, "file.open failed")
-FSTRINGVALUE(Com::tSDPrintingByte, "SD printing byte ")
-FSTRINGVALUE(Com::tNotSDPrinting, "Not SD printing")
-FSTRINGVALUE(Com::tOpenFailedFile, "open failed, File: ")
-FSTRINGVALUE(Com::tWritingToFile, "Writing to file: ")
-FSTRINGVALUE(Com::tDoneSavingFile, "Done saving file.")
-FSTRINGVALUE(Com::tFileDeleted, "File deleted")
-FSTRINGVALUE(Com::tDeletionFailed, "Deletion failed")
-FSTRINGVALUE(Com::tDirectoryCreated, "Directory created")
-FSTRINGVALUE(Com::tCreationFailed, "Creation failed")
-FSTRINGVALUE(Com::tSDErrorCode, "SD errorCode:")
-#endif // SDSUPPORT
-
 FSTRINGVALUE(Com::tHeaterDecoupledWarning, "One heater seems decoupled from thermistor - disabling all for safety!")
 
 FSTRINGVALUE(Com::tOutputObjectPrint, OUTPUT_OBJECT_SCRIPT_PRINT)
@@ -298,7 +272,6 @@ FSTRINGVALUE(Com::tConfig, "Config:")
 
     ; // needed because the development tool does not recognize the ; within FSTRINGVALUE definition right.
 
-bool Com::writeToAll = true; // transmit start messages to all devices!
 
 void Com::cap(FSTRINGPARAM(text)) {
     printF(tCap);
@@ -374,7 +347,7 @@ void Com::printFLN(FSTRINGPARAM(text), const char* msg) {
 void Com::printF(FSTRINGPARAM(ptr)) {
     char c;
     while ((c = HAL::readFlashByte(ptr++)) != 0)
-        GCodeSource::writeToAll(c);
+        HAL::serialWriteByte(c);
 } // printF
 
 void Com::printF(FSTRINGPARAM(text), const char* msg) {
@@ -434,13 +407,13 @@ void Com::printSharpLine() {
 
 void Com::print(const char* text) {
     while (*text) {
-        GCodeSource::writeToAll(*text++);
+        HAL::serialWriteByte(*text++);
     }
 } // print
 
 void Com::print(int32_t value) {
     if (value < 0) {
-        GCodeSource::writeToAll('-');
+        HAL::serialWriteByte('-');
         value = -value;
     }
     printNumber(value);

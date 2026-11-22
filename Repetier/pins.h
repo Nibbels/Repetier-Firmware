@@ -38,8 +38,6 @@
 #if MOTHERBOARD == DEVICE_TYPE_RF1000
 #define KNOWN_BOARD 1
 
-#define SDCARDDETECT -1
-
 // digital pin mappings
 #define ORIG_X_STEP_PIN 54
 // PINF.0, 97, STP_DRV1
@@ -89,8 +87,6 @@
 #define ORIG_E1_ENABLE_PIN -1
 #endif // NUM_EXTRUDER == 2
 
-#define SDSS 53
-// PINB.0, 19, SS
 #define LED_PIN 13
 // PINB.7, 26, LED13
 
@@ -124,14 +120,6 @@
 
 #define E0_PINS ORIG_E0_STEP_PIN, ORIG_E0_DIR_PIN, ORIG_E0_ENABLE_PIN,
 #define E1_PINS ORIG_E1_STEP_PIN, ORIG_E1_DIR_PIN, ORIG_E1_ENABLE_PIN,
-
-// these pins are defined in the SD library if building with SD support
-#define SCK_PIN 52
-// PINB.1, 20, SCK
-#define MISO_PIN 50
-// PINB.3, 22, MISO
-#define MOSI_PIN 51
-// PINB.2, 21, MOSI
 
 // motor driver pin mappings
 #define X_SCS_PIN 49
@@ -260,9 +248,6 @@
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 #define KNOWN_BOARD 1
 
-#define SDCARDDETECT 19
-// PIND.2, 45, CARD
-
 // digital pin mappings
 #define ORIG_X_STEP_PIN 54
 // PINF.0, 97, STP_DRV1
@@ -309,8 +294,6 @@
 #define ORIG_E1_ENABLE_PIN 30
 // PINC.7, 60, ENA_DRV5
 
-#define SDSS 53
-// PINB.0, 19, SS
 #define LED_PIN -1
 
 #define ORIG_FAN_PIN X24_PIN
@@ -338,14 +321,6 @@
 
 #define E0_PINS ORIG_E0_STEP_PIN, ORIG_E0_DIR_PIN, ORIG_E0_ENABLE_PIN,
 #define E1_PINS ORIG_E1_STEP_PIN, ORIG_E1_DIR_PIN, ORIG_E1_ENABLE_PIN,
-
-// these pins are defined in the SD library if building with SD support
-#define SCK_PIN 52
-// PINB.1, 20, SCK
-#define MISO_PIN 50
-// PINB.3, 22, MISO
-#define MOSI_PIN 51
-// PINB.2, 21, MOSI
 
 // motor driver pin mappings
 #define X_SCS_PIN 49

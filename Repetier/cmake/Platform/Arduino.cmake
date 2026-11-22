@@ -998,7 +998,6 @@ endfunction()
 # For known libraries can list recurse here
 set(Wire_RECURSE True)
 set(Ethernet_RECURSE True)
-set(SD_RECURSE True)
 set(Servo_RECURSE True)
 set(SPI_RECURSE True)
 set(SoftwareSerial_RECURSE True)

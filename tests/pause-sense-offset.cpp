@@ -275,7 +275,6 @@ void changeFeedrateMultiply(int) { assert(false); }
 void printCurrentPosition() {}
 }
 
-struct { bool sdmode = false; } sd;
 struct GCode {
     static void readFromSerial() {
         assert(Printer::printStop.commandsBlocked());
@@ -544,7 +543,6 @@ void cancelAndCleanup() {
     const long y = Printer::directCurrentSteps[Y_AXIS];
     pollDuringMoves = false;
     clockMs = UINT32_MAX - 500;
-    sd.sdmode = true;
     duringMove = [](long, long, long z, long) {
         if (z > 0) {
             PrintLine::direct.task = DIRECT_RUNNING;
@@ -555,7 +553,7 @@ void cancelAndCleanup() {
     Printer::pause.serviceMotion();
     duringMove = nullptr;
     assert(Printer::directCurrentSteps[Y_AXIS] == y);
-    assert(PrintLine::stopRequests == 1 && !sd.sdmode && !PrintLine::hasLines());
+    assert(PrintLine::stopRequests == 1 && !PrintLine::hasLines());
     assert(Printer::printStop.commandsBlocked() && !Printer::menuPaused);
     assert(Printer::pause.allowsQueueAdvance());
     Printer::pause.queueRequest(PrintPause::Destination::InPlace);

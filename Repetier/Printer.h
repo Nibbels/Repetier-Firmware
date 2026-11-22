@@ -35,7 +35,6 @@
 #define PRINTER_FLAG0_MANUAL_MOVE_MODE 16
 #define PRINTER_FLAG0_LARGE_MACHINE 128
 
-#define PRINTER_FLAG1_AUTOMOUNT 2
 #define PRINTER_FLAG1_ANIMATION 4
 #define PRINTER_FLAG1_ALLSWITCHEDOFF 8
 #define PRINTER_FLAG1_UI_ERROR_MESSAGE 16
@@ -455,14 +454,6 @@ public:
         flag1 = (b ? flag1 | PRINTER_FLAG1_ALLSWITCHEDOFF : flag1 & ~PRINTER_FLAG1_ALLSWITCHEDOFF);
     } // setAllSwitchedOff
 
-    static INLINE uint8_t isAutomount() {
-        return flag1 & PRINTER_FLAG1_AUTOMOUNT;
-    } // isAutomount
-
-    static INLINE void setAutomount(uint8_t b) {
-        flag1 = (b ? flag1 | PRINTER_FLAG1_AUTOMOUNT : flag1 & ~PRINTER_FLAG1_AUTOMOUNT);
-    } // setAutomount
-
     static INLINE uint8_t isAnimation() {
         return flag1 & PRINTER_FLAG1_ANIMATION;
     } // isAnimation
@@ -485,9 +476,6 @@ public:
 
     static INLINE void setPrinting(bool b) {
         flag3 = (b ? flag3 | PRINTER_FLAG3_PRINTING : flag3 & ~PRINTER_FLAG3_PRINTING);
-        if (!b) {
-            Printer::setMenuMode(MENU_MODE_SD_PRINTING, b);
-        }
         Printer::setMenuMode(MENU_MODE_PRINTING, b);
     }
 

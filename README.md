@@ -4,11 +4,12 @@
 # Inofficial modification of the RF firmware for RF1000 and RF2000 / RF2000v2 devices
 Based on Repetier-Firmware - the fast and user friendly firmware.
 
+This branch streams print jobs over USB.
+
 ## Disclaimer
 
 THIS VERSION IS AN UNOFFICIAL MODIFICATION OF mhiers UNOFFICIAL MODIFICATION OF THE ORIGINAL FIRMWARE. 
 It is neither endorsed nor supported by the developers of the RF1000 firmware.  
-SD support can be enabled or disabled with `SDSUPPORT`.
 
 USE AT YOUR OWN RISK.
 

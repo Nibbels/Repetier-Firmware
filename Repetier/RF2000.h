@@ -356,15 +356,6 @@ STEP_PACKING_MIN_INTERVAL can be changed in Menu-> Configuration->Stepper->DblFq
 #define MIN_STEP_PACKING_MIN_INTERVAL 3300
 #define MAX_STEP_PACKING_MIN_INTERVAL 5000
 
-/** \brief Number of moves we can cache in advance.
-This number of moves can be cached in advance. If you wan't to cache more, increase this. Especially on
-many very short moves the cache may go empty. The minimum value is 5. */
-#if SDSUPPORT
-#define MOVE_CACHE_SIZE 17
-#else
-#define MOVE_CACHE_SIZE 24
-#endif
-
 /** \brief Low filled cache size.
 If the cache contains less then MOVE_CACHE_LOW segments, the time per segment is limited to LOW_TICKS_PER_MOVE clock cycles.
 If a move would be shorter, the feedrate will be reduced. This should prevent buffer underflows. Set this to 0 if you

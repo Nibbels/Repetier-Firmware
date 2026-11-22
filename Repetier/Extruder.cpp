@@ -50,7 +50,6 @@ Is called every 100ms.
 static uint8_t extruderTempErrors = 0;
 void Extruder::manageTemperatures() {
 
-    Com::writeToAll = true;
     uint8_t errorDetected = 0;
 
     for (uint8_t controller = 0; controller < NUM_TEMPERATURE_LOOPS; controller++) {

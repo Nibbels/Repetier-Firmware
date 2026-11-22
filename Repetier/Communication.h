@@ -39,7 +39,6 @@ public:
     FSTRINGVAR(tWrongChecksum)
     FSTRINGVAR(tFormatError)
     FSTRINGVAR(tMissingChecksum)
-    FSTRINGVAR(tDonePrinting)
     FSTRINGVAR(tX)
     FSTRINGVAR(tY)
     FSTRINGVAR(tZ)
@@ -58,7 +57,6 @@ public:
     FSTRINGVAR(tK)
     FSTRINGVAR(tL)
     FSTRINGVAR(tO)
-    FSTRINGVAR(tSDReadError)
     FSTRINGVAR(tExpectedLine)
     FSTRINGVAR(tGot)
     FSTRINGVAR(tSkip)
@@ -257,30 +255,6 @@ public:
     FSTRINGVAR(tEPRPrinter_FAN_PART_FAN_PWM_MIN)
     FSTRINGVAR(tEPRPrinter_FAN_PART_FAN_PWM_MAX)
 
-
-#if SDSUPPORT
-    FSTRINGVAR(tSDRemoved)
-    FSTRINGVAR(tSDInserted)
-    FSTRINGVAR(tSDInitFail)
-    FSTRINGVAR(tErrorWritingToFile)
-    FSTRINGVAR(tBeginFileList)
-    FSTRINGVAR(tEndFileList)
-    FSTRINGVAR(tFileOpened)
-    FSTRINGVAR(tSpaceSizeColon)
-    FSTRINGVAR(tFileSelected)
-    FSTRINGVAR(tFileOpenFailed)
-    FSTRINGVAR(tSDPrintingByte)
-    FSTRINGVAR(tNotSDPrinting)
-    FSTRINGVAR(tOpenFailedFile)
-    FSTRINGVAR(tWritingToFile)
-    FSTRINGVAR(tDoneSavingFile)
-    FSTRINGVAR(tFileDeleted)
-    FSTRINGVAR(tDeletionFailed)
-    FSTRINGVAR(tDirectoryCreated)
-    FSTRINGVAR(tCreationFailed)
-    FSTRINGVAR(tSDErrorCode)
-#endif // SDSUPPORT
-
     FSTRINGVAR(tHeaterDecoupledWarning)
     FSTRINGVAR(tOutputObjectPrint)
     FSTRINGVAR(tUnmountFilamentSoft)
@@ -325,14 +299,13 @@ public:
     static inline void print(int value) { print((int32_t)value); }
     static void print(const char* text);
     static inline void print(char c) {
-        GCodeSource::writeToAll(c);
+        HAL::serialWriteByte(c);
     }
     static void printFloat(float number, uint8_t digits, bool komma_as_dot = false);
     static inline void println() {
-        GCodeSource::writeToAll('\r');
-        GCodeSource::writeToAll('\n');
+        HAL::serialWriteByte('\r');
+        HAL::serialWriteByte('\n');
     }
-    static bool writeToAll;
 }; // Com
 
 #endif // COMMUNICATION_H

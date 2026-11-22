@@ -133,7 +133,6 @@
     <ClInclude Include="RF.h" />
     <ClInclude Include="RF1000.h" />
     <ClInclude Include="RF2000.h" />
-    <ClInclude Include="SdFat.h" />
     <ClInclude Include="ui.h" />
     <ClInclude Include="uiconfig.h" />
     <ClInclude Include="uilang.h" />
@@ -150,8 +149,6 @@
     <ClCompile Include="motion.cpp" />
     <ClCompile Include="Printer.cpp" />
     <ClCompile Include="RF.cpp" />
-    <ClCompile Include="SDCard.cpp" />
-    <ClCompile Include="SdFat.cpp" />
     <ClCompile Include="ui.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

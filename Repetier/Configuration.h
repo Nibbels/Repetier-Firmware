@@ -320,26 +320,6 @@ Overridden if EEPROM activated. */
 #define BED_DECOUPLE_TEST_PERIOD                   12000
 
 // ##########################################################################################
-// ##   configure the SD Card
-// ##########################################################################################
-
-/** \brief  Select whether the SD card is supported. */
-#ifndef SDSUPPORT
-#define SDSUPPORT                           1                                                   // 1 = supported, 0 = not supported
-#endif
-
-/** \brief Total size of the buffer used to store the long filenames */
-// If you need more maximum file name length than 26 chars 
-// - For SD-Printing using a Gcode / using Octoprints sd file listing
-// - Or for seeing the full filenames within the SD-Card file menu
-// then increase MAX_VFAT_ENTRIES to 3. But that has to be payed with ~65bytes of Ram.
-// (Printing a file using the SD card menu will start the print using the file number, so you dont need to see the full file length.)
-#define MAX_VFAT_ENTRIES                    (2)
-#define LONG_FILENAME_LENGTH                (13*MAX_VFAT_ENTRIES+1)
-#define SD_MAX_FOLDER_DEPTH                 2
-
-
-// ##########################################################################################
 // ##   configuration of the manual steps
 // ##########################################################################################
 
@@ -528,6 +508,7 @@ we use blocks of 2 kByte size for the structure of our EEPROM
  * execution.
  */
 #define GCODE_BUFFER_SIZE                   2
+#define MOVE_CACHE_SIZE                     24 // Planned moves buffered for the stepper.
 
 /** \brief  Turn the case light on/off per default */
 #define CASE_LIGHTS_DEFAULT_ON              0

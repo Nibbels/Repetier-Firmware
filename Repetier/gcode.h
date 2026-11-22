@@ -26,86 +26,7 @@ enum FirmwareState { NotBusy = 0,
                      WaitHeater,
                      Calibrating };
 
-#if SDSUPPORT
-class SDCard;
-#endif //SDSUPPORT
-class Commands;
-class GCode;
-
-/** This class defines the general interface to handle gcode communication with the firmware. This
-allows it to connect to different data sources and handle them all inside the same data structure.
-If several readers are active, the first one sending a byte pauses all other inputs until the command
-is complete. Only then the next reader will be queried. New queries are started in round robin fashion
-so every channel gets the same chance to send commands.
-
-Available source types are:
-- serial communication port
-- SD card, when compiled in
-*/
-class GCodeSource {
-    static constexpr uint8_t maxDataSources = 1 + (SDSUPPORT ? 1 : 0);
-    static fast8_t numSources; ///< Number of data sources available
-    static fast8_t numWriteSources;
-    static GCodeSource* sources[maxDataSources];
-    static GCodeSource* writeableSources[maxDataSources];
-
-public:
-    static GCodeSource* activeSource;
-    static void registerSource(GCodeSource* newSource);
-    static void removeSource(GCodeSource* delSource);
-    static void rotateSource();           ///< Move active to next source
-    static void writeToAll(uint8_t byte); ///< Write to all listening sources
-    static void printAllFLN(FSTRINGPARAM(text));
-    static void printAllFLN(FSTRINGPARAM(text), int32_t v);
-    uint32_t lastLineNumber;
-    uint8_t wasLastCommandReceivedAsBinary; ///< Was the last successful command in binary mode?
-    millis_t timeOfLastDataPacket;
-    int8_t waitingForResend; ///< Waiting for line to be resend. -1 = no wait.
-
-    GCodeSource();
-    virtual ~GCodeSource() { }
-    virtual bool isOpen() = 0;
-    virtual bool supportsWrite() = 0; ///< true if write is a non dummy function
-    virtual bool closeOnError() = 0;  // return true if the channel can not interactively correct errors.
-    virtual bool dataAvailable() = 0; // would read return a new byte?
-    virtual int readByte() = 0;
-    virtual void close() = 0;
-    virtual void writeByte(uint8_t byte) = 0;
-};
-
-class SerialGCodeSource : public GCodeSource {
-    Stream* stream;
-
-public:
-    SerialGCodeSource(Stream* p);
-    virtual bool isOpen();
-    virtual bool supportsWrite(); ///< true if write is a non dummy function
-    virtual bool closeOnError();  // return true if the channel can not interactively correct errors.
-    virtual bool dataAvailable(); // would read return a new byte?
-    virtual int readByte();
-    virtual void writeByte(uint8_t byte);
-    virtual void close();
-};
-//#pragma message "Sd support: " XSTR(SDSUPPORT)
-#if SDSUPPORT
-class SDCardGCodeSource : public GCodeSource {
-public:
-    virtual bool isOpen();
-    virtual bool supportsWrite(); ///< true if write is a non dummy function
-    virtual bool closeOnError();  // return true if the channel can not interactively correct errors.
-    virtual bool dataAvailable(); // would read return a new byte?
-    virtual int readByte();
-    virtual void writeByte(uint8_t byte);
-    virtual void close();
-};
-#endif
-
-extern SerialGCodeSource serial0Source;
-#if SDSUPPORT
-extern SDCardGCodeSource sdSource;
-#endif
-
-class GCode // 52 uint8_ts per command needed
+class GCode
 {
     uint16_t params;
     uint16_t params2;
@@ -274,7 +195,6 @@ public:
         return ((params2 & 32768) != 0);
     }
     void printCommand();
-    bool parseBinary(uint8_t* buffer, fast8_t length, bool fromSerial);
     bool parseAscii(char* line, bool fromSerial);
     void popCurrentCommand();
     void echoCommand();
@@ -294,13 +214,7 @@ public:
     static void keepAlive(enum FirmwareState state);
     static constexpr millis_t keepAliveIntervalMs = 2000;
 
-#if SDSUPPORT
-    friend class SDCard;
-#endif //SDSUPPORT
     friend class UIDisplay;
-    friend class GCodeSource;
-
-    GCodeSource* source;
 
 protected:
     void outputGCommand();
@@ -334,11 +248,20 @@ protected:
     static uint8_t commentDetected;                   ///< Flags true if we are reading the comment part of a command.
     static uint8_t binaryCommandSize;                 ///< Expected size of the incoming binary command.
     static bool waitUntilAllCommandsAreParsed;        ///< Don't read until all commands are parsed. Needed if gcode_buffer is misused as storage for strings.
-    static uint32_t lastLineNumber;                   ///< Last line number received.
     static uint32_t actLineNumber;                    ///< Line number of current command.
     static volatile uint8_t bufferLength;             ///< Number of commands stored in gcode_buffer
     static uint8_t formatErrors;                      ///< Number of sequential format errors
     static millis_t lastBusySignal;                   ///< When was the last busy signal
+
+private:
+    struct SerialReceiveState {
+        uint32_t lastLineNumber;
+        millis_t timeOfLastDataPacket;
+        int8_t waitingForResend; ///< -1 when no resend is pending.
+        bool lastCommandWasBinary;
+    };
+    static SerialReceiveState serialReceive;
+    bool parseBinary(uint8_t* buffer, fast8_t length);
 };                                                    // GCode
 
 #endif // GCODE_H

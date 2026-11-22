@@ -45,11 +45,6 @@
 #define UI_ACTION_EPOSITION 1008
 #define UI_ACTION_BED_TEMP 1009
 #define UI_ACTION_EXTRUDER_TEMP 1010
-#define UI_ACTION_SD_PRINT 1013
-#define UI_ACTION_SD_PAUSE 1014
-#define UI_ACTION_SD_CONTINUE 1015
-#define UI_ACTION_SD_UNMOUNT 1016
-#define UI_ACTION_SD_MOUNT 1017
 #define UI_ACTION_XPOSITION_FAST 1018
 #define UI_ACTION_YPOSITION_FAST 1019
 #define UI_ACTION_ZPOSITION_FAST 1020
@@ -235,8 +230,6 @@
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
 //mtype usw.
-#define UI_MENU_TYPE_INFO 0
-#define UI_MENU_TYPE_FILE_SELECTOR 1
 #define UI_MENU_TYPE_SUBMENU 2
 #define UI_MENU_TYPE_MODIFICATION_MENU 3
 #define UI_MENU_TYPE_WIZARD 5
@@ -256,7 +249,6 @@ typedef struct
 typedef struct
 {
     // 0 = info page
-    // 1 = file selector
     // 2 = submenu
     // 3 = modification menu
     unsigned char menuType;
@@ -534,10 +526,6 @@ extern char g_nYesNo;
 #define UI_MENU(name, items, itemsCnt) \
     const UIMenuEntry* const name##_entries[] PROGMEM = items; \
     const UIMenu name PROGMEM = { 2, 0, itemsCnt, name##_entries };
-#define UI_MENU_FILESELECT(name, items, itemsCnt) \
-    const UIMenuEntry* const name##_entries[] PROGMEM = items; \
-    const UIMenu name PROGMEM = { 1, 0, itemsCnt, name##_entries };
-
 // Maximum size of a row - if row is larger, text gets scrolled
 #define MAX_COLS 28 //Anzahl Speicherplätze für Bytes in Display-Zeile, wenn mehr als Display, dann Scrolling. Kann gleich oder größer Displayzeilenlänge sein.
 
@@ -620,14 +608,6 @@ public:
     void setStatusP(PGM_P txt, bool error = false);
     void setStatus(char* txt, bool error = false, bool force = false);
 
-#if SDSUPPORT
-    char cwd[SD_MAX_FOLDER_DEPTH * LONG_FILENAME_LENGTH + 2];
-    uint8_t folderLevel;
-
-    void updateSDFileCount();
-    void goDir(char* name);
-    bool isDirname(char* name);
-#endif // SDSUPPORT
 
     void lock();
     void unlock();

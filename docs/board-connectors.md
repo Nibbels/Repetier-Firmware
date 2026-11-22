@@ -59,7 +59,6 @@ This reproduces the documented retrofit with the T0 heatsink fan on X44. Add the
 #define MOTHERBOARD DEVICE_TYPE_RF2000
 #define NUM_EXTRUDER 1
 #define EXT0_EXTRUDER_COOLER_PIN X44_PIN
-#define SDSUPPORT 0
 #define MAX_ROOM_TEMPERATURE 25
 ```
 
@@ -67,7 +66,7 @@ This reproduces the documented retrofit with the T0 heatsink fan on X44. Add the
 
 Choose the [sensor ID](#temperature-sensor-ids) for the installed sensor. The shipped hotend profiles are defined in [Configuration.h](../Repetier/Configuration.h). Stored PID settings take precedence at boot.
 
-`SDSUPPORT=0` and `MAX_ROOM_TEMPERATURE=25` describe this specific machine. The common defaults are SD enabled and a 33 °C room-temperature threshold.
+This machine uses a room-temperature threshold of 25 °C. The common default is 33 °C.
 
 ## Board references
 
