@@ -35,7 +35,6 @@
 #define PRINTER_FLAG1_ANIMATION 4
 #define PRINTER_FLAG1_ALLSWITCHEDOFF 8
 #define PRINTER_FLAG1_UI_ERROR_MESSAGE 16
-#define PRINTER_FLAG1_Z_ORIGIN_SET 64
 
 #define PRINTER_FLAG2_RESET_FILAMENT_USAGE 4
 #define PRINTER_FLAG2_GOT_TEMPS 32
@@ -69,9 +68,6 @@ public:
     static float homingFeedrate[];
     static float maxAccelerationMMPerSquareSecond[];
     static float maxTravelAccelerationMMPerSquareSecond[];
-#if FEATURE_MILLING_MODE
-    static short max_milling_all_axis_acceleration;
-#endif // FEATURE_MILLING_MODE
     static uint32_t maxPrintAccelerationStepsPerSquareSecond[];
     static uint32_t maxTravelAccelerationStepsPerSquareSecond[];
     static uint8_t relativeCoordinateMode;         // Determines absolute (false) or relative Coordinates (true).
@@ -111,7 +107,6 @@ public:
     static float maxZJerk;                  // Maximum allowed jerk in z direction in mm/s
     static speed_t vMaxReached[2];          // Maximumu reached speed
     static unsigned long msecondsPrinting;  // Milliseconds of printing time (means time with heated extruder)
-    static unsigned long msecondsMilling;   // Milliseconds of milling time
     static float filamentPrinted;           // mm of filament printed since counting started
     static long ZOffset;                    // Z Offset in um
     static char ZMode;                      // Z Scale
@@ -133,10 +128,6 @@ public:
     static volatile char doHeatBedZCompensation;
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
-#if FEATURE_WORK_PART_Z_COMPENSATION
-    static volatile char doWorkPartZCompensation;
-    static volatile long staticCompensationZ; // this is the z-delta which can occur in case the x/y position of the z-origin from the work part scan is different to the x/y position of the z-origin from the moment of the start of the milling
-#endif                                        // FEATURE_WORK_PART_Z_COMPENSATION
 
     static volatile long currentSteps[3];
     static volatile char blockAll;
@@ -146,7 +137,7 @@ public:
     static volatile long currentZSteps;
     static uint16_t maxZOverrideSteps;
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#if FEATURE_HEAT_BED_Z_COMPENSATION
     static volatile bool scanZMoveActive;
     static volatile long compensatedPositionTargetStepsZ;
     static volatile long compensatedPositionCurrentStepsZ;
@@ -156,16 +147,11 @@ public:
     static long queuePositionZLayerGuessNew;
     static volatile long queuePositionZLayerCurrent;
     static volatile long queuePositionZLayerLast;
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
     static volatile long directDestinationSteps[4];
     static volatile long directCurrentSteps[4];
 
-#if FEATURE_MILLING_MODE
-    static char operatingMode;
-    static float drillFeedrate;
-    static float drillZDepth;
-#endif // FEATURE_MILLING_MODE
 
 #if FEATURE_CONFIGURABLE_Z_ENDSTOPS
     static char ZEndstopType;
@@ -175,9 +161,6 @@ public:
     static char endstopZMaxHit;
 #endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
 
-#if FEATURE_CONFIGURABLE_MILLER_TYPE
-    static char MillerType;
-#endif // FEATURE_CONFIGURABLE_MILLER_TYPE
 
 #if STEPPER_ON_DELAY
     static char enabledStepper[3];
@@ -334,9 +317,9 @@ public:
     /** \brief Disable stepper motor for z direction. */
     static INLINE void disableZStepper() {
         InterruptProtectedBlock noInts;
-#if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#if FEATURE_HEAT_BED_Z_COMPENSATION
         Printer::compensatedPositionTargetStepsZ = Printer::compensatedPositionCurrentStepsZ = g_nZScanZPosition = 0;
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#endif // FEATURE_HEAT_BED_Z_COMPENSATION
         noInts.unprotect();
 
         // when the stepper is disabled we loose our home position because somebody else can move our mechanical parts
@@ -368,12 +351,6 @@ public:
         Printer::queuePositionZLayerCurrent = 0;
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
-#if FEATURE_FIND_Z_ORIGIN
-        g_nZOriginPosition[X_AXIS] = 0;
-        g_nZOriginPosition[Y_AXIS] = 0;
-        g_nZOriginPosition[Z_AXIS] = 0;
-        Printer::setZOriginSet(false); //flag wegen statusnachricht
-#endif                                 // FEATURE_FIND_Z_ORIGIN
 
         killPausePrint();
 
@@ -639,20 +616,12 @@ public:
             Printer::outOfPrintVolume[Y_AXIS] = 0;
         if (z == false)
             Printer::outOfPrintVolumeZ = 0;
-#if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#if FEATURE_HEAT_BED_Z_COMPENSATION
         if (!isAxisHomed(Z_AXIS)) {
             Printer::disableCMPnow(true); //true == wait for move while HOMING
         }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#endif // FEATURE_HEAT_BED_Z_COMPENSATION
     }  // setHomed
-
-    static INLINE uint8_t isZOriginSet() {
-        return flag1 & PRINTER_FLAG1_Z_ORIGIN_SET;
-    } // isZOriginSet
-
-    static INLINE void setZOriginSet(uint8_t b) {
-        flag1 = (b ? flag1 | PRINTER_FLAG1_Z_ORIGIN_SET : flag1 & ~PRINTER_FLAG1_Z_ORIGIN_SET);
-    } // setZOriginSet
 
     static INLINE uint8_t isAllSwitchedOff() {
         return flag1 & PRINTER_FLAG1_ALLSWITCHEDOFF;
@@ -728,18 +697,9 @@ public:
 #if FEATURE_CONFIGURABLE_Z_ENDSTOPS
 
         if (ZEndstopType == ENDSTOP_TYPE_SINGLE) {
-#if FEATURE_MILLING_MODE
-            if (operatingMode == OPERATING_MODE_PRINT) {
-#endif // FEATURE_MILLING_MODE
 
-                // in case there is only one z-endstop and we are in operating mode "print", the z-min endstop must be connected
-                return READ(Z_MIN_PIN) != ENDSTOP_Z_MIN_INVERTING;
-#if FEATURE_MILLING_MODE
-            } else {
-                // in case there is only one z-endstop and we are in operating mode "mill", the z-min endstop is not connected and can not be detected
-                return false;
-            }
-#endif // FEATURE_MILLING_MODE
+            // A single connected Z endstop is the Z-min switch.
+            return READ(Z_MIN_PIN) != ENDSTOP_Z_MIN_INVERTING;
         }
 
         // we end up here in case the z-min and z-max endstops are connected in a circuit
@@ -830,14 +790,8 @@ public:
 #if FEATURE_CONFIGURABLE_Z_ENDSTOPS
 
         if (ZEndstopType == ENDSTOP_TYPE_SINGLE) {
-#if FEATURE_MILLING_MODE
-            if (operatingMode == OPERATING_MODE_MILL) {
-                // in case there is only one z-endstop and we are in operating mode "mill", the z-max endstop must be connected
-                return READ(Z_MAX_PIN) != ENDSTOP_Z_MAX_INVERTING;
-            }
-#endif // FEATURE_MILLING_MODE
 
-            // in case there is only one z-endstop and we are in operating mode "print", the z-max endstop is not connected and can not be detected
+            // Use the software maximum when only the Z-min switch is connected.
             return isZMaxSoftEndstopHit();
         }
 
@@ -954,12 +908,6 @@ public:
     } // setSomeTempsensorDefect
 
     static INLINE bool isAnyTempsensorDefect() {
-#if FEATURE_MILLING_MODE
-        if (Printer::operatingMode != OPERATING_MODE_PRINT) {
-            // we do not support temperature sensors in case we are not in operating mode print
-            return 0;
-        }
-#endif // FEATURE_MILLING_MODE
 
         return (flag0 & PRINTER_FLAG0_TEMPSENSOR_DEFECT);
     } // isAnyTempsensorDefect
@@ -977,24 +925,6 @@ public:
             // show the Enstop distance
             return Printer::currentZSteps * Printer::axisMMPerSteps[Z_AXIS];
         }
-
-        //		//TODO: Das stimmt bestimmt nicht :D -> Nur fürs Milling und sollte sich von oben Z_VALUE_MODE_Z_MIN unterscheiden.
-        //		if (Printer::ZMode == Z_VALUE_MODE_Z_ORIGIN)
-        //		{
-        //			// return all values in [mm]
-        //			long fvalue = Printer::currentZSteps;
-        //#if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
-        //			// add the current z-compensation
-        //			fvalue += Printer::compensatedPositionCurrentStepsZ; //da drin: zoffset + senseoffset + digitcompensation
-        //			fvalue += g_nZScanZPosition;
-        //#endif // FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
-        //
-        //#if FEATURE_FIND_Z_ORIGIN
-        //			fvalue += g_nZOriginPosition[Z_AXIS];
-        //#endif // FEATURE_FIND_Z_ORIGIN
-        //
-        //			return float(fvalue * Printer::axisMMPerSteps[Z_AXIS]);
-        //		}
 
         // Z_VALUE_MODE_LAYER:
         // show the G-Code Commanded Z
@@ -1099,7 +1029,7 @@ public:
     static void GoToMemoryPosition(bool x, bool y, bool z, bool e, float feed);
 #endif // FEATURE_MEMORY_POSITION
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#if FEATURE_HEAT_BED_Z_COMPENSATION
 #if FEATURE_SENSIBLE_PRESSURE
     static void enableSenseOffsetnow(void);
 #endif // FEATURE_SENSIBLE_PRESSURE
@@ -1107,7 +1037,7 @@ public:
     static bool isZCompensationLimited(bool positive);
     static void enableCMPnow(void);
     static void disableCMPnow(bool wait = false);
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
     static void stopPrint();
     static bool checkAbortKeys(void);

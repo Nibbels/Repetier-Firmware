@@ -104,7 +104,6 @@ FSTRINGVALUE(Com::tPrintingIsInProcessError, "Error: printing is in progress")
 FSTRINGVALUE(Com::tFanspeed, "Fanspeed:")
 FSTRINGVALUE(Com::tPrintedFilament, "Printed filament:")
 FSTRINGVALUE(Com::tPrintingTime, "Printing time:")
-FSTRINGVALUE(Com::tMillingTime, "Milling time:")
 FSTRINGVALUE(Com::tSpacem, "m ")
 FSTRINGVALUE(Com::tSpaceDaysSpace, " days ")
 FSTRINGVALUE(Com::tSpaceHoursSpace, " hours ")
@@ -137,12 +136,10 @@ FSTRINGVALUE(Com::tEEPROMUpdated, "EEPROM updated")
 FSTRINGVALUE(Com::tLinearLColon, "linear L:")
 FSTRINGVALUE(Com::tQuadraticKColon, " quadratic K:")
 FSTRINGVALUE(Com::tscanHeatBed, "scanHeatBed(): ")
-FSTRINGVALUE(Com::tscanWorkPart, "scanWorkPart(): ")
 FSTRINGVALUE(Com::tAutoMatrixLeveling, "Auto-Matrix-Leveling @X:")
 #if FEATURE_SERVICE_INTERVAL
 FSTRINGVALUE(Com::tPrintedFilamentService, "Printed filament since last Service:")
 FSTRINGVALUE(Com::tPrintingTimeService, "Printing time since last Service:")
-FSTRINGVALUE(Com::tMillingTimeService, "Milling time since last Service:")
 #endif // FEATURE_SERVICE_INTERVAL
 
 #ifdef PRINT_GENERIC_TEMP_TABLE
@@ -198,12 +195,9 @@ FSTRINGVALUE(Com::tEPRFilamentPrinted, "Filament printed [m]")
 FSTRINGVALUE(Com::tEPRFilamentPrintedService, "Filament printed since last Service [m]")
 FSTRINGVALUE(Com::tEPRPrinterActive, "Printer active [s]")
 FSTRINGVALUE(Com::tEPRPrinterActiveService, "Printer active since last Service [s]")
-FSTRINGVALUE(Com::tEPRMillerActive, "Miller active [s]")
-FSTRINGVALUE(Com::tEPRMillerActiveService, "Miller active since last Service [s]")
 FSTRINGVALUE(Com::tEPRMaxInactiveTime, "Max. inactive time [ms 0=off]")
 FSTRINGVALUE(Com::tEPRStopAfterInactivty, "Stop stepper after inactivity [ms 0=off]")
 FSTRINGVALUE(Com::tEPRXMaxLength, "X max print length [mm]")
-FSTRINGVALUE(Com::tEPRXMaxLengthMilling, "X max milling length [mm]")
 FSTRINGVALUE(Com::tEPRYMaxLength, "Y max length [mm]")
 FSTRINGVALUE(Com::tEPRZMaxLength, "Z max length [mm]")
 FSTRINGVALUE(Com::tEPRXBacklash, "X backlash [mm]")
@@ -226,9 +220,6 @@ FSTRINGVALUE(Com::tEPRZAcceleration, "Z-axis acceleration [mm/s^2]")
 FSTRINGVALUE(Com::tEPRXTravelAcceleration, "X-axis travel acceleration [mm/s^2]")
 FSTRINGVALUE(Com::tEPRYTravelAcceleration, "Y-axis travel acceleration [mm/s^2]")
 FSTRINGVALUE(Com::tEPRZTravelAcceleration, "Z-axis travel acceleration [mm/s^2]")
-#if FEATURE_MILLING_MODE
-FSTRINGVALUE(Com::tEPRZMillingAcceleration, "All axis milling acceleration [mm/s^2]")
-#endif //FEATURE_MILLING_MODE
 FSTRINGVALUE(Com::tEPRZOffset, "Z-Offset [um]")
 FSTRINGVALUE(Com::tEPRZMode, "Z Scale")
 FSTRINGVALUE(Com::tEPRBedPIDDriveMax, "Bed PID I-drive max")
@@ -258,9 +249,7 @@ FSTRINGVALUE(Com::tEPRExtruderCoolerSpeed, "Extruder cooler speed [0-255]")
 FSTRINGVALUE(Com::tEPRAdvanceK, "Advance K [0=off]")
 FSTRINGVALUE(Com::tEPRAdvanceL, "Advance L [0=off]")
 FSTRINGVALUE(Com::tEPRBeeperMode, "Beeper [0=off 1=on]")
-FSTRINGVALUE(Com::tEPROperatingMode, "operating mode [1=print 2=mill]")
 FSTRINGVALUE(Com::tEPRZEndstopType, "Z endstop type [1=single 2=circuit]")
-FSTRINGVALUE(Com::tEPRMillerType, "Miller type [tracks]")
 FSTRINGVALUE(Com::tEPRRGBLightMode, "RGB Light mode [0..3 off/ws/aut/man]")
 FSTRINGVALUE(Com::tEPRFET1Mode, "24V-Port X42 default [0=off 1=on]")
 FSTRINGVALUE(Com::tEPRFET2Mode, "24V-Port X44 default [0=off 1=on]")
@@ -273,9 +262,9 @@ FSTRINGVALUE(Com::tEPRZERO_DIGIT_STATE, "Digit homing [1=on 2=off]")
 FSTRINGVALUE(Com::tEPRPrinterZ_STEP_SIZE, "Z-Button stepsize [Steps]")
 FSTRINGVALUE(Com::tEPRPrinterMOD_ZOS_SCAN_POINT_X, "X pos Z-Offset-Scan [col]")
 FSTRINGVALUE(Com::tEPRPrinterMOD_ZOS_SCAN_POINT_Y, "Y pos Z-Offset-Scan [row]")
-#if FEATURE_WORK_PART_Z_COMPENSATION || FEATURE_HEAT_BED_Z_COMPENSATION
+#if FEATURE_HEAT_BED_Z_COMPENSATION
 FSTRINGVALUE(Com::tEPRZScanStartLift, "Z-Scan start elevation [mm]")
-#endif // FEATURE_WORK_PART_Z_COMPENSATION || FEATURE_HEAT_BED_Z_COMPENSATION
+#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 #if FEATURE_SENSIBLE_PRESSURE
 FSTRINGVALUE(Com::tEPRPrinterMOD_SENSEOFFSET_OFFSET_MAX, "SenseOffset peak offset [um]")
 FSTRINGVALUE(Com::tEPRPrinterEPR_RF_MOD_SENSEOFFSET_DIGITS, "SenseOffset cap [Digits]")
@@ -337,16 +326,12 @@ FSTRINGVALUE(Com::tSDErrorCode, "SD errorCode:")
 FSTRINGVALUE(Com::tHeaterDecoupledWarning, "One heater seems decoupled from thermistor - disabling all for safety!")
 
 FSTRINGVALUE(Com::tOutputObjectPrint, OUTPUT_OBJECT_SCRIPT_PRINT)
-FSTRINGVALUE(Com::tOutputObjectMill, OUTPUT_OBJECT_SCRIPT_MILL)
 
 FSTRINGVALUE(Com::tUnmountFilamentSoft, UNMOUNT_FILAMENT_SCRIPT_SOFT)
 FSTRINGVALUE(Com::tUnmountFilamentHard, UNMOUNT_FILAMENT_SCRIPT_HARD)
 FSTRINGVALUE(Com::tMountFilamentSoft, MOUNT_FILAMENT_SCRIPT_SOFT)
 FSTRINGVALUE(Com::tMountFilamentHard, MOUNT_FILAMENT_SCRIPT_HARD)
 
-#if FEATURE_FIND_Z_ORIGIN
-FSTRINGVALUE(Com::tFindZOrigin, FIND_Z_ORIGIN_SCRIPT)
-#endif // FEATURE_FIND_Z_ORIGIN
 FSTRINGVALUE(Com::tCap, "Cap:")
 FSTRINGVALUE(Com::tConfig, "Config:")
 

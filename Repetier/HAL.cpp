@@ -771,7 +771,7 @@ ISR(TIMER1_COMPA_vect) {
 
     OCR1A = 61000;
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#if FEATURE_HEAT_BED_Z_COMPENSATION
     if (PrintLine::cur == NULL && PrintLine::direct.task == TASK_NO_TASK) {
         PrintLine::stepSlowedZCompensation(); // Z is free here.
         // Wait if the z-CMP is under heavy workload
@@ -784,7 +784,7 @@ ISR(TIMER1_COMPA_vect) {
             return;
         }
     }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
     if (PrintLine::direct.task) {
         setTimer(PrintLine::performDirectMove());

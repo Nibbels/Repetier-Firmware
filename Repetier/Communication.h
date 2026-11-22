@@ -94,7 +94,6 @@ public:
     FSTRINGVAR(tFanspeed)
     FSTRINGVAR(tPrintedFilament)
     FSTRINGVAR(tPrintingTime)
-    FSTRINGVAR(tMillingTime)
     FSTRINGVAR(tSpacem)
     FSTRINGVAR(tSpaceDaysSpace)
     FSTRINGVAR(tSpaceHoursSpace)
@@ -129,13 +128,11 @@ public:
     FSTRINGVAR(tQuadraticKColon)
     FSTRINGVAR(tEEPROMUpdated)
     FSTRINGVAR(tscanHeatBed)
-    FSTRINGVAR(tscanWorkPart)
     FSTRINGVAR(tAutoMatrixLeveling)
 
 #if FEATURE_SERVICE_INTERVAL
     FSTRINGVAR(tPrintedFilamentService)
     FSTRINGVAR(tPrintingTimeService)
-    FSTRINGVAR(tMillingTimeService)
 #endif // FEATURE_SERVICE_INTERVAL
 
 #ifdef PRINT_GENERIC_TEMP_TABLE
@@ -191,13 +188,10 @@ public:
     FSTRINGVAR(tEPRFilamentPrintedService)
     FSTRINGVAR(tEPRPrinterActive)
     FSTRINGVAR(tEPRPrinterActiveService)
-    FSTRINGVAR(tEPRMillerActive)
-    FSTRINGVAR(tEPRMillerActiveService)
     FSTRINGVAR(tEPRMaxInactiveTime)
     FSTRINGVAR(tEPRStopAfterInactivty)
     FSTRINGVAR(tEPRMaxXYJerk)
     FSTRINGVAR(tEPRXMaxLength)
-    FSTRINGVAR(tEPRXMaxLengthMilling)
     FSTRINGVAR(tEPRYMaxLength)
     FSTRINGVAR(tEPRZMaxLength)
     FSTRINGVAR(tEPRXBacklash)
@@ -205,12 +199,9 @@ public:
     FSTRINGVAR(tEPRZBacklash)
     FSTRINGVAR(tEPRZAcceleration)
     FSTRINGVAR(tEPRZTravelAcceleration)
-#if FEATURE_WORK_PART_Z_COMPENSATION || FEATURE_HEAT_BED_Z_COMPENSATION
+#if FEATURE_HEAT_BED_Z_COMPENSATION
     FSTRINGVAR(tEPRZScanStartLift)
-#endif // FEATURE_WORK_PART_Z_COMPENSATION || FEATURE_HEAT_BED_Z_COMPENSATION
-#if FEATURE_MILLING_MODE
-    FSTRINGVAR(tEPRZMillingAcceleration)
-#endif //FEATURE_MILLING_MODE
+#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 #if FEATURE_READ_CALIPER
     FSTRINGVAR(tEPRZCallStandard)
     FSTRINGVAR(tEPRZCallAdjust)
@@ -265,9 +256,7 @@ public:
     FSTRINGVAR(tEPRAdvanceL)
     FSTRINGVAR(tEPRBeeperMode)
     FSTRINGVAR(tEPRCaseLightsMode)
-    FSTRINGVAR(tEPROperatingMode)
     FSTRINGVAR(tEPRZEndstopType)
-    FSTRINGVAR(tEPRMillerType)
     FSTRINGVAR(tEPRRGBLightMode)
     FSTRINGVAR(tEPRFET1Mode)
     FSTRINGVAR(tEPRFET2Mode)
@@ -336,15 +325,11 @@ public:
 
     FSTRINGVAR(tHeaterDecoupledWarning)
     FSTRINGVAR(tOutputObjectPrint)
-    FSTRINGVAR(tOutputObjectMill)
     FSTRINGVAR(tUnmountFilamentSoft)
     FSTRINGVAR(tUnmountFilamentHard)
     FSTRINGVAR(tMountFilamentSoft)
     FSTRINGVAR(tMountFilamentHard)
 
-#if FEATURE_FIND_Z_ORIGIN
-    FSTRINGVAR(tFindZOrigin)
-#endif // FEATURE_FIND_Z_ORIGIN
     FSTRINGVAR(tCap)
     FSTRINGVAR(tConfig)
 

@@ -43,35 +43,6 @@ Overflow in Z-Matrix: >12.7f
 #error This Firmware supports up to 2 Extruders. You might have to reimplement the 3+ code or "request it" if you really got hands on a RFx000 board with 3+ Extruders.
 #endif // NUM_EXTRUDER > 2 || NUM_EXTRUDER < 0
 
-/** \brief Allows to use the device for milling */
-#define FEATURE_MILLING_MODE 0 // 1 = on, 0 = off
-
-#if FEATURE_MILLING_MODE
-#error REMOVE THIS LINE TO SHOW THAT YOU UNDERSTOOD THAT MILLING WITH A COMMUNITY-MOD-FW HIGHER THAN 1.43.20 HAS TO BE ALPHA-TESTED BY SOMEONE. WE CHANGED ALOT AND STILL DID NOT TEST MILLING.
-
-/** \brief Enables automatic compensation in z direction for the operationg mode "mill" */
-#define FEATURE_WORK_PART_Z_COMPENSATION 1 // 1 = on, 0 = off
-
-/** \brief This feature allows to move the milling bed upwards automatically until the miller is hit. The found position is taken over as Z=0 automatically.
-     Be aware that mis-using of this functionality can ruin the tool (e.g. in case the tool is placed above the milling bed and not above the to-be-milled object). */
-#define FEATURE_FIND_Z_ORIGIN 1 // 1 = on, 0 = off
-
-/** \brief Enables/disables the menu entry which allows to choose the currently installed miller type */
-#define FEATURE_CONFIGURABLE_MILLER_TYPE 1 // 1 = on, 0 = off
-
-#if FEATURE_WORK_PART_Z_COMPENSATION && !FEATURE_FIND_Z_ORIGIN
-#error It does not make sense to enable the work part z-compensation without enabling of the automatic detection of the z-origin
-#endif // FEATURE_WORK_PART_Z_COMPENSATION && !FEATURE_FIND_Z_ORIGIN
-
-/** \brief Define the type of the present miller hardware */
-#define MILLER_TYPE MILLER_TYPE_TWO_TRACKS
-/** \brief Define lower acceleration to reach very small speeds */
-#define MILLER_ACCELERATION 15
-
-/** \brief Default operating mode */
-#define DEFAULT_OPERATING_MODE OPERATING_MODE_PRINT
-
-#endif // FEATURE_MILLING_MODE
 
 /** \brief Allows to use the 230V output */
 #define FEATURE_230V_OUTPUT 0 // the RF1000 does not support the 230 V output
@@ -115,7 +86,6 @@ If EEPROM is enabled these values will be overidden with the values in the EEPRO
 #define X_MAX_LENGTH_PRINT 245 // [mm]
 #endif                         // NUM_EXTRUDER == 2
 
-#define X_MAX_LENGTH_MILL 230 // [mm]
 #define Y_MAX_LENGTH 245      // [mm]
 #define Z_MAX_LENGTH 200      // [mm]
 
@@ -132,20 +102,6 @@ Overridden if EEPROM activated.*/
 
 /** \brief Number of steps for a 1mm move in z direction  Overridden if EEPROM activated.*/
 #define ZAXIS_STEPS_PER_MM float(80 * (float)RF_MICRO_STEPS_Z)
-
-// ##########################################################################################
-// ##   Miller type 1 (= one track)
-// ##########################################################################################
-
-#define MT1_WORK_PART_SCAN_CONTACT_PRESSURE_DELTA 10 // [digits]
-#define MT1_WORK_PART_SCAN_RETRY_PRESSURE_DELTA 5    // [digits]
-
-// ##########################################################################################
-// ##   Miller type 2 (= two tracks)
-// ##########################################################################################
-
-#define MT2_WORK_PART_SCAN_CONTACT_PRESSURE_DELTA 30 // [digits]
-#define MT2_WORK_PART_SCAN_RETRY_PRESSURE_DELTA 20   // [digits]
 
 // ##########################################################################################
 // ##   Configuration of the 1. extruder
@@ -584,17 +540,11 @@ on this endstop. */
 #endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
 
 /** \brief Set order of axis homing. Use HOME_ORDER_XYZ and replace XYZ with your order. */
-#if FEATURE_MILLING_MODE
-#define HOMING_ORDER_PRINT HOME_ORDER_XYZ //if you work with springloaded hotend or positive Z-Matrix home Z last! You might otherwise hit the surface.
-#define HOMING_ORDER_MILL HOME_ORDER_ZXY
-#else
 #define HOMING_ORDER_PRINT HOME_ORDER_XYZ //if you work with springloaded hotend or positive Z-Matrix home Z last!! You might otherwise hit the surface.
-#endif                                    // FEATURE_MILLING_MODE
 
 /** \brief Sets direction of endstops when homing; 1=MAX, -1=MIN */
 #define X_HOME_DIR -1
 #define Y_HOME_DIR -1
-//gets inverted when searching home dir in milling mode:
 #define Z_HOME_DIR -1
 
 /** \brief If during homing the endstop is reached, how many mm should the printer move back for the second try */
@@ -610,7 +560,6 @@ during homing operation. The homing speed is divided by the value. 1 = same spee
 
 /** \brief When you have several endstops in one circuit you need to disable it after homing by moving a
 small amount back. This is also the case with H-belt systems. */
-#define LEAVE_Z_MAX_ENDSTOP_AFTER_HOME 2.0f // [mm] positive value, because homedir is known.
 
 // ##########################################################################################
 // ##   Motor Current & Stepper configurations
@@ -845,105 +794,20 @@ Above this value the z compensation will distribute the roughness of the surface
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
 // ##########################################################################################
-// ##   Configuration of the work part z compensation
-// ##########################################################################################
-
-#if FEATURE_WORK_PART_Z_COMPENSATION
-
-/** \brief Specifies the maximal static z-offset which can be configured.
-*/
-#define WORK_PART_MAX_STATIC_Z_OFFSET_MM 10 // [mm]
-
-/** \brief Configuration of the work part scan */
-#define WORK_PART_SCAN_X_START_MM 5         // [mm] from the left border of the work bed
-#define WORK_PART_SCAN_X_END_MM 220         // [mm]
-#define WORK_PART_SCAN_X_STEP_SIZE_MM 20    // [mm]
-#define WORK_PART_SCAN_X_STEP_SIZE_MIN_MM 5 // [mm]
-
-#define WORK_PART_SCAN_Y_START_MM 55        // [mm] from the front border of the work bed
-#define WORK_PART_SCAN_Y_END_MM 170         // [mm]
-#define WORK_PART_SCAN_Y_STEP_SIZE_MM 20    // [mm]
-#define WORK_PART_SCAN_Y_STEP_SIZE_MIN_MM 5 // [mm]
-
-#define WORK_PART_SCAN_UP_FAST_MM -0.025f   // [mm]
-#define WORK_PART_SCAN_UP_SLOW_MM -0.005f   // [mm]
-#define WORK_PART_SCAN_DOWN_SLOW_MM 0.0125f // [mm]
-#define WORK_PART_SCAN_DOWN_FAST_MM 0.5f    // [mm]
-
-#define WORK_PART_SCAN_FAST_STEP_DELAY_MS 5   // [ms]
-#define WORK_PART_SCAN_SLOW_STEP_DELAY_MS 100 // [ms]
-#define WORK_PART_SCAN_IDLE_DELAY_MS 250      // [ms]
-
-#if MILLER_TYPE == MILLER_TYPE_ONE_TRACK
-#define WORK_PART_SCAN_CONTACT_PRESSURE_DELTA MT1_WORK_PART_SCAN_CONTACT_PRESSURE_DELTA
-#define WORK_PART_SCAN_RETRY_PRESSURE_DELTA MT1_WORK_PART_SCAN_RETRY_PRESSURE_DELTA
-#elif MILLER_TYPE == MILLER_TYPE_TWO_TRACKS
-#define WORK_PART_SCAN_CONTACT_PRESSURE_DELTA MT2_WORK_PART_SCAN_CONTACT_PRESSURE_DELTA
-#define WORK_PART_SCAN_RETRY_PRESSURE_DELTA MT2_WORK_PART_SCAN_RETRY_PRESSURE_DELTA
-#endif // MILLER_TYPE
-
-#define WORK_PART_SCAN_IDLE_PRESSURE_DELTA 0   // [digits]
-#define WORK_PART_SCAN_IDLE_PRESSURE_MIN -5000 // [digits]
-#define WORK_PART_SCAN_IDLE_PRESSURE_MAX 5000  // [digits]
-
-#define WORK_PART_SCAN_RETRIES 3                 // [-]
-#define WORK_PART_SCAN_PRESSURE_READS 15         // [-]
-#define WORK_PART_SCAN_PRESSURE_TOLERANCE 15     // [digits]
-#define WORK_PART_SCAN_PRESSURE_READ_DELAY_MS 15 // [ms]
-#define WORK_PART_SCAN_DELAY 1000                // [ms]
-
-#define WORK_PART_SCAN_Z_START_MM 15 // [mm]
-
-#endif // FEATURE_WORK_PART_Z_COMPENSATION
-
-// ##########################################################################################
 // ##   configuration of the pause functionality
 // ##########################################################################################
 
 /** \brief Configuration of the pause steps */
-//look here if you want to prevent clamp crashes while milling! choose your pause position right.
-#define DEFAULT_PAUSE_MM_X_MILL 0            // [mm]
 #define DEFAULT_PAUSE_MM_X_PRINT 0           // [mm]
-#define DEFAULT_PAUSE_MM_Y_MILL 200          // [mm]
 #define DEFAULT_PAUSE_MM_Y_PRINT 200         // [mm]
-#define DEFAULT_PAUSE_MM_Z_MILL 10           // [mm]
 #define DEFAULT_PAUSE_MM_Z_PRINT 10          // [mm]
 #define DEFAULT_PAUSE_MM_E SCRIPT_RETRACT_MM // [mm] Zahl wird immer vorzeichenlos als Retract benutzt
 
 #define PAUSE_COOLDOWN 100 // [°C] 0=Off and 1..255=Temp down while paused
 
 // ##########################################################################################
-// ##   configuration of the z origin search
-// ##########################################################################################
-
-#if FEATURE_FIND_Z_ORIGIN
-
-#define SEARCH_Z_ORIGIN_CONTACT_PRESSURE_DELTA 500 // [digits]
-#define SEARCH_Z_ORIGIN_BREAKOUT_DELAY 100         // [ms]
-#define SEARCH_Z_ORIGIN_BED_UP_MM -0.05f           // [mm]
-#define SEARCH_Z_ORIGIN_BED_DOWN_MM 0.025f         // [mm]
-
-/** \brief The following commands are executed before the z-origin is set to 0. */
-#define FIND_Z_ORIGIN_SCRIPT "G91\nG1 Z15 F5000"
-
-#endif // FEATURE_FIND_Z_ORIGIN
-
-// ##########################################################################################
 // ##   debugging
 // ##########################################################################################
 
-#if FEATURE_MILLING_MODE
-
-/** \brief Enables debug outputs from the work part scan */
-#define DEBUG_WORK_PART_SCAN 0 // 1 = on, 0 = off
-
-#if FEATURE_FIND_Z_ORIGIN
-
-/** \brief Enables debug outputs from the search of the z-origin */
-#define DEBUG_FIND_Z_ORIGIN 0 // 1 = on, 0 = off
-
-#endif // FEATURE_FIND_Z_ORIGIN
-
-#endif // FEATURE_MILLING_MODE
 
 #endif // RF1000_H

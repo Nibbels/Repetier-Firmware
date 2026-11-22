@@ -18,13 +18,13 @@ Firmware changes are tracked on `ai-firmware-review` against `community_developm
 
 ### Z travel and scanning
 
-- [x] **Allow scan retreat from the exact lower bound.** `moveZ()` stops a further approach at `-maxZOverrideSteps` and allows the bed to move away. The scan keeps control of the Z motor for the duration of its move. [Scan step output](../Repetier/RF.cpp#L4758)
+- [x] **Allow scan retreat from the exact lower bound.** `moveZ()` stops a further approach at `-maxZOverrideSteps` and allows the bed to move away. The scan keeps control of the Z motor for the duration of its move. [Scan step output](../Repetier/RF.cpp#L3609)
 
-- [x] **Apply travel limits to compensation-only Z pulses.** Each pulse checks the motor position in the requested direction. Z-max uses the configured limit and, where present, the hardware switch. Z-min allows the model-specific overtravel in homed print mode. An unreachable target stays pending, leaving the next retreat step available. Host replays covered idle and XY movement, queued and direct retreat, disabling compensation at a limit, and the RF1000 shared switch. Physical verification remains open. [Compensation pulses](../Repetier/motion.cpp#L969) · [Travel limit check](../Repetier/Printer.cpp#L1166) · [Scan reach](z-offset/scans-and-persistence.md#z-min-screw-adjustment-and-scan-reach)
+- [x] **Apply travel limits to compensation-only Z pulses.** Each pulse checks the motor position in the requested direction. Z-max uses the configured limit and, where present, the hardware switch. Z-min allows the model-specific overtravel after homing. An unreachable target stays pending, leaving the next retreat step available. Host replays covered idle and XY movement, queued and direct retreat, disabling compensation at a limit, and the RF1000 shared switch. Physical verification remains open. [Compensation pulses](../Repetier/motion.cpp#L969) · [Travel limit check](../Repetier/Printer.cpp#L1048) · [Scan reach](z-offset/scans-and-persistence.md#z-min-screw-adjustment-and-scan-reach)
 
 ### Pause and resume
 
-- [ ] **Suspend automatic SenseOffset learning during pause.** In print mode, bed-matrix lookup and fade use the frozen print XYZ. In a host replay, pre-pause samples raised SenseOffset by 10 µm after the reading fell to zero. Stop learning and clear sample history while retaining applied clearance, manual offset adjustment and live Digit-Z force tracking. The pause guard passed a host trial. Check the return at equal force and after manual extrusion while parked. [Print matrix coordinates](../Repetier/RF.cpp#L3198-L3221) · [SenseOffset sampling](../Repetier/RF.cpp#L5688-L5726)
+- [ ] **Suspend automatic SenseOffset learning during pause.** Bed-matrix lookup and fade use the frozen print XYZ. In a host replay, pre-pause samples raised SenseOffset by 10 µm after the reading fell to zero. Stop learning and clear sample history while retaining applied clearance, manual offset adjustment and live Digit-Z force tracking. The pause guard passed a host trial. Check the return at equal force and after manual extrusion while parked. [Print matrix coordinates](../Repetier/RF.cpp#L3128) · [Pressure handler](../Repetier/RF.cpp#L4325)
 
 The updated host replay covers early Pause and Play on pressure, queued and panel requests, ordinary and overlapping jog releases, a blocked return and retry, cancellation, and the two-press wake and resume sequence. The step replay covers clipped direct moves, preservation of queued overtravel, and direct extrusion with the pressure guard. AVR builds passed for all three models. Physical verification remains open.
 
@@ -57,7 +57,6 @@ The firmware restricted Play to a completed pause in 1.37t2. The 1.43.56 pause r
 ## Calibration and persistence
 
 - [ ] **Make the `M3902 Z0` offset transfer durable.** The command saves zero for the manual offset immediately. A reset before saving the RAM bed matrix can lose the transferred correction. [Matrix persistence](z-offset/scans-and-persistence.md#critical-transfer-operation-m3902-z0)
-- **Deferred pending the milling scope decision.** The fork's Auto-touch and workpiece-origin routines refine contact detection and widen the origin search from 0.25 to 0.50 mm. [Probe routine](https://github.com/afriess/RFx000x-Firmware/blob/0e11752/Repetier/RF.cpp#L3382-L3405) · [Search range](https://github.com/afriess/RFx000x-Firmware/commit/0dd35e4)
 
 ## Motion smoothness and performance
 
@@ -68,9 +67,9 @@ The firmware restricted Play to a completed pause in 1.37t2. The 1.43.56 pause r
 
 Work through the [architecture review and migration](development-roadmap.md#5-firmware-structure-and-hardware-variants) as the blocks establish which state, algorithms and hardware differences belong together.
 
-- [ ] **Propose which optional features to retire.** Start with milling mode and identify its shared print paths, compatibility implications and removable variants. [Feature retirement](development-roadmap.md#feature-retirement)
+- [x] **Retire milling mode.** Removed the mode switch, workpiece scans and compensation, along with their commands, UI pages and configuration. Preserved the print EEPROM layout. [Feature retirement](development-roadmap.md#feature-retirement)
+- [ ] **Review other optional features for retirement.** Check actual usage, dependencies and the simplification from removing the alternate paths.
 
 ## Fork candidates
 
 - [Z-CMP timing and step packing](#motion-smoothness-and-performance)
-- [Auto-touch and workpiece origin](#calibration-and-persistence)

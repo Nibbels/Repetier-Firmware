@@ -22,7 +22,7 @@ https://github.com/RF1000/Repetier-Firmware (siehe Branch developement. Oder auc
 `#define MOTHERBOARD                         DEVICE_TYPE_RF1000` or  
 `#define MOTHERBOARD                         DEVICE_TYPE_RF2000` or  
 `#define MOTHERBOARD                         DEVICE_TYPE_RF2000v2`  
-- Wer den Fräsmodus nicht benötigt, kann ihn aus der Firmware entfernen. Dazu stellt man in der RF1000.h/RF2000.h/RF2000v2.h das FEATURE_MILLING_MODE auf 0.
+- Dieser Stand ist für den 3D-Druck ausgelegt. Der [letzte Stand mit Fräscode](https://github.com/Nibbels/Repetier-Firmware/tree/7e2e08b7f6da7677007dfddd06f8fc5adeb7d709) liegt im Repository-Verlauf.
 - Optional: Man bearbeitet und speichert Configuration.h und RF1000.h oder RF2000.h, wie man es für seinen speziellen Drucker braucht.
 - Der Drucker wird mit dem USB-Kabel angeschlossen und angeschaltet.
 - Die Datei /Repetier/Repetier.ino doppelklicken. 

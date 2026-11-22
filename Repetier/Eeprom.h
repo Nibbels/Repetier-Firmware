@@ -18,7 +18,7 @@
 #ifndef EEPROM_H
 #define EEPROM_H
 
-// Id to distinguish version changes
+// Keep the existing addresses when retiring settings. Legacy cells remain reserved.
 #define EEPROM_PROTOCOL_VERSION 8
 
 /** Where to start with our datablock in memory. Can be moved if you
@@ -70,21 +70,14 @@ have problems with other modules using the eeprom */
 #if FEATURE_SERVICE_INTERVAL
 #define EPR_PRINTING_TIME_SERVICE 169     // Time in seconds printing since last service intervall
 #define EPR_PRINTING_DISTANCE_SERVICE 173 // Filament length printed since last service intervall
-#define EPR_MILLING_TIME_SERVICE 177      // Time in seconds milling since last service intervall
 #endif                                    // FEATURE_SERVICE_INTERVAL
 
-#define EPR_MILLING_TIME 181 // Time in seconds milling
 
 #define EPR_RF_BEEPER_MODE 1000
 #define EPR_RF_CASE_LIGHT_MODE 1001
 #define EPR_RF_230V_OUTPUT_MODE 1002
-#define EPR_RF_OPERATING_MODE 1003
-#define EPR_X_HOMING_FEEDRATE_MILL 1004
-#define EPR_Y_HOMING_FEEDRATE_MILL 1008
-#define EPR_Z_HOMING_FEEDRATE_MILL 1012
 #define EPR_RF_Z_ENDSTOP_TYPE 1016
 #define EPR_RF_HOTEND_TYPE 1017 //depreached 30 07 2017 Nibbels : Die Funktion war nur für RF1000, nur Single, in der Falschen Klasse, wenn nötig, dann in Class Extruder einbauen. Hat beim RF2000 keiner vermisst: Ersatz ist EPR_EXTRUDER_SENSOR_TYPE
-#define EPR_RF_MILLER_TYPE 1018
 #define EPR_RF_RGB_LIGHT_MODE 1019
 #define EPR_RF_FET1_MODE 1020
 #define EPR_RF_FET2_MODE 1021
@@ -135,13 +128,11 @@ have problems with other modules using the eeprom */
 //#define EPR_RF_FREQ_DBL                   1928 //1929 2byte für uint16 -> frequenz double grenze -> ALT, das ist jetzt StepPackingMinInterval EPR_RF_STEP_PACKING_MIN_INTERVAL!
 #define EPR_RF_FAN_MODE 1930 //[1byte]
 
-#define EPR_RF_MILL_ACCELERATION 1932 //+1933 u short
 #define EPR_RF_CAL_STANDARD 1934      //+1935 u short
 #define EPR_RF_CAL_ADJUST 1936        //[1byte]
 #define EPR_RF_ZERO_DIGIT_STATE 1937  //[1byte]
 #define EPR_RF_DIGIT_CMP_STATE 1938   //[1byte]
 
-#define EPR_X_LENGTH_MILLING 1939 //[+1940+1941+1942 4byte float x-axis length for milling / switching]
 
 #define EPR_RF_MICRO_STEPS_X 1943    //[1byte]
 #define EPR_RF_MICRO_STEPS_Y 1944    //[1byte]
@@ -216,7 +207,6 @@ public:
     static void updateChecksum();
     static void readDataFromEEPROM();
     static void restoreEEPROMSettingsFromConfiguration();
-    static void initializeAllOperatingModes();
     static void clearEEPROM();
     static void writeSettings();
     static void update(GCode* com);

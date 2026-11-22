@@ -49,7 +49,7 @@ Tests still required on a physical printer: `M3909 P0` during a first layer, sub
 
 ### Finding F3 (PARTIALLY FIXED): consecutive-print lifecycle
 
-**Fixed on [ba93708](https://github.com/Nibbels/Repetier-Firmware/commit/ba93708d41c84fcce16872720b6b954da70ea157) for sequences that home Z.** `homeZAxis()` disables CMP through `setHomed(-1,-1,false)` and waits for compensation to return to zero. Then it resets `queuePositionZLayerGuessNew`, `Current`, `Last`, `g_minZCompensationSteps`, `g_maxZCompensationSteps` and `g_diffZCompensationSteps`, using live Z steps/mm for the default bounds. It clears the transient SenseOffset and active pressure threshold, then reconstructs `g_staticZSteps` from the **preserved EEPROM-backed** `Printer::ZOffset`. The matrix remains untouched. Printing-mode guard also covers combined print/mill firmware.
+**Fixed on [ba93708](https://github.com/Nibbels/Repetier-Firmware/commit/ba93708d41c84fcce16872720b6b954da70ea157) for sequences that home Z.** `homeZAxis()` disables CMP through `setHomed(-1,-1,false)` and waits for compensation to return to zero. Then it resets `queuePositionZLayerGuessNew`, `Current`, `Last`, `g_minZCompensationSteps`, `g_maxZCompensationSteps` and `g_diffZCompensationSteps`, using live Z steps/mm for the default bounds. It clears the transient SenseOffset and active pressure threshold, then reconstructs `g_staticZSteps` from the **preserved EEPROM-backed** `Printer::ZOffset`. The matrix remains untouched.
 
 Prints begun without a fresh Z home may retain learned fade boundaries during priming. The `M3912` phase flag controls the transition to the DMS brake even with inherited limits. `M3000` clears the dynamic offset. `G28 Z` resets the learned bounds as well.
 

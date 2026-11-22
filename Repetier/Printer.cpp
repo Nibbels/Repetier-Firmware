@@ -34,9 +34,6 @@ float Printer::homingFeedrate[3] = { HOMING_FEEDRATE_X_PRINT, HOMING_FEEDRATE_Y_
 
 float Printer::maxAccelerationMMPerSquareSecond[4] = { MAX_ACCELERATION_UNITS_PER_SQ_SECOND_X, MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Y, MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Z };                            ///< X, Y, Z and E max acceleration in mm/s^2 for printing moves or retracts
 float Printer::maxTravelAccelerationMMPerSquareSecond[4] = { MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_X, MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Y, MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Z }; ///< X, Y, Z max acceleration in mm/s^2 for travel moves
-#if FEATURE_MILLING_MODE
-short Printer::max_milling_all_axis_acceleration = MILLER_ACCELERATION; //miller min speed is limited to too high speed because of acceleration-formula. We use this value in milling mode and make it adjustable within small numbers like 5 to 100 or something like that.
-#endif                                                                  // FEATURE_MILLING_MODE
 
 /** Acceleration in steps/s^2 in printing mode.*/
 uint32_t Printer::maxPrintAccelerationStepsPerSquareSecond[4];
@@ -88,10 +85,9 @@ float Printer::maxXYJerk;                                         // Maximum all
 float Printer::maxZJerk;                                          // Maximum allowed jerk in z direction in mm/s
 unsigned int Printer::vMaxReached[2];                             // Maximum reached speed [FOR_DIRECT, FOR_QUEUE]
 unsigned long Printer::msecondsPrinting = 0;                      // Milliseconds of printing time (means time with heated extruder)
-unsigned long Printer::msecondsMilling = 0;                       // Milliseconds of milling time
 float Printer::filamentPrinted = 0.0f;                            // mm of filament printed since counting started
 long Printer::ZOffset = 0;                                        // Z Offset in um
-char Printer::ZMode = DEFAULT_Z_SCALE_MODE;                       // Z Scale  1 = show the z-distance to z-min (print) or to the z-origin (mill), 2 = show the z-distance to the surface of the heat bed (print) or work part (mill)
+char Printer::ZMode = DEFAULT_Z_SCALE_MODE;                       // Z-min distance or nominal layer height
 char Printer::moveMode[3];                                        // move mode which is applied within the Position X/Y/Z menus
 bool Printer::moveKosys = KOSYS_GCODE;                            // true = GCode, false = DirectMove / OffsetMove
 bool Printer::movePositionFeedrateChoice = FEEDRATE_DIRECTCONFIG; // select the feedrate for menu positioning: feedrate from last gcode or standard speed
@@ -110,10 +106,6 @@ float Printer::memoryF;
 volatile char Printer::doHeatBedZCompensation = false;
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
-#if FEATURE_WORK_PART_Z_COMPENSATION
-volatile char Printer::doWorkPartZCompensation = false;
-volatile long Printer::staticCompensationZ = 0;
-#endif // FEATURE_WORK_PART_Z_COMPENSATION
 
 volatile long Printer::currentSteps[3] = { 0, 0, 0 };
 volatile char Printer::blockAll = 0;
@@ -123,7 +115,7 @@ volatile long Printer::currentYSteps = 0;                                       
 volatile long Printer::currentZSteps = 0;                                                  //das ist der Z-Zähler der GCodes zum Zählen des tiefsten Schalterdruckpunkts /Schaltercrash.
 uint16_t Printer::maxZOverrideSteps = uint16_t(ZAXIS_STEPS_PER_MM * Z_ENDSTOP_DRIVE_OVER); //das ist der Z-Zähler der GCodes zum Zählen des tiefsten Schalterdruckpunkts /Schaltercrash.
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#if FEATURE_HEAT_BED_Z_COMPENSATION
 volatile bool Printer::scanZMoveActive = false;
 volatile long Printer::compensatedPositionTargetStepsZ = 0;
 volatile long Printer::compensatedPositionCurrentStepsZ = 0;
@@ -134,16 +126,11 @@ volatile float Printer::compensatedPositionCollectTinyE = 0.0f;
 long Printer::queuePositionZLayerGuessNew = 0;
 volatile long Printer::queuePositionZLayerCurrent = 0;
 volatile long Printer::queuePositionZLayerLast = 0;
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
 volatile long Printer::directDestinationSteps[4] = { 0, 0, 0, 0 };
 volatile long Printer::directCurrentSteps[4] = { 0, 0, 0, 0 };
 
-#if FEATURE_MILLING_MODE
-char Printer::operatingMode;
-float Printer::drillFeedrate;
-float Printer::drillZDepth;
-#endif // FEATURE_MILLING_MODE
 
 #if FEATURE_CONFIGURABLE_Z_ENDSTOPS
 char Printer::ZEndstopType;
@@ -153,9 +140,6 @@ char Printer::endstopZMinHit;
 char Printer::endstopZMaxHit;
 #endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
 
-#if FEATURE_CONFIGURABLE_MILLER_TYPE
-char Printer::MillerType;
-#endif // FEATURE_CONFIGURABLE_MILLER_TYPE
 
 #if STEPPER_ON_DELAY
 char Printer::enabledStepper[3] = { 0, 0, 0 };
@@ -250,21 +234,10 @@ void Printer::updateDerivedParameter() {
         }
         axisMMPerSteps[axis] = mmPerStep;
 
-#if FEATURE_MILLING_MODE
-        if (Printer::operatingMode == OPERATING_MODE_PRINT) {
-#endif // FEATURE_MILLING_MODE
-            /** Acceleration in steps/s^2 in printing mode.*/
-            maxPrintAccelerationStepsPerSquareSecond[axis] = uint32_t(maxAccelerationMMPerSquareSecond[axis] * axisStepsPerMM[axis]);
-            /** Acceleration in steps/s^2 in movement mode.*/
-            maxTravelAccelerationStepsPerSquareSecond[axis] = uint32_t(maxTravelAccelerationMMPerSquareSecond[axis] * axisStepsPerMM[axis]);
-#if FEATURE_MILLING_MODE
-        } else {
-            /** Acceleration in steps/s^2 in milling mode.*/
-            maxPrintAccelerationStepsPerSquareSecond[axis] = uint32_t(MILLER_ACCELERATION * axisStepsPerMM[axis]);
-            /** Acceleration in steps/s^2 in milling-movement mode.*/
-            maxTravelAccelerationStepsPerSquareSecond[axis] = uint32_t(MILLER_ACCELERATION * axisStepsPerMM[axis]);
-        }
-#endif // FEATURE_MILLING_MODE
+        /** Acceleration in steps/s^2 in printing mode.*/
+        maxPrintAccelerationStepsPerSquareSecond[axis] = uint32_t(maxAccelerationMMPerSquareSecond[axis] * axisStepsPerMM[axis]);
+        /** Acceleration in steps/s^2 in movement mode.*/
+        maxTravelAccelerationStepsPerSquareSecond[axis] = uint32_t(maxTravelAccelerationMMPerSquareSecond[axis] * axisStepsPerMM[axis]);
     }
 
     // 07 11 2017 https://github.com/repetier/Repetier-Firmware/commit/e76875ec2d04bd0dbfdd9a157270ee03f4731d5f#diff-dbe11559ff43e09563388a4968911e40L1973
@@ -275,26 +248,10 @@ void Printer::updateDerivedParameter() {
     // driving axis is the problematic speed.
 
     float accel;
-#if FEATURE_MILLING_MODE
-    if (Printer::operatingMode == OPERATING_MODE_PRINT) {
-#endif // FEATURE_MILLING_MODE
-        accel = RMath::max(maxAccelerationMMPerSquareSecond[X_AXIS], maxTravelAccelerationMMPerSquareSecond[X_AXIS]);
-#if FEATURE_MILLING_MODE
-    } else {
-        accel = MILLER_ACCELERATION;
-    }
-#endif // FEATURE_MILLING_MODE
+    accel = RMath::max(maxAccelerationMMPerSquareSecond[X_AXIS], maxTravelAccelerationMMPerSquareSecond[X_AXIS]);
 
     float minimumSpeed = 1.41 * accel * sqrt(2.0f / (axisStepsPerMM[X_AXIS] * accel));
-#if FEATURE_MILLING_MODE
-    if (Printer::operatingMode == OPERATING_MODE_PRINT) {
-#endif // FEATURE_MILLING_MODE
-        accel = RMath::max(maxAccelerationMMPerSquareSecond[Y_AXIS], maxTravelAccelerationMMPerSquareSecond[Y_AXIS]);
-#if FEATURE_MILLING_MODE
-    } else {
-        accel = MILLER_ACCELERATION;
-    }
-#endif // FEATURE_MILLING_MODE
+    accel = RMath::max(maxAccelerationMMPerSquareSecond[Y_AXIS], maxTravelAccelerationMMPerSquareSecond[Y_AXIS]);
     float minimumSpeed2 = 1.41 * accel * sqrt(2.0f / (axisStepsPerMM[Y_AXIS] * accel));
     if (minimumSpeed2 > minimumSpeed) {
         minimumSpeed = minimumSpeed2;
@@ -305,13 +262,7 @@ void Printer::updateDerivedParameter() {
         Com::printFLN(PSTR("XY jerk was too low, setting to "), maxXYJerk);
     }
 
-#if FEATURE_MILLING_MODE
-    if (Printer::operatingMode == OPERATING_MODE_PRINT) {
-#endif // FEATURE_MILLING_MODE
-        accel = RMath::max(maxAccelerationMMPerSquareSecond[Z_AXIS], maxTravelAccelerationMMPerSquareSecond[Z_AXIS]);
-#if FEATURE_MILLING_MODE
-    }
-#endif // FEATURE_MILLING_MODE
+    accel = RMath::max(maxAccelerationMMPerSquareSecond[Z_AXIS], maxTravelAccelerationMMPerSquareSecond[Z_AXIS]);
     float minimumZSpeed = 0.5 * accel * sqrt(2.0f / (axisStepsPerMM[Z_AXIS] * accel));
     if (maxZJerk < 2 * minimumZSpeed) {
         maxZJerk = 2 * minimumZSpeed;
@@ -572,12 +523,6 @@ void Printer::queueRelativeMMCoordinates(float dx, float dy, float dz, float de,
 #define NORMAL_DIRECT false
 #define STOPPABLE_DIRECT true
 void Printer::offsetRelativeStepsCoordinates(int32_t dx, int32_t dy, int32_t dz, int32_t de, uint8_t configuration) {
-#if FEATURE_MILLING_MODE
-    // we do not process the extruder in case we are not in operating mode "print"
-    if (Printer::operatingMode != OPERATING_MODE_PRINT) {
-        de = 0;
-    }
-#endif // FEATURE_MILLING_MODE
 
     if (dx != 0 || dy != 0 || dz != 0 || de != 0) {
         if (configuration && g_pauseMode && (!isPauseSettled() || PrintLine::direct.task))
@@ -905,34 +850,14 @@ void Printer::setup() {
     doHeatBedZCompensation = 0; //init
 #endif                          // FEATURE_HEAT_BED_Z_COMPENSATION
 
-#if FEATURE_WORK_PART_Z_COMPENSATION
-    doWorkPartZCompensation = 0; //init
-    staticCompensationZ = 0;     //init
-#endif                           // FEATURE_WORK_PART_Z_COMPENSATION
 
     blockAll = 0;
 
-#if FEATURE_MILLING_MODE
-    operatingMode = DEFAULT_OPERATING_MODE;
-    drillFeedrate = 0.0;
-    drillZDepth = 0.0;
-#endif // FEATURE_MILLING_MODE
 
-#if FEATURE_MILLING_MODE
-    if (Printer::operatingMode == OPERATING_MODE_PRINT) {
-#endif // FEATURE_MILLING_MODE
-        Printer::homingFeedrate[X_AXIS] = HOMING_FEEDRATE_X_PRINT;
-        Printer::homingFeedrate[Y_AXIS] = HOMING_FEEDRATE_Y_PRINT;
-        Printer::homingFeedrate[Z_AXIS] = HOMING_FEEDRATE_Z_PRINT;
-        Printer::axisLengthMM[X_AXIS] = X_MAX_LENGTH_PRINT;
-#if FEATURE_MILLING_MODE
-    } else {
-        Printer::homingFeedrate[X_AXIS] = HOMING_FEEDRATE_X_MILL;
-        Printer::homingFeedrate[Y_AXIS] = HOMING_FEEDRATE_Y_MILL;
-        Printer::homingFeedrate[Z_AXIS] = HOMING_FEEDRATE_Z_MILL;
-        Printer::axisLengthMM[X_AXIS] = X_MAX_LENGTH_MILL;
-    }
-#endif // FEATURE_MILLING_MODE
+    Printer::homingFeedrate[X_AXIS] = HOMING_FEEDRATE_X_PRINT;
+    Printer::homingFeedrate[Y_AXIS] = HOMING_FEEDRATE_Y_PRINT;
+    Printer::homingFeedrate[Z_AXIS] = HOMING_FEEDRATE_Z_PRINT;
+    Printer::axisLengthMM[X_AXIS] = X_MAX_LENGTH_PRINT;
 
     Printer::axisLengthMM[Y_AXIS] = Y_MAX_LENGTH;
     Printer::axisLengthMM[Z_AXIS] = Z_MAX_LENGTH;
@@ -1091,7 +1016,7 @@ void Printer::GoToMemoryPosition(bool x, bool y, bool z, bool e, float feed) {
 } // GoToMemoryPosition
 #endif // FEATURE_MEMORY_POSITION
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#if FEATURE_HEAT_BED_Z_COMPENSATION
 
 #if FEATURE_SENSIBLE_PRESSURE
 void Printer::enableSenseOffsetnow(void) {
@@ -1107,53 +1032,10 @@ void Printer::enableSenseOffsetnow(void) {
 #endif // FEATURE_SENSIBLE_PRESSURE
 
 void Printer::enableCMPnow(void) {
-#if FEATURE_MILLING_MODE
-    if (Printer::operatingMode == OPERATING_MODE_MILL) {
-#if FEATURE_WORK_PART_Z_COMPENSATION
-        if (Printer::doWorkPartZCompensation)
-            return; // false;
-#endif              // FEATURE_WORK_PART_Z_COMPENSATION
-    } else
-#endif // FEATURE_MILLING_MODE
-    {
-#if FEATURE_HEAT_BED_Z_COMPENSATION
-        if (Printer::doHeatBedZCompensation)
-            return; // false;
-#endif              // FEATURE_HEAT_BED_Z_COMPENSATION
+    if (doHeatBedZCompensation || !areAxisHomed() || g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
+        return;
     }
-
-    if (!Printer::areAxisHomed()) {
-        return; // false;
-    }
-
-    // enable the z compensation
-    if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT)
-        return; // false;
-
-        // enable the z compensation only in case we have valid compensation values
-#if FEATURE_MILLING_MODE
-    if (Printer::operatingMode == OPERATING_MODE_MILL) {
-#if FEATURE_WORK_PART_Z_COMPENSATION
-        Printer::doWorkPartZCompensation = 1;
-#if FEATURE_FIND_Z_ORIGIN
-        if (g_nZOriginPosition[X_AXIS] || g_nZOriginPosition[Y_AXIS]) {
-            Printer::staticCompensationZ = getZMatrixDepth(g_nZOriginPosition[X_AXIS], g_nZOriginPosition[Y_AXIS]); //determineStaticCompensationZ();
-        } else {
-            // we know nothing about a static z-delta in case we do not know the x and y positions at which the z-origin has been determined
-            Printer::staticCompensationZ = 0;
-        }
-#else
-        // we know nothing about a static z-delta when we do not have the automatic search of the z-origin available
-        Printer::staticCompensationZ = 0;
-#endif // FEATURE_FIND_Z_ORIGIN
-#endif // FEATURE_WORK_PART_Z_COMPENSATION
-    } else
-#endif // FEATURE_MILLING_MODE
-    {
-#if FEATURE_HEAT_BED_Z_COMPENSATION
-        Printer::doHeatBedZCompensation = 1;
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
-    }
+    doHeatBedZCompensation = 1;
 }
 
 bool Printer::needsCMPwait(void) {
@@ -1165,11 +1047,7 @@ bool Printer::needsCMPwait(void) {
 
 bool Printer::isZCompensationLimited(bool positive) {
     // Homed print moves can approach past the Z-min switch within the configured overtravel.
-#if FEATURE_MILLING_MODE
-    const bool allowMinOverride = isAxisHomed(Z_AXIS) && operatingMode == OPERATING_MODE_PRINT;
-#else
     const bool allowMinOverride = isAxisHomed(Z_AXIS);
-#endif
     if (positive ? isZMaxSoftEndstopHit() : allowMinOverride && isZMinOverrideReached()) {
         return true;
     }
@@ -1192,20 +1070,7 @@ bool Printer::isZCompensationLimited(bool positive) {
 }
 
 void Printer::disableCMPnow(bool wait) {
-#if FEATURE_MILLING_MODE
-    if (Printer::operatingMode == OPERATING_MODE_PRINT) {
-#endif // FEATURE_MILLING_MODE
-#if FEATURE_HEAT_BED_Z_COMPENSATION
-        Printer::doHeatBedZCompensation = 0;
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
-#if FEATURE_MILLING_MODE
-#if FEATURE_WORK_PART_Z_COMPENSATION
-    } else {
-        Printer::doWorkPartZCompensation = 0;
-        Printer::staticCompensationZ = 0;
-    }
-#endif                                            // FEATURE_WORK_PART_Z_COMPENSATION
-#endif                                            // FEATURE_MILLING_MODE
+    doHeatBedZCompensation = 0;
     {
         InterruptProtectedBlock noInts;
         compensatedPositionTargetStepsZ = 0;
@@ -1223,7 +1088,7 @@ void Printer::disableCMPnow(bool wait) {
         //checkforperiodical .. possible loop inside scans and homing.
     }
 }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
 int8_t Printer::anyHomeDir(uint8_t axis) {
     int8_t nHomeDir = 0;
@@ -1241,20 +1106,10 @@ int8_t Printer::anyHomeDir(uint8_t axis) {
         break;
     }
     case Z_AXIS: {
-#if FEATURE_MILLING_MODE
-        if (Printer::operatingMode == OPERATING_MODE_PRINT && (MIN_HARDWARE_ENDSTOP_Z && Z_MIN_PIN > -1)) {
-            // in operating mode "print" we use the z min endstop
-            nHomeDir = Z_HOME_DIR;
-        } else if (MAX_HARDWARE_ENDSTOP_Z && Z_MAX_PIN > -1) {
-            // in operating mode "mill" we use the z max endstop
-            nHomeDir = -1 * Z_HOME_DIR;
-        }
-#else
         if ((MIN_HARDWARE_ENDSTOP_Z && Z_MIN_PIN > -1 && Z_HOME_DIR == -1) || (MAX_HARDWARE_ENDSTOP_Z && Z_MAX_PIN > -1 && Z_HOME_DIR == 1)) {
             nHomeDir = Z_HOME_DIR; //-1 -> RFx000.h
         }
         break;
-#endif // FEATURE_MILLING_MODE
     }
     }
     return nHomeDir;
@@ -1506,10 +1361,6 @@ void Printer::homeXAxis() {
                 : RMath::min(offX, int32_t(extruder[i].offsetMM[X_AXIS] * Printer::axisStepsPerMM[X_AXIS]));
 #endif // NUM_EXTRUDER>1
 
-#if FEATURE_MILLING_MODE
-        if (Printer::operatingMode == OPERATING_MODE_MILL)
-            offX = 0; // in operating mode mill, there is no extruder offset
-#endif                // FEATURE_MILLING_MODE
 
         Printer::queueRelativeStepsCoordinates(long(2 * abs(maxSoftEndstopSteps[X_AXIS] + 2 * offX) * nHomeDir), 0, 0, 0, homingFeedrate[X_AXIS], false, true); //stop at endstop
         Printer::queueRelativeMMCoordinates(-1 * ENDSTOP_X_BACK_MOVE * nHomeDir, 0, 0, 0, homingFeedrate[X_AXIS] / ENDSTOP_X_RETEST_REDUCTION_FACTOR, false);
@@ -1551,10 +1402,6 @@ void Printer::homeYAxis() {
                 : RMath::min(offY, int32_t(extruder[i].offsetMM[Y_AXIS] * Printer::axisStepsPerMM[Y_AXIS]));
 #endif // NUM_EXTRUDER>1
 
-#if FEATURE_MILLING_MODE
-        if (Printer::operatingMode == OPERATING_MODE_MILL)
-            offY = 0; // in operating mode mill, there is no extruder offset
-#endif                // FEATURE_MILLING_MODE
 
         Printer::queueRelativeStepsCoordinates(0, long(2 * abs(maxSoftEndstopSteps[Y_AXIS] + 2 * offY) * nHomeDir), 0, 0, homingFeedrate[Y_AXIS], false, true); //stop at endstop
         Printer::queueRelativeMMCoordinates(0, -1 * ENDSTOP_Y_BACK_MOVE * nHomeDir, 0, 0, homingFeedrate[Y_AXIS] / ENDSTOP_Y_RETEST_REDUCTION_FACTOR, false);
@@ -1608,44 +1455,31 @@ void Printer::homeZAxis() {
 
         InterruptProtectedBlock noInts;
 #if FEATURE_HEAT_BED_Z_COMPENSATION
-#if FEATURE_MILLING_MODE
-        if (Printer::operatingMode == OPERATING_MODE_PRINT) {
-#endif // FEATURE_MILLING_MODE
-            // Each Z home starts a fresh first-layer reference. In particular,
-            // do not let a previous print's learned g_min/g_max affect M3912.
-            Printer::queuePositionZLayerGuessNew = 0;
-            Printer::queuePositionZLayerCurrent = 0;
-            Printer::queuePositionZLayerLast = 0;
-            g_minZCompensationSteps = defaultMinZCompensationSteps;
-            g_maxZCompensationSteps = defaultMaxZCompensationSteps;
-            g_diffZCompensationSteps = defaultMaxZCompensationSteps - defaultMinZCompensationSteps;
+        // Each Z home starts a fresh first-layer reference. In particular,
+        // do not let a previous print's learned g_min/g_max affect M3912.
+        Printer::queuePositionZLayerGuessNew = 0;
+        Printer::queuePositionZLayerCurrent = 0;
+        Printer::queuePositionZLayerLast = 0;
+        g_minZCompensationSteps = defaultMinZCompensationSteps;
+        g_maxZCompensationSteps = defaultMaxZCompensationSteps;
+        g_diffZCompensationSteps = defaultMaxZCompensationSteps - defaultMinZCompensationSteps;
 #if FEATURE_SENSIBLE_PRESSURE
-            // CMP is already disabled: discard only the volatile correction,
-            // never the user's EEPROM-backed manual offset / Mod Menu transfer.
-            g_nSensiblePressureDigits = 0;
-            g_nSensiblePressureOffset = 0;
-            g_nSensiblePressure1stMarke = 0;
-            g_staticZSteps = manualZOffsetSteps;
+        // CMP is already disabled: discard only the volatile correction,
+        // never the user's EEPROM-backed manual offset / Mod Menu transfer.
+        g_nSensiblePressureDigits = 0;
+        g_nSensiblePressureOffset = 0;
+        g_nSensiblePressure1stMarke = 0;
+        g_staticZSteps = manualZOffsetSteps;
 #endif // FEATURE_SENSIBLE_PRESSURE
-#if FEATURE_MILLING_MODE
-        }
-#endif // FEATURE_MILLING_MODE
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION
-#if FEATURE_FIND_Z_ORIGIN
-        //das ist die Z-Origin-Höhe und ihre XY-Scan-Stelle.
-        g_nZOriginPosition[X_AXIS] = 0;
-        g_nZOriginPosition[Y_AXIS] = 0;
-        g_nZOriginPosition[Z_AXIS] = 0;
-        Printer::setZOriginSet(false); //removes flag wegen statusnachricht
-#endif                                 // FEATURE_FIND_Z_ORIGIN
 
         Printer::resetDirectAxis(Z_AXIS);
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#if FEATURE_HEAT_BED_Z_COMPENSATION
         // Homing replaces the reference, including any correction that could not unwind at a limit.
         compensatedPositionTargetStepsZ = compensatedPositionCurrentStepsZ = 0;
         g_nZScanZPosition = 0;
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#endif // FEATURE_HEAT_BED_Z_COMPENSATION
         noInts.unprotect();
 
         //1. Schnelles Fahren bis zum Schalterkontakt:
@@ -1671,23 +1505,12 @@ void Printer::homeZAxis() {
         //3. langsames Fahren bis zum Schalterkontakt:
         Printer::queueRelativeMMCoordinates(0, 0, (0.1f + ENDSTOP_Z_BACK_MOVE) * nHomeDir, 0, float(homingFeedrate[Z_AXIS] / ENDSTOP_Z_RETEST_REDUCTION_FACTOR), true, true);
 
-#if FEATURE_MILLING_MODE
-        //4. Wenn Millingmode dann nochmal freifahren und erst anschließend Koordinate nullen.
-        if (Printer::operatingMode == OPERATING_MODE_MILL) {
-            // when the milling mode is active and we are in operating mode "mill", we use the z max endstop and we free the z-max endstop after it has been hit
-            Printer::queueRelativeMMCoordinates(0, 0, (LEAVE_Z_MAX_ENDSTOP_AFTER_HOME + Z_ENDSTOP_MAX_HYSTERESIS) * (-1 * nHomeDir), 0, float(homingFeedrate[Z_AXIS]), true);
-        }
-#endif // FEATURE_MILLING_MODE
 
         //currentZSteps ist die Schalter-Z-Koordinate, die die Z-Steps per Dir-Pin abzählt.
-        // Wenn wir im Milingmode sind, dann homen wir und setzen den NUllpunkt direkt in die Mitte des theoretischen Fahrwegs.
         // Die absoluten Achsengrenzen werden gesetzt, vor der zweite Extruder sein offset bekommt.
         Printer::currentZSteps = (nHomeDir == -1) ? 0 : maxSoftEndstopSteps[Z_AXIS];
 
 #if NUM_EXTRUDER == 2
-#if FEATURE_MILLING_MODE
-        if (Printer::operatingMode == OPERATING_MODE_PRINT)
-#endif // FEATURE_MILLING_MODE
         {
             // Standardverhalten: Kein Offset für Z vorsehen, es gibt kein Homing-Offset.
             if (Extruder::current->id == extruder[1].id && Extruder::current->offsetMM[Z_AXIS] != 0.0f) {
@@ -1699,7 +1522,6 @@ void Printer::homeZAxis() {
 #endif // NUM_EXTRUDER>1
 
         //5. Setzen der aktuellen End-Position auf die Koordinate, zu der das Homing gehört.
-        // Dann steht der Fräser auf Höhe Z-Length-Halbe. Danch wrid sowieso mit findZOrigin oder origin gearbeitet.
         Printer::setZAxisSteps((nHomeDir == -1) ? 0 : maxSoftEndstopSteps[Z_AXIS]);
 
         //6. Korrektur der Flags
@@ -1743,15 +1565,7 @@ void Printer::homeAxis(bool xaxis, bool yaxis, bool zaxis) // home non-delta pri
 #endif //FEATURE_UNLOCK_MOVEMENT
 
     char homingOrder;
-#if FEATURE_MILLING_MODE
-    if (operatingMode == OPERATING_MODE_PRINT) {
-#endif // FEATURE_MILLING_MODE
-        homingOrder = HOMING_ORDER_PRINT;
-#if FEATURE_MILLING_MODE
-    } else {
-        homingOrder = HOMING_ORDER_MILL;
-    }
-#endif // FEATURE_MILLING_MODE
+    homingOrder = HOMING_ORDER_PRINT;
 
 #if FEATURE_CONFIGURABLE_Z_ENDSTOPS
     //ich weiß nicht ob das überhaupt ein gutes verhalten ist. Es ist nicht gut, wenn die z-schraube zu weit reingeschraubt ist und daher z-homing über dem bett verboten sein sollte.
@@ -1768,19 +1582,13 @@ void Printer::homeAxis(bool xaxis, bool yaxis, bool zaxis) // home non-delta pri
     }
 #endif //FEATURE_CONFIGURABLE_Z_ENDSTOPS
 
-#if FEATURE_MILLING_MODE
-    if (operatingMode == OPERATING_MODE_PRINT) { //wollte nicht milling mode, weil ich die mechanik da nicht kenne, dieses if ist unter umständen nutzlos.
-#endif                                           // FEATURE_MILLING_MODE
-        if ((!yaxis && zaxis) || (/* z vor y */ homingOrder == HOME_ORDER_XZY || homingOrder == HOME_ORDER_ZXY || homingOrder == HOME_ORDER_ZYX)) {
-            // do not allow homing Z-Only within menu, when the Extruder is configured < 0 and over bed.
-            if (!Printer::isZHomeSafe()) {
-                homeYAxis(); //bevor die düse gegen das bett knallen könnte, weil positive z-matix oder tipdown-extruder sollte erst y genullt werden: kann das im printermode schädlich sein?
-                //wenn Z genullt wird, sollte auch Y genullt werden dürfen.
-            }
+    if ((!yaxis && zaxis) || (/* z vor y */ homingOrder == HOME_ORDER_XZY || homingOrder == HOME_ORDER_ZXY || homingOrder == HOME_ORDER_ZYX)) {
+        // do not allow homing Z-Only within menu, when the Extruder is configured < 0 and over bed.
+        if (!Printer::isZHomeSafe()) {
+            homeYAxis(); //bevor die düse gegen das bett knallen könnte, weil positive z-matix oder tipdown-extruder sollte erst y genullt werden: kann das im printermode schädlich sein?
+            //wenn Z genullt wird, sollte auch Y genullt werden dürfen.
         }
-#if FEATURE_MILLING_MODE
     }
-#endif // FEATURE_MILLING_MODE
 
     switch (homingOrder) {
     case HOME_ORDER_XYZ: {

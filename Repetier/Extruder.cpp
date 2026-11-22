@@ -55,12 +55,6 @@ Is called every 100ms.
 */
 static uint8_t extruderTempErrors = 0;
 void Extruder::manageTemperatures() {
-#if FEATURE_MILLING_MODE
-    if (Printer::operatingMode != OPERATING_MODE_PRINT) {
-        // we do not check temperatures in case we are not in operating mode print
-        return;
-    }
-#endif // FEATURE_MILLING_MODE
 
     Com::writeToAll = true;
     uint8_t errorDetected = 0;
@@ -338,12 +332,6 @@ void TemperatureController::updateTempControlVars() {
 This function changes and initalizes a new extruder. This is also called, after the eeprom values are changed.
 */
 void Extruder::selectExtruderById(uint8_t extruderId) {
-#if FEATURE_MILLING_MODE
-    if (Printer::operatingMode == OPERATING_MODE_MILL) {
-        // in operating mode mill, the extruders are not used
-        return;
-    }
-#endif // FEATURE_MILLING_MODE
 
     if (extruderId >= NUM_EXTRUDER)
         extruderId = Extruder::current->id;
@@ -499,13 +487,7 @@ void Extruder::setTemperatureForExtruder(float temperatureInCelsius, uint8_t ext
 #if EEPROM_MODE != 0
     if (alloff && !alloffs) // All heaters are now switched off?
     {
-#if FEATURE_MILLING_MODE
-        if (Printer::operatingMode == OPERATING_MODE_PRINT) {
-#endif // FEATURE_MILLING_MODE
-            EEPROM::updatePrinterUsage();
-#if FEATURE_MILLING_MODE
-        }
-#endif // FEATURE_MILLING_MODE
+        EEPROM::updatePrinterUsage();
     }
 #endif // EEPROM_MODE != 0
 
@@ -561,23 +543,17 @@ float Extruder::getHeatedBedTemperature() {
 } // getHeatedBedTemperature
 
 void Extruder::disableAllExtruders() {
-#if FEATURE_MILLING_MODE
-    if (Printer::operatingMode == OPERATING_MODE_PRINT) {
-#endif // FEATURE_MILLING_MODE
-        Extruder* e;
-        for (uint8_t i = 0; i < NUM_EXTRUDER; i++) {
-            e = &extruder[i];
+    Extruder* e;
+    for (uint8_t i = 0; i < NUM_EXTRUDER; i++) {
+        e = &extruder[i];
 
-            if (e->enablePin > -1)
-                HAL::digitalWrite(e->enablePin, !e->enableOn);
+        if (e->enablePin > -1)
+            HAL::digitalWrite(e->enablePin, !e->enableOn);
 
 #if STEPPER_ON_DELAY
-            e->enabled = 0;
+        e->enabled = 0;
 #endif // STEPPER_ON_DELAY
-        }
-#if FEATURE_MILLING_MODE
     }
-#endif // FEATURE_MILLING_MODE
 
     cleanupEPositions();
 } // disableAllExtruders

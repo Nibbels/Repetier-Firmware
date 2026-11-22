@@ -965,7 +965,7 @@ void PrintLine::arc(float* position, float* target, float* offset, float radius,
 }
 #endif
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#if FEATURE_HEAT_BED_Z_COMPENSATION
 void PrintLine::stepSlowedZCompensation() {
     if (Printer::blockAll || Printer::scanZMoveActive) {
         return;
@@ -1025,7 +1025,7 @@ bool PrintLine::needCmpWait() {
     return (catchingUp || (!Printer::doHeatBedZCompensation && positive == Printer::getZDirectionIsPos()))
         && !Printer::isZCompensationLimited(positive);
 }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
 /**
   Processes the moves from the queue and moves the stepper motors one step. If the last step is reached, the next movement from the queue is started.
@@ -1057,15 +1057,15 @@ long PrintLine::performQueueMove() {
             return 1000;
         }
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
-        case TASK_ENABLE_Z_COMPENSATION: // M3001 M3141
+#if FEATURE_HEAT_BED_Z_COMPENSATION
+        case TASK_ENABLE_Z_COMPENSATION: // M3001
         {
             Printer::enableCMPnow();
             removeCurrentLineForbidInterrupt();
             return 1000;
         }
 
-        case TASK_DISABLE_Z_COMPENSATION: // M3000 M3140
+        case TASK_DISABLE_Z_COMPENSATION: // M3000
         {
             // disable the z compensation
             Printer::disableCMPnow(); //hier nicht unbedingt warten, das soll im fluss der queue einfach abgeschaltet werden. zu große abstände regelt die needCmpWait
@@ -1081,7 +1081,7 @@ long PrintLine::performQueueMove() {
             return 1000;
         }
 #endif // FEATURE_SENSIBLE_PRESSURE
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
         case TASK_UNLOCK_DISPLAY_MSG: // M3117 unlock
         {
@@ -1468,7 +1468,7 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
                 int8_t dir = (Printer::getZDirectionIsPos() ? 1 : -1);
                 //070118better zCMP strategy: if zCMP is against Queue/Direct, dont do some step and count it done @Queue/Direct and count it done @zCMP.
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#if FEATURE_HEAT_BED_Z_COMPENSATION
                 const long cmpDiff = Printer::compensatedPositionTargetStepsZ - Printer::compensatedPositionCurrentStepsZ;
                 const bool cmpPositive = cmpDiff > 0;
                 // A correction held at a limit must leave the retreat step available.
@@ -1484,7 +1484,7 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
                 }
 #else
                 Printer::startZStep();
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
                 if (forQueue) {
                     move->error[Z_AXIS] += queueError;
@@ -1496,11 +1496,11 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
                 // Note: There is no need to check whether we are past the z-min endstop here because G-Codes typically are not able to go past the z-min endstop anyways.
             }
         }
-#if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#if FEATURE_HEAT_BED_Z_COMPENSATION
         else if (move->isXOrYMove()) {
             PrintLine::stepSlowedZCompensation(); // Z is free here. This is no Z-Move
         }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
         move->stepsRemaining--;
 
@@ -1613,21 +1613,10 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
         }
 
         char nIdle = 1;
-#if FEATURE_MILLING_MODE
-        if (Printer::operatingMode == OPERATING_MODE_PRINT) {
-#endif // FEATURE_MILLING_MODE
 #if FEATURE_HEAT_BED_Z_COMPENSATION
-            if (g_nHeatBedScanStatus || g_nZOSScanStatus)
-                nIdle = 0; // we are not idle because the heat bed scan is going on at the moment
+        if (g_nHeatBedScanStatus || g_nZOSScanStatus)
+            nIdle = 0; // we are not idle because the heat bed scan is going on at the moment
 #endif                     // FEATURE_HEAT_BED_Z_COMPENSATION
-#if FEATURE_MILLING_MODE
-        } else {
-#if FEATURE_WORK_PART_Z_COMPENSATION
-            if (g_nWorkPartScanStatus)
-                nIdle = 0; // we are not idle because the work part scan is going on at the moment
-#endif                     // FEATURE_WORK_PART_Z_COMPENSATION
-        }
-#endif // FEATURE_MILLING_MODE
 
         if (linesCount == 0 && nIdle) {
             g_uStartOfIdle = HAL::timeInMilliseconds(); //end a move

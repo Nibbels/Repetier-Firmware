@@ -35,15 +35,11 @@
 #define DEVICE_TYPE_RF2000 14
 #define DEVICE_TYPE_RF2000v2 15
 
-#define OPERATING_MODE_PRINT 1 // the firmware works in mode "print"
-#define OPERATING_MODE_MILL 2  // the firmware works in mode "mill"
 
 #define HOTEND_TYPE_V1 2 // hotend V1
 #define HOTEND_TYPE_V2 3 // hotend V2 for single extruder
 #define HOTEND_TYPE_V3 5 // hotend V3
 
-#define MILLER_TYPE_ONE_TRACK 1  // one track in x- and y-direction
-#define MILLER_TYPE_TWO_TRACKS 2 // two tracks in x- and y-direction
 
 #define ENDSTOP_TYPE_SINGLE 1  // there is only one endstop attached (either the min- or the max-endstop)
 #define ENDSTOP_TYPE_CIRCUIT 2 // the min- and max-endstops are attached in a single circuit
@@ -70,9 +66,7 @@
 #define MENU_MODE_PAUSED 4
 #define MENU_MODE_FAN_RUNNING 8
 #define MENU_MODE_PRINTING 16
-#define MENU_MODE_PRINTER 32       // we have to show the printer menu
-#define MENU_MODE_MILLER 64        // we have to show the miller menu
-#define MENU_MODE_FAN_MODE_PDM 128 // we have to show the miller menu
+#define MENU_MODE_FAN_MODE_PDM 128
 
 #define IGNORE_COORDINATE 99999.0f
 
@@ -125,9 +119,8 @@
 #define HEAT_BED_SCAN_MODE_PLA 1
 #define HEAT_BED_SCAN_MODE_ABS 2
 
-#define Z_VALUE_MODE_Z_MIN 1    // show the z-distance to z-min (print)
-#define Z_VALUE_MODE_Z_ORIGIN 1 // show the z-distance to the z-origin (mill)
-#define Z_VALUE_MODE_LAYER 3    // show the z-distance to the surface of the heat bed (print) or work part (mill)
+#define Z_VALUE_MODE_Z_MIN 1 // show the distance to Z-min
+#define Z_VALUE_MODE_LAYER 3 // show the nominal layer height
 
 #define STOP_BECAUSE_OF_Z_MIN 1
 #define STOP_BECAUSE_OF_Z_BLOCK 2

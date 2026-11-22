@@ -22,7 +22,7 @@ https://github.com/RF1000/Repetier-Firmware (see branch development. Or else loo
 `#define MOTHERBOARD                         DEVICE_TYPE_RF1000` or  
 `#define MOTHERBOARD                         DEVICE_TYPE_RF2000` or  
 `#define MOTHERBOARD                         DEVICE_TYPE_RF2000v2`  
-- If you do not need the milling mode, you can remove it from the firmware. To do this, set the FEATURE_MILLING_MODE to 0 in RF1000.h / RF2000.h / RF2000v2.h.
+- This revision is for 3D printing. The [last revision containing the milling code](https://github.com/Nibbels/Repetier-Firmware/tree/7e2e08b7f6da7677007dfddd06f8fc5adeb7d709) is available in the repository history.
 - Optional: Edit and save the Configuration.h and RF1000.h or RF2000.h to your needs in case you use special specialized hardware.
 - Connect your Printer with a USB-cable and switch it on.
 - Go to and doubleclick /Repetier/Repetier.ino

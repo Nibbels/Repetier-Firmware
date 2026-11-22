@@ -69,7 +69,7 @@
 #define ORIG_Z_ENABLE_PIN 62
 // PINK.0, 89, ENA_DRV3
 
-// the RF1000 with miller functionality can provide min and max endstops at the same pin
+// The RF1000 can wire both Z endstops to the same input.
 #define ORIG_Z_MIN_PIN 31
 // PINC.6, 59, ES3
 #define ORIG_Z_MAX_PIN 31
@@ -329,7 +329,7 @@
 #define ORIG_Z_ENABLE_PIN 62
 // PINK.0, 89, ENA_DRV3
 
-// the RF2000 with miller functionality can provide min and max endstops
+// Z-min and Z-max have separate inputs.
 #define ORIG_Z_MIN_PIN 31
 // PINC.6, 59, ES3
 #define ORIG_Z_MAX_PIN 16
@@ -575,7 +575,7 @@
 // PINK.0, 89, ENA_DRV3
 #define ORIG_Z_ENABLE_PIN 62
 
-// the RF2000 with miller functionality can provide min and max endstops
+// Z-min and Z-max have separate inputs.
 // PINC.6, 59, ES3
 #define ORIG_Z_MIN_PIN 31
 // PINH.1, 13, ES4

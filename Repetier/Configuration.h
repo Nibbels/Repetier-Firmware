@@ -116,8 +116,6 @@
 /** \brief Enables/disables the emergency stop in case of too high pressure */
 #define FEATURE_EMERGENCY_STOP_Z_AND_E          1                                                   // 1 = on, 0 = off
 
-/** \brief Enables/disables the set to x/y origin feature */
-#define FEATURE_SET_TO_XY_ORIGIN            1                                                   // 1 = on, 0 = off
 
 /**
  * \brief Ditto printing allows 2 extruders to do the same action. This effectively allows
@@ -271,9 +269,6 @@ Overridden if EEPROM activated. */
 #define HOMING_FEEDRATE_Y_PRINT            80
 #define HOMING_FEEDRATE_Z_PRINT             9
 
-#define HOMING_FEEDRATE_X_MILL             70
-#define HOMING_FEEDRATE_Y_MILL             70
-#define HOMING_FEEDRATE_Z_MILL              7
 
 /** \brief Speed for direct movements in mm/s. Overridden if EEPROM activated. */
 #define STANDARD_POSITION_FEEDRATE_XY     100
@@ -393,15 +388,14 @@ Overridden if EEPROM activated. */
 
 /** \brief The following script allows to configure the exact behavior of the automatic object output */
 #define OUTPUT_OBJECT_SCRIPT_PRINT          "G21\nG92 E0\nG1 E-" xstr(SCRIPT_RETRACT_MM) "\nG4 P100\nG92 E0\nG90\nG1 Z200 F540\nG1 Y245 F4800"
-#define OUTPUT_OBJECT_SCRIPT_MILL           "G28 Z0\nG21\nG91\nG1 Y245 F4800"
 
 // ##########################################################################################
 // ##   configuration of the pause functionality
 // ##########################################################################################
 
-#if !FEATURE_HEAT_BED_Z_COMPENSATION && !FEATURE_WORK_PART_Z_COMPENSATION
-    #error FEATURE_PAUSE_PRINTING can not be used without FEATURE_HEAT_BED_Z_COMPENSATION or FEATURE_WORK_PART_Z_COMPENSATION
-#endif // !FEATURE_HEAT_BED_Z_COMPENSATION && !FEATURE_WORK_PART_Z_COMPENSATION
+#if !FEATURE_HEAT_BED_Z_COMPENSATION
+    #error FEATURE_PAUSE_PRINTING can not be used without FEATURE_HEAT_BED_Z_COMPENSATION
+#endif // !FEATURE_HEAT_BED_Z_COMPENSATION
 
 /** \brief Specifies the time interval after the pausing of the print at which the extruder current is reduced */
 #define EXTRUDER_CURRENT_PAUSE_DELAY        60000                                               // [ms] Minimum 30000 -> 30s.
@@ -485,8 +479,6 @@ Overridden if EEPROM activated. */
 /** \brief Specifies the max printed hours [h] */
 #define HOURS_PRINTED_UNTIL_SERVICE         100
 
-/** \brief Specifies the max milling hours [h] */
-#define HOURS_MILLED_UNTIL_SERVICE          100
 
 /** \brief Specifies the max printed filament [m] */
 #define FILAMENT_PRINTED_UNTIL_SERVICE      50000
@@ -729,7 +721,6 @@ Honeywell 100K Thermistor (135-104LAG-J01)  : R0 = 100000  T0 = 25  Beta = 3974
 
 /** \brief Time to return to info menu if x millisconds no key was pressed. Set to 0 to disable it. */
 #define UI_PRINT_AUTORETURN_TO_MENU_AFTER   120000
-#define UI_MILL_AUTORETURN_TO_MENU_AFTER    0
 
 /**
  * \brief Normally cou want a next/previous actions with every click of your encoder.
@@ -768,14 +759,10 @@ Honeywell 100K Thermistor (135-104LAG-J01)  : R0 = 100000  T0 = 25  Beta = 3974
 #define BEEPER_START_HEAT_BED_SCAN_SEQUENCE     100,2
 #define BEEPER_ABORT_HEAT_BED_SCAN_SEQUENCE     250,5
 #define BEEPER_STOP_HEAT_BED_SCAN_SEQUENCE      100,3
-#define BEEPER_START_WORK_PART_SCAN_SEQUENCE    100,2
-#define BEEPER_ABORT_WORK_PART_SCAN_SEQUENCE    250,5
-#define BEEPER_STOP_WORK_PART_SCAN_SEQUENCE     100,3
 //FEATURE_ALIGN_EXTRUDERS
  #define BEEPER_START_ALIGN_EXTRUDERS_SEQUENCE  100,2
  #define BEEPER_ABORT_ALIGN_EXTRUDERS_SEQUENCE  250,5
  #define BEEPER_STOP_ALIGN_EXTRUDERS_SEQUENCE   100,3
-#define BEEPER_ABORT_SET_POSITION_SEQUENCE      250,5
 #define BEEPER_ACCEPT_SET_POSITION_SEQUENCE     100,2
 #define BEEPER_SERVICE_INTERVALL_SEQUNCE        100,3
 #define BEEPER_ALIGN_EXTRUDERS_SEQUNCE          50,5
@@ -823,57 +810,26 @@ Honeywell 100K Thermistor (135-104LAG-J01)  : R0 = 100000  T0 = 25  Beta = 3974
 // ##   external EEPROM which is used for the z-compensation (32.768 bytes)
 // ##########################################################################################
 /*
-we use blocks of 2 kByte size for the structure of our EEPROM
+Each sector is 1536 bytes.
 
-00000 ... 01535 bytes [EEPROM_SECTOR_SIZE Bytes] = general information
-  00000 [2 bytes] EEPROM format
-  00002 [2 bytes] active work part z-compensation matrix (1 ... EEPROM_MAX_WORK_PART_SECTORS)
-  00004 [2 bytes] active heat bed z-compensation matrix (1 ... EEPROM_MAX_HEAT_BED_SECTORS)
+Sector 0 holds the EEPROM format at byte 0 and the active heat-bed sector at byte 4.
+Bytes 2 and 3 and sectors starting at sector 10 are reserved for legacy data.
 
-01536 ... 03071 bytes [EEPROM_SECTOR_SIZE Bytes] = heat bed z-compensation matrix 1
-  01536 [2 bytes] x-dimension of the heat bed z-compensation matrix 1
-  01538 [2 bytes] y-dimension of the heat bed z-compensation matrix 1
-  01540 [2 bytes] used micro steps
-  01542 [12 bytes] reserved
-  01554 [x bytes] heat bed z-compensation matrix 1
-
-03072 ... 04597 bytes [EEPROM_SECTOR_SIZE Bytes] = heat bed z-compensation matrix 2
-  ...
-
-15360 ... 16895 bytes [EEPROM_SECTOR_SIZE Bytes]  = work part compensation matrix 1
-  15360 [2 bytes] x-dimension of the work part compensation matrix 1
-  15362 [2 bytes] y-dimension of the work part compensation matrix 1
-  15364 [2 bytes] used micro steps
-  15366 [2 bytes] x start position of the work part scan [mm]
-  15368 [2 bytes] y start position of the work part scan [mm]
-  15370 [2 bytes] x step size of the work part scan [mm]
-  15372 [2 bytes] y step size of the work part scan [mm]
-  15374 [2 bytes] x end position of the work part scan [mm]
-  15376 [2 bytes] y end position of the work part scan [mm]
-  15378 [x bytes] work part z-compensation matrix 1
-
-16895 ... 18430 bytes [2 kBytes]  = work part compensation matrix 2
-  ...
+Sectors 1 through 9 hold heat-bed matrices. Each starts with the format at byte 0,
+the X and Y dimensions at bytes 2 and 4, and the microstep setting at byte 6.
+Bytes 8 through 27 are reserved. The matrix starts at byte 28.
 */
 
 #define EEPROM_OFFSET_SECTOR_FORMAT                 0
 #define EEPROM_OFFSET_DIMENSION_X                   2
 #define EEPROM_OFFSET_DIMENSION_Y                   4
 #define EEPROM_OFFSET_MICRO_STEPS                   6
-#define EEPROM_OFFSET_X_START_MM                    16
-#define EEPROM_OFFSET_Y_START_MM                    18
-#define EEPROM_OFFSET_X_STEP_MM                     20
-#define EEPROM_OFFSET_Y_STEP_MM                     22
-#define EEPROM_OFFSET_X_END_MM                      24
-#define EEPROM_OFFSET_Y_END_MM                      26
 #define EEPROM_OFFSET_MATRIX_START                  28
 
 #define EEPROM_SECTOR_SIZE                          1536                                        // [bytes]
-#define EEPROM_MAX_WORK_PART_SECTORS                9
 #define EEPROM_MAX_HEAT_BED_SECTORS                 9
 
 #define EEPROM_OFFSET_HEADER_FORMAT                 0                                           // [bytes]
-#define EEPROM_OFFSET_ACTIVE_WORK_PART_Z_MATRIX     2                                           // [bytes]
 #define EEPROM_OFFSET_ACTIVE_HEAT_BED_Z_MATRIX      4                                           // [bytes]
 
 #define EEPROM_FORMAT                               7

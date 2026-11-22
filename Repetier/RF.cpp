@@ -22,18 +22,14 @@
 FSTRINGVALUE(ui_text_error, UI_TEXT_ERROR)
 FSTRINGVALUE(ui_text_warning, UI_TEXT_WARNING)
 FSTRINGVALUE(ui_text_information, UI_TEXT_INFORMATION)
-FSTRINGVALUE(ui_text_set_origin, UI_TEXT_SET_ORIGIN)
 FSTRINGVALUE(ui_text_heat_bed_scan, UI_TEXT_HEAT_BED_SCAN)
-FSTRINGVALUE(ui_text_work_part_scan, UI_TEXT_WORK_PART_SCAN)
-FSTRINGVALUE(ui_text_find_z_origin, UI_TEXT_FIND_Z_ORIGIN)
 FSTRINGVALUE(ui_text_output_object, UI_TEXT_OUTPUT_OBJECT)
 FSTRINGVALUE(ui_text_park_heat_bed, UI_TEXT_PARK_HEAT_BED)
+FSTRINGVALUE(ui_text_set_origin, UI_TEXT_SET_ORIGIN)
 FSTRINGVALUE(ui_text_pause, UI_TEXT_PAUSE)
 FSTRINGVALUE(ui_text_home, UI_TEXT_HOME)
 FSTRINGVALUE(ui_text_z_compensation, UI_TEXT_Z_COMPENSATION)
-FSTRINGVALUE(ui_text_change_mode, UI_TEXT_CHANGE_MODE)
 FSTRINGVALUE(ui_text_change_z_type, UI_TEXT_CHANGE_Z_TYPE)
-FSTRINGVALUE(ui_text_change_miller_type, UI_TEXT_CHANGE_MILLER_TYPE)
 FSTRINGVALUE(ui_text_x_axis, UI_TEXT_X_AXIS)
 FSTRINGVALUE(ui_text_y_axis, UI_TEXT_Y_AXIS)
 FSTRINGVALUE(ui_text_z_axis, UI_TEXT_Z_AXIS)
@@ -88,17 +84,12 @@ long g_min_nZScanZPosition = 0;
 unsigned char g_ZOS_Auto_Matrix_Leveling_State = 0; //if 1 do multiple scans to correct matrix. while correcting this is rising for switch cases see state 50+
 #endif                                              // FEATURE_HEAT_BED_Z_COMPENSATION
 
-#if FEATURE_WORK_PART_Z_COMPENSATION
-volatile unsigned char g_nWorkPartScanStatus = 0;
-char g_nWorkPartScanMode = 0;
-char g_nActiveWorkPart = 1;
-#endif // FEATURE_WORK_PART_Z_COMPENSATION
 
-#if FEATURE_WORK_PART_Z_COMPENSATION || FEATURE_HEAT_BED_Z_COMPENSATION
+#if FEATURE_HEAT_BED_Z_COMPENSATION
 float g_scanStartZLiftMM = HEAT_BED_SCAN_Z_START_MM;
-#endif //FEATURE_WORK_PART_Z_COMPENSATION || FEATURE_HEAT_BED_Z_COMPENSATION
+#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#if FEATURE_HEAT_BED_Z_COMPENSATION
 unsigned long g_lastScanTime = 0;
 unsigned long g_scanStartTime = 0;
 char g_scanRetries = 0;
@@ -149,7 +140,7 @@ short g_nScanIdlePressureMax = 0;
 char g_nScanPressureReads = 0;
 unsigned short g_nScanPressureReadDelay = 0;
 short g_nScanPressureTolerance = 0;
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
 long g_staticZSteps = 0;
 #if FEATURE_STARTLINE
@@ -215,10 +206,6 @@ short g_nDigitFlowCompensation_Fmax = short(abs(EMERGENCY_PAUSE_DIGITS_MAX));   
 #endif                                                                              // FEATURE_DIGIT_FLOW_COMPENSATION
 #endif                                                                              // FEATURE_DIGIT_Z_COMPENSATION
 
-#if FEATURE_FIND_Z_ORIGIN
-volatile unsigned char g_nFindZOriginStatus = 0;
-long g_nZOriginPosition[3] = { 0, 0, 0 };
-#endif // FEATURE_FIND_Z_ORIGIN
 
 #if FEATURE_ALIGN_EXTRUDERS
 volatile unsigned char g_nAlignExtrudersStatus = 0;
@@ -253,15 +240,14 @@ unsigned long g_nlastServiceTime = 0;
 int g_nEnteredService = 0;
 #endif // FEATURE_SERVICE_INTERVAL
 
+static void setupForPrinting();
+
 void initRF(void) {
     // initialize the strain gauge
     initStrainGauge();
 
-#if FEATURE_MILLING_MODE
-    switchOperatingMode(Printer::operatingMode);
-#else
-    switchOperatingMode(OPERATING_MODE_PRINT);
-#endif // FEATURE_MILLING_MODE
+    Printer::disableCMPnow(true);
+    setupForPrinting();
 
 #if FEATURE_CONFIGURABLE_Z_ENDSTOPS
     if (Printer::ZEndstopType != ENDSTOP_TYPE_SINGLE) {
@@ -277,10 +263,8 @@ void initRF(void) {
     float fDistanceService = Printer::filamentPrinted * 0.001 + HAL::eprGetFloat(EPR_PRINTING_DISTANCE_SERVICE);
     int32_t uSecondsServicePrint = ((HAL::timeInMilliseconds() - Printer::msecondsPrinting) / 1000) + HAL::eprGetInt32(EPR_PRINTING_TIME_SERVICE);
     int32_t uHoursServicePrint = uSecondsServicePrint / 3600;
-    int32_t uSecondsServiceMill = ((HAL::timeInMilliseconds() - Printer::msecondsMilling) / 1000) + HAL::eprGetInt32(EPR_MILLING_TIME_SERVICE);
-    int32_t uHoursServiceMill = uSecondsServiceMill / 3600;
 
-    if (fDistanceService >= FILAMENT_PRINTED_UNTIL_SERVICE || uHoursServicePrint >= HOURS_PRINTED_UNTIL_SERVICE || uHoursServiceMill >= HOURS_MILLED_UNTIL_SERVICE) {
+    if (fDistanceService >= FILAMENT_PRINTED_UNTIL_SERVICE || uHoursServicePrint >= HOURS_PRINTED_UNTIL_SERVICE) {
         UI_STATUS(UI_TEXT_SERVICE);
         BEEP_SERVICE_INTERVALL
         g_nlastServiceTime = HAL::timeInMilliseconds();
@@ -431,14 +415,6 @@ void startHeatBedScan(void) {
     if (g_nZOSScanStatus)
         return;
 #endif //FEATURE_HEAT_BED_Z_COMPENSATION
-#if FEATURE_WORK_PART_Z_COMPENSATION
-    if (g_nWorkPartScanStatus)
-        return;
-#endif //FEATURE_WORK_PART_Z_COMPENSATION
-#if FEATURE_FIND_Z_ORIGIN
-    if (g_nFindZOriginStatus)
-        return;
-#endif //FEATURE_FIND_Z_ORIGIN
     if (g_nHeatBedScanStatus) {
         // abort the heat bed scan
         if (Printer::debugInfo()) {
@@ -474,14 +450,6 @@ void scanHeatBed(void) {
     if (g_nZOSScanStatus)
         return;
 #endif //FEATURE_HEAT_BED_Z_COMPENSATION
-#if FEATURE_WORK_PART_Z_COMPENSATION
-    if (g_nWorkPartScanStatus)
-        return;
-#endif //FEATURE_WORK_PART_Z_COMPENSATION
-#if FEATURE_FIND_Z_ORIGIN
-    if (g_nFindZOriginStatus)
-        return;
-#endif //FEATURE_FIND_Z_ORIGIN
 
     static unsigned char nIndexX;
     static unsigned char nIndexY;
@@ -1868,14 +1836,6 @@ void alignExtruders(void) {
     if (g_nZOSScanStatus)
         return;
 #endif //FEATURE_HEAT_BED_Z_COMPENSATION
-#if FEATURE_WORK_PART_Z_COMPENSATION
-    if (g_nWorkPartScanStatus)
-        return;
-#endif //FEATURE_WORK_PART_Z_COMPENSATION
-#if FEATURE_FIND_Z_ORIGIN
-    if (g_nFindZOriginStatus)
-        return;
-#endif //FEATURE_FIND_Z_ORIGIN
 
     if (g_abortZScan) {
         showAbortScanReason((void*)ui_text_align_extruders, g_abortZScan);
@@ -2075,14 +2035,6 @@ void startZOScan(bool automatrixleveling) {
         return;
         //if( g_nZOSScanStatus ) return;
 #endif //FEATURE_HEAT_BED_Z_COMPENSATION
-#if FEATURE_WORK_PART_Z_COMPENSATION
-    if (g_nWorkPartScanStatus)
-        return;
-#endif //FEATURE_WORK_PART_Z_COMPENSATION
-#if FEATURE_FIND_Z_ORIGIN
-    if (g_nFindZOriginStatus)
-        return;
-#endif //FEATURE_FIND_Z_ORIGIN
 
     if (g_nZOSScanStatus) {
         // abort the heat bed scan
@@ -2110,22 +2062,11 @@ void searchZOScan(void) {
         return;
         //if( g_nZOSScanStatus ) return;
 #endif //FEATURE_HEAT_BED_Z_COMPENSATION
-#if FEATURE_WORK_PART_Z_COMPENSATION
-    if (g_nWorkPartScanStatus)
-        return;
-#endif //FEATURE_WORK_PART_Z_COMPENSATION
-#if FEATURE_FIND_Z_ORIGIN
-    if (g_nFindZOriginStatus)
-        return;
-#endif //FEATURE_FIND_Z_ORIGIN
 
     if (!g_nZOSScanStatus)
         return;
 
     if (g_nHeatBedScanStatus
-#if FEATURE_WORK_PART_Z_COMPENSATION
-        || g_nWorkPartScanStatus
-#endif // FEATURE_WORK_PART_Z_COMPENSATION
     ) {
         g_nZOSScanStatus = 0;
         g_ZOS_Auto_Matrix_Leveling_State = 0;
@@ -3185,16 +3126,6 @@ long getZMatrixDepth(long x, long y) {
 }
 
 long getZMatrixDepth_CurrentXY(void) {
-#if FEATURE_MILLING_MODE
-    if (Printer::operatingMode == OPERATING_MODE_MILL) {
-        // While milling direct positioning is not exclusive for extruder offsets and pausing.
-        // We have to respect the absolute position in steps.
-        // This is valid if a workpart scan is always done having zero direct steps. -> to scan we home and move by gcode coordinates. so this is true.
-        return getZMatrixDepth(
-            Printer::currentXSteps,
-            Printer::currentYSteps);
-    }
-#endif
     // We need the current queue steps here. No Direct, No Offsets.
     // We need to insert where the nozzle is, relative to 0 homing coordinates which are always min endstop because we dropped axis offsets.
     // Because our RF2000 Matrix is 180mm width. That is the center of the bed. left and right are spaces. -> Center buildarea starts at 0 gcode coordinates and thats what we want.
@@ -3351,7 +3282,7 @@ void showAbortScanReason(const void* scanName, char abortScanIdentifier) {
         break;
     }
 
-    // Z-Schraube falsch, Origin-/Workpart-Scan gegen nichts, ??
+    // Z-Schraube falsch eingestellt?
     // _MAX_COMPENSATION und _ENDSTOP_PROTECTION deuten im Printermodus auf dasselbe hin, sind aber 2 unterschiedliche Stellen.
     case SCAN_ABORT_REASON_MIN_ENDSTOP: {
         showError(scanName, PSTR("Min Endstop"));
@@ -3389,1089 +3320,9 @@ void showAbortScanReason(const void* scanName, char abortScanIdentifier) {
     }
 }
 
-#if FEATURE_FIND_Z_ORIGIN
-void startFindZOrigin(void) {
-#if FEATURE_ALIGN_EXTRUDERS
-    if (g_nAlignExtrudersStatus)
-        return;
-#endif //FEATURE_ALIGN_EXTRUDERS
+
+
 #if FEATURE_HEAT_BED_Z_COMPENSATION
-    if (g_nHeatBedScanStatus)
-        return;
-    if (g_nZOSScanStatus)
-        return;
-#endif //FEATURE_HEAT_BED_Z_COMPENSATION
-#if FEATURE_WORK_PART_Z_COMPENSATION
-    if (g_nWorkPartScanStatus)
-        return;
-#endif //FEATURE_WORK_PART_Z_COMPENSATION
-#if FEATURE_FIND_Z_ORIGIN
-        //if( g_nFindZOriginStatus ) return;
-#endif //FEATURE_FIND_Z_ORIGIN
-    if (g_nFindZOriginStatus) {
-        g_abortZScan = SCAN_ABORT_REASON_CANCELED;
-    } else {
-        if (Printer::operatingMode != OPERATING_MODE_MILL) {
-            Com::printFLN(PSTR("startFindZOrigin(): z-origin not supported in printer mode"));
-            showError((void*)ui_text_find_z_origin, (void*)ui_text_operation_denied);
-            return;
-        }
-        // start the search
-        g_nFindZOriginStatus = 1;
-    }
-} // startFindZOrigin
-
-void findZOrigin(void) {
-#if FEATURE_ALIGN_EXTRUDERS
-    if (g_nAlignExtrudersStatus)
-        return;
-#endif //FEATURE_ALIGN_EXTRUDERS
-#if FEATURE_HEAT_BED_Z_COMPENSATION
-    if (g_nHeatBedScanStatus)
-        return;
-    if (g_nZOSScanStatus)
-        return;
-#endif //FEATURE_HEAT_BED_Z_COMPENSATION
-#if FEATURE_WORK_PART_Z_COMPENSATION
-    if (g_nWorkPartScanStatus)
-        return;
-#endif //FEATURE_WORK_PART_Z_COMPENSATION
-#if FEATURE_FIND_Z_ORIGIN
-        //if( g_nFindZOriginStatus ) return;
-#endif //FEATURE_FIND_Z_ORIGIN
-
-    static short nMaxPressureContact;
-    static short nMinPressureContact;
-    short nCurrentPressure;
-    unsigned long uStartTime;
-    unsigned long uCurrentTime;
-
-    if (g_abortZScan) {
-        showAbortScanReason((void*)ui_text_find_z_origin, g_abortZScan);
-        // the search has been aborted
-        g_abortZScan = 0;
-
-        // turn off the engines
-        Printer::disableZStepper();
-
-        if (Printer::debugInfo()) {
-            Com::printFLN(PSTR("findZOrigin(): aborted"));
-        }
-
-        g_nFindZOriginStatus = 0;
-
-        g_uStartOfIdle = HAL::timeInMilliseconds() + 30000; //abort findZOrigin
-        return;
-    }
-
-    if (g_nFindZOriginStatus) {
-        // show that we are active
-        previousMillisCmd = HAL::timeInMilliseconds(); //prevent inactive shutdown of steppers/temps
-        GCode::keepAlive(Calibrating);
-
-        UI_STATUS_UPD(UI_TEXT_FIND_Z_ORIGIN);
-
-        //HAL::delayMilliseconds( 2000 );
-
-        switch (g_nFindZOriginStatus) {
-        case 1: {
-            g_abortZScan = 0;
-            //g_nLastZScanZPosition      = 0; //sodass dass bei mehreren scans nicht die letzte position als abstands limit feststeht. //brauche ich nicht bei findzorigin
-            g_nZOriginPosition[Z_AXIS] = 0;
-
-            if (Printer::debugInfo()) {
-                Com::printFLN(PSTR("findZOrigin(): started"));
-            }
-
-            if (readAveragePressure(&nCurrentPressure)) {
-                Com::printFLN(PSTR("findZOrigin(): start pressure not determined"));
-                g_abortZScan = SCAN_ABORT_REASON_START_PRESSURE;
-                return;
-            }
-
-            nMinPressureContact = nCurrentPressure - SEARCH_Z_ORIGIN_CONTACT_PRESSURE_DELTA;
-            nMaxPressureContact = nCurrentPressure + SEARCH_Z_ORIGIN_CONTACT_PRESSURE_DELTA;
-
-            if (Printer::debugInfo()) {
-                Com::printF(PSTR("findZOrigin(): nMinPressureContact = "), nMinPressureContact);
-                Com::printFLN(PSTR(", nMaxPressureContact = "), nMaxPressureContact);
-            }
-
-            Printer::enableZStepper();
-
-            g_nFindZOriginStatus = 2;
-
-#if DEBUG_FIND_Z_ORIGIN
-            Com::printFLN(PSTR("findZOrigin(): 1->10"));
-#endif // DEBUG_FIND_Z_ORIGIN
-            break;
-        }
-        case 2: {
-#if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
-            Printer::disableCMPnow(true); //schalte Z CMP ab für findZOrigin
-#endif                                    // FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
-            g_nFindZOriginStatus = 10;
-            break;
-        }
-        case 10: {
-            // move the heat bed up until we detect the contact pressure
-            uStartTime = HAL::timeInMilliseconds();
-            while (1) {
-                nCurrentPressure = readStrainGauge(ACTIVE_STRAIN_GAUGE);
-
-                if (nCurrentPressure > nMaxPressureContact || nCurrentPressure < nMinPressureContact) {
-                    // we have reached the target pressure
-                    g_nFindZOriginStatus = 20;
-
-#if DEBUG_FIND_Z_ORIGIN
-                    Com::printFLN(PSTR("findZOrigin(): 10->20"));
-#endif // DEBUG_FIND_Z_ORIGIN
-                    return;
-                }
-
-                if (Printer::isZMinEndstopHit()) {
-                    // this should never happen
-                    Com::printFLN(PSTR("findZOrigin(): the z-min endstop reached"));
-                    g_abortZScan = SCAN_ABORT_REASON_MIN_ENDSTOP;
-                    return;
-                }
-
-                moveZ(int(SEARCH_Z_ORIGIN_BED_UP_MM * Printer::axisStepsPerMM[Z_AXIS]));
-                g_nZOriginPosition[Z_AXIS] = g_nZScanZPosition; //passt wenn korrekt gehomed.
-
-                uCurrentTime = HAL::timeInMilliseconds();
-                if ((uCurrentTime - uStartTime) > SEARCH_Z_ORIGIN_BREAKOUT_DELAY) {
-                    // do not stay within this loop forever
-                    return;
-                }
-
-                if (g_abortZScan) {
-                    break;
-                }
-            }
-            break;
-        }
-        case 20: {
-            // move the heat bed down again until we do not detect any contact anymore
-            uStartTime = HAL::timeInMilliseconds();
-            while (1) {
-                nCurrentPressure = readStrainGauge(ACTIVE_STRAIN_GAUGE);
-
-                if (nCurrentPressure > nMinPressureContact && nCurrentPressure < nMaxPressureContact) {
-                    // we have reached the target pressure
-                    g_nFindZOriginStatus = 30;
-
-#if DEBUG_FIND_Z_ORIGIN
-                    Com::printFLN(PSTR("findZOrigin(): 20 -> 30"));
-#endif // DEBUG_FIND_Z_ORIGIN
-                    return;
-                }
-
-                if (Printer::isZMaxEndstopHit()) {
-                    Com::printFLN(PSTR("findZOrigin(): the z-max endstop reached"));
-                    g_abortZScan = SCAN_ABORT_REASON_MAX_ENDSTOP;
-                    return;
-                }
-
-                moveZ(int(SEARCH_Z_ORIGIN_BED_DOWN_MM * Printer::axisStepsPerMM[Z_AXIS]));
-                g_nZOriginPosition[Z_AXIS] = g_nZScanZPosition; //passt wenn korrekt gehomed.
-
-                uCurrentTime = HAL::timeInMilliseconds();
-                if ((uCurrentTime - uStartTime) > SEARCH_Z_ORIGIN_BREAKOUT_DELAY) {
-                    // do not stay within this loop forever
-                    return;
-                }
-
-                if (g_abortZScan) {
-                    break;
-                }
-            }
-            break;
-        }
-        case 30: {
-            // we have found the z-origin
-            setZOrigin();
-
-            GCode::executeFString(Com::tFindZOrigin);
-            g_nFindZOriginStatus = 40;
-
-#if DEBUG_FIND_Z_ORIGIN
-            Com::printFLN(PSTR("findZOrigin(): 30 -> 40"));
-#endif // DEBUG_FIND_Z_ORIGIN
-            break;
-        }
-        case 40: {
-            if (PrintLine::linesCount) {
-                // wait until all moves have been done
-                break;
-            }
-
-            Commands::printCurrentPosition();
-            g_nFindZOriginStatus = 0;
-            UI_STATUS_UPD(UI_TEXT_FIND_Z_ORIGIN_DONE);
-
-#if DEBUG_FIND_Z_ORIGIN
-            Com::printFLN(PSTR("findZOrigin(): 40 -> 0"));
-#endif // DEBUG_FIND_Z_ORIGIN
-            break;
-        }
-        }
-    }
-} // findZOrigin
-#endif // FEATURE_FIND_Z_ORIGIN
-
-#if FEATURE_WORK_PART_Z_COMPENSATION
-void startWorkPartScan(char nMode) {
-#if FEATURE_ALIGN_EXTRUDERS
-    if (g_nAlignExtrudersStatus)
-        return;
-#endif //FEATURE_ALIGN_EXTRUDERS
-#if FEATURE_HEAT_BED_Z_COMPENSATION
-    if (g_nHeatBedScanStatus)
-        return;
-    if (g_nZOSScanStatus)
-        return;
-#endif //FEATURE_HEAT_BED_Z_COMPENSATION
-#if FEATURE_WORK_PART_Z_COMPENSATION
-        //if( g_nWorkPartScanStatus ) return;
-#endif //FEATURE_WORK_PART_Z_COMPENSATION
-#if FEATURE_FIND_Z_ORIGIN
-    if (g_nFindZOriginStatus)
-        return;
-#endif //FEATURE_FIND_Z_ORIGIN
-    if (g_nWorkPartScanStatus) {
-        // abort the work part scan
-        if (Printer::debugInfo()) {
-            Com::printFLN(PSTR("startWorkPartScan(): the scan has been cancelled"));
-        }
-        g_abortZScan = SCAN_ABORT_REASON_CANCELED;
-    } else {
-        if (Printer::isPrinting()) {
-            // there is some printing in progress at the moment - do not start the heat bed scan in this case
-            if (Printer::debugErrors()) {
-                Com::printFLN(Com::tPrintingIsInProcessError);
-            }
-
-            showError((void*)ui_text_work_part_scan, (void*)ui_text_operation_denied);
-        } else {
-            // start the work part scan
-            g_nWorkPartScanStatus = 1;
-            g_nWorkPartScanMode = nMode;
-            BEEP_START_WORK_PART_SCAN
-
-            // when the work part is scanned, the z-compensation must be disabled
-            Printer::disableCMPnow(true); //brauchen wir hier, es gibt einen fall ohne ZHoming
-        }
-    }
-} // startWorkPartScan
-
-void scanWorkPart(void) {
-#if FEATURE_ALIGN_EXTRUDERS
-    if (g_nAlignExtrudersStatus)
-        return;
-#endif //FEATURE_ALIGN_EXTRUDERS
-#if FEATURE_HEAT_BED_Z_COMPENSATION
-    if (g_nHeatBedScanStatus)
-        return;
-    if (g_nZOSScanStatus)
-        return;
-#endif //FEATURE_HEAT_BED_Z_COMPENSATION
-#if FEATURE_WORK_PART_Z_COMPENSATION
-        //if( g_nWorkPartScanStatus ) return;
-#endif //FEATURE_WORK_PART_Z_COMPENSATION
-#if FEATURE_FIND_Z_ORIGIN
-    if (g_nFindZOriginStatus)
-        return;
-#endif //FEATURE_FIND_Z_ORIGIN
-
-    static unsigned char nIndexX;
-    static unsigned char nIndexY;
-    static char nIndexYDirection;
-    static long nX;
-    static long nY;
-    static long nYDirection;
-    static short nContactPressure = 0;
-    short nTempPressure;
-    long nTempPosition;
-
-    // directions:
-    // +x = to the right
-    // -x = to the left
-    // +y = work part moves to the front
-    // -y = work part moves to the back
-    // +z = work part moves down
-    // -z = work part moves up
-
-    if (g_abortZScan) {
-        showAbortScanReason((void*)ui_text_work_part_scan, g_abortZScan);
-        BEEP_ABORT_WORK_PART_SCAN
-        // the scan has been aborted
-        g_abortZScan = 0;
-
-        // start at the home position
-        if (g_nWorkPartScanMode) {
-            // also the z-axis shall be homed
-            Printer::homeAxis(true, true, true);
-        } else {
-            // the z-axis shall not be homed - in this case we must ensure that the tool does not crash against the limit stops at the front/left of the bed
-            Printer::queueRelativeMMCoordinates(0, 0, WORK_PART_SCAN_Z_START_MM, 0, Printer::homingFeedrate[Z_AXIS], true, true);
-            Printer::homeAxis(true, true, false);
-        }
-
-        // turn off the engines
-        Printer::disableAllSteppersNow();
-
-        if (Printer::debugInfo()) {
-            Com::printF(Com::tscanWorkPart);
-            Com::printFLN(PSTR("the scan has been aborted"));
-        }
-
-        // restore the compensation values from the EEPROM
-        if (loadCompensationMatrix((EEPROM_SECTOR_SIZE * 9) + (unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveWorkPart))) {
-            // there is no valid compensation matrix available
-            initCompensationMatrix();
-        }
-
-        g_nWorkPartScanStatus = 0;
-        g_nLastZScanZPosition = 0;
-        g_retryZScan = 0;
-
-        g_uStartOfIdle = HAL::timeInMilliseconds() + 30000; //scanWorkPart aborted
-        return;
-    }
-
-    if (g_nWorkPartScanStatus) {
-        // show that we are active
-        previousMillisCmd = HAL::timeInMilliseconds(); //prevent inactive shutdown of steppers/temps
-        GCode::keepAlive(Calibrating);
-
-        UI_STATUS(UI_TEXT_WORK_PART_SCAN);
-
-        if (g_retryZScan) {
-            // we have to retry to scan the current position
-            g_nWorkPartScanStatus = 45;
-            g_retryZScan = 0;
-        }
-
-        switch (g_nWorkPartScanStatus) {
-        case 1: {
-            g_scanStartTime = HAL::timeInMilliseconds();
-            g_abortZScan = 0;
-            nContactPressure = 0;
-            g_nLastZScanZPosition = 0; //sodass dass bei mehreren scans nicht die letzte position als abstands limit feststeht.
-
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanWorkPart);
-                Com::printFLN(PSTR("the scan has been started"));
-            }
-
-            // clear all fields of the work part compensation matrix
-            initCompensationMatrix();
-
-            g_uZMatrixMax[X_AXIS] = g_uZMatrixMax[Y_AXIS] = 0;
-
-            // output the currently used scan parameters
-            outputScanParameters();
-
-            g_nWorkPartScanStatus = 10;
-
-#if DEBUG_WORK_PART_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanWorkPart);
-                Com::printFLN(PSTR("1 -> 10"));
-            }
-#endif // DEBUG_WORK_PART_SCAN
-            break;
-        }
-        case 10: {
-            // start at the home position
-            if (g_nWorkPartScanMode) {
-                // also the z-axis shall be homed
-                Printer::homeAxis(true, true, true);
-            } else {
-                // the z-axis shall not be homed - in this case we must ensure that the tool does not crash against the limit stops at the front/left of the bed
-                Printer::queueRelativeMMCoordinates(0, 0, WORK_PART_SCAN_Z_START_MM, 0, Printer::homingFeedrate[Z_AXIS], true, true);
-                Printer::homeAxis(true, true, false);
-            }
-
-            g_nWorkPartScanStatus = 25;
-            g_lastScanTime = HAL::timeInMilliseconds();
-
-#if DEBUG_WORK_PART_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanWorkPart);
-                Com::printFLN(PSTR("10 -> 25"));
-            }
-#endif // DEBUG_WORK_PART_SCAN
-            break;
-        }
-        case 25: {
-            // move to the first position
-            Printer::queueRelativeStepsCoordinates(g_nScanXStartSteps, 0, 0, 0, Printer::homingFeedrate[X_AXIS], false, true);
-            Printer::queueRelativeStepsCoordinates(0, g_nScanYStartSteps, 0, 0, Printer::homingFeedrate[Y_AXIS], true, true);
-
-            g_nWorkPartScanStatus = 30;
-            g_lastScanTime = HAL::timeInMilliseconds();
-
-#if DEBUG_WORK_PART_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanWorkPart);
-                Com::printFLN(PSTR("25 -> 30"));
-            }
-#endif // DEBUG_WORK_PART_SCAN
-            break;
-        }
-        case 30: {
-            if ((HAL::timeInMilliseconds() - g_lastScanTime) < WORK_PART_SCAN_DELAY) {
-                // do not check too early
-                break;
-            }
-
-            if (readIdlePressure(&g_nFirstIdlePressure)) {
-                g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
-                // we were unable to determine the idle pressure
-                break;
-            }
-
-            adjustPressureLimits(g_nFirstIdlePressure);
-
-            nX = g_nScanXStartSteps;
-            nY = g_nScanYStartSteps;
-            nYDirection = g_nScanYStepSizeSteps; // we start to move the milling bed from the back to the front
-            nIndexYDirection = 1;
-            nIndexX = 2;
-            nIndexY = 2;
-
-            // store also the version of this work part compensation matrix
-            g_ZCompensationMatrix[0][0] = EEPROM_FORMAT;
-
-            g_nWorkPartScanStatus = 32;
-
-#if DEBUG_WORK_PART_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanWorkPart);
-                Com::printFLN(PSTR("30 -> 32"));
-            }
-#endif // DEBUG_WORK_PART_SCAN
-            break;
-        }
-        case 32: {
-            short nCurrentPressure;
-
-            // move the work part up until we detect the contact pressure
-            g_lastScanTime = HAL::timeInMilliseconds();
-            while (1) {
-                nCurrentPressure = readStrainGauge(ACTIVE_STRAIN_GAUGE);
-
-                if (nCurrentPressure > g_nMaxPressureContact || nCurrentPressure < g_nMinPressureContact) {
-                    // we have reached the target pressure
-                    g_nWorkPartScanStatus = 33;
-
-#if DEBUG_WORK_PART_SCAN == 2
-                    if (Printer::debugInfo()) {
-                        Com::printF(Com::tscanWorkPart);
-                        Com::printFLN(PSTR("32 -> 33"));
-                    }
-#endif // DEBUG_WORK_PART_SCAN
-                    return;
-                }
-
-                if (Printer::isZMinEndstopHit()) {
-                    // this should never happen
-                    if (Printer::debugErrors()) {
-                        Com::printF(Com::tscanWorkPart);
-                        Com::printFLN(PSTR("the z-min endstop has been reached"));
-                    }
-                    g_abortZScan = SCAN_ABORT_REASON_MIN_ENDSTOP;
-                    return;
-                }
-
-                moveZ(g_nScanHeatBedUpFastSteps);
-
-                if ((HAL::timeInMilliseconds() - g_lastScanTime) > SEARCH_Z_ORIGIN_BREAKOUT_DELAY) {
-                    // do not stay within this loop forever
-                    return;
-                }
-
-                if (g_abortZScan) {
-                    break;
-                }
-            }
-
-            // we should never end up here
-            break;
-        }
-        case 33: {
-            short nCurrentPressure;
-
-            // move the work part down again until we do not detect any contact anymore
-            g_lastScanTime = HAL::timeInMilliseconds();
-            while (1) {
-                nCurrentPressure = readStrainGauge(ACTIVE_STRAIN_GAUGE);
-
-                if (nCurrentPressure > g_nMinPressureContact && nCurrentPressure < g_nMaxPressureContact) {
-                    // we have reached the target pressure / we have found the z-origin
-                    if (Printer::debugErrors()) {
-                        Com::printF(Com::tscanWorkPart);
-                        Com::printFLN(PSTR("the z-origin has been determined"));
-                    }
-
-                    setZOrigin();
-
-                    // move away from the surface
-                    if (moveZPlusDownFast()) {
-                        g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
-                    }
-
-                    g_nWorkPartScanStatus = 35;
-
-                    // ensure that we do not remember any previous z-position at this moment
-                    g_nLastZScanZPosition = 0;
-
-#if DEBUG_WORK_PART_SCAN == 2
-                    if (Printer::debugInfo()) {
-                        Com::printF(Com::tscanWorkPart);
-                        Com::printFLN(PSTR("33 -> 35 > "), nZ);
-                    }
-#endif // DEBUG_WORK_PART_SCAN
-                    return;
-                }
-
-                if (Printer::isZMaxEndstopHit()) {
-                    if (Printer::debugErrors()) {
-                        Com::printF(Com::tscanWorkPart);
-                        Com::printFLN(PSTR("the z-max endstop has been reached"));
-                    }
-                    g_abortZScan = SCAN_ABORT_REASON_MAX_ENDSTOP;
-                    return;
-                }
-
-                moveZ(g_nScanHeatBedDownSlowSteps);
-
-                if ((HAL::timeInMilliseconds() - g_lastScanTime) > SEARCH_Z_ORIGIN_BREAKOUT_DELAY) {
-                    // do not stay within this loop forever
-                    return;
-                }
-
-                if (g_abortZScan) {
-                    break;
-                }
-            }
-
-            // we should never end up here
-            break;
-        }
-        case 35: {
-            g_nWorkPartScanStatus = 40;
-
-#if DEBUG_WORK_PART_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanWorkPart);
-                Com::printFLN(PSTR("35 -> 40"));
-            }
-#endif // DEBUG_WORK_PART_SCAN
-            break;
-        }
-        case 39: {
-            nTempPosition = nX + g_nScanXStepSizeSteps;
-            if (nTempPosition > g_nScanXMaxPositionSteps) {
-                // we end up here when the scan is complete
-                g_nWorkPartScanStatus = 60;
-
-#if DEBUG_WORK_PART_SCAN == 2
-                if (Printer::debugInfo()) {
-                    Com::printF(Com::tscanWorkPart);
-                    Com::printFLN(PSTR("39 -> 60"));
-                }
-#endif // DEBUG_WORK_PART_SCAN
-                break;
-            }
-
-            // move to the next x-position
-            Printer::queueRelativeStepsCoordinates(g_nScanXStepSizeSteps, 0, 0, 0, Printer::homingFeedrate[X_AXIS], true, true);
-            nX += g_nScanXStepSizeSteps;
-            nIndexX++;
-
-            if (nIndexX > COMPENSATION_MATRIX_MAX_X) {
-                if (Printer::debugErrors()) {
-                    Com::printF(Com::tscanWorkPart);
-                    Com::printFLN(PSTR("the x-dimension of the z matrix became too big: "), nIndexX);
-                }
-                g_abortZScan = SCAN_ABORT_REASON_MATRIX_DIMENSION;
-                break;
-            }
-
-            if (nYDirection > 0) {
-                // we were moving from the front to the back during this column, so we have to move from the back to the front during the next column
-                nYDirection = -g_nScanYStepSizeSteps; // we start to move the milling bed from the back to the front
-                nIndexYDirection = -1;
-            } else {
-                // we were moving from the back to the front during this column, so we have to move from the front to the back during the next column
-                nYDirection = g_nScanYStepSizeSteps; // we start to move the milling bed from the back to the front
-                nIndexYDirection = 1;
-            }
-
-            g_nWorkPartScanStatus = 40;
-
-#if DEBUG_WORK_PART_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanWorkPart);
-                Com::printFLN(PSTR("39 -> 40"));
-            }
-#endif // DEBUG_WORK_PART_SCAN
-            break;
-        }
-        case 40: {
-            // safety checks
-            if (nX <= g_nScanXMaxPositionSteps) {
-                // remember also the exact x-position of this row/column
-                g_ZCompensationMatrix[nIndexX][0] = (short)((float)nX / Printer::axisStepsPerMM[X_AXIS] + 0.5); // convert to mm
-
-                g_nWorkPartScanStatus = 49;
-                g_lastScanTime = HAL::timeInMilliseconds();
-
-#if DEBUG_WORK_PART_SCAN == 2
-                if (Printer::debugInfo()) {
-                    Com::printF(Com::tscanWorkPart);
-                    Com::printFLN(PSTR("40 -> 49 : X="), g_ZCompensationMatrix[nIndexX][0]);
-                }
-#endif // DEBUG_WORK_PART_SCAN
-                break;
-            }
-
-            // we end up here when the scan is complete
-            g_nWorkPartScanStatus = 60;
-
-#if DEBUG_WORK_PART_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanWorkPart);
-                Com::printFLN(PSTR("40 -> 60"));
-            }
-#endif // DEBUG_WORK_PART_SCAN
-            break;
-        }
-        case 45: {
-            // move away from the surface
-            moveZ(g_nScanHeatBedDownFastSteps);
-
-            g_scanRetries--;
-            g_nWorkPartScanStatus = 46;
-            g_lastScanTime = HAL::timeInMilliseconds();
-
-#if DEBUG_WORK_PART_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanWorkPart);
-                Com::printFLN(PSTR("45 -> 46"));
-            }
-#endif // DEBUG_WORK_PART_SCAN
-            break;
-        }
-        case 46: {
-            if ((HAL::timeInMilliseconds() - g_lastScanTime) < WORK_PART_SCAN_DELAY) {
-                // do not check too early
-                break;
-            }
-
-            // try to determine the idle pressure again
-            if (readIdlePressure(&g_nFirstIdlePressure)) {
-                g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
-                // we were unable to determine the idle pressure
-                break;
-            }
-
-            adjustPressureLimits(g_nFirstIdlePressure);
-
-            g_nWorkPartScanStatus = 50;
-
-#if DEBUG_WORK_PART_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanWorkPart);
-                Com::printFLN(PSTR("46 -> 50"));
-            }
-#endif // DEBUG_WORK_PART_SCAN
-            break;
-        }
-        case 49: {
-            g_scanRetries = WORK_PART_SCAN_RETRIES;
-            g_nWorkPartScanStatus = 50;
-
-#if DEBUG_WORK_PART_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanWorkPart);
-                Com::printFLN(PSTR("49 -> 50"));
-            }
-#endif // DEBUG_WORK_PART_SCAN
-            break;
-        }
-        case 50: {
-            if ((HAL::timeInMilliseconds() - g_lastScanTime) < g_nScanIdleDelay) {
-                // do not check too early
-                break;
-            }
-
-            // scan this point
-            if (testIdlePressure()) {
-                // the current idle pressure is not plausible
-                g_abortZScan = SCAN_ABORT_REASON_IDLE_PRESSURE;
-                break;
-            }
-
-            // we should consider that the idle presse can change slightly
-            adjustPressureLimits(g_nCurrentIdlePressure);
-
-            g_nWorkPartScanStatus = 51;
-
-#if DEBUG_WORK_PART_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanWorkPart);
-                Com::printFLN(PSTR("50 -> 51"));
-            }
-#endif // DEBUG_WORK_PART_SCAN
-            break;
-        }
-        case 51: {
-            // move fast to the surface
-            moveZMinusUpFast();
-
-            g_nWorkPartScanStatus = 52;
-
-#if DEBUG_WORK_PART_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanWorkPart);
-                Com::printFLN(PSTR("51 -> 52"));
-            }
-#endif // DEBUG_WORK_PART_SCAN
-            break;
-        }
-        case 52: {
-            // move a little bit away from the surface
-            moveZPlusDownSlow();
-            g_nWorkPartScanStatus = 53;
-
-#if DEBUG_WORK_PART_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanWorkPart);
-                Com::printFLN(PSTR("52 -> 53"));
-            }
-#endif // DEBUG_WORK_PART_SCAN
-            break;
-        }
-        case 53: {
-            // move slowly to the surface
-            moveZMinusUpSlow(&nTempPressure);
-            nContactPressure = nTempPressure;
-            moveZPlusDownSlow(8); //and slowslowly back near idle pressure
-            g_nWorkPartScanStatus = 54;
-
-#if DEBUG_WORK_PART_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanWorkPart);
-                Com::printFLN(PSTR("53 -> 54"));
-            }
-#endif // DEBUG_WORK_PART_SCAN
-            break;
-        }
-        case 54: {
-#if DEBUG_WORK_PART_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(PSTR("nX;"), nX);
-                Com::printF(Com::tSemiColon, (float)nX / Printer::axisStepsPerMM[X_AXIS]);
-                Com::printF(PSTR(";nY;"), nY);
-                Com::printF(Com::tSemiColon, (float)nY / Printer::axisStepsPerMM[Y_AXIS]);
-                Com::printF(PSTR(";nZ;"), g_nZScanZPosition);
-                Com::printF(Com::tSemiColon, (float)g_nZScanZPosition / Printer::axisStepsPerMM[Z_AXIS]);
-                Com::printF(PSTR(";Pressure;"), nContactPressure);
-
-                Com::printF(PSTR(";nIndexX;"), (int)nIndexX);
-                Com::printF(PSTR(";nIndexY;"), (int)nIndexY);
-
-                Com::printFLN(PSTR(" "));
-            }
-#endif // DEBUG_WORK_PART_SCAN
-
-            // remember the z-position and the exact y-position of this row/column
-            g_ZCompensationMatrix[nIndexX][nIndexY] = (short)g_nZScanZPosition;
-            g_ZCompensationMatrix[0][nIndexY] = (short)((float)nY / Printer::axisStepsPerMM[Y_AXIS] + 0.5); // convert to mm
-
-            if (nIndexX > g_uZMatrixMax[X_AXIS]) {
-                g_uZMatrixMax[X_AXIS] = nIndexX;
-            }
-
-            if (nIndexY > g_uZMatrixMax[Y_AXIS]) {
-                g_uZMatrixMax[Y_AXIS] = nIndexY;
-            }
-
-            g_nWorkPartScanStatus = 55;
-
-#if DEBUG_WORK_PART_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanWorkPart);
-                Com::printFLN(PSTR("54 -> 55 > "), g_nZScanZPosition);
-            }
-#endif // DEBUG_WORK_PART_SCAN
-            break;
-        }
-        case 55: {
-            // move away from the surface
-            if (moveZPlusDownFast()) {
-                g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
-            }
-
-            if (nYDirection > 0) {
-                nTempPosition = nY + nYDirection;
-
-                if (nTempPosition > g_nScanYMaxPositionSteps) {
-                    // we have reached the end of this column
-                    g_nWorkPartScanStatus = 39;
-
-#if DEBUG_WORK_PART_SCAN == 2
-                    if (Printer::debugInfo()) {
-                        Com::printF(Com::tscanWorkPart);
-                        Com::printFLN(PSTR("55 -> 39"));
-                    }
-#endif // DEBUG_WORK_PART_SCAN
-                    break;
-                }
-            } else {
-                nTempPosition = nY + nYDirection;
-
-                if (nTempPosition < g_nScanYStartSteps) {
-                    // we have reached the end of this column
-                    g_nWorkPartScanStatus = 39;
-
-#if DEBUG_WORK_PART_SCAN == 2
-                    if (Printer::debugInfo()) {
-                        Com::printF(Com::tscanWorkPart);
-                        Com::printFLN(PSTR("55 -> 39"));
-                    }
-#endif // DEBUG_WORK_PART_SCAN
-                    break;
-                }
-            }
-
-            // move to the next y-position
-            Printer::queueRelativeStepsCoordinates(0, nYDirection, 0, 0, Printer::homingFeedrate[Y_AXIS], true, true);
-            nY += nYDirection;
-            nIndexY += nIndexYDirection;
-
-            if (nIndexY > COMPENSATION_MATRIX_MAX_Y) {
-                if (Printer::debugErrors()) {
-                    Com::printF(Com::tscanWorkPart);
-                    Com::printFLN(PSTR("the y-dimension of the z matrix became too big: "), nIndexY);
-                }
-                g_abortZScan = SCAN_ABORT_REASON_MATRIX_DIMENSION;
-                break;
-            }
-
-            g_nWorkPartScanStatus = 49;
-            g_lastScanTime = HAL::timeInMilliseconds();
-
-#if DEBUG_WORK_PART_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanWorkPart);
-                Com::printFLN(PSTR("55 -> 49"));
-            }
-#endif // DEBUG_WORK_PART_SCAN
-            break;
-        }
-        case 60: {
-            // move back to the home position
-            if (g_nWorkPartScanMode) {
-                // also the z-axis shall be homed
-                Printer::homeAxis(true, true, true);
-            } else {
-                // the z-axis shall not be homed - in this case we must ensure that the tool does not crash against the limit stops at the front/left of the bed
-                Printer::queueRelativeMMCoordinates(0, 0, WORK_PART_SCAN_Z_START_MM, 0, Printer::homingFeedrate[Z_AXIS], true, true);
-                Printer::homeAxis(true, true, false);
-            }
-
-            // turn off the engines
-            Printer::disableAllSteppersNow();
-
-            g_nWorkPartScanStatus = 65;
-
-#if DEBUG_WORK_PART_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanWorkPart);
-                Com::printFLN(PSTR("60 -> 65"));
-            }
-#endif // DEBUG_WORK_PART_SCAN
-            break;
-        }
-        case 65: {
-            if (Printer::debugInfo()) {
-                // output the determined compensation
-                Com::printF(Com::tscanWorkPart);
-                Com::printFLN(PSTR("raw work part z matrix: "));
-                outputCompensationMatrix();
-            }
-
-            g_nWorkPartScanStatus = 70;
-
-#if DEBUG_WORK_PART_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanWorkPart);
-                Com::printFLN(PSTR("65 -> 70"));
-            }
-#endif // DEBUG_WORK_PART_SCAN
-            break;
-        }
-        case 70: {
-            g_nWorkPartScanStatus = 75;
-
-#if DEBUG_WORK_PART_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanWorkPart);
-                Com::printFLN(PSTR("70 -> 75"));
-            }
-#endif // DEBUG_WORK_PART_SCAN
-            break;
-        }
-        case 75: {
-            if (Printer::debugInfo()) {
-                // output the pure scan time
-                Com::printF(Com::tscanWorkPart);
-                Com::printF(PSTR("total scan time: "), long((HAL::timeInMilliseconds() - g_scanStartTime) / 1000));
-                Com::printFLN(PSTR(" [s]"));
-            }
-
-            // prepare the work part compensation matrix for fast usage during the actual milling
-            prepareCompensationMatrix();
-
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanWorkPart);
-                Com::printFLN(PSTR("g_uZMatrixMax[Y_AXIS].1 = "), (int)g_uZMatrixMax[Y_AXIS]);
-            }
-
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanWorkPart);
-                Com::printFLN(PSTR("g_uZMatrixMax[Y_AXIS].2 = "), (int)g_uZMatrixMax[Y_AXIS]);
-
-                // output the converted work part compensation matrix
-                Com::printF(Com::tscanWorkPart);
-                Com::printFLN(PSTR("converted work part z matrix: "));
-                outputCompensationMatrix();
-            }
-
-            // save the determined values to the EEPROM
-            saveCompensationMatrix((EEPROM_SECTOR_SIZE * 9) + (unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveWorkPart));
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanWorkPart);
-                Com::printFLN(PSTR("the work part z matrix has been saved > "), g_nActiveWorkPart);
-            }
-
-            g_nWorkPartScanStatus = 80;
-            g_lastScanTime = HAL::timeInMilliseconds();
-
-#if DEBUG_WORK_PART_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanWorkPart);
-                Com::printFLN(PSTR("75 -> 80"));
-            }
-#endif // DEBUG_WORK_PART_SCAN
-            break;
-        }
-        case 80: {
-            if ((HAL::timeInMilliseconds() - g_lastScanTime) < WORK_PART_SCAN_DELAY) {
-                // do not check too early
-                break;
-            }
-
-            // compare the idle pressure at the beginning and at the end
-            if (readAveragePressure(&nTempPressure)) {
-                g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
-            }
-
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanWorkPart);
-                Com::printFLN(PSTR("idle pressure at start: "), g_nFirstIdlePressure);
-                Com::printF(Com::tscanWorkPart);
-                Com::printFLN(PSTR("idle pressure at stop: "), nTempPressure);
-            }
-
-            g_nWorkPartScanStatus = 100;
-
-#if DEBUG_WORK_PART_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanWorkPart);
-                Com::printFLN(PSTR("80 -> 100"));
-            }
-#endif // DEBUG_WORK_PART_SCAN
-            break;
-        }
-        case 100: {
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanWorkPart);
-                Com::printFLN(PSTR("the scan has been completed"));
-            }
-            UI_STATUS_UPD(UI_TEXT_WORK_PART_SCAN_DONE);
-            BEEP_STOP_WORK_PART_SCAN
-
-            g_nWorkPartScanStatus = 0;
-
-#if DEBUG_WORK_PART_SCAN == 2
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanWorkPart);
-                Com::printFLN(PSTR("100 -> 0"));
-            }
-#endif // DEBUG_WORK_PART_SCAN
-            break;
-        }
-        }
-    }
-    (void)nContactPressure;
-    return;
-
-} // scanWorkPart
-
-void doWorkPartZCompensation(void) {
-    long nNeededZCompensation;
-
-    if (Printer::doWorkPartZCompensation) {
-        if (Printer::currentSteps[Z_AXIS]) {
-            nNeededZCompensation = getWorkPartOffset();
-            nNeededZCompensation += g_staticZSteps;
-        } else {
-            // we do not perform a compensation in case the z-position from the G-code is 0 (because this would drive the tool against the work part)
-            nNeededZCompensation = g_staticZSteps;
-        }
-    } else {
-        nNeededZCompensation = 0;
-        //nNeededZCompensation += g_staticZSteps; //-> Dann wäre das Offset immer gültig, auch ohne CMP.
-    }
-
-    InterruptProtectedBlock noInts;
-    Printer::compensatedPositionTargetStepsZ = nNeededZCompensation;
-    noInts.unprotect();
-    return;
-} // doWorkPartZCompensation
-
-long getWorkPartOffset(void) {
-    if (!Printer::doWorkPartZCompensation) {
-        // we determine the offset to the scanned work part only in case the work part z compensation is active
-        return 0;
-    }
-
-    long nOffset = getZMatrixDepth_CurrentXY();
-
-    /*  Com::printF( PSTR( "getWorkPartOffset();" ), nXLeftIndex );
-        Com::printF( Com::tSemiColon, nXRightIndex );
-        Com::printF( Com::tSemiColon, nYFrontIndex );
-        Com::printF( Com::tSemiColon, nYBackIndex );
-        Com::printF( Com::tSemiColon, nOffset );
-        Com::printFLN( Com::tSemiColon, Printer::staticCompensationZ );*/
-
-#if FEATURE_FIND_Z_ORIGIN
-    nOffset -= Printer::staticCompensationZ;
-#endif // FEATURE_FIND_Z_ORIGIN
-
-    return nOffset;
-
-} // getWorkPartOffset
-
-#endif // FEATURE_WORK_PART_Z_COMPENSATION
-
-#if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
 short readIdlePressure(short* pnIdlePressure) {
     short nTempPressure;
     char nTemp;
@@ -4613,10 +3464,10 @@ short moveZPlusDownFast() {
         return -1;
     }
 
-#if DEBUG_HEAT_BED_SCAN || DEBUG_WORK_PART_SCAN
+#if DEBUG_HEAT_BED_SCAN
     if (Printer::debugInfo())
         Com::printFLN(PSTR("moveZPlusDownFast(): "), (int)nTempPressure);
-#endif // DEBUG_HEAT_BED_SCAN || DEBUG_WORK_PART_SCAN
+#endif // DEBUG_HEAT_BED_SCAN
     return 0;
 } // moveZPlusDownFast
 
@@ -4776,30 +3627,24 @@ void moveZ(int nSteps) {
         Commands::checkForPeriodicalActions(Processing);
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#if FEATURE_HEAT_BED_Z_COMPENSATION
     // A retreat can make a pending correction reachable again. Keep Z for the scan until this move ends.
     Printer::scanZMoveActive = true;
 #endif
 
     // perform the steps
     for (int i = 0; i < nMaxLoops; i++) {
-#if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#if FEATURE_HEAT_BED_Z_COMPENSATION
         if (g_abortZScan)
             break; // do not continue here in case the current operation has been cancelled
-#endif             // FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
-#if FEATURE_MILLING_MODE
-        if (Printer::operatingMode == OPERATING_MODE_PRINT) // nur printing-mode. Beim millingmode könnte das falsch sein. Test TODO daher nur printing-mode, da stimmts.
-#endif                                                      //FEATURE_MILLING_MODE
-        {
-            if (nSteps < 0 && Printer::isAxisHomed(Z_AXIS) && Printer::isZMinOverrideReached()) {
-                g_abortZScan = SCAN_ABORT_REASON_REACHED_MAX_COMPENSATION; // prepare abort
-                g_scanRetries = 0;                                         // prevent any retrys this is hopeless in this case.
-                Com::printFLN(PSTR("Z-Endstop protection"));
-                UI_STATUS_UPD("Z-Endstop protection");
-
-                break; // doppelcheck auf crash des sensors
-            }
+        if (nSteps < 0 && Printer::isAxisHomed(Z_AXIS) && Printer::isZMinOverrideReached()) {
+            g_abortZScan = SCAN_ABORT_REASON_REACHED_MAX_COMPENSATION;
+            g_scanRetries = 0;
+            Com::printFLN(PSTR("Z-Endstop protection"));
+            UI_STATUS_UPD("Z-Endstop protection");
+            break;
         }
 
         if (nSteps >= 0) {
@@ -4822,103 +3667,50 @@ void moveZ(int nSteps) {
 
         g_nZScanZPosition += (Printer::getZDirectionIsPos() ? 1 : -1);
     }
-#if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#if FEATURE_HEAT_BED_Z_COMPENSATION
     Printer::scanZMoveActive = false;
 #endif
 } // moveZ
 
 void restoreDefaultScanParameters(void) {
-#if FEATURE_MILLING_MODE
-    if (Printer::operatingMode == OPERATING_MODE_PRINT) {
-#endif // FEATURE_MILLING_MODE
 #if FEATURE_HEAT_BED_Z_COMPENSATION
-        // we must restore the default scan parameters for the heat bed scan
-        g_nScanXStartSteps = long(Printer::axisStepsPerMM[X_AXIS] * HEAT_BED_SCAN_X_START_MM);
-        g_nScanXStepSizeMM = HEAT_BED_SCAN_X_STEP_SIZE_MM;
-        g_nScanXStepSizeSteps = long(Printer::axisStepsPerMM[X_AXIS] * HEAT_BED_SCAN_X_STEP_SIZE_MM);
-        g_nScanXEndSteps = long(Printer::axisStepsPerMM[X_AXIS] * HEAT_BED_SCAN_X_END_MM);
-        g_nScanXMaxPositionSteps = long((Printer::axisLengthMM[X_AXIS] - HEAT_BED_SCAN_X_END_MM) * Printer::axisStepsPerMM[X_AXIS]);
+    // we must restore the default scan parameters for the heat bed scan
+    g_nScanXStartSteps = long(Printer::axisStepsPerMM[X_AXIS] * HEAT_BED_SCAN_X_START_MM);
+    g_nScanXStepSizeMM = HEAT_BED_SCAN_X_STEP_SIZE_MM;
+    g_nScanXStepSizeSteps = long(Printer::axisStepsPerMM[X_AXIS] * HEAT_BED_SCAN_X_STEP_SIZE_MM);
+    g_nScanXEndSteps = long(Printer::axisStepsPerMM[X_AXIS] * HEAT_BED_SCAN_X_END_MM);
+    g_nScanXMaxPositionSteps = long((Printer::axisLengthMM[X_AXIS] - HEAT_BED_SCAN_X_END_MM) * Printer::axisStepsPerMM[X_AXIS]);
 
-        g_nScanYStartSteps = long(Printer::axisStepsPerMM[Y_AXIS] * HEAT_BED_SCAN_Y_START_MM);
-        g_nScanYStepSizeMM = HEAT_BED_SCAN_Y_STEP_SIZE_MM;
-        g_nScanYStepSizeSteps = long(Printer::axisStepsPerMM[Y_AXIS] * HEAT_BED_SCAN_Y_STEP_SIZE_MM);
-        g_nScanYEndSteps = long(Printer::axisStepsPerMM[Y_AXIS] * HEAT_BED_SCAN_Y_END_MM);
-        g_nScanYMaxPositionSteps = long((Printer::axisLengthMM[Y_AXIS] - HEAT_BED_SCAN_Y_END_MM) * Printer::axisStepsPerMM[Y_AXIS]);
+    g_nScanYStartSteps = long(Printer::axisStepsPerMM[Y_AXIS] * HEAT_BED_SCAN_Y_START_MM);
+    g_nScanYStepSizeMM = HEAT_BED_SCAN_Y_STEP_SIZE_MM;
+    g_nScanYStepSizeSteps = long(Printer::axisStepsPerMM[Y_AXIS] * HEAT_BED_SCAN_Y_STEP_SIZE_MM);
+    g_nScanYEndSteps = long(Printer::axisStepsPerMM[Y_AXIS] * HEAT_BED_SCAN_Y_END_MM);
+    g_nScanYMaxPositionSteps = long((Printer::axisLengthMM[Y_AXIS] - HEAT_BED_SCAN_Y_END_MM) * Printer::axisStepsPerMM[Y_AXIS]);
 
-        g_nScanHeatBedUpFastSteps = short(Printer::axisStepsPerMM[Z_AXIS] * HEAT_BED_SCAN_UP_FAST_MM);
-        g_nScanHeatBedUpSlowSteps = short(Printer::axisStepsPerMM[Z_AXIS] * HEAT_BED_SCAN_UP_SLOW_MM);
-        g_nScanHeatBedDownFastSteps = short(Printer::axisStepsPerMM[Z_AXIS] * HEAT_BED_SCAN_DOWN_FAST_MM);
-        g_nScanHeatBedDownSlowSteps = short(Printer::axisStepsPerMM[Z_AXIS] * HEAT_BED_SCAN_DOWN_SLOW_MM);
+    g_nScanHeatBedUpFastSteps = short(Printer::axisStepsPerMM[Z_AXIS] * HEAT_BED_SCAN_UP_FAST_MM);
+    g_nScanHeatBedUpSlowSteps = short(Printer::axisStepsPerMM[Z_AXIS] * HEAT_BED_SCAN_UP_SLOW_MM);
+    g_nScanHeatBedDownFastSteps = short(Printer::axisStepsPerMM[Z_AXIS] * HEAT_BED_SCAN_DOWN_FAST_MM);
+    g_nScanHeatBedDownSlowSteps = short(Printer::axisStepsPerMM[Z_AXIS] * HEAT_BED_SCAN_DOWN_SLOW_MM);
 
-        /* Maximum number of steps to scan after the Z-min switch has been reached. If within these steps the surface has not
-           been reached, the scan is retried HEAT_BED_SCAN_RETRIES times and then (if still not found) aborted.
-           Note that the head bed scan matrix consists of 16 bit signed values, thus more then 32767 steps will lead to an overflow! */
-        g_nScanZMaxCompensationSteps = short(Z_ENDSTOP_DRIVE_OVER * Printer::axisStepsPerMM[Z_AXIS]);
+    /* Maximum number of steps to scan after the Z-min switch has been reached. If within these steps the surface has not
+       been reached, the scan is retried HEAT_BED_SCAN_RETRIES times and then (if still not found) aborted.
+       Note that the head bed scan matrix consists of 16 bit signed values, thus more then 32767 steps will lead to an overflow! */
+    g_nScanZMaxCompensationSteps = short(Z_ENDSTOP_DRIVE_OVER * Printer::axisStepsPerMM[Z_AXIS]);
 
-        g_nScanFastStepDelay = HEAT_BED_SCAN_FAST_STEP_DELAY_MS;
-        g_nScanSlowStepDelay = HEAT_BED_SCAN_SLOW_STEP_DELAY_MS;
-        g_nScanIdleDelay = HEAT_BED_SCAN_IDLE_DELAY_MS;
+    g_nScanFastStepDelay = HEAT_BED_SCAN_FAST_STEP_DELAY_MS;
+    g_nScanSlowStepDelay = HEAT_BED_SCAN_SLOW_STEP_DELAY_MS;
+    g_nScanIdleDelay = HEAT_BED_SCAN_IDLE_DELAY_MS;
 
-        g_nScanContactPressureDelta = HEAT_BED_SCAN_CONTACT_PRESSURE_DELTA;
-        g_nScanRetryPressureDelta = HEAT_BED_SCAN_RETRY_PRESSURE_DELTA;
-        g_nScanIdlePressureDelta = HEAT_BED_SCAN_IDLE_PRESSURE_DELTA;
-        g_nScanIdlePressureMin = HEAT_BED_SCAN_IDLE_PRESSURE_MIN;
-        g_nScanIdlePressureMax = HEAT_BED_SCAN_IDLE_PRESSURE_MAX;
+    g_nScanContactPressureDelta = HEAT_BED_SCAN_CONTACT_PRESSURE_DELTA;
+    g_nScanRetryPressureDelta = HEAT_BED_SCAN_RETRY_PRESSURE_DELTA;
+    g_nScanIdlePressureDelta = HEAT_BED_SCAN_IDLE_PRESSURE_DELTA;
+    g_nScanIdlePressureMin = HEAT_BED_SCAN_IDLE_PRESSURE_MIN;
+    g_nScanIdlePressureMax = HEAT_BED_SCAN_IDLE_PRESSURE_MAX;
 
-        g_nScanPressureReads = HEAT_BED_SCAN_PRESSURE_READS;
-        g_nScanPressureTolerance = HEAT_BED_SCAN_PRESSURE_TOLERANCE;
-        g_nScanPressureReadDelay = HEAT_BED_SCAN_PRESSURE_READ_DELAY_MS;
+    g_nScanPressureReads = HEAT_BED_SCAN_PRESSURE_READS;
+    g_nScanPressureTolerance = HEAT_BED_SCAN_PRESSURE_TOLERANCE;
+    g_nScanPressureReadDelay = HEAT_BED_SCAN_PRESSURE_READ_DELAY_MS;
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION
-#if FEATURE_MILLING_MODE
-    } else {
-#if FEATURE_WORK_PART_Z_COMPENSATION
-        // we must restore the default scan parameters for the work part scan
-        g_nScanXStartSteps = long(Printer::axisStepsPerMM[X_AXIS] * WORK_PART_SCAN_X_START_MM);
-        g_nScanXStepSizeMM = WORK_PART_SCAN_X_STEP_SIZE_MM;
-        g_nScanXStepSizeSteps = long(Printer::axisStepsPerMM[X_AXIS] * WORK_PART_SCAN_X_STEP_SIZE_MM);
-        g_nScanXEndSteps = long(Printer::axisStepsPerMM[X_AXIS] * WORK_PART_SCAN_X_END_MM);
-        g_nScanXMaxPositionSteps = long((Printer::axisLengthMM[X_AXIS] - WORK_PART_SCAN_X_END_MM) * Printer::axisStepsPerMM[X_AXIS]);
-
-        g_nScanYStartSteps = long(Printer::axisStepsPerMM[Y_AXIS] * WORK_PART_SCAN_Y_START_MM);
-        g_nScanYStepSizeMM = WORK_PART_SCAN_Y_STEP_SIZE_MM;
-        g_nScanYStepSizeSteps = long(Printer::axisStepsPerMM[Y_AXIS] * WORK_PART_SCAN_Y_STEP_SIZE_MM);
-        g_nScanYEndSteps = long(Printer::axisStepsPerMM[Y_AXIS] * WORK_PART_SCAN_Y_END_MM);
-        g_nScanYMaxPositionSteps = long((Printer::axisLengthMM[Y_AXIS] - WORK_PART_SCAN_Y_END_MM) * Printer::axisStepsPerMM[Y_AXIS]);
-
-        g_nScanHeatBedUpFastSteps = short(Printer::axisStepsPerMM[Z_AXIS] * WORK_PART_SCAN_UP_FAST_MM);
-        g_nScanHeatBedUpSlowSteps = short(Printer::axisStepsPerMM[Z_AXIS] * WORK_PART_SCAN_UP_SLOW_MM);
-        g_nScanHeatBedDownFastSteps = short(Printer::axisStepsPerMM[Z_AXIS] * WORK_PART_SCAN_DOWN_FAST_MM);
-        g_nScanHeatBedDownSlowSteps = short(Printer::axisStepsPerMM[Z_AXIS] * WORK_PART_SCAN_DOWN_SLOW_MM);
-
-        g_nScanZMaxCompensationSteps = 32767; //Max scan depth means max matrix value and that is short. So the old 20mm would have only worked if we used < 32microsteps.
-
-        g_nScanFastStepDelay = WORK_PART_SCAN_FAST_STEP_DELAY_MS;
-        g_nScanSlowStepDelay = WORK_PART_SCAN_SLOW_STEP_DELAY_MS;
-        g_nScanIdleDelay = WORK_PART_SCAN_IDLE_DELAY_MS;
-
-#if FEATURE_CONFIGURABLE_MILLER_TYPE
-        if (Printer::MillerType == MILLER_TYPE_ONE_TRACK) {
-            g_nScanContactPressureDelta = MT1_WORK_PART_SCAN_CONTACT_PRESSURE_DELTA;
-            g_nScanRetryPressureDelta = MT1_WORK_PART_SCAN_RETRY_PRESSURE_DELTA;
-        } else {
-            g_nScanContactPressureDelta = MT2_WORK_PART_SCAN_CONTACT_PRESSURE_DELTA;
-            g_nScanRetryPressureDelta = MT2_WORK_PART_SCAN_RETRY_PRESSURE_DELTA;
-        }
-#else
-        g_nScanContactPressureDelta = WORK_PART_SCAN_CONTACT_PRESSURE_DELTA;
-        g_nScanRetryPressureDelta = WORK_PART_SCAN_RETRY_PRESSURE_DELTA;
-#endif // FEATURE_CONFIGURABLE_MILLER_TYPE
-
-        g_nScanIdlePressureDelta = WORK_PART_SCAN_IDLE_PRESSURE_DELTA;
-        g_nScanIdlePressureMin = WORK_PART_SCAN_IDLE_PRESSURE_MIN;
-        g_nScanIdlePressureMax = WORK_PART_SCAN_IDLE_PRESSURE_MAX;
-
-        g_nScanPressureReads = WORK_PART_SCAN_PRESSURE_READS;
-        g_nScanPressureTolerance = WORK_PART_SCAN_PRESSURE_TOLERANCE;
-        g_nScanPressureReadDelay = WORK_PART_SCAN_PRESSURE_READ_DELAY_MS;
-#endif // FEATURE_WORK_PART_Z_COMPENSATION
-    }
-#endif // FEATURE_MILLING_MODE
 } // restoreDefaultScanParameters
 
 void outputScanParameters(void) {
@@ -5025,28 +3817,11 @@ void outputCompensationMatrix(char format) {
     Com::printFLN(PSTR("g_uZMatrixMax[Y_AXIS] = "), g_uZMatrixMax[Y_AXIS]);
 
 #if FEATURE_HEAT_BED_Z_COMPENSATION
-#if FEATURE_MILLING_MODE
-    if (Printer::operatingMode == OPERATING_MODE_PRINT)
-#endif // FEATURE_MILLING_MODE
     {
         Com::printFLN(PSTR("g_nActiveHeatBed = "), g_nActiveHeatBed);
     }
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
-#if FEATURE_WORK_PART_Z_COMPENSATION && FEATURE_MILLING_MODE
-    if (Printer::operatingMode == OPERATING_MODE_MILL) {
-        Com::printFLN(PSTR("g_nActiveWorkPart = "), g_nActiveWorkPart);
-        Com::printF(PSTR("scan start: x = "), (float)g_nScanXStartSteps / Printer::axisStepsPerMM[X_AXIS]);
-        Com::printF(PSTR(", y = "), (float)g_nScanYStartSteps / Printer::axisStepsPerMM[Y_AXIS]);
-        Com::printFLN(PSTR(" [mm]"));
-        Com::printF(PSTR("scan steps: x = "), (float)g_nScanXStepSizeMM);
-        Com::printF(PSTR(", y = "), (float)g_nScanYStepSizeMM);
-        Com::printFLN(PSTR(" [mm]"));
-        Com::printF(PSTR("scan end: x = "), (float)g_nScanXMaxPositionSteps / Printer::axisStepsPerMM[X_AXIS]);
-        Com::printF(PSTR(", y = "), (float)g_nScanYMaxPositionSteps / Printer::axisStepsPerMM[Y_AXIS]);
-        Com::printFLN(PSTR(" [mm]"));
-    }
-#endif // FEATURE_WORK_PART_Z_COMPENSATION && FEATURE_MILLING_MODE
 } // outputCompensationMatrix
 
 char prepareCompensationMatrix(void) {
@@ -5229,14 +4004,6 @@ void saveCompensationMatrix(unsigned int uAddress) {
 #endif // FEATURE_ADJUSTABLE_MICROSTEPS
         );
 
-        // write some information about the scanning area - note that this information is read only in case of work part z-compensation matrixes later
-        writeWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_X_START_MM, (short)(g_nScanXStartSteps / Printer::axisStepsPerMM[X_AXIS]));
-        writeWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_Y_START_MM, (short)(g_nScanYStartSteps / Printer::axisStepsPerMM[Y_AXIS]));
-        writeWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_X_STEP_MM, (short)g_nScanXStepSizeMM);
-        writeWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_Y_STEP_MM, (short)g_nScanYStepSizeMM);
-        writeWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_X_END_MM, (short)(g_nScanXMaxPositionSteps / Printer::axisStepsPerMM[X_AXIS]));
-        writeWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_Y_END_MM, (short)(g_nScanYMaxPositionSteps / Printer::axisStepsPerMM[Y_AXIS]));
-
         uOffset = uAddress + EEPROM_OFFSET_MATRIX_START;
         for (x = 0; x <= g_uZMatrixMax[X_AXIS]; x++) {
             for (y = 0; y <= g_uZMatrixMax[Y_AXIS]; y++) {
@@ -5268,14 +4035,6 @@ void saveCompensationMatrix(unsigned int uAddress) {
 
         // write the current micro steps
         writeWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_MICRO_STEPS, 0);
-
-        // write some information about the scanning area - note that this information is read only in case of work part z-compensation matrixes later
-        writeWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_X_START_MM, 0);
-        writeWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_Y_START_MM, 0);
-        writeWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_X_STEP_MM, 0);
-        writeWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_Y_STEP_MM, 0);
-        writeWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_X_END_MM, 0);
-        writeWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_Y_END_MM, 0);
 
         uOffset = uAddress + EEPROM_OFFSET_MATRIX_START;
         for (x = 0; x < COMPENSATION_MATRIX_MAX_X; x++) {
@@ -5325,37 +4084,6 @@ bool loadActiveHeatBedFromExtEEPROM() {
 }
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
-#if FEATURE_WORK_PART_Z_COMPENSATION
-bool saveActiveWorkPartToExtEEPROM(char newActiveWorkPart) {
-    if (newActiveWorkPart < 1 || newActiveWorkPart > EEPROM_MAX_HEAT_BED_SECTORS) {
-        return false;
-    }
-
-    char oldActiveWorkPart = (char)readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, EEPROM_OFFSET_ACTIVE_WORK_PART_Z_MATRIX);
-    if (oldActiveWorkPart != newActiveWorkPart) {
-        writeWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, EEPROM_OFFSET_ACTIVE_WORK_PART_Z_MATRIX, newActiveWorkPart);
-    }
-
-    return true;
-}
-
-bool loadActiveWorkPartFromExtEEPROM() {
-    char uTemp = (char)readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, EEPROM_OFFSET_ACTIVE_WORK_PART_Z_MATRIX);
-
-    if (uTemp < 1 || uTemp > EEPROM_MAX_HEAT_BED_SECTORS) {
-        Com::printFLN(PSTR("Invalid active work part within ext. EEPROM detected: "), (int)uTemp);
-        if (g_nActiveWorkPart < 1 || g_nActiveWorkPart > EEPROM_MAX_HEAT_BED_SECTORS) {
-            g_nActiveWorkPart = 1;
-        }
-        saveActiveWorkPartToExtEEPROM(g_nActiveWorkPart);
-
-        return false;
-    }
-
-    g_nActiveWorkPart = uTemp;
-    return true;
-}
-#endif //FEATURE_WORK_PART_Z_COMPENSATION
 
 char loadCompensationMatrix(unsigned int uAddress) {
     if (uAddress == 0) {
@@ -5388,13 +4116,6 @@ char loadCompensationMatrix(unsigned int uAddress) {
         return -1;
     }
 
-#if FEATURE_WORK_PART_Z_COMPENSATION && FEATURE_MILLING_MODE
-    if (Printer::operatingMode == OPERATING_MODE_MILL) {
-        if (Printer::debugErrors()) {
-            Com::printFLN(PSTR("loadMatrix(): active work part: "), (int)g_nActiveWorkPart);
-        }
-    }
-#endif // FEATURE_WORK_PART_Z_COMPENSATION && FEATURE_MILLING_MODE
 
     // check the stored sector format
     uTemp = readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_SECTOR_FORMAT);
@@ -5469,18 +4190,6 @@ char loadCompensationMatrix(unsigned int uAddress) {
         Com::printFLN(PSTR(")"));
     }
 
-    if (uAddress > (EEPROM_SECTOR_SIZE * 9)) {
-        // in case we are reading a work part z-compensation matrix, we have to read out some information about the scanning area
-        g_nScanXStartSteps = (long)readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_X_START_MM) * Printer::axisStepsPerMM[X_AXIS];
-        g_nScanYStartSteps = (long)readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_Y_START_MM) * Printer::axisStepsPerMM[Y_AXIS];
-        g_nScanXStepSizeMM = (long)readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_X_STEP_MM);
-        g_nScanYStepSizeMM = (long)readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_Y_STEP_MM);
-        g_nScanXMaxPositionSteps = (long)readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_X_END_MM) * Printer::axisStepsPerMM[X_AXIS];
-        g_nScanYMaxPositionSteps = (long)readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_Y_END_MM) * Printer::axisStepsPerMM[Y_AXIS];
-        g_nScanXStepSizeSteps = g_nScanXStepSizeMM * Printer::axisStepsPerMM[X_AXIS];
-        g_nScanYStepSizeSteps = g_nScanYStepSizeMM * Printer::axisStepsPerMM[Y_AXIS];
-    }
-
     // read out the actual compensation values
     uOffset = uAddress + EEPROM_OFFSET_MATRIX_START;
     for (x = 0; x <= g_uZMatrixMax[X_AXIS]; x++) {
@@ -5526,7 +4235,7 @@ void clearCompensationMatrix(unsigned int uAddress) {
     }
 } // clearCompensationMatrix
 
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
 void clearExternalEEPROM(void) {
     unsigned short i;
@@ -5606,13 +4315,6 @@ unsigned short readWord24C256(int addressI2C, unsigned int addressEEPROM) {
 } // readWord24C256
 
 void recalculateZCompensation(void) {
-#if FEATURE_MILLING_MODE
-    if (Printer::operatingMode == OPERATING_MODE_MILL) {
-#if FEATURE_WORK_PART_Z_COMPENSATION
-        doWorkPartZCompensation();
-#endif // FEATURE_WORK_PART_Z_COMPENSATION
-    } else
-#endif // FEATURE_MILLING_MODE
     {
 #if FEATURE_HEAT_BED_Z_COMPENSATION
         recalculateHeatBedZCompensation();
@@ -5879,9 +4581,6 @@ void handlePauseTime(millis_t uTime) {
             }
             if ((uTime - g_uPauseTime) > (EXTRUDER_CURRENT_PAUSE_DELAY < 30000 ? 30000 : EXTRUDER_CURRENT_PAUSE_DELAY)) //das sind alle 60s
             {
-#if FEATURE_MILLING_MODE
-                if (Printer::operatingMode == OPERATING_MODE_PRINT)
-#endif // FEATURE_MILLING_MODE
 #if NUM_EXTRUDER > 0
                 {
                     Com::printFLN(PSTR("Pause: Saving Energy"));
@@ -5914,36 +4613,19 @@ void handlePauseTime(millis_t uTime) {
 }
 
 void handleScanWorkTasks() {
-#if FEATURE_MILLING_MODE
-    if (Printer::operatingMode == OPERATING_MODE_PRINT) {
-#endif // FEATURE_MILLING_MODE
 #if FEATURE_HEAT_BED_Z_COMPENSATION
-        if (g_nHeatBedScanStatus) {
-            scanHeatBed();
-        }
-        if (g_nZOSScanStatus) {
-            searchZOScan();
-        }
+    if (g_nHeatBedScanStatus) {
+        scanHeatBed();
+    }
+    if (g_nZOSScanStatus) {
+        searchZOScan();
+    }
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION
 #if FEATURE_ALIGN_EXTRUDERS
-        if (g_nAlignExtrudersStatus) {
-            alignExtruders();
-        }
-#endif // FEATURE_ALIGN_EXTRUDERS
-#if FEATURE_MILLING_MODE
-    } else {
-#if FEATURE_WORK_PART_Z_COMPENSATION
-        if (g_nWorkPartScanStatus) {
-            scanWorkPart();
-        }
-#endif // FEATURE_WORK_PART_Z_COMPENSATION
-#if FEATURE_FIND_Z_ORIGIN
-        if (g_nFindZOriginStatus) {
-            findZOrigin();
-        }
-#endif // FEATURE_FIND_Z_ORIGIN
+    if (g_nAlignExtrudersStatus) {
+        alignExtruders();
     }
-#endif // FEATURE_MILLING_MODE
+#endif // FEATURE_ALIGN_EXTRUDERS
 }
 
 #if FEATURE_SERVICE_INTERVAL
@@ -5957,33 +4639,17 @@ void handleServiceInterval(millis_t uTime) {
         if ((uTime - g_nlastServiceTime) > 5000) {
             g_uStartOfIdle = uTime; //enter FEATURE_SERVICE_INTERVAL
 
-#if FEATURE_MILLING_MODE
-            if (Printer::operatingMode == OPERATING_MODE_PRINT) {
-#endif // FEATURE_MILLING_MODE
-                if (READ(5) == 0 && READ(11) == 0 && READ(42) == 0) {
-                    if (g_nServiceRequest == 1) {
-                        HAL::eprSetInt32(EPR_PRINTING_TIME_SERVICE, 0);
-                        EEPROM::updateChecksum();
-                        HAL::eprSetFloat(EPR_PRINTING_DISTANCE_SERVICE, 0);
-                        EEPROM::updateChecksum();
-                        Com::printF(PSTR("Service Reset"));
-                    }
-                } else {
-                    g_nServiceRequest = 0;
+            if (READ(5) == 0 && READ(11) == 0 && READ(42) == 0) {
+                if (g_nServiceRequest == 1) {
+                    HAL::eprSetInt32(EPR_PRINTING_TIME_SERVICE, 0);
+                    EEPROM::updateChecksum();
+                    HAL::eprSetFloat(EPR_PRINTING_DISTANCE_SERVICE, 0);
+                    EEPROM::updateChecksum();
+                    Com::printF(PSTR("Service Reset"));
                 }
-#if FEATURE_MILLING_MODE
             } else {
-                if (READ(5) == 0 && READ(11) == 0 && READ(42) == 0) {
-                    if (g_nServiceRequest == 1) {
-                        HAL::eprSetInt32(EPR_MILLING_TIME_SERVICE, 0);
-                        EEPROM::updateChecksum();
-                        Com::printF(PSTR(" Service Reset = OK "));
-                    }
-                } else {
-                    g_nServiceRequest = 0;
-                }
+                g_nServiceRequest = 0;
             }
-#endif // FEATURE_MILLING_MODE
             g_nEnteredService = 1;
         }
     }
@@ -6021,52 +4687,27 @@ void handleStopPrint(millis_t uTime) {
                 // there is no printing in progress any more, do all clean-up now
                 g_uStopTime = 0;
 
-#if FEATURE_MILLING_MODE
-                if (Printer::operatingMode == OPERATING_MODE_PRINT) {
-#endif // FEATURE_MILLING_MODE
 
-                    // disable all heaters
-                    Extruder::setHeatedBedTemperature(0, false);
-                    Extruder::setTemperatureForAllExtruders(0, false);
-#if FEATURE_MILLING_MODE
-                } else if (Printer::operatingMode == OPERATING_MODE_MILL) {
-                    EEPROM::updatePrinterUsage();
-                }
-#endif // FEATURE_MILLING_MODE
+                // disable all heaters
+                Extruder::setHeatedBedTemperature(0, false);
+                Extruder::setTemperatureForAllExtruders(0, false);
 
                 //unaufgeräumtes beenden: Es wird sowieso der Stepper deaktiviert.
                 g_nZOSScanStatus = 0;
                 g_nHeatBedScanStatus = 0;
                 //g_nAlignExtrudersStatus = 0;
 
-#if FEATURE_FIND_Z_ORIGIN
-                g_nFindZOriginStatus = 0;
-#endif // FEATURE_FIND_Z_ORIGIN
-#if FEATURE_MILLING_MODE && FEATURE_WORK_PART_Z_COMPENSATION
-                g_nWorkPartScanStatus = 0;
-#endif // FEATURE_MILLING_MODE && FEATURE_WORK_PART_Z_COMPENSATION
 
                 Com::printFLN(PSTR("Stop complete"));
                 Printer::setPrinting(false);
 
                 BEEP_STOP_PRINTING
 
-#if FEATURE_MILLING_MODE
-                if (Printer::operatingMode == OPERATING_MODE_PRINT) {
-#endif // FEATURE_MILLING_MODE
-                    g_uBlockCommands = uTime;
-#if FEATURE_MILLING_MODE
-                }
-                else {
-                    // In milling mode we dont execute automatic outputObject. @See https://github.com/RF1000community/Repetier-Firmware/issues/206
-                    g_uBlockCommands = 0;
-                }
-#endif // FEATURE_MILLING_MODE
+                g_uBlockCommands = uTime;
             }
         }
     }
 
-    // In milling mode g_uBlockCommands should never be > 1, see ~8 lines prior to this line.
     if (g_uBlockCommands > 1) //=1 scheint zu blocken, dann muss g_uStopTime aktiv sein und hier drüber erst eine Uhrzeit reinsetzen.
     {
         /*
@@ -6167,11 +4808,6 @@ void outputObject(bool showerrors) {
     Commands::setFanSpeed((uint8_t)0);
 #endif // FAN_PIN>-1 && FEATURE_FAN_CONTROL
 
-#if FEATURE_MILLING_MODE
-    if (Printer::operatingMode == OPERATING_MODE_MILL) {
-        GCode::executeFString(Com::tOutputObjectMill);
-    } else
-#endif // FEATURE_MILLING_MODE
     {
         GCode::executeFString(Com::tOutputObjectPrint);
     }
@@ -6249,11 +4885,6 @@ static void handlePauseStatus() {
         if (returnToPrintPosition()) {
             Com::printFLN(PSTR("RequestContinue:"));
             killPausePrint();
-#if FEATURE_MILLING_MODE
-            if (Printer::operatingMode == OPERATING_MODE_MILL) {
-                UI_STATUS_UPD(UI_TEXT_MILL_POS);
-            } else
-#endif
             {
                 UI_STATUS_UPD(UI_TEXT_PRINT_POS);
             }
@@ -6397,9 +5028,6 @@ void pausePrint(void) {
         return;
     }
 
-#if FEATURE_MILLING_MODE
-    if (Printer::operatingMode == OPERATING_MODE_PRINT)
-#endif // FEATURE_MILLING_MODE
     {
         // 3rd Step: go to standby fast
         if (g_pauseMode == PAUSE_MODE_PAUSED_AND_MOVED && g_pauseStatus == PAUSE_STATUS_PAUSED) {
@@ -6456,22 +5084,16 @@ void continuePrint(void) {
     BEEP_CONTINUE
     uid.exitmenu();
 
-#if FEATURE_MILLING_MODE
-    if (Printer::operatingMode == OPERATING_MODE_PRINT) {
-#endif // FEATURE_MILLING_MODE
-        if (continuePrintLoadTemperatures()) {
-            if (g_pauseStatus == PAUSE_STATUS_HEATING) {
-                UI_STATUS_UPD(UI_TEXT_CONTINUING_READY);
-                BEEP_CONTINUE
-                g_uStartOfIdle = HAL::timeInMilliseconds() + 30000;
-                g_uPauseTime = HAL::timeInMilliseconds() + 240000;
-                g_pauseStatus = PAUSE_STATUS_PAUSED;
-            }
-            return;
+    if (continuePrintLoadTemperatures()) {
+        if (g_pauseStatus == PAUSE_STATUS_HEATING) {
+            UI_STATUS_UPD(UI_TEXT_CONTINUING_READY);
+            BEEP_CONTINUE
+            g_uStartOfIdle = HAL::timeInMilliseconds() + 30000;
+            g_uPauseTime = HAL::timeInMilliseconds() + 240000;
+            g_pauseStatus = PAUSE_STATUS_PAUSED;
         }
-#if FEATURE_MILLING_MODE
+        return;
     }
-#endif // FEATURE_MILLING_MODE
 
     if (g_pauseStatus == PAUSE_STATUS_HEATING) {
         g_pauseStatus = PAUSE_STATUS_GOTO_CONTINUE;
@@ -6483,12 +5105,6 @@ void setExtruderCurrent(uint8_t nr, uint8_t current) {
     if (nr > NUM_EXTRUDER - 1)
         nr = NUM_EXTRUDER - 1; //0 ist T0, 1 ist T1
 
-#if FEATURE_MILLING_MODE
-    if (Printer::operatingMode != OPERATING_MODE_PRINT) {
-        // we have no extruder when we are not in print mode
-        return;
-    }
-#endif // FEATURE_MILLING_MODE
 
     // set the current for the extruder motor
 
@@ -6508,47 +5124,43 @@ void processSpecialGCode(GCode* pCommand) {
 #if FEATURE_HEAT_BED_Z_COMPENSATION
         case 3000: // M3000 - turn the z-compensation off
         {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_PRINT)) {
-                if (Printer::debugInfo()) {
-                    Com::printFLN(PSTR("M3000: disabling z compensation"));
-                }
-                queueTask(TASK_DISABLE_Z_COMPENSATION);
+            if (Printer::debugInfo()) {
+                Com::printFLN(PSTR("M3000: disabling z compensation"));
             }
+            queueTask(TASK_DISABLE_Z_COMPENSATION);
             break;
         }
         case 3001: // M3001 - turn the z-compensation on
         {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_PRINT)) {
-                if (Printer::doHeatBedZCompensation) {
-                    Com::printFLN(PSTR("M3001: z compensation is enabled already"));
-                    break;
-                }
-
-                if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
-                    // we try to load the z compensation matrix before its first usage because this can take some time
-                    prepareZCompensation();
-                }
-
-                if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
-                    Com::printF(PSTR("M3001: z compensation can not be enabled. Heat bed compensation matrix not valid ( "), g_ZCompensationMatrix[0][0]);
-                    Com::printF(PSTR(" / "), EEPROM_FORMAT);
-                    Com::printFLN(PSTR(" )"));
-                    break;
-                }
-
-                if (!Printer::areAxisHomed()) {
-                    Com::printFLN(PSTR("M3001: z compensation can not be enabled. Home position is unknown"));
-                    showError((void*)ui_text_z_compensation, (void*)ui_text_home_unknown);
-                    break;
-                }
-
-                queueTask(TASK_ENABLE_Z_COMPENSATION);
-
-                //wenn der nutzer im menü "autostart" gewählt hat, dann senseoffset sofort mit M3001 mitstarten.
-                //Die Einstellwerte kommen dann aus dem EEPROM
-                if (Printer::g_senseoffset_autostart)
-                    queueTask(TASK_ENABLE_SENSE_OFFSET);
+            if (Printer::doHeatBedZCompensation) {
+                Com::printFLN(PSTR("M3001: z compensation is enabled already"));
+                break;
             }
+
+            if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
+                // we try to load the z compensation matrix before its first usage because this can take some time
+                prepareZCompensation();
+            }
+
+            if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
+                Com::printF(PSTR("M3001: z compensation can not be enabled. Heat bed compensation matrix not valid ( "), g_ZCompensationMatrix[0][0]);
+                Com::printF(PSTR(" / "), EEPROM_FORMAT);
+                Com::printFLN(PSTR(" )"));
+                break;
+            }
+
+            if (!Printer::areAxisHomed()) {
+                Com::printFLN(PSTR("M3001: z compensation can not be enabled. Home position is unknown"));
+                showError((void*)ui_text_z_compensation, (void*)ui_text_home_unknown);
+                break;
+            }
+
+            queueTask(TASK_ENABLE_Z_COMPENSATION);
+
+            //wenn der nutzer im menü "autostart" gewählt hat, dann senseoffset sofort mit M3001 mitstarten.
+            //Die Einstellwerte kommen dann aus dem EEPROM
+            if (Printer::g_senseoffset_autostart)
+                queueTask(TASK_ENABLE_SENSE_OFFSET);
             break;
         }
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION
@@ -6574,369 +5186,345 @@ void processSpecialGCode(GCode* pCommand) {
 #if FEATURE_HEAT_BED_Z_COMPENSATION
         case 3006: // M3006 [S] [Z] - configure the static z-offset ( S - units are [um], Z - units are [mm] )
         {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_PRINT)) {
-                if (pCommand->hasZ()) {
-                    // test and take over the specified value
-                    if (pCommand->Z < -HEAT_BED_Z_COMPENSATION_MAX_MM)
-                        pCommand->Z = -HEAT_BED_Z_COMPENSATION_MAX_MM;
-                    if (pCommand->Z > HEAT_BED_Z_COMPENSATION_MAX_MM)
-                        pCommand->Z = HEAT_BED_Z_COMPENSATION_MAX_MM;
+            if (pCommand->hasZ()) {
+                // test and take over the specified value
+                if (pCommand->Z < -HEAT_BED_Z_COMPENSATION_MAX_MM)
+                    pCommand->Z = -HEAT_BED_Z_COMPENSATION_MAX_MM;
+                if (pCommand->Z > HEAT_BED_Z_COMPENSATION_MAX_MM)
+                    pCommand->Z = HEAT_BED_Z_COMPENSATION_MAX_MM;
 
-                    Printer::ZOffset = long(pCommand->Z * 1000);
+                Printer::ZOffset = long(pCommand->Z * 1000);
 #if FEATURE_SENSIBLE_PRESSURE
-                    // Preserve the live SenseOffset when changing the EEPROM-backed manual offset.
-                    g_staticZSteps = long(((Printer::ZOffset + g_nSensiblePressureOffset) * Printer::axisStepsPerMM[Z_AXIS]) / 1000);
+                // Preserve the live SenseOffset when changing the EEPROM-backed manual offset.
+                g_staticZSteps = long(((Printer::ZOffset + g_nSensiblePressureOffset) * Printer::axisStepsPerMM[Z_AXIS]) / 1000);
 #else
-                    g_staticZSteps = long(pCommand->Z * Printer::axisStepsPerMM[Z_AXIS]);
+                g_staticZSteps = long(pCommand->Z * Printer::axisStepsPerMM[Z_AXIS]);
 #endif // FEATURE_SENSIBLE_PRESSURE
-                    if (Printer::debugInfo()) {
-                        Com::printF(PSTR("M3006: new static z-offset: "), pCommand->Z);
-                        Com::printF(PSTR(" [mm]"));
-                        Com::printF(PSTR(" / "), g_staticZSteps);
-                        Com::printFLN(PSTR(" [steps]"));
-                    }
-
-                    if (HAL::eprGetInt32(EPR_RF_Z_OFFSET) != Printer::ZOffset) {
-                        HAL::eprSetInt32(EPR_RF_Z_OFFSET, Printer::ZOffset);
-                        EEPROM::updateChecksum();
-                    }
-                } else if (pCommand->hasS()) {
-                    // test and take over the specified value
-                    nTemp = pCommand->S;
-
-                    if (nTemp < -(HEAT_BED_Z_COMPENSATION_MAX_MM * 1000))
-                        nTemp = -(HEAT_BED_Z_COMPENSATION_MAX_MM * 1000);
-                    if (nTemp > (HEAT_BED_Z_COMPENSATION_MAX_MM * 1000))
-                        nTemp = (HEAT_BED_Z_COMPENSATION_MAX_MM * 1000);
-
-                    Printer::ZOffset = nTemp;
-#if FEATURE_SENSIBLE_PRESSURE
-                    // Match the menu and SenseOffset controller's combined correction.
-                    g_staticZSteps = long(((Printer::ZOffset + g_nSensiblePressureOffset) * Printer::axisStepsPerMM[Z_AXIS]) / 1000);
-#else
-                    g_staticZSteps = (nTemp * Printer::axisStepsPerMM[Z_AXIS]) / 1000;
-#endif // FEATURE_SENSIBLE_PRESSURE
-                    if (Printer::debugInfo()) {
-                        Com::printF(PSTR("M3006: new static z-offset: "), nTemp);
-                        Com::printF(PSTR(" [um]"));
-                        Com::printF(PSTR(" / "), g_staticZSteps);
-                        Com::printFLN(PSTR(" [steps]"));
-                    }
-
-                    if (HAL::eprGetInt32(EPR_RF_Z_OFFSET) != Printer::ZOffset) {
-                        HAL::eprSetInt32(EPR_RF_Z_OFFSET, Printer::ZOffset);
-                        EEPROM::updateChecksum();
-                    }
-                } else {
-                    showInvalidSyntax(pCommand->M);
+                if (Printer::debugInfo()) {
+                    Com::printF(PSTR("M3006: new static z-offset: "), pCommand->Z);
+                    Com::printF(PSTR(" [mm]"));
+                    Com::printF(PSTR(" / "), g_staticZSteps);
+                    Com::printFLN(PSTR(" [steps]"));
                 }
+
+                if (HAL::eprGetInt32(EPR_RF_Z_OFFSET) != Printer::ZOffset) {
+                    HAL::eprSetInt32(EPR_RF_Z_OFFSET, Printer::ZOffset);
+                    EEPROM::updateChecksum();
+                }
+            } else if (pCommand->hasS()) {
+                // test and take over the specified value
+                nTemp = pCommand->S;
+
+                if (nTemp < -(HEAT_BED_Z_COMPENSATION_MAX_MM * 1000))
+                    nTemp = -(HEAT_BED_Z_COMPENSATION_MAX_MM * 1000);
+                if (nTemp > (HEAT_BED_Z_COMPENSATION_MAX_MM * 1000))
+                    nTemp = (HEAT_BED_Z_COMPENSATION_MAX_MM * 1000);
+
+                Printer::ZOffset = nTemp;
+#if FEATURE_SENSIBLE_PRESSURE
+                // Match the menu and SenseOffset controller's combined correction.
+                g_staticZSteps = long(((Printer::ZOffset + g_nSensiblePressureOffset) * Printer::axisStepsPerMM[Z_AXIS]) / 1000);
+#else
+                g_staticZSteps = (nTemp * Printer::axisStepsPerMM[Z_AXIS]) / 1000;
+#endif // FEATURE_SENSIBLE_PRESSURE
+                if (Printer::debugInfo()) {
+                    Com::printF(PSTR("M3006: new static z-offset: "), nTemp);
+                    Com::printF(PSTR(" [um]"));
+                    Com::printF(PSTR(" / "), g_staticZSteps);
+                    Com::printFLN(PSTR(" [steps]"));
+                }
+
+                if (HAL::eprGetInt32(EPR_RF_Z_OFFSET) != Printer::ZOffset) {
+                    HAL::eprSetInt32(EPR_RF_Z_OFFSET, Printer::ZOffset);
+                    EEPROM::updateChecksum();
+                }
+            } else {
+                showInvalidSyntax(pCommand->M);
             }
             break;
         }
         case 3009: // M3009 [S] - get/choose the active heat bed z-compensation matrix
         {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_PRINT)) {
-                if (Printer::doHeatBedZCompensation) {
-                    // do not allow to change the current heat bed z-compensation matrix while the z-compensation is active
-                    if (Printer::debugErrors()) {
-                        Com::printFLN(PSTR("M3009: heat bed z matrix can not be changed while z-compensation is active"));
-                    }
-
-                    showError((void*)ui_text_z_compensation, (void*)ui_text_operation_denied);
-                    break;
+            if (Printer::doHeatBedZCompensation) {
+                // do not allow to change the current heat bed z-compensation matrix while the z-compensation is active
+                if (Printer::debugErrors()) {
+                    Com::printFLN(PSTR("M3009: heat bed z matrix can not be changed while z-compensation is active"));
                 }
 
-                if (pCommand->hasS()) {
-                    nTemp = pCommand->S;
-
-                    if (nTemp < 1 || nTemp > EEPROM_MAX_HEAT_BED_SECTORS) {
-                        if (Printer::debugErrors()) {
-                            Com::printF(PSTR("M3009: invalid heat bed z matrix ("), nTemp);
-                            Com::printFLN(PSTR(")"));
-                        }
-                        break;
-                    }
-
-                    if (g_nActiveHeatBed != nTemp) {
-                        // we have to switch to another heat bed z-compensation matrix
-                        switchActiveHeatBed((char)nTemp);
-                    }
-                }
-
-                if (Printer::debugInfo()) {
-                    Com::printFLN(PSTR("M3009: currently active heat bed z matrix: "), g_nActiveHeatBed);
-                }
+                showError((void*)ui_text_z_compensation, (void*)ui_text_operation_denied);
+                break;
             }
-            break;
-        }
-        case 3010: // M3010 [S] - start/abort the heat bed scan
-        {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_PRINT)) {
-                if (pCommand->hasS()) {
-                    if (pCommand->S == HEAT_BED_SCAN_MODE_PLA || pCommand->S == HEAT_BED_SCAN_MODE_ABS) {
-                        g_nHeatBedScanMode = (char)pCommand->S;
-                    } else {
-                        g_nHeatBedScanMode = 0;
-                    }
-                } else {
-                    g_nHeatBedScanMode = 0;
-                }
-                startHeatBedScan();
-            }
-            break;
-        }
-        case 3011: // M3011 [S] - clear the specified z-compensation matrix from the EEPROM
-        {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_PRINT)) {
-#if FEATURE_HEAT_BED_Z_COMPENSATION
-                if (Printer::doHeatBedZCompensation) {
-                    if (Printer::debugErrors()) {
-                        Com::printFLN(PSTR("M3011: the heat bed z matrix can not be cleared while the z-compensation is active"));
-                    }
 
-                    showError((void*)ui_text_z_compensation, (void*)ui_text_operation_denied);
-                    break;
-                }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
-                if (pCommand->hasS()) {
-                    nTemp = pCommand->S;
-                } else {
-                    // we clear the current z-compensation matrix in case no other z-compensation matrix is specified
-                    nTemp = g_nActiveHeatBed;
-                }
+            if (pCommand->hasS()) {
+                nTemp = pCommand->S;
 
                 if (nTemp < 1 || nTemp > EEPROM_MAX_HEAT_BED_SECTORS) {
                     if (Printer::debugErrors()) {
-                        Com::printF(PSTR("M3011: invalid heat bed z matrix ("), nTemp);
-                        Com::printFLN(PSTR(")"));
-                    }
-                    break;
-                }
-
-                if (saveActiveHeatBedToExtEEPROM((char)nTemp)) {
-                    // switch to the specified z-compensation matrix
-                    g_nActiveHeatBed = (char)nTemp;
-                    clearCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed));
-                    Com::printFLN(PSTR("M3011: cleared heat bed z matrix: "), nTemp);
-                }
-            }
-            break;
-        }
-        case 3012: // M3012 - restore the default scan parameters
-        {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_PRINT)) {
-                restoreDefaultScanParameters();
-            }
-            break;
-        }
-        case 3013: // M3013 [S] [P] - output the current heat bed z-compensation matrix
-        {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_PRINT)) {
-                char format;
-                char nOldHeatBed = 127;
-
-                if (pCommand->hasS()) {
-                    nTemp = pCommand->S;
-                } else {
-                    // we output the current z-compensation matrix in case no other z-compensation matrix is specified
-                    nTemp = g_nActiveHeatBed;
-                }
-
-                if (pCommand->hasP()) {
-                    format = pCommand->P ? 1 : 0;
-                } else {
-                    format = 0;
-                }
-
-                if (nTemp < 1 || nTemp > EEPROM_MAX_HEAT_BED_SECTORS) {
-                    if (Printer::debugErrors()) {
-                        Com::printF(PSTR("M3013: invalid heat bed z matrix ("), nTemp);
+                        Com::printF(PSTR("M3009: invalid heat bed z matrix ("), nTemp);
                         Com::printFLN(PSTR(")"));
                     }
                     break;
                 }
 
                 if (g_nActiveHeatBed != nTemp) {
-                    // remember current z-compensation matrix
-                    nOldHeatBed = g_nActiveHeatBed;
-                    // we have to switch to another z-compensation matrix
+                    // we have to switch to another heat bed z-compensation matrix
                     switchActiveHeatBed((char)nTemp);
                 }
+            }
 
-                if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
-                    // we load the z-compensation matrix before its first usage because this can take some time
-                    prepareZCompensation();
-                }
-
-                if (g_ZCompensationMatrix[0][0] == EEPROM_FORMAT) {
-                    if (Printer::debugInfo()) {
-                        Com::printFLN(PSTR("M3013: current heat bed z-compensation matrix: "));
-                    }
-                    outputCompensationMatrix(format);
+            if (Printer::debugInfo()) {
+                Com::printFLN(PSTR("M3009: currently active heat bed z matrix: "), g_nActiveHeatBed);
+            }
+            break;
+        }
+        case 3010: // M3010 [S] - start/abort the heat bed scan
+        {
+            if (pCommand->hasS()) {
+                if (pCommand->S == HEAT_BED_SCAN_MODE_PLA || pCommand->S == HEAT_BED_SCAN_MODE_ABS) {
+                    g_nHeatBedScanMode = (char)pCommand->S;
                 } else {
-                    if (Printer::debugErrors()) {
-                        Com::printF(PSTR("M3013: the heat bed z-compensation matrix is not valid ( "), g_ZCompensationMatrix[0][0]);
-                        Com::printF(PSTR(" / "), EEPROM_FORMAT);
-                        Com::printFLN(PSTR(" )"));
-                    }
-
-                    showError((void*)ui_text_z_compensation, (void*)ui_text_invalid_matrix);
+                    g_nHeatBedScanMode = 0;
+                }
+            } else {
+                g_nHeatBedScanMode = 0;
+            }
+            startHeatBedScan();
+            break;
+        }
+        case 3011: // M3011 [S] - clear the specified z-compensation matrix from the EEPROM
+        {
+#if FEATURE_HEAT_BED_Z_COMPENSATION
+            if (Printer::doHeatBedZCompensation) {
+                if (Printer::debugErrors()) {
+                    Com::printFLN(PSTR("M3011: the heat bed z matrix can not be cleared while the z-compensation is active"));
                 }
 
-                if (nOldHeatBed != 127) {
-                    // restore z-compensation matrix, in case we switched them
-                    switchActiveHeatBed(nOldHeatBed);
+                showError((void*)ui_text_z_compensation, (void*)ui_text_operation_denied);
+                break;
+            }
+#endif // FEATURE_HEAT_BED_Z_COMPENSATION
+            if (pCommand->hasS()) {
+                nTemp = pCommand->S;
+            } else {
+                // we clear the current z-compensation matrix in case no other z-compensation matrix is specified
+                nTemp = g_nActiveHeatBed;
+            }
+
+            if (nTemp < 1 || nTemp > EEPROM_MAX_HEAT_BED_SECTORS) {
+                if (Printer::debugErrors()) {
+                    Com::printF(PSTR("M3011: invalid heat bed z matrix ("), nTemp);
+                    Com::printFLN(PSTR(")"));
                 }
+                break;
+            }
+
+            if (saveActiveHeatBedToExtEEPROM((char)nTemp)) {
+                // switch to the specified z-compensation matrix
+                g_nActiveHeatBed = (char)nTemp;
+                clearCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed));
+                Com::printFLN(PSTR("M3011: cleared heat bed z matrix: "), nTemp);
+            }
+            break;
+        }
+        case 3012: // M3012 - restore the default scan parameters
+        {
+            restoreDefaultScanParameters();
+            break;
+        }
+        case 3013: // M3013 [S] [P] - output the current heat bed z-compensation matrix
+        {
+            char format;
+            char nOldHeatBed = 127;
+
+            if (pCommand->hasS()) {
+                nTemp = pCommand->S;
+            } else {
+                // we output the current z-compensation matrix in case no other z-compensation matrix is specified
+                nTemp = g_nActiveHeatBed;
+            }
+
+            if (pCommand->hasP()) {
+                format = pCommand->P ? 1 : 0;
+            } else {
+                format = 0;
+            }
+
+            if (nTemp < 1 || nTemp > EEPROM_MAX_HEAT_BED_SECTORS) {
+                if (Printer::debugErrors()) {
+                    Com::printF(PSTR("M3013: invalid heat bed z matrix ("), nTemp);
+                    Com::printFLN(PSTR(")"));
+                }
+                break;
+            }
+
+            if (g_nActiveHeatBed != nTemp) {
+                // remember current z-compensation matrix
+                nOldHeatBed = g_nActiveHeatBed;
+                // we have to switch to another z-compensation matrix
+                switchActiveHeatBed((char)nTemp);
+            }
+
+            if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
+                // we load the z-compensation matrix before its first usage because this can take some time
+                prepareZCompensation();
+            }
+
+            if (g_ZCompensationMatrix[0][0] == EEPROM_FORMAT) {
+                if (Printer::debugInfo()) {
+                    Com::printFLN(PSTR("M3013: current heat bed z-compensation matrix: "));
+                }
+                outputCompensationMatrix(format);
+            } else {
+                if (Printer::debugErrors()) {
+                    Com::printF(PSTR("M3013: the heat bed z-compensation matrix is not valid ( "), g_ZCompensationMatrix[0][0]);
+                    Com::printF(PSTR(" / "), EEPROM_FORMAT);
+                    Com::printFLN(PSTR(" )"));
+                }
+
+                showError((void*)ui_text_z_compensation, (void*)ui_text_invalid_matrix);
+            }
+
+            if (nOldHeatBed != 127) {
+                // restore z-compensation matrix, in case we switched them
+                switchActiveHeatBed(nOldHeatBed);
             }
             break;
         }
         case 3020: // M3020 [S] - configure the x start position for the heat bed scan ( units are [mm] )
         {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_PRINT)) {
-                if (pCommand->hasS()) {
-                    // test and take over the specified value
-                    nTemp = pCommand->S;
-                    if (nTemp < 5)
-                        nTemp = 5;
-                    if (nTemp > (Printer::axisLengthMM[X_AXIS] - 5))
-                        nTemp = Printer::axisLengthMM[X_AXIS] - 5;
+            if (pCommand->hasS()) {
+                // test and take over the specified value
+                nTemp = pCommand->S;
+                if (nTemp < 5)
+                    nTemp = 5;
+                if (nTemp > (Printer::axisLengthMM[X_AXIS] - 5))
+                    nTemp = Printer::axisLengthMM[X_AXIS] - 5;
 
-                    g_nScanXStartSteps = (long)((float)nTemp * Printer::axisStepsPerMM[X_AXIS]);
-                    if (Printer::debugInfo()) {
-                        Com::printF(PSTR("M3020: new x start position: "), nTemp);
-                        Com::printF(PSTR(" [mm], "), (int)g_nScanXStartSteps);
-                        Com::printFLN(PSTR(" [steps]"));
-                    }
-                } else {
-                    showInvalidSyntax(pCommand->M);
+                g_nScanXStartSteps = (long)((float)nTemp * Printer::axisStepsPerMM[X_AXIS]);
+                if (Printer::debugInfo()) {
+                    Com::printF(PSTR("M3020: new x start position: "), nTemp);
+                    Com::printF(PSTR(" [mm], "), (int)g_nScanXStartSteps);
+                    Com::printFLN(PSTR(" [steps]"));
                 }
+            } else {
+                showInvalidSyntax(pCommand->M);
             }
             break;
         }
         case 3021: // M3021 [S] - configure the y start position for the heat bed scan ( units are [mm] )
         {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_PRINT)) {
-                if (pCommand->hasS()) {
-                    // test and take over the specified value
-                    nTemp = pCommand->S;
-                    if (nTemp < 5)
-                        nTemp = 5;
-                    if (nTemp > (Printer::axisLengthMM[Y_AXIS] - 5))
-                        nTemp = Printer::axisLengthMM[Y_AXIS] - 5;
+            if (pCommand->hasS()) {
+                // test and take over the specified value
+                nTemp = pCommand->S;
+                if (nTemp < 5)
+                    nTemp = 5;
+                if (nTemp > (Printer::axisLengthMM[Y_AXIS] - 5))
+                    nTemp = Printer::axisLengthMM[Y_AXIS] - 5;
 
-                    g_nScanYStartSteps = (long)((float)nTemp * Printer::axisStepsPerMM[Y_AXIS]);
-                    if (Printer::debugInfo()) {
-                        Com::printF(PSTR("M3021: new y start position: "), nTemp);
-                        Com::printF(PSTR(" [mm], "), (int)g_nScanYStartSteps);
-                        Com::printFLN(PSTR(" [steps]"));
-                    }
-                } else {
-                    showInvalidSyntax(pCommand->M);
+                g_nScanYStartSteps = (long)((float)nTemp * Printer::axisStepsPerMM[Y_AXIS]);
+                if (Printer::debugInfo()) {
+                    Com::printF(PSTR("M3021: new y start position: "), nTemp);
+                    Com::printF(PSTR(" [mm], "), (int)g_nScanYStartSteps);
+                    Com::printFLN(PSTR(" [steps]"));
                 }
+            } else {
+                showInvalidSyntax(pCommand->M);
             }
             break;
         }
         case 3022: // M3022 [S] - configure the x step size for the heat bed scan ( units are [mm] )
         {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_PRINT)) {
-                if (pCommand->hasS()) {
-                    // test and take over the specified value
-                    nTemp = pCommand->S;
-                    if (nTemp < HEAT_BED_SCAN_X_STEP_SIZE_MIN_MM)
-                        nTemp = HEAT_BED_SCAN_X_STEP_SIZE_MIN_MM;
-                    if (nTemp > 100)
-                        nTemp = 100;
+            if (pCommand->hasS()) {
+                // test and take over the specified value
+                nTemp = pCommand->S;
+                if (nTemp < HEAT_BED_SCAN_X_STEP_SIZE_MIN_MM)
+                    nTemp = HEAT_BED_SCAN_X_STEP_SIZE_MIN_MM;
+                if (nTemp > 100)
+                    nTemp = 100;
 
-                    g_nScanXStepSizeSteps = (long)((float)nTemp * Printer::axisStepsPerMM[X_AXIS]);
-                    if (Printer::debugInfo()) {
-                        Com::printF(PSTR("M3022: new x step size: "), (int)nTemp);
-                        Com::printF(PSTR(" [mm], "), (int)g_nScanXStepSizeSteps);
-                        Com::printFLN(PSTR(" [steps]"));
-                    }
-                } else {
-                    showInvalidSyntax(pCommand->M);
+                g_nScanXStepSizeSteps = (long)((float)nTemp * Printer::axisStepsPerMM[X_AXIS]);
+                if (Printer::debugInfo()) {
+                    Com::printF(PSTR("M3022: new x step size: "), (int)nTemp);
+                    Com::printF(PSTR(" [mm], "), (int)g_nScanXStepSizeSteps);
+                    Com::printFLN(PSTR(" [steps]"));
                 }
+            } else {
+                showInvalidSyntax(pCommand->M);
             }
             break;
         }
         case 3023: // M3023 [S] - configure the y step size for the heat bed scan ( units are [mm] )
         {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_PRINT)) {
-                if (pCommand->hasS()) {
-                    // test and take over the specified value
-                    nTemp = pCommand->S;
-                    if (nTemp < HEAT_BED_SCAN_Y_STEP_SIZE_MIN_MM)
-                        nTemp = HEAT_BED_SCAN_Y_STEP_SIZE_MIN_MM;
-                    if (nTemp > 100)
-                        nTemp = 100;
+            if (pCommand->hasS()) {
+                // test and take over the specified value
+                nTemp = pCommand->S;
+                if (nTemp < HEAT_BED_SCAN_Y_STEP_SIZE_MIN_MM)
+                    nTemp = HEAT_BED_SCAN_Y_STEP_SIZE_MIN_MM;
+                if (nTemp > 100)
+                    nTemp = 100;
 
-                    g_nScanYStepSizeSteps = (long)((float)nTemp * Printer::axisStepsPerMM[Y_AXIS]);
-                    if (Printer::debugInfo()) {
-                        Com::printF(PSTR("M3023: new y step size: "), (int)nTemp);
-                        Com::printF(PSTR(" [mm], "), (int)g_nScanYStepSizeSteps);
-                        Com::printFLN(PSTR(" [steps]"));
-                    }
-                } else {
-                    showInvalidSyntax(pCommand->M);
+                g_nScanYStepSizeSteps = (long)((float)nTemp * Printer::axisStepsPerMM[Y_AXIS]);
+                if (Printer::debugInfo()) {
+                    Com::printF(PSTR("M3023: new y step size: "), (int)nTemp);
+                    Com::printF(PSTR(" [mm], "), (int)g_nScanYStepSizeSteps);
+                    Com::printFLN(PSTR(" [steps]"));
                 }
+            } else {
+                showInvalidSyntax(pCommand->M);
             }
             break;
         }
         case 3024: // M3024 [S] - configure the x end position for the heat bed scan ( units are [mm] )
         {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_PRINT)) {
-                if (pCommand->hasS()) {
-                    // test and take over the specified value
-                    nTemp = pCommand->S;
-                    if (nTemp < 5)
-                        nTemp = 5;
-                    if (nTemp > (Printer::axisLengthMM[X_AXIS] - 5))
-                        nTemp = Printer::axisLengthMM[X_AXIS] - 5;
+            if (pCommand->hasS()) {
+                // test and take over the specified value
+                nTemp = pCommand->S;
+                if (nTemp < 5)
+                    nTemp = 5;
+                if (nTemp > (Printer::axisLengthMM[X_AXIS] - 5))
+                    nTemp = Printer::axisLengthMM[X_AXIS] - 5;
 
-                    g_nScanXEndSteps = (long)((float)nTemp * Printer::axisStepsPerMM[X_AXIS]);
-                    if (Printer::debugInfo()) {
-                        Com::printF(PSTR("M3024: new x end position: "), nTemp);
-                        Com::printF(PSTR(" [mm], "), (int)g_nScanXEndSteps);
-                        Com::printFLN(PSTR(" [steps]"));
-                    }
-
-                    g_nScanXMaxPositionSteps = long(Printer::axisLengthMM[X_AXIS] * Printer::axisStepsPerMM[X_AXIS] - g_nScanXEndSteps);
-                    if (Printer::debugInfo()) {
-                        Com::printF(PSTR("M3024: new x max position: "), (int)g_nScanXMaxPositionSteps);
-                        Com::printFLN(PSTR(" [steps]"));
-                    }
-                } else {
-                    showInvalidSyntax(pCommand->M);
+                g_nScanXEndSteps = (long)((float)nTemp * Printer::axisStepsPerMM[X_AXIS]);
+                if (Printer::debugInfo()) {
+                    Com::printF(PSTR("M3024: new x end position: "), nTemp);
+                    Com::printF(PSTR(" [mm], "), (int)g_nScanXEndSteps);
+                    Com::printFLN(PSTR(" [steps]"));
                 }
+
+                g_nScanXMaxPositionSteps = long(Printer::axisLengthMM[X_AXIS] * Printer::axisStepsPerMM[X_AXIS] - g_nScanXEndSteps);
+                if (Printer::debugInfo()) {
+                    Com::printF(PSTR("M3024: new x max position: "), (int)g_nScanXMaxPositionSteps);
+                    Com::printFLN(PSTR(" [steps]"));
+                }
+            } else {
+                showInvalidSyntax(pCommand->M);
             }
             break;
         }
         case 3025: // M3025 [S] - configure the y end position for the heat bed scan ( units are [mm] )
         {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_PRINT)) {
-                if (pCommand->hasS()) {
-                    // test and take over the specified value
-                    nTemp = pCommand->S;
-                    if (nTemp < 5)
-                        nTemp = 5;
-                    if (nTemp > (Printer::axisLengthMM[Y_AXIS] - 5))
-                        nTemp = Printer::axisLengthMM[Y_AXIS] - 5;
+            if (pCommand->hasS()) {
+                // test and take over the specified value
+                nTemp = pCommand->S;
+                if (nTemp < 5)
+                    nTemp = 5;
+                if (nTemp > (Printer::axisLengthMM[Y_AXIS] - 5))
+                    nTemp = Printer::axisLengthMM[Y_AXIS] - 5;
 
-                    g_nScanYEndSteps = (long)((float)nTemp * Printer::axisStepsPerMM[Y_AXIS]);
-                    if (Printer::debugInfo()) {
-                        Com::printF(PSTR("M3025: new y end position: "), nTemp);
-                        Com::printF(PSTR(" [mm], "), (int)g_nScanYEndSteps);
-                        Com::printFLN(PSTR(" [steps]"));
-                    }
-
-                    g_nScanYMaxPositionSteps = long(Printer::axisLengthMM[Y_AXIS] * Printer::axisStepsPerMM[Y_AXIS] - g_nScanYEndSteps);
-                    if (Printer::debugInfo()) {
-                        Com::printF(PSTR("M3025: new y max position: "), (int)g_nScanYMaxPositionSteps);
-                        Com::printFLN(PSTR(" [steps]"));
-                    }
-                } else {
-                    showInvalidSyntax(pCommand->M);
+                g_nScanYEndSteps = (long)((float)nTemp * Printer::axisStepsPerMM[Y_AXIS]);
+                if (Printer::debugInfo()) {
+                    Com::printF(PSTR("M3025: new y end position: "), nTemp);
+                    Com::printF(PSTR(" [mm], "), (int)g_nScanYEndSteps);
+                    Com::printFLN(PSTR(" [steps]"));
                 }
+
+                g_nScanYMaxPositionSteps = long(Printer::axisLengthMM[Y_AXIS] * Printer::axisStepsPerMM[Y_AXIS] - g_nScanYEndSteps);
+                if (Printer::debugInfo()) {
+                    Com::printF(PSTR("M3025: new y max position: "), (int)g_nScanYMaxPositionSteps);
+                    Com::printFLN(PSTR(" [steps]"));
+                }
+            } else {
+                showInvalidSyntax(pCommand->M);
             }
             break;
         }
@@ -7038,8 +5626,8 @@ void processSpecialGCode(GCode* pCommand) {
         }
 #endif // FEATURE_SEE_DISPLAY
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
-        case 3030: // M3030 [S] - configure the fast step size for moving of the heat bed up during the heat bed/work part scan
+#if FEATURE_HEAT_BED_Z_COMPENSATION
+        case 3030: // M3030 [S] - configure the fast step size for moving of the heat bed up during the heat-bed scan
         {
             if (pCommand->hasS()) {
                 // test and take over the specified value
@@ -7059,7 +5647,7 @@ void processSpecialGCode(GCode* pCommand) {
             }
             break;
         }
-        case 3031: // M3031 [S] - configure the slow step size for moving of the heat bed up during the heat bed/work part scan
+        case 3031: // M3031 [S] - configure the slow step size for moving of the heat bed up during the heat-bed scan
         {
             if (pCommand->hasS()) {
                 // test and take over the specified value
@@ -7079,7 +5667,7 @@ void processSpecialGCode(GCode* pCommand) {
             }
             break;
         }
-        case 3032: // M3032 [S] - configure the fast step size for moving of the heat bed down during the heat bed/work part scan
+        case 3032: // M3032 [S] - configure the fast step size for moving of the heat bed down during the heat-bed scan
         {
             if (pCommand->hasS()) {
                 // test and take over the specified value
@@ -7099,7 +5687,7 @@ void processSpecialGCode(GCode* pCommand) {
             }
             break;
         }
-        case 3033: // M3033 [S] - configure the slow step size for moving of the heat bed down during the heat bed/work part scan
+        case 3033: // M3033 [S] - configure the slow step size for moving of the heat bed down during the heat-bed scan
         {
             if (pCommand->hasS()) {
                 // test and take over the specified value
@@ -7119,7 +5707,7 @@ void processSpecialGCode(GCode* pCommand) {
             }
             break;
         }
-        case 3040: // M3040 [S] - configure the delay (in ms) between two fast movements during the heat bed/work part scan
+        case 3040: // M3040 [S] - configure the delay (in ms) between two fast movements during the heat-bed scan
         {
             if (pCommand->hasS()) {
                 // test and take over the specified value
@@ -7139,7 +5727,7 @@ void processSpecialGCode(GCode* pCommand) {
             }
             break;
         }
-        case 3041: // M3041 [S] - configure the delay (in ms) between two slow movements during the heat bed/work part scan
+        case 3041: // M3041 [S] - configure the delay (in ms) between two slow movements during the heat-bed scan
         {
             if (pCommand->hasS()) {
                 // test and take over the specified value
@@ -7298,7 +5886,7 @@ void processSpecialGCode(GCode* pCommand) {
             }
             break;
         }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
         case 3060: // M3060 - output the device type and firmware version
         {
@@ -7656,417 +6244,7 @@ void processSpecialGCode(GCode* pCommand) {
         }
 #endif // FEATURE_CASE_FAN && !CASE_FAN_ALWAYS_ON && CASE_FAN_PIN > -1
 
-#if FEATURE_FIND_Z_ORIGIN
-        case 3130: // M3130 - start/stop the search of the z-origin
-        {
-            startFindZOrigin();
-            // We have to wait until the findZOrigin is stopped because this is used in gcode flow.
-            // findZOrigin is not processing within pause and resuming after pause.
-            Commands::waitUntilEndOfAllMoves(); //find z origin, might prevent stop
-            break;
-        }
-#endif // FEATURE_FIND_Z_ORIGIN
 
-#if FEATURE_WORK_PART_Z_COMPENSATION
-        case 3140: // M3140 - turn the z-compensation off
-        {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_MILL)) {
-                if (Printer::debugInfo()) {
-                    Com::printFLN(PSTR("M3140: disabling z compensation"));
-                }
-                queueTask(TASK_DISABLE_Z_COMPENSATION);
-            }
-            break;
-        }
-        case 3141: // M3141 - turn the z-compensation on
-        {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_MILL)) {
-                if (Printer::doWorkPartZCompensation) {
-                    if (Printer::debugInfo()) {
-                        Com::printFLN(PSTR("M3141: the z compensation is enabled already"));
-                    }
-                    break;
-                }
-
-                if (Printer::areAxisHomed()) {
-                    if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
-                        // we load the z compensation matrix before its first usage because this can take some time
-                        prepareZCompensation();
-                    }
-
-                    if (g_ZCompensationMatrix[0][0] == EEPROM_FORMAT) {
-                        // enable the z compensation only in case we have valid compensation values
-                        if (Printer::debugInfo()) {
-                            Com::printFLN(PSTR("M3141: enabling z compensation"));
-                        }
-
-                        /*                          if( g_nZOriginPosition[X_AXIS] && g_nZOriginPosition[Y_AXIS] )
-                                                    {
-                                                        Com::printF( PSTR( "g_nZOriginPosition[X_AXIS] = " ), g_nZOriginPosition[X_AXIS] );
-                                                        Com::printFLN( PSTR( ", g_nZOriginPosition[Y_AXIS] = " ), g_nZOriginPosition[Y_AXIS] );
-                                                    }
-                        */
-                        queueTask(TASK_ENABLE_Z_COMPENSATION);
-                    } else {
-                        if (Printer::debugErrors()) {
-                            Com::printF(PSTR("M3141: the z compensation can not be enabled because the work part compensation matrix is not valid ( "), g_ZCompensationMatrix[0][0]);
-                            Com::printF(PSTR(" / "), EEPROM_FORMAT);
-                            Com::printFLN(PSTR(" )"));
-                        }
-
-                        showError((void*)ui_text_z_compensation, (void*)ui_text_invalid_matrix);
-                    }
-                } else {
-                    if (Printer::debugErrors()) {
-                        Com::printFLN(PSTR("M3141: the z compensation can not be enabled because the home position is unknown"));
-                    }
-
-                    showError((void*)ui_text_z_compensation, (void*)ui_text_home_unknown);
-                }
-            }
-            break;
-        }
-
-        case 3146: // M3146 [S] [Z] - configure the static z-offset ( S - units are [um], Z - units are [mm] )
-        {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_MILL)) {
-                if (pCommand->hasZ()) {
-                    // test and take over the specified value
-                    nTemp = pCommand->Z;
-
-                    if (nTemp < -WORK_PART_MAX_STATIC_Z_OFFSET_MM)
-                        nTemp = -WORK_PART_MAX_STATIC_Z_OFFSET_MM;
-                    if (nTemp > WORK_PART_MAX_STATIC_Z_OFFSET_MM)
-                        nTemp = WORK_PART_MAX_STATIC_Z_OFFSET_MM;
-
-                    g_staticZSteps = (nTemp * Printer::axisStepsPerMM[Z_AXIS]);
-                    if (Printer::debugInfo()) {
-                        Com::printF(PSTR("M3146: new static z-offset: "), nTemp);
-                        Com::printF(PSTR(" [mm]"));
-                        Com::printF(PSTR(" / "), g_staticZSteps);
-                        Com::printFLN(PSTR(" [steps]"));
-                    }
-                } else if (pCommand->hasS()) {
-                    // test and take over the specified value
-                    nTemp = pCommand->S;
-
-                    if (nTemp < -(WORK_PART_MAX_STATIC_Z_OFFSET_MM * 1000))
-                        nTemp = -(WORK_PART_MAX_STATIC_Z_OFFSET_MM * 1000);
-                    if (nTemp > (WORK_PART_MAX_STATIC_Z_OFFSET_MM * 1000))
-                        nTemp = (WORK_PART_MAX_STATIC_Z_OFFSET_MM * 1000);
-
-                    g_staticZSteps = (nTemp * Printer::axisStepsPerMM[Z_AXIS]) / 1000;
-                    if (Printer::debugInfo()) {
-                        Com::printF(PSTR("M3146: new static z-offset: "), nTemp);
-                        Com::printF(PSTR(" [um]"));
-                        Com::printF(PSTR(" / "), g_staticZSteps);
-                        Com::printFLN(PSTR(" [steps]"));
-                    }
-                } else {
-                    showInvalidSyntax(pCommand->M);
-                }
-            }
-            break;
-        }
-
-        case 3149: // M3149 [S] - get/choose the active work part z-compensation matrix
-        {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_MILL)) {
-                if (Printer::doWorkPartZCompensation) {
-                    // do not allow to change the current work part z-compensation matrix while the z-compensation is active
-                    if (Printer::debugErrors()) {
-                        Com::printFLN(PSTR("M3149: the work part z matrix can not be changed while the z-compensation is active"));
-                    }
-
-                    showError((void*)ui_text_z_compensation, (void*)ui_text_operation_denied);
-                    break;
-                }
-
-                if (pCommand->hasS()) {
-                    nTemp = pCommand->S;
-
-                    if (nTemp < 1 || nTemp > EEPROM_MAX_WORK_PART_SECTORS) {
-                        if (Printer::debugErrors()) {
-                            Com::printF(PSTR("M3149: invalid work part ("), nTemp);
-                            Com::printFLN(PSTR(")"));
-                        }
-                        break;
-                    }
-
-                    if (g_nActiveWorkPart != nTemp) {
-                        // we have to switch to another work part
-                        switchActiveWorkPart((char)nTemp);
-                    }
-                }
-
-                if (Printer::debugInfo()) {
-                    Com::printFLN(PSTR("M3149: currently active work part: "), g_nActiveWorkPart);
-                }
-            }
-            break;
-        }
-        case 3150: // M3150 - start/abort the work part scan
-        {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_MILL)) {
-                if (pCommand->hasS()) {
-                    nTemp = pCommand->S;
-                } else {
-                    nTemp = 0;
-                }
-
-                startWorkPartScan((char)nTemp);
-            }
-            break;
-        }
-        case 3151: // M3151 [S] - clear the specified z-compensation matrix from the EEPROM
-        {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_MILL)) {
-                if (Printer::doWorkPartZCompensation) {
-                    if (Printer::debugErrors()) {
-                        Com::printFLN(PSTR("M3151: the work part z matrix can not be cleared while the z-compensation is active"));
-                    }
-
-                    showError((void*)ui_text_z_compensation, (void*)ui_text_operation_denied);
-                    break;
-                }
-
-                if (pCommand->hasS()) {
-                    nTemp = pCommand->S;
-                } else {
-                    // we clear the current z-compensation matrix in case no other z-compensation matrix is specified
-                    nTemp = g_nActiveWorkPart;
-                }
-
-                if (nTemp < 1 || nTemp > EEPROM_MAX_WORK_PART_SECTORS) {
-                    if (Printer::debugErrors()) {
-                        Com::printF(PSTR("M3151: invalid work part ("), nTemp);
-                        Com::printFLN(PSTR(")"));
-                    }
-                    break;
-                }
-
-                if (saveActiveWorkPartToExtEEPROM((char)nTemp)) {
-                    // switch to the specified work part
-                    g_nActiveWorkPart = (char)nTemp;
-                    clearCompensationMatrix((EEPROM_SECTOR_SIZE * 9) + (unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveWorkPart));
-                    Com::printFLN(PSTR("M3151: cleared z-compensation matrix: "), nTemp);
-                }
-            }
-            break;
-        }
-        case 3152: // M3152 - restore the default scan parameters
-        {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_MILL)) {
-                restoreDefaultScanParameters();
-            }
-            break;
-        }
-        case 3153: // M3153 [S] [P] - output the specified work part z-compensation matrix
-        {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_MILL)) {
-                char format;
-
-                if (pCommand->hasS()) {
-                    nTemp = pCommand->S;
-                } else {
-                    // we output the current z-compensation matrix in case no other z-compensation matrix is specified
-                    nTemp = g_nActiveWorkPart;
-                }
-
-                if (pCommand->hasP()) {
-                    format = pCommand->P ? 1 : 0;
-                } else {
-                    format = 0;
-                }
-
-                if (nTemp < 0 || nTemp > EEPROM_MAX_WORK_PART_SECTORS) {
-                    if (Printer::debugErrors()) {
-                        Com::printF(PSTR("M3153: invalid work part ("), nTemp);
-                        Com::printFLN(PSTR(")"));
-                    }
-                    break;
-                }
-
-                if (g_nActiveWorkPart != nTemp) {
-                    // we have to switch to another work part
-                    switchActiveWorkPart((char)nTemp);
-                }
-
-                if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
-                    // we load the z compensation matrix before its first usage because this can take some time
-                    prepareZCompensation();
-                }
-
-                if (g_ZCompensationMatrix[0][0] == EEPROM_FORMAT) {
-                    if (Printer::debugInfo()) {
-                        Com::printFLN(PSTR("M3153: current work part compensation matrix: "));
-                    }
-                    outputCompensationMatrix(format);
-                } else {
-                    if (Printer::debugErrors()) {
-                        Com::printF(PSTR("M3153: the work part compensation matrix is not valid ( "), g_ZCompensationMatrix[0][0]);
-                        Com::printF(PSTR(" / "), EEPROM_FORMAT);
-                        Com::printFLN(PSTR(" )"));
-                    }
-
-                    showError((void*)ui_text_z_compensation, (void*)ui_text_invalid_matrix);
-                }
-            }
-            break;
-        }
-        case 3160: // M3160 [S] - configure the x start position for the work part scan
-        {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_MILL)) {
-                if (pCommand->hasS()) {
-                    // test and take over the specified value
-                    nTemp = pCommand->S;
-                    if (nTemp < 5)
-                        nTemp = 5;
-                    if (nTemp > (Printer::axisLengthMM[X_AXIS] - 5))
-                        nTemp = Printer::axisLengthMM[X_AXIS] - 5;
-
-                    g_nScanXStartSteps = (long)((float)nTemp * Printer::axisStepsPerMM[X_AXIS]);
-                    if (Printer::debugInfo()) {
-                        Com::printF(PSTR("M3160: new x start position: "), nTemp);
-                        Com::printF(PSTR(" [mm], "), (int)g_nScanXStartSteps);
-                        Com::printFLN(PSTR(" [steps]"));
-                    }
-                } else {
-                    showInvalidSyntax(pCommand->M);
-                }
-            }
-            break;
-        }
-        case 3161: // M3161 [S] - configure the y start position for the work part scan
-        {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_MILL)) {
-                if (pCommand->hasS()) {
-                    // test and take over the specified value
-                    nTemp = pCommand->S;
-                    if (nTemp < 5)
-                        nTemp = 5;
-                    if (nTemp > (Printer::axisLengthMM[Y_AXIS] - 5))
-                        nTemp = Printer::axisLengthMM[Y_AXIS] - 5;
-
-                    g_nScanYStartSteps = (long)((float)nTemp * Printer::axisStepsPerMM[Y_AXIS]);
-                    if (Printer::debugInfo()) {
-                        Com::printF(PSTR("M3161: new y start position: "), nTemp);
-                        Com::printF(PSTR(" [mm], "), (int)g_nScanYStartSteps);
-                        Com::printFLN(PSTR(" [steps]"));
-                    }
-                } else {
-                    showInvalidSyntax(pCommand->M);
-                }
-            }
-            break;
-        }
-        case 3162: // M3162 [S] - configure the x step size for the work part scan
-        {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_MILL)) {
-                if (pCommand->hasS()) {
-                    // test and take over the specified value
-                    nTemp = pCommand->S;
-                    if (nTemp < WORK_PART_SCAN_X_STEP_SIZE_MIN_MM)
-                        nTemp = WORK_PART_SCAN_X_STEP_SIZE_MIN_MM;
-                    if (nTemp > 100)
-                        nTemp = 100;
-
-                    g_nScanXStepSizeMM = nTemp;
-                    g_nScanXStepSizeSteps = (long)((float)nTemp * Printer::axisStepsPerMM[X_AXIS]);
-                    if (Printer::debugInfo()) {
-                        Com::printF(PSTR("M3162: new x step size: "), (int)g_nScanXStepSizeMM);
-                        Com::printF(PSTR(" [mm], "), (int)g_nScanXStepSizeSteps);
-                        Com::printFLN(PSTR(" [steps]"));
-                    }
-                } else {
-                    showInvalidSyntax(pCommand->M);
-                }
-            }
-            break;
-        }
-        case 3163: // M3163 [S] - configure the y step size for the work part scan
-        {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_MILL)) {
-                if (pCommand->hasS()) {
-                    // test and take over the specified value
-                    nTemp = pCommand->S;
-                    if (nTemp < WORK_PART_SCAN_Y_STEP_SIZE_MIN_MM)
-                        nTemp = WORK_PART_SCAN_Y_STEP_SIZE_MIN_MM;
-                    if (nTemp > 100)
-                        nTemp = 100;
-
-                    g_nScanYStepSizeMM = nTemp;
-                    g_nScanYStepSizeSteps = (long)((float)nTemp * Printer::axisStepsPerMM[Y_AXIS]);
-                    if (Printer::debugInfo()) {
-                        Com::printF(PSTR("M3163: new y step size: "), (int)g_nScanYStepSizeMM);
-                        Com::printF(PSTR(" [mm], "), (int)g_nScanYStepSizeSteps);
-                        Com::printFLN(PSTR(" [steps]"));
-                    }
-                } else {
-                    showInvalidSyntax(pCommand->M);
-                }
-            }
-            break;
-        }
-        case 3164: // M3164 [S] - configure the x end position for the work part scan
-        {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_MILL)) {
-                if (pCommand->hasS()) {
-                    // test and take over the specified value
-                    nTemp = pCommand->S;
-                    if (nTemp < 5)
-                        nTemp = 5;
-                    if (nTemp > (Printer::axisLengthMM[X_AXIS] - 5))
-                        nTemp = Printer::axisLengthMM[X_AXIS] - 5;
-
-                    g_nScanXEndSteps = (long)((float)nTemp * Printer::axisStepsPerMM[X_AXIS]);
-                    if (Printer::debugInfo()) {
-                        Com::printF(PSTR("M3164: new x end position: "), nTemp);
-                        Com::printF(PSTR(" [mm], "), (int)g_nScanXEndSteps);
-                        Com::printFLN(PSTR(" [steps]"));
-                    }
-
-                    g_nScanXMaxPositionSteps = long(Printer::axisLengthMM[X_AXIS] * Printer::axisStepsPerMM[X_AXIS] - g_nScanXEndSteps);
-                    if (Printer::debugInfo()) {
-                        Com::printF(PSTR("M3164: new x max position: "), (int)g_nScanXMaxPositionSteps);
-                        Com::printFLN(PSTR(" [steps]"));
-                    }
-                } else {
-                    showInvalidSyntax(pCommand->M);
-                }
-            }
-            break;
-        }
-        case 3165: // M3165 [S] - configure the y end position for the work part scan
-        {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_MILL)) {
-                if (pCommand->hasS()) {
-                    // test and take over the specified value
-                    nTemp = pCommand->S;
-                    if (nTemp < 5)
-                        nTemp = 5;
-                    if (nTemp > (Printer::axisLengthMM[Y_AXIS] - 5))
-                        nTemp = Printer::axisLengthMM[Y_AXIS] - 5;
-
-                    g_nScanYEndSteps = (long)((float)nTemp * Printer::axisStepsPerMM[Y_AXIS]);
-                    if (Printer::debugInfo()) {
-                        Com::printF(PSTR("M3165: new y end position: "), nTemp);
-                        Com::printF(PSTR(" [mm], "), (int)g_nScanYEndSteps);
-                        Com::printFLN(PSTR(" [steps]"));
-                    }
-
-                    g_nScanYMaxPositionSteps = long(Printer::axisLengthMM[Y_AXIS] * Printer::axisStepsPerMM[Y_AXIS] - g_nScanYEndSteps);
-                    if (Printer::debugInfo()) {
-                        Com::printF(PSTR("M3165: new y max position: "), (int)g_nScanYMaxPositionSteps);
-                        Com::printFLN(PSTR(" [steps]"));
-                    }
-                } else {
-                    showInvalidSyntax(pCommand->M);
-                }
-            }
-            break;
-        }
-#endif // FEATURE_WORK_PART_Z_COMPENSATION
 
         case 3200: // M3200 - reserved for test and debug
         {
@@ -8077,10 +6255,10 @@ void processSpecialGCode(GCode* pCommand) {
                     Commands::writeLowestFreeRAM();
                     Com::printFLN(PSTR("lowest free RAM: "), Commands::lowestRAMValue);
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#if FEATURE_HEAT_BED_Z_COMPENSATION
                     Com::printFLN(PSTR("z-compensation matrix x: "), COMPENSATION_MATRIX_MAX_X);
                     Com::printFLN(PSTR("z-compensation matrix y: "), COMPENSATION_MATRIX_MAX_Y);
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+#endif // FEATURE_HEAT_BED_Z_COMPENSATION
                     break;
                 }
                 case 2: {
@@ -8144,17 +6322,6 @@ void processSpecialGCode(GCode* pCommand) {
                     break;
                 }
 
-#if FEATURE_FIND_Z_ORIGIN
-                case 7: {
-                    Com::printF(PSTR("Z-Origin;X;"), g_nZOriginPosition[X_AXIS]);
-                    Com::printF(Com::tSemiColon, (float)g_nZOriginPosition[X_AXIS] / Printer::axisStepsPerMM[X_AXIS]);
-                    Com::printF(PSTR(";Y;"), g_nZOriginPosition[Y_AXIS]);
-                    Com::printF(Com::tSemiColon, (float)g_nZOriginPosition[Y_AXIS] / Printer::axisStepsPerMM[Y_AXIS]);
-                    Com::printF(PSTR(";Z;"), Printer::staticCompensationZ);
-                    Com::printFLN(Com::tSemiColon, (float)Printer::staticCompensationZ / Printer::axisStepsPerMM[Z_AXIS]);
-                    break;
-                }
-#endif // FEATURE_FIND_Z_ORIGIN
 
                 case 9: {
                     Com::printFLN(PSTR("debug level: "), Printer::debugLevel);
@@ -8646,9 +6813,7 @@ void processSpecialGCode(GCode* pCommand) {
 #if FEATURE_ALIGN_EXTRUDERS
         case 3309: // start/abort to align the two extruders
         {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_PRINT)) {
-                startAlignExtruders();
-            }
+            startAlignExtruders();
             break;
         }
 #endif // FEATURE_ALIGN_EXTRUDERS
@@ -8657,158 +6822,156 @@ void processSpecialGCode(GCode* pCommand) {
         case 3901: // 3901 [X] [Y] - configure the Matrix-Position to Scan, [S] confugure learningrate, [P] configure dist weight || by Nibbels
         case 3900: // 3900 direct preconfig, no break;->next is M3900.
         {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_PRINT)) {
-                bool err3900r = false;
-                if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
-                    // we load the z compensation matrix before its first usage because this can take some time
-                    Com::printFLN(PSTR("M3900/M3901: INFO Die Z-Matrix wurde aus dem EEPROM gelesen."));
-                    prepareZCompensation();
-                }
+            bool err3900r = false;
+            if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
+                // we load the z compensation matrix before its first usage because this can take some time
+                Com::printFLN(PSTR("M3900/M3901: INFO Die Z-Matrix wurde aus dem EEPROM gelesen."));
+                prepareZCompensation();
+            }
 
-                if (g_ZCompensationMatrix[0][0] == EEPROM_FORMAT) {
-                    if (!pCommand->hasR()) { //Normaler ZOS, kein Auto-Matrix-Leveling.
-                        if (pCommand->hasX()) {
-                            // test and take over the specified value
-                            unsigned char nTempUC = (unsigned char)pCommand->X;
+            if (g_ZCompensationMatrix[0][0] == EEPROM_FORMAT) {
+                if (!pCommand->hasR()) { //Normaler ZOS, kein Auto-Matrix-Leveling.
+                    if (pCommand->hasX()) {
+                        // test and take over the specified value
+                        unsigned char nTempUC = (unsigned char)pCommand->X;
 
-                            //Wessix idee: zufalls-Scanpunkt wegen DDP-Platten-Schonung.
-                            if (nTempUC == 0)
-                                nTempUC = (unsigned char)random((HEAT_BED_SCAN_X_START_MM == 0) ? 1 : 2, g_uZMatrixMax[X_AXIS]); // ergibt min bis max-1
+                        //Wessix idee: zufalls-Scanpunkt wegen DDP-Platten-Schonung.
+                        if (nTempUC == 0)
+                            nTempUC = (unsigned char)random((HEAT_BED_SCAN_X_START_MM == 0) ? 1 : 2, g_uZMatrixMax[X_AXIS]); // ergibt min bis max-1
 
-                            //wenn die Startposition nicht 0 ist, wird eine Dummy-Matrix-Linie ergänzt. Mit der sollten wir nicht arbeiten.
-                            if (nTempUC < 1 + ((HEAT_BED_SCAN_X_START_MM == 0) ? 0 : 1))
-                                nTempUC = 1 + ((HEAT_BED_SCAN_X_START_MM == 0) ? 0 : 1);
-                            if (nTempUC > g_uZMatrixMax[X_AXIS] - 1)
-                                nTempUC = g_uZMatrixMax[X_AXIS] - 1; //2..n-1
+                        //wenn die Startposition nicht 0 ist, wird eine Dummy-Matrix-Linie ergänzt. Mit der sollten wir nicht arbeiten.
+                        if (nTempUC < 1 + ((HEAT_BED_SCAN_X_START_MM == 0) ? 0 : 1))
+                            nTempUC = 1 + ((HEAT_BED_SCAN_X_START_MM == 0) ? 0 : 1);
+                        if (nTempUC > g_uZMatrixMax[X_AXIS] - 1)
+                            nTempUC = g_uZMatrixMax[X_AXIS] - 1; //2..n-1
 
-                            g_ZOSTestPoint[X_AXIS] = nTempUC;
+                        g_ZOSTestPoint[X_AXIS] = nTempUC;
 
-                            unsigned char oldval = HAL::eprGetByte(EPR_RF_MOD_ZOS_SCAN_POINT_X);
-                            if (oldval != g_ZOSTestPoint[X_AXIS]) {
-                                HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_X, g_ZOSTestPoint[X_AXIS]);
-                                EEPROM::updateChecksum(); //deshalb die prüfung
-                            }
-
-                            if (Printer::debugInfo()) {
-                                Com::printF(PSTR("M3900/M3901: CHANGED X ZOS Testposition: "), nTempUC);
-                                if (HEAT_BED_SCAN_X_START_MM == 0) {
-                                    Com::printF(PSTR(" [Z-Matrix index] X={1.."), g_uZMatrixMax[X_AXIS] - 1);
-                                } else {
-                                    Com::printF(PSTR(" [Z-Matrix index] X={2.."), g_uZMatrixMax[X_AXIS] - 1);
-                                }
-                                Com::printFLN(PSTR("}"));
-                            }
+                        unsigned char oldval = HAL::eprGetByte(EPR_RF_MOD_ZOS_SCAN_POINT_X);
+                        if (oldval != g_ZOSTestPoint[X_AXIS]) {
+                            HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_X, g_ZOSTestPoint[X_AXIS]);
+                            EEPROM::updateChecksum(); //deshalb die prüfung
                         }
 
-                        if (pCommand->hasY()) {
-                            // test and take over the specified value
-                            unsigned char nTempUC = (unsigned char)pCommand->Y;
-
-                            //Wessix idee: zufalls-Scanpunkt wegen DDP-Platten-Schonung.
-                            if (nTempUC == 0)
-                                nTempUC = (unsigned char)random((HEAT_BED_SCAN_Y_START_MM == 0) ? 1 : 2, g_uZMatrixMax[Y_AXIS]); // ergibt min bis max-1
-
-                            if (nTempUC < 1 + ((HEAT_BED_SCAN_Y_START_MM == 0) ? 0 : 1))
-                                nTempUC = 1 + ((HEAT_BED_SCAN_Y_START_MM == 0) ? 0 : 1);
-                            if (nTempUC > g_uZMatrixMax[Y_AXIS] - 1)
-                                nTempUC = g_uZMatrixMax[Y_AXIS] - 1; //2..n-1
-
-                            g_ZOSTestPoint[Y_AXIS] = nTempUC;
-
-                            unsigned char oldval = HAL::eprGetByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y);
-                            if (oldval != g_ZOSTestPoint[Y_AXIS]) {
-                                HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y, g_ZOSTestPoint[Y_AXIS]);
-                                EEPROM::updateChecksum(); //deshalb die prüfung
-                            }
-
-                            if (Printer::debugInfo()) {
-                                Com::printF(PSTR("M3900/M3901: CHANGED Y ZOS Testposition: "), nTempUC);
-                                if (HEAT_BED_SCAN_Y_START_MM == 0) {
-                                    Com::printF(PSTR(" [Z-Matrix index] Y={1.."), g_uZMatrixMax[Y_AXIS] - 1);
-                                } else {
-                                    Com::printF(PSTR(" [Z-Matrix index] Y={2.."), g_uZMatrixMax[Y_AXIS] - 1);
-                                }
-                                Com::printFLN(PSTR("}"));
-                            }
-                        }
-
-                        if (pCommand->hasS()) {
-                            // M3900 S set learning rate to limit changes caused of z-Offset Scan. This might proof handy for multiple positions scans.
-                            if (pCommand->S >= 0 && pCommand->S <= 100) {
-                                g_ZOSlearningRate = (float)pCommand->S * 0.01f;
-                                Com::printFLN(PSTR("M3900/M3901: CHANGED [S] ZOS learning rate : "), g_ZOSlearningRate);
+                        if (Printer::debugInfo()) {
+                            Com::printF(PSTR("M3900/M3901: CHANGED X ZOS Testposition: "), nTempUC);
+                            if (HEAT_BED_SCAN_X_START_MM == 0) {
+                                Com::printF(PSTR(" [Z-Matrix index] X={1.."), g_uZMatrixMax[X_AXIS] - 1);
                             } else {
-                                Com::printFLN(PSTR("M3900/M3901: ERROR [S] ZOS learning rate ignored, out of range {0...100}"));
-                                err3900r = true;
+                                Com::printF(PSTR(" [Z-Matrix index] X={2.."), g_uZMatrixMax[X_AXIS] - 1);
                             }
+                            Com::printFLN(PSTR("}"));
                         }
-
-                        if (pCommand->hasP()) {
-                            // M3900 P set distance weight: This can be used as something like the auto-bed-leveling (if used in all corners) but technically affects the Z_Matrix
-                            if (pCommand->P >= 0 && pCommand->P <= 100) {
-                                g_ZOSlearningGradient = (float)pCommand->P * 0.01f;
-                                Com::printFLN(PSTR("M3900/M3901: CHANGED [P] ZOS learning linear distance weight : "), g_ZOSlearningGradient);
-                            } else {
-                                Com::printFLN(PSTR("M3900/M3901: ERROR [P] ZOS learning DistanceWeight, out of range {0...100}"));
-                                err3900r = true;
-                            }
-                        }
-
-                        // Anzeige der aktuellen Settings
-                        Com::printFLN(PSTR("M3900/M3901: ### AKTIVE ZOS SETTINGS ###"));
-                        Com::printF(PSTR("M3900/M3901: Testposition [X]: "), g_ZOSTestPoint[X_AXIS]);
-                        Com::printF(PSTR(" Testposition [Y]: "), g_ZOSTestPoint[Y_AXIS]);
-                        Com::printFLN(PSTR(" [Z-Matrix index]"));
-                        Com::printFLN(PSTR("M3900/M3901: [S] ZOS learning rate is : "), g_ZOSlearningRate);
-                        if (g_ZOSlearningRate == 1.0f) {
-                            Com::printFLN(PSTR("M3900/M3901: INFO [S] ZOS::overwrite mode (1.00)"));
-                        } else {
-                            Com::printFLN(PSTR("M3900/M3901: INFO [S] ZOS::additiv / learning mode (0.00 - 0.99)"));
-                        }
-                        Com::printFLN(PSTR("M3900/M3901: [P] ZOS learning linear distance weight is : "), g_ZOSlearningGradient);
-                        if (g_ZOSlearningGradient == 0.0f) {
-                            Com::printFLN(PSTR("M3900/M3901: INFO [P] ZOS::reiner Offset-Scan"));
-                        } else if (g_ZOSlearningGradient == 1.0f) {
-                            Com::printFLN(PSTR("M3900/M3901: INFO [P] ZOS::rein linear abstandsgewichteter Scan"));
-                        } else {
-                            Com::printFLN(PSTR("M3900/M3901: INFO [P] ZOS::Das Ergebnis-Offset setzt sich zusammen aus Abstandsgewichtung und Offset"));
-                        }
-
-                        if (g_ZOSlearningGradient > 0.0f) {
-                            Com::printFLN(PSTR("M3900/M3901: INFO [P] Set 0 => 0.0 for Offset only, set 100 => 1.0 for distance weight only"));
-                            Com::printFLN(PSTR("M3900/M3901: INFO [P] Combine linear distance weight with low learning rate and multiple checks at corners (for example) against bed warping!"));
-                        }
-                        if (g_ZOSlearningRate == 1.0f) {
-                            Com::printFLN(PSTR("M3900/M3901: FORMEL Z-Matrix = EEPROM-Matrix + g_ZOSlearningRate*(g_ZOSlearningGradient*weight(x,y)*Offset + (1.0-g_ZOSlearningGradient)*Offset)"));
-                        } else {
-                            Com::printFLN(PSTR("M3900/M3901: FORMEL Z-Matrix = Z-Matrix + g_ZOSlearningRate*(g_ZOSlearningGradient*weight(x,y)*Offset + (1.0-g_ZOSlearningGradient)*Offset)"));
-                        }
-                    } else { // pCommand->hasR() //Auto-Matrix-Leveling.
-                             //Auto-Matrix-Leveling aktiv.
                     }
-                    if (pCommand->M == 3901) {
-                        //M3901
-                        //M3900 wird nicht gestartet - nur preconfig, kein mhier-Scan!
-                        if (pCommand->hasR())
-                            Com::printFLN(PSTR("M3901: Use M3900 for Auto-Matrix-Leveling!"));
+
+                    if (pCommand->hasY()) {
+                        // test and take over the specified value
+                        unsigned char nTempUC = (unsigned char)pCommand->Y;
+
+                        //Wessix idee: zufalls-Scanpunkt wegen DDP-Platten-Schonung.
+                        if (nTempUC == 0)
+                            nTempUC = (unsigned char)random((HEAT_BED_SCAN_Y_START_MM == 0) ? 1 : 2, g_uZMatrixMax[Y_AXIS]); // ergibt min bis max-1
+
+                        if (nTempUC < 1 + ((HEAT_BED_SCAN_Y_START_MM == 0) ? 0 : 1))
+                            nTempUC = 1 + ((HEAT_BED_SCAN_Y_START_MM == 0) ? 0 : 1);
+                        if (nTempUC > g_uZMatrixMax[Y_AXIS] - 1)
+                            nTempUC = g_uZMatrixMax[Y_AXIS] - 1; //2..n-1
+
+                        g_ZOSTestPoint[Y_AXIS] = nTempUC;
+
+                        unsigned char oldval = HAL::eprGetByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y);
+                        if (oldval != g_ZOSTestPoint[Y_AXIS]) {
+                            HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y, g_ZOSTestPoint[Y_AXIS]);
+                            EEPROM::updateChecksum(); //deshalb die prüfung
+                        }
+
+                        if (Printer::debugInfo()) {
+                            Com::printF(PSTR("M3900/M3901: CHANGED Y ZOS Testposition: "), nTempUC);
+                            if (HEAT_BED_SCAN_Y_START_MM == 0) {
+                                Com::printF(PSTR(" [Z-Matrix index] Y={1.."), g_uZMatrixMax[Y_AXIS] - 1);
+                            } else {
+                                Com::printF(PSTR(" [Z-Matrix index] Y={2.."), g_uZMatrixMax[Y_AXIS] - 1);
+                            }
+                            Com::printFLN(PSTR("}"));
+                        }
+                    }
+
+                    if (pCommand->hasS()) {
+                        // M3900 S set learning rate to limit changes caused of z-Offset Scan. This might proof handy for multiple positions scans.
+                        if (pCommand->S >= 0 && pCommand->S <= 100) {
+                            g_ZOSlearningRate = (float)pCommand->S * 0.01f;
+                            Com::printFLN(PSTR("M3900/M3901: CHANGED [S] ZOS learning rate : "), g_ZOSlearningRate);
+                        } else {
+                            Com::printFLN(PSTR("M3900/M3901: ERROR [S] ZOS learning rate ignored, out of range {0...100}"));
+                            err3900r = true;
+                        }
+                    }
+
+                    if (pCommand->hasP()) {
+                        // M3900 P set distance weight: This can be used as something like the auto-bed-leveling (if used in all corners) but technically affects the Z_Matrix
+                        if (pCommand->P >= 0 && pCommand->P <= 100) {
+                            g_ZOSlearningGradient = (float)pCommand->P * 0.01f;
+                            Com::printFLN(PSTR("M3900/M3901: CHANGED [P] ZOS learning linear distance weight : "), g_ZOSlearningGradient);
+                        } else {
+                            Com::printFLN(PSTR("M3900/M3901: ERROR [P] ZOS learning DistanceWeight, out of range {0...100}"));
+                            err3900r = true;
+                        }
+                    }
+
+                    // Anzeige der aktuellen Settings
+                    Com::printFLN(PSTR("M3900/M3901: ### AKTIVE ZOS SETTINGS ###"));
+                    Com::printF(PSTR("M3900/M3901: Testposition [X]: "), g_ZOSTestPoint[X_AXIS]);
+                    Com::printF(PSTR(" Testposition [Y]: "), g_ZOSTestPoint[Y_AXIS]);
+                    Com::printFLN(PSTR(" [Z-Matrix index]"));
+                    Com::printFLN(PSTR("M3900/M3901: [S] ZOS learning rate is : "), g_ZOSlearningRate);
+                    if (g_ZOSlearningRate == 1.0f) {
+                        Com::printFLN(PSTR("M3900/M3901: INFO [S] ZOS::overwrite mode (1.00)"));
                     } else {
-                        if (err3900r) {
-                            Com::printFLN(PSTR("M3900/M3901: ERROR in Config ### ZOS SKIPPED ###"));
-                        } else {
-                            // M3900:
-                            // mit R im GCode macht der Scan ein Auto-Matrix-Leveling, anstatt die anderen Schalter zu bedienen.
-                            startZOScan(pCommand->hasR());
-                            // Warte bis Z-Offset-Scan beendet wurde.
-                            while (g_nZOSScanStatus) {
-                                Commands::checkForPeriodicalActions(Calibrating);
-                            }
+                        Com::printFLN(PSTR("M3900/M3901: INFO [S] ZOS::additiv / learning mode (0.00 - 0.99)"));
+                    }
+                    Com::printFLN(PSTR("M3900/M3901: [P] ZOS learning linear distance weight is : "), g_ZOSlearningGradient);
+                    if (g_ZOSlearningGradient == 0.0f) {
+                        Com::printFLN(PSTR("M3900/M3901: INFO [P] ZOS::reiner Offset-Scan"));
+                    } else if (g_ZOSlearningGradient == 1.0f) {
+                        Com::printFLN(PSTR("M3900/M3901: INFO [P] ZOS::rein linear abstandsgewichteter Scan"));
+                    } else {
+                        Com::printFLN(PSTR("M3900/M3901: INFO [P] ZOS::Das Ergebnis-Offset setzt sich zusammen aus Abstandsgewichtung und Offset"));
+                    }
+
+                    if (g_ZOSlearningGradient > 0.0f) {
+                        Com::printFLN(PSTR("M3900/M3901: INFO [P] Set 0 => 0.0 for Offset only, set 100 => 1.0 for distance weight only"));
+                        Com::printFLN(PSTR("M3900/M3901: INFO [P] Combine linear distance weight with low learning rate and multiple checks at corners (for example) against bed warping!"));
+                    }
+                    if (g_ZOSlearningRate == 1.0f) {
+                        Com::printFLN(PSTR("M3900/M3901: FORMEL Z-Matrix = EEPROM-Matrix + g_ZOSlearningRate*(g_ZOSlearningGradient*weight(x,y)*Offset + (1.0-g_ZOSlearningGradient)*Offset)"));
+                    } else {
+                        Com::printFLN(PSTR("M3900/M3901: FORMEL Z-Matrix = Z-Matrix + g_ZOSlearningRate*(g_ZOSlearningGradient*weight(x,y)*Offset + (1.0-g_ZOSlearningGradient)*Offset)"));
+                    }
+                } else { // pCommand->hasR() //Auto-Matrix-Leveling.
+                         //Auto-Matrix-Leveling aktiv.
+                }
+                if (pCommand->M == 3901) {
+                    //M3901
+                    //M3900 wird nicht gestartet - nur preconfig, kein mhier-Scan!
+                    if (pCommand->hasR())
+                        Com::printFLN(PSTR("M3901: Use M3900 for Auto-Matrix-Leveling!"));
+                } else {
+                    if (err3900r) {
+                        Com::printFLN(PSTR("M3900/M3901: ERROR in Config ### ZOS SKIPPED ###"));
+                    } else {
+                        // M3900:
+                        // mit R im GCode macht der Scan ein Auto-Matrix-Leveling, anstatt die anderen Schalter zu bedienen.
+                        startZOScan(pCommand->hasR());
+                        // Warte bis Z-Offset-Scan beendet wurde.
+                        while (g_nZOSScanStatus) {
+                            Commands::checkForPeriodicalActions(Calibrating);
                         }
                     }
-                } else {
-                    Com::printFLN(PSTR("M3900/M3901: ERROR Matrix Initialisation Error!"));
-                    Com::printFLN(PSTR("M3900/M3901: INFO Die Z-Matrix konnte nicht aus dem EEPROM gelesen werden."));
-                    Com::printFLN(PSTR("M3900/M3901: INFO Vermutlich noch nie einen Heat-Bed-Scan gemacht."));
                 }
+            } else {
+                Com::printFLN(PSTR("M3900/M3901: ERROR Matrix Initialisation Error!"));
+                Com::printFLN(PSTR("M3900/M3901: INFO Die Z-Matrix konnte nicht aus dem EEPROM gelesen werden."));
+                Com::printFLN(PSTR("M3900/M3901: INFO Vermutlich noch nie einen Heat-Bed-Scan gemacht."));
             }
             break;
         }
@@ -8824,139 +6987,137 @@ void processSpecialGCode(GCode* pCommand) {
 #if FEATURE_HEAT_BED_Z_COMPENSATION
         case 3902: // M3902 Nibbels Matrix Manipulations "NMM"
         {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_PRINT)) {
-                //NMM Funktion 1 - R=Repair
-                if (pCommand->hasR()) {
+            //NMM Funktion 1 - R=Repair
+            if (pCommand->hasR()) {
+                //search for a hole within the heat beds z-Matrix
+                fixKeramikLochInMatrix();
+            }
+
+            if (pCommand->hasE()) {
+                //completly wipe the matrix-data to zero->flatten the matrix to nothing.
+                setMatrixNull();
+            }
+            //NMM Funktion 2 - Z=Offset manuell nachstellen
+            if (pCommand->hasZ()) {
+                if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
+                    // we load the z compensation matrix before its first usage because this can take some time
+                    Com::printFLN(PSTR("M3901: INFO Die Z-Matrix wurde aus dem EEPROM gelesen."));
+                    prepareZCompensation();
+                }
+                if (g_ZCompensationMatrix[0][0] == EEPROM_FORMAT) {
                     //search for a hole within the heat beds z-Matrix
-                    fixKeramikLochInMatrix();
-                }
+                    float hochrunter = (float)pCommand->Z;
+                    if (hochrunter > 0.2f)
+                        hochrunter = 0.2f;
+                    if (hochrunter < -0.2f)
+                        hochrunter = -0.2f;
 
-                if (pCommand->hasE()) {
-                    //completly wipe the matrix-data to zero->flatten the matrix to nothing.
-                    setMatrixNull();
-                }
-                //NMM Funktion 2 - Z=Offset manuell nachstellen
-                if (pCommand->hasZ()) {
-                    if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
-                        // we load the z compensation matrix before its first usage because this can take some time
-                        Com::printFLN(PSTR("M3901: INFO Die Z-Matrix wurde aus dem EEPROM gelesen."));
-                        prepareZCompensation();
-                    }
-                    if (g_ZCompensationMatrix[0][0] == EEPROM_FORMAT) {
-                        //search for a hole within the heat beds z-Matrix
-                        float hochrunter = (float)pCommand->Z;
-                        if (hochrunter > 0.2f)
-                            hochrunter = 0.2f;
-                        if (hochrunter < -0.2f)
-                            hochrunter = -0.2f;
+                    Com::printSharpLine();
 
-                        Com::printSharpLine();
-
-                        if (hochrunter < 0.0f) {
-                            Com::printFLN(PSTR("M3902: Duese-Bett-Abstand wird kleiner gemacht. "), hochrunter);
-                        } else if (hochrunter > 0.0f) {
-                            Com::printFLN(PSTR("M3902: Duese-Bett-Abstand wird groesser gemacht. "), hochrunter);
-                        } else {
-                            Com::printFLN(PSTR("M3902: Duese-Bett-Abstand bleibt gleich. Das Offset wird in die Matrix verrechnet und genullt."), hochrunter);
-                        }
-                        Com::printFLN(PSTR("M3902: -Z heisst Bett hoch/weniger Abstand, +Z heisst Bett runter/mehr Abstand. "));
-                        Com::printFLN(PSTR("M3902: Bei Z=0 ändert sich nichts, doch es wird das aktuelle Offset in die Matrix verrechnet. "));
-
-                        Com::printSharpLine();
-
-                        // determine the minimal distance between extruder and heat bed
-                        determineCompensationOffsetZ(); //-> schreibt kleinsten abstand in g_offsetZCompensationSteps, sollte schon drin sein, aber man weiß nie.
-                        Com::printFLN(PSTR("M3902: Alt::Min. Bett-Hotend Abstand [Steps] = "), -1 * (int)g_offsetZCompensationSteps);
-
-                        long hochrunterSteps = long(hochrunter * Printer::axisStepsPerMM[Z_AXIS]); //axissteps ist auch float
-
-                        Com::printFLN(PSTR("M3902: Veraenderung Z [mm] = "), hochrunter);
-                        Com::printFLN(PSTR("M3902: Veraenderung Z [Steps] = "), hochrunterSteps);
-
-                        if (hochrunter == 0.00f) {
-                            //wenn Z=0.0 soll alles so bleibenk aber das Offset ins Matrix-Offset reingerechnet und genullt werden.
-                            //das Offset muss negativ eingehen, denn wenn die Matrix "weniger tief" ist, bleibt die Düse weiter weg vom Bett.
-                            hochrunterSteps = long((Printer::ZOffset * Printer::axisStepsPerMM[Z_AXIS]) / 1000); //offset-stepps neu berechnen!
-                            Com::printFLN(PSTR("M3902: Veraenderung = zOffset --> zMatrix; Offset = 0;"));
-                        }
-
-                        //das ist ein negativer wert! Je mehr Abstand, desto negativer. Positiv verboten.
-                        if (g_offsetZCompensationSteps + hochrunterSteps > (long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM) - -1 * g_nScanHeatBedUpFastSteps)) {
-                            Com::printF(PSTR("M3902: Fehler::Z-Matrix wuerde positiv werden. Das waere eine Kollision um "), (int)(g_offsetZCompensationSteps + hochrunterSteps));
-                            Com::printFLN(PSTR(" [Steps] bzw. "), Printer::axisMMPerSteps[Z_AXIS] * (float)(g_offsetZCompensationSteps + hochrunterSteps), 2);
-                            Com::printFLN(PSTR(" [mm]"));
-                        } else {
-                            Com::printFLN(PSTR("M3902: Neu::Min. Bett-Extruder Restabstand = "), -1 * (int)(g_offsetZCompensationSteps));
-
-                            short x;
-                            short y;
-                            short deltaZ = (short)hochrunterSteps;
-                            bool overflow = false;
-                            bool overnull = false;
-                            bool overH = false;
-
-                            for (x = 1; x <= g_uZMatrixMax[X_AXIS]; x++) {
-                                for (y = 1; y <= g_uZMatrixMax[Y_AXIS]; y++) {
-                                    if ((long)g_ZCompensationMatrix[x][y] + (long)deltaZ >= 32767) {
-                                        overflow = true;
-                                    } else {
-                                        g_ZCompensationMatrix[x][y] += deltaZ;
-                                        if (g_ZCompensationMatrix[x][y] > 0)
-                                            overnull = true; //overflow oder kollision, kann einfach nicht sein und abfrage ist kurz.
-                                        if (g_ZCompensationMatrix[x][y] > (long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM) - -1 * g_nScanHeatBedUpFastSteps))
-                                            overH = true;
-                                    }
-                                }
-                            }
-                            if (overnull) {
-                                Com::printFLN(PSTR("M3901: WARNING::positive Matrix::Please fix Z-Screw"));
-                            }
-                            if (overH) {
-                                Com::printFLN(PSTR("M3901: ERROR::sehr positive Matrix::ReLoading zMatrix from EEPROM to RAM"));
-                                if (loadCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed))) {
-                                    // Error: there is no valid compensation matrix available
-                                    initCompensationMatrix();
-                                }
-                            } else if (overflow) {
-                                Com::printFLN(PSTR("M3901: ERROR::Overflow in Matrix::ReLoading zMatrix from EEPROM to RAM"));
-                                if (loadCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed))) {
-                                    // Error: there is no valid compensation matrix available
-                                    initCompensationMatrix();
-                                }
-                            } else {
-                                if (hochrunter == 0.00f) {
-                                    Printer::ZOffset = 0; //offset um nullen
-                                    if (HAL::eprGetInt32(EPR_RF_Z_OFFSET) != Printer::ZOffset) {
-                                        HAL::eprSetInt32(EPR_RF_Z_OFFSET, Printer::ZOffset);
-                                        EEPROM::updateChecksum();
-                                    }
-                                    g_staticZSteps = ((Printer::ZOffset + g_nSensiblePressureOffset) * Printer::axisStepsPerMM[Z_AXIS]) / 1000; //offset-stepps neu berechnen
-                                }
-                                g_ZMatrixChangedInRam = 1;
-                            }
-                        }
-
-                        // determine the minimal distance between extruder and heat bed
-                        determineCompensationOffsetZ();
-                        Com::printFLN(PSTR("M3902: Neu::Min. Bett-Extruder Restabstand [Steps] = "), -1 * (int)g_offsetZCompensationSteps);
-                        Com::printFLN(PSTR("M3902: Neu::Min. Bett-Extruder Restabstand [mm] = "), -1 * Printer::axisMMPerSteps[Z_AXIS] * (float)g_offsetZCompensationSteps, 2);
+                    if (hochrunter < 0.0f) {
+                        Com::printFLN(PSTR("M3902: Duese-Bett-Abstand wird kleiner gemacht. "), hochrunter);
+                    } else if (hochrunter > 0.0f) {
+                        Com::printFLN(PSTR("M3902: Duese-Bett-Abstand wird groesser gemacht. "), hochrunter);
                     } else {
-                        Com::printFLN(PSTR("M3902: ERROR::Matrix Initialisation Error!"));
-                        Com::printFLN(PSTR("M3902: INFO Die Z-Matrix konnte nicht aus dem EEPROM gelesen werden."));
-                        Com::printFLN(PSTR("M3902: INFO Vermutlich nie einen Heat-Bed-Scan gemacht."));
+                        Com::printFLN(PSTR("M3902: Duese-Bett-Abstand bleibt gleich. Das Offset wird in die Matrix verrechnet und genullt."), hochrunter);
                     }
-                }
+                    Com::printFLN(PSTR("M3902: -Z heisst Bett hoch/weniger Abstand, +Z heisst Bett runter/mehr Abstand. "));
+                    Com::printFLN(PSTR("M3902: Bei Z=0 ändert sich nichts, doch es wird das aktuelle Offset in die Matrix verrechnet. "));
 
-                //NMM Funktion 3 - S=Save,Sichern der Matrix an spezielle EEPROM-Position
-                if (pCommand->hasS()) {
-                    if (pCommand->S >= 1 && pCommand->S <= EEPROM_MAX_HEAT_BED_SECTORS) {
-                        // save the determined values to the EEPROM @ savepoint "pCommand->S" Standard: 1..9
-                        unsigned int savepoint = (unsigned int)pCommand->S;
-                        saveCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * savepoint)); //g_nActiveHeatBed --> pCommand->S
-                        Com::printFLN(PSTR("M3902: Save the Matrix::OK"));
-                    } else {
-                        Com::printFLN(PSTR("M3902: Save the Matrix::ERROR::invalid savepoint, invalid active heatbedmatrix"));
+                    Com::printSharpLine();
+
+                    // determine the minimal distance between extruder and heat bed
+                    determineCompensationOffsetZ(); //-> schreibt kleinsten abstand in g_offsetZCompensationSteps, sollte schon drin sein, aber man weiß nie.
+                    Com::printFLN(PSTR("M3902: Alt::Min. Bett-Hotend Abstand [Steps] = "), -1 * (int)g_offsetZCompensationSteps);
+
+                    long hochrunterSteps = long(hochrunter * Printer::axisStepsPerMM[Z_AXIS]); //axissteps ist auch float
+
+                    Com::printFLN(PSTR("M3902: Veraenderung Z [mm] = "), hochrunter);
+                    Com::printFLN(PSTR("M3902: Veraenderung Z [Steps] = "), hochrunterSteps);
+
+                    if (hochrunter == 0.00f) {
+                        //wenn Z=0.0 soll alles so bleibenk aber das Offset ins Matrix-Offset reingerechnet und genullt werden.
+                        //das Offset muss negativ eingehen, denn wenn die Matrix "weniger tief" ist, bleibt die Düse weiter weg vom Bett.
+                        hochrunterSteps = long((Printer::ZOffset * Printer::axisStepsPerMM[Z_AXIS]) / 1000); //offset-stepps neu berechnen!
+                        Com::printFLN(PSTR("M3902: Veraenderung = zOffset --> zMatrix; Offset = 0;"));
                     }
+
+                    //das ist ein negativer wert! Je mehr Abstand, desto negativer. Positiv verboten.
+                    if (g_offsetZCompensationSteps + hochrunterSteps > (long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM) - -1 * g_nScanHeatBedUpFastSteps)) {
+                        Com::printF(PSTR("M3902: Fehler::Z-Matrix wuerde positiv werden. Das waere eine Kollision um "), (int)(g_offsetZCompensationSteps + hochrunterSteps));
+                        Com::printFLN(PSTR(" [Steps] bzw. "), Printer::axisMMPerSteps[Z_AXIS] * (float)(g_offsetZCompensationSteps + hochrunterSteps), 2);
+                        Com::printFLN(PSTR(" [mm]"));
+                    } else {
+                        Com::printFLN(PSTR("M3902: Neu::Min. Bett-Extruder Restabstand = "), -1 * (int)(g_offsetZCompensationSteps));
+
+                        short x;
+                        short y;
+                        short deltaZ = (short)hochrunterSteps;
+                        bool overflow = false;
+                        bool overnull = false;
+                        bool overH = false;
+
+                        for (x = 1; x <= g_uZMatrixMax[X_AXIS]; x++) {
+                            for (y = 1; y <= g_uZMatrixMax[Y_AXIS]; y++) {
+                                if ((long)g_ZCompensationMatrix[x][y] + (long)deltaZ >= 32767) {
+                                    overflow = true;
+                                } else {
+                                    g_ZCompensationMatrix[x][y] += deltaZ;
+                                    if (g_ZCompensationMatrix[x][y] > 0)
+                                        overnull = true; //overflow oder kollision, kann einfach nicht sein und abfrage ist kurz.
+                                    if (g_ZCompensationMatrix[x][y] > (long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM) - -1 * g_nScanHeatBedUpFastSteps))
+                                        overH = true;
+                                }
+                            }
+                        }
+                        if (overnull) {
+                            Com::printFLN(PSTR("M3901: WARNING::positive Matrix::Please fix Z-Screw"));
+                        }
+                        if (overH) {
+                            Com::printFLN(PSTR("M3901: ERROR::sehr positive Matrix::ReLoading zMatrix from EEPROM to RAM"));
+                            if (loadCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed))) {
+                                // Error: there is no valid compensation matrix available
+                                initCompensationMatrix();
+                            }
+                        } else if (overflow) {
+                            Com::printFLN(PSTR("M3901: ERROR::Overflow in Matrix::ReLoading zMatrix from EEPROM to RAM"));
+                            if (loadCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed))) {
+                                // Error: there is no valid compensation matrix available
+                                initCompensationMatrix();
+                            }
+                        } else {
+                            if (hochrunter == 0.00f) {
+                                Printer::ZOffset = 0; //offset um nullen
+                                if (HAL::eprGetInt32(EPR_RF_Z_OFFSET) != Printer::ZOffset) {
+                                    HAL::eprSetInt32(EPR_RF_Z_OFFSET, Printer::ZOffset);
+                                    EEPROM::updateChecksum();
+                                }
+                                g_staticZSteps = ((Printer::ZOffset + g_nSensiblePressureOffset) * Printer::axisStepsPerMM[Z_AXIS]) / 1000; //offset-stepps neu berechnen
+                            }
+                            g_ZMatrixChangedInRam = 1;
+                        }
+                    }
+
+                    // determine the minimal distance between extruder and heat bed
+                    determineCompensationOffsetZ();
+                    Com::printFLN(PSTR("M3902: Neu::Min. Bett-Extruder Restabstand [Steps] = "), -1 * (int)g_offsetZCompensationSteps);
+                    Com::printFLN(PSTR("M3902: Neu::Min. Bett-Extruder Restabstand [mm] = "), -1 * Printer::axisMMPerSteps[Z_AXIS] * (float)g_offsetZCompensationSteps, 2);
+                } else {
+                    Com::printFLN(PSTR("M3902: ERROR::Matrix Initialisation Error!"));
+                    Com::printFLN(PSTR("M3902: INFO Die Z-Matrix konnte nicht aus dem EEPROM gelesen werden."));
+                    Com::printFLN(PSTR("M3902: INFO Vermutlich nie einen Heat-Bed-Scan gemacht."));
+                }
+            }
+
+            //NMM Funktion 3 - S=Save,Sichern der Matrix an spezielle EEPROM-Position
+            if (pCommand->hasS()) {
+                if (pCommand->S >= 1 && pCommand->S <= EEPROM_MAX_HEAT_BED_SECTORS) {
+                    // save the determined values to the EEPROM @ savepoint "pCommand->S" Standard: 1..9
+                    unsigned int savepoint = (unsigned int)pCommand->S;
+                    saveCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * savepoint)); //g_nActiveHeatBed --> pCommand->S
+                    Com::printFLN(PSTR("M3902: Save the Matrix::OK"));
+                } else {
+                    Com::printFLN(PSTR("M3902: Save the Matrix::ERROR::invalid savepoint, invalid active heatbedmatrix"));
                 }
             }
             break;
@@ -8972,64 +7133,62 @@ void processSpecialGCode(GCode* pCommand) {
 #if FEATURE_SENSIBLE_PRESSURE
         case 3909: // M3909 [P]PressureDigits - configure the sensible pressure value threshold || by Wessix and Nibbels
         {
-            if (isSupportedMCommand(pCommand->M, OPERATING_MODE_PRINT)) {
-                bool error = false;
-                //Statusänderung P10000 ([digits])
-                if (pCommand->hasP()) {
-                    if (pCommand->P > 32767)
-                        pCommand->P = 32767;
-                    if (pCommand->P >= 0 && pCommand->P < EMERGENCY_PAUSE_DIGITS_MAX) {
-                        if (pCommand->P) {
-                            Com::printFLN(PSTR("M3909: SensiblePressure Pmax="), pCommand->P);
-                            short oldval = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS);
-                            if (oldval != pCommand->P) {
-                                Com::printFLN(PSTR("M3909: P change"));
-                                HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS, pCommand->P);
-                                EEPROM::updateChecksum(); //deshalb die prüfung
-                            }
-                        } else {
-                            g_nSensiblePressureDigits = 0;
-                            error = true;
-                            Com::printFLN(PSTR("M3909: SensiblePressure disabled"));
-                        }
-                    } else {
-                        Com::printFLN(PSTR("M3909: wrong [P]"));
-                        error = true;
-                    }
-                }
-
-                if (pCommand->hasS()) {
-                    if (pCommand->S > 0 && pCommand->S <= 300) {
-                        //max darf nie 0 werden!! div/0 bei zeile ~5600
-                        g_nSensiblePressureOffsetMax = (short)pCommand->S;
-                        Com::printFLN(PSTR("M3909: SensiblePressure max. [S]Offset changed to "), g_nSensiblePressureOffsetMax);
-                        short oldval = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX);
-                        if (oldval != g_nSensiblePressureOffsetMax) {
-                            Com::printFLN(PSTR("M3909: S change"));
-                            HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX, g_nSensiblePressureOffsetMax);
+            bool error = false;
+            //Statusänderung P10000 ([digits])
+            if (pCommand->hasP()) {
+                if (pCommand->P > 32767)
+                    pCommand->P = 32767;
+                if (pCommand->P >= 0 && pCommand->P < EMERGENCY_PAUSE_DIGITS_MAX) {
+                    if (pCommand->P) {
+                        Com::printFLN(PSTR("M3909: SensiblePressure Pmax="), pCommand->P);
+                        short oldval = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS);
+                        if (oldval != pCommand->P) {
+                            Com::printFLN(PSTR("M3909: P change"));
+                            HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS, pCommand->P);
                             EEPROM::updateChecksum(); //deshalb die prüfung
                         }
                     } else {
-                        Com::printFLN(PSTR("M3909: ERROR::>0.3mm=S300 - This function is ment to compensate minimal amounts of too close distance."));
-                        Com::printFLN(PSTR("M3909: INFO::If you have to auto-compensate your offset to high, clean your nozzle, rise your temp, lower your speed."));
-                        Com::printFLN(PSTR("M3909: INFO::This function should lower the chance of an accidential emergency block on the first layer. It cannot help you to avoid calibration!"));
+                        g_nSensiblePressureDigits = 0;
                         error = true;
+                        Com::printFLN(PSTR("M3909: SensiblePressure disabled"));
                     }
-                }
-
-                //Statusausgabe per M3909
-                if (g_nSensiblePressureDigits) {
-                    Com::printF(PSTR("M3909: INFO SensiblePressure active. [P]PressureDigit = +-"), g_nSensiblePressureDigits);
-                    Com::printFLN(PSTR(" [digits] (Standard: use `standard print digits` +20%)"));
-                    Com::printF(PSTR("M3909: INFO SensiblePressures [S]max. offset is "), g_nSensiblePressureOffsetMax);
-                    Com::printFLN(PSTR(" [um] (Standard: 180um, Max: 300um)"));
                 } else {
-                    Com::printFLN(PSTR("M3909: INFO SensiblePressure is currently disabled."));
+                    Com::printFLN(PSTR("M3909: wrong [P]"));
+                    error = true;
                 }
-
-                if (!error)
-                    queueTask(TASK_ENABLE_SENSE_OFFSET);
             }
+
+            if (pCommand->hasS()) {
+                if (pCommand->S > 0 && pCommand->S <= 300) {
+                    //max darf nie 0 werden!! div/0 bei zeile ~5600
+                    g_nSensiblePressureOffsetMax = (short)pCommand->S;
+                    Com::printFLN(PSTR("M3909: SensiblePressure max. [S]Offset changed to "), g_nSensiblePressureOffsetMax);
+                    short oldval = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX);
+                    if (oldval != g_nSensiblePressureOffsetMax) {
+                        Com::printFLN(PSTR("M3909: S change"));
+                        HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX, g_nSensiblePressureOffsetMax);
+                        EEPROM::updateChecksum(); //deshalb die prüfung
+                    }
+                } else {
+                    Com::printFLN(PSTR("M3909: ERROR::>0.3mm=S300 - This function is ment to compensate minimal amounts of too close distance."));
+                    Com::printFLN(PSTR("M3909: INFO::If you have to auto-compensate your offset to high, clean your nozzle, rise your temp, lower your speed."));
+                    Com::printFLN(PSTR("M3909: INFO::This function should lower the chance of an accidential emergency block on the first layer. It cannot help you to avoid calibration!"));
+                    error = true;
+                }
+            }
+
+            //Statusausgabe per M3909
+            if (g_nSensiblePressureDigits) {
+                Com::printF(PSTR("M3909: INFO SensiblePressure active. [P]PressureDigit = +-"), g_nSensiblePressureDigits);
+                Com::printFLN(PSTR(" [digits] (Standard: use `standard print digits` +20%)"));
+                Com::printF(PSTR("M3909: INFO SensiblePressures [S]max. offset is "), g_nSensiblePressureOffsetMax);
+                Com::printFLN(PSTR(" [um] (Standard: 180um, Max: 300um)"));
+            } else {
+                Com::printFLN(PSTR("M3909: INFO SensiblePressure is currently disabled."));
+            }
+
+            if (!error)
+                queueTask(TASK_ENABLE_SENSE_OFFSET);
             break;
         }
 #endif // FEATURE_SENSIBLE_PRESSURE
@@ -9574,14 +7733,6 @@ bool isAnyScanRunning() {
     if (g_nZOSScanStatus)
         return true;
 #endif //FEATURE_HEAT_BED_Z_COMPENSATION
-#if FEATURE_WORK_PART_Z_COMPENSATION
-    if (g_nWorkPartScanStatus)
-        return true;
-#endif //FEATURE_WORK_PART_Z_COMPENSATION
-#if FEATURE_FIND_Z_ORIGIN
-    if (g_nFindZOriginStatus)
-        return true;
-#endif //FEATURE_FIND_Z_ORIGIN
 
     return false;
 }
@@ -9592,7 +7743,7 @@ void moveXAction(int8_t direction) {
     if (g_pauseMode) {
         moveKosys = KOSYS_DIRECTOFFSET;
     } else if (PrintLine::linesCount || isAnyScanRunning()) {
-        // this operation is not allowed while a printing/milling/scanning is in progress
+        // this operation is not allowed while a printing or scanning is in progress
         return;
     }
 
@@ -9688,7 +7839,7 @@ void moveYAction(int8_t direction) {
     if (g_pauseMode) {
         moveKosys = KOSYS_DIRECTOFFSET;
     } else if (PrintLine::linesCount || isAnyScanRunning()) {
-        // this operation is not allowed while a printing/milling/scanning is in progress
+        // this operation is not allowed while a printing or scanning is in progress
         return;
     }
 
@@ -9812,7 +7963,7 @@ void moveZAction(int8_t direction) {
     if (g_pauseMode) {
         moveMode = MOVE_MODE_SINGLE_MOVE;
     } else if (PrintLine::linesCount) {
-        // in case we are printing/milling at the moment, only the single step movements are allowed
+        // in case we are printing at the moment, only the single step movements are allowed
         moveMode = MOVE_MODE_SINGLE_STEPS;
     }
 
@@ -9886,18 +8037,6 @@ void moveZAction(int8_t direction) {
             return;
         }
 
-#if FEATURE_MILLING_MODE
-        // Im Milling nicht so strikt sein, einfach fahren was kommandiert wird und auf softendstop hoffen. Evtl. ist diese Regel Bullshit.
-        if (Printer::operatingMode != OPERATING_MODE_PRINT) {
-            //#if MENU_POSITION_ALL_DIRECT
-            Printer::offsetRelativeStepsCoordinates(0, 0, distanceMM * Printer::axisStepsPerMM[Z_AXIS] * direction, 0, TASK_MOVE_POSITION_MANUAL);
-            //#else
-            //				Printer::queueRelativeMMCoordinates(0, 0, distanceMM * direction, 0, Printer::feedrate, true);
-            //#endif
-
-            return;
-        }
-#endif // FEATURE_MILLING_MODE
 
         // Wir sind hier knapp über dem Schalter: Nur so weit runterfahren, wie man über 0 ist. Denn da ist beim Printermode homed der Endschalter.
         if (Printer::currentZSteps > 0) {
@@ -10501,132 +8640,6 @@ void cleanupEPositions(void) {
     noInts.unprotect();
 } // cleanupEPositions
 
-void setZOrigin(void) {
-#if FEATURE_FIND_Z_ORIGIN
-    g_nZOriginPosition[X_AXIS] = Printer::currentXSteps;
-    g_nZOriginPosition[Y_AXIS] = Printer::currentYSteps;
-    g_nZOriginPosition[Z_AXIS] = 0;
-    Printer::setZOriginSet(true); //flag wegen statusnachricht
-#endif                            // FEATURE_FIND_Z_ORIGIN
-
-    // Axis length is decreased by active position height
-    // Diese neue Länge wandert gleich ins EEPROM. Will man das wirklich? Unten sollte sowieso der Endschalter stoppen.
-    // Printer::axisLengthMM[Z_AXIS] -= (Printer::destinationMM[Z_AXIS] + Printer::getDirectMM(Z_AXIS));
-
-    Printer::setZAxisSteps(0);
-    Printer::resetDirectAxis(Z_AXIS);
-
-    // Origin offset set for gcode coordinate translation
-    Printer::originOffsetMM[Z_AXIS] = 0;
-
-    g_nZScanZPosition = 0;
-    // -> nönö, daran verändert nur das homing was!: Printer::currentZSteps                      = 0; //an dieser variable darf man im druckmodus eigentlich nie rumspielen ^^.
-
-    Printer::updateDerivedParameter();
-
-#if EEPROM_MODE != 0
-    EEPROM::storeDataIntoEEPROM(false);
-
-    if (Printer::debugInfo()) {
-        Com::printFLN(Com::tEEPROMUpdated);
-    }
-#endif // EEPROM_MODE!=0
-
-    Commands::printCurrentPosition();
-
-    BEEP_ACCEPT_SET_POSITION
-} // setZOrigin
-
-void switchOperatingMode(char newOperatingMode) {
-    if (newOperatingMode != OPERATING_MODE_PRINT
-#if FEATURE_MILLING_MODE
-        && newOperatingMode != OPERATING_MODE_MILL
-#endif // FEATURE_MILLING_MODE
-    ) {
-        // do not allow not-supported operating modes
-        return;
-    }
-
-    Printer::disableCMPnow(true); //besser aus und warten.
-
-#if FEATURE_MILLING_MODE
-    Printer::operatingMode = newOperatingMode;
-    if (Printer::operatingMode == OPERATING_MODE_PRINT) {
-#endif // FEATURE_MILLING_MODE
-        setupForPrinting();
-#if FEATURE_MILLING_MODE
-    } else {
-        setupForMilling();
-    }
-#endif // FEATURE_MILLING_MODE
-} // switchOperatingMode
-
-#if FEATURE_MILLING_MODE
-void switchActiveWorkPart(char newActiveWorkPart) {
-    if (!saveActiveWorkPartToExtEEPROM(newActiveWorkPart)) {
-        // do not allow not-supported z-compensation matrix
-        return;
-    }
-
-    g_nActiveWorkPart = newActiveWorkPart;
-
-    if (loadCompensationMatrix((EEPROM_SECTOR_SIZE * 9) + (unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveWorkPart))) {
-        // there is no valid z-compensation matrix available
-        initCompensationMatrix();
-    }
-} // switchActiveWorkPart
-
-void setScanXYStart(void) {
-    g_nScanXStartSteps = Printer::getDestinationSteps(X_AXIS) + Printer::directDestinationSteps[X_AXIS];
-    g_nScanYStartSteps = Printer::getDestinationSteps(Y_AXIS) + Printer::directDestinationSteps[Y_AXIS];
-
-    if (g_nScanXStartSteps > g_nScanXMaxPositionSteps || g_nScanYStartSteps > g_nScanYMaxPositionSteps) {
-        // the new start position would be bigger than the current end position - we set the end position to the start position in this case
-        if (Printer::debugInfo()) {
-            Com::printFLN(PSTR("setScanXYStart(): the new x/y start position is bigger than the current x/y end position, the x/y end position will be set to the new x/y start position"));
-            g_nScanXMaxPositionSteps = g_nScanXStartSteps;
-            g_nScanYMaxPositionSteps = g_nScanYStartSteps;
-        }
-    }
-
-    if (Printer::debugInfo()) {
-        Com::printFLN(PSTR("setScanXYStart(): the new x/y start position has been set"));
-        Com::printF(PSTR("start: x = "), (float)g_nScanXStartSteps * Printer::axisMMPerSteps[X_AXIS]);
-        Com::printF(PSTR(", y = "), (float)g_nScanYStartSteps * Printer::axisMMPerSteps[Y_AXIS]);
-        Com::printFLN(PSTR(" [mm]"));
-        Com::printF(PSTR("end: x = "), (float)g_nScanXMaxPositionSteps * Printer::axisMMPerSteps[X_AXIS]);
-        Com::printF(PSTR(", y = "), (float)g_nScanYMaxPositionSteps * Printer::axisMMPerSteps[Y_AXIS]);
-        Com::printFLN(PSTR(" [mm]"));
-    }
-    BEEP_ACCEPT_SET_POSITION
-} // setScanXYStart
-
-void setScanXYEnd(void) {
-    // round to Integer [mm]
-    g_nScanXMaxPositionSteps = Printer::getDestinationSteps(X_AXIS) + Printer::directDestinationSteps[X_AXIS];
-    g_nScanYMaxPositionSteps = Printer::getDestinationSteps(Y_AXIS) + Printer::directDestinationSteps[Y_AXIS];
-
-    if (g_nScanXMaxPositionSteps < g_nScanXStartSteps || g_nScanYMaxPositionSteps < g_nScanYStartSteps) {
-        // the new end position would be smaller than the current start position - we set the start position to the end position in this case
-        if (Printer::debugInfo()) {
-            Com::printFLN(PSTR("setScanXYEnd(): the new x/y end position is smaller than the current x/y start position, the x/y start position will be set to the new x/y end position"));
-            g_nScanXStartSteps = g_nScanXMaxPositionSteps;
-            g_nScanYStartSteps = g_nScanYMaxPositionSteps;
-        }
-    }
-
-    if (Printer::debugInfo()) {
-        Com::printFLN(PSTR("setScanXYEnd(): the new x/y end position has been set"));
-        Com::printF(PSTR("start: x = "), (float)g_nScanXStartSteps * Printer::axisMMPerSteps[X_AXIS]);
-        Com::printF(PSTR(", y = "), (float)g_nScanYStartSteps * Printer::axisMMPerSteps[Y_AXIS]);
-        Com::printFLN(PSTR(" [mm]"));
-        Com::printF(PSTR("end: x = "), (float)g_nScanXMaxPositionSteps * Printer::axisMMPerSteps[X_AXIS]);
-        Com::printF(PSTR(", y = "), (float)g_nScanYMaxPositionSteps * Printer::axisMMPerSteps[Y_AXIS]);
-        Com::printFLN(PSTR(" [mm]"));
-    }
-    BEEP_ACCEPT_SET_POSITION
-} // setScanXYEnd
-#endif // FEATURE_MILLING_MODE
 
 #if FEATURE_HEAT_BED_Z_COMPENSATION
 void switchActiveHeatBed(char newActiveHeatBed) {
@@ -10712,68 +8725,55 @@ void updateRGBLightStatus(void) {
         return;
     }
 
-#if FEATURE_MILLING_MODE
-    if (Printer::operatingMode == OPERATING_MODE_PRINT) {
-#endif // FEATURE_MILLING_MODE
 
-        // operating mode print
+    // operating mode print
 #if NUM_EXTRUDER >= 1
-        for (uint8_t i = 0; i < NUM_EXTRUDER; i++) {
-            if (extruder[i].tempControl.targetTemperatureC > MAX_ROOM_TEMPERATURE) {
-                if (fabs(extruder[i].tempControl.targetTemperatureC - extruder[i].tempControl.currentTemperatureC) < RGB_LIGHT_TEMP_TOLERANCE) {
-                    // we have reached the target temperature
-                    newStatus = RGB_STATUS_PRINTING;
-                } else if (extruder[i].tempControl.targetTemperatureC > extruder[i].tempControl.currentTemperatureC) {
-                    // we are still heating
-                    newStatus = RGB_STATUS_HEATING;
-                } else {
-                    // we end up here in case the target temperature is below the current temperature (this happens typically when the target temperature is reduced after the first layer)
-                }
-            }
-        }
-#endif // NUM_EXTRUDER >= 1
-
-        if (heatedBedController.targetTemperatureC > MAX_ROOM_TEMPERATURE) {
-            if (fabs(heatedBedController.targetTemperatureC - heatedBedController.currentTemperatureC) < RGB_LIGHT_TEMP_TOLERANCE) {
+    for (uint8_t i = 0; i < NUM_EXTRUDER; i++) {
+        if (extruder[i].tempControl.targetTemperatureC > MAX_ROOM_TEMPERATURE) {
+            if (fabs(extruder[i].tempControl.targetTemperatureC - extruder[i].tempControl.currentTemperatureC) < RGB_LIGHT_TEMP_TOLERANCE) {
                 // we have reached the target temperature
-                if (newStatus == RGB_STATUS_IDLE) {
-                    newStatus = RGB_STATUS_PRINTING;
-                }
-            } else if (heatedBedController.targetTemperatureC > heatedBedController.currentTemperatureC) {
+                newStatus = RGB_STATUS_PRINTING;
+            } else if (extruder[i].tempControl.targetTemperatureC > extruder[i].tempControl.currentTemperatureC) {
                 // we are still heating
                 newStatus = RGB_STATUS_HEATING;
             } else {
                 // we end up here in case the target temperature is below the current temperature (this happens typically when the target temperature is reduced after the first layer)
             }
         }
-
-#if NUM_EXTRUDER >= 1
-        for (uint8_t i = 0; i < NUM_EXTRUDER; i++) {
-            if ((extruder[i].tempControl.currentTemperatureC - extruder[i].tempControl.targetTemperatureC) > COOLDOWN_THRESHOLD) {
-                // we shall cool down
-                if (newStatus == RGB_STATUS_IDLE) {
-                    newStatus = RGB_STATUS_COOLING;
-                }
-            }
-        }
+    }
 #endif // NUM_EXTRUDER >= 1
 
-        if ((heatedBedController.currentTemperatureC - heatedBedController.targetTemperatureC) > COOLDOWN_THRESHOLD) {
+    if (heatedBedController.targetTemperatureC > MAX_ROOM_TEMPERATURE) {
+        if (fabs(heatedBedController.targetTemperatureC - heatedBedController.currentTemperatureC) < RGB_LIGHT_TEMP_TOLERANCE) {
+            // we have reached the target temperature
+            if (newStatus == RGB_STATUS_IDLE) {
+                newStatus = RGB_STATUS_PRINTING;
+            }
+        } else if (heatedBedController.targetTemperatureC > heatedBedController.currentTemperatureC) {
+            // we are still heating
+            newStatus = RGB_STATUS_HEATING;
+        } else {
+            // we end up here in case the target temperature is below the current temperature (this happens typically when the target temperature is reduced after the first layer)
+        }
+    }
+
+#if NUM_EXTRUDER >= 1
+    for (uint8_t i = 0; i < NUM_EXTRUDER; i++) {
+        if ((extruder[i].tempControl.currentTemperatureC - extruder[i].tempControl.targetTemperatureC) > COOLDOWN_THRESHOLD) {
             // we shall cool down
             if (newStatus == RGB_STATUS_IDLE) {
                 newStatus = RGB_STATUS_COOLING;
             }
         }
-#if FEATURE_MILLING_MODE
-    } else {
-        // operating mode mill
-        if (PrintLine::linesCount) {
-            newStatus = RGB_STATUS_PRINTING;
-        } else {
-            newStatus = RGB_STATUS_IDLE;
+    }
+#endif // NUM_EXTRUDER >= 1
+
+    if ((heatedBedController.currentTemperatureC - heatedBedController.targetTemperatureC) > COOLDOWN_THRESHOLD) {
+        // we shall cool down
+        if (newStatus == RGB_STATUS_IDLE) {
+            newStatus = RGB_STATUS_COOLING;
         }
     }
-#endif // FEATURE_MILLING_MODE
 
     if (newStatus != Printer::RGBLightStatus) {
         if (newStatus == RGB_STATUS_IDLE && Printer::RGBLightStatus == RGB_STATUS_COLOR_CHANGE) {
@@ -10839,7 +8839,7 @@ void updateRGBLightStatus(void) {
 } // updateRGBLightStatus
 #endif // FEATURE_RGB_LIGHT_EFFECTS
 
-void setupForPrinting(void) {
+static void setupForPrinting() {
     Printer::setSomeTempsensorDefect(false);
 
 #if EEPROM_MODE
@@ -10882,62 +8882,8 @@ void setupForPrinting(void) {
 
     g_staticZSteps = (Printer::ZOffset * Printer::axisStepsPerMM[Z_AXIS]) / 1000;
 
-    Printer::setMenuMode(MENU_MODE_MILLER, false);
-    Printer::setMenuMode(MENU_MODE_PRINTER, true);
-
     g_uStartOfIdle = HAL::timeInMilliseconds(); //setupForPrinting
 } // setupForPrinting
-
-void setupForMilling(void) {
-#if EEPROM_MODE
-    // read the settings from the EEPROM
-    Printer::homingFeedrate[X_AXIS] = HAL::eprGetFloat(EPR_X_HOMING_FEEDRATE_MILL);
-    Printer::homingFeedrate[Y_AXIS] = HAL::eprGetFloat(EPR_Y_HOMING_FEEDRATE_MILL);
-    Printer::homingFeedrate[Z_AXIS] = HAL::eprGetFloat(EPR_Z_HOMING_FEEDRATE_MILL);
-#else
-    // read the settings from Configuration.h
-    Printer::homingFeedrate[X_AXIS] = HOMING_FEEDRATE_X_MILL;
-    Printer::homingFeedrate[Y_AXIS] = HOMING_FEEDRATE_Y_MILL;
-    Printer::homingFeedrate[Z_AXIS] = HOMING_FEEDRATE_Z_MILL;
-#endif // EEPROM_MODE
-
-    // disable all heaters
-    Extruder::setHeatedBedTemperature(0, false);
-    Extruder::setTemperatureForAllExtruders(0, false);
-
-#if EEPROM_MODE
-    Printer::axisLengthMM[X_AXIS] = HAL::eprGetFloat(EPR_X_LENGTH_MILLING);
-    if (Printer::axisLengthMM[X_AXIS] <= 0 || Printer::axisLengthMM[X_AXIS] > 245.0f) {
-        Printer::axisLengthMM[X_AXIS] = X_MAX_LENGTH_MILL;
-        HAL::eprSetFloat(EPR_X_LENGTH_MILLING, Printer::axisLengthMM[X_AXIS]);
-        EEPROM::updateChecksum();
-    }
-#else
-    Printer::axisLengthMM[X_AXIS] = X_MAX_LENGTH_MILL;
-#endif // EEPROM_MODE
-
-#if FEATURE_WORK_PART_Z_COMPENSATION
-    loadActiveWorkPartFromExtEEPROM();
-    if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
-        // we load the z compensation matrix before its first usage because this can take some time
-        // This function needs the corrected axis length for restoreDefaultScanParameters();
-        prepareZCompensation();
-    }
-#endif // FEATURE_WORK_PART_Z_COMPENSATION
-
-    g_nPauseSteps[X_AXIS] = long(Printer::axisStepsPerMM[X_AXIS] * DEFAULT_PAUSE_MM_X_MILL);
-    g_nPauseSteps[Y_AXIS] = long(Printer::axisStepsPerMM[Y_AXIS] * DEFAULT_PAUSE_MM_Y_MILL);
-    g_nPauseSteps[Z_AXIS] = long(Printer::axisStepsPerMM[Z_AXIS] * DEFAULT_PAUSE_MM_Z_MILL);
-
-    Printer::updateDerivedParameter();
-
-    g_staticZSteps = 0;
-
-    Printer::setMenuMode(MENU_MODE_PRINTER, false);
-    Printer::setMenuMode(MENU_MODE_MILLER, true);
-
-    g_uStartOfIdle = HAL::timeInMilliseconds(); //setupForMilling
-} // setupForMilling
 
 void prepareZCompensation(void) {
     if (COMPENSATION_MATRIX_SIZE > EEPROM_SECTOR_SIZE) {
@@ -10949,92 +8895,24 @@ void prepareZCompensation(void) {
         return;
     }
 
-#if FEATURE_MILLING_MODE
-    if (Printer::operatingMode == OPERATING_MODE_PRINT) {
-#endif // FEATURE_MILLING_MODE
 #if FEATURE_HEAT_BED_Z_COMPENSATION
-        // restore the default scan parameters
-        restoreDefaultScanParameters();
+    // restore the default scan parameters
+    restoreDefaultScanParameters();
 
-        // restore the last known compensation matrix
-        // this operation must be performed after restoring of the default scan parameters because the values from the EEPROM can overwrite some scan parameters
-        if (loadCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed))) {
-            // there is no valid compensation matrix available
-            initCompensationMatrix();
-            Com::printFLN(PSTR("prepareZCompensation(): the compensation matrix is not available"));
-        }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
-#if FEATURE_MILLING_MODE
-    } else if (Printer::operatingMode == OPERATING_MODE_MILL) {
-#if FEATURE_WORK_PART_Z_COMPENSATION
-        // we must restore the default work part scan parameters
-        restoreDefaultScanParameters();
-
-        // we must restore the work part z-compensation matrix
-        // this operation must be performed after restoring of the default scan parameters because the values from the EEPROM can overwrite some scan parameters
-        if (loadCompensationMatrix((EEPROM_SECTOR_SIZE * 9) + (unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveWorkPart))) {
-            // there is no valid compensation matrix available
-            initCompensationMatrix();
-            Com::printFLN(PSTR("prepareZCompensation(): the compensation matrix is not available"));
-        }
-#endif // FEATURE_WORK_PART_Z_COMPENSATION
+    // restore the last known compensation matrix
+    // this operation must be performed after restoring of the default scan parameters because the values from the EEPROM can overwrite some scan parameters
+    if (loadCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed))) {
+        // there is no valid compensation matrix available
+        initCompensationMatrix();
+        Com::printFLN(PSTR("prepareZCompensation(): the compensation matrix is not available"));
     }
-#endif // FEATURE_MILLING_MODE
+#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
 } // prepareZCompensation
-
-unsigned char isSupportedGCommand(unsigned int currentGCode, char neededMode, char outputLog) {
-    char currentMode = OPERATING_MODE_PRINT;
-
-#if FEATURE_MILLING_MODE
-    if (Printer::operatingMode == OPERATING_MODE_MILL) {
-        currentMode = OPERATING_MODE_MILL;
-    }
-#endif // FEATURE_MILLING_MODE
-
-    if (currentMode == neededMode) {
-        return 1;
-    }
-
-    if (Printer::debugErrors() && outputLog) {
-        Com::printF(PSTR("G"), (int)currentGCode);
-        Com::printFLN(PSTR(": this command is not supported in this mode"));
-    }
-
-    // TODO: shall we show an error message at the display here?
-    return 0;
-
-} // isSupportedGCommand
-
-unsigned char isSupportedMCommand(unsigned int currentMCode, char neededMode, char outputLog) {
-    char currentMode = OPERATING_MODE_PRINT;
-
-#if FEATURE_MILLING_MODE
-    if (Printer::operatingMode == OPERATING_MODE_MILL) {
-        currentMode = OPERATING_MODE_MILL;
-    }
-#endif // FEATURE_MILLING_MODE
-
-    if (currentMode == neededMode) {
-        return 1;
-    }
-
-    if (Printer::debugErrors() && outputLog) {
-        Com::printF(PSTR("M"), (int)currentMCode);
-        Com::printFLN(PSTR(": this command is not supported in this mode"));
-    }
-
-    // TODO: shall we show an error message at the display here?
-    return 0;
-
-} // isSupportedMCommand
 
 unsigned char isMovingAllowed(const char* pszCommand, char outputLog) {
 #if FEATURE_UNLOCK_MOVEMENT
     if (
-#if FEATURE_MILLING_MODE
-        Printer::operatingMode == OPERATING_MODE_PRINT &&
-#endif                               // FEATURE_MILLING_MODE
         !Printer::g_unlock_movement) //!Printer::isHomed()
     {
         // do not allow to move in case the printer just started and has no homing
@@ -11064,27 +8942,7 @@ unsigned char isMovingAllowed(const char* pszCommand, char outputLog) {
     }
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
-#if FEATURE_WORK_PART_Z_COMPENSATION
-    if (g_nWorkPartScanStatus) {
-        // do not allow manual movements while the work part scan is in progress
-        if (Printer::debugErrors() && outputLog) {
-            Com::printF(pszCommand);
-            Com::printFLN(PSTR(": command can not be used while scan is in progress"));
-        }
-        return 0;
-    }
-#endif // FEATURE_WORK_PART_Z_COMPENSATION
 
-#if FEATURE_FIND_Z_ORIGIN
-    if (g_nFindZOriginStatus && g_nFindZOriginStatus != 30) {
-        // do not allow manual movements while the z-origin is searched
-        if (Printer::debugErrors() && outputLog) {
-            Com::printF(pszCommand);
-            Com::printFLN(PSTR(": this command can not be used while the z-origin is searched"));
-        }
-        return 0;
-    }
-#endif // FEATURE_FIND_Z_ORIGIN
 
 #if FEATURE_CONFIGURABLE_Z_ENDSTOPS
     if (Printer::ZEndstopUnknown) {
@@ -11127,29 +8985,7 @@ unsigned char isHomingAllowed(GCode* com, char outputLog) {
     }
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
-#if FEATURE_WORK_PART_Z_COMPENSATION
-    if (g_nWorkPartScanStatus) {
-        // do not allow homing while the work part scan is in progress
-        if (Printer::debugErrors() && outputLog) {
-            Com::printFLN(PSTR("G28: homing can not be performed while the work part scan is in progress"));
-        }
-        showError((void*)ui_text_home, (void*)ui_text_operation_denied);
 
-        return 0;
-    }
-#endif // FEATURE_WORK_PART_Z_COMPENSATION
-
-#if FEATURE_FIND_Z_ORIGIN
-    if (g_nFindZOriginStatus) {
-        // do not allow homing while the z-origin is searched
-        if (Printer::debugErrors() && outputLog) {
-            Com::printFLN(PSTR("G28: homing can not be performed while the z-origin is searched"));
-        }
-        showError((void*)ui_text_home, (void*)ui_text_operation_denied);
-
-        return 0;
-    }
-#endif // FEATURE_FIND_Z_ORIGIN
 
     if (!com) {
         // there is nothing more which we can check
@@ -11407,15 +9243,7 @@ void notifyAboutWrongHardwareType(unsigned char guessedHardwareType) {
 #endif // FEATURE_TYPE_EEPROM
 
 void showIdle(void) {
-#if FEATURE_MILLING_MODE
-    if (Printer::operatingMode == OPERATING_MODE_PRINT) {
-#endif // FEATURE_MILLING_MODE
-        UI_STATUS(UI_TEXT_PRINTER_READY);
-#if FEATURE_MILLING_MODE
-    } else {
-        UI_STATUS(UI_TEXT_MILLER_READY);
-    }
-#endif // FEATURE_MILLING_MODE
+    UI_STATUS(UI_TEXT_PRINTER_READY);
 } // showIdle
 
 void showError(const void* line2, const void* line3, const void* line4) {
