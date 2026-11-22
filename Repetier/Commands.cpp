@@ -186,11 +186,7 @@ void Commands::printTemperatures(bool showRaw) {
         Com::printF(Com::tSpace);
         Com::printF(Com::tF);
         Com::printF(Com::tColon, (int)g_nLastDigits); //Kraft
-#if FEATURE_ZERO_DIGITS
         Com::printF(Com::tSpaceSlash, (int)(Printer::g_pressure_offset_active ? Printer::g_pressure_offset : 0)); //Offset
-#else
-        Com::printF(Com::tSpaceSlash, 0); //Offset 0
-#endif                                      // FEATURE_ZERO_DIGITS
         Com::printF(Com::tSpaceAtColon, 0); //Ziel ^^, nein ich halte mich nur an die PWM-Syntax
         Com::println();
     }
@@ -515,9 +511,9 @@ void Commands::processMCode(GCode* com) {
 
         if (com->hasS()) {
             if (com->hasT())
-                Extruder::setTemperatureForExtruder(com->S, com->T, com->hasF() && com->F > 0);
+                Extruder::setTemperatureForExtruder(com->S, com->T);
             else
-                Extruder::setTemperatureForExtruder(com->S, Extruder::current->id, com->hasF() && com->F > 0);
+                Extruder::setTemperatureForExtruder(com->S, Extruder::current->id);
         }
 #endif // NUM_EXTRUDER>0
         break;
@@ -538,7 +534,7 @@ void Commands::processMCode(GCode* com) {
         if (Printer::debugDryrun())
             break;
         if (com->hasS())
-            Extruder::setHeatedBedTemperature(com->S, com->hasF() && com->F > 0);
+            Extruder::setHeatedBedTemperature(com->S);
         break;
     }
     case 109: // M109 - Wait for extruder heater to reach target.
@@ -560,7 +556,7 @@ void Commands::processMCode(GCode* com) {
         if (com->hasT() && com->T < NUM_EXTRUDER)
             actExtruder = &extruder[com->T];
         if (com->hasS())
-            Extruder::setTemperatureForExtruder(com->S, actExtruder->id, com->hasF() && com->F > 0);
+            Extruder::setTemperatureForExtruder(com->S, actExtruder->id);
 
         if (fabs(actExtruder->tempControl.targetTemperatureC - actExtruder->tempControl.currentTemperatureC) < TEMP_TOLERANCE) {
             break;
@@ -644,7 +640,7 @@ void Commands::processMCode(GCode* com) {
         g_uStartOfIdle = 0;                 //M190
         Commands::waitUntilEndOfAllMoves(); //M190
         if (com->hasS())
-            Extruder::setHeatedBedTemperature(com->S, com->hasF() && com->F > 0);
+            Extruder::setHeatedBedTemperature(com->S);
 
         bool dirRising = true; // random init
         float settarget = -1;  // random init in °C
@@ -692,21 +688,6 @@ void Commands::processMCode(GCode* com) {
         }
         break;
     }
-
-#if BEEPER_PIN >= 0
-    case 300: // M300
-    {
-        int beepS = 1;
-        int beepP = 1000;
-        if (com->hasS())
-            beepS = com->S;
-        if (com->hasP())
-            beepP = com->P;
-        HAL::tone(BEEPER_PIN, beepS);
-        HAL::delayMilliseconds(beepP);
-        HAL::noTone(BEEPER_PIN);
-    } break;
-#endif // BEEPER_PIN >= 0
 
     case 303: // M303
     {
@@ -805,7 +786,7 @@ void Commands::processMCode(GCode* com) {
         }
         if (Printer::debugDryrun()) // simulate movements without printing
         {
-            Extruder::setTemperatureForAllExtruders(0, false);
+            Extruder::setTemperatureForAllExtruders(0);
         }
         break;
     }
@@ -892,15 +873,6 @@ void Commands::processMCode(GCode* com) {
         Com::println();
         break;
     }
-
-#if FEATURE_BEEPER
-    case 120: // M120 - Test beeper function
-    {
-        if (com->hasS() && com->hasP())
-            beep(com->S, com->P); // Beep test
-        break;
-    }
-#endif // FEATURE_BEEPER
 
     case 201: // M201
     {

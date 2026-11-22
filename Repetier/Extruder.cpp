@@ -102,10 +102,6 @@ void Extruder::manageTemperatures() {
             continue;
 
         uint8_t on = act->currentTemperatureC >= act->targetTemperatureC ? LOW : HIGH;
-        if (!on && act->isAlarm()) {
-            beep(50 * (controller + 1), 3);
-            act->setAlarm(false); //reset alarm
-        }
 
         millis_t time = HAL::timeInMilliseconds(); // compare time for decouple tests
         // Run test if heater and sensor are decoupled
@@ -395,7 +391,7 @@ void Extruder::selectExtruderById(uint8_t extruderId) {
 #endif // NUM_EXTRUDER>1
 } // selectExtruderById
 
-void Extruder::setTemperatureForExtruder(float temperatureInCelsius, uint8_t extr, bool beep) {
+void Extruder::setTemperatureForExtruder(float temperatureInCelsius, uint8_t extr) {
     if (extr >= NUM_EXTRUDER) {
         // do not set the temperature for an extruder which is not present - this attempt could heat up the extruder without any control and could significantly overheat the extruder
         if (temperatureInCelsius > 0)
@@ -422,9 +418,6 @@ void Extruder::setTemperatureForExtruder(float temperatureInCelsius, uint8_t ext
         temperatureInCelsius = 0;
     tc->setTargetTemperature(temperatureInCelsius, 0);
     tc->updateTempControlVars();
-
-    if (beep && temperatureInCelsius > 30)
-        tc->setAlarm(true);
 
     if (temperatureInCelsius >= EXTRUDER_FAN_COOL_TEMP)
         extruder[extr].coolerPWM = extruder[extr].coolerSpeed;
@@ -485,12 +478,12 @@ void Extruder::setTemperatureForExtruder(float temperatureInCelsius, uint8_t ext
     }
 } // setTemperatureForExtruder
 
-void Extruder::setTemperatureForAllExtruders(float temperatureInCelsius, bool beep) {
+void Extruder::setTemperatureForAllExtruders(float temperatureInCelsius) {
     for (uint8_t extrNr = 0; extrNr < NUM_EXTRUDER; extrNr++)
-        Extruder::setTemperatureForExtruder(temperatureInCelsius, extrNr, beep);
+        Extruder::setTemperatureForExtruder(temperatureInCelsius, extrNr);
 }
 
-void Extruder::setHeatedBedTemperature(float temperatureInCelsius, bool beep) {
+void Extruder::setHeatedBedTemperature(float temperatureInCelsius) {
 #if HAVE_HEATED_BED
     float offset = 0.0;
 
@@ -509,8 +502,6 @@ void Extruder::setHeatedBedTemperature(float temperatureInCelsius, bool beep) {
 #endif // FEATURE_HEAT_BED_TEMP_COMPENSATION
 
     heatedBedController.setTargetTemperature(temperatureInCelsius, offset);
-    if (beep && temperatureInCelsius > 30)
-        heatedBedController.setAlarm(true);
 
     if (Printer::debugInfo()) {
         Com::printFLN(Com::tTargetBedColon, heatedBedController.targetTemperatureC, 0);

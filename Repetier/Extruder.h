@@ -25,7 +25,6 @@
 extern void reportTempsensorAndHeaterErrors(); ///< Report defect sensors
 extern uint8_t manageMonitor;
 
-#define TEMPERATURE_CONTROLLER_FLAG_ALARM 1
 #define TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_FULL 2  ///< Full heating enabled
 #define TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_HOLD 4  ///< Holding target temperature
 #define TEMPERATURE_CONTROLLER_FLAG_SENSDEFECT 8     ///< Indicating sensor defect
@@ -74,16 +73,6 @@ public:
     void updateTempControlVars();
     void waitForTargetTemperature(uint8_t plus_temp_tolerance = 0, bool resumingPause = false);
     void autotunePID(float temp, uint8_t controllerId, int maxCycles, bool storeResult, int method);
-
-    inline bool isAlarm() {
-        return flags & TEMPERATURE_CONTROLLER_FLAG_ALARM;
-    }
-    inline void setAlarm(bool on) {
-        if (on)
-            flags |= TEMPERATURE_CONTROLLER_FLAG_ALARM;
-        else
-            flags &= ~TEMPERATURE_CONTROLLER_FLAG_ALARM;
-    }
 
     //Code für den Decouple-Test der Heizkreisläufe:
     inline bool isDecoupleFull() {
@@ -315,10 +304,10 @@ public:
     static void selectExtruderById(uint8_t extruderId);
     static void initExtruder();
     static void initHeatedBed();
-    static void setHeatedBedTemperature(float temperatureInCelsius, bool beep = false);
+    static void setHeatedBedTemperature(float temperatureInCelsius);
     static float getHeatedBedTemperature();
-    static void setTemperatureForExtruder(float temperatureInCelsius, uint8_t extr, bool beep = false);
-    static void setTemperatureForAllExtruders(float temperatureInCelsius, bool beep);
+    static void setTemperatureForExtruder(float temperatureInCelsius, uint8_t extr);
+    static void setTemperatureForAllExtruders(float temperatureInCelsius);
 }; // Extruder
 
 #if HAVE_HEATED_BED

@@ -237,16 +237,13 @@ FSTRINGVALUE(Com::tEPRDistanceRetractHeating, "Distance to retract when heating 
 FSTRINGVALUE(Com::tEPRExtruderCoolerSpeed, "Extruder cooler speed [0-255]")
 FSTRINGVALUE(Com::tEPRAdvanceK, "Advance K [0=off]")
 FSTRINGVALUE(Com::tEPRAdvanceL, "Advance L [0=off]")
-FSTRINGVALUE(Com::tEPRBeeperMode, "Beeper [0=off 1=on]")
 FSTRINGVALUE(Com::tEPRRGBLightMode, "RGB Light mode [0..3 off/ws/aut/man]")
 FSTRINGVALUE(Com::tEPRFET1Mode, "24V-Port X42 default [0=off 1=on]")
 FSTRINGVALUE(Com::tEPRFET2Mode, "24V-Port X44 default [0=off 1=on]")
 FSTRINGVALUE(Com::tEPRFET3Mode, "24V-Port X45/board fan default [0=off 1=on]")
 FSTRINGVALUE(Com::tEPRCaseLightsMode, "24V-Port X19/case light default [0=off 1=on]")
 
-#if FEATURE_ZERO_DIGITS
 FSTRINGVALUE(Com::tEPRZERO_DIGIT_STATE, "Digit homing [1=on 2=off]")
-#endif // FEATURE_ZERO_DIGITS
 FSTRINGVALUE(Com::tEPRPrinterZ_STEP_SIZE, "Z-Button stepsize [Steps]")
 FSTRINGVALUE(Com::tEPRPrinterMOD_ZOS_SCAN_POINT_X, "X pos Z-Offset-Scan [col]")
 FSTRINGVALUE(Com::tEPRPrinterMOD_ZOS_SCAN_POINT_Y, "Y pos Z-Offset-Scan [row]")

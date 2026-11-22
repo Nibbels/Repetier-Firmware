@@ -158,7 +158,6 @@ volatile long g_nContinueExtruderSteps = 0;
 volatile char g_pauseStatus = PAUSE_STATUS_NONE;
 volatile char g_pauseMode = PAUSE_MODE_NONE;
 volatile millis_t g_uPauseTime = 0;
-volatile char g_pauseBeepDone = 0;
 
 long g_nEmergencyPauseDigitsMin = EMERGENCY_PAUSE_DIGITS_MIN; //short reicht eigentlich
 long g_nEmergencyPauseDigitsMax = EMERGENCY_PAUSE_DIGITS_MAX; //short reicht eigentlich
@@ -245,11 +244,9 @@ short readStrainGauge(unsigned char uAddress) //readStrainGauge dauert etwas unt
     (void)Register; //Nibbels: Tut so als würde die variable benutzt werden. Macht aber nix.
     Wire.endTransmission();
 
-#if FEATURE_ZERO_DIGITS
     if (Printer::g_pressure_offset_active && -27768 < Result && Result < 27767) {
         Result -= Printer::g_pressure_offset; //no overflow possible: pressure_offset ist 5000 max.
     }
-#endif // FEATURE_ZERO_DIGITS
 
     /* brief: This is for correcting sinking hotends at high digit values because of DMS-Sensor by Nibbels  */
     static long nSensibleCompensationSum = 0;
@@ -369,7 +366,6 @@ void startHeatBedScan(void) {
             g_nHeatBedScanStatus = 1;
             g_abortZScan = 0; //dont kill job on start
             g_retryZScan = 0;
-            BEEP_START_HEAT_BED_SCAN
         }
     }
     return;
@@ -407,7 +403,6 @@ void scanHeatBed(void) {
 
     if (g_abortZScan) {
         showAbortScanReason((void*)ui_text_heat_bed_scan, g_abortZScan);
-        BEEP_ABORT_HEAT_BED_SCAN
         // the scan has been aborted
         g_abortZScan = 0;
 
@@ -421,8 +416,8 @@ void scanHeatBed(void) {
         Printer::disableAllSteppersNow();
 
         // disable all heaters
-        Extruder::setHeatedBedTemperature(0, false);
-        Extruder::setTemperatureForAllExtruders(0, false);
+        Extruder::setHeatedBedTemperature(0);
+        Extruder::setTemperatureForAllExtruders(0);
 
         if (Printer::debugInfo()) {
             Com::printF(Com::tscanHeatBed);
@@ -507,11 +502,11 @@ void scanHeatBed(void) {
             Extruder::selectExtruderById(0);
 
             if (g_nHeatBedScanMode == HEAT_BED_SCAN_MODE_PLA) {
-                Extruder::setHeatedBedTemperature(PRECISE_HEAT_BED_SCAN_BED_TEMP_PLA, false);
-                Extruder::setTemperatureForAllExtruders(PRECISE_HEAT_BED_SCAN_EXTRUDER_TEMP_SCAN, false);
+                Extruder::setHeatedBedTemperature(PRECISE_HEAT_BED_SCAN_BED_TEMP_PLA);
+                Extruder::setTemperatureForAllExtruders(PRECISE_HEAT_BED_SCAN_EXTRUDER_TEMP_SCAN);
             } else if (g_nHeatBedScanMode == HEAT_BED_SCAN_MODE_ABS) {
-                Extruder::setHeatedBedTemperature(PRECISE_HEAT_BED_SCAN_BED_TEMP_ABS, false);
-                Extruder::setTemperatureForAllExtruders(PRECISE_HEAT_BED_SCAN_EXTRUDER_TEMP_SCAN, false);
+                Extruder::setHeatedBedTemperature(PRECISE_HEAT_BED_SCAN_BED_TEMP_ABS);
+                Extruder::setTemperatureForAllExtruders(PRECISE_HEAT_BED_SCAN_EXTRUDER_TEMP_SCAN);
             }
 
             g_nHeatBedScanStatus = 15;
@@ -998,8 +993,8 @@ void scanHeatBed(void) {
 
             if (!g_nHeatBedScanMode) {
                 // disable all heaters
-                Extruder::setHeatedBedTemperature(0, false);
-                Extruder::setTemperatureForAllExtruders(0, false);
+                Extruder::setHeatedBedTemperature(0);
+                Extruder::setTemperatureForAllExtruders(0);
             }
 
             g_nHeatBedScanStatus = 65;
@@ -1293,7 +1288,6 @@ void scanHeatBed(void) {
         case 123: {
             // the left extruder is at the surface now - show that the user must move also the right extruder to the surface in order to get them to the same z-height
             UI_STATUS_UPD(UI_TEXT_ALIGN_EXTRUDERS);
-            BEEP_ALIGN_EXTRUDERS
 
             g_lastScanTime = HAL::timeInMilliseconds();
 
@@ -1313,13 +1307,9 @@ void scanHeatBed(void) {
             if (!g_nContinueButtonPressed) {
                 unsigned long uRemainingSeconds;
                 uRemainingSeconds = (HAL::timeInMilliseconds() - g_lastScanTime) / 1000;
-                if (uRemainingSeconds > HEAT_BED_SCAN_ALIGN_EXTRUDERS_ABORT_DELAY) {
-                    //After one hour waiting for user interaction: beep and continue without align extruders.
-                    BEEP_ABORT_ALIGN_EXTRUDERS
-                    if (uRemainingSeconds > HEAT_BED_SCAN_ALIGN_EXTRUDERS_ABORT_DELAY + 4) {
-                        g_nHeatBedScanStatus = 149;
-                        break;
-                    }
+                if (uRemainingSeconds > HEAT_BED_SCAN_ALIGN_EXTRUDERS_ABORT_DELAY + 4) {
+                    g_nHeatBedScanStatus = 149;
+                    break;
                 }
                 break;
             }
@@ -1416,9 +1406,9 @@ void scanHeatBed(void) {
             g_lastScanTime = HAL::timeInMilliseconds();
             // at this point we are homed and we are above the x/y position at which we shall perform the measurement of the z-offset with the hot extruder(s)
             if (g_nHeatBedScanMode == HEAT_BED_SCAN_MODE_PLA) {
-                Extruder::setTemperatureForAllExtruders(PRECISE_HEAT_BED_SCAN_EXTRUDER_TEMP_PLA, false);
+                Extruder::setTemperatureForAllExtruders(PRECISE_HEAT_BED_SCAN_EXTRUDER_TEMP_PLA);
             } else if (g_nHeatBedScanMode == HEAT_BED_SCAN_MODE_ABS) {
-                Extruder::setTemperatureForAllExtruders(PRECISE_HEAT_BED_SCAN_EXTRUDER_TEMP_ABS, false);
+                Extruder::setTemperatureForAllExtruders(PRECISE_HEAT_BED_SCAN_EXTRUDER_TEMP_ABS);
             }
 
             g_nHeatBedScanStatus = 136;
@@ -1670,8 +1660,8 @@ void scanHeatBed(void) {
             Printer::disableAllSteppersNow();
 
             // disable all heaters
-            Extruder::setHeatedBedTemperature(0, false);
-            Extruder::setTemperatureForAllExtruders(0, false);
+            Extruder::setHeatedBedTemperature(0);
+            Extruder::setTemperatureForAllExtruders(0);
 
             g_nHeatBedScanStatus = 160;
 
@@ -1698,7 +1688,6 @@ void scanHeatBed(void) {
             //UI_STATUS_UPD( UI_TEXT_HEAT_BED_SCAN_DONE );
             g_uStartOfIdle = HAL::timeInMilliseconds(); //end scanHeatBed
 
-            BEEP_STOP_HEAT_BED_SCAN
             showInformation(PSTR(UI_TEXT_HEAT_BED_SCAN_DONE), (void*)ui_text_saving_success, PSTR(UI_TEXT_OK)); //tell user the scan was a success
 
             g_nHeatBedScanStatus = 0;
@@ -1741,8 +1730,6 @@ void startAlignExtruders(void) {
             return;
         }
 
-        BEEP_START_ALIGN_EXTRUDERS
-
         if (Printer::doHeatBedZCompensation
             || !Printer::areAxisHomed()
             || Printer::currentXSteps * Printer::axisMMPerSteps[X_AXIS] < HEAT_BED_SCAN_X_START_MM
@@ -1770,7 +1757,6 @@ void alignExtruders(void) {
 
     if (g_abortZScan) {
         showAbortScanReason((void*)ui_text_align_extruders, g_abortZScan);
-        BEEP_ABORT_ALIGN_EXTRUDERS
         // the alignment has been aborted
         g_abortZScan = 0;
 
@@ -1878,7 +1864,6 @@ void alignExtruders(void) {
         case 123: {
             // the left extruder is at the surface now - show that the user must move also the right extruder to the surface in order to get them to the same z-height
             UI_STATUS_UPD(UI_TEXT_ALIGN_EXTRUDERS);
-            BEEP_ALIGN_EXTRUDERS
 
             g_lastScanTime = HAL::timeInMilliseconds();
 
@@ -1896,15 +1881,11 @@ void alignExtruders(void) {
             if (!g_nContinueButtonPressed) {
                 unsigned long uRemainingSeconds;
                 uRemainingSeconds = (HAL::timeInMilliseconds() - g_lastScanTime) / 1000;
-                if (uRemainingSeconds > HEAT_BED_SCAN_ALIGN_EXTRUDERS_ABORT_DELAY) {
-                    //After one hour waiting for user interaction: beep, shut off all temps and abort.
-                    BEEP_ABORT_ALIGN_EXTRUDERS
-                    if (uRemainingSeconds > HEAT_BED_SCAN_ALIGN_EXTRUDERS_ABORT_DELAY + 4) {
-                        g_abortZScan = SCAN_ABORT_REASON_PRINTER_LONELY;
-                        Extruder::setTemperatureForAllExtruders(0, false);
-                        Extruder::setHeatedBedTemperature(0);
-                        break;
-                    }
+                if (uRemainingSeconds > HEAT_BED_SCAN_ALIGN_EXTRUDERS_ABORT_DELAY + 4) {
+                    g_abortZScan = SCAN_ABORT_REASON_PRINTER_LONELY;
+                    Extruder::setTemperatureForAllExtruders(0);
+                    Extruder::setHeatedBedTemperature(0);
+                    break;
                 }
                 break;
             }
@@ -1938,7 +1919,6 @@ void alignExtruders(void) {
             }
 
             showInformation(PSTR(UI_TEXT_ALIGN_EXTRUDERS_DONE));
-            BEEP_STOP_ALIGN_EXTRUDERS
             g_uStartOfIdle = HAL::timeInMilliseconds() + 30000; //alignExtruders ended
 
             g_nAlignExtrudersStatus = 0;
@@ -1972,7 +1952,6 @@ void startZOScan(bool automatrixleveling) {
         abortSearchHeatBedZOffset(false);
     } else {
         Com::printFLN(PSTR("ZOS started"));
-        BEEP_START_HEAT_BED_SCAN
         g_nZOSScanStatus = 1;
         // start the heat bed scan
         g_abortZScan = 0; //dont kill job on start
@@ -2475,7 +2454,6 @@ void searchZOScan(void) {
             g_uStartOfIdle = HAL::timeInMilliseconds() + 30000; //go to printer ready/ignore status   //end searchZOScan
 
             //g_nZScanZPosition is 0 now.
-            BEEP_SHORT
             Com::printFLN(PSTR("ZOS finished"));
             break;
         }
@@ -4259,11 +4237,6 @@ void handleStrainGaugeFeatures(millis_t uTime) {
 
 void handlePauseTime(millis_t uTime) {
     if (g_uPauseTime) {
-        if (!g_pauseBeepDone) {
-            BEEP_PAUSE
-            g_pauseBeepDone = 1;
-        }
-
         if (g_pauseStatus == PAUSE_STATUS_PAUSED) //and absolutly not PAUSE_STATUS_HEATING
         {
             if (g_uPauseTime > uTime) {
@@ -4349,8 +4322,8 @@ void handleStopPrint(millis_t uTime) {
 
 
                 // disable all heaters
-                Extruder::setHeatedBedTemperature(0, false);
-                Extruder::setTemperatureForAllExtruders(0, false);
+                Extruder::setHeatedBedTemperature(0);
+                Extruder::setTemperatureForAllExtruders(0);
 
                 //unaufgeräumtes beenden: Es wird sowieso der Stepper deaktiviert.
                 g_nZOSScanStatus = 0;
@@ -4360,8 +4333,6 @@ void handleStopPrint(millis_t uTime) {
 
                 Com::printFLN(PSTR("Stop complete"));
                 Printer::setPrinting(false);
-
-                BEEP_STOP_PRINTING
 
                 g_uBlockCommands = uTime;
             }
@@ -4487,7 +4458,6 @@ void requestPrintPause(bool moveAway) {
 
     g_pauseMode = moveAway ? PAUSE_MODE_PAUSED_AND_MOVED : PAUSE_MODE_PAUSED;
     g_pauseStatus = moveAway ? PAUSE_STATUS_GOTO_PAUSE_AND_MOVE : PAUSE_STATUS_GOTO_PAUSE;
-    g_pauseBeepDone = 0;
 }
 
 static long pauseReturnSteps(uint8_t axis) {
@@ -4664,7 +4634,6 @@ void pausePrint(void) {
             g_uStartOfIdle = HAL::timeInMilliseconds() + 30000;                      //hold status msg
             g_uPauseTime = HAL::timeInMilliseconds() - EXTRUDER_CURRENT_PAUSE_DELAY; //drop temps now
             UI_STATUS_UPD(UI_TEXT_COOLING_DOWN);
-            BEEP_CONTINUE
         }
     }
 } // pausePrint
@@ -4711,13 +4680,11 @@ void continuePrint(void) {
     g_uPauseTime = 0;   //do not drop temps later
     g_uStartOfIdle = 0; //continueprint
     UI_STATUS_UPD(UI_TEXT_CONTINUING);
-    BEEP_CONTINUE
     uid.exitmenu();
 
     if (continuePrintLoadTemperatures()) {
         if (g_pauseStatus == PAUSE_STATUS_HEATING) {
             UI_STATUS_UPD(UI_TEXT_CONTINUING_READY);
-            BEEP_CONTINUE
             g_uStartOfIdle = HAL::timeInMilliseconds() + 30000;
             g_uPauseTime = HAL::timeInMilliseconds() + 240000;
             g_pauseStatus = PAUSE_STATUS_PAUSED;
@@ -5815,35 +5782,6 @@ void processSpecialGCode(GCode* pCommand) {
                     Com::printFLN(PSTR(", z = "), Printer::homingFeedrate[Z_AXIS]);
                     break;
                 }
-                case 3: {
-                    if (pCommand->hasS()) {
-                        switch (pCommand->S) {
-                        case 1:
-                            BEEP_SHORT break;
-                        case 2:
-                            BEEP_LONG break;
-                        case 3:
-                            BEEP_START_PRINTING break;
-                        case 4:
-                            BEEP_STOP_PRINTING break;
-                        case 6:
-                            BEEP_PAUSE break;
-                        case 7:
-                            BEEP_CONTINUE break;
-                        case 8:
-                            BEEP_START_HEAT_BED_SCAN break;
-                        case 9:
-                            BEEP_ABORT_HEAT_BED_SCAN break;
-                        case 10:
-                            BEEP_STOP_HEAT_BED_SCAN break;
-                        case 12:
-                            BEEP_ALIGN_EXTRUDERS break;
-                        case 13:
-                            BEEP_WRONG_FIRMWARE break;
-                        }
-                    }
-                    break;
-                }
                 case 4: {
                     // simulate blocking of all axes
                     Com::printFLN(PSTR("M3200: block all"));
@@ -6902,7 +6840,6 @@ void processSpecialGCode(GCode* pCommand) {
                         if (g_uBlockCommands)
                             break; // No further moves after cancellation.
                         if (Printer::checkPlayKey()) {
-                            BEEP_LONG //start Printing
                             skip_by_keys = true;
                             break;
                         }
@@ -6962,11 +6899,9 @@ void processSpecialGCode(GCode* pCommand) {
             Com::printFLN(PSTR("Load Filament"));
             g_uStartOfIdle = 0; //M3913
 
-#if FEATURE_ZERO_DIGITS
                 //normalize dms sensor values to 0 if allowed in options and not already done
             if (!Printer::g_pressure_offset)
                 Printer::homeDigits();
-#endif // FEATURE_ZERO_DIGITS
 
             uint8_t Extrusion = 65; //max, wenn kein wiederstand. (ca. hotendlänge)
             uint8_t eFeedrate = 1;
@@ -6991,7 +6926,6 @@ void processSpecialGCode(GCode* pCommand) {
                 }
                 if (Printer::checkAbortKeys()) {
                     UI_STATUS_UPD(UI_TEXT_ABORT_KEYPRESSED);
-                    BEEP_PAUSE
                     break;
                 }
                 e += 0.02; //kleine schritte
@@ -7020,7 +6954,7 @@ void processSpecialGCode(GCode* pCommand) {
             float t = float(UI_SET_EXTRUDER_MIN_TEMP_UNMOUNT);
 
             //preheat / precool
-            Extruder::setTemperatureForExtruder(t, Extruder::current->id, true);
+            Extruder::setTemperatureForExtruder(t, Extruder::current->id);
             Extruder::current->tempControl.waitForTargetTemperature(10);
 
             //set stuff
@@ -7030,11 +6964,9 @@ void processSpecialGCode(GCode* pCommand) {
             Printer::unitIsInches = 0; //to save possible G21 .. weiß net ob das so wichtig wäre ^^.
             Printer::setEPositionMM(0); // G92 E0
 
-#if FEATURE_ZERO_DIGITS
                 //normalize dms sensor values to 0 if allowed in options and not already done
             if (!Printer::g_pressure_offset)
                 Printer::homeDigits();
-#endif // FEATURE_ZERO_DIGITS
 
             //work
             float e = 0.0f;
@@ -7062,7 +6994,6 @@ void processSpecialGCode(GCode* pCommand) {
                         e = float(outputLength); //for sure exits because of no retrys
                         retry = 0;               //exits moves
                         UI_STATUS_UPD(UI_TEXT_ABORT_KEYPRESSED);
-                        BEEP_PAUSE
                         break;
                     }
                     e -= de; //mm - kleine schritte auf Zug
@@ -7080,18 +7011,17 @@ void processSpecialGCode(GCode* pCommand) {
                     break;
                 if (t > Extruder::current->tempControl.targetTemperatureC && fabs(e) < 10.0f /*mm*/) {
                     //wenn der extruder nicht weiterkommt und die bisherige wegstrecke unter 10mm ist, dann etwas die Temperatur erhöhen und nochmal ziehen.
-                    Extruder::setTemperatureForExtruder(t, Extruder::current->id, false);
+                    Extruder::setTemperatureForExtruder(t, Extruder::current->id);
                     Extruder::current->tempControl.waitForTargetTemperature();
                 } else if (fabs(e) >= 10.0f /*mm*/) {
                     //das filament kam schon etwas raus, hängt aber nun.
                     if (!retry--) {
-                        BEEP_ABORT_HEAT_BED_SCAN
                         break;
                     }
                 }
                 eFeedrate = 0.3f;
             }
-            Extruder::setTemperatureForExtruder(0, Extruder::current->id, false);
+            Extruder::setTemperatureForExtruder(0, Extruder::current->id);
             //cleanup
 
             Printer::setEPositionMM(0); // G92 E0
@@ -8335,17 +8265,12 @@ void prepareZCompensation(void) {
 } // prepareZCompensation
 
 unsigned char isMovingAllowed(const char* pszCommand, char outputLog) {
-#if FEATURE_UNLOCK_MOVEMENT
-    if (
-        !Printer::g_unlock_movement) //!Printer::isHomed()
-    {
-        // do not allow to move in case the printer just started and has no homing
-        // this is a temporary fix to the wall-crashes when the printer resets
+    if (!Printer::g_unlock_movement) {
+        // A host may keep sending motion commands after a controller reset.
         Com::printF(pszCommand);
-        Com::printFLN(PSTR("FEATURE_UNLOCK_MOVEMENT: move forbidden because not (homed/temp set/buttons pressed)"));
+        Com::printFLN(PSTR(": movement locked until homing or panel input"));
         return 0;
     }
-#endif //FEATURE_UNLOCK_MOVEMENT
     if (Printer::blockAll) {
         // do not allow to move in case the movements have been blocked
         return 0;
@@ -8550,16 +8475,12 @@ void determineHardwareType(void) {
             }
 
             // we end up here in case this firmware is for the RF2000, but the current board does not seem to be an RF2000 board
-            notifyAboutWrongHardwareType(DEVICE_TYPE_RF1000);
-
             Printer::wrongType = 1;
             return;
         }
 
         if (MOTHERBOARD == DEVICE_TYPE_RF1000) {
             // we end up here in case this firmware is for the RF1000, but the current board seems to be an RF2000 board
-            notifyAboutWrongHardwareType(DEVICE_TYPE_RF2000);
-
             Printer::wrongType = 1;
             return;
         }
@@ -8570,8 +8491,6 @@ void determineHardwareType(void) {
 
     if (MOTHERBOARD == DEVICE_TYPE_RF1000) {
         // we end up here in case this firmware is for the RF1000, but the current board seems to be an RF2000 board
-        notifyAboutWrongHardwareType(DEVICE_TYPE_RF2000);
-
         Printer::wrongType = 1;
         return;
     }
@@ -8585,39 +8504,6 @@ void determineHardwareType(void) {
 
 } // determineHardwareType
 
-void notifyAboutWrongHardwareType(unsigned char guessedHardwareType) {
-    uint16_t duration = 1000;
-    uint8_t count = 4;
-
-    switch (guessedHardwareType) {
-    case DEVICE_TYPE_RF1000: {
-        // we try to beep via the beeper pin of the RF1000 hardware
-        SET_OUTPUT(BEEPER_PIN_RF1000);
-
-        for (uint8_t i = 0; i < count; i++) {
-            WRITE(BEEPER_PIN_RF1000, HIGH);
-            HAL::delayMilliseconds(duration);
-            WRITE(BEEPER_PIN_RF1000, LOW);
-            HAL::delayMilliseconds(duration);
-        }
-        break;
-    }
-    case DEVICE_TYPE_RF2000: {
-        // we try to beep via the beeper pin of the RF2000 / RF2000v2 hardware
-        SET_OUTPUT(BEEPER_PIN_RF2000);
-
-        for (uint8_t i = 0; i < count; i++) {
-            WRITE(BEEPER_PIN_RF2000, HIGH);
-            HAL::delayMilliseconds(duration);
-            WRITE(BEEPER_PIN_RF2000, LOW);
-            HAL::delayMilliseconds(duration);
-        }
-        break;
-    }
-    }
-    return;
-
-} // notifyAboutWrongHardwareType
 #endif // FEATURE_TYPE_EEPROM
 
 void showIdle(void) {

@@ -68,7 +68,7 @@ have problems with other modules using the eeprom */
 #define EPR_BACKLASH_Z 165
 // 169-176 are reserved for the former service counters.
 
-#define EPR_RF_BEEPER_MODE 1000
+// 1000 is reserved for the former beeper setting.
 #define EPR_RF_CASE_LIGHT_MODE 1001
 #define EPR_RF_230V_OUTPUT_MODE 1002
 // 1016 is reserved for the former RF1000 endstop setting.

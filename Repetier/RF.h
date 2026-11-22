@@ -327,7 +327,7 @@
 
 - M3309 - start/abort to align the two extruders
   - Examples:
-  - M3309 ; moves the heat bed up until it touches the first extruder and beeps afterwards in order to indicate that the extruders can be aligned manually
+  - M3309 ; moves the heat bed up until it touches the first extruder, then waits while the operator aligns the extruders
 
 */
 
@@ -505,7 +505,6 @@ extern volatile long g_nContinueExtruderSteps;
 extern volatile char g_pauseStatus;
 extern volatile char g_pauseMode;
 extern volatile millis_t g_uPauseTime;
-extern volatile char g_pauseBeepDone;
 
 inline bool isPauseSettled() {
     const char status = g_pauseStatus;
@@ -678,7 +677,6 @@ extern float getHeatBedTemperatureOffset(float temperatureInCelsius);
 
 #if FEATURE_TYPE_EEPROM
 extern void determineHardwareType(void);
-extern void notifyAboutWrongHardwareType(unsigned char guessedHardwareType);
 #endif // FEATURE_TYPE_EEPROM
 extern void showIdle(void);
 extern void showError(const void* line2, const void* line3 = NULL, const void* line4 = NULL);

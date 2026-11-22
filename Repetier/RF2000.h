@@ -65,7 +65,7 @@ Overflow in Z-Matrix: >12.7f
 #define EXT0_HOTEND_TYPE HOTEND_TYPE_V2
 #define EXT1_HOTEND_TYPE HOTEND_TYPE_V2
 
-/** \brief This feature enables a security check so that the Firmware for a RF2000 is only working on a RF2000 Board otherwise the firmware beeps. */
+/** \brief Checks the board type before initializing hardware outputs. */
 #define FEATURE_TYPE_EEPROM 1 // 1 = on, 0 = off
 
 // ##########################################################################################

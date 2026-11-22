@@ -71,9 +71,6 @@
 // ##    supported features
 // ##########################################################################################
 
-/** \brief Specifies if you want to adjust your average pressure to zero digits after homing. This pushes the weight-scale to zero by adding the idle pressure as an offset. */
-#define FEATURE_ZERO_DIGITS                 1
-
 /** \brief Auto-Retract within hardcoded scripts: Pause / Output_Object / ... Vom Hotend abhängig! V2: 10mm, E3D: 1-2mm (?) */
 #define SCRIPT_RETRACT_MM                   1                                                    //[mm] Firmwares E-Retract */
 
@@ -85,12 +82,6 @@
 #define DEBUG_HEAT_BED_SCAN                 0                                                   // 0 = off, 1 = on, 2 = on with more debug outputs
 
 /**
- * \brief The Firmwares disalowes movement before you at least: pressed a printers button, set a temperature, homed once
- * If you did not do this, a previous watchdog reset is assumed and fail-drive against some border without homing is blocked thatway.
- * This is a fix for repetier-server not knowing that the printer reset and still sending commands
- */
-#define FEATURE_UNLOCK_MOVEMENT             1                                                   // 1 = on, 0 = off
-/**
  * XYZ_POSITION_BUTTON_DIRECTION = -1 : This fits to you if you want more intuitivity when choosing the Up-Down-Buttons within "Menu:Position->X-/Y-/Z-Position".
  * XYZ_POSITION_BUTTON_DIRECTION = 1 : This fits more if you want to stick to standard coordinates direction.
  */
@@ -101,9 +92,6 @@
 
 /** \brief Enables/disables the support for the fan control */
 #define FEATURE_FAN_CONTROL                 1                                                   // 1 = on, 0 = off
-
-/** \brief Enables/disables the beeper */
-#define FEATURE_BEEPER                      1                                                   // 1 = on, 0 = off
 
 // ##########################################################################################
 // ##   Common extruder configuration
@@ -611,31 +599,6 @@ Honeywell 100K Thermistor (135-104LAG-J01)  : R0 = 100000  T0 = 25  Beta = 3974
 
 /** \brief Lowest repeat time. */
 #define UI_KEY_MIN_REPEAT                   50
-
-/** \brief Default beeper mode. */
-#define BEEPER_MODE                         1                                                   // 1 = on, 0 = off
-
-/**
- * \brief Beeper sound definitions for short beeps during key actions
- * and longer beeps for important actions.
- * Parameter is delay in microseconds and the second is the number of repetitions.
- * Values must be in range 1..255
- */
-#define BEEPER_SHORT_SEQUENCE                   2,2
-#define BEEPER_LONG_SEQUENCE                    8,8
-#define BEEPER_START_PRINTING_SEQUENCE          100,2
-#define BEEPER_STOP_PRINTING_SEQUENCE           100,3
-#define BEEPER_PAUSE_SEQUENCE                   50,3
-#define BEEPER_CONTINUE_SEQUENCE                50,2
-#define BEEPER_START_HEAT_BED_SCAN_SEQUENCE     100,2
-#define BEEPER_ABORT_HEAT_BED_SCAN_SEQUENCE     250,5
-#define BEEPER_STOP_HEAT_BED_SCAN_SEQUENCE      100,3
-//FEATURE_ALIGN_EXTRUDERS
- #define BEEPER_START_ALIGN_EXTRUDERS_SEQUENCE  100,2
- #define BEEPER_ABORT_ALIGN_EXTRUDERS_SEQUENCE  250,5
- #define BEEPER_STOP_ALIGN_EXTRUDERS_SEQUENCE   100,3
-#define BEEPER_ALIGN_EXTRUDERS_SEQUNCE          50,5
-#define BEEPER_WRONG_FIRMWARE_SEQUNCE           255,16
 
 /** \brief Values used for preheat */
 #define UI_SET_PRESET_HEATED_BED_TEMP_PLA   60

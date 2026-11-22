@@ -143,10 +143,6 @@ public:
     static char enabledStepper[3];
 #endif // STEPPER_ON_DELAY
 
-#if FEATURE_BEEPER
-    static char enableBeeper;
-#endif // FEATURE_BEEPER
-
     static char enableCaseLight;
 
 #ifdef RGB_LIGHT_R_PIN
@@ -177,18 +173,14 @@ public:
     static unsigned char wrongType;
 #endif // FEATURE_TYPE_EEPROM
 
-#if FEATURE_UNLOCK_MOVEMENT
     static unsigned char g_unlock_movement;
-#endif //FEATURE_UNLOCK_MOVEMENT
 
     static bool g_senseoffset_autostart;
 
     static uint8_t motorCurrent[DRV8711_NUM_CHANNELS];
 
-#if FEATURE_ZERO_DIGITS
     static bool g_pressure_offset_active;
     static short g_pressure_offset;
-#endif // FEATURE_ZERO_DIGITS
 
 #if FEATURE_ADJUSTABLE_MICROSTEPS
     static uint8_t motorMicroStepsModeValue[DRV8711_NUM_CHANNELS]; //1=2MS, 2=4MS, 3=8MS, 4=16MS, 5=32MS, 6=64MS, 7=128MS, 8=256MS
@@ -686,9 +678,7 @@ public:
         if (!areAllSteppersDisabled()) {
             UI_STATUS_UPD(UI_TEXT_STEPPER_DISABLED);
         }
-#if FEATURE_UNLOCK_MOVEMENT
         Printer::g_unlock_movement = 0; //again lock movement until homing or keypress or another print happens. --> toooooo much? Ich aktiviers: http://www.rf1000.de/viewtopic.php?f=70&t=2282
-#endif                                  //FEATURE_UNLOCK_MOVEMENT
         disableXStepper();
         disableYStepper();
         disableZStepper();

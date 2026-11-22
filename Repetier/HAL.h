@@ -456,16 +456,6 @@ public:
         ::delay(delayMs);
     } // delayMilliseconds
 
-    static inline void tone(uint8_t pin, int duration) {
-        ::tone(pin, duration);
-
-    } // tone
-
-    static inline void noTone(uint8_t pin) {
-        ::noTone(pin);
-
-    } // noTone
-
     static inline void eprSetByte(unsigned int pos, uint8_t value) {
         uint8_t oldval = eprGetByte(pos);
         if (oldval != value)

@@ -192,9 +192,7 @@ public:
     FSTRINGVAR(tEPRZAcceleration)
     FSTRINGVAR(tEPRZTravelAcceleration)
     FSTRINGVAR(tEPRZScanStartLift)
-#if FEATURE_ZERO_DIGITS
     FSTRINGVAR(tEPRZERO_DIGIT_STATE)
-#endif // FEATURE_ZERO_DIGITS
     FSTRINGVAR(tEPRZDIGIT_CMP_STATE)
     FSTRINGVAR(tEPRZStepsPerMM)
     FSTRINGVAR(tEPRZMaxFeedrate)
@@ -238,7 +236,6 @@ public:
     FSTRINGVAR(tEPRExtruderCoolerSpeed)
     FSTRINGVAR(tEPRAdvanceK)
     FSTRINGVAR(tEPRAdvanceL)
-    FSTRINGVAR(tEPRBeeperMode)
     FSTRINGVAR(tEPRCaseLightsMode)
     FSTRINGVAR(tEPRRGBLightMode)
     FSTRINGVAR(tEPRFET1Mode)

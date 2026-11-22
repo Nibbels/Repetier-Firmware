@@ -19,8 +19,6 @@
 #define PINS_H
 
 #define CURRENT_CONTROL_DRV8711 4
-#define BEEPER_PIN_RF1000 23
-#define BEEPER_PIN_RF2000 5
 
 // ##########################################################################################
 // ##   RF1000 pin assignment
@@ -35,8 +33,6 @@
 // Definition for current control
 #define STEPPER_CURRENT_CONTROL CURRENT_CONTROL_DRV8711
 
-// On board beeper, so define values already here
-#define BEEPER_PIN 23
 #define SDCARDDETECT -1
 
 // digital pin mappings
@@ -283,9 +279,6 @@
 // Definition for current control
 #define STEPPER_CURRENT_CONTROL CURRENT_CONTROL_DRV8711
 
-// On board beeper, so define values already here
-#define BEEPER_PIN 5
-// PINE.3,  5, BUZ1
 #define SDCARDDETECT 19
 // PIND.2, 45, CARD
 
@@ -521,9 +514,6 @@
 // Definition for current control
 #define STEPPER_CURRENT_CONTROL CURRENT_CONTROL_DRV8711
 
-// On board beeper, so define values already here
-// PINE.3,  5, BUZ1
-#define BEEPER_PIN 5
 // PIND.2, 45, CARD
 #define SDCARDDETECT 19
 

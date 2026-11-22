@@ -122,10 +122,6 @@ volatile long Printer::directCurrentSteps[4] = { 0, 0, 0, 0 };
 char Printer::enabledStepper[3] = { 0, 0, 0 };
 #endif // STEPPER_ON_DELAY
 
-#if FEATURE_BEEPER
-char Printer::enableBeeper;
-#endif // FEATURE_BEEPER
-
 char Printer::enableCaseLight = CASE_LIGHTS_DEFAULT_ON;
 
 #ifdef RGB_LIGHT_R_PIN
@@ -156,19 +152,15 @@ unsigned long Printer::fanOffDelay = 0;
 unsigned char Printer::wrongType;
 #endif // FEATURE_TYPE_EEPROM
 
-#if FEATURE_UNLOCK_MOVEMENT
 //When the printer resets, we should not do movement, because it would not be homed. At least some interaction with buttons or temperature-commands are needed to allow movement.
 unsigned char Printer::g_unlock_movement = 0;
-#endif //FEATURE_UNLOCK_MOVEMENT
 
 bool Printer::g_senseoffset_autostart = false;
 
 uint8_t Printer::motorCurrent[DRV8711_NUM_CHANNELS] = { 0 };
 
-#if FEATURE_ZERO_DIGITS
 bool Printer::g_pressure_offset_active = true;
 short Printer::g_pressure_offset = 0;
-#endif // FEATURE_ZERO_DIGITS
 
 #if FEATURE_ADJUSTABLE_MICROSTEPS
 //RF_MICRO_STEPS_ have values 0=FULL 1=2MS, 2=4MS, 3=8MS, 4=16MS, 5=32MS, 6=64MS, 7=128MS, 8=256MS
@@ -257,7 +249,7 @@ void Printer::switchEverythingOff() {
 
     Printer::disableAllSteppersNow();
 
-    Extruder::setTemperatureForAllExtruders(0, false);
+    Extruder::setTemperatureForAllExtruders(0);
     Extruder::setHeatedBedTemperature(0);
     UI_STATUS_UPD(UI_TEXT_SWITCHED_OFF);
 
@@ -580,19 +572,18 @@ void Printer::setup() {
 
     HAL::allowInterrupts();
 
-#if FEATURE_BEEPER
-    enableBeeper = BEEPER_MODE;
-#endif // FEATURE_BEEPER
-
     Wire.begin();
 
 #if FEATURE_TYPE_EEPROM
     determineHardwareType();
 
     if (wrongType) {
-        // this firmware is not for this hardware
+        EEPROM::initBaudrate();
+        HAL::serialSetBaudrate(baudrate);
+        Com::printErrorFLN(PSTR(UI_TEXT_WRONG_FIRMWARE));
+
+        // Halt before initializing hardware outputs for a different board.
         while (1) {
-            // this firmware shall not try to do anything at this hardware
         }
     }
 #endif // FEATURE_TYPE_EEPROM
@@ -880,9 +871,7 @@ void Printer::setup() {
     }
 #endif // RGB_LIGHT_R_PIN
 
-#if FEATURE_UNLOCK_MOVEMENT
     g_unlock_movement = 0;
-#endif //FEATURE_UNLOCK_MOVEMENT
 
     HAL::startWatchdog();
 } // setup()
@@ -1367,7 +1356,6 @@ void Printer::homeZAxis() {
 } // homeZAxis
 
 void Printer::homeDigits() {
-#if FEATURE_ZERO_DIGITS
     short nTempPressure = 0;
     if (Printer::g_pressure_offset_active) { //only adjust pressure if you do a full homing.
         Printer::g_pressure_offset = 0;      //prevent to messure already adjusted offset -> without = 0 this would only iterate some bad values.
@@ -1383,7 +1371,6 @@ void Printer::homeDigits() {
             Com::printFLN(PSTR("DigitOffset failed reading "));
         }
     }
-#endif // FEATURE_ZERO_DIGITS
 }
 
 void Printer::homeAxis(bool xaxis, bool yaxis, bool zaxis) // home non-delta printer
@@ -1391,9 +1378,7 @@ void Printer::homeAxis(bool xaxis, bool yaxis, bool zaxis) // home non-delta pri
     g_uStartOfIdle = 0; //start of homing xyz
 
     //Bei beliebiger user interaktion oder Homing soll G1 etc. erlaubt werden. Dann ist der Drucker nicht abgestürzt, sondern bedient worden.
-#if FEATURE_UNLOCK_MOVEMENT
     g_unlock_movement = 1;
-#endif //FEATURE_UNLOCK_MOVEMENT
 
     char homingOrder;
     homingOrder = HOMING_ORDER_PRINT;

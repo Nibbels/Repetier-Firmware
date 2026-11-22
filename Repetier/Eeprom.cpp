@@ -354,10 +354,6 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
         HAL::eprSetFloat(EPR_PRINTING_DISTANCE, 0);
     }
 
-#if FEATURE_BEEPER
-    HAL::eprSetByte(EPR_RF_BEEPER_MODE, Printer::enableBeeper);
-#endif // FEATURE_BEEPER
-
     HAL::eprSetByte(EPR_RF_CASE_LIGHT_MODE, Printer::enableCaseLight);
 
 #ifdef RGB_LIGHT_R_PIN
@@ -403,9 +399,7 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     HAL::eprSetByte(EPR_RF_MOTOR_CURRENT + E_AXIS + 1, Printer::motorCurrent[E_AXIS + 1]);
 #endif //NUM_EXTRUDER > 1
 
-#if FEATURE_ZERO_DIGITS
     HAL::eprSetByte(EPR_RF_ZERO_DIGIT_STATE, (Printer::g_pressure_offset_active ? 1 : 2)); //2 ist false, < 1 ist true
-#endif                                                                                     // FEATURE_ZERO_DIGITS
     HAL::eprSetByte(EPR_RF_DIGIT_CMP_STATE, (g_nDigitZCompensationDigits_active ? 1 : 2)); //2 ist false, < 1 ist true
 
     HAL::eprSetFloat(EPR_ZSCAN_START_MM, g_scanStartZLiftMM);
@@ -660,10 +654,6 @@ void EEPROM::readDataFromEEPROM() {
             e->coolerSpeed = HAL::eprGetByte(o + EPR_EXTRUDER_COOLER_SPEED);
     }
 
-#if FEATURE_BEEPER
-    Printer::enableBeeper = HAL::eprGetByte(EPR_RF_BEEPER_MODE);
-#endif // FEATURE_BEEPER
-
     Printer::enableCaseLight = HAL::eprGetByte(EPR_RF_CASE_LIGHT_MODE);
 
 #ifdef RGB_LIGHT_R_PIN
@@ -769,9 +759,7 @@ void EEPROM::readDataFromEEPROM() {
         change = true;
     }
 
-#if FEATURE_ZERO_DIGITS
     Printer::g_pressure_offset_active = (HAL::eprGetByte(EPR_RF_ZERO_DIGIT_STATE) > 1 ? false : true); //2 ist false, < 1 ist true
-#endif                                                                                                 // FEATURE_ZERO_DIGITS
     g_nDigitZCompensationDigits_active = (HAL::eprGetByte(EPR_RF_DIGIT_CMP_STATE) > 1 ? false : true); //2 ist false, < 1 ist true
 
     float tmpss = HAL::eprGetFloat(EPR_ZSCAN_START_MM);
@@ -1006,9 +994,7 @@ void EEPROM::writeSettings() {
 
     writeInt(EPR_RF_MOD_Z_STEP_SIZE, Com::tEPRPrinterZ_STEP_SIZE);
 
-#if FEATURE_ZERO_DIGITS
     writeByte(EPR_RF_ZERO_DIGIT_STATE, Com::tEPRZERO_DIGIT_STATE);
-#endif // FEATURE_ZERO_DIGITS
     writeByte(EPR_RF_DIGIT_CMP_STATE, Com::tEPRZDIGIT_CMP_STATE);
 
     writeInt(EPR_RF_MOD_SENSEOFFSET_DIGITS, Com::tEPRPrinterEPR_RF_MOD_SENSEOFFSET_DIGITS);
@@ -1089,9 +1075,6 @@ void EEPROM::writeSettings() {
     writeLong(EPR_MAX_INACTIVE_TIME, Com::tEPRMaxInactiveTime);
     writeLong(EPR_STEPPER_INACTIVE_TIME, Com::tEPRStopAfterInactivty);
     // RF specific
-#if FEATURE_BEEPER
-    writeByte(EPR_RF_BEEPER_MODE, Com::tEPRBeeperMode);
-#endif // FEATURE_BEEPER
 
     writeFloat(EPR_PRINTING_DISTANCE, Com::tEPRFilamentPrinted);
     writeLong(EPR_PRINTING_TIME, Com::tEPRPrinterActive);

@@ -76,7 +76,7 @@ As `C(x,y,z)` changes during fade-out, the true vertical separation between succ
 
 For absolute-E G-code, the slicer's **logical E timeline** gives a requested change in filament length. The planner applies the flow multipliers and computes base E steps. It carries the fractional step in `[-0.5, 0.5)` and initializes each segment's pulse accumulator, including reused queue slots. Motion direction and distance use the resulting integer step count. ECMP and advance can add their own pulses during execution. [Extrusion quantization](../../Repetier/motion.cpp#L120-L161)
 
-`G92 E` sets both the destination and queued logical E coordinates and clears their millimetre remainders. The fractional motor-step carry survives, so setting a fractional E origin followed by a move to the same E value produces zero new base pulses. A push followed by an equal undo at an exact half-step also returns to the same count with constant flow. [G92 dispatch](../../Repetier/Commands.cpp#L398)
+`G92 E` sets both the destination and queued logical E coordinates and clears their millimetre remainders. The fractional motor-step carry survives, so setting a fractional E origin followed by a move to the same E value produces zero new base pulses. A push followed by an equal undo at an exact half-step also returns to the same count with constant flow. [G92 dispatch](../../Repetier/Commands.cpp#L394)
 
 ### Arithmetic test: restore the logical timeline
 

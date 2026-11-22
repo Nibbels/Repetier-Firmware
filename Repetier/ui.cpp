@@ -32,33 +32,6 @@ bool g_nAutoReturnMessage = false;
 char g_nYesNo = 0; // 0 = no, 1 = yes
 volatile char g_nContinueButtonPressed = 0;
 
-void beep(uint8_t duration, uint8_t count) {
-#if FEATURE_BEEPER && defined(BEEPER_PIN) && BEEPER_PIN >= 0
-    if (!Printer::enableBeeper) {
-        // we shall not beep
-        return;
-    }
-
-    SET_OUTPUT(BEEPER_PIN);
-#ifndef BEEPER_TYPE_INVERTING
-#define BEEPER_TYPE_INVERTING false
-#endif // BEEPER_TYPE_INVERTING
-
-    for (uint8_t i = 0; i < count; i++) {
-#if BEEPER_TYPE_INVERTING
-        WRITE(BEEPER_PIN, LOW);
-        HAL::delayMilliseconds(duration);
-        WRITE(BEEPER_PIN, HIGH);
-#else
-        WRITE(BEEPER_PIN, HIGH);
-        HAL::delayMilliseconds(duration);
-        WRITE(BEEPER_PIN, LOW);
-#endif // BEEPER_TYPE_INVERTING
-        HAL::delayMilliseconds(duration);
-    }
-#endif // FEATURE_BEEPER && defined(BEEPER_PIN) && BEEPER_PIN>=0
-} // beep
-
 bool UIMenuEntry::showEntry() const {
     bool ret = true;
     uint8_t f, f2;
@@ -842,8 +815,6 @@ void UIDisplay::parse(char* txt, bool ram) {
                 addStringP(Printer::debugErrors() ? ui_text_on : ui_text_off); // %de : Debug error state
             else if (c2 == 'd')
                 addStringP(Printer::debugDryrun() ? ui_text_on : ui_text_off); // %dd : Debug dry run state
-            else if (c2 == 'b')
-                addStringP(Printer::enableBeeper ? ui_text_on : ui_text_off); // %db : beeper state
             break;
         }
         case 'D': {
@@ -968,12 +939,10 @@ void UIDisplay::parse(char* txt, bool ram) {
                 addInt(part_fan_pwm_max, 3);
             }
 #endif // FAN_PIN>-1 && FEATURE_FAN_CONTROL
-#if FEATURE_ZERO_DIGITS
             if (c2 == 'H') // %FH : Digit Homing to Zero ON/OFF
             {
                 addStringP(Printer::g_pressure_offset_active ? ui_text_on : ui_text_off);
             }
-#endif // FEATURE_ZERO_DIGITS
             if (c2 == 'C') // %FC : Digits force-bend-hotend-down Compensation Z ON/OFF
             {
                 addStringP(g_nDigitZCompensationDigits_active ? ui_text_on : ui_text_off);
@@ -2368,7 +2337,6 @@ void UIDisplay::okAction() {
         menuLevel = 1;
         menuTop[1] = menuPos[1] = 0;
         menu[1] = (void*)&ui_menu_main;
-        BEEP_SHORT
         return;
     }
 
@@ -2430,7 +2398,6 @@ void UIDisplay::okAction() {
 
         if (sd.selectFile(filename, false)) {
             sd.startPrint();
-            BEEP_START_PRINTING
             exitmenu();
         }
 
@@ -2440,7 +2407,6 @@ void UIDisplay::okAction() {
 
     if (entType == 2) { // Enter submenu
         pushMenu((void*)action, false);
-        BEEP_SHORT
         return;
     }
     if (entType == 3) {
@@ -2551,7 +2517,6 @@ void UIDisplay::zOffsetMinusAction() {
 void UIDisplay::rightAction() {
     if (menuLevel == 0 && menuPos[0] == 1) { //wenn im Mod-Menü für Z-Offset/Matrix Sense-Offset/Limiter, dann anders!
         senseOffsetUpAction();
-        beep(1, 4);
     } else
     {
         if (menu[menuLevel] == &ui_menu_xpos) {
@@ -2591,7 +2556,6 @@ void UIDisplay::backAction() {
         //we are in the Mod menu
         //verkleinern des Digit-Limits
         senseOffsetDownAction();
-        beep(1, 4);
     } else
     {
 #ifdef RGB_LIGHT_R_PIN
@@ -3633,14 +3597,12 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
 } //changeSwitchCase
 
 void UIDisplay::mainSwitchCase(int action) {
-    bool skipBeep = false;
     switch (action) {
         /*
         * HARDWARE BUTTONS
         */
     case UI_ACTION_OK: {
         okAction();
-        skipBeep = true; // Prevent double beep
         g_nYesNo = 0;
         break;
     }
@@ -3668,7 +3630,6 @@ void UIDisplay::mainSwitchCase(int action) {
         if (uid.menuLevel == 0 && uid.menuPos[0] == 1) {
             //wenn im Mod-Menü für Z-Offset/Matrix Sense-Offset/Limiter, dann anders!
             zOffsetMinusAction();
-            beep(1, 4);
         } //ELSE DO MOVE Z:
         else {
             moveZAction(-1);
@@ -3681,7 +3642,6 @@ void UIDisplay::mainSwitchCase(int action) {
                                                          //DO NOT MOVE Z: ALTER Z-OFFSET
         if (uid.menuLevel == 0 && uid.menuPos[0] == 1) { //wenn im Mod-Menü für Z-Offset/Matrix Z-Offset/Matrix Sense-Offset/Limiter, dann anders!
             zOffsetPlusAction();
-            beep(1, 4);
         } //ELSE DO MOVE Z:
         else {
             moveZAction(1);
@@ -3698,7 +3658,6 @@ void UIDisplay::mainSwitchCase(int action) {
                                                              //so dont retract, change the speed of the print to a lower speed instead of retracting:
                                                              //limits handled by change-function!
                 Commands::changeFeedrateMultiply(Printer::feedrateMultiply + 1);
-                beep(1, 4);
             } else if (!g_pauseMode || (isPauseSettled() && !PrintLine::direct.task)) {
                 Printer::offsetRelativeStepsCoordinates(0, 0, 0, int32_t(g_nManualSteps[E_AXIS]));
 
@@ -3718,7 +3677,6 @@ void UIDisplay::mainSwitchCase(int action) {
                                                              //so dont retract, change the speed of the print to a lower speed instead of retracting:
                                                              //limits handled by change-function!
                 Commands::changeFeedrateMultiply(Printer::feedrateMultiply - 1);
-                beep(1, 4);
             } else if (!g_pauseMode || (isPauseSettled() && !PrintLine::direct.task)) {
                 Printer::offsetRelativeStepsCoordinates(0, 0, 0, -1 * int32_t(g_nManualSteps[E_AXIS]));
 
@@ -3836,7 +3794,7 @@ void UIDisplay::mainSwitchCase(int action) {
             Printer::debugLevel += 8;
         if (Printer::debugDryrun()) // simulate movements without printing
         {
-            Extruder::setTemperatureForAllExtruders(0, false);
+            Extruder::setTemperatureForAllExtruders(0);
 #if HAVE_HEATED_BED == true
             Extruder::setHeatedBedTemperature(0);
 #endif // HAVE_HEATED_BED==true
@@ -3944,7 +3902,7 @@ void UIDisplay::mainSwitchCase(int action) {
     case UI_ACTION_PREHEAT_PLA: {
         g_uStartOfIdle = HAL::timeInMilliseconds() + 10000; //preheat PLA just got selected
         UI_STATUS_UPD(UI_TEXT_PREHEAT_PLA);
-        Extruder::setTemperatureForAllExtruders(UI_SET_PRESET_EXTRUDER_TEMP_PLA, false);
+        Extruder::setTemperatureForAllExtruders(UI_SET_PRESET_EXTRUDER_TEMP_PLA);
 #if HAVE_HEATED_BED == true
         Extruder::setHeatedBedTemperature(UI_SET_PRESET_HEATED_BED_TEMP_PLA);
 #endif // HAVE_HEATED_BED==true
@@ -3953,7 +3911,7 @@ void UIDisplay::mainSwitchCase(int action) {
     case UI_ACTION_PREHEAT_ABS: {
         g_uStartOfIdle = HAL::timeInMilliseconds() + 10000; //preheat ABS just got selected
         UI_STATUS_UPD(UI_TEXT_PREHEAT_ABS);
-        Extruder::setTemperatureForAllExtruders(UI_SET_PRESET_EXTRUDER_TEMP_ABS, false);
+        Extruder::setTemperatureForAllExtruders(UI_SET_PRESET_EXTRUDER_TEMP_ABS);
 #if HAVE_HEATED_BED == true
         Extruder::setHeatedBedTemperature(UI_SET_PRESET_HEATED_BED_TEMP_ABS);
 #endif // HAVE_HEATED_BED==true
@@ -3961,7 +3919,7 @@ void UIDisplay::mainSwitchCase(int action) {
     }
     case UI_ACTION_COOLDOWN: {
         UI_STATUS_UPD(UI_TEXT_COOLDOWN);
-        Extruder::setTemperatureForAllExtruders(0, false);
+        Extruder::setTemperatureForAllExtruders(0);
 #if HAVE_HEATED_BED == true
         Extruder::setHeatedBedTemperature(0);
 #endif // HAVE_HEATED_BED==true
@@ -4009,10 +3967,10 @@ void UIDisplay::mainSwitchCase(int action) {
             if (action == UI_ACTION_MOUNT_FILAMENT_SOFT) {
                 /* Diese PLA Temp ist bei ~180 °C, die meisten Filamente werden gerade so weich. Wenn man keine mindesetens "weiche" Temperatur eingestellt hat, soll geheizt werden.*/
                 if (Extruder::current->tempControl.targetTemperatureC < UI_SET_PRESET_EXTRUDER_TEMP_PLA) {
-                    Extruder::setTemperatureForExtruder(UI_SET_PRESET_EXTRUDER_TEMP_PLA, Extruder::current->id, true);
+                    Extruder::setTemperatureForExtruder(UI_SET_PRESET_EXTRUDER_TEMP_PLA, Extruder::current->id);
                     Extruder::current->tempControl.waitForTargetTemperature();
                     GCode::executeFString(Com::tMountFilamentSoft);
-                    Extruder::setTemperatureForExtruder(0, Extruder::current->id, false);
+                    Extruder::setTemperatureForExtruder(0, Extruder::current->id);
                 } else {
                     GCode::executeFString(Com::tMountFilamentSoft);
                 }
@@ -4050,19 +4008,6 @@ void UIDisplay::mainSwitchCase(int action) {
         break;
     }
 #endif // NUM_EXTRUDER == 2
-
-#if FEATURE_BEEPER
-    case UI_ACTION_BEEPER: {
-        if (Printer::enableBeeper)
-            Printer::enableBeeper = 0;
-        else
-            Printer::enableBeeper = 1;
-
-        HAL::eprSetByte(EPR_RF_BEEPER_MODE, Printer::enableBeeper);
-        EEPROM::updateChecksum();
-        break;
-    }
-#endif // FEATURE_BEEPER
 
 #if SDSUPPORT
     case UI_ACTION_SD_PRINT: {
@@ -4145,14 +4090,12 @@ void UIDisplay::mainSwitchCase(int action) {
         break;
     }
 
-#if FEATURE_ZERO_DIGITS
-    case UI_ACTION_FEATURE_ZERO_DIGITS: {
+    case UI_ACTION_DIGIT_HOMING: {
         Printer::g_pressure_offset_active = (Printer::g_pressure_offset_active ? false : true);
         HAL::eprSetByte(EPR_RF_ZERO_DIGIT_STATE, (Printer::g_pressure_offset_active ? 1 : 2)); //2 ist false, < 1 ist true
         EEPROM::updateChecksum();
         break;
     }
-#endif // FEATURE_ZERO_DIGITS
     case UI_ACTION_DIGIT_COMPENSATION: {
         g_nDigitZCompensationDigits_active = (g_nDigitZCompensationDigits_active ? false : true);
         HAL::eprSetByte(EPR_RF_DIGIT_CMP_STATE, (g_nDigitZCompensationDigits_active ? 1 : 2)); //2 ist false, < 1 ist true
@@ -4236,8 +4179,6 @@ void UIDisplay::mainSwitchCase(int action) {
     }
     }
 
-    if (!skipBeep)
-        BEEP_SHORT
 } //mainSwitchCase
 
 void UIDisplay::nextPreviousAction(int8_t next) {
@@ -4426,7 +4367,6 @@ void UIDisplay::slowAction() {
         if (epos) {
             Com::writeToAll = true;
             nextPreviousAction(epos); //Nibbels: Funktion, die rechts links auswertet oder Errors wegklicken lässt. abhängig von this->encoderPos .. sonst verwendet mit -1 oder 1
-            BEEP_SHORT
             refresh = 1;
         }
         noInts.protect();
@@ -4434,10 +4374,8 @@ void UIDisplay::slowAction() {
         const millis_t buttonAge = HAL::timeInMilliseconds() - lastButtonStart;
         noInts.unprotect();
         if (lastAction != buttonAction) {
-#if FEATURE_UNLOCK_MOVEMENT
             //Bei beliebiger user interaktion oder Homing soll G1 etc. erlaubt werden. Dann ist der Drucker nicht abgestürzt, sondern bedient worden.
             Printer::g_unlock_movement = 1;
-#endif //FEATURE_UNLOCK_MOVEMENT
             if (buttonAction == 0) {
                 lastAction = 0;
                 noInts.protect(); //HAL::forbidInterrupts();

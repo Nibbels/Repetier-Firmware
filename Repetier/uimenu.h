@@ -78,7 +78,6 @@ List of placeholder:
 %di : Debug info state
 %de : Debug error state
 %dd : Debug dry run state
-%db : beeper state
 %O0 : OPS mode = 0
 %O1 : OPS mode = 1
 %O2 : OPS mode = 2
@@ -671,15 +670,6 @@ UI_MENU_CHANGEACTION(ui_menu_general_baud,UI_TEXT_BAUDRATE,UI_ACTION_BAUDRATE)
 UI_MENU_ACTIONSELECTOR(ui_menu_general_stepper_inactive,UI_TEXT_STEPPER_OFF,ui_menu_stepper2)
 UI_MENU_ACTIONSELECTOR(ui_menu_general_max_inactive,UI_TEXT_ALL_OFF,ui_menu_maxinactive2)
 
-#if FEATURE_BEEPER
-UI_MENU_ACTIONCOMMAND(ui_menu_general_beeper,UI_TEXT_BEEPER,UI_ACTION_BEEPER)
-#define BEEPER_MODE_COUNT   1
-#define BEEPER_MODE_ENTRY   ,&ui_menu_general_beeper
-#else
-#define BEEPER_MODE_COUNT   0
-#define BEEPER_MODE_ENTRY
-#endif // FEATURE_BEEPER
-
 #ifdef RGB_LIGHT_R_PIN
 UI_MENU_CHANGEACTION(ui_menu_toggle_rgb_light,UI_TEXT_RGB_LIGHT_MODE,UI_ACTION_RGB_LIGHT_MODE)
 #define RGB_LIGHT_ENTRY ,&ui_menu_toggle_rgb_light
@@ -749,14 +739,7 @@ UI_MENU(ui_menu_settings_emerg_zstop,UI_MENU_CONF_EMERGENCY_ZSTOP,UI_MENU_BACKCN
 UI_MENU_SUBMENU(ui_menu_conf_emerg_zstop, UI_TEXT_EMERGENCY_ZSTOP_MENU, ui_menu_settings_emerg_zstop)
 
 /** \brief Configuration->DMS-Features->Zero Digits ON OFF */
-#if FEATURE_ZERO_DIGITS
-UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_zero_digits_homing,UI_TEXT_DO_FEATURE_ZERO_DIGITS,UI_ACTION_FEATURE_ZERO_DIGITS,0, MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING | MENU_MODE_PAUSED)
-#define UI_MENU_FEATURE_ZERO_DIGITS  &ui_menu_zero_digits_homing,
-#define UI_MENU_FEATURE_ZERO_DIGITS_COUNT 1
-#else
-#define UI_MENU_FEATURE_ZERO_DIGITS
-#define UI_MENU_FEATURE_ZERO_DIGITS_COUNT 0
-#endif // FEATURE_ZERO_DIGITS
+UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_zero_digits_homing,UI_TEXT_DIGIT_HOMING,UI_ACTION_DIGIT_HOMING,0, MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING | MENU_MODE_PAUSED)
 
 /** \brief Configuration->DMS-Features->DIGIT COMPENSATION ON OFF */
 UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_digits_cmp,UI_TEXT_DO_DIGIT_COMPENSATION,UI_ACTION_DIGIT_COMPENSATION,0, MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING | MENU_MODE_PAUSED)
@@ -773,8 +756,8 @@ UI_MENU(ui_menu_settings_flow,UI_MENU_CONF_FLOW_COMPENSATION,UI_MENU_BACKCNT+4)
 UI_MENU_SUBMENU(ui_menu_conf_flow, UI_TEXT_FLOW_MENU, ui_menu_settings_flow)
 
 #define UI_MENU_DMS {UI_MENU_ADDCONDBACK &ui_menu_conf_senseoffset, &ui_menu_conf_emerg_pause, &ui_menu_conf_emerg_zstop, \
-    &ui_menu_conf_flow, UI_MENU_FEATURE_ZERO_DIGITS &ui_menu_digits_cmp}
-UI_MENU(ui_menu_dms,UI_MENU_DMS,UI_MENU_BACKCNT+5+UI_MENU_FEATURE_ZERO_DIGITS_COUNT)
+    &ui_menu_conf_flow, &ui_menu_zero_digits_homing, &ui_menu_digits_cmp}
+UI_MENU(ui_menu_dms,UI_MENU_DMS,UI_MENU_BACKCNT+6)
 
 /** \brief Configuration->DMS Features menu */
 UI_MENU_SUBMENU(ui_menu_conf_dms, UI_TEXT_DMS, ui_menu_dms)
@@ -866,8 +849,8 @@ UI_MENU_CHANGEACTION_FILTER(ui_menu_microsteps_e,  UI_TEXT_MICRO_STEPS_E , UI_AC
 UI_MENU(ui_menu_motor,UI_MENU_MOTOR_COND,UI_MENU_MOTOR_COUNT)
 //############################################################### MOTOR MENU
 
-#define UI_MENU_GENERAL {UI_MENU_ADDCONDBACK &ui_menu_general_baud,&ui_menu_general_stepper_inactive,&ui_menu_general_max_inactive BEEPER_MODE_ENTRY RGB_LIGHT_ENTRY EXTRUDER_OFFSET_TYPE_ENTRY_XY}
-UI_MENU(ui_menu_general,UI_MENU_GENERAL,UI_MENU_BACKCNT+1+1+1+BEEPER_MODE_COUNT+RGB_LIGHT_COUNT+EXTRUDER_OFFSET_TYPE_COUNT_XY)
+#define UI_MENU_GENERAL {UI_MENU_ADDCONDBACK &ui_menu_general_baud,&ui_menu_general_stepper_inactive,&ui_menu_general_max_inactive RGB_LIGHT_ENTRY EXTRUDER_OFFSET_TYPE_ENTRY_XY}
+UI_MENU(ui_menu_general,UI_MENU_GENERAL,UI_MENU_BACKCNT+3+RGB_LIGHT_COUNT+EXTRUDER_OFFSET_TYPE_COUNT_XY)
 
 /** \brief Configuration menu */
 UI_MENU_SUBMENU(ui_menu_conf_general,  UI_TEXT_GENERAL,        ui_menu_general)
