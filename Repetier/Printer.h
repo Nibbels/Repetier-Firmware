@@ -430,8 +430,6 @@ public:
     static inline uint8_t isZHomeSafe() //experimentelle funktion, die nicht viel abdeckt, das ist ein test. ... TODO: merge with function isHomingAllowed
     {
         bool problematisch = false;
-        if (Extruder::current->offsetMM[Z_AXIS] != 0)
-            problematisch = true; //wenn rechtes gefedertes Hotend tiefer, dann evtl. kollision
         if (g_offsetZCompensationSteps > 0)
             problematisch = true; //wenn matrix positiv, dann evtl. problem
         if (isAxisHomed(Y_AXIS) && Printer::currentYSteps <= 5 * YAXIS_STEPS_PER_MM)

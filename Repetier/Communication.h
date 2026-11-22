@@ -229,7 +229,6 @@ public:
     FSTRINGVAR(tEPRXOffset)
     FSTRINGVAR(tEPRYOffset)
     FSTRINGVAR(tEPRZOffset)
-    FSTRINGVAR(tEPRZOffsetmm)
     FSTRINGVAR(tEPRZMode)
     FSTRINGVAR(tEPRRetractionWhenHeating)
     FSTRINGVAR(tEPRDistanceRetractHeating)

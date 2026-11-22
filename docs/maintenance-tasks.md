@@ -18,7 +18,7 @@ Firmware changes are tracked on `ai-firmware-review` against `community_developm
 
 ### Z travel and scanning
 
-- [x] **Allow scan retreat from the exact lower bound.** `moveZ()` stops a further approach at `-maxZOverrideSteps` and allows the bed to move away. The scan keeps control of the Z motor for the duration of its move. [Scan step output](../Repetier/RF.cpp#L2499)
+- [x] **Allow scan retreat from the exact lower bound.** `moveZ()` stops a further approach at `-maxZOverrideSteps` and allows the bed to move away. The scan keeps control of the Z motor for the duration of its move. [Scan step output](../Repetier/RF.cpp#L2496)
 
 - [x] **Apply travel limits to compensation-only Z pulses.** Each pulse checks the motor position in the requested direction. Z-max uses the configured limit and, where present, the hardware switch. Z-min allows the model-specific overtravel after homing. An unreachable target stays pending, leaving the next retreat step available. Host replays covered idle and XY movement, queued and direct retreat, and disabling compensation at a limit. Physical verification remains open. [Compensation pulses](../Repetier/motion.cpp#L802) · [Travel limit check](../Repetier/Printer.cpp#L871) · [Scan reach](z-offset/scans-and-persistence.md#z-min-screw-adjustment-and-scan-reach)
 
@@ -30,7 +30,7 @@ Firmware changes are tracked on `ai-firmware-review` against `community_developm
 
 ### Pause and resume
 
-- [ ] **Suspend automatic SenseOffset learning during pause.** Bed-matrix lookup and fade use the frozen print XYZ. In a host replay, pre-pause samples raised SenseOffset by 10 µm after the reading fell to zero. Stop learning and clear sample history while retaining applied clearance, manual offset adjustment and live Digit-Z force tracking. The pause guard passed a host trial. Check the return at equal force and after manual extrusion while parked. [Print matrix coordinates](../Repetier/RF.cpp#L2032) · [Pressure handler](../Repetier/RF.cpp#L3170)
+- [ ] **Suspend automatic SenseOffset learning during pause.** Bed-matrix lookup and fade use the frozen print XYZ. In a host replay, pre-pause samples raised SenseOffset by 10 µm after the reading fell to zero. Stop learning and clear sample history while retaining applied clearance, manual offset adjustment and live Digit-Z force tracking. The pause guard passed a host trial. Check the return at equal force and after manual extrusion while parked. [Print matrix coordinates](../Repetier/RF.cpp#L2032) · [Pressure handler](../Repetier/RF.cpp#L3167)
 
 The updated host replay covers early Pause and Play on pressure, queued and panel requests, ordinary and overlapping jog releases, a blocked return and retry, cancellation, and the two-press wake and resume sequence. The step replay covers clipped direct moves, preservation of queued overtravel, and direct extrusion with the pressure guard. AVR builds passed for all three models. Physical verification remains open.
 
@@ -87,6 +87,7 @@ Work through the [architecture review and migration](development-roadmap.md#5-fi
 - [x] **Fold board outputs and core controls into the model builds.** Removed guided nozzle alignment and the optional driver status command. AVR builds cover all three models. A host replay of the bed scan completion states covers the standard, PLA and ABS paths through matrix save. [Feature retirement](development-roadmap.md#feature-retirement)
 - [x] **Remove the remaining `FEATURE_*` switches.** Use model temperature curves, compile homing diagnostics and WobbleFix on all models, and remove the unused checksum bit. Host tests compared sensor conversion and zero-amplitude move targets. [Feature retirement](development-roadmap.md#feature-retirement)
 - [x] **Fold the shared motion, display and serial defaults into the firmware.** Pressure Advance, the current junction and short-segment calculations, the 25 ms driver enable wait and the 120 s menu timeout are built in. SD builds include file sizes in `M20`. Automatic trace builds, alternate serial ports and the early RF1000 fan-pin variant are retired. [Shared build defaults](development-roadmap.md#feature-retirement)
+- [x] **Retire TipDown and fix the UART transmit ring at 64 bytes.** Removed the per-tool Z displacement from tool changes, homing and EEPROM settings. The movement planner keeps the existing cache sizes of 17 with SD and 24 without SD. [Feature retirement](development-roadmap.md#feature-retirement)
 
 ## Fork candidates
 

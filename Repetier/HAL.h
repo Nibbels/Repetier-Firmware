@@ -159,15 +159,8 @@ typedef uint8_t ufast8_t;
 #define SERIAL_BUFFER_SIZE 128
 #define SERIAL_BUFFER_MASK 127
 
-#undef SERIAL_TX_BUFFER_SIZE
-#undef SERIAL_TX_BUFFER_MASK
-#ifdef BIG_OUTPUT_BUFFER
-#define SERIAL_TX_BUFFER_SIZE 128
-#define SERIAL_TX_BUFFER_MASK 127
-#else
-#define SERIAL_TX_BUFFER_SIZE 64
-#define SERIAL_TX_BUFFER_MASK 63
-#endif
+constexpr uint8_t serialTxBufferSize = 64;
+constexpr uint8_t serialTxBufferMask = serialTxBufferSize - 1;
 
 struct ring_buffer_rx {
     unsigned char buffer[SERIAL_BUFFER_SIZE];
@@ -176,7 +169,7 @@ struct ring_buffer_rx {
 };
 
 struct ring_buffer_tx {
-    unsigned char buffer[SERIAL_TX_BUFFER_SIZE];
+    unsigned char buffer[serialTxBufferSize];
     volatile uint8_t head;
     volatile uint8_t tail;
 };

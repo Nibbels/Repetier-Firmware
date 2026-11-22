@@ -25,7 +25,7 @@ This is deliberately **not** a bidirectional PID loop. It is a bounded, positive
 
 `g_minZCompensationSteps` controls both where full scanned-bed following ends and where SenseOffset may regulate. The fallback limit is 0.33 mm. Generated `M3912` priming suspends SenseOffset for the entire line, including with a higher limit inherited from an earlier print. For a manually scripted prime, enable SenseOffset after priming and account for `M3001` AutoStart. [Manual start-line ordering](automatic-start-line.md#manual-start-lines)
 
-Extruder-specific Z offsets and different coordinate origins require care; current source has a TODO about which Z quantity should be used for SenseOffset eligibility.
+SenseOffset checks the executing nominal Z against the learned limit. The G-code origin is resolved before this check.
 
 ## Intentional manual persistence of learned clearance
 

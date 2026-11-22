@@ -33,7 +33,7 @@ M109 S[first_layer_temperature_1] ; Extruder längen
 
 M400 ; Warten bis Idle
 
-; Wähle Extruder Rechts -> Wirkt sich auch auf mhier's Z-Offset-Scan aus! If you have some T1-Tipdown Hotend choose the right offset in Configuration->Z-Compensation->Extruder T1 Tipdown
+; Wähle den rechten Extruder für den folgenden Z-Offset-Scan.
 T1
 M3900 R1 ; Auto-Matrix-Leveling (- Z-Offsetscan an 7 Punkten mit Abstandsgewichtung: Das biegt ein verstelltes Heizbett gerade, behält aber die Welligkeit der alten Matrix.)
 

@@ -1294,22 +1294,8 @@ void Printer::homeZAxis() {
         Printer::queueRelativeMMCoordinates(0, 0, (0.1f + ENDSTOP_Z_BACK_MOVE) * nHomeDir, 0, float(homingFeedrate[Z_AXIS] / ENDSTOP_Z_RETEST_REDUCTION_FACTOR), true, true);
 
 
-        //currentZSteps ist die Schalter-Z-Koordinate, die die Z-Steps per Dir-Pin abzählt.
-        // Die absoluten Achsengrenzen werden gesetzt, vor der zweite Extruder sein offset bekommt.
+        // Set the motor position and the nominal axis origin to the switch coordinate.
         Printer::currentZSteps = (nHomeDir == -1) ? 0 : maxSoftEndstopSteps[Z_AXIS];
-
-#if NUM_EXTRUDER == 2
-        {
-            // Standardverhalten: Kein Offset für Z vorsehen, es gibt kein Homing-Offset.
-            if (Extruder::current->id == extruder[1].id && Extruder::current->offsetMM[Z_AXIS] != 0.0f) {
-                // Wenn beim Homing von Extruder Rechts ein Offset aktiv ist, dann hat der ein negatives Offset.
-                // Wir verkleinern bei Z nicht künstlich unseren Bauraum um den Extruder-Abstand. Darum einfach per Offset hinfahren.
-                Printer::offsetRelativeStepsCoordinates(0, 0, -1 * nHomeDir * (0 - Extruder::current->offsetMM[Z_AXIS]) * Printer::axisStepsPerMM[Z_AXIS], 0);
-            }
-        }
-#endif // NUM_EXTRUDER>1
-
-        //5. Setzen der aktuellen End-Position auf die Koordinate, zu der das Homing gehört.
         Printer::setZAxisSteps((nHomeDir == -1) ? 0 : maxSoftEndstopSteps[Z_AXIS]);
 
         //6. Korrektur der Flags
@@ -1349,10 +1335,9 @@ void Printer::homeAxis(bool xaxis, bool yaxis, bool zaxis) // home non-delta pri
     homingOrder = HOMING_ORDER_PRINT;
 
     if ((!yaxis && zaxis) || (/* z vor y */ homingOrder == HOME_ORDER_XZY || homingOrder == HOME_ORDER_ZXY || homingOrder == HOME_ORDER_ZYX)) {
-        // do not allow homing Z-Only within menu, when the Extruder is configured < 0 and over bed.
+        // With a positive bed matrix, move clear of the bed before homing Z.
         if (!Printer::isZHomeSafe()) {
-            homeYAxis(); //bevor die düse gegen das bett knallen könnte, weil positive z-matix oder tipdown-extruder sollte erst y genullt werden: kann das im printermode schädlich sein?
-            //wenn Z genullt wird, sollte auch Y genullt werden dürfen.
+            homeYAxis();
         }
     }
 

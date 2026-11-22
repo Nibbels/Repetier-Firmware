@@ -7,9 +7,9 @@
 1. **Theoretical slicer G-code**: `G1 Z0.20` requests a nominal layer height in the G-code's current work origin, G90/G91 mode and units. This number is not necessarily physical Z motor steps.
 2. **Uncompensated planned firmware position.** `Printer::queueGCodeCoordinates()` converts units and subtracts the work-origin offset in absolute mode. The planner rounds the float target with `prepareDestinationSteps(Z_AXIS)` and records the resulting integer in `queuedPositionSteps[Z_AXIS]`. `currentSteps[Z_AXIS]` tracks execution. The learned `g_min` and `g_max` use the nominal planned steps.
 3. **Compensation/Z motor target**: `recalculateHeatBedZCompensation()` uses the *executing nominal* `currentSteps[Z_AXIS]` to select the height-dependent shape compensation and adds `g_staticZSteps` (menu Z + accumulated SenseOffset). A separate optional **Digit-Z** force correction and endstop rules may also apply. Target is `compensatedPositionTargetStepsZ`; actual motor correction `compensatedPositionCurrentStepsZ` can lag behind the target.
-4. **Real nozzle-to-bed clearance and printed geometry**: combines nominal Z motion, actual compensation motor steps, tool offsets, physical thermal drift and the real bed surface. This is not directly identical to any one planned variable.
+4. **Real nozzle-to-bed clearance and printed geometry** combine nominal Z motion, actual compensation motor steps, direct Z moves, physical thermal drift and the real bed surface.
 
-The source intentionally avoids including extruder-specific Z displacement in the nominal fade-height coordinate. Both the layer detector and fade calculation reason in the nominal planned axis, even though extruder/tool offsets or manual direct moves can change real nozzle clearance.
+The layer detector and fade calculation use nominal Z. Manual direct moves can change nozzle clearance independently of that value.
 
 ## Why segment rounding cannot accumulate in XYZ
 

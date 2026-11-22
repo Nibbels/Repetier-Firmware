@@ -2043,10 +2043,7 @@ void recalculateHeatBedZCompensation(void) {
     float nNeededZEPerc = 0.0f;
 
     if (Printer::doHeatBedZCompensation) {
-        long nCurrentPositionStepsZ = Printer::currentSteps[Z_AXIS]; //direct muss hier egal sein, das ist nur das extruder und sonstige manual-offset.
-
-        // Der Z-Kompensation wird das extruderspezifische Z-Offset des jeweiligen Extruders verschwiegen, sodass dieses die Höhen / Limits nicht beeinflusst. Die X- und Y-Offsets werden behalten, denn das korrigiert Düsen- zu Welligkeitsposition nach Extruderwechsel. Das extruderspezifische Z-Offset Extruder::current->zOffset wird beim Toolchange in nCurrentPositionStepsZ eingerechnet und verfahren.
-        // Extruder::current->zOffset ist negativ, wenn das hotend weiter heruntergedrückt werden kann als 0. -> Bettfahrt nach unten, um auszuweichen.
+        long nCurrentPositionStepsZ = Printer::currentSteps[Z_AXIS]; // Use the executing nominal Z for the fade limits.
         if (nCurrentPositionStepsZ >= 0) {
             // check whether we have to perform a compensation in z-direction
             if (nCurrentPositionStepsZ < g_maxZCompensationSteps) {
@@ -6153,32 +6150,6 @@ void processSpecialGCode(GCode* pCommand) {
             Printer::relativeExtruderCoordinateMode = save_relativeExtruderCoordinateMode;
             Printer::unitIsInches = saveunitIsInches;
             g_uStartOfIdle = HAL::timeInMilliseconds() + 5000; // M3914 unload filament ends
-            break;
-        }
-
-        case 3919: // M3919 [S]mikrometer - Testfunction for Dip-Down-Hotend beim T1: Einstellen des extruderspezifischen Z-Offsets
-        {
-            /* Eigentlich kann man das mit jedem Extruder machen, aber ich lasse das nur für T1 zu, weil ich nur das testen kann. Der Rechte Extruder kann damit absinken, wenn das Filament ihn runterdrückt. Der Linke bleibt in jedem Fall gleich hoch auf der Höhe des Homings! */
-            if (pCommand->hasZ() && (pCommand->Z <= 0 && pCommand->Z >= -2.0f)) {
-                if (Printer::debugDryrun())
-                    break;
-                Commands::waitUntilEndOfAllMoves();
-
-                uint8_t extruderId = 1;
-
-                if (Printer::isAxisHomed(Z_AXIS) && Extruder::current->id == extruder[extruderId].id) {
-                    int32_t dz = (pCommand->Z - extruder[extruderId].offsetMM[Z_AXIS]) * Printer::axisStepsPerMM[Z_AXIS];
-                    // Shift the extruder-offset negatively to stay at the same point after switch
-                    Printer::offsetRelativeStepsCoordinates(0, 0, -dz, 0);
-                }
-                extruder[extruderId].offsetMM[Z_AXIS] = (float)pCommand->Z;
-                Com::printFLN(PSTR("M3919 T1 Spring displace: "), extruder[extruderId].offsetMM[Z_AXIS]);
-
-                HAL::eprSetFloat(EEPROM::getExtruderOffset(extruderId) + EPR_EXTRUDER_Z_OFFSET, extruder[extruderId].offsetMM[Z_AXIS]); //mm negativ
-                EEPROM::updateChecksum();
-            } else {
-                Com::printFLN(PSTR("M3919 Help: Write M3919 T1 Z-0.500 when T1 goes down 500um/0.5mm"));
-            }
             break;
         }
 

@@ -88,7 +88,6 @@ Overridden if EEPROM activated.*/
 
 #define EXT0_X_OFFSET_MM 0.0f
 #define EXT0_Y_OFFSET_MM 0.0f
-#define EXT0_Z_OFFSET_MM 0.0f //to support Nozzle-Tip-Down-Hotends
 
 /** \brief for skeinforge 40 and later, steps to pull the plasic 1 mm inside the extruder, not out.  Overridden if EEPROM activated. */
 #define EXT0_STEPS_PER_MM (8.75 * RF_MICRO_STEPS_E)
@@ -242,7 +241,6 @@ The codes are only executed for multiple extruder when changing the extruder. */
 
 #define EXT1_X_OFFSET_MM 33.9f // [mm]
 #define EXT1_Y_OFFSET_MM 0.1f  // [mm]
-#define EXT1_Z_OFFSET_MM 0.0f  // [mm] //to support Nozzle-Tip-Down-Hotends
 
 /** \brief for skeinforge 40 and later, steps to pull the plasic 1 mm inside the extruder, not out.  Overridden if EEPROM activated. */
 #define EXT1_STEPS_PER_MM (8.75 * RF_MICRO_STEPS_E)
@@ -683,7 +681,6 @@ Above this value the z compensation will distribute the roughness of the surface
 #define HEAT_BED_SCAN_Y_CALIBRATION_POINT_MM 100 // [mm] from the front border of the heat bed
 #endif                                           // NUM_EXTRUDER == 2
 
-//Nibbels: increased from 500 to 1000 in order to avoid problems with Dip-Down-Hotends
 #define HEAT_BED_SCAN_Z_START_MM 1.0f // [mm]
 
 #define HEAT_BED_SCAN_CONTACT_PRESSURE_DELTA 10 // [digits]

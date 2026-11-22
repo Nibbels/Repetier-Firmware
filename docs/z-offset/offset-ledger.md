@@ -13,7 +13,6 @@
 | `g_minZCompensationSteps` | steps | RAM: initial/fallback config; **dynamically replaced** by first-layer detector | Boot EEPROM read; `motion.cpp` model layer learning | Full bed-following limit, SenseOffset low-Z gate, Digit Flow high-Z gate |
 | `g_maxZCompensationSteps` | steps | RAM: fallback config then dynamically learned | Boot EEPROM read; `motion.cpp` | End of scanned-profile fade and ECMP transition |
 | `g_nDigitZCompensationDigits` | force digits (stored float) | RAM | DMS readings | Optional additional force-dependent Z target term |
-| `Extruder::current->offsetMM[Z_AXIS]` | mm | Internal EEPROM per extruder | Tool configuration/menu | Extruder/tool-specific positioning, not simply interchangeable with `Printer::ZOffset` |
 | `Printer::compensatedPositionTargetStepsZ` / `CurrentStepsZ` | steps | RAM/live stepper state | Z compensation target calculation / execution | Separate desired vs realized correction; can lag during motion |
 
 ### Simplified formula for printing (normal Z >= 0)
@@ -35,7 +34,7 @@ CompensationTarget =
   + application-specific bounds/special cases
 ```
 
-This describes **the compensation target** rather than absolute physical nozzle coordinates. Endstop constraints, negative Z, direct moves, queue moves, tool offsets, and disabled compensation matter. It is an aid for debugging, not a replacement for reading `recalculateHeatBedZCompensation()`.
+This describes **the compensation target** rather than absolute physical nozzle coordinates. Endstop constraints, negative Z, direct moves, queue moves, and disabled compensation matter. It is an aid for debugging, not a replacement for reading `recalculateHeatBedZCompensation()`.
 
 **Sign:** positive menu Z offset / positive SenseOffset raises nozzle-to-bed clearance by moving the bed away in printing convention. An edit to a matrix shifts the baseline and may change clearance without changing the menu Z-offset.
 

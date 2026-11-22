@@ -333,17 +333,14 @@ void Extruder::selectExtruderById(uint8_t extruderId) {
     }
 #endif // NUM_EXTRUDER>1
 
-    // Update extruder head position
-    // We only move an axis to its corrected position if we are homed. Otherwise homing will do this job.
-    int32_t dOffset[3] = { 0 };
+    // Correct X and Y on homed axes. Homing positions the other axes later.
+    int32_t dx = 0;
+    int32_t dy = 0;
     if (Printer::isAxisHomed(X_AXIS))
-        dOffset[X_AXIS] = (extruder[extruderId].offsetMM[X_AXIS] - Extruder::current->offsetMM[X_AXIS]) * Printer::axisStepsPerMM[X_AXIS]; //neu - alt -> geht negativ als bewegung rein.
+        dx = (extruder[extruderId].offsetMM[X_AXIS] - Extruder::current->offsetMM[X_AXIS]) * Printer::axisStepsPerMM[X_AXIS];
     if (Printer::isAxisHomed(Y_AXIS))
-        dOffset[Y_AXIS] = (extruder[extruderId].offsetMM[Y_AXIS] - Extruder::current->offsetMM[Y_AXIS]) * Printer::axisStepsPerMM[Y_AXIS];
-    if (Printer::isAxisHomed(Z_AXIS))
-        dOffset[Z_AXIS] = (extruder[extruderId].offsetMM[Z_AXIS] - Extruder::current->offsetMM[Z_AXIS]) * Printer::axisStepsPerMM[Z_AXIS];
-    // Shift the extruder-offset negatively to stay at the same point after switch
-    Printer::offsetRelativeStepsCoordinates(-dOffset[X_AXIS], -dOffset[Y_AXIS], -dOffset[Z_AXIS], 0);
+        dy = (extruder[extruderId].offsetMM[Y_AXIS] - Extruder::current->offsetMM[Y_AXIS]) * Printer::axisStepsPerMM[Y_AXIS];
+    Printer::offsetRelativeStepsCoordinates(-dx, -dy, 0, 0);
 
     Extruder::current->enabled = 0;
 
@@ -1187,7 +1184,7 @@ const char ext1_deselect_cmd[] PROGMEM = EXT1_DESELECT_COMMANDS;
 Extruder extruder[NUM_EXTRUDER] = {
 #if NUM_EXTRUDER > 0
     { 0,
-      { EXT0_X_OFFSET_MM, EXT0_Y_OFFSET_MM, EXT0_Z_OFFSET_MM },
+      { EXT0_X_OFFSET_MM, EXT0_Y_OFFSET_MM },
       EXT0_STEPS_PER_MM,
       EXT0_ENABLE_PIN,
       EXT0_ENABLE_ON,
@@ -1229,7 +1226,7 @@ Extruder extruder[NUM_EXTRUDER] = {
 #if NUM_EXTRUDER > 1
     ,
     { 1,
-      { EXT1_X_OFFSET_MM, EXT1_Y_OFFSET_MM, EXT1_Z_OFFSET_MM },
+      { EXT1_X_OFFSET_MM, EXT1_Y_OFFSET_MM },
       EXT1_STEPS_PER_MM,
       EXT1_ENABLE_PIN,
       EXT1_ENABLE_ON,

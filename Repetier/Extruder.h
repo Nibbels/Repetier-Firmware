@@ -157,7 +157,7 @@ public:
     static Extruder* current;
 
     uint8_t id;
-    float offsetMM[3];
+    float offsetMM[2]; ///< X/Y tool offsets in mm.
     float stepsPerMM; ///< Steps per mm.
     int8_t enablePin; ///< Pin to enable extruder stepper motor.
     uint8_t enableOn;

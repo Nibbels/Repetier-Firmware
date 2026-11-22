@@ -989,10 +989,6 @@ void UIDisplay::parse(char* txt, bool ram) {
             {
                 addFloat(extruder[1].offsetMM[Y_AXIS], 4, 3);
             }
-            if (c2 == 'S') // %OS : Extruder spring displacement Z [mm]
-            {
-                addFloat(extruder[1].offsetMM[Z_AXIS], 4, 3);
-            }
 #endif // NUM_EXTRUDER>1
 
             break;
@@ -2851,21 +2847,6 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         }
 
         HAL::eprSetFloat(EEPROM::getExtruderOffset(1) + EPR_EXTRUDER_Y_OFFSET, extruder[1].offsetMM[Y_AXIS]);
-        EEPROM::updateChecksum();
-        break;
-    }
-    case UI_ACTION_EXTRUDER_OFFSET_Z: {
-        float oldZOffset = extruder[1].offsetMM[Z_AXIS];
-        //Das hier ist nur dazu gedacht, um eine Tip-Down-Nozzle auf per ToolChange auf die Korrekte Höhe zu justieren.
-        INCREMENT_MIN_MAX(extruder[1].offsetMM[Z_AXIS], 0.025, -2, 0);
-
-        if (Printer::isAxisHomed(Z_AXIS) && Extruder::current->id == extruder[1].id) {
-            int32_t dz = (extruder[1].offsetMM[Z_AXIS] - oldZOffset) * Printer::axisStepsPerMM[Z_AXIS];
-            // Shift the extruder-offset negatively to stay at the same point after switch
-            Printer::offsetRelativeStepsCoordinates(0, 0, -dz, 0);
-        }
-
-        HAL::eprSetFloat(EEPROM::getExtruderOffset(1) + EPR_EXTRUDER_Z_OFFSET, extruder[1].offsetMM[Z_AXIS]); //mm negativ
         EEPROM::updateChecksum();
         break;
     }

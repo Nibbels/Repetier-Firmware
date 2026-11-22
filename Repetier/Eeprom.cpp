@@ -75,7 +75,6 @@ void EEPROM::restoreEEPROMExtruderSettingsFromConfiguration(uint8_t extruderId) 
 
         e->offsetMM[X_AXIS] = EXT0_X_OFFSET_MM;
         e->offsetMM[Y_AXIS] = EXT0_Y_OFFSET_MM;
-        e->offsetMM[Z_AXIS] = EXT0_Z_OFFSET_MM;
 
 #if RETRACT_DURING_HEATUP
         e->waitRetractTemperature = EXT0_WAIT_RETRACT_TEMP;
@@ -105,7 +104,6 @@ void EEPROM::restoreEEPROMExtruderSettingsFromConfiguration(uint8_t extruderId) 
 
         e->offsetMM[X_AXIS] = EXT1_X_OFFSET_MM;
         e->offsetMM[Y_AXIS] = EXT1_Y_OFFSET_MM;
-        e->offsetMM[Z_AXIS] = EXT1_Z_OFFSET_MM;
 
 #if RETRACT_DURING_HEATUP
         e->waitRetractTemperature = EXT1_WAIT_RETRACT_TEMP;
@@ -417,7 +415,6 @@ void EEPROM::storeExtruderDataIntoEEPROM(uint8_t extruderId) {
 
     HAL::eprSetFloat(o + EPR_EXTRUDER_X_OFFSET, e->offsetMM[X_AXIS]);
     HAL::eprSetFloat(o + EPR_EXTRUDER_Y_OFFSET, e->offsetMM[Y_AXIS]);
-    HAL::eprSetFloat(o + EPR_EXTRUDER_Z_OFFSET, e->offsetMM[Z_AXIS]);
 
 #if RETRACT_DURING_HEATUP
     HAL::eprSetInt16(o + EPR_EXTRUDER_WAIT_RETRACT_TEMP, e->waitRetractTemperature);
@@ -615,12 +612,6 @@ void EEPROM::readDataFromEEPROM() {
 
         e->offsetMM[X_AXIS] = HAL::eprGetFloat(o + EPR_EXTRUDER_X_OFFSET);
         e->offsetMM[Y_AXIS] = HAL::eprGetFloat(o + EPR_EXTRUDER_Y_OFFSET);
-        e->offsetMM[Z_AXIS] = HAL::eprGetFloat(o + EPR_EXTRUDER_Z_OFFSET);
-        if (e->offsetMM[Z_AXIS] > 0) {
-            e->offsetMM[Z_AXIS] = 0;                            //this offset is negative only! to tune a (right) hotend down.
-            HAL::eprSetFloat(o + EPR_EXTRUDER_Z_OFFSET, 0.00f); //do not allow positive values
-            change = true;                                      //update checksum later in this function
-        }
 
 #if RETRACT_DURING_HEATUP
         e->waitRetractTemperature = HAL::eprGetInt16(o + EPR_EXTRUDER_WAIT_RETRACT_TEMP);
@@ -1016,7 +1007,6 @@ void EEPROM::writeSettings() {
 
         writeFloat(o + EPR_EXTRUDER_X_OFFSET, Com::tEPRXOffset);
         writeFloat(o + EPR_EXTRUDER_Y_OFFSET, Com::tEPRYOffset);
-        writeFloat(o + EPR_EXTRUDER_Z_OFFSET, Com::tEPRZOffsetmm);
 
 #if RETRACT_DURING_HEATUP
         writeInt(o + EPR_EXTRUDER_WAIT_RETRACT_TEMP, Com::tEPRRetractionWhenHeating);

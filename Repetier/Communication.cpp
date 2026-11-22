@@ -231,7 +231,6 @@ FSTRINGVALUE(Com::tEPRBedsensorType, "Bed Temp. sensor type [3=orig. 4=alternati
 FSTRINGVALUE(Com::tEPRsensorType, "Temp. sensor type [3=V2 8=E3D 13=V3]")
 FSTRINGVALUE(Com::tEPRXOffset, "X-offset [mm]")
 FSTRINGVALUE(Com::tEPRYOffset, "Y-offset [mm]")
-FSTRINGVALUE(Com::tEPRZOffsetmm, "Z-offset [mm]")
 FSTRINGVALUE(Com::tEPRRetractionWhenHeating, "Temp. for retraction when heating [C]")
 FSTRINGVALUE(Com::tEPRDistanceRetractHeating, "Distance to retract when heating [mm]")
 FSTRINGVALUE(Com::tEPRExtruderCoolerSpeed, "Extruder cooler speed [0-255]")

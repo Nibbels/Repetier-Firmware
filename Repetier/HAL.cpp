@@ -1097,7 +1097,7 @@ ISR(USART_UDRE_vect)
     } else {
         // There is more data in the output buffer. Send the next byte
         uint8_t c = tx_buffer.buffer[tx_buffer.tail];
-        tx_buffer.tail = (tx_buffer.tail + 1) & SERIAL_TX_BUFFER_MASK;
+        tx_buffer.tail = (tx_buffer.tail + 1) & serialTxBufferMask;
 #if defined(UDR0)
         UDR0 = c;
 #elif defined(UDR)
@@ -1194,7 +1194,7 @@ int RFHardwareSerial::available(void) {
 } // available
 
 int RFHardwareSerial::outputUnused(void) {
-    return SERIAL_TX_BUFFER_SIZE - (unsigned int)((SERIAL_TX_BUFFER_SIZE + _tx_buffer->head - _tx_buffer->tail) & SERIAL_TX_BUFFER_MASK);
+    return serialTxBufferSize - (unsigned int)((serialTxBufferSize + _tx_buffer->head - _tx_buffer->tail) & serialTxBufferMask);
 } // outputUnused
 
 int RFHardwareSerial::peek(void) {
@@ -1223,7 +1223,7 @@ void RFHardwareSerial::flush() {
 } // flush
 
 size_t RFHardwareSerial::write(uint8_t c) {
-    uint8_t i = (_tx_buffer->head + 1) & SERIAL_TX_BUFFER_MASK;
+    uint8_t i = (_tx_buffer->head + 1) & serialTxBufferMask;
 
     // If the output buffer is full, there's nothing for it other than to
     // wait for the interrupt handler to empty it a bit

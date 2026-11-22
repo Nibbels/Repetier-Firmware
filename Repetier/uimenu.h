@@ -162,7 +162,6 @@ List of placeholder:
 %Oa : Active Extruder
 %OE : Extruder offset X [mm]
 %OF : Extruder offset Y [mm]
-%OS : Extruder spring displacement Z [mm]
 %px : mode of the Position X menu
 %py : mode of the Position Y menu
 %pz : mode of the Position Z menu
@@ -384,16 +383,6 @@ UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_heat_bed_scan_abs,UI_TEXT_HEAT_BED_SCAN_ABS
 UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_mhier_z_scan,UI_TEXT_DO_MHIER_BED_SCAN,UI_ACTION_RF_DO_MHIER_BED_SCAN,0, MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING | MENU_MODE_PAUSED)
 UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_mhier_auto_matrix_leveling,UI_TEXT_DO_MHIER_AUTO_MATRIX_LEVELING,UI_ACTION_RF_DO_MHIER_AUTO_MATRIX_LEVELING,0,MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING | MENU_MODE_PAUSED)
 
-#if NUM_EXTRUDER>1 && UI_SHOW_TIPDOWN_IN_ZCONFIGURATION
-UI_MENU_ACTION2(ui_menu_extruder_offsetz2,UI_ACTION_EXTRUDER_OFFSET_Z,UI_TEXT_EXTRUDER_OFFSET_Z2, "")
-UI_MENU_ACTIONSELECTOR(ui_menu_extruder_offset_z,UI_TEXT_EXTRUDER_OFFSET_Z,ui_menu_extruder_offsetz2)
-#define EXTRUDER_OFFSET_TYPE_ENTRY_Z ,&ui_menu_extruder_offset_z
-#define EXTRUDER_OFFSET_TYPE_COUNT_Z 1
-#else
-#define EXTRUDER_OFFSET_TYPE_ENTRY_Z
-#define EXTRUDER_OFFSET_TYPE_COUNT_Z 0
-#endif // NUM_EXTRUDER>1
-
 UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_save_active_zMatrix,UI_TEXT_DO_SAVE_ACTIVE_ZMATRIX,UI_ACTION_RF_DO_SAVE_ACTIVE_ZMATRIX,0, MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING | MENU_MODE_PAUSED)
 
 UI_MENU_ACTION4(ui_menu_zoffset,UI_ACTION_ZOFFSET, UI_TEXT_ACTION_ZOFFSET, "", "", "")
@@ -406,9 +395,9 @@ UI_MENU_CHANGEACTION_FILTER(ui_menu_set_z_scan_start_lift,UI_TEXT_SCAN_START_HEI
 /** \brief Z calibration menu */
 
 #define UI_MENU_Z {UI_MENU_ADDCONDBACK &ui_menu_heat_bed_scan, &ui_menu_heat_bed_scan_pla, &ui_menu_heat_bed_scan_abs, \
-    &ui_menu_mhier_z_scan, &ui_menu_mhier_auto_matrix_leveling, &ui_menu_zoffset_z EXTRUDER_OFFSET_TYPE_ENTRY_Z, \
+    &ui_menu_mhier_z_scan, &ui_menu_mhier_auto_matrix_leveling, &ui_menu_zoffset_z, \
     &ui_menu_z_mode, &ui_menu_set_z_matrix_heat_bed, &ui_menu_set_z_scan_start_lift, &ui_menu_save_active_zMatrix}
-UI_MENU(ui_menu_z,UI_MENU_Z,UI_MENU_BACKCNT+10+EXTRUDER_OFFSET_TYPE_COUNT_Z)
+UI_MENU(ui_menu_z,UI_MENU_Z,UI_MENU_BACKCNT+10)
 
 /** \brief Extruder menu */
 UI_MENU_CHANGEACTION(ui_menu_quick_flowmultiply,UI_TEXT_FLOW_MULTIPLY,UI_ACTION_FLOWRATE_MULTIPLY)

@@ -4,7 +4,7 @@
 
 ## What the mechanics do
 
-The print gap is affected by: (1) the nominal commanded Z, (2) the scanned heat-bed shape, (3) a persistent operator/menu Z-offset, (4) a positive, capped SenseOffset correction when first-layer force is excessive, (5) optional extra force-dependent Digit-Z compensation, and (6) extruder/tool positioning. The machine also **physically drifts thermally** as the bed, nozzle and structure expand; not every physical change is estimated or automatically corrected in software.
+The print gap depends on nominal Z, the scanned heat-bed shape, the saved manual Z offset, SenseOffset and Digit-Z. The machine also drifts as the bed, nozzle and structure heat up.
 
 **SenseOffset is not a replacement for the scan or for calibration.** An excessively close nozzle can increase extrusion force because the gap provides less outlet space for polymer. A DMS strain gauge measures force, not melt pressure. Pressure can also rise due to a clog, speed, material, temperature, filament/cable preload or a dirty nozzle.
 
@@ -15,11 +15,11 @@ Commanded Z (the print's planned geometric height)
   + scanned-bed correction B(x,y), progressively faded to its baseline O
   + g_staticZSteps = (Printer::ZOffset + g_nSensiblePressureOffset)*Z_steps_per_mm/1000
   + optional force-sensitive Digit-Z correction
-  + other guarded mechanical/tool effects, Z endstop limits
+  + other mechanical effects and Z endstop limits
   → compensatedPositionTargetStepsZ → physical Z motor activity
 ```
 
-The **nominal Z** is also used to decide the fade region. The source does *not* simply sum all these terms at all heights: below `g_min` it follows the full matrix, above `g_max` it retains the matrix baseline, and there are endstop checks. Tool-specific Z offsets have their own coordinate path; see [offset ledger](offset-ledger.md).
+The **nominal Z** selects the fade region. Below `g_min` the correction follows the full matrix, and above `g_max` it uses the matrix baseline. Z endstops constrain the result. [Offset ledger](offset-ledger.md)
 
 `g_minZCompensationSteps` is both the full-profile fade boundary and the SenseOffset eligibility height. Ordinary Digit Flow is eligible at `currentZ > g_min`; SenseOffset is eligible at `currentZ <= g_min`. The `M3912` phase flag enables Digit Flow and suspends SenseOffset during generated priming independently of these limits. `homeZAxis()` resets the learned limits.
 
