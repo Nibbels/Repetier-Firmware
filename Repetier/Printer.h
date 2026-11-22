@@ -88,7 +88,7 @@ public:
     static float originOffsetMM[3];
     static volatile float destinationMM[4]; // Requested target in mm from origin.
     static float destinationRemainderMM[4]; // Fraction lost when adding relative moves to the target.
-    static int32_t queuedPositionSteps[3];  // Last queued XYZ endpoints in nominal steps.
+    static int32_t queuedPositionSteps[3];  // Last queued endpoints in steps, including the XY wobble correction.
     static float queuedEPositionMM;        // Last queued logical E coordinate in mm.
     static float queuedERemainderMM;
 
@@ -179,7 +179,7 @@ public:
 
     static int8_t wobblePhaseXY;
     static int16_t wobbleAmplitudes[3]; // X, Y at X-min, Y at X-max, in micrometres.
-    static float lastWobbleFixOffset[2]; // Last X/Y correction in millimetres.
+    static float lastWobbleFixOffset[2]; // Queued X/Y correction in millimetres.
 
     static INLINE void setMenuMode(uint8_t mode, bool on) {
         if (on)
@@ -716,12 +716,14 @@ public:
         InterruptProtectedBlock noInts;
         Printer::currentSteps[X_AXIS] = Printer::queuedPositionSteps[X_AXIS] = x;
         setDestinationMM(X_AXIS, x * axisMMPerSteps[X_AXIS]);
+        clearWobbleFixOffset(X_AXIS);
         noInts.unprotect();
     }
     static INLINE void setYAxisSteps(int32_t y) {
         InterruptProtectedBlock noInts;
         Printer::currentSteps[Y_AXIS] = Printer::queuedPositionSteps[Y_AXIS] = y;
         setDestinationMM(Y_AXIS, y * axisMMPerSteps[Y_AXIS]);
+        clearWobbleFixOffset(Y_AXIS);
         noInts.unprotect();
     }
     static INLINE void setZAxisSteps(int32_t z) {
@@ -769,11 +771,8 @@ public:
     static void homeDigits();
     static void homeAxis(bool xaxis, bool yaxis, bool zaxis); /// Home axis
     static void setOrigin(float xOff, float yOff, float zOff);
-    static void addKurtWobbleFixOffset();
-
-    static INLINE long getDestinationSteps(uint8_t axis) {
-        return lroundf(Printer::destinationMM[axis] * Printer::axisStepsPerMM[axis]);
-    } // getDestinationSteps
+    static void updateWobbleFixOffsets();
+    static int32_t prepareDestinationSteps(uint8_t axis);
 
     static INLINE float getDirectMM(uint8_t axis) {
         return (float)Printer::directDestinationSteps[axis] * Printer::axisMMPerSteps[axis];
@@ -801,6 +800,12 @@ public:
     static void showConfiguration();
 
 private:
+    static uint8_t queuedWobbleAxes;
+    static INLINE void clearWobbleFixOffset(uint8_t axis) {
+        lastWobbleFixOffset[axis] = 0.0f;
+        queuedWobbleAxes &= ~(1U << axis);
+    }
+
     static void homeXAxis();
     static void homeYAxis();
     static void homeZAxis();

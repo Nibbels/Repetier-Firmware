@@ -87,8 +87,9 @@ uint8_t PrintLine::linesPos = 0;            // Position for executing line movem
 
   @param abortAtEndstops Stop this move at any endstop during move.
    Otherwise the endstop causes an ignore of moving that axis but coordinates will move
+  @param updateWobble Recalculate the XY correction for a G-code XYZ move.
  */
-void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, float feedrate) {
+void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, float feedrate, bool updateWobble) {
     Printer::unmarkAllSteppersDisabled(); // ??? hier wird nichts enabled. Nur markiert, auch wenn später oder früher "enablestepper" passiert.
     //evtl. weil dadurch in jedem fall gleich ein stepper aktiviert werden würde -> darum hier schon als aktiv markieren, weil umumgänglich ist.
     // Aber dann müsste man das (timingsicher) auch schon in den Funktionen über prepareDirectMove erledigt haben.
@@ -105,14 +106,8 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
     if (!pathOptimize)
         p->setEndSpeedFixed(true);
 
-    // Constrain Destinations to values we should be able to reach
-    for (uint8_t axis = 0; axis < E_AXIS; axis++) {
-        float direct = Printer::getDirectMM(axis);
-        float endstop = Printer::maxSoftEndstopSteps[axis] * Printer::axisMMPerSteps[axis];
-        if (Printer::destinationMM[axis] + direct >= endstop + 0.1) {
-            Printer::setDestinationMM(axis, endstop + 0.1 - direct);
-        }
-    }
+    if (updateWobble)
+        Printer::updateWobbleFixOffsets();
 
     float axisDistanceMM[4]; // Axis movement in mm
     // Find direction
@@ -140,7 +135,7 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
             Printer::queuedEPositionMM = targetE;
             Printer::queuedERemainderMM = targetRemainder;
         } else {
-            const int32_t targetSteps = Printer::getDestinationSteps(axis);
+            const int32_t targetSteps = Printer::prepareDestinationSteps(axis);
             steps = targetSteps - Printer::queuedPositionSteps[axis];
             Printer::queuedPositionSteps[axis] = targetSteps;
         }

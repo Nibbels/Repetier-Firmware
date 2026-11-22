@@ -162,6 +162,7 @@ uint8_t Printer::motorMicroStepsModeValue[DRV8711_NUM_CHANNELS] = { 0 }; //init 
 int8_t Printer::wobblePhaseXY = 0; // +100 = +pi, -100 = -pi.
 int16_t Printer::wobbleAmplitudes[3] = { 0 };
 float Printer::lastWobbleFixOffset[2] = { 0 };
+uint8_t Printer::queuedWobbleAxes = 0;
 
 void Printer::updateDerivedParameter() {
     // das extruder offset dürfen wir zur achslänge addieren, weil in dem Axis-Length von z.b. 180 mm schon angenommen wird, dass der extruder mit beiden nozzles jeden punkt erreicht.
@@ -257,54 +258,57 @@ void Printer::updateAdvanceActivated() {
 #endif // USE_ADVANCE
 } // updateAdvanceActivated
 
-void Printer::addKurtWobbleFixOffset() {
-    /*
-    Zielkoordinate in Z ist: "z"
-    Wir fügen beim Umrechnen in Steps vorher noch ein Offset in XYZ ein.
-    offsetZ = amplitude des hubs                     * drehposition spindel
-    offsetY = amplitude in Richtung Y linke Spindel  * drehposition spindel
-    offsetY = amplitude in Richtung Y rechte Spindel * drehposition spindel
-    offsetX = amplitude in Richtung X                * drehposition spindel
-
-    "sinOffset = amplitude * sin( 2*Pi*(Z/5mm + zStartOffset) );"
-    */
-
-    //vorausgerechnete konstanten.
-    float zweiPi = 6.2832f;          //2*Pi
-    float hundertstelPi = 0.031428f; //Pi/100
-    float spindelSteigung = 5.0f;    //[mm]
-    float zSchalterZ = Printer::currentZSteps * Printer::axisMMPerSteps[Z_AXIS];
-
-    //wobble durch Bauchtanz der Druckplatte
-    //wobbleX oder wobbleY(x0) oder wobbleX(x245)
-    if (Printer::wobbleAmplitudes[0]) {
-        float anglePositionWobble = cos(zweiPi * (zSchalterZ / spindelSteigung) - (float)Printer::wobblePhaseXY * hundertstelPi);
-        //für das wobble in Richtung X-Achse gilt immer dieselbe Amplitude, weil im extremfall beide gegeneinander arbeiten und sich aufheben könnten, oder die Spindeln arbeiten zusammen.
-        float wOffsetX = Printer::wobbleAmplitudes[0] * anglePositionWobble * 0.001; //offset in [mm]
-        if (Printer::relativeCoordinateMode) {
-            //fraglich wie lange das genau bleibt. Ist aber auch so beim relativen Drucken ein Problem.
-            //addiere nur die Änderung des Offsets.
-            Printer::addDestinationMM(X_AXIS, wOffsetX - Printer::lastWobbleFixOffset[X_AXIS]);
-        } else {
-            Printer::addDestinationMM(X_AXIS, wOffsetX);
+void Printer::updateWobbleFixOffsets() {
+    // The factory settings bypass all floating-point work.
+    if (!(wobbleAmplitudes[0] | wobbleAmplitudes[1] | wobbleAmplitudes[2])) {
+        if (queuedWobbleAxes) {
+            clearWobbleFixOffset(X_AXIS);
+            clearWobbleFixOffset(Y_AXIS);
         }
-        Printer::lastWobbleFixOffset[X_AXIS] = wOffsetX;
+        return;
     }
-    if (Printer::wobbleAmplitudes[1] || Printer::wobbleAmplitudes[2]) {
-        float anglePositionWobble = sin(zweiPi * (zSchalterZ / spindelSteigung) - (float)Printer::wobblePhaseXY * hundertstelPi);
-        //gilt eher die Y-Achsen-Richtung-Amplitude links (x=0) oder rechts (x=achsenlänge)? (abhängig von der ziel-x-position wird anteilig verrechnet.)
-        float xPosPercent = float(Printer::currentXSteps) / float(Printer::maxSoftEndstopSteps[X_AXIS]);
-        float wOffsetY = ((1 - xPosPercent) * Printer::wobbleAmplitudes[1] + (xPosPercent)*Printer::wobbleAmplitudes[2]) * anglePositionWobble * 0.001; //offset in [mm]
-        if (Printer::relativeCoordinateMode) {
-            //fraglich wie lange das genau bleibt. Ist aber auch so beim relativen Drucken ein Problem.
-            //addiere nur die Änderung des Offsets.
-            Printer::addDestinationMM(Y_AXIS, wOffsetY - Printer::lastWobbleFixOffset[Y_AXIS]);
-        } else {
-            Printer::addDestinationMM(Y_AXIS, wOffsetY);
+
+    InterruptProtectedBlock noInts;
+    const long motorX = currentXSteps;
+    const long motorZ = currentZSteps;
+    noInts.unprotect();
+
+    // The spindle advances 5 mm per rotation, measured from the machine Z reference.
+    const float zMM = motorZ * axisMMPerSteps[Z_AXIS];
+    const float phase = 6.2832f * (zMM / 5.0f) - wobblePhaseXY * 0.031428f;
+    const bool correctX = wobbleAmplitudes[0] != 0;
+    const bool correctY = wobbleAmplitudes[1] || wobbleAmplitudes[2];
+    lastWobbleFixOffset[X_AXIS] = correctX ? wobbleAmplitudes[0] * cos(phase) * 0.001f : 0.0f;
+    lastWobbleFixOffset[Y_AXIS] = 0.0f;
+    if (correctY) {
+        const float xFraction = float(motorX) / maxSoftEndstopSteps[X_AXIS];
+        const float amplitude = (1 - xFraction) * wobbleAmplitudes[1] + xFraction * wobbleAmplitudes[2];
+        lastWobbleFixOffset[Y_AXIS] = amplitude * sin(phase) * 0.001f;
+    }
+    queuedWobbleAxes = (correctX << X_AXIS) | (correctY << Y_AXIS);
+}
+
+int32_t Printer::prepareDestinationSteps(uint8_t axis) {
+    const float direct = getDirectMM(axis);
+    const float endstop = maxSoftEndstopSteps[axis] * axisMMPerSteps[axis];
+    float targetMM = destinationMM[axis];
+    if (targetMM + direct >= endstop + 0.1) {
+        targetMM = endstop + 0.1 - direct;
+        setDestinationMM(axis, targetMM);
+    }
+
+    if (queuedWobbleAxes && axis < Z_AXIS) {
+        const float nominalMM = targetMM;
+        targetMM += lastWobbleFixOffset[axis];
+        if (targetMM + direct >= endstop + 0.1) {
+            targetMM = endstop + 0.1 - direct;
+            // Later E-only moves carry the correction actually applied at the limit.
+            lastWobbleFixOffset[axis] = targetMM - nominalMM;
         }
-        Printer::lastWobbleFixOffset[Y_AXIS] = wOffsetY;
     }
-} // addKurtWobbleFixOffset
+
+    return lroundf(targetMM * axisStepsPerMM[axis]);
+}
 
 inline bool isExtrusionAllowed(float e) {
     // calculate total amount of extrusion respecting coordinate mode
@@ -398,13 +402,8 @@ bool Printer::queueGCodeCoordinates(GCode* com) {
         Printer::setFeedrate(com->F);
     }
 
-    // Test the three integer amplitudes together before entering the float calculations.
-    if (isXYZMove && (wobbleAmplitudes[0] | wobbleAmplitudes[1] | wobbleAmplitudes[2])) {
-        addKurtWobbleFixOffset();
-    }
-
     if (isXYZMove || isEMove) {
-        PrintLine::prepareQueueMove(false, true, Printer::feedrate);
+        PrintLine::prepareQueueMove(false, true, Printer::feedrate, isXYZMove);
 
         return true;
     }
@@ -413,17 +412,16 @@ bool Printer::queueGCodeCoordinates(GCode* com) {
     return false;
 } // queueGCodeCoordinates
 
-/**
- * Move to Cartesian coordinates
- *
- * Does ignore origin offset? TODO
- * Does ignore wobble fix
- */
+/** Move to machine coordinates, retaining the correction on omitted axes. */
 void Printer::queueFloatCoordinates(float x, float y, float z, float e, float feedrate) {
-    if (x != IGNORE_COORDINATE)
+    if (x != IGNORE_COORDINATE) {
         setDestinationMM(X_AXIS, x);
-    if (y != IGNORE_COORDINATE)
+        clearWobbleFixOffset(X_AXIS);
+    }
+    if (y != IGNORE_COORDINATE) {
         setDestinationMM(Y_AXIS, y);
+        clearWobbleFixOffset(Y_AXIS);
+    }
     if (z != IGNORE_COORDINATE)
         setDestinationMM(Z_AXIS, z);
     if (e != IGNORE_COORDINATE)

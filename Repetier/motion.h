@@ -386,7 +386,7 @@ public:
     static inline void backwardPlanner(uint8_t p, uint8_t last);
     static void updateTrapezoids();
     static uint8_t insertWaitMovesIfNeeded(uint8_t pathOptimize, uint8_t waitExtraLines);
-    static void prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, float feedrate);
+    static void prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, float feedrate, bool updateWobble = false);
     static void prepareDirectMove(bool stoppable, bool feedrateSource);
     static void stopDirectMove(void);
 

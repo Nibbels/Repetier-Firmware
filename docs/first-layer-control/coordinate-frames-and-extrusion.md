@@ -5,7 +5,7 @@
 ## Z: four different layers of meaning
 
 1. **Theoretical slicer G-code**: `G1 Z0.20` requests a nominal layer height in the G-code's current work origin, G90/G91 mode and units. This number is not necessarily physical Z motor steps.
-2. **Uncompensated planned firmware position.** `Printer::queueGCodeCoordinates()` converts units and subtracts the work-origin offset in absolute mode. The planner rounds the float target with `getDestinationSteps(Z_AXIS)` and records the resulting integer in `queuedPositionSteps[Z_AXIS]`. `currentSteps[Z_AXIS]` tracks execution. The learned `g_min` and `g_max` use the nominal planned steps.
+2. **Uncompensated planned firmware position.** `Printer::queueGCodeCoordinates()` converts units and subtracts the work-origin offset in absolute mode. The planner rounds the float target with `prepareDestinationSteps(Z_AXIS)` and records the resulting integer in `queuedPositionSteps[Z_AXIS]`. `currentSteps[Z_AXIS]` tracks execution. The learned `g_min` and `g_max` use the nominal planned steps.
 3. **Compensation/Z motor target**: `recalculateHeatBedZCompensation()` uses the *executing nominal* `currentSteps[Z_AXIS]` to select the height-dependent shape compensation and adds `g_staticZSteps` (menu Z + accumulated SenseOffset). A separate optional **Digit-Z** force correction and endstop rules may also apply. Target is `compensatedPositionTargetStepsZ`; actual motor correction `compensatedPositionCurrentStepsZ` can lag behind the target.
 4. **Real nozzle-to-bed clearance and printed geometry**: combines nominal Z motion, actual compensation motor steps, tool offsets, physical thermal drift and the real bed surface. This is not directly identical to any one planned variable.
 
@@ -30,6 +30,8 @@ Relative moves keep the rounding remainder from each float addition and fold it 
 | 100,000 × E0.008 at 280 steps/mm and 100% flow | 223,903 base steps | 224,000 base steps |
 
 The Z residual reflects the precision of each parsed binary32 input. Actual motor position also depends on the configured limits, direct moves, compensation and the motor following its pulses.
+
+WobbleFix adds an XY correction at the step endpoint. Omitted axes and relative moves use the retained target in millimetres. E-only moves reuse the queued XY correction, and homing or setting an explicit machine X/Y target clears the correction on that axis. The software limit constrains the retained target and the corrected endpoint independently. [Conversion to steps](../../Repetier/Printer.cpp#L291)
 
 ## What `g_min` and `g_max` really mean
 

@@ -20,13 +20,13 @@ Firmware changes are tracked on `ai-firmware-review` against `community_developm
 
 - [x] **Allow scan retreat from the exact lower bound.** `moveZ()` stops a further approach at `-maxZOverrideSteps` and allows the bed to move away. The scan keeps control of the Z motor for the duration of its move. [Scan step output](../Repetier/RF.cpp#L2830)
 
-- [x] **Apply travel limits to compensation-only Z pulses.** Each pulse checks the motor position in the requested direction. Z-max uses the configured limit and, where present, the hardware switch. Z-min allows the model-specific overtravel after homing. An unreachable target stays pending, leaving the next retreat step available. Host replays covered idle and XY movement, queued and direct retreat, and disabling compensation at a limit. Physical verification remains open. [Compensation pulses](../Repetier/motion.cpp#L827) · [Travel limit check](../Repetier/Printer.cpp#L887) · [Scan reach](z-offset/scans-and-persistence.md#z-min-screw-adjustment-and-scan-reach)
+- [x] **Apply travel limits to compensation-only Z pulses.** Each pulse checks the motor position in the requested direction. Z-max uses the configured limit and, where present, the hardware switch. Z-min allows the model-specific overtravel after homing. An unreachable target stays pending, leaving the next retreat step available. Host replays covered idle and XY movement, queued and direct retreat, and disabling compensation at a limit. Physical verification remains open. [Compensation pulses](../Repetier/motion.cpp#L822) · [Travel limit check](../Repetier/Printer.cpp#L885) · [Scan reach](z-offset/scans-and-persistence.md#z-min-screw-adjustment-and-scan-reach)
 
 - [x] **Use the configured Z maximum on the RF1000.** The RF1000 homes on its physical Z-min switch and limits travel toward Z-max in software. The factory setting is 195 mm and the stored Z height takes precedence. RF2000 and RF2000v2 use their separate Z-min and Z-max inputs. [Endstop configurations](development-roadmap.md#feature-retirement)
 
 ### Wobble correction
 
-- [ ] **Keep the WobbleFix offset out of the retained G-code target.** With an X amplitude of 100 µm at machine Z=0 and phase zero, each absolute `G1 Y…` replay added another 100 µm to the held X target. Give programmed and corrected XY separate ownership. Include omitted axes, relative moves and homing in the replay. The factory zero-amplitude path produces the same target and rounding remainder as the previous firmware. [Correction](../Repetier/Printer.cpp#L260) · [G-code target](../Repetier/Printer.cpp#L369)
+- [x] **Keep the WobbleFix offset out of the retained G-code target.** Previously, each absolute `G1 Y…` added another 100 µm to X with an X amplitude of 100 µm at machine Z=0 and phase zero. The planner now adds the correction to the step endpoint. In a host replay, all 50 Y-only moves retained the same X after the first corrected target. Relative moves, `G92`, E-only moves, homing resets and software limits also passed. Physical verification remains open. [Correction](../Repetier/Printer.cpp#L261) · [Step endpoint](../Repetier/Printer.cpp#L291)
 
 ### Pause and resume
 

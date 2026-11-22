@@ -333,12 +333,12 @@ The following variables are used for movements in x/y/z direction:
 
 - Printer::destinationMM[x/y/z]
   - unit is [mm]
-  - this is the precise target coordinate which might not be fully reachable by full steps
+  - this is the target before XY wobble correction, which might not be fully reachable by full steps
   - destinationRemainderMM retains the low part of this target between relative moves.
 
 - Printer::queuedPositionSteps[x/y/z]
   - unit is [steps]
-  - holds the rounded nominal endpoint of the last queued move.
+  - holds the rounded endpoint of the last queued move, with the wobble correction included in X/Y.
   - the next move uses the difference between two integer endpoints.
   - coordinate resets update the queued steps, current steps and millimetre target together.
 
