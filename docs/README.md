@@ -2,7 +2,7 @@
 
 These are source-grounded design documents, complementary to [README.md](../README.md) and [changelog.txt](../changelog.txt).
 
-See [open firmware tasks](maintenance-tasks.md) for the pause and resume follow-ups.
+See [firmware fixes and candidate pulls](maintenance-tasks.md) for current changes and open tasks.
 
 ## Z-offset, calibration and persistence
 Start at [Z-offset subsystem: engineering map](z-offset/README.md) for the offset ledger, boot/print lifecycle audit, HBS/ZOS, two EEPROM stores, physical thermal drift and source-backed candidate causes of sudden Z shifts. See [Mod Menu live transfer](z-offset/history-and-workflows.md): alternating Z-up/down deliberately converts SenseOffset into the saved manual Z-offset.
