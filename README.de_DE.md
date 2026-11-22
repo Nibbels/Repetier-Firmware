@@ -180,8 +180,7 @@ Menü -> Configuration -> Stepper :: DblFq = 6500 oder {5000...12000}
 
 ## Konfigurierbare Temperatureinstellungen im Menü und EEPROM  
 Der PID-Autotune, die weiteren Regelparameter und der Sensortyp sind im Menü einstellbar.  
-Menü -> Configuration -> Temperatures -> Extruder0/Extruder1/Heizbett -> Sensortype: {1=Pico/Reprap, 3=EPCOS G550, 8=104-GT2, 14=3950-100k}  
-Sollte man andere Sensortypen benötigen kann man sie in der RF1000.h / RF2000.h nachschlagen und im EEPROM direkt editieren.  
+Unter **Configuration → Temperatures** bietet das Menü die Sensortypen `1`, `3`, `8` und `13` für die Extruder sowie `3` und `4` für das Heizbett. Die vollständige Tabelle enthält auch die Typen für die Build-Konfiguration und das EEPROM. [Temperatursensoren und IDs](docs/board-connectors.md#temperature-sensor-ids)
 
 ## Feature Digit-Z-Kompensation (beta)
 Wenn auf die DMS gedrückt wird, wird das Bett in seiner Höhe korrigiert, wenn die Z-Kompensation arbeitet. Damit wird die Durchbiegung der DMS-Sensoren unter Last korrigiert. Die Änderungen bewegen sich in etwa im Bereich von +0,01mm wenn +1000 Digits Kraft auf die Sensoren aufgebracht werden.
@@ -189,8 +188,8 @@ Wenn auf die DMS gedrückt wird, wird das Bett in seiner Höhe korrigiert, wenn 
 ## RF2000: Zusätzlicher Temperatursensor für den Heizraum  
 Diese Option aktiviert einen weiteren Temperatursensor C, dessen Messwerte automatisch mit der Statusabfrage ausgegeben werden.
 Beispiel: ``` 22:09:24.271: T:21.7 /0 @:0 B:20.6 /0 B@:0 T0:21.7 /0 @0:0 T1:23.2 /0 @1:0 C:21.5 /0 C@:0 F:-173 /0 @:0 ```  
-Weitere Konfigurationsoptionen (Einstellunge der Umrechungstabelle) findet man durch die Suche nach RESERVE_ANALOG_SENSOR_TYPE in der RF2000.h.
-Sucht man in der Firmware nach RESERVE_ANALOG_INPUTS sieht man weiteren nützlichen Code, welcher zum Sensor gehört.
+`RESERVE_ANALOG_SENSOR_TYPE` in `RF2000.h` wählt die Umrechnung für den Eingang `X35_ADC_CHANNEL`. [Temperatursensoren und IDs](docs/board-connectors.md#temperature-sensor-ids)
+
 Man muss, um den Temperatursensor zu nutzen, ein zusätzliches Kabel mit einem Temperatursensor am Port X35 an der Druckerplatine des RF2000-Druckers anschliessen. Anschließend kann der optionale Sensor an einem beliebigen Punkt im Drucker positioniert werden.
 Es könnte z.B. die Temperatur in der Nähe der Hauptplatine, die Hitzeentwicklung an einem Steppermotor oder die Temperatur im Druckraum gemessen werden.
 

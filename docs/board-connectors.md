@@ -26,6 +26,31 @@ X42 and X44 are independently switched outputs. For instance, when X44 runs the 
 - The RF1000 uses X13, X14 and X15 for X-min, Y-min and Z-min. The RF2000 family adds X36 for Z-max. The installed switches use active-low inputs with pull-ups.
 - X21 is the stock four-line character LCD connector. The stock LCD wiring ties R/W low, so firmware writes use the existing 320 μs delay.
 
+### Temperature sensor IDs
+
+The sensor ID selects the ADC-to-temperature conversion. Set the hotend sensor defaults with `EXT0_TEMPSENSOR_TYPE` and `EXT1_TEMPSENSOR_TYPE` in [Configuration.h](../Repetier/Configuration.h). The hotend profile independently sets the temperature limit and factory PID values.
+
+| ID | Conversion | Sensor |
+| --- | --- | --- |
+| `1` | NTC | EPCOS B57560G0107F000, shown as Pico/RepRap on the LCD |
+| `2` | NTC | 200 kΩ thermistor |
+| `3` | NTC | EPCOS G550, 100 kΩ, used in the Conrad Renkforce V2 hotend and listed as the Mendel Parts thermistor |
+| `4` | NTC | 10 kΩ thermistor |
+| `8` | NTC | ATC Semitec 104-GT2 for E3D hotends, with a 300 °C entry in the calibration table |
+| `9` | NTC | Honeywell 135-104LAG-J01, 100 kΩ |
+| `10` | NTC | Vishay NTCS0603E3104FXT, 100 kΩ, 0603 SMD, 4.7 kΩ pull-up |
+| `11` | NTC | GE Sensing AL03006-58.2K-97-G1, 100 kΩ, 4.7 kΩ pull-up |
+| `12` | NTC | RS 198-961, 100 kΩ, 4.7 kΩ pull-up |
+| `13` | NTC | 100 kΩ, 3950 K, Conrad V3 calibration table |
+| `14` | NTC | 100 kΩ, 3950 K, alternate calibration table |
+| `53` | Pt100 interface | E3D PT100 board with analog voltage output to the ADC |
+| `60` | Thermocouple amplifier | AD8495, scaled at 5 mV/°C |
+| `100` | Thermocouple amplifier | AD595, scaled at 10 mV/°C |
+
+The RF1000 and RF2000 hotends default to `3`, and the RF2000v2 hotend defaults to `13`. The heated bed defaults to `3` on all three models. The RF2000 family's X35 input defaults to `14`.
+
+The LCD offers `1`, `3`, `8` and `13` for hotends and `3` and `4` for the bed. For hotends and the bed, the other conversions can be selected through the build defaults or EEPROM. A configured EEPROM sensor value takes precedence at startup. [Conversion code](../Repetier/Extruder.cpp)
+
 ## RF2000 single-extruder example with an E3D V6 or Volcano
 
 This reproduces the documented retrofit with the T0 heatsink fan on X44. Add the settings near the model selection in [Configuration.h](../Repetier/Configuration.h), or pass the same definitions to the compiler.
@@ -40,7 +65,7 @@ This reproduces the documented retrofit with the T0 heatsink fan on X44. Add the
 
 `X44_PIN` resolves to the same `32` as the previous configuration. The two-extruder RF2000 factory profile still defaults to both cooler pins unassigned. An assigned heatsink fan uses the existing per-tool cooler setting and temperature logic. The cooler owns X44 in this example, so `M3300 P2` and the X44 accessory menu cannot switch it off. The same ownership rule applies to X42 and X19.
 
-`EXT0_TEMPSENSOR_TYPE` selects the ADC sensor for T0. `EXT0_HOTEND_PROFILE` selects its temperature limit and factory PID values. The corresponding `EXT1_` settings apply to T1. The shipped profiles are defined in [Configuration.h](../Repetier/Configuration.h). Stored sensor and PID settings take precedence at boot.
+Choose the [sensor ID](#temperature-sensor-ids) for the installed sensor. The shipped hotend profiles are defined in [Configuration.h](../Repetier/Configuration.h). Stored PID settings take precedence at boot.
 
 `SDSUPPORT=0` and `MAX_ROOM_TEMPERATURE=25` describe this specific machine. The common defaults are SD enabled and a 33 °C room-temperature threshold.
 

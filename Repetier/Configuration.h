@@ -53,6 +53,9 @@
 //#define EXT0_EXTRUDER_COOLER_PIN X44_PIN
 //#define EXT1_EXTRUDER_COOLER_PIN -1
 //#define EXT0_HOTEND_PROFILE HotendProfiles::v2
+
+// Set EXT0_TEMPSENSOR_TYPE and EXT1_TEMPSENSOR_TYPE independently of the hotend profile.
+// See docs/board-connectors.md#temperature-sensor-ids for the IDs and sensor models.
 //#define EXT0_TEMPSENSOR_TYPE 8
 
 #ifndef MOTHERBOARD
@@ -85,6 +88,7 @@
 
 struct HotendProfile {
     uint16_t maxTemperatureC; // Setpoint limit and heater cutoff
+    // Bounds on the integral term's contribution to heater PWM.
     uint8_t pidDriveMax;
     uint8_t pidDriveMin;
     float pidPGain;
@@ -98,9 +102,6 @@ constexpr HotendProfile v1 = { 275, 130, 30, 37.52f, 10.0f, 35.18f, 255 };
 constexpr HotendProfile v2 = { 275, 120, 30, 12.5f,   3.2f, 18.0f,  255 };
 constexpr HotendProfile v3 = { 275, 120, 30, 17.11f,  2.05f, 35.75f, 255 };
 }
-
-// Select sensor IDs independently of the hotend profile with EXT0_TEMPSENSOR_TYPE
-// and EXT1_TEMPSENSOR_TYPE. The sensor conversions are listed in Extruder.cpp.
 
 // ##########################################################################################
 // ##   common configuration

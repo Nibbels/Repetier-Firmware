@@ -174,8 +174,7 @@ Menü -> Configuration -> Stepper :: DblFq = 6500 or {5000...12000}
 
 ## Configurable temperature settings within menu and EEPROM  
 PID-Autotune, other controlparameters and the sensortype is adjustable within the menu.  
-Menü -> Configuration -> Temperatures -> Extruder0/Extruder1/Heizbett -> Sensortype: {1=Pico/Reprap, 3=EPCOS G550, 8=104-GT2, 14=3950-100k}  
-In case you need other sensor types see RF1000.h / RF2000.h and edit it within EEPROM.
+Under **Configuration → Temperatures**, the sensor menu offers types `1`, `3`, `8` and `13` for the extruders and `3` and `4` for the bed. The complete list also covers the types available through build settings and EEPROM. [Temperature sensor IDs](docs/board-connectors.md#temperature-sensor-ids)
 
 ## Feature Digit-Z-Kompensation (beta)
 If you apply force to the DMS sensors the bed is adjusted (if Z-Compensation is active). This corrects the error which bending of the sensors apply to your layers. The physical change of the beds level is approximately +0,01mm for +1000 applied force (digits).
@@ -183,8 +182,8 @@ If you apply force to the DMS sensors the bed is adjusted (if Z-Compensation is 
 ## RF2000: Additional Temperature Sensor for heated chamger  
 This optional 3rd temperature C is automatically sent out with the other Temperatures and Digits.  
 Example: ``` 22:09:24.271: T:21.7 /0 @:0 B:20.6 /0 B@:0 T0:21.7 /0 @0:0 T1:23.2 /0 @1:0 C:21.5 /0 C@:0 F:-173 /0 @:0 ```  
-See RESERVE_ANALOG_SENSOR_TYPE in RF2000.h for configuration options.  
-See RESERVE_ANALOG_INPUTS to find the involved code within the firmware.  
+`RESERVE_ANALOG_SENSOR_TYPE` in `RF2000.h` selects the conversion for the `X35_ADC_CHANNEL` input. [Temperature sensor IDs](docs/board-connectors.md#temperature-sensor-ids)
+
 You will need to install and additional cable and a temperature sensor at X35 on your printers Board. Then you can wire your sensor to some place needed.  
 This sensor might keep track of your boards temperature or the air-temperature within your enclosure.  
 
