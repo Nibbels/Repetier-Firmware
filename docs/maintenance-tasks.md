@@ -95,6 +95,19 @@ Work through the [architecture review and migration](development-roadmap.md#5-fi
 - [x] **Retire the M109 retract and obsolete build variants.** The heat-up wait leaves extrusion to the print's G-code. Board selection determines the physical Z-max input. The heater and LCD use their stock variants. [Feature retirement](development-roadmap.md#feature-retirement)
 - [x] **Share the RF2000 family profile and pin map.** Compile the stock defaults for each model, keep named connectors for retrofits and reserve X19, X42 or X44 for automatic cooling when assigned there. EEPROM support is built in with the existing persisted layout. [Board reference](board-connectors.md)
 
+### SD support removal
+
+Commit `0ae25f2` contains the complete SD removal. It deletes the card driver and SdFat library, card settings and SPI support, file commands `M20`–`M30` and `M32`, the LCD browser and SD-specific status, and the G-code source switching. All three models receive external G-code through USB and use a 24-move planner queue. Use the removal diff and its parent revision to investigate or reimplement SD later. [Removal commit](https://github.com/Nibbels/Repetier-Firmware/commit/0ae25f2a57b8e68f6dc734ff6f849962581a9ee4) · [Complete source before removal](https://github.com/Nibbels/Repetier-Firmware/tree/330726479462569312a0e35114e260236a3dbde5)
+
+```sh
+git show 0ae25f2a57b8e68f6dc734ff6f849962581a9ee4
+git show 0ae25f2a57b8e68f6dc734ff6f849962581a9ee4^:Repetier/SDCard.cpp
+```
+
+The former SD path used AVR hardware SPI with CS on digital pin 53 (PB0), SCK on 52 (PB1), MOSI on 51 (PB2), and MISO on 50 (PB3). RF2000 and RF2000v2 used active-low card detection on pin 19 (PD2). RF1000 had no card-detect input. SdFat used table-driven CRC, single-block I/O and a shared FAT16/FAT32 cache. The filename buffer used two VFAT entries and the folder depth was two. [Archived pin map](https://github.com/Nibbels/Repetier-Firmware/blob/330726479462569312a0e35114e260236a3dbde5/Repetier/pins.h) · [Archived settings](https://github.com/Nibbels/Repetier-Firmware/blob/330726479462569312a0e35114e260236a3dbde5/Repetier/Configuration.h#L323) · [Archived SdFat code](https://github.com/Nibbels/Repetier-Firmware/blob/330726479462569312a0e35114e260236a3dbde5/Repetier/SdFat.cpp)
+
+The old file source called `close()` on normal EOF and entered `Printer::stopPrint()`. A host replay on `351dd60` discarded three buffered moves and the active move. If SD is reimplemented, verify that normal EOF drains queued commands and motion, including a final line without a newline and pause and resume during draining. Test read errors and cancellation separately. [Archived file source](https://github.com/Nibbels/Repetier-Firmware/blob/330726479462569312a0e35114e260236a3dbde5/Repetier/gcode.cpp#L1120)
+
 ## Fork candidates
 
 - [Z-CMP timing and step packing](#motion-smoothness-and-performance)

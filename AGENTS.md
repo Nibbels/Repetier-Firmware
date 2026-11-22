@@ -18,6 +18,8 @@ This is shared AVR/ATmega2560 Repetier firmware for **RF1000, RF2000 and RF2000v
 
 **Pause and stop.** `Printer::pause` owns the pause phase and return position. The queue, the panel and the DMS handler use its request and query methods. `Printer::printStop` owns timed abort cleanup and command admission during a stop. Run `python3 tests/pause-sense-offset.py` when changing these transitions. [Pause and stop transitions](docs/development-roadmap.md#pause-and-stop-transitions)
 
+**Print input.** USB over UART0 is the sole external G-code input. All three models buffer 24 planned moves. The SD removal record links to the commit containing the full deletion and to the last revision with the card implementation. [SD support removal](docs/maintenance-tasks.md#sd-support-removal)
+
 **Non-negotiable operator workflow:** In Mod Menu page 2 the Z/bed DOWN→UP button pair intentionally transfers 5 µm of live SenseOffset into the EEPROM-backed manual part of `Printer::zOffset` with approximately unchanged final clearance (see [live takeover procedure](docs/z-offset/history-and-workflows.md) and the original January 2017 changelog). Do not “fix” the asymmetric button behavior or reset dynamic offsets while a manual transfer is underway.
 
 **Print start.** The standard USB start sequence runs `G28` before enabling bed compensation. Z homing restores the fade bounds and clears layer tracking, ECMP and live SenseOffset with its sample history. `M3079` runs the output move and disables the motors and bed compensation at the end of a print. [USB print start](docs/first-layer-control/README.md#usb-print-start) · [Test scenarios](docs/first-layer-control/test-scenarios.md)
