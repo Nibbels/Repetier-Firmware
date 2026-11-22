@@ -117,11 +117,9 @@ With the dynamic fade span determined from `(O-minB)*20`, the shape loss at the 
 
 [Source: ECMP percent during fade](../../Repetier/RF.cpp#L3199-L3254) · [additional E-step accumulation](../../Repetier/motion.cpp#L1468-L1492) · [fractional E rounding](../../Repetier/motion.cpp#L125-L136).
 
-## Another DMS-to-Z mechanism must not be confused with SenseOffset
+## Elastic Digit-Z correction during priming
 
-`FEATURE_DIGIT_Z_COMPENSATION` is **enabled** in the current configuration, with `g_nDigitZCompensationDigits_active=true` initially. When bed compensation is active, `recalculateHeatBedZCompensation()` can add a bounded, instantaneous force-dependent Z adjustment from DMS readings. This is **not** `g_nSensiblePressureOffset` (which accumulates positive micrometres).
-
-Thus 'no new SenseOffset during M3912' does **not** literally mean 'no force-dependent Z motion during M3912'. The start-line design must specify whether instantaneous Digit-Z protection stays active to counter force-induced nozzle flex, or whether strict pressure-only feed/E control also suspends Digit-Z. **Do not silently disable it without measuring the mechanical consequences.**
+`FEATURE_DIGIT_Z_COMPENSATION` is enabled in the current configuration, with `g_nDigitZCompensationDigits_active=true` initially. During M3912, bed compensation can still include a bounded correction for elastic hotend deflection. It follows filtered force as the load rises and falls. M3912 suspends the accumulation of SenseOffset during that phase. [Digit-Z formula and timing](../z-offset/thermal-and-force.md#elastic-hotend-deflection-and-digit-z)
 
 ## Sources
 

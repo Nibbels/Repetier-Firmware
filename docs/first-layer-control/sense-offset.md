@@ -6,13 +6,15 @@ Wessix proposed, and Nibbels coded, a safeguard for printing very close to the h
 
 SenseOffset responds to **excessive DMS digits** by increasing nozzle clearance incrementally and never reducing it again just because measured force fell. High readings may also be caused by a clog or temperature/material/feed problems; thus changes must be limited.
 
+Digit-Z uses a reversible force-to-Z estimate for elastic hotend deflection. SenseOffset retains learned first-layer clearance, for example as the printer warms and the gap drifts. [Deflection estimate and timing](../z-offset/thermal-and-force.md#elastic-hotend-deflection-and-digit-z)
+
 ## Input, gating and response
 
 - Current `Configuration.h` enables `FEATURE_SENSIBLE_PRESSURE` and sets `SENSIBLE_PRESSURE_INTERVAL=50 ms` and `SENSIBLE_PRESSURE_MAX_OFFSET=180 um` as defaults.
 - `M3909 P<digits> S<max_um>` sets threshold and maximum additional offset; source bounds `S` to **1..300 um**. `M3909 P0` disables control. EEPROM may retain thresholds. `M3001` may queue an auto-enable of SenseOffset if configured.
 - SenseOffset needs active bed Z compensation and an enabled positive force threshold.
 - It can react only when **`Printer::currentSteps[Z_AXIS] <= g_minZCompensationSteps`**. That is a **nominal step-coordinate condition**, not a measurement of actual gap.
-- About every 50 ms the code can gather a reading; first decision after **10 samples**, then it carries half the averaging window forward.
+- The first decision takes **10 accepted samples**, about half a second at 50 ms spacing. The interval check can skip a poll that arrives exactly 50 ms after the last sample. Later decisions carry half the averaging window forward.
 - It takes the **absolute** average reading. Above the configured limit it increases `g_nSensiblePressureOffset` by at least **1 um** when correction is warranted; larger pressure deviations can increase the increment, with tapering as offset approaches the maximum.
 - The result changes `g_staticZSteps = ((Printer::ZOffset + g_nSensiblePressureOffset) * axisStepsPerMM[Z]) / 1000`.
 - Below the pressure threshold, the additional offset **does not decrease**. It persists when leaving the low-Z region; loss/disable of bed compensation is a separate deactivation/reset path.

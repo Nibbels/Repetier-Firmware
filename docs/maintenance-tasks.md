@@ -31,3 +31,7 @@ The firmware restricted Play to a completed pause in 1.37t2. The 1.43.56 pause r
 ## G-code coordinates
 
 - [x] **Preserve precision when accumulating long relative moves.** Relative updates retain the small remainder of each float addition. The Z stress replay that previously left 288 steps now returns to zero, and 100,000 small relative E commands reach the expected 224,000 steps. [Endpoint proof and replay](first-layer-control/coordinate-frames-and-extrusion.md#why-segment-rounding-cannot-accumulate-in-xyz)
+
+## Digit-Z
+
+- [ ] **Recover the same elastic correction at the same steady DMS reading.** Retain the integer filter remainder to eliminate the one-microstep difference reproduced at 5,530 digits. Verify rising and falling force, then measure the force-to-deflection slope and the delay from load change to applied Z on the printer. [Formula, timing and replay](z-offset/thermal-and-force.md#elastic-hotend-deflection-and-digit-z)
