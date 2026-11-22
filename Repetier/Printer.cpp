@@ -47,8 +47,10 @@ uint8_t Printer::relativeCoordinateMode = false;         // Determines absolute 
 uint8_t Printer::relativeExtruderCoordinateMode = false; // Determines Absolute or Relative E Codes while in Absolute Coordinates mode. E is always relative in Relative Coordinates mode.
 
 volatile float Printer::destinationMM[4] = { 0, 0, 0, 0 };
+float Printer::destinationRemainderMM[4] = { 0, 0, 0, 0 };
 int32_t Printer::queuedPositionSteps[3] = { 0, 0, 0 };
 float Printer::queuedEPositionMM = 0;
+float Printer::queuedERemainderMM = 0;
 float Printer::originOffsetMM[3] = { 0, 0, 0 };
 uint8_t Printer::flag0 = 0;
 uint8_t Printer::flag1 = 0;
@@ -99,10 +101,8 @@ volatile int16_t Printer::outOfPrintVolume[2] = { 0 };
 volatile int32_t Printer::outOfPrintVolumeZ = 0;
 
 #if FEATURE_MEMORY_POSITION
-float Printer::memoryX;
-float Printer::memoryY;
-float Printer::memoryZ;
-float Printer::memoryE;
+float Printer::memoryPositionMM[4];
+float Printer::memoryRemainderMM[4];
 float Printer::memoryF;
 #endif // FEATURE_MEMORY_POSITION
 
@@ -378,9 +378,9 @@ void Printer::addKurtWobbleFixOffset() {
         if (Printer::relativeCoordinateMode) {
             //fraglich wie lange das genau bleibt. Ist aber auch so beim relativen Drucken ein Problem.
             //addiere nur die Änderung des Offsets.
-            Printer::destinationMM[X_AXIS] += (wOffsetX - Printer::lastWobbleFixOffset[X_AXIS]);
+            Printer::addDestinationMM(X_AXIS, wOffsetX - Printer::lastWobbleFixOffset[X_AXIS]);
         } else {
-            Printer::destinationMM[X_AXIS] += wOffsetX;
+            Printer::addDestinationMM(X_AXIS, wOffsetX);
         }
         Printer::lastWobbleFixOffset[X_AXIS] = wOffsetX;
     }
@@ -392,9 +392,9 @@ void Printer::addKurtWobbleFixOffset() {
         if (Printer::relativeCoordinateMode) {
             //fraglich wie lange das genau bleibt. Ist aber auch so beim relativen Drucken ein Problem.
             //addiere nur die Änderung des Offsets.
-            Printer::destinationMM[Y_AXIS] += (wOffsetY - Printer::lastWobbleFixOffset[Y_AXIS]);
+            Printer::addDestinationMM(Y_AXIS, wOffsetY - Printer::lastWobbleFixOffset[Y_AXIS]);
         } else {
-            Printer::destinationMM[Y_AXIS] += wOffsetY;
+            Printer::addDestinationMM(Y_AXIS, wOffsetY);
         }
         Printer::lastWobbleFixOffset[Y_AXIS] = wOffsetY;
     }
@@ -405,7 +405,7 @@ inline bool isExtrusionAllowed(float e) {
     // calculate total amount of extrusion respecting coordinate mode
     float de = e;
     if (!Printer::relativeCoordinateMode && !Printer::relativeExtruderCoordinateMode) {
-        de = e - Printer::destinationMM[E_AXIS];
+        de = (e - Printer::destinationMM[E_AXIS]) - Printer::destinationRemainderMM[E_AXIS];
     }
 
 #if FEATURE_DIGIT_FLOW_COMPENSATION
@@ -452,48 +452,47 @@ void Printer::setFeedrate(float feedrate) {
         Printer::feedrate = feedrate * (float)Printer::feedrateMultiply * 0.00016666666f;
 }
 
-/**
-\brief Sets the destination coordinates to values stored in com.
+void Printer::addDestinationMM(uint8_t axis, float distance) {
+    if (distance == 0.0f)
+        return;
 
-For the computation of the destination, the following facts are considered:
-- Are units inches or mm.
-- Relative or absolute positioning with special case only extruder relative.
-- Offset in x and y direction for multiple extruder support.
+    // TwoSum recovers the rounding error of the addition, including after reversals.
+    const float previous = destinationMM[axis];
+    const float sum = previous + distance;
+    const float added = sum - previous;
+    const float error = (previous - (sum - added)) + (distance - added);
+    const float remainder = destinationRemainderMM[axis] + error;
+    const float target = sum + remainder;
+    setDestinationMM(axis, target, remainder - (target - sum));
+}
 
-- originOffsetMM is only affecting gcode coordinates??
-*/
+// Convert G-code positions to millimetres in the planner's coordinate frame.
 bool Printer::queueGCodeCoordinates(GCode* com, bool noDriving) {
-    InterruptProtectedBlock noInts;
     bool isXYZMove = !com->hasNoXYZ();
     if (relativeCoordinateMode) {
         if (com->hasX())
-            destinationMM[X_AXIS] += convertToMM(com->X);
+            addDestinationMM(X_AXIS, convertToMM(com->X));
         if (com->hasY())
-            destinationMM[Y_AXIS] += convertToMM(com->Y);
+            addDestinationMM(Y_AXIS, convertToMM(com->Y));
         if (com->hasZ())
-            destinationMM[Z_AXIS] += convertToMM(com->Z);
+            addDestinationMM(Z_AXIS, convertToMM(com->Z));
     } else //absolute Coordinate Mode
     {
         if (com->hasX())
-            destinationMM[X_AXIS] = convertToMM(com->X) - Printer::originOffsetMM[X_AXIS];
+            setDestinationMM(X_AXIS, convertToMM(com->X) - originOffsetMM[X_AXIS]);
         if (com->hasY())
-            destinationMM[Y_AXIS] = convertToMM(com->Y) - Printer::originOffsetMM[Y_AXIS];
+            setDestinationMM(Y_AXIS, convertToMM(com->Y) - originOffsetMM[Y_AXIS]);
         if (com->hasZ())
-            destinationMM[Z_AXIS] = convertToMM(com->Z) - Printer::originOffsetMM[Z_AXIS];
+            setDestinationMM(Z_AXIS, convertToMM(com->Z) - originOffsetMM[Z_AXIS]);
     }
-    noInts.unprotect();
 
     float e = convertToMM(com->E);
     bool isEMove = com->hasE() && isExtrusionAllowed(e);
     if (isEMove) {
-        noInts.protect();
-        if (relativeCoordinateMode || relativeExtruderCoordinateMode) {
-            destinationMM[E_AXIS] += e;
-        } else //absolute Coordinate Mode
-        {
-            destinationMM[E_AXIS] = e;
-        }
-        noInts.unprotect();
+        if (relativeCoordinateMode || relativeExtruderCoordinateMode)
+            addDestinationMM(E_AXIS, e);
+        else
+            setDestinationMM(E_AXIS, e);
     }
 
     if (com->hasF()) {
@@ -527,23 +526,16 @@ bool Printer::queueGCodeCoordinates(GCode* com, bool noDriving) {
  * Does ignore wobble fix
  */
 void Printer::queueFloatCoordinates(float x, float y, float z, float e, float feedrate) {
-    InterruptProtectedBlock noInts;
-    if (x == IGNORE_COORDINATE)
-        x = destinationMM[X_AXIS];
-    if (y == IGNORE_COORDINATE)
-        y = destinationMM[Y_AXIS];
-    if (z == IGNORE_COORDINATE)
-        z = destinationMM[Z_AXIS];
-    if (e == IGNORE_COORDINATE)
-        e = destinationMM[E_AXIS];
+    if (x != IGNORE_COORDINATE)
+        setDestinationMM(X_AXIS, x);
+    if (y != IGNORE_COORDINATE)
+        setDestinationMM(Y_AXIS, y);
+    if (z != IGNORE_COORDINATE)
+        setDestinationMM(Z_AXIS, z);
+    if (e != IGNORE_COORDINATE)
+        setDestinationMM(E_AXIS, e);
     if (feedrate == IGNORE_COORDINATE)
         feedrate = Printer::feedrate;
-
-    destinationMM[X_AXIS] = x;
-    destinationMM[Y_AXIS] = y;
-    destinationMM[Z_AXIS] = z;
-    destinationMM[E_AXIS] = e;
-    noInts.unprotect();
 
     PrintLine::prepareQueueMove(false, true, feedrate);
 
@@ -552,29 +544,17 @@ void Printer::queueFloatCoordinates(float x, float y, float z, float e, float fe
 
 /** \brief Move printer the given number of steps. Puts the move into the queue. Used by e.g. homing commands. */
 void Printer::queueRelativeStepsCoordinates(long dx, long dy, long dz, long de, float feedrate, bool waitEnd, bool abortAtEndstops) {
-    InterruptProtectedBlock noInts;
-    destinationMM[X_AXIS] += dx * axisMMPerSteps[X_AXIS];
-    destinationMM[Y_AXIS] += dy * axisMMPerSteps[Y_AXIS];
-    destinationMM[Z_AXIS] += dz * axisMMPerSteps[Z_AXIS];
-    destinationMM[E_AXIS] += de * axisMMPerSteps[E_AXIS];
-    noInts.unprotect();
-
-    PrintLine::prepareQueueMove(abortAtEndstops, !waitEnd, feedrate);
-
-    if (waitEnd)
-        Commands::waitUntilEndOfAllMoves();
-
-    previousMillisCmd = HAL::timeInMilliseconds(); //prevent inactive shutdown of steppers/temps
+    queueRelativeMMCoordinates(dx * axisMMPerSteps[X_AXIS], dy * axisMMPerSteps[Y_AXIS],
+                               dz * axisMMPerSteps[Z_AXIS], de * axisMMPerSteps[E_AXIS],
+                               feedrate, waitEnd, abortAtEndstops);
 } // queueRelativeStepsCoordinates
 
 /** \brief Move printer the given number of mm. Puts the move into the queue. */
 void Printer::queueRelativeMMCoordinates(float dx, float dy, float dz, float de, float feedrate, bool waitEnd, bool abortAtEndstops) {
-    InterruptProtectedBlock noInts;
-    destinationMM[X_AXIS] += dx;
-    destinationMM[Y_AXIS] += dy;
-    destinationMM[Z_AXIS] += dz;
-    destinationMM[E_AXIS] += de;
-    noInts.unprotect();
+    addDestinationMM(X_AXIS, dx);
+    addDestinationMM(Y_AXIS, dy);
+    addDestinationMM(Z_AXIS, dz);
+    addDestinationMM(E_AXIS, de);
 
     PrintLine::prepareQueueMove(abortAtEndstops, !waitEnd, feedrate);
 
@@ -599,6 +579,9 @@ void Printer::offsetRelativeStepsCoordinates(int32_t dx, int32_t dy, int32_t dz,
 #endif // FEATURE_MILLING_MODE
 
     if (dx != 0 || dy != 0 || dz != 0 || de != 0) {
+        if (configuration && g_pauseMode && (!isPauseSettled() || PrintLine::direct.task))
+            return;
+
         while (PrintLine::direct.task) {
             // If another offset move is going on, we have to wait
             Commands::checkForPeriodicalActions(Processing);
@@ -625,6 +608,9 @@ void Printer::offsetRelativeStepsCoordinates(int32_t dx, int32_t dy, int32_t dz,
 
         // If we start this move by pressing a button we dont want to wait for it to finish and instead have it listening to the buttons release
         if (configuration == TASK_MOVE_FROM_BUTTON) {
+#if UI_DISPLAY_TYPE != 0
+            uid.jogButtonAction = uid.lastAction;
+#endif
             PrintLine::prepareDirectMove(STOPPABLE_DIRECT, feedrateSource);
             //noInts handled by destructor
 
@@ -1085,18 +1071,22 @@ void Printer::setup() {
 void Printer::MemoryPosition() {
     Commands::waitUntilEndOfAllMoves();
 
-    Printer::memoryX = Printer::destinationMM[X_AXIS];
-    Printer::memoryY = Printer::destinationMM[Y_AXIS];
-    Printer::memoryZ = Printer::destinationMM[Z_AXIS];
-    Printer::memoryE = Printer::destinationMM[E_AXIS];
-    Printer::memoryF = Printer::feedrate;
+    for (uint8_t axis = X_AXIS; axis <= E_AXIS; axis++) {
+        memoryPositionMM[axis] = destinationMM[axis];
+        memoryRemainderMM[axis] = destinationRemainderMM[axis];
+    }
+    memoryF = feedrate;
 } // MemoryPosition
 
 void Printer::GoToMemoryPosition(bool x, bool y, bool z, bool e, float feed) {
-    bool all = !(x || y || z);
-    queueFloatCoordinates((all || x ? Printer::memoryX : IGNORE_COORDINATE), (all || y ? Printer::memoryY : IGNORE_COORDINATE), (all || z ? Printer::memoryZ : IGNORE_COORDINATE), (e ? Printer::memoryE : IGNORE_COORDINATE),
-                          feed);
-    Printer::feedrate = Printer::memoryF;
+    const bool allXYZ = !(x || y || z);
+    const bool restore[] = { allXYZ || x, allXYZ || y, allXYZ || z, e };
+    for (uint8_t axis = X_AXIS; axis <= E_AXIS; axis++) {
+        if (restore[axis])
+            setDestinationMM(axis, memoryPositionMM[axis], memoryRemainderMM[axis]);
+    }
+    queueFloatCoordinates(IGNORE_COORDINATE, IGNORE_COORDINATE, IGNORE_COORDINATE, IGNORE_COORDINATE, feed);
+    feedrate = memoryF;
 } // GoToMemoryPosition
 #endif // FEATURE_MEMORY_POSITION
 
@@ -1852,13 +1842,9 @@ void Printer::stopPrint() //function for aborting USB and SD-Prints
     //now mark the print to get cleaned up after some time:
     g_uStopTime = HAL::timeInMilliseconds(); //starts output object in combination with g_uBlockCommands
 
-    if (g_pauseStatus != PAUSE_STATUS_NONE) {
-        // the printing is paused at the moment
-        g_uPauseTime = 0;
-        g_pauseStatus = PAUSE_STATUS_NONE;
-        g_pauseMode = PAUSE_MODE_NONE;
-    }
-    Printer::setMenuMode(MENU_MODE_PAUSED, false); //egal ob nicht gesetzt.
+    if (g_pauseMode && PrintLine::direct.task)
+        PrintLine::stopDirectMove();
+    killPausePrint();
 
     //erase the coordinates and kill the current taskplaner:
     PrintLine::resetPathPlanner();

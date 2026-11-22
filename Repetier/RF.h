@@ -427,7 +427,7 @@ The following variables are used for movements in x/y/z direction:
 - Printer::destinationMM[x/y/z]
   - unit is [mm]
   - this is the precise target coordinate which might not be fully reachable by full steps
-  - add set and subtract positions here.
+  - destinationRemainderMM retains the low part of this target between relative moves.
 
 - Printer::queuedPositionSteps[x/y/z]
   - unit is [steps]
@@ -626,11 +626,16 @@ extern volatile millis_t g_uBlockCommands;
 // other configurable parameters
 extern unsigned short g_nManualSteps[4];
 extern volatile long g_nPauseSteps[4];
-extern volatile long g_nContinueSteps[4];
+extern volatile long g_nContinueExtruderSteps;
 extern volatile char g_pauseStatus;
 extern volatile char g_pauseMode;
 extern volatile millis_t g_uPauseTime;
 extern volatile char g_pauseBeepDone;
+
+inline bool isPauseSettled() {
+    const char status = g_pauseStatus;
+    return status == PAUSE_STATUS_PAUSED || status == PAUSE_STATUS_PAUSED_STANDBY;
+}
 
 #if FEATURE_EMERGENCY_PAUSE
 extern long g_nEmergencyPauseDigitsMin; //short reicht eigentlich
@@ -782,6 +787,7 @@ extern void parkPrinter(void);
 #endif // FEATURE_PARK
 
 extern void pausePrint(void);
+extern void requestPrintPause(bool moveAway);
 extern void killPausePrint(void);
 extern void continuePrint(void);
 extern void setExtruderCurrent(uint8_t nr, uint8_t current);

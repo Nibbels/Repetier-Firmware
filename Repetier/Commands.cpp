@@ -374,13 +374,18 @@ void Commands::reportPrinterUsage() {
 */
 #if FEATURE_ARC_SUPPORT
 void Commands::processArc(GCode* com) {
-    //TODO: Check if coordinates must be relative here. I guess so ...
-
     float position[4];
-    position[X_AXIS] = Printer::destinationMM[X_AXIS];
-    position[Y_AXIS] = Printer::destinationMM[Y_AXIS];
-    position[Z_AXIS] = Printer::destinationMM[Z_AXIS];
-    position[E_AXIS] = Printer::destinationMM[E_AXIS];
+    float positionRemainder[4];
+    for (uint8_t axis = X_AXIS; axis <= E_AXIS; axis++) {
+        position[axis] = Printer::destinationMM[axis];
+        positionRemainder[axis] = Printer::destinationRemainderMM[axis];
+    }
+
+    const auto rejectArc = [&]() {
+        for (uint8_t axis = X_AXIS; axis <= E_AXIS; axis++)
+            Printer::setDestinationMM(axis, position[axis], positionRemainder[axis]);
+        Com::printErrorFLN(Com::tInvalidArc);
+    };
 
     Printer::queueGCodeCoordinates(com, true); // For X Y Z E F
 
@@ -456,7 +461,7 @@ void Commands::processArc(GCode* com) {
                                                                             // If r is smaller than d, the arc is now traversing the complex plane beyond the reach of any
                                                                             // real CNC, and thus - for practical reasons - we will terminate promptly:
         if (isnan(h_x2_div_d)) {
-            Com::printErrorFLN(Com::tInvalidArc);
+            rejectArc();
             return;
         }
         // Invert the sign of h_x2_div_d if the circle is counter clockwise (see sketch below)
@@ -510,14 +515,14 @@ void Commands::processArc(GCode* com) {
         // as this is only a validation for totally wrong generated gcodes.
         // The last move is a move to the perfect end-point, but if the slicer/user calculated the center a bit wrong the actual drawn circle would not end at the endpoint.
         if (fabs(r2 - r) > 0.01f) {
-            Com::printErrorFLN(Com::tInvalidArc);
+            rejectArc();
             return;
         }
     }
     // Set clockwise/counter-clockwise sign for arc computations
     uint8_t isclockwise = com->G == 2;
     // Trace the arc
-    PrintLine::arc(position, target, offset, r, isclockwise);
+    PrintLine::arc(position, target, offset, r, isclockwise, positionRemainder[E_AXIS]);
 }
 #endif
 

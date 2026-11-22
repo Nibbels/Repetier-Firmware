@@ -390,7 +390,7 @@ public:
     static void prepareDirectMove(bool stoppable, bool feedrateSource);
     static void stopDirectMove(void);
 #if FEATURE_ARC_SUPPORT
-    static void arc(float* position, float* target, float* offset, float radius, uint8_t isclockwise);
+    static void arc(float* position, float* target, float* offset, float radius, uint8_t isclockwise, float startERemainder);
 #endif // FEATURE_ARC_SUPPORT
 
     static INLINE void previousPlannerIndex(uint8_t& p) {

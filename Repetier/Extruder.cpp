@@ -987,7 +987,7 @@ void TemperatureController::setTargetTemperature(float target, float offset) {
 
 uint8_t autotuneIndex = 255;
 
-void TemperatureController::waitForTargetTemperature(uint8_t plus_temp_tolerance) {
+void TemperatureController::waitForTargetTemperature(uint8_t plus_temp_tolerance, bool resumingPause) {
     if (Printer::debugDryrun())
         return;
     bool dirRising = targetTemperatureC > currentTemperatureC;
@@ -999,6 +999,8 @@ void TemperatureController::waitForTargetTemperature(uint8_t plus_temp_tolerance
     g_uStartOfIdle = 0; //start waitForTargetTemperature
     while (true) {
         Commands::checkForPeriodicalActions(WaitHeater);
+        if (resumingPause && g_pauseStatus != PAUSE_STATUS_HEATING)
+            return;
         if (fabs(targetTemperatureC - currentTemperatureC) <= TEMP_TOLERANCE + plus_temp_tolerance)
             break;
         if (!dirRising && currentTemperatureC < MAX_ROOM_TEMPERATURE)

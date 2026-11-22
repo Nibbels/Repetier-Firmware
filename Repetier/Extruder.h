@@ -72,7 +72,7 @@ public:
     void setTargetTemperature(float target, float offset);
     void updateCurrentTemperature();
     void updateTempControlVars();
-    void waitForTargetTemperature(uint8_t plus_temp_tolerance = 0);
+    void waitForTargetTemperature(uint8_t plus_temp_tolerance = 0, bool resumingPause = false);
     void autotunePID(float temp, uint8_t controllerId, int maxCycles, bool storeResult, int method);
 
     inline bool isAlarm() {

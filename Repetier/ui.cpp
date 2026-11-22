@@ -4139,11 +4139,11 @@ void UIDisplay::mainSwitchCase(int action) {
                                                              //limits handled by change-function!
                 Commands::changeFeedrateMultiply(Printer::feedrateMultiply + 1);
                 beep(1, 4);
-            } else {
+            } else if (!g_pauseMode || (isPauseSettled() && !PrintLine::direct.task)) {
                 Printer::offsetRelativeStepsCoordinates(0, 0, 0, int32_t(g_nManualSteps[E_AXIS]));
 
                 //In case of double pause and in case we tempered with the retract, we dont want to drive the E-Axis back to some old location - that much likely causes emergency block.
-                g_nContinueSteps[E_AXIS] = 0;
+                g_nContinueExtruderSteps = 0;
             }
         }
         break;
@@ -4165,11 +4165,11 @@ void UIDisplay::mainSwitchCase(int action) {
                                                              //limits handled by change-function!
                 Commands::changeFeedrateMultiply(Printer::feedrateMultiply - 1);
                 beep(1, 4);
-            } else {
+            } else if (!g_pauseMode || (isPauseSettled() && !PrintLine::direct.task)) {
                 Printer::offsetRelativeStepsCoordinates(0, 0, 0, -1 * int32_t(g_nManualSteps[E_AXIS]));
 
                 //In case of double pause and in case we tempered with the retract, we dont want to drive the E-Axis back to some old location - that much likely causes emergency block.
-                g_nContinueSteps[E_AXIS] = 0;
+                g_nContinueExtruderSteps = 0;
             }
         }
         break;
@@ -5111,18 +5111,22 @@ void UIDisplay::slowAction() {
             BEEP_SHORT
             refresh = 1;
         }
-        if (lastAction != lastButtonAction) {
+        noInts.protect();
+        const int buttonAction = lastButtonAction;
+        const millis_t buttonAge = HAL::timeInMilliseconds() - lastButtonStart;
+        noInts.unprotect();
+        if (lastAction != buttonAction) {
 #if FEATURE_UNLOCK_MOVEMENT
             //Bei beliebiger user interaktion oder Homing soll G1 etc. erlaubt werden. Dann ist der Drucker nicht abgestürzt, sondern bedient worden.
             Printer::g_unlock_movement = 1;
 #endif //FEATURE_UNLOCK_MOVEMENT
-            if (lastButtonAction == 0) {
+            if (buttonAction == 0) {
                 lastAction = 0;
                 noInts.protect(); //HAL::forbidInterrupts();
                 flags &= ~3;
-            } else if (time - lastButtonStart > UI_KEY_BOUNCETIME) // New key pressed
+            } else if (buttonAge > UI_KEY_BOUNCETIME) // New key pressed
             {
-                lastAction = lastButtonAction;
+                lastAction = buttonAction;
                 Com::writeToAll = true;
                 executeAction(lastAction);
                 nextRepeat = time + UI_KEY_FIRST_REPEAT;
@@ -5207,12 +5211,10 @@ void UIDisplay::fastAction() {
             }
         }
 
-        if (!nextAction) {
-            // no key is pressed at the moment
-            if (PrintLine::direct.task == DIRECT_RUNNING_STOPPABLE) {
-                // the current direct movement has been started via a hardware or menu button - these movements shall be stopped as soon as the button is released
-                PrintLine::stopDirectMove();
-            }
+        if ((PrintLine::direct.task == DIRECT_RUNNING_STOPPABLE || PrintLine::direct.task == DIRECT_PREPARED_STOPPABLE)
+            && (!nextAction || nextAction != jogButtonAction)) {
+            // Releasing the jog key or selecting another key ends the jog.
+            PrintLine::stopDirectMove();
         }
 
         flags &= ~UI_FLAG_KEY_TEST_RUNNING;

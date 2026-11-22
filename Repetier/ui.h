@@ -599,6 +599,7 @@ public:
     const void* messageLine4;
     int activeAction; // action for ok/next/previous
     int lastAction;
+    volatile int jogButtonAction; // Key that started the current stoppable move.
     millis_t lastSwitch; // Last time display switched pages
     millis_t lastRefresh;
     volatile int lastButtonAction;

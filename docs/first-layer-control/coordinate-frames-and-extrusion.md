@@ -22,7 +22,14 @@ The previous planner repeatedly added step-sized distances to an XYZ float. The 
 | Z0 to Z200 in 0.001 mm targets, then one move to Z0, at 1,280 steps/mm | 459 steps from zero | 0 steps from zero |
 | Z at 2.5 steps, followed by Y moves | Z shifted from step 3 to step 2 | Z stayed at step 3 |
 
-This invariant applies to the float targets the planner receives. The regular `G91` and `M83` inputs still accumulate in binary32. In the host replay, 200,000 relative `Z0.0005` commands followed by `Z-100` left a float target of +0.2253 mm. Likewise, 100,000 relative `E0.008` commands produced about 799.654 mm. The planner rounded those targets consistently. Absolute endpoints avoid the repeated addition. Actual motor position also depends on limits, direct moves, compensation and the motor following its pulses. [G-code coordinate update](../../Repetier/Printer.cpp#L465-L497)
+Relative moves keep the rounding remainder from each float addition and fold it into later updates. Absolute axis targets clear that axis's remainder. The XYZ planner still rounds the float target once per endpoint. E uses the difference between both parts of its logical target before applying flow. [Coordinate update](../../Repetier/Printer.cpp#L455-L497) · [Planner](../../Repetier/motion.cpp#L120-L168)
+
+| Relative G-code replay | Previous accumulation | With the remainder |
+| --- | --- | --- |
+| 200,000 × Z0.0005, then Z−100 at 1,280 steps/mm | +0.2253 mm in the target, 288 steps from zero | About +0.00000475 mm in the target, 0 steps from zero |
+| 100,000 × E0.008 at 280 steps/mm and 100% flow | 223,903 base steps | 224,000 base steps |
+
+The Z residual reflects the precision of each parsed binary32 input. Actual motor position also depends on the configured limits, direct moves, compensation and the motor following its pulses.
 
 ## What `g_min` and `g_max` really mean
 
@@ -69,9 +76,9 @@ As `C(x,y,z)` changes during fade-out, the true vertical separation between succ
 
 For absolute-E G-code, the slicer's **logical E timeline** gives a requested change in filament length. The planner applies the flow multipliers and computes base E steps. It carries the fractional step in `[-0.5, 0.5)` and initializes each segment's pulse accumulator, including reused queue slots. Motion direction and distance use the resulting integer step count. ECMP and advance can add their own pulses during execution. [Extrusion quantization](../../Repetier/motion.cpp#L120-L161)
 
-`G92 E` sets the float E origin through `Printer::setEPositionMM()`. Both `destinationMM[E_AXIS]` and `queuedEPositionMM` receive the new logical value. The setter preserves the fractional-step carry, so setting a fractional E origin followed by a move to the same E value produces zero new base pulses. A push followed by an equal undo at an exact half-step also returns to the same count with constant flow. [G92 dispatch](../../Repetier/Commands.cpp#L731-L751)
+`G92 E` sets both the destination and queued logical E coordinates and clears their millimetre remainders. The fractional motor-step carry survives, so setting a fractional E origin followed by a move to the same E value produces zero new base pulses. A push followed by an equal undo at an exact half-step also returns to the same count with constant flow. [G92 dispatch](../../Repetier/Commands.cpp#L731-L756)
 
-Arc extrusion interpolates E from the start of the arc, using the segment index. A host replay verified that an arc from E10 to E11 at 256 steps/mm emitted 256 forward base steps without a corrective retract at the endpoint. [Arc interpolation](../../Repetier/motion.cpp#L945-L960)
+Arc extrusion interpolates E from the start of the arc, using the segment index and the starting remainder. The final segment restores the commanded endpoint and its remainder. A host replay verified that an arc from E10 to E11 at 256 steps/mm emitted 256 forward base steps without a corrective retract at the endpoint. [Arc interpolation](../../Repetier/motion.cpp#L950-L966)
 
 ### Arithmetic test: restore the logical timeline
 
@@ -83,7 +90,7 @@ Suppose the slicer is at absolute `E10`, then calls `M3912`, whose internal prim
 | Patched M3912: restore entry logical E10 | +1 E unit | **Correct** |
 | Conventional start script: entry E0, next slicer command E1 | +1 E unit | Both reset-to-E0 and restore-entry-E0 produce the correct result |
 
-At entry, M3912 drains the queue, saves the incoming logical E and primes on its own E0 timeline. After the line it restores logical E, E mode and fractional step accounting. Print cancellation retains the stop handler's E0. [Implementation in 5f848c9](https://github.com/Nibbels/Repetier-Firmware/commit/5f848c9a5cd0347c6d45fd9d3f13afd7344cb775)
+At entry, M3912 drains the queue, saves the incoming logical E and its millimetre remainder, and primes on its own E0 timeline. After the line it restores logical E with its remainder, E mode and fractional step accounting. Print cancellation retains the stop handler's E0. [Save and restore](../../Repetier/RF.cpp#L9096-L9271)
 
 In relative E mode, firmware-generated absolute E coordinates remain internal to `queueFloatCoordinates()`; restoring logical E is still harmless and preserves later G-code interpretation. Retracts cause occasional decreases in the logical E timeline, but do not invalidate this model.
 

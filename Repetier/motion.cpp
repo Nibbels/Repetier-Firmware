@@ -110,7 +110,7 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
         float direct = Printer::getDirectMM(axis);
         float endstop = Printer::maxSoftEndstopSteps[axis] * Printer::axisMMPerSteps[axis];
         if (Printer::destinationMM[axis] + direct >= endstop + 0.1) {
-            Printer::destinationMM[axis] = (endstop + 0.1 - direct);
+            Printer::setDestinationMM(axis, endstop + 0.1 - direct);
         }
     }
 
@@ -121,7 +121,8 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
         int32_t steps;
         if (axis == E_AXIS) {
             const float targetE = Printer::destinationMM[E_AXIS];
-            const float requestedMM = targetE - Printer::queuedEPositionMM;
+            const float targetRemainder = Printer::destinationRemainderMM[E_AXIS];
+            const float requestedMM = (targetE - Printer::queuedEPositionMM) + (targetRemainder - Printer::queuedERemainderMM);
 #if FEATURE_DIGIT_FLOW_COMPENSATION
             const float flow = Printer::menuExtrusionFactor * Printer::dynamicExtrusionFactor;
 #else
@@ -141,6 +142,7 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
             }
             Printer::extrudeMultiplyErrorSteps = remainder;
             Printer::queuedEPositionMM = targetE;
+            Printer::queuedERemainderMM = targetRemainder;
         } else {
             const int32_t targetSteps = Printer::getDestinationSteps(axis);
             steps = targetSteps - Printer::queuedPositionSteps[axis];
@@ -310,14 +312,8 @@ void PrintLine::prepareDirectMove(bool stoppable, bool feedrateSource) {
 
 void PrintLine::stopDirectMove(void) //Funktion ist bereits zur ausführzeit von InterruptProtectedBlock eingeschlossen!
 {
-    if (PrintLine::direct.isXYZMove()) {
-        // decelerate and stop
-        if (PrintLine::direct.stepsRemaining > 32) //die genaue anzahl der Decelerate Steps sollte hier eigentlich fast egal sein. Besser evtl. die Microsteps der Hauptachse?
-        {
-            PrintLine::direct.stepsRemaining = 32;
-        }
-    }
-    return;
+    if (direct.stepsRemaining > 32)
+        direct.stepsRemaining = 32; // Leave a short deceleration tail.
 } // stopDirectMove
 
 void PrintLine::calculateMove(float axisDistanceMM[], fast8_t drivingAxis, float feedrate) {
@@ -840,14 +836,16 @@ void PrintLine::waitForXFreeLines(uint8_t b) {
 // Arc function taken from grbl
 // The arc is approximated by generating a huge number of tiny, linear segments. The length of each
 // segment is configured in settings.mm_per_arc_segment.
-void PrintLine::arc(float* position, float* target, float* offset, float radius, uint8_t isclockwise) {
+void PrintLine::arc(float* position, float* target, float* offset, float radius, uint8_t isclockwise, float startERemainder) {
     //   int acceleration_manager_was_enabled = plan_is_acceleration_manager_enabled();
     //   plan_set_acceleration_manager_enabled(false); // disable acceleration management for the duration of the arc
     float center_axis0 = position[X_AXIS] + offset[X_AXIS];
     float center_axis1 = position[Y_AXIS] + offset[Y_AXIS];
     //float linear_travel = 0; //target[axis_linear] - position[axis_linear];
-    float extruder_travel = target[E_AXIS] - position[E_AXIS]; //das kann nicht anders sein, als dass man die extrusion im gcode angibt. man muss vorher verindern, dass in der G3 funktion direkt extrudiert wird.
-    //float extruder_travel = (Printer::destinationSteps[E_AXIS] - Printer::currentPositionSteps[E_AXIS]) * Printer::invAxisStepsPerMM[E_AXIS];
+    const float targetXRemainder = Printer::destinationRemainderMM[X_AXIS];
+    const float targetYRemainder = Printer::destinationRemainderMM[Y_AXIS];
+    const float targetERemainder = Printer::destinationRemainderMM[E_AXIS];
+    const float extruder_travel = (target[E_AXIS] - position[E_AXIS]) + (targetERemainder - startERemainder);
     float r_axis0 = -offset[0]; // Radius vector from center to current location
     float r_axis1 = -offset[1];
     float rt_axis0 = target[0] - center_axis0;
@@ -953,11 +951,17 @@ void PrintLine::arc(float* position, float* target, float* offset, float radius,
         arc_target[X_AXIS] = center_axis0 + r_axis0;
         arc_target[Y_AXIS] = center_axis1 + r_axis1;
         //arc_target[axis_linear] += linear_per_segment;
-        arc_target[E_AXIS] = position[E_AXIS] + i * extruder_per_segment;
-        Printer::queueFloatCoordinates(arc_target[X_AXIS], arc_target[Y_AXIS], IGNORE_COORDINATE, arc_target[E_AXIS], IGNORE_COORDINATE);
+        if (extruder_travel != 0.0f) {
+            Printer::setDestinationMM(E_AXIS, position[E_AXIS], startERemainder);
+            Printer::addDestinationMM(E_AXIS, i * extruder_per_segment);
+        }
+        Printer::queueFloatCoordinates(arc_target[X_AXIS], arc_target[Y_AXIS], IGNORE_COORDINATE, IGNORE_COORDINATE, IGNORE_COORDINATE);
     }
     // Ensure last segment arrives at target location.
-    Printer::queueFloatCoordinates(target[X_AXIS], target[Y_AXIS], IGNORE_COORDINATE, target[E_AXIS], IGNORE_COORDINATE);
+    Printer::setDestinationMM(X_AXIS, target[X_AXIS], targetXRemainder);
+    Printer::setDestinationMM(Y_AXIS, target[Y_AXIS], targetYRemainder);
+    Printer::setDestinationMM(E_AXIS, target[E_AXIS], targetERemainder);
+    Printer::queueFloatCoordinates(IGNORE_COORDINATE, IGNORE_COORDINATE, IGNORE_COORDINATE, IGNORE_COORDINATE, IGNORE_COORDINATE);
 }
 #endif
 
@@ -1091,25 +1095,13 @@ long PrintLine::performQueueMove() {
 
         case TASK_PAUSE_PRINT: {
             removeCurrentLineForbidInterrupt();
-            // the printing shall be paused without moving of the printer/miller head
-            if (!g_pauseMode) {
-                g_uPauseTime = HAL::timeInMilliseconds();
-                g_pauseMode = PAUSE_MODE_PAUSED; // Blocks Queue
-                g_pauseStatus = PAUSE_STATUS_GOTO_PAUSE;
-                g_pauseBeepDone = 0;
-            }
+            requestPrintPause(false);
             return 1000;
         }
 
         case TASK_PAUSE_PRINT_AND_MOVE: {
             removeCurrentLineForbidInterrupt();
-            // the printing shall be paused with moving of the printer/miller head to the pause position
-            if (!g_pauseMode) {
-                g_uPauseTime = HAL::timeInMilliseconds();
-                g_pauseMode = PAUSE_MODE_PAUSED_AND_MOVED; // Blocks Queue
-                g_pauseStatus = PAUSE_STATUS_GOTO_PAUSE_AND_MOVE;
-                g_pauseBeepDone = 0;
-            }
+            requestPrintPause(true);
             return 1000;
         }
 
@@ -1221,9 +1213,10 @@ bool inBauraum(uint8_t axisXY, PrintLine* move, uint8_t forQueue) {
             // all directMoves have abort set, some queueMoves too (Homing and optional scans etc.)
             if (move->isAbortAtEndstops()) {
                 move->setMoveOfAxisFinished(axisXY);
-                if (!forQueue)
+                if (forQueue)
+                    Printer::outOfPrintVolume[axisXY] = 0;
+                else
                     Printer::stopDirectAxis(axisXY);
-                Printer::outOfPrintVolume[axisXY] = 0;
 
                 return false;
             }
@@ -1233,7 +1226,7 @@ bool inBauraum(uint8_t axisXY, PrintLine* move, uint8_t forQueue) {
             return false;
         }
 
-        if (Printer::outOfPrintVolume[axisXY] > 0) {
+        if (forQueue && Printer::outOfPrintVolume[axisXY] > 0) {
             // If we are in the endstop and have oversteps while moving z to minus we pay back ignored plusZ by ignoring minusZ until overMaxEndstopZ is even.
             Printer::outOfPrintVolume[axisXY]--;
 
@@ -1248,9 +1241,10 @@ bool inBauraum(uint8_t axisXY, PrintLine* move, uint8_t forQueue) {
             // all directMoves have abort set, some queueMoves too (Homing and optional scans etc.)
             if (move->isAbortAtEndstops()) {
                 move->setMoveOfAxisFinished(axisXY);
-                if (!forQueue)
+                if (forQueue)
+                    Printer::outOfPrintVolume[axisXY] = 0;
+                else
                     Printer::stopDirectAxis(axisXY);
-                Printer::outOfPrintVolume[axisXY] = 0;
 
                 return false;
             }
@@ -1260,7 +1254,7 @@ bool inBauraum(uint8_t axisXY, PrintLine* move, uint8_t forQueue) {
             return false;
         }
 
-        if (Printer::outOfPrintVolume[axisXY] < 0) {
+        if (forQueue && Printer::outOfPrintVolume[axisXY] < 0) {
             // If we are in the endstop and have oversteps while moving z to minus we pay back ignored plusZ by ignoring minusZ until overMaxEndstopZ is even.
             Printer::outOfPrintVolume[axisXY]++;
 
@@ -1271,7 +1265,7 @@ bool inBauraum(uint8_t axisXY, PrintLine* move, uint8_t forQueue) {
     }
 
     /* Angeblich kein Knopf gedrückt, aber overSteps übrig. -> overSteps zurückbauen und output ignorieren, der Schalter könnte wackeln. */
-    if (Printer::outOfPrintVolume[axisXY] != 0) {
+    if (forQueue && Printer::outOfPrintVolume[axisXY] != 0) {
         if (Printer::outOfPrintVolume[axisXY] > 0 && move->isNegativeMoveOfAxis(axisXY)) {
             Printer::outOfPrintVolume[axisXY]--;
 
@@ -1299,9 +1293,10 @@ bool inBauraumZ(PrintLine* move, uint8_t forQueue) {
         if (move->isZPositiveMove()) {
             if (move->isAbortAtEndstops()) { // all directMoves have abort set, some queueMoves too (Homing and optional scans etc.)
                 move->setZMoveFinished();
-                if (!forQueue)
+                if (forQueue)
+                    Printer::outOfPrintVolumeZ = 0;
+                else
                     Printer::stopDirectAxis(Z_AXIS);
-                Printer::outOfPrintVolumeZ = 0;
 
                 return false;
             }
@@ -1311,7 +1306,7 @@ bool inBauraumZ(PrintLine* move, uint8_t forQueue) {
             return false;
         }
 
-        if (Printer::outOfPrintVolumeZ != 0) {
+        if (forQueue && Printer::outOfPrintVolumeZ != 0) {
             // If we are in the endstop and have oversteps while moving z to minus we pay back ignored plusZ by ignoring minusZ until overMaxEndstopZ is even.
             Printer::outOfPrintVolumeZ--;
 
@@ -1341,7 +1336,8 @@ bool inBauraumZ(PrintLine* move, uint8_t forQueue) {
                 || (!forQueue && move->task == DIRECT_RUNNING_STOPPABLE)
                 || (Printer::currentZSteps <= -1 * long(Printer::maxZOverrideSteps))) {
                 move->setZMoveFinished();
-                Printer::outOfPrintVolumeZ = 0;
+                if (forQueue)
+                    Printer::outOfPrintVolumeZ = 0;
 
                 return false;
             }
@@ -1351,7 +1347,7 @@ bool inBauraumZ(PrintLine* move, uint8_t forQueue) {
     }
 
     /* Angeblich kein Knopf gedrückt, aber overSteps übrig. -> overSteps zurückbauen und output ignorieren, der Schalter könnte wackeln. */
-    else if (Printer::outOfPrintVolumeZ > 0) {
+    else if (forQueue && Printer::outOfPrintVolumeZ > 0) {
         // If we are in the endstop and have oversteps while moving z to minus we pay back ignored plusZ by ignoring minusZ until overMaxEndstopZ is even.
         Printer::outOfPrintVolumeZ--;
 
@@ -1429,8 +1425,8 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
                     move->error[E_AXIS] += directError;
             }
 
-            // Active pressure is to high to extrude
-            if (g_nEmergencyESkip || !(Printer::outOfPrintVolume[X_AXIS] == 0 && Printer::outOfPrintVolume[Y_AXIS] == 0 && Printer::outOfPrintVolumeZ == 0)) {
+            // Queue overtravel belongs to the frozen print path. The pressure guard applies to both paths.
+            if (g_nEmergencyESkip || (forQueue && (Printer::outOfPrintVolume[X_AXIS] || Printer::outOfPrintVolume[Y_AXIS] || Printer::outOfPrintVolumeZ))) {
                 doESteps = false;
             }
             HAL::forbidInterrupts();
@@ -1446,19 +1442,17 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
                     Extruder::step();
                 }
                 if (!forQueue)
-                    g_nContinueSteps[E_AXIS] -= dir;
+                    g_nContinueExtruderSteps -= dir;
 
 #if FEATURE_HEAT_BED_Z_COMPENSATION
                 // This Block adds % parts of steps to extrusion because of higher layer heights caused by ZCMP
                 // We calculated compensatedPositionOverPercE as a result of streched layer heights. Here we add material to the layer to compensate stretching.
-                if (Printer::compensatedPositionOverPercE != 0) {
+                if (forQueue && Printer::compensatedPositionOverPercE != 0) {
                     Printer::compensatedPositionCollectTinyE += Printer::compensatedPositionOverPercE;
                     if (Printer::compensatedPositionCollectTinyE >= 1) {
 #if USE_ADVANCE
                         if (Printer::isAdvanceActivated()) {
                             Printer::extruderStepsNeeded += dir;
-                            if (!forQueue)
-                                g_nContinueSteps[E_AXIS] -= dir;
                             while (Printer::compensatedPositionCollectTinyE >= 1) {
                                 Printer::compensatedPositionCollectTinyE--; //notfalls bei überkompensation - sollte nicht vorkommen.
                             }
@@ -1467,8 +1461,6 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
                         {
                             Extruder::unstep();
                             // this is a steps spacer, not a double code from some lines above.
-                            if (!forQueue)
-                                g_nContinueSteps[E_AXIS] -= dir;
                             while (Printer::compensatedPositionCollectTinyE >= 1) {
                                 Printer::compensatedPositionCollectTinyE--; //notfalls bei überkompensation - sollte nicht vorkommen.
                             }
@@ -1495,7 +1487,6 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
                 } else if (move->isXMove()) {
                     // Endstop handling clears the axis flag when it rejects a direct step and stops the axis.
                     move->error[X_AXIS] += directError;
-                    g_nContinueSteps[X_AXIS] -= dir;
                     Printer::directCurrentSteps[X_AXIS] += dir;
                 }
             }
@@ -1515,7 +1506,6 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
                     Printer::currentSteps[Y_AXIS] += dir;
                 } else if (move->isYMove()) {
                     move->error[Y_AXIS] += directError;
-                    g_nContinueSteps[Y_AXIS] -= dir;
                     Printer::directCurrentSteps[Y_AXIS] += dir;
                 }
             }
@@ -1550,7 +1540,6 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
                     Printer::currentSteps[Z_AXIS] += dir;
                 } else if (move->isZMove()) {
                     move->error[Z_AXIS] += directError;
-                    g_nContinueSteps[Z_AXIS] -= dir;
                     Printer::directCurrentSteps[Z_AXIS] += dir;
                 }
                 // Note: There is no need to check whether we are past the z-min endstop here because G-Codes typically are not able to go past the z-min endstop anyways.

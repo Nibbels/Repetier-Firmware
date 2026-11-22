@@ -2,13 +2,15 @@
 
 ## Pause and resume
 
-- [ ] **Define how Z compensation behaves while paused.** SenseOffset checks the frozen queued first-layer Z. It can keep accumulating after a direct park move has opened the nozzle gap. The return motion reverses the direct Z offset while compensation can still change the motor position. Compare queued Z, direct Z and applied compensation before pause, while parked and before the queue restarts. Include manual extrusion while parked and preserve the existing clearance and saved manual offset. [SenseOffset gate](../Repetier/RF.cpp#L5688-L5726) · [Z coordinate contributions](../Repetier/RF.h#L438-L475)
+- [ ] **Define how Z compensation behaves while paused.** SenseOffset checks the frozen queued first-layer Z. It can keep accumulating after a direct park move has opened the nozzle gap. The return restores the direct Z position while compensation can still change the motor position. Compare queued Z, direct Z and applied compensation before pause, while parked and before the queue restarts. Include manual extrusion while parked and preserve the existing clearance and saved manual offset. [SenseOffset gate](../Repetier/RF.cpp#L5688-L5726) · [Z coordinate contributions](../Repetier/RF.h#L438-L475)
 
-- [ ] **Serialize Pause and Play with the park and return moves.** The PWM timer samples the panel keys, and the foreground UI can dispatch them from the loop inside a blocking direct move. A pressure pause or a G-code pause can start outside the panel's UI action guard. Play currently accepts both a pending pause and an active park, and Pause can advance an in-place pause to the park stage before the return offsets have been reset. Give the transition exclusive control of those offsets and hold the print queue until the return completes. Include the normal panel sequence and the two-press standby sequence in regression checks. [Key handling](../Repetier/ui.cpp#L5093-L5220) · [Direct-move waits](../Repetier/Printer.cpp#L586-L636) · [Button guards](../Repetier/RF.cpp#L6369-L6452)
+- [x] **Serialize pause transitions and restore the saved direct step position.** A single handler owns the park and return moves. It saves the three direct XYZ positions before parking. Play returns the difference between the saved and current steps, then checks each part of the return before releasing the print queue. A blocked return stays paused so the next attempt can travel only the remaining distance. Direct moves preserve the queue's separate accounting for steps ignored at travel limits. [Pause handler](../Repetier/RF.cpp#L6189-L6275) · [Limit handling](../Repetier/motion.cpp#L1209-L1358)
 
-- [ ] **Stop a held jog when its initiating key is released.** The fast UI handler trims a stoppable jog only when it samples no key. If Play stays down while Bed DOWN is released, the jog can continue toward Z max while the return waits for it to finish. Check both an ordinary release and a release with a second key held. [Key priority](../Repetier/ui.cpp#L581-L594) · [Release check](../Repetier/ui.cpp#L5191-L5219) · [Paused Z jog](../Repetier/RF.cpp#L9966-L9991)
+- [x] **Stop a held jog when its initiating key is released.** The fast UI handler trims the jog when the selected key changes. Resuming also trims an active held jog before calculating the return. [Release check](../Repetier/ui.cpp#L5196-L5220) · [Resume guard](../Repetier/RF.cpp#L6424-L6454)
 
-### Timing replay on `0c8d899`
+The updated host replay covers early Pause and Play on pressure, queued and panel requests, ordinary and overlapping jog releases, a blocked return and retry, cancellation, and the two-press wake and resume sequence. The step replay covers clipped direct moves, preservation of queued overtravel, and direct extrusion with the pressure guard. AVR builds passed for all three models. Physical verification remains open.
+
+### Original timing replay on `0c8d899`
 
 The host replay used the firmware's pause handlers, foreground UI, and key polling with simulated timer ticks and motor movement. Park requests used the RF2000 defaults with room for the full move.
 
@@ -26,4 +28,4 @@ The firmware restricted Play to a completed pause in 1.37t2. The 1.43.56 pause r
 
 ## G-code coordinates
 
-- [ ] **Preserve precision when accumulating long relative moves.** `G91` and `M83` add to a binary32 target before the planner converts it to steps. The host stress replay left +0.2253 mm after 200,000 relative `Z0.0005` commands and one `Z-100`. Check precision across absolute and relative mode switches, logical origin changes and generated priming. [Endpoint proof and replay](first-layer-control/coordinate-frames-and-extrusion.md#why-segment-rounding-cannot-accumulate-in-xyz)
+- [x] **Preserve precision when accumulating long relative moves.** Relative updates retain the small remainder of each float addition. The Z stress replay that previously left 288 steps now returns to zero, and 100,000 small relative E commands reach the expected 224,000 steps. [Endpoint proof and replay](first-layer-control/coordinate-frames-and-extrusion.md#why-segment-rounding-cannot-accumulate-in-xyz)

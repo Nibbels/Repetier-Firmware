@@ -94,8 +94,10 @@ public:
     static int8_t lastDirectionSovereignty;
     static float originOffsetMM[3];
     static volatile float destinationMM[4]; // Requested target in mm from origin.
+    static float destinationRemainderMM[4]; // Fraction lost when adding relative moves to the target.
     static int32_t queuedPositionSteps[3];  // Last queued XYZ endpoints in nominal steps.
     static float queuedEPositionMM;        // Last queued logical E coordinate in mm.
+    static float queuedERemainderMM;
 
     static long maxSoftEndstopSteps[3];     // For software endstops, limit of move in positive direction. (=Homing-Offset + Achsenlänge)
     static float axisLengthMM[3];           // Länge des überfahrbaren Bereichs im positiven Homing. (=Schienen-Fahrweg - Homing-Offset - 2x ExtruderOffset)
@@ -122,10 +124,8 @@ public:
     static volatile int32_t outOfPrintVolumeZ;
 
 #if FEATURE_MEMORY_POSITION
-    static float memoryX;
-    static float memoryY;
-    static float memoryZ;
-    static float memoryE;
+    static float memoryPositionMM[4];
+    static float memoryRemainderMM[4];
     static float memoryF;
 #endif // FEATURE_MEMORY_POSITION
 
@@ -1015,26 +1015,33 @@ public:
     static INLINE void setXAxisSteps(int32_t x) {
         InterruptProtectedBlock noInts;
         Printer::currentSteps[X_AXIS] = Printer::queuedPositionSteps[X_AXIS] = x;
-        Printer::destinationMM[X_AXIS] = x * axisMMPerSteps[X_AXIS];
+        setDestinationMM(X_AXIS, x * axisMMPerSteps[X_AXIS]);
         noInts.unprotect();
     }
     static INLINE void setYAxisSteps(int32_t y) {
         InterruptProtectedBlock noInts;
         Printer::currentSteps[Y_AXIS] = Printer::queuedPositionSteps[Y_AXIS] = y;
-        Printer::destinationMM[Y_AXIS] = y * axisMMPerSteps[Y_AXIS];
+        setDestinationMM(Y_AXIS, y * axisMMPerSteps[Y_AXIS]);
         noInts.unprotect();
     }
     static INLINE void setZAxisSteps(int32_t z) {
         InterruptProtectedBlock noInts;
         Printer::currentSteps[Z_AXIS] = Printer::queuedPositionSteps[Z_AXIS] = z;
-        Printer::destinationMM[Z_AXIS] = z * axisMMPerSteps[Z_AXIS];
+        setDestinationMM(Z_AXIS, z * axisMMPerSteps[Z_AXIS]);
         noInts.unprotect();
     }
-    static INLINE void setEPositionMM(float e) {
-        InterruptProtectedBlock noInts;
-        Printer::queuedEPositionMM = Printer::destinationMM[E_AXIS] = e;
-        noInts.unprotect();
+    static INLINE void setEPositionMM(float e, float remainder = 0.0f) {
+        setDestinationMM(E_AXIS, e, remainder);
+        queuedEPositionMM = e;
+        queuedERemainderMM = remainder;
     }
+
+    static INLINE void setDestinationMM(uint8_t axis, float target, float remainder = 0.0f) {
+        destinationMM[axis] = target;
+        destinationRemainderMM[axis] = remainder;
+    }
+
+    static void addDestinationMM(uint8_t axis, float distance);
 
     static INLINE void stopDirectAxis(uint8_t axis) {
         Printer::directDestinationSteps[axis] = Printer::directCurrentSteps[axis];
