@@ -124,6 +124,7 @@ volatile long Printer::currentZSteps = 0;                                       
 uint16_t Printer::maxZOverrideSteps = uint16_t(ZAXIS_STEPS_PER_MM * Z_ENDSTOP_DRIVE_OVER); //das ist der Z-Zähler der GCodes zum Zählen des tiefsten Schalterdruckpunkts /Schaltercrash.
 
 #if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+volatile bool Printer::scanZMoveActive = false;
 volatile long Printer::compensatedPositionTargetStepsZ = 0;
 volatile long Printer::compensatedPositionCurrentStepsZ = 0;
 
@@ -1156,19 +1157,38 @@ void Printer::enableCMPnow(void) {
 }
 
 bool Printer::needsCMPwait(void) {
-    if (abs(Printer::compensatedPositionCurrentStepsZ - Printer::compensatedPositionTargetStepsZ)) {
-        if (!Printer::checkCMPblocked())
-            return true;
-    }
-    return false;
+    InterruptProtectedBlock noInts;
+    const long cmpDiff = compensatedPositionTargetStepsZ - compensatedPositionCurrentStepsZ;
+    return cmpDiff && !blockAll && (cmpDiff > 0) == getZDirectionIsPos()
+        && !isZCompensationLimited(cmpDiff > 0);
 }
 
-bool Printer::checkCMPblocked(void) {
-    //die zcmp läuft dann, wenn die achse nicht gegenläufig steht und reserviert ist:
-    //true = zcmp ist blockiert -> ist mal möglich aber wenn nichts läuft ein fehler, weil die achse nicht zeitnah von einer anderen funktion freigegeben wird.
-    //false = zcmp darf sich aktuell korrigieren, wenn sonst keine prioritären Einschränkungen aktiv sind. -> auf kompensationsende warten müsste erfolgreich verlaufen
-    return ((Printer::compensatedPositionCurrentStepsZ < Printer::compensatedPositionTargetStepsZ) && !Printer::getZDirectionIsPos())
-        || ((Printer::compensatedPositionCurrentStepsZ > Printer::compensatedPositionTargetStepsZ) && Printer::getZDirectionIsPos());
+bool Printer::isZCompensationLimited(bool positive) {
+    // Homed print moves can approach past the Z-min switch within the configured overtravel.
+#if FEATURE_MILLING_MODE
+    const bool allowMinOverride = isAxisHomed(Z_AXIS) && operatingMode == OPERATING_MODE_PRINT;
+#else
+    const bool allowMinOverride = isAxisHomed(Z_AXIS);
+#endif
+    if (positive ? isZMaxSoftEndstopHit() : allowMinOverride && isZMinOverrideReached()) {
+        return true;
+    }
+
+#if FEATURE_CONFIGURABLE_Z_ENDSTOPS
+    if (ZEndstopType == ENDSTOP_TYPE_CIRCUIT) {
+        if (ZEndstopUnknown) {
+            return true;
+        }
+        // Latch the shared switch before a compensation pulse changes direction.
+        if (isZMaxEndstopHit()) {
+            return positive;
+        }
+        const bool minHit = isZMinEndstopHit();
+        return !positive && !allowMinOverride && minHit;
+    }
+#endif // FEATURE_CONFIGURABLE_Z_ENDSTOPS
+
+    return positive ? isZMaxEndstopHit() : !allowMinOverride && isZMinEndstopHit();
 }
 
 void Printer::disableCMPnow(bool wait) {
@@ -1186,10 +1206,19 @@ void Printer::disableCMPnow(bool wait) {
     }
 #endif                                            // FEATURE_WORK_PART_Z_COMPENSATION
 #endif                                            // FEATURE_MILLING_MODE
-    Printer::compensatedPositionTargetStepsZ = 0; //tell CMP to move to 0. TODO: Care for positive matrix beds.
-
-    while (wait && compensatedPositionCurrentStepsZ - compensatedPositionTargetStepsZ) //warte auf queue befehlsende
     {
+        InterruptProtectedBlock noInts;
+        compensatedPositionTargetStepsZ = 0;
+    }
+
+    while (wait) {
+        {
+            InterruptProtectedBlock noInts;
+            const long cmpDiff = compensatedPositionTargetStepsZ - compensatedPositionCurrentStepsZ;
+            if (!cmpDiff || blockAll || isZCompensationLimited(cmpDiff > 0)) {
+                break;
+            }
+        }
         HAL::delayMilliseconds(1);
         //checkforperiodical .. possible loop inside scans and homing.
     }
@@ -1568,7 +1597,7 @@ void Printer::homeZAxis() {
         setHomed(-1, -1, false);
 
 #if FEATURE_HEAT_BED_Z_COMPENSATION
-        // The Z reference has been invalidated and CMP has returned to zero.
+        // The Z reference has been invalidated and CMP has been disabled.
         // Do the unit conversions outside the interrupt-protected block.
         const long defaultMinZCompensationSteps = long(HEAT_BED_Z_COMPENSATION_MIN_MM * Printer::axisStepsPerMM[Z_AXIS]);
         const long defaultMaxZCompensationSteps = long(HEAT_BED_Z_COMPENSATION_MAX_MM * Printer::axisStepsPerMM[Z_AXIS]);
@@ -1613,7 +1642,8 @@ void Printer::homeZAxis() {
         Printer::resetDirectAxis(Z_AXIS);
 
 #if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
-        //das ist diese Scan-Positions-Z-Zusatzachse für MoveZ-Bewegungen.
+        // Homing replaces the reference, including any correction that could not unwind at a limit.
+        compensatedPositionTargetStepsZ = compensatedPositionCurrentStepsZ = 0;
         g_nZScanZPosition = 0;
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
         noInts.unprotect();

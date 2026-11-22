@@ -375,7 +375,7 @@ public:
 
     static inline void computeMaxJunctionSpeed(PrintLine* previous, PrintLine* current);
 
-    static long needCmpWait();
+    static bool needCmpWait();
     static void stepSlowedZCompensation();
     static long performQueueMove();
     static long performDirectMove();

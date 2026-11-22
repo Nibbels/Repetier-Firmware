@@ -147,6 +147,7 @@ public:
     static uint16_t maxZOverrideSteps;
 
 #if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+    static volatile bool scanZMoveActive;
     static volatile long compensatedPositionTargetStepsZ;
     static volatile long compensatedPositionCurrentStepsZ;
     static volatile float compensatedPositionOverPercE;
@@ -803,6 +804,10 @@ public:
         return Printer::currentZSteps >= Printer::maxSoftEndstopSteps[Z_AXIS];
     }
 
+    static inline bool isZMinOverrideReached() {
+        return currentZSteps <= -long(maxZOverrideSteps);
+    }
+
     static INLINE bool isXMaxEndstopHit() {
 #if X_MAX_PIN > -1 && MAX_HARDWARE_ENDSTOP_X
         return READ(X_MAX_PIN) != ENDSTOP_X_MAX_INVERTING;
@@ -1099,7 +1104,7 @@ public:
     static void enableSenseOffsetnow(void);
 #endif // FEATURE_SENSIBLE_PRESSURE
     static bool needsCMPwait(void);
-    static bool checkCMPblocked(void);
+    static bool isZCompensationLimited(bool positive);
     static void enableCMPnow(void);
     static void disableCMPnow(bool wait = false);
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION

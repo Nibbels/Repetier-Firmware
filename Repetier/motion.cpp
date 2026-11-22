@@ -967,7 +967,7 @@ void PrintLine::arc(float* position, float* target, float* offset, float radius,
 
 #if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
 void PrintLine::stepSlowedZCompensation() {
-    if (Printer::blockAll) {
+    if (Printer::blockAll || Printer::scanZMoveActive) {
         return;
     }
 
@@ -986,69 +986,25 @@ void PrintLine::stepSlowedZCompensation() {
         return;
     }
 
-    int32_t cmpDiff = Printer::compensatedPositionTargetStepsZ - Printer::compensatedPositionCurrentStepsZ;
-
-    if (cmpDiff > 0) {
-        // here we shall move the z-axis only in case performQueueMove() is not moving into the other direction at the moment
-        bool posZ = Printer::getZDirectionIsPos();
-        if (!posZ) {
-            posZ = true;
-            // set the direction only in case it is not set already
-            Printer::setZDirection(posZ);
+    const long cmpDiff = Printer::compensatedPositionTargetStepsZ - Printer::compensatedPositionCurrentStepsZ;
+    const bool positive = cmpDiff > 0;
+    if (cmpDiff && !Printer::isZCompensationLimited(positive)) {
+        if (Printer::getZDirectionIsPos() != positive) {
+            Printer::setZDirection(positive);
         }
-        // we must move the heat bed do the bottom
-        if (posZ) {
-            Printer::startZStep();
+        Printer::startZStep();
 #if STEPPER_HIGH_DELAY > 0
-            HAL::delayMicroseconds(STEPPER_HIGH_DELAY);
-#endif // STEPPER_HIGH_DELAY>0
-            Printer::compensatedPositionCurrentStepsZ++;
+        HAL::delayMicroseconds(STEPPER_HIGH_DELAY);
+#endif // STEPPER_HIGH_DELAY > 0
+        Printer::compensatedPositionCurrentStepsZ += positive ? 1 : -1;
 
-            // adjust a sort of acceleration
-            if (mass < massWeight && abs(cmpDiff) < massWeight)
-                mass++;
-            else if (mass)
-                mass--;
+        if (mass < massWeight && abs(cmpDiff) < massWeight)
+            mass++;
+        else if (mass)
+            mass--;
 
-            Printer::endZStep();
-            waitSteps = mass + Printer::stepsPerTimerCall;
-
-            return;
-        }
-    }
-
-    if (cmpDiff < 0) {
-        // here we shall move the z-axis only in case performQueueMove() is not moving into the other direction at the moment
-        bool posZ = Printer::getZDirectionIsPos();
-        if (posZ) {
-            posZ = false;
-            // set the direction only in case it is not set already
-            Printer::setZDirection(posZ);
-        }
-        // we must move the heat bed to the top
-        if (!posZ) {
-            Printer::startZStep();
-#if STEPPER_HIGH_DELAY > 0
-            HAL::delayMicroseconds(STEPPER_HIGH_DELAY);
-#endif // STEPPER_HIGH_DELAY>0
-
-            // adjust a sort of acceleration
-            Printer::compensatedPositionCurrentStepsZ--;
-            if (mass < massWeight && abs(cmpDiff) < massWeight)
-                mass++;
-            else if (mass)
-                mass--;
-
-            Printer::endZStep();
-            waitSteps = mass + Printer::stepsPerTimerCall;
-
-            return;
-        }
-    }
-
-    // Idlen baut Timeout auf, also Trägheit
-    // Steppen baut das ab.
-    if (!cmpDiff && mass < massWeight) {
+        Printer::endZStep();
+    } else if (mass < massWeight) {
         mass++;
     }
 
@@ -1056,22 +1012,18 @@ void PrintLine::stepSlowedZCompensation() {
     waitSteps = mass + Printer::stepsPerTimerCall;
 }
 
-long PrintLine::needCmpWait() {
-    // Pause a bit, if z-compensation is way out of line: this is usefull when starting prints using very deep bed-leveling and custom z-endstop switches which can override a lot.
-    uint16_t ZcmpNachlauf = abs(Printer::compensatedPositionCurrentStepsZ - Printer::compensatedPositionTargetStepsZ);
-
-    //wenn die zkompensation wegen z.B. Startposition über 0.25mm hinterherhängt: pause und warten.
-    if (ZcmpNachlauf > (uint16_t(Printer::axisStepsPerMM[Z_AXIS]) >> 2) && Printer::compensatedPositionTargetStepsZ) {
-        return true;
+bool PrintLine::needCmpWait() {
+    const long target = Printer::compensatedPositionTargetStepsZ;
+    const long cmpDiff = target - Printer::compensatedPositionCurrentStepsZ;
+    if (!cmpDiff || Printer::blockAll || Printer::scanZMoveActive) {
+        return false;
     }
 
-    if (ZcmpNachlauf && !Printer::doHeatBedZCompensation) {
-        if (!Printer::checkCMPblocked()) { //wenn blocked, kann die nächste bewegung das aufheben. Hier gehts nur um wenige steps in Z, da ist das egal, wenn mal nicht kurz pausiert wird.
-            return true;
-        }
-    }
-
-    return false; //ignore this.
+    const bool positive = cmpDiff > 0;
+    // Wait for a correction over 0.25 mm behind, or for the correction to finish switching off.
+    const bool catchingUp = target && abs(cmpDiff) > (uint16_t(Printer::axisStepsPerMM[Z_AXIS]) >> 2);
+    return (catchingUp || (!Printer::doHeatBedZCompensation && positive == Printer::getZDirectionIsPos()))
+        && !Printer::isZCompensationLimited(positive);
 }
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
 
@@ -1334,7 +1286,7 @@ bool inBauraumZ(PrintLine* move, uint8_t forQueue) {
             if (
                 !Printer::isAxisHomed(Z_AXIS)
                 || (!forQueue && move->task == DIRECT_RUNNING_STOPPABLE)
-                || (Printer::currentZSteps <= -1 * long(Printer::maxZOverrideSteps))) {
+                || Printer::isZMinOverrideReached()) {
                 move->setZMoveFinished();
                 if (forQueue)
                     Printer::outOfPrintVolumeZ = 0;
@@ -1517,12 +1469,11 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
                 //070118better zCMP strategy: if zCMP is against Queue/Direct, dont do some step and count it done @Queue/Direct and count it done @zCMP.
 
 #if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
-                bool cmpup = (Printer::compensatedPositionCurrentStepsZ < Printer::compensatedPositionTargetStepsZ);
-                bool cmpdown = (Printer::compensatedPositionCurrentStepsZ > Printer::compensatedPositionTargetStepsZ);
-                if (dir < 0 && cmpup) {
-                    Printer::compensatedPositionCurrentStepsZ++;
-                } else if (dir > 0 && cmpdown) {
-                    Printer::compensatedPositionCurrentStepsZ--;
+                const long cmpDiff = Printer::compensatedPositionTargetStepsZ - Printer::compensatedPositionCurrentStepsZ;
+                const bool cmpPositive = cmpDiff > 0;
+                // A correction held at a limit must leave the retreat step available.
+                if (cmpDiff && cmpPositive != (dir > 0) && !Printer::isZCompensationLimited(cmpPositive)) {
+                    Printer::compensatedPositionCurrentStepsZ -= dir;
                 } else {
                     HAL::allowInterrupts();
                     //no conflicting zCMP: Do the Z-Step.

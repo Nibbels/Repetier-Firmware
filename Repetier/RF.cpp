@@ -3296,15 +3296,6 @@ void recalculateHeatBedZCompensation(void) {
         // Nicht zCMP Offsets nutzen, wenn nur gehomed, weil das alle Scans stören kann, nur weil eine falsche Matrix geladen ist. Security hin oder her.
     }
 
-    //nachprüfung wegen override des schalterdruckpunktes
-    if (Printer::isAxisHomed(Z_AXIS) && Printer::currentZSteps <= -1 * long(Printer::maxZOverrideSteps)) {
-        if (nNeededZCompensation < Printer::compensatedPositionCurrentStepsZ) {
-            nNeededZCompensation = Printer::compensatedPositionCurrentStepsZ; //nicht 100% sauber, aber schalterdruckpunkt ist auch nicht perfekt auf den step definiert. Einfach nicht näher rankompensieren, wie wir waren, bis wir aus der eingestellten schalter-todeszone raus sind, dann weiter wie bisher.
-        }
-        //nNeededZEPerc = 0.0; //-> ist hier generell völlig egal. Hmm, eigentlich könnte man in diesem fall automatisch raften,
-        //aber das wäre fast irre, wenn wir einfach mit material auffüllen, nur weil wir mit der düse nicht weiter ranfahren dürfen.
-    }
-
     InterruptProtectedBlock noInts;
     Printer::compensatedPositionTargetStepsZ = nNeededZCompensation;
     Printer::compensatedPositionOverPercE = nNeededZEPerc;
@@ -4772,8 +4763,7 @@ void moveZ(int nSteps) {
     Reason is because we removed watchdog-ping from HAL::delayMicroseconds (which was good!)
     */
 
-    // Warning: this function does not check any end stops
-    // choose the direction
+    // The scan may pass the Z-min switch up to the configured overtravel.
 
     int nMaxLoops;
     if (nSteps >= 0)
@@ -4786,6 +4776,11 @@ void moveZ(int nSteps) {
         Commands::checkForPeriodicalActions(Processing);
 #endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
+#if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+    // A retreat can make a pending correction reachable again. Keep Z for the scan until this move ends.
+    Printer::scanZMoveActive = true;
+#endif
+
     // perform the steps
     for (int i = 0; i < nMaxLoops; i++) {
 #if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
@@ -4797,7 +4792,7 @@ void moveZ(int nSteps) {
         if (Printer::operatingMode == OPERATING_MODE_PRINT) // nur printing-mode. Beim millingmode könnte das falsch sein. Test TODO daher nur printing-mode, da stimmts.
 #endif                                                      //FEATURE_MILLING_MODE
         {
-            if (Printer::isAxisHomed(Z_AXIS) && Printer::currentZSteps <= -1 * long(Printer::maxZOverrideSteps)) {
+            if (nSteps < 0 && Printer::isAxisHomed(Z_AXIS) && Printer::isZMinOverrideReached()) {
                 g_abortZScan = SCAN_ABORT_REASON_REACHED_MAX_COMPENSATION; // prepare abort
                 g_scanRetries = 0;                                         // prevent any retrys this is hopeless in this case.
                 Com::printFLN(PSTR("Z-Endstop protection"));
@@ -4827,6 +4822,9 @@ void moveZ(int nSteps) {
 
         g_nZScanZPosition += (Printer::getZDirectionIsPos() ? 1 : -1);
     }
+#if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
+    Printer::scanZMoveActive = false;
+#endif
 } // moveZ
 
 void restoreDefaultScanParameters(void) {

@@ -16,15 +16,15 @@ Firmware changes are tracked on `ai-firmware-review` against `community_developm
 
 | Candidate | Disposition |
 | --- | --- |
-| Z-CMP wait between queued segments | Adapt alongside the Z travel fix. The fork's timer change also stops idle compensation during a pause with buffered moves. Preserve live idle compensation and let a move away from a travel limit proceed when a correction is blocked. [Timer patch](https://github.com/afriess/RFx000x-Firmware/commit/e51f9bc) |
+| Z-CMP wait between queued segments | The review branch skips waits for corrections held at a travel limit and keeps idle compensation active with a paused queue. The fork's change to waits between buffered moves remains a timing candidate. [Timer patch](https://github.com/afriess/RFx000x-Firmware/commit/e51f9bc) |
 | Step-packing threshold | Evaluate in the performance review. Using the computed `minInterval` honors the extra 64 ticks for pressure advance. Removing the 512-tick interval floor is a separate motion timing change to evaluate. [Step-packing patch](https://github.com/afriess/RFx000x-Firmware/commit/0e11752) |
 | Auto-touch and workpiece origin | Deferred. The experimental probing routines refine workpiece contact and origin measurement. The 0.25 to 0.50 mm change widens the origin search. [Probe routine](https://github.com/afriess/RFx000x-Firmware/blob/0e11752/Repetier/RF.cpp#L3382-L3405) · [Search range](https://github.com/afriess/RFx000x-Firmware/commit/0dd35e4) |
 
 ## Z travel and scanning
 
-- [ ] **Allow scan retreat from the exact lower bound.** A direction check in `moveZ()` passed a host trial for probing past the switch, reaching `-maxZOverrideSteps`, blocking further approach and retreating from that bound. The firmware patch is pending. [Scan step output](../Repetier/RF.cpp#L4789-L4828)
+- [x] **Allow scan retreat from the exact lower bound.** `moveZ()` stops a further approach at `-maxZOverrideSteps` and allows the bed to move away. The scan keeps control of the Z motor for the duration of its move. [Scan step output](../Repetier/RF.cpp#L4758)
 
-- [ ] **Apply travel limits to compensation-only Z pulses.** Host replays emitted pulses past Z-max and past the lower Z-min override between target refreshes. Check the actual motor position and configured limit before each pulse, preserving the model-specific travel past the homing trigger. Allow retreat even when compensation is waiting at a limit. Check idle and XY motion. [Compensation pulses](../Repetier/motion.cpp#L969-L1036) · [Existing Z endstop rules](../Repetier/motion.cpp#L1290-L1361) · [Scan reach](z-offset/scans-and-persistence.md#z-min-screw-adjustment-and-scan-reach)
+- [x] **Apply travel limits to compensation-only Z pulses.** Each pulse checks the motor position in the requested direction. Z-max uses the configured limit and, where present, the hardware switch. Z-min allows the model-specific overtravel in homed print mode. An unreachable target stays pending, leaving the next retreat step available. Host replays covered idle and XY movement, queued and direct retreat, disabling compensation at a limit, and the RF1000 shared switch. Physical verification remains open. [Compensation pulses](../Repetier/motion.cpp#L969) · [Travel limit check](../Repetier/Printer.cpp#L1166) · [Scan reach](z-offset/scans-and-persistence.md#z-min-screw-adjustment-and-scan-reach)
 
 ## Pause and resume
 
