@@ -14,6 +14,7 @@
 #include "RF2000.h"
 #include "ZOffset.h"
 #include "PrintLayers.h"
+#include "BedCompensation.h"
 #include "PrintPause.h"
 #include "PrintStop.h"
 
@@ -30,13 +31,14 @@ millis_t clockMs = 0, g_uStartOfIdle = 0, previousMillisCmd = 0;
 volatile uint8_t g_startLineActive = 0;
 char g_nHeatBedScanStatus = 0, g_nZOSScanStatus = 0;
 unsigned short g_nManualSteps[4] = { 1, 1, 1, 28 };
-long g_offsetZCompensationSteps = 250;
+int32_t g_offsetZCompensationSteps = 250;
 short g_ZCompensationMax = 200;
 short forceDigits = 0;
 bool pollDuringMoves = true;
 bool clipReturn[4] = {};
 int incompleteReturns = 0;
 int incomingReads = 0, objectOutputs = 0;
+unsigned matrixDepthReads = 0;
 void (*duringMove)(long, long, long, long) = nullptr;
 void (*duringHeatWait)() = nullptr;
 
@@ -49,6 +51,12 @@ millis_t timeInMilliseconds() { return clockMs; }
 
 bool interruptsEnabled = true;
 unsigned pauseBeforeLock = 0;
+unsigned locksUntilCompensationPublish = 0;
+float extrusionBeforePublish = 0.0f;
+
+namespace Printer {
+extern float compensatedPositionOverPercE;
+}
 
 class InterruptProtectedBlock {
     const bool previousState = interruptsEnabled;
@@ -57,6 +65,8 @@ public:
     InterruptProtectedBlock() {
         if (interruptsEnabled && pauseBeforeLock && --pauseBeforeLock == 0)
             requestInterruptPause();
+        if (interruptsEnabled && locksUntilCompensationPublish && --locksUntilCompensationPublish == 0)
+            extrusionBeforePublish = Printer::compensatedPositionOverPercE;
         interruptsEnabled = false;
     }
     ~InterruptProtectedBlock() { unprotect(); }
@@ -283,14 +293,17 @@ void outputObject(bool showerrors) {
     ++objectOutputs;
 }
 
-long getZMatrixDepth(long x, long y) { return 37 + x / 32 - y / 64; }
+long getZMatrixDepth(long x, long y) {
+    ++matrixDepthReads;
+    return 37 + x / 32 - y / 64;
+}
 
 #include "pause-sense-offset-firmware.inc"
 
 void poll() {
     clockMs += EMERGENCY_PAUSE_INTERVAL + 1;
     handleStrainGaugeFeatures(clockMs);
-    recalculateHeatBedZCompensation();
+    recalculateZCompensation();
 }
 
 void sample(short force, int count = 1) {
@@ -665,11 +678,13 @@ void homeBetweenPrints() {
     assert(layers.currentLayerSteps() == layerWithoutPrime && !layers.previousLayerSteps());
 }
 
-void expectCompensation(long nominalZ, long bedCorrection, float extraExtrusion) {
+void expectCompensation(long nominalZ, long correctionTarget, float extraExtrusion, unsigned expectedReads) {
     Printer::zMotion.setNominalSteps(nominalZ);
-    recalculateHeatBedZCompensation();
-    assert(Printer::zMotion.correctionTarget() == bedCorrection + Printer::zOffset.effectiveSteps());
+    const unsigned readsBefore = matrixDepthReads;
+    recalculateZCompensation();
+    assert(Printer::zMotion.correctionTarget() == correctionTarget);
     assert(std::abs(Printer::compensatedPositionOverPercE - extraExtrusion) < 0.000001f);
+    assert(matrixDepthReads - readsBefore == expectedReads);
 }
 
 void layerFadeAndZHop() {
@@ -680,6 +695,7 @@ void layerFadeAndZHop() {
     Printer::currentXYSteps[X_AXIS] = 5280; // Interpolated bed depth of 202 steps.
     Printer::currentXYSteps[Y_AXIS] = 0;
     g_nDigitZCompensationDigits_active = false;
+    const long offset = Printer::zOffset.effectiveSteps();
 
     g_startLineActive = true;
     planMove(primeZ, true);
@@ -691,7 +707,7 @@ void layerFadeAndZHop() {
     planMove(primeZ, false);
     assert(layers.currentLayerSteps() == primeZ && !layers.previousLayerSteps());
     assert(layers.fadeStartSteps() == primeZ && layers.fadeEndSteps() == fadeEnd);
-    expectCompensation(primeZ, 202, 0.0f);
+    expectCompensation(primeZ, 202 + offset, 0.0f, 1);
 
     // Travel and return to the same layer before XY extrusion resumes.
     planMove(primeZ + 128, true, false, false);
@@ -702,9 +718,62 @@ void layerFadeAndZHop() {
 
     planMove(fadeEnd - 50, true);
     // The executor is still within the fade even though the planner is farther ahead.
-    expectCompensation(primeZ + 500, 226, 0.048f);
+    expectCompensation(primeZ + 500, 226 + offset, 0.048f, 1);
     planMove(fadeEnd + 50, true);
-    expectCompensation(fadeEnd, 250, 0.024f);
+    expectCompensation(fadeEnd, 250 + offset, 0.024f, 1);
+    planMove(fadeEnd + 100, true);
+    expectCompensation(fadeEnd + 50, 250 + offset, 0.0f, 0);
+}
+
+void compensationBoundaries() {
+    auto& layers = Printer::layers;
+    Printer::currentXYSteps[X_AXIS] = 5280; // Interpolated bed depth of 202 steps.
+    Printer::currentXYSteps[Y_AXIS] = 0;
+    g_nDigitZCompensationDigits_active = false;
+    const long offset = Printer::zOffset.effectiveSteps();
+    const long fadeStart = layers.fadeStartSteps();
+    const long fadeEnd = layers.fadeEndSteps();
+
+    Printer::compensatedPositionOverPercE = 0.048f;
+    locksUntilCompensationPublish = 2; // One read of nominal Z, then publication.
+    expectCompensation(-1, 263 + offset, 0.0f, 0);
+    assert(!locksUntilCompensationPublish && extrusionBeforePublish == 0.048f);
+    expectCompensation(0, 215 + offset, 0.0f, 1);
+    expectCompensation(fadeStart, 202 + offset, 0.0f, 1);
+    expectCompensation(fadeStart + 1, 203 + offset, 0.048f, 1);
+    expectCompensation(fadeEnd - 1, 250 + offset, 0.048f, 1);
+    expectCompensation(fadeEnd, 250 + offset, 0.0f, 0);
+
+    // Reloading the defaults puts the fade start at 422, inside the planned layer from 256 to 512.
+    planMove(512, true);
+    layers.resetFadeBounds(zStepsPerMm);
+    expectCompensation(448, 203 + offset, 4320.0f / (12378.0f * 256.0f), 1);
+
+    g_nDigitZCompensationDigits_active = true;
+    g_nDigitZCompensationDigits = -5500;
+    expectCompensation(256, 202 + offset + 53, 0.0f, 1);
+    g_nDigitZCompensationDigits = 5500;
+    expectCompensation(256, 202 + offset + 53, 0.0f, 1);
+
+    Printer::axisStepsPerMM[Z_AXIS] = 2560.0f;
+    layers.resetFadeBounds(Printer::axisStepsPerMM[Z_AXIS]);
+    Printer::zOffset.refreshSteps(Printer::axisStepsPerMM[Z_AXIS]);
+    const long scaledOffset = Printer::zOffset.effectiveSteps();
+    g_nDigitZCompensationDigits = 32767;
+    expectCompensation(0, 215 + scaledOffset + 600, 0.0f, 1);
+
+    Printer::doHeatBedZCompensation = false;
+    expectCompensation(0, 0, 0.0f, 0);
+
+    // A flat matrix gives a zero-width fade at the first layer.
+    Printer::doHeatBedZCompensation = true;
+    g_nDigitZCompensationDigits_active = false;
+    g_ZCompensationMax = g_offsetZCompensationSteps;
+    Printer::currentXYSteps[X_AXIS] = 6816; // Interpolated bed depth of 250 steps.
+    layers.resetTracking();
+    planMove(256, true);
+    assert(layers.fadeStartSteps() == 256 && layers.fadeEndSteps() == 256);
+    expectCompensation(256, 250 + scaledOffset, 0.0f, 1);
 }
 
 void layerScaleTransitions() {
@@ -774,6 +843,8 @@ int main(int argc, char** argv) {
         layerFadeAndZHop();
     else if (!std::strcmp(argv[1], "layer-scale"))
         layerScaleTransitions();
+    else if (!std::strcmp(argv[1], "compensation-bounds"))
+        compensationBoundaries();
     else
         return 1;
     std::printf("Print lifecycle replay passed (%s)\n", argv[1]);

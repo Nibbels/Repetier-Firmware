@@ -519,7 +519,6 @@ extern short testExtruderTemperature(void);
 extern short testHeatBedTemperature(void);
 extern long getZMatrixDepth(long x, long y);
 extern long getZMatrixDepth_CurrentXY(void);
-extern void recalculateHeatBedZCompensation(void);
 
 extern void switchActiveHeatBed(char newActiveHeatBed);
 

@@ -26,6 +26,8 @@ Firmware changes are tracked on `ai-firmware-review` against `community_developm
 
 The four AVR builds matched the previous revision's CPU cycles and Z step counts in nine instruction traces per build. These cover idle compensation, queued X and Z, opposing Z correction and direct moves. Flash changed by −30 bytes on RF1000, +60 on RF2000 and RF2000v2, and +66 on the RF2000 X44 retrofit. RF1000 uses four fewer bytes of global SRAM. Physical tests remain open.
 
+- [x] **Extract the bed correction and ECMP calculation.** The foreground supplies nominal Z, layer geometry and a matrix reader to `BedCompensation`. The replay checks target steps, ECMP and matrix reads at negative and zero Z, both fade boundaries, a flat matrix and disabled compensation. The active Digit-Z replay covers both sensor polarities and the 600-step limit. A regression probe reproduces the early ECMP write on negative Z in `0383de5` and checks publication under interrupt protection on the new revision. All four builds use 46 fewer flash bytes, and the 36 instruction traces match the previous cycles and Z step counts. Physical tests remain open. [Calculation](../Repetier/BedCompensation.h) · [Host replay](../tests/pause-sense-offset.py)
+
 ### Z travel and scanning
 
 - [x] **Give Z step execution one owner.** `ZMotion` tracks nominal progress, direct displacement, scan travel, requested and applied correction, missed queued steps and emitted motor steps. The host replay covers endstop clipping, overtravel repayment, opposing correction, compensation waits, scan retreat and microstep scale changes. Run `python3 tests/z-motion.py` for all three model policies. [Execution and limits](development-roadmap.md#z-step-execution)

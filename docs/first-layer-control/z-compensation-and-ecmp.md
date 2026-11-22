@@ -4,11 +4,11 @@
 
 ## Bed-scan profile vs absolute offset
 
-`recalculateHeatBedZCompensation()` reads the interpolated XY bed matrix and calculates an additional Z motor target. Define `B(x,y)` as matrix correction and `O=g_offsetZCompensationSteps` as the common compensation offset. The regions use the executing nominal Z in motor steps and the bounds from `Printer::layers`.
+`BedCompensation::calculate()` takes the executing nominal Z, the planned layer and fade bounds, the matrix maximum and a reader for the local XY bed depth. It returns a Z correction in steps and the geometric extra extrusion per queued E step. Define `B(x,y)` as the local matrix correction and `O=g_offsetZCompensationSteps` as the common bed-profile offset.
 
 | Height | Bed-profile behavior |
 | --- | --- |
-| `Z <= fadeStartSteps()` | Full XY-dependent scanned-bed correction to preserve nozzle gap |
+| `0 <= Z <= fadeStartSteps()` | Full XY-dependent scanned-bed correction to preserve nozzle gap |
 | `fadeStartSteps() < Z < fadeEndSteps()` | Linearly fade XY-dependent variation toward baseline |
 | `Z >= fadeEndSteps()` | Common bed-profile offset |
 
@@ -18,7 +18,7 @@ In the middle region the conceptual calculation from source is:
 C(x,y,Z) = O + (B(x,y)-O) * (Zmax-Z)/(Zmax-Zmin)
 ```
 
-Above the fade end, the target still includes `Printer::zOffset.effectiveSteps()` and any active Digit-Z correction. Physical endstop limits continue to apply.
+The matrix reader runs within the bed-profile region and during the last ECMP crossing. Later layers use the common offset. At `Z = 0` the full-profile region adds a 13-step clearance. Negative nominal Z uses the common offset plus that clearance. `recalculateZCompensation()` adds effective Z offset and active Digit-Z to the result and publishes the Z target and ECMP ratio together under interrupt protection. Physical endstop limits apply to the resulting motion.
 
 ## Why g_min and g_max are dynamic
 
@@ -54,7 +54,8 @@ An untested fork's RF2000v2-only reset-after-M3912 is not backed by model-specif
 ## Source
 
 - [Layer detector and dynamic boundaries](../../Repetier/PrintLayers.h)
-- [Fade interpolation, material correction, offsets](../../Repetier/RF.cpp#L2032)
+- [Fade interpolation and material correction](../../Repetier/BedCompensation.h)
+- [Offset composition and publication](../../Repetier/RF.cpp#L2033)
 - [Stepper E compensation](../../Repetier/motion.cpp#L1093)
 - [M3912 reset](../../Repetier/RF.cpp#L5608)
 - [Z-stepper reset](../../Repetier/Printer.h#L355-L371)

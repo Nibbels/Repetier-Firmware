@@ -53,6 +53,9 @@
     <ClInclude Include="Printer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="BedCompensation.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="PrintLayers.h">
       <Filter>Header Files</Filter>
     </ClInclude>

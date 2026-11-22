@@ -17,6 +17,7 @@
 
 #include <Arduino.h> // capital A so it is error prone on case-sensitive filesystems
 #include "Repetier.h"
+#include "BedCompensation.h"
 #include <Wire.h>
 
 FSTRINGVALUE(ui_text_error, UI_TEXT_ERROR)
@@ -2029,104 +2030,28 @@ long getZMatrixDepth_CurrentXY(void) {
         Printer::currentXYSteps[Y_AXIS]);
 }
 
-void recalculateHeatBedZCompensation(void) {
-    long nNeededZCompensation = 0;
-    float nNeededZEPerc = 0.0f;
-
+void recalculateZCompensation(void) {
+    BedCompensation::Result result{0, 0.0f};
     if (Printer::doHeatBedZCompensation) {
-        const long nominalZSteps = Printer::zMotion.nominalSteps();
         const auto& layers = Printer::layers;
-        const long fadeStartSteps = layers.fadeStartSteps();
-        const long fadeEndSteps = layers.fadeEndSteps();
-        const long previousLayerSteps = layers.previousLayerSteps();
-        const long currentLayerSteps = layers.currentLayerSteps();
-        if (nominalZSteps >= 0) {
-            // check whether we have to perform a compensation in z-direction
-            if (nominalZSteps < fadeEndSteps) {
-                nNeededZCompensation = getZMatrixDepth_CurrentXY(); //Das ist hier der Zeiger auf den interpolierten Z-Matrix-Wert.
-
-                if (nominalZSteps <= fadeStartSteps) {
-                    // the printer is very close to the surface - we shall print a layer of exactly the desired thickness
-                    if (nominalZSteps == 0) {
-                        nNeededZCompensation += 13; //G1 Z0 shall not hit the bed: +5um -> this is better than not compensating at all because it makes tests weired.
-                    }
-                    //nNeededZEPerc = 0.0f;
-                } else {
-                    long zl;
-                    long div;
-                    // Compensate Extrusion within ZCMP: Add and sum up this amount for every step extruded in move interrupt. Extrude the step if we have some full >=1.0 in interrupt.
-                    if (previousLayerSteps < fadeStartSteps && fadeStartSteps < currentLayerSteps) {
-                        //geschmälert um Anteil innerhalb CMP-Ausschleichbereich:
-                        zl = (g_offsetZCompensationSteps - nNeededZCompensation) * (currentLayerSteps - fadeStartSteps);
-                        div = (fadeEndSteps - fadeStartSteps) * (currentLayerSteps - previousLayerSteps);
-                    } else {
-                        zl = (g_offsetZCompensationSteps - nNeededZCompensation);
-                        div = (fadeEndSteps - fadeStartSteps);
-                    }
-                    if (div && zl) {
-                        nNeededZEPerc = float(zl) / float(div);
-                    } else {
-                        nNeededZEPerc = 0.0f;
-                    }
-                    // the printer is already a bit away from the surface - do the actual compensation -> Hier ist nNeededZCompensation dann nicht mehr der Zeiger auf die Oberfläche, sondern der Zeiger auf die kompensationshöhe:
-                    nNeededZCompensation = ((nNeededZCompensation - g_offsetZCompensationSteps) * (fadeEndSteps - nominalZSteps))
-                        / (fadeEndSteps - fadeStartSteps);
-                    nNeededZCompensation += g_offsetZCompensationSteps;
-                }
-            } else {
-                // after the first layers, only the static offset to the surface must be compensated
-                nNeededZCompensation = g_offsetZCompensationSteps;
-
-                if (previousLayerSteps < fadeEndSteps && fadeEndSteps <= currentLayerSteps) {
-                    //Volle E-Kompensation: geschmälert um Anteil innerhalb CMP-Ausschleichbereich:
-                    long zl = (g_offsetZCompensationSteps - getZMatrixDepth_CurrentXY()) * (fadeEndSteps - previousLayerSteps);
-                    long div = (fadeEndSteps - fadeStartSteps) * (currentLayerSteps - previousLayerSteps);
-                    if (div && zl) {
-                        nNeededZEPerc = float(zl) / float(div);
-                    } else {
-                        nNeededZEPerc = 0.0f;
-                    }
-                    /*}else{
-                        nNeededZEPerc = 0.0f;*/
-                }
-            }
-        } else {
-            //Gcode Z < 0 soll 5um überhalb des top matrix elements bleiben: diese anweisungen sind generell für uns sinnlos bzw. schädlich.
-            nNeededZCompensation = g_offsetZCompensationSteps + 13;
-            Printer::compensatedPositionOverPercE = 0.0f;
-        }
-
-        nNeededZCompensation += Printer::zOffset.effectiveSteps();
-
-        //Etwa 5500 digits verursachen 0.05 mm tiefere nozzle: ca. 0.00001 = 1/100.000 mm pro digit.
-        //0.00001 ist vermutlich konservativ bis ok.
-        //Je höher die Kraft nach unten, desto mehr muss das Bett ausweichen: Z nach oben/+.
-
-        //VORSICHT: Die Messzellen könnten falsch verbaut sein, darum Digits immer positiv nutzen. Negative Digits würden sowieso in die falsche Richtung tunen. Ein kleiner Versatz der Nullposition wäre beim Druck egal.
-        //long nNeededDigitZCompensationSteps = (long)(fabs(g_nDigitZCompensationDigits) * (float)Printer::axisStepsPerMM[Z_AXIS] * 0.00001f);
-        if (g_nDigitZCompensationDigits_active) {
-            long nNeededDigitZCompensationSteps = abs((long)(g_nDigitZCompensationDigits * (float)Printer::axisStepsPerMM[Z_AXIS]));
-            nNeededDigitZCompensationSteps >>= 17; // geteilt durch 131072 statt errechnet ca. 110000 .. wäre 18% überkompensiert aber verdammt schnell gerechnet. evtl. ist überkompensation nicht so schlecht... höhere digits höhere schwankungen, das ist sowieso nur eine ganz grob vermessene kompensation, etwas mehr platz kann für die digits eine dämpfende wirkung haben.
-            //sign-extension kann hier, da positiv kein problem sein.: unsigned(x) >> y
-            //g_nDigitZCompensationDigits -> max. 32768, axisStepsPerMM[Z_AXIS] -> ca. 2560, also passts in long. -> ca. max 640 steps.
-            nNeededDigitZCompensationSteps = constrain(nNeededDigitZCompensationSteps, 0, 600);
-
-            nNeededZCompensation += nNeededDigitZCompensationSteps;
-            /*
-            }else{
-                //wie bisher ohne additionszusatz
-            */
-        }
-
-    } else {
-        // Nicht zCMP Offsets nutzen, wenn nur gehomed, weil das alle Scans stören kann, nur weil eine falsche Matrix geladen ist. Security hin oder her.
+        const BedCompensation::Geometry geometry{
+            Printer::zMotion.nominalSteps(),
+            layers.fadeStartSteps(),
+            layers.fadeEndSteps(),
+            layers.previousLayerSteps(),
+            layers.currentLayerSteps(),
+            g_offsetZCompensationSteps,
+        };
+        result = BedCompensation::calculate(geometry, [] { return getZMatrixDepth_CurrentXY(); });
+        result.zCorrectionSteps += Printer::zOffset.effectiveSteps();
+        if (g_nDigitZCompensationDigits_active)
+            result.zCorrectionSteps += BedCompensation::digitZSteps(g_nDigitZCompensationDigits, Printer::axisStepsPerMM[Z_AXIS]);
     }
 
-    InterruptProtectedBlock noInts;
-    Printer::zMotion.requestCorrection(nNeededZCompensation);
-    Printer::compensatedPositionOverPercE = nNeededZEPerc;
-    noInts.unprotect();
-} // recalculateHeatBedZCompensation
+    InterruptProtectedBlock lock;
+    Printer::zMotion.requestCorrection(result.zCorrectionSteps);
+    Printer::compensatedPositionOverPercE = result.extraExtrusionPerStep;
+}
 
 void showAbortScanReason(const void* scanName, char abortScanIdentifier) {
     switch (abortScanIdentifier) {
@@ -3118,10 +3043,6 @@ unsigned short readWord24C256(int addressI2C, unsigned int addressEEPROM) {
     return data + Temp;
 
 } // readWord24C256
-
-void recalculateZCompensation(void) {
-    recalculateHeatBedZCompensation();
-} // recalculateZCompensation
 
 namespace {
 struct SenseOffsetSamples {

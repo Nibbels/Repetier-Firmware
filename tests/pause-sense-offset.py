@@ -60,7 +60,7 @@ def main():
         ], check=True)
         for scenario in (
             "park", "short-pause", "interrupt", "panel", "return", "jog", "cancel", "queue", "home", "layer-fade",
-            "layer-scale",
+            "layer-scale", "compensation-bounds",
         ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
 

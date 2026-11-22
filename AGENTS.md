@@ -16,6 +16,8 @@ This is shared AVR/ATmega2560 Repetier firmware for **RF1000, RF2000 and RF2000v
 
 **Z motion.** `Printer::zMotion` owns the execution counters and travel rules. Use its operations for queued, direct, scan and compensation steps. A clipped nominal step or a step balanced by compensation can advance the path without an emitted pulse. Run `python3 tests/z-motion.py` when editing these paths. [Execution model](docs/development-roadmap.md#z-step-execution)
 
+**Bed compensation.** `BedCompensation` calculates the bed-profile correction and ECMP ratio from executing nominal Z, planned layer bounds and a matrix reader. `recalculateZCompensation()` adds the effective offset and active Digit-Z, then publishes the Z target and ECMP ratio together under interrupt protection. [Calculation and test cases](docs/first-layer-control/z-compensation-and-ecmp.md)
+
 **Pause and stop.** `Printer::pause` owns the pause phase and return position. The queue, the panel and the DMS handler use its request and query methods. `Printer::printStop` owns timed abort cleanup and command admission during a stop. Run `python3 tests/pause-sense-offset.py` when changing these transitions. [Pause and stop transitions](docs/development-roadmap.md#pause-and-stop-transitions)
 
 **Print input.** USB over UART0 is the sole external G-code input. All three models buffer 24 planned moves. The SD removal record links to the commit containing the full deletion and to the last revision with the card implementation. [SD support removal](docs/maintenance-tasks.md#sd-support-removal)
