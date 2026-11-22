@@ -863,13 +863,13 @@ long PrintLine::performQueueMove() {
 
         case TASK_PAUSE_PRINT: {
             removeCurrentLineForbidInterrupt();
-            requestPrintPause(false);
+            Printer::pause.request(PrintPause::Destination::InPlace);
             return 1000;
         }
 
         case TASK_PAUSE_PRINT_AND_MOVE: {
             removeCurrentLineForbidInterrupt();
-            requestPrintPause(true);
+            Printer::pause.request(PrintPause::Destination::Park);
             return 1000;
         }
 
@@ -1115,7 +1115,7 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
                     Extruder::step();
                 }
                 if (!forQueue)
-                    g_nContinueExtruderSteps -= dir;
+                    Printer::pause.recordDirectExtrusion(dir);
 
                 // This Block adds % parts of steps to extrusion because of higher layer heights caused by ZCMP
                 // We calculated compensatedPositionOverPercE as a result of streched layer heights. Here we add material to the layer to compensate stretching.

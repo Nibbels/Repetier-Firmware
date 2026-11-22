@@ -17,21 +17,30 @@ def main():
     rf = (firmware / "RF.cpp").read_text(encoding="utf-8")
     rf_header = (firmware / "RF.h").read_text(encoding="utf-8")
     ui = (firmware / "ui.cpp").read_text(encoding="utf-8")
+    ui_header = (firmware / "ui.h").read_text(encoding="utf-8")
     motion = (firmware / "motion.h").read_text(encoding="utf-8")
+    printer = (firmware / "Printer.cpp").read_text(encoding="utf-8")
+    pause = (firmware / "PrintPause.cpp").read_text(encoding="utf-8")
+    stop = (firmware / "PrintStop.cpp").read_text(encoding="utf-8")
     fragments = [
-        section(rf_header, "#define UI_ACTION_RF_HEAT_BED_UP", "#define UI_ACTION_RF_EXTRUDER_RETRACT"),
-        section(motion, "#define DIRECT_PREPARED_STOPPABLE", "\n")
-        + "\n" + section(motion, "#define DIRECT_RUNNING_STOPPABLE", "\n"),
-        section(rf, "volatile long g_nPauseSteps[4]", "\n#ifdef RGB_LIGHT_R_PIN"),
-        section(rf_header, "inline bool isPauseSettled()", "\nextern long g_nEmergencyPauseDigitsMin"),
+        section(rf_header, "#define UI_ACTION_RF_HEAT_BED_UP", "#define UI_ACTION_RF_PAUSE"),
+        section(ui_header, "#define UI_FLAG_FAST_KEY_ACTION", "#define UI_FLAG_KEY_TEST_RUNNING")
+        + section(ui_header, "#define UI_FLAG_KEY_TEST_RUNNING", "\n"),
+        section(motion, "#define DIRECT_IDLE", "#define FOR_DIRECT"),
+        section(motion, "    static bool hasStoppableDirectMove()", "\n\n")
+        .replace("    static bool hasStoppableDirectMove()", "bool PrintLine::hasStoppableDirectMove()", 1),
+        section(rf, "long g_nEmergencyPauseDigitsMin", "\n#ifdef RGB_LIGHT_R_PIN"),
         section(rf, "static short readStrainGauge()", "\nvoid adjustPressureLimits("),
         section(rf, "long getZMatrixDepth_CurrentXY(", "\nvoid showAbortScanReason("),
-        section(rf, "void handleStrainGaugeFeatures(", "\nvoid handlePauseTime("),
-        section(rf, "void requestPrintPause(bool moveAway) {", "\nvoid loopFeatures("),
-        section(rf, "static void waitForPauseTransition()", "\nvoid setExtruderCurrent("),
+        section(rf, "void handleStrainGaugeFeatures(", "\nvoid handleScanWorkTasks("),
+        pause.removeprefix('#include "Repetier.h"\n'),
+        stop.removeprefix('#include "Repetier.h"\n'),
+        section(printer, "void Printer::stopPrint()", "\n#define START_EXTRUDER_CONFIG"),
         section(rf, "void moveZAction(int8_t direction) {", "} // moveZAction") + "}",
-        "void extrudeFromPanel() { switch (UI_ACTION_RF_EXTRUDER_OUTPUT) {\n"
-        + section(ui, "case UI_ACTION_RF_EXTRUDER_OUTPUT:", "case UI_ACTION_RF_EXTRUDER_RETRACT:")
+        section(ui, "void UIDisplay::pressPlay()", "\nvoid UIDisplay::mainSwitchCase("),
+        section(ui, "void UIDisplay::fastAction()", "} // fastAction") + "}",
+        "void extrudeFromPanel() { const int action = UI_ACTION_RF_EXTRUDER_OUTPUT; switch (action) {\n"
+        + section(ui, "case UI_ACTION_RF_EXTRUDER_OUTPUT:", "case UI_ACTION_RF_PAUSE:")
         + "} }",
     ]
     with TemporaryDirectory(prefix="rfx-pause-replay-") as directory:
@@ -43,8 +52,8 @@ def main():
             "-I", str(firmware), "-I", str(build), str(tests / "pause-sense-offset.cpp"),
             "-o", str(executable),
         ], check=True)
-        for scenario in ("park", "short-pause", "interrupt"):
-            subprocess.run([str(executable), scenario], check=True)
+        for scenario in ("park", "short-pause", "interrupt", "panel", "return", "jog", "cancel", "queue"):
+            subprocess.run([str(executable), scenario], check=True, timeout=10)
 
 
 if __name__ == "__main__":

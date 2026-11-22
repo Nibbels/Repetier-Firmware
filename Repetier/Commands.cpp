@@ -41,7 +41,7 @@ void Commands::commandLoop() {
         Commands::checkForPeriodicalActions(Processing); //check heater and other stuff every n milliseconds
     } else {
         enum FirmwareState state = NotBusy;
-        if (g_pauseMode) {
+        if (Printer::pause.isPaused()) {
             state = Paused;
         }
 
@@ -440,8 +440,8 @@ void Commands::processMCode(GCode* com) {
     }
     case 24: // M24 - Start SD print
     {
-        if (g_pauseMode) {
-            continuePrint();
+        if (Printer::pause.isPaused()) {
+            uid.pressPlay();
         } else {
             sd.startPrint();
         }
@@ -449,8 +449,7 @@ void Commands::processMCode(GCode* com) {
     }
     case 25: // M25 - Pause (SD) print
     {
-        queueTask(TASK_PAUSE_PRINT);
-        Commands::waitUntilEndOfAllMoves(); //M400 (normal gcode wait)
+        Printer::pause.queueRequest(PrintPause::Destination::InPlace);
         break;
     }
     case 26: // M26 - Set SD index

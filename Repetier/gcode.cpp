@@ -260,7 +260,7 @@ void GCode::checkAndPushCommand() {
 } // checkAndPushCommand
 
 void GCode::pushCommand() {
-    if (g_uBlockCommands)
+    if (Printer::printStop.commandsBlocked())
         return; // no further commands from the SD card/Host shall be processed
 
     if (++bufferWriteIndex >= GCODE_BUFFER_SIZE)

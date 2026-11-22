@@ -310,7 +310,7 @@ void Extruder::selectExtruderById(uint8_t extruderId) {
     }
 
     g_nManualSteps[E_AXIS] = (unsigned short)lroundf(Printer::axisStepsPerMM[E_AXIS] * DEFAULT_MANUAL_MM_E);
-    g_nPauseSteps[E_AXIS] = long(Printer::axisStepsPerMM[E_AXIS] * SCRIPT_RETRACT_MM);
+    Printer::pause.setParkSteps(E_AXIS, long(Printer::axisStepsPerMM[E_AXIS] * SCRIPT_RETRACT_MM));
 
     Printer::maxExtruderSpeed = (uint8_t)floor(HAL::maxExtruderTimerFrequency() / (Extruder::current->maxFeedrate * Extruder::current->stepsPerMM));
     if (Printer::maxExtruderSpeed > 15)
@@ -780,7 +780,7 @@ void TemperatureController::waitForTargetTemperature(uint8_t plus_temp_tolerance
     g_uStartOfIdle = 0; //start waitForTargetTemperature
     while (true) {
         Commands::checkForPeriodicalActions(WaitHeater);
-        if (resumingPause && g_pauseStatus != PAUSE_STATUS_HEATING)
+        if (resumingPause && !Printer::pause.isReheating())
             return;
         if (fabs(targetTemperatureC - currentTemperatureC) <= TEMP_TOLERANCE + plus_temp_tolerance)
             break;

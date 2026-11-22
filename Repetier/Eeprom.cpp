@@ -217,7 +217,7 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
         //setMotorCurrent( stp+1, uMotorCurrentUse[stp] ); //driver ist 1-basiert //hier nur config laden
     }
 
-    restoreDefaultPauseParkingOffsets();
+    Printer::pause.restoreDefaultParking();
 
     Printer::updateDerivedParameter();
     Extruder::selectExtruderById(Extruder::current->id);

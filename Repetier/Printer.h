@@ -22,6 +22,8 @@
 
 #include "ZOffset.h"
 #include "ZMotion.h"
+#include "PrintPause.h"
+#include "PrintStop.h"
 
 // ##########################################################################################
 // ##   status flags
@@ -107,6 +109,8 @@ public:
     static float filamentPrinted;           // mm of filament printed since counting started
     static ZOffset zOffset;
     static ZMotion zMotion;
+    static PrintPause pause;
+    static PrintStop printStop;
     static char ZMode;                      // Z Scale
     static char moveMode[3];                // move mode which is applied within the Position X/Y/Z menus
     static bool moveKosys;                  // true = GCode, false = DirectMove / OffsetMove
@@ -213,7 +217,7 @@ public:
         Printer::currentXSteps = 0;
         Printer::resetDirectAxis(X_AXIS);
 
-        killPausePrint();
+        pause.cancel();
 
         noInts.unprotect(); //HAL::allowInterrupts();
 
@@ -237,7 +241,7 @@ public:
         Printer::currentYSteps = 0;
         Printer::resetDirectAxis(Y_AXIS);
 
-        killPausePrint();
+        pause.cancel();
 
         noInts.unprotect(); //HAL::allowInterrupts();
 
@@ -267,7 +271,7 @@ public:
         Printer::queuePositionZLayerLast = 0;
         Printer::queuePositionZLayerCurrent = 0;
 
-        killPausePrint();
+        pause.cancel();
 
         noInts.unprotect();
 
@@ -425,15 +429,15 @@ public:
 
     static inline void setHomed(int8_t x = -1, int8_t y = -1, int8_t z = -1) {
         if (x != -1) {
-            x = (g_uBlockCommands ? false : x); // block commands while homing does break moves so no safe sethome is possible
+            x = printStop.commandsBlocked() ? false : x; // A stop can interrupt homing.
             flag3 = (x ? flag3 | PRINTER_FLAG3_X_HOMED : flag3 & ~PRINTER_FLAG3_X_HOMED);
         }
         if (y != -1) {
-            y = (g_uBlockCommands ? false : y); // block commands while homing does break moves so no safe sethome is possible
+            y = printStop.commandsBlocked() ? false : y;
             flag3 = (y ? flag3 | PRINTER_FLAG3_Y_HOMED : flag3 & ~PRINTER_FLAG3_Y_HOMED);
         }
         if (z != -1)
-            zMotion.setHomed(!g_uBlockCommands && z);
+            zMotion.setHomed(!printStop.commandsBlocked() && z);
         if (x == false)
             Printer::outOfPrintVolume[X_AXIS] = 0;
         if (y == false)

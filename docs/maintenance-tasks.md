@@ -36,6 +36,8 @@ Firmware changes are tracked on `ai-firmware-review` against `community_developm
 
 ### Pause and resume
 
+- [x] **Give the pause and stop sequences explicit state owners.** The replay runs the production transitions for panel Pause and Play, queued admission, clipped XY/Z/E returns, an overlapping jog release, cancellation during parking, reheating and returning, and timed stop cleanup. It also exercises standby and stop across clock rollover. Run `python3 tests/pause-sense-offset.py`. Physical verification remains open. [Pause and stop transitions](development-roadmap.md#pause-and-stop-transitions)
+
 - [x] **Suspend automatic SenseOffset learning during pause.** The previous handler could add 10 µm of clearance from pre-pause samples after the DMS reading fell to zero. A pause now invalidates the learning window as soon as it is accepted. The host replay tests park, jog, manual extrusion, reheating, return at equal force, a pause between polls and a queued pause during the offset update. It also verifies live Digit-Z response. Physical verification remains open. [SenseOffset during pause](first-layer-control/sense-offset.md#pause-and-resume)
 
 The updated host replay covers early Pause and Play on pressure, queued and panel requests, ordinary and overlapping jog releases, a blocked return and retry, cancellation, and the two-press wake and resume sequence. The step replay covers clipped direct moves, preservation of queued overtravel, and direct extrusion with the pressure guard. AVR builds passed for all three models. Physical verification remains open.

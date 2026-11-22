@@ -642,7 +642,7 @@ ISR(TIMER1_COMPA_vect) {
         return;
     }
 
-    if (PrintLine::hasLines() && !g_pauseMode) {
+    if (PrintLine::hasLines() && Printer::pause.allowsQueueAdvance()) {
         setTimer(PrintLine::performQueueMove());
         sbi(TIMSK1, OCIE1A);
 

@@ -64,23 +64,6 @@ constexpr unsigned int stepperEnableDelayMs = 25;
 #define TASK_ENABLE_SENSE_OFFSET 100
 #define TASK_UNLOCK_DISPLAY_MSG 101
 
-//no pause
-#define PAUSE_STATUS_NONE 0 // we are not paused at the moment
-//pause changing
-#define PAUSE_STATUS_GOTO_PAUSE 1          // we are going to pause the print
-#define PAUSE_STATUS_GOTO_MOVED 2          // we are going to move the head of a paused print to pause position
-#define PAUSE_STATUS_GOTO_PAUSE_AND_MOVE 3 // we are going to pause the print and move the head to pause position
-#define PAUSE_STATUS_HEATING 4             // we are heating up again.
-#define PAUSE_STATUS_GOTO_CONTINUE 5       // we are going to continue the print (= moving to the continue position)
-//finished pausing
-#define PAUSE_STATUS_PAUSING 6        // we are moving rightnow
-#define PAUSE_STATUS_PAUSED 7         // we have paused the print (= pause position reached)use position reached)
-#define PAUSE_STATUS_PAUSED_STANDBY 8 // we have paused the print and dropped temps
-
-#define PAUSE_MODE_NONE 0             // we are not paused at the moment
-#define PAUSE_MODE_PAUSED 1           // stopp at the last printing position
-#define PAUSE_MODE_PAUSED_AND_MOVED 2 // move away from the last printing position
-
 #define RGB_MODE_OFF 0
 #define RGB_MODE_WHITE 1
 #define RGB_MODE_AUTOMATIC 2

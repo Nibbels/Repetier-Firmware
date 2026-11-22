@@ -1071,7 +1071,7 @@ void UIDisplay::parse(char* txt, bool ram) {
                     printCols[col++] = 'A';
                 if (col < MAX_COLS)
                     printCols[col++] = ' ';
-                if (g_pauseStatus == PAUSE_STATUS_PAUSED)
+                if (Printer::pause.isWarmPause())
                     addStringP(PSTR(UI_TEXT_PAUSED));
                 else
                     addInt((int)Printer::motorCurrent[E_AXIS], 3);
@@ -1082,7 +1082,7 @@ void UIDisplay::parse(char* txt, bool ram) {
                     printCols[col++] = 'A';
                 if (col < MAX_COLS)
                     printCols[col++] = ' ';
-                if (g_pauseStatus == PAUSE_STATUS_PAUSED)
+                if (Printer::pause.isWarmPause())
                     addStringP(PSTR(UI_TEXT_PAUSED));
                 else
                     addInt((int)Printer::motorCurrent[E_AXIS + 1], 3);
@@ -1100,7 +1100,7 @@ void UIDisplay::parse(char* txt, bool ram) {
                 } else {
 #if SDSUPPORT
                     if (sd.sdactive && sd.sdmode) {
-                        if (g_pauseMode) {
+                        if (Printer::pause.isPaused()) {
                             // do not show the printing progress while we are paused
                             parse(statusMsg, true);
                         } else {
@@ -1487,7 +1487,7 @@ void UIDisplay::parse(char* txt, bool ram) {
             if (c2 == 'M') // %sM : State of the sensible offset
             {
                 if (Printer::doHeatBedZCompensation && g_nSensiblePressureDigits > 0) {
-                    if (g_nSensiblePressure1stMarke && !g_pauseMode)
+                    if (g_nSensiblePressure1stMarke && Printer::pause.allowsQueueAdvance())
                         addStringP(PSTR("^"));
                     else
                         addStringP(PSTR("@"));
@@ -1596,7 +1596,7 @@ void UIDisplay::parse(char* txt, bool ram) {
                     break;
                 }
                 }
-                if (Printer::moveMode[X_AXIS] == MOVE_MODE_SINGLE_MOVE || Printer::moveKosys == KOSYS_DIRECTOFFSET || g_pauseMode /*we are in pause position menu*/) {
+                if (Printer::moveMode[X_AXIS] == MOVE_MODE_SINGLE_MOVE || Printer::moveKosys == KOSYS_DIRECTOFFSET || Printer::pause.isPaused()) {
                     addStringP(PSTR(" ("));
                     addStringP(PSTR(UI_TEXT_MOVE_MODE_OFFSET));
                     addStringP(PSTR(")"));
@@ -1632,7 +1632,7 @@ void UIDisplay::parse(char* txt, bool ram) {
                     break;
                 }
                 }
-                if (Printer::moveMode[Y_AXIS] == MOVE_MODE_SINGLE_MOVE || Printer::moveKosys == KOSYS_DIRECTOFFSET || g_pauseMode /*we are in pause position menu Y*/) {
+                if (Printer::moveMode[Y_AXIS] == MOVE_MODE_SINGLE_MOVE || Printer::moveKosys == KOSYS_DIRECTOFFSET || Printer::pause.isPaused()) {
                     addStringP(PSTR(" ("));
                     addStringP(PSTR(UI_TEXT_MOVE_MODE_OFFSET));
                     addStringP(PSTR(")"));
@@ -1645,7 +1645,7 @@ void UIDisplay::parse(char* txt, bool ram) {
             }
             if (c2 == 'z') // %pz: mode of the Position Z menu
             {
-                if (g_pauseMode /*we are in pause position menu Z*/) {
+                if (Printer::pause.isPaused()) {
                     addStringP(PSTR(UI_TEXT_MOVE_MODE_SINGLE_MOVE));
                 } else {
                     switch (Printer::moveMode[Z_AXIS]) {
@@ -1675,7 +1675,6 @@ void UIDisplay::parse(char* txt, bool ram) {
 
                 // Z axis is always direct offset move because gcode does not make sense here.
 
-                //if (Printer::moveMode[Z_AXIS] == MOVE_MODE_SINGLE_MOVE || Printer::moveKosys == KOSYS_DIRECTOFFSET || g_pauseMode /*we are in pause position menu Z*/)
                 //{
                 addStringP(PSTR(" ("));
                 addStringP(PSTR(UI_TEXT_MOVE_MODE_OFFSET));
@@ -3278,7 +3277,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
     case UI_ACTION_MICROSTEPS_XY:
     case UI_ACTION_MICROSTEPS_Z:
     case UI_ACTION_MICROSTEPS_E: {
-        if (!Printer::isPrinting() && !PrintLine::linesCount && g_pauseStatus == PAUSE_STATUS_NONE) {
+        if (!Printer::isPrinting() && !PrintLine::linesCount && Printer::pause.allowsQueueAdvance()) {
             Printer::disableAllSteppersNow(); //Stepper und Homing ausmachen.
                                               //We cannot use the old coordinates anymore.
 
@@ -3334,7 +3333,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
                     case Y_AXIS:
                     case Z_AXIS: {
                         Printer::axisStepsPerMM[i] *= stepsmm_korrekturfactor;
-                        g_nPauseSteps[i] *= stepsmm_korrekturfactor;
+                        Printer::pause.scaleParkSteps(i, stepsmm_korrekturfactor);
                         if (i == Z_AXIS) {
                             Printer::zMotion.rescaleMotorReference(stepsmm_korrekturfactor);
                             g_maxZCompensationSteps *= stepsmm_korrekturfactor; //preadjust max compensation steps for z-CMP (gets autoadjusted but the user might override autoadjustement)
@@ -3377,6 +3376,22 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
     }
     }
 } //changeSwitchCase
+
+void UIDisplay::pressPlay() {
+    static uint8_t idlePlayCount = 0;
+    if (Printer::pause.isPaused()) {
+        if (Printer::pause.resume())
+            idlePlayCount = 0;
+        return;
+    }
+
+    if (!g_nHeatBedScanStatus && ++idlePlayCount >= 10) {
+        idlePlayCount = 0;
+        Com::printFLN(PSTR("LCD re-init"));
+        showInformation(PSTR(UI_TEXT_MANUAL), PSTR(UI_TEXT_LCD_CIRCUIT), PSTR(UI_TEXT_RESET));
+        initializeLCD();
+    }
+}
 
 void UIDisplay::mainSwitchCase(int action) {
     switch (action) {
@@ -3430,50 +3445,22 @@ void UIDisplay::mainSwitchCase(int action) {
         }
         break;
     }
-    case UI_ACTION_RF_EXTRUDER_OUTPUT: {
-        // show that we are active
-        previousMillisCmd = HAL::timeInMilliseconds(); //prevent inactive shutdown of steppers/temps
-
-        {
-            if (uid.menuLevel == 0 && uid.menuPos[0] == 1) { //wenn im Mod-Menü für Z-Offset/Matrix Sense-Offset/Limiter, dann anders!
-                                                             //we are in the Mod menu
-                                                             //so dont retract, change the speed of the print to a lower speed instead of retracting:
-                                                             //limits handled by change-function!
-                Commands::changeFeedrateMultiply(Printer::feedrateMultiply + 1);
-            } else if (!g_pauseMode || (isPauseSettled() && !PrintLine::direct.task)) {
-                Printer::offsetRelativeStepsCoordinates(0, 0, 0, int32_t(g_nManualSteps[E_AXIS]));
-
-                //In case of double pause and in case we tempered with the retract, we dont want to drive the E-Axis back to some old location - that much likely causes emergency block.
-                g_nContinueExtruderSteps = 0;
-            }
-        }
-        break;
-    }
+    case UI_ACTION_RF_EXTRUDER_OUTPUT:
     case UI_ACTION_RF_EXTRUDER_RETRACT: {
-        // show that we are active
-        previousMillisCmd = HAL::timeInMilliseconds(); //prevent inactive shutdown of steppers/temps
-
-        {
-            if (uid.menuLevel == 0 && uid.menuPos[0] == 1) { //wenn im Mod-Menü für Z-Offset/Matrix Sense-Offset/Limiter, dann anders!
-                                                             //we are in the Mod menu
-                                                             //so dont retract, change the speed of the print to a lower speed instead of retracting:
-                                                             //limits handled by change-function!
-                Commands::changeFeedrateMultiply(Printer::feedrateMultiply - 1);
-            } else if (!g_pauseMode || (isPauseSettled() && !PrintLine::direct.task)) {
-                Printer::offsetRelativeStepsCoordinates(0, 0, 0, -1 * int32_t(g_nManualSteps[E_AXIS]));
-
-                //In case of double pause and in case we tempered with the retract, we dont want to drive the E-Axis back to some old location - that much likely causes emergency block.
-                g_nContinueExtruderSteps = 0;
-            }
-        }
+        previousMillisCmd = HAL::timeInMilliseconds();
+        const int8_t direction = action == UI_ACTION_RF_EXTRUDER_OUTPUT ? 1 : -1;
+        if (uid.menuLevel == 0 && uid.menuPos[0] == 1)
+            Commands::changeFeedrateMultiply(Printer::feedrateMultiply + direction);
+        else
+            Printer::pause.extrudeManually(int32_t(g_nManualSteps[E_AXIS]) * direction);
         break;
     }
     case UI_ACTION_RF_PAUSE: {
-        pausePrint();
+        Printer::pause.pressPause();
         break;
     }
     case UI_ACTION_RF_CONTINUE: {
-        continuePrint();
+        pressPlay();
         break;
     }
 
@@ -3788,12 +3775,12 @@ void UIDisplay::mainSwitchCase(int action) {
     }
     case UI_ACTION_SD_PAUSE: {
         exitmenu();
-        pausePrint();
+        Printer::pause.pressPause();
         break;
     }
     case UI_ACTION_SD_CONTINUE: {
         exitmenu();
-        continuePrint();
+        pressPlay();
         break;
     }
     case UI_ACTION_SD_UNMOUNT: {
@@ -4203,8 +4190,8 @@ void UIDisplay::fastAction() {
             flags |= UI_FLAG_FAST_KEY_ACTION;
         }
 
-        if ((PrintLine::direct.task == DIRECT_RUNNING_STOPPABLE || PrintLine::direct.task == DIRECT_PREPARED_STOPPABLE)
-            && (!nextAction || nextAction != jogButtonAction)) {
+        const bool jogKeyStillPressed = nextAction && nextAction == jogButtonAction;
+        if (PrintLine::hasStoppableDirectMove() && !jogKeyStillPressed) {
             // Releasing the jog key or selecting another key ends the jog.
             PrintLine::stopDirectMove();
         }

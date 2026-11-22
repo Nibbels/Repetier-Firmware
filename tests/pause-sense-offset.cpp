@@ -10,6 +10,8 @@
 #define MOTHERBOARD DEVICE_TYPE_RF2000
 #include "Configuration.h"
 #include "ZOffset.h"
+#include "PrintPause.h"
+#include "PrintStop.h"
 
 // The replay compiles the live firmware routines. These shims supply DMS bytes,
 // a bed profile, a clock and the motor displacements completed during each wait.
@@ -19,19 +21,25 @@ constexpr float zStepsPerMm = 1280.0f;
 constexpr int16_t initialClearance = 20;
 constexpr int16_t printingForce = 6000;
 constexpr int16_t senseThreshold = 3000;
+constexpr int MOVE_CACHE_SIZE = 17;
+constexpr float DEFAULT_PAUSE_MM_Z_PRINT = 30.0f;
+constexpr long parkY = 200 * 160L, parkZ = 30 * static_cast<long>(zStepsPerMm), parkE = 280;
 
 millis_t clockMs = 0, g_uStartOfIdle = 0, previousMillisCmd = 0;
-volatile millis_t g_uBlockCommands = 0;
 volatile uint8_t g_startLineActive = 0;
-char g_nHeatBedScanStatus = 0;
+char g_nHeatBedScanStatus = 0, g_nZOSScanStatus = 0;
 unsigned short g_nManualSteps[4] = { 1, 1, 1, 28 };
 long g_minZCompensationSteps = 256, g_maxZCompensationSteps = 12800;
 long g_offsetZCompensationSteps = 250;
 short forceDigits = 0;
 bool pollDuringMoves = true;
+bool clipReturn[4] = {};
+int incompleteReturns = 0;
+int incomingReads = 0, objectOutputs = 0;
+void (*duringMove)(long, long, long, long) = nullptr;
+void (*duringHeatWait)() = nullptr;
 
-void requestPrintPause(bool moveAway);
-void killPausePrint();
+void requestInterruptPause();
 void poll();
 
 namespace HAL {
@@ -47,7 +55,7 @@ class InterruptProtectedBlock {
 public:
     InterruptProtectedBlock() {
         if (interruptsEnabled && pauseBeforeLock && --pauseBeforeLock == 0)
-            requestPrintPause(true);
+            requestInterruptPause();
         interruptsEnabled = false;
     }
     ~InterruptProtectedBlock() { unprotect(); }
@@ -76,7 +84,7 @@ struct Com {
     template<class... Args> static void printFLN(Args...) {}
 };
 
-template<class... Args> void showWarning(Args...) {}
+template<class... Args> void showWarning(Args...) { ++incompleteReturns; }
 template<class... Args> void showError(Args...) { assert(false); }
 template<class... Args> void showInformation(Args...) { assert(false); }
 void doEmergencyStop(int) { assert(false); }
@@ -102,6 +110,8 @@ struct WireInput {
 } Wire;
 
 namespace Printer {
+extern PrintPause pause;
+extern PrintStop printStop;
 ZOffset zOffset;
 ZMotion zMotion(zStepsPerMm);
 long currentXYSteps[2] = { 6400, 12800 };
@@ -118,19 +128,34 @@ float compensatedPositionOverPercE = 0.0f;
 float dynamicFeedrateFactor = 1.0f, dynamicExtrusionFactor = 1.0f;
 unsigned short interval_mod = 0;
 bool blockAll = false, doHeatBedZCompensation = true, g_pressure_offset_active = false;
+bool printing = true, menuPaused = false;
 short g_pressure_offset = 0;
 int feedrateMultiply = 100, motorCurrent[4] = {};
 char moveMode[3] = { MOVE_MODE_SINGLE_STEPS, MOVE_MODE_SINGLE_STEPS, MOVE_MODE_SINGLE_STEPS };
 
 bool debugErrors() { return false; }
-bool isPrinting() { return true; }
+bool isPrinting() { return printing; }
+void setPrinting(bool active) { printing = active; }
 bool areAxisHomed() { return true; }
 bool isAxisHomed(int) { return true; }
 bool isZMoveActive() { return false; }
 bool isZMaxEndstopHit() { return zMotion.maxEndstopHit(); }
 bool isZMinEndstopHit() { return ZMotion::minSwitchHit(); }
-void setMenuMode(int, bool) {}
+bool needsCMPwait() { return false; }
+void setMenuMode(int mode, bool active) {
+    assert(mode == MENU_MODE_PAUSED);
+    menuPaused = active;
+}
+void stopPrint();
+void setXAxisSteps(long) {}
+void setYAxisSteps(long) {}
+void setZAxisSteps(long steps) { zMotion.setNominalSteps(steps); }
+void setEPositionMM(float value) { assert(value == 0); }
 void offsetRelativeStepsCoordinates(long x, long y, long z, long e, int task = TASK_NO_TASK);
+}
+
+void requestInterruptPause() {
+    Printer::pause.request(PrintPause::Destination::Park);
 }
 
 bool READ(int pin) {
@@ -154,16 +179,25 @@ struct Extruder {
     struct {
         float targetTemperatureC = 200.0f;
         uint8_t paused = 0;
-        void waitForTargetTemperature(int, bool) { poll(); }
+        void waitForTargetTemperature(int, bool resumingPause) {
+            assert(resumingPause && Printer::pause.isReheating());
+            if (duringHeatWait)
+                duringHeatWait();
+            poll();
+        }
     } tempControl;
     int8_t stepperDirection = 0;
 
     static Extruder* current;
     static void setTemperatureForExtruder(float temperature, int tool);
+    static void setHeatedBedTemperature(float temperature) { bedTemperature = temperature; }
+    static void setTemperatureForAllExtruders(float temperature) { setTemperatureForExtruder(temperature, 0); }
+    static float bedTemperature;
 };
 
 Extruder extruder[NUM_EXTRUDER];
 Extruder* Extruder::current = extruder;
+float Extruder::bedTemperature = 60.0f;
 
 void Extruder::setTemperatureForExtruder(float temperature, int tool) {
     extruder[tool].tempControl.targetTemperatureC = temperature;
@@ -172,23 +206,56 @@ void Extruder::setTemperatureForExtruder(float temperature, int tool) {
 
 struct PrintLine {
     static struct Direct { int task = TASK_NO_TASK; } direct;
+    static PrintLine* cur;
     static int linesCount;
-    static void stopDirectMove() { direct.task = TASK_NO_TASK; }
+    static int queuedTask, stopRequests;
+    static bool hasLines() { return linesCount; }
+    static bool hasStoppableDirectMove();
+    static void stopDirectMove() { ++stopRequests; }
+    static void resetPathPlanner() { linesCount = 0; queuedTask = TASK_NO_TASK; }
+    static void queueTask(int task) {
+        assert(!interruptsEnabled && linesCount < MOVE_CACHE_SIZE);
+        queuedTask = task;
+        ++linesCount;
+    }
 };
 
 PrintLine::Direct PrintLine::direct;
+PrintLine* PrintLine::cur = nullptr;
 int PrintLine::linesCount = 3;
+int PrintLine::queuedTask = TASK_NO_TASK;
+int PrintLine::stopRequests = 0;
 
-struct {
+struct UIDisplay {
     int lastButtonAction = 0, menuLevel = 1, menuPos[1] = {};
+    int flags = 0, jogButtonAction = 0;
+    int16_t nextKey = 0;
+    millis_t lastButtonStart = 0;
     void exitmenu() {}
     void initializeLCD() {}
+    void ui_check_keys(int16_t& action) { action = nextKey; }
+    void pressPlay();
+    void fastAction();
 } uid;
 
-enum FirmwareState { Paused };
+enum FirmwareState { Paused, Processing };
 namespace Commands {
 void checkForPeriodicalActions(FirmwareState);
 void changeFeedrateMultiply(int) { assert(false); }
+void printCurrentPosition() {}
+}
+
+struct { bool sdmode = false; } sd;
+struct GCode {
+    static void readFromSerial() {
+        assert(Printer::printStop.commandsBlocked());
+        ++incomingReads;
+    }
+};
+void outputObject(bool showerrors) {
+    assert(!showerrors && !PrintLine::hasLines() && !PrintLine::direct.task);
+    assert(!Printer::printStop.commandsBlocked());
+    ++objectOutputs;
 }
 
 long getZMatrixDepth(long x, long y) { return 37 + x / 32 - y / 64; }
@@ -207,7 +274,27 @@ void sample(short force, int count = 1) {
         poll();
 }
 
-void Commands::checkForPeriodicalActions(FirmwareState) { handlePauseStatus(); }
+bool pauseDuringQueueWait = false;
+void Commands::checkForPeriodicalActions(FirmwareState state) {
+    if (state == Processing && Printer::pause.allowsQueueAdvance() && PrintLine::hasLines()) {
+        if (pauseDuringQueueWait) {
+            pauseDuringQueueWait = false;
+            Printer::pause.request(PrintPause::Destination::InPlace);
+        } else if (--PrintLine::linesCount == 0 && PrintLine::queuedTask != TASK_NO_TASK) {
+            const auto destination = PrintLine::queuedTask == TASK_PAUSE_PRINT_AND_MOVE
+                ? PrintPause::Destination::Park : PrintPause::Destination::InPlace;
+            PrintLine::queuedTask = TASK_NO_TASK;
+            Printer::pause.request(destination);
+        }
+    }
+    if (PrintLine::direct.task && PrintLine::stopRequests) {
+        const long stopTail = -32;
+        Printer::directCurrentSteps[Z_AXIS] += stopTail;
+        Printer::zMotion.setMotorReference(Printer::zMotion.motorSteps() + stopTail);
+        PrintLine::direct.task = TASK_NO_TASK;
+    }
+    Printer::pause.serviceMotion();
+}
 
 void Printer::offsetRelativeStepsCoordinates(long x, long y, long z, long e, int task) {
     // A short jog toward the print point travels one mm before key release.
@@ -216,12 +303,19 @@ void Printer::offsetRelativeStepsCoordinates(long x, long y, long z, long e, int
     if (x || y || z || e) {
         if (pollDuringMoves)
             poll();
+        if (clipReturn[X_AXIS] && x < 0) x = 0;
+        if (clipReturn[Y_AXIS] && y < 0) y = 0;
+        if (clipReturn[Z_AXIS] && z < 0) z = 0;
+        if ((clipReturn[E_AXIS] && e > 0) || g_nEmergencyESkip) e = 0;
         directCurrentSteps[X_AXIS] += x;
         directCurrentSteps[Y_AXIS] += y;
         directCurrentSteps[Z_AXIS] += z;
         directCurrentSteps[E_AXIS] += e;
         zMotion.setMotorReference(zMotion.motorSteps() + z);
-        g_nContinueExtruderSteps -= e;
+        for (long pulse = 0; pulse < std::labs(e); ++pulse)
+            pause.recordDirectExtrusion(e > 0 ? 1 : -1);
+        if (duringMove)
+            duringMove(x, y, z, e);
     }
 }
 
@@ -232,14 +326,14 @@ void parkAndResume() {
     const long originalY = Printer::directCurrentSteps[Y_AXIS];
     const long originalZ = Printer::directCurrentSteps[Z_AXIS];
 
-    requestPrintPause(true);
-    assert(g_pauseStatus == PAUSE_STATUS_GOTO_PAUSE_AND_MOVE);
+    Printer::pause.request(PrintPause::Destination::Park);
+    assert(Printer::pause.isPaused() && !Printer::pause.isSettled());
     sample(0);
     assert(Printer::zOffset.senseMicrometers() == initialClearance && !g_nSensiblePressure1stMarke);
-    handlePauseStatus();
-    assert(isPauseSettled());
-    assert(Printer::directCurrentSteps[Y_AXIS] == originalY + g_nPauseSteps[Y_AXIS]);
-    assert(Printer::directCurrentSteps[Z_AXIS] == originalZ + g_nPauseSteps[Z_AXIS]);
+    Printer::pause.serviceMotion();
+    assert(Printer::pause.isSettled());
+    assert(Printer::directCurrentSteps[Y_AXIS] == originalY + parkY);
+    assert(Printer::directCurrentSteps[Z_AXIS] == originalZ + parkZ);
 
     sample(0, 40);
     const long zeroForceTarget = Printer::zMotion.correctionTarget();
@@ -256,10 +350,10 @@ void parkAndResume() {
     sample(EMERGENCY_STOP_DIGITS_MAX + 1, 2 * EMERGENCY_STOP_CHECKS);
     assert(g_nEmergencyESkip);
     sample(printingForce, 50);
-    assert(!g_nEmergencyESkip && g_pauseStatus == PAUSE_STATUS_PAUSED);
+    assert(!g_nEmergencyESkip && Printer::pause.isWarmPause());
     extrudeFromPanel();
-    const long manualExtruderPosition = -g_nPauseSteps[E_AXIS] + g_nManualSteps[E_AXIS];
-    assert(Printer::directCurrentSteps[E_AXIS] == manualExtruderPosition && !g_nContinueExtruderSteps);
+    const long manualExtruderPosition = -parkE + g_nManualSteps[E_AXIS];
+    assert(Printer::directCurrentSteps[E_AXIS] == manualExtruderPosition);
 
     const auto& offset = Printer::zOffset;
     const long firstManual = offset.manualMicrometers();
@@ -268,12 +362,13 @@ void parkAndResume() {
     assert(offset.manualMicrometers() == firstManual + Z_OFFSET_BUTTON_STEPS);
     assert(offset.senseMicrometers() == initialClearance - Z_OFFSET_BUTTON_STEPS);
 
-    g_pauseStatus = PAUSE_STATUS_PAUSED_STANDBY;
-    Extruder::current->tempControl.paused = 40;
-    continuePrint();
-    assert(g_pauseMode && isPauseSettled());
-    continuePrint();
-    assert(!g_pauseMode && g_pauseStatus == PAUSE_STATUS_NONE);
+    clockMs += EXTRUDER_CURRENT_PAUSE_DELAY + 1;
+    Printer::pause.serviceStandby(clockMs);
+    assert(Printer::pause.isSettled() && !Printer::pause.isWarmPause());
+    uid.pressPlay();
+    assert(Printer::pause.isWarmPause());
+    uid.pressPlay();
+    assert(Printer::pause.allowsQueueAdvance());
     assert(Printer::directCurrentSteps[Y_AXIS] == originalY && Printer::directCurrentSteps[Z_AXIS] == originalZ);
     assert(Printer::directCurrentSteps[E_AXIS] == manualExtruderPosition);
     assert(Printer::zMotion.correctionTarget() == firstTarget);
@@ -287,10 +382,9 @@ void parkAndResume() {
 void pauseBetweenPolls() {
     sample(printingForce, 9);
     pollDuringMoves = false;
-    requestPrintPause(false);
-    handlePauseStatus();
-    continuePrint();
-    assert(!g_pauseMode);
+    Printer::pause.request(PrintPause::Destination::InPlace);
+    Printer::pause.serviceMotion();
+    assert(Printer::pause.resume() && Printer::pause.allowsQueueAdvance());
 
     sample(printingForce, 9);
     assert(Printer::zOffset.senseMicrometers() == initialClearance);
@@ -304,8 +398,181 @@ void interruptDuringLearning() {
     // pause just before the lock that would publish the SenseOffset update.
     pauseBeforeLock = 4;
     sample(printingForce);
-    assert(!pauseBeforeLock && g_pauseMode == PAUSE_MODE_PAUSED_AND_MOVED);
+    assert(!pauseBeforeLock && Printer::pause.isPaused() && !Printer::pause.isSettled());
     assert(Printer::zOffset.senseMicrometers() == initialClearance);
+}
+
+void panelSequence() {
+    const long y = Printer::directCurrentSteps[Y_AXIS], z = Printer::directCurrentSteps[Z_AXIS];
+    duringMove = [](long, long, long, long) {
+        assert(Printer::pause.isPaused() && !Printer::pause.isSettled());
+        assert(!Printer::pause.resume());
+        Printer::pause.pressPause();
+        Printer::pause.serviceMotion();
+    };
+
+    Printer::pause.pressPause();
+    assert(Printer::pause.isWarmPause() && Printer::menuPaused);
+    assert(Printer::directCurrentSteps[Y_AXIS] == y && Printer::directCurrentSteps[Z_AXIS] == z);
+    assert(Printer::directCurrentSteps[E_AXIS] == -parkE);
+    Printer::pause.pressPause();
+    duringMove = nullptr;
+    assert(Printer::pause.isWarmPause() && Printer::directCurrentSteps[E_AXIS] == -parkE);
+    assert(Printer::directCurrentSteps[Y_AXIS] == y + parkY && Printer::directCurrentSteps[Z_AXIS] == z + parkZ);
+
+    // Force standby even if uptime is shorter than the automatic wait.
+    assert(clockMs < EXTRUDER_CURRENT_PAUSE_DELAY);
+    Printer::pause.pressPause();
+    Printer::pause.serviceStandby(++clockMs);
+    assert(Printer::pause.isSettled() && !Printer::pause.isWarmPause());
+    assert(Extruder::current->tempControl.targetTemperatureC == 100.0f);
+    uid.pressPlay();
+    assert(Printer::pause.isWarmPause() && Extruder::current->tempControl.targetTemperatureC == 200.0f);
+    assert(Printer::directCurrentSteps[Y_AXIS] == y + parkY);
+    Printer::pause.serviceStandby(clockMs + EXTRUDER_CURRENT_PAUSE_DELAY + 1);
+    assert(Printer::pause.isWarmPause());
+    uid.pressPlay();
+    assert(Printer::pause.allowsQueueAdvance() && !Printer::menuPaused);
+    assert(Printer::directCurrentSteps[Y_AXIS] == y && Printer::directCurrentSteps[Z_AXIS] == z);
+    assert(Printer::directCurrentSteps[E_AXIS] == 0);
+
+    pollDuringMoves = false;
+    clockMs = UINT32_MAX - 500;
+    Printer::pause.pressPause();
+    Printer::pause.serviceStandby(clockMs + EXTRUDER_CURRENT_PAUSE_DELAY);
+    assert(Printer::pause.isWarmPause());
+    Printer::pause.serviceStandby(clockMs + EXTRUDER_CURRENT_PAUSE_DELAY + 1);
+    assert(Printer::pause.isSettled() && !Printer::pause.isWarmPause());
+}
+
+void clippedReturn() {
+    const long y = Printer::directCurrentSteps[Y_AXIS], z = Printer::directCurrentSteps[Z_AXIS];
+    pollDuringMoves = false;
+    Printer::pause.request(PrintPause::Destination::Park);
+    Printer::pause.serviceMotion();
+    assert(Printer::pause.limitZJog(-2 * parkZ) == -parkZ);
+
+    clipReturn[Y_AXIS] = true;
+    assert(Printer::pause.resume());
+    assert(Printer::pause.isSettled() && incompleteReturns == 1);
+    assert(Printer::directCurrentSteps[Y_AXIS] == y + parkY);
+    assert(Printer::directCurrentSteps[Z_AXIS] == z + parkZ && Printer::directCurrentSteps[E_AXIS] == -parkE);
+
+    clipReturn[Y_AXIS] = false;
+    clipReturn[Z_AXIS] = true;
+    assert(Printer::pause.resume());
+    assert(Printer::pause.isSettled() && incompleteReturns == 2);
+    assert(Printer::directCurrentSteps[Y_AXIS] == y);
+    assert(Printer::directCurrentSteps[Z_AXIS] == z + parkZ && Printer::directCurrentSteps[E_AXIS] == -parkE);
+
+    clipReturn[Z_AXIS] = false;
+    clipReturn[E_AXIS] = true;
+    assert(Printer::pause.resume());
+    assert(Printer::pause.isSettled() && incompleteReturns == 3);
+    assert(Printer::directCurrentSteps[Z_AXIS] == z && Printer::directCurrentSteps[E_AXIS] == -parkE);
+    assert(Printer::pause.limitZJog(-32) == 0);
+    clipReturn[E_AXIS] = false;
+    assert(Printer::pause.resume() && Printer::pause.allowsQueueAdvance());
+    assert(Printer::directCurrentSteps[E_AXIS] == 0);
+
+    Printer::pause.request(PrintPause::Destination::Park);
+    Printer::pause.serviceMotion();
+    duringMove = [](long, long yMove, long, long) {
+        if (yMove < 0)
+            Printer::stopPrint();
+    };
+    assert(Printer::pause.resume() && Printer::printStop.commandsBlocked());
+    duringMove = nullptr;
+    assert(Printer::directCurrentSteps[Y_AXIS] == y);
+    assert(Printer::directCurrentSteps[Z_AXIS] == z + parkZ && Printer::directCurrentSteps[E_AXIS] == -parkE);
+    assert(incompleteReturns == 3);
+}
+
+void overlappingJog() {
+    const long z = Printer::directCurrentSteps[Z_AXIS];
+    Printer::pause.request(PrintPause::Destination::Park);
+    Printer::pause.serviceMotion();
+    PrintLine::direct.task = DIRECT_RUNNING;
+    assert(!Printer::pause.resume() && !Printer::pause.allowsManualMove());
+
+    PrintLine::direct.task = DIRECT_RUNNING_STOPPABLE;
+    uid.jogButtonAction = UI_ACTION_RF_HEAT_BED_DOWN;
+    uid.nextKey = UI_ACTION_RF_HEAT_BED_DOWN;
+    uid.fastAction();
+    assert(!PrintLine::stopRequests);
+    uid.nextKey = 0;
+    uid.fastAction();
+    assert(PrintLine::stopRequests == 1 && PrintLine::direct.task);
+
+    // The return uses the position after the deceleration tail has completed.
+    assert(Printer::pause.resume());
+    assert(PrintLine::stopRequests == 2 && !PrintLine::direct.task);
+    assert(Printer::pause.allowsQueueAdvance() && Printer::directCurrentSteps[Z_AXIS] == z);
+}
+
+void cancelAndCleanup() {
+    const long y = Printer::directCurrentSteps[Y_AXIS];
+    pollDuringMoves = false;
+    clockMs = UINT32_MAX - 500;
+    sd.sdmode = true;
+    duringMove = [](long, long, long z, long) {
+        if (z > 0) {
+            PrintLine::direct.task = DIRECT_RUNNING;
+            Printer::stopPrint();
+        }
+    };
+    Printer::pause.request(PrintPause::Destination::Park);
+    Printer::pause.serviceMotion();
+    duringMove = nullptr;
+    assert(Printer::directCurrentSteps[Y_AXIS] == y);
+    assert(PrintLine::stopRequests == 1 && !sd.sdmode && !PrintLine::hasLines());
+    assert(Printer::printStop.commandsBlocked() && !Printer::menuPaused);
+    assert(Printer::pause.allowsQueueAdvance());
+    Printer::pause.queueRequest(PrintPause::Destination::InPlace);
+    Printer::pause.request(PrintPause::Destination::Park);
+    assert(Printer::pause.allowsQueueAdvance() && !PrintLine::hasLines());
+
+    Printer::printStop.service(clockMs + 2001);
+    assert(Printer::isPrinting() && incomingReads == 1 && !objectOutputs);
+    PrintLine::direct.task = TASK_NO_TASK;
+    g_nHeatBedScanStatus = g_nZOSScanStatus = 1;
+    Printer::printStop.service(clockMs + 4001);
+    assert(Printer::isPrinting() && !objectOutputs);
+    Printer::printStop.service(clockMs + 4002);
+    assert(!Printer::isPrinting() && !g_nHeatBedScanStatus && !g_nZOSScanStatus);
+    assert(Extruder::bedTemperature == 0.0f && Extruder::current->tempControl.targetTemperatureC == 0.0f);
+    assert(Printer::printStop.commandsBlocked());
+    Printer::printStop.service(clockMs + 5002);
+    assert(!objectOutputs);
+    Printer::printStop.service(clockMs + 5003);
+    Printer::printStop.service(clockMs + 6000);
+    assert(objectOutputs == 1 && !Printer::printStop.commandsBlocked());
+
+    // A USB stop during a heater wait must also discard the pending return.
+    clockMs = 0;
+    Printer::setPrinting(true);
+    Extruder::setTemperatureForExtruder(200.0f, 0);
+    Printer::pause.request(PrintPause::Destination::Park);
+    Printer::pause.serviceMotion();
+    clockMs += EXTRUDER_CURRENT_PAUSE_DELAY + 1;
+    Printer::pause.serviceStandby(clockMs);
+    duringHeatWait = Printer::stopPrint;
+    assert(Printer::pause.resume() && Printer::printStop.commandsBlocked());
+    assert(Printer::pause.allowsQueueAdvance() && Printer::directCurrentSteps[Y_AXIS] == y + parkY);
+}
+
+void queuedPause() {
+    Printer::pause.queueRequest(PrintPause::Destination::Park);
+    assert(Printer::pause.isSettled() && !PrintLine::hasLines());
+    Printer::pause.queueRequest(PrintPause::Destination::InPlace);
+    assert(!PrintLine::hasLines() && Printer::pause.resume());
+    assert(Printer::pause.allowsQueueAdvance());
+
+    PrintLine::linesCount = MOVE_CACHE_SIZE;
+    pauseDuringQueueWait = true;
+    Printer::pause.queueRequest(PrintPause::Destination::Park);
+    assert(Printer::pause.isSettled() && PrintLine::linesCount == MOVE_CACHE_SIZE);
+    assert(PrintLine::queuedTask == TASK_NO_TASK);
 }
 
 void initializeOffsets() {
@@ -325,9 +592,8 @@ void initializeOffsets() {
 int main(int argc, char** argv) {
     assert(argc == 2);
     initializeOffsets();
-    g_nPauseSteps[Y_AXIS] = 200 * 160;
-    g_nPauseSteps[Z_AXIS] = 30 * static_cast<long>(zStepsPerMm);
-    g_nPauseSteps[E_AXIS] = 280;
+    Printer::pause.restoreDefaultParking();
+    Printer::pause.setParkSteps(E_AXIS, parkE);
 
     if (!std::strcmp(argv[1], "park"))
         parkAndResume();
@@ -335,7 +601,17 @@ int main(int argc, char** argv) {
         pauseBetweenPolls();
     else if (!std::strcmp(argv[1], "interrupt"))
         interruptDuringLearning();
+    else if (!std::strcmp(argv[1], "panel"))
+        panelSequence();
+    else if (!std::strcmp(argv[1], "return"))
+        clippedReturn();
+    else if (!std::strcmp(argv[1], "jog"))
+        overlappingJog();
+    else if (!std::strcmp(argv[1], "cancel"))
+        cancelAndCleanup();
+    else if (!std::strcmp(argv[1], "queue"))
+        queuedPause();
     else
         return 1;
-    std::printf("SenseOffset pause replay passed (%s)\n", argv[1]);
+    std::printf("Print lifecycle replay passed (%s)\n", argv[1]);
 }

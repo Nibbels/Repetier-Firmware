@@ -446,7 +446,7 @@ void Printer::queueRelativeMMCoordinates(float dx, float dy, float dz, float de,
 void Printer::offsetRelativeStepsCoordinates(int32_t dx, int32_t dy, int32_t dz, int32_t de, uint8_t configuration) {
 
     if (dx != 0 || dy != 0 || dz != 0 || de != 0) {
-        if (configuration && g_pauseMode && (!isPauseSettled() || PrintLine::direct.task))
+        if (configuration && !pause.allowsManualMove())
             return;
 
         while (PrintLine::direct.task) {
@@ -1234,7 +1234,7 @@ void Printer::stopPrint() //function for aborting USB and SD-Prints
 {
     if (!Printer::isPrinting())
         return;
-    g_uStartOfIdle = 0; //jetzt nicht mehr in showidle() gehen, das erledigt später g_uStopTime;
+    g_uStartOfIdle = 0; // The stop sequence handles the transition to idle.
 
 #if SDSUPPORT
     if (sd.sdmode) //prüfung auf !sdmode sollte hier eigenlicht nicht mehr nötig sein, aber ..
@@ -1252,13 +1252,10 @@ void Printer::stopPrint() //function for aborting USB and SD-Prints
     }
 
     InterruptProtectedBlock noInts;
-    g_uBlockCommands = 1; //keine gcodes mehr ausführen bis beenden beendet.
-    //now mark the print to get cleaned up after some time:
-    g_uStopTime = HAL::timeInMilliseconds(); //starts output object in combination with g_uBlockCommands
-
-    if (g_pauseMode && PrintLine::direct.task)
+    printStop.begin(HAL::timeInMilliseconds());
+    if (pause.isPaused() && PrintLine::direct.task)
         PrintLine::stopDirectMove();
-    killPausePrint();
+    pause.cancel();
 
     //erase the coordinates and kill the current taskplaner:
     PrintLine::resetPathPlanner();
@@ -1351,7 +1348,7 @@ bool Printer::checkAbortKeys(void) {
 }
 
 bool Printer::checkPlayKey(void) {
-    if (g_pauseMode == PAUSE_MODE_NONE) {
+    if (pause.allowsQueueAdvance()) {
         int16_t activeKeys = 0;
         uid.ui_check_keys(activeKeys);
         if (activeKeys == UI_ACTION_RF_CONTINUE) {

@@ -29,7 +29,7 @@ SenseOffset checks the executing nominal Z against the learned limit. The G-code
 
 ## Pause and resume
 
-An accepted pause suspends automatic SenseOffset learning through the retract, park, jog, reheat and return. It discards the pressure average, sample count and previous average even if the pause ends between DMS polls. The live offset and threshold are retained while bed compensation is active. The Mod Menu can still adjust the offset manually.
+An accepted pause suspends automatic SenseOffset learning through the retract, park, jog, reheat and return. `Printer::pause` records the boundary for the next DMS poll, which resets the pressure average, sample count and previous average even if the pause ended between polls. The live offset and threshold are retained while bed compensation is active. The Mod Menu can still adjust the offset manually. [Pause transitions](../development-roadmap.md#pause-and-stop-transitions)
 
 The bed profile and fade use the frozen print position. Digit-Z continues to follow live force, including force from parked manual extrusion. After return, SenseOffset needs ten fresh eligible samples before it can add clearance. [Pressure handler](../../Repetier/RF.cpp)
 

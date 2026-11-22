@@ -162,8 +162,6 @@ short g_nScanPressureTolerance = 0;
 volatile uint8_t g_startLineActive = 0;
 char g_debugLevel = 0;
 char g_debugLog = 0;
-millis_t g_uStopTime = 0;
-volatile millis_t g_uBlockCommands = 0;
 
 // other configurable parameters
 unsigned short g_nManualSteps[4] = {
@@ -172,15 +170,6 @@ unsigned short g_nManualSteps[4] = {
     lroundf(ZAXIS_STEPS_PER_MM* DEFAULT_MANUAL_MM_Z),
     lroundf(EXT0_STEPS_PER_MM* DEFAULT_MANUAL_MM_E)
 }; //pre init
-
-volatile long g_nPauseSteps[4] = { 0 };
-static long pauseDirectPositionSteps[3];
-volatile long g_nContinueExtruderSteps = 0;
-volatile char g_pauseStatus = PAUSE_STATUS_NONE;
-volatile char g_pauseMode = PAUSE_MODE_NONE;
-volatile millis_t g_uPauseTime = 0;
-// A pause can start in the stepper ISR and finish between foreground DMS polls.
-static volatile bool senseOffsetPauseStarted = false;
 
 long g_nEmergencyPauseDigitsMin = EMERGENCY_PAUSE_DIGITS_MIN; //short reicht eigentlich
 long g_nEmergencyPauseDigitsMax = EMERGENCY_PAUSE_DIGITS_MAX; //short reicht eigentlich
@@ -3133,14 +3122,7 @@ void recalculateZCompensation(void) {
 } // recalculateZCompensation
 
 void handleStrainGaugeFeatures(millis_t uTime) {
-    bool wasPaused;
-    bool discardSenseOffsetHistory;
-    {
-        InterruptProtectedBlock noInts;
-        wasPaused = g_pauseMode != PAUSE_MODE_NONE;
-        discardSenseOffsetHistory = senseOffsetPauseStarted;
-        senseOffsetPauseStarted = false;
-    }
+    const auto pauseSample = Printer::pause.beginSenseOffsetSample();
 
     // Share one scheduled DMS reading among SenseOffset, emergency pause and emergency stop.
     bool i_need_strain_value = 0;
@@ -3191,9 +3173,9 @@ void handleStrainGaugeFeatures(millis_t uTime) {
     }
 
     const bool learnSenseOffset = g_nSensiblePressureDigits && Printer::doHeatBedZCompensation
-        && !g_startLineActive && !wasPaused && !senseOffsetPauseStarted;
+        && !g_startLineActive && !pauseSample.wasPaused && Printer::pause.allowsSenseOffsetLearning();
     // Start a fresh window after a pause, even if it ended before this poll.
-    if (!learnSenseOffset || discardSenseOffsetHistory) {
+    if (!learnSenseOffset || pauseSample.resetWindow) {
         nSensiblePressureSum = 0;
         nSensiblePressureChecks = 0;
         g_nSensibleLastPressure = 0;
@@ -3266,7 +3248,7 @@ void handleStrainGaugeFeatures(millis_t uTime) {
                             asm volatile("" : : "m"(increment));
                             // The queue can request a pause while the increment is calculated.
                             InterruptProtectedBlock noInts;
-                            if (!senseOffsetPauseStarted && !g_pauseMode && Printer::doHeatBedZCompensation)
+                            if (Printer::pause.allowsSenseOffsetLearning() && Printer::doHeatBedZCompensation)
                                 Printer::zOffset.applySenseIncrement(increment);
                         }
                     } else {
@@ -3292,7 +3274,7 @@ void handleStrainGaugeFeatures(millis_t uTime) {
         {
             uLastPressureTime = uTime;
 
-            if (!g_pauseMode && Printer::isPrinting() && Printer::areAxisHomed()) {
+            if (!Printer::pause.isPaused() && Printer::isPrinting() && Printer::areAxisHomed()) {
                 // this check shall be done only during the printing (for example, it shall not be done in case filament is extruded manually)
                 nPressureSum += pressure;
                 nPressureChecks += 1;
@@ -3307,7 +3289,7 @@ void handleStrainGaugeFeatures(millis_t uTime) {
                         Com::printF(PSTR("emergency pause: "), nPressure);
                         showWarning((void*)ui_text_emergency_pause);
 
-                        requestPrintPause(true);
+                        Printer::pause.request(PrintPause::Destination::Park);
                     }
                 }
             } else {
@@ -3347,44 +3329,6 @@ void handleStrainGaugeFeatures(millis_t uTime) {
     }
 }
 
-void handlePauseTime(millis_t uTime) {
-    constexpr float pauseCooldownC = 100.0f;
-    if (g_uPauseTime) {
-        if (g_pauseStatus == PAUSE_STATUS_PAUSED) //and absolutly not PAUSE_STATUS_HEATING
-        {
-            if (g_uPauseTime > uTime) {
-                return;
-            }
-            if ((uTime - g_uPauseTime) > (EXTRUDER_CURRENT_PAUSE_DELAY < 30000 ? 30000 : EXTRUDER_CURRENT_PAUSE_DELAY)) //das sind alle 60s
-            {
-                {
-                    Com::printFLN(PSTR("Pause: Saving Energy"));
-                    // we have paused a few moments ago - reduce the current of the extruder motor in order to avoid unwanted heating of the filament for use cases where the printing is paused for several minutes
-                    for (uint8_t i = 0; i < NUM_EXTRUDER; i++) {
-                        setExtruderCurrent(i, EXTRUDER_CURRENT_PAUSED);
-                        if (!extruder[i].tempControl.paused) {
-                            const float target = extruder[i].tempControl.targetTemperatureC;
-                            const uint8_t cooldown = static_cast<uint8_t>(constrain(target, 0.0f, pauseCooldownC));
-                            Extruder::setTemperatureForExtruder(target - cooldown, i);
-                            // Store the drop for resume after the setter clears it.
-                            extruder[i].tempControl.paused = cooldown;
-                        }
-                    }
-                    g_pauseStatus = PAUSE_STATUS_PAUSED_STANDBY;
-                }
-                g_uPauseTime = 0;
-            }
-        }
-        else if (g_pauseStatus == PAUSE_STATUS_NONE
-            || g_pauseStatus > PAUSE_STATUS_PAUSED
-            || g_pauseStatus == PAUSE_STATUS_HEATING
-            || g_pauseStatus == PAUSE_STATUS_GOTO_CONTINUE) {
-            // we are not waiting for the pause event anymore
-            g_uPauseTime = 0;
-        }
-    }
-}
-
 void handleScanWorkTasks() {
     if (g_nHeatBedScanStatus) {
         scanHeatBed();
@@ -3395,66 +3339,9 @@ void handleScanWorkTasks() {
 }
 
 void handleStartPrint() {
-    if (PrintLine::linesCount > 2 && !g_uStopTime && !g_uBlockCommands) {
+    if (PrintLine::linesCount > 2 && !Printer::printStop.commandsBlocked()) {
         // this check shall be done only during the printing (for example, it shall not be done in case filament is extruded manually)
         Printer::setPrinting(true);
-    }
-}
-
-/**
- * Handle Print Stops. Printer::stopPrint()
- * -> g_uStopTime > 0 and g_uBlockCommands == 1
- * -> g_uBlockCommands
- * -> OutputObject
- * -> g_uStartOfIdle
- * -> Printer::setPrinting(false);
- */
-void handleStopPrint(millis_t uTime) {
-    if (g_uStopTime) {
-        if (g_uStopTime > uTime) {
-            return;
-        }
-        GCode::readFromSerial();          //consume gcode buffers but dont put gcodes into queue rightnow, because of g_uBlockCommands
-        if ((uTime - g_uStopTime) > 2000) //jede 1 sekunden  wäre standard nach config
-        {
-            // we have stopped the printing a few moments ago, output the object now
-            if (PrintLine::linesCount || PrintLine::direct.task) {
-                // wait until all moves are done
-                g_uStopTime = uTime;
-            } else {
-                // there is no printing in progress any more, do all clean-up now
-                g_uStopTime = 0;
-
-
-                // disable all heaters
-                Extruder::setHeatedBedTemperature(0);
-                Extruder::setTemperatureForAllExtruders(0);
-
-                //unaufgeräumtes beenden: Es wird sowieso der Stepper deaktiviert.
-                g_nZOSScanStatus = 0;
-                g_nHeatBedScanStatus = 0;
-
-                Com::printFLN(PSTR("Stop complete"));
-                Printer::setPrinting(false);
-
-                g_uBlockCommands = uTime;
-            }
-        }
-    }
-
-    if (g_uBlockCommands > 1) //=1 scheint zu blocken, dann muss g_uStopTime aktiv sein und hier drüber erst eine Uhrzeit reinsetzen.
-    {
-        /*
-        Prüfung unnötig, es wird niemals eine Echtzeit reingeschrieben.
-        if( g_uBlockCommands > uTime ){
-            return;
-        }*/
-        if ((uTime - g_uBlockCommands) > 1000) //jede 1 sekunden wäre standard nach config
-        {
-            g_uBlockCommands = 0;
-            // output the object
-            outputObject(false); //in g_uBlockCommands > 1
-        }
     }
 }
 
@@ -3550,89 +3437,6 @@ void outputObject(bool showerrors) {
     g_uStartOfIdle = HAL::timeInMilliseconds(); //outputobject ends
 } // outputObject
 
-void requestPrintPause(bool moveAway) {
-    InterruptProtectedBlock noInts;
-    if (g_pauseMode || g_uBlockCommands || Printer::blockAll)
-        return;
-
-    senseOffsetPauseStarted = true;
-    g_pauseMode = moveAway ? PAUSE_MODE_PAUSED_AND_MOVED : PAUSE_MODE_PAUSED;
-    g_pauseStatus = moveAway ? PAUSE_STATUS_GOTO_PAUSE_AND_MOVE : PAUSE_STATUS_GOTO_PAUSE;
-}
-
-static long pauseReturnSteps(uint8_t axis) {
-    InterruptProtectedBlock noInts;
-    return pauseDirectPositionSteps[axis] - Printer::directPosition(axis).steps();
-}
-
-static bool moveDuringPause(long x, long y, long z, long e) {
-    Printer::offsetRelativeStepsCoordinates(x, y, z, e);
-    return g_pauseStatus == PAUSE_STATUS_PAUSING && !Printer::blockAll;
-}
-
-static bool returnToPrintPosition() {
-    if (!moveDuringPause(pauseReturnSteps(X_AXIS), pauseReturnSteps(Y_AXIS), 0, 0)
-        || pauseReturnSteps(X_AXIS) || pauseReturnSteps(Y_AXIS))
-        return false;
-    if (!moveDuringPause(0, 0, pauseReturnSteps(Z_AXIS), 0) || pauseReturnSteps(Z_AXIS))
-        return false;
-    return moveDuringPause(0, 0, 0, g_nContinueExtruderSteps) && !g_nContinueExtruderSteps;
-}
-
-static void handlePauseStatus() {
-    if (PrintLine::direct.task || Printer::blockAll)
-        return;
-
-    const char request = g_pauseStatus;
-    switch (request) {
-    case PAUSE_STATUS_GOTO_PAUSE:
-    case PAUSE_STATUS_GOTO_MOVED:
-    case PAUSE_STATUS_GOTO_PAUSE_AND_MOVE:
-        g_pauseStatus = PAUSE_STATUS_PAUSING;
-        UI_STATUS_UPD(UI_TEXT_PAUSING);
-        uid.exitmenu();
-        if (request != PAUSE_STATUS_GOTO_MOVED) {
-            // Direct motion is idle and the print queue is frozen.
-            for (uint8_t axis = X_AXIS; axis <= Z_AXIS; axis++)
-                pauseDirectPositionSteps[axis] = Printer::directPosition(axis).steps();
-            g_nContinueExtruderSteps = 0;
-            g_uStartOfIdle = 0;
-            Printer::setMenuMode(MENU_MODE_PAUSED, true);
-            Com::printFLN(PSTR("RequestPause:"));
-            if (!moveDuringPause(0, 0, 0, -abs(g_nPauseSteps[E_AXIS])))
-                return;
-        }
-        if (request != PAUSE_STATUS_GOTO_PAUSE) {
-            if (!moveDuringPause(0, 0, abs(g_nPauseSteps[Z_AXIS]), 0)
-                || !moveDuringPause(g_nPauseSteps[X_AXIS], g_nPauseSteps[Y_AXIS], 0, 0))
-                return;
-        }
-        UI_STATUS_UPD(UI_TEXT_PAUSED);
-        break;
-
-    case PAUSE_STATUS_GOTO_CONTINUE:
-        g_pauseStatus = PAUSE_STATUS_PAUSING;
-        if (returnToPrintPosition()) {
-            Com::printFLN(PSTR("RequestContinue:"));
-            killPausePrint();
-            {
-                UI_STATUS_UPD(UI_TEXT_PRINT_POS);
-            }
-            return;
-        }
-        if (g_pauseStatus != PAUSE_STATUS_PAUSING || Printer::blockAll)
-            return;
-        Com::printFLN(PSTR("Pause return incomplete"));
-        showWarning(ui_text_pause, ui_text_operation_denied);
-        break;
-
-    default:
-        return;
-    }
-    g_uPauseTime = HAL::timeInMilliseconds();
-    g_pauseStatus = PAUSE_STATUS_PAUSED;
-}
-
 void loopFeatures() //wird so aufgerufen, dass es ein ~100ms Takt sein sollte.
 {
     static char nEntered = 0;
@@ -3640,18 +3444,18 @@ void loopFeatures() //wird so aufgerufen, dass es ein ~100ms Takt sein sollte.
         nEntered++;
 
         millis_t uTime = HAL::timeInMilliseconds();
-        handleStopPrint(uTime);
+        Printer::printStop.service(uTime);
         handleStartPrint();
 
         handleStartStandby(uTime);
         handleStrainGaugeFeatures(uTime);
 
-        handlePauseTime(uTime);
+        Printer::pause.serviceStandby(uTime);
 
 #ifdef RGB_LIGHT_R_PIN
         updateRGBLightStatus();
 #endif // RGB_LIGHT_R_PIN
-        if (!g_pauseMode) {
+        if (!Printer::pause.isPaused()) {
             handleScanWorkTasks();
         }
 
@@ -3659,139 +3463,8 @@ void loopFeatures() //wird so aufgerufen, dass es ein ~100ms Takt sein sollte.
     }
 
     // Direct-move waits can re-enter this loop. Only pending requests start a transition.
-    handlePauseStatus();
+    Printer::pause.serviceMotion();
 } // loopFeatures
-
-static void waitForPauseTransition() {
-    while (g_pauseMode && !isPauseSettled() && !Printer::blockAll) {
-        Commands::checkForPeriodicalActions(Paused);
-    }
-}
-
-static bool continuePrintLoadTemperatures() {
-    bool wait = false;
-    for (uint8_t i = 0; i < NUM_EXTRUDER; i++) {
-        setExtruderCurrent(i, Printer::motorCurrent[E_AXIS + i]);
-        if (extruder[i].tempControl.paused) {
-            // Restore the temperature in use before the pause.
-            // Wird nicht zurückgesetzt, wenn Temperatur in Pause verändert wurde. dann ist ".pause === 0"
-            Extruder::setTemperatureForExtruder((float)extruder[i].tempControl.targetTemperatureC + (float)extruder[i].tempControl.paused, i);
-            // extruder[i].tempControl.paused = 0; -> Unnötig, weil setTemperature .paused nullt.
-            wait = true;
-        }
-    }
-    if (wait) {
-        UI_STATUS_UPD(UI_TEXT_HEATING_UP);
-        for (uint8_t i = 0; i < NUM_EXTRUDER && g_pauseStatus == PAUSE_STATUS_HEATING; i++) {
-            extruder[i].tempControl.waitForTargetTemperature(ADD_CONTINUE_AFTER_PAUSE_TEMP_TOLERANCE, true);
-        }
-        return true; // abort continue and wait for next button press because we had to wake up
-    }
-    return false;
-}
-
-void pausePrint(void) {
-    if (g_pauseMode == PAUSE_MODE_NONE) {
-        if (!PrintLine::linesCount) // the printing is not paused at the moment
-        {
-            if (Printer::debugErrors())
-                Com::printFLN(PSTR("pausePrint(): nothing is printed"));
-            showError((void*)ui_text_pause, (void*)ui_text_operation_denied);
-
-            return;
-        }
-
-        if (!Printer::areAxisHomed()) {
-            if (Printer::debugErrors())
-                Com::printFLN(PSTR("pausePrint(): home position is unknown"));
-            showError((void*)ui_text_pause, (void*)ui_text_home_unknown);
-
-            return;
-        }
-
-        Com::printFLN(PSTR("pausing..."));
-        requestPrintPause(false);
-        waitForPauseTransition();
-        return;
-    }
-
-    if (!isPauseSettled())
-        return;
-
-    if (g_pauseMode == PAUSE_MODE_PAUSED) {
-        g_pauseMode = PAUSE_MODE_PAUSED_AND_MOVED;
-        g_pauseStatus = PAUSE_STATUS_GOTO_MOVED;
-        Com::printFLN(PSTR("moving to pause position..."));
-        waitForPauseTransition();
-        return;
-    }
-
-    {
-        // 3rd Step: go to standby fast
-        if (g_pauseMode == PAUSE_MODE_PAUSED_AND_MOVED && g_pauseStatus == PAUSE_STATUS_PAUSED) {
-            g_uStartOfIdle = HAL::timeInMilliseconds() + 30000;                      //hold status msg
-            g_uPauseTime = HAL::timeInMilliseconds() - EXTRUDER_CURRENT_PAUSE_DELAY; //drop temps now
-            UI_STATUS_UPD(UI_TEXT_COOLING_DOWN);
-        }
-    }
-} // pausePrint
-
-void killPausePrint(void) {
-    InterruptProtectedBlock noInts;
-    g_uPauseTime = 0;
-    g_pauseStatus = PAUSE_STATUS_NONE;
-    g_pauseMode = PAUSE_MODE_NONE;
-    Printer::setMenuMode(MENU_MODE_PAUSED, false);
-}
-
-void continuePrint(void) {
-    static char countplays = 1;
-    if (!g_pauseMode) {
-        if (!g_nHeatBedScanStatus
-        ) {
-            if (countplays++ >= 10) {
-                Com::printFLN(PSTR("LCD re-init"));
-                countplays = 1;
-                showInformation(PSTR(UI_TEXT_MANUAL), PSTR(UI_TEXT_LCD_CIRCUIT), PSTR(UI_TEXT_RESET));
-                uid.initializeLCD();
-            }
-        }
-        return;
-    }
-    if (!isPauseSettled() || Printer::blockAll) {
-        return;
-    }
-
-    {
-        InterruptProtectedBlock noInts;
-        const uint8_t directTask = PrintLine::direct.task;
-        if (directTask == DIRECT_PREPARED_STOPPABLE || directTask == DIRECT_RUNNING_STOPPABLE)
-            PrintLine::stopDirectMove();
-        else if (directTask)
-            return;
-        g_pauseStatus = PAUSE_STATUS_HEATING;
-    }
-    countplays = 1;
-    g_uPauseTime = 0;   //do not drop temps later
-    g_uStartOfIdle = 0; //continueprint
-    UI_STATUS_UPD(UI_TEXT_CONTINUING);
-    uid.exitmenu();
-
-    if (continuePrintLoadTemperatures()) {
-        if (g_pauseStatus == PAUSE_STATUS_HEATING) {
-            UI_STATUS_UPD(UI_TEXT_CONTINUING_READY);
-            g_uStartOfIdle = HAL::timeInMilliseconds() + 30000;
-            g_uPauseTime = HAL::timeInMilliseconds() + 240000;
-            g_pauseStatus = PAUSE_STATUS_PAUSED;
-        }
-        return;
-    }
-
-    if (g_pauseStatus == PAUSE_STATUS_HEATING) {
-        g_pauseStatus = PAUSE_STATUS_GOTO_CONTINUE;
-        waitForPauseTransition();
-    }
-} // continuePrint
 
 void setExtruderCurrent(uint8_t nr, uint8_t current) {
     if (nr > NUM_EXTRUDER - 1)
@@ -4545,15 +4218,8 @@ void processSpecialGCode(GCode* pCommand) {
 
         case 3070: // M3070 [S] - pause the print as if the "Pause" button would have been pressed
         {
-            //put pause task into MOVE_CACHE
-            if (pCommand->hasS() && pCommand->S >= 2 && Printer::areAxisHomed()) {
-                // we shall pause the printing and we shall move away
-                queueTask(TASK_PAUSE_PRINT_AND_MOVE);
-            } else {
-                // we shall pause within print queue and stay where we are
-                queueTask(TASK_PAUSE_PRINT);
-            }
-            Commands::waitUntilEndOfAllMoves(); //M400 (normal gcode wait)
+            const bool park = pCommand->hasS() && pCommand->S >= 2 && Printer::areAxisHomed();
+            Printer::pause.queueRequest(park ? PrintPause::Destination::Park : PrintPause::Destination::InPlace);
             break;
         }
 
@@ -4703,7 +4369,7 @@ void processSpecialGCode(GCode* pCommand) {
                     if (nTemp > Printer::maxSoftEndstopSteps[X_AXIS])
                         nTemp = Printer::maxSoftEndstopSteps[X_AXIS];
 
-                    g_nPauseSteps[X_AXIS] = nTemp;
+                    Printer::pause.setParkSteps(X_AXIS, nTemp);
                     Com::printF(PSTR("M3105: new x pause offset: "), nTemp * Printer::axisMMPerSteps[X_AXIS]);
                     Com::printFLN(PSTR(" [mm]"));
                 }
@@ -4715,7 +4381,7 @@ void processSpecialGCode(GCode* pCommand) {
                     if (nTemp > Printer::maxSoftEndstopSteps[Y_AXIS])
                         nTemp = Printer::maxSoftEndstopSteps[Y_AXIS];
 
-                    g_nPauseSteps[Y_AXIS] = nTemp;
+                    Printer::pause.setParkSteps(Y_AXIS, nTemp);
                     Com::printF(PSTR("M3105: new y pause offset: "), nTemp * Printer::axisMMPerSteps[Y_AXIS]);
                     Com::printFLN(PSTR(" [mm]"));
                 }
@@ -4727,7 +4393,7 @@ void processSpecialGCode(GCode* pCommand) {
                     if (nTemp > Printer::zMotion.maxSteps())
                         nTemp = Printer::zMotion.maxSteps();
 
-                    g_nPauseSteps[Z_AXIS] = nTemp;
+                    Printer::pause.setParkSteps(Z_AXIS, nTemp);
                     Com::printF(PSTR("M3105: new z pause offset: "), nTemp * Printer::axisMMPerSteps[Z_AXIS]);
                     Com::printFLN(PSTR(" [mm]"));
                 }
@@ -4739,7 +4405,7 @@ void processSpecialGCode(GCode* pCommand) {
                     if (nTemp > 5)
                         nTemp = 5; //Zahl immer positiv, sie wird abgezogen = Retract!
 
-                    g_nPauseSteps[E_AXIS] = (long)((float)nTemp * Extruder::current->stepsPerMM);
+                    Printer::pause.setParkSteps(E_AXIS, long(nTemp * Extruder::current->stepsPerMM));
                     Com::printF(PSTR("M3105: new extruder pause offset: "), nTemp);
                     Com::printFLN(PSTR(" [mm]"));
                 }
@@ -5757,7 +5423,7 @@ void processSpecialGCode(GCode* pCommand) {
         case 3912: //M3912 lay down automatic startmade which you can abort (when the hotend is moving) by pressing play
         {
             Commands::waitUntilEndOfAllMoves(); //feature startline
-            if (Printer::areAxisHomed() && Printer::doHeatBedZCompensation && !g_uBlockCommands) {
+            if (Printer::areAxisHomed() && Printer::doHeatBedZCompensation && !Printer::printStop.commandsBlocked()) {
 
                 Com::printFLN(PSTR("Auto-Startmade"));
                 short min = 1500;
@@ -5872,10 +5538,10 @@ void processSpecialGCode(GCode* pCommand) {
                 bool skip_by_keys = false;
 
                 const float startLineZ = 0.35f;
-                if (!g_uBlockCommands)
+                if (!Printer::printStop.commandsBlocked())
                     Printer::queueFloatCoordinates(x, y, startLineZ, IGNORE_COORDINATE, RMath::min(Printer::homingFeedrate[X_AXIS], Printer::homingFeedrate[Y_AXIS]));
 
-                for (uint8_t i = 1; i <= Lines && !g_uBlockCommands; i++) {
+                for (uint8_t i = 1; i <= Lines && !Printer::printStop.commandsBlocked(); i++) {
                     float x_0 = x;
                     float y_0 = y;
                     float e_0 = e;
@@ -5890,7 +5556,7 @@ void processSpecialGCode(GCode* pCommand) {
                     }
                     for (float i = 0.0025f; i <= 1.0f; i += 0.0025f) {
                         Commands::checkForPeriodicalActions(Processing);
-                        if (g_uBlockCommands)
+                        if (Printer::printStop.commandsBlocked())
                             break; // No further moves after cancellation.
                         if (Printer::checkPlayKey()) {
                             skip_by_keys = true;
@@ -5902,7 +5568,7 @@ void processSpecialGCode(GCode* pCommand) {
                                                        IGNORE_COORDINATE,
                                                        e_0 + (e - e_0) * i, lineFeedrate);
                     }
-                    if (g_uBlockCommands || skip_by_keys)
+                    if (Printer::printStop.commandsBlocked() || skip_by_keys)
                         break; // No extra Y travel after skip/abort.
                     y += 1.5f;
                     //if you use T1 then dont make the start line ontop of the startline of T0
@@ -5925,7 +5591,7 @@ void processSpecialGCode(GCode* pCommand) {
                     InterruptProtectedBlock noInts;
                     // On AVR, a uint16_t timer modifier must be updated atomically.
                     Printer::interval_mod = 0;
-                    if (!g_uBlockCommands) {
+                    if (!Printer::printStop.commandsBlocked()) {
                         // Physical filament stays extruded; restore only the
                         // slicer's logical E timeline, including its substeps.
                         Printer::setEPositionMM(save_logicalE, save_logicalERemainder);
@@ -5971,7 +5637,7 @@ void processSpecialGCode(GCode* pCommand) {
             float e = 0.0f;
             while (e < float(Extrusion)) {
                 Commands::checkForPeriodicalActions(Processing);
-                if (g_uBlockCommands || abs(readStrainGauge()) > maxP /* digits sind soweit gestiegen, dass abbruch.*/) {
+                if (Printer::printStop.commandsBlocked() || abs(readStrainGauge()) > maxP /* digits sind soweit gestiegen, dass abbruch.*/) {
                     UI_STATUS_UPD(UI_TEXT_OK);
                     break;
                 }
@@ -6028,14 +5694,14 @@ void processSpecialGCode(GCode* pCommand) {
                 while (HAL::timeInMilliseconds() <= time) {
                     Commands::checkForPeriodicalActions(WaitHeater);
                     UI_STATUS_UPD(UI_TEXT_UNMOUNT_FILAMENT);
-                    if (g_uBlockCommands)
+                    if (Printer::printStop.commandsBlocked())
                         break;
                 }
-                if (g_uBlockCommands)
+                if (Printer::printStop.commandsBlocked())
                     break;
                 while (fabs(e) < float(outputLength)) {
                     Commands::checkForPeriodicalActions(Processing);
-                    if (g_uBlockCommands)
+                    if (Printer::printStop.commandsBlocked())
                         break;
                     if (abs(readStrainGauge()) > maxForce /* digits sind soweit INS MINUS gestiegen, dass abbruch.*/) {
                         t += 3.33; // +1°K
@@ -6058,7 +5724,7 @@ void processSpecialGCode(GCode* pCommand) {
                     }
                     Printer::queueFloatCoordinates(IGNORE_COORDINATE, IGNORE_COORDINATE, IGNORE_COORDINATE, e, eFeedrate);
                 }
-                if (g_uBlockCommands)
+                if (Printer::printStop.commandsBlocked())
                     break;
                 if (t > Extruder::current->tempControl.targetTemperatureC && fabs(e) < 10.0f /*mm*/) {
                     //wenn der extruder nicht weiterkommt und die bisherige wegstrecke unter 10mm ist, dann etwas die Temperatur erhöhen und nochmal ziehen.
@@ -6118,7 +5784,7 @@ bool isAnyScanRunning() {
 void moveXAction(int8_t direction) {
     bool moveKosys = Printer::moveKosys;
 
-    if (g_pauseMode) {
+    if (Printer::pause.isPaused()) {
         moveKosys = KOSYS_DIRECTOFFSET;
     } else if (PrintLine::linesCount || isAnyScanRunning()) {
         // this operation is not allowed while a printing or scanning is in progress
@@ -6214,7 +5880,7 @@ void moveXAction(int8_t direction) {
 void moveYAction(int8_t direction) {
     bool moveKosys = Printer::moveKosys;
 
-    if (g_pauseMode) {
+    if (Printer::pause.isPaused()) {
         moveKosys = KOSYS_DIRECTOFFSET;
     } else if (PrintLine::linesCount || isAnyScanRunning()) {
         // this operation is not allowed while a printing or scanning is in progress
@@ -6308,7 +5974,7 @@ void moveYAction(int8_t direction) {
 } // moveYAction
 
 void moveZAction(int8_t direction) {
-    if (isAnyScanRunning() || (g_pauseMode && !isPauseSettled())) {
+    if (isAnyScanRunning() || !Printer::pause.allowsManualMove()) {
         // this operation is not allowed while some scan is in progress
         return;
     }
@@ -6331,7 +5997,7 @@ void moveZAction(int8_t direction) {
         }
     }
 
-    if (g_pauseMode) {
+    if (Printer::pause.isPaused()) {
         moveMode = MOVE_MODE_SINGLE_MOVE;
     } else if (PrintLine::linesCount) {
         // in case we are printing at the moment, only the single step movements are allowed
@@ -6363,13 +6029,7 @@ void moveZAction(int8_t direction) {
             return;
         }
 
-        if (g_pauseMode && direction < 0) {
-            const long returnSteps = pauseReturnSteps(Z_AXIS);
-            if (returnSteps >= 0) {
-                return;
-            }
-            steps = RMath::max(steps, returnSteps);
-        }
+        steps = Printer::pause.limitZJog(steps);
 
         Printer::offsetRelativeStepsCoordinates(0, 0, steps, 0, TASK_MOVE_POSITION_MANUAL);
         break;
@@ -6407,13 +6067,7 @@ void moveZAction(int8_t direction) {
         if (Printer::isAxisHomed(Z_AXIS))
             steps = (direction < 0 ? 0L : Printer::zMotion.maxSteps()) - Printer::zMotion.motorSteps();
 
-        if (g_pauseMode && direction < 0) {
-            const long returnSteps = pauseReturnSteps(Z_AXIS);
-            if (returnSteps >= 0) {
-                return;
-            }
-            steps = RMath::max(steps, returnSteps);
-        }
+        steps = Printer::pause.limitZJog(steps);
 
         Printer::offsetRelativeStepsCoordinates(0, 0, steps, 0, TASK_MOVE_FROM_BUTTON);
         break;
@@ -6971,13 +6625,6 @@ void updateRGBLightStatus(void) {
 } // updateRGBLightStatus
 #endif // RGB_LIGHT_R_PIN
 
-void restoreDefaultPauseParkingOffsets() {
-    // The active extruder sets the E retract when it is selected.
-    g_nPauseSteps[X_AXIS] = 0;
-    g_nPauseSteps[Y_AXIS] = long(Printer::axisStepsPerMM[Y_AXIS] * 200);
-    g_nPauseSteps[Z_AXIS] = long(Printer::axisStepsPerMM[Z_AXIS] * DEFAULT_PAUSE_MM_Z_PRINT);
-}
-
 static void setupForPrinting() {
     Printer::setSomeTempsensorDefect(false);
 
@@ -7000,7 +6647,7 @@ static void setupForPrinting() {
         prepareZCompensation();
     }
 
-    restoreDefaultPauseParkingOffsets();
+    Printer::pause.restoreDefaultParking();
 
     Printer::updateDerivedParameter();
 

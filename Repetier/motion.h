@@ -93,6 +93,11 @@ public:
     char task;
     static PrintLine direct;
 
+    static bool hasStoppableDirectMove() {
+        const char task = direct.task;
+        return task == DIRECT_PREPARED_STOPPABLE || task == DIRECT_RUNNING_STOPPABLE;
+    }
+
     static volatile uint8_t linesCount; // Number of lines cached 0 = nothing to do
 
     inline bool areParameterUpToDate() {

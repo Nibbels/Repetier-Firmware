@@ -155,7 +155,7 @@ void SDCard::unmount() {
 void SDCard::startPrint() {
     if (!sdactive)
         return;
-    if (g_pauseMode)
+    if (Printer::pause.isPaused())
         return;
     sdmode = 1;
     Printer::setMenuMode(MENU_MODE_SD_PRINTING, true);

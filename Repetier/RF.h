@@ -453,21 +453,8 @@ extern unsigned short g_nScanRetryPressureDelta;
 extern volatile uint8_t g_startLineActive;
 extern char g_debugLevel;
 extern char g_debugLog;
-extern millis_t g_uStopTime;
-extern volatile millis_t g_uBlockCommands;
-
 // other configurable parameters
 extern unsigned short g_nManualSteps[4];
-extern volatile long g_nPauseSteps[4];
-extern volatile long g_nContinueExtruderSteps;
-extern volatile char g_pauseStatus;
-extern volatile char g_pauseMode;
-extern volatile millis_t g_uPauseTime;
-
-inline bool isPauseSettled() {
-    const char status = g_pauseStatus;
-    return status == PAUSE_STATUS_PAUSED || status == PAUSE_STATUS_PAUSED_STANDBY;
-}
 
 extern long g_nEmergencyPauseDigitsMin; //short reicht eigentlich
 extern long g_nEmergencyPauseDigitsMax; //short reicht eigentlich
@@ -514,7 +501,6 @@ extern unsigned char g_uRGBTargetB;
 #endif // RGB_LIGHT_R_PIN
 
 extern void initRF(void);
-void restoreDefaultPauseParkingOffsets();
 extern void initStrainGauge(void);
 
 extern void showAbortScanReason(const void* scanName, char abortScanIdentifier);
@@ -575,10 +561,6 @@ extern void recalculateZCompensation(void);
 extern void loopFeatures(void);
 extern void outputObject(bool showerrors = true);
 
-extern void pausePrint(void);
-extern void requestPrintPause(bool moveAway);
-extern void killPausePrint(void);
-extern void continuePrint(void);
 extern void setExtruderCurrent(uint8_t nr, uint8_t current);
 extern void processSpecialGCode(GCode* pCommand);
 extern void queueTask(char task);

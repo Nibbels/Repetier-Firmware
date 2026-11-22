@@ -60,11 +60,29 @@ On the RF2000 build, an instruction trace of an idle tick with 400 steps of pend
 ## 1. Coordinate systems and motion compensation
 
 - **Define the coordinate path.** Trace G-code origin and units through nominal integer endpoints, executed nominal steps, direct or scan offsets, requested and applied compensation, and actual motor steps. Record where tool offsets and endstop-suppressed travel enter. For E, track logical position and base, ECMP and advance pulses. Use the trace to identify duplicate conversions, overlapping writers and places where one frame is read as another.
-- **Use the Z motion owner as the baseline for the remaining refactor.** Move pause transitions and the saved return position behind one interface. Then give the bed and DMS calculation a clear input and output in nominal coordinates and correction steps. Keep the ownership of execution counters with the step executor. [Z step execution](#z-step-execution)
+- **Use the Z motion owner as the baseline for the remaining refactor.** Pause transitions and the saved return position now belong to `Printer::pause`. Give bed and DMS calculations explicit inputs in nominal coordinates and outputs in correction steps. The step executor owns the execution counters. [Z step execution](#z-step-execution) · [Pause and stop transitions](#pause-and-stop-transitions)
 - **Handle the pause boundary.** Every accepted pause invalidates the SenseOffset window. Park, jog, reheat and return keep the existing clearance and live Digit-Z, and print motion resumes with a fresh learning window. The host replay checks the return at equal DMS force after manual extrusion. [Pause verification](maintenance-tasks.md#pause-and-resume)
 - **Verify movement end to end.** Replay many small absolute and relative moves, tool changes, homing and coordinate resets, clipped motion, and pause/jog/resume. Check integer endpoint and pulse counts, frame changes at each transition, and recovery at both Z limits. On the printer, check scan retreat, bounded compensation and return to the print path. Use the [coordinate replay findings](first-layer-control/coordinate-frames-and-extrusion.md) and [Z travel tests](maintenance-tasks.md#z-travel-and-scanning) as the baseline.
 
 ## 2. Print lifecycle and DMS controls
+
+### Pause and stop transitions
+
+`Printer::pause` owns the pause phase, the configured park offsets, the saved return position, the direct extrusion to recover and the standby deadline. Panel input, queued G-code and DMS submit requests. Timer1 reads one byte to decide whether the print queue can advance. A pause still lets the direct moves and live Z compensation run. The pause handler sets the active phase before entering waits that can service the same handler again. [Pause implementation](../Repetier/PrintPause.cpp)
+
+| Event | Transition |
+| --- | --- |
+| First panel Pause | Freeze the queue, save the direct XYZ position, and retract E. The second Pause lifts Z and parks XY. |
+| Queued M25, M3070 or DMS pause | Accept the request in place or with a park according to its source. A queued pause command returns when a pause freezes the queue. |
+| Automatic or requested standby | Reduce the hotend target and motor current while keeping the saved return position. The third panel Pause requests immediate standby after parking. |
+| Play | Restore heat first if needed. After a reheat the next Play starts the return. Complete XY before Z, then recover E. A clipped return leaves the print paused for another attempt. |
+| Stop | Cancel the pause and end any active pause jog. The stop sequence drains input and waits for motion to finish, turns off the heaters and releases the command block after the output delay. |
+
+`Printer::printStop` keeps the abort phase and its timestamp separately. The pause and stop timers use elapsed time across clock rollover. [Stop implementation](../Repetier/PrintStop.cpp) · [Lifecycle replay](../tests/pause-sense-offset.py)
+
+The AVR builds use 4 fewer bytes of global SRAM and 76–136 fewer bytes of flash than `48e0c99`. The Timer1 pause check uses the same instructions. Instruction traces for queued X and Z, direct Z and idle compensation match the previous cycle counts on all three model builds. Physical pulse timing still needs verification.
+
+### Job boundaries and DMS
 
 - **Define job boundaries.** Trace SD and streamed G-code through start, normal finish and cancellation. `handleStartPrint()` currently infers printing from queue depth, which cannot identify a job boundary reliably. Establish where learned `g_min/g_max`, layer markers and live correction can be reset for a new job without `G28 Z`, including jobs without `M3912`. Cover a second print at a different first-layer height and commands that merely refill or drain the queue. [Current start heuristic](../Repetier/RF.cpp#L3435) · [Lifecycle findings](z-offset/lifecycle-and-findings.md#finding-f3-partially-fixed-consecutive-print-lifecycle)
 - **Make pressure control follow phase.** Give start-line braking, first-layer SenseOffset, elastic Digit-Z, and emergency pressure actions clear inputs and effects. Define when each takes effect in the queue and on the machine. Keep `M3912`'s force-sensitive XY and E brake independently observable from M220/M221, and test its cleanup on completion, skip and cancellation. Check first-layer recognition with and without a Z move after priming, including 0.35 and 0.352 mm. [Priming and DMS behavior](first-layer-control/m3912-state-boundary.md)

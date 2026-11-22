@@ -609,6 +609,7 @@ public:
     void slowAction();
 
     void finishAction(int action);
+    void pressPlay();
     void changeSwitchCase(int action, int8_t increment);
     void mainSwitchCase(int action);
 
