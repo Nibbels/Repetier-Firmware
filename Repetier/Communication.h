@@ -129,9 +129,6 @@ public:
     FSTRINGVAR(tscanHeatBed)
     FSTRINGVAR(tAutoMatrixLeveling)
 
-#ifdef PRINT_GENERIC_TEMP_TABLE
-    FSTRINGVAR(tGenTemp)
-#endif // PRINT_GENERIC_TEMP_TABLE
 
     FSTRINGVAR(tTargetExtr)
     FSTRINGVAR(tTargetBedColon)
@@ -161,9 +158,7 @@ public:
     FSTRINGVAR(tTempSensorWorking)
     FSTRINGVAR(tDryModeUntilRestart)
 
-#ifdef WAITING_IDENTIFIER
     FSTRINGVAR(tWait)
-#endif // WAITING_IDENTIFIER
 
 #if EEPROM_MODE == 0
     FSTRINGVAR(tNoEEPROMSupport)
@@ -230,8 +225,6 @@ public:
     FSTRINGVAR(tEPRYOffset)
     FSTRINGVAR(tEPRZOffset)
     FSTRINGVAR(tEPRZMode)
-    FSTRINGVAR(tEPRRetractionWhenHeating)
-    FSTRINGVAR(tEPRDistanceRetractHeating)
     FSTRINGVAR(tEPRExtruderCoolerSpeed)
     FSTRINGVAR(tEPRAdvanceK)
     FSTRINGVAR(tEPRAdvanceL)

@@ -31,7 +31,6 @@ volatile uint8_t GCode::bufferLength = 0;          ///< Number of commands store
 uint8_t GCode::formatErrors = 0;
 PGM_P GCode::fatalErrorMsg = NULL;  ///< message unset = no fatal error
 millis_t GCode::lastBusySignal = 0; ///< When was the last busy signal
-uint32_t GCode::keepAliveInterval = KEEP_ALIVE_INTERVAL;
 
 /** \page Repetier-protocol
 
@@ -173,8 +172,8 @@ uint8_t GCode::computeBinarySize(char* ptr) // unsigned int bitfield) {
 void GCode::keepAlive(enum FirmwareState state) {
     millis_t now = HAL::timeInMilliseconds();
 
-    if (state != NotBusy && keepAliveInterval != 0) {
-        if ((now - lastBusySignal) < keepAliveInterval) {
+    if (state != NotBusy) {
+        if ((now - lastBusySignal) < keepAliveIntervalMs) {
             return;
         }
         if (state == Paused) {
@@ -404,13 +403,11 @@ void GCode::readFromSerial() {
                 requestResend(); // Something is wrong, a started line was not continued in the last second
                 GCodeSource::activeSource->timeOfLastDataPacket = time;
             }
-#ifdef WAITING_IDENTIFIER
             else if (bufferLength == 0 && time - GCodeSource::activeSource->timeOfLastDataPacket > 1000) // Don't do it if buffer is not empty. It may be a slow executing command.
             {
                 Com::printFLN(Com::tWait); // Unblock communication in case the last ok was not received correct.
                 GCodeSource::activeSource->timeOfLastDataPacket = time;
             }
-#endif
         }
         if (commandsReceivingWritePosition == 0) // nothing read, we can rotate to next input source
             GCodeSource::rotateSource();

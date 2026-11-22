@@ -1349,10 +1349,9 @@ void searchZOScan(void) {
             float xScanPosition = g_ZCompensationMatrix[g_ZOSTestPoint[X_AXIS]][0]; // + g_nScanXStartSteps; <-- NEIN! Man muss nur die jeweils erste und letzte Matrix-Zeile meiden, ausser HEAT_BED_SCAN_X_START_MM ist 0 oder HEAT_BED_SCAN_Y_START_MM ist 0
             float yScanPosition = g_ZCompensationMatrix[0][g_ZOSTestPoint[Y_AXIS]]; // + g_nScanYStartSteps; <-- NEIN!
 
-#if SEARCH_HEAT_BED_OFFSET_SCAN_POSITION_RAND_MM > 0
-            xScanPosition += random(-1 * SEARCH_HEAT_BED_OFFSET_SCAN_POSITION_RAND_MM, SEARCH_HEAT_BED_OFFSET_SCAN_POSITION_RAND_MM);
-            yScanPosition += random(-1 * SEARCH_HEAT_BED_OFFSET_SCAN_POSITION_RAND_MM, SEARCH_HEAT_BED_OFFSET_SCAN_POSITION_RAND_MM);
-#endif //SEARCH_HEAT_BED_OFFSET_SCAN_POSITION_RAND_MM
+            constexpr long scanPositionJitterMm = 3;
+            xScanPosition += random(-scanPositionJitterMm, scanPositionJitterMm);
+            yScanPosition += random(-scanPositionJitterMm, scanPositionJitterMm);
 
             Printer::queueRelativeMMCoordinates(xScanPosition, yScanPosition, 0, 0, RMath::min(Printer::homingFeedrate[X_AXIS], Printer::homingFeedrate[Y_AXIS]), true, true);
             g_nZOSScanStatus = 6;
@@ -1683,7 +1682,7 @@ void calculateZScrewCorrection(void) {
     //Einfach so: wird ein Puffer von 0.05 angestrebt. Die ideale Matrix-Verschiebung wird auf 260°C Hotend / 120°C Bett, was ein Extremwert darstellen soll auf -0.05mm angepeilt.
 
     //Config
-    float maxExtruderTemperature = (float)EXTRUDER_MAX_TEMP;
+    const float maxExtruderTemperature = Extruder::current->tempControl.heaterCutoffC;
     float maxBedTemperature = 120.0f; //120°C ist ok... mit 180 zu rechnen wäre übertrieben.
     float BedThermalExplansionInMikrons = 1.5f;
     float ExtruderThermalExpansionInMikrons = 0.95f;
@@ -1698,8 +1697,6 @@ void calculateZScrewCorrection(void) {
         ExtruderTemperature = 20.0f; //Wenn zu kalt oder undefiniert dann Standardbedingungen annehmen.
 
     float BedTemperature = Extruder::getHeatedBedTemperature();
-    if (BedTemperature == -1)
-        maxBedTemperature = BedTemperature = 20.0f; //Wenn kein Heated-Bed dann Standardbedingungen annehmen.
 
     //Umrechnung des aktuellen Zustandes auf die heißesten Werte:
     float MinDistanceInMikronsKalt = MatrixMaximumInMikrons
@@ -1945,7 +1942,6 @@ short testExtruderTemperature(void) //Funktion ist speziell für HBS Scan.
 
 short testHeatBedTemperature(void) //Funktion ist speziell für HBS Scan.
 {
-#if HAVE_HEATED_BED
     if (heatedBedController.targetTemperatureC > (MAX_ROOM_TEMPERATURE >= PRECISE_HEAT_BED_SCAN_BED_TEMP_PLA - TEMP_TOLERANCE
                                                       ? PRECISE_HEAT_BED_SCAN_BED_TEMP_PLA - TEMP_TOLERANCE
                                                       : MAX_ROOM_TEMPERATURE))
@@ -1971,7 +1967,6 @@ short testHeatBedTemperature(void) //Funktion ist speziell für HBS Scan.
             return -1;
         }
     }
-#endif // HAVE_HEATED_BED
 
     // at this point we have reached the proper temperature
     return 0;
@@ -6528,7 +6523,6 @@ void moveZAction(int8_t direction) {
     }
 } // moveZAction
 
-#if STEPPER_CURRENT_CONTROL == CURRENT_CONTROL_DRV8711
 
 #if DRV8711_NUM_CHANNELS != 5
 #error Wer DRV8711_NUM_CHANNELS ändert, muss sich wirklich reindenken und von den Achszuordnungen bis zu den EEPROM-Speicherplätzen alles überdenken. Normalerweise darf dieser Wert nicht anders als 5 sein. Ausser Conrad baut ein Board mit 3 Extrudersteppern oder ähnlich.
@@ -6887,7 +6881,6 @@ void setMotorCurrent(unsigned char driver, uint8_t level) {
 
 } // setMotorCurrent
 
-#endif // CURRENT_CONTROL_DRV8711
 
 void cleanupEPositions(void) {
     InterruptProtectedBlock noInts;

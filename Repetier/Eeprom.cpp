@@ -76,10 +76,6 @@ void EEPROM::restoreEEPROMExtruderSettingsFromConfiguration(uint8_t extruderId) 
         e->offsetMM[X_AXIS] = EXT0_X_OFFSET_MM;
         e->offsetMM[Y_AXIS] = EXT0_Y_OFFSET_MM;
 
-#if RETRACT_DURING_HEATUP
-        e->waitRetractTemperature = EXT0_WAIT_RETRACT_TEMP;
-        e->waitRetractUnits = EXT0_WAIT_RETRACT_UNITS;
-#endif // RETRACT_DURING_HEATUP
 
         e->coolerSpeed = EXT0_EXTRUDER_COOLER_SPEED;
         e->advanceL = EXT0_ADVANCE_L;
@@ -105,10 +101,6 @@ void EEPROM::restoreEEPROMExtruderSettingsFromConfiguration(uint8_t extruderId) 
         e->offsetMM[X_AXIS] = EXT1_X_OFFSET_MM;
         e->offsetMM[Y_AXIS] = EXT1_Y_OFFSET_MM;
 
-#if RETRACT_DURING_HEATUP
-        e->waitRetractTemperature = EXT1_WAIT_RETRACT_TEMP;
-        e->waitRetractUnits = EXT1_WAIT_RETRACT_UNITS;
-#endif // RETRACT_DURING_HEATUP
 
         e->coolerSpeed = EXT1_EXTRUDER_COOLER_SPEED;
 
@@ -166,7 +158,6 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     Printer::maxTravelAccelerationMMPerSquareSecond[Y_AXIS] = MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Y;
     Printer::maxTravelAccelerationMMPerSquareSecond[Z_AXIS] = MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Z;
 
-#if HAVE_HEATED_BED
     heatedBedController.pidDriveMax = HEATED_BED_PID_INTEGRAL_DRIVE_MAX;
     heatedBedController.pidDriveMin = HEATED_BED_PID_INTEGRAL_DRIVE_MIN;
     heatedBedController.pidPGain = HEATED_BED_PID_PGAIN;
@@ -174,7 +165,6 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     heatedBedController.pidDGain = HEATED_BED_PID_DGAIN;
     heatedBedController.pidMax = HEATED_BED_PID_MAX;
     heatedBedController.sensorType = HEATED_BED_SENSOR_TYPE;
-#endif // HAVE_HEATED_BED
 
         Printer::axisLengthMM[X_AXIS] = X_MAX_LENGTH_PRINT;
 
@@ -303,7 +293,6 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     HAL::eprSetFloat(EPR_Y_MAX_TRAVEL_ACCEL, Printer::maxTravelAccelerationMMPerSquareSecond[Y_AXIS]);
     HAL::eprSetFloat(EPR_Z_MAX_TRAVEL_ACCEL, Printer::maxTravelAccelerationMMPerSquareSecond[Z_AXIS]);
 
-#if HAVE_HEATED_BED
     HAL::eprSetByte(EPR_BED_DRIVE_MAX, heatedBedController.pidDriveMax);
     HAL::eprSetByte(EPR_BED_DRIVE_MIN, heatedBedController.pidDriveMin);
     HAL::eprSetFloat(EPR_BED_PID_PGAIN, heatedBedController.pidPGain);
@@ -311,15 +300,6 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     HAL::eprSetFloat(EPR_BED_PID_DGAIN, heatedBedController.pidDGain);
     HAL::eprSetByte(EPR_BED_PID_MAX, heatedBedController.pidMax);
     HAL::eprSetByte(EPR_RF_HEATED_BED_SENSOR_TYPE, heatedBedController.sensorType);
-#else
-    HAL::eprSetByte(EPR_BED_DRIVE_MAX, HEATED_BED_PID_INTEGRAL_DRIVE_MAX);
-    HAL::eprSetByte(EPR_BED_DRIVE_MIN, HEATED_BED_PID_INTEGRAL_DRIVE_MIN);
-    HAL::eprSetFloat(EPR_BED_PID_PGAIN, HEATED_BED_PID_PGAIN);
-    HAL::eprSetFloat(EPR_BED_PID_IGAIN, HEATED_BED_PID_IGAIN);
-    HAL::eprSetFloat(EPR_BED_PID_DGAIN, HEATED_BED_PID_DGAIN);
-    HAL::eprSetByte(EPR_BED_PID_MAX, HEATED_BED_PID_MAX);
-    HAL::eprSetByte(EPR_RF_HEATED_BED_SENSOR_TYPE, HEATED_BED_SENSOR_TYPE);
-#endif // HAVE_HEATED_BED
 
         HAL::eprSetFloat(EPR_X_LENGTH, Printer::axisLengthMM[X_AXIS]);
     HAL::eprSetFloat(EPR_Y_LENGTH, Printer::axisLengthMM[Y_AXIS]);
@@ -416,13 +396,6 @@ void EEPROM::storeExtruderDataIntoEEPROM(uint8_t extruderId) {
     HAL::eprSetFloat(o + EPR_EXTRUDER_X_OFFSET, e->offsetMM[X_AXIS]);
     HAL::eprSetFloat(o + EPR_EXTRUDER_Y_OFFSET, e->offsetMM[Y_AXIS]);
 
-#if RETRACT_DURING_HEATUP
-    HAL::eprSetInt16(o + EPR_EXTRUDER_WAIT_RETRACT_TEMP, e->waitRetractTemperature);
-    HAL::eprSetInt16(o + EPR_EXTRUDER_WAIT_RETRACT_UNITS, e->waitRetractUnits);
-#else
-    HAL::eprSetInt16(o + EPR_EXTRUDER_WAIT_RETRACT_TEMP, EXT0_WAIT_RETRACT_TEMP);
-    HAL::eprSetInt16(o + EPR_EXTRUDER_WAIT_RETRACT_UNITS, EXT0_WAIT_RETRACT_UNITS);
-#endif // RETRACT_DURING_HEATUP
 
     HAL::eprSetByte(o + EPR_EXTRUDER_COOLER_SPEED, e->coolerSpeed);
 
@@ -518,7 +491,6 @@ void EEPROM::readDataFromEEPROM() {
         change = true; //update checksum later in this function
     }
 
-#if HAVE_HEATED_BED
     heatedBedController.pidDriveMax = HAL::eprGetByte(EPR_BED_DRIVE_MAX);
     heatedBedController.pidDriveMin = HAL::eprGetByte(EPR_BED_DRIVE_MIN);
     heatedBedController.pidPGain = HAL::eprGetFloat(EPR_BED_PID_PGAIN);
@@ -526,7 +498,6 @@ void EEPROM::readDataFromEEPROM() {
     heatedBedController.pidDGain = HAL::eprGetFloat(EPR_BED_PID_DGAIN);
     heatedBedController.pidMax = HAL::eprGetByte(EPR_BED_PID_MAX);
     heatedBedController.sensorType = (HAL::eprGetByte(EPR_RF_HEATED_BED_SENSOR_TYPE) != 0) ? HAL::eprGetByte(EPR_RF_HEATED_BED_SENSOR_TYPE) : HEATED_BED_SENSOR_TYPE;
-#endif // HAVE_HEATED_BED
 
     Printer::axisLengthMM[X_AXIS] = HAL::eprGetFloat(EPR_X_LENGTH);
     if (Printer::axisLengthMM[X_AXIS] <= 0 || Printer::axisLengthMM[X_AXIS] > 245.0f) {
@@ -613,10 +584,6 @@ void EEPROM::readDataFromEEPROM() {
         e->offsetMM[X_AXIS] = HAL::eprGetFloat(o + EPR_EXTRUDER_X_OFFSET);
         e->offsetMM[Y_AXIS] = HAL::eprGetFloat(o + EPR_EXTRUDER_Y_OFFSET);
 
-#if RETRACT_DURING_HEATUP
-        e->waitRetractTemperature = HAL::eprGetInt16(o + EPR_EXTRUDER_WAIT_RETRACT_TEMP);
-        e->waitRetractUnits = HAL::eprGetInt16(o + EPR_EXTRUDER_WAIT_RETRACT_UNITS);
-#endif // RETRACT_DURING_HEATUP
 
         e->advanceL = HAL::eprGetFloat(o + EPR_EXTRUDER_ADVANCE_L);
         if (e->advanceL > 0 && e->advanceL < 20) {
@@ -977,7 +944,6 @@ void EEPROM::writeSettings() {
     writeByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y, Com::tEPRPrinterMOD_ZOS_SCAN_POINT_Y);
     writeFloat(EPR_ZSCAN_START_MM, Com::tEPRZScanStartLift);
 
-#if HAVE_HEATED_BED
     writeByte(EPR_RF_HEATED_BED_SENSOR_TYPE, Com::tEPRBedsensorType);
     writeFloat(EPR_BED_PID_PGAIN, Com::tEPRBedPGain);
     writeFloat(EPR_BED_PID_IGAIN, Com::tEPRBedIGain);
@@ -985,7 +951,6 @@ void EEPROM::writeSettings() {
     writeByte(EPR_BED_PID_MAX, Com::tEPRBedPIDMaxValue);
     writeByte(EPR_BED_DRIVE_MIN, Com::tEPRBedPIDDriveMin);
     writeByte(EPR_BED_DRIVE_MAX, Com::tEPRBedPIDDriveMax);
-#endif // HAVE_HEATED_BED
 
     // now the extruder
     for (uint8_t i = 0; i < NUM_EXTRUDER; i++) {
@@ -1008,10 +973,6 @@ void EEPROM::writeSettings() {
         writeFloat(o + EPR_EXTRUDER_X_OFFSET, Com::tEPRXOffset);
         writeFloat(o + EPR_EXTRUDER_Y_OFFSET, Com::tEPRYOffset);
 
-#if RETRACT_DURING_HEATUP
-        writeInt(o + EPR_EXTRUDER_WAIT_RETRACT_TEMP, Com::tEPRRetractionWhenHeating);
-        writeInt(o + EPR_EXTRUDER_WAIT_RETRACT_UNITS, Com::tEPRDistanceRetractHeating);
-#endif // RETRACT_DURING_HEATUP
 
         writeByte(o + EPR_EXTRUDER_COOLER_SPEED, Com::tEPRExtruderCoolerSpeed);
     }

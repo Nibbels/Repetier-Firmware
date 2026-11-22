@@ -532,38 +532,16 @@ public:
     } // convertToMM
 
     static INLINE bool isXMinEndstopHit() {
-#if X_MIN_PIN > -1 && MIN_HARDWARE_ENDSTOP_X
         return READ(X_MIN_PIN) != ENDSTOP_X_MIN_INVERTING;
-#else
-        return false;
-#endif // X_MIN_PIN>-1 && MIN_HARDWARE_ENDSTOP_X
     }  // isXMinEndstopHit
 
     static INLINE bool isYMinEndstopHit() {
-#if Y_MIN_PIN > -1 && MIN_HARDWARE_ENDSTOP_Y
         return READ(Y_MIN_PIN) != ENDSTOP_Y_MIN_INVERTING;
-#else
-        return false;
-#endif // Y_MIN_PIN>-1 && MIN_HARDWARE_ENDSTOP_Y
     }  // isYMinEndstopHit
 
     static INLINE bool isZMinEndstopHit() {
-#if Z_MIN_PIN > -1 && MIN_HARDWARE_ENDSTOP_Z
-
         return READ(Z_MIN_PIN) != ENDSTOP_Z_MIN_INVERTING;
-
-#else  //Z_MIN_PIN>-1 && MIN_HARDWARE_ENDSTOP_Z
-        return false;
-#endif // Z_MIN_PIN>-1 && MIN_HARDWARE_ENDSTOP_Z
     }  // isZMinEndstopHit
-
-    static inline bool isXMaxSoftEndstopHit() {
-        return Printer::currentXSteps >= Printer::maxSoftEndstopSteps[X_AXIS];
-    }
-
-    static inline bool isYMaxSoftEndstopHit() {
-        return Printer::currentYSteps >= Printer::maxSoftEndstopSteps[Y_AXIS];
-    }
 
     static inline bool isZMaxSoftEndstopHit() {
         return Printer::currentZSteps >= Printer::maxSoftEndstopSteps[Z_AXIS];
@@ -574,29 +552,19 @@ public:
     }
 
     static INLINE bool isXMaxEndstopHit() {
-#if X_MAX_PIN > -1 && MAX_HARDWARE_ENDSTOP_X
-        return READ(X_MAX_PIN) != ENDSTOP_X_MAX_INVERTING;
-#else
-        return isXMaxSoftEndstopHit();
-#endif // X_MAX_PIN>-1 && MAX_HARDWARE_ENDSTOP_X
+        return Printer::currentXSteps >= Printer::maxSoftEndstopSteps[X_AXIS];
     }  // isXMaxEndstopHit
 
     static INLINE bool isYMaxEndstopHit() {
-#if Y_MAX_PIN > -1 && MAX_HARDWARE_ENDSTOP_Y
-        return READ(Y_MAX_PIN) != ENDSTOP_Y_MAX_INVERTING;
-#else
-        return isYMaxSoftEndstopHit();
-#endif // Y_MAX_PIN>-1 && MAX_HARDWARE_ENDSTOP_Y
+        return Printer::currentYSteps >= Printer::maxSoftEndstopSteps[Y_AXIS];
     }  // isYMaxEndstopHit
 
     static inline bool isZMaxEndstopHit() {
-#if Z_MAX_PIN > -1 && MAX_HARDWARE_ENDSTOP_Z
-
+#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
         return READ(Z_MAX_PIN) != ENDSTOP_Z_MAX_INVERTING;
-
 #else
         return isZMaxSoftEndstopHit();
-#endif // Z_MAX_PIN>-1 && MAX_HARDWARE_ENDSTOP_Z
+#endif // RF2000 / RF2000v2
     }  // isZMaxEndstopHit
 
     static INLINE bool isMinEndstopHit(uint8_t axis) {

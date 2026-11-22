@@ -91,12 +91,12 @@
 /** \brief for each extruder, fan will stay on until extruder temperature is below this value */
 #define EXTRUDER_FAN_COOL_TEMP              50
 
-/** \brief Maximal temperature which can be set for the extruder */
-#define EXTRUDER_MAX_TEMP                   275
-
 // ##########################################################################################
 // ##   Hotend V1
 // ##########################################################################################
+
+/** Maximum hotend setpoint and heater cutoff in degrees Celsius. */
+#define HOTEND_V1_MAX_TEMP_C 275
 
 /** \brief The maximum value, I-gain can contribute to the output. */
 #define HT2_PID_INTEGRAL_DRIVE_MAX          130
@@ -113,6 +113,9 @@
 // ##   Hotend V2
 // ##########################################################################################
 
+/** Maximum hotend setpoint and heater cutoff in degrees Celsius. */
+#define HOTEND_V2_MAX_TEMP_C 275
+
 /** \brief The maximum value, I-gain can contribute to the output. */
 #define HT3_PID_INTEGRAL_DRIVE_MAX          120
 /** \brief lower value for integral part. */
@@ -127,6 +130,9 @@
 // ##########################################################################################
 // ##	Hotend V3
 // ##########################################################################################
+
+/** Maximum hotend setpoint and heater cutoff in degrees Celsius. */
+#define HOTEND_V3_MAX_TEMP_C 275
 
 /** \brief The maximum value, I-gain can contribute to the output. */
 #define HT4_PID_INTEGRAL_DRIVE_MAX          120
@@ -338,127 +344,6 @@ Overridden if EEPROM activated. */
 #define EMERGENCY_STOP_CHECKS               3
 
 // ##########################################################################################
-// ##   configuration of user-defined thermistor tables
-// ##########################################################################################
-/**
- * There are many different thermistors, which can be combined with different resistors. This result
- * in unpredictable number of tables. As a resolution, the user can define one table here, that can
- * be used as type 5 for thermister type in extruder/heated bed definition. Make sure, the number of entries
- * matches the value in NUM_TEMPS_USERTHERMISTOR0. If you span definition over multiple lines, make sure to end
- * each line, except the last, with a backslash. The table format is {{adc1,temp1},{adc2,temp2}...} with
- * increasing adc values. For more informations, read
- * http://hydraraptor.blogspot.com/2007/10/measuring-temperature-easy-way.html
- * 
- * If you have a sprinter temperature table, you have to multiply the first value with 4 and the second with 8.
- * This firmware works with increased precision, so the value reads go from 0 to 4095 and the temperature is
- * temperature*8.
- * 
- * If you have a PTC thermistor instead of a NTC thermistor, keep the adc values increasing and use themistor types 50-52 instead of 5-7!
- */
-
-/** \brief Number of entries in the user thermistor table 0. Set to 0 to disable it. */
-#define NUM_TEMPS_USERTHERMISTOR0           28
-#define USER_THERMISTORTABLE0  {\
-  {1*4,864*8},{21*4,280*8},{25*4,270*8},{29*4,260*8},{33*4,250*8},{39*4,240*8},{46*4,230*8},{54*4,220*8},{64*4,210*8},{75*4,200*8},\
-  {90*4,190*8},{107*4,180*8},{128*4,170*8},{154*4,160*8},{184*4,150*8},{221*4,140*8},{265*4,130*8},{316*4,120*8},{375*4,110*8},\
-  {441*4,105*8},{513*4,100*8},{588*4,100*8},{734*4,80*8},{856*4,60*8},{938*4,40*8},{986*4,20*8},{1008*4,0*8},{1018*4,-20*8} }
-
-/** \brief Number of entries in the user thermistor table 1. Set to 0 to disable it. */
-#define NUM_TEMPS_USERTHERMISTOR1           0
-#define USER_THERMISTORTABLE1               {}
-
-/** \brief Number of entries in the user thermistor table 2. Set to 0 to disable it. */
-#define NUM_TEMPS_USERTHERMISTOR2           0
-#define USER_THERMISTORTABLE2               {}
-
-/**
- * \brief If defined, creates a thermistor table at startup.
- * 
- * If you don't feel like computing the table on your own, you can use this generic method. It is
- * a simple approximation which may be not as accurate as a good table computed from the reference
- * values in the datasheet. You can increase precision if you use a temperature/resistance for
- * R0/T0, which is near your operating temperature. This will reduce precision for lower temperatures,
- * which are not realy important. The resistors must fit the following schematic:
- * @code
- * VREF ---- R2 ---+--- Termistor ---+-- GND
- *                 |                 |
- *                 +------ R1 -------+
- *                 |                 |
- *                 +---- Capacitor --+
- *                 |
- *                 V measured
- * @endcode
- * 
- * If you don't have R1, set it to 0.
- * The capacitor is for reducing noise from long thermistor cable. If you don't have one, it's OK.
- * 
- * If you need the generic table, uncomment the following define.
- */
-//#define USE_GENERIC_THERMISTORTABLE_1
-
-/* Some examples for different thermistors:
-
-EPCOS B57560G104+ : R0 = 100000  T0 = 25  Beta = 4036
-EPCOS 100K Thermistor (B57560G1104F) :  R0 = 100000  T0 = 25  Beta = 4092
-ATC Semitec 104GT-2 : R0 = 100000  T0 = 25  Beta = 4267
-Honeywell 100K Thermistor (135-104LAG-J01)  : R0 = 100000  T0 = 25  Beta = 3974
-
-*/
-
-/** \brief Reference Temperature */
-#define GENERIC_THERM1_T0                   25
-
-/** \brief Resistance at reference temperature */
-#define GENERIC_THERM1_R0                   200000
-
-/**
- * \brief Beta value of thermistor
- * You can use the beta from the datasheet or compute it yourself.
- * See http://reprap.org/wiki/MeasuringThermistorBeta for more details.
- */
-#define GENERIC_THERM1_BETA                 8304
-
-/** \brief Start temperature for generated thermistor table */
-#define GENERIC_THERM1_MIN_TEMP             -20
-
-/** \brief End Temperature for generated thermistor table */
-#define GENERIC_THERM1_MAX_TEMP             300
-#define GENERIC_THERM1_R1                   0
-#define GENERIC_THERM1_R2                   4700
-
-// The same for table 2 and 3 if needed
-
-/** \brief USE_GENERIC_THERMISTORTABLE_2 */
-#define GENERIC_THERM2_T0                   170
-#define GENERIC_THERM2_R0                   1042.7f
-#define GENERIC_THERM2_BETA                 4036
-#define GENERIC_THERM2_MIN_TEMP             -20
-#define GENERIC_THERM2_MAX_TEMP             300
-#define GENERIC_THERM2_R1                   0
-#define GENERIC_THERM2_R2                   4700
-
-/** \brief USE_GENERIC_THERMISTORTABLE_3 */
-#define GENERIC_THERM3_T0                   170
-#define GENERIC_THERM3_R0                   1042.7f
-#define GENERIC_THERM3_BETA                 4036
-#define GENERIC_THERM3_MIN_TEMP             -20
-#define GENERIC_THERM3_MAX_TEMP             300
-#define GENERIC_THERM3_R1                   0
-#define GENERIC_THERM3_R2                   4700
-
-/** \brief Supply voltage to ADC, can be changed by setting ANALOG_REF below to different value. */
-#define GENERIC_THERM_VREF                  5
-
-/** 
- * \brief Number of entries in generated table. One entry takes 4 bytes. Higher number of entries increase computation time too.
- * Value is used for all generic tables created. 
- */
-#define GENERIC_THERM_NUM_ENTRIES           33
-
-/** \brief If enabled, writes the created generic table to serial port at startup. */
-//#define PRINT_GENERIC_TEMP_TABLE
-
-// ##########################################################################################
 // ##   sensor heater decoupling
 // ##########################################################################################
 
@@ -527,22 +412,8 @@ Honeywell 100K Thermistor (135-104LAG-J01)  : R0 = 100000  T0 = 25  Beta = 3974
 // ##   Values for menu settings
 // ###############################################################################
 
-/** 
- * \brief Select the language to use.
- * 0 = English
- * 1 = German 
- */
-#define UI_LANGUAGE                         0
-
 /** \brief Periodic redraw interval for the selected status page.*/
 #define UI_PAGES_DURATION                   4000
-
-/**
- * \brief Normally cou want a next/previous actions with every click of your encoder.
- * Unfotunately, the encoder have a different count of phase changes between clicks.
- * Select an encoder speed from 0 = fastest to 2 = slowest that results in one menu move per click.
- */
-#define UI_ENCODER_SPEED                    1
 
 /** \brief bounce time of keys in milliseconds */
 #define UI_KEY_BOUNCETIME                   10
@@ -660,9 +531,6 @@ we use blocks of 2 kByte size for the structure of our EEPROM
 /** \brief Defines the I2C address for the external EEPROM which stores type information */
 #define I2C_ADDRESS_TYPE_EEPROM             0x51
 
-/** \brief Default diagnostic level at boot. Values >= 2 enable info and error messages. */
-#define ALLOW_EXTENDED_COMMUNICATION        2
-
 /** 
  * \brief Configuration of the external watchdog
  * The TPS3820 of the RF1000/RF2000 resets about 112/200/310 (min/typical/max) ms after the last time when it was triggered
@@ -676,9 +544,6 @@ we use blocks of 2 kByte size for the structure of our EEPROM
 
 /** \brief The display shows that the device is idle after no new commands were processed for longer than the minimal idle time */
 #define MINIMAL_IDLE_TIME                   500                                                 // [ms]
-
-/** \brief Allow a configurable filament retract while M109 waits for the selected nozzle to heat. */
-#define RETRACT_DURING_HEATUP               true
 
 /**
  * \brief PID control only works target temperature +/- PID_CONTROL_RANGE.
@@ -728,21 +593,6 @@ we use blocks of 2 kByte size for the structure of our EEPROM
  * execution.
  */
 #define GCODE_BUFFER_SIZE                   2
-
-/**
- * \brief Communication errors can swollow part of the ok, which tells the host software to send
- * the next command. Not receiving it will cause your printer to stop. Sending this string every
- * second, if our queue is empty should prevent this. Comment it, if you don't wan't this feature.
- */
-#define WAITING_IDENTIFIER                  "wait"
-
-/**
- * \brief If the firmware is busy, it will send a busy signal to host signaling that
- * everything is fine and it only takes a bit longer to finish. That way the
- * host can keep timeout short so in case of communication errors the resulting
- * blobs are much smaller. Set to 0 to disable it.
- */
-#define KEEP_ALIVE_INTERVAL                 2000                                                // [ms]
 
 /** \brief  Turn the case light on/off per default */
 #define CASE_LIGHTS_DEFAULT_ON              0

@@ -38,6 +38,7 @@ public:
     uint8_t pwmIndex;           ///< pwm index for output control. 0-2 = Extruder, 3 = Fan, 4 = Heated Bed
     uint8_t sensorType;         ///< Type of temperature sensor.
     uint8_t sensorPin;          ///< Pin to read extruder temperature.
+    const uint16_t heaterCutoffC; ///< Switch the heater off above this temperature.
     int16_t currentTemperature; ///< Currenttemperature value read from sensor.
     float currentTemperatureC;  ///< Current temperature in degC.
     float targetTemperatureC;   ///< Target temperature in degC.
@@ -65,7 +66,7 @@ public:
     uint8_t paused;
 
     void setTargetTemperature(float target);
-    void updateCurrentTemperature();
+    bool updateCurrentTemperature(); ///< False for an unsupported sensor type.
     void updateTempControlVars();
     void waitForTargetTemperature(uint8_t plus_temp_tolerance = 0, bool resumingPause = false);
     void autotunePID(float temp, uint8_t controllerId, int maxCycles, bool storeResult, int method);
@@ -151,7 +152,7 @@ extern Extruder extruder[];
 This structure contains all definitions for an extruder and all
 current state variables, like current temperature, feeder position etc.
 */
-class Extruder // Size: 12*1 Byte+12*4 Byte+4*2Byte = 68 Byte
+class Extruder
 {
 public:
     static Extruder* current;
@@ -164,8 +165,6 @@ public:
     float maxFeedrate;              ///< Maximum feedrate in mm/s.
     float maxAcceleration;          ///< Maximum acceleration in mm/s^2.
     float maxEJerk;                 ///< Maximum start feedrate in mm/s.
-    int16_t waitRetractTemperature; ///< Temperature to retract the filament when waiting for heatup
-    int16_t waitRetractUnits;       ///< Units to retract the filament when waiting for heatup
     volatile int8_t stepperDirection;
 
     float advanceL;
@@ -300,12 +299,8 @@ public:
     static void setTemperatureForAllExtruders(float temperatureInCelsius);
 }; // Extruder
 
-#if HAVE_HEATED_BED
-#define NUM_TEMPERATURE_LOOPS NUM_EXTRUDER + 1
+#define NUM_TEMPERATURE_LOOPS (NUM_EXTRUDER + 1)
 extern TemperatureController heatedBedController;
-#else
-#define NUM_TEMPERATURE_LOOPS NUM_EXTRUDER
-#endif // HAVE_HEATED_BED
 
 #if RESERVE_ANALOG_INPUTS
 extern TemperatureController optTempController;

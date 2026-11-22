@@ -143,7 +143,6 @@ void Commands::printTemperatures(bool showRaw) {
         // Show output of autotune when tuning!
         Com::printF(Com::tSpaceAtColon, (pwm_pos[Extruder::current->id]));
 
-#if HAVE_HEATED_BED
         Com::printF(Com::tSpaceBColon, Extruder::getHeatedBedTemperature(), 1);
         Com::printF(Com::tSpaceSlash, heatedBedController.targetTemperatureC, 0);
 
@@ -152,7 +151,6 @@ void Commands::printTemperatures(bool showRaw) {
             Com::printF(Com::tColon, (1023 << (2 - ANALOG_REDUCE_BITS)) - heatedBedController.currentTemperature);
         }
         Com::printF(Com::tSpaceBAtColon, (pwm_pos[heatedBedController.pwmIndex])); // Show output of autotune when tuning!
-#endif                                                                             // HAVE_HEATED_BED
 
 #if NUM_EXTRUDER > 1
         for (uint8_t i = 0; i < NUM_EXTRUDER; i++) {
@@ -559,12 +557,8 @@ void Commands::processMCode(GCode* com) {
             break;
         }
 
-#if RETRACT_DURING_HEATUP
-        uint8_t retracted = 0;
-#endif // RETRACT_DURING_HEATUP
         millis_t currentTime = HAL::timeInMilliseconds();
         bool isTempReached;
-        bool longTempTime = false; // random init
         bool dirRising = true;     // random init
         float settarget = -1;      // random init in °C
 
@@ -575,7 +569,6 @@ void Commands::processMCode(GCode* com) {
             if (settarget != actExtruder->tempControl.targetTemperatureC) {
                 settarget = actExtruder->tempControl.targetTemperatureC; //in °C
                 dirRising = (actExtruder->tempControl.targetTemperatureC > actExtruder->tempControl.currentTemperatureC);
-                longTempTime = (fabs(actExtruder->tempControl.targetTemperatureC - actExtruder->tempControl.currentTemperatureC) > 40.0f ? true : false);
                 if (dirRising) {
                     UI_STATUS_UPD(UI_TEXT_HEATING_EXTRUDER);
                 } else {
@@ -585,17 +578,6 @@ void Commands::processMCode(GCode* com) {
 
             isTempReached = fabs(actExtruder->tempControl.targetTemperatureC - actExtruder->tempControl.currentTemperatureC) < TEMP_TOLERANCE;
 
-#if RETRACT_DURING_HEATUP
-            if (!retracted && dirRising) {
-                if (longTempTime
-                    && actExtruder == Extruder::current
-                    && actExtruder->waitRetractUnits > 0
-                    && actExtruder->tempControl.currentTemperatureC >= actExtruder->waitRetractTemperature) {
-                    Printer::queueRelativeMMCoordinates(0, 0, 0, -actExtruder->waitRetractUnits, actExtruder->maxFeedrate, false, false);
-                    retracted = 1;
-                }
-            }
-#endif // RETRACT_DURING_HEATUP
             if (!dirRising) {
                 if (actExtruder->tempControl.currentTemperatureC <= MAX_ROOM_TEMPERATURE) {
                     break;
@@ -613,11 +595,6 @@ void Commands::processMCode(GCode* com) {
             }
         } while (!isTempReached);
 
-#if RETRACT_DURING_HEATUP
-        if (retracted && actExtruder == Extruder::current) {
-            Printer::queueRelativeMMCoordinates(0, 0, 0, actExtruder->waitRetractUnits, actExtruder->maxFeedrate, false, false);
-        }
-#endif // RETRACT_DURING_HEATUP
 #endif // NUM_EXTRUDER>0
 
         g_uStartOfIdle = HAL::timeInMilliseconds(); //end of M109
@@ -625,7 +602,6 @@ void Commands::processMCode(GCode* com) {
     }
     case 190: // M190 - Wait bed for heater to reach target.
     {
-#if HAVE_HEATED_BED
         previousMillisCmd = HAL::timeInMilliseconds(); //prevent inactive shutdown of steppers/temps
         if (Printer::isAnyTempsensorDefect()) {
             reportTempsensorAndHeaterErrors();
@@ -662,7 +638,6 @@ void Commands::processMCode(GCode* com) {
         }
 
         g_uStartOfIdle = HAL::timeInMilliseconds() + 5000; //end of M190
-#endif                                                         // HAVE_HEATED_BED
         break;
     }
     case 116: // M116 - Wait for temperatures to reach target temperature
@@ -688,7 +663,6 @@ void Commands::processMCode(GCode* com) {
 
     case 303: // M303
     {
-#if NUM_TEMPERATURE_LOOPS > 0
         int temp = 150;
         int cont = 0;
         int cycles = 10;
@@ -706,7 +680,6 @@ void Commands::processMCode(GCode* com) {
         if (cont < 0)
             cont = 0;
         tempController[cont]->autotunePID(temp, cont, cycles, com->hasX(), method);
-#endif // NUM_TEMPERATURE_LOOPS > 0
         break;
     }
 
@@ -824,48 +797,28 @@ void Commands::processMCode(GCode* com) {
         Com::writeToAll = false;
         Commands::waitUntilEndOfAllMoves(); //M119
 
-#if (X_MIN_PIN > -1) && MIN_HARDWARE_ENDSTOP_X
         Com::printF(Com::tXMinColon);
         Com::printF(Printer::isXMinEndstopHit() ? Com::tHSpace : Com::tLSpace);
-#endif // (X_MIN_PIN > -1) && MIN_HARDWARE_ENDSTOP_X
 
-#if (X_MAX_PIN > -1) && MAX_HARDWARE_ENDSTOP_X
-        Com::printF(Com::tXMaxColon);
-        Com::printF(Printer::isXMaxEndstopHit() ? Com::tHSpace : Com::tLSpace);
-#else
         Com::printF(Com::tSoftDash);
         Com::printF(Com::tXMaxColon);
         Com::printF(Printer::isXMaxEndstopHit() ? Com::tHSpace : Com::tLSpace);
-#endif // (X_MAX_PIN > -1) && MAX_HARDWARE_ENDSTOP_X
 
-#if (Y_MIN_PIN > -1) && MIN_HARDWARE_ENDSTOP_Y
         Com::printF(Com::tYMinColon);
         Com::printF(Printer::isYMinEndstopHit() ? Com::tHSpace : Com::tLSpace);
-#endif // (Y_MIN_PIN > -1) && MIN_HARDWARE_ENDSTOP_Y
 
-#if (Y_MAX_PIN > -1) && MAX_HARDWARE_ENDSTOP_Y
-        Com::printF(Com::tYMaxColon);
-        Com::printF(Printer::isYMaxEndstopHit() ? Com::tHSpace : Com::tLSpace);
-#else
         Com::printF(Com::tSoftDash);
         Com::printF(Com::tYMaxColon);
         Com::printF(Printer::isYMaxEndstopHit() ? Com::tHSpace : Com::tLSpace);
-#endif // (Y_MAX_PIN > -1) && MAX_HARDWARE_ENDSTOP_Y
 
-#if (Z_MIN_PIN > -1) && MIN_HARDWARE_ENDSTOP_Z
         Com::printF(Com::tZMinColon);
         Com::printF(Printer::isZMinEndstopHit() ? Com::tHSpace : Com::tLSpace);
-#endif // (Z_MIN_PIN > -1) && MIN_HARDWARE_ENDSTOP_Z
 
-        // The RF1000 reports its software Z maximum here.
-#if (Z_MAX_PIN > -1) && MAX_HARDWARE_ENDSTOP_Z
-        Com::printF(Com::tZMaxColon);
-        Com::printF(Printer::isZMaxEndstopHit() ? Com::tHSpace : Com::tLSpace);
-#else
+#if MOTHERBOARD == DEVICE_TYPE_RF1000
         Com::printF(Com::tSoftDash);
+#endif
         Com::printF(Com::tZMaxColon);
         Com::printF(Printer::isZMaxEndstopHit() ? Com::tHSpace : Com::tLSpace);
-#endif // (Z_MAX_PIN > -1) && MAX_HARDWARE_ENDSTOP_Z
 
         Com::println();
         break;
@@ -903,10 +856,8 @@ void Commands::processMCode(GCode* com) {
         if (com->hasS()) {
             if (com->S < NUM_EXTRUDER)
                 manageMonitor = com->S;
-#if HAVE_HEATED_BED
             else
                 manageMonitor = NUM_EXTRUDER; // Set 100 to heated bed
-#endif                                            // HAVE_HEATED_BED
         }
         break;
     }
@@ -918,13 +869,8 @@ void Commands::processMCode(GCode* com) {
                 break;
             if (com->S < NUM_EXTRUDER)
                 temp = &extruder[com->S].tempControl;
-#if HAVE_HEATED_BED
             else
                 temp = &heatedBedController;
-#else
-            else
-                break;
-#endif // HAVE_HEATED_BED
         }
         if (com->hasX())
             temp->pidPGain = com->X;

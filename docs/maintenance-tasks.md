@@ -72,10 +72,6 @@ The firmware restricted Play to a completed pause in 1.37t2. The 1.43.56 pause r
 - [ ] **Evaluate Z-CMP wait between queued segments.** The review branch skips waits for corrections held at a travel limit and keeps idle compensation active with a paused queue. Compare the fork's change to waits between buffered moves in the timing review. [Timer patch](https://github.com/afriess/RFx000x-Firmware/commit/e51f9bc)
 - [ ] **Evaluate step packing.** Check the computed `minInterval` with the extra 64 ticks for pressure advance. Measure removing the 512-tick interval floor separately. [Step-packing patch](https://github.com/afriess/RFx000x-Firmware/commit/0e11752)
 
-## Heating and filament
-
-- [ ] **Review the optional M109 retract.** The factory distance is 0 mm. With a positive stored distance, the loop can enqueue the matching prime after a timeout or a sensor fault. Check successful heating, cooldown and target edits, cancellation and sensor faults with both tools. Track the original retract amount, the active tool and the logical and motor E positions. Require successful heating before returning filament. [Heat-up wait](../Repetier/Commands.cpp#L537)
-
 ## Firmware structure and hardware variants
 
 Work through the [architecture review and migration](development-roadmap.md#5-firmware-structure-and-hardware-variants) as the blocks establish which state, algorithms and hardware differences belong together.
@@ -88,6 +84,7 @@ Work through the [architecture review and migration](development-roadmap.md#5-fi
 - [x] **Remove the remaining `FEATURE_*` switches.** Use model temperature curves, compile homing diagnostics and WobbleFix on all models, and remove the unused checksum bit. Host tests compared sensor conversion and zero-amplitude move targets. [Feature retirement](development-roadmap.md#feature-retirement)
 - [x] **Fold the shared motion, display and serial defaults into the firmware.** Pressure Advance, the current junction and short-segment calculations, the 25 ms driver enable wait and the 120 s menu timeout are built in. SD builds include file sizes in `M20`. Automatic trace builds, alternate serial ports and the early RF1000 fan-pin variant are retired. [Shared build defaults](development-roadmap.md#feature-retirement)
 - [x] **Retire TipDown and fix the UART transmit ring at 64 bytes.** Removed the per-tool Z displacement from tool changes, homing and EEPROM settings. The movement planner keeps the existing cache sizes of 17 with SD and 24 without SD. [Feature retirement](development-roadmap.md#feature-retirement)
+- [x] **Retire the M109 retract and obsolete build variants.** The heat-up wait leaves extrusion to the print's G-code. Board selection determines the physical Z-max input. The heater, LCD and SdFat code use their stock variants. [Feature retirement](development-roadmap.md#feature-retirement)
 
 ## Fork candidates
 

@@ -224,25 +224,17 @@
 
 // Load some parts of the printers configuration
 #if MOTHERBOARD == DEVICE_TYPE_RF1000
-#define UI_HAS_BACK_KEY 1
-#define UI_DISPLAY_TYPE 1 // 1 = LCD Display with 4 bit data bus
 #define UI_COLS 16        //check MAX_COLS when changed
 #define UI_ROWS 4         //do not change for RF1000 or RF2000!
 #define UI_DELAYPERCHAR 320
 #define UI_SPACER ""
-#define UI_INVERT_MENU_DIRECTION false
-#define UI_INVERT_INCREMENT_DIRECTION true
 #endif // MOTHERBOARD == DEVICE_TYPE_RF1000
 
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
-#define UI_HAS_BACK_KEY 1
-#define UI_DISPLAY_TYPE 1 // 1 = LCD Display with 4 bit data bus
 #define UI_COLS 20        //check MAX_COLS when changed
 #define UI_ROWS 4         //do not change for RF1000 or RF2000!
 #define UI_DELAYPERCHAR 320
 #define UI_SPACER "    "
-#define UI_INVERT_MENU_DIRECTION false
-#define UI_INVERT_INCREMENT_DIRECTION true
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
 //mtype usw.
@@ -665,7 +657,6 @@ extern UIDisplay uid;
 #include "uilang.h"
 #include "uimenu.h"
 
-#if UI_DISPLAY_TYPE != 0
 #define UI_INITIALIZE uid.initialize();
 #define UI_FAST \
     if (pwm_count_heater & 4) { \
@@ -699,33 +690,5 @@ extern UIDisplay uid;
     }
 #define UI_CLEAR_STATUS \
     { uid.statusMsg[0] = 0; }
-#else
-#define UI_INITIALIZE \
-    { }
-#define UI_FAST \
-    { }
-#define UI_SLOW \
-    { }
-#define UI_STATUS(status) \
-    { }
-#define UI_STATUS_RAM(status) \
-    { }
-#define UI_STATUS_UPD(status) \
-    { }
-#define UI_STATUS_UPD_RAM(status) \
-    { }
-#define UI_CLEAR_STATUS \
-    { }
-#define UI_ERROR(msg) \
-    { }
-#define UI_ERROR_P(status) \
-    { }
-#define UI_ERROR_UPD(status) \
-    { }
-#define UI_ERROR_RAM(status) \
-    { }
-#define UI_ERROR_UPD_RAM(status) \
-    { }
-#endif // UI_DISPLAY_TYPE!=0
 
 #endif // UI_H

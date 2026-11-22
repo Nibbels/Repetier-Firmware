@@ -1497,7 +1497,7 @@ bool SdBaseFile::openRoot(SdVolume* vol) {
         goto fail;
     }
     vol_ = vol;
-    if (vol->fatType() == 16 || (FAT12_SUPPORT && vol->fatType() == 12)) {
+    if (vol->fatType() == 16) {
         type_ = FAT_FILE_TYPE_ROOT_FIXED;
         firstCluster_ = 0;
         fileSize_ = 32 * vol->rootDirEntryCount();
@@ -1822,40 +1822,10 @@ int SdBaseFile::read(void* buf, size_t nbyte) {
             }
             uint8_t* src = pc->data + offset;
             memcpy(dst, src, n);
-        } else if (!USE_MULTI_BLOCK_SD_IO || toRead < 1024) {
+        } else {
             // read single block
             n = 512;
             if (!vol_->readBlock(block, dst)) {
-                DBG_FAIL_MACRO;
-                goto fail;
-            }
-        } else {
-            uint8_t nb = toRead >> 9;
-            if (type_ != FAT_FILE_TYPE_ROOT_FIXED) {
-                uint8_t mb = vol_->blocksPerCluster() - blockOfCluster;
-                if (mb < nb)
-                    nb = mb;
-            }
-            n = 512 * nb;
-            if (vol_->cacheBlockNumber() <= block
-                && block < (vol_->cacheBlockNumber() + nb)) {
-                // flush cache if a block is in the cache
-                if (!vol_->cacheSync()) {
-                    DBG_FAIL_MACRO;
-                    goto fail;
-                }
-            }
-            if (!vol_->sdCard()->readStart(block)) {
-                DBG_FAIL_MACRO;
-                goto fail;
-            }
-            for (uint8_t b = 0; b < nb; b++) {
-                if (!vol_->sdCard()->readData(dst + b * 512)) {
-                    DBG_FAIL_MACRO;
-                    goto fail;
-                }
-            }
-            if (!vol_->sdCard()->readStop()) {
                 DBG_FAIL_MACRO;
                 goto fail;
             }
@@ -2805,7 +2775,7 @@ int SdBaseFile::write(const void* buf, size_t nbyte) {
                     goto fail;
                 }
             }
-        } else if (!USE_MULTI_BLOCK_SD_IO || nToWrite < 1024) {
+        } else {
             // use single block write command
             n = 512;
             if (vol_->cacheBlockNumber() == block) {
@@ -2815,34 +2785,7 @@ int SdBaseFile::write(const void* buf, size_t nbyte) {
                 DBG_FAIL_MACRO;
                 goto fail;
             }
-        } else {
-            // use multiple block write command
-            uint8_t maxBlocks = vol_->blocksPerCluster() - blockOfCluster;
-            uint8_t nBlock = nToWrite >> 9;
-            if (nBlock > maxBlocks)
-                nBlock = maxBlocks;
-
-            n = 512 * nBlock;
-            if (!vol_->sdCard()->writeStart(block, nBlock)) {
-                DBG_FAIL_MACRO;
-                goto fail;
-            }
-            for (uint8_t b = 0; b < nBlock; b++) {
-                // invalidate cache if block is in cache
-                if ((block + b) == vol_->cacheBlockNumber()) {
-                    vol_->cacheInvalidate();
-                }
-                if (!vol_->sdCard()->writeData(src + 512 * b)) {
-                    DBG_FAIL_MACRO;
-                    goto fail;
-                }
-            }
-            if (!vol_->sdCard()->writeStop()) {
-                DBG_FAIL_MACRO;
-                goto fail;
-            }
         }
-        curPosition_ += n;
         src += n;
         nToWrite -= n;
     }
@@ -2871,9 +2814,6 @@ fail:
 }
 //------------------------------------------------------------------------------
 // suppress cpplint warnings with NOLINT comment
-#if ALLOW_DEPRECATED_FUNCTIONS && !defined(DOXYGEN)
-void (*SdBaseFile::oldDateTime_)(uint16_t& date, uint16_t& time) = 0; // NOLINT
-#endif                                                                // ALLOW_DEPRECATED_FUNCTIONS
 
 // ============== Sd2Card.cpp =============
 
@@ -2882,7 +2822,6 @@ void (*SdBaseFile::oldDateTime_)(uint16_t& date, uint16_t& time) = 0; // NOLINT
 #define SD_TRACE(m, b)
 // #define SD_TRACE(m, b) Serial.print(m);Serial.println(b);
 // SPI functions
-#ifndef SOFTWARE_SPI
 // functions for hardware SPI
 //------------------------------------------------------------------------------
 // make sure SPCR rate is in expected bits
@@ -2932,46 +2871,7 @@ static void spiSend(const uint8_t* buf, size_t n) {
 }
 
 //------------------------------------------------------------------------------
-#else // SOFTWARE_SPI
-#include <SoftSPI.h>
-static SoftSPI<SOFT_SPI_MISO_PIN, SOFT_SPI_MOSI_PIN, SOFT_SPI_SCK_PIN, 0> softSpiBus;
-//------------------------------------------------------------------------------
-/**
- * initialize SPI pins
- */
-static void spiBegin() {
-    softSpiBus.begin();
-}
-//------------------------------------------------------------------------------
-/** Soft SPI receive byte */
-static uint8_t spiRec() {
-    return softSpiBus.receive();
-}
-//------------------------------------------------------------------------------
-/** Soft SPI read data */
-static uint8_t spiRec(uint8_t* buf, size_t nbyte) {
-    for (size_t i = 0; i < nbyte; i++) {
-        buf[i] = spiRec();
-    }
-    return 0;
-}
-//------------------------------------------------------------------------------
-/** Soft SPI send byte */
-static void spiSend(uint8_t data) {
-    softSpiBus.send(data);
-}
-//------------------------------------------------------------------------------
-/** Soft SPI send block */
-static void spiSendBlock(uint8_t token, const uint8_t* buf) {
-    spiSend(token);
-    for (uint16_t i = 0; i < 512; i++) {
-        spiSend(buf[i]);
-    }
-}
-
-#endif // SOFTWARE_SPI
 //==============================================================================
-#if USE_SD_CRC
 // CRC functions
 //------------------------------------------------------------------------------
 static uint8_t CRC7(const uint8_t* data, uint8_t n) {
@@ -2988,23 +2888,8 @@ static uint8_t CRC7(const uint8_t* data, uint8_t n) {
     return (crc << 1) | 1;
 }
 //------------------------------------------------------------------------------
-#if USE_SD_CRC == 1
-// slower CRC-CCITT
-// uses the x^16,x^12,x^5,x^1 polynomial.
-static uint16_t CRC_CCITT(const uint8_t* data, size_t n) {
-    uint16_t crc = 0;
-    for (size_t i = 0; i < n; i++) {
-        crc = (uint8_t)(crc >> 8) | (crc << 8);
-        crc ^= data[i];
-        crc ^= (uint8_t)(crc & 0xff) >> 4;
-        crc ^= crc << 12;
-        crc ^= (crc & 0xff) << 5;
-    }
-    return crc;
-}
-#elif USE_SD_CRC > 1 // CRC_CCITT
 //------------------------------------------------------------------------------
-// faster CRC-CCITT
+// Table-driven CRC-CCITT for SD data blocks.
 // uses the x^16,x^12,x^5,x^1 polynomial.
 static const uint16_t crctab[] PROGMEM = {
     0x0000, 0x1021, 0x2042, 0x3063, 0x4084, 0x50A5, 0x60C6, 0x70E7,
@@ -3047,8 +2932,6 @@ static uint16_t CRC_CCITT(const uint8_t* data, size_t n) {
     }
     return crc;
 }
-#endif               //  CRC_CCITT
-#endif               // USE_SD_CRC
 //==============================================================================
 // Sd2Card member functions
 //------------------------------------------------------------------------------
@@ -3062,7 +2945,6 @@ uint8_t Sd2Card::cardCommand(uint8_t cmd, uint32_t arg) {
 
     uint8_t* pa = reinterpret_cast<uint8_t*>(&arg);
 
-#if USE_SD_CRC
     // form message
     //uint8_t d[6] = {cmd | 0X40, pa[3], pa[2], pa[1], pa[0]}; Nibbels
     uint8_t d[6] = { (uint8_t)(cmd | 0X40), pa[3], pa[2], pa[1], pa[0] };
@@ -3073,21 +2955,6 @@ uint8_t Sd2Card::cardCommand(uint8_t cmd, uint32_t arg) {
     // send message
     for (uint8_t k = 0; k < 6; k++)
         spiSend(d[k]);
-#else  // USE_SD_CRC
-    // send command
-    spiSend(cmd | 0x40);
-
-    // send argument
-    for (int8_t i = 3; i >= 0; i--)
-        spiSend(pa[i]);
-
-    // send CRC - correct for CMD0 with arg zero or CMD8 with arg 0X1AA
-    spiSend(cmd == CMD0 ? 0X95 : 0X87);
-#endif // USE_SD_CRC
-
-    // skip stuff byte for stop read
-    if (cmd == CMD12)
-        spiRec();
 
     // wait for response
     for (uint8_t i = 0; ((status_ = spiRec()) & 0X80) && i != 0XFF; i++)
@@ -3128,9 +2995,7 @@ void Sd2Card::chipSelectHigh() {
 }
 //------------------------------------------------------------------------------
 void Sd2Card::chipSelectLow() {
-#ifndef SOFTWARE_SPI
     spiInit(spiRate_);
-#endif // SOFTWARE_SPI
     HAL::digitalWrite(chipSelectPin_, LOW);
 }
 //------------------------------------------------------------------------------
@@ -3214,11 +3079,9 @@ bool Sd2Card::init(uint8_t sckRateID, uint8_t chipSelectPin) {
     HAL::digitalWrite(chipSelectPin_, HIGH);
     spiBegin();
 
-#ifndef SOFTWARE_SPI
     // set SCK rate for initialization commands
     spiRate_ = SPI_SD_INIT_RATE;
     spiInit(spiRate_);
-#endif // SOFTWARE_SPI
 
     // must supply min of 74 clock cycles with CS high.
     for (uint8_t i = 0; i < 10; i++)
@@ -3231,12 +3094,10 @@ bool Sd2Card::init(uint8_t sckRateID, uint8_t chipSelectPin) {
             goto fail;
         }
     }
-#if USE_SD_CRC
     if (cardCommand(CMD59, 1) != R1_IDLE_STATE) {
         error(SD_CARD_ERROR_CMD59);
         goto fail;
     }
-#endif // USE_SD_CRC
     // check SD version
     while (1) {
         if (cardCommand(CMD8, 0x1AA) == (R1_ILLEGAL_COMMAND | R1_IDLE_STATE)) {
@@ -3278,11 +3139,7 @@ bool Sd2Card::init(uint8_t sckRateID, uint8_t chipSelectPin) {
     }
     chipSelectHigh();
 
-#ifndef SOFTWARE_SPI
     return setSckRate(sckRateID);
-#else  // SOFTWARE_SPI
-    return true;
-#endif // SOFTWARE_SPI
 
 fail:
     chipSelectHigh();
@@ -3314,18 +3171,6 @@ fail:
     return false;
 }
 //------------------------------------------------------------------------------
-/** Read one data block in a multiple block read sequence
- *
- * \param[in] dst Pointer to the location for the data to be read.
- *
- * \return The value one, true, is returned for success and
- * the value zero, false, is returned for failure.
- */
-bool Sd2Card::readData(uint8_t* dst) {
-    chipSelectLow();
-    return readData(dst, 512);
-}
-//------------------------------------------------------------------------------
 bool Sd2Card::readData(uint8_t* dst, size_t count) {
     uint16_t crc;
     // wait for start block token
@@ -3347,12 +3192,10 @@ bool Sd2Card::readData(uint8_t* dst, size_t count) {
     }
     // get crc
     crc = (spiRec() << 8) | spiRec();
-#if USE_SD_CRC
     if (crc != CRC_CCITT(dst, count)) {
         error(SD_CARD_ERROR_READ_CRC);
         goto fail;
     }
-#endif // USE_SD_CRC
 
     chipSelectHigh();
     return true;
@@ -3370,51 +3213,6 @@ bool Sd2Card::readRegister(uint8_t cmd, void* buf) {
         goto fail;
     }
     return readData(dst, 16);
-
-fail:
-    chipSelectHigh();
-    return false;
-}
-//------------------------------------------------------------------------------
-/** Start a read multiple blocks sequence.
- *
- * \param[in] blockNumber Address of first block in sequence.
- *
- * \note This function is used with readData() and readStop() for optimized
- * multiple block reads.  SPI chipSelect must be low for the entire sequence.
- *
- * \return The value one, true, is returned for success and
- * the value zero, false, is returned for failure.
- */
-bool Sd2Card::readStart(uint32_t blockNumber) {
-    SD_TRACE("RS", blockNumber);
-    if (type() != SD_CARD_TYPE_SDHC)
-        blockNumber <<= 9;
-    if (cardCommand(CMD18, blockNumber)) {
-        error(SD_CARD_ERROR_CMD18);
-        goto fail;
-    }
-    chipSelectHigh();
-    return true;
-
-fail:
-    chipSelectHigh();
-    return false;
-}
-//------------------------------------------------------------------------------
-/** End a read multiple blocks sequence.
- *
-* \return The value one, true, is returned for success and
- * the value zero, false, is returned for failure.
- */
-bool Sd2Card::readStop() {
-    chipSelectLow();
-    if (cardCommand(CMD12, 0)) {
-        error(SD_CARD_ERROR_CMD12);
-        goto fail;
-    }
-    chipSelectHigh();
-    return true;
 
 fail:
     chipSelectHigh();
@@ -3476,7 +3274,7 @@ bool Sd2Card::writeBlock(uint32_t blockNumber, const uint8_t* src) {
         error(SD_CARD_ERROR_CMD24);
         goto fail;
     }
-    if (!writeData(DATA_START_BLOCK, src))
+    if (!writeData(src))
         goto fail;
 
     // wait for flash programming to complete
@@ -3497,36 +3295,11 @@ fail:
     return false;
 }
 //------------------------------------------------------------------------------
-/** Write one data block in a multiple block write sequence
- * \param[in] src Pointer to the location of the data to be written.
- * \return The value one, true, is returned for success and
- * the value zero, false, is returned for failure.
- */
+// Send a single data block with its CRC.
 bool Sd2Card::writeData(const uint8_t* src) {
-    chipSelectLow();
-    // wait for previous write to finish
-    if (!waitNotBusy(SD_WRITE_TIMEOUT))
-        goto fail;
-    if (!writeData(WRITE_MULTIPLE_TOKEN, src))
-        goto fail;
-    chipSelectHigh();
-    return true;
-
-fail:
-    error(SD_CARD_ERROR_WRITE_MULTIPLE);
-    chipSelectHigh();
-    return false;
-}
-//------------------------------------------------------------------------------
-// send one block of data for write block or write multiple blocks
-bool Sd2Card::writeData(uint8_t token, const uint8_t* src) {
-#if USE_SD_CRC
     uint16_t crc = CRC_CCITT(src, 512);
-#else  // USE_SD_CRC
-    uint16_t crc = 0XFFFF;
-#endif // USE_SD_CRC
 
-    spiSend(token);
+    spiSend(DATA_START_BLOCK);
     spiSend(src, 512);
     spiSend(crc >> 8);
     spiSend(crc & 0XFF);
@@ -3543,77 +3316,17 @@ fail:
     return false;
 }
 //------------------------------------------------------------------------------
-/** Start a write multiple blocks sequence.
- *
- * \param[in] blockNumber Address of first block in sequence.
- * \param[in] eraseCount The number of blocks to be pre-erased.
- *
- * \note This function is used with writeData() and writeStop()
- * for optimized multiple block writes.
- *
- * \return The value one, true, is returned for success and
- * the value zero, false, is returned for failure.
- */
-bool Sd2Card::writeStart(uint32_t blockNumber, uint32_t eraseCount) {
-    SD_TRACE("WS", blockNumber);
-    // send pre-erase count
-    if (cardAcmd(ACMD23, eraseCount)) {
-        error(SD_CARD_ERROR_ACMD23);
-        goto fail;
-    }
-    // use address if not SDHC card
-    if (type() != SD_CARD_TYPE_SDHC)
-        blockNumber <<= 9;
-    if (cardCommand(CMD25, blockNumber)) {
-        error(SD_CARD_ERROR_CMD25);
-        goto fail;
-    }
-    chipSelectHigh();
-    return true;
-
-fail:
-    chipSelectHigh();
-    return false;
-}
-//------------------------------------------------------------------------------
-/** End a write multiple blocks sequence.
- *
-* \return The value one, true, is returned for success and
- * the value zero, false, is returned for failure.
- */
-bool Sd2Card::writeStop() {
-    chipSelectLow();
-    if (!waitNotBusy(SD_WRITE_TIMEOUT))
-        goto fail;
-    spiSend(STOP_TRAN_TOKEN);
-    if (!waitNotBusy(SD_WRITE_TIMEOUT))
-        goto fail;
-    chipSelectHigh();
-    return true;
-
-fail:
-    error(SD_CARD_ERROR_STOP_TRAN);
-    chipSelectHigh();
-    return false;
-}
 
 // =================== SdVolume ===================
 
 //------------------------------------------------------------------------------
-#if !USE_MULTIPLE_CARDS
 // raw block cache
 
 cache_t SdVolume::cacheBuffer_;       // 512 byte cache for Sd2Card
 uint32_t SdVolume::cacheBlockNumber_; // current block number
 uint8_t SdVolume::cacheStatus_;       // status of cache block
 uint32_t SdVolume::cacheFatOffset_;   // offset for mirrored FAT
-#if USE_SEPARATE_FAT_CACHE
-cache_t SdVolume::cacheFatBuffer_;       // 512 byte cache for FAT
-uint32_t SdVolume::cacheFatBlockNumber_; // current Fat block number
-uint8_t SdVolume::cacheFatStatus_;       // status of cache Fatblock
-#endif                                   // USE_SEPARATE_FAT_CACHE
-Sd2Card* SdVolume::sdCard_;              // pointer to SD card object
-#endif                                   // USE_MULTIPLE_CARDS
+Sd2Card* SdVolume::sdCard_;           // pointer to the SD card
 //------------------------------------------------------------------------------
 // find a contiguous group of clusters
 bool SdVolume::allocContiguous(uint32_t count, uint32_t* curCluster) {
@@ -3705,97 +3418,6 @@ fail:
 
 // cache functions
 
-#if USE_SEPARATE_FAT_CACHE
-
-//------------------------------------------------------------------------------
-cache_t* SdVolume::cacheFetch(uint32_t blockNumber, uint8_t options) {
-    return cacheFetchData(blockNumber, options);
-}
-//------------------------------------------------------------------------------
-cache_t* SdVolume::cacheFetchData(uint32_t blockNumber, uint8_t options) {
-    if (cacheBlockNumber_ != blockNumber) {
-        if (!cacheWriteData()) {
-            DBG_FAIL_MACRO;
-            goto fail;
-        }
-        if (!(options & CACHE_OPTION_NO_READ)) {
-            if (!sdCard_->readBlock(blockNumber, cacheBuffer_.data)) {
-                DBG_FAIL_MACRO;
-                goto fail;
-            }
-        }
-        cacheStatus_ = 0;
-        cacheBlockNumber_ = blockNumber;
-    }
-    cacheStatus_ |= options & CACHE_STATUS_MASK;
-    return &cacheBuffer_;
-
-fail:
-    return 0;
-}
-//------------------------------------------------------------------------------
-cache_t* SdVolume::cacheFetchFat(uint32_t blockNumber, uint8_t options) {
-    if (cacheFatBlockNumber_ != blockNumber) {
-        if (!cacheWriteFat()) {
-            DBG_FAIL_MACRO;
-            goto fail;
-        }
-        if (!(options & CACHE_OPTION_NO_READ)) {
-            if (!sdCard_->readBlock(blockNumber, cacheFatBuffer_.data)) {
-                DBG_FAIL_MACRO;
-                goto fail;
-            }
-        }
-        cacheFatStatus_ = 0;
-        cacheFatBlockNumber_ = blockNumber;
-    }
-    cacheFatStatus_ |= options & CACHE_STATUS_MASK;
-    return &cacheFatBuffer_;
-
-fail:
-    return 0;
-}
-//------------------------------------------------------------------------------
-bool SdVolume::cacheSync() {
-    return cacheWriteData() && cacheWriteFat();
-}
-//------------------------------------------------------------------------------
-bool SdVolume::cacheWriteData() {
-    if (cacheStatus_ & CACHE_STATUS_DIRTY) {
-        if (!sdCard_->writeBlock(cacheBlockNumber_, cacheBuffer_.data)) {
-            DBG_FAIL_MACRO;
-            goto fail;
-        }
-        cacheStatus_ &= ~CACHE_STATUS_DIRTY;
-    }
-    return true;
-
-fail:
-    return false;
-}
-//------------------------------------------------------------------------------
-bool SdVolume::cacheWriteFat() {
-    if (cacheFatStatus_ & CACHE_STATUS_DIRTY) {
-        if (!sdCard_->writeBlock(cacheFatBlockNumber_, cacheFatBuffer_.data)) {
-            DBG_FAIL_MACRO;
-            goto fail;
-        }
-        // mirror second FAT
-        if (cacheFatOffset_) {
-            uint32_t lbn = cacheFatBlockNumber_ + cacheFatOffset_;
-            if (!sdCard_->writeBlock(lbn, cacheFatBuffer_.data)) {
-                DBG_FAIL_MACRO;
-                goto fail;
-            }
-        }
-        cacheFatStatus_ &= ~CACHE_STATUS_DIRTY;
-    }
-    return true;
-
-fail:
-    return false;
-}
-#else  // USE_SEPARATE_FAT_CACHE
 //------------------------------------------------------------------------------
 cache_t* SdVolume::cacheFetch(uint32_t blockNumber, uint8_t options) {
     if (cacheBlockNumber_ != blockNumber) {
@@ -3848,7 +3470,6 @@ fail:
 bool SdVolume::cacheWriteData() {
     return cacheSync();
 }
-#endif // USE_SEPARATE_FAT_CACHE
 //------------------------------------------------------------------------------
 void SdVolume::cacheInvalidate() {
     cacheBlockNumber_ = 0XFFFFFFFF;
@@ -3874,33 +3495,6 @@ bool SdVolume::fatGet(uint32_t cluster, uint32_t* value) {
         goto fail;
     }
 
-    if (FAT12_SUPPORT && fatType_ == 12) {
-
-        uint16_t index = cluster;
-
-        index += index >> 1;
-
-        lba = fatStartBlock_ + (index >> 9);
-        pc = cacheFetchFat(lba, CACHE_FOR_READ);
-        if (!pc) {
-            DBG_FAIL_MACRO;
-            goto fail;
-        }
-        index &= 0X1FF;
-        uint16_t tmp = pc->data[index];
-        index++;
-        if (index == 512) {
-            pc = cacheFetchFat(lba + 1, CACHE_FOR_READ);
-            if (!pc) {
-                DBG_FAIL_MACRO;
-                goto fail;
-            }
-            index = 0;
-        }
-        tmp |= pc->data[index] << 8;
-        *value = cluster & 1 ? tmp >> 4 : tmp & 0XFFF;
-        return true;
-    }
     if (fatType_ == 16) {
         lba = fatStartBlock_ + (cluster >> 8);
     } else if (fatType_ == 32) {
@@ -3933,39 +3527,6 @@ bool SdVolume::fatPut(uint32_t cluster, uint32_t value) {
     if (cluster < 2 || cluster > (clusterCount_ + 1)) {
         DBG_FAIL_MACRO;
         goto fail;
-    }
-    if (FAT12_SUPPORT && fatType_ == 12) {
-        uint16_t index = cluster;
-        index += index >> 1;
-        lba = fatStartBlock_ + (index >> 9);
-        pc = cacheFetchFat(lba, CACHE_FOR_WRITE);
-        if (!pc) {
-            DBG_FAIL_MACRO;
-            goto fail;
-        }
-        index &= 0X1FF;
-        uint8_t tmp = value;
-        if (cluster & 1) {
-            tmp = (pc->data[index] & 0XF) | tmp << 4;
-        }
-        pc->data[index] = tmp;
-
-        index++;
-        if (index == 512) {
-            lba++;
-            index = 0;
-            pc = cacheFetchFat(lba, CACHE_FOR_WRITE);
-            if (!pc) {
-                DBG_FAIL_MACRO;
-                goto fail;
-            }
-        }
-        tmp = value >> 4;
-        if (!(cluster & 1)) {
-            tmp = ((pc->data[index] & 0XF0)) | tmp >> 4;
-        }
-        pc->data[index] = tmp;
-        return true;
     }
     if (fatType_ == 16) {
         lba = fatStartBlock_ + (cluster >> 8);
@@ -4029,17 +3590,7 @@ int32_t SdVolume::freeClusterCount() {
     uint32_t todo = clusterCount_ + 2;
     uint16_t n;
 
-    if (FAT12_SUPPORT && fatType_ == 12) {
-        for (unsigned i = 2; i < todo; i++) {
-            uint32_t c;
-            if (!fatGet(i, &c)) {
-                DBG_FAIL_MACRO;
-                goto fail;
-            }
-            if (c == 0)
-                free++;
-        }
-    } else if (fatType_ == 16 || fatType_ == 32) {
+    if (fatType_ == 16 || fatType_ == 32) {
         lba = fatStartBlock_;
         while (todo) {
             cache_t* pc = cacheFetchFat(lba++, CACHE_FOR_READ);
@@ -4099,10 +3650,6 @@ bool SdVolume::init(Sd2Card* dev, uint8_t part) {
     cacheStatus_ = 0; // cacheSync() will write block if true
     cacheBlockNumber_ = 0XFFFFFFFF;
     cacheFatOffset_ = 0;
-#if USE_SERARATEFAT_CACHE
-    cacheFatStatus_ = 0; // cacheSync() will write block if true
-    cacheFatBlockNumber_ = 0XFFFFFFFF;
-#endif // USE_SERARATEFAT_CACHE
     // if part == 0 assume super floppy with FAT boot sector in block zero
     // if part > 0 assume mbr volume with partition table
     if (part) {
@@ -4170,12 +3717,11 @@ bool SdVolume::init(Sd2Card* dev, uint8_t part) {
 
     // FAT type is determined by cluster count
     if (clusterCount_ < 4085) {
-        fatType_ = 12;
-        if (!FAT12_SUPPORT) {
-            DBG_FAIL_MACRO;
-            goto fail;
-        }
-    } else if (clusterCount_ < 65525) {
+        // Only FAT16 and FAT32 volumes are supported.
+        DBG_FAIL_MACRO;
+        goto fail;
+    }
+    if (clusterCount_ < 65525) {
         fatType_ = 16;
     } else {
         rootDirStart_ = fbs->fat32RootCluster;

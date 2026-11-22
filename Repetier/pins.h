@@ -18,8 +18,6 @@
 #ifndef PINS_H
 #define PINS_H
 
-#define CURRENT_CONTROL_DRV8711 4
-
 // ##########################################################################################
 // ##   RF1000 pin assignment
 // ##########################################################################################
@@ -29,9 +27,6 @@
 #if !defined(__AVR_ATmega1280__) && !defined(__AVR_ATmega2560__)
 #error Oops!  Make sure you have 'Arduino Mega' selected from the 'Tools -> Boards' menu.
 #endif
-
-// Definition for current control
-#define STEPPER_CURRENT_CONTROL CURRENT_CONTROL_DRV8711
 
 #define SDCARDDETECT -1
 
@@ -44,8 +39,6 @@
 // PIND.7, 50, ENA_DRV1
 #define ORIG_X_MIN_PIN 3
 // PINE.5,  7, ES1
-#define ORIG_X_MAX_PIN -1
-// not installed
 
 #define ORIG_Y_STEP_PIN 60
 // PINF.6, 91, STP_DRV2
@@ -55,8 +48,6 @@
 // PINF.2, 95, ENA_DRV2
 #define ORIG_Y_MIN_PIN 2
 // PINE.4,  6, ES2
-#define ORIG_Y_MAX_PIN -1
-// not installed
 
 #define ORIG_Z_STEP_PIN 46
 // PINL.3, 38, STP_DRV3
@@ -67,7 +58,6 @@
 
 #define ORIG_Z_MIN_PIN 31
 // PINC.6, 59, ES3
-#define ORIG_Z_MAX_PIN -1
 
 #define ORIG_E0_STEP_PIN 26
 // PINA.4, 74, STP_DRV4
@@ -271,9 +261,6 @@
 #error Oops!  Make sure you have 'Arduino Mega' selected from the 'Tools -> Boards' menu.
 #endif
 
-// Definition for current control
-#define STEPPER_CURRENT_CONTROL CURRENT_CONTROL_DRV8711
-
 #define SDCARDDETECT 19
 // PIND.2, 45, CARD
 
@@ -286,8 +273,6 @@
 // PIND.7, 50, ENA_DRV1
 #define ORIG_X_MIN_PIN 35
 // PINC.2, 55, ES1
-#define ORIG_X_MAX_PIN -1
-// not installed
 
 #define ORIG_Y_STEP_PIN 60
 // PINF.6, 91, STP_DRV2
@@ -297,8 +282,6 @@
 // PINF.2, 95, ENA_DRV2
 #define ORIG_Y_MIN_PIN 37
 // PINC.0, 53, ES2
-#define ORIG_Y_MAX_PIN -1
-// not installed
 
 #define ORIG_Z_STEP_PIN 57
 // PINF.3, 94, STP_DRV3
@@ -310,7 +293,7 @@
 // Z-min and Z-max have separate inputs.
 #define ORIG_Z_MIN_PIN 31
 // PINC.6, 59, ES3
-#define ORIG_Z_MAX_PIN 16
+#define Z_MAX_PIN 16
 // PINH.1, 13, ES4
 
 #define ORIG_E0_STEP_PIN 26
@@ -506,9 +489,6 @@
 #error Oops!  Make sure you have 'Arduino Mega' selected from the 'Tools -> Boards' menu.
 #endif
 
-// Definition for current control
-#define STEPPER_CURRENT_CONTROL CURRENT_CONTROL_DRV8711
-
 // PIND.2, 45, CARD
 #define SDCARDDETECT 19
 
@@ -521,8 +501,6 @@
 #define ORIG_X_ENABLE_PIN 38
 // PINC.2, 55, ES1
 #define ORIG_X_MIN_PIN 35
-// not installed
-#define ORIG_X_MAX_PIN -1
 
 // PINF.6, 91, STP_DRV2
 #define ORIG_Y_STEP_PIN 60
@@ -532,8 +510,6 @@
 #define ORIG_Y_ENABLE_PIN 56
 // PINC.0, 53, ES2
 #define ORIG_Y_MIN_PIN 37
-// not installed
-#define ORIG_Y_MAX_PIN -1
 
 // PINF.3, 94, STP_DRV3
 #define ORIG_Z_STEP_PIN 57
@@ -546,7 +522,7 @@
 // PINC.6, 59, ES3
 #define ORIG_Z_MIN_PIN 31
 // PINH.1, 13, ES4
-#define ORIG_Z_MAX_PIN 16
+#define Z_MAX_PIN 16
 
 // PINA.4, 74, STP_DRV4
 #define ORIG_E0_STEP_PIN 26
@@ -749,28 +725,22 @@
 #define E2_PINS
 #endif
 
-#ifndef HEATER_PINS_INVERTED
-#define HEATER_PINS_INVERTED 0
-#endif
 
 // Original pin assignmats to be used in configuration tool
 #define X_STEP_PIN ORIG_X_STEP_PIN
 #define X_DIR_PIN ORIG_X_DIR_PIN
 #define X_ENABLE_PIN ORIG_X_ENABLE_PIN
 #define X_MIN_PIN ORIG_X_MIN_PIN
-#define X_MAX_PIN ORIG_X_MAX_PIN
 
 #define Y_STEP_PIN ORIG_Y_STEP_PIN
 #define Y_DIR_PIN ORIG_Y_DIR_PIN
 #define Y_ENABLE_PIN ORIG_Y_ENABLE_PIN
 #define Y_MIN_PIN ORIG_Y_MIN_PIN
-#define Y_MAX_PIN ORIG_Y_MAX_PIN
 
 #define Z_STEP_PIN ORIG_Z_STEP_PIN
 #define Z_DIR_PIN ORIG_Z_DIR_PIN
 #define Z_ENABLE_PIN ORIG_Z_ENABLE_PIN
 #define Z_MIN_PIN ORIG_Z_MIN_PIN
-#define Z_MAX_PIN ORIG_Z_MAX_PIN
 
 #define E0_STEP_PIN ORIG_E0_STEP_PIN
 #define E0_DIR_PIN ORIG_E0_DIR_PIN

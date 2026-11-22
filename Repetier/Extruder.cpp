@@ -36,15 +36,8 @@ volatile uint8 osAnalogInputPos = 0; // Current sampling position
 volatile uint osAnalogInputValues[ANALOG_INPUTS] = { 0 };
 #endif // ANALOG_INPUTS>0
 
-#ifdef USE_GENERIC_THERMISTORTABLE_1
-short temptable_generic1[GENERIC_THERM_NUM_ENTRIES][2];
-#endif
-#ifdef USE_GENERIC_THERMISTORTABLE_2
-short temptable_generic2[GENERIC_THERM_NUM_ENTRIES][2];
-#endif
-#ifdef USE_GENERIC_THERMISTORTABLE_3
-short temptable_generic3[GENERIC_THERM_NUM_ENTRIES][2];
-#endif
+// Preserve the heated bed's existing measured-temperature cutoff. Its setpoint has its own limit.
+constexpr uint16_t bedHeaterCutoffC = 275;
 
 /** Makes updates to temperatures and heater state every call.
 Is called every 100ms.
@@ -58,8 +51,9 @@ void Extruder::manageTemperatures() {
     for (uint8_t controller = 0; controller < NUM_TEMPERATURE_LOOPS; controller++) {
         TemperatureController* act = tempController[controller];
 
-        // Get Temperature
-        act->updateCurrentTemperature();
+        const bool sensorSupported = act->updateCurrentTemperature();
+        if (!sensorSupported)
+            pwm_pos[act->pwmIndex] = 0;
         if (controller == autotuneIndex)
             continue; // Ignore heater we are currently testing
 
@@ -98,7 +92,7 @@ void Extruder::manageTemperatures() {
                 }
             }
         }
-        if (Printer::isAnyTempsensorDefect())
+        if (!sensorSupported || Printer::isAnyTempsensorDefect())
             continue;
 
         uint8_t on = act->currentTemperatureC >= act->targetTemperatureC ? LOW : HIGH;
@@ -201,12 +195,9 @@ void Extruder::manageTemperatures() {
 
             output = constrain((int)pidTerm, 0, act->pidMax);
         }
+        if (act->currentTemperatureC > act->heaterCutoffC)
+            output = 0;
         pwm_pos[act->pwmIndex] = output;
-
-#ifdef EXTRUDER_MAX_TEMP
-        if (act->currentTemperatureC > EXTRUDER_MAX_TEMP) // Force heater off if EXTRUDER_MAX_TEMP is exceeded
-            pwm_pos[act->pwmIndex] = 0;
-#endif // EXTRUDER_MAX_TEMP
 
 #if LED_PIN > -1
         if (act == &Extruder::current->tempControl)
@@ -230,41 +221,9 @@ void Extruder::manageTemperatures() {
 } // manageTemperatures
 
 void Extruder::initHeatedBed() {
-#if HAVE_HEATED_BED
     heatedBedController.updateTempControlVars();
-#endif // HAVE_HEATED_BED
 } // initHeatedBed
 
-#if defined(USE_GENERIC_THERMISTORTABLE_1) || defined(USE_GENERIC_THERMISTORTABLE_2) || defined(USE_GENERIC_THERMISTORTABLE_3)
-void createGenericTable(short table[GENERIC_THERM_NUM_ENTRIES][2], short minTemp, short maxTemp, float beta, float r0, float t0, float r1, float r2) {
-    t0 += 273.15f;
-    float rs, vs;
-    if (r1 == 0) {
-        rs = r2;
-        vs = GENERIC_THERM_VREF;
-    } else {
-        vs = static_cast<float>((GENERIC_THERM_VREF * r1) / (r1 + r2));
-        rs = (r2 * r1) / (r1 + r2);
-    }
-    float k = r0 * exp(-beta / t0);
-    float delta = (maxTemp - minTemp) / (GENERIC_THERM_NUM_ENTRIES - 1.0f);
-    for (uint8_t i = 0; i < GENERIC_THERM_NUM_ENTRIES; i++) {
-        float t = maxTemp - i * delta;
-        float r = exp(beta / (t + 272.65)) * k;
-        float v = 4092 * r * vs / ((rs + r) * GENERIC_THERM_VREF);
-        int adc = static_cast<int>(v);
-        t *= 8;
-        if (adc > 4092)
-            adc = 4092;
-        table[i][0] = (adc >> (ANALOG_REDUCE_BITS));
-        table[i][1] = static_cast<int>(t);
-#ifdef PRINT_GENERIC_TEMP_TABLE
-        Com::printF(Com::tGenTemp, table[i][0]);
-        Com::printFLN(Com::tComma, table[i][1]);
-#endif // PRINT_GENERIC_TEMP_TABLE
-    }
-}
-#endif
 
 /** \brief Initalizes all extruder.
 Updates the pin configuration needed for the extruder and activates extruder 0.
@@ -275,17 +234,8 @@ void Extruder::initExtruder() {
     uint8_t i;
     Extruder::current = &extruder[0];
 
-#ifdef USE_GENERIC_THERMISTORTABLE_1
-    createGenericTable(temptable_generic1, GENERIC_THERM1_MIN_TEMP, GENERIC_THERM1_MAX_TEMP, GENERIC_THERM1_BETA, GENERIC_THERM1_R0, GENERIC_THERM1_T0, GENERIC_THERM1_R1, GENERIC_THERM1_R2);
-#endif // USE_GENERIC_THERMISTORTABLE_1
 
-#ifdef USE_GENERIC_THERMISTORTABLE_2
-    createGenericTable(temptable_generic2, GENERIC_THERM2_MIN_TEMP, GENERIC_THERM2_MAX_TEMP, GENERIC_THERM2_BETA, GENERIC_THERM2_R0, GENERIC_THERM2_T0, GENERIC_THERM2_R1, GENERIC_THERM2_R2);
-#endif // USE_GENERIC_THERMISTORTABLE_2
 
-#ifdef USE_GENERIC_THERMISTORTABLE_3
-    createGenericTable(temptable_generic3, GENERIC_THERM3_MIN_TEMP, GENERIC_THERM3_MAX_TEMP, GENERIC_THERM3_BETA, GENERIC_THERM3_R0, GENERIC_THERM3_T0, GENERIC_THERM3_R1, GENERIC_THERM3_R2);
-#endif // USE_GENERIC_THERMISTORTABLE_3
 
 #if defined(EXT0_STEP_PIN) && EXT0_STEP_PIN > -1
     SET_OUTPUT(EXT0_DIR_PIN);
@@ -394,14 +344,11 @@ void Extruder::setTemperatureForExtruder(float temperatureInCelsius, uint8_t ext
         if (tempController[i]->targetTemperatureC > 0)
             alloffs = false;
 
-#ifdef EXTRUDER_MAX_TEMP
-    if (temperatureInCelsius > EXTRUDER_MAX_TEMP)
-        temperatureInCelsius = EXTRUDER_MAX_TEMP;
-#endif // EXTRUDER_MAX_TEMP
-
+    TemperatureController* tc = tempController[extr];
+    if (temperatureInCelsius > tc->heaterCutoffC)
+        temperatureInCelsius = tc->heaterCutoffC;
     if (temperatureInCelsius < 0)
         temperatureInCelsius = 0;
-    TemperatureController* tc = tempController[extr];
     if (tc->isSensorDefect() || tc->isSensorDecoupled())
         temperatureInCelsius = 0;
     if (tc->sensorType == 0)
@@ -474,7 +421,6 @@ void Extruder::setTemperatureForAllExtruders(float temperatureInCelsius) {
 }
 
 void Extruder::setHeatedBedTemperature(float temperatureInCelsius) {
-#if HAVE_HEATED_BED
     if (temperatureInCelsius > HEATED_BED_MAX_TEMP)
         temperatureInCelsius = HEATED_BED_MAX_TEMP;
     if (temperatureInCelsius < 0)
@@ -490,17 +436,10 @@ void Extruder::setHeatedBedTemperature(float temperatureInCelsius) {
     if (Printer::debugInfo()) {
         Com::printFLN(Com::tTargetBedColon, heatedBedController.targetTemperatureC, 0);
     }
-#endif // HAVE_HEATED_BED
 } // setHeatedBedTemperature
 
 float Extruder::getHeatedBedTemperature() {
-#if HAVE_HEATED_BED
-    TemperatureController* c = tempController[NUM_TEMPERATURE_LOOPS - 1];
-    return c->currentTemperatureC;
-#else
-    return -1;
-#endif // HAVE_HEATED_BED
-
+    return heatedBedController.currentTemperatureC;
 } // getHeatedBedTemperature
 
 void Extruder::disableAllExtruders() {
@@ -655,53 +594,21 @@ const short temptable_15[NUMTEMPS_15][2] PROGMEM = {
     { 0, 0 }, { 908, 8 }, { 942, 10 * 8 }, { 982, 20 * 8 }, { 1015, 8 * 30 }, { 1048, 8 * 40 }, { 1080, 8 * 50 }, { 1113, 8 * 60 }, { 1146, 8 * 70 }, { 1178, 8 * 80 }, { 1211, 8 * 90 }, { 1276, 8 * 110 }, { 1318, 8 * 120 }, { 1670, 8 * 230 }, { 2455, 8 * 500 }, { 3445, 8 * 900 }, { 3666, 8 * 1000 }, { 3871, 8 * 1100 }, { 4095, 8 * 2000 }
 };
 
-#if NUM_TEMPS_USERTHERMISTOR0 > 0
-const short temptable_5[NUM_TEMPS_USERTHERMISTOR0][2] PROGMEM = USER_THERMISTORTABLE0;
-#endif // NUM_TEMPS_USERTHERMISTOR0>0
-
-#if NUM_TEMPS_USERTHERMISTOR1 > 0
-const short temptable_6[NUM_TEMPS_USERTHERMISTOR1][2] PROGMEM = USER_THERMISTORTABLE1;
-#endif // NUM_TEMPS_USERTHERMISTOR1>0
-
-#if NUM_TEMPS_USERTHERMISTOR2 > 0
-const short temptable_7[NUM_TEMPS_USERTHERMISTOR2][2] PROGMEM = USER_THERMISTORTABLE2;
-#endif // NUM_TEMPS_USERTHERMISTOR2>0
-
-const short* const temptables[15] PROGMEM = { (short int*)&temptable_1[0][0], (short int*)&temptable_2[0][0], (short int*)&temptable_3[0][0], (short int*)&temptable_4[0][0]
-#if NUM_TEMPS_USERTHERMISTOR0 > 0
-                                              ,
-                                              (short int*)&temptable_5[0][0]
-#else
-                                              ,
-                                              0
-#endif // NUM_TEMPS_USERTHERMISTOR0>0
-
-#if NUM_TEMPS_USERTHERMISTOR1 > 0
-                                              ,
-                                              (short int*)&temptable_6[0][0]
-#else
-                                              ,
-                                              0
-#endif // NUM_TEMPS_USERTHERMISTOR1>0
-
-#if NUM_TEMPS_USERTHERMISTOR2 > 0
-                                              ,
-                                              (short int*)&temptable_7[0][0]
-#else
-                                              ,
-                                              0
-#endif // NUM_TEMPS_USERTHERMISTOR2>0
-
-                                              ,
-                                              (short int*)&temptable_8[0][0], (short int*)&temptable_9[0][0], (short int*)&temptable_10[0][0], (short int*)&temptable_11[0][0], (short int*)&temptable_12[0][0], (short int*)&temptable_13[0][0], (short int*)&temptable_14[0][0], (short int*)&temptable_15[0][0] };
+// Leave the retired user-table slots (sensor IDs 5–7) empty to preserve existing sensor numbers.
+const short* const temptables[15] PROGMEM = {
+    &temptable_1[0][0], &temptable_2[0][0], &temptable_3[0][0], &temptable_4[0][0],
+    nullptr, nullptr, nullptr,
+    &temptable_8[0][0], &temptable_9[0][0], &temptable_10[0][0], &temptable_11[0][0],
+    &temptable_12[0][0], &temptable_13[0][0], &temptable_14[0][0], &temptable_15[0][0],
+};
 const uint8_t temptables_num[15] PROGMEM = {
     NUMTEMPS_1,
     NUMTEMPS_2,
     NUMTEMPS_3,
     NUMTEMPS_4,
-    NUM_TEMPS_USERTHERMISTOR0,
-    NUM_TEMPS_USERTHERMISTOR1,
-    NUM_TEMPS_USERTHERMISTOR2,
+    0,
+    0,
+    0,
     NUMTEMPS_8,
     NUMTEMPS_9,
     NUMTEMPS_10,
@@ -746,8 +653,8 @@ float calibratedSensorTemperature(float sensorCelsius) {
 }
 }
 
-void TemperatureController::updateCurrentTemperature() {
-    uint8_t type = sensorType;
+bool TemperatureController::updateCurrentTemperature() {
+    const uint8_t type = sensorType;
     // get raw temperature
     switch (type) {
     case 0:
@@ -758,9 +665,6 @@ void TemperatureController::updateCurrentTemperature() {
     case 2:  // is 200k thermistor
     case 3:  // V2 Sensor Conrad Renkforce / mendel-parts thermistor (EPCOS G550) = NTC mit 100kOhm
     case 4:  // is 10k thermistor
-    case 5:  // user thermistor 0
-    case 6:  // user thermistor 1
-    case 7:  // user thermistor 2
     case 8:  // E3D Thermistor
     case 9:  // 100k Honeywell 135-104LAG-J01
     case 10: // 100k 0603 SMD Vishay NTCS0603E3104FXT (4.7k pullup)
@@ -768,16 +672,10 @@ void TemperatureController::updateCurrentTemperature() {
     case 12: // 100k RS thermistor 198-961 (4.7k pullup)
     case 13: // NTC 3950 100k thermistor - Conrad V3
     case 14: // Thermistor NTC 3950 100k Ohm
-    case 97: // Define Raw Thermistor and Restistor-Settings within configuration.h see USE_GENERIC_THERMISTORTABLE_1 and GENERIC_THERM_NUM_ENTRIES
-    case 98: // Define Raw Thermistor and Restistor-Settings within configuration.h see USE_GENERIC_THERMISTORTABLE_2 and GENERIC_THERM_NUM_ENTRIES
-    case 99: // Define Raw Thermistor and Restistor-Settings within configuration.h see USE_GENERIC_THERMISTORTABLE_3 and GENERIC_THERM_NUM_ENTRIES
     {
         currentTemperature = (1023 << (2 - ANALOG_REDUCE_BITS)) - (osAnalogInputValues[sensorPin] >> (ANALOG_REDUCE_BITS)); // Convert to 10 bit result
         break;
     }
-    case 50: // User defined PTC table
-    case 51:
-    case 52:
     case 53:  // E3D PT100 Board
     case 60:  // HEATER_USES_AD8495 (Delivers 5mV/degC)
     case 100: // AD595
@@ -787,10 +685,11 @@ void TemperatureController::updateCurrentTemperature() {
     }
 #endif // ANALOG_INPUTS>0
 
-    default: {
-        currentTemperature = 4095; // unknown method, return high value to switch heater off for safety
-        break;
-    }
+    default:
+        // An unsupported ID may still be stored in EEPROM. Report a sensor fault.
+        currentTemperature = 4095;
+        currentTemperatureC = MAX_DEFECT_TEMPERATURE + 1.0f;
+        return false;
     }
 
     switch (type) {
@@ -802,9 +701,6 @@ void TemperatureController::updateCurrentTemperature() {
     case 2:
     case 3:
     case 4:
-    case 5: //user thermistor 0
-    case 6: //user thermistor 1
-    case 7: //user thermistor 2
     case 8: //E3D Thermistor
     case 9:
     case 10:
@@ -813,34 +709,20 @@ void TemperatureController::updateCurrentTemperature() {
     case 13: // Conrad V3
     case 14: // Thermistor NTC 3950 100k Ohm
     //PTC
-    case 50: // User defined PTC thermistor 0
-    case 51: // user defined PTC thermistor 1
-    case 52: // user defined PTC thermistor 2
     case 53: // E3D PT100 Board
     {
-        //###########################################TYPE DISTINCT
-#define NTC_thermistor true
-#define PTC_thermistor false
-        bool thermistortype = NTC_thermistor;
+        const bool isNtc = type != 53;
+        const uint8_t tableIndex = isNtc ? type - 1 : 14; // Sensor 53 uses table 15.
 
-        if (type >= 50 && type <= 52) {
-            type -= 45; //50 -> 5 .. 52 -> 7 :: das heißt verwende user thermistor position 5..7, aber als PTC statt NTC
-            thermistortype = PTC_thermistor;
-        } else if (type == 53) {
-            type -= 38; //53 -> 15 PT100 E3D
-            thermistortype = PTC_thermistor;
-        }
-        type--; //num to index
-
-        uint8_t num = pgm_read_byte(&temptables_num[type]) << 1;
+        uint8_t num = pgm_read_byte(&temptables_num[tableIndex]) << 1;
         uint8_t i = 2;
-        const int16_t* temptable = (const int16_t*)pgm_read_word(&temptables[type]);
+        const int16_t* temptable = (const int16_t*)pgm_read_word(&temptables[tableIndex]);
         int16_t oldraw = pgm_read_word(&temptable[0]);
         int16_t oldtemp = pgm_read_word(&temptable[1]);
         int16_t newtemp = 0;
 
         //NTC: Suche Temperatur andersrum, weil Steigung der Umrechnungskurve invertiert ist.
-        if (thermistortype == NTC_thermistor)
+        if (isNtc)
             currentTemperature = (1023 << (2 - ANALOG_REDUCE_BITS)) - currentTemperature;
 
         while (i < num) {
@@ -849,7 +731,7 @@ void TemperatureController::updateCurrentTemperature() {
             if (newraw > currentTemperature) {
                 const float sensorCelsius = TEMP_INT_TO_FLOAT(oldtemp + (float)(currentTemperature - oldraw) * (float)(newtemp - oldtemp) / (newraw - oldraw));
                 currentTemperatureC = calibratedSensorTemperature(sensorCelsius);
-                return;
+                return true;
             }
             oldtemp = newtemp;
             oldraw = newraw;
@@ -871,54 +753,8 @@ void TemperatureController::updateCurrentTemperature() {
 
         break;
     }
-
-#if defined(USE_GENERIC_THERMISTORTABLE_1) || defined(USE_GENERIC_THERMISTORTABLE_2) || defined(USE_GENERIC_THERMISTORTABLE_3)
-    case 97:
-    case 98:
-    case 99: {
-        uint8_t i = 2;
-        const int16_t* temptable;
-
-#ifdef USE_GENERIC_THERMISTORTABLE_1
-        if (type == 97)
-            temptable = (const int16_t*)temptable_generic1;
-#endif // USE_GENERIC_THERMISTORTABLE_1
-
-#ifdef USE_GENERIC_THERMISTORTABLE_2
-        if (type == 98)
-            temptable = (const int16_t*)temptable_generic2;
-#endif // USE_GENERIC_THERMISTORTABLE_2
-
-#ifdef USE_GENERIC_THERMISTORTABLE_3
-        if (type == 99)
-            temptable = (const int16_t*)temptable_generic3;
-#endif // USE_GENERIC_THERMISTORTABLE_3
-
-        int16_t oldraw = temptable[0];
-        int16_t oldtemp = temptable[1];
-        int16_t newtemp;
-
-        currentTemperature = (1023 << (2 - ANALOG_REDUCE_BITS)) - currentTemperature; //NTC -> switch to search from other side
-
-        while (i < GENERIC_THERM_NUM_ENTRIES * 2) {
-            int16_t newraw = temptable[i++];
-            newtemp = temptable[i++];
-            if (newraw > currentTemperature) {
-                const float sensorCelsius = TEMP_INT_TO_FLOAT(oldtemp + (float)(currentTemperature - oldraw) * (float)(newtemp - oldtemp) / (newraw - oldraw));
-                currentTemperatureC = calibratedSensorTemperature(sensorCelsius);
-                return;
-            }
-            oldtemp = newtemp;
-            oldraw = newraw;
-        }
-        // Overflow: Set to last value in the table
-        currentTemperatureC = calibratedSensorTemperature(TEMP_INT_TO_FLOAT(newtemp));
-
-        break;
     }
-#endif // defined(USE_GENERIC_THERMISTORTABLE_1) || defined(USE_GENERIC_THERMISTORTABLE_2) || defined(USE_GENERIC_THERMISTORTABLE_3)
-    }
-
+    return true;
 } // updateCurrentTemperature
 
 void TemperatureController::setTargetTemperature(float target) {
@@ -956,6 +792,11 @@ void TemperatureController::waitForTargetTemperature(uint8_t plus_temp_tolerance
 }
 
 void TemperatureController::autotunePID(float temp, uint8_t controllerId, int maxCycles, bool storeValues, int method) {
+    if (!updateCurrentTemperature()) {
+        pwm_pos[pwmIndex] = 0;
+        Com::printErrorFLN(PSTR("PID autotune failed: unsupported temperature sensor"));
+        return;
+    }
     g_uStartOfIdle = 0; // start autotunePID
     UI_STATUS_UPD(UI_TEXT_PID);
     float currentTemp;
@@ -1191,12 +1032,10 @@ Extruder extruder[NUM_EXTRUDER] = {
       EXT0_MAX_FEEDRATE,
       EXT0_MAX_ACCELERATION,
       EXT0_MAX_START_FEEDRATE,
-      EXT0_WAIT_RETRACT_TEMP,
-      EXT0_WAIT_RETRACT_UNITS,
       0,
       EXT0_ADVANCE_L,
       {
-          0, EXT0_TEMPSENSOR_TYPE, EXT0_SENSOR_INDEX, 0, 0, 0,
+          0, EXT0_TEMPSENSOR_TYPE, EXT0_SENSOR_INDEX, EXT0_MAX_TEMP_C, 0, 0, 0,
           0,
           0,
           EXT0_PID_INTEGRAL_DRIVE_MAX,
@@ -1233,12 +1072,10 @@ Extruder extruder[NUM_EXTRUDER] = {
       EXT1_MAX_FEEDRATE,
       EXT1_MAX_ACCELERATION,
       EXT1_MAX_START_FEEDRATE,
-      EXT1_WAIT_RETRACT_TEMP,
-      EXT1_WAIT_RETRACT_UNITS,
       0,
       EXT1_ADVANCE_L,
       {
-          1, EXT1_TEMPSENSOR_TYPE, EXT1_SENSOR_INDEX, 0, 0, 0,
+          1, EXT1_TEMPSENSOR_TYPE, EXT1_SENSOR_INDEX, EXT1_MAX_TEMP_C, 0, 0, 0,
           0,
           0,
           EXT1_PID_INTEGRAL_DRIVE_MAX,
@@ -1266,10 +1103,8 @@ Extruder extruder[NUM_EXTRUDER] = {
 #endif // NUM_EXTRUDER>1
 };
 
-#if HAVE_HEATED_BED
-#define NUM_TEMPERATURE_LOOPS NUM_EXTRUDER + 1
 TemperatureController heatedBedController = {
-    NUM_EXTRUDER, HEATED_BED_SENSOR_TYPE, BED_SENSOR_INDEX, 0, 0, 0,
+    NUM_EXTRUDER, HEATED_BED_SENSOR_TYPE, BED_SENSOR_INDEX, bedHeaterCutoffC, 0, 0, 0,
     0,
     0,
     HEATED_BED_PID_INTEGRAL_DRIVE_MAX,
@@ -1288,9 +1123,6 @@ TemperatureController heatedBedController = {
     BED_DECOUPLE_TEST_PERIOD,
     0 //uint8_t paused
 };
-#else
-#define NUM_TEMPERATURE_LOOPS NUM_EXTRUDER
-#endif // HAVE_HEATED_BED
 
 #if RESERVE_ANALOG_INPUTS
 /** \brief This is an optional Temperature Sensor. //Nibbels
@@ -1299,7 +1131,7 @@ Do not try to do anything other than updateCurrentTemperature and reading the Te
 TODO: Making a totally clean class, without the logic to controll something.
 */
 TemperatureController optTempController = {
-    0, RESERVE_ANALOG_SENSOR_TYPE, RESERVE_SENSOR_INDEX, 0, 0, 0,
+    0, RESERVE_ANALOG_SENSOR_TYPE, RESERVE_SENSOR_INDEX, 0, 0, 0, 0,
     0,
     0,
     0,
@@ -1330,12 +1162,10 @@ TemperatureController* tempController[NUM_TEMPERATURE_LOOPS] = {
     &extruder[1].tempControl
 #endif // NUM_EXTRUDER>1
 
-#if HAVE_HEATED_BED
 #if NUM_EXTRUDER == 0
          & heatedBedController
 #else
     ,
     &heatedBedController
 #endif // NUM_EXTRUDER==0
-#endif // HAVE_HEATED_BED
 };

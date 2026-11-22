@@ -52,11 +52,7 @@ uint8_t Printer::flag1 = 0;
 uint8_t Printer::flag2 = 0;
 uint8_t Printer::flag3 = 0;
 
-#if ALLOW_EXTENDED_COMMUNICATION < 2
-uint8_t Printer::debugLevel = 0; ///< Bitfield defining debug output. 1 = echo, 2 = info, 4 = error, 8 = dry run., 16 = Only communication, 32 = No moves
-#else
 uint8_t Printer::debugLevel = 6; ///< Bitfield defining debug output. 1 = echo, 2 = info, 4 = error, 8 = dry run., 16 = Only communication, 32 = No moves
-#endif // ALLOW_EXTENDED_COMMUNICATION < 2
 
 uint8_t Printer::stepsPerTimerCall = 1;
 uint16_t Printer::stepsPackingMinInterval = STEP_PACKING_MIN_INTERVAL;
@@ -488,9 +484,7 @@ void Printer::offsetRelativeStepsCoordinates(int32_t dx, int32_t dy, int32_t dz,
 
         // If we start this move by pressing a button we dont want to wait for it to finish and instead have it listening to the buttons release
         if (configuration == TASK_MOVE_FROM_BUTTON) {
-#if UI_DISPLAY_TYPE != 0
             uid.jogButtonAction = uid.lastAction;
-#endif
             PrintLine::prepareDirectMove(STOPPABLE_DIRECT, feedrateSource);
             //noInts handled by destructor
 
@@ -605,8 +599,7 @@ void Printer::setup() {
     disableZStepper();
 #endif // Z_ENABLE_PIN > -1
 
-        //endstop pullups
-#if MIN_HARDWARE_ENDSTOP_X
+    // Endstop inputs and pull-ups.
 #if X_MIN_PIN > -1
     SET_INPUT(X_MIN_PIN);
 
@@ -616,9 +609,7 @@ void Printer::setup() {
 #else
 #error You have defined hardware x min endstop without pin assignment. Set pin number for X_MIN_PIN
 #endif // X_MIN_PIN>-1
-#endif // MIN_HARDWARE_ENDSTOP_X
 
-#if MIN_HARDWARE_ENDSTOP_Y
 #if Y_MIN_PIN > -1
     SET_INPUT(Y_MIN_PIN);
 
@@ -628,9 +619,7 @@ void Printer::setup() {
 #else
 #error You have defined hardware y min endstop without pin assignment. Set pin number for Y_MIN_PIN
 #endif // Y_MIN_PIN>-1
-#endif // MIN_HARDWARE_ENDSTOP_Y
 
-#if MIN_HARDWARE_ENDSTOP_Z
 #if Z_MIN_PIN > -1
     SET_INPUT(Z_MIN_PIN);
 
@@ -640,33 +629,8 @@ void Printer::setup() {
 #else
 #error You have defined hardware z min endstop without pin assignment. Set pin number for Z_MIN_PIN
 #endif // Z_MIN_PIN>-1
-#endif // MIN_HARDWARE_ENDSTOP_Z
 
-#if MAX_HARDWARE_ENDSTOP_X
-#if X_MAX_PIN > -1
-    SET_INPUT(X_MAX_PIN);
-
-#if ENDSTOP_PULLUP_X_MAX
-    PULLUP(X_MAX_PIN, HIGH);
-#endif // ENDSTOP_PULLUP_X_MAX
-#else
-#error You have defined hardware x max endstop without pin assignment. Set pin number for X_MAX_PIN
-#endif // X_MAX_PIN>-1
-#endif // MAX_HARDWARE_ENDSTOP_X
-
-#if MAX_HARDWARE_ENDSTOP_Y
-#if Y_MAX_PIN > -1
-    SET_INPUT(Y_MAX_PIN);
-
-#if ENDSTOP_PULLUP_Y_MAX
-    PULLUP(Y_MAX_PIN, HIGH);
-#endif // ENDSTOP_PULLUP_Y_MAX
-#else
-#error You have defined hardware y max endstop without pin assignment. Set pin number for Y_MAX_PIN
-#endif // Y_MAX_PIN>-1
-#endif // MAX_HARDWARE_ENDSTOP_Y
-
-#if MAX_HARDWARE_ENDSTOP_Z
+#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 #if Z_MAX_PIN > -1
     SET_INPUT(Z_MAX_PIN);
 
@@ -676,7 +640,7 @@ void Printer::setup() {
 #else
 #error You have defined hardware z max endstop without pin assignment. Set pin number for Z_MAX_PIN
 #endif // Z_MAX_PIN>-1
-#endif // MAX_HARDWARE_ENDSTOP_Z
+#endif // RF2000 / RF2000v2
 
 #if FAN_PIN > -1
     SET_OUTPUT(FAN_PIN);
@@ -690,12 +654,12 @@ void Printer::setup() {
 
 #if EXT0_HEATER_PIN > -1
     SET_OUTPUT(EXT0_HEATER_PIN);
-    WRITE(EXT0_HEATER_PIN, HEATER_PINS_INVERTED);
+    WRITE(EXT0_HEATER_PIN, LOW);
 #endif // EXT0_HEATER_PIN>-1
 
 #if defined(EXT1_HEATER_PIN) && EXT1_HEATER_PIN > -1 && NUM_EXTRUDER > 1
     SET_OUTPUT(EXT1_HEATER_PIN);
-    WRITE(EXT1_HEATER_PIN, HEATER_PINS_INVERTED);
+    WRITE(EXT1_HEATER_PIN, LOW);
 #endif // defined(EXT1_HEATER_PIN) && EXT1_HEATER_PIN>-1 && NUM_EXTRUDER>1
 
 #if EXT0_EXTRUDER_COOLER_PIN > -1
@@ -764,7 +728,7 @@ void Printer::setup() {
 
 #if HEATED_BED_HEATER_PIN > -1
     SET_OUTPUT(HEATED_BED_HEATER_PIN);
-    WRITE(HEATED_BED_HEATER_PIN, HEATER_PINS_INVERTED);
+    WRITE(HEATED_BED_HEATER_PIN, LOW);
     Extruder::initHeatedBed();
 #endif // HEATED_BED_HEATER_PIN>-1
 
@@ -899,28 +863,20 @@ void Printer::disableCMPnow(bool wait) {
 }
 
 int8_t Printer::anyHomeDir(uint8_t axis) {
-    int8_t nHomeDir = 0;
     switch (axis) {
-    case X_AXIS: {
-        if ((MIN_HARDWARE_ENDSTOP_X && X_MIN_PIN > -1 && X_HOME_DIR == -1) || (MAX_HARDWARE_ENDSTOP_X && X_MAX_PIN > -1 && X_HOME_DIR == 1)) {
-            nHomeDir = X_HOME_DIR; //-1 -> RFx000.h
-        }
-        break;
+    case X_AXIS:
+        return X_HOME_DIR == -1 ? X_HOME_DIR : 0;
+    case Y_AXIS:
+        return Y_HOME_DIR == -1 ? Y_HOME_DIR : 0;
+    case Z_AXIS:
+#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
+        return (Z_HOME_DIR == -1 || Z_HOME_DIR == 1) ? Z_HOME_DIR : 0;
+#else
+        return Z_HOME_DIR == -1 ? Z_HOME_DIR : 0;
+#endif
+    default:
+        return 0;
     }
-    case Y_AXIS: {
-        if ((MIN_HARDWARE_ENDSTOP_Y && Y_MIN_PIN > -1 && Y_HOME_DIR == -1) || (MAX_HARDWARE_ENDSTOP_Y && Y_MAX_PIN > -1 && Y_HOME_DIR == 1)) {
-            nHomeDir = Y_HOME_DIR; //-1 -> RFx000.h
-        }
-        break;
-    }
-    case Z_AXIS: {
-        if ((MIN_HARDWARE_ENDSTOP_Z && Z_MIN_PIN > -1 && Z_HOME_DIR == -1) || (MAX_HARDWARE_ENDSTOP_Z && Z_MAX_PIN > -1 && Z_HOME_DIR == 1)) {
-            nHomeDir = Z_HOME_DIR; //-1 -> RFx000.h
-        }
-        break;
-    }
-    }
-    return nHomeDir;
 }
 
 bool Printer::anyEndstop(uint8_t axis) {
@@ -1459,7 +1415,7 @@ void Printer::showConfiguration() {
     Com::config(PSTR("InputBuffer:"), SERIAL_BUFFER_SIZE - 1);
     Com::config(PSTR("NumExtruder:"), NUM_EXTRUDER);
     Com::config(PSTR("MixingExtruder:"), 0);
-    Com::config(PSTR("HeatedBed:"), HAVE_HEATED_BED);
+    Com::config(PSTR("HeatedBed:"), 1);
     Com::config(PSTR("SDCard:"), SDSUPPORT);
     Com::config(PSTR("Fan:"), FAN_PIN > -1);
     Com::config(PSTR("Fan2:0"));
@@ -1480,7 +1436,7 @@ void Printer::showConfiguration() {
     Com::config(PSTR("PrintlineCache:"), MOVE_CACHE_SIZE);
     Com::config(PSTR("JerkXY:"), Printer::maxXYJerk);
     Com::config(PSTR("JerkZ:"), Printer::maxZJerk);
-    Com::config(PSTR("KeepAliveInterval:"), KEEP_ALIVE_INTERVAL);
+    Com::config(PSTR("KeepAliveInterval:"), GCode::keepAliveIntervalMs);
 
     Com::config(PSTR("XMin:"), 0);
     Com::config(PSTR("YMin:"), 0);
@@ -1510,7 +1466,7 @@ void Printer::showConfiguration() {
         //START_EXTRUDER_CONFIG(i)
         //	Com::printFLN(PSTR("Diameter:"), extruder[i].diameter);
         START_EXTRUDER_CONFIG(i)
-        Com::printFLN(PSTR("MaxTemp:"), EXTRUDER_MAX_TEMP);
+        Com::printFLN(PSTR("MaxTemp:"), static_cast<uint32_t>(extruder[i].tempControl.heaterCutoffC));
     }
 }
 

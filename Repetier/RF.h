@@ -622,7 +622,6 @@ extern void moveXAction(int8_t increment);
 extern void moveYAction(int8_t increment);
 extern void moveZAction(int8_t increment);
 
-#if STEPPER_CURRENT_CONTROL == CURRENT_CONTROL_DRV8711
 extern void setMotorCurrent(unsigned char driver, uint8_t level);
 
 // adjust/set Microsteps()
@@ -632,7 +631,6 @@ extern uint8_t drv8711MicroSteps_2_ModeValue(unsigned short microsteps);
 extern void drv8711adjustMicroSteps(unsigned char driver);
 
 extern void drv8711Init(void);
-#endif // CURRENT_CONTROL_DRV8711
 
 extern void cleanupEPositions(void);
 

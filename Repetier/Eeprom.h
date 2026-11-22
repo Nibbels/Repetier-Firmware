@@ -178,8 +178,7 @@ have problems with other modules using the eeprom */
 #define EPR_EXTRUDER_ADVANCE_K 41
 #define EPR_EXTRUDER_DRIVE_MIN 45
 #define EPR_EXTRUDER_ADVANCE_L 46
-#define EPR_EXTRUDER_WAIT_RETRACT_TEMP 50
-#define EPR_EXTRUDER_WAIT_RETRACT_UNITS 52
+// Offsets 50–53 are reserved for the former M109 heat-up retract settings.
 #define EPR_EXTRUDER_COOLER_SPEED 54 //byte
 #define EPR_EXTRUDER_SENSOR_TYPE 94  //uint8
 // Offsets 95–98 in each extruder block are reserved for the former TipDown setting.

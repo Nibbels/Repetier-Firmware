@@ -826,9 +826,6 @@ void PrintLine::stepSlowedZCompensation() {
             Printer::setZDirection(positive);
         }
         Printer::startZStep();
-#if STEPPER_HIGH_DELAY > 0
-        HAL::delayMicroseconds(STEPPER_HIGH_DELAY);
-#endif // STEPPER_HIGH_DELAY > 0
         Printer::compensatedPositionCurrentStepsZ += positive ? 1 : -1;
 
         if (mass < massWeight && abs(cmpDiff) < massWeight)
@@ -1181,10 +1178,6 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
 
     for (fast8_t loop = 0; loop < max_loops; loop++) {
 
-#if STEPPER_HIGH_DELAY > 0
-        if (loop)
-            HAL::delayMicroseconds(STEPPER_HIGH_DELAY);
-#endif // STEPPER_HIGH_DELAY > 0
 
         if (move->isEMove()) {
             HAL::allowInterrupts();
@@ -1312,9 +1305,6 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
 
         move->stepsRemaining--;
 
-#if STEPPER_HIGH_DELAY > 0
-        HAL::delayMicroseconds(STEPPER_HIGH_DELAY);
-#endif // #if STEPPER_HIGH_DELAY>0
 
         if (!Printer::isAdvanceActivated()) // Use interrupt for movement
             Extruder::unstep();

@@ -42,9 +42,7 @@ void SDCard::automount() {
         if (sdactive || sdmode == 100) // Card removed
         {
             Com::printFLN(PSTR("SD Card removed"));
-#if UI_DISPLAY_TYPE != 0
             uid.exitmenu();
-#endif // UI_DISPLAY_TYPE!=0
             unmount();
             UI_STATUS(UI_TEXT_SD_REMOVED);
         }
@@ -54,12 +52,10 @@ void SDCard::automount() {
             mount(/*not silent mount*/);
             if (sdmode != 100)                           // send message only if we have success
                 Com::printFLN(PSTR("SD Card inserted")); // Not translatable or host will not understand signal
-#if UI_DISPLAY_TYPE != 0
             if (sdactive) {
                 Printer::setAutomount(true);
                 uid.executeAction(UI_ACTION_SD_PRINT + UI_ACTION_TOPMENU);
             }
-#endif // UI_DISPLAY_TYPE!=0
         }
     }
 #endif // defined(SDCARDDETECT) && SDCARDDETECT>-1
@@ -152,11 +148,9 @@ void SDCard::unmount() {
     savetosd = false;
     Printer::setAutomount(false);
     Printer::setMenuMode(MENU_MODE_SD_MOUNTED + MENU_MODE_PAUSED + MENU_MODE_SD_PRINTING, false);
-#if UI_DISPLAY_TYPE != 0
     uid.cwd[0] = '/';
     uid.cwd[1] = 0;
     uid.folderLevel = 0;
-#endif // UI_DISPLAY_TYPE!=0
     Com::printFLN(PSTR("SD Card unmounted"));
 } // unmount
 

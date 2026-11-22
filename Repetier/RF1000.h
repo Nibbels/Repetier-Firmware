@@ -98,9 +98,6 @@ NTC-Thermistors
 2: 200k Thermistor
 3: Hotend V2 Sensor Conrad Renkforce / mendel-parts thermistor (EPCOS G550) = NTC mit 100kOhm
 4: 10k Thermistor
-5: USER_THERMISTORTABLE0 als NTC
-6: USER_THERMISTORTABLE1 als NTC
-7: USER_THERMISTORTABLE2 als NTC
 8: E3D Thermistor ATC Semitec 104-GT2 (300°C)
 9: 100k Honeywell 135-104LAG-J01
 10: 100k 0603 SMD Vishay NTCS0603E3104FXT (4.7k pullup)
@@ -108,13 +105,7 @@ NTC-Thermistors
 12: 100k RS Thermistor 198-961 (4.7k pullup)
 13: NTC 3950 100k thermistor - Conrad V3
 14: Thermistor NTC 3950 100k Ohm
-97: USE_GENERIC_THERMISTORTABLE_1 and GENERIC_THERM_NUM_ENTRIES Define Raw Thermistor and Resistor-Settings within configuration.h
-98: USE_GENERIC_THERMISTORTABLE_2 and GENERIC_THERM_NUM_ENTRIES Define Raw Thermistor and Resistor-Settings within configuration.h
-99: USE_GENERIC_THERMISTORTABLE_3 and GENERIC_THERM_NUM_ENTRIES Define Raw Thermistor and Resistor-Settings within configuration.h
 PTC-Thermistors
-50: USER_THERMISTORTABLE0 als PTC
-51: USER_THERMISTORTABLE1 als PTC
-52: USER_THERMISTORTABLE2 als PTC
 53: E3D PT100 Board (direct AD voltage in)
 60: HEATER_USES_AD8495 (Delivers 5mV/degC)
 100: AD595 */
@@ -151,6 +142,7 @@ Overridden if EEPROM activated. */
 
 #if EXT0_HOTEND_TYPE == HOTEND_TYPE_V1
 
+#define EXT0_MAX_TEMP_C HOTEND_V1_MAX_TEMP_C
 /** \brief The maximum value, I-gain can contribute to the output. Overridden if EEPROM activated. */
 #define EXT0_PID_INTEGRAL_DRIVE_MAX HT2_PID_INTEGRAL_DRIVE_MAX
 /** \brief lower value for integral part. Overridden if EEPROM activated. */
@@ -166,6 +158,7 @@ Overridden if EEPROM activated. */
 
 #if EXT0_HOTEND_TYPE == HOTEND_TYPE_V2
 
+#define EXT0_MAX_TEMP_C HOTEND_V2_MAX_TEMP_C
 /** \brief The maximum value, I-gain can contribute to the output. Overridden if EEPROM activated. */
 #define EXT0_PID_INTEGRAL_DRIVE_MAX HT3_PID_INTEGRAL_DRIVE_MAX
 /** \brief lower value for integral part. Overridden if EEPROM activated. */
@@ -181,6 +174,7 @@ Overridden if EEPROM activated. */
 
 #if EXT0_HOTEND_TYPE == HOTEND_TYPE_V3
 
+#define EXT0_MAX_TEMP_C HOTEND_V3_MAX_TEMP_C
 /** \brief The maximum value, I-gain can contribute to the output. Overridden if EEPROM activated. */
 #define EXT0_PID_INTEGRAL_DRIVE_MAX HT4_PID_INTEGRAL_DRIVE_MAX
 /** \brief lower value for integral part. Overridden if EEPROM activated. */
@@ -200,13 +194,6 @@ Overridden if EEPROM activated. */
 /** \brief Faktor for the advance algorithm. 0 disables the algorithm.  Overridden if EEPROM activated.
 L is the linear factor and seems to be working better then the quadratic dependency. */
 #define EXT0_ADVANCE_L 0.0f
-
-/** \brief Temperature to retract filament when extruder is heating up. Overridden if EEPROM activated. */
-#define EXT0_WAIT_RETRACT_TEMP 150
-
-/** \brief Units (mm/inches) to retract filament when extruder is heating up. Overridden if EEPROM activated. Set
-to 0 to disable. */
-#define EXT0_WAIT_RETRACT_UNITS 0
 
 /** \brief You can run any gcode command on extruder deselect/select. Seperate multiple commands with a new line \n.
 That way you can execute some mechanical components needed for extruder selection or retract filament or whatever you need.
@@ -251,9 +238,6 @@ NTC-Thermistors
 2: 200k Thermistor
 3: Hotend V2 Sensor Conrad Renkforce / mendel-parts thermistor (EPCOS G550) = NTC mit 100kOhm
 4: 10k Thermistor
-5: USER_THERMISTORTABLE0 als NTC
-6: USER_THERMISTORTABLE1 als NTC
-7: USER_THERMISTORTABLE2 als NTC
 8: E3D Thermistor ATC Semitec 104-GT2 (300°C)
 9: 100k Honeywell 135-104LAG-J01
 10: 100k 0603 SMD Vishay NTCS0603E3104FXT (4.7k pullup)
@@ -261,13 +245,7 @@ NTC-Thermistors
 12: 100k RS Thermistor 198-961 (4.7k pullup)
 13: NTC 3950 100k thermistor - Conrad V3
 14: Thermistor NTC 3950 100k Ohm
-97: USE_GENERIC_THERMISTORTABLE_1 and GENERIC_THERM_NUM_ENTRIES Define Raw Thermistor and Resistor-Settings within configuration.h
-98: USE_GENERIC_THERMISTORTABLE_2 and GENERIC_THERM_NUM_ENTRIES Define Raw Thermistor and Resistor-Settings within configuration.h
-99: USE_GENERIC_THERMISTORTABLE_3 and GENERIC_THERM_NUM_ENTRIES Define Raw Thermistor and Resistor-Settings within configuration.h
 PTC-Thermistors
-50: USER_THERMISTORTABLE0 als PTC
-51: USER_THERMISTORTABLE1 als PTC
-52: USER_THERMISTORTABLE2 als PTC
 53: E3D PT100 Board (direct AD voltage in)
 60: HEATER_USES_AD8495 (Delivers 5mV/degC)
 100: AD595 */
@@ -304,6 +282,7 @@ Overridden if EEPROM activated. */
 
 #if EXT1_HOTEND_TYPE == HOTEND_TYPE_V1
 
+#define EXT1_MAX_TEMP_C HOTEND_V1_MAX_TEMP_C
 /** \brief The maximum value, I-gain can contribute to the output. Overridden if EEPROM activated. */
 #define EXT1_PID_INTEGRAL_DRIVE_MAX HT2_PID_INTEGRAL_DRIVE_MAX
 /** \brief lower value for integral part. Overridden if EEPROM activated. */
@@ -319,6 +298,7 @@ Overridden if EEPROM activated. */
 
 #if EXT1_HOTEND_TYPE == HOTEND_TYPE_V2
 
+#define EXT1_MAX_TEMP_C HOTEND_V2_MAX_TEMP_C
 /** \brief The maximum value, I-gain can contribute to the output. Overridden if EEPROM activated. */
 #define EXT1_PID_INTEGRAL_DRIVE_MAX HT3_PID_INTEGRAL_DRIVE_MAX
 /** \brief lower value for integral part. Overridden if EEPROM activated. */
@@ -334,6 +314,7 @@ Overridden if EEPROM activated. */
 
 #if EXT1_HOTEND_TYPE == HOTEND_TYPE_V3
 
+#define EXT1_MAX_TEMP_C HOTEND_V3_MAX_TEMP_C
 /** \brief The maximum value, I-gain can contribute to the output. Overridden if EEPROM activated. */
 #define EXT1_PID_INTEGRAL_DRIVE_MAX HT4_PID_INTEGRAL_DRIVE_MAX
 /** \brief lower value for integral part. Overridden if EEPROM activated. */
@@ -358,13 +339,6 @@ L is the linear factor and seems to be working better then the quadratic depende
 needed to move the motor cog in reverse direction until it hits the driving
 cog. Direct drive extruder need 0. */
 #define EXT1_ADVANCE_BACKLASH_STEPS 0
-
-/** \brief Temperature to retract filament when extruder is heating up. Overridden if EEPROM activated. */
-#define EXT1_WAIT_RETRACT_TEMP 150
-
-/** \brief Units (mm/inches) to retract filament when extruder is heating up. Overridden if EEPROM activated. Set
-to 0 to disable. */
-#define EXT1_WAIT_RETRACT_UNITS 0
 
 /** \brief You can run any gcode command on extruder deselect/select. Seperate multiple commands with a new line \n.
 That way you can execute some mechanical components needed for extruder selection or retract filament or whatever you need.
@@ -395,9 +369,6 @@ The codes are only executed for multiple extruder when changing the extruder. */
 // ##########################################################################################
 // ##   Configuration of the heated bed
 // ##########################################################################################
-
-/** \brief Set true if you have a heated bed conected to your board, false if not */
-#define HAVE_HEATED_BED true
 
 /** \brief Maximal temperature which can be set for the heating bed */
 #define HEATED_BED_MAX_TEMP 180
@@ -443,7 +414,7 @@ A good start is 30 lower then the optimal value. You need to leave room for cool
 #define MIN_DEFECT_TEMPERATURE -10
 #define MAX_DEFECT_TEMPERATURE 300
 
-#if HAVE_HEATED_BED == true && HEATED_BED_SENSOR_TYPE < 101
+#if HEATED_BED_SENSOR_TYPE < 101
 
 #define BED_ANALOG_INPUTS 1
 #define BED_SENSOR_INDEX EXT0_ANALOG_INPUTS + EXT1_ANALOG_INPUTS
@@ -455,7 +426,7 @@ A good start is 30 lower then the optimal value. You need to leave room for cool
 #define BED_SENSOR_INDEX HEATED_BED_SENSOR_PIN
 #define BED_ANALOG_CHANNEL
 
-#endif // HAVE_HEATED_BED==true && HEATED_BED_SENSOR_TYPE<101
+#endif // HEATED_BED_SENSOR_TYPE < 101
 
 // Temperature offsets at sensor readings of 60, 80, 100, 120, 140 and 160 °C.
 #define SENSOR_TEMPERATURE_OFFSETS_C { 0, 0, 0, 0, 0, 0 }
@@ -472,24 +443,11 @@ on this endstop. */
 #define ENDSTOP_PULLUP_X_MIN true
 #define ENDSTOP_PULLUP_Y_MIN true
 #define ENDSTOP_PULLUP_Z_MIN true
-#define ENDSTOP_PULLUP_X_MAX true
-#define ENDSTOP_PULLUP_Y_MAX true
 
 /** \brief set to true to invert the logic of the endstops */
 #define ENDSTOP_X_MIN_INVERTING true
 #define ENDSTOP_Y_MIN_INVERTING true
 #define ENDSTOP_Z_MIN_INVERTING true
-#define ENDSTOP_X_MAX_INVERTING true
-#define ENDSTOP_Y_MAX_INVERTING true
-
-/** \brief Set the values true where you have a hardware endstop. The Pin number is taken from pins.h. */
-#define MIN_HARDWARE_ENDSTOP_X true
-#define MIN_HARDWARE_ENDSTOP_Y true
-#define MIN_HARDWARE_ENDSTOP_Z true
-#define MAX_HARDWARE_ENDSTOP_X false
-#define MAX_HARDWARE_ENDSTOP_Y false
-
-#define MAX_HARDWARE_ENDSTOP_Z false
 
 /** \brief Set order of axis homing. Use HOME_ORDER_XYZ and replace XYZ with your order. */
 #define HOMING_ORDER_PRINT HOME_ORDER_XYZ //if you work with springloaded hotend or positive Z-Matrix home Z last!! You might otherwise hit the surface.
@@ -525,12 +483,6 @@ during homing operation. The homing speed is divided by the value. 1 = same spee
 #define MOTOR_CURRENT_NORMAL \
     { 110, 110, 105, 110, 110 }
 #define MOTOR_CURRENT_MIN EXTRUDER_CURRENT_PAUSED
-
-/** \brief If your stepper needs a longer high signal then given, you can add a delay here.
-The delay is realized as a simple loop wasting time, which is not available for other
-computations. So make it as low as possible. For the most common drivers no delay is needed, as the
-included delay is already enough. */
-#define STEPPER_HIGH_DELAY 0
 
 // ##########################################################################################
 // ##   miscellaneous configurations
@@ -569,16 +521,6 @@ included delay is already enough. */
 /** \brief Automatic filament mount, mounting of the filament with heating. Stop @ XXXX digits */
 #define MOUNT_FILAMENT_SCRIPT_SOFT "M3913 P3500 F3"
 #define MOUNT_FILAMENT_SCRIPT_HARD "M109 S" xstr(UI_SET_PRESET_EXTRUDER_TEMP_ABS) "\nG21\nG92 E0\nG1 E90 F100\nG92 E0\nM104 S0"
-
-// ##########################################################################################
-// ##   PWM configuration
-// ##########################################################################################
-
-/** \brief Heaters: speed of the PWM signal,          0 = 15.25Hz, 1 = 30.51Hz, 2 = 61.03Hz */
-#define HEATER_PWM_SPEED 1
-
-/** \brief Extruder Coolers: speed of the PWM signal, 0 = 15.25Hz, 1 = 30.51Hz, 2 = 61.03Hz */
-#define COOLER_PWM_SPEED 0
 
 // ##########################################################################################
 // ##   Part Fan configuration
@@ -719,7 +661,6 @@ Above this value the z compensation will distribute the roughness of the surface
 // scan position defined by the index of the heat bed matrix, counting from 1
 #define SEARCH_HEAT_BED_OFFSET_SCAN_POSITION_INDEX_X 5
 #define SEARCH_HEAT_BED_OFFSET_SCAN_POSITION_INDEX_Y 5
-#define SEARCH_HEAT_BED_OFFSET_SCAN_POSITION_RAND_MM 3
 // number of scanning iterations 2+
 #define SEARCH_HEAT_BED_OFFSET_SCAN_ITERATIONS 1
 

@@ -45,7 +45,6 @@ bool UIMenuEntry::showEntry() const {
     return ret;
 } // showEntry
 
-#if UI_DISPLAY_TYPE != 0
 UIDisplay uid;
 char displayCache[UI_ROWS][MAX_COLS + 1];
 
@@ -266,7 +265,6 @@ bool normalchars = false;
 static const uint8_t LCDLineOffsets[] PROGMEM = UI_LINE_OFFSETS;
 static const char versionString[] PROGMEM = UI_VERSION_STRING;
 
-#if UI_DISPLAY_TYPE == 1 || UI_DISPLAY_TYPE == 2
 
 UIDisplay::UIDisplay() {
     locked = 0;
@@ -522,7 +520,6 @@ void UIDisplay::printRow(uint8_t r, char* txt, char* txt2, uint8_t changeAtCol) 
     //if we had sdcard files last we would see more than 20 bytes. Keep 0 at end.
     displayCache[r][col] = 0;
 } // printRow
-#endif // UI_DISPLAY_TYPE==1 || UI_DISPLAY_TYPE==2
 
 void UIDisplay::ui_init_keys() {
     UI_KEYS_INIT_BUTTON_LOW(ENABLE_KEY_1); // push button, connects gnd to pin
@@ -592,7 +589,6 @@ void UIDisplay::initialize() {
 
 } // initialize
 
-#if UI_DISPLAY_TYPE == 1 || UI_DISPLAY_TYPE == 2
 void UIDisplay::createChar(uint8_t location, const uint8_t charmap[]) {
     location &= 0x7; // we only have 8 locations 0-7
     lcdCommand(LCD_SETCGRAMADDR | (location << 3));
@@ -601,7 +597,6 @@ void UIDisplay::createChar(uint8_t location, const uint8_t charmap[]) {
     }
 
 } // createChar
-#endif // UI_DISPLAY_TYPE==1 || UI_DISPLAY_TYPE==2
 
 void UIDisplay::printRowP(uint8_t r, PGM_P txt) {
     if (r >= UI_ROWS)
@@ -885,11 +880,9 @@ void UIDisplay::parse(char* txt, bool ram) {
                 uint8_t nr = c2 - '0';
                 fvalue = extruder[nr].tempControl.currentTemperatureC; // %e0..9 : Temp. of extruder 0..9
             }
-#if HAVE_HEATED_BED
             else if (c2 == 'b') {
                 fvalue = Extruder::getHeatedBedTemperature(); // %eb : Current heated bed temperature
             }
-#endif // HAVE_HEATED_BED
             addFloat(fvalue, 3, 0);
             break;
         }
@@ -901,11 +894,9 @@ void UIDisplay::parse(char* txt, bool ram) {
             } else if (c2 >= '0' && c2 <= '9') {
                 fvalue = extruder[c2 - '0'].tempControl.targetTemperatureC; // %E0-9 : Target temperature of extruder 0..9
             }
-#if HAVE_HEATED_BED
             else if (c2 == 'b') {
                 fvalue = heatedBedController.targetTemperatureC; // %Eb : Target temperature of heated bed
             }
-#endif // HAVE_HEATED_BED
             addFloat(fvalue, 3, 0);
             break;
         }
@@ -1247,12 +1238,10 @@ void UIDisplay::parse(char* txt, bool ram) {
                 ivalue = pwm_pos[c2 - '0'];
             }
 
-#if HAVE_HEATED_BED
             else if (c2 == 'b') // %ob : Output level heated bed
             {
                 ivalue = pwm_pos[heatedBedController.pwmIndex];
             }
-#endif // HAVE_HEATED_BED
 
             else if (c2 == 'C') // %oC : Output level current extruder
             {
@@ -1460,15 +1449,6 @@ void UIDisplay::parse(char* txt, bool ram) {
                 }
                 }
             }
-#if RETRACT_DURING_HEATUP
-            else if (c2 == 'T') // %XT : Extruder wait retract temperature
-            {
-                addInt(Extruder::current->waitRetractTemperature, 4);
-            } else if (c2 == 'U') // %XU : Extruder wait retract unit
-            {
-                addInt(Extruder::current->waitRetractUnits, 2);
-            }
-#endif // RETRACT_DURING_HEATUP
 
             else if (c2 == 'l') // %Xl : Advance L value
             {
@@ -1524,48 +1504,28 @@ void UIDisplay::parse(char* txt, bool ram) {
         {
             if (c2 == 'x') // %sx : State of x min endstop
             {
-#if (X_MIN_PIN > -1) && MIN_HARDWARE_ENDSTOP_X
                 addStringP(Printer::isXMinEndstopHit() ? ui_text_on : ui_text_off);
-#else
-                addStringP(ui_text_na);
-#endif // (X_MIN_PIN > -1) && MIN_HARDWARE_ENDSTOP_X
             }
             if (c2 == 'X') // %sX : State of x max endstop
-#if (X_MAX_PIN > -1) && MAX_HARDWARE_ENDSTOP_X
-                addStringP(Printer::isXMaxEndstopHit() ? ui_text_on : ui_text_off);
-#else
                 addStringP(ui_text_na);
-#endif // (X_MAX_PIN > -1) && MAX_HARDWARE_ENDSTOP_X
 
             if (c2 == 'y') // %sy : State of y min endstop
-#if (Y_MIN_PIN > -1) && MIN_HARDWARE_ENDSTOP_Y
                 addStringP(Printer::isYMinEndstopHit() ? ui_text_on : ui_text_off);
-#else
-                addStringP(ui_text_na);
-#endif // (Y_MIN_PIN > -1)&& MIN_HARDWARE_ENDSTOP_Y
 
             if (c2 == 'Y') // %sY : State of y max endstop
-#if (Y_MAX_PIN > -1) && MAX_HARDWARE_ENDSTOP_Y
-                addStringP(Printer::isYMaxEndstopHit() ? ui_text_on : ui_text_off);
-#else
                 addStringP(ui_text_na);
-#endif // (Y_MAX_PIN > -1) && MAX_HARDWARE_ENDSTOP_Y
 
             if (c2 == 'z') // %sz : State of z min endstop
             {
-#if (Z_MIN_PIN > -1) && MIN_HARDWARE_ENDSTOP_Z
                 addStringP(Printer::isZMinEndstopHit() ? ui_text_on : ui_text_off);
-#else
-                addStringP(ui_text_na);
-#endif // (Z_MIN_PIN > -1) && MIN_HARDWARE_ENDSTOP_Z
             }
             if (c2 == 'Z') // %sZ : State of z max endstop
             {
-#if (Z_MAX_PIN > -1) && MAX_HARDWARE_ENDSTOP_Z
+#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
                 addStringP(Printer::isZMaxEndstopHit() ? ui_text_on : ui_text_off);
 #else
                 addStringP(ui_text_na);
-#endif // (Z_MAX_PIN > -1) && MAX_HARDWARE_ENDSTOP_Z
+#endif // RF2000 / RF2000v2
             }
             if (c2 == 'C') // %sC : State of the z compensation
             {
@@ -2665,7 +2625,6 @@ void UIDisplay::finishAction(int action) {
         Line 1059: #define PRECISE_HEAT_BED_SCAN_BED_TEMP_PLA          60                                                                  // [°C]
         Line 1062: #define PRECISE_HEAT_BED_SCAN_EXTRUDER_TEMP_PLA     230                                                                 // [°C]
         */
-#if NUM_TEMPERATURE_LOOPS > 0
         int temperature = PRECISE_HEAT_BED_SCAN_EXTRUDER_TEMP_PLA;
         int cycles = 10;
         if (UI_MENU_PID_EXT0_COUNT + UI_MENU_PID_EXT1_COUNT + UI_MENU_PID_BED_COUNT - 1 == heater && UI_MENU_PID_BED_COUNT > 0) {
@@ -2680,9 +2639,6 @@ void UIDisplay::finishAction(int action) {
         exitmenu();
         menuPos[0] = 3; //show temps
         tempController[heater]->autotunePID(temperature, heater, cycles, writeeeprom, method);
-#else
-        Com::printFLN(PSTR("PID Autotune Error: Noo Temperature-Loops defined!??"));
-#endif // NUM_TEMPERATURE_LOOPS > 0
         break;
     }
     }
@@ -2777,7 +2733,6 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         break;
     }
     case UI_ACTION_HEATED_BED_TEMP: {
-#if HAVE_HEATED_BED == true
         int tmp = (int)heatedBedController.targetTemperatureC;
         if (tmp < UI_SET_MIN_HEATED_BED_TEMP)
             tmp = 0;
@@ -2789,7 +2744,6 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         else if (tmp > UI_SET_MAX_HEATED_BED_TEMP)
             tmp = UI_SET_MAX_HEATED_BED_TEMP;
         Extruder::setHeatedBedTemperature(tmp);
-#endif // HAVE_HEATED_BED
         break;
     }
     case UI_ACTION_EXTRUDER0_TEMP: {
@@ -3733,9 +3687,7 @@ void UIDisplay::mainSwitchCase(int action) {
         if (Printer::debugDryrun()) // simulate movements without printing
         {
             Extruder::setTemperatureForAllExtruders(0);
-#if HAVE_HEATED_BED == true
             Extruder::setHeatedBedTemperature(0);
-#endif // HAVE_HEATED_BED==true
         }
         break;
     }
@@ -3839,32 +3791,24 @@ void UIDisplay::mainSwitchCase(int action) {
         g_uStartOfIdle = HAL::timeInMilliseconds() + 10000; //preheat PLA just got selected
         UI_STATUS_UPD(UI_TEXT_PREHEAT_PLA);
         Extruder::setTemperatureForAllExtruders(UI_SET_PRESET_EXTRUDER_TEMP_PLA);
-#if HAVE_HEATED_BED == true
         Extruder::setHeatedBedTemperature(UI_SET_PRESET_HEATED_BED_TEMP_PLA);
-#endif // HAVE_HEATED_BED==true
         break;
     }
     case UI_ACTION_PREHEAT_ABS: {
         g_uStartOfIdle = HAL::timeInMilliseconds() + 10000; //preheat ABS just got selected
         UI_STATUS_UPD(UI_TEXT_PREHEAT_ABS);
         Extruder::setTemperatureForAllExtruders(UI_SET_PRESET_EXTRUDER_TEMP_ABS);
-#if HAVE_HEATED_BED == true
         Extruder::setHeatedBedTemperature(UI_SET_PRESET_HEATED_BED_TEMP_ABS);
-#endif // HAVE_HEATED_BED==true
         break;
     }
     case UI_ACTION_COOLDOWN: {
         UI_STATUS_UPD(UI_TEXT_COOLDOWN);
         Extruder::setTemperatureForAllExtruders(0);
-#if HAVE_HEATED_BED == true
         Extruder::setHeatedBedTemperature(0);
-#endif // HAVE_HEATED_BED==true
         break;
     }
     case UI_ACTION_HEATED_BED_OFF: {
-#if HAVE_HEATED_BED == true
         Extruder::setHeatedBedTemperature(0);
-#endif // HAVE_HEATED_BED==true
         break;
     }
     case UI_ACTION_EXTRUDER0_OFF: {
@@ -4124,7 +4068,7 @@ void UIDisplay::nextPreviousAction(int8_t next) {
 
     if (menuLevel == 0) {
         lastSwitch = HAL::timeInMilliseconds();
-        if ((UI_INVERT_MENU_DIRECTION && next < 0) || (!UI_INVERT_MENU_DIRECTION && next > 0)) {
+        if (next > 0) {
             menuPos[0]++;
             if (menuPos[0] >= UI_NUM_PAGES)
                 menuPos[0] = 0;
@@ -4146,7 +4090,7 @@ void UIDisplay::nextPreviousAction(int8_t next) {
 
     if (mtype == UI_MENU_TYPE_SUBMENU && activeAction == 0) // browse through menu items
     {
-        if ((UI_INVERT_MENU_DIRECTION && next < 0) || (!UI_INVERT_MENU_DIRECTION && next > 0)) {
+        if (next > 0) {
             //up-to-bottom-Patch
             uint8_t vorher = menuPos[menuLevel];
             if (menuPos[menuLevel] < nr - 1)
@@ -4206,7 +4150,7 @@ void UIDisplay::nextPreviousAction(int8_t next) {
     if (mtype == UI_MENU_TYPE_FILE_SELECTOR) // SD listing
     {
         //Com::printF( PSTR( "SD listing: " ), menuPos[menuLevel] ); Com::printFLN( PSTR( " / " ), menuLevel );
-        if ((UI_INVERT_MENU_DIRECTION && next < 0) || (!UI_INVERT_MENU_DIRECTION && next > 0)) {
+        if (next > 0) {
             menuPos[menuLevel] += 1;
             if (menuPos[menuLevel] > nFilesOnCard)
                 menuPos[menuLevel] = 0;
@@ -4232,11 +4176,7 @@ void UIDisplay::nextPreviousAction(int8_t next) {
     else
         action = activeAction;
 
-#if UI_INVERT_INCREMENT_DIRECTION
     changeSwitchCase(action, -next);
-#else
-    changeSwitchCase(action, next);
-#endif // UI_INVERT_INCREMENT_DIRECTION
 
     g_nAutoReturnTime = HAL::timeInMilliseconds() + menuAutoReturnDelayMs;
 } // nextPreviousAction
@@ -4403,12 +4343,4 @@ void UIDisplay::exitmenu() {
     return;
 } // unlock
 
-#if UI_ENCODER_SPEED == 0
-const int8_t encoder_table[16] PROGMEM = { 0, 1, -1, 0, -1, 0, 0, 1, 1, 0, 0, -1, 0, -1, 1, 0 }; // Full speed
-#elif UI_ENCODER_SPEED == 1
 const int8_t encoder_table[16] PROGMEM = { 0, 0, -1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, -1, 0, 0 }; // Half speed
-#else
-const int8_t encoder_table[16] PROGMEM = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 1, 0 }; // Quart speed
-#endif // UI_ENCODER_SPEED==0
-
-#endif //  UI_DISPLAY_TYPE!=0

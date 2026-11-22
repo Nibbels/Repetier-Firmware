@@ -298,7 +298,7 @@ public:
     }
     static FSTRINGPARAM(fatalErrorMsg);
     static void keepAlive(enum FirmwareState state);
-    static uint32_t keepAliveInterval;
+    static constexpr millis_t keepAliveIntervalMs = 2000;
 
 #if SDSUPPORT
     friend class SDCard;

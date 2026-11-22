@@ -133,9 +133,6 @@ FSTRINGVALUE(Com::tQuadraticKColon, " quadratic K:")
 FSTRINGVALUE(Com::tscanHeatBed, "scanHeatBed(): ")
 FSTRINGVALUE(Com::tAutoMatrixLeveling, "Auto-Matrix-Leveling @X:")
 
-#ifdef PRINT_GENERIC_TEMP_TABLE
-FSTRINGVALUE(Com::tGenTemp, "GenTemp:")
-#endif // PRINT_GENERIC_TEMP_TABLE
 
 FSTRINGVALUE(Com::tTargetExtr, "TargetExtr")
 FSTRINGVALUE(Com::tTargetBedColon, "TargetBed:")
@@ -165,9 +162,7 @@ FSTRINGVALUE(Com::tTempHeaterDefect, ": heater decoupled")
 FSTRINGVALUE(Com::tTempSensorWorking, ": working")
 FSTRINGVALUE(Com::tDryModeUntilRestart, "Printer set into dry run mode until restart!")
 
-#ifdef WAITING_IDENTIFIER
-FSTRINGVALUE(Com::tWait, WAITING_IDENTIFIER)
-#endif // WAITING_IDENTIFIER
+FSTRINGVALUE(Com::tWait, "wait")
 
 #if EEPROM_MODE == 0
 FSTRINGVALUE(Com::tNoEEPROMSupport, "No EEPROM support compiled.\r\n")
@@ -231,8 +226,6 @@ FSTRINGVALUE(Com::tEPRBedsensorType, "Bed Temp. sensor type [3=orig. 4=alternati
 FSTRINGVALUE(Com::tEPRsensorType, "Temp. sensor type [3=V2 8=E3D 13=V3]")
 FSTRINGVALUE(Com::tEPRXOffset, "X-offset [mm]")
 FSTRINGVALUE(Com::tEPRYOffset, "Y-offset [mm]")
-FSTRINGVALUE(Com::tEPRRetractionWhenHeating, "Temp. for retraction when heating [C]")
-FSTRINGVALUE(Com::tEPRDistanceRetractHeating, "Distance to retract when heating [mm]")
 FSTRINGVALUE(Com::tEPRExtruderCoolerSpeed, "Extruder cooler speed [0-255]")
 FSTRINGVALUE(Com::tEPRAdvanceK, "Advance K [0=off]")
 FSTRINGVALUE(Com::tEPRAdvanceL, "Advance L [0=off]")

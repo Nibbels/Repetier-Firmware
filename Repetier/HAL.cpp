@@ -665,50 +665,11 @@ ISR(TIMER1_COMPA_vect) {
     sbi(TIMSK1, OCIE1A);
 } // ISR(TIMER1_COMPA_vect)
 
-/**
-* HEATER CONFIGURATION
-*/
-
-#if !defined(HEATER_PWM_SPEED)
-#define HEATER_PWM_SPEED 0
-#endif
-#if HEATER_PWM_SPEED < 0
-#define HEATER_PWM_SPEED 0
-#endif
-#if HEATER_PWM_SPEED > 4
-#define HEATER_PWM_SPEED 4
-#endif
-
-#if HEATER_PWM_SPEED == 0
-#define HEATER_PWM_STEP 1   // 2^0 == 0000 0001 == 1 << 0
-#define HEATER_PWM_MASK 255 //1111 1111 = (255 << 0) & 0xff
-#elif HEATER_PWM_SPEED == 1
-#define HEATER_PWM_STEP 2   // 2^1 == 0000 0010 == 1 << 1
-#define HEATER_PWM_MASK 254 //1111 1110 = (255 << 1) & 0xff
-#else
-#define HEATER_PWM_STEP 4   // 2^2 == 0000 0100 == 1 << 2
-#define HEATER_PWM_MASK 252 //1111 1100 = (255 << 2) & 0xff
-#endif                      // HEATER_PWM_SPEED
-
-/**
-* SECONDARY FAN / EXTRUDER FAN CONFIGURATION
-*/
-//by this logic/code the higher frequency is used the less steps are commandable.
-//we have to use small frequencys and "it is only a partfan" thatwhy that matter is acceptable.
-#if !defined(COOLER_PWM_SPEED)
-#define COOLER_PWM_SPEED 0
-#endif
-
-#if COOLER_PWM_SPEED == 0
-#define COOLER_PWM_STEP 1   // 2^0 == 0000 0001 == 1 << 0
-#define COOLER_PWM_MASK 255 //1111 1111 = (255 << 0) & 0xff
-#elif COOLER_PWM_SPEED == 1
-#define COOLER_PWM_STEP 2   // 2^1 == 0000 0010 == 1 << 1
-#define COOLER_PWM_MASK 254 //1111 1110 = (255 << 1) & 0xff
-#else
-#define COOLER_PWM_STEP 4   // 2^2 == 0000 0100 == 1 << 2
-#define COOLER_PWM_MASK 252 //1111 1100 = (255 << 2) & 0xff
-#endif                      // COOLER_PWM_SPEED
+// Heater and secondary fan PWM use the stock duty cycle resolution.
+constexpr uint8_t heaterPwmStep = 2;
+constexpr uint8_t heaterPwmMask = 0xFE;
+constexpr uint8_t coolerPwmStep = 1;
+constexpr uint8_t coolerPwmMask = 0xFF;
 
 /**
 * PART FAN CONFIGURATION
@@ -748,19 +709,17 @@ ISR(PWM_TIMER_VECTOR) {
 
     if (pwm_count_heater == 0) {
 #if EXT0_HEATER_PIN > -1
-        if ((pwm_pos_set[0] = (pwm_pos[0] & HEATER_PWM_MASK)) > 0)
-            WRITE(EXT0_HEATER_PIN, !HEATER_PINS_INVERTED);
+        if ((pwm_pos_set[0] = (pwm_pos[0] & heaterPwmMask)) > 0)
+            WRITE(EXT0_HEATER_PIN, HIGH);
 #endif // EXT0_HEATER_PIN>-1
 
 #if defined(EXT1_HEATER_PIN) && EXT1_HEATER_PIN > -1 && NUM_EXTRUDER > 1
-        if ((pwm_pos_set[1] = (pwm_pos[1] & HEATER_PWM_MASK)) > 0)
-            WRITE(EXT1_HEATER_PIN, !HEATER_PINS_INVERTED);
+        if ((pwm_pos_set[1] = (pwm_pos[1] & heaterPwmMask)) > 0)
+            WRITE(EXT1_HEATER_PIN, HIGH);
 #endif // defined(EXT1_HEATER_PIN) && EXT1_HEATER_PIN>-1 && NUM_EXTRUDER>1
 
-#if HEATED_BED_HEATER_PIN > -1 && HAVE_HEATED_BED
-        if ((pwm_pos_set[NUM_EXTRUDER] = (pwm_pos[NUM_EXTRUDER] & HEATER_PWM_MASK)) > 0)
-            WRITE(HEATED_BED_HEATER_PIN, !HEATER_PINS_INVERTED);
-#endif // HEATED_BED_HEATER_PIN>-1 && HAVE_HEATED_BED
+        if ((pwm_pos_set[NUM_EXTRUDER] = (pwm_pos[NUM_EXTRUDER] & heaterPwmMask)) > 0)
+            WRITE(HEATED_BED_HEATER_PIN, HIGH);
     }
 
     if (pwm_count_cooler == 0) {
@@ -777,43 +736,41 @@ ISR(PWM_TIMER_VECTOR) {
 #endif // defined(EXT1_HEATER_PIN) && EXT1_HEATER_PIN > -1 && NUM_EXTRUDER > 1
 
 #if FAN_BOARD_PIN > -1
-        if ((pwm_pos_set[NUM_EXTRUDER + 1] = (pwm_pos[NUM_EXTRUDER + 1] & COOLER_PWM_MASK)) > 0)
+        if ((pwm_pos_set[NUM_EXTRUDER + 1] = (pwm_pos[NUM_EXTRUDER + 1] & coolerPwmMask)) > 0)
             WRITE(FAN_BOARD_PIN, 1);
 #endif // FAN_BOARD_PIN>-1
     }
 
 #if EXT0_HEATER_PIN > -1
-    if (pwm_pos_set[0] == pwm_count_heater && pwm_pos_set[0] != HEATER_PWM_MASK)
-        WRITE(EXT0_HEATER_PIN, HEATER_PINS_INVERTED);
+    if (pwm_pos_set[0] == pwm_count_heater && pwm_pos_set[0] != heaterPwmMask)
+        WRITE(EXT0_HEATER_PIN, LOW);
 #if EXT0_EXTRUDER_COOLER_PIN > -1
-    if (pwm_cooler_pos_set[0] == pwm_count_cooler && pwm_cooler_pos_set[0] != COOLER_PWM_MASK)
+    if (pwm_cooler_pos_set[0] == pwm_count_cooler && pwm_cooler_pos_set[0] != coolerPwmMask)
         WRITE(EXT0_EXTRUDER_COOLER_PIN, 0);
 #endif // #if EXT0_EXTRUDER_COOLER_PIN > -1
 #endif // #if EXT0_HEATER_PIN>-1
 
 #if defined(EXT1_HEATER_PIN) && EXT1_HEATER_PIN > -1 && NUM_EXTRUDER > 1
-    if (pwm_pos_set[1] == pwm_count_heater && pwm_pos_set[1] != HEATER_PWM_MASK)
-        WRITE(EXT1_HEATER_PIN, HEATER_PINS_INVERTED);
+    if (pwm_pos_set[1] == pwm_count_heater && pwm_pos_set[1] != heaterPwmMask)
+        WRITE(EXT1_HEATER_PIN, LOW);
 #if EXT1_EXTRUDER_COOLER_PIN > -1 && EXT1_EXTRUDER_COOLER_PIN != EXT0_EXTRUDER_COOLER_PIN
-    if (pwm_cooler_pos_set[1] == pwm_count_cooler && pwm_cooler_pos_set[1] != COOLER_PWM_MASK)
+    if (pwm_cooler_pos_set[1] == pwm_count_cooler && pwm_cooler_pos_set[1] != coolerPwmMask)
         WRITE(EXT1_EXTRUDER_COOLER_PIN, 0);
 #endif // EXT1_EXTRUDER_COOLER_PIN>-1 && EXT1_EXTRUDER_COOLER_PIN!=EXT0_EXTRUDER_COOLER_PIN
 #endif // defined(EXT1_HEATER_PIN) && EXT1_HEATER_PIN>-1 && NUM_EXTRUDER>1
 
-#if HEATED_BED_HEATER_PIN > -1 && HAVE_HEATED_BED
-    if (pwm_pos_set[NUM_EXTRUDER] == pwm_count_heater && pwm_pos_set[NUM_EXTRUDER] != HEATER_PWM_MASK)
-        WRITE(HEATED_BED_HEATER_PIN, HEATER_PINS_INVERTED);
-#endif // HEATED_BED_HEATER_PIN>-1 && HAVE_HEATED_BED
+    if (pwm_pos_set[NUM_EXTRUDER] == pwm_count_heater && pwm_pos_set[NUM_EXTRUDER] != heaterPwmMask)
+        WRITE(HEATED_BED_HEATER_PIN, LOW);
 
 #if FAN_BOARD_PIN > -1
-    if (pwm_pos_set[NUM_EXTRUDER + 1] == pwm_count_cooler && pwm_pos_set[NUM_EXTRUDER + 1] != COOLER_PWM_MASK)
+    if (pwm_pos_set[NUM_EXTRUDER + 1] == pwm_count_cooler && pwm_pos_set[NUM_EXTRUDER + 1] != coolerPwmMask)
         WRITE(FAN_BOARD_PIN, 0);
 #endif // #if FAN_BOARD_PIN>-1
 
     // run the heater PWM speed like we were used to:
-    pwm_count_heater += HEATER_PWM_STEP;
+    pwm_count_heater += heaterPwmStep;
     // run alle the secondary cooler PWM speed like we were used to:
-    pwm_count_cooler += COOLER_PWM_STEP;
+    pwm_count_cooler += coolerPwmStep;
 
 #if FAN_PIN > -1
     /**
@@ -990,9 +947,6 @@ ISR(EXTRUDER_TIMER_VECTOR) {
     } else if (Printer::extruderStepsNeeded != 0) {
         Extruder::step();
         Printer::extruderStepsNeeded -= extruderLastDirection;
-#if STEPPER_HIGH_DELAY > 0
-        HAL::delayMicroseconds(STEPPER_HIGH_DELAY);
-#endif // #if STEPPER_HIGH_DELAY>0
         Extruder::unstep();
     }
     EXTRUDER_OCR = timer + Printer::maxExtruderSpeed;
