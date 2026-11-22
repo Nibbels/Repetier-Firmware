@@ -6,22 +6,22 @@
 
 During the first layer, SenseOffset gradually raises nozzle clearance when DMS force suggests the gap is too small. That **dynamic correction is RAM-only**. Sometimes the measured correction reveals a *persistent* setup discrepancy that should survive a restart: a thicker/thinner magnetic print sheet, bed or nozzle positioning after manually pulling a printed object from a bed, or an imperfect initial Z-offset calibration.
 
-The operator can deliberately **transfer (capitalize) part of the dynamic correction into the saved, manual `Printer::ZOffset`** without changing net clearance. This helps improve the baseline for subsequent prints. It does not automatically decide which DMS readings reflect permanent versus thermal or material-dependent errors: the operator chooses to make that correction permanent.
+The operator can deliberately **transfer (capitalize) part of the dynamic correction into the saved manual Z offset** without changing net clearance. This helps improve the baseline for subsequent prints. It does not automatically decide which DMS readings reflect permanent versus thermal or material-dependent errors: the operator chooses to make that correction permanent.
 
 ## The buttons and their direction matter
 
 The behavior applies only on **Mod Menu / page 2** (`uid.menuLevel == 0 && uid.menuPos[0] == 1`). In other contexts, the same buttons command *direct Z motion*, not a Z-offset adjustment.
 
 In the Mod Menu:
-- Physical **Z / heat-bed DOWN** action `UI_ACTION_RF_HEAT_BED_DOWN` calls `zOffsetPlusAction()` and **increases persistent `Printer::ZOffset` by 5 µm**; dynamic SenseOffset is unchanged, total clearance increases 5 µm.
+- Physical **Z / heat-bed DOWN** action `UI_ACTION_RF_HEAT_BED_DOWN` calls `zOffsetPlusAction()` and **increases the saved manual offset by 5 µm**; dynamic SenseOffset is unchanged, total clearance increases 5 µm.
 - Physical **Z / heat-bed UP** action `UI_ACTION_RF_HEAT_BED_UP` calls `zOffsetMinusAction()`. When dynamic SenseOffset is positive, it **consumes up to 5 µm of dynamic correction first**, leaving manual Z-offset unchanged as long as sufficient dynamic correction remains. Net clearance decreases by up to 5 µm.
-- Each actual change in `Printer::ZOffset` is written to the **MCU's internal EEPROM**, with checksum update if the value changed. Dynamic SenseOffset remains RAM-only.
+- Each actual change in the manual offset is written to the **MCU's internal EEPROM**, with checksum update if the value changed. Dynamic SenseOffset remains RAM-only.
 
 The step size is `Z_OFFSET_BUTTON_STEPS=5` µm (not the regular menu's `Z_OFFSET_MENU_STEPS=25` µm).
 
 ## Example: 200 µm already learned, manual offset initially zero
 
-| Mod-menu action | Saved `Printer::ZOffset` | Live SenseOffset | Combined static correction |
+| Mod-menu action | Saved manual offset | Live SenseOffset | Combined static correction |
 | --- | ---: | ---: | ---: |
 | Before | 0 µm | +200 µm | +200 µm |
 | Bed DOWN (plus) | +5 µm | +200 µm | +205 µm |
@@ -39,7 +39,7 @@ After 40 completed pairs, approximately +200 µm has moved from dynamic to manua
 2. **Clamps and zero snapping:** buttons clamp the menu offset to the configured range and snap near zero to zero; the arithmetic is not exact at all arbitrary offset values (especially values entered through G-code that are not multiples of 5 µm). Do not assert perfectly constant combined correction in all edge cases.
 3. **Dynamic near zero:** once the remaining dynamic correction is below 5 µm, the last UP press consumes it and can also change the saved manual offset. A fully paired sequence must be reviewed at this boundary.
 4. **EEPROM writes:** the accumulating manual correction is committed at each actual manual-offset change. This is by design, but many repeated cycles generate repeated EEPROM writes; avoid treating this as a high-frequency automatic control loop.
-5. **Do not reset dynamic offset when enabling or editing `Printer::ZOffset`** without honoring this transfer operation. A general “always zero dynamic on adjustment” fix would destroy the feature.
+5. **Do not reset dynamic offset when enabling or editing the manual offset** without honoring this transfer operation. A general “always zero dynamic on adjustment” fix would destroy the feature.
 6. **Transfer is a decision, not proof of correct calibration.** Thermal drift, ooze/clogging, filament pressure and sensor bias can produce temporary SenseOffset increases. Taking them into permanent EEPROM could make future *cold* or *warm* prints worse. The operator may want a calibration scan or visual first-layer check before retaining a large correction.
 
 ## Relevance to the Z lifecycle bugs
@@ -51,7 +51,7 @@ After 40 completed pairs, approximately +200 µm has moved from dynamic to manua
 ## Source and history
 
 - [Mod-menu buttons mapped to plus/minus](../../Repetier/ui.cpp#L4100-L4126)
-- [Offset plus/minus logic and immediate EEPROM persistence](../../Repetier/ui.cpp#L2821-L2879)
+- [Offset plus/minus logic and immediate EEPROM persistence](../../Repetier/ui.cpp#L2335-L2343)
 - [5 µm per Mod-menu button](../../Repetier/Configuration.h#L901-L908)
 - [Historical first-hand design intent, January 25, 2017](../../changelog.txt#L1760-L1768)
 - [All offset terms and storage](offset-ledger.md) · [Lifecycle risks](lifecycle-and-findings.md)

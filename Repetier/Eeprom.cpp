@@ -111,6 +111,7 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     Printer::axisStepsPerMM[X_AXIS] = XAXIS_STEPS_PER_MM;
     Printer::axisStepsPerMM[Y_AXIS] = YAXIS_STEPS_PER_MM;
     Printer::axisStepsPerMM[Z_AXIS] = ZAXIS_STEPS_PER_MM;
+    Printer::zOffset.refreshSteps(Printer::axisStepsPerMM[Z_AXIS]);
     Printer::axisStepsPerMM[E_AXIS] = 1; //man könnte auch vom current extruder die id auslesen und dann EXT0_STEPS_PER_MM oder EXT1_STEPS_PER_MM ?
                                          // -> ist autokorrigiert wenn man einmal einen extruder auswählt. Siehe unten.
     Printer::maxFeedrate[X_AXIS] = MAX_FEEDRATE_X;
@@ -259,7 +260,7 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     HAL::eprSetFloat(EPR_X_MAX_FEEDRATE, Printer::maxFeedrate[X_AXIS]);
     HAL::eprSetFloat(EPR_Y_MAX_FEEDRATE, Printer::maxFeedrate[Y_AXIS]);
     HAL::eprSetFloat(EPR_Z_MAX_FEEDRATE, Printer::maxFeedrate[Z_AXIS]);
-    HAL::eprSetInt32(EPR_RF_Z_OFFSET, Printer::ZOffset);
+    HAL::eprSetInt32(EPR_RF_Z_OFFSET, Printer::zOffset.manualMicrometers());
     HAL::eprSetByte(EPR_RF_Z_MODE, Printer::ZMode);
     HAL::eprSetByte(EPR_RF_MOVE_MODE_X, Printer::moveMode[X_AXIS]);
     HAL::eprSetByte(EPR_RF_MOVE_MODE_Y, Printer::moveMode[Y_AXIS]);
@@ -392,6 +393,14 @@ void EEPROM::updateChecksum() {
     HAL::eprSetByte(EPR_INTEGRITY_BYTE, computeChecksum());
 } // updateChecksum
 
+void EEPROM::storeManualZOffset() {
+    const int32_t manual = Printer::zOffset.manualMicrometers();
+    if (HAL::eprGetInt32(EPR_RF_Z_OFFSET) != manual) {
+        HAL::eprSetInt32(EPR_RF_Z_OFFSET, manual);
+        updateChecksum();
+    }
+}
+
 void EEPROM::readDataFromEEPROM() {
     bool change = false;
 
@@ -417,9 +426,9 @@ void EEPROM::readDataFromEEPROM() {
         }
     }
 
-    Printer::ZOffset = HAL::eprGetInt32(EPR_RF_Z_OFFSET);
+    // Reload the saved value in the current scale and keep the live SenseOffset.
+    Printer::zOffset.setManualMicrometers(HAL::eprGetInt32(EPR_RF_Z_OFFSET), Printer::axisStepsPerMM[Z_AXIS]);
     Printer::ZMode = HAL::eprGetByte(EPR_RF_Z_MODE);
-    g_staticZSteps = (Printer::ZOffset * Printer::axisStepsPerMM[Z_AXIS]) / 1000;
     Printer::maxZOverrideSteps = uint16_t(Printer::axisStepsPerMM[Z_AXIS] * Z_ENDSTOP_DRIVE_OVER);
 
     g_minZCompensationSteps = long(heatBedZCompensationMinMm * Printer::axisStepsPerMM[Z_AXIS]); //load the values with applied micro-steps

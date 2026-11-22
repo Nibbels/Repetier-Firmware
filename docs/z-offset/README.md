@@ -13,7 +13,7 @@ The print gap depends on nominal Z, the scanned heat-bed shape, the saved manual
 ```text
 Commanded Z (the print's planned geometric height)
   + scanned-bed correction B(x,y), progressively faded to its baseline O
-  + g_staticZSteps = (Printer::ZOffset + g_nSensiblePressureOffset)*Z_steps_per_mm/1000
+  + Printer::zOffset.effectiveSteps() = trunc((manual µm + SenseOffset µm)*Z_steps_per_mm/1000)
   + optional force-sensitive Digit-Z correction
   + other mechanical effects and Z endstop limits
   → compensatedPositionTargetStepsZ → physical Z motor activity

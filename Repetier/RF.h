@@ -454,6 +454,7 @@ constexpr int heatBedScanPlaNozzleC = 210;
 // Above the minimum height, gradually fade the bed profile through the maximum height.
 constexpr float heatBedZCompensationMinMm = 0.33f;
 constexpr int heatBedZCompensationMaxMm = 10;
+constexpr int32_t maxManualZOffsetMicrometers = heatBedZCompensationMaxMm * 1000L;
 
 // determine the maximal needed size for the heat bed compensation
 #define COMPENSATION_MATRIX_MAX_X long((X_MAX_LENGTH_PRINT - heatBedScanXStartMm - heatBedScanXEndMm) / heatBedScanMinStepMm + 4)
@@ -496,7 +497,6 @@ extern long g_nScanYStepSizeSteps;
 extern unsigned short g_nScanContactPressureDelta;
 extern unsigned short g_nScanRetryPressureDelta;
 
-extern long g_staticZSteps;
 extern volatile uint8_t g_startLineActive;
 extern char g_debugLevel;
 extern char g_debugLog;
@@ -528,7 +528,6 @@ extern long nSensiblePressureSum;
 extern char nSensiblePressureChecks;
 extern short g_nSensiblePressureDigits;
 extern short g_nSensiblePressureOffsetMax;
-extern short g_nSensiblePressureOffset;
 extern char g_nSensiblePressure1stMarke; //sagt, ob regelung aktiv oder inaktiv, wegen Z-Limits
 
 extern short g_nLastDigits;

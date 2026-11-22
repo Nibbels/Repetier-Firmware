@@ -195,6 +195,7 @@ public:
     static void init();
     static void initBaudrate();
     static void storeDataIntoEEPROM(uint8_t corrupted = 0);
+    static void storeManualZOffset();
     static void updateChecksum();
     static void readDataFromEEPROM();
     static void restoreEEPROMSettingsFromConfiguration();

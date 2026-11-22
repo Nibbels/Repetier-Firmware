@@ -1284,7 +1284,7 @@ void UIDisplay::parse(char* txt, bool ram) {
         case 'z': // %z0 : Z Offset
         {
             if (c2 == '0') {
-                addInt(Printer::ZOffset, 4);
+                addInt(Printer::zOffset.manualMicrometers(), 4);
             } else if (c2 == 'm') // %zm : Z Scale
             {
                 addStringP(Printer::ZMode == Z_VALUE_MODE_Z_MIN ? ui_text_z_mode_min : ui_text_z_mode_gcode);
@@ -1478,7 +1478,7 @@ void UIDisplay::parse(char* txt, bool ram) {
             if (c2 == 'S') // %sS : State of the sensible offset
             {
                 if (Printer::doHeatBedZCompensation) {
-                    addInt((int)g_nSensiblePressureOffset, 4);
+                    addInt(Printer::zOffset.senseMicrometers(), 4);
                 } else {
                     addInt(0, 4);
                 }
@@ -2333,52 +2333,13 @@ void UIDisplay::senseOffsetDownAction() {
 }
 
 void UIDisplay::zOffsetPlusAction() {
-    long nTemp = Printer::ZOffset; //um --> mm*1000
-    nTemp += Z_OFFSET_BUTTON_STEPS;
-    //beim Überschreiten von 0, soll 0 erreicht werden, sodass man nicht mit krummen Zahlen rumhantieren muss.
-    if (nTemp < Z_OFFSET_BUTTON_STEPS && nTemp > 0)
-        nTemp = 0;
-    if (nTemp < -(heatBedZCompensationMaxMm * 1000))
-        nTemp = -(heatBedZCompensationMaxMm * 1000);
-    if (nTemp > (heatBedZCompensationMaxMm * 1000))
-        nTemp = (heatBedZCompensationMaxMm * 1000);
-    Printer::ZOffset = nTemp;
-    g_staticZSteps = long(((Printer::ZOffset + g_nSensiblePressureOffset) * Printer::axisStepsPerMM[Z_AXIS]) / 1000);
-    if (HAL::eprGetInt32(EPR_RF_Z_OFFSET) != Printer::ZOffset) {
-        HAL::eprSetInt32(EPR_RF_Z_OFFSET, Printer::ZOffset);
-        EEPROM::updateChecksum();
-    }
+    Printer::zOffset.adjustWithBedButton(Z_OFFSET_BUTTON_STEPS, maxManualZOffsetMicrometers, Printer::axisStepsPerMM[Z_AXIS]);
+    EEPROM::storeManualZOffset();
 }
 
 void UIDisplay::zOffsetMinusAction() {
-    long nTemp = Printer::ZOffset; //um --> mm*1000
-    nTemp -= Z_OFFSET_BUTTON_STEPS;
-    //beim Unterschreiten von 0, soll 0 erreicht werden, sodass man nicht mit krummen Zahlen rumhantieren muss.
-    if (nTemp < 0 && nTemp > -Z_OFFSET_BUTTON_STEPS)
-        nTemp = 0;
-    /* IDEE: Wenn automatisches Offset und wir korrigieren dagegen, soll erst dieses abgebaut werden */
-    if (g_nSensiblePressureOffset > 0) { //aus: dann 0, an: dann > 0
-                                         //automatik hat das bett runtergefahren, wir fahren es mit negativem offset hoch.
-                                         //blöd: damit ist die automatik evtl. weiter am limit und kann nachfolgend nichts mehr tun.
-                                         //also erst ausgleichen! dann verändern.
-        if (g_nSensiblePressureOffset > Z_OFFSET_BUTTON_STEPS) {
-            nTemp += Z_OFFSET_BUTTON_STEPS;
-            g_nSensiblePressureOffset -= Z_OFFSET_BUTTON_STEPS;
-        } else {
-            nTemp += g_nSensiblePressureOffset;
-            g_nSensiblePressureOffset = 0;
-        }
-    }
-    if (nTemp < -(heatBedZCompensationMaxMm * 1000))
-        nTemp = -(heatBedZCompensationMaxMm * 1000);
-    if (nTemp > (heatBedZCompensationMaxMm * 1000))
-        nTemp = (heatBedZCompensationMaxMm * 1000);
-    Printer::ZOffset = nTemp;
-    g_staticZSteps = long(((Printer::ZOffset + g_nSensiblePressureOffset) * Printer::axisStepsPerMM[Z_AXIS]) / 1000);
-    if (HAL::eprGetInt32(EPR_RF_Z_OFFSET) != Printer::ZOffset) {
-        HAL::eprSetInt32(EPR_RF_Z_OFFSET, Printer::ZOffset);
-        EEPROM::updateChecksum();
-    }
+    Printer::zOffset.adjustWithBedButton(-Z_OFFSET_BUTTON_STEPS, maxManualZOffsetMicrometers, Printer::axisStepsPerMM[Z_AXIS]);
+    EEPROM::storeManualZOffset();
 }
 
 void UIDisplay::rightAction() {
@@ -2651,10 +2612,10 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         break;
     }
     case UI_ACTION_ZOFFSET: {
-        INCREMENT_MIN_MAX(Printer::ZOffset, Z_OFFSET_MENU_STEPS, -(heatBedZCompensationMaxMm * 1000), (heatBedZCompensationMaxMm * 1000));
-        g_staticZSteps = ((Printer::ZOffset + g_nSensiblePressureOffset) * Printer::axisStepsPerMM[Z_AXIS]) / 1000;
-        HAL::eprSetInt32(EPR_RF_Z_OFFSET, Printer::ZOffset);
-        EEPROM::updateChecksum();
+        int32_t manual = Printer::zOffset.manualMicrometers();
+        INCREMENT_MIN_MAX(manual, Z_OFFSET_MENU_STEPS, -maxManualZOffsetMicrometers, maxManualZOffsetMicrometers);
+        Printer::zOffset.setManualMicrometers(manual, Printer::axisStepsPerMM[Z_AXIS]);
+        EEPROM::storeManualZOffset();
         break;
     }
     case UI_ACTION_EPOSITION: {
@@ -3375,7 +3336,6 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
                         Printer::axisStepsPerMM[i] *= stepsmm_korrekturfactor;
                         g_nPauseSteps[i] *= stepsmm_korrekturfactor;
                         if (i == Z_AXIS) {
-                            g_staticZSteps *= stepsmm_korrekturfactor;          //adjust static offset from Z-Offset to fit new Microstepping
                             Printer::currentZSteps *= stepsmm_korrekturfactor;  //adjust critical z-counter for drive over switch limits
                             g_maxZCompensationSteps *= stepsmm_korrekturfactor; //preadjust max compensation steps for z-CMP (gets autoadjusted but the user might override autoadjustement)
                             g_minZCompensationSteps *= stepsmm_korrekturfactor; //preadjust max compensation steps for z-CMP (gets autoadjusted but the user might override autoadjustement)
@@ -3409,6 +3369,8 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
             if (updateall)
                 HAL::eprSetByte(EPR_RF_MICRO_STEPS_USED, 0xAB); //erstes schreiben markiert eepromwerte als gültig
             noInts.unprotect();
+            if (changed[Z_AXIS])
+                Printer::zOffset.refreshSteps(Printer::axisStepsPerMM[Z_AXIS]);
             EEPROM::updateChecksum();
         }
         break;

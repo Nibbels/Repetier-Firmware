@@ -159,7 +159,6 @@ char g_nScanPressureReads = 0;
 unsigned short g_nScanPressureReadDelay = 0;
 short g_nScanPressureTolerance = 0;
 
-long g_staticZSteps = 0;
 // Enabled only while firmware-generated M3912 moves are planned/executed.
 volatile uint8_t g_startLineActive = 0;
 char g_debugLevel = 0;
@@ -193,7 +192,6 @@ bool g_nEmergencyESkip = false;
 // It adds clearance when DMS force is high on the first layer.
 short g_nSensiblePressureDigits = 0; //init auf zahl bringt stand 1.37r2 nur was wenn zcompensation an. darum lesen aus eeprom oder setzen auf wert nur durch Mcode
 short g_nSensiblePressureOffsetMax = SENSIBLE_PRESSURE_MAX_OFFSET;
-short g_nSensiblePressureOffset = 0;
 char g_nSensiblePressure1stMarke = 0; //sagt, ob regelung aktiv oder inaktiv, wegen Z-Limits
 
 short g_nLastDigits = 0;
@@ -2106,7 +2104,7 @@ void recalculateHeatBedZCompensation(void) {
             Printer::compensatedPositionOverPercE = 0.0f;
         }
 
-        nNeededZCompensation += g_staticZSteps;
+        nNeededZCompensation += Printer::zOffset.effectiveSteps();
 
         //Etwa 5500 digits verursachen 0.05 mm tiefere nozzle: ca. 0.00001 = 1/100.000 mm pro digit.
         //0.00001 ist vermutlich konservativ bis ok.
@@ -3210,15 +3208,13 @@ void handleStrainGaugeFeatures(millis_t uTime) {
     if (!Printer::doHeatBedZCompensation) {
         bool wasEnabled = g_nSensiblePressureDigits != 0;
         g_nSensiblePressureDigits = 0;
-        if (g_nSensiblePressureOffset) {
-            Com::printF(PSTR("SensiblePressure(): offset reverted from "), g_nSensiblePressureOffset);
+        if (Printer::zOffset.senseMicrometers()) {
+            Com::printF(PSTR("SensiblePressure(): offset reverted from "), Printer::zOffset.senseMicrometers());
             Com::printFLN(PSTR(" [um] to 0 [um] "));
-            // Preserve the EEPROM-backed manual offset.
-            g_nSensiblePressureOffset = 0;
-            g_staticZSteps = (Printer::ZOffset * Printer::axisStepsPerMM[Z_AXIS]) / 1000;
+            Printer::zOffset.clearSenseOffset(Printer::axisStepsPerMM[Z_AXIS]);
         }
         if (wasEnabled)
-            Com::printFLN(PSTR("SensiblePressure(): now disabled because of no z-CMP. "), g_nSensiblePressureOffset);
+            Com::printFLN(PSTR("SensiblePressure(): now disabled because of no z-CMP. "), Printer::zOffset.senseMicrometers());
     }
 
     // M3909 P0 keeps the already applied offset while compensation is still
@@ -3262,17 +3258,6 @@ void handleStrainGaugeFeatures(millis_t uTime) {
                     if ((nPressure > g_nSensiblePressureDigits)) {
                         /* here the action is defined if digits are > g_nSensiblePressureDigits while printing */
 
-                        /*
-                        Z-OFFSETs :: Mir sind aktuell folgende Offsets in Z bekannt:
-                            long Printer::ZOffset;                                                          == OFFSET IN MENÜ / M3006 in [um]
-                            g_staticZSteps = (Printer::ZOffset * Printer::axisStepsPerMM[Z_AXIS]) / 1000;   == OFFSET-STEPS errechnet aus Printer::ZOffset -> Und NEU zusätzlich aus SenseOffset
-                            g_offsetZCompensationSteps                                                      == OFFSET AUS zMATRIX (Minimaler Bett-Hotend-Abstand)
-                            nNeededZCompensation                                                            == In der Z-Compensations-Funktion: Das ist der Matrixanteil an exaktem Punkt x/y
-
-                            Strategie: Wir haben unser eigenes Sensible-Offset "g_nSensiblePressureOffset" mit Beschränkung und rechnen g_staticZSteps neu aus.
-                            g_nSensiblePressureOffset
-                        */
-
                         //wie stark reagieren?
                         //PID -Regler wollen wir uns aber sparen...
                         unsigned char step = 1; //0..255!! standardincrement
@@ -3292,7 +3277,7 @@ void handleStrainGaugeFeatures(millis_t uTime) {
                             step = 1;
                         } else {
                             //digits steigen gerade -> je höher mein aktuelles zusätzliches offset, desto weniger regelspeed.
-                            inc = (float)g_nSensiblePressureOffset / (float)g_nSensiblePressureOffsetMax; //0.25 .. 1
+                            inc = (float)Printer::zOffset.senseMicrometers() / (float)g_nSensiblePressureOffsetMax; //0.25 .. 1
                             if (inc >= 0.25) {
                                 step = step - (short)(inc * (step - 1)); //über der viertel offsetstrecke, das zusätzliche offset stark ausbremsen.
                             }
@@ -3302,15 +3287,8 @@ void handleStrainGaugeFeatures(millis_t uTime) {
                             }
                         }
 
-                        if (step > 0) {
-                            //um == mikrometer -> Offsetbereich beschränkt auf 0..0,10mm
-                            if (g_nSensiblePressureOffset + step <= (long)g_nSensiblePressureOffsetMax) {
-                                g_nSensiblePressureOffset += step;
-                            } else {
-                                g_nSensiblePressureOffset = (long)g_nSensiblePressureOffsetMax;
-                            }
-                            g_staticZSteps = ((Printer::ZOffset + g_nSensiblePressureOffset) * Printer::axisStepsPerMM[Z_AXIS]) / 1000;
-                        }
+                        if (step > 0)
+                            Printer::zOffset.addSenseMicrometers(step, g_nSensiblePressureOffsetMax, Printer::axisStepsPerMM[Z_AXIS]);
                     } else {
                         //kleinere digits sind natürlich zugelassen, runtergeregelt wird nicht wegen kleinerer digits bei z.B. retracts
                     }
@@ -3324,7 +3302,7 @@ void handleStrainGaugeFeatures(millis_t uTime) {
                     nSensiblePressureSum = 0; //close down counters if function deactivated.
                     nSensiblePressureChecks = 0;
                 }
-                //offset muss bleiben! g_nSensiblePressureOffset != 0
+                // Keep the applied clearance when the learning conditions no longer hold.
             }
         }
     }
@@ -3914,55 +3892,31 @@ void processSpecialGCode(GCode* pCommand) {
             break;
         }
 
-        case 3006: // M3006 [S] [Z] - configure the static z-offset ( S - units are [um], Z - units are [mm] )
-        {
-            if (pCommand->hasZ()) {
-                // test and take over the specified value
-                if (pCommand->Z < -heatBedZCompensationMaxMm)
-                    pCommand->Z = -heatBedZCompensationMaxMm;
-                if (pCommand->Z > heatBedZCompensationMaxMm)
-                    pCommand->Z = heatBedZCompensationMaxMm;
-
-                Printer::ZOffset = long(pCommand->Z * 1000);
-                // Preserve the live SenseOffset when changing the EEPROM-backed manual offset.
-                g_staticZSteps = long(((Printer::ZOffset + g_nSensiblePressureOffset) * Printer::axisStepsPerMM[Z_AXIS]) / 1000);
-                if (Printer::debugInfo()) {
-                    Com::printF(PSTR("M3006: new static z-offset: "), pCommand->Z);
-                    Com::printF(PSTR(" [mm]"));
-                    Com::printF(PSTR(" / "), g_staticZSteps);
-                    Com::printFLN(PSTR(" [steps]"));
-                }
-
-                if (HAL::eprGetInt32(EPR_RF_Z_OFFSET) != Printer::ZOffset) {
-                    HAL::eprSetInt32(EPR_RF_Z_OFFSET, Printer::ZOffset);
-                    EEPROM::updateChecksum();
-                }
+        case 3006: { // S in micrometers, Z in millimeters
+            const bool inMillimeters = pCommand->hasZ();
+            if (inMillimeters) {
+                pCommand->Z = constrain(pCommand->Z, -heatBedZCompensationMaxMm, heatBedZCompensationMaxMm);
+                nTemp = long(pCommand->Z * 1000);
             } else if (pCommand->hasS()) {
-                // test and take over the specified value
-                nTemp = pCommand->S;
-
-                if (nTemp < -(heatBedZCompensationMaxMm * 1000))
-                    nTemp = -(heatBedZCompensationMaxMm * 1000);
-                if (nTemp > (heatBedZCompensationMaxMm * 1000))
-                    nTemp = (heatBedZCompensationMaxMm * 1000);
-
-                Printer::ZOffset = nTemp;
-                // Match the menu and SenseOffset controller's combined correction.
-                g_staticZSteps = long(((Printer::ZOffset + g_nSensiblePressureOffset) * Printer::axisStepsPerMM[Z_AXIS]) / 1000);
-                if (Printer::debugInfo()) {
-                    Com::printF(PSTR("M3006: new static z-offset: "), nTemp);
-                    Com::printF(PSTR(" [um]"));
-                    Com::printF(PSTR(" / "), g_staticZSteps);
-                    Com::printFLN(PSTR(" [steps]"));
-                }
-
-                if (HAL::eprGetInt32(EPR_RF_Z_OFFSET) != Printer::ZOffset) {
-                    HAL::eprSetInt32(EPR_RF_Z_OFFSET, Printer::ZOffset);
-                    EEPROM::updateChecksum();
-                }
+                nTemp = constrain(pCommand->S, -maxManualZOffsetMicrometers, maxManualZOffsetMicrometers);
             } else {
                 showInvalidSyntax(pCommand->M);
+                break;
             }
+
+            Printer::zOffset.setManualMicrometers(nTemp, Printer::axisStepsPerMM[Z_AXIS]);
+            if (Printer::debugInfo()) {
+                if (inMillimeters) {
+                    Com::printF(PSTR("M3006: new static z-offset: "), pCommand->Z);
+                    Com::printF(PSTR(" [mm]"));
+                } else {
+                    Com::printF(PSTR("M3006: new static z-offset: "), nTemp);
+                    Com::printF(PSTR(" [um]"));
+                }
+                Com::printF(PSTR(" / "), Printer::zOffset.effectiveSteps());
+                Com::printFLN(PSTR(" [steps]"));
+            }
+            EEPROM::storeManualZOffset();
             break;
         }
         case 3009: // M3009 [S] - get/choose the active heat bed z-compensation matrix
@@ -5635,7 +5589,7 @@ void processSpecialGCode(GCode* pCommand) {
                     if (hochrunter == 0.00f) {
                         //wenn Z=0.0 soll alles so bleibenk aber das Offset ins Matrix-Offset reingerechnet und genullt werden.
                         //das Offset muss negativ eingehen, denn wenn die Matrix "weniger tief" ist, bleibt die Düse weiter weg vom Bett.
-                        hochrunterSteps = long((Printer::ZOffset * Printer::axisStepsPerMM[Z_AXIS]) / 1000); //offset-stepps neu berechnen!
+                        hochrunterSteps = Printer::zOffset.manualSteps(Printer::axisStepsPerMM[Z_AXIS]);
                         Com::printFLN(PSTR("M3902: Veraenderung = zOffset --> zMatrix; Offset = 0;"));
                     }
 
@@ -5684,12 +5638,8 @@ void processSpecialGCode(GCode* pCommand) {
                             }
                         } else {
                             if (hochrunter == 0.00f) {
-                                Printer::ZOffset = 0; //offset um nullen
-                                if (HAL::eprGetInt32(EPR_RF_Z_OFFSET) != Printer::ZOffset) {
-                                    HAL::eprSetInt32(EPR_RF_Z_OFFSET, Printer::ZOffset);
-                                    EEPROM::updateChecksum();
-                                }
-                                g_staticZSteps = ((Printer::ZOffset + g_nSensiblePressureOffset) * Printer::axisStepsPerMM[Z_AXIS]) / 1000; //offset-stepps neu berechnen
+                                Printer::zOffset.setManualMicrometers(0, Printer::axisStepsPerMM[Z_AXIS]);
+                                EEPROM::storeManualZOffset();
                             }
                             g_ZMatrixChangedInRam = 1;
                         }
@@ -7109,8 +7059,6 @@ static void setupForPrinting() {
     restoreDefaultPauseParkingOffsets();
 
     Printer::updateDerivedParameter();
-
-    g_staticZSteps = (Printer::ZOffset * Printer::axisStepsPerMM[Z_AXIS]) / 1000;
 
     g_uStartOfIdle = HAL::timeInMilliseconds(); //setupForPrinting
 } // setupForPrinting

@@ -41,7 +41,7 @@ Current defaults include a **33-digit** point-scan contact threshold and a **sin
 
 | Item | Nonvolatile storage | How it is written |
 | --- | --- | --- |
-| Menu Z-offset, `Printer::ZOffset` | **Internal MCU EEPROM** `EPR_RF_Z_OFFSET` | Changed by M3006 / UI, immediately written with checksum; `M3902 Z0` also writes zero here |
+| Manual Z offset, `Printer::zOffset.manualMicrometers()` | **Internal MCU EEPROM** `EPR_RF_Z_OFFSET` | Changed by M3006 / UI, immediately written with checksum; `M3902 Z0` also writes zero here |
 | Bed matrix (multiple slots and chosen active slot) | **External I²C EEPROM** | HBS saves on completion; `M3902 S<n>` or UI 'Save Matrix' for RAM modifications; matrix selection in M3009 / menu |
 
 ### Critical transfer operation: M3902 Z0

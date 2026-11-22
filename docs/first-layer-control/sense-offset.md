@@ -15,8 +15,8 @@ Digit-Z uses a reversible force-to-Z estimate for elastic hotend deflection. Sen
 - SenseOffset needs active bed Z compensation and an enabled positive force threshold.
 - It can react only when **`Printer::currentSteps[Z_AXIS] <= g_minZCompensationSteps`**. That is a **nominal step-coordinate condition**, not a measurement of actual gap.
 - The first decision takes **10 accepted samples**, about half a second at 50 ms spacing. The interval check can skip a poll that arrives exactly 50 ms after the last sample. Later decisions carry half the averaging window forward.
-- It takes the **absolute** average reading. Above the configured limit it increases `g_nSensiblePressureOffset` by at least **1 um** when correction is warranted; larger pressure deviations can increase the increment, with tapering as offset approaches the maximum.
-- The result changes `g_staticZSteps = ((Printer::ZOffset + g_nSensiblePressureOffset) * axisStepsPerMM[Z]) / 1000`.
+- It takes the **absolute** average reading. Above the configured limit it increases the live SenseOffset by at least **1 µm** when correction is warranted; larger pressure deviations can increase the increment, with tapering as offset approaches the maximum.
+- `Printer::zOffset` converts the sum of the manual and live values to `effectiveSteps()`. [Offset ledger](../z-offset/offset-ledger.md)
 - Below the pressure threshold, the additional offset **does not decrease**. It persists when leaving the low-Z region; loss/disable of bed compensation is a separate deactivation/reset path.
 
 This is deliberately **not** a bidirectional PID loop. It is a bounded, positive-only first-layer clearance correction; the cap limits inappropriate reactions to a clogged nozzle or sensor error.
@@ -29,7 +29,7 @@ SenseOffset checks the executing nominal Z against the learned limit. The G-code
 
 ## Intentional manual persistence of learned clearance
 
-The operator can use alternating Z/bed DOWN and UP buttons in Mod Menu page 2 to transfer the positive SenseOffset adjustment into the saved manual `Printer::ZOffset` in 5 µm increments while approximately maintaining the combined correction. This is explicitly documented in the original 2017 changelog and must survive future fixes. See [live transfer procedure and conditions](../z-offset/history-and-workflows.md).
+The operator can use alternating Z/bed DOWN and UP buttons in Mod Menu page 2 to transfer the positive SenseOffset adjustment into the saved manual Z offset in 5 µm increments while approximately maintaining the combined correction. This is explicitly documented in the original 2017 changelog and must survive future fixes. See [live transfer procedure and conditions](../z-offset/history-and-workflows.md).
 
 ## Relevant source
 - [Globals, names and defaults](../../Repetier/RF.cpp#L193-L199)

@@ -18,7 +18,7 @@ In the middle region the conceptual calculation from source is:
 C(x,y,Z) = O + (B(x,y)-O) * (Zmax-Z)/(Zmax-Zmin)
 ```
 
-Additionally applied: `g_staticZSteps`, optional force-dependent Digit-Z correction, and physical endstop limits. Therefore 'zero compensation above max' would be misleading: **variable bed shape ends, not all Z offsets**.
+Above the fade end, the target still includes `Printer::zOffset.effectiveSteps()` and any active Digit-Z correction. Physical endstop limits continue to apply.
 
 ## Why g_min and g_max are dynamic
 

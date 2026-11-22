@@ -78,7 +78,7 @@ float Printer::maxZJerk;                                          // Maximum all
 unsigned int Printer::vMaxReached[2];                             // Maximum reached speed [FOR_DIRECT, FOR_QUEUE]
 unsigned long Printer::msecondsPrinting = 0;                      // Milliseconds of printing time (means time with heated extruder)
 float Printer::filamentPrinted = 0.0f;                            // mm of filament printed since counting started
-long Printer::ZOffset = 0;                                        // Z Offset in um
+ZOffset Printer::zOffset;
 char Printer::ZMode = DEFAULT_Z_SCALE_MODE;                       // Z-min distance or nominal layer height
 char Printer::moveMode[3];                                        // move mode which is applied within the Position X/Y/Z menus
 bool Printer::moveKosys = KOSYS_GCODE;                            // true = GCode, false = DirectMove / OffsetMove
@@ -1176,7 +1176,7 @@ void Printer::homeZAxis() {
         // Do the unit conversions outside the interrupt-protected block.
         const long defaultMinZCompensationSteps = long(heatBedZCompensationMinMm * Printer::axisStepsPerMM[Z_AXIS]);
         const long defaultMaxZCompensationSteps = long(heatBedZCompensationMaxMm * Printer::axisStepsPerMM[Z_AXIS]);
-        const long manualZOffsetSteps = long((Printer::ZOffset * Printer::axisStepsPerMM[Z_AXIS]) / 1000);
+        zOffset.clearSenseOffset(axisStepsPerMM[Z_AXIS]);
 
         InterruptProtectedBlock noInts;
         // Each Z home starts a fresh first-layer reference. In particular,
@@ -1187,12 +1187,8 @@ void Printer::homeZAxis() {
         g_minZCompensationSteps = defaultMinZCompensationSteps;
         g_maxZCompensationSteps = defaultMaxZCompensationSteps;
         g_diffZCompensationSteps = defaultMaxZCompensationSteps - defaultMinZCompensationSteps;
-        // CMP is already disabled: discard only the volatile correction,
-        // never the user's EEPROM-backed manual offset / Mod Menu transfer.
         g_nSensiblePressureDigits = 0;
-        g_nSensiblePressureOffset = 0;
         g_nSensiblePressure1stMarke = 0;
-        g_staticZSteps = manualZOffsetSteps;
 
         Printer::resetDirectAxis(Z_AXIS);
 

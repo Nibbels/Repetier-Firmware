@@ -37,7 +37,7 @@ Digit-Z adds a force-dependent Z adjustment when enabled in the DMS menu. Emerge
 | `g_minZCompensationSteps` | Full bed-profile limit **also used to gate SenseOffset** |
 | `g_maxZCompensationSteps` | End of fade-out of spatial bed shape |
 | `g_offsetZCompensationSteps` | Matrix-derived baseline |
-| `g_staticZSteps` | Manual menu Z offset + SenseOffset (converted from micrometres to steps) |
+| `Printer::zOffset.effectiveSteps()` | Manual menu Z offset + SenseOffset (converted from micrometres to steps) |
 | `Printer::compensatedPositionOverPercE` | Geometric extrusion correction from changing layer thickness |
 | `dynamicFeedrateFactor` / `dynamicExtrusionFactor` | Pressure-dependent feed and extrusion multipliers for Digit Flow Compensation |
 

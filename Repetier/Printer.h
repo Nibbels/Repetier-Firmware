@@ -20,6 +20,8 @@
 #ifndef PRINTER_H
 #define PRINTER_H
 
+#include "ZOffset.h"
+
 // ##########################################################################################
 // ##   status flags
 // ##########################################################################################
@@ -103,7 +105,7 @@ public:
     static speed_t vMaxReached[2];          // Maximumu reached speed
     static unsigned long msecondsPrinting;  // Milliseconds of printing time (means time with heated extruder)
     static float filamentPrinted;           // mm of filament printed since counting started
-    static long ZOffset;                    // Z Offset in um
+    static ZOffset zOffset;
     static char ZMode;                      // Z Scale
     static char moveMode[3];                // move mode which is applied within the Position X/Y/Z menus
     static bool moveKosys;                  // true = GCode, false = DirectMove / OffsetMove

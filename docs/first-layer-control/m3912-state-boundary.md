@@ -37,7 +37,7 @@ The previous print's spatial fade thresholds can still affect the generated prim
 | `queuePositionZLayerGuessNew/Current/Last` | Clear and exclude prime movement from learning | Clear all three |
 | `g_startLineActive` | Set before first prime move | Clear after queue drain |
 | User `feedrateMultiply`, `menuExtrusionFactor`, `Printer::feedrate` | **Never modified** | Unchanged |
-| `Printer::ZOffset`, existing SenseOffset, matrix, `g_min/g_max`, XY/Z position | **Preserve** | Unchanged by reset logic |
+| Manual offset, existing SenseOffset, matrix, `g_min/g_max`, XY/Z position | **Preserve** | Unchanged by reset logic |
 
 **Logical E example:** if the slicer has already reached absolute **E10**, the internal prime can physically push many additional millimetres of filament using its own temporary E0-based coordinates. Afterwards the firmware **restores logical E10**; the next slicer `E11` requests only 1 mm. With conventional entry E0, restoring E0 behaves like the original start code. On cancellation the stop handler's intentional E0 reset is preserved; play-key skip is treated as successful cleanup without extra Y travel.
 

@@ -26,7 +26,7 @@ To establish whether the response is fast enough, measure nozzle deflection thro
 - **150 µm** as a maximum additional 'Nachdehnung' / warming allowance;
 - **50 µm** desired remaining margin at the projected upper temperatures.
 
-It prints **Z-screw correction advice** after ZOS and does **not** apply live corrections to `Printer::ZOffset` or `g_staticZSteps` as bed/hotend temperature changes. The coefficients are approximate assumptions for the historic hardware, **not calibrated for E3D** or interchangeable hotends. The precise thermal drift in the first ~10 minutes was not established from source; a rough 0.01 mm observed transient and the 150 µm source allowance are **different quantities** and should not be equated.
+It prints **Z-screw correction advice** after ZOS and does **not** apply live corrections to the manual or effective offset held by `Printer::zOffset` as bed/hotend temperature changes. The coefficients are approximate assumptions for the historic hardware, **not calibrated for E3D** or interchangeable hotends. The precise thermal drift in the first ~10 minutes was not established from source; a rough 0.01 mm observed transient and the 150 µm source allowance are **different quantities** and should not be equated.
 
 This distinction is essential for diagnosing a 'random Z-offset': an observed physical gap change can occur while every software offset variable is unchanged.
 
@@ -51,7 +51,7 @@ A good calibration requires stable heat distribution, minimal side loading and a
 
 ## Operator capitalization of a learned correction
 
-If SenseOffset accumulates significant positive correction and the operator concludes the **persistent manual** Z baseline is miscalibrated (for example after swapping magnetic build plates or slight mechanical movement when removing a print), the firmware has a deliberate Mod Menu Z-up/down procedure to **transfer** this correction into EEPROM-backed `Printer::ZOffset` while approximately maintaining total clearance. This is a manual decision, **not automatic thermal compensation**. Material/temperature-dependent force changes should not automatically become a permanent offset. See [Mod Menu live transfer](history-and-workflows.md).
+If SenseOffset accumulates significant positive correction and the operator concludes the **persistent manual** Z baseline is miscalibrated (for example after swapping magnetic build plates or slight mechanical movement when removing a print), the firmware has a deliberate Mod Menu Z-up/down procedure to **transfer** this correction into the EEPROM-backed manual Z offset while approximately maintaining total clearance. This is a manual decision, **not automatic thermal compensation**. Material/temperature-dependent force changes should not automatically become a permanent offset. See [Mod Menu live transfer](history-and-workflows.md).
 
 ## Observational troubleshooting
 
