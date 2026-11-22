@@ -13,7 +13,7 @@
 | `g_minZCompensationSteps` | steps | RAM: initial/fallback config; **dynamically replaced** by first-layer detector | Boot EEPROM read; `motion.cpp` model layer learning | Full bed-following limit, SenseOffset low-Z gate, Digit Flow high-Z gate |
 | `g_maxZCompensationSteps` | steps | RAM: fallback config then dynamically learned | Boot EEPROM read; `motion.cpp` | End of scanned-profile fade and ECMP transition |
 | `g_nDigitZCompensationDigits` | force digits (stored float) | RAM | DMS readings | Optional additional force-dependent Z target term |
-| `Printer::compensatedPositionTargetStepsZ` / `CurrentStepsZ` | steps | RAM/live stepper state | Z compensation target calculation / execution | Separate desired vs realized correction; can lag during motion |
+| `ZMotion` correction target and applied correction | Z motor steps | RAM/live stepper state | Bed and DMS calculation publishes the target. `ZMotion` updates the applied correction. | Applied correction can lag behind the target during motion |
 
 ### Simplified formula for printing (normal Z >= 0)
 

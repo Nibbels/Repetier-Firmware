@@ -937,7 +937,7 @@ void UIDisplay::parse(char* txt, bool ram) {
                     printCols[col++] = '*';
             } else if (c2 == 'z' && col < MAX_COLS) // %hz : z homed
             {
-                if (Printer::flag3 & PRINTER_FLAG3_Z_HOMED)
+                if (Printer::zMotion.isHomed())
                     printCols[col++] = '*';
             } else if (c2 == 'X' && col < MAX_COLS) // %hX : x homed
             {
@@ -953,7 +953,7 @@ void UIDisplay::parse(char* txt, bool ram) {
                     printCols[col++] = '?';
             } else if (c2 == 'Z' && col < MAX_COLS) // %hZ : z homed
             {
-                if (Printer::flag3 & PRINTER_FLAG3_Z_HOMED)
+                if (Printer::zMotion.isHomed())
                     printCols[col++] = ':';
                 else
                     printCols[col++] = '?';
@@ -1206,7 +1206,7 @@ void UIDisplay::parse(char* txt, bool ram) {
                         // we can not move any more
                         bDefect = true;
                     } else {
-                        fvalue = Printer::currentSteps[X_AXIS] * Printer::axisMMPerSteps[X_AXIS];
+                        fvalue = Printer::currentXYSteps[X_AXIS] * Printer::axisMMPerSteps[X_AXIS];
                     }
                 } else if (c2 == '1') // %x1 : Y position
                 {
@@ -1214,7 +1214,7 @@ void UIDisplay::parse(char* txt, bool ram) {
                         // we can not move any more
                         bDefect = true;
                     } else {
-                        fvalue = Printer::currentSteps[Y_AXIS] * Printer::axisMMPerSteps[Y_AXIS];
+                        fvalue = Printer::currentXYSteps[Y_AXIS] * Printer::axisMMPerSteps[Y_AXIS];
                     }
                 } else if (c2 == '2') // %x2 : Z position
                 {
@@ -1230,7 +1230,7 @@ void UIDisplay::parse(char* txt, bool ram) {
                         // we can not move any more
                         bDefect = true;
                     } else {
-                        fvalue = Printer::directCurrentSteps[X_AXIS] * Printer::axisMMPerSteps[X_AXIS];
+                        fvalue = Printer::directSteps(X_AXIS) * Printer::axisMMPerSteps[X_AXIS];
                     }
                 } else if (c2 == '4') // %x4 : Y offset position
                 {
@@ -1238,7 +1238,7 @@ void UIDisplay::parse(char* txt, bool ram) {
                         // we can not move any more
                         bDefect = true;
                     } else {
-                        fvalue = Printer::directCurrentSteps[Y_AXIS] * Printer::axisMMPerSteps[Y_AXIS];
+                        fvalue = Printer::directSteps(Y_AXIS) * Printer::axisMMPerSteps[Y_AXIS];
                     }
                 } else if (c2 == '5') // %x5 : Z offset position
                 {
@@ -1253,7 +1253,7 @@ void UIDisplay::parse(char* txt, bool ram) {
                             if (col < MAX_COLS)
                                 printCols[col++] = 'm';
                         } else {
-                            fvalue = (Printer::currentZSteps - Printer::currentSteps[Z_AXIS]) * Printer::axisMMPerSteps[Z_AXIS];
+                            fvalue = Printer::zMotion.motorOffsetSteps() * Printer::axisMMPerSteps[Z_AXIS];
                             if (col < MAX_COLS)
                                 printCols[col++] = ' ';
                             addFloat(fvalue, 3, 2);
@@ -3336,7 +3336,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
                         Printer::axisStepsPerMM[i] *= stepsmm_korrekturfactor;
                         g_nPauseSteps[i] *= stepsmm_korrekturfactor;
                         if (i == Z_AXIS) {
-                            Printer::currentZSteps *= stepsmm_korrekturfactor;  //adjust critical z-counter for drive over switch limits
+                            Printer::zMotion.rescaleMotorReference(stepsmm_korrekturfactor);
                             g_maxZCompensationSteps *= stepsmm_korrekturfactor; //preadjust max compensation steps for z-CMP (gets autoadjusted but the user might override autoadjustement)
                             g_minZCompensationSteps *= stepsmm_korrekturfactor; //preadjust max compensation steps for z-CMP (gets autoadjusted but the user might override autoadjustement)
                             g_nManualSteps[Z_AXIS] *= stepsmm_korrekturfactor;

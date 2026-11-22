@@ -54,6 +54,14 @@ public:
     void unprotect() { interruptsEnabled = previousState; }
 };
 
+enum { Z_MIN_PIN, Z_MAX_PIN, Z_DIR_PIN, Z_STEP_PIN };
+constexpr bool INVERT_Z_DIR = false, LOW = false, HIGH = true;
+constexpr float Z_ENDSTOP_DRIVE_OVER = 0.7f;
+#define INLINE inline
+bool READ(int pin);
+void WRITE(int pin, bool high);
+#include "ZMotion.h"
+
 #define PSTR(text) (text)
 #define UI_STATUS_UPD(text) ((void)0)
 #define UI_TEXT_MANUAL ""
@@ -95,12 +103,14 @@ struct WireInput {
 
 namespace Printer {
 ZOffset zOffset;
-long currentSteps[3] = { 6400, 12800, 256 };
+ZMotion zMotion(zStepsPerMm);
+long currentXYSteps[2] = { 6400, 12800 };
 long directCurrentSteps[4] = { 0, 16, 8, 0 };
-long currentZSteps = currentSteps[Z_AXIS] + directCurrentSteps[Z_AXIS];
-long compensatedPositionTargetStepsZ = 0;
-long maxSoftEndstopSteps[3] = { 100000, 100000, 200000 };
-long maxZOverrideSteps = 1000;
+struct DirectDisplacement {
+    long displacement;
+    long steps() const { return displacement; }
+};
+DirectDisplacement directPosition(uint8_t axis) { return {directCurrentSteps[axis]}; }
 long queuePositionZLayerLast = 0, queuePositionZLayerCurrent = 256;
 float axisStepsPerMM[3] = { 160.0f, 160.0f, zStepsPerMm };
 float axisMMPerSteps[3] = { 1.0f / 160, 1.0f / 160, 1.0f / zStepsPerMm };
@@ -117,10 +127,18 @@ bool isPrinting() { return true; }
 bool areAxisHomed() { return true; }
 bool isAxisHomed(int) { return true; }
 bool isZMoveActive() { return false; }
-bool isZMaxEndstopHit() { return currentZSteps >= maxSoftEndstopSteps[Z_AXIS]; }
-bool isZMinEndstopHit() { return currentZSteps <= 0; }
+bool isZMaxEndstopHit() { return zMotion.maxEndstopHit(); }
+bool isZMinEndstopHit() { return ZMotion::minSwitchHit(); }
 void setMenuMode(int, bool) {}
 void offsetRelativeStepsCoordinates(long x, long y, long z, long e, int task = TASK_NO_TASK);
+}
+
+bool READ(int pin) {
+    const int32_t motor = Printer::zMotion.motorSteps();
+    if (pin == Z_MIN_PIN)
+        return motor > 0;
+    assert(pin == Z_MAX_PIN);
+    return motor < 200000;
 }
 
 namespace RMath {
@@ -202,7 +220,7 @@ void Printer::offsetRelativeStepsCoordinates(long x, long y, long z, long e, int
         directCurrentSteps[Y_AXIS] += y;
         directCurrentSteps[Z_AXIS] += z;
         directCurrentSteps[E_AXIS] += e;
-        currentZSteps += z;
+        zMotion.setMotorReference(zMotion.motorSteps() + z);
         g_nContinueExtruderSteps -= e;
     }
 }
@@ -210,7 +228,7 @@ void Printer::offsetRelativeStepsCoordinates(long x, long y, long z, long e, int
 void parkAndResume() {
     sample(printingForce, 9);
     assert(Printer::zOffset.senseMicrometers() == initialClearance && g_nSensiblePressure1stMarke);
-    const long firstTarget = Printer::compensatedPositionTargetStepsZ;
+    const long firstTarget = Printer::zMotion.correctionTarget();
     const long originalY = Printer::directCurrentSteps[Y_AXIS];
     const long originalZ = Printer::directCurrentSteps[Z_AXIS];
 
@@ -224,12 +242,12 @@ void parkAndResume() {
     assert(Printer::directCurrentSteps[Z_AXIS] == originalZ + g_nPauseSteps[Z_AXIS]);
 
     sample(0, 40);
-    const long zeroForceTarget = Printer::compensatedPositionTargetStepsZ;
-    const long printMatrix = getZMatrixDepth(Printer::currentSteps[X_AXIS], Printer::currentSteps[Y_AXIS]);
+    const long zeroForceTarget = Printer::zMotion.correctionTarget();
+    const long printMatrix = getZMatrixDepth(Printer::currentXYSteps[X_AXIS], Printer::currentXYSteps[Y_AXIS]);
     assert(zeroForceTarget == printMatrix + Printer::zOffset.effectiveSteps());
 
     sample(printingForce, 40);
-    assert(Printer::compensatedPositionTargetStepsZ > zeroForceTarget);
+    assert(Printer::zMotion.correctionTarget() > zeroForceTarget);
     assert(Printer::zOffset.senseMicrometers() == initialClearance);
     const long parkedZ = Printer::directCurrentSteps[Z_AXIS];
     moveZAction(-1);
@@ -258,7 +276,7 @@ void parkAndResume() {
     assert(!g_pauseMode && g_pauseStatus == PAUSE_STATUS_NONE);
     assert(Printer::directCurrentSteps[Y_AXIS] == originalY && Printer::directCurrentSteps[Z_AXIS] == originalZ);
     assert(Printer::directCurrentSteps[E_AXIS] == manualExtruderPosition);
-    assert(Printer::compensatedPositionTargetStepsZ == firstTarget);
+    assert(Printer::zMotion.correctionTarget() == firstTarget);
 
     sample(printingForce, 9);
     assert(offset.senseMicrometers() == initialClearance - Z_OFFSET_BUTTON_STEPS);
@@ -282,15 +300,17 @@ void pauseBetweenPolls() {
 
 void interruptDuringLearning() {
     sample(printingForce, 9);
-    // Let the poll capture its pause state and read Digit-Z. Enter a queued
+    // Let the poll capture its pause state and the nominal Z. Enter a queued
     // pause just before the lock that would publish the SenseOffset update.
-    pauseBeforeLock = 3;
+    pauseBeforeLock = 4;
     sample(printingForce);
     assert(!pauseBeforeLock && g_pauseMode == PAUSE_MODE_PAUSED_AND_MOVED);
     assert(Printer::zOffset.senseMicrometers() == initialClearance);
 }
 
 void initializeOffsets() {
+    Printer::zMotion.setNominalSteps(256);
+    Printer::zMotion.setMotorReference(256 + Printer::directCurrentSteps[Z_AXIS]);
     Printer::zOffset.setManualMicrometers(50, zStepsPerMm);
     g_nSensiblePressureDigits = senseThreshold;
     g_nSensiblePressureOffsetMax = initialClearance;

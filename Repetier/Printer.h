@@ -21,6 +21,7 @@
 #define PRINTER_H
 
 #include "ZOffset.h"
+#include "ZMotion.h"
 
 // ##########################################################################################
 // ##   status flags
@@ -42,7 +43,6 @@
 
 #define PRINTER_FLAG3_X_HOMED 1  // flag3 alike original repetier
 #define PRINTER_FLAG3_Y_HOMED 2  // flag3 alike original repetier
-#define PRINTER_FLAG3_Z_HOMED 4  // flag3 alike original repetier
 #define PRINTER_FLAG3_PRINTING 8 // flag3 alike original repetier
 
 #define KOSYS_GCODE true
@@ -92,7 +92,7 @@ public:
     static float queuedEPositionMM;        // Last queued logical E coordinate in mm.
     static float queuedERemainderMM;
 
-    static long maxSoftEndstopSteps[3];     // For software endstops, limit of move in positive direction. (=Homing-Offset + Achsenlänge)
+    static long maxSoftEndstopSteps[2];     // X/Y software endstops. Z limits belong to zMotion.
     static float axisLengthMM[3];           // Länge des überfahrbaren Bereichs im positiven Homing. (=Schienen-Fahrweg - Homing-Offset - 2x ExtruderOffset)
     static float feedrate;                  // Last requested feedrate.
     static int feedrateMultiply;            // Multiplier for feedrate in percent (factor 1 = 100)
@@ -106,6 +106,7 @@ public:
     static unsigned long msecondsPrinting;  // Milliseconds of printing time (means time with heated extruder)
     static float filamentPrinted;           // mm of filament printed since counting started
     static ZOffset zOffset;
+    static ZMotion zMotion;
     static char ZMode;                      // Z Scale
     static char moveMode[3];                // move mode which is applied within the Position X/Y/Z menus
     static bool moveKosys;                  // true = GCode, false = DirectMove / OffsetMove
@@ -113,30 +114,20 @@ public:
 
     // This is some buffer but only for a limited amount of overdrive.
     static volatile int16_t outOfPrintVolume[2];
-    static volatile int32_t outOfPrintVolumeZ;
 
     static volatile char doHeatBedZCompensation;
 
-    static volatile long currentSteps[3];
+    static volatile long currentXYSteps[2];
     static volatile char blockAll;
 
     static volatile long currentXSteps;
     static volatile long currentYSteps;
-    static volatile long currentZSteps;
-    static uint16_t maxZOverrideSteps;
-
-    static volatile bool scanZMoveActive;
-    static volatile long compensatedPositionTargetStepsZ;
-    static volatile long compensatedPositionCurrentStepsZ;
     static volatile float compensatedPositionOverPercE;
     static volatile float compensatedPositionCollectTinyE;
 
     static long queuePositionZLayerGuessNew;
     static volatile long queuePositionZLayerCurrent;
     static volatile long queuePositionZLayerLast;
-
-    static volatile long directDestinationSteps[4];
-    static volatile long directCurrentSteps[4];
 
     static char enabledStepper[3];
 
@@ -256,7 +247,7 @@ public:
     /** \brief Disable stepper motor for z direction. */
     static INLINE void disableZStepper() {
         InterruptProtectedBlock noInts;
-        Printer::compensatedPositionTargetStepsZ = Printer::compensatedPositionCurrentStepsZ = g_nZScanZPosition = 0;
+        zMotion.clearScanAndCorrection();
         noInts.unprotect();
 
         // when the stepper is disabled we loose our home position because somebody else can move our mechanical parts
@@ -270,8 +261,8 @@ public:
 
         noInts.protect();
         Printer::setZAxisSteps(0);
-        Printer::currentZSteps = 0;
-        Printer::resetDirectAxis(Z_AXIS);
+        zMotion.setMotorReference(0);
+        zMotion.resetDirectPosition();
 
         Printer::queuePositionZLayerLast = 0;
         Printer::queuePositionZLayerCurrent = 0;
@@ -342,16 +333,6 @@ public:
         }
     } // setYDirection
 
-    static INLINE void setZDirection(bool positive) {
-        if (positive) {
-            // heat bed moves to the bottom
-            WRITE(Z_DIR_PIN, !INVERT_Z_DIR);
-        } else {
-            // heat bed moves to the top
-            WRITE(Z_DIR_PIN, INVERT_Z_DIR);
-        }
-    } // setZDirection
-
     static INLINE void startXStep(int8_t dir = (Printer::getXDirectionIsPos() ? 1 : -1)) {
         WRITE(X_STEP_PIN, HIGH);
         Printer::currentXSteps += dir;
@@ -361,15 +342,6 @@ public:
         WRITE(Y_STEP_PIN, HIGH);
         Printer::currentYSteps += dir;
     } // startYStep
-
-    static INLINE void startZStep(int8_t dir = (Printer::getZDirectionIsPos() ? 1 : -1)) {
-        WRITE(Z_STEP_PIN, HIGH);
-        Printer::currentZSteps += dir;
-    } // startZStep
-
-    static INLINE void endZStep(void) {
-        WRITE(Z_STEP_PIN, LOW);
-    }  // endZStep
 
     static INLINE void endYStep(void) {
         WRITE(Y_STEP_PIN, LOW);
@@ -382,12 +354,8 @@ public:
     static INLINE void endXYZSteps() {
         endXStep();
         endYStep();
-        endZStep();
+        ZMotion::finishPulse();
     } // endXYZSteps
-
-    static INLINE bool getZDirectionIsPos() {
-        return ((READ(Z_DIR_PIN) != 0) ^ INVERT_Z_DIR);
-    } // getZDirectionIsPos
 
     static INLINE bool getYDirectionIsPos() {
         return ((READ(Y_DIR_PIN) != 0) ^ INVERT_Y_DIR);
@@ -423,7 +391,7 @@ public:
             return (flag3 & PRINTER_FLAG3_Y_HOMED);
         }
         case Z_AXIS: {
-            return (flag3 & PRINTER_FLAG3_Z_HOMED);
+            return zMotion.isHomed();
         }
         }
         return 0;
@@ -447,8 +415,6 @@ public:
     static int8_t anyHomeDir(uint8_t axis);
     static bool anyEndstop(uint8_t axis);
     static void changeAxisDirection(uint8_t axis, int8_t direction);
-    static void startAxisStep(uint8_t axis);
-    static void endAxisStep(uint8_t axis);
     static void stepAxisStep(uint8_t axis, uint8_t slower = 1);
     static int8_t checkHome(int8_t axis); // M3028 homing repeatability test.
 
@@ -466,16 +432,12 @@ public:
             y = (g_uBlockCommands ? false : y); // block commands while homing does break moves so no safe sethome is possible
             flag3 = (y ? flag3 | PRINTER_FLAG3_Y_HOMED : flag3 & ~PRINTER_FLAG3_Y_HOMED);
         }
-        if (z != -1) {
-            z = (g_uBlockCommands ? false : z); // block commands while homing does break moves so no safe sethome is possible
-            flag3 = (z ? flag3 | PRINTER_FLAG3_Z_HOMED : flag3 & ~PRINTER_FLAG3_Z_HOMED);
-        }
+        if (z != -1)
+            zMotion.setHomed(!g_uBlockCommands && z);
         if (x == false)
             Printer::outOfPrintVolume[X_AXIS] = 0;
         if (y == false)
             Printer::outOfPrintVolume[Y_AXIS] = 0;
-        if (z == false)
-            Printer::outOfPrintVolumeZ = 0;
         if (!isAxisHomed(Z_AXIS)) {
             Printer::disableCMPnow(true); //true == wait for move while HOMING
         }
@@ -542,16 +504,8 @@ public:
     }  // isYMinEndstopHit
 
     static INLINE bool isZMinEndstopHit() {
-        return READ(Z_MIN_PIN) == LOW;
+        return ZMotion::minSwitchHit();
     }  // isZMinEndstopHit
-
-    static inline bool isZMaxSoftEndstopHit() {
-        return Printer::currentZSteps >= Printer::maxSoftEndstopSteps[Z_AXIS];
-    }
-
-    static inline bool isZMinOverrideReached() {
-        return currentZSteps <= -long(maxZOverrideSteps);
-    }
 
     static INLINE bool isXMaxEndstopHit() {
         return Printer::currentXSteps >= Printer::maxSoftEndstopSteps[X_AXIS];
@@ -562,12 +516,12 @@ public:
     }  // isYMaxEndstopHit
 
     static inline bool isZMaxEndstopHit() {
-#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
-        return READ(Z_MAX_PIN) == LOW;
-#else
-        return isZMaxSoftEndstopHit();
-#endif // RF2000 / RF2000v2
+        return zMotion.maxEndstopHit();
     }  // isZMaxEndstopHit
+
+    static inline int32_t softwareEndstopSteps(uint8_t axis) {
+        return axis == Z_AXIS ? zMotion.maxSteps() : maxSoftEndstopSteps[axis];
+    }
 
     static INLINE bool isMinEndstopHit(uint8_t axis) {
         if (axis == X_AXIS)
@@ -640,12 +594,12 @@ public:
     static inline float currentZPositionMM() {
         if (Printer::ZMode == Z_VALUE_MODE_Z_MIN) {
             // show the Enstop distance
-            return Printer::currentZSteps * Printer::axisMMPerSteps[Z_AXIS];
+            return zMotion.motorSteps() * Printer::axisMMPerSteps[Z_AXIS];
         }
 
         // Z_VALUE_MODE_LAYER:
         // show the G-Code Commanded Z
-        return Printer::currentSteps[Z_AXIS] * Printer::axisMMPerSteps[Z_AXIS];
+        return zMotion.nominalSteps() * Printer::axisMMPerSteps[Z_AXIS];
     } // currentZPositionMM
 
 #if NUM_EXTRUDER > 1
@@ -666,21 +620,22 @@ public:
 
     static INLINE void setXAxisSteps(int32_t x) {
         InterruptProtectedBlock noInts;
-        Printer::currentSteps[X_AXIS] = Printer::queuedPositionSteps[X_AXIS] = x;
+        currentXYSteps[X_AXIS] = queuedPositionSteps[X_AXIS] = x;
         setDestinationMM(X_AXIS, x * axisMMPerSteps[X_AXIS]);
         clearWobbleFixOffset(X_AXIS);
         noInts.unprotect();
     }
     static INLINE void setYAxisSteps(int32_t y) {
         InterruptProtectedBlock noInts;
-        Printer::currentSteps[Y_AXIS] = Printer::queuedPositionSteps[Y_AXIS] = y;
+        currentXYSteps[Y_AXIS] = queuedPositionSteps[Y_AXIS] = y;
         setDestinationMM(Y_AXIS, y * axisMMPerSteps[Y_AXIS]);
         clearWobbleFixOffset(Y_AXIS);
         noInts.unprotect();
     }
     static INLINE void setZAxisSteps(int32_t z) {
         InterruptProtectedBlock noInts;
-        Printer::currentSteps[Z_AXIS] = Printer::queuedPositionSteps[Z_AXIS] = z;
+        zMotion.setNominalSteps(z);
+        queuedPositionSteps[Z_AXIS] = z;
         setDestinationMM(Z_AXIS, z * axisMMPerSteps[Z_AXIS]);
         noInts.unprotect();
     }
@@ -698,16 +653,32 @@ public:
     static void addDestinationMM(uint8_t axis, float distance);
 
     static INLINE void stopDirectAxis(uint8_t axis) {
-        Printer::directDestinationSteps[axis] = Printer::directCurrentSteps[axis];
+        if (axis == Z_AXIS)
+            zMotion.stopDirectMove();
+        else
+            otherDirectPosition(axis).stop();
     }
     static INLINE void resetDirectAxis(uint8_t axis) {
-        Printer::directDestinationSteps[axis] = Printer::directCurrentSteps[axis] = 0;
+        if (axis == Z_AXIS)
+            zMotion.resetDirectPosition();
+        else
+            otherDirectPosition(axis).reset();
+    }
+    static INLINE const DirectPosition& directPosition(uint8_t axis) {
+        return axis == Z_AXIS ? zMotion.directPosition() : otherDirectPosition(axis);
+    }
+    static INLINE int32_t directSteps(uint8_t axis) {
+        InterruptProtectedBlock lock;
+        return directPosition(axis).steps();
+    }
+    static INLINE void advanceDirectXY(uint8_t axis, int8_t direction) {
+        xyDirect[axis].advance(direction);
     }
 
     static int32_t getPlannedDirectAxisSteps(uint8_t axis) {
         InterruptProtectedBlock noInts;
-        int32_t plannedAxisSteps = Printer::currentSteps[axis];
-        plannedAxisSteps += Printer::directDestinationSteps[axis];
+        int32_t plannedAxisSteps = axis == Z_AXIS ? zMotion.nominalSteps() : currentXYSteps[axis];
+        plannedAxisSteps += directPosition(axis).target();
         noInts.unprotect();
 
         return plannedAxisSteps;
@@ -727,7 +698,10 @@ public:
     static int32_t prepareDestinationSteps(uint8_t axis);
 
     static INLINE float getDirectMM(uint8_t axis) {
-        return (float)Printer::directDestinationSteps[axis] * Printer::axisMMPerSteps[axis];
+        InterruptProtectedBlock lock;
+        const int32_t target = directPosition(axis).target();
+        lock.unprotect();
+        return target * Printer::axisMMPerSteps[axis];
     } // getDirectMM
 
     static INLINE uint8_t getFanSpeed(bool percent = false) {
@@ -742,7 +716,6 @@ public:
 
     static void enableSenseOffsetnow(void);
     static bool needsCMPwait(void);
-    static bool isZCompensationLimited(bool positive);
     static void enableCMPnow(void);
     static void disableCMPnow(bool wait = false);
 
@@ -752,6 +725,12 @@ public:
     static void showConfiguration();
 
 private:
+    static DirectPosition xyDirect[2];
+    static DirectPosition extruderDirect;
+    static INLINE DirectPosition& otherDirectPosition(uint8_t axis) {
+        return axis == E_AXIS ? extruderDirect : xyDirect[axis];
+    }
+
     static uint8_t queuedWobbleAxes;
     static INLINE void clearWobbleFixOffset(uint8_t axis) {
         lastWobbleFixOffset[axis] = 0.0f;

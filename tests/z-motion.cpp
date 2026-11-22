@@ -1,0 +1,330 @@
+#include <cassert>
+#include <cstdint>
+#include <cstdlib>
+
+#include "Constants.h"
+#undef uint
+
+enum { Z_MIN_PIN, Z_MAX_PIN, Z_DIR_PIN, Z_STEP_PIN };
+constexpr bool INVERT_Z_DIR = false, LOW = false, HIGH = true;
+constexpr float Z_ENDSTOP_DRIVE_OVER = 0.25f;
+constexpr uint16_t XYZ_STEPPER_HIGH_DELAY = 100, XYZ_STEPPER_LOW_DELAY = 100;
+#define INLINE inline
+#define PSTR(text) (text)
+#define UI_STATUS_UPD(text) ((void)(text))
+
+namespace {
+bool interruptsEnabled = true;
+bool stepHigh = false, positive = true;
+int32_t motorPosition = 0, minContact = 0, maxContact = 1000;
+int pulseCount = 0, waitedMs = 0;
+bool tickDuringScan = false;
+
+class InterruptProtectedBlock {
+    const bool previous_ = interruptsEnabled;
+
+public:
+    InterruptProtectedBlock() { interruptsEnabled = false; }
+    ~InterruptProtectedBlock() { unprotect(); }
+    void unprotect() { interruptsEnabled = previous_; }
+};
+
+bool READ(int pin) {
+    if (pin == Z_DIR_PIN)
+        return positive;
+    if (pin == Z_MIN_PIN)
+        return motorPosition > minContact;
+    assert(pin == Z_MAX_PIN);
+    return motorPosition < maxContact;
+}
+
+void WRITE(int pin, bool high) {
+    if (pin == Z_DIR_PIN) {
+        assert(!stepHigh);
+        positive = high;
+        return;
+    }
+    assert(pin == Z_STEP_PIN);
+    if (high) {
+        assert(!stepHigh);
+        motorPosition += positive ? 1 : -1;
+        pulseCount++;
+    }
+    stepHigh = high;
+}
+}
+
+namespace HAL {
+void allowInterrupts() { interruptsEnabled = true; }
+void forbidInterrupts() { interruptsEnabled = false; }
+void delayMilliseconds(int milliseconds);
+void delayMicroseconds(int microseconds);
+}
+
+#include "ZMotion.h"
+
+namespace Printer {
+ZMotion zMotion(100.0f);
+bool blockAll = false, doHeatBedZCompensation = true;
+uint8_t stepsPerTimerCall = 1;
+bool needsCMPwait();
+void disableCMPnow(bool wait);
+}
+
+struct PrintLine {
+    static void stepSlowedZCompensation();
+    static bool needCmpWait();
+};
+
+constexpr int Processing = 0;
+constexpr int SCAN_ABORT_REASON_REACHED_MAX_COMPENSATION = 7;
+int g_abortZScan = 0, g_scanRetries = 0;
+struct Commands { static void checkForPeriodicalActions(int) { HAL::delayMilliseconds(1); } };
+struct Com { static void printFLN(const char*) {} };
+
+#include "z-motion-firmware.inc"
+
+namespace {
+using Printer::zMotion;
+using Path = ZMotion::Path;
+
+void tick() {
+    InterruptProtectedBlock lock;
+    PrintLine::stepSlowedZCompensation();
+    assert(!stepHigh && zMotion.motorSteps() == motorPosition);
+}
+
+void settleCorrection() {
+    for (int i = 0; i < 600; ++i)
+        tick();
+}
+
+void reset(int32_t position, bool homed = true) {
+    zMotion.configureTravel(100.0f, 10.0f);
+    zMotion.setMotorReference(position);
+    zMotion.setNominalSteps(position);
+    zMotion.resetDirectPosition();
+    zMotion.clearScanAndCorrection();
+    zMotion.setHomed(false);
+    zMotion.setHomed(homed);
+    motorPosition = position;
+    minContact = 0;
+    maxContact = 1000;
+    pulseCount = waitedMs = 0;
+    Printer::blockAll = false;
+    Printer::doHeatBedZCompensation = true;
+    g_abortZScan = 0;
+    g_scanRetries = 2;
+    ZMotion::setDirection(true);
+}
+
+bool step(Path path, int8_t direction) {
+    InterruptProtectedBlock lock;
+    ZMotion::setDirection(direction > 0);
+    const bool continuing = zMotion.stepPath(path);
+    assert(!interruptsEnabled);
+    ZMotion::finishPulse();
+    assert(zMotion.motorSteps() == motorPosition);
+    return continuing;
+}
+
+void driveDirect(int32_t distance, Path path = Path::Direct) {
+    zMotion.requestDirectMove(distance);
+    const int8_t direction = distance > 0 ? 1 : -1;
+    for (int32_t i = 0; i < abs(distance); ++i) {
+        if (!step(path, direction))
+            break;
+    }
+    zMotion.stopDirectMove();
+}
+
+void queuedAndDirectTravel() {
+    reset(999);
+    for (int i = 0; i < 4; ++i)
+        assert(step(Path::Queued, 1));
+    assert(motorPosition == 1000 && pulseCount == 1);
+    assert(zMotion.nominalSteps() == 1003 && zMotion.hasQueuedOvertravel());
+
+    driveDirect(-2);
+    assert(motorPosition == 998 && zMotion.directPosition().steps() == -2);
+    driveDirect(7);
+    assert(motorPosition == 1000 && zMotion.directPosition().steps() == 0);
+    assert(zMotion.directPosition().target() == 0 && zMotion.hasQueuedOvertravel());
+
+    for (int i = 0; i < 3; ++i)
+        assert(step(Path::Queued, -1));
+    assert(motorPosition == 1000 && !zMotion.hasQueuedOvertravel());
+    assert(zMotion.nominalSteps() == 1000 && pulseCount == 5);
+    assert(step(Path::Queued, -1) && motorPosition == 999);
+
+    reset(1000);
+    assert(step(Path::Queued, 1) && zMotion.hasQueuedOvertravel());
+    driveDirect(-1);
+    assert(step(Path::Queued, 1) && motorPosition == 999);
+    assert(!zMotion.hasQueuedOvertravel());
+    assert(step(Path::Queued, 1) && motorPosition == 1000);
+    assert(step(Path::Queued, 1) && zMotion.hasQueuedOvertravel());
+    assert(!step(Path::QueuedUntilEndstop, 1));
+    assert(!zMotion.hasQueuedOvertravel());
+}
+
+void minimumTravel() {
+    reset(1, false);
+    assert(step(Path::QueuedUntilEndstop, -1) && motorPosition == 0);
+    assert(!step(Path::QueuedUntilEndstop, -1));
+    assert(pulseCount == 1 && zMotion.nominalSteps() == -1);
+    driveDirect(-1);
+    assert(pulseCount == 1 && zMotion.directPosition().steps() == 0);
+
+    reset(1, false);
+    zMotion.requestCorrection(-4);
+    settleCorrection();
+    assert(motorPosition == 0 && pulseCount == 1);
+    zMotion.setHomed(true);
+    settleCorrection();
+    assert(motorPosition == -3 && pulseCount == 4);
+
+    reset(0);
+    driveDirect(-4, Path::StoppableDirect);
+    assert(pulseCount == 0);
+    driveDirect(-24);
+    assert(motorPosition == -24 && zMotion.directPosition().steps() == -24);
+    assert(!zMotion.manualStepExceedsMinimum(-1) && zMotion.manualStepExceedsMinimum(-2));
+    driveDirect(-8);
+    assert(motorPosition == -25 && zMotion.directPosition().target() == -25);
+    driveDirect(25);
+    assert(motorPosition == 0 && zMotion.directPosition().steps() == 0);
+
+    // Changing the microstep scale preserves the physical overtravel distance.
+    zMotion.configureTravel(200.0f, 10.0f);
+    assert(zMotion.minOvertravel() == 50 && zMotion.maxSteps() == 2000);
+    driveDirect(-52);
+    assert(motorPosition == -50);
+}
+
+void upperLimitsByModel() {
+    reset(999);
+    maxContact = 1003;
+    driveDirect(6);
+#if MOTHERBOARD == DEVICE_TYPE_RF1000
+    assert(motorPosition == 1000);
+#else
+    assert(motorPosition == 1003);
+#endif
+    reset(999);
+    maxContact = 1003;
+    zMotion.requestCorrection(12);
+    settleCorrection();
+    assert(motorPosition == 1000 && pulseCount == 1);
+
+    reset(995);
+    maxContact = 997;
+    zMotion.requestCorrection(12);
+    settleCorrection();
+#if MOTHERBOARD == DEVICE_TYPE_RF1000
+    assert(motorPosition == 1000);
+#else
+    assert(motorPosition == 997);
+#endif
+    assert(!PrintLine::needCmpWait());
+}
+
+void opposingCorrection() {
+    reset(500);
+    zMotion.requestCorrection(2);
+    assert(step(Path::Queued, -1));
+    driveDirect(-1);
+    assert(zMotion.nominalSteps() == 499 && zMotion.directPosition().steps() == -1);
+    assert(pulseCount == 0 && !zMotion.correctionCanMove());
+    assert(step(Path::Queued, -1) && pulseCount == 1);
+
+    reset(1000);
+    zMotion.requestCorrection(4);
+    assert(step(Path::Queued, -1) && motorPosition == 999);
+    assert(step(Path::Queued, -1) && motorPosition == 999);
+    assert(zMotion.nominalSteps() == 998 && pulseCount == 1);
+
+    reset(-25);
+    zMotion.requestCorrection(-5);
+    driveDirect(1);
+    assert(motorPosition == -24 && pulseCount == 1);
+    driveDirect(1);
+    assert(motorPosition == -24 && zMotion.directPosition().steps() == 2);
+}
+
+void correctionWaits() {
+    reset(500);
+    zMotion.requestCorrection(25);
+    assert(!PrintLine::needCmpWait() && Printer::needsCMPwait());
+    zMotion.requestCorrection(26);
+    assert(PrintLine::needCmpWait());
+    settleCorrection();
+    assert(motorPosition == 526 && !PrintLine::needCmpWait());
+    Printer::disableCMPnow(true);
+    assert(waitedMs > 0 && !Printer::doHeatBedZCompensation);
+    assert(motorPosition == 500);
+
+    reset(999);
+    zMotion.requestCorrection(-5);
+    settleCorrection();
+    driveDirect(6);
+    assert(motorPosition == 1000);
+    Printer::disableCMPnow(true);
+    assert(waitedMs == 0 && !PrintLine::needCmpWait());
+    driveDirect(-7);
+    settleCorrection();
+    assert(motorPosition == 998);
+}
+
+void scanTravel() {
+    reset(-25);
+    zMotion.requestCorrection(-4);
+    ZMotion::setDirection(false);
+    tickDuringScan = true;
+    moveZ(4);
+    assert(!g_abortZScan && !zMotion.scanInProgress());
+    assert(motorPosition == -21 && zMotion.scanSteps() == 4 && pulseCount == 4);
+    tickDuringScan = false;
+    settleCorrection();
+    assert(motorPosition == -25 && pulseCount == 8 && zMotion.scanSteps() == 4);
+
+    reset(-24);
+    moveZ(-2);
+    assert(g_abortZScan == SCAN_ABORT_REASON_REACHED_MAX_COMPENSATION && g_scanRetries == 0);
+    assert(motorPosition == -25 && zMotion.scanSteps() == -1 && !zMotion.scanInProgress());
+    moveZ(1);
+    assert(pulseCount == 1 && !zMotion.scanInProgress());
+
+    reset(10);
+    ZMotion::setDirection(false);
+    zMotion.stepHomeCheck(20);
+    assert(motorPosition == 9 && zMotion.motorSteps() == 9);
+    assert(zMotion.nominalSteps() == 10 && zMotion.scanSteps() == 0);
+}
+}
+
+void HAL::delayMilliseconds(int milliseconds) {
+    waitedMs += milliseconds;
+    assert(waitedMs < 10000);
+    tick();
+}
+
+void HAL::delayMicroseconds(int microseconds) {
+    assert(microseconds > 0);
+    if (tickDuringScan) {
+        assert(zMotion.scanInProgress());
+        const int previousPulses = pulseCount;
+        InterruptProtectedBlock lock;
+        PrintLine::stepSlowedZCompensation();
+        assert(!PrintLine::needCmpWait() && pulseCount == previousPulses);
+    }
+}
+
+int main() {
+    queuedAndDirectTravel();
+    minimumTravel();
+    upperLimitsByModel();
+    opposingCorrection();
+    correctionWaits();
+    scanTravel();
+}

@@ -168,6 +168,17 @@ public:
         return flags & FLAG_ABORT_AT_ENDSTOPS;
     } // isAbortAtEndstops
 
+    ZMotion::Path zPath(bool queued) {
+        if (queued)
+            return isAbortAtEndstops() ? ZMotion::Path::QueuedUntilEndstop : ZMotion::Path::Queued;
+        return task == DIRECT_RUNNING_STOPPABLE ? ZMotion::Path::StoppableDirect : ZMotion::Path::Direct;
+    }
+
+    static bool hasQueuedOvertravel() {
+        return Printer::outOfPrintVolume[X_AXIS] || Printer::outOfPrintVolume[Y_AXIS]
+            || Printer::zMotion.hasQueuedOvertravel();
+    }
+
     inline bool isNominalMove() {
         return flags & FLAG_NOMINAL;
     } // isNominalMove
@@ -443,7 +454,7 @@ public:
             Printer::setYDirection(isYPositiveMove());
         }
         if (isZMove()) {
-            Printer::setZDirection(isZPositiveMove());
+            ZMotion::setDirection(isZPositiveMove());
         }
         if (isEMove()) {
             if (!Printer::isAdvanceActivated()) // Set direction if no advance/OPS enabled

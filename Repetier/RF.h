@@ -328,56 +328,10 @@
 // ##########################################################################################
 // ##   X/Y/Z movements
 // ##########################################################################################
-/*
-The following variables are used for movements in x/y/z direction:
-
-- Printer::destinationMM[x/y/z]
-  - unit is [mm]
-  - this is the target before XY wobble correction, which might not be fully reachable by full steps
-  - destinationRemainderMM retains the low part of this target between relative moves.
-
-- Printer::queuedPositionSteps[x/y/z]
-  - unit is [steps]
-  - holds the rounded endpoint of the last queued move, with the wobble correction included in X/Y.
-  - the next move uses the difference between two integer endpoints.
-  - coordinate resets update the queued steps, current steps and millimetre target together.
-
-- Printer::currentSteps[x/y/z]
-  - unit is [steps]
-  - holds the position which has been reached through the movements from the queue
-  - the value of currentSteps represents the current position of the printer in x, y and z direction
-
-- Printer::directDestinationSteps[x/y/z]
-  - unit is [steps]
-  - holds the position which shall be reached through direct movements, e.g. from the manual buttons or from the direct pause/continue functionality
-
-- Printer::directCurrentSteps[x/y/z]
-  - unit is [steps]
-  - holds the position which has been reached through direct movements, e.g. from the manual buttons or from the direct pause/continue functionality
-
-- Printer::originOffsetMM[x/y/z]
-  - unit is [mm]
-  - holds the offset to the real origin of each axis
-
-- Printer::compensatedPositionTargetStepsZ
-  - unit is [steps]
-  - holds the position which shall be reached through the z-compensation
-
-- Printer::compensatedPositionCurrentStepsZ
-  - unit is [steps]
-  - holds the position which has been reached through the z-compensation
-
-- the current x/y position of the printer in [steps] is:
-  - Printer::currentSteps[x/y] + directCurrentSteps[x/y]
-  - from Endstop: Printer::currentXSteps or Printer::currentYSteps
-
-- the current z position of the printer in [steps] is:
-  - Printer::currentSteps[z] + directCurrentSteps[z] + compensatedPositionCurrentStepsZ
-  - Printer::currentZSteps as the resulting position from endstop
-  - see also:
-    - Printer::currentZPositionMM()
-
-*/
+// The planner retains the G-code target in destinationMM and the rounded
+// endpoint in queuedPositionSteps. Execution advances currentXYSteps and
+// zMotion.nominalSteps(). Each direct position tracks its own displacement.
+// ZMotion also accounts for scan travel, applied correction and actual pulses.
 
 #define DRV8711_NUM_CHANNELS 5
 
@@ -485,7 +439,6 @@ extern float g_scanStartZLiftMM;
 extern char g_abortZScan;
 extern short g_ZCompensationMatrix[COMPENSATION_MATRIX_MAX_X][COMPENSATION_MATRIX_MAX_Y];
 extern unsigned char g_uZMatrixMax[2];
-extern long g_nZScanZPosition;
 
 extern char g_nHeatBedScanMode; // 0 = oldScan, 1 = PLA, 2 = ABS
 

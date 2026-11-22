@@ -22,9 +22,11 @@ Firmware changes are tracked on `ai-firmware-review` against `community_developm
 
 ### Z travel and scanning
 
-- [x] **Allow scan retreat from the exact lower bound.** `moveZ()` stops a further approach at `-maxZOverrideSteps` and allows the bed to move away. The scan keeps control of the Z motor for the duration of its move. [Scan step output](../Repetier/RF.cpp#L2496)
+- [x] **Give Z step execution one owner.** `ZMotion` tracks nominal progress, direct displacement, scan travel, requested and applied correction, missed queued steps and emitted motor steps. The host replay covers endstop clipping, overtravel repayment, opposing correction, compensation waits, scan retreat and microstep scale changes. Run `python3 tests/z-motion.py` for all three model policies. [Execution and limits](development-roadmap.md#z-step-execution)
 
-- [x] **Apply travel limits to compensation-only Z pulses.** Each pulse checks the motor position in the requested direction. Z-max uses the configured limit and, where present, the hardware switch. Z-min allows the model-specific overtravel after homing. An unreachable target stays pending, leaving the next retreat step available. Host replays covered idle and XY movement, queued and direct retreat, and disabling compensation at a limit. Physical verification remains open. [Compensation pulses](../Repetier/motion.cpp#L802) · [Travel limit check](../Repetier/Printer.cpp#L871) · [Scan reach](z-offset/scans-and-persistence.md#z-min-screw-adjustment-and-scan-reach)
+- [x] **Allow scan retreat from the exact lower bound.** A homed scan stops further approach at the configured Z-min overtravel limit and can still drive the bed away. [Scan step output](../Repetier/ZMotion.cpp) · [Scan reach](z-offset/scans-and-persistence.md#z-min-screw-adjustment-and-scan-reach)
+
+- [x] **Apply travel limits to compensation-only Z pulses.** Each pulse checks the motor position in the requested direction. Z-max uses the configured limit and, where present, the hardware switch. Z-min allows the model-specific overtravel after homing. An unreachable target stays pending, leaving the next retreat step available. Host replays cover idle correction, queued and direct retreat, and disabling compensation at a limit. Physical verification remains open. [Compensation pulses and limits](../Repetier/ZMotion.cpp)
 
 - [x] **Use the configured Z maximum on the RF1000.** The RF1000 homes on its physical Z-min switch and limits travel toward Z-max in software. The factory setting is 195 mm and the stored Z height takes precedence. RF2000 and RF2000v2 use their separate Z-min and Z-max inputs. [Endstop configurations](development-roadmap.md#feature-retirement)
 

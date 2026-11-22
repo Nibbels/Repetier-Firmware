@@ -241,7 +241,7 @@ void PrintLine::prepareDirectMove(bool stoppable, bool feedrateSource) {
     // Find direction
     float axisDistanceMM[4]; // Axis movement in mm
     for (uint8_t axis = 0; axis < 4; axis++) {
-        direct.delta[axis] = Printer::directDestinationSteps[axis] - Printer::directCurrentSteps[axis];
+        direct.delta[axis] = Printer::directPosition(axis).remaining();
         // no special extrusion handling. this direct drive is only for manual move and button feed. no precision needed.
         if (direct.delta[axis] >= 0)
             direct.setPositiveDirectionForAxis(axis);
@@ -800,7 +800,7 @@ void PrintLine::waitForXFreeLines(uint8_t b) {
 } // waitForXFreeLines
 
 void PrintLine::stepSlowedZCompensation() {
-    if (Printer::blockAll || Printer::scanZMoveActive) {
+    if (Printer::blockAll || Printer::zMotion.scanInProgress()) {
         return;
     }
 
@@ -811,7 +811,7 @@ void PrintLine::stepSlowedZCompensation() {
     // When we reach a small amount of leftover todo steps we add something to "mass" to slowdown.
     // Idle zCmp adds to "mass" so we have a slow next start.
 
-#define massWeight 15
+    constexpr uint8_t massWeight = 15;
     static uint8_t waitSteps = 0;
     static uint8_t mass = massWeight;
     if (waitSteps) {
@@ -819,21 +819,14 @@ void PrintLine::stepSlowedZCompensation() {
         return;
     }
 
-    const long cmpDiff = Printer::compensatedPositionTargetStepsZ - Printer::compensatedPositionCurrentStepsZ;
-    const bool positive = cmpDiff > 0;
-    if (cmpDiff && !Printer::isZCompensationLimited(positive)) {
-        if (Printer::getZDirectionIsPos() != positive) {
-            Printer::setZDirection(positive);
-        }
-        Printer::startZStep();
-        Printer::compensatedPositionCurrentStepsZ += positive ? 1 : -1;
-
+    const int32_t cmpDiff = Printer::zMotion.stepCorrection();
+    if (cmpDiff) {
         if (mass < massWeight && abs(cmpDiff) < massWeight)
             mass++;
         else if (mass)
             mass--;
 
-        Printer::endZStep();
+        ZMotion::finishPulse();
     } else if (mass < massWeight) {
         mass++;
     }
@@ -843,17 +836,11 @@ void PrintLine::stepSlowedZCompensation() {
 }
 
 bool PrintLine::needCmpWait() {
-    const long target = Printer::compensatedPositionTargetStepsZ;
-    const long cmpDiff = target - Printer::compensatedPositionCurrentStepsZ;
-    if (!cmpDiff || Printer::blockAll || Printer::scanZMoveActive) {
+    if (Printer::blockAll || Printer::zMotion.scanInProgress()) {
         return false;
     }
 
-    const bool positive = cmpDiff > 0;
-    // Wait for a correction over 0.25 mm behind, or for the correction to finish switching off.
-    const bool catchingUp = target && abs(cmpDiff) > (uint16_t(Printer::axisStepsPerMM[Z_AXIS]) >> 2);
-    return (catchingUp || (!Printer::doHeatBedZCompensation && positive == Printer::getZDirectionIsPos()))
-        && !Printer::isZCompensationLimited(positive);
+    return Printer::zMotion.correctionDelaysQueue(Printer::doHeatBedZCompensation);
 }
 
 /**
@@ -1054,83 +1041,6 @@ bool inBauraum(uint8_t axisXY, PrintLine* move, uint8_t forQueue) {
 }
 
 /**
-* This special Endstop treatment is only needed because if we have preplanned moves they will not care about relative move-back-restrictions otherwise.
-* we could just handle this like in x and y by comparing the coordinates towards real step count, but within Z we have all sorts of z-manipulation.
-* so I introduce one more static long to count steps we ignored while hitting an endstop. Those steps first have to by "payed back" to unlock moving z away from this endstop again.
-*
-* Even if z compensation would still adjust somehow those remembered steps have to be undone before the next relative queuemove can drive z again.
-* But on that height z-compensation is equal for all x-y-positions
-*/
-bool inBauraumZ(PrintLine* move, uint8_t forQueue) {
-    if (Printer::isZMaxEndstopHit()) {
-        if (move->isZPositiveMove()) {
-            if (move->isAbortAtEndstops()) { // all directMoves have abort set, some queueMoves too (Homing and optional scans etc.)
-                move->setZMoveFinished();
-                if (forQueue)
-                    Printer::outOfPrintVolumeZ = 0;
-                else
-                    Printer::stopDirectAxis(Z_AXIS);
-
-                return false;
-            }
-            // If we do not abort the Z-move outside of boundarys we will count the oversteps and block the physical step
-            Printer::outOfPrintVolumeZ++;
-
-            return false;
-        }
-
-        if (forQueue && Printer::outOfPrintVolumeZ != 0) {
-            // If we are in the endstop and have oversteps while moving z to minus we pay back ignored plusZ by ignoring minusZ until overMaxEndstopZ is even.
-            Printer::outOfPrintVolumeZ--;
-
-            return false;
-        }
-
-        return true;
-    }
-
-    if (Printer::isZMinEndstopHit()) {
-        /**
-        * Printer Z-Min is a very special endstop. It is not being handled by coordinate virtualizing, because:
-        *
-        * There is no chance that we will end up being limited by queue-Moves endstop crossing here
-        * because near z-min we have a warped z-coordinate system
-        * The Gcode coordinate queue is always beleaving it drives at constant levels (when driving lower than z-min-endstop as example).
-        * The Gcode coordinate queue cannot set gcode coordinates lower than Z=0 even if the system drives lower than z-min-endstop.
-        */
-
-        // unhomed stop
-        // directDrive stop
-        // if not then we are homed
-        // we allow to overdrive Z-min a little bit so that also G-Codes are able to move to a smaller z-position even when Z-min has fired already
-        if (move->isZNegativeMove()) {
-            if (
-                !Printer::isAxisHomed(Z_AXIS)
-                || (!forQueue && move->task == DIRECT_RUNNING_STOPPABLE)
-                || Printer::isZMinOverrideReached()) {
-                move->setZMoveFinished();
-                if (forQueue)
-                    Printer::outOfPrintVolumeZ = 0;
-
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /* Angeblich kein Knopf gedrückt, aber overSteps übrig. -> overSteps zurückbauen und output ignorieren, der Schalter könnte wackeln. */
-    else if (forQueue && Printer::outOfPrintVolumeZ > 0) {
-        // If we are in the endstop and have oversteps while moving z to minus we pay back ignored plusZ by ignoring minusZ until overMaxEndstopZ is even.
-        Printer::outOfPrintVolumeZ--;
-
-        return false;
-    }
-
-    return true;
-}
-
-/**
   Processes the one-and-only direct move and moves the stepper motors one step.
   The function must be called from a timer loop. It returns the time for the next call. */
 long directError;
@@ -1191,7 +1101,7 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
             }
 
             // Queue overtravel belongs to the frozen print path. The pressure guard applies to both paths.
-            if (g_nEmergencyESkip || (forQueue && (Printer::outOfPrintVolume[X_AXIS] || Printer::outOfPrintVolume[Y_AXIS] || Printer::outOfPrintVolumeZ))) {
+            if (g_nEmergencyESkip || (forQueue && PrintLine::hasQueuedOvertravel())) {
                 doESteps = false;
             }
             HAL::forbidInterrupts();
@@ -1242,11 +1152,11 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
 
                 if (forQueue) {
                     move->error[X_AXIS] += queueError;
-                    Printer::currentSteps[X_AXIS] += dir;
+                    Printer::currentXYSteps[X_AXIS] += dir;
                 } else if (move->isXMove()) {
                     // Endstop handling clears the axis flag when it rejects a direct step and stops the axis.
                     move->error[X_AXIS] += directError;
-                    Printer::directCurrentSteps[X_AXIS] += dir;
+                    Printer::advanceDirectXY(X_AXIS, dir);
                 }
             }
         }
@@ -1262,41 +1172,24 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
 
                 if (forQueue) {
                     move->error[Y_AXIS] += queueError;
-                    Printer::currentSteps[Y_AXIS] += dir;
+                    Printer::currentXYSteps[Y_AXIS] += dir;
                 } else if (move->isYMove()) {
                     move->error[Y_AXIS] += directError;
-                    Printer::directCurrentSteps[Y_AXIS] += dir;
+                    Printer::advanceDirectXY(Y_AXIS, dir);
                 }
             }
         }
 
         if (move->isZMove()) {
             if ((move->error[Z_AXIS] -= move->delta[Z_AXIS]) < 0) {
-                int8_t dir = (Printer::getZDirectionIsPos() ? 1 : -1);
-                //070118better zCMP strategy: if zCMP is against Queue/Direct, dont do some step and count it done @Queue/Direct and count it done @zCMP.
+                const bool continuing = Printer::zMotion.stepPath(move->zPath(forQueue));
+                if (!continuing)
+                    move->setZMoveFinished();
 
-                const long cmpDiff = Printer::compensatedPositionTargetStepsZ - Printer::compensatedPositionCurrentStepsZ;
-                const bool cmpPositive = cmpDiff > 0;
-                // A correction held at a limit must leave the retreat step available.
-                if (cmpDiff && cmpPositive != (dir > 0) && !Printer::isZCompensationLimited(cmpPositive)) {
-                    Printer::compensatedPositionCurrentStepsZ -= dir;
-                } else {
-                    HAL::allowInterrupts();
-                    //no conflicting zCMP: Do the Z-Step.
-                    if (inBauraumZ(move, forQueue)) {
-                        Printer::startZStep(dir);
-                    }
-                    HAL::forbidInterrupts();
-                }
-
-                if (forQueue) {
+                if (forQueue)
                     move->error[Z_AXIS] += queueError;
-                    Printer::currentSteps[Z_AXIS] += dir;
-                } else if (move->isZMove()) {
+                else if (continuing)
                     move->error[Z_AXIS] += directError;
-                    Printer::directCurrentSteps[Z_AXIS] += dir;
-                }
-                // Note: There is no need to check whether we are past the z-min endstop here because G-Codes typically are not able to go past the z-min endstop anyways.
             }
         }
         else if (move->isXOrYMove()) {

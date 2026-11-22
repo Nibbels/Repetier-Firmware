@@ -65,7 +65,7 @@ unsigned long Printer::stepNumber[2] = { 0 };     // Step number in current move
 unsigned short Printer::interval_mod = 0; // additional step duration in ticks to slow the printer down live
 int8_t Printer::lastDirectionSovereignty = 0;
 
-long Printer::maxSoftEndstopSteps[3] = { 0 }; // For software endstops, limit of move in positive direction. (=Homing-Offset + Achsenlänge)
+long Printer::maxSoftEndstopSteps[2] = { 0 };
 float Printer::axisLengthMM[3] = { 0 };       // Länge des überfahrbaren Bereichs im positiven Homing. (=Schienen-Fahrweg - Homing-Offset - 2x ExtruderOffset)
 float Printer::feedrate = 10;                 // Last requested feedrate.
 int Printer::feedrateMultiply = 100;          // Multiplier for feedrate in percent (factor 100 = 100%)
@@ -79,6 +79,7 @@ unsigned int Printer::vMaxReached[2];                             // Maximum rea
 unsigned long Printer::msecondsPrinting = 0;                      // Milliseconds of printing time (means time with heated extruder)
 float Printer::filamentPrinted = 0.0f;                            // mm of filament printed since counting started
 ZOffset Printer::zOffset;
+ZMotion Printer::zMotion{ZAXIS_STEPS_PER_MM};
 char Printer::ZMode = DEFAULT_Z_SCALE_MODE;                       // Z-min distance or nominal layer height
 char Printer::moveMode[3];                                        // move mode which is applied within the Position X/Y/Z menus
 bool Printer::moveKosys = KOSYS_GCODE;                            // true = GCode, false = DirectMove / OffsetMove
@@ -86,21 +87,14 @@ bool Printer::movePositionFeedrateChoice = FEEDRATE_DIRECTCONFIG; // select the 
 
 // This is some buffer but only for a limited amount of overdrive.
 volatile int16_t Printer::outOfPrintVolume[2] = { 0 };
-volatile int32_t Printer::outOfPrintVolumeZ = 0;
 
 volatile char Printer::doHeatBedZCompensation = false;
 
-volatile long Printer::currentSteps[3] = { 0, 0, 0 };
+volatile long Printer::currentXYSteps[2] = { 0 };
 volatile char Printer::blockAll = 0;
 
 volatile long Printer::currentXSteps = 0;                                                  //das ist der X-Zähler der GCodes zum Zählen des tiefsten Schalterdruckpunkts /Schaltercrash.
 volatile long Printer::currentYSteps = 0;                                                  //das ist der Y-Zähler der GCodes zum Zählen des tiefsten Schalterdruckpunkts /Schaltercrash.
-volatile long Printer::currentZSteps = 0;                                                  //das ist der Z-Zähler der GCodes zum Zählen des tiefsten Schalterdruckpunkts /Schaltercrash.
-uint16_t Printer::maxZOverrideSteps = uint16_t(ZAXIS_STEPS_PER_MM * Z_ENDSTOP_DRIVE_OVER); //das ist der Z-Zähler der GCodes zum Zählen des tiefsten Schalterdruckpunkts /Schaltercrash.
-
-volatile bool Printer::scanZMoveActive = false;
-volatile long Printer::compensatedPositionTargetStepsZ = 0;
-volatile long Printer::compensatedPositionCurrentStepsZ = 0;
 
 volatile float Printer::compensatedPositionOverPercE = 0.0f;
 volatile float Printer::compensatedPositionCollectTinyE = 0.0f;
@@ -109,8 +103,8 @@ long Printer::queuePositionZLayerGuessNew = 0;
 volatile long Printer::queuePositionZLayerCurrent = 0;
 volatile long Printer::queuePositionZLayerLast = 0;
 
-volatile long Printer::directDestinationSteps[4] = { 0, 0, 0, 0 };
-volatile long Printer::directCurrentSteps[4] = { 0, 0, 0, 0 };
+DirectPosition Printer::xyDirect[2];
+DirectPosition Printer::extruderDirect;
 
 char Printer::enabledStepper[3] = { 0, 0, 0 };
 
@@ -170,8 +164,7 @@ void Printer::updateDerivedParameter() {
                                                                    + getMaxExtruderOffsetMM(Y_AXIS)
 #endif
                                                                        ));
-    // Sonderbehandlung für Z.
-    maxSoftEndstopSteps[Z_AXIS] = (long)(axisStepsPerMM[Z_AXIS] * axisLengthMM[Z_AXIS]);
+    zMotion.configureTravel(axisStepsPerMM[Z_AXIS], axisLengthMM[Z_AXIS]);
 
     for (uint8_t axis = 0; axis < 4; axis++) {
         const float mmPerStep = 1.0f / axisStepsPerMM[axis];
@@ -258,7 +251,7 @@ void Printer::updateWobbleFixOffsets() {
 
     InterruptProtectedBlock noInts;
     const long motorX = currentXSteps;
-    const long motorZ = currentZSteps;
+    const long motorZ = zMotion.motorSteps();
     noInts.unprotect();
 
     // The spindle advances 5 mm per rotation, measured from the machine Z reference.
@@ -278,7 +271,7 @@ void Printer::updateWobbleFixOffsets() {
 
 int32_t Printer::prepareDestinationSteps(uint8_t axis) {
     const float direct = getDirectMM(axis);
-    const float endstop = maxSoftEndstopSteps[axis] * axisMMPerSteps[axis];
+    const float endstop = softwareEndstopSteps(axis) * axisMMPerSteps[axis];
     float targetMM = destinationMM[axis];
     if (targetMM + direct >= endstop + 0.1) {
         targetMM = endstop + 0.1 - direct;
@@ -462,16 +455,10 @@ void Printer::offsetRelativeStepsCoordinates(int32_t dx, int32_t dy, int32_t dz,
         }
 
         InterruptProtectedBlock noInts;
-        //braucht man das Stop noch?
-        Printer::stopDirectAxis(X_AXIS);
-        Printer::stopDirectAxis(Y_AXIS);
-        Printer::stopDirectAxis(Z_AXIS);
-        Printer::stopDirectAxis(E_AXIS);
-
-        Printer::directDestinationSteps[X_AXIS] += dx;
-        Printer::directDestinationSteps[Y_AXIS] += dy;
-        Printer::directDestinationSteps[Z_AXIS] += dz;
-        Printer::directDestinationSteps[E_AXIS] += de;
+        xyDirect[X_AXIS].request(dx);
+        xyDirect[Y_AXIS].request(dy);
+        zMotion.requestDirectMove(dz);
+        extruderDirect.request(de);
 
         bool feedrateSource = FEEDRATE_DIRECTCONFIG;
         if (configuration == TASK_MOVE_FROM_BUTTON || configuration == TASK_MOVE_POSITION_MANUAL) {
@@ -815,33 +802,20 @@ void Printer::enableCMPnow(void) {
 
 bool Printer::needsCMPwait(void) {
     InterruptProtectedBlock noInts;
-    const long cmpDiff = compensatedPositionTargetStepsZ - compensatedPositionCurrentStepsZ;
-    return cmpDiff && !blockAll && (cmpDiff > 0) == getZDirectionIsPos()
-        && !isZCompensationLimited(cmpDiff > 0);
-}
-
-bool Printer::isZCompensationLimited(bool positive) {
-    // Homed print moves can approach past the Z-min switch within the configured overtravel.
-    const bool allowMinOverride = isAxisHomed(Z_AXIS);
-    if (positive ? isZMaxSoftEndstopHit() : allowMinOverride && isZMinOverrideReached()) {
-        return true;
-    }
-
-    return positive ? isZMaxEndstopHit() : !allowMinOverride && isZMinEndstopHit();
+    return !blockAll && zMotion.correctionFollowsDirection();
 }
 
 void Printer::disableCMPnow(bool wait) {
     doHeatBedZCompensation = 0;
     {
         InterruptProtectedBlock noInts;
-        compensatedPositionTargetStepsZ = 0;
+        zMotion.requestCorrection(0);
     }
 
     while (wait) {
         {
             InterruptProtectedBlock noInts;
-            const long cmpDiff = compensatedPositionTargetStepsZ - compensatedPositionCurrentStepsZ;
-            if (!cmpDiff || blockAll || isZCompensationLimited(cmpDiff > 0)) {
+            if (blockAll || !zMotion.correctionCanMove()) {
                 break;
             }
         }
@@ -886,50 +860,27 @@ void Printer::changeAxisDirection(uint8_t axis, int8_t direction) {
         break;
     }
     case Z_AXIS: {
-        Printer::setZDirection((direction > 0 ? true : false));
-        break;
-    }
-    }
-}
-
-void Printer::startAxisStep(uint8_t axis) {
-    switch (axis) {
-    case X_AXIS: {
-        Printer::startXStep();
-        break;
-    }
-    case Y_AXIS: {
-        Printer::startYStep();
-        break;
-    }
-    case Z_AXIS: {
-        Printer::startZStep();
-        break;
-    }
-    }
-}
-void Printer::endAxisStep(uint8_t axis) {
-    switch (axis) {
-    case X_AXIS: {
-        Printer::endXStep();
-        break;
-    }
-    case Y_AXIS: {
-        Printer::endYStep();
-        break;
-    }
-    case Z_AXIS: {
-        Printer::endZStep();
+        ZMotion::setDirection(direction > 0);
         break;
     }
     }
 }
 
 void Printer::stepAxisStep(uint8_t axis, uint8_t slower) {
+    if (axis == Z_AXIS) {
+        zMotion.stepHomeCheck(slower);
+        return;
+    }
     HAL::delayMicroseconds(XYZ_STEPPER_HIGH_DELAY * slower);
-    Printer::startAxisStep(axis);
+    if (axis == X_AXIS)
+        startXStep();
+    else if (axis == Y_AXIS)
+        startYStep();
     HAL::delayMicroseconds(XYZ_STEPPER_LOW_DELAY * slower);
-    Printer::endAxisStep(axis);
+    if (axis == X_AXIS)
+        endXStep();
+    else if (axis == Y_AXIS)
+        endYStep();
 }
 
 int8_t Printer::checkHome(int8_t axis) //X_AXIS 0, Y_AXIS 1, Z_AXIS 2
@@ -962,7 +913,7 @@ int8_t Printer::checkHome(int8_t axis) //X_AXIS 0, Y_AXIS 1, Z_AXIS 2
     //previous motion state:
     long oldCurrentSteps;
     if (axis == Z_AXIS)
-        oldCurrentSteps = Printer::currentZSteps; //zählt hoch und runter. alternativ achsen-kosys wie bei x und y, aber wegen zcompensation problematisch, weil verzerrt (??-> noch nicht fertig durchdacht).
+        oldCurrentSteps = zMotion.motorSteps();
     else if (axis == Y_AXIS)
         oldCurrentSteps = Printer::currentYSteps;
     else
@@ -986,7 +937,7 @@ int8_t Printer::checkHome(int8_t axis) //X_AXIS 0, Y_AXIS 1, Z_AXIS 2
                 returnSteps += nHomeDir;
             }
             //verbot unendlich weiterzufahren, wenn endstop kaputt
-            if (abs(returnSteps) > abs(Printer::maxSoftEndstopSteps[axis]) * 110 / 100)
+            if (abs(returnSteps) > abs(softwareEndstopSteps(axis)) * 110 / 100)
                 finish = true;
 
             if (finish)
@@ -1052,7 +1003,7 @@ int8_t Printer::checkHome(int8_t axis) //X_AXIS 0, Y_AXIS 1, Z_AXIS 2
     //check ob steps verloren gehen:
     long delta;
     if (axis == Z_AXIS)
-        delta = Printer::currentZSteps; //zählt hoch und runter. alternativ achsen-kosys wie bei x und y, aber wegen zcompensation problematisch, weil verzerrt (??-> noch nicht fertig durchdacht).
+        delta = zMotion.motorSteps();
     else if (axis == Y_AXIS)
         delta = Printer::currentYSteps;
     else
@@ -1190,16 +1141,15 @@ void Printer::homeZAxis() {
         g_nSensiblePressureDigits = 0;
         g_nSensiblePressure1stMarke = 0;
 
-        Printer::resetDirectAxis(Z_AXIS);
+        zMotion.resetDirectPosition();
 
         // Homing replaces the reference, including any correction that could not unwind at a limit.
-        compensatedPositionTargetStepsZ = compensatedPositionCurrentStepsZ = 0;
-        g_nZScanZPosition = 0;
+        zMotion.clearScanAndCorrection();
         noInts.unprotect();
 
         //1. Schnelles Fahren bis zum Schalterkontakt:
         //Ist der Schalter gedrückt, wird sofort geskipped.
-        Printer::queueRelativeStepsCoordinates(0, 0, (maxSoftEndstopSteps[Z_AXIS] + 2 * int32_t(maxZOverrideSteps)) * nHomeDir, 0, homingFeedrate[Z_AXIS], true, true);
+        Printer::queueRelativeStepsCoordinates(0, 0, (zMotion.maxSteps() + 2 * int32_t(zMotion.minOvertravel())) * nHomeDir, 0, homingFeedrate[Z_AXIS], true, true);
 
         //2. in jedem Fall Freifahren vom Schalterkontakt:
         //ENDSTOP_Z_BACK_MOVE größer als 32768 ist eigentlich nicht möglich, nicht sinnvoll und würde, da das überfahren bei 32microsteps von der z-matrix >-12,7mm abhängig ist verboten sein.
@@ -1222,8 +1172,12 @@ void Printer::homeZAxis() {
 
 
         // Set the motor position and the nominal axis origin to the switch coordinate.
-        Printer::currentZSteps = (nHomeDir == -1) ? 0 : maxSoftEndstopSteps[Z_AXIS];
-        Printer::setZAxisSteps((nHomeDir == -1) ? 0 : maxSoftEndstopSteps[Z_AXIS]);
+        const int32_t homeSteps = nHomeDir < 0 ? 0 : zMotion.maxSteps();
+        {
+            InterruptProtectedBlock noInts;
+            zMotion.setMotorReference(homeSteps);
+            setZAxisSteps(homeSteps);
+        }
 
         //6. Korrektur der Flags
         setHomed(-1, -1, true);
@@ -1310,9 +1264,9 @@ void Printer::stopPrint() //function for aborting USB and SD-Prints
     PrintLine::resetPathPlanner();
     PrintLine::cur = NULL;
 
-    Printer::setXAxisSteps(Printer::currentSteps[X_AXIS]);
-    Printer::setYAxisSteps(Printer::currentSteps[Y_AXIS]);
-    Printer::setZAxisSteps(Printer::currentSteps[Z_AXIS]);
+    setXAxisSteps(currentXYSteps[X_AXIS]);
+    setYAxisSteps(currentXYSteps[Y_AXIS]);
+    setZAxisSteps(zMotion.nominalSteps());
     Printer::setEPositionMM(0); // G92 E0
 
     noInts.unprotect();

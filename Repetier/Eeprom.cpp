@@ -429,7 +429,6 @@ void EEPROM::readDataFromEEPROM() {
     // Reload the saved value in the current scale and keep the live SenseOffset.
     Printer::zOffset.setManualMicrometers(HAL::eprGetInt32(EPR_RF_Z_OFFSET), Printer::axisStepsPerMM[Z_AXIS]);
     Printer::ZMode = HAL::eprGetByte(EPR_RF_Z_MODE);
-    Printer::maxZOverrideSteps = uint16_t(Printer::axisStepsPerMM[Z_AXIS] * Z_ENDSTOP_DRIVE_OVER);
 
     g_minZCompensationSteps = long(heatBedZCompensationMinMm * Printer::axisStepsPerMM[Z_AXIS]); //load the values with applied micro-steps
     g_maxZCompensationSteps = long(heatBedZCompensationMaxMm * Printer::axisStepsPerMM[Z_AXIS]);

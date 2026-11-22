@@ -119,7 +119,6 @@ char g_nHeatBedScanMode = 0;
 char g_abortZScan = 0;
 short g_ZCompensationMatrix[COMPENSATION_MATRIX_MAX_X][COMPENSATION_MATRIX_MAX_Y];
 unsigned char g_uZMatrixMax[2] = { 0, 0 };
-long g_nZScanZPosition = 0;
 long g_nLastZScanZPosition = 0;
 
 short g_nMaxPressureContact;
@@ -283,7 +282,7 @@ static short readStrainGauge() //readStrainGauge dauert etwas unter einer Millis
             nSensibleCompensationChecks -= 1;                                 //*=0.75 bei 4 ist 3
             // M3912 feeds high DMS force into a progressive speed/E brake,
             // irrespective of the previous print's first-layer boundary.
-            bool digitFlowAllowed = Printer::currentSteps[Z_AXIS] > g_minZCompensationSteps;
+            bool digitFlowAllowed = Printer::zMotion.nominalSteps() > g_minZCompensationSteps;
             digitFlowAllowed = digitFlowAllowed || g_startLineActive;
             if (g_nDigitFlowCompensation_intense != 0) {
                 short active_summed_digits = abs(static_cast<short>(g_nDigitZCompensationDigits));
@@ -775,7 +774,7 @@ void scanHeatBed(void) {
         }
         case 54: {
             // remember the z-position and the exact y-position of this row/column
-            g_ZCompensationMatrix[nIndexX][nIndexY] = (short)g_nZScanZPosition;
+            g_ZCompensationMatrix[nIndexX][nIndexY] = (short)Printer::zMotion.scanSteps();
             g_ZCompensationMatrix[0][nIndexY] = (short)((float)nY / Printer::axisStepsPerMM[Y_AXIS] + 0.5); // convert to mm
 
             if (nIndexX > g_uZMatrixMax[X_AXIS]) {
@@ -1115,7 +1114,7 @@ void scanHeatBed(void) {
         }
         case 148: {
             // adjust the current z-position to the compensation matrix in order to consider the different length of the extruder at higher temperatures
-            adjustCompensationMatrix((short)g_nZScanZPosition);
+            adjustCompensationMatrix((short)Printer::zMotion.scanSteps());
 
             if (Printer::debugInfo()) {
                 // output the converted heat bed compensation matrix
@@ -1427,7 +1426,7 @@ void searchZOScan(void) {
             Com::printFLN(PSTR("Approaching HeatBed"));
 
             // move to the surface
-            long oldZsteps = g_nZScanZPosition;
+            long oldZsteps = Printer::zMotion.scanSteps();
 
             moveZMinusUpFast(); // ------
             HAL::delayMilliseconds(g_nScanSlowStepDelay);
@@ -1441,7 +1440,7 @@ void searchZOScan(void) {
                 g_retryZScan = 1;
             }
 
-            long didZsteps = abs(g_nZScanZPosition - oldZsteps);
+            long didZsteps = abs(Printer::zMotion.scanSteps() - oldZsteps);
             Com::printFLN(PSTR("FastUp:"), didZsteps);
 
             // move 2 intervals (but not more that you went down!) back away from the surface
@@ -1488,22 +1487,22 @@ void searchZOScan(void) {
         case 20: {
             Com::printFLN(PSTR("Testing Surface "));
             Com::printFLN(PSTR("10.1"));
-            long previousZ = g_nZScanZPosition;
+            long previousZ = Printer::zMotion.scanSteps();
 
             // Back off from the coarse approach before probing slowly.
             moveZ(abs(g_nScanHeatBedUpSlowSteps));
-            Com::printFLN(PSTR("DownFine:"), g_nZScanZPosition - previousZ);
-            previousZ = g_nZScanZPosition;
+            Com::printFLN(PSTR("DownFine:"), Printer::zMotion.scanSteps() - previousZ);
+            previousZ = Printer::zMotion.scanSteps();
 
             short nTempPressure;
             moveZMinusUpSlow(&nTempPressure, 2);
-            Com::printFLN(PSTR("UpFine:"), g_nZScanZPosition - previousZ);
-            previousZ = g_nZScanZPosition;
+            Com::printFLN(PSTR("UpFine:"), Printer::zMotion.scanSteps() - previousZ);
+            previousZ = Printer::zMotion.scanSteps();
 
             // Release contact force without comparing against the previous probe position.
             g_nLastZScanZPosition = 0;
             moveZPlusDownSlow(8);
-            Com::printFLN(PSTR("DownFine:"), g_nZScanZPosition - previousZ);
+            Com::printFLN(PSTR("DownFine:"), Printer::zMotion.scanSteps() - previousZ);
 
             if (g_scanRetries > 0 && g_retryZScan) {
                 g_retryZScan = 0;
@@ -1518,10 +1517,10 @@ void searchZOScan(void) {
                 break;
             }
 
-            if (g_nZScanZPosition < g_min_nZScanZPosition)
-                g_min_nZScanZPosition = g_nZScanZPosition;
+            if (Printer::zMotion.scanSteps() < g_min_nZScanZPosition)
+                g_min_nZScanZPosition = Printer::zMotion.scanSteps();
 
-            Com::printFLN(PSTR("Z = "), g_nZScanZPosition * Printer::axisMMPerSteps[Z_AXIS], 4);
+            Com::printFLN(PSTR("Z = "), Printer::zMotion.scanSteps() * Printer::axisMMPerSteps[Z_AXIS], 4);
             g_nZOSScanStatus = 50;
             break;
         }
@@ -1616,7 +1615,7 @@ void searchZOScan(void) {
                 g_ZOS_Auto_Matrix_Leveling_State++;
                 moveZ(Printer::axisStepsPerMM[Z_AXIS]);
                 Printer::homeAxis(true, true, false);
-                moveZ(-g_nZScanZPosition); // g_nZScanZPosition counts z-steps. we need to move the heatbed down to be at z=0 again
+                moveZ(-Printer::zMotion.scanSteps()); // Printer::zMotion.scanSteps() counts z-steps. we need to move the heatbed down to be at z=0 again
                 outputCompensationMatrix(1);
             }
             }
@@ -1625,7 +1624,7 @@ void searchZOScan(void) {
         case 99: {
             moveZ(Printer::axisStepsPerMM[Z_AXIS]);
             Printer::homeAxis(false, true, false);
-            moveZ(-g_nZScanZPosition); // g_nZScanZPosition counts z-steps. we need to move the heatbed down to be at z=0 again
+            moveZ(-Printer::zMotion.scanSteps()); // Printer::zMotion.scanSteps() counts z-steps. we need to move the heatbed down to be at z=0 again
             g_nZOSScanStatus = 100;    // No AUTO_MATRIX_LEVELING
             break;
         }
@@ -1638,7 +1637,7 @@ void searchZOScan(void) {
             g_nAutoReturnTime = HAL::timeInMilliseconds() + 30000;
             g_uStartOfIdle = HAL::timeInMilliseconds() + 30000; //go to printer ready/ignore status   //end searchZOScan
 
-            //g_nZScanZPosition is 0 now.
+            //Printer::zMotion.scanSteps() is 0 now.
             Com::printFLN(PSTR("ZOS finished"));
             break;
         }
@@ -2040,8 +2039,8 @@ long getZMatrixDepth_CurrentXY(void) {
     // We need to insert where the nozzle is, relative to 0 homing coordinates which are always min endstop because we dropped axis offsets.
     // Because our RF2000 Matrix is 180mm width. That is the center of the bed. left and right are spaces. -> Center buildarea starts at 0 gcode coordinates and thats what we want.
     return getZMatrixDepth(
-        Printer::currentSteps[X_AXIS],
-        Printer::currentSteps[Y_AXIS]);
+        Printer::currentXYSteps[X_AXIS],
+        Printer::currentXYSteps[Y_AXIS]);
 }
 
 void recalculateHeatBedZCompensation(void) {
@@ -2049,7 +2048,7 @@ void recalculateHeatBedZCompensation(void) {
     float nNeededZEPerc = 0.0f;
 
     if (Printer::doHeatBedZCompensation) {
-        long nCurrentPositionStepsZ = Printer::currentSteps[Z_AXIS]; // Use the executing nominal Z for the fade limits.
+        long nCurrentPositionStepsZ = Printer::zMotion.nominalSteps(); // Use the executing nominal Z for the fade limits.
         if (nCurrentPositionStepsZ >= 0) {
             // check whether we have to perform a compensation in z-direction
             if (nCurrentPositionStepsZ < g_maxZCompensationSteps) {
@@ -2133,7 +2132,7 @@ void recalculateHeatBedZCompensation(void) {
     }
 
     InterruptProtectedBlock noInts;
-    Printer::compensatedPositionTargetStepsZ = nNeededZCompensation;
+    Printer::zMotion.requestCorrection(nNeededZCompensation);
     Printer::compensatedPositionOverPercE = nNeededZEPerc;
     noInts.unprotect();
 } // recalculateHeatBedZCompensation
@@ -2350,7 +2349,7 @@ short moveZPlusDownFast() {
     short nTempPressure;
 
     // move the heat bed down so that we won't hit it when we move to the next position
-    g_nLastZScanZPosition = g_nZScanZPosition;
+    g_nLastZScanZPosition = Printer::zMotion.scanSteps();
     HAL::delayMilliseconds(g_nScanFastStepDelay);
 
     moveZ(g_nScanHeatBedDownFastSteps);
@@ -2367,7 +2366,7 @@ short moveZPlusDownFast() {
 //Spacing Langsam:
 void moveZPlusDownSlow(uint8_t acuteness) {
     short nTempPressure;
-    long startScanZPosition = g_nZScanZPosition;
+    long startScanZPosition = Printer::zMotion.scanSteps();
 
     // move the heat bed down until we detect the retry pressure (slow speed)
     while (1) {
@@ -2392,17 +2391,17 @@ void moveZPlusDownSlow(uint8_t acuteness) {
         }
 
         char error = 0;
-        if (g_nZScanZPosition > long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM) || g_nZScanZPosition > 32767) {
-            Com::printFLN(PSTR("Z = "), g_nZScanZPosition * Printer::axisMMPerSteps[Z_AXIS]);
+        if (Printer::zMotion.scanSteps() > long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM) || Printer::zMotion.scanSteps() > 32767) {
+            Com::printFLN(PSTR("Z = "), Printer::zMotion.scanSteps() * Printer::axisMMPerSteps[Z_AXIS]);
             error = SCAN_ABORT_REASON_SCAN_OVER_START;
-        } else if (g_nLastZScanZPosition && abs(g_nZScanZPosition - g_nLastZScanZPosition) > g_nScanHeatBedDownFastSteps * (2 +                                                                                           /*nach wiederholungen etwas mehr zulassen. krumme keramik braucht wohl mehr ... */
+        } else if (g_nLastZScanZPosition && abs(Printer::zMotion.scanSteps() - g_nLastZScanZPosition) > g_nScanHeatBedDownFastSteps * (2 +                                                                                           /*nach wiederholungen etwas mehr zulassen. krumme keramik braucht wohl mehr ... */
                                                                                                                             (g_scanRetries < heatBedScanRetries ?                                                      /* nur beachten bei wiederholung */
                                                                                                                                  (heatBedScanRetries - g_scanRetries <= 2 ? heatBedScanRetries - g_scanRetries : 2) /* nie mehr als 0.2 bzw 2x draufschlagen, das reicht sicher - sonst ist es ein anderer fehler. */
                                                                                                                                                                    : 0))) {
-            Com::printFLN(PSTR("dZ_lastpos = "), abs(g_nZScanZPosition - g_nLastZScanZPosition) * Printer::axisMMPerSteps[Z_AXIS]);
+            Com::printFLN(PSTR("dZ_lastpos = "), abs(Printer::zMotion.scanSteps() - g_nLastZScanZPosition) * Printer::axisMMPerSteps[Z_AXIS]);
             error = SCAN_ABORT_REASON_SCAN_TOO_UNEVEN;
-        } else if (abs(startScanZPosition - g_nZScanZPosition) > g_nScanHeatBedDownFastSteps * 2 / acuteness) {
-            Com::printFLN(PSTR("dZ_move = "), g_nZScanZPosition * Printer::axisMMPerSteps[Z_AXIS]);
+        } else if (abs(startScanZPosition - Printer::zMotion.scanSteps()) > g_nScanHeatBedDownFastSteps * 2 / acuteness) {
+            Com::printFLN(PSTR("dZ_move = "), Printer::zMotion.scanSteps() * Printer::axisMMPerSteps[Z_AXIS]);
             error = SCAN_ABORT_REASON_SCAN_STEP_DELTA_OUT_OF_RANGE;
         }
         if (error) {
@@ -2422,10 +2421,10 @@ void moveZMinusUpFast() {
 
     // move the heat bed up until we detect the contact pressure (fast speed)
     while (1) {
-        if (g_nZScanZPosition <= -g_nScanZMaxCompensationSteps || g_nZScanZPosition < -32768) {
+        if (Printer::zMotion.scanSteps() <= -g_nScanZMaxCompensationSteps || Printer::zMotion.scanSteps() < -32768) {
             Com::printFLN(PSTR("moveZMinusUpFast(): out of range "), (int)g_scanRetries);
             Com::printFLN(PSTR("Z-Endstop Limit:"), Z_ENDSTOP_DRIVE_OVER);
-            Com::printFLN(PSTR("Z = "), g_nZScanZPosition * Printer::axisMMPerSteps[Z_AXIS]);
+            Com::printFLN(PSTR("Z = "), Printer::zMotion.scanSteps() * Printer::axisMMPerSteps[Z_AXIS]);
 
             if (g_scanRetries)
                 g_retryZScan = 1;
@@ -2463,10 +2462,10 @@ void moveZMinusUpSlow(short* pnContactPressure, uint8_t acuteness) {
 
     // move the heat bed up until we detect the contact pressure (slow speed)
     while (1) {
-        if (g_nZScanZPosition <= -g_nScanZMaxCompensationSteps || g_nZScanZPosition < -32768) {
+        if (Printer::zMotion.scanSteps() <= -g_nScanZMaxCompensationSteps || Printer::zMotion.scanSteps() < -32768) {
             Com::printFLN(PSTR("moveZMinusUpSlow(): the z position went out of range, retries = "), g_scanRetries);
             Com::printFLN(PSTR("Z-Endstop Limit:"), Z_ENDSTOP_DRIVE_OVER);
-            Com::printFLN(PSTR("Z = "), g_nZScanZPosition * Printer::axisMMPerSteps[Z_AXIS]);
+            Com::printFLN(PSTR("Z = "), Printer::zMotion.scanSteps() * Printer::axisMMPerSteps[Z_AXIS]);
 
             if (g_scanRetries)
                 g_retryZScan = 1;
@@ -2500,61 +2499,24 @@ void moveZMinusUpSlow(short* pnContactPressure, uint8_t acuteness) {
 } // moveZMinusUpSlow
 
 void moveZ(int nSteps) {
-    /*
-    Warning 03.11.2017 : Do not try to make more steps than < 10mm in one row. Some printers will get a watchdog reset.
-    When choosing 10mm one printer crashed while others still worked.
-    We changed Scan PLA/ABS to 2x 5mm and it worked.
-    Reason is because we removed watchdog-ping from HAL::delayMicroseconds (which was good!)
-    */
-
-    // The scan may pass the Z-min switch up to the configured overtravel.
-
-    int nMaxLoops;
-    if (nSteps >= 0)
-        nMaxLoops = nSteps;
-    else
-        nMaxLoops = -nSteps;
-
+    // Keep individual scan moves short so the foreground can service the watchdog.
     while (Printer::needsCMPwait())
         Commands::checkForPeriodicalActions(Processing);
 
-    // A retreat can make a pending correction reachable again. Keep Z for the scan until this move ends.
-    Printer::scanZMoveActive = true;
-
-    // perform the steps
+    // Retreat can make a pending correction reachable. Reserve Z for this scan move.
+    const int nMaxLoops = abs(nSteps);
+    ZMotion::ScanMove scan(Printer::zMotion, nSteps < 0 ? -1 : 1);
     for (int i = 0; i < nMaxLoops; i++) {
         if (g_abortZScan)
-            break; // do not continue here in case the current operation has been cancelled
-
-        if (nSteps < 0 && Printer::isAxisHomed(Z_AXIS) && Printer::isZMinOverrideReached()) {
+            break;
+        if (!scan.step()) {
             g_abortZScan = SCAN_ABORT_REASON_REACHED_MAX_COMPENSATION;
             g_scanRetries = 0;
             Com::printFLN(PSTR("Z-Endstop protection"));
             UI_STATUS_UPD("Z-Endstop protection");
             break;
         }
-
-        if (nSteps >= 0) {
-            if (!Printer::getZDirectionIsPos()) {
-                Printer::setZDirection(true);
-                //Com::printFLN( PSTR( "moveZ: BedDown Z=" ),g_nZScanZPosition );  //kann manchmal verwirrend sein, gleiche richtugnen werden nicht angezeigt. Hoch, etwas runter .... scan ergebnis ... runter für neuanlauf  -> scanergebnis unsichtbar.
-            }
-        } else {
-            if (Printer::getZDirectionIsPos()) {
-                Printer::setZDirection(false);
-                //Com::printFLN( PSTR( "moveZ: BedUp Z=" ),g_nZScanZPosition );  //kann manchmal verwirrend sein, gleiche richtugnen werden nicht angezeigt. Hoch, etwas runter .... scan ergebnis ... runter für neuanlauf  -> scanergebnis unsichtbar.
-            }
-        }
-
-        HAL::delayMicroseconds(XYZ_STEPPER_HIGH_DELAY);
-        Printer::startZStep();
-
-        HAL::delayMicroseconds(XYZ_STEPPER_LOW_DELAY);
-        Printer::endZStep();
-
-        g_nZScanZPosition += (Printer::getZDirectionIsPos() ? 1 : -1);
     }
-    Printer::scanZMoveActive = false;
 } // moveZ
 
 void restoreDefaultScanParameters(void) {
@@ -3250,7 +3212,7 @@ void handleStrainGaugeFeatures(millis_t uTime) {
             #Die Höhe über Grund, kompensiert sollte unterhalb g_maxZCompensationSteps sein.
             #currentSteps = Achsenziel + Achsenoffset, aber g_minZCompensationSteps/g_maxZCompensationSteps kennen das Achsenoffset nicht ohne Hilfe: Das gehört hier her, wenn man die Layerhöhe abgleichen will.
             */
-            if (Printer::currentSteps[Z_AXIS] <= g_minZCompensationSteps) {
+            if (Printer::zMotion.nominalSteps() <= g_minZCompensationSteps) {
                 g_nSensiblePressure1stMarke = 1; //marker für display: wir sind in regelhöhe
                 //wenn durch Gcode gefüllt, prüfe, ob Z-Korrektur (weg vom Bett) notwendig ist, in erstem Layer.
                 nSensiblePressureSum += pressure;
@@ -3600,7 +3562,7 @@ void requestPrintPause(bool moveAway) {
 
 static long pauseReturnSteps(uint8_t axis) {
     InterruptProtectedBlock noInts;
-    return pauseDirectPositionSteps[axis] - Printer::directCurrentSteps[axis];
+    return pauseDirectPositionSteps[axis] - Printer::directPosition(axis).steps();
 }
 
 static bool moveDuringPause(long x, long y, long z, long e) {
@@ -3632,7 +3594,7 @@ static void handlePauseStatus() {
         if (request != PAUSE_STATUS_GOTO_MOVED) {
             // Direct motion is idle and the print queue is frozen.
             for (uint8_t axis = X_AXIS; axis <= Z_AXIS; axis++)
-                pauseDirectPositionSteps[axis] = Printer::directCurrentSteps[axis];
+                pauseDirectPositionSteps[axis] = Printer::directPosition(axis).steps();
             g_nContinueExtruderSteps = 0;
             g_uStartOfIdle = 0;
             Printer::setMenuMode(MENU_MODE_PAUSED, true);
@@ -4762,8 +4724,8 @@ void processSpecialGCode(GCode* pCommand) {
                     nTemp = pCommand->Z * Printer::axisStepsPerMM[Z_AXIS];
                     if (nTemp < 0)
                         nTemp = 0; //no pause within printed part.
-                    if (nTemp > Printer::maxSoftEndstopSteps[Z_AXIS])
-                        nTemp = Printer::maxSoftEndstopSteps[Z_AXIS];
+                    if (nTemp > Printer::zMotion.maxSteps())
+                        nTemp = Printer::zMotion.maxSteps();
 
                     g_nPauseSteps[Z_AXIS] = nTemp;
                     Com::printF(PSTR("M3105: new z pause offset: "), nTemp * Printer::axisMMPerSteps[Z_AXIS]);
@@ -6396,8 +6358,7 @@ void moveZAction(int8_t direction) {
     case MOVE_MODE_SINGLE_STEPS: {
         int32_t steps = int32_t(g_nManualSteps[Z_AXIS]) * direction;
 
-        if (direction < 0 && Printer::isZMinEndstopHit() && Printer::currentZSteps + steps < -1 * int32_t(Printer::maxZOverrideSteps)) {
-            // do not allow to drive the bed into the extruder
+        if (Printer::zMotion.manualStepExceedsMinimum(steps)) {
             showInformation((void*)ui_text_z_axis, (void*)ui_text_min_reached);
             return;
         }
@@ -6410,17 +6371,7 @@ void moveZAction(int8_t direction) {
             steps = RMath::max(steps, returnSteps);
         }
 
-        //Z should be direct, because we have scan origin and z-origin to set coordinates and while printing gcode coordinate system is senseless.
-
-        //if (Printer::moveKosys == KOSYS_GCODE)
-        //{
-        //	Printer::queueRelativeStepsCoordinates(0, 0, steps, 0, Printer::homingFeedrate[Z_AXIS], true);
-        //}
-        //else /*if (Printer::moveKosys == KOSYS_DIRECTOFFSET) */
-        //{
         Printer::offsetRelativeStepsCoordinates(0, 0, steps, 0, TASK_MOVE_POSITION_MANUAL);
-        //}
-
         break;
     }
     case MOVE_MODE_1_MM:
@@ -6432,41 +6383,17 @@ void moveZAction(int8_t direction) {
         if (moveMode == MOVE_MODE_50_MM)
             distanceMM = 50;
 
-        // Normale Bewegung möglich:
+        const long motorZ = Printer::zMotion.motorSteps();
         if (!Printer::isAxisHomed(Z_AXIS)
             || direction > 0
-            || Printer::currentZSteps * Printer::axisMMPerSteps[Z_AXIS] >= (float)distanceMM) {
-            //#if MENU_POSITION_ALL_DIRECT
+            || motorZ * Printer::axisMMPerSteps[Z_AXIS] >= distanceMM) {
             Printer::offsetRelativeStepsCoordinates(0, 0, distanceMM * Printer::axisStepsPerMM[Z_AXIS] * direction, 0, TASK_MOVE_POSITION_MANUAL);
-            //#else
-            // if enabled fix feedrate
-            //				Printer::queueRelativeMMCoordinates(0, 0, distanceMM * direction, 0, Printer::homingFeedrate[Z_AXIS], true);
-            //#endif
-
             return;
         }
 
-
-        // Wir sind hier knapp über dem Schalter: Nur so weit runterfahren, wie man über 0 ist. Denn da ist beim Printermode homed der Endschalter.
-        if (Printer::currentZSteps > 0) {
-            //#if MENU_POSITION_ALL_DIRECT
-            Printer::offsetRelativeStepsCoordinates(0, 0, -Printer::currentZSteps, 0, TASK_MOVE_POSITION_MANUAL);
-            //#else
-            // if enabled fix feedrate
-            //				Printer::queueRelativeStepsCoordinates(0, 0, -Printer::currentZSteps, 0, Printer::homingFeedrate[Z_AXIS], true);
-            //#endif
-
-            return;
-        }
-
-        //#if MENU_POSITION_ALL_DIRECT
-        // Sonst Stepweise
-        Printer::offsetRelativeStepsCoordinates(0, 0, -1 * int32_t(g_nManualSteps[Z_AXIS]), 0, TASK_MOVE_POSITION_MANUAL);
-        //#else
-        // if enabled fix feedrate
-        //			Printer::queueRelativeStepsCoordinates(0, 0, -1 * int32_t(g_nManualSteps[Z_AXIS]), 0, Printer::homingFeedrate[Z_AXIS], true);
-        //#endif
-
+        // Approach the switch coordinate first, then allow small single moves.
+        const long steps = motorZ > 0 ? -motorZ : -int32_t(g_nManualSteps[Z_AXIS]);
+        Printer::offsetRelativeStepsCoordinates(0, 0, steps, 0, TASK_MOVE_POSITION_MANUAL);
         break;
     }
     case MOVE_MODE_SINGLE_MOVE: {
@@ -6475,12 +6402,10 @@ void moveZAction(int8_t direction) {
             return;
         }
 
-        int32_t steps;
-        //errate homed möglichst den erzwungenen stop-punkt wegen dem bonus der decelleration
-        if (direction < 0)
-            steps = (Printer::isAxisHomed(Z_AXIS) ? -Printer::currentZSteps : -Printer::maxSoftEndstopSteps[Z_AXIS]);
-        else
-            steps = (Printer::isAxisHomed(Z_AXIS) ? Printer::maxSoftEndstopSteps[Z_AXIS] - Printer::currentZSteps : Printer::maxSoftEndstopSteps[Z_AXIS]);
+        // Plan to the estimated stop so a homed jog decelerates near it.
+        long steps = direction < 0 ? -Printer::zMotion.maxSteps() : Printer::zMotion.maxSteps();
+        if (Printer::isAxisHomed(Z_AXIS))
+            steps = (direction < 0 ? 0L : Printer::zMotion.maxSteps()) - Printer::zMotion.motorSteps();
 
         if (g_pauseMode && direction < 0) {
             const long returnSteps = pauseReturnSteps(Z_AXIS);

@@ -16,7 +16,7 @@ Commanded Z (the print's planned geometric height)
   + Printer::zOffset.effectiveSteps() = trunc((manual µm + SenseOffset µm)*Z_steps_per_mm/1000)
   + optional force-sensitive Digit-Z correction
   + other mechanical effects and Z endstop limits
-  → compensatedPositionTargetStepsZ → physical Z motor activity
+  → ZMotion::requestCorrection() → applied correction and Z motor pulses
 ```
 
 The **nominal Z** selects the fade region. Below `g_min` the correction follows the full matrix, and above `g_max` it uses the matrix baseline. Z endstops constrain the result. [Offset ledger](offset-ledger.md)

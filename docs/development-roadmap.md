@@ -18,9 +18,9 @@ Use the architecture below throughout the blocks. Calibration can progress indep
 
 ### One owner for motion
 
-`Printer::zOffset` owns the saved manual offset, the live SenseOffset and their combined step count behind a private state boundary. EEPROM reloads preserve the live contribution, and calibration changes recompute steps from micrometers. `Printer` still exposes nominal and motor position, direct offsets and the applied compensation. The physical Z counter is adjusted by the microstep menu, step output and reference changes. [Offset owner](../Repetier/ZOffset.h) · [Motion state](../Repetier/Printer.h)
+`Printer::zOffset` owns the saved manual offset, the live SenseOffset and their combined step count. EEPROM reloads preserve the live contribution, and calibration changes recompute steps from micrometers. `Printer::zMotion` owns executed Z positions, the homing state, travel limits and pulse accounting. The planner, DMS and bed calculations submit step requests to it. [Offset owner](../Repetier/ZOffset.h) · [Z motion owner](../Repetier/ZMotion.h)
 
-Use one statically allocated motion controller with private state. Route each movement and each motion-related state change through named operations such as queueing a move, jogging, homing, starting a scan, parking and resuming, applying new calibration or receiving a DMS sample. G-code and the panel request the same operations where applicable. Keep the policy and state for limits, coordinate transforms, pause positions, SenseOffset, Z-CMP and Z scan together behind that interface. Sensor sampling, storage and UI can provide inputs or read a consistent snapshot. Keep planning, policy and pulse execution as separate responsibilities inside the controller.
+Route movement and motion state changes through named operations such as queueing a move, jogging, homing, probing, parking, resuming and applying new calibration. G-code and the panel request the same operations where applicable. Give planning, pulse execution, compensation calculation and the print phases their own state owners behind that interface. Sensor sampling and storage supply inputs, and the UI reads snapshots.
 
 Use that same view for firmware diagnostics and host replays. For a suspect move, show the active motion source, nominal target and progress, direct displacement, requested and applied correction, motor step count, and any endstop or inhibition reason. Track which operation changed the state. Sample at the points where this explains a transition, with pulse-level tracing reserved for test builds. This gives future fixes a single place to assert and observe motion behavior.
 
@@ -34,16 +34,33 @@ Use that same view for firmware diagnostics and host replays. For a suspect move
 
 Test whether `PrintLine` can become a queue entry with execution handled separately. Use a common motion execution interface for scan, homing, jog and print where their rules agree. Express the different rules at that interface, including probing past the Z-min trigger and compensating during paused printing. Use small functions and existing representations where they already express the behavior. [Coordinate frames and extrusion](first-layer-control/coordinate-frames-and-extrusion.md) · [Offset units and operations](z-offset/offset-ledger.md)
 
+### Z step execution
+
+`PrintLine` supplies the Z step request and its path type. `ZMotion` decides whether to emit a pulse, consume a step without a pulse or stop the segment's Z axis. Each emitted pulse updates the motor position through the same operation, including scan and homing diagnostic pulses.
+
+| Motion source | Accounting and limits |
+| --- | --- |
+| Queued moves | Each due step advances nominal Z. Suppressed steps at Z-max accrue overtravel on the queued path. Returning from the limit consumes that overtravel before further nominal steps emit pulses. A queue move configured to stop at an endstop can terminate its Z axis. |
+| Direct moves | Advance the jog or pause displacement only for steps accepted by execution. A clipped move ends at the accepted displacement. A held-button jog stops at Z-min contact. Homed single-step jogs can use the configured Z-min overtravel. |
+| Z compensation | Keep the requested and applied correction separately. Positive pulses respect the configured maximum and the Z-max switch where fitted. Negative pulses respect the Z-min switch before homing and the overtravel limit after homing. A reachable opposing correction and a queued or direct step can advance together without a pulse. A correction held at a limit leaves the retreat step available. |
+| Scan motion | Record displacement from the scan reference. Compensation pulses wait during a scan move. The approach stops at the homed Z-min overtravel limit and retreat is available at that position. |
+
+Travel calibration updates the maximum, the Z-min overtravel and the quarter-millimetre wait threshold together. Microstep edits therefore preserve the physical overtravel distance. The wait calculation in the timer uses integer steps. [Execution rules](../Repetier/ZMotion.cpp) · [Z motion replay](../tests/z-motion.py)
+
 ### Cost on the ATmega2560
 
 A small Z-pulse compilation probe used the repository's AVR-GCC 7.3.0 with `-mmcu=atmega2560 -Os -flto`. It checked the target, motor position and endstop before updating the pulse and two counters. Three standalone volatile 32-bit values and the same three values as private members of a static object produced byte-identical 226-byte Timer1 handlers. Each probe used 528 bytes of `.text` and 12 bytes of `.bss`. A deliberately out-of-line method generated a call and increased the handler's register pushes from 12 to 16. This establishes that the small encapsulated path can compile at the same cost. Complete firmware timing remains to be measured.
 
 Use short, statically bound methods on the interrupt path, including the separate advance timer. Keep coordinate conversion and DMS filtering in the foreground. Transfer only the values needed for the next action, with brief interrupt protection for multi-byte state shared with the foreground. Compare linked AVR assembly, stack use, SRAM and pulse timing on the migrated path. Make the first migration earn its place by reducing the places that can change a value and by exposing the resulting motion state to a replay or trace.
 
+The Z migration compiles with 3 more bytes of global SRAM per model. Compared with `97d0aee`, flash decreases by 12 bytes on RF1000, 34 bytes on RF2000 and RF2000v2, and 86 bytes on the RF2000 X44 retrofit. The linked Timer1 handlers contain no float-to-integer conversion for the Z compensation wait.
+
+On the RF2000 build, an instruction trace of an idle tick with 400 steps of pending correction takes 504 CPU cycles, down from 600. The movement part of a one-step queued X tick takes 441 cycles, up from 435. A queued Z step with an opposing correction takes 372 cycles, up from 344. These traces use fixed inputs and exclude nested interrupts. Measure pulse spacing and timing headroom on the printer.
+
 ## 1. Coordinate systems and motion compensation
 
 - **Define the coordinate path.** Trace G-code origin and units through nominal integer endpoints, executed nominal steps, direct or scan offsets, requested and applied compensation, and actual motor steps. Record where tool offsets and endstop-suppressed travel enter. For E, track logical position and base, ECMP and advance pulses. Use the trace to identify duplicate conversions, overlapping writers and places where one frame is read as another.
-- **Resolve motion ownership.** Use the new directional Z limits as the baseline. Trace which path can emit a pulse at each point in queue motion, direct movement, probing and idle correction. Review how moves in opposite directions can cancel each other and how a blocked or pending correction is accounted for. Consolidate common step accounting and limit decisions where the replays show equivalent behavior.
+- **Use the Z motion owner as the baseline for the remaining refactor.** Move pause transitions and the saved return position behind one interface. Then give the bed and DMS calculation a clear input and output in nominal coordinates and correction steps. Keep the ownership of execution counters with the step executor. [Z step execution](#z-step-execution)
 - **Handle the pause boundary.** Every accepted pause invalidates the SenseOffset window. Park, jog, reheat and return keep the existing clearance and live Digit-Z, and print motion resumes with a fresh learning window. The host replay checks the return at equal DMS force after manual extrusion. [Pause verification](maintenance-tasks.md#pause-and-resume)
 - **Verify movement end to end.** Replay many small absolute and relative moves, tool changes, homing and coordinate resets, clipped motion, and pause/jog/resume. Check integer endpoint and pulse counts, frame changes at each transition, and recovery at both Z limits. On the printer, check scan retreat, bounded compensation and return to the print path. Use the [coordinate replay findings](first-layer-control/coordinate-frames-and-extrusion.md) and [Z travel tests](maintenance-tasks.md#z-travel-and-scanning) as the baseline.
 
