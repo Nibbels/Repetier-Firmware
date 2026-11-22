@@ -10,7 +10,7 @@ Digit-Z uses a reversible force-to-Z estimate for elastic hotend deflection. Sen
 
 ## Input, gating and response
 
-- Current `Configuration.h` enables `FEATURE_SENSIBLE_PRESSURE` and sets `SENSIBLE_PRESSURE_INTERVAL=50 ms` and `SENSIBLE_PRESSURE_MAX_OFFSET=180 um` as defaults.
+- `Configuration.h` sets `SENSIBLE_PRESSURE_INTERVAL=50 ms` and `SENSIBLE_PRESSURE_MAX_OFFSET=180 um` as defaults.
 - `M3909 P<digits> S<max_um>` sets threshold and maximum additional offset; source bounds `S` to **1..300 um**. `M3909 P0` disables control. EEPROM may retain thresholds. `M3001` may queue an auto-enable of SenseOffset if configured.
 - SenseOffset needs active bed Z compensation and an enabled positive force threshold.
 - It can react only when **`Printer::currentSteps[Z_AXIS] <= g_minZCompensationSteps`**. That is a **nominal step-coordinate condition**, not a measurement of actual gap.

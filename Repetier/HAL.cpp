@@ -229,7 +229,7 @@ void HAL::setupTimer() {
     OCR1A = 65500;                     // start off with a slow frequency.
     TIMSK1 |= (1 << OCIE1A);           // Enable interrupt
 
-#if FEATURE_RGB_LIGHT_EFFECTS
+#ifdef RGB_LIGHT_R_PIN
     // Configure Timer 4 for RGB-PWM
     TCCR4A = 0; // clear Register
     TCCR4B = 0;
@@ -248,58 +248,7 @@ void HAL::setupTimer() {
     OCR4A = 0; // default R = 0 at startup
     OCR4B = 0; // default G = 0 at startup
     OCR4C = 0; // default B = 0 at startup
-#endif         // FEATURE_RGB_LIGHT_EFFECTS
-
-#if FEATURE_SERVO && (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2)
-    //Configure Timer 5
-    TCCR5A = 0; // clear Register
-    TCCR5B = 0;
-
-    ICR5 = 39999; // set frequency to 50Hz = 20ms
-
-    TCCR5A |= (1 << WGM51);                              // Fast PWM
-    TCCR5B |= (1 << WGM52) | (1 << WGM53) | (1 << CS51); // Prescaler = 8
-
-    SET_OUTPUT(SERVO1_PIN); // PL3 - Pin 38 ( OC5A )
-    SET_OUTPUT(SERVO2_PIN); // PL4 - Pin 39 ( OC5B )
-    SET_OUTPUT(SERVO3_PIN); // PL5 - Pin 40 ( OC5C )
-
-    TCCR5A |= (1 << COM5A1) | (1 << COM5B1) | (1 << COM5C1); // enable Fast PWM
-
-    OCR5A = 1600; // default ( 800 [uS] )
-    OCR5B = 1600; // default ( 800 [uS] )
-    OCR5C = 1600; // default ( 800 [uS] )
-#endif            // FEATURE_SERVO && (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2)
-
-#if FEATURE_SERVO && MOTHERBOARD == DEVICE_TYPE_RF1000
-#if SERVO0_PIN > -1
-    SET_OUTPUT(SERVO0_PIN);
-    WRITE(SERVO0_PIN, LOW);
-#endif // SERVO0_PIN>-1
-
-#if SERVO1_PIN > -1
-    SET_OUTPUT(SERVO1_PIN);
-    WRITE(SERVO1_PIN, LOW);
-#endif // SERVO1_PIN>-1
-
-#if SERVO2_PIN > -1
-    SET_OUTPUT(SERVO2_PIN);
-    WRITE(SERVO2_PIN, LOW);
-#endif // SERVO2_PIN>-1
-
-    TCCR3A = 0;         // normal counting mode
-    TCCR3B = _BV(CS31); // set prescaler of 8
-    TCNT3 = 0;          // clear the timer count
-
-#if defined(__AVR_ATmega128__)
-    TIFR |= _BV(OCF3A);    // clear any pending interrupts;
-    ETIMSK |= _BV(OCIE3A); // enable the output compare interrupt
-#else
-    TIFR3 = _BV(OCF3A);   // clear any pending interrupts;
-    TIMSK3 = _BV(OCIE3A); // enable the output compare interrupt
-#endif // defined(__AVR_ATmega128__)
-#endif // FEATURE_SERVO && MOTHERBOARD == DEVICE_TYPE_RF1000
-
+#endif // RGB_LIGHT_R_PIN
 } // setupTimer
 
 void HAL::showStartReason() {
@@ -535,97 +484,6 @@ unsigned char HAL::i2cReadNak(void) {
     return TWDR;
 } // i2cReadNak
 
-#if FEATURE_SERVO && MOTHERBOARD == DEVICE_TYPE_RF1000
-#if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__) || defined(__AVR_AT90USB646__) || defined(__AVR_AT90USB1286__) || defined(__AVR_ATmega128__) || defined(__AVR_ATmega1281__) || defined(__AVR_ATmega2561__)
-#define SERVO2500US F_CPU / 3200
-#define SERVO5000US F_CPU / 1600
-unsigned int HAL::servoTimings[4] = { 0, 0, 0, 0 };
-static uint8_t servoIndex = 0;
-
-void HAL::servoMicroseconds(uint8_t servo, int ms) {
-    if (ms < 500)
-        ms = 0;
-    if (ms > 2500)
-        ms = 2500;
-    servoTimings[servo] = (unsigned int)(((F_CPU / 1000000) * (long)ms) >> 3);
-
-} // servoMicroseconds
-
-SIGNAL(TIMER3_COMPA_vect) {
-    switch (servoIndex) {
-    case 0: {
-        TCNT3 = 0;
-        if (HAL::servoTimings[0]) {
-#if SERVO0_PIN > -1
-            WRITE(SERVO0_PIN, HIGH);
-#endif // SERVO0_PIN>-1
-
-            OCR3A = HAL::servoTimings[0];
-        } else {
-            OCR3A = SERVO2500US;
-        }
-        break;
-    }
-    case 1: {
-#if SERVO0_PIN > -1
-        WRITE(SERVO0_PIN, LOW);
-#endif // SERVO0_PIN>-1
-
-        OCR3A = SERVO5000US;
-        break;
-    }
-    case 2: {
-        TCNT3 = 0;
-        if (HAL::servoTimings[1]) {
-#if SERVO1_PIN > -1
-            WRITE(SERVO1_PIN, HIGH);
-#endif // SERVO1_PIN>-1
-
-            OCR3A = HAL::servoTimings[1];
-        } else {
-            OCR3A = SERVO2500US;
-        }
-        break;
-    }
-    case 3: {
-#if SERVO1_PIN > -1
-        WRITE(SERVO1_PIN, LOW);
-#endif // SERVO1_PIN>-1
-
-        OCR3A = SERVO5000US;
-        break;
-    }
-    case 4: {
-        TCNT3 = 0;
-        if (HAL::servoTimings[2]) {
-#if SERVO2_PIN > -1
-            WRITE(SERVO2_PIN, HIGH);
-#endif // SERVO2_PIN>-1
-
-            OCR3A = HAL::servoTimings[2];
-        } else {
-            OCR3A = SERVO2500US;
-        }
-        break;
-    }
-    case 5: {
-#if SERVO2_PIN > -1
-        WRITE(SERVO2_PIN, LOW);
-#endif // SERVO2_PIN>-1
-
-        OCR3A = SERVO5000US;
-        break;
-    }
-    }
-    servoIndex++;
-    if (servoIndex > 5)
-        servoIndex = 0;
-}
-#else
-#error No servo support for your board, please disable FEATURE_SERVO
-#endif // defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__) || defined(__AVR_AT90USB646__) || defined(__AVR_AT90USB1286__) || defined(__AVR_ATmega128__) ||defined(__AVR_ATmega1281__)||defined(__AVR_ATmega2561__)
-#endif // #if FEATURE_SERVO && MOTHERBOARD == DEVICE_TYPE_RF1000
-
 //initialize watchdog
 void HAL::WDT_Init(void) {
     // Just to be safe since we can not clear WDE if WDRF is set
@@ -771,7 +629,6 @@ ISR(TIMER1_COMPA_vect) {
 
     OCR1A = 61000;
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     if (PrintLine::cur == NULL && PrintLine::direct.task == TASK_NO_TASK) {
         PrintLine::stepSlowedZCompensation(); // Z is free here.
         // Wait if the z-CMP is under heavy workload
@@ -784,7 +641,6 @@ ISR(TIMER1_COMPA_vect) {
             return;
         }
     }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
     if (PrintLine::direct.task) {
         setTimer(PrintLine::performDirectMove());
@@ -1014,17 +870,17 @@ ISR(PWM_TIMER_VECTOR) {
         execute50msPeriodical = 1; //volle 100ms Zeit -> Ping 50ms
     }
 
-#if FEATURE_RGB_LIGHT_EFFECTS
+#ifdef RGB_LIGHT_R_PIN
     bool rgb_10ms_change_should_be_now = false;
-#endif // FEATURE_RGB_LIGHT_EFFECTS
+#endif // RGB_LIGHT_R_PIN
 
     static char counter10Periodical = 0; // Approximate a 10ms timer :: blocks pingwatchdog s commandloop if not working
     if (++counter10Periodical >= 39) {
         counter10Periodical = 0;
         execute10msPeriodical = 1;
-#if FEATURE_RGB_LIGHT_EFFECTS
+#ifdef RGB_LIGHT_R_PIN
         rgb_10ms_change_should_be_now = true;
-#endif // FEATURE_RGB_LIGHT_EFFECTS
+#endif // RGB_LIGHT_R_PIN
 
 #if FAN_PIN > -1 && FEATURE_FAN_CONTROL
         //hier her versetzt, um 10ms einstell-auflösung zu erhalten. Darum /10 statt bisher /100 beim Init in setFanSpeed().
@@ -1076,7 +932,7 @@ ISR(PWM_TIMER_VECTOR) {
 
     UI_FAST; // Short timed user interface action
 
-#if FEATURE_RGB_LIGHT_EFFECTS
+#ifdef RGB_LIGHT_R_PIN
     if (rgb_10ms_change_should_be_now) {
         char change = 0;
         if (g_uRGBTargetR > g_uRGBCurrentR) {
@@ -1105,7 +961,7 @@ ISR(PWM_TIMER_VECTOR) {
             setRGBLEDs(g_uRGBCurrentR, g_uRGBCurrentG, g_uRGBCurrentB);
         }
     }
-#endif // FEATURE_RGB_LIGHT_EFFECTS
+#endif // RGB_LIGHT_R_PIN
 } // ISR(PWM_TIMER_VECTOR)
 
 #if USE_ADVANCE
@@ -1512,8 +1368,6 @@ RFHardwareSerial RFSerial(&rx_buffer, &tx_buffer, &UBRR0H, &UBRR0L, &UCSR0A, &UC
 
 #endif // EXTERNALSERIAL
 
-#if FEATURE_CASE_LIGHT
 #if !defined CASE_LIGHT_PIN || CASE_LIGHT_PIN < 0
 #error The case light pin must be defined in case the case light feature shall be used.
 #endif //!defined CASE_LIGHT_PIN || CASE_LIGHT_PIN < 0
-#endif // FEATURE_CASE_LIGHT

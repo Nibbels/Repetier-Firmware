@@ -60,7 +60,6 @@ FSTRINGVALUE(ui_text_saving_success, UI_TEXT_SAVING_SUCCESS)
 
 millis_t g_uStartOfIdle = 0;
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
 long g_offsetZCompensationSteps = 0;
 short g_ZCompensationMax = 0;
 long g_minZCompensationSteps = long(HEAT_BED_Z_COMPENSATION_MIN_MM * ZAXIS_STEPS_PER_MM); //pre init
@@ -80,14 +79,9 @@ float g_ZOSlearningRate = 1.0f;
 float g_ZOSlearningGradient = 0.0f;
 long g_min_nZScanZPosition = 0;
 unsigned char g_ZOS_Auto_Matrix_Leveling_State = 0; //if 1 do multiple scans to correct matrix. while correcting this is rising for switch cases see state 50+
-#endif                                              // FEATURE_HEAT_BED_Z_COMPENSATION
 
-
-#if FEATURE_HEAT_BED_Z_COMPENSATION
 float g_scanStartZLiftMM = HEAT_BED_SCAN_Z_START_MM;
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
 unsigned long g_lastScanTime = 0;
 unsigned long g_scanStartTime = 0;
 char g_scanRetries = 0;
@@ -138,13 +132,10 @@ short g_nScanIdlePressureMax = 0;
 char g_nScanPressureReads = 0;
 unsigned short g_nScanPressureReadDelay = 0;
 short g_nScanPressureTolerance = 0;
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
 long g_staticZSteps = 0;
-#if FEATURE_STARTLINE
 // Enabled only while firmware-generated M3912 moves are planned/executed.
 volatile uint8_t g_startLineActive = 0;
-#endif // FEATURE_STARTLINE
 char g_debugLevel = 0;
 char g_debugLog = 0;
 millis_t g_uStopTime = 0;
@@ -169,43 +160,33 @@ volatile char g_pauseMode = PAUSE_MODE_NONE;
 volatile millis_t g_uPauseTime = 0;
 volatile char g_pauseBeepDone = 0;
 
-#if FEATURE_EMERGENCY_PAUSE
 long g_nEmergencyPauseDigitsMin = EMERGENCY_PAUSE_DIGITS_MIN; //short reicht eigentlich
 long g_nEmergencyPauseDigitsMax = EMERGENCY_PAUSE_DIGITS_MAX; //short reicht eigentlich
-#endif                                                        // FEATURE_EMERGENCY_PAUSE
 
-#if FEATURE_EMERGENCY_STOP_Z_AND_E
 short g_nEmergencyStopZAndEMin = EMERGENCY_STOP_DIGITS_MIN;
 short g_nEmergencyStopZAndEMax = EMERGENCY_STOP_DIGITS_MAX;
 bool g_nEmergencyESkip = false;
-#endif //FEATURE_EMERGENCY_STOP_Z_AND_E
 
-#if FEATURE_SENSIBLE_PRESSURE
-/* brief: This is for correcting too close Z at first layer, see FEATURE_SENSIBLE_PRESSURE // Idee Wessix, coded by Nibbels  */
+// SenseOffset was proposed by Wessix and implemented by Nibbels.
+// It adds clearance when DMS force is high on the first layer.
 short g_nSensiblePressureDigits = 0; //init auf zahl bringt stand 1.37r2 nur was wenn zcompensation an. darum lesen aus eeprom oder setzen auf wert nur durch Mcode
 short g_nSensiblePressureOffsetMax = SENSIBLE_PRESSURE_MAX_OFFSET;
 short g_nSensiblePressureOffset = 0;
 char g_nSensiblePressure1stMarke = 0; //sagt, ob regelung aktiv oder inaktiv, wegen Z-Limits
-#endif                                // FEATURE_SENSIBLE_PRESSURE
 
 short g_nLastDigits = 0;
-#if FEATURE_DIGIT_Z_COMPENSATION
 float g_nDigitZCompensationDigits = 0.0f;
 bool g_nDigitZCompensationDigits_active = true;
-#if FEATURE_DIGIT_FLOW_COMPENSATION
 int8_t g_nDigitFlowCompensation_intense = 0;                                        // +- % Standard 0 heißt flowmulti wird zu 1.0f
 int8_t g_nDigitFlowCompensation_speed_intense = 0;                                  // +- % Standard 0 heißt feedmulti wird zu 1.0f
 short g_nDigitFlowCompensation_Fmin = short(abs(EMERGENCY_PAUSE_DIGITS_MAX) * 0.7); //mögliche Standardwerte
 short g_nDigitFlowCompensation_Fmax = short(abs(EMERGENCY_PAUSE_DIGITS_MAX));       //mögliche Standardwerte -> z.b. gut wenn das die pause-digits sind.
-#endif                                                                              // FEATURE_DIGIT_FLOW_COMPENSATION
-#endif                                                                              // FEATURE_DIGIT_Z_COMPENSATION
-
 
 #if FEATURE_ALIGN_EXTRUDERS
 volatile unsigned char g_nAlignExtrudersStatus = 0;
 #endif // FEATURE_ALIGN_EXTRUDERS
 
-#if FEATURE_RGB_LIGHT_EFFECTS
+#ifdef RGB_LIGHT_R_PIN
 unsigned char g_uRGBHeatingR = RGB_HEATING_R;
 unsigned char g_uRGBHeatingG = RGB_HEATING_G;
 unsigned char g_uRGBHeatingB = RGB_HEATING_B;
@@ -227,7 +208,7 @@ volatile unsigned char g_uRGBCurrentB = 0;
 unsigned char g_uRGBTargetR = 0;
 unsigned char g_uRGBTargetG = 0;
 unsigned char g_uRGBTargetB = 0;
-#endif // FEATURE_RGB_LIGHT_EFFECTS
+#endif // RGB_LIGHT_R_PIN
 
 static void setupForPrinting();
 
@@ -271,7 +252,6 @@ short readStrainGauge(unsigned char uAddress) //readStrainGauge dauert etwas unt
 #endif // FEATURE_ZERO_DIGITS
 
     /* brief: This is for correcting sinking hotends at high digit values because of DMS-Sensor by Nibbels  */
-#if FEATURE_DIGIT_Z_COMPENSATION
     static long nSensibleCompensationSum = 0;
     static char nSensibleCompensationChecks = 0;
     if (Printer::doHeatBedZCompensation) {
@@ -285,13 +265,10 @@ short readStrainGauge(unsigned char uAddress) //readStrainGauge dauert etwas unt
             noInts.unprotect();
             nSensibleCompensationSum = (long)g_nDigitZCompensationDigits * 3; //(nSensibleCompensationSum >> 1) + (nSensibleCompensationSum >> 2);--> sign-extension?? //nSensibleCompensationSum*0.75
             nSensibleCompensationChecks -= 1;                                 //*=0.75 bei 4 ist 3
-#if FEATURE_DIGIT_FLOW_COMPENSATION
             // M3912 feeds high DMS force into a progressive speed/E brake,
             // irrespective of the previous print's first-layer boundary.
             bool digitFlowAllowed = Printer::currentSteps[Z_AXIS] > g_minZCompensationSteps;
-#if FEATURE_STARTLINE
             digitFlowAllowed = digitFlowAllowed || g_startLineActive;
-#endif // FEATURE_STARTLINE
             if (g_nDigitFlowCompensation_intense != 0) {
                 short active_summed_digits = abs(static_cast<short>(g_nDigitZCompensationDigits));
                 /*
@@ -336,28 +313,22 @@ short readStrainGauge(unsigned char uAddress) //readStrainGauge dauert etwas unt
             } else {
                 Printer::dynamicFeedrateFactor = 1.0f;
             }
-#endif // FEATURE_DIGIT_FLOW_COMPENSATION
 
         } else {
-#if FEATURE_DIGIT_FLOW_COMPENSATION
             Printer::dynamicExtrusionFactor = 1.0f;
             Printer::dynamicFeedrateFactor = 1.0f;
-#endif // FEATURE_DIGIT_FLOW_COMPENSATION
             InterruptProtectedBlock noInts;
             g_nDigitZCompensationDigits = (float)Result; //startwert / failwert
             noInts.unprotect();
         }
     }
 
-#if FEATURE_DIGIT_FLOW_COMPENSATION
     if (Printer::dynamicFeedrateFactor == 1.0f || !Printer::doHeatBedZCompensation) {
         Printer::interval_mod = 0; //0 = off / 1024 = off but 0 saves calc in interrupt.
     } else {
         float speed_feed_modifier = 1024.0f / Printer::dynamicFeedrateFactor; //1024 = 100% -> 234% speed, heißt interval kürzer. 56% speed heißt interval länger.
         Printer::interval_mod = (unsigned short)speed_feed_modifier;
     }
-#endif // FEATURE_DIGIT_FLOW_COMPENSATION
-#endif // FEATURE_DIGIT_Z_COMPENSATION
     g_nLastDigits = Result;
     return Result;
 } // readStrainGauge
@@ -371,17 +342,14 @@ void adjustPressureLimits(short IdlePressure) {
     g_nMaxPressureIdle = IdlePressure + g_nScanIdlePressureDelta;
 }
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
 void startHeatBedScan(void) {
 #if FEATURE_ALIGN_EXTRUDERS
     if (g_nAlignExtrudersStatus)
         return;
 #endif //FEATURE_ALIGN_EXTRUDERS
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     //if( g_nHeatBedScanStatus ) return;
     if (g_nZOSScanStatus)
         return;
-#endif //FEATURE_HEAT_BED_Z_COMPENSATION
     if (g_nHeatBedScanStatus) {
         // abort the heat bed scan
         if (Printer::debugInfo()) {
@@ -412,11 +380,9 @@ void scanHeatBed(void) {
     if (g_nAlignExtrudersStatus)
         return;
 #endif //FEATURE_ALIGN_EXTRUDERS
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     //if( g_nHeatBedScanStatus ) return;
     if (g_nZOSScanStatus)
         return;
-#endif //FEATURE_HEAT_BED_Z_COMPENSATION
 
     static unsigned char nIndexX;
     static unsigned char nIndexY;
@@ -1797,12 +1763,10 @@ void alignExtruders(void) {
 #if FEATURE_ALIGN_EXTRUDERS
     //if( g_nAlignExtrudersStatus ) return;
 #endif //FEATURE_ALIGN_EXTRUDERS
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     if (g_nHeatBedScanStatus)
         return;
     if (g_nZOSScanStatus)
         return;
-#endif //FEATURE_HEAT_BED_Z_COMPENSATION
 
     if (g_abortZScan) {
         showAbortScanReason((void*)ui_text_align_extruders, g_abortZScan);
@@ -1997,11 +1961,9 @@ void startZOScan(bool automatrixleveling) {
     if (g_nAlignExtrudersStatus)
         return;
 #endif //FEATURE_ALIGN_EXTRUDERS
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     if (g_nHeatBedScanStatus)
         return;
         //if( g_nZOSScanStatus ) return;
-#endif //FEATURE_HEAT_BED_Z_COMPENSATION
 
     if (g_nZOSScanStatus) {
         // abort the heat bed scan
@@ -2024,11 +1986,9 @@ void searchZOScan(void) {
     if (g_nAlignExtrudersStatus)
         return;
 #endif //FEATURE_ALIGN_EXTRUDERS
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     if (g_nHeatBedScanStatus)
         return;
         //if( g_nZOSScanStatus ) return;
-#endif //FEATURE_HEAT_BED_Z_COMPENSATION
 
     if (!g_nZOSScanStatus)
         return;
@@ -2992,7 +2952,6 @@ void recalculateHeatBedZCompensation(void) {
 
         nNeededZCompensation += g_staticZSteps;
 
-#if FEATURE_DIGIT_Z_COMPENSATION
         //Etwa 5500 digits verursachen 0.05 mm tiefere nozzle: ca. 0.00001 = 1/100.000 mm pro digit.
         //0.00001 ist vermutlich konservativ bis ok.
         //Je höher die Kraft nach unten, desto mehr muss das Bett ausweichen: Z nach oben/+.
@@ -3012,7 +2971,6 @@ void recalculateHeatBedZCompensation(void) {
                 //wie bisher ohne additionszusatz
             */
         }
-#endif // FEATURE_DIGIT_Z_COMPENSATION
 
     } else {
         // Nicht zCMP Offsets nutzen, wenn nur gehomed, weil das alle Scans stören kann, nur weil eine falsche Matrix geladen ist. Security hin oder her.
@@ -3023,7 +2981,6 @@ void recalculateHeatBedZCompensation(void) {
     Printer::compensatedPositionOverPercE = nNeededZEPerc;
     noInts.unprotect();
 } // recalculateHeatBedZCompensation
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
 void showAbortScanReason(const void* scanName, char abortScanIdentifier) {
     switch (abortScanIdentifier) {
@@ -3111,9 +3068,6 @@ void showAbortScanReason(const void* scanName, char abortScanIdentifier) {
     }
 }
 
-
-
-#if FEATURE_HEAT_BED_Z_COMPENSATION
 short readIdlePressure(short* pnIdlePressure) {
     short nTempPressure;
     char nTemp;
@@ -3413,22 +3367,16 @@ void moveZ(int nSteps) {
     else
         nMaxLoops = -nSteps;
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     while (Printer::needsCMPwait())
         Commands::checkForPeriodicalActions(Processing);
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     // A retreat can make a pending correction reachable again. Keep Z for the scan until this move ends.
     Printer::scanZMoveActive = true;
-#endif
 
     // perform the steps
     for (int i = 0; i < nMaxLoops; i++) {
-#if FEATURE_HEAT_BED_Z_COMPENSATION
         if (g_abortZScan)
             break; // do not continue here in case the current operation has been cancelled
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
         if (nSteps < 0 && Printer::isAxisHomed(Z_AXIS) && Printer::isZMinOverrideReached()) {
             g_abortZScan = SCAN_ABORT_REASON_REACHED_MAX_COMPENSATION;
@@ -3458,13 +3406,10 @@ void moveZ(int nSteps) {
 
         g_nZScanZPosition += (Printer::getZDirectionIsPos() ? 1 : -1);
     }
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     Printer::scanZMoveActive = false;
-#endif
 } // moveZ
 
 void restoreDefaultScanParameters(void) {
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     // we must restore the default scan parameters for the heat bed scan
     g_nScanXStartSteps = long(Printer::axisStepsPerMM[X_AXIS] * HEAT_BED_SCAN_X_START_MM);
     g_nScanXStepSizeMM = HEAT_BED_SCAN_X_STEP_SIZE_MM;
@@ -3501,7 +3446,6 @@ void restoreDefaultScanParameters(void) {
     g_nScanPressureReads = HEAT_BED_SCAN_PRESSURE_READS;
     g_nScanPressureTolerance = HEAT_BED_SCAN_PRESSURE_TOLERANCE;
     g_nScanPressureReadDelay = HEAT_BED_SCAN_PRESSURE_READ_DELAY_MS;
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 } // restoreDefaultScanParameters
 
 void outputScanParameters(void) {
@@ -3594,7 +3538,6 @@ void outputCompensationMatrix(char format) {
         Com::printFLN(PSTR(" "));
     }
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     Com::printF(PSTR("offset = "), g_offsetZCompensationSteps);
     Com::printF(PSTR(" [steps] (= "), (float)g_offsetZCompensationSteps * Printer::axisMMPerSteps[Z_AXIS]);
     Com::printFLN(PSTR(" [mm])"));
@@ -3602,16 +3545,13 @@ void outputCompensationMatrix(char format) {
     Com::printF(PSTR("warpage = "), g_ZCompensationMax - g_offsetZCompensationSteps);
     Com::printF(PSTR(" [steps] (= "), float(g_ZCompensationMax - g_offsetZCompensationSteps) * Printer::axisMMPerSteps[Z_AXIS]);
     Com::printFLN(PSTR(" [mm])"));
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
     Com::printFLN(PSTR("g_uZMatrixMax[X_AXIS] = "), g_uZMatrixMax[X_AXIS]);
     Com::printFLN(PSTR("g_uZMatrixMax[Y_AXIS] = "), g_uZMatrixMax[Y_AXIS]);
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     {
         Com::printFLN(PSTR("g_nActiveHeatBed = "), g_nActiveHeatBed);
     }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
 } // outputCompensationMatrix
 
@@ -3719,7 +3659,6 @@ char prepareCompensationMatrix(void) {
 } // prepareCompensationMatrix
 
 void determineCompensationOffsetZ(void) {
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     short x;
     short y;
     short uMax = -32768;
@@ -3737,7 +3676,6 @@ void determineCompensationOffsetZ(void) {
     }
     g_ZCompensationMax = uMin;
     g_offsetZCompensationSteps = uMax;
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 } // determineCompensationOffsetZ
 
 void adjustCompensationMatrix(short nZ) {
@@ -3837,13 +3775,10 @@ void saveCompensationMatrix(unsigned int uAddress) {
         }
     }
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     determineCompensationOffsetZ();
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
     g_ZMatrixChangedInRam = 0;
 } // saveCompensationMatrix
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
 bool saveActiveHeatBedToExtEEPROM(char newActiveHeatBed) {
     if (newActiveHeatBed < 1 || newActiveHeatBed > EEPROM_MAX_HEAT_BED_SECTORS) {
         return false;
@@ -3873,8 +3808,6 @@ bool loadActiveHeatBedFromExtEEPROM() {
     g_nActiveHeatBed = uTemp;
     return true;
 }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
-
 
 char loadCompensationMatrix(unsigned int uAddress) {
     if (uAddress == 0) {
@@ -4005,9 +3938,7 @@ char loadCompensationMatrix(unsigned int uAddress) {
         GCode::keepAlive(Processing);
     }
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     determineCompensationOffsetZ();
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
     g_ZMatrixChangedInRam = 0; //Nibbels: Marker, dass die Matrix gespeichert werden kann oder eben nicht, weils unverändert keinen Sinn macht.
 
@@ -4025,8 +3956,6 @@ void clearCompensationMatrix(unsigned int uAddress) {
         Com::printFLN(PSTR("clearMatrix(): matrix cleared"));
     }
 } // clearCompensationMatrix
-
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
 void clearExternalEEPROM(void) {
     unsigned short i;
@@ -4106,22 +4035,13 @@ unsigned short readWord24C256(int addressI2C, unsigned int addressEEPROM) {
 } // readWord24C256
 
 void recalculateZCompensation(void) {
-    {
-#if FEATURE_HEAT_BED_Z_COMPENSATION
-        recalculateHeatBedZCompensation();
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
-    }
+    recalculateHeatBedZCompensation();
 } // recalculateZCompensation
 
 void handleStrainGaugeFeatures(millis_t uTime) {
-    /* Change: 09_06_2017 Never read straingauge twice in a row: test if this helps avoiding my watchdog problem
-           Thatwhy I bring the statics up and preread the value for both FEATURE_EMERGENCY_PAUSE and FEATURE_EMERGENCY_STOP_Z_AND_E */
-    /* Update: 19_06_2017 This is really nice and clean but it has not been the problem. */
-#if FEATURE_EMERGENCY_PAUSE || FEATURE_EMERGENCY_STOP_Z_AND_E
+    // Share one scheduled DMS reading among SenseOffset, emergency pause and emergency stop.
     bool i_need_strain_value = 0;
-#endif //FEATURE_EMERGENCY_PAUSE || FEATURE_EMERGENCY_STOP_Z_AND_E
 
-#if FEATURE_SENSIBLE_PRESSURE
     static millis_t nSensiblePressureTime = 0;
     static long nSensiblePressureSum = 0;
     static char nSensiblePressureChecks = 0;
@@ -4130,9 +4050,7 @@ void handleStrainGaugeFeatures(millis_t uTime) {
     {
         i_need_strain_value = 1;
     }
-#endif // FEATURE_SENSIBLE_PRESSURE
 
-#if FEATURE_EMERGENCY_PAUSE
     static millis_t uLastPressureTime = 0;
     static long nPressureSum = 0;
     static char nPressureChecks = 0;
@@ -4140,9 +4058,7 @@ void handleStrainGaugeFeatures(millis_t uTime) {
     {
         i_need_strain_value = 1;
     }
-#endif // FEATURE_EMERGENCY_PAUSE
 
-#if FEATURE_EMERGENCY_STOP_Z_AND_E
     static millis_t uLastZPressureTime = 0;
     static long nZPressureSum = 0;
     static char nZPressureChecks = 0;
@@ -4150,17 +4066,13 @@ void handleStrainGaugeFeatures(millis_t uTime) {
     {
         i_need_strain_value = 1;
     }
-#endif // FEATURE_EMERGENCY_STOP_Z_AND_E
 
-#if FEATURE_EMERGENCY_PAUSE || FEATURE_EMERGENCY_STOP_Z_AND_E || FEATURE_SENSIBLE_PRESSURE
     static short pressure = 0;
     if (i_need_strain_value) {
         pressure = readStrainGauge(ACTIVE_STRAIN_GAUGE);
     }
-#endif //FEATURE_EMERGENCY_PAUSE || FEATURE_EMERGENCY_STOP_Z_AND_E || FEATURE_SENSIBLE_PRESSURE
 
     short nPressure;
-#if FEATURE_SENSIBLE_PRESSURE
     // When bed compensation is disabled, any remaining live SenseOffset is
     // safe to discard, including after M3909 P0 disabled its threshold.
     if (!Printer::doHeatBedZCompensation) {
@@ -4179,11 +4091,7 @@ void handleStrainGaugeFeatures(millis_t uTime) {
 
     // M3909 P0 keeps the already applied offset while compensation is still
     // active, but its old pressure samples must not leak into a new session.
-    if (!g_nSensiblePressureDigits
-#if FEATURE_STARTLINE
-        || g_startLineActive
-#endif // FEATURE_STARTLINE
-    ) {
+    if (!g_nSensiblePressureDigits || g_startLineActive) {
         // Priming force belongs to the speed/E brake, not SenseOffset.
         nSensiblePressureSum = 0;
         nSensiblePressureChecks = 0;
@@ -4195,11 +4103,7 @@ void handleStrainGaugeFeatures(millis_t uTime) {
         nSensiblePressureTime = uTime;
         /* brief: This is for correcting too close Z at first layer // Idee Wessix, coded by Nibbels  */
 
-        if (g_nSensiblePressureDigits && Printer::doHeatBedZCompensation
-#if FEATURE_STARTLINE
-            && !g_startLineActive
-#endif // FEATURE_STARTLINE
-        ) { //activate feature with G-Code.
+        if (g_nSensiblePressureDigits && Printer::doHeatBedZCompensation && !g_startLineActive) { //activate feature with G-Code.
             /*
             Still testing: Gesucht ist ein Limit des der Abstands zum Druckbett, also die jeweils richtige Layerbegrenzung::
 
@@ -4292,9 +4196,7 @@ void handleStrainGaugeFeatures(millis_t uTime) {
             }
         }
     }
-#endif // FEATURE_SENSIBLE_PRESSURE
 
-#if FEATURE_EMERGENCY_PAUSE
     if (g_nEmergencyPauseDigitsMin || g_nEmergencyPauseDigitsMax) {
         if ((uTime - uLastPressureTime) > EMERGENCY_PAUSE_INTERVAL) //jede 100ms -> das macht hier drin wenig sinn.
         {
@@ -4324,9 +4226,7 @@ void handleStrainGaugeFeatures(millis_t uTime) {
             }
         }
     }
-#endif // FEATURE_EMERGENCY_PAUSE
 
-#if FEATURE_EMERGENCY_STOP_Z_AND_E
     if ((uTime - uLastZPressureTime) > EMERGENCY_STOP_INTERVAL) //jede 10ms -> das macht hier drin überhaupt garkeinen sinn.
     {
         uLastZPressureTime = uTime;
@@ -4355,7 +4255,6 @@ void handleStrainGaugeFeatures(millis_t uTime) {
             }
         }
     }
-#endif // FEATURE_EMERGENCY_STOP_Z_AND_E
 }
 
 void handlePauseTime(millis_t uTime) {
@@ -4404,14 +4303,12 @@ void handlePauseTime(millis_t uTime) {
 }
 
 void handleScanWorkTasks() {
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     if (g_nHeatBedScanStatus) {
         scanHeatBed();
     }
     if (g_nZOSScanStatus) {
         searchZOScan();
     }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 #if FEATURE_ALIGN_EXTRUDERS
     if (g_nAlignExtrudersStatus) {
         alignExtruders();
@@ -4681,9 +4578,9 @@ void loopFeatures() //wird so aufgerufen, dass es ein ~100ms Takt sein sollte.
 
         handlePauseTime(uTime);
 
-#if FEATURE_RGB_LIGHT_EFFECTS
+#ifdef RGB_LIGHT_R_PIN
         updateRGBLightStatus();
-#endif // FEATURE_RGB_LIGHT_EFFECTS
+#endif // RGB_LIGHT_R_PIN
         if (!g_pauseMode) {
             handleScanWorkTasks();
         }
@@ -4854,7 +4751,6 @@ void processSpecialGCode(GCode* pCommand) {
 
     if (pCommand->hasM()) {
         switch (pCommand->M) {
-#if FEATURE_HEAT_BED_Z_COMPENSATION
         case 3000: // M3000 - turn the z-compensation off
         {
             if (Printer::debugInfo()) {
@@ -4896,7 +4792,6 @@ void processSpecialGCode(GCode* pCommand) {
                 queueTask(TASK_ENABLE_SENSE_OFFSET);
             break;
         }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
         case 3005: // M3005 [S] - enable custom debug outputs
         {
@@ -4916,7 +4811,6 @@ void processSpecialGCode(GCode* pCommand) {
             break;
         }
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
         case 3006: // M3006 [S] [Z] - configure the static z-offset ( S - units are [um], Z - units are [mm] )
         {
             if (pCommand->hasZ()) {
@@ -4927,12 +4821,8 @@ void processSpecialGCode(GCode* pCommand) {
                     pCommand->Z = HEAT_BED_Z_COMPENSATION_MAX_MM;
 
                 Printer::ZOffset = long(pCommand->Z * 1000);
-#if FEATURE_SENSIBLE_PRESSURE
                 // Preserve the live SenseOffset when changing the EEPROM-backed manual offset.
                 g_staticZSteps = long(((Printer::ZOffset + g_nSensiblePressureOffset) * Printer::axisStepsPerMM[Z_AXIS]) / 1000);
-#else
-                g_staticZSteps = long(pCommand->Z * Printer::axisStepsPerMM[Z_AXIS]);
-#endif // FEATURE_SENSIBLE_PRESSURE
                 if (Printer::debugInfo()) {
                     Com::printF(PSTR("M3006: new static z-offset: "), pCommand->Z);
                     Com::printF(PSTR(" [mm]"));
@@ -4954,12 +4844,8 @@ void processSpecialGCode(GCode* pCommand) {
                     nTemp = (HEAT_BED_Z_COMPENSATION_MAX_MM * 1000);
 
                 Printer::ZOffset = nTemp;
-#if FEATURE_SENSIBLE_PRESSURE
                 // Match the menu and SenseOffset controller's combined correction.
                 g_staticZSteps = long(((Printer::ZOffset + g_nSensiblePressureOffset) * Printer::axisStepsPerMM[Z_AXIS]) / 1000);
-#else
-                g_staticZSteps = (nTemp * Printer::axisStepsPerMM[Z_AXIS]) / 1000;
-#endif // FEATURE_SENSIBLE_PRESSURE
                 if (Printer::debugInfo()) {
                     Com::printF(PSTR("M3006: new static z-offset: "), nTemp);
                     Com::printF(PSTR(" [um]"));
@@ -5026,7 +4912,6 @@ void processSpecialGCode(GCode* pCommand) {
         }
         case 3011: // M3011 [S] - clear the specified z-compensation matrix from the EEPROM
         {
-#if FEATURE_HEAT_BED_Z_COMPENSATION
             if (Printer::doHeatBedZCompensation) {
                 if (Printer::debugErrors()) {
                     Com::printFLN(PSTR("M3011: the heat bed z matrix can not be cleared while the z-compensation is active"));
@@ -5035,7 +4920,6 @@ void processSpecialGCode(GCode* pCommand) {
                 showError((void*)ui_text_z_compensation, (void*)ui_text_operation_denied);
                 break;
             }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
             if (pCommand->hasS()) {
                 nTemp = pCommand->S;
             } else {
@@ -5261,7 +5145,6 @@ void processSpecialGCode(GCode* pCommand) {
             }
             break;
         }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
 #if FEATURE_CHECK_HOME
         case 3028: // M3028
@@ -5359,7 +5242,6 @@ void processSpecialGCode(GCode* pCommand) {
         }
 #endif // FEATURE_SEE_DISPLAY
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
         case 3030: // M3030 [S] - configure the fast step size for moving of the heat bed up during the heat-bed scan
         {
             if (pCommand->hasS()) {
@@ -5619,7 +5501,6 @@ void processSpecialGCode(GCode* pCommand) {
             }
             break;
         }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
         case 3060: // M3060 - output the device type and firmware version
         {
@@ -5642,7 +5523,6 @@ void processSpecialGCode(GCode* pCommand) {
             break;
         }
 
-#if FEATURE_EMERGENCY_PAUSE
         case 3075: // M3075 [S] [P] - configure the emergency pause digits
         {
             long nMin = g_nEmergencyPauseDigitsMin;
@@ -5692,9 +5572,7 @@ void processSpecialGCode(GCode* pCommand) {
 
             break;
         }
-#endif // FEATURE_EMERGENCY_PAUSE
 
-#if FEATURE_EMERGENCY_STOP_Z_AND_E
         case 3076: // M3076 [S] [P] - configure the emergency stop digits
         {
             long nMin = g_nEmergencyStopZAndEMin;
@@ -5738,7 +5616,6 @@ void processSpecialGCode(GCode* pCommand) {
 
             break;
         }
-#endif // FEATURE_EMERGENCY_STOP_Z_AND_E
 
         case 3079: // M3079 - output the printed object
         {
@@ -5927,10 +5804,8 @@ void processSpecialGCode(GCode* pCommand) {
                     Commands::writeLowestFreeRAM();
                     Com::printFLN(PSTR("lowest free RAM: "), Commands::lowestRAMValue);
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
                     Com::printFLN(PSTR("z-compensation matrix x: "), COMPENSATION_MATRIX_MAX_X);
                     Com::printFLN(PSTR("z-compensation matrix y: "), COMPENSATION_MATRIX_MAX_Y);
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
                     break;
                 }
                 case 2: {
@@ -6096,7 +5971,7 @@ void processSpecialGCode(GCode* pCommand) {
         }
 #endif // FEATURE_230V_OUTPUT
 
-#if FEATURE_RGB_LIGHT_EFFECTS
+#ifdef RGB_LIGHT_R_PIN
         case 3303: // M3303 [P] [S] - configure the RGB light effects for heating
         {
             if (pCommand->hasP()) {
@@ -6478,7 +6353,7 @@ void processSpecialGCode(GCode* pCommand) {
 
             break;
         }
-#endif // FEATURE_RGB_LIGHT_EFFECTS
+#endif // RGB_LIGHT_R_PIN
 
 #if FEATURE_ALIGN_EXTRUDERS
         case 3309: // start/abort to align the two extruders
@@ -6488,7 +6363,6 @@ void processSpecialGCode(GCode* pCommand) {
         }
 #endif // FEATURE_ALIGN_EXTRUDERS
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
         case 3901: // 3901 [X] [Y] - configure the Matrix-Position to Scan, [S] confugure learningrate, [P] configure dist weight || by Nibbels
         case 3900: // 3900 direct preconfig, no break;->next is M3900.
         {
@@ -6645,16 +6519,7 @@ void processSpecialGCode(GCode* pCommand) {
             }
             break;
         }
-#else
-        case 3900: // M3900 search for the heat bed and set the Z offset appropriately
-        case 3901: // 3901 [X] [Y] - configure the Matrix-Position to Scan, [S] confugure learningrate, [P] configure dist weight || by Nibbels
-        {
-            Com::printFLN(PSTR("M3900/M3901 inactive Feature FEATURE_HEAT_BED_Z_COMPENSATION"));
-            break;
-        }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
         case 3902: // M3902 Nibbels Matrix Manipulations "NMM"
         {
             //NMM Funktion 1 - R=Repair
@@ -6792,15 +6657,7 @@ void processSpecialGCode(GCode* pCommand) {
             }
             break;
         }
-#else
-        case 3902: // M3902 Nibbels Matrix Manipulations "NMM"
-        {
-            Com::printFLN(PSTR("M3902 inactive Feature"));
-            break;
-        }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
-#if FEATURE_SENSIBLE_PRESSURE
         case 3909: // M3909 [P]PressureDigits - configure the sensible pressure value threshold || by Wessix and Nibbels
         {
             bool error = false;
@@ -6861,9 +6718,7 @@ void processSpecialGCode(GCode* pCommand) {
                 queueTask(TASK_ENABLE_SENSE_OFFSET);
             break;
         }
-#endif // FEATURE_SENSIBLE_PRESSURE
 
-#if FEATURE_DIGIT_FLOW_COMPENSATION
         case 3911: // M3911 [S]Inc/Dec - Testfunction for AtlonXP's DigitFlowCompensation
         {
             if (pCommand->hasS() && pCommand->hasP()) {
@@ -6905,12 +6760,9 @@ void processSpecialGCode(GCode* pCommand) {
             Com::printFLN(PSTR("[F]   Feed CMP %: "), g_nDigitFlowCompensation_speed_intense);
             break;
         }
-#endif // FEATURE_DIGIT_FLOW_COMPENSATION
 
-#if FEATURE_STARTLINE
         case 3912: //M3912 lay down automatic startmade which you can abort (when the hotend is moving) by pressing play
         {
-#if FEATURE_DIGIT_FLOW_COMPENSATION
             Commands::waitUntilEndOfAllMoves(); //feature startline
             if (Printer::areAxisHomed() && Printer::doHeatBedZCompensation && !g_uBlockCommands) {
 
@@ -6992,7 +6844,6 @@ void processSpecialGCode(GCode* pCommand) {
                         y = maxY;
                 }
 
-#if FEATURE_DIGIT_FLOW_COMPENSATION
                 //bezogen auf : M3411 S P F-90 -> Flow CMP Speed einstellungen werden kurz substituiert und dann resubstituiert
                 g_nDigitFlowCompensation_Fmin = min;
                 g_nDigitFlowCompensation_Fmax = max;
@@ -7000,7 +6851,6 @@ void processSpecialGCode(GCode* pCommand) {
                 g_nDigitFlowCompensation_intense = -75;
                 //M82:
                 Printer::relativeExtruderCoordinateMode = false;
-#endif // FEATURE_DIGIT_FLOW_COMPENSATION
 
                 Printer::setEPositionMM(0); // G92 E0
 
@@ -7103,12 +6953,8 @@ void processSpecialGCode(GCode* pCommand) {
             } else {
                 Com::printFLN(PSTR("M3912 error missing homing or zCMP"));
             }
-#else
-            Com::printFLN(PSTR("M3912 requires FEATURE_DIGIT_FLOW_COMPENSATION"));
-#endif // FEATURE_DIGIT_FLOW_COMPENSATION
             break;
         }
-#endif //FEATURE_STARTLINE
 
         case 3913: //M3913 input filament until DMS Sensor tells us to stop or Extrusion amount is reached
         {
@@ -7321,12 +7167,10 @@ bool isAnyScanRunning() {
     if (g_nAlignExtrudersStatus)
         return true;
 #endif //FEATURE_ALIGN_EXTRUDERS
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     if (g_nHeatBedScanStatus)
         return true;
     if (g_nZOSScanStatus)
         return true;
-#endif //FEATURE_HEAT_BED_Z_COMPENSATION
 
     return false;
 }
@@ -8227,8 +8071,6 @@ void cleanupEPositions(void) {
     noInts.unprotect();
 } // cleanupEPositions
 
-
-#if FEATURE_HEAT_BED_Z_COMPENSATION
 void switchActiveHeatBed(char newActiveHeatBed) {
     if (!saveActiveHeatBedToExtEEPROM(newActiveHeatBed)) {
         // do not allow not-supported z-compensation matrix
@@ -8242,9 +8084,8 @@ void switchActiveHeatBed(char newActiveHeatBed) {
         initCompensationMatrix();
     }
 } // switchActiveHeatBed
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
-#if FEATURE_RGB_LIGHT_EFFECTS
+#ifdef RGB_LIGHT_R_PIN
 void setRGBTargetColors(uint8_t R, uint8_t G, uint8_t B) {
     g_uRGBTargetR = R;
     g_uRGBTargetG = G;
@@ -8424,7 +8265,7 @@ void updateRGBLightStatus(void) {
     return;
 
 } // updateRGBLightStatus
-#endif // FEATURE_RGB_LIGHT_EFFECTS
+#endif // RGB_LIGHT_R_PIN
 
 static void setupForPrinting() {
     Printer::setSomeTempsensorDefect(false);
@@ -8452,14 +8293,12 @@ static void setupForPrinting() {
     Printer::axisLengthMM[X_AXIS] = X_MAX_LENGTH_PRINT;
 #endif // EEPROM_MODE
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     loadActiveHeatBedFromExtEEPROM();
     if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
         // we load the z compensation matrix before its first usage because this can take some time
         // This function needs the corrected axis length for restoreDefaultScanParameters();
         prepareZCompensation();
     }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
     g_nPauseSteps[X_AXIS] = long(Printer::axisStepsPerMM[X_AXIS] * DEFAULT_PAUSE_MM_X_PRINT);
     g_nPauseSteps[Y_AXIS] = long(Printer::axisStepsPerMM[Y_AXIS] * DEFAULT_PAUSE_MM_Y_PRINT);
@@ -8482,7 +8321,6 @@ void prepareZCompensation(void) {
         return;
     }
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     // restore the default scan parameters
     restoreDefaultScanParameters();
 
@@ -8493,7 +8331,6 @@ void prepareZCompensation(void) {
         initCompensationMatrix();
         Com::printFLN(PSTR("prepareZCompensation(): the compensation matrix is not available"));
     }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
 } // prepareZCompensation
 
@@ -8514,7 +8351,6 @@ unsigned char isMovingAllowed(const char* pszCommand, char outputLog) {
         return 0;
     }
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     if (g_nHeatBedScanStatus || g_nZOSScanStatus
 #if FEATURE_ALIGN_EXTRUDERS
         || g_nAlignExtrudersStatus
@@ -8527,7 +8363,6 @@ unsigned char isMovingAllowed(const char* pszCommand, char outputLog) {
         }
         return 0;
     }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
     // we allow the manual movements at the moment
     return 1;
@@ -8547,7 +8382,6 @@ unsigned char isHomingAllowed(GCode* com, char outputLog) {
     }
 #endif //FEATURE_ALIGN_EXTRUDERS
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     if (g_nHeatBedScanStatus || g_nZOSScanStatus) {
         // do not allow homing while the heat bed scan is in progress
         if (Printer::debugErrors() && outputLog) {
@@ -8557,9 +8391,6 @@ unsigned char isHomingAllowed(GCode* com, char outputLog) {
 
         return 0;
     }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
-
-
 
     if (!com) {
         // there is nothing more which we can check

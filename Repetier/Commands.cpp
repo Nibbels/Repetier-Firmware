@@ -104,9 +104,7 @@ void Commands::waitUntilEndOfAllMoves() {
     if (PrintLine::hasLines())
         bWait = true;
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     bWait = (Printer::needsCMPwait() ? true : bWait);
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
     while (bWait) {
         Commands::checkForPeriodicalActions(Processing);
@@ -115,10 +113,7 @@ void Commands::waitUntilEndOfAllMoves() {
         if (PrintLine::hasLines())
             bWait = true;
 
-
-#if FEATURE_HEAT_BED_Z_COMPENSATION
         bWait = (Printer::needsCMPwait() ? true : bWait);
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
     }
 } // waitUntilEndOfAllMoves
 
@@ -188,7 +183,6 @@ void Commands::printTemperatures(bool showRaw) {
         Com::printF(Com::tSpaceCAtColon, 0);                   // leistung
 #endif                                                         // RESERVE_ANALOG_INPUTS
 
-#if FEATURE_PRINT_PRESSURE
         Com::printF(Com::tSpace);
         Com::printF(Com::tF);
         Com::printF(Com::tColon, (int)g_nLastDigits); //Kraft
@@ -198,7 +192,6 @@ void Commands::printTemperatures(bool showRaw) {
         Com::printF(Com::tSpaceSlash, 0); //Offset 0
 #endif                                      // FEATURE_ZERO_DIGITS
         Com::printF(Com::tSpaceAtColon, 0); //Ziel ^^, nein ich halte mich nur an die PWM-Syntax
-#endif                                      //FEATURE_PRINT_PRESSURE
         Com::println();
     }
 } // printTemperatures
@@ -304,163 +297,6 @@ void Commands::reportPrinterUsage() {
 #endif // EEPROM_MODE
 } // reportPrinterUsage
 
-/**
-\brief Execute the Arc command stored in com.
-*/
-#if FEATURE_ARC_SUPPORT
-void Commands::processArc(GCode* com) {
-    float position[4];
-    float positionRemainder[4];
-    for (uint8_t axis = X_AXIS; axis <= E_AXIS; axis++) {
-        position[axis] = Printer::destinationMM[axis];
-        positionRemainder[axis] = Printer::destinationRemainderMM[axis];
-    }
-
-    const auto rejectArc = [&]() {
-        for (uint8_t axis = X_AXIS; axis <= E_AXIS; axis++)
-            Printer::setDestinationMM(axis, position[axis], positionRemainder[axis]);
-        Com::printErrorFLN(Com::tInvalidArc);
-    };
-
-    Printer::queueGCodeCoordinates(com, true); // For X Y Z E F
-
-    // get start position for arc lines
-    float target[4];
-    target[X_AXIS] = Printer::destinationMM[X_AXIS];
-    target[Y_AXIS] = Printer::destinationMM[Y_AXIS];
-    target[Z_AXIS] = Printer::destinationMM[Z_AXIS];
-    target[E_AXIS] = Printer::destinationMM[E_AXIS];
-
-    float offset[2] = {
-        Printer::convertToMM(com->hasI() ? com->I : 0),
-        Printer::convertToMM(com->hasJ() ? com->J : 0)
-    };
-
-    float r;
-    if (com->hasR()) {
-        /*
-        We need to calculate the center of the circle that has the designated radius and passes
-        through both the current position and the target position. This method calculates the following
-        set of equations where [x,y] is the vector from current to target position, d == magnitude of
-        that vector, h == hypotenuse of the triangle formed by the radius of the circle, the distance to
-        the center of the travel vector. A vector perpendicular to the travel vector [-y,x] is scaled to the
-        length of h [-y/d*h, x/d*h] and added to the center of the travel vector [x/2,y/2] to form the new point
-        [i,j] at [x/2-y/d*h, y/2+x/d*h] which will be the center of our arc.
-
-        d^2 == x^2 + y^2
-        h^2 == r^2 - (d/2)^2
-        i == x/2 - y/d*h
-        j == y/2 + x/d*h
-
-                                     O <- [i,j]
-                                  -  |
-                        r      -     |
-                            -        |
-                         -           | h
-                      -              |
-        [0,0] ->  C -----------------+--------------- T  <- [x,y]
-                  | <------ d/2 ---->|
-
-        C - Current position
-        T - Target position
-        O - center of circle that pass through both C and T
-        d - distance from C to T
-        r - designated radius
-        h - distance from center of CT to O
-
-        Expanding the equations:
-
-        d -> sqrt(x^2 + y^2)
-        h -> sqrt(4 * r^2 - x^2 - y^2)/2
-        i -> (x - (y * sqrt(4 * r^2 - x^2 - y^2)) / sqrt(x^2 + y^2)) / 2
-        j -> (y + (x * sqrt(4 * r^2 - x^2 - y^2)) / sqrt(x^2 + y^2)) / 2
-
-        Which can be written:
-
-        i -> (x - (y * sqrt(4 * r^2 - x^2 - y^2))/sqrt(x^2 + y^2))/2
-        j -> (y + (x * sqrt(4 * r^2 - x^2 - y^2))/sqrt(x^2 + y^2))/2
-
-        Which we for size and speed reasons optimize to:
-
-        h_x2_div_d = sqrt(4 * r^2 - x^2 - y^2)/sqrt(x^2 + y^2)
-        i = (x - (y * h_x2_div_d))/2
-        j = (y + (x * h_x2_div_d))/2
-
-        */
-        r = Printer::convertToMM(com->R);
-        // Calculate the change in position along each selected axis
-        double x = target[X_AXIS] - position[X_AXIS];
-        double y = target[Y_AXIS] - position[Y_AXIS];
-
-        double h_x2_div_d = -sqrt(4 * r * r - x * x - y * y) / hypot(x, y); // == -(h * 2 / d)
-                                                                            // If r is smaller than d, the arc is now traversing the complex plane beyond the reach of any
-                                                                            // real CNC, and thus - for practical reasons - we will terminate promptly:
-        if (isnan(h_x2_div_d)) {
-            rejectArc();
-            return;
-        }
-        // Invert the sign of h_x2_div_d if the circle is counter clockwise (see sketch below)
-        if (com->G == 3) {
-            h_x2_div_d = -h_x2_div_d;
-        }
-
-        /* The counter clockwise circle lies to the left of the target direction. When offset is positive,
-            the left hand circle will be generated - when it is negative the right hand circle is generated.
-
-
-                                                               T  <-- Target position
-
-                                                               ^
-        Clockwise circles with this center                     |          Clockwise circles with this center will have
-        will have > 180 deg of angular travel                  |          < 180 deg of angular travel, which is a good thing!
-                                                     \         |          /
-        center of arc when h_x2_div_d is positive ->  x <----- | -----> x <- center of arc when h_x2_div_d is negative
-                                                               |
-                                                               |
-
-                                                               C  <-- Current position                                 */
-
-        // Negative R is g-code-alias for "I want a circle with more than 180 degrees of travel" (go figure!),
-        // even though it is advised against ever generating such circles in a single line of g-code. By
-        // inverting the sign of h_x2_div_d the center of the circles is placed on the opposite side of the line of
-        // travel and thus we get the inadvisable long arcs as prescribed.
-        if (r < 0) {
-            h_x2_div_d = -h_x2_div_d;
-            r = -r; // Finished with r. Set to positive for mc_arc
-        }
-        // Complete the operation by calculating the actual center of the arc
-        offset[X_AXIS] = 0.5 * (x - (y * h_x2_div_d));
-        offset[Y_AXIS] = 0.5 * (y + (x * h_x2_div_d));
-
-    } else { // Offset mode specific computations
-        // here we have an offset for the center. A radius is being calculated.
-
-        // this is a radius from start coordinates to the center of arc.
-        r = hypot(offset[X_AXIS], offset[Y_AXIS]); // Compute arc radius for arc
-
-        // to reach the end coordinates we should have the same radius from center to end.
-        // Vector from start to end minus offset is the vector from offset to end:
-        double centerToEndX = target[X_AXIS] - position[X_AXIS] - offset[X_AXIS];
-        double centerToEndY = target[Y_AXIS] - position[Y_AXIS] - offset[Y_AXIS];
-        // distance from center of circle to endpoint
-        float r2 = hypot(centerToEndX, centerToEndY); // Compute arc radius for arc
-
-        // What is a valid calculation error?
-        // For this check 0.01 circle perfectness is probably enough
-        // as this is only a validation for totally wrong generated gcodes.
-        // The last move is a move to the perfect end-point, but if the slicer/user calculated the center a bit wrong the actual drawn circle would not end at the endpoint.
-        if (fabs(r2 - r) > 0.01f) {
-            rejectArc();
-            return;
-        }
-    }
-    // Set clockwise/counter-clockwise sign for arc computations
-    uint8_t isclockwise = com->G == 2;
-    // Trace the arc
-    PrintLine::arc(position, target, offset, r, isclockwise, positionRemainder[E_AXIS]);
-}
-#endif
-
 /** \brief Execute the command stored in com. */
 void Commands::executeGCode(GCode* com) {
     // Set return channel for private commands. By default all commands send to all receivers.
@@ -505,13 +341,6 @@ void Commands::processGCode(GCode* com) {
 
         break;
     }
-
-#if FEATURE_ARC_SUPPORT
-    case 2: // CW Arc
-    case 3: // CCW Arc MOTION_MODE_CW_ARC: case MOTION_MODE_CCW_ARC:
-        processArc(com);
-        break;
-#endif
 
     case 4: // G4 dwell
     {
@@ -1258,7 +1087,6 @@ void Commands::processMCode(GCode* com) {
         Printer::showConfiguration();
         break;
 
-#if FEATURE_CASE_LIGHT
     case 355: // M355  - Turn case light on/off / Turn X19 on and off.
     {
         // Idee und Teilcode und Vorarbeit von WESSIX
@@ -1280,7 +1108,6 @@ void Commands::processMCode(GCode* com) {
         break;
     }
     // Ende Idee und Teilcode von WESSIX
-#endif        // FEATURE_CASE_LIGHT
     case 400: // M400 - Finish all moves
     {
         Commands::waitUntilEndOfAllMoves(); //M400 (normal gcode wait)
@@ -1363,68 +1190,6 @@ void Commands::processMCode(GCode* com) {
         showInformation(PSTR(UI_TEXT_CONFIGURATION), PSTR(UI_TEXT_RESTORE_DEFAULTS), PSTR(UI_TEXT_OK));
         break;
     }
-
-#if FEATURE_SERVO && MOTHERBOARD == DEVICE_TYPE_RF1000
-    case 340: // M340
-    {
-        if (com->hasP() && com->P < 4 && com->P >= 0) {
-            int s = 0;
-            if (com->hasS())
-                s = com->S;
-            HAL::servoMicroseconds(com->P, s);
-        }
-        break;
-    }
-#endif // FEATURE_SERVO && MOTHERBOARD == DEVICE_TYPE_RF1000
-
-#if FEATURE_SERVO && (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2)
-    case 340: // M340
-    {
-        if (com->hasP()) {
-            switch (com->P) {
-            case 1: {
-                if (com->hasS()) {
-                    int S = com->S;
-                    if (S >= 800 && S <= 2200) {
-                        Com::printFLN(PSTR(" 1. servo value [uS] =  "), S);
-                        OCR5A = 2 * S;
-                    } else {
-                        Com::printFLN(PSTR(" 1. servo value out of range "));
-                    }
-                }
-                break;
-            }
-            case 2: {
-                if (com->hasS()) {
-                    int S = com->S;
-                    if (S >= 800 && S <= 2200) {
-                        Com::printFLN(PSTR(" 2. servo value [uS] =  "), S);
-                        OCR5B = 2 * S;
-                    } else {
-                        Com::printFLN(PSTR(" 2. servo value out of range "));
-                    }
-                }
-                break;
-            }
-            case 3: {
-                if (com->hasS()) {
-                    int S = com->S;
-                    if (S >= 800 && S <= 2200) {
-                        Com::printFLN(PSTR(" 3. servo value [uS] =  "), S);
-                        OCR5C = 2 * S;
-                    } else {
-                        Com::printFLN(PSTR(" 3. servo value out of range "));
-                    }
-                }
-                break;
-            }
-            }
-        } else {
-            showInvalidSyntax(com->M);
-        }
-        break;
-    }
-#endif // FEATURE_SERVO && (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2)
 
     default: {
         // we may have to process RF specific commands

@@ -84,9 +84,7 @@ public:
     static volatile float v;                // Last planned printer speed.
     static unsigned long timer[2];          // used for acceleration/deceleration timing
     static unsigned long stepNumber[2];     // Step number in current move.
-#if FEATURE_DIGIT_FLOW_COMPENSATION
     static unsigned short interval_mod; // additional step duration in ticks to slow the printer down live
-#endif                                  // FEATURE_DIGIT_FLOW_COMPENSATION
     static int8_t lastDirectionSovereignty;
     static float originOffsetMM[3];
     static volatile float destinationMM[4]; // Requested target in mm from origin.
@@ -118,10 +116,7 @@ public:
     static volatile int16_t outOfPrintVolume[2];
     static volatile int32_t outOfPrintVolumeZ;
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     static volatile char doHeatBedZCompensation;
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
-
 
     static volatile long currentSteps[3];
     static volatile char blockAll;
@@ -131,7 +126,6 @@ public:
     static volatile long currentZSteps;
     static uint16_t maxZOverrideSteps;
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     static volatile bool scanZMoveActive;
     static volatile long compensatedPositionTargetStepsZ;
     static volatile long compensatedPositionCurrentStepsZ;
@@ -141,7 +135,6 @@ public:
     static long queuePositionZLayerGuessNew;
     static volatile long queuePositionZLayerCurrent;
     static volatile long queuePositionZLayerLast;
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
     static volatile long directDestinationSteps[4];
     static volatile long directCurrentSteps[4];
@@ -154,17 +147,15 @@ public:
     static char enableBeeper;
 #endif // FEATURE_BEEPER
 
-#if FEATURE_CASE_LIGHT
     static char enableCaseLight;
-#endif // FEATURE_CASE_LIGHT
 
-#if FEATURE_RGB_LIGHT_EFFECTS
+#ifdef RGB_LIGHT_R_PIN
     static char RGBLightMode;
     static char RGBLightStatus;
     static unsigned long RGBLightIdleStart;
     static char RGBButtonBackPressed;
     static char RGBLightModeForceWhite;
-#endif // FEATURE_RGB_LIGHT_EFFECTS
+#endif // RGB_LIGHT_R_PIN
 
 #if FEATURE_230V_OUTPUT
     static char enable230VOutput;
@@ -190,9 +181,7 @@ public:
     static unsigned char g_unlock_movement;
 #endif //FEATURE_UNLOCK_MOVEMENT
 
-#if FEATURE_SENSIBLE_PRESSURE
     static bool g_senseoffset_autostart;
-#endif //FEATURE_SENSIBLE_PRESSURE
 
     static uint8_t motorCurrent[DRV8711_NUM_CHANNELS];
 
@@ -293,9 +282,7 @@ public:
     /** \brief Disable stepper motor for z direction. */
     static INLINE void disableZStepper() {
         InterruptProtectedBlock noInts;
-#if FEATURE_HEAT_BED_Z_COMPENSATION
         Printer::compensatedPositionTargetStepsZ = Printer::compensatedPositionCurrentStepsZ = g_nZScanZPosition = 0;
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
         noInts.unprotect();
 
         // when the stepper is disabled we loose our home position because somebody else can move our mechanical parts
@@ -314,11 +301,8 @@ public:
         Printer::currentZSteps = 0;
         Printer::resetDirectAxis(Z_AXIS);
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
         Printer::queuePositionZLayerLast = 0;
         Printer::queuePositionZLayerCurrent = 0;
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
-
 
         killPausePrint();
 
@@ -492,10 +476,8 @@ public:
         if (g_nAlignExtrudersStatus)
             problematisch = false; //das homing passiert in Z einzeln, liegt aber neben dem Bett.
 #endif                             // FEATURE_ALIGN_EXTRUDERS
-#if FEATURE_HEAT_BED_Z_COMPENSATION
         if (g_nHeatBedScanStatus)
             problematisch = false; //das homing passiert in Z einzeln, liegt aber neben dem Bett.
-#endif                             //FEATURE_HEAT_BED_Z_COMPENSATION
         if (problematisch)
             return 0; //während Z-Scan gibts einen homeZ, der ist aber nicht relevant, den case gibts nicht!
         else
@@ -536,11 +518,9 @@ public:
             Printer::outOfPrintVolume[Y_AXIS] = 0;
         if (z == false)
             Printer::outOfPrintVolumeZ = 0;
-#if FEATURE_HEAT_BED_Z_COMPENSATION
         if (!isAxisHomed(Z_AXIS)) {
             Printer::disableCMPnow(true); //true == wait for move while HOMING
         }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
     }  // setHomed
 
     static INLINE uint8_t isAllSwitchedOff() {
@@ -809,7 +789,7 @@ public:
 
     static void setup();
     static void setFeedrate(float feedrate);
-    static bool queueGCodeCoordinates(GCode* com, bool noDriving = false);
+    static bool queueGCodeCoordinates(GCode* com);
     static void queueFloatCoordinates(float x, float y, float z, float e, float feedrate);
     static void queueRelativeStepsCoordinates(long x, long y, long z, long e, float feedrate, bool waitEnd, bool abortAtEndstops = false);
     static void queueRelativeMMCoordinates(float x, float y, float z, float e, float feedrate, bool waitEnd, bool abortAtEndstops = false);
@@ -837,15 +817,11 @@ public:
         return (uint8_t)(((uint16_t)fanSpeed * 100) / 255); //%
     }                                                       // getFanSpeed
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
-#if FEATURE_SENSIBLE_PRESSURE
     static void enableSenseOffsetnow(void);
-#endif // FEATURE_SENSIBLE_PRESSURE
     static bool needsCMPwait(void);
     static bool isZCompensationLimited(bool positive);
     static void enableCMPnow(void);
     static void disableCMPnow(bool wait = false);
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
     static void stopPrint();
     static bool checkAbortKeys(void);

@@ -47,9 +47,6 @@ Overflow in Z-Matrix: >12.7f
 /** \brief Allows to use the 230V output */
 #define FEATURE_230V_OUTPUT 0 // the RF1000 does not support the 230 V output
 
-/** \brief Allows to use the RGB light effects */
-#define FEATURE_RGB_LIGHT_EFFECTS 0 // the RF1000 does not support RGB light effects
-
 /** \brief Allows to use the 24V FET outputs */
 #define FEATURE_24V_FET_OUTPUTS 0 // the RF1000 does not support the 24V FET outputs
 
@@ -693,8 +690,6 @@ For more informations, read the wiki. */
 // ##   Configuration of the heat bed z compensation
 // ##########################################################################################
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
-
 /** \brief Specifies until which height the z compensation must complete */
 #define HEAT_BED_Z_COMPENSATION_MAX_MM 10 // [mm]
 
@@ -775,8 +770,6 @@ Above this value the z compensation will distribute the roughness of the surface
 #define SEARCH_HEAT_BED_OFFSET_SCAN_POSITION_RAND_MM 3
 // number of scanning iterations 2+
 #define SEARCH_HEAT_BED_OFFSET_SCAN_ITERATIONS 1
-
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
 // ##########################################################################################
 // ##   configuration of the pause functionality

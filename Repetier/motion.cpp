@@ -123,11 +123,7 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
             const float targetE = Printer::destinationMM[E_AXIS];
             const float targetRemainder = Printer::destinationRemainderMM[E_AXIS];
             const float requestedMM = (targetE - Printer::queuedEPositionMM) + (targetRemainder - Printer::queuedERemainderMM);
-#if FEATURE_DIGIT_FLOW_COMPENSATION
             const float flow = Printer::menuExtrusionFactor * Printer::dynamicExtrusionFactor;
-#else
-            const float flow = Printer::menuExtrusionFactor;
-#endif // FEATURE_DIGIT_FLOW_COMPENSATION
 
             const float requestedSteps = requestedMM * flow * Printer::axisStepsPerMM[E_AXIS];
             steps = lroundf(requestedSteps);
@@ -171,10 +167,7 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
         return;
     }
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
-#if FEATURE_STARTLINE
     if (!g_startLineActive)
-#endif // FEATURE_STARTLINE
     {
         // Remember a Z change until extrusion confirms a layer. Returning
         // from a Z hop to the current layer cancels the candidate.
@@ -206,7 +199,6 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
             }
         }
     }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
     // Define variables that are needed for the Bresenham algorithm. Please note that Z is not currently included in the Bresenham algorithm.
     if (p->delta[Y_AXIS] > p->delta[X_AXIS] && p->delta[Y_AXIS] > p->delta[Z_AXIS] && p->delta[Y_AXIS] > p->delta[E_AXIS])
@@ -832,140 +824,6 @@ void PrintLine::waitForXFreeLines(uint8_t b) {
     }
 } // waitForXFreeLines
 
-#if FEATURE_ARC_SUPPORT
-// Arc function taken from grbl
-// The arc is approximated by generating a huge number of tiny, linear segments. The length of each
-// segment is configured in settings.mm_per_arc_segment.
-void PrintLine::arc(float* position, float* target, float* offset, float radius, uint8_t isclockwise, float startERemainder) {
-    //   int acceleration_manager_was_enabled = plan_is_acceleration_manager_enabled();
-    //   plan_set_acceleration_manager_enabled(false); // disable acceleration management for the duration of the arc
-    float center_axis0 = position[X_AXIS] + offset[X_AXIS];
-    float center_axis1 = position[Y_AXIS] + offset[Y_AXIS];
-    //float linear_travel = 0; //target[axis_linear] - position[axis_linear];
-    const float targetXRemainder = Printer::destinationRemainderMM[X_AXIS];
-    const float targetYRemainder = Printer::destinationRemainderMM[Y_AXIS];
-    const float targetERemainder = Printer::destinationRemainderMM[E_AXIS];
-    const float extruder_travel = (target[E_AXIS] - position[E_AXIS]) + (targetERemainder - startERemainder);
-    float r_axis0 = -offset[0]; // Radius vector from center to current location
-    float r_axis1 = -offset[1];
-    float rt_axis0 = target[0] - center_axis0;
-    float rt_axis1 = target[1] - center_axis1;
-    /*long xtarget = Printer::destinationSteps[X_AXIS];
-    long ytarget = Printer::destinationSteps[Y_AXIS];
-    long ztarget = Printer::destinationSteps[Z_AXIS];
-    long etarget = Printer::destinationSteps[E_AXIS];
-    */
-    // CCW angle between position and target from circle center. Only one atan2() trig computation required.
-    float angular_travel = atan2(r_axis0 * rt_axis1 - r_axis1 * rt_axis0, r_axis0 * rt_axis0 + r_axis1 * rt_axis1);
-    if ((!isclockwise && angular_travel <= 0.00001) || (isclockwise && angular_travel < -0.000001)) {
-        angular_travel += 2.0f * M_PI;
-    }
-    if (isclockwise) {
-        angular_travel -= 2.0f * M_PI;
-    }
-
-    float millimeters_of_travel = fabs(angular_travel) * radius; //hypot(angular_travel*radius, fabs(linear_travel));
-    if (millimeters_of_travel < 0.001f) {
-        return; // treat as succes because there is nothing to do;
-    }
-    //uint16_t segments = (radius>=BIG_ARC_RADIUS ? floor(millimeters_of_travel/MM_PER_ARC_SEGMENT_BIG) : floor(millimeters_of_travel/MM_PER_ARC_SEGMENT));
-    // Increase segment size if printing faster then computation speed allows
-    uint16_t segments = (Printer::feedrate > 60.0f ? floor(millimeters_of_travel / RMath::min(static_cast<float>(MM_PER_ARC_SEGMENT_BIG), Printer::feedrate * 0.01666f * static_cast<float>(MM_PER_ARC_SEGMENT))) : floor(millimeters_of_travel / static_cast<float>(MM_PER_ARC_SEGMENT)));
-    if (segments == 0)
-        segments = 1;
-    /*
-    // Multiply inverse feed_rate to compensate for the fact that this movement is approximated
-    // by a number of discrete segments. The inverse feed_rate should be correct for the sum of
-    // all segments.
-    if (invert_feed_rate) { feed_rate *= segments; }
-    */
-    float theta_per_segment = angular_travel / segments;
-    //float linear_per_segment = linear_travel/segments;
-    float extruder_per_segment = extruder_travel / segments;
-
-    /* Vector rotation by transformation matrix: r is the original vector, r_T is the rotated vector,
-    and phi is the angle of rotation. Based on the solution approach by Jens Geisler.
-    r_T = [cos(phi) -sin(phi);
-    sin(phi)  cos(phi] * r ;
-
-    For arc generation, the center of the circle is the axis of rotation and the radius vector is
-    defined from the circle center to the initial position. Each line segment is formed by successive
-    vector rotations. This requires only two cos() and sin() computations to form the rotation
-    matrix for the duration of the entire arc. Error may accumulate from numerical round-off, since
-    all double numbers are single precision on the Arduino. (True double precision will not have
-    round off issues for CNC applications.) Single precision error can accumulate to be greater than
-    tool precision in some cases. Therefore, arc path correction is implemented.
-
-    Small angle approximation may be used to reduce computation overhead further. This approximation
-    holds for everything, but very small circles and large mm_per_arc_segment values. In other words,
-    theta_per_segment would need to be greater than 0.1 rad and N_ARC_CORRECTION would need to be large
-    to cause an appreciable drift error. N_ARC_CORRECTION~=25 is more than small enough to correct for
-    numerical drift error. N_ARC_CORRECTION may be on the order a hundred(s) before error becomes an
-    issue for CNC machines with the single precision Arduino calculations.
-
-    This approximation also allows mc_arc to immediately insert a line segment into the planner
-    without the initial overhead of computing cos() or sin(). By the time the arc needs to be applied
-    a correction, the planner should have caught up to the lag caused by the initial mc_arc overhead.
-    This is important when there are successive arc motions.
-    */
-    // Vector rotation matrix values
-    float cos_T = 1 - 0.5 * theta_per_segment * theta_per_segment; // Small angle approximation
-    float sin_T = theta_per_segment;
-
-    float arc_target[4];
-    float sin_Ti;
-    float cos_Ti;
-    float r_axisi;
-    uint16_t i;
-    int8_t count = 0;
-
-    // Initialize the linear axis
-    //arc_target[axis_linear] = position[axis_linear];
-
-    for (i = 1; i < segments; i++) {
-        // Increment (segments-1)
-
-        if ((count & 3) == 0) {
-            //GCode::readFromSerial();
-            Commands::checkForPeriodicalActions(Processing);
-            //UI_MEDIUM; // do check encoder
-        }
-
-        if (count < N_ARC_CORRECTION) { //25 pieces
-                                        // Apply vector rotation matrix
-            r_axisi = r_axis0 * sin_T + r_axis1 * cos_T;
-            r_axis0 = r_axis0 * cos_T - r_axis1 * sin_T;
-            r_axis1 = r_axisi;
-            count++;
-        } else {
-            // Arc correction to radius vector. Computed only every N_ARC_CORRECTION increments.
-            // Compute exact location by applying transformation matrix from initial radius vector(=-offset).
-            cos_Ti = cos(i * theta_per_segment);
-            sin_Ti = sin(i * theta_per_segment);
-            r_axis0 = -offset[0] * cos_Ti + offset[1] * sin_Ti;
-            r_axis1 = -offset[0] * sin_Ti - offset[1] * cos_Ti;
-            count = 0;
-        }
-
-        // Update arc_target location
-        arc_target[X_AXIS] = center_axis0 + r_axis0;
-        arc_target[Y_AXIS] = center_axis1 + r_axis1;
-        //arc_target[axis_linear] += linear_per_segment;
-        if (extruder_travel != 0.0f) {
-            Printer::setDestinationMM(E_AXIS, position[E_AXIS], startERemainder);
-            Printer::addDestinationMM(E_AXIS, i * extruder_per_segment);
-        }
-        Printer::queueFloatCoordinates(arc_target[X_AXIS], arc_target[Y_AXIS], IGNORE_COORDINATE, IGNORE_COORDINATE, IGNORE_COORDINATE);
-    }
-    // Ensure last segment arrives at target location.
-    Printer::setDestinationMM(X_AXIS, target[X_AXIS], targetXRemainder);
-    Printer::setDestinationMM(Y_AXIS, target[Y_AXIS], targetYRemainder);
-    Printer::setDestinationMM(E_AXIS, target[E_AXIS], targetERemainder);
-    Printer::queueFloatCoordinates(IGNORE_COORDINATE, IGNORE_COORDINATE, IGNORE_COORDINATE, IGNORE_COORDINATE, IGNORE_COORDINATE);
-}
-#endif
-
-#if FEATURE_HEAT_BED_Z_COMPENSATION
 void PrintLine::stepSlowedZCompensation() {
     if (Printer::blockAll || Printer::scanZMoveActive) {
         return;
@@ -1025,7 +883,6 @@ bool PrintLine::needCmpWait() {
     return (catchingUp || (!Printer::doHeatBedZCompensation && positive == Printer::getZDirectionIsPos()))
         && !Printer::isZCompensationLimited(positive);
 }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
 /**
   Processes the moves from the queue and moves the stepper motors one step. If the last step is reached, the next movement from the queue is started.
@@ -1057,7 +914,6 @@ long PrintLine::performQueueMove() {
             return 1000;
         }
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
         case TASK_ENABLE_Z_COMPENSATION: // M3001
         {
             Printer::enableCMPnow();
@@ -1073,15 +929,12 @@ long PrintLine::performQueueMove() {
             return 1000;
         }
 
-#if FEATURE_SENSIBLE_PRESSURE
         case TASK_ENABLE_SENSE_OFFSET: // M3909
         {
             Printer::enableSenseOffsetnow();
             removeCurrentLineForbidInterrupt();
             return 1000;
         }
-#endif // FEATURE_SENSIBLE_PRESSURE
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
         case TASK_UNLOCK_DISPLAY_MSG: // M3117 unlock
         {
@@ -1396,7 +1249,6 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
                 if (!forQueue)
                     g_nContinueExtruderSteps -= dir;
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
                 // This Block adds % parts of steps to extrusion because of higher layer heights caused by ZCMP
                 // We calculated compensatedPositionOverPercE as a result of streched layer heights. Here we add material to the layer to compensate stretching.
                 if (forQueue && Printer::compensatedPositionOverPercE != 0) {
@@ -1420,7 +1272,6 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
                         }
                     }
                 }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
             }
         }
 
@@ -1468,7 +1319,6 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
                 int8_t dir = (Printer::getZDirectionIsPos() ? 1 : -1);
                 //070118better zCMP strategy: if zCMP is against Queue/Direct, dont do some step and count it done @Queue/Direct and count it done @zCMP.
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
                 const long cmpDiff = Printer::compensatedPositionTargetStepsZ - Printer::compensatedPositionCurrentStepsZ;
                 const bool cmpPositive = cmpDiff > 0;
                 // A correction held at a limit must leave the retreat step available.
@@ -1482,9 +1332,6 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
                     }
                     HAL::forbidInterrupts();
                 }
-#else
-                Printer::startZStep();
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
                 if (forQueue) {
                     move->error[Z_AXIS] += queueError;
@@ -1496,11 +1343,9 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
                 // Note: There is no need to check whether we are past the z-min endstop here because G-Codes typically are not able to go past the z-min endstop anyways.
             }
         }
-#if FEATURE_HEAT_BED_Z_COMPENSATION
         else if (move->isXOrYMove()) {
             PrintLine::stepSlowedZCompensation(); // Z is free here. This is no Z-Move
         }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
         move->stepsRemaining--;
 
@@ -1567,7 +1412,6 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
     //RETURN manipulated value:
     unsigned long interval = Printer::interval;
 
-#if FEATURE_DIGIT_FLOW_COMPENSATION
     if (Printer::interval_mod) {
         //if we have to add some time because we need live adjusting then add it. But we should not calculate with * and / here so we have to prepare some delay. The preparation might be inprecise. So check it.
         if (forQueue && move->primaryAxis <= Y_AXIS) {
@@ -1575,7 +1419,6 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
             interval >>= 10;                   // geteilt durch 1024 = 2^10
         }
     }
-#endif // FEATURE_DIGIT_FLOW_COMPENSATION
 
     //Now manipulate step-width=interval according to single-, double-, tripple-, ... steppings needs:
     //we know that next time will be a (as example) double or quad step so we let pass twice the time and set the stepsPerTimerCall accordingly.
@@ -1613,10 +1456,8 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
         }
 
         char nIdle = 1;
-#if FEATURE_HEAT_BED_Z_COMPENSATION
         if (g_nHeatBedScanStatus || g_nZOSScanStatus)
             nIdle = 0; // we are not idle because the heat bed scan is going on at the moment
-#endif                     // FEATURE_HEAT_BED_Z_COMPENSATION
 
         if (linesCount == 0 && nIdle) {
             g_uStartOfIdle = HAL::timeInMilliseconds(); //end a move

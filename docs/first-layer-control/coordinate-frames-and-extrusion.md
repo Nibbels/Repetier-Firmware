@@ -76,9 +76,7 @@ As `C(x,y,z)` changes during fade-out, the true vertical separation between succ
 
 For absolute-E G-code, the slicer's **logical E timeline** gives a requested change in filament length. The planner applies the flow multipliers and computes base E steps. It carries the fractional step in `[-0.5, 0.5)` and initializes each segment's pulse accumulator, including reused queue slots. Motion direction and distance use the resulting integer step count. ECMP and advance can add their own pulses during execution. [Extrusion quantization](../../Repetier/motion.cpp#L120-L161)
 
-`G92 E` sets both the destination and queued logical E coordinates and clears their millimetre remainders. The fractional motor-step carry survives, so setting a fractional E origin followed by a move to the same E value produces zero new base pulses. A push followed by an equal undo at an exact half-step also returns to the same count with constant flow. [G92 dispatch](../../Repetier/Commands.cpp#L731-L756)
-
-Arc extrusion interpolates E from the start of the arc, using the segment index and the starting remainder. The final segment restores the commanded endpoint and its remainder. A host replay verified that an arc from E10 to E11 at 256 steps/mm emitted 256 forward base steps without a corrective retract at the endpoint. [Arc interpolation](../../Repetier/motion.cpp#L950-L966)
+`G92 E` sets both the destination and queued logical E coordinates and clears their millimetre remainders. The fractional motor-step carry survives, so setting a fractional E origin followed by a move to the same E value produces zero new base pulses. A push followed by an equal undo at an exact half-step also returns to the same count with constant flow. [G92 dispatch](../../Repetier/Commands.cpp#L398)
 
 ### Arithmetic test: restore the logical timeline
 
@@ -119,7 +117,7 @@ With the dynamic fade span determined from `(O-minB)*20`, the shape loss at the 
 
 ## Elastic Digit-Z correction during priming
 
-`FEATURE_DIGIT_Z_COMPENSATION` is enabled in the current configuration, with `g_nDigitZCompensationDigits_active=true` initially. During M3912, bed compensation can still include a bounded correction for elastic hotend deflection. It follows filtered force as the load rises and falls. M3912 suspends the accumulation of SenseOffset during that phase. [Digit-Z formula and timing](../z-offset/thermal-and-force.md#elastic-hotend-deflection-and-digit-z)
+Digit-Z is built into all three models and enabled by default through `g_nDigitZCompensationDigits_active`. During M3912, bed compensation can still include a bounded correction for elastic hotend deflection. It follows filtered force as the load rises and falls. M3912 suspends the accumulation of SenseOffset during that phase. [Digit-Z formula and timing](../z-offset/thermal-and-force.md#elastic-hotend-deflection-and-digit-z)
 
 ## Sources
 

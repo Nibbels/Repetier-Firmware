@@ -68,9 +68,7 @@ volatile unsigned long Printer::interval = 10000; // Last step duration in ticks
 volatile float Printer::v = 0;                    // Last planned printer speed.
 unsigned long Printer::timer[2] = { 0 };          // Used for acceleration/deceleration timing
 unsigned long Printer::stepNumber[2] = { 0 };     // Step number in current move.
-#if FEATURE_DIGIT_FLOW_COMPENSATION
 unsigned short Printer::interval_mod = 0; // additional step duration in ticks to slow the printer down live
-#endif                                    // FEATURE_DIGIT_FLOW_COMPENSATION
 int8_t Printer::lastDirectionSovereignty = 0;
 
 long Printer::maxSoftEndstopSteps[3] = { 0 }; // For software endstops, limit of move in positive direction. (=Homing-Offset + Achsenlänge)
@@ -96,10 +94,7 @@ bool Printer::movePositionFeedrateChoice = FEEDRATE_DIRECTCONFIG; // select the 
 volatile int16_t Printer::outOfPrintVolume[2] = { 0 };
 volatile int32_t Printer::outOfPrintVolumeZ = 0;
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
 volatile char Printer::doHeatBedZCompensation = false;
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
-
 
 volatile long Printer::currentSteps[3] = { 0, 0, 0 };
 volatile char Printer::blockAll = 0;
@@ -109,7 +104,6 @@ volatile long Printer::currentYSteps = 0;                                       
 volatile long Printer::currentZSteps = 0;                                                  //das ist der Z-Zähler der GCodes zum Zählen des tiefsten Schalterdruckpunkts /Schaltercrash.
 uint16_t Printer::maxZOverrideSteps = uint16_t(ZAXIS_STEPS_PER_MM * Z_ENDSTOP_DRIVE_OVER); //das ist der Z-Zähler der GCodes zum Zählen des tiefsten Schalterdruckpunkts /Schaltercrash.
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
 volatile bool Printer::scanZMoveActive = false;
 volatile long Printer::compensatedPositionTargetStepsZ = 0;
 volatile long Printer::compensatedPositionCurrentStepsZ = 0;
@@ -120,7 +114,6 @@ volatile float Printer::compensatedPositionCollectTinyE = 0.0f;
 long Printer::queuePositionZLayerGuessNew = 0;
 volatile long Printer::queuePositionZLayerCurrent = 0;
 volatile long Printer::queuePositionZLayerLast = 0;
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
 volatile long Printer::directDestinationSteps[4] = { 0, 0, 0, 0 };
 volatile long Printer::directCurrentSteps[4] = { 0, 0, 0, 0 };
@@ -133,17 +126,15 @@ char Printer::enabledStepper[3] = { 0, 0, 0 };
 char Printer::enableBeeper;
 #endif // FEATURE_BEEPER
 
-#if FEATURE_CASE_LIGHT
 char Printer::enableCaseLight = CASE_LIGHTS_DEFAULT_ON;
-#endif // FEATURE_CASE_LIGHT
 
-#if FEATURE_RGB_LIGHT_EFFECTS
+#ifdef RGB_LIGHT_R_PIN
 char Printer::RGBLightMode;
 char Printer::RGBLightStatus;
 unsigned long Printer::RGBLightIdleStart;
 char Printer::RGBButtonBackPressed;
 char Printer::RGBLightModeForceWhite;
-#endif // FEATURE_RGB_LIGHT_EFFECTS
+#endif // RGB_LIGHT_R_PIN
 
 #if FEATURE_230V_OUTPUT
 char Printer::enable230VOutput;
@@ -170,9 +161,7 @@ unsigned char Printer::wrongType;
 unsigned char Printer::g_unlock_movement = 0;
 #endif //FEATURE_UNLOCK_MOVEMENT
 
-#if FEATURE_SENSIBLE_PRESSURE
 bool Printer::g_senseoffset_autostart = false;
-#endif //FEATURE_SENSIBLE_PRESSURE
 
 uint8_t Printer::motorCurrent[DRV8711_NUM_CHANNELS] = { 0 };
 
@@ -344,15 +333,9 @@ inline bool isExtrusionAllowed(float e) {
         de = (e - Printer::destinationMM[E_AXIS]) - Printer::destinationRemainderMM[E_AXIS];
     }
 
-#if FEATURE_DIGIT_FLOW_COMPENSATION
     if (fabs(de) * Printer::menuExtrusionFactor * Printer::dynamicExtrusionFactor > EXTRUDE_MAXLENGTH) {
         return false;
     }
-#else
-    if (fabs(de) * Printer::menuExtrusionFactor > EXTRUDE_MAXLENGTH) {
-        return false;
-    }
-#endif // FEATURE_DIGIT_FLOW_COMPENSATION
 
     if (Printer::debugDryrun()) {
         return false;
@@ -403,7 +386,7 @@ void Printer::addDestinationMM(uint8_t axis, float distance) {
 }
 
 // Convert G-code positions to millimetres in the planner's coordinate frame.
-bool Printer::queueGCodeCoordinates(GCode* com, bool noDriving) {
+bool Printer::queueGCodeCoordinates(GCode* com) {
     bool isXYZMove = !com->hasNoXYZ();
     if (relativeCoordinateMode) {
         if (com->hasX())
@@ -440,10 +423,6 @@ bool Printer::queueGCodeCoordinates(GCode* com, bool noDriving) {
         addKurtWobbleFixOffset();
     }
 #endif // FEATURE_Kurt67_WOBBLE_FIX
-
-    if (noDriving) {
-        return isXYZMove || isEMove;
-    }
 
     if (isXYZMove || isEMove) {
         PrintLine::prepareQueueMove(false, true, Printer::feedrate);
@@ -774,10 +753,7 @@ void Printer::setup() {
     moveMode[Y_AXIS] = DEFAULT_MOVE_MODE_Y;
     moveMode[Z_AXIS] = DEFAULT_MOVE_MODE_Z;
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     doHeatBedZCompensation = 0; //init
-#endif                          // FEATURE_HEAT_BED_Z_COMPENSATION
-
 
     blockAll = 0;
 
@@ -794,7 +770,7 @@ void Printer::setup() {
     fanOffDelay = CASE_FAN_OFF_DELAY;
 #endif // FEATURE_CASE_FAN
 
-#if FEATURE_RGB_LIGHT_EFFECTS
+#ifdef RGB_LIGHT_R_PIN
     RGBLightMode = RGB_LIGHT_DEFAULT_MODE;
     if (RGBLightMode == RGB_MODE_AUTOMATIC) {
         RGBLightStatus = RGB_STATUS_AUTOMATIC;
@@ -804,7 +780,7 @@ void Printer::setup() {
     RGBLightIdleStart = 0;
     RGBButtonBackPressed = 0;
     RGBLightModeForceWhite = 0;
-#endif // FEATURE_RGB_LIGHT_EFFECTS
+#endif // RGB_LIGHT_R_PIN
 
 #if USE_ADVANCE
     extruderStepsNeeded = 0;
@@ -867,10 +843,8 @@ void Printer::setup() {
 #endif // CASE_FAN_ALWAYS_ON
 #endif // FEATURE_CASE_FAN && CASE_FAN_PIN > -1
 
-#if FEATURE_CASE_LIGHT
     SET_OUTPUT(CASE_LIGHT_PIN);
     WRITE(CASE_LIGHT_PIN, enableCaseLight);
-#endif // FEATURE_CASE_LIGHT
 
     updateDerivedParameter();
     Commands::checkFreeMemory();
@@ -883,7 +857,7 @@ void Printer::setup() {
     sd.mount(true /* Silent mount because otherwise RF1000 prints errors if no sdcard is present at boottime*/);
 #endif // SDSUPPORT
 
-#if FEATURE_RGB_LIGHT_EFFECTS
+#ifdef RGB_LIGHT_R_PIN
     setRGBLEDs(0, 0, 0);
 
     switch (RGBLightMode) {
@@ -904,7 +878,7 @@ void Printer::setup() {
         break;
     }
     }
-#endif // FEATURE_RGB_LIGHT_EFFECTS
+#endif // RGB_LIGHT_R_PIN
 
 #if FEATURE_UNLOCK_MOVEMENT
     g_unlock_movement = 0;
@@ -913,9 +887,6 @@ void Printer::setup() {
     HAL::startWatchdog();
 } // setup()
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
-
-#if FEATURE_SENSIBLE_PRESSURE
 void Printer::enableSenseOffsetnow(void) {
     short oldval = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS);
     if (oldval > 0 && oldval < EMERGENCY_PAUSE_DIGITS_MAX) {
@@ -926,7 +897,6 @@ void Printer::enableSenseOffsetnow(void) {
         g_nSensiblePressureOffsetMax = oldval;
     }
 }
-#endif // FEATURE_SENSIBLE_PRESSURE
 
 void Printer::enableCMPnow(void) {
     if (doHeatBedZCompensation || !areAxisHomed() || g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
@@ -971,7 +941,6 @@ void Printer::disableCMPnow(bool wait) {
         //checkforperiodical .. possible loop inside scans and homing.
     }
 }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
 int8_t Printer::anyHomeDir(uint8_t axis) {
     int8_t nHomeDir = 0;
@@ -1318,18 +1287,13 @@ void Printer::homeZAxis() {
         //homing ausschalten und zCMP (...) auch.
         setHomed(-1, -1, false);
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
         // The Z reference has been invalidated and CMP has been disabled.
         // Do the unit conversions outside the interrupt-protected block.
         const long defaultMinZCompensationSteps = long(HEAT_BED_Z_COMPENSATION_MIN_MM * Printer::axisStepsPerMM[Z_AXIS]);
         const long defaultMaxZCompensationSteps = long(HEAT_BED_Z_COMPENSATION_MAX_MM * Printer::axisStepsPerMM[Z_AXIS]);
-#if FEATURE_SENSIBLE_PRESSURE
         const long manualZOffsetSteps = long((Printer::ZOffset * Printer::axisStepsPerMM[Z_AXIS]) / 1000);
-#endif // FEATURE_SENSIBLE_PRESSURE
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
         InterruptProtectedBlock noInts;
-#if FEATURE_HEAT_BED_Z_COMPENSATION
         // Each Z home starts a fresh first-layer reference. In particular,
         // do not let a previous print's learned g_min/g_max affect M3912.
         Printer::queuePositionZLayerGuessNew = 0;
@@ -1338,23 +1302,18 @@ void Printer::homeZAxis() {
         g_minZCompensationSteps = defaultMinZCompensationSteps;
         g_maxZCompensationSteps = defaultMaxZCompensationSteps;
         g_diffZCompensationSteps = defaultMaxZCompensationSteps - defaultMinZCompensationSteps;
-#if FEATURE_SENSIBLE_PRESSURE
         // CMP is already disabled: discard only the volatile correction,
         // never the user's EEPROM-backed manual offset / Mod Menu transfer.
         g_nSensiblePressureDigits = 0;
         g_nSensiblePressureOffset = 0;
         g_nSensiblePressure1stMarke = 0;
         g_staticZSteps = manualZOffsetSteps;
-#endif // FEATURE_SENSIBLE_PRESSURE
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
         Printer::resetDirectAxis(Z_AXIS);
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
         // Homing replaces the reference, including any correction that could not unwind at a limit.
         compensatedPositionTargetStepsZ = compensatedPositionCurrentStepsZ = 0;
         g_nZScanZPosition = 0;
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
         noInts.unprotect();
 
         //1. Schnelles Fahren bis zum Schalterkontakt:

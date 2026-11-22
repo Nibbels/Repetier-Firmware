@@ -209,14 +209,6 @@
 #define ENABLE_KEY_5 42
 // PINL.7, 42, TAST5
 
-// servo pin mapping
-#define SERVO0_PIN 35
-// PINC.2, 55, PC2
-#define SERVO1_PIN 33
-// PINC.4, 57, PC4
-#define SERVO2_PIN 32
-// PINC.5, 58, PC5
-
 // case light pin mapping
 #define CASE_LIGHT_PIN 25
 // PINA.3, 75, OUT1
@@ -452,14 +444,6 @@
 // PINB.5, 24, TAST4
 #define ENABLE_KEY_5 42
 // PINL.7, 42, TAST5
-
-// servo pin mapping
-#define SERVO1_PIN 46
-// PINL.3, 38, SERVO_1
-#define SERVO2_PIN 45
-// PINL.4, 39, SERVO_2
-#define SERVO3_PIN 44
-// PINL.5, 40, SERVO_3
 
 // 230V output pin mapping
 #define OUTPUT_230V_PIN 3
@@ -698,14 +682,6 @@
 #define ENABLE_KEY_4 11
 // PINL.7, 42, TAST5
 #define ENABLE_KEY_5 42
-
-// servo pin mapping
-// PINL.3, 38, SERVO_1
-#define SERVO1_PIN 46
-// PINL.4, 39, SERVO_2
-#define SERVO2_PIN 45
-// PINL.5, 40, SERVO_3
-#define SERVO3_PIN 44
 
 // 230V output pin mapping
 // PINE.5,  7, P230

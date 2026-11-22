@@ -45,11 +45,11 @@ The previous print's spatial fade thresholds can still affect the generated prim
 
 Bed compensation uses the scanned matrix. The nominal 0.35 mm prime is about 20 µm into the fade at the default `g_min` of 0.33 mm. Geometric ECMP and instantaneous Digit-Z force correction can both apply during priming.
 
-If `FEATURE_STARTLINE` is compiled but `FEATURE_DIGIT_FLOW_COMPENSATION` is disabled, M3912 emits an explicit error instead of invoking unavailable Digit Flow settings or running unbraked priming.
+M3912 and Digit Flow are compiled together on all three models.
 
 ## Tests performed and remaining tests
 
-**AVR builds passed** for RF1000, RF2000 and RF2000v2 with Arduino AVR core 1.8.6 and avr-gcc 7.3.0. The RF2000v2 build bypassed its existing acknowledgement `#error` in a temporary copy. RF1000 also built with `FEATURE_STARTLINE` and `FEATURE_DIGIT_FLOW_COMPENSATION` turned off in separate builds.
+**AVR builds passed** for RF1000, RF2000 and RF2000v2 with Arduino AVR core 1.8.6 and avr-gcc 7.3.0. The RF2000v2 build bypassed its existing acknowledgement `#error` in a temporary copy.
 
 **Planner checks passed** for generated priming with a stale limit, a model starting at the same Z as the prime after an E-only unretract, real layers across the former 0.352 mm exclusion window, a descent from a manual line, and a Z hop back to the current layer. Both bundled start-code samples place `M3909` after `M3912`.
 

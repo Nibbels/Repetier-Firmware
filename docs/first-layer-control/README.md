@@ -18,7 +18,7 @@ A heat-bed scan supplies the bed's geometric shape. It cannot fully predict real
 | [**Bed-profile fade / ECMP**](z-compensation-and-ecmp.md) | Scanned XY matrix, detected layer height | Follow measured bed shape on first layer; gradually fade the variable correction to a common offset; compensate E material for layer-thickness changes | First layer through fade-out height |
 | [**Adaptive M3912 start line**](automatic-start-line.md) | DMS force during priming | Temporarily reduces **travel speed and E extrusion** | Priming at nominal Z=0.35 mm |
 
-Optional `FEATURE_DIGIT_Z_COMPENSATION` adds another force-dependent Z adjustment; emergency stop/pause is separate again.
+Digit-Z adds a force-dependent Z adjustment when enabled in the DMS menu. Emergency pause and stop use their own force limits.
 
 ### Intended print sequence
 

@@ -104,7 +104,6 @@ FSTRINGVALUE(Com::tSpacem, "m ")
 FSTRINGVALUE(Com::tSpaceDaysSpace, " days ")
 FSTRINGVALUE(Com::tSpaceHoursSpace, " hours ")
 FSTRINGVALUE(Com::tSpaceMin, " min")
-FSTRINGVALUE(Com::tInvalidArc, "Invalid arc")
 FSTRINGVALUE(Com::tComma, ",")
 FSTRINGVALUE(Com::tSpace, " ")
 FSTRINGVALUE(Com::tYColon, "Y:")
@@ -251,25 +250,15 @@ FSTRINGVALUE(Com::tEPRZERO_DIGIT_STATE, "Digit homing [1=on 2=off]")
 FSTRINGVALUE(Com::tEPRPrinterZ_STEP_SIZE, "Z-Button stepsize [Steps]")
 FSTRINGVALUE(Com::tEPRPrinterMOD_ZOS_SCAN_POINT_X, "X pos Z-Offset-Scan [col]")
 FSTRINGVALUE(Com::tEPRPrinterMOD_ZOS_SCAN_POINT_Y, "Y pos Z-Offset-Scan [row]")
-#if FEATURE_HEAT_BED_Z_COMPENSATION
 FSTRINGVALUE(Com::tEPRZScanStartLift, "Z-Scan start elevation [mm]")
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
-#if FEATURE_SENSIBLE_PRESSURE
 FSTRINGVALUE(Com::tEPRPrinterMOD_SENSEOFFSET_OFFSET_MAX, "SenseOffset peak offset [um]")
 FSTRINGVALUE(Com::tEPRPrinterEPR_RF_MOD_SENSEOFFSET_DIGITS, "SenseOffset cap [Digits]")
-#endif //FEATURE_SENSIBLE_PRESSURE
-#if FEATURE_EMERGENCY_PAUSE
 FSTRINGVALUE(Com::tEPRPrinterEPR_RF_EmergencyPauseDigitsMin, "Emergency-Pause min [Digits 0=off]")
 FSTRINGVALUE(Com::tEPRPrinterEPR_RF_EmergencyPauseDigitsMax, "Emergency-Pause max [Digits 0=off]")
-#endif //FEATURE_EMERGENCY_PAUSE
 
-#if FEATURE_EMERGENCY_STOP_Z_AND_E
 FSTRINGVALUE(Com::tEPRPrinterEPR_RF_EmergencyStopAllMin, "Z-Emergency-Stop min [Digits]")
 FSTRINGVALUE(Com::tEPRPrinterEPR_RF_EmergencyStopAllMax, "Z-Emergency-Stop max [Digits]")
-#endif //FEATURE_EMERGENCY_STOP_Z_AND_E
-#if FEATURE_DIGIT_Z_COMPENSATION
 FSTRINGVALUE(Com::tEPRZDIGIT_CMP_STATE, "Digit compensation [1=ON 2=OFF]")
-#endif // FEATURE_DIGIT_Z_COMPENSATION
 
 FSTRINGVALUE(Com::tEPRPrinter_STEPPER_X, "X Stepper current [2A=126]")
 FSTRINGVALUE(Com::tEPRPrinter_STEPPER_Y, "Y Stepper current [2A=126]")

@@ -854,7 +854,6 @@ void UIDisplay::parse(char* txt, bool ram) {
             break;
         }
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
         case 'H': {
             if (c2 == 'B')
                 addLong(g_nActiveHeatBed, 1); // %HB : active heat bed z matrix
@@ -862,8 +861,6 @@ void UIDisplay::parse(char* txt, bool ram) {
                 addFloat((float)g_offsetZCompensationSteps * Printer::axisMMPerSteps[Z_AXIS] * 1000.0f, 3, 0); // %HO : active heat bed min z offset in um
             break;
         }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
-
 
         case 'e': // Extruder temperature
         {
@@ -977,12 +974,10 @@ void UIDisplay::parse(char* txt, bool ram) {
                 addStringP(Printer::g_pressure_offset_active ? ui_text_on : ui_text_off);
             }
 #endif // FEATURE_ZERO_DIGITS
-#if FEATURE_DIGIT_Z_COMPENSATION
             if (c2 == 'C') // %FC : Digits force-bend-hotend-down Compensation Z ON/OFF
             {
                 addStringP(g_nDigitZCompensationDigits_active ? ui_text_on : ui_text_off);
             }
-#endif // FEATURE_DIGIT_Z_COMPENSATION
             break;
         }
         case 'f': {
@@ -1082,12 +1077,10 @@ void UIDisplay::parse(char* txt, bool ram) {
             if (c2 == 'a')
                 addInt(lastAction, 4);
 
-#if FEATURE_CASE_LIGHT
             else if (c2 == 'o')
                 addStringP(Printer::enableCaseLight ? ui_text_on : ui_text_off); // %lo : Lights on/off
-#endif                                                                           // FEATURE_CASE_LIGHT
 
-#if FEATURE_RGB_LIGHT_EFFECTS
+#ifdef RGB_LIGHT_R_PIN
             else if (c2 == 'i') // %li : Light: White/Color
             {
                 if (Printer::RGBLightModeForceWhite) {
@@ -1109,7 +1102,7 @@ void UIDisplay::parse(char* txt, bool ram) {
                     }
                 }
             }
-#endif // FEATURE_RGB_LIGHT_EFFECTS
+#endif // RGB_LIGHT_R_PIN
 
             break;
         }
@@ -1249,20 +1242,14 @@ void UIDisplay::parse(char* txt, bool ram) {
             if (c2 == 'f') // %of : flow multiplier
             {
                 addInt(100 * Printer::menuExtrusionFactor
-#if FEATURE_DIGIT_FLOW_COMPENSATION
                            * Printer::dynamicExtrusionFactor
-#endif // FEATURE_DIGIT_FLOW_COMPENSATION
                        ,
                        3);
                 break;
             }
             if (c2 == 'm') // %om : Speed multiplier
             {
-#if FEATURE_DIGIT_FLOW_COMPENSATION
                 addInt(Printer::feedrateMultiply * Printer::dynamicFeedrateFactor, 3);
-#else
-                addInt(Printer::feedrateMultiply, 3);
-#endif // FEATURE_DIGIT_FLOW_COMPENSATION
                 break;
             }
             if (c2 == 'M') // %oM : Printer::feedrate
@@ -1272,11 +1259,7 @@ void UIDisplay::parse(char* txt, bool ram) {
             }
             if (c2 == 'v') // %ov : Active Speed
             {
-#if FEATURE_DIGIT_FLOW_COMPENSATION
                 addFloat(Printer::v * Printer::dynamicFeedrateFactor, 3, 1);
-#else
-                addFloat(Printer::v, 3, 2);
-#endif // FEATURE_DIGIT_FLOW_COMPENSATION
                 break;
             }
             if (c2 == 'p') // %op : Is single double or quadstepping?
@@ -1642,28 +1625,23 @@ void UIDisplay::parse(char* txt, bool ram) {
             }
             if (c2 == 'C') // %sC : State of the z compensation
             {
-#if FEATURE_HEAT_BED_Z_COMPENSATION
                 if (Printer::doHeatBedZCompensation) {
                     addStringP(ui_text_z_compensation_active);
                 }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
             }
 
             if (c2 == 'S') // %sS : State of the sensible offset
             {
-#if FEATURE_SENSIBLE_PRESSURE
                 if (Printer::doHeatBedZCompensation) {
                     addInt((int)g_nSensiblePressureOffset, 4);
                 } else {
                     addInt(0, 4);
                 }
-#endif // FEATURE_SENSIBLE_PRESSURE
             }
 
             if (c2 == 'M') // %sM : State of the sensible offset
             {
-#if FEATURE_SENSIBLE_PRESSURE
                 if (Printer::doHeatBedZCompensation && g_nSensiblePressureDigits > 0) {
                     if (g_nSensiblePressure1stMarke)
                         addStringP(PSTR("^"));
@@ -1673,25 +1651,18 @@ void UIDisplay::parse(char* txt, bool ram) {
                 } else {
                     addStringP(ui_text_off);
                 }
-#endif // FEATURE_SENSIBLE_PRESSURE
             }
             if (c2 == 'm') // %sm : State of the sensible pressure in eeprom
             {
-#if FEATURE_SENSIBLE_PRESSURE
                 addInt(HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS), 5);
-#endif // FEATURE_SENSIBLE_PRESSURE
             }
             if (c2 == 'o') // %so : State of the sensible pressure maxoffset in eeprom
             {
-#if FEATURE_SENSIBLE_PRESSURE
                 addInt(HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX), 5);
-#endif // FEATURE_SENSIBLE_PRESSURE
             }
             if (c2 == 'a') // %sa : State of the sensible pressure autostarter
             {
-#if FEATURE_SENSIBLE_PRESSURE
                 addStringP(Printer::g_senseoffset_autostart ? ui_text_on : ui_text_off);
-#endif // FEATURE_SENSIBLE_PRESSURE
             }
 
             if (c2 == '1') // %s1 : current value of the strain gauge
@@ -1751,10 +1722,8 @@ void UIDisplay::parse(char* txt, bool ram) {
                 if (g_ZMatrixChangedInRam)
                     printCols[col++] = '*';
             } // %SM : Matrix has changed in Ram and is ready to Save. -> *)
-#if FEATURE_HEAT_BED_Z_COMPENSATION
             else if (c2 == 's')
                 addFloat(g_scanStartZLiftMM, 1, 1); // %Ss : active current value of HEAT_BED_SCAN_Z_START_MM
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
             break;
         }
         case 'p': {
@@ -1873,7 +1842,6 @@ void UIDisplay::parse(char* txt, bool ram) {
                 //}
                 break;
             }
-#if FEATURE_EMERGENCY_PAUSE
             if (c2 == 'l') // %pl : g_nEmergencyPauseDigitsMin [1700/kg]
             {
                 addLong(g_nEmergencyPauseDigitsMin, 6);
@@ -1884,8 +1852,6 @@ void UIDisplay::parse(char* txt, bool ram) {
                 addLong(g_nEmergencyPauseDigitsMax, 6);
                 break;
             }
-#endif //FEATURE_EMERGENCY_PAUSE
-#if FEATURE_EMERGENCY_STOP_Z_AND_E
             if (c2 == 'L') // %pL : g_nEmergencyStopZAndEMin [1700/kg]
             {
                 addLong(g_nEmergencyStopZAndEMin, 6);
@@ -1896,7 +1862,6 @@ void UIDisplay::parse(char* txt, bool ram) {
                 addLong(g_nEmergencyStopZAndEMax, 6);
                 break;
             }
-#endif // FEATURE_EMERGENCY_STOP_Z_AND_E
             break;
         }
         case 'P': {
@@ -1917,7 +1882,6 @@ void UIDisplay::parse(char* txt, bool ram) {
             break;
         }
         case 'C': {
-#if FEATURE_DIGIT_FLOW_COMPENSATION
             if (c2 == 'U') // %CU : digit flow lower limit
             {
                 addInt((int)g_nDigitFlowCompensation_Fmin, 5);
@@ -1931,7 +1895,6 @@ void UIDisplay::parse(char* txt, bool ram) {
             {
                 addInt((int)g_nDigitFlowCompensation_speed_intense, 3);
             }
-#endif // FEATURE_DIGIT_FLOW_COMPENSATION
             break;
         }
         case 'L': {
@@ -2547,11 +2510,7 @@ void UIDisplay::zOffsetPlusAction() {
     if (nTemp > (HEAT_BED_Z_COMPENSATION_MAX_MM * 1000))
         nTemp = (HEAT_BED_Z_COMPENSATION_MAX_MM * 1000);
     Printer::ZOffset = nTemp;
-#if FEATURE_SENSIBLE_PRESSURE
     g_staticZSteps = long(((Printer::ZOffset + g_nSensiblePressureOffset) * Printer::axisStepsPerMM[Z_AXIS]) / 1000);
-#else
-    g_staticZSteps = long((Printer::ZOffset * Printer::axisStepsPerMM[Z_AXIS]) / 1000);
-#endif //FEATURE_SENSIBLE_PRESSURE
     if (HAL::eprGetInt32(EPR_RF_Z_OFFSET) != Printer::ZOffset) {
         HAL::eprSetInt32(EPR_RF_Z_OFFSET, Printer::ZOffset);
         EEPROM::updateChecksum();
@@ -2564,7 +2523,6 @@ void UIDisplay::zOffsetMinusAction() {
     //beim Unterschreiten von 0, soll 0 erreicht werden, sodass man nicht mit krummen Zahlen rumhantieren muss.
     if (nTemp < 0 && nTemp > -Z_OFFSET_BUTTON_STEPS)
         nTemp = 0;
-#if FEATURE_SENSIBLE_PRESSURE
     /* IDEE: Wenn automatisches Offset und wir korrigieren dagegen, soll erst dieses abgebaut werden */
     if (g_nSensiblePressureOffset > 0) { //aus: dann 0, an: dann > 0
                                          //automatik hat das bett runtergefahren, wir fahren es mit negativem offset hoch.
@@ -2578,17 +2536,12 @@ void UIDisplay::zOffsetMinusAction() {
             g_nSensiblePressureOffset = 0;
         }
     }
-#endif //FEATURE_SENSIBLE_PRESSURE
     if (nTemp < -(HEAT_BED_Z_COMPENSATION_MAX_MM * 1000))
         nTemp = -(HEAT_BED_Z_COMPENSATION_MAX_MM * 1000);
     if (nTemp > (HEAT_BED_Z_COMPENSATION_MAX_MM * 1000))
         nTemp = (HEAT_BED_Z_COMPENSATION_MAX_MM * 1000);
     Printer::ZOffset = nTemp;
-#if FEATURE_SENSIBLE_PRESSURE
     g_staticZSteps = long(((Printer::ZOffset + g_nSensiblePressureOffset) * Printer::axisStepsPerMM[Z_AXIS]) / 1000);
-#else
-    g_staticZSteps = long((Printer::ZOffset * Printer::axisStepsPerMM[Z_AXIS]) / 1000);
-#endif //FEATURE_SENSIBLE_PRESSURE
     if (HAL::eprGetInt32(EPR_RF_Z_OFFSET) != Printer::ZOffset) {
         HAL::eprSetInt32(EPR_RF_Z_OFFSET, Printer::ZOffset);
         EEPROM::updateChecksum();
@@ -2596,12 +2549,10 @@ void UIDisplay::zOffsetMinusAction() {
 }
 
 void UIDisplay::rightAction() {
-#if FEATURE_SENSIBLE_PRESSURE
     if (menuLevel == 0 && menuPos[0] == 1) { //wenn im Mod-Menü für Z-Offset/Matrix Sense-Offset/Limiter, dann anders!
         senseOffsetUpAction();
         beep(1, 4);
     } else
-#endif
     {
         if (menu[menuLevel] == &ui_menu_xpos) {
             Printer::moveMode[X_AXIS]++;
@@ -2635,7 +2586,6 @@ void UIDisplay::rightAction() {
 } // rightAction
 
 void UIDisplay::backAction() {
-#if FEATURE_SENSIBLE_PRESSURE
     if (menuLevel == 0 && menuPos[0] == 1) {
         //wenn im Mod-Menü für Z-Offset/Matrix Sense-Offset/Limiter, dann anders!
         //we are in the Mod menu
@@ -2643,13 +2593,12 @@ void UIDisplay::backAction() {
         senseOffsetDownAction();
         beep(1, 4);
     } else
-#endif
     {
-#if FEATURE_RGB_LIGHT_EFFECTS
+#ifdef RGB_LIGHT_R_PIN
         if (menuLevel == 0) {
             Printer::RGBButtonBackPressed = 1;
         }
-#endif // FEATURE_RGB_LIGHT_EFFECTS
+#endif // RGB_LIGHT_R_PIN
         menuEsc();
         Printer::setAutomount(false);
         activeAction = 0;
@@ -2882,11 +2831,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
     }
     case UI_ACTION_ZOFFSET: {
         INCREMENT_MIN_MAX(Printer::ZOffset, Z_OFFSET_MENU_STEPS, -(HEAT_BED_Z_COMPENSATION_MAX_MM * 1000), (HEAT_BED_Z_COMPENSATION_MAX_MM * 1000));
-#if FEATURE_SENSIBLE_PRESSURE
         g_staticZSteps = ((Printer::ZOffset + g_nSensiblePressureOffset) * Printer::axisStepsPerMM[Z_AXIS]) / 1000;
-#else
-        g_staticZSteps = (Printer::ZOffset * Printer::axisStepsPerMM[Z_AXIS]) / 1000;
-#endif
         HAL::eprSetInt32(EPR_RF_Z_OFFSET, Printer::ZOffset);
         EEPROM::updateChecksum();
         break;
@@ -3153,7 +3098,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         break;
     }
 
-#if FEATURE_RGB_LIGHT_EFFECTS
+#ifdef RGB_LIGHT_R_PIN
     case UI_ACTION_RGB_LIGHT_MODE: {
         INCREMENT_MIN_MAX(Printer::RGBLightMode, 1, 0, 3);
 
@@ -3188,7 +3133,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         }
         break;
     }
-#endif // FEATURE_RGB_LIGHT_EFFECTS
+#endif // RGB_LIGHT_R_PIN
 
     case UI_ACTION_EXTR_STEPS_E0:
     case UI_ACTION_EXTR_STEPS_E1: {
@@ -3283,8 +3228,6 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         break;
     }
 
-
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     case UI_ACTION_RF_SET_Z_MATRIX_HEAT_BED: {
         if (Printer::doHeatBedZCompensation) {
             // do not allow to change the current heat bed z-compensation matrix while the z-compensation is active
@@ -3296,16 +3239,13 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         switchActiveHeatBed(g_nActiveHeatBed);
         break;
     }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     case UI_ACTION_RF_SCAN_START_HEIGHT: {
         INCREMENT_MIN_MAX(g_scanStartZLiftMM, 0.1f, 0.3f, 6.0f);
         HAL::eprSetFloat(EPR_ZSCAN_START_MM, g_scanStartZLiftMM); //mm zlift vor den scans.
         EEPROM::updateChecksum();
         break;
     }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
     case UI_ACTION_RF_RESET_ACK:
     case UI_ACTION_STOP_ACK:
@@ -3318,7 +3258,6 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         break;
     }
 
-#if FEATURE_EMERGENCY_PAUSE
     case UI_ACTION_EMERGENCY_PAUSE_MIN: {
         INCREMENT_MIN_MAX(g_nEmergencyPauseDigitsMin, 200, EMERGENCY_PAUSE_DIGITS_MIN, g_nEmergencyPauseDigitsMax);
         HAL::eprSetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMIN, g_nEmergencyPauseDigitsMin);
@@ -3331,9 +3270,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         EEPROM::updateChecksum();
         break;
     }
-#endif //FEATURE_EMERGENCY_PAUSE
 
-#if FEATURE_EMERGENCY_STOP_Z_AND_E
     case UI_ACTION_EMERGENCY_ZSTOP_MIN: {
         INCREMENT_MIN_MAX(g_nEmergencyStopZAndEMin, 200, EMERGENCY_STOP_DIGITS_MIN, g_nEmergencyStopZAndEMax);
         HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN, g_nEmergencyStopZAndEMin);
@@ -3346,9 +3283,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         EEPROM::updateChecksum();
         break;
     }
-#endif //FEATURE_EMERGENCY_STOP_Z_AND_E
 
-#if FEATURE_SENSIBLE_PRESSURE
     case UI_ACTION_SENSEOFFSET_DIGITS: {
         short oldval = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS);
         INCREMENT_MIN_MAX(oldval, 100, 500, EMERGENCY_PAUSE_DIGITS_MAX);
@@ -3363,7 +3298,6 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         EEPROM::updateChecksum();
         break;
     }
-#endif //FEATURE_SENSIBLE_PRESSURE
 
 #if FEATURE_Kurt67_WOBBLE_FIX
     //Antibauchtanz:
@@ -3569,7 +3503,6 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         }
         break;
     }
-#if FEATURE_DIGIT_FLOW_COMPENSATION
     case UI_ACTION_FLOW_MIN: {
         INCREMENT_MIN_MAX(g_nDigitFlowCompensation_Fmin, 200, 0, g_nDigitFlowCompensation_Fmax);
         break;
@@ -3589,7 +3522,6 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         //feedmulti wird zur laufzeit geändert, anhand von steigung intense
         break;
     }
-#endif //FEATURE_DIGIT_FLOW_COMPENSATION
     case UI_ACTION_SHIFT_INTERVAL: {
         INCREMENT_MIN_MAX(Printer::stepsPackingMinInterval, -100, MIN_STEP_PACKING_MIN_INTERVAL, MAX_STEP_PACKING_MIN_INTERVAL);
         HAL::eprSetInt16(EPR_RF_STEP_PACKING_MIN_INTERVAL, Printer::stepsPackingMinInterval);
@@ -3912,7 +3844,6 @@ void UIDisplay::mainSwitchCase(int action) {
         break;
     }
 
-#if FEATURE_CASE_LIGHT
     case UI_ACTION_LIGHTS_ONOFF: {
         if (Printer::enableCaseLight)
             Printer::enableCaseLight = 0;
@@ -3925,7 +3856,6 @@ void UIDisplay::mainSwitchCase(int action) {
 
         break;
     }
-#endif // FEATURE_CASE_LIGHT
 
 #if FEATURE_230V_OUTPUT
     case UI_ACTION_230V_OUTPUT: {
@@ -4223,23 +4153,18 @@ void UIDisplay::mainSwitchCase(int action) {
         break;
     }
 #endif // FEATURE_ZERO_DIGITS
-#if FEATURE_DIGIT_Z_COMPENSATION
     case UI_ACTION_DIGIT_COMPENSATION: {
         g_nDigitZCompensationDigits_active = (g_nDigitZCompensationDigits_active ? false : true);
         HAL::eprSetByte(EPR_RF_DIGIT_CMP_STATE, (g_nDigitZCompensationDigits_active ? 1 : 2)); //2 ist false, < 1 ist true
         EEPROM::updateChecksum();
         break;
     }
-#endif // FEATURE_DIGIT_Z_COMPENSATION
-#if FEATURE_SENSIBLE_PRESSURE
     case UI_ACTION_SENSEOFFSET_AUTOSTART: {
         Printer::g_senseoffset_autostart = (Printer::g_senseoffset_autostart ? false : true);
         HAL::eprSetByte(EPR_RF_MOD_SENSEOFFSET_AUTOSTART, (int8_t)Printer::g_senseoffset_autostart);
         EEPROM::updateChecksum();
         break;
     }
-#endif //FEATURE_SENSIBLE_PRESSURE
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     case UI_ACTION_RF_DO_MHIER_BED_SCAN: {
         //macht an, wenn an, macht aus:
         startZOScan();
@@ -4268,7 +4193,6 @@ void UIDisplay::mainSwitchCase(int action) {
         }
         break;
     }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 #if FEATURE_ALIGN_EXTRUDERS
     case UI_ACTION_ALIGN_EXTRUDERS: {
         exitmenu();
@@ -4277,7 +4201,6 @@ void UIDisplay::mainSwitchCase(int action) {
     }
 #endif // FEATURE_ALIGN_EXTRUDERS
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     case UI_ACTION_RF_SCAN_HEAT_BED: {
         g_nHeatBedScanMode = 0;
         startHeatBedScan();
@@ -4299,8 +4222,6 @@ void UIDisplay::mainSwitchCase(int action) {
         uid.exitmenu();
         break;
     }
-
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
 #if FEATURE_ALIGN_EXTRUDERS
     case UI_ACTION_RF_ALIGN_EXTRUDERS: {

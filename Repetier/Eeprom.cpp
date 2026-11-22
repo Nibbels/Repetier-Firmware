@@ -217,10 +217,8 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     g_ZOSTestPoint[X_AXIS] = SEARCH_HEAT_BED_OFFSET_SCAN_POSITION_INDEX_X;
     g_ZOSTestPoint[Y_AXIS] = SEARCH_HEAT_BED_OFFSET_SCAN_POSITION_INDEX_Y;
 
-#if FEATURE_SENSIBLE_PRESSURE
     g_nSensiblePressureOffsetMax = (short)SENSIBLE_PRESSURE_MAX_OFFSET;
     Printer::g_senseoffset_autostart = false;
-#endif //FEATURE_SENSIBLE_PRESSURE
 
 #if FEATURE_Kurt67_WOBBLE_FIX
     Printer::wobblePhaseXY = 0;
@@ -229,20 +227,16 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     Printer::wobbleAmplitudes[2] = 0;
 #endif //FEATURE_Kurt67_WOBBLE_FIX
 
-#if FEATURE_EMERGENCY_PAUSE
     g_nEmergencyPauseDigitsMax = EMERGENCY_PAUSE_DIGITS_MAX;
     g_nEmergencyPauseDigitsMin = EMERGENCY_PAUSE_DIGITS_MIN;
-#endif // FEATURE_EMERGENCY_PAUSE
-#if FEATURE_EMERGENCY_STOP_Z_AND_E
     g_nEmergencyStopZAndEMin = EMERGENCY_STOP_DIGITS_MIN; //limit to value in config.
     g_nEmergencyStopZAndEMax = EMERGENCY_STOP_DIGITS_MAX; //limit to value in config.
-#endif                                                    // FEATURE_EMERGENCY_STOP_Z_AND_E
 
-#if FEATURE_RGB_LIGHT_EFFECTS
+#ifdef RGB_LIGHT_R_PIN
     Printer::RGBLightMode = RGB_MODE_AUTOMATIC;
     Printer::RGBLightStatus = RGB_STATUS_AUTOMATIC;
     Printer::RGBLightIdleStart = 0;
-#endif // FEATURE_RGB_LIGHT_EFFECTS
+#endif // RGB_LIGHT_R_PIN
 
     const unsigned short uMotorCurrentUse[] = MOTOR_CURRENT_NORMAL; //Standardwert
     for (uint8_t stp = 0; stp < 3 + NUM_EXTRUDER; stp++) {          //0..4 bei 5 steppern.
@@ -364,13 +358,11 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     HAL::eprSetByte(EPR_RF_BEEPER_MODE, Printer::enableBeeper);
 #endif // FEATURE_BEEPER
 
-#if FEATURE_CASE_LIGHT
     HAL::eprSetByte(EPR_RF_CASE_LIGHT_MODE, Printer::enableCaseLight);
-#endif // FEATURE_CASE_LIGHT
 
-#if FEATURE_RGB_LIGHT_EFFECTS
+#ifdef RGB_LIGHT_R_PIN
     HAL::eprSetByte(EPR_RF_RGB_LIGHT_MODE, Printer::RGBLightMode);
-#endif // FEATURE_RGB_LIGHT_EFFECTS
+#endif // RGB_LIGHT_R_PIN
 
 #if FEATURE_24V_FET_OUTPUTS
     HAL::eprSetByte(EPR_RF_FET1_MODE, Printer::enableFET1);
@@ -384,15 +376,11 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
 #endif // FEATURE_230V_OUTPUT
 
     HAL::eprSetInt16(EPR_RF_MOD_Z_STEP_SIZE, g_nManualSteps[Z_AXIS]);
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_X, g_ZOSTestPoint[0]);
     HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y, g_ZOSTestPoint[1]);
-#endif //FEATURE_HEAT_BED_Z_COMPENSATION
-#if FEATURE_SENSIBLE_PRESSURE
     //Do not update EPR_RF_MOD_SENSEOFFSET_DIGITS here
     HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX, g_nSensiblePressureOffsetMax);
     HAL::eprSetByte(EPR_RF_MOD_SENSEOFFSET_AUTOSTART, Printer::g_senseoffset_autostart);
-#endif //FEATURE_SENSIBLE_PRESSURE
 
 #if FEATURE_Kurt67_WOBBLE_FIX
     HAL::eprSetByte(EPR_RF_MOD_WOBBLE_FIX_PHASEXY, Printer::wobblePhaseXY);
@@ -401,16 +389,12 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     HAL::eprSetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPY2, Printer::wobbleAmplitudes[2]);
 #endif //FEATURE_Kurt67_WOBBLE_FIX
 
-#if FEATURE_EMERGENCY_PAUSE
     HAL::eprSetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMIN, g_nEmergencyPauseDigitsMin);
     HAL::eprSetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMAX, g_nEmergencyPauseDigitsMax);
-#endif // FEATURE_EMERGENCY_PAUSE
 
-#if FEATURE_EMERGENCY_STOP_Z_AND_E
     HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN, g_nEmergencyStopZAndEMin);
     HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX, g_nEmergencyStopZAndEMax);
 
-#endif // FEATURE_EMERGENCY_STOP_Z_AND_E
     HAL::eprSetByte(EPR_RF_MOTOR_CURRENT + X_AXIS, Printer::motorCurrent[X_AXIS]);
     HAL::eprSetByte(EPR_RF_MOTOR_CURRENT + Y_AXIS, Printer::motorCurrent[Y_AXIS]);
     HAL::eprSetByte(EPR_RF_MOTOR_CURRENT + Z_AXIS, Printer::motorCurrent[Z_AXIS]);
@@ -422,13 +406,9 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
 #if FEATURE_ZERO_DIGITS
     HAL::eprSetByte(EPR_RF_ZERO_DIGIT_STATE, (Printer::g_pressure_offset_active ? 1 : 2)); //2 ist false, < 1 ist true
 #endif                                                                                     // FEATURE_ZERO_DIGITS
-#if FEATURE_DIGIT_Z_COMPENSATION
     HAL::eprSetByte(EPR_RF_DIGIT_CMP_STATE, (g_nDigitZCompensationDigits_active ? 1 : 2)); //2 ist false, < 1 ist true
-#endif                                                                                     // FEATURE_DIGIT_Z_COMPENSATION
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     HAL::eprSetFloat(EPR_ZSCAN_START_MM, g_scanStartZLiftMM);
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
     // Save version and build checksum
     HAL::eprSetByte(EPR_VERSION, EEPROM_PROTOCOL_VERSION);
@@ -684,11 +664,9 @@ void EEPROM::readDataFromEEPROM() {
     Printer::enableBeeper = HAL::eprGetByte(EPR_RF_BEEPER_MODE);
 #endif // FEATURE_BEEPER
 
-#if FEATURE_CASE_LIGHT
     Printer::enableCaseLight = HAL::eprGetByte(EPR_RF_CASE_LIGHT_MODE);
-#endif // FEATURE_CASE_LIGHT
 
-#if FEATURE_RGB_LIGHT_EFFECTS
+#ifdef RGB_LIGHT_R_PIN
     Printer::RGBLightMode = HAL::eprGetByte(EPR_RF_RGB_LIGHT_MODE);
     if (Printer::RGBLightMode == RGB_MODE_AUTOMATIC) {
         Printer::RGBLightStatus = RGB_STATUS_AUTOMATIC;
@@ -696,7 +674,7 @@ void EEPROM::readDataFromEEPROM() {
     } else {
         Printer::RGBLightStatus = RGB_STATUS_NOT_AUTOMATIC;
     }
-#endif // FEATURE_RGB_LIGHT_EFFECTS
+#endif // RGB_LIGHT_R_PIN
 
 #if FEATURE_24V_FET_OUTPUTS
     Printer::enableFET1 = HAL::eprGetByte(EPR_RF_FET1_MODE);
@@ -742,7 +720,6 @@ void EEPROM::readDataFromEEPROM() {
     g_nManualSteps[Z_AXIS] = (unsigned short)constrain((unsigned short)HAL::eprGetInt16(EPR_RF_MOD_Z_STEP_SIZE), 1, stepsize_table[NUM_ACCEPTABLE_STEP_SIZE_TABLE - 1]); //limit stepsize to value in config.
     g_nManualSteps[E_AXIS] = (unsigned short)lroundf(Extruder::current->stepsPerMM * DEFAULT_MANUAL_MM_E);                                                               //current extruder stepsPerMM weil hier noch kein update für Printer::axisStepsPerMM[E_AXIS] gemacht wurde!
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     g_ZOSTestPoint[X_AXIS] = HAL::eprGetByte(EPR_RF_MOD_ZOS_SCAN_POINT_X);
     if (g_ZOSTestPoint[X_AXIS] != 0) { //constrain if not 0 = random.
                                        //wenn die Startposition nicht 0 ist, wird eine Dummy-Matrix-Linie ergänzt. Mit der sollten wir nicht arbeiten.
@@ -759,13 +736,10 @@ void EEPROM::readDataFromEEPROM() {
         if (g_ZOSTestPoint[Y_AXIS] > COMPENSATION_MATRIX_MAX_Y - 1)
             g_ZOSTestPoint[Y_AXIS] = COMPENSATION_MATRIX_MAX_Y - 1; //2..n-1 //COMPENSATION_MATRIX_MAX_Y -> g_uZMatrixMax[Y_AXIS] erst voll wenn matrix initialisiert, aber die normale ultra-max-grenze reicht hier! constrain nachher.
     }
-#endif //FEATURE_HEAT_BED_Z_COMPENSATION
 
-#if FEATURE_SENSIBLE_PRESSURE
     //Do not read EPR_RF_MOD_SENSEOFFSET_DIGITS here
     g_nSensiblePressureOffsetMax = (HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX) == 0) ? (short)SENSIBLE_PRESSURE_MAX_OFFSET : (short)constrain(HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX), 1, 300);
     Printer::g_senseoffset_autostart = HAL::eprGetByte(EPR_RF_MOD_SENSEOFFSET_AUTOSTART);
-#endif //FEATURE_SENSIBLE_PRESSURE
 
 #if FEATURE_Kurt67_WOBBLE_FIX
     Printer::wobblePhaseXY = HAL::eprGetByte(EPR_RF_MOD_WOBBLE_FIX_PHASEXY);
@@ -774,19 +748,14 @@ void EEPROM::readDataFromEEPROM() {
     Printer::wobbleAmplitudes[2] = HAL::eprGetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPY2);
 #endif //FEATURE_Kurt67_WOBBLE_FIX
 
-#if FEATURE_EMERGENCY_PAUSE
     g_nEmergencyPauseDigitsMin = (long)constrain(HAL::eprGetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMIN), EMERGENCY_PAUSE_DIGITS_MIN, EMERGENCY_PAUSE_DIGITS_MAX); //limit to value in config.
     g_nEmergencyPauseDigitsMax = (long)constrain(HAL::eprGetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMAX), EMERGENCY_PAUSE_DIGITS_MIN, EMERGENCY_PAUSE_DIGITS_MAX); //limit to value in config.
     //min = 0 and max = 0 -> means feature off
-#endif // FEATURE_EMERGENCY_PAUSE
 
-#if FEATURE_DIGIT_FLOW_COMPENSATION && FEATURE_DIGIT_Z_COMPENSATION
     //Standardgrenzen hängen von Pause-Digits ab
     g_nDigitFlowCompensation_Fmin = RMath::min(short(abs(g_nEmergencyPauseDigitsMax) * 0.7), 4000); //mögliche Standardwerte, 4000 oder eben das kleinere abh. von pause digits.
     g_nDigitFlowCompensation_Fmax = short(abs(g_nEmergencyPauseDigitsMax));                         //mögliche Standardwerte -> z.b. gut wenn das die pause-digits sind.
-#endif                                                                                              // FEATURE_DIGIT_FLOW_COMPENSATION && FEATURE_DIGIT_Z_COMPENSATION
 
-#if FEATURE_EMERGENCY_STOP_Z_AND_E
     g_nEmergencyStopZAndEMin = (short)constrain(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN), EMERGENCY_STOP_DIGITS_MIN, EMERGENCY_STOP_DIGITS_MAX); //limit to value in config.
     g_nEmergencyStopZAndEMax = (short)constrain(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX), EMERGENCY_STOP_DIGITS_MIN, EMERGENCY_STOP_DIGITS_MAX); //limit to value in config.
     if (g_nEmergencyStopZAndEMin == 0) {
@@ -799,16 +768,12 @@ void EEPROM::readDataFromEEPROM() {
         HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX, g_nEmergencyStopZAndEMax);
         change = true;
     }
-#endif // FEATURE_EMERGENCY_STOP_Z_AND_E
 
 #if FEATURE_ZERO_DIGITS
     Printer::g_pressure_offset_active = (HAL::eprGetByte(EPR_RF_ZERO_DIGIT_STATE) > 1 ? false : true); //2 ist false, < 1 ist true
 #endif                                                                                                 // FEATURE_ZERO_DIGITS
-#if FEATURE_DIGIT_Z_COMPENSATION
     g_nDigitZCompensationDigits_active = (HAL::eprGetByte(EPR_RF_DIGIT_CMP_STATE) > 1 ? false : true); //2 ist false, < 1 ist true
-#endif                                                                                                 // FEATURE_DIGIT_Z_COMPENSATION
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     float tmpss = HAL::eprGetFloat(EPR_ZSCAN_START_MM);
     if (tmpss >= 0.3f && tmpss <= 6.0f) {
         g_scanStartZLiftMM = tmpss;
@@ -816,7 +781,6 @@ void EEPROM::readDataFromEEPROM() {
         HAL::eprSetFloat(EPR_ZSCAN_START_MM, HEAT_BED_SCAN_Z_START_MM);
         change = true;
     }
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
     const unsigned short uMotorCurrentMax[] = MOTOR_CURRENT_MAX;    //oberes Amperelimit
     const unsigned short uMotorCurrentUse[] = MOTOR_CURRENT_NORMAL; //Standardwert
@@ -1045,32 +1009,20 @@ void EEPROM::writeSettings() {
 #if FEATURE_ZERO_DIGITS
     writeByte(EPR_RF_ZERO_DIGIT_STATE, Com::tEPRZERO_DIGIT_STATE);
 #endif // FEATURE_ZERO_DIGITS
-#if FEATURE_DIGIT_Z_COMPENSATION
     writeByte(EPR_RF_DIGIT_CMP_STATE, Com::tEPRZDIGIT_CMP_STATE);
-#endif // FEATURE_DIGIT_Z_COMPENSATION
 
-#if FEATURE_SENSIBLE_PRESSURE
     writeInt(EPR_RF_MOD_SENSEOFFSET_DIGITS, Com::tEPRPrinterEPR_RF_MOD_SENSEOFFSET_DIGITS);
     writeInt(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX, Com::tEPRPrinterMOD_SENSEOFFSET_OFFSET_MAX);
-#endif //FEATURE_SENSIBLE_PRESSURE
 
-#if FEATURE_EMERGENCY_PAUSE
     writeLong(EPR_RF_EMERGENCYPAUSEDIGITSMIN, Com::tEPRPrinterEPR_RF_EmergencyPauseDigitsMin);
     writeLong(EPR_RF_EMERGENCYPAUSEDIGITSMAX, Com::tEPRPrinterEPR_RF_EmergencyPauseDigitsMax);
-#endif //FEATURE_EMERGENCY_PAUSE
 
-#if FEATURE_EMERGENCY_STOP_Z_AND_E
     writeInt(EPR_RF_EMERGENCYZSTOPDIGITSMIN, Com::tEPRPrinterEPR_RF_EmergencyStopAllMin);
     writeInt(EPR_RF_EMERGENCYZSTOPDIGITSMAX, Com::tEPRPrinterEPR_RF_EmergencyStopAllMax);
-#endif //FEATURE_EMERGENCY_STOP_Z_AND_E
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     writeByte(EPR_RF_MOD_ZOS_SCAN_POINT_X, Com::tEPRPrinterMOD_ZOS_SCAN_POINT_X);
     writeByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y, Com::tEPRPrinterMOD_ZOS_SCAN_POINT_Y);
-#endif //FEATURE_HEAT_BED_Z_COMPENSATION
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     writeFloat(EPR_ZSCAN_START_MM, Com::tEPRZScanStartLift);
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
 #if HAVE_HEATED_BED
     writeByte(EPR_RF_HEATED_BED_SENSOR_TYPE, Com::tEPRBedsensorType);
@@ -1127,13 +1079,11 @@ void EEPROM::writeSettings() {
     writeByte(EPR_RF_FET3_MODE, Com::tEPRFET3Mode);
 #endif // FEATURE_24V_FET_OUTPUTS
 
-#if FEATURE_CASE_LIGHT
     writeByte(EPR_RF_CASE_LIGHT_MODE, Com::tEPRCaseLightsMode);
-#endif // FEATURE_CASE_LIGHT
 
-#if FEATURE_RGB_LIGHT_EFFECTS
+#ifdef RGB_LIGHT_R_PIN
     writeByte(EPR_RF_RGB_LIGHT_MODE, Com::tEPRRGBLightMode);
-#endif // FEATURE_RGB_LIGHT_EFFECTS
+#endif // RGB_LIGHT_R_PIN
 
     writeLong(EPR_BAUDRATE, Com::tEPRBaudrate);
     writeLong(EPR_MAX_INACTIVE_TIME, Com::tEPRMaxInactiveTime);

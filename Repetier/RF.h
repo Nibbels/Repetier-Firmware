@@ -450,18 +450,13 @@ extern const char ui_text_saving_success[] PROGMEM;
 // Anscheinend crashgefährliches Hardware-Software-Setting
 #define SCAN_ABORT_REASON_BAD_HEIGHT_MATRIX 16
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
-
 // determine the maximal needed size for the heat bed compensation
 #define COMPENSATION_MATRIX_MAX_X long((X_MAX_LENGTH_PRINT - HEAT_BED_SCAN_X_START_MM - HEAT_BED_SCAN_X_END_MM) / HEAT_BED_SCAN_X_STEP_SIZE_MIN_MM + 4)
 #define COMPENSATION_MATRIX_MAX_Y long((Y_MAX_LENGTH - HEAT_BED_SCAN_Y_START_MM - HEAT_BED_SCAN_Y_END_MM) / HEAT_BED_SCAN_Y_STEP_SIZE_MIN_MM + 4)
 #define COMPENSATION_MATRIX_SIZE long(COMPENSATION_MATRIX_MAX_X * COMPENSATION_MATRIX_MAX_Y * 2 + EEPROM_OFFSET_MATRIX_START) // [bytes]
 
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
-
 extern millis_t g_uStartOfIdle;
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
 extern long g_offsetZCompensationSteps; // this is the minimal distance between the heat bed and the extruder at the moment when the z-min endstop is hit
 extern short g_ZCompensationMax;
 extern long g_minZCompensationSteps;
@@ -478,14 +473,9 @@ extern long g_min_nZScanZPosition;
 extern unsigned char g_ZOS_Auto_Matrix_Leveling_State;
 //Matrix speichern über Menü: Sinnmarker
 extern volatile unsigned char g_ZMatrixChangedInRam;
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
-
-#if FEATURE_HEAT_BED_Z_COMPENSATION
 extern float g_scanStartZLiftMM;
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
 extern char g_abortZScan;
 extern short g_ZCompensationMatrix[COMPENSATION_MATRIX_MAX_X][COMPENSATION_MATRIX_MAX_Y];
 extern unsigned char g_uZMatrixMax[2];
@@ -500,12 +490,9 @@ extern long g_nScanYStepSizeSteps;
 
 extern unsigned short g_nScanContactPressureDelta;
 extern unsigned short g_nScanRetryPressureDelta;
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
 extern long g_staticZSteps;
-#if FEATURE_STARTLINE
 extern volatile uint8_t g_startLineActive;
-#endif // FEATURE_STARTLINE
 extern char g_debugLevel;
 extern char g_debugLog;
 extern millis_t g_uStopTime;
@@ -525,45 +512,34 @@ inline bool isPauseSettled() {
     return status == PAUSE_STATUS_PAUSED || status == PAUSE_STATUS_PAUSED_STANDBY;
 }
 
-#if FEATURE_EMERGENCY_PAUSE
 extern long g_nEmergencyPauseDigitsMin; //short reicht eigentlich
 extern long g_nEmergencyPauseDigitsMax; //short reicht eigentlich
-#endif                                  // FEATURE_EMERGENCY_PAUSE
 
-#if FEATURE_EMERGENCY_STOP_Z_AND_E
 extern short g_nEmergencyStopZAndEMin;
 extern short g_nEmergencyStopZAndEMax;
 extern bool g_nEmergencyESkip;
-#endif //FEATURE_EMERGENCY_STOP_Z_AND_E
 
-#if FEATURE_SENSIBLE_PRESSURE
-/* brief: This is for correcting too close Z at first layer, see FEATURE_SENSIBLE_PRESSURE // Idee Wessix, coded by Nibbels  */
+// SenseOffset adds clearance when DMS force is high on the first layer.
 extern long nSensiblePressureSum;
 extern char nSensiblePressureChecks;
 extern short g_nSensiblePressureDigits;
 extern short g_nSensiblePressureOffsetMax;
 extern short g_nSensiblePressureOffset;
 extern char g_nSensiblePressure1stMarke; //sagt, ob regelung aktiv oder inaktiv, wegen Z-Limits
-#endif                                   // FEATURE_SENSIBLE_PRESSURE
 
 extern short g_nLastDigits;
-#if FEATURE_DIGIT_Z_COMPENSATION
 extern float g_nDigitZCompensationDigits;
 extern bool g_nDigitZCompensationDigits_active;
-#if FEATURE_DIGIT_FLOW_COMPENSATION
 extern int8_t g_nDigitFlowCompensation_intense;
 extern int8_t g_nDigitFlowCompensation_speed_intense;
 extern short g_nDigitFlowCompensation_Fmin;
 extern short g_nDigitFlowCompensation_Fmax;
-#endif // FEATURE_DIGIT_FLOW_COMPENSATION
-#endif // FEATURE_DIGIT_Z_COMPENSATION
-
 
 #if FEATURE_ALIGN_EXTRUDERS
 extern volatile unsigned char g_nAlignExtrudersStatus;
 #endif // FEATURE_ALIGN_EXTRUDERS
 
-#if FEATURE_RGB_LIGHT_EFFECTS
+#ifdef RGB_LIGHT_R_PIN
 extern unsigned char g_uRGBHeatingR;
 extern unsigned char g_uRGBHeatingG;
 extern unsigned char g_uRGBHeatingB;
@@ -585,7 +561,7 @@ extern volatile unsigned char g_uRGBCurrentB;
 extern unsigned char g_uRGBTargetR;
 extern unsigned char g_uRGBTargetG;
 extern unsigned char g_uRGBTargetB;
-#endif // FEATURE_RGB_LIGHT_EFFECTS
+#endif // RGB_LIGHT_R_PIN
 
 extern void initRF(void);
 extern void initStrainGauge(void);
@@ -593,7 +569,6 @@ extern short readStrainGauge(unsigned char uAddress);
 
 extern void showAbortScanReason(const void* scanName, char abortScanIdentifier);
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
 extern void startHeatBedScan(void);
 extern void scanHeatBed(void);
 extern void startZOScan(bool automatrixleveling = false);
@@ -617,15 +592,12 @@ extern long getZMatrixDepth_CurrentXY(void);
 extern void recalculateHeatBedZCompensation(void);
 
 extern void switchActiveHeatBed(char newActiveHeatBed);
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
 #if FEATURE_ALIGN_EXTRUDERS
 extern void startAlignExtruders(void);
 extern void alignExtruders(void);
 #endif // FEATURE_ALIGN_EXTRUDERS
 
-
-#if FEATURE_HEAT_BED_Z_COMPENSATION
 extern short readIdlePressure(short* pnIdlePressure);
 extern short testIdlePressure(void);
 extern short readAveragePressure(short* pnAveragePressure);
@@ -646,8 +618,6 @@ extern void clearCompensationMatrix(unsigned int uAddress);
 
 extern char prepareCompensationMatrix(void);
 extern char loadCompensationMatrix(unsigned int uAddress);
-
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
 
 extern void clearExternalEEPROM(void);
 extern void writeByte24C256(int addressI2C, unsigned int addressEEPROM, unsigned char data);
@@ -689,14 +659,11 @@ extern unsigned short readMotorStatus(unsigned char driver);
 
 extern void cleanupEPositions(void);
 
-
-
-
-#if FEATURE_RGB_LIGHT_EFFECTS
+#ifdef RGB_LIGHT_R_PIN
 extern void setRGBTargetColors(uint8_t R, uint8_t G, uint8_t B);
 extern void setRGBLEDs(uint8_t R, uint8_t G, uint8_t B);
 extern void updateRGBLightStatus(void);
-#endif // FEATURE_RGB_LIGHT_EFFECTS
+#endif // RGB_LIGHT_R_PIN
 
 extern void prepareZCompensation(void);
 extern unsigned char isMovingAllowed(const char* pszCommand, char outputLog = 1);

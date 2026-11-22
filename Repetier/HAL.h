@@ -723,11 +723,6 @@ public:
 
     } // maxExtruderTimerFrequency
 
-#if FEATURE_SERVO && MOTHERBOARD == DEVICE_TYPE_RF1000
-    static unsigned int servoTimings[4];
-    static void servoMicroseconds(uint8_t servo, int ms);
-#endif // FEATURE_SERVO && MOTHERBOARD == DEVICE_TYPE_RF1000
-
     static void analogStart();
 #if USE_ADVANCE
     static void resetExtruderDirection();

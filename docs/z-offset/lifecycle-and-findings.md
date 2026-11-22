@@ -24,13 +24,12 @@
 
 **Fixed in [b4ae1dc](https://github.com/Nibbels/Repetier-Firmware/commit/b4ae1dc53a184c7a866db987f4419413912a58d5)** on `ai-firmware-review`. Before this patch, both `M3006 Z<mm>` and `M3006 S<um>` set `g_staticZSteps` from only the requested manual offset even when `g_nSensiblePressureOffset` was nonzero. The dynamic variable remained unchanged, causing the effective Z correction to temporarily omit the accumulated SenseOffset until another update recomputed the full sum.
 
-The patch sets `Printer::ZOffset` first, then calculates `g_staticZSteps` using the same combined `(Printer::ZOffset + g_nSensiblePressureOffset)` expression already used in the Mod Menu and pressure controller. The `#if FEATURE_SENSIBLE_PRESSURE` fallback preserves the original calculation when this feature is compiled out. EEPROM persistence of *only the manual offset* is unchanged; the dynamic portion remains in RAM.
+The patch sets `Printer::ZOffset` first, then calculates `g_staticZSteps` using the same combined `(Printer::ZOffset + g_nSensiblePressureOffset)` expression already used in the Mod Menu and pressure controller. EEPROM persistence of *only the manual offset* is unchanged; the dynamic portion remains in RAM.
 
 **Regression scenarios (static source checks done; firmware/hardware tests pending):**
 - `Printer::ZOffset=40 µm`, `g_nSensiblePressureOffset=100 µm`, `M3006 S50` → effective combined correction `150 µm`, EEPROM manual `50 µm`.
 - Same initial state, `M3006 Z0.05` → same result, subject to normal micrometre and motor-step truncation.
 - `g_nSensiblePressureOffset=0` → ordinary `M3006` semantics unchanged.
-- With `FEATURE_SENSIBLE_PRESSURE=0` → code retains original M3006 calculation without accessing unavailable SenseOffset globals.
 - The Z-up/down **live transfer** of dynamic offset into EEPROM manual offset remains unchanged.
 
 **Still open:** all other writers of `g_staticZSteps` and the print lifecycle, particularly `setupForPrinting()`, `M3909 P0`, sequential prints, and stale `g_min` / `g_max` state. Do not mark the broader Z-offset symptom fixed without hardware evidence.

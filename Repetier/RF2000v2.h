@@ -47,9 +47,6 @@ Overflow in Z-Matrix: >12.7f
 /** \brief Allows to use the 230V output */
 #define FEATURE_230V_OUTPUT 1 // 1 = on, 0 = off
 
-/** \brief Allows to use the RGB light effects */
-#define FEATURE_RGB_LIGHT_EFFECTS 1 // 1 = on, 0 = off
-
 /**
  *\brief Allows to use the 24V FET outputs
  * Also set the FET1 FET2 pins. They have menu support and their state is remembered using eeprom.
@@ -708,8 +705,6 @@ For more informations, read the wiki. */
 // ##   Configuration of the heat bed z compensation
 // ##########################################################################################
 
-#if FEATURE_HEAT_BED_Z_COMPENSATION
-
 /** \brief Specifies until which height the z compensation must complete */
 #define HEAT_BED_Z_COMPENSATION_MAX_MM 10 // [mm]
 
@@ -792,8 +787,6 @@ Above this value the z compensation will distribute the roughness of the surface
 // number of scanning iterations 2+
 #define SEARCH_HEAT_BED_OFFSET_SCAN_ITERATIONS 1
 
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
-
 // ##########################################################################################
 // ##   configuration of the pause functionality
 // ##########################################################################################
@@ -839,8 +832,6 @@ Above this value the z compensation will distribute the roughness of the surface
 // ##   configuration of the RGB light effects
 // ##########################################################################################
 
-#if FEATURE_RGB_LIGHT_EFFECTS
-
 /** \brief Specfies the default RGB light mode */
 #define RGB_LIGHT_DEFAULT_MODE RGB_MODE_WHITE
 
@@ -874,7 +865,5 @@ Above this value the z compensation will distribute the roughness of the surface
 #define RGB_MANUAL_R 128
 #define RGB_MANUAL_G 128
 #define RGB_MANUAL_B 255
-
-#endif // FEATURE_RGB_LIGHT_EFFECTS
 
 #endif // RF2000_V2_H

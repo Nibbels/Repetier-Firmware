@@ -71,35 +71,18 @@
 // ##    supported features
 // ##########################################################################################
 
-/** \brief Enables/diables the emergency pause in case of too high pressure */
-#define FEATURE_EMERGENCY_PAUSE             1                                                    // 1 = on, 0 = off
-
-/** \brief Specifies if you want to see the pressure digits within the repetier-server/repetier-host temperature message */
-#define FEATURE_PRINT_PRESSURE              1                                                    // 1 = on, 0 = off
-
 /** \brief Specifies if you want to adjust your average pressure to zero digits after homing. This pushes the weight-scale to zero by adding the idle pressure as an offset. */
 #define FEATURE_ZERO_DIGITS                 1
 
 /** \brief Auto-Retract within hardcoded scripts: Pause / Output_Object / ... Vom Hotend abhängig! V2: 10mm, E3D: 1-2mm (?) */
 #define SCRIPT_RETRACT_MM                   1                                                    //[mm] Firmwares E-Retract */
 
-/** \brief Enables automatic compensation in z direction for the operationg mode "print" */
-#define FEATURE_HEAT_BED_Z_COMPENSATION     1                                                    // 1 = on, 0 = off
-/** \brief Enables the precise heat bed scan */
-#if FEATURE_HEAT_BED_Z_COMPENSATION
-  #define FEATURE_DIGIT_Z_COMPENSATION      1                                                    // 1 = on, 0 = off
-  #define FEATURE_DIGIT_FLOW_COMPENSATION   1                                                    // 1 = on, 0 = off
-  #define FEATURE_SENSIBLE_PRESSURE         1                                                    // 1 = on, 0 = off
-  #if FEATURE_SENSIBLE_PRESSURE
-    // mittels SENSIBLE_PRESSURE soll im grunde ausschließlich die wärmeausdehnung in einem perfekt kalibrierten system (HBS,mhier) kompensiert werden:
-    // Max lift in [um]; Standard: 180um=0,18mm, darf nie 0 sein!! größer 0.2 macht normalerweise keinen Sinn.
-    // Läuft dieser Wert ins Limit ist die Düse nicht in Ordnung, die Digit-Begrenzung zu niedrig oder das Z-Offset falsch justiert.
-    #define SENSIBLE_PRESSURE_MAX_OFFSET                180
-    #define SENSIBLE_PRESSURE_INTERVAL                   50                                      //weniger macht keinen sinn. ob diese einschränkung sinn macht, aber sie bleibt vorerst mal da!
-  #endif // FEATURE_SENSIBLE_PRESSURE
-  /** \brief Enables debug outputs from the heat bed scan */
-  #define DEBUG_HEAT_BED_SCAN               0                                                    // 0 = off, 1 = on, 2 = on with more debug outputs
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
+// Default SenseOffset limit in µm and sampling interval in ms.
+#define SENSIBLE_PRESSURE_MAX_OFFSET        180
+#define SENSIBLE_PRESSURE_INTERVAL          50
+
+/** \brief Enables debug outputs from the heat bed scan */
+#define DEBUG_HEAT_BED_SCAN                 0                                                   // 0 = off, 1 = on, 2 = on with more debug outputs
 
 /**
  * \brief The Firmwares disalowes movement before you at least: pressed a printers button, set a temperature, homed once
@@ -113,41 +96,14 @@
  */
 #define XYZ_POSITION_BUTTON_DIRECTION       1                                                   // 1 = on, 0 = off
 
-/** \brief Enables/disables the emergency stop in case of too high pressure */
-#define FEATURE_EMERGENCY_STOP_Z_AND_E          1                                                   // 1 = on, 0 = off
-
 /** \brief If a checksum is sent, all future comamnds must also contain a checksum. Increases reliability especially for binary protocol. */
 #define FEATURE_CHECKSUM_FORCED             0                                                   // 1 = on, 0 = off
 
 /** \brief Enables/disables the support for the fan control */
 #define FEATURE_FAN_CONTROL                 1                                                   // 1 = on, 0 = off
 
-/** \brief Enables/disables the support for G2/G3 arc commands 
-Arc gcodes can have valid and invalid parameters because of the arcs math and radius/start/endpoint constraints we set by gcode params.
-a) Examples for valid arcs:
-- Full circles seem to be always working and their behaviour seems to be good.
-- If I stand at X=0 Y=0 the G3 X0 Y50 I0 J25 draws a half circle. Thats correct.
-- If I stand at X=0 Y=0 the G3 X0 Y50 I10 J25 draws a circle which does not have its center not between start and end. Thats correct.
-- From X0 Y0 the half circle G3 X0 Y50 R25 seems to work too.
-- From X0 Y0 the half circle G3 X0 Y50 R35 flattens the curve because of the higher radius. Center is not inbetween start and end.
-b) Examples for impossible arcs:
-- From X0 Y0 the half circle G3 X0 Y50 R15 has an impossible too small radius and sets octoprint to disconnect because of the error message.
-- Any circles center offset has to have the same radius from start to center and from center to endpoint. Otherwise we throw an error message.
-*/
-#define FEATURE_ARC_SUPPORT                 1                                                   // 1 = on, 0 = off
-
 /** \brief Enables/disables the beeper */
 #define FEATURE_BEEPER                      1                                                   // 1 = on, 0 = off
-
-/** \brief Allows to use the case light @ X19 */
-#define FEATURE_CASE_LIGHT                  1                                                   // 1 = on, 0 = off
-
-/**
- * \brief Allows to control up to 3 servos
- * Servos are controlled by a pulse width normally between 500 and 2500 with 1500ms in center position. 0 turns servo off.
- * WARNING: Servos can draw a considerable amount of current. Make sure your system can handle this or you may risk your hardware!
- */
-#define FEATURE_SERVO                       1                                                   // 1 = on, 0 = off
 
 // ##########################################################################################
 // ##   Common extruder configuration
@@ -380,10 +336,6 @@ Overridden if EEPROM activated. */
 // ##   configuration of the pause functionality
 // ##########################################################################################
 
-#if !FEATURE_HEAT_BED_Z_COMPENSATION
-    #error FEATURE_PAUSE_PRINTING can not be used without FEATURE_HEAT_BED_Z_COMPENSATION
-#endif // !FEATURE_HEAT_BED_Z_COMPENSATION
-
 /** \brief Specifies the time interval after the pausing of the print at which the extruder current is reduced */
 #define EXTRUDER_CURRENT_PAUSE_DELAY        60000                                               // [ms] Minimum 30000 -> 30s.
 
@@ -393,8 +345,6 @@ Overridden if EEPROM activated. */
 // ##########################################################################################
 // ##   configuration of the emergency pause functionality
 // ##########################################################################################
-
-#if FEATURE_EMERGENCY_PAUSE
 
 /**
  * \brief Specifies the pressure at which the emergency pause shall be performed, in [digits]
@@ -410,14 +360,9 @@ Overridden if EEPROM activated. */
 /** \brief Specifies the number of pressure values which shall be averaged. The emergency pause can be detected each EMERGENCY_PAUSE_INTERVAL * EMERGENCY_PAUSE_CHECKS [ms] */
 #define EMERGENCY_PAUSE_CHECKS              10
 
-#endif // FEATURE_EMERGENCY_PAUSE
-
-
 // ##########################################################################################
 // ##   configuration of the emergency stop functionality
 // ##########################################################################################
-
-#if FEATURE_EMERGENCY_STOP_Z_AND_E
 
 /**
  * \brief 
@@ -435,9 +380,6 @@ Overridden if EEPROM activated. */
 
 /** \brief Specifies the number of pressure values which shall be averaged. The emergency stop can be detected each EMERGENCY_STOP_INTERVAL * EMERGENCY_STOP_CHECKS [ms] */
 #define EMERGENCY_STOP_CHECKS               3
-
-#endif // FEATURE_EMERGENCY_STOP_Z_AND_E
-
 
 // ##########################################################################################
 // ##   configuration of user-defined thermistor tables
@@ -878,13 +820,6 @@ we use blocks of 2 kByte size for the structure of our EEPROM
 #define ANALOG_REF_INT_2_56                 _BV(REFS0) | _BV(REFS1)
 #define ANALOG_REF                          ANALOG_REF_AVCC
 
-/** \brief Step to split a circle in small Lines */
-#define MM_PER_ARC_SEGMENT                  1
-#define MM_PER_ARC_SEGMENT_BIG              3
-
-/** \brief After this count of steps a new SIN / COS caluclation is startet to correct the circle interpolation */
-#define N_ARC_CORRECTION                    25
-
 /** \brief Communication speed. Overridden if EEPROM activated. */
 #define BAUDRATE                            115200
 
@@ -950,9 +885,6 @@ we use blocks of 2 kByte size for the structure of our EEPROM
 
 /** \brief This is some testing function for reading the stepper drivers status bits while operation */
 #define FEATURE_READ_STEPPER_STATUS         0
-
-/** \brief Automatic Startline */
-#define FEATURE_STARTLINE                   1
 
 /** 
  * \brief Z-Wobble elimination tool
