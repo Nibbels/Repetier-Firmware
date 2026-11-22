@@ -9,6 +9,7 @@
 | **Power-up / firmware reset** | Restored from MCU EEPROM and converted to steps | RAM initializes **0** | Restored to header defaults (0.33/10 mm with live steps/mm) by EEPROM load | Selected sector loaded from external I²C EEPROM; extrema recalculated |
 | **EEPROM reload (`M501` / `M206`)** | Reloaded from EEPROM and combined with live SenseOffset using the loaded Z steps/mm | Preserved | Restored to the scaled defaults | Preserved |
 | **Ordinary Z homing (`homeZAxis`)** | **Preserved** | **Reset to 0 after CMP is disabled**; threshold deactivated | **FIXED:** all 3 markers and learned min/max reset to defaults in print mode | **Preserved** |
+| **Explicit print start (`M3921`)** | Preserved | Cleared with sample history and the active threshold | Defaults restored and all three markers cleared once prior moves finish | Preserved |
 | **Disable Z stepper (`disableZStepper`)** | Preserved | No dedicated reset | Current/last markers reset, but **GuessNew and learned min/max are not** | Preserved |
 | **M3001 enable compensation** | Preserved | Auto-enable from EEPROM threshold possible | Preserved | Valid matrix required |
 | **M3912 adaptive priming** | Preserved | Applied correction retained and new SenseOffset increments suspended | Phase flag suspends learning and all three markers are reset. Learned limits stay in effect during priming | Preserved |
@@ -19,7 +20,7 @@
 | **M3006 change** | Updates and immediately saves | Variable unchanged | Preserved | Preserved |
 | **M3902 Z0 then matrix save** | Sets and saves menu offset to 0 | Variable unchanged | Preserved | Transfers former manual offset to RAM matrix; external save is separate |
 
-`handleStartPrint()` is not a reliable new-print initialization event: it marks 'printing' when queue depth exceeds two. `Printer::stopPrint()` and the later `handleStopPrint()` clean up the move queue/heaters/print markers but do not explicitly zero SenseOffset or reinitialize the learned Z boundaries.
+`handleStartPrint()` marks printing status when queue depth exceeds two. `Printer::stopPrint()` and the stop sequence clear job motion and turn off the heaters. `M3921` and Z homing initialize layer and live SenseOffset state for the next print.
 
 ### Finding F1 (FIXED ON REVIEW BRANCH): M3006 must preserve live SenseOffset
 
@@ -50,13 +51,7 @@ Tests still required on a physical printer: `M3909 P0` during a first layer, sub
 
 ### Finding F3 (PARTIALLY FIXED): consecutive-print lifecycle
 
-**Fixed on [ba93708](https://github.com/Nibbels/Repetier-Firmware/commit/ba93708d41c84fcce16872720b6b954da70ea157) for sequences that home Z.** `homeZAxis()` disables CMP through `setHomed(-1,-1,false)` and waits for compensation to return to zero. Then it resets `queuePositionZLayerGuessNew`, `Current`, `Last`, `g_minZCompensationSteps`, `g_maxZCompensationSteps` and `g_diffZCompensationSteps`, using live Z steps/mm for the default bounds. It clears the live SenseOffset and active threshold. The offset owner recomputes the effective steps from the saved manual value. The matrix remains untouched.
-
-Prints begun without a fresh Z home may retain learned fade boundaries during priming. The `M3912` phase flag controls the transition to the DMS brake even with inherited limits. `M3000` clears the dynamic offset. `G28 Z` resets the learned bounds as well.
-
-**Conclusion:** Z home is the implemented safe primary lifecycle boundary. Separate analysis is required for no-homing workflows; do not reset fade limits while a real layer is being printed.
-
-[Patched Z home](../../Repetier/Printer.cpp#L1556-L1657) · [print-state heuristics](../../Repetier/RF.cpp#L5969-L6098) · [M3912](../../Repetier/RF.cpp#L9094-L9263).
+Previously, only Z homing restored the learned fade bounds. A serial print now has an explicit boundary at `M3921`. It shares the first-layer reset with `homeZAxis()` and recalculates the compensation target for the existing position. Put the marker at a position with nozzle clearance before priming. The host replay covers a second job with a different first-layer height and skips automatic priming in a separate case. [USB print start](../first-layer-control/README.md#usb-print-start)
 
 ### Finding F4 (HIGH): matrix-offset transfer is not an atomic persistent transaction
 

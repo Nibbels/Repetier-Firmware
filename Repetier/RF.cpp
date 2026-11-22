@@ -90,7 +90,6 @@ long g_offsetZCompensationSteps = 0;
 short g_ZCompensationMax = 0;
 long g_minZCompensationSteps = long(heatBedZCompensationMinMm * ZAXIS_STEPS_PER_MM); //pre init
 long g_maxZCompensationSteps = long(heatBedZCompensationMaxMm * ZAXIS_STEPS_PER_MM); //pre init
-long g_diffZCompensationSteps = g_maxZCompensationSteps - g_minZCompensationSteps;
 volatile unsigned char g_nHeatBedScanStatus = 0;
 char g_nActiveHeatBed = 1;
 
@@ -3121,6 +3120,26 @@ void recalculateZCompensation(void) {
     recalculateHeatBedZCompensation();
 } // recalculateZCompensation
 
+namespace {
+struct SenseOffsetSamples {
+    long sum = 0;
+    char count = 0;
+    short lastAverage = 0;
+};
+SenseOffsetSamples senseOffsetSamples;
+
+void clearSenseOffsetSamples() {
+    senseOffsetSamples = {};
+    g_nSensiblePressure1stMarke = 0;
+}
+}
+
+void resetSenseOffsetForPrint() {
+    Printer::zOffset.clearSenseOffset(Printer::axisStepsPerMM[Z_AXIS]);
+    g_nSensiblePressureDigits = 0;
+    clearSenseOffsetSamples();
+}
+
 void handleStrainGaugeFeatures(millis_t uTime) {
     const auto pauseSample = Printer::pause.beginSenseOffsetSample();
 
@@ -3128,9 +3147,6 @@ void handleStrainGaugeFeatures(millis_t uTime) {
     bool i_need_strain_value = 0;
 
     static millis_t nSensiblePressureTime = 0;
-    static long nSensiblePressureSum = 0;
-    static char nSensiblePressureChecks = 0;
-    static short g_nSensibleLastPressure = 0;
     if ((uTime - nSensiblePressureTime) > SENSIBLE_PRESSURE_INTERVAL) //max. jede 50ms
     {
         i_need_strain_value = 1;
@@ -3175,12 +3191,8 @@ void handleStrainGaugeFeatures(millis_t uTime) {
     const bool learnSenseOffset = g_nSensiblePressureDigits && Printer::doHeatBedZCompensation
         && !g_startLineActive && !pauseSample.wasPaused && Printer::pause.allowsSenseOffsetLearning();
     // Start a fresh window after a pause, even if it ended before this poll.
-    if (!learnSenseOffset || pauseSample.resetWindow) {
-        nSensiblePressureSum = 0;
-        nSensiblePressureChecks = 0;
-        g_nSensibleLastPressure = 0;
-        g_nSensiblePressure1stMarke = 0;
-    }
+    if (!learnSenseOffset || pauseSample.resetWindow)
+        clearSenseOffsetSamples();
 
     if ((uTime - nSensiblePressureTime) > SENSIBLE_PRESSURE_INTERVAL) {
         nSensiblePressureTime = uTime;
@@ -3197,16 +3209,16 @@ void handleStrainGaugeFeatures(millis_t uTime) {
             if (Printer::zMotion.nominalSteps() <= g_minZCompensationSteps) {
                 g_nSensiblePressure1stMarke = 1; //marker für display: wir sind in regelhöhe
                 //wenn durch Gcode gefüllt, prüfe, ob Z-Korrektur (weg vom Bett) notwendig ist, in erstem Layer.
-                nSensiblePressureSum += pressure;
-                nSensiblePressureChecks += 1;
+                senseOffsetSamples.sum += pressure;
+                senseOffsetSamples.count += 1;
                 //jede 1 sekunden, bzw 0.5sekunden. => 100ms * 10 ::
-                if (nSensiblePressureChecks >= 10) {
+                if (senseOffsetSamples.count >= 10) {
 
-                    nPressure = (short)(nSensiblePressureSum / nSensiblePressureChecks);
+                    nPressure = (short)(senseOffsetSamples.sum / senseOffsetSamples.count);
 
                     //half interval, remember old values 50% -> gibt etwas value-trägheit in den regler -> aber verursacht doppelte schrittgeschwindigkeit bei 0,5
-                    nSensiblePressureSum *= 0.5;
-                    nSensiblePressureChecks *= 0.5;
+                    senseOffsetSamples.sum *= 0.5;
+                    senseOffsetSamples.count *= 0.5;
 
                     //größer, kleiner, falls Messzellen falschrum eingebaut. -> abs() // später einfacher zu verrechnen.
                     nPressure = abs(nPressure);
@@ -3227,7 +3239,7 @@ void handleStrainGaugeFeatures(millis_t uTime) {
                             step += (short)inc;
                         }
 
-                        if (g_nSensibleLastPressure - nPressure > 0) {
+                        if (senseOffsetSamples.lastAverage - nPressure > 0) {
                             //digits sinken gerade -> egal wie hoch, regelspeed raus!
                             step = 1;
                         } else {
@@ -3254,15 +3266,15 @@ void handleStrainGaugeFeatures(millis_t uTime) {
                     } else {
                         //kleinere digits sind natürlich zugelassen, runtergeregelt wird nicht wegen kleinerer digits bei z.B. retracts
                     }
-                    g_nSensibleLastPressure = nPressure; //save last pressure.
+                    senseOffsetSamples.lastAverage = nPressure; //save last pressure.
                 }
             } else {
                 g_nSensiblePressure1stMarke = 0; //marker für display: auf dieser Höhe regeln wir nichts mehr oder noch nichts.
                 // if sensible not active
                 // if z-compensation not active
-                if (nSensiblePressureSum > 0) {
-                    nSensiblePressureSum = 0; //close down counters if function deactivated.
-                    nSensiblePressureChecks = 0;
+                if (senseOffsetSamples.sum > 0) {
+                    senseOffsetSamples.sum = 0; //close down counters if function deactivated.
+                    senseOffsetSamples.count = 0;
                 }
                 // Keep the applied clearance when the learning conditions no longer hold.
             }
@@ -5445,9 +5457,7 @@ void processSpecialGCode(GCode* pCommand) {
                     save_logicalERemainder = Printer::destinationRemainderMM[E_AXIS];
                     save_extrudeMultiplyErrorSteps = Printer::extrudeMultiplyErrorSteps;
                     save_compensatedPositionCollectTinyE = Printer::compensatedPositionCollectTinyE;
-                    Printer::queuePositionZLayerGuessNew = 0;
-                    Printer::queuePositionZLayerCurrent = 0;
-                    Printer::queuePositionZLayerLast = 0;
+                    Printer::resetLayerTracking();
                     g_startLineActive = 1;
                 }
 
@@ -5598,9 +5608,7 @@ void processSpecialGCode(GCode* pCommand) {
                         Printer::extrudeMultiplyErrorSteps = save_extrudeMultiplyErrorSteps;
                         Printer::compensatedPositionCollectTinyE = save_compensatedPositionCollectTinyE;
                     }
-                    Printer::queuePositionZLayerGuessNew = 0;
-                    Printer::queuePositionZLayerCurrent = 0;
-                    Printer::queuePositionZLayerLast = 0;
+                    Printer::resetLayerTracking();
                     g_startLineActive = 0;
                 }
                 Printer::relativeExtruderCoordinateMode = save_relativeExtruderCoordinateMode;
@@ -5748,6 +5756,13 @@ void processSpecialGCode(GCode* pCommand) {
             g_uStartOfIdle = HAL::timeInMilliseconds() + 5000; // M3914 unload filament ends
             break;
         }
+
+        case 3921: // M3921 - initialize compensation state for a new print.
+            if (Printer::beginPrintJob())
+                Com::printFLN(PSTR("M3921: First-layer state reset"));
+            else
+                Com::printErrorFLN(PSTR("M3921: Print start blocked"));
+            break;
 
 #ifdef X35_ADC_CHANNEL
         case 3941: // 3941 reading optional temperature port X35 - Testfunction || by Nibbels

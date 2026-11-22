@@ -62,7 +62,11 @@ The firmware restricted Play to a completed pause in 1.37t2. The 1.43.56 pause r
 
 ### Z lifecycle
 
-- [ ] **Reset learned fade bounds for prints started without Z homing.** The previous print's bounds can remain active into the next print, including during priming. Identify a reliable print-start boundary that also covers jobs without `M3912`. [Lifecycle finding](z-offset/lifecycle-and-findings.md#finding-f3-partially-fixed-consecutive-print-lifecycle)
+- [x] **Give serial prints an explicit first-layer reset.** `M3921` waits for queued and direct moves to finish and initializes the next print's layer and SenseOffset state. The host replay covers consecutive prints with first layers of 0.40 mm and 0.20 mm, model extrusion without `M3912`, and a pause during the wait. Physical verification remains open. [USB print start](first-layer-control/README.md#usb-print-start)
+
+### SD print completion
+
+- [ ] **Drain queued work at normal SD file end.** `SDCardGCodeSource::dataAvailable()` calls `close()` at EOF, which enters `Printer::stopPrint()`. The host reproduction on `351dd60` cleared all three buffered movement entries and the active move. On normal EOF, close input and execute buffered G-codes and their planned motion before reporting completion. Cover a pause and resume while draining, the final line without a newline, and a real cancellation or read error. Deferred while the main workflow uses USB. [SD input](../Repetier/gcode.cpp#L1120) · [Stop sequence](../Repetier/PrintStop.cpp)
 
 ### Digit-Z
 

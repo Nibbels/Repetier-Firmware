@@ -782,6 +782,46 @@ void Printer::setup() {
     HAL::startWatchdog();
 } // setup()
 
+void Printer::resetLayerTracking() {
+    queuePositionZLayerGuessNew = 0;
+    queuePositionZLayerCurrent = 0;
+    queuePositionZLayerLast = 0;
+}
+
+void Printer::resetPrintZState() {
+    const float stepsPerMm = axisStepsPerMM[Z_AXIS];
+    const long minSteps = long(heatBedZCompensationMinMm * stepsPerMm);
+    const long maxSteps = long(heatBedZCompensationMaxMm * stepsPerMm);
+    resetSenseOffsetForPrint();
+
+    InterruptProtectedBlock noInts;
+    resetLayerTracking();
+    g_minZCompensationSteps = minSteps;
+    g_maxZCompensationSteps = maxSteps;
+    compensatedPositionOverPercE = 0.0f;
+    compensatedPositionCollectTinyE = 0.0f;
+}
+
+bool Printer::canBeginPrintJob() {
+    if (blockAll || printStop.commandsBlocked() || pause.isPaused())
+        return false;
+    return !g_startLineActive && !isAnyScanRunning();
+}
+
+bool Printer::beginPrintJob() {
+    // The command at the front of the G-code buffer fences planning for the new job.
+    while (canBeginPrintJob()) {
+        if (!PrintLine::hasLines() && !PrintLine::direct.task) {
+            resetPrintZState();
+            recalculateZCompensation();
+            return true;
+        }
+
+        Commands::checkForPeriodicalActions(Processing);
+    }
+    return false;
+}
+
 void Printer::enableSenseOffsetnow(void) {
     short oldval = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS);
     if (oldval > 0 && oldval < EMERGENCY_PAUSE_DIGITS_MAX) {
@@ -1123,24 +1163,8 @@ void Printer::homeZAxis() {
         //homing ausschalten und zCMP (...) auch.
         setHomed(-1, -1, false);
 
-        // The Z reference has been invalidated and CMP has been disabled.
-        // Do the unit conversions outside the interrupt-protected block.
-        const long defaultMinZCompensationSteps = long(heatBedZCompensationMinMm * Printer::axisStepsPerMM[Z_AXIS]);
-        const long defaultMaxZCompensationSteps = long(heatBedZCompensationMaxMm * Printer::axisStepsPerMM[Z_AXIS]);
-        zOffset.clearSenseOffset(axisStepsPerMM[Z_AXIS]);
-
+        resetPrintZState();
         InterruptProtectedBlock noInts;
-        // Each Z home starts a fresh first-layer reference. In particular,
-        // do not let a previous print's learned g_min/g_max affect M3912.
-        Printer::queuePositionZLayerGuessNew = 0;
-        Printer::queuePositionZLayerCurrent = 0;
-        Printer::queuePositionZLayerLast = 0;
-        g_minZCompensationSteps = defaultMinZCompensationSteps;
-        g_maxZCompensationSteps = defaultMaxZCompensationSteps;
-        g_diffZCompensationSteps = defaultMaxZCompensationSteps - defaultMinZCompensationSteps;
-        g_nSensiblePressureDigits = 0;
-        g_nSensiblePressure1stMarke = 0;
-
         zMotion.resetDirectPosition();
 
         // Homing replaces the reference, including any correction that could not unwind at a limit.

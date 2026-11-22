@@ -421,7 +421,6 @@ extern long g_offsetZCompensationSteps; // this is the minimal distance between 
 extern short g_ZCompensationMax;
 extern long g_minZCompensationSteps;
 extern long g_maxZCompensationSteps;
-extern long g_diffZCompensationSteps;
 extern volatile unsigned char g_nHeatBedScanStatus;
 extern char g_nActiveHeatBed;
 //ZOS:
@@ -558,6 +557,8 @@ extern unsigned char readByte24C256(int addressI2C, unsigned int addressEEPROM);
 extern unsigned short readWord24C256(int addressI2C, unsigned int addressEEPROM);
 
 extern void recalculateZCompensation(void);
+extern void resetSenseOffsetForPrint();
+extern bool isAnyScanRunning();
 extern void loopFeatures(void);
 extern void outputObject(bool showerrors = true);
 

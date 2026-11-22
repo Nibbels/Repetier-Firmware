@@ -31,13 +31,16 @@ char g_nHeatBedScanStatus = 0, g_nZOSScanStatus = 0;
 unsigned short g_nManualSteps[4] = { 1, 1, 1, 28 };
 long g_minZCompensationSteps = 256, g_maxZCompensationSteps = 12800;
 long g_offsetZCompensationSteps = 250;
+long g_ZCompensationMax = 200;
 short forceDigits = 0;
 bool pollDuringMoves = true;
 bool clipReturn[4] = {};
 int incompleteReturns = 0;
 int incomingReads = 0, objectOutputs = 0;
+unsigned startWaitPolls = 0;
 void (*duringMove)(long, long, long, long) = nullptr;
 void (*duringHeatWait)() = nullptr;
+void (*duringPeriodicActions)() = nullptr;
 
 void requestInterruptPause();
 void poll();
@@ -80,15 +83,18 @@ const char ui_text_z_axis[] = "", ui_text_max_reached[] = "", ui_text_min_reache
 const char ui_text_emergency_pause[] = "";
 
 struct Com {
+    static int errorCount;
     template<class... Args> static void printF(Args...) {}
     template<class... Args> static void printFLN(Args...) {}
+    template<class... Args> static void printErrorFLN(Args...) { ++errorCount; }
 };
+int Com::errorCount = 0;
 
 template<class... Args> void showWarning(Args...) { ++incompleteReturns; }
 template<class... Args> void showError(Args...) { assert(false); }
 template<class... Args> void showInformation(Args...) { assert(false); }
 void doEmergencyStop(int) { assert(false); }
-bool isAnyScanRunning() { return false; }
+bool isAnyScanRunning();
 void setExtruderCurrent(int, int) {}
 
 struct WireInput {
@@ -121,10 +127,12 @@ struct DirectDisplacement {
     long steps() const { return displacement; }
 };
 DirectDisplacement directPosition(uint8_t axis) { return {directCurrentSteps[axis]}; }
-long queuePositionZLayerLast = 0, queuePositionZLayerCurrent = 256;
+long queuePositionZLayerGuessNew = 0, queuePositionZLayerLast = 0, queuePositionZLayerCurrent = 256;
+long queuedPositionSteps[3] = {};
 float axisStepsPerMM[3] = { 160.0f, 160.0f, zStepsPerMm };
 float axisMMPerSteps[3] = { 1.0f / 160, 1.0f / 160, 1.0f / zStepsPerMm };
 float compensatedPositionOverPercE = 0.0f;
+float compensatedPositionCollectTinyE = 0.0f;
 float dynamicFeedrateFactor = 1.0f, dynamicExtrusionFactor = 1.0f;
 unsigned short interval_mod = 0;
 bool blockAll = false, doHeatBedZCompensation = true, g_pressure_offset_active = false;
@@ -147,6 +155,10 @@ void setMenuMode(int mode, bool active) {
     menuPaused = active;
 }
 void stopPrint();
+bool canBeginPrintJob();
+bool beginPrintJob();
+void resetLayerTracking();
+void resetPrintZState();
 void setXAxisSteps(long) {}
 void setYAxisSteps(long) {}
 void setZAxisSteps(long steps) { zMotion.setNominalSteps(steps); }
@@ -205,6 +217,13 @@ void Extruder::setTemperatureForExtruder(float temperature, int tool) {
 }
 
 struct PrintLine {
+    bool moveZ = false;
+    bool positiveE = false;
+    bool moveXY = false;
+    bool isZMove() const { return moveZ; }
+    bool isEPositiveMove() const { return positiveE; }
+    bool isXOrYMove() const { return moveXY; }
+
     static struct Direct { int task = TASK_NO_TASK; } direct;
     static PrintLine* cur;
     static int linesCount;
@@ -276,6 +295,8 @@ void sample(short force, int count = 1) {
 
 bool pauseDuringQueueWait = false;
 void Commands::checkForPeriodicalActions(FirmwareState state) {
+    if (duringPeriodicActions)
+        duringPeriodicActions();
     if (state == Processing && Printer::pause.allowsQueueAdvance() && PrintLine::hasLines()) {
         if (pauseDuringQueueWait) {
             pauseDuringQueueWait = false;
@@ -575,6 +596,119 @@ void queuedPause() {
     assert(PrintLine::queuedTask == TASK_NO_TASK);
 }
 
+void planLayer(long z, bool hasZMove) {
+    PrintLine move;
+    move.moveZ = hasZMove;
+    move.positiveE = true;
+    move.moveXY = true;
+    Printer::queuedPositionSteps[Z_AXIS] = z;
+    trackPlannedLayer(&move);
+}
+
+void serialPrintStart() {
+    const long oldLayer = 512; // 0.40 mm
+    const long newLayer = 256; // 0.20 mm
+    const long primeZ = 448; // 0.35 mm
+    const long defaultMin = long(heatBedZCompensationMinMm * zStepsPerMm);
+    const long fadeSpan = (g_offsetZCompensationSteps - g_ZCompensationMax) * 20;
+    Printer::resetLayerTracking();
+    planLayer(oldLayer, true);
+    assert(g_minZCompensationSteps == oldLayer && g_maxZCompensationSteps == oldLayer + fadeSpan);
+    sample(printingForce, 9);
+    assert(Printer::zOffset.senseMicrometers() == initialClearance);
+
+    const long parkNominalZ = 20 * long(zStepsPerMm);
+    const long parkMotorZ = parkNominalZ + Printer::directCurrentSteps[Z_AXIS];
+    const long manualZ = Printer::zOffset.manualMicrometers();
+    Printer::zMotion.setNominalSteps(parkNominalZ);
+    Printer::zMotion.setMotorReference(parkMotorZ);
+    Printer::compensatedPositionCollectTinyE = 0.75f;
+    Printer::feedrateMultiply = 93;
+    g_nDigitZCompensationDigits_active = false;
+
+    PrintLine::linesCount = 3;
+    PrintLine::direct.task = DIRECT_RUNNING;
+    duringPeriodicActions = [] {
+        assert(g_minZCompensationSteps == 512 && Printer::zOffset.senseMicrometers() == initialClearance);
+        if (++startWaitPolls == 5)
+            PrintLine::direct.task = TASK_NO_TASK;
+    };
+    dispatchPrintStart(3921);
+    duringPeriodicActions = nullptr;
+    assert(startWaitPolls == 5 && !PrintLine::hasLines() && !PrintLine::direct.task);
+    assert(!Com::errorCount && Printer::doHeatBedZCompensation && Printer::feedrateMultiply == 93);
+    assert(Printer::zMotion.nominalSteps() == parkNominalZ && Printer::zMotion.motorSteps() == parkMotorZ);
+    assert(Printer::zOffset.manualMicrometers() == manualZ && Printer::zOffset.senseMicrometers() == 0);
+    assert(Printer::zMotion.correctionTarget() == g_offsetZCompensationSteps + Printer::zOffset.manualSteps(zStepsPerMm));
+    assert(Printer::compensatedPositionCollectTinyE == 0.0f);
+    assert(g_nSensiblePressureDigits == 0 && !g_nSensiblePressure1stMarke);
+    assert(g_minZCompensationSteps == defaultMin && g_maxZCompensationSteps == heatBedZCompensationMaxMm * zStepsPerMm);
+    assert(!Printer::queuePositionZLayerGuessNew && !Printer::queuePositionZLayerCurrent && !Printer::queuePositionZLayerLast);
+
+    g_startLineActive = true;
+    planLayer(primeZ, true);
+    assert(g_minZCompensationSteps == defaultMin && !Printer::queuePositionZLayerCurrent);
+    g_startLineActive = false;
+    planLayer(newLayer, true);
+    assert(g_minZCompensationSteps == newLayer && g_maxZCompensationSteps == newLayer + fadeSpan);
+    assert(Printer::queuePositionZLayerCurrent == newLayer && !Printer::queuePositionZLayerLast);
+
+    // Re-enable SenseOffset before the first DMS poll of the new job.
+    Printer::zMotion.setNominalSteps(newLayer);
+    g_nSensiblePressureDigits = senseThreshold;
+    sample(printingForce, 9);
+    assert(!Printer::zOffset.senseMicrometers());
+    sample(printingForce);
+    assert(Printer::zOffset.senseMicrometers() > 0);
+
+    // A print without M3912 can learn the model layer even with no separate Z move.
+    dispatchPrintStart(3921);
+    assert(Com::errorCount == 0 && g_minZCompensationSteps == defaultMin);
+    const long layerWithoutPrime = 451; // 0.352 mm rounded to steps
+    planLayer(layerWithoutPrime, false);
+    assert(g_minZCompensationSteps == layerWithoutPrime);
+    assert(Printer::queuePositionZLayerCurrent == layerWithoutPrime && !Printer::queuePositionZLayerLast);
+}
+
+void serialPrintStartBlocked() {
+    const long oldMin = g_minZCompensationSteps;
+    const long oldLayer = Printer::queuePositionZLayerCurrent;
+    auto checkRejected = [&] {
+        const int errors = Com::errorCount;
+        dispatchPrintStart(3921);
+        assert(Com::errorCount == errors + 1);
+        assert(g_minZCompensationSteps == oldMin && Printer::queuePositionZLayerCurrent == oldLayer);
+        assert(Printer::zOffset.senseMicrometers() == initialClearance);
+    };
+
+    g_startLineActive = true;
+    checkRejected();
+    g_startLineActive = false;
+    g_nZOSScanStatus = 1;
+    checkRejected();
+    g_nZOSScanStatus = 0;
+    Printer::blockAll = true;
+    checkRejected();
+    Printer::blockAll = false;
+
+    const int lines = PrintLine::linesCount;
+    Printer::pause.request(PrintPause::Destination::InPlace);
+    checkRejected();
+    assert(PrintLine::linesCount == lines);
+    Printer::pause.cancel();
+
+    // A DMS pause can freeze queued motion while the marker is waiting.
+    pollDuringMoves = false;
+    pauseDuringQueueWait = true;
+    checkRejected();
+    assert(Printer::pause.isSettled() && PrintLine::linesCount == lines);
+    Printer::pause.cancel();
+
+    Printer::printStop.begin(clockMs);
+    checkRejected();
+    assert(PrintLine::linesCount == lines);
+}
+
 void initializeOffsets() {
     Printer::zMotion.setNominalSteps(256);
     Printer::zMotion.setMotorReference(256 + Printer::directCurrentSteps[Z_AXIS]);
@@ -611,6 +745,10 @@ int main(int argc, char** argv) {
         cancelAndCleanup();
     else if (!std::strcmp(argv[1], "queue"))
         queuedPause();
+    else if (!std::strcmp(argv[1], "serial-start"))
+        serialPrintStart();
+    else if (!std::strcmp(argv[1], "serial-start-blocked"))
+        serialPrintStartBlocked();
     else
         return 1;
     std::printf("Print lifecycle replay passed (%s)\n", argv[1]);

@@ -432,7 +432,6 @@ void EEPROM::readDataFromEEPROM() {
 
     g_minZCompensationSteps = long(heatBedZCompensationMinMm * Printer::axisStepsPerMM[Z_AXIS]); //load the values with applied micro-steps
     g_maxZCompensationSteps = long(heatBedZCompensationMaxMm * Printer::axisStepsPerMM[Z_AXIS]);
-    g_diffZCompensationSteps = g_maxZCompensationSteps - g_minZCompensationSteps;
 
     Printer::moveMode[X_AXIS] = HAL::eprGetByte(EPR_RF_MOVE_MODE_X);
     Printer::moveMode[Y_AXIS] = HAL::eprGetByte(EPR_RF_MOVE_MODE_Y);

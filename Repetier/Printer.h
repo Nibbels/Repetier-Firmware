@@ -722,13 +722,18 @@ public:
     static bool needsCMPwait(void);
     static void enableCMPnow(void);
     static void disableCMPnow(bool wait = false);
+    static void resetLayerTracking();
 
+    static bool beginPrintJob();
     static void stopPrint();
     static bool checkAbortKeys(void);
     static bool checkPlayKey(void);
     static void showConfiguration();
 
 private:
+    static bool canBeginPrintJob();
+    static void resetPrintZState();
+
     static DirectPosition xyDirect[2];
     static DirectPosition extruderDirect;
     static INLINE DirectPosition& otherDirectPosition(uint8_t axis) {

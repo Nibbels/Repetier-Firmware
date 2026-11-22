@@ -1,4 +1,4 @@
-"""Build and run the pause replay with the current firmware routines."""
+"""Replay print lifecycle transitions with the current firmware routines."""
 
 import os
 from pathlib import Path
@@ -19,11 +19,13 @@ def main():
     ui = (firmware / "ui.cpp").read_text(encoding="utf-8")
     ui_header = (firmware / "ui.h").read_text(encoding="utf-8")
     motion = (firmware / "motion.h").read_text(encoding="utf-8")
+    move_planner = (firmware / "motion.cpp").read_text(encoding="utf-8")
     printer = (firmware / "Printer.cpp").read_text(encoding="utf-8")
     pause = (firmware / "PrintPause.cpp").read_text(encoding="utf-8")
     stop = (firmware / "PrintStop.cpp").read_text(encoding="utf-8")
     fragments = [
         section(rf_header, "#define UI_ACTION_RF_HEAT_BED_UP", "#define UI_ACTION_RF_PAUSE"),
+        section(rf_header, "constexpr float heatBedZCompensationMinMm", "constexpr int32_t maxManualZOffsetMicrometers"),
         section(ui_header, "#define UI_FLAG_FAST_KEY_ACTION", "#define UI_FLAG_KEY_TEST_RUNNING")
         + section(ui_header, "#define UI_FLAG_KEY_TEST_RUNNING", "\n"),
         section(motion, "#define DIRECT_IDLE", "#define FOR_DIRECT"),
@@ -32,16 +34,24 @@ def main():
         section(rf, "long g_nEmergencyPauseDigitsMin", "\n#ifdef RGB_LIGHT_R_PIN"),
         section(rf, "static short readStrainGauge()", "\nvoid adjustPressureLimits("),
         section(rf, "long getZMatrixDepth_CurrentXY(", "\nvoid showAbortScanReason("),
-        section(rf, "void handleStrainGaugeFeatures(", "\nvoid handleScanWorkTasks("),
+        section(rf, "void recalculateZCompensation(", "\nvoid handleScanWorkTasks("),
         pause.removeprefix('#include "Repetier.h"\n'),
         stop.removeprefix('#include "Repetier.h"\n'),
         section(printer, "void Printer::stopPrint()", "\n#define START_EXTRUDER_CONFIG"),
+        section(printer, "void Printer::resetLayerTracking()", "\nvoid Printer::enableSenseOffsetnow("),
+        section(rf, "bool isAnyScanRunning()", "\nvoid moveXAction("),
         section(rf, "void moveZAction(int8_t direction) {", "} // moveZAction") + "}",
         section(ui, "void UIDisplay::pressPlay()", "\nvoid UIDisplay::mainSwitchCase("),
         section(ui, "void UIDisplay::fastAction()", "} // fastAction") + "}",
         "void extrudeFromPanel() { const int action = UI_ACTION_RF_EXTRUDER_OUTPUT; switch (action) {\n"
         + section(ui, "case UI_ACTION_RF_EXTRUDER_OUTPUT:", "case UI_ACTION_RF_PAUSE:")
         + "} }",
+        "void dispatchPrintStart(uint16_t command) { switch (command) {\n"
+        + section(rf, "case 3921:", "\n#ifdef X35_ADC_CHANNEL")
+        + "} }",
+        "void trackPlannedLayer(PrintLine* p) {\n"
+        + section(move_planner, "    if (!g_startLineActive)", "\n    // Define variables that are needed")
+        + "}",
     ]
     with TemporaryDirectory(prefix="rfx-pause-replay-") as directory:
         build = Path(directory)
@@ -52,7 +62,10 @@ def main():
             "-I", str(firmware), "-I", str(build), str(tests / "pause-sense-offset.cpp"),
             "-o", str(executable),
         ], check=True)
-        for scenario in ("park", "short-pause", "interrupt", "panel", "return", "jog", "cancel", "queue"):
+        for scenario in (
+            "park", "short-pause", "interrupt", "panel", "return", "jog", "cancel", "queue",
+            "serial-start", "serial-start-blocked",
+        ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
 
 
