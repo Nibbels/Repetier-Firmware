@@ -30,15 +30,15 @@ SDCard::SDCard() {
     savetosd = false;
     Printer::setAutomount(false);
 
-#if defined(SDCARDDETECT) && SDCARDDETECT > -1
+#if SDCARDDETECT >= 0
     SET_INPUT(SDCARDDETECT);
     WRITE(SDCARDDETECT, HIGH);
-#endif // defined(SDCARDDETECT) && SDCARDDETECT>-1
+#endif
 } /// SDCard
 
 void SDCard::automount() {
-#if defined(SDCARDDETECT) && SDCARDDETECT > -1
-    if (READ(SDCARDDETECT) != SDCARDDETECTINVERTED) {
+#if SDCARDDETECT >= 0
+    if (READ(SDCARDDETECT) == HIGH) {
         if (sdactive || sdmode == 100) // Card removed
         {
             Com::printFLN(PSTR("SD Card removed"));
@@ -58,16 +58,15 @@ void SDCard::automount() {
             }
         }
     }
-#endif // defined(SDCARDDETECT) && SDCARDDETECT>-1
+#endif
 } // automount
 
 void SDCard::initsd(bool silent) {
     sdactive = false;
-#if SDSS > -1
-#if defined(SDCARDDETECT) && SDCARDDETECT > -1
-    if (READ(SDCARDDETECT) != SDCARDDETECTINVERTED)
+#if SDCARDDETECT >= 0
+    if (READ(SDCARDDETECT) == HIGH)
         return;
-#endif // defined(SDCARDDETECT) && SDCARDDETECT>-1
+#endif
 
     //fix in https://github.com/repetier/Repetier-Firmware/commit/d4e396d0f4d1b81cc4d388360be461f11ceb9edd ??
     HAL::delayMilliseconds(50);      // wait for stabilization of contacts, bootup ...
@@ -134,7 +133,6 @@ void SDCard::initsd(bool silent) {
     Printer::setMenuMode(MENU_MODE_SD_MOUNTED, true);
 
     fat.chdir();
-#endif // SDSS >- 1
 } // initsd
 
 void SDCard::mount(bool silent) {

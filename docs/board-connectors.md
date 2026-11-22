@@ -38,7 +38,9 @@ This reproduces the documented retrofit with the T0 heatsink fan on X44. Add the
 #define MAX_ROOM_TEMPERATURE 25
 ```
 
-`X44_PIN` resolves to the same `32` as the previous configuration. The two-extruder RF2000 factory profile still defaults to both cooler pins unassigned. An assigned heatsink fan uses the existing per-tool cooler setting and temperature logic. The cooler owns X44 in this example, so `M3300 P2` and the X44 accessory menu cannot switch it off. The same ownership rule applies to X42 and X19. Choose the thermistor type and temperature limit for the installed hotend through the existing sensor and hotend settings.
+`X44_PIN` resolves to the same `32` as the previous configuration. The two-extruder RF2000 factory profile still defaults to both cooler pins unassigned. An assigned heatsink fan uses the existing per-tool cooler setting and temperature logic. The cooler owns X44 in this example, so `M3300 P2` and the X44 accessory menu cannot switch it off. The same ownership rule applies to X42 and X19.
+
+`EXT0_TEMPSENSOR_TYPE` selects the ADC sensor for T0. `EXT0_HOTEND_PROFILE` selects its temperature limit and factory PID values. The corresponding `EXT1_` settings apply to T1. The shipped profiles are defined in [Configuration.h](../Repetier/Configuration.h). Stored sensor and PID settings take precedence at boot.
 
 `SDSUPPORT=0` and `MAX_ROOM_TEMPERATURE=25` describe this specific machine. The common defaults are SD enabled and a 33 °C room-temperature threshold.
 

@@ -38,10 +38,6 @@
 // Give an enabled stepper driver time to settle before the first step.
 constexpr unsigned int stepperEnableDelayMs = 25;
 
-#define HOTEND_TYPE_V1 2 // hotend V1
-#define HOTEND_TYPE_V2 3 // hotend V2 for single extruder
-#define HOTEND_TYPE_V3 5 // hotend V3
-
 #define X_AXIS 0
 #define Y_AXIS 1
 #define Z_AXIS 2

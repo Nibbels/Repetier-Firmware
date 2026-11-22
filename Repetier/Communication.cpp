@@ -255,12 +255,10 @@ FSTRINGVALUE(Com::tEPRPrinter_STEPPER_E1, "E1 Stepper current [2A/126]")
 #endif //NUM_EXTRUDER > 1
 FSTRINGVALUE(Com::tEPRInterruptSpacingInterval, "Interrupt spacing [CPU Ticks]")
 
-#if FAN_PIN > -1
 FSTRINGVALUE(Com::tEPRPrinter_FAN_MODE, "Fan modulation [0=PWM 1=PDM]")
 FSTRINGVALUE(Com::tEPRPrinter_FAN_SPEED, "Fan PWM divisor [15.3Hz/x]")
 FSTRINGVALUE(Com::tEPRPrinter_FAN_PART_FAN_PWM_MIN, "Partfan 1% level [1..239]")
 FSTRINGVALUE(Com::tEPRPrinter_FAN_PART_FAN_PWM_MAX, "Partfan 99% level [16..254]")
-#endif // FAN_PIN > -1
 
 
 #if SDSUPPORT

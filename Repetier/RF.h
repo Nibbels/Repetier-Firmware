@@ -440,9 +440,24 @@ extern const char ui_text_saving_success[] PROGMEM;
 // Anscheinend crashgefährliches Hardware-Software-Setting
 #define SCAN_ABORT_REASON_BAD_HEIGHT_MATRIX 16
 
+// Factory scan margins in mm. X depends on the installed tool count.
+constexpr int heatBedScanXStartMm = NUM_EXTRUDER == 2 ? 0 : 15;
+constexpr int heatBedScanXEndMm = NUM_EXTRUDER == 2 ? 0 : 5;
+constexpr int heatBedScanYStartMm = 30;
+constexpr int heatBedScanYEndMm = 5;
+constexpr int heatBedScanMinStepMm = 10;
+constexpr float defaultHeatBedScanLiftMm = 1.0f;
+constexpr uint8_t defaultZOffsetScanIndex = 5; // One-based matrix index, for both X and Y.
+constexpr int heatBedScanPlaBedC = 60;
+constexpr int heatBedScanPlaNozzleC = 210;
+
+// Above the minimum height, gradually fade the bed profile through the maximum height.
+constexpr float heatBedZCompensationMinMm = 0.33f;
+constexpr int heatBedZCompensationMaxMm = 10;
+
 // determine the maximal needed size for the heat bed compensation
-#define COMPENSATION_MATRIX_MAX_X long((X_MAX_LENGTH_PRINT - HEAT_BED_SCAN_X_START_MM - HEAT_BED_SCAN_X_END_MM) / HEAT_BED_SCAN_X_STEP_SIZE_MIN_MM + 4)
-#define COMPENSATION_MATRIX_MAX_Y long((Y_MAX_LENGTH - HEAT_BED_SCAN_Y_START_MM - HEAT_BED_SCAN_Y_END_MM) / HEAT_BED_SCAN_Y_STEP_SIZE_MIN_MM + 4)
+#define COMPENSATION_MATRIX_MAX_X long((X_MAX_LENGTH_PRINT - heatBedScanXStartMm - heatBedScanXEndMm) / heatBedScanMinStepMm + 4)
+#define COMPENSATION_MATRIX_MAX_Y long((Y_MAX_LENGTH - heatBedScanYStartMm - heatBedScanYEndMm) / heatBedScanMinStepMm + 4)
 #define COMPENSATION_MATRIX_SIZE long(COMPENSATION_MATRIX_MAX_X * COMPENSATION_MATRIX_MAX_Y * 2 + EEPROM_OFFSET_MATRIX_START) // [bytes]
 
 extern millis_t g_uStartOfIdle;
@@ -549,8 +564,8 @@ extern unsigned char g_uRGBTargetB;
 #endif // RGB_LIGHT_R_PIN
 
 extern void initRF(void);
+void restoreDefaultPauseParkingOffsets();
 extern void initStrainGauge(void);
-extern short readStrainGauge(unsigned char uAddress);
 
 extern void showAbortScanReason(const void* scanName, char abortScanIdentifier);
 

@@ -225,10 +225,8 @@ void Printer::switchEverythingOff() {
     if (Printer::isAllSwitchedOff())
         return;
 
-#if FAN_PIN > -1
     // disable the fan
     Commands::setFanSpeed((uint8_t)0);
-#endif // FAN_PIN > -1
 
     Printer::disableAllSteppersNow();
 
@@ -634,10 +632,8 @@ void Printer::setup() {
 #endif // Z_MAX_PIN>-1
 #endif // RF2000 / RF2000v2
 
-#if FAN_PIN > -1
     SET_OUTPUT(FAN_PIN);
     WRITE(FAN_PIN, LOW);
-#endif // FAN_PIN > -1
 
 #if FAN_BOARD_PIN > -1
     SET_OUTPUT(FAN_BOARD_PIN);
@@ -718,11 +714,9 @@ void Printer::setup() {
     HAL::showStartReason();
     Extruder::initExtruder();
 
-#if HEATED_BED_HEATER_PIN > -1
     SET_OUTPUT(HEATED_BED_HEATER_PIN);
     WRITE(HEATED_BED_HEATER_PIN, LOW);
     Extruder::initHeatedBed();
-#endif // HEATED_BED_HEATER_PIN>-1
 
     HAL::analogStart();
 
@@ -733,7 +727,7 @@ void Printer::setup() {
     EEPROM::init();
 
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
-    enable230VOutput = OUTPUT_230V_DEFAULT_ON;
+    enable230VOutput = 0;
     SET_OUTPUT(OUTPUT_230V_PIN);
     WRITE(OUTPUT_230V_PIN, enable230VOutput);
 
@@ -1180,8 +1174,8 @@ void Printer::homeZAxis() {
 
         // The Z reference has been invalidated and CMP has been disabled.
         // Do the unit conversions outside the interrupt-protected block.
-        const long defaultMinZCompensationSteps = long(HEAT_BED_Z_COMPENSATION_MIN_MM * Printer::axisStepsPerMM[Z_AXIS]);
-        const long defaultMaxZCompensationSteps = long(HEAT_BED_Z_COMPENSATION_MAX_MM * Printer::axisStepsPerMM[Z_AXIS]);
+        const long defaultMinZCompensationSteps = long(heatBedZCompensationMinMm * Printer::axisStepsPerMM[Z_AXIS]);
+        const long defaultMaxZCompensationSteps = long(heatBedZCompensationMaxMm * Printer::axisStepsPerMM[Z_AXIS]);
         const long manualZOffsetSteps = long((Printer::ZOffset * Printer::axisStepsPerMM[Z_AXIS]) / 1000);
 
         InterruptProtectedBlock noInts;
@@ -1342,7 +1336,7 @@ void Printer::showConfiguration() {
     Com::config(PSTR("MixingExtruder:"), 0);
     Com::config(PSTR("HeatedBed:"), 1);
     Com::config(PSTR("SDCard:"), SDSUPPORT);
-    Com::config(PSTR("Fan:"), FAN_PIN > -1);
+    Com::config(PSTR("Fan:"), true);
     Com::config(PSTR("Fan2:0"));
     Com::config(PSTR("LCD:"), 0);
     Com::config(PSTR("SoftwarePowerSwitch:"), 0);

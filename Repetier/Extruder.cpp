@@ -26,13 +26,20 @@ volatile uint8_t execute50msPeriodical = 0;
 volatile uint8_t execute16msPeriodical = 0;
 volatile uint8_t execute10msPeriodical = 0;
 
-#if ANALOG_INPUTS > 0
-const uint8 osAnalogInputChannels[] PROGMEM = ANALOG_INPUT_CHANNELS;
-volatile uint8 osAnalogInputCounter[ANALOG_INPUTS] = { 0 };
-volatile uint osAnalogInputBuildup[ANALOG_INPUTS] = { 0 };
+const uint8 osAnalogInputChannels[TemperatureAdcCount] PROGMEM = {
+    EXT0_TEMPSENSOR_PIN,
+#if NUM_EXTRUDER > 1
+    EXT1_TEMPSENSOR_PIN,
+#endif
+    HEATED_BED_SENSOR_PIN,
+#ifdef X35_ADC_CHANNEL
+    TEMP_3_PIN,
+#endif
+};
+volatile uint8 osAnalogInputCounter[TemperatureAdcCount] = { 0 };
+volatile uint osAnalogInputBuildup[TemperatureAdcCount] = { 0 };
 volatile uint8 osAnalogInputPos = 0; // Current sampling position
-volatile uint osAnalogInputValues[ANALOG_INPUTS] = { 0 };
-#endif // ANALOG_INPUTS>0
+volatile uint osAnalogInputValues[TemperatureAdcCount] = { 0 };
 
 // Preserve the heated bed's existing measured-temperature cutoff. Its setpoint has its own limit.
 constexpr uint16_t bedHeaterCutoffC = 275;
@@ -274,11 +281,7 @@ void Extruder::selectExtruderById(uint8_t extruderId) {
         extruderId = Extruder::current->id;
 
 #if NUM_EXTRUDER > 1
-    bool executeSelect = false;
-    if (extruderId != Extruder::current->id) {
-        GCode::executeFString(Extruder::current->deselectCommands);
-        executeSelect = true;
-    }
+    const bool toolChanged = extruderId != Extruder::current->id;
 #endif // NUM_EXTRUDER>1
 
     // Correct X and Y on homed axes. Homing positions the other axes later.
@@ -307,7 +310,7 @@ void Extruder::selectExtruderById(uint8_t extruderId) {
     }
 
     g_nManualSteps[E_AXIS] = (unsigned short)lroundf(Printer::axisStepsPerMM[E_AXIS] * DEFAULT_MANUAL_MM_E);
-    g_nPauseSteps[E_AXIS] = long(Printer::axisStepsPerMM[E_AXIS] * DEFAULT_PAUSE_MM_E);
+    g_nPauseSteps[E_AXIS] = long(Printer::axisStepsPerMM[E_AXIS] * SCRIPT_RETRACT_MM);
 
     Printer::maxExtruderSpeed = (uint8_t)floor(HAL::maxExtruderTimerFrequency() / (Extruder::current->maxFeedrate * Extruder::current->stepsPerMM));
     if (Printer::maxExtruderSpeed > 15)
@@ -324,8 +327,10 @@ void Extruder::selectExtruderById(uint8_t extruderId) {
     // We needed to adjust extrusionFactor to possibly different diameter
 
 #if NUM_EXTRUDER > 1
-    if (executeSelect) // Run only when changing
-        GCode::executeFString(Extruder::current->selectCommands);
+    if (toolChanged) {
+        uid.setStatusP(extruderId == 0 ? PSTR("Extruder 0") : PSTR("Extruder 1"));
+        uid.refreshPage();
+    }
 #endif // NUM_EXTRUDER>1
 } // selectExtruderById
 
@@ -656,7 +661,6 @@ bool TemperatureController::updateCurrentTemperature() {
     case 0:
         currentTemperature = 25;
         break;
-#if ANALOG_INPUTS > 0
     case 1:  // Epcos B57560G0107F000
     case 2:  // is 200k thermistor
     case 3:  // V2 Sensor Conrad Renkforce / mendel-parts thermistor (EPCOS G550) = NTC mit 100kOhm
@@ -679,7 +683,6 @@ bool TemperatureController::updateCurrentTemperature() {
         currentTemperature = (osAnalogInputValues[sensorPin] >> (ANALOG_REDUCE_BITS));
         break;
     }
-#endif // ANALOG_INPUTS>0
 
     default:
         // An unsupported ID may still be stored in EEPROM. Report a sensor fault.
@@ -1008,14 +1011,6 @@ void reportTempsensorAndHeaterErrors() {
 
 Extruder* Extruder::current;
 
-const char ext0_select_cmd[] PROGMEM = EXT0_SELECT_COMMANDS;
-const char ext0_deselect_cmd[] PROGMEM = EXT0_DESELECT_COMMANDS;
-
-#if NUM_EXTRUDER > 1
-const char ext1_select_cmd[] PROGMEM = EXT1_SELECT_COMMANDS;
-const char ext1_deselect_cmd[] PROGMEM = EXT1_DESELECT_COMMANDS;
-#endif // NUM_EXTRUDER>1
-
 Extruder extruder[NUM_EXTRUDER] = {
     { 0,
       { EXT0_X_OFFSET_MM, EXT0_Y_OFFSET_MM },
@@ -1028,15 +1023,15 @@ Extruder extruder[NUM_EXTRUDER] = {
       0,
       EXT0_ADVANCE_L,
       {
-          0, EXT0_TEMPSENSOR_TYPE, EXT0_SENSOR_INDEX, EXT0_MAX_TEMP_C, 0, 0, 0,
+          0, EXT0_TEMPSENSOR_TYPE, Hotend0AdcIndex, EXT0_HOTEND_PROFILE.maxTemperatureC, 0, 0, 0,
           0,
           0,
-          EXT0_PID_INTEGRAL_DRIVE_MAX,
-          EXT0_PID_INTEGRAL_DRIVE_MIN,
-          EXT0_PID_P,
-          EXT0_PID_I,
-          EXT0_PID_D,
-          EXT0_PID_MAX,
+          EXT0_HOTEND_PROFILE.pidDriveMax,
+          EXT0_HOTEND_PROFILE.pidDriveMin,
+          EXT0_HOTEND_PROFILE.pidPGain,
+          EXT0_HOTEND_PROFILE.pidIGain,
+          EXT0_HOTEND_PROFILE.pidDGain,
+          EXT0_HOTEND_PROFILE.pidMax,
           0,
           0,
           0,
@@ -1047,8 +1042,6 @@ Extruder extruder[NUM_EXTRUDER] = {
           EXT0_DECOUPLE_TEST_PERIOD,
           0 //uint8_t paused
       },
-      ext0_select_cmd,
-      ext0_deselect_cmd,
       EXT0_EXTRUDER_COOLER_SPEED,
       0,
       0
@@ -1067,15 +1060,15 @@ Extruder extruder[NUM_EXTRUDER] = {
       0,
       EXT1_ADVANCE_L,
       {
-          1, EXT1_TEMPSENSOR_TYPE, EXT1_SENSOR_INDEX, EXT1_MAX_TEMP_C, 0, 0, 0,
+          1, EXT1_TEMPSENSOR_TYPE, Hotend1AdcIndex, EXT1_HOTEND_PROFILE.maxTemperatureC, 0, 0, 0,
           0,
           0,
-          EXT1_PID_INTEGRAL_DRIVE_MAX,
-          EXT1_PID_INTEGRAL_DRIVE_MIN,
-          EXT1_PID_P,
-          EXT1_PID_I,
-          EXT1_PID_D,
-          EXT1_PID_MAX,
+          EXT1_HOTEND_PROFILE.pidDriveMax,
+          EXT1_HOTEND_PROFILE.pidDriveMin,
+          EXT1_HOTEND_PROFILE.pidPGain,
+          EXT1_HOTEND_PROFILE.pidIGain,
+          EXT1_HOTEND_PROFILE.pidDGain,
+          EXT1_HOTEND_PROFILE.pidMax,
           0,
           0,
           0,
@@ -1086,8 +1079,6 @@ Extruder extruder[NUM_EXTRUDER] = {
           EXT1_DECOUPLE_TEST_PERIOD,
           0 //uint8_t paused
       },
-      ext1_select_cmd,
-      ext1_deselect_cmd,
       EXT1_EXTRUDER_COOLER_SPEED,
       0,
       0
@@ -1096,7 +1087,7 @@ Extruder extruder[NUM_EXTRUDER] = {
 };
 
 TemperatureController heatedBedController = {
-    NUM_EXTRUDER, HEATED_BED_SENSOR_TYPE, BED_SENSOR_INDEX, bedHeaterCutoffC, 0, 0, 0,
+    NUM_EXTRUDER, HEATED_BED_SENSOR_TYPE, BedAdcIndex, bedHeaterCutoffC, 0, 0, 0,
     0,
     0,
     HEATED_BED_PID_INTEGRAL_DRIVE_MAX,
@@ -1116,14 +1107,14 @@ TemperatureController heatedBedController = {
     0 //uint8_t paused
 };
 
-#if RESERVE_ANALOG_INPUTS
+#ifdef X35_ADC_CHANNEL
 /** \brief This is an optional Temperature Sensor. //Nibbels
 There is no Controller involved! It is not hooked into tempController
 Do not try to do anything other than updateCurrentTemperature and reading the Temps.
 TODO: Making a totally clean class, without the logic to controll something.
 */
 TemperatureController optTempController = {
-    0, RESERVE_ANALOG_SENSOR_TYPE, RESERVE_SENSOR_INDEX, 0, 0, 0, 0,
+    0, RESERVE_ANALOG_SENSOR_TYPE, ChamberAdcIndex, 0, 0, 0, 0,
     0,
     0,
     0,
@@ -1142,7 +1133,7 @@ TemperatureController optTempController = {
     0 /*0 = no decouple test*/,
     0 //uint8_t paused
 };
-#endif // RESERVE_ANALOG_INPUTS
+#endif // X35_ADC_CHANNEL
 
 TemperatureController* tempController[NUM_TEMPERATURE_LOOPS] = {
     &extruder[0].tempControl

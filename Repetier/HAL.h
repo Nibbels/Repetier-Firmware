@@ -534,7 +534,6 @@ public:
 
     // SPI related functions
     static void spiBegin() {
-#if SDSS >= 0
         SET_INPUT(MISO_PIN);
         SET_OUTPUT(MOSI_PIN);
         SET_OUTPUT(SCK_PIN);
@@ -543,7 +542,6 @@ public:
 
         // set SS high - may be chip select for another SPI device
         WRITE(SDSS, HIGH);
-#endif // SDSS>=0
 
     } // spiBegin
 

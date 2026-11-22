@@ -116,7 +116,7 @@ List of placeholder:
 %sf : Feedrate for menu postition xy
 %sF : Feedrate for menu postition z
 %SM : Matrix has changed in Ram and is ready to Save. -> *)
-%Ss : active current value of HEAT_BED_SCAN_Z_START_MM
+%Ss : active current value of defaultHeatBedScanLiftMm
 %is : Stepper inactive time in seconds
 %ip : Max. inactive time in seconds
 %X0..9 : Extruder selected marker
@@ -494,7 +494,6 @@ UI_MENU(ui_menu_quick,UI_MENU_QUICK,5+OUTPUT_X19_COUNT+OUTPUT_OBJECT_COUNT+OUTPU
 
 /** \brief Fan menu */
 
-#if FAN_PIN > -1
 UI_MENU_CHANGEACTION(ui_menu_fan_fanspeed, UI_TEXT_ACTION_FANSPEED,UI_ACTION_FANSPEED)
 UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_fan_off,UI_TEXT_FAN_OFF,UI_ACTION_FAN_OFF,MENU_MODE_FAN_RUNNING,0)
 UI_MENU_ACTIONCOMMAND(ui_menu_fan_25,UI_TEXT_FAN_25,UI_ACTION_FAN_25)
@@ -507,17 +506,9 @@ UI_MENU_CHANGEACTION_FILTER(ui_menu_fan_hz,      UI_TEXT_FAN_HZ,             UI_
 UI_MENU_ACTIONCOMMAND(      ui_menu_fan_mode,    UI_TEXT_FAN_MODE,           UI_ACTION_FAN_MODE)
 UI_MENU_CHANGEACTION(       ui_menu_fan_pwm_min, UI_TEXT_FAN_PART_FAN_PWM_MIN, UI_ACTION_FAN_PART_FAN_PWM_MIN)
 UI_MENU_CHANGEACTION(       ui_menu_fan_pwm_max, UI_TEXT_FAN_PART_FAN_PWM_MAX, UI_ACTION_FAN_PART_FAN_PWM_MAX)
-#define UI_MENU_FANHZMODE_CNT 2
-
 #define UI_MENU_FAN {&ui_menu_fan_fanspeed,&ui_menu_fan_off,&ui_menu_fan_25,&ui_menu_fan_50,&ui_menu_fan_75,&ui_menu_fan_full}
 UI_MENU(ui_menu_fan,UI_MENU_FAN,6)
 UI_MENU_SUBMENU(ui_menu_fan_sub,UI_TEXT_FANSPEED,ui_menu_fan)
-#define UI_MENU_FAN_COND &ui_menu_fan_sub,
-#define UI_MENU_FAN_CNT 1
-#else
-#define UI_MENU_FAN_COND
-#define UI_MENU_FAN_CNT 0
-#endif // FAN_PIN > -1
 
 #define UI_MENU_CONF_FAN {&ui_menu_fan_mode, &ui_menu_fan_hz, &ui_menu_fan_pwm_min, &ui_menu_fan_pwm_max}
 UI_MENU(ui_menu_settings_fan,UI_MENU_CONF_FAN,1+1+1+1)
@@ -541,19 +532,11 @@ UI_MENU_SUBMENU(ui_menu_conf_fan, UI_TEXT_FAN_CONF_MENU, ui_menu_settings_fan)
  UI_MENU_ACTION4(ui_menu_sd_stop_print_ack, UI_ACTION_STOP_ACK, UI_TEXT_STOP_PRINT_ACK, "", UI_ACTION_TEXT_YES, UI_ACTION_TEXT_NO)
  UI_MENU_ACTIONSELECTOR_FILTER(ui_menu_sd_stop_print, UI_TEXT_STOP_PRINT, ui_menu_sd_stop_print_ack, MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING, 0)
 
+ UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_sd_unmount,UI_TEXT_UNMOUNT_CARD,UI_ACTION_SD_UNMOUNT,MENU_MODE_SD_MOUNTED, MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING | MENU_MODE_PAUSED)
+ UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_sd_mount,UI_TEXT_MOUNT_CARD,UI_ACTION_SD_MOUNT,0,MENU_MODE_SD_MOUNTED)
 
- #if defined(SDCARDDETECT) && SDCARDDETECT>-1
-  #define UI_MOUNT_CNT 0
-  #define UI_MOUNT_CMD
- #else
-  UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_sd_unmount,UI_TEXT_UNMOUNT_CARD,UI_ACTION_SD_UNMOUNT,MENU_MODE_SD_MOUNTED, MENU_MODE_PRINTING | MENU_MODE_SD_PRINTING | MENU_MODE_PAUSED)
-  UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_sd_mount,UI_TEXT_MOUNT_CARD,UI_ACTION_SD_MOUNT,0,MENU_MODE_SD_MOUNTED)
-  #define UI_MOUNT_CNT 2
-  #define UI_MOUNT_CMD ,&ui_menu_sd_mount,&ui_menu_sd_unmount
- #endif // (SDCARDDETECT) && SDCARDDETECT>-1
-
- #define UI_MENU_SD {&ui_menu_sd_print_file,&ui_menu_sd_pause_print,&ui_menu_sd_stop_print,&ui_menu_sd_continue_print UI_MOUNT_CMD}
- UI_MENU(ui_menu_sd,UI_MENU_SD,4+UI_MOUNT_CNT)
+ #define UI_MENU_SD {&ui_menu_sd_print_file,&ui_menu_sd_pause_print,&ui_menu_sd_stop_print,&ui_menu_sd_continue_print,&ui_menu_sd_mount,&ui_menu_sd_unmount}
+ UI_MENU(ui_menu_sd,UI_MENU_SD,6)
  UI_MENU_SUBMENU_FILTER(ui_menu_sd_sub,UI_TEXT_SD_CARD,ui_menu_sd,0, MENU_MODE_PRINTING)
 
  #define UI_MENU_SD_COND &ui_menu_sd_sub,
@@ -826,8 +809,8 @@ UI_MENU_SUBMENU(ui_menu_main5, UI_TEXT_CONFIGURATION,  ui_menu_configuration)
 #define UI_MENU_RF2000_FILE_COUNT   0
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
-#define UI_MENU_MAIN {UI_MENU_QUICK_SETTINGS_ENTRY UI_MENU_RF2000_FILE_COND UI_MENU_POSITION_ENTRY UI_MENU_PAUSE_POSITION_ENTRY UI_MENU_EXTRUDER_ENTRY UI_MENU_FAN_COND UI_MENU_SD_COND UI_MENU_CONFIGURATION_ENTRY}
-UI_MENU(ui_menu_main,UI_MENU_MAIN,UI_MENU_QUICK_SETTINGS_COUNT+UI_MENU_RF2000_FILE_COUNT+UI_MENU_PAUSE_POSITION_COUNT+UI_MENU_POSITION_COUNT+UI_MENU_EXTRUDER_COUNT+UI_MENU_FAN_CNT+UI_MENU_SD_CNT+UI_MENU_CONFIGURATION_COUNT)
+#define UI_MENU_MAIN {UI_MENU_QUICK_SETTINGS_ENTRY UI_MENU_RF2000_FILE_COND UI_MENU_POSITION_ENTRY UI_MENU_PAUSE_POSITION_ENTRY UI_MENU_EXTRUDER_ENTRY &ui_menu_fan_sub, UI_MENU_SD_COND UI_MENU_CONFIGURATION_ENTRY}
+UI_MENU(ui_menu_main,UI_MENU_MAIN,UI_MENU_QUICK_SETTINGS_COUNT+UI_MENU_RF2000_FILE_COUNT+UI_MENU_PAUSE_POSITION_COUNT+UI_MENU_POSITION_COUNT+UI_MENU_EXTRUDER_COUNT+1+UI_MENU_SD_CNT+UI_MENU_CONFIGURATION_COUNT)
 
 /* Define menus accessible by action commands
 

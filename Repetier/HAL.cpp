@@ -290,9 +290,8 @@ void HAL::resetHardware() {
 } // resetHardware
 
 void HAL::analogStart() {
-#if ANALOG_INPUTS > 0
     ADMUX = _BV(REFS0); // Use AVCC as the temperature ADC reference.
-    for (uint8_t i = 0; i < ANALOG_INPUTS; i++) {
+    for (uint8_t i = 0; i < TemperatureAdcCount; i++) {
         osAnalogInputCounter[i] = 0;
         osAnalogInputBuildup[i] = 0;
         osAnalogInputValues[i] = 0;
@@ -316,7 +315,6 @@ void HAL::analogStart() {
 
     ADMUX = (ADMUX & ~(0x1F)) | (channel & 7);
     ADCSRA |= _BV(ADSC); // start conversion without interrupt!
-#endif                   // ANALOG_INPUTS>0
 
 } // analogStart
 
@@ -772,7 +770,6 @@ ISR(PWM_TIMER_VECTOR) {
     // run alle the secondary cooler PWM speed like we were used to:
     pwm_count_cooler += coolerPwmStep;
 
-#if FAN_PIN > -1
     /**
     PART FAN SPEED CONTROL
     */
@@ -803,7 +800,6 @@ ISR(PWM_TIMER_VECTOR) {
     /**
     END PART FAN SPEED CONTROL
     */
-#endif // FAN_PIN > -1
 
     static int counter100Periodical = 0; // Approximate a 100ms timer :: blocks pingwatchdog s commandloop if not working
     counter100Periodical++;
@@ -829,16 +825,13 @@ ISR(PWM_TIMER_VECTOR) {
         rgb_10ms_change_should_be_now = true;
 #endif // RGB_LIGHT_R_PIN
 
-#if FAN_PIN > -1
         //hier her versetzt, um 10ms einstell-auflösung zu erhalten. Darum /10 statt bisher /100 beim Init in setFanSpeed().
         //fan anfangs auf high zum anlaufen, aber das muss beendet werden:
         if (fanKickstart)
             fanKickstart--;
-#endif // FAN_PIN > -1
     }
 
     // read analog values
-#if ANALOG_INPUTS > 0
     if ((ADCSRA & _BV(ADSC)) == 0) // Conversion finished?
     {
         osAnalogInputBuildup[osAnalogInputPos] += ADCW;
@@ -851,7 +844,7 @@ ISR(PWM_TIMER_VECTOR) {
             osAnalogInputBuildup[osAnalogInputPos] = 0;
             osAnalogInputCounter[osAnalogInputPos] = 0;
             // Start next conversion
-            if (osAnalogInputPos < ANALOG_INPUTS - 1)
+            if (osAnalogInputPos < TemperatureAdcCount - 1)
                 osAnalogInputPos++;
             else
                 osAnalogInputPos = 0;
@@ -868,7 +861,6 @@ ISR(PWM_TIMER_VECTOR) {
         }
         ADCSRA |= _BV(ADSC); // start next conversion
     }
-#endif // ANALOG_INPUTS>0
 
     UI_FAST; // Short timed user interface action
 

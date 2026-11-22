@@ -847,7 +847,6 @@ void UIDisplay::parse(char* txt, bool ram) {
 
         case 'F': // FAN speed
         {
-#if FAN_PIN > -1
             if (c2 == 's') { // %Fs : Fan speed in Percent
                 addFloat(Printer::getFanSpeed(false) / 2.55f, 3, 1);
             } else if (c2 == 'h') { // %Fh : Fan frequency in Hz/Teiler
@@ -862,7 +861,6 @@ void UIDisplay::parse(char* txt, bool ram) {
             } else if (c2 == 'O') { // %FO : Fan modulation maximum = 100% FanSpeed
                 addInt(part_fan_pwm_max, 3);
             }
-#endif // FAN_PIN > -1
             if (c2 == 'H') // %FH : Digit Homing to Zero ON/OFF
             {
                 addStringP(Printer::g_pressure_offset_active ? ui_text_on : ui_text_off);
@@ -1569,7 +1567,7 @@ void UIDisplay::parse(char* txt, bool ram) {
                     printCols[col++] = '*';
             } // %SM : Matrix has changed in Ram and is ready to Save. -> *)
             else if (c2 == 's')
-                addFloat(g_scanStartZLiftMM, 1, 1); // %Ss : active current value of HEAT_BED_SCAN_Z_START_MM
+                addFloat(g_scanStartZLiftMM, 1, 1); // %Ss : active current value of defaultHeatBedScanLiftMm
             break;
         }
         case 'p': {
@@ -2340,10 +2338,10 @@ void UIDisplay::zOffsetPlusAction() {
     //beim Überschreiten von 0, soll 0 erreicht werden, sodass man nicht mit krummen Zahlen rumhantieren muss.
     if (nTemp < Z_OFFSET_BUTTON_STEPS && nTemp > 0)
         nTemp = 0;
-    if (nTemp < -(HEAT_BED_Z_COMPENSATION_MAX_MM * 1000))
-        nTemp = -(HEAT_BED_Z_COMPENSATION_MAX_MM * 1000);
-    if (nTemp > (HEAT_BED_Z_COMPENSATION_MAX_MM * 1000))
-        nTemp = (HEAT_BED_Z_COMPENSATION_MAX_MM * 1000);
+    if (nTemp < -(heatBedZCompensationMaxMm * 1000))
+        nTemp = -(heatBedZCompensationMaxMm * 1000);
+    if (nTemp > (heatBedZCompensationMaxMm * 1000))
+        nTemp = (heatBedZCompensationMaxMm * 1000);
     Printer::ZOffset = nTemp;
     g_staticZSteps = long(((Printer::ZOffset + g_nSensiblePressureOffset) * Printer::axisStepsPerMM[Z_AXIS]) / 1000);
     if (HAL::eprGetInt32(EPR_RF_Z_OFFSET) != Printer::ZOffset) {
@@ -2371,10 +2369,10 @@ void UIDisplay::zOffsetMinusAction() {
             g_nSensiblePressureOffset = 0;
         }
     }
-    if (nTemp < -(HEAT_BED_Z_COMPENSATION_MAX_MM * 1000))
-        nTemp = -(HEAT_BED_Z_COMPENSATION_MAX_MM * 1000);
-    if (nTemp > (HEAT_BED_Z_COMPENSATION_MAX_MM * 1000))
-        nTemp = (HEAT_BED_Z_COMPENSATION_MAX_MM * 1000);
+    if (nTemp < -(heatBedZCompensationMaxMm * 1000))
+        nTemp = -(heatBedZCompensationMaxMm * 1000);
+    if (nTemp > (heatBedZCompensationMaxMm * 1000))
+        nTemp = (heatBedZCompensationMaxMm * 1000);
     Printer::ZOffset = nTemp;
     g_staticZSteps = long(((Printer::ZOffset + g_nSensiblePressureOffset) * Printer::axisStepsPerMM[Z_AXIS]) / 1000);
     if (HAL::eprGetInt32(EPR_RF_Z_OFFSET) != Printer::ZOffset) {
@@ -2559,15 +2557,11 @@ void UIDisplay::finishAction(int action) {
             method = 4; //J4
         }
 
-        /*
-        Line 1059: #define PRECISE_HEAT_BED_SCAN_BED_TEMP_PLA          60                                                                  // [°C]
-        Line 1062: #define PRECISE_HEAT_BED_SCAN_EXTRUDER_TEMP_PLA     230                                                                 // [°C]
-        */
-        int temperature = PRECISE_HEAT_BED_SCAN_EXTRUDER_TEMP_PLA;
+        int temperature = heatBedScanPlaNozzleC;
         int cycles = 10;
         if (UI_MENU_PID_EXT0_COUNT + UI_MENU_PID_EXT1_COUNT + UI_MENU_PID_BED_COUNT - 1 == heater && UI_MENU_PID_BED_COUNT > 0) {
             //Das ist das Heizbett und kein Extruder
-            temperature = PRECISE_HEAT_BED_SCAN_BED_TEMP_PLA; //Bett nicht so hoch testen, wie Extruder.
+            temperature = heatBedScanPlaBedC; //Bett nicht so hoch testen, wie Extruder.
             cycles = 16;                                      //Bett ist erfahrungsgemäß viel träger. Mehr Zyklen erhöhen die Genauigkeit des Ergebnis.
         }
         bool writeeeprom = true;
@@ -2584,7 +2578,6 @@ void UIDisplay::finishAction(int action) {
 
 void UIDisplay::changeSwitchCase(int action, int8_t increment) {
     switch (action) {
-#if FAN_PIN > -1
     case UI_ACTION_FANSPEED: {
         int speed = (int)Printer::getFanSpeed() + (int)increment;
         if (speed > 255)
@@ -2630,7 +2623,6 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         EEPROM::updateChecksum();
         break;
     }
-#endif // FAN_PIN > -1
     case UI_ACTION_XPOSITION: {
         /*
         XYZ_POSITION_BUTTON_DIRECTION = -1 : This fits to you if you want more intuitivity when choosing the Up-Down-Buttons.
@@ -2659,7 +2651,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         break;
     }
     case UI_ACTION_ZOFFSET: {
-        INCREMENT_MIN_MAX(Printer::ZOffset, Z_OFFSET_MENU_STEPS, -(HEAT_BED_Z_COMPENSATION_MAX_MM * 1000), (HEAT_BED_Z_COMPENSATION_MAX_MM * 1000));
+        INCREMENT_MIN_MAX(Printer::ZOffset, Z_OFFSET_MENU_STEPS, -(heatBedZCompensationMaxMm * 1000), (heatBedZCompensationMaxMm * 1000));
         g_staticZSteps = ((Printer::ZOffset + g_nSensiblePressureOffset) * Printer::axisStepsPerMM[Z_AXIS]) / 1000;
         HAL::eprSetInt32(EPR_RF_Z_OFFSET, Printer::ZOffset);
         EEPROM::updateChecksum();
@@ -3852,7 +3844,6 @@ void UIDisplay::mainSwitchCase(int action) {
     }
 #endif // SDSUPPORT
 
-#if FAN_PIN > -1
     case UI_ACTION_FAN_OFF: {
         Commands::setFanSpeed((uint8_t)0);
         break;
@@ -3879,7 +3870,6 @@ void UIDisplay::mainSwitchCase(int action) {
         EEPROM::updateChecksum();
         break;
     }
-#endif // FAN_PIN > -1
 
     case UI_ACTION_MENU_XPOS: {
         pushMenu((void*)&ui_menu_xpos, false);

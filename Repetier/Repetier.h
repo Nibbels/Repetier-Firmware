@@ -34,6 +34,19 @@
 #error Unsupported RFx000 model
 #endif
 
+#ifndef EXT0_HOTEND_PROFILE
+#define EXT0_HOTEND_PROFILE DEFAULT_HOTEND_PROFILE
+#endif
+#ifndef EXT1_HOTEND_PROFILE
+#define EXT1_HOTEND_PROFILE DEFAULT_HOTEND_PROFILE
+#endif
+#ifndef EXT0_TEMPSENSOR_TYPE
+#define EXT0_TEMPSENSOR_TYPE DEFAULT_HOTEND_SENSOR_TYPE
+#endif
+#ifndef EXT1_TEMPSENSOR_TYPE
+#define EXT1_TEMPSENSOR_TYPE DEFAULT_HOTEND_SENSOR_TYPE
+#endif
+
 #include "pins.h"
 #include "HAL.h"
 #include "gcode.h"
@@ -103,11 +116,24 @@ public:
     } // sqr
 };
 
-extern const uint8 osAnalogInputChannels[] PROGMEM;
-extern volatile uint8 osAnalogInputCounter[ANALOG_INPUTS];
-extern volatile uint osAnalogInputBuildup[ANALOG_INPUTS];
+// Indices follow the order of osAnalogInputChannels.
+enum TemperatureAdcIndex : uint8_t {
+    Hotend0AdcIndex,
+#if NUM_EXTRUDER > 1
+    Hotend1AdcIndex,
+#endif
+    BedAdcIndex,
+#ifdef X35_ADC_CHANNEL
+    ChamberAdcIndex,
+#endif
+    TemperatureAdcCount
+};
+
+extern const uint8 osAnalogInputChannels[TemperatureAdcCount] PROGMEM;
+extern volatile uint8 osAnalogInputCounter[TemperatureAdcCount];
+extern volatile uint osAnalogInputBuildup[TemperatureAdcCount];
 extern volatile uint8 osAnalogInputPos; // Current sampling position
-extern volatile uint osAnalogInputValues[ANALOG_INPUTS];
+extern volatile uint osAnalogInputValues[TemperatureAdcCount];
 extern uint8_t pwm_pos[NUM_EXTRUDER + 3]; // 0-NUM_EXTRUDER = Heater 0-NUM_EXTRUDER of extruder, NUM_EXTRUDER = Heated bed, NUM_EXTRUDER+1 Board fan, NUM_EXTRUDER+2 = Fan
 extern uint8_t fanSpeed;                  //remember user input fan speed at a 0..255 scale.
 
@@ -134,9 +160,7 @@ extern volatile uint8_t execute50msPeriodical;
 extern volatile uint8_t execute16msPeriodical;
 extern volatile uint8_t execute10msPeriodical;
 
-#if FAN_PIN > -1
 extern uint8_t fanKickstart;
-#endif // FAN_PIN > -1
 
 #if SDSUPPORT
 #define SHORT_FILENAME_LENGTH 14

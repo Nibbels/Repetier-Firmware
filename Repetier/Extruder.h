@@ -37,7 +37,7 @@ class TemperatureController {
 public:
     uint8_t pwmIndex;           ///< pwm index for output control. 0-2 = Extruder, 3 = Fan, 4 = Heated Bed
     uint8_t sensorType;         ///< Type of temperature sensor.
-    uint8_t sensorPin;          ///< Pin to read extruder temperature.
+    uint8_t sensorPin;          ///< Index into the ADC sample array.
     const uint16_t heaterCutoffC; ///< Switch the heater off above this temperature.
     int16_t currentTemperature; ///< Currenttemperature value read from sensor.
     float currentTemperatureC;  ///< Current temperature in degC.
@@ -170,8 +170,6 @@ public:
     float advanceL;
 
     TemperatureController tempControl;
-    const char* PROGMEM selectCommands;
-    const char* PROGMEM deselectCommands;
     uint8_t coolerSpeed; ///< Speed to use when enabled
     uint8_t coolerPWM;   ///< current PWM setting
 
@@ -296,9 +294,9 @@ public:
 #define NUM_TEMPERATURE_LOOPS (NUM_EXTRUDER + 1)
 extern TemperatureController heatedBedController;
 
-#if RESERVE_ANALOG_INPUTS
+#ifdef X35_ADC_CHANNEL
 extern TemperatureController optTempController;
-#endif // RESERVE_ANALOG_INPUTS
+#endif // X35_ADC_CHANNEL
 
 #define TEMP_INT_TO_FLOAT(temp) ((float)(temp) / (float)(1 << CELSIUS_EXTRA_BITS))
 #define TEMP_FLOAT_TO_INT(temp) ((int)((temp) * (1 << CELSIUS_EXTRA_BITS)))

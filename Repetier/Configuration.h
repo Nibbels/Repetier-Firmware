@@ -19,6 +19,7 @@
 #ifndef CONFIGURATION_H
 #define CONFIGURATION_H
 
+#include <stdint.h>
 
 // ##########################################################################################
 // ##   IMPORTANT
@@ -51,6 +52,8 @@
 //#define NUM_EXTRUDER 1
 //#define EXT0_EXTRUDER_COOLER_PIN X44_PIN
 //#define EXT1_EXTRUDER_COOLER_PIN -1
+//#define EXT0_HOTEND_PROFILE HotendProfiles::v2
+//#define EXT0_TEMPSENSOR_TYPE 8
 
 #ifndef MOTHERBOARD
     #error Device type (RF1000 / RF2000 / RF2000v2) is not defined. Edit Configuration.h or pass the corresponding option to the compiler.
@@ -80,59 +83,24 @@
 /** \brief for each extruder, fan will stay on until extruder temperature is below this value */
 #define EXTRUDER_FAN_COOL_TEMP              50
 
-// ##########################################################################################
-// ##   Hotend V1
-// ##########################################################################################
+struct HotendProfile {
+    uint16_t maxTemperatureC; // Setpoint limit and heater cutoff
+    uint8_t pidDriveMax;
+    uint8_t pidDriveMin;
+    float pidPGain;
+    float pidIGain;
+    float pidDGain;
+    uint8_t pidMax; // Maximum heater PWM
+};
 
-/** Maximum hotend setpoint and heater cutoff in degrees Celsius. */
-#define HOTEND_V1_MAX_TEMP_C 275
+namespace HotendProfiles {
+constexpr HotendProfile v1 = { 275, 130, 30, 37.52f, 10.0f, 35.18f, 255 };
+constexpr HotendProfile v2 = { 275, 120, 30, 12.5f,   3.2f, 18.0f,  255 };
+constexpr HotendProfile v3 = { 275, 120, 30, 17.11f,  2.05f, 35.75f, 255 };
+}
 
-/** \brief The maximum value, I-gain can contribute to the output. */
-#define HT2_PID_INTEGRAL_DRIVE_MAX          130
-/** \brief lower value for integral part. */
-#define HT2_PID_INTEGRAL_DRIVE_MIN          30
-/** \brief P-gain. */
-#define HT2_PID_P                           37.52
-/** \brief I-gain. */
-#define HT2_PID_I                           10
-/** \brief Dgain. */
-#define HT2_PID_D                           35.18
-
-// ##########################################################################################
-// ##   Hotend V2
-// ##########################################################################################
-
-/** Maximum hotend setpoint and heater cutoff in degrees Celsius. */
-#define HOTEND_V2_MAX_TEMP_C 275
-
-/** \brief The maximum value, I-gain can contribute to the output. */
-#define HT3_PID_INTEGRAL_DRIVE_MAX          120
-/** \brief lower value for integral part. */
-#define HT3_PID_INTEGRAL_DRIVE_MIN          30
-/** \brief P-gain. */
-#define HT3_PID_P                           12.5
-/** \brief I-gain. */
-#define HT3_PID_I                           3.2
-/** \brief Dgain. */
-#define HT3_PID_D                           18
-
-// ##########################################################################################
-// ##	Hotend V3
-// ##########################################################################################
-
-/** Maximum hotend setpoint and heater cutoff in degrees Celsius. */
-#define HOTEND_V3_MAX_TEMP_C 275
-
-/** \brief The maximum value, I-gain can contribute to the output. */
-#define HT4_PID_INTEGRAL_DRIVE_MAX          120
-/** \brief lower value for integral part. */
-#define HT4_PID_INTEGRAL_DRIVE_MIN          30
-/** \brief P-gain. */
-#define HT4_PID_P                           17.11
-/** \brief I-gain. */
-#define HT4_PID_I                           2.05
-/** \brief Dgain. */
-#define HT4_PID_D                           35.75
+// Select sensor IDs independently of the hotend profile with EXT0_TEMPSENSOR_TYPE
+// and EXT1_TEMPSENSOR_TYPE. The sensor conversions are listed in Extruder.cpp.
 
 // ##########################################################################################
 // ##   common configuration
@@ -267,14 +235,6 @@ Overridden if EEPROM activated. */
 // Length below which the junction planner slows closely spaced direction changes.
 #define MAX_JERK_DISTANCE                   0.6
 
-// ##########################################################################################
-// ##   configuration of the extended buttons
-// ##########################################################################################
-
-#define EXTENDED_BUTTONS_COUNTER_NORMAL     4                                                   // 39 ~ run 100 times per second, 4 ~ run 1000 times per second
-#define EXTENDED_BUTTONS_COUNTER_FAST       4                                                   // 39 ~ run 100 times per second, 4 ~ run 1000 times per second
-#define EXTENDED_BUTTONS_STEPPER_DELAY      1                                                   // [us]
-
 
 // ##########################################################################################
 // ##   configuration of the output object functionality
@@ -367,9 +327,6 @@ Overridden if EEPROM activated. */
 #define SDSUPPORT                           1                                                   // 1 = supported, 0 = not supported
 #endif
 
-/** \brief  Change to true if you get a inserted message on removal. */
-#define SDCARDDETECTINVERTED                false
-
 /** \brief Total size of the buffer used to store the long filenames */
 // If you need more maximum file name length than 26 chars 
 // - For SD-Printing using a Gcode / using Octoprints sd file listing
@@ -427,7 +384,6 @@ Overridden if EEPROM activated. */
 /** \brief Values used for unload(unmount)/load(mount) filament */
 #define UI_SET_EXTRUDER_MIN_TEMP_UNMOUNT     90                                                 //hat anfangs hohe toleranz.
 #define UI_SET_EXTRUDER_MAX_TEMP_UNMOUNT    240
-#define UI_SET_EXTRUDER_TEMP_MOUNT          210
 
 /** \brief Extreme values */
 #define UI_SET_MIN_HEATED_BED_TEMP          50
@@ -435,7 +391,6 @@ Overridden if EEPROM activated. */
 #define UI_SET_MIN_EXTRUDER_TEMP            70
 #define UI_SET_MAX_EXTRUDER_TEMP            270
 #define UI_SET_EXTRUDER_FEEDRATE            1.5f                                                 // [mm/sec]
-#define UI_SET_EXTRUDER_RETRACT_DISTANCE    3                                                   // [mm]
 #define COOLDOWN_THRESHOLD                  40                                                  // [°C]
 
 #define SPEED_MIN_MILLIS                    300
@@ -514,9 +469,6 @@ we use blocks of 2 kByte size for the structure of our EEPROM
 
 /** \brief Defines the I2C address for the strain gauge */
 #define I2C_ADDRESS_STRAIN_GAUGE            0x49
-
-/** \brief Defines which strain gauge is used for the heat bed scan */
-#define ACTIVE_STRAIN_GAUGE                 0x49
 
 /** \brief Defines the I2C address for the external EEPROM which stores the z-compensation matrix */
 #define I2C_ADDRESS_EXTERNAL_EEPROM         0x50

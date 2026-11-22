@@ -132,8 +132,6 @@
 // PINB.3, 22, MISO
 #define MOSI_PIN 51
 // PINB.2, 21, MOSI
-#define MAX6675_SS 53
-// PINB.0, 19, SS
 
 // motor driver pin mappings
 #define X_SCS_PIN 49
@@ -348,8 +346,6 @@
 // PINB.3, 22, MISO
 #define MOSI_PIN 51
 // PINB.2, 21, MOSI
-#define MAX6675_SS 53
-// PINB.0, 19, SS
 
 // motor driver pin mappings
 #define X_SCS_PIN 49

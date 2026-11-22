@@ -78,9 +78,9 @@ void Commands::checkForPeriodicalActions(enum FirmwareState state) {
         Extruder::manageTemperatures();
         if (state == WaitHeater)
             Commands::printTemperatures(); //selfcontrolling timediff
-#if defined(SDCARDDETECT) && SDCARDDETECT > -1 && defined(SDSUPPORT) && SDSUPPORT
+#if SDSUPPORT && SDCARDDETECT >= 0
         sd.automount();
-#endif // defined(SDCARDDETECT) && SDCARDDETECT>-1 && defined(SDSUPPORT) && SDSUPPORT
+#endif
         UI_SLOW;
     }
 
@@ -168,7 +168,7 @@ void Commands::printTemperatures(bool showRaw) {
         }
 #endif // NUM_EXTRUDER
 
-#if RESERVE_ANALOG_INPUTS
+#ifdef X35_ADC_CHANNEL
         //Act as heated chamber ambient temperature for Repetier-Server 0.86.2+ ---> Letter C
         TemperatureController* act = &optTempController;
         act->updateCurrentTemperature();
@@ -176,7 +176,7 @@ void Commands::printTemperatures(bool showRaw) {
         Com::printF(Com::tColon, act->currentTemperatureC, 1); //temp
         Com::printF(Com::tSpaceSlash, 0, 0);                   // ziel-temp
         Com::printF(Com::tSpaceCAtColon, 0);                   // leistung
-#endif                                                         // RESERVE_ANALOG_INPUTS
+#endif // X35_ADC_CHANNEL
 
         Com::printF(Com::tSpace);
         Com::printF(Com::tF);
@@ -201,7 +201,6 @@ void Commands::changeFlowrateMultiply(float newExtrusionFactor) {
     Com::printFLN(Com::tFlowMultiply, (int)lroundf(100 * newExtrusionFactor));
 } // changeFlowrateMultiply
 
-#if FAN_PIN > -1
 uint8_t fanKickstart = 0;
 void Commands::setFanSpeed(uint8_t speed, bool recalc) {
     //speed = constrain(speed,0,255); nichts anderes passt in uint8_t hinein.
@@ -243,9 +242,7 @@ void Commands::setFanSpeed(uint8_t speed, bool recalc) {
 
     pwm_pos[NUM_EXTRUDER + 2] = speed;
 } // setFanSpeed
-#endif // FAN_PIN > -1
 
-#if FAN_PIN > -1
 void Commands::adjustFanFrequency(uint8_t speed_divisor = PART_FAN_DEFAULT_PWM_SPEED_DIVISOR) { //1 = ~15.3hz, ~2=7.62hz, ...
     InterruptProtectedBlock noInts;
     if (!speed_divisor)
@@ -256,7 +253,6 @@ void Commands::adjustFanMode(uint8_t output_mode) { //0 = pwm, 1 = pdm
     part_fan_frequency_modulation = (output_mode ? PART_FAN_MODE_PDM : PART_FAN_MODE_PWM);
     Printer::setMenuMode(MENU_MODE_FAN_MODE_PDM, (bool)part_fan_frequency_modulation);
 }
-#endif // FAN_PIN > -1
 
 void Commands::reportPrinterUsage() {
     if (Printer::debugInfo()) {
@@ -677,7 +673,6 @@ void Commands::processMCode(GCode* com) {
         break;
     }
 
-#if FAN_PIN > -1
     case 106: // M106 - Fan On
     {
         setFanSpeed(com->hasS() ? (uint8_t)constrain(com->S, 0, 255) : (uint8_t)255);
@@ -688,7 +683,6 @@ void Commands::processMCode(GCode* com) {
         setFanSpeed(0);
         break;
     }
-#endif // FAN_PIN > -1
 
     case 82: // M82
     {

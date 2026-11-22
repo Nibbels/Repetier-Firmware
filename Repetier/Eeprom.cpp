@@ -61,12 +61,12 @@ void EEPROM::restoreEEPROMExtruderSettingsFromConfiguration(uint8_t extruderId) 
         e->maxEJerk = EXT0_MAX_START_FEEDRATE;
         e->maxAcceleration = EXT0_MAX_ACCELERATION;
 
-        e->tempControl.pidDriveMax = EXT0_PID_INTEGRAL_DRIVE_MAX;
-        e->tempControl.pidDriveMin = EXT0_PID_INTEGRAL_DRIVE_MIN;
-        e->tempControl.pidPGain = EXT0_PID_P;
-        e->tempControl.pidIGain = EXT0_PID_I;
-        e->tempControl.pidDGain = EXT0_PID_D;
-        e->tempControl.pidMax = EXT0_PID_MAX;
+        e->tempControl.pidDriveMax = EXT0_HOTEND_PROFILE.pidDriveMax;
+        e->tempControl.pidDriveMin = EXT0_HOTEND_PROFILE.pidDriveMin;
+        e->tempControl.pidPGain = EXT0_HOTEND_PROFILE.pidPGain;
+        e->tempControl.pidIGain = EXT0_HOTEND_PROFILE.pidIGain;
+        e->tempControl.pidDGain = EXT0_HOTEND_PROFILE.pidDGain;
+        e->tempControl.pidMax = EXT0_HOTEND_PROFILE.pidMax;
         e->tempControl.sensorType = EXT0_TEMPSENSOR_TYPE;
 
         e->offsetMM[X_AXIS] = EXT0_X_OFFSET_MM;
@@ -85,12 +85,12 @@ void EEPROM::restoreEEPROMExtruderSettingsFromConfiguration(uint8_t extruderId) 
         e->maxEJerk = EXT1_MAX_START_FEEDRATE;
         e->maxAcceleration = EXT1_MAX_ACCELERATION;
 
-        e->tempControl.pidDriveMax = EXT1_PID_INTEGRAL_DRIVE_MAX;
-        e->tempControl.pidDriveMin = EXT1_PID_INTEGRAL_DRIVE_MIN;
-        e->tempControl.pidPGain = EXT1_PID_P;
-        e->tempControl.pidIGain = EXT1_PID_I;
-        e->tempControl.pidDGain = EXT1_PID_D;
-        e->tempControl.pidMax = EXT1_PID_MAX;
+        e->tempControl.pidDriveMax = EXT1_HOTEND_PROFILE.pidDriveMax;
+        e->tempControl.pidDriveMin = EXT1_HOTEND_PROFILE.pidDriveMin;
+        e->tempControl.pidPGain = EXT1_HOTEND_PROFILE.pidPGain;
+        e->tempControl.pidIGain = EXT1_HOTEND_PROFILE.pidIGain;
+        e->tempControl.pidDGain = EXT1_HOTEND_PROFILE.pidDGain;
+        e->tempControl.pidMax = EXT1_HOTEND_PROFILE.pidMax;
         e->tempControl.sensorType = EXT1_TEMPSENSOR_TYPE;
 
         e->offsetMM[X_AXIS] = EXT1_X_OFFSET_MM;
@@ -180,7 +180,7 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
 
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
     //hier nur config laden nicht mosfets schalten!
-    Printer::enable230VOutput = OUTPUT_230V_DEFAULT_ON;
+    Printer::enable230VOutput = 0;
 
     //hier nur config laden nicht mosfets schalten!
     Printer::enableFET1 = FET1_DEFAULT_ON;
@@ -188,8 +188,8 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     Printer::enableFET3 = FET3_DEFAULT_ON;
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
-    g_ZOSTestPoint[X_AXIS] = SEARCH_HEAT_BED_OFFSET_SCAN_POSITION_INDEX_X;
-    g_ZOSTestPoint[Y_AXIS] = SEARCH_HEAT_BED_OFFSET_SCAN_POSITION_INDEX_Y;
+    g_ZOSTestPoint[X_AXIS] = defaultZOffsetScanIndex;
+    g_ZOSTestPoint[Y_AXIS] = defaultZOffsetScanIndex;
 
     g_nSensiblePressureOffsetMax = (short)SENSIBLE_PRESSURE_MAX_OFFSET;
     Printer::g_senseoffset_autostart = false;
@@ -216,9 +216,7 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
         //setMotorCurrent( stp+1, uMotorCurrentUse[stp] ); //driver ist 1-basiert //hier nur config laden
     }
 
-    g_nPauseSteps[X_AXIS] = long(Printer::axisStepsPerMM[X_AXIS] * DEFAULT_PAUSE_MM_X_PRINT);
-    g_nPauseSteps[Y_AXIS] = long(Printer::axisStepsPerMM[Y_AXIS] * DEFAULT_PAUSE_MM_Y_PRINT);
-    g_nPauseSteps[Z_AXIS] = long(Printer::axisStepsPerMM[Z_AXIS] * DEFAULT_PAUSE_MM_Z_PRINT);
+    restoreDefaultPauseParkingOffsets();
 
     Printer::updateDerivedParameter();
     Extruder::selectExtruderById(Extruder::current->id);
@@ -301,13 +299,11 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     }
     HAL::eprSetInt16(EPR_RF_STEP_PACKING_MIN_INTERVAL, Printer::stepsPackingMinInterval);
 
-#if FAN_PIN > -1
     HAL::eprSetByte(EPR_RF_FAN_MODE, part_fan_frequency_modulation);
 
     HAL::eprSetByte(EPR_RF_PART_FAN_SPEED, part_fan_pwm_speed);
     HAL::eprSetByte(EPR_RF_PART_FAN_PWM_MIN, part_fan_pwm_min);
     HAL::eprSetByte(EPR_RF_PART_FAN_PWM_MAX, part_fan_pwm_max);
-#endif // FAN_PIN > -1
 
     if (corrupted) {
         HAL::eprSetInt32(EPR_PRINTING_TIME, 0);
@@ -426,8 +422,8 @@ void EEPROM::readDataFromEEPROM() {
     g_staticZSteps = (Printer::ZOffset * Printer::axisStepsPerMM[Z_AXIS]) / 1000;
     Printer::maxZOverrideSteps = uint16_t(Printer::axisStepsPerMM[Z_AXIS] * Z_ENDSTOP_DRIVE_OVER);
 
-    g_minZCompensationSteps = long(HEAT_BED_Z_COMPENSATION_MIN_MM * Printer::axisStepsPerMM[Z_AXIS]); //load the values with applied micro-steps
-    g_maxZCompensationSteps = long(HEAT_BED_Z_COMPENSATION_MAX_MM * Printer::axisStepsPerMM[Z_AXIS]);
+    g_minZCompensationSteps = long(heatBedZCompensationMinMm * Printer::axisStepsPerMM[Z_AXIS]); //load the values with applied micro-steps
+    g_maxZCompensationSteps = long(heatBedZCompensationMaxMm * Printer::axisStepsPerMM[Z_AXIS]);
     g_diffZCompensationSteps = g_maxZCompensationSteps - g_minZCompensationSteps;
 
     Printer::moveMode[X_AXIS] = HAL::eprGetByte(EPR_RF_MOVE_MODE_X);
@@ -536,17 +532,12 @@ void EEPROM::readDataFromEEPROM() {
         if ((e->tempControl.pidDriveMin == 40 && e->tempControl.pidDriveMax == 40)
             || (e->tempControl.pidDriveMin == 0 && e->tempControl.pidDriveMax == 0)) {
 
-            e->tempControl.pidDriveMin =
-#if NUM_EXTRUDER >= 2
-                (i == 0 ? EXT0_PID_INTEGRAL_DRIVE_MIN : (i == 1 ? EXT1_PID_INTEGRAL_DRIVE_MIN : HT3_PID_INTEGRAL_DRIVE_MIN));
+#if NUM_EXTRUDER > 1
+            e->tempControl.pidDriveMin = i == 0 ? EXT0_HOTEND_PROFILE.pidDriveMin : EXT1_HOTEND_PROFILE.pidDriveMin;
+            e->tempControl.pidDriveMax = i == 0 ? EXT0_HOTEND_PROFILE.pidDriveMax : EXT1_HOTEND_PROFILE.pidDriveMax;
 #else
-                EXT0_PID_INTEGRAL_DRIVE_MIN;
-#endif
-            e->tempControl.pidDriveMax =
-#if NUM_EXTRUDER >= 2
-                (i == 0 ? EXT0_PID_INTEGRAL_DRIVE_MAX : (i == 1 ? EXT1_PID_INTEGRAL_DRIVE_MAX : HT3_PID_INTEGRAL_DRIVE_MAX));
-#else
-                EXT0_PID_INTEGRAL_DRIVE_MAX;
+            e->tempControl.pidDriveMin = EXT0_HOTEND_PROFILE.pidDriveMin;
+            e->tempControl.pidDriveMax = EXT0_HOTEND_PROFILE.pidDriveMax;
 #endif
             HAL::eprSetByte(o + EPR_EXTRUDER_DRIVE_MIN, e->tempControl.pidDriveMin);
             HAL::eprSetByte(o + EPR_EXTRUDER_DRIVE_MAX, e->tempControl.pidDriveMax);
@@ -637,16 +628,16 @@ void EEPROM::readDataFromEEPROM() {
     g_ZOSTestPoint[X_AXIS] = HAL::eprGetByte(EPR_RF_MOD_ZOS_SCAN_POINT_X);
     if (g_ZOSTestPoint[X_AXIS] != 0) { //constrain if not 0 = random.
                                        //wenn die Startposition nicht 0 ist, wird eine Dummy-Matrix-Linie ergänzt. Mit der sollten wir nicht arbeiten.
-        if (g_ZOSTestPoint[X_AXIS] < 1 + ((HEAT_BED_SCAN_X_START_MM == 0) ? 0 : 1))
-            g_ZOSTestPoint[X_AXIS] = 1 + ((HEAT_BED_SCAN_X_START_MM == 0) ? 0 : 1);
+        if (g_ZOSTestPoint[X_AXIS] < 1 + ((heatBedScanXStartMm == 0) ? 0 : 1))
+            g_ZOSTestPoint[X_AXIS] = 1 + ((heatBedScanXStartMm == 0) ? 0 : 1);
         if (g_ZOSTestPoint[X_AXIS] > COMPENSATION_MATRIX_MAX_X - 1)
             g_ZOSTestPoint[X_AXIS] = COMPENSATION_MATRIX_MAX_X - 1; //2..n-1 //COMPENSATION_MATRIX_MAX_X -> g_uZMatrixMax[X_AXIS] erst voll wenn matrix initialisiert, aber die normale ultra-max-grenze reicht hier! constrain nachher.
     }
     g_ZOSTestPoint[Y_AXIS] = HAL::eprGetByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y);
     if (g_ZOSTestPoint[Y_AXIS] != 0) { //constrain if not 0 = random.
                                        //wenn die Startposition nicht 0 ist, wird eine Dummy-Matrix-Linie ergänzt. Mit der sollten wir nicht arbeiten.
-        if (g_ZOSTestPoint[Y_AXIS] < 1 + ((HEAT_BED_SCAN_Y_START_MM == 0) ? 0 : 1))
-            g_ZOSTestPoint[Y_AXIS] = 1 + ((HEAT_BED_SCAN_Y_START_MM == 0) ? 0 : 1);
+        if (g_ZOSTestPoint[Y_AXIS] < 1 + ((heatBedScanYStartMm == 0) ? 0 : 1))
+            g_ZOSTestPoint[Y_AXIS] = 1 + ((heatBedScanYStartMm == 0) ? 0 : 1);
         if (g_ZOSTestPoint[Y_AXIS] > COMPENSATION_MATRIX_MAX_Y - 1)
             g_ZOSTestPoint[Y_AXIS] = COMPENSATION_MATRIX_MAX_Y - 1; //2..n-1 //COMPENSATION_MATRIX_MAX_Y -> g_uZMatrixMax[Y_AXIS] erst voll wenn matrix initialisiert, aber die normale ultra-max-grenze reicht hier! constrain nachher.
     }
@@ -688,7 +679,7 @@ void EEPROM::readDataFromEEPROM() {
     if (tmpss >= 0.3f && tmpss <= 6.0f) {
         g_scanStartZLiftMM = tmpss;
     } else {
-        HAL::eprSetFloat(EPR_ZSCAN_START_MM, HEAT_BED_SCAN_Z_START_MM);
+        HAL::eprSetFloat(EPR_ZSCAN_START_MM, defaultHeatBedScanLiftMm);
         change = true;
     }
 
@@ -729,7 +720,6 @@ void EEPROM::readDataFromEEPROM() {
         Printer::stepsPackingMinInterval = constrain(HAL::eprGetInt16(EPR_RF_STEP_PACKING_MIN_INTERVAL), MIN_STEP_PACKING_MIN_INTERVAL, MAX_STEP_PACKING_MIN_INTERVAL);
     }
 
-#if FAN_PIN > -1
     uint8_t temp_min = HAL::eprGetByte(EPR_RF_PART_FAN_PWM_MIN);
     uint8_t temp_max = HAL::eprGetByte(EPR_RF_PART_FAN_PWM_MAX);
     if ((int)temp_max - (int)temp_min >= 16 && temp_min > 0 && temp_max < 255) {
@@ -746,7 +736,6 @@ void EEPROM::readDataFromEEPROM() {
         Commands::adjustFanFrequency(tempfs);
     }
     Commands::adjustFanMode((HAL::eprGetByte(EPR_RF_FAN_MODE) == PART_FAN_MODE_PDM ? PART_FAN_MODE_PDM : PART_FAN_MODE_PWM));
-#endif // FAN_PIN > -1
 
     if (change)
         EEPROM::updateChecksum();
@@ -955,12 +944,10 @@ void EEPROM::writeSettings() {
         writeByte(o + EPR_EXTRUDER_COOLER_SPEED, Com::tEPRExtruderCoolerSpeed);
     }
 
-#if FAN_PIN > -1
     writeByte(EPR_RF_FAN_MODE, Com::tEPRPrinter_FAN_MODE);
     writeByte(EPR_RF_PART_FAN_SPEED, Com::tEPRPrinter_FAN_SPEED);
     writeByte(EPR_RF_PART_FAN_PWM_MIN, Com::tEPRPrinter_FAN_PART_FAN_PWM_MIN);
     writeByte(EPR_RF_PART_FAN_PWM_MAX, Com::tEPRPrinter_FAN_PART_FAN_PWM_MAX);
-#endif // FAN_PIN > -1
 
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
     writeByte(EPR_RF_FET1_MODE, Com::tEPRFET1Mode);

@@ -45,13 +45,8 @@ Overflow in Z-Matrix: >12.7f
 #error RFx000 firmware supports one or two extruders.
 #endif
 
-/** \brief Define the type of the present extruders */
-#if NUM_EXTRUDER == 2
-#define EXT0_HOTEND_TYPE HOTEND_TYPE_V2
-#define EXT1_HOTEND_TYPE HOTEND_TYPE_V2
-#else
-#define EXT0_HOTEND_TYPE HOTEND_TYPE_V2
-#endif // NUM_EXTRUDER == 2
+#define DEFAULT_HOTEND_PROFILE HotendProfiles::v2
+#define DEFAULT_HOTEND_SENSOR_TYPE 3
 
 // ##########################################################################################
 // ##   Calibration
@@ -94,26 +89,7 @@ Overridden if EEPROM activated.*/
 /** \brief for skeinforge 40 and later, steps to pull the plasic 1 mm inside the extruder, not out.  Overridden if EEPROM activated. */
 #define EXT0_STEPS_PER_MM (8.75 * RF_MICRO_STEPS_E)
 
-/** \brief What type of sensor is used?
-NTC-Thermistors
-1: Epcos B57560G0107F000
-2: 200k Thermistor
-3: Hotend V2 Sensor Conrad Renkforce / mendel-parts thermistor (EPCOS G550) = NTC mit 100kOhm
-4: 10k Thermistor
-8: E3D Thermistor ATC Semitec 104-GT2 (300°C)
-9: 100k Honeywell 135-104LAG-J01
-10: 100k 0603 SMD Vishay NTCS0603E3104FXT (4.7k pullup)
-11: 100k GE Sensing AL03006-58.2K-97-G1 (4.7k pullup)
-12: 100k RS Thermistor 198-961 (4.7k pullup)
-13: NTC 3950 100k thermistor - Conrad V3
-14: Thermistor NTC 3950 100k Ohm
-PTC-Thermistors
-53: E3D PT100 Board (direct AD voltage in)
-60: HEATER_USES_AD8495 (Delivers 5mV/degC)
-100: AD595 */
-#define EXT0_TEMPSENSOR_TYPE 3
-
-/** \brief Analog input pin for reading temperatures or pin enabling SS for MAX6675 */
+/** \brief Analog input pin for measuring hotend temperature */
 #define EXT0_TEMPSENSOR_PIN TEMP_0_PIN
 
 /** \brief Which pin enables the heater */
@@ -142,85 +118,12 @@ Overridden if EEPROM activated. */
 Overridden if EEPROM activated. */
 #define EXT0_MAX_ACCELERATION 6000
 
-#if EXT0_HOTEND_TYPE == HOTEND_TYPE_V1
-
-#define EXT0_MAX_TEMP_C HOTEND_V1_MAX_TEMP_C
-/** \brief The maximum value, I-gain can contribute to the output. Overridden if EEPROM activated. */
-#define EXT0_PID_INTEGRAL_DRIVE_MAX HT2_PID_INTEGRAL_DRIVE_MAX
-/** \brief lower value for integral part. Overridden if EEPROM activated. */
-#define EXT0_PID_INTEGRAL_DRIVE_MIN HT2_PID_INTEGRAL_DRIVE_MIN
-/** \brief P-gain. Overridden if EEPROM activated. */
-#define EXT0_PID_P HT2_PID_P
-/** \brief I-gain. Overridden if EEPROM activated. */
-#define EXT0_PID_I HT2_PID_I
-/** \brief D-gain. Overridden if EEPROM activated.*/
-#define EXT0_PID_D HT2_PID_D
-
-#endif // EXT0_HOTEND_TYPE == HOTEND_TYPE_V1
-
-#if EXT0_HOTEND_TYPE == HOTEND_TYPE_V2
-
-#define EXT0_MAX_TEMP_C HOTEND_V2_MAX_TEMP_C
-/** \brief The maximum value, I-gain can contribute to the output. Overridden if EEPROM activated. */
-#define EXT0_PID_INTEGRAL_DRIVE_MAX HT3_PID_INTEGRAL_DRIVE_MAX
-/** \brief lower value for integral part. Overridden if EEPROM activated. */
-#define EXT0_PID_INTEGRAL_DRIVE_MIN HT3_PID_INTEGRAL_DRIVE_MIN
-/** \brief P-gain. Overridden if EEPROM activated. */
-#define EXT0_PID_P HT3_PID_P
-/** \brief I-gain. Overridden if EEPROM activated. */
-#define EXT0_PID_I HT3_PID_I
-/** \brief D-gain. Overridden if EEPROM activated.*/
-#define EXT0_PID_D HT3_PID_D
-
-#endif // EXT0_HOTEND_TYPE == HOTEND_TYPE_V2
-
-#if EXT0_HOTEND_TYPE == HOTEND_TYPE_V3
-
-#define EXT0_MAX_TEMP_C HOTEND_V3_MAX_TEMP_C
-/** \brief The maximum value, I-gain can contribute to the output. Overridden if EEPROM activated. */
-#define EXT0_PID_INTEGRAL_DRIVE_MAX HT4_PID_INTEGRAL_DRIVE_MAX
-/** \brief lower value for integral part. Overridden if EEPROM activated. */
-#define EXT0_PID_INTEGRAL_DRIVE_MIN HT4_PID_INTEGRAL_DRIVE_MIN
-/** \brief P-gain. Overridden if EEPROM activated. */
-#define EXT0_PID_P HT4_PID_P
-/** \brief I-gain. Overridden if EEPROM activated. */
-#define EXT0_PID_I HT4_PID_I
-/** \brief D-gain. Overridden if EEPROM activated.*/
-#define EXT0_PID_D HT4_PID_D
-
-#endif // EXT0_HOTEND_TYPE == HOTEND_TYPE_V3
-
-/** \brief maximum time the heater is can be switched on. Max = 255.  Overridden if EEPROM activated. */
-#define EXT0_PID_MAX 255
-
 /** \brief Faktor for the advance algorithm. 0 disables the algorithm.  Overridden if EEPROM activated.
 L is the linear factor and seems to be working better then the quadratic dependency. */
 #define EXT0_ADVANCE_L 0.0f
 
-/** \brief You can run any gcode command on extruder deselect/select. Seperate multiple commands with a new line \n.
-That way you can execute some mechanical components needed for extruder selection or retract filament or whatever you need.
-The codes are only executed for multiple extruder when changing the extruder. */
-#define EXT0_SELECT_COMMANDS "M117 Extruder 0"
-#define EXT0_DESELECT_COMMANDS ""
-
 /** \brief PWM speed for the cooler fan. 0=off 255=full speed */
 #define EXT0_EXTRUDER_COOLER_SPEED 255
-
-#if EXT0_TEMPSENSOR_TYPE < 101
-
-#define EXT0_ANALOG_INPUTS 1
-#define EXT0_SENSOR_INDEX 0
-#define EXT0_ANALOG_CHANNEL EXT0_TEMPSENSOR_PIN
-#define ACCOMMA0 ,
-
-#else
-
-#define EXT0_ANALOG_INPUTS 0
-#define EXT0_SENSOR_INDEX EXT0_TEMPSENSOR_PIN
-#define EXT0_ANALOG_CHANNEL
-#define ACCOMMA0
-
-#endif // NUM_EXTRUDER>0 && EXT0_TEMPSENSOR_TYPE<101
 
 #if NUM_EXTRUDER == 2
 
@@ -234,26 +137,7 @@ The codes are only executed for multiple extruder when changing the extruder. */
 /** \brief for skeinforge 40 and later, steps to pull the plasic 1 mm inside the extruder, not out.  Overridden if EEPROM activated. */
 #define EXT1_STEPS_PER_MM (8.75 * RF_MICRO_STEPS_E)
 
-/** \brief What type of sensor is used?
-NTC-Thermistors
-1: Epcos B57560G0107F000
-2: 200k Thermistor
-3: Hotend V2 Sensor Conrad Renkforce / mendel-parts thermistor (EPCOS G550) = NTC mit 100kOhm
-4: 10k Thermistor
-8: E3D Thermistor ATC Semitec 104-GT2 (300°C)
-9: 100k Honeywell 135-104LAG-J01
-10: 100k 0603 SMD Vishay NTCS0603E3104FXT (4.7k pullup)
-11: 100k GE Sensing AL03006-58.2K-97-G1 (4.7k pullup)
-12: 100k RS Thermistor 198-961 (4.7k pullup)
-13: NTC 3950 100k thermistor - Conrad V3
-14: Thermistor NTC 3950 100k Ohm
-PTC-Thermistors
-53: E3D PT100 Board (direct AD voltage in)
-60: HEATER_USES_AD8495 (Delivers 5mV/degC)
-100: AD595 */
-#define EXT1_TEMPSENSOR_TYPE 3
-
-/** \brief Analog input pin for reading temperatures or pin enabling SS for MAX6675 */
+/** \brief Analog input pin for measuring hotend temperature */
 #define EXT1_TEMPSENSOR_PIN TEMP_1_PIN
 
 /** \brief Which pin enables the heater */
@@ -282,57 +166,6 @@ Overridden if EEPROM activated. */
 Overridden if EEPROM activated. */
 #define EXT1_MAX_ACCELERATION 6000
 
-#if EXT1_HOTEND_TYPE == HOTEND_TYPE_V1
-
-#define EXT1_MAX_TEMP_C HOTEND_V1_MAX_TEMP_C
-/** \brief The maximum value, I-gain can contribute to the output. Overridden if EEPROM activated. */
-#define EXT1_PID_INTEGRAL_DRIVE_MAX HT2_PID_INTEGRAL_DRIVE_MAX
-/** \brief lower value for integral part. Overridden if EEPROM activated. */
-#define EXT1_PID_INTEGRAL_DRIVE_MIN HT2_PID_INTEGRAL_DRIVE_MIN
-/** \brief P-gain. Overridden if EEPROM activated. */
-#define EXT1_PID_P HT2_PID_P
-/** \brief I-gain. Overridden if EEPROM activated. */
-#define EXT1_PID_I HT2_PID_I
-/** \brief D-gain. Overridden if EEPROM activated.*/
-#define EXT1_PID_D HT2_PID_D
-
-#endif // EXT1_HOTEND_TYPE == HOTEND_TYPE_V1
-
-#if EXT1_HOTEND_TYPE == HOTEND_TYPE_V2
-
-#define EXT1_MAX_TEMP_C HOTEND_V2_MAX_TEMP_C
-/** \brief The maximum value, I-gain can contribute to the output. Overridden if EEPROM activated. */
-#define EXT1_PID_INTEGRAL_DRIVE_MAX HT3_PID_INTEGRAL_DRIVE_MAX
-/** \brief lower value for integral part. Overridden if EEPROM activated. */
-#define EXT1_PID_INTEGRAL_DRIVE_MIN HT3_PID_INTEGRAL_DRIVE_MIN
-/** \brief P-gain. Overridden if EEPROM activated. */
-#define EXT1_PID_P HT3_PID_P
-/** \brief I-gain. Overridden if EEPROM activated. */
-#define EXT1_PID_I HT3_PID_I
-/** \brief D-gain. Overridden if EEPROM activated.*/
-#define EXT1_PID_D HT3_PID_D
-
-#endif // EXT1_HOTEND_TYPE == HOTEND_TYPE_V2
-
-#if EXT1_HOTEND_TYPE == HOTEND_TYPE_V3
-
-#define EXT1_MAX_TEMP_C HOTEND_V3_MAX_TEMP_C
-/** \brief The maximum value, I-gain can contribute to the output. Overridden if EEPROM activated. */
-#define EXT1_PID_INTEGRAL_DRIVE_MAX HT4_PID_INTEGRAL_DRIVE_MAX
-/** \brief lower value for integral part. Overridden if EEPROM activated. */
-#define EXT1_PID_INTEGRAL_DRIVE_MIN HT4_PID_INTEGRAL_DRIVE_MIN
-/** \brief P-gain. Overridden if EEPROM activated. */
-#define EXT1_PID_P HT4_PID_P
-/** \brief I-gain. Overridden if EEPROM activated. */
-#define EXT1_PID_I HT4_PID_I
-/** \brief D-gain. Overridden if EEPROM activated.*/
-#define EXT1_PID_D HT4_PID_D
-
-#endif // EXT1_HOTEND_TYPE == HOTEND_TYPE_V3
-
-/** \brief maximum time the heater is can be switched on. Max = 255.  Overridden if EEPROM activated. */
-#define EXT1_PID_MAX 255
-
 /** \brief Faktor for the advance algorithm. 0 disables the algorithm.  Overridden if EEPROM activated.
 L is the linear factor and seems to be working better then the quadratic dependency. */
 #define EXT1_ADVANCE_L 0.0f
@@ -340,33 +173,9 @@ L is the linear factor and seems to be working better then the quadratic depende
 /** \brief Motor steps to remove backlash for advance alorithm. These are the steps
 needed to move the motor cog in reverse direction until it hits the driving
 cog. Direct drive extruder need 0. */
-#define EXT1_ADVANCE_BACKLASH_STEPS 0
-
-/** \brief You can run any gcode command on extruder deselect/select. Seperate multiple commands with a new line \n.
-That way you can execute some mechanical components needed for extruder selection or retract filament or whatever you need.
-The codes are only executed for multiple extruder when changing the extruder. */
-#define EXT1_SELECT_COMMANDS "M117 Extruder 1"
-#define EXT1_DESELECT_COMMANDS ""
-
 /** \brief PWM speed for the cooler fan. 0=off 255=full speed */
 #define EXT1_EXTRUDER_COOLER_SPEED 255
 #endif // NUM_EXTRUDER == 2
-
-#if NUM_EXTRUDER > 1 && EXT1_TEMPSENSOR_TYPE < 101
-
-#define EXT1_ANALOG_INPUTS 1
-#define EXT1_SENSOR_INDEX EXT0_ANALOG_INPUTS
-#define EXT1_ANALOG_CHANNEL ACCOMMA0 EXT1_TEMPSENSOR_PIN
-#define ACCOMMA1 ,
-
-#else
-
-#define EXT1_ANALOG_INPUTS 0
-#define EXT1_SENSOR_INDEX EXT1_TEMPSENSOR_PIN
-#define EXT1_ANALOG_CHANNEL
-#define ACCOMMA1 ACCOMMA0
-
-#endif // NUM_EXTRUDER>1 && EXT1_TEMPSENSOR_TYPE<101
 
 // ##########################################################################################
 // ##   Configuration of the heated bed
@@ -375,8 +184,7 @@ The codes are only executed for multiple extruder when changing the extruder. */
 /** \brief Maximal temperature which can be set for the heating bed */
 #define HEATED_BED_MAX_TEMP 180
 
-/** \brief Select type of your heated bed. It's the same as for EXT0_TEMPSENSOR_TYPE
-set to 0 if you don't have a heated bed */
+/** \brief Select type of your heated bed. Uses the same sensor types as EXT0_TEMPSENSOR_TYPE */
 #define HEATED_BED_SENSOR_TYPE 3
 
 /** \brief Analog pin of analog sensor to read temperature of heated bed.  */
@@ -384,9 +192,6 @@ set to 0 if you don't have a heated bed */
 
 /** \brief Pin to enable heater for bed. */
 #define HEATED_BED_HEATER_PIN HEATER_2_PIN
-
-/** \brief How often the temperature of the heated bed is set (msec) */
-#define HEATED_BED_SET_INTERVAL 5000
 
 /** \brief The maximum value, I-gain can contribute to the output.
 The precise values may differ for different nozzle/resistor combination.
@@ -415,20 +220,6 @@ A good start is 30 lower then the optimal value. You need to leave room for cool
 /** \brief Extreme values to detect defect thermistors. */
 #define MIN_DEFECT_TEMPERATURE -10
 #define MAX_DEFECT_TEMPERATURE 300
-
-#if HEATED_BED_SENSOR_TYPE < 101
-
-#define BED_ANALOG_INPUTS 1
-#define BED_SENSOR_INDEX EXT0_ANALOG_INPUTS + EXT1_ANALOG_INPUTS
-#define BED_ANALOG_CHANNEL ACCOMMA1 HEATED_BED_SENSOR_PIN
-
-#else
-
-#define BED_ANALOG_INPUTS 0
-#define BED_SENSOR_INDEX HEATED_BED_SENSOR_PIN
-#define BED_ANALOG_CHANNEL
-
-#endif // HEATED_BED_SENSOR_TYPE < 101
 
 // Temperature offsets at sensor readings of 60, 80, 100, 120, 140 and 160 °C.
 #define SENSOR_TEMPERATURE_OFFSETS_C { 0, 0, 0, 0, 0, 0 }
@@ -469,15 +260,6 @@ during homing operation. The homing speed is divided by the value. 1 = same spee
 // ##########################################################################################
 // ##   miscellaneous configurations
 // ##########################################################################################
-
-/** \brief number of analog input signals. Normally 1 for each temperature sensor */
-#define ANALOG_INPUTS (EXT0_ANALOG_INPUTS + EXT1_ANALOG_INPUTS + BED_ANALOG_INPUTS)
-
-#if ANALOG_INPUTS > 0
-/** \brief Channels are the MUX-part of ADMUX register */
-#define ANALOG_INPUT_CHANNELS \
-    { EXT0_ANALOG_CHANNEL EXT1_ANALOG_CHANNEL BED_ANALOG_CHANNEL }
-#endif // ANALOG_INPUTS>0
 
 /** \brief For Inverting Stepper Enable Pins (Active Low) use 0, Non Inverting (Active High) use 1 */
 #define X_ENABLE_ON 1
@@ -564,103 +346,8 @@ if you are printing many very short segments at high speed.*/
 
 //For configuration of speed vs. cpu RF_MICRO_STEPS_ @ CONFIGURATION.h as well!
 
-// ##########################################################################################
-// ##   Configuration of the heat bed z compensation
-// ##########################################################################################
-
-/** \brief Specifies until which height the z compensation must complete */
-#define HEAT_BED_Z_COMPENSATION_MAX_MM 10 // [mm]
-
-/** \brief Specifies from which height on the z compensation shall be performed
-Below this value the z compensation will only change the z axis so that a constant distance to the heat bed is hold (this is good for the first layer).
-Above this value the z compensation will distribute the roughness of the surface over the layers until HEAT_BED_Z_COMPENSATION_MAX_MM is reached. */
-#define HEAT_BED_Z_COMPENSATION_MIN_MM float(0.33) // [mm]
-
-/** \brief Configuration of the heat bed scan */
-#if NUM_EXTRUDER == 2
-#define HEAT_BED_SCAN_X_START_MM 0               // [mm] from the left border of the heat bed
-#define HEAT_BED_SCAN_X_END_MM 0                 // [mm] from the right border of the heat bed
-#define HEAT_BED_SCAN_X_STEP_SIZE_MM 20          // [mm]
-#define HEAT_BED_SCAN_X_STEP_SIZE_MIN_MM 10      // [mm]
-#define HEAT_BED_SCAN_X_CALIBRATION_POINT_MM 100 // [mm] from the left border of the heat bed
-
-#define HEAT_BED_SCAN_Y_START_MM 30              // [mm] from the front border of the heat bed
-#define HEAT_BED_SCAN_Y_END_MM 5                 // [mm] from the back border of the heat bed
-#define HEAT_BED_SCAN_Y_STEP_SIZE_MM 20          // [mm]
-#define HEAT_BED_SCAN_Y_STEP_SIZE_MIN_MM 10      // [mm]
-#define HEAT_BED_SCAN_Y_CALIBRATION_POINT_MM 100 // [mm] from the front border of the heat bed
-
-#else /* NUM_EXTRUDER != 2 -> */
-
-#define HEAT_BED_SCAN_X_START_MM 15              // [mm] from the left border of the heat bed
-#define HEAT_BED_SCAN_X_END_MM 5                 // [mm] from the right border of the heat bed
-#define HEAT_BED_SCAN_X_STEP_SIZE_MM 20          // [mm]
-#define HEAT_BED_SCAN_X_STEP_SIZE_MIN_MM 10      // [mm]
-#define HEAT_BED_SCAN_X_CALIBRATION_POINT_MM 100 // [mm] from the left border of the heat bed
-
-#define HEAT_BED_SCAN_Y_START_MM 30              // [mm] from the front border of the heat bed
-#define HEAT_BED_SCAN_Y_END_MM 5                 // [mm] from the back border of the heat bed
-#define HEAT_BED_SCAN_Y_STEP_SIZE_MM 20          // [mm]
-#define HEAT_BED_SCAN_Y_STEP_SIZE_MIN_MM 10      // [mm]
-#define HEAT_BED_SCAN_Y_CALIBRATION_POINT_MM 100 // [mm] from the front border of the heat bed
-#endif                                           // NUM_EXTRUDER == 2
-
-#define HEAT_BED_SCAN_Z_START_MM 1.0f // [mm]
-
-#define HEAT_BED_SCAN_CONTACT_PRESSURE_DELTA 10 // [digits]
-#define HEAT_BED_SCAN_RETRY_PRESSURE_DELTA 5    // [digits]
-#define HEAT_BED_SCAN_IDLE_PRESSURE_DELTA 0     // [digits]
-#define HEAT_BED_SCAN_IDLE_PRESSURE_MIN -7500   // [digits]
-#define HEAT_BED_SCAN_IDLE_PRESSURE_MAX 7500    // [digits]
-
-#define HEAT_BED_SCAN_UP_FAST_MM -0.02f   // [mm]
-#define HEAT_BED_SCAN_DOWN_FAST_MM 0.2f   // [mm]
-#define HEAT_BED_SCAN_UP_SLOW_MM -0.004f  // [mm]
-#define HEAT_BED_SCAN_DOWN_SLOW_MM 0.004f // [mm]
-
-#define HEAT_BED_SCAN_FAST_STEP_DELAY_MS 1   // [ms]
-#define HEAT_BED_SCAN_SLOW_STEP_DELAY_MS 100 // [ms]
-#define HEAT_BED_SCAN_IDLE_DELAY_MS 250      // [ms]
-
-#define HEAT_BED_SCAN_RETRIES 5                                       // [-]
-#define HEAT_BED_SCAN_PRESSURE_READS 15                               // [-]
-#define HEAT_BED_SCAN_PRESSURE_TOLERANCE 15                           // [digits]
-#define HEAT_BED_SCAN_PRESSURE_READ_DELAY_MS 15                       // [ms]
-#define HEAT_BED_SCAN_DELAY 1000                                      // [ms]
-
-#define PRECISE_HEAT_BED_SCAN_WARMUP_DELAY (uint32_t)600      // [s]
-#define PRECISE_HEAT_BED_SCAN_CALIBRATION_DELAY (uint32_t)600 // [s]
-#define PRECISE_HEAT_BED_SCAN_BED_TEMP_PLA 60                 // [°C]
-#define PRECISE_HEAT_BED_SCAN_BED_TEMP_ABS 100                // [°C]
-#define PRECISE_HEAT_BED_SCAN_EXTRUDER_TEMP_SCAN 100          // [°C]
-#define PRECISE_HEAT_BED_SCAN_EXTRUDER_TEMP_PLA 210           // [°C]
-#define PRECISE_HEAT_BED_SCAN_EXTRUDER_TEMP_ABS 240           // [°C]
-
-// configuration for the head bet offset search (M3900 command)
-#define SEARCH_HEAT_BED_OFFSET_CONTACT_PRESSURE_DELTA 33 // [digits]
-#define SEARCH_HEAT_BED_OFFSET_RETRY_PRESSURE_DELTA 30   // [digits]
-#define SEARCH_HEAT_BED_OFFSET_IDLE_PRESSURE_DELTA 0     // [digits]
-// scan position defined by the index of the heat bed matrix, counting from 1
-#define SEARCH_HEAT_BED_OFFSET_SCAN_POSITION_INDEX_X 5
-#define SEARCH_HEAT_BED_OFFSET_SCAN_POSITION_INDEX_Y 5
-// number of scanning iterations 2+
-#define SEARCH_HEAT_BED_OFFSET_SCAN_ITERATIONS 1
-
-// ##########################################################################################
-// ##   configuration of the pause functionality
-// ##########################################################################################
-
-/** \brief Configuration of the pause steps */
-#define DEFAULT_PAUSE_MM_X_PRINT 0           // [mm]
-#define DEFAULT_PAUSE_MM_Y_PRINT 200         // [mm]
-#define DEFAULT_PAUSE_MM_Z_PRINT 10          // [mm]
-#define DEFAULT_PAUSE_MM_E SCRIPT_RETRACT_MM // [mm] Zahl wird immer vorzeichenlos als Retract benutzt
-
-#define PAUSE_COOLDOWN 100 // [°C] 0=Off and 1..255=Temp down while paused
-
-// ##########################################################################################
-// ##   debugging
-// ##########################################################################################
-
+// Model-specific movement for the bed scan and print pause.
+#define HEAT_BED_SCAN_DOWN_FAST_MM 0.2f // [mm]
+#define DEFAULT_PAUSE_MM_Z_PRINT 10     // [mm]
 
 #endif // RF1000_H
