@@ -823,8 +823,6 @@ bool SdBaseFile::make83Name(const char* str, uint8_t* name, const char** ptr) {
             i = 8;  // place for extension
         } else {
             // illegal FAT characters
-#define FLASH_ILLEGAL_CHARS
-#ifdef FLASH_ILLEGAL_CHARS
             // store chars in flash
             FSTRINGPARAM(p);
             p = illegalFileChars;
@@ -835,13 +833,6 @@ bool SdBaseFile::make83Name(const char* str, uint8_t* name, const char** ptr) {
                     goto fail;
                 }
             }
-#else  // FLASH_ILLEGAL_CHARS
-       // store chars in RAM
-            if (strchr("|<>^+=?/[];,*\"\\", c)) {
-                DBG_FAIL_MACRO;
-                goto fail;
-            }
-#endif // FLASH_ILLEGAL_CHARS
 
             // check size and only allow ASCII printable characters
             if (i > n || c < 0X20 || c > 0X7E) {
@@ -2819,8 +2810,6 @@ fail:
 
 //==============================================================================
 // debug trace macro
-#define SD_TRACE(m, b)
-// #define SD_TRACE(m, b) Serial.print(m);Serial.println(b);
 // SPI functions
 // functions for hardware SPI
 //------------------------------------------------------------------------------
@@ -3156,7 +3145,6 @@ fail:
  * the value zero, false, is returned for failure.
  */
 bool Sd2Card::readBlock(uint32_t blockNumber, uint8_t* dst) {
-    SD_TRACE("RB", blockNumber);
     // use address if not SDHC card
     if (type() != SD_CARD_TYPE_SDHC)
         blockNumber <<= 9;
@@ -3266,7 +3254,6 @@ fail:
  * the value zero, false, is returned for failure.
  */
 bool Sd2Card::writeBlock(uint32_t blockNumber, const uint8_t* src) {
-    SD_TRACE("WB", blockNumber);
     // use address if not SDHC card
     if (type() != SD_CARD_TYPE_SDHC)
         blockNumber <<= 9;

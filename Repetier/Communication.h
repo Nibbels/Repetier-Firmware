@@ -160,9 +160,6 @@ public:
 
     FSTRINGVAR(tWait)
 
-#if EEPROM_MODE == 0
-    FSTRINGVAR(tNoEEPROMSupport)
-#else
     FSTRINGVAR(tConfigStoredEEPROM)
     FSTRINGVAR(tConfigLoadedEEPROM)
     FSTRINGVAR(tEPRConfigResetDefaults)
@@ -262,7 +259,6 @@ public:
     FSTRINGVAR(tEPRPrinter_FAN_PART_FAN_PWM_MAX)
 #endif // FAN_PIN > -1
 
-#endif // EEPROM_MODE==0
 
 #if SDSUPPORT
     FSTRINGVAR(tSDRemoved)

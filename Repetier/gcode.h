@@ -32,12 +32,6 @@ class SDCard;
 class Commands;
 class GCode;
 
-#define SERIAL_IN_BUFFER 128u
-
-#ifndef MAX_DATA_SOURCES
-#define MAX_DATA_SOURCES 4
-#endif
-
 /** This class defines the general interface to handle gcode communication with the firmware. This
 allows it to connect to different data sources and handle them all inside the same data structure.
 If several readers are active, the first one sending a byte pauses all other inputs until the command
@@ -46,14 +40,14 @@ so every channel gets the same chance to send commands.
 
 Available source types are:
 - serial communication port
-- sd card
-- flash memory
+- SD card, when compiled in
 */
 class GCodeSource {
+    static constexpr uint8_t maxDataSources = 1 + (SDSUPPORT ? 1 : 0);
     static fast8_t numSources; ///< Number of data sources available
     static fast8_t numWriteSources;
-    static GCodeSource* sources[MAX_DATA_SOURCES];
-    static GCodeSource* writeableSources[MAX_DATA_SOURCES];
+    static GCodeSource* sources[maxDataSources];
+    static GCodeSource* writeableSources[maxDataSources];
 
 public:
     static GCodeSource* activeSource;

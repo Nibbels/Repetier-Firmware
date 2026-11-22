@@ -18,14 +18,6 @@
 #ifndef UI_LANG_H
 #define UI_LANG_H
 
-#if !defined(UI_DISPLAY_CHARSET) || UI_DISPLAY_CHARSET > 3
-#if MOTHERBOARD == DEVICE_TYPE_RF1000
-#define UI_DISPLAY_CHARSET 1
-#else
-#define UI_DISPLAY_CHARSET 2
-#endif // MOTHERBOARD == DEVICE_TYPE_RF1000
-#endif // !defined(UI_DISPLAY_CHARSET) || UI_DISPLAY_CHARSET>3
-
 //Symbolic character values for specific symbols.
 //May be overridden for different controllers, character sets, etc.
 #define cUP "\001"
@@ -37,20 +29,7 @@
 #define bFOLD 6
 #define cARROW "\176"
 
-#if UI_DISPLAY_CHARSET == 0 // ASCII fallback
-#define CHAR_RIGHT '-'
-#define CHAR_SELECTOR '>'
-#define CHAR_SELECTED '*'
-#define STR_auml "ae"
-#define STR_Auml "Ae"
-#define STR_uuml "ue"
-#define STR_Uuml "Ue"
-#define STR_ouml "oe"
-#define STR_Ouml "Oe"
-#define STR_szlig "ss"
-#endif
-
-#if UI_DISPLAY_CHARSET == 1 // HD44870 charset with knji chars
+#if MOTHERBOARD == DEVICE_TYPE_RF1000 // RF1000 LCD character ROM
 #define CHAR_RIGHT 0x7e
 #define CHAR_SELECTOR '>'
 #define CHAR_SELECTED '*'
@@ -61,9 +40,7 @@
 #define STR_ouml "\357"
 #define STR_Ouml "Oe"
 #define STR_szlig "\342"
-#endif
-
-#if UI_DISPLAY_CHARSET == 2 // Western charset
+#else // RF2000 family LCD character ROM
 #define CHAR_RIGHT 0xbc
 #define CHAR_SELECTOR 0xf6
 #define CHAR_SELECTED '*'
@@ -76,21 +53,6 @@
 #define STR_szlig "\160"
 #endif
 
-#if UI_DISPLAY_CHARSET == 3 // U8glib
-//>>
-#define CHAR_RIGHT 187
-//'>'
-#define CHAR_SELECTOR 255
-//'*'
-#define CHAR_SELECTED 254
-#define STR_auml "\344"
-#define STR_Auml "\304"
-#define STR_uuml "\374"
-#define STR_Uuml "\334"
-#define STR_ouml "\366"
-#define STR_Ouml "\326"
-#define STR_szlig "\337"
-#endif
 
 // ##########################################################################################
 // ##    English

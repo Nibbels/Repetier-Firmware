@@ -8,7 +8,8 @@ Based on Repetier-Firmware - the fast and user friendly firmware.
 
 THIS VERSION IS AN UNOFFICIAL MODIFICATION OF mhiers UNOFFICIAL MODIFICATION OF THE ORIGINAL FIRMWARE. 
 It is neither endorsed nor supported by the developers of the RF1000 firmware.  
-There is no SD-Card support included.  
+SD support can be enabled or disabled with `SDSUPPORT`.
+
 USE AT YOUR OWN RISK.
 
 For the official version, have a look at the upstream repository:
@@ -23,7 +24,7 @@ https://github.com/RF1000/Repetier-Firmware (see branch development. Or else loo
 `#define MOTHERBOARD                         DEVICE_TYPE_RF2000` or  
 `#define MOTHERBOARD                         DEVICE_TYPE_RF2000v2`  
 - This revision is for 3D printing. The [last revision containing the milling code](https://github.com/Nibbels/Repetier-Firmware/tree/7e2e08b7f6da7677007dfddd06f8fc5adeb7d709) is available in the repository history.
-- Optional: Edit and save the Configuration.h and RF1000.h or RF2000.h to your needs in case you use special specialized hardware.
+- For retrofits edit `Configuration.h` and the model settings in `RF1000.h` or in the shared `RF2000.h` for RF2000 and RF2000v2. See the [board connectors and X44 cooler example](docs/board-connectors.md).
 - Connect your Printer with a USB-cable and switch it on.
 - Go to and doubleclick /Repetier/Repetier.ino
 - Within the cyan colored Arduino-IDE you have to choose some preconfiguration settings for your RFx000 Board at the menu **Tools->**:  

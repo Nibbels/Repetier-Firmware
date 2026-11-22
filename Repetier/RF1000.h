@@ -22,7 +22,9 @@
 #define UI_PRINTER_NAME "RF1000"
 
 /** \brief Number of extruders */
+#ifndef NUM_EXTRUDER
 #define NUM_EXTRUDER 1 // 1 = Single, 2 = Dual
+#endif
 
 /** \brief Specifies the maximal drive over millimeters which the z-endstop can bear without getting damaged or degraded */
 /*
@@ -39,9 +41,9 @@ Overflow in Z-Matrix: >12.7f
 // ##   main hardware configuration
 // ##########################################################################################
 
-#if NUM_EXTRUDER > 2 || NUM_EXTRUDER < 0
-#error This Firmware supports up to 2 Extruders. You might have to reimplement the 3+ code or "request it" if you really got hands on a RFx000 board with 3+ Extruders.
-#endif // NUM_EXTRUDER > 2 || NUM_EXTRUDER < 0
+#if NUM_EXTRUDER < 1 || NUM_EXTRUDER > 2
+#error RFx000 firmware supports one or two extruders.
+#endif
 
 /** \brief Define the type of the present extruders */
 #if NUM_EXTRUDER == 2
@@ -204,7 +206,7 @@ The codes are only executed for multiple extruder when changing the extruder. */
 /** \brief PWM speed for the cooler fan. 0=off 255=full speed */
 #define EXT0_EXTRUDER_COOLER_SPEED 255
 
-#if NUM_EXTRUDER > 0 && EXT0_TEMPSENSOR_TYPE < 101
+#if EXT0_TEMPSENSOR_TYPE < 101
 
 #define EXT0_ANALOG_INPUTS 1
 #define EXT0_SENSOR_INDEX 0
@@ -436,26 +438,6 @@ A good start is 30 lower then the optimal value. You need to leave room for cool
 // ##########################################################################################
 
 #define Z_ENDSTOP_MAX_HYSTERESIS 0.5f //mm
-
-/** \brief By default all endstops are pulled up to HIGH. You need a pullup if you
-use a mechanical endstop connected with GND. Set value to false for no pullup
-on this endstop. */
-#define ENDSTOP_PULLUP_X_MIN true
-#define ENDSTOP_PULLUP_Y_MIN true
-#define ENDSTOP_PULLUP_Z_MIN true
-
-/** \brief set to true to invert the logic of the endstops */
-#define ENDSTOP_X_MIN_INVERTING true
-#define ENDSTOP_Y_MIN_INVERTING true
-#define ENDSTOP_Z_MIN_INVERTING true
-
-/** \brief Set order of axis homing. Use HOME_ORDER_XYZ and replace XYZ with your order. */
-#define HOMING_ORDER_PRINT HOME_ORDER_XYZ //if you work with springloaded hotend or positive Z-Matrix home Z last!! You might otherwise hit the surface.
-
-/** \brief Sets direction of endstops when homing; 1=MAX, -1=MIN */
-#define X_HOME_DIR -1
-#define Y_HOME_DIR -1
-#define Z_HOME_DIR -1
 
 /** \brief If during homing the endstop is reached, how many mm should the printer move back for the second try */
 #define ENDSTOP_X_BACK_MOVE 5.0f

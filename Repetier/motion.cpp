@@ -45,11 +45,11 @@
 #error One of the following pins is not assigned: X_STEP_PIN,Y_STEP_PIN,Z_STEP_PIN
 #endif // X_STEP_PIN<0 || Y_STEP_PIN<0 || Z_STEP_PIN<0
 
-#if EXT0_STEP_PIN < 0 && NUM_EXTRUDER > 0
+#if EXT0_STEP_PIN < 0
 #error EXT0_STEP_PIN not set to a pin number.
 #endif // EXT0_STEP_PIN<0 && NUM_EXTRUDER>0
 
-#if EXT0_DIR_PIN < 0 && NUM_EXTRUDER > 0
+#if EXT0_DIR_PIN < 0
 #error EXT0_DIR_PIN not set to a pin number.
 #endif // EXT0_DIR_PIN<0 && NUM_EXTRUDER>0
 

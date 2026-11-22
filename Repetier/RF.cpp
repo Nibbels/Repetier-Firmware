@@ -3387,7 +3387,6 @@ void handlePauseTime(millis_t uTime) {
             }
             if ((uTime - g_uPauseTime) > (EXTRUDER_CURRENT_PAUSE_DELAY < 30000 ? 30000 : EXTRUDER_CURRENT_PAUSE_DELAY)) //das sind alle 60s
             {
-#if NUM_EXTRUDER > 0
                 {
                     Com::printFLN(PSTR("Pause: Saving Energy"));
                     // we have paused a few moments ago - reduce the current of the extruder motor in order to avoid unwanted heating of the filament for use cases where the printing is paused for several minutes
@@ -3404,7 +3403,6 @@ void handlePauseTime(millis_t uTime) {
                     }
                     g_pauseStatus = PAUSE_STATUS_PAUSED_STANDBY;
                 }
-#endif
                 g_uPauseTime = 0;
             }
         }
@@ -3705,7 +3703,6 @@ static void waitForPauseTransition() {
 }
 
 static bool continuePrintLoadTemperatures() {
-#if NUM_EXTRUDER > 0
     bool wait = false;
     for (uint8_t i = 0; i < NUM_EXTRUDER; i++) {
         setExtruderCurrent(i, Printer::motorCurrent[E_AXIS + i]);
@@ -3724,7 +3721,6 @@ static bool continuePrintLoadTemperatures() {
         }
         return true; // abort continue and wait for next button press because we had to wake up
     }
-#endif // NUM_EXTRUDER > 0
     return false;
 }
 
@@ -4951,8 +4947,13 @@ void processSpecialGCode(GCode* pCommand) {
         case 3300: // M3300 [P] [S] - configure the 24V FET outputs ( on/off )
         {
             if (pCommand->hasP()) {
+                if ((pCommand->P == 1 && FET1 > -1 && HOTEND_COOLER_USES_PIN(FET1))
+                    || (pCommand->P == 2 && FET2 > -1 && HOTEND_COOLER_USES_PIN(FET2))) {
+                    Com::printErrorFLN(PSTR("M3300: output is assigned to a hotend cooler"));
+                    break;
+                }
                 switch (pCommand->P) {
-#if FET1 > -1
+#if FET1 > -1 && !HOTEND_COOLER_USES_PIN(FET1)
                 case 1: {
                     if (pCommand->hasS()) {
                         if (pCommand->S == 0) {
@@ -4969,8 +4970,8 @@ void processSpecialGCode(GCode* pCommand) {
                     }
                     break;
                 }
-#endif // FET1
-#if FET2 > -1
+#endif // FET1 accessory output
+#if FET2 > -1 && !HOTEND_COOLER_USES_PIN(FET2)
                 case 2: {
                     if (pCommand->hasS()) {
                         if (pCommand->S == 0) {
@@ -4987,7 +4988,7 @@ void processSpecialGCode(GCode* pCommand) {
                     }
                     break;
                 }
-#endif // FET2
+#endif // FET2 accessory output
 #if FET3 > -1
                 case 3: {
                     if (pCommand->hasS()) {
@@ -5914,14 +5915,12 @@ void processSpecialGCode(GCode* pCommand) {
                 const float spacerXd = (NUM_EXTRUDER > 1 ? extruder[1].offsetMM[X_AXIS] : 0);
 
                 float x = spacerX;
-#if NUM_EXTRUDER > 0
                 if (Extruder::current->id != 0) {
                     //if you use T1 then dont make the start line ontop of the startline of T0
                     //shift the y-position according to the extruders number.
                     y += (float)Extruder::current->id; /* times 1mm */
                     ;
                 }
-#endif                                  //NUM_EXTRUDER > 0
                 if (pCommand->hasY()) { //override y with user value
                     y = (float)pCommand->Y;
                     float max = Printer::maxSoftEndstopSteps[Y_AXIS] * Printer::axisMMPerSteps[Y_AXIS] * 0.5;
@@ -5968,11 +5967,9 @@ void processSpecialGCode(GCode* pCommand) {
                     if (g_uBlockCommands || skip_by_keys)
                         break; // No extra Y travel after skip/abort.
                     y += 1.5f;
-#if NUM_EXTRUDER > 0
                     //if you use T1 then dont make the start line ontop of the startline of T0
                     y += float(NUM_EXTRUDER - 1); /* +1mm spacing for each extruder involved */
                     ;
-#endif //NUM_EXTRUDER > 0
                     Printer::queueFloatCoordinates(IGNORE_COORDINATE, y, IGNORE_COORDINATE, IGNORE_COORDINATE, Printer::homingFeedrate[Y_AXIS]);
                     if (skip_by_keys)
                         break; //mache die Startmade überspringbar -> weiter zum Druck.
@@ -6742,10 +6739,6 @@ void drv8711Init(void) {
     WRITE(DRV_RESET1, LOW);
     SET_OUTPUT(DRV_RESET1);
 
-#if DRV_RESET2
-    WRITE(DRV_RESET2, LOW);
-    SET_OUTPUT(DRV_RESET2);
-#endif // DRV_RESET2
 
     WRITE(DRV_SCLK, LOW);
     SET_OUTPUT(DRV_SCLK);
@@ -6764,16 +6757,10 @@ void drv8711Init(void) {
     // reset all DRV8711 (active high)
     WRITE(DRV_RESET1, HIGH);
 
-#if DRV_RESET2
-    WRITE(DRV_RESET2, HIGH);
-#endif // DRV_RESET2
 
     HAL::delayMicroseconds(5000);
     WRITE(DRV_RESET1, LOW);
 
-#if DRV_RESET2
-    WRITE(DRV_RESET2, LOW);
-#endif // DRV_RESET2
 
     HAL::delayMicroseconds(5000);
 
@@ -6975,7 +6962,6 @@ void updateRGBLightStatus(void) {
 
 
     // operating mode print
-#if NUM_EXTRUDER >= 1
     for (uint8_t i = 0; i < NUM_EXTRUDER; i++) {
         if (extruder[i].tempControl.targetTemperatureC > MAX_ROOM_TEMPERATURE) {
             if (fabs(extruder[i].tempControl.targetTemperatureC - extruder[i].tempControl.currentTemperatureC) < RGB_LIGHT_TEMP_TOLERANCE) {
@@ -6989,7 +6975,6 @@ void updateRGBLightStatus(void) {
             }
         }
     }
-#endif // NUM_EXTRUDER >= 1
 
     if (heatedBedController.targetTemperatureC > MAX_ROOM_TEMPERATURE) {
         if (fabs(heatedBedController.targetTemperatureC - heatedBedController.currentTemperatureC) < RGB_LIGHT_TEMP_TOLERANCE) {
@@ -7005,7 +6990,6 @@ void updateRGBLightStatus(void) {
         }
     }
 
-#if NUM_EXTRUDER >= 1
     for (uint8_t i = 0; i < NUM_EXTRUDER; i++) {
         if ((extruder[i].tempControl.currentTemperatureC - extruder[i].tempControl.targetTemperatureC) > COOLDOWN_THRESHOLD) {
             // we shall cool down
@@ -7014,7 +6998,6 @@ void updateRGBLightStatus(void) {
             }
         }
     }
-#endif // NUM_EXTRUDER >= 1
 
     if ((heatedBedController.currentTemperatureC - heatedBedController.targetTemperatureC) > COOLDOWN_THRESHOLD) {
         // we shall cool down
@@ -7090,28 +7073,17 @@ void updateRGBLightStatus(void) {
 static void setupForPrinting() {
     Printer::setSomeTempsensorDefect(false);
 
-#if EEPROM_MODE
     // read the settings from the EEPROM
     Printer::homingFeedrate[X_AXIS] = HAL::eprGetFloat(EPR_X_HOMING_FEEDRATE_PRINT);
     Printer::homingFeedrate[Y_AXIS] = HAL::eprGetFloat(EPR_Y_HOMING_FEEDRATE_PRINT);
     Printer::homingFeedrate[Z_AXIS] = HAL::eprGetFloat(EPR_Z_HOMING_FEEDRATE_PRINT);
-#else
-    // read the settings from Configuration.h
-    Printer::homingFeedrate[X_AXIS] = HOMING_FEEDRATE_X_PRINT;
-    Printer::homingFeedrate[Y_AXIS] = HOMING_FEEDRATE_Y_PRINT;
-    Printer::homingFeedrate[Z_AXIS] = HOMING_FEEDRATE_Z_PRINT;
-#endif // EEPROM_MODE
 
-#if EEPROM_MODE
     Printer::axisLengthMM[X_AXIS] = HAL::eprGetFloat(EPR_X_LENGTH);
     if (Printer::axisLengthMM[X_AXIS] <= 0 || Printer::axisLengthMM[X_AXIS] > 245.0f) {
         Printer::axisLengthMM[X_AXIS] = X_MAX_LENGTH_PRINT;
         HAL::eprSetFloat(EPR_X_LENGTH, Printer::axisLengthMM[X_AXIS]);
         EEPROM::updateChecksum();
     }
-#else
-    Printer::axisLengthMM[X_AXIS] = X_MAX_LENGTH_PRINT;
-#endif // EEPROM_MODE
 
     loadActiveHeatBedFromExtEEPROM();
     if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {

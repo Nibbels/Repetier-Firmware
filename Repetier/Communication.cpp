@@ -164,9 +164,6 @@ FSTRINGVALUE(Com::tDryModeUntilRestart, "Printer set into dry run mode until res
 
 FSTRINGVALUE(Com::tWait, "wait")
 
-#if EEPROM_MODE == 0
-FSTRINGVALUE(Com::tNoEEPROMSupport, "No EEPROM support compiled.\r\n")
-#else
 FSTRINGVALUE(Com::tConfigStoredEEPROM, "Configuration stored to EEPROM.")
 FSTRINGVALUE(Com::tConfigLoadedEEPROM, "Configuration loaded from EEPROM.")
 FSTRINGVALUE(Com::tEPRConfigResetDefaults, "Configuration reset to defaults.")
@@ -265,7 +262,6 @@ FSTRINGVALUE(Com::tEPRPrinter_FAN_PART_FAN_PWM_MIN, "Partfan 1% level [1..239]")
 FSTRINGVALUE(Com::tEPRPrinter_FAN_PART_FAN_PWM_MAX, "Partfan 99% level [16..254]")
 #endif // FAN_PIN > -1
 
-#endif // EEPROM_MODE
 
 #if SDSUPPORT
 FSTRINGVALUE(Com::tSDRemoved, UI_TEXT_SD_REMOVED)

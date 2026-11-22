@@ -19,7 +19,7 @@ The relevant original decisions were documented over years. Read these before re
 | Topic | Source |
 | --- | --- |
 | Compile-time DMS features, time/offset constants | [Configuration.h](../../Repetier/Configuration.h#L86-L100) |
-| Common nominal boundaries / special prime height | [RF1000.h](../../Repetier/RF1000.h#L762-L773), [RF2000.h](../../Repetier/RF2000.h#L769-L780), [RF2000v2.h](../../Repetier/RF2000v2.h#L769-L780) |
+| Common nominal boundaries / special prime height | [RF1000.h](../../Repetier/RF1000.h#L762-L773), [RF2000 family](../../Repetier/RF2000.h) |
 | Planner first-layer detector, auto bounds | [motion.cpp](../../Repetier/motion.cpp#L173-L219) |
 | Matrix Z interpolation, fade-out, ECMP | [RF.cpp](../../Repetier/RF.cpp#L3192-L3302) |
 | Realized E-stepping / material correction | [motion.cpp](../../Repetier/motion.cpp#L1385-L1500) |

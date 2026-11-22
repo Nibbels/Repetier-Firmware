@@ -505,12 +505,6 @@ union csd_t {
 /** SPI clock rate selector for SD initialization commands. */
 #define SPI_SD_INIT_RATE 11
 //------------------------------------------------------------------------------
-/**
- * Set the SS pin high for hardware SPI.  If SS is chip select for another SPI
- * device this will disable that device during the SD init phase.
- */
-#define SET_SPI_SS_HIGH 1
-//------------------------------------------------------------------------------
 // SPI speed is F_CPU/2^(1 + index), 0 <= index <= 6
 /** Set SCK to max rate of F_CPU/2. See Sd2Card::setSckRate(). */
 uint8_t const SPI_FULL_SPEED = 0;

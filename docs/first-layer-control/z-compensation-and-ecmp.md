@@ -63,4 +63,4 @@ An untested fork's RF2000v2-only reset-after-M3912 is not backed by model-specif
 - [Stepper E compensation](../../Repetier/motion.cpp#L1385-L1500)
 - [M3912 reset](../../Repetier/RF.cpp#L9288-L9313)
 - [Z-stepper reset](../../Repetier/Printer.h#L355-L371)
-- [Same three machine configurations](../../Repetier/RF1000.h#L762-L773) · [RF2000](../../Repetier/RF2000.h#L769-L780) · [RF2000v2](../../Repetier/RF2000v2.h#L769-L780)
+- [RF1000](../../Repetier/RF1000.h) · [RF2000 family](../../Repetier/RF2000.h)

@@ -186,10 +186,8 @@ public:
 #else
         switch (Extruder::current->id) {
         case 0: {
-#if NUM_EXTRUDER > 0
             WRITE(EXT0_STEP_PIN, HIGH);
 
-#endif // NUM_EXTRUDER>0
             break;
         }
 
@@ -212,10 +210,8 @@ public:
 #else
         switch (Extruder::current->id) {
         case 0: {
-#if NUM_EXTRUDER > 0
             WRITE(EXT0_STEP_PIN, LOW);
 
-#endif // NUM_EXTRUDER>0
             break;
         }
 
@@ -246,7 +242,6 @@ public:
         }
 #else
         switch (Extruder::current->id) {
-#if NUM_EXTRUDER > 0
         case 0: {
             if (dir)
                 WRITE(EXT0_DIR_PIN, !EXT0_INVERSE);
@@ -255,7 +250,6 @@ public:
 
             break;
         }
-#endif // NUM_EXTRUDER>0
 
 #if defined(EXT1_DIR_PIN) && NUM_EXTRUDER > 1
         case 1: {

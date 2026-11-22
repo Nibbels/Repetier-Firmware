@@ -28,15 +28,11 @@
 
 #if MOTHERBOARD == DEVICE_TYPE_RF1000
 #include "RF1000.h"
-#endif // MOTHERBOARD == DEVICE_TYPE_RF1000
-
-#if MOTHERBOARD == DEVICE_TYPE_RF2000
+#elif MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 #include "RF2000.h"
-#endif // MOTHERBOARD == DEVICE_TYPE_RF2000
-
-#if MOTHERBOARD == DEVICE_TYPE_RF2000v2
-#include "RF2000v2.h"
-#endif // MOTHERBOARD == DEVICE_TYPE_RF2000v2
+#else
+#error Unsupported RFx000 model
+#endif
 
 #include "pins.h"
 #include "HAL.h"

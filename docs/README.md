@@ -4,6 +4,10 @@ These are source-grounded design documents, complementary to [README.md](../READ
 
 Start with the [development roadmap](development-roadmap.md) for the active coordinate and motion-compensation block and the intended firmware architecture. The [maintenance list](maintenance-tasks.md) tracks fixes and open tasks by development block.
 
+## Board connectors and retrofits
+
+The [board connector reference](board-connectors.md) maps RF1000 and RF2000 family outputs, sensor ports and expansion headers. It includes the single-extruder RF2000 setup with an E3D heatsink fan on X44.
+
 ## Z-offset, calibration and persistence
 Start at [Z-offset subsystem: engineering map](z-offset/README.md) for the offset ledger, boot/print lifecycle audit, HBS/ZOS, two EEPROM stores, physical thermal drift and source-backed candidate causes of sudden Z shifts. See [Mod Menu live transfer](z-offset/history-and-workflows.md): alternating Z-up/down deliberately converts SenseOffset into the saved manual Z-offset.
 

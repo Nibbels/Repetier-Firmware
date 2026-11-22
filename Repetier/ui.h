@@ -222,18 +222,15 @@
 // Load basic language definition to make sure all values are defined
 #include "uilang.h"
 
-// Load some parts of the printers configuration
+// Stock LCD geometry, with separate widths for the two panels.
+#define UI_ROWS 4
 #if MOTHERBOARD == DEVICE_TYPE_RF1000
 #define UI_COLS 16        //check MAX_COLS when changed
-#define UI_ROWS 4         //do not change for RF1000 or RF2000!
-#define UI_DELAYPERCHAR 320
 #define UI_SPACER ""
 #endif // MOTHERBOARD == DEVICE_TYPE_RF1000
 
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 #define UI_COLS 20        //check MAX_COLS when changed
-#define UI_ROWS 4         //do not change for RF1000 or RF2000!
-#define UI_DELAYPERCHAR 320
 #define UI_SPACER "    "
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
@@ -638,7 +635,6 @@ public:
 
 extern UIDisplay uid;
 
-#if UI_ROWS == 4
 #if UI_COLS == 16
 #define UI_LINE_OFFSETS \
     { 0, 0x40, 0x10, 0x50 } // 4x16
@@ -649,10 +645,6 @@ extern UIDisplay uid;
 #else
 #error Unknown combination of rows/columns - define UI_LINE_OFFSETS manually.
 #endif // UI_COLS==16
-#else
-#define UI_LINE_OFFSETS \
-    { 0, 0x40, 0x10, 0x50 } // 2x16, 2x20, 2x24
-#endif                      // UI_ROWS==4
 
 #include "uilang.h"
 #include "uimenu.h"

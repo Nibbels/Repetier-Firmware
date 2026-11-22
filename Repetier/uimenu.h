@@ -217,7 +217,6 @@ UI_PAGE2(name,row1,row2);
 for 2 row displays. You can add additional pages or change the default pages like you want.
 */
 
-#if UI_ROWS>=4
         #if UI_COLS<=16
             UI_PAGE4(ui_page1,"%U1%ec/%EcB%eb/%Eb%U2","Z%hZ%x2%x5%sC",UI_TEXT_STRAIN_GAUGE,"%os")
         #else
@@ -232,15 +231,10 @@ for 2 row displays. You can add additional pages or change the default pages lik
         UI_PAGE4(ui_page3,UI_TEXT_PAGE_EXTRUDER1,"",UI_TEXT_PAGE_BED,"%os")
     #endif // NUM_EXTRUDER>1
 
-    #if EEPROM_MODE!=0
         UI_PAGE4(ui_page4,"%Z5","%Z6","%Z7","%Z8")
 
         #define UI_PRINTTIME_PAGES ,&ui_page4
         #define UI_PRINTTIME_COUNT 1
-    #else
-        #define UI_PRINTTIME_PAGES
-        #define UI_PRINTTIME_COUNT 0
-    #endif // EEPROM_MODE!=0
 
     #if UI_COLS<=16
         UI_PAGE4(ui_page_mod,UI_TEXT_STRAIN_GAUGE_SPEED,
@@ -291,7 +285,6 @@ for 2 row displays. You can add additional pages or change the default pages lik
 
     // How many pages do you want to have. Minimum is 1.
     #define UI_NUM_PAGES 4+UI_PRINTTIME_COUNT+UI_MOD_COUNT+UI_MOD2_COUNT
-#endif // UI_ROWS>=4
 
 /* ============ MENU definition ================
 
@@ -312,11 +305,9 @@ ok sets the value if not already done and goes back to previous menu.
 UI_MENU_ACTION4(ui_menu_message,UI_ACTION_DUMMY,"%m1","%m2","%m3","%m4")
 
 /** \brief Positions submenus */
-#if UI_ROWS>=4
 UI_MENU_ACTION4(ui_menu_xpos,UI_ACTION_XPOSITION, "X%hX%x0 %x3mm", "Min:%sx Max:%sX", "F=%sf(%sK)", "%px")
 UI_MENU_ACTION4(ui_menu_ypos,UI_ACTION_YPOSITION, "Y%hY%x1 %x4mm", "Min:%sy Max:%sY", "F=%sf(%sK)", "%py")
 UI_MENU_ACTION4(ui_menu_zpos,UI_ACTION_ZPOSITION, "Z%hZ%x2%x5 %sC", "Min:%sz Max:%sZ", "F=%sF(%sK)", "%pz")
-#endif // UI_ROWS>=4
 
 UI_MENU_ACTION2(ui_menu_epos,UI_ACTION_EPOSITION, UI_TEXT_ACTION_EPOSITION_FAST2a, UI_TEXT_ACTION_EPOSITION_FAST2b)
 
@@ -464,25 +455,32 @@ UI_MENU_ACTIONCOMMAND(ui_menu_toggle_230V_output, UI_TEXT_230V_OUTPUT, UI_ACTION
 #define OUTPUT_230V_COUNT 0
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
+#if !HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)
 UI_MENU_ACTIONCOMMAND(ui_menu_light_mode, UI_TEXT_LIGHTS_ONOFF, UI_ACTION_LIGHTS_ONOFF)
+#define OUTPUT_X19_ENTRY , &ui_menu_light_mode
+#define OUTPUT_X19_COUNT 1
+#else
+#define OUTPUT_X19_ENTRY
+#define OUTPUT_X19_COUNT 0
+#endif
 
-#if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && FET1 > -1
+#if FET1 > -1 && !HOTEND_COOLER_USES_PIN(FET1)
 UI_MENU_ACTIONCOMMAND(ui_menu_toggle_FET1_output, UI_TEXT_FET1_OUTPUT, UI_ACTION_FET1_OUTPUT)
 #define OUTPUT_FET1_ENTRY , &ui_menu_toggle_FET1_output
 #define OUTPUT_FET1_COUNT 1
 #else
 #define OUTPUT_FET1_ENTRY
 #define OUTPUT_FET1_COUNT 0
-#endif // (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && FET1 > -1
+#endif // FET1 accessory output
 
-#if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && FET2 > -1
+#if FET2 > -1 && !HOTEND_COOLER_USES_PIN(FET2)
 UI_MENU_ACTIONCOMMAND(ui_menu_toggle_FET2_output, UI_TEXT_FET2_OUTPUT, UI_ACTION_FET2_OUTPUT)
 #define OUTPUT_FET2_ENTRY , &ui_menu_toggle_FET2_output
 #define OUTPUT_FET2_COUNT 1
 #else
 #define OUTPUT_FET2_ENTRY
 #define OUTPUT_FET2_COUNT 0
-#endif // (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && FET2 > -1
+#endif // FET2 accessory output
 
 UI_MENU_ACTION4(ui_menu_quick_reset_ack, UI_ACTION_RF_RESET_ACK, UI_TEXT_RESET_ACK, "", UI_ACTION_TEXT_YES, UI_ACTION_TEXT_NO)
 UI_MENU_ACTIONSELECTOR(ui_menu_quick_reset,UI_TEXT_RESET,ui_menu_quick_reset_ack)
@@ -490,9 +488,9 @@ UI_MENU_ACTIONSELECTOR(ui_menu_quick_reset,UI_TEXT_RESET,ui_menu_quick_reset_ack
 #define RESET_VIA_MENU_ENTRY , &ui_menu_quick_reset
 
 #define UI_MENU_QUICK {&ui_menu_quick_stop_print, &ui_menu_home_all, &ui_menu_quick_stopstepper \
-    OUTPUT_OBJECT_ENTRY, &ui_menu_quick_speedmultiply, &ui_menu_quick_flowmultiply OUTPUT_230V_ENTRY, \
-    &ui_menu_light_mode OUTPUT_FET1_ENTRY OUTPUT_FET2_ENTRY RESET_VIA_MENU_ENTRY}
-UI_MENU(ui_menu_quick,UI_MENU_QUICK,6+OUTPUT_OBJECT_COUNT+OUTPUT_230V_COUNT+OUTPUT_FET1_COUNT+OUTPUT_FET2_COUNT+RESET_VIA_MENU_COUNT)
+    OUTPUT_OBJECT_ENTRY, &ui_menu_quick_speedmultiply, &ui_menu_quick_flowmultiply OUTPUT_230V_ENTRY \
+    OUTPUT_X19_ENTRY OUTPUT_FET1_ENTRY OUTPUT_FET2_ENTRY RESET_VIA_MENU_ENTRY}
+UI_MENU(ui_menu_quick,UI_MENU_QUICK,5+OUTPUT_X19_COUNT+OUTPUT_OBJECT_COUNT+OUTPUT_230V_COUNT+OUTPUT_FET1_COUNT+OUTPUT_FET2_COUNT+RESET_VIA_MENU_COUNT)
 
 /** \brief Fan menu */
 

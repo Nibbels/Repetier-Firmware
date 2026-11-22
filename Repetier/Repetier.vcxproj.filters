@@ -65,12 +65,6 @@
     <ClInclude Include="RF2000.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="RF2000v2.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="u8glib_ex.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="ui.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -84,9 +78,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="SdFat.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="FatStructs.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

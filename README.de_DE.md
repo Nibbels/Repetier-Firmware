@@ -8,7 +8,8 @@ Basierend auf der Repetier-Firmware - die schnelle und benutzerfreundliche Firmw
 ## Warnhinweis
 Diese Firmware-Modifikation stellt eine Weiterentwicklung/Ergänzung von mhier's inoffizieller Firmware-Modifikation der original Conrad-Firmware dar. Sie wird vom Hersteller der RF1000 und RF2000 Geräte nicht unterstützt.  
 Für etwaige Schäden, die an Ihrem Gerät entstehen könnten, kann keine Verantwortung übernommen werden.  
-Diese Firmware unterstützt den Druck von SD-Karte nicht.  
+Die SD-Unterstützung lässt sich über `SDSUPPORT` ein- und ausschalten.
+
 BENUTZUNG AUF EIGENE GEFAHR. 
 
 Link zur offiziellen Version der Firmware:
@@ -23,7 +24,7 @@ https://github.com/RF1000/Repetier-Firmware (siehe Branch developement. Oder auc
 `#define MOTHERBOARD                         DEVICE_TYPE_RF2000` or  
 `#define MOTHERBOARD                         DEVICE_TYPE_RF2000v2`  
 - Dieser Stand ist für den 3D-Druck ausgelegt. Der [letzte Stand mit Fräscode](https://github.com/Nibbels/Repetier-Firmware/tree/7e2e08b7f6da7677007dfddd06f8fc5adeb7d709) liegt im Repository-Verlauf.
-- Optional: Man bearbeitet und speichert Configuration.h und RF1000.h oder RF2000.h, wie man es für seinen speziellen Drucker braucht.
+- Für Umbauten stehen die Einstellungen in `Configuration.h` sowie in `RF1000.h` oder im gemeinsamen `RF2000.h` für RF2000 und RF2000v2. Die [Anschlussübersicht](docs/board-connectors.md) enthält das Beispiel für einen Hotend-Lüfter an X44.
 - Der Drucker wird mit dem USB-Kabel angeschlossen und angeschaltet.
 - Die Datei /Repetier/Repetier.ino doppelklicken. 
 - Innerhalb der türkisfarbenen Arduino-IDE muss man im Menü **Werkzeuge->** die Voreinstellungen für die RFx000-Boards prüfen oder einstellen:  

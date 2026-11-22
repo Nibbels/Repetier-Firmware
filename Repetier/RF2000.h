@@ -18,34 +18,84 @@
 #ifndef RF2000_H
 #define RF2000_H
 
-// this file contains all definitions which are specific to the RF2000 hardware
+// RF2000 and RF2000v2 share the configuration below. Select their factory
+// differences here before deriving motion, heater and scan settings.
+#if MOTHERBOARD == DEVICE_TYPE_RF2000v2
+// Identity and Z endstop
+#define UI_PRINTER_NAME "RF2000v2"
+#define Z_ENDSTOP_DRIVE_OVER 3.0f
+#define Z_ENDSTOP_MAX_HYSTERESIS 0.2f
+
+// Travel limits in mm
+#define X_MAX_LENGTH_DUAL 170
+#define Y_MAX_LENGTH 290
+#define Z_MAX_LENGTH 185
+
+// Extruder and hotend
+#define EXT0_HOTEND_TYPE HOTEND_TYPE_V3
+#define EXT1_HOTEND_TYPE HOTEND_TYPE_V3
+#define EXT0_STEPS_PER_MM (8.0 * RF_MICRO_STEPS_E)
+#define EXT1_STEPS_PER_MM (8.00 * RF_MICRO_STEPS_E)
+#define EXT0_TEMPSENSOR_TYPE 13
+#define EXT1_TEMPSENSOR_TYPE 13
+#define EXT1_X_OFFSET_MM 33.6f
+#define EXT1_Y_OFFSET_MM 0.0f
+
+// Bed heater PID and scan
+#define HEATED_BED_PID_PGAIN 34.0
+#define HEATED_BED_PID_IGAIN 0.015
+#define HEATED_BED_PID_DGAIN 110.0
+#define HEAT_BED_SCAN_DOWN_FAST_MM 0.2f
+
+// Part fan frequency divisor and PWM range (1–254)
+#define PART_FAN_DEFAULT_PWM_SPEED_DIVISOR 5
+#define PART_FAN_PWM_MIN 90
+#define PART_FAN_PWM_MAX 193
+#else
+// Identity and Z endstop
 #define UI_PRINTER_NAME "RF2000"
+#define Z_ENDSTOP_DRIVE_OVER 1.3f
+#define Z_ENDSTOP_MAX_HYSTERESIS 0.1f
+
+// Travel limits in mm
+#define X_MAX_LENGTH_DUAL 180
+#define Y_MAX_LENGTH 245
+#define Z_MAX_LENGTH 200
+
+// Extruder and hotend
+#define EXT0_HOTEND_TYPE HOTEND_TYPE_V2
+#define EXT1_HOTEND_TYPE HOTEND_TYPE_V2
+#define EXT0_STEPS_PER_MM (8.75 * RF_MICRO_STEPS_E)
+#define EXT1_STEPS_PER_MM (8.75 * RF_MICRO_STEPS_E)
+#define EXT0_TEMPSENSOR_TYPE 3
+#define EXT1_TEMPSENSOR_TYPE 3
+#define EXT1_X_OFFSET_MM 33.9f
+#define EXT1_Y_OFFSET_MM 0.1f
+
+// Bed heater PID and scan
+#define HEATED_BED_PID_PGAIN 53.74
+#define HEATED_BED_PID_IGAIN 7.48
+#define HEATED_BED_PID_DGAIN 96.52
+#define HEAT_BED_SCAN_DOWN_FAST_MM 0.1f
+
+// Part fan frequency divisor and PWM range (1–254)
+#define PART_FAN_DEFAULT_PWM_SPEED_DIVISOR 3
+#define PART_FAN_PWM_MIN 1
+#define PART_FAN_PWM_MAX 160
+#endif
 
 /** \brief Number of extruders */
+#ifndef NUM_EXTRUDER
 #define NUM_EXTRUDER 2 // 1 = Single, 2 = Dual
-
-/** \brief Specifies the maximal drive over millimeters which the z-endstop can bear without getting damaged or degraded */
-/*
-Known Limits for Z_ENDSTOP_DRIVE_OVER to avoid when extending value:
-Z-EndStop button crash RF1000: ~ >0.8f
-Z-EndStop optical button crash RF2000: ~ >1.3f
-Crash with Einhausung/Plexiglas backside RFx000: ~ >5.0 .. 6.0f
-Crash with backside metal RFx000: ~ >10.0..12.0f
-Overflow in Z-Matrix: >12.7f
-*/
-#define Z_ENDSTOP_DRIVE_OVER 1.3f //mm
+#endif
 
 // ##########################################################################################
 // ##   main hardware configuration
 // ##########################################################################################
 
-#if NUM_EXTRUDER > 2 || NUM_EXTRUDER < 0
-#error This Firmware supports up to 2 Extruders. You might have to reimplement the 3+ code or "request it" if you really got hands on a RFx000 board with 3+ Extruders.
-#endif // NUM_EXTRUDER > 2 || NUM_EXTRUDER < 0
-
-/** \brief Define the type of the present extruders */
-#define EXT0_HOTEND_TYPE HOTEND_TYPE_V2
-#define EXT1_HOTEND_TYPE HOTEND_TYPE_V2
+#if NUM_EXTRUDER < 1 || NUM_EXTRUDER > 2
+#error RFx000 firmware supports one or two extruders.
+#endif
 
 // ##########################################################################################
 // ##   Calibration
@@ -56,14 +106,10 @@ For delta robot Z_MAX_LENGTH is the maximum travel of the towers and should be s
 and the platform when the printer is at its home position.
 If EEPROM is enabled these values will be overidden with the values in the EEPROM */
 #if NUM_EXTRUDER == 2
-#define X_MAX_LENGTH_PRINT 180 // [mm]
+#define X_MAX_LENGTH_PRINT X_MAX_LENGTH_DUAL // [mm]
 #else
 #define X_MAX_LENGTH_PRINT 230 // [mm]
 #endif                         // NUM_EXTRUDER == 2
-
-#define Y_MAX_LENGTH 245      // [mm]
-//RF2000 von Nibbels: ~194,86 -> PAUSE_Z_MAX_SPACING_MM großzügig einplanen
-#define Z_MAX_LENGTH 200 // [mm]
 
 /** \brief Drive settings for printers with cartesian drive systems */
 /** \brief Number of steps for a 1mm move in x direction.
@@ -86,9 +132,6 @@ Overridden if EEPROM activated.*/
 #define EXT0_X_OFFSET_MM 0.0f
 #define EXT0_Y_OFFSET_MM 0.0f
 
-/** \brief for skeinforge 40 and later, steps to pull the plasic 1 mm inside the extruder, not out.  Overridden if EEPROM activated. */
-#define EXT0_STEPS_PER_MM (8.75 * RF_MICRO_STEPS_E)
-
 /** \brief What type of sensor is used?
 NTC-Thermistors
 1: Epcos B57560G0107F000
@@ -106,7 +149,6 @@ PTC-Thermistors
 53: E3D PT100 Board (direct AD voltage in)
 60: HEATER_USES_AD8495 (Delivers 5mV/degC)
 100: AD595 */
-#define EXT0_TEMPSENSOR_TYPE 3
 
 /** \brief Analog input pin for reading temperatures or pin enabling SS for MAX6675 */
 #define EXT0_TEMPSENSOR_PIN TEMP_0_PIN
@@ -201,7 +243,7 @@ The codes are only executed for multiple extruder when changing the extruder. */
 /** \brief PWM speed for the cooler fan. 0=off 255=full speed */
 #define EXT0_EXTRUDER_COOLER_SPEED 255
 
-#if NUM_EXTRUDER > 0 && EXT0_TEMPSENSOR_TYPE < 101
+#if EXT0_TEMPSENSOR_TYPE < 101
 
 #define EXT0_ANALOG_INPUTS 1
 #define EXT0_SENSOR_INDEX 0
@@ -223,12 +265,6 @@ The codes are only executed for multiple extruder when changing the extruder. */
 // ##   Configuration of the 2. extruder
 // ##########################################################################################
 
-#define EXT1_X_OFFSET_MM 33.9f // [mm]
-#define EXT1_Y_OFFSET_MM 0.1f  // [mm]
-
-/** \brief for skeinforge 40 and later, steps to pull the plasic 1 mm inside the extruder, not out.  Overridden if EEPROM activated. */
-#define EXT1_STEPS_PER_MM (8.75 * RF_MICRO_STEPS_E)
-
 /** \brief What type of sensor is used?
 NTC-Thermistors
 1: Epcos B57560G0107F000
@@ -246,7 +282,6 @@ PTC-Thermistors
 53: E3D PT100 Board (direct AD voltage in)
 60: HEATER_USES_AD8495 (Delivers 5mV/degC)
 100: AD595 */
-#define EXT1_TEMPSENSOR_TYPE 3
 
 /** \brief Analog input pin for reading temperatures or pin enabling SS for MAX6675 */
 #define EXT1_TEMPSENSOR_PIN TEMP_1_PIN
@@ -395,15 +430,6 @@ A good start is 30 lower then the optimal value. You need to leave room for cool
  Overridden if EEPROM activated. */
 #define HEATED_BED_PID_INTEGRAL_DRIVE_MIN 5
 
-/** \brief P-gain.  Overridden if EEPROM activated. */
-#define HEATED_BED_PID_PGAIN 53.74
-
-/** \brief I-gain  Overridden if EEPROM activated.*/
-#define HEATED_BED_PID_IGAIN 7.48
-
-/** \brief Dgain.  Overridden if EEPROM activated.*/
-#define HEATED_BED_PID_DGAIN 96.52
-
 /** \brief maximum time the heater can be switched on. Max = 255.  Overridden if EEPROM activated.*/
 #define HEATED_BED_PID_MAX 255
 
@@ -445,29 +471,14 @@ A good start is 30 lower then the optimal value. You need to leave room for cool
 // ##   Configuration of the endstops
 // ##########################################################################################
 
-#define Z_ENDSTOP_MAX_HYSTERESIS 0.1f //mm
-
-/** \brief By default all endstops are pulled up to HIGH. You need a pullup if you
-use a mechanical endstop connected with GND. Set value to false for no pullup
-on this endstop. */
-#define ENDSTOP_PULLUP_X_MIN true
-#define ENDSTOP_PULLUP_Y_MIN true
-#define ENDSTOP_PULLUP_Z_MIN true
-#define ENDSTOP_PULLUP_Z_MAX true
-
-/** \brief set to true to invert the logic of the endstops */
-#define ENDSTOP_X_MIN_INVERTING true
-#define ENDSTOP_Y_MIN_INVERTING true
-#define ENDSTOP_Z_MIN_INVERTING true
-#define ENDSTOP_Z_MAX_INVERTING true
-
-/** \brief Set order of axis homing. Use HOME_ORDER_XYZ and replace XYZ with your order. */
-#define HOMING_ORDER_PRINT HOME_ORDER_XYZ //if you work with springloaded hotend or positive Z-Matrix home Z last!! You might otherwise hit the surface.
-
-/** \brief Sets direction of endstops when homing; 1=MAX, -1=MIN */
-#define X_HOME_DIR -1
-#define Y_HOME_DIR -1
-#define Z_HOME_DIR -1
+/*
+Known Limits for Z_ENDSTOP_DRIVE_OVER to avoid when extending value:
+Z-EndStop button crash RF1000: ~ >0.8f
+Z-EndStop optical button crash RF2000: ~ >1.3f
+Crash with Einhausung/Plexiglas backside RFx000: ~ >5.0 .. 6.0f
+Crash with backside metal RFx000: ~ >10.0..12.0f
+Overflow in Z-Matrix: >12.7f
+*/
 
 /** \brief If during homing the endstop is reached, how many mm should the printer move back for the second try */
 #define ENDSTOP_X_BACK_MOVE 5.0f
@@ -537,12 +548,6 @@ during homing operation. The homing speed is divided by the value. 1 = same spee
 // ##########################################################################################
 // ##   Part Fan configuration
 // ##########################################################################################
-
-/** \brief Part Fan:                                  1 = 15.3Hz,  2 = 7.62Hz, 3 = 5.1Hz, 4 = 3.82Hz,  5 = 3.06Hz,  6 = 2.55Hz, 7 = 2.1Hz */
-#define PART_FAN_DEFAULT_PWM_SPEED_DIVISOR 3
-/** \brief the following values can be used in order to fine-tune the operating range of the cooler: */
-#define PART_FAN_PWM_MIN 1   // 1 ... 254 equals 1 ... 99 %
-#define PART_FAN_PWM_MAX 160 // 1 ... 254 equals 1 ... 99 %
 
 /** Some fans won't start for low values, but would run if started with higher power at the beginning.
 This defines the full power duration before returning to set value. Time is in milliseconds
@@ -644,7 +649,6 @@ Above this value the z compensation will distribute the roughness of the surface
 #define HEAT_BED_SCAN_IDLE_PRESSURE_MAX 7500    // [digits]
 
 #define HEAT_BED_SCAN_UP_FAST_MM -0.02f   // [mm]
-#define HEAT_BED_SCAN_DOWN_FAST_MM 0.1f   // [mm]
 #define HEAT_BED_SCAN_UP_SLOW_MM -0.004f  // [mm]
 #define HEAT_BED_SCAN_DOWN_SLOW_MM 0.004f // [mm]
 
@@ -692,7 +696,6 @@ Above this value the z compensation will distribute the roughness of the surface
 // ##########################################################################################
 // ##   debugging
 // ##########################################################################################
-
 
 // ##########################################################################################
 // ##   configuration of the 230V output

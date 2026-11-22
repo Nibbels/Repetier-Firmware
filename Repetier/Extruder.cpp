@@ -18,9 +18,7 @@
 #include "Repetier.h"
 #include "pins_arduino.h"
 
-#if EEPROM_MODE != 0
 #include "Eeprom.h"
-#endif // EEPROM_MODE!=0
 
 uint8_t manageMonitor = 255; ///< Temp. we want to monitor with our host. 1+NUM_EXTRUDER is heated bed
 volatile uint8_t execute100msPeriodical = 0;
@@ -400,12 +398,10 @@ void Extruder::setTemperatureForExtruder(float temperatureInCelsius, uint8_t ext
         if (tempController[i]->targetTemperatureC > 0)
             alloff = false;
 
-#if EEPROM_MODE != 0
     if (alloff && !alloffs) // All heaters are now switched off?
     {
         EEPROM::updatePrinterUsage();
     }
-#endif // EEPROM_MODE != 0
 
     if (alloffs && !alloff) // heaters are turned on, start measuring printing time
     {
@@ -1012,10 +1008,8 @@ void reportTempsensorAndHeaterErrors() {
 
 Extruder* Extruder::current;
 
-#if NUM_EXTRUDER > 0
 const char ext0_select_cmd[] PROGMEM = EXT0_SELECT_COMMANDS;
 const char ext0_deselect_cmd[] PROGMEM = EXT0_DESELECT_COMMANDS;
-#endif // NUM_EXTRUDER>0
 
 #if NUM_EXTRUDER > 1
 const char ext1_select_cmd[] PROGMEM = EXT1_SELECT_COMMANDS;
@@ -1023,7 +1017,6 @@ const char ext1_deselect_cmd[] PROGMEM = EXT1_DESELECT_COMMANDS;
 #endif // NUM_EXTRUDER>1
 
 Extruder extruder[NUM_EXTRUDER] = {
-#if NUM_EXTRUDER > 0
     { 0,
       { EXT0_X_OFFSET_MM, EXT0_Y_OFFSET_MM },
       EXT0_STEPS_PER_MM,
@@ -1060,7 +1053,6 @@ Extruder extruder[NUM_EXTRUDER] = {
       0,
       0
     }
-#endif // NUM_EXTRUDER>0
 
 #if NUM_EXTRUDER > 1
     ,
@@ -1153,19 +1145,13 @@ TemperatureController optTempController = {
 #endif // RESERVE_ANALOG_INPUTS
 
 TemperatureController* tempController[NUM_TEMPERATURE_LOOPS] = {
-#if NUM_EXTRUDER > 0
     &extruder[0].tempControl
-#endif // NUM_EXTRUDER>0
 
 #if NUM_EXTRUDER > 1
     ,
     &extruder[1].tempControl
 #endif // NUM_EXTRUDER>1
 
-#if NUM_EXTRUDER == 0
-         & heatedBedController
-#else
     ,
     &heatedBedController
-#endif // NUM_EXTRUDER==0
 };

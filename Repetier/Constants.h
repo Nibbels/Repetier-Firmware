@@ -48,12 +48,6 @@ constexpr unsigned int stepperEnableDelayMs = 25;
 #define E_AXIS 3
 #define VIRTUAL_AXIS 4
 
-#define HOME_ORDER_XYZ 1
-#define HOME_ORDER_XZY 2
-#define HOME_ORDER_YXZ 3
-#define HOME_ORDER_YZX 4
-#define HOME_ORDER_ZXY 5
-#define HOME_ORDER_ZYX 6
 
 #define MENU_MODE_SD_MOUNTED 1
 #define MENU_MODE_SD_PRINTING 2

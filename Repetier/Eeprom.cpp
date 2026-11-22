@@ -17,8 +17,10 @@
 
 #include "Repetier.h"
 
+// Persisted signature for the existing internal EEPROM layout.
+constexpr uint8_t eepromMagic = 44;
+
 void EEPROM::update(GCode* com) {
-#if EEPROM_MODE != 0
     if (com->hasT() && com->hasP())
         switch (com->T) {
         case 0: {
@@ -46,18 +48,12 @@ void EEPROM::update(GCode* com) {
 
     readDataFromEEPROM();
     Extruder::selectExtruderById(Extruder::current->id);
-#else
-    if (Printer::debugErrors()) {
-        Com::printErrorF(Com::tNoEEPROMSupport);
-    }
-#endif // EEPROM_MODE!=0
 
 } // update
 
 void EEPROM::restoreEEPROMExtruderSettingsFromConfiguration(uint8_t extruderId) {
     Extruder* e;
 
-#if NUM_EXTRUDER > 0
     if (extruderId == 0) {
         e = &extruder[0];
         e->stepsPerMM = EXT0_STEPS_PER_MM;
@@ -80,7 +76,6 @@ void EEPROM::restoreEEPROMExtruderSettingsFromConfiguration(uint8_t extruderId) 
         e->coolerSpeed = EXT0_EXTRUDER_COOLER_SPEED;
         e->advanceL = EXT0_ADVANCE_L;
     }
-#endif // NUM_EXTRUDER>0
 
 #if NUM_EXTRUDER > 1
     if (extruderId == 1) {
@@ -110,7 +105,6 @@ void EEPROM::restoreEEPROMExtruderSettingsFromConfiguration(uint8_t extruderId) 
 }
 
 void EEPROM::restoreEEPROMSettingsFromConfiguration() {
-#if EEPROM_MODE != 0
     baudrate = BAUDRATE;
     maxInactiveTime = MAX_INACTIVE_TIME * 1000L;
     stepperInactiveTime = STEPPER_INACTIVE_TIME * 1000L;
@@ -171,9 +165,7 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     Printer::axisLengthMM[Y_AXIS] = Y_MAX_LENGTH;
     Printer::axisLengthMM[Z_AXIS] = Z_MAX_LENGTH;
 
-#if NUM_EXTRUDER > 0
     EEPROM::restoreEEPROMExtruderSettingsFromConfiguration(0);
-#endif // NUM_EXTRUDER>0
 #if NUM_EXTRUDER > 1
     EEPROM::restoreEEPROMExtruderSettingsFromConfiguration(1);
 #endif // NUM_EXTRUDER > 1
@@ -238,7 +230,6 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     g_nManualSteps[E_AXIS] = (unsigned short)lroundf(Extruder::current->stepsPerMM * DEFAULT_MANUAL_MM_E);
 
     Com::printInfoFLN(Com::tEPRConfigResetDefaults);
-#endif // EEPROM_MODE!=0
 
 } // restoreEEPROMSettingsFromConfiguration
 
@@ -259,8 +250,7 @@ void EEPROM::clearEEPROM() {
 } // clearEEPROM
 
 void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
-#if EEPROM_MODE != 0
-    HAL::eprSetByte(EPR_MAGIC_BYTE, EEPROM_MODE);
+    HAL::eprSetByte(EPR_MAGIC_BYTE, eepromMagic);
     HAL::eprSetByte(EPR_CHECK_NUM_EXTRUDERS, NUM_EXTRUDER);
     HAL::eprSetInt32(EPR_BAUDRATE, baudrate);
     HAL::eprSetInt32(EPR_MAX_INACTIVE_TIME, maxInactiveTime);
@@ -373,7 +363,6 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     // Save version and build checksum
     HAL::eprSetByte(EPR_VERSION, EEPROM_PROTOCOL_VERSION);
     EEPROM::updateChecksum();
-#endif // EEPROM_MODE!=0
 
 } // storeDataIntoEEPROM
 
@@ -403,16 +392,13 @@ void EEPROM::storeExtruderDataIntoEEPROM(uint8_t extruderId) {
 }
 
 void EEPROM::updateChecksum() {
-#if EEPROM_MODE != 0
     //ändert sich die checksumme nicht, wird nicht geschrieben. doppelprüfung ist überflüssig.
     HAL::eprSetByte(EPR_INTEGRITY_BYTE, computeChecksum());
-#endif // EEPROM_MODE!=0
 } // updateChecksum
 
 void EEPROM::readDataFromEEPROM() {
     bool change = false;
 
-#if EEPROM_MODE != 0
     uint8_t version = HAL::eprGetByte(EPR_VERSION); // This is the saved version. Don't copy data not set in older versions!
     baudrate = HAL::eprGetInt32(EPR_BAUDRATE);
     maxInactiveTime = HAL::eprGetInt32(EPR_MAX_INACTIVE_TIME);
@@ -773,21 +759,17 @@ void EEPROM::readDataFromEEPROM() {
     Extruder::selectExtruderById(Extruder::current->id);
     Extruder::initHeatedBed();
 
-#endif // EEPROM_MODE!=0
 } // readDataFromEEPROM
 
 void EEPROM::initBaudrate() {
-#if EEPROM_MODE != 0
-    if (HAL::eprGetByte(EPR_MAGIC_BYTE) == EEPROM_MODE) {
+    if (HAL::eprGetByte(EPR_MAGIC_BYTE) == eepromMagic) {
         baudrate = HAL::eprGetInt32(EPR_BAUDRATE);
     }
-#endif // EEPROM_MODE!=0
 } // initBaudrate
 
 void EEPROM::init() {
-#if EEPROM_MODE != 0
     bool kill_eeprom_because_corrupted = (computeChecksum() != HAL::eprGetByte(EPR_INTEGRITY_BYTE));
-    bool kill_eeprom_wrong_version_update = (EEPROM_MODE != HAL::eprGetByte(EPR_MAGIC_BYTE));
+    bool kill_eeprom_wrong_version_update = (eepromMagic != HAL::eprGetByte(EPR_MAGIC_BYTE));
     bool kill_eeprom_by_back_ok_play = (READ(ENABLE_KEY_1) == 0 && READ(ENABLE_KEY_4) == 0 && READ(ENABLE_KEY_E5) == 0);
 
     bool update_eeprom_num_extruders_changed_2 = (NUM_EXTRUDER > HAL::eprGetByte(EPR_CHECK_NUM_EXTRUDERS) && NUM_EXTRUDER == 2);
@@ -852,11 +834,9 @@ void EEPROM::init() {
     }
 
     EEPROM::readDataFromEEPROM();
-#endif // EEPROM_MODE!=0
 } // init
 
 void EEPROM::updatePrinterUsage() {
-#if EEPROM_MODE != 0
     if (Printer::filamentPrinted == 0 || (Printer::flag2 & PRINTER_FLAG2_RESET_FILAMENT_USAGE) != 0)
         return; // No miles only enabled
     uint32_t seconds = (HAL::timeInMilliseconds() - Printer::msecondsPrinting) / 1000;
@@ -868,7 +848,6 @@ void EEPROM::updatePrinterUsage() {
     Printer::msecondsPrinting = HAL::timeInMilliseconds();
     EEPROM::updateChecksum();
     Commands::reportPrinterUsage();
-#endif // EEPROM_MODE
 } // updatePrinterUsage
 
 int EEPROM::getExtruderOffset(uint8_t extruder) {
@@ -887,7 +866,6 @@ With
 - description = Definition of the value
 */
 void EEPROM::writeSettings() {
-#if EEPROM_MODE != 0
 
     writeFloat(EPR_X_MAX_FEEDRATE, Com::tEPRXMaxFeedrate);
     writeFloat(EPR_X_HOMING_FEEDRATE_PRINT, Com::tEPRXHomingFeedrate);
@@ -1004,14 +982,8 @@ void EEPROM::writeSettings() {
     writeFloat(EPR_PRINTING_DISTANCE, Com::tEPRFilamentPrinted);
     writeLong(EPR_PRINTING_TIME, Com::tEPRPrinterActive);
 
-#else
-    if (Printer::debugErrors()) {
-        Com::printErrorF(Com::tNoEEPROMSupport);
-    }
-#endif // EEPROM_MODE!=0
 } // writeSettings
 
-#if EEPROM_MODE != 0
 uint8_t EEPROM::computeChecksum() {
     millis_t lastTime = HAL::timeInMilliseconds();
     millis_t currentTime;
@@ -1081,4 +1053,3 @@ void EEPROM::writeByte(uint pos, PGM_P text) {
     Com::printFLN(text);
     HAL::delayMilliseconds(4); // reduces somehow transmission errors https://github.com/repetier/Repetier-Firmware/commit/6bdd97e83b656d15cafe51958ba1504e1bfb97de
 } // writeByte
-#endif // EEPROM_MODE!=0

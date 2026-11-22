@@ -85,6 +85,7 @@ Work through the [architecture review and migration](development-roadmap.md#5-fi
 - [x] **Fold the shared motion, display and serial defaults into the firmware.** Pressure Advance, the current junction and short-segment calculations, the 25 ms driver enable wait and the 120 s menu timeout are built in. SD builds include file sizes in `M20`. Automatic trace builds, alternate serial ports and the early RF1000 fan-pin variant are retired. [Shared build defaults](development-roadmap.md#feature-retirement)
 - [x] **Retire TipDown and fix the UART transmit ring at 64 bytes.** Removed the per-tool Z displacement from tool changes, homing and EEPROM settings. The movement planner keeps the existing cache sizes of 17 with SD and 24 without SD. [Feature retirement](development-roadmap.md#feature-retirement)
 - [x] **Retire the M109 retract and obsolete build variants.** The heat-up wait leaves extrusion to the print's G-code. Board selection determines the physical Z-max input. The heater, LCD and SdFat code use their stock variants. [Feature retirement](development-roadmap.md#feature-retirement)
+- [x] **Share the RF2000 family profile and pin map.** Compile the stock defaults for each model, keep named connectors for retrofits and reserve X19, X42 or X44 for automatic cooling when assigned there. EEPROM support is built in with the existing persisted layout. [Board reference](board-connectors.md)
 
 ## Fork candidates
 

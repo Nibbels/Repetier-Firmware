@@ -293,53 +293,7 @@ void lcdWriteNibble(uint8_t value) {
 } // lcdWriteNibble
 
 void lcdWriteByte(uint8_t c, uint8_t rs) {
-#if UI_DISPLAY_RW_PIN < 0
-    HAL::delayMicroseconds(UI_DELAYPERCHAR);
-#else
-    SET_INPUT(UI_DISPLAY_D4_PIN);
-    SET_INPUT(UI_DISPLAY_D5_PIN);
-    SET_INPUT(UI_DISPLAY_D6_PIN);
-    SET_INPUT(UI_DISPLAY_D7_PIN);
-    WRITE(UI_DISPLAY_RW_PIN, HIGH);
-    WRITE(UI_DISPLAY_RS_PIN, LOW);
-    uint8_t busy;
-    do {
-        WRITE(UI_DISPLAY_ENABLE_PIN, HIGH);
-        __asm__("nop\n\t"
-                "nop\n\t"
-                "nop\n\t"
-                "nop\n\t"
-                "nop\n\t"
-                "nop\n\t");
-        busy = READ(UI_DISPLAY_D7_PIN);
-        WRITE(UI_DISPLAY_ENABLE_PIN, LOW);
-        __asm__("nop\n\t"
-                "nop\n\t"
-                "nop\n\t"
-                "nop\n\t"
-                "nop\n\t"
-                "nop\n\t");
-        WRITE(UI_DISPLAY_ENABLE_PIN, HIGH);
-        __asm__("nop\n\t"
-                "nop\n\t"
-                "nop\n\t"
-                "nop\n\t"
-                "nop\n\t"
-                "nop\n\t");
-        WRITE(UI_DISPLAY_ENABLE_PIN, LOW);
-        __asm__("nop\n\t"
-                "nop\n\t"
-                "nop\n\t"
-                "nop\n\t"
-                "nop\n\t"
-                "nop\n\t");
-    } while (busy);
-    SET_OUTPUT(UI_DISPLAY_D4_PIN);
-    SET_OUTPUT(UI_DISPLAY_D5_PIN);
-    SET_OUTPUT(UI_DISPLAY_D6_PIN);
-    SET_OUTPUT(UI_DISPLAY_D7_PIN);
-    WRITE(UI_DISPLAY_RW_PIN, LOW);
-#endif // UI_DISPLAY_RW_PIN<0
+    HAL::delayMicroseconds(320); // The LCD R/W line is tied low.
 
     WRITE(UI_DISPLAY_RS_PIN, rs);
     WRITE(UI_DISPLAY_D4_PIN, c & 0x10);
@@ -412,9 +366,6 @@ void UIDisplay::initializeLCD(bool normal) {
     SET_INPUT(UI_DISPLAY_D7_PIN);
     SET_INPUT(UI_DISPLAY_RS_PIN);
 
-#if UI_DISPLAY_RW_PIN > -1
-    SET_INPUT(UI_DISPLAY_RW_PIN);
-#endif // UI_DISPLAY_RW_PIN>-1
 
     SET_INPUT(UI_DISPLAY_ENABLE_PIN);
 
@@ -429,13 +380,10 @@ void UIDisplay::initializeLCD(bool normal) {
     SET_OUTPUT(UI_DISPLAY_D7_PIN);
     SET_OUTPUT(UI_DISPLAY_RS_PIN);
 
-#if UI_DISPLAY_RW_PIN > -1
-    SET_OUTPUT(UI_DISPLAY_RW_PIN);
-#endif // UI_DISPLAY_RW_PIN>-1
 
     SET_OUTPUT(UI_DISPLAY_ENABLE_PIN);
 
-    // Now we pull both RS and R/W low to begin commands
+    // Select the LCD command register.
     WRITE(UI_DISPLAY_RS_PIN, LOW);
     WRITE(UI_DISPLAY_ENABLE_PIN, LOW);
 
@@ -580,12 +528,8 @@ void UIDisplay::initialize() {
         displayCache[y][0] = 0;
     printRowP(0, PSTR(BIGC0));
     printRowP(1, PSTR(BIGC1));
-#if UI_ROWS > 3
     printRowP(UI_ROWS - 2, PSTR(BIGC2));
-#endif // UI_ROWS>3
-#if UI_ROWS > 2
     printRowP(UI_ROWS - 1, PSTR(BIGC3));
-#endif // UI_ROWS>2
 
 } // initialize
 
@@ -1371,7 +1315,6 @@ void UIDisplay::parse(char* txt, bool ram) {
         }
         case 'X': // Extruder related
         {
-#if NUM_EXTRUDER > 0
             if (c2 >= '0' && c2 <= '9') // %X0..9 : Extruder selected marker
             {
                 addStringP(Extruder::current->id == c2 - '0' ? ui_selected : ui_unselected);
@@ -1486,7 +1429,6 @@ void UIDisplay::parse(char* txt, bool ram) {
             {
                 addInt(drv8711ModeValue_2_MicroSteps(Printer::motorMicroStepsModeValue[E_AXIS]), 3);
             }
-#endif                          // NUM_EXTRUDER>0
             else if (c2 == 'g') // %Xg : Printer::stepsPackingMinInterval
             {
                 addInt(Printer::stepsPackingMinInterval, 4);
@@ -1868,7 +1810,6 @@ void UIDisplay::parse(char* txt, bool ram) {
                 addStringP(PSTR(UI_TEXT_PRINT_TIME));
             } else if (c2 == '6') // Shows printing time
             {
-#if EEPROM_MODE != 0
                 bool alloff = true;
                 for (uint8_t i = 0; i < NUM_EXTRUDER; i++)
                     if (tempController[i]->targetTemperatureC > 0)
@@ -1886,17 +1827,14 @@ void UIDisplay::parse(char* txt, bool ram) {
                 tmp = seconds / 60;
                 addInt(tmp, 2, '0');
                 addStringP(PSTR(UI_TEXT_PRINTTIME_MINUTES));
-#endif                            // EEPROM_MODE
             } else if (c2 == '7') // Shows text printed filament
             {
                 addStringP(PSTR(UI_TEXT_PRINT_FILAMENT));
             } else if (c2 == '8') // Shows printed filament
             {
-#if EEPROM_MODE != 0
                 float dist = Printer::filamentPrinted * 0.001 + HAL::eprGetFloat(EPR_PRINTING_DISTANCE);
                 addFloat(dist, 6, 1);
                 addStringP(PSTR(" m"));
-#endif // EEPROM_MODE
             }
             break;
         }
@@ -2939,7 +2877,6 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         break;
     }
     case UI_ACTION_BAUDRATE: {
-#if EEPROM_MODE != 0
         unsigned char p = 0;
         int32_t rate;
         do {
@@ -2968,7 +2905,6 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
 
         HAL::eprSetInt32(EPR_BAUDRATE, baudrate);
         EEPROM::updateChecksum();
-#endif // EEPROM_MODE!=0
         break;
     }
 
@@ -3692,6 +3628,7 @@ void UIDisplay::mainSwitchCase(int action) {
         break;
     }
 
+#if !HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)
     case UI_ACTION_LIGHTS_ONOFF: {
         if (Printer::enableCaseLight)
             Printer::enableCaseLight = 0;
@@ -3704,6 +3641,7 @@ void UIDisplay::mainSwitchCase(int action) {
 
         break;
     }
+#endif
 
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
     case UI_ACTION_230V_OUTPUT: {
@@ -3720,7 +3658,7 @@ void UIDisplay::mainSwitchCase(int action) {
         break;
     }
 
-#if FET1 > -1
+#if FET1 > -1 && !HOTEND_COOLER_USES_PIN(FET1)
     case UI_ACTION_FET1_OUTPUT: {
         if (Printer::enableFET1)
             Printer::enableFET1 = 0;
@@ -3732,8 +3670,8 @@ void UIDisplay::mainSwitchCase(int action) {
         EEPROM::updateChecksum();
         break;
     }
-#endif // FET1
-#if FET2 > -1
+#endif // FET1 accessory output
+#if FET2 > -1 && !HOTEND_COOLER_USES_PIN(FET2)
     case UI_ACTION_FET2_OUTPUT: {
         if (Printer::enableFET2)
             Printer::enableFET2 = 0;
@@ -3745,7 +3683,7 @@ void UIDisplay::mainSwitchCase(int action) {
         EEPROM::updateChecksum();
         break;
     }
-#endif // FET2
+#endif // FET2 accessory output
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
     case UI_ACTION_CONFIG_SINGLE_STEPS: {
@@ -3879,7 +3817,6 @@ void UIDisplay::mainSwitchCase(int action) {
 #endif // NUM_EXTRUDER>1
         break;
     }
-#if NUM_EXTRUDER >= 1
     case UI_ACTION_ACTIVE_EXTRUDER: {
         if (Extruder::current->id == 0)
             Extruder::selectExtruderById(1);
@@ -3887,7 +3824,6 @@ void UIDisplay::mainSwitchCase(int action) {
             Extruder::selectExtruderById(0);
         break;
     }
-#endif // NUM_EXTRUDER == 2
 
 #if SDSUPPORT
     case UI_ACTION_SD_PRINT: {

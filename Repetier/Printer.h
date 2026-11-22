@@ -532,15 +532,15 @@ public:
     } // convertToMM
 
     static INLINE bool isXMinEndstopHit() {
-        return READ(X_MIN_PIN) != ENDSTOP_X_MIN_INVERTING;
+        return READ(X_MIN_PIN) == LOW;
     }  // isXMinEndstopHit
 
     static INLINE bool isYMinEndstopHit() {
-        return READ(Y_MIN_PIN) != ENDSTOP_Y_MIN_INVERTING;
+        return READ(Y_MIN_PIN) == LOW;
     }  // isYMinEndstopHit
 
     static INLINE bool isZMinEndstopHit() {
-        return READ(Z_MIN_PIN) != ENDSTOP_Z_MIN_INVERTING;
+        return READ(Z_MIN_PIN) == LOW;
     }  // isZMinEndstopHit
 
     static inline bool isZMaxSoftEndstopHit() {
@@ -561,7 +561,7 @@ public:
 
     static inline bool isZMaxEndstopHit() {
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
-        return READ(Z_MAX_PIN) != ENDSTOP_Z_MAX_INVERTING;
+        return READ(Z_MAX_PIN) == LOW;
 #else
         return isZMaxSoftEndstopHit();
 #endif // RF2000 / RF2000v2

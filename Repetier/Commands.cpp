@@ -259,7 +259,6 @@ void Commands::adjustFanMode(uint8_t output_mode) { //0 = pwm, 1 = pdm
 #endif // FAN_PIN > -1
 
 void Commands::reportPrinterUsage() {
-#if EEPROM_MODE != 0
     if (Printer::debugInfo()) {
         float dist = Printer::filamentPrinted * 0.001 + HAL::eprGetFloat(EPR_PRINTING_DISTANCE);
         Com::printF(Com::tPrintedFilament, dist, 2);
@@ -285,7 +284,6 @@ void Commands::reportPrinterUsage() {
         Com::printF(Com::tSpaceHoursSpace, tmp);
         Com::printFLN(Com::tSpaceMin);
     }
-#endif // EEPROM_MODE
 } // reportPrinterUsage
 
 /** \brief Execute the command stored in com. */
@@ -491,7 +489,6 @@ void Commands::processMCode(GCode* com) {
 
     case 104: // M104 - set extruder temp
     {
-#if NUM_EXTRUDER > 0
         if (Printer::isAnyTempsensorDefect()) {
             reportTempsensorAndHeaterErrors();
             break;
@@ -510,7 +507,6 @@ void Commands::processMCode(GCode* com) {
             else
                 Extruder::setTemperatureForExtruder(com->S, Extruder::current->id);
         }
-#endif // NUM_EXTRUDER>0
         break;
     }
     case 105: // M105 - get temperature. Always returns the current temperature, doesn't wait until move stopped
@@ -535,7 +531,6 @@ void Commands::processMCode(GCode* com) {
     case 109: // M109 - Wait for extruder heater to reach target.
     {
         previousMillisCmd = HAL::timeInMilliseconds(); //prevent inactive shutdown of steppers/temps
-#if NUM_EXTRUDER > 0
         if (Printer::isAnyTempsensorDefect()) {
             reportTempsensorAndHeaterErrors();
             break;
@@ -595,7 +590,6 @@ void Commands::processMCode(GCode* com) {
             }
         } while (!isTempReached);
 
-#endif // NUM_EXTRUDER>0
 
         g_uStartOfIdle = HAL::timeInMilliseconds(); //end of M109
         break;
@@ -771,7 +765,6 @@ void Commands::processMCode(GCode* com) {
         if (Printer::debugInfo()) {
             Com::printFLN(Com::tFirmware);
         }
-        //#if EEPROM_MODE != 0
         //		Com::cap(PSTR("EEPROM:1"));
         //#else
         //		Com::cap(PSTR("EEPROM:0"));
@@ -1001,6 +994,9 @@ void Commands::processMCode(GCode* com) {
 
     case 355: // M355  - Turn case light on/off / Turn X19 on and off.
     {
+#if HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)
+        Com::printErrorFLN(PSTR("M355: X19 is assigned to a hotend cooler"));
+#else
         // Idee und Teilcode und Vorarbeit von WESSIX
         // Code schaltet X19, das ist nicht zwingend das Licht!
         if (com->hasS()) {
@@ -1017,6 +1013,7 @@ void Commands::processMCode(GCode* com) {
         }
         WRITE(CASE_LIGHT_PIN, Printer::enableCaseLight);
         Com::printFLN(PSTR("M355: X19 set to "), Printer::enableCaseLight);
+#endif
         break;
     }
     // Ende Idee und Teilcode von WESSIX
@@ -1067,30 +1064,18 @@ void Commands::processMCode(GCode* com) {
     }
     case 500: // M500
     {
-#if EEPROM_MODE != 0
         EEPROM::storeDataIntoEEPROM(false);
         Com::printInfoF(Com::tConfigStoredEEPROM);
-#else
-        if (Printer::debugErrors()) {
-            Com::printErrorF(Com::tNoEEPROMSupport);
-        }
-#endif // EEPROM_MODE!=0
         break;
     }
     case 501: // M501
     {
-#if EEPROM_MODE != 0
         EEPROM::readDataFromEEPROM();
         Extruder::selectExtruderById(Extruder::current->id);
 
         if (Printer::debugInfo()) {
             Com::printInfoF(Com::tConfigLoadedEEPROM);
         }
-#else
-        if (Printer::debugErrors()) {
-            Com::printErrorF(Com::tNoEEPROMSupport);
-        }
-#endif // EEPROM_MODE!=0
         break;
     }
     case 502: // M502

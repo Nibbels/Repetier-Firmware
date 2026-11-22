@@ -35,7 +35,6 @@
  * file has no effect. Parameters overriden by EEPROM settings are calibartion values, extruder
  * values except thermistor tables and some other parameter likely to change during usage
  * like advance steps or ops mode.
- * To override EEPROM settings with config settings, set EEPROM_MODE 0
  */
 
 // ##########################################################################################
@@ -47,25 +46,15 @@
 //#define MOTHERBOARD                         DEVICE_TYPE_RF2000
 //#define MOTHERBOARD                         DEVICE_TYPE_RF2000v2
 
+// Optional retrofit settings. Use the named connectors for the selected board.
+// See docs/board-connectors.md for the output mapping and the RF2000 example.
+//#define NUM_EXTRUDER 1
+//#define EXT0_EXTRUDER_COOLER_PIN X44_PIN
+//#define EXT1_EXTRUDER_COOLER_PIN -1
+
 #ifndef MOTHERBOARD
     #error Device type (RF1000 / RF2000 / RF2000v2) is not defined. Edit Configuration.h or pass the corresponding option to the compiler.
 #endif
-#if MOTHERBOARD == DEVICE_TYPE_RF2000v2
-    #error This Mod-Firmware has not been massively tested on a RF2000v2 yet. But the firmware has been created with care. Please remove this message if you acknowledged this.
-#endif // MOTHERBOARD == DEVICE_TYPE_RF2000v2
-
-/**
- * \brief EEPROM storage mode
- * Set the EEPROM_MODE to 0 if you always want to use the settings in this configuration file. If not,
- * set it to a value not stored in the first EEPROM-byte used. If you later want to overwrite your current
- * EEPROM settings with configuration defaults, just select an other value. On the first call to epr_init()
- * it will detect a mismatch of the first byte and copy default values into EEPROM. If the first byte
- * matches, the stored values are used to overwrite the settings.
- * 
- * IMPORTANT: With mode <>0 some changes in Configuration.h are not set any more, as they are
- *            taken from the EEPROM.
- */
-#define EEPROM_MODE                         44
 
 // ##########################################################################################
 // ##    supported features
@@ -229,22 +218,22 @@ Overridden if EEPROM activated. */
 
 #if ACCELERATION_MAX_XY < MAX_ACCELERATION_UNITS_PER_SQ_SECOND_X || MAX_ACCELERATION_UNITS_PER_SQ_SECOND_X < ACCELERATION_MIN_XY
 #error Please respect the given acceleration limits or change them according your needs within Configuration.h
-#endif // NUM_EXTRUDER > 2 || NUM_EXTRUDER < 0
+#endif
 #if ACCELERATION_MAX_XY < MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Y || MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Y < ACCELERATION_MIN_XY
 #error Please respect the given acceleration limits or change them according your needs within Configuration.h
-#endif // NUM_EXTRUDER > 2 || NUM_EXTRUDER < 0
+#endif
 #if ACCELERATION_MAX_Z < MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Z || MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Z < ACCELERATION_MAX_Z
 #error Please respect the given acceleration limits or change them according your needs within Configuration.h
-#endif // NUM_EXTRUDER > 2 || NUM_EXTRUDER < 0
+#endif
 #if ACCELERATION_MAX_XY < MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_X || MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_X < ACCELERATION_MIN_XY
 #error Please respect the given x travel acceleration limits or change them according your needs within Configuration.h
-#endif // NUM_EXTRUDER > 2 || NUM_EXTRUDER < 0
+#endif
 #if ACCELERATION_MAX_XY < MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Y || MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Y < ACCELERATION_MIN_XY
 #error Please respect the given y travel acceleration limits or change them according your needs within Configuration.h
-#endif // NUM_EXTRUDER > 2 || NUM_EXTRUDER < 0
+#endif
 #if ACCELERATION_MAX_Z < MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Z || MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Z < ACCELERATION_MAX_Z
 #error Please respect the given z travel acceleration limits or change them according your needs within Configuration.h
-#endif // NUM_EXTRUDER > 2 || NUM_EXTRUDER < 0
+#endif
 
 // E-ACCELERATION is extruder configuration and has no strict limits rightnow.
 
@@ -374,7 +363,9 @@ Overridden if EEPROM activated. */
 // ##########################################################################################
 
 /** \brief  Select whether the SD card is supported. */
+#ifndef SDSUPPORT
 #define SDSUPPORT                           1                                                   // 1 = supported, 0 = not supported
+#endif
 
 /** \brief  Change to true if you get a inserted message on removal. */
 #define SDCARDDETECTINVERTED                false
@@ -517,7 +508,9 @@ we use blocks of 2 kByte size for the structure of our EEPROM
 #define DEFAULT_Z_SCALE_MODE                Z_VALUE_MODE_LAYER
 
 /** \brief Minimal temperature which can be reached by cooling */
+#ifndef MAX_ROOM_TEMPERATURE
 #define MAX_ROOM_TEMPERATURE                33                                                  // [°C]
+#endif
 
 /** \brief Defines the I2C address for the strain gauge */
 #define I2C_ADDRESS_STRAIN_GAUGE            0x49
@@ -572,17 +565,6 @@ we use blocks of 2 kByte size for the structure of our EEPROM
  * Faster start is better here, because reaching pause position might take a while - for a bit less oozing
  */
 #define ADD_CONTINUE_AFTER_PAUSE_TEMP_TOLERANCE         2                                      // [°C]
-
-/** \brief Bits of the ADC converter */
-#define ANALOG_INPUT_BITS                   10
-
-/** \brief Build median from 2^ANALOG_INPUT_SAMPLE samples */
-#define ANALOG_INPUT_SAMPLE                 5
-#define ANALOG_REF_AREF                     0
-#define ANALOG_REF_AVCC                     _BV(REFS0)
-#define ANALOG_REF_INT_1_1                  _BV(REFS1)
-#define ANALOG_REF_INT_2_56                 _BV(REFS0) | _BV(REFS1)
-#define ANALOG_REF                          ANALOG_REF_AVCC
 
 /** \brief Communication speed. Overridden if EEPROM activated. */
 #define BAUDRATE                            115200

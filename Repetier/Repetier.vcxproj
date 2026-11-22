@@ -123,7 +123,6 @@
     <ClInclude Include="Eeprom.h" />
     <ClInclude Include="Extruder.h" />
     <ClInclude Include="fastio.h" />
-    <ClInclude Include="FatStructs.h" />
     <ClInclude Include="gcode.h" />
     <ClInclude Include="HAL.h" />
     <ClInclude Include="motion.h" />
@@ -133,9 +132,7 @@
     <ClInclude Include="RF.h" />
     <ClInclude Include="RF1000.h" />
     <ClInclude Include="RF2000.h" />
-    <ClInclude Include="RF2000v2.h" />
     <ClInclude Include="SdFat.h" />
-    <ClInclude Include="u8glib_ex.h" />
     <ClInclude Include="ui.h" />
     <ClInclude Include="uiconfig.h" />
     <ClInclude Include="uilang.h" />

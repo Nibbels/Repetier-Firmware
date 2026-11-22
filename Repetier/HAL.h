@@ -541,14 +541,8 @@ public:
         // SS must be in output mode even it is not chip select
         SET_OUTPUT(SDSS);
 
-#if SDSSORIG > -1
-        SET_OUTPUT(SDSSORIG);
-#endif // SDSSORIG >- 1
-
         // set SS high - may be chip select for another SPI device
-#if SET_SPI_SS_HIGH
         WRITE(SDSS, HIGH);
-#endif // SET_SPI_SS_HIGH
 #endif // SDSS>=0
 
     } // spiBegin

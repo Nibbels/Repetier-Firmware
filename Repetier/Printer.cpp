@@ -603,9 +603,7 @@ void Printer::setup() {
 #if X_MIN_PIN > -1
     SET_INPUT(X_MIN_PIN);
 
-#if ENDSTOP_PULLUP_X_MIN
     PULLUP(X_MIN_PIN, HIGH);
-#endif // ENDSTOP_PULLUP_X_MIN
 #else
 #error You have defined hardware x min endstop without pin assignment. Set pin number for X_MIN_PIN
 #endif // X_MIN_PIN>-1
@@ -613,9 +611,7 @@ void Printer::setup() {
 #if Y_MIN_PIN > -1
     SET_INPUT(Y_MIN_PIN);
 
-#if ENDSTOP_PULLUP_Y_MIN
     PULLUP(Y_MIN_PIN, HIGH);
-#endif // ENDSTOP_PULLUP_Y_MIN
 #else
 #error You have defined hardware y min endstop without pin assignment. Set pin number for Y_MIN_PIN
 #endif // Y_MIN_PIN>-1
@@ -623,9 +619,7 @@ void Printer::setup() {
 #if Z_MIN_PIN > -1
     SET_INPUT(Z_MIN_PIN);
 
-#if ENDSTOP_PULLUP_Z_MIN
     PULLUP(Z_MIN_PIN, HIGH);
-#endif // ENDSTOP_PULLUP_Z_MIN
 #else
 #error You have defined hardware z min endstop without pin assignment. Set pin number for Z_MIN_PIN
 #endif // Z_MIN_PIN>-1
@@ -634,9 +628,7 @@ void Printer::setup() {
 #if Z_MAX_PIN > -1
     SET_INPUT(Z_MAX_PIN);
 
-#if ENDSTOP_PULLUP_Z_MAX
     PULLUP(Z_MAX_PIN, HIGH);
-#endif // ENDSTOP_PULLUP_Z_MAX
 #else
 #error You have defined hardware z max endstop without pin assignment. Set pin number for Z_MAX_PIN
 #endif // Z_MAX_PIN>-1
@@ -745,14 +737,14 @@ void Printer::setup() {
     SET_OUTPUT(OUTPUT_230V_PIN);
     WRITE(OUTPUT_230V_PIN, enable230VOutput);
 
-#if FET1 > -1
+#if FET1 > -1 && !HOTEND_COOLER_USES_PIN(FET1)
     SET_OUTPUT(FET1);
     WRITE(FET1, enableFET1);
-#endif // FET1
-#if FET2 > -1
+#endif // FET1 accessory output
+#if FET2 > -1 && !HOTEND_COOLER_USES_PIN(FET2)
     SET_OUTPUT(FET2);
     WRITE(FET2, enableFET2);
-#endif // FET2
+#endif // FET2 accessory output
 #if FET3 > -1 && CASE_FAN_PIN < 0
     SET_OUTPUT(FET3);
     WRITE(FET3, enableFET3);
@@ -765,8 +757,10 @@ void Printer::setup() {
 #endif // CASE_FAN_PIN > -1
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
+#if !HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)
     SET_OUTPUT(CASE_LIGHT_PIN);
     WRITE(CASE_LIGHT_PIN, enableCaseLight);
+#endif
 
     updateDerivedParameter();
     Commands::checkFreeMemory();
@@ -863,20 +857,7 @@ void Printer::disableCMPnow(bool wait) {
 }
 
 int8_t Printer::anyHomeDir(uint8_t axis) {
-    switch (axis) {
-    case X_AXIS:
-        return X_HOME_DIR == -1 ? X_HOME_DIR : 0;
-    case Y_AXIS:
-        return Y_HOME_DIR == -1 ? Y_HOME_DIR : 0;
-    case Z_AXIS:
-#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
-        return (Z_HOME_DIR == -1 || Z_HOME_DIR == 1) ? Z_HOME_DIR : 0;
-#else
-        return Z_HOME_DIR == -1 ? Z_HOME_DIR : 0;
-#endif
-    default:
-        return 0;
-    }
+    return axis <= Z_AXIS ? -1 : 0;
 }
 
 bool Printer::anyEndstop(uint8_t axis) {
@@ -1287,72 +1268,16 @@ void Printer::homeAxis(bool xaxis, bool yaxis, bool zaxis) // home non-delta pri
     //Bei beliebiger user interaktion oder Homing soll G1 etc. erlaubt werden. Dann ist der Drucker nicht abgestürzt, sondern bedient worden.
     g_unlock_movement = 1;
 
-    char homingOrder;
-    homingOrder = HOMING_ORDER_PRINT;
+    // Clear a positive bed matrix before homing Z when Y was omitted.
+    if (!yaxis && zaxis && !Printer::isZHomeSafe())
+        homeYAxis();
 
-    if ((!yaxis && zaxis) || (/* z vor y */ homingOrder == HOME_ORDER_XZY || homingOrder == HOME_ORDER_ZXY || homingOrder == HOME_ORDER_ZYX)) {
-        // With a positive bed matrix, move clear of the bed before homing Z.
-        if (!Printer::isZHomeSafe()) {
-            homeYAxis();
-        }
-    }
-
-    switch (homingOrder) {
-    case HOME_ORDER_XYZ: {
-        if (xaxis)
-            homeXAxis();
-        if (yaxis)
-            homeYAxis();
-        if (zaxis)
-            homeZAxis();
-        break;
-    }
-    case HOME_ORDER_XZY: {
-        if (xaxis)
-            homeXAxis();
-        if (zaxis)
-            homeZAxis();
-        if (yaxis)
-            homeYAxis();
-        break;
-    }
-    case HOME_ORDER_YXZ: {
-        if (yaxis)
-            homeYAxis();
-        if (xaxis)
-            homeXAxis();
-        if (zaxis)
-            homeZAxis();
-        break;
-    }
-    case HOME_ORDER_YZX: {
-        if (yaxis)
-            homeYAxis();
-        if (zaxis)
-            homeZAxis();
-        if (xaxis)
-            homeXAxis();
-        break;
-    }
-    case HOME_ORDER_ZXY: {
-        if (zaxis)
-            homeZAxis();
-        if (xaxis)
-            homeXAxis();
-        if (yaxis)
-            homeYAxis();
-        break;
-    }
-    case HOME_ORDER_ZYX: {
-        if (zaxis)
-            homeZAxis();
-        if (yaxis)
-            homeYAxis();
-        if (xaxis)
-            homeXAxis();
-        break;
-    }
-    }
+    if (xaxis)
+        homeXAxis();
+    if (yaxis)
+        homeYAxis();
+    if (zaxis)
+        homeZAxis();
 
     if (xaxis && yaxis && zaxis)
         Printer::homeDigits();
@@ -1421,18 +1346,18 @@ void Printer::showConfiguration() {
     Com::config(PSTR("Fan2:0"));
     Com::config(PSTR("LCD:"), 0);
     Com::config(PSTR("SoftwarePowerSwitch:"), 0);
-    Com::config(PSTR("XHomeDir:"), X_HOME_DIR);
-    Com::config(PSTR("YHomeDir:"), Y_HOME_DIR);
-    Com::config(PSTR("ZHomeDir:"), Z_HOME_DIR);
+    Com::config(PSTR("XHomeDir:"), -1);
+    Com::config(PSTR("YHomeDir:"), -1);
+    Com::config(PSTR("ZHomeDir:"), -1);
 
-    Com::config(PSTR("XHomePos:"), (X_HOME_DIR > 0 ? Printer::axisLengthMM[X_AXIS] : 0), 2);
-    Com::config(PSTR("YHomePos:"), (Y_HOME_DIR > 0 ? Printer::axisLengthMM[Y_AXIS] : 0), 2);
-    Com::config(PSTR("ZHomePos:"), (Z_HOME_DIR > 0 ? Printer::axisLengthMM[Z_AXIS] : 0), 2);
+    Com::config(PSTR("XHomePos:"), 0.0f, 2);
+    Com::config(PSTR("YHomePos:"), 0.0f, 2);
+    Com::config(PSTR("ZHomePos:"), 0.0f, 2);
 
     Com::config(PSTR("SupportG10G11:"), 0);
     Com::config(PSTR("SupportLocalFilamentchange:"), 0);
     Com::config(PSTR("CaseLights:"), 0);
-    Com::config(PSTR("EEPROM:"), EEPROM_MODE != 0);
+    Com::config(PSTR("EEPROM:"), 1);
     Com::config(PSTR("PrintlineCache:"), MOVE_CACHE_SIZE);
     Com::config(PSTR("JerkXY:"), Printer::maxXYJerk);
     Com::config(PSTR("JerkZ:"), Printer::maxZJerk);

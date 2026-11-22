@@ -991,8 +991,8 @@ SerialGCodeSource serial0Source(&RFSerial);
 
 fast8_t GCodeSource::numSources = 1; ///< Number of data sources available
 fast8_t GCodeSource::numWriteSources = 1;
-GCodeSource* GCodeSource::sources[MAX_DATA_SOURCES] = { &serial0Source };
-GCodeSource* GCodeSource::writeableSources[MAX_DATA_SOURCES] = { &serial0Source };
+GCodeSource* GCodeSource::sources[maxDataSources] = { &serial0Source };
+GCodeSource* GCodeSource::writeableSources[maxDataSources] = { &serial0Source };
 GCodeSource* GCodeSource::activeSource = &serial0Source;
 
 void GCodeSource::registerSource(GCodeSource* newSource) {

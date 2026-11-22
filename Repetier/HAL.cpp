@@ -291,7 +291,7 @@ void HAL::resetHardware() {
 
 void HAL::analogStart() {
 #if ANALOG_INPUTS > 0
-    ADMUX = ANALOG_REF; // refernce voltage
+    ADMUX = _BV(REFS0); // Use AVCC as the temperature ADC reference.
     for (uint8_t i = 0; i < ANALOG_INPUTS; i++) {
         osAnalogInputCounter[i] = 0;
         osAnalogInputBuildup[i] = 0;
@@ -702,7 +702,7 @@ ISR(PWM_TIMER_VECTOR) {
     static uint8_t pwm_count_part_fan = 0;
 
     static uint8_t pwm_pos_set[NUM_EXTRUDER + 3];
-#if NUM_EXTRUDER > 0 && ((defined(EXT0_HEATER_PIN) && EXT0_HEATER_PIN > -1 && EXT0_EXTRUDER_COOLER_PIN > -1) || (NUM_EXTRUDER > 1 && EXT1_EXTRUDER_COOLER_PIN > -1 && EXT1_EXTRUDER_COOLER_PIN != EXT0_EXTRUDER_COOLER_PIN))
+#if ((defined(EXT0_HEATER_PIN) && EXT0_HEATER_PIN > -1 && EXT0_EXTRUDER_COOLER_PIN > -1) || (NUM_EXTRUDER > 1 && EXT1_EXTRUDER_COOLER_PIN > -1 && EXT1_EXTRUDER_COOLER_PIN != EXT0_EXTRUDER_COOLER_PIN))
     static uint8_t pwm_cooler_pos_set[NUM_EXTRUDER];
 #endif
     PWM_OCR += 64;
@@ -842,18 +842,11 @@ ISR(PWM_TIMER_VECTOR) {
     if ((ADCSRA & _BV(ADSC)) == 0) // Conversion finished?
     {
         osAnalogInputBuildup[osAnalogInputPos] += ADCW;
-        if (++osAnalogInputCounter[osAnalogInputPos] >= _BV(ANALOG_INPUT_SAMPLE)) {
-#if ANALOG_INPUT_BITS + ANALOG_INPUT_SAMPLE < 12
-            osAnalogInputValues[osAnalogInputPos] = osAnalogInputBuildup[osAnalogInputPos] << (12 - ANALOG_INPUT_BITS - ANALOG_INPUT_SAMPLE);
-#endif // ANALOG_INPUT_BITS+ANALOG_INPUT_SAMPLE<12
+        if (++osAnalogInputCounter[osAnalogInputPos] >= 32) {
 
-#if ANALOG_INPUT_BITS + ANALOG_INPUT_SAMPLE > 12
-            osAnalogInputValues[osAnalogInputPos] = osAnalogInputBuildup[osAnalogInputPos] >> (ANALOG_INPUT_BITS + ANALOG_INPUT_SAMPLE - 12);
-#endif // ANALOG_INPUT_BITS+ANALOG_INPUT_SAMPLE>12
+            // Scale 32 ten-bit samples to the sensor tables' 12-bit range.
+            osAnalogInputValues[osAnalogInputPos] = osAnalogInputBuildup[osAnalogInputPos] >> 3;
 
-#if ANALOG_INPUT_BITS + ANALOG_INPUT_SAMPLE == 12
-            osAnalogInputValues[osAnalogInputPos] = osAnalogInputBuildup[osAnalogInputPos];
-#endif // ANALOG_INPUT_BITS+ANALOG_INPUT_SAMPLE==12
 
             osAnalogInputBuildup[osAnalogInputPos] = 0;
             osAnalogInputCounter[osAnalogInputPos] = 0;
@@ -912,9 +905,7 @@ ISR(PWM_TIMER_VECTOR) {
 } // ISR(PWM_TIMER_VECTOR)
 
 static int8_t extruderLastDirection = 0;
-#ifndef ADVANCE_DIR_FILTER_STEPS
-#define ADVANCE_DIR_FILTER_STEPS 2
-#endif
+constexpr uint8_t advanceDirectionFilterSteps = 2;
 
 void HAL::resetExtruderDirection() {
     extruderLastDirection = 0;
@@ -933,13 +924,13 @@ ISR(EXTRUDER_TIMER_VECTOR) {
         return; // currently no need
 
     if (Printer::extruderStepsNeeded > 0 && extruderLastDirection != 1) {
-        if (Printer::extruderStepsNeeded >= ADVANCE_DIR_FILTER_STEPS) {
+        if (Printer::extruderStepsNeeded >= advanceDirectionFilterSteps) {
             Extruder::setDirection(true);
             extruderLastDirection = 1;
             timer += 40; // Add some more wait time to prevent blocking
         }
     } else if (Printer::extruderStepsNeeded < 0 && extruderLastDirection != -1) {
-        if (-Printer::extruderStepsNeeded >= ADVANCE_DIR_FILTER_STEPS) {
+        if (-Printer::extruderStepsNeeded >= advanceDirectionFilterSteps) {
             Extruder::setDirection(false);
             extruderLastDirection = -1;
             timer += 40; // Add some more wait time to prevent blocking
@@ -992,78 +983,22 @@ inline void rf_store_char(unsigned char c, ring_buffer_rx* buffer) {
     }
 } // rf_store_char
 
-#if !defined(USART0_RX_vect) && defined(USART1_RX_vect)
-// do nothing - on the 32u4 the first USART is USART1
-#else
 void rfSerialEvent() __attribute__((weak));
 void rfSerialEvent() { }
-#define serialEvent_implemented
-#if defined(USART_RX_vect)
-SIGNAL(USART_RX_vect)
-#elif defined(USART0_RX_vect)
-SIGNAL(USART0_RX_vect)
-#else
-#if defined(SIG_USART0_RECV)
-SIGNAL(SIG_USART0_RECV)
-#elif defined(SIG_UART0_RECV)
-SIGNAL(SIG_UART0_RECV)
-#elif defined(SIG_UART_RECV)
-SIGNAL(SIG_UART_RECV)
-#else
-#error "Don't know what the Data Received vector is called for the first UART"
-#endif // defined(SIG_USART0_RECV)
-#endif // defined(USART_RX_vect)
-{
-#if defined(UDR0)
-    unsigned char c = UDR0;
-#elif defined(UDR)
-    unsigned char c = UDR;
-#else
-#error UDR not defined
-#endif // defined(UDR0)
-    rf_store_char(c, &rx_buffer);
-}
-#endif // !defined(USART0_RX_vect) && defined(USART1_RX_vect)
 
-#if !defined(USART0_UDRE_vect) && defined(USART1_UDRE_vect)
-// do nothing - on the 32u4 the first USART is USART1
-#else
-#if !defined(UART0_UDRE_vect) && !defined(UART_UDRE_vect) && !defined(USART0_UDRE_vect) && !defined(USART_UDRE_vect)
-#error "Don't know what the Data Register Empty vector is called for the first UART"
-#else
-#if defined(UART0_UDRE_vect)
-ISR(UART0_UDRE_vect)
-#elif defined(UART_UDRE_vect)
-ISR(UART_UDRE_vect)
-#elif defined(USART0_UDRE_vect)
-ISR(USART0_UDRE_vect)
-#elif defined(USART_UDRE_vect)
-ISR(USART_UDRE_vect)
-#endif // defined(UART0_UDRE_vect)
-{
+SIGNAL(USART0_RX_vect) {
+    rf_store_char(UDR0, &rx_buffer);
+}
+
+ISR(USART0_UDRE_vect) {
     if (tx_buffer.head == tx_buffer.tail) {
-        // Buffer empty, so disable interrupts
-#if defined(UCSR0B)
         bit_clear(UCSR0B, UDRIE0);
-#else
-        bit_clear(UCSRB, UDRIE);
-#endif // defined(UCSR0B)
     } else {
-        // There is more data in the output buffer. Send the next byte
         uint8_t c = tx_buffer.buffer[tx_buffer.tail];
         tx_buffer.tail = (tx_buffer.tail + 1) & serialTxBufferMask;
-#if defined(UDR0)
         UDR0 = c;
-#elif defined(UDR)
-        UDR = c;
-#else
-#error UDR not defined
-#endif // defined(UDR0)
     }
 }
-#endif // !defined(UART0_UDRE_vect) && !defined(UART_UDRE_vect) && !defined(USART0_UDRE_vect) && !defined(USART_UDRE_vect)
-#endif // !defined(USART0_UDRE_vect) && defined(USART1_UDRE_vect)
-
 
 // Constructors ////////////////////////////////////////////////////////////////
 
@@ -1194,15 +1129,7 @@ size_t RFHardwareSerial::write(uint8_t c) {
 
 // Preinstantiate Objects //////////////////////////////////////////////////////
 
-#if defined(UBRRH) && defined(UBRRL)
-RFHardwareSerial RFSerial(&rx_buffer, &tx_buffer, &UBRRH, &UBRRL, &UCSRA, &UCSRB, &UDR, RXEN, TXEN, RXCIE, UDRIE, U2X);
-#elif defined(UBRR0H) && defined(UBRR0L)
 RFHardwareSerial RFSerial(&rx_buffer, &tx_buffer, &UBRR0H, &UBRR0L, &UCSR0A, &UCSR0B, &UDR0, RXEN0, TXEN0, RXCIE0, UDRIE0, U2X0);
-#elif defined(USBCON)
-// do nothing - Serial object and buffers are initialized in CDC code
-#else
-#error no serial port defined (port 0)
-#endif // defined(UBRRH) && defined(UBRRL)
 
 
 #if !defined CASE_LIGHT_PIN || CASE_LIGHT_PIN < 0
