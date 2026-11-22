@@ -1,5 +1,7 @@
 # Firmware maintenance handover
 
+**Development roadmap:** [Architecture and development blocks](docs/development-roadmap.md). The active block is coordinate systems and motion compensation. The [maintenance list](docs/maintenance-tasks.md) tracks its fixes and later work. Evaluate step packing in the motion smoothness and performance block.
+
 **Verified coordinate semantics:** [coordinate frames and extrusion timeline](docs/first-layer-control/coordinate-frames-and-extrusion.md). `g_min/g_max` refer to nominal planned Z steps (not compensated motor position). The [M3912 patch 5f848c9](https://github.com/Nibbels/Repetier-Firmware/commit/5f848c9a5cd0347c6d45fd9d3f13afd7344cb775) now restores the incoming *logical* E coordinate. The user M220 speed override and DMS `dynamicFeedrateFactor`/`interval_mod` are independent. Instantaneous Digit-Z differs from accumulated SenseOffset.
 
 **M3912 uses an isolated pressure-braked priming phase.** `g_startLineActive` identifies generated prime moves. High DMS force progressively constrains XY speed and reduces E flow, like the audible change when a chainsaw enters wood. Manual start code enables SenseOffset with `M3909` after priming. [State ledger and test plan](docs/first-layer-control/m3912-state-boundary.md)

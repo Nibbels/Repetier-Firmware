@@ -1,6 +1,6 @@
 # Firmware fixes and candidate pulls
 
-Firmware changes are tracked on `ai-firmware-review` against `community_development`. [Branch comparison](https://github.com/Nibbels/Repetier-Firmware/compare/community_development...ai-firmware-review)
+Firmware changes are tracked on `ai-firmware-review` against `community_development`. The [development roadmap](development-roadmap.md) defines the block outcomes and architecture. [Branch comparison](https://github.com/Nibbels/Repetier-Firmware/compare/community_development...ai-firmware-review)
 
 ## On the review branch
 
@@ -12,21 +12,17 @@ Firmware changes are tracked on `ai-firmware-review` against `community_developm
 | Pause, resume and jog | Standby cooldown uses the correct temperature units. The pause handler serializes park and return. It computes return travel from the saved direct XYZ position and keeps the queue paused if the return is blocked. Jog release also works when another key is held. [Cooldown and endstops](https://github.com/Nibbels/Repetier-Firmware/commit/0c8d899) · [Pause and jog](https://github.com/Nibbels/Repetier-Firmware/commit/5883673) |
 | Planned steps and relative moves | XYZ moves use integer endpoint differences. Relative G-code retains the rounding remainder, and E retains a separate fractional motor-step carry. The long relative-Z replay went from 288 steps off to zero, and 100,000 small relative E moves produced 224,000 steps. [XYZ planner](https://github.com/Nibbels/Repetier-Firmware/commit/0a5bdd9) · [Relative coordinates](https://github.com/Nibbels/Repetier-Firmware/commit/5883673) · [Replay details](first-layer-control/coordinate-frames-and-extrusion.md#why-segment-rounding-cannot-accumulate-in-xyz) |
 
-## Fork candidates
+## Coordinate systems and motion compensation
 
-| Candidate | Disposition |
-| --- | --- |
-| Z-CMP wait between queued segments | The review branch skips waits for corrections held at a travel limit and keeps idle compensation active with a paused queue. The fork's change to waits between buffered moves remains a timing candidate. [Timer patch](https://github.com/afriess/RFx000x-Firmware/commit/e51f9bc) |
-| Step-packing threshold | Evaluate in the performance review. Using the computed `minInterval` honors the extra 64 ticks for pressure advance. Removing the 512-tick interval floor is a separate motion timing change to evaluate. [Step-packing patch](https://github.com/afriess/RFx000x-Firmware/commit/0e11752) |
-| Auto-touch and workpiece origin | Deferred. The experimental probing routines refine workpiece contact and origin measurement. The 0.25 to 0.50 mm change widens the origin search. [Probe routine](https://github.com/afriess/RFx000x-Firmware/blob/0e11752/Repetier/RF.cpp#L3382-L3405) · [Search range](https://github.com/afriess/RFx000x-Firmware/commit/0dd35e4) |
+**Active development block.** [State and motion responsibilities](development-roadmap.md#1-coordinate-systems-and-motion-compensation)
 
-## Z travel and scanning
+### Z travel and scanning
 
 - [x] **Allow scan retreat from the exact lower bound.** `moveZ()` stops a further approach at `-maxZOverrideSteps` and allows the bed to move away. The scan keeps control of the Z motor for the duration of its move. [Scan step output](../Repetier/RF.cpp#L4758)
 
 - [x] **Apply travel limits to compensation-only Z pulses.** Each pulse checks the motor position in the requested direction. Z-max uses the configured limit and, where present, the hardware switch. Z-min allows the model-specific overtravel in homed print mode. An unreachable target stays pending, leaving the next retreat step available. Host replays covered idle and XY movement, queued and direct retreat, disabling compensation at a limit, and the RF1000 shared switch. Physical verification remains open. [Compensation pulses](../Repetier/motion.cpp#L969) · [Travel limit check](../Repetier/Printer.cpp#L1166) · [Scan reach](z-offset/scans-and-persistence.md#z-min-screw-adjustment-and-scan-reach)
 
-## Pause and resume
+### Pause and resume
 
 - [ ] **Suspend automatic SenseOffset learning during pause.** In print mode, bed-matrix lookup and fade use the frozen print XYZ. In a host replay, pre-pause samples raised SenseOffset by 10 µm after the reading fell to zero. Stop learning and clear sample history while retaining applied clearance, manual offset adjustment and live Digit-Z force tracking. The pause guard passed a host trial. Check the return at equal force and after manual extrusion while parked. [Print matrix coordinates](../Repetier/RF.cpp#L3198-L3221) · [SenseOffset sampling](../Repetier/RF.cpp#L5688-L5726)
 
@@ -48,11 +44,31 @@ The host replay used the firmware's pause handlers, foreground UI, and key polli
 
 The firmware restricted Play to a completed pause in 1.37t2. The 1.43.56 pause rewrite removed that check. The 1.43.76 standby change added checks for heating and the initial return request. [1.37t2](https://github.com/Nibbels/Repetier-Firmware/commit/c9b3a88) · [1.43.56](https://github.com/Nibbels/Repetier-Firmware/commit/391cedb) · [1.43.76](https://github.com/Nibbels/Repetier-Firmware/commit/6f5167d)
 
-## Digit-Z
+## Print lifecycle and DMS controls
+
+### Z lifecycle
+
+- [ ] **Reset learned fade bounds for prints started without Z homing.** The previous print's bounds can remain active into the next print, including during priming. Identify a reliable print-start boundary that also covers jobs without `M3912`. [Lifecycle finding](z-offset/lifecycle-and-findings.md#finding-f3-partially-fixed-consecutive-print-lifecycle)
+
+### Digit-Z
 
 - [ ] **Recover the same elastic correction at the same steady DMS reading.** Retain the integer filter remainder to eliminate the one-microstep difference reproduced at 5,530 digits. Verify rising and falling force, then measure the force-to-deflection slope and the delay from load change to applied Z on the printer. [Formula, timing and replay](z-offset/thermal-and-force.md#elastic-hotend-deflection-and-digit-z)
 
-## Z lifecycle
+## Calibration and persistence
 
-- [ ] **Reset learned fade bounds for prints started without Z homing.** The previous print's bounds can remain active into the next print, including during priming. Identify a reliable print-start boundary that also covers jobs without `M3912`. [Lifecycle finding](z-offset/lifecycle-and-findings.md#finding-f3-partially-fixed-consecutive-print-lifecycle)
 - [ ] **Make the `M3902 Z0` offset transfer durable.** The command saves zero for the manual offset immediately. A reset before saving the RAM bed matrix can lose the transferred correction. [Matrix persistence](z-offset/scans-and-persistence.md#critical-transfer-operation-m3902-z0)
+- **Deferred.** The fork's Auto-touch and workpiece-origin routines refine contact detection and widen the origin search from 0.25 to 0.50 mm. [Probe routine](https://github.com/afriess/RFx000x-Firmware/blob/0e11752/Repetier/RF.cpp#L3382-L3405) · [Search range](https://github.com/afriess/RFx000x-Firmware/commit/0dd35e4)
+
+## Motion smoothness and performance
+
+- [ ] **Evaluate Z-CMP wait between queued segments.** The review branch skips waits for corrections held at a travel limit and keeps idle compensation active with a paused queue. Compare the fork's change to waits between buffered moves in the timing review. [Timer patch](https://github.com/afriess/RFx000x-Firmware/commit/e51f9bc)
+- [ ] **Evaluate step packing.** Check the computed `minInterval` with the extra 64 ticks for pressure advance. Measure removing the 512-tick interval floor separately. [Step-packing patch](https://github.com/afriess/RFx000x-Firmware/commit/0e11752)
+
+## Firmware structure and hardware variants
+
+Work through the [architecture review and migration](development-roadmap.md#5-firmware-structure-and-hardware-variants) as the blocks establish which state, algorithms and hardware differences belong together.
+
+## Fork candidates
+
+- [Z-CMP timing and step packing](#motion-smoothness-and-performance)
+- [Auto-touch and workpiece origin](#calibration-and-persistence)
