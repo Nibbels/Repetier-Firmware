@@ -59,6 +59,8 @@ unsigned strainGaugeReads = 0;
 void (*duringMove)(long, long, long, long) = nullptr;
 void (*duringHeatWait)() = nullptr;
 std::function<void()> duringPeriodicActions;
+std::function<void()> duringOutputScript;
+unsigned motorShutdowns = 0;
 unsigned primePolls = 0, primeMoves = 0, primeWaits = 0, skipPrimeAt = 0, abortPrimeAt = 0;
 unsigned primeSpacingMoves = 0;
 struct PrimeMove {
@@ -142,10 +144,12 @@ void WRITE(int pin, bool high);
 const char ui_text_pause[] = "", ui_text_operation_denied[] = "", ui_text_home_unknown[] = "";
 const char ui_text_z_axis[] = "", ui_text_max_reached[] = "", ui_text_min_reached[] = "";
 const char ui_text_emergency_pause[] = "";
+const char ui_text_output_object[] = "";
 
 struct Com {
     static constexpr const char* tSlash = "/";
     static constexpr const char* tLinearLColon = "Linear L:";
+    static constexpr const char* tOutputObjectPrint = "output";
     static const char* lastLine;
     static void printFLN(const char* line) { lastLine = line; }
     template<class... Args> static void printF(Args...) {}
@@ -258,6 +262,10 @@ void stopDirectAxis(uint8_t axis) { stoppedDirectAxis = axis; }
 bool isZMaxEndstopHit() { return zMotion.maxEndstopHit(); }
 bool isZMinEndstopHit() { return ZMotion::minSwitchHit(); }
 bool needsCMPwait() { return false; }
+void disableAllSteppersNow() {
+    assert(extrusionOutput.pendingSteps() == 0);
+    ++motorShutdowns;
+}
 void setMenuMode(int mode, bool active) {
     assert(mode == MENU_MODE_PAUSED);
     menuPaused = active;
@@ -510,6 +518,7 @@ bool waitForMotionHandoff(bool waitThroughPause = false);
 void waitUntilEndOfAllMoves() { ++primeWaits; PrintLine::linesCount = 0; }
 void changeFeedrateMultiply(int) { assert(false); }
 void printCurrentPosition() {}
+void setFanSpeed(uint8_t) {}
 }
 
 struct GCode {
@@ -533,6 +542,13 @@ struct GCodeInput {
         assert(Printer::printStop.commandsBlocked());
         ++incomingReads;
     }
+    static void executeFlashScript(const char* script) {
+        assert(script == Com::tOutputObjectPrint && !PrintLine::hasLines());
+        assert(!Printer::printStop.commandsBlocked());
+        ++objectOutputs;
+        if (duringOutputScript)
+            duringOutputScript();
+    }
 };
 
 unsigned queuedSenseOffsetEnables = 0;
@@ -541,11 +557,7 @@ void queueTask(char task) {
     ++queuedSenseOffsetEnables;
 }
 
-void outputObject(bool showerrors) {
-    assert(!showerrors && !PrintLine::hasLines() && !PrintLine::direct.task);
-    assert(!Printer::printStop.commandsBlocked());
-    ++objectOutputs;
-}
+void outputObject(bool showerrors);
 
 long getZMatrixDepth(long x, long y) {
     ++matrixDepthReads;
@@ -1881,6 +1893,28 @@ void tickAdvanceInterrupt() {
     compare = Printer::extrusionOutput.nextTimerCompare(compare);
 }
 
+void finishAdvanceBeforeAndAfterOutput() {
+    auto& output = Printer::extrusionOutput;
+    output.setAdvanceEnabled(true);
+    output.setStepInterval(15);
+    output.addSteps(2);
+    output.setLeadSteps(1);
+    for (int i = 0; i < 4; ++i)
+        tickAdvanceInterrupt();
+    assert(Extruder::current->deliveredSteps == 3);
+
+    PrintLine::linesCount = 0;
+    duringPeriodicActions = tickAdvanceInterrupt;
+    duringOutputScript = [&] {
+        assert(Extruder::current->deliveredSteps == 2 && !output.pendingSteps());
+        assert(motorShutdowns == 0);
+        output.addSteps(-1);
+    };
+    outputObject(true);
+    assert(objectOutputs == 1 && motorShutdowns == 1);
+    assert(Extruder::current->deliveredSteps == 1 && !output.pendingSteps());
+}
+
 void advancePauseWithPressureLimit() {
     auto& output = Printer::extrusionOutput;
     output.setAdvanceEnabled(true);
@@ -2326,6 +2360,8 @@ int main(int argc, char** argv) {
         advanceCancel();
     else if (!std::strcmp(argv[1], "pressure-advance-pause"))
         advancePauseWithPressureLimit();
+    else if (!std::strcmp(argv[1], "advance-output"))
+        finishAdvanceBeforeAndAfterOutput();
 #if NUM_EXTRUDER > 1
     else if (!std::strcmp(argv[1], "advance-tool"))
         advanceToolChange();

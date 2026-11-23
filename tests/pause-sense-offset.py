@@ -46,6 +46,7 @@ def main():
         section(rf, "short readAveragePressure(", "} // readAveragePressure") + "}",
         section(rf, "long getZMatrixDepth_CurrentXY(", "\nvoid showAbortScanReason("),
         section(rf, "static void serviceSenseOffset(", "\nvoid handleScanWorkTasks("),
+        section(rf, "void outputObject(bool showerrors)", "\nvoid loopFeatures("),
         pause.removeprefix('#include "Repetier.h"\n'),
         idle.removeprefix('#include "Repetier.h"\n'),
         stop.removeprefix('#include "Repetier.h"\n#include "GCodeInput.h"\n'),
@@ -148,7 +149,7 @@ def main():
             "pressure-pause", "pressure-stop", "digit-zero",
             "extrusion-planning",
             "gcode-target", "wobble-target", "cartesian-planning", "segment-geometry", "move-queue", "idle-status", "ecmp-stepping",
-            "advance-timer", "advance-mode", "advance-cancel", "pressure-advance-pause", "advance-peak",
+            "advance-timer", "advance-mode", "advance-cancel", "pressure-advance-pause", "advance-output", "advance-peak",
             "step-clock", "lookahead", "direct-ramp", "xy-limits",
         ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)

@@ -3075,7 +3075,7 @@ void handleStartStandby(millis_t uTime) {
 }
 
 void outputObject(bool showerrors) {
-    if (PrintLine::hasLines()) {
+    if (PrintLine::hasLines() || !Commands::waitForMotionHandoff()) {
         if (showerrors)
             showError((void*)ui_text_output_object, (void*)ui_text_operation_denied);
         return;
