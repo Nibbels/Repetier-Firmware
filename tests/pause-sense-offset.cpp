@@ -620,7 +620,7 @@ void sample(short force, int count = 1) {
 void digitZero() {
     const auto readCurrentDigits = [] {
         int16_t digits = 0;
-        assert(sampleStrainGauge(digits));
+        assert(Printer::strainGauge.readDigits(clockMs, digits));
         return digits;
     };
     duringPeriodicActions = [] { dmsInput.tick(); };
@@ -667,12 +667,12 @@ void digitZero() {
 
     dmsInput.disconnected = true;
     int16_t digits = 5;
-    assert(!sampleStrainGauge(digits) && digits == 5);
+    assert(!gauge.readDigits(clockMs, digits) && digits == 5);
     short average = 5;
     assert(readAveragePressure(&average) && average == 0);
     dmsInput.disconnected = false;
     dmsInput.wrongConfiguration = true;
-    assert(!sampleStrainGauge(digits) && digits == 5);
+    assert(!gauge.readDigits(clockMs, digits) && digits == 5);
     duringPeriodicActions = nullptr;
 }
 
@@ -1401,10 +1401,8 @@ void compensationBoundaries() {
     expectCompensation(448, 203 + offset, 4320.0f / (12378.0f * 256.0f), 1);
 
     auto settleDigitZ = [](short digits) {
-        forceDigits = digits;
-        int16_t sampled;
         for (int i = 0; i < 40; ++i)
-            assert(sampleStrainGauge(sampled));
+            updateDigitCompensation(digits);
     };
     Printer::digitCompensation.setDigitZEnabled(true);
     settleDigitZ(-5500);

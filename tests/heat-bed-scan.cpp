@@ -165,7 +165,7 @@ void adjustPressureLimits(short baseline) {
     g_nMinPressureRetry = baseline - 5;
     g_nMaxPressureRetry = baseline + 5;
 }
-void observeStrainGauge(int16_t) {
+void updateDigitCompensation(int16_t) {
     ++pressureReads;
     acceptedAt = Printer::strainGauge.latestStart();
 }

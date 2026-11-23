@@ -162,7 +162,7 @@ bool moveZ(long steps) {
     Printer::zMotion.position += steps;
     return true;
 }
-void observeStrainGauge(int16_t) {
+void updateDigitCompensation(int16_t) {
     acceptedAt = Printer::strainGauge.latestStart();
     if (++pressureSamples <= 10 && injectNoise)
         lastUnstableAt = HAL::now;

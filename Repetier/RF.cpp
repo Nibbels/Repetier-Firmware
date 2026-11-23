@@ -193,18 +193,11 @@ void initRF(void) {
     setupForPrinting();
 } // initRF
 
-static void observeStrainGauge(int16_t digits) {
+static void updateDigitCompensation(int16_t digits) {
     Printer::digitCompensation.observe(digits, Printer::doHeatBedZCompensation, [] {
         // The force brake also runs during M3912, regardless of the learned first-layer boundary.
         return Printer::zMotion.nominalSteps() > Printer::layers.fadeStartSteps() || Printer::startLine.active();
     });
-}
-
-static bool sampleStrainGauge(int16_t& digits) {
-    if (!Printer::strainGauge.readDigits(HAL::timeInMilliseconds(), digits))
-        return false;
-    observeStrainGauge(digits);
-    return true;
 }
 
 void adjustPressureLimits(short IdlePressure) {
@@ -2312,7 +2305,7 @@ static void servicePressureMeasurement(PressureMeasurement& measurement, millis_
         return;
     }
     if (measurement.record(sample.startedAtMs, sample.readAtMs, digits))
-        observeStrainGauge(digits);
+        updateDigitCompensation(digits);
 }
 
 static void reportPressureReadFailure(const PressureMeasurement& measurement) {
@@ -3028,16 +3021,19 @@ void handleStrainGaugeFeatures(millis_t uTime) {
     const auto pauseSample = Printer::pause.beginSenseOffsetSample();
     auto& protection = Printer::pressureProtection;
 
-    // Share one scheduled DMS reading among SenseOffset, emergency pause and emergency stop.
+    // Share one cached DMS value among the checks due on this tick.
     const bool senseOffsetDue = Printer::senseOffsetControl.takeSampleSlot(uTime);
     const bool pauseDue = protection.pauseSampleDue(uTime);
     const bool stopDue = protection.stopSampleDue(uTime);
     int16_t pressure = 0;
-    if ((senseOffsetDue || pauseDue || stopDue) && !sampleStrainGauge(pressure)) {
-        protection.readFailed(uTime, pauseDue, stopDue);
-        Printer::senseOffsetControl.resetWindow();
-        serviceSenseOffset(false, 0, pauseSample);
-        return;
+    if (senseOffsetDue || pauseDue || stopDue) {
+        if (!Printer::strainGauge.readDigits(HAL::timeInMilliseconds(), pressure)) {
+            protection.readFailed(uTime, pauseDue, stopDue);
+            Printer::senseOffsetControl.resetWindow();
+            serviceSenseOffset(false, 0, pauseSample);
+            return;
+        }
+        updateDigitCompensation(pressure);
     }
 
     serviceSenseOffset(senseOffsetDue, pressure, pauseSample);
@@ -4886,7 +4882,11 @@ void loadFilament(GCode* pCommand) {
     while (e < float(Extrusion)) {
         Commands::checkForPeriodicalActions(Processing);
         int16_t digits;
-        if (Printer::printJob.commandsBlocked() || !sampleStrainGauge(digits) || abs(int32_t(digits)) > maxP) {
+        const bool haveDigits = !Printer::printJob.commandsBlocked()
+            && Printer::strainGauge.readDigits(HAL::timeInMilliseconds(), digits);
+        if (haveDigits)
+            updateDigitCompensation(digits);
+        if (!haveDigits || abs(int32_t(digits)) > maxP) {
             UI_STATUS_UPD(UI_TEXT_OK);
             break;
         }
@@ -4954,11 +4954,12 @@ void unloadFilament(GCode* pCommand) {
             if (Printer::printJob.commandsBlocked())
                 break;
             int16_t digits;
-            if (!sampleStrainGauge(digits)) {
+            if (!Printer::strainGauge.readDigits(HAL::timeInMilliseconds(), digits)) {
                 e = outputLength;
                 retry = 0;
                 break;
             }
+            updateDigitCompensation(digits);
             if (abs(int32_t(digits)) > maxForce) {
                 t += 3.33; // +1°K
                 break;
