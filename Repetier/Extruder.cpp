@@ -271,31 +271,40 @@ void TemperatureController::updateTempControlVars() {
     }
 } // updateTempControlVars
 
-/** \brief Select extruder ext_num.
-This function changes and initalizes a new extruder. This is also called, after the eeprom values are changed.
-*/
-void Extruder::selectExtruderById(uint8_t extruderId) {
-
-    if (extruderId >= NUM_EXTRUDER)
-        extruderId = Extruder::current->id;
+bool Extruder::selectExtruderById(uint8_t extruderId) {
+    if (!Commands::waitForMotionHandoff())
+        return false;
 
 #if NUM_EXTRUDER > 1
-    const bool toolChanged = extruderId != Extruder::current->id;
-#endif // NUM_EXTRUDER>1
+    if (extruderId >= NUM_EXTRUDER || extruderId == current->id)
+        return true;
 
     // Correct X and Y on homed axes. Homing positions the other axes later.
     int32_t dx = 0;
     int32_t dy = 0;
     if (Printer::isAxisHomed(X_AXIS))
-        dx = (extruder[extruderId].offsetMM[X_AXIS] - Extruder::current->offsetMM[X_AXIS]) * Printer::axisStepsPerMM[X_AXIS];
+        dx = (extruder[extruderId].offsetMM[X_AXIS] - current->offsetMM[X_AXIS]) * Printer::axisStepsPerMM[X_AXIS];
     if (Printer::isAxisHomed(Y_AXIS))
-        dy = (extruder[extruderId].offsetMM[Y_AXIS] - Extruder::current->offsetMM[Y_AXIS]) * Printer::axisStepsPerMM[Y_AXIS];
+        dy = (extruder[extruderId].offsetMM[Y_AXIS] - current->offsetMM[Y_AXIS]) * Printer::axisStepsPerMM[Y_AXIS];
+
+    {
+        InterruptProtectedBlock lock;
+        current->enabled = 0;
+        current = &extruder[extruderId];
+        Printer::pressureAdvance.resetDirection();
+    }
+    applyCurrentSettings();
     Printer::offsetRelativeStepsCoordinates(-dx, -dy, 0, 0);
 
-    Extruder::current->enabled = 0;
+    uid.setStatusP(current->id == 0 ? PSTR("Extruder 0") : PSTR("Extruder 1"));
+    uid.refreshPage();
+#else
+    (void)extruderId;
+#endif
+    return true;
+}
 
-    Extruder::current = &extruder[extruderId];
-
+void Extruder::applyCurrentSettings() {
     Printer::axisStepsPerMM[E_AXIS] = Extruder::current->stepsPerMM;
     Printer::axisMMPerSteps[E_AXIS] = 1.0f / Printer::axisStepsPerMM[E_AXIS];
     Printer::maxFeedrate[E_AXIS] = Extruder::current->maxFeedrate;
@@ -319,20 +328,8 @@ void Extruder::selectExtruderById(uint8_t extruderId) {
     // Limit feedrate to interrupt speed
     if (fmax < Printer::maxFeedrate[E_AXIS])
         Printer::maxFeedrate[E_AXIS] = fmax;
-    Printer::pressureAdvance.resetDirection();
-
     Extruder::current->tempControl.updateTempControlVars();
-
-    // When inserting diameter for hotend 1/2
-    // We needed to adjust extrusionFactor to possibly different diameter
-
-#if NUM_EXTRUDER > 1
-    if (toolChanged) {
-        uid.setStatusP(extruderId == 0 ? PSTR("Extruder 0") : PSTR("Extruder 1"));
-        uid.refreshPage();
-    }
-#endif // NUM_EXTRUDER>1
-} // selectExtruderById
+}
 
 void Extruder::setTemperatureForExtruder(float temperatureInCelsius, uint8_t extr) {
     if (extr >= NUM_EXTRUDER) {

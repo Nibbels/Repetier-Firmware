@@ -102,6 +102,35 @@ void Commands::waitUntilEndOfAllMoves() {
     }
 } // waitUntilEndOfAllMoves
 
+bool Commands::waitForMotionHandoff() {
+    // Periodic actions can run panel commands while the foreground waits.
+    static bool waiting = false;
+    if (waiting)
+        return false;
+    waiting = true;
+
+    bool settled = false;
+    auto& advance = Printer::pressureAdvance;
+    while (!Printer::blockAll && !Printer::printStop.commandsBlocked() && Printer::pause.allowsQueueAdvance()) {
+        {
+            InterruptProtectedBlock lock;
+            if (!PrintLine::hasLines() && !PrintLine::directMoveActive() && !Printer::needsCMPwait()) {
+                if (!Printer::isAdvanceActivated())
+                    advance.clearSteps();
+                settled = advance.drain();
+            } else {
+                advance.cancelDrain();
+            }
+        }
+        if (settled)
+            break;
+        Commands::checkForPeriodicalActions(Processing);
+    }
+    advance.cancelDrain();
+    waiting = false;
+    return settled;
+}
+
 void Commands::printCurrentPosition() {
     // Wir zeigen dem Repetier-Host wo wir gerade stehen.
     // Hier ist die reine GCode-Position interessant, sonst würde das Einrechnen des GCode-Origin auch keinen Sinn machen.
@@ -279,7 +308,6 @@ void Commands::executeGCode(GCode* com) {
         Commands::processMCode(com);
     } else if (com->hasT()) // Process T code
     {
-        Commands::waitUntilEndOfAllMoves(); //Tn-Code (change Extruder)
         Extruder::selectExtruderById(com->T);
     } else if (com->hasF()) // Process F code http://linuxcnc.org/docs/html/gcode/other-code.html#sec:set-feed-rate
     {
@@ -801,7 +829,7 @@ void Commands::processMCode(GCode* com) {
         // Das ist die E-Startgeschwindigkeit. Quasi dasselbe wie Jerk für den Extruder.
         if (com->hasE()) {
             Extruder::current->maxEJerk = constrain(com->E, 1.0f, Extruder::current->maxFeedrate);
-            Extruder::selectExtruderById(Extruder::current->id);
+            Extruder::applyCurrentSettings();
         }
 
         break;
@@ -966,7 +994,6 @@ void Commands::processMCode(GCode* com) {
     case 501: // M501
     {
         EEPROM::readDataFromEEPROM();
-        Extruder::selectExtruderById(Extruder::current->id);
 
         if (Printer::debugInfo()) {
             Com::printInfoF(Com::tConfigLoadedEEPROM);

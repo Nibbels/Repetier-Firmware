@@ -2683,7 +2683,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
 #endif //NUM_EXTRUDER > 1
             INCREMENT_MIN_MAX(extruder[eNr].stepsPerMM, 1, 1, 9999);
             if (eNr == Extruder::current->id)
-                Extruder::selectExtruderById(eNr); //übernehmen der werte
+                Extruder::applyCurrentSettings();
 
             HAL::eprSetFloat(EEPROM::getExtruderOffset(eNr) + EPR_EXTRUDER_STEPS_PER_MM, extruder[eNr].stepsPerMM);
             EEPROM::updateChecksum();
@@ -2725,7 +2725,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
 #endif //NUM_EXTRUDER > 1
         INCREMENT_MIN_MAX(extruder[eNr].maxAcceleration, 200, 200, 10000);
         if (eNr == Extruder::current->id)
-            Extruder::selectExtruderById(eNr);
+            Extruder::applyCurrentSettings();
 
         HAL::eprSetFloat(EEPROM::getExtruderOffset(eNr) + EPR_EXTRUDER_MAX_ACCELERATION, extruder[eNr].maxAcceleration);
         EEPROM::updateChecksum();
@@ -2741,7 +2741,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
 #endif //NUM_EXTRUDER > 1
         INCREMENT_MIN_MAX(extruder[eNr].maxFeedrate, 1, extruder[eNr].maxEJerk, 60);
         if (eNr == Extruder::current->id)
-            Extruder::selectExtruderById(eNr);
+            Extruder::applyCurrentSettings();
 
         HAL::eprSetFloat(EEPROM::getExtruderOffset(eNr) + EPR_EXTRUDER_MAX_FEEDRATE, extruder[eNr].maxFeedrate);
         EEPROM::updateChecksum();
@@ -2757,7 +2757,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
 #endif //NUM_EXTRUDER > 1
         INCREMENT_MIN_MAX(extruder[eNr].maxEJerk, 1, 1, extruder[eNr].maxFeedrate);
         if (eNr == Extruder::current->id)
-            Extruder::selectExtruderById(eNr);
+            Extruder::applyCurrentSettings();
 
         HAL::eprSetFloat(EEPROM::getExtruderOffset(eNr) + EPR_EXTRUDER_MAX_START_FEEDRATE, extruder[eNr].maxEJerk);
         EEPROM::updateChecksum();
@@ -3165,7 +3165,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
             if (updatederived)
                 Printer::updateDerivedParameter();
             if (updateextruder)
-                Extruder::selectExtruderById(Extruder::current->id);
+                Extruder::applyCurrentSettings();
             if (updateall)
                 HAL::eprSetByte(EPR_RF_MICRO_STEPS_USED, 0xAB); //erstes schreiben markiert eepromwerte als gültig
             noInts.unprotect();

@@ -47,7 +47,6 @@ void EEPROM::update(GCode* com) {
     EEPROM::updateChecksum();
 
     readDataFromEEPROM();
-    Extruder::selectExtruderById(Extruder::current->id);
 
 } // update
 
@@ -215,7 +214,7 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     Printer::pause.restoreDefaultParking();
 
     Printer::updateDerivedParameter();
-    Extruder::selectExtruderById(Extruder::current->id);
+    Extruder::applyCurrentSettings();
     Extruder::initHeatedBed();
 
     g_nManualSteps[X_AXIS] = (unsigned short)lroundf(Printer::axisStepsPerMM[X_AXIS] * DEFAULT_MANUAL_MM_X);
@@ -763,7 +762,7 @@ void EEPROM::readDataFromEEPROM() {
         storeDataIntoEEPROM(false); // Store new fields for changed version
     }
     Printer::updateDerivedParameter();
-    Extruder::selectExtruderById(Extruder::current->id);
+    Extruder::applyCurrentSettings();
     Extruder::initHeatedBed();
 
 } // readDataFromEEPROM

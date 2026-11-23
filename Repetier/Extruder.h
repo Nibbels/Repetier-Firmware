@@ -303,7 +303,8 @@ public:
     } // enable
     static void manageTemperatures();
     static void disableAllExtruders();
-    static void selectExtruderById(uint8_t extruderId);
+    static bool selectExtruderById(uint8_t extruderId);
+    static void applyCurrentSettings();
     static void initExtruder();
     static void initHeatedBed();
     static void setHeatedBedTemperature(float temperatureInCelsius);

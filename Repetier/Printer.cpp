@@ -645,7 +645,7 @@ void Printer::setup() {
     Commands::writeLowestFreeRAM();
     HAL::setupTimer();
 
-    Extruder::selectExtruderById(0);
+    Extruder::applyCurrentSettings();
 
 #ifdef RGB_LIGHT_R_PIN
     setRGBLEDs(0, 0, 0);

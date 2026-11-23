@@ -352,7 +352,8 @@ void scanHeatBed(void) {
         }
         case 10: {
             // the scan is performed with the left extruder
-            Extruder::selectExtruderById(0);
+            if (!Extruder::selectExtruderById(0))
+                break;
 
             if (g_nHeatBedScanMode == HEAT_BED_SCAN_MODE_PLA) {
                 Extruder::setHeatedBedTemperature(heatBedScanPlaBedC);

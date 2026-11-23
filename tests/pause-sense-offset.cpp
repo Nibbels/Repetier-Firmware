@@ -10,7 +10,9 @@
 #include "Constants.h"
 #undef uint
 #define MOTHERBOARD DEVICE_TYPE_RF2000
+#ifndef NUM_EXTRUDER
 #define NUM_EXTRUDER 1
+#endif
 #include "Configuration.h"
 #include "RF2000.h"
 #include "ZOffset.h"
@@ -237,7 +239,7 @@ constexpr float maxXYJerk = 8.0f, maxZJerk = 0.5f;
 volatile char doHeatBedZCompensation = true;
 bool printing = true, menuPaused = false;
 bool axesHomed = true;
-int feedrateMultiply = 100, motorCurrent[4] = {};
+int feedrateMultiply = 100, motorCurrent[3 + NUM_EXTRUDER] = {};
 char moveMode[3] = { MOVE_MODE_SINGLE_STEPS, MOVE_MODE_SINGLE_STEPS, MOVE_MODE_SINGLE_STEPS };
 
 bool debugErrors() { return false; }
@@ -353,6 +355,8 @@ struct Extruder {
     } tempControl;
     int8_t stepperDirection = 0;
     uint8_t id = 0;
+    bool enabled = false;
+    int deliveredSteps = 0;
     float offsetMM[2] = {};
     float maxEJerk = 6.0f;
     float advanceL = 0.0f;
@@ -366,7 +370,10 @@ struct Extruder {
         step();
         pending = remaining;
         unstep();
+        current->deliveredSteps += current->stepperDirection;
     }
+    static bool selectExtruderById(uint8_t id);
+    static void applyCurrentSettings() {}
     static void setTemperatureForExtruder(float temperature, int tool);
     static void setHeatedBedTemperature(float temperature) { bedTemperature = temperature; }
     static void setTemperatureForAllExtruders(float temperature) { setTemperatureForExtruder(temperature, 0); }
@@ -486,6 +493,8 @@ struct UIDisplay {
     void exitmenu() {}
     void initializeLCD() {}
     void ui_check_keys(int16_t& action) { action = nextKey; }
+    void setStatusP(const char*) {}
+    void refreshPage() {}
     void pressPlay();
     void fastAction();
     void senseOffsetUpAction();
@@ -495,6 +504,7 @@ struct UIDisplay {
 enum FirmwareState { Paused, Processing };
 namespace Commands {
 void checkForPeriodicalActions(FirmwareState);
+bool waitForMotionHandoff();
 void waitUntilEndOfAllMoves() { ++primeWaits; PrintLine::linesCount = 0; }
 void changeFeedrateMultiply(int) { assert(false); }
 void printCurrentPosition() {}
@@ -1664,6 +1674,69 @@ void advanceTimer() {
     assert(Extruder::stepPulses == basePulses + 4 && Extruder::trailingEdges == baseTrailingEdges + 4);
 }
 
+#if NUM_EXTRUDER > 1
+void advanceToolChange() {
+    auto& advance = Printer::pressureAdvance;
+    Printer::advanceActive = true;
+    advance.setStepInterval(12);
+    extruder[1].id = 1;
+    extruder[1].offsetMM[X_AXIS] = 2.0f;
+    extruder[0].enabled = true;
+
+    uint8_t compare = 0;
+    const auto tick = [&] {
+        InterruptProtectedBlock lock;
+        compare = advance.nextTimerCompare(compare);
+    };
+    advance.addSteps(2);
+    tick();
+    tick();
+    tick();
+    advance.setLeadSteps(1);
+    tick();
+    assert(extruder[0].deliveredSteps == 3 && advance.pendingSteps() == 0);
+
+    PrintLine::linesCount = 2;
+    unsigned waits = 0;
+    duringPeriodicActions = [&] {
+        assert(Extruder::current == &extruder[0]);
+        if (PrintLine::hasLines())
+            assert(advance.pendingSteps() == 0);
+        // A nested panel selection cannot take over the motor during the drain.
+        assert(!Extruder::selectExtruderById(1));
+        ++waits;
+        tick();
+    };
+    duringMove = [](long x, long y, long z, long e) {
+        assert(Extruder::current == &extruder[1]);
+        assert(x == -320 && !y && !z && !e);
+    };
+    assert(Extruder::selectExtruderById(1) && waits >= 4);
+    duringMove = nullptr;
+    duringPeriodicActions = nullptr;
+    assert(!extruder[0].enabled && extruder[0].deliveredSteps == 2);
+    assert(Extruder::current == &extruder[1] && extruder[1].deliveredSteps == 0);
+
+    advance.addSteps(-2);
+    tick();
+    tick();
+    tick();
+    assert(extruder[1].deliveredSteps == -2);
+    advance.addSteps(1);
+    tick();
+    assert(advance.pendingSteps() == 1);
+    duringPeriodicActions = tick;
+    assert(Extruder::selectExtruderById(0));
+    duringPeriodicActions = nullptr;
+    assert(advance.pendingSteps() == 0);
+    assert(extruder[0].deliveredSteps == 2 && extruder[1].deliveredSteps == -1);
+
+    Printer::pause.request(PrintPause::Destination::InPlace);
+    assert(!Extruder::selectExtruderById(1));
+    assert(Extruder::current == &extruder[0]);
+}
+#endif
+
 void stepClock() {
     PrintLine move;
     StepExecutor::StepClock queued, direct;
@@ -2060,6 +2133,10 @@ int main(int argc, char** argv) {
         ecmpStepping();
     else if (!std::strcmp(argv[1], "advance-timer"))
         advanceTimer();
+#if NUM_EXTRUDER > 1
+    else if (!std::strcmp(argv[1], "advance-tool"))
+        advanceToolChange();
+#endif
     else if (!std::strcmp(argv[1], "step-clock"))
         stepClock();
     else if (!std::strcmp(argv[1], "lookahead"))

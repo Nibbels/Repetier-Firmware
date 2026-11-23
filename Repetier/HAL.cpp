@@ -897,7 +897,7 @@ uint8_t PressureAdvance::nextTimerCompare(uint8_t compare) {
         const int8_t direction = pending > 0 ? 1 : -1;
         if (direction_ == direction) {
             Extruder::timedStep(pendingSteps_, pending - direction);
-        } else if (pending >= 2 || pending <= -2) {
+        } else if (pending >= 2 || pending <= -2 || draining_) {
             Extruder::setDirection(direction > 0);
             direction_ = direction;
             compare += 40;

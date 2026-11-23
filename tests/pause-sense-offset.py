@@ -32,6 +32,8 @@ def main():
     dms = (firmware / "StrainGauge.cpp").read_text(encoding="utf-8")
     start_line = (firmware / "StartLine.cpp").read_text(encoding="utf-8")
     hal = (firmware / "HAL.cpp").read_text(encoding="utf-8")
+    commands = (firmware / "Commands.cpp").read_text(encoding="utf-8")
+    extruder = (firmware / "Extruder.cpp").read_text(encoding="utf-8")
     fragments = [
         section(eeprom, "#define EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX", "#define EPR_RF_HEATED_BED_SENSOR_TYPE"),
         section(rf_header, "#define UI_ACTION_RF_HEAT_BED_UP", "#define UI_ACTION_RF_PAUSE"),
@@ -85,6 +87,8 @@ def main():
         planner.split('#include "MotionPlanner.h"\n', 1)[1],
         section(move_planner, "uint8_t PrintLine::insertWaitMovesIfNeeded(", "\nvoid PrintLine::waitForXFreeLines("),
         section(hal, "uint8_t PressureAdvance::nextTimerCompare(", "\nISR(EXTRUDER_TIMER_VECTOR"),
+        section(commands, "bool Commands::waitForMotionHandoff()", "\nvoid Commands::printCurrentPosition()"),
+        section(extruder, "bool Extruder::selectExtruderById(", "\nvoid Extruder::applyCurrentSettings("),
         "void rescalePlannedAxis(uint8_t axis) {\nusing namespace Printer;\n"
         + section(printer, "        const float mmPerStep = 1.0f / axisStepsPerMM[axis];", "\n\n        /** Acceleration")
         + "\n}",
@@ -125,11 +129,11 @@ def main():
             encoding="utf-8",
         )
         executable = build / "pause-replay"
-        subprocess.run([
+        compile_replay = [
             os.environ.get("CXX", "c++"), "-std=c++11", "-O2", "-Wall", "-Wextra", "-Werror",
             "-I", str(firmware), "-I", str(build), str(tests / "pause-sense-offset.cpp"),
-            "-o", str(executable),
-        ], check=True)
+        ]
+        subprocess.run([*compile_replay, "-o", str(executable)], check=True)
         for scenario in (
             "park", "short-pause", "interrupt", "panel", "return", "jog", "cancel", "queue", "home", "layer-fade",
             "layer-scale", "compensation-bounds",
@@ -141,6 +145,8 @@ def main():
             "advance-timer", "advance-peak", "step-clock", "lookahead", "direct-ramp", "xy-limits",
         ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
+        subprocess.run([*compile_replay, "-DNUM_EXTRUDER=2", "-o", str(executable)], check=True)
+        subprocess.run([str(executable), "advance-tool"], check=True, timeout=10)
 
 
 if __name__ == "__main__":
