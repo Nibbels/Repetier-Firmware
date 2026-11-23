@@ -1052,7 +1052,7 @@ void homeBetweenPrints() {
     const long manualZ = Printer::zOffset.manualMicrometers();
     planMove(oldLayer + 64, true);
     planMove(oldLayer + 128, true, false, false);
-    Printer::extrusionCompensation.setRatio(12.5f);
+    Printer::extrusionCompensation.publishRatio(0.5f);
     Printer::extrusionCompensation.restoreRemainder(0.75f);
 
     Printer::homeZAxis();
@@ -1148,10 +1148,11 @@ void compensationBoundaries() {
     const long fadeStart = layers.fadeStartSteps();
     const long fadeEnd = layers.fadeEndSteps();
 
-    Printer::extrusionCompensation.setRatio(0.048f);
+    const float previousRatio = ExtrusionCompensation::prepareRatio(0.048f);
+    Printer::extrusionCompensation.publishRatio(previousRatio);
     locksUntilCompensationPublish = 2; // One read of nominal Z, then publication.
     expectCompensation(-1, 263 + offset, 0.0f, 0);
-    assert(!locksUntilCompensationPublish && extrusionBeforePublish == 0.048f);
+    assert(!locksUntilCompensationPublish && extrusionBeforePublish == previousRatio);
     expectCompensation(0, 215 + offset, 0.0f, 1);
     expectCompensation(fadeStart, 202 + offset, 0.0f, 1);
     expectCompensation(fadeStart + 1, 203 + offset, 0.048f, 1);
@@ -1492,7 +1493,7 @@ void ecmpStepping() {
     PrintLine move;
     move.moveE = move.positiveE = true;
     move.delta[E_AXIS] = 1;
-    Printer::extrusionCompensation.setRatio(0.25f);
+    Printer::extrusionCompensation.publishRatio(0.25f);
 
     for (unsigned i = 0; i < 3; ++i)
         executeExtrusionStep(&move, true);
@@ -1503,15 +1504,36 @@ void ecmpStepping() {
     assert(Extruder::stepPulses == 6 && Extruder::trailingEdges == 1);
     assert(Printer::extrusionCompensation.remainder() == 0.0f);
 
-    Printer::advanceActive = true;
-    Printer::extrusionCompensation.restoreRemainder(0.75f);
-    move.positiveE = false;
-    executeExtrusionStep(&move, true);
-    assert(Printer::extruderStepsNeeded == -2);
-    move.positiveE = true;
-    executeExtrusionStep(&move, true);
-    // The existing positive-only carry can add a step to only one half of a reversal.
-    assert(Printer::extruderStepsNeeded == -1 && Extruder::stepPulses == 6);
+    auto replayReversal = [&](bool advance, float ratio, float remainder, unsigned count, int expectedSteps) {
+        Printer::advanceActive = advance;
+        Printer::extruderStepsNeeded = 0;
+        Printer::extrusionCompensation.publishRatio(ExtrusionCompensation::prepareRatio(ratio));
+        Printer::extrusionCompensation.restoreRemainder(remainder);
+        const unsigned before = Extruder::stepPulses;
+
+        move.positiveE = false;
+        for (unsigned i = 0; i < count; ++i)
+            executeExtrusionStep(&move, true);
+        const unsigned afterRetract = Extruder::stepPulses;
+        const int retracted = advance ? -Printer::extruderStepsNeeded : int(afterRetract - before);
+
+        move.positiveE = true;
+        for (unsigned i = 0; i < count; ++i)
+            executeExtrusionStep(&move, true);
+        const int returned = advance ? Printer::extruderStepsNeeded + retracted
+                                      : int(Extruder::stepPulses - afterRetract);
+        assert(retracted == expectedSteps && returned == retracted);
+        assert(Printer::extrusionCompensation.remainder() == remainder);
+        assert(Printer::extruderStepsNeeded == 0);
+        if (advance)
+            assert(Extruder::stepPulses == before);
+    };
+
+    for (bool advance : {false, true}) {
+        replayReversal(advance, 0.25f, 0.75f, 1, 1); // Original regression.
+        replayReversal(advance, 0.25f, 0.125f, 1, 2); // Crossing the whole-step boundary.
+        replayReversal(advance, 0.048f, 0.0f, 100, 105); // Non-binary ECMP rate.
+    }
 }
 
 void xyLimits() {

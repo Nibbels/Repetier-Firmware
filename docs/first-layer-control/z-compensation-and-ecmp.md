@@ -41,9 +41,11 @@ The 2018 changelog describes this as spreading bed-profile correction out so it 
 
 ## Geometric material compensation (ECMP)
 
-Following an uneven first-layer surface then gradually printing flat upper layers alters the *physical layer thickness* at a given XY location. To maintain material deposition, the firmware computes a layer-dependent extrusion correction (`nNeededZEPerc`) from the interpolated matrix, `g_min`, `g_max` and accepted current/previous layer heights. This becomes `Printer::extrusionCompensation.ratio()`; the stepper path accumulates fractional E steps and inserts appropriate extra steps. First and last layers crossing a fade boundary have special interpolation.
+Following an uneven first-layer surface then gradually printing flat upper layers alters the *physical layer thickness* at a given XY location. To maintain material deposition, the firmware computes an extra extrusion ratio from the interpolated matrix, `g_min`, `g_max` and the accepted current and previous layer heights. First and last layers crossing a fade boundary have special interpolation.
 
-**ECMP is not pressure-based Digit Flow Compensation.** One changes extruded material according to geometric layer changes; the other reacts to DMS force. Both can affect final E deposition, so changing fade boundaries requires examining ECMP as well.
+The foreground rounds the ratio to a multiple of 2⁻²³ and limits it to one extra pulse per base step. The timer adds the published ratio for each forward queued E step and subtracts it for each reverse step. Crossing a whole-step boundary emits or queues an extra step in that direction and leaves a remainder in `[0, 1)`. Equal opposite base moves at the same ratio therefore restore the original remainder and cancel all extra steps exactly. [ECMP accumulator](../../Repetier/ExtrusionCompensation.h)
+
+Digit Flow Compensation reacts to DMS force and also affects material deposition.
 
 ## Interaction with M3912 and lifecycle
 

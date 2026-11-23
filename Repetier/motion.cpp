@@ -1020,7 +1020,8 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
             HAL::forbidInterrupts();
 
             if (doESteps) {
-                int8_t dir = (move->isEPositiveMove() ? 1 : -1);
+                const bool forward = move->isEPositiveMove();
+                const int8_t dir = forward ? 1 : -1;
                 if (Printer::isAdvanceActivated())
                     Printer::extruderStepsNeeded += dir;
                 else
@@ -1030,14 +1031,14 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
                 if (!forQueue)
                     Printer::pause.recordDirectExtrusion(dir);
 
-                if (forQueue && Printer::extrusionCompensation.addBaseStep()) {
+                if (forQueue && Printer::extrusionCompensation.addBaseStep(forward)) {
                     if (Printer::isAdvanceActivated()) {
                         Printer::extruderStepsNeeded += dir;
-                        Printer::extrusionCompensation.consumeWholeSteps();
+                        Printer::extrusionCompensation.consumeExtraStep(forward);
                     } else {
-                        // Consume the whole steps while the pulse is low.
+                        // Normalize the remainder between the two step pulses.
                         Extruder::unstep();
-                        Printer::extrusionCompensation.consumeWholeSteps();
+                        Printer::extrusionCompensation.consumeExtraStep(forward);
                         Extruder::step();
                     }
                 }

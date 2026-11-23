@@ -6,7 +6,7 @@
 
 **Extrusion planning.** `Printer::extrusionPlanner` owns the last queued logical E and fractional base step. Use `Printer::setEPositionMM()` to synchronize the current and queued E reference while retaining the fractional step. [Extrusion planner](Repetier/ExtrusionPlanner.h)
 
-**Geometric extrusion compensation.** `Printer::extrusionCompensation` owns the ECMP ratio and fractional extra step. The foreground publishes the ratio alongside the Z correction target under interrupt protection. The timer consumes whole steps between the two pulse edges when advance is off. [ECMP](Repetier/ExtrusionCompensation.h)
+**Geometric extrusion compensation.** `Printer::extrusionCompensation` owns the ECMP ratio and fractional extra step. The foreground prepares the ratio and publishes it alongside the Z correction target under interrupt protection. The timer accounts for the E direction and normalizes the remainder between pulses when advance is off. [ECMP](Repetier/ExtrusionCompensation.h)
 
 **Move targets.** `Printer::moveTarget` owns the retained machine-space millimetres, their fractional carry and the work offset. The planner asks for these values before rounding to steps. [Coordinate targets](Repetier/MoveTarget.h)
 

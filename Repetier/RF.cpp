@@ -1922,9 +1922,12 @@ void recalculateZCompensation(void) {
             result.zCorrectionSteps += BedCompensation::digitZSteps(Printer::digitCompensation.filteredDigits(), Printer::axisStepsPerMM[Z_AXIS]);
     }
 
+    const float ratio = ExtrusionCompensation::prepareRatio(result.extraExtrusionPerStep);
+    // Finish quantization before disabling step interrupts.
+    asm volatile("" : : "g"(ratio));
     InterruptProtectedBlock lock;
     Printer::zMotion.requestCorrection(result.zCorrectionSteps);
-    Printer::extrusionCompensation.setRatio(result.extraExtrusionPerStep);
+    Printer::extrusionCompensation.publishRatio(ratio);
 }
 
 void showAbortScanReason(const void* scanName, char abortScanIdentifier) {
