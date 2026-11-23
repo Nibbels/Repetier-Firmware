@@ -107,16 +107,15 @@ def main():
         + "\n}",
         section(executor, "template <int8_t limitDirection>", "\n/**\n  Processes the one-and-only direct move"),
         start_line.removeprefix('#include "Repetier.h"\n'),
-        "void configureSenseOffset(GCode* pCommand) { switch (3909) {\n"
-        + section(rf, "        case 3909:", "\n        case 3911:")
-        + "} }",
-        "void configurePressure(int command, GCode* pCommand) { switch (command) {\n"
-        + section(rf, "        case 3075:", "\n        case 3079:")
-        + "} }",
-        section(rf, "static bool prepareFilamentProgram(", "\nvoid processSpecialGCode("),
-        "void runFilamentCommand(int command, GCode* pCommand) { switch (command) {\n"
-        + section(rf, "        case 3913:", "\n#ifdef X35_ADC_CHANNEL")
-        + "} }",
+        section(rf, "void setSenseOffsetParameters(", "\nvoid setDigitFlowParameters("),
+        "void configureSenseOffset(GCode* command) { setSenseOffsetParameters(command); }",
+        section(rf, "void setEmergencyPauseDigits(", "\nvoid testWatchdog("),
+        "void configurePressure(int code, GCode* command) {"
+        " if (code == 3075) setEmergencyPauseDigits(command); else setEmergencyStopDigits(command); }",
+        section(rf, "static bool prepareFilamentProgram(", "\nnamespace {"),
+        section(rf, "void loadFilament(", "\n#ifdef X35_ADC_CHANNEL"),
+        "void runFilamentCommand(int code, GCode* command) {"
+        " if (code == 3913) loadFilament(command); else unloadFilament(command); }",
     ]
     with TemporaryDirectory(prefix="rfx-pause-replay-") as directory:
         build = Path(directory)

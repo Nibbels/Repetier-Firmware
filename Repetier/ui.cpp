@@ -49,7 +49,11 @@ bool UIMenuEntry::showEntry() const {
 } // showEntry
 
 UIDisplay uid;
-char displayCache[UI_ROWS][MAX_COLS + 1];
+static char displayCache[UI_ROWS][MAX_COLS + 1];
+
+const char* UIDisplay::cachedRow(uint8_t row) const {
+    return displayCache[row];
+}
 
 // Menu up sign - code 1
 // ..*.. 4

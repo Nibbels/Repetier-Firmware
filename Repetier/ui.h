@@ -593,6 +593,7 @@ public:
     void printRowP(uint8_t r, PGM_P txt);
     void parse(char* txt, bool ram); /// Parse output and write to printCols;
     void refreshPage();
+    const char* cachedRow(uint8_t row) const;
     void executeAction(int action);
     void slowAction();
 

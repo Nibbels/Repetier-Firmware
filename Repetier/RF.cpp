@@ -3281,2108 +3281,1863 @@ static bool prepareFilamentProgram() {
     return false;
 }
 
-void processSpecialGCode(GCode* pCommand) {
+namespace {
+
+// Bed compensation and scan parameters.
+void disableBedCompensation() {
+    if (Printer::debugInfo()) {
+        Com::printFLN(PSTR("M3000: disabling z compensation"));
+    }
+    queueTask(TASK_DISABLE_Z_COMPENSATION);
+}
+
+void enableBedCompensation() {
+    if (Printer::doHeatBedZCompensation) {
+        Com::printFLN(PSTR("M3001: z compensation is enabled already"));
+        return;
+    }
+
+    if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
+        // we try to load the z compensation matrix before its first usage because this can take some time
+        prepareZCompensation();
+    }
+
+    if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
+        Com::printF(PSTR("M3001: z compensation can not be enabled. Heat bed compensation matrix not valid ( "), g_ZCompensationMatrix[0][0]);
+        Com::printF(PSTR(" / "), EEPROM_FORMAT);
+        Com::printFLN(PSTR(" )"));
+        return;
+    }
+
+    if (!Printer::areAxisHomed()) {
+        Com::printFLN(PSTR("M3001: z compensation can not be enabled. Home position is unknown"));
+        showError((void*)ui_text_z_compensation, (void*)ui_text_home_unknown);
+        return;
+    }
+
+    queueTask(TASK_ENABLE_Z_COMPENSATION);
+
+    //wenn der nutzer im menü "autostart" gewählt hat, dann senseoffset sofort mit M3001 mitstarten.
+    //Die Einstellwerte kommen dann aus dem EEPROM
+    if (Printer::senseOffsetControl.autoStart())
+        queueTask(TASK_ENABLE_SENSE_OFFSET);
+}
+
+void configureRfDebug(GCode* pCommand) {
     long nTemp;
+    if (pCommand->hasS()) {
+        // test and take over the specified value
+        nTemp = pCommand->S;
+        if (nTemp < 0)
+            nTemp = 0;
 
-    if (pCommand->hasM()) {
-        switch (pCommand->M) {
-        case 3000: // M3000 - turn the z-compensation off
-        {
-            if (Printer::debugInfo()) {
-                Com::printFLN(PSTR("M3000: disabling z compensation"));
-            }
-            queueTask(TASK_DISABLE_Z_COMPENSATION);
-            break;
+        g_debugLevel = (char)nTemp;
+        if (Printer::debugInfo()) {
+            Com::printFLN(PSTR("M3005: new debug level: "), g_debugLevel);
         }
-        case 3001: // M3001 - turn the z-compensation on
-        {
-            if (Printer::doHeatBedZCompensation) {
-                Com::printFLN(PSTR("M3001: z compensation is enabled already"));
-                break;
-            }
+    } else {
+        showInvalidSyntax(pCommand->M);
+    }
+}
 
-            if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
-                // we try to load the z compensation matrix before its first usage because this can take some time
-                prepareZCompensation();
-            }
+void setManualZOffset(GCode* pCommand) {
+    long nTemp;
+    // S in micrometers, Z in millimeters
+    const bool inMillimeters = pCommand->hasZ();
+    if (inMillimeters) {
+        constexpr float maxOffsetMm = maxManualZOffsetMicrometers / 1000.0f;
+        pCommand->Z = constrain(pCommand->Z, -maxOffsetMm, maxOffsetMm);
+        nTemp = long(pCommand->Z * 1000);
+    } else if (pCommand->hasS()) {
+        nTemp = constrain(pCommand->S, -maxManualZOffsetMicrometers, maxManualZOffsetMicrometers);
+    } else {
+        showInvalidSyntax(pCommand->M);
+        return;
+    }
 
-            if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
-                Com::printF(PSTR("M3001: z compensation can not be enabled. Heat bed compensation matrix not valid ( "), g_ZCompensationMatrix[0][0]);
-                Com::printF(PSTR(" / "), EEPROM_FORMAT);
-                Com::printFLN(PSTR(" )"));
-                break;
-            }
-
-            if (!Printer::areAxisHomed()) {
-                Com::printFLN(PSTR("M3001: z compensation can not be enabled. Home position is unknown"));
-                showError((void*)ui_text_z_compensation, (void*)ui_text_home_unknown);
-                break;
-            }
-
-            queueTask(TASK_ENABLE_Z_COMPENSATION);
-
-            //wenn der nutzer im menü "autostart" gewählt hat, dann senseoffset sofort mit M3001 mitstarten.
-            //Die Einstellwerte kommen dann aus dem EEPROM
-            if (Printer::senseOffsetControl.autoStart())
-                queueTask(TASK_ENABLE_SENSE_OFFSET);
-            break;
+    Printer::zOffset.setManualMicrometers(nTemp, Printer::axisStepsPerMM[Z_AXIS]);
+    if (Printer::debugInfo()) {
+        if (inMillimeters) {
+            Com::printF(PSTR("M3006: new static z-offset: "), pCommand->Z);
+            Com::printF(PSTR(" [mm]"));
+        } else {
+            Com::printF(PSTR("M3006: new static z-offset: "), nTemp);
+            Com::printF(PSTR(" [um]"));
         }
+        Com::printF(PSTR(" / "), Printer::zOffset.effectiveSteps());
+        Com::printFLN(PSTR(" [steps]"));
+    }
+    EEPROM::storeManualZOffset();
+}
 
-        case 3005: // M3005 [S] - enable custom debug outputs
-        {
-            if (pCommand->hasS()) {
-                // test and take over the specified value
-                nTemp = pCommand->S;
-                if (nTemp < 0)
-                    nTemp = 0;
-
-                g_debugLevel = (char)nTemp;
-                if (Printer::debugInfo()) {
-                    Com::printFLN(PSTR("M3005: new debug level: "), g_debugLevel);
-                }
-            } else {
-                showInvalidSyntax(pCommand->M);
-            }
-            break;
+void selectBedMatrix(GCode* pCommand) {
+    long nTemp;
+    if (Printer::doHeatBedZCompensation) {
+        // do not allow to change the current heat bed z-compensation matrix while the z-compensation is active
+        if (Printer::debugErrors()) {
+            Com::printFLN(PSTR("M3009: heat bed z matrix can not be changed while z-compensation is active"));
         }
 
-        case 3006: { // S in micrometers, Z in millimeters
-            const bool inMillimeters = pCommand->hasZ();
-            if (inMillimeters) {
-                constexpr float maxOffsetMm = maxManualZOffsetMicrometers / 1000.0f;
-                pCommand->Z = constrain(pCommand->Z, -maxOffsetMm, maxOffsetMm);
-                nTemp = long(pCommand->Z * 1000);
-            } else if (pCommand->hasS()) {
-                nTemp = constrain(pCommand->S, -maxManualZOffsetMicrometers, maxManualZOffsetMicrometers);
-            } else {
-                showInvalidSyntax(pCommand->M);
-                break;
+        showError((void*)ui_text_z_compensation, (void*)ui_text_operation_denied);
+        return;
+    }
+
+    if (pCommand->hasS()) {
+        nTemp = pCommand->S;
+
+        if (nTemp < 1 || nTemp > EEPROM_MAX_HEAT_BED_SECTORS) {
+            if (Printer::debugErrors()) {
+                Com::printF(PSTR("M3009: invalid heat bed z matrix ("), nTemp);
+                Com::printFLN(PSTR(")"));
             }
-
-            Printer::zOffset.setManualMicrometers(nTemp, Printer::axisStepsPerMM[Z_AXIS]);
-            if (Printer::debugInfo()) {
-                if (inMillimeters) {
-                    Com::printF(PSTR("M3006: new static z-offset: "), pCommand->Z);
-                    Com::printF(PSTR(" [mm]"));
-                } else {
-                    Com::printF(PSTR("M3006: new static z-offset: "), nTemp);
-                    Com::printF(PSTR(" [um]"));
-                }
-                Com::printF(PSTR(" / "), Printer::zOffset.effectiveSteps());
-                Com::printFLN(PSTR(" [steps]"));
-            }
-            EEPROM::storeManualZOffset();
-            break;
-        }
-        case 3009: // M3009 [S] - get/choose the active heat bed z-compensation matrix
-        {
-            if (Printer::doHeatBedZCompensation) {
-                // do not allow to change the current heat bed z-compensation matrix while the z-compensation is active
-                if (Printer::debugErrors()) {
-                    Com::printFLN(PSTR("M3009: heat bed z matrix can not be changed while z-compensation is active"));
-                }
-
-                showError((void*)ui_text_z_compensation, (void*)ui_text_operation_denied);
-                break;
-            }
-
-            if (pCommand->hasS()) {
-                nTemp = pCommand->S;
-
-                if (nTemp < 1 || nTemp > EEPROM_MAX_HEAT_BED_SECTORS) {
-                    if (Printer::debugErrors()) {
-                        Com::printF(PSTR("M3009: invalid heat bed z matrix ("), nTemp);
-                        Com::printFLN(PSTR(")"));
-                    }
-                    break;
-                }
-
-                if (g_nActiveHeatBed != nTemp) {
-                    // we have to switch to another heat bed z-compensation matrix
-                    switchActiveHeatBed((char)nTemp);
-                }
-            }
-
-            if (Printer::debugInfo()) {
-                Com::printFLN(PSTR("M3009: currently active heat bed z matrix: "), g_nActiveHeatBed);
-            }
-            break;
-        }
-        case 3010: // M3010 [S] - start/abort the heat bed scan
-        {
-            if (pCommand->hasS()) {
-                if (pCommand->S == HEAT_BED_SCAN_MODE_PLA || pCommand->S == HEAT_BED_SCAN_MODE_ABS) {
-                    g_nHeatBedScanMode = (char)pCommand->S;
-                } else {
-                    g_nHeatBedScanMode = 0;
-                }
-            } else {
-                g_nHeatBedScanMode = 0;
-            }
-            startHeatBedScan();
-            break;
-        }
-        case 3011: // M3011 [S] - clear the specified z-compensation matrix from the EEPROM
-        {
-            if (Printer::doHeatBedZCompensation) {
-                if (Printer::debugErrors()) {
-                    Com::printFLN(PSTR("M3011: the heat bed z matrix can not be cleared while the z-compensation is active"));
-                }
-
-                showError((void*)ui_text_z_compensation, (void*)ui_text_operation_denied);
-                break;
-            }
-            if (pCommand->hasS()) {
-                nTemp = pCommand->S;
-            } else {
-                // we clear the current z-compensation matrix in case no other z-compensation matrix is specified
-                nTemp = g_nActiveHeatBed;
-            }
-
-            if (nTemp < 1 || nTemp > EEPROM_MAX_HEAT_BED_SECTORS) {
-                if (Printer::debugErrors()) {
-                    Com::printF(PSTR("M3011: invalid heat bed z matrix ("), nTemp);
-                    Com::printFLN(PSTR(")"));
-                }
-                break;
-            }
-
-            if (saveActiveHeatBedToExtEEPROM((char)nTemp)) {
-                // switch to the specified z-compensation matrix
-                g_nActiveHeatBed = (char)nTemp;
-                clearCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed));
-                Com::printFLN(PSTR("M3011: cleared heat bed z matrix: "), nTemp);
-            }
-            break;
-        }
-        case 3012: // M3012 - restore the default scan parameters
-        {
-            restoreDefaultScanParameters();
-            break;
-        }
-        case 3013: // M3013 [S] [P] - output the current heat bed z-compensation matrix
-        {
-            char format;
-            char nOldHeatBed = 127;
-
-            if (pCommand->hasS()) {
-                nTemp = pCommand->S;
-            } else {
-                // we output the current z-compensation matrix in case no other z-compensation matrix is specified
-                nTemp = g_nActiveHeatBed;
-            }
-
-            if (pCommand->hasP()) {
-                format = pCommand->P ? 1 : 0;
-            } else {
-                format = 0;
-            }
-
-            if (nTemp < 1 || nTemp > EEPROM_MAX_HEAT_BED_SECTORS) {
-                if (Printer::debugErrors()) {
-                    Com::printF(PSTR("M3013: invalid heat bed z matrix ("), nTemp);
-                    Com::printFLN(PSTR(")"));
-                }
-                break;
-            }
-
-            if (g_nActiveHeatBed != nTemp) {
-                // remember current z-compensation matrix
-                nOldHeatBed = g_nActiveHeatBed;
-                // we have to switch to another z-compensation matrix
-                switchActiveHeatBed((char)nTemp);
-            }
-
-            if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
-                // we load the z-compensation matrix before its first usage because this can take some time
-                prepareZCompensation();
-            }
-
-            if (g_ZCompensationMatrix[0][0] == EEPROM_FORMAT) {
-                if (Printer::debugInfo()) {
-                    Com::printFLN(PSTR("M3013: current heat bed z-compensation matrix: "));
-                }
-                outputCompensationMatrix(format);
-            } else {
-                if (Printer::debugErrors()) {
-                    Com::printF(PSTR("M3013: the heat bed z-compensation matrix is not valid ( "), g_ZCompensationMatrix[0][0]);
-                    Com::printF(PSTR(" / "), EEPROM_FORMAT);
-                    Com::printFLN(PSTR(" )"));
-                }
-
-                showError((void*)ui_text_z_compensation, (void*)ui_text_invalid_matrix);
-            }
-
-            if (nOldHeatBed != 127) {
-                // restore z-compensation matrix, in case we switched them
-                switchActiveHeatBed(nOldHeatBed);
-            }
-            break;
-        }
-        case 3020: // M3020 [S] - configure the x start position for the heat bed scan ( units are [mm] )
-        {
-            if (pCommand->hasS()) {
-                // test and take over the specified value
-                nTemp = pCommand->S;
-                if (nTemp < 5)
-                    nTemp = 5;
-                if (nTemp > (Printer::axisLengthMM[X_AXIS] - 5))
-                    nTemp = Printer::axisLengthMM[X_AXIS] - 5;
-
-                g_nScanXStartSteps = (long)((float)nTemp * Printer::axisStepsPerMM[X_AXIS]);
-                if (Printer::debugInfo()) {
-                    Com::printF(PSTR("M3020: new x start position: "), nTemp);
-                    Com::printF(PSTR(" [mm], "), (int)g_nScanXStartSteps);
-                    Com::printFLN(PSTR(" [steps]"));
-                }
-            } else {
-                showInvalidSyntax(pCommand->M);
-            }
-            break;
-        }
-        case 3021: // M3021 [S] - configure the y start position for the heat bed scan ( units are [mm] )
-        {
-            if (pCommand->hasS()) {
-                // test and take over the specified value
-                nTemp = pCommand->S;
-                if (nTemp < 5)
-                    nTemp = 5;
-                if (nTemp > (Printer::axisLengthMM[Y_AXIS] - 5))
-                    nTemp = Printer::axisLengthMM[Y_AXIS] - 5;
-
-                g_nScanYStartSteps = (long)((float)nTemp * Printer::axisStepsPerMM[Y_AXIS]);
-                if (Printer::debugInfo()) {
-                    Com::printF(PSTR("M3021: new y start position: "), nTemp);
-                    Com::printF(PSTR(" [mm], "), (int)g_nScanYStartSteps);
-                    Com::printFLN(PSTR(" [steps]"));
-                }
-            } else {
-                showInvalidSyntax(pCommand->M);
-            }
-            break;
-        }
-        case 3022: // M3022 [S] - configure the x step size for the heat bed scan ( units are [mm] )
-        {
-            if (pCommand->hasS()) {
-                // test and take over the specified value
-                nTemp = pCommand->S;
-                if (nTemp < heatBedScanMinStepMm)
-                    nTemp = heatBedScanMinStepMm;
-                if (nTemp > 100)
-                    nTemp = 100;
-
-                g_nScanXStepSizeSteps = (long)((float)nTemp * Printer::axisStepsPerMM[X_AXIS]);
-                if (Printer::debugInfo()) {
-                    Com::printF(PSTR("M3022: new x step size: "), (int)nTemp);
-                    Com::printF(PSTR(" [mm], "), (int)g_nScanXStepSizeSteps);
-                    Com::printFLN(PSTR(" [steps]"));
-                }
-            } else {
-                showInvalidSyntax(pCommand->M);
-            }
-            break;
-        }
-        case 3023: // M3023 [S] - configure the y step size for the heat bed scan ( units are [mm] )
-        {
-            if (pCommand->hasS()) {
-                // test and take over the specified value
-                nTemp = pCommand->S;
-                if (nTemp < heatBedScanMinStepMm)
-                    nTemp = heatBedScanMinStepMm;
-                if (nTemp > 100)
-                    nTemp = 100;
-
-                g_nScanYStepSizeSteps = (long)((float)nTemp * Printer::axisStepsPerMM[Y_AXIS]);
-                if (Printer::debugInfo()) {
-                    Com::printF(PSTR("M3023: new y step size: "), (int)nTemp);
-                    Com::printF(PSTR(" [mm], "), (int)g_nScanYStepSizeSteps);
-                    Com::printFLN(PSTR(" [steps]"));
-                }
-            } else {
-                showInvalidSyntax(pCommand->M);
-            }
-            break;
-        }
-        case 3024: // M3024 [S] - configure the x end position for the heat bed scan ( units are [mm] )
-        {
-            if (pCommand->hasS()) {
-                // test and take over the specified value
-                nTemp = pCommand->S;
-                if (nTemp < 5)
-                    nTemp = 5;
-                if (nTemp > (Printer::axisLengthMM[X_AXIS] - 5))
-                    nTemp = Printer::axisLengthMM[X_AXIS] - 5;
-
-                g_nScanXEndSteps = (long)((float)nTemp * Printer::axisStepsPerMM[X_AXIS]);
-                if (Printer::debugInfo()) {
-                    Com::printF(PSTR("M3024: new x end position: "), nTemp);
-                    Com::printF(PSTR(" [mm], "), (int)g_nScanXEndSteps);
-                    Com::printFLN(PSTR(" [steps]"));
-                }
-
-                g_nScanXMaxPositionSteps = long(Printer::axisLengthMM[X_AXIS] * Printer::axisStepsPerMM[X_AXIS] - g_nScanXEndSteps);
-                if (Printer::debugInfo()) {
-                    Com::printF(PSTR("M3024: new x max position: "), (int)g_nScanXMaxPositionSteps);
-                    Com::printFLN(PSTR(" [steps]"));
-                }
-            } else {
-                showInvalidSyntax(pCommand->M);
-            }
-            break;
-        }
-        case 3025: // M3025 [S] - configure the y end position for the heat bed scan ( units are [mm] )
-        {
-            if (pCommand->hasS()) {
-                // test and take over the specified value
-                nTemp = pCommand->S;
-                if (nTemp < 5)
-                    nTemp = 5;
-                if (nTemp > (Printer::axisLengthMM[Y_AXIS] - 5))
-                    nTemp = Printer::axisLengthMM[Y_AXIS] - 5;
-
-                g_nScanYEndSteps = (long)((float)nTemp * Printer::axisStepsPerMM[Y_AXIS]);
-                if (Printer::debugInfo()) {
-                    Com::printF(PSTR("M3025: new y end position: "), nTemp);
-                    Com::printF(PSTR(" [mm], "), (int)g_nScanYEndSteps);
-                    Com::printFLN(PSTR(" [steps]"));
-                }
-
-                g_nScanYMaxPositionSteps = long(Printer::axisLengthMM[Y_AXIS] * Printer::axisStepsPerMM[Y_AXIS] - g_nScanYEndSteps);
-                if (Printer::debugInfo()) {
-                    Com::printF(PSTR("M3025: new y max position: "), (int)g_nScanYMaxPositionSteps);
-                    Com::printFLN(PSTR(" [steps]"));
-                }
-            } else {
-                showInvalidSyntax(pCommand->M);
-            }
-            break;
+            return;
         }
 
-        case 3028: // M3028
-        {
-            if (pCommand->hasX()) {
-                Printer::checkHome(X_AXIS);
-            }
-            if (pCommand->hasY()) {
-                Printer::checkHome(Y_AXIS);
-            }
-            if (pCommand->hasZ()) {
-                Printer::checkHome(Z_AXIS);
-            }
-            break;
+        if (g_nActiveHeatBed != nTemp) {
+            // we have to switch to another heat bed z-compensation matrix
+            switchActiveHeatBed((char)nTemp);
+        }
+    }
+
+    if (Printer::debugInfo()) {
+        Com::printFLN(PSTR("M3009: currently active heat bed z matrix: "), g_nActiveHeatBed);
+    }
+}
+
+void requestHeatBedScan(GCode* pCommand) {
+    if (pCommand->hasS()) {
+        if (pCommand->S == HEAT_BED_SCAN_MODE_PLA || pCommand->S == HEAT_BED_SCAN_MODE_ABS) {
+            g_nHeatBedScanMode = (char)pCommand->S;
+        } else {
+            g_nHeatBedScanMode = 0;
+        }
+    } else {
+        g_nHeatBedScanMode = 0;
+    }
+    startHeatBedScan();
+}
+
+void clearBedMatrix(GCode* pCommand) {
+    long nTemp;
+    if (Printer::doHeatBedZCompensation) {
+        if (Printer::debugErrors()) {
+            Com::printFLN(PSTR("M3011: the heat bed z matrix can not be cleared while the z-compensation is active"));
         }
 
-        case 3029: // M3029 [P] - See the display text or send Button press per gcode to the printer via [P]Code.
-        {
-            if (pCommand->hasP()) {
-                switch (pCommand->P) {
-                case UI_ACTION_OK:       // 1001
-                case UI_ACTION_NEXT:     // 1
-                case UI_ACTION_PREVIOUS: // 2
-                case UI_ACTION_BACK:     // 1000
-                case UI_ACTION_RIGHT:    // 1129
+        showError((void*)ui_text_z_compensation, (void*)ui_text_operation_denied);
+        return;
+    }
+    if (pCommand->hasS()) {
+        nTemp = pCommand->S;
+    } else {
+        // we clear the current z-compensation matrix in case no other z-compensation matrix is specified
+        nTemp = g_nActiveHeatBed;
+    }
 
-                case UI_ACTION_RF_HEAT_BED_UP:      // 514
-                case UI_ACTION_RF_HEAT_BED_DOWN:    // 515
-                case UI_ACTION_RF_EXTRUDER_RETRACT: // 517
-                case UI_ACTION_RF_EXTRUDER_OUTPUT:  // 516
-                case UI_ACTION_RF_CONTINUE:         // 1519
-                case UI_ACTION_RF_PAUSE:            // 1518
-                {
-                    Com::printFLN(PSTR("RequestMenu:Press:"), pCommand->P);
-                    uid.executeAction(pCommand->P);
-                } break;
-                }
-            } else {
-                extern char displayCache[UI_ROWS][MAX_COLS + 1];
-                Com::printF(PSTR("RequestMenu:"), UI_ROWS);
+    if (nTemp < 1 || nTemp > EEPROM_MAX_HEAT_BED_SECTORS) {
+        if (Printer::debugErrors()) {
+            Com::printF(PSTR("M3011: invalid heat bed z matrix ("), nTemp);
+            Com::printFLN(PSTR(")"));
+        }
+        return;
+    }
 
-                Com::printF(PSTR(","), MAX_COLS + 1);
-                Com::printF(PSTR(":"));
-                if (pCommand->hasL()) {
-                    //print line by line for human readability
-                    Com::println();
-                    Com::println();
-                }
-                // we print out UI_ROWS x MAX_COLS+1 field.
-                for (uint8_t row = 0; row < UI_ROWS; row++) {
-                    bool nulled = false;
-                    for (uint8_t col = 0; col < MAX_COLS + 1; col++) {
-                        if (displayCache[row][col] == 0 || nulled) {
-                            nulled = true;
-                            Com::print(' '); //null as space
-                            continue;
-                        }
+    if (saveActiveHeatBedToExtEEPROM((char)nTemp)) {
+        // switch to the specified z-compensation matrix
+        g_nActiveHeatBed = (char)nTemp;
+        clearCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed));
+        Com::printFLN(PSTR("M3011: cleared heat bed z matrix: "), nTemp);
+    }
+}
 
-                        if (isprint(displayCache[row][col])) {
-                            Com::print(displayCache[row][col]);
-                            continue;
-                        }
+void reportBedMatrix(GCode* pCommand) {
+    long nTemp;
+    char format;
+    char nOldHeatBed = 127;
 
-                        switch (displayCache[row][col]) {
-                        case 2: {
-                            Com::print('\'');
-                            break;
-                        }
-                        case 5: {
-                            Com::print('!');
-                            break;
-                        }
-                        case (char)CHAR_SELECTOR: {
-                            Com::print('>');
-                            break;
-                        }
-                        case (char)CHAR_SELECTED: {
-                            Com::print('*');
-                            break;
-                        }
-                        default:
-                            Com::print('_'); //others?
-                        }
-                    }
-                    if (pCommand->hasL()) {
-                        //print line by line for human readability
-                        Com::println();
-                    }
-                }
-                Com::println();
-            }
-            break;
+    if (pCommand->hasS()) {
+        nTemp = pCommand->S;
+    } else {
+        // we output the current z-compensation matrix in case no other z-compensation matrix is specified
+        nTemp = g_nActiveHeatBed;
+    }
+
+    if (pCommand->hasP()) {
+        format = pCommand->P ? 1 : 0;
+    } else {
+        format = 0;
+    }
+
+    if (nTemp < 1 || nTemp > EEPROM_MAX_HEAT_BED_SECTORS) {
+        if (Printer::debugErrors()) {
+            Com::printF(PSTR("M3013: invalid heat bed z matrix ("), nTemp);
+            Com::printFLN(PSTR(")"));
+        }
+        return;
+    }
+
+    if (g_nActiveHeatBed != nTemp) {
+        // remember current z-compensation matrix
+        nOldHeatBed = g_nActiveHeatBed;
+        // we have to switch to another z-compensation matrix
+        switchActiveHeatBed((char)nTemp);
+    }
+
+    if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
+        // we load the z-compensation matrix before its first usage because this can take some time
+        prepareZCompensation();
+    }
+
+    if (g_ZCompensationMatrix[0][0] == EEPROM_FORMAT) {
+        if (Printer::debugInfo()) {
+            Com::printFLN(PSTR("M3013: current heat bed z-compensation matrix: "));
+        }
+        outputCompensationMatrix(format);
+    } else {
+        if (Printer::debugErrors()) {
+            Com::printF(PSTR("M3013: the heat bed z-compensation matrix is not valid ( "), g_ZCompensationMatrix[0][0]);
+            Com::printF(PSTR(" / "), EEPROM_FORMAT);
+            Com::printFLN(PSTR(" )"));
         }
 
-        case 3030: // M3030 [S] - configure the fast step size for moving of the heat bed up during the heat-bed scan
-        {
-            if (pCommand->hasS()) {
-                // test and take over the specified value
-                nTemp = pCommand->S;
-                if (nTemp > 50)
-                    nTemp = 50;
-                if (nTemp < 1)
-                    nTemp = 1;
+        showError((void*)ui_text_z_compensation, (void*)ui_text_invalid_matrix);
+    }
 
-                g_nScanHeatBedUpFastSteps = -nTemp;
-                if (Printer::debugInfo()) {
-                    Com::printF(PSTR("M3030: new fast step size for moving of the bed up: "), (int)g_nScanHeatBedUpFastSteps);
-                    Com::printFLN(PSTR(" [steps]"));
-                }
-            } else {
-                showInvalidSyntax(pCommand->M);
-            }
-            break;
+    if (nOldHeatBed != 127) {
+        // restore z-compensation matrix, in case we switched them
+        switchActiveHeatBed(nOldHeatBed);
+    }
+}
+
+void setScanXStart(GCode* pCommand) {
+    long nTemp;
+    if (pCommand->hasS()) {
+        // test and take over the specified value
+        nTemp = pCommand->S;
+        if (nTemp < 5)
+            nTemp = 5;
+        if (nTemp > (Printer::axisLengthMM[X_AXIS] - 5))
+            nTemp = Printer::axisLengthMM[X_AXIS] - 5;
+
+        g_nScanXStartSteps = (long)((float)nTemp * Printer::axisStepsPerMM[X_AXIS]);
+        if (Printer::debugInfo()) {
+            Com::printF(PSTR("M3020: new x start position: "), nTemp);
+            Com::printF(PSTR(" [mm], "), (int)g_nScanXStartSteps);
+            Com::printFLN(PSTR(" [steps]"));
         }
-        case 3031: // M3031 [S] - configure the slow step size for moving of the heat bed up during the heat-bed scan
-        {
-            if (pCommand->hasS()) {
-                // test and take over the specified value
-                nTemp = pCommand->S;
-                if (nTemp > 50)
-                    nTemp = 50;
-                if (nTemp < 1)
-                    nTemp = 1;
+    } else {
+        showInvalidSyntax(pCommand->M);
+    }
+}
 
-                g_nScanHeatBedUpSlowSteps = -nTemp;
-                if (Printer::debugInfo()) {
-                    Com::printF(PSTR("M3031: new slow step size for moving of the bed up: "), (int)g_nScanHeatBedUpSlowSteps);
-                    Com::printFLN(PSTR(" [steps]"));
-                }
-            } else {
-                showInvalidSyntax(pCommand->M);
-            }
-            break;
+void setScanYStart(GCode* pCommand) {
+    long nTemp;
+    if (pCommand->hasS()) {
+        // test and take over the specified value
+        nTemp = pCommand->S;
+        if (nTemp < 5)
+            nTemp = 5;
+        if (nTemp > (Printer::axisLengthMM[Y_AXIS] - 5))
+            nTemp = Printer::axisLengthMM[Y_AXIS] - 5;
+
+        g_nScanYStartSteps = (long)((float)nTemp * Printer::axisStepsPerMM[Y_AXIS]);
+        if (Printer::debugInfo()) {
+            Com::printF(PSTR("M3021: new y start position: "), nTemp);
+            Com::printF(PSTR(" [mm], "), (int)g_nScanYStartSteps);
+            Com::printFLN(PSTR(" [steps]"));
         }
-        case 3032: // M3032 [S] - configure the fast step size for moving of the heat bed down during the heat-bed scan
-        {
-            if (pCommand->hasS()) {
-                // test and take over the specified value
-                nTemp = pCommand->S;
-                if (nTemp < Printer::axisStepsPerMM[Z_AXIS] / 20)
-                    nTemp = Printer::axisStepsPerMM[Z_AXIS] / 20;
-                if (nTemp > Printer::axisStepsPerMM[Z_AXIS] * 5)
-                    nTemp = Printer::axisStepsPerMM[Z_AXIS] * 5;
+    } else {
+        showInvalidSyntax(pCommand->M);
+    }
+}
 
-                g_nScanHeatBedDownFastSteps = nTemp;
-                if (Printer::debugInfo()) {
-                    Com::printF(PSTR("M3032: new fast step size for moving of the bed down: "), (int)g_nScanHeatBedDownFastSteps);
-                    Com::printFLN(PSTR(" [steps]"));
-                }
-            } else {
-                showInvalidSyntax(pCommand->M);
-            }
-            break;
+void setScanXStep(GCode* pCommand) {
+    long nTemp;
+    if (pCommand->hasS()) {
+        // test and take over the specified value
+        nTemp = pCommand->S;
+        if (nTemp < heatBedScanMinStepMm)
+            nTemp = heatBedScanMinStepMm;
+        if (nTemp > 100)
+            nTemp = 100;
+
+        g_nScanXStepSizeSteps = (long)((float)nTemp * Printer::axisStepsPerMM[X_AXIS]);
+        if (Printer::debugInfo()) {
+            Com::printF(PSTR("M3022: new x step size: "), (int)nTemp);
+            Com::printF(PSTR(" [mm], "), (int)g_nScanXStepSizeSteps);
+            Com::printFLN(PSTR(" [steps]"));
         }
-        case 3033: // M3033 [S] - configure the slow step size for moving of the heat bed down during the heat-bed scan
-        {
-            if (pCommand->hasS()) {
-                // test and take over the specified value
-                nTemp = pCommand->S;
-                if (nTemp < 1)
-                    nTemp = 1;
-                if (nTemp > 50)
-                    nTemp = 50;
+    } else {
+        showInvalidSyntax(pCommand->M);
+    }
+}
 
-                g_nScanHeatBedDownSlowSteps = nTemp;
-                if (Printer::debugInfo()) {
-                    Com::printF(PSTR("M3033: new slow step size for moving of the bed down: "), (int)g_nScanHeatBedDownSlowSteps);
-                    Com::printFLN(PSTR(" [steps]"));
-                }
-            } else {
-                showInvalidSyntax(pCommand->M);
-            }
-            break;
+void setScanYStep(GCode* pCommand) {
+    long nTemp;
+    if (pCommand->hasS()) {
+        // test and take over the specified value
+        nTemp = pCommand->S;
+        if (nTemp < heatBedScanMinStepMm)
+            nTemp = heatBedScanMinStepMm;
+        if (nTemp > 100)
+            nTemp = 100;
+
+        g_nScanYStepSizeSteps = (long)((float)nTemp * Printer::axisStepsPerMM[Y_AXIS]);
+        if (Printer::debugInfo()) {
+            Com::printF(PSTR("M3023: new y step size: "), (int)nTemp);
+            Com::printF(PSTR(" [mm], "), (int)g_nScanYStepSizeSteps);
+            Com::printFLN(PSTR(" [steps]"));
         }
-        case 3040: // M3040 [S] - configure the delay (in ms) between two fast movements during the heat-bed scan
-        {
-            if (pCommand->hasS()) {
-                // test and take over the specified value
-                nTemp = pCommand->S;
-                if (nTemp < 1)
-                    nTemp = 1;
-                if (nTemp > 1000)
-                    nTemp = 1000;
+    } else {
+        showInvalidSyntax(pCommand->M);
+    }
+}
 
-                g_nScanFastStepDelay = nTemp;
-                if (Printer::debugInfo()) {
-                    Com::printF(PSTR("M3040: new delay between two fast movements: "), (int)g_nScanFastStepDelay);
-                    Com::printFLN(PSTR(" [ms]"));
-                }
-            } else {
-                showInvalidSyntax(pCommand->M);
-            }
-            break;
-        }
-        case 3041: // M3041 [S] - configure the delay (in ms) between two slow movements during the heat-bed scan
-        {
-            if (pCommand->hasS()) {
-                // test and take over the specified value
-                nTemp = pCommand->S;
-                if (nTemp < 1)
-                    nTemp = 1;
-                if (nTemp > 1000)
-                    nTemp = 1000;
+void setScanXEnd(GCode* pCommand) {
+    long nTemp;
+    if (pCommand->hasS()) {
+        // test and take over the specified value
+        nTemp = pCommand->S;
+        if (nTemp < 5)
+            nTemp = 5;
+        if (nTemp > (Printer::axisLengthMM[X_AXIS] - 5))
+            nTemp = Printer::axisLengthMM[X_AXIS] - 5;
 
-                g_nScanSlowStepDelay = nTemp;
-                if (Printer::debugInfo()) {
-                    Com::printF(PSTR("M3041: new delay between two slow movements: "), (int)g_nScanSlowStepDelay);
-                    Com::printFLN(PSTR(" [ms]"));
-                }
-            } else {
-                showInvalidSyntax(pCommand->M);
-            }
-            break;
-        }
-        case 3042: // M3042 [S] - configure the delay (in ms) between reaching of a new x/y position and the test of the idle pressure
-        {
-            if (pCommand->hasS()) {
-                // test and take over the specified value
-                nTemp = pCommand->S;
-                if (nTemp < 1)
-                    nTemp = 1;
-                if (nTemp > 10000)
-                    nTemp = 10000;
-
-                g_nScanIdleDelay = nTemp;
-                if (Printer::debugInfo()) {
-                    Com::printF(PSTR("M3042: new idle delay: "), (int)g_nScanIdleDelay);
-                    Com::printFLN(PSTR(" [ms]"));
-                }
-            } else {
-                showInvalidSyntax(pCommand->M);
-            }
-            break;
-        }
-        case 3050: // M3050 [S] - configure the contact pressure delta (in digits)
-        {
-            if (pCommand->hasS()) {
-                // test and take over the specified value
-                nTemp = pCommand->S;
-                if (nTemp < 1)
-                    nTemp = 1;
-                if (nTemp > 1000)
-                    nTemp = 1000;
-
-                g_nScanContactPressureDelta = nTemp;
-                if (Printer::debugInfo()) {
-                    Com::printF(PSTR("M3050: new contact pressure delta: "), (int)g_nScanContactPressureDelta);
-                    Com::printFLN(PSTR(" [digits]"));
-                }
-            } else {
-                showInvalidSyntax(pCommand->M);
-            }
-            break;
-        }
-        case 3051: // M3051 [S] - configure the retry pressure delta (in digits)
-        {
-            if (pCommand->hasS()) {
-                // test and take over the specified value
-                nTemp = pCommand->S;
-                if (nTemp < 1)
-                    nTemp = 1;
-                if (nTemp > 1000)
-                    nTemp = 1000;
-
-                g_nScanRetryPressureDelta = nTemp;
-                if (Printer::debugInfo()) {
-                    Com::printF(PSTR("M3051: new retry pressure delta: "), (int)g_nScanRetryPressureDelta);
-                    Com::printFLN(PSTR(" [digits]"));
-                }
-            } else {
-                showInvalidSyntax(pCommand->M);
-            }
-            break;
-        }
-        case 3052: // M3052 [S] - configure the idle pressure tolerance (in digits)
-        {
-            if (pCommand->hasS()) {
-                // test and take over the specified value
-                nTemp = pCommand->S;
-                if (nTemp < 1)
-                    nTemp = 1;
-                if (nTemp > 1000)
-                    nTemp = 1000;
-
-                g_nScanIdlePressureDelta = nTemp;
-                if (Printer::debugInfo()) {
-                    Com::printF(PSTR("M3052: new idle pressure delta: "), (int)g_nScanIdlePressureDelta);
-                    Com::printFLN(PSTR(" [digits]"));
-                }
-            } else {
-                showInvalidSyntax(pCommand->M);
-            }
-            break;
-        }
-        case 3053: // M3053 [S] - configure the number of A/D converter reads per pressure measurement
-        {
-            if (pCommand->hasS()) {
-                // test and take over the specified value
-                nTemp = pCommand->S;
-                if (nTemp < 1)
-                    nTemp = 1;
-                if (nTemp > 100)
-                    nTemp = 100;
-
-                g_nScanPressureReads = nTemp;
-                if (Printer::debugInfo()) {
-                    Com::printF(PSTR("M3053: new pressure reads per measurement: "), (int)g_nScanPressureReads);
-                }
-            } else {
-                showInvalidSyntax(pCommand->M);
-            }
-            break;
-        }
-        case 3054: // M3054 [S] - configure the delay (in ms) between two A/D converter reads
-        {
-            if (pCommand->hasS()) {
-                // test and take over the specified value
-                nTemp = pCommand->S;
-                if (nTemp < 1)
-                    nTemp = 1;
-                if (nTemp > 1000)
-                    nTemp = 1000;
-
-                g_nScanPressureReadDelay = nTemp;
-                if (Printer::debugInfo()) {
-                    Com::printF(PSTR("M3054: new delay between two pressure reads: "), (int)g_nScanPressureReadDelay);
-                    Com::printFLN(PSTR(" [ms]"));
-                }
-            } else {
-                showInvalidSyntax(pCommand->M);
-            }
-            break;
-        }
-        case 3055: // M3055 [S] - configure the pressure tolerance (in digits) per pressure measurement
-        {
-            if (pCommand->hasS()) {
-                // test and take over the specified value
-                nTemp = pCommand->S;
-                if (nTemp < 1)
-                    nTemp = 1;
-                if (nTemp > 1000)
-                    nTemp = 1000;
-
-                g_nScanPressureTolerance = nTemp;
-                if (Printer::debugInfo()) {
-                    Com::printF(PSTR("M3055: new scan pressure tolerance: "), (int)g_nScanPressureTolerance);
-                    Com::printFLN(PSTR(" [digits]"));
-                }
-            } else {
-                showInvalidSyntax(pCommand->M);
-            }
-            break;
+        g_nScanXEndSteps = (long)((float)nTemp * Printer::axisStepsPerMM[X_AXIS]);
+        if (Printer::debugInfo()) {
+            Com::printF(PSTR("M3024: new x end position: "), nTemp);
+            Com::printF(PSTR(" [mm], "), (int)g_nScanXEndSteps);
+            Com::printFLN(PSTR(" [steps]"));
         }
 
-        case 3060: // M3060 - output the device type and firmware version
-        {
-            Com::printFLN(PSTR("Device Type: "), UI_PRINTER_NAME);
-            Com::printFLN(PSTR("Firmware Version: "), UI_VERSION_STRING);
-            break;
+        g_nScanXMaxPositionSteps = long(Printer::axisLengthMM[X_AXIS] * Printer::axisStepsPerMM[X_AXIS] - g_nScanXEndSteps);
+        if (Printer::debugInfo()) {
+            Com::printF(PSTR("M3024: new x max position: "), (int)g_nScanXMaxPositionSteps);
+            Com::printFLN(PSTR(" [steps]"));
+        }
+    } else {
+        showInvalidSyntax(pCommand->M);
+    }
+}
+
+void setScanYEnd(GCode* pCommand) {
+    long nTemp;
+    if (pCommand->hasS()) {
+        // test and take over the specified value
+        nTemp = pCommand->S;
+        if (nTemp < 5)
+            nTemp = 5;
+        if (nTemp > (Printer::axisLengthMM[Y_AXIS] - 5))
+            nTemp = Printer::axisLengthMM[Y_AXIS] - 5;
+
+        g_nScanYEndSteps = (long)((float)nTemp * Printer::axisStepsPerMM[Y_AXIS]);
+        if (Printer::debugInfo()) {
+            Com::printF(PSTR("M3025: new y end position: "), nTemp);
+            Com::printF(PSTR(" [mm], "), (int)g_nScanYEndSteps);
+            Com::printFLN(PSTR(" [steps]"));
         }
 
-        case 3070: // M3070 [S] - pause the print as if the "Pause" button would have been pressed
-        {
-            const bool park = pCommand->hasS() && pCommand->S >= 2 && Printer::areAxisHomed();
-            Printer::pause.queueRequest(park ? PrintPause::Destination::Park : PrintPause::Destination::InPlace);
-            break;
+        g_nScanYMaxPositionSteps = long(Printer::axisLengthMM[Y_AXIS] * Printer::axisStepsPerMM[Y_AXIS] - g_nScanYEndSteps);
+        if (Printer::debugInfo()) {
+            Com::printF(PSTR("M3025: new y max position: "), (int)g_nScanYMaxPositionSteps);
+            Com::printFLN(PSTR(" [steps]"));
         }
+    } else {
+        showInvalidSyntax(pCommand->M);
+    }
+}
 
-        case 3075: // M3075 [S] [P] - configure the emergency pause digits
+// Panel and homing diagnostics.
+void testHomingRepeatability(GCode* pCommand) {
+    if (pCommand->hasX()) {
+        Printer::checkHome(X_AXIS);
+    }
+    if (pCommand->hasY()) {
+        Printer::checkHome(Y_AXIS);
+    }
+    if (pCommand->hasZ()) {
+        Printer::checkHome(Z_AXIS);
+    }
+}
+
+void accessPanel(GCode* pCommand) {
+    if (pCommand->hasP()) {
+        switch (pCommand->P) {
+        case UI_ACTION_OK:       // 1001
+        case UI_ACTION_NEXT:     // 1
+        case UI_ACTION_PREVIOUS: // 2
+        case UI_ACTION_BACK:     // 1000
+        case UI_ACTION_RIGHT:    // 1129
+
+        case UI_ACTION_RF_HEAT_BED_UP:      // 514
+        case UI_ACTION_RF_HEAT_BED_DOWN:    // 515
+        case UI_ACTION_RF_EXTRUDER_RETRACT: // 517
+        case UI_ACTION_RF_EXTRUDER_OUTPUT:  // 516
+        case UI_ACTION_RF_CONTINUE:         // 1519
+        case UI_ACTION_RF_PAUSE:            // 1518
         {
-            const auto limits = Printer::pressureProtection.pauseLimits();
-            long nMin = limits.minimum;
-            long nMax = limits.maximum;
-
-            if (pCommand->hasS()) {
-                // test and take over the specified value - this is our new min value
-                nMin = pCommand->S;
-            }
-            if (pCommand->hasP()) {
-                // test and take over the specified value - this is our new max value
-                nMax = pCommand->P;
-            }
-
-            if (nMin < EMERGENCY_PAUSE_DIGITS_MIN)
-                nMin = EMERGENCY_PAUSE_DIGITS_MIN;
-            if (nMax > EMERGENCY_PAUSE_DIGITS_MAX)
-                nMax = EMERGENCY_PAUSE_DIGITS_MAX;
-
-            const bool disable = nMin == 0 && nMax == 0;
-            if (disable || nMin < nMax) {
-                Printer::pressureProtection.setPauseLimits({int16_t(nMin), int16_t(nMax)});
-                HAL::eprSetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMIN, nMin);
-                HAL::eprSetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMAX, nMax);
-                EEPROM::updateChecksum();
-                if (Printer::debugInfo()) {
-                    if (disable) {
-                        Com::printFLN(PSTR("M3075: emergency pause disabled"));
-                    } else {
-                        Com::printF(PSTR("M3075: new min: "), (int)nMin);
-                        Com::printF(PSTR(" [digits], new max: "), (int)nMax);
-                        Com::printFLN(PSTR(" [digits]"));
-                    }
-                }
-            } else {
-                if (Printer::debugErrors()) {
-                    Com::printF(PSTR("M3075: min max ("), (int)nMin);
-                    Com::printF(Com::tSlash, (int)nMin);
-                    Com::printFLN(PSTR(") invalide"));
-                }
-            }
-
-            break;
+            Com::printFLN(PSTR("RequestMenu:Press:"), pCommand->P);
+            uid.executeAction(pCommand->P);
+        } break;
         }
+    } else {
+        Com::printF(PSTR("RequestMenu:"), UI_ROWS);
 
-        case 3076: // M3076 [S] [P] - configure the emergency stop digits
-        {
-            const auto limits = Printer::pressureProtection.stopLimits();
-            long nMin = limits.minimum;
-            long nMax = limits.maximum;
-
-            if (pCommand->hasS()) {
-                // test and take over the specified value - this is our new min value
-                nMin = pCommand->S;
-            }
-            if (pCommand->hasP()) {
-                // test and take over the specified value - this is our new max value
-                nMax = pCommand->P;
-            }
-
-            if (nMin == 0 && nMax == 0) {
-                Printer::pressureProtection.setStopLimits({0, 0});
-
-                if (Printer::debugInfo()) {
-                    Com::printFLN(PSTR("M3076: temporary stop band [0, 0] digits"));
-                }
-            } else if (nMin < nMax && nMin >= -32768 && nMax <= 32767) {
-                Printer::pressureProtection.setStopLimits({int16_t(nMin), int16_t(nMax)});
-
-                if (Printer::debugInfo()) {
-                    Com::printF(PSTR("M3076: new min: "), (int)nMin);
-                    Com::printF(PSTR(" [digits], new max: "), (int)nMax);
-                    Com::printFLN(PSTR(" [digits]"));
-                }
-                HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX, nMax);
-                HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN, nMin);
-                EEPROM::updateChecksum();
-            } else {
-                if (Printer::debugErrors()) {
-                    Com::printF(PSTR("M3076: min max ("), (int)nMin);
-                    Com::printF(Com::tSlash, (int)nMax);
-                    Com::printFLN(PSTR(") invalide"));
-                }
-            }
-
-            break;
+        Com::printF(PSTR(","), MAX_COLS + 1);
+        Com::printF(PSTR(":"));
+        if (pCommand->hasL()) {
+            //print line by line for human readability
+            Com::println();
+            Com::println();
         }
-
-        case 3079: // M3079 - output the printed object
-        {
-            outputObject(); //als Gcode direkt
-            break;
-        }
-
-        case 3090: // M3090 - test the watchdog (this command resets the firmware)
-        {
-            if (pCommand->hasS()) {
-                if (pCommand->S == 666) {
-                    if (g_bPingWatchdog) {
-                        HAL::stopWatchdog();
-                        Com::printFLN(PSTR("M3090: WARNING the watchdog is disabled now"));
-                    } else {
-                        HAL::startWatchdog();
-                        Com::printFLN(PSTR("M3090: the watchdog has been activated"));
-                    }
+        // we print out UI_ROWS x MAX_COLS+1 field.
+        for (uint8_t row = 0; row < UI_ROWS; row++) {
+            const char* line = uid.cachedRow(row);
+            bool nulled = false;
+            for (uint8_t col = 0; col < MAX_COLS + 1; col++) {
+                const char character = line[col];
+                if (character == 0 || nulled) {
+                    nulled = true;
+                    Com::print(' '); //null as space
+                    continue;
                 }
-            } else if (pCommand->hasP()) {
-                HAL::delayMilliseconds(10000);
-            } else if (pCommand->hasT()) {
-                for (int iii = 0; iii < 1000; iii++)
-                    HAL::delayMicroseconds(10000);
-            } else {
-                if (Printer::debugInfo()) {
-                    Com::printFLN(PSTR("M3090: the watchdog is going to reset the firmware"));
+
+                if (isprint(character)) {
+                    Com::print(character);
+                    continue;
                 }
-                HAL::delayMilliseconds(100);
-                HAL::testWatchdog();
-            }
-            break;
-        }
 
-        case 3091: // M3091 - erase the external EEPROM
-        {
-            clearExternalEEPROM();
-            break;
-        }
-
-        case 3105: // M3105 [X] [Y] [Z] [E] - configure the offset in x, y, z and e direction which shall be applied in case the "Pause" button has been pressed ( units are [mm] )
-        {
-            if (pCommand->hasNoXYZ() && !pCommand->hasE()) {
-                showInvalidSyntax(pCommand->M);
-            } else {
-                if (pCommand->hasX()) {
-                    // test and take over the specified value
-                    nTemp = pCommand->X * Printer::axisStepsPerMM[X_AXIS];
-                    if (nTemp < -Printer::maxSoftEndstopSteps[X_AXIS])
-                        nTemp = -Printer::maxSoftEndstopSteps[X_AXIS];
-                    if (nTemp > Printer::maxSoftEndstopSteps[X_AXIS])
-                        nTemp = Printer::maxSoftEndstopSteps[X_AXIS];
-
-                    Printer::pause.setParkSteps(X_AXIS, nTemp);
-                    Com::printF(PSTR("M3105: new x pause offset: "), nTemp * Printer::axisMMPerSteps[X_AXIS]);
-                    Com::printFLN(PSTR(" [mm]"));
-                }
-                if (pCommand->hasY()) {
-                    // test and take over the specified value
-                    nTemp = pCommand->Y * Printer::axisStepsPerMM[Y_AXIS];
-                    if (nTemp < -Printer::maxSoftEndstopSteps[Y_AXIS])
-                        nTemp = -Printer::maxSoftEndstopSteps[Y_AXIS];
-                    if (nTemp > Printer::maxSoftEndstopSteps[Y_AXIS])
-                        nTemp = Printer::maxSoftEndstopSteps[Y_AXIS];
-
-                    Printer::pause.setParkSteps(Y_AXIS, nTemp);
-                    Com::printF(PSTR("M3105: new y pause offset: "), nTemp * Printer::axisMMPerSteps[Y_AXIS]);
-                    Com::printFLN(PSTR(" [mm]"));
-                }
-                if (pCommand->hasZ()) {
-                    // test and take over the specified value
-                    nTemp = pCommand->Z * Printer::axisStepsPerMM[Z_AXIS];
-                    if (nTemp < 0)
-                        nTemp = 0; //no pause within printed part.
-                    if (nTemp > Printer::zMotion.maxSteps())
-                        nTemp = Printer::zMotion.maxSteps();
-
-                    Printer::pause.setParkSteps(Z_AXIS, nTemp);
-                    Com::printF(PSTR("M3105: new z pause offset: "), nTemp * Printer::axisMMPerSteps[Z_AXIS]);
-                    Com::printFLN(PSTR(" [mm]"));
-                }
-                if (pCommand->hasE()) {
-                    // test and take over the specified value
-                    nTemp = pCommand->E;
-                    if (nTemp < 0)
-                        nTemp = 0;
-                    if (nTemp > 5)
-                        nTemp = 5; //Zahl immer positiv, sie wird abgezogen = Retract!
-
-                    Printer::pause.setParkSteps(E_AXIS, long(nTemp * Extruder::current->stepsPerMM));
-                    Com::printF(PSTR("M3105: new extruder pause offset: "), nTemp);
-                    Com::printFLN(PSTR(" [mm]"));
-                }
-            }
-            break;
-        }
-
-        case 3115: // M3115 - set the x/y origin to the current x/y position
-        {
-            Printer::setOrigin(-Printer::moveTarget.machineMM(X_AXIS), -Printer::moveTarget.machineMM(Y_AXIS), Printer::moveTarget.workOffsetMM(Z_AXIS));
-            break;
-        }
-        case 3117: // M3117 - set a status text which is not overwritten by M117
-        {
-            if (pCommand->hasString()) {
-                if (!uid.locked) {
-                    // ensure that the current text won't be overwritten
-                    uid.lock();
-                    if (Printer::debugInfo()) {
-                        Com::printFLN(PSTR("M3117: lock"));
-                    }
-                }
-                uid.setStatus(pCommand->text, false, true);
-                uid.refreshPage();
-            } else {
-                if (uid.locked) {
-                    // allow to overwrite the current string again
-                    // Put the unlock into queue to avoid racetime conditions with prior commands
-                    queueTask(TASK_UNLOCK_DISPLAY_MSG);
-                    Com::printFLN(PSTR("M3117: queued unlock"));
-                }
-            }
-            break;
-        }
-
-#if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
-        case 3120: // M3120 - turn on the case fan
-        {
-            //disable fan-temp-ignore to original state // Nibbels
-            Printer::ignoreFanOn = false;
-
-            // enable the case fan
-            Printer::prepareFanOff = 0;
-            WRITE(CASE_FAN_PIN, 1);
-
-            if (Printer::debugInfo()) {
-                Com::printFLN(PSTR("M3120: fan on"));
-            }
-            break;
-        }
-
-        case 3121: // M3121 - turn off the case fan
-        {
-            // disable the case fan
-            if (pCommand->hasS()) {
-                // we shall set a new case fan off delay
-                Printer::fanOffDelay = pCommand->S;
-                Printer::fanOffDelay *= 1000; // convert from [s] to [ms]
-            }
-
-            if (pCommand->hasP()) {
-                // the fan should be disabled even if the print starts // temp > fan on temp // Nibbels
-                Printer::ignoreFanOn = true;
-            }
-
-            if (Printer::fanOffDelay) {
-                // we are going to disable the case fan after the delay
-                Printer::prepareFanOff = HAL::timeInMilliseconds();
-
-                if (Printer::debugInfo()) {
-                    Com::printF(PSTR("M3121: fan off in "), pCommand->S);
-                    Com::printFLN(PSTR(" [s]"));
-                }
-            } else {
-                // we are going to disable the case fan now
-                Printer::prepareFanOff = 0;
-                WRITE(CASE_FAN_PIN, 0);
-
-                if (Printer::debugInfo()) {
-                    Com::printFLN(PSTR("M3121: fan off"));
-                }
-            }
-            break;
-        }
-#endif // (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
-
-        case 3200: // M3200 - reserved for test and debug
-        {
-            if (pCommand->hasP()) {
-                switch (pCommand->P) {
-                case 1: {
-                    Commands::checkFreeMemory();
-                    Commands::writeLowestFreeRAM();
-                    Com::printFLN(PSTR("lowest free RAM: "), Commands::lowestRAMValue);
-
-                    Com::printFLN(PSTR("z-compensation matrix x: "), COMPENSATION_MATRIX_MAX_X);
-                    Com::printFLN(PSTR("z-compensation matrix y: "), COMPENSATION_MATRIX_MAX_Y);
-                    break;
-                }
+                switch (character) {
                 case 2: {
-                    Com::printFLN(PSTR("Homing feedrates:"));
-                    Com::printF(PSTR("x = "), Printer::homingFeedrate[X_AXIS]);
-                    Com::printF(PSTR(", y = "), Printer::homingFeedrate[Y_AXIS]);
-                    Com::printFLN(PSTR(", z = "), Printer::homingFeedrate[Z_AXIS]);
-                    break;
-                }
-                case 4: {
-                    // simulate blocking of all axes
-                    Com::printFLN(PSTR("M3200: block all"));
-
-                    doEmergencyStop(STOP_BECAUSE_OF_Z_BLOCK);
+                    Com::print('\'');
                     break;
                 }
                 case 5: {
-                    // simulate a temp sensor error
-                    Com::printFLN(PSTR("M3200: simulating defect sensor"));
-                    //ext 0 soll defekt aussehen
-                    TemperatureController* act0 = tempController[0];
-                    act0->setSensorDefect(true);
-                    //ext 1/bett soll decoupled aussehen
-                    TemperatureController* act1 = tempController[1];
-                    act1->setSensorDecoupled(true);
-                    //generelle defekt-einstufung
-                    Printer::setSomeTempsensorDefect(true);
-                    //fehlermeldung ausgeben
-                    reportTempsensorAndHeaterErrors();
+                    Com::print('!');
                     break;
                 }
-
-
-                case 9: {
-                    Com::printFLN(PSTR("debug level: "), Printer::debugLevel);
+                case (char)CHAR_SELECTOR: {
+                    Com::print('>');
                     break;
                 }
-
-                case 13: {
-                    Com::printFLN(PSTR("LCD re-initialization"));
-                    uid.initializeLCD();
+                case (char)CHAR_SELECTED: {
+                    Com::print('*');
+                    break;
                 }
+                default:
+                    Com::print('_'); //others?
                 }
             }
-
-            break;
+            if (pCommand->hasL()) {
+                //print line by line for human readability
+                Com::println();
+            }
         }
+        Com::println();
+    }
+}
 
-#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
-        case 3300: // M3300 [P] [S] - configure the 24V FET outputs ( on/off )
-        {
-            if (pCommand->hasP()) {
-                if ((pCommand->P == 1 && FET1 > -1 && HOTEND_COOLER_USES_PIN(FET1))
-                    || (pCommand->P == 2 && FET2 > -1 && HOTEND_COOLER_USES_PIN(FET2))) {
-                    Com::printErrorFLN(PSTR("M3300: output is assigned to a hotend cooler"));
-                    break;
-                }
-                switch (pCommand->P) {
-#if FET1 > -1 && !HOTEND_COOLER_USES_PIN(FET1)
-                case 1: {
-                    if (pCommand->hasS()) {
-                        if (pCommand->S == 0) {
-                            Printer::enableFET1 = 0;
-                            WRITE(FET1, Printer::enableFET1);
-                            Com::printFLN(PSTR("24V X42 FET1-output = off"));
-                        } else {
-                            Printer::enableFET1 = 1;
-                            WRITE(FET1, Printer::enableFET1);
-                            Com::printFLN(PSTR("24V X42 FET1-output = on"));
-                        }
-                        HAL::eprSetByte(EPR_RF_FET1_MODE, Printer::enableFET1);
-                        EEPROM::updateChecksum();
-                    }
-                    break;
-                }
-#endif // FET1 accessory output
-#if FET2 > -1 && !HOTEND_COOLER_USES_PIN(FET2)
-                case 2: {
-                    if (pCommand->hasS()) {
-                        if (pCommand->S == 0) {
-                            Printer::enableFET2 = 0;
-                            WRITE(FET2, Printer::enableFET2);
-                            Com::printFLN(PSTR("24V X44 FET2-output = off"));
-                        } else {
-                            Printer::enableFET2 = 1;
-                            WRITE(FET2, Printer::enableFET2);
-                            Com::printFLN(PSTR("24V X44 FET2-output = on"));
-                        }
-                        HAL::eprSetByte(EPR_RF_FET2_MODE, Printer::enableFET2);
-                        EEPROM::updateChecksum();
-                    }
-                    break;
-                }
-#endif // FET2 accessory output
-#if FET3 > -1
-                case 3: {
-                    if (pCommand->hasS()) {
-                        if (pCommand->S == 0) {
-                            Printer::enableFET3 = 0;
-                            WRITE(FET3, Printer::enableFET3);
-                            Com::printFLN(PSTR("24V X45/BoardFan FET3-output = off"));
-                        } else {
-                            Printer::enableFET3 = 1;
-                            WRITE(FET3, Printer::enableFET3);
-                            Com::printFLN(PSTR("24V X45/BoardFan FET3-output = on"));
-                        }
-                        HAL::eprSetByte(EPR_RF_FET3_MODE, Printer::enableFET3);
-                        EEPROM::updateChecksum();
-                    }
-                    break;
-                }
-#endif // FET3
-                }
+// Probe settings.
+void setFastApproachStep(GCode* pCommand) {
+    long nTemp;
+    if (pCommand->hasS()) {
+        // test and take over the specified value
+        nTemp = pCommand->S;
+        if (nTemp > 50)
+            nTemp = 50;
+        if (nTemp < 1)
+            nTemp = 1;
+
+        g_nScanHeatBedUpFastSteps = -nTemp;
+        if (Printer::debugInfo()) {
+            Com::printF(PSTR("M3030: new fast step size for moving of the bed up: "), (int)g_nScanHeatBedUpFastSteps);
+            Com::printFLN(PSTR(" [steps]"));
+        }
+    } else {
+        showInvalidSyntax(pCommand->M);
+    }
+}
+
+void setSlowApproachStep(GCode* pCommand) {
+    long nTemp;
+    if (pCommand->hasS()) {
+        // test and take over the specified value
+        nTemp = pCommand->S;
+        if (nTemp > 50)
+            nTemp = 50;
+        if (nTemp < 1)
+            nTemp = 1;
+
+        g_nScanHeatBedUpSlowSteps = -nTemp;
+        if (Printer::debugInfo()) {
+            Com::printF(PSTR("M3031: new slow step size for moving of the bed up: "), (int)g_nScanHeatBedUpSlowSteps);
+            Com::printFLN(PSTR(" [steps]"));
+        }
+    } else {
+        showInvalidSyntax(pCommand->M);
+    }
+}
+
+void setFastRetreatStep(GCode* pCommand) {
+    long nTemp;
+    if (pCommand->hasS()) {
+        // test and take over the specified value
+        nTemp = pCommand->S;
+        if (nTemp < Printer::axisStepsPerMM[Z_AXIS] / 20)
+            nTemp = Printer::axisStepsPerMM[Z_AXIS] / 20;
+        if (nTemp > Printer::axisStepsPerMM[Z_AXIS] * 5)
+            nTemp = Printer::axisStepsPerMM[Z_AXIS] * 5;
+
+        g_nScanHeatBedDownFastSteps = nTemp;
+        if (Printer::debugInfo()) {
+            Com::printF(PSTR("M3032: new fast step size for moving of the bed down: "), (int)g_nScanHeatBedDownFastSteps);
+            Com::printFLN(PSTR(" [steps]"));
+        }
+    } else {
+        showInvalidSyntax(pCommand->M);
+    }
+}
+
+void setSlowRetreatStep(GCode* pCommand) {
+    long nTemp;
+    if (pCommand->hasS()) {
+        // test and take over the specified value
+        nTemp = pCommand->S;
+        if (nTemp < 1)
+            nTemp = 1;
+        if (nTemp > 50)
+            nTemp = 50;
+
+        g_nScanHeatBedDownSlowSteps = nTemp;
+        if (Printer::debugInfo()) {
+            Com::printF(PSTR("M3033: new slow step size for moving of the bed down: "), (int)g_nScanHeatBedDownSlowSteps);
+            Com::printFLN(PSTR(" [steps]"));
+        }
+    } else {
+        showInvalidSyntax(pCommand->M);
+    }
+}
+
+void setFastScanDelay(GCode* pCommand) {
+    long nTemp;
+    if (pCommand->hasS()) {
+        // test and take over the specified value
+        nTemp = pCommand->S;
+        if (nTemp < 1)
+            nTemp = 1;
+        if (nTemp > 1000)
+            nTemp = 1000;
+
+        g_nScanFastStepDelay = nTemp;
+        if (Printer::debugInfo()) {
+            Com::printF(PSTR("M3040: new delay between two fast movements: "), (int)g_nScanFastStepDelay);
+            Com::printFLN(PSTR(" [ms]"));
+        }
+    } else {
+        showInvalidSyntax(pCommand->M);
+    }
+}
+
+void setSlowScanDelay(GCode* pCommand) {
+    long nTemp;
+    if (pCommand->hasS()) {
+        // test and take over the specified value
+        nTemp = pCommand->S;
+        if (nTemp < 1)
+            nTemp = 1;
+        if (nTemp > 1000)
+            nTemp = 1000;
+
+        g_nScanSlowStepDelay = nTemp;
+        if (Printer::debugInfo()) {
+            Com::printF(PSTR("M3041: new delay between two slow movements: "), (int)g_nScanSlowStepDelay);
+            Com::printFLN(PSTR(" [ms]"));
+        }
+    } else {
+        showInvalidSyntax(pCommand->M);
+    }
+}
+
+void setScanIdleDelay(GCode* pCommand) {
+    long nTemp;
+    if (pCommand->hasS()) {
+        // test and take over the specified value
+        nTemp = pCommand->S;
+        if (nTemp < 1)
+            nTemp = 1;
+        if (nTemp > 10000)
+            nTemp = 10000;
+
+        g_nScanIdleDelay = nTemp;
+        if (Printer::debugInfo()) {
+            Com::printF(PSTR("M3042: new idle delay: "), (int)g_nScanIdleDelay);
+            Com::printFLN(PSTR(" [ms]"));
+        }
+    } else {
+        showInvalidSyntax(pCommand->M);
+    }
+}
+
+void setContactPressureDelta(GCode* pCommand) {
+    long nTemp;
+    if (pCommand->hasS()) {
+        // test and take over the specified value
+        nTemp = pCommand->S;
+        if (nTemp < 1)
+            nTemp = 1;
+        if (nTemp > 1000)
+            nTemp = 1000;
+
+        g_nScanContactPressureDelta = nTemp;
+        if (Printer::debugInfo()) {
+            Com::printF(PSTR("M3050: new contact pressure delta: "), (int)g_nScanContactPressureDelta);
+            Com::printFLN(PSTR(" [digits]"));
+        }
+    } else {
+        showInvalidSyntax(pCommand->M);
+    }
+}
+
+void setRetryPressureDelta(GCode* pCommand) {
+    long nTemp;
+    if (pCommand->hasS()) {
+        // test and take over the specified value
+        nTemp = pCommand->S;
+        if (nTemp < 1)
+            nTemp = 1;
+        if (nTemp > 1000)
+            nTemp = 1000;
+
+        g_nScanRetryPressureDelta = nTemp;
+        if (Printer::debugInfo()) {
+            Com::printF(PSTR("M3051: new retry pressure delta: "), (int)g_nScanRetryPressureDelta);
+            Com::printFLN(PSTR(" [digits]"));
+        }
+    } else {
+        showInvalidSyntax(pCommand->M);
+    }
+}
+
+void setIdlePressureTolerance(GCode* pCommand) {
+    long nTemp;
+    if (pCommand->hasS()) {
+        // test and take over the specified value
+        nTemp = pCommand->S;
+        if (nTemp < 1)
+            nTemp = 1;
+        if (nTemp > 1000)
+            nTemp = 1000;
+
+        g_nScanIdlePressureDelta = nTemp;
+        if (Printer::debugInfo()) {
+            Com::printF(PSTR("M3052: new idle pressure delta: "), (int)g_nScanIdlePressureDelta);
+            Com::printFLN(PSTR(" [digits]"));
+        }
+    } else {
+        showInvalidSyntax(pCommand->M);
+    }
+}
+
+void setPressureReadCount(GCode* pCommand) {
+    long nTemp;
+    if (pCommand->hasS()) {
+        // test and take over the specified value
+        nTemp = pCommand->S;
+        if (nTemp < 1)
+            nTemp = 1;
+        if (nTemp > 100)
+            nTemp = 100;
+
+        g_nScanPressureReads = nTemp;
+        if (Printer::debugInfo()) {
+            Com::printF(PSTR("M3053: new pressure reads per measurement: "), (int)g_nScanPressureReads);
+        }
+    } else {
+        showInvalidSyntax(pCommand->M);
+    }
+}
+
+void setPressureReadDelay(GCode* pCommand) {
+    long nTemp;
+    if (pCommand->hasS()) {
+        // test and take over the specified value
+        nTemp = pCommand->S;
+        if (nTemp < 1)
+            nTemp = 1;
+        if (nTemp > 1000)
+            nTemp = 1000;
+
+        g_nScanPressureReadDelay = nTemp;
+        if (Printer::debugInfo()) {
+            Com::printF(PSTR("M3054: new delay between two pressure reads: "), (int)g_nScanPressureReadDelay);
+            Com::printFLN(PSTR(" [ms]"));
+        }
+    } else {
+        showInvalidSyntax(pCommand->M);
+    }
+}
+
+void setPressureReadTolerance(GCode* pCommand) {
+    long nTemp;
+    if (pCommand->hasS()) {
+        // test and take over the specified value
+        nTemp = pCommand->S;
+        if (nTemp < 1)
+            nTemp = 1;
+        if (nTemp > 1000)
+            nTemp = 1000;
+
+        g_nScanPressureTolerance = nTemp;
+        if (Printer::debugInfo()) {
+            Com::printF(PSTR("M3055: new scan pressure tolerance: "), (int)g_nScanPressureTolerance);
+            Com::printFLN(PSTR(" [digits]"));
+        }
+    } else {
+        showInvalidSyntax(pCommand->M);
+    }
+}
+
+// Printer operation and safety commands.
+void reportDeviceVersion() {
+    Com::printFLN(PSTR("Device Type: "), UI_PRINTER_NAME);
+    Com::printFLN(PSTR("Firmware Version: "), UI_VERSION_STRING);
+}
+
+void requestPrintPause(GCode* pCommand) {
+    const bool park = pCommand->hasS() && pCommand->S >= 2 && Printer::areAxisHomed();
+    Printer::pause.queueRequest(park ? PrintPause::Destination::Park : PrintPause::Destination::InPlace);
+}
+
+void setEmergencyPauseDigits(GCode* pCommand) {
+    const auto limits = Printer::pressureProtection.pauseLimits();
+    long nMin = limits.minimum;
+    long nMax = limits.maximum;
+
+    if (pCommand->hasS()) {
+        // test and take over the specified value - this is our new min value
+        nMin = pCommand->S;
+    }
+    if (pCommand->hasP()) {
+        // test and take over the specified value - this is our new max value
+        nMax = pCommand->P;
+    }
+
+    if (nMin < EMERGENCY_PAUSE_DIGITS_MIN)
+        nMin = EMERGENCY_PAUSE_DIGITS_MIN;
+    if (nMax > EMERGENCY_PAUSE_DIGITS_MAX)
+        nMax = EMERGENCY_PAUSE_DIGITS_MAX;
+
+    const bool disable = nMin == 0 && nMax == 0;
+    if (disable || nMin < nMax) {
+        Printer::pressureProtection.setPauseLimits({int16_t(nMin), int16_t(nMax)});
+        HAL::eprSetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMIN, nMin);
+        HAL::eprSetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMAX, nMax);
+        EEPROM::updateChecksum();
+        if (Printer::debugInfo()) {
+            if (disable) {
+                Com::printFLN(PSTR("M3075: emergency pause disabled"));
             } else {
-                showInvalidSyntax(pCommand->M);
+                Com::printF(PSTR("M3075: new min: "), (int)nMin);
+                Com::printF(PSTR(" [digits], new max: "), (int)nMax);
+                Com::printFLN(PSTR(" [digits]"));
             }
-
-            break;
         }
-
-        case 3301: // M3301 [S] - configure the 230V output ( on/off )
-        {
-            if (pCommand->hasS()) {
-                if (pCommand->S == 0) {
-                    Printer::enable230VOutput = 0;
-                    WRITE(OUTPUT_230V_PIN, Printer::enable230VOutput);
-                    Com::printFLN(PSTR("230V output = off"));
-                } else {
-                    Printer::enable230VOutput = 1;
-                    WRITE(OUTPUT_230V_PIN, Printer::enable230VOutput);
-                    Com::printFLN(PSTR("230V output = on"));
-                }
-            } else {
-                showInvalidSyntax(pCommand->M);
-            }
-            break;
-        }
-#endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
-
-#ifdef RGB_LIGHT_R_PIN
-        case 3303: // M3303 [P] [S] - configure the RGB light effects for heating
-        {
-            if (pCommand->hasP()) {
-                switch (pCommand->P) {
-                case 1: // red
-                {
-                    if (pCommand->hasS()) {
-                        if (pCommand->S >= 0 && pCommand->S <= 255) {
-                            g_uRGBHeatingR = pCommand->S;
-
-                            HAL::eprSetByte(EPR_RF_RGB_HEATING_R, g_uRGBHeatingR);
-                            EEPROM::updateChecksum();
-
-                            if (Printer::RGBLightMode == RGB_MODE_AUTOMATIC && Printer::RGBLightStatus == RGB_STATUS_HEATING) {
-                                setRGBTargetColors(g_uRGBHeatingR, g_uRGBHeatingG, g_uRGBHeatingB);
-                            }
-                            Com::printFLN(PSTR("RGB_HEATING_R = "), g_uRGBHeatingR);
-                        } else {
-                            Com::printFLN(PSTR("RGB_HEATING_R out of range "));
-                        }
-                    }
-                    break;
-                }
-                case 2: // green
-                {
-                    if (pCommand->hasS()) {
-                        if (pCommand->S >= 0 && pCommand->S <= 255) {
-                            g_uRGBHeatingG = pCommand->S;
-
-                            HAL::eprSetByte(EPR_RF_RGB_HEATING_G, g_uRGBHeatingG);
-                            EEPROM::updateChecksum();
-
-                            if (Printer::RGBLightMode == RGB_MODE_AUTOMATIC && Printer::RGBLightStatus == RGB_STATUS_HEATING) {
-                                setRGBTargetColors(g_uRGBHeatingR, g_uRGBHeatingG, g_uRGBHeatingB);
-                            }
-                            Com::printFLN(PSTR("RGB_HEATING_G = "), g_uRGBHeatingG);
-                        } else {
-                            Com::printFLN(PSTR("RGB_HEATING_G out of range "));
-                        }
-                    }
-                    break;
-                }
-                case 3: // blue
-                {
-                    if (pCommand->hasS()) {
-                        if (pCommand->S >= 0 && pCommand->S <= 255) {
-                            g_uRGBHeatingB = pCommand->S;
-
-                            HAL::eprSetByte(EPR_RF_RGB_HEATING_B, g_uRGBHeatingB);
-                            EEPROM::updateChecksum();
-
-                            if (Printer::RGBLightMode == RGB_MODE_AUTOMATIC && Printer::RGBLightStatus == RGB_STATUS_HEATING) {
-                                setRGBTargetColors(g_uRGBHeatingR, g_uRGBHeatingG, g_uRGBHeatingB);
-                            }
-                            Com::printFLN(PSTR("RGB_HEATING_B = "), g_uRGBHeatingB);
-                        } else {
-                            Com::printFLN(PSTR("RGB_HEATING_B out of range "));
-                        }
-                    }
-                    break;
-                }
-                }
-            }
-
-            break;
-        }
-        case 3304: // M3304 [P] [S] - configure the RGB light effects for printing
-        {
-            if (pCommand->hasP()) {
-                switch (pCommand->P) {
-                case 1: // red
-                {
-                    if (pCommand->hasS()) {
-                        if (pCommand->S >= 0 && pCommand->S <= 255) {
-                            g_uRGBPrintingR = pCommand->S;
-
-                            HAL::eprSetByte(EPR_RF_RGB_PRINTING_R, g_uRGBPrintingR);
-                            EEPROM::updateChecksum();
-
-                            if (Printer::RGBLightMode == RGB_MODE_AUTOMATIC && Printer::RGBLightStatus == RGB_STATUS_PRINTING) {
-                                setRGBTargetColors(g_uRGBPrintingR, g_uRGBPrintingG, g_uRGBPrintingB);
-                            }
-                            Com::printFLN(PSTR("RGB_PRINTING_R = "), g_uRGBPrintingR);
-                        } else {
-                            Com::printFLN(PSTR("RGB_PRINTING_R out of range "));
-                        }
-                    }
-                    break;
-                }
-                case 2: // green
-                {
-                    if (pCommand->hasS()) {
-                        if (pCommand->S >= 0 && pCommand->S <= 255) {
-                            g_uRGBPrintingG = pCommand->S;
-
-                            HAL::eprSetByte(EPR_RF_RGB_PRINTING_G, g_uRGBPrintingG);
-                            EEPROM::updateChecksum();
-
-                            if (Printer::RGBLightMode == RGB_MODE_AUTOMATIC && Printer::RGBLightStatus == RGB_STATUS_PRINTING) {
-                                setRGBTargetColors(g_uRGBPrintingR, g_uRGBPrintingG, g_uRGBPrintingB);
-                            }
-                            Com::printFLN(PSTR("RGB_PRINTING_G = "), g_uRGBPrintingG);
-                        } else {
-                            Com::printFLN(PSTR("RGB_PRINTING_G out of range "));
-                        }
-                    }
-                    break;
-                }
-                case 3: // blue
-                {
-                    if (pCommand->hasS()) {
-                        if (pCommand->S >= 0 && pCommand->S <= 255) {
-                            g_uRGBPrintingB = pCommand->S;
-
-                            HAL::eprSetByte(EPR_RF_RGB_PRINTING_B, g_uRGBPrintingB);
-                            EEPROM::updateChecksum();
-
-                            if (Printer::RGBLightMode == RGB_MODE_AUTOMATIC && Printer::RGBLightStatus == RGB_STATUS_PRINTING) {
-                                setRGBTargetColors(g_uRGBPrintingR, g_uRGBPrintingG, g_uRGBPrintingB);
-                            }
-                            Com::printFLN(PSTR("RGB_PRINTING_B = "), g_uRGBPrintingB);
-                        } else {
-                            Com::printFLN(PSTR("RGB_PRINTING_B out of range "));
-                        }
-                    }
-                    break;
-                }
-                }
-            }
-            break;
-        }
-
-        case 3305: // M3305 [P] [S] - configure the RGB light effects for cooling
-        {
-            if (pCommand->hasP()) {
-                switch (pCommand->P) {
-                case 1: // red
-                {
-                    if (pCommand->hasS()) {
-                        if (pCommand->S >= 0 && pCommand->S <= 255) {
-                            g_uRGBCoolingR = pCommand->S;
-
-                            HAL::eprSetByte(EPR_RF_RGB_COOLING_R, g_uRGBCoolingR);
-                            EEPROM::updateChecksum();
-
-                            if (Printer::RGBLightMode == RGB_MODE_AUTOMATIC && Printer::RGBLightStatus == RGB_STATUS_COOLING) {
-                                setRGBTargetColors(g_uRGBCoolingR, g_uRGBCoolingG, g_uRGBCoolingB);
-                            }
-                            Com::printFLN(PSTR("RGB_COOLING_R = "), g_uRGBCoolingR);
-                        } else {
-                            Com::printFLN(PSTR("RGB_COOLING_R out of range "));
-                        }
-                    }
-                    break;
-                }
-                case 2: // green
-                {
-                    if (pCommand->hasS()) {
-                        if (pCommand->S >= 0 && pCommand->S <= 255) {
-                            g_uRGBCoolingG = pCommand->S;
-
-                            HAL::eprSetByte(EPR_RF_RGB_COOLING_G, g_uRGBCoolingG);
-                            EEPROM::updateChecksum();
-
-                            if (Printer::RGBLightMode == RGB_MODE_AUTOMATIC && Printer::RGBLightStatus == RGB_STATUS_COOLING) {
-                                setRGBTargetColors(g_uRGBCoolingR, g_uRGBCoolingG, g_uRGBCoolingB);
-                            }
-                            Com::printFLN(PSTR("RGB_COOLING_G = "), g_uRGBCoolingG);
-                        } else {
-                            Com::printFLN(PSTR("RGB_COOLING_G out of range "));
-                        }
-                    }
-                    break;
-                }
-                case 3: // blue
-                {
-                    if (pCommand->hasS()) {
-                        if (pCommand->S >= 0 && pCommand->S <= 255) {
-                            g_uRGBCoolingB = pCommand->S;
-
-                            HAL::eprSetByte(EPR_RF_RGB_COOLING_B, g_uRGBCoolingB);
-                            EEPROM::updateChecksum();
-
-                            if (Printer::RGBLightMode == RGB_MODE_AUTOMATIC && Printer::RGBLightStatus == RGB_STATUS_COOLING) {
-                                setRGBTargetColors(g_uRGBCoolingR, g_uRGBCoolingG, g_uRGBCoolingB);
-                            }
-                            Com::printFLN(PSTR("RGB_COOLING_B = "), g_uRGBCoolingB);
-                        } else {
-                            Com::printFLN(PSTR("RGB_COOLING_B out of range "));
-                        }
-                    }
-                    break;
-                }
-                }
-            }
-            break;
-        }
-
-        case 3306: // M3306 [P] [S] - configure the RGB light effects for idle
-        {
-            if (pCommand->hasP()) {
-                switch (pCommand->P) {
-                case 1: // red
-                {
-                    if (pCommand->hasS()) {
-                        if (pCommand->S >= 0 && pCommand->S <= 255) {
-                            g_uRGBIdleR = pCommand->S;
-
-                            HAL::eprSetByte(EPR_RF_RGB_IDLE_R, g_uRGBIdleR);
-                            EEPROM::updateChecksum();
-
-                            if (Printer::RGBLightMode == RGB_MODE_AUTOMATIC && Printer::RGBLightStatus == RGB_STATUS_IDLE) {
-                                setRGBTargetColors(g_uRGBIdleR, g_uRGBIdleG, g_uRGBIdleB);
-                            }
-                            Com::printFLN(PSTR("RGB_IDLE_R = "), g_uRGBIdleR);
-                        } else {
-                            Com::printFLN(PSTR("RGB_IDLE_R out of range "));
-                        }
-                    }
-                    break;
-                }
-                case 2: // green
-                {
-                    if (pCommand->hasS()) {
-                        if (pCommand->S >= 0 && pCommand->S <= 255) {
-                            g_uRGBIdleG = pCommand->S;
-
-                            HAL::eprSetByte(EPR_RF_RGB_IDLE_G, g_uRGBIdleG);
-                            EEPROM::updateChecksum();
-
-                            if (Printer::RGBLightMode == RGB_MODE_AUTOMATIC && Printer::RGBLightStatus == RGB_STATUS_IDLE) {
-                                setRGBTargetColors(g_uRGBIdleR, g_uRGBIdleG, g_uRGBIdleB);
-                            }
-                            Com::printFLN(PSTR("RGB_IDLE_G = "), g_uRGBIdleG);
-                        } else {
-                            Com::printFLN(PSTR("RGB_IDLE_G out of range "));
-                        }
-                    }
-                    break;
-                }
-                case 3: // blue
-                {
-                    if (pCommand->hasS()) {
-                        if (pCommand->S >= 0 && pCommand->S <= 255) {
-                            g_uRGBIdleB = pCommand->S;
-
-                            HAL::eprSetByte(EPR_RF_RGB_IDLE_B, g_uRGBIdleB);
-                            EEPROM::updateChecksum();
-
-                            if (Printer::RGBLightMode == RGB_MODE_AUTOMATIC && Printer::RGBLightStatus == RGB_STATUS_IDLE) {
-                                setRGBTargetColors(g_uRGBIdleR, g_uRGBIdleG, g_uRGBIdleB);
-                            }
-                            Com::printFLN(PSTR("RGB_IDLE_B = "), g_uRGBIdleB);
-                        } else {
-                            Com::printFLN(PSTR("RGB_IDLE_B out of range "));
-                        }
-                    }
-                    break;
-                }
-                }
-            }
-
-            break;
-        }
-        case 3307: // M3307 [P] [S] - configure the manual RGB light colors
-        {
-            if (pCommand->hasP()) {
-                switch (pCommand->P) {
-                case 1: // red
-                {
-                    if (pCommand->hasS()) {
-                        if (pCommand->S >= 0 && pCommand->S <= 255) {
-                            g_uRGBManualR = pCommand->S;
-
-                            HAL::eprSetByte(EPR_RF_RGB_MANUAL_R, g_uRGBManualR);
-                            EEPROM::updateChecksum();
-
-                            if (Printer::RGBLightMode == RGB_MODE_MANUAL) {
-                                setRGBTargetColors(g_uRGBManualR, g_uRGBManualG, g_uRGBManualB);
-                            }
-                            Com::printFLN(PSTR("RGB_MANUAL_R = "), g_uRGBManualR);
-                        } else {
-                            Com::printFLN(PSTR("RGB_MANUAL_R out of range "));
-                        }
-                    }
-                    break;
-                }
-                case 2: // green
-                {
-                    if (pCommand->hasS()) {
-                        if (pCommand->S >= 0 && pCommand->S <= 255) {
-                            g_uRGBManualG = pCommand->S;
-
-                            HAL::eprSetByte(EPR_RF_RGB_MANUAL_G, g_uRGBManualG);
-                            EEPROM::updateChecksum();
-
-                            if (Printer::RGBLightMode == RGB_MODE_MANUAL) {
-                                setRGBTargetColors(g_uRGBManualR, g_uRGBManualG, g_uRGBManualB);
-                            }
-                            Com::printFLN(PSTR("RGB_MANUAL_G = "), g_uRGBManualG);
-                        } else {
-                            Com::printFLN(PSTR("RGB_MANUAL_G out of range "));
-                        }
-                    }
-                    break;
-                }
-                case 3: // blue
-                {
-                    if (pCommand->hasS()) {
-                        if (pCommand->S >= 0 && pCommand->S <= 255) {
-                            g_uRGBManualB = pCommand->S;
-
-                            HAL::eprSetByte(EPR_RF_RGB_MANUAL_B, g_uRGBManualB);
-                            EEPROM::updateChecksum();
-
-                            if (Printer::RGBLightMode == RGB_MODE_MANUAL) {
-                                setRGBTargetColors(g_uRGBManualR, g_uRGBManualG, g_uRGBManualB);
-                            }
-                            Com::printFLN(PSTR("RGB_MANUAL_B = "), g_uRGBManualB);
-                        } else {
-                            Com::printFLN(PSTR("RGB_MANUAL_B out of range "));
-                        }
-                    }
-                    break;
-                }
-                }
-            }
-
-            break;
-        }
-        case 3308: // M3308 [P] - configure the RGB light mode
-        {
-            if (pCommand->hasP()) {
-                switch (pCommand->P) {
-                case RGB_MODE_OFF: {
-                    Printer::RGBLightStatus = RGB_STATUS_NOT_AUTOMATIC;
-                    Printer::RGBLightMode = RGB_MODE_OFF;
-                    Printer::RGBLightModeForceWhite = 0;
-
-                    setRGBTargetColors(0, 0, 0);
-
-                    HAL::eprSetByte(EPR_RF_RGB_LIGHT_MODE, Printer::RGBLightMode);
-                    EEPROM::updateChecksum();
-                    break;
-                }
-                case RGB_MODE_WHITE: {
-                    Printer::RGBLightStatus = RGB_STATUS_NOT_AUTOMATIC;
-                    Printer::RGBLightMode = RGB_MODE_WHITE;
-                    Printer::RGBLightModeForceWhite = 0;
-
-                    setRGBTargetColors(255, 255, 255);
-
-                    HAL::eprSetByte(EPR_RF_RGB_LIGHT_MODE, Printer::RGBLightMode);
-                    EEPROM::updateChecksum();
-                    break;
-                }
-                case RGB_MODE_AUTOMATIC: {
-                    Printer::RGBLightStatus = RGB_STATUS_AUTOMATIC;
-                    Printer::RGBLightMode = RGB_MODE_AUTOMATIC;
-                    Printer::RGBLightModeForceWhite = 0;
-
-                    HAL::eprSetByte(EPR_RF_RGB_LIGHT_MODE, Printer::RGBLightMode);
-                    EEPROM::updateChecksum();
-                    break;
-                }
-                case RGB_MODE_MANUAL: {
-                    Printer::RGBLightStatus = RGB_STATUS_NOT_AUTOMATIC;
-                    Printer::RGBLightMode = RGB_MODE_MANUAL;
-                    Printer::RGBLightModeForceWhite = 0;
-
-                    setRGBTargetColors(g_uRGBManualR, g_uRGBManualG, g_uRGBManualB);
-
-                    HAL::eprSetByte(EPR_RF_RGB_LIGHT_MODE, Printer::RGBLightMode);
-                    EEPROM::updateChecksum();
-                    break;
-                }
-                }
-            }
-
-            break;
-        }
-#endif // RGB_LIGHT_R_PIN
-
-        case 3901: // 3901 [X] [Y] - configure the Matrix-Position to Scan, [S] confugure learningrate, [P] configure dist weight || by Nibbels
-        case 3900: // 3900 direct preconfig, no break;->next is M3900.
-        {
-            bool err3900r = false;
-            if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
-                // we load the z compensation matrix before its first usage because this can take some time
-                Com::printFLN(PSTR("M3900/M3901: INFO Die Z-Matrix wurde aus dem EEPROM gelesen."));
-                prepareZCompensation();
-            }
-
-            if (g_ZCompensationMatrix[0][0] == EEPROM_FORMAT) {
-                if (!pCommand->hasR()) { //Normaler ZOS, kein Auto-Matrix-Leveling.
-                    if (pCommand->hasX()) {
-                        // test and take over the specified value
-                        unsigned char nTempUC = (unsigned char)pCommand->X;
-
-                        //Wessix idee: zufalls-Scanpunkt wegen DDP-Platten-Schonung.
-                        if (nTempUC == 0)
-                            nTempUC = (unsigned char)random((heatBedScanXStartMm == 0) ? 1 : 2, g_uZMatrixMax[X_AXIS]); // ergibt min bis max-1
-
-                        //wenn die Startposition nicht 0 ist, wird eine Dummy-Matrix-Linie ergänzt. Mit der sollten wir nicht arbeiten.
-                        if (nTempUC < 1 + ((heatBedScanXStartMm == 0) ? 0 : 1))
-                            nTempUC = 1 + ((heatBedScanXStartMm == 0) ? 0 : 1);
-                        if (nTempUC > g_uZMatrixMax[X_AXIS] - 1)
-                            nTempUC = g_uZMatrixMax[X_AXIS] - 1; //2..n-1
-
-                        g_ZOSTestPoint[X_AXIS] = nTempUC;
-
-                        unsigned char oldval = HAL::eprGetByte(EPR_RF_MOD_ZOS_SCAN_POINT_X);
-                        if (oldval != g_ZOSTestPoint[X_AXIS]) {
-                            HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_X, g_ZOSTestPoint[X_AXIS]);
-                            EEPROM::updateChecksum(); //deshalb die prüfung
-                        }
-
-                        if (Printer::debugInfo()) {
-                            Com::printF(PSTR("M3900/M3901: CHANGED X ZOS Testposition: "), nTempUC);
-                            if (heatBedScanXStartMm == 0) {
-                                Com::printF(PSTR(" [Z-Matrix index] X={1.."), g_uZMatrixMax[X_AXIS] - 1);
-                            } else {
-                                Com::printF(PSTR(" [Z-Matrix index] X={2.."), g_uZMatrixMax[X_AXIS] - 1);
-                            }
-                            Com::printFLN(PSTR("}"));
-                        }
-                    }
-
-                    if (pCommand->hasY()) {
-                        // test and take over the specified value
-                        unsigned char nTempUC = (unsigned char)pCommand->Y;
-
-                        //Wessix idee: zufalls-Scanpunkt wegen DDP-Platten-Schonung.
-                        if (nTempUC == 0)
-                            nTempUC = (unsigned char)random((heatBedScanYStartMm == 0) ? 1 : 2, g_uZMatrixMax[Y_AXIS]); // ergibt min bis max-1
-
-                        if (nTempUC < 1 + ((heatBedScanYStartMm == 0) ? 0 : 1))
-                            nTempUC = 1 + ((heatBedScanYStartMm == 0) ? 0 : 1);
-                        if (nTempUC > g_uZMatrixMax[Y_AXIS] - 1)
-                            nTempUC = g_uZMatrixMax[Y_AXIS] - 1; //2..n-1
-
-                        g_ZOSTestPoint[Y_AXIS] = nTempUC;
-
-                        unsigned char oldval = HAL::eprGetByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y);
-                        if (oldval != g_ZOSTestPoint[Y_AXIS]) {
-                            HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y, g_ZOSTestPoint[Y_AXIS]);
-                            EEPROM::updateChecksum(); //deshalb die prüfung
-                        }
-
-                        if (Printer::debugInfo()) {
-                            Com::printF(PSTR("M3900/M3901: CHANGED Y ZOS Testposition: "), nTempUC);
-                            if (heatBedScanYStartMm == 0) {
-                                Com::printF(PSTR(" [Z-Matrix index] Y={1.."), g_uZMatrixMax[Y_AXIS] - 1);
-                            } else {
-                                Com::printF(PSTR(" [Z-Matrix index] Y={2.."), g_uZMatrixMax[Y_AXIS] - 1);
-                            }
-                            Com::printFLN(PSTR("}"));
-                        }
-                    }
-
-                    if (pCommand->hasS()) {
-                        // M3900 S set learning rate to limit changes caused of z-Offset Scan. This might proof handy for multiple positions scans.
-                        if (pCommand->S >= 0 && pCommand->S <= 100) {
-                            g_ZOSlearningRate = (float)pCommand->S * 0.01f;
-                            Com::printFLN(PSTR("M3900/M3901: CHANGED [S] ZOS learning rate : "), g_ZOSlearningRate);
-                        } else {
-                            Com::printFLN(PSTR("M3900/M3901: ERROR [S] ZOS learning rate ignored, out of range {0...100}"));
-                            err3900r = true;
-                        }
-                    }
-
-                    if (pCommand->hasP()) {
-                        // M3900 P set distance weight: This can be used as something like the auto-bed-leveling (if used in all corners) but technically affects the Z_Matrix
-                        if (pCommand->P >= 0 && pCommand->P <= 100) {
-                            g_ZOSlearningGradient = (float)pCommand->P * 0.01f;
-                            Com::printFLN(PSTR("M3900/M3901: CHANGED [P] ZOS learning linear distance weight : "), g_ZOSlearningGradient);
-                        } else {
-                            Com::printFLN(PSTR("M3900/M3901: ERROR [P] ZOS learning DistanceWeight, out of range {0...100}"));
-                            err3900r = true;
-                        }
-                    }
-
-                    // Anzeige der aktuellen Settings
-                    Com::printFLN(PSTR("M3900/M3901: ### AKTIVE ZOS SETTINGS ###"));
-                    Com::printF(PSTR("M3900/M3901: Testposition [X]: "), g_ZOSTestPoint[X_AXIS]);
-                    Com::printF(PSTR(" Testposition [Y]: "), g_ZOSTestPoint[Y_AXIS]);
-                    Com::printFLN(PSTR(" [Z-Matrix index]"));
-                    Com::printFLN(PSTR("M3900/M3901: [S] ZOS learning rate is : "), g_ZOSlearningRate);
-                    if (g_ZOSlearningRate == 1.0f) {
-                        Com::printFLN(PSTR("M3900/M3901: INFO [S] ZOS::overwrite mode (1.00)"));
-                    } else {
-                        Com::printFLN(PSTR("M3900/M3901: INFO [S] ZOS::additiv / learning mode (0.00 - 0.99)"));
-                    }
-                    Com::printFLN(PSTR("M3900/M3901: [P] ZOS learning linear distance weight is : "), g_ZOSlearningGradient);
-                    if (g_ZOSlearningGradient == 0.0f) {
-                        Com::printFLN(PSTR("M3900/M3901: INFO [P] ZOS::reiner Offset-Scan"));
-                    } else if (g_ZOSlearningGradient == 1.0f) {
-                        Com::printFLN(PSTR("M3900/M3901: INFO [P] ZOS::rein linear abstandsgewichteter Scan"));
-                    } else {
-                        Com::printFLN(PSTR("M3900/M3901: INFO [P] ZOS::Das Ergebnis-Offset setzt sich zusammen aus Abstandsgewichtung und Offset"));
-                    }
-
-                    if (g_ZOSlearningGradient > 0.0f) {
-                        Com::printFLN(PSTR("M3900/M3901: INFO [P] Set 0 => 0.0 for Offset only, set 100 => 1.0 for distance weight only"));
-                        Com::printFLN(PSTR("M3900/M3901: INFO [P] Combine linear distance weight with low learning rate and multiple checks at corners (for example) against bed warping!"));
-                    }
-                    if (g_ZOSlearningRate == 1.0f) {
-                        Com::printFLN(PSTR("M3900/M3901: FORMEL Z-Matrix = EEPROM-Matrix + g_ZOSlearningRate*(g_ZOSlearningGradient*weight(x,y)*Offset + (1.0-g_ZOSlearningGradient)*Offset)"));
-                    } else {
-                        Com::printFLN(PSTR("M3900/M3901: FORMEL Z-Matrix = Z-Matrix + g_ZOSlearningRate*(g_ZOSlearningGradient*weight(x,y)*Offset + (1.0-g_ZOSlearningGradient)*Offset)"));
-                    }
-                } else { // pCommand->hasR() //Auto-Matrix-Leveling.
-                         //Auto-Matrix-Leveling aktiv.
-                }
-                if (pCommand->M == 3901) {
-                    //M3901
-                    //M3900 wird nicht gestartet - nur preconfig, kein mhier-Scan!
-                    if (pCommand->hasR())
-                        Com::printFLN(PSTR("M3901: Use M3900 for Auto-Matrix-Leveling!"));
-                } else {
-                    if (err3900r) {
-                        Com::printFLN(PSTR("M3900/M3901: ERROR in Config ### ZOS SKIPPED ###"));
-                    } else {
-                        // M3900:
-                        // mit R im GCode macht der Scan ein Auto-Matrix-Leveling, anstatt die anderen Schalter zu bedienen.
-                        startZOScan(pCommand->hasR());
-                        // Warte bis Z-Offset-Scan beendet wurde.
-                        while (zOffsetScan.active()) {
-                            Commands::checkForPeriodicalActions(Calibrating);
-                        }
-                    }
-                }
-            } else {
-                Com::printFLN(PSTR("M3900/M3901: ERROR Matrix Initialisation Error!"));
-                Com::printFLN(PSTR("M3900/M3901: INFO Die Z-Matrix konnte nicht aus dem EEPROM gelesen werden."));
-                Com::printFLN(PSTR("M3900/M3901: INFO Vermutlich noch nie einen Heat-Bed-Scan gemacht."));
-            }
-            break;
-        }
-
-        case 3902: // M3902 Nibbels Matrix Manipulations "NMM"
-        {
-            //NMM Funktion 1 - R=Repair
-            if (pCommand->hasR()) {
-                //search for a hole within the heat beds z-Matrix
-                fixKeramikLochInMatrix();
-            }
-
-            if (pCommand->hasE()) {
-                //completly wipe the matrix-data to zero->flatten the matrix to nothing.
-                setMatrixNull();
-            }
-            //NMM Funktion 2 - Z=Offset manuell nachstellen
-            if (pCommand->hasZ()) {
-                if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
-                    // we load the z compensation matrix before its first usage because this can take some time
-                    Com::printFLN(PSTR("M3901: INFO Die Z-Matrix wurde aus dem EEPROM gelesen."));
-                    prepareZCompensation();
-                }
-                if (g_ZCompensationMatrix[0][0] == EEPROM_FORMAT) {
-                    //search for a hole within the heat beds z-Matrix
-                    float hochrunter = (float)pCommand->Z;
-                    if (hochrunter > 0.2f)
-                        hochrunter = 0.2f;
-                    if (hochrunter < -0.2f)
-                        hochrunter = -0.2f;
-
-                    Com::printSharpLine();
-
-                    if (hochrunter < 0.0f) {
-                        Com::printFLN(PSTR("M3902: Duese-Bett-Abstand wird kleiner gemacht. "), hochrunter);
-                    } else if (hochrunter > 0.0f) {
-                        Com::printFLN(PSTR("M3902: Duese-Bett-Abstand wird groesser gemacht. "), hochrunter);
-                    } else {
-                        Com::printFLN(PSTR("M3902: Duese-Bett-Abstand bleibt gleich. Das Offset wird in die Matrix verrechnet und genullt."), hochrunter);
-                    }
-                    Com::printFLN(PSTR("M3902: -Z heisst Bett hoch/weniger Abstand, +Z heisst Bett runter/mehr Abstand. "));
-                    Com::printFLN(PSTR("M3902: Bei Z=0 ändert sich nichts, doch es wird das aktuelle Offset in die Matrix verrechnet. "));
-
-                    Com::printSharpLine();
-
-                    // determine the minimal distance between extruder and heat bed
-                    determineCompensationOffsetZ(); //-> schreibt kleinsten abstand in g_offsetZCompensationSteps, sollte schon drin sein, aber man weiß nie.
-                    Com::printFLN(PSTR("M3902: Alt::Min. Bett-Hotend Abstand [Steps] = "), -1 * (int)g_offsetZCompensationSteps);
-
-                    long hochrunterSteps = long(hochrunter * Printer::axisStepsPerMM[Z_AXIS]); //axissteps ist auch float
-
-                    Com::printFLN(PSTR("M3902: Veraenderung Z [mm] = "), hochrunter);
-                    Com::printFLN(PSTR("M3902: Veraenderung Z [Steps] = "), hochrunterSteps);
-
-                    if (hochrunter == 0.00f) {
-                        //wenn Z=0.0 soll alles so bleibenk aber das Offset ins Matrix-Offset reingerechnet und genullt werden.
-                        //das Offset muss negativ eingehen, denn wenn die Matrix "weniger tief" ist, bleibt die Düse weiter weg vom Bett.
-                        hochrunterSteps = Printer::zOffset.manualSteps(Printer::axisStepsPerMM[Z_AXIS]);
-                        Com::printFLN(PSTR("M3902: Veraenderung = zOffset --> zMatrix; Offset = 0;"));
-                    }
-
-                    //das ist ein negativer wert! Je mehr Abstand, desto negativer. Positiv verboten.
-                    if (g_offsetZCompensationSteps + hochrunterSteps > (long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM) - -1 * g_nScanHeatBedUpFastSteps)) {
-                        Com::printF(PSTR("M3902: Fehler::Z-Matrix wuerde positiv werden. Das waere eine Kollision um "), (int)(g_offsetZCompensationSteps + hochrunterSteps));
-                        Com::printFLN(PSTR(" [Steps] bzw. "), Printer::axisMMPerSteps[Z_AXIS] * (float)(g_offsetZCompensationSteps + hochrunterSteps), 2);
-                        Com::printFLN(PSTR(" [mm]"));
-                    } else {
-                        Com::printFLN(PSTR("M3902: Neu::Min. Bett-Extruder Restabstand = "), -1 * (int)(g_offsetZCompensationSteps));
-
-                        short x;
-                        short y;
-                        short deltaZ = (short)hochrunterSteps;
-                        bool overflow = false;
-                        bool overnull = false;
-                        bool overH = false;
-
-                        for (x = 1; x <= g_uZMatrixMax[X_AXIS]; x++) {
-                            for (y = 1; y <= g_uZMatrixMax[Y_AXIS]; y++) {
-                                if ((long)g_ZCompensationMatrix[x][y] + (long)deltaZ >= 32767) {
-                                    overflow = true;
-                                } else {
-                                    g_ZCompensationMatrix[x][y] += deltaZ;
-                                    if (g_ZCompensationMatrix[x][y] > 0)
-                                        overnull = true; //overflow oder kollision, kann einfach nicht sein und abfrage ist kurz.
-                                    if (g_ZCompensationMatrix[x][y] > (long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM) - -1 * g_nScanHeatBedUpFastSteps))
-                                        overH = true;
-                                }
-                            }
-                        }
-                        if (overnull) {
-                            Com::printFLN(PSTR("M3901: WARNING::positive Matrix::Please fix Z-Screw"));
-                        }
-                        if (overH) {
-                            Com::printFLN(PSTR("M3901: ERROR::sehr positive Matrix::ReLoading zMatrix from EEPROM to RAM"));
-                            if (loadCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed))) {
-                                // Error: there is no valid compensation matrix available
-                                initCompensationMatrix();
-                            }
-                        } else if (overflow) {
-                            Com::printFLN(PSTR("M3901: ERROR::Overflow in Matrix::ReLoading zMatrix from EEPROM to RAM"));
-                            if (loadCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed))) {
-                                // Error: there is no valid compensation matrix available
-                                initCompensationMatrix();
-                            }
-                        } else {
-                            if (hochrunter == 0.00f) {
-                                Printer::zOffset.setManualMicrometers(0, Printer::axisStepsPerMM[Z_AXIS]);
-                                EEPROM::storeManualZOffset();
-                            }
-                            g_ZMatrixChangedInRam = 1;
-                        }
-                    }
-
-                    // determine the minimal distance between extruder and heat bed
-                    determineCompensationOffsetZ();
-                    Com::printFLN(PSTR("M3902: Neu::Min. Bett-Extruder Restabstand [Steps] = "), -1 * (int)g_offsetZCompensationSteps);
-                    Com::printFLN(PSTR("M3902: Neu::Min. Bett-Extruder Restabstand [mm] = "), -1 * Printer::axisMMPerSteps[Z_AXIS] * (float)g_offsetZCompensationSteps, 2);
-                } else {
-                    Com::printFLN(PSTR("M3902: ERROR::Matrix Initialisation Error!"));
-                    Com::printFLN(PSTR("M3902: INFO Die Z-Matrix konnte nicht aus dem EEPROM gelesen werden."));
-                    Com::printFLN(PSTR("M3902: INFO Vermutlich nie einen Heat-Bed-Scan gemacht."));
-                }
-            }
-
-            //NMM Funktion 3 - S=Save,Sichern der Matrix an spezielle EEPROM-Position
-            if (pCommand->hasS()) {
-                if (pCommand->S >= 1 && pCommand->S <= EEPROM_MAX_HEAT_BED_SECTORS) {
-                    // save the determined values to the EEPROM @ savepoint "pCommand->S" Standard: 1..9
-                    unsigned int savepoint = (unsigned int)pCommand->S;
-                    saveCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * savepoint)); //g_nActiveHeatBed --> pCommand->S
-                    Com::printFLN(PSTR("M3902: Save the Matrix::OK"));
-                } else {
-                    Com::printFLN(PSTR("M3902: Save the Matrix::ERROR::invalid savepoint, invalid active heatbedmatrix"));
-                }
-            }
-            break;
-        }
-
-        case 3909: // M3909 [P]PressureDigits - configure the sensible pressure value threshold || by Wessix and Nibbels
-        {
-            auto& controller = Printer::senseOffsetControl;
-            bool error = false;
-            //Statusänderung P10000 ([digits])
-            if (pCommand->hasP()) {
-                if (pCommand->P > 32767)
-                    pCommand->P = 32767;
-                if (pCommand->P >= 0 && pCommand->P < EMERGENCY_PAUSE_DIGITS_MAX) {
-                    if (pCommand->P) {
-                        Com::printFLN(PSTR("M3909: SensiblePressure Pmax="), pCommand->P);
-                        short oldval = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS);
-                        if (oldval != pCommand->P) {
-                            Com::printFLN(PSTR("M3909: P change"));
-                            HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS, pCommand->P);
-                            EEPROM::updateChecksum(); //deshalb die prüfung
-                        }
-                    } else {
-                        controller.setThresholdDigits(0);
-                        error = true;
-                        Com::printFLN(PSTR("M3909: SensiblePressure disabled"));
-                    }
-                } else {
-                    Com::printFLN(PSTR("M3909: wrong [P]"));
-                    error = true;
-                }
-            }
-
-            if (pCommand->hasS()) {
-                if (pCommand->S > 0 && pCommand->S <= 300) {
-                    const int16_t maxMicrometers = pCommand->S;
-                    controller.setMaxMicrometers(maxMicrometers);
-                    Com::printFLN(PSTR("M3909: SensiblePressure max. [S]Offset changed to "), maxMicrometers);
-                    short oldval = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX);
-                    if (oldval != maxMicrometers) {
-                        Com::printFLN(PSTR("M3909: S change"));
-                        HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX, maxMicrometers);
-                        EEPROM::updateChecksum(); //deshalb die prüfung
-                    }
-                } else {
-                    Com::printFLN(PSTR("M3909: ERROR::>0.3mm=S300 - This function is ment to compensate minimal amounts of too close distance."));
-                    Com::printFLN(PSTR("M3909: INFO::If you have to auto-compensate your offset to high, clean your nozzle, rise your temp, lower your speed."));
-                    Com::printFLN(PSTR("M3909: INFO::This function should lower the chance of an accidential emergency block on the first layer. It cannot help you to avoid calibration!"));
-                    error = true;
-                }
-            }
-
-            //Statusausgabe per M3909
-            const auto limits = controller.limits();
-            if (limits.thresholdDigits) {
-                Com::printF(PSTR("M3909: INFO SensiblePressure active. [P]PressureDigit = +-"), limits.thresholdDigits);
-                Com::printFLN(PSTR(" [digits] (Standard: use `standard print digits` +20%)"));
-                Com::printF(PSTR("M3909: INFO SensiblePressures [S]max. offset is "), limits.maxMicrometers);
-                Com::printFLN(PSTR(" [um] (Standard: 180um, Max: 300um)"));
-            } else {
-                Com::printFLN(PSTR("M3909: INFO SensiblePressure is currently disabled."));
-            }
-
-            if (!error)
-                queueTask(TASK_ENABLE_SENSE_OFFSET);
-            break;
-        }
-
-        case 3911: // M3911 [S]Inc/Dec - Testfunction for AtlonXP's DigitFlowCompensation
-        {
-            auto profile = Printer::digitCompensation.flowProfile();
-            if (pCommand->hasS() && pCommand->hasP()) {
-                short min = abs(static_cast<short>(pCommand->S));
-                short max = abs(static_cast<short>(pCommand->P));
-                if (min > max) {
-                    min = abs(static_cast<short>(pCommand->P));
-                    max = abs(static_cast<short>(pCommand->S));
-                }
-                if (min < 500)
-                    min = 500; //weniger ist in jedem fall sinnfrei, selbst mit ninjaflex und digit homing
-                if (max < min)
-                    max = min; //geht: flowsprung.
-                profile.minDigits = min;
-                profile.maxDigits = max;
-            }
-
-            if (pCommand->hasE()) {
-                int8_t e = static_cast<int8_t>(pCommand->E);
-                if (e > 99)
-                    e = 99;
-                if (e < -99)
-                    e = -99;
-                profile.extrusionPercent = e;
-            }
-
-            if (pCommand->hasF()) {
-                int8_t f = static_cast<int8_t>(pCommand->F);
-                if (f > 99)
-                    f = 99;
-                if (f < -90)
-                    f = -90;
-                profile.speedPercent = f;
-            }
-
-            Printer::digitCompensation.setFlowProfile(profile);
-            Com::printFLN(PSTR("[S|P] Flow CMP min: "), profile.minDigits);
-            Com::printFLN(PSTR("[S|P] Flow CMP max: "), profile.maxDigits);
-            Com::printFLN(PSTR("[E]   Flow CMP %: "), profile.extrusionPercent);
-            Com::printFLN(PSTR("[F]   Feed CMP %: "), profile.speedPercent);
-            break;
-        }
-
-        case 3912: // M3912 - pressure-braked priming line.
-            Printer::startLine.run(*pCommand);
-            break;
-
-        case 3913: //M3913 input filament until DMS Sensor tells us to stop or Extrusion amount is reached
-        {
-            if (!prepareFilamentProgram())
-                break;
-            Com::printFLN(PSTR("Load Filament"));
-            Printer::idleStatus.cancel();
-
-                //normalize dms sensor values to 0 if allowed in options and not already done
-            if (!Printer::strainGauge.zeroOffset())
-                Printer::homeDigits();
-
-            uint8_t Extrusion = 65; //max, wenn kein wiederstand. (ca. hotendlänge)
-            uint8_t eFeedrate = 1;
-            if (pCommand->hasF())
-                eFeedrate = constrain(abs(static_cast<uint8_t>(pCommand->F)), 1, 50);
-            short maxP = 2000; //to overwrite .. safety.
-            if (pCommand->hasP())
-                maxP = constrain(abs(static_cast<short>(pCommand->P)), 0, 20000);
-            bool save_relativeExtruderCoordinateMode = Printer::relativeExtruderCoordinateMode;
-            Printer::relativeExtruderCoordinateMode = false; //M82:
-            uint8_t saveunitIsInches = Printer::unitIsInches;
-            Printer::unitIsInches = 0; //to save possible G21 .. weiß net ob das so wichtig wäre ^^.
-
-            Printer::setEPositionMM(0); // G92 E0
-
-            float e = 0.0f;
-            while (e < float(Extrusion)) {
-                Commands::checkForPeriodicalActions(Processing);
-                if (Printer::printJob.commandsBlocked() || abs(sampleStrainGauge()) > maxP /* digits sind soweit gestiegen, dass abbruch.*/) {
-                    UI_STATUS_UPD(UI_TEXT_OK);
-                    break;
-                }
-                if (Printer::checkAbortKeys()) {
-                    UI_STATUS_UPD(UI_TEXT_ABORT_KEYPRESSED);
-                    break;
-                }
-                e += 0.02; //kleine schritte
-                Printer::queueFloatCoordinates(IGNORE_COORDINATE, IGNORE_COORDINATE, IGNORE_COORDINATE, e, eFeedrate);
-            }
-
-            Printer::setEPositionMM(0); // G92 E0
-
-            Printer::relativeExtruderCoordinateMode = save_relativeExtruderCoordinateMode;
-            Printer::unitIsInches = saveunitIsInches;
-            Printer::printJob.finishFilamentService();
-            Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 5000);
-            break;
-        }
-        case 3914: //M3914 coldpull filament very gently
-        {
-            if (!prepareFilamentProgram())
-                break;
-            Com::printFLN(PSTR("Unload Filament"));
-            Printer::idleStatus.cancel();
-
-            //init
-            uint8_t outputLength = 100; //9cm max Output, wenn kein übertriebener wiederstand. Unser Hotend ist nicht ganz so lang.
-            float eFeedrate = 0.3f;     /*mm/s*/
-            short maxForce = 4000;      //3500+ might work well! You should stay underneath the force causing step loss.
-            if (pCommand->hasP())
-                maxForce = constrain(abs(static_cast<short>(pCommand->P)), 0, EMERGENCY_PAUSE_DIGITS_MAX);
-            float t = float(UI_SET_EXTRUDER_MIN_TEMP_UNMOUNT);
-
-            //preheat / precool
-            Extruder::setTemperatureForExtruder(t, Extruder::current->id);
-            Extruder::current->tempControl.waitForTargetTemperature(10);
-
-            //set stuff
-            bool save_relativeExtruderCoordinateMode = Printer::relativeExtruderCoordinateMode;
-            Printer::relativeExtruderCoordinateMode = false; //M82:
-            uint8_t saveunitIsInches = Printer::unitIsInches;
-            Printer::unitIsInches = 0; //to save possible G21 .. weiß net ob das so wichtig wäre ^^.
-            Printer::setEPositionMM(0); // G92 E0
-
-                //normalize dms sensor values to 0 if allowed in options and not already done
-            if (!Printer::strainGauge.zeroOffset())
-                Printer::homeDigits();
-
-            //work
-            float e = 0.0f;
-            float de = 0.005f;
-            uint8_t retry = 5;
-            while (t < float(UI_SET_EXTRUDER_MAX_TEMP_UNMOUNT) && fabs(e) < float(outputLength)) {
-                millis_t time = HAL::timeInMilliseconds() + 2000;
-                while (HAL::timeInMilliseconds() <= time) {
-                    Commands::checkForPeriodicalActions(WaitHeater);
-                    UI_STATUS_UPD(UI_TEXT_UNMOUNT_FILAMENT);
-                    if (Printer::printJob.commandsBlocked())
-                        break;
-                }
-                if (Printer::printJob.commandsBlocked())
-                    break;
-                while (fabs(e) < float(outputLength)) {
-                    Commands::checkForPeriodicalActions(Processing);
-                    if (Printer::printJob.commandsBlocked())
-                        break;
-                    if (abs(sampleStrainGauge()) > maxForce /* digits sind soweit INS MINUS gestiegen, dass abbruch.*/) {
-                        t += 3.33; // +1°K
-                        break;
-                    }
-                    if (Printer::checkAbortKeys()) {
-                        e = float(outputLength); //for sure exits because of no retrys
-                        retry = 0;               //exits moves
-                        UI_STATUS_UPD(UI_TEXT_ABORT_KEYPRESSED);
-                        break;
-                    }
-                    e -= de; //mm - kleine schritte auf Zug
-                    if (fabs(e) > 5.0f /*mm*/ && eFeedrate < 10.0f /*mm/s*/) {
-                        eFeedrate += (fabs(e) > 10.0f ? 0.01f : 0.001f); // mm/s
-                    }
-                    if (fabs(e) > 15.0f /*mm*/ && eFeedrate < 20.0f /*mm/s*/) {
-                        eFeedrate += 0.01f; // mm/s
-                        if (de <= 0.02f)
-                            de += 0.0001f;
-                    }
-                    Printer::queueFloatCoordinates(IGNORE_COORDINATE, IGNORE_COORDINATE, IGNORE_COORDINATE, e, eFeedrate);
-                }
-                if (Printer::printJob.commandsBlocked())
-                    break;
-                if (t > Extruder::current->tempControl.targetTemperatureC && fabs(e) < 10.0f /*mm*/) {
-                    //wenn der extruder nicht weiterkommt und die bisherige wegstrecke unter 10mm ist, dann etwas die Temperatur erhöhen und nochmal ziehen.
-                    Extruder::setTemperatureForExtruder(t, Extruder::current->id);
-                    Extruder::current->tempControl.waitForTargetTemperature();
-                } else if (fabs(e) >= 10.0f /*mm*/) {
-                    //das filament kam schon etwas raus, hängt aber nun.
-                    if (!retry--) {
-                        break;
-                    }
-                }
-                eFeedrate = 0.3f;
-            }
-            Extruder::setTemperatureForExtruder(0, Extruder::current->id);
-            //cleanup
-
-            Printer::setEPositionMM(0); // G92 E0
-
-            Printer::relativeExtruderCoordinateMode = save_relativeExtruderCoordinateMode;
-            Printer::unitIsInches = saveunitIsInches;
-            Printer::printJob.finishFilamentService();
-            Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 5000);
-            break;
-        }
-
-#ifdef X35_ADC_CHANNEL
-        case 3941: // 3941 reading optional temperature port X35 - Testfunction || by Nibbels
-        {
-            //Com::printFLN( PSTR( "M3941 TempReader starting ..." ) );
-            TemperatureController* act = &optTempController;
-            act->updateCurrentTemperature();
-            Com::printFLN(PSTR("Opt Temp: "), act->currentTemperatureC, 2);
-            //Com::printFLN( PSTR( "M3941 Ended!" ) );
-            break;
-        }
-#endif // X35_ADC_CHANNEL
-
-   
+    } else {
+        if (Printer::debugErrors()) {
+            Com::printF(PSTR("M3075: min max ("), (int)nMin);
+            Com::printF(Com::tSlash, (int)nMin);
+            Com::printFLN(PSTR(") invalide"));
         }
     }
-} // processSpecialGCode
+}
+
+void setEmergencyStopDigits(GCode* pCommand) {
+    const auto limits = Printer::pressureProtection.stopLimits();
+    long nMin = limits.minimum;
+    long nMax = limits.maximum;
+
+    if (pCommand->hasS()) {
+        // test and take over the specified value - this is our new min value
+        nMin = pCommand->S;
+    }
+    if (pCommand->hasP()) {
+        // test and take over the specified value - this is our new max value
+        nMax = pCommand->P;
+    }
+
+    if (nMin == 0 && nMax == 0) {
+        Printer::pressureProtection.setStopLimits({0, 0});
+
+        if (Printer::debugInfo()) {
+            Com::printFLN(PSTR("M3076: temporary stop band [0, 0] digits"));
+        }
+    } else if (nMin < nMax && nMin >= -32768 && nMax <= 32767) {
+        Printer::pressureProtection.setStopLimits({int16_t(nMin), int16_t(nMax)});
+
+        if (Printer::debugInfo()) {
+            Com::printF(PSTR("M3076: new min: "), (int)nMin);
+            Com::printF(PSTR(" [digits], new max: "), (int)nMax);
+            Com::printFLN(PSTR(" [digits]"));
+        }
+        HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX, nMax);
+        HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN, nMin);
+        EEPROM::updateChecksum();
+    } else {
+        if (Printer::debugErrors()) {
+            Com::printF(PSTR("M3076: min max ("), (int)nMin);
+            Com::printF(Com::tSlash, (int)nMax);
+            Com::printFLN(PSTR(") invalide"));
+        }
+    }
+}
+
+void testWatchdog(GCode* pCommand) {
+    if (pCommand->hasS()) {
+        if (pCommand->S == 666) {
+            if (g_bPingWatchdog) {
+                HAL::stopWatchdog();
+                Com::printFLN(PSTR("M3090: WARNING the watchdog is disabled now"));
+            } else {
+                HAL::startWatchdog();
+                Com::printFLN(PSTR("M3090: the watchdog has been activated"));
+            }
+        }
+    } else if (pCommand->hasP()) {
+        HAL::delayMilliseconds(10000);
+    } else if (pCommand->hasT()) {
+        for (int iii = 0; iii < 1000; iii++)
+            HAL::delayMicroseconds(10000);
+    } else {
+        if (Printer::debugInfo()) {
+            Com::printFLN(PSTR("M3090: the watchdog is going to reset the firmware"));
+        }
+        HAL::delayMilliseconds(100);
+        HAL::testWatchdog();
+    }
+}
+
+void eraseMatrixEeprom() {
+    clearExternalEEPROM();
+}
+
+void setPauseParkingOffsets(GCode* pCommand) {
+    long nTemp;
+    if (pCommand->hasNoXYZ() && !pCommand->hasE()) {
+        showInvalidSyntax(pCommand->M);
+    } else {
+        if (pCommand->hasX()) {
+            // test and take over the specified value
+            nTemp = pCommand->X * Printer::axisStepsPerMM[X_AXIS];
+            if (nTemp < -Printer::maxSoftEndstopSteps[X_AXIS])
+                nTemp = -Printer::maxSoftEndstopSteps[X_AXIS];
+            if (nTemp > Printer::maxSoftEndstopSteps[X_AXIS])
+                nTemp = Printer::maxSoftEndstopSteps[X_AXIS];
+
+            Printer::pause.setParkSteps(X_AXIS, nTemp);
+            Com::printF(PSTR("M3105: new x pause offset: "), nTemp * Printer::axisMMPerSteps[X_AXIS]);
+            Com::printFLN(PSTR(" [mm]"));
+        }
+        if (pCommand->hasY()) {
+            // test and take over the specified value
+            nTemp = pCommand->Y * Printer::axisStepsPerMM[Y_AXIS];
+            if (nTemp < -Printer::maxSoftEndstopSteps[Y_AXIS])
+                nTemp = -Printer::maxSoftEndstopSteps[Y_AXIS];
+            if (nTemp > Printer::maxSoftEndstopSteps[Y_AXIS])
+                nTemp = Printer::maxSoftEndstopSteps[Y_AXIS];
+
+            Printer::pause.setParkSteps(Y_AXIS, nTemp);
+            Com::printF(PSTR("M3105: new y pause offset: "), nTemp * Printer::axisMMPerSteps[Y_AXIS]);
+            Com::printFLN(PSTR(" [mm]"));
+        }
+        if (pCommand->hasZ()) {
+            // test and take over the specified value
+            nTemp = pCommand->Z * Printer::axisStepsPerMM[Z_AXIS];
+            if (nTemp < 0)
+                nTemp = 0; //no pause within printed part.
+            if (nTemp > Printer::zMotion.maxSteps())
+                nTemp = Printer::zMotion.maxSteps();
+
+            Printer::pause.setParkSteps(Z_AXIS, nTemp);
+            Com::printF(PSTR("M3105: new z pause offset: "), nTemp * Printer::axisMMPerSteps[Z_AXIS]);
+            Com::printFLN(PSTR(" [mm]"));
+        }
+        if (pCommand->hasE()) {
+            // test and take over the specified value
+            nTemp = pCommand->E;
+            if (nTemp < 0)
+                nTemp = 0;
+            if (nTemp > 5)
+                nTemp = 5; //Zahl immer positiv, sie wird abgezogen = Retract!
+
+            Printer::pause.setParkSteps(E_AXIS, long(nTemp * Extruder::current->stepsPerMM));
+            Com::printF(PSTR("M3105: new extruder pause offset: "), nTemp);
+            Com::printFLN(PSTR(" [mm]"));
+        }
+    }
+}
+
+void setXYOrigin() {
+    Printer::setOrigin(-Printer::moveTarget.machineMM(X_AXIS), -Printer::moveTarget.machineMM(Y_AXIS),
+                       Printer::moveTarget.workOffsetMM(Z_AXIS));
+}
+
+void setPanelStatusOverride(GCode* pCommand) {
+    if (pCommand->hasString()) {
+        if (!uid.locked) {
+            // ensure that the current text won't be overwritten
+            uid.lock();
+            if (Printer::debugInfo()) {
+                Com::printFLN(PSTR("M3117: lock"));
+            }
+        }
+        uid.setStatus(pCommand->text, false, true);
+        uid.refreshPage();
+    } else {
+        if (uid.locked) {
+            // allow to overwrite the current string again
+            // Put the unlock into queue to avoid racetime conditions with prior commands
+            queueTask(TASK_UNLOCK_DISPLAY_MSG);
+            Com::printFLN(PSTR("M3117: queued unlock"));
+        }
+    }
+}
+
+#if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
+void turnOnCaseFan() {
+    //disable fan-temp-ignore to original state // Nibbels
+    Printer::ignoreFanOn = false;
+
+    // enable the case fan
+    Printer::prepareFanOff = 0;
+    WRITE(CASE_FAN_PIN, 1);
+
+    if (Printer::debugInfo()) {
+        Com::printFLN(PSTR("M3120: fan on"));
+    }
+}
+
+void scheduleCaseFanOff(GCode* pCommand) {
+    // disable the case fan
+    if (pCommand->hasS()) {
+        // we shall set a new case fan off delay
+        Printer::fanOffDelay = pCommand->S;
+        Printer::fanOffDelay *= 1000; // convert from [s] to [ms]
+    }
+
+    if (pCommand->hasP()) {
+        // the fan should be disabled even if the print starts // temp > fan on temp // Nibbels
+        Printer::ignoreFanOn = true;
+    }
+
+    if (Printer::fanOffDelay) {
+        // we are going to disable the case fan after the delay
+        Printer::prepareFanOff = HAL::timeInMilliseconds();
+
+        if (Printer::debugInfo()) {
+            Com::printF(PSTR("M3121: fan off in "), pCommand->S);
+            Com::printFLN(PSTR(" [s]"));
+        }
+    } else {
+        // we are going to disable the case fan now
+        Printer::prepareFanOff = 0;
+        WRITE(CASE_FAN_PIN, 0);
+
+        if (Printer::debugInfo()) {
+            Com::printFLN(PSTR("M3121: fan off"));
+        }
+    }
+}
+
+#endif // (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
+void runRfDiagnostic(GCode* pCommand) {
+    if (pCommand->hasP()) {
+        switch (pCommand->P) {
+        case 1: {
+            Commands::checkFreeMemory();
+            Commands::writeLowestFreeRAM();
+            Com::printFLN(PSTR("lowest free RAM: "), Commands::lowestRAMValue);
+
+            Com::printFLN(PSTR("z-compensation matrix x: "), COMPENSATION_MATRIX_MAX_X);
+            Com::printFLN(PSTR("z-compensation matrix y: "), COMPENSATION_MATRIX_MAX_Y);
+            break;
+        }
+        case 2: {
+            Com::printFLN(PSTR("Homing feedrates:"));
+            Com::printF(PSTR("x = "), Printer::homingFeedrate[X_AXIS]);
+            Com::printF(PSTR(", y = "), Printer::homingFeedrate[Y_AXIS]);
+            Com::printFLN(PSTR(", z = "), Printer::homingFeedrate[Z_AXIS]);
+            break;
+        }
+        case 4: {
+            // simulate blocking of all axes
+            Com::printFLN(PSTR("M3200: block all"));
+
+            doEmergencyStop(STOP_BECAUSE_OF_Z_BLOCK);
+            break;
+        }
+        case 5: {
+            // simulate a temp sensor error
+            Com::printFLN(PSTR("M3200: simulating defect sensor"));
+            //ext 0 soll defekt aussehen
+            TemperatureController* act0 = tempController[0];
+            act0->setSensorDefect(true);
+            //ext 1/bett soll decoupled aussehen
+            TemperatureController* act1 = tempController[1];
+            act1->setSensorDecoupled(true);
+            //generelle defekt-einstufung
+            Printer::setSomeTempsensorDefect(true);
+            //fehlermeldung ausgeben
+            reportTempsensorAndHeaterErrors();
+            break;
+        }
+
+
+        case 9: {
+            Com::printFLN(PSTR("debug level: "), Printer::debugLevel);
+            break;
+        }
+
+        case 13: {
+            Com::printFLN(PSTR("LCD re-initialization"));
+            uid.initializeLCD();
+        }
+        }
+    }
+}
+
+#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
+// RF2000 family outputs.
+void setAccessoryFet(GCode* pCommand) {
+    if (pCommand->hasP()) {
+        if ((pCommand->P == 1 && FET1 > -1 && HOTEND_COOLER_USES_PIN(FET1))
+            || (pCommand->P == 2 && FET2 > -1 && HOTEND_COOLER_USES_PIN(FET2))) {
+            Com::printErrorFLN(PSTR("M3300: output is assigned to a hotend cooler"));
+            return;
+        }
+        switch (pCommand->P) {
+#if FET1 > -1 && !HOTEND_COOLER_USES_PIN(FET1)
+        case 1: {
+            if (pCommand->hasS()) {
+                if (pCommand->S == 0) {
+                    Printer::enableFET1 = 0;
+                    WRITE(FET1, Printer::enableFET1);
+                    Com::printFLN(PSTR("24V X42 FET1-output = off"));
+                } else {
+                    Printer::enableFET1 = 1;
+                    WRITE(FET1, Printer::enableFET1);
+                    Com::printFLN(PSTR("24V X42 FET1-output = on"));
+                }
+                HAL::eprSetByte(EPR_RF_FET1_MODE, Printer::enableFET1);
+                EEPROM::updateChecksum();
+            }
+            break;
+        }
+#endif // FET1 accessory output
+#if FET2 > -1 && !HOTEND_COOLER_USES_PIN(FET2)
+        case 2: {
+            if (pCommand->hasS()) {
+                if (pCommand->S == 0) {
+                    Printer::enableFET2 = 0;
+                    WRITE(FET2, Printer::enableFET2);
+                    Com::printFLN(PSTR("24V X44 FET2-output = off"));
+                } else {
+                    Printer::enableFET2 = 1;
+                    WRITE(FET2, Printer::enableFET2);
+                    Com::printFLN(PSTR("24V X44 FET2-output = on"));
+                }
+                HAL::eprSetByte(EPR_RF_FET2_MODE, Printer::enableFET2);
+                EEPROM::updateChecksum();
+            }
+            break;
+        }
+#endif // FET2 accessory output
+#if FET3 > -1
+        case 3: {
+            if (pCommand->hasS()) {
+                if (pCommand->S == 0) {
+                    Printer::enableFET3 = 0;
+                    WRITE(FET3, Printer::enableFET3);
+                    Com::printFLN(PSTR("24V X45/BoardFan FET3-output = off"));
+                } else {
+                    Printer::enableFET3 = 1;
+                    WRITE(FET3, Printer::enableFET3);
+                    Com::printFLN(PSTR("24V X45/BoardFan FET3-output = on"));
+                }
+                HAL::eprSetByte(EPR_RF_FET3_MODE, Printer::enableFET3);
+                EEPROM::updateChecksum();
+            }
+            break;
+        }
+#endif // FET3
+        }
+    } else {
+        showInvalidSyntax(pCommand->M);
+    }
+}
+
+void setMainsOutput(GCode* pCommand) {
+    if (pCommand->hasS()) {
+        if (pCommand->S == 0) {
+            Printer::enable230VOutput = 0;
+            WRITE(OUTPUT_230V_PIN, Printer::enable230VOutput);
+            Com::printFLN(PSTR("230V output = off"));
+        } else {
+            Printer::enable230VOutput = 1;
+            WRITE(OUTPUT_230V_PIN, Printer::enable230VOutput);
+            Com::printFLN(PSTR("230V output = on"));
+        }
+    } else {
+        showInvalidSyntax(pCommand->M);
+    }
+}
+
+#endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
+#ifdef RGB_LIGHT_R_PIN
+struct RgbComponent {
+    uint8_t& level;
+    unsigned int address;
+};
+
+struct RgbProfile {
+    RgbComponent components[3];
+    PGM_P messagePrefix;
+    bool active;
+};
+
+void setRgbComponent(GCode& command, const RgbProfile& profile) {
+    if (!command.hasP() || !command.hasS() || command.P < 1 || command.P > 3)
+        return;
+
+    const uint8_t channel = command.P - 1;
+    const char channelName = channel == 0 ? 'R' : channel == 1 ? 'G' : 'B';
+    if (command.S < 0 || command.S > 255) {
+        Com::printF(profile.messagePrefix);
+        Com::print(channelName);
+        Com::printFLN(PSTR(" out of range "));
+        return;
+    }
+
+    const auto& component = profile.components[channel];
+    component.level = command.S;
+    HAL::eprSetByte(component.address, component.level);
+    EEPROM::updateChecksum();
+    if (profile.active)
+        setRGBTargetColors(profile.components[0].level, profile.components[1].level, profile.components[2].level);
+    Com::printF(profile.messagePrefix);
+    Com::print(channelName);
+    Com::printFLN(PSTR(" = "), component.level);
+}
+
+// RGB lighting.
+void setHeatingLight(GCode* pCommand) {
+    const bool active = Printer::RGBLightMode == RGB_MODE_AUTOMATIC && Printer::RGBLightStatus == RGB_STATUS_HEATING;
+    setRgbComponent(*pCommand, {{{g_uRGBHeatingR, EPR_RF_RGB_HEATING_R},
+                                 {g_uRGBHeatingG, EPR_RF_RGB_HEATING_G},
+                                 {g_uRGBHeatingB, EPR_RF_RGB_HEATING_B}},
+                                PSTR("RGB_HEATING_"), active});
+}
+
+void setPrintingLight(GCode* pCommand) {
+    const bool active = Printer::RGBLightMode == RGB_MODE_AUTOMATIC && Printer::RGBLightStatus == RGB_STATUS_PRINTING;
+    setRgbComponent(*pCommand, {{{g_uRGBPrintingR, EPR_RF_RGB_PRINTING_R},
+                                 {g_uRGBPrintingG, EPR_RF_RGB_PRINTING_G},
+                                 {g_uRGBPrintingB, EPR_RF_RGB_PRINTING_B}},
+                                PSTR("RGB_PRINTING_"), active});
+}
+
+void setCoolingLight(GCode* pCommand) {
+    const bool active = Printer::RGBLightMode == RGB_MODE_AUTOMATIC && Printer::RGBLightStatus == RGB_STATUS_COOLING;
+    setRgbComponent(*pCommand, {{{g_uRGBCoolingR, EPR_RF_RGB_COOLING_R},
+                                 {g_uRGBCoolingG, EPR_RF_RGB_COOLING_G},
+                                 {g_uRGBCoolingB, EPR_RF_RGB_COOLING_B}},
+                                PSTR("RGB_COOLING_"), active});
+}
+
+void setIdleLight(GCode* pCommand) {
+    const bool active = Printer::RGBLightMode == RGB_MODE_AUTOMATIC && Printer::RGBLightStatus == RGB_STATUS_IDLE;
+    setRgbComponent(*pCommand, {{{g_uRGBIdleR, EPR_RF_RGB_IDLE_R},
+                                 {g_uRGBIdleG, EPR_RF_RGB_IDLE_G},
+                                 {g_uRGBIdleB, EPR_RF_RGB_IDLE_B}},
+                                PSTR("RGB_IDLE_"), active});
+}
+
+void setManualLight(GCode* pCommand) {
+    const bool active = Printer::RGBLightMode == RGB_MODE_MANUAL;
+    setRgbComponent(*pCommand, {{{g_uRGBManualR, EPR_RF_RGB_MANUAL_R},
+                                 {g_uRGBManualG, EPR_RF_RGB_MANUAL_G},
+                                 {g_uRGBManualB, EPR_RF_RGB_MANUAL_B}},
+                                PSTR("RGB_MANUAL_"), active});
+}
+
+void setRgbLightMode(GCode* pCommand) {
+    if (pCommand->hasP()) {
+        switch (pCommand->P) {
+        case RGB_MODE_OFF: {
+            Printer::RGBLightStatus = RGB_STATUS_NOT_AUTOMATIC;
+            Printer::RGBLightMode = RGB_MODE_OFF;
+            Printer::RGBLightModeForceWhite = 0;
+
+            setRGBTargetColors(0, 0, 0);
+
+            HAL::eprSetByte(EPR_RF_RGB_LIGHT_MODE, Printer::RGBLightMode);
+            EEPROM::updateChecksum();
+            break;
+        }
+        case RGB_MODE_WHITE: {
+            Printer::RGBLightStatus = RGB_STATUS_NOT_AUTOMATIC;
+            Printer::RGBLightMode = RGB_MODE_WHITE;
+            Printer::RGBLightModeForceWhite = 0;
+
+            setRGBTargetColors(255, 255, 255);
+
+            HAL::eprSetByte(EPR_RF_RGB_LIGHT_MODE, Printer::RGBLightMode);
+            EEPROM::updateChecksum();
+            break;
+        }
+        case RGB_MODE_AUTOMATIC: {
+            Printer::RGBLightStatus = RGB_STATUS_AUTOMATIC;
+            Printer::RGBLightMode = RGB_MODE_AUTOMATIC;
+            Printer::RGBLightModeForceWhite = 0;
+
+            HAL::eprSetByte(EPR_RF_RGB_LIGHT_MODE, Printer::RGBLightMode);
+            EEPROM::updateChecksum();
+            break;
+        }
+        case RGB_MODE_MANUAL: {
+            Printer::RGBLightStatus = RGB_STATUS_NOT_AUTOMATIC;
+            Printer::RGBLightMode = RGB_MODE_MANUAL;
+            Printer::RGBLightModeForceWhite = 0;
+
+            setRGBTargetColors(g_uRGBManualR, g_uRGBManualG, g_uRGBManualB);
+
+            HAL::eprSetByte(EPR_RF_RGB_LIGHT_MODE, Printer::RGBLightMode);
+            EEPROM::updateChecksum();
+            break;
+        }
+        }
+    }
+}
+
+#endif // RGB_LIGHT_R_PIN
+// Z-offset scan, matrix correction and filament control.
+void configureZOffsetScan(GCode* pCommand) {
+    bool err3900r = false;
+    if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
+        // we load the z compensation matrix before its first usage because this can take some time
+        Com::printFLN(PSTR("M3900/M3901: INFO Die Z-Matrix wurde aus dem EEPROM gelesen."));
+        prepareZCompensation();
+    }
+
+    if (g_ZCompensationMatrix[0][0] == EEPROM_FORMAT) {
+        if (!pCommand->hasR()) { //Normaler ZOS, kein Auto-Matrix-Leveling.
+            if (pCommand->hasX()) {
+                // test and take over the specified value
+                unsigned char nTempUC = (unsigned char)pCommand->X;
+
+                //Wessix idee: zufalls-Scanpunkt wegen DDP-Platten-Schonung.
+                if (nTempUC == 0)
+                    nTempUC = (unsigned char)random((heatBedScanXStartMm == 0) ? 1 : 2, g_uZMatrixMax[X_AXIS]); // ergibt min bis max-1
+
+                //wenn die Startposition nicht 0 ist, wird eine Dummy-Matrix-Linie ergänzt. Mit der sollten wir nicht arbeiten.
+                if (nTempUC < 1 + ((heatBedScanXStartMm == 0) ? 0 : 1))
+                    nTempUC = 1 + ((heatBedScanXStartMm == 0) ? 0 : 1);
+                if (nTempUC > g_uZMatrixMax[X_AXIS] - 1)
+                    nTempUC = g_uZMatrixMax[X_AXIS] - 1; //2..n-1
+
+                g_ZOSTestPoint[X_AXIS] = nTempUC;
+
+                unsigned char oldval = HAL::eprGetByte(EPR_RF_MOD_ZOS_SCAN_POINT_X);
+                if (oldval != g_ZOSTestPoint[X_AXIS]) {
+                    HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_X, g_ZOSTestPoint[X_AXIS]);
+                    EEPROM::updateChecksum(); //deshalb die prüfung
+                }
+
+                if (Printer::debugInfo()) {
+                    Com::printF(PSTR("M3900/M3901: CHANGED X ZOS Testposition: "), nTempUC);
+                    if (heatBedScanXStartMm == 0) {
+                        Com::printF(PSTR(" [Z-Matrix index] X={1.."), g_uZMatrixMax[X_AXIS] - 1);
+                    } else {
+                        Com::printF(PSTR(" [Z-Matrix index] X={2.."), g_uZMatrixMax[X_AXIS] - 1);
+                    }
+                    Com::printFLN(PSTR("}"));
+                }
+            }
+
+            if (pCommand->hasY()) {
+                // test and take over the specified value
+                unsigned char nTempUC = (unsigned char)pCommand->Y;
+
+                //Wessix idee: zufalls-Scanpunkt wegen DDP-Platten-Schonung.
+                if (nTempUC == 0)
+                    nTempUC = (unsigned char)random((heatBedScanYStartMm == 0) ? 1 : 2, g_uZMatrixMax[Y_AXIS]); // ergibt min bis max-1
+
+                if (nTempUC < 1 + ((heatBedScanYStartMm == 0) ? 0 : 1))
+                    nTempUC = 1 + ((heatBedScanYStartMm == 0) ? 0 : 1);
+                if (nTempUC > g_uZMatrixMax[Y_AXIS] - 1)
+                    nTempUC = g_uZMatrixMax[Y_AXIS] - 1; //2..n-1
+
+                g_ZOSTestPoint[Y_AXIS] = nTempUC;
+
+                unsigned char oldval = HAL::eprGetByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y);
+                if (oldval != g_ZOSTestPoint[Y_AXIS]) {
+                    HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y, g_ZOSTestPoint[Y_AXIS]);
+                    EEPROM::updateChecksum(); //deshalb die prüfung
+                }
+
+                if (Printer::debugInfo()) {
+                    Com::printF(PSTR("M3900/M3901: CHANGED Y ZOS Testposition: "), nTempUC);
+                    if (heatBedScanYStartMm == 0) {
+                        Com::printF(PSTR(" [Z-Matrix index] Y={1.."), g_uZMatrixMax[Y_AXIS] - 1);
+                    } else {
+                        Com::printF(PSTR(" [Z-Matrix index] Y={2.."), g_uZMatrixMax[Y_AXIS] - 1);
+                    }
+                    Com::printFLN(PSTR("}"));
+                }
+            }
+
+            if (pCommand->hasS()) {
+                // M3900 S set learning rate to limit changes caused of z-Offset Scan. This might proof handy for multiple positions scans.
+                if (pCommand->S >= 0 && pCommand->S <= 100) {
+                    g_ZOSlearningRate = (float)pCommand->S * 0.01f;
+                    Com::printFLN(PSTR("M3900/M3901: CHANGED [S] ZOS learning rate : "), g_ZOSlearningRate);
+                } else {
+                    Com::printFLN(PSTR("M3900/M3901: ERROR [S] ZOS learning rate ignored, out of range {0...100}"));
+                    err3900r = true;
+                }
+            }
+
+            if (pCommand->hasP()) {
+                // M3900 P set distance weight: This can be used as something like the auto-bed-leveling (if used in all corners) but technically affects the Z_Matrix
+                if (pCommand->P >= 0 && pCommand->P <= 100) {
+                    g_ZOSlearningGradient = (float)pCommand->P * 0.01f;
+                    Com::printFLN(PSTR("M3900/M3901: CHANGED [P] ZOS learning linear distance weight : "), g_ZOSlearningGradient);
+                } else {
+                    Com::printFLN(PSTR("M3900/M3901: ERROR [P] ZOS learning DistanceWeight, out of range {0...100}"));
+                    err3900r = true;
+                }
+            }
+
+            // Anzeige der aktuellen Settings
+            Com::printFLN(PSTR("M3900/M3901: ### AKTIVE ZOS SETTINGS ###"));
+            Com::printF(PSTR("M3900/M3901: Testposition [X]: "), g_ZOSTestPoint[X_AXIS]);
+            Com::printF(PSTR(" Testposition [Y]: "), g_ZOSTestPoint[Y_AXIS]);
+            Com::printFLN(PSTR(" [Z-Matrix index]"));
+            Com::printFLN(PSTR("M3900/M3901: [S] ZOS learning rate is : "), g_ZOSlearningRate);
+            if (g_ZOSlearningRate == 1.0f) {
+                Com::printFLN(PSTR("M3900/M3901: INFO [S] ZOS::overwrite mode (1.00)"));
+            } else {
+                Com::printFLN(PSTR("M3900/M3901: INFO [S] ZOS::additiv / learning mode (0.00 - 0.99)"));
+            }
+            Com::printFLN(PSTR("M3900/M3901: [P] ZOS learning linear distance weight is : "), g_ZOSlearningGradient);
+            if (g_ZOSlearningGradient == 0.0f) {
+                Com::printFLN(PSTR("M3900/M3901: INFO [P] ZOS::reiner Offset-Scan"));
+            } else if (g_ZOSlearningGradient == 1.0f) {
+                Com::printFLN(PSTR("M3900/M3901: INFO [P] ZOS::rein linear abstandsgewichteter Scan"));
+            } else {
+                Com::printFLN(PSTR("M3900/M3901: INFO [P] ZOS::Das Ergebnis-Offset setzt sich zusammen aus Abstandsgewichtung und Offset"));
+            }
+
+            if (g_ZOSlearningGradient > 0.0f) {
+                Com::printFLN(PSTR("M3900/M3901: INFO [P] Set 0 => 0.0 for Offset only, set 100 => 1.0 for distance weight only"));
+                Com::printFLN(PSTR("M3900/M3901: INFO [P] Combine linear distance weight with low learning rate and multiple checks at corners (for example) against bed warping!"));
+            }
+            if (g_ZOSlearningRate == 1.0f) {
+                Com::printFLN(PSTR("M3900/M3901: FORMEL Z-Matrix = EEPROM-Matrix + g_ZOSlearningRate*(g_ZOSlearningGradient*weight(x,y)*Offset + (1.0-g_ZOSlearningGradient)*Offset)"));
+            } else {
+                Com::printFLN(PSTR("M3900/M3901: FORMEL Z-Matrix = Z-Matrix + g_ZOSlearningRate*(g_ZOSlearningGradient*weight(x,y)*Offset + (1.0-g_ZOSlearningGradient)*Offset)"));
+            }
+        } else { // pCommand->hasR() //Auto-Matrix-Leveling.
+                 //Auto-Matrix-Leveling aktiv.
+        }
+        if (pCommand->M == 3901) {
+            //M3901
+            //M3900 wird nicht gestartet - nur preconfig, kein mhier-Scan!
+            if (pCommand->hasR())
+                Com::printFLN(PSTR("M3901: Use M3900 for Auto-Matrix-Leveling!"));
+        } else {
+            if (err3900r) {
+                Com::printFLN(PSTR("M3900/M3901: ERROR in Config ### ZOS SKIPPED ###"));
+            } else {
+                // M3900:
+                // mit R im GCode macht der Scan ein Auto-Matrix-Leveling, anstatt die anderen Schalter zu bedienen.
+                startZOScan(pCommand->hasR());
+                // Warte bis Z-Offset-Scan beendet wurde.
+                while (zOffsetScan.active()) {
+                    Commands::checkForPeriodicalActions(Calibrating);
+                }
+            }
+        }
+    } else {
+        Com::printFLN(PSTR("M3900/M3901: ERROR Matrix Initialisation Error!"));
+        Com::printFLN(PSTR("M3900/M3901: INFO Die Z-Matrix konnte nicht aus dem EEPROM gelesen werden."));
+        Com::printFLN(PSTR("M3900/M3901: INFO Vermutlich noch nie einen Heat-Bed-Scan gemacht."));
+    }
+}
+
+void adjustBedMatrix(GCode* pCommand) {
+    //NMM Funktion 1 - R=Repair
+    if (pCommand->hasR()) {
+        //search for a hole within the heat beds z-Matrix
+        fixKeramikLochInMatrix();
+    }
+
+    if (pCommand->hasE()) {
+        //completly wipe the matrix-data to zero->flatten the matrix to nothing.
+        setMatrixNull();
+    }
+    //NMM Funktion 2 - Z=Offset manuell nachstellen
+    if (pCommand->hasZ()) {
+        if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
+            // we load the z compensation matrix before its first usage because this can take some time
+            Com::printFLN(PSTR("M3901: INFO Die Z-Matrix wurde aus dem EEPROM gelesen."));
+            prepareZCompensation();
+        }
+        if (g_ZCompensationMatrix[0][0] == EEPROM_FORMAT) {
+            //search for a hole within the heat beds z-Matrix
+            float hochrunter = (float)pCommand->Z;
+            if (hochrunter > 0.2f)
+                hochrunter = 0.2f;
+            if (hochrunter < -0.2f)
+                hochrunter = -0.2f;
+
+            Com::printSharpLine();
+
+            if (hochrunter < 0.0f) {
+                Com::printFLN(PSTR("M3902: Duese-Bett-Abstand wird kleiner gemacht. "), hochrunter);
+            } else if (hochrunter > 0.0f) {
+                Com::printFLN(PSTR("M3902: Duese-Bett-Abstand wird groesser gemacht. "), hochrunter);
+            } else {
+                Com::printFLN(PSTR("M3902: Duese-Bett-Abstand bleibt gleich. Das Offset wird in die Matrix verrechnet und genullt."), hochrunter);
+            }
+            Com::printFLN(PSTR("M3902: -Z heisst Bett hoch/weniger Abstand, +Z heisst Bett runter/mehr Abstand. "));
+            Com::printFLN(PSTR("M3902: Bei Z=0 ändert sich nichts, doch es wird das aktuelle Offset in die Matrix verrechnet. "));
+
+            Com::printSharpLine();
+
+            // determine the minimal distance between extruder and heat bed
+            determineCompensationOffsetZ(); //-> schreibt kleinsten abstand in g_offsetZCompensationSteps, sollte schon drin sein, aber man weiß nie.
+            Com::printFLN(PSTR("M3902: Alt::Min. Bett-Hotend Abstand [Steps] = "), -1 * (int)g_offsetZCompensationSteps);
+
+            long hochrunterSteps = long(hochrunter * Printer::axisStepsPerMM[Z_AXIS]); //axissteps ist auch float
+
+            Com::printFLN(PSTR("M3902: Veraenderung Z [mm] = "), hochrunter);
+            Com::printFLN(PSTR("M3902: Veraenderung Z [Steps] = "), hochrunterSteps);
+
+            if (hochrunter == 0.00f) {
+                //wenn Z=0.0 soll alles so bleibenk aber das Offset ins Matrix-Offset reingerechnet und genullt werden.
+                //das Offset muss negativ eingehen, denn wenn die Matrix "weniger tief" ist, bleibt die Düse weiter weg vom Bett.
+                hochrunterSteps = Printer::zOffset.manualSteps(Printer::axisStepsPerMM[Z_AXIS]);
+                Com::printFLN(PSTR("M3902: Veraenderung = zOffset --> zMatrix; Offset = 0;"));
+            }
+
+            //das ist ein negativer wert! Je mehr Abstand, desto negativer. Positiv verboten.
+            if (g_offsetZCompensationSteps + hochrunterSteps > (long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM) - -1 * g_nScanHeatBedUpFastSteps)) {
+                Com::printF(PSTR("M3902: Fehler::Z-Matrix wuerde positiv werden. Das waere eine Kollision um "), (int)(g_offsetZCompensationSteps + hochrunterSteps));
+                Com::printFLN(PSTR(" [Steps] bzw. "), Printer::axisMMPerSteps[Z_AXIS] * (float)(g_offsetZCompensationSteps + hochrunterSteps), 2);
+                Com::printFLN(PSTR(" [mm]"));
+            } else {
+                Com::printFLN(PSTR("M3902: Neu::Min. Bett-Extruder Restabstand = "), -1 * (int)(g_offsetZCompensationSteps));
+
+                short x;
+                short y;
+                short deltaZ = (short)hochrunterSteps;
+                bool overflow = false;
+                bool overnull = false;
+                bool overH = false;
+
+                for (x = 1; x <= g_uZMatrixMax[X_AXIS]; x++) {
+                    for (y = 1; y <= g_uZMatrixMax[Y_AXIS]; y++) {
+                        if ((long)g_ZCompensationMatrix[x][y] + (long)deltaZ >= 32767) {
+                            overflow = true;
+                        } else {
+                            g_ZCompensationMatrix[x][y] += deltaZ;
+                            if (g_ZCompensationMatrix[x][y] > 0)
+                                overnull = true; //overflow oder kollision, kann einfach nicht sein und abfrage ist kurz.
+                            if (g_ZCompensationMatrix[x][y] > (long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM) - -1 * g_nScanHeatBedUpFastSteps))
+                                overH = true;
+                        }
+                    }
+                }
+                if (overnull) {
+                    Com::printFLN(PSTR("M3901: WARNING::positive Matrix::Please fix Z-Screw"));
+                }
+                if (overH) {
+                    Com::printFLN(PSTR("M3901: ERROR::sehr positive Matrix::ReLoading zMatrix from EEPROM to RAM"));
+                    if (loadCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed))) {
+                        // Error: there is no valid compensation matrix available
+                        initCompensationMatrix();
+                    }
+                } else if (overflow) {
+                    Com::printFLN(PSTR("M3901: ERROR::Overflow in Matrix::ReLoading zMatrix from EEPROM to RAM"));
+                    if (loadCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed))) {
+                        // Error: there is no valid compensation matrix available
+                        initCompensationMatrix();
+                    }
+                } else {
+                    if (hochrunter == 0.00f) {
+                        Printer::zOffset.setManualMicrometers(0, Printer::axisStepsPerMM[Z_AXIS]);
+                        EEPROM::storeManualZOffset();
+                    }
+                    g_ZMatrixChangedInRam = 1;
+                }
+            }
+
+            // determine the minimal distance between extruder and heat bed
+            determineCompensationOffsetZ();
+            Com::printFLN(PSTR("M3902: Neu::Min. Bett-Extruder Restabstand [Steps] = "), -1 * (int)g_offsetZCompensationSteps);
+            Com::printFLN(PSTR("M3902: Neu::Min. Bett-Extruder Restabstand [mm] = "), -1 * Printer::axisMMPerSteps[Z_AXIS] * (float)g_offsetZCompensationSteps, 2);
+        } else {
+            Com::printFLN(PSTR("M3902: ERROR::Matrix Initialisation Error!"));
+            Com::printFLN(PSTR("M3902: INFO Die Z-Matrix konnte nicht aus dem EEPROM gelesen werden."));
+            Com::printFLN(PSTR("M3902: INFO Vermutlich nie einen Heat-Bed-Scan gemacht."));
+        }
+    }
+
+    //NMM Funktion 3 - S=Save,Sichern der Matrix an spezielle EEPROM-Position
+    if (pCommand->hasS()) {
+        if (pCommand->S >= 1 && pCommand->S <= EEPROM_MAX_HEAT_BED_SECTORS) {
+            // save the determined values to the EEPROM @ savepoint "pCommand->S" Standard: 1..9
+            unsigned int savepoint = (unsigned int)pCommand->S;
+            saveCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * savepoint)); //g_nActiveHeatBed --> pCommand->S
+            Com::printFLN(PSTR("M3902: Save the Matrix::OK"));
+        } else {
+            Com::printFLN(PSTR("M3902: Save the Matrix::ERROR::invalid savepoint, invalid active heatbedmatrix"));
+        }
+    }
+}
+
+void setSenseOffsetParameters(GCode* pCommand) {
+    auto& controller = Printer::senseOffsetControl;
+    bool error = false;
+    //Statusänderung P10000 ([digits])
+    if (pCommand->hasP()) {
+        if (pCommand->P > 32767)
+            pCommand->P = 32767;
+        if (pCommand->P >= 0 && pCommand->P < EMERGENCY_PAUSE_DIGITS_MAX) {
+            if (pCommand->P) {
+                Com::printFLN(PSTR("M3909: SensiblePressure Pmax="), pCommand->P);
+                short oldval = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS);
+                if (oldval != pCommand->P) {
+                    Com::printFLN(PSTR("M3909: P change"));
+                    HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS, pCommand->P);
+                    EEPROM::updateChecksum(); //deshalb die prüfung
+                }
+            } else {
+                controller.setThresholdDigits(0);
+                error = true;
+                Com::printFLN(PSTR("M3909: SensiblePressure disabled"));
+            }
+        } else {
+            Com::printFLN(PSTR("M3909: wrong [P]"));
+            error = true;
+        }
+    }
+
+    if (pCommand->hasS()) {
+        if (pCommand->S > 0 && pCommand->S <= 300) {
+            const int16_t maxMicrometers = pCommand->S;
+            controller.setMaxMicrometers(maxMicrometers);
+            Com::printFLN(PSTR("M3909: SensiblePressure max. [S]Offset changed to "), maxMicrometers);
+            short oldval = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX);
+            if (oldval != maxMicrometers) {
+                Com::printFLN(PSTR("M3909: S change"));
+                HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX, maxMicrometers);
+                EEPROM::updateChecksum(); //deshalb die prüfung
+            }
+        } else {
+            Com::printFLN(PSTR("M3909: ERROR::>0.3mm=S300 - This function is ment to compensate minimal amounts of too close distance."));
+            Com::printFLN(PSTR("M3909: INFO::If you have to auto-compensate your offset to high, clean your nozzle, rise your temp, lower your speed."));
+            Com::printFLN(PSTR("M3909: INFO::This function should lower the chance of an accidential emergency block on the first layer. It cannot help you to avoid calibration!"));
+            error = true;
+        }
+    }
+
+    //Statusausgabe per M3909
+    const auto limits = controller.limits();
+    if (limits.thresholdDigits) {
+        Com::printF(PSTR("M3909: INFO SensiblePressure active. [P]PressureDigit = +-"), limits.thresholdDigits);
+        Com::printFLN(PSTR(" [digits] (Standard: use `standard print digits` +20%)"));
+        Com::printF(PSTR("M3909: INFO SensiblePressures [S]max. offset is "), limits.maxMicrometers);
+        Com::printFLN(PSTR(" [um] (Standard: 180um, Max: 300um)"));
+    } else {
+        Com::printFLN(PSTR("M3909: INFO SensiblePressure is currently disabled."));
+    }
+
+    if (!error)
+        queueTask(TASK_ENABLE_SENSE_OFFSET);
+}
+
+void setDigitFlowParameters(GCode* pCommand) {
+    auto profile = Printer::digitCompensation.flowProfile();
+    if (pCommand->hasS() && pCommand->hasP()) {
+        short min = abs(static_cast<short>(pCommand->S));
+        short max = abs(static_cast<short>(pCommand->P));
+        if (min > max) {
+            min = abs(static_cast<short>(pCommand->P));
+            max = abs(static_cast<short>(pCommand->S));
+        }
+        if (min < 500)
+            min = 500; //weniger ist in jedem fall sinnfrei, selbst mit ninjaflex und digit homing
+        if (max < min)
+            max = min; //geht: flowsprung.
+        profile.minDigits = min;
+        profile.maxDigits = max;
+    }
+
+    if (pCommand->hasE()) {
+        int8_t e = static_cast<int8_t>(pCommand->E);
+        if (e > 99)
+            e = 99;
+        if (e < -99)
+            e = -99;
+        profile.extrusionPercent = e;
+    }
+
+    if (pCommand->hasF()) {
+        int8_t f = static_cast<int8_t>(pCommand->F);
+        if (f > 99)
+            f = 99;
+        if (f < -90)
+            f = -90;
+        profile.speedPercent = f;
+    }
+
+    Printer::digitCompensation.setFlowProfile(profile);
+    Com::printFLN(PSTR("[S|P] Flow CMP min: "), profile.minDigits);
+    Com::printFLN(PSTR("[S|P] Flow CMP max: "), profile.maxDigits);
+    Com::printFLN(PSTR("[E]   Flow CMP %: "), profile.extrusionPercent);
+    Com::printFLN(PSTR("[F]   Feed CMP %: "), profile.speedPercent);
+}
+
+void loadFilament(GCode* pCommand) {
+    if (!prepareFilamentProgram())
+        return;
+    Com::printFLN(PSTR("Load Filament"));
+    Printer::idleStatus.cancel();
+
+        //normalize dms sensor values to 0 if allowed in options and not already done
+    if (!Printer::strainGauge.zeroOffset())
+        Printer::homeDigits();
+
+    uint8_t Extrusion = 65; //max, wenn kein wiederstand. (ca. hotendlänge)
+    uint8_t eFeedrate = 1;
+    if (pCommand->hasF())
+        eFeedrate = constrain(abs(static_cast<uint8_t>(pCommand->F)), 1, 50);
+    short maxP = 2000; //to overwrite .. safety.
+    if (pCommand->hasP())
+        maxP = constrain(abs(static_cast<short>(pCommand->P)), 0, 20000);
+    bool save_relativeExtruderCoordinateMode = Printer::relativeExtruderCoordinateMode;
+    Printer::relativeExtruderCoordinateMode = false; //M82:
+    uint8_t saveunitIsInches = Printer::unitIsInches;
+    Printer::unitIsInches = 0; //to save possible G21 .. weiß net ob das so wichtig wäre ^^.
+
+    Printer::setEPositionMM(0); // G92 E0
+
+    float e = 0.0f;
+    while (e < float(Extrusion)) {
+        Commands::checkForPeriodicalActions(Processing);
+        if (Printer::printJob.commandsBlocked() || abs(sampleStrainGauge()) > maxP /* digits sind soweit gestiegen, dass abbruch.*/) {
+            UI_STATUS_UPD(UI_TEXT_OK);
+            break;
+        }
+        if (Printer::checkAbortKeys()) {
+            UI_STATUS_UPD(UI_TEXT_ABORT_KEYPRESSED);
+            break;
+        }
+        e += 0.02; //kleine schritte
+        Printer::queueFloatCoordinates(IGNORE_COORDINATE, IGNORE_COORDINATE, IGNORE_COORDINATE, e, eFeedrate);
+    }
+
+    Printer::setEPositionMM(0); // G92 E0
+
+    Printer::relativeExtruderCoordinateMode = save_relativeExtruderCoordinateMode;
+    Printer::unitIsInches = saveunitIsInches;
+    Printer::printJob.finishFilamentService();
+    Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 5000);
+}
+
+void unloadFilament(GCode* pCommand) {
+    if (!prepareFilamentProgram())
+        return;
+    Com::printFLN(PSTR("Unload Filament"));
+    Printer::idleStatus.cancel();
+
+    //init
+    uint8_t outputLength = 100; //9cm max Output, wenn kein übertriebener wiederstand. Unser Hotend ist nicht ganz so lang.
+    float eFeedrate = 0.3f;     /*mm/s*/
+    short maxForce = 4000;      //3500+ might work well! You should stay underneath the force causing step loss.
+    if (pCommand->hasP())
+        maxForce = constrain(abs(static_cast<short>(pCommand->P)), 0, EMERGENCY_PAUSE_DIGITS_MAX);
+    float t = float(UI_SET_EXTRUDER_MIN_TEMP_UNMOUNT);
+
+    //preheat / precool
+    Extruder::setTemperatureForExtruder(t, Extruder::current->id);
+    Extruder::current->tempControl.waitForTargetTemperature(10);
+
+    //set stuff
+    bool save_relativeExtruderCoordinateMode = Printer::relativeExtruderCoordinateMode;
+    Printer::relativeExtruderCoordinateMode = false; //M82:
+    uint8_t saveunitIsInches = Printer::unitIsInches;
+    Printer::unitIsInches = 0; //to save possible G21 .. weiß net ob das so wichtig wäre ^^.
+    Printer::setEPositionMM(0); // G92 E0
+
+        //normalize dms sensor values to 0 if allowed in options and not already done
+    if (!Printer::strainGauge.zeroOffset())
+        Printer::homeDigits();
+
+    //work
+    float e = 0.0f;
+    float de = 0.005f;
+    uint8_t retry = 5;
+    while (t < float(UI_SET_EXTRUDER_MAX_TEMP_UNMOUNT) && fabs(e) < float(outputLength)) {
+        millis_t time = HAL::timeInMilliseconds() + 2000;
+        while (HAL::timeInMilliseconds() <= time) {
+            Commands::checkForPeriodicalActions(WaitHeater);
+            UI_STATUS_UPD(UI_TEXT_UNMOUNT_FILAMENT);
+            if (Printer::printJob.commandsBlocked())
+                break;
+        }
+        if (Printer::printJob.commandsBlocked())
+            break;
+        while (fabs(e) < float(outputLength)) {
+            Commands::checkForPeriodicalActions(Processing);
+            if (Printer::printJob.commandsBlocked())
+                break;
+            if (abs(sampleStrainGauge()) > maxForce /* digits sind soweit INS MINUS gestiegen, dass abbruch.*/) {
+                t += 3.33; // +1°K
+                break;
+            }
+            if (Printer::checkAbortKeys()) {
+                e = float(outputLength); //for sure exits because of no retrys
+                retry = 0;               //exits moves
+                UI_STATUS_UPD(UI_TEXT_ABORT_KEYPRESSED);
+                break;
+            }
+            e -= de; //mm - kleine schritte auf Zug
+            if (fabs(e) > 5.0f /*mm*/ && eFeedrate < 10.0f /*mm/s*/) {
+                eFeedrate += (fabs(e) > 10.0f ? 0.01f : 0.001f); // mm/s
+            }
+            if (fabs(e) > 15.0f /*mm*/ && eFeedrate < 20.0f /*mm/s*/) {
+                eFeedrate += 0.01f; // mm/s
+                if (de <= 0.02f)
+                    de += 0.0001f;
+            }
+            Printer::queueFloatCoordinates(IGNORE_COORDINATE, IGNORE_COORDINATE, IGNORE_COORDINATE, e, eFeedrate);
+        }
+        if (Printer::printJob.commandsBlocked())
+            break;
+        if (t > Extruder::current->tempControl.targetTemperatureC && fabs(e) < 10.0f /*mm*/) {
+            //wenn der extruder nicht weiterkommt und die bisherige wegstrecke unter 10mm ist, dann etwas die Temperatur erhöhen und nochmal ziehen.
+            Extruder::setTemperatureForExtruder(t, Extruder::current->id);
+            Extruder::current->tempControl.waitForTargetTemperature();
+        } else if (fabs(e) >= 10.0f /*mm*/) {
+            //das filament kam schon etwas raus, hängt aber nun.
+            if (!retry--) {
+                break;
+            }
+        }
+        eFeedrate = 0.3f;
+    }
+    Extruder::setTemperatureForExtruder(0, Extruder::current->id);
+    //cleanup
+
+    Printer::setEPositionMM(0); // G92 E0
+
+    Printer::relativeExtruderCoordinateMode = save_relativeExtruderCoordinateMode;
+    Printer::unitIsInches = saveunitIsInches;
+    Printer::printJob.finishFilamentService();
+    Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 5000);
+}
+
+#ifdef X35_ADC_CHANNEL
+void readOptionalTemperature() {
+    //Com::printFLN( PSTR( "M3941 TempReader starting ..." ) );
+    TemperatureController* act = &optTempController;
+    act->updateCurrentTemperature();
+    Com::printFLN(PSTR("Opt Temp: "), act->currentTemperatureC, 2);
+    //Com::printFLN( PSTR( "M3941 Ended!" ) );
+}
+
+#endif // X35_ADC_CHANNEL
+
+} // namespace
+
+void processSpecialGCode(GCode* pCommand) {
+    if (!pCommand->hasM())
+        return;
+
+    switch (pCommand->M) {
+    case 3000: disableBedCompensation(); return;
+    case 3001: enableBedCompensation(); return;
+    case 3005: configureRfDebug(pCommand); return;
+    case 3006: setManualZOffset(pCommand); return;
+    case 3009: selectBedMatrix(pCommand); return;
+    case 3010: requestHeatBedScan(pCommand); return;
+    case 3011: clearBedMatrix(pCommand); return;
+    case 3012: restoreDefaultScanParameters(); return;
+    case 3013: reportBedMatrix(pCommand); return;
+    case 3020: setScanXStart(pCommand); return;
+    case 3021: setScanYStart(pCommand); return;
+    case 3022: setScanXStep(pCommand); return;
+    case 3023: setScanYStep(pCommand); return;
+    case 3024: setScanXEnd(pCommand); return;
+    case 3025: setScanYEnd(pCommand); return;
+    case 3028: testHomingRepeatability(pCommand); return;
+    case 3029: accessPanel(pCommand); return;
+    case 3030: setFastApproachStep(pCommand); return;
+    case 3031: setSlowApproachStep(pCommand); return;
+    case 3032: setFastRetreatStep(pCommand); return;
+    case 3033: setSlowRetreatStep(pCommand); return;
+    case 3040: setFastScanDelay(pCommand); return;
+    case 3041: setSlowScanDelay(pCommand); return;
+    case 3042: setScanIdleDelay(pCommand); return;
+    case 3050: setContactPressureDelta(pCommand); return;
+    case 3051: setRetryPressureDelta(pCommand); return;
+    case 3052: setIdlePressureTolerance(pCommand); return;
+    case 3053: setPressureReadCount(pCommand); return;
+    case 3054: setPressureReadDelay(pCommand); return;
+    case 3055: setPressureReadTolerance(pCommand); return;
+    case 3060: reportDeviceVersion(); return;
+    case 3070: requestPrintPause(pCommand); return;
+    case 3075: setEmergencyPauseDigits(pCommand); return;
+    case 3076: setEmergencyStopDigits(pCommand); return;
+    case 3079: outputObject(); return;
+    case 3090: testWatchdog(pCommand); return;
+    case 3091: eraseMatrixEeprom(); return;
+    case 3105: setPauseParkingOffsets(pCommand); return;
+    case 3115: setXYOrigin(); return;
+    case 3117: setPanelStatusOverride(pCommand); return;
+#if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
+    case 3120: turnOnCaseFan(); return;
+    case 3121: scheduleCaseFanOff(pCommand); return;
+#endif // (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
+    case 3200: runRfDiagnostic(pCommand); return;
+#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
+    case 3300: setAccessoryFet(pCommand); return;
+    case 3301: setMainsOutput(pCommand); return;
+#endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
+#ifdef RGB_LIGHT_R_PIN
+    case 3303: setHeatingLight(pCommand); return;
+    case 3304: setPrintingLight(pCommand); return;
+    case 3305: setCoolingLight(pCommand); return;
+    case 3306: setIdleLight(pCommand); return;
+    case 3307: setManualLight(pCommand); return;
+    case 3308: setRgbLightMode(pCommand); return;
+#endif // RGB_LIGHT_R_PIN
+    case 3901:
+    case 3900: configureZOffsetScan(pCommand); return;
+    case 3902: adjustBedMatrix(pCommand); return;
+    case 3909: setSenseOffsetParameters(pCommand); return;
+    case 3911: setDigitFlowParameters(pCommand); return;
+    case 3912: Printer::startLine.run(*pCommand); return;
+    case 3913: loadFilament(pCommand); return;
+    case 3914: unloadFilament(pCommand); return;
+#ifdef X35_ADC_CHANNEL
+    case 3941: readOptionalTemperature(); return;
+#endif // X35_ADC_CHANNEL
+    }
+}
+
 
 void queueTask(char task) {
     if (PrintLine::waitForXFreeLines(1))
