@@ -17,6 +17,7 @@
 
 #include <Arduino.h> // capital A so it is error prone on case-sensitive filesystems
 #include "Repetier.h"
+#include "GCodeInput.h"
 #include "BedCompensation.h"
 #include <Wire.h>
 
@@ -311,7 +312,7 @@ void scanHeatBed(void) {
     if (g_nHeatBedScanStatus) {
         // show that we are active
         previousMillisCmd = HAL::timeInMilliseconds(); //prevent inactive shutdown of steppers/temps
-        GCode::keepAlive(Calibrating);
+        GCodeInput::keepAlive(Calibrating);
 
         if (g_nHeatBedScanStatus != 15 && g_nHeatBedScanStatus != 20 && g_nHeatBedScanStatus != 22 && g_nHeatBedScanStatus != 136 && g_nHeatBedScanStatus != 137) {
             // there are a few cases where we do not want to change the current status text
@@ -1073,7 +1074,7 @@ void searchZOScan(void) {
 
     if (g_nZOSScanStatus) {
         previousMillisCmd = HAL::timeInMilliseconds(); //prevent inactive shutdown of steppers/temps
-        GCode::keepAlive(Calibrating);
+        GCodeInput::keepAlive(Calibrating);
 
         switch (g_nZOSScanStatus) {
         case 1: {
@@ -2638,7 +2639,7 @@ void saveCompensationMatrix(unsigned int uAddress) {
                 writeWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uOffset, g_ZCompensationMatrix[x][y]);
                 uOffset += 2;
             }
-            GCode::keepAlive(Processing);
+            GCodeInput::keepAlive(Processing);
         }
     } else {
         // we do not have valid heat bed compensation values - clear the EEPROM data
@@ -2670,7 +2671,7 @@ void saveCompensationMatrix(unsigned int uAddress) {
                 writeWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uOffset, 0);
                 uOffset += 2;
             }
-            GCode::keepAlive(Processing);
+            GCodeInput::keepAlive(Processing);
         }
     }
 
@@ -2822,7 +2823,7 @@ char loadCompensationMatrix(unsigned int uAddress) {
             }
             uOffset += 2;
         }
-        GCode::keepAlive(Processing);
+        GCodeInput::keepAlive(Processing);
     }
 
     determineCompensationOffsetZ();
@@ -3086,7 +3087,7 @@ void outputObject(bool showerrors) {
     Commands::setFanSpeed((uint8_t)0);
 
     {
-        GCode::executeFString(Com::tOutputObjectPrint);
+        GCodeInput::executeFlashScript(Com::tOutputObjectPrint);
     }
 
     Commands::waitUntilEndOfAllMoves(); //output object

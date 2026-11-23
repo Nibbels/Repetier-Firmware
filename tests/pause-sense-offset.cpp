@@ -510,6 +510,9 @@ struct GCode {
     bool hasZ() const { return Z != 0; }
     bool hasNoXYZ() const { return !hasX() && !hasY() && !hasZ(); }
 
+};
+
+struct GCodeInput {
     static void readFromSerial() {
         assert(Printer::printStop.commandsBlocked());
         ++incomingReads;

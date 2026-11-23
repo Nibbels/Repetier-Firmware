@@ -11,11 +11,12 @@ import subprocess
 def main():
     tests = Path(__file__).resolve().parent
     firmware = tests.parent / "Repetier"
-    receiver = (firmware / "gcode.cpp").read_text(encoding="utf-8")
+    commands = (firmware / "gcode.cpp").read_text(encoding="utf-8")
+    receiver = (firmware / "GCodeInput.cpp").read_text(encoding="utf-8")
     uart = (firmware / "UsbSerial.cpp").read_text(encoding="utf-8")
     communication = (firmware / "Communication.cpp").read_text(encoding="utf-8")
     configuration = (firmware / "Configuration.h").read_text(encoding="utf-8")
-    names = set(re.findall(r"\bCom::(t\w+)\b", receiver)) | {"tError"}
+    names = set(re.findall(r"\bCom::(t\w+)\b", commands + receiver)) | {"tError"}
     constants = {
         name: value for name, value in re.findall(r'^FSTRINGVALUE\(Com::(t\w+), ("[^"]*")\)', communication, re.M)
         if name in names
@@ -26,7 +27,9 @@ def main():
     with TemporaryDirectory(prefix="rfx-serial-replay-") as directory:
         build = Path(directory)
         (build / "gcode-settings.inc").write_text(f"#define GCODE_BUFFER_SIZE {capacity}\n", encoding="utf-8")
-        (build / "gcode-receiver.inc").write_text(receiver.replace('#include "Repetier.h"\n', "", 1), encoding="utf-8")
+        (build / "gcode-receiver.inc").write_text(
+            (commands + "\n" + receiver).replace('#include "Repetier.h"\n', ""), encoding="utf-8",
+        )
         (build / "usb-serial-firmware.inc").write_text(
             re.sub(r"^#include <avr/\w+\.h>\n", "", uart, flags=re.M), encoding="utf-8",
         )
@@ -40,7 +43,7 @@ def main():
         ]
         replay = build / "serial-replay"
         subprocess.run(compiler + [str(tests / "serial-protocol.cpp"), "-o", str(replay)], check=True)
-        for scenario in ("numbered", "queue", "display", "idle", "binary", "stopping"):
+        for scenario in ("numbered", "queue", "display", "idle", "binary", "stopping", "script"):
             subprocess.run([str(replay), scenario], check=True, timeout=10)
         uart_replay = build / "uart-replay"
         subprocess.run(compiler + [str(tests / "usb-serial.cpp"), "-o", str(uart_replay)], check=True)

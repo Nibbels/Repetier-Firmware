@@ -44,7 +44,7 @@ def main():
         section(rf, "long getZMatrixDepth_CurrentXY(", "\nvoid showAbortScanReason("),
         section(rf, "static void serviceSenseOffset(", "\nvoid handleScanWorkTasks("),
         pause.removeprefix('#include "Repetier.h"\n'),
-        stop.removeprefix('#include "Repetier.h"\n'),
+        stop.removeprefix('#include "Repetier.h"\n#include "GCodeInput.h"\n'),
         "namespace Printer {\n"
         + section(printer_header, "    static INLINE void setEPositionMM(", "\n    static INLINE void stopDirectAxis(")
         .replace("static INLINE void ", "void ")

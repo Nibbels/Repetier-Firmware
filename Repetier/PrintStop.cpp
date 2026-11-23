@@ -1,4 +1,5 @@
 #include "Repetier.h"
+#include "GCodeInput.h"
 
 PrintStop Printer::printStop;
 
@@ -6,7 +7,7 @@ void PrintStop::service(uint32_t now) {
     switch (phase_) {
     case Phase::Draining:
         // Drain incoming bytes while the command parser rejects new work.
-        GCode::readFromSerial();
+        GCodeInput::readFromSerial();
         if (static_cast<int32_t>(now - phaseSince_) <= 2000)
             return;
         if (PrintLine::hasLines() || PrintLine::directMoveActive()) {

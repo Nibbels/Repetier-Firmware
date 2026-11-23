@@ -17,6 +17,7 @@
 
 #define UI_MAIN
 #include "Repetier.h"
+#include "GCodeInput.h"
 #include "StepExecutor.h"
 extern const int8_t encoder_table[16] PROGMEM;
 
@@ -3515,9 +3516,9 @@ void UIDisplay::mainSwitchCase(int action) {
         if (unmount) {
             UI_STATUS_UPD(UI_TEXT_UNMOUNT_FILAMENT);
             if (action == UI_ACTION_UNMOUNT_FILAMENT_SOFT) {
-                GCode::executeFString(Com::tUnmountFilamentSoft);
+                GCodeInput::executeFlashScript(Com::tUnmountFilamentSoft);
             } else {
-                GCode::executeFString(Com::tUnmountFilamentHard);
+                GCodeInput::executeFlashScript(Com::tUnmountFilamentHard);
             }
         } else {
             UI_STATUS_UPD(UI_TEXT_MOUNT_FILAMENT);
@@ -3526,13 +3527,13 @@ void UIDisplay::mainSwitchCase(int action) {
                 if (Extruder::current->tempControl.targetTemperatureC < UI_SET_PRESET_EXTRUDER_TEMP_PLA) {
                     Extruder::setTemperatureForExtruder(UI_SET_PRESET_EXTRUDER_TEMP_PLA, Extruder::current->id);
                     Extruder::current->tempControl.waitForTargetTemperature();
-                    GCode::executeFString(Com::tMountFilamentSoft);
+                    GCodeInput::executeFlashScript(Com::tMountFilamentSoft);
                     Extruder::setTemperatureForExtruder(0, Extruder::current->id);
                 } else {
-                    GCode::executeFString(Com::tMountFilamentSoft);
+                    GCodeInput::executeFlashScript(Com::tMountFilamentSoft);
                 }
             } else {
-                GCode::executeFString(Com::tMountFilamentHard);
+                GCodeInput::executeFlashScript(Com::tMountFilamentHard);
             }
         }
         g_uStartOfIdle = HAL::timeInMilliseconds(); // UI_ACTION_UNMOUNT_FILAMENT UI_ACTION_MOUNT_FILAMENT

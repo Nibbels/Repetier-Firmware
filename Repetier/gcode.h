@@ -18,7 +18,7 @@
 #ifndef GCODE_H
 #define GCODE_H
 
-#define MAX_CMD_SIZE 96
+#include <stdint.h>
 
 enum FirmwareState { NotBusy = 0,
                      Processing,
@@ -26,8 +26,9 @@ enum FirmwareState { NotBusy = 0,
                      WaitHeater,
                      Calibrating };
 
-class GCode
-{
+class GCode {
+    friend class GCodeInput;
+
     uint16_t params;
     uint16_t params2;
 
@@ -195,68 +196,6 @@ public:
         return ((params2 & 32768) != 0);
     }
     void printCommand();
-    bool parseAscii(char* line, bool fromSerial);
-    void popCurrentCommand();
-    void echoCommand();
-    static GCode* peekCurrentCommand();
-    static void readFromSerial();
-    static void executeFString(FSTRINGPARAM(cmd));
-    static void executeString(char* cmd);
-    static uint8_t computeBinarySize(char* ptr);
-    //static void fatalError(FSTRINGPARAM(message));
-    static void reportFatalError();
-    //	static void resetFatalError();
-    inline static bool hasFatalError() {
-        return fatalErrorMsg != NULL;
-    }
-    static FSTRINGPARAM(fatalErrorMsg);
-    static void keepAlive(enum FirmwareState state);
-    static constexpr millis_t keepAliveIntervalMs = 2000;
-
-    friend class UIDisplay;
-
-protected:
-    void outputGCommand();
-    void checkAndPushCommand();
-    static void requestResend();
-    inline float parseFloatValue(char* s) {
-        char* endPtr;
-        while (*s == 32)
-            s++; // skip spaces
-        float f = (strtod(s, &endPtr));
-        if (s == endPtr)
-            f = 0.0; // treat empty string "x " as "x0"
-        return f;
-    }
-    inline long parseLongValue(char* s) {
-        char* endPtr;
-        while (*s == 32)
-            s++; // skip spaces
-        long l = (strtol(s, &endPtr, 10));
-        if (s == endPtr)
-            l = 0; // treat empty string argument "p " as "p0"
-        return l;
-    }
-
-    static uint8_t commandReceiving[MAX_CMD_SIZE];    ///< Current received command.
-    static uint8_t commandsReceivingWritePosition;    ///< Writing position in gcode_transbuffer.
-    static uint8_t sendAsBinary;                      ///< Flags the command as binary input.
-    static uint8_t commentDetected;                   ///< Flags true if we are reading the comment part of a command.
-    static uint8_t binaryCommandSize;                 ///< Expected size of the incoming binary command.
-    static bool waitUntilAllCommandsAreParsed;        ///< Don't read until all commands are parsed. Needed if gcode_buffer is misused as storage for strings.
-    static uint32_t actLineNumber;                    ///< Line number of current command.
-    static uint8_t formatErrors;                      ///< Number of sequential format errors
-    static millis_t lastBusySignal;                   ///< When was the last busy signal
-
-private:
-    struct SerialReceiveState {
-        uint32_t lastLineNumber;
-        millis_t timeOfLastDataPacket;
-        int8_t waitingForResend; ///< -1 when no resend is pending.
-        bool lastCommandWasBinary;
-    };
-    static SerialReceiveState serialReceive;
-    bool parseBinary(uint8_t* buffer, fast8_t length);
-};                                                    // GCode
+};
 
 #endif // GCODE_H

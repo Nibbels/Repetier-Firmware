@@ -16,6 +16,7 @@
 */
 
 #include "Repetier.h"
+#include "GCodeInput.h"
 #include <Wire.h>
 
 PressureAdvance Printer::pressureAdvance;
@@ -1160,7 +1161,7 @@ void Printer::showConfiguration() {
     Com::config(PSTR("PrintlineCache:"), MOVE_CACHE_SIZE);
     Com::config(PSTR("JerkXY:"), Printer::maxXYJerk);
     Com::config(PSTR("JerkZ:"), Printer::maxZJerk);
-    Com::config(PSTR("KeepAliveInterval:"), GCode::keepAliveIntervalMs);
+    Com::config(PSTR("KeepAliveInterval:"), GCodeInput::keepAliveIntervalMs);
 
     Com::config(PSTR("XMin:"), 0);
     Com::config(PSTR("YMin:"), 0);

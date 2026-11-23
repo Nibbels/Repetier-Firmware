@@ -12,9 +12,8 @@ using fast8_t = int8_t;
 using PGM_P = const char*;
 #define FSTRINGPARAM(name) const char* name
 #define PSTR(text) text
-#define UI_ERROR_P(text) (void)(text);
 #include "gcode-settings.inc"
-#include "gcode.h"
+#include "GCodeInput.h"
 
 namespace {
 std::deque<uint8_t> incoming;
@@ -23,6 +22,8 @@ millis_t clockMs = 0;
 bool echo = false;
 bool stopped = false;
 unsigned flushes = 0;
+unsigned scriptCommands = 0;
+GCode lastScriptCommand{};
 }
 
 namespace HAL {
@@ -47,7 +48,11 @@ struct {
 
 namespace Commands {
 void emergencyStop() { std::abort(); }
-void executeGCode(GCode*) {}
+void executeGCode(GCode* code) {
+    assert(code->internalCommand);
+    ++scriptCommands;
+    lastScriptCommand = *code;
+}
 void checkForPeriodicalActions(FirmwareState) {}
 }
 
@@ -106,7 +111,7 @@ std::string binary(std::initializer_list<uint8_t> payload) {
 }
 
 void readReply(const std::string& expected) {
-    GCode::readFromSerial();
+    GCodeInput::readFromSerial();
     if (replies != expected)
         std::fprintf(stderr, "Expected [%s], received [%s]\n", expected.c_str(), replies.c_str());
     assert(replies == expected);
@@ -114,35 +119,39 @@ void readReply(const std::string& expected) {
 }
 
 void popM(unsigned number) {
-    GCode* code = GCode::peekCurrentCommand();
+    GCode* code = GCodeInput::peekCurrentCommand();
     assert(code && code->hasM() && code->M == number);
-    code->popCurrentCommand();
+    GCodeInput::popCurrentCommand();
 }
 
 void numberedLines() {
     feed("N40 M110\n");
     readReply("ok\r\n");
-    assert(!GCode::peekCurrentCommand());
+    assert(!GCodeInput::peekCurrentCommand());
 
     const std::string move = numbered("N41 G1 X1.25 E0.5");
     feed(move.substr(0, 7));
     readReply("");
-    assert(!GCode::peekCurrentCommand());
+    assert(!GCodeInput::peekCurrentCommand());
     feed(move.substr(7));
     readReply("ok 41\r\n");
-    GCode* code = GCode::peekCurrentCommand();
+    GCode* code = GCodeInput::peekCurrentCommand();
     assert(code && code->N == 41 && code->G == 1 && code->X == 1.25f && code->E == 0.5f);
-    code->popCurrentCommand();
+    GCodeInput::popCurrentCommand();
 
     feed(move);
     readReply("skip 41\r\nok\r\n");
-    assert(!GCode::peekCurrentCommand());
+    assert(!GCodeInput::peekCurrentCommand());
     feed(numbered("N43 M105"));
     readReply("\r\nResend:42\r\nok\r\n");
     assert(flushes == 1);
     feed(numbered("N42 M105"));
     readReply("ok 42\r\n");
     popM(105);
+
+    feed("N43 M105*0\n");
+    readReply("Error:Wrong checksum\r\nCorrupted: N43 M105*0\r\n\r\nResend:43\r\nok\r\n");
+    assert(!GCodeInput::peekCurrentCommand());
 }
 
 void queueBackpressure() {
@@ -158,14 +167,14 @@ void queueBackpressure() {
     readReply("ok 0\r\n");
     popM(114);
     popM(115);
-    assert(!GCode::peekCurrentCommand());
+    assert(!GCodeInput::peekCurrentCommand());
 }
 
 void displayText() {
     feed("M117 Cooling down\nM115\n");
     readReply("ok 0\r\n");
     readReply("");
-    const auto* display = GCode::peekCurrentCommand();
+    const auto* display = GCodeInput::peekCurrentCommand();
     assert(display && display->text == std::string("Cooling down"));
     popM(117);
     readReply("ok 0\r\n");
@@ -185,16 +194,16 @@ void idleAndPartialLine() {
     readReply("");
     ++clockMs;
     readReply("\r\nResend:1\r\nok\r\n");
-    assert(!GCode::peekCurrentCommand());
+    assert(!GCodeInput::peekCurrentCommand());
     assert(flushes == 1);
 }
 
 void binaryFrames() {
     feed(binary({0x85, 0x00, 0x01, 0x00, 0x01}));
     readReply("ok 1\r\n");
-    GCode* command = GCode::peekCurrentCommand();
+    GCode* command = GCodeInput::peekCurrentCommand();
     assert(command && command->N == 1 && command->hasG() && command->G == 1 && !command->isV2());
-    command->popCurrentCommand();
+    GCodeInput::popCurrentCommand();
 
     auto packet = binary({0x83, 0x10, 0x00, 0x00, 0x02, 0x00, 0x2F, 0x0C});
     auto corrupted = packet;
@@ -203,7 +212,7 @@ void binaryFrames() {
     readReply("\r\nResend:2\r\nok\r\n");
     feed(std::string(31, '\0') + packet);
     readReply("ok 2\r\n");
-    assert(GCode::peekCurrentCommand()->isV2());
+    assert(GCodeInput::peekCurrentCommand()->isV2());
     popM(3119);
 
     feed(numbered("N3 M105"));
@@ -215,10 +224,19 @@ void stopDrainsInput() {
     stopped = true;
     feed("N1 M105\n");
     readReply("ok 1\r\n");
-    assert(!GCode::peekCurrentCommand());
+    assert(!GCodeInput::peekCurrentCommand());
     stopped = false;
     feed("N2 M105\n");
     readReply("ok 2\r\n");
+    popM(105);
+}
+
+void flashScript() {
+    GCodeInput::executeFlashScript("; comment\nG91\nG1 X0.5 ; jog\n");
+    assert(scriptCommands == 2 && lastScriptCommand.G == 1 && lastScriptCommand.X == 0.5f);
+    assert(replies.empty() && !GCodeInput::peekCurrentCommand());
+    feed("N1 M105\n");
+    readReply("ok 1\r\n");
     popM(105);
 }
 
@@ -233,6 +251,7 @@ int main(int argc, char** argv) {
     else if (scenario == "idle") idleAndPartialLine();
     else if (scenario == "binary") binaryFrames();
     else if (scenario == "stopping") stopDrainsInput();
+    else if (scenario == "script") flashScript();
     else return 1;
     std::printf("Serial protocol replay passed (%s)\n", argv[1]);
 }

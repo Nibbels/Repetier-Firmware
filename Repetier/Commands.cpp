@@ -16,17 +16,18 @@
 */
 
 #include "Repetier.h"
+#include "GCodeInput.h"
 
 int Commands::lowestRAMValue = MAX_RAM;
 int Commands::lowestRAMValueSend = MAX_RAM;
 
 void Commands::commandLoop() {
-    GCode::readFromSerial();
+    GCodeInput::readFromSerial();
 
-    GCode* code = GCode::peekCurrentCommand();
+    GCode* code = GCodeInput::peekCurrentCommand();
     if (code) {
         Commands::executeGCode(code);
-        code->popCurrentCommand();
+        GCodeInput::popCurrentCommand();
         Commands::checkForPeriodicalActions(Processing); //check heater and other stuff every n milliseconds
     } else {
         enum FirmwareState state = NotBusy;
@@ -44,7 +45,7 @@ void Commands::checkForPeriodicalActions(enum FirmwareState state) {
      * Except this 16ms execute variable which is set by internal watchdog timer.
      */
     if (state != NotBusy) {
-        GCode::keepAlive(state);
+        GCodeInput::keepAlive(state);
     }
 
     if (execute10msPeriodical) {
