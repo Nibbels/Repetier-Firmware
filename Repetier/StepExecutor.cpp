@@ -72,13 +72,13 @@ inline void StepExecutor::adjustDirections(PrintLine& move) {
         ZMotion::setDirection(move.isZPositiveMove());
     }
     if (move.isEMove()) {
-        if (!Printer::isAdvanceActivated()) // Set direction if no advance/OPS enabled
+        if (!Printer::pressureAdvance.active())
             Extruder::setDirection(move.isEPositiveMove());
     }
 }
 
 inline void StepExecutor::updateAdvanceSteps(const PrintLine& move, uint16_t speed) {
-    if (!Printer::isAdvanceActivated())
+    if (!Printer::pressureAdvance.active())
         return;
 
     const int32_t leadSteps = (speed * move.stepProfile.advanceL) >> 16;
@@ -395,7 +395,7 @@ long StepExecutor::performMove(PrintLine* move, uint8_t forQueue) {
             if (doESteps) {
                 const bool forward = move->isEPositiveMove();
                 const int8_t dir = forward ? 1 : -1;
-                if (Printer::isAdvanceActivated())
+                if (Printer::pressureAdvance.active())
                     Printer::pressureAdvance.addSteps(dir);
                 else
                 {
@@ -405,7 +405,7 @@ long StepExecutor::performMove(PrintLine* move, uint8_t forQueue) {
                     Printer::pause.recordDirectExtrusion(dir);
 
                 if (forQueue && Printer::extrusionCompensation.addBaseStep(forward)) {
-                    if (Printer::isAdvanceActivated()) {
+                    if (Printer::pressureAdvance.active()) {
                         Printer::pressureAdvance.addSteps(dir);
                         Printer::extrusionCompensation.consumeExtraStep(forward);
                     } else {
@@ -479,7 +479,7 @@ long StepExecutor::performMove(PrintLine* move, uint8_t forQueue) {
         move->stepsRemaining--;
 
 
-        if (!Printer::isAdvanceActivated()) // Use interrupt for movement
+        if (!Printer::pressureAdvance.active())
             Extruder::unstep();
 
         Printer::endXYZSteps();
@@ -509,7 +509,7 @@ long StepExecutor::performMove(PrintLine* move, uint8_t forQueue) {
     stepsPerTimerCall = 1;
     unsigned long one_interval = interval;
     uint16_t minInterval = Printer::stepsPackingMinInterval;
-    if (Printer::isAdvanceActivated()) {
+    if (Printer::pressureAdvance.active()) {
         minInterval += 64;
     }
     while (interval < Printer::stepsPackingMinInterval) {

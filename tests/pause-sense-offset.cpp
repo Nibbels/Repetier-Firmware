@@ -145,10 +145,12 @@ const char ui_text_emergency_pause[] = "";
 
 struct Com {
     static constexpr const char* tSlash = "/";
+    static constexpr const char* tLinearLColon = "Linear L:";
     static const char* lastLine;
     static void printFLN(const char* line) { lastLine = line; }
     template<class... Args> static void printF(Args...) {}
     template<class... Args> static void printFLN(Args...) {}
+    static void println() {}
 };
 
 const char* Com::lastLine = nullptr;
@@ -234,7 +236,6 @@ bool blockAll = false;
 PressureAdvance pressureAdvance;
 MachineInactivity inactivity(STEPPER_INACTIVE_TIME * 1000UL, MAX_INACTIVE_TIME * 1000UL);
 IdleStatus idleStatus;
-bool advanceActive = false;
 constexpr float maxXYJerk = 8.0f, maxZJerk = 0.5f;
 volatile char doHeatBedZCompensation = true;
 bool printing = true, menuPaused = false;
@@ -245,7 +246,6 @@ char moveMode[3] = { MOVE_MODE_SINGLE_STEPS, MOVE_MODE_SINGLE_STEPS, MOVE_MODE_S
 bool debugErrors() { return false; }
 bool infoLogging = false;
 bool debugInfo() { return infoLogging; }
-bool isAdvanceActivated() { return advanceActive; }
 bool debugDryrun() { return false; }
 float convertToMM(float value) { return unitIsInches ? value * 25.4 : value; }
 bool isPrinting() { return printing; }
@@ -263,6 +263,7 @@ void setMenuMode(int mode, bool active) {
     menuPaused = active;
 }
 void stopPrint();
+void applyPressureAdvanceSettings();
 void homeZAxis();
 void homeDigits();
 void enableSenseOffsetnow();
@@ -372,7 +373,7 @@ struct Extruder {
         unstep();
         current->deliveredSteps += current->stepperDirection;
     }
-    static bool selectExtruderById(uint8_t id);
+    static bool selectExtruderById(uint8_t id, bool waitThroughPause = false);
     static void applyCurrentSettings() {}
     static void setTemperatureForExtruder(float temperature, int tool);
     static void setHeatedBedTemperature(float temperature) { bedTemperature = temperature; }
@@ -504,7 +505,7 @@ struct UIDisplay {
 enum FirmwareState { Paused, Processing };
 namespace Commands {
 void checkForPeriodicalActions(FirmwareState);
-bool waitForMotionHandoff();
+bool waitForMotionHandoff(bool waitThroughPause = false);
 void waitUntilEndOfAllMoves() { ++primeWaits; PrintLine::linesCount = 0; }
 void changeFeedrateMultiply(int) { assert(false); }
 void printCurrentPosition() {}
@@ -513,14 +514,14 @@ void printCurrentPosition() {}
 struct GCode {
     long S = 0, P = 0;
     float E = 0, F = 0, I = 1, X = 0, Y = 0, Z = 0;
-    bool explicitP = false, explicitS = false;
+    bool explicitP = false, explicitS = false, explicitY = false;
     bool hasS() const { return explicitS || S != 0; }
     bool hasP() const { return explicitP || P != 0; }
     bool hasE() const { return E != 0; }
     bool hasF() const { return F != 0; }
     bool hasI() const { return I != 0; }
     bool hasX() const { return X != 0; }
-    bool hasY() const { return Y != 0; }
+    bool hasY() const { return explicitY || Y != 0; }
     bool hasZ() const { return Z != 0; }
     bool hasNoXYZ() const { return !hasX() && !hasY() && !hasZ(); }
 
@@ -1609,7 +1610,7 @@ void ecmpStepping() {
     assert(Printer::extrusionCompensation.remainder() == 0.0f);
 
     auto replayReversal = [&](bool advance, float ratio, float remainder, unsigned count, int expectedSteps) {
-        Printer::advanceActive = advance;
+        Printer::pressureAdvance.setActive(advance);
         Printer::pressureAdvance.clearSteps();
         Printer::extrusionCompensation.publishRatio(ExtrusionCompensation::prepareRatio(ratio));
         Printer::extrusionCompensation.restoreRemainder(remainder);
@@ -1677,7 +1678,7 @@ void advanceTimer() {
 #if NUM_EXTRUDER > 1
 void advanceToolChange() {
     auto& advance = Printer::pressureAdvance;
-    Printer::advanceActive = true;
+    advance.setActive(true);
     advance.setStepInterval(12);
     extruder[1].id = 1;
     extruder[1].offsetMM[X_AXIS] = 2.0f;
@@ -1734,8 +1735,68 @@ void advanceToolChange() {
     Printer::pause.request(PrintPause::Destination::InPlace);
     assert(!Extruder::selectExtruderById(1));
     assert(Extruder::current == &extruder[0]);
+
+    pollDuringMoves = false;
+    duringPeriodicActions = [&] {
+        assert(Extruder::current == &extruder[0]);
+        Printer::pause.cancel();
+    };
+    assert(Extruder::selectExtruderById(1, true));
+    duringPeriodicActions = nullptr;
+    assert(Extruder::current == &extruder[1]);
 }
 #endif
+
+void advanceModeChange() {
+    auto& advance = Printer::pressureAdvance;
+    advance.setStepInterval(15);
+
+    GCode testStep;
+    testStep.S = 20;
+    runAdvanceCommand(223, &testStep);
+    assert(advance.pendingSteps() == 0);
+
+    PrintLine::linesCount = 2;
+    GCode setting;
+    setting.Y = 20;
+    unsigned calls = 0;
+    duringPeriodicActions = [&] {
+        ++calls;
+        assert(!advance.active() && Extruder::current->advanceL == 0);
+    };
+    runAdvanceCommand(233, &setting);
+    duringPeriodicActions = nullptr;
+    assert(calls == 2 && advance.active() && Extruder::current->advanceL == 20);
+    assert(advance.pendingSteps() == 0);
+
+    testStep.S = 2;
+    runAdvanceCommand(223, &testStep);
+    advance.setLeadSteps(1);
+    uint8_t compare = 0;
+    const auto tick = [&] {
+        InterruptProtectedBlock lock;
+        compare = advance.nextTimerCompare(compare);
+    };
+    for (int i = 0; i < 4; ++i)
+        tick();
+    assert(Extruder::current->deliveredSteps == 3 && advance.pendingSteps() == 0);
+
+    setting.explicitY = true;
+    setting.Y = 0;
+    duringPeriodicActions = [&] {
+        assert(advance.active() && Extruder::current->advanceL == 20);
+        tick();
+    };
+    runAdvanceCommand(233, &setting);
+    duringPeriodicActions = nullptr;
+    assert(!advance.active() && Extruder::current->advanceL == 0);
+    assert(Extruder::current->deliveredSteps == 2 && advance.pendingSteps() == 0);
+
+    runAdvanceCommand(223, &testStep);
+    setting.Y = 30;
+    runAdvanceCommand(233, &setting);
+    assert(advance.active() && advance.pendingSteps() == 0);
+}
 
 void stepClock() {
     PrintLine move;
@@ -1889,7 +1950,7 @@ void lookaheadMoves() {
     };
     uint32_t trace = 0;
     const auto run = [&](uint8_t axes, bool advance, float junctionSpeed) {
-        Printer::advanceActive = advance;
+        Printer::pressureAdvance.setActive(advance);
         queue.clear();
         PrintLine& front = prepare(printX);
         MotionPlanner::updateLookahead(queue);
@@ -2133,6 +2194,8 @@ int main(int argc, char** argv) {
         ecmpStepping();
     else if (!std::strcmp(argv[1], "advance-timer"))
         advanceTimer();
+    else if (!std::strcmp(argv[1], "advance-mode"))
+        advanceModeChange();
 #if NUM_EXTRUDER > 1
     else if (!std::strcmp(argv[1], "advance-tool"))
         advanceToolChange();

@@ -271,8 +271,8 @@ void TemperatureController::updateTempControlVars() {
     }
 } // updateTempControlVars
 
-bool Extruder::selectExtruderById(uint8_t extruderId) {
-    if (!Commands::waitForMotionHandoff())
+bool Extruder::selectExtruderById(uint8_t extruderId, bool waitThroughPause) {
+    if (!Commands::waitForMotionHandoff(waitThroughPause))
         return false;
 
 #if NUM_EXTRUDER > 1

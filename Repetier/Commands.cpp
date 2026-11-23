@@ -102,7 +102,7 @@ void Commands::waitUntilEndOfAllMoves() {
     }
 } // waitUntilEndOfAllMoves
 
-bool Commands::waitForMotionHandoff() {
+bool Commands::waitForMotionHandoff(bool waitThroughPause) {
     // Periodic actions can run panel commands while the foreground waits.
     static bool waiting = false;
     if (waiting)
@@ -111,20 +111,19 @@ bool Commands::waitForMotionHandoff() {
 
     bool settled = false;
     auto& advance = Printer::pressureAdvance;
-    while (!Printer::blockAll && !Printer::printStop.commandsBlocked() && Printer::pause.allowsQueueAdvance()) {
+    while (!Printer::blockAll && !Printer::printStop.commandsBlocked()) {
+        bool paused;
         {
             InterruptProtectedBlock lock;
-            if (!PrintLine::hasLines() && !PrintLine::directMoveActive() && !Printer::needsCMPwait()) {
-                if (!Printer::isAdvanceActivated())
-                    advance.clearSteps();
+            paused = Printer::pause.isPaused();
+            if (!paused && !PrintLine::hasLines() && !PrintLine::directMoveActive() && !Printer::needsCMPwait())
                 settled = advance.drain();
-            } else {
+            else
                 advance.cancelDrain();
-            }
         }
-        if (settled)
+        if (settled || (paused && !waitThroughPause))
             break;
-        Commands::checkForPeriodicalActions(Processing);
+        Commands::checkForPeriodicalActions(paused ? Paused : Processing);
     }
     advance.cancelDrain();
     waiting = false;
@@ -308,7 +307,7 @@ void Commands::executeGCode(GCode* com) {
         Commands::processMCode(com);
     } else if (com->hasT()) // Process T code
     {
-        Extruder::selectExtruderById(com->T);
+        Extruder::selectExtruderById(com->T, true);
     } else if (com->hasF()) // Process F code http://linuxcnc.org/docs/html/gcode/other-code.html#sec:set-feed-rate
     {
         Printer::setFeedrate(com->F);
@@ -809,7 +808,8 @@ void Commands::processMCode(GCode* com) {
     }
     case 206: // M206 - T[type] P[pos] [Sint(long] [Xfloat]  Set eeprom value
     {
-        EEPROM::update(com);
+        if (Commands::waitForMotionHandoff(true))
+            EEPROM::update(com);
         break;
     }
     case 207: // M207 - X<XY jerk> Z<Z Jerk> E<E Jerk>
@@ -886,8 +886,9 @@ void Commands::processMCode(GCode* com) {
 
     case 223: // M223 - Extruder interrupt test
     {
-        if (com->hasS()) {
-            InterruptProtectedBlock noInts; //BEGIN_INTERRUPT_PROTECTED
+        if (com->hasS() && Printer::pressureAdvance.active() && !Printer::pause.isPaused()
+            && !Printer::printStop.commandsBlocked() && !Printer::blockAll) {
+            InterruptProtectedBlock lock;
             Printer::pressureAdvance.addSteps(com->S);
         }
         break;
@@ -903,11 +904,12 @@ void Commands::processMCode(GCode* com) {
     }
     case 233: // M233
     {
-        if (com->hasY())
+        if (com->hasY() && com->Y != Extruder::current->advanceL && Commands::waitForMotionHandoff(true)) {
             Extruder::current->advanceL = com->Y;
+            Printer::applyPressureAdvanceSettings();
+        }
         Com::printF(Com::tLinearLColon, Extruder::current->advanceL);
         Com::println();
-        Printer::updateAdvanceActivated();
         break;
     }
 
@@ -993,6 +995,8 @@ void Commands::processMCode(GCode* com) {
     }
     case 501: // M501
     {
+        if (!Commands::waitForMotionHandoff(true))
+            break;
         EEPROM::readDataFromEEPROM();
 
         if (Printer::debugInfo()) {
@@ -1002,6 +1006,8 @@ void Commands::processMCode(GCode* com) {
     }
     case 502: // M502
     {
+        if (!Commands::waitForMotionHandoff(true))
+            break;
         EEPROM::restoreEEPROMSettingsFromConfiguration();
         EEPROM::storeDataIntoEEPROM(false);
 

@@ -26,7 +26,7 @@ public:
     static void processGCode(GCode* com);
     static void processMCode(GCode* com);
     static void waitUntilEndOfAllMoves();
-    static bool waitForMotionHandoff();
+    static bool waitForMotionHandoff(bool waitThroughPause = false);
     static void printCurrentPosition();
     static void printTemperatures(bool showRaw = false);
     static void setFanSpeed(uint8_t speed, bool recalc = false); /// Set fan speed 0..255

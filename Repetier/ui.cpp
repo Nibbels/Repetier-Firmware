@@ -2252,7 +2252,7 @@ void UIDisplay::finishAction(int action) {
     }
 
     case UI_ACTION_RESTORE_DEFAULTS: {
-        if (g_nYesNo != 1) {
+        if (g_nYesNo != 1 || !Commands::waitForMotionHandoff()) {
             // continue only in case the user has chosen "Yes"
             break;
         }
@@ -2693,6 +2693,8 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
 
     case UI_ACTION_ADVANCE_L_E0:
     case UI_ACTION_ADVANCE_L_E1: {
+        if (!Commands::waitForMotionHandoff())
+            break;
 #if NUM_EXTRUDER > 1
         uint8_t eNr = (UI_ACTION_ADVANCE_L_E1 == action) ? 1 : 0;
 #else
@@ -2709,7 +2711,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
                 extruder[eNr].advanceL = 0;
             }
         }
-        Printer::updateAdvanceActivated();
+        Printer::applyPressureAdvanceSettings();
 
         HAL::eprSetFloat(EEPROM::getExtruderOffset(eNr) + EPR_EXTRUDER_ADVANCE_L, extruder[eNr].advanceL);
         EEPROM::updateChecksum();

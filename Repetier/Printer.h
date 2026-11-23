@@ -45,7 +45,6 @@
 // ##########################################################################################
 
 #define PRINTER_FLAG0_STEPPER_DISABLED 1
-#define PRINTER_FLAG0_SEPERATE_EXTRUDER_INT 2
 #define PRINTER_FLAG0_TEMPSENSOR_DEFECT 4
 #define PRINTER_FLAG0_MANUAL_MOVE_MODE 16
 #define PRINTER_FLAG0_LARGE_MACHINE 128
@@ -362,14 +361,6 @@ public:
         flag0 = (b ? flag0 | PRINTER_FLAG0_LARGE_MACHINE : flag0 & ~PRINTER_FLAG0_LARGE_MACHINE);
     } // setLargeMachine
 
-    static INLINE uint8_t isAdvanceActivated() {
-        return flag0 & PRINTER_FLAG0_SEPERATE_EXTRUDER_INT;
-    } // isAdvanceActivated
-
-    static INLINE void setAdvanceActivated(uint8_t b) {
-        flag0 = (b ? flag0 | PRINTER_FLAG0_SEPERATE_EXTRUDER_INT : flag0 & ~PRINTER_FLAG0_SEPERATE_EXTRUDER_INT);
-    } // setAdvanceActivated
-
     static INLINE uint8_t isAxisHomed(int8_t b) //X_AXIS 0, Y_AXIS 1, Z_AXIS 2
     {
         switch (b) {
@@ -593,7 +584,7 @@ public:
 
     static void updateDerivedParameter();
     static void switchEverythingOff();
-    static void updateAdvanceActivated();
+    static void applyPressureAdvanceSettings();
 
     static INLINE void setXAxisSteps(int32_t x) {
         InterruptProtectedBlock noInts;

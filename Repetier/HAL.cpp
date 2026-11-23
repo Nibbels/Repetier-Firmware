@@ -908,7 +908,7 @@ uint8_t PressureAdvance::nextTimerCompare(uint8_t compare) {
 
 // Inline the direction path so the interrupt only saves the registers it uses.
 ISR(EXTRUDER_TIMER_VECTOR, __attribute__((flatten))) {
-    if (Printer::isAdvanceActivated())
+    if (Printer::pressureAdvance.active())
         EXTRUDER_OCR = Printer::pressureAdvance.nextTimerCompare(EXTRUDER_OCR);
 }
 

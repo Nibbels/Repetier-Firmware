@@ -180,8 +180,6 @@ void Printer::updateDerivedParameter() {
         maxZJerk = 2 * minimumZSpeed;
         Com::printFLN(PSTR("Z jerk was too low, setting to "), maxZJerk);
     }
-
-    Printer::updateAdvanceActivated();
 } // updateDerivedParameter
 
 /** \brief Stop heater and stepper motors. Disable power,if possible. */
@@ -201,14 +199,17 @@ void Printer::switchEverythingOff() {
     Printer::setAllSwitchedOff(true);
 } // switchEverythingOff
 
-void Printer::updateAdvanceActivated() {
-    Printer::setAdvanceActivated(false);
-    for (uint8_t i = 0; i < NUM_EXTRUDER; i++) {
+void Printer::applyPressureAdvanceSettings() {
+    bool active = false;
+    for (uint8_t i = 0; i < NUM_EXTRUDER; ++i) {
         if (extruder[i].advanceL != 0) {
-            Printer::setAdvanceActivated(true);
+            active = true;
+            break;
         }
     }
-} // updateAdvanceActivated
+    InterruptProtectedBlock lock;
+    pressureAdvance.setActive(active);
+}
 
 void Printer::updateWobbleFixOffsets() {
     // The factory settings bypass all floating-point work.

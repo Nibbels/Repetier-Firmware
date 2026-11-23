@@ -361,7 +361,7 @@ void MotionPlanner::updateLookahead(MoveQueue& queue) {
     // keeps the conservative entry and exit so nozzle pressure can change.
     // See Repetier-Firmware issue 837 for the fast travel to print case.
     if (previous.isEOnlyMove() != newest.isEOnlyMove()
-        || (Printer::isAdvanceActivated() && previous.isEMove() != newest.isEMove())) {
+        || (Printer::pressureAdvance.active() && previous.isEMove() != newest.isEMove())) {
         previous.setEndSpeedFixed(true);
         newest.setStartSpeedFixed(true);
         prepareStepProfile(newest);

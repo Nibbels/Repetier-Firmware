@@ -7,6 +7,16 @@
 // Writers of multi-byte state run with step interrupts masked.
 class PressureAdvance {
 public:
+    bool active() const { return active_; }
+
+    // The foreground settles the old motion before changing the E pulse writer.
+    void setActive(bool active) {
+        if (active_ != active) {
+            resetDirection();
+            active_ = active;
+        }
+    }
+
     void clearSteps() {
         pendingSteps_ = 0;
         leadSteps_ = 0;
@@ -54,6 +64,7 @@ private:
     uint8_t stepInterval_ = 0;
     int8_t direction_ = 0;
     volatile bool draining_ = false;
+    volatile bool active_ = false;
 };
 
 #endif
