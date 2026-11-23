@@ -1118,7 +1118,7 @@ void UIDisplay::parse(char* txt, bool ram) {
             }
             if (c2 == 'p') // %op : Is single double or quadstepping?
             {
-                addInt(Printer::stepsPerTimerCall, 1);
+                addInt(PrintLine::stepsPerInterrupt(), 1);
                 addStringP(PSTR("ST"));
 
                 break;

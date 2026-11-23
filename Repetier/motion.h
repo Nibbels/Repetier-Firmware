@@ -61,6 +61,24 @@ public:
 private:
     static MoveQueue queue;
     static PrintLine direct;
+    struct StepClock {
+        uint32_t ticks = 0;
+        uint32_t steps = 0;
+        speed_t peak = 0;
+
+        void start(speed_t speed) {
+            peak = speed;
+            steps = 0;
+            ticks = 0;
+        }
+    };
+    enum class DirectionOwner : int8_t { None, Direct = -1, Queued = 1 };
+    static StepClock stepClocks[2];
+    static DirectionOwner directionOwner;
+    static volatile uint32_t stepIntervalTicks;
+    static uint8_t stepsPerTimerCall;
+    speed_t nextStepSpeed(StepClock& clock, uint8_t pulses, uint32_t interval);
+
     flag8_t primaryAxis;
     int32_t timeInTicks;
     flag8_t dir;                 ///< Direction of movement. 1 = X+, 2 = Y+, 4= Z+, values can be combined.
@@ -96,6 +114,7 @@ private:
 
 public:
     static bool directMoveActive() { return direct.task != DIRECT_IDLE; }
+    static uint8_t stepsPerInterrupt() { return stepsPerTimerCall; }
     static bool hasStoppableDirectMove() {
         const char task = direct.task;
         return task == DIRECT_PREPARED_STOPPABLE || task == DIRECT_RUNNING_STOPPABLE;
@@ -317,23 +336,6 @@ public:
         Printer::pressureAdvance.setLeadSteps(leadSteps);
         HAL::allowInterrupts();
     }  // updateAdvanceSteps
-
-    INLINE bool moveDecelerating(uint8_t forQueue) {
-        if (stepsRemaining <= static_cast<int32_t>(decelSteps)) {
-            if (!(flags & FLAG_DECELERATING)) //reset "timer" only once.
-            {
-                Printer::timer[forQueue] = 0;
-                flags |= FLAG_DECELERATING;
-            }
-            return true;
-        }
-
-        return false;
-    } // moveDecelerating
-
-    INLINE bool moveAccelerating(uint8_t forQueue) {
-        return Printer::stepNumber[forQueue] <= accelSteps;
-    } // moveAccelerating
 
     void updateStepsParameter();
     inline float safeSpeed(fast8_t drivingAxis);

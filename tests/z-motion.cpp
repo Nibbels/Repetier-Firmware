@@ -66,12 +66,12 @@ void delayMicroseconds(int microseconds);
 namespace Printer {
 ZMotion zMotion(100.0f);
 bool blockAll = false, doHeatBedZCompensation = true;
-uint8_t stepsPerTimerCall = 1;
 bool needsCMPwait();
 void disableCMPnow(bool wait);
 }
 
 struct PrintLine {
+    static constexpr uint8_t stepsPerTimerCall = 1;
     static void stepSlowedZCompensation();
     static bool needCmpWait();
 };

@@ -46,15 +46,10 @@ uint8_t Printer::flag3 = 0;
 
 uint8_t Printer::debugLevel = 6; ///< Bitfield defining debug output. 1 = echo, 2 = info, 4 = error, 8 = dry run., 16 = Only communication, 32 = No moves
 
-uint8_t Printer::stepsPerTimerCall = 1;
 uint16_t Printer::stepsPackingMinInterval = STEP_PACKING_MIN_INTERVAL;
 uint8_t Printer::menuMode = 0;
 
-volatile unsigned long Printer::interval = 10000; // Last step duration in ticks.
 volatile float Printer::v = 0;                    // Last planned printer speed.
-unsigned long Printer::timer[2] = { 0 };          // Used for acceleration/deceleration timing
-unsigned long Printer::stepNumber[2] = { 0 };     // Step number in current move.
-int8_t Printer::lastDirectionSovereignty = 0;
 
 long Printer::maxSoftEndstopSteps[2] = { 0 };
 float Printer::axisLengthMM[3] = { 0 };       // Länge des überfahrbaren Bereichs im positiven Homing. (=Schienen-Fahrweg - Homing-Offset - 2x ExtruderOffset)
@@ -63,7 +58,6 @@ int Printer::feedrateMultiply = 100;          // Multiplier for feedrate in perc
 float Printer::menuExtrusionFactor = 1.0;     // Flow multiplier factor (1.0 = 100%)
 float Printer::maxXYJerk;                                         // Maximum allowed jerk in mm/s
 float Printer::maxZJerk;                                          // Maximum allowed jerk in z direction in mm/s
-unsigned int Printer::vMaxReached[2];                             // Maximum reached speed [FOR_DIRECT, FOR_QUEUE]
 unsigned long Printer::msecondsPrinting = 0;                      // Milliseconds of printing time (means time with heated extruder)
 float Printer::filamentPrinted = 0.0f;                            // mm of filament printed since counting started
 ZOffset Printer::zOffset;

@@ -65,9 +65,6 @@
 #define FEEDRATE_GCODE true
 #define FEEDRATE_DIRECTCONFIG false
 
-#define DIR_QUEUE 1
-#define DIR_DIRECT -1
-
 class Printer {
 public:
     static PressureAdvance pressureAdvance;
@@ -89,13 +86,8 @@ public:
     static uint8_t flag1;
     static uint8_t flag2;
     static uint8_t flag3;
-    static uint8_t stepsPerTimerCall;
     static uint16_t stepsPackingMinInterval;
-    static volatile unsigned long interval; // Last step duration in ticks.
     static volatile float v;                // Last planned printer speed.
-    static unsigned long timer[2];          // used for acceleration/deceleration timing
-    static unsigned long stepNumber[2];     // Step number in current move.
-    static int8_t lastDirectionSovereignty;
 
     static long maxSoftEndstopSteps[2];     // X/Y software endstops. Z limits belong to zMotion.
     static float axisLengthMM[3];           // Länge des überfahrbaren Bereichs im positiven Homing. (=Schienen-Fahrweg - Homing-Offset - 2x ExtruderOffset)
@@ -104,7 +96,6 @@ public:
     static float menuExtrusionFactor;       // Flow multiplier factor (1.0 = 100%)
     static float maxXYJerk;                 // Maximum allowed jerk in mm/s
     static float maxZJerk;                  // Maximum allowed jerk in z direction in mm/s
-    static speed_t vMaxReached[2];          // Maximumu reached speed
     static unsigned long msecondsPrinting;  // Milliseconds of printing time (means time with heated extruder)
     static float filamentPrinted;           // mm of filament printed since counting started
     static ZOffset zOffset;

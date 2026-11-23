@@ -24,6 +24,7 @@
 // The replay compiles the live firmware routines. These shims supply DMS bytes,
 // a bed profile, a clock and the motor displacements completed during each wait.
 using millis_t = uint32_t;
+using speed_t = uint16_t;
 constexpr float zStepsPerMm = 1280.0f;
 constexpr int16_t initialClearance = 20;
 constexpr int16_t printingForce = 6000;
@@ -60,6 +61,9 @@ void poll();
 
 namespace HAL {
 millis_t timeInMilliseconds() { return clockMs; }
+speed_t ComputeV(uint32_t ticks, uint32_t acceleration) {
+    return ((uint64_t(ticks >> 8) * acceleration) >> 10);
+}
 void delayMilliseconds(unsigned delay) { clockMs += delay; }
 int16_t eepromWords[2048] = {};
 int32_t eepromDWords[2048] = {};
@@ -357,6 +361,8 @@ void Extruder::setTemperatureForExtruder(float temperature, int tool) {
 
 class MoveQueue;
 struct PrintLine {
+#include "step-clock-firmware.inc"
+
     bool moveZ = false;
     bool positiveE = false;
     bool moveXY = false;
@@ -376,6 +382,9 @@ struct PrintLine {
     void setPositiveDirectionForAxis(uint8_t axis) { xyDirection |= 1 << axis; }
     int32_t error[4] = {}, delta[4] = {};
     int32_t stepsRemaining = 0;
+    uint32_t accelSteps = 0, decelSteps = 0, fAcceleration = 0;
+    speed_t vStart = 0, vMax = 0, vEnd = 0;
+    speed_t nextStepSpeed(StepClock& clock, uint8_t pulses, uint32_t interval);
     float distance = 0;
     uint8_t primaryAxis = 0;
     char task = TASK_NO_TASK;
@@ -1613,6 +1622,33 @@ void advanceTimer() {
     assert(Extruder::stepPulses == basePulses + 4);
 }
 
+void stepClock() {
+    PrintLine move;
+    PrintLine::StepClock queued, direct;
+    queued.start(100);
+    direct.start(125);
+    move.accelSteps = 2;
+    move.decelSteps = 3;
+    move.stepsRemaining = 90;
+    move.fAcceleration = 1024;
+    move.vStart = 100;
+    move.vMax = 300;
+    move.vEnd = 75;
+    constexpr uint32_t interval = 150 * 256;
+    assert(move.nextStepSpeed(queued, 1, interval) == 250);
+    assert(move.nextStepSpeed(queued, 1, interval) == 300);
+    assert(move.nextStepSpeed(queued, 1, interval) == 300);
+    assert(direct.steps == 0 && direct.ticks == 0 && direct.peak == 125);
+
+    move.stepsRemaining = 3;
+    assert(move.nextStepSpeed(queued, 1, interval) == 300);
+    assert((move.flags & FLAG_DECELERATING) && queued.ticks == 0);
+    assert(move.nextStepSpeed(queued, 1, interval) == 150);
+    assert(move.nextStepSpeed(queued, 1, interval) == 75);
+    queued.start(80);
+    assert(queued.steps == 0 && queued.ticks == 0 && queued.peak == 80);
+}
+
 void segmentGeometry() {
     PrintLine move;
     move.setAxisSteps(X_AXIS, -10);
@@ -1809,6 +1845,8 @@ int main(int argc, char** argv) {
         ecmpStepping();
     else if (!std::strcmp(argv[1], "advance-timer"))
         advanceTimer();
+    else if (!std::strcmp(argv[1], "step-clock"))
+        stepClock();
     else if (!std::strcmp(argv[1], "xy-limits"))
         xyLimits();
     else

@@ -71,6 +71,10 @@ uint8_t fanSpeed = 0;
 
 MoveQueue PrintLine::queue;
 PrintLine PrintLine::direct;
+PrintLine::StepClock PrintLine::stepClocks[2];
+PrintLine::DirectionOwner PrintLine::directionOwner = DirectionOwner::None;
+volatile uint32_t PrintLine::stepIntervalTicks = 10000;
+uint8_t PrintLine::stepsPerTimerCall = 1;
 
 bool PrintLine::hasActiveZMove() {
     InterruptProtectedBlock lock;
@@ -770,7 +774,7 @@ void PrintLine::stepSlowedZCompensation() {
     }
 
     // Do not calculate this work more often then needed.
-    waitSteps = mass + Printer::stepsPerTimerCall;
+    waitSteps = mass + stepsPerTimerCall;
 }
 
 bool PrintLine::needCmpWait() {
@@ -871,29 +875,27 @@ long PrintLine::performQueueMove() {
 
         move->enableSteppers(); //set Z direction etc.
         move->adjustDirections();
-        Printer::lastDirectionSovereignty = DIR_QUEUE;
+        directionOwner = DirectionOwner::Queued;
         move->fixStartAndEndSpeed();
 
         queueError = move->delta[move->primaryAxis];
         if (!move->areParameterUpToDate())
             move->updateStepsParameter(); // should never happen, but with bad timings???
-        Printer::vMaxReached[FOR_QUEUE] = move->vStart;
-        Printer::stepNumber[FOR_QUEUE] = 0;
-        Printer::timer[FOR_QUEUE] = 0;
+        stepClocks[FOR_QUEUE].start(move->vStart);
         Printer::v = move->fullSpeed;
 
         HAL::forbidInterrupts();
 
-        move->updateAdvanceSteps(move->vStart); //startet advance extruder "etwas" vor der ersten bewegung: gut? ist Printer::interval immer klein genug?
+        move->updateAdvanceSteps(move->vStart); //startet advance extruder "etwas" vor der ersten bewegung: gut? ist stepIntervalTicks immer klein genug?
 
-        return (Printer::interval >> 1); //wait 50% to next interrupt.
+        return (stepIntervalTicks >> 1); //wait 50% to next interrupt.
     }
 
-    if (Printer::lastDirectionSovereignty != DIR_QUEUE) {
-        Printer::lastDirectionSovereignty = DIR_QUEUE;
+    if (directionOwner != DirectionOwner::Queued) {
+        directionOwner = DirectionOwner::Queued;
         Printer::v = move->fullSpeed;
         move->adjustDirections();
-        move->updateAdvanceSteps(Printer::vMaxReached[DIR_QUEUE]);
+        move->updateAdvanceSteps(stepClocks[FOR_QUEUE].peak);
     }
 
     return performMove(move, FOR_QUEUE);
@@ -949,34 +951,57 @@ long PrintLine::performDirectMove() {
 
         direct.enableSteppers();
         direct.adjustDirections();
-        Printer::lastDirectionSovereignty = DIR_DIRECT;
+        directionOwner = DirectionOwner::Direct;
         direct.fixStartAndEndSpeed();
 
         directError = direct.delta[direct.primaryAxis];
         direct.updateStepsParameter(); // should never be needed, but with bad timings???
-        Printer::vMaxReached[FOR_DIRECT] = direct.vStart;
-        Printer::stepNumber[FOR_DIRECT] = 0;
-        Printer::timer[FOR_DIRECT] = 0;
+        stepClocks[FOR_DIRECT].start(direct.vStart);
         Printer::v = direct.fullSpeed;
 
-        direct.updateAdvanceSteps(direct.vStart); //startet advance extruder "etwas" vor der ersten bewegung: gut? ist Printer::interval immer klein genug?
+        direct.updateAdvanceSteps(direct.vStart); //startet advance extruder "etwas" vor der ersten bewegung: gut? ist stepIntervalTicks immer klein genug?
 
-        return (Printer::interval >> 1); //wait 50% to next interrupt.
+        return (stepIntervalTicks >> 1); //wait 50% to next interrupt.
     }
 
-    if (Printer::lastDirectionSovereignty != DIR_DIRECT) {
-        Printer::lastDirectionSovereignty = DIR_DIRECT;
+    if (directionOwner != DirectionOwner::Direct) {
+        directionOwner = DirectionOwner::Direct;
         Printer::v = direct.fullSpeed;
         direct.adjustDirections();
-        direct.updateAdvanceSteps(Printer::vMaxReached[FOR_DIRECT]);
+        direct.updateAdvanceSteps(stepClocks[FOR_DIRECT].peak);
     }
 
     return performMove(&direct, FOR_DIRECT);
 } // performDirectMove
 
+speed_t PrintLine::nextStepSpeed(StepClock& clock, uint8_t pulses, uint32_t interval) {
+    clock.steps += pulses;
+    clock.ticks += interval * pulses;
+
+    if (clock.steps <= accelSteps) {
+        const speed_t speed = vStart + HAL::ComputeV(clock.ticks, fAcceleration);
+        clock.peak = speed > vMax ? vMax : speed;
+        return clock.peak;
+    }
+
+    if (stepsRemaining > static_cast<int32_t>(decelSteps))
+        return accelSteps ? clock.peak : vMax;
+
+    if (!(flags & FLAG_DECELERATING)) {
+        clock.ticks = 0;
+        flags |= FLAG_DECELERATING;
+    }
+
+    const speed_t slowdown = HAL::ComputeV(clock.ticks, fAcceleration);
+    if (slowdown > clock.peak)
+        return vEnd;
+    const speed_t speed = clock.peak - slowdown;
+    return speed < vEnd ? vEnd : speed;
+}
+
 long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
     HAL::allowInterrupts();
-    fast8_t max_loops = Printer::stepsPerTimerCall;
+    fast8_t max_loops = stepsPerTimerCall;
     if (move->stepsRemaining < max_loops)
         max_loops = move->stepsRemaining;
     HAL::forbidInterrupts();
@@ -1092,53 +1117,17 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
     }                       // for loop
     HAL::allowInterrupts(); // Allow interrupts for other types, timer1 is still disabled
 
-    /***
-    Printer::interval -> printers interval
-    interval          -> actual sent interval that might be manipulated
-    v                 -> not manipulated active speed
-    ***/
-    //v [Steps/s] -> interval in [ [OP/s] / [Steps/s] ] = OPs/Steps = Time inbetween two steps.
-    speed_t v;
-
-    Printer::stepNumber[forQueue] += max_loops;
-    Printer::timer[forQueue] += (Printer::interval * max_loops);
-
-    //If acceleration is enabled on this move and we are in the acceleration segment, calculate the current interval
-    if (move->moveAccelerating(forQueue)) // we are accelerating
-    {
-        v = HAL::ComputeV(Printer::timer[forQueue], move->fAcceleration);
-        v += move->vStart;
-        if (v > move->vMax)
-            v = move->vMax;
-        Printer::vMaxReached[forQueue] = v;
-    } else if (move->moveDecelerating(forQueue)) // time to slow down
-    {
-        // Printer::timer got reset the first time reaching here.
-        //dieses v ist hier erst gegenbeschleunigend und wird dann gleich abgezogen -> das ist die korrektur.
-        unsigned int v_inv = HAL::ComputeV(Printer::timer[forQueue], move->fAcceleration); //hier negativgeschleunigung positiv ausgerechnet.
-        if (v_inv > Printer::vMaxReached[forQueue])                                        // if deceleration goes too far it can become too large -> schneller vorab-limiter, eigentlich Printer::vMaxReached - move-vEnd, aber wie programmiert scheints egal und schneller zu sein.
-            v = move->vEnd;
-        else {
-            v = Printer::vMaxReached[forQueue] - v_inv; //flip positive calculation to decelerated speed.
-            if (v < move->vEnd)
-                v = move->vEnd; // extra steps at the end of desceleration due to rounding errors
-        }
-    } else // full speed reached
-    {
-        // If we had acceleration, we need to use the latest vMaxReached and interval
-        // If we started full speed, we need to use move->fullInterval and vMax
-        v = (!move->accelSteps ? move->vMax : Printer::vMaxReached[forQueue]);
-    }
+    const speed_t v = move->nextStepSpeed(stepClocks[forQueue], max_loops, stepIntervalTicks);
     move->updateAdvanceSteps(v);
 
-    Printer::interval = HAL::CPUDivU2(v);
+    stepIntervalTicks = HAL::CPUDivU2(v);
 
     // Dieses Limit bedeutet max. 31250 steps/s bei 16mhz.
-    if (Printer::interval < 512)
-        Printer::interval = 512;
+    if (stepIntervalTicks < 512)
+        stepIntervalTicks = 512;
 
     //RETURN manipulated value:
-    unsigned long interval = Printer::interval;
+    unsigned long interval = stepIntervalTicks;
 
     const uint16_t digitFlowScale = Printer::digitCompensation.intervalScale();
     if (digitFlowScale && forQueue && move->primaryAxis <= Y_AXIS) {
@@ -1148,7 +1137,7 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
 
     //Now manipulate step-width=interval according to single-, double-, tripple-, ... steppings needs:
     //we know that next time will be a (as example) double or quad step so we let pass twice the time and set the stepsPerTimerCall accordingly.
-    Printer::stepsPerTimerCall = 1;
+    stepsPerTimerCall = 1;
     unsigned long one_interval = interval;
     uint16_t minInterval = Printer::stepsPackingMinInterval;
     if (Printer::isAdvanceActivated()) {
@@ -1156,7 +1145,7 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
     }
     while (interval < Printer::stepsPackingMinInterval) {
         interval += one_interval;
-        Printer::stepsPerTimerCall += 1;
+        stepsPerTimerCall += 1;
     }
 
     if (move->stepsRemaining <= 0 || move->isNoMove()) // line finished
@@ -1190,7 +1179,7 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
             Printer::v = 0;
         }
 
-        interval >>= 1; // 50% of time to next call to do cur=0, which will fire another interrupt at 50% of the active Printer::interval step time. This works like "move 1 end -> 50% -> prepare move 2 -> 50% -> move 2 begin"
+        interval >>= 1; // 50% of time to next call to do cur=0, which will fire another interrupt at 50% of the active stepIntervalTicks step time. This works like "move 1 end -> 50% -> prepare move 2 -> 50% -> move 2 begin"
     } // line finished
 
     return interval;
