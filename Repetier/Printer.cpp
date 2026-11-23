@@ -83,6 +83,7 @@ DigitCompensation Printer::digitCompensation{
     short(abs(EMERGENCY_PAUSE_DIGITS_MAX) * 0.7), short(abs(EMERGENCY_PAUSE_DIGITS_MAX))
 };
 PressureProtection Printer::pressureProtection;
+StrainGauge Printer::strainGauge;
 char Printer::ZMode = DEFAULT_Z_SCALE_MODE;                       // Z-min distance or nominal layer height
 char Printer::moveMode[3];                                        // move mode which is applied within the Position X/Y/Z menus
 bool Printer::moveKosys = KOSYS_GCODE;                            // true = GCode, false = DirectMove / OffsetMove
@@ -137,8 +138,6 @@ unsigned char Printer::g_unlock_movement = 0;
 
 uint8_t Printer::motorCurrent[DRV8711_NUM_CHANNELS] = { 0 };
 
-bool Printer::g_pressure_offset_active = true;
-short Printer::g_pressure_offset = 0;
 
 //RF_MICRO_STEPS_ have values 0=FULL 1=2MS, 2=4MS, 3=8MS, 4=16MS, 5=32MS, 6=64MS, 7=128MS, 8=256MS
 uint8_t Printer::motorMicroStepsModeValue[DRV8711_NUM_CHANNELS] = { 0 }; //init later because of recalculation of value
@@ -1169,20 +1168,18 @@ void Printer::homeZAxis() {
 } // homeZAxis
 
 void Printer::homeDigits() {
-    short nTempPressure = 0;
-    if (Printer::g_pressure_offset_active) { //only adjust pressure if you do a full homing.
-        Printer::g_pressure_offset = 0;      //prevent to messure already adjusted offset -> without = 0 this would only iterate some bad values.
-        if (!readAveragePressure(&nTempPressure)) {
-            if (-5000 < nTempPressure && nTempPressure < 5000) {
-                Com::printFLN(PSTR("DigitOffset = "), nTempPressure);
-                Printer::g_pressure_offset = nTempPressure;
-            } else {
-                //those high values shouldnt happen! fix your machine... DONT ZEROSCALE DIGITS
-                Com::printFLN(PSTR("DigitOffset failed "), nTempPressure);
-            }
-        } else {
-            Com::printFLN(PSTR("DigitOffset failed reading "));
-        }
+    if (!strainGauge.zeroingEnabled())
+        return;
+
+    // Base the new zero on uncorrected readings.
+    strainGauge.clearZeroOffset();
+    short average = 0;
+    if (readAveragePressure(&average)) {
+        Com::printFLN(PSTR("DigitOffset failed reading "));
+    } else if (strainGauge.setZeroFromAverage(average)) {
+        Com::printFLN(PSTR("DigitOffset = "), average);
+    } else {
+        Com::printFLN(PSTR("DigitOffset failed "), average);
     }
 }
 

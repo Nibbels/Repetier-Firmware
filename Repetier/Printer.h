@@ -28,6 +28,7 @@
 #include "PrintStop.h"
 #include "DigitCompensation.h"
 #include "PressureProtection.h"
+#include "StrainGauge.h"
 
 // ##########################################################################################
 // ##   status flags
@@ -113,6 +114,7 @@ public:
     static PrintLayers layers;
     static DigitCompensation digitCompensation;
     static PressureProtection pressureProtection;
+    static StrainGauge strainGauge;
     static PrintPause pause;
     static PrintStop printStop;
     static char ZMode;                      // Z Scale
@@ -164,8 +166,6 @@ public:
 
     static uint8_t motorCurrent[DRV8711_NUM_CHANNELS];
 
-    static bool g_pressure_offset_active;
-    static short g_pressure_offset;
 
     static uint8_t motorMicroStepsModeValue[DRV8711_NUM_CHANNELS]; //1=2MS, 2=4MS, 3=8MS, 4=16MS, 5=32MS, 6=64MS, 7=128MS, 8=256MS
 

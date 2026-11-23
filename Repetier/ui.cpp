@@ -855,7 +855,7 @@ void UIDisplay::parse(char* txt, bool ram) {
             }
             if (c2 == 'H') // %FH : Digit Homing to Zero ON/OFF
             {
-                addStringP(Printer::g_pressure_offset_active ? ui_text_on : ui_text_off);
+                addStringP(Printer::strainGauge.zeroingEnabled() ? ui_text_on : ui_text_off);
             }
             if (c2 == 'C') // %FC : Digits force-bend-hotend-down Compensation Z ON/OFF
             {
@@ -3610,8 +3610,9 @@ void UIDisplay::mainSwitchCase(int action) {
     }
 
     case UI_ACTION_DIGIT_HOMING: {
-        Printer::g_pressure_offset_active = (Printer::g_pressure_offset_active ? false : true);
-        HAL::eprSetByte(EPR_RF_ZERO_DIGIT_STATE, (Printer::g_pressure_offset_active ? 1 : 2)); //2 ist false, < 1 ist true
+        const bool enabled = !Printer::strainGauge.zeroingEnabled();
+        Printer::strainGauge.setZeroingEnabled(enabled);
+        HAL::eprSetByte(EPR_RF_ZERO_DIGIT_STATE, enabled ? 1 : 2);
         EEPROM::updateChecksum();
         break;
     }

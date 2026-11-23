@@ -479,7 +479,6 @@ extern unsigned char g_uRGBTargetB;
 #endif // RGB_LIGHT_R_PIN
 
 extern void initRF(void);
-extern void initStrainGauge(void);
 
 extern void showAbortScanReason(const void* scanName, char abortScanIdentifier);
 

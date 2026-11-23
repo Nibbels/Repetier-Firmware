@@ -34,6 +34,9 @@ unsigned short g_nManualSteps[4] = { 1, 1, 1, 28 };
 int32_t g_offsetZCompensationSteps = 250;
 short g_ZCompensationMax = 200;
 short forceDigits = 0;
+char g_nScanPressureReads = 4;
+unsigned short g_nScanPressureReadDelay = 3;
+short g_nScanPressureTolerance = 10;
 bool pollDuringMoves = true;
 bool clipReturn[4] = {};
 int incompleteReturns = 0;
@@ -50,6 +53,7 @@ void poll();
 
 namespace HAL {
 millis_t timeInMilliseconds() { return clockMs; }
+void delayMilliseconds(unsigned delay) { clockMs += delay; }
 int16_t eepromWords[2048] = {};
 int32_t eepromDWords[2048] = {};
 int16_t eprGetInt16(unsigned address) { return eepromWords[address]; }
@@ -95,6 +99,7 @@ void WRITE(int pin, bool high);
 #include "DigitCompensation.h"
 #include "SenseOffsetControl.h"
 #include "PressureProtection.h"
+#include "StrainGauge.h"
 
 #define PSTR(text) (text)
 #define UI_STATUS_UPD(text) ((void)0)
@@ -126,7 +131,13 @@ void setExtruderCurrent(int, int) {}
 
 struct WireInput {
     uint8_t byteIndex = 0;
+    unsigned configurations = 0;
     void beginTransmission(uint8_t address) const { assert(address == I2C_ADDRESS_STRAIN_GAUGE); }
+    void write(uint8_t value) {
+        assert(value == 0x8c);
+        byteIndex = 3;
+        ++configurations;
+    }
     void requestFrom(uint8_t address, uint8_t length) {
         assert(address == I2C_ADDRESS_STRAIN_GAUGE && length == 3);
         ++strainGaugeReads;
@@ -149,6 +160,7 @@ extern PrintStop printStop;
 ZOffset zOffset;
 SenseOffsetControl senseOffsetControl{SENSIBLE_PRESSURE_MAX_OFFSET};
 PressureProtection pressureProtection;
+StrainGauge strainGauge;
 ZMotion zMotion(zStepsPerMm);
 PrintLayers layers{zStepsPerMm};
 DigitCompensation digitCompensation{
@@ -172,11 +184,10 @@ float extrudeMultiplyErrorSteps = 0.0f, menuExtrusionFactor = 1.0f;
 bool relativeExtruderCoordinateMode = false;
 float compensatedPositionOverPercE = 0.0f;
 float compensatedPositionCollectTinyE = 0.0f;
-bool blockAll = false, g_pressure_offset_active = false;
+bool blockAll = false;
 volatile char doHeatBedZCompensation = true;
 bool printing = true, menuPaused = false;
 bool axesHomed = true, movingZ = false;
-short g_pressure_offset = 0;
 int feedrateMultiply = 100, motorCurrent[4] = {};
 char moveMode[3] = { MOVE_MODE_SINGLE_STEPS, MOVE_MODE_SINGLE_STEPS, MOVE_MODE_SINGLE_STEPS };
 
@@ -196,6 +207,7 @@ void setMenuMode(int mode, bool active) {
 }
 void stopPrint();
 void homeZAxis();
+void homeDigits();
 void enableSenseOffsetnow();
 char anyHomeDir(uint8_t axis) {
     assert(axis == Z_AXIS);
@@ -387,6 +399,47 @@ void sample(short force, int count = 1) {
     forceDigits = force;
     for (int i = 0; i < count; ++i)
         poll();
+}
+
+void digitZero() {
+    auto& gauge = Printer::strainGauge;
+    gauge.begin();
+    assert(Wire.configurations == 1);
+    assert(gauge.zeroingEnabled());
+    forceDigits = 1000;
+    Printer::homeDigits();
+    assert(gauge.zeroOffset() == 1000);
+    assert(strainGaugeReads == 4 && clockMs == 12);
+    assert(Printer::digitCompensation.latestDigits() == 1000);
+    assert(sampleStrainGauge() == 0);
+
+    forceDigits = -1200;
+    Printer::homeDigits();
+    assert(gauge.zeroOffset() == -1200); // Fresh reference, even with a prior zero.
+    assert(sampleStrainGauge() == 0);
+    forceDigits = -27767;
+    assert(sampleStrainGauge() == -26567);
+    forceDigits = -27768;
+    assert(sampleStrainGauge() == -27768);
+    forceDigits = 27766;
+    assert(sampleStrainGauge() == 28966);
+    forceDigits = 27767;
+    assert(sampleStrainGauge() == 27767);
+
+    gauge.setZeroingEnabled(false);
+    forceDigits = 2400;
+    const unsigned readsBeforeZero = strainGaugeReads;
+    Printer::homeDigits();
+    assert(strainGaugeReads == readsBeforeZero && gauge.zeroOffset() == -1200);
+    assert(gauge.effectiveZeroOffset() == 0);
+    assert(sampleStrainGauge() == 2400);
+    gauge.setZeroingEnabled(true);
+    assert(gauge.effectiveZeroOffset() == -1200);
+    assert(sampleStrainGauge() == 3600);
+
+    forceDigits = 5000;
+    Printer::homeDigits();
+    assert(!gauge.zeroOffset() && sampleStrainGauge() == 5000);
 }
 
 void pressurePause() {
@@ -1135,8 +1188,7 @@ void digitFlowSamples() {
     readAt(101, 4500, 1);
     check(3128, 1, 0.99f, 1034, 67);
 
-    Printer::g_pressure_offset_active = true;
-    Printer::g_pressure_offset = 1000;
+    assert(Printer::strainGauge.setZeroFromAverage(1000));
     readAt(112, 5500, 1);
     assert(compensation.latestDigits() == 4500);
     check(3471, 1, 1, 0, 70);
@@ -1215,7 +1267,7 @@ void initializeOffsets() {
 int main(int argc, char** argv) {
     assert(argc == 2);
     const bool digitFlowReplay = !std::strcmp(argv[1], "digit-flow");
-    if (!digitFlowReplay && std::strncmp(argv[1], "pressure-", 9))
+    if (!digitFlowReplay && std::strcmp(argv[1], "digit-zero") && std::strncmp(argv[1], "pressure-", 9))
         initializeOffsets();
     Printer::pause.restoreDefaultParking();
     Printer::pause.setParkSteps(E_AXIS, parkE);
@@ -1262,6 +1314,8 @@ int main(int argc, char** argv) {
         pressurePause();
     else if (!std::strcmp(argv[1], "pressure-stop"))
         pressureStop();
+    else if (!std::strcmp(argv[1], "digit-zero"))
+        digitZero();
     else
         return 1;
     std::printf("Print lifecycle replay passed (%s)\n", argv[1]);

@@ -76,7 +76,9 @@ The firmware restricted Play to a completed pause in 1.37t2. The 1.43.56 pause r
 
 - [x] **Give SenseOffset learning one owner.** The replay covers the ten-sample window, both force polarities, a falling average, tapering near the cap, pause, priming and crossing the first-layer boundary. It exercises queued settings activation, `M3909 P0`, Mod Menu thresholds and disabling bed compensation. It also checks that a queued limit change invalidates an increment that was calculated before the new limits arrived. The four AVR builds use 1 fewer byte of global SRAM and 22–32 more flash bytes. The 36 stepper instruction traces match the previous cycles and Z step counts. Physical verification remains open. [SenseOffset control](../Repetier/SenseOffsetControl.h) · [Host replay](../tests/pause-sense-offset.py)
 
-### Digit-Z
+### Strain gauge and Digit-Z
+
+- [x] **Extract sensor access and Digit Homing.** The driver configures and reads the ADC and owns the zero offset. The replay checks the signed I²C reading, fresh zero measurement, enable and disable, the raw-reading limits and rejection at 5000 digits. [Sensor driver](../Repetier/StrainGauge.cpp) · [Host replay](../tests/pause-sense-offset.py)
 
 - [x] **Give the DMS filter and Digit Flow one owner.** The host replay checks the sampling schedule, filter output, first-layer gating, live Z target and both flow factors. It runs M3912 through completion, skip and cancellation. The four AVR builds retain the same instruction sequence for applying the interval scale and mask both byte writes when publishing it. The 36 stepper traces match the previous cycles and Z step counts. Global SRAM drops by 3 bytes per build. Physical verification remains open. [Digit compensation](../Repetier/DigitCompensation.h) · [Host replay](../tests/pause-sense-offset.py)
 

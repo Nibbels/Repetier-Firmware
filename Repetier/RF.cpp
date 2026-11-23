@@ -196,42 +196,14 @@ unsigned char g_uRGBTargetB = 0;
 static void setupForPrinting();
 
 void initRF(void) {
-    // initialize the strain gauge
-    initStrainGauge();
+    Printer::strainGauge.begin();
 
     Printer::disableCMPnow(true);
     setupForPrinting();
 } // initRF
 
-void initStrainGauge(void) {
-    // configure DMS #1 (0x8C = single mode, 16 bits, gain = *1)
-    Wire.beginTransmission(I2C_ADDRESS_STRAIN_GAUGE);
-    Wire.write(0x8C);
-    Wire.endTransmission();
-    return;
-
-} // initStrainGauge
-
-static short readStrainGauge() {
-    Wire.beginTransmission(I2C_ADDRESS_STRAIN_GAUGE);
-    Wire.requestFrom((uint8_t)I2C_ADDRESS_STRAIN_GAUGE, (uint8_t)3);
-
-    const uint16_t high = Wire.read();
-    const uint16_t low = Wire.read();
-    const uint16_t value = (high << 8) + low;
-    Wire.read(); // ADC status byte.
-    Wire.endTransmission();
-
-    short digits = static_cast<int16_t>(value);
-    if (Printer::g_pressure_offset_active && -27768 < digits && digits < 27767) {
-        digits -= Printer::g_pressure_offset; // The zero offset is limited to 5000 digits.
-    }
-
-    return digits;
-}
-
 static short sampleStrainGauge() {
-    const short digits = readStrainGauge();
+    const short digits = Printer::strainGauge.readDigits();
     Printer::digitCompensation.observe(digits, Printer::doHeatBedZCompensation, [] {
         // The force brake also runs during M3912, regardless of the learned first-layer boundary.
         return Printer::zMotion.nominalSteps() > Printer::layers.fadeStartSteps() || g_startLineActive;
@@ -5285,7 +5257,7 @@ void processSpecialGCode(GCode* pCommand) {
             g_uStartOfIdle = 0; //M3913
 
                 //normalize dms sensor values to 0 if allowed in options and not already done
-            if (!Printer::g_pressure_offset)
+            if (!Printer::strainGauge.zeroOffset())
                 Printer::homeDigits();
 
             uint8_t Extrusion = 65; //max, wenn kein wiederstand. (ca. hotendlänge)
@@ -5350,7 +5322,7 @@ void processSpecialGCode(GCode* pCommand) {
             Printer::setEPositionMM(0); // G92 E0
 
                 //normalize dms sensor values to 0 if allowed in options and not already done
-            if (!Printer::g_pressure_offset)
+            if (!Printer::strainGauge.zeroOffset())
                 Printer::homeDigits();
 
             //work

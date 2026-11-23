@@ -24,6 +24,7 @@ def main():
     eeprom = (firmware / "Eeprom.h").read_text(encoding="utf-8")
     pause = (firmware / "PrintPause.cpp").read_text(encoding="utf-8")
     stop = (firmware / "PrintStop.cpp").read_text(encoding="utf-8")
+    dms = (firmware / "StrainGauge.cpp").read_text(encoding="utf-8")
     fragments = [
         section(eeprom, "#define EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX", "#define EPR_RF_HEATED_BED_SENSOR_TYPE"),
         section(rf_header, "#define UI_ACTION_RF_HEAT_BED_UP", "#define UI_ACTION_RF_PAUSE"),
@@ -32,13 +33,15 @@ def main():
         section(motion, "#define DIRECT_IDLE", "#define FOR_DIRECT"),
         section(motion, "    static bool hasStoppableDirectMove()", "\n\n")
         .replace("    static bool hasStoppableDirectMove()", "bool PrintLine::hasStoppableDirectMove()", 1),
-        section(rf, "static short readStrainGauge()", "\nvoid adjustPressureLimits("),
+        dms.removeprefix('#include "Repetier.h"\n#include <Wire.h>\n'),
+        section(rf, "static short sampleStrainGauge()", "\nvoid adjustPressureLimits("),
+        section(rf, "short readAveragePressure(", "} // readAveragePressure") + "}",
         section(rf, "long getZMatrixDepth_CurrentXY(", "\nvoid showAbortScanReason("),
         section(rf, "static void serviceSenseOffset(", "\nvoid handleScanWorkTasks("),
         pause.removeprefix('#include "Repetier.h"\n'),
         stop.removeprefix('#include "Repetier.h"\n'),
         section(printer, "void Printer::stopPrint()", "\n#define START_EXTRUDER_CONFIG"),
-        section(printer, "void Printer::homeZAxis()", "\nvoid Printer::homeDigits("),
+        section(printer, "void Printer::homeZAxis()", "\nvoid Printer::homeAxis("),
         section(printer, "void Printer::enableSenseOffsetnow(", "\nvoid Printer::enableCMPnow("),
         section(rf, "bool isAnyScanRunning()", "\nvoid moveXAction("),
         section(rf, "void moveZAction(int8_t direction) {", "} // moveZAction") + "}",
@@ -75,7 +78,7 @@ def main():
             "layer-scale", "compensation-bounds",
             "digit-flow", "prime-complete", "prime-skip", "prime-abort",
             "sense-window", "sense-settings", "sense-limit-interrupt",
-            "pressure-pause", "pressure-stop",
+            "pressure-pause", "pressure-stop", "digit-zero",
         ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
 

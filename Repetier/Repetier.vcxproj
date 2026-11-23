@@ -134,6 +134,7 @@
     <ClInclude Include="ZOffset.h" />
     <ClInclude Include="SenseOffsetControl.h" />
     <ClInclude Include="PressureProtection.h" />
+    <ClInclude Include="StrainGauge.h" />
     <ClInclude Include="Repetier.h" />
     <ClInclude Include="RF.h" />
     <ClInclude Include="RF1000.h" />
@@ -154,6 +155,7 @@
     <ClCompile Include="motion.cpp" />
     <ClCompile Include="Printer.cpp" />
     <ClCompile Include="RF.cpp" />
+    <ClCompile Include="StrainGauge.cpp" />
     <ClCompile Include="ui.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

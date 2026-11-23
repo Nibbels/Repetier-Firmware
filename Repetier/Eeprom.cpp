@@ -352,7 +352,7 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     HAL::eprSetByte(EPR_RF_MOTOR_CURRENT + E_AXIS + 1, Printer::motorCurrent[E_AXIS + 1]);
 #endif //NUM_EXTRUDER > 1
 
-    HAL::eprSetByte(EPR_RF_ZERO_DIGIT_STATE, (Printer::g_pressure_offset_active ? 1 : 2)); //2 ist false, < 1 ist true
+    HAL::eprSetByte(EPR_RF_ZERO_DIGIT_STATE, Printer::strainGauge.zeroingEnabled() ? 1 : 2);
     HAL::eprSetByte(EPR_RF_DIGIT_CMP_STATE, Printer::digitCompensation.digitZEnabled() ? 1 : 2);
 
     HAL::eprSetFloat(EPR_ZSCAN_START_MM, g_scanStartZLiftMM);
@@ -690,7 +690,7 @@ void EEPROM::readDataFromEEPROM() {
     }
     Printer::pressureProtection.setStopLimits(stopLimits);
 
-    Printer::g_pressure_offset_active = (HAL::eprGetByte(EPR_RF_ZERO_DIGIT_STATE) > 1 ? false : true); //2 ist false, < 1 ist true
+    Printer::strainGauge.setZeroingEnabled(HAL::eprGetByte(EPR_RF_ZERO_DIGIT_STATE) <= 1);
     Printer::digitCompensation.setDigitZEnabled(HAL::eprGetByte(EPR_RF_DIGIT_CMP_STATE) <= 1);
 
     float tmpss = HAL::eprGetFloat(EPR_ZSCAN_START_MM);
