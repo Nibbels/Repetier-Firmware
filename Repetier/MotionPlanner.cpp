@@ -18,8 +18,13 @@
 #include "Repetier.h"
 #include "MotionPlanner.h"
 
-int maxadv2 = 0;
-float maxadvspeed = 0;
+MotionPlanner::AdvancePeak MotionPlanner::advancePeak_{};
+
+MotionPlanner::AdvancePeak MotionPlanner::takeAdvancePeak() {
+    const AdvancePeak peak = advancePeak_;
+    advancePeak_ = {};
+    return peak;
+}
 
 inline float MotionPlanner::safeSpeed(PrintLine& move, int8_t drivingAxis) {
     const auto& lookahead = move.lookahead;
@@ -172,9 +177,9 @@ void MotionPlanner::prepareMove(PrintLine& move, const float axisDistanceMM[4], 
     } else {
         float advlin = fabs(lookahead.speedE) * Extruder::current->advanceL * 0.001 * Printer::axisStepsPerMM[E_AXIS];
         stepProfile.advanceL = ((65536L * advlin) / stepProfile.vMax);
-        if (advlin > maxadv2) {
-            maxadv2 = advlin;
-            maxadvspeed = fabs(lookahead.speedE);
+        if (advlin > advancePeak_.steps) {
+            advancePeak_.steps = advlin;
+            advancePeak_.extrusionSpeed = fabs(lookahead.speedE);
         }
     }
 

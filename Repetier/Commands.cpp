@@ -17,6 +17,7 @@
 
 #include "Repetier.h"
 #include "GCodeInput.h"
+#include "MotionPlanner.h"
 
 int Commands::lowestRAMValue = MAX_RAM;
 int Commands::lowestRAMValueSend = MAX_RAM;
@@ -865,12 +866,11 @@ void Commands::processMCode(GCode* com) {
     }
     case 232: // M232
     {
+        const auto peak = MotionPlanner::takeAdvancePeak();
         if (Printer::debugInfo()) {
-            Com::printF(Com::tLinearStepsColon, maxadv2);
-            Com::printFLN(Com::tCommaSpeedEqual, maxadvspeed);
+            Com::printF(Com::tLinearStepsColon, peak.steps);
+            Com::printFLN(Com::tCommaSpeedEqual, peak.extrusionSpeed);
         }
-        maxadv2 = 0;
-        maxadvspeed = 0;
         break;
     }
     case 233: // M233

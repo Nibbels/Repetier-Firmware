@@ -1770,6 +1770,21 @@ void idleStatusTransitions() {
     assert(status.poll(2000, delay) == Transition::Waiting && interruptsEnabled);
 }
 
+void advancePeakReport() {
+    PrintLine move;
+    move.setAxisSteps(X_AXIS, 16000);
+    move.setAxisSteps(E_AXIS, 5600);
+    const float axisDistances[] = {100, 0, 0, 20};
+    move.setSegmentGeometry(axisDistances);
+    Extruder::current->advanceL = 100.0f;
+    MotionPlanner::prepareMove(move, axisDistances, 25, PrintLine::queue);
+
+    const auto peak = MotionPlanner::takeAdvancePeak();
+    assert(peak.steps == 140 && peak.extrusionSpeed == 5.0f);
+    const auto cleared = MotionPlanner::takeAdvancePeak();
+    assert(cleared.steps == 0 && cleared.extrusionSpeed == 0.0f);
+}
+
 void lookaheadMoves() {
     MoveQueue& queue = PrintLine::queue;
     for (int index = 0; index < MOVE_CACHE_SIZE - 2; ++index) {
@@ -2039,6 +2054,8 @@ int main(int argc, char** argv) {
         moveQueue();
     else if (!std::strcmp(argv[1], "idle-status"))
         idleStatusTransitions();
+    else if (!std::strcmp(argv[1], "advance-peak"))
+        advancePeakReport();
     else if (!std::strcmp(argv[1], "ecmp-stepping"))
         ecmpStepping();
     else if (!std::strcmp(argv[1], "advance-timer"))
