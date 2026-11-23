@@ -15,19 +15,22 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef LOOKAHEAD_PLANNER_H
-#define LOOKAHEAD_PLANNER_H
+#ifndef MOTION_PLANNER_H
+#define MOTION_PLANNER_H
 
 #include <stdint.h>
 
 class MoveQueue;
 class PrintLine;
 
-class LookaheadPlanner {
+class MotionPlanner {
 public:
-    static void update(MoveQueue& queue);
+    static void prepareMove(PrintLine& move, const float axisDistanceMM[4], float feedrate, const MoveQueue& queue);
+    static void prepareStepProfile(PrintLine& move);
+    static void updateLookahead(MoveQueue& queue);
 
 private:
+    static float safeSpeed(PrintLine& move, int8_t drivingAxis);
     static void limitJunction(PrintLine& previous, const PrintLine& next);
     static void planDeceleration(MoveQueue& queue, uint8_t start, uint8_t first);
     static void planAcceleration(MoveQueue& queue, uint8_t first, uint8_t end);

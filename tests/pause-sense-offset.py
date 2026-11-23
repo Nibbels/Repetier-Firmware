@@ -20,7 +20,7 @@ def main():
     ui_header = (firmware / "ui.h").read_text(encoding="utf-8")
     motion = (firmware / "motion.h").read_text(encoding="utf-8")
     move_planner = (firmware / "motion.cpp").read_text(encoding="utf-8")
-    lookahead = (firmware / "LookaheadPlanner.cpp").read_text(encoding="utf-8")
+    planner = (firmware / "MotionPlanner.cpp").read_text(encoding="utf-8")
     printer = (firmware / "Printer.cpp").read_text(encoding="utf-8")
     printer_header = (firmware / "Printer.h").read_text(encoding="utf-8")
     eeprom = (firmware / "Eeprom.h").read_text(encoding="utf-8")
@@ -78,7 +78,7 @@ def main():
         section(move_planner, "speed_t PrintLine::nextStepSpeed(", "\nlong PrintLine::performMove("),
         move_planner[move_planner.index("void PrintLine::prepareDirectMove("):move_planner.index("/** \\brief Check if move is new.")]
         .replace("void PrintLine::stopDirectMove() {", "void PrintLine::applyDirectStop() {", 1),
-        lookahead.split('#include "LookaheadPlanner.h"\n', 1)[1],
+        planner.split('#include "MotionPlanner.h"\n', 1)[1],
         section(move_planner, "uint8_t PrintLine::insertWaitMovesIfNeeded(", "\nvoid PrintLine::waitForXFreeLines("),
         section(hal, "uint8_t PressureAdvance::nextTimerCompare(", "\nISR(EXTRUDER_TIMER_VECTOR"),
         "void rescalePlannedAxis(uint8_t axis) {\nusing namespace Printer;\n"

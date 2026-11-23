@@ -20,7 +20,7 @@
 #include "BedCompensation.h"
 #include "PrintPause.h"
 #include "PrintStop.h"
-#include "LookaheadPlanner.h"
+#include "MotionPlanner.h"
 
 // The replay compiles the live firmware routines. These shims supply DMS bytes,
 // a bed profile, a clock and the motor displacements completed during each wait.
@@ -31,8 +31,6 @@ using fast8_t = int8_t;
 constexpr uint32_t F_CPU = 16000000UL;
 constexpr int32_t LIMIT_INTERVAL = (F_CPU / 40000) + 1;
 constexpr bool FEEDRATE_GCODE = true;
-int maxadv2 = 0;
-float maxadvspeed = 0;
 constexpr float zStepsPerMm = 1280.0f;
 constexpr int16_t initialClearance = 20;
 constexpr int16_t printingForce = 6000;
@@ -409,11 +407,8 @@ struct PrintLine {
     LookaheadData lookahead{};
     StepProfile stepProfile{};
     speed_t nextStepSpeed(StepClock& clock, uint8_t pulses, uint32_t interval);
-    void prepareStepProfile();
     void fitRampToRemainingSteps();
     void limitToStopTail(bool refitRamp);
-    void calculateMove(float axisDistanceMM[], fast8_t drivingAxis, float feedrate);
-    inline float safeSpeed(fast8_t drivingAxis);
     float fullSpeed = 0;
     int32_t timeInTicks = 0;
     uint8_t primaryAxis = 0;
@@ -1777,18 +1772,18 @@ void lookaheadMoves() {
         Printer::advanceActive = advance;
         queue.clear();
         PrintLine& front = prepare(printX);
-        LookaheadPlanner::update(queue);
+        MotionPlanner::updateLookahead(queue);
         queue.publish(true);
         PrintLine& reserved = prepare(printX);
-        LookaheadPlanner::update(queue);
+        MotionPlanner::updateLookahead(queue);
         queue.publish(true);
         assert(queue.activateFront() == &front);
         const uint8_t frontFlags = front.joinFlags, reservedFlags = reserved.joinFlags;
         PrintLine& previous = prepare(printX);
-        LookaheadPlanner::update(queue);
+        MotionPlanner::updateLookahead(queue);
         queue.publish(true);
         PrintLine& newest = prepare(axes);
-        LookaheadPlanner::update(queue);
+        MotionPlanner::updateLookahead(queue);
 
         assert(interruptsEnabled && queue.count() == 3);
         assert(queue.active() == &front && front.joinFlags == frontFlags && reserved.joinFlags == reservedFlags);
@@ -1838,7 +1833,7 @@ void directRamp() {
     PrintLine legacyStop = move;
     legacyStop.stepsRemaining = 32;
     legacyStop.invalidateStepProfile();
-    legacyStop.prepareStepProfile();
+    MotionPlanner::prepareStepProfile(legacyStop);
     {
         InterruptProtectedBlock lock;
         PrintLine::stopDirectMove();

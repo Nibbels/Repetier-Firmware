@@ -56,7 +56,7 @@ class MoveQueue;
 class PrintLine {
     friend class UIDisplay;
     friend class MoveQueue;
-    friend class LookaheadPlanner;
+    friend class MotionPlanner;
 
 public:
     flag8_t joinFlags;
@@ -82,7 +82,6 @@ private:
     static volatile uint32_t stepIntervalTicks;
     static uint8_t stepsPerTimerCall;
     speed_t nextStepSpeed(StepClock& clock, uint8_t pulses, uint32_t interval);
-    void prepareStepProfile();
     inline bool isStepProfileReady() const {
         return joinFlags & FLAG_JOIN_STEP_PROFILE_READY;
     } // isStepProfileReady
@@ -358,8 +357,6 @@ public:
         HAL::allowInterrupts();
     }  // updateAdvanceSteps
 
-    inline float safeSpeed(fast8_t drivingAxis);
-    void calculateMove(float axis_diff[], fast8_t drivingAxis, float feedrate);
 
     INLINE long getWaitTicks() {
         return timeInTicks;
