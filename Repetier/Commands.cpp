@@ -79,35 +79,15 @@ void Commands::checkForPeriodicalActions(enum FirmwareState state) {
 
 } // checkForPeriodicalActions
 
-/** \brief Waits until movement cache is empty.
-    Some commands expect no movement, before they can execute. This function
-    waits, until the steppers are stopped. In the meanwhile it buffers incoming
-    commands and manages temperatures. */
-void Commands::waitUntilEndOfAllMoves() {
-    bool bWait = false;
-
-    if (PrintLine::hasLines())
-        bWait = true;
-
-    bWait = (Printer::needsCMPwait() ? true : bWait);
-
-    while (bWait) {
-        Commands::checkForPeriodicalActions(Processing);
-
-        bWait = false;
-        if (PrintLine::hasLines())
-            bWait = true;
-
-        bWait = (Printer::needsCMPwait() ? true : bWait);
+bool Commands::waitForMotion(MotionWait motion, PauseWait pause) {
+    const bool drainOutputs = motion == MotionWait::AllOutputs;
+    // The periodic pump can run panel commands. Only one caller may drain Advance.
+    static bool drainingOutputs = false;
+    if (drainOutputs) {
+        if (drainingOutputs)
+            return false;
+        drainingOutputs = true;
     }
-} // waitUntilEndOfAllMoves
-
-bool Commands::waitForMotionHandoff(bool waitThroughPause) {
-    // Periodic actions can run panel commands while the foreground waits.
-    static bool waiting = false;
-    if (waiting)
-        return false;
-    waiting = true;
 
     bool settled = false;
     auto& advance = Printer::extrusionOutput;
@@ -116,17 +96,29 @@ bool Commands::waitForMotionHandoff(bool waitThroughPause) {
         {
             InterruptProtectedBlock lock;
             paused = Printer::pause.isPaused();
-            if (!paused && !PrintLine::hasLines() && !PrintLine::directMoveActive() && !Printer::needsCMPwait())
-                settled = advance.drain();
-            else
-                advance.cancelDrain();
+            const bool queueAndZSettled = !PrintLine::hasLines() && !Printer::needsCMPwait();
+            if (drainOutputs) {
+                if (queueAndZSettled && !paused && !PrintLine::directMoveActive())
+                    settled = advance.drain();
+                else
+                    advance.cancelDrain();
+            } else {
+                settled = queueAndZSettled;
+            }
         }
-        if (settled || (paused && !waitThroughPause))
+        if (paused && pause == PauseWait::Cancel) {
+            settled = false;
             break;
-        Commands::checkForPeriodicalActions(paused ? Paused : Processing);
+        }
+        if (settled)
+            break;
+        Commands::checkForPeriodicalActions(drainOutputs && paused ? Paused : Processing);
     }
-    advance.cancelDrain();
-    waiting = false;
+
+    if (drainOutputs) {
+        advance.cancelDrain();
+        drainingOutputs = false;
+    }
     return settled;
 }
 
@@ -336,7 +328,8 @@ void Commands::processGCode(GCode* com) {
 
     case 4: // G4 dwell
     {
-        Commands::waitUntilEndOfAllMoves(); //G4
+        if (!Commands::waitForMotion(Commands::MotionWait::QueueAndZ, Commands::PauseWait::Resume))
+            break;
         uint32_t codenum = 0;
         if (com->hasP())
             codenum = com->P; // milliseconds to wait
@@ -429,8 +422,9 @@ void Commands::processMCode(GCode* com) {
             break;
 
         //TODO man müsste das in den Movecache legen!
-        if (com->hasP() || (com->hasS() && com->S == 0))
-            Commands::waitUntilEndOfAllMoves(); //M104
+        const bool heaterOff = com->hasS() && com->S == 0;
+        if ((com->hasP() || heaterOff) && !Commands::waitForMotion(Commands::MotionWait::QueueAndZ, Commands::PauseWait::Resume) && !heaterOff)
+            break;
 
         if (com->hasS()) {
             if (com->hasT())
@@ -470,7 +464,8 @@ void Commands::processMCode(GCode* com) {
         }
 
         Printer::idleStatus.cancel();
-        Commands::waitUntilEndOfAllMoves(); //M109
+        if (!Commands::waitForMotion(Commands::MotionWait::QueueAndZ, Commands::PauseWait::Resume))
+            break;
 
         Extruder* actExtruder = Extruder::current;
         if (com->hasT() && com->T < NUM_EXTRUDER)
@@ -535,7 +530,8 @@ void Commands::processMCode(GCode* com) {
             break;
         }
         Printer::idleStatus.cancel();
-        Commands::waitUntilEndOfAllMoves(); //M190
+        if (!Commands::waitForMotion(Commands::MotionWait::QueueAndZ, Commands::PauseWait::Resume))
+            break;
         if (com->hasS())
             Extruder::setHeatedBedTemperature(com->S);
 
@@ -633,7 +629,7 @@ void Commands::processMCode(GCode* com) {
         if (com->hasS()) {
             Printer::inactivity.setStepperTimeout(com->S * 1000);
         } else {
-            if (Commands::waitForMotionHandoff(true))
+            if (Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Resume))
                 Printer::disableAllSteppersNow();
         }
         break;
@@ -714,7 +710,7 @@ void Commands::processMCode(GCode* com) {
             break;
         }
 
-        Commands::waitUntilEndOfAllMoves(); //M119
+        Commands::waitForMotion(Commands::MotionWait::QueueAndZ, Commands::PauseWait::Resume);
 
         Com::printF(Com::tXMinColon);
         Com::printF(Printer::isXMinEndstopHit() ? Com::tHSpace : Com::tLSpace);
@@ -808,7 +804,7 @@ void Commands::processMCode(GCode* com) {
     }
     case 206: // M206 - T[type] P[pos] [Sint(long] [Xfloat]  Set eeprom value
     {
-        if (Commands::waitForMotionHandoff(true))
+        if (Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Resume))
             EEPROM::update(com);
         break;
     }
@@ -843,7 +839,8 @@ void Commands::processMCode(GCode* com) {
             extId = com->T;
         }
         if (extId >= 0 && extId < NUM_EXTRUDER) {
-            Commands::waitUntilEndOfAllMoves(); //M218
+            if (!Commands::waitForMotion(Commands::MotionWait::QueueAndZ, Commands::PauseWait::Resume))
+                break;
             int32_t dx = 0;
             int32_t dy = 0;
             if (com->hasX()) {
@@ -904,7 +901,7 @@ void Commands::processMCode(GCode* com) {
     }
     case 233: // M233
     {
-        if (com->hasY() && com->Y != Extruder::current->advanceL && Commands::waitForMotionHandoff(true)) {
+        if (com->hasY() && com->Y != Extruder::current->advanceL && Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Resume)) {
             Extruder::current->advanceL = com->Y;
             Printer::applyAdvanceSettings();
         }
@@ -944,7 +941,7 @@ void Commands::processMCode(GCode* com) {
     // Ende Idee und Teilcode von WESSIX
     case 400: // M400 - Finish all moves
     {
-        Commands::waitForMotionHandoff(true);
+        Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Resume);
         break;
     }
 
@@ -995,7 +992,7 @@ void Commands::processMCode(GCode* com) {
     }
     case 501: // M501
     {
-        if (!Commands::waitForMotionHandoff(true))
+        if (!Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Resume))
             break;
         EEPROM::readDataFromEEPROM();
 
@@ -1006,7 +1003,7 @@ void Commands::processMCode(GCode* com) {
     }
     case 502: // M502
     {
-        if (!Commands::waitForMotionHandoff(true))
+        if (!Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Resume))
             break;
         EEPROM::restoreEEPROMSettingsFromConfiguration();
         EEPROM::storeDataIntoEEPROM(false);

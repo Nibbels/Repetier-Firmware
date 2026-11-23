@@ -653,8 +653,8 @@ public:
     static void setFeedrate(float feedrate);
     static bool queueGCodeCoordinates(GCode* com);
     static void queueFloatCoordinates(float x, float y, float z, float e, float feedrate);
-    static void queueRelativeStepsCoordinates(long x, long y, long z, long e, float feedrate, bool waitEnd, bool abortAtEndstops = false);
-    static void queueRelativeMMCoordinates(float x, float y, float z, float e, float feedrate, bool waitEnd, bool abortAtEndstops = false);
+    static bool queueRelativeStepsCoordinates(long x, long y, long z, long e, float feedrate, bool waitEnd, bool abortAtEndstops = false);
+    static bool queueRelativeMMCoordinates(float x, float y, float z, float e, float feedrate, bool waitEnd, bool abortAtEndstops = false);
     static void offsetRelativeStepsCoordinates(int32_t dx, int32_t dy, int32_t dz, int32_t de, uint8_t configuration = 0);
     static void homeDigits();
     static void homeAxis(bool xaxis, bool yaxis, bool zaxis); /// Home axis

@@ -425,7 +425,8 @@ void scanHeatBed(void) {
 
             // start at the home position
             Printer::homeAxis(true, true, true);
-            Commands::waitUntilEndOfAllMoves(); //scanHeatBed
+            if (!Commands::waitForMotion(Commands::MotionWait::QueueAndZ, Commands::PauseWait::Resume))
+                break;
 
             // move a bit away from the heat bed in order to achieve better measurements in case of hardware configurations where the extruder is very close to the heat bed after the z-homing
             moveZ(long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM));
@@ -3078,7 +3079,7 @@ void handleStartStandby(millis_t uTime) {
 }
 
 void outputObject(bool showerrors) {
-    if (PrintLine::hasLines() || !Commands::waitForMotionHandoff()) {
+    if (PrintLine::hasLines() || !Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Cancel)) {
         if (showerrors)
             showError((void*)ui_text_output_object, (void*)ui_text_operation_denied);
         return;
@@ -3101,7 +3102,7 @@ void outputObject(bool showerrors) {
         GCodeInput::executeFlashScript(Com::tOutputObjectPrint);
     }
 
-    if (!Commands::waitForMotionHandoff())
+    if (!Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Cancel))
         return;
 
     // disable all steppers
@@ -3155,7 +3156,7 @@ void setExtruderCurrent(uint8_t nr, uint8_t current) {
 } // setExtruderCurrent
 
 static bool prepareFilamentProgram() {
-    if (Commands::waitForMotionHandoff())
+    if (Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Cancel))
         return true;
     Com::printFLN(PSTR("Filament program requires settled, unpaused motion"));
     return false;

@@ -94,6 +94,8 @@ On the RF2000 build, an instruction trace of an idle tick with 400 steps of pend
 
 The AVR builds use 4 fewer bytes of global SRAM and 76–136 fewer bytes of flash than `48e0c99`. The Timer1 pause check uses the same instructions. Instruction traces for queued X and Z, direct Z and idle compensation match the previous cycle counts on all three model builds. Physical pulse timing still needs verification.
 
+`Commands::waitForMotion` services the firmware while waiting. Homing moves, priming and heater commands wait for the queue and following Z correction. Tool and Advance changes, automatic filament programs and output moves also settle direct motion and drain Advance. Panel actions that need full motion ownership cancel on pause. Serial handoffs can wait for Play. The wait returns failure on an emergency or print stop so a cancelled heater wait or homing move cannot commit its next action. [Motion wait](../Repetier/Commands.cpp) · [Lifecycle replay](../tests/pause-sense-offset.py)
+
 ### Job boundaries and DMS
 
 `StrainGauge` owns I²C access, the Digit Homing setting and the measured zero in RAM. `sampleStrainGauge()` passes the corrected sample to `DigitCompensation` and its caller. The periodic DMS checks, scan pressure averaging and filament load and unload use the same entry point. The filter publishes the timer interval scale atomically on change. The planner reads the extrusion factor for new E segments, and Timer1 reads the scale for queued XY-primary segments. SenseOffset and the emergency pressure checks consume the corrected sample on their own schedules. [Sensor driver](../Repetier/StrainGauge.cpp) · [Filter and Digit Flow](../Repetier/DigitCompensation.h)

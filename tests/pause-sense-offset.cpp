@@ -61,7 +61,7 @@ void (*duringHeatWait)() = nullptr;
 std::function<void()> duringPeriodicActions;
 std::function<void()> duringOutputScript;
 unsigned motorShutdowns = 0;
-unsigned primePolls = 0, primeMoves = 0, primeWaits = 0, skipPrimeAt = 0, abortPrimeAt = 0;
+unsigned primePolls = 0, primeMoves = 0, skipPrimeAt = 0, abortPrimeAt = 0;
 unsigned primeSpacingMoves = 0;
 struct PrimeMove {
     float x, y, z, e, speed;
@@ -286,13 +286,15 @@ void setHomed(int8_t x, int8_t y, int8_t z) {
         doHeatBedZCompensation = false;
 }
 // Model the endstop contact and backoff used by homeZAxis().
-void queueRelativeStepsCoordinates(long, long, long z, long, float, bool, bool checkEndstop) {
+bool queueRelativeStepsCoordinates(long, long, long z, long, float, bool, bool checkEndstop) {
     assert(z < 0 && checkEndstop);
     zMotion.setMotorReference(0);
+    return true;
 }
-void queueRelativeMMCoordinates(float, float, float z, float, float, bool, bool checkEndstop = false) {
+bool queueRelativeMMCoordinates(float, float, float z, float, float, bool, bool checkEndstop = false) {
     const int32_t steps = zMotion.motorSteps() + int32_t(z * axisStepsPerMM[Z_AXIS]);
     zMotion.setMotorReference(checkEndstop ? std::max(int32_t(0), steps) : steps);
+    return true;
 }
 void setXAxisSteps(long) {}
 void setYAxisSteps(long) {}
@@ -306,23 +308,7 @@ float getDirectMM(uint8_t axis) { return directCurrentSteps[axis] * axisMMPerSte
 int32_t softwareEndstopSteps(uint8_t axis) {
     return axis == Z_AXIS ? zMotion.maxSteps() : maxSoftEndstopSteps[axis];
 }
-void queueFloatCoordinates(float x, float y, float z, float e, float speed) {
-    assert(startLine.active() && !printStop.commandsBlocked());
-    ++primeMoves;
-    if (primeMoves == 1)
-        primeApproach = {x, y, z, e, speed};
-    if (primeMoves == 2)
-        firstPrimeSegment = {x, y, z, e, speed};
-    if (x == IGNORE_COORDINATE && y != IGNORE_COORDINATE && e == IGNORE_COORDINATE)
-        ++primeSpacingMoves;
-    if (z != IGNORE_COORDINATE)
-        zMotion.setNominalSteps(std::lround(z * axisStepsPerMM[Z_AXIS]));
-    if (e != IGNORE_COORDINATE) {
-        setEPositionMM(e);
-        extrusionPlanner.restoreStepRemainder(0.375f);
-        extrusionCompensation.restoreRemainder(0.25f);
-    }
-}
+void queueFloatCoordinates(float x, float y, float z, float e, float speed);
 bool checkPlayKey() { return skipPrimeAt && primePolls >= skipPrimeAt; }
 bool checkAbortKeys() { return false; }
 void offsetRelativeStepsCoordinates(long x, long y, long z, long e, int task = TASK_NO_TASK);
@@ -482,6 +468,25 @@ struct PrintLine {
 };
 
 PrintLine PrintLine::direct;
+
+void Printer::queueFloatCoordinates(float x, float y, float z, float e, float speed) {
+    assert(startLine.active() && !printStop.commandsBlocked());
+    ++primeMoves;
+    ++PrintLine::linesCount;
+    if (primeMoves == 1)
+        primeApproach = {x, y, z, e, speed};
+    if (primeMoves == 2)
+        firstPrimeSegment = {x, y, z, e, speed};
+    if (x == IGNORE_COORDINATE && y != IGNORE_COORDINATE && e == IGNORE_COORDINATE)
+        ++primeSpacingMoves;
+    if (z != IGNORE_COORDINATE)
+        zMotion.setNominalSteps(std::lround(z * axisStepsPerMM[Z_AXIS]));
+    if (e != IGNORE_COORDINATE) {
+        setEPositionMM(e);
+        extrusionPlanner.restoreStepRemainder(0.375f);
+        extrusionCompensation.restoreRemainder(0.25f);
+    }
+}
 int PrintLine::linesCount = 3;
 int PrintLine::queuedTask = TASK_NO_TASK;
 int PrintLine::stopRequests = 0;
@@ -515,8 +520,9 @@ struct UIDisplay {
 enum FirmwareState { Paused, Processing, WaitHeater };
 namespace Commands {
 void checkForPeriodicalActions(FirmwareState);
-bool waitForMotionHandoff(bool waitThroughPause = false);
-void waitUntilEndOfAllMoves() { ++primeWaits; PrintLine::linesCount = 0; }
+enum class MotionWait { QueueAndZ, AllOutputs };
+enum class PauseWait { Resume, Cancel };
+bool waitForMotion(MotionWait motion, PauseWait pause);
 void changeFeedrateMultiply(int) { assert(false); }
 void printCurrentPosition() {}
 void setFanSpeed(uint8_t) {}
@@ -569,10 +575,11 @@ long getZMatrixDepth(long x, long y) {
 
 void withStartLine(const std::function<void()>& action) {
     assert(!duringPeriodicActions);
+    PrintLine::linesCount = 0;
     skipPrimeAt = primePolls + 1;
     duringPeriodicActions = [&] {
-        ++primePolls;
-        action();
+        if (++primePolls == skipPrimeAt)
+            action();
     };
     GCode command;
     Printer::startLine.run(command);
@@ -1475,6 +1482,7 @@ void primeFlowCleanup(unsigned skipAt, unsigned abortAt) {
     Printer::relativeExtruderCoordinateMode = true;
     Printer::feedrateMultiply = 85;
     Printer::menuExtrusionFactor = 0.93f;
+    PrintLine::linesCount = 0;
     skipPrimeAt = skipAt;
     abortPrimeAt = abortAt;
     duringPeriodicActions = [] {
@@ -1495,7 +1503,7 @@ void primeFlowCleanup(unsigned skipAt, unsigned abortAt) {
     Printer::startLine.run(command);
     duringPeriodicActions = nullptr;
 
-    assert(observedPrimeBrake && primeWaits == 2);
+    assert(observedPrimeBrake && !PrintLine::hasLines());
     assert((skipAt || abortAt) ? primeMoves == (skipAt ? skipAt : abortAt) : primeMoves > 300);
     const auto profile = compensation.flowProfile();
     assert(profile.minDigits == 2000 && profile.maxDigits == 6100);
@@ -1512,6 +1520,7 @@ void primeFlowCleanup(unsigned skipAt, unsigned abortAt) {
 }
 
 void primeParameters() {
+    PrintLine::linesCount = 0;
     GCode command;
     command.S = 6000;
     command.P = 2000;
@@ -1522,11 +1531,11 @@ void primeParameters() {
 
     Printer::axesHomed = false;
     Printer::startLine.run(command);
-    assert(!primeMoves && primeWaits == 1);
+    assert(!primeMoves);
     Printer::axesHomed = true;
     Printer::doHeatBedZCompensation = false;
     Printer::startLine.run(command);
-    assert(!primeMoves && primeWaits == 2);
+    assert(!primeMoves);
     Printer::doHeatBedZCompensation = true;
 
     duringPeriodicActions = [] {
@@ -1535,7 +1544,7 @@ void primeParameters() {
     };
     Printer::startLine.run(command);
     duringPeriodicActions = nullptr;
-    assert(primeWaits == 4 && primeSpacingMoves == 5);
+    assert(!PrintLine::hasLines() && primeSpacingMoves == 5);
     assert(primeApproach.x == 15.0f && primeApproach.y == 122.5f && primeApproach.z == 0.35f);
     assert(primeApproach.e == IGNORE_COORDINATE && primeApproach.speed == 60.0f);
     assert(firstPrimeSegment.speed == 50.0f && firstPrimeSegment.y == 122.5f);
@@ -1867,6 +1876,39 @@ void advanceModeChange() {
     assert(advance.advanceEnabled() && advance.pendingSteps() == 0);
 }
 
+void motionWait() {
+    using namespace Commands;
+    PrintLine::direct.task = DIRECT_RUNNING;
+    PrintLine::linesCount = 2;
+    unsigned polls = 0;
+    duringPeriodicActions = [&] {
+        ++polls;
+        assert(PrintLine::directMoveActive());
+    };
+    assert(waitForMotion(MotionWait::QueueAndZ, PauseWait::Resume));
+    assert(polls == 2 && PrintLine::directMoveActive());
+
+    Printer::pause.request(PrintPause::Destination::InPlace);
+    PrintLine::linesCount = 1;
+    assert(!waitForMotion(MotionWait::QueueAndZ, PauseWait::Cancel));
+    assert(!waitForMotion(MotionWait::AllOutputs, PauseWait::Cancel));
+    assert(polls == 2 && PrintLine::linesCount == 1 && PrintLine::directMoveActive());
+
+    duringPeriodicActions = [&] {
+        ++polls;
+        Printer::pause.cancel();
+        PrintLine::direct.task = DIRECT_IDLE;
+    };
+    assert(waitForMotion(MotionWait::AllOutputs, PauseWait::Resume));
+    assert(polls == 4 && !PrintLine::hasLines());
+
+    PrintLine::linesCount = 1;
+    duringPeriodicActions = [] { Printer::stopPrint(); };
+    assert(!waitForMotion(MotionWait::QueueAndZ, PauseWait::Resume));
+    assert(Printer::printStop.commandsBlocked());
+    duringPeriodicActions = nullptr;
+}
+
 void advanceCancel() {
     auto& output = Printer::extrusionOutput;
     output.setAdvanceEnabled(true);
@@ -1876,7 +1918,7 @@ void advanceCancel() {
     Printer::stopPrint();
     assert(output.blocked() && output.pendingSteps() == 0);
     assert(Printer::printStop.commandsBlocked() && !PrintLine::hasLines());
-    assert(!Commands::waitForMotionHandoff(true));
+    assert(!Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Resume));
 
     PrintLine move;
     move.moveE = true;
@@ -2490,6 +2532,8 @@ int main(int argc, char** argv) {
         advanceTimer();
     else if (!std::strcmp(argv[1], "advance-mode"))
         advanceModeChange();
+    else if (!std::strcmp(argv[1], "motion-wait"))
+        motionWait();
     else if (!std::strcmp(argv[1], "advance-cancel"))
         advanceCancel();
     else if (!std::strcmp(argv[1], "pressure-advance-pause"))

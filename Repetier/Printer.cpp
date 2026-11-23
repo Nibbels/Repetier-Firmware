@@ -329,14 +329,17 @@ void Printer::queueFloatCoordinates(float x, float y, float z, float e, float fe
 } // queueFloatCoordinates
 
 /** \brief Move printer the given number of steps. Puts the move into the queue. Used by e.g. homing commands. */
-void Printer::queueRelativeStepsCoordinates(long dx, long dy, long dz, long de, float feedrate, bool waitEnd, bool abortAtEndstops) {
-    queueRelativeMMCoordinates(dx * axisMMPerSteps[X_AXIS], dy * axisMMPerSteps[Y_AXIS],
-                               dz * axisMMPerSteps[Z_AXIS], de * axisMMPerSteps[E_AXIS],
-                               feedrate, waitEnd, abortAtEndstops);
+bool Printer::queueRelativeStepsCoordinates(long dx, long dy, long dz, long de, float feedrate, bool waitEnd, bool abortAtEndstops) {
+    return queueRelativeMMCoordinates(dx * axisMMPerSteps[X_AXIS], dy * axisMMPerSteps[Y_AXIS],
+                                      dz * axisMMPerSteps[Z_AXIS], de * axisMMPerSteps[E_AXIS],
+                                      feedrate, waitEnd, abortAtEndstops);
 } // queueRelativeStepsCoordinates
 
 /** \brief Move printer the given number of mm. Puts the move into the queue. */
-void Printer::queueRelativeMMCoordinates(float dx, float dy, float dz, float de, float feedrate, bool waitEnd, bool abortAtEndstops) {
+bool Printer::queueRelativeMMCoordinates(float dx, float dy, float dz, float de, float feedrate, bool waitEnd, bool abortAtEndstops) {
+    if (Printer::blockAll || Printer::printStop.commandsBlocked())
+        return false;
+
     moveTarget.addMM(X_AXIS, dx);
     moveTarget.addMM(Y_AXIS, dy);
     moveTarget.addMM(Z_AXIS, dz);
@@ -344,10 +347,11 @@ void Printer::queueRelativeMMCoordinates(float dx, float dy, float dz, float de,
 
     PrintLine::prepareQueueMove(abortAtEndstops, !waitEnd, feedrate);
 
-    if (waitEnd)
-        Commands::waitUntilEndOfAllMoves();
+    if (waitEnd && !Commands::waitForMotion(Commands::MotionWait::QueueAndZ, Commands::PauseWait::Resume))
+        return false;
 
     Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
+    return true;
 } // queueRelativeMMCoordinates
 
 /**
@@ -939,9 +943,13 @@ void Printer::homeXAxis() {
 #endif // NUM_EXTRUDER>1
 
 
-        Printer::queueRelativeStepsCoordinates(long(2 * abs(maxSoftEndstopSteps[X_AXIS] + 2 * offX) * nHomeDir), 0, 0, 0, homingFeedrate[X_AXIS], false, true); //stop at endstop
+        if (!Printer::queueRelativeStepsCoordinates(long(2 * abs(maxSoftEndstopSteps[X_AXIS] + 2 * offX) * nHomeDir), 0, 0, 0, homingFeedrate[X_AXIS], false, true))
+            return;
         Printer::queueRelativeMMCoordinates(-1 * ENDSTOP_X_BACK_MOVE * nHomeDir, 0, 0, 0, homingFeedrate[X_AXIS] / ENDSTOP_X_RETEST_REDUCTION_FACTOR, false);
-        Printer::queueRelativeMMCoordinates(2 * ENDSTOP_X_BACK_MOVE * nHomeDir, 0, 0, 0, homingFeedrate[X_AXIS] / ENDSTOP_X_RETEST_REDUCTION_FACTOR, true, true); //stop at endstop, wait
+        if (!Printer::queueRelativeMMCoordinates(2 * ENDSTOP_X_BACK_MOVE * nHomeDir, 0, 0, 0, homingFeedrate[X_AXIS] / ENDSTOP_X_RETEST_REDUCTION_FACTOR, true, true)) {
+            setHomed(false, -1, -1);
+            return;
+        }
 
         Printer::xyMotion.setMotorSteps(X_AXIS, (nHomeDir == -1) ? 0 : maxSoftEndstopSteps[X_AXIS]);
 
@@ -979,9 +987,13 @@ void Printer::homeYAxis() {
 #endif // NUM_EXTRUDER>1
 
 
-        Printer::queueRelativeStepsCoordinates(0, long(2 * abs(maxSoftEndstopSteps[Y_AXIS] + 2 * offY) * nHomeDir), 0, 0, homingFeedrate[Y_AXIS], false, true); //stop at endstop
+        if (!Printer::queueRelativeStepsCoordinates(0, long(2 * abs(maxSoftEndstopSteps[Y_AXIS] + 2 * offY) * nHomeDir), 0, 0, homingFeedrate[Y_AXIS], false, true))
+            return;
         Printer::queueRelativeMMCoordinates(0, -1 * ENDSTOP_Y_BACK_MOVE * nHomeDir, 0, 0, homingFeedrate[Y_AXIS] / ENDSTOP_Y_RETEST_REDUCTION_FACTOR, false);
-        Printer::queueRelativeMMCoordinates(0, 2 * ENDSTOP_Y_BACK_MOVE * nHomeDir, 0, 0, homingFeedrate[Y_AXIS] / ENDSTOP_Y_RETEST_REDUCTION_FACTOR, true, true); //stop at endstop, wait
+        if (!Printer::queueRelativeMMCoordinates(0, 2 * ENDSTOP_Y_BACK_MOVE * nHomeDir, 0, 0, homingFeedrate[Y_AXIS] / ENDSTOP_Y_RETEST_REDUCTION_FACTOR, true, true)) {
+            setHomed(-1, false, -1);
+            return;
+        }
 
         Printer::xyMotion.setMotorSteps(Y_AXIS, (nHomeDir == -1) ? 0 : maxSoftEndstopSteps[Y_AXIS]);
 #if NUM_EXTRUDER > 1
@@ -1027,7 +1039,8 @@ void Printer::homeZAxis() {
 
         //1. Schnelles Fahren bis zum Schalterkontakt:
         //Ist der Schalter gedrückt, wird sofort geskipped.
-        Printer::queueRelativeStepsCoordinates(0, 0, (zMotion.maxSteps() + 2 * int32_t(zMotion.minOvertravel())) * nHomeDir, 0, homingFeedrate[Z_AXIS], true, true);
+        if (!Printer::queueRelativeStepsCoordinates(0, 0, (zMotion.maxSteps() + 2 * int32_t(zMotion.minOvertravel())) * nHomeDir, 0, homingFeedrate[Z_AXIS], true, true))
+            return;
 
         //2. in jedem Fall Freifahren vom Schalterkontakt:
         //ENDSTOP_Z_BACK_MOVE größer als 32768 ist eigentlich nicht möglich, nicht sinnvoll und würde, da das überfahren bei 32microsteps von der z-matrix >-12,7mm abhängig ist verboten sein.
@@ -1036,17 +1049,20 @@ void Printer::homeZAxis() {
             //faktor *2 und *5 : doppelt/5x so schnell beim Zurücksetzen als nachher beim langsamst hinfahren. Sonst dauert das ewig.
             if (Printer::isZMinEndstopHit()) {
                 //schalter noch gedrückt, wir müssen weiter aus dem schalter rausfahren, aber keinesfalls mehr als ENDSTOP_Z_BACK_MOVE
-                Printer::queueRelativeMMCoordinates(0, 0, 0.1f * (-1 * nHomeDir), 0, float(homingFeedrate[Z_AXIS] / ENDSTOP_Z_RETEST_REDUCTION_FACTOR * 5.0f), true);
+                if (!Printer::queueRelativeMMCoordinates(0, 0, 0.1f * (-1 * nHomeDir), 0, float(homingFeedrate[Z_AXIS] / ENDSTOP_Z_RETEST_REDUCTION_FACTOR * 5.0f), true))
+                    return;
             } else { //wir sind aus dem schalterbereich raus, müssten also nicht weiter zurücksetzen:
                      //1) egal ob der schalter zu anfang überfahren war oder nicht: etwas zurücksetzen, nachdem der schalter angefahren wurde.
                      //2) hier wird in jedem Fall etwas weiter weggefahren, sodass man wieder neu auf Z anfahren kann.
-                Printer::queueRelativeMMCoordinates(0, 0, Z_ENDSTOP_MAX_HYSTERESIS * (-1 * nHomeDir), 0, float(homingFeedrate[Z_AXIS] / ENDSTOP_Z_RETEST_REDUCTION_FACTOR * 2.0f), true);
+                if (!Printer::queueRelativeMMCoordinates(0, 0, Z_ENDSTOP_MAX_HYSTERESIS * (-1 * nHomeDir), 0, float(homingFeedrate[Z_AXIS] / ENDSTOP_Z_RETEST_REDUCTION_FACTOR * 2.0f), true))
+                    return;
                 break;
             }
         }
 
         //3. langsames Fahren bis zum Schalterkontakt:
-        Printer::queueRelativeMMCoordinates(0, 0, (0.1f + ENDSTOP_Z_BACK_MOVE) * nHomeDir, 0, float(homingFeedrate[Z_AXIS] / ENDSTOP_Z_RETEST_REDUCTION_FACTOR), true, true);
+        if (!Printer::queueRelativeMMCoordinates(0, 0, (0.1f + ENDSTOP_Z_BACK_MOVE) * nHomeDir, 0, float(homingFeedrate[Z_AXIS] / ENDSTOP_Z_RETEST_REDUCTION_FACTOR), true, true))
+            return;
 
 
         // Set the motor position and the nominal axis origin to the switch coordinate.

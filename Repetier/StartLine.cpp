@@ -93,8 +93,9 @@ struct ExtrusionState {
 }
 
 void StartLine::run(GCode& command) {
-    Commands::waitUntilEndOfAllMoves();
-    if (!Printer::areAxisHomed() || !Printer::doHeatBedZCompensation || Printer::printStop.commandsBlocked()) {
+    if (!Commands::waitForMotion(Commands::MotionWait::QueueAndZ, Commands::PauseWait::Resume))
+        return;
+    if (!Printer::areAxisHomed() || !Printer::doHeatBedZCompensation) {
         Com::printFLN(PSTR("M3912 error missing homing or zCMP"));
         return;
     }
@@ -117,12 +118,12 @@ void StartLine::run(GCode& command) {
     Printer::setEPositionMM(0);
     queueLines(settings);
 
-    Commands::waitUntilEndOfAllMoves();
+    const bool settled = Commands::waitForMotion(Commands::MotionWait::QueueAndZ, Commands::PauseWait::Resume);
     Printer::digitCompensation.setFlowProfile(savedFlow);
     Printer::digitCompensation.resetFlow();
     {
         InterruptProtectedBlock lock;
-        if (!Printer::printStop.commandsBlocked()) {
+        if (settled) {
             Printer::setEPositionMM(savedE.position, savedE.positionRemainder);
             Printer::extrusionPlanner.restoreStepRemainder(savedE.stepRemainder);
             Printer::extrusionCompensation.restoreRemainder(savedE.ecmpRemainder);
