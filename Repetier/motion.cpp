@@ -123,12 +123,13 @@ void PrintLine::setSegmentGeometry(const float axisDistanceMM[]) {
    Otherwise the endstop causes an ignore of moving that axis but coordinates will move
   @param updateWobble Recalculate the XY correction for a G-code XYZ move.
  */
-void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, float feedrate, bool updateWobble) {
+bool PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, float feedrate, bool updateWobble) {
+    if (!PrintLine::waitForXFreeLines(1))
+        return false;
+
     Printer::unmarkAllSteppersDisabled(); // ??? hier wird nichts enabled. Nur markiert, auch wenn später oder früher "enablestepper" passiert.
     //evtl. weil dadurch in jedem fall gleich ein stepper aktiviert werden würde -> darum hier schon als aktiv markieren, weil umumgänglich ist.
     // Aber dann müsste man das (timingsicher) auch schon in den Funktionen über prepareDirectMove erledigt haben.
-
-    PrintLine::waitForXFreeLines(1);
 
     uint8_t newPath = PrintLine::insertWaitMovesIfNeeded(pathOptimize, 0);
     PrintLine* p = &queue.writeSlot();
@@ -168,8 +169,7 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
     if (p->isNoMove()) {
         if (newPath)
             discardQueuedMoves();
-        // No steps included
-        return;
+        return false;
     }
 
     if (!Printer::startLine.active()) {
@@ -188,6 +188,7 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
 
     // Make result permanent
     queue.publish(true);
+    return true;
 } // prepareQueueMove
 
 void PrintLine::prepareDirectMove(const int32_t steps[4], bool stoppable, bool feedrateSource) {
@@ -282,9 +283,11 @@ uint8_t PrintLine::insertWaitMovesIfNeeded(uint8_t pathOptimize, uint8_t waitExt
     return 0;
 } // insertWaitMovesIfNeeded
 
-void PrintLine::waitForXFreeLines(uint8_t b) {
-    while (queue.count() + b > MOVE_CACHE_SIZE) // wait for a free entry in movement cache
-    {
+bool PrintLine::waitForXFreeLines(uint8_t slots) {
+    while (!Printer::blockAll && !Printer::printJob.commandsBlocked()) {
+        if (queue.count() + slots <= MOVE_CACHE_SIZE)
+            return true;
         Commands::checkForPeriodicalActions(Processing);
     }
+    return false;
 } // waitForXFreeLines

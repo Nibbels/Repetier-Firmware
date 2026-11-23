@@ -25,7 +25,7 @@
 #include "ZMotion.h"
 #include "PrintLayers.h"
 #include "PrintPause.h"
-#include "PrintStop.h"
+#include "PrintJob.h"
 #include "MachineInactivity.h"
 #include "IdleStatus.h"
 #include "DigitCompensation.h"
@@ -58,7 +58,6 @@
 
 #define PRINTER_FLAG3_X_HOMED 1  // flag3 alike original repetier
 #define PRINTER_FLAG3_Y_HOMED 2  // flag3 alike original repetier
-#define PRINTER_FLAG3_PRINTING 8 // flag3 alike original repetier
 
 #define KOSYS_GCODE true
 #define KOSYS_DIRECTOFFSET false
@@ -67,10 +66,11 @@
 #define FEEDRATE_DIRECTCONFIG false
 
 class Printer {
+    static uint8_t menuMode_;
+
 public:
     static ExtrusionOutput extrusionOutput;
 
-    static uint8_t menuMode;
     static float axisStepsPerMM[];
     static float axisMMPerSteps[];
     static float maxFeedrate[];
@@ -113,7 +113,7 @@ public:
     static CartesianPlanner cartesianPlanner;
     static XYMotion xyMotion;
     static PrintPause pause;
-    static PrintStop printStop;
+    static PrintJob printJob;
     static MachineInactivity inactivity;
     static IdleStatus idleStatus;
     static char ZMode;                      // Z Scale
@@ -161,13 +161,17 @@ public:
 
     static INLINE void setMenuMode(uint8_t mode, bool on) {
         if (on)
-            menuMode |= mode;
+            menuMode_ |= mode;
         else
-            menuMode &= ~mode;
+            menuMode_ &= ~mode;
     } // setMenuMode
 
+    static INLINE uint8_t activeMenuModes() {
+        return menuMode_ | (printJob.isBusy() ? MENU_MODE_PRINTING : 0);
+    }
+
     static INLINE bool isMenuMode(uint8_t mode) {
-        return (menuMode & mode) == mode;
+        return (activeMenuModes() & mode) == mode;
     } // isMenuMode
 
     static INLINE bool debugEcho() {
@@ -405,15 +409,15 @@ public:
 
     static inline void setHomed(int8_t x = -1, int8_t y = -1, int8_t z = -1) {
         if (x != -1) {
-            x = printStop.commandsBlocked() ? false : x; // A stop can interrupt homing.
+            x = printJob.commandsBlocked() ? false : x; // A stop can interrupt homing.
             flag3 = (x ? flag3 | PRINTER_FLAG3_X_HOMED : flag3 & ~PRINTER_FLAG3_X_HOMED);
         }
         if (y != -1) {
-            y = printStop.commandsBlocked() ? false : y;
+            y = printJob.commandsBlocked() ? false : y;
             flag3 = (y ? flag3 | PRINTER_FLAG3_Y_HOMED : flag3 & ~PRINTER_FLAG3_Y_HOMED);
         }
         if (z != -1)
-            zMotion.setHomed(!printStop.commandsBlocked() && z);
+            zMotion.setHomed(!printJob.commandsBlocked() && z);
         if (x == false)
             xyMotion.clearQueuedOvertravel(X_AXIS);
         if (y == false)
@@ -446,15 +450,6 @@ public:
     static INLINE void setUIErrorMessage(uint8_t b) {
         flag1 = (b ? flag1 | PRINTER_FLAG1_UI_ERROR_MESSAGE : flag1 & ~PRINTER_FLAG1_UI_ERROR_MESSAGE);
     } // setUIErrorMessage
-
-    static INLINE uint8_t isPrinting() {
-        return flag3 & PRINTER_FLAG3_PRINTING;
-    }
-
-    static INLINE void setPrinting(bool b) {
-        flag3 = (b ? flag3 | PRINTER_FLAG3_PRINTING : flag3 & ~PRINTER_FLAG3_PRINTING);
-        Printer::setMenuMode(MENU_MODE_PRINTING, b);
-    }
 
     static INLINE void toggleAnimation() {
         setAnimation(!isAnimation());

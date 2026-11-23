@@ -9,7 +9,7 @@ constexpr float standbyDropC = 100.0f;
 PrintPause Printer::pause;
 
 bool PrintPause::acceptsPauseRequest() const {
-    return allowsQueueAdvance() && !Printer::printStop.commandsBlocked() && !Printer::blockAll;
+    return allowsQueueAdvance() && !Printer::printJob.commandsBlocked() && !Printer::blockAll;
 }
 
 void PrintPause::request(Destination destination) {
@@ -275,6 +275,8 @@ void PrintPause::returnToPrint() {
     if (moveBackToPrintPosition()) {
         Com::printFLN(PSTR("RequestContinue:"));
         cancel();
+        if (!PrintLine::hasLines())
+            Printer::idleStatus.schedule(HAL::timeInMilliseconds());
         UI_STATUS_UPD(UI_TEXT_PRINT_POS);
         return;
     }

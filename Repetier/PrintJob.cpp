@@ -1,9 +1,9 @@
 #include "Repetier.h"
 #include "GCodeInput.h"
 
-PrintStop Printer::printStop;
+PrintJob Printer::printJob;
 
-void PrintStop::service(uint32_t now) {
+void PrintJob::service(uint32_t now) {
     switch (phase_) {
     case Phase::Draining:
         // Drain incoming bytes while the command parser rejects new work.
@@ -20,7 +20,6 @@ void PrintStop::service(uint32_t now) {
         g_nZOSScanStatus = 0;
         g_nHeatBedScanStatus = 0;
         Com::printFLN(PSTR("Stop complete"));
-        Printer::setPrinting(false);
         phaseSince_ = now;
         phase_ = Phase::WaitingToOutput;
         return;
@@ -37,6 +36,8 @@ void PrintStop::service(uint32_t now) {
         return;
 
     case Phase::Idle:
+    case Phase::Printing:
+    case Phase::FilamentService:
         return;
     }
 }

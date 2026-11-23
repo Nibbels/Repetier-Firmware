@@ -301,9 +301,9 @@ public:
     static void discardQueuedMoves();
 
 
-    static void waitForXFreeLines(uint8_t b = 1);
+    static bool waitForXFreeLines(uint8_t b = 1);
     static uint8_t insertWaitMovesIfNeeded(uint8_t pathOptimize, uint8_t waitExtraLines);
-    static void prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, float feedrate, bool updateWobble = false);
+    static bool prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, float feedrate, bool updateWobble = false);
     // Reserve the slot while the caller publishes the offset targets under its timer lock.
     static void reserveDirectMove(bool stoppable) {
         direct.task = stoppable ? DIRECT_PREPARING_STOPPABLE : DIRECT_PREPARING;

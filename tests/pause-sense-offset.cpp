@@ -23,7 +23,7 @@
 #include "PrintLayers.h"
 #include "BedCompensation.h"
 #include "PrintPause.h"
-#include "PrintStop.h"
+#include "PrintJob.h"
 #include "MotionPlanner.h"
 
 // The replay compiles the live firmware routines. These shims supply DMS bytes,
@@ -199,7 +199,7 @@ struct WireInput {
 
 namespace Printer {
 extern PrintPause pause;
-extern PrintStop printStop;
+extern PrintJob printJob;
 extern StartLine startLine;
 ZOffset zOffset;
 SenseOffsetControl senseOffsetControl{SENSIBLE_PRESSURE_MAX_OFFSET};
@@ -242,7 +242,7 @@ MachineInactivity inactivity(STEPPER_INACTIVE_TIME * 1000UL, MAX_INACTIVE_TIME *
 IdleStatus idleStatus;
 constexpr float maxXYJerk = 8.0f, maxZJerk = 0.5f;
 volatile char doHeatBedZCompensation = true;
-bool printing = true, menuPaused = false;
+bool menuPaused = false;
 bool axesHomed = true;
 int feedrateMultiply = 100, motorCurrent[3 + NUM_EXTRUDER] = {};
 char moveMode[3] = { MOVE_MODE_SINGLE_STEPS, MOVE_MODE_SINGLE_STEPS, MOVE_MODE_SINGLE_STEPS };
@@ -252,8 +252,6 @@ bool infoLogging = false;
 bool debugInfo() { return infoLogging; }
 bool debugDryrun() { return false; }
 float convertToMM(float value) { return unitIsInches ? value * 25.4 : value; }
-bool isPrinting() { return printing; }
-void setPrinting(bool active) { printing = active; }
 bool areAxisHomed() { return axesHomed; }
 bool isAxisHomed(int) { return true; }
 bool isMinEndstopHit(uint8_t axis) { return xyMinHit[axis]; }
@@ -453,9 +451,11 @@ struct PrintLine {
     static bool hasStoppableDirectMove();
     static unsigned plannedMoves;
     static bool updatesWobble;
-    static void prepareQueueMove(bool, bool, float, bool wobble) {
+    static bool publishesMove;
+    static bool prepareQueueMove(bool, bool, float, bool wobble) {
         ++plannedMoves;
         updatesWobble = wobble;
+        return publishesMove;
     }
     static void applyDirectStop();
     static void stopDirectMove() { ++stopRequests; applyDirectStop(); }
@@ -468,9 +468,10 @@ struct PrintLine {
 };
 
 PrintLine PrintLine::direct;
+bool PrintLine::publishesMove = true;
 
 void Printer::queueFloatCoordinates(float x, float y, float z, float e, float speed) {
-    assert(startLine.active() && !printStop.commandsBlocked());
+    assert(startLine.active() && !printJob.commandsBlocked());
     ++primeMoves;
     ++PrintLine::linesCount;
     if (primeMoves == 1)
@@ -529,6 +530,7 @@ void setFanSpeed(uint8_t) {}
 }
 
 struct GCode {
+    bool internalCommand = false;
     long S = 0, P = 0;
     float E = 0, F = 0, I = 1, X = 0, Y = 0, Z = 0;
     bool explicitP = false, explicitS = false, explicitY = false;
@@ -546,12 +548,12 @@ struct GCode {
 
 struct GCodeInput {
     static void readFromSerial() {
-        assert(Printer::printStop.commandsBlocked());
+        assert(Printer::printJob.commandsBlocked());
         ++incomingReads;
     }
     static void executeFlashScript(const char* script) {
         assert(script == Com::tOutputObjectPrint && !PrintLine::hasLines());
-        assert(!Printer::printStop.commandsBlocked());
+        assert(!Printer::printJob.commandsBlocked());
         ++objectOutputs;
         if (duringOutputScript)
             duringOutputScript();
@@ -565,6 +567,14 @@ void queueTask(char task) {
 }
 
 void outputObject(bool showerrors);
+void showIdle() {}
+#define CASE_FAN_PIN -1
+#define MINIMAL_IDLE_TIME 500
+namespace Printer {
+void switchEverythingOff() { assert(false); }
+void setAllSwitchedOff(bool) {}
+bool areAllSteppersDisabled() { return false; }
+}
 
 long getZMatrixDepth(long x, long y) {
     ++matrixDepthReads;
@@ -1104,7 +1114,7 @@ void clippedReturn() {
         if (yMove < 0)
             Printer::stopPrint();
     };
-    assert(Printer::pause.resume() && Printer::printStop.commandsBlocked());
+    assert(Printer::pause.resume() && Printer::printJob.commandsBlocked());
     duringMove = nullptr;
     assert(Printer::directCurrentSteps[Y_AXIS] == y);
     assert(Printer::directCurrentSteps[Z_AXIS] == z + parkZ && Printer::directCurrentSteps[E_AXIS] == -parkE);
@@ -1148,38 +1158,38 @@ void cancelAndCleanup() {
     duringMove = nullptr;
     assert(Printer::directCurrentSteps[Y_AXIS] == y);
     assert(PrintLine::stopRequests == 1 && !PrintLine::hasLines());
-    assert(Printer::printStop.commandsBlocked() && !Printer::menuPaused);
+    assert(Printer::printJob.commandsBlocked() && !Printer::menuPaused);
     assert(Printer::pause.allowsQueueAdvance());
     Printer::pause.queueRequest(PrintPause::Destination::InPlace);
     Printer::pause.request(PrintPause::Destination::Park);
     assert(Printer::pause.allowsQueueAdvance() && !PrintLine::hasLines());
 
-    Printer::printStop.service(clockMs + 2001);
-    assert(Printer::isPrinting() && incomingReads == 1 && !objectOutputs);
+    Printer::printJob.service(clockMs + 2001);
+    assert(Printer::printJob.isBusy() && incomingReads == 1 && !objectOutputs);
     PrintLine::direct.task = TASK_NO_TASK;
     g_nHeatBedScanStatus = g_nZOSScanStatus = 1;
-    Printer::printStop.service(clockMs + 4001);
-    assert(Printer::isPrinting() && !objectOutputs);
-    Printer::printStop.service(clockMs + 4002);
-    assert(!Printer::isPrinting() && !g_nHeatBedScanStatus && !g_nZOSScanStatus);
+    Printer::printJob.service(clockMs + 4001);
+    assert(Printer::printJob.isBusy() && !objectOutputs);
+    Printer::printJob.service(clockMs + 4002);
+    assert(!Printer::printJob.isBusy() && !g_nHeatBedScanStatus && !g_nZOSScanStatus);
     assert(Extruder::bedTemperature == 0.0f && Extruder::current->tempControl.targetTemperatureC == 0.0f);
-    assert(Printer::printStop.commandsBlocked());
-    Printer::printStop.service(clockMs + 5002);
+    assert(Printer::printJob.commandsBlocked());
+    Printer::printJob.service(clockMs + 5002);
     assert(!objectOutputs);
-    Printer::printStop.service(clockMs + 5003);
-    Printer::printStop.service(clockMs + 6000);
-    assert(objectOutputs == 1 && !Printer::printStop.commandsBlocked());
+    Printer::printJob.service(clockMs + 5003);
+    Printer::printJob.service(clockMs + 6000);
+    assert(objectOutputs == 1 && !Printer::printJob.commandsBlocked());
 
     // A USB stop during a heater wait must also discard the pending return.
     clockMs = 0;
-    Printer::setPrinting(true);
+    Printer::printJob.admitPrintMotion();
     Extruder::setTemperatureForExtruder(200.0f, 0);
     Printer::pause.request(PrintPause::Destination::Park);
     Printer::pause.serviceMotion();
     clockMs += EXTRUDER_CURRENT_PAUSE_DELAY + 1;
     Printer::pause.serviceStandby(clockMs);
     duringHeatWait = Printer::stopPrint;
-    assert(Printer::pause.resume() && Printer::printStop.commandsBlocked());
+    assert(Printer::pause.resume() && Printer::printJob.commandsBlocked());
     assert(Printer::pause.allowsQueueAdvance() && Printer::directCurrentSteps[Y_AXIS] == y + parkY);
 }
 
@@ -1512,7 +1522,7 @@ void primeFlowCleanup(unsigned skipAt, unsigned abortAt) {
     assert(!Printer::startLine.active() && Printer::relativeExtruderCoordinateMode);
     assert(Printer::feedrateMultiply == 85 && Printer::menuExtrusionFactor == 0.93f);
     if (abortAt) {
-        assert(Printer::printStop.commandsBlocked() && Printer::moveTarget.machineMM(E_AXIS) == 0.0f);
+        assert(Printer::printJob.commandsBlocked() && Printer::moveTarget.machineMM(E_AXIS) == 0.0f);
     } else {
         assert(Printer::moveTarget.machineMM(E_AXIS) == 10.0f && Printer::moveTarget.remainderMM(E_AXIS) == 0.00001f);
         assert(Printer::extrusionPlanner.stepRemainder() == 0.125f && Printer::extrusionCompensation.remainder() == 0.75f);
@@ -1579,6 +1589,46 @@ void extrusionPlanning() {
         steps += planExtrusionMove();
     }
     assert(steps == 224000);
+}
+
+void printJob() {
+    auto& job = Printer::printJob;
+    assert(!job.isBusy() && !job.commandsBlocked());
+    assert(PrintLine::hasLines()); // Artificial queue entries alone do not start a print.
+
+    GCode command;
+    command.X = 10;
+    command.internalCommand = true;
+    assert(Printer::queueGCodeCoordinates(&command) && !job.isPrinting());
+
+    command.internalCommand = false;
+    PrintLine::publishesMove = false;
+    assert(!Printer::queueGCodeCoordinates(&command) && !job.isPrinting());
+
+    PrintLine::publishesMove = true;
+    PrintLine::linesCount = 1;
+    assert(Printer::queueGCodeCoordinates(&command) && job.isPrinting());
+    Printer::pause.restoreDefaultParking();
+    Printer::pause.setParkSteps(E_AXIS, 0);
+    Printer::pause.request(PrintPause::Destination::InPlace);
+    Printer::pause.serviceMotion();
+    PrintLine::linesCount = 0;
+    Printer::idleStatus.schedule(clockMs);
+    clockMs += MINIMAL_IDLE_TIME + 1;
+    handleStartStandby(clockMs);
+    assert(job.isPrinting() && Printer::pause.isPaused());
+
+    assert(Printer::pause.resume());
+    clockMs += MINIMAL_IDLE_TIME + 1;
+    handleStartStandby(clockMs);
+    assert(!job.isBusy() && !Printer::pause.isPaused());
+
+    job.beginFilamentService();
+    assert(job.isBusy() && !job.isPrinting());
+    Printer::stopPrint();
+    assert(job.commandsBlocked() && !job.isPrinting());
+    job.finishFilamentService();
+    assert(job.commandsBlocked());
 }
 
 void gcodeTarget() {
@@ -1905,7 +1955,7 @@ void motionWait() {
     PrintLine::linesCount = 1;
     duringPeriodicActions = [] { Printer::stopPrint(); };
     assert(!waitForMotion(MotionWait::QueueAndZ, PauseWait::Resume));
-    assert(Printer::printStop.commandsBlocked());
+    assert(Printer::printJob.commandsBlocked());
     duringPeriodicActions = nullptr;
 }
 
@@ -1917,7 +1967,7 @@ void advanceCancel() {
     output.addSteps(2);
     Printer::stopPrint();
     assert(output.blocked() && output.pendingSteps() == 0);
-    assert(Printer::printStop.commandsBlocked() && !PrintLine::hasLines());
+    assert(Printer::printJob.commandsBlocked() && !PrintLine::hasLines());
     assert(!Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Resume));
 
     PrintLine move;
@@ -1940,9 +1990,9 @@ void advanceCancel() {
 
     // Cleanup releases its own inhibit, preserving any motor shutdown.
     output.inhibit(ExtrusionOutput::Inhibit::MotorsDisabled);
-    Printer::printStop.service(clockMs + 2001);
-    Printer::printStop.service(clockMs + 3002);
-    assert(objectOutputs == 1 && !Printer::printStop.commandsBlocked() && output.blocked());
+    Printer::printJob.service(clockMs + 2001);
+    Printer::printJob.service(clockMs + 3002);
+    assert(objectOutputs == 1 && !Printer::printJob.commandsBlocked() && output.blocked());
     output.allow(ExtrusionOutput::Inhibit::MotorsDisabled);
     assert(!output.blocked());
     {
@@ -2455,6 +2505,8 @@ int main(int argc, char** argv) {
         initializeOffsets();
     Printer::pause.restoreDefaultParking();
     Printer::pause.setParkSteps(E_AXIS, parkE);
+    if (std::strcmp(argv[1], "print-job"))
+        Printer::printJob.admitPrintMotion();
 
     if (!std::strcmp(argv[1], "park"))
         parkAndResume();
@@ -2524,6 +2576,8 @@ int main(int argc, char** argv) {
         moveQueue();
     else if (!std::strcmp(argv[1], "idle-status"))
         idleStatusTransitions();
+    else if (!std::strcmp(argv[1], "print-job"))
+        printJob();
     else if (!std::strcmp(argv[1], "advance-peak"))
         advancePeakReport();
     else if (!std::strcmp(argv[1], "ecmp-stepping"))

@@ -28,7 +28,7 @@ def main():
     eeprom = (firmware / "Eeprom.h").read_text(encoding="utf-8")
     pause = (firmware / "PrintPause.cpp").read_text(encoding="utf-8")
     idle = (firmware / "IdleStatus.cpp").read_text(encoding="utf-8")
-    stop = (firmware / "PrintStop.cpp").read_text(encoding="utf-8")
+    stop = (firmware / "PrintJob.cpp").read_text(encoding="utf-8")
     dms = (firmware / "StrainGauge.cpp").read_text(encoding="utf-8")
     start_line = (firmware / "StartLine.cpp").read_text(encoding="utf-8")
     hal = (firmware / "HAL.cpp").read_text(encoding="utf-8")
@@ -46,6 +46,7 @@ def main():
         section(rf, "short readAveragePressure(", "} // readAveragePressure") + "}",
         section(rf, "long getZMatrixDepth_CurrentXY(", "\nvoid showAbortScanReason("),
         section(rf, "static void serviceSenseOffset(", "\nvoid handleScanWorkTasks("),
+        section(rf, "void handleStartStandby(", "\nvoid outputObject("),
         section(rf, "void outputObject(bool showerrors)", "\nvoid loopFeatures("),
         pause.removeprefix('#include "Repetier.h"\n'),
         idle.removeprefix('#include "Repetier.h"\n'),
@@ -86,7 +87,7 @@ def main():
         move_planner[move_planner.index("void PrintLine::prepareDirectMove("):move_planner.index("/** \\brief Check if move is new.")]
         .replace("void PrintLine::stopDirectMove() {", "void PrintLine::applyDirectStop() {", 1),
         planner.split('#include "MotionPlanner.h"\n', 1)[1],
-        section(move_planner, "uint8_t PrintLine::insertWaitMovesIfNeeded(", "\nvoid PrintLine::waitForXFreeLines("),
+        section(move_planner, "uint8_t PrintLine::insertWaitMovesIfNeeded(", "\nbool PrintLine::waitForXFreeLines("),
         section(hal, "uint8_t ExtrusionOutput::nextTimerCompare(", "\nISR(EXTRUDER_TIMER_VECTOR"),
         section(executor, "inline void StepExecutor::updateAdvanceSteps(", "\nvoid StepExecutor::stepSlowedZCompensation("),
         section(commands, "bool Commands::waitForMotion(", "\nvoid Commands::printCurrentPosition()"),
@@ -157,7 +158,7 @@ def main():
             "sense-window", "sense-settings", "sense-limit-interrupt",
             "pressure-pause", "pressure-stop", "pressure-frozen-z", "digit-zero",
             "extrusion-planning",
-            "gcode-target", "wobble-target", "cartesian-planning", "segment-geometry", "move-queue", "idle-status", "ecmp-stepping",
+            "gcode-target", "wobble-target", "cartesian-planning", "segment-geometry", "move-queue", "idle-status", "print-job", "ecmp-stepping",
             "advance-timer", "advance-mode", "advance-cancel", "motion-wait", "pressure-advance-pause", "advance-output", "advance-peak",
             "step-clock", "lookahead", "direct-ramp", "xy-limits",
         ):

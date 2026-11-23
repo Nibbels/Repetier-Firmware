@@ -39,7 +39,7 @@ Settings readSettings(GCode& command) {
 }
 
 void queueLines(const Settings& settings) {
-    if (Printer::printStop.commandsBlocked())
+    if (Printer::printJob.commandsBlocked())
         return;
 
     constexpr float xMargin = 15.0f;
@@ -52,7 +52,7 @@ void queueLines(const Settings& settings) {
     Printer::queueFloatCoordinates(x, y, startZ, IGNORE_COORDINATE,
                                    RMath::min(Printer::homingFeedrate[X_AXIS], Printer::homingFeedrate[Y_AXIS]));
 
-    for (uint8_t line = 0; line < settings.lines && !Printer::printStop.commandsBlocked(); ++line) {
+    for (uint8_t line = 0; line < settings.lines && !Printer::printJob.commandsBlocked(); ++line) {
         const float startX = x, startY = y, startE = e;
         const float length = Printer::axisLengthMM[X_AXIS] - 2 * xMargin - toolOffsetX;
         if (line & 1) {
@@ -66,7 +66,7 @@ void queueLines(const Settings& settings) {
 
         for (float progress = 0.0025f; progress <= 1.0f; progress += 0.0025f) {
             Commands::checkForPeriodicalActions(Processing);
-            if (Printer::printStop.commandsBlocked() || Printer::checkPlayKey())
+            if (Printer::printJob.commandsBlocked() || Printer::checkPlayKey())
                 return;
 
             // Short segments let the DMS brake respond to nozzle load.
@@ -75,7 +75,7 @@ void queueLines(const Settings& settings) {
                                            IGNORE_COORDINATE,
                                            startE + (e - startE) * progress, settings.speed);
         }
-        if (Printer::printStop.commandsBlocked())
+        if (Printer::printJob.commandsBlocked())
             return;
 
         y += 1.5f;
@@ -100,6 +100,7 @@ void StartLine::run(GCode& command) {
         return;
     }
 
+    Printer::printJob.admitPrintMotion();
     Com::printFLN(PSTR("Auto-Startmade"));
     const auto savedFlow = Printer::digitCompensation.flowProfile();
     const bool savedRelativeE = Printer::relativeExtruderCoordinateMode;

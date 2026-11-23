@@ -27,7 +27,8 @@ void Commands::commandLoop() {
 
     GCode* code = GCodeInput::peekCurrentCommand();
     if (code) {
-        Commands::executeGCode(code);
+        if (!Printer::printJob.commandsBlocked())
+            Commands::executeGCode(code);
         GCodeInput::popCurrentCommand();
         Commands::checkForPeriodicalActions(Processing); //check heater and other stuff every n milliseconds
     } else {
@@ -91,7 +92,7 @@ bool Commands::waitForMotion(MotionWait motion, PauseWait pause) {
 
     bool settled = false;
     auto& advance = Printer::extrusionOutput;
-    while (!Printer::blockAll && !Printer::printStop.commandsBlocked()) {
+    while (!Printer::blockAll && !Printer::printJob.commandsBlocked()) {
         bool paused;
         {
             InterruptProtectedBlock lock;

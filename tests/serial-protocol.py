@@ -13,6 +13,8 @@ def main():
     firmware = tests.parent / "Repetier"
     commands = (firmware / "gcode.cpp").read_text(encoding="utf-8")
     receiver = (firmware / "GCodeInput.cpp").read_text(encoding="utf-8")
+    command_loop = (firmware / "Commands.cpp").read_text(encoding="utf-8")
+    command_loop = command_loop[command_loop.index("void Commands::commandLoop()"):command_loop.index("void Commands::checkForPeriodicalActions(")]
     uart = (firmware / "UsbSerial.cpp").read_text(encoding="utf-8")
     communication = (firmware / "Communication.cpp").read_text(encoding="utf-8")
     configuration = (firmware / "Configuration.h").read_text(encoding="utf-8")
@@ -28,7 +30,7 @@ def main():
         build = Path(directory)
         (build / "gcode-settings.inc").write_text(f"#define GCODE_BUFFER_SIZE {capacity}\n", encoding="utf-8")
         (build / "gcode-receiver.inc").write_text(
-            (commands + "\n" + receiver).replace('#include "Repetier.h"\n', ""), encoding="utf-8",
+            (commands + "\n" + receiver + "\n" + command_loop).replace('#include "Repetier.h"\n', ""), encoding="utf-8",
         )
         (build / "usb-serial-firmware.inc").write_text(
             re.sub(r"^#include <avr/\w+\.h>\n", "", uart, flags=re.M), encoding="utf-8",

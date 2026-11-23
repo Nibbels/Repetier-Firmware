@@ -37,12 +37,13 @@ bool UIMenuEntry::showEntry() const {
     bool ret = true;
     uint8_t f, f2;
 
+    const uint8_t menuMode = Printer::activeMenuModes();
     f = HAL::readFlashByte((const prog_char*)&filter);
     if (f != 0)
-        ret = (f & Printer::menuMode) != 0;
+        ret = (f & menuMode) != 0;
     f2 = HAL::readFlashByte((const prog_char*)&nofilter);
     if (ret && f2 != 0) {
-        ret = (f2 & Printer::menuMode) == 0;
+        ret = (f2 & menuMode) == 0;
     }
     return ret;
 } // showEntry
@@ -2675,7 +2676,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
 
     case UI_ACTION_EXTR_STEPS_E0:
     case UI_ACTION_EXTR_STEPS_E1: {
-        if (!Printer::isMenuMode(MENU_MODE_PAUSED) && !Printer::isPrinting()) {
+        if (!Printer::isMenuMode(MENU_MODE_PAUSED) && !Printer::printJob.isBusy()) {
 #if NUM_EXTRUDER > 1
             uint8_t eNr = (UI_ACTION_EXTR_STEPS_E1 == action) ? 1 : 0;
 #else
@@ -3081,7 +3082,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
     case UI_ACTION_MICROSTEPS_XY:
     case UI_ACTION_MICROSTEPS_Z:
     case UI_ACTION_MICROSTEPS_E: {
-        if (!Printer::isPrinting() && !PrintLine::hasLines() && Printer::pause.allowsQueueAdvance()) {
+        if (!Printer::printJob.isBusy() && !PrintLine::hasLines() && Printer::pause.allowsQueueAdvance()) {
             Printer::disableAllSteppersNow(); //Stepper und Homing ausmachen.
                                               //We cannot use the old coordinates anymore.
 

@@ -48,7 +48,7 @@ uint8_t Printer::flag3 = 0;
 uint8_t Printer::debugLevel = 6; ///< Bitfield defining debug output. 1 = echo, 2 = info, 4 = error, 8 = dry run., 16 = Only communication, 32 = No moves
 
 uint16_t Printer::stepsPackingMinInterval = STEP_PACKING_MIN_INTERVAL;
-uint8_t Printer::menuMode = 0;
+uint8_t Printer::menuMode_ = 0;
 
 
 long Printer::maxSoftEndstopSteps[2] = { 0 };
@@ -296,14 +296,12 @@ bool Printer::queueGCodeCoordinates(GCode* com) {
         Printer::setFeedrate(com->F);
     }
 
-    if (isXYZMove || isEMove) {
-        PrintLine::prepareQueueMove(false, true, Printer::feedrate, isXYZMove);
-
-        return true;
-    }
-
-    // report back moves which do not turn steppers
-    return false;
+    if (!isXYZMove && !isEMove)
+        return false;
+    const bool published = PrintLine::prepareQueueMove(false, true, Printer::feedrate, isXYZMove);
+    if (published && !com->internalCommand)
+        printJob.admitPrintMotion();
+    return published;
 } // queueGCodeCoordinates
 
 /** Move to machine coordinates, retaining the correction on omitted axes. */
@@ -337,7 +335,7 @@ bool Printer::queueRelativeStepsCoordinates(long dx, long dy, long dz, long de, 
 
 /** \brief Move printer the given number of mm. Puts the move into the queue. */
 bool Printer::queueRelativeMMCoordinates(float dx, float dy, float dz, float de, float feedrate, bool waitEnd, bool abortAtEndstops) {
-    if (Printer::blockAll || Printer::printStop.commandsBlocked())
+    if (Printer::blockAll || Printer::printJob.commandsBlocked())
         return false;
 
     moveTarget.addMM(X_AXIS, dx);
@@ -1123,12 +1121,10 @@ void Printer::homeAxis(bool xaxis, bool yaxis, bool zaxis) // home non-delta pri
 } // homeAxis
 
 void Printer::stopPrint() {
-    if (!Printer::isPrinting())
+    InterruptProtectedBlock noInts;
+    if (!printJob.beginStop(HAL::timeInMilliseconds()))
         return;
     Printer::idleStatus.cancel();
-
-    InterruptProtectedBlock noInts;
-    printStop.begin(HAL::timeInMilliseconds());
     extrusionOutput.inhibit(ExtrusionOutput::Inhibit::PrintStop);
     if (pause.isPaused() && PrintLine::directMoveActive())
         PrintLine::stopDirectMove();

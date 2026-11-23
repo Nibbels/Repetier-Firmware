@@ -229,7 +229,7 @@ void startHeatBedScan(void) {
         }
         g_abortZScan = SCAN_ABORT_REASON_CANCELED;
     } else {
-        if (Printer::isPrinting()) {
+        if (Printer::printJob.isBusy()) {
             // there is some printing in progress at the moment - do not start the heat bed scan in this case
             if (Printer::debugErrors()) {
                 Com::printFLN(Com::tPrintingIsInProcessError);
@@ -2977,7 +2977,7 @@ void handleStrainGaugeFeatures(millis_t uTime) {
     serviceSenseOffset(senseOffsetDue, pressure, pauseSample);
 
     if (pauseDue && protection.pauseEnabled()) {
-        const bool printingHomed = !Printer::pause.isPaused() && Printer::isPrinting() && Printer::areAxisHomed();
+        const bool printingHomed = !Printer::pause.isPaused() && Printer::printJob.isPrinting() && Printer::areAxisHomed();
         int16_t average;
         if (protection.checkPause(uTime, pressure, printingHomed, average)) {
             Com::printF(PSTR("emergency pause: "), average);
@@ -3019,13 +3019,6 @@ void handleScanWorkTasks() {
     }
 }
 
-void handleStartPrint() {
-    if (PrintLine::queuedMoveCount() > 2 && !Printer::printStop.commandsBlocked()) {
-        // this check shall be done only during the printing (for example, it shall not be done in case filament is extruded manually)
-        Printer::setPrinting(true);
-    }
-}
-
 void handleStartStandby(millis_t uTime) {
     /**
      * Check if the Fan shall be turned off.
@@ -3045,16 +3038,14 @@ void handleStartStandby(millis_t uTime) {
     }
 #endif // (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
 
-    /**
-     * Check if the Printer should reset the printing flag
-     * And show Idle State within the display.
-     */
-    const auto idleTransition = Printer::idleStatus.poll(uTime, MINIMAL_IDLE_TIME);
-    if (idleTransition == IdleStatus::Transition::Deferred)
-        return;
-    if (idleTransition == IdleStatus::Transition::Ready) {
-        showIdle();
-        Printer::setPrinting(false);
+    if (!Printer::pause.isPaused() && !Printer::startLine.active()) {
+        const auto idleTransition = Printer::idleStatus.poll(uTime, MINIMAL_IDLE_TIME);
+        if (idleTransition == IdleStatus::Transition::Deferred)
+            return;
+        if (idleTransition == IdleStatus::Transition::Ready && !PrintLine::hasLines() && !PrintLine::directMoveActive()) {
+            Printer::printJob.finishPrintMotion();
+            showIdle();
+        }
     }
 
     /**
@@ -3062,7 +3053,7 @@ void handleStartStandby(millis_t uTime) {
      */
     // A preceding service may have recorded activity after the initial clock sample.
     const millis_t inactivityTime = HAL::timeInMilliseconds();
-    if (PrintLine::hasLines() || Printer::isPrinting() || Printer::isMenuMode(MENU_MODE_PAUSED)) {
+    if (PrintLine::hasLines() || Printer::printJob.isBusy() || Printer::pause.isPaused()) {
         Printer::inactivity.recordActivity(inactivityTime);
     } else {
         if (Printer::inactivity.shutdownTimeoutExpired(inactivityTime)) {
@@ -3118,8 +3109,7 @@ void loopFeatures() //wird so aufgerufen, dass es ein ~100ms Takt sein sollte.
         nEntered++;
 
         millis_t uTime = HAL::timeInMilliseconds();
-        Printer::printStop.service(uTime);
-        handleStartPrint();
+        Printer::printJob.service(uTime);
 
         handleStartStandby(uTime);
         handleStrainGaugeFeatures(uTime);
@@ -3156,8 +3146,10 @@ void setExtruderCurrent(uint8_t nr, uint8_t current) {
 } // setExtruderCurrent
 
 static bool prepareFilamentProgram() {
-    if (Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Cancel))
+    if (Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Cancel)) {
+        Printer::printJob.beginFilamentService();
         return true;
+    }
     Com::printFLN(PSTR("Filament program requires settled, unpaused motion"));
     return false;
 }
@@ -5133,7 +5125,7 @@ void processSpecialGCode(GCode* pCommand) {
             float e = 0.0f;
             while (e < float(Extrusion)) {
                 Commands::checkForPeriodicalActions(Processing);
-                if (Printer::printStop.commandsBlocked() || abs(sampleStrainGauge()) > maxP /* digits sind soweit gestiegen, dass abbruch.*/) {
+                if (Printer::printJob.commandsBlocked() || abs(sampleStrainGauge()) > maxP /* digits sind soweit gestiegen, dass abbruch.*/) {
                     UI_STATUS_UPD(UI_TEXT_OK);
                     break;
                 }
@@ -5149,6 +5141,7 @@ void processSpecialGCode(GCode* pCommand) {
 
             Printer::relativeExtruderCoordinateMode = save_relativeExtruderCoordinateMode;
             Printer::unitIsInches = saveunitIsInches;
+            Printer::printJob.finishFilamentService();
             Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 5000);
             break;
         }
@@ -5191,14 +5184,14 @@ void processSpecialGCode(GCode* pCommand) {
                 while (HAL::timeInMilliseconds() <= time) {
                     Commands::checkForPeriodicalActions(WaitHeater);
                     UI_STATUS_UPD(UI_TEXT_UNMOUNT_FILAMENT);
-                    if (Printer::printStop.commandsBlocked())
+                    if (Printer::printJob.commandsBlocked())
                         break;
                 }
-                if (Printer::printStop.commandsBlocked())
+                if (Printer::printJob.commandsBlocked())
                     break;
                 while (fabs(e) < float(outputLength)) {
                     Commands::checkForPeriodicalActions(Processing);
-                    if (Printer::printStop.commandsBlocked())
+                    if (Printer::printJob.commandsBlocked())
                         break;
                     if (abs(sampleStrainGauge()) > maxForce /* digits sind soweit INS MINUS gestiegen, dass abbruch.*/) {
                         t += 3.33; // +1°K
@@ -5221,7 +5214,7 @@ void processSpecialGCode(GCode* pCommand) {
                     }
                     Printer::queueFloatCoordinates(IGNORE_COORDINATE, IGNORE_COORDINATE, IGNORE_COORDINATE, e, eFeedrate);
                 }
-                if (Printer::printStop.commandsBlocked())
+                if (Printer::printJob.commandsBlocked())
                     break;
                 if (t > Extruder::current->tempControl.targetTemperatureC && fabs(e) < 10.0f /*mm*/) {
                     //wenn der extruder nicht weiterkommt und die bisherige wegstrecke unter 10mm ist, dann etwas die Temperatur erhöhen und nochmal ziehen.
@@ -5242,6 +5235,7 @@ void processSpecialGCode(GCode* pCommand) {
 
             Printer::relativeExtruderCoordinateMode = save_relativeExtruderCoordinateMode;
             Printer::unitIsInches = saveunitIsInches;
+            Printer::printJob.finishFilamentService();
             Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 5000);
             break;
         }
@@ -5264,9 +5258,8 @@ void processSpecialGCode(GCode* pCommand) {
 } // processSpecialGCode
 
 void queueTask(char task) {
-    PrintLine::waitForXFreeLines(1);
-    PrintLine::queueTask(task);
-    return;
+    if (PrintLine::waitForXFreeLines(1))
+        PrintLine::queueTask(task);
 } // queueTask
 
 bool isAnyScanRunning() {

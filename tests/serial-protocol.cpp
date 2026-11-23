@@ -43,10 +43,12 @@ bool debugErrors() { return false; }
 bool debugEcho() { return echo; }
 struct {
     bool commandsBlocked() const { return stopped; }
-} printStop;
+} printJob;
+struct { bool isPaused() const { return false; } } pause;
 }
 
 namespace Commands {
+void commandLoop();
 void emergencyStop() { std::abort(); }
 void executeGCode(GCode* code) {
     assert(code->internalCommand);
@@ -221,13 +223,18 @@ void binaryFrames() {
 }
 
 void stopDrainsInput() {
-    stopped = true;
-    feed("N1 M105\n");
+    feed("N1 M104 S200\n");
     readReply("ok 1\r\n");
-    assert(!GCodeInput::peekCurrentCommand());
-    stopped = false;
+    assert(GCodeInput::peekCurrentCommand());
+    stopped = true;
+    Commands::commandLoop();
+    assert(!GCodeInput::peekCurrentCommand() && scriptCommands == 0);
     feed("N2 M105\n");
     readReply("ok 2\r\n");
+    assert(!GCodeInput::peekCurrentCommand());
+    stopped = false;
+    feed("N3 M105\n");
+    readReply("ok 3\r\n");
     popM(105);
 }
 

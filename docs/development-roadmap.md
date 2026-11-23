@@ -90,7 +90,7 @@ On the RF2000 build, an instruction trace of an idle tick with 400 steps of pend
 | Play | Restore heat first if needed. After a reheat the next Play starts the return. Complete XY before Z, then recover E. A clipped return leaves the print paused for another attempt. |
 | Stop | Cancel the pause and end any active pause jog. The stop sequence drains input and waits for motion to finish, turns off the heaters and releases the command block after the output delay. |
 
-`Printer::printStop` keeps the abort phase and its timestamp separately. The pause and stop timers use elapsed time across clock rollover. [Stop implementation](../Repetier/PrintStop.cpp) · [Lifecycle replay](../tests/pause-sense-offset.py)
+`Printer::printJob` owns print admission and the abort phase. Stop discards any pending commands already in the serial queue while continuing to acknowledge the input. The pause and stop timers use elapsed time across clock rollover. [Stop implementation](../Repetier/PrintJob.cpp) · [Lifecycle replay](../tests/pause-sense-offset.py)
 
 The AVR builds use 4 fewer bytes of global SRAM and 76–136 fewer bytes of flash than `48e0c99`. The Timer1 pause check uses the same instructions. Instruction traces for queued X and Z, direct Z and idle compensation match the previous cycle counts on all three model builds. Physical pulse timing still needs verification.
 
@@ -106,7 +106,7 @@ The AVR builds use 4 fewer bytes of global SRAM and 76–136 fewer bytes of flas
 
 `StartLine` owns the M3912 phase from queue drain and admission through the temporary Digit Flow profile, generated moves and E state restoration. The planner and pressure controls query the phase through `active()`. [Priming operation](../Repetier/StartLine.cpp) · [State ledger](first-layer-control/m3912-state-boundary.md)
 
-- **Initialize serial jobs at Z homing.** The standard start G-code runs `G28` before enabling compensation or priming. The queue-depth heuristic serves the printing status. [USB print start](first-layer-control/README.md#usb-print-start)
+- **Recognize a serial job at motion admission.** The standard start G-code runs `G28` before enabling compensation or priming. The first USB move that publishes real steps or an accepted `M3912` begins the printing state. Warmup slots, homing and scripted output moves leave it alone. Filament service has its own stoppable phase. The Ready transition waits for an unpaused, empty motion path. [USB print start](first-layer-control/README.md#usb-print-start)
 - **Make pressure control follow phase.** Give start-line braking, first-layer SenseOffset, elastic Digit-Z, and emergency pressure actions clear inputs and effects. Define when each takes effect in the queue and on the machine. Keep `M3912`'s force-sensitive XY and E brake independently observable from M220/M221, and test its cleanup on completion, skip and cancellation. Check first-layer recognition with and without a Z move after priming, including 0.35 and 0.352 mm. [Priming and DMS behavior](first-layer-control/m3912-state-boundary.md)
 - **Make Digit-Z settle consistently.** Retain the filter's rounding remainder and replay increasing, decreasing and steady loads. Measure deflection and the delay from load change through DMS reading to applied Z at the printer. [Digit-Z finding and measurement plan](z-offset/thermal-and-force.md#elastic-hotend-deflection-and-digit-z)
 
