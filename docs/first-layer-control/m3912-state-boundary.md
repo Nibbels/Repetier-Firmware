@@ -30,7 +30,7 @@ The previous print's spatial fade thresholds can still affect the generated prim
 | M82/M83 E-coordinate mode | Save, force absolute | Restore |
 | Logical slicer E coordinate | Save incoming value, use local E0 for prime | Restore incoming E unless print was cancelled |
 | `extrusionPlanner.stepRemainder()` | Save planner sub-step E remainder | Restore on normal/skip completion |
-| `compensatedPositionCollectTinyE` | Save ECMP fractional E remainder under interrupt protection | Restore on normal/skip completion |
+| `extrusionCompensation.remainder()` | Save ECMP fractional E remainder under interrupt protection | Restore on normal/skip completion |
 | DMS `feedrateFactor()` and `extrusionFactor()` | Continuously adapt to DMS force | Reset both to 1.0 |
 | DMS `intervalScale()` | Computed from the DMS speed factor | Reset to 0 atomically |
 | Planned layer tracking in `Printer::layers` | Reset tracking and exclude prime movement from learning | Reset tracking |

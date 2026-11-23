@@ -106,7 +106,7 @@ void StartLine::run(GCode& command) {
     {
         InterruptProtectedBlock lock;
         savedE = {Printer::moveTarget.machineMM(E_AXIS), Printer::moveTarget.remainderMM(E_AXIS),
-                  Printer::extrusionPlanner.stepRemainder(), Printer::compensatedPositionCollectTinyE};
+                  Printer::extrusionPlanner.stepRemainder(), Printer::extrusionCompensation.remainder()};
         Printer::layers.resetTracking();
         active_ = true;
     }
@@ -125,7 +125,7 @@ void StartLine::run(GCode& command) {
         if (!Printer::printStop.commandsBlocked()) {
             Printer::setEPositionMM(savedE.position, savedE.positionRemainder);
             Printer::extrusionPlanner.restoreStepRemainder(savedE.stepRemainder);
-            Printer::compensatedPositionCollectTinyE = savedE.ecmpRemainder;
+            Printer::extrusionCompensation.restoreRemainder(savedE.ecmpRemainder);
         }
         Printer::layers.resetTracking();
         active_ = false;

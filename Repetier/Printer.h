@@ -31,6 +31,7 @@
 #include "StrainGauge.h"
 #include "StartLine.h"
 #include "ExtrusionPlanner.h"
+#include "ExtrusionCompensation.h"
 #include "MoveTarget.h"
 #include "WobbleCorrection.h"
 #include "CartesianPlanner.h"
@@ -115,6 +116,7 @@ public:
     static StrainGauge strainGauge;
     static StartLine startLine;
     static ExtrusionPlanner extrusionPlanner;
+    static ExtrusionCompensation extrusionCompensation;
     static MoveTarget moveTarget;
     static WobbleCorrection wobbleCorrection;
     static CartesianPlanner cartesianPlanner;
@@ -135,8 +137,6 @@ public:
 
     static volatile long currentXSteps;
     static volatile long currentYSteps;
-    static volatile float compensatedPositionOverPercE;
-    static volatile float compensatedPositionCollectTinyE;
 
     static char enabledStepper[3];
 

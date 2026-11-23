@@ -1924,7 +1924,7 @@ void recalculateZCompensation(void) {
 
     InterruptProtectedBlock lock;
     Printer::zMotion.requestCorrection(result.zCorrectionSteps);
-    Printer::compensatedPositionOverPercE = result.extraExtrusionPerStep;
+    Printer::extrusionCompensation.setRatio(result.extraExtrusionPerStep);
 }
 
 void showAbortScanReason(const void* scanName, char abortScanIdentifier) {

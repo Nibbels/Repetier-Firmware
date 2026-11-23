@@ -78,6 +78,7 @@ DigitCompensation Printer::digitCompensation{
 PressureProtection Printer::pressureProtection;
 StrainGauge Printer::strainGauge;
 ExtrusionPlanner Printer::extrusionPlanner;
+ExtrusionCompensation Printer::extrusionCompensation;
 MoveTarget Printer::moveTarget;
 WobbleCorrection Printer::wobbleCorrection;
 CartesianPlanner Printer::cartesianPlanner;
@@ -97,8 +98,6 @@ volatile char Printer::blockAll = 0;
 volatile long Printer::currentXSteps = 0;                                                  //das ist der X-Zähler der GCodes zum Zählen des tiefsten Schalterdruckpunkts /Schaltercrash.
 volatile long Printer::currentYSteps = 0;                                                  //das ist der Y-Zähler der GCodes zum Zählen des tiefsten Schalterdruckpunkts /Schaltercrash.
 
-volatile float Printer::compensatedPositionOverPercE = 0.0f;
-volatile float Printer::compensatedPositionCollectTinyE = 0.0f;
 
 DirectPosition Printer::xyDirect[2];
 DirectPosition Printer::extruderDirect;
@@ -1063,8 +1062,7 @@ void Printer::homeZAxis() {
         senseOffsetControl.resetWindow();
 
         InterruptProtectedBlock noInts;
-        compensatedPositionOverPercE = 0.0f;
-        compensatedPositionCollectTinyE = 0.0f;
+        extrusionCompensation.reset();
         zMotion.resetDirectPosition();
 
         // Homing replaces the reference, including any correction that could not unwind at a limit.

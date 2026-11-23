@@ -41,7 +41,7 @@ The 2018 changelog describes this as spreading bed-profile correction out so it 
 
 ## Geometric material compensation (ECMP)
 
-Following an uneven first-layer surface then gradually printing flat upper layers alters the *physical layer thickness* at a given XY location. To maintain material deposition, the firmware computes a layer-dependent extrusion correction (`nNeededZEPerc`) from the interpolated matrix, `g_min`, `g_max` and accepted current/previous layer heights. This becomes `Printer::compensatedPositionOverPercE`; the stepper path accumulates fractional E steps and inserts appropriate extra steps. First and last layers crossing a fade boundary have special interpolation.
+Following an uneven first-layer surface then gradually printing flat upper layers alters the *physical layer thickness* at a given XY location. To maintain material deposition, the firmware computes a layer-dependent extrusion correction (`nNeededZEPerc`) from the interpolated matrix, `g_min`, `g_max` and accepted current/previous layer heights. This becomes `Printer::extrusionCompensation.ratio()`; the stepper path accumulates fractional E steps and inserts appropriate extra steps. First and last layers crossing a fade boundary have special interpolation.
 
 **ECMP is not pressure-based Digit Flow Compensation.** One changes extruded material according to geometric layer changes; the other reacts to DMS force. Both can affect final E deposition, so changing fade boundaries requires examining ECMP as well.
 

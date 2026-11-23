@@ -1074,25 +1074,15 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
                 if (!forQueue)
                     Printer::pause.recordDirectExtrusion(dir);
 
-                // This Block adds % parts of steps to extrusion because of higher layer heights caused by ZCMP
-                // We calculated compensatedPositionOverPercE as a result of streched layer heights. Here we add material to the layer to compensate stretching.
-                if (forQueue && Printer::compensatedPositionOverPercE != 0) {
-                    Printer::compensatedPositionCollectTinyE += Printer::compensatedPositionOverPercE;
-                    if (Printer::compensatedPositionCollectTinyE >= 1) {
-                        if (Printer::isAdvanceActivated()) {
-                            Printer::extruderStepsNeeded += dir;
-                            while (Printer::compensatedPositionCollectTinyE >= 1) {
-                                Printer::compensatedPositionCollectTinyE--; //notfalls bei überkompensation - sollte nicht vorkommen.
-                            }
-                        } else
-                        {
-                            Extruder::unstep();
-                            // this is a steps spacer, not a double code from some lines above.
-                            while (Printer::compensatedPositionCollectTinyE >= 1) {
-                                Printer::compensatedPositionCollectTinyE--; //notfalls bei überkompensation - sollte nicht vorkommen.
-                            }
-                            Extruder::step();
-                        }
+                if (forQueue && Printer::extrusionCompensation.addBaseStep()) {
+                    if (Printer::isAdvanceActivated()) {
+                        Printer::extruderStepsNeeded += dir;
+                        Printer::extrusionCompensation.consumeWholeSteps();
+                    } else {
+                        // Consume the whole steps while the pulse is low.
+                        Extruder::unstep();
+                        Printer::extrusionCompensation.consumeWholeSteps();
+                        Extruder::step();
                     }
                 }
             }

@@ -6,6 +6,8 @@
 
 **Extrusion planning.** `Printer::extrusionPlanner` owns the last queued logical E and fractional base step. Use `Printer::setEPositionMM()` to synchronize the current and queued E reference while retaining the fractional step. [Extrusion planner](Repetier/ExtrusionPlanner.h)
 
+**Geometric extrusion compensation.** `Printer::extrusionCompensation` owns the ECMP ratio and fractional extra step. The foreground publishes the ratio alongside the Z correction target under interrupt protection. The timer consumes whole steps between the two pulse edges when advance is off. [ECMP](Repetier/ExtrusionCompensation.h)
+
 **Move targets.** `Printer::moveTarget` owns the retained machine-space millimetres, their fractional carry and the work offset. The planner asks for these values before rounding to steps. [Coordinate targets](Repetier/MoveTarget.h)
 
 **M3912 uses an isolated pressure-braked priming phase.** `Printer::startLine` owns the phase, generates its moves and restores the temporary state after draining the queue. High DMS force progressively constrains XY speed and reduces E flow, like the audible change when a chainsaw enters wood. Manual start code enables SenseOffset with `M3909` after priming. [State ledger and test plan](docs/first-layer-control/m3912-state-boundary.md)

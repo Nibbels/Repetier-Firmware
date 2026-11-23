@@ -38,7 +38,7 @@ Digit-Z adds a force-dependent Z adjustment when enabled in the DMS menu. Emerge
 | `layers.fadeEndSteps()` | End of fade-out of spatial bed shape |
 | `g_offsetZCompensationSteps` | Matrix-derived baseline |
 | `Printer::zOffset.effectiveSteps()` | Manual menu Z offset + SenseOffset (converted from micrometres to steps) |
-| `Printer::compensatedPositionOverPercE` | Geometric extrusion correction from changing layer thickness |
+| `Printer::extrusionCompensation.ratio()` | Geometric extrusion correction from changing layer thickness |
 | `digitCompensation.feedrateFactor()` / `extrusionFactor()` | Pressure-dependent feed and extrusion multipliers for Digit Flow |
 
 Positions named *Steps* are motor steps, SenseOffset and manual Z offsets are in **um**, DMS forces in **digits**.

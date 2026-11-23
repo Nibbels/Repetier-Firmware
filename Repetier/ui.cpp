@@ -1724,7 +1724,7 @@ void UIDisplay::parse(char* txt, bool ram) {
                 break;
             } else if (c2 == 'P') // %LP : ECMP %
             {
-                addFloat(Printer::compensatedPositionOverPercE * 100, 1, 2);
+                addFloat(Printer::extrusionCompensation.ratio() * 100, 1, 2);
                 break;
             } else if (c2 == 'm') // %Lm : Fade start
             {

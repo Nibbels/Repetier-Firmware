@@ -69,7 +69,7 @@ This validates the user's qualitative point: **printing flat layers over a local
 
 ### Why ECMP exists
 
-As `C(x,y,z)` changes during fade-out, the true vertical separation between successive deposited layers is not always just the slicer's nominal layer height. The firmware's *geometric E material compensation* (`Printer::compensatedPositionOverPercE`) inserts extra E stepping so that these stretched layers are filled instead of under-extruded. In the example the nominal fade slope is 200 / 4000 = **0.05 (5%)**. This is why the original `*20` factor was chosen. The actual code includes special handling at the first and last fade boundaries.
+As `C(x,y,z)` changes during fade-out, the true vertical separation between successive deposited layers is not always just the slicer's nominal layer height. The firmware's *geometric E material compensation* (`Printer::extrusionCompensation.ratio()`) inserts extra E stepping so that these stretched layers are filled instead of under-extruded. In the example the nominal fade slope is 200 / 4000 = **0.05 (5%)**. This is why the original `*20` factor was chosen. The actual code includes special handling at the first and last fade boundaries.
 
 **Important:** ECMP is geometric and independent of **Digit Flow**, which adjusts E volume in response to extrusion force. Do not mix ECMP, live SenseOffset, or instantaneous Digit-Z corrections when changing the fade equation.
 
@@ -104,7 +104,7 @@ In relative E mode, firmware-generated absolute E coordinates remain internal to
 ## Two fractional E-step accumulators also cross the priming boundary
 
 - `Printer::extrusionPlanner.stepRemainder()` is the **sub-step remainder** from mapping logical E movement (with menu flow and dynamic DMS flow multipliers) into integer motor steps during queue planning.
-- `Printer::compensatedPositionCollectTinyE` is the **sub-step remainder** from adding geometric ECMP extrusion during step execution.
+- `Printer::extrusionCompensation.remainder()` is the **sub-step remainder** from adding geometric ECMP extrusion during step execution.
 
 Both previously spilled into M3912. The patched code **saves and restores both fractional E-step remainders** after the queue drains, with interrupt protection for the ECMP remainder. Hardware validation remains necessary.
 

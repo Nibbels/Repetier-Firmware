@@ -47,6 +47,9 @@ The four AVR builds matched the previous revision's CPU cycles and Z step counts
 
 - [x] **Give the planned E reference and base-step carry one owner.** The replay uses the production destination update and planner arithmetic. It checks `G92` with a fractional origin, a half-step reversal with a flow multiplier and 100,000 relative 0.008 mm moves, which yield 224,000 steps at 280 steps/mm. The priming replay checks restoration of the base-step carry. [Planner](../Repetier/ExtrusionPlanner.h) · [Host replay](../tests/pause-sense-offset.py)
 
+- [x] **Encapsulate geometric extrusion compensation during execution.** The replay checks base and extra pulses, the intermediate falling edge, direct extrusion and the advance queue. [Execution state](../Repetier/ExtrusionCompensation.h) · [Host replay](../tests/pause-sense-offset.py)
+- [ ] **Review ECMP across a retract and its matching unretract.** With a ratio of 0.25 and a starting remainder of 0.75, the actual stepper branch queues −2 then +1 E steps in the advance path for a −1/+1 base-step pair. The accumulator advances in the same direction for both moves. Decide how to account for direction and retractions, then check signed pulse totals and spacing in both execution paths. [Reproduction in the ECMP replay](../tests/pause-sense-offset.cpp)
+
 The pressure protection, sensor, start-line and extrusion-planner extractions together use 368–410 fewer flash bytes and 3 more bytes of global SRAM than `777525c`. The final 36 instruction traces reproduce the previous Z step counts and cycles. Physical verification remains open.
 
 ### Wobble correction

@@ -14,6 +14,7 @@
 #include "Configuration.h"
 #include "RF2000.h"
 #include "ZOffset.h"
+#include "ExtrusionCompensation.h"
 #include "PrintLayers.h"
 #include "BedCompensation.h"
 #include "PrintPause.h"
@@ -76,8 +77,13 @@ void (*onInterrupt)() = nullptr;
 unsigned locksUntilCompensationPublish = 0;
 float extrusionBeforePublish = 0.0f;
 
+namespace HAL {
+void allowInterrupts() { interruptsEnabled = true; }
+void forbidInterrupts() { interruptsEnabled = false; }
+}
+
 namespace Printer {
-extern float compensatedPositionOverPercE;
+extern ExtrusionCompensation extrusionCompensation;
 }
 
 class InterruptProtectedBlock {
@@ -88,7 +94,7 @@ public:
         if (interruptsEnabled && interruptBeforeLock && --interruptBeforeLock == 0)
             onInterrupt();
         if (interruptsEnabled && locksUntilCompensationPublish && --locksUntilCompensationPublish == 0)
-            extrusionBeforePublish = Printer::compensatedPositionOverPercE;
+            extrusionBeforePublish = Printer::extrusionCompensation.ratio();
         interruptsEnabled = false;
     }
     ~InterruptProtectedBlock() { unprotect(); }
@@ -198,9 +204,10 @@ float feedrate = 10.0f;
 bool unitIsInches = false, relativeCoordinateMode = false;
 float menuExtrusionFactor = 1.0f;
 bool relativeExtruderCoordinateMode = false;
-float compensatedPositionOverPercE = 0.0f;
-float compensatedPositionCollectTinyE = 0.0f;
+ExtrusionCompensation extrusionCompensation;
 bool blockAll = false;
+int extruderStepsNeeded = 0;
+bool advanceActive = false;
 volatile char doHeatBedZCompensation = true;
 bool printing = true, menuPaused = false;
 bool axesHomed = true, movingZ = false;
@@ -209,6 +216,7 @@ char moveMode[3] = { MOVE_MODE_SINGLE_STEPS, MOVE_MODE_SINGLE_STEPS, MOVE_MODE_S
 
 bool debugErrors() { return false; }
 bool debugInfo() { return false; }
+bool isAdvanceActivated() { return advanceActive; }
 bool debugDryrun() { return false; }
 float convertToMM(float value) { return unitIsInches ? value * 25.4 : value; }
 bool isPrinting() { return printing; }
@@ -272,7 +280,7 @@ void queueFloatCoordinates(float x, float y, float z, float e, float speed) {
     if (e != IGNORE_COORDINATE) {
         setEPositionMM(e);
         extrusionPlanner.restoreStepRemainder(0.375f);
-        compensatedPositionCollectTinyE = 0.25f;
+        extrusionCompensation.restoreRemainder(0.25f);
     }
 }
 bool checkPlayKey() { return skipPrimeAt && primePolls >= skipPrimeAt; }
@@ -316,6 +324,9 @@ struct Extruder {
     float offsetMM[2] = {};
 
     static Extruder* current;
+    static unsigned stepPulses, trailingEdges;
+    static void step() { assert(!interruptsEnabled); ++stepPulses; }
+    static void unstep() { assert(!interruptsEnabled); ++trailingEdges; }
     static void setTemperatureForExtruder(float temperature, int tool);
     static void setHeatedBedTemperature(float temperature) { bedTemperature = temperature; }
     static void setTemperatureForAllExtruders(float temperature) { setTemperatureForExtruder(temperature, 0); }
@@ -324,6 +335,7 @@ struct Extruder {
 
 Extruder extruder[NUM_EXTRUDER];
 Extruder* Extruder::current = extruder;
+unsigned Extruder::stepPulses = 0, Extruder::trailingEdges = 0;
 float Extruder::bedTemperature = 60.0f;
 
 void Extruder::setTemperatureForExtruder(float temperature, int tool) {
@@ -335,6 +347,9 @@ struct PrintLine {
     bool moveZ = false;
     bool positiveE = false;
     bool moveXY = false;
+    bool moveE = false;
+    int32_t error[4] = {}, delta[4] = {};
+    bool isEMove() const { return moveE; }
     bool isZMove() const { return moveZ; }
     bool isEPositiveMove() const { return positiveE; }
     bool isXOrYMove() const { return moveXY; }
@@ -345,6 +360,7 @@ struct PrintLine {
     static int queuedTask, stopRequests;
     static bool hasLines() { return linesCount; }
     static bool hasStoppableDirectMove();
+    static bool hasQueuedOvertravel() { return false; }
     static unsigned plannedMoves;
     static bool updatesWobble;
     static void prepareQueueMove(bool, bool, float, bool wobble) {
@@ -367,6 +383,7 @@ int PrintLine::queuedTask = TASK_NO_TASK;
 int PrintLine::stopRequests = 0;
 unsigned PrintLine::plannedMoves = 0;
 bool PrintLine::updatesWobble = false;
+const int32_t queueError = 1, directError = 1;
 
 struct UIDisplay {
     int lastButtonAction = 0, menuLevel = 1, menuPos[1] = {};
@@ -1017,15 +1034,15 @@ void homeBetweenPrints() {
     const long manualZ = Printer::zOffset.manualMicrometers();
     planMove(oldLayer + 64, true);
     planMove(oldLayer + 128, true, false, false);
-    Printer::compensatedPositionOverPercE = 12.5f;
-    Printer::compensatedPositionCollectTinyE = 0.75f;
+    Printer::extrusionCompensation.setRatio(12.5f);
+    Printer::extrusionCompensation.restoreRemainder(0.75f);
 
     Printer::homeZAxis();
     assert(!Printer::doHeatBedZCompensation && Printer::zMotion.isHomed());
     assert(!Printer::zMotion.nominalSteps() && !Printer::zMotion.motorSteps());
     assert(Printer::zOffset.manualMicrometers() == manualZ && Printer::zOffset.senseMicrometers() == 0);
     assert(Printer::zMotion.correctionTarget() == 0);
-    assert(Printer::compensatedPositionOverPercE == 0.0f && Printer::compensatedPositionCollectTinyE == 0.0f);
+    assert(Printer::extrusionCompensation.ratio() == 0.0f && Printer::extrusionCompensation.remainder() == 0.0f);
     assert(Printer::senseOffsetControl.limits().thresholdDigits == 0 && !Printer::senseOffsetControl.inLearningRange());
     assert(layers.fadeStartSteps() == defaultMin && layers.fadeEndSteps() == 12800);
     planMove(0, false, true, false); // An E-only move must not confirm the pre-home candidate.
@@ -1062,7 +1079,7 @@ void expectCompensation(long nominalZ, long correctionTarget, float extraExtrusi
     const unsigned readsBefore = matrixDepthReads;
     recalculateZCompensation();
     assert(Printer::zMotion.correctionTarget() == correctionTarget);
-    assert(std::abs(Printer::compensatedPositionOverPercE - extraExtrusion) < 0.000001f);
+    assert(std::abs(Printer::extrusionCompensation.ratio() - extraExtrusion) < 0.000001f);
     assert(matrixDepthReads - readsBefore == expectedReads);
 }
 
@@ -1113,7 +1130,7 @@ void compensationBoundaries() {
     const long fadeStart = layers.fadeStartSteps();
     const long fadeEnd = layers.fadeEndSteps();
 
-    Printer::compensatedPositionOverPercE = 0.048f;
+    Printer::extrusionCompensation.setRatio(0.048f);
     locksUntilCompensationPublish = 2; // One read of nominal Z, then publication.
     expectCompensation(-1, 263 + offset, 0.0f, 0);
     assert(!locksUntilCompensationPublish && extrusionBeforePublish == 0.048f);
@@ -1261,7 +1278,7 @@ void primeFlowCleanup(unsigned skipAt, unsigned abortAt) {
     planMove(512, true);
     Printer::setEPositionMM(10.0f, 0.00001f);
     Printer::extrusionPlanner.restoreStepRemainder(0.125f);
-    Printer::compensatedPositionCollectTinyE = 0.75f;
+    Printer::extrusionCompensation.restoreRemainder(0.75f);
     Printer::relativeExtruderCoordinateMode = true;
     Printer::feedrateMultiply = 85;
     Printer::menuExtrusionFactor = 0.93f;
@@ -1297,7 +1314,7 @@ void primeFlowCleanup(unsigned skipAt, unsigned abortAt) {
         assert(Printer::printStop.commandsBlocked() && Printer::moveTarget.machineMM(E_AXIS) == 0.0f);
     } else {
         assert(Printer::moveTarget.machineMM(E_AXIS) == 10.0f && Printer::moveTarget.remainderMM(E_AXIS) == 0.00001f);
-        assert(Printer::extrusionPlanner.stepRemainder() == 0.125f && Printer::compensatedPositionCollectTinyE == 0.75f);
+        assert(Printer::extrusionPlanner.stepRemainder() == 0.125f && Printer::extrusionCompensation.remainder() == 0.75f);
     }
 }
 
@@ -1453,6 +1470,32 @@ void cartesianPlanning() {
     assert(planCartesianAxis(X_AXIS) == -16000);
 }
 
+void ecmpStepping() {
+    PrintLine move;
+    move.moveE = move.positiveE = true;
+    move.delta[E_AXIS] = 1;
+    Printer::extrusionCompensation.setRatio(0.25f);
+
+    for (unsigned i = 0; i < 3; ++i)
+        executeExtrusionStep(&move, true);
+    assert(Extruder::stepPulses == 3 && Printer::extrusionCompensation.remainder() == 0.75f);
+    executeExtrusionStep(&move, false);
+    assert(Extruder::stepPulses == 4 && Printer::extrusionCompensation.remainder() == 0.75f);
+    executeExtrusionStep(&move, true);
+    assert(Extruder::stepPulses == 6 && Extruder::trailingEdges == 1);
+    assert(Printer::extrusionCompensation.remainder() == 0.0f);
+
+    Printer::advanceActive = true;
+    Printer::extrusionCompensation.restoreRemainder(0.75f);
+    move.positiveE = false;
+    executeExtrusionStep(&move, true);
+    assert(Printer::extruderStepsNeeded == -2);
+    move.positiveE = true;
+    executeExtrusionStep(&move, true);
+    // The existing positive-only carry can add a step to only one half of a reversal.
+    assert(Printer::extruderStepsNeeded == -1 && Extruder::stepPulses == 6);
+}
+
 void initializeOffsets() {
     planMove(256, true);
     Printer::zMotion.setNominalSteps(256);
@@ -1530,6 +1573,8 @@ int main(int argc, char** argv) {
         wobbleTarget();
     else if (!std::strcmp(argv[1], "cartesian-planning"))
         cartesianPlanning();
+    else if (!std::strcmp(argv[1], "ecmp-stepping"))
+        ecmpStepping();
     else
         return 1;
     std::printf("Print lifecycle replay passed (%s)\n", argv[1]);
