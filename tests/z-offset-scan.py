@@ -22,12 +22,22 @@ def main():
         (build / "scan-pressure-firmware.inc").write_text(
             source[pressure_start:pressure_end] + source[service_start:service_end], encoding="utf-8",
         )
+        discard_start = source.index("void discardScans()")
+        discard_end = source.index("\nfloat g_ZSchraubenSollDrehungenWarm_U", discard_start)
+        dispatch_start = source.index("void handleScanWorkTasks(")
+        dispatch_end = source.index("\nvoid handleStartStandby(", dispatch_start)
+        (build / "scan-dispatch-firmware.inc").write_text(
+            source[discard_start:discard_end] + source[dispatch_start:dispatch_end], encoding="utf-8",
+        )
         executable = build / "scan"
         subprocess.run([
             os.environ.get("CXX", "c++"), "-std=c++11", "-O2", "-Wall", "-Wextra", "-Werror",
             "-I", str(build), "-I", str(firmware), str(tests / "z-offset-scan.cpp"), "-o", str(executable),
         ], check=True)
-        for scenario in ("normal", "retry", "missing-matrix", "level", "cancel-during-home", "disconnected", "overload"):
+        for scenario in (
+            "normal", "retry", "missing-matrix", "level", "tiny-matrix", "cancel-during-home",
+            "stop-during-home", "disconnected", "overload",
+        ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
 
 

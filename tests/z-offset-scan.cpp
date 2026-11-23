@@ -6,6 +6,7 @@
 #include <cstring>
 #include <utility>
 #include <vector>
+#include "CalibrationScan.h"
 #include "PressureMeasurement.h"
 #include "scan-strain-gauge.h"
 
@@ -14,28 +15,20 @@ using millis_t = uint32_t;
 enum { X_AXIS, Y_AXIS, Z_AXIS };
 enum { EEPROM_FORMAT = 42, COMPENSATION_MATRIX_MAX_X = 10, COMPENSATION_MATRIX_MAX_Y = 10 };
 enum { EEPROM_SECTOR_SIZE = 4096, EEPROM_OFFSET_DIMENSION_X = 2, EEPROM_OFFSET_DIMENSION_Y = 4 };
-enum { SCAN_ABORT_REASON_CANCELED = 1, SCAN_ABORT_REASON_MISSING_MATRIX, SCAN_ABORT_REASON_AVERAGE_PRESSURE,
-       SCAN_ABORT_REASON_IDLE_PRESSURE, SCAN_ABORT_REASON_OVERFLOWING_MATRIX, SCAN_ABORT_REASON_BAD_HEIGHT_MATRIX, SCAN_ABORT_REASON_DMS_UNAVAILABLE, SCAN_ABORT_REASON_DMS_OVERLOAD };
-enum {
-    SCAN_ABORT_REASON_REACHED_MAX_COMPENSATION = 30, SCAN_ABORT_REASON_SCAN_OVER_START,
-    SCAN_ABORT_REASON_SCAN_TOO_UNEVEN, SCAN_ABORT_REASON_SCAN_STEP_DELTA_OUT_OF_RANGE
-};
 template<class T>
 T constrain(T value, T minimum, T maximum) { return std::min(std::max(value, minimum), maximum); }
 
 constexpr int heatBedScanRetries = 5;
 constexpr uint8_t I2C_ADDRESS_EXTERNAL_EEPROM = 0x50;
 constexpr int heatBedScanXStartMm = 15, heatBedScanYStartMm = 30, heatBedScanDelayMs = 1000;
-constexpr int zOffsetScanContactPressureDelta = 33, zOffsetScanRetryPressureDelta = 30, zOffsetScanIdlePressureDelta = 0;
+constexpr int zOffsetScanContactPressureDelta = 33, zOffsetScanRetryPressureDelta = 30;
 #define PSTR(text) text
 #define UI_STATUS_UPD(text) ((void)(text))
 constexpr char UI_TEXT_ZCALIB[] = "z calibrate", UI_TEXT_DO_MHIER_BED_SCAN[] = "scan";
 constexpr char ui_text_heat_bed_zoffset_search_status[] = "status", ui_text_heat_bed_zoffset_fix_z1[] = "z1",
                ui_text_heat_bed_zoffset_fix_z2[] = "z2", ui_text_statusmsg[] = "message";
 
-char g_retryZScan = 0, g_scanRetries = 0, g_abortZScan = 0, g_nActiveHeatBed = 1;
-short g_nCurrentIdlePressure = 0, g_nMinPressureContact = 0, g_nMaxPressureContact = 0;
-short g_nMinPressureRetry = 0, g_nMaxPressureRetry = 0, g_nMinPressureIdle = 0, g_nMaxPressureIdle = 0;
+char g_nActiveHeatBed = 1;
 short g_nScanHeatBedUpFastSteps = -4, g_nScanHeatBedUpSlowSteps = -2;
 short g_nScanHeatBedDownSlowSteps = 2, g_nScanHeatBedDownFastSteps = 20, g_nScanZMaxCompensationSteps = 600;
 short g_nScanIdlePressureMin = -7500, g_nScanIdlePressureMax = 7500;
@@ -46,7 +39,6 @@ float g_scanStartZLiftMM = 1.0f;
 float g_ZOSlearningRate = 1.0f, g_ZOSlearningGradient = 0.0f;
 uint8_t g_ZOSTestPoint[2] = {3, 4}, g_uZMatrixMax[2] = {9, 9}, g_ZMatrixChangedInRam = 0;
 short g_ZCompensationMatrix[COMPENSATION_MATRIX_MAX_X][COMPENSATION_MATRIX_MAX_Y];
-long g_nLastZScanZPosition = 0;
 bool g_nAutoReturnMessage = false;
 uint32_t g_nAutoReturnTime = 0;
 
@@ -56,7 +48,7 @@ bool injectNoise = false, injectDisconnection = false, injectOverload = false;
 uint32_t lastUnstableAt = 0;
 uint32_t lastMoveAt = 0, acceptedAt = 0;
 bool moved = false, returningToZero = false;
-char abortedWith = 0;
+ScanAbort abortedWith = ScanAbort::None;
 bool matrixAvailable = true;
 void (*onHome)() = nullptr;
 std::vector<std::pair<float, float>> probePoints;
@@ -68,6 +60,9 @@ uint32_t timeInMilliseconds() { return now; }
 
 namespace Printer {
 ScanStrainGauge strainGauge;
+bool blockAll = false;
+struct { bool commandsBlocked() const { return false; } } printJob;
+struct { bool isPaused() const { return false; } } pause;
 struct { void cancel() {} void schedule(uint32_t) {} } idleStatus;
 struct { void recordActivity(uint32_t) {} } inactivity;
 struct {
@@ -118,7 +113,7 @@ template<class... Args> void printF(Args...) {}
 template<class... Args> void printFLN(Args...) {}
 }
 
-void showAbortScanReason(const char*, char reason) { abortedWith = reason; }
+void showAbortScanReason(const char*, ScanAbort reason) { abortedWith = reason; }
 void showMyPage(void*, void*, void*, void*) {}
 void initCompensationMatrix() { g_ZCompensationMatrix[0][0] = 0; }
 int loadCompensationMatrix(unsigned int address) {
@@ -188,17 +183,40 @@ void calculateZScrewCorrection() {
 #include "scan-pressure-firmware.inc"
 #include "z-offset-scan-firmware.inc"
 
+namespace {
+struct {
+    bool active() const { return false; }
+    void tick() { assert(false); }
+    void discard() {}
+} heatBedScan;
+bool isAnyScanRunning() { return zOffsetScan.active(); }
+}
+
+#include "scan-dispatch-firmware.inc"
+
 int main(int argc, char** argv) {
     assert(argc == 2);
     const bool level = !std::strcmp(argv[1], "level");
     const bool retry = !std::strcmp(argv[1], "retry");
     const bool missing = !std::strcmp(argv[1], "missing-matrix");
     const bool cancel = !std::strcmp(argv[1], "cancel-during-home");
+    const bool stop = !std::strcmp(argv[1], "stop-during-home");
+    const bool tinyMatrix = !std::strcmp(argv[1], "tiny-matrix");
+    if (tinyMatrix)
+        g_uZMatrixMax[X_AXIS] = g_uZMatrixMax[Y_AXIS] = 2;
     if (cancel) {
         onHome = [] {
             onHome = nullptr;
             zOffsetScan.startOrCancel(false);
-            assert(zOffsetScan.active() && !abortedWith);
+            assert(zOffsetScan.active() && abortedWith == ScanAbort::None);
+        };
+    }
+    if (stop) {
+        onHome = [] {
+            onHome = nullptr;
+            Printer::blockAll = true;
+            discardScans();
+            assert(zOffsetScan.active());
         };
     }
     matrixAvailable = !missing;
@@ -210,30 +228,33 @@ int main(int argc, char** argv) {
     while (zOffsetScan.active()) {
         assert(++tickCount <= 15000);
         Printer::strainGauge.service(HAL::now, probeDigits());
-        if (!g_abortZScan)
-            scanPressure.service(HAL::now);
-        zOffsetScan.tick();
+        handleScanWorkTasks(true);
         assert(serviced == tickCount);
         HAL::now += 10;
     }
     if (injectDisconnection || injectOverload) {
-        assert(abortedWith == (injectOverload ? SCAN_ABORT_REASON_DMS_OVERLOAD : SCAN_ABORT_REASON_DMS_UNAVAILABLE) && shutdowns == 1);
+        assert(abortedWith == (injectOverload ? ScanAbort::DmsOverload : ScanAbort::DmsUnavailable) && shutdowns == 1);
         assert(negativeMoves == 1 && homedZ == 1 && !corrected && !reported);
     } else if (cancel) {
-        assert(abortedWith == SCAN_ABORT_REASON_CANCELED && tickCount == 3 && homedZ == 2);
+        assert(abortedWith == ScanAbort::Canceled && tickCount == 3 && homedZ == 2);
         assert(shutdowns == 1 && probePoints.empty() && !corrected && !reported);
+    } else if (stop) {
+        assert(abortedWith == ScanAbort::None && tickCount == 2 && homedZ == 1);
+        assert(probePoints.empty() && !negativeMoves && !corrected && !reported);
     } else if (missing) {
-        assert(abortedWith == SCAN_ABORT_REASON_MISSING_MATRIX && shutdowns == 1);
+        assert(abortedWith == ScanAbort::MissingMatrix && shutdowns == 1);
         assert(tickCount == 4 && loaded == 1 && homedZ == 2 && !reported && !corrected);
     } else {
-        assert(!abortedWith && reported == 1 && g_nAutoReturnMessage && g_ZMatrixChangedInRam);
+        assert(abortedWith == ScanAbort::None && reported == 1 && g_nAutoReturnMessage && g_ZMatrixChangedInRam);
         assert(homedZ == (level ? 7u : 1u) && corrected == homedZ && homedXY == homedZ);
         assert(loaded == 1 && negativeMoves > 0);
-        assert(g_ZCompensationMatrix[4][4] == -123);
+        const int checkIndex = tinyMatrix ? 2 : 4;
+        assert(g_ZCompensationMatrix[checkIndex][checkIndex] == -123);
         assert(positiveRetryRetreats == static_cast<unsigned>(retry));
         const std::vector<std::pair<float, float>> expected = level
             ? std::vector<std::pair<float, float>>{{40, 40}, {20, 20}, {80, 80}, {40, 30}, {20, 80}, {80, 20}, {40, 50}}
-            : std::vector<std::pair<float, float>>{{30, 40}};
+            : tinyMatrix ? std::vector<std::pair<float, float>>{{10, 10}}
+                         : std::vector<std::pair<float, float>>{{30, 40}};
         assert(probePoints == expected);
     }
     std::printf("Z-offset scan replay passed (%s)\n", argv[1]);

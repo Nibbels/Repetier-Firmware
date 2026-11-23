@@ -3678,22 +3678,19 @@ void UIDisplay::mainSwitchCase(int action) {
     }
 
     case UI_ACTION_RF_SCAN_HEAT_BED: {
-        g_nHeatBedScanMode = 0;
-        startHeatBedScan();
+        startHeatBedScan(HeatBedScanMode::Standard);
         //gehe zurück und zeige dem User was passiert.
         uid.exitmenu();
         break;
     }
     case UI_ACTION_RF_SCAN_HEAT_BED_PLA: {
-        g_nHeatBedScanMode = HEAT_BED_SCAN_MODE_PLA;
-        startHeatBedScan();
+        startHeatBedScan(HeatBedScanMode::Pla);
         //gehe zurück und zeige dem User was passiert.
         uid.exitmenu();
         break;
     }
     case UI_ACTION_RF_SCAN_HEAT_BED_ABS: {
-        g_nHeatBedScanMode = HEAT_BED_SCAN_MODE_ABS;
-        startHeatBedScan();
+        startHeatBedScan(HeatBedScanMode::Abs);
         //gehe zurück und zeige dem User was passiert.
         uid.exitmenu();
         break;

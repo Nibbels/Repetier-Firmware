@@ -27,7 +27,10 @@ def main():
             os.environ.get("CXX", "c++"), "-std=c++11", "-O2", "-Wall", "-Wextra", "-Werror",
             "-I", str(build), "-I", str(firmware), str(tests / "heat-bed-scan.cpp"), "-o", str(executable),
         ], check=True)
-        for scenario in ("standard", "pla", "abs", "retry", "cancel", "disconnected", "overload", "invalid-grid"):
+        for scenario in (
+            "standard", "pla", "abs", "retry", "cancel", "disconnected", "overload",
+            "overload-and-cancel", "stop-mid-grid", "invalid-grid",
+        ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
 
 

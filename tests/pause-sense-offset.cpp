@@ -128,6 +128,7 @@ void WRITE(int pin, bool high);
 #include "DigitCompensation.h"
 #include "SenseOffsetControl.h"
 #include "PressureProtection.h"
+#include "CalibrationScan.h"
 #include "PressureMeasurement.h"
 #include "StrainGauge.h"
 #include "StartLine.h"

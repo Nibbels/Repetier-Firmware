@@ -64,6 +64,7 @@ void delayMicroseconds(int microseconds);
 }
 
 #include "ZMotion.h"
+#include "CalibrationScan.h"
 
 namespace Printer {
 ZMotion zMotion(100.0f);
@@ -80,22 +81,21 @@ struct StepExecutor {
 };
 
 constexpr int Processing = 0, Calibrating = 1;
-constexpr int SCAN_ABORT_REASON_REACHED_MAX_COMPENSATION = 7;
-int g_abortZScan = 0, g_scanRetries = 0;
+ScanSession scanSession;
 struct Commands {
     static void checkForPeriodicalActions(int state) {
         if (state == Calibrating) {
             assert(!stepHigh && pulseCount - lastServicePulse <= 16);
             lastServicePulse = pulseCount;
             if (cancelAtPulses && pulseCount >= cancelAtPulses)
-                g_abortZScan = 1;
+                scanSession.requestAbort(ScanAbort::Canceled);
         }
         HAL::delayMilliseconds(1);
     }
 };
 struct Com { static void printFLN(const char*) {} };
 
-bool moveZ(int nSteps, bool emergencyRetreat = false);
+static bool moveZ(int nSteps, bool emergencyRetreat = false);
 
 #include "z-motion-firmware.inc"
 
@@ -128,8 +128,8 @@ void reset(int32_t position, bool homed = true) {
     pulseCount = waitedMs = lastServicePulse = cancelAtPulses = 0;
     Printer::blockAll = false;
     Printer::doHeatBedZCompensation = true;
-    g_abortZScan = 0;
-    g_scanRetries = 2;
+    scanSession.reset();
+    scanSession.armRetries(2);
     ZMotion::setDirection(true);
 }
 
@@ -297,7 +297,7 @@ void scanTravel() {
     ZMotion::setDirection(false);
     tickDuringScan = true;
     moveZ(4);
-    assert(!g_abortZScan && !zMotion.scanInProgress());
+    assert(!scanSession.aborting() && !zMotion.scanInProgress());
     assert(motorPosition == -21 && zMotion.scanSteps() == 4 && pulseCount == 4);
     tickDuringScan = false;
     settleCorrection();
@@ -305,19 +305,21 @@ void scanTravel() {
 
     reset(-24);
     moveZ(-2);
-    assert(g_abortZScan == SCAN_ABORT_REASON_REACHED_MAX_COMPENSATION && g_scanRetries == 0);
+    assert(scanSession.aborting() && scanSession.retriesRemaining() == 0);
     assert(motorPosition == -25 && zMotion.scanSteps() == -1 && !zMotion.scanInProgress());
     moveZ(1);
     assert(pulseCount == 1 && !zMotion.scanInProgress());
+    assert(scanSession.takeAbort() == ScanAbort::MaxCompensation);
 
     reset(100);
     cancelAtPulses = 32;
     assert(!moveZ(80));
-    assert(g_abortZScan && pulseCount == 32 && waitedMs == 2 && zMotion.scanSteps() == 32);
+    assert(scanSession.aborting() && pulseCount == 32 && waitedMs == 2 && zMotion.scanSteps() == 32);
     assert(!zMotion.scanInProgress());
 
     reset(100);
     Printer::blockAll = true;
+    scanSession.requestAbort(ScanAbort::DmsOverload);
     moveZ(4);
     assert(!pulseCount);
     assert(moveZ(4, true));

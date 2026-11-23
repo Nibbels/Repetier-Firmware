@@ -85,7 +85,6 @@ constexpr int heatBedScanAbsNozzleC = 240;
 
 constexpr int zOffsetScanContactPressureDelta = 33;
 constexpr int zOffsetScanRetryPressureDelta = 30;
-constexpr int zOffsetScanIdlePressureDelta = 0;
 
 
 long g_offsetZCompensationSteps = 0;
@@ -102,24 +101,8 @@ float g_ZOSlearningGradient = 0.0f;
 
 float g_scanStartZLiftMM = defaultHeatBedScanLiftMm;
 
-char g_scanRetries = 0;
-char g_retryZScan = 0;
-
-char g_nHeatBedScanMode = 0;
-
-char g_abortZScan = 0;
 short g_ZCompensationMatrix[COMPENSATION_MATRIX_MAX_X][COMPENSATION_MATRIX_MAX_Y];
 unsigned char g_uZMatrixMax[2] = { 0, 0 };
-long g_nLastZScanZPosition = 0;
-
-short g_nMaxPressureContact;
-short g_nMaxPressureRetry;
-short g_nMaxPressureIdle;
-short g_nMinPressureContact;
-short g_nMinPressureRetry;
-short g_nMinPressureIdle;
-short g_nFirstIdlePressure;
-short g_nCurrentIdlePressure;
 
 // configurable scan parameters - the proper default values are set by restoreDefaultScanParameters()
 long g_nScanXStartSteps = 0;
@@ -186,6 +169,8 @@ unsigned char g_uRGBTargetB = 0;
 
 static void setupForPrinting();
 static bool readWord24C256(int addressI2C, unsigned int addressEEPROM, unsigned short& data);
+static void showAbortScanReason(const void* scanName, ScanAbort reason);
+static bool moveZ(int nSteps, bool emergencyRetreat = false);
 
 void initRF(void) {
     Printer::strainGauge.begin(HAL::timeInMilliseconds());
@@ -201,17 +186,8 @@ static void updateDigitCompensation(int16_t digits) {
     });
 }
 
-void adjustPressureLimits(short IdlePressure) {
-    g_nMinPressureContact = IdlePressure - g_nScanContactPressureDelta;
-    g_nMaxPressureContact = IdlePressure + g_nScanContactPressureDelta;
-    g_nMinPressureRetry = IdlePressure - g_nScanRetryPressureDelta;
-    g_nMaxPressureRetry = IdlePressure + g_nScanRetryPressureDelta;
-    g_nMinPressureIdle = IdlePressure - g_nScanIdlePressureDelta;
-    g_nMaxPressureIdle = IdlePressure + g_nScanIdlePressureDelta;
-}
-
 static PressureMeasurement::Settings pressureMeasurementSettings();
-static void servicePressureMeasurement(PressureMeasurement& measurement, millis_t now, bool scanning = false);
+static ScanAbort servicePressureMeasurement(PressureMeasurement& measurement, millis_t now, bool scanning = false);
 static void reportPressureReadFailure(const PressureMeasurement& measurement);
 
 namespace {
@@ -219,9 +195,7 @@ namespace {
 using PressureResult = PressureMeasurement::Result;
 constexpr int16_t scanOverloadDigits = 10000;
 
-bool scanRequiresRetreatOnly() {
-    return g_abortZScan == SCAN_ABORT_REASON_DMS_UNAVAILABLE || g_abortZScan == SCAN_ABORT_REASON_DMS_OVERLOAD;
-}
+ScanSession scanSession;
 
 class ScanPressure {
 public:
@@ -258,7 +232,9 @@ public:
     bool service(millis_t now) {
         if (measurement_.result() != PressureResult::Pending)
             return false;
-        servicePressureMeasurement(measurement_, now, true);
+        const auto fault = servicePressureMeasurement(measurement_, now, true);
+        if (fault != ScanAbort::None)
+            scanSession.requestAbort(fault);
         return measurement_.result() != PressureResult::Pending;
     }
 
@@ -281,8 +257,8 @@ private:
             digits = measurement_.average();
         } else {
             reportPressureReadFailure(measurement_);
-            if (result == PressureResult::ReadError && !g_abortZScan)
-                g_abortZScan = SCAN_ABORT_REASON_DMS_UNAVAILABLE;
+            if (result == PressureResult::ReadError)
+                scanSession.requestAbort(ScanAbort::DmsUnavailable);
         }
         measurement_.reset();
         return result;
@@ -304,6 +280,15 @@ public:
     ProbeProgress retreat();
     long measuredZ() const { return measuredZ_; }
 
+    void setPressureLimits(short baseline, uint16_t contactDelta, uint16_t retryDelta) {
+        contactMin_ = baseline - contactDelta;
+        contactMax_ = baseline + contactDelta;
+        releaseMin_ = baseline - retryDelta;
+        releaseMax_ = baseline + retryDelta;
+    }
+
+    void forgetPreviousPoint() { lastProbeZ_ = 0; }
+
     void reset() {
         scanPressure.reset();
         releaseStarted_ = false;
@@ -318,16 +303,18 @@ private:
     ProbeProgress approach(bool fine);
     ProbeProgress release(uint8_t divisor);
     ProbeProgress advancePoint(ProbeProgress progress, PointPhase next);
-    ProbeProgress travelLimit(char reason) const {
-        if (g_scanRetries)
-            g_retryZScan = 1;
-        else
-            g_abortZScan = reason;
+    ProbeProgress travelLimit(ScanAbort reason) const {
+        scanSession.requestRetryOrAbort(reason);
         return ProbeProgress::Failed;
     }
 
+    long lastProbeZ_ = 0;
     long releaseStartZ_ = 0;
     long measuredZ_ = 0;
+    short contactMin_ = 0;
+    short contactMax_ = 0;
+    short releaseMin_ = 0;
+    short releaseMax_ = 0;
     PointPhase pointPhase_ = PointPhase::ApproachCoarse;
     millis_t retreatStartedAt_ = 0;
     bool releaseStarted_ = false;
@@ -369,7 +356,7 @@ ProbeProgress ScanProbe::approach(bool fine) {
     const long limit = RMath::max(-static_cast<long>(g_nScanZMaxCompensationSteps), -32768L);
     if (currentZ <= limit) {
         Com::printFLN(PSTR("Probe reached the Z scan limit: "), currentZ);
-        return travelLimit(SCAN_ABORT_REASON_REACHED_MAX_COMPENSATION);
+        return travelLimit(ScanAbort::MaxCompensation);
     }
 
     short digits;
@@ -377,16 +364,15 @@ ProbeProgress ScanProbe::approach(bool fine) {
     if (result == PressureResult::Pending)
         return ProbeProgress::Pending;
     if (result != PressureResult::Stable) {
-        if (!g_abortZScan)
-            g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
+        scanSession.requestAbort(ScanAbort::AveragePressure);
         return ProbeProgress::Failed;
     }
-    if (digits > g_nMaxPressureContact || digits < g_nMinPressureContact)
+    if (digits > contactMax_ || digits < contactMin_)
         return ProbeProgress::Done;
 
     const int step = fine ? g_nScanHeatBedUpSlowSteps : g_nScanHeatBedUpFastSteps;
     if (step >= 0)
-        return travelLimit(SCAN_ABORT_REASON_REACHED_MAX_COMPENSATION);
+        return travelLimit(ScanAbort::MaxCompensation);
     return moveZ(RMath::max(static_cast<long>(step), limit - currentZ))
         ? ProbeProgress::Pending : ProbeProgress::Failed;
 }
@@ -402,11 +388,10 @@ ProbeProgress ScanProbe::release(uint8_t divisor) {
     if (result == PressureResult::Pending)
         return ProbeProgress::Pending;
     if (result != PressureResult::Stable) {
-        if (!g_abortZScan)
-            g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
+        scanSession.requestAbort(ScanAbort::AveragePressure);
         return ProbeProgress::Failed;
     }
-    if (digits < g_nMaxPressureRetry && digits > g_nMinPressureRetry) {
+    if (digits < releaseMax_ && digits > releaseMin_) {
         releaseStarted_ = false;
         return ProbeProgress::Done;
     }
@@ -415,14 +400,14 @@ ProbeProgress ScanProbe::release(uint8_t divisor) {
     const long nextZ = Printer::zMotion.scanSteps() + step;
     const long startHeight = static_cast<long>(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM);
     if (nextZ > startHeight || nextZ > 32767)
-        return travelLimit(SCAN_ABORT_REASON_SCAN_OVER_START);
+        return travelLimit(ScanAbort::AboveStart);
 
-    const int retryAllowance = constrain(heatBedScanRetries - g_scanRetries, 0, 2);
+    const int retryAllowance = constrain(heatBedScanRetries - scanSession.retriesRemaining(), 0, 2);
     const long fastRetreatSteps = g_nScanHeatBedDownFastSteps;
-    if (g_nLastZScanZPosition && abs(nextZ - g_nLastZScanZPosition) > fastRetreatSteps * (2 + retryAllowance))
-        return travelLimit(SCAN_ABORT_REASON_SCAN_TOO_UNEVEN);
+    if (lastProbeZ_ && abs(nextZ - lastProbeZ_) > fastRetreatSteps * (2 + retryAllowance))
+        return travelLimit(ScanAbort::UnevenBed);
     if (abs(nextZ - releaseStartZ_) > fastRetreatSteps * 2 / divisor)
-        return travelLimit(SCAN_ABORT_REASON_SCAN_STEP_DELTA_OUT_OF_RANGE);
+        return travelLimit(ScanAbort::StepDeltaOutOfRange);
 
     return moveZ(step) ? ProbeProgress::Pending : ProbeProgress::Failed;
 }
@@ -431,7 +416,7 @@ ProbeProgress ScanProbe::retreat() {
     const millis_t now = HAL::timeInMilliseconds();
     switch (retreatPhase_) {
     case RetreatPhase::Idle:
-        g_nLastZScanZPosition = Printer::zMotion.scanSteps();
+        lastProbeZ_ = Printer::zMotion.scanSteps();
         retreatStartedAt_ = now;
         retreatPhase_ = RetreatPhase::BeforeMove;
         return ProbeProgress::Pending;
@@ -450,8 +435,7 @@ ProbeProgress ScanProbe::retreat() {
         retreatPhase_ = RetreatPhase::Idle;
         if (result == PressureResult::Stable)
             return ProbeProgress::Done;
-        if (!g_abortZScan)
-            g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
+        scanSession.requestAbort(ScanAbort::AveragePressure);
         return ProbeProgress::Failed;
     }
     return ProbeProgress::Failed;
@@ -466,9 +450,9 @@ namespace {
 class HeatBedScan {
 public:
     bool active() const { return phase_ != Phase::Idle; }
-    void startOrCancel();
+    void startOrCancel(HeatBedScanMode mode);
     void tick();
-    void discard() { phase_ = Phase::Idle; scanProbe.reset(); }
+    void discard();
 
 private:
     enum class Phase : uint8_t {
@@ -513,9 +497,11 @@ private:
         HomeAfterThermalProbe,
         SwitchOffAfterScan,
         SaveMatrix,
+        Aborting,
     };
 
     void abort();
+    void finish();
     void showStatus();
     void initialize();
     void prepareProbeTemperature();
@@ -532,7 +518,7 @@ private:
     void retryReturnToPoint();
     void retryMeasureBaseline();
     void armPointRetries();
-    void checkPointPressure();
+    void checkProbePressure(Phase next);
     void measureMeshPoint();
     void recordMeshPoint();
     void advanceRow();
@@ -550,7 +536,6 @@ private:
     void thermalRetryHomeZ();
     void thermalRetryReturnToPoint();
     void thermalRetryMeasureBaseline();
-    void checkThermalProbePressure();
     void measureThermalProbe();
     void applyThermalOffset();
     void homeAfterThermalProbe();
@@ -561,6 +546,7 @@ private:
 
     volatile Phase phase_ = Phase::Idle;
     Phase retryPhase_ = Phase::Idle;
+    HeatBedScanMode mode_ = HeatBedScanMode::Standard;
     millis_t lastCheckMs_ = 0;
     millis_t startedAtMs_ = 0;
     long xSteps_ = 0;
@@ -569,15 +555,18 @@ private:
     uint8_t xIndex_ = 0;
     uint8_t yIndex_ = 0;
     int8_t yIndexDirection_ = 0;
+    short baselineDigits_ = 0;
 };
 
 HeatBedScan heatBedScan;
 
-void HeatBedScan::startOrCancel() {
+void HeatBedScan::startOrCancel(HeatBedScanMode mode) {
+    if (phase_ == Phase::Aborting)
+        return;
     if (active()) {
         if (Printer::debugInfo())
             Com::printFLN(PSTR("HBS: cancelled"));
-        g_abortZScan = SCAN_ABORT_REASON_CANCELED;
+        scanSession.requestAbort(ScanAbort::Canceled);
         return;
     }
 
@@ -588,15 +577,15 @@ void HeatBedScan::startOrCancel() {
         return;
     }
 
+    scanSession.reset();
+    mode_ = mode;
     phase_ = Phase::Initialize;
-    g_abortZScan = 0;
-    g_retryZScan = 0;
 }
 
 void HeatBedScan::tick() {
     if (!active())
         return;
-    if (g_abortZScan) {
+    if (scanSession.aborting()) {
         abort();
         return;
     }
@@ -604,15 +593,15 @@ void HeatBedScan::tick() {
     Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
     GCodeInput::keepAlive(Calibrating);
     showStatus();
-    if (g_retryZScan) {
+    if (scanSession.takeRetryRequest()) {
         scanProbe.reset();
         phase_ = retryPhase_;
-        g_retryZScan = 0;
     }
 
     // A single phase runs before the foreground services the firmware again.
     switch (phase_) {
-    case Phase::Idle: break;
+    case Phase::Idle:
+    case Phase::Aborting: break;
     case Phase::Initialize: initialize(); break;
     case Phase::PrepareProbeTemperature: prepareProbeTemperature(); break;
     case Phase::WaitForBedTemperature: waitForBedTemperature(); break;
@@ -628,7 +617,7 @@ void HeatBedScan::tick() {
     case Phase::RetryReturnToPoint: retryReturnToPoint(); break;
     case Phase::RetryMeasureBaseline: retryMeasureBaseline(); break;
     case Phase::ArmPointRetries: armPointRetries(); break;
-    case Phase::CheckPointPressure: checkPointPressure(); break;
+    case Phase::CheckPointPressure: checkProbePressure(Phase::MeasureMeshPoint); break;
     case Phase::MeasureMeshPoint: measureMeshPoint(); break;
     case Phase::RecordMeshPoint: recordMeshPoint(); break;
     case Phase::AdvanceRow: advanceRow(); break;
@@ -647,7 +636,7 @@ void HeatBedScan::tick() {
     case Phase::ThermalRetryHomeZ: thermalRetryHomeZ(); break;
     case Phase::ThermalRetryReturnToPoint: thermalRetryReturnToPoint(); break;
     case Phase::ThermalRetryMeasureBaseline: thermalRetryMeasureBaseline(); break;
-    case Phase::CheckThermalProbePressure: checkThermalProbePressure(); break;
+    case Phase::CheckThermalProbePressure: checkProbePressure(Phase::MeasureThermalProbe); break;
     case Phase::MeasureThermalProbe: measureThermalProbe(); break;
     case Phase::ApplyThermalOffset: applyThermalOffset(); break;
     case Phase::HomeAfterThermalProbe: homeAfterThermalProbe(); break;
@@ -670,14 +659,14 @@ void HeatBedScan::showStatus() {
 }
 
 void HeatBedScan::abort() {
-    const bool retreatOnly = scanRequiresRetreatOnly();
+    phase_ = Phase::Aborting;
+    const auto reason = scanSession.takeAbort();
     Extruder::setHeatedBedTemperature(0);
     Extruder::setTemperatureForAllExtruders(0);
-    showAbortScanReason((void*)ui_text_heat_bed_scan, g_abortZScan);
-    g_abortZScan = 0;
+    showAbortScanReason((void*)ui_text_heat_bed_scan, reason);
 
     const bool retreated = moveZ(int(Printer::axisStepsPerMM[Z_AXIS] * 5));
-    if (retreated && !retreatOnly)
+    if (retreated && !ScanSession::retreatOnly(reason))
         Printer::homeAxis(true, true, true);
     Printer::disableAllSteppersNow();
 
@@ -690,26 +679,35 @@ void HeatBedScan::abort() {
     if (loadCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed)))
         initCompensationMatrix();
 
-    discard();
-    g_nLastZScanZPosition = 0;
-    g_retryZScan = 0;
-    g_abortZScan = 0;
+    finish();
+}
+
+void HeatBedScan::discard() {
+    // An admitted scan has replaced the RAM matrix once initialization ran.
+    if (active() && phase_ != Phase::Initialize)
+        initCompensationMatrix();
+    finish();
+}
+
+void HeatBedScan::finish() {
+    phase_ = Phase::Idle;
+    scanProbe.reset();
+    scanProbe.forgetPreviousPoint();
+    scanSession.reset();
     retryPhase_ = Phase::Idle;
 }
 
 void HeatBedScan::initialize() {
     Printer::idleStatus.cancel();
     startedAtMs_ = HAL::timeInMilliseconds();
-    g_abortZScan = 0;
-    retryPhase_ = Phase::Idle;
-    g_nLastZScanZPosition = 0; //sodass dass bei mehreren scans nicht die letzte position als abstands limit feststeht.
 
     if (Printer::debugInfo()) {
         Com::printF(Com::tscanHeatBed);
         Com::printFLN(PSTR("scan started"));
     }
 
-    // clear all fields of the heat bed compensation matrix
+    // Suspend compensation before replacing its working matrix.
+    Printer::disableCMPnow(false);
     initCompensationMatrix();
 
     g_uZMatrixMax[X_AXIS] = g_uZMatrixMax[Y_AXIS] = 0;
@@ -725,10 +723,10 @@ void HeatBedScan::prepareProbeTemperature() {
     if (!Extruder::selectExtruderById(0))
         return;
 
-    if (g_nHeatBedScanMode == HEAT_BED_SCAN_MODE_PLA) {
+    if (mode_ == HeatBedScanMode::Pla) {
         Extruder::setHeatedBedTemperature(heatBedScanPlaBedC);
         Extruder::setTemperatureForAllExtruders(heatBedScanProbeNozzleC);
-    } else if (g_nHeatBedScanMode == HEAT_BED_SCAN_MODE_ABS) {
+    } else if (mode_ == HeatBedScanMode::Abs) {
         Extruder::setHeatedBedTemperature(heatBedScanAbsBedC);
         Extruder::setTemperatureForAllExtruders(heatBedScanProbeNozzleC);
     }
@@ -766,7 +764,7 @@ void HeatBedScan::waitForProbeTemperature() {
     phase_ = Phase::WarmupAndHome;
     lastCheckMs_ = HAL::timeInMilliseconds();
 
-    if (g_nHeatBedScanMode) {
+    if (mode_ != HeatBedScanMode::Standard) {
         if (Printer::debugInfo()) {
             Com::printF(Com::tscanHeatBed);
             Com::printFLN(PSTR("warmup delay [s] = "), preciseBedScanWarmupSeconds);
@@ -775,7 +773,7 @@ void HeatBedScan::waitForProbeTemperature() {
 }
 
 void HeatBedScan::warmupAndHome() {
-    if (g_nHeatBedScanMode) {
+    if (mode_ != HeatBedScanMode::Standard) {
         // wait some time so that the desired target temperature is reached in all parts of our components
         unsigned long uRemainingSeconds;
 
@@ -816,12 +814,11 @@ void HeatBedScan::measureInitialPressure() {
     if (HAL::timeInMilliseconds() - lastCheckMs_ < heatBedScanDelayMs)
         return;
 
-    const auto result = scanPressure.idle(g_nFirstIdlePressure);
+    const auto result = scanPressure.idle(baselineDigits_);
     if (result == PressureResult::Pending)
         return;
     if (result != PressureResult::Stable) {
-        if (!g_abortZScan)
-            g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
+        scanSession.requestAbort(ScanAbort::AveragePressure);
         return;
     }
 
@@ -836,8 +833,6 @@ void HeatBedScan::initializeGrid() {
     yIndexDirection_ = 1;
     xIndex_ = 2;
     yIndex_ = 2;
-
-    adjustPressureLimits(g_nFirstIdlePressure);
 
     // store also the version of this heat bed compensation matrix
     g_ZCompensationMatrix[0][0] = EEPROM_FORMAT;
@@ -860,7 +855,7 @@ void HeatBedScan::advanceColumn() {
     xIndex_++;
 
     if (xIndex_ >= COMPENSATION_MATRIX_MAX_X) {
-        g_abortZScan = SCAN_ABORT_REASON_MATRIX_DIMENSION;
+        scanSession.requestAbort(ScanAbort::MatrixDimensions);
         return;
     }
 
@@ -898,7 +893,7 @@ void HeatBedScan::retryHomeY() {
         return;
     Printer::homeAxis(false, true, false);                             //Home Y
 
-    g_scanRetries--;
+    scanSession.consumeRetry();
     phase_ = Phase::RetryHomeZ;
     lastCheckMs_ = HAL::timeInMilliseconds();
 }
@@ -908,7 +903,7 @@ void HeatBedScan::retryHomeZ() {
     Printer::homeAxis(false, false, true);                             //Neben Bett: Home Z
     if (!moveZ(long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM)))
         return;
-    g_nLastZScanZPosition = 0;                                         //Reset last scan position to avoid abort due to this limitter
+    scanProbe.forgetPreviousPoint();
 
     phase_ = Phase::RetryReturnToPoint;
     lastCheckMs_ = HAL::timeInMilliseconds();
@@ -925,43 +920,40 @@ void HeatBedScan::retryMeasureBaseline() {
     if (HAL::timeInMilliseconds() - lastCheckMs_ < heatBedScanDelayMs)
         return;
 
-    const auto result = scanPressure.idle(g_nFirstIdlePressure);
+    const auto result = scanPressure.idle(baselineDigits_);
     if (result == PressureResult::Pending)
         return;
     if (result != PressureResult::Stable) {
-        if (!g_abortZScan)
-            g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
+        scanSession.requestAbort(ScanAbort::AveragePressure);
         return;
     }
-    adjustPressureLimits(g_nFirstIdlePressure);
-
     phase_ = Phase::CheckPointPressure;
     lastCheckMs_ = HAL::timeInMilliseconds();
 }
 
 void HeatBedScan::armPointRetries() {
-    g_scanRetries = heatBedScanRetries;
+    scanSession.armRetries(heatBedScanRetries);
     retryPhase_ = Phase::RetryHomeY;
     phase_ = Phase::CheckPointPressure;
 }
 
-void HeatBedScan::checkPointPressure() {
+void HeatBedScan::checkProbePressure(Phase next) {
     if (HAL::timeInMilliseconds() - lastCheckMs_ < g_nScanIdleDelay)
         return;
 
-    const auto result = scanPressure.average(g_nCurrentIdlePressure);
-    if (result == PressureResult::Pending || g_abortZScan)
+    short baseline;
+    const auto result = scanPressure.average(baseline);
+    if (result == PressureResult::Pending || scanSession.aborting())
         return;
     if (result != PressureResult::Stable) {
-        if (g_scanRetries)
-            g_retryZScan = 1;
-        else
-            g_abortZScan = SCAN_ABORT_REASON_IDLE_PRESSURE;
+        scanSession.requestRetryOrAbort(ScanAbort::IdlePressure);
         return;
     }
 
-    adjustPressureLimits(g_nCurrentIdlePressure);
-    phase_ = Phase::MeasureMeshPoint;
+    scanProbe.setPressureLimits(baseline, g_nScanContactPressureDelta, g_nScanRetryPressureDelta);
+    if (next == Phase::MeasureThermalProbe)
+        scanProbe.forgetPreviousPoint();
+    phase_ = next;
 }
 
 void HeatBedScan::measureMeshPoint() {
@@ -1003,7 +995,7 @@ void HeatBedScan::advanceRow() {
     yIndex_ += yIndexDirection_;
 
     if (yIndex_ >= COMPENSATION_MATRIX_MAX_Y) {
-        g_abortZScan = SCAN_ABORT_REASON_MATRIX_DIMENSION;
+        scanSession.requestAbort(ScanAbort::MatrixDimensions);
         return;
     }
 
@@ -1019,7 +1011,7 @@ void HeatBedScan::homeAfterMesh() {
     // move back to the home position
     Printer::homeAxis(true, true, true);
 
-    if (!g_nHeatBedScanMode) {
+    if (mode_ == HeatBedScanMode::Standard) {
         // disable all heaters
         Extruder::setHeatedBedTemperature(0);
         Extruder::setTemperatureForAllExtruders(0);
@@ -1055,7 +1047,7 @@ void HeatBedScan::prepareMatrix() {
 
     // prepare the heat bed compensation matrix for fast usage during the actual printing
     if (prepareCompensationMatrix()) {
-        g_abortZScan = SCAN_ABORT_REASON_MATRIX_DIMENSION;
+        scanSession.requestAbort(ScanAbort::MatrixDimensions);
         return;
     }
 
@@ -1085,19 +1077,18 @@ void HeatBedScan::checkFinalPressure() {
     if (result == PressureResult::Pending)
         return;
     if (result != PressureResult::Stable) {
-        if (!g_abortZScan)
-            g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
+        scanSession.requestAbort(ScanAbort::AveragePressure);
         return;
     }
 
     if (Printer::debugInfo()) {
         Com::printF(Com::tscanHeatBed);
-        Com::printFLN(PSTR("idle pressure at start: "), g_nFirstIdlePressure);
+        Com::printFLN(PSTR("idle pressure at start: "), baselineDigits_);
         Com::printF(Com::tscanHeatBed);
         Com::printFLN(PSTR("idle pressure at stop: "), pressure);
     }
 
-    if (g_nHeatBedScanMode) {
+    if (mode_ != HeatBedScanMode::Standard) {
         // we have to determine the z-offset which is caused by different extruder temperatures
         phase_ = Phase::MoveToThermalProbe;
 
@@ -1135,9 +1126,9 @@ void HeatBedScan::extendThermalClearance() {
 void HeatBedScan::heatNozzleForCalibration() {
     lastCheckMs_ = HAL::timeInMilliseconds();
     // at this point we are homed and we are above the x/y position at which we shall perform the measurement of the z-offset with the hot extruder(s)
-    if (g_nHeatBedScanMode == HEAT_BED_SCAN_MODE_PLA) {
+    if (mode_ == HeatBedScanMode::Pla) {
         Extruder::setTemperatureForAllExtruders(heatBedScanPlaNozzleC);
-    } else if (g_nHeatBedScanMode == HEAT_BED_SCAN_MODE_ABS) {
+    } else if (mode_ == HeatBedScanMode::Abs) {
         Extruder::setTemperatureForAllExtruders(heatBedScanAbsNozzleC);
     }
 
@@ -1167,7 +1158,7 @@ void HeatBedScan::waitForCalibrationTemperature() {
 }
 
 void HeatBedScan::stabilizeCalibrationTemperature() {
-    if (g_nHeatBedScanMode) {
+    if (mode_ != HeatBedScanMode::Standard) {
         // wait some time so that the desired target temperature is reached in all parts of our components
         unsigned long uRemainingSeconds;
 
@@ -1182,7 +1173,7 @@ void HeatBedScan::stabilizeCalibrationTemperature() {
         }
     }
 
-    g_scanRetries = heatBedScanRetries;
+    scanSession.armRetries(heatBedScanRetries);
     retryPhase_ = Phase::ThermalRetryHomeY;
     phase_ = Phase::CheckThermalProbePressure;
     lastCheckMs_ = HAL::timeInMilliseconds();
@@ -1193,7 +1184,7 @@ void HeatBedScan::thermalRetryHomeY() {
         return;
     Printer::homeAxis(false, true, false);                             //Home Y
 
-    g_scanRetries--;
+    scanSession.consumeRetry();
     phase_ = Phase::ThermalRetryHomeZ;
     lastCheckMs_ = HAL::timeInMilliseconds();
 }
@@ -1203,7 +1194,7 @@ void HeatBedScan::thermalRetryHomeZ() {
     Printer::homeAxis(false, false, true);                             //Neben Bett: Home Z
     if (!moveZ(long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM)))
         return;
-    g_nLastZScanZPosition = 0;                                         //Reset last scan position to avoid abort due to this limitter
+    scanProbe.forgetPreviousPoint();
 
     phase_ = Phase::ThermalRetryReturnToPoint;
     lastCheckMs_ = HAL::timeInMilliseconds();
@@ -1220,38 +1211,16 @@ void HeatBedScan::thermalRetryMeasureBaseline() {
     if (HAL::timeInMilliseconds() - lastCheckMs_ < heatBedScanDelayMs)
         return;
 
-    const auto result = scanPressure.idle(g_nFirstIdlePressure);
+    short baseline;
+    const auto result = scanPressure.idle(baseline);
     if (result == PressureResult::Pending)
         return;
     if (result != PressureResult::Stable) {
-        if (!g_abortZScan)
-            g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
+        scanSession.requestAbort(ScanAbort::AveragePressure);
         return;
     }
-    adjustPressureLimits(g_nFirstIdlePressure);
-
     phase_ = Phase::CheckThermalProbePressure;
     lastCheckMs_ = HAL::timeInMilliseconds();
-}
-
-void HeatBedScan::checkThermalProbePressure() {
-    if (HAL::timeInMilliseconds() - lastCheckMs_ < g_nScanIdleDelay)
-        return;
-
-    const auto result = scanPressure.average(g_nCurrentIdlePressure);
-    if (result == PressureResult::Pending || g_abortZScan)
-        return;
-    if (result != PressureResult::Stable) {
-        if (g_scanRetries)
-            g_retryZScan = 1;
-        else
-            g_abortZScan = SCAN_ABORT_REASON_IDLE_PRESSURE;
-        return;
-    }
-
-    adjustPressureLimits(g_nCurrentIdlePressure);
-    g_nLastZScanZPosition = 0;
-    phase_ = Phase::MeasureThermalProbe;
 }
 
 void HeatBedScan::measureThermalProbe() {
@@ -1311,7 +1280,7 @@ void HeatBedScan::saveMatrix() {
 
     showInformation(PSTR(UI_TEXT_HEAT_BED_SCAN_DONE), (void*)ui_text_saving_success, PSTR(UI_TEXT_OK)); //tell user the scan was a success
 
-    phase_ = Phase::Idle;
+    finish();
 }
 
 } // namespace
@@ -1320,9 +1289,9 @@ bool heatBedScanRunning() {
     return heatBedScan.active();
 }
 
-void startHeatBedScan() {
+void startHeatBedScan(HeatBedScanMode mode) {
     if (!zOffsetScanRunning())
-        heatBedScan.startOrCancel();
+        heatBedScan.startOrCancel(mode);
 }
 
 namespace {
@@ -1335,8 +1304,9 @@ public:
     void discard() {
         phase_ = Phase::Idle;
         levelingPass_ = LevelingPass::None;
-        cancelRequested_ = false;
         scanProbe.reset();
+        scanProbe.forgetPreviousPoint();
+        scanSession.reset();
     }
 
 private:
@@ -1384,10 +1354,9 @@ private:
 
     volatile Phase phase_ = Phase::Idle;
     LevelingPass levelingPass_ = LevelingPass::None;
-    void retryProbe(char failure);
+    void retryProbe(ScanAbort failure);
     long probeZSteps_ = 0;
     millis_t retryWaitStartedMs_ = 0;
-    bool cancelRequested_ = false;
 };
 
 ZOffsetScan zOffsetScan;
@@ -1397,16 +1366,14 @@ void ZOffsetScan::startOrCancel(bool levelMatrix) {
         return;
     if (active()) {
         Com::printFLN(PSTR("ZOS cancelled"));
-        // Probe helpers see the abort reason. The next tick owns cleanup.
-        g_abortZScan = SCAN_ABORT_REASON_CANCELED;
-        cancelRequested_ = true;
+        scanSession.requestAbort(ScanAbort::Canceled);
         return;
     }
 
     Com::printFLN(PSTR("ZOS started"));
-    phase_ = Phase::Initialize;
-    g_abortZScan = 0;
+    scanSession.reset();
     levelingPass_ = levelMatrix ? LevelingPass::Center : LevelingPass::None;
+    phase_ = Phase::Initialize;
 }
 
 void ZOffsetScan::tick() {
@@ -1415,7 +1382,7 @@ void ZOffsetScan::tick() {
 
     Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
     GCodeInput::keepAlive(Calibrating);
-    if (cancelRequested_ || g_abortZScan) {
+    if (scanSession.aborting()) {
         abort(false);
         return;
     }
@@ -1489,14 +1456,10 @@ void ZOffsetScan::selectLevelingPoint(unsigned short maxX, unsigned short maxY) 
 }
 
 void ZOffsetScan::initialize() {
-    g_retryZScan = 0;
     Printer::idleStatus.cancel();
     Com::printFLN(PSTR("ZOS init"));
     phase_ = Phase::HomeForProbe;
     probeZSteps_ = long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM); //nur nutzen wenn kleiner.
-    g_scanRetries = 0;                                                                  // never retry   TODO allow retries?
-    g_abortZScan = 0;
-    g_nLastZScanZPosition = 0;                                                          //sodass dass bei mehreren scans nicht die letzte position als abstands limit feststeht.
 }
 
 void ZOffsetScan::homeForProbe() {
@@ -1544,7 +1507,7 @@ void ZOffsetScan::loadMatrix() {
     // safety check on the current matrix
     if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
         Com::printFLN(PSTR("ERROR::prev. matrix invalid!"));
-        g_abortZScan = SCAN_ABORT_REASON_MISSING_MATRIX;
+        scanSession.requestAbort(ScanAbort::MissingMatrix);
         abort(false);
         return;
     }
@@ -1574,7 +1537,7 @@ void ZOffsetScan::positionProbe() {
 }
 
 void ZOffsetScan::armPressureRetries() {
-    g_scanRetries = 20; //für 9, 10, 20
+    scanSession.armRetries(20);
     phase_ = Phase::MeasureBaseline;
 }
 
@@ -1592,35 +1555,28 @@ void ZOffsetScan::retreatForRetry() {
 }
 
 void ZOffsetScan::measureBaseline() {
-    const auto result = scanPressure.idle(g_nCurrentIdlePressure);
+    short baseline;
+    const auto result = scanPressure.idle(baseline);
     if (result == PressureResult::Pending)
         return;
     if (result != PressureResult::Stable) {
-        retryProbe(SCAN_ABORT_REASON_IDLE_PRESSURE);
+        retryProbe(ScanAbort::IdlePressure);
         return;
     }
 
-    g_nMinPressureContact = g_nCurrentIdlePressure - zOffsetScanContactPressureDelta;
-    g_nMaxPressureContact = g_nCurrentIdlePressure + zOffsetScanContactPressureDelta;
-    g_nMinPressureRetry = g_nCurrentIdlePressure - zOffsetScanRetryPressureDelta;
-    g_nMaxPressureRetry = g_nCurrentIdlePressure + zOffsetScanRetryPressureDelta;
-    g_nMinPressureIdle = g_nCurrentIdlePressure - zOffsetScanIdlePressureDelta;
-    g_nMaxPressureIdle = g_nCurrentIdlePressure + zOffsetScanIdlePressureDelta;
+    scanProbe.setPressureLimits(baseline, zOffsetScanContactPressureDelta, zOffsetScanRetryPressureDelta);
 
     Com::printFLN(PSTR("Approaching HeatBed"));
-    g_nLastZScanZPosition = 0;
+    scanProbe.forgetPreviousPoint();
     phase_ = Phase::MeasureSurface;
 }
 
-void ZOffsetScan::retryProbe(char failure) {
-    if (!g_abortZScan && g_scanRetries > 0) {
-        --g_scanRetries;
-        g_retryZScan = 0;
+void ZOffsetScan::retryProbe(ScanAbort failure) {
+    if (scanSession.consumeRetry()) {
         beginRetryWait();
         return;
     }
-    if (!g_abortZScan)
-        g_abortZScan = failure;
+    scanSession.requestAbort(failure);
 }
 
 void ZOffsetScan::measureSurface() {
@@ -1628,7 +1584,7 @@ void ZOffsetScan::measureSurface() {
     if (progress == ProbeProgress::Pending)
         return;
     if (progress == ProbeProgress::Failed) {
-        retryProbe(SCAN_ABORT_REASON_AVERAGE_PRESSURE);
+        retryProbe(ScanAbort::AveragePressure);
         return;
     }
 
@@ -1657,8 +1613,10 @@ void ZOffsetScan::applyMatrixCorrection() {
     nZ = (long)((float)nZ * g_ZOSlearningRate);
 
     //Nibbels: weight change because of distance. lerne bettwinkelausgleich.
-    float x_bed_len_quadrat = (float)((g_uZMatrixMax[X_AXIS] - 2) * (g_uZMatrixMax[X_AXIS] - 2)); //index zwischenabstamd x_n - x_0
-    float y_bed_len_quadrat = (float)((g_uZMatrixMax[Y_AXIS] - 2) * (g_uZMatrixMax[Y_AXIS] - 2));
+    const int xIntervals = RMath::max(1, g_uZMatrixMax[X_AXIS] - 2);
+    const int yIntervals = RMath::max(1, g_uZMatrixMax[Y_AXIS] - 2);
+    const float x_bed_len_quadrat = xIntervals * xIntervals;
+    const float y_bed_len_quadrat = yIntervals * yIntervals;
     float x_dist = 0;
     float y_dist = 0;
     float xy_weight = 0;
@@ -1693,7 +1651,7 @@ void ZOffsetScan::applyMatrixCorrection() {
     if (overflow) {
         // load the unaltered compensation matrix from the EEPROM since the current in-memory matrix is invalid
         Com::printFLN(PSTR("Matrix Overflow!"));
-        g_abortZScan = SCAN_ABORT_REASON_OVERFLOWING_MATRIX;
+        scanSession.requestAbort(ScanAbort::MatrixOverflow);
         abort(true);
         return;
     }
@@ -1701,7 +1659,7 @@ void ZOffsetScan::applyMatrixCorrection() {
     if (overH) {
         // load the unaltered compensation matrix from the EEPROM since the current in-memory matrix is bigger than z=zero
         Com::printFLN(PSTR("ERROR::Z-Matrix höher Start-Z!"));
-        g_abortZScan = SCAN_ABORT_REASON_BAD_HEIGHT_MATRIX;
+        scanSession.requestAbort(ScanAbort::MatrixHeight);
         abort(true);
         return;
     }
@@ -1742,7 +1700,7 @@ void ZOffsetScan::retreatForFinish() {
 }
 
 void ZOffsetScan::reportScrewAdjustment() {
-    phase_ = Phase::Idle;
+    discard();
     calculateZScrewCorrection();
 
     showMyPage((void*)ui_text_heat_bed_zoffset_search_status, (void*)ui_text_heat_bed_zoffset_fix_z1, (void*)ui_text_heat_bed_zoffset_fix_z2, (void*)ui_text_statusmsg);
@@ -1756,9 +1714,8 @@ void ZOffsetScan::reportScrewAdjustment() {
 
 void ZOffsetScan::abort(bool reloadMatrix) {
     phase_ = Phase::Aborting;
-    cancelRequested_ = false;
-    const bool retreatOnly = scanRequiresRetreatOnly();
-    showAbortScanReason(PSTR(UI_TEXT_DO_MHIER_BED_SCAN), g_abortZScan);
+    const auto reason = scanSession.takeAbort();
+    showAbortScanReason(PSTR(UI_TEXT_DO_MHIER_BED_SCAN), reason);
 
     if (reloadMatrix) {
         if (loadCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed))) {
@@ -1766,14 +1723,10 @@ void ZOffsetScan::abort(bool reloadMatrix) {
             initCompensationMatrix();
         }
     }
-    g_abortZScan = 0;
-    g_retryZScan = 0;
-    g_nLastZScanZPosition = 0;
-
     // the search has been aborted
     Com::printFLN(PSTR("ZOS aborted"));
 
-    if (retreatOnly) {
+    if (ScanSession::retreatOnly(reason)) {
         moveZ(int(Printer::axisStepsPerMM[Z_AXIS] * 5));
     } else if (Printer::queueRelativeMMCoordinates(0, 0, 5, 0, Printer::homingFeedrate[Z_AXIS], true, true)) {
         Printer::homeAxis(true, true, true);
@@ -1783,7 +1736,6 @@ void ZOffsetScan::abort(bool reloadMatrix) {
     Printer::disableAllSteppersNow();
 
     discard();
-    g_abortZScan = 0;
     Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 30000);
 }
 
@@ -1799,6 +1751,10 @@ static bool zOffsetScanRunning() {
 }
 
 void discardScans() {
+    // A homing or move wait can service the print stop while a scan phase is on
+    // the stack. Complete the discard when that phase returns.
+    if (scanSession.deferDiscard())
+        return;
     heatBedScan.discard();
     zOffsetScan.discard();
 }
@@ -2187,50 +2143,50 @@ void recalculateZCompensation(void) {
     Printer::extrusionCompensation.publishRatio(ratio);
 }
 
-void showAbortScanReason(const void* scanName, char abortScanIdentifier) {
-    switch (abortScanIdentifier) {
+static void showAbortScanReason(const void* scanName, ScanAbort reason) {
+    switch (reason) {
         // Geplantes Canceling
-    case SCAN_ABORT_REASON_CANCELED: {
+    case ScanAbort::Canceled: {
         showError(scanName, PSTR(UI_TEXT_SCAN_ABORTED));
         break;
     }
 
     // Kabelbruch, Extruder verspannt, Stecker wackelig, Ingress,...
-    case SCAN_ABORT_REASON_START_PRESSURE: {
+    case ScanAbort::StartPressure: {
         showError(scanName, PSTR("Bad start force"));
         break;
     }
-    case SCAN_ABORT_REASON_IDLE_PRESSURE: {
+    case ScanAbort::IdlePressure: {
         showError(scanName, PSTR("Bad idle force"));
         break;
     }
-    case SCAN_ABORT_REASON_DMS_OVERLOAD:
+    case ScanAbort::DmsOverload:
         showError(scanName, PSTR("DMS overload"));
         break;
-    case SCAN_ABORT_REASON_DMS_UNAVAILABLE:
+    case ScanAbort::DmsUnavailable:
         showError(scanName, PSTR("DMS read failed"));
         break;
-    case SCAN_ABORT_REASON_AVERAGE_PRESSURE: {
+    case ScanAbort::AveragePressure: {
         showError(scanName, PSTR("Bad force signal"));
         break;
     }
 
     // Hinweise auf Bugs
-    case SCAN_ABORT_REASON_SCAN_OVER_START: {
+    case ScanAbort::AboveStart: {
         showError(scanName, PSTR("Bug SOS"));
         break;
     }
-    case SCAN_ABORT_REASON_MATRIX_DIMENSION: {
+    case ScanAbort::MatrixDimensions: {
         showError(scanName, PSTR("Bug MDO"));
         break;
     }
 
     // Löcher im Druckbett, Druckbett verdreckt, Mechanik problem, DDP schlecht geklebt
-    case SCAN_ABORT_REASON_SCAN_TOO_UNEVEN: {
+    case ScanAbort::UnevenBed: {
         showError(scanName, PSTR("Uneven bed, dirt"), PSTR("hole, bad ground"));
         break;
     }
-    case SCAN_ABORT_REASON_SCAN_STEP_DELTA_OUT_OF_RANGE: {
+    case ScanAbort::StepDeltaOutOfRange: {
         // Fehler trat auf, als ich die Düse beim HBS ein Blatt Papier mitschleppen hab lassen.
         // Marius1 hatte den Fehler durch ein sehr schräg eingebautes Bett.
         showError(scanName, PSTR("Leftovers, snot"), PSTR("incrustation"));
@@ -2239,32 +2195,32 @@ void showAbortScanReason(const void* scanName, char abortScanIdentifier) {
 
     // Z-Schraube falsch eingestellt?
     // _MAX_COMPENSATION und _ENDSTOP_PROTECTION deuten im Printermodus auf dasselbe hin, sind aber 2 unterschiedliche Stellen.
-    case SCAN_ABORT_REASON_MIN_ENDSTOP: {
+    case ScanAbort::MinEndstop: {
         showError(scanName, PSTR("Min Endstop"));
         break;
     }
-    case SCAN_ABORT_REASON_MAX_ENDSTOP: {
+    case ScanAbort::MaxEndstop: {
         showError(scanName, PSTR("Max Endstop"));
         break;
     }
-    case SCAN_ABORT_REASON_REACHED_MAX_COMPENSATION: {
+    case ScanAbort::MaxCompensation: {
         showError(scanName, PSTR("Reached limit"), PSTR("max compensation"));
         break;
     }
-    case SCAN_ABORT_REASON_REACHED_ENDSTOP_PROTECTION: {
+    case ScanAbort::EndstopProtection: {
         showError(scanName, PSTR("Reached endstop"), PSTR("protection limit"));
         break;
     }
 
-    case SCAN_ABORT_REASON_MISSING_MATRIX: {
+    case ScanAbort::MissingMatrix: {
         showError(scanName, PSTR("Missing or"), PSTR(UI_TEXT_INVALID_MATRIX));
         break;
     }
-    case SCAN_ABORT_REASON_OVERFLOWING_MATRIX: {
+    case ScanAbort::MatrixOverflow: {
         showError(scanName, PSTR("Correction would"), PSTR("overflow matrix"));
         break;
     }
-    case SCAN_ABORT_REASON_BAD_HEIGHT_MATRIX: {
+    case ScanAbort::MatrixHeight: {
         // Matrix hat einen Punkt über Z-Start. Das ist gefährlich hoch, weil die Nozzle theoretisch beim Fahren auf position kollidiert haben könnte.
         // Eine rein positive Matrix melden wir nicht, das ist egal, sofern die Starthöhe immer höher ist. Dafür gibts im Anschluss des Scans die genaue Meldung zur Schraubeneinstellung.
         showError(scanName, PSTR("Badly wrong"), PSTR("Z-Screw/Z-Start"));
@@ -2280,24 +2236,24 @@ static PressureMeasurement::Settings pressureMeasurementSettings() {
             static_cast<uint16_t>(g_nScanPressureTolerance)};
 }
 
-static void servicePressureMeasurement(PressureMeasurement& measurement, millis_t now, bool scanning) {
+static ScanAbort servicePressureMeasurement(PressureMeasurement& measurement, millis_t now, bool scanning) {
     const auto& gauge = Printer::strainGauge;
     StrainGauge::Sample sample;
     const auto availability = gauge.latest(now, sample);
     if (availability == StrainGauge::Availability::Waiting)
-        return;
+        return ScanAbort::None;
     if (availability == StrainGauge::Availability::Fault) {
         measurement.readFailed();
-        return;
+        return ScanAbort::DmsUnavailable;
     }
     const int16_t digits = gauge.correctedDigits(sample);
     if (scanning && abs(static_cast<int32_t>(digits)) >= scanOverloadDigits) {
-        g_abortZScan = SCAN_ABORT_REASON_DMS_OVERLOAD;
         measurement.readFailed();
-        return;
+        return ScanAbort::DmsOverload;
     }
     if (measurement.record(sample.startedAtMs, sample.readAtMs, digits))
         updateDigitCompensation(digits);
+    return ScanAbort::None;
 }
 
 static void reportPressureReadFailure(const PressureMeasurement& measurement) {
@@ -2330,9 +2286,9 @@ short readAveragePressure(short* average) {
     return -1;
 } // readAveragePressure
 
-bool moveZ(int nSteps, bool emergencyRetreat) {
+static bool moveZ(int nSteps, bool emergencyRetreat) {
     const auto interrupted = [emergencyRetreat] {
-        return g_abortZScan || (!emergencyRetreat && (Printer::blockAll || Printer::printJob.commandsBlocked()));
+        return !emergencyRetreat && (scanSession.aborting() || Printer::blockAll || Printer::printJob.commandsBlocked());
     };
     if (interrupted())
         return false;
@@ -2349,8 +2305,8 @@ bool moveZ(int nSteps, bool emergencyRetreat) {
         if (interrupted())
             return false;
         if (!scan.step()) {
-            g_abortZScan = SCAN_ABORT_REASON_REACHED_MAX_COMPENSATION;
-            g_scanRetries = 0;
+            if (!emergencyRetreat)
+                scanSession.requestAbort(ScanAbort::MaxCompensation);
             Com::printFLN(PSTR("Z-Endstop protection"));
             UI_STATUS_UPD("Z-Endstop protection");
             return false;
@@ -3090,8 +3046,7 @@ void handleStrainGaugeFeatures(millis_t uTime) {
 }
 
 void handleScanWorkTasks(bool tickDue) {
-    static bool insideScan = false;
-    if (insideScan || !isAnyScanRunning())
+    if (scanSession.dispatching() || !isAnyScanRunning())
         return;
     if (Printer::blockAll || Printer::printJob.commandsBlocked()) {
         discardScans();
@@ -3100,15 +3055,16 @@ void handleScanWorkTasks(bool tickDue) {
     if (Printer::pause.isPaused())
         return;
 
-    insideScan = true;
-    const bool measurementReady = !g_abortZScan && scanPressure.service(HAL::timeInMilliseconds());
+    scanSession.beginDispatch();
+    const bool measurementReady = !scanSession.aborting() && scanPressure.service(HAL::timeInMilliseconds());
     if (tickDue || measurementReady) {
         if (heatBedScan.active())
             heatBedScan.tick();
         else
             zOffsetScan.tick();
     }
-    insideScan = false;
+    if (scanSession.finishDispatch() || Printer::blockAll || Printer::printJob.commandsBlocked())
+        discardScans();
 }
 
 void handleStartStandby(millis_t uTime) {
@@ -3254,6 +3210,10 @@ void disableBedCompensation() {
 }
 
 void enableBedCompensation() {
+    if (isAnyScanRunning()) {
+        Com::printFLN(PSTR("M3001: z compensation is unavailable during a scan"));
+        return;
+    }
     if (Printer::doHeatBedZCompensation) {
         Com::printFLN(PSTR("M3001: z compensation is enabled already"));
         return;
@@ -3367,16 +3327,11 @@ void selectBedMatrix(GCode* pCommand) {
 }
 
 void requestHeatBedScan(GCode* pCommand) {
-    if (pCommand->hasS()) {
-        if (pCommand->S == HEAT_BED_SCAN_MODE_PLA || pCommand->S == HEAT_BED_SCAN_MODE_ABS) {
-            g_nHeatBedScanMode = (char)pCommand->S;
-        } else {
-            g_nHeatBedScanMode = 0;
-        }
-    } else {
-        g_nHeatBedScanMode = 0;
+    if (pCommand->hasS() && (pCommand->S == int(HeatBedScanMode::Pla) || pCommand->S == int(HeatBedScanMode::Abs))) {
+        startHeatBedScan(static_cast<HeatBedScanMode>(pCommand->S));
+        return;
     }
-    startHeatBedScan();
+    startHeatBedScan(HeatBedScanMode::Standard);
 }
 
 void clearBedMatrix(GCode* pCommand) {

@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstring>
 #include <vector>
+#include "CalibrationScan.h"
 #include "PressureMeasurement.h"
 #include "scan-strain-gauge.h"
 
@@ -11,13 +12,7 @@ namespace {
 using millis_t = uint32_t;
 enum { X_AXIS, Y_AXIS, Z_AXIS };
 enum { EEPROM_FORMAT = 42, COMPENSATION_MATRIX_MAX_X = 8, COMPENSATION_MATRIX_MAX_Y = 8 };
-enum { HEAT_BED_SCAN_MODE_PLA = 1, HEAT_BED_SCAN_MODE_ABS = 2, EEPROM_SECTOR_SIZE = 1536 };
-enum { SCAN_ABORT_REASON_CANCELED = 1, SCAN_ABORT_REASON_AVERAGE_PRESSURE, SCAN_ABORT_REASON_IDLE_PRESSURE,
-       SCAN_ABORT_REASON_MATRIX_DIMENSION, SCAN_ABORT_REASON_DMS_UNAVAILABLE, SCAN_ABORT_REASON_DMS_OVERLOAD };
-enum {
-    SCAN_ABORT_REASON_REACHED_MAX_COMPENSATION = 30, SCAN_ABORT_REASON_SCAN_OVER_START,
-    SCAN_ABORT_REASON_SCAN_TOO_UNEVEN, SCAN_ABORT_REASON_SCAN_STEP_DELTA_OUT_OF_RANGE
-};
+enum { EEPROM_SECTOR_SIZE = 1536 };
 template<class T>
 T constrain(T value, T minimum, T maximum) { return std::min(std::max(value, minimum), maximum); }
 
@@ -33,13 +28,11 @@ constexpr char UI_TEXT_HEATING[] = "Heating", UI_TEXT_HEAT_BED_SCAN[] = "Scan",
                UI_TEXT_HEAT_BED_SCAN_DONE[] = "Done", UI_TEXT_OK[] = "OK";
 constexpr char ui_text_heat_bed_scan[] = "Scan", ui_text_operation_denied[] = "Busy", ui_text_saving_success[] = "Saved";
 
-char g_abortZScan = 0, g_retryZScan = 0, g_scanRetries = 0, g_nHeatBedScanMode = 0, g_nActiveHeatBed = 2;
+char g_nActiveHeatBed = 2;
 short g_nScanHeatBedUpFastSteps = -4, g_nScanHeatBedUpSlowSteps = -2, g_nScanHeatBedDownSlowSteps = 2;
 short g_nScanHeatBedDownFastSteps = 20, g_nScanZMaxCompensationSteps = 600;
 short g_nScanIdlePressureMin = -7500, g_nScanIdlePressureMax = 7500;
-short g_nMinPressureContact = 0, g_nMaxPressureContact = 0, g_nMinPressureRetry = 0, g_nMaxPressureRetry = 0;
-short g_nFirstIdlePressure = 500, g_nCurrentIdlePressure = 500;
-long g_nLastZScanZPosition = 0;
+uint16_t g_nScanContactPressureDelta = 10, g_nScanRetryPressureDelta = 5;
 short g_ZCompensationMatrix[COMPENSATION_MATRIX_MAX_X][COMPENSATION_MATRIX_MAX_Y];
 uint8_t g_uZMatrixMax[2] = {};
 float g_scanStartZLiftMM = 1.0f;
@@ -53,7 +46,7 @@ bool injectNoise = false, injectDisconnection = false, injectOverload = false, i
 bool matrixPrepared = false, matrixSaved = false;
 unsigned keepAlives = 0, homedXY = 0, homedZ = 0, pressureReads = 0, negativeMoves = 0,
          disabled = 0, loaded = 0, thermalOffsets = 0, completed = 0, warmupMessages = 0;
-char aborted = 0;
+ScanAbort aborted = ScanAbort::None;
 uint32_t lastMoveAt = 0, acceptedAt = 0;
 bool moved = false;
 int bedTarget = 0;
@@ -76,6 +69,7 @@ struct {
 } zMotion;
 bool debugErrors() { return false; }
 bool debugInfo() { return false; }
+void disableCMPnow(bool wait) { assert(!wait); }
 void homeAxis(bool x, bool y, bool z) {
     assert(x || y || z);
     if (y)
@@ -123,7 +117,7 @@ void keepAlive(int state) { assert(state == Calibrating); ++keepAlives; }
 namespace RMath { using std::min; using std::max; }
 
 void showError(void*, void*) { assert(false); }
-void showAbortScanReason(const void*, char reason) { aborted = reason; }
+void showAbortScanReason(const void*, ScanAbort reason) { aborted = reason; }
 void showInformation(const void*, const void*, const void*) { ++completed; }
 void initCompensationMatrix() {
     std::memset(g_ZCompensationMatrix, 0, sizeof(g_ZCompensationMatrix));
@@ -163,12 +157,6 @@ bool moveZ(long distance) {
     Printer::zMotion.position += distance;
     return true;
 }
-void adjustPressureLimits(short baseline) {
-    g_nMinPressureContact = baseline - 10;
-    g_nMaxPressureContact = baseline + 10;
-    g_nMinPressureRetry = baseline - 5;
-    g_nMaxPressureRetry = baseline + 5;
-}
 void updateDigitCompensation(int16_t) {
     ++pressureReads;
     acceptedAt = Printer::strainGauge.latestStart();
@@ -191,40 +179,51 @@ void addLong(char* text, long value, int) {
 
 int main(int argc, char** argv) {
     assert(argc == 2);
+    HeatBedScanMode mode = HeatBedScanMode::Standard;
     if (!std::strcmp(argv[1], "pla"))
-        g_nHeatBedScanMode = HEAT_BED_SCAN_MODE_PLA;
+        mode = HeatBedScanMode::Pla;
     if (!std::strcmp(argv[1], "abs"))
-        g_nHeatBedScanMode = HEAT_BED_SCAN_MODE_ABS;
+        mode = HeatBedScanMode::Abs;
     const bool retry = !std::strcmp(argv[1], "retry");
     const bool cancel = !std::strcmp(argv[1], "cancel");
+    const bool cancelOnOverload = !std::strcmp(argv[1], "overload-and-cancel");
+    const bool stop = !std::strcmp(argv[1], "stop-mid-grid");
     injectNoise = retry;
     injectDisconnection = !std::strcmp(argv[1], "disconnected");
-    injectOverload = !std::strcmp(argv[1], "overload");
+    injectOverload = cancelOnOverload || !std::strcmp(argv[1], "overload");
     invalidGrid = !std::strcmp(argv[1], "invalid-grid");
 
-    heatBedScan.startOrCancel();
+    heatBedScan.startOrCancel(mode);
     unsigned ticks = 0;
     while (heatBedScan.active()) {
         assert(++ticks <= 5000);
         Printer::strainGauge.service(HAL::now, probeDigits());
-        if (!g_abortZScan)
+        if (!scanSession.aborting())
             scanPressure.service(HAL::now);
+        if (cancelOnOverload && scanSession.aborting())
+            heatBedScan.startOrCancel(HeatBedScanMode::Abs);
         heatBedScan.tick();
         if (cancel && ticks == 3)
-            heatBedScan.startOrCancel();
+            heatBedScan.startOrCancel(HeatBedScanMode::Abs);
+        if (stop && negativeMoves) {
+            assert(g_ZCompensationMatrix[0][0] == EEPROM_FORMAT);
+            heatBedScan.discard();
+        }
         HAL::now += 200000;
     }
     if (injectDisconnection || injectOverload) {
-        assert(aborted == (injectOverload ? SCAN_ABORT_REASON_DMS_OVERLOAD : SCAN_ABORT_REASON_DMS_UNAVAILABLE) && negativeMoves == 1);
+        assert(aborted == (injectOverload ? ScanAbort::DmsOverload : ScanAbort::DmsUnavailable) && negativeMoves == 1);
         assert(homedZ == 1 && disabled == 1 && loaded == 1 && !matrixSaved);
     } else if (invalidGrid) {
-        assert(aborted == SCAN_ABORT_REASON_MATRIX_DIMENSION && loaded == 1 && disabled == 1);
+        assert(aborted == ScanAbort::MatrixDimensions && loaded == 1 && disabled == 1);
         assert(!matrixPrepared && !matrixSaved && !completed);
+    } else if (stop) {
+        assert(aborted == ScanAbort::None && !g_ZCompensationMatrix[0][0] && !matrixSaved);
     } else if (cancel) {
-        assert(aborted == SCAN_ABORT_REASON_CANCELED && loaded == 1 && disabled == 1);
+        assert(aborted == ScanAbort::Canceled && loaded == 1 && disabled == 1);
         assert(!matrixSaved && !completed && ticks == 4 && keepAlives == 3);
     } else {
-        assert(!aborted && !loaded && matrixSaved && completed == 1 && disabled == 1);
+        assert(aborted == ScanAbort::None && !loaded && matrixSaved && completed == 1 && disabled == 1);
         assert(g_uZMatrixMax[X_AXIS] == 4 && g_uZMatrixMax[Y_AXIS] == 4);
         for (int x = 2; x <= 4; ++x) {
             assert(g_ZCompensationMatrix[x][0] == x - 1);
@@ -232,8 +231,8 @@ int main(int argc, char** argv) {
                 assert(g_ZCompensationMatrix[x][y] == -123);
         }
         assert(keepAlives == ticks && bedTarget == 0 && negativeMoves > 9);
-        if (g_nHeatBedScanMode) {
-            assert(nozzleTargets == std::vector<int>({100, g_nHeatBedScanMode == HEAT_BED_SCAN_MODE_PLA ? 210 : 240, 0}));
+        if (mode != HeatBedScanMode::Standard) {
+            assert(nozzleTargets == std::vector<int>({100, mode == HeatBedScanMode::Pla ? 210 : 240, 0}));
             assert(thermalOffsets == 1 && warmupMessages == 4 && homedXY == 3 && homedZ == 3);
         } else {
             assert(nozzleTargets == std::vector<int>({0, 0}));

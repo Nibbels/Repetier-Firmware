@@ -81,9 +81,6 @@ constexpr unsigned int stepperEnableDelayMs = 25;
 #define MOVE_MODE_50_MM 4
 #define MOVE_MODE_SINGLE_MOVE 5
 
-#define HEAT_BED_SCAN_MODE_PLA 1
-#define HEAT_BED_SCAN_MODE_ABS 2
-
 #define Z_VALUE_MODE_Z_MIN 1 // show the distance to Z-min
 #define Z_VALUE_MODE_LAYER 3 // show the nominal layer height
 

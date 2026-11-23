@@ -18,6 +18,8 @@
 #ifndef RF_H
 #define RF_H
 
+#include "CalibrationScan.h"
+
 // ##########################################################################################
 // ##   RF specific UI Actions
 // ##########################################################################################
@@ -362,38 +364,6 @@ extern const char ui_text_sensor_error[] PROGMEM;
 extern const char ui_text_heater_error[] PROGMEM;
 extern const char ui_text_saving_success[] PROGMEM;
 
-// Geplantes Canceling
-#define SCAN_ABORT_REASON_CANCELED 1
-
-// Kabelbruch, Extruder verspannt, Stecker wackelig, Ingress,...
-#define SCAN_ABORT_REASON_START_PRESSURE 3
-#define SCAN_ABORT_REASON_IDLE_PRESSURE 4
-#define SCAN_ABORT_REASON_AVERAGE_PRESSURE 5
-
-// Hinweise auf Bugs
-#define SCAN_ABORT_REASON_SCAN_OVER_START 6
-#define SCAN_ABORT_REASON_SCAN_STEP_DELTA_OUT_OF_RANGE 7
-#define SCAN_ABORT_REASON_MATRIX_DIMENSION 8
-
-// Löcher im Druckbett, Druckbett verdreckt, Mechanik problem, DDP schlecht geklebt
-#define SCAN_ABORT_REASON_SCAN_TOO_UNEVEN 9
-
-// Z-Schraube falsch eingestellt?
-// _MAX_COMPENSATION und _ENDSTOP_PROTECTION deuten im Printermodus auf dasselbe hin, sind aber 2 unterschiedliche Stellen.
-#define SCAN_ABORT_REASON_MIN_ENDSTOP 10
-#define SCAN_ABORT_REASON_MAX_ENDSTOP 11
-#define SCAN_ABORT_REASON_REACHED_MAX_COMPENSATION 12
-#define SCAN_ABORT_REASON_REACHED_ENDSTOP_PROTECTION 13
-
-// Ungültige oder nicht vorhandene Z-Matrix
-#define SCAN_ABORT_REASON_MISSING_MATRIX 14
-// Softwaretechnisch ungültiges Ergebnis. Scan über 12+mm tief??
-#define SCAN_ABORT_REASON_OVERFLOWING_MATRIX 15
-// Anscheinend crashgefährliches Hardware-Software-Setting
-#define SCAN_ABORT_REASON_BAD_HEIGHT_MATRIX 16
-#define SCAN_ABORT_REASON_DMS_UNAVAILABLE 17
-#define SCAN_ABORT_REASON_DMS_OVERLOAD 18
-
 // Factory scan margins in mm. X depends on the installed tool count.
 constexpr int heatBedScanXStartMm = NUM_EXTRUDER == 2 ? 0 : 15;
 constexpr int heatBedScanXEndMm = NUM_EXTRUDER == 2 ? 0 : 5;
@@ -425,11 +395,8 @@ extern volatile unsigned char g_ZMatrixChangedInRam;
 
 extern float g_scanStartZLiftMM;
 
-extern char g_abortZScan;
 extern short g_ZCompensationMatrix[COMPENSATION_MATRIX_MAX_X][COMPENSATION_MATRIX_MAX_Y];
 extern unsigned char g_uZMatrixMax[2];
-
-extern char g_nHeatBedScanMode; // 0 = oldScan, 1 = PLA, 2 = ABS
 
 extern long g_nScanXStepSizeMM;
 extern long g_nScanXStepSizeSteps;
@@ -474,9 +441,7 @@ extern unsigned char g_uRGBTargetB;
 
 extern void initRF(void);
 
-extern void showAbortScanReason(const void* scanName, char abortScanIdentifier);
-
-extern void startHeatBedScan(void);
+extern void startHeatBedScan(HeatBedScanMode mode);
 extern bool heatBedScanRunning();
 extern bool isAnyScanRunning();
 extern void discardScans();
@@ -502,7 +467,6 @@ extern void switchActiveHeatBed(char newActiveHeatBed);
 
 extern short readAveragePressure(short* pnAveragePressure);
 
-extern bool moveZ(int nSteps, bool emergencyRetreat = false);
 extern void restoreDefaultScanParameters(void);
 extern void outputScanParameters(void);
 extern void outputCompensationMatrix(char format = 0);
