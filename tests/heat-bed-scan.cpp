@@ -49,7 +49,8 @@ uint16_t g_nScanPressureReadDelay = 15, g_nScanPressureTolerance = 15;
 long g_nScanXStartSteps = 100, g_nScanYStartSteps = 100, g_nScanXStepSizeSteps = 100, g_nScanYStepSizeSteps = 100;
 long g_nScanXMaxPositionSteps = 300, g_nScanYMaxPositionSteps = 300;
 
-bool injectNoise = false, injectDisconnection = false, injectOverload = false, matrixPrepared = false, matrixSaved = false;
+bool injectNoise = false, injectDisconnection = false, injectOverload = false, invalidGrid = false;
+bool matrixPrepared = false, matrixSaved = false;
 unsigned keepAlives = 0, homedXY = 0, homedZ = 0, pressureReads = 0, negativeMoves = 0,
          disabled = 0, loaded = 0, thermalOffsets = 0, completed = 0, warmupMessages = 0;
 char aborted = 0;
@@ -130,7 +131,10 @@ void initCompensationMatrix() {
 }
 void outputScanParameters() {}
 void outputCompensationMatrix() {}
-void prepareCompensationMatrix() { matrixPrepared = true; }
+char prepareCompensationMatrix() {
+    matrixPrepared = !invalidGrid;
+    return invalidGrid ? -1 : 0;
+}
 void determineCompensationOffsetZ() {}
 void adjustCompensationMatrix(short steps) { assert(steps == -123); ++thermalOffsets; }
 int loadCompensationMatrix(unsigned int address) {
@@ -196,6 +200,7 @@ int main(int argc, char** argv) {
     injectNoise = retry;
     injectDisconnection = !std::strcmp(argv[1], "disconnected");
     injectOverload = !std::strcmp(argv[1], "overload");
+    invalidGrid = !std::strcmp(argv[1], "invalid-grid");
 
     heatBedScan.startOrCancel();
     unsigned ticks = 0;
@@ -212,6 +217,9 @@ int main(int argc, char** argv) {
     if (injectDisconnection || injectOverload) {
         assert(aborted == (injectOverload ? SCAN_ABORT_REASON_DMS_OVERLOAD : SCAN_ABORT_REASON_DMS_UNAVAILABLE) && negativeMoves == 1);
         assert(homedZ == 1 && disabled == 1 && loaded == 1 && !matrixSaved);
+    } else if (invalidGrid) {
+        assert(aborted == SCAN_ABORT_REASON_MATRIX_DIMENSION && loaded == 1 && disabled == 1);
+        assert(!matrixPrepared && !matrixSaved && !completed);
     } else if (cancel) {
         assert(aborted == SCAN_ABORT_REASON_CANCELED && loaded == 1 && disabled == 1);
         assert(!matrixSaved && !completed && ticks == 4 && keepAlives == 3);

@@ -185,6 +185,7 @@ unsigned char g_uRGBTargetB = 0;
 #endif // RGB_LIGHT_R_PIN
 
 static void setupForPrinting();
+static bool readWord24C256(int addressI2C, unsigned int addressEEPROM, unsigned short& data);
 
 void initRF(void) {
     Printer::strainGauge.begin(HAL::timeInMilliseconds());
@@ -1053,7 +1054,10 @@ void HeatBedScan::prepareMatrix() {
     }
 
     // prepare the heat bed compensation matrix for fast usage during the actual printing
-    prepareCompensationMatrix();
+    if (prepareCompensationMatrix()) {
+        g_abortZScan = SCAN_ABORT_REASON_MATRIX_DIMENSION;
+        return;
+    }
 
     if (Printer::debugInfo()) {
         Com::printF(Com::tscanHeatBed);
@@ -2108,56 +2112,44 @@ short testHeatBedTemperature(void) //Funktion ist speziell für HBS Scan.
     return 0;
 } // testHeatBedTemperature
 
+namespace {
+struct MatrixSpan {
+    uint8_t low, high;
+    long distance, width;
+
+    long depth(long lowDepth, long highDepth) const {
+        return width ? lowDepth + (highDepth - lowDepth) * distance / width : lowDepth;
+    }
+};
+
+MatrixSpan matrixSpan(uint8_t axis, long position) {
+    const float stepsPerMm = Printer::axisStepsPerMM[axis];
+    const auto coordinate = [axis, stepsPerMm](uint8_t index) {
+        const short mm = axis == X_AXIS ? g_ZCompensationMatrix[index][0] : g_ZCompensationMatrix[0][index];
+        return long(mm * stepsPerMm);
+    };
+
+    uint8_t low = 1;
+    long start = coordinate(low);
+    if (position > start) {
+        for (uint8_t high = 2; high <= g_uZMatrixMax[axis]; ++high) {
+            const long end = coordinate(high);
+            if (position <= end)
+                return {low, high, position - start, end - start};
+            low = high;
+            start = end;
+        }
+    }
+    return {low, low, 0, 0};
+}
+} // namespace
+
 long getZMatrixDepth(long x, long y) {
-    // find the rectangle which covers the current position of the extruder
-    unsigned char nXLeftIndex = 1;
-    long nXLeftSteps = (long)((float)g_ZCompensationMatrix[1][0] * Printer::axisStepsPerMM[X_AXIS]);
-    unsigned char nXRightIndex = 0;
-    long nXRightSteps = 0;
-    long i;
-    long nTemp;
-
-    for (i = 1; i <= g_uZMatrixMax[X_AXIS]; i++) {
-        nTemp = g_ZCompensationMatrix[i][0];
-        nTemp = (long)((float)nTemp * Printer::axisStepsPerMM[X_AXIS]);
-        if (x <= nTemp) {
-            nXRightIndex = i;
-            nXRightSteps = nTemp;
-            break;
-        }
-        nXLeftIndex = i;
-        nXLeftSteps = nTemp;
-    }
-
-    unsigned char nYFrontIndex = 1;
-    long nYFrontSteps = (long)((float)g_ZCompensationMatrix[0][1] * Printer::axisStepsPerMM[Y_AXIS]);
-    unsigned char nYBackIndex = 0;
-    long nYBackSteps = 0;
-
-    for (i = 1; i <= g_uZMatrixMax[Y_AXIS]; i++) {
-        nTemp = g_ZCompensationMatrix[0][i];
-        nTemp = (long)((float)nTemp * Printer::axisStepsPerMM[Y_AXIS]);
-        if (y <= nTemp) {
-            nYBackIndex = i;
-            nYBackSteps = nTemp;
-            break;
-        }
-        nYFrontIndex = i;
-        nYFrontSteps = nTemp;
-    }
-
-    long nDeltaX = x - nXLeftSteps;
-    long nDeltaY = y - nYFrontSteps;
-    long nStepSizeX = nXRightSteps - nXLeftSteps;
-    long nStepSizeY = nYBackSteps - nYFrontSteps;
-
-    // we do a linear interpolation in order to find our exact place within the current rectangle
-    long nTempXFront = g_ZCompensationMatrix[nXLeftIndex][nYFrontIndex] + (g_ZCompensationMatrix[nXRightIndex][nYFrontIndex] - g_ZCompensationMatrix[nXLeftIndex][nYFrontIndex]) * nDeltaX / nStepSizeX;
-    long nTempXBack = g_ZCompensationMatrix[nXLeftIndex][nYBackIndex] + (g_ZCompensationMatrix[nXRightIndex][nYBackIndex] - g_ZCompensationMatrix[nXLeftIndex][nYBackIndex]) * nDeltaX / nStepSizeX;
-
-    long ZMatrixDepth = nTempXFront + (nTempXBack - nTempXFront) * nDeltaY / nStepSizeY; //Das ist hier noch der Zeiger auf die Oberfläche.
-
-    return ZMatrixDepth;
+    const auto column = matrixSpan(X_AXIS, x);
+    const auto row = matrixSpan(Y_AXIS, y);
+    const long front = column.depth(g_ZCompensationMatrix[column.low][row.low], g_ZCompensationMatrix[column.high][row.low]);
+    const long back = column.depth(g_ZCompensationMatrix[column.low][row.high], g_ZCompensationMatrix[column.high][row.high]);
+    return row.depth(front, back);
 }
 
 long getZMatrixDepth_CurrentXY(void) {
@@ -2547,7 +2539,18 @@ char prepareCompensationMatrix(void) {
         return -1;
     }
 
-    if (g_ZCompensationMatrix[2][0] > 0) {
+    const bool padLeft = g_ZCompensationMatrix[2][0] > 0;
+    const bool padFront = g_ZCompensationMatrix[0][2] > 0;
+    const bool padRight = g_ZCompensationMatrix[g_uZMatrixMax[X_AXIS]][0] < short(Printer::axisLengthMM[X_AXIS]);
+    const bool padBack = g_ZCompensationMatrix[0][g_uZMatrixMax[Y_AXIS]] < short(Printer::axisLengthMM[Y_AXIS]);
+    const int lastX = g_uZMatrixMax[X_AXIS] - !padLeft + padRight;
+    const int lastY = g_uZMatrixMax[Y_AXIS] - !padFront + padBack;
+    if (lastX < 2 || lastX >= COMPENSATION_MATRIX_MAX_X || lastY < 2 || lastY >= COMPENSATION_MATRIX_MAX_Y) {
+        Com::printFLN(PSTR("zCMP: prepared matrix dimensions out of range"));
+        return -1;
+    }
+
+    if (padLeft) {
         // we have to fill x[1] with the values of x[2]
         /*      if( Printer::debugInfo() )
         {
@@ -2570,7 +2573,7 @@ char prepareCompensationMatrix(void) {
         g_uZMatrixMax[X_AXIS]--;
     }
 
-    if (g_ZCompensationMatrix[g_uZMatrixMax[X_AXIS]][0] < (short)Printer::axisLengthMM[X_AXIS]) {
+    if (padRight) {
         // we have to fill x[g_uZMatrixMax[X_AXIS]] with the values of x[g_uZMatrixMax[X_AXIS]-1]
         g_ZCompensationMatrix[g_uZMatrixMax[X_AXIS] + 1][0] = short(Printer::axisLengthMM[X_AXIS]);
         for (y = 1; y <= g_uZMatrixMax[Y_AXIS]; y++) {
@@ -2583,7 +2586,7 @@ char prepareCompensationMatrix(void) {
         // there is nothing else to do here
     }
 
-    if (g_ZCompensationMatrix[0][2] > 0) {
+    if (padFront) {
         // we have to fill y[1] with the values of y[2]
         g_ZCompensationMatrix[0][1] = 0;
         for (x = 1; x <= g_uZMatrixMax[X_AXIS]; x++) {
@@ -2601,7 +2604,7 @@ char prepareCompensationMatrix(void) {
         g_uZMatrixMax[Y_AXIS]--;
     }
 
-    if (g_ZCompensationMatrix[0][g_uZMatrixMax[Y_AXIS]] < short(Printer::axisLengthMM[Y_AXIS])) {
+    if (padBack) {
         // we have to fill y[g_uZMatrixMax[Y_AXIS]] with the values of y[g_uZMatrixMax[Y_AXIS]-1]
         g_ZCompensationMatrix[0][g_uZMatrixMax[Y_AXIS] + 1] = short(Printer::axisLengthMM[Y_AXIS]);
         for (x = 1; x <= g_uZMatrixMax[X_AXIS]; x++) {
@@ -2777,16 +2780,18 @@ char loadCompensationMatrix(unsigned int uAddress) {
     unsigned short uDimensionY;
     unsigned short uMicroSteps;
     unsigned int uOffset;
-    short nTemp;
     short x;
     short y;
     float fMicroStepCorrection;
 
     Printer::disableCMPnow(true); // vorher, nicht nachher ausschalten, sonst arbeitet unter Umständen die alte matrix.
+    // The payload is read into the working buffer. Publish the format marker
+    // and dimensions only after the whole sector has been accepted.
+    g_ZCompensationMatrix[0][0] = 0;
 
     // check the stored header format
-    uTemp = readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, EEPROM_OFFSET_HEADER_FORMAT);
-
+    if (!readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, EEPROM_OFFSET_HEADER_FORMAT, uTemp))
+        return -1;
     if (uTemp != EEPROM_FORMAT) {
         if (Printer::debugErrors()) {
             Com::printF(PSTR("loadMatrix(): invalid header format: "), (int)uTemp);
@@ -2798,8 +2803,8 @@ char loadCompensationMatrix(unsigned int uAddress) {
 
 
     // check the stored sector format
-    uTemp = readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_SECTOR_FORMAT);
-
+    if (!readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_SECTOR_FORMAT, uTemp))
+        return -1;
     if (uTemp != EEPROM_FORMAT) {
         if (Printer::debugErrors()) {
             Com::printF(PSTR("loadMatrix(): invalid sector format: "), (int)uTemp);
@@ -2810,34 +2815,36 @@ char loadCompensationMatrix(unsigned int uAddress) {
     }
 
     // check the stored x dimension
-    uDimensionX = readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_DIMENSION_X);
-
-    if (uDimensionX > COMPENSATION_MATRIX_MAX_X) {
+    if (!readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_DIMENSION_X, uDimensionX))
+        return -1;
+    if (uDimensionX < 2 || uDimensionX >= COMPENSATION_MATRIX_MAX_X) {
         if (Printer::debugErrors()) {
             Com::printF(PSTR("loadMatrix(): invalid x dimension: "), (int)uDimensionX);
-            Com::printF(PSTR(" (max expected: "), COMPENSATION_MATRIX_MAX_X);
+            Com::printF(PSTR(" (max expected: "), COMPENSATION_MATRIX_MAX_X - 1);
             Com::printFLN(PSTR(")"));
         }
         return -1;
     }
 
     // check the stored y dimension
-    uDimensionY = readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_DIMENSION_Y);
-
-    if (uDimensionY > COMPENSATION_MATRIX_MAX_Y) {
+    if (!readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_DIMENSION_Y, uDimensionY))
+        return -1;
+    if (uDimensionY < 2 || uDimensionY >= COMPENSATION_MATRIX_MAX_Y) {
         if (Printer::debugErrors()) {
             Com::printF(PSTR("loadMatrix(): invalid y dimension: "), (int)uDimensionY);
-            Com::printF(PSTR(" (max expected: "), COMPENSATION_MATRIX_MAX_Y);
+            Com::printF(PSTR(" (max expected: "), COMPENSATION_MATRIX_MAX_Y - 1);
             Com::printFLN(PSTR(")"));
         }
         return -1;
     }
 
-    g_uZMatrixMax[X_AXIS] = (unsigned char)uDimensionX;
-    g_uZMatrixMax[Y_AXIS] = (unsigned char)uDimensionY;
-
     // check the stored microsteps
-    uMicroSteps = readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_MICRO_STEPS);
+    if (!readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_MICRO_STEPS, uMicroSteps))
+        return -1;
+    if (!uMicroSteps || uMicroSteps > 256 || (uMicroSteps & (uMicroSteps - 1))) {
+        Com::printFLN(PSTR("loadMatrix(): invalid microstep count: "), uint32_t(uMicroSteps));
+        return -1;
+    }
 
     if (uMicroSteps ==
         drv8711ModeValue_2_MicroSteps(Printer::motorMicroStepsModeValue[Z_AXIS])
@@ -2860,16 +2867,24 @@ char loadCompensationMatrix(unsigned int uAddress) {
 
     // read out the actual compensation values
     uOffset = uAddress + EEPROM_OFFSET_MATRIX_START;
-    for (x = 0; x <= g_uZMatrixMax[X_AXIS]; x++) {
-        for (y = 0; y <= g_uZMatrixMax[Y_AXIS]; y++) {
-            nTemp = readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uOffset);
-
-            if (x == 0 || y == 0) {
+    for (x = 0; x <= uDimensionX; x++) {
+        for (y = 0; y <= uDimensionY; y++) {
+            if (!readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uOffset, uTemp)) {
+                Com::printFLN(PSTR("loadMatrix(): EEPROM read failed"));
+                return -1;
+            }
+            const int16_t value = static_cast<int16_t>(uTemp);
+            if (x == 0 && y == 0) {
+                if (value != EEPROM_FORMAT) {
+                    Com::printFLN(PSTR("loadMatrix(): invalid matrix format: "), value);
+                    return -1;
+                }
+            } else if (x == 0 || y == 0) {
                 // we must not modify our header row/column
-                g_ZCompensationMatrix[x][y] = nTemp;
+                g_ZCompensationMatrix[x][y] = value;
             } else {
                 // we may have to update all z-compensation values
-                long transformedMatrixElement = long((float)nTemp * fMicroStepCorrection);
+                long transformedMatrixElement = long((float)value * fMicroStepCorrection);
                 if (transformedMatrixElement > 32767 || transformedMatrixElement < -32768) {
                     Com::printFLN(PSTR("MicroStep transf.: overflow"));
 
@@ -2882,8 +2897,10 @@ char loadCompensationMatrix(unsigned int uAddress) {
         GCodeInput::keepAlive(Processing);
     }
 
+    g_uZMatrixMax[X_AXIS] = uDimensionX;
+    g_uZMatrixMax[Y_AXIS] = uDimensionY;
     determineCompensationOffsetZ();
-
+    g_ZCompensationMatrix[0][0] = EEPROM_FORMAT;
     g_ZMatrixChangedInRam = 0; //Nibbels: Marker, dass die Matrix gespeichert werden kann oder eben nicht, weils unverändert keinen Sinn macht.
 
     return 0;
@@ -2951,30 +2968,30 @@ void writeWord24C256(int addressI2C, unsigned int addressEEPROM, unsigned short 
 
 } // writeWord24C256
 
-unsigned char readByte24C256(int addressI2C, unsigned int addressEEPROM) {
+static bool readByte24C256(int addressI2C, unsigned int addressEEPROM, uint8_t& data) {
     TwiTransfer::finishActive();
     HAL::delayMilliseconds(EEPROM_DELAY);
     const uint8_t bytes[] = {byte(addressEEPROM >> 8), byte(addressEEPROM)};
     TwiTransfer transfer;
     if (!transfer.write(addressI2C, bytes, sizeof(bytes), HAL::timeInMilliseconds()) || !transfer.wait()
         || !transfer.read(addressI2C, 1, HAL::timeInMilliseconds()) || !transfer.wait())
-        return 0xff;
-    return transfer.byteAt(0);
-
+        return false;
+    data = transfer.byteAt(0);
+    return true;
 } // readByte24C256
+
+static bool readWord24C256(int addressI2C, unsigned int addressEEPROM, unsigned short& data) {
+    uint8_t high, low;
+    if (!readByte24C256(addressI2C, addressEEPROM, high) || !readByte24C256(addressI2C, addressEEPROM + 1, low))
+        return false;
+    data = (uint16_t(high) << 8) | low;
+    return true;
+} // readWord24C256
 
 unsigned short readWord24C256(int addressI2C, unsigned int addressEEPROM) {
     unsigned short data;
-    byte Temp;
-
-    Temp = readByte24C256(addressI2C, addressEEPROM);
-    data = Temp;
-    data = data << 8;
-    Temp = readByte24C256(addressI2C, addressEEPROM + 1);
-
-    return data + Temp;
-
-} // readWord24C256
+    return readWord24C256(addressI2C, addressEEPROM, data) ? data : 0xffff;
+}
 
 static void serviceSenseOffset(bool sampleDue, short pressure, const PrintPause::SenseOffsetSample& pauseSample) {
     auto& controller = Printer::senseOffsetControl;

@@ -519,7 +519,6 @@ extern void clearExternalEEPROM(void);
 extern void writeByte24C256(int addressI2C, unsigned int addressEEPROM, unsigned char data);
 extern void writeWord24C256(int addressI2C, unsigned int addressEEPROM, unsigned short data);
 
-extern unsigned char readByte24C256(int addressI2C, unsigned int addressEEPROM);
 extern unsigned short readWord24C256(int addressI2C, unsigned int addressEEPROM);
 
 extern void recalculateZCompensation(void);

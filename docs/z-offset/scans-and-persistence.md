@@ -77,6 +77,8 @@ The measurement requires a bounded spread within each sample window. Slow baseli
 | Manual Z offset, `Printer::zOffset.manualMicrometers()` | **Internal MCU EEPROM** `EPR_RF_Z_OFFSET` | Changed by M3006 / UI, immediately written with checksum; `M3902 Z0` also writes zero here |
 | Bed matrix (multiple slots and chosen active slot) | **External I²C EEPROM** | HBS saves on completion; `M3902 S<n>` or UI 'Save Matrix' for RAM modifications; matrix selection in M3009 / menu |
 
+Stored dimensions are inclusive last indices. Loading checks both indices, the microstep count and the format markers before activating the payload. A failed I²C byte read leaves the matrix unavailable. Mesh preparation checks that its padding fits before writing another row or column. Interpolation uses the nearest edge for XY positions outside the sampled rectangle.
+
 ### Critical transfer operation: M3902 Z0
 
 `M3902 Z0` shifts **the RAM matrix by the existing manual offset in steps**, changes the menu offset to zero and **immediately persists zero in internal EEPROM**. However the matrix is *only in RAM* until a separate save is issued.
