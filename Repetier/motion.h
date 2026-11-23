@@ -107,27 +107,37 @@ private:
     flag8_t dir;                 ///< Direction of movement. 1 = X+, 2 = Y+, 4= Z+, values can be combined.
     int32_t delta[4];            ///< Steps we want to move.
     int32_t error[4];            ///< Error calculation for Bresenham algorithm
-    float speedX;                ///< Speed in x direction at vMax in mm/s
-    float speedY;                ///< Speed in y direction at vMax in mm/s
-    float speedZ;                ///< Speed in z direction at vMax in mm/s
-    float speedE;                ///< Speed in E direction at vMax in mm/s
-    float fullSpeed;             ///< Desired speed mm/s
-    float invFullSpeed;          ///< 1.0/fullSpeed for faster computation
-    float accelerationDistance2; ///< Real 2.0*distance*acceleration mm²/s²
-    float maxJunctionSpeed;      ///< Max. junction speed between this and next segment
-    float startSpeed;            ///< Starting speed in mm/s
-    float endSpeed;              ///< Exit speed in mm/s
-    float minSpeed;
-    float distance;
-    uint32_t accelSteps;       ///< How much steps does it take, to reach the plateau.
-    uint32_t decelSteps;       ///< How much steps does it take, to reach the end speed.
-    uint32_t accelerationPrim; ///< Acceleration along primary axis
-    uint32_t fAcceleration;    ///< accelerationPrim*262144/F_CPU
-    speed_t vMax;              ///< Maximum reached speed in steps/s.
-    speed_t vStart;            ///< Starting speed in steps/s.
-    speed_t vEnd;              ///< End speed in steps/s
+    float fullSpeed; ///< Segment feed in mm/s, also published to the status display.
 
-    uint32_t advanceL; ///< Recomputated L value
+    // Lookahead revises these values while the slot is owned by the planner.
+    struct LookaheadData {
+        float speedX;
+        float speedY;
+        float speedZ;
+        float speedE;
+        float invFullSpeed;
+        float accelerationDistance2;
+        float maxJunctionSpeed;
+        float startSpeed;
+        float endSpeed;
+        float minSpeed;
+        float distance;
+        uint32_t accelerationPrim;
+    };
+
+    // Timer1 consumes this profile in motor steps and timer ticks.
+    struct StepProfile {
+        uint32_t accelSteps;
+        uint32_t decelSteps;
+        uint32_t fAcceleration; ///< Scaled acceleration for HAL::ComputeV.
+        speed_t vMax;
+        speed_t vStart;
+        speed_t vEnd;
+        uint32_t advanceL;
+    };
+
+    LookaheadData lookahead;
+    StepProfile stepProfile;
 
     void setAxisSteps(uint8_t axis, int32_t steps);
     void setSegmentGeometry(const float axisDistanceMM[]);
@@ -342,7 +352,7 @@ public:
         if (!Printer::isAdvanceActivated())
             return;
 
-        const int32_t leadSteps = (v * advanceL) >> 16;
+        const int32_t leadSteps = (v * stepProfile.advanceL) >> 16;
         HAL::forbidInterrupts();
         Printer::pressureAdvance.setLeadSteps(leadSteps);
         HAL::allowInterrupts();

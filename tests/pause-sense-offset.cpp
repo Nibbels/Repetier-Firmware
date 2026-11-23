@@ -405,21 +405,17 @@ struct PrintLine {
     void setPositiveDirectionForAxis(uint8_t axis) { dir |= 1 << axis; }
     int32_t error[4] = {}, delta[4] = {};
     int32_t stepsRemaining = 0;
-    uint32_t accelSteps = 0, decelSteps = 0, fAcceleration = 0;
-    uint32_t accelerationPrim = 0;
-    uint32_t advanceL = 0;
-    speed_t vStart = 0, vMax = 0, vEnd = 0;
+#include "step-profile-firmware.inc"
+    LookaheadData lookahead{};
+    StepProfile stepProfile{};
     speed_t nextStepSpeed(StepClock& clock, uint8_t pulses, uint32_t interval);
     void prepareStepProfile();
     void fitRampToRemainingSteps();
     void limitToStopTail(bool refitRamp);
     void calculateMove(float axisDistanceMM[], fast8_t drivingAxis, float feedrate);
     inline float safeSpeed(fast8_t drivingAxis);
-    float speedX = 0, speedY = 0, speedZ = 0, speedE = 0;
-    float fullSpeed = 0, invFullSpeed = 0, accelerationDistance2 = 0;
-    float minSpeed = 0, startSpeed = 0, endSpeed = 0, maxJunctionSpeed = 0;
+    float fullSpeed = 0;
     int32_t timeInTicks = 0;
-    float distance = 0;
     uint8_t primaryAxis = 0;
     char task = TASK_NO_TASK;
     uint8_t flags = 0, joinFlags = 0, dir = 0;
@@ -1668,13 +1664,13 @@ void stepClock() {
     PrintLine::StepClock queued, direct;
     queued.start(100);
     direct.start(125);
-    move.accelSteps = 2;
-    move.decelSteps = 3;
+    move.stepProfile.accelSteps = 2;
+    move.stepProfile.decelSteps = 3;
     move.stepsRemaining = 90;
-    move.fAcceleration = 1024;
-    move.vStart = 100;
-    move.vMax = 300;
-    move.vEnd = 75;
+    move.stepProfile.fAcceleration = 1024;
+    move.stepProfile.vStart = 100;
+    move.stepProfile.vMax = 300;
+    move.stepProfile.vEnd = 75;
     constexpr uint32_t interval = 150 * 256;
     assert(move.nextStepSpeed(queued, 1, interval) == 250);
     assert(move.nextStepSpeed(queued, 1, interval) == 300);
@@ -1697,21 +1693,21 @@ void segmentGeometry() {
     const float distances[] = {3, 4, 12, 2};
     move.setSegmentGeometry(distances);
     assert(move.isNegativeMoveOfAxis(X_AXIS) && move.isPositiveMoveOfAxis(Y_AXIS));
-    assert(move.primaryAxis == X_AXIS && move.stepsRemaining == 10 && move.distance == 5);
+    assert(move.primaryAxis == X_AXIS && move.stepsRemaining == 10 && move.lookahead.distance == 5);
 
     move.setAxisSteps(Z_AXIS, 10);
     move.setSegmentGeometry(distances);
-    assert(move.primaryAxis == Z_AXIS && move.stepsRemaining == 10 && move.distance == 13);
+    assert(move.primaryAxis == Z_AXIS && move.stepsRemaining == 10 && move.lookahead.distance == 13);
 
     move.setAxisSteps(E_AXIS, -10);
     move.setSegmentGeometry(distances);
-    assert(move.primaryAxis == E_AXIS && move.stepsRemaining == 10 && move.distance == 13);
+    assert(move.primaryAxis == E_AXIS && move.stepsRemaining == 10 && move.lookahead.distance == 13);
 
     PrintLine retract;
     retract.setAxisSteps(E_AXIS, -1);
     retract.setSegmentGeometry(distances);
     assert(retract.isNegativeMoveOfAxis(E_AXIS));
-    assert(retract.primaryAxis == E_AXIS && retract.stepsRemaining == 1 && retract.distance == 2);
+    assert(retract.primaryAxis == E_AXIS && retract.stepsRemaining == 1 && retract.lookahead.distance == 2);
 }
 
 void moveQueue() {
@@ -1761,19 +1757,19 @@ void lookaheadMoves() {
         PrintLine& move = queue.writeSlot();
         move = PrintLine{};
         move.dir = axes;
-        move.speedX = (axes & 16) ? 32.0f : 0.0f;
-        move.speedY = (axes & 32) ? 32.0f : 0.0f;
-        move.speedE = axes == retract ? -32.0f : (axes & 128) ? 2.0f : 0.0f;
-        move.distance = 0.3f;
+        move.lookahead.speedX = (axes & 16) ? 32.0f : 0.0f;
+        move.lookahead.speedY = (axes & 32) ? 32.0f : 0.0f;
+        move.lookahead.speedE = axes == retract ? -32.0f : (axes & 128) ? 2.0f : 0.0f;
+        move.lookahead.distance = 0.3f;
         move.timeInTicks = 50000;
         move.fullSpeed = 32.0f;
-        move.invFullSpeed = 1.0f / 32.0f;
-        move.minSpeed = move.startSpeed = move.endSpeed = 4.0f;
-        move.accelerationDistance2 = 128.0f;
+        move.lookahead.invFullSpeed = 1.0f / 32.0f;
+        move.lookahead.minSpeed = move.lookahead.startSpeed = move.lookahead.endSpeed = 4.0f;
+        move.lookahead.accelerationDistance2 = 128.0f;
         move.stepsRemaining = 48;
-        move.accelerationPrim = 40000;
-        move.fAcceleration = 655;
-        move.vMax = 4000;
+        move.lookahead.accelerationPrim = 40000;
+        move.stepProfile.fAcceleration = 655;
+        move.stepProfile.vMax = 4000;
         return move;
     };
     uint32_t trace = 0;
@@ -1796,7 +1792,7 @@ void lookaheadMoves() {
 
         assert(interruptsEnabled && queue.count() == 3);
         assert(queue.active() == &front && front.joinFlags == frontFlags && reserved.joinFlags == reservedFlags);
-        assert(previous.endSpeed == junctionSpeed && newest.startSpeed == junctionSpeed);
+        assert(previous.lookahead.endSpeed == junctionSpeed && newest.lookahead.startSpeed == junctionSpeed);
         for (auto* move : {&front, &reserved, &previous, &newest}) {
             assert(move->isStepProfileReady() && !move->isBlocked());
         }
@@ -1805,8 +1801,8 @@ void lookaheadMoves() {
         for (auto* profile : {&previous, &newest}) {
             PrintLine move = *profile;
             PrintLine::StepClock clock;
-            clock.start(move.vStart);
-            uint32_t interval = 16000000UL / move.vStart;
+            clock.start(move.stepProfile.vStart);
+            uint32_t interval = 16000000UL / move.stepProfile.vStart;
             while (move.stepsRemaining > 0) {
                 --move.stepsRemaining;
                 const speed_t speed = move.nextStepSpeed(clock, 1, interval);
@@ -1837,7 +1833,7 @@ void directRamp() {
     PrintLine::prepareDirectMove(steps, true, false);
     assert(interruptsEnabled && move.task == DIRECT_PREPARED_STOPPABLE);
     assert(move.isStepProfileReady() && move.stepsRemaining == 161);
-    assert(move.vStart == move.vEnd && move.accelSteps == move.decelSteps && move.accelSteps > 16);
+    assert(move.stepProfile.vStart == move.stepProfile.vEnd && move.stepProfile.accelSteps == move.stepProfile.decelSteps && move.stepProfile.accelSteps > 16);
 
     PrintLine legacyStop = move;
     legacyStop.stepsRemaining = 32;
@@ -1848,7 +1844,7 @@ void directRamp() {
         PrintLine::stopDirectMove();
     }
     assert(move.stepsRemaining == 32);
-    assert(move.accelSteps == legacyStop.accelSteps && move.decelSteps == legacyStop.decelSteps);
+    assert(move.stepProfile.accelSteps == legacyStop.stepProfile.accelSteps && move.stepProfile.decelSteps == legacyStop.stepProfile.decelSteps);
 
     reserve();
     interruptBeforeLock = 1;
@@ -1861,17 +1857,17 @@ void directRamp() {
     PrintLine::prepareDirectMove(steps, true, false);
     assert(interruptBeforeLock == 0 && interruptsEnabled);
     assert(move.task == DIRECT_PREPARED_STOPPABLE && move.stepsRemaining == 32);
-    assert(move.accelSteps == legacyStop.accelSteps && move.decelSteps == legacyStop.decelSteps);
+    assert(move.stepProfile.accelSteps == legacyStop.stepProfile.accelSteps && move.stepProfile.decelSteps == legacyStop.stepProfile.decelSteps);
 
     reserve();
     PrintLine::prepareDirectMove(steps, true, false);
-    const uint32_t initialRampSteps = move.accelSteps;
+    const uint32_t initialRampSteps = move.stepProfile.accelSteps;
     {
         InterruptProtectedBlock lock;
         move.task = DIRECT_RUNNING_STOPPABLE;
         PrintLine::stopDirectMove();
     }
-    assert(move.stepsRemaining == 32 && move.accelSteps == initialRampSteps);
+    assert(move.stepsRemaining == 32 && move.stepProfile.accelSteps == initialRampSteps);
 
     reserve();
     const int32_t noSteps[4] = {};

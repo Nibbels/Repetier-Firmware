@@ -107,13 +107,13 @@ void PrintLine::setSegmentGeometry(const float axisDistanceMM[]) {
         primaryAxis = E_AXIS;
     stepsRemaining = delta[primaryAxis];
 
-    distance = axisDistanceMM[E_AXIS];
+    lookahead.distance = axisDistanceMM[E_AXIS];
     if (isXYZMove()) {
         float distanceSquared = axisDistanceMM[X_AXIS] * axisDistanceMM[X_AXIS]
             + axisDistanceMM[Y_AXIS] * axisDistanceMM[Y_AXIS];
         if (isZMove())
             distanceSquared += axisDistanceMM[Z_AXIS] * axisDistanceMM[Z_AXIS];
-        distance = RMath::max((float)sqrt(distanceSquared), distance);
+        lookahead.distance = RMath::max((float)sqrt(distanceSquared), lookahead.distance);
     }
 }
 
@@ -255,7 +255,7 @@ void PrintLine::calculateMove(float axisDistanceMM[], fast8_t drivingAxis, float
     if (stepsRemaining == 0) { // need at least one step for bresenham
         return;
     }
-    float timeForMove = (float)(F_CPU)*distance / feedrate; // time is in ticks
+    float timeForMove = (float)(F_CPU)*lookahead.distance / feedrate; // time is in ticks
     // Small element limiter: This was not present in directmove but is not harmfull.
     if (queue.count() < MOVE_CACHE_LOW && timeForMove < LOW_TICKS_PER_MOVE) // Limit speed to keep cache full.
     {
@@ -297,38 +297,38 @@ void PrintLine::calculateMove(float axisDistanceMM[], fast8_t drivingAxis, float
     ticks_t fullIntervalb = limitInterval = (limitInterval > LIMIT_INTERVAL ? limitInterval : LIMIT_INTERVAL); // This is our target speed
     if (limitInterval != limitInterval0) {
         // new time at full speed = limitInterval*p->stepsRemaining [ticks]
-        timeForMove = (float)limitInterval * (float)stepsRemaining; // for large z-distance this overflows with long computation
+        timeForMove = (float)limitInterval * (float)stepsRemaining; // Preserve range on long Z moves.
     }
     float inverseTimeS = static_cast<float>(F_CPU) / timeForMove;
     if (isXMove()) {
         axisInterval[X_AXIS] = static_cast<int32_t>(timeForMove / (axisDistanceMM[X_AXIS] * Printer::axisStepsPerMM[X_AXIS]));
-        speedX = axisDistanceMM[X_AXIS] * inverseTimeS;
+        lookahead.speedX = axisDistanceMM[X_AXIS] * inverseTimeS;
         if (isXNegativeMove())
-            speedX = -speedX;
+            lookahead.speedX = -lookahead.speedX;
     } else
-        speedX = 0;
+        lookahead.speedX = 0;
     if (isYMove()) {
         axisInterval[Y_AXIS] = static_cast<int32_t>(timeForMove / (axisDistanceMM[Y_AXIS] * Printer::axisStepsPerMM[Y_AXIS]));
-        speedY = axisDistanceMM[Y_AXIS] * inverseTimeS;
+        lookahead.speedY = axisDistanceMM[Y_AXIS] * inverseTimeS;
         if (isYNegativeMove())
-            speedY = -speedY;
+            lookahead.speedY = -lookahead.speedY;
     } else
-        speedY = 0;
+        lookahead.speedY = 0;
     if (isZMove()) {
         axisInterval[Z_AXIS] = static_cast<int32_t>(timeForMove / (axisDistanceMM[Z_AXIS] * Printer::axisStepsPerMM[Z_AXIS]));
-        speedZ = axisDistanceMM[Z_AXIS] * inverseTimeS;
+        lookahead.speedZ = axisDistanceMM[Z_AXIS] * inverseTimeS;
         if (isZNegativeMove())
-            speedZ = -speedZ;
+            lookahead.speedZ = -lookahead.speedZ;
     } else
-        speedZ = 0;
+        lookahead.speedZ = 0;
     if (isEMove()) {
         axisInterval[E_AXIS] = static_cast<int32_t>(timeForMove / (axisDistanceMM[E_AXIS] * Printer::axisStepsPerMM[E_AXIS]));
-        speedE = axisDistanceMM[E_AXIS] * inverseTimeS;
+        lookahead.speedE = axisDistanceMM[E_AXIS] * inverseTimeS;
         if (isENegativeMove())
-            speedE = -speedE;
+            lookahead.speedE = -lookahead.speedE;
     } else
-        speedE = 0;
-    fullSpeed = distance * inverseTimeS;
+        lookahead.speedE = 0;
+    fullSpeed = lookahead.distance * inverseTimeS;
     // long interval = axis_interval[primary_axis]; // time for every step in ticks with full speed
     // If acceleration is enabled, do some Bresenham calculations depending on which axis will lead it.
 
@@ -348,34 +348,31 @@ void PrintLine::calculateMove(float axisDistanceMM[], fast8_t drivingAxis, float
     error[X_AXIS] = error[Y_AXIS] = error[Z_AXIS] = delta[primaryAxis] >> 1;
     error[E_AXIS] = 0;
 
-    invFullSpeed = 1.0 / fullSpeed;
-    accelerationPrim = slowestAxisPlateauTimeRepro / axisInterval[primaryAxis]; // a = v/t = F_CPU/(c*t): Steps/s^2
+    lookahead.invFullSpeed = 1.0 / fullSpeed;
+    lookahead.accelerationPrim = slowestAxisPlateauTimeRepro / axisInterval[primaryAxis]; // a = v/t = F_CPU/(c*t): Steps/s^2
 
     // Now we can calculate the new primary axis acceleration, so that the slowest axis max acceleration is not violated
     // Im Interrupt steht quasi die Formel v = a * t / 2^18, darum hier die 262144
-    fAcceleration = 262144.0 * (float)accelerationPrim / F_CPU;                                        // will overflow without float!
-    accelerationDistance2 = 2.0 * distance * slowestAxisPlateauTimeRepro * fullSpeed / ((float)F_CPU); // mm^2/s^2
-    startSpeed = endSpeed = minSpeed = safeSpeed(drivingAxis);
-    if (startSpeed > feedrate) {
-        startSpeed = endSpeed = minSpeed = feedrate;
+    stepProfile.fAcceleration = 262144.0 * (float)lookahead.accelerationPrim / F_CPU;                                        // will overflow without float!
+    lookahead.accelerationDistance2 = 2.0 * lookahead.distance * slowestAxisPlateauTimeRepro * fullSpeed / ((float)F_CPU); // mm^2/s^2
+    lookahead.startSpeed = lookahead.endSpeed = lookahead.minSpeed = safeSpeed(drivingAxis);
+    if (lookahead.startSpeed > feedrate) {
+        lookahead.startSpeed = lookahead.endSpeed = lookahead.minSpeed = feedrate;
     }
     // Can accelerate to full speed within the line
-    if (startSpeed * startSpeed + accelerationDistance2 >= fullSpeed * fullSpeed)
+    if (lookahead.startSpeed * lookahead.startSpeed + lookahead.accelerationDistance2 >= fullSpeed * fullSpeed)
         setNominalMove();
 
-    vMax = F_CPU / fullIntervalb; // maximum steps per second, we can reach
-    // if(p->vMax>46000)            // gets overflow in N computation
-    // p->vMax = 46000;
-    // p->plateauN = (p->vMax*p->vMax/p->accelerationPrim)>>1;
+    stepProfile.vMax = F_CPU / fullIntervalb; // maximum steps per second, we can reach
 
     if (!isXYZMove() || !isEPositiveMove()) { // No head move or E move only or sucking filament back
-        advanceL = 0;
+        stepProfile.advanceL = 0;
     } else {
-        float advlin = fabs(speedE) * Extruder::current->advanceL * 0.001 * Printer::axisStepsPerMM[E_AXIS];
-        advanceL = ((65536L * advlin) / vMax); //advanceLscaled = (65536*vE*k2)/vMax
+        float advlin = fabs(lookahead.speedE) * Extruder::current->advanceL * 0.001 * Printer::axisStepsPerMM[E_AXIS];
+        stepProfile.advanceL = ((65536L * advlin) / stepProfile.vMax);
         if (advlin > maxadv2) {
             maxadv2 = advlin;
-            maxadvspeed = fabs(speedE);
+            maxadvspeed = fabs(lookahead.speedE);
         }
     }
 
@@ -386,22 +383,22 @@ void PrintLine::prepareStepProfile() {
     if (isStepProfileReady() || isWarmUp())
         return;
 
-    float startFactor = startSpeed * invFullSpeed;
-    float endFactor = endSpeed * invFullSpeed;
-    vStart = vMax * startFactor; // starting speed
-    vEnd = vMax * endFactor;
+    float startFactor = lookahead.startSpeed * lookahead.invFullSpeed;
+    float endFactor = lookahead.endSpeed * lookahead.invFullSpeed;
+    stepProfile.vStart = stepProfile.vMax * startFactor; // starting speed
+    stepProfile.vEnd = stepProfile.vMax * endFactor;
 
-    uint32_t vmax2 = HAL::U16SquaredToU32(vMax);
+    uint32_t vmax2 = HAL::U16SquaredToU32(stepProfile.vMax);
 
-    if (vStart == vMax) {
-        accelSteps = 0;
+    if (stepProfile.vStart == stepProfile.vMax) {
+        stepProfile.accelSteps = 0;
     } else {
-        accelSteps = ((vmax2 - HAL::U16SquaredToU32(vStart)) / (accelerationPrim << 1)) + 1; // Always add 1 for missing precision
+        stepProfile.accelSteps = ((vmax2 - HAL::U16SquaredToU32(stepProfile.vStart)) / (lookahead.accelerationPrim << 1)) + 1; // Always add 1 for missing precision
     }
-    if (vEnd == vMax) {
-        decelSteps = 0;
+    if (stepProfile.vEnd == stepProfile.vMax) {
+        stepProfile.decelSteps = 0;
     } else {
-        decelSteps = ((vmax2 - HAL::U16SquaredToU32(vEnd)) / (accelerationPrim << 1)) + 1;
+        stepProfile.decelSteps = ((vmax2 - HAL::U16SquaredToU32(stepProfile.vEnd)) / (lookahead.accelerationPrim << 1)) + 1;
     }
 
     fitRampToRemainingSteps();
@@ -409,10 +406,10 @@ void PrintLine::prepareStepProfile() {
 }
 
 void PrintLine::fitRampToRemainingSteps() {
-    if (static_cast<int32_t>(accelSteps + decelSteps) > stepsRemaining) {
-        const uint32_t reduction = (accelSteps + decelSteps - stepsRemaining) >> 1;
-        accelSteps -= RMath::min(static_cast<int32_t>(accelSteps), static_cast<int32_t>(reduction));
-        decelSteps -= RMath::min(static_cast<int32_t>(decelSteps), static_cast<int32_t>(reduction));
+    if (static_cast<int32_t>(stepProfile.accelSteps + stepProfile.decelSteps) > stepsRemaining) {
+        const uint32_t reduction = (stepProfile.accelSteps + stepProfile.decelSteps - stepsRemaining) >> 1;
+        stepProfile.accelSteps -= RMath::min(static_cast<int32_t>(stepProfile.accelSteps), static_cast<int32_t>(reduction));
+        stepProfile.decelSteps -= RMath::min(static_cast<int32_t>(stepProfile.decelSteps), static_cast<int32_t>(reduction));
     }
 }
 
@@ -423,15 +420,15 @@ inline float PrintLine::safeSpeed(fast8_t drivingAxis) {
     if (isZMove()) {
         mz = Printer::maxZJerk * 0.5f;
         if (isXOrYMove()) {
-            if (fabs(speedZ) > mz)
-                safe = RMath::min(safe, mz * fullSpeed / fabs(speedZ));
+            if (fabs(lookahead.speedZ) > mz)
+                safe = RMath::min(safe, mz * fullSpeed / fabs(lookahead.speedZ));
         } else {
             safe = mz;
         }
     }
     if (isEMove()) {
         if (isXYZMove())
-            safe = RMath::min(safe, 0.5f * Extruder::current->maxEJerk * fullSpeed / fabs(speedE));
+            safe = RMath::min(safe, 0.5f * Extruder::current->maxEJerk * fullSpeed / fabs(lookahead.speedE));
         else
             safe = 0.5f * Extruder::current->maxEJerk; // This is a retraction move
     }
@@ -615,12 +612,12 @@ long PrintLine::performQueueMove() {
         move->fixStartAndEndSpeed();
 
         queueError = move->delta[move->primaryAxis];
-        stepClocks[FOR_QUEUE].start(move->vStart);
+        stepClocks[FOR_QUEUE].start(move->stepProfile.vStart);
         Printer::v = move->fullSpeed;
 
         HAL::forbidInterrupts();
 
-        move->updateAdvanceSteps(move->vStart); //startet advance extruder "etwas" vor der ersten bewegung: gut? ist stepIntervalTicks immer klein genug?
+        move->updateAdvanceSteps(move->stepProfile.vStart); //startet advance extruder "etwas" vor der ersten bewegung: gut? ist stepIntervalTicks immer klein genug?
 
         return (stepIntervalTicks >> 1); //wait 50% to next interrupt.
     }
@@ -687,10 +684,10 @@ long PrintLine::performDirectMove() {
         directionOwner = DirectionOwner::Direct;
 
         directError = direct.delta[direct.primaryAxis];
-        stepClocks[FOR_DIRECT].start(direct.vStart);
+        stepClocks[FOR_DIRECT].start(direct.stepProfile.vStart);
         Printer::v = direct.fullSpeed;
 
-        direct.updateAdvanceSteps(direct.vStart); //startet advance extruder "etwas" vor der ersten bewegung: gut? ist stepIntervalTicks immer klein genug?
+        direct.updateAdvanceSteps(direct.stepProfile.vStart); //startet advance extruder "etwas" vor der ersten bewegung: gut? ist stepIntervalTicks immer klein genug?
 
         return (stepIntervalTicks >> 1); //wait 50% to next interrupt.
     }
@@ -709,25 +706,25 @@ speed_t PrintLine::nextStepSpeed(StepClock& clock, uint8_t pulses, uint32_t inte
     clock.steps += pulses;
     clock.ticks += interval * pulses;
 
-    if (clock.steps <= accelSteps) {
-        const speed_t speed = vStart + HAL::ComputeV(clock.ticks, fAcceleration);
-        clock.peak = speed > vMax ? vMax : speed;
+    if (clock.steps <= stepProfile.accelSteps) {
+        const speed_t speed = stepProfile.vStart + HAL::ComputeV(clock.ticks, stepProfile.fAcceleration);
+        clock.peak = speed > stepProfile.vMax ? stepProfile.vMax : speed;
         return clock.peak;
     }
 
-    if (stepsRemaining > static_cast<int32_t>(decelSteps))
-        return accelSteps ? clock.peak : vMax;
+    if (stepsRemaining > static_cast<int32_t>(stepProfile.decelSteps))
+        return stepProfile.accelSteps ? clock.peak : stepProfile.vMax;
 
     if (!(flags & FLAG_DECELERATING)) {
         clock.ticks = 0;
         flags |= FLAG_DECELERATING;
     }
 
-    const speed_t slowdown = HAL::ComputeV(clock.ticks, fAcceleration);
+    const speed_t slowdown = HAL::ComputeV(clock.ticks, stepProfile.fAcceleration);
     if (slowdown > clock.peak)
-        return vEnd;
+        return stepProfile.vEnd;
     const speed_t speed = clock.peak - slowdown;
-    return speed < vEnd ? vEnd : speed;
+    return speed < stepProfile.vEnd ? stepProfile.vEnd : speed;
 }
 
 long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {

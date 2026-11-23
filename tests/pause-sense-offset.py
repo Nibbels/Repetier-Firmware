@@ -102,6 +102,9 @@ def main():
         (build / "step-clock-firmware.inc").write_text(
             section(motion, "    struct StepClock {", "    enum class DirectionOwner"), encoding="utf-8",
         )
+        (build / "step-profile-firmware.inc").write_text(
+            section(motion, "    struct LookaheadData {", "    LookaheadData lookahead;"), encoding="utf-8",
+        )
         (build / "lookahead-flags-firmware.inc").write_text(
             section(motion, "#define FLAG_WARMUP", "\nenum DirectMovePhase")
             + section(motion, "    inline bool isStepProfileReady()", "    void fitRampToRemainingSteps();")

@@ -19,15 +19,17 @@
 #include "LookaheadPlanner.h"
 
 inline void LookaheadPlanner::limitJunction(PrintLine& previous, const PrintLine& next) {
+    auto& from = previous.lookahead;
+    const auto& to = next.lookahead;
     // The XY limit weights the angle between the two moves by the previous move's length.
     float factor = 1.0;
     float lengthFactor = 1.0;
-    if (previous.distance < MAX_JERK_DISTANCE)
-        lengthFactor = static_cast<float>(MAX_JERK_DISTANCE * MAX_JERK_DISTANCE) / (previous.distance * previous.distance);
+    if (from.distance < MAX_JERK_DISTANCE)
+        lengthFactor = static_cast<float>(MAX_JERK_DISTANCE * MAX_JERK_DISTANCE) / (from.distance * from.distance);
     float maxJoinSpeed = RMath::min(next.fullSpeed, previous.fullSpeed);
 
     const float calculatedJerk = maxJoinSpeed * lengthFactor
-        * (1.0 - (next.speedX * previous.speedX + next.speedY * previous.speedY + next.speedZ * previous.speedZ)
+        * (1.0 - (to.speedX * from.speedX + to.speedY * from.speedY + to.speedZ * from.speedZ)
             / (next.fullSpeed * previous.fullSpeed));
 
     if (calculatedJerk > Printer::maxXYJerk) {
@@ -37,42 +39,44 @@ inline void LookaheadPlanner::limitJunction(PrintLine& previous, const PrintLine
     }
 
     if ((previous.dir | next.dir) & (16 << Z_AXIS)) {
-        const float zJerk = fabs(next.speedZ - previous.speedZ);
+        const float zJerk = fabs(to.speedZ - from.speedZ);
         if (zJerk > Printer::maxZJerk)
             factor = RMath::min(factor, Printer::maxZJerk / zJerk);
     }
 
-    const float eJerk = fabs(next.speedE - previous.speedE);
+    const float eJerk = fabs(to.speedE - from.speedE);
     if (eJerk > Extruder::current->maxEJerk) {
         factor = RMath::min(factor, Extruder::current->maxEJerk / eJerk);
     }
-    previous.maxJunctionSpeed = maxJoinSpeed * factor;
+    from.maxJunctionSpeed = maxJoinSpeed * factor;
 }
 
 inline void LookaheadPlanner::planDeceleration(MoveQueue& queue, uint8_t start, uint8_t first) {
     PrintLine* next = &queue.slot(start);
-    float lastJunctionSpeed = next->endSpeed;
+    float lastJunctionSpeed = next->lookahead.endSpeed;
 
     while (start != first) {
         MoveQueue::previousIndex(start);
         PrintLine& previous = queue.slot(start);
         previous.block();
+        auto& from = previous.lookahead;
+        auto& to = next->lookahead;
         lastJunctionSpeed = next->isNominalMove() ? next->fullSpeed
-            : sqrt(lastJunctionSpeed * lastJunctionSpeed + next->accelerationDistance2);
+            : sqrt(lastJunctionSpeed * lastJunctionSpeed + to.accelerationDistance2);
 
-        if (lastJunctionSpeed >= previous.maxJunctionSpeed) {
-            if (previous.endSpeed != previous.maxJunctionSpeed) {
+        if (lastJunctionSpeed >= from.maxJunctionSpeed) {
+            if (from.endSpeed != from.maxJunctionSpeed) {
                 previous.invalidateStepProfile();
-                previous.endSpeed = RMath::max(previous.minSpeed, previous.maxJunctionSpeed);
+                from.endSpeed = RMath::max(from.minSpeed, from.maxJunctionSpeed);
             }
-            if (next->startSpeed != previous.maxJunctionSpeed) {
-                next->startSpeed = RMath::max(next->minSpeed, previous.maxJunctionSpeed);
+            if (to.startSpeed != from.maxJunctionSpeed) {
+                to.startSpeed = RMath::max(to.minSpeed, from.maxJunctionSpeed);
                 next->invalidateStepProfile();
             }
-            lastJunctionSpeed = previous.endSpeed;
+            lastJunctionSpeed = from.endSpeed;
         } else {
-            next->startSpeed = RMath::max(next->minSpeed, lastJunctionSpeed);
-            lastJunctionSpeed = previous.endSpeed = RMath::max(lastJunctionSpeed, previous.minSpeed);
+            to.startSpeed = RMath::max(to.minSpeed, lastJunctionSpeed);
+            lastJunctionSpeed = from.endSpeed = RMath::max(lastJunctionSpeed, from.minSpeed);
             previous.invalidateStepProfile();
             next->invalidateStepProfile();
         }
@@ -82,21 +86,23 @@ inline void LookaheadPlanner::planDeceleration(MoveQueue& queue, uint8_t start, 
 
 inline void LookaheadPlanner::planAcceleration(MoveQueue& queue, uint8_t first, uint8_t end) {
     PrintLine* next = &queue.slot(first);
-    float entrySpeed = next->startSpeed;
+    float entrySpeed = next->lookahead.startSpeed;
     while (first != end) {
         PrintLine& move = *next;
         MoveQueue::nextIndex(first);
         next = &queue.slot(first);
+        auto& from = move.lookahead;
+        auto& to = next->lookahead;
         float reachableExit = move.isNominalMove() ? move.fullSpeed
-            : sqrt(entrySpeed * entrySpeed + move.accelerationDistance2);
-        if (reachableExit > move.endSpeed) {
-            if (entrySpeed < move.minSpeed) {
-                entrySpeed = move.minSpeed;
-                move.endSpeed = sqrt(entrySpeed * entrySpeed + move.accelerationDistance2);
+            : sqrt(entrySpeed * entrySpeed + from.accelerationDistance2);
+        if (reachableExit > from.endSpeed) {
+            if (entrySpeed < from.minSpeed) {
+                entrySpeed = from.minSpeed;
+                from.endSpeed = sqrt(entrySpeed * entrySpeed + from.accelerationDistance2);
             }
-            move.startSpeed = entrySpeed;
-            next->startSpeed = entrySpeed = RMath::max(RMath::min(move.endSpeed, move.maxJunctionSpeed), next->minSpeed);
-            if (move.endSpeed == move.maxJunctionSpeed) {
+            from.startSpeed = entrySpeed;
+            to.startSpeed = entrySpeed = RMath::max(RMath::min(from.endSpeed, from.maxJunctionSpeed), to.minSpeed);
+            if (from.endSpeed == from.maxJunctionSpeed) {
                 move.setEndSpeedFixed(true);
                 next->setStartSpeedFixed(true);
             }
@@ -104,17 +110,17 @@ inline void LookaheadPlanner::planAcceleration(MoveQueue& queue, uint8_t first, 
         } else {
             move.fixStartAndEndSpeed();
             move.invalidateStepProfile();
-            if (move.minSpeed > entrySpeed) {
-                entrySpeed = move.minSpeed;
-                reachableExit = sqrt(entrySpeed * entrySpeed + move.accelerationDistance2);
+            if (from.minSpeed > entrySpeed) {
+                entrySpeed = from.minSpeed;
+                reachableExit = sqrt(entrySpeed * entrySpeed + from.accelerationDistance2);
             }
-            move.startSpeed = entrySpeed;
-            move.endSpeed = RMath::max(move.minSpeed, reachableExit);
-            next->startSpeed = entrySpeed = RMath::max(RMath::min(move.endSpeed, move.maxJunctionSpeed), next->minSpeed);
+            from.startSpeed = entrySpeed;
+            from.endSpeed = RMath::max(from.minSpeed, reachableExit);
+            to.startSpeed = entrySpeed = RMath::max(RMath::min(from.endSpeed, from.maxJunctionSpeed), to.minSpeed);
             next->setStartSpeedFixed(true);
         }
     }
-    next->startSpeed = RMath::max(next->minSpeed, entrySpeed);
+    next->lookahead.startSpeed = RMath::max(next->lookahead.minSpeed, entrySpeed);
 }
 
 void LookaheadPlanner::update(MoveQueue& queue) {
