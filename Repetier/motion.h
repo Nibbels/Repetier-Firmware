@@ -140,7 +140,7 @@ public:
         joinFlags = (newState ? joinFlags | FLAG_JOIN_END_FIXED : joinFlags & ~FLAG_JOIN_END_FIXED);
     } // setEndSpeedFixed
 
-    inline bool isWarmUp() {
+    inline bool isWarmUp() const {
         return flags & FLAG_WARMUP;
     } // isWarmUp
 
@@ -288,7 +288,16 @@ public:
     static uint8_t queuedMoveCount();
     static INLINE bool hasLines() { return queuedMoveCount() != 0; }
     static bool hasActiveQueuedMove();
-    static bool hasActiveZMove();
+
+    struct ActiveMove {
+        enum class Source : uint8_t { None, Direct, Queued };
+        Source source;
+        uint8_t axes;
+
+        bool usesAxis(uint8_t axis) const { return axes & (1 << axis); }
+    };
+    static ActiveMove activeMove();
+
     static void discardQueuedMoves();
 
 

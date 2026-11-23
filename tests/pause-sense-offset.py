@@ -81,7 +81,7 @@ def main():
         section(move_planner, "void PrintLine::setAxisSteps(", "\n/** \\brief Put a move"),
         section(motion, "class MoveQueue {", "\ninline uint8_t PrintLine::queuedMoveCount"),
         "MoveQueue PrintLine::queue;",
-        section(move_planner, "bool PrintLine::hasActiveZMove()", "\nvoid PrintLine::setAxisSteps("),
+        section(move_planner, "PrintLine::ActiveMove PrintLine::activeMove()", "\nvoid PrintLine::setAxisSteps("),
         section(executor, "speed_t StepExecutor::nextStepSpeed(", "\n// Isolate completion"),
         move_planner[move_planner.index("void PrintLine::prepareDirectMove("):move_planner.index("/** \\brief Check if move is new.")]
         .replace("void PrintLine::stopDirectMove() {", "void PrintLine::applyDirectStop() {", 1),
@@ -139,6 +139,10 @@ def main():
             + section(motion, "    static void reserveDirectMove(", "    static void stopDirectMove()"),
             encoding="utf-8",
         )
+        (build / "active-move-firmware.inc").write_text(
+            section(motion, "    struct ActiveMove {", "    static void discardQueuedMoves();"),
+            encoding="utf-8",
+        )
         executable = build / "pause-replay"
         compile_replay = [
             os.environ.get("CXX", "c++"), "-std=c++11", "-O2", "-Wall", "-Wextra", "-Werror",
@@ -151,7 +155,7 @@ def main():
             "layer-scale", "compensation-bounds",
             "digit-flow", "prime-complete", "prime-skip", "prime-abort", "prime-parameters",
             "sense-window", "sense-settings", "sense-limit-interrupt",
-            "pressure-pause", "pressure-stop", "digit-zero",
+            "pressure-pause", "pressure-stop", "pressure-frozen-z", "digit-zero",
             "extrusion-planning",
             "gcode-target", "wobble-target", "cartesian-planning", "segment-geometry", "move-queue", "idle-status", "ecmp-stepping",
             "advance-timer", "advance-mode", "advance-cancel", "pressure-advance-pause", "advance-output", "advance-peak",
@@ -159,7 +163,8 @@ def main():
         ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
         subprocess.run([*compile_replay, "-DNUM_EXTRUDER=2", "-o", str(executable)], check=True)
-        subprocess.run([str(executable), "advance-tool"], check=True, timeout=10)
+        for scenario in ("advance-tool", "pressure-stop", "pressure-frozen-z"):
+            subprocess.run([str(executable), scenario], check=True, timeout=10)
 
 
 if __name__ == "__main__":

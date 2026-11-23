@@ -462,7 +462,7 @@ struct PrintLine {
     static int queuedTask, stopRequests;
     static bool hasLines() { return linesCount; }
     static bool directMoveActive() { return direct.task != TASK_NO_TASK; }
-    static bool hasActiveZMove();
+#include "active-move-firmware.inc"
     static int queuedMoveCount() { return linesCount; }
     static bool hasStoppableDirectMove();
     static unsigned plannedMoves;
@@ -674,8 +674,8 @@ void pressureStop() {
 
     PrintLine::direct.task = DIRECT_RUNNING;
     PrintLine::direct.stepsRemaining = 1;
-    PrintLine::direct.moveZ = true;
-    Extruder::current->stepperDirection = 1;
+    PrintLine::direct.setAxisSteps(Z_AXIS, 1);
+    PrintLine::direct.setAxisSteps(E_AXIS, 1);
     auto& output = Printer::extrusionOutput;
     output.setAdvanceEnabled(true);
     output.setLeadSteps(2);
@@ -716,7 +716,8 @@ void pressureStop() {
         output.nextTimerCompare(0);
     }
     assert(output.pendingSteps() == 0 && Extruder::stepPulses == 0);
-    Extruder::current->stepperDirection = 0;
+    PrintLine::direct.setMoveOfAxisFinished(E_AXIS);
+    Extruder::current->stepperDirection = 1; // A cached direction cannot hide a Z move.
     sample(-12001, EMERGENCY_STOP_CHECKS - 1);
     assert(!Printer::extrusionOutput.blocked());
     expectPressureStop = true;
@@ -738,6 +739,28 @@ void pressureStop() {
     // The temporary zero band still rejects any nonzero average.
     sample(1, EMERGENCY_STOP_CHECKS);
     assert(Printer::extrusionOutput.blocked());
+}
+
+void pressureWithFrozenZ() {
+    pollDuringMoves = false;
+    auto& queue = PrintLine::queue;
+    queue.writeSlot().setAxisSteps(Z_AXIS, 80);
+    queue.publish(true);
+    queue.activateFront()->stepsRemaining = 80;
+    assert(PrintLine::activeMove().source == PrintLine::ActiveMove::Source::Queued);
+    Printer::pause.request(PrintPause::Destination::InPlace);
+    Printer::pause.serviceMotion();
+    assert(Printer::pause.isSettled());
+    assert(PrintLine::activeMove().source == PrintLine::ActiveMove::Source::None);
+
+    PrintLine::direct.task = DIRECT_RUNNING;
+    PrintLine::direct.setAxisSteps(E_AXIS, 10);
+    PrintLine::direct.stepsRemaining = 10;
+    const auto move = PrintLine::activeMove();
+    assert(move.source == PrintLine::ActiveMove::Source::Direct);
+    assert(move.usesAxis(E_AXIS) && !move.usesAxis(Z_AXIS));
+    sample(EMERGENCY_STOP_DIGITS_MAX + 1, EMERGENCY_STOP_CHECKS);
+    assert(!pressureStops && Printer::extrusionOutput.blocked());
 }
 
 bool pauseDuringQueueWait = false;
@@ -2114,10 +2137,17 @@ void moveQueue() {
         assert(queue.count() == count && queue.active() == nullptr);
     }
     assert(Printer::idleStatus.poll(0, 500) == IdleStatus::Transition::Deferred);
-    queue.activateFront()->moveZ = true;
-    assert(PrintLine::hasActiveZMove() && interruptsEnabled);
+    auto* move = queue.activateFront();
+    assert(PrintLine::activeMove().source == PrintLine::ActiveMove::Source::None);
+    move->task = TASK_NO_TASK;
+    move->setAxisSteps(Z_AXIS, 1);
+    move->stepsRemaining = 1;
+    assert(PrintLine::activeMove().usesAxis(Z_AXIS) && interruptsEnabled);
+    PrintLine::reserveDirectMove(false);
+    assert(PrintLine::activeMove().source == PrintLine::ActiveMove::Source::None);
+    PrintLine::direct.task = DIRECT_IDLE;
     queue.clear();
-    assert(!PrintLine::hasActiveZMove() && interruptsEnabled);
+    assert(PrintLine::activeMove().source == PrintLine::ActiveMove::Source::None && interruptsEnabled);
     assert(queue.count() == 0 && queue.active() == nullptr);
     assert(queue.readIndex() == MOVE_CACHE_SIZE - 1 && queue.writeIndex() == queue.readIndex());
 
@@ -2434,6 +2464,8 @@ int main(int argc, char** argv) {
         pressurePause();
     else if (!std::strcmp(argv[1], "pressure-stop"))
         pressureStop();
+    else if (!std::strcmp(argv[1], "pressure-frozen-z"))
+        pressureWithFrozenZ();
     else if (!std::strcmp(argv[1], "digit-zero"))
         digitZero();
     else if (!std::strcmp(argv[1], "extrusion-planning"))

@@ -2992,17 +2992,20 @@ void handleStrainGaugeFeatures(millis_t uTime) {
         return;
 
     const bool blocked = decision == PressureProtection::StopDecision::LimitExceeded;
+    bool stopZ = false;
     {
         InterruptProtectedBlock lock;
         auto& output = Printer::extrusionOutput;
         if (blocked) {
             const int16_t discarded = output.inhibit(ExtrusionOutput::Inhibit::Pressure);
             Printer::pause.discardPendingExtrusion(discarded);
+            const auto move = PrintLine::activeMove();
+            stopZ = move.usesAxis(Z_AXIS) && !move.usesAxis(E_AXIS);
         } else {
             output.allow(ExtrusionOutput::Inhibit::Pressure);
         }
     }
-    if (blocked && PrintLine::hasActiveZMove() && !Extruder::current->stepperDirection)
+    if (stopZ)
         doEmergencyStop(STOP_BECAUSE_OF_Z_BLOCK);
 }
 

@@ -67,12 +67,20 @@ uint8_t fanSpeed = 0;
 MoveQueue PrintLine::queue;
 PrintLine PrintLine::direct;
 
-bool PrintLine::hasActiveZMove() {
+PrintLine::ActiveMove PrintLine::activeMove() {
     InterruptProtectedBlock lock;
-    if (direct.task >= DIRECT_PREPARED && direct.stepsRemaining && direct.isZMove())
-        return true;
-    PrintLine* active = queue.active();
-    return active && active->isZMove();
+    if (!Printer::blockAll) {
+        // Use Timer1's priority. Even a direct slot being prepared holds the queue.
+        if (directMoveActive()) {
+            if (direct.task >= DIRECT_PREPARED && direct.stepsRemaining > 0)
+                return {ActiveMove::Source::Direct, uint8_t(direct.dir >> 4)};
+        } else if (Printer::pause.allowsQueueAdvance()) {
+            const auto* move = queue.active();
+            if (move && move->task == TASK_NO_TASK && !move->isWarmUp() && move->stepsRemaining > 0)
+                return {ActiveMove::Source::Queued, uint8_t(move->dir >> 4)};
+        }
+    }
+    return {ActiveMove::Source::None, 0};
 }
 
 void PrintLine::setAxisSteps(uint8_t axis, int32_t steps) {
