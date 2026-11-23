@@ -112,7 +112,7 @@ The firmware restricted Play to a completed pause in 1.37t2. The 1.43.56 pause r
 ### Pressure protection
 
 - [x] **Give the DMS emergency windows one owner.** The replay exercises `M3075` and `M3076`, the saved limits, the exact-boundary samples, the homing gate, emergency park, the Z stop and the extrusion inhibit. The four AVR builds match the prior 36 step traces. [Pressure protection](../Repetier/PressureProtection.h) · [Host replay](../tests/pause-sense-offset.py)
-- [ ] **Clarify the `M3076 S0 P0` status message.** The command sets a temporary [0, 0] band and currently reports that the Z stop is disabled. The active rule inhibits extrusion for any nonzero average outside that band. The ordinary settings remain in EEPROM. [G-code handler](../Repetier/RF.cpp) · [Replay](../tests/pause-sense-offset.cpp)
+- [x] **Report the temporary stop band set by `M3076 S0 P0`.** The status now names the active [0, 0] band. The replay checks the message, the inhibit for a nonzero average, and retention of the saved EEPROM limits. [G-code handler](../Repetier/RF.cpp) · [Replay](../tests/pause-sense-offset.cpp)
 
 ## Calibration and persistence
 

@@ -129,9 +129,13 @@ const char ui_text_emergency_pause[] = "";
 
 struct Com {
     static constexpr const char* tSlash = "/";
+    static const char* lastLine;
+    static void printFLN(const char* line) { lastLine = line; }
     template<class... Args> static void printF(Args...) {}
     template<class... Args> static void printFLN(Args...) {}
 };
+
+const char* Com::lastLine = nullptr;
 
 template<class... Args> void showWarning(Args...) { ++incompleteReturns; }
 template<class... Args> void showError(Args...) { assert(false); }
@@ -219,7 +223,8 @@ int feedrateMultiply = 100, motorCurrent[4] = {};
 char moveMode[3] = { MOVE_MODE_SINGLE_STEPS, MOVE_MODE_SINGLE_STEPS, MOVE_MODE_SINGLE_STEPS };
 
 bool debugErrors() { return false; }
-bool debugInfo() { return false; }
+bool infoLogging = false;
+bool debugInfo() { return infoLogging; }
 bool isAdvanceActivated() { return advanceActive; }
 bool debugDryrun() { return false; }
 float convertToMM(float value) { return unitIsInches ? value * 25.4 : value; }
@@ -598,7 +603,10 @@ void pressureStop() {
     Printer::movingZ = false;
     command.explicitS = command.explicitP = true;
     command.S = command.P = 0;
+    Printer::infoLogging = true;
     configurePressure(3076, &command);
+    Printer::infoLogging = false;
+    assert(Com::lastLine && !std::strcmp(Com::lastLine, "M3076: temporary stop band [0, 0] digits"));
     assert(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN) == -12000);
     assert(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX) == 11500);
     sample(0, EMERGENCY_STOP_CHECKS);

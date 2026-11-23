@@ -3949,7 +3949,7 @@ void processSpecialGCode(GCode* pCommand) {
                 Printer::pressureProtection.setStopLimits({0, 0});
 
                 if (Printer::debugInfo()) {
-                    Com::printFLN(PSTR("M3076: emerg zstop temp. disabled"));
+                    Com::printFLN(PSTR("M3076: temporary stop band [0, 0] digits"));
                 }
             } else if (nMin < nMax && nMin >= -32768 && nMax <= 32767) {
                 Printer::pressureProtection.setStopLimits({int16_t(nMin), int16_t(nMax)});
