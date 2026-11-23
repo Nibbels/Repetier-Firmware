@@ -521,6 +521,7 @@ public:
     } // maxExtruderTimerFrequency
 
     static void analogStart();
+    static uint16_t temperatureAdcSample(uint8_t index);
 };
 
 #define EXTRUDER_TIMER_VECTOR TIMER0_COMPA_vect

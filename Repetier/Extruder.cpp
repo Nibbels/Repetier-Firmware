@@ -22,21 +22,6 @@
 
 uint8_t manageMonitor = 255; ///< Temp. we want to monitor with our host. 1+NUM_EXTRUDER is heated bed
 
-const uint8 osAnalogInputChannels[TemperatureAdcCount] PROGMEM = {
-    EXT0_TEMPSENSOR_PIN,
-#if NUM_EXTRUDER > 1
-    EXT1_TEMPSENSOR_PIN,
-#endif
-    HEATED_BED_SENSOR_PIN,
-#ifdef X35_ADC_CHANNEL
-    TEMP_3_PIN,
-#endif
-};
-volatile uint8 osAnalogInputCounter[TemperatureAdcCount] = { 0 };
-volatile uint osAnalogInputBuildup[TemperatureAdcCount] = { 0 };
-volatile uint8 osAnalogInputPos = 0; // Current sampling position
-volatile uint osAnalogInputValues[TemperatureAdcCount] = { 0 };
-
 // Preserve the heated bed's existing measured-temperature cutoff. Its setpoint has its own limit.
 constexpr uint16_t bedHeaterCutoffC = 275;
 
@@ -670,14 +655,14 @@ bool TemperatureController::updateCurrentTemperature() {
     case 13: // NTC 3950 100k thermistor - Conrad V3
     case 14: // Thermistor NTC 3950 100k Ohm
     {
-        currentTemperature = (1023 << (2 - ANALOG_REDUCE_BITS)) - (osAnalogInputValues[sensorPin] >> (ANALOG_REDUCE_BITS)); // Convert to 10 bit result
+        currentTemperature = (1023 << (2 - ANALOG_REDUCE_BITS)) - (HAL::temperatureAdcSample(sensorPin) >> (ANALOG_REDUCE_BITS)); // Convert to 10 bit result
         break;
     }
     case 53:  // E3D PT100 Board
     case 60:  // HEATER_USES_AD8495 (Delivers 5mV/degC)
     case 100: // AD595
     {
-        currentTemperature = (osAnalogInputValues[sensorPin] >> (ANALOG_REDUCE_BITS));
+        currentTemperature = (HAL::temperatureAdcSample(sensorPin) >> (ANALOG_REDUCE_BITS));
         break;
     }
 

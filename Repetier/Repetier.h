@@ -116,7 +116,7 @@ public:
     } // sqr
 };
 
-// Indices follow the order of osAnalogInputChannels.
+// Indices follow the temperature ADC channel order in HAL.cpp.
 enum TemperatureAdcIndex : uint8_t {
     Hotend0AdcIndex,
 #if NUM_EXTRUDER > 1
@@ -129,11 +129,6 @@ enum TemperatureAdcIndex : uint8_t {
     TemperatureAdcCount
 };
 
-extern const uint8 osAnalogInputChannels[TemperatureAdcCount] PROGMEM;
-extern volatile uint8 osAnalogInputCounter[TemperatureAdcCount];
-extern volatile uint osAnalogInputBuildup[TemperatureAdcCount];
-extern volatile uint8 osAnalogInputPos; // Current sampling position
-extern volatile uint osAnalogInputValues[TemperatureAdcCount];
 extern uint8_t pwm_pos[NUM_EXTRUDER + 3]; // 0-NUM_EXTRUDER = Heater 0-NUM_EXTRUDER of extruder, NUM_EXTRUDER = Heated bed, NUM_EXTRUDER+1 Board fan, NUM_EXTRUDER+2 = Fan
 extern uint8_t fanSpeed;                  //remember user input fan speed at a 0..255 scale.
 

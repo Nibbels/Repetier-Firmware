@@ -10,6 +10,8 @@
 
 **Move targets.** `Printer::moveTarget` owns the retained machine-space millimetres, their fractional carry and the work offset. The planner asks for these values before rounding to steps. [Coordinate targets](Repetier/MoveTarget.h)
 
+**Motion command settings.** `Printer::gcodeModes` owns units and relative coordinate modes. `Printer::manualMotion` owns the panel's jog modes, feedrate source and step increments. Keep the established EEPROM layout for panel settings. [G-code modes](Repetier/GCodeModes.h) · [Manual motion](Repetier/ManualMotion.h)
+
 **M3912 uses an isolated pressure-braked priming phase.** `Printer::startLine` owns the phase, generates its moves and restores the temporary state after draining the queue. High DMS force progressively constrains XY speed and reduces E flow, like the audible change when a chainsaw enters wood. Manual start code enables SenseOffset with `M3909` after priming. [State ledger and test plan](docs/first-layer-control/m3912-state-boundary.md)
 
 **Start with [docs/first-layer-control/README.md](docs/first-layer-control/README.md) before editing first-layer, Z compensation, DMS or priming behavior. For the full Z-offset sum, boot/print lifecycle, matrix EEPROM and thermal/scanning risks, read [docs/z-offset/README.md](docs/z-offset/README.md).** The linked documentation explains original intent, actual execution paths, risks and test scenarios.
@@ -20,7 +22,11 @@ This is shared AVR/ATmega2560 Repetier firmware for **RF1000, RF2000 and RF2000v
 
 **Heater safety and watchdog.** Scan and motion waits must keep periodic services running. Read the [heater safety and watchdog requirements](docs/heater-safety.md) before changing heater control, PWM, scheduler waits or scan state dispatch.
 
+**HAL events and ADC.** HAL owns pending periodic ticks, the watchdog heartbeat and the temperature ADC buffers. Foreground code consumes ticks through HAL and fetches a complete ADC sample through `temperatureAdcSample()`.
+
 **Calibration scans.** The bed mesh, hot-nozzle calibration and Z-offset scans use a shared point probe and a foreground pressure sampling service. `ScanSession` owns aborts and retries. `ScanProbe` owns the pressure bands and the preceding Z position. Keep contact, overload and hardware travel rules independent. Use the [scan handover](docs/z-offset/scans-and-persistence.md) for the guarded-motion design and the [mesh replay](tests/heat-bed-scan.py) and [Z-offset replay](tests/z-offset-scan.py) for motion, retry, cancel and sensor faults.
+
+**Scan parameters.** Calibration owns `ScanSettings` in `RF.cpp`. The panel reads the scan stride and changes the starting lift through the scan interface. [Scan settings](Repetier/ScanSettings.h)
 
 **Motion planning.** `MotionPlanner` prepares the step profile and owns the junction calculations. The planner updates queue slots in place and releases them with complete profiles. For a direct move, `Printer::offsetRelativeStepsCoordinates()` reserves the slot under interrupt protection, then the foreground plans and publishes the move. Replay early jog release and queue wrap with `python3 tests/pause-sense-offset.py`. [Planner and executor boundary](docs/motion-timing.md#planner-and-executor-boundary)
 

@@ -19,6 +19,21 @@
 #include "StepExecutor.h"
 
 namespace {
+const uint8 temperatureAdcChannels[TemperatureAdcCount] PROGMEM = {
+    EXT0_TEMPSENSOR_PIN,
+#if NUM_EXTRUDER > 1
+    EXT1_TEMPSENSOR_PIN,
+#endif
+    HEATED_BED_SENSOR_PIN,
+#ifdef X35_ADC_CHANNEL
+    TEMP_3_PIN,
+#endif
+};
+volatile uint8 temperatureAdcCount[TemperatureAdcCount] = { 0 };
+volatile uint temperatureAdcSum[TemperatureAdcCount] = { 0 };
+volatile uint8 temperatureAdcPosition = 0; // Current sampling position
+volatile uint temperatureAdcValues[TemperatureAdcCount] = { 0 };
+
 volatile unsigned long watchdogHeartbeat = 0;
 volatile bool watchdogActive = false;
 
@@ -316,12 +331,18 @@ void HAL::resetHardware() {
     resetFunc();
 } // resetHardware
 
+uint16_t HAL::temperatureAdcSample(uint8_t index) {
+    // The PWM interrupt can publish between the two byte loads on AVR.
+    InterruptProtectedBlock lock;
+    return temperatureAdcValues[index];
+}
+
 void HAL::analogStart() {
     ADMUX = _BV(REFS0); // Use AVCC as the temperature ADC reference.
     for (uint8_t i = 0; i < TemperatureAdcCount; i++) {
-        osAnalogInputCounter[i] = 0;
-        osAnalogInputBuildup[i] = 0;
-        osAnalogInputValues[i] = 0;
+        temperatureAdcCount[i] = 0;
+        temperatureAdcSum[i] = 0;
+        temperatureAdcValues[i] = 0;
     }
     ADCSRA = _BV(ADEN) | _BV(ADSC) | ANALOG_PRESCALER;
     //ADCSRA |= _BV(ADSC);                  // start ADC-conversion
@@ -331,7 +352,7 @@ void HAL::analogStart() {
     dummyADCResult = ADCW;
     (void)dummyADCResult;
     // Enable interrupt driven conversion loop
-    uint8_t channel = pgm_read_byte(&osAnalogInputChannels[osAnalogInputPos]);
+    uint8_t channel = pgm_read_byte(&temperatureAdcChannels[temperatureAdcPosition]);
 
 #if defined(ADCSRB) && defined(MUX5)
     if (channel & 8) // Reading channel 0-7 or 8-15?
@@ -696,21 +717,21 @@ ISR(PWM_TIMER_VECTOR) {
     // read analog values
     if ((ADCSRA & _BV(ADSC)) == 0) // Conversion finished?
     {
-        osAnalogInputBuildup[osAnalogInputPos] += ADCW;
-        if (++osAnalogInputCounter[osAnalogInputPos] >= 32) {
+        temperatureAdcSum[temperatureAdcPosition] += ADCW;
+        if (++temperatureAdcCount[temperatureAdcPosition] >= 32) {
 
             // Scale 32 ten-bit samples to the sensor tables' 12-bit range.
-            osAnalogInputValues[osAnalogInputPos] = osAnalogInputBuildup[osAnalogInputPos] >> 3;
+            temperatureAdcValues[temperatureAdcPosition] = temperatureAdcSum[temperatureAdcPosition] >> 3;
 
 
-            osAnalogInputBuildup[osAnalogInputPos] = 0;
-            osAnalogInputCounter[osAnalogInputPos] = 0;
+            temperatureAdcSum[temperatureAdcPosition] = 0;
+            temperatureAdcCount[temperatureAdcPosition] = 0;
             // Start next conversion
-            if (osAnalogInputPos < TemperatureAdcCount - 1)
-                osAnalogInputPos++;
+            if (temperatureAdcPosition < TemperatureAdcCount - 1)
+                temperatureAdcPosition++;
             else
-                osAnalogInputPos = 0;
-            uint8_t channel = pgm_read_byte(&osAnalogInputChannels[osAnalogInputPos]);
+                temperatureAdcPosition = 0;
+            uint8_t channel = pgm_read_byte(&temperatureAdcChannels[temperatureAdcPosition]);
 
 #if defined(ADCSRB) && defined(MUX5)
             if (channel & 8) // Reading channel 0-7 or 8-15?
