@@ -85,11 +85,6 @@ float extrusionBeforePublish = 0.0f;
 namespace HAL {
 void allowInterrupts() { interruptsEnabled = true; }
 void forbidInterrupts() { interruptsEnabled = false; }
-unsigned stepHighHolds = 0;
-void holdStepHigh() {
-    assert(!interruptsEnabled);
-    ++stepHighHolds;
-}
 }
 
 namespace Printer {
@@ -348,6 +343,11 @@ struct Extruder {
     static void setDirection(bool forward) { current->stepperDirection = forward ? 1 : -1; }
     static void step() { assert(!interruptsEnabled); ++stepPulses; }
     static void unstep() { assert(!interruptsEnabled); ++trailingEdges; }
+    static void timedStep(volatile int16_t& pending, int16_t remaining) {
+        step();
+        pending = remaining;
+        unstep();
+    }
     static void setTemperatureForExtruder(float temperature, int tool);
     static void setHeatedBedTemperature(float temperature) { bedTemperature = temperature; }
     static void setTemperatureForAllExtruders(float temperature) { setTemperatureForExtruder(temperature, 0); }
@@ -1597,11 +1597,12 @@ void ecmpStepping() {
 void advanceTimer() {
     PressureAdvance advance;
     const unsigned basePulses = Extruder::stepPulses;
+    const unsigned baseTrailingEdges = Extruder::trailingEdges;
     InterruptProtectedBlock lock;
     advance.setStepInterval(12);
     advance.addSteps(1);
     assert(advance.nextTimerCompare(0) == 12 && advance.pendingSteps() == 1);
-    assert(Extruder::stepPulses == basePulses && HAL::stepHighHolds == 0);
+    assert(Extruder::stepPulses == basePulses && Extruder::trailingEdges == baseTrailingEdges);
     advance.addSteps(1);
     assert(advance.nextTimerCompare(12) == 64 && Extruder::current->stepperDirection == 1);
     assert(advance.nextTimerCompare(64) == 76 && advance.pendingSteps() == 1);
@@ -1624,7 +1625,7 @@ void advanceTimer() {
     assert(advance.nextTimerCompare(240) == 36 && Extruder::current->stepperDirection == -1);
     assert(advance.nextTimerCompare(36) == 48 && advance.pendingSteps() == -1);
     assert(advance.nextTimerCompare(48) == 60 && advance.pendingSteps() == 0);
-    assert(Extruder::stepPulses == basePulses + 4 && HAL::stepHighHolds == 4);
+    assert(Extruder::stepPulses == basePulses + 4 && Extruder::trailingEdges == baseTrailingEdges + 4);
 }
 
 void stepClock() {

@@ -891,32 +891,24 @@ ISR(PWM_TIMER_VECTOR) {
 } // ISR(PWM_TIMER_VECTOR)
 
 uint8_t PressureAdvance::nextTimerCompare(uint8_t compare) {
-    constexpr uint8_t directionFilterSteps = 2;
-    if (pendingSteps() > 0 && direction_ != 1) {
-        if (pendingSteps() >= directionFilterSteps) {
-            Extruder::setDirection(true);
-            direction_ = 1;
+    const int16_t pending = pendingSteps();
+    if (pending) {
+        const int8_t direction = pending > 0 ? 1 : -1;
+        if (direction_ == direction) {
+            Extruder::timedStep(pendingSteps_, pending - direction);
+        } else if (pending >= 2 || pending <= -2) {
+            Extruder::setDirection(direction > 0);
+            direction_ = direction;
             compare += 40;
         }
-    } else if (pendingSteps() < 0 && direction_ != -1) {
-        if (-pendingSteps() >= directionFilterSteps) {
-            Extruder::setDirection(false);
-            direction_ = -1;
-            compare += 40;
-        }
-    } else if (pendingSteps()) {
-        Extruder::step();
-        pendingSteps_ -= direction_;
-        HAL::holdStepHigh();
-        Extruder::unstep();
     }
     return compare + stepInterval_;
 }
 
-ISR(EXTRUDER_TIMER_VECTOR) {
-    const uint8_t compare = EXTRUDER_OCR;
+// Inline the direction path so the interrupt only saves the registers it uses.
+ISR(EXTRUDER_TIMER_VECTOR, __attribute__((flatten))) {
     if (Printer::isAdvanceActivated())
-        EXTRUDER_OCR = Printer::pressureAdvance.nextTimerCompare(compare);
+        EXTRUDER_OCR = Printer::pressureAdvance.nextTimerCompare(EXTRUDER_OCR);
 }
 
 // Implement serial communication for one stream only!

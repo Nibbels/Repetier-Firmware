@@ -55,6 +55,10 @@ All known arduino boards use 64. This value is needed for the extruder timing. *
 #include "Arduino.h"
 #include "fastio.h"
 
+#define _STEP_WITH_COUNT(IO, pending, remaining) \
+    HAL::stepWithCount(_SFR_IO_ADDR(DIO ## IO ## _WPORT), DIO ## IO ## _PIN, pending, remaining)
+#define STEP_WITH_COUNT(IO, pending, remaining) _STEP_WITH_COUNT(IO, pending, remaining)
+
 extern unsigned char g_bPingWatchdog;
 extern unsigned long g_uLastCommandLoop;
 
@@ -419,9 +423,26 @@ public:
 
     static int32_t CPUDivU2(unsigned int divisor);
 
-    static inline void holdStepHigh() {
-        // The DRV8711 requires at least 1.9 microseconds high on STEP.
-        __builtin_avr_delay_cycles((2UL * F_CPU + 999999UL) / 1000000UL);
+    static INLINE void stepWithCount(uint8_t port, uint8_t bit, volatile int16_t& pending, int16_t remaining) {
+        // Book the step while STEP is high. The stores take four cycles and CBI takes two.
+        constexpr unsigned long highCycles = (2UL * F_CPU + 999999UL) / 1000000UL;
+        constexpr unsigned long waitCycles = highCycles - 6;
+        uint8_t counter;
+        asm volatile(
+            "sbi %[port], %[bit]\n\t"
+            "std %a[pending]+1, %B[remaining]\n\t"
+            "st %a[pending], %A[remaining]\n\t"
+            "ldi %[counter], %[loops]\n"
+            "1: dec %[counter]\n\t"
+            "brne 1b\n\t"
+            ".rept %[tail]\n\t"
+            "nop\n\t"
+            ".endr\n\t"
+            "cbi %[port], %[bit]"
+            : [counter] "=&d"(counter)
+            : [port] "I"(port), [bit] "I"(bit), [pending] "b"(&pending),
+              [remaining] "r"(remaining), [loops] "M"(waitCycles / 3), [tail] "n"(waitCycles % 3)
+            : "cc", "memory");
     }
 
     static inline void delayMicroseconds(unsigned int delayUs) //see https://www.arduino.cc/en/Reference/AttachInterrupt for interrupt-warning.

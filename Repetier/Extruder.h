@@ -224,6 +224,27 @@ public:
 
     } // unstep
 
+    // Select the tool before either edge of the timed Pressure Advance pulse.
+    static INLINE void timedStep(volatile int16_t& pending, int16_t remaining) {
+#if NUM_EXTRUDER == 1
+        STEP_WITH_COUNT(EXT0_STEP_PIN, pending, remaining);
+#else
+        switch (Extruder::current->id) {
+        case 0:
+            STEP_WITH_COUNT(EXT0_STEP_PIN, pending, remaining);
+            break;
+#ifdef EXT1_STEP_PIN
+        case 1:
+            STEP_WITH_COUNT(EXT1_STEP_PIN, pending, remaining);
+            break;
+#endif
+        default:
+            pending = remaining;
+            break;
+        }
+#endif
+    }
+
     /** \brief Activates the extruder stepper and sets the direction. */
     static inline void setDirection(uint8_t dir) {
 #if NUM_EXTRUDER == 1
