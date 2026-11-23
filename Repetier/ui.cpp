@@ -3189,7 +3189,7 @@ void UIDisplay::pressPlay() {
         return;
     }
 
-    if (!g_nHeatBedScanStatus && ++idlePlayCount >= 10) {
+    if (!heatBedScanRunning() && ++idlePlayCount >= 10) {
         idlePlayCount = 0;
         Com::printFLN(PSTR("LCD re-init"));
         showInformation(PSTR(UI_TEXT_MANUAL), PSTR(UI_TEXT_LCD_CIRCUIT), PSTR(UI_TEXT_RESET));

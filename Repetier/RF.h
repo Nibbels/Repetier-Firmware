@@ -415,7 +415,6 @@ constexpr int32_t maxManualZOffsetMicrometers = 10000;
 
 extern long g_offsetZCompensationSteps; // this is the minimal distance between the heat bed and the extruder at the moment when the z-min endstop is hit
 extern short g_ZCompensationMax;
-extern volatile unsigned char g_nHeatBedScanStatus;
 extern char g_nActiveHeatBed;
 //ZOS:
 extern unsigned char g_ZOSTestPoint[2];
@@ -478,6 +477,7 @@ extern void initRF(void);
 extern void showAbortScanReason(const void* scanName, char abortScanIdentifier);
 
 extern void startHeatBedScan(void);
+extern bool heatBedScanRunning();
 extern bool isAnyScanRunning();
 extern void discardScans();
 extern void startZOScan(bool automatrixleveling = false);

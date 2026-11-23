@@ -388,7 +388,7 @@ public:
             problematisch = true; //wenn matrix positiv, dann evtl. problem
         if (isAxisHomed(Y_AXIS) && Printer::xyMotion.motorSteps(Y_AXIS) <= 5 * YAXIS_STEPS_PER_MM)
             problematisch = false; //vorherige Probleme egal, wenn bett nach hinten gefahren
-        if (g_nHeatBedScanStatus)
+        if (heatBedScanRunning())
             problematisch = false; //das homing passiert in Z einzeln, liegt aber neben dem Bett.
         if (problematisch)
             return 0; //während Z-Scan gibts einen homeZ, der ist aber nicht relevant, den case gibts nicht!

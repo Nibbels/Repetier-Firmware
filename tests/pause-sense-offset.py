@@ -63,7 +63,8 @@ def main():
         section(printer, "void Printer::homeZAxis()", "\nvoid Printer::homeAxis("),
         section(printer, "void Printer::enableSenseOffsetnow(", "\nvoid Printer::enableCMPnow("),
         section(rf, "bool isAnyScanRunning()", "\nvoid moveXAction(")
-        .replace("zOffsetScan.active()", "zOffsetScanRunning()"),
+        .replace("zOffsetScan.active()", "zOffsetScanRunning()")
+        .replace("heatBedScan.active()", "heatBedScanRunning()"),
         section(rf, "void moveZAction(int8_t direction) {", "} // moveZAction") + "}",
         section(ui, "void UIDisplay::pressPlay()", "\nvoid UIDisplay::mainSwitchCase("),
         section(ui, "void UIDisplay::fastAction()", "} // fastAction") + "}",

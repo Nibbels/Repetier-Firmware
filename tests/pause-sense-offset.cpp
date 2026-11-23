@@ -170,6 +170,7 @@ void doEmergencyStop(int reason) {
     expectPressureStop = false;
 }
 bool isAnyScanRunning();
+bool heatBedScanRunning() { return g_nHeatBedScanStatus != 0; }
 bool zOffsetScanRunning() { return g_nZOSScanStatus != 0; }
 void discardScans() { g_nHeatBedScanStatus = g_nZOSScanStatus = 0; }
 void setExtruderCurrent(int, int) {}

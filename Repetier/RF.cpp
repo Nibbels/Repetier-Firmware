@@ -89,7 +89,6 @@ constexpr int zOffsetScanIdlePressureDelta = 0;
 
 long g_offsetZCompensationSteps = 0;
 short g_ZCompensationMax = 0;
-volatile unsigned char g_nHeatBedScanStatus = 0;
 char g_nActiveHeatBed = 1;
 
 //ZOS
@@ -102,11 +101,8 @@ float g_ZOSlearningGradient = 0.0f;
 
 float g_scanStartZLiftMM = defaultHeatBedScanLiftMm;
 
-unsigned long g_lastScanTime = 0;
-unsigned long g_scanStartTime = 0;
 char g_scanRetries = 0;
 char g_retryZScan = 0;
-unsigned char g_retryStatus = 0;
 
 char g_nHeatBedScanMode = 0;
 
@@ -216,825 +212,914 @@ void adjustPressureLimits(short IdlePressure) {
 
 static bool zOffsetScanRunning();
 
-void startHeatBedScan(void) {
-    //if( g_nHeatBedScanStatus ) return;
-    if (zOffsetScanRunning())
-        return;
-    if (g_nHeatBedScanStatus) {
-        // abort the heat bed scan
-        if (Printer::debugInfo()) {
-            Com::printFLN(PSTR("HBS: cancelled"));
-        }
-        g_abortZScan = SCAN_ABORT_REASON_CANCELED;
-    } else {
-        if (Printer::printJob.isBusy()) {
-            // there is some printing in progress at the moment - do not start the heat bed scan in this case
-            if (Printer::debugErrors()) {
-                Com::printFLN(Com::tPrintingIsInProcessError);
-            }
+namespace {
 
-            showError((void*)ui_text_heat_bed_scan, (void*)ui_text_operation_denied);
-        } else {
-            // start the heat bed scan
-            g_nHeatBedScanStatus = 1;
-            g_abortZScan = 0; //dont kill job on start
-            g_retryZScan = 0;
+class HeatBedScan {
+public:
+    bool active() const { return phase_ != Phase::Idle; }
+    void startOrCancel();
+    void tick();
+    void discard() { phase_ = Phase::Idle; }
+
+private:
+    enum class Phase : uint8_t {
+        Idle,
+        Initialize,
+        PrepareProbeTemperature,
+        WaitForBedTemperature,
+        WaitForProbeTemperature,
+        WarmupAndHome,
+        MoveToMeshStart,
+        MeasureInitialPressure,
+        InitializeGrid,
+        AdvanceColumn,
+        StartColumn,
+        RetryHomeY,
+        RetryHomeZ,
+        RetryReturnToPoint,
+        RetryMeasureBaseline,
+        ArmPointRetries,
+        CheckPointPressure,
+        ApproachMeshPoint,
+        BackOffMeshPoint,
+        ProbeMeshPoint,
+        RecordMeshPoint,
+        AdvanceRow,
+        HomeAfterMesh,
+        ReportRawMatrix,
+        YieldBeforeMatrixPreparation,
+        PrepareMatrix,
+        CheckFinalPressure,
+        MoveToThermalProbe,
+        LiftForThermalProbe,
+        ExtendThermalClearance,
+        HeatNozzleForCalibration,
+        WaitForCalibrationTemperature,
+        StabilizeCalibrationTemperature,
+        ThermalRetryHomeY,
+        ThermalRetryHomeZ,
+        ThermalRetryReturnToPoint,
+        ThermalRetryMeasureBaseline,
+        CheckThermalProbePressure,
+        ApproachThermalProbe,
+        BackOffThermalProbe,
+        MeasureThermalOffset,
+        ApplyThermalOffset,
+        HomeAfterThermalProbe,
+        SwitchOffAfterScan,
+        SaveMatrix,
+    };
+
+    void abort();
+    void showStatus();
+    void initialize();
+    void prepareProbeTemperature();
+    void waitForBedTemperature();
+    void waitForProbeTemperature();
+    void warmupAndHome();
+    void moveToMeshStart();
+    void measureInitialPressure();
+    void initializeGrid();
+    void advanceColumn();
+    void startColumn();
+    void retryHomeY();
+    void retryHomeZ();
+    void retryReturnToPoint();
+    void retryMeasureBaseline();
+    void armPointRetries();
+    void checkPointPressure();
+    void approachMeshPoint();
+    void backOffMeshPoint();
+    void probeMeshPoint();
+    void recordMeshPoint();
+    void advanceRow();
+    void homeAfterMesh();
+    void reportRawMatrix();
+    void prepareMatrix();
+    void checkFinalPressure();
+    void moveToThermalProbe();
+    void liftForThermalProbe();
+    void extendThermalClearance();
+    void heatNozzleForCalibration();
+    void waitForCalibrationTemperature();
+    void stabilizeCalibrationTemperature();
+    void thermalRetryHomeY();
+    void thermalRetryHomeZ();
+    void thermalRetryReturnToPoint();
+    void thermalRetryMeasureBaseline();
+    void checkThermalProbePressure();
+    void approachThermalProbe();
+    void backOffThermalProbe();
+    void measureThermalOffset();
+    void applyThermalOffset();
+    void homeAfterThermalProbe();
+    void switchOffAfterScan();
+    void saveMatrix();
+
+    volatile Phase phase_ = Phase::Idle;
+    Phase retryPhase_ = Phase::Idle;
+    millis_t lastCheckMs_ = 0;
+    millis_t startedAtMs_ = 0;
+    long xSteps_ = 0;
+    long ySteps_ = 0;
+    long yStrideSteps_ = 0;
+    uint8_t xIndex_ = 0;
+    uint8_t yIndex_ = 0;
+    int8_t yIndexDirection_ = 0;
+};
+
+HeatBedScan heatBedScan;
+
+void HeatBedScan::startOrCancel() {
+    if (active()) {
+        if (Printer::debugInfo())
+            Com::printFLN(PSTR("HBS: cancelled"));
+        g_abortZScan = SCAN_ABORT_REASON_CANCELED;
+        return;
+    }
+
+    if (Printer::printJob.isBusy()) {
+        if (Printer::debugErrors())
+            Com::printFLN(Com::tPrintingIsInProcessError);
+        showError((void*)ui_text_heat_bed_scan, (void*)ui_text_operation_denied);
+        return;
+    }
+
+    phase_ = Phase::Initialize;
+    g_abortZScan = 0;
+    g_retryZScan = 0;
+}
+
+void HeatBedScan::tick() {
+    if (!active())
+        return;
+    if (g_abortZScan) {
+        abort();
+        return;
+    }
+
+    Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
+    GCodeInput::keepAlive(Calibrating);
+    showStatus();
+    if (g_retryZScan) {
+        phase_ = retryPhase_;
+        g_retryZScan = 0;
+    }
+
+    // A single phase runs before the foreground services the firmware again.
+    switch (phase_) {
+    case Phase::Idle: break;
+    case Phase::Initialize: initialize(); break;
+    case Phase::PrepareProbeTemperature: prepareProbeTemperature(); break;
+    case Phase::WaitForBedTemperature: waitForBedTemperature(); break;
+    case Phase::WaitForProbeTemperature: waitForProbeTemperature(); break;
+    case Phase::WarmupAndHome: warmupAndHome(); break;
+    case Phase::MoveToMeshStart: moveToMeshStart(); break;
+    case Phase::MeasureInitialPressure: measureInitialPressure(); break;
+    case Phase::InitializeGrid: initializeGrid(); break;
+    case Phase::AdvanceColumn: advanceColumn(); break;
+    case Phase::StartColumn: startColumn(); break;
+    case Phase::RetryHomeY: retryHomeY(); break;
+    case Phase::RetryHomeZ: retryHomeZ(); break;
+    case Phase::RetryReturnToPoint: retryReturnToPoint(); break;
+    case Phase::RetryMeasureBaseline: retryMeasureBaseline(); break;
+    case Phase::ArmPointRetries: armPointRetries(); break;
+    case Phase::CheckPointPressure: checkPointPressure(); break;
+    case Phase::ApproachMeshPoint: approachMeshPoint(); break;
+    case Phase::BackOffMeshPoint: backOffMeshPoint(); break;
+    case Phase::ProbeMeshPoint: probeMeshPoint(); break;
+    case Phase::RecordMeshPoint: recordMeshPoint(); break;
+    case Phase::AdvanceRow: advanceRow(); break;
+    case Phase::HomeAfterMesh: homeAfterMesh(); break;
+    case Phase::ReportRawMatrix: reportRawMatrix(); break;
+    case Phase::YieldBeforeMatrixPreparation: phase_ = Phase::PrepareMatrix; break;
+    case Phase::PrepareMatrix: prepareMatrix(); break;
+    case Phase::CheckFinalPressure: checkFinalPressure(); break;
+    case Phase::MoveToThermalProbe: moveToThermalProbe(); break;
+    case Phase::LiftForThermalProbe: liftForThermalProbe(); break;
+    case Phase::ExtendThermalClearance: extendThermalClearance(); break;
+    case Phase::HeatNozzleForCalibration: heatNozzleForCalibration(); break;
+    case Phase::WaitForCalibrationTemperature: waitForCalibrationTemperature(); break;
+    case Phase::StabilizeCalibrationTemperature: stabilizeCalibrationTemperature(); break;
+    case Phase::ThermalRetryHomeY: thermalRetryHomeY(); break;
+    case Phase::ThermalRetryHomeZ: thermalRetryHomeZ(); break;
+    case Phase::ThermalRetryReturnToPoint: thermalRetryReturnToPoint(); break;
+    case Phase::ThermalRetryMeasureBaseline: thermalRetryMeasureBaseline(); break;
+    case Phase::CheckThermalProbePressure: checkThermalProbePressure(); break;
+    case Phase::ApproachThermalProbe: approachThermalProbe(); break;
+    case Phase::BackOffThermalProbe: backOffThermalProbe(); break;
+    case Phase::MeasureThermalOffset: measureThermalOffset(); break;
+    case Phase::ApplyThermalOffset: applyThermalOffset(); break;
+    case Phase::HomeAfterThermalProbe: homeAfterThermalProbe(); break;
+    case Phase::SwitchOffAfterScan: switchOffAfterScan(); break;
+    case Phase::SaveMatrix: saveMatrix(); break;
+    }
+}
+
+void HeatBedScan::showStatus() {
+    switch (phase_) {
+    case Phase::WaitForBedTemperature:
+    case Phase::WaitForProbeTemperature:
+    case Phase::WarmupAndHome:
+    case Phase::WaitForCalibrationTemperature:
+    case Phase::StabilizeCalibrationTemperature:
+        return; // Keep the heater or countdown message during these phases.
+    default:
+        UI_STATUS(UI_TEXT_HEAT_BED_SCAN);
+    }
+}
+
+void HeatBedScan::abort() {
+    showAbortScanReason((void*)ui_text_heat_bed_scan, g_abortZScan);
+    // the scan has been aborted
+    g_abortZScan = 0;
+
+    // avoid to crash the extruder against the heat bed during the following homing
+    moveZ(int(Printer::axisStepsPerMM[Z_AXIS] * 5));
+
+    // start at the home position
+    Printer::homeAxis(true, true, true);
+
+    // turn off the engines
+    Printer::disableAllSteppersNow();
+
+    // disable all heaters
+    Extruder::setHeatedBedTemperature(0);
+    Extruder::setTemperatureForAllExtruders(0);
+
+    if (Printer::debugInfo()) {
+        Com::printF(Com::tscanHeatBed);
+        Com::printFLN(PSTR("aborted"));
+    }
+
+    Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 30000);
+
+    // restore the compensation values from the EEPROM
+    if (loadCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed))) {
+        // there is no valid compensation matrix available
+        initCompensationMatrix();
+    }
+
+    phase_ = Phase::Idle;
+    g_nLastZScanZPosition = 0;
+    g_retryZScan = 0;
+    retryPhase_ = Phase::Idle;
+}
+
+void HeatBedScan::initialize() {
+    Printer::idleStatus.cancel();
+    startedAtMs_ = HAL::timeInMilliseconds();
+    g_abortZScan = 0;
+    retryPhase_ = Phase::Idle;
+    g_nLastZScanZPosition = 0; //sodass dass bei mehreren scans nicht die letzte position als abstands limit feststeht.
+
+    if (Printer::debugInfo()) {
+        Com::printF(Com::tscanHeatBed);
+        Com::printFLN(PSTR("scan started"));
+    }
+
+    // clear all fields of the heat bed compensation matrix
+    initCompensationMatrix();
+
+    g_uZMatrixMax[X_AXIS] = g_uZMatrixMax[Y_AXIS] = 0;
+
+    // output the currently used scan parameters
+    outputScanParameters();
+
+    phase_ = Phase::PrepareProbeTemperature;
+}
+
+void HeatBedScan::prepareProbeTemperature() {
+    // the scan is performed with the left extruder
+    if (!Extruder::selectExtruderById(0))
+        return;
+
+    if (g_nHeatBedScanMode == HEAT_BED_SCAN_MODE_PLA) {
+        Extruder::setHeatedBedTemperature(heatBedScanPlaBedC);
+        Extruder::setTemperatureForAllExtruders(heatBedScanProbeNozzleC);
+    } else if (g_nHeatBedScanMode == HEAT_BED_SCAN_MODE_ABS) {
+        Extruder::setHeatedBedTemperature(heatBedScanAbsBedC);
+        Extruder::setTemperatureForAllExtruders(heatBedScanProbeNozzleC);
+    }
+
+    phase_ = Phase::WaitForBedTemperature;
+    lastCheckMs_ = HAL::timeInMilliseconds();
+}
+
+void HeatBedScan::waitForBedTemperature() {
+    if ((HAL::timeInMilliseconds() - lastCheckMs_) < heatBedScanDelayMs) {
+        // do not check too often
+        return;
+    }
+
+    if (testHeatBedTemperature()) {
+        // we did not reach the proper temperature
+        lastCheckMs_ = HAL::timeInMilliseconds();
+        return;
+    }
+    phase_ = Phase::WaitForProbeTemperature;
+    lastCheckMs_ = HAL::timeInMilliseconds();
+}
+
+void HeatBedScan::waitForProbeTemperature() {
+    if ((HAL::timeInMilliseconds() - lastCheckMs_) < heatBedScanDelayMs) {
+        // do not check too often
+        return;
+    }
+
+    if (testExtruderTemperature()) {
+        // we did not reach the proper temperature
+        lastCheckMs_ = HAL::timeInMilliseconds();
+        return;
+    }
+    phase_ = Phase::WarmupAndHome;
+    lastCheckMs_ = HAL::timeInMilliseconds();
+
+    if (g_nHeatBedScanMode) {
+        if (Printer::debugInfo()) {
+            Com::printF(Com::tscanHeatBed);
+            Com::printFLN(PSTR("warmup delay [s] = "), preciseBedScanWarmupSeconds);
         }
     }
-    return;
-} // startHeatBedScan
+}
 
-void scanHeatBed(void) {
-    //if( g_nHeatBedScanStatus ) return;
-    if (zOffsetScanRunning())
+void HeatBedScan::warmupAndHome() {
+    if (g_nHeatBedScanMode) {
+        // wait some time so that the desired target temperature is reached in all parts of our components
+        unsigned long uRemainingSeconds;
+
+        uRemainingSeconds = (HAL::timeInMilliseconds() - lastCheckMs_) / 1000;
+        if (uRemainingSeconds < preciseBedScanWarmupSeconds) {
+            char szStatus[32];
+            strcpy(szStatus, UI_TEXT_HEATING);
+            addLong(szStatus, preciseBedScanWarmupSeconds - uRemainingSeconds, 3);
+            strcat(szStatus, "[s]");
+            UI_STATUS_UPD_RAM(szStatus);
+            return;
+        }
+    }
+
+    // start at the home position
+    Printer::homeAxis(true, true, true);
+    if (!Commands::waitForMotion(Commands::MotionWait::QueueAndZ, Commands::PauseWait::Resume))
         return;
 
-    static unsigned char nIndexX;
-    static unsigned char nIndexY;
-    static char nIndexYDirection;
-    static long nX;
-    static long nY;
-    static long nYDirection;
-    //unsigned char         nLastHeatBedScanStatus = g_nHeatBedScanStatus;
-    short nTempPressure;
-    long nTempPosition;
+    // move a bit away from the heat bed in order to achieve better measurements in case of hardware configurations where the extruder is very close to the heat bed after the z-homing
+    moveZ(long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM));
 
-    // directions:
-    // +x = to the right
-    // -x = to the left
-    // +y = heat bed moves to the front
-    // -y = heat bed moves to the back
-    // +z = heat bed moves down
-    // -z = heat bed moves up
+    phase_ = Phase::MoveToMeshStart;
+    lastCheckMs_ = HAL::timeInMilliseconds();
+}
 
-    if (g_abortZScan) {
-        showAbortScanReason((void*)ui_text_heat_bed_scan, g_abortZScan);
-        // the scan has been aborted
-        g_abortZScan = 0;
+void HeatBedScan::moveToMeshStart() {
+    // move to the first position
+    Printer::queueRelativeStepsCoordinates(g_nScanXStartSteps, 0, 0, 0, Printer::homingFeedrate[X_AXIS], false, true);
+    Printer::queueRelativeStepsCoordinates(0, g_nScanYStartSteps, 0, 0, Printer::homingFeedrate[Y_AXIS], true, true);
 
-        // avoid to crash the extruder against the heat bed during the following homing
-        moveZ(int(Printer::axisStepsPerMM[Z_AXIS] * 5));
+    phase_ = Phase::MeasureInitialPressure;
+    lastCheckMs_ = HAL::timeInMilliseconds();
+}
 
-        // start at the home position
-        Printer::homeAxis(true, true, true);
+void HeatBedScan::measureInitialPressure() {
+    if ((HAL::timeInMilliseconds() - lastCheckMs_) < heatBedScanDelayMs) {
+        // do not check too early
+        return;
+    }
 
-        // turn off the engines
-        Printer::disableAllSteppersNow();
+    if (readIdlePressure(&g_nFirstIdlePressure)) {
+        g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
+        // we were unable to determine the idle pressure
+        return;
+    }
 
+    phase_ = Phase::InitializeGrid;
+    lastCheckMs_ = HAL::timeInMilliseconds();
+}
+
+void HeatBedScan::initializeGrid() {
+    xSteps_ = g_nScanXStartSteps;
+    ySteps_ = g_nScanYStartSteps;
+    yStrideSteps_ = g_nScanYStepSizeSteps; // we start to move the heat bed from the back to the front
+    yIndexDirection_ = 1;
+    xIndex_ = 2;
+    yIndex_ = 2;
+
+    adjustPressureLimits(g_nFirstIdlePressure);
+
+    // store also the version of this heat bed compensation matrix
+    g_ZCompensationMatrix[0][0] = EEPROM_FORMAT;
+
+    phase_ = Phase::StartColumn;
+}
+
+void HeatBedScan::advanceColumn() {
+    const long nextPosition = xSteps_ + g_nScanXStepSizeSteps;
+    if (nextPosition > g_nScanXMaxPositionSteps) {
+        // we end up here when the scan is complete
+        phase_ = Phase::HomeAfterMesh;
+
+        return;
+    }
+
+    // move to the next x-position
+    Printer::queueRelativeStepsCoordinates(g_nScanXStepSizeSteps, 0, 0, 0, Printer::homingFeedrate[X_AXIS], true, true);
+    xSteps_ += g_nScanXStepSizeSteps;
+    xIndex_++;
+
+    if (xIndex_ > COMPENSATION_MATRIX_MAX_X) {
+        g_abortZScan = SCAN_ABORT_REASON_MATRIX_DIMENSION;
+        return;
+    }
+
+    if (yStrideSteps_ > 0) {
+        // we were moving from the front to the back during this column, so we have to move from the back to the front during the next column
+        yStrideSteps_ = -g_nScanYStepSizeSteps; // we start to move the heat bed from the back to the front
+        yIndexDirection_ = -1;
+    } else {
+        // we were moving from the back to the front during this column, so we have to move from the front to the back during the next column
+        yStrideSteps_ = g_nScanYStepSizeSteps; // we start to move the heat bed from the back to the front
+        yIndexDirection_ = 1;
+    }
+
+    phase_ = Phase::StartColumn;
+}
+
+void HeatBedScan::startColumn() {
+    // safety checks
+    if (xSteps_ <= g_nScanXMaxPositionSteps) {
+        // remember also the exact x-position of this row/column
+        g_ZCompensationMatrix[xIndex_][0] = (short)((float)xSteps_ / Printer::axisStepsPerMM[X_AXIS] + 0.5); // convert to mm
+
+        phase_ = Phase::ArmPointRetries;
+        lastCheckMs_ = HAL::timeInMilliseconds();
+
+        return;
+    }
+
+    // we end up here when the scan is complete
+    phase_ = Phase::HomeAfterMesh;
+}
+
+void HeatBedScan::retryHomeY() {
+    moveZ(long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM)); //spacing for bed
+    Printer::homeAxis(false, true, false);                             //Home Y
+
+    g_scanRetries--;
+    phase_ = Phase::RetryHomeZ;
+    lastCheckMs_ = HAL::timeInMilliseconds();
+}
+
+void HeatBedScan::retryHomeZ() {
+    // home the z-axis in order to find the starting point again
+    Printer::homeAxis(false, false, true);                             //Neben Bett: Home Z
+    moveZ(long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM)); //spacing for bed
+    g_nLastZScanZPosition = 0;                                         //Reset last scan position to avoid abort due to this limitter
+
+    phase_ = Phase::RetryReturnToPoint;
+    lastCheckMs_ = HAL::timeInMilliseconds();
+}
+
+void HeatBedScan::retryReturnToPoint() {
+    Printer::queueRelativeStepsCoordinates(0, ySteps_, 0, 0, Printer::homingFeedrate[Y_AXIS], true, true);
+
+    phase_ = Phase::RetryMeasureBaseline;
+    lastCheckMs_ = HAL::timeInMilliseconds();
+}
+
+void HeatBedScan::retryMeasureBaseline() {
+    if ((HAL::timeInMilliseconds() - lastCheckMs_) < heatBedScanDelayMs) {
+        // do not check too early
+        return;
+    }
+
+    if (readIdlePressure(&g_nFirstIdlePressure)) {
+        g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
+        // we were unable to determine the idle pressure
+        return;
+    } else {
+        adjustPressureLimits(g_nFirstIdlePressure);
+    }
+    phase_ = Phase::CheckPointPressure;
+    lastCheckMs_ = HAL::timeInMilliseconds();
+}
+
+void HeatBedScan::armPointRetries() {
+    g_scanRetries = heatBedScanRetries;
+    retryPhase_ = Phase::RetryHomeY;
+    phase_ = Phase::CheckPointPressure;
+}
+
+void HeatBedScan::checkPointPressure() {
+    if ((HAL::timeInMilliseconds() - lastCheckMs_) < g_nScanIdleDelay) {
+        // do not check too early
+        return;
+    }
+
+    // scan this point
+    if (testIdlePressure()) {
+        // the current idle pressure is not plausible
+        if (g_scanRetries) {
+            g_retryZScan = 1;
+        } else {
+            g_abortZScan = SCAN_ABORT_REASON_IDLE_PRESSURE;
+        }
+        return;
+    }
+
+    // we should consider that the idle presse can change slightly
+    adjustPressureLimits(g_nCurrentIdlePressure);
+
+    phase_ = Phase::ApproachMeshPoint;
+}
+
+void HeatBedScan::approachMeshPoint() {
+    // move fast to the surface
+    moveZMinusUpFast();
+    phase_ = Phase::BackOffMeshPoint;
+}
+
+void HeatBedScan::backOffMeshPoint() {
+    // move a little bit away from the surface
+    moveZPlusDownSlow();
+
+    phase_ = Phase::ProbeMeshPoint;
+}
+
+void HeatBedScan::probeMeshPoint() {
+    short pressure;
+    // move slowly to the surface
+    moveZMinusUpSlow(&pressure);
+    moveZPlusDownSlow(8); //and slowslowly back near idle pressure
+
+    phase_ = Phase::RecordMeshPoint;
+}
+
+void HeatBedScan::recordMeshPoint() {
+    // remember the z-position and the exact y-position of this row/column
+    g_ZCompensationMatrix[xIndex_][yIndex_] = (short)Printer::zMotion.scanSteps();
+    g_ZCompensationMatrix[0][yIndex_] = (short)((float)ySteps_ / Printer::axisStepsPerMM[Y_AXIS] + 0.5); // convert to mm
+
+    if (xIndex_ > g_uZMatrixMax[X_AXIS]) {
+        g_uZMatrixMax[X_AXIS] = xIndex_;
+    }
+
+    if (yIndex_ > g_uZMatrixMax[Y_AXIS]) {
+        g_uZMatrixMax[Y_AXIS] = yIndex_;
+    }
+
+    phase_ = Phase::AdvanceRow;
+}
+
+void HeatBedScan::advanceRow() {
+    // Move away from the surface before translating XY.
+    if (moveZPlusDownFast())
+        g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
+
+    const long nextPosition = ySteps_ + yStrideSteps_;
+    const bool columnComplete = yStrideSteps_ > 0 ? nextPosition > g_nScanYMaxPositionSteps
+                                                  : nextPosition < g_nScanYStartSteps;
+    if (columnComplete) {
+        phase_ = Phase::AdvanceColumn;
+        return;
+    }
+
+    // move to the next y-position
+    Printer::queueRelativeStepsCoordinates(0, yStrideSteps_, 0, 0, Printer::homingFeedrate[Y_AXIS], true, true);
+    ySteps_ += yStrideSteps_;
+    yIndex_ += yIndexDirection_;
+
+    if (yIndex_ > COMPENSATION_MATRIX_MAX_Y) {
+        g_abortZScan = SCAN_ABORT_REASON_MATRIX_DIMENSION;
+        return;
+    }
+
+    phase_ = Phase::ArmPointRetries;
+    lastCheckMs_ = HAL::timeInMilliseconds();
+}
+
+void HeatBedScan::homeAfterMesh() {
+    // avoid to crash the extruder against the heat bed during the following homing
+    moveZ(int(Printer::axisStepsPerMM[Z_AXIS] * 5));
+
+    // move back to the home position
+    Printer::homeAxis(true, true, true);
+
+    if (!g_nHeatBedScanMode) {
         // disable all heaters
         Extruder::setHeatedBedTemperature(0);
         Extruder::setTemperatureForAllExtruders(0);
+    }
 
-        if (Printer::debugInfo()) {
-            Com::printF(Com::tscanHeatBed);
-            Com::printFLN(PSTR("aborted"));
-        }
+    phase_ = Phase::ReportRawMatrix;
+}
 
-        Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 30000);
+void HeatBedScan::reportRawMatrix() {
+    if (Printer::debugInfo()) {
+        // output the determined compensation
+        Com::printF(Com::tscanHeatBed);
+        Com::printFLN(PSTR("raw heat bed z matrix: "));
+        determineCompensationOffsetZ();
+        outputCompensationMatrix();
+    }
 
-        // restore the compensation values from the EEPROM
-        if (loadCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed))) {
-            // there is no valid compensation matrix available
-            initCompensationMatrix();
-        }
+    phase_ = Phase::YieldBeforeMatrixPreparation;
+}
 
-        g_nHeatBedScanStatus = 0;
-        g_nLastZScanZPosition = 0;
-        g_retryZScan = 0;
-        g_retryStatus = 0;
+void HeatBedScan::prepareMatrix() {
+    if (Printer::debugInfo()) {
+        // output the pure scan time
+        Com::printF(Com::tscanHeatBed);
+        Com::printF(PSTR("total scan time: "), long((HAL::timeInMilliseconds() - startedAtMs_) / 1000));
+        Com::printFLN(PSTR(" [s]"));
+    }
 
+    if (Printer::debugInfo()) {
+        Com::printF(Com::tscanHeatBed);
+        Com::printFLN(PSTR("g_uZMatrixMax[Y_AXIS].1 = "), (int)g_uZMatrixMax[Y_AXIS]);
+    }
+
+    // prepare the heat bed compensation matrix for fast usage during the actual printing
+    prepareCompensationMatrix();
+
+    if (Printer::debugInfo()) {
+        Com::printF(Com::tscanHeatBed);
+        Com::printFLN(PSTR("g_uZMatrixMax[Y_AXIS].2 = "), (int)g_uZMatrixMax[Y_AXIS]);
+
+        // output the converted heat bed compensation matrix
+        Com::printF(Com::tscanHeatBed);
+        Com::printFLN(PSTR("converted heat bed z matrix: "));
+        outputCompensationMatrix();
+    }
+
+    phase_ = Phase::CheckFinalPressure;
+    lastCheckMs_ = HAL::timeInMilliseconds();
+}
+
+void HeatBedScan::checkFinalPressure() {
+    short pressure;
+    if ((HAL::timeInMilliseconds() - lastCheckMs_) < heatBedScanDelayMs) {
+        // do not check too early
         return;
     }
 
-    if (g_nHeatBedScanStatus) {
-        // show that we are active
-        Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
-        GCodeInput::keepAlive(Calibrating);
-
-        if (g_nHeatBedScanStatus != 15 && g_nHeatBedScanStatus != 20 && g_nHeatBedScanStatus != 22 && g_nHeatBedScanStatus != 136 && g_nHeatBedScanStatus != 137) {
-            // there are a few cases where we do not want to change the current status text
-            UI_STATUS(UI_TEXT_HEAT_BED_SCAN);
-        }
-
-        if (g_retryZScan) {
-            // we have to retry to scan the current position
-            g_nHeatBedScanStatus = g_retryStatus;
-            g_retryZScan = 0;
-
-        }
-
-        switch (g_nHeatBedScanStatus) {
-        case 1: {
-            Printer::idleStatus.cancel();
-            g_scanStartTime = HAL::timeInMilliseconds();
-            g_abortZScan = 0;
-            g_retryStatus = 0;
-            g_nLastZScanZPosition = 0; //sodass dass bei mehreren scans nicht die letzte position als abstands limit feststeht.
-
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("scan started"));
-            }
-
-            // clear all fields of the heat bed compensation matrix
-            initCompensationMatrix();
-
-            g_uZMatrixMax[X_AXIS] = g_uZMatrixMax[Y_AXIS] = 0;
-
-            // output the currently used scan parameters
-            outputScanParameters();
-
-            g_nHeatBedScanStatus = 10;
-
-            break;
-        }
-        case 10: {
-            // the scan is performed with the left extruder
-            if (!Extruder::selectExtruderById(0))
-                break;
-
-            if (g_nHeatBedScanMode == HEAT_BED_SCAN_MODE_PLA) {
-                Extruder::setHeatedBedTemperature(heatBedScanPlaBedC);
-                Extruder::setTemperatureForAllExtruders(heatBedScanProbeNozzleC);
-            } else if (g_nHeatBedScanMode == HEAT_BED_SCAN_MODE_ABS) {
-                Extruder::setHeatedBedTemperature(heatBedScanAbsBedC);
-                Extruder::setTemperatureForAllExtruders(heatBedScanProbeNozzleC);
-            }
-
-            g_nHeatBedScanStatus = 15;
-            g_lastScanTime = HAL::timeInMilliseconds();
-
-            break;
-        }
-        case 15: {
-            if ((HAL::timeInMilliseconds() - g_lastScanTime) < heatBedScanDelayMs) {
-                // do not check too often
-                break;
-            }
-
-            if (testHeatBedTemperature()) {
-                // we did not reach the proper temperature
-                g_lastScanTime = HAL::timeInMilliseconds();
-                break;
-            }
-            g_nHeatBedScanStatus = 20;
-            g_lastScanTime = HAL::timeInMilliseconds();
-
-            break;
-        }
-        case 20: {
-            if ((HAL::timeInMilliseconds() - g_lastScanTime) < heatBedScanDelayMs) {
-                // do not check too often
-                break;
-            }
-
-            if (testExtruderTemperature()) {
-                // we did not reach the proper temperature
-                g_lastScanTime = HAL::timeInMilliseconds();
-                break;
-            }
-            g_nHeatBedScanStatus = 22;
-            g_lastScanTime = HAL::timeInMilliseconds();
-
-            if (g_nHeatBedScanMode) {
-                if (Printer::debugInfo()) {
-                    Com::printF(Com::tscanHeatBed);
-                    Com::printFLN(PSTR("warmup delay [s] = "), preciseBedScanWarmupSeconds);
-                }
-            }
-
-            break;
-        }
-        case 22: {
-            if (g_nHeatBedScanMode) {
-                // wait some time so that the desired target temperature is reached in all parts of our components
-                unsigned long uRemainingSeconds;
-
-                uRemainingSeconds = (HAL::timeInMilliseconds() - g_lastScanTime) / 1000;
-                if (uRemainingSeconds < preciseBedScanWarmupSeconds) {
-                    char szStatus[32];
-                    strcpy(szStatus, UI_TEXT_HEATING);
-                    addLong(szStatus, preciseBedScanWarmupSeconds - uRemainingSeconds, 3);
-                    strcat(szStatus, "[s]");
-                    UI_STATUS_UPD_RAM(szStatus);
-                    break;
-                }
-            }
-
-            // start at the home position
-            Printer::homeAxis(true, true, true);
-            if (!Commands::waitForMotion(Commands::MotionWait::QueueAndZ, Commands::PauseWait::Resume))
-                break;
-
-            // move a bit away from the heat bed in order to achieve better measurements in case of hardware configurations where the extruder is very close to the heat bed after the z-homing
-            moveZ(long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM));
-
-            g_nHeatBedScanStatus = 25;
-            g_lastScanTime = HAL::timeInMilliseconds();
-
-            break;
-        }
-        case 25: {
-            // move to the first position
-            Printer::queueRelativeStepsCoordinates(g_nScanXStartSteps, 0, 0, 0, Printer::homingFeedrate[X_AXIS], false, true);
-            Printer::queueRelativeStepsCoordinates(0, g_nScanYStartSteps, 0, 0, Printer::homingFeedrate[Y_AXIS], true, true);
-
-            g_nHeatBedScanStatus = 30;
-            g_lastScanTime = HAL::timeInMilliseconds();
-
-            break;
-        }
-        case 30: {
-            if ((HAL::timeInMilliseconds() - g_lastScanTime) < heatBedScanDelayMs) {
-                // do not check too early
-                break;
-            }
-
-            if (readIdlePressure(&g_nFirstIdlePressure)) {
-                g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
-                // we were unable to determine the idle pressure
-                break;
-            }
-
-            g_nHeatBedScanStatus = 35;
-            g_lastScanTime = HAL::timeInMilliseconds();
-
-            break;
-        }
-        case 35: {
-            nX = g_nScanXStartSteps;
-            nY = g_nScanYStartSteps;
-            nYDirection = g_nScanYStepSizeSteps; // we start to move the heat bed from the back to the front
-            nIndexYDirection = 1;
-            nIndexX = 2;
-            nIndexY = 2;
-
-            adjustPressureLimits(g_nFirstIdlePressure);
-
-            // store also the version of this heat bed compensation matrix
-            g_ZCompensationMatrix[0][0] = EEPROM_FORMAT;
-
-            g_nHeatBedScanStatus = 40;
-
-            break;
-        }
-        case 39: {
-            nTempPosition = nX + g_nScanXStepSizeSteps;
-            if (nTempPosition > g_nScanXMaxPositionSteps) {
-                // we end up here when the scan is complete
-                g_nHeatBedScanStatus = 60;
-
-                break;
-            }
-
-            // move to the next x-position
-            Printer::queueRelativeStepsCoordinates(g_nScanXStepSizeSteps, 0, 0, 0, Printer::homingFeedrate[X_AXIS], true, true);
-            nX += g_nScanXStepSizeSteps;
-            nIndexX++;
-
-            if (nIndexX > COMPENSATION_MATRIX_MAX_X) {
-                g_abortZScan = SCAN_ABORT_REASON_MATRIX_DIMENSION;
-                break;
-            }
-
-            if (nYDirection > 0) {
-                // we were moving from the front to the back during this column, so we have to move from the back to the front during the next column
-                nYDirection = -g_nScanYStepSizeSteps; // we start to move the heat bed from the back to the front
-                nIndexYDirection = -1;
-            } else {
-                // we were moving from the back to the front during this column, so we have to move from the front to the back during the next column
-                nYDirection = g_nScanYStepSizeSteps; // we start to move the heat bed from the back to the front
-                nIndexYDirection = 1;
-            }
-
-            g_nHeatBedScanStatus = 40;
-
-            break;
-        }
-        case 40: {
-            // safety checks
-            if (nX <= g_nScanXMaxPositionSteps) {
-                // remember also the exact x-position of this row/column
-                g_ZCompensationMatrix[nIndexX][0] = (short)((float)nX / Printer::axisStepsPerMM[X_AXIS] + 0.5); // convert to mm
-
-                g_nHeatBedScanStatus = 49;
-                g_lastScanTime = HAL::timeInMilliseconds();
-
-                break;
-            }
-
-            // we end up here when the scan is complete
-            g_nHeatBedScanStatus = 60;
-
-            break;
-        }
-        //############################################################### Scan retry
-        case 45: {
-            moveZ(long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM)); //spacing for bed
-            Printer::homeAxis(false, true, false);                             //Home Y
-
-            g_scanRetries--;
-            g_nHeatBedScanStatus = 46;
-            g_lastScanTime = HAL::timeInMilliseconds();
-
-            break;
-        }
-        case 46: {
-            // home the z-axis in order to find the starting point again
-            Printer::homeAxis(false, false, true);                             //Neben Bett: Home Z
-            moveZ(long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM)); //spacing for bed
-            g_nLastZScanZPosition = 0;                                         //Reset last scan position to avoid abort due to this limitter
-
-            g_nHeatBedScanStatus = 47;
-            g_lastScanTime = HAL::timeInMilliseconds();
-
-            break;
-        }
-        case 47: {
-            Printer::queueRelativeStepsCoordinates(0, nY, 0, 0, Printer::homingFeedrate[Y_AXIS], true, true);
-
-            g_nHeatBedScanStatus = 48;
-            g_lastScanTime = HAL::timeInMilliseconds();
-
-            break;
-        }
-        case 48: // Remeasure inconsistent pressure values to have new clean fence levels
-        {
-            if ((HAL::timeInMilliseconds() - g_lastScanTime) < heatBedScanDelayMs) {
-                // do not check too early
-                break;
-            }
-
-            if (readIdlePressure(&g_nFirstIdlePressure)) {
-                g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
-                // we were unable to determine the idle pressure
-                break;
-            } else {
-                adjustPressureLimits(g_nFirstIdlePressure);
-            }
-            g_nHeatBedScanStatus = 50;
-            g_lastScanTime = HAL::timeInMilliseconds();
-
-            break;
-        }
-        //############################################################### /ERROR HANDLING
-        case 49: {
-            g_scanRetries = heatBedScanRetries;
-            g_retryStatus = 45;
-            g_nHeatBedScanStatus = 50;
-
-            break;
-        }
-        case 50: {
-            if ((HAL::timeInMilliseconds() - g_lastScanTime) < g_nScanIdleDelay) {
-                // do not check too early
-                break;
-            }
-
-            // scan this point
-            if (testIdlePressure()) {
-                // the current idle pressure is not plausible
-                if (g_scanRetries) {
-                    g_retryZScan = 1;
-                } else {
-                    g_abortZScan = SCAN_ABORT_REASON_IDLE_PRESSURE;
-                }
-                break;
-            }
-
-            // we should consider that the idle presse can change slightly
-            adjustPressureLimits(g_nCurrentIdlePressure);
-
-            g_nHeatBedScanStatus = 51;
-
-            break;
-        }
-        case 51: {
-            // move fast to the surface
-            moveZMinusUpFast();
-            g_nHeatBedScanStatus = 52;
-
-            break;
-        }
-        case 52: {
-            // move a little bit away from the surface
-            moveZPlusDownSlow();
-
-            g_nHeatBedScanStatus = 53;
-
-            break;
-        }
-        case 53: {
-            // move slowly to the surface
-            moveZMinusUpSlow(&nTempPressure);
-            moveZPlusDownSlow(8); //and slowslowly back near idle pressure
-
-            g_nHeatBedScanStatus = 54;
-
-            break;
-        }
-        case 54: {
-            // remember the z-position and the exact y-position of this row/column
-            g_ZCompensationMatrix[nIndexX][nIndexY] = (short)Printer::zMotion.scanSteps();
-            g_ZCompensationMatrix[0][nIndexY] = (short)((float)nY / Printer::axisStepsPerMM[Y_AXIS] + 0.5); // convert to mm
-
-            if (nIndexX > g_uZMatrixMax[X_AXIS]) {
-                g_uZMatrixMax[X_AXIS] = nIndexX;
-            }
-
-            if (nIndexY > g_uZMatrixMax[Y_AXIS]) {
-                g_uZMatrixMax[Y_AXIS] = nIndexY;
-            }
-
-            g_nHeatBedScanStatus = 55;
-
-            break;
-        }
-        case 55: {
-            // move away from the surface
-            if (moveZPlusDownFast())
+    // compare the idle pressure at the beginning and at the end
+    if (readAveragePressure(&pressure)) {
         g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
-
-            if (nYDirection > 0) {
-                nTempPosition = nY + nYDirection;
-
-                if (nTempPosition > g_nScanYMaxPositionSteps) {
-                    // we have reached the end of this column
-                    g_nHeatBedScanStatus = 39;
-
-                    break;
-                }
-            } else {
-                nTempPosition = nY + nYDirection;
-
-                if (nTempPosition < g_nScanYStartSteps) {
-                    // we have reached the end of this column
-                    g_nHeatBedScanStatus = 39;
-
-                    break;
-                }
-            }
-
-            // move to the next y-position
-            Printer::queueRelativeStepsCoordinates(0, nYDirection, 0, 0, Printer::homingFeedrate[Y_AXIS], true, true);
-            nY += nYDirection;
-            nIndexY += nIndexYDirection;
-
-            if (nIndexY > COMPENSATION_MATRIX_MAX_Y) {
-                g_abortZScan = SCAN_ABORT_REASON_MATRIX_DIMENSION;
-                break;
-            }
-
-            g_nHeatBedScanStatus = 49;
-            g_lastScanTime = HAL::timeInMilliseconds();
-
-            break;
-        }
-        case 60: {
-            // avoid to crash the extruder against the heat bed during the following homing
-            moveZ(int(Printer::axisStepsPerMM[Z_AXIS] * 5));
-
-            // move back to the home position
-            Printer::homeAxis(true, true, true);
-
-            if (!g_nHeatBedScanMode) {
-                // disable all heaters
-                Extruder::setHeatedBedTemperature(0);
-                Extruder::setTemperatureForAllExtruders(0);
-            }
-
-            g_nHeatBedScanStatus = 65;
-
-            break;
-        }
-        case 65: {
-            if (Printer::debugInfo()) {
-                // output the determined compensation
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("raw heat bed z matrix: "));
-                determineCompensationOffsetZ();
-                outputCompensationMatrix();
-            }
-
-            g_nHeatBedScanStatus = 70;
-
-            break;
-        }
-        case 70: {
-            g_nHeatBedScanStatus = 75;
-
-            break;
-        }
-        case 75: {
-            if (Printer::debugInfo()) {
-                // output the pure scan time
-                Com::printF(Com::tscanHeatBed);
-                Com::printF(PSTR("total scan time: "), long((HAL::timeInMilliseconds() - g_scanStartTime) / 1000));
-                Com::printFLN(PSTR(" [s]"));
-            }
-
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("g_uZMatrixMax[Y_AXIS].1 = "), (int)g_uZMatrixMax[Y_AXIS]);
-            }
-
-            // prepare the heat bed compensation matrix for fast usage during the actual printing
-            prepareCompensationMatrix();
-
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("g_uZMatrixMax[Y_AXIS].2 = "), (int)g_uZMatrixMax[Y_AXIS]);
-
-                // output the converted heat bed compensation matrix
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("converted heat bed z matrix: "));
-                outputCompensationMatrix();
-            }
-
-            g_nHeatBedScanStatus = 80;
-            g_lastScanTime = HAL::timeInMilliseconds();
-
-            break;
-        }
-        case 80: {
-            if ((HAL::timeInMilliseconds() - g_lastScanTime) < heatBedScanDelayMs) {
-                // do not check too early
-                break;
-            }
-
-            // compare the idle pressure at the beginning and at the end
-            if (readAveragePressure(&nTempPressure)) {
-                g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
-            }
-
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("idle pressure at start: "), g_nFirstIdlePressure);
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("idle pressure at stop: "), nTempPressure);
-            }
-
-            if (g_nHeatBedScanMode) {
-                // we have to determine the z-offset which is caused by different extruder temperatures
-                g_nHeatBedScanStatus = 130;
-
-            } else {
-                // we are done
-                g_nHeatBedScanStatus = 150;
-
-            }
-            break;
-        }
-        case 130: {
-            // we are homed at the moment - move to the position where we shall determine the length offset which is caused by the heated up extruder
-            Printer::queueRelativeMMCoordinates(heatBedScanCalibrationPointMm, heatBedScanCalibrationPointMm, 0, 0, RMath::min(Printer::homingFeedrate[X_AXIS], Printer::homingFeedrate[Y_AXIS]), true, true);
-
-            g_lastScanTime = HAL::timeInMilliseconds();
-            g_nHeatBedScanStatus = 133;
-
-            break;
-        }
-        case 133: {
-            // move the heat bed 5mm down
-            moveZ(int(Printer::axisStepsPerMM[Z_AXIS] * 5));
-            g_lastScanTime = HAL::timeInMilliseconds();
-            g_nHeatBedScanStatus = 134;
-
-            break;
-        }
-        case 134: {
-            // move the heat bed 5mm down
-            moveZ(int(Printer::axisStepsPerMM[Z_AXIS] * 5));
-            g_lastScanTime = HAL::timeInMilliseconds();
-            g_nHeatBedScanStatus = 135;
-
-            break;
-        }
-        case 135: {
-            g_lastScanTime = HAL::timeInMilliseconds();
-            // at this point we are homed and we are above the x/y position at which we shall perform the measurement of the z-offset with the hot extruder(s)
-            if (g_nHeatBedScanMode == HEAT_BED_SCAN_MODE_PLA) {
-                Extruder::setTemperatureForAllExtruders(heatBedScanPlaNozzleC);
-            } else if (g_nHeatBedScanMode == HEAT_BED_SCAN_MODE_ABS) {
-                Extruder::setTemperatureForAllExtruders(heatBedScanAbsNozzleC);
-            }
-
-            g_nHeatBedScanStatus = 136;
-
-            break;
-        }
-        case 136: {
-            if ((HAL::timeInMilliseconds() - g_lastScanTime) < heatBedScanDelayMs) {
-                // do not check too often
-                break;
-            }
-
-            if (testExtruderTemperature()) {
-                // we did not reach the proper temperature
-                g_lastScanTime = HAL::timeInMilliseconds();
-                break;
-            }
-
-            g_nHeatBedScanStatus = 137;
-            g_lastScanTime = HAL::timeInMilliseconds();
-
-
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("calibration delay [s] =  "), (uint32_t)preciseBedScanCalibrationSeconds);
-            }
-            break;
-        }
-        case 137: {
-            if (g_nHeatBedScanMode) {
-                // wait some time so that the desired target temperature is reached in all parts of our components
-                unsigned long uRemainingSeconds;
-
-                uRemainingSeconds = (HAL::timeInMilliseconds() - g_lastScanTime) / 1000;
-                if (uRemainingSeconds < preciseBedScanCalibrationSeconds) {
-                    char szStatus[32];
-                    strcpy(szStatus, UI_TEXT_HEATING);
-                    addLong(szStatus, preciseBedScanCalibrationSeconds - uRemainingSeconds, 3);
-                    strcat(szStatus, "[s]");
-                    UI_STATUS_UPD_RAM(szStatus);
-                    break;
-                }
-            }
-
-            g_scanRetries = heatBedScanRetries;
-            g_retryStatus = 139;
-            g_nHeatBedScanStatus = 144;
-            g_lastScanTime = HAL::timeInMilliseconds();
-
-            break;
-        }
-        //############################################################### Scan retry
-        case 139: {
-            moveZ(long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM)); //spacing for bed
-            Printer::homeAxis(false, true, false);                             //Home Y
-
-            g_scanRetries--;
-            g_nHeatBedScanStatus = 140;
-            g_lastScanTime = HAL::timeInMilliseconds();
-
-            break;
-        }
-
-        case 140: {
-            // home the z-axis in order to find the starting point again
-            Printer::homeAxis(false, false, true);                             //Neben Bett: Home Z
-            moveZ(long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM)); //spacing for bed
-            g_nLastZScanZPosition = 0;                                         //Reset last scan position to avoid abort due to this limitter
-
-            g_nHeatBedScanStatus = 141;
-            g_lastScanTime = HAL::timeInMilliseconds();
-
-            break;
-        }
-        case 141: {
-            Printer::queueRelativeMMCoordinates(0, heatBedScanCalibrationPointMm, 0, 0, Printer::homingFeedrate[Y_AXIS], true, true);
-
-            g_nHeatBedScanStatus = 142;
-            g_lastScanTime = HAL::timeInMilliseconds();
-
-            break;
-        }
-        case 142: // Remeasure inconsistent pressure values to have new clean fence levels
-        {
-            if ((HAL::timeInMilliseconds() - g_lastScanTime) < heatBedScanDelayMs) {
-                // do not check too early
-                break;
-            }
-
-            if (readIdlePressure(&g_nFirstIdlePressure)) {
-                g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
-                // we were unable to determine the idle pressure
-                break;
-            } else {
-                adjustPressureLimits(g_nFirstIdlePressure);
-            }
-            g_nHeatBedScanStatus = 144;
-            g_lastScanTime = HAL::timeInMilliseconds();
-
-            break;
-        }
-
-        //############################################################### /ERROR HANDLING
-        case 144: {
-            if ((HAL::timeInMilliseconds() - g_lastScanTime) < g_nScanIdleDelay) {
-                // do not check too early
-                break;
-            }
-
-            // scan this point
-            if (testIdlePressure()) {
-                // the current idle pressure is not plausible
-                if (g_scanRetries) {
-                    g_retryZScan = 1;
-                } else {
-                    g_abortZScan = SCAN_ABORT_REASON_IDLE_PRESSURE;
-                }
-                break;
-            }
-
-            // we should consider that the idle presse can change slightly
-            adjustPressureLimits(g_nCurrentIdlePressure);
-
-            g_nHeatBedScanStatus = 145;
-
-            break;
-        }
-        case 145: {
-            // move to the surface
-            moveZMinusUpFast();
-
-            g_nHeatBedScanStatus = 146;
-
-            break;
-        }
-        case 146: {
-            // ensure that we do not remember any previous z-position at this moment
-            g_nLastZScanZPosition = 0;
-
-            // move a little bit away from the surface
-            moveZPlusDownSlow();
-
-            g_nHeatBedScanStatus = 147;
-
-            break;
-        }
-        case 147: {
-            // move slowly to the surface
-            moveZMinusUpSlow(&nTempPressure);
-            moveZPlusDownSlow(8); //and slowslowly back near idle pressure
-
-            g_nHeatBedScanStatus = 148;
-
-            break;
-        }
-        case 148: {
-            // adjust the current z-position to the compensation matrix in order to consider the different length of the extruder at higher temperatures
-            adjustCompensationMatrix((short)Printer::zMotion.scanSteps());
-
-            if (Printer::debugInfo()) {
-                // output the converted heat bed compensation matrix
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("adjusted heat bed z matrix: "));
-                outputCompensationMatrix();
-            }
-
-            g_nHeatBedScanStatus = 149;
-
-            break;
-        }
-        case 149: {
-            // avoid to crash the extruder against the heat bed during the following homing
-            moveZ(int(Printer::axisStepsPerMM[Z_AXIS] * 5));
-
-            // move back to the home position
-            Printer::homeAxis(true, true, true);
-            g_nHeatBedScanStatus = 150;
-
-            break;
-        }
-        case 150: {
-            // turn off the engines
-            Printer::disableAllSteppersNow();
-
-            // disable all heaters
-            Extruder::setHeatedBedTemperature(0);
-            Extruder::setTemperatureForAllExtruders(0);
-
-            g_nHeatBedScanStatus = 160;
-
-            break;
-        }
-        case 160: {
-            // save the determined values to the EEPROM
-            saveCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed));
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("the heat bed z matrix has been saved"));
-            }
-
-            if (Printer::debugInfo()) {
-                Com::printF(Com::tscanHeatBed);
-                Com::printFLN(PSTR("the scan has been completed"));
-            }
-            //UI_STATUS_UPD( UI_TEXT_HEAT_BED_SCAN_DONE );
-            Printer::idleStatus.schedule(HAL::timeInMilliseconds());
-
-            showInformation(PSTR(UI_TEXT_HEAT_BED_SCAN_DONE), (void*)ui_text_saving_success, PSTR(UI_TEXT_OK)); //tell user the scan was a success
-
-            g_nHeatBedScanStatus = 0;
-
-            break;
-        }
+    }
+
+    if (Printer::debugInfo()) {
+        Com::printF(Com::tscanHeatBed);
+        Com::printFLN(PSTR("idle pressure at start: "), g_nFirstIdlePressure);
+        Com::printF(Com::tscanHeatBed);
+        Com::printFLN(PSTR("idle pressure at stop: "), pressure);
+    }
+
+    if (g_nHeatBedScanMode) {
+        // we have to determine the z-offset which is caused by different extruder temperatures
+        phase_ = Phase::MoveToThermalProbe;
+
+    } else {
+        // we are done
+        phase_ = Phase::SwitchOffAfterScan;
+
+    }
+}
+
+void HeatBedScan::moveToThermalProbe() {
+    // we are homed at the moment - move to the position where we shall determine the length offset which is caused by the heated up extruder
+    Printer::queueRelativeMMCoordinates(heatBedScanCalibrationPointMm, heatBedScanCalibrationPointMm, 0, 0, RMath::min(Printer::homingFeedrate[X_AXIS], Printer::homingFeedrate[Y_AXIS]), true, true);
+
+    lastCheckMs_ = HAL::timeInMilliseconds();
+    phase_ = Phase::LiftForThermalProbe;
+}
+
+void HeatBedScan::liftForThermalProbe() {
+    // move the heat bed 5mm down
+    moveZ(int(Printer::axisStepsPerMM[Z_AXIS] * 5));
+    lastCheckMs_ = HAL::timeInMilliseconds();
+    phase_ = Phase::ExtendThermalClearance;
+}
+
+void HeatBedScan::extendThermalClearance() {
+    // move the heat bed 5mm down
+    moveZ(int(Printer::axisStepsPerMM[Z_AXIS] * 5));
+    lastCheckMs_ = HAL::timeInMilliseconds();
+    phase_ = Phase::HeatNozzleForCalibration;
+}
+
+void HeatBedScan::heatNozzleForCalibration() {
+    lastCheckMs_ = HAL::timeInMilliseconds();
+    // at this point we are homed and we are above the x/y position at which we shall perform the measurement of the z-offset with the hot extruder(s)
+    if (g_nHeatBedScanMode == HEAT_BED_SCAN_MODE_PLA) {
+        Extruder::setTemperatureForAllExtruders(heatBedScanPlaNozzleC);
+    } else if (g_nHeatBedScanMode == HEAT_BED_SCAN_MODE_ABS) {
+        Extruder::setTemperatureForAllExtruders(heatBedScanAbsNozzleC);
+    }
+
+    phase_ = Phase::WaitForCalibrationTemperature;
+}
+
+void HeatBedScan::waitForCalibrationTemperature() {
+    if ((HAL::timeInMilliseconds() - lastCheckMs_) < heatBedScanDelayMs) {
+        // do not check too often
+        return;
+    }
+
+    if (testExtruderTemperature()) {
+        // we did not reach the proper temperature
+        lastCheckMs_ = HAL::timeInMilliseconds();
+        return;
+    }
+
+    phase_ = Phase::StabilizeCalibrationTemperature;
+    lastCheckMs_ = HAL::timeInMilliseconds();
+
+
+    if (Printer::debugInfo()) {
+        Com::printF(Com::tscanHeatBed);
+        Com::printFLN(PSTR("calibration delay [s] =  "), (uint32_t)preciseBedScanCalibrationSeconds);
+    }
+}
+
+void HeatBedScan::stabilizeCalibrationTemperature() {
+    if (g_nHeatBedScanMode) {
+        // wait some time so that the desired target temperature is reached in all parts of our components
+        unsigned long uRemainingSeconds;
+
+        uRemainingSeconds = (HAL::timeInMilliseconds() - lastCheckMs_) / 1000;
+        if (uRemainingSeconds < preciseBedScanCalibrationSeconds) {
+            char szStatus[32];
+            strcpy(szStatus, UI_TEXT_HEATING);
+            addLong(szStatus, preciseBedScanCalibrationSeconds - uRemainingSeconds, 3);
+            strcat(szStatus, "[s]");
+            UI_STATUS_UPD_RAM(szStatus);
+            return;
         }
     }
-} // scanHeatBed
 
-/**************************************************************************************************************************************/
+    g_scanRetries = heatBedScanRetries;
+    retryPhase_ = Phase::ThermalRetryHomeY;
+    phase_ = Phase::CheckThermalProbePressure;
+    lastCheckMs_ = HAL::timeInMilliseconds();
+}
+
+void HeatBedScan::thermalRetryHomeY() {
+    moveZ(long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM)); //spacing for bed
+    Printer::homeAxis(false, true, false);                             //Home Y
+
+    g_scanRetries--;
+    phase_ = Phase::ThermalRetryHomeZ;
+    lastCheckMs_ = HAL::timeInMilliseconds();
+}
+
+void HeatBedScan::thermalRetryHomeZ() {
+    // home the z-axis in order to find the starting point again
+    Printer::homeAxis(false, false, true);                             //Neben Bett: Home Z
+    moveZ(long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM)); //spacing for bed
+    g_nLastZScanZPosition = 0;                                         //Reset last scan position to avoid abort due to this limitter
+
+    phase_ = Phase::ThermalRetryReturnToPoint;
+    lastCheckMs_ = HAL::timeInMilliseconds();
+}
+
+void HeatBedScan::thermalRetryReturnToPoint() {
+    Printer::queueRelativeMMCoordinates(0, heatBedScanCalibrationPointMm, 0, 0, Printer::homingFeedrate[Y_AXIS], true, true);
+
+    phase_ = Phase::ThermalRetryMeasureBaseline;
+    lastCheckMs_ = HAL::timeInMilliseconds();
+}
+
+void HeatBedScan::thermalRetryMeasureBaseline() {
+    if ((HAL::timeInMilliseconds() - lastCheckMs_) < heatBedScanDelayMs) {
+        // do not check too early
+        return;
+    }
+
+    if (readIdlePressure(&g_nFirstIdlePressure)) {
+        g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
+        // we were unable to determine the idle pressure
+        return;
+    } else {
+        adjustPressureLimits(g_nFirstIdlePressure);
+    }
+    phase_ = Phase::CheckThermalProbePressure;
+    lastCheckMs_ = HAL::timeInMilliseconds();
+}
+
+void HeatBedScan::checkThermalProbePressure() {
+    if ((HAL::timeInMilliseconds() - lastCheckMs_) < g_nScanIdleDelay) {
+        // do not check too early
+        return;
+    }
+
+    // scan this point
+    if (testIdlePressure()) {
+        // the current idle pressure is not plausible
+        if (g_scanRetries) {
+            g_retryZScan = 1;
+        } else {
+            g_abortZScan = SCAN_ABORT_REASON_IDLE_PRESSURE;
+        }
+        return;
+    }
+
+    // we should consider that the idle presse can change slightly
+    adjustPressureLimits(g_nCurrentIdlePressure);
+
+    phase_ = Phase::ApproachThermalProbe;
+}
+
+void HeatBedScan::approachThermalProbe() {
+    // move to the surface
+    moveZMinusUpFast();
+
+    phase_ = Phase::BackOffThermalProbe;
+}
+
+void HeatBedScan::backOffThermalProbe() {
+    // ensure that we do not remember any previous z-position at this moment
+    g_nLastZScanZPosition = 0;
+
+    // move a little bit away from the surface
+    moveZPlusDownSlow();
+
+    phase_ = Phase::MeasureThermalOffset;
+}
+
+void HeatBedScan::measureThermalOffset() {
+    short pressure;
+    // move slowly to the surface
+    moveZMinusUpSlow(&pressure);
+    moveZPlusDownSlow(8); //and slowslowly back near idle pressure
+
+    phase_ = Phase::ApplyThermalOffset;
+}
+
+void HeatBedScan::applyThermalOffset() {
+    // adjust the current z-position to the compensation matrix in order to consider the different length of the extruder at higher temperatures
+    adjustCompensationMatrix((short)Printer::zMotion.scanSteps());
+
+    if (Printer::debugInfo()) {
+        // output the converted heat bed compensation matrix
+        Com::printF(Com::tscanHeatBed);
+        Com::printFLN(PSTR("adjusted heat bed z matrix: "));
+        outputCompensationMatrix();
+    }
+
+    phase_ = Phase::HomeAfterThermalProbe;
+}
+
+void HeatBedScan::homeAfterThermalProbe() {
+    // avoid to crash the extruder against the heat bed during the following homing
+    moveZ(int(Printer::axisStepsPerMM[Z_AXIS] * 5));
+
+    // move back to the home position
+    Printer::homeAxis(true, true, true);
+    phase_ = Phase::SwitchOffAfterScan;
+}
+
+void HeatBedScan::switchOffAfterScan() {
+    // turn off the engines
+    Printer::disableAllSteppersNow();
+
+    // disable all heaters
+    Extruder::setHeatedBedTemperature(0);
+    Extruder::setTemperatureForAllExtruders(0);
+
+    phase_ = Phase::SaveMatrix;
+}
+
+void HeatBedScan::saveMatrix() {
+    // save the determined values to the EEPROM
+    saveCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed));
+    if (Printer::debugInfo()) {
+        Com::printF(Com::tscanHeatBed);
+        Com::printFLN(PSTR("the heat bed z matrix has been saved"));
+    }
+
+    if (Printer::debugInfo()) {
+        Com::printF(Com::tscanHeatBed);
+        Com::printFLN(PSTR("the scan has been completed"));
+    }
+    //UI_STATUS_UPD( UI_TEXT_HEAT_BED_SCAN_DONE );
+    Printer::idleStatus.schedule(HAL::timeInMilliseconds());
+
+    showInformation(PSTR(UI_TEXT_HEAT_BED_SCAN_DONE), (void*)ui_text_saving_success, PSTR(UI_TEXT_OK)); //tell user the scan was a success
+
+    phase_ = Phase::Idle;
+}
+
+} // namespace
+
+bool heatBedScanRunning() {
+    return heatBedScan.active();
+}
+
+void startHeatBedScan() {
+    if (!zOffsetScanRunning())
+        heatBedScan.startOrCancel();
+}
+
 namespace {
 
 class ZOffsetScan {
@@ -1548,7 +1633,7 @@ void ZOffsetScan::abort(bool reloadMatrix) {
 } // namespace
 
 void startZOScan(bool autoLevelMatrix) {
-    if (!g_nHeatBedScanStatus)
+    if (!heatBedScan.active())
         zOffsetScan.startOrCancel(autoLevelMatrix);
 }
 
@@ -1557,7 +1642,7 @@ static bool zOffsetScanRunning() {
 }
 
 void discardScans() {
-    g_nHeatBedScanStatus = 0;
+    heatBedScan.discard();
     zOffsetScan.discard();
 }
 
@@ -3036,9 +3121,7 @@ void handleStrainGaugeFeatures(millis_t uTime) {
 }
 
 void handleScanWorkTasks() {
-    if (g_nHeatBedScanStatus) {
-        scanHeatBed();
-    }
+    heatBedScan.tick();
     zOffsetScan.tick();
 }
 
@@ -5286,7 +5369,7 @@ void queueTask(char task) {
 } // queueTask
 
 bool isAnyScanRunning() {
-    return g_nHeatBedScanStatus || zOffsetScan.active();
+    return heatBedScan.active() || zOffsetScan.active();
 }
 
 void moveXAction(int8_t direction) {

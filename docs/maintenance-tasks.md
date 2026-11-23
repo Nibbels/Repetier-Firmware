@@ -48,6 +48,7 @@ Across the four AVR builds, 64 XY instruction traces reproduce the motor displac
 ### Z travel and scanning
 
 - [x] **Give the Z-offset scan named phases.** The scan owner keeps the current phase, probe Z and the leveling route. Each service call advances one phase and keeps the existing calibration waits. The replay checks normal completion, an unstable pressure retry, a missing EEPROM matrix and all seven leveling points. [Z-offset scan replay](../tests/z-offset-scan.py)
+- [x] **Give the bed mesh scan named phases.** The scan owner keeps the mesh cursor, timestamps and retry phase. The standard, PLA, ABS, retry and cancel replays match the old scan's phase counts and verify the saved mesh and heater targets. [Bed scan replay](../tests/heat-bed-scan.py)
 
 - [x] **Give Z step execution one owner.** `ZMotion` tracks nominal progress, direct displacement, scan travel, requested and applied correction, missed queued steps and emitted motor steps. The host replay covers endstop clipping, overtravel repayment, opposing correction, compensation waits, scan retreat and microstep scale changes. Run `python3 tests/z-motion.py` for all three model policies. [Execution and limits](development-roadmap.md#z-step-execution)
 
