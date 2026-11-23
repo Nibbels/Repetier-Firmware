@@ -356,6 +356,7 @@ void Extruder::setTemperatureForExtruder(float temperature, int tool) {
     extruder[tool].tempControl.paused = 0;
 }
 
+class MoveQueue;
 struct PrintLine {
     bool moveZ = false;
     bool positiveE = false;
@@ -378,6 +379,12 @@ struct PrintLine {
     int32_t stepsRemaining = 0;
     float distance = 0;
     uint8_t primaryAxis = 0;
+    char task = TASK_NO_TASK;
+    uint8_t flags = 0, joinFlags = 0, dir = 0;
+    uint8_t warmupDepth = 0;
+    long warmupTicks = 0;
+    void setWaitForXLinesFilled(uint8_t depth) { warmupDepth = depth; }
+    void setWaitTicks(long ticks) { warmupTicks = ticks; }
     void setAxisSteps(uint8_t axis, int32_t steps);
     void setSegmentGeometry(const float axisDistanceMM[]);
     bool isEMove() const { return moveE; }
@@ -387,10 +394,12 @@ struct PrintLine {
     bool isXOrYMove() const { return moveXY; }
 
     static struct Direct { int task = TASK_NO_TASK; } direct;
-    static PrintLine* cur;
+    static MoveQueue queue;
+    static uint8_t insertWaitMovesIfNeeded(uint8_t pathOptimize, uint8_t waitExtraLines);
     static int linesCount;
     static int queuedTask, stopRequests;
     static bool hasLines() { return linesCount; }
+    static int queuedMoveCount() { return linesCount; }
     static bool hasStoppableDirectMove();
     static bool hasQueuedOvertravel() { return false; }
     static unsigned plannedMoves;
@@ -400,7 +409,7 @@ struct PrintLine {
         updatesWobble = wobble;
     }
     static void stopDirectMove() { ++stopRequests; }
-    static void resetPathPlanner() { linesCount = 0; queuedTask = TASK_NO_TASK; }
+    static void discardQueuedMoves() { linesCount = 0; queuedTask = TASK_NO_TASK; }
     static void queueTask(int task) {
         assert(!interruptsEnabled && linesCount < MOVE_CACHE_SIZE);
         queuedTask = task;
@@ -409,7 +418,6 @@ struct PrintLine {
 };
 
 PrintLine::Direct PrintLine::direct;
-PrintLine* PrintLine::cur = nullptr;
 int PrintLine::linesCount = 3;
 int PrintLine::queuedTask = TASK_NO_TASK;
 int PrintLine::stopRequests = 0;
@@ -1587,6 +1595,37 @@ void segmentGeometry() {
     assert(retract.primaryAxis == E_AXIS && retract.stepsRemaining == 1 && retract.distance == 2);
 }
 
+void moveQueue() {
+    auto& queue = PrintLine::queue;
+    g_uStartOfIdle = 500;
+    for (int count = 1; count < MOVE_CACHE_SIZE; ++count) {
+        queue.writeSlot().task = TASK_DISABLE_Z_COMPENSATION;
+        queue.publish(false);
+        assert(queue.count() == count && queue.active() == nullptr);
+    }
+    assert(g_uStartOfIdle == 500);
+    queue.activateFront();
+    queue.clear();
+    assert(queue.count() == 0 && queue.active() == nullptr);
+    assert(queue.readIndex() == MOVE_CACHE_SIZE - 1 && queue.writeIndex() == queue.readIndex());
+
+    assert(PrintLine::insertWaitMovesIfNeeded(1, 0) == 1);
+    assert(queue.count() == 4 && g_uStartOfIdle == 0);
+    for (int depth = 3; depth >= 0; --depth) {
+        auto* move = queue.activateFront();
+        assert(move->task == TASK_NO_TASK && move->flags == FLAG_WARMUP);
+        assert(move->warmupDepth == depth && move->warmupTicks == 100000);
+        queue.releaseFront();
+        assert(queue.count() == depth + 1 && queue.active() == nullptr);
+        assert(queue.activateFront() == move);
+        queue.retireFront();
+        assert(!interruptsEnabled && queue.count() == depth);
+        HAL::allowInterrupts();
+    }
+    assert(queue.count() == 0 && queue.active() == nullptr);
+    assert(queue.readIndex() == 3 && queue.writeIndex() == 3);
+}
+
 void xyLimits() {
     for (uint8_t axis = X_AXIS; axis <= Y_AXIS; ++axis) {
         const uint8_t positive = 17 << axis, negative = 16 << axis;
@@ -1707,6 +1746,8 @@ int main(int argc, char** argv) {
         cartesianPlanning();
     else if (!std::strcmp(argv[1], "segment-geometry"))
         segmentGeometry();
+    else if (!std::strcmp(argv[1], "move-queue"))
+        moveQueue();
     else if (!std::strcmp(argv[1], "ecmp-stepping"))
         ecmpStepping();
     else if (!std::strcmp(argv[1], "xy-limits"))

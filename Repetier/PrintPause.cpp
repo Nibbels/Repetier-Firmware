@@ -22,7 +22,7 @@ void PrintPause::request(Destination destination) {
 }
 
 void PrintPause::queueRequest(Destination destination) {
-    while (PrintLine::linesCount >= MOVE_CACHE_SIZE) {
+    while (PrintLine::queuedMoveCount() >= MOVE_CACHE_SIZE) {
         if (!acceptsPauseRequest())
             return;
         Commands::checkForPeriodicalActions(Processing);
@@ -42,7 +42,7 @@ void PrintPause::queueRequest(Destination destination) {
 
 void PrintPause::pressPause() {
     if (allowsQueueAdvance()) {
-        if (!PrintLine::linesCount) {
+        if (!PrintLine::hasLines()) {
             if (Printer::debugErrors())
                 Com::printFLN(PSTR("pausePrint(): nothing is printed"));
             showError((void*)ui_text_pause, (void*)ui_text_operation_denied);

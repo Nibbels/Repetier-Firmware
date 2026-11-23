@@ -49,17 +49,16 @@
 #define FOR_QUEUE 1
 
 class UIDisplay;
+class MoveQueue;
 class PrintLine {
     friend class UIDisplay;
 
 public:
-    static uint8_t linesPos; // Position for executing line movement
-    static PrintLine lines[];
-    static uint8_t linesWritePos; // Position where we write the next cached line move
     flag8_t joinFlags;
     volatile flag8_t flags;
 
 private:
+    static MoveQueue queue;
     flag8_t primaryAxis;
     int32_t timeInTicks;
     flag8_t dir;                 ///< Direction of movement. 1 = X+, 2 = Y+, 4= Z+, values can be combined.
@@ -92,7 +91,6 @@ private:
 
 public:
     int32_t stepsRemaining; ///< Remaining steps, until move is finished
-    static PrintLine* cur;
     char task;
     static PrintLine direct;
 
@@ -100,8 +98,6 @@ public:
         const char task = direct.task;
         return task == DIRECT_PREPARED_STOPPABLE || task == DIRECT_RUNNING_STOPPABLE;
     }
-
-    static volatile uint8_t linesCount; // Number of lines cached 0 = nothing to do
 
     inline bool areParameterUpToDate() {
         return joinFlags & FLAG_JOIN_STEPPARAMS_COMPUTED;
@@ -310,11 +306,6 @@ public:
         dir |= 1 << axis;
     } // setPositiveDirectionForAxis
 
-    inline static void resetPathPlanner() {
-        linesCount = 0;
-        linesPos = linesWritePos;
-    } // resetPathPlanner
-
     inline void updateAdvanceSteps(speed_t v) {
         if (!Printer::isAdvanceActivated())
             return;
@@ -355,37 +346,11 @@ public:
         timeInTicks = wait;
     } // setWaitTicks
 
-    static INLINE bool hasLines() {
-        return linesCount;
-    } // hasLines
-
-    static uint8_t getLinesCount() {
-        InterruptProtectedBlock noInts;
-        return linesCount;
-    }
-
-    static INLINE void setCurrentLine() {
-        cur = &lines[linesPos];
-    } // setCurrentLine
-
-    static INLINE void removeCurrentLineForbidInterrupt() {
-        HAL::forbidInterrupts();
-        nextPlannerIndex(linesPos);
-        cur->task = TASK_NO_TASK;
-        cur = NULL;
-        --linesCount;
-    } // removeCurrentLineForbidInterrupt
-
-    static INLINE void pushLine() {
-        nextPlannerIndex(linesWritePos);
-        InterruptProtectedBlock noInts;
-        linesCount++;
-        g_uStartOfIdle = 0; //tell the printer work is being done.
-    }                       // pushLine
-
-    static PrintLine* getNextWriteLine() {
-        return &lines[linesWritePos];
-    } // getNextWriteLine
+    static uint8_t queuedMoveCount();
+    static INLINE bool hasLines() { return queuedMoveCount() != 0; }
+    static bool hasActiveQueuedMove();
+    static bool hasActiveQueuedZMove();
+    static void discardQueuedMoves();
 
     static inline void computeMaxJunctionSpeed(PrintLine* previous, PrintLine* current);
 
@@ -404,26 +369,7 @@ public:
     static void prepareDirectMove(bool stoppable, bool feedrateSource);
     static void stopDirectMove(void);
 
-    static INLINE void previousPlannerIndex(uint8_t& p) {
-        p = (p ? p - 1 : MOVE_CACHE_SIZE - 1);
-    } // previousPlannerIndex
-
-    static INLINE void nextPlannerIndex(uint8_t& p) {
-        p = (p >= MOVE_CACHE_SIZE - 1 ? 0 : p + 1);
-    } // nextPlannerIndex
-
-    static inline void queueTask(char task) {
-        PrintLine* p;
-
-        p = getNextWriteLine();
-        p->task = task;
-
-        nextPlannerIndex(linesWritePos);
-        InterruptProtectedBlock noInts; //BEGIN_INTERRUPT_PROTECTED
-        linesCount++;
-        //END_INTERRUPT_PROTECTED
-        return;
-    } // queueTask
+    static void queueTask(char task);
 
     inline void enableSteppers(void) {
         if (Printer::blockAll) {
@@ -469,5 +415,70 @@ public:
         }
     } // adjustDirections
 };
+
+// The foreground fills and publishes slots. The step timer activates and retires them.
+class MoveQueue {
+public:
+    uint8_t count() const { return count_; }
+    uint8_t readIndex() const { return readIndex_; }
+    uint8_t writeIndex() const { return writeIndex_; }
+    PrintLine* active() const { return active_; }
+    PrintLine& slot(uint8_t index) { return slots_[index]; }
+    PrintLine& writeSlot() { return slot(writeIndex_); }
+
+    void publish(bool startsMotion) {
+        nextIndex(writeIndex_);
+        InterruptProtectedBlock lock;
+        ++count_;
+        if (startsMotion)
+            g_uStartOfIdle = 0;
+    }
+
+    PrintLine* activateFront() {
+        active_ = &slot(readIndex_);
+        return active_;
+    }
+
+    void releaseFront() { active_ = nullptr; }
+
+    void retireFront() {
+        HAL::forbidInterrupts();
+        nextIndex(readIndex_);
+        active_->task = TASK_NO_TASK;
+        active_ = nullptr;
+        --count_;
+    }
+
+    void clear() {
+        InterruptProtectedBlock lock;
+        count_ = 0;
+        readIndex_ = writeIndex_;
+        active_ = nullptr;
+    }
+
+    static void nextIndex(uint8_t& index) {
+        index = index >= MOVE_CACHE_SIZE - 1 ? 0 : index + 1;
+    }
+
+    static void previousIndex(uint8_t& index) {
+        index = index ? index - 1 : MOVE_CACHE_SIZE - 1;
+    }
+
+private:
+    PrintLine slots_[MOVE_CACHE_SIZE];
+    PrintLine* active_ = nullptr;
+    uint8_t readIndex_ = 0;
+    uint8_t writeIndex_ = 0;
+    volatile uint8_t count_ = 0;
+};
+
+inline uint8_t PrintLine::queuedMoveCount() { return queue.count(); }
+inline bool PrintLine::hasActiveQueuedMove() { return queue.active() != nullptr; }
+inline void PrintLine::discardQueuedMoves() { queue.clear(); }
+
+inline void PrintLine::queueTask(char task) {
+    queue.writeSlot().task = task;
+    queue.publish(false);
+}
 
 #endif // MOTION_H

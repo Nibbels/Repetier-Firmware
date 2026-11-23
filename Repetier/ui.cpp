@@ -3075,7 +3075,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
     case UI_ACTION_MICROSTEPS_XY:
     case UI_ACTION_MICROSTEPS_Z:
     case UI_ACTION_MICROSTEPS_E: {
-        if (!Printer::isPrinting() && !PrintLine::linesCount && Printer::pause.allowsQueueAdvance()) {
+        if (!Printer::isPrinting() && !PrintLine::hasLines() && Printer::pause.allowsQueueAdvance()) {
             Printer::disableAllSteppersNow(); //Stepper und Homing ausmachen.
                                               //We cannot use the old coordinates anymore.
 
@@ -3269,7 +3269,7 @@ void UIDisplay::mainSwitchCase(int action) {
         break;
     }
     case UI_ACTION_HOME_ALL: {
-        if (PrintLine::linesCount) {
+        if (PrintLine::hasLines()) {
             // do not allow homing via the menu while we are printing
             Com::printFLN(Com::tPrintingIsInProcessError);
             showError((void*)ui_text_home, (void*)ui_text_operation_denied);
@@ -3283,7 +3283,7 @@ void UIDisplay::mainSwitchCase(int action) {
         break;
     }
     case UI_ACTION_HOME_X: {
-        if (PrintLine::linesCount) {
+        if (PrintLine::hasLines()) {
             // do not allow homing via the menu while we are printing
             if (Printer::debugErrors()) {
                 Com::printFLN(Com::tPrintingIsInProcessError);
@@ -3300,7 +3300,7 @@ void UIDisplay::mainSwitchCase(int action) {
         break;
     }
     case UI_ACTION_HOME_Y: {
-        if (PrintLine::linesCount) {
+        if (PrintLine::hasLines()) {
             // do not allow homing via the menu while we are printing
             if (Printer::debugErrors()) {
                 Com::printFLN(Com::tPrintingIsInProcessError);
@@ -3317,7 +3317,7 @@ void UIDisplay::mainSwitchCase(int action) {
         break;
     }
     case UI_ACTION_HOME_Z: {
-        if (PrintLine::linesCount) {
+        if (PrintLine::hasLines()) {
             // do not allow homing via the menu while we are printing
             if (Printer::debugErrors()) {
                 Com::printFLN(Com::tPrintingIsInProcessError);

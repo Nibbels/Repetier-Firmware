@@ -71,13 +71,14 @@ uint8_t pwm_pos[NUM_EXTRUDER + 3]; // 0-NUM_EXTRUDER = Heater 0-NUM_EXTRUDER of 
 
 uint8_t fanSpeed = 0;
 
-PrintLine PrintLine::lines[MOVE_CACHE_SIZE]; // Cache for print moves.
-PrintLine* PrintLine::cur = 0;               // Current printing line
-PrintLine PrintLine::direct;                 // direct movement
+MoveQueue PrintLine::queue;
+PrintLine PrintLine::direct;
 
-uint8_t PrintLine::linesWritePos = 0;       // Position where we write the next cached line move.
-volatile uint8_t PrintLine::linesCount = 0; // Number of lines cached 0 = nothing to do.
-uint8_t PrintLine::linesPos = 0;            // Position for executing line movement.
+bool PrintLine::hasActiveQueuedZMove() {
+    InterruptProtectedBlock lock;
+    PrintLine* active = queue.active();
+    return active && active->isZMove();
+}
 
 void PrintLine::setAxisSteps(uint8_t axis, int32_t steps) {
     if (steps >= 0)
@@ -127,7 +128,7 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
     PrintLine::waitForXFreeLines(1);
 
     uint8_t newPath = PrintLine::insertWaitMovesIfNeeded(pathOptimize, 0);
-    PrintLine* p = PrintLine::getNextWriteLine();
+    PrintLine* p = &queue.writeSlot();
 
     p->task = TASK_NO_TASK;
     p->flags = (abortAtEndstops ? FLAG_ABORT_AT_ENDSTOPS : 0);
@@ -163,7 +164,7 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
     // need to delete dummy elements, otherwise commands can get locked.
     if (p->isNoMove()) {
         if (newPath)
-            PrintLine::resetPathPlanner();
+            discardQueuedMoves();
         // No steps included
         return;
     }
@@ -183,7 +184,7 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
         waitRelax = 70;
 
     // Make result permanent
-    pushLine();
+    queue.publish(true);
 } // prepareQueueMove
 
 void PrintLine::prepareDirectMove(bool stoppable, bool feedrateSource) {
@@ -241,9 +242,9 @@ void PrintLine::calculateMove(float axisDistanceMM[], fast8_t drivingAxis, float
     }
     float timeForMove = (float)(F_CPU)*distance / feedrate; // time is in ticks
     // Small element limiter: This was not present in directmove but is not harmfull.
-    if (linesCount < MOVE_CACHE_LOW && timeForMove < LOW_TICKS_PER_MOVE) // Limit speed to keep cache full.
+    if (queue.count() < MOVE_CACHE_LOW && timeForMove < LOW_TICKS_PER_MOVE) // Limit speed to keep cache full.
     {
-        timeForMove += ((LOW_TICKS_PER_MOVE - timeForMove)) * 3 / (linesCount + 1); // Increase time if queue gets empty. Add more time if queue gets smaller.
+        timeForMove += ((LOW_TICKS_PER_MOVE - timeForMove)) * 3 / (queue.count() + 1); // Increase time if queue gets empty. Add more time if queue gets smaller.
     }
     timeInTicks = timeForMove;
 
@@ -372,20 +373,20 @@ is never exceeded. If a segment with reached maximum speed is met, the planner s
 is already optimal from previous updates.
 The first 2 entries in the queue are not checked. The first is the one that is already in print and the following will likely become active.
 
-The method is called before linesCount is increased!
+The new move is still in the unpublished write slot.
 */
 void PrintLine::updateTrapezoids() {
-    uint8_t first = linesWritePos;
+    uint8_t first = queue.writeIndex();
     PrintLine* firstLine;
-    PrintLine* act = &lines[linesWritePos];
+    PrintLine* act = &queue.slot(queue.writeIndex());
     InterruptProtectedBlock noInts; //BEGIN_INTERRUPT_PROTECTED;
 
     // First we find out how far back we could go with optimization.
 
-    uint8_t maxfirst = linesPos; // first non fixed segment
+    uint8_t maxfirst = queue.readIndex(); // first non fixed segment
 
-    if (maxfirst != linesWritePos) {
-        nextPlannerIndex(maxfirst); // don't touch the line printing
+    if (maxfirst != queue.writeIndex()) {
+        MoveQueue::nextIndex(maxfirst); // don't touch the line printing
     }
 
     // Now ignore enough segments to gain enough time for path planning
@@ -400,21 +401,21 @@ void PrintLine::updateTrapezoids() {
 #define minTime 45000L
 #endif
 
-    while (timeleft < minTime && maxfirst != linesWritePos) {
-        timeleft += lines[maxfirst].timeInTicks;
-        nextPlannerIndex(maxfirst);
+    while (timeleft < minTime && maxfirst != queue.writeIndex()) {
+        timeleft += queue.slot(maxfirst).timeInTicks;
+        MoveQueue::nextIndex(maxfirst);
     }
 
     // Search last fixed element
-    while (first != maxfirst && !lines[first].isEndSpeedFixed())
-        previousPlannerIndex(first);
+    while (first != maxfirst && !queue.slot(first).isEndSpeedFixed())
+        MoveQueue::previousIndex(first);
 
-    if (first != linesWritePos && lines[first].isEndSpeedFixed())
-        nextPlannerIndex(first);
+    if (first != queue.writeIndex() && queue.slot(first).isEndSpeedFixed())
+        MoveQueue::nextIndex(first);
     // now first points to last segment before the end speed is fixed
     // so start speed is also fixed.
 
-    if (first == linesWritePos) // Nothing to plan
+    if (first == queue.writeIndex()) // Nothing to plan
     {
         act->block();       // Prevent stepper interrupt from using this
         noInts.unprotect(); //ESCAPE_INTERRUPT_PROTECTED
@@ -428,13 +429,13 @@ void PrintLine::updateTrapezoids() {
     that is not a wait move
     First is now the new element or the first element with non fixed end speed.
     anyhow, the start speed of first is fixed  */
-    firstLine = &lines[first];
+    firstLine = &queue.slot(first);
     firstLine->block(); // don't let printer touch this or following segments during update
     noInts.unprotect(); //END_INTERRUPT_PROTECTED;
 
-    uint8_t previousIndex = linesWritePos;
-    previousPlannerIndex(previousIndex);
-    PrintLine* previous = &lines[previousIndex];
+    uint8_t previousIndex = queue.writeIndex();
+    MoveQueue::previousIndex(previousIndex);
+    PrintLine* previous = &queue.slot(previousIndex);
 
     // filters z-move<->not z-move //Nibbels: Test if this is better with our type of Z-Comp because of bad edges? See https://github.com/repetier/Repetier-Firmware/commit/5fbe3748a0ca55386d5315d5b44c4209bec62fc2#diff-593812a66d7348c87b711b15b1ad5195L696
     /*
@@ -478,21 +479,21 @@ void PrintLine::updateTrapezoids() {
     // Set maximum junction speed if we have a real move before
     computeMaxJunctionSpeed(previous, act);
     // Increase speed if possible neglecting current speed
-    backwardPlanner(linesWritePos, first);
+    backwardPlanner(queue.writeIndex(), first);
     // Reduce speed to reachable speeds
     forwardPlanner(first);
 
     // Update precomputed data
     do {
-        lines[first].updateStepsParameter();
+        queue.slot(first).updateStepsParameter();
 
         //noInts.protect(); //BEGIN_INTERRUPT_PROTECTED;
-        lines[first].unblock(); // start with first block to release next used segment as early as possible
-        nextPlannerIndex(first);
-        lines[first].block();
+        queue.slot(first).unblock(); // start with first block to release next used segment as early as possible
+        MoveQueue::nextIndex(first);
+        queue.slot(first).block();
         //noInts.unprotect(); //END_INTERRUPT_PROTECTED;
 
-    } while (first != linesWritePos);
+    } while (first != queue.writeIndex());
 
     act->updateStepsParameter();
     act->unblock();
@@ -594,12 +595,12 @@ start = last line inserted
 last = last element until we check
 */
 inline void PrintLine::backwardPlanner(uint8_t start, uint8_t last) {
-    PrintLine *act = &lines[start], *previous;
+    PrintLine *act = &queue.slot(start), *previous;
     float lastJunctionSpeed = act->endSpeed; // Start always with safe speed
 
     while (start != last) {
-        previousPlannerIndex(start);
-        previous = &lines[start];
+        MoveQueue::previousIndex(start);
+        previous = &queue.slot(start);
         previous->block();
         // Avoid speed calculate once cruising in split delta move
         // Avoid speed calculate if we know we can accelerate within the line
@@ -634,14 +635,14 @@ inline void PrintLine::backwardPlanner(uint8_t start, uint8_t last) {
 
 void PrintLine::forwardPlanner(uint8_t first) {
     PrintLine* act;
-    PrintLine* next = &lines[first];
+    PrintLine* next = &queue.slot(first);
     float vmaxRight;
     float leftSpeed = next->startSpeed;
-    while (first != linesWritePos) // All except last segment, which has fixed end speed
+    while (first != queue.writeIndex()) // All except last segment, which has fixed end speed
     {
         act = next;
-        nextPlannerIndex(first);
-        next = &lines[first];
+        MoveQueue::nextIndex(first);
+        next = &queue.slot(first);
         // Avoid speed calculate if we know we can accelerate within the line.
         vmaxRight = (act->isNominalMove() ? act->fullSpeed : sqrt(leftSpeed * leftSpeed + act->accelerationDistance2));
         if (vmaxRight > act->endSpeed) // Could be higher next run?
@@ -709,20 +710,20 @@ not act on the first two moves in the queue. The stepper timer will spot these m
 processing.
 */
 uint8_t PrintLine::insertWaitMovesIfNeeded(uint8_t pathOptimize, uint8_t waitExtraLines) {
-    if (linesCount == 0
+    if (queue.count() == 0
         && waitRelax == 0
         && pathOptimize) // First line after some time - warmup needed
     {
         uint8_t w = 4;
         while (w--) {
-            PrintLine* p = getNextWriteLine();
+            PrintLine* p = &queue.writeSlot();
             p->task = TASK_NO_TASK;
             p->flags = FLAG_WARMUP;
             p->joinFlags = FLAG_JOIN_STEPPARAMS_COMPUTED | FLAG_JOIN_END_FIXED | FLAG_JOIN_START_FIXED;
             p->dir = 0;
             p->setWaitForXLinesFilled(w + waitExtraLines);
             p->setWaitTicks(100000); //repetier changed this from 25k to 100k in https://github.com/repetier/Repetier-Firmware/commit/2385051856278c189d7c1f1fd67acc27825c82ac#diff-11347f18746fb080f5bda21c30428558R1080
-            pushLine();
+            queue.publish(true);
         }
         return 1;
     }
@@ -730,7 +731,7 @@ uint8_t PrintLine::insertWaitMovesIfNeeded(uint8_t pathOptimize, uint8_t waitExt
 } // insertWaitMovesIfNeeded
 
 void PrintLine::waitForXFreeLines(uint8_t b) {
-    while (getLinesCount() + b > MOVE_CACHE_SIZE) // wait for a free entry in movement cache
+    while (queue.count() + b > MOVE_CACHE_SIZE) // wait for a free entry in movement cache
     {
         Commands::checkForPeriodicalActions(Processing);
     }
@@ -785,27 +786,28 @@ bool PrintLine::needCmpWait() {
   The function must be called from a timer loop. It returns the time for the next call. */
 volatile long queueError;
 long PrintLine::performQueueMove() {
-    if (cur == NULL) {
-        if (!linesCount) {
+    PrintLine* move = queue.active();
+    if (move == nullptr) {
+        if (!queue.count()) {
             HAL::forbidInterrupts();
             return 1000;
         }
 
-        setCurrentLine();
+        move = queue.activateFront();
 
-        switch (cur->task) {
+        switch (move->task) {
         case TASK_NO_TASK: {
             break;
         }
 
         case TASK_PAUSE_PRINT: {
-            removeCurrentLineForbidInterrupt();
+            queue.retireFront();
             Printer::pause.request(PrintPause::Destination::InPlace);
             return 1000;
         }
 
         case TASK_PAUSE_PRINT_AND_MOVE: {
-            removeCurrentLineForbidInterrupt();
+            queue.retireFront();
             Printer::pause.request(PrintPause::Destination::Park);
             return 1000;
         }
@@ -813,7 +815,7 @@ long PrintLine::performQueueMove() {
         case TASK_ENABLE_Z_COMPENSATION: // M3001
         {
             Printer::enableCMPnow();
-            removeCurrentLineForbidInterrupt();
+            queue.retireFront();
             return 1000;
         }
 
@@ -821,14 +823,14 @@ long PrintLine::performQueueMove() {
         {
             // disable the z compensation
             Printer::disableCMPnow(); //hier nicht unbedingt warten, das soll im fluss der queue einfach abgeschaltet werden. zu große abstände regelt die needCmpWait
-            removeCurrentLineForbidInterrupt();
+            queue.retireFront();
             return 1000;
         }
 
         case TASK_ENABLE_SENSE_OFFSET: // M3909
         {
             Printer::enableSenseOffsetnow();
-            removeCurrentLineForbidInterrupt();
+            queue.retireFront();
             return 1000;
         }
 
@@ -836,65 +838,65 @@ long PrintLine::performQueueMove() {
         {
             // allow to overwrite the current string again
             uid.unlock();
-            removeCurrentLineForbidInterrupt();
+            queue.retireFront();
             return 1000;
         }
 
         default: {
             // this is an unknown task - we should never end up here
-            removeCurrentLineForbidInterrupt();
+            queue.retireFront();
             return 1000;
         }
         }
 
-        if (cur->isBlocked()) // This step is in computation - shouldn't happen
+        if (move->isBlocked()) // This step is in computation - shouldn't happen
         {
-            cur = NULL;
+            queue.releaseFront();
             return 2000;
         }
         HAL::allowInterrupts();
 
-        if (cur->isWarmUp()) {
+        if (move->isWarmUp()) {
             // This is a warmup move to initalize the path planner correctly. Just waste
             // a bit of time to get the planning up to date.
-            if (linesCount <= cur->getWaitForXLinesFilled()) {
-                cur = NULL;
+            if (queue.count() <= move->getWaitForXLinesFilled()) {
+                queue.releaseFront();
                 return 2000;
             }
 
-            long wait = cur->getWaitTicks();
-            removeCurrentLineForbidInterrupt();
+            long wait = move->getWaitTicks();
+            queue.retireFront();
             return (wait); // waste some time for path optimization to fill up
         }
 
-        cur->enableSteppers(); //set Z direction etc.
-        cur->adjustDirections();
+        move->enableSteppers(); //set Z direction etc.
+        move->adjustDirections();
         Printer::lastDirectionSovereignty = DIR_QUEUE;
-        cur->fixStartAndEndSpeed();
+        move->fixStartAndEndSpeed();
 
-        queueError = cur->delta[cur->primaryAxis];
-        if (!cur->areParameterUpToDate())
-            cur->updateStepsParameter(); // should never happen, but with bad timings???
-        Printer::vMaxReached[FOR_QUEUE] = cur->vStart;
+        queueError = move->delta[move->primaryAxis];
+        if (!move->areParameterUpToDate())
+            move->updateStepsParameter(); // should never happen, but with bad timings???
+        Printer::vMaxReached[FOR_QUEUE] = move->vStart;
         Printer::stepNumber[FOR_QUEUE] = 0;
         Printer::timer[FOR_QUEUE] = 0;
-        Printer::v = cur->fullSpeed;
+        Printer::v = move->fullSpeed;
 
         HAL::forbidInterrupts();
 
-        cur->updateAdvanceSteps(cur->vStart); //startet advance extruder "etwas" vor der ersten bewegung: gut? ist Printer::interval immer klein genug?
+        move->updateAdvanceSteps(move->vStart); //startet advance extruder "etwas" vor der ersten bewegung: gut? ist Printer::interval immer klein genug?
 
         return (Printer::interval >> 1); //wait 50% to next interrupt.
     }
 
     if (Printer::lastDirectionSovereignty != DIR_QUEUE) {
         Printer::lastDirectionSovereignty = DIR_QUEUE;
-        Printer::v = cur->fullSpeed;
-        cur->adjustDirections();
-        cur->updateAdvanceSteps(Printer::vMaxReached[DIR_QUEUE]);
+        Printer::v = move->fullSpeed;
+        move->adjustDirections();
+        move->updateAdvanceSteps(Printer::vMaxReached[DIR_QUEUE]);
     }
 
-    return performMove(cur, FOR_QUEUE);
+    return performMove(move, FOR_QUEUE);
 } // performQueueMove
 
 template <int8_t limitDirection>
@@ -1164,7 +1166,7 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
                                      // Auch wenn kein Z-Move, könnte die Z-Kompensation die Achse Z benutzt haben.
 
         if (forQueue) {
-            removeCurrentLineForbidInterrupt();
+            queue.retireFront();
         } else {
             //forDirect:
             // Wir dürften das stop nicht brauchen, brauchen es aber:
@@ -1183,7 +1185,7 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
         if (g_nHeatBedScanStatus || g_nZOSScanStatus)
             nIdle = 0; // we are not idle because the heat bed scan is going on at the moment
 
-        if (linesCount == 0 && nIdle) {
+        if (queue.count() == 0 && nIdle) {
             g_uStartOfIdle = HAL::timeInMilliseconds(); //end a move
             Printer::v = 0;
         }

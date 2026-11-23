@@ -2999,7 +2999,7 @@ void handleScanWorkTasks() {
 }
 
 void handleStartPrint() {
-    if (PrintLine::linesCount > 2 && !Printer::printStop.commandsBlocked()) {
+    if (PrintLine::queuedMoveCount() > 2 && !Printer::printStop.commandsBlocked()) {
         // this check shall be done only during the printing (for example, it shall not be done in case filament is extruded manually)
         Printer::setPrinting(true);
     }
@@ -3066,7 +3066,7 @@ void handleStartStandby(millis_t uTime) {
 }
 
 void outputObject(bool showerrors) {
-    if (PrintLine::linesCount) {
+    if (PrintLine::hasLines()) {
         if (showerrors)
             showError((void*)ui_text_output_object, (void*)ui_text_operation_denied);
         return;
@@ -5260,7 +5260,7 @@ void moveXAction(int8_t direction) {
 
     if (Printer::pause.isPaused()) {
         moveKosys = KOSYS_DIRECTOFFSET;
-    } else if (PrintLine::linesCount || isAnyScanRunning()) {
+    } else if (PrintLine::hasLines() || isAnyScanRunning()) {
         // this operation is not allowed while a printing or scanning is in progress
         return;
     }
@@ -5356,7 +5356,7 @@ void moveYAction(int8_t direction) {
 
     if (Printer::pause.isPaused()) {
         moveKosys = KOSYS_DIRECTOFFSET;
-    } else if (PrintLine::linesCount || isAnyScanRunning()) {
+    } else if (PrintLine::hasLines() || isAnyScanRunning()) {
         // this operation is not allowed while a printing or scanning is in progress
         return;
     }
@@ -5463,7 +5463,7 @@ void moveZAction(int8_t direction) {
         //VORSICHT: ES könnte evtl. sein dass sich lastbuttonaction während der ausführung ändert. (??)
 
         //sollte diese Aktion durch die Knöpfe ausgeführt worden sein, dann in der Sprungweite limitieren:
-        if (PrintLine::linesCount) {
+        if (PrintLine::hasLines()) {
             // there is some printing in progress at the moment - do not allow single move in this case
             moveMode = MOVE_MODE_SINGLE_STEPS;
         } else {
@@ -5473,7 +5473,7 @@ void moveZAction(int8_t direction) {
 
     if (Printer::pause.isPaused()) {
         moveMode = MOVE_MODE_SINGLE_MOVE;
-    } else if (PrintLine::linesCount) {
+    } else if (PrintLine::hasLines()) {
         // in case we are printing at the moment, only the single step movements are allowed
         moveMode = MOVE_MODE_SINGLE_STEPS;
     }

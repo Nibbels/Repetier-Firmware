@@ -275,14 +275,7 @@ bool Printer::isZMoveActive() {
     if (PrintLine::direct.stepsRemaining && PrintLine::direct.isZMove()) {
         return true;
     }
-    if (PrintLine::cur == NULL) {
-        return false;
-    }
-    if (PrintLine::cur->isZMove()) {
-        return true;
-    }
-
-    return false;
+    return PrintLine::hasActiveQueuedZMove();
 }
 
 /**
@@ -1164,8 +1157,7 @@ void Printer::stopPrint() {
     pause.cancel();
 
     //erase the coordinates and kill the current taskplaner:
-    PrintLine::resetPathPlanner();
-    PrintLine::cur = NULL;
+    PrintLine::discardQueuedMoves();
 
     setXAxisSteps(currentXYSteps[X_AXIS]);
     setYAxisSteps(currentXYSteps[Y_AXIS]);

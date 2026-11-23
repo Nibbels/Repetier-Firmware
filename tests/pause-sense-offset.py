@@ -71,6 +71,10 @@ def main():
         + section(move_planner, "            const int32_t targetSteps = Printer::prepareDestinationSteps(axis);", "\n        }")
         + "\nreturn steps;\n}",
         section(move_planner, "void PrintLine::setAxisSteps(", "\n/** \\brief Put a move"),
+        section(motion, "#define FLAG_WARMUP", "\n#define DIRECT_IDLE"),
+        section(motion, "class MoveQueue {", "\ninline uint8_t PrintLine::queuedMoveCount"),
+        "MoveQueue PrintLine::queue;\nconst int waitRelax = 0;",
+        section(move_planner, "uint8_t PrintLine::insertWaitMovesIfNeeded(", "\nvoid PrintLine::waitForXFreeLines("),
         "void rescalePlannedAxis(uint8_t axis) {\nusing namespace Printer;\n"
         + section(printer, "        const float mmPerStep = 1.0f / axisStepsPerMM[axis];", "\n\n        /** Acceleration")
         + "\n}",
@@ -102,7 +106,7 @@ def main():
             "sense-window", "sense-settings", "sense-limit-interrupt",
             "pressure-pause", "pressure-stop", "digit-zero",
             "extrusion-planning",
-            "gcode-target", "wobble-target", "cartesian-planning", "segment-geometry", "ecmp-stepping", "xy-limits",
+            "gcode-target", "wobble-target", "cartesian-planning", "segment-geometry", "move-queue", "ecmp-stepping", "xy-limits",
         ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
 
