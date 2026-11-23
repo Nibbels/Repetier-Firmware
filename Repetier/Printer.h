@@ -32,6 +32,7 @@
 #include "StartLine.h"
 #include "ExtrusionPlanner.h"
 #include "ExtrusionCompensation.h"
+#include "PressureAdvance.h"
 #include "MoveTarget.h"
 #include "WobbleCorrection.h"
 #include "CartesianPlanner.h"
@@ -69,9 +70,7 @@
 
 class Printer {
 public:
-    static volatile int extruderStepsNeeded; // This many extruder steps are still needed, <0 = reverse steps needed.
-    static uint8_t maxExtruderSpeed;         // Timer delay for end extruder speed
-    static volatile int advanceStepsSet;
+    static PressureAdvance pressureAdvance;
 
     static uint8_t menuMode;
     static float axisStepsPerMM[];

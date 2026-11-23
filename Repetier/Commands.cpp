@@ -858,7 +858,7 @@ void Commands::processMCode(GCode* com) {
     {
         if (com->hasS()) {
             InterruptProtectedBlock noInts; //BEGIN_INTERRUPT_PROTECTED
-            Printer::extruderStepsNeeded += com->S;
+            Printer::pressureAdvance.addSteps(com->S);
         }
         break;
     }

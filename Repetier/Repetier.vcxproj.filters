@@ -95,6 +95,9 @@
     <ClInclude Include="XYOvertravel.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="PressureAdvance.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="Repetier.h">
       <Filter>Header Files</Filter>
     </ClInclude>

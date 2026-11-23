@@ -312,10 +312,9 @@ public:
         if (!Printer::isAdvanceActivated())
             return;
 
-        int32_t tred = (v * advanceL) >> 16;
+        const int32_t leadSteps = (v * advanceL) >> 16;
         HAL::forbidInterrupts();
-        Printer::extruderStepsNeeded += tred - Printer::advanceStepsSet;
-        Printer::advanceStepsSet = tred;
+        Printer::pressureAdvance.setLeadSteps(leadSteps);
         HAL::allowInterrupts();
     }  // updateAdvanceSteps
 

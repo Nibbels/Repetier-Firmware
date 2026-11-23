@@ -15,6 +15,7 @@
 #include "RF2000.h"
 #include "ZOffset.h"
 #include "ExtrusionCompensation.h"
+#include "PressureAdvance.h"
 #include "PrintLayers.h"
 #include "BedCompensation.h"
 #include "PrintPause.h"
@@ -214,7 +215,7 @@ float menuExtrusionFactor = 1.0f;
 bool relativeExtruderCoordinateMode = false;
 ExtrusionCompensation extrusionCompensation;
 bool blockAll = false;
-int extruderStepsNeeded = 0;
+PressureAdvance pressureAdvance;
 bool advanceActive = false;
 volatile char doHeatBedZCompensation = true;
 bool printing = true, menuPaused = false;
@@ -337,6 +338,7 @@ struct Extruder {
 
     static Extruder* current;
     static unsigned stepPulses, trailingEdges;
+    static void setDirection(bool forward) { current->stepperDirection = forward ? 1 : -1; }
     static void step() { assert(!interruptsEnabled); ++stepPulses; }
     static void unstep() { assert(!interruptsEnabled); ++trailingEdges; }
     static void setTemperatureForExtruder(float temperature, int tool);
@@ -1550,7 +1552,7 @@ void ecmpStepping() {
 
     auto replayReversal = [&](bool advance, float ratio, float remainder, unsigned count, int expectedSteps) {
         Printer::advanceActive = advance;
-        Printer::extruderStepsNeeded = 0;
+        Printer::pressureAdvance.clearSteps();
         Printer::extrusionCompensation.publishRatio(ExtrusionCompensation::prepareRatio(ratio));
         Printer::extrusionCompensation.restoreRemainder(remainder);
         const unsigned before = Extruder::stepPulses;
@@ -1559,16 +1561,16 @@ void ecmpStepping() {
         for (unsigned i = 0; i < count; ++i)
             executeExtrusionStep(&move, true);
         const unsigned afterRetract = Extruder::stepPulses;
-        const int retracted = advance ? -Printer::extruderStepsNeeded : int(afterRetract - before);
+        const int retracted = advance ? -Printer::pressureAdvance.pendingSteps() : int(afterRetract - before);
 
         move.positiveE = true;
         for (unsigned i = 0; i < count; ++i)
             executeExtrusionStep(&move, true);
-        const int returned = advance ? Printer::extruderStepsNeeded + retracted
+        const int returned = advance ? Printer::pressureAdvance.pendingSteps() + retracted
                                       : int(Extruder::stepPulses - afterRetract);
         assert(retracted == expectedSteps && returned == retracted);
         assert(Printer::extrusionCompensation.remainder() == remainder);
-        assert(Printer::extruderStepsNeeded == 0);
+        assert(Printer::pressureAdvance.pendingSteps() == 0);
         if (advance)
             assert(Extruder::stepPulses == before);
     };
@@ -1578,6 +1580,39 @@ void ecmpStepping() {
         replayReversal(advance, 0.25f, 0.125f, 1, 2); // Crossing the whole-step boundary.
         replayReversal(advance, 0.048f, 0.0f, 100, 105); // Non-binary ECMP rate.
     }
+}
+
+void advanceTimer() {
+    PressureAdvance advance;
+    const unsigned basePulses = Extruder::stepPulses;
+    InterruptProtectedBlock lock;
+    advance.setStepInterval(12);
+    advance.addSteps(1);
+    assert(advance.nextTimerCompare(0) == 12 && advance.pendingSteps() == 1);
+    assert(Extruder::stepPulses == basePulses);
+    advance.addSteps(1);
+    assert(advance.nextTimerCompare(12) == 64 && Extruder::current->stepperDirection == 1);
+    assert(advance.nextTimerCompare(64) == 76 && advance.pendingSteps() == 1);
+    assert(advance.nextTimerCompare(76) == 88 && advance.pendingSteps() == 0);
+    assert(Extruder::stepPulses == basePulses + 2);
+
+    advance.setLeadSteps(3);
+    advance.setLeadSteps(5);
+    advance.postponeRelaxation();
+    for (int tick = 0; tick < 70; ++tick) {
+        assert(!advance.relaxDelayElapsed());
+        advance.onIdleTick();
+        assert(advance.pendingSteps() == 5);
+    }
+    assert(advance.relaxDelayElapsed());
+    advance.onIdleTick();
+    assert(advance.pendingSteps() == 0);
+
+    advance.addSteps(-2);
+    assert(advance.nextTimerCompare(240) == 36 && Extruder::current->stepperDirection == -1);
+    assert(advance.nextTimerCompare(36) == 48 && advance.pendingSteps() == -1);
+    assert(advance.nextTimerCompare(48) == 60 && advance.pendingSteps() == 0);
+    assert(Extruder::stepPulses == basePulses + 4);
 }
 
 void segmentGeometry() {
@@ -1761,6 +1796,8 @@ int main(int argc, char** argv) {
         moveQueue();
     else if (!std::strcmp(argv[1], "ecmp-stepping"))
         ecmpStepping();
+    else if (!std::strcmp(argv[1], "advance-timer"))
+        advanceTimer();
     else if (!std::strcmp(argv[1], "xy-limits"))
         xyLimits();
     else

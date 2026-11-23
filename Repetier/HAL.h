@@ -571,7 +571,6 @@ public:
     } // maxExtruderTimerFrequency
 
     static void analogStart();
-    static void resetExtruderDirection();
 };
 
 #define EXTRUDER_TIMER_VECTOR TIMER0_COMPA_vect

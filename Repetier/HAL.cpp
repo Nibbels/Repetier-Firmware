@@ -649,13 +649,7 @@ ISR(TIMER1_COMPA_vect) {
         return;
     }
 
-    if (waitRelax == 0) {
-        if (Printer::advanceStepsSet) {
-            Printer::extruderStepsNeeded -= Printer::advanceStepsSet;
-            Printer::advanceStepsSet = 0;
-        }
-    } else
-        waitRelax--;
+    Printer::pressureAdvance.onIdleTick();
 
     stepperWait = 0; // Important because of optimization in asm at begin
     OCR1A = 3000;
@@ -896,43 +890,32 @@ ISR(PWM_TIMER_VECTOR) {
 #endif // RGB_LIGHT_R_PIN
 } // ISR(PWM_TIMER_VECTOR)
 
-static int8_t extruderLastDirection = 0;
-constexpr uint8_t advanceDirectionFilterSteps = 2;
-
-void HAL::resetExtruderDirection() {
-    extruderLastDirection = 0;
-}
-/** \brief Timer routine for extruder stepper.
-Several methods need to move the extruder. To get a optima result,
-all methods update the printer_state.extruderStepsNeeded with the
-number of additional steps needed. During this interrupt, one step
-is executed. This will keep the extruder moving, until the total
-wanted movement is achieved. This will be done with the maximum
-allowable speed for the extruder.
-*/
-ISR(EXTRUDER_TIMER_VECTOR) {
-    uint8_t timer = EXTRUDER_OCR;
-    if (!Printer::isAdvanceActivated())
-        return; // currently no need
-
-    if (Printer::extruderStepsNeeded > 0 && extruderLastDirection != 1) {
-        if (Printer::extruderStepsNeeded >= advanceDirectionFilterSteps) {
+uint8_t PressureAdvance::nextTimerCompare(uint8_t compare) {
+    constexpr uint8_t directionFilterSteps = 2;
+    if (pendingSteps() > 0 && direction_ != 1) {
+        if (pendingSteps() >= directionFilterSteps) {
             Extruder::setDirection(true);
-            extruderLastDirection = 1;
-            timer += 40; // Add some more wait time to prevent blocking
+            direction_ = 1;
+            compare += 40;
         }
-    } else if (Printer::extruderStepsNeeded < 0 && extruderLastDirection != -1) {
-        if (-Printer::extruderStepsNeeded >= advanceDirectionFilterSteps) {
+    } else if (pendingSteps() < 0 && direction_ != -1) {
+        if (-pendingSteps() >= directionFilterSteps) {
             Extruder::setDirection(false);
-            extruderLastDirection = -1;
-            timer += 40; // Add some more wait time to prevent blocking
+            direction_ = -1;
+            compare += 40;
         }
-    } else if (Printer::extruderStepsNeeded != 0) {
+    } else if (pendingSteps()) {
         Extruder::step();
-        Printer::extruderStepsNeeded -= extruderLastDirection;
+        pendingSteps_ -= direction_;
         Extruder::unstep();
     }
-    EXTRUDER_OCR = timer + Printer::maxExtruderSpeed;
+    return compare + stepInterval_;
+}
+
+ISR(EXTRUDER_TIMER_VECTOR) {
+    const uint8_t compare = EXTRUDER_OCR;
+    if (Printer::isAdvanceActivated())
+        EXTRUDER_OCR = Printer::pressureAdvance.nextTimerCompare(compare);
 }
 
 // Implement serial communication for one stream only!

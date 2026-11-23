@@ -18,9 +18,7 @@
 #include "Repetier.h"
 #include <Wire.h>
 
-uint8_t Printer::maxExtruderSpeed;         // Timer delay for end extruder speed
-volatile int Printer::extruderStepsNeeded; // This many extruder steps are still needed, <0 = reverse steps needed.
-volatile int Printer::advanceStepsSet;
+PressureAdvance Printer::pressureAdvance;
 
 uint8_t Printer::unitIsInches = 0; // 0 = Units are mm, 1 = units are inches.
 
@@ -571,7 +569,7 @@ void Printer::setup() {
     WRITE(EXT1_EXTRUDER_COOLER_PIN, LOW);
 #endif // defined(EXT1_EXTRUDER_COOLER_PIN) && EXT1_EXTRUDER_COOLER_PIN >- 1 && NUM_EXTRUDER > 1
 
-    advanceStepsSet = 0;
+    pressureAdvance.clearSteps();
 
     maxXYJerk = MAX_JERK;
     maxZJerk = MAX_ZJERK;
@@ -610,8 +608,6 @@ void Printer::setup() {
     RGBButtonBackPressed = 0;
     RGBLightModeForceWhite = 0;
 #endif // RGB_LIGHT_R_PIN
-
-    extruderStepsNeeded = 0;
 
     UI_INITIALIZE;
 

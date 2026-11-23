@@ -27,6 +27,7 @@ def main():
     stop = (firmware / "PrintStop.cpp").read_text(encoding="utf-8")
     dms = (firmware / "StrainGauge.cpp").read_text(encoding="utf-8")
     start_line = (firmware / "StartLine.cpp").read_text(encoding="utf-8")
+    hal = (firmware / "HAL.cpp").read_text(encoding="utf-8")
     fragments = [
         section(eeprom, "#define EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX", "#define EPR_RF_HEATED_BED_SENSOR_TYPE"),
         section(rf_header, "#define UI_ACTION_RF_HEAT_BED_UP", "#define UI_ACTION_RF_PAUSE"),
@@ -73,9 +74,10 @@ def main():
         section(move_planner, "void PrintLine::setAxisSteps(", "\n/** \\brief Put a move"),
         section(motion, "#define FLAG_WARMUP", "\n#define DIRECT_IDLE"),
         section(motion, "class MoveQueue {", "\ninline uint8_t PrintLine::queuedMoveCount"),
-        "MoveQueue PrintLine::queue;\nconst int waitRelax = 0;",
+        "MoveQueue PrintLine::queue;",
         section(move_planner, "bool PrintLine::hasActiveZMove()", "\nvoid PrintLine::setAxisSteps("),
         section(move_planner, "uint8_t PrintLine::insertWaitMovesIfNeeded(", "\nvoid PrintLine::waitForXFreeLines("),
+        section(hal, "uint8_t PressureAdvance::nextTimerCompare(", "\nISR(EXTRUDER_TIMER_VECTOR)"),
         "void rescalePlannedAxis(uint8_t axis) {\nusing namespace Printer;\n"
         + section(printer, "        const float mmPerStep = 1.0f / axisStepsPerMM[axis];", "\n\n        /** Acceleration")
         + "\n}",
@@ -107,7 +109,8 @@ def main():
             "sense-window", "sense-settings", "sense-limit-interrupt",
             "pressure-pause", "pressure-stop", "digit-zero",
             "extrusion-planning",
-            "gcode-target", "wobble-target", "cartesian-planning", "segment-geometry", "move-queue", "ecmp-stepping", "xy-limits",
+            "gcode-target", "wobble-target", "cartesian-planning", "segment-geometry", "move-queue", "ecmp-stepping",
+            "advance-timer", "xy-limits",
         ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
 

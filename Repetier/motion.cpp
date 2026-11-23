@@ -65,8 +65,6 @@ long baudrate = BAUDRATE; // Communication speed rate.
 
 int maxadv2 = 0;
 float maxadvspeed = 0;
-volatile int waitRelax = 0; // Delay filament relax at the end of print, could be a simple timeout
-
 uint8_t pwm_pos[NUM_EXTRUDER + 3]; // 0-NUM_EXTRUDER = Heater 0-NUM_EXTRUDER of extruder, NUM_EXTRUDER = Heated bed, NUM_EXTRUDER+1 Board fan, NUM_EXTRUDER+2 = Fan
 
 uint8_t fanSpeed = 0;
@@ -183,7 +181,7 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
 
     updateTrapezoids();
     if (pathOptimize)
-        waitRelax = 70;
+        Printer::pressureAdvance.postponeRelaxation();
 
     // Make result permanent
     queue.publish(true);
@@ -713,7 +711,7 @@ processing.
 */
 uint8_t PrintLine::insertWaitMovesIfNeeded(uint8_t pathOptimize, uint8_t waitExtraLines) {
     if (queue.count() == 0
-        && waitRelax == 0
+        && Printer::pressureAdvance.relaxDelayElapsed()
         && pathOptimize) // First line after some time - warmup needed
     {
         uint8_t w = 4;
@@ -1007,7 +1005,7 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
                 const bool forward = move->isEPositiveMove();
                 const int8_t dir = forward ? 1 : -1;
                 if (Printer::isAdvanceActivated())
-                    Printer::extruderStepsNeeded += dir;
+                    Printer::pressureAdvance.addSteps(dir);
                 else
                 {
                     Extruder::step();
@@ -1017,7 +1015,7 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
 
                 if (forQueue && Printer::extrusionCompensation.addBaseStep(forward)) {
                     if (Printer::isAdvanceActivated()) {
-                        Printer::extruderStepsNeeded += dir;
+                        Printer::pressureAdvance.addSteps(dir);
                         Printer::extrusionCompensation.consumeExtraStep(forward);
                     } else {
                         // Normalize the remainder between the two step pulses.

@@ -311,14 +311,15 @@ void Extruder::selectExtruderById(uint8_t extruderId) {
     g_nManualSteps[E_AXIS] = (unsigned short)lroundf(Printer::axisStepsPerMM[E_AXIS] * DEFAULT_MANUAL_MM_E);
     Printer::pause.setParkSteps(E_AXIS, long(Printer::axisStepsPerMM[E_AXIS] * SCRIPT_RETRACT_MM));
 
-    Printer::maxExtruderSpeed = (uint8_t)floor(HAL::maxExtruderTimerFrequency() / (Extruder::current->maxFeedrate * Extruder::current->stepsPerMM));
-    if (Printer::maxExtruderSpeed > 15)
-        Printer::maxExtruderSpeed = 15;
-    float fmax = (HAL::maxExtruderTimerFrequency() / ((float)Printer::maxExtruderSpeed * Printer::axisStepsPerMM[E_AXIS]));
+    uint8_t stepInterval = (uint8_t)floor(HAL::maxExtruderTimerFrequency() / (Extruder::current->maxFeedrate * Extruder::current->stepsPerMM));
+    if (stepInterval > 15)
+        stepInterval = 15;
+    Printer::pressureAdvance.setStepInterval(stepInterval);
+    float fmax = HAL::maxExtruderTimerFrequency() / (float(stepInterval) * Printer::axisStepsPerMM[E_AXIS]);
     // Limit feedrate to interrupt speed
     if (fmax < Printer::maxFeedrate[E_AXIS])
         Printer::maxFeedrate[E_AXIS] = fmax;
-    HAL::resetExtruderDirection();
+    Printer::pressureAdvance.resetDirection();
 
     Extruder::current->tempControl.updateTempControlVars();
 

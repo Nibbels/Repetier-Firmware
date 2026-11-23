@@ -139,9 +139,6 @@ extern uint8_t fanSpeed;                  //remember user input fan speed at a 0
 
 extern int maxadv2;
 extern float maxadvspeed;
-// Delay filament relax at the end of print, could be a simple timeout
-extern volatile int waitRelax;
-
 #include "Extruder.h"
 
 extern millis_t previousMillisCmd;
