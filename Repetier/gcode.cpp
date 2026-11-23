@@ -17,9 +17,36 @@
 
 #include "Repetier.h"
 
-GCode GCode::commandsBuffered[GCODE_BUFFER_SIZE];  ///< Buffer for received commands.
-uint8_t GCode::bufferReadIndex = 0;                ///< Read position in gcode_buffer.
-uint8_t GCode::bufferWriteIndex = 0;               ///< Write position in gcode_buffer.
+namespace {
+class CommandQueue {
+public:
+    bool empty() const { return count_ == 0; }
+    bool full() const { return count_ >= GCODE_BUFFER_SIZE; }
+    GCode& writeSlot() { return slots_[write_]; }
+    GCode* front() { return empty() ? nullptr : &slots_[read_]; }
+
+    void publish() {
+        if (++write_ == GCODE_BUFFER_SIZE)
+            write_ = 0;
+        ++count_;
+    }
+
+    void retireFront() {
+        if (++read_ == GCODE_BUFFER_SIZE)
+            read_ = 0;
+        --count_;
+    }
+
+private:
+    GCode slots_[GCODE_BUFFER_SIZE];
+    uint8_t read_ = 0;
+    uint8_t write_ = 0;
+    volatile uint8_t count_ = 0;
+};
+
+CommandQueue commandQueue;
+} // namespace
+
 uint8_t GCode::commandReceiving[MAX_CMD_SIZE];     ///< Current received command.
 uint8_t GCode::commandsReceivingWritePosition = 0; ///< Writing position in gcode_transbuffer.
 uint8_t GCode::sendAsBinary;                       ///< Flags the command as binary input.
@@ -27,7 +54,6 @@ uint8_t GCode::commentDetected = false;            ///< Flags true if we are rea
 uint8_t GCode::binaryCommandSize;                  ///< Expected size of the incoming binary command.
 bool GCode::waitUntilAllCommandsAreParsed = false; ///< Don't read until all commands are parsed. Needed if gcode_buffer is misused as storage for strings.
 uint32_t GCode::actLineNumber;                     ///< Line number of current command.
-volatile uint8_t GCode::bufferLength = 0;          ///< Number of commands stored in gcode_buffer
 uint8_t GCode::formatErrors = 0;
 PGM_P GCode::fatalErrorMsg = NULL;  ///< message unset = no fatal error
 millis_t GCode::lastBusySignal = 0; ///< When was the last busy signal
@@ -249,8 +275,8 @@ void GCode::checkAndPushCommand() {
     }
     if (GCode::hasFatalError()) {
         GCode::reportFatalError();
-    } else {
-        pushCommand();
+    } else if (!Printer::printStop.commandsBlocked()) {
+        commandQueue.publish();
     }
 
     Com::printFLN(Com::tOkSpace, actLineNumber);
@@ -260,33 +286,20 @@ void GCode::checkAndPushCommand() {
     serialReceive.waitingForResend = -1; // everything is ok.
 } // checkAndPushCommand
 
-void GCode::pushCommand() {
-    if (Printer::printStop.commandsBlocked())
-        return; // Continue acknowledging the host while the stop sequence drains input.
-
-    if (++bufferWriteIndex >= GCODE_BUFFER_SIZE)
-        bufferWriteIndex = 0;
-    bufferLength++;
-} // pushCommand
-
 /**
 \brief Get the next buffered command. Returns 0 if no more commands are buffered. For each
 returned command, the popCurrentCommand() function must be called.
 */
 GCode* GCode::peekCurrentCommand() {
-    if (bufferLength == 0)
-        return NULL; // No more data
-    return &commandsBuffered[bufferReadIndex];
+    return commandQueue.front();
 } // peekCurrentCommand
 
 /** \brief Removes the last returned command from cache. */
 void GCode::popCurrentCommand() {
-    if (!bufferLength)
+    if (commandQueue.empty())
         return; // Should not happen, but safety first
     echoCommand();
-    if (++bufferReadIndex == GCODE_BUFFER_SIZE)
-        bufferReadIndex = 0;
-    bufferLength--;
+    commandQueue.retireFront();
 } // popCurrentCommand
 
 void GCode::echoCommand() {
@@ -377,7 +390,7 @@ void GCode::executeString(char* cmd) {
 
 // Receive one complete command from the USB serial port per call.
 void GCode::readFromSerial() {
-    if (bufferLength >= GCODE_BUFFER_SIZE || (waitUntilAllCommandsAreParsed && bufferLength)) {
+    if (commandQueue.full() || (waitUntilAllCommandsAreParsed && !commandQueue.empty())) {
         keepAlive(Processing);
         return;
     }
@@ -389,7 +402,7 @@ void GCode::readFromSerial() {
         if ((serialReceive.waitingForResend >= 0 || commandsReceivingWritePosition > 0) && idleTime > 200) {
             requestResend();
             serialReceive.timeOfLastDataPacket = now;
-        } else if (bufferLength == 0 && idleTime > 1000) {
+        } else if (commandQueue.empty() && idleTime > 1000) {
             // Unblock the host if an acknowledgement was lost.
             Com::printFLN(Com::tWait);
             serialReceive.timeOfLastDataPacket = now;
@@ -415,7 +428,7 @@ void GCode::readFromSerial() {
             sendAsBinary = (commandReceiving[0] & 128) != 0;
         }
 
-        GCode& command = commandsBuffered[bufferWriteIndex];
+        GCode& command = commandQueue.writeSlot();
         if (sendAsBinary) {
             if (commandsReceivingWritePosition < 2)
                 continue;

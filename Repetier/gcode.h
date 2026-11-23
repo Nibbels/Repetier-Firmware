@@ -200,7 +200,6 @@ public:
     void echoCommand();
     static GCode* peekCurrentCommand();
     static void readFromSerial();
-    static void pushCommand();
     static void executeFString(FSTRINGPARAM(cmd));
     static void executeString(char* cmd);
     static uint8_t computeBinarySize(char* ptr);
@@ -239,9 +238,6 @@ protected:
         return l;
     }
 
-    static GCode commandsBuffered[GCODE_BUFFER_SIZE]; ///< Buffer for received commands.
-    static uint8_t bufferReadIndex;                   ///< Read position in gcode_buffer.
-    static uint8_t bufferWriteIndex;                  ///< Write position in gcode_buffer.
     static uint8_t commandReceiving[MAX_CMD_SIZE];    ///< Current received command.
     static uint8_t commandsReceivingWritePosition;    ///< Writing position in gcode_transbuffer.
     static uint8_t sendAsBinary;                      ///< Flags the command as binary input.
@@ -249,7 +245,6 @@ protected:
     static uint8_t binaryCommandSize;                 ///< Expected size of the incoming binary command.
     static bool waitUntilAllCommandsAreParsed;        ///< Don't read until all commands are parsed. Needed if gcode_buffer is misused as storage for strings.
     static uint32_t actLineNumber;                    ///< Line number of current command.
-    static volatile uint8_t bufferLength;             ///< Number of commands stored in gcode_buffer
     static uint8_t formatErrors;                      ///< Number of sequential format errors
     static millis_t lastBusySignal;                   ///< When was the last busy signal
 
