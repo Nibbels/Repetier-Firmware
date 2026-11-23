@@ -47,6 +47,9 @@ Across the four AVR builds, 64 XY instruction traces reproduce the motor displac
 
 ### Z travel and scanning
 
+- [x] **Share one point probe across both scans.** The bed mesh, hot-nozzle calibration and Z-offset adjustment use the same coarse approach, release, fine approach and measurement result. The replay covers sensor loss and overload during the approach and checks the recorded Z. [Shared probe and hardware follow-up](z-offset/scans-and-persistence.md#one-point-probe-for-both-scan-jobs)
+- [ ] **Use the normal step executor for guarded Z probes.** Measure sample-to-stop time and the permissible bed force on each assembly. Feed timed DMS readings to a scan stop policy and to the existing print force controls. Report the executed Z at the end of the probe. [Guarded move design](z-offset/scans-and-persistence.md#guarded-moves-on-the-common-motion-path)
+
 - [x] **Service temperature control during DMS scans.** Scan sampling and Z probe increments yield to the foreground. The EEPROM failure, noise retry, manual cancel and missing DMS tests run the two scan workflows. The pulse replay checks a service visit every 16 Z pulses and cancellation between groups. [Bed scan](../tests/heat-bed-scan.py) · [Z-offset scan](../tests/z-offset-scan.py) · [Z pulses](../tests/z-motion.py)
 
 - [x] **Give the Z-offset scan named phases.** The scan owner keeps the current phase, probe Z and the leveling route. Each service call advances one phase and keeps the existing calibration waits. The replay checks normal completion, an unstable pressure retry, a missing EEPROM matrix and all seven leveling points. [Z-offset scan replay](../tests/z-offset-scan.py)

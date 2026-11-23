@@ -12,7 +12,7 @@ enum { X_AXIS, Y_AXIS, Z_AXIS };
 enum { EEPROM_FORMAT = 42, COMPENSATION_MATRIX_MAX_X = 8, COMPENSATION_MATRIX_MAX_Y = 8 };
 enum { HEAT_BED_SCAN_MODE_PLA = 1, HEAT_BED_SCAN_MODE_ABS = 2, EEPROM_SECTOR_SIZE = 1536 };
 enum { SCAN_ABORT_REASON_CANCELED = 1, SCAN_ABORT_REASON_AVERAGE_PRESSURE, SCAN_ABORT_REASON_IDLE_PRESSURE,
-       SCAN_ABORT_REASON_MATRIX_DIMENSION, SCAN_ABORT_REASON_DMS_UNAVAILABLE };
+       SCAN_ABORT_REASON_MATRIX_DIMENSION, SCAN_ABORT_REASON_DMS_UNAVAILABLE, SCAN_ABORT_REASON_DMS_OVERLOAD };
 enum {
     SCAN_ABORT_REASON_REACHED_MAX_COMPENSATION = 30, SCAN_ABORT_REASON_SCAN_OVER_START,
     SCAN_ABORT_REASON_SCAN_TOO_UNEVEN, SCAN_ABORT_REASON_SCAN_STEP_DELTA_OUT_OF_RANGE
@@ -48,7 +48,7 @@ uint16_t g_nScanPressureReadDelay = 15, g_nScanPressureTolerance = 15;
 long g_nScanXStartSteps = 100, g_nScanYStartSteps = 100, g_nScanXStepSizeSteps = 100, g_nScanYStepSizeSteps = 100;
 long g_nScanXMaxPositionSteps = 300, g_nScanYMaxPositionSteps = 300;
 
-bool injectNoise = false, injectDisconnection = false, disconnected = false, matrixPrepared = false, matrixSaved = false;
+bool injectNoise = false, injectDisconnection = false, injectOverload = false, disconnected = false, matrixPrepared = false, matrixSaved = false;
 unsigned keepAlives = 0, homedXY = 0, homedZ = 0, pressureReads = 0, negativeMoves = 0,
          disabled = 0, loaded = 0, thermalOffsets = 0, completed = 0, warmupMessages = 0;
 char aborted = 0;
@@ -140,16 +140,17 @@ void saveCompensationMatrix(unsigned int address) {
 }
 int testHeatBedTemperature() { return 0; }
 int testExtruderTemperature() { return 0; }
-void moveZ(long distance) {
+bool moveZ(long distance) {
     if (distance < 0) {
-        assert(!disconnected);
+        assert(!disconnected && (!injectOverload || !negativeMoves));
         ++negativeMoves;
         if (injectDisconnection)
             disconnected = true;
-    } else if (disconnected) {
+    } else if (disconnected || (injectOverload && negativeMoves)) {
         assert(bedTarget == 0 && !nozzleTargets.empty() && nozzleTargets.back() == 0);
     }
     Printer::zMotion.position += distance;
+    return true;
 }
 void adjustPressureLimits(short baseline) {
     g_nMinPressureContact = baseline - 10;
@@ -161,6 +162,10 @@ bool sampleStrainGauge(int16_t& digits) {
     ++pressureReads;
     if (disconnected)
         return false;
+    if (injectOverload && negativeMoves) {
+        digits = 10000;
+        return true;
+    }
     if (injectNoise && pressureReads > 6 && pressureReads <= 21) {
         digits = pressureReads % 2 ? 500 : 700;
         return true;
@@ -187,18 +192,21 @@ int main(int argc, char** argv) {
     const bool cancel = !std::strcmp(argv[1], "cancel");
     injectNoise = retry;
     injectDisconnection = !std::strcmp(argv[1], "disconnected");
+    injectOverload = !std::strcmp(argv[1], "overload");
 
     heatBedScan.startOrCancel();
     unsigned ticks = 0;
     while (heatBedScan.active()) {
         assert(++ticks <= 5000);
+        if (!g_abortZScan)
+            scanPressure.service(HAL::now);
         heatBedScan.tick();
         if (cancel && ticks == 3)
             heatBedScan.startOrCancel();
         HAL::now += 200000;
     }
-    if (injectDisconnection) {
-        assert(aborted == SCAN_ABORT_REASON_DMS_UNAVAILABLE && negativeMoves == 1);
+    if (injectDisconnection || injectOverload) {
+        assert(aborted == (injectOverload ? SCAN_ABORT_REASON_DMS_OVERLOAD : SCAN_ABORT_REASON_DMS_UNAVAILABLE) && negativeMoves == 1);
         assert(homedZ == 1 && disabled == 1 && loaded == 1 && !matrixSaved);
     } else if (cancel) {
         assert(aborted == SCAN_ABORT_REASON_CANCELED && loaded == 1 && disabled == 1);

@@ -14,7 +14,7 @@ enum { X_AXIS, Y_AXIS, Z_AXIS };
 enum { EEPROM_FORMAT = 42, COMPENSATION_MATRIX_MAX_X = 10, COMPENSATION_MATRIX_MAX_Y = 10 };
 enum { EEPROM_SECTOR_SIZE = 4096, EEPROM_OFFSET_DIMENSION_X = 2, EEPROM_OFFSET_DIMENSION_Y = 4 };
 enum { SCAN_ABORT_REASON_CANCELED = 1, SCAN_ABORT_REASON_MISSING_MATRIX, SCAN_ABORT_REASON_AVERAGE_PRESSURE,
-       SCAN_ABORT_REASON_IDLE_PRESSURE, SCAN_ABORT_REASON_OVERFLOWING_MATRIX, SCAN_ABORT_REASON_BAD_HEIGHT_MATRIX, SCAN_ABORT_REASON_DMS_UNAVAILABLE };
+       SCAN_ABORT_REASON_IDLE_PRESSURE, SCAN_ABORT_REASON_OVERFLOWING_MATRIX, SCAN_ABORT_REASON_BAD_HEIGHT_MATRIX, SCAN_ABORT_REASON_DMS_UNAVAILABLE, SCAN_ABORT_REASON_DMS_OVERLOAD };
 enum {
     SCAN_ABORT_REASON_REACHED_MAX_COMPENSATION = 30, SCAN_ABORT_REASON_SCAN_OVER_START,
     SCAN_ABORT_REASON_SCAN_TOO_UNEVEN, SCAN_ABORT_REASON_SCAN_STEP_DELTA_OUT_OF_RANGE
@@ -51,7 +51,7 @@ uint32_t g_nAutoReturnTime = 0;
 
 unsigned homedZ = 0, homedXY = 0, reported = 0, positiveRetryRetreats = 0, loaded = 0, shutdowns = 0, serviced = 0;
 unsigned corrected = 0, pressureSamples = 0, tickCount = 0, negativeMoves = 0;
-bool injectNoise = false, injectDisconnection = false, disconnected = false;
+bool injectNoise = false, injectDisconnection = false, injectOverload = false, disconnected = false;
 uint32_t lastUnstableAt = 0;
 char abortedWith = 0;
 bool matrixAvailable = true;
@@ -140,9 +140,9 @@ long random(long min, long max) {
     assert(min == -3 && max == 3);
     return 0;
 }
-void moveZ(long steps) {
+bool moveZ(long steps) {
     if (steps < 0) {
-        assert(!disconnected);
+        assert(!disconnected && (!injectOverload || !negativeMoves));
         ++negativeMoves;
         if (injectDisconnection)
             disconnected = true;
@@ -151,10 +151,15 @@ void moveZ(long steps) {
         ++positiveRetryRetreats;
     }
     Printer::zMotion.position += steps;
+    return true;
 }
 bool sampleStrainGauge(int16_t& digits) {
     if (disconnected)
         return false;
+    if (injectOverload && negativeMoves) {
+        digits = -10000;
+        return true;
+    }
     if (++pressureSamples <= 10 && injectNoise) {
         digits = pressureSamples % 2 ? 500 : 700;
         lastUnstableAt = HAL::now;
@@ -193,16 +198,19 @@ int main(int argc, char** argv) {
     matrixAvailable = !missing;
     injectNoise = retry;
     injectDisconnection = !std::strcmp(argv[1], "disconnected");
+    injectOverload = !std::strcmp(argv[1], "overload");
     HAL::now = retry ? UINT32_MAX - 900 : 0;
     zOffsetScan.startOrCancel(level);
     while (zOffsetScan.active()) {
         assert(++tickCount <= 7000);
+        if (!g_abortZScan)
+            scanPressure.service(HAL::now);
         zOffsetScan.tick();
         assert(serviced == tickCount);
         HAL::now += 10;
     }
-    if (injectDisconnection) {
-        assert(abortedWith == SCAN_ABORT_REASON_DMS_UNAVAILABLE && shutdowns == 1);
+    if (injectDisconnection || injectOverload) {
+        assert(abortedWith == (injectOverload ? SCAN_ABORT_REASON_DMS_OVERLOAD : SCAN_ABORT_REASON_DMS_UNAVAILABLE) && shutdowns == 1);
         assert(negativeMoves == 1 && homedZ == 1 && !corrected && !reported);
     } else if (cancel) {
         assert(abortedWith == SCAN_ABORT_REASON_CANCELED && tickCount == 3 && homedZ == 2);
@@ -214,6 +222,7 @@ int main(int argc, char** argv) {
         assert(!abortedWith && reported == 1 && g_nAutoReturnMessage && g_ZMatrixChangedInRam);
         assert(homedZ == (level ? 7u : 1u) && corrected == homedZ && homedXY == homedZ);
         assert(loaded == 1 && negativeMoves > 0);
+        assert(g_ZCompensationMatrix[4][4] == -123);
         assert(positiveRetryRetreats == static_cast<unsigned>(retry));
         const std::vector<std::pair<float, float>> expected = level
             ? std::vector<std::pair<float, float>>{{40, 40}, {20, 20}, {80, 80}, {40, 30}, {20, 80}, {80, 20}, {40, 50}}

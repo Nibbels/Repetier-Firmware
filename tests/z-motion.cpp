@@ -95,7 +95,7 @@ struct Commands {
 };
 struct Com { static void printFLN(const char*) {} };
 
-void moveZ(int nSteps, bool emergencyRetreat = false);
+bool moveZ(int nSteps, bool emergencyRetreat = false);
 
 #include "z-motion-firmware.inc"
 
@@ -312,7 +312,7 @@ void scanTravel() {
 
     reset(100);
     cancelAtPulses = 32;
-    moveZ(80);
+    assert(!moveZ(80));
     assert(g_abortZScan && pulseCount == 32 && waitedMs == 2 && zMotion.scanSteps() == 32);
     assert(!zMotion.scanInProgress());
 
@@ -320,7 +320,7 @@ void scanTravel() {
     Printer::blockAll = true;
     moveZ(4);
     assert(!pulseCount);
-    moveZ(4, true);
+    assert(moveZ(4, true));
     assert(pulseCount == 4 && motorPosition == 104);
 
     reset(10);

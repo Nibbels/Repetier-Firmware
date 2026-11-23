@@ -27,7 +27,7 @@ def main():
             os.environ.get("CXX", "c++"), "-std=c++11", "-O2", "-Wall", "-Wextra", "-Werror",
             "-I", str(build), "-I", str(firmware), str(tests / "z-offset-scan.cpp"), "-o", str(executable),
         ], check=True)
-        for scenario in ("normal", "retry", "missing-matrix", "level", "cancel-during-home", "disconnected"):
+        for scenario in ("normal", "retry", "missing-matrix", "level", "cancel-during-home", "disconnected", "overload"):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
 
 

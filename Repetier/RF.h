@@ -394,6 +394,7 @@ extern const char ui_text_saving_success[] PROGMEM;
 // Anscheinend crashgefährliches Hardware-Software-Setting
 #define SCAN_ABORT_REASON_BAD_HEIGHT_MATRIX 16
 #define SCAN_ABORT_REASON_DMS_UNAVAILABLE 17
+#define SCAN_ABORT_REASON_DMS_OVERLOAD 18
 
 // Factory scan margins in mm. X depends on the installed tool count.
 constexpr int heatBedScanXStartMm = NUM_EXTRUDER == 2 ? 0 : 15;
@@ -503,7 +504,7 @@ extern void switchActiveHeatBed(char newActiveHeatBed);
 
 extern short readAveragePressure(short* pnAveragePressure);
 
-extern void moveZ(int nSteps, bool emergencyRetreat = false);
+extern bool moveZ(int nSteps, bool emergencyRetreat = false);
 extern void restoreDefaultScanParameters(void);
 extern void outputScanParameters(void);
 extern void outputCompensationMatrix(char format = 0);

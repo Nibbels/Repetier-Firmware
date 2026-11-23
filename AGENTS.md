@@ -20,7 +20,7 @@ This is shared AVR/ATmega2560 Repetier firmware for **RF1000, RF2000 and RF2000v
 
 **Heater safety and watchdog.** Scan and motion waits must keep periodic services running. Read the [heater safety and watchdog requirements](docs/heater-safety.md) before changing heater control, PWM, scheduler waits or scan state dispatch.
 
-**Calibration scans.** The bed mesh and Z-offset scans own their phases and run one phase per service call. Long waits inside a phase still rely on cooperative firmware services. Repeat, cancel, matrix saving and thermal calibration are covered by [bed mesh replay](tests/heat-bed-scan.py) and [Z-offset replay](tests/z-offset-scan.py).
+**Calibration scans.** The bed mesh, hot-nozzle calibration and Z-offset scans use a shared point probe and a foreground pressure sampling service. Keep contact, overload and hardware travel rules independent. Use the [scan handover](docs/z-offset/scans-and-persistence.md) for the guarded-motion design and the [mesh replay](tests/heat-bed-scan.py) and [Z-offset replay](tests/z-offset-scan.py) for motion, retry, cancel and sensor faults.
 
 **Motion planning.** `MotionPlanner` prepares the step profile and owns the junction calculations. The planner updates queue slots in place and releases them with complete profiles. For a direct move, `Printer::offsetRelativeStepsCoordinates()` reserves the slot under interrupt protection, then the foreground plans and publishes the move. Replay early jog release and queue wrap with `python3 tests/pause-sense-offset.py`. [Planner and executor boundary](docs/motion-timing.md#planner-and-executor-boundary)
 
