@@ -114,29 +114,6 @@ void invalidateBedMatrixForReload() { g_ZCompensationMatrix[0][0] = EEPROM_FORMA
 char g_debugLevel = 0;
 char g_debugLog = 0;
 
-#ifdef RGB_LIGHT_R_PIN
-unsigned char g_uRGBHeatingR = RGB_HEATING_R;
-unsigned char g_uRGBHeatingG = RGB_HEATING_G;
-unsigned char g_uRGBHeatingB = RGB_HEATING_B;
-unsigned char g_uRGBPrintingR = RGB_PRINTING_R;
-unsigned char g_uRGBPrintingG = RGB_PRINTING_G;
-unsigned char g_uRGBPrintingB = RGB_PRINTING_B;
-unsigned char g_uRGBCoolingR = RGB_COOLING_R;
-unsigned char g_uRGBCoolingG = RGB_COOLING_G;
-unsigned char g_uRGBCoolingB = RGB_COOLING_B;
-unsigned char g_uRGBIdleR = RGB_IDLE_R;
-unsigned char g_uRGBIdleG = RGB_IDLE_G;
-unsigned char g_uRGBIdleB = RGB_IDLE_B;
-unsigned char g_uRGBManualR = RGB_MANUAL_R;
-unsigned char g_uRGBManualG = RGB_MANUAL_G;
-unsigned char g_uRGBManualB = RGB_MANUAL_B;
-volatile unsigned char g_uRGBCurrentR = 0;
-volatile unsigned char g_uRGBCurrentG = 0;
-volatile unsigned char g_uRGBCurrentB = 0;
-unsigned char g_uRGBTargetR = 0;
-unsigned char g_uRGBTargetG = 0;
-unsigned char g_uRGBTargetB = 0;
-#endif // RGB_LIGHT_R_PIN
 
 static void setupForPrinting();
 static void initCompensationMatrix();
@@ -3144,7 +3121,7 @@ void loopFeatures() //wird so aufgerufen, dass es ein ~100ms Takt sein sollte.
         Printer::pause.serviceStandby(uTime);
 
 #ifdef RGB_LIGHT_R_PIN
-        updateRGBLightStatus();
+        RgbLighting::updateStatus();
 #endif // RGB_LIGHT_R_PIN
 
         nEntered--;
@@ -4297,133 +4274,6 @@ void setMainsOutput(GCode* pCommand) {
 }
 
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
-#ifdef RGB_LIGHT_R_PIN
-struct RgbComponent {
-    uint8_t& level;
-    unsigned int address;
-};
-
-struct RgbProfile {
-    RgbComponent components[3];
-    PGM_P messagePrefix;
-    bool active;
-};
-
-void setRgbComponent(GCode& command, const RgbProfile& profile) {
-    if (!command.hasP() || !command.hasS() || command.P < 1 || command.P > 3)
-        return;
-
-    const uint8_t channel = command.P - 1;
-    const char channelName = channel == 0 ? 'R' : channel == 1 ? 'G' : 'B';
-    if (command.S < 0 || command.S > 255) {
-        Com::printF(profile.messagePrefix);
-        Com::print(channelName);
-        Com::printFLN(PSTR(" out of range "));
-        return;
-    }
-
-    const auto& component = profile.components[channel];
-    component.level = command.S;
-    HAL::eprSetByte(component.address, component.level);
-    EEPROM::updateChecksum();
-    if (profile.active)
-        setRGBTargetColors(profile.components[0].level, profile.components[1].level, profile.components[2].level);
-    Com::printF(profile.messagePrefix);
-    Com::print(channelName);
-    Com::printFLN(PSTR(" = "), component.level);
-}
-
-// RGB lighting.
-void setHeatingLight(GCode* pCommand) {
-    const bool active = Printer::RGBLightMode == RGB_MODE_AUTOMATIC && Printer::RGBLightStatus == RGB_STATUS_HEATING;
-    setRgbComponent(*pCommand, {{{g_uRGBHeatingR, EPR_RF_RGB_HEATING_R},
-                                 {g_uRGBHeatingG, EPR_RF_RGB_HEATING_G},
-                                 {g_uRGBHeatingB, EPR_RF_RGB_HEATING_B}},
-                                PSTR("RGB_HEATING_"), active});
-}
-
-void setPrintingLight(GCode* pCommand) {
-    const bool active = Printer::RGBLightMode == RGB_MODE_AUTOMATIC && Printer::RGBLightStatus == RGB_STATUS_PRINTING;
-    setRgbComponent(*pCommand, {{{g_uRGBPrintingR, EPR_RF_RGB_PRINTING_R},
-                                 {g_uRGBPrintingG, EPR_RF_RGB_PRINTING_G},
-                                 {g_uRGBPrintingB, EPR_RF_RGB_PRINTING_B}},
-                                PSTR("RGB_PRINTING_"), active});
-}
-
-void setCoolingLight(GCode* pCommand) {
-    const bool active = Printer::RGBLightMode == RGB_MODE_AUTOMATIC && Printer::RGBLightStatus == RGB_STATUS_COOLING;
-    setRgbComponent(*pCommand, {{{g_uRGBCoolingR, EPR_RF_RGB_COOLING_R},
-                                 {g_uRGBCoolingG, EPR_RF_RGB_COOLING_G},
-                                 {g_uRGBCoolingB, EPR_RF_RGB_COOLING_B}},
-                                PSTR("RGB_COOLING_"), active});
-}
-
-void setIdleLight(GCode* pCommand) {
-    const bool active = Printer::RGBLightMode == RGB_MODE_AUTOMATIC && Printer::RGBLightStatus == RGB_STATUS_IDLE;
-    setRgbComponent(*pCommand, {{{g_uRGBIdleR, EPR_RF_RGB_IDLE_R},
-                                 {g_uRGBIdleG, EPR_RF_RGB_IDLE_G},
-                                 {g_uRGBIdleB, EPR_RF_RGB_IDLE_B}},
-                                PSTR("RGB_IDLE_"), active});
-}
-
-void setManualLight(GCode* pCommand) {
-    const bool active = Printer::RGBLightMode == RGB_MODE_MANUAL;
-    setRgbComponent(*pCommand, {{{g_uRGBManualR, EPR_RF_RGB_MANUAL_R},
-                                 {g_uRGBManualG, EPR_RF_RGB_MANUAL_G},
-                                 {g_uRGBManualB, EPR_RF_RGB_MANUAL_B}},
-                                PSTR("RGB_MANUAL_"), active});
-}
-
-void setRgbLightMode(GCode* pCommand) {
-    if (pCommand->hasP()) {
-        switch (pCommand->P) {
-        case RGB_MODE_OFF: {
-            Printer::RGBLightStatus = RGB_STATUS_NOT_AUTOMATIC;
-            Printer::RGBLightMode = RGB_MODE_OFF;
-            Printer::RGBLightModeForceWhite = 0;
-
-            setRGBTargetColors(0, 0, 0);
-
-            HAL::eprSetByte(EPR_RF_RGB_LIGHT_MODE, Printer::RGBLightMode);
-            EEPROM::updateChecksum();
-            break;
-        }
-        case RGB_MODE_WHITE: {
-            Printer::RGBLightStatus = RGB_STATUS_NOT_AUTOMATIC;
-            Printer::RGBLightMode = RGB_MODE_WHITE;
-            Printer::RGBLightModeForceWhite = 0;
-
-            setRGBTargetColors(255, 255, 255);
-
-            HAL::eprSetByte(EPR_RF_RGB_LIGHT_MODE, Printer::RGBLightMode);
-            EEPROM::updateChecksum();
-            break;
-        }
-        case RGB_MODE_AUTOMATIC: {
-            Printer::RGBLightStatus = RGB_STATUS_AUTOMATIC;
-            Printer::RGBLightMode = RGB_MODE_AUTOMATIC;
-            Printer::RGBLightModeForceWhite = 0;
-
-            HAL::eprSetByte(EPR_RF_RGB_LIGHT_MODE, Printer::RGBLightMode);
-            EEPROM::updateChecksum();
-            break;
-        }
-        case RGB_MODE_MANUAL: {
-            Printer::RGBLightStatus = RGB_STATUS_NOT_AUTOMATIC;
-            Printer::RGBLightMode = RGB_MODE_MANUAL;
-            Printer::RGBLightModeForceWhite = 0;
-
-            setRGBTargetColors(g_uRGBManualR, g_uRGBManualG, g_uRGBManualB);
-
-            HAL::eprSetByte(EPR_RF_RGB_LIGHT_MODE, Printer::RGBLightMode);
-            EEPROM::updateChecksum();
-            break;
-        }
-        }
-    }
-}
-
-#endif // RGB_LIGHT_R_PIN
 // Z-offset scan, matrix correction and filament control.
 void configureZOffsetScan(GCode* pCommand) {
     if (heatBedScan.active()) {
@@ -5046,12 +4896,12 @@ void processSpecialGCode(GCode* pCommand) {
     case 3301: setMainsOutput(pCommand); return;
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 #ifdef RGB_LIGHT_R_PIN
-    case 3303: setHeatingLight(pCommand); return;
-    case 3304: setPrintingLight(pCommand); return;
-    case 3305: setCoolingLight(pCommand); return;
-    case 3306: setIdleLight(pCommand); return;
-    case 3307: setManualLight(pCommand); return;
-    case 3308: setRgbLightMode(pCommand); return;
+    case 3303: RgbLighting::setHeatingLight(pCommand); return;
+    case 3304: RgbLighting::setPrintingLight(pCommand); return;
+    case 3305: RgbLighting::setCoolingLight(pCommand); return;
+    case 3306: RgbLighting::setIdleLight(pCommand); return;
+    case 3307: RgbLighting::setManualLight(pCommand); return;
+    case 3308: RgbLighting::setRgbLightMode(pCommand); return;
 #endif // RGB_LIGHT_R_PIN
     case 3901:
     case 3900: configureZOffsetScan(pCommand); return;
@@ -5748,183 +5598,6 @@ bool switchActiveHeatBed(char newActiveHeatBed) {
     return true;
 } // switchActiveHeatBed
 
-#ifdef RGB_LIGHT_R_PIN
-void setRGBTargetColors(uint8_t R, uint8_t G, uint8_t B) {
-    g_uRGBTargetR = R;
-    g_uRGBTargetG = G;
-    g_uRGBTargetB = B;
-
-} // setRGBTargetColors
-
-void setRGBLEDs(uint8_t R, uint8_t G, uint8_t B) {
-    if (R > 0) {
-        TCCR4A |= (1 << COM4A1); // R > 0 PWM start
-        OCR4A = R * 80;
-    } else {
-        TCCR4A &= ~(1 << COM4A1); // R = 0 PWM stop
-    }
-
-    if (G > 0) {
-        TCCR4A |= (1 << COM4B1); // G > 0 PWM start
-        OCR4B = G * 80;
-    } else {
-        TCCR4A &= ~(1 << COM4B1); // G = 0 PWM stop
-    }
-
-    if (B > 0) {
-        TCCR4A |= (1 << COM4C1); // B > 0 PWM start
-        OCR4C = B * 80;
-    } else {
-        TCCR4A &= ~(1 << COM4C1); // B = 0 PWM stop
-    }
-
-    g_uRGBCurrentR = R;
-    g_uRGBCurrentG = G;
-    g_uRGBCurrentB = B;
-
-} // setRGBLEDs
-
-void updateRGBLightStatus(void) {
-    char newStatus = RGB_STATUS_IDLE;
-
-    if (Printer::RGBButtonBackPressed) {
-        // toggle the white light
-        Printer::RGBLightModeForceWhite = !Printer::RGBLightModeForceWhite;
-
-        if (Printer::RGBLightModeForceWhite) {
-            setRGBTargetColors(255, 255, 255);
-        } else {
-            if (Printer::RGBLightMode == RGB_MODE_OFF) {
-                setRGBTargetColors(0, 0, 0);
-            } else if (Printer::RGBLightMode == RGB_MODE_AUTOMATIC) {
-                Printer::RGBLightStatus = RGB_STATUS_AUTOMATIC;
-            } else if (Printer::RGBLightMode == RGB_MODE_MANUAL) {
-                setRGBTargetColors(g_uRGBManualR, g_uRGBManualG, g_uRGBManualB);
-            }
-        }
-
-        Printer::RGBButtonBackPressed = 0;
-    }
-
-    if (Printer::RGBLightModeForceWhite) {
-        // there is nothing to do in case we shall display the white light
-        return;
-    }
-
-    if (Printer::RGBLightStatus == RGB_STATUS_NOT_AUTOMATIC) {
-        // there is nothing to do in case we shall not change the RGB colors automatically
-        return;
-    }
-
-
-    // operating mode print
-    for (uint8_t i = 0; i < NUM_EXTRUDER; i++) {
-        if (extruder[i].tempControl.targetTemperatureC > MAX_ROOM_TEMPERATURE) {
-            if (fabs(extruder[i].tempControl.targetTemperatureC - extruder[i].tempControl.currentTemperatureC) < RGB_LIGHT_TEMP_TOLERANCE) {
-                // we have reached the target temperature
-                newStatus = RGB_STATUS_PRINTING;
-            } else if (extruder[i].tempControl.targetTemperatureC > extruder[i].tempControl.currentTemperatureC) {
-                // we are still heating
-                newStatus = RGB_STATUS_HEATING;
-            } else {
-                // we end up here in case the target temperature is below the current temperature (this happens typically when the target temperature is reduced after the first layer)
-            }
-        }
-    }
-
-    if (heatedBedController.targetTemperatureC > MAX_ROOM_TEMPERATURE) {
-        if (fabs(heatedBedController.targetTemperatureC - heatedBedController.currentTemperatureC) < RGB_LIGHT_TEMP_TOLERANCE) {
-            // we have reached the target temperature
-            if (newStatus == RGB_STATUS_IDLE) {
-                newStatus = RGB_STATUS_PRINTING;
-            }
-        } else if (heatedBedController.targetTemperatureC > heatedBedController.currentTemperatureC) {
-            // we are still heating
-            newStatus = RGB_STATUS_HEATING;
-        } else {
-            // we end up here in case the target temperature is below the current temperature (this happens typically when the target temperature is reduced after the first layer)
-        }
-    }
-
-    for (uint8_t i = 0; i < NUM_EXTRUDER; i++) {
-        if ((extruder[i].tempControl.currentTemperatureC - extruder[i].tempControl.targetTemperatureC) > COOLDOWN_THRESHOLD) {
-            // we shall cool down
-            if (newStatus == RGB_STATUS_IDLE) {
-                newStatus = RGB_STATUS_COOLING;
-            }
-        }
-    }
-
-    if ((heatedBedController.currentTemperatureC - heatedBedController.targetTemperatureC) > COOLDOWN_THRESHOLD) {
-        // we shall cool down
-        if (newStatus == RGB_STATUS_IDLE) {
-            newStatus = RGB_STATUS_COOLING;
-        }
-    }
-
-    if (newStatus != Printer::RGBLightStatus) {
-        if (newStatus == RGB_STATUS_IDLE && Printer::RGBLightStatus == RGB_STATUS_COLOR_CHANGE) {
-            // when we are in color change mode already we shall not switch back to idle
-        } else {
-            Printer::RGBLightStatus = newStatus;
-            //          Com::printFLN( PSTR( "new RGB light status: " ), Printer::RGBLightStatus );
-
-            switch (Printer::RGBLightStatus) {
-            case RGB_STATUS_PRINTING: {
-                setRGBTargetColors(g_uRGBPrintingR, g_uRGBPrintingG, g_uRGBPrintingB);
-                break;
-            }
-            case RGB_STATUS_HEATING: {
-                setRGBTargetColors(g_uRGBHeatingR, g_uRGBHeatingG, g_uRGBHeatingB);
-                break;
-            }
-            case RGB_STATUS_COOLING: {
-                setRGBTargetColors(g_uRGBCoolingR, g_uRGBCoolingG, g_uRGBCoolingB);
-                break;
-            }
-            case RGB_STATUS_IDLE: // fall through
-            default: {
-                Printer::RGBLightIdleStart = HAL::timeInMilliseconds();
-                Printer::RGBLightStatus = RGB_STATUS_IDLE;
-                setRGBTargetColors(g_uRGBIdleR, g_uRGBIdleG, g_uRGBIdleB);
-                break;
-            }
-            }
-        }
-    }
-
-    if (Printer::RGBLightStatus == RGB_STATUS_IDLE && Printer::RGBLightIdleStart) {
-        if ((HAL::timeInMilliseconds() - Printer::RGBLightIdleStart) / 1000 > RGB_LIGHT_COLOR_CHANGE_DELAY) {
-            Printer::RGBLightStatus = RGB_STATUS_COLOR_CHANGE;
-            Printer::RGBLightIdleStart = 0;
-
-            //          Com::printFLN( PSTR( "new RGB light status: " ), Printer::RGBLightStatus );
-            setRGBTargetColors(255, 0, 0);
-        }
-    }
-
-    if (Printer::RGBLightStatus == RGB_STATUS_COLOR_CHANGE) {
-        if (g_uRGBTargetR == g_uRGBCurrentR && g_uRGBTargetG == g_uRGBCurrentG && g_uRGBTargetB == g_uRGBCurrentB) {
-            if (g_uRGBTargetR == 255 && g_uRGBTargetG == 0 && g_uRGBTargetB == 0) {
-                g_uRGBTargetG = 255;
-            } else if (g_uRGBTargetR == 255 && g_uRGBTargetG == 255 && g_uRGBTargetB == 0) {
-                g_uRGBTargetR = 0;
-            } else if (g_uRGBTargetR == 0 && g_uRGBTargetG == 255 && g_uRGBTargetB == 0) {
-                g_uRGBTargetB = 255;
-            } else if (g_uRGBTargetR == 0 && g_uRGBTargetG == 255 && g_uRGBTargetB == 255) {
-                g_uRGBTargetG = 0;
-            } else if (g_uRGBTargetR == 0 && g_uRGBTargetG == 0 && g_uRGBTargetB == 255) {
-                g_uRGBTargetR = 255;
-            } else if (g_uRGBTargetR == 255 && g_uRGBTargetG == 0 && g_uRGBTargetB == 255) {
-                g_uRGBTargetB = 0;
-            }
-        }
-    }
-
-    return;
-
-} // updateRGBLightStatus
-#endif // RGB_LIGHT_R_PIN
 
 static void setupForPrinting() {
     Printer::setSomeTempsensorDefect(false);

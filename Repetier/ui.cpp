@@ -966,10 +966,10 @@ void UIDisplay::parse(char* txt, bool ram) {
 #ifdef RGB_LIGHT_R_PIN
             else if (c2 == 'i') // %li : Light: White/Color
             {
-                if (Printer::RGBLightModeForceWhite) {
+                if (RgbLighting::forcedWhite()) {
                     addStringP(ui_text_white);
                 } else {
-                    switch (Printer::RGBLightMode) {
+                    switch (RgbLighting::mode()) {
                     case RGB_MODE_OFF:
                         addStringP(ui_text_off);
                         break;
@@ -2162,7 +2162,7 @@ void UIDisplay::backAction() {
     {
 #ifdef RGB_LIGHT_R_PIN
         if (menuLevel == 0) {
-            Printer::RGBButtonBackPressed = 1;
+            RgbLighting::requestWhiteToggle();
         }
 #endif // RGB_LIGHT_R_PIN
         menuEsc();
@@ -2638,37 +2638,9 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
 
 #ifdef RGB_LIGHT_R_PIN
     case UI_ACTION_RGB_LIGHT_MODE: {
-        INCREMENT_MIN_MAX(Printer::RGBLightMode, 1, 0, 3);
-
-        HAL::eprSetByte(EPR_RF_RGB_LIGHT_MODE, Printer::RGBLightMode);
-        EEPROM::updateChecksum();
-
-        switch (Printer::RGBLightMode) {
-        case RGB_MODE_OFF: {
-            Printer::RGBLightStatus = RGB_STATUS_NOT_AUTOMATIC;
-            Printer::RGBLightModeForceWhite = 0;
-            setRGBTargetColors(0, 0, 0);
-            break;
-        }
-        case RGB_MODE_WHITE: {
-            Printer::RGBLightStatus = RGB_STATUS_NOT_AUTOMATIC;
-            Printer::RGBLightModeForceWhite = 0;
-            setRGBTargetColors(255, 255, 255);
-            break;
-        }
-        case RGB_MODE_AUTOMATIC: {
-            // the firmware will determine the current RGB colors automatically
-            Printer::RGBLightStatus = RGB_STATUS_AUTOMATIC;
-            Printer::RGBLightModeForceWhite = 0;
-            break;
-        }
-        case RGB_MODE_MANUAL: {
-            Printer::RGBLightStatus = RGB_STATUS_NOT_AUTOMATIC;
-            Printer::RGBLightModeForceWhite = 0;
-            setRGBTargetColors(g_uRGBManualR, g_uRGBManualG, g_uRGBManualB);
-            break;
-        }
-        }
+        char mode = RgbLighting::mode();
+        INCREMENT_MIN_MAX(mode, 1, 0, 3);
+        RgbLighting::selectMode(mode);
         break;
     }
 #endif // RGB_LIGHT_R_PIN

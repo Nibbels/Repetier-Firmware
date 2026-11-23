@@ -199,9 +199,7 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     Printer::pressureProtection.setStopLimits({EMERGENCY_STOP_DIGITS_MIN, EMERGENCY_STOP_DIGITS_MAX});
 
 #ifdef RGB_LIGHT_R_PIN
-    Printer::RGBLightMode = RGB_MODE_AUTOMATIC;
-    Printer::RGBLightStatus = RGB_STATUS_AUTOMATIC;
-    Printer::RGBLightIdleStart = 0;
+    RgbLighting::restoreMode(RGB_MODE_AUTOMATIC);
 #endif // RGB_LIGHT_R_PIN
 
     const unsigned short uMotorCurrentUse[] = MOTOR_CURRENT_NORMAL; //Standardwert
@@ -308,7 +306,7 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     HAL::eprSetByte(EPR_RF_CASE_LIGHT_MODE, Printer::enableCaseLight);
 
 #ifdef RGB_LIGHT_R_PIN
-    HAL::eprSetByte(EPR_RF_RGB_LIGHT_MODE, Printer::RGBLightMode);
+    HAL::eprSetByte(EPR_RF_RGB_LIGHT_MODE, RgbLighting::mode());
 #endif // RGB_LIGHT_R_PIN
 
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
@@ -578,13 +576,7 @@ void EEPROM::readDataFromEEPROM() {
     Printer::enableCaseLight = HAL::eprGetByte(EPR_RF_CASE_LIGHT_MODE);
 
 #ifdef RGB_LIGHT_R_PIN
-    Printer::RGBLightMode = HAL::eprGetByte(EPR_RF_RGB_LIGHT_MODE);
-    if (Printer::RGBLightMode == RGB_MODE_AUTOMATIC) {
-        Printer::RGBLightStatus = RGB_STATUS_AUTOMATIC;
-        Printer::RGBLightIdleStart = 0;
-    } else {
-        Printer::RGBLightStatus = RGB_STATUS_NOT_AUTOMATIC;
-    }
+    RgbLighting::restoreMode(HAL::eprGetByte(EPR_RF_RGB_LIGHT_MODE));
 #endif // RGB_LIGHT_R_PIN
 
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2

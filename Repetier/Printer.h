@@ -128,13 +128,6 @@ public:
 
     static char enableCaseLight;
 
-#ifdef RGB_LIGHT_R_PIN
-    static char RGBLightMode;
-    static char RGBLightStatus;
-    static unsigned long RGBLightIdleStart;
-    static char RGBButtonBackPressed;
-    static char RGBLightModeForceWhite;
-#endif // RGB_LIGHT_R_PIN
 
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
     static char enable230VOutput;

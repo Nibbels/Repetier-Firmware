@@ -92,13 +92,6 @@ char Printer::enabledStepper[3] = { 0, 0, 0 };
 
 char Printer::enableCaseLight = CASE_LIGHTS_DEFAULT_ON;
 
-#ifdef RGB_LIGHT_R_PIN
-char Printer::RGBLightMode;
-char Printer::RGBLightStatus;
-unsigned long Printer::RGBLightIdleStart;
-char Printer::RGBButtonBackPressed;
-char Printer::RGBLightModeForceWhite;
-#endif // RGB_LIGHT_R_PIN
 
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 char Printer::enable230VOutput;
@@ -577,15 +570,7 @@ void Printer::setup() {
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
 #ifdef RGB_LIGHT_R_PIN
-    RGBLightMode = RGB_LIGHT_DEFAULT_MODE;
-    if (RGBLightMode == RGB_MODE_AUTOMATIC) {
-        RGBLightStatus = RGB_STATUS_AUTOMATIC;
-    } else {
-        RGBLightStatus = RGB_STATUS_NOT_AUTOMATIC;
-    }
-    RGBLightIdleStart = 0;
-    RGBButtonBackPressed = 0;
-    RGBLightModeForceWhite = 0;
+    RgbLighting::reset();
 #endif // RGB_LIGHT_R_PIN
 
     UI_INITIALIZE;
@@ -650,26 +635,7 @@ void Printer::setup() {
     Extruder::applyCurrentSettings();
 
 #ifdef RGB_LIGHT_R_PIN
-    setRGBLEDs(0, 0, 0);
-
-    switch (RGBLightMode) {
-    case RGB_MODE_OFF: {
-        setRGBTargetColors(0, 0, 0);
-        break;
-    }
-    case RGB_MODE_WHITE: {
-        setRGBTargetColors(255, 255, 255);
-        break;
-    }
-    case RGB_MODE_AUTOMATIC: {
-        setRGBTargetColors(g_uRGBIdleR, g_uRGBIdleG, g_uRGBIdleB);
-        break;
-    }
-    case RGB_MODE_MANUAL: {
-        setRGBTargetColors(g_uRGBManualR, g_uRGBManualG, g_uRGBManualB);
-        break;
-    }
-    }
+    RgbLighting::initialize();
 #endif // RGB_LIGHT_R_PIN
 
     g_unlock_movement = 0;

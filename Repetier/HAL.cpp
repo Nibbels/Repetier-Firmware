@@ -797,34 +797,8 @@ ISR(PWM_TIMER_VECTOR) {
     UI_FAST; // Short timed user interface action
 
 #ifdef RGB_LIGHT_R_PIN
-    if (rgb_10ms_change_should_be_now) {
-        char change = 0;
-        if (g_uRGBTargetR > g_uRGBCurrentR) {
-            g_uRGBCurrentR++;
-            change = 1;
-        } else if (g_uRGBTargetR < g_uRGBCurrentR) {
-            g_uRGBCurrentR--;
-            change = 1;
-        }
-        if (g_uRGBTargetG > g_uRGBCurrentG) {
-            g_uRGBCurrentG++;
-            change = 1;
-        } else if (g_uRGBTargetG < g_uRGBCurrentG) {
-            g_uRGBCurrentG--;
-            change = 1;
-        }
-        if (g_uRGBTargetB > g_uRGBCurrentB) {
-            g_uRGBCurrentB++;
-            change = 1;
-        } else if (g_uRGBTargetB < g_uRGBCurrentB) {
-            g_uRGBCurrentB--;
-            change = 1;
-        }
-
-        if (change) {
-            setRGBLEDs(g_uRGBCurrentR, g_uRGBCurrentG, g_uRGBCurrentB);
-        }
-    }
+    if (rgb_10ms_change_should_be_now)
+        RgbLighting::advanceFade();
 #endif // RGB_LIGHT_R_PIN
 } // ISR(PWM_TIMER_VECTOR)
 

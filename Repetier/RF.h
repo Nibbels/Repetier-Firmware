@@ -19,6 +19,7 @@
 #define RF_H
 
 #include "CalibrationScan.h"
+#include "RgbLighting.h"
 
 // ##########################################################################################
 // ##   RF specific UI Actions
@@ -394,29 +395,6 @@ extern char g_debugLog;
 // SenseOffset adds clearance when DMS force is high on the first layer.
 
 
-#ifdef RGB_LIGHT_R_PIN
-extern unsigned char g_uRGBHeatingR;
-extern unsigned char g_uRGBHeatingG;
-extern unsigned char g_uRGBHeatingB;
-extern unsigned char g_uRGBPrintingR;
-extern unsigned char g_uRGBPrintingG;
-extern unsigned char g_uRGBPrintingB;
-extern unsigned char g_uRGBCoolingR;
-extern unsigned char g_uRGBCoolingG;
-extern unsigned char g_uRGBCoolingB;
-extern unsigned char g_uRGBIdleR;
-extern unsigned char g_uRGBIdleG;
-extern unsigned char g_uRGBIdleB;
-extern unsigned char g_uRGBManualR;
-extern unsigned char g_uRGBManualG;
-extern unsigned char g_uRGBManualB;
-extern volatile unsigned char g_uRGBCurrentR;
-extern volatile unsigned char g_uRGBCurrentG;
-extern volatile unsigned char g_uRGBCurrentB;
-extern unsigned char g_uRGBTargetR;
-extern unsigned char g_uRGBTargetG;
-extern unsigned char g_uRGBTargetB;
-#endif // RGB_LIGHT_R_PIN
 
 extern void initRF(void);
 
@@ -482,11 +460,6 @@ extern void drv8711Init(void);
 
 extern void cleanupEPositions(void);
 
-#ifdef RGB_LIGHT_R_PIN
-extern void setRGBTargetColors(uint8_t R, uint8_t G, uint8_t B);
-extern void setRGBLEDs(uint8_t R, uint8_t G, uint8_t B);
-extern void updateRGBLightStatus(void);
-#endif // RGB_LIGHT_R_PIN
 
 extern void prepareZCompensation(void);
 extern unsigned char isMovingAllowed(const char* pszCommand, char outputLog = 1);
