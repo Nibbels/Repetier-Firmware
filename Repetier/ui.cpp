@@ -1233,7 +1233,7 @@ void UIDisplay::parse(char* txt, bool ram) {
                         // we can not move any more
                         bDefect = true;
                     } else {
-                        fvalue = Printer::destinationMM[E_AXIS];
+                        fvalue = Printer::moveTarget.machineMM(E_AXIS);
                     }
                 }
 

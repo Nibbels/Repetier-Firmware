@@ -43,11 +43,12 @@ def main():
         pause.removeprefix('#include "Repetier.h"\n'),
         stop.removeprefix('#include "Repetier.h"\n'),
         "namespace Printer {\n"
-        + section(printer_header, "    static INLINE void setEPositionMM(", "\n    static void addDestinationMM(")
+        + section(printer_header, "    static INLINE void setEPositionMM(", "\n    static INLINE void stopDirectAxis(")
         .replace("static INLINE void ", "void ")
         .replace("float remainder = 0.0f", "float remainder")
         + "\n}",
-        section(printer, "void Printer::addDestinationMM(", "\n// Convert G-code positions"),
+        section(printer, "inline bool isExtrusionAllowed(", "\nbool Printer::isZMoveActive("),
+        section(printer, "void Printer::setFeedrate(", "\n/** Move to machine coordinates"),
         section(printer, "void Printer::stopPrint()", "\n#define START_EXTRUDER_CONFIG"),
         section(printer, "void Printer::homeZAxis()", "\nvoid Printer::homeAxis("),
         section(printer, "void Printer::enableSenseOffsetnow(", "\nvoid Printer::enableCMPnow("),
@@ -89,6 +90,7 @@ def main():
             "sense-window", "sense-settings", "sense-limit-interrupt",
             "pressure-pause", "pressure-stop", "digit-zero",
             "extrusion-planning",
+            "gcode-target",
         ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
 

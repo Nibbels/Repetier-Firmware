@@ -113,8 +113,8 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
     for (uint8_t axis = 0; axis < 4; axis++) {
         int32_t steps;
         if (axis == E_AXIS) {
-            const float targetE = Printer::destinationMM[E_AXIS];
-            const float targetRemainder = Printer::destinationRemainderMM[E_AXIS];
+            const float targetE = Printer::moveTarget.machineMM(E_AXIS);
+            const float targetRemainder = Printer::moveTarget.remainderMM(E_AXIS);
             const float flow = Printer::menuExtrusionFactor * Printer::digitCompensation.extrusionFactor();
             steps = Printer::extrusionPlanner.planSteps({targetE, targetRemainder}, flow, Printer::axisStepsPerMM[E_AXIS]);
         } else {

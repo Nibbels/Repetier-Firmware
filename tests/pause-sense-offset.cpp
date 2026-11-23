@@ -107,6 +107,7 @@ void WRITE(int pin, bool high);
 #include "StrainGauge.h"
 #include "StartLine.h"
 #include "ExtrusionPlanner.h"
+#include "MoveTarget.h"
 
 #define PSTR(text) (text)
 #define UI_STATUS_UPD(text) ((void)0)
@@ -188,7 +189,9 @@ float axisMMPerSteps[3] = { 1.0f / 160, 1.0f / 160, 1.0f / zStepsPerMm };
 float homingFeedrate[3] = { 60.0f, 60.0f, 5.0f };
 float axisLengthMM[3] = { 170.0f, 245.0f, 200.0f };
 long maxSoftEndstopSteps[2] = { 170 * 160L, 245 * 160L };
-float destinationMM[4] = {}, destinationRemainderMM[4] = {};
+MoveTarget moveTarget;
+float feedrate = 10.0f;
+bool unitIsInches = false, relativeCoordinateMode = false;
 float menuExtrusionFactor = 1.0f;
 bool relativeExtruderCoordinateMode = false;
 float compensatedPositionOverPercE = 0.0f;
@@ -202,6 +205,8 @@ char moveMode[3] = { MOVE_MODE_SINGLE_STEPS, MOVE_MODE_SINGLE_STEPS, MOVE_MODE_S
 
 bool debugErrors() { return false; }
 bool debugInfo() { return false; }
+bool debugDryrun() { return false; }
+float convertToMM(float value) { return unitIsInches ? value * 25.4 : value; }
 bool isPrinting() { return printing; }
 void setPrinting(bool active) { printing = active; }
 bool areAxisHomed() { return axesHomed; }
@@ -240,9 +245,9 @@ void queueRelativeMMCoordinates(float, float, float z, float, float, bool, bool 
 void setXAxisSteps(long) {}
 void setYAxisSteps(long) {}
 void setZAxisSteps(long steps) { zMotion.setNominalSteps(steps); }
-void setDestinationMM(uint8_t axis, float target, float remainder = 0.0f);
 void setEPositionMM(float value, float remainder = 0.0f);
-void addDestinationMM(uint8_t axis, float distance);
+void setFeedrate(float value);
+bool queueGCodeCoordinates(GCode*);
 void queueFloatCoordinates(float x, float y, float z, float e, float speed) {
     assert(startLine.active() && !printStop.commandsBlocked());
     ++primeMoves;
@@ -330,6 +335,12 @@ struct PrintLine {
     static int queuedTask, stopRequests;
     static bool hasLines() { return linesCount; }
     static bool hasStoppableDirectMove();
+    static unsigned plannedMoves;
+    static bool updatesWobble;
+    static void prepareQueueMove(bool, bool, float, bool wobble) {
+        ++plannedMoves;
+        updatesWobble = wobble;
+    }
     static void stopDirectMove() { ++stopRequests; }
     static void resetPathPlanner() { linesCount = 0; queuedTask = TASK_NO_TASK; }
     static void queueTask(int task) {
@@ -344,6 +355,8 @@ PrintLine* PrintLine::cur = nullptr;
 int PrintLine::linesCount = 3;
 int PrintLine::queuedTask = TASK_NO_TASK;
 int PrintLine::stopRequests = 0;
+unsigned PrintLine::plannedMoves = 0;
+bool PrintLine::updatesWobble = false;
 
 struct UIDisplay {
     int lastButtonAction = 0, menuLevel = 1, menuPos[1] = {};
@@ -369,14 +382,17 @@ void printCurrentPosition() {}
 
 struct GCode {
     long S = 0, P = 0;
-    float E = 0, F = 0, I = 1, Y = 0;
+    float E = 0, F = 0, I = 1, X = 0, Y = 0, Z = 0;
     bool explicitP = false, explicitS = false;
     bool hasS() const { return explicitS || S != 0; }
     bool hasP() const { return explicitP || P != 0; }
     bool hasE() const { return E != 0; }
     bool hasF() const { return F != 0; }
     bool hasI() const { return I != 0; }
+    bool hasX() const { return X != 0; }
     bool hasY() const { return Y != 0; }
+    bool hasZ() const { return Z != 0; }
+    bool hasNoXYZ() const { return !hasX() && !hasY() && !hasZ(); }
 
     static void readFromSerial() {
         assert(Printer::printStop.commandsBlocked());
@@ -1268,9 +1284,9 @@ void primeFlowCleanup(unsigned skipAt, unsigned abortAt) {
     assert(!Printer::startLine.active() && Printer::relativeExtruderCoordinateMode);
     assert(Printer::feedrateMultiply == 85 && Printer::menuExtrusionFactor == 0.93f);
     if (abortAt) {
-        assert(Printer::printStop.commandsBlocked() && Printer::destinationMM[E_AXIS] == 0.0f);
+        assert(Printer::printStop.commandsBlocked() && Printer::moveTarget.machineMM(E_AXIS) == 0.0f);
     } else {
-        assert(Printer::destinationMM[E_AXIS] == 10.0f && Printer::destinationRemainderMM[E_AXIS] == 0.00001f);
+        assert(Printer::moveTarget.machineMM(E_AXIS) == 10.0f && Printer::moveTarget.remainderMM(E_AXIS) == 0.00001f);
         assert(Printer::extrusionPlanner.stepRemainder() == 0.125f && Printer::compensatedPositionCollectTinyE == 0.75f);
     }
 }
@@ -1310,19 +1326,19 @@ void primeParameters() {
 void extrusionPlanning() {
     Printer::axisStepsPerMM[E_AXIS] = 1.0f;
     Printer::setEPositionMM(0);
-    Printer::addDestinationMM(E_AXIS, 0.5f);
+    Printer::moveTarget.addMM(E_AXIS, 0.5f);
     assert(planExtrusionMove() == 1 && Printer::extrusionPlanner.stepRemainder() == -0.5f);
 
     // G92 rebases the logical position while retaining the motor-step carry.
     Printer::setEPositionMM(10.0f, 0.00001f);
     assert(planExtrusionMove() == 0 && Printer::extrusionPlanner.stepRemainder() == -0.5f);
-    Printer::addDestinationMM(E_AXIS, 0.5f);
+    Printer::moveTarget.addMM(E_AXIS, 0.5f);
     assert(planExtrusionMove() == 0 && Printer::extrusionPlanner.stepRemainder() == 0.0f);
 
     Printer::menuExtrusionFactor = 0.5f;
-    Printer::addDestinationMM(E_AXIS, 1.0f);
+    Printer::moveTarget.addMM(E_AXIS, 1.0f);
     assert(planExtrusionMove() == 1);
-    Printer::addDestinationMM(E_AXIS, -1.0f);
+    Printer::moveTarget.addMM(E_AXIS, -1.0f);
     assert(planExtrusionMove() == -1 && Printer::extrusionPlanner.stepRemainder() == 0.0f);
 
     Printer::setEPositionMM(0);
@@ -1330,10 +1346,50 @@ void extrusionPlanning() {
     Printer::axisStepsPerMM[E_AXIS] = 280.0f;
     int32_t steps = 0;
     for (int i = 0; i < 100000; ++i) {
-        Printer::addDestinationMM(E_AXIS, 0.008f);
+        Printer::moveTarget.addMM(E_AXIS, 0.008f);
         steps += planExtrusionMove();
     }
     assert(steps == 224000);
+}
+
+void gcodeTarget() {
+    Printer::moveTarget.setWorkOffsetMM(X_AXIS, 11);
+    Printer::moveTarget.setWorkOffsetMM(Y_AXIS, -3);
+    GCode command;
+    command.X = 21;
+    command.Y = 37;
+    command.E = 2;
+    command.F = 1200;
+    assert(Printer::queueGCodeCoordinates(&command));
+    assert(Printer::moveTarget.machineMM(X_AXIS) == 10 && Printer::moveTarget.machineMM(Y_AXIS) == 40);
+    assert(Printer::moveTarget.machineMM(E_AXIS) == 2 && PrintLine::updatesWobble);
+    assert(std::abs(Printer::feedrate - 20) < 0.00001f);
+
+    Printer::relativeCoordinateMode = true;
+    command.X = 0;
+    command.Y = 0.25f;
+    command.E = 1;
+    assert(Printer::queueGCodeCoordinates(&command));
+    assert(Printer::moveTarget.machineMM(X_AXIS) == 10 && Printer::moveTarget.machineMM(Y_AXIS) == 40.25f);
+    assert(Printer::moveTarget.machineMM(E_AXIS) == 3);
+
+    Printer::relativeCoordinateMode = false;
+    Printer::relativeExtruderCoordinateMode = true;
+    Printer::unitIsInches = true;
+    command.X = 0.5f;
+    command.Y = command.E = command.F = 0;
+    assert(Printer::queueGCodeCoordinates(&command));
+    assert(std::abs(Printer::moveTarget.machineMM(X_AXIS) - 1.7f) < 0.00001f);
+    assert(Printer::moveTarget.machineMM(Y_AXIS) == 40.25f);
+
+    Printer::unitIsInches = false;
+    command.X = 0;
+    command.E = -0.5f;
+    assert(Printer::queueGCodeCoordinates(&command));
+    assert(!PrintLine::updatesWobble && Printer::moveTarget.machineMM(E_AXIS) == 2.5f);
+    command.E = 0;
+    assert(!Printer::queueGCodeCoordinates(&command));
+    assert(PrintLine::plannedMoves == 4);
 }
 
 void initializeOffsets() {
@@ -1407,6 +1463,8 @@ int main(int argc, char** argv) {
         digitZero();
     else if (!std::strcmp(argv[1], "extrusion-planning"))
         extrusionPlanning();
+    else if (!std::strcmp(argv[1], "gcode-target"))
+        gcodeTarget();
     else
         return 1;
     std::printf("Print lifecycle replay passed (%s)\n", argv[1]);

@@ -16,6 +16,10 @@ Firmware changes are tracked on `ai-firmware-review` against `community_developm
 
 **Active development block.** [State and motion responsibilities](development-roadmap.md#1-coordinate-systems-and-motion-compensation)
 
+### Commanded coordinates
+
+- [x] **Give the requested position and work offset one owner.** The G-code replay checks absolute work coordinates with an offset, relative moves, inches, omitted axes and E-only moves. [Commanded coordinates](../Repetier/MoveTarget.h) · [Replay](../tests/pause-sense-offset.py)
+
 ### Z offset ownership
 
 - [x] **Give the effective Z offset one owner.** `Printer::zOffset` owns the manual and live values and calculates their combined steps. A reload through `M501` or `M206` preserves the live contribution. The host regression covers reload, Mod Menu transfer, clearing the live portion, and changes to steps per mm. [Offset ledger and regression command](z-offset/offset-ledger.md)

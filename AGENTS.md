@@ -6,6 +6,8 @@
 
 **Extrusion planning.** `Printer::extrusionPlanner` owns the last queued logical E and fractional base step. Use `Printer::setEPositionMM()` to synchronize the current and queued E reference while retaining the fractional step. [Extrusion planner](Repetier/ExtrusionPlanner.h)
 
+**Move targets.** `Printer::moveTarget` owns the retained machine-space millimetres, their fractional carry and the work offset. The planner asks for these values before rounding to steps. [Coordinate targets](Repetier/MoveTarget.h)
+
 **M3912 uses an isolated pressure-braked priming phase.** `Printer::startLine` owns the phase, generates its moves and restores the temporary state after draining the queue. High DMS force progressively constrains XY speed and reduces E flow, like the audible change when a chainsaw enters wood. Manual start code enables SenseOffset with `M3909` after priming. [State ledger and test plan](docs/first-layer-control/m3912-state-boundary.md)
 
 **Start with [docs/first-layer-control/README.md](docs/first-layer-control/README.md) before editing first-layer, Z compensation, DMS or priming behavior. For the full Z-offset sum, boot/print lifecycle, matrix EEPROM and thermal/scanning risks, read [docs/z-offset/README.md](docs/z-offset/README.md).** The linked documentation explains original intent, actual execution paths, risks and test scenarios.

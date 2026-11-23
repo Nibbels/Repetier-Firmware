@@ -41,10 +41,7 @@ uint32_t Printer::maxTravelAccelerationStepsPerSquareSecond[4];
 uint8_t Printer::relativeCoordinateMode = false;         // Determines absolute (false) or relative Coordinates (true).
 uint8_t Printer::relativeExtruderCoordinateMode = false; // Determines Absolute or Relative E Codes while in Absolute Coordinates mode. E is always relative in Relative Coordinates mode.
 
-volatile float Printer::destinationMM[4] = { 0, 0, 0, 0 };
-float Printer::destinationRemainderMM[4] = { 0, 0, 0, 0 };
 int32_t Printer::queuedPositionSteps[3] = { 0, 0, 0 };
-float Printer::originOffsetMM[3] = { 0, 0, 0 };
 uint8_t Printer::flag0 = 0;
 uint8_t Printer::flag1 = 0;
 uint8_t Printer::flag2 = 0;
@@ -82,6 +79,7 @@ DigitCompensation Printer::digitCompensation{
 PressureProtection Printer::pressureProtection;
 StrainGauge Printer::strainGauge;
 ExtrusionPlanner Printer::extrusionPlanner;
+MoveTarget Printer::moveTarget;
 char Printer::ZMode = DEFAULT_Z_SCALE_MODE;                       // Z-min distance or nominal layer height
 char Printer::moveMode[3];                                        // move mode which is applied within the Position X/Y/Z menus
 bool Printer::moveKosys = KOSYS_GCODE;                            // true = GCode, false = DirectMove / OffsetMove
@@ -267,10 +265,10 @@ void Printer::updateWobbleFixOffsets() {
 int32_t Printer::prepareDestinationSteps(uint8_t axis) {
     const float direct = getDirectMM(axis);
     const float endstop = softwareEndstopSteps(axis) * axisMMPerSteps[axis];
-    float targetMM = destinationMM[axis];
+    float targetMM = moveTarget.machineMM(axis);
     if (targetMM + direct >= endstop + 0.1) {
         targetMM = endstop + 0.1 - direct;
-        setDestinationMM(axis, targetMM);
+        moveTarget.setMachineMM(axis, targetMM);
     }
 
     if (queuedWobbleAxes && axis < Z_AXIS) {
@@ -290,7 +288,7 @@ inline bool isExtrusionAllowed(float e) {
     // calculate total amount of extrusion respecting coordinate mode
     float de = e;
     if (!Printer::relativeCoordinateMode && !Printer::relativeExtruderCoordinateMode) {
-        de = (e - Printer::destinationMM[E_AXIS]) - Printer::destinationRemainderMM[E_AXIS];
+        de = (e - Printer::moveTarget.machineMM(E_AXIS)) - Printer::moveTarget.remainderMM(E_AXIS);
     }
 
     if (fabs(de) * Printer::menuExtrusionFactor * Printer::digitCompensation.extrusionFactor() > EXTRUDE_MAXLENGTH) {
@@ -331,47 +329,23 @@ void Printer::setFeedrate(float feedrate) {
         Printer::feedrate = feedrate * (float)Printer::feedrateMultiply * 0.00016666666f;
 }
 
-void Printer::addDestinationMM(uint8_t axis, float distance) {
-    if (distance == 0.0f)
-        return;
-
-    // TwoSum recovers the rounding error of the addition, including after reversals.
-    const float previous = destinationMM[axis];
-    const float sum = previous + distance;
-    const float added = sum - previous;
-    const float error = (previous - (sum - added)) + (distance - added);
-    const float remainder = destinationRemainderMM[axis] + error;
-    const float target = sum + remainder;
-    setDestinationMM(axis, target, remainder - (target - sum));
-}
-
 // Convert G-code positions to millimetres in the planner's coordinate frame.
 bool Printer::queueGCodeCoordinates(GCode* com) {
-    bool isXYZMove = !com->hasNoXYZ();
-    if (relativeCoordinateMode) {
-        if (com->hasX())
-            addDestinationMM(X_AXIS, convertToMM(com->X));
-        if (com->hasY())
-            addDestinationMM(Y_AXIS, convertToMM(com->Y));
-        if (com->hasZ())
-            addDestinationMM(Z_AXIS, convertToMM(com->Z));
-    } else //absolute Coordinate Mode
-    {
-        if (com->hasX())
-            setDestinationMM(X_AXIS, convertToMM(com->X) - originOffsetMM[X_AXIS]);
-        if (com->hasY())
-            setDestinationMM(Y_AXIS, convertToMM(com->Y) - originOffsetMM[Y_AXIS]);
-        if (com->hasZ())
-            setDestinationMM(Z_AXIS, convertToMM(com->Z) - originOffsetMM[Z_AXIS]);
-    }
+    const bool isXYZMove = !com->hasNoXYZ();
+    if (com->hasX())
+        moveTarget.setFromGCodeMM(X_AXIS, convertToMM(com->X), relativeCoordinateMode);
+    if (com->hasY())
+        moveTarget.setFromGCodeMM(Y_AXIS, convertToMM(com->Y), relativeCoordinateMode);
+    if (com->hasZ())
+        moveTarget.setFromGCodeMM(Z_AXIS, convertToMM(com->Z), relativeCoordinateMode);
 
     float e = convertToMM(com->E);
     bool isEMove = com->hasE() && isExtrusionAllowed(e);
     if (isEMove) {
         if (relativeCoordinateMode || relativeExtruderCoordinateMode)
-            addDestinationMM(E_AXIS, e);
+            moveTarget.addMM(E_AXIS, e);
         else
-            setDestinationMM(E_AXIS, e);
+            moveTarget.setMachineMM(E_AXIS, e);
     }
 
     if (com->hasF()) {
@@ -391,17 +365,17 @@ bool Printer::queueGCodeCoordinates(GCode* com) {
 /** Move to machine coordinates, retaining the correction on omitted axes. */
 void Printer::queueFloatCoordinates(float x, float y, float z, float e, float feedrate) {
     if (x != IGNORE_COORDINATE) {
-        setDestinationMM(X_AXIS, x);
+        moveTarget.setMachineMM(X_AXIS, x);
         clearWobbleFixOffset(X_AXIS);
     }
     if (y != IGNORE_COORDINATE) {
-        setDestinationMM(Y_AXIS, y);
+        moveTarget.setMachineMM(Y_AXIS, y);
         clearWobbleFixOffset(Y_AXIS);
     }
     if (z != IGNORE_COORDINATE)
-        setDestinationMM(Z_AXIS, z);
+        moveTarget.setMachineMM(Z_AXIS, z);
     if (e != IGNORE_COORDINATE)
-        setDestinationMM(E_AXIS, e);
+        moveTarget.setMachineMM(E_AXIS, e);
     if (feedrate == IGNORE_COORDINATE)
         feedrate = Printer::feedrate;
 
@@ -419,10 +393,10 @@ void Printer::queueRelativeStepsCoordinates(long dx, long dy, long dz, long de, 
 
 /** \brief Move printer the given number of mm. Puts the move into the queue. */
 void Printer::queueRelativeMMCoordinates(float dx, float dy, float dz, float de, float feedrate, bool waitEnd, bool abortAtEndstops) {
-    addDestinationMM(X_AXIS, dx);
-    addDestinationMM(Y_AXIS, dy);
-    addDestinationMM(Z_AXIS, dz);
-    addDestinationMM(E_AXIS, de);
+    moveTarget.addMM(X_AXIS, dx);
+    moveTarget.addMM(Y_AXIS, dy);
+    moveTarget.addMM(Z_AXIS, dz);
+    moveTarget.addMM(E_AXIS, de);
 
     PrintLine::prepareQueueMove(abortAtEndstops, !waitEnd, feedrate);
 
@@ -488,22 +462,22 @@ void Printer::setOrigin(float xOff, float yOff, float zOff) {
     bool someFailed = false;
 
     if (isAxisHomed(X_AXIS) || xOff == 0.0f) {
-        originOffsetMM[X_AXIS] = xOff;
-        Com::printF(PSTR("x="), originOffsetMM[X_AXIS]);
+        moveTarget.setWorkOffsetMM(X_AXIS, xOff);
+        Com::printF(PSTR("x="), xOff);
     } else {
         Com::printF(PSTR("x-fail"));
         someFailed = true;
     }
     if (isAxisHomed(Y_AXIS) || yOff == 0.0f) {
-        originOffsetMM[Y_AXIS] = yOff;
-        Com::printF(PSTR(" y="), originOffsetMM[Y_AXIS]);
+        moveTarget.setWorkOffsetMM(Y_AXIS, yOff);
+        Com::printF(PSTR(" y="), yOff);
     } else {
         Com::printF(PSTR(" y-fail"));
         someFailed = true;
     }
     if (isAxisHomed(Z_AXIS) || zOff == 0.0f) {
-        originOffsetMM[Z_AXIS] = zOff;
-        Com::printF(PSTR(" z="), originOffsetMM[Z_AXIS]);
+        moveTarget.setWorkOffsetMM(Z_AXIS, zOff);
+        Com::printF(PSTR(" z="), zOff);
     } else {
         Com::printF(PSTR(" z-fail"));
         someFailed = true;

@@ -105,7 +105,7 @@ void StartLine::run(GCode& command) {
     ExtrusionState savedE;
     {
         InterruptProtectedBlock lock;
-        savedE = {Printer::destinationMM[E_AXIS], Printer::destinationRemainderMM[E_AXIS],
+        savedE = {Printer::moveTarget.machineMM(E_AXIS), Printer::moveTarget.remainderMM(E_AXIS),
                   Printer::extrusionPlanner.stepRemainder(), Printer::compensatedPositionCollectTinyE};
         Printer::layers.resetTracking();
         active_ = true;

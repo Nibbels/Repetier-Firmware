@@ -31,6 +31,7 @@
 #include "StrainGauge.h"
 #include "StartLine.h"
 #include "ExtrusionPlanner.h"
+#include "MoveTarget.h"
 
 // ##########################################################################################
 // ##   status flags
@@ -92,9 +93,6 @@ public:
     static unsigned long timer[2];          // used for acceleration/deceleration timing
     static unsigned long stepNumber[2];     // Step number in current move.
     static int8_t lastDirectionSovereignty;
-    static float originOffsetMM[3];
-    static volatile float destinationMM[4]; // Requested target in mm from origin.
-    static float destinationRemainderMM[4]; // Fraction lost when adding relative moves to the target.
     static int32_t queuedPositionSteps[3];  // Last queued endpoints in steps, including the XY wobble correction.
 
     static long maxSoftEndstopSteps[2];     // X/Y software endstops. Z limits belong to zMotion.
@@ -116,6 +114,7 @@ public:
     static StrainGauge strainGauge;
     static StartLine startLine;
     static ExtrusionPlanner extrusionPlanner;
+    static MoveTarget moveTarget;
     static PrintPause pause;
     static PrintStop printStop;
     static char ZMode;                      // Z Scale
@@ -613,14 +612,14 @@ public:
     static INLINE void setXAxisSteps(int32_t x) {
         InterruptProtectedBlock noInts;
         currentXYSteps[X_AXIS] = queuedPositionSteps[X_AXIS] = x;
-        setDestinationMM(X_AXIS, x * axisMMPerSteps[X_AXIS]);
+        moveTarget.setMachineMM(X_AXIS, x * axisMMPerSteps[X_AXIS]);
         clearWobbleFixOffset(X_AXIS);
         noInts.unprotect();
     }
     static INLINE void setYAxisSteps(int32_t y) {
         InterruptProtectedBlock noInts;
         currentXYSteps[Y_AXIS] = queuedPositionSteps[Y_AXIS] = y;
-        setDestinationMM(Y_AXIS, y * axisMMPerSteps[Y_AXIS]);
+        moveTarget.setMachineMM(Y_AXIS, y * axisMMPerSteps[Y_AXIS]);
         clearWobbleFixOffset(Y_AXIS);
         noInts.unprotect();
     }
@@ -628,20 +627,13 @@ public:
         InterruptProtectedBlock noInts;
         zMotion.setNominalSteps(z);
         queuedPositionSteps[Z_AXIS] = z;
-        setDestinationMM(Z_AXIS, z * axisMMPerSteps[Z_AXIS]);
+        moveTarget.setMachineMM(Z_AXIS, z * axisMMPerSteps[Z_AXIS]);
         noInts.unprotect();
     }
     static INLINE void setEPositionMM(float e, float remainder = 0.0f) {
-        setDestinationMM(E_AXIS, e, remainder);
+        moveTarget.setMachineMM(E_AXIS, e, remainder);
         extrusionPlanner.setLogicalPosition({e, remainder});
     }
-
-    static INLINE void setDestinationMM(uint8_t axis, float target, float remainder = 0.0f) {
-        destinationMM[axis] = target;
-        destinationRemainderMM[axis] = remainder;
-    }
-
-    static void addDestinationMM(uint8_t axis, float distance);
 
     static INLINE void stopDirectAxis(uint8_t axis) {
         if (axis == Z_AXIS)

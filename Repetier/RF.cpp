@@ -4068,7 +4068,7 @@ void processSpecialGCode(GCode* pCommand) {
 
         case 3115: // M3115 - set the x/y origin to the current x/y position
         {
-            Printer::setOrigin(-Printer::destinationMM[X_AXIS], -Printer::destinationMM[Y_AXIS], Printer::originOffsetMM[Z_AXIS]);
+            Printer::setOrigin(-Printer::moveTarget.machineMM(X_AXIS), -Printer::moveTarget.machineMM(Y_AXIS), Printer::moveTarget.workOffsetMM(Z_AXIS));
             break;
         }
         case 3117: // M3117 - set a status text which is not overwritten by M117

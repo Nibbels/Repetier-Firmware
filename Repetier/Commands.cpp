@@ -108,14 +108,14 @@ void Commands::printCurrentPosition() {
     // Z bleibt ein Sonderfall. Normalerweise auch hier GCode-Position
     float z = Printer::currentZPositionMM();
 
-    x += Printer::originOffsetMM[X_AXIS];
-    y += Printer::originOffsetMM[Y_AXIS];
-    z += Printer::originOffsetMM[Z_AXIS];
+    x += Printer::moveTarget.workOffsetMM(X_AXIS);
+    y += Printer::moveTarget.workOffsetMM(Y_AXIS);
+    z += Printer::moveTarget.workOffsetMM(Z_AXIS);
 
     Com::printF(Com::tXColon, x * (Printer::unitIsInches ? 0.03937 : 1), 2);
     Com::printF(Com::tSpaceYColon, y * (Printer::unitIsInches ? 0.03937 : 1), 2);
     Com::printF(Com::tSpaceZColon, z * (Printer::unitIsInches ? 0.03937 : 1), 2);
-    Com::printFLN(Com::tSpaceEColon, Printer::destinationMM[E_AXIS] * (Printer::unitIsInches ? 0.03937 : 1), 2);
+    Com::printFLN(Com::tSpaceEColon, Printer::moveTarget.machineMM(E_AXIS) * (Printer::unitIsInches ? 0.03937 : 1), 2);
 } // printCurrentPosition
 
 void Commands::printTemperatures(bool showRaw) {
@@ -362,16 +362,16 @@ void Commands::processGCode(GCode* com) {
     {
         if (!com->hasNoXYZ()) {
             // set the origin only in case we got any x, y and/or z offset
-            float xOff = Printer::originOffsetMM[X_AXIS];
-            float yOff = Printer::originOffsetMM[Y_AXIS];
-            float zOff = Printer::originOffsetMM[Z_AXIS];
+            float xOff = Printer::moveTarget.workOffsetMM(X_AXIS);
+            float yOff = Printer::moveTarget.workOffsetMM(Y_AXIS);
+            float zOff = Printer::moveTarget.workOffsetMM(Z_AXIS);
 
             if (com->hasX())
-                xOff = Printer::convertToMM(com->X) - Printer::destinationMM[X_AXIS];
+                xOff = Printer::convertToMM(com->X) - Printer::moveTarget.machineMM(X_AXIS);
             if (com->hasY())
-                yOff = Printer::convertToMM(com->Y) - Printer::destinationMM[Y_AXIS];
+                yOff = Printer::convertToMM(com->Y) - Printer::moveTarget.machineMM(Y_AXIS);
             if (com->hasZ())
-                zOff = Printer::convertToMM(com->Z) - Printer::destinationMM[Z_AXIS];
+                zOff = Printer::convertToMM(com->Z) - Printer::moveTarget.machineMM(Z_AXIS);
 
             Printer::setOrigin(xOff, yOff, zOff);
         }
