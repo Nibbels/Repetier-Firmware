@@ -20,6 +20,7 @@
 #include "BedCompensation.h"
 #include "PrintPause.h"
 #include "PrintStop.h"
+#include "LookaheadPlanner.h"
 
 // The replay compiles the live firmware routines. These shims supply DMS bytes,
 // a bed profile, a clock and the motor displacements completed during each wait.
@@ -64,6 +65,7 @@ millis_t timeInMilliseconds() { return clockMs; }
 speed_t ComputeV(uint32_t ticks, uint32_t acceleration) {
     return ((uint64_t(ticks >> 8) * acceleration) >> 10);
 }
+uint32_t U16SquaredToU32(uint16_t value) { return uint32_t(value) * value; }
 void delayMilliseconds(unsigned delay) { clockMs += delay; }
 int16_t eepromWords[2048] = {};
 int32_t eepromDWords[2048] = {};
@@ -219,6 +221,7 @@ ExtrusionCompensation extrusionCompensation;
 bool blockAll = false;
 PressureAdvance pressureAdvance;
 bool advanceActive = false;
+constexpr float maxXYJerk = 8.0f, maxZJerk = 0.5f;
 volatile char doHeatBedZCompensation = true;
 bool printing = true, menuPaused = false;
 bool axesHomed = true;
@@ -320,6 +323,7 @@ T constrain(T value, A low, B high) {
 
 namespace RMath {
 float min(float a, float b) { return std::min(a, b); }
+int32_t min(int32_t a, int32_t b) { return std::min(a, b); }
 float max(float a, float b) { return std::max(a, b); }
 }
 
@@ -337,6 +341,7 @@ struct Extruder {
     int8_t stepperDirection = 0;
     uint8_t id = 0;
     float offsetMM[2] = {};
+    float maxEJerk = 6.0f;
 
     static Extruder* current;
     static unsigned stepPulses, trailingEdges;
@@ -388,19 +393,27 @@ struct PrintLine {
     int32_t error[4] = {}, delta[4] = {};
     int32_t stepsRemaining = 0;
     uint32_t accelSteps = 0, decelSteps = 0, fAcceleration = 0;
+    uint32_t accelerationPrim = 0;
     speed_t vStart = 0, vMax = 0, vEnd = 0;
     speed_t nextStepSpeed(StepClock& clock, uint8_t pulses, uint32_t interval);
+    void updateStepsParameter();
+    float speedX = 0, speedY = 0, speedZ = 0, speedE = 0;
+    float fullSpeed = 0, invFullSpeed = 0, accelerationDistance2 = 0;
+    float minSpeed = 0, startSpeed = 0, endSpeed = 0, maxJunctionSpeed = 0;
+    int32_t timeInTicks = 0;
     float distance = 0;
     uint8_t primaryAxis = 0;
     char task = TASK_NO_TASK;
     uint8_t flags = 0, joinFlags = 0, dir = 0;
+#include "lookahead-flags-firmware.inc"
     uint8_t warmupDepth = 0;
     long warmupTicks = 0;
     void setWaitForXLinesFilled(uint8_t depth) { warmupDepth = depth; }
     void setWaitTicks(long ticks) { warmupTicks = ticks; }
     void setAxisSteps(uint8_t axis, int32_t steps);
     void setSegmentGeometry(const float axisDistanceMM[]);
-    bool isEMove() const { return moveE; }
+    bool isEMove() const { return moveE || (dir & 128); }
+    bool isEOnlyMove() const { return (dir & 240) == 128; }
     bool isZMove() const { return moveZ || (xyDirection & (16 << Z_AXIS)); }
     bool isXYZMove() const { return xyDirection & 112; }
     bool isEPositiveMove() const { return positiveE; }
@@ -1712,6 +1725,78 @@ void moveQueue() {
     assert(queue.readIndex() == 3 && queue.writeIndex() == 3);
 }
 
+void lookaheadMoves() {
+    MoveQueue& queue = PrintLine::queue;
+    for (int index = 0; index < MOVE_CACHE_SIZE - 2; ++index) {
+        queue.publish(false);
+        queue.activateFront();
+        queue.retireFront();
+        HAL::allowInterrupts();
+    }
+
+    constexpr uint8_t printX = 16 | 128, printY = 32 | 128, travelX = 16, retract = 128;
+    const auto prepare = [&](uint8_t axes) -> PrintLine& {
+        PrintLine& move = queue.writeSlot();
+        move = PrintLine{};
+        move.dir = axes;
+        move.speedX = (axes & 16) ? 32.0f : 0.0f;
+        move.speedY = (axes & 32) ? 32.0f : 0.0f;
+        move.speedE = axes == retract ? -32.0f : (axes & 128) ? 2.0f : 0.0f;
+        move.distance = 0.3f;
+        move.timeInTicks = 50000;
+        move.fullSpeed = 32.0f;
+        move.invFullSpeed = 1.0f / 32.0f;
+        move.minSpeed = move.startSpeed = move.endSpeed = 4.0f;
+        move.accelerationDistance2 = 128.0f;
+        move.stepsRemaining = 48;
+        move.accelerationPrim = 40000;
+        move.fAcceleration = 655;
+        move.vMax = 4000;
+        return move;
+    };
+    uint32_t trace = 0;
+    const auto run = [&](uint8_t axes, bool advance, float junctionSpeed) {
+        Printer::advanceActive = advance;
+        queue.clear();
+        PrintLine& front = prepare(printX);
+        queue.publish(true);
+        PrintLine& reserved = prepare(printX);
+        queue.publish(true);
+        PrintLine& previous = prepare(printX);
+        LookaheadPlanner::update(queue);
+        queue.publish(true);
+        PrintLine& newest = prepare(axes);
+        LookaheadPlanner::update(queue);
+
+        assert(interruptsEnabled && queue.count() == 3);
+        assert(front.joinFlags == 0 && reserved.joinFlags == 0);
+        assert(previous.endSpeed == junctionSpeed && newest.startSpeed == junctionSpeed);
+        assert(previous.areParameterUpToDate() && newest.areParameterUpToDate());
+        assert(!previous.isBlocked() && !newest.isBlocked());
+        queue.publish(true);
+
+        for (auto* profile : {&previous, &newest}) {
+            PrintLine move = *profile;
+            PrintLine::StepClock clock;
+            clock.start(move.vStart);
+            uint32_t interval = 16000000UL / move.vStart;
+            while (move.stepsRemaining > 0) {
+                --move.stepsRemaining;
+                const speed_t speed = move.nextStepSpeed(clock, 1, interval);
+                interval = 16000000UL / speed;
+                trace = trace * 31 + interval;
+            }
+        }
+    };
+    run(printX, true, 12.0f);
+    run(printY, true, 4.0f);
+    run(travelX, false, 12.0f);
+    run(travelX, true, 4.0f);
+    run(retract, false, 4.0f);
+    run(retract, true, 4.0f);
+    assert(trace == 0x670f3ba6U); // Step intervals captured before extracting the planner.
+}
+
 void xyLimits() {
     for (uint8_t axis = X_AXIS; axis <= Y_AXIS; ++axis) {
         const uint8_t positive = 17 << axis, negative = 16 << axis;
@@ -1853,6 +1938,8 @@ int main(int argc, char** argv) {
         advanceTimer();
     else if (!std::strcmp(argv[1], "step-clock"))
         stepClock();
+    else if (!std::strcmp(argv[1], "lookahead"))
+        lookaheadMoves();
     else if (!std::strcmp(argv[1], "xy-limits"))
         xyLimits();
     else

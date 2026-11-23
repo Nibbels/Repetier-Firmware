@@ -53,6 +53,7 @@ class MoveQueue;
 class PrintLine {
     friend class UIDisplay;
     friend class MoveQueue;
+    friend class LookaheadPlanner;
 
 public:
     flag8_t joinFlags;
@@ -355,8 +356,6 @@ public:
     static bool hasActiveZMove();
     static void discardQueuedMoves();
 
-    static inline void computeMaxJunctionSpeed(PrintLine* previous, PrintLine* current);
-
     static bool needCmpWait();
     static void stepSlowedZCompensation();
     static long performQueueMove();
@@ -364,9 +363,6 @@ public:
 
     static long performMove(PrintLine* move, uint8_t forQueue);
     static void waitForXFreeLines(uint8_t b = 1);
-    static inline void forwardPlanner(uint8_t p);
-    static inline void backwardPlanner(uint8_t p, uint8_t last);
-    static void updateTrapezoids();
     static uint8_t insertWaitMovesIfNeeded(uint8_t pathOptimize, uint8_t waitExtraLines);
     static void prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, float feedrate, bool updateWobble = false);
     static void prepareDirectMove(bool stoppable, bool feedrateSource);

@@ -20,6 +20,7 @@ def main():
     ui_header = (firmware / "ui.h").read_text(encoding="utf-8")
     motion = (firmware / "motion.h").read_text(encoding="utf-8")
     move_planner = (firmware / "motion.cpp").read_text(encoding="utf-8")
+    lookahead = (firmware / "LookaheadPlanner.cpp").read_text(encoding="utf-8")
     printer = (firmware / "Printer.cpp").read_text(encoding="utf-8")
     printer_header = (firmware / "Printer.h").read_text(encoding="utf-8")
     eeprom = (firmware / "Eeprom.h").read_text(encoding="utf-8")
@@ -72,11 +73,12 @@ def main():
         + section(move_planner, "            const int32_t targetSteps = Printer::prepareDestinationSteps(axis);", "\n        }")
         + "\nreturn steps;\n}",
         section(move_planner, "void PrintLine::setAxisSteps(", "\n/** \\brief Put a move"),
-        section(motion, "#define FLAG_WARMUP", "\n#define DIRECT_IDLE"),
         section(motion, "class MoveQueue {", "\ninline uint8_t PrintLine::queuedMoveCount"),
         "MoveQueue PrintLine::queue;",
         section(move_planner, "bool PrintLine::hasActiveZMove()", "\nvoid PrintLine::setAxisSteps("),
         section(move_planner, "speed_t PrintLine::nextStepSpeed(", "\nlong PrintLine::performMove("),
+        section(move_planner, "void PrintLine::updateStepsParameter()", "\ninline float PrintLine::safeSpeed"),
+        lookahead.split('#include "LookaheadPlanner.h"\n', 1)[1],
         section(move_planner, "uint8_t PrintLine::insertWaitMovesIfNeeded(", "\nvoid PrintLine::waitForXFreeLines("),
         section(hal, "uint8_t PressureAdvance::nextTimerCompare(", "\nISR(EXTRUDER_TIMER_VECTOR"),
         "void rescalePlannedAxis(uint8_t axis) {\nusing namespace Printer;\n"
@@ -100,6 +102,12 @@ def main():
         (build / "step-clock-firmware.inc").write_text(
             section(motion, "    struct StepClock {", "    enum class DirectionOwner"), encoding="utf-8",
         )
+        (build / "lookahead-flags-firmware.inc").write_text(
+            section(motion, "#define FLAG_WARMUP", "\n#define DIRECT_IDLE")
+            + section(motion, "    inline bool areParameterUpToDate()", "    inline uint8_t getWaitForXLinesFilled()")
+            + section(motion, "    inline void block()", "\n    // If we reach endstops")
+            + section(motion, "    inline bool isNominalMove()", "    inline void setXMoveFinished()"), encoding="utf-8",
+        )
         executable = build / "pause-replay"
         subprocess.run([
             os.environ.get("CXX", "c++"), "-std=c++11", "-O2", "-Wall", "-Wextra", "-Werror",
@@ -114,7 +122,7 @@ def main():
             "pressure-pause", "pressure-stop", "digit-zero",
             "extrusion-planning",
             "gcode-target", "wobble-target", "cartesian-planning", "segment-geometry", "move-queue", "ecmp-stepping",
-            "advance-timer", "step-clock", "xy-limits",
+            "advance-timer", "step-clock", "lookahead", "xy-limits",
         ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
 
