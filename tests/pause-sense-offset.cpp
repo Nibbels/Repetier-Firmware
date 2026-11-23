@@ -16,6 +16,7 @@
 #include "ZOffset.h"
 #include "ExtrusionCompensation.h"
 #include "PressureAdvance.h"
+#include "MachineInactivity.h"
 #include "PrintLayers.h"
 #include "BedCompensation.h"
 #include "PrintPause.h"
@@ -37,7 +38,7 @@ constexpr int16_t printingForce = 6000;
 constexpr int16_t senseThreshold = 3000;
 constexpr long parkY = 200 * 160L, parkZ = 30 * static_cast<long>(zStepsPerMm), parkE = 280;
 
-millis_t clockMs = 0, g_uStartOfIdle = 0, previousMillisCmd = 0;
+millis_t clockMs = 0, g_uStartOfIdle = 0;
 char g_nHeatBedScanStatus = 0, g_nZOSScanStatus = 0;
 unsigned short g_nManualSteps[4] = { 1, 1, 1, 28 };
 int32_t g_offsetZCompensationSteps = 250;
@@ -228,6 +229,7 @@ bool relativeExtruderCoordinateMode = false;
 ExtrusionCompensation extrusionCompensation;
 bool blockAll = false;
 PressureAdvance pressureAdvance;
+MachineInactivity inactivity(STEPPER_INACTIVE_TIME * 1000UL, MAX_INACTIVE_TIME * 1000UL);
 bool advanceActive = false;
 constexpr float maxXYJerk = 8.0f, maxZJerk = 0.5f;
 volatile char doHeatBedZCompensation = true;

@@ -63,6 +63,7 @@ float Printer::filamentPrinted = 0.0f;                            // mm of filam
 ZOffset Printer::zOffset;
 SenseOffsetControl Printer::senseOffsetControl{SENSIBLE_PRESSURE_MAX_OFFSET};
 ZMotion Printer::zMotion{ZAXIS_STEPS_PER_MM};
+MachineInactivity Printer::inactivity(STEPPER_INACTIVE_TIME * 1000UL, MAX_INACTIVE_TIME * 1000UL);
 PrintLayers Printer::layers{ZAXIS_STEPS_PER_MM};
 DigitCompensation Printer::digitCompensation{
     short(abs(EMERGENCY_PAUSE_DIGITS_MAX) * 0.7), short(abs(EMERGENCY_PAUSE_DIGITS_MAX))
@@ -322,7 +323,7 @@ void Printer::queueFloatCoordinates(float x, float y, float z, float e, float fe
 
     PrintLine::prepareQueueMove(false, true, feedrate);
 
-    previousMillisCmd = HAL::timeInMilliseconds(); //prevent inactive shutdown of steppers/temps
+    Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
 } // queueFloatCoordinates
 
 /** \brief Move printer the given number of steps. Puts the move into the queue. Used by e.g. homing commands. */
@@ -344,7 +345,7 @@ void Printer::queueRelativeMMCoordinates(float dx, float dy, float dz, float de,
     if (waitEnd)
         Commands::waitUntilEndOfAllMoves();
 
-    previousMillisCmd = HAL::timeInMilliseconds(); //prevent inactive shutdown of steppers/temps
+    Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
 } // queueRelativeMMCoordinates
 
 /**
@@ -953,7 +954,7 @@ void Printer::homeXAxis() {
         Printer::setXAxisSteps((nHomeDir == -1) ? 0 : maxSoftEndstopSteps[X_AXIS]);
 
         // show that we are active
-        previousMillisCmd = HAL::timeInMilliseconds(); //prevent inactive shutdown of steppers/temps
+        Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
         setHomed(true, -1, -1);
         UI_STATUS_UPD("");
     }
@@ -992,7 +993,7 @@ void Printer::homeYAxis() {
         Printer::setYAxisSteps((nHomeDir == -1) ? 0 : maxSoftEndstopSteps[Y_AXIS]);
 
         // show that we are active
-        previousMillisCmd = HAL::timeInMilliseconds(); //prevent inactive shutdown of steppers/temps
+        Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
         setHomed(-1, true, -1);
         UI_STATUS_UPD("");
     }
@@ -1057,7 +1058,7 @@ void Printer::homeZAxis() {
         //6. Korrektur der Flags
         setHomed(-1, -1, true);
         // show that we are active
-        previousMillisCmd = HAL::timeInMilliseconds(); //prevent inactive shutdown of steppers/temps
+        Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
         UI_STATUS_UPD("");
     }
 } // homeZAxis

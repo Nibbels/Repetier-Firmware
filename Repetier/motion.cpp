@@ -58,10 +58,6 @@
 #error MOVE_CACHE_SIZE must be at least 5
 #endif // MOVE_CACHE_SIZE<5
 
-// Inactivity shutdown variables
-millis_t previousMillisCmd = 0;
-millis_t maxInactiveTime = MAX_INACTIVE_TIME * 1000L;
-millis_t stepperInactiveTime = STEPPER_INACTIVE_TIME * 1000L;
 long baudrate = BAUDRATE; // Communication speed rate.
 
 uint8_t pwm_pos[NUM_EXTRUDER + 3]; // 0-NUM_EXTRUDER = Heater 0-NUM_EXTRUDER of extruder, NUM_EXTRUDER = Heated bed, NUM_EXTRUDER+1 Board fan, NUM_EXTRUDER+2 = Fan

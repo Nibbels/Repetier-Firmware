@@ -106,8 +106,8 @@ void EEPROM::restoreEEPROMExtruderSettingsFromConfiguration(uint8_t extruderId) 
 
 void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     baudrate = BAUDRATE;
-    maxInactiveTime = MAX_INACTIVE_TIME * 1000L;
-    stepperInactiveTime = STEPPER_INACTIVE_TIME * 1000L;
+    Printer::inactivity.setShutdownTimeout(MAX_INACTIVE_TIME * 1000L);
+    Printer::inactivity.setStepperTimeout(STEPPER_INACTIVE_TIME * 1000L);
     Printer::axisStepsPerMM[X_AXIS] = XAXIS_STEPS_PER_MM;
     Printer::axisStepsPerMM[Y_AXIS] = YAXIS_STEPS_PER_MM;
     Printer::axisStepsPerMM[Z_AXIS] = ZAXIS_STEPS_PER_MM;
@@ -247,8 +247,8 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     HAL::eprSetByte(EPR_MAGIC_BYTE, eepromMagic);
     HAL::eprSetByte(EPR_CHECK_NUM_EXTRUDERS, NUM_EXTRUDER);
     HAL::eprSetInt32(EPR_BAUDRATE, baudrate);
-    HAL::eprSetInt32(EPR_MAX_INACTIVE_TIME, maxInactiveTime);
-    HAL::eprSetInt32(EPR_STEPPER_INACTIVE_TIME, stepperInactiveTime);
+    HAL::eprSetInt32(EPR_MAX_INACTIVE_TIME, Printer::inactivity.shutdownTimeout());
+    HAL::eprSetInt32(EPR_STEPPER_INACTIVE_TIME, Printer::inactivity.stepperTimeout());
     HAL::eprSetFloat(EPR_XAXIS_STEPS_PER_MM, Printer::axisStepsPerMM[X_AXIS]);
     HAL::eprSetFloat(EPR_YAXIS_STEPS_PER_MM, Printer::axisStepsPerMM[Y_AXIS]);
     HAL::eprSetFloat(EPR_ZAXIS_STEPS_PER_MM, Printer::axisStepsPerMM[Z_AXIS]);
@@ -404,8 +404,8 @@ void EEPROM::readDataFromEEPROM() {
 
     uint8_t version = HAL::eprGetByte(EPR_VERSION); // This is the saved version. Don't copy data not set in older versions!
     baudrate = HAL::eprGetInt32(EPR_BAUDRATE);
-    maxInactiveTime = HAL::eprGetInt32(EPR_MAX_INACTIVE_TIME);
-    stepperInactiveTime = HAL::eprGetInt32(EPR_STEPPER_INACTIVE_TIME);
+    Printer::inactivity.setShutdownTimeout(HAL::eprGetInt32(EPR_MAX_INACTIVE_TIME));
+    Printer::inactivity.setStepperTimeout(HAL::eprGetInt32(EPR_STEPPER_INACTIVE_TIME));
     Printer::axisStepsPerMM[X_AXIS] = HAL::eprGetFloat(EPR_XAXIS_STEPS_PER_MM);
     Printer::axisStepsPerMM[Y_AXIS] = HAL::eprGetFloat(EPR_YAXIS_STEPS_PER_MM);
     Printer::axisStepsPerMM[Z_AXIS] = HAL::eprGetFloat(EPR_ZAXIS_STEPS_PER_MM);

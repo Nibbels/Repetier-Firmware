@@ -889,9 +889,9 @@ void UIDisplay::parse(char* txt, bool ram) {
         }
         case 'i': {
             if (c2 == 's')
-                addLong(stepperInactiveTime / 1000, 4); // %is : Stepper inactive time in seconds
+                addLong(Printer::inactivity.stepperTimeout() / 1000, 4); // %is : Stepper inactive time in seconds
             else if (c2 == 'p')
-                addLong(maxInactiveTime / 1000, 4); // %ip : Max. inactive time in seconds
+                addLong(Printer::inactivity.shutdownTimeout() / 1000, 4); // %ip : Max. inactive time in seconds
             break;
         }
         case 'O': // ops related stuff
@@ -2483,18 +2483,20 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         break;
     }
     case UI_ACTION_STEPPER_INACTIVE: {
-        stepperInactiveTime -= stepperInactiveTime % 1000;
-        INCREMENT_MAX(stepperInactiveTime, 60000UL, 10080000UL);
-
-        HAL::eprSetInt32(EPR_STEPPER_INACTIVE_TIME, stepperInactiveTime);
+        millis_t duration = Printer::inactivity.stepperTimeout();
+        duration -= duration % 1000;
+        INCREMENT_MAX(duration, 60000UL, 10080000UL);
+        Printer::inactivity.setStepperTimeout(duration);
+        HAL::eprSetInt32(EPR_STEPPER_INACTIVE_TIME, duration);
         EEPROM::updateChecksum();
         break;
     }
     case UI_ACTION_MAX_INACTIVE: {
-        maxInactiveTime -= maxInactiveTime % 1000;
-        INCREMENT_MAX(maxInactiveTime, 60000UL, 10080000UL);
-
-        HAL::eprSetInt32(EPR_MAX_INACTIVE_TIME, maxInactiveTime);
+        millis_t duration = Printer::inactivity.shutdownTimeout();
+        duration -= duration % 1000;
+        INCREMENT_MAX(duration, 60000UL, 10080000UL);
+        Printer::inactivity.setShutdownTimeout(duration);
+        HAL::eprSetInt32(EPR_MAX_INACTIVE_TIME, duration);
         EEPROM::updateChecksum();
         break;
     }
@@ -3220,7 +3222,7 @@ void UIDisplay::mainSwitchCase(int action) {
     }
     case UI_ACTION_RF_HEAT_BED_UP: {
         // show that we are active
-        previousMillisCmd = HAL::timeInMilliseconds(); //prevent inactive shutdown of steppers/temps
+        Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
 
         //DO NOT MOVE Z: ALTER Z-OFFSET
         if (uid.menuLevel == 0 && uid.menuPos[0] == 1) {
@@ -3234,7 +3236,7 @@ void UIDisplay::mainSwitchCase(int action) {
     }
     case UI_ACTION_RF_HEAT_BED_DOWN: {
         // show that we are active
-        previousMillisCmd = HAL::timeInMilliseconds();   //prevent inactive shutdown of steppers/temps
+        Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
                                                          //DO NOT MOVE Z: ALTER Z-OFFSET
         if (uid.menuLevel == 0 && uid.menuPos[0] == 1) { //wenn im Mod-Menü für Z-Offset/Matrix Z-Offset/Matrix Sense-Offset/Limiter, dann anders!
             zOffsetPlusAction();
@@ -3246,7 +3248,7 @@ void UIDisplay::mainSwitchCase(int action) {
     }
     case UI_ACTION_RF_EXTRUDER_OUTPUT:
     case UI_ACTION_RF_EXTRUDER_RETRACT: {
-        previousMillisCmd = HAL::timeInMilliseconds();
+        Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
         const int8_t direction = action == UI_ACTION_RF_EXTRUDER_OUTPUT ? 1 : -1;
         if (uid.menuLevel == 0 && uid.menuPos[0] == 1)
             Commands::changeFeedrateMultiply(Printer::feedrateMultiply + direction);

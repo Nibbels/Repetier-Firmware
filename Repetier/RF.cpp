@@ -311,7 +311,7 @@ void scanHeatBed(void) {
 
     if (g_nHeatBedScanStatus) {
         // show that we are active
-        previousMillisCmd = HAL::timeInMilliseconds(); //prevent inactive shutdown of steppers/temps
+        Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
         GCodeInput::keepAlive(Calibrating);
 
         if (g_nHeatBedScanStatus != 15 && g_nHeatBedScanStatus != 20 && g_nHeatBedScanStatus != 22 && g_nHeatBedScanStatus != 136 && g_nHeatBedScanStatus != 137) {
@@ -1073,7 +1073,7 @@ void searchZOScan(void) {
     }
 
     if (g_nZOSScanStatus) {
-        previousMillisCmd = HAL::timeInMilliseconds(); //prevent inactive shutdown of steppers/temps
+        Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
         GCodeInput::keepAlive(Calibrating);
 
         switch (g_nZOSScanStatus) {
@@ -3046,20 +3046,18 @@ void handleStartStandby(millis_t uTime) {
      * Check if the Printer should turn off Steppers or Everything
      */
     if (PrintLine::hasLines() || Printer::isPrinting() || Printer::isMenuMode(MENU_MODE_PAUSED)) {
-        previousMillisCmd = uTime; //prevent inactive shutdown of steppers/temps
+        Printer::inactivity.recordActivity(uTime);
     } else {
-        if (previousMillisCmd > uTime) {
+        if (!Printer::inactivity.canCheckAt(uTime))
             return;
-        }
-        uTime -= previousMillisCmd;
 
-        if (maxInactiveTime != 0 && uTime > maxInactiveTime) {
+        if (Printer::inactivity.shutdownTimeoutExpired(uTime)) {
             Printer::switchEverythingOff(); //kill not only steppers
         } else {
             Printer::setAllSwitchedOff(false); // reset if not time to kill: prevents repeated kills
         }
 
-        if (stepperInactiveTime != 0 && uTime > stepperInactiveTime && !Printer::areAllSteppersDisabled()) {
+        if (Printer::inactivity.stepperTimeoutExpired(uTime) && !Printer::areAllSteppersDisabled()) {
             Printer::disableAllSteppersNow();
             Commands::setFanSpeed((uint8_t)0);
         }
@@ -5279,7 +5277,7 @@ void moveXAction(int8_t direction) {
     }
 
     // show that we are active
-    previousMillisCmd = HAL::timeInMilliseconds(); //prevent inactive shutdown of steppers/temps
+    Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
 
     switch (Printer::moveMode[X_AXIS]) {
     case MOVE_MODE_SINGLE_STEPS: {
@@ -5375,7 +5373,7 @@ void moveYAction(int8_t direction) {
     }
 
     // show that we are active
-    previousMillisCmd = HAL::timeInMilliseconds(); //prevent inactive shutdown of steppers/temps
+    Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
 
     switch (Printer::moveMode[Y_AXIS]) {
     case MOVE_MODE_SINGLE_STEPS: {
@@ -5455,7 +5453,7 @@ void moveZAction(int8_t direction) {
     }
 
     // show that we are active
-    previousMillisCmd = HAL::timeInMilliseconds(); //prevent inactive shutdown of steppers/temps
+    Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
 
     char moveMode = Printer::moveMode[Z_AXIS];
 

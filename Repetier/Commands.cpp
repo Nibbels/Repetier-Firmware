@@ -382,7 +382,7 @@ void Commands::processGCode(GCode* com) {
         break;
     }
     }
-    previousMillisCmd = HAL::timeInMilliseconds(); //prevent inactive shutdown of steppers/temps
+    Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
 }
 
 /**
@@ -396,7 +396,7 @@ void Commands::processMCode(GCode* com) {
             reportTempsensorAndHeaterErrors();
             break;
         }
-        previousMillisCmd = HAL::timeInMilliseconds(); //prevent inactive shutdown of steppers/temps
+        Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
         if (Printer::debugDryrun())
             break;
 
@@ -423,7 +423,7 @@ void Commands::processMCode(GCode* com) {
             reportTempsensorAndHeaterErrors();
             break;
         }
-        previousMillisCmd = HAL::timeInMilliseconds(); //prevent inactive shutdown of steppers/temps
+        Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
         if (Printer::debugDryrun())
             break;
         if (com->hasS())
@@ -432,7 +432,7 @@ void Commands::processMCode(GCode* com) {
     }
     case 109: // M109 - Wait for extruder heater to reach target.
     {
-        previousMillisCmd = HAL::timeInMilliseconds(); //prevent inactive shutdown of steppers/temps
+        Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
         if (Printer::isAnyTempsensorDefect()) {
             reportTempsensorAndHeaterErrors();
             break;
@@ -498,7 +498,7 @@ void Commands::processMCode(GCode* com) {
     }
     case 190: // M190 - Wait bed for heater to reach target.
     {
-        previousMillisCmd = HAL::timeInMilliseconds(); //prevent inactive shutdown of steppers/temps
+        Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
         if (Printer::isAnyTempsensorDefect()) {
             reportTempsensorAndHeaterErrors();
             break;
@@ -603,7 +603,7 @@ void Commands::processMCode(GCode* com) {
     case 84: // M84
     {
         if (com->hasS()) {
-            stepperInactiveTime = com->S * 1000;
+            Printer::inactivity.setStepperTimeout(com->S * 1000);
         } else {
             Commands::waitUntilEndOfAllMoves(); //M84
             Printer::disableAllSteppersNow();
@@ -613,9 +613,9 @@ void Commands::processMCode(GCode* com) {
     case 85: // M85
     {
         if (com->hasS())
-            maxInactiveTime = (long)com->S * 1000;
+            Printer::inactivity.setShutdownTimeout((long)com->S * 1000);
         else
-            maxInactiveTime = 0;
+            Printer::inactivity.setShutdownTimeout(0);
         break;
     }
     case 99: // M99 S<time>

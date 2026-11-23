@@ -141,9 +141,6 @@ extern int maxadv2;
 extern float maxadvspeed;
 #include "Extruder.h"
 
-extern millis_t previousMillisCmd;
-extern millis_t maxInactiveTime;
-extern millis_t stepperInactiveTime;
 
 extern void drv8711Init();
 
