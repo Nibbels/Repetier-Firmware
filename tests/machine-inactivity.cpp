@@ -15,14 +15,18 @@ int main() {
     assert(inactivity.shutdownTimeoutExpired(16001));
 
     inactivity.recordActivity(16001);
-    assert(inactivity.canCheckAt(16001));
     assert(!inactivity.stepperTimeoutExpired(16001) && !inactivity.shutdownTimeoutExpired(16001));
 
     inactivity.setStepperTimeout(0);
     inactivity.setShutdownTimeout(0);
     assert(!inactivity.stepperTimeoutExpired(600000) && !inactivity.shutdownTimeoutExpired(600000));
 
+    inactivity.setStepperTimeout(20);
+    inactivity.setShutdownTimeout(50);
     inactivity.recordActivity(UINT32_MAX - 20);
-    assert(!inactivity.canCheckAt(50));
+    assert(!inactivity.stepperTimeoutExpired(UINT32_MAX));
+    assert(inactivity.stepperTimeoutExpired(0));
+    assert(!inactivity.shutdownTimeoutExpired(29));
+    assert(inactivity.shutdownTimeoutExpired(30));
     std::puts("Machine inactivity replay passed");
 }

@@ -15,7 +15,6 @@ public:
     void setStepperTimeout(uint32_t duration) { stepperTimeout_ = duration; }
     void setShutdownTimeout(uint32_t duration) { shutdownTimeout_ = duration; }
 
-    bool canCheckAt(uint32_t now) const { return now >= lastActivity_; }
     bool stepperTimeoutExpired(uint32_t now) const {
         return stepperTimeout_ != 0 && now - lastActivity_ > stepperTimeout_;
     }

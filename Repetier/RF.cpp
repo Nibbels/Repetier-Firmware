@@ -3039,19 +3039,18 @@ void handleStartStandby(millis_t uTime) {
     /**
      * Check if the Printer should turn off Steppers or Everything
      */
+    // A preceding service may have recorded activity after the initial clock sample.
+    const millis_t inactivityTime = HAL::timeInMilliseconds();
     if (PrintLine::hasLines() || Printer::isPrinting() || Printer::isMenuMode(MENU_MODE_PAUSED)) {
-        Printer::inactivity.recordActivity(uTime);
+        Printer::inactivity.recordActivity(inactivityTime);
     } else {
-        if (!Printer::inactivity.canCheckAt(uTime))
-            return;
-
-        if (Printer::inactivity.shutdownTimeoutExpired(uTime)) {
+        if (Printer::inactivity.shutdownTimeoutExpired(inactivityTime)) {
             Printer::switchEverythingOff(); //kill not only steppers
         } else {
             Printer::setAllSwitchedOff(false); // reset if not time to kill: prevents repeated kills
         }
 
-        if (Printer::inactivity.stepperTimeoutExpired(uTime) && !Printer::areAllSteppersDisabled()) {
+        if (Printer::inactivity.stepperTimeoutExpired(inactivityTime) && !Printer::areAllSteppersDisabled()) {
             Printer::disableAllSteppersNow();
             Commands::setFanSpeed((uint8_t)0);
         }
