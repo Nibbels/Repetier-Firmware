@@ -35,6 +35,7 @@
 #include "MoveTarget.h"
 #include "WobbleCorrection.h"
 #include "CartesianPlanner.h"
+#include "XYOvertravel.h"
 
 // ##########################################################################################
 // ##   status flags
@@ -120,15 +121,13 @@ public:
     static MoveTarget moveTarget;
     static WobbleCorrection wobbleCorrection;
     static CartesianPlanner cartesianPlanner;
+    static XYOvertravel xyOvertravel;
     static PrintPause pause;
     static PrintStop printStop;
     static char ZMode;                      // Z Scale
     static char moveMode[3];                // move mode which is applied within the Position X/Y/Z menus
     static bool moveKosys;                  // true = GCode, false = DirectMove / OffsetMove
     static bool movePositionFeedrateChoice; // select the feedrate for menu positioning: feedrate from last gcode or standard speed
-
-    // This is some buffer but only for a limited amount of overdrive.
-    static volatile int16_t outOfPrintVolume[2];
 
     static volatile char doHeatBedZCompensation;
 
@@ -436,9 +435,9 @@ public:
         if (z != -1)
             zMotion.setHomed(!printStop.commandsBlocked() && z);
         if (x == false)
-            Printer::outOfPrintVolume[X_AXIS] = 0;
+            xyOvertravel.clear(X_AXIS);
         if (y == false)
-            Printer::outOfPrintVolume[Y_AXIS] = 0;
+            xyOvertravel.clear(Y_AXIS);
         if (!isAxisHomed(Z_AXIS)) {
             Printer::disableCMPnow(true); //true == wait for move while HOMING
         }

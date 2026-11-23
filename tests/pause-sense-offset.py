@@ -76,6 +76,7 @@ def main():
         "void executeExtrusionStep(PrintLine* move, bool forQueue) {\n"
         + section(move_planner, "        if (move->isEMove()) {", "\n        if (move->isXMove()) {")
         + "\n}",
+        section(move_planner, "template <int8_t limitDirection>", "\n/**\n  Processes the one-and-only direct move"),
         start_line.removeprefix('#include "Repetier.h"\n'),
         "void configureSenseOffset(GCode* pCommand) { switch (3909) {\n"
         + section(rf, "        case 3909:", "\n        case 3911:")
@@ -100,7 +101,7 @@ def main():
             "sense-window", "sense-settings", "sense-limit-interrupt",
             "pressure-pause", "pressure-stop", "digit-zero",
             "extrusion-planning",
-            "gcode-target", "wobble-target", "cartesian-planning", "ecmp-stepping",
+            "gcode-target", "wobble-target", "cartesian-planning", "ecmp-stepping", "xy-limits",
         ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
 

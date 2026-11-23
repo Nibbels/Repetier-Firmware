@@ -92,6 +92,9 @@
     <ClInclude Include="CartesianPlanner.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="XYOvertravel.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="Repetier.h">
       <Filter>Header Files</Filter>
     </ClInclude>

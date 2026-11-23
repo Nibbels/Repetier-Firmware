@@ -33,6 +33,12 @@ The four AVR builds matched the previous revision's CPU cycles and Z step counts
 
 - [x] **Extract the bed correction and ECMP calculation.** The foreground supplies nominal Z, layer geometry and a matrix reader to `BedCompensation`. The replay checks target steps, ECMP and matrix reads at negative and zero Z, both fade boundaries, a flat matrix and disabled compensation. The active Digit-Z replay covers both sensor polarities and the 600-step limit. A regression probe reproduces the early ECMP write on negative Z in `0383de5` and checks publication under interrupt protection on the new revision. All four builds use 46 fewer flash bytes, and the 36 instruction traces match the previous cycles and Z step counts. Physical tests remain open. [Calculation](../Repetier/BedCompensation.h) · [Host replay](../tests/pause-sense-offset.py)
 
+### XY travel limits
+
+- [x] **Share the XY limit rule and own the skipped steps.** The replay checks both axes, either limit, repayment with the switch held and after it opens, and the difference between clipped queued and direct moves. [Accounting](../Repetier/XYOvertravel.h) · [Replay](../tests/pause-sense-offset.py)
+
+Across the four AVR builds, 64 XY instruction traces reproduce the motor displacements and skipped-step counts from `92f2b10`. An unobstructed queued X step takes one more CPU cycle and the corresponding Y step takes the same number. Limit paths range from ten fewer to six more cycles. Physical pulse timing remains open.
+
 ### Z travel and scanning
 
 - [x] **Give Z step execution one owner.** `ZMotion` tracks nominal progress, direct displacement, scan travel, requested and applied correction, missed queued steps and emitted motor steps. The host replay covers endstop clipping, overtravel repayment, opposing correction, compensation waits, scan retreat and microstep scale changes. Run `python3 tests/z-motion.py` for all three model policies. [Execution and limits](development-roadmap.md#z-step-execution)

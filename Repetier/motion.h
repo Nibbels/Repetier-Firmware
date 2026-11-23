@@ -180,8 +180,7 @@ public:
     }
 
     static bool hasQueuedOvertravel() {
-        return Printer::outOfPrintVolume[X_AXIS] || Printer::outOfPrintVolume[Y_AXIS]
-            || Printer::zMotion.hasQueuedOvertravel();
+        return Printer::xyOvertravel.any() || Printer::zMotion.hasQueuedOvertravel();
     }
 
     inline bool isNominalMove() {

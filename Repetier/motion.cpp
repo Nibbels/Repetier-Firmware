@@ -917,83 +917,39 @@ long PrintLine::performQueueMove() {
     return performMove(cur, FOR_QUEUE);
 } // performQueueMove
 
-/**
- * Check if our queued move is within or without specified print volume
- *
- * The coordinate system might sometimes move out of the print volume box but the printer is not allowed to move then.
- */
-bool inBauraum(uint8_t axisXY, PrintLine* move, uint8_t forQueue) {
-    // entry assumes that isXMove is true
+template <int8_t limitDirection>
+static bool canStepAtXYLimit(uint8_t axis, PrintLine* move, uint8_t forQueue) {
+    auto& overtravel = Printer::xyOvertravel;
+    const bool towardLimit = limitDirection > 0 ? move->isPositiveMoveOfAxis(axis) : move->isNegativeMoveOfAxis(axis);
+    if (!towardLimit)
+        return !forQueue || !overtravel.payBack(axis, -limitDirection);
 
-    if (Printer::isMaxEndstopHit(axisXY)) {
-        if (move->isPositiveMoveOfAxis(axisXY)) {
-            // all directMoves have abort set, some queueMoves too (Homing and optional scans etc.)
-            if (move->isAbortAtEndstops()) {
-                move->setMoveOfAxisFinished(axisXY);
-                if (forQueue)
-                    Printer::outOfPrintVolume[axisXY] = 0;
-                else
-                    Printer::stopDirectAxis(axisXY);
-
-                return false;
-            }
-            // If we do not abort the Z-move outside of boundarys we will count the oversteps and block the physical step
-            Printer::outOfPrintVolume[axisXY]++;
-
-            return false;
-        }
-
-        if (forQueue && Printer::outOfPrintVolume[axisXY] > 0) {
-            // If we are in the endstop and have oversteps while moving z to minus we pay back ignored plusZ by ignoring minusZ until overMaxEndstopZ is even.
-            Printer::outOfPrintVolume[axisXY]--;
-
-            return false;
-        }
-
-        return true;
+    if (move->isAbortAtEndstops()) {
+        move->setMoveOfAxisFinished(axis);
+        if (forQueue)
+            overtravel.clear(axis);
+        else
+            Printer::stopDirectAxis(axis);
+    } else {
+        overtravel.recordBlockedStep(axis, limitDirection);
     }
+    return false;
+}
 
-    if (Printer::isMinEndstopHit(axisXY)) {
-        if (move->isNegativeMoveOfAxis(axisXY)) {
-            // all directMoves have abort set, some queueMoves too (Homing and optional scans etc.)
-            if (move->isAbortAtEndstops()) {
-                move->setMoveOfAxisFinished(axisXY);
-                if (forQueue)
-                    Printer::outOfPrintVolume[axisXY] = 0;
-                else
-                    Printer::stopDirectAxis(axisXY);
+static bool canStepXY(uint8_t axis, PrintLine* move, uint8_t forQueue) {
+    if (Printer::isMaxEndstopHit(axis))
+        return canStepAtXYLimit<1>(axis, move, forQueue);
+    if (Printer::isMinEndstopHit(axis))
+        return canStepAtXYLimit<-1>(axis, move, forQueue);
 
-                return false;
-            }
-            // If we do not abort the Z-move outside of boundarys we will count the oversteps and block the physical step
-            Printer::outOfPrintVolume[axisXY]--;
-
-            return false;
-        }
-
-        if (forQueue && Printer::outOfPrintVolume[axisXY] < 0) {
-            // If we are in the endstop and have oversteps while moving z to minus we pay back ignored plusZ by ignoring minusZ until overMaxEndstopZ is even.
-            Printer::outOfPrintVolume[axisXY]++;
-
-            return false;
-        }
-
-        return true;
+    auto& overtravel = Printer::xyOvertravel;
+    // A returning queue move still accounts for skipped steps when the switch opens.
+    if (forQueue && overtravel.steps(axis)) {
+        if (move->isNegativeMoveOfAxis(axis))
+            return !overtravel.payBack(axis, -1);
+        if (move->isPositiveMoveOfAxis(axis))
+            return !overtravel.payBack(axis, 1);
     }
-
-    /* Angeblich kein Knopf gedrückt, aber overSteps übrig. -> overSteps zurückbauen und output ignorieren, der Schalter könnte wackeln. */
-    if (forQueue && Printer::outOfPrintVolume[axisXY] != 0) {
-        if (Printer::outOfPrintVolume[axisXY] > 0 && move->isNegativeMoveOfAxis(axisXY)) {
-            Printer::outOfPrintVolume[axisXY]--;
-
-            return false;
-        } else if (Printer::outOfPrintVolume[axisXY] < 0 && move->isPositiveMoveOfAxis(axisXY)) {
-            Printer::outOfPrintVolume[axisXY]++;
-
-            return false;
-        }
-    }
-
     return true;
 }
 
@@ -1092,7 +1048,7 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
             if ((move->error[X_AXIS] -= move->delta[X_AXIS]) < 0) {
                 HAL::allowInterrupts();
                 int8_t dir = (Printer::getXDirectionIsPos() ? 1 : -1);
-                if (inBauraum(X_AXIS, move, forQueue)) {
+                if (canStepXY(X_AXIS, move, forQueue)) {
                     Printer::startXStep(dir);
                 }
                 HAL::forbidInterrupts();
@@ -1112,7 +1068,7 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
             if ((move->error[Y_AXIS] -= move->delta[Y_AXIS]) < 0) {
                 HAL::allowInterrupts();
                 int8_t dir = (Printer::getYDirectionIsPos() ? 1 : -1);
-                if (inBauraum(Y_AXIS, move, forQueue)) {
+                if (canStepXY(Y_AXIS, move, forQueue)) {
                     Printer::startYStep(dir);
                 }
                 HAL::forbidInterrupts();

@@ -22,6 +22,8 @@ This is shared AVR/ATmega2560 Repetier firmware for **RF1000, RF2000 and RF2000v
 
 **Z motion.** `Printer::zMotion` owns the execution counters and travel rules. Use its operations for queued, direct, scan and compensation steps. A clipped nominal step or a step balanced by compensation can advance the path without an emitted pulse. Run `python3 tests/z-motion.py` when editing these paths. [Execution model](docs/development-roadmap.md#z-step-execution)
 
+**XY travel limits.** `Printer::xyOvertravel` tracks skipped queue steps. The step executor uses one rule for arriving at either limit. Queued motion pays back skipped steps on the way back, including when the switch has opened. A direct retreat preserves the queued position. [XY limits and replay](docs/maintenance-tasks.md#xy-travel-limits)
+
 **Bed compensation.** `BedCompensation` calculates the bed-profile correction and ECMP ratio from executing nominal Z, planned layer bounds and a matrix reader. `recalculateZCompensation()` adds the effective offset and active Digit-Z, then publishes the Z target and ECMP ratio together under interrupt protection. [Calculation and test cases](docs/first-layer-control/z-compensation-and-ecmp.md)
 
 **Digit compensation.** `Printer::digitCompensation` owns the DMS filter, the Digit-Z switch, the Digit Flow profile and its live factors. Keep sampling and regulation in the foreground. Timer1 reads the atomically published `intervalScale()` for queued XY moves. M220 and M221 still control the user speed and flow overrides. Run `python3 tests/pause-sense-offset.py` for the DMS sample and M3912 replays. [DMS controls](docs/development-roadmap.md#job-boundaries-and-dms)

@@ -82,13 +82,11 @@ ExtrusionCompensation Printer::extrusionCompensation;
 MoveTarget Printer::moveTarget;
 WobbleCorrection Printer::wobbleCorrection;
 CartesianPlanner Printer::cartesianPlanner;
+XYOvertravel Printer::xyOvertravel;
 char Printer::ZMode = DEFAULT_Z_SCALE_MODE;                       // Z-min distance or nominal layer height
 char Printer::moveMode[3];                                        // move mode which is applied within the Position X/Y/Z menus
 bool Printer::moveKosys = KOSYS_GCODE;                            // true = GCode, false = DirectMove / OffsetMove
 bool Printer::movePositionFeedrateChoice = FEEDRATE_DIRECTCONFIG; // select the feedrate for menu positioning: feedrate from last gcode or standard speed
-
-// This is some buffer but only for a limited amount of overdrive.
-volatile int16_t Printer::outOfPrintVolume[2] = { 0 };
 
 volatile char Printer::doHeatBedZCompensation = false;
 

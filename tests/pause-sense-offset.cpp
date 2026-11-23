@@ -116,6 +116,7 @@ void WRITE(int pin, bool high);
 #include "MoveTarget.h"
 #include "WobbleCorrection.h"
 #include "CartesianPlanner.h"
+#include "XYOvertravel.h"
 
 #define PSTR(text) (text)
 #define UI_STATUS_UPD(text) ((void)0)
@@ -185,6 +186,9 @@ DigitCompensation digitCompensation{
     short(std::abs(EMERGENCY_PAUSE_DIGITS_MAX) * 0.7), short(std::abs(EMERGENCY_PAUSE_DIGITS_MAX))
 };
 long currentXYSteps[2] = { 6400, 12800 };
+XYOvertravel xyOvertravel;
+bool xyMinHit[2] = {}, xyMaxHit[2] = {};
+int8_t stoppedDirectAxis = -1;
 long currentXSteps = 0;
 WobbleCorrection wobbleCorrection;
 long directCurrentSteps[4] = { 0, 16, 8, 0 };
@@ -224,6 +228,9 @@ void setPrinting(bool active) { printing = active; }
 bool areAxisHomed() { return axesHomed; }
 bool isAxisHomed(int) { return true; }
 bool isZMoveActive() { return movingZ; }
+bool isMinEndstopHit(uint8_t axis) { return xyMinHit[axis]; }
+bool isMaxEndstopHit(uint8_t axis) { return xyMaxHit[axis]; }
+void stopDirectAxis(uint8_t axis) { stoppedDirectAxis = axis; }
 bool isZMaxEndstopHit() { return zMotion.maxEndstopHit(); }
 bool isZMinEndstopHit() { return ZMotion::minSwitchHit(); }
 bool needsCMPwait() { return false; }
@@ -348,6 +355,17 @@ struct PrintLine {
     bool positiveE = false;
     bool moveXY = false;
     bool moveE = false;
+    uint8_t xyDirection = 0;
+    bool abortAtEndstops = false;
+    bool isAbortAtEndstops() const { return abortAtEndstops; }
+    bool isPositiveMoveOfAxis(uint8_t axis) const {
+        uint8_t mask = 17 << axis;
+        return (xyDirection & mask) == mask;
+    }
+    bool isNegativeMoveOfAxis(uint8_t axis) const {
+        return (xyDirection & (17 << axis)) == (16 << axis);
+    }
+    void setMoveOfAxisFinished(uint8_t axis) { xyDirection &= ~(16 << axis); }
     int32_t error[4] = {}, delta[4] = {};
     bool isEMove() const { return moveE; }
     bool isZMove() const { return moveZ; }
@@ -1496,6 +1514,47 @@ void ecmpStepping() {
     assert(Printer::extruderStepsNeeded == -1 && Extruder::stepPulses == 6);
 }
 
+void xyLimits() {
+    for (uint8_t axis = X_AXIS; axis <= Y_AXIS; ++axis) {
+        const uint8_t positive = 17 << axis, negative = 16 << axis;
+        PrintLine move;
+        move.xyDirection = positive;
+        Printer::xyMaxHit[axis] = true;
+        assert(!canStepXY(axis, &move, true));
+        assert(!canStepXY(axis, &move, true));
+        assert(Printer::xyOvertravel.steps(axis) == 2);
+
+        move.xyDirection = negative;
+        assert(!canStepXY(axis, &move, true));
+        Printer::xyMaxHit[axis] = false;
+        assert(!canStepXY(axis, &move, true));
+        assert(canStepXY(axis, &move, true) && !Printer::xyOvertravel.steps(axis));
+
+        Printer::xyMinHit[axis] = true;
+        assert(!canStepXY(axis, &move, true));
+        assert(Printer::xyOvertravel.steps(axis) == -1);
+        move.xyDirection = positive;
+        move.abortAtEndstops = true;
+        assert(canStepXY(axis, &move, false)); // A direct retreat leaves the queue's debt alone.
+        assert(Printer::xyOvertravel.steps(axis) == -1);
+        assert(!canStepXY(axis, &move, true));
+        assert(canStepXY(axis, &move, true) && !Printer::xyOvertravel.steps(axis));
+
+        move.xyDirection = negative;
+        move.abortAtEndstops = false;
+        assert(!canStepXY(axis, &move, true));
+        move.abortAtEndstops = true;
+        assert(!canStepXY(axis, &move, true));
+        assert(!move.isNegativeMoveOfAxis(axis) && !Printer::xyOvertravel.steps(axis));
+        assert(Printer::stoppedDirectAxis != axis);
+
+        move.xyDirection = negative;
+        assert(!canStepXY(axis, &move, false));
+        assert(!move.isNegativeMoveOfAxis(axis) && Printer::stoppedDirectAxis == axis);
+        Printer::xyMinHit[axis] = false;
+    }
+}
+
 void initializeOffsets() {
     planMove(256, true);
     Printer::zMotion.setNominalSteps(256);
@@ -1575,6 +1634,8 @@ int main(int argc, char** argv) {
         cartesianPlanning();
     else if (!std::strcmp(argv[1], "ecmp-stepping"))
         ecmpStepping();
+    else if (!std::strcmp(argv[1], "xy-limits"))
+        xyLimits();
     else
         return 1;
     std::printf("Print lifecycle replay passed (%s)\n", argv[1]);
