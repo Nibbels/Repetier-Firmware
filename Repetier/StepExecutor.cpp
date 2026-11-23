@@ -341,6 +341,30 @@ speed_t StepExecutor::nextStepSpeed(PrintLine& move, StepClock& clock, uint8_t p
     return speed < stepProfile.vEnd ? stepProfile.vEnd : speed;
 }
 
+// Isolate completion from step scheduling.
+inline void StepExecutor::finishMove(PrintLine& move, bool queued) {
+    move.dir &= ~240;
+    Extruder::current->stepperDirection = 0;
+
+    auto& queue = PrintLine::queue;
+    if (queued) {
+        queue.retireFront();
+    } else {
+        Printer::stopDirectAxis(X_AXIS);
+        Printer::stopDirectAxis(Y_AXIS);
+        Printer::stopDirectAxis(Z_AXIS);
+        Printer::stopDirectAxis(E_AXIS);
+        move.stepsRemaining = 0;
+        move.task = DIRECT_IDLE;
+    }
+
+    const bool scanning = g_nHeatBedScanStatus || g_nZOSScanStatus;
+    if (queue.count() == 0 && !scanning) {
+        Printer::idleStatus.schedule(HAL::timeInMilliseconds());
+        nominalFeedrate_ = 0;
+    }
+}
+
 long StepExecutor::performMove(PrintLine* move, uint8_t forQueue) {
     HAL::allowInterrupts();
     fast8_t max_loops = stepsPerTimerCall;
@@ -493,40 +517,10 @@ long StepExecutor::performMove(PrintLine* move, uint8_t forQueue) {
         stepsPerTimerCall += 1;
     }
 
-    if (move->stepsRemaining <= 0 || move->isNoMove()) // line finished
-    {
-        // Release every axis so Z compensation can resume between moves.
-        move->dir &= ~240;
-        Extruder::current->stepperDirection = 0;
-
-        auto& queue = PrintLine::queue;
-        if (forQueue) {
-            queue.retireFront();
-        } else {
-            //forDirect:
-            // Wir dürften das stop nicht brauchen, brauchen es aber:
-            //  Abbrechen von Direct-Move geht "sanft" über stepsremaining
-            //  Abbrechen von Direct-Move geht hart über setMoveFinished.
-            // Bei beiden Abbruchvarianten wird die destination nicht erreicht, also nicht fertig gezählt.
-            Printer::stopDirectAxis(X_AXIS);
-            Printer::stopDirectAxis(Y_AXIS);
-            Printer::stopDirectAxis(Z_AXIS);
-            Printer::stopDirectAxis(E_AXIS);
-            move->stepsRemaining = 0;
-            move->task = DIRECT_IDLE;
-        }
-
-        char nIdle = 1;
-        if (g_nHeatBedScanStatus || g_nZOSScanStatus)
-            nIdle = 0; // we are not idle because the heat bed scan is going on at the moment
-
-        if (queue.count() == 0 && nIdle) {
-            Printer::idleStatus.schedule(HAL::timeInMilliseconds());
-            nominalFeedrate_ = 0;
-        }
-
-        interval >>= 1; // 50% of time to next call to do cur=0, which will fire another interrupt at 50% of the active stepIntervalTicks step time. This works like "move 1 end -> 50% -> prepare move 2 -> 50% -> move 2 begin"
-    } // line finished
+    if (move->stepsRemaining <= 0 || move->isNoMove()) {
+        finishMove(*move, forQueue);
+        interval >>= 1; // The two half-intervals allow time to set up the next move.
+    }
 
     return interval;
 } // performMove

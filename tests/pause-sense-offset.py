@@ -79,7 +79,7 @@ def main():
         section(motion, "class MoveQueue {", "\ninline uint8_t PrintLine::queuedMoveCount"),
         "MoveQueue PrintLine::queue;",
         section(move_planner, "bool PrintLine::hasActiveZMove()", "\nvoid PrintLine::setAxisSteps("),
-        section(executor, "speed_t StepExecutor::nextStepSpeed(", "\nlong StepExecutor::performMove("),
+        section(executor, "speed_t StepExecutor::nextStepSpeed(", "\n// Isolate completion"),
         move_planner[move_planner.index("void PrintLine::prepareDirectMove("):move_planner.index("/** \\brief Check if move is new.")]
         .replace("void PrintLine::stopDirectMove() {", "void PrintLine::applyDirectStop() {", 1),
         planner.split('#include "MotionPlanner.h"\n', 1)[1],

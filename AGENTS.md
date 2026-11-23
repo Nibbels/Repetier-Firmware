@@ -42,7 +42,9 @@ This is shared AVR/ATmega2560 Repetier firmware for **RF1000, RF2000 and RF2000v
 
 **Pause and stop.** `Printer::pause` owns the pause phase and return position. The queue, the panel and the DMS handler use its request and query methods. `Printer::printStop` owns timed abort cleanup and command admission during a stop. Run `python3 tests/pause-sense-offset.py` when changing these transitions. [Pause and stop transitions](docs/development-roadmap.md#pause-and-stop-transitions)
 
-**Print input.** USB over UART0 is the sole external G-code input. All three models buffer 24 planned moves. Run `python3 tests/serial-protocol.py` when changing the receiver or command admission. Preserve the established host transcripts. [Serial compatibility](docs/development-roadmap.md#serial-printing-compatibility) · [SD support removal](docs/maintenance-tasks.md#sd-support-removal)
+**Idle and shutdown.** `Printer::idleStatus` owns the pending Ready transition shared by the foreground and Timer1. `Printer::inactivity` owns the last activity time and the two persisted `M84` and `M85` thresholds. Use elapsed clock arithmetic through rollover and take the inactivity sample after preceding foreground services. [Lifecycle tests](tests/pause-sense-offset.py) · [Timeout replay](tests/machine-inactivity.cpp)
+
+**Print input.** `UsbSerial` owns USART0 and the byte rings. `GCodeInput` owns the receiver state and two parsed command slots. All three models buffer 24 planned moves. Run `python3 tests/serial-protocol.py` when changing transport, admission or framing. [Serial compatibility](docs/development-roadmap.md#serial-printing-compatibility) · [SD support removal](docs/maintenance-tasks.md#sd-support-removal)
 
 **Non-negotiable operator workflow:** In Mod Menu page 2 the Z/bed DOWN→UP button pair intentionally transfers 5 µm of live SenseOffset into the EEPROM-backed manual part of `Printer::zOffset` with approximately unchanged final clearance (see [live takeover procedure](docs/z-offset/history-and-workflows.md) and the original January 2017 changelog). Do not “fix” the asymmetric button behavior or reset dynamic offsets while a manual transfer is underway.
 

@@ -58,6 +58,7 @@ private:
 
     static uint16_t nextStepSpeed(PrintLine& move, StepClock& clock, uint8_t pulses, uint32_t interval);
     static long performMove(PrintLine* move, uint8_t forQueue);
+    static void finishMove(PrintLine& move, bool queued);
 };
 
 #endif
