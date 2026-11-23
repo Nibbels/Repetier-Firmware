@@ -131,6 +131,7 @@ void WRITE(int pin, bool high);
 #include "PressureProtection.h"
 #include "CalibrationScan.h"
 #include "ManualMotion.h"
+#include "GCodeModes.h"
 #include "PressureMeasurement.h"
 #include "StrainGauge.h"
 #include "StartLine.h"
@@ -243,9 +244,8 @@ float axisLengthMM[3] = { 170.0f, 245.0f, 200.0f };
 long maxSoftEndstopSteps[2] = { 170 * 160L, 245 * 160L };
 MoveTarget moveTarget;
 float feedrate = 10.0f;
-bool unitIsInches = false, relativeCoordinateMode = false;
+GCodeModes gcodeModes;
 float menuExtrusionFactor = 1.0f;
-bool relativeExtruderCoordinateMode = false;
 ExtrusionCompensation extrusionCompensation;
 bool blockAll = false;
 ExtrusionOutput extrusionOutput;
@@ -262,7 +262,7 @@ bool debugErrors() { return false; }
 bool infoLogging = false;
 bool debugInfo() { return infoLogging; }
 bool debugDryrun() { return false; }
-float convertToMM(float value) { return unitIsInches ? value * 25.4 : value; }
+float convertToMM(float value) { return gcodeModes.inches() ? value * 25.4 : value; }
 bool areAxisHomed() { return axesHomed; }
 bool isAxisHomed(int) { return true; }
 bool isMinEndstopHit(uint8_t axis) { return xyMinHit[axis]; }
@@ -1544,7 +1544,7 @@ void primeFlowCleanup(unsigned skipAt, unsigned abortAt) {
     Printer::setEPositionMM(10.0f, 0.00001f);
     Printer::extrusionPlanner.restoreStepRemainder(0.125f);
     Printer::extrusionCompensation.restoreRemainder(0.75f);
-    Printer::relativeExtruderCoordinateMode = true;
+    Printer::gcodeModes.setRelativeEOverride(true);
     Printer::feedrateMultiply = 85;
     Printer::menuExtrusionFactor = 0.93f;
     PrintLine::linesCount = 0;
@@ -1574,7 +1574,7 @@ void primeFlowCleanup(unsigned skipAt, unsigned abortAt) {
     assert(profile.minDigits == 2000 && profile.maxDigits == 6100);
     assert(profile.extrusionPercent == 21 && profile.speedPercent == -30);
     assert(compensation.extrusionFactor() == 1 && compensation.feedrateFactor() == 1 && !compensation.intervalScale());
-    assert(!Printer::startLine.active() && Printer::relativeExtruderCoordinateMode);
+    assert(!Printer::startLine.active() && Printer::gcodeModes.relativeEOverride());
     assert(Printer::feedrateMultiply == 85 && Printer::menuExtrusionFactor == 0.93f);
     if (abortAt) {
         assert(Printer::printJob.commandsBlocked() && Printer::moveTarget.machineMM(E_AXIS) == 0.0f);
@@ -1699,7 +1699,7 @@ void gcodeTarget() {
     assert(Printer::moveTarget.machineMM(E_AXIS) == 2 && PrintLine::updatesWobble);
     assert(std::abs(Printer::feedrate - 20) < 0.00001f);
 
-    Printer::relativeCoordinateMode = true;
+    Printer::gcodeModes.setRelativeXYZ(true);
     command.X = 0;
     command.Y = 0.25f;
     command.E = 1;
@@ -1707,16 +1707,16 @@ void gcodeTarget() {
     assert(Printer::moveTarget.machineMM(X_AXIS) == 10 && Printer::moveTarget.machineMM(Y_AXIS) == 40.25f);
     assert(Printer::moveTarget.machineMM(E_AXIS) == 3);
 
-    Printer::relativeCoordinateMode = false;
-    Printer::relativeExtruderCoordinateMode = true;
-    Printer::unitIsInches = true;
+    Printer::gcodeModes.setRelativeXYZ(false);
+    Printer::gcodeModes.setRelativeEOverride(true);
+    Printer::gcodeModes.setInches(true);
     command.X = 0.5f;
     command.Y = command.E = command.F = 0;
     assert(Printer::queueGCodeCoordinates(&command));
     assert(std::abs(Printer::moveTarget.machineMM(X_AXIS) - 1.7f) < 0.00001f);
     assert(Printer::moveTarget.machineMM(Y_AXIS) == 40.25f);
 
-    Printer::unitIsInches = false;
+    Printer::gcodeModes.setInches(false);
     command.X = 0;
     command.E = -0.5f;
     assert(Printer::queueGCodeCoordinates(&command));
@@ -2135,7 +2135,7 @@ void manualExtrusionDuringPause(bool advance) {
 void filamentProgramDuringPause() {
     Printer::setEPositionMM(42.5f, 0.000125f);
     Printer::extrusionPlanner.restoreStepRemainder(0.25f);
-    Printer::relativeExtruderCoordinateMode = true;
+    Printer::gcodeModes.setRelativeEOverride(true);
     const float targetTemperature = Extruder::current->tempControl.targetTemperatureC;
     const int queued = PrintLine::linesCount;
 
@@ -2154,7 +2154,7 @@ void filamentProgramDuringPause() {
         assert(Printer::moveTarget.machineMM(E_AXIS) == 42.5f);
         assert(Printer::moveTarget.remainderMM(E_AXIS) == 0.000125f);
         assert(Printer::extrusionPlanner.stepRemainder() == 0.25f);
-        assert(Printer::relativeExtruderCoordinateMode);
+        assert(Printer::gcodeModes.relativeEOverride());
         assert(Extruder::current->tempControl.targetTemperatureC == targetTemperature);
     }
 }

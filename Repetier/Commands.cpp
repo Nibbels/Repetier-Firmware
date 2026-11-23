@@ -139,10 +139,10 @@ void Commands::printCurrentPosition() {
     y += Printer::moveTarget.workOffsetMM(Y_AXIS);
     z += Printer::moveTarget.workOffsetMM(Z_AXIS);
 
-    Com::printF(Com::tXColon, x * (Printer::unitIsInches ? 0.03937 : 1), 2);
-    Com::printF(Com::tSpaceYColon, y * (Printer::unitIsInches ? 0.03937 : 1), 2);
-    Com::printF(Com::tSpaceZColon, z * (Printer::unitIsInches ? 0.03937 : 1), 2);
-    Com::printFLN(Com::tSpaceEColon, Printer::moveTarget.machineMM(E_AXIS) * (Printer::unitIsInches ? 0.03937 : 1), 2);
+    Com::printF(Com::tXColon, x * (Printer::gcodeModes.inches() ? 0.03937 : 1), 2);
+    Com::printF(Com::tSpaceYColon, y * (Printer::gcodeModes.inches() ? 0.03937 : 1), 2);
+    Com::printF(Com::tSpaceZColon, z * (Printer::gcodeModes.inches() ? 0.03937 : 1), 2);
+    Com::printFLN(Com::tSpaceEColon, Printer::moveTarget.machineMM(E_AXIS) * (Printer::gcodeModes.inches() ? 0.03937 : 1), 2);
 } // printCurrentPosition
 
 void Commands::printTemperatures(bool showRaw) {
@@ -349,12 +349,12 @@ void Commands::processGCode(GCode* com) {
     }
     case 20: // G20 - Units to inches
     {
-        Printer::unitIsInches = 1;
+        Printer::gcodeModes.setInches(1);
         break;
     }
     case 21: // G21 - Units to mm
     {
-        Printer::unitIsInches = 0;
+        Printer::gcodeModes.setInches(0);
         break;
     }
     case 28: // G28 - Home all axes one at a time
@@ -373,14 +373,14 @@ void Commands::processGCode(GCode* com) {
 
     case 90: // G90
     {
-        Printer::relativeCoordinateMode = false;
+        Printer::gcodeModes.setRelativeXYZ(false);
         if (com->internalCommand)
             Com::printInfoFLN(PSTR("Absolute positioning"));
         break;
     }
     case 91: // G91
     {
-        Printer::relativeCoordinateMode = true;
+        Printer::gcodeModes.setRelativeXYZ(true);
         if (com->internalCommand)
             Com::printInfoFLN(PSTR("Relative positioning"));
         break;
@@ -621,12 +621,12 @@ void Commands::processMCode(GCode* com) {
 
     case 82: // M82
     {
-        Printer::relativeExtruderCoordinateMode = false;
+        Printer::gcodeModes.setRelativeEOverride(false);
         break;
     }
     case 83: // M83
     {
-        Printer::relativeExtruderCoordinateMode = true;
+        Printer::gcodeModes.setRelativeEOverride(true);
         break;
     }
     case 84: // M84

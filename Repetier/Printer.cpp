@@ -20,13 +20,13 @@
 #include "TwiTransfer.h"
 
 ExtrusionOutput Printer::extrusionOutput;
+GCodeModes Printer::gcodeModes;
 ManualMotion Printer::manualMotion(
     lroundf(XAXIS_STEPS_PER_MM * DEFAULT_MANUAL_MM_X),
     lroundf(YAXIS_STEPS_PER_MM * DEFAULT_MANUAL_MM_Y),
     lroundf(ZAXIS_STEPS_PER_MM * DEFAULT_MANUAL_MM_Z),
     lroundf(EXT0_STEPS_PER_MM * DEFAULT_MANUAL_MM_E));
 
-uint8_t Printer::unitIsInches = 0; // 0 = Units are mm, 1 = units are inches.
 
 //Stepper Movement Variables
 float Printer::axisStepsPerMM[4] = { XAXIS_STEPS_PER_MM, YAXIS_STEPS_PER_MM, ZAXIS_STEPS_PER_MM, 1 };                      ///< Number of steps per mm needed.
@@ -42,8 +42,6 @@ uint32_t Printer::maxPrintAccelerationStepsPerSquareSecond[4];
 /** Acceleration in steps/s^2 in movement mode.*/
 uint32_t Printer::maxTravelAccelerationStepsPerSquareSecond[4];
 
-uint8_t Printer::relativeCoordinateMode = false;         // Determines absolute (false) or relative Coordinates (true).
-uint8_t Printer::relativeExtruderCoordinateMode = false; // Determines Absolute or Relative E Codes while in Absolute Coordinates mode. E is always relative in Relative Coordinates mode.
 
 uint8_t Printer::flag0 = 0;
 uint8_t Printer::flag1 = 0;
@@ -247,7 +245,7 @@ int32_t Printer::prepareDestinationSteps(uint8_t axis) {
 inline bool isExtrusionAllowed(float e) {
     // calculate total amount of extrusion respecting coordinate mode
     float de = e;
-    if (!Printer::relativeCoordinateMode && !Printer::relativeExtruderCoordinateMode) {
+    if (!Printer::gcodeModes.relativeE()) {
         de = (e - Printer::moveTarget.machineMM(E_AXIS)) - Printer::moveTarget.remainderMM(E_AXIS);
     }
 
@@ -269,7 +267,7 @@ void Printer::setFeedrate(float feedrate) {
     if (feedrate <= 0)
         return;
 
-    if (Printer::unitIsInches)
+    if (Printer::gcodeModes.inches())
         Printer::feedrate = feedrate * (float)Printer::feedrateMultiply * 0.0042333f; // Factor is 25.4/60/100 = convertToMM(0.00016666666f)
     else
         Printer::feedrate = feedrate * (float)Printer::feedrateMultiply * 0.00016666666f;
@@ -279,16 +277,16 @@ void Printer::setFeedrate(float feedrate) {
 bool Printer::queueGCodeCoordinates(GCode* com) {
     const bool isXYZMove = !com->hasNoXYZ();
     if (com->hasX())
-        moveTarget.setFromGCodeMM(X_AXIS, convertToMM(com->X), relativeCoordinateMode);
+        moveTarget.setFromGCodeMM(X_AXIS, convertToMM(com->X), gcodeModes.relativeXYZ());
     if (com->hasY())
-        moveTarget.setFromGCodeMM(Y_AXIS, convertToMM(com->Y), relativeCoordinateMode);
+        moveTarget.setFromGCodeMM(Y_AXIS, convertToMM(com->Y), gcodeModes.relativeXYZ());
     if (com->hasZ())
-        moveTarget.setFromGCodeMM(Z_AXIS, convertToMM(com->Z), relativeCoordinateMode);
+        moveTarget.setFromGCodeMM(Z_AXIS, convertToMM(com->Z), gcodeModes.relativeXYZ());
 
     float e = convertToMM(com->E);
     bool isEMove = com->hasE() && isExtrusionAllowed(e);
     if (isEMove) {
-        if (relativeCoordinateMode || relativeExtruderCoordinateMode)
+        if (gcodeModes.relativeE())
             moveTarget.addMM(E_AXIS, e);
         else
             moveTarget.setMachineMM(E_AXIS, e);

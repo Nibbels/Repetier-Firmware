@@ -764,7 +764,7 @@ void UIDisplay::parse(char* txt, bool ram) {
         {
             if (c2 == 'r') // %er : Extruder relative mode
             {
-                addStringP(Printer::relativeExtruderCoordinateMode ? ui_yes : ui_no);
+                addStringP(Printer::gcodeModes.relativeEOverride() ? ui_yes : ui_no);
                 break;
             }
 
@@ -3540,7 +3540,7 @@ void UIDisplay::mainSwitchCase(int action) {
         break;
     }
     case UI_ACTION_EXTRUDER_RELATIVE: {
-        Printer::relativeExtruderCoordinateMode = !Printer::relativeExtruderCoordinateMode;
+        Printer::gcodeModes.setRelativeEOverride(!Printer::gcodeModes.relativeEOverride());
         break;
     }
     case UI_ACTION_SELECT_EXTRUDER0: {

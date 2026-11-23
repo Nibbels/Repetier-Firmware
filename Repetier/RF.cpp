@@ -4867,10 +4867,10 @@ void loadFilament(GCode* pCommand) {
     short maxP = 2000; //to overwrite .. safety.
     if (pCommand->hasP())
         maxP = constrain(abs(static_cast<short>(pCommand->P)), 0, 20000);
-    bool save_relativeExtruderCoordinateMode = Printer::relativeExtruderCoordinateMode;
-    Printer::relativeExtruderCoordinateMode = false; //M82:
-    uint8_t saveunitIsInches = Printer::unitIsInches;
-    Printer::unitIsInches = 0; //to save possible G21 .. weiß net ob das so wichtig wäre ^^.
+    const bool savedRelativeE = Printer::gcodeModes.relativeEOverride();
+    Printer::gcodeModes.setRelativeEOverride(false); //M82:
+    const bool savedInches = Printer::gcodeModes.inches();
+    Printer::gcodeModes.setInches(0); //to save possible G21 .. weiß net ob das so wichtig wäre ^^.
 
     Printer::setEPositionMM(0); // G92 E0
 
@@ -4896,8 +4896,8 @@ void loadFilament(GCode* pCommand) {
 
     Printer::setEPositionMM(0); // G92 E0
 
-    Printer::relativeExtruderCoordinateMode = save_relativeExtruderCoordinateMode;
-    Printer::unitIsInches = saveunitIsInches;
+    Printer::gcodeModes.setRelativeEOverride(savedRelativeE);
+    Printer::gcodeModes.setInches(savedInches);
     Printer::printJob.finishFilamentService();
     Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 5000);
 }
@@ -4921,10 +4921,10 @@ void unloadFilament(GCode* pCommand) {
     Extruder::current->tempControl.waitForTargetTemperature(10);
 
     //set stuff
-    bool save_relativeExtruderCoordinateMode = Printer::relativeExtruderCoordinateMode;
-    Printer::relativeExtruderCoordinateMode = false; //M82:
-    uint8_t saveunitIsInches = Printer::unitIsInches;
-    Printer::unitIsInches = 0; //to save possible G21 .. weiß net ob das so wichtig wäre ^^.
+    const bool savedRelativeE = Printer::gcodeModes.relativeEOverride();
+    Printer::gcodeModes.setRelativeEOverride(false); //M82:
+    const bool savedInches = Printer::gcodeModes.inches();
+    Printer::gcodeModes.setInches(0); //to save possible G21 .. weiß net ob das so wichtig wäre ^^.
     Printer::setEPositionMM(0); // G92 E0
 
         //normalize dms sensor values to 0 if allowed in options and not already done
@@ -4996,8 +4996,8 @@ void unloadFilament(GCode* pCommand) {
 
     Printer::setEPositionMM(0); // G92 E0
 
-    Printer::relativeExtruderCoordinateMode = save_relativeExtruderCoordinateMode;
-    Printer::unitIsInches = saveunitIsInches;
+    Printer::gcodeModes.setRelativeEOverride(savedRelativeE);
+    Printer::gcodeModes.setInches(savedInches);
     Printer::printJob.finishFilamentService();
     Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 5000);
 }

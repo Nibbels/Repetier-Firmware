@@ -21,6 +21,7 @@
 #define PRINTER_H
 
 #include "ManualMotion.h"
+#include "GCodeModes.h"
 
 #include "ZOffset.h"
 #include "SenseOffsetControl.h"
@@ -81,9 +82,7 @@ public:
     static float maxTravelAccelerationMMPerSquareSecond[];
     static uint32_t maxPrintAccelerationStepsPerSquareSecond[];
     static uint32_t maxTravelAccelerationStepsPerSquareSecond[];
-    static uint8_t relativeCoordinateMode;         // Determines absolute (false) or relative Coordinates (true).
-    static uint8_t relativeExtruderCoordinateMode; // Determines Absolute or Relative E Codes while in Absolute Coordinates mode. E is always relative in Relative Coordinates mode.
-    static uint8_t unitIsInches;
+    static GCodeModes gcodeModes;
     static uint8_t debugLevel;
     static uint8_t flag0;
     static uint8_t flag1;
@@ -456,7 +455,7 @@ public:
     } // toggleAnimation
 
     static INLINE float convertToMM(float x) {
-        return (unitIsInches ? x * 25.4 : x);
+        return (gcodeModes.inches() ? x * 25.4 : x);
     } // convertToMM
 
     static INLINE bool isXMinEndstopHit() {

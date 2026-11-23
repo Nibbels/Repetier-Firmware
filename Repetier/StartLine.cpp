@@ -103,7 +103,7 @@ void StartLine::run(GCode& command) {
     Printer::printJob.admitPrintMotion();
     Com::printFLN(PSTR("Auto-Startmade"));
     const auto savedFlow = Printer::digitCompensation.flowProfile();
-    const bool savedRelativeE = Printer::relativeExtruderCoordinateMode;
+    const bool savedRelativeE = Printer::gcodeModes.relativeEOverride();
     ExtrusionState savedE;
     {
         InterruptProtectedBlock lock;
@@ -115,7 +115,7 @@ void StartLine::run(GCode& command) {
 
     const auto settings = readSettings(command);
     Printer::digitCompensation.setFlowProfile(settings.flow);
-    Printer::relativeExtruderCoordinateMode = false;
+    Printer::gcodeModes.setRelativeEOverride(false);
     Printer::setEPositionMM(0);
     queueLines(settings);
 
@@ -132,5 +132,5 @@ void StartLine::run(GCode& command) {
         Printer::layers.resetTracking();
         active_ = false;
     }
-    Printer::relativeExtruderCoordinateMode = savedRelativeE;
+    Printer::gcodeModes.setRelativeEOverride(savedRelativeE);
 }
