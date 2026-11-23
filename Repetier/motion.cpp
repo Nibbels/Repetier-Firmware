@@ -175,7 +175,7 @@ bool PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
     if (!Printer::startLine.active()) {
         const PrintLayers::PlannedMove move{
             Printer::cartesianPlanner.lastQueuedSteps(Z_AXIS), p->isZMove(), p->isXOrYMove(), p->isEPositiveMove()};
-        Printer::layers.recordPlannedMove(move, Printer::axisStepsPerMM[Z_AXIS], g_offsetZCompensationSteps, g_ZCompensationMax);
+        Printer::layers.recordPlannedMove(move, Printer::axisStepsPerMM[Z_AXIS], bedMatrixHighestZSteps(), bedMatrixLowestZSteps());
     }
 
     p->setSegmentGeometry(axisDistanceMM);

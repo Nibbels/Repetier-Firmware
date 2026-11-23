@@ -13,9 +13,9 @@ def main():
     sections = (
         ("static bool writeByte24C256(int addressI2C, unsigned int addressEEPROM, unsigned char data) {",
          "static void serviceSenseOffset("),
-        ("void initCompensationMatrix(", "void outputCompensationMatrix("),
-        ("char prepareCompensationMatrix(", "void adjustCompensationMatrix("),
-        ("static bool writeMatrixSector(", "void clearExternalEEPROM("),
+        ("static void initCompensationMatrix(void) {", "static void outputCompensationMatrix("),
+        ("static char prepareCompensationMatrix(void) {", "static void adjustCompensationMatrix("),
+        ("static bool writeMatrixSector(", "static void clearExternalEEPROM("),
         ("namespace {\nstruct MatrixSpan", "long getZMatrixDepth_CurrentXY("),
     )
     with TemporaryDirectory(prefix="rfx-bed-matrix-") as directory:

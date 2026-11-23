@@ -754,9 +754,9 @@ void UIDisplay::parse(char* txt, bool ram) {
 
         case 'H': {
             if (c2 == 'B')
-                addLong(g_nActiveHeatBed, 1); // %HB : active heat bed z matrix
+                addLong(activeBedMatrixSlot(), 1); // %HB : active heat bed z matrix
             else if (c2 == 'O')
-                addFloat((float)g_offsetZCompensationSteps * Printer::axisMMPerSteps[Z_AXIS] * 1000.0f, 3, 0); // %HO : active heat bed min z offset in um
+                addFloat((float)bedMatrixHighestZSteps() * Printer::axisMMPerSteps[Z_AXIS] * 1000.0f, 3, 0); // %HO : active heat bed min z offset in um
             break;
         }
 
@@ -1538,7 +1538,7 @@ void UIDisplay::parse(char* txt, bool ram) {
             else if (c2 == 'z')
                 addFloat(g_nManualSteps[Z_AXIS] * Printer::axisMMPerSteps[Z_AXIS] * 1000.0f, 4, 1); // %Sz : Mikrometer per Z-Single_Step (Z_Axis)
             else if (c2 == 'M' && col < MAX_COLS) {
-                if (g_ZMatrixChangedInRam)
+                if (bedMatrixHasUnsavedChanges())
                     printCols[col++] = '*';
             } // %SM : Matrix has changed in Ram and is ready to Save. -> *)
             else if (c2 == 's')
@@ -2778,7 +2778,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
             break;
         }
 
-        char nextHeatBed = g_nActiveHeatBed;
+        char nextHeatBed = activeBedMatrixSlot();
         INCREMENT_MIN_MAX(nextHeatBed, 1, 1, EEPROM_MAX_HEAT_BED_SECTORS);
         switchActiveHeatBed(nextHeatBed);
         break;
@@ -3149,7 +3149,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
                             Printer::layers.rescaleFadeBounds(stepsmm_korrekturfactor);
                             g_nManualSteps[Z_AXIS] *= stepsmm_korrekturfactor;
                             HAL::eprSetInt16(EPR_RF_MOD_Z_STEP_SIZE, g_nManualSteps[Z_AXIS]);
-                            g_ZCompensationMatrix[0][0] = EEPROM_FORMAT - 1; //force the zmatrix in ram to be invalid and to reload it later.
+                            invalidateBedMatrixForReload();
                                                                              //korrektur der aktiven kompensation/zoffset ist durch fehlendes homing unterbunden.
                         }
                         updatederived = true; //übernehmen der werte in offsets und infaxissteps, accel usw..
@@ -3665,9 +3665,9 @@ void UIDisplay::mainSwitchCase(int action) {
     }
     case UI_ACTION_RF_DO_SAVE_ACTIVE_ZMATRIX: {
         // save the determined values to the EEPROM
-        if (g_ZMatrixChangedInRam) {
+        if (bedMatrixHasUnsavedChanges()) {
             exitmenu();
-            if (!saveCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed))) {
+            if (!saveActiveBedMatrix()) {
                 showError(ui_text_manual, PSTR("Matrix save failed"));
                 break;
             }

@@ -384,7 +384,7 @@ public:
     static inline uint8_t isZHomeSafe() //experimentelle funktion, die nicht viel abdeckt, das ist ein test. ... TODO: merge with function isHomingAllowed
     {
         bool problematisch = false;
-        if (g_offsetZCompensationSteps > 0)
+        if (bedMatrixHighestZSteps() > 0)
             problematisch = true; //wenn matrix positiv, dann evtl. problem
         if (isAxisHomed(Y_AXIS) && Printer::xyMotion.motorSteps(Y_AXIS) <= 5 * YAXIS_STEPS_PER_MM)
             problematisch = false; //vorherige Probleme egal, wenn bett nach hinten gefahren

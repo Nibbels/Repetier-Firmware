@@ -685,7 +685,7 @@ void Printer::enableSenseOffsetnow(void) {
 }
 
 void Printer::enableCMPnow(void) {
-    if (doHeatBedZCompensation || !areAxisHomed() || g_ZCompensationMatrix[0][0] != EEPROM_FORMAT || isAnyScanRunning()) {
+    if (doHeatBedZCompensation || !areAxisHomed() || !bedMatrixAvailable() || isAnyScanRunning()) {
         return;
     }
     doHeatBedZCompensation = 1;

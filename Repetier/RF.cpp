@@ -87,17 +87,24 @@ constexpr int zOffsetScanContactPressureDelta = 33;
 constexpr int zOffsetScanRetryPressureDelta = 30;
 
 
-long g_offsetZCompensationSteps = 0;
-short g_ZCompensationMax = 0;
-char g_nActiveHeatBed = 1;
+static long g_offsetZCompensationSteps = 0;
+static short g_ZCompensationMax = 0;
+static char g_nActiveHeatBed = 1;
 
 // g_ZMatrixChangedInRam soll 1 werden, wenn ZOS, Offsetänderung der Matrix etc. Sonst wäre Sichern der Matrix unnötig.
-volatile unsigned char g_ZMatrixChangedInRam = 0;
+static volatile unsigned char g_ZMatrixChangedInRam = 0;
 
 float g_scanStartZLiftMM = defaultHeatBedScanLiftMm;
 
-short g_ZCompensationMatrix[COMPENSATION_MATRIX_MAX_X][COMPENSATION_MATRIX_MAX_Y];
-unsigned char g_uZMatrixMax[2] = { 0, 0 };
+static short g_ZCompensationMatrix[COMPENSATION_MATRIX_MAX_X][COMPENSATION_MATRIX_MAX_Y];
+static unsigned char g_uZMatrixMax[2] = { 0, 0 };
+
+uint8_t activeBedMatrixSlot() { return g_nActiveHeatBed; }
+bool bedMatrixAvailable() { return g_ZCompensationMatrix[0][0] == EEPROM_FORMAT; }
+bool bedMatrixHasUnsavedChanges() { return g_ZMatrixChangedInRam; }
+long bedMatrixHighestZSteps() { return g_offsetZCompensationSteps; }
+short bedMatrixLowestZSteps() { return g_ZCompensationMax; }
+void invalidateBedMatrixForReload() { g_ZCompensationMatrix[0][0] = EEPROM_FORMAT - 1; }
 
 // configurable scan parameters - the proper default values are set by restoreDefaultScanParameters()
 long g_nScanXStartSteps = 0;
@@ -163,6 +170,13 @@ unsigned char g_uRGBTargetB = 0;
 #endif // RGB_LIGHT_R_PIN
 
 static void setupForPrinting();
+static void initCompensationMatrix();
+static void outputCompensationMatrix(char format = 0);
+static char prepareCompensationMatrix();
+static void determineCompensationOffsetZ();
+static void adjustCompensationMatrix(short steps);
+static char loadCompensationMatrix(unsigned int address);
+static unsigned short readWord24C256(int addressI2C, unsigned int addressEEPROM);
 static bool writeWord24C256(int addressI2C, unsigned int addressEEPROM, unsigned short data);
 static bool readWord24C256(int addressI2C, unsigned int addressEEPROM, unsigned short& data);
 static bool writeByte24C256(int addressI2C, unsigned int addressEEPROM, unsigned char data);
@@ -2424,7 +2438,7 @@ void outputScanParameters(void) {
     }
 } // outputScanParameters
 
-void initCompensationMatrix(void) {
+static void initCompensationMatrix(void) {
     // clear all fields of the compensation matrix
     memset(g_ZCompensationMatrix, 0, sizeof(g_ZCompensationMatrix));
     g_uZMatrixMax[X_AXIS] = g_uZMatrixMax[Y_AXIS] = 0;
@@ -2433,7 +2447,7 @@ void initCompensationMatrix(void) {
     g_ZMatrixChangedInRam = 0;
 } // initCompensationMatrix
 
-void outputCompensationMatrix(char format) {
+static void outputCompensationMatrix(char format) {
     short x;
     short y;
 
@@ -2475,7 +2489,7 @@ void outputCompensationMatrix(char format) {
 
 } // outputCompensationMatrix
 
-char prepareCompensationMatrix(void) {
+static char prepareCompensationMatrix(void) {
     short x;
     short y;
 
@@ -2589,7 +2603,7 @@ char prepareCompensationMatrix(void) {
     return 0;
 } // prepareCompensationMatrix
 
-void determineCompensationOffsetZ(void) {
+static void determineCompensationOffsetZ(void) {
     short x;
     short y;
     short uMax = -32768;
@@ -2609,7 +2623,7 @@ void determineCompensationOffsetZ(void) {
     g_offsetZCompensationSteps = uMax;
 } // determineCompensationOffsetZ
 
-void adjustCompensationMatrix(short nZ) {
+static void adjustCompensationMatrix(short nZ) {
     short x;
     short y;
     short nOffset = getZMatrixDepth_CurrentXY();
@@ -2678,12 +2692,16 @@ static bool saveWorkingMatrix(unsigned int address) {
     return true;
 }
 
-bool saveCompensationMatrix(unsigned int address) {
+static bool saveCompensationMatrix(unsigned int address) {
     if (isAnyScanRunning()) {
         Com::printFLN(PSTR("saveMatrix(): scan in progress"));
         return false;
     }
     return saveWorkingMatrix(address);
+}
+
+bool saveActiveBedMatrix() {
+    return saveCompensationMatrix(static_cast<unsigned int>(EEPROM_SECTOR_SIZE * g_nActiveHeatBed));
 }
 
 bool saveActiveHeatBedToExtEEPROM(char newActiveHeatBed) {
@@ -2720,7 +2738,7 @@ bool loadActiveHeatBedFromExtEEPROM() {
     return true;
 }
 
-char loadCompensationMatrix(unsigned int uAddress) {
+static char loadCompensationMatrix(unsigned int uAddress) {
     if (uAddress == 0) {
         Com::printFLN(PSTR("loadMatrix(): valid uAddress - aborted!"));
 
@@ -2871,7 +2889,7 @@ static bool clearCompensationMatrix(unsigned int address) {
     return true;
 }
 
-void clearExternalEEPROM(void) {
+static void clearExternalEEPROM(void) {
     unsigned short i;
     unsigned short uMax = 32768;
     unsigned short uTemp;
@@ -2937,7 +2955,7 @@ static bool readWord24C256(int addressI2C, unsigned int addressEEPROM, unsigned 
     return true;
 } // readWord24C256
 
-unsigned short readWord24C256(int addressI2C, unsigned int addressEEPROM) {
+static unsigned short readWord24C256(int addressI2C, unsigned int addressEEPROM) {
     unsigned short data;
     return readWord24C256(addressI2C, addressEEPROM, data) ? data : 0xffff;
 }

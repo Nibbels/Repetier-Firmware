@@ -53,7 +53,7 @@ namespace GCodeInput {
 void keepAlive(int state) { assert(state == Processing); }
 }
 unsigned short drv8711ModeValue_2_MicroSteps(uint8_t mode) { return 1 << mode; }
-void determineCompensationOffsetZ();
+static void determineCompensationOffsetZ();
 bool isAnyScanRunning() { return scanning; }
 
 void TwiTransfer::finishActive() {}
@@ -180,7 +180,7 @@ int main() {
     assert(g_ZMatrixChangedInRam && readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, sector) == 0);
     writeFailure = -1;
     assert(saveCompensationMatrix(sector * 2) && g_ZMatrixChangedInRam);
-    assert(saveCompensationMatrix(sector) && !g_ZMatrixChangedInRam);
+    assert(saveActiveBedMatrix() && !g_ZMatrixChangedInRam);
     assert(loadCompensationMatrix(sector) == 0 && g_ZCompensationMatrix[0][4] == 41);
 
     const unsigned writesBefore = writes;

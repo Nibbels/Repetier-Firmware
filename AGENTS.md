@@ -36,6 +36,8 @@ This is shared AVR/ATmega2560 Repetier firmware for **RF1000, RF2000 and RF2000v
 
 **Bed compensation.** `BedCompensation` calculates the bed-profile correction and ECMP ratio from executing nominal Z, planned layer bounds and a matrix reader. `recalculateZCompensation()` adds the effective offset and active Digit-Z, then publishes the Z target and ECMP ratio together under interrupt protection. [Calculation and test cases](docs/first-layer-control/z-compensation-and-ecmp.md)
 
+**Bed matrix.** The calibration code in `RF.cpp` owns the working mesh, extents, active sector and pending save. Use the matrix queries from the planner and panel. Mutations go through the slot, reload and save operations. Run `python3 tests/bed-matrix.py` for persistence and grid boundary replays. [Matrix storage](docs/z-offset/scans-and-persistence.md)
+
 **Digit compensation.** `Printer::digitCompensation` owns the DMS filter, the Digit-Z switch, the Digit Flow profile and its live factors. Keep sampling and regulation in the foreground. Timer1 reads the atomically published `intervalScale()` for queued XY moves. M220 and M221 still control the user speed and flow overrides. Run `python3 tests/pause-sense-offset.py` for the DMS sample and M3912 replays. [DMS controls](docs/development-roadmap.md#job-boundaries-and-dms)
 
 **Strain gauge.** `Printer::strainGauge` owns single-shot ADS1100 acquisition, the last eight raw samples and the Digit Homing reference. The foreground advances hardware TWI without waiting. Consumers copy the latest sample, and probe increments require a conversion started after Z settled. [DMS acquisition and scan timing](docs/z-offset/scans-and-persistence.md#shared-dms-acquisition) · [ADC and bus replay](tests/twi-transfer.py)

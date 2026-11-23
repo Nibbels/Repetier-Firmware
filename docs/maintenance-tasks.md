@@ -135,6 +135,8 @@ The firmware restricted Play to a completed pause in 1.37t2. The 1.43.56 pause r
 
 ## Calibration and persistence
 
+- [x] **Encapsulate the scan and matrix state.** The source audit identified scan abort and Z-offset point selection as the most frequently assigned legacy globals. The shared scan session owns aborts and retries, and the Z-offset scan owns its point and learning settings. The panel and planner use bed-matrix queries and operations. [Scan replays and ownership](z-offset/scans-and-persistence.md)
+- [x] **Validate mesh dimensions and interrupted EEPROM writes.** Check the inclusive grid bounds and edge padding, invalidate the destination sector during a save, and retain a failed save for retry in RAM. [Matrix replay](../tests/bed-matrix.py)
 - [ ] **Make the `M3902 Z0` offset transfer durable.** The command saves zero for the manual offset immediately. A reset before saving the RAM bed matrix can lose the transferred correction. [Matrix persistence](z-offset/scans-and-persistence.md#critical-transfer-operation-m3902-z0)
 
 ## Motion smoothness and performance

@@ -383,16 +383,7 @@ constexpr int32_t maxManualZOffsetMicrometers = 10000;
 #define COMPENSATION_MATRIX_SIZE long(COMPENSATION_MATRIX_MAX_X * COMPENSATION_MATRIX_MAX_Y * 2 + EEPROM_OFFSET_MATRIX_START) // [bytes]
 
 
-extern long g_offsetZCompensationSteps; // this is the minimal distance between the heat bed and the extruder at the moment when the z-min endstop is hit
-extern short g_ZCompensationMax;
-extern char g_nActiveHeatBed;
-//Matrix speichern über Menü: Sinnmarker
-extern volatile unsigned char g_ZMatrixChangedInRam;
-
 extern float g_scanStartZLiftMM;
-
-extern short g_ZCompensationMatrix[COMPENSATION_MATRIX_MAX_X][COMPENSATION_MATRIX_MAX_Y];
-extern unsigned char g_uZMatrixMax[2];
 
 extern long g_nScanXStepSizeMM;
 extern long g_nScanXStepSizeSteps;
@@ -462,23 +453,18 @@ extern long getZMatrixDepth(long x, long y);
 extern long getZMatrixDepth_CurrentXY(void);
 
 extern bool switchActiveHeatBed(char newActiveHeatBed);
+uint8_t activeBedMatrixSlot();
+bool bedMatrixAvailable();
+bool bedMatrixHasUnsavedChanges();
+long bedMatrixHighestZSteps();
+short bedMatrixLowestZSteps();
+void invalidateBedMatrixForReload();
+bool saveActiveBedMatrix();
 
 extern short readAveragePressure(short* pnAveragePressure);
 
 extern void restoreDefaultScanParameters(void);
 extern void outputScanParameters(void);
-extern void outputCompensationMatrix(char format = 0);
-extern void initCompensationMatrix(void);
-extern void determineCompensationOffsetZ(void);
-extern void adjustCompensationMatrix(short nZ);
-extern bool saveCompensationMatrix(unsigned int uAddress);
-
-extern char prepareCompensationMatrix(void);
-extern char loadCompensationMatrix(unsigned int uAddress);
-
-extern void clearExternalEEPROM(void);
-
-extern unsigned short readWord24C256(int addressI2C, unsigned int addressEEPROM);
 
 extern void recalculateZCompensation(void);
 extern void loopFeatures(void);

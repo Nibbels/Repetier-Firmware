@@ -46,6 +46,8 @@ char g_nHeatBedScanStatus = 0, g_nZOSScanStatus = 0;
 unsigned short g_nManualSteps[4] = { 1, 1, 1, 28 };
 int32_t g_offsetZCompensationSteps = 250;
 short g_ZCompensationMax = 200;
+long bedMatrixHighestZSteps() { return g_offsetZCompensationSteps; }
+short bedMatrixLowestZSteps() { return g_ZCompensationMax; }
 short forceDigits = 0;
 char g_nScanPressureReads = 4;
 unsigned short g_nScanPressureReadDelay = 3;
