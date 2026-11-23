@@ -15,12 +15,12 @@ def main():
     tests = Path(__file__).resolve().parent
     firmware = tests.parent / "Repetier"
     z_motion = (firmware / "ZMotion.cpp").read_text(encoding="utf-8")
-    motion = (firmware / "motion.cpp").read_text(encoding="utf-8")
+    executor = (firmware / "StepExecutor.cpp").read_text(encoding="utf-8")
     printer = (firmware / "Printer.cpp").read_text(encoding="utf-8")
     rf = (firmware / "RF.cpp").read_text(encoding="utf-8")
     fragments = [
         z_motion.removeprefix('#include "Repetier.h"\n'),
-        section(motion, "void PrintLine::stepSlowedZCompensation()", "\n/**\n  Processes the moves"),
+        section(executor, "void StepExecutor::stepSlowedZCompensation()", "\n/**\n  Processes the moves"),
         section(printer, "bool Printer::needsCMPwait(", "\nint8_t Printer::anyHomeDir("),
         section(rf, "void moveZ(int nSteps) {", "\nvoid restoreDefaultScanParameters("),
     ]

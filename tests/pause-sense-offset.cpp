@@ -382,7 +382,6 @@ void Extruder::setTemperatureForExtruder(float temperature, int tool) {
 class MoveQueue;
 #include "direct-phase-firmware.inc"
 struct PrintLine {
-#include "step-clock-firmware.inc"
 #include "direct-control-firmware.inc"
 
     bool moveZ = false;
@@ -406,7 +405,6 @@ struct PrintLine {
 #include "step-profile-firmware.inc"
     LookaheadData lookahead{};
     StepProfile stepProfile{};
-    speed_t nextStepSpeed(StepClock& clock, uint8_t pulses, uint32_t interval);
     void fitRampToRemainingSteps();
     void limitToStopTail(bool refitRamp);
     float fullSpeed = 0;
@@ -469,7 +467,12 @@ int PrintLine::queuedTask = TASK_NO_TASK;
 int PrintLine::stopRequests = 0;
 unsigned PrintLine::plannedMoves = 0;
 bool PrintLine::updatesWobble = false;
-const int32_t queueError = 1, directError = 1;
+const int32_t queuedPrimarySteps = 1, directPrimarySteps = 1;
+
+struct StepExecutor {
+#include "step-clock-firmware.inc"
+    static speed_t nextStepSpeed(PrintLine& move, StepClock& clock, uint8_t pulses, uint32_t interval);
+};
 
 struct UIDisplay {
     int lastButtonAction = 0, menuLevel = 1, menuPos[1] = {};
@@ -1656,7 +1659,7 @@ void advanceTimer() {
 
 void stepClock() {
     PrintLine move;
-    PrintLine::StepClock queued, direct;
+    StepExecutor::StepClock queued, direct;
     queued.start(100);
     direct.start(125);
     move.stepProfile.accelSteps = 2;
@@ -1667,16 +1670,16 @@ void stepClock() {
     move.stepProfile.vMax = 300;
     move.stepProfile.vEnd = 75;
     constexpr uint32_t interval = 150 * 256;
-    assert(move.nextStepSpeed(queued, 1, interval) == 250);
-    assert(move.nextStepSpeed(queued, 1, interval) == 300);
-    assert(move.nextStepSpeed(queued, 1, interval) == 300);
+    assert(StepExecutor::nextStepSpeed(move, queued, 1, interval) == 250);
+    assert(StepExecutor::nextStepSpeed(move, queued, 1, interval) == 300);
+    assert(StepExecutor::nextStepSpeed(move, queued, 1, interval) == 300);
     assert(direct.steps == 0 && direct.ticks == 0 && direct.peak == 125);
 
     move.stepsRemaining = 3;
-    assert(move.nextStepSpeed(queued, 1, interval) == 300);
+    assert(StepExecutor::nextStepSpeed(move, queued, 1, interval) == 300);
     assert((move.flags & FLAG_DECELERATING) && queued.ticks == 0);
-    assert(move.nextStepSpeed(queued, 1, interval) == 150);
-    assert(move.nextStepSpeed(queued, 1, interval) == 75);
+    assert(StepExecutor::nextStepSpeed(move, queued, 1, interval) == 150);
+    assert(StepExecutor::nextStepSpeed(move, queued, 1, interval) == 75);
     queued.start(80);
     assert(queued.steps == 0 && queued.ticks == 0 && queued.peak == 80);
 }
@@ -1795,12 +1798,12 @@ void lookaheadMoves() {
 
         for (auto* profile : {&previous, &newest}) {
             PrintLine move = *profile;
-            PrintLine::StepClock clock;
+            StepExecutor::StepClock clock;
             clock.start(move.stepProfile.vStart);
             uint32_t interval = 16000000UL / move.stepProfile.vStart;
             while (move.stepsRemaining > 0) {
                 --move.stepsRemaining;
-                const speed_t speed = move.nextStepSpeed(clock, 1, interval);
+                const speed_t speed = StepExecutor::nextStepSpeed(move, clock, 1, interval);
                 interval = 16000000UL / speed;
                 trace = trace * 31 + interval;
             }

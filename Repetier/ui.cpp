@@ -17,6 +17,7 @@
 
 #define UI_MAIN
 #include "Repetier.h"
+#include "StepExecutor.h"
 extern const int8_t encoder_table[16] PROGMEM;
 
 #include <math.h>
@@ -1118,7 +1119,7 @@ void UIDisplay::parse(char* txt, bool ram) {
             }
             if (c2 == 'p') // %op : Is single double or quadstepping?
             {
-                addInt(PrintLine::stepsPerInterrupt(), 1);
+                addInt(StepExecutor::stepsPerInterrupt(), 1);
                 addStringP(PSTR("ST"));
 
                 break;

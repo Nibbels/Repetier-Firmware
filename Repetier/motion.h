@@ -57,6 +57,7 @@ class PrintLine {
     friend class UIDisplay;
     friend class MoveQueue;
     friend class MotionPlanner;
+    friend class StepExecutor;
 
 public:
     flag8_t joinFlags;
@@ -65,23 +66,6 @@ public:
 private:
     static MoveQueue queue;
     static PrintLine direct;
-    struct StepClock {
-        uint32_t ticks = 0;
-        uint32_t steps = 0;
-        speed_t peak = 0;
-
-        void start(speed_t speed) {
-            peak = speed;
-            steps = 0;
-            ticks = 0;
-        }
-    };
-    enum class DirectionOwner : int8_t { None, Direct = -1, Queued = 1 };
-    static StepClock stepClocks[2];
-    static DirectionOwner directionOwner;
-    static volatile uint32_t stepIntervalTicks;
-    static uint8_t stepsPerTimerCall;
-    speed_t nextStepSpeed(StepClock& clock, uint8_t pulses, uint32_t interval);
     inline bool isStepProfileReady() const {
         return joinFlags & FLAG_JOIN_STEP_PROFILE_READY;
     } // isStepProfileReady
@@ -146,7 +130,6 @@ private:
 
 public:
     static bool directMoveActive() { return direct.task != DIRECT_IDLE; }
-    static uint8_t stepsPerInterrupt() { return stepsPerTimerCall; }
     static bool hasStoppableDirectMove() {
         const char task = direct.task;
         return task == DIRECT_PREPARING_STOPPABLE || task == DIRECT_PREPARED_STOPPABLE || task == DIRECT_RUNNING_STOPPABLE;
@@ -372,12 +355,7 @@ public:
     static bool hasActiveZMove();
     static void discardQueuedMoves();
 
-    static bool needCmpWait();
-    static void stepSlowedZCompensation();
-    static long performQueueMove();
-    static long performDirectMove();
 
-    static long performMove(PrintLine* move, uint8_t forQueue);
     static void waitForXFreeLines(uint8_t b = 1);
     static uint8_t insertWaitMovesIfNeeded(uint8_t pathOptimize, uint8_t waitExtraLines);
     static void prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, float feedrate, bool updateWobble = false);

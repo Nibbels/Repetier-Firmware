@@ -21,6 +21,8 @@ def main():
     motion = (firmware / "motion.h").read_text(encoding="utf-8")
     move_planner = (firmware / "motion.cpp").read_text(encoding="utf-8")
     planner = (firmware / "MotionPlanner.cpp").read_text(encoding="utf-8")
+    executor = (firmware / "StepExecutor.cpp").read_text(encoding="utf-8")
+    executor_header = (firmware / "StepExecutor.h").read_text(encoding="utf-8")
     printer = (firmware / "Printer.cpp").read_text(encoding="utf-8")
     printer_header = (firmware / "Printer.h").read_text(encoding="utf-8")
     eeprom = (firmware / "Eeprom.h").read_text(encoding="utf-8")
@@ -75,7 +77,7 @@ def main():
         section(motion, "class MoveQueue {", "\ninline uint8_t PrintLine::queuedMoveCount"),
         "MoveQueue PrintLine::queue;",
         section(move_planner, "bool PrintLine::hasActiveZMove()", "\nvoid PrintLine::setAxisSteps("),
-        section(move_planner, "speed_t PrintLine::nextStepSpeed(", "\nlong PrintLine::performMove("),
+        section(executor, "speed_t StepExecutor::nextStepSpeed(", "\nlong StepExecutor::performMove("),
         move_planner[move_planner.index("void PrintLine::prepareDirectMove("):move_planner.index("/** \\brief Check if move is new.")]
         .replace("void PrintLine::stopDirectMove() {", "void PrintLine::applyDirectStop() {", 1),
         planner.split('#include "MotionPlanner.h"\n', 1)[1],
@@ -85,9 +87,9 @@ def main():
         + section(printer, "        const float mmPerStep = 1.0f / axisStepsPerMM[axis];", "\n\n        /** Acceleration")
         + "\n}",
         "void executeExtrusionStep(PrintLine* move, bool forQueue) {\n"
-        + section(move_planner, "        if (move->isEMove()) {", "\n        if (move->isXMove()) {")
+        + section(executor, "        if (move->isEMove()) {", "\n        if (move->isXMove()) {")
         + "\n}",
-        section(move_planner, "template <int8_t limitDirection>", "\n/**\n  Processes the one-and-only direct move"),
+        section(executor, "template <int8_t limitDirection>", "\n/**\n  Processes the one-and-only direct move"),
         start_line.removeprefix('#include "Repetier.h"\n'),
         "void configureSenseOffset(GCode* pCommand) { switch (3909) {\n"
         + section(rf, "        case 3909:", "\n        case 3911:")
@@ -100,7 +102,7 @@ def main():
         build = Path(directory)
         (build / "pause-sense-offset-firmware.inc").write_text("\n".join(fragments), encoding="utf-8")
         (build / "step-clock-firmware.inc").write_text(
-            section(motion, "    struct StepClock {", "    enum class DirectionOwner"), encoding="utf-8",
+            section(executor_header, "    struct StepClock {", "    enum class DirectionOwner"), encoding="utf-8",
         )
         (build / "step-profile-firmware.inc").write_text(
             section(motion, "    struct LookaheadData {", "    LookaheadData lookahead;"), encoding="utf-8",

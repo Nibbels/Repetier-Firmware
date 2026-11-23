@@ -70,7 +70,7 @@ bool needsCMPwait();
 void disableCMPnow(bool wait);
 }
 
-struct PrintLine {
+struct StepExecutor {
     static constexpr uint8_t stepsPerTimerCall = 1;
     static void stepSlowedZCompensation();
     static bool needCmpWait();
@@ -90,7 +90,7 @@ using Path = ZMotion::Path;
 
 void tick() {
     InterruptProtectedBlock lock;
-    PrintLine::stepSlowedZCompensation();
+    StepExecutor::stepSlowedZCompensation();
     assert(!stepHigh && zMotion.motorSteps() == motorPosition);
 }
 
@@ -226,7 +226,7 @@ void upperLimitsByModel() {
 #else
     assert(motorPosition == 997);
 #endif
-    assert(!PrintLine::needCmpWait());
+    assert(!StepExecutor::needCmpWait());
 }
 
 void opposingCorrection() {
@@ -255,11 +255,11 @@ void opposingCorrection() {
 void correctionWaits() {
     reset(500);
     zMotion.requestCorrection(25);
-    assert(!PrintLine::needCmpWait() && Printer::needsCMPwait());
+    assert(!StepExecutor::needCmpWait() && Printer::needsCMPwait());
     zMotion.requestCorrection(26);
-    assert(PrintLine::needCmpWait());
+    assert(StepExecutor::needCmpWait());
     settleCorrection();
-    assert(motorPosition == 526 && !PrintLine::needCmpWait());
+    assert(motorPosition == 526 && !StepExecutor::needCmpWait());
     Printer::disableCMPnow(true);
     assert(waitedMs > 0 && !Printer::doHeatBedZCompensation);
     assert(motorPosition == 500);
@@ -270,7 +270,7 @@ void correctionWaits() {
     driveDirect(6);
     assert(motorPosition == 1000);
     Printer::disableCMPnow(true);
-    assert(waitedMs == 0 && !PrintLine::needCmpWait());
+    assert(waitedMs == 0 && !StepExecutor::needCmpWait());
     driveDirect(-7);
     settleCorrection();
     assert(motorPosition == 998);
@@ -315,8 +315,8 @@ void HAL::delayMicroseconds(int microseconds) {
         assert(zMotion.scanInProgress());
         const int previousPulses = pulseCount;
         InterruptProtectedBlock lock;
-        PrintLine::stepSlowedZCompensation();
-        assert(!PrintLine::needCmpWait() && pulseCount == previousPulses);
+        StepExecutor::stepSlowedZCompensation();
+        assert(!StepExecutor::needCmpWait() && pulseCount == previousPulses);
     }
 }
 

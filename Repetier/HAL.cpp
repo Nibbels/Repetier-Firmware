@@ -16,6 +16,7 @@
 */
 
 #include "Repetier.h"
+#include "StepExecutor.h"
 #include <compat/twi.h>
 
 unsigned long g_uLastCommandLoop = 0;
@@ -624,9 +625,9 @@ ISR(TIMER1_COMPA_vect) {
     OCR1A = 61000;
 
     if (!PrintLine::hasActiveQueuedMove() && !PrintLine::directMoveActive()) {
-        PrintLine::stepSlowedZCompensation(); // Z is free here.
+        StepExecutor::stepSlowedZCompensation(); // Z is free here.
         // Wait if the z-CMP is under heavy workload
-        if (PrintLine::needCmpWait()) {
+        if (StepExecutor::needCmpWait()) {
             HAL::forbidInterrupts();
             setTimer(3000);
             sbi(TIMSK1, OCIE1A);
@@ -636,14 +637,14 @@ ISR(TIMER1_COMPA_vect) {
     }
 
     if (PrintLine::directMoveActive()) {
-        setTimer(PrintLine::performDirectMove());
+        setTimer(StepExecutor::performDirectMove());
         sbi(TIMSK1, OCIE1A);
 
         return;
     }
 
     if (PrintLine::hasLines() && Printer::pause.allowsQueueAdvance()) {
-        setTimer(PrintLine::performQueueMove());
+        setTimer(StepExecutor::performQueueMove());
         sbi(TIMSK1, OCIE1A);
 
         return;
