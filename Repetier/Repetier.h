@@ -147,10 +147,6 @@ extern void drv8711Init();
 
 extern long baudrate;
 
-extern volatile uint8_t execute100msPeriodical;
-extern volatile uint8_t execute50msPeriodical;
-extern volatile uint8_t execute16msPeriodical;
-extern volatile uint8_t execute10msPeriodical;
 
 extern uint8_t fanKickstart;
 

@@ -21,10 +21,6 @@
 #include "Eeprom.h"
 
 uint8_t manageMonitor = 255; ///< Temp. we want to monitor with our host. 1+NUM_EXTRUDER is heated bed
-volatile uint8_t execute100msPeriodical = 0;
-volatile uint8_t execute50msPeriodical = 0;
-volatile uint8_t execute16msPeriodical = 0;
-volatile uint8_t execute10msPeriodical = 0;
 
 const uint8 osAnalogInputChannels[TemperatureAdcCount] PROGMEM = {
     EXT0_TEMPSENSOR_PIN,

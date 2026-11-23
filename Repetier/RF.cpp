@@ -3995,7 +3995,7 @@ void setEmergencyStopDigits(GCode* pCommand) {
 void testWatchdog(GCode* pCommand) {
     if (pCommand->hasS()) {
         if (pCommand->S == 666) {
-            if (g_bPingWatchdog) {
+            if (HAL::watchdogEnabled()) {
                 HAL::stopWatchdog();
                 Com::printFLN(PSTR("M3090: WARNING the watchdog is disabled now"));
             } else {

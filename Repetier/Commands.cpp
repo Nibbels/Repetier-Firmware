@@ -50,24 +50,21 @@ void Commands::checkForPeriodicalActions(enum FirmwareState state) {
         GCodeInput::keepAlive(state);
     }
 
-    const bool scanTickDue = execute10msPeriodical;
+    const bool scanTickDue = HAL::takeScanTick();
     if (scanTickDue) {
-        execute10msPeriodical = 0;
         // Dieses freigabesignal sollte aus dem PWM-Timer kommen, denn dann ist klar, dass auch der noch läuft.
         // Dann laufen für den Watchdogreset der Timer und checkForPeriodicalActions().
         HAL::tellWatchdogOk();
     }
 
-    if (execute16msPeriodical) {
-        execute16msPeriodical = 0;
-        bool buttonSpeedBoost = (!execute100msPeriodical && HAL::timeInMilliseconds() - uid.lastButtonStart < 20000);
+    if (HAL::takeCompensationTick()) {
+        bool buttonSpeedBoost = (!HAL::temperatureTickPending() && HAL::timeInMilliseconds() - uid.lastButtonStart < 20000);
         if (buttonSpeedBoost)
             UI_SLOW;
         recalculateZCompensation();
     }
 
-    if (execute100msPeriodical) {
-        execute100msPeriodical = 0;
+    if (HAL::takeTemperatureTick()) {
         Extruder::manageTemperatures();
         if (state == WaitHeater)
             Commands::printTemperatures(); //selfcontrolling timediff
@@ -76,8 +73,7 @@ void Commands::checkForPeriodicalActions(enum FirmwareState state) {
 
     Printer::strainGauge.service(HAL::timeInMilliseconds());
 
-    if (execute50msPeriodical) {
-        execute50msPeriodical = 0;
+    if (HAL::takeFeatureTick()) {
         loopFeatures();
     }
 

@@ -60,9 +60,6 @@ All known arduino boards use 64. This value is needed for the extruder timing. *
     HAL::stepWithCount(_SFR_IO_ADDR(DIO ## IO ## _WPORT), DIO ## IO ## _PIN, pending, remaining)
 #define STEP_WITH_COUNT(IO, pending, remaining) _STEP_WITH_COUNT(IO, pending, remaining)
 
-extern unsigned char g_bPingWatchdog;
-extern unsigned long g_uLastCommandLoop;
-
 #ifdef MOTHERBOARD
 #ifndef WATCHDOG_PIN
 #error Watchdog pin not defined. We really need some Watchdog pin with a working watchdogtimer!
@@ -505,17 +502,13 @@ public:
     static void startWatchdog();
     static void stopWatchdog();
     static void tellWatchdogOk();
-    inline static void pingWatchdog() {
-        if (!g_bPingWatchdog) {
-            // do not trigger the watchdog in case it is not enabled
-            return;
-        }
-        // external watchdog
-        if ((HAL::timeInMilliseconds() - g_uLastCommandLoop) < WATCHDOG_MAIN_LOOP_TIMEOUT) {
-            // ping the watchdog only in case the mainloop is still being called
-            WRITE(WATCHDOG_PIN, READ(WATCHDOG_PIN) ? 0 : 1);
-        }
-    } // pingWatchdog
+    static bool watchdogEnabled();
+
+    static bool takeScanTick();
+    static bool takeCompensationTick();
+    static bool takeFeatureTick();
+    static bool takeTemperatureTick();
+    static bool temperatureTickPending();
 
     inline static void testWatchdog() {
         while (1) {

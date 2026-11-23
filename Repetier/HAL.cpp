@@ -18,8 +18,35 @@
 #include "Repetier.h"
 #include "StepExecutor.h"
 
-unsigned long g_uLastCommandLoop = 0;
-unsigned char g_bPingWatchdog = 0;
+namespace {
+volatile unsigned long watchdogHeartbeat = 0;
+volatile bool watchdogActive = false;
+
+// Separate bytes allow each ISR to post an event without a shared bit update.
+volatile bool scanTick = false;
+volatile bool compensationTick = false;
+volatile bool featureTick = false;
+volatile bool temperatureTick = false;
+
+bool takeTick(volatile bool& pending) {
+    if (!pending)
+        return false;
+    pending = false;
+    return true;
+}
+
+inline void pingWatchdog() {
+    if (watchdogActive && HAL::timeInMilliseconds() - watchdogHeartbeat < WATCHDOG_MAIN_LOOP_TIMEOUT)
+        WRITE(WATCHDOG_PIN, READ(WATCHDOG_PIN) ? 0 : 1);
+}
+} // namespace
+
+bool HAL::takeScanTick() { return takeTick(scanTick); }
+bool HAL::takeCompensationTick() { return takeTick(compensationTick); }
+bool HAL::takeFeatureTick() { return takeTick(featureTick); }
+bool HAL::takeTemperatureTick() { return takeTick(temperatureTick); }
+bool HAL::temperatureTickPending() { return temperatureTick; }
+bool HAL::watchdogEnabled() { return watchdogActive; }
 
 HAL::HAL() {
     //ctor
@@ -340,9 +367,9 @@ void HAL::WDT_Init(void) {
 
 //Watchdog timeout ISR
 ISR(WDT_vect) {
-    HAL::pingWatchdog();
+    pingWatchdog();
     WDTCSR |= (1 << WDIE); //Nibbels: nächstes mal kein Reset durch internen Watchdog, sondern wieder dieser interrupt.
-    execute16msPeriodical = 1; //Tell commandloop that 16ms have passed
+    compensationTick = true; //Tell commandloop that 16ms have passed
 }
 
 // Watchdog support
@@ -350,22 +377,24 @@ void HAL::startWatchdog() {
     Com::printFLN(Com::tStartWatchdog);
     // external watchdog
     SET_OUTPUT(WATCHDOG_PIN);
-    g_bPingWatchdog = 1; //allow pinging
-    tellWatchdogOk();    //Nibbels: Init für g_uLastCommandLoop
+    tellWatchdogOk();
+    watchdogActive = true;
     pingWatchdog();      //Nibbels: Hier macht der mehr sinn!
     HAL::WDT_Init();     //Nibbels: use watchdogtimer to test var and trigger
 } // startWatchdog
 
 void HAL::stopWatchdog() {
-    g_bPingWatchdog = 0;      //disallow pinging
+    watchdogActive = false;
                               // external watchdog
     WRITE(WATCHDOG_PIN, LOW); //Nibbels: In case you stop the watchdog it has to be set floating. thatwhy disable internal pullup as this will make the state like OUTPUT-high. This is not really needed as this function does not do anything when starting the arduino. rightnow at start it sets a pin to input which is already input.
     SET_INPUT(WATCHDOG_PIN);
 } // stopWatchdog
 
 void HAL::tellWatchdogOk() {
-    g_uLastCommandLoop = HAL::timeInMilliseconds();
-} // pingWatchdog
+    const auto now = HAL::timeInMilliseconds();
+    InterruptProtectedBlock lock;
+    watchdogHeartbeat = now;
+}
 
 // ================== Interrupt handling ======================
 /** \brief Sets the timer 1 compare value to delay ticks.
@@ -638,12 +667,12 @@ ISR(PWM_TIMER_VECTOR) {
     counter100Periodical++;
     if (counter100Periodical == 196) //halbe 100ms Zeit -> Ping 50ms
     {
-        execute50msPeriodical = 1;
+        featureTick = true;
     } else if (counter100Periodical >= 391) //(int)(F_CPU/40960))
     {
         counter100Periodical = 0;
-        execute100msPeriodical = 1;
-        execute50msPeriodical = 1; //volle 100ms Zeit -> Ping 50ms
+        temperatureTick = true;
+        featureTick = true; //volle 100ms Zeit -> Ping 50ms
     }
 
 #ifdef RGB_LIGHT_R_PIN
@@ -653,7 +682,7 @@ ISR(PWM_TIMER_VECTOR) {
     static char counter10Periodical = 0; // Approximate a 10ms timer :: blocks pingwatchdog s commandloop if not working
     if (++counter10Periodical >= 39) {
         counter10Periodical = 0;
-        execute10msPeriodical = 1;
+        scanTick = true;
 #ifdef RGB_LIGHT_R_PIN
         rgb_10ms_change_should_be_now = true;
 #endif // RGB_LIGHT_R_PIN
