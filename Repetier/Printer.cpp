@@ -17,7 +17,7 @@
 
 #include "Repetier.h"
 #include "GCodeInput.h"
-#include <Wire.h>
+#include "TwiTransfer.h"
 
 ExtrusionOutput Printer::extrusionOutput;
 
@@ -432,7 +432,7 @@ void Printer::setup() {
 
     HAL::allowInterrupts();
 
-    Wire.begin();
+    TwiTransfer::beginBus();
 
     determineHardwareType();
 

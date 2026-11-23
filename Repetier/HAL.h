@@ -113,12 +113,6 @@ public:
 #define bit_clear(x, y) x &= ~(1 << y)
 #define bit_set(x, y) x |= (1 << y)
 
-/** defines the data direction (reading from I2C device) in i2cStart(),i2cRepStart() */
-#define I2C_READ 1
-
-/** defines the data direction (writing to I2C device) in i2cStart(),i2cRepStart() */
-#define I2C_WRITE 0
-
 #define LIMIT_INTERVAL ((F_CPU / 40000) + 1)
 
 #ifndef cbi
@@ -503,15 +497,6 @@ public:
     static void showStartReason();
     static int getFreeRam();
     static void resetHardware();
-
-    // I2C Support
-    static void i2cInit(unsigned long clockSpeedHz);
-    static unsigned char i2cStart(unsigned char address);
-    static void i2cStartWait(unsigned char address);
-    static void i2cStop(void);
-    static void i2cWrite(unsigned char data);
-    static unsigned char i2cReadAck(void);
-    static unsigned char i2cReadNak(void);
 
     //Nibbels: Use watchdog to trigger external watchdog with constant time function according to command loop.
     static void WDT_Init(void);

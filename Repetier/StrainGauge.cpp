@@ -1,24 +1,24 @@
 #include "Repetier.h"
-#include <Wire.h>
+#include "TwiTransfer.h"
 
 namespace {
 constexpr uint8_t continuous16BitGain1 = 0x0c;
 }
 
 void StrainGauge::begin() const {
-    Wire.setWireTimeout(3000, true);
-    Wire.beginTransmission(I2C_ADDRESS_STRAIN_GAUGE);
-    Wire.write(continuous16BitGain1);
-    Wire.endTransmission();
+    TwiTransfer transfer;
+    if (transfer.write(I2C_ADDRESS_STRAIN_GAUGE, &continuous16BitGain1, 1, HAL::timeInMilliseconds()))
+        transfer.wait();
 }
 
 bool StrainGauge::readDigits(int16_t& digits) const {
-    if (Wire.requestFrom(uint8_t(I2C_ADDRESS_STRAIN_GAUGE), uint8_t(3)) != 3)
+    TwiTransfer transfer;
+    if (!transfer.read(I2C_ADDRESS_STRAIN_GAUGE, 3, HAL::timeInMilliseconds()) || !transfer.wait())
         return false;
 
-    const uint16_t high = Wire.read();
-    const uint16_t low = Wire.read();
-    const uint8_t configuration = Wire.read();
+    const uint16_t high = transfer.byteAt(0);
+    const uint16_t low = transfer.byteAt(1);
+    const uint8_t configuration = transfer.byteAt(2);
     // ST/BSY reads high in continuous mode.
     if ((configuration & 0x7f) != continuous16BitGain1)
         return false;

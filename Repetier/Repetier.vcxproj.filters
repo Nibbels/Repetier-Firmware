@@ -74,6 +74,9 @@
     <ClInclude Include="StrainGauge.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="TwiTransfer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="StartLine.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -152,6 +155,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="StrainGauge.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="TwiTransfer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="StartLine.cpp">

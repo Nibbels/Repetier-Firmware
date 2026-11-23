@@ -37,7 +37,6 @@ Implemented Codes
 */
 
 #include "Repetier.h"
-#include <Wire.h>
 
 void setup() {
     Printer::setup();

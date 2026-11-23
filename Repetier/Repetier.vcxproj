@@ -135,6 +135,7 @@
     <ClInclude Include="SenseOffsetControl.h" />
     <ClInclude Include="PressureProtection.h" />
     <ClInclude Include="StrainGauge.h" />
+    <ClInclude Include="TwiTransfer.h" />
     <ClInclude Include="StartLine.h" />
     <ClInclude Include="ExtrusionPlanner.h" />
     <ClInclude Include="ExtrusionCompensation.h" />
@@ -164,6 +165,7 @@
     <ClCompile Include="Printer.cpp" />
     <ClCompile Include="RF.cpp" />
     <ClCompile Include="StrainGauge.cpp" />
+    <ClCompile Include="TwiTransfer.cpp" />
     <ClCompile Include="StartLine.cpp" />
     <ClCompile Include="ui.cpp" />
   </ItemGroup>

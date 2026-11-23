@@ -20,7 +20,7 @@
 #include "PressureMeasurement.h"
 #include "GCodeInput.h"
 #include "BedCompensation.h"
-#include <Wire.h>
+#include "TwiTransfer.h"
 
 FSTRINGVALUE(ui_text_error, UI_TEXT_ERROR)
 FSTRINGVALUE(ui_text_warning, UI_TEXT_WARNING)
@@ -2924,14 +2924,12 @@ void clearExternalEEPROM(void) {
 } // clearExternalEEPROM
 
 void writeByte24C256(int addressI2C, unsigned int addressEEPROM, unsigned char data) {
+    TwiTransfer::finishActive();
     HAL::delayMilliseconds(EEPROM_DELAY);
-    Wire.beginTransmission(addressI2C);
-    Wire.write(int(addressEEPROM >> 8));   // MSB
-    Wire.write(int(addressEEPROM & 0xFF)); // LSB
-    Wire.write(data);
-    Wire.endTransmission();
-    return;
-
+    const uint8_t bytes[] = {byte(addressEEPROM >> 8), byte(addressEEPROM), data};
+    TwiTransfer transfer;
+    if (transfer.write(addressI2C, bytes, sizeof(bytes), HAL::timeInMilliseconds()))
+        transfer.wait();
 } // writeByte24C256
 
 void writeWord24C256(int addressI2C, unsigned int addressEEPROM, unsigned short data) {
@@ -2946,14 +2944,14 @@ void writeWord24C256(int addressI2C, unsigned int addressEEPROM, unsigned short 
 } // writeWord24C256
 
 unsigned char readByte24C256(int addressI2C, unsigned int addressEEPROM) {
+    TwiTransfer::finishActive();
     HAL::delayMilliseconds(EEPROM_DELAY);
-    Wire.beginTransmission(addressI2C);
-    Wire.write(int(addressEEPROM >> 8));   // MSB
-    Wire.write(int(addressEEPROM & 0xFF)); // LSB
-    Wire.endTransmission();
-    Wire.requestFrom(addressI2C, 1);
-
-    return Wire.read();
+    const uint8_t bytes[] = {byte(addressEEPROM >> 8), byte(addressEEPROM)};
+    TwiTransfer transfer;
+    if (!transfer.write(addressI2C, bytes, sizeof(bytes), HAL::timeInMilliseconds()) || !transfer.wait()
+        || !transfer.read(addressI2C, 1, HAL::timeInMilliseconds()) || !transfer.wait())
+        return 0xff;
+    return transfer.byteAt(0);
 
 } // readByte24C256
 

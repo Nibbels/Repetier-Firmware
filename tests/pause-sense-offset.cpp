@@ -130,6 +130,7 @@ void WRITE(int pin, bool high);
 #include "PressureProtection.h"
 #include "PressureMeasurement.h"
 #include "StrainGauge.h"
+#include "TwiTransfer.h"
 #include "StartLine.h"
 #include "ExtrusionPlanner.h"
 #include "MoveTarget.h"
@@ -176,34 +177,29 @@ bool zOffsetScanRunning() { return g_nZOSScanStatus != 0; }
 void discardScans() { g_nHeatBedScanStatus = g_nZOSScanStatus = 0; }
 void setExtruderCurrent(int, int) {}
 
-struct WireInput {
-    uint8_t byteIndex = 0;
+struct DmsInput {
     unsigned configurations = 0;
     bool disconnected = false;
     uint8_t configuration = 0x8c;
-    void setWireTimeout(uint32_t timeout, bool reset) const { assert(timeout == 3000 && reset); }
-    void beginTransmission(uint8_t address) const { assert(address == I2C_ADDRESS_STRAIN_GAUGE); }
-    void write(uint8_t value) {
-        assert(value == 0x0c);
-        byteIndex = 3;
-        ++configurations;
-    }
-    uint8_t requestFrom(uint8_t address, uint8_t length) {
-        assert(address == I2C_ADDRESS_STRAIN_GAUGE && length == 3);
-        ++strainGaugeReads;
-        byteIndex = 0;
-        return disconnected ? 0 : 3;
-    }
-    void endTransmission() const { assert(byteIndex == 3); }
-    int read() {
-        const uint16_t digits = static_cast<uint16_t>(forceDigits);
-        switch (byteIndex++) {
-        case 0: return digits >> 8;
-        case 1: return digits & 0xff;
-        default: return configuration;
-        }
-    }
-} Wire;
+} dmsInput;
+
+bool TwiTransfer::write(uint8_t address, const uint8_t* bytes, uint8_t length, uint32_t) {
+    assert(address == I2C_ADDRESS_STRAIN_GAUGE && length == 1 && bytes[0] == 0x0c);
+    ++dmsInput.configurations;
+    return true;
+}
+
+bool TwiTransfer::read(uint8_t address, uint8_t length, uint32_t) {
+    assert(address == I2C_ADDRESS_STRAIN_GAUGE && length == 3);
+    ++strainGaugeReads;
+    const uint16_t digits = static_cast<uint16_t>(forceDigits);
+    bytes_[0] = digits >> 8;
+    bytes_[1] = digits & 0xff;
+    bytes_[2] = dmsInput.configuration;
+    return true;
+}
+
+bool TwiTransfer::wait() { return !dmsInput.disconnected; }
 
 namespace Printer {
 extern PrintPause pause;
@@ -626,7 +622,7 @@ void digitZero() {
     duringPeriodicActions = [] { ++clockMs; };
     auto& gauge = Printer::strainGauge;
     gauge.begin();
-    assert(Wire.configurations == 1);
+    assert(dmsInput.configurations == 1);
     assert(gauge.zeroingEnabled());
     forceDigits = 1000;
     Printer::homeDigits();
@@ -663,14 +659,14 @@ void digitZero() {
     Printer::homeDigits();
     assert(!gauge.zeroOffset() && readCurrentDigits() == 5000);
 
-    Wire.disconnected = true;
+    dmsInput.disconnected = true;
     int16_t digits = 5;
     assert(!sampleStrainGauge(digits) && digits == 5);
     short average = 5;
     assert(readAveragePressure(&average) && average == 0);
     assert(Printer::digitCompensation.latestDigits() == 5000);
-    Wire.disconnected = false;
-    Wire.configuration = 0;
+    dmsInput.disconnected = false;
+    dmsInput.configuration = 0;
     assert(!sampleStrainGauge(digits) && digits == 5);
     duringPeriodicActions = nullptr;
 }
