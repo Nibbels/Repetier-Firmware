@@ -8,6 +8,7 @@
 #include <vector>
 
 namespace {
+using millis_t = uint32_t;
 enum { X_AXIS, Y_AXIS, Z_AXIS };
 enum { EEPROM_FORMAT = 42, COMPENSATION_MATRIX_MAX_X = 10, COMPENSATION_MATRIX_MAX_Y = 10 };
 enum { EEPROM_SECTOR_SIZE = 4096, EEPROM_OFFSET_DIMENSION_X = 2, EEPROM_OFFSET_DIMENSION_Y = 4 };
@@ -39,6 +40,7 @@ unsigned homedZ = 0, homedXY = 0, reported = 0, retreats = 0, loaded = 0, shutdo
 unsigned corrected = 0, pressureSamples = 0, tickCount = 0, idleFailures = 0;
 char abortedWith = 0;
 bool matrixAvailable = true;
+void (*onHome)() = nullptr;
 std::vector<std::pair<float, float>> probePoints;
 
 namespace HAL {
@@ -59,6 +61,8 @@ float axisMMPerSteps[3] = {1.0f / 160, 1.0f / 160, 1.0f / 100};
 float homingFeedrate[3] = {60, 60, 5};
 void homeAxis(bool x, bool y, bool z) {
     assert(y);
+    if (onHome)
+        onHome();
     if (z) {
         assert(x);
         ++homedZ;
@@ -156,21 +160,38 @@ int main(int argc, char** argv) {
     const bool level = !std::strcmp(argv[1], "level");
     const bool retry = !std::strcmp(argv[1], "retry");
     const bool missing = !std::strcmp(argv[1], "missing-matrix");
+    const bool cancel = !std::strcmp(argv[1], "cancel-during-home");
+    if (cancel) {
+        onHome = [] {
+            onHome = nullptr;
+            zOffsetScan.startOrCancel(false);
+            assert(zOffsetScan.active() && !abortedWith);
+        };
+    }
     matrixAvailable = !missing;
     idleFailures = retry ? 1 : 0;
     zOffsetScan.startOrCancel(level);
     while (zOffsetScan.active()) {
         assert(++tickCount <= 75);
+        if (retry && tickCount == 7)
+            HAL::now = UINT32_MAX - 500;
+        if (retry && tickCount >= 8 && tickCount <= 11)
+            HAL::now += 250;
         zOffsetScan.tick();
         assert(serviced == tickCount);
+        if (retry && tickCount >= 7 && tickCount <= 11)
+            assert(retreats == (tickCount == 11 ? 1u : 0u));
     }
-    if (missing) {
+    if (cancel) {
+        assert(abortedWith == SCAN_ABORT_REASON_CANCELED && tickCount == 3 && homedZ == 2);
+        assert(shutdowns == 1 && probePoints.empty() && !corrected && !reported);
+    } else if (missing) {
         assert(abortedWith == SCAN_ABORT_REASON_MISSING_MATRIX && shutdowns == 1);
         assert(tickCount == 4 && loaded == 1 && homedZ == 2 && !reported && !corrected);
     } else {
         assert(!abortedWith && reported == 1 && g_nAutoReturnMessage && g_ZMatrixChangedInRam);
         assert(homedZ == (level ? 7u : 1u) && corrected == homedZ && homedXY == homedZ);
-        assert(tickCount == (level ? 73u : retry ? 15u : 13u) && loaded == 1);
+        assert(tickCount == (level ? 73u : retry ? 18u : 13u) && loaded == 1);
         assert(retreats == static_cast<unsigned>(retry));
         const std::vector<std::pair<float, float>> expected = level
             ? std::vector<std::pair<float, float>>{{40, 40}, {20, 20}, {80, 80}, {40, 30}, {20, 80}, {80, 20}, {40, 50}}

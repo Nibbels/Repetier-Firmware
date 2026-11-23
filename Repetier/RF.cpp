@@ -1130,6 +1130,7 @@ public:
     void discard() {
         phase_ = Phase::Idle;
         levelingPass_ = LevelingPass::None;
+        cancelRequested_ = false;
     }
 
 private:
@@ -1149,6 +1150,7 @@ private:
         ContinueLeveling,
         RetreatForFinish,
         ReportScrewAdjustment,
+        Aborting,
     };
     enum class LevelingPass : uint8_t {
         None, Center, MinXMinY, MaxXMaxY, CenterYMinusOne, MinXMaxY, MaxXMinY, CenterYPlusOne
@@ -1162,6 +1164,7 @@ private:
     void loadMatrix();
     void positionProbe();
     void armPressureRetries();
+    void beginRetryWait();
     void retreatForRetry();
     void measureBaseline();
     void approachSurface();
@@ -1174,15 +1177,20 @@ private:
     volatile Phase phase_ = Phase::Idle;
     LevelingPass levelingPass_ = LevelingPass::None;
     long probeZSteps_ = 0;
+    millis_t retryWaitStartedMs_ = 0;
+    bool cancelRequested_ = false;
 };
 
 ZOffsetScan zOffsetScan;
 
 void ZOffsetScan::startOrCancel(bool levelMatrix) {
+    if (phase_ == Phase::Aborting)
+        return;
     if (active()) {
         Com::printFLN(PSTR("ZOS cancelled"));
+        // Probe helpers see the abort reason. The next tick owns cleanup.
         g_abortZScan = SCAN_ABORT_REASON_CANCELED;
-        abort(false);
+        cancelRequested_ = true;
         return;
     }
 
@@ -1198,10 +1206,16 @@ void ZOffsetScan::tick() {
 
     Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
     GCodeInput::keepAlive(Calibrating);
+    if (cancelRequested_) {
+        g_abortZScan = SCAN_ABORT_REASON_CANCELED;
+        abort(false);
+        return;
+    }
 
     // Run one phase per service call. Calibration waits still pump the foreground.
     switch (phase_) {
-    case Phase::Idle: break;
+    case Phase::Idle:
+    case Phase::Aborting: break;
     case Phase::Initialize: initialize(); break;
     case Phase::HomeForProbe: homeForProbe(); break;
     case Phase::LiftForProbe: liftForProbe(); break;
@@ -1356,8 +1370,14 @@ void ZOffsetScan::armPressureRetries() {
     phase_ = Phase::MeasureBaseline;
 }
 
+void ZOffsetScan::beginRetryWait() {
+    retryWaitStartedMs_ = HAL::timeInMilliseconds();
+    phase_ = Phase::RetreatForRetry;
+}
+
 void ZOffsetScan::retreatForRetry() {
-    HAL::delayMilliseconds(heatBedScanDelayMs);
+    if (HAL::timeInMilliseconds() - retryWaitStartedMs_ < heatBedScanDelayMs)
+        return;
     if (moveZPlusDownFast()) {
         g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
     }
@@ -1368,7 +1388,7 @@ void ZOffsetScan::measureBaseline() {
     if (readIdlePressure(&g_nCurrentIdlePressure)) {
         //Problem mit Digits, die wackeln:
         if (g_scanRetries-- > 0) {
-            phase_ = Phase::RetreatForRetry;
+            beginRetryWait();
             g_abortZScan = 0;
             return;
         } else {
@@ -1436,7 +1456,7 @@ void ZOffsetScan::approachSurface() {
         g_retryZScan = 0;
         g_scanRetries--;
         Com::printFLN(PSTR("Bettsuchproblem 10 -> 7 :"), g_scanRetries);
-        phase_ = Phase::RetreatForRetry;
+        beginRetryWait();
         return;
     }
 
@@ -1475,7 +1495,7 @@ void ZOffsetScan::probeSurface() {
         g_retryZScan = 0;
         g_scanRetries--;
         Com::printFLN(PSTR("Suchproblem 20 -> 7:"), g_scanRetries);
-        phase_ = Phase::RetreatForRetry;
+        beginRetryWait();
         return;
     }
     if (g_abortZScan) {
@@ -1603,6 +1623,8 @@ void ZOffsetScan::reportScrewAdjustment() {
 }
 
 void ZOffsetScan::abort(bool reloadMatrix) {
+    phase_ = Phase::Aborting;
+    cancelRequested_ = false;
     showAbortScanReason(PSTR(UI_TEXT_DO_MHIER_BED_SCAN), g_abortZScan);
 
     if (reloadMatrix) {
@@ -1612,7 +1634,6 @@ void ZOffsetScan::abort(bool reloadMatrix) {
         }
     }
     g_abortZScan = 0;
-    phase_ = Phase::Idle;
     g_retryZScan = 0;
     g_nLastZScanZPosition = 0;
 
@@ -1626,7 +1647,7 @@ void ZOffsetScan::abort(bool reloadMatrix) {
     // turn off all steppers and extruders
     Printer::disableAllSteppersNow();
 
-    levelingPass_ = LevelingPass::None;
+    discard();
     Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 30000);
 }
 
