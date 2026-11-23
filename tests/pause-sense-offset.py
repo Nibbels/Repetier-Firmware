@@ -104,7 +104,8 @@ def main():
         )
         (build / "lookahead-flags-firmware.inc").write_text(
             section(motion, "#define FLAG_WARMUP", "\nenum DirectMovePhase")
-            + section(motion, "    inline bool areParameterUpToDate()", "    inline uint8_t getWaitForXLinesFilled()")
+            + section(motion, "    inline bool isStepProfileReady()", "    void fitRampToRemainingSteps();")
+            + section(motion, "    inline bool isStartSpeedFixed()", "    inline uint8_t getWaitForXLinesFilled()")
             + section(motion, "    inline void block()", "\n    // If we reach endstops")
             + section(motion, "    inline bool isNominalMove()", "    inline void setXMoveFinished()"), encoding="utf-8",
         )

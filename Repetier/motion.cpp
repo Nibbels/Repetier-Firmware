@@ -221,7 +221,7 @@ void PrintLine::prepareDirectMove(const int32_t steps[4], bool stoppable, bool f
     }
 
     direct.calculateMove(axisDistanceMM, direct.primaryAxis, feedrate);
-    direct.updateStepsParameter();
+    direct.prepareStepProfile();
 
     InterruptProtectedBlock publish;
     if (direct.task == DIRECT_PREPARING_STOPPED)
@@ -382,8 +382,8 @@ void PrintLine::calculateMove(float axisDistanceMM[], fast8_t drivingAxis, float
 } // calculateMove
 
 // Convert planned entry and exit speeds to a step profile.
-void PrintLine::updateStepsParameter() {
-    if (areParameterUpToDate() || isWarmUp())
+void PrintLine::prepareStepProfile() {
+    if (isStepProfileReady() || isWarmUp())
         return;
 
     float startFactor = startSpeed * invFullSpeed;
@@ -405,7 +405,7 @@ void PrintLine::updateStepsParameter() {
     }
 
     fitRampToRemainingSteps();
-    setParameterUpToDate();
+    markStepProfileReady();
 }
 
 void PrintLine::fitRampToRemainingSteps() {
@@ -459,7 +459,7 @@ uint8_t PrintLine::insertWaitMovesIfNeeded(uint8_t pathOptimize, uint8_t waitExt
             PrintLine* p = &queue.writeSlot();
             p->task = TASK_NO_TASK;
             p->flags = FLAG_WARMUP;
-            p->joinFlags = FLAG_JOIN_STEPPARAMS_COMPUTED | FLAG_JOIN_END_FIXED | FLAG_JOIN_START_FIXED;
+            p->joinFlags = FLAG_JOIN_STEP_PROFILE_READY | FLAG_JOIN_END_FIXED | FLAG_JOIN_START_FIXED;
             p->dir = 0;
             p->setWaitForXLinesFilled(w + waitExtraLines);
             p->setWaitTicks(100000); //repetier changed this from 25k to 100k in https://github.com/repetier/Repetier-Firmware/commit/2385051856278c189d7c1f1fd67acc27825c82ac#diff-11347f18746fb080f5bda21c30428558R1080
@@ -589,8 +589,8 @@ long PrintLine::performQueueMove() {
         }
         }
 
-        if (move->isBlocked()) // This step is in computation - shouldn't happen
-        {
+        // Lookahead holds a block until it has refreshed a queued step profile.
+        if (move->isBlocked()) {
             queue.releaseFront();
             return 2000;
         }
@@ -615,8 +615,6 @@ long PrintLine::performQueueMove() {
         move->fixStartAndEndSpeed();
 
         queueError = move->delta[move->primaryAxis];
-        if (!move->areParameterUpToDate())
-            move->updateStepsParameter(); // should never happen, but with bad timings???
         stepClocks[FOR_QUEUE].start(move->vStart);
         Printer::v = move->fullSpeed;
 

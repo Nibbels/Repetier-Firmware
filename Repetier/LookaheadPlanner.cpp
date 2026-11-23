@@ -62,19 +62,19 @@ inline void LookaheadPlanner::planDeceleration(MoveQueue& queue, uint8_t start, 
 
         if (lastJunctionSpeed >= previous.maxJunctionSpeed) {
             if (previous.endSpeed != previous.maxJunctionSpeed) {
-                previous.invalidateParameter();
+                previous.invalidateStepProfile();
                 previous.endSpeed = RMath::max(previous.minSpeed, previous.maxJunctionSpeed);
             }
             if (next->startSpeed != previous.maxJunctionSpeed) {
                 next->startSpeed = RMath::max(next->minSpeed, previous.maxJunctionSpeed);
-                next->invalidateParameter();
+                next->invalidateStepProfile();
             }
             lastJunctionSpeed = previous.endSpeed;
         } else {
             next->startSpeed = RMath::max(next->minSpeed, lastJunctionSpeed);
             lastJunctionSpeed = previous.endSpeed = RMath::max(lastJunctionSpeed, previous.minSpeed);
-            previous.invalidateParameter();
-            next->invalidateParameter();
+            previous.invalidateStepProfile();
+            next->invalidateStepProfile();
         }
         next = &previous;
     }
@@ -100,10 +100,10 @@ inline void LookaheadPlanner::planAcceleration(MoveQueue& queue, uint8_t first, 
                 move.setEndSpeedFixed(true);
                 next->setStartSpeedFixed(true);
             }
-            move.invalidateParameter();
+            move.invalidateStepProfile();
         } else {
             move.fixStartAndEndSpeed();
-            move.invalidateParameter();
+            move.invalidateStepProfile();
             if (move.minSpeed > entrySpeed) {
                 entrySpeed = move.minSpeed;
                 reachableExit = sqrt(entrySpeed * entrySpeed + move.accelerationDistance2);
@@ -146,7 +146,7 @@ void LookaheadPlanner::update(MoveQueue& queue) {
 
     if (first == end) {
         newest.setStartSpeedFixed(true);
-        newest.updateStepsParameter();
+        newest.prepareStepProfile();
         newest.unblock();
         return;
     }
@@ -162,7 +162,7 @@ void LookaheadPlanner::update(MoveQueue& queue) {
         || (Printer::isAdvanceActivated() && previous.isEMove() != newest.isEMove())) {
         previous.setEndSpeedFixed(true);
         newest.setStartSpeedFixed(true);
-        newest.updateStepsParameter();
+        newest.prepareStepProfile();
         firstMove.unblock();
         return;
     }
@@ -174,12 +174,12 @@ void LookaheadPlanner::update(MoveQueue& queue) {
     // Release each recalculated move as soon as its step profile is ready.
     do {
         PrintLine& move = queue.slot(first);
-        move.updateStepsParameter();
+        move.prepareStepProfile();
         move.unblock();
         MoveQueue::nextIndex(first);
         queue.slot(first).block();
     } while (first != end);
 
-    newest.updateStepsParameter();
+    newest.prepareStepProfile();
     newest.unblock();
 }

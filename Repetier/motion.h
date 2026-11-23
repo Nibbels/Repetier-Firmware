@@ -28,7 +28,7 @@
 #define FLAG_SKIP_DEACCELERATING 64
 #define FLAG_BLOCKED 128
 
-#define FLAG_JOIN_STEPPARAMS_COMPUTED 1  // Are the step parameter computed
+#define FLAG_JOIN_STEP_PROFILE_READY 1  // The foreground has prepared the step ramp.
 #define FLAG_JOIN_END_FIXED 2            // The right speed is fixed. Don't check this block or any block to the left.
 #define FLAG_JOIN_START_FIXED 4          // The left speed is fixed. Don't check left block.
 #define FLAG_JOIN_START_RETRACT 8        // Start filament retraction at move start
@@ -82,6 +82,19 @@ private:
     static volatile uint32_t stepIntervalTicks;
     static uint8_t stepsPerTimerCall;
     speed_t nextStepSpeed(StepClock& clock, uint8_t pulses, uint32_t interval);
+    void prepareStepProfile();
+    inline bool isStepProfileReady() const {
+        return joinFlags & FLAG_JOIN_STEP_PROFILE_READY;
+    } // isStepProfileReady
+
+    inline void invalidateStepProfile() {
+        joinFlags &= ~FLAG_JOIN_STEP_PROFILE_READY;
+    } // invalidateStepProfile
+
+    inline void markStepProfileReady() {
+        joinFlags |= FLAG_JOIN_STEP_PROFILE_READY;
+    } // markStepProfileReady
+
     void fitRampToRemainingSteps();
     void limitToStopTail(bool refitRamp);
 
@@ -129,18 +142,6 @@ public:
         const char task = direct.task;
         return task == DIRECT_PREPARING_STOPPABLE || task == DIRECT_PREPARED_STOPPABLE || task == DIRECT_RUNNING_STOPPABLE;
     }
-
-    inline bool areParameterUpToDate() {
-        return joinFlags & FLAG_JOIN_STEPPARAMS_COMPUTED;
-    } // areParameterUpToDate
-
-    inline void invalidateParameter() {
-        joinFlags &= ~FLAG_JOIN_STEPPARAMS_COMPUTED;
-    } // invalidateParameter
-
-    inline void setParameterUpToDate() {
-        joinFlags |= FLAG_JOIN_STEPPARAMS_COMPUTED;
-    } // setParameterUpToDate
 
     inline bool isStartSpeedFixed() {
         return joinFlags & FLAG_JOIN_START_FIXED;
@@ -347,7 +348,6 @@ public:
         HAL::allowInterrupts();
     }  // updateAdvanceSteps
 
-    void updateStepsParameter();
     inline float safeSpeed(fast8_t drivingAxis);
     void calculateMove(float axis_diff[], fast8_t drivingAxis, float feedrate);
 

@@ -410,7 +410,7 @@ struct PrintLine {
     uint32_t advanceL = 0;
     speed_t vStart = 0, vMax = 0, vEnd = 0;
     speed_t nextStepSpeed(StepClock& clock, uint8_t pulses, uint32_t interval);
-    void updateStepsParameter();
+    void prepareStepProfile();
     void fitRampToRemainingSteps();
     void limitToStopTail(bool refitRamp);
     void calculateMove(float axisDistanceMM[], fast8_t drivingAxis, float feedrate);
@@ -1781,9 +1781,13 @@ void lookaheadMoves() {
         Printer::advanceActive = advance;
         queue.clear();
         PrintLine& front = prepare(printX);
+        LookaheadPlanner::update(queue);
         queue.publish(true);
         PrintLine& reserved = prepare(printX);
+        LookaheadPlanner::update(queue);
         queue.publish(true);
+        assert(queue.activateFront() == &front);
+        const uint8_t frontFlags = front.joinFlags, reservedFlags = reserved.joinFlags;
         PrintLine& previous = prepare(printX);
         LookaheadPlanner::update(queue);
         queue.publish(true);
@@ -1791,10 +1795,11 @@ void lookaheadMoves() {
         LookaheadPlanner::update(queue);
 
         assert(interruptsEnabled && queue.count() == 3);
-        assert(front.joinFlags == 0 && reserved.joinFlags == 0);
+        assert(queue.active() == &front && front.joinFlags == frontFlags && reserved.joinFlags == reservedFlags);
         assert(previous.endSpeed == junctionSpeed && newest.startSpeed == junctionSpeed);
-        assert(previous.areParameterUpToDate() && newest.areParameterUpToDate());
-        assert(!previous.isBlocked() && !newest.isBlocked());
+        for (auto* move : {&front, &reserved, &previous, &newest}) {
+            assert(move->isStepProfileReady() && !move->isBlocked());
+        }
         queue.publish(true);
 
         for (auto* profile : {&previous, &newest}) {
@@ -1831,13 +1836,13 @@ void directRamp() {
     reserve();
     PrintLine::prepareDirectMove(steps, true, false);
     assert(interruptsEnabled && move.task == DIRECT_PREPARED_STOPPABLE);
-    assert(move.areParameterUpToDate() && move.stepsRemaining == 161);
+    assert(move.isStepProfileReady() && move.stepsRemaining == 161);
     assert(move.vStart == move.vEnd && move.accelSteps == move.decelSteps && move.accelSteps > 16);
 
     PrintLine legacyStop = move;
     legacyStop.stepsRemaining = 32;
-    legacyStop.invalidateParameter();
-    legacyStop.updateStepsParameter();
+    legacyStop.invalidateStepProfile();
+    legacyStop.prepareStepProfile();
     {
         InterruptProtectedBlock lock;
         PrintLine::stopDirectMove();
