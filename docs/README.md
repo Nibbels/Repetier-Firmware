@@ -4,6 +4,10 @@ These are source-grounded design documents, complementary to [README.md](../READ
 
 Start with the [development roadmap](development-roadmap.md) for the active coordinate and motion-compensation block and the intended firmware architecture. The [maintenance list](maintenance-tasks.md) tracks fixes and open tasks by development block.
 
+## Motion throughput and real-time timing
+
+The [performance goal and timing plan](motion-timing.md) traces step generation, serial streaming and peripheral service on the ATmega2560. It defines the preparation and measurements for changing Pressure Advance scheduling and step packing.
+
 ## Board connectors and retrofits
 
 The [board connector reference](board-connectors.md) maps RF1000 and RF2000 family outputs, sensor ports and expansion headers. It includes the single-extruder RF2000 setup with an E3D heatsink fan on X44.

@@ -7,7 +7,7 @@ The current block is **coordinate systems and motion compensation**. The aim is 
 | [Coordinate systems and motion compensation](#1-coordinate-systems-and-motion-compensation) | **Active.** One accountable path for nominal geometry, direct motion, compensation and motor position. |
 | [Print lifecycle and DMS controls](#2-print-lifecycle-and-dms-controls) | Explicit job and phase transitions, with consistent pressure control and reset behavior. |
 | [Calibration and persistence](#3-calibration-and-persistence) | A traceable path from measured contact to the active and saved calibration. |
-| [Motion smoothness and performance](#4-motion-smoothness-and-performance) | A timing baseline and measured improvements. Step packing belongs here. |
+| [Motion smoothness and performance](#4-motion-smoothness-and-performance) | Highest sustainable motion throughput with CPU time for UART, planning, temperature and DMS. |
 | [Firmware structure and hardware variants](#5-firmware-structure-and-hardware-variants) | Fewer supported combinations and clear boundaries between machine logic, operator interfaces and hardware. |
 
 Use the architecture below throughout the blocks. Calibration can progress independently once the live and saved offset semantics are clear. Evaluate timing changes after the coordinate behavior has a repeatable baseline. Review the scope of optional features before restructuring the paths that serve them.
@@ -114,9 +114,11 @@ The AVR builds use 4 fewer bytes of global SRAM and 76–136 fewer bytes of flas
 
 ## 4. Motion smoothness and performance
 
-- **Measure the causes of uneven motion.** Use the same G-code and settings before and after each change. Compare long moves with dense short segments. Measure planner throughput and queue depth, reasons for gaps between segments, ISR duration, step interval and pulse widths. Include active Z-CMP and cases with pressure advance or DMS speed limiting. Count XYZ/E pulses alongside timing to catch motion changes hidden by a faster run.
-- **Review junctions and waits.** Check the junction-speed calculation and short-segment slowdown together. Trace Pressure Advance through lookahead and step execution. Replay the fork's inter-segment Z-CMP wait change against queued motion, blocked corrections and paused prints that still need live compensation. [Motion review tasks](maintenance-tasks.md#motion-smoothness-and-performance)
-- **Evaluate step packing in that baseline.** Compare using the computed `minInterval` with the 64-tick pressure-advance allowance and changing the 512-tick floor in separate experiments. Judge each by measured motion continuity, pulse timing and AVR interrupt headroom, with matching step totals. [Step-packing diff](https://github.com/afriess/RFx000x-Firmware/commit/0e11752)
+**Performance target.** Increase the highest reliable straight and curved print speeds on the stock 16 MHz ATmega2560. Preserve pulse and position accounting, mechanical limits and bounded service times for G-code, heaters, DMS and the watchdog. The [timing analysis and implementation plan](motion-timing.md) records the current CPU load, interrupt handoffs, candidate designs and acceptance tests.
+
+- **Measure the complete pipeline.** Compare long moves with dense short segments. Track serial throughput, lookahead, buffered motion time, interrupt load and worst-case service gaps. Replay Z compensation, Digit Flow and Pressure Advance on both workloads.
+- **Finish the motion handoffs first.** Define exclusive STEP/DIR ownership, pending E and lead rules at tool and mode changes, and a stable handoff from the planner to step execution. Then try on-demand wake of the independent Advance interrupt.
+- **Tune the measured bottleneck.** Measure how short-segment pacing and junction speed affect continuity under variable USB delivery. Review print, travel and retract joins separately with Advance on and off. Compare packing by delivered steps, pulse timing and foreground headroom, with Z-CMP waits measured independently. Treat scheduler consolidation as an experiment once the separate timers have a measured baseline. [Planner behavior](motion-timing.md#lookahead-short-moves-and-extrusion-transitions) · [Open implementation tasks](maintenance-tasks.md#motion-smoothness-and-performance)
 
 ## 5. Firmware structure and hardware variants
 
