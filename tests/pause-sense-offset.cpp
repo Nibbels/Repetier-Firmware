@@ -26,6 +26,13 @@
 // a bed profile, a clock and the motor displacements completed during each wait.
 using millis_t = uint32_t;
 using speed_t = uint16_t;
+using ticks_t = uint32_t;
+using fast8_t = int8_t;
+constexpr uint32_t F_CPU = 16000000UL;
+constexpr int32_t LIMIT_INTERVAL = (F_CPU / 40000) + 1;
+constexpr bool FEEDRATE_GCODE = true;
+int maxadv2 = 0;
+float maxadvspeed = 0;
 constexpr float zStepsPerMm = 1280.0f;
 constexpr int16_t initialClearance = 20;
 constexpr int16_t printingForce = 6000;
@@ -208,7 +215,10 @@ struct DirectDisplacement {
 DirectDisplacement directPosition(uint8_t axis) { return {directCurrentSteps[axis]}; }
 CartesianPlanner cartesianPlanner;
 float axisStepsPerMM[4] = { 160.0f, 160.0f, zStepsPerMm, 280.0f };
-float axisMMPerSteps[3] = { 1.0f / 160, 1.0f / 160, 1.0f / zStepsPerMm };
+float axisMMPerSteps[4] = { 1.0f / 160, 1.0f / 160, 1.0f / zStepsPerMm, 1.0f / 280 };
+float maxFeedrate[4] = { 200, 200, 9, 25 };
+uint32_t maxPrintAccelerationStepsPerSquareSecond[4] = { 100000, 100000, 100000, 100000 };
+uint32_t maxTravelAccelerationStepsPerSquareSecond[4] = { 100000, 100000, 100000, 100000 };
 float homingFeedrate[3] = { 60.0f, 60.0f, 5.0f };
 float axisLengthMM[3] = { 170.0f, 245.0f, 200.0f };
 long maxSoftEndstopSteps[2] = { 170 * 160L, 245 * 160L };
@@ -325,6 +335,7 @@ namespace RMath {
 float min(float a, float b) { return std::min(a, b); }
 int32_t min(int32_t a, int32_t b) { return std::min(a, b); }
 float max(float a, float b) { return std::max(a, b); }
+int32_t max(int32_t a, int32_t b) { return std::max(a, b); }
 }
 
 struct Extruder {
@@ -342,6 +353,7 @@ struct Extruder {
     uint8_t id = 0;
     float offsetMM[2] = {};
     float maxEJerk = 6.0f;
+    float advanceL = 0.0f;
 
     static Extruder* current;
     static unsigned stepPulses, trailingEdges;
@@ -370,33 +382,39 @@ void Extruder::setTemperatureForExtruder(float temperature, int tool) {
 }
 
 class MoveQueue;
+#include "direct-phase-firmware.inc"
 struct PrintLine {
 #include "step-clock-firmware.inc"
+#include "direct-control-firmware.inc"
 
     bool moveZ = false;
     bool positiveE = false;
     bool moveXY = false;
     bool moveE = false;
-    uint8_t xyDirection = 0;
     bool abortAtEndstops = false;
     bool isAbortAtEndstops() const { return abortAtEndstops; }
     bool isPositiveMoveOfAxis(uint8_t axis) const {
         uint8_t mask = 17 << axis;
-        return (xyDirection & mask) == mask;
+        return (dir & mask) == mask;
     }
     bool isNegativeMoveOfAxis(uint8_t axis) const {
-        return (xyDirection & (17 << axis)) == (16 << axis);
+        return (dir & (17 << axis)) == (16 << axis);
     }
-    void setMoveOfAxisFinished(uint8_t axis) { xyDirection &= ~(16 << axis); }
-    void setMoveOfAxis(uint8_t axis) { xyDirection |= 16 << axis; }
-    void setPositiveDirectionForAxis(uint8_t axis) { xyDirection |= 1 << axis; }
+    void setMoveOfAxisFinished(uint8_t axis) { dir &= ~(16 << axis); }
+    void setMoveOfAxis(uint8_t axis) { dir |= 16 << axis; }
+    void setPositiveDirectionForAxis(uint8_t axis) { dir |= 1 << axis; }
     int32_t error[4] = {}, delta[4] = {};
     int32_t stepsRemaining = 0;
     uint32_t accelSteps = 0, decelSteps = 0, fAcceleration = 0;
     uint32_t accelerationPrim = 0;
+    uint32_t advanceL = 0;
     speed_t vStart = 0, vMax = 0, vEnd = 0;
     speed_t nextStepSpeed(StepClock& clock, uint8_t pulses, uint32_t interval);
     void updateStepsParameter();
+    void fitRampToRemainingSteps();
+    void limitToStopTail(bool refitRamp);
+    void calculateMove(float axisDistanceMM[], fast8_t drivingAxis, float feedrate);
+    inline float safeSpeed(fast8_t drivingAxis);
     float speedX = 0, speedY = 0, speedZ = 0, speedE = 0;
     float fullSpeed = 0, invFullSpeed = 0, accelerationDistance2 = 0;
     float minSpeed = 0, startSpeed = 0, endSpeed = 0, maxJunctionSpeed = 0;
@@ -412,19 +430,22 @@ struct PrintLine {
     void setWaitTicks(long ticks) { warmupTicks = ticks; }
     void setAxisSteps(uint8_t axis, int32_t steps);
     void setSegmentGeometry(const float axisDistanceMM[]);
+    bool isMoveOfAxis(uint8_t axis) const { return dir & (16 << axis); }
+    bool isNoMove() const { return (dir & 240) == 0; }
+    bool isXMove() const { return isMoveOfAxis(X_AXIS); }
+    bool isYMove() const { return isMoveOfAxis(Y_AXIS); }
+    bool isXNegativeMove() const { return isNegativeMoveOfAxis(X_AXIS); }
+    bool isYNegativeMove() const { return isNegativeMoveOfAxis(Y_AXIS); }
+    bool isZNegativeMove() const { return isNegativeMoveOfAxis(Z_AXIS); }
+    bool isENegativeMove() const { return isNegativeMoveOfAxis(E_AXIS); }
     bool isEMove() const { return moveE || (dir & 128); }
     bool isEOnlyMove() const { return (dir & 240) == 128; }
-    bool isZMove() const { return moveZ || (xyDirection & (16 << Z_AXIS)); }
-    bool isXYZMove() const { return xyDirection & 112; }
-    bool isEPositiveMove() const { return positiveE; }
-    bool isXOrYMove() const { return moveXY; }
+    bool isZMove() const { return moveZ || isMoveOfAxis(Z_AXIS); }
+    bool isXYZMove() const { return dir & 112; }
+    bool isEPositiveMove() const { return positiveE || isPositiveMoveOfAxis(E_AXIS); }
+    bool isXOrYMove() const { return moveXY || (dir & 48); }
 
-    static struct Direct {
-        int task = TASK_NO_TASK;
-        int32_t stepsRemaining = 0;
-        bool moveZ = false;
-        bool isZMove() const { return moveZ; }
-    } direct;
+    static PrintLine direct;
     static MoveQueue queue;
     static uint8_t insertWaitMovesIfNeeded(uint8_t pathOptimize, uint8_t waitExtraLines);
     static int linesCount;
@@ -441,7 +462,8 @@ struct PrintLine {
         ++plannedMoves;
         updatesWobble = wobble;
     }
-    static void stopDirectMove() { ++stopRequests; }
+    static void applyDirectStop();
+    static void stopDirectMove() { ++stopRequests; applyDirectStop(); }
     static void discardQueuedMoves() { linesCount = 0; queuedTask = TASK_NO_TASK; }
     static void queueTask(int task) {
         assert(!interruptsEnabled && linesCount < MOVE_CACHE_SIZE);
@@ -450,7 +472,7 @@ struct PrintLine {
     }
 };
 
-PrintLine::Direct PrintLine::direct;
+PrintLine PrintLine::direct;
 int PrintLine::linesCount = 3;
 int PrintLine::queuedTask = TASK_NO_TASK;
 int PrintLine::stopRequests = 0;
@@ -1797,17 +1819,72 @@ void lookaheadMoves() {
     assert(trace == 0x670f3ba6U); // Step intervals captured before extracting the planner.
 }
 
+void directRamp() {
+    PrintLine& move = PrintLine::direct;
+    const int32_t steps[4] = {161, 0, 0, 0};
+    const auto reserve = [&] {
+        move = PrintLine{};
+        InterruptProtectedBlock lock;
+        PrintLine::reserveDirectMove(true);
+    };
+
+    reserve();
+    PrintLine::prepareDirectMove(steps, true, false);
+    assert(interruptsEnabled && move.task == DIRECT_PREPARED_STOPPABLE);
+    assert(move.areParameterUpToDate() && move.stepsRemaining == 161);
+    assert(move.vStart == move.vEnd && move.accelSteps == move.decelSteps && move.accelSteps > 16);
+
+    PrintLine legacyStop = move;
+    legacyStop.stepsRemaining = 32;
+    legacyStop.invalidateParameter();
+    legacyStop.updateStepsParameter();
+    {
+        InterruptProtectedBlock lock;
+        PrintLine::stopDirectMove();
+    }
+    assert(move.stepsRemaining == 32);
+    assert(move.accelSteps == legacyStop.accelSteps && move.decelSteps == legacyStop.decelSteps);
+
+    reserve();
+    interruptBeforeLock = 1;
+    onInterrupt = [] {
+        assert(interruptsEnabled && PrintLine::hasStoppableDirectMove());
+        InterruptProtectedBlock lock;
+        PrintLine::stopDirectMove();
+        assert(PrintLine::direct.task == DIRECT_PREPARING_STOPPED);
+    };
+    PrintLine::prepareDirectMove(steps, true, false);
+    assert(interruptBeforeLock == 0 && interruptsEnabled);
+    assert(move.task == DIRECT_PREPARED_STOPPABLE && move.stepsRemaining == 32);
+    assert(move.accelSteps == legacyStop.accelSteps && move.decelSteps == legacyStop.decelSteps);
+
+    reserve();
+    PrintLine::prepareDirectMove(steps, true, false);
+    const uint32_t initialRampSteps = move.accelSteps;
+    {
+        InterruptProtectedBlock lock;
+        move.task = DIRECT_RUNNING_STOPPABLE;
+        PrintLine::stopDirectMove();
+    }
+    assert(move.stepsRemaining == 32 && move.accelSteps == initialRampSteps);
+
+    reserve();
+    const int32_t noSteps[4] = {};
+    PrintLine::prepareDirectMove(noSteps, true, false);
+    assert(!PrintLine::directMoveActive() && move.stepsRemaining == 0);
+}
+
 void xyLimits() {
     for (uint8_t axis = X_AXIS; axis <= Y_AXIS; ++axis) {
         const uint8_t positive = 17 << axis, negative = 16 << axis;
         PrintLine move;
-        move.xyDirection = positive;
+        move.dir = positive;
         Printer::xyMaxHit[axis] = true;
         assert(!canStepXY(axis, &move, true));
         assert(!canStepXY(axis, &move, true));
         assert(Printer::xyMotion.queuedOvertravel(axis) == 2);
 
-        move.xyDirection = negative;
+        move.dir = negative;
         assert(!canStepXY(axis, &move, true));
         Printer::xyMaxHit[axis] = false;
         assert(!canStepXY(axis, &move, true));
@@ -1816,14 +1893,14 @@ void xyLimits() {
         Printer::xyMinHit[axis] = true;
         assert(!canStepXY(axis, &move, true));
         assert(Printer::xyMotion.queuedOvertravel(axis) == -1);
-        move.xyDirection = positive;
+        move.dir = positive;
         move.abortAtEndstops = true;
         assert(canStepXY(axis, &move, false)); // A direct retreat leaves the queue's debt alone.
         assert(Printer::xyMotion.queuedOvertravel(axis) == -1);
         assert(!canStepXY(axis, &move, true));
         assert(canStepXY(axis, &move, true) && !Printer::xyMotion.queuedOvertravel(axis));
 
-        move.xyDirection = negative;
+        move.dir = negative;
         move.abortAtEndstops = false;
         assert(!canStepXY(axis, &move, true));
         move.abortAtEndstops = true;
@@ -1831,7 +1908,7 @@ void xyLimits() {
         assert(!move.isNegativeMoveOfAxis(axis) && !Printer::xyMotion.queuedOvertravel(axis));
         assert(Printer::stoppedDirectAxis != axis);
 
-        move.xyDirection = negative;
+        move.dir = negative;
         assert(!canStepXY(axis, &move, false));
         assert(!move.isNegativeMoveOfAxis(axis) && Printer::stoppedDirectAxis == axis);
         Printer::xyMinHit[axis] = false;
@@ -1940,6 +2017,8 @@ int main(int argc, char** argv) {
         stepClock();
     else if (!std::strcmp(argv[1], "lookahead"))
         lookaheadMoves();
+    else if (!std::strcmp(argv[1], "direct-ramp"))
+        directRamp();
     else if (!std::strcmp(argv[1], "xy-limits"))
         xyLimits();
     else

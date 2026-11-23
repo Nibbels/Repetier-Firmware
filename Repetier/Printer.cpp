@@ -351,50 +351,37 @@ void Printer::queueRelativeMMCoordinates(float dx, float dy, float dz, float de,
  * This function transfers the axis without affecting the axis values.
  * This is expecially usefull to transfer the extruder 0 to 1 and backwards.
  */
-#define NORMAL_DIRECT false
-#define STOPPABLE_DIRECT true
 void Printer::offsetRelativeStepsCoordinates(int32_t dx, int32_t dy, int32_t dz, int32_t de, uint8_t configuration) {
+    if (dx == 0 && dy == 0 && dz == 0 && de == 0)
+        return;
+    if (configuration && !pause.allowsManualMove())
+        return;
 
-    if (dx != 0 || dy != 0 || dz != 0 || de != 0) {
-        if (configuration && !pause.allowsManualMove())
-            return;
+    while (PrintLine::directMoveActive()) {
+        Commands::checkForPeriodicalActions(Processing);
+    }
 
-        while (PrintLine::directMoveActive()) {
-            // If another offset move is going on, we have to wait
-            Commands::checkForPeriodicalActions(Processing);
-        }
-
-        InterruptProtectedBlock noInts;
+    const bool stoppable = configuration == TASK_MOVE_FROM_BUTTON;
+    const bool feedrateSource = (stoppable || configuration == TASK_MOVE_POSITION_MANUAL)
+        ? movePositionFeedrateChoice : FEEDRATE_DIRECTCONFIG;
+    const int32_t steps[4] = {dx, dy, dz, de};
+    {
+        InterruptProtectedBlock lock;
         xyMotion.requestDirect(X_AXIS, dx);
         xyMotion.requestDirect(Y_AXIS, dy);
         zMotion.requestDirectMove(dz);
         extruderDirect.request(de);
-
-        bool feedrateSource = FEEDRATE_DIRECTCONFIG;
-        if (configuration == TASK_MOVE_FROM_BUTTON || configuration == TASK_MOVE_POSITION_MANUAL) {
-            // In position menu or when moving using z-buttons we always choose the feedrate type configured in menu->position->Pos-Feedrate {direct or gcode}
-            // single Z feedrate is always limited to direct config as well as max-feedrate
-            feedrateSource = Printer::movePositionFeedrateChoice;
-        }
-
-        // If we start this move by pressing a button we dont want to wait for it to finish and instead have it listening to the buttons release
-        if (configuration == TASK_MOVE_FROM_BUTTON) {
+        if (stoppable)
             uid.jogButtonAction = uid.lastAction;
-            PrintLine::prepareDirectMove(STOPPABLE_DIRECT, feedrateSource);
-            //noInts handled by destructor
+        PrintLine::reserveDirectMove(stoppable);
+    }
 
-            return;
-        }
+    PrintLine::prepareDirectMove(steps, stoppable, feedrateSource);
+    if (stoppable)
+        return;
 
-        PrintLine::prepareDirectMove(NORMAL_DIRECT, feedrateSource);
-
-        //release Interrupts for processing
-        noInts.unprotect();
-
-        while (PrintLine::directMoveActive()) {
-            // Wait until this offset move is finished. Otherwise could be interrupted by queue-moves and end up directStepping
-            Commands::checkForPeriodicalActions(Processing);
-        }
+    while (PrintLine::directMoveActive()) {
+        Commands::checkForPeriodicalActions(Processing);
     }
 }
 

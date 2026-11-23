@@ -34,7 +34,6 @@ def main():
         section(rf_header, "#define UI_ACTION_RF_HEAT_BED_UP", "#define UI_ACTION_RF_PAUSE"),
         section(ui_header, "#define UI_FLAG_FAST_KEY_ACTION", "#define UI_FLAG_KEY_TEST_RUNNING")
         + section(ui_header, "#define UI_FLAG_KEY_TEST_RUNNING", "\n"),
-        section(motion, "#define DIRECT_IDLE", "#define FOR_DIRECT"),
         section(motion, "    static bool hasStoppableDirectMove()", "\n\n")
         .replace("    static bool hasStoppableDirectMove()", "bool PrintLine::hasStoppableDirectMove()", 1),
         dms.removeprefix('#include "Repetier.h"\n#include <Wire.h>\n'),
@@ -77,7 +76,8 @@ def main():
         "MoveQueue PrintLine::queue;",
         section(move_planner, "bool PrintLine::hasActiveZMove()", "\nvoid PrintLine::setAxisSteps("),
         section(move_planner, "speed_t PrintLine::nextStepSpeed(", "\nlong PrintLine::performMove("),
-        section(move_planner, "void PrintLine::updateStepsParameter()", "\ninline float PrintLine::safeSpeed"),
+        move_planner[move_planner.index("void PrintLine::prepareDirectMove("):move_planner.index("/** \\brief Check if move is new.")]
+        .replace("void PrintLine::stopDirectMove() {", "void PrintLine::applyDirectStop() {", 1),
         lookahead.split('#include "LookaheadPlanner.h"\n', 1)[1],
         section(move_planner, "uint8_t PrintLine::insertWaitMovesIfNeeded(", "\nvoid PrintLine::waitForXFreeLines("),
         section(hal, "uint8_t PressureAdvance::nextTimerCompare(", "\nISR(EXTRUDER_TIMER_VECTOR"),
@@ -103,10 +103,18 @@ def main():
             section(motion, "    struct StepClock {", "    enum class DirectionOwner"), encoding="utf-8",
         )
         (build / "lookahead-flags-firmware.inc").write_text(
-            section(motion, "#define FLAG_WARMUP", "\n#define DIRECT_IDLE")
+            section(motion, "#define FLAG_WARMUP", "\nenum DirectMovePhase")
             + section(motion, "    inline bool areParameterUpToDate()", "    inline uint8_t getWaitForXLinesFilled()")
             + section(motion, "    inline void block()", "\n    // If we reach endstops")
             + section(motion, "    inline bool isNominalMove()", "    inline void setXMoveFinished()"), encoding="utf-8",
+        )
+        (build / "direct-phase-firmware.inc").write_text(
+            section(motion, "enum DirectMovePhase", "#define FOR_DIRECT"), encoding="utf-8",
+        )
+        (build / "direct-control-firmware.inc").write_text(
+            section(motion, "    static bool directMovePreparing(", "\n\n")
+            + section(motion, "    static void reserveDirectMove(", "    static void stopDirectMove()"),
+            encoding="utf-8",
         )
         executable = build / "pause-replay"
         subprocess.run([
@@ -122,7 +130,7 @@ def main():
             "pressure-pause", "pressure-stop", "digit-zero",
             "extrusion-planning",
             "gcode-target", "wobble-target", "cartesian-planning", "segment-geometry", "move-queue", "ecmp-stepping",
-            "advance-timer", "step-clock", "lookahead", "xy-limits",
+            "advance-timer", "step-clock", "lookahead", "direct-ramp", "xy-limits",
         ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
 

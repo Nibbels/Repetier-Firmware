@@ -79,7 +79,7 @@ uint8_t PrintLine::stepsPerTimerCall = 1;
 
 bool PrintLine::hasActiveZMove() {
     InterruptProtectedBlock lock;
-    if (direct.stepsRemaining && direct.isZMove())
+    if (direct.task >= DIRECT_PREPARED && direct.stepsRemaining && direct.isZMove())
         return true;
     PrintLine* active = queue.active();
     return active && active->isZMove();
@@ -192,31 +192,21 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
     queue.publish(true);
 } // prepareQueueMove
 
-void PrintLine::prepareDirectMove(bool stoppable, bool feedrateSource) {
-    if (direct.task) {
-        // Do not overwrite a running directstep process.
-        // If we return here the steps still might be processed as slow direct-stepping.
-        // Rework your code if you see this happening.
-        return;
-    }
-    direct.block();
-    direct.task = DIRECT_PREPARING;
+void PrintLine::prepareDirectMove(const int32_t steps[4], bool stoppable, bool feedrateSource) {
     direct.flags = FLAG_ABORT_AT_ENDSTOPS;
     direct.joinFlags = 0;
-    direct.setEndSpeedFixed(true);
+    direct.fixStartAndEndSpeed();
     direct.dir = 0;
 
-    // Find direction
-    float axisDistanceMM[4]; // Axis movement in mm
+    float axisDistanceMM[4];
     for (uint8_t axis = 0; axis < 4; axis++) {
-        direct.setAxisSteps(axis, Printer::directPosition(axis).remaining());
+        direct.setAxisSteps(axis, steps[axis]);
         axisDistanceMM[axis] = fabs(direct.delta[axis] * Printer::axisMMPerSteps[axis]);
     }
     if (direct.isNoMove()) {
         direct.stepsRemaining = 0;
-        direct.unblock();
-        direct.task = TASK_NO_TASK;
-        return; // No steps included
+        direct.task = DIRECT_IDLE;
+        return;
     }
 
     direct.setSegmentGeometry(axisDistanceMM);
@@ -231,15 +221,35 @@ void PrintLine::prepareDirectMove(bool stoppable, bool feedrateSource) {
     }
 
     direct.calculateMove(axisDistanceMM, direct.primaryAxis, feedrate);
-    direct.unblock();
-    direct.task = (stoppable ? DIRECT_PREPARED_STOPPABLE : DIRECT_PREPARED);
-} // prepareDirectMove
+    direct.updateStepsParameter();
 
-void PrintLine::stopDirectMove(void) //Funktion ist bereits zur ausführzeit von InterruptProtectedBlock eingeschlossen!
-{
-    if (direct.stepsRemaining > 32)
-        direct.stepsRemaining = 32; // Leave a short deceleration tail.
-} // stopDirectMove
+    InterruptProtectedBlock publish;
+    if (direct.task == DIRECT_PREPARING_STOPPED)
+        direct.limitToStopTail(true);
+    direct.task = stoppable ? DIRECT_PREPARED_STOPPABLE : DIRECT_PREPARED;
+}
+
+// Call with interrupts masked. During preparation only the phase is shared.
+void PrintLine::stopDirectMove() {
+    const char phase = direct.task;
+    if (directMovePreparing(phase)) {
+        direct.task = DIRECT_PREPARING_STOPPED;
+        return;
+    }
+    direct.limitToStopTail(phase == DIRECT_PREPARED_STOPPABLE || phase == DIRECT_PREPARED);
+}
+
+void PrintLine::limitToStopTail(bool refitRamp) {
+    constexpr int32_t stopTailSteps = 32;
+    if (stepsRemaining <= stopTailSteps)
+        return;
+    stepsRemaining = stopTailSteps;
+    if (refitRamp) {
+        // A direct move has equal entry and exit speeds. Fitting the earlier
+        // symmetric ramp again gives the same result for a shorter move.
+        fitRampToRemainingSteps();
+    }
+}
 
 void PrintLine::calculateMove(float axisDistanceMM[], fast8_t drivingAxis, float feedrate) {
     if (stepsRemaining == 0) { // need at least one step for bresenham
@@ -394,14 +404,17 @@ void PrintLine::updateStepsParameter() {
         decelSteps = ((vmax2 - HAL::U16SquaredToU32(vEnd)) / (accelerationPrim << 1)) + 1;
     }
 
-    if (static_cast<int32_t>(accelSteps + decelSteps) > stepsRemaining) // can't reach limit speed
-    {
-        uint32_t red = (accelSteps + decelSteps - stepsRemaining) >> 1;
-        accelSteps = accelSteps - RMath::min(static_cast<int32_t>(accelSteps), static_cast<int32_t>(red));
-        decelSteps = decelSteps - RMath::min(static_cast<int32_t>(decelSteps), static_cast<int32_t>(red));
-    }
+    fitRampToRemainingSteps();
     setParameterUpToDate();
-} // updateStepsParameter
+}
+
+void PrintLine::fitRampToRemainingSteps() {
+    if (static_cast<int32_t>(accelSteps + decelSteps) > stepsRemaining) {
+        const uint32_t reduction = (accelSteps + decelSteps - stepsRemaining) >> 1;
+        accelSteps -= RMath::min(static_cast<int32_t>(accelSteps), static_cast<int32_t>(reduction));
+        decelSteps -= RMath::min(static_cast<int32_t>(decelSteps), static_cast<int32_t>(reduction));
+    }
+}
 
 inline float PrintLine::safeSpeed(fast8_t drivingAxis) {
     float xyMin = Printer::maxXYJerk * 0.5f;
@@ -665,8 +678,7 @@ static bool canStepXY(uint8_t axis, PrintLine* move, uint8_t forQueue) {
   The function must be called from a timer loop. It returns the time for the next call. */
 long directError;
 long PrintLine::performDirectMove() {
-    if (direct.isBlocked()) // This step is in computation - shouldn't happen
-    {
+    if (directMovePreparing(direct.task)) {
         return 2000;
     }
     if (direct.task == DIRECT_PREPARED_STOPPABLE || direct.task == DIRECT_PREPARED) {
@@ -675,10 +687,8 @@ long PrintLine::performDirectMove() {
         direct.enableSteppers();
         direct.adjustDirections();
         directionOwner = DirectionOwner::Direct;
-        direct.fixStartAndEndSpeed();
 
         directError = direct.delta[direct.primaryAxis];
-        direct.updateStepsParameter(); // should never be needed, but with bad timings???
         stepClocks[FOR_DIRECT].start(direct.vStart);
         Printer::v = direct.fullSpeed;
 

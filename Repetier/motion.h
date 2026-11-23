@@ -37,13 +37,16 @@
 #define FLAG_JOIN_WAIT_EXTRUDER_UP 64    // Wait for the extruder to finish it's up movement
 #define FLAG_JOIN_WAIT_EXTRUDER_DOWN 128 // Wait for the extruder to finish it's down movement
 
-#define DIRECT_IDLE 0
-#define DIRECT_PREPARING 1
-#define DIRECT_PREPARED 2
-#define DIRECT_RUNNING 3
-
-#define DIRECT_PREPARED_STOPPABLE 12
-#define DIRECT_RUNNING_STOPPABLE 13
+enum DirectMovePhase : char {
+    DIRECT_IDLE,
+    DIRECT_PREPARING,
+    DIRECT_PREPARING_STOPPABLE,
+    DIRECT_PREPARING_STOPPED,
+    DIRECT_PREPARED,
+    DIRECT_PREPARED_STOPPABLE,
+    DIRECT_RUNNING,
+    DIRECT_RUNNING_STOPPABLE,
+};
 
 #define FOR_DIRECT 0
 #define FOR_QUEUE 1
@@ -79,6 +82,12 @@ private:
     static volatile uint32_t stepIntervalTicks;
     static uint8_t stepsPerTimerCall;
     speed_t nextStepSpeed(StepClock& clock, uint8_t pulses, uint32_t interval);
+    void fitRampToRemainingSteps();
+    void limitToStopTail(bool refitRamp);
+
+    static bool directMovePreparing(char phase) {
+        return phase >= DIRECT_PREPARING && phase <= DIRECT_PREPARING_STOPPED;
+    }
 
     flag8_t primaryAxis;
     int32_t timeInTicks;
@@ -118,7 +127,7 @@ public:
     static uint8_t stepsPerInterrupt() { return stepsPerTimerCall; }
     static bool hasStoppableDirectMove() {
         const char task = direct.task;
-        return task == DIRECT_PREPARED_STOPPABLE || task == DIRECT_RUNNING_STOPPABLE;
+        return task == DIRECT_PREPARING_STOPPABLE || task == DIRECT_PREPARED_STOPPABLE || task == DIRECT_RUNNING_STOPPABLE;
     }
 
     inline bool areParameterUpToDate() {
@@ -365,8 +374,12 @@ public:
     static void waitForXFreeLines(uint8_t b = 1);
     static uint8_t insertWaitMovesIfNeeded(uint8_t pathOptimize, uint8_t waitExtraLines);
     static void prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, float feedrate, bool updateWobble = false);
-    static void prepareDirectMove(bool stoppable, bool feedrateSource);
-    static void stopDirectMove(void);
+    // Reserve the slot while the caller publishes the offset targets under its timer lock.
+    static void reserveDirectMove(bool stoppable) {
+        direct.task = stoppable ? DIRECT_PREPARING_STOPPABLE : DIRECT_PREPARING;
+    }
+    static void prepareDirectMove(const int32_t steps[4], bool stoppable, bool feedrateSource);
+    static void stopDirectMove();
 
     static void queueTask(char task);
 
