@@ -22,6 +22,8 @@ Use the architecture below throughout the blocks. Calibration can progress indep
 
 `Printer::layers` owns the pending layer candidate, both confirmed layer heights and the two fade boundaries. The planner reports a move after determining its nominal step endpoint. Homing and priming reset tracking, and EEPROM loads and microstep edits update the bounds for their respective scales. [Layer state](../Repetier/PrintLayers.h)
 
+`ExtrusionPlanner` owns the last queued logical E and the fractional base step carried across segments. The planner provides the requested E coordinate and flow and obtains an integer E step delta. `G92 E` synchronizes the commanded and queued logical references. The ECMP and advance paths add physical steps during execution. [E quantization](../Repetier/ExtrusionPlanner.h) · [Extrusion timeline](first-layer-control/coordinate-frames-and-extrusion.md)
+
 `BedCompensation` calculates the bed correction and ECMP ratio from planned layer geometry, executing nominal Z and the scanned bed. It queries the local matrix depth when the profile or a fade boundary needs it. The foreground adds manual and live Z offsets and Digit-Z before publishing the Z target and ECMP ratio together. [Calculation](../Repetier/BedCompensation.h) · [Publication](../Repetier/RF.cpp#L1907)
 
 Route movement and motion state changes through named operations such as queueing a move, jogging, homing, probing, parking, resuming and applying new calibration. G-code and the panel request the same operations where applicable. Give planning, pulse execution, compensation calculation and the print phases their own state owners behind that interface. Sensor sampling and storage supply inputs, and the UI reads snapshots.

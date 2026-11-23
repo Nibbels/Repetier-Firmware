@@ -30,6 +30,7 @@
 #include "PressureProtection.h"
 #include "StrainGauge.h"
 #include "StartLine.h"
+#include "ExtrusionPlanner.h"
 
 // ##########################################################################################
 // ##   status flags
@@ -95,15 +96,12 @@ public:
     static volatile float destinationMM[4]; // Requested target in mm from origin.
     static float destinationRemainderMM[4]; // Fraction lost when adding relative moves to the target.
     static int32_t queuedPositionSteps[3];  // Last queued endpoints in steps, including the XY wobble correction.
-    static float queuedEPositionMM;        // Last queued logical E coordinate in mm.
-    static float queuedERemainderMM;
 
     static long maxSoftEndstopSteps[2];     // X/Y software endstops. Z limits belong to zMotion.
     static float axisLengthMM[3];           // Länge des überfahrbaren Bereichs im positiven Homing. (=Schienen-Fahrweg - Homing-Offset - 2x ExtruderOffset)
     static float feedrate;                  // Last requested feedrate.
     static int feedrateMultiply;            // Multiplier for feedrate in percent (factor 1 = 100)
     static float menuExtrusionFactor;       // Flow multiplier factor (1.0 = 100%)
-    static float extrudeMultiplyErrorSteps; // collects the extrusion error.
     static float maxXYJerk;                 // Maximum allowed jerk in mm/s
     static float maxZJerk;                  // Maximum allowed jerk in z direction in mm/s
     static speed_t vMaxReached[2];          // Maximumu reached speed
@@ -117,6 +115,7 @@ public:
     static PressureProtection pressureProtection;
     static StrainGauge strainGauge;
     static StartLine startLine;
+    static ExtrusionPlanner extrusionPlanner;
     static PrintPause pause;
     static PrintStop printStop;
     static char ZMode;                      // Z Scale
@@ -634,8 +633,7 @@ public:
     }
     static INLINE void setEPositionMM(float e, float remainder = 0.0f) {
         setDestinationMM(E_AXIS, e, remainder);
-        queuedEPositionMM = e;
-        queuedERemainderMM = remainder;
+        extrusionPlanner.setLogicalPosition({e, remainder});
     }
 
     static INLINE void setDestinationMM(uint8_t axis, float target, float remainder = 0.0f) {

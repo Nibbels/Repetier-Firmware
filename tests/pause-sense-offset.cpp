@@ -106,6 +106,7 @@ void WRITE(int pin, bool high);
 #include "PressureProtection.h"
 #include "StrainGauge.h"
 #include "StartLine.h"
+#include "ExtrusionPlanner.h"
 
 #define PSTR(text) (text)
 #define UI_STATUS_UPD(text) ((void)0)
@@ -168,6 +169,7 @@ ZOffset zOffset;
 SenseOffsetControl senseOffsetControl{SENSIBLE_PRESSURE_MAX_OFFSET};
 PressureProtection pressureProtection;
 StrainGauge strainGauge;
+ExtrusionPlanner extrusionPlanner;
 ZMotion zMotion(zStepsPerMm);
 PrintLayers layers{zStepsPerMm};
 DigitCompensation digitCompensation{
@@ -181,13 +183,13 @@ struct DirectDisplacement {
 };
 DirectDisplacement directPosition(uint8_t axis) { return {directCurrentSteps[axis]}; }
 int32_t queuedPositionSteps[3] = {};
-float axisStepsPerMM[3] = { 160.0f, 160.0f, zStepsPerMm };
+float axisStepsPerMM[4] = { 160.0f, 160.0f, zStepsPerMm, 280.0f };
 float axisMMPerSteps[3] = { 1.0f / 160, 1.0f / 160, 1.0f / zStepsPerMm };
 float homingFeedrate[3] = { 60.0f, 60.0f, 5.0f };
 float axisLengthMM[3] = { 170.0f, 245.0f, 200.0f };
 long maxSoftEndstopSteps[2] = { 170 * 160L, 245 * 160L };
 float destinationMM[4] = {}, destinationRemainderMM[4] = {};
-float extrudeMultiplyErrorSteps = 0.0f, menuExtrusionFactor = 1.0f;
+float menuExtrusionFactor = 1.0f;
 bool relativeExtruderCoordinateMode = false;
 float compensatedPositionOverPercE = 0.0f;
 float compensatedPositionCollectTinyE = 0.0f;
@@ -238,10 +240,9 @@ void queueRelativeMMCoordinates(float, float, float z, float, float, bool, bool 
 void setXAxisSteps(long) {}
 void setYAxisSteps(long) {}
 void setZAxisSteps(long steps) { zMotion.setNominalSteps(steps); }
-void setEPositionMM(float value, float remainder = 0) {
-    destinationMM[E_AXIS] = value;
-    destinationRemainderMM[E_AXIS] = remainder;
-}
+void setDestinationMM(uint8_t axis, float target, float remainder = 0.0f);
+void setEPositionMM(float value, float remainder = 0.0f);
+void addDestinationMM(uint8_t axis, float distance);
 void queueFloatCoordinates(float x, float y, float z, float e, float speed) {
     assert(startLine.active() && !printStop.commandsBlocked());
     ++primeMoves;
@@ -255,7 +256,7 @@ void queueFloatCoordinates(float x, float y, float z, float e, float speed) {
         zMotion.setNominalSteps(std::lround(z * axisStepsPerMM[Z_AXIS]));
     if (e != IGNORE_COORDINATE) {
         setEPositionMM(e);
-        extrudeMultiplyErrorSteps = 0.375f;
+        extrusionPlanner.restoreStepRemainder(0.375f);
         compensatedPositionCollectTinyE = 0.25f;
     }
 }
@@ -1233,7 +1234,7 @@ void primeFlowCleanup(unsigned skipAt, unsigned abortAt) {
     Printer::layers.resetTracking();
     planMove(512, true);
     Printer::setEPositionMM(10.0f, 0.00001f);
-    Printer::extrudeMultiplyErrorSteps = 0.125f;
+    Printer::extrusionPlanner.restoreStepRemainder(0.125f);
     Printer::compensatedPositionCollectTinyE = 0.75f;
     Printer::relativeExtruderCoordinateMode = true;
     Printer::feedrateMultiply = 85;
@@ -1270,7 +1271,7 @@ void primeFlowCleanup(unsigned skipAt, unsigned abortAt) {
         assert(Printer::printStop.commandsBlocked() && Printer::destinationMM[E_AXIS] == 0.0f);
     } else {
         assert(Printer::destinationMM[E_AXIS] == 10.0f && Printer::destinationRemainderMM[E_AXIS] == 0.00001f);
-        assert(Printer::extrudeMultiplyErrorSteps == 0.125f && Printer::compensatedPositionCollectTinyE == 0.75f);
+        assert(Printer::extrusionPlanner.stepRemainder() == 0.125f && Printer::compensatedPositionCollectTinyE == 0.75f);
     }
 }
 
@@ -1304,6 +1305,35 @@ void primeParameters() {
     assert(firstPrimeSegment.speed == 50.0f && firstPrimeSegment.y == 122.5f);
     assert(std::abs(firstPrimeSegment.x - 15.35f) < 0.00001f);
     assert(std::abs(firstPrimeSegment.e - 0.0175f) < 0.00001f);
+}
+
+void extrusionPlanning() {
+    Printer::axisStepsPerMM[E_AXIS] = 1.0f;
+    Printer::setEPositionMM(0);
+    Printer::addDestinationMM(E_AXIS, 0.5f);
+    assert(planExtrusionMove() == 1 && Printer::extrusionPlanner.stepRemainder() == -0.5f);
+
+    // G92 rebases the logical position while retaining the motor-step carry.
+    Printer::setEPositionMM(10.0f, 0.00001f);
+    assert(planExtrusionMove() == 0 && Printer::extrusionPlanner.stepRemainder() == -0.5f);
+    Printer::addDestinationMM(E_AXIS, 0.5f);
+    assert(planExtrusionMove() == 0 && Printer::extrusionPlanner.stepRemainder() == 0.0f);
+
+    Printer::menuExtrusionFactor = 0.5f;
+    Printer::addDestinationMM(E_AXIS, 1.0f);
+    assert(planExtrusionMove() == 1);
+    Printer::addDestinationMM(E_AXIS, -1.0f);
+    assert(planExtrusionMove() == -1 && Printer::extrusionPlanner.stepRemainder() == 0.0f);
+
+    Printer::setEPositionMM(0);
+    Printer::menuExtrusionFactor = 1.0f;
+    Printer::axisStepsPerMM[E_AXIS] = 280.0f;
+    int32_t steps = 0;
+    for (int i = 0; i < 100000; ++i) {
+        Printer::addDestinationMM(E_AXIS, 0.008f);
+        steps += planExtrusionMove();
+    }
+    assert(steps == 224000);
 }
 
 void initializeOffsets() {
@@ -1375,6 +1405,8 @@ int main(int argc, char** argv) {
         pressureStop();
     else if (!std::strcmp(argv[1], "digit-zero"))
         digitZero();
+    else if (!std::strcmp(argv[1], "extrusion-planning"))
+        extrusionPlanning();
     else
         return 1;
     std::printf("Print lifecycle replay passed (%s)\n", argv[1]);

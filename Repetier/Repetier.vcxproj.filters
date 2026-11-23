@@ -77,6 +77,9 @@
     <ClInclude Include="StartLine.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ExtrusionPlanner.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="Repetier.h">
       <Filter>Header Files</Filter>
     </ClInclude>

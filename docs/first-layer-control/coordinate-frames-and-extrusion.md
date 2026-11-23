@@ -75,7 +75,7 @@ As `C(x,y,z)` changes during fade-out, the true vertical separation between succ
 
 ## E: logical coordinate is not physical filament pushed
 
-For absolute-E G-code, the slicer's **logical E timeline** gives a requested change in filament length. The planner applies the flow multipliers and computes base E steps. It carries the fractional step in `[-0.5, 0.5)` and initializes each segment's pulse accumulator, including reused queue slots. Motion direction and distance use the resulting integer step count. ECMP and advance can add their own pulses during execution. [Extrusion quantization](../../Repetier/motion.cpp#L120-L161)
+For absolute-E G-code, the slicer's **logical E timeline** gives a requested change in filament length. `ExtrusionPlanner` compares the requested position with its last queued logical E, applies the flow multipliers and computes base E steps with fractional carry in `[-0.5, 0.5)`. The motion planner initializes each segment's pulse accumulator, including reused queue slots. Motion direction and distance use the resulting integer step count. ECMP and advance can add their own pulses during execution. [Extrusion quantization](../../Repetier/ExtrusionPlanner.h)
 
 `G92 E` sets both the destination and queued logical E coordinates and clears their millimetre remainders. The fractional motor-step carry survives, so setting a fractional E origin followed by a move to the same E value produces zero new base pulses. A push followed by an equal undo at an exact half-step also returns to the same count with constant flow. [G92 dispatch](../../Repetier/Commands.cpp#L394)
 
@@ -103,7 +103,7 @@ In relative E mode, firmware-generated absolute E coordinates remain internal to
 
 ## Two fractional E-step accumulators also cross the priming boundary
 
-- `Printer::extrudeMultiplyErrorSteps` is the **sub-step remainder** from mapping logical E movement (with menu flow and dynamic DMS flow multipliers) into integer motor steps during queue planning.
+- `Printer::extrusionPlanner.stepRemainder()` is the **sub-step remainder** from mapping logical E movement (with menu flow and dynamic DMS flow multipliers) into integer motor steps during queue planning.
 - `Printer::compensatedPositionCollectTinyE` is the **sub-step remainder** from adding geometric ECMP extrusion during step execution.
 
 Both previously spilled into M3912. The patched code **saves and restores both fractional E-step remainders** after the queue drains, with interrupt protection for the ECMP remainder. Hardware validation remains necessary.
@@ -114,7 +114,7 @@ At the freshly homed default `g_min=0.33 mm`, M3912 primes at nominal Z=0.35 mm,
 
 With the dynamic fade span determined from `(O-minB)*20`, the shape loss at the priming height is generally small. ECMP may still follow the corresponding fade slope. A physical test can quantify its effect on deposited material during priming.
 
-[Source: ECMP percent during fade](../../Repetier/RF.cpp#L3199-L3254) · [additional E-step accumulation](../../Repetier/motion.cpp#L1468-L1492) · [fractional E rounding](../../Repetier/motion.cpp#L125-L136).
+[ECMP percent during fade](../../Repetier/BedCompensation.h) · [additional E-step accumulation](../../Repetier/motion.cpp) · [fractional E rounding](../../Repetier/ExtrusionPlanner.h).
 
 ## Elastic Digit-Z correction during priming
 

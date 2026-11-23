@@ -21,6 +21,7 @@ def main():
     motion = (firmware / "motion.h").read_text(encoding="utf-8")
     move_planner = (firmware / "motion.cpp").read_text(encoding="utf-8")
     printer = (firmware / "Printer.cpp").read_text(encoding="utf-8")
+    printer_header = (firmware / "Printer.h").read_text(encoding="utf-8")
     eeprom = (firmware / "Eeprom.h").read_text(encoding="utf-8")
     pause = (firmware / "PrintPause.cpp").read_text(encoding="utf-8")
     stop = (firmware / "PrintStop.cpp").read_text(encoding="utf-8")
@@ -41,6 +42,12 @@ def main():
         section(rf, "static void serviceSenseOffset(", "\nvoid handleScanWorkTasks("),
         pause.removeprefix('#include "Repetier.h"\n'),
         stop.removeprefix('#include "Repetier.h"\n'),
+        "namespace Printer {\n"
+        + section(printer_header, "    static INLINE void setEPositionMM(", "\n    static void addDestinationMM(")
+        .replace("static INLINE void ", "void ")
+        .replace("float remainder = 0.0f", "float remainder")
+        + "\n}",
+        section(printer, "void Printer::addDestinationMM(", "\n// Convert G-code positions"),
         section(printer, "void Printer::stopPrint()", "\n#define START_EXTRUDER_CONFIG"),
         section(printer, "void Printer::homeZAxis()", "\nvoid Printer::homeAxis("),
         section(printer, "void Printer::enableSenseOffsetnow(", "\nvoid Printer::enableCMPnow("),
@@ -55,6 +62,9 @@ def main():
         "void trackPlannedLayer(PrintLine* p) {\n"
         + section(move_planner, "    if (!Printer::startLine.active())", "\n    // Define variables that are needed")
         + "}",
+        "int32_t planExtrusionMove() {\nint32_t steps;\n"
+        + section(move_planner, "            const float targetE =", "\n        } else {")
+        + "\nreturn steps;\n}",
         start_line.removeprefix('#include "Repetier.h"\n'),
         "void configureSenseOffset(GCode* pCommand) { switch (3909) {\n"
         + section(rf, "        case 3909:", "\n        case 3911:")
@@ -78,6 +88,7 @@ def main():
             "digit-flow", "prime-complete", "prime-skip", "prime-abort", "prime-parameters",
             "sense-window", "sense-settings", "sense-limit-interrupt",
             "pressure-pause", "pressure-stop", "digit-zero",
+            "extrusion-planning",
         ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
 

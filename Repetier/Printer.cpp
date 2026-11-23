@@ -44,8 +44,6 @@ uint8_t Printer::relativeExtruderCoordinateMode = false; // Determines Absolute 
 volatile float Printer::destinationMM[4] = { 0, 0, 0, 0 };
 float Printer::destinationRemainderMM[4] = { 0, 0, 0, 0 };
 int32_t Printer::queuedPositionSteps[3] = { 0, 0, 0 };
-float Printer::queuedEPositionMM = 0;
-float Printer::queuedERemainderMM = 0;
 float Printer::originOffsetMM[3] = { 0, 0, 0 };
 uint8_t Printer::flag0 = 0;
 uint8_t Printer::flag1 = 0;
@@ -69,7 +67,6 @@ float Printer::axisLengthMM[3] = { 0 };       // Länge des überfahrbaren Berei
 float Printer::feedrate = 10;                 // Last requested feedrate.
 int Printer::feedrateMultiply = 100;          // Multiplier for feedrate in percent (factor 100 = 100%)
 float Printer::menuExtrusionFactor = 1.0;     // Flow multiplier factor (1.0 = 100%)
-float Printer::extrudeMultiplyErrorSteps = 0;
 float Printer::maxXYJerk;                                         // Maximum allowed jerk in mm/s
 float Printer::maxZJerk;                                          // Maximum allowed jerk in z direction in mm/s
 unsigned int Printer::vMaxReached[2];                             // Maximum reached speed [FOR_DIRECT, FOR_QUEUE]
@@ -84,6 +81,7 @@ DigitCompensation Printer::digitCompensation{
 };
 PressureProtection Printer::pressureProtection;
 StrainGauge Printer::strainGauge;
+ExtrusionPlanner Printer::extrusionPlanner;
 char Printer::ZMode = DEFAULT_Z_SCALE_MODE;                       // Z-min distance or nominal layer height
 char Printer::moveMode[3];                                        // move mode which is applied within the Position X/Y/Z menus
 bool Printer::moveKosys = KOSYS_GCODE;                            // true = GCode, false = DirectMove / OffsetMove

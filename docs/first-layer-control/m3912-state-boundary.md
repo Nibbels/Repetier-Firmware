@@ -29,7 +29,7 @@ The previous print's spatial fade thresholds can still affect the generated prim
 | Digit Flow profile | Save, override limits with 1500/4500 or S/P and set speed to −90% and extrusion to −75% | Restore |
 | M82/M83 E-coordinate mode | Save, force absolute | Restore |
 | Logical slicer E coordinate | Save incoming value, use local E0 for prime | Restore incoming E unless print was cancelled |
-| `extrudeMultiplyErrorSteps` | Save planner sub-step E remainder | Restore on normal/skip completion |
+| `extrusionPlanner.stepRemainder()` | Save planner sub-step E remainder | Restore on normal/skip completion |
 | `compensatedPositionCollectTinyE` | Save ECMP fractional E remainder under interrupt protection | Restore on normal/skip completion |
 | DMS `feedrateFactor()` and `extrusionFactor()` | Continuously adapt to DMS force | Reset both to 1.0 |
 | DMS `intervalScale()` | Computed from the DMS speed factor | Reset to 0 atomically |

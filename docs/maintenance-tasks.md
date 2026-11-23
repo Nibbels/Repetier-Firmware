@@ -38,6 +38,12 @@ The four AVR builds matched the previous revision's CPU cycles and Z step counts
 
 - [x] **Use the configured Z maximum on the RF1000.** The RF1000 homes on its physical Z-min switch and limits travel toward Z-max in software. The factory setting is 195 mm and the stored Z height takes precedence. RF2000 and RF2000v2 use their separate Z-min and Z-max inputs. [Endstop configurations](development-roadmap.md#feature-retirement)
 
+### Extrusion planning
+
+- [x] **Give the planned E reference and base-step carry one owner.** The replay uses the production destination update and planner arithmetic. It checks `G92` with a fractional origin, a half-step reversal with a flow multiplier and 100,000 relative 0.008 mm moves, which yield 224,000 steps at 280 steps/mm. The priming replay checks restoration of the base-step carry. [Planner](../Repetier/ExtrusionPlanner.h) · [Host replay](../tests/pause-sense-offset.py)
+
+The pressure protection, sensor, start-line and extrusion-planner extractions together use 368–410 fewer flash bytes and 3 more bytes of global SRAM than `777525c`. The final 36 instruction traces reproduce the previous Z step counts and cycles. Physical verification remains open.
+
 ### Wobble correction
 
 - [x] **Keep the WobbleFix offset out of the retained G-code target.** Previously, each absolute `G1 Y…` added another 100 µm to X with an X amplitude of 100 µm at machine Z=0 and phase zero. The planner now adds the correction to the step endpoint. In a host replay, all 50 Y-only moves retained the same X after the first corrected target. Relative moves, `G92`, E-only moves, homing resets and software limits also passed. Physical verification remains open. [Correction](../Repetier/Printer.cpp#L255) · [Step endpoint](../Repetier/Printer.cpp#L285)

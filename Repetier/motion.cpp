@@ -115,23 +115,8 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
         if (axis == E_AXIS) {
             const float targetE = Printer::destinationMM[E_AXIS];
             const float targetRemainder = Printer::destinationRemainderMM[E_AXIS];
-            const float requestedMM = (targetE - Printer::queuedEPositionMM) + (targetRemainder - Printer::queuedERemainderMM);
             const float flow = Printer::menuExtrusionFactor * Printer::digitCompensation.extrusionFactor();
-
-            const float requestedSteps = requestedMM * flow * Printer::axisStepsPerMM[E_AXIS];
-            steps = lroundf(requestedSteps);
-            // Add the fractional parts at step scale. Keep the remainder in [-0.5, 0.5).
-            float remainder = (requestedSteps - steps) + Printer::extrudeMultiplyErrorSteps;
-            if (remainder >= 0.5f) {
-                ++steps;
-                remainder -= 1.0f;
-            } else if (remainder < -0.5f) {
-                --steps;
-                remainder += 1.0f;
-            }
-            Printer::extrudeMultiplyErrorSteps = remainder;
-            Printer::queuedEPositionMM = targetE;
-            Printer::queuedERemainderMM = targetRemainder;
+            steps = Printer::extrusionPlanner.planSteps({targetE, targetRemainder}, flow, Printer::axisStepsPerMM[E_AXIS]);
         } else {
             const int32_t targetSteps = Printer::prepareDestinationSteps(axis);
             steps = targetSteps - Printer::queuedPositionSteps[axis];

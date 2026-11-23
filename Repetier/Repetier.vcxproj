@@ -136,6 +136,7 @@
     <ClInclude Include="PressureProtection.h" />
     <ClInclude Include="StrainGauge.h" />
     <ClInclude Include="StartLine.h" />
+    <ClInclude Include="ExtrusionPlanner.h" />
     <ClInclude Include="Repetier.h" />
     <ClInclude Include="RF.h" />
     <ClInclude Include="RF1000.h" />
