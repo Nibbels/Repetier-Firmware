@@ -261,10 +261,7 @@ typedef struct
 
 extern const int8_t encoder_table[16] PROGMEM;
 
-extern millis_t g_nAutoReturnTime;
-extern bool g_nAutoReturnMessage;
 
-extern char g_nYesNo;
 
 // Key codes
 #define UI_KEYS_INIT_CLICKENCODER_LOW(pinA, pinB) \
@@ -546,10 +543,6 @@ public:
     uint8_t menuTop[MAX_MENU_LEVELS]; // Top row in menu
     int8_t shift;                     // Display shift for scrolling text
     int pageDelay;                    // Counter. If 0 page is refreshed if menuLevel is 0.
-    const void* messageLine1;
-    const void* messageLine2;
-    const void* messageLine3;
-    const void* messageLine4;
     int activeAction; // action for ok/next/previous
     int lastAction;
     volatile int jogButtonAction; // Key that started the current stoppable move.
@@ -603,7 +596,8 @@ public:
     void mainSwitchCase(int action);
 
     void fastAction();
-    void showMessage(bool refresh);
+    void showMessage(const void* line1, const void* line2, const void* line3, const void* line4);
+    void scheduleMessageReturn(millis_t deadline);
     void pushMenu(void* men, bool refresh);
     void adjustMenuPos();
     void setStatusP(PGM_P txt, bool error = false);
@@ -613,6 +607,15 @@ public:
     void lock();
     void unlock();
     void exitmenu();
+
+private:
+    const void* messageLine1;
+    const void* messageLine2;
+    const void* messageLine3;
+    const void* messageLine4;
+    millis_t autoReturnTime_ = 0;
+    bool autoReturnMessage_ = false;
+    char confirmation_ = 0;
 };
 
 extern UIDisplay uid;

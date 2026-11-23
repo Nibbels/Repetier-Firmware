@@ -49,8 +49,10 @@ ScanSettings scanSettings = [] {
 }();
 uint8_t g_uZMatrixMax[2] = {9, 9}, g_ZMatrixChangedInRam = 0;
 short g_ZCompensationMatrix[COMPENSATION_MATRIX_MAX_X][COMPENSATION_MATRIX_MAX_Y];
-bool g_nAutoReturnMessage = false;
-uint32_t g_nAutoReturnTime = 0;
+struct {
+    uint32_t messageReturnAt = 0;
+    void scheduleMessageReturn(uint32_t deadline) { messageReturnAt = deadline; }
+} uid;
 
 unsigned homedZ = 0, homedXY = 0, reported = 0, positiveRetryRetreats = 0, loaded = 0, shutdowns = 0, serviced = 0;
 unsigned corrected = 0, pressureSamples = 0, tickCount = 0, negativeMoves = 0;
@@ -258,7 +260,7 @@ int main(int argc, char** argv) {
         assert(abortedWith == ScanAbort::MissingMatrix && shutdowns == 1);
         assert(tickCount == 4 && loaded == 1 && homedZ == 2 && !reported && !corrected);
     } else {
-        assert(abortedWith == ScanAbort::None && reported == 1 && g_nAutoReturnMessage && g_ZMatrixChangedInRam);
+        assert(abortedWith == ScanAbort::None && reported == 1 && uid.messageReturnAt != 0 && g_ZMatrixChangedInRam);
         assert(homedZ == (level ? 7u : 1u) && corrected == homedZ && homedXY == homedZ);
         assert(loaded == 1 && negativeMoves > 0);
         const int checkIndex = tinyMatrix ? 2 : 4;

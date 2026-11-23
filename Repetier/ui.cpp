@@ -28,10 +28,7 @@ extern const int8_t encoder_table[16] PROGMEM;
 
 constexpr millis_t menuAutoReturnDelayMs = 120000;
 
-millis_t g_nAutoReturnTime = 0;
-bool g_nAutoReturnMessage = false;
 
-char g_nYesNo = 0; // 0 = no, 1 = yes
 
 bool UIMenuEntry::showEntry() const {
     bool ret = true;
@@ -996,13 +993,13 @@ void UIDisplay::parse(char* txt, bool ram) {
         case 'm': {
             if (c2 == 'Y' && col < MAX_COLS) // %mY : menu yes
             {
-                if (g_nYesNo)
+                if (confirmation_)
                     printCols[col++] = CHAR_SELECTED;
                 else
                     printCols[col++] = ' ';
             } else if (c2 == 'N' && col < MAX_COLS) // %mN : menu no
             {
-                if (g_nYesNo)
+                if (confirmation_)
                     printCols[col++] = ' ';
                 else
                     printCols[col++] = CHAR_SELECTED;
@@ -1868,7 +1865,7 @@ void UIDisplay::refreshPage() {
 
     // Reset timeout on menu back when user active on menu
     if (encoderLast != encoderStartScreen)
-        g_nAutoReturnTime = HAL::timeInMilliseconds() + menuAutoReturnDelayMs;
+        autoReturnTime_ = HAL::timeInMilliseconds() + menuAutoReturnDelayMs;
 
     encoderStartScreen = encoderLast;
 
@@ -1985,13 +1982,19 @@ void UIDisplay::refreshPage() {
     }
 } // refreshPage
 
-void UIDisplay::showMessage(bool refresh) {
-    pushMenu((void*)&ui_menu_message, refresh);
+void UIDisplay::showMessage(const void* line1, const void* line2, const void* line3, const void* line4) {
+    messageLine1 = line1;
+    messageLine2 = line2;
+    messageLine3 = line3;
+    messageLine4 = line4;
+    pushMenu((void*)&ui_menu_message, true);
+    autoReturnTime_ = 0;
+}
 
-    // show this message until the user acknowledges it
-    g_nAutoReturnTime = 0;
-
-} // showMessage
+void UIDisplay::scheduleMessageReturn(millis_t deadline) {
+    autoReturnMessage_ = true;
+    autoReturnTime_ = deadline;
+}
 
 void UIDisplay::pushMenu(void* men, bool refresh) {
     if (men == menu[menuLevel]) {
@@ -2164,7 +2167,7 @@ void UIDisplay::backAction() {
 #endif // RGB_LIGHT_R_PIN
         menuEsc();
         activeAction = 0;
-        g_nYesNo = 0;
+        confirmation_ = 0;
     }
 } // backAction
 
@@ -2228,7 +2231,7 @@ void UIDisplay::adjustMenuPos() {
 void UIDisplay::finishAction(int action) {
     switch (action) {
     case UI_ACTION_RF_RESET_ACK: {
-        if (g_nYesNo != 1) {
+        if (confirmation_ != 1) {
             // continue only in case the user has chosen "Yes"
             break;
         }
@@ -2239,7 +2242,7 @@ void UIDisplay::finishAction(int action) {
     }
 
     case UI_ACTION_STOP_ACK: {
-        if (g_nYesNo != 1) {
+        if (confirmation_ != 1) {
             // continue only in case the user has chosen "Yes"
             break;
         }
@@ -2249,7 +2252,7 @@ void UIDisplay::finishAction(int action) {
     }
 
     case UI_ACTION_RESTORE_DEFAULTS: {
-        if (g_nYesNo != 1 || !Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Cancel)) {
+        if (confirmation_ != 1 || !Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Cancel)) {
             // continue only in case the user has chosen "Yes"
             break;
         }
@@ -2265,7 +2268,7 @@ void UIDisplay::finishAction(int action) {
     case UI_ACTION_CHOOSE_CLASSICPID:
     case UI_ACTION_CHOOSE_NO:
     case UI_ACTION_CHOOSE_TYREUS_LYBEN: {
-        if (g_nYesNo != 1) {
+        if (confirmation_ != 1) {
             // continue only in case the user has chosen "Yes"
             break;
         }
@@ -2792,7 +2795,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
     case UI_ACTION_CHOOSE_CLASSICPID:
     case UI_ACTION_CHOOSE_NO:
     case UI_ACTION_CHOOSE_TYREUS_LYBEN: {
-        INCREMENT_MIN_MAX(g_nYesNo, 1, 0, 1);
+        INCREMENT_MIN_MAX(confirmation_, 1, 0, 1);
         break;
     }
 
@@ -3203,7 +3206,7 @@ void UIDisplay::mainSwitchCase(int action) {
         */
     case UI_ACTION_OK: {
         okAction();
-        g_nYesNo = 0;
+        confirmation_ = 0;
         break;
     }
     case UI_ACTION_BACK: {
@@ -3803,7 +3806,7 @@ void UIDisplay::nextPreviousAction(int8_t next) {
 
     changeSwitchCase(action, -next);
 
-    g_nAutoReturnTime = HAL::timeInMilliseconds() + menuAutoReturnDelayMs;
+    autoReturnTime_ = HAL::timeInMilliseconds() + menuAutoReturnDelayMs;
 } // nextPreviousAction
 
 // Actions are events from user input. Depending on the current state, each
@@ -3829,7 +3832,7 @@ void UIDisplay::executeAction(int action) {
 
     refreshPage();
 
-    g_nAutoReturnTime = HAL::timeInMilliseconds() + menuAutoReturnDelayMs;
+    autoReturnTime_ = HAL::timeInMilliseconds() + menuAutoReturnDelayMs;
 } // executeAction
 
 void UIDisplay::slowAction() {
@@ -3886,14 +3889,14 @@ void UIDisplay::slowAction() {
     }
     noInts.unprotect(); //HAL::allowInterrupts();
 
-    if (menuLevel > 0 && g_nAutoReturnTime && g_nAutoReturnTime < time) {
-        if (menu[menuLevel] != &ui_menu_message || g_nAutoReturnMessage) {
+    if (menuLevel > 0 && autoReturnTime_ && autoReturnTime_ < time) {
+        if (menu[menuLevel] != &ui_menu_message || autoReturnMessage_) {
             lastSwitch = time;
             exitmenu();
             activeAction = 0;
-            g_nAutoReturnMessage = false;
+            autoReturnMessage_ = false;
         }
-        g_nAutoReturnTime = 0;
+        autoReturnTime_ = 0;
     }
 
     if (menuLevel == 0 && time > 4000) {

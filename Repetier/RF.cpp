@@ -1687,8 +1687,7 @@ void ZOffsetScan::reportScrewAdjustment() {
     calculateZScrewCorrection();
 
     showMyPage((void*)ui_text_heat_bed_zoffset_search_status, (void*)ui_text_heat_bed_zoffset_fix_z1, (void*)ui_text_heat_bed_zoffset_fix_z2, (void*)ui_text_statusmsg);
-    g_nAutoReturnMessage = true;
-    g_nAutoReturnTime = HAL::timeInMilliseconds() + 30000;
+    uid.scheduleMessageReturn(HAL::timeInMilliseconds() + 30000);
     Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 30000);
 
     //Printer::zMotion.scanSteps() is 0 now.
@@ -6167,46 +6166,22 @@ void showIdle(void) {
 } // showIdle
 
 void showError(const void* line2, const void* line3, const void* line4) {
-    uid.messageLine1 = (const void*)ui_text_error;
-    uid.messageLine2 = line2;
-    uid.messageLine3 = line3;
-    uid.messageLine4 = line4;
-
-    uid.showMessage(true);
-    return;
+    uid.showMessage((const void*)ui_text_error, line2, line3, line4);
 
 } // showError
 
 void showWarning(const void* line2, const void* line3, const void* line4) {
-    uid.messageLine1 = (const void*)ui_text_warning;
-    uid.messageLine2 = line2;
-    uid.messageLine3 = line3;
-    uid.messageLine4 = line4;
-
-    uid.showMessage(true);
-    return;
+    uid.showMessage((const void*)ui_text_warning, line2, line3, line4);
 
 } // showWarning
 
 void showInformation(const void* line2, const void* line3, const void* line4) {
-    uid.messageLine1 = (const void*)ui_text_information;
-    uid.messageLine2 = line2;
-    uid.messageLine3 = line3;
-    uid.messageLine4 = line4;
-
-    uid.showMessage(true);
-    return;
+    uid.showMessage((const void*)ui_text_information, line2, line3, line4);
 
 } // showInformation
 
 void showMyPage(const void* line1, const void* line2, const void* line3, const void* line4) {
-    uid.messageLine1 = line1;
-    uid.messageLine2 = line2;
-    uid.messageLine3 = line3;
-    uid.messageLine4 = line4;
-
-    uid.showMessage(true);
-    return;
+    uid.showMessage(line1, line2, line3, line4);
 
 } // showMyPage
 
