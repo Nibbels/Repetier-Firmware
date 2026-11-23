@@ -218,7 +218,7 @@ int extruderStepsNeeded = 0;
 bool advanceActive = false;
 volatile char doHeatBedZCompensation = true;
 bool printing = true, menuPaused = false;
-bool axesHomed = true, movingZ = false;
+bool axesHomed = true;
 int feedrateMultiply = 100, motorCurrent[4] = {};
 char moveMode[3] = { MOVE_MODE_SINGLE_STEPS, MOVE_MODE_SINGLE_STEPS, MOVE_MODE_SINGLE_STEPS };
 
@@ -232,7 +232,6 @@ bool isPrinting() { return printing; }
 void setPrinting(bool active) { printing = active; }
 bool areAxisHomed() { return axesHomed; }
 bool isAxisHomed(int) { return true; }
-bool isZMoveActive() { return movingZ; }
 bool isMinEndstopHit(uint8_t axis) { return xyMinHit[axis]; }
 bool isMaxEndstopHit(uint8_t axis) { return xyMaxHit[axis]; }
 void stopDirectAxis(uint8_t axis) { stoppedDirectAxis = axis; }
@@ -393,12 +392,19 @@ struct PrintLine {
     bool isEPositiveMove() const { return positiveE; }
     bool isXOrYMove() const { return moveXY; }
 
-    static struct Direct { int task = TASK_NO_TASK; } direct;
+    static struct Direct {
+        int task = TASK_NO_TASK;
+        int32_t stepsRemaining = 0;
+        bool moveZ = false;
+        bool isZMove() const { return moveZ; }
+    } direct;
     static MoveQueue queue;
     static uint8_t insertWaitMovesIfNeeded(uint8_t pathOptimize, uint8_t waitExtraLines);
     static int linesCount;
     static int queuedTask, stopRequests;
     static bool hasLines() { return linesCount; }
+    static bool directMoveActive() { return direct.task != TASK_NO_TASK; }
+    static bool hasActiveZMove();
     static int queuedMoveCount() { return linesCount; }
     static bool hasStoppableDirectMove();
     static bool hasQueuedOvertravel() { return false; }
@@ -591,7 +597,9 @@ void pressureStop() {
     assert(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN) == -12000);
     assert(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX) == 11500);
 
-    Printer::movingZ = true;
+    PrintLine::direct.task = DIRECT_RUNNING;
+    PrintLine::direct.stepsRemaining = 1;
+    PrintLine::direct.moveZ = true;
     Extruder::current->stepperDirection = 1;
     forceDigits = 11501;
     auto advance = [](millis_t elapsed) {
@@ -617,7 +625,8 @@ void pressureStop() {
     sample(-12001);
     assert(Printer::pressureProtection.extrusionBlocked() && pressureStops == 1);
 
-    Printer::movingZ = false;
+    PrintLine::direct.task = TASK_NO_TASK;
+    PrintLine::direct.stepsRemaining = 0;
     command.explicitS = command.explicitP = true;
     command.S = command.P = 0;
     Printer::infoLogging = true;
@@ -1604,8 +1613,10 @@ void moveQueue() {
         assert(queue.count() == count && queue.active() == nullptr);
     }
     assert(g_uStartOfIdle == 500);
-    queue.activateFront();
+    queue.activateFront()->moveZ = true;
+    assert(PrintLine::hasActiveZMove() && interruptsEnabled);
     queue.clear();
+    assert(!PrintLine::hasActiveZMove() && interruptsEnabled);
     assert(queue.count() == 0 && queue.active() == nullptr);
     assert(queue.readIndex() == MOVE_CACHE_SIZE - 1 && queue.writeIndex() == queue.readIndex());
 

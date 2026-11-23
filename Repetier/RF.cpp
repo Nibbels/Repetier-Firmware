@@ -2985,7 +2985,7 @@ void handleStrainGaugeFeatures(millis_t uTime) {
     }
 
     if (stopDue && protection.checkStop(uTime, pressure)
-        && Printer::isZMoveActive() && !Extruder::current->stepperDirection)
+        && PrintLine::hasActiveZMove() && !Extruder::current->stepperDirection)
         doEmergencyStop(STOP_BECAUSE_OF_Z_BLOCK);
 }
 
@@ -5333,7 +5333,7 @@ void moveXAction(int8_t direction) {
         break;
     }
     case MOVE_MODE_SINGLE_MOVE: {
-        if (PrintLine::direct.task) {
+        if (PrintLine::directMoveActive()) {
             // we are moving already, there is nothing more to do
             return;
         }
@@ -5429,7 +5429,7 @@ void moveYAction(int8_t direction) {
         break;
     }
     case MOVE_MODE_SINGLE_MOVE: {
-        if (PrintLine::direct.task) {
+        if (PrintLine::directMoveActive()) {
             // we are moving already, there is nothing more to do
             return;
         }
@@ -5531,7 +5531,7 @@ void moveZAction(int8_t direction) {
         break;
     }
     case MOVE_MODE_SINGLE_MOVE: {
-        if (PrintLine::direct.task) {
+        if (PrintLine::directMoveActive()) {
             // we are moving already, there is nothing more to do
             return;
         }

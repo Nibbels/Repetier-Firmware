@@ -9,7 +9,7 @@ void PrintStop::service(uint32_t now) {
         GCode::readFromSerial();
         if (static_cast<int32_t>(now - phaseSince_) <= 2000)
             return;
-        if (PrintLine::hasLines() || PrintLine::direct.task) {
+        if (PrintLine::hasLines() || PrintLine::directMoveActive()) {
             phaseSince_ = now;
             return;
         }

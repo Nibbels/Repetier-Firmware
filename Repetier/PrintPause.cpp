@@ -87,7 +87,7 @@ bool PrintPause::resume() {
 
         if (PrintLine::hasStoppableDirectMove())
             PrintLine::stopDirectMove();
-        else if (PrintLine::direct.task)
+        else if (PrintLine::directMoveActive())
             return false;
 
         phase_ = Phase::Reheating;
@@ -124,7 +124,7 @@ void PrintPause::cancel() {
 }
 
 void PrintPause::serviceMotion() {
-    if (PrintLine::direct.task || Printer::blockAll)
+    if (PrintLine::directMoveActive() || Printer::blockAll)
         return;
 
     switch (phase_) {
@@ -166,7 +166,7 @@ void PrintPause::serviceStandby(uint32_t now) {
 bool PrintPause::allowsManualMove() const {
     if (allowsQueueAdvance())
         return true;
-    return isSettled() && !PrintLine::direct.task;
+    return isSettled() && !PrintLine::directMoveActive();
 }
 
 int32_t PrintPause::limitZJog(int32_t steps) const {

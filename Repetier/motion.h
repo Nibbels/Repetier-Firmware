@@ -52,6 +52,7 @@ class UIDisplay;
 class MoveQueue;
 class PrintLine {
     friend class UIDisplay;
+    friend class MoveQueue;
 
 public:
     flag8_t joinFlags;
@@ -59,6 +60,7 @@ public:
 
 private:
     static MoveQueue queue;
+    static PrintLine direct;
     flag8_t primaryAxis;
     int32_t timeInTicks;
     flag8_t dir;                 ///< Direction of movement. 1 = X+, 2 = Y+, 4= Z+, values can be combined.
@@ -89,11 +91,11 @@ private:
     void setAxisSteps(uint8_t axis, int32_t steps);
     void setSegmentGeometry(const float axisDistanceMM[]);
 
-public:
     int32_t stepsRemaining; ///< Remaining steps, until move is finished
-    char task;
-    static PrintLine direct;
+    volatile char task;
 
+public:
+    static bool directMoveActive() { return direct.task != DIRECT_IDLE; }
     static bool hasStoppableDirectMove() {
         const char task = direct.task;
         return task == DIRECT_PREPARED_STOPPABLE || task == DIRECT_RUNNING_STOPPABLE;
@@ -349,7 +351,7 @@ public:
     static uint8_t queuedMoveCount();
     static INLINE bool hasLines() { return queuedMoveCount() != 0; }
     static bool hasActiveQueuedMove();
-    static bool hasActiveQueuedZMove();
+    static bool hasActiveZMove();
     static void discardQueuedMoves();
 
     static inline void computeMaxJunctionSpeed(PrintLine* previous, PrintLine* current);

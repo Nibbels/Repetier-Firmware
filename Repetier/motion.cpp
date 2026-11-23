@@ -74,8 +74,10 @@ uint8_t fanSpeed = 0;
 MoveQueue PrintLine::queue;
 PrintLine PrintLine::direct;
 
-bool PrintLine::hasActiveQueuedZMove() {
+bool PrintLine::hasActiveZMove() {
     InterruptProtectedBlock lock;
+    if (direct.stepsRemaining && direct.isZMove())
+        return true;
     PrintLine* active = queue.active();
     return active && active->isZMove();
 }

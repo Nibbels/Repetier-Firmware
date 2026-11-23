@@ -271,13 +271,6 @@ inline bool isExtrusionAllowed(float e) {
     return true;
 }
 
-bool Printer::isZMoveActive() {
-    if (PrintLine::direct.stepsRemaining && PrintLine::direct.isZMove()) {
-        return true;
-    }
-    return PrintLine::hasActiveQueuedZMove();
-}
-
 /**
 * Set the printers feedrate according to active unit settings
 */
@@ -380,7 +373,7 @@ void Printer::offsetRelativeStepsCoordinates(int32_t dx, int32_t dy, int32_t dz,
         if (configuration && !pause.allowsManualMove())
             return;
 
-        while (PrintLine::direct.task) {
+        while (PrintLine::directMoveActive()) {
             // If another offset move is going on, we have to wait
             Commands::checkForPeriodicalActions(Processing);
         }
@@ -412,7 +405,7 @@ void Printer::offsetRelativeStepsCoordinates(int32_t dx, int32_t dy, int32_t dz,
         //release Interrupts for processing
         noInts.unprotect();
 
-        while (PrintLine::direct.task) {
+        while (PrintLine::directMoveActive()) {
             // Wait until this offset move is finished. Otherwise could be interrupted by queue-moves and end up directStepping
             Commands::checkForPeriodicalActions(Processing);
         }
@@ -1152,7 +1145,7 @@ void Printer::stopPrint() {
 
     InterruptProtectedBlock noInts;
     printStop.begin(HAL::timeInMilliseconds());
-    if (pause.isPaused() && PrintLine::direct.task)
+    if (pause.isPaused() && PrintLine::directMoveActive())
         PrintLine::stopDirectMove();
     pause.cancel();
 

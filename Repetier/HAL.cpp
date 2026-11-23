@@ -623,7 +623,7 @@ ISR(TIMER1_COMPA_vect) {
 
     OCR1A = 61000;
 
-    if (!PrintLine::hasActiveQueuedMove() && PrintLine::direct.task == TASK_NO_TASK) {
+    if (!PrintLine::hasActiveQueuedMove() && !PrintLine::directMoveActive()) {
         PrintLine::stepSlowedZCompensation(); // Z is free here.
         // Wait if the z-CMP is under heavy workload
         if (PrintLine::needCmpWait()) {
@@ -635,7 +635,7 @@ ISR(TIMER1_COMPA_vect) {
         }
     }
 
-    if (PrintLine::direct.task) {
+    if (PrintLine::directMoveActive()) {
         setTimer(PrintLine::performDirectMove());
         sbi(TIMSK1, OCIE1A);
 

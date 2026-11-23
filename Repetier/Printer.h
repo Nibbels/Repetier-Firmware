@@ -605,7 +605,6 @@ public:
     static void updateDerivedParameter();
     static void switchEverythingOff();
     static void updateAdvanceActivated();
-    static bool isZMoveActive();
 
     static INLINE void setXAxisSteps(int32_t x) {
         InterruptProtectedBlock noInts;

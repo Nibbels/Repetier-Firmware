@@ -47,7 +47,7 @@ def main():
         .replace("static INLINE void ", "void ")
         .replace("float remainder = 0.0f", "float remainder")
         + "\n}",
-        section(printer, "inline bool isExtrusionAllowed(", "\nbool Printer::isZMoveActive("),
+        section(printer, "inline bool isExtrusionAllowed(", "\n/**\n* Set the printers feedrate"),
         section(printer, "void Printer::updateWobbleFixOffsets(", "\ninline bool isExtrusionAllowed("),
         section(printer, "void Printer::setFeedrate(", "\n/** Move to machine coordinates"),
         section(printer, "void Printer::stopPrint()", "\n#define START_EXTRUDER_CONFIG"),
@@ -74,6 +74,7 @@ def main():
         section(motion, "#define FLAG_WARMUP", "\n#define DIRECT_IDLE"),
         section(motion, "class MoveQueue {", "\ninline uint8_t PrintLine::queuedMoveCount"),
         "MoveQueue PrintLine::queue;\nconst int waitRelax = 0;",
+        section(move_planner, "bool PrintLine::hasActiveZMove()", "\nvoid PrintLine::setAxisSteps("),
         section(move_planner, "uint8_t PrintLine::insertWaitMovesIfNeeded(", "\nvoid PrintLine::waitForXFreeLines("),
         "void rescalePlannedAxis(uint8_t axis) {\nusing namespace Printer;\n"
         + section(printer, "        const float mmPerStep = 1.0f / axisStepsPerMM[axis];", "\n\n        /** Acceleration")

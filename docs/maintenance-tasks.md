@@ -23,6 +23,7 @@ Firmware changes are tracked on `ai-firmware-review` against `community_developm
 - [x] **Share segment geometry between queued and direct motion.** Both paths use the same signed step setup, primary-axis selection and distance calculation. The replay covers equal step counts in multiple axes, mixed XYZ/E and an E-only retract. [Segment geometry](../Repetier/motion.cpp) · [Replay](../tests/pause-sense-offset.py)
 - [x] **Initialize the task field of every warm-up entry.** A queue replay discarded 23 commands and then wrapped the four warm-up entries through slot zero. Previously the reused slot still held a discarded M3000 task, which the dispatcher would run before inspecting the warm-up flag. Now all four entries contain only a warm-up. [Queue warm-up](../Repetier/motion.cpp)
 - [x] **Give the motion buffer one owner.** `MoveQueue` owns the slots, indices, occupancy and active entry. The replay covers publishing, cancellation, wraparound, temporary release while waiting and interrupt-protected retirement. [Motion buffer](../Repetier/motion.h) · [Replay](../tests/pause-sense-offset.py)
+- [x] **Keep the direct segment inside the motion executor.** Timer1, pause, panel moves and print stop query its state through dedicated methods. The DMS stop check reads direct and queued Z activity in one interrupt-protected snapshot. The replay covers active direct Z, queued Z and clearing the queue. [Motion executor](../Repetier/motion.cpp) · [Replay](../tests/pause-sense-offset.py)
 
 ### Z offset ownership
 
