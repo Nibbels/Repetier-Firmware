@@ -42,6 +42,25 @@ A sustainable speed plan needs a reachable exit at the visible queue tail. Evalu
 
 Keep the current extrusion joins as a baseline for structural refactors. Review their print effect separately with continuous extrusion, print–travel–print, E-only retract and unretract, and short print segments whose E quantizes to zero. Repeat with Advance on and off. Record junction reason, entry and exit speeds, signed E pulses, pending E steps, requested lead and DMS response. Use the replay and physical prints to decide where a clean pressure transition benefits from a slow exit and where it produces an audible or visible hesitation. [Deferred review](maintenance-tasks.md#motion-smoothness-and-performance)
 
+### Replay with steady and bursty input
+
+The host replay runs 300 extruding segments around a circle of radius 1.35 mm and requests 100 mm/s. For each chord length the three schedules use the same quantized XY and E moves and start with the same 12 prepared entries. That is 143.74 ms of planned motion at 0.20 mm and 156.48 ms at 0.60 mm before applying the ramps. Input averages 200 lines/s after prefill. In bursts the lines arrive at the modeled wire rate of 40 bytes per line with 8N1 framing at 115,200 baud. Lines wait at the source when the 24-move queue is full. [Reproduce with `python3 tests/pause-sense-offset.py`](../tests/pause-sense-offset.py)
+
+| Chord | Offered input | Mean path speed | Segments stretched by low occupancy | Joins limited below both full speeds | Adjacent full-speed changes >20 mm/s¹ | Longest empty-queue gap |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| 0.20 mm | Steady | 39.71 mm/s | 68 / 300 | 155 | 10 | 0 ms |
+| 0.20 mm | Groups of 32, 52 ms between groups | 39.80 mm/s | 54 / 300 | 161 | 12 | 0 ms |
+| 0.20 mm | Groups of 96, 150 ms between groups | 41.16 mm/s | 28 / 300 | 182 | 4 | 45.43 ms |
+| 0.60 mm | Steady | 75.14 mm/s | 10 / 300 | 289 | 0 | 0 ms |
+| 0.60 mm | Groups of 32, 52 ms between groups | 75.14 mm/s | 10 / 300 | 289 | 0 | 0 ms |
+| 0.60 mm | Groups of 96, 150 ms between groups | 75.14 mm/s | 10 / 300 | 289 | 0 | 0 ms |
+
+¹ Counted after prefill using each segment's planned full speed. Mean path speed includes all motion, idle gaps and final queue drain. The longest modeled interval between Timer1 batches within a segment was 1.43–1.57 ms across the runs.
+
+At 0.20 mm the ordinary bursts changed how often the low-queue rule engaged. Both the steady and 32-line runs kept moving even with adjacent setpoint changes above 20 mm/s. The longer interruption additionally caused one empty-queue gap. At 0.60 mm the tight turns constrained the computed join speeds and the modeled average was identical across the three schedules.
+
+The replay uses the live planner, queue and step speed calculation with modeled arrivals and approximate batch timing. The model omits USB parsing and ACK time, planner CPU time, restart warmup, concurrent interrupts and compensation waits. Measure those contributions and STEP intervals on the printer when choosing a pacing policy.
+
 ## Planner and executor boundary
 
 `MotionPlanner` computes per-move limits, lookahead and step profiles in the foreground. A `PrintLine` keeps the lookahead data and prepared ramp in separate fields of the same 119-byte slot. A queued move stays blocked while lookahead updates its profile. Timer1 starts an available move with the prepared step rates and ramp lengths. The host replay matches the existing step intervals for short moves and extrusion joins, including a wrapped queue. [Planner](../Repetier/MotionPlanner.cpp) · [Step profile and queue](../Repetier/motion.h) · [Replay](../tests/pause-sense-offset.py)

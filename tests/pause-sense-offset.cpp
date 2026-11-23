@@ -2510,6 +2510,136 @@ void lookaheadMoves() {
     assert(trace == 0x670f3ba6U); // Step intervals captured before extracting the planner.
 }
 
+void shortMovePacing() {
+    constexpr unsigned prefill = 12, segmentCount = 300;
+    constexpr uint32_t sendPeriod = F_CPU / 200;
+    // Forty bytes per line with 8N1 framing at the configured UART rate.
+    constexpr uint32_t wireTicks = (uint64_t(F_CPU) * 40 * 10 + BAUDRATE - 1) / BAUDRATE;
+    constexpr float radius = 1.35f, feedrate = 100.0f;
+    for (const float chord : {0.2f, 0.6f}) {
+        const double angle = 2 * std::asin(chord / (2 * radius));
+        double referenceDistance = 0;
+        for (const unsigned groupSize : {1U, 32U, 96U}) {
+            MoveQueue queue;
+            unsigned admitted = 0, retired = 0, stretched = 0, limitedJoins = 0;
+            unsigned emptyGaps = 0, deferred = 0, speedJumps = 0;
+            uint32_t now = 0, endOfMove = 0, emptyTicks = 0, longestGap = 0;
+            uint32_t interval = 10000, longestBatchInterval = 0, prefillTicks = 0;
+            uint8_t batchSteps = 1;
+            float lastFullSpeed = 0;
+            double distance = 0;
+            int32_t previous[4] = {static_cast<int32_t>(std::lround(radius * Printer::stepsPerMm(X_AXIS))), 0, 0, 0};
+
+            const auto arrival = [&](unsigned segment) {
+                const unsigned offset = segment - prefill;
+                return offset / groupSize * groupSize * sendPeriod + (offset % groupSize + 1) * wireTicks;
+            };
+            const auto admitMove = [&] {
+                const unsigned segment = admitted + 1;
+                const int32_t target[4] = {
+                    static_cast<int32_t>(std::lround(radius * std::cos(segment * angle) * Printer::stepsPerMm(X_AXIS))),
+                    static_cast<int32_t>(std::lround(radius * std::sin(segment * angle) * Printer::stepsPerMm(Y_AXIS))),
+                    0,
+                    static_cast<int32_t>(std::lround(chord * segment * 0.05f * Printer::stepsPerMm(E_AXIS)))
+                };
+
+                PrintLine& move = queue.writeSlot();
+                move = PrintLine{};
+                float distances[4];
+                for (uint8_t axis = 0; axis < 4; ++axis) {
+                    const int32_t steps = target[axis] - previous[axis];
+                    distances[axis] = std::abs(steps) * Printer::mmPerStep(axis);
+                    move.setAxisSteps(axis, steps);
+                    previous[axis] = target[axis];
+                }
+                move.setSegmentGeometry(distances);
+                assert(move.isEPositiveMove() && move.isXOrYMove() && move.stepsRemaining);
+                distance += move.lookahead.distance;
+                MotionPlanner::prepareMove(move, distances, feedrate, queue);
+                const float requestedTicks = float(F_CPU) * move.lookahead.distance / feedrate;
+                stretched += move.timeInTicks > requestedTicks + 1;
+                if (admitted < prefill)
+                    prefillTicks += move.timeInTicks;
+                speedJumps += admitted >= prefill && std::abs(move.fullSpeed - lastFullSpeed) > 20.0f;
+                lastFullSpeed = move.fullSpeed;
+                MotionPlanner::updateLookahead(queue);
+                if (queue.count()) {
+                    uint8_t tail = queue.writeIndex();
+                    MoveQueue::previousIndex(tail);
+                    const PrintLine& previousMove = queue.slot(tail);
+                    const float join = previousMove.lookahead.maxJunctionSpeed;
+                    limitedJoins += join > 0 && join + 0.001f < std::min(previousMove.fullSpeed, move.fullSpeed);
+                }
+                queue.publish(true);
+                ++admitted;
+            };
+            const auto moveDuration = [&](PrintLine move) {
+                StepExecutor::StepClock clock;
+                clock.start(move.stepProfile.vStart);
+                uint32_t duration = interval >> 1;
+                while (move.stepsRemaining) {
+                    const uint8_t steps = std::min<int32_t>(batchSteps, move.stepsRemaining);
+                    move.stepsRemaining -= steps;
+                    const speed_t speed = StepExecutor::nextStepSpeed(move, clock, steps, interval);
+                    assert(speed);
+                    interval = std::max<uint32_t>(512, F_CPU / speed);
+                    batchSteps = (STEP_PACKING_MIN_INTERVAL + interval - 1) / interval;
+                    const uint32_t packed = interval * batchSteps;
+                    duration += move.stepsRemaining ? packed : packed >> 1;
+                    if (move.stepsRemaining)
+                        longestBatchInterval = std::max(longestBatchInterval, packed);
+                }
+                return duration;
+            };
+
+            // Start both schedules with the same already planned motion.
+            while (admitted < prefill)
+                admitMove();
+            while (retired < segmentCount) {
+                if (queue.active() && now == endOfMove) {
+                    queue.retireFront();
+                    HAL::allowInterrupts();
+                    if (++retired == segmentCount)
+                        break;
+                }
+                while (admitted < segmentCount && queue.count() < MOVE_CACHE_SIZE && arrival(admitted) <= now) {
+                    deferred += arrival(admitted) < now;
+                    admitMove();
+                }
+                if (!queue.active() && queue.count()) {
+                    PrintLine& move = *queue.activateFront();
+                    assert(move.isStepProfileReady() && !move.isBlocked());
+                    move.fixStartAndEndSpeed();
+                    endOfMove = now + moveDuration(move);
+                }
+                const uint32_t input = admitted < segmentCount && queue.count() < MOVE_CACHE_SIZE ? arrival(admitted) : UINT32_MAX;
+                const uint32_t output = queue.active() ? endOfMove : UINT32_MAX;
+                const uint32_t next = std::min(input, output);
+                assert(next > now && next != UINT32_MAX);
+                if (!queue.active()) {
+                    const uint32_t gap = next - now;
+                    ++emptyGaps;
+                    emptyTicks += gap;
+                    longestGap = std::max(longestGap, gap);
+                }
+                now = next;
+            }
+            assert(admitted == segmentCount && queue.count() == 0 && interruptsEnabled);
+            if (groupSize == 1)
+                referenceDistance = distance;
+            else
+                assert(distance == referenceDistance);
+            std::printf("Short moves %.2f mm, group %u: %.2f mm/s, initial reserve %.2f ms, stretched %u/%u, limited joins %u, "
+                        "speed jumps %u, empty gaps %u (%.2f ms total, %.2f ms max), "
+                        "max batch interval %.2f ms, deferred %u\n",
+                        chord, groupSize, distance * F_CPU / now, prefillTicks * 1000.0 / F_CPU,
+                        stretched, segmentCount, limitedJoins, speedJumps,
+                        emptyGaps, emptyTicks * 1000.0 / F_CPU, longestGap * 1000.0 / F_CPU,
+                        longestBatchInterval * 1000.0 / F_CPU, deferred);
+        }
+    }
+}
+
 void directRamp() {
     PrintLine& move = PrintLine::direct;
     const int32_t steps[4] = {161, 0, 0, 0};
@@ -2742,6 +2872,8 @@ int main(int argc, char** argv) {
         stepClock();
     else if (!std::strcmp(argv[1], "lookahead"))
         lookaheadMoves();
+    else if (!std::strcmp(argv[1], "short-move-pacing"))
+        shortMovePacing();
     else if (!std::strcmp(argv[1], "direct-ramp"))
         directRamp();
     else if (!std::strcmp(argv[1], "xy-limits"))
