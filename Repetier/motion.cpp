@@ -116,7 +116,7 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
             const float targetE = Printer::destinationMM[E_AXIS];
             const float targetRemainder = Printer::destinationRemainderMM[E_AXIS];
             const float requestedMM = (targetE - Printer::queuedEPositionMM) + (targetRemainder - Printer::queuedERemainderMM);
-            const float flow = Printer::menuExtrusionFactor * Printer::dynamicExtrusionFactor;
+            const float flow = Printer::menuExtrusionFactor * Printer::digitCompensation.extrusionFactor();
 
             const float requestedSteps = requestedMM * flow * Printer::axisStepsPerMM[E_AXIS];
             steps = lroundf(requestedSteps);
@@ -1227,12 +1227,10 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
     //RETURN manipulated value:
     unsigned long interval = Printer::interval;
 
-    if (Printer::interval_mod) {
-        //if we have to add some time because we need live adjusting then add it. But we should not calculate with * and / here so we have to prepare some delay. The preparation might be inprecise. So check it.
-        if (forQueue && move->primaryAxis <= Y_AXIS) {
-            interval *= Printer::interval_mod; //1024 == 100%
-            interval >>= 10;                   // geteilt durch 1024 = 2^10
-        }
+    const uint16_t digitFlowScale = Printer::digitCompensation.intervalScale();
+    if (digitFlowScale && forQueue && move->primaryAxis <= Y_AXIS) {
+        interval *= digitFlowScale; // 1024 == 100%
+        interval >>= 10;
     }
 
     //Now manipulate step-width=interval according to single-, double-, tripple-, ... steppings needs:

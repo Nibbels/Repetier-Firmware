@@ -74,6 +74,8 @@ The firmware restricted Play to a completed pause in 1.37t2. The 1.43.56 pause r
 
 ### Digit-Z
 
+- [x] **Give the DMS filter and Digit Flow one owner.** The host replay checks the sampling schedule, filter output, first-layer gating, live Z target and both flow factors. It runs M3912 through completion, skip and cancellation. The four AVR builds retain the same instruction sequence for applying the interval scale and mask both byte writes when publishing it. The 36 stepper traces match the previous cycles and Z step counts. Global SRAM drops by 3 bytes per build. Physical verification remains open. [Digit compensation](../Repetier/DigitCompensation.h) · [Host replay](../tests/pause-sense-offset.py)
+
 - [ ] **Recover the same elastic correction at the same steady DMS reading.** Retain the integer filter remainder to eliminate the one-microstep difference reproduced at 5,530 digits. Verify rising and falling force, then measure the force-to-deflection slope and the delay from load change to applied Z on the printer. [Formula, timing and replay](z-offset/thermal-and-force.md#elastic-hotend-deflection-and-digit-z)
 
 ## Calibration and persistence

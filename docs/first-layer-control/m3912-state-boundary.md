@@ -8,7 +8,7 @@ The operator's **chainsaw-under-load analogy** describes the audible effect: whi
 
 Default thresholds are **1500–4500 DMS digits** (overridable by `M3912 S/P`), with speed intensity −90% and extrusion intensity −75%. At high force the target speed factor reaches **0.10** and the E factor **0.25**. The speed factor approaches its target by small 0.01 steps per update; planned E segments use the instantaneous E factor. These are not direct pressure measurements.
 
-**Never change the user's normal M220 speed override** (`Printer::feedrateMultiply`) or M221 flow multiplier (`Printer::menuExtrusionFactor`). The DMS speed factor is `Printer::dynamicFeedrateFactor`, applied through `Printer::interval_mod` to live XY-primary step timing. The DMS E factor is `Printer::dynamicExtrusionFactor`, applied during E planning.
+**Preserve the user's M220 speed override** (`Printer::feedrateMultiply`) and M221 flow multiplier (`Printer::menuExtrusionFactor`). `Printer::digitCompensation` supplies `intervalScale()` to live XY-primary step timing and `extrusionFactor()` to E planning.
 
 ## Generated priming phase
 
@@ -26,14 +26,13 @@ The previous print's spatial fade thresholds can still affect the generated prim
 
 | State | Action at entry | Action at exit |
 | --- | --- | --- |
-| `g_nDigitFlowCompensation_Fmin/Fmax` | Save, override with 1500/4500 or S/P | Restore |
-| DMS speed and extrusion intensities | Save, set −90% and −75% | Restore |
+| Digit Flow profile | Save, override limits with 1500/4500 or S/P and set speed to −90% and extrusion to −75% | Restore |
 | M82/M83 E-coordinate mode | Save, force absolute | Restore |
 | Logical slicer E coordinate | Save incoming value, use local E0 for prime | Restore incoming E unless print was cancelled |
 | `extrudeMultiplyErrorSteps` | Save planner sub-step E remainder | Restore on normal/skip completion |
 | `compensatedPositionCollectTinyE` | Save ECMP fractional E remainder under interrupt protection | Restore on normal/skip completion |
-| DMS `dynamicFeedrateFactor` and `dynamicExtrusionFactor` | Continuously adapt to DMS force | Reset both to 1.0 |
-| DMS `interval_mod` | Continuously computed from DMS speed | Reset to 0 atomically; no lingering XY brake |
+| DMS `feedrateFactor()` and `extrusionFactor()` | Continuously adapt to DMS force | Reset both to 1.0 |
+| DMS `intervalScale()` | Computed from the DMS speed factor | Reset to 0 atomically |
 | Planned layer tracking in `Printer::layers` | Reset tracking and exclude prime movement from learning | Reset tracking |
 | `g_startLineActive` | Set before first prime move | Clear after queue drain |
 | User `feedrateMultiply`, `menuExtrusionFactor`, `Printer::feedrate` | **Never modified** | Unchanged |
@@ -55,8 +54,10 @@ M3912 and Digit Flow are compiled together on all three models.
 
 **Arithmetic cases passed:** E10→M3912→E11 requests +1 E; E0→M3912→E1 requests +1 E. At DMS 1500 the speed/E factors are 1.0/1.0, at 3000 the speed **goal**/E factor are 0.55/0.625, and at ≥4500 they are 0.10/0.25. Actual speed ramps toward the goal rather than jumping.
 
+The host replay runs the production M3912 case with pressure braking and checks cleanup on completion, play-key skip and print cancellation. [Replay](../../tests/pause-sense-offset.py)
+
 **Physical tests pending.** Check high- and low-force priming, live M220/M221 overrides, M82/M83 and nonzero absolute E, play-key skip and print cancellation, first model layers at 0.20, 0.35, 0.352 and 0.40 mm, and consecutive prints with and without Z homing. Use the motor sound and DMS logs to check the physical brake response.
 
 ## Source
 
-[M3912, the DMS controller and SenseOffset](../../Repetier/RF.cpp) · [first-layer planner](../../Repetier/motion.cpp) · [shared priming flag](../../Repetier/RF.h) · [coordinate frames and ECMP](coordinate-frames-and-extrusion.md).
+[M3912](../../Repetier/RF.cpp#L5273) · [Digit Flow controller](../../Repetier/DigitCompensation.h) · [SenseOffset](sense-offset.md) · [first-layer planner](../../Repetier/motion.cpp) · [coordinate frames and ECMP](coordinate-frames-and-extrusion.md).

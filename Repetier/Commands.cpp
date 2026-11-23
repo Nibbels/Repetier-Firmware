@@ -166,7 +166,7 @@ void Commands::printTemperatures(bool showRaw) {
 
         Com::printF(Com::tSpace);
         Com::printF(Com::tF);
-        Com::printF(Com::tColon, (int)g_nLastDigits); //Kraft
+        Com::printF(Com::tColon, (int)Printer::digitCompensation.latestDigits()); //Kraft
         Com::printF(Com::tSpaceSlash, (int)(Printer::g_pressure_offset_active ? Printer::g_pressure_offset : 0)); //Offset
         Com::printF(Com::tSpaceAtColon, 0); //Ziel ^^, nein ich halte mich nur an die PWM-Syntax
         Com::println();

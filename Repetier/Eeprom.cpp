@@ -353,7 +353,7 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
 #endif //NUM_EXTRUDER > 1
 
     HAL::eprSetByte(EPR_RF_ZERO_DIGIT_STATE, (Printer::g_pressure_offset_active ? 1 : 2)); //2 ist false, < 1 ist true
-    HAL::eprSetByte(EPR_RF_DIGIT_CMP_STATE, (g_nDigitZCompensationDigits_active ? 1 : 2)); //2 ist false, < 1 ist true
+    HAL::eprSetByte(EPR_RF_DIGIT_CMP_STATE, Printer::digitCompensation.digitZEnabled() ? 1 : 2);
 
     HAL::eprSetFloat(EPR_ZSCAN_START_MM, g_scanStartZLiftMM);
 
@@ -661,9 +661,11 @@ void EEPROM::readDataFromEEPROM() {
     g_nEmergencyPauseDigitsMax = (long)constrain(HAL::eprGetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMAX), EMERGENCY_PAUSE_DIGITS_MIN, EMERGENCY_PAUSE_DIGITS_MAX); //limit to value in config.
     //min = 0 and max = 0 -> means feature off
 
-    //Standardgrenzen hängen von Pause-Digits ab
-    g_nDigitFlowCompensation_Fmin = RMath::min(short(abs(g_nEmergencyPauseDigitsMax) * 0.7), 4000); //mögliche Standardwerte, 4000 oder eben das kleinere abh. von pause digits.
-    g_nDigitFlowCompensation_Fmax = short(abs(g_nEmergencyPauseDigitsMax));                         //mögliche Standardwerte -> z.b. gut wenn das die pause-digits sind.
+    // Default flow limits depend on the emergency pause limit.
+    auto flowProfile = Printer::digitCompensation.flowProfile();
+    flowProfile.minDigits = RMath::min(short(abs(g_nEmergencyPauseDigitsMax) * 0.7), 4000);
+    flowProfile.maxDigits = short(abs(g_nEmergencyPauseDigitsMax));
+    Printer::digitCompensation.setFlowProfile(flowProfile);
 
     g_nEmergencyStopZAndEMin = (short)constrain(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN), EMERGENCY_STOP_DIGITS_MIN, EMERGENCY_STOP_DIGITS_MAX); //limit to value in config.
     g_nEmergencyStopZAndEMax = (short)constrain(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX), EMERGENCY_STOP_DIGITS_MIN, EMERGENCY_STOP_DIGITS_MAX); //limit to value in config.
@@ -679,7 +681,7 @@ void EEPROM::readDataFromEEPROM() {
     }
 
     Printer::g_pressure_offset_active = (HAL::eprGetByte(EPR_RF_ZERO_DIGIT_STATE) > 1 ? false : true); //2 ist false, < 1 ist true
-    g_nDigitZCompensationDigits_active = (HAL::eprGetByte(EPR_RF_DIGIT_CMP_STATE) > 1 ? false : true); //2 ist false, < 1 ist true
+    Printer::digitCompensation.setDigitZEnabled(HAL::eprGetByte(EPR_RF_DIGIT_CMP_STATE) <= 1);
 
     float tmpss = HAL::eprGetFloat(EPR_ZSCAN_START_MM);
     if (tmpss >= 0.3f && tmpss <= 6.0f) {

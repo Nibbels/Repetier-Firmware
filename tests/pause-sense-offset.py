@@ -48,6 +48,9 @@ def main():
         "void trackPlannedLayer(PrintLine* p) {\n"
         + section(move_planner, "    if (!g_startLineActive)", "\n    // Define variables that are needed")
         + "}",
+        "void runStartLine(GCode* pCommand) { switch (3912) {\n"
+        + section(rf, "        case 3912:", "\n        case 3913:")
+        + "} }",
     ]
     with TemporaryDirectory(prefix="rfx-pause-replay-") as directory:
         build = Path(directory)
@@ -61,6 +64,7 @@ def main():
         for scenario in (
             "park", "short-pause", "interrupt", "panel", "return", "jog", "cancel", "queue", "home", "layer-fade",
             "layer-scale", "compensation-bounds",
+            "digit-flow", "prime-complete", "prime-skip", "prime-abort",
         ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
 

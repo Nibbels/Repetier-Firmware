@@ -89,17 +89,17 @@ Suppose the slicer is at absolute `E10`, then calls `M3912`, whose internal prim
 | Patched M3912: restore entry logical E10 | +1 E unit | **Correct** |
 | Conventional start script: entry E0, next slicer command E1 | +1 E unit | Both reset-to-E0 and restore-entry-E0 produce the correct result |
 
-At entry, M3912 drains the queue, saves the incoming logical E and its millimetre remainder, and primes on its own E0 timeline. After the line it restores logical E with its remainder, E mode and fractional step accounting. Print cancellation retains the stop handler's E0. [Save and restore](../../Repetier/RF.cpp#L9096-L9271)
+At entry, M3912 drains the queue, saves the incoming logical E and its millimetre remainder, and primes on its own E0 timeline. After the line it restores logical E with its remainder, E mode and fractional step accounting. Print cancellation retains the stop handler's E0. [Save and restore](../../Repetier/RF.cpp#L5273)
 
 In relative E mode, firmware-generated absolute E coordinates remain internal to `queueFloatCoordinates()`; restoring logical E is still harmless and preserves later G-code interpretation. Retracts cause occasional decreases in the logical E timeline, but do not invalidate this model.
 
 ## DMS speed is orthogonal to user speed override
 
 - `Printer::feedrateMultiply` (typically M220 or menu speed%) changes the user's normal requested feedrate. The stored `Printer::feedrate` incorporates that multiplier.
-- `Printer::dynamicFeedrateFactor` is a separate DMS-based value (1.0 means neutral). It is translated to `Printer::interval_mod`, a timer divisor applied at **execution time** to XY-primary queued moves; it **does not modify** `feedrateMultiply`.
-- `Printer::menuExtrusionFactor` (user flow%) and `Printer::dynamicExtrusionFactor` (DMS flow) likewise remain separate; the planner multiplies them when generating physical E steps.
+- `digitCompensation.feedrateFactor()` represents the DMS-based speed factor (1.0 means neutral). The controller publishes `intervalScale()` for application at **execution time** to XY-primary queued moves. A nonzero scale multiplies the interval in units of 1/1024.
+- The planner multiplies the user flow percentage in `Printer::menuExtrusionFactor` by `digitCompensation.extrusionFactor()` when generating physical E steps.
 - `M3912` uses explicit mm/s for its internal queue moves; it does not change or save the general user speed override. Consequently, don't assume that the start-line's configured XY feedrate always applies M220 in exactly the same way as a slicer G1 F move. Pressure-derived step slowdown remains an additional mechanism.
-- Returning `dynamicFeedrateFactor` to 1.0 is correct **but derived `interval_mod` should also be neutralized** after priming to avoid a stale timer-scale effect.
+- `resetFlow()` returns both DMS factors to 1.0 and atomically publishes a neutral timer scale of 0 after priming.
 
 ## Two fractional E-step accumulators also cross the priming boundary
 
@@ -118,7 +118,7 @@ With the dynamic fade span determined from `(O-minB)*20`, the shape loss at the 
 
 ## Elastic Digit-Z correction during priming
 
-Digit-Z is built into all three models and enabled by default through `g_nDigitZCompensationDigits_active`. During M3912, bed compensation can still include a bounded correction for elastic hotend deflection. It follows filtered force as the load rises and falls. M3912 suspends the accumulation of SenseOffset during that phase. [Digit-Z formula and timing](../z-offset/thermal-and-force.md#elastic-hotend-deflection-and-digit-z)
+Digit-Z is built into all three models and enabled by default in `Printer::digitCompensation`. During M3912, bed compensation can still include a bounded correction for elastic hotend deflection. It follows filtered force as the load rises and falls. M3912 suspends the accumulation of SenseOffset during that phase. [Digit-Z formula and timing](../z-offset/thermal-and-force.md#elastic-hotend-deflection-and-digit-z)
 
 ## Sources
 
@@ -126,6 +126,6 @@ Digit-Z is built into all three models and enabled by default through `g_nDigitZ
 - [Nominal step coordinate](../../Repetier/Printer.h#L1071-L1073), [layer recognition / g_min g_max](../../Repetier/motion.cpp#L173-L220)
 - [Bed profile, fade and ECMP](../../Repetier/RF.cpp#L3192-L3302), [matrix extrema](../../Repetier/RF.cpp#L5145-L5167)
 - [Actual E-step multiplier](../../Repetier/motion.cpp#L122-L135), [ECMP stepping](../../Repetier/motion.cpp#L1468-L1494)
-- [Logical E reset](../../Repetier/Printer.h#L1035-L1042), [M3912 entry and exit](../../Repetier/RF.cpp#L9103-L9275)
-- [User speed/flow overrides](../../Repetier/Commands.cpp#L210-L227), [runtime XY timing](../../Repetier/motion.cpp#L1645-L1654)
-- [Digit-Z flag](../../Repetier/RF.cpp#L200-L210), [its additive correction](../../Repetier/RF.cpp#L3262-L3294)
+- [Logical E reset](../../Repetier/Printer.h#L1035-L1042), [M3912 entry and exit](../../Repetier/RF.cpp#L5273)
+- [User speed/flow overrides](../../Repetier/Commands.cpp#L210-L227), [runtime XY timing](../../Repetier/motion.cpp#L1230)
+- [Digit-Z and Digit Flow state](../../Repetier/DigitCompensation.h), [additive Z correction](../../Repetier/RF.cpp#L1950)

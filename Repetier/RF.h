@@ -462,13 +462,6 @@ extern short g_nSensiblePressureDigits;
 extern short g_nSensiblePressureOffsetMax;
 extern char g_nSensiblePressure1stMarke; //sagt, ob regelung aktiv oder inaktiv, wegen Z-Limits
 
-extern short g_nLastDigits;
-extern float g_nDigitZCompensationDigits;
-extern bool g_nDigitZCompensationDigits_active;
-extern int8_t g_nDigitFlowCompensation_intense;
-extern int8_t g_nDigitFlowCompensation_speed_intense;
-extern short g_nDigitFlowCompensation_Fmin;
-extern short g_nDigitFlowCompensation_Fmax;
 
 #ifdef RGB_LIGHT_R_PIN
 extern unsigned char g_uRGBHeatingR;

@@ -182,14 +182,6 @@ short g_nSensiblePressureDigits = 0; //init auf zahl bringt stand 1.37r2 nur was
 short g_nSensiblePressureOffsetMax = SENSIBLE_PRESSURE_MAX_OFFSET;
 char g_nSensiblePressure1stMarke = 0; //sagt, ob regelung aktiv oder inaktiv, wegen Z-Limits
 
-short g_nLastDigits = 0;
-float g_nDigitZCompensationDigits = 0.0f;
-bool g_nDigitZCompensationDigits_active = true;
-int8_t g_nDigitFlowCompensation_intense = 0;                                        // +- % Standard 0 heißt flowmulti wird zu 1.0f
-int8_t g_nDigitFlowCompensation_speed_intense = 0;                                  // +- % Standard 0 heißt feedmulti wird zu 1.0f
-short g_nDigitFlowCompensation_Fmin = short(abs(EMERGENCY_PAUSE_DIGITS_MAX) * 0.7); //mögliche Standardwerte
-short g_nDigitFlowCompensation_Fmax = short(abs(EMERGENCY_PAUSE_DIGITS_MAX));       //mögliche Standardwerte -> z.b. gut wenn das die pause-digits sind.
-
 #ifdef RGB_LIGHT_R_PIN
 unsigned char g_uRGBHeatingR = RGB_HEATING_R;
 unsigned char g_uRGBHeatingG = RGB_HEATING_G;
@@ -233,107 +225,32 @@ void initStrainGauge(void) {
 
 } // initStrainGauge
 
-static short readStrainGauge() //readStrainGauge dauert etwas unter einer Millisekunde!
-{
-    unsigned char Register;
-    short Result;
-
+static short readStrainGauge() {
     Wire.beginTransmission(I2C_ADDRESS_STRAIN_GAUGE);
     Wire.requestFrom((uint8_t)I2C_ADDRESS_STRAIN_GAUGE, (uint8_t)3);
 
-    Result = Wire.read();
-    Result = Result << 8;
-    Result += Wire.read();
-
-    Register = Wire.read();
-    (void)Register; //Nibbels: Tut so als würde die variable benutzt werden. Macht aber nix.
+    const uint16_t high = Wire.read();
+    const uint16_t low = Wire.read();
+    const uint16_t value = (high << 8) + low;
+    Wire.read(); // ADC status byte.
     Wire.endTransmission();
 
-    if (Printer::g_pressure_offset_active && -27768 < Result && Result < 27767) {
-        Result -= Printer::g_pressure_offset; //no overflow possible: pressure_offset ist 5000 max.
+    short digits = static_cast<int16_t>(value);
+    if (Printer::g_pressure_offset_active && -27768 < digits && digits < 27767) {
+        digits -= Printer::g_pressure_offset; // The zero offset is limited to 5000 digits.
     }
 
-    /* brief: This is for correcting sinking hotends at high digit values because of DMS-Sensor by Nibbels  */
-    static long nSensibleCompensationSum = 0;
-    static char nSensibleCompensationChecks = 0;
-    if (Printer::doHeatBedZCompensation) {
-        //wenn ein retract stattfindet und das nicht echtzeit-schnell funktioniert, könnte es leichte probleme geben, aber prinzipiell wäre dann der Einfluss nicht so schädlich, wie ständig die digitabsenkung zu ignorieren.
-        //das folgende sammelt immer 4 messwerte, schreibt den mittelwert raus und minimiert sammelwert und zähler auf 75%, dann den vierten wert neu in den topf..
-        nSensibleCompensationSum += Result;
-        nSensibleCompensationChecks += 1;
-        if (nSensibleCompensationChecks == 4) {
-            InterruptProtectedBlock noInts;
-            g_nDigitZCompensationDigits = (float)(nSensibleCompensationSum / 4); //*0.25, nachkommsstellen sind egal.
-            noInts.unprotect();
-            nSensibleCompensationSum = (long)g_nDigitZCompensationDigits * 3; //(nSensibleCompensationSum >> 1) + (nSensibleCompensationSum >> 2);--> sign-extension?? //nSensibleCompensationSum*0.75
-            nSensibleCompensationChecks -= 1;                                 //*=0.75 bei 4 ist 3
-            // M3912 feeds high DMS force into a progressive speed/E brake,
-            // irrespective of the previous print's first-layer boundary.
-            bool digitFlowAllowed = Printer::zMotion.nominalSteps() > Printer::layers.fadeStartSteps();
-            digitFlowAllowed = digitFlowAllowed || g_startLineActive;
-            if (g_nDigitFlowCompensation_intense != 0) {
-                short active_summed_digits = abs(static_cast<short>(g_nDigitZCompensationDigits));
-                /*
-                unter unterem digits limit: flow = 1.000
-                zwischen beiden limits    : flow = 1.000 + anteil an maximaler auslenkung
-                über oberem   digits limit: flow = 1.000 + maximale auslenkung plus oder minus
-                */
-                if (active_summed_digits <= g_nDigitFlowCompensation_Fmin) {
-                    Printer::dynamicExtrusionFactor = 1.0f;
-                } else if (active_summed_digits >= g_nDigitFlowCompensation_Fmax) {
-                    if (digitFlowAllowed)
-                        Printer::dynamicExtrusionFactor = 1.0f + 0.01f * g_nDigitFlowCompensation_intense;
-                    else
-                        Printer::dynamicExtrusionFactor = 1.0f;
-                } else {
-                    if (digitFlowAllowed)
-                        Printer::dynamicExtrusionFactor = 1.0f + 0.01f * g_nDigitFlowCompensation_intense * (active_summed_digits - g_nDigitFlowCompensation_Fmin) / (g_nDigitFlowCompensation_Fmax - g_nDigitFlowCompensation_Fmin);
-                    else
-                        Printer::dynamicExtrusionFactor = 1.0f;
-                }
-            } else {
-                Printer::dynamicExtrusionFactor = 1.0f;
-            }
-            if (g_nDigitFlowCompensation_speed_intense != 0) {
-                short active_summed_digits = abs(static_cast<short>(g_nDigitZCompensationDigits));
-                /*
-                unter unterem digits limit: feed = 1.000
-                zwischen beiden limits    : feed = 1.000 + anteil an maximaler auslenkung
-                über oberem   digits limit: feed = 1.000 + maximale auslenkung plus oder minus
-                */
-                float goal = 1.0f;
-                if (active_summed_digits <= g_nDigitFlowCompensation_Fmin) {
-                    goal = 1.0f;
-                } else if (active_summed_digits >= g_nDigitFlowCompensation_Fmax) {
-                    if (digitFlowAllowed)
-                        goal = 1.0f + 0.01f * g_nDigitFlowCompensation_speed_intense;
-                } else {
-                    if (digitFlowAllowed)
-                        goal = 1.0f + 0.01f * g_nDigitFlowCompensation_speed_intense * (active_summed_digits - g_nDigitFlowCompensation_Fmin) / (g_nDigitFlowCompensation_Fmax - g_nDigitFlowCompensation_Fmin);
-                }
-                Printer::dynamicFeedrateFactor += (goal == Printer::dynamicFeedrateFactor ? 0.0f : (goal > Printer::dynamicFeedrateFactor ? 0.010f : -0.010f));
-            } else {
-                Printer::dynamicFeedrateFactor = 1.0f;
-            }
+    return digits;
+}
 
-        } else {
-            Printer::dynamicExtrusionFactor = 1.0f;
-            Printer::dynamicFeedrateFactor = 1.0f;
-            InterruptProtectedBlock noInts;
-            g_nDigitZCompensationDigits = (float)Result; //startwert / failwert
-            noInts.unprotect();
-        }
-    }
-
-    if (Printer::dynamicFeedrateFactor == 1.0f || !Printer::doHeatBedZCompensation) {
-        Printer::interval_mod = 0; //0 = off / 1024 = off but 0 saves calc in interrupt.
-    } else {
-        float speed_feed_modifier = 1024.0f / Printer::dynamicFeedrateFactor; //1024 = 100% -> 234% speed, heißt interval kürzer. 56% speed heißt interval länger.
-        Printer::interval_mod = (unsigned short)speed_feed_modifier;
-    }
-    g_nLastDigits = Result;
-    return Result;
-} // readStrainGauge
+static short sampleStrainGauge() {
+    const short digits = readStrainGauge();
+    Printer::digitCompensation.observe(digits, Printer::doHeatBedZCompensation, [] {
+        // The force brake also runs during M3912, regardless of the learned first-layer boundary.
+        return Printer::zMotion.nominalSteps() > Printer::layers.fadeStartSteps() || g_startLineActive;
+    });
+    return digits;
+}
 
 void adjustPressureLimits(short IdlePressure) {
     g_nMinPressureContact = IdlePressure - g_nScanContactPressureDelta;
@@ -2044,8 +1961,8 @@ void recalculateZCompensation(void) {
         };
         result = BedCompensation::calculate(geometry, [] { return getZMatrixDepth_CurrentXY(); });
         result.zCorrectionSteps += Printer::zOffset.effectiveSteps();
-        if (g_nDigitZCompensationDigits_active)
-            result.zCorrectionSteps += BedCompensation::digitZSteps(g_nDigitZCompensationDigits, Printer::axisStepsPerMM[Z_AXIS]);
+        if (Printer::digitCompensation.digitZEnabled())
+            result.zCorrectionSteps += BedCompensation::digitZSteps(Printer::digitCompensation.filteredDigits(), Printer::axisStepsPerMM[Z_AXIS]);
     }
 
     InterruptProtectedBlock lock;
@@ -2222,7 +2139,7 @@ short readAveragePressure(short* pnAveragePressure) {
         nMaxPressure = -32000;
         for (i = 0; i < g_nScanPressureReads; i++) {
             HAL::delayMilliseconds(g_nScanPressureReadDelay);
-            nTempPressure = readStrainGauge();
+            nTempPressure = sampleStrainGauge();
             nPressureSum += nTempPressure;
             if (nTempPressure < nMinPressure)
                 nMinPressure = nTempPressure;
@@ -3094,7 +3011,7 @@ void handleStrainGaugeFeatures(millis_t uTime) {
 
     static short pressure = 0;
     if (i_need_strain_value) {
-        pressure = readStrainGauge();
+        pressure = sampleStrainGauge();
     }
 
     short nPressure;
@@ -5311,6 +5228,7 @@ void processSpecialGCode(GCode* pCommand) {
 
         case 3911: // M3911 [S]Inc/Dec - Testfunction for AtlonXP's DigitFlowCompensation
         {
+            auto profile = Printer::digitCompensation.flowProfile();
             if (pCommand->hasS() && pCommand->hasP()) {
                 short min = abs(static_cast<short>(pCommand->S));
                 short max = abs(static_cast<short>(pCommand->P));
@@ -5322,8 +5240,8 @@ void processSpecialGCode(GCode* pCommand) {
                     min = 500; //weniger ist in jedem fall sinnfrei, selbst mit ninjaflex und digit homing
                 if (max < min)
                     max = min; //geht: flowsprung.
-                g_nDigitFlowCompensation_Fmin = min;
-                g_nDigitFlowCompensation_Fmax = max;
+                profile.minDigits = min;
+                profile.maxDigits = max;
             }
 
             if (pCommand->hasE()) {
@@ -5332,7 +5250,7 @@ void processSpecialGCode(GCode* pCommand) {
                     e = 99;
                 if (e < -99)
                     e = -99;
-                g_nDigitFlowCompensation_intense = e;
+                profile.extrusionPercent = e;
             }
 
             if (pCommand->hasF()) {
@@ -5341,13 +5259,14 @@ void processSpecialGCode(GCode* pCommand) {
                     f = 99;
                 if (f < -90)
                     f = -90;
-                g_nDigitFlowCompensation_speed_intense = f;
+                profile.speedPercent = f;
             }
 
-            Com::printFLN(PSTR("[S|P] Flow CMP min: "), g_nDigitFlowCompensation_Fmin);
-            Com::printFLN(PSTR("[S|P] Flow CMP max: "), g_nDigitFlowCompensation_Fmax);
-            Com::printFLN(PSTR("[E]   Flow CMP %: "), g_nDigitFlowCompensation_intense);
-            Com::printFLN(PSTR("[F]   Feed CMP %: "), g_nDigitFlowCompensation_speed_intense);
+            Printer::digitCompensation.setFlowProfile(profile);
+            Com::printFLN(PSTR("[S|P] Flow CMP min: "), profile.minDigits);
+            Com::printFLN(PSTR("[S|P] Flow CMP max: "), profile.maxDigits);
+            Com::printFLN(PSTR("[E]   Flow CMP %: "), profile.extrusionPercent);
+            Com::printFLN(PSTR("[F]   Feed CMP %: "), profile.speedPercent);
             break;
         }
 
@@ -5360,11 +5279,7 @@ void processSpecialGCode(GCode* pCommand) {
                 short min = 1500;
                 short max = 4500;
 
-                //dirty hack
-                short save_g_nDigitFlowCompensation_Fmin = g_nDigitFlowCompensation_Fmin;
-                short save_g_nDigitFlowCompensation_Fmax = g_nDigitFlowCompensation_Fmax;
-                short save_g_nDigitFlowCompensation_speed_intense = g_nDigitFlowCompensation_speed_intense;
-                short save_g_nDigitFlowCompensation_intense = g_nDigitFlowCompensation_intense;
+                const auto savedFlowProfile = Printer::digitCompensation.flowProfile();
                 bool save_relativeExtruderCoordinateMode = Printer::relativeExtruderCoordinateMode;
                 float save_logicalE;
                 float save_logicalERemainder;
@@ -5432,11 +5347,7 @@ void processSpecialGCode(GCode* pCommand) {
                         y = maxY;
                 }
 
-                //bezogen auf : M3411 S P F-90 -> Flow CMP Speed einstellungen werden kurz substituiert und dann resubstituiert
-                g_nDigitFlowCompensation_Fmin = min;
-                g_nDigitFlowCompensation_Fmax = max;
-                g_nDigitFlowCompensation_speed_intense = -90;
-                g_nDigitFlowCompensation_intense = -75;
+                Printer::digitCompensation.setFlowProfile({min, max, -75, -90});
                 //M82:
                 Printer::relativeExtruderCoordinateMode = false;
 
@@ -5508,18 +5419,11 @@ void processSpecialGCode(GCode* pCommand) {
                         break; //mache die Startmade überspringbar -> weiter zum Druck.
                 }
                 Commands::waitUntilEndOfAllMoves(); // Prime queue fully drained.
-                // Reset only DMS-specific throttling, not M220 or M221.
-                Printer::dynamicExtrusionFactor = 1.0f;
-                Printer::dynamicFeedrateFactor = 1.0f;
-                g_nDigitFlowCompensation_Fmin = save_g_nDigitFlowCompensation_Fmin;
-                g_nDigitFlowCompensation_Fmax = save_g_nDigitFlowCompensation_Fmax;
-                g_nDigitFlowCompensation_speed_intense = save_g_nDigitFlowCompensation_speed_intense;
-                g_nDigitFlowCompensation_intense = save_g_nDigitFlowCompensation_intense;
+                Printer::digitCompensation.setFlowProfile(savedFlowProfile);
+                Printer::digitCompensation.resetFlow();
 
                 {
                     InterruptProtectedBlock noInts;
-                    // On AVR, a uint16_t timer modifier must be updated atomically.
-                    Printer::interval_mod = 0;
                     if (!Printer::printStop.commandsBlocked()) {
                         // Physical filament stays extruded; restore only the
                         // slicer's logical E timeline, including its substeps.
@@ -5564,7 +5468,7 @@ void processSpecialGCode(GCode* pCommand) {
             float e = 0.0f;
             while (e < float(Extrusion)) {
                 Commands::checkForPeriodicalActions(Processing);
-                if (Printer::printStop.commandsBlocked() || abs(readStrainGauge()) > maxP /* digits sind soweit gestiegen, dass abbruch.*/) {
+                if (Printer::printStop.commandsBlocked() || abs(sampleStrainGauge()) > maxP /* digits sind soweit gestiegen, dass abbruch.*/) {
                     UI_STATUS_UPD(UI_TEXT_OK);
                     break;
                 }
@@ -5630,7 +5534,7 @@ void processSpecialGCode(GCode* pCommand) {
                     Commands::checkForPeriodicalActions(Processing);
                     if (Printer::printStop.commandsBlocked())
                         break;
-                    if (abs(readStrainGauge()) > maxForce /* digits sind soweit INS MINUS gestiegen, dass abbruch.*/) {
+                    if (abs(sampleStrainGauge()) > maxForce /* digits sind soweit INS MINUS gestiegen, dass abbruch.*/) {
                         t += 3.33; // +1°K
                         break;
                     }

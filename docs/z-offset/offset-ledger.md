@@ -12,7 +12,7 @@
 | `g_ZCompensationMax` | steps | Derived RAM from minimum matrix value | Same matrix-extrema routine | Sets fade span with `g_offsetZCompensationSteps` |
 | `Printer::layers.fadeStartSteps()` | nominal Z steps | RAM, fallback then learned from the first model layer | `PrintLayers` on planning, homing, EEPROM load and microstep changes | Full bed-following limit, SenseOffset low-Z gate, Digit Flow high-Z gate |
 | `Printer::layers.fadeEndSteps()` | nominal Z steps | RAM, fallback then derived from the first model layer and matrix relief | `PrintLayers` on planning, homing, EEPROM load and microstep changes | End of scanned-profile fade and ECMP transition |
-| `g_nDigitZCompensationDigits` | force digits (stored float) | RAM | DMS readings | Optional additional force-dependent Z target term |
+| `Printer::digitCompensation.filteredDigits()` | signed force digits | RAM | Foreground DMS filter | Optional additional force-dependent Z target term |
 | `ZMotion` correction target and applied correction | Z motor steps | RAM/live stepper state | Bed and DMS calculation publishes the target. `ZMotion` updates the applied correction. | Applied correction can lag behind the target during motion |
 
 ### Simplified formula for printing (normal Z >= 0)
@@ -34,7 +34,7 @@ CompensationTarget =
   + application-specific bounds/special cases
 ```
 
-This formula describes the compensation target. Endstop constraints and the executing movement determine the resulting motor position. The implementation handles negative Z, zero-height clearance, and disabled compensation. [Bed correction](../../Repetier/BedCompensation.h) · [Target publication](../../Repetier/RF.cpp#L2033)
+This formula describes the compensation target. Endstop constraints and the executing movement determine the resulting motor position. The implementation handles negative Z, zero-height clearance, and disabled compensation. [Bed correction](../../Repetier/BedCompensation.h) · [Target publication](../../Repetier/RF.cpp#L1950)
 
 **Sign:** positive menu Z offset / positive SenseOffset raises nozzle-to-bed clearance by moving the bed away in printing convention. An edit to a matrix shifts the baseline and may change clearance without changing the menu Z-offset.
 

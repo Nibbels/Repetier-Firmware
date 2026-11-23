@@ -28,13 +28,13 @@ Before priming, the command waits for the move queue; saves current flow/feed co
 
 It then generates alternating lines and advances E. Each line is broken up with a `0.0025` fractional increment (approximately **400 queue segments per line**, not '100' as the old code comment states). This allows new segments to incorporate updated pressure-dependent extrusion multipliers. Feedrate adjustment is applied at runtime in the stepper timing path, not only to newly enqueued segments. The play key and command-block path can interrupt the priming sequence.
 
-After waiting for the queued prime moves, `M3912` restores the previous Digit Flow configuration, resets both dynamic factors and `interval_mod`, restores the **incoming logical E reference** and both sub-step E remainders, and restores the E mode. It resets layer tracking so the real model layer can be detected. A skip finishes the queued prime moves before cleaning up the phase.
+After waiting for the queued prime moves, `M3912` restores the previous Digit Flow profile and calls `resetFlow()` to neutralize both live factors and the timer interval scale. It restores the **incoming logical E reference** and both sub-step E remainders on completion or skip. It restores the E mode and resets layer tracking so the real model layer can be detected. A skip finishes the queued prime moves before cleaning up the phase.
 
 ## How pressure changes flow vs speed
 
-**Material:** `readStrainGauge()` updates `dynamicExtrusionFactor` depending on the measured DMS force between `Fmin` and `Fmax`. `PrintLine::prepareQueueMove()` multiplies newly planned E increments by that factor. With -75% intensity, maximal response aims at **25% of nominal extrusion**.
+**Material.** `DigitCompensation` updates its extrusion factor from the filtered DMS force and the profile limits. `PrintLine::prepareQueueMove()` multiplies newly planned E increments by that factor. With −75% intensity, maximal response aims at **25% of nominal extrusion**.
 
-**Speed:** `readStrainGauge()` moves `dynamicFeedrateFactor` toward the pressure-dependent target by 0.01 per update. Its reciprocal is converted to `interval_mod`, applied to **queued XY-primary** timer intervals during stepping. With -90% intensity, maximal response aims at **10% of nominal speed**.
+**Speed.** `DigitCompensation` moves its feedrate factor toward the pressure-dependent target by 0.01 per update. It publishes the reciprocal as a fixed-point scale for **queued XY-primary** timer intervals. With −90% intensity, maximal response aims at **10% of nominal speed**. [Filter and factors](../../Repetier/DigitCompensation.h)
 
 The adaptations depend on DMS processing and queue timing; they are not guarantees of a precise physical flow or pressure.
 
@@ -53,7 +53,7 @@ Place `M3909` with a positive `P` threshold after the final priming move and bef
 The layer detector sees manual priming as regular extrusion. A manual line above the model's first layer lets the descent to that layer establish the new compensation boundary.
 
 ## Source
-- [M3912 generation, overrides, save/restore](../../Repetier/RF.cpp#L9122-L9322)
+- [M3912 generation, overrides, save/restore](../../Repetier/RF.cpp#L5273)
 - [DMS → E/feed factors](../../Repetier/RF.cpp#L319-L398)
 - [E factor at planner time](../../Repetier/motion.cpp#L118-L138)
 - [Feed factor at ISR timer interval](../../Repetier/motion.cpp#L1625-L1671)

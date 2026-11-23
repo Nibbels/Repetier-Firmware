@@ -859,7 +859,7 @@ void UIDisplay::parse(char* txt, bool ram) {
             }
             if (c2 == 'C') // %FC : Digits force-bend-hotend-down Compensation Z ON/OFF
             {
-                addStringP(g_nDigitZCompensationDigits_active ? ui_text_on : ui_text_off);
+                addStringP(Printer::digitCompensation.digitZEnabled() ? ui_text_on : ui_text_off);
             }
             break;
         }
@@ -1096,14 +1096,14 @@ void UIDisplay::parse(char* txt, bool ram) {
             if (c2 == 'f') // %of : flow multiplier
             {
                 addInt(100 * Printer::menuExtrusionFactor
-                           * Printer::dynamicExtrusionFactor
+                           * Printer::digitCompensation.extrusionFactor()
                        ,
                        3);
                 break;
             }
             if (c2 == 'm') // %om : Speed multiplier
             {
-                addInt(Printer::feedrateMultiply * Printer::dynamicFeedrateFactor, 3);
+                addInt(Printer::feedrateMultiply * Printer::digitCompensation.feedrateFactor(), 3);
                 break;
             }
             if (c2 == 'M') // %oM : Printer::feedrate
@@ -1113,7 +1113,7 @@ void UIDisplay::parse(char* txt, bool ram) {
             }
             if (c2 == 'v') // %ov : Active Speed
             {
-                addFloat(Printer::v * Printer::dynamicFeedrateFactor, 3, 1);
+                addFloat(Printer::v * Printer::digitCompensation.feedrateFactor(), 3, 1);
                 break;
             }
             if (c2 == 'p') // %op : Is single double or quadstepping?
@@ -1478,7 +1478,7 @@ void UIDisplay::parse(char* txt, bool ram) {
 
             if (c2 == '1') // %s1 : current value of the strain gauge
             {
-                addInt(g_nLastDigits, 5);
+                addInt(Printer::digitCompensation.latestDigits(), 5);
             }
 
             if (c2 == 'k') // %sk : Positioning coordinate system for XY (move by gode or directoffset)
@@ -1694,16 +1694,16 @@ void UIDisplay::parse(char* txt, bool ram) {
         case 'C': {
             if (c2 == 'U') // %CU : digit flow lower limit
             {
-                addInt((int)g_nDigitFlowCompensation_Fmin, 5);
+                addInt(Printer::digitCompensation.flowProfile().minDigits, 5);
             } else if (c2 == 'O') // %CO : digit flow higher limit
             {
-                addInt((int)g_nDigitFlowCompensation_Fmax, 5);
+                addInt(Printer::digitCompensation.flowProfile().maxDigits, 5);
             } else if (c2 == 'F') // %CF : digit flow flowrate
             {
-                addInt((int)g_nDigitFlowCompensation_intense, 3); //eigentlcih sollten wir F und E hier tauschen... egal.
+                addInt(Printer::digitCompensation.flowProfile().extrusionPercent, 3);
             } else if (c2 == 'E')                                 // %CE : digit flow feedrate
             {
-                addInt((int)g_nDigitFlowCompensation_speed_intense, 3);
+                addInt(Printer::digitCompensation.flowProfile().speedPercent, 3);
             }
             break;
         }
@@ -3030,22 +3030,28 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         break;
     }
     case UI_ACTION_FLOW_MIN: {
-        INCREMENT_MIN_MAX(g_nDigitFlowCompensation_Fmin, 200, 0, g_nDigitFlowCompensation_Fmax);
+        auto profile = Printer::digitCompensation.flowProfile();
+        INCREMENT_MIN_MAX(profile.minDigits, 200, 0, profile.maxDigits);
+        Printer::digitCompensation.setFlowProfile(profile);
         break;
     }
     case UI_ACTION_FLOW_MAX: {
         short max = (g_nEmergencyPauseDigitsMax ? abs(g_nEmergencyPauseDigitsMax) : abs(EMERGENCY_PAUSE_DIGITS_MAX));
-        INCREMENT_MIN_MAX(g_nDigitFlowCompensation_Fmax, 200, g_nDigitFlowCompensation_Fmin, max);
+        auto profile = Printer::digitCompensation.flowProfile();
+        INCREMENT_MIN_MAX(profile.maxDigits, 200, profile.minDigits, max);
+        Printer::digitCompensation.setFlowProfile(profile);
         break;
     }
     case UI_ACTION_FLOW_DF: {
-        INCREMENT_MIN_MAX(g_nDigitFlowCompensation_intense, 1, -99, 99);
-        //flowmulti wird zur laufzeit geändert, anhand von steigung intense -> aber je nach cache erst sehr spät.
+        auto profile = Printer::digitCompensation.flowProfile();
+        INCREMENT_MIN_MAX(profile.extrusionPercent, 1, -99, 99);
+        Printer::digitCompensation.setFlowProfile(profile);
         break;
     }
     case UI_ACTION_FLOW_DV: {
-        INCREMENT_MIN_MAX(g_nDigitFlowCompensation_speed_intense, 1, -90, 99);
-        //feedmulti wird zur laufzeit geändert, anhand von steigung intense
+        auto profile = Printer::digitCompensation.flowProfile();
+        INCREMENT_MIN_MAX(profile.speedPercent, 1, -90, 99);
+        Printer::digitCompensation.setFlowProfile(profile);
         break;
     }
     case UI_ACTION_SHIFT_INTERVAL: {
@@ -3605,8 +3611,9 @@ void UIDisplay::mainSwitchCase(int action) {
         break;
     }
     case UI_ACTION_DIGIT_COMPENSATION: {
-        g_nDigitZCompensationDigits_active = (g_nDigitZCompensationDigits_active ? false : true);
-        HAL::eprSetByte(EPR_RF_DIGIT_CMP_STATE, (g_nDigitZCompensationDigits_active ? 1 : 2)); //2 ist false, < 1 ist true
+        const bool enabled = !Printer::digitCompensation.digitZEnabled();
+        Printer::digitCompensation.setDigitZEnabled(enabled);
+        HAL::eprSetByte(EPR_RF_DIGIT_CMP_STATE, enabled ? 1 : 2);
         EEPROM::updateChecksum();
         break;
     }

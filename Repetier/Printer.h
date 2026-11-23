@@ -25,6 +25,7 @@
 #include "PrintLayers.h"
 #include "PrintPause.h"
 #include "PrintStop.h"
+#include "DigitCompensation.h"
 
 // ##########################################################################################
 // ##   status flags
@@ -85,7 +86,6 @@ public:
     static volatile float v;                // Last planned printer speed.
     static unsigned long timer[2];          // used for acceleration/deceleration timing
     static unsigned long stepNumber[2];     // Step number in current move.
-    static unsigned short interval_mod; // additional step duration in ticks to slow the printer down live
     static int8_t lastDirectionSovereignty;
     static float originOffsetMM[3];
     static volatile float destinationMM[4]; // Requested target in mm from origin.
@@ -98,9 +98,7 @@ public:
     static float axisLengthMM[3];           // Länge des überfahrbaren Bereichs im positiven Homing. (=Schienen-Fahrweg - Homing-Offset - 2x ExtruderOffset)
     static float feedrate;                  // Last requested feedrate.
     static int feedrateMultiply;            // Multiplier for feedrate in percent (factor 1 = 100)
-    static float dynamicFeedrateFactor;     // Feedrate multiplier factor for digit compensation (1.0 = 100%)
     static float menuExtrusionFactor;       // Flow multiplier factor (1.0 = 100%)
-    static float dynamicExtrusionFactor;    // Flow multiplier factor for digit compensation (1.0 = 100%)
     static float extrudeMultiplyErrorSteps; // collects the extrusion error.
     static float maxXYJerk;                 // Maximum allowed jerk in mm/s
     static float maxZJerk;                  // Maximum allowed jerk in z direction in mm/s
@@ -110,6 +108,7 @@ public:
     static ZOffset zOffset;
     static ZMotion zMotion;
     static PrintLayers layers;
+    static DigitCompensation digitCompensation;
     static PrintPause pause;
     static PrintStop printStop;
     static char ZMode;                      // Z Scale

@@ -39,8 +39,12 @@ bool clipReturn[4] = {};
 int incompleteReturns = 0;
 int incomingReads = 0, objectOutputs = 0;
 unsigned matrixDepthReads = 0;
+unsigned strainGaugeReads = 0;
 void (*duringMove)(long, long, long, long) = nullptr;
 void (*duringHeatWait)() = nullptr;
+void (*duringPeriodicActions)() = nullptr;
+unsigned primePolls = 0, primeMoves = 0, primeWaits = 0, skipPrimeAt = 0, abortPrimeAt = 0;
+bool observedPrimeBrake = false;
 
 void requestInterruptPause();
 void poll();
@@ -79,6 +83,7 @@ constexpr bool LOW = false, HIGH = true;
 bool READ(int pin);
 void WRITE(int pin, bool high);
 #include "ZMotion.h"
+#include "DigitCompensation.h"
 
 #define PSTR(text) (text)
 #define UI_STATUS_UPD(text) ((void)0)
@@ -106,6 +111,7 @@ struct WireInput {
     void beginTransmission(uint8_t address) const { assert(address == I2C_ADDRESS_STRAIN_GAUGE); }
     void requestFrom(uint8_t address, uint8_t length) {
         assert(address == I2C_ADDRESS_STRAIN_GAUGE && length == 3);
+        ++strainGaugeReads;
         byteIndex = 0;
     }
     void endTransmission() const { assert(byteIndex == 3); }
@@ -125,6 +131,9 @@ extern PrintStop printStop;
 ZOffset zOffset;
 ZMotion zMotion(zStepsPerMm);
 PrintLayers layers{zStepsPerMm};
+DigitCompensation digitCompensation{
+    short(std::abs(EMERGENCY_PAUSE_DIGITS_MAX) * 0.7), short(std::abs(EMERGENCY_PAUSE_DIGITS_MAX))
+};
 long currentXYSteps[2] = { 6400, 12800 };
 long directCurrentSteps[4] = { 0, 16, 8, 0 };
 struct DirectDisplacement {
@@ -136,11 +145,15 @@ int32_t queuedPositionSteps[3] = {};
 float axisStepsPerMM[3] = { 160.0f, 160.0f, zStepsPerMm };
 float axisMMPerSteps[3] = { 1.0f / 160, 1.0f / 160, 1.0f / zStepsPerMm };
 float homingFeedrate[3] = { 60.0f, 60.0f, 5.0f };
+float axisLengthMM[3] = { 170.0f, 245.0f, 200.0f };
+long maxSoftEndstopSteps[2] = { 170 * 160L, 245 * 160L };
+float destinationMM[4] = {}, destinationRemainderMM[4] = {};
+float extrudeMultiplyErrorSteps = 0.0f, menuExtrusionFactor = 1.0f;
+bool relativeExtruderCoordinateMode = false;
 float compensatedPositionOverPercE = 0.0f;
 float compensatedPositionCollectTinyE = 0.0f;
-float dynamicFeedrateFactor = 1.0f, dynamicExtrusionFactor = 1.0f;
-unsigned short interval_mod = 0;
-bool blockAll = false, doHeatBedZCompensation = true, g_pressure_offset_active = false;
+bool blockAll = false, g_pressure_offset_active = false;
+volatile char doHeatBedZCompensation = true;
 bool printing = true, menuPaused = false;
 short g_pressure_offset = 0;
 int feedrateMultiply = 100, motorCurrent[4] = {};
@@ -183,7 +196,22 @@ void queueRelativeMMCoordinates(float, float, float z, float, float, bool, bool 
 void setXAxisSteps(long) {}
 void setYAxisSteps(long) {}
 void setZAxisSteps(long steps) { zMotion.setNominalSteps(steps); }
-void setEPositionMM(float value) { assert(value == 0); }
+void setEPositionMM(float value, float remainder = 0) {
+    destinationMM[E_AXIS] = value;
+    destinationRemainderMM[E_AXIS] = remainder;
+}
+void queueFloatCoordinates(float, float, float z, float e, float) {
+    assert(g_startLineActive && !printStop.commandsBlocked());
+    ++primeMoves;
+    if (z != IGNORE_COORDINATE)
+        zMotion.setNominalSteps(std::lround(z * axisStepsPerMM[Z_AXIS]));
+    if (e != IGNORE_COORDINATE) {
+        setEPositionMM(e);
+        extrudeMultiplyErrorSteps = 0.375f;
+        compensatedPositionCollectTinyE = 0.25f;
+    }
+}
+bool checkPlayKey() { return skipPrimeAt && primePolls >= skipPrimeAt; }
 void offsetRelativeStepsCoordinates(long x, long y, long z, long e, int task = TASK_NO_TASK);
 }
 
@@ -204,6 +232,10 @@ T constrain(T value, A low, B high) {
     return value < low ? low : value > high ? high : value;
 }
 
+namespace RMath {
+float min(float a, float b) { return std::min(a, b); }
+}
+
 struct Extruder {
     struct {
         float targetTemperatureC = 200.0f;
@@ -216,6 +248,8 @@ struct Extruder {
         }
     } tempControl;
     int8_t stepperDirection = 0;
+    uint8_t id = 0;
+    float offsetMM[2] = {};
 
     static Extruder* current;
     static void setTemperatureForExtruder(float temperature, int tool);
@@ -277,11 +311,21 @@ struct UIDisplay {
 enum FirmwareState { Paused, Processing };
 namespace Commands {
 void checkForPeriodicalActions(FirmwareState);
+void waitUntilEndOfAllMoves() { ++primeWaits; PrintLine::linesCount = 0; }
 void changeFeedrateMultiply(int) { assert(false); }
 void printCurrentPosition() {}
 }
 
 struct GCode {
+    long S = 0, P = 0;
+    float E = 0, F = 0, I = 1, Y = 0;
+    bool hasS() const { return S != 0; }
+    bool hasP() const { return P != 0; }
+    bool hasE() const { return E != 0; }
+    bool hasF() const { return F != 0; }
+    bool hasI() const { return I != 0; }
+    bool hasY() const { return Y != 0; }
+
     static void readFromSerial() {
         assert(Printer::printStop.commandsBlocked());
         ++incomingReads;
@@ -314,6 +358,8 @@ void sample(short force, int count = 1) {
 
 bool pauseDuringQueueWait = false;
 void Commands::checkForPeriodicalActions(FirmwareState state) {
+    if (duringPeriodicActions)
+        duringPeriodicActions();
     if (state == Processing && Printer::pause.allowsQueueAdvance() && PrintLine::hasLines()) {
         if (pauseDuringQueueWait) {
             pauseDuringQueueWait = false;
@@ -434,7 +480,7 @@ void interruptDuringLearning() {
     sample(printingForce, 9);
     // Let the poll capture its pause state and the nominal Z. Enter a queued
     // pause just before the lock that would publish the SenseOffset update.
-    pauseBeforeLock = 4;
+    pauseBeforeLock = 3;
     sample(printingForce);
     assert(!pauseBeforeLock && Printer::pause.isPaused() && !Printer::pause.isSettled());
     assert(Printer::zOffset.senseMicrometers() == initialClearance);
@@ -694,7 +740,7 @@ void layerFadeAndZHop() {
     layers.resetTracking();
     Printer::currentXYSteps[X_AXIS] = 5280; // Interpolated bed depth of 202 steps.
     Printer::currentXYSteps[Y_AXIS] = 0;
-    g_nDigitZCompensationDigits_active = false;
+    Printer::digitCompensation.setDigitZEnabled(false);
     const long offset = Printer::zOffset.effectiveSteps();
 
     g_startLineActive = true;
@@ -729,7 +775,7 @@ void compensationBoundaries() {
     auto& layers = Printer::layers;
     Printer::currentXYSteps[X_AXIS] = 5280; // Interpolated bed depth of 202 steps.
     Printer::currentXYSteps[Y_AXIS] = 0;
-    g_nDigitZCompensationDigits_active = false;
+    Printer::digitCompensation.setDigitZEnabled(false);
     const long offset = Printer::zOffset.effectiveSteps();
     const long fadeStart = layers.fadeStartSteps();
     const long fadeEnd = layers.fadeEndSteps();
@@ -749,17 +795,22 @@ void compensationBoundaries() {
     layers.resetFadeBounds(zStepsPerMm);
     expectCompensation(448, 203 + offset, 4320.0f / (12378.0f * 256.0f), 1);
 
-    g_nDigitZCompensationDigits_active = true;
-    g_nDigitZCompensationDigits = -5500;
+    auto settleDigitZ = [](short digits) {
+        forceDigits = digits;
+        for (int i = 0; i < 40; ++i)
+            sampleStrainGauge();
+    };
+    Printer::digitCompensation.setDigitZEnabled(true);
+    settleDigitZ(-5500);
     expectCompensation(256, 202 + offset + 53, 0.0f, 1);
-    g_nDigitZCompensationDigits = 5500;
+    settleDigitZ(5500);
     expectCompensation(256, 202 + offset + 53, 0.0f, 1);
 
     Printer::axisStepsPerMM[Z_AXIS] = 2560.0f;
     layers.resetFadeBounds(Printer::axisStepsPerMM[Z_AXIS]);
     Printer::zOffset.refreshSteps(Printer::axisStepsPerMM[Z_AXIS]);
     const long scaledOffset = Printer::zOffset.effectiveSteps();
-    g_nDigitZCompensationDigits = 32767;
+    settleDigitZ(32767);
     expectCompensation(0, 215 + scaledOffset + 600, 0.0f, 1);
 
     Printer::doHeatBedZCompensation = false;
@@ -767,7 +818,7 @@ void compensationBoundaries() {
 
     // A flat matrix gives a zero-width fade at the first layer.
     Printer::doHeatBedZCompensation = true;
-    g_nDigitZCompensationDigits_active = false;
+    Printer::digitCompensation.setDigitZEnabled(false);
     g_ZCompensationMax = g_offsetZCompensationSteps;
     Printer::currentXYSteps[X_AXIS] = 6816; // Interpolated bed depth of 250 steps.
     layers.resetTracking();
@@ -800,6 +851,126 @@ void layerScaleTransitions() {
     assert(layers.currentLayerSteps() == 601 && !layers.previousLayerSteps());
 }
 
+void digitFlowSamples() {
+    auto& compensation = Printer::digitCompensation;
+    compensation.setFlowProfile({1500, 4500, -75, -90});
+    planMove(256, true);
+    Printer::zMotion.setNominalSteps(256);
+
+    auto readAt = [](millis_t time, short digits, unsigned expectedReads) {
+        clockMs = time;
+        forceDigits = digits;
+        const unsigned before = strainGaugeReads;
+        handleStrainGaugeFeatures(clockMs);
+        if (strainGaugeReads - before != expectedReads)
+            std::fprintf(stderr, "Unexpected DMS sample count at %lu ms\n", static_cast<unsigned long>(time));
+        assert(strainGaugeReads - before == expectedReads);
+        recalculateZCompensation();
+    };
+    auto check = [&](short filtered, float extrusion, float speed, unsigned interval, long target) {
+        assert(compensation.filteredDigits() == filtered);
+        assert(std::abs(compensation.extrusionFactor() - extrusion) < 0.000001f);
+        assert(std::abs(compensation.feedrateFactor() - speed) < 0.000001f);
+        assert(compensation.intervalScale() == interval);
+        assert(Printer::zMotion.correctionTarget() == target);
+    };
+    readAt(10, 4500, 0);
+    check(0, 1, 1, 0, 37);
+    for (millis_t time : {11U, 22U, 33U, 44U}) {
+        readAt(time, 4500, 1);
+        check(4500, 1, 1, 0, 80);
+    }
+    readAt(50, 5500, 0);
+    assert(compensation.latestDigits() == 4500);
+
+    // SenseOffset's 50 ms deadline also feeds the shared Digit-Z filter.
+    Printer::zMotion.setNominalSteps(257);
+    readAt(51, 4500, 1);
+    check(4500, 0.25f, 0.99f, 1034, 81);
+    readAt(54, 7000, 0);
+    check(4500, 0.25f, 0.99f, 1034, 81);
+    readAt(62, 1500, 1);
+    check(3750, 0.4375f, 0.98f, 1044, 74);
+
+    Printer::zMotion.setNominalSteps(256);
+    g_startLineActive = true;
+    readAt(73, -3000, 1);
+    check(2062, 0.8595f, 0.97f, 1055, 57);
+
+    g_startLineActive = false;
+    Printer::doHeatBedZCompensation = false;
+    readAt(84, 5000, 1);
+    assert(compensation.latestDigits() == 5000);
+    check(2062, 0.8595f, 0.97f, 0, 0);
+
+    Printer::doHeatBedZCompensation = true;
+    readAt(95, 4500, 1);
+    check(2671, 1, 0.98f, 1044, 63);
+    readAt(101, 4500, 1);
+    check(3128, 1, 0.99f, 1034, 67);
+
+    Printer::g_pressure_offset_active = true;
+    Printer::g_pressure_offset = 1000;
+    readAt(112, 5500, 1);
+    assert(compensation.latestDigits() == 4500);
+    check(3471, 1, 1, 0, 70);
+
+    // The step interrupt can process M3000 during the foreground calculation.
+    compensation.observe(4500, Printer::doHeatBedZCompensation, [] {
+        Printer::doHeatBedZCompensation = false;
+        return true;
+    });
+    assert(compensation.feedrateFactor() < 1.0f && compensation.intervalScale() == 0);
+}
+
+void primeFlowCleanup(unsigned skipAt, unsigned abortAt) {
+    auto& compensation = Printer::digitCompensation;
+    compensation.setFlowProfile({2000, 6100, 21, -30});
+    // The prime lies below this learned boundary and still enables Digit Flow.
+    Printer::layers.resetTracking();
+    planMove(512, true);
+    Printer::setEPositionMM(10.0f, 0.00001f);
+    Printer::extrudeMultiplyErrorSteps = 0.125f;
+    Printer::compensatedPositionCollectTinyE = 0.75f;
+    Printer::relativeExtruderCoordinateMode = true;
+    Printer::feedrateMultiply = 85;
+    Printer::menuExtrusionFactor = 0.93f;
+    skipPrimeAt = skipAt;
+    abortPrimeAt = abortAt;
+    duringPeriodicActions = [] {
+        assert(g_startLineActive);
+        ++primePolls;
+        if (primePolls == abortPrimeAt) {
+            Printer::stopPrint();
+            return;
+        }
+        sample(printingForce);
+        const auto& compensation = Printer::digitCompensation;
+        const auto profile = compensation.flowProfile();
+        assert(profile.minDigits == 1500 && profile.maxDigits == 4500);
+        observedPrimeBrake |= compensation.extrusionFactor() < 0.5f
+            && compensation.feedrateFactor() < 1.0f && compensation.intervalScale() > 1024;
+    };
+    GCode command;
+    runStartLine(&command);
+    duringPeriodicActions = nullptr;
+
+    assert(observedPrimeBrake && primeWaits == 2);
+    assert((skipAt || abortAt) ? primeMoves == (skipAt ? skipAt : abortAt) : primeMoves > 300);
+    const auto profile = compensation.flowProfile();
+    assert(profile.minDigits == 2000 && profile.maxDigits == 6100);
+    assert(profile.extrusionPercent == 21 && profile.speedPercent == -30);
+    assert(compensation.extrusionFactor() == 1 && compensation.feedrateFactor() == 1 && !compensation.intervalScale());
+    assert(!g_startLineActive && Printer::relativeExtruderCoordinateMode);
+    assert(Printer::feedrateMultiply == 85 && Printer::menuExtrusionFactor == 0.93f);
+    if (abortAt) {
+        assert(Printer::printStop.commandsBlocked() && Printer::destinationMM[E_AXIS] == 0.0f);
+    } else {
+        assert(Printer::destinationMM[E_AXIS] == 10.0f && Printer::destinationRemainderMM[E_AXIS] == 0.00001f);
+        assert(Printer::extrudeMultiplyErrorSteps == 0.125f && Printer::compensatedPositionCollectTinyE == 0.75f);
+    }
+}
+
 void initializeOffsets() {
     planMove(256, true);
     Printer::zMotion.setNominalSteps(256);
@@ -817,7 +988,9 @@ void initializeOffsets() {
 
 int main(int argc, char** argv) {
     assert(argc == 2);
-    initializeOffsets();
+    const bool digitFlowReplay = !std::strcmp(argv[1], "digit-flow");
+    if (!digitFlowReplay)
+        initializeOffsets();
     Printer::pause.restoreDefaultParking();
     Printer::pause.setParkSteps(E_AXIS, parkE);
 
@@ -845,6 +1018,14 @@ int main(int argc, char** argv) {
         layerScaleTransitions();
     else if (!std::strcmp(argv[1], "compensation-bounds"))
         compensationBoundaries();
+    else if (digitFlowReplay)
+        digitFlowSamples();
+    else if (!std::strcmp(argv[1], "prime-complete"))
+        primeFlowCleanup(0, 0);
+    else if (!std::strcmp(argv[1], "prime-skip"))
+        primeFlowCleanup(8, 0);
+    else if (!std::strcmp(argv[1], "prime-abort"))
+        primeFlowCleanup(0, 8);
     else
         return 1;
     std::printf("Print lifecycle replay passed (%s)\n", argv[1]);

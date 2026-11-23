@@ -62,16 +62,13 @@ volatile unsigned long Printer::interval = 10000; // Last step duration in ticks
 volatile float Printer::v = 0;                    // Last planned printer speed.
 unsigned long Printer::timer[2] = { 0 };          // Used for acceleration/deceleration timing
 unsigned long Printer::stepNumber[2] = { 0 };     // Step number in current move.
-unsigned short Printer::interval_mod = 0; // additional step duration in ticks to slow the printer down live
 int8_t Printer::lastDirectionSovereignty = 0;
 
 long Printer::maxSoftEndstopSteps[2] = { 0 };
 float Printer::axisLengthMM[3] = { 0 };       // Länge des überfahrbaren Bereichs im positiven Homing. (=Schienen-Fahrweg - Homing-Offset - 2x ExtruderOffset)
 float Printer::feedrate = 10;                 // Last requested feedrate.
 int Printer::feedrateMultiply = 100;          // Multiplier for feedrate in percent (factor 100 = 100%)
-float Printer::dynamicFeedrateFactor = 1.0;   // Feedrate multiplier factor for digit compensation (1.0 = 100%)
 float Printer::menuExtrusionFactor = 1.0;     // Flow multiplier factor (1.0 = 100%)
-float Printer::dynamicExtrusionFactor = 1.0;  // Flow multiplier factor for digit compensation (1.0 = 100%)
 float Printer::extrudeMultiplyErrorSteps = 0;
 float Printer::maxXYJerk;                                         // Maximum allowed jerk in mm/s
 float Printer::maxZJerk;                                          // Maximum allowed jerk in z direction in mm/s
@@ -81,6 +78,9 @@ float Printer::filamentPrinted = 0.0f;                            // mm of filam
 ZOffset Printer::zOffset;
 ZMotion Printer::zMotion{ZAXIS_STEPS_PER_MM};
 PrintLayers Printer::layers{ZAXIS_STEPS_PER_MM};
+DigitCompensation Printer::digitCompensation{
+    short(abs(EMERGENCY_PAUSE_DIGITS_MAX) * 0.7), short(abs(EMERGENCY_PAUSE_DIGITS_MAX))
+};
 char Printer::ZMode = DEFAULT_Z_SCALE_MODE;                       // Z-min distance or nominal layer height
 char Printer::moveMode[3];                                        // move mode which is applied within the Position X/Y/Z menus
 bool Printer::moveKosys = KOSYS_GCODE;                            // true = GCode, false = DirectMove / OffsetMove
@@ -295,7 +295,7 @@ inline bool isExtrusionAllowed(float e) {
         de = (e - Printer::destinationMM[E_AXIS]) - Printer::destinationRemainderMM[E_AXIS];
     }
 
-    if (fabs(de) * Printer::menuExtrusionFactor * Printer::dynamicExtrusionFactor > EXTRUDE_MAXLENGTH) {
+    if (fabs(de) * Printer::menuExtrusionFactor * Printer::digitCompensation.extrusionFactor() > EXTRUDE_MAXLENGTH) {
         return false;
     }
 
