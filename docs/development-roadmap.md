@@ -1,20 +1,20 @@
 # RFx000 firmware development roadmap
 
-The current block is **coordinate systems and motion compensation**. The aim is to explain every requested and applied movement from G-code through the motor pulses, then simplify the firmware around those responsibilities. The work covers the shared firmware for RF1000, RF2000 and RF2000v2. The [maintenance list](maintenance-tasks.md) records individual fixes, candidates and verification results.
+The target is **firmware designed for the RFx000 boards**. Keep Repetier-compatible USB printing while giving motion, print lifecycle, calibration and board drivers their own state and interfaces. The work covers RF1000, RF2000, RF2000v2 and the documented retrofits. The [maintenance list](maintenance-tasks.md) records individual fixes and verification results.
 
 | Development block | Outcome |
 | --- | --- |
-| [Coordinate systems and motion compensation](#1-coordinate-systems-and-motion-compensation) | **Active.** One accountable path for nominal geometry, direct motion, compensation and motor position. |
+| [Coordinate systems and motion compensation](#1-coordinate-systems-and-motion-compensation) | One accountable path for nominal geometry, direct motion, compensation and motor position. |
 | [Print lifecycle and DMS controls](#2-print-lifecycle-and-dms-controls) | Explicit job and phase transitions, with consistent pressure control and reset behavior. |
 | [Calibration and persistence](#3-calibration-and-persistence) | A traceable path from measured contact to the active and saved calibration. |
 | [Motion smoothness and performance](#4-motion-smoothness-and-performance) | Highest sustainable motion throughput with CPU time for UART, planning, temperature and DMS. |
-| [Firmware structure and hardware variants](#5-firmware-structure-and-hardware-variants) | Fewer supported combinations and clear boundaries between machine logic, operator interfaces and hardware. |
+| [Firmware structure and hardware variants](#5-firmware-structure-and-hardware-variants) | **Active.** RFx000 board drivers and machine services with a Repetier-compatible serial interface. |
 
 Use the architecture below throughout the blocks. Calibration can progress independently once the live and saved offset semantics are clear. Evaluate timing changes after the coordinate behavior has a repeatable baseline. Review the scope of optional features before restructuring the paths that serve them.
 
 ## Architecture to test against the code
 
-`motion.cpp` currently contains path planning, queued task dispatch, direct moves, endstop decisions and step output. `RF.cpp` combines scan motion, matrix math, pressure control, pause and print state, and special G-code dispatch. `Printer` holds state read and written by these paths. [`Commands.cpp`](../Repetier/Commands.cpp#L54) refreshes compensation in the foreground, and [`HAL.cpp`](../Repetier/HAL.cpp#L739) switches between compensation, direct motion and queued motion in the stepper interrupt. [Planner and executor](../Repetier/motion.cpp) · [RF machine functions](../Repetier/RF.cpp)
+`MotionPlanner` prepares step profiles and updates lookahead. `MoveQueue` owns the buffered slots and `StepExecutor` owns the clocks, direction and step output. Timer1 chooses between Z compensation, direct motion and queued motion. `RF.cpp` still combines scan motion, matrix math, pressure control, lifecycle state and RF G-code dispatch. Give those services their own state as the callers are separated. [Planner](../Repetier/MotionPlanner.cpp) · [Executor](../Repetier/StepExecutor.cpp) · [RF machine functions](../Repetier/RF.cpp)
 
 ### One owner for motion
 
@@ -122,9 +122,14 @@ The AVR builds use 4 fewer bytes of global SRAM and 76–136 fewer bytes of flas
 
 ## 5. Firmware structure and hardware variants
 
+- **Design for the installed boards.** Use the RF hardware map and factory profiles to decide which paths belong in firmware. Preserve working calibration, EEPROM data and retrofit wiring while moving their owners. Retire inherited branches once the RF entry points and dependencies have been checked.
 - **Split responsibilities where the workflows cross.** As each block settles its state and callers, bring G-code and panel actions through the same machine operations where they request the same behavior. Review which parts of `RF.cpp` belong to motion policy, print lifecycle, calibration or peripherals. Review periodic and nested waits for explicit completion conditions and a single owner of each transition. Expose small interfaces that eliminate direct cross-module writes.
 - **Review actual hardware differences.** Compare board pins, driver and timer behavior, endstop topology and calibration data. Keep model differences at the hardware or configuration boundary where they express real capabilities. Use the same exercise for heater, watchdog and peripheral hooks when those boundaries are touched. [Board selection](../Repetier/Configuration.h#L45) · [Pin mappings](../Repetier/pins.h)
 - **Make refactoring verifiable.** Move in small slices with a stated state owner, call path and expected behavior. Keep structural changes and intentional behavior changes in separate commits where practical. Bring representative host replays into the repository as the shared interfaces take shape. Run the relevant replays and AVR builds for RF1000, RF2000 and RF2000v2, track flash and SRAM, and record physical verification separately for motion, sensors and persistence. [Existing printer scenarios](first-layer-control/test-scenarios.md)
+
+### Serial printing compatibility
+
+USB over UART0 is the host interface. Preserve configured baud, startup and capability reporting, line numbering and checksums, ASCII and Repetier binary input, response order and command backpressure. Keep RF G-code command meanings while their handlers move into machine services. The host transcript replay exercises numbered lines, repeated and missing lines, queue pressure, text commands, idle and partial-line timeouts, binary v1/v2 and acknowledgement during a print stop. Run `python3 tests/serial-protocol.py` when changing reception or admission. Connection startup and a complete print with a real host remain hardware checks. [Receiver](../Repetier/gcode.cpp) · [Transcript replay](../tests/serial-protocol.cpp)
 
 ### Feature retirement
 

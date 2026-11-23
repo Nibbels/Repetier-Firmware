@@ -1,6 +1,6 @@
 # Firmware maintenance handover
 
-**Development roadmap:** [Architecture and development blocks](docs/development-roadmap.md). The active block is coordinate systems and motion compensation. The [maintenance list](docs/maintenance-tasks.md) tracks its fixes and later work. Evaluate step packing in the motion smoothness and performance block. Review optional features before migrating their code. [Milling mode has been retired](docs/development-roadmap.md#feature-retirement).
+**Development roadmap.** Build firmware for the RFx000 boards with the established Repetier serial printing interface. Give each service ownership of its mutable state and use small, verifiable commits. Evaluate step packing in the motion smoothness and performance block. [Development blocks](docs/development-roadmap.md) · [Maintenance tasks](docs/maintenance-tasks.md)
 
 **Verified coordinate semantics.** `Printer::layers` owns the pending and confirmed model layers and both fade boundaries in nominal planned Z steps. The foreground compares them with the nominal position executing in `ZMotion`. The M3912 patch restores the incoming logical E coordinate. [Coordinate frames and extrusion timeline](docs/first-layer-control/coordinate-frames-and-extrusion.md) · [M3912 patch](https://github.com/Nibbels/Repetier-Firmware/commit/5f848c9a5cd0347c6d45fd9d3f13afd7344cb775)
 
@@ -19,6 +19,8 @@ This is shared AVR/ATmega2560 Repetier firmware for **RF1000, RF2000 and RF2000v
 **Motion performance.** Optimize sustainable print speed and worst-case service gaps together. Use the [timing plan](docs/motion-timing.md) for STEP/DIR ownership, Advance handoffs, UART throughput and the baseline required to evaluate packing. Use the [planner notes](docs/motion-timing.md#lookahead-short-moves-and-extrusion-transitions) when touching short-segment speed, retract or print–travel joins. Preserve their behavior during structural refactors and review the speed policy with its own replays.
 
 **Motion planning.** `MotionPlanner` prepares the step profile and owns the junction calculations. The planner updates queue slots in place and releases them with complete profiles. For a direct move, `Printer::offsetRelativeStepsCoordinates()` reserves the slot under interrupt protection, then the foreground plans and publishes the move. Replay early jog release and queue wrap with `python3 tests/pause-sense-offset.py`. [Planner and executor boundary](docs/motion-timing.md#planner-and-executor-boundary)
+
+**Step execution.** `StepExecutor` owns both step clocks, cached primary-axis counts, pulse packing, direction and the feedrate snapshot for the panel. Timer1 selects the move and the executor runs its prepared profile. Keep hardware operations in the executor and check the AVR pulse traces when changing a hot path. [Executor](Repetier/StepExecutor.cpp)
 
 **Board connectors and retrofits.** Preserve named physical connector definitions and the existing controls for available switched outputs. A port can be unused in the factory build and used for equipment such as an E3D V6 or Volcano heatsink fan or a water-cooling pump. The RF2000 family shares its pin map and configuration with model-specific defaults. Check the [board notes and X44 example](docs/board-connectors.md) before changing pin assignments or retiring an output path.
 
@@ -40,7 +42,7 @@ This is shared AVR/ATmega2560 Repetier firmware for **RF1000, RF2000 and RF2000v
 
 **Pause and stop.** `Printer::pause` owns the pause phase and return position. The queue, the panel and the DMS handler use its request and query methods. `Printer::printStop` owns timed abort cleanup and command admission during a stop. Run `python3 tests/pause-sense-offset.py` when changing these transitions. [Pause and stop transitions](docs/development-roadmap.md#pause-and-stop-transitions)
 
-**Print input.** USB over UART0 is the sole external G-code input. All three models buffer 24 planned moves. The SD removal record links to the commit containing the full deletion and to the last revision with the card implementation. [SD support removal](docs/maintenance-tasks.md#sd-support-removal)
+**Print input.** USB over UART0 is the sole external G-code input. All three models buffer 24 planned moves. Run `python3 tests/serial-protocol.py` when changing the receiver or command admission. Preserve the established host transcripts. [Serial compatibility](docs/development-roadmap.md#serial-printing-compatibility) · [SD support removal](docs/maintenance-tasks.md#sd-support-removal)
 
 **Non-negotiable operator workflow:** In Mod Menu page 2 the Z/bed DOWN→UP button pair intentionally transfers 5 µm of live SenseOffset into the EEPROM-backed manual part of `Printer::zOffset` with approximately unchanged final clearance (see [live takeover procedure](docs/z-offset/history-and-workflows.md) and the original January 2017 changelog). Do not “fix” the asymmetric button behavior or reset dynamic offsets while a manual transfer is underway.
 
