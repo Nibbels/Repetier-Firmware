@@ -60,9 +60,7 @@
 
 long baudrate = BAUDRATE; // Communication speed rate.
 
-uint8_t pwm_pos[NUM_EXTRUDER + 3]; // 0-NUM_EXTRUDER = Heater 0-NUM_EXTRUDER of extruder, NUM_EXTRUDER = Heated bed, NUM_EXTRUDER+1 Board fan, NUM_EXTRUDER+2 = Fan
 
-uint8_t fanSpeed = 0;
 
 MoveQueue PrintLine::queue;
 PrintLine PrintLine::direct;

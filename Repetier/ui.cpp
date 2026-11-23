@@ -846,16 +846,16 @@ void UIDisplay::parse(char* txt, bool ram) {
             if (c2 == 's') { // %Fs : Fan speed in Percent
                 addFloat(Printer::getFanSpeed(false) / 2.55f, 3, 1);
             } else if (c2 == 'h') { // %Fh : Fan frequency in Hz/Teiler
-                addFloat(15.3f / part_fan_pwm_speed, 2, 1);
+                addFloat(15.3f / HAL::partFanDivisor(), 2, 1);
             } else if (c2 == 'm') { // %Fm : Fan modulation type PWM or PDM
-                if (part_fan_frequency_modulation == PART_FAN_MODE_PDM)
+                if (HAL::partFanMode() == PART_FAN_MODE_PDM)
                     addStringP(PSTR("PDM"));
                 else
                     addStringP(PSTR("PWM"));
             } else if (c2 == 'U') { // %FU : Fan modulation minimum = 1% FanSpeed
-                addInt(part_fan_pwm_min, 3);
+                addInt(HAL::partFanMinDuty(), 3);
             } else if (c2 == 'O') { // %FO : Fan modulation maximum = 100% FanSpeed
-                addInt(part_fan_pwm_max, 3);
+                addInt(HAL::partFanMaxDuty(), 3);
             }
             if (c2 == 'H') // %FH : Digit Homing to Zero ON/OFF
             {
@@ -1148,17 +1148,17 @@ void UIDisplay::parse(char* txt, bool ram) {
             // Extruder output level
             if (c2 >= '0' && c2 <= '9') // %o0..9 : Output level extruder 0..9 is % including %sign
             {
-                ivalue = pwm_pos[c2 - '0'];
+                ivalue = HAL::outputDuty(c2 - '0');
             }
 
             else if (c2 == 'b') // %ob : Output level heated bed
             {
-                ivalue = pwm_pos[heatedBedController.pwmIndex];
+                ivalue = HAL::outputDuty(heatedBedController.pwmIndex);
             }
 
             else if (c2 == 'C') // %oC : Output level current extruder
             {
-                ivalue = pwm_pos[Extruder::current->id];
+                ivalue = HAL::outputDuty(Extruder::current->id);
             }
 
             ivalue = (ivalue * 100) / 255;
@@ -2323,37 +2323,37 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
     }
     case UI_ACTION_FAN_HZ: {
         if (increment > 0) {
-            Commands::adjustFanFrequency((part_fan_pwm_speed == PART_FAN_MODE_MAX ? 1 : part_fan_pwm_speed + 1));
+            Commands::adjustFanFrequency((HAL::partFanDivisor() == PART_FAN_MODE_MAX ? 1 : HAL::partFanDivisor() + 1));
         } else {
-            Commands::adjustFanFrequency((part_fan_pwm_speed == 1 ? PART_FAN_MODE_MAX : part_fan_pwm_speed - 1));
+            Commands::adjustFanFrequency((HAL::partFanDivisor() == 1 ? PART_FAN_MODE_MAX : HAL::partFanDivisor() - 1));
         }
-        HAL::eprSetByte(EPR_RF_PART_FAN_SPEED, part_fan_pwm_speed);
+        HAL::eprSetByte(EPR_RF_PART_FAN_SPEED, HAL::partFanDivisor());
         EEPROM::updateChecksum();
         break;
     }
     case UI_ACTION_FAN_PART_FAN_PWM_MIN: {
-        int temp = part_fan_pwm_min;
+        int temp = HAL::partFanMinDuty();
         INCREMENT_MIN_MAX(temp, 1, 1, 239);
-        if (temp <= (int)part_fan_pwm_max - 16) {
-            part_fan_pwm_min = temp;
+        if (temp <= (int)HAL::partFanMaxDuty() - 16) {
+            HAL::setPartFanDutyRange(temp, HAL::partFanMaxDuty());
         }
-        //recalculate active pwm value out of fanSpeed for easy tune-in.
+        //recalculate active pwm value out of HAL::partFanSpeed() for easy tune-in.
         //(Tune-In: set fan to 1% and rise minimum until it starts.)
-        Commands::setFanSpeed(fanSpeed, true);
-        HAL::eprSetByte(EPR_RF_PART_FAN_PWM_MIN, part_fan_pwm_min);
+        Commands::setFanSpeed(HAL::partFanSpeed(), true);
+        HAL::eprSetByte(EPR_RF_PART_FAN_PWM_MIN, HAL::partFanMinDuty());
         EEPROM::updateChecksum();
         break;
     }
     case UI_ACTION_FAN_PART_FAN_PWM_MAX: {
-        int temp = part_fan_pwm_max;
+        int temp = HAL::partFanMaxDuty();
         INCREMENT_MIN_MAX(temp, 1, 16, 255);
-        if (temp >= part_fan_pwm_min + 16) {
-            part_fan_pwm_max = temp;
+        if (temp >= HAL::partFanMinDuty() + 16) {
+            HAL::setPartFanDutyRange(HAL::partFanMinDuty(), temp);
         }
-        //recalculate active pwm value out of fanSpeed for easy tune-in.
+        //recalculate active pwm value out of HAL::partFanSpeed() for easy tune-in.
         //(Tune-In: set fan to 100% and decrease maximum until fan slows down slightly.)
-        Commands::setFanSpeed(fanSpeed, true);
-        HAL::eprSetByte(EPR_RF_PART_FAN_PWM_MAX, part_fan_pwm_max);
+        Commands::setFanSpeed(HAL::partFanSpeed(), true);
+        HAL::eprSetByte(EPR_RF_PART_FAN_PWM_MAX, HAL::partFanMaxDuty());
         EEPROM::updateChecksum();
         break;
     }
@@ -3588,8 +3588,8 @@ void UIDisplay::mainSwitchCase(int action) {
         break;
     }
     case UI_ACTION_FAN_MODE: {
-        Commands::adjustFanMode((part_fan_frequency_modulation ? PART_FAN_MODE_PWM : PART_FAN_MODE_PDM)); //0 = pwm, 1 = pdm
-        HAL::eprSetByte(EPR_RF_FAN_MODE, part_fan_frequency_modulation);
+        Commands::adjustFanMode((HAL::partFanMode() ? PART_FAN_MODE_PWM : PART_FAN_MODE_PDM)); //0 = pwm, 1 = pdm
+        HAL::eprSetByte(EPR_RF_FAN_MODE, HAL::partFanMode());
         EEPROM::updateChecksum();
         break;
     }

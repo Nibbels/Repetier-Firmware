@@ -71,10 +71,6 @@ All known arduino boards use 64. This value is needed for the extruder timing. *
 
 #define PART_FAN_MODE_PWM 0
 #define PART_FAN_MODE_PDM 1
-extern uint8_t part_fan_frequency_modulation;
-extern uint8_t part_fan_pwm_speed;
-extern uint8_t part_fan_pwm_max; //this is calculated as 99%
-extern uint8_t part_fan_pwm_min; //this is calculated as 1%
 
 class InterruptProtectedBlock {
 private:
@@ -491,6 +487,20 @@ public:
     } // serialFlush
 
     static void setupTimer();
+
+    static void resetPwmOutputs();
+    static uint8_t outputDuty(uint8_t channel);
+    static void setHeaterDuty(uint8_t channel, uint8_t duty);
+    static void setBoardFan(bool enabled);
+    static uint8_t partFanSpeed();
+    static void setPartFanSpeed(uint8_t speed);
+    static uint8_t partFanDivisor();
+    static void setPartFanDivisor(uint8_t divisor);
+    static uint8_t partFanMode();
+    static void setPartFanMode(uint8_t mode);
+    static uint8_t partFanMinDuty();
+    static uint8_t partFanMaxDuty();
+    static void setPartFanDutyRange(uint8_t minimum, uint8_t maximum);
     static void showStartReason();
     static int getFreeRam();
     static void resetHardware();

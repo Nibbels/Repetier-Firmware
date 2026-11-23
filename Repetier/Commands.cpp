@@ -150,7 +150,7 @@ void Commands::printTemperatures(bool showRaw) {
         Com::printF(Com::tTColon, Extruder::current->tempControl.currentTemperatureC, 1);
         Com::printF(Com::tSpaceSlash, Extruder::current->tempControl.targetTemperatureC, 0);
         // Show output of autotune when tuning!
-        Com::printF(Com::tSpaceAtColon, (pwm_pos[Extruder::current->id]));
+        Com::printF(Com::tSpaceAtColon, (HAL::outputDuty(Extruder::current->id)));
 
         Com::printF(Com::tSpaceBColon, Extruder::getHeatedBedTemperature(), 1);
         Com::printF(Com::tSpaceSlash, heatedBedController.targetTemperatureC, 0);
@@ -159,7 +159,7 @@ void Commands::printTemperatures(bool showRaw) {
             Com::printF(Com::tSpaceRaw, (int)NUM_EXTRUDER);
             Com::printF(Com::tColon, (1023 << (2 - ANALOG_REDUCE_BITS)) - heatedBedController.currentTemperature);
         }
-        Com::printF(Com::tSpaceBAtColon, (pwm_pos[heatedBedController.pwmIndex])); // Show output of autotune when tuning!
+        Com::printF(Com::tSpaceBAtColon, (HAL::outputDuty(heatedBedController.pwmIndex))); // Show output of autotune when tuning!
 
 #if NUM_EXTRUDER > 1
         for (uint8_t i = 0; i < NUM_EXTRUDER; i++) {
@@ -168,7 +168,7 @@ void Commands::printTemperatures(bool showRaw) {
             Com::printF(Com::tSpaceSlash, extruder[i].tempControl.targetTemperatureC, 0);
 
             Com::printF(Com::tSpaceAt, (int)i);
-            Com::printF(Com::tColon, (pwm_pos[extruder[i].tempControl.pwmIndex])); // Show output of autotune when tuning!
+            Com::printF(Com::tColon, HAL::outputDuty(extruder[i].tempControl.pwmIndex)); // Show output of autotune when tuning!
 
             if (showRaw) {
                 Com::printF(Com::tSpaceRaw, (int)i);
@@ -210,57 +210,23 @@ void Commands::changeFlowrateMultiply(float newExtrusionFactor) {
     Com::printFLN(Com::tFlowMultiply, (int)lroundf(100 * newExtrusionFactor));
 } // changeFlowrateMultiply
 
-uint8_t fanKickstart = 0;
 void Commands::setFanSpeed(uint8_t speed, bool recalc) {
-    //speed = constrain(speed,0,255); nichts anderes passt in uint8_t hinein.
-
-    //do nothing if the fan speed does not change at all
-    if (fanSpeed == speed && !recalc)
+    if (HAL::partFanSpeed() == speed && !recalc)
         return;
 
-    //the new fan speed value is being remembered unchanged
-    //the output of the speed within display etc. stays unscaled
-    fanSpeed = speed;
-
-    //output the new setting unscaled to repetier-host/server UI
-    Printer::setMenuMode(MENU_MODE_FAN_RUNNING, (fanSpeed > 0));
-    Com::printFLN(Com::tFanspeed, (fanSpeed == 1) ? 2 : fanSpeed); //bei 1 zeigt repetierserver / repetierhost 0% an, was nicht stimmt. Das ist etwas Pfusch, aber nun funktionierts.
-
-    //wenn speed > 0 und < 255, dann wird der wertebereich eingegrenzt, sonst === 0 oder full power
-    if (speed > 0 && speed < 255) {
-        //scale the input speed value within MIN and MAX
-        long temp = speed;
-        temp *= (part_fan_pwm_max - part_fan_pwm_min);
-        temp /= 255;
-        temp += part_fan_pwm_min;
-        speed = constrain(temp, 0, 255);
-        /*
-        from here "speed" is scaled to a set boundary. It will be the same scale like pwm_pos[NUM_EXTRUDER+2] has.
-        Commanded (and user ui) speed is "fanSpeed", which stays unscaled.
-        */
-    }
-
-    //if specified calculate a kickstart time when the fan speed is commanded to rise
-    //use fanSpeed (not "speed") to compare with PART_FAN_KICKSTART_THRESHOLD so we dont have to recalculate the threshold according min-max.
-    if (fanKickstart == 0 && speed > pwm_pos[NUM_EXTRUDER + 2] && fanSpeed < PART_FAN_KICKSTART_THRESHOLD) {
-        if (speed)
-            fanKickstart = PART_FAN_KICKSTART_TIME_BOOST / 10;
-        else
-            fanKickstart = PART_FAN_KICKSTART_TIME_OFF_ON / 10;
-    }
-
-    pwm_pos[NUM_EXTRUDER + 2] = speed;
-} // setFanSpeed
-
-void Commands::adjustFanFrequency(uint8_t speed_divisor = PART_FAN_DEFAULT_PWM_SPEED_DIVISOR) { //1 = ~15.3hz, ~2=7.62hz, ...
-    InterruptProtectedBlock noInts;
-    if (!speed_divisor)
-        speed_divisor = 1;
-    part_fan_pwm_speed = (speed_divisor <= PART_FAN_MODE_MAX ? speed_divisor : PART_FAN_DEFAULT_PWM_SPEED_DIVISOR);
+    Printer::setMenuMode(MENU_MODE_FAN_RUNNING, speed > 0);
+    // Repetier-Host rounds a reported value of 1 down to zero percent.
+    Com::printFLN(Com::tFanspeed, speed == 1 ? 2 : speed);
+    HAL::setPartFanSpeed(speed);
 }
-void Commands::adjustFanMode(uint8_t output_mode) { //0 = pwm, 1 = pdm
-    part_fan_frequency_modulation = (output_mode ? PART_FAN_MODE_PDM : PART_FAN_MODE_PWM);
-    Printer::setMenuMode(MENU_MODE_FAN_MODE_PDM, (bool)part_fan_frequency_modulation);
+
+void Commands::adjustFanFrequency(uint8_t speed_divisor = PART_FAN_DEFAULT_PWM_SPEED_DIVISOR) {
+    HAL::setPartFanDivisor(speed_divisor);
+}
+
+void Commands::adjustFanMode(uint8_t output_mode) {
+    HAL::setPartFanMode(output_mode);
+    Printer::setMenuMode(MENU_MODE_FAN_MODE_PDM, HAL::partFanMode() == PART_FAN_MODE_PDM);
 }
 
 void Commands::reportPrinterUsage() {

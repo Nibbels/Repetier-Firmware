@@ -551,21 +551,70 @@ constexpr uint8_t heaterPwmStep = 2;
 constexpr uint8_t heaterPwmMask = 0xFE;
 constexpr uint8_t coolerPwmStep = 1;
 constexpr uint8_t coolerPwmMask = 0xFF;
+constexpr uint8_t partFanPwmStep = 1;
+constexpr uint8_t partFanPwmMask = 0xFF;
+static_assert(PART_FAN_DEFAULT_PWM_SPEED_DIVISOR > 0, "Part fan divisor must be positive");
 
 /**
 * PART FAN CONFIGURATION
 */
-uint8_t part_fan_frequency_modulation = PART_FAN_MODE_PWM;
+namespace {
+// Hotends, bed, board fan and part fan, in the existing PWM channel order.
+volatile uint8_t requestedDuty[NUM_EXTRUDER + 3];
+constexpr uint8_t boardFanChannel = NUM_EXTRUDER + 1;
+constexpr uint8_t partFanChannel = NUM_EXTRUDER + 2;
+uint8_t requestedFanSpeed = 0;
+volatile uint8_t fanKickstart = 0;
+volatile uint8_t fanMode = PART_FAN_MODE_PWM;
+volatile uint8_t fanDivisor = PART_FAN_DEFAULT_PWM_SPEED_DIVISOR;
+uint8_t fanMaxDuty = PART_FAN_PWM_MAX;
+uint8_t fanMinDuty = PART_FAN_PWM_MIN;
+} // namespace
 
-//default 15.3 hz and downscaleable by factor via "part_fan_pwm_speed"
-#define PART_FAN_PWM_STEP 1
-#define PART_FAN_PWM_MASK 255
-#if PART_FAN_DEFAULT_PWM_SPEED_DIVISOR <= 0
-#error PART_FAN_DEFAULT_PWM_SPEED_DIVISOR has to be 1 or higher.
-#endif
-uint8_t part_fan_pwm_speed = PART_FAN_DEFAULT_PWM_SPEED_DIVISOR;
-uint8_t part_fan_pwm_max = PART_FAN_PWM_MAX; //this is calculated as 99%
-uint8_t part_fan_pwm_min = PART_FAN_PWM_MIN; //this is calculated as 1%
+void HAL::resetPwmOutputs() {
+    for (auto& duty : requestedDuty)
+        duty = 0;
+}
+
+uint8_t HAL::outputDuty(uint8_t channel) { return requestedDuty[channel]; }
+void HAL::setHeaterDuty(uint8_t channel, uint8_t duty) { requestedDuty[channel] = duty; }
+void HAL::setBoardFan(bool enabled) { requestedDuty[boardFanChannel] = enabled ? 255 : 0; }
+uint8_t HAL::partFanSpeed() { return requestedFanSpeed; }
+uint8_t HAL::partFanDivisor() { return fanDivisor; }
+uint8_t HAL::partFanMode() { return fanMode; }
+uint8_t HAL::partFanMinDuty() { return fanMinDuty; }
+uint8_t HAL::partFanMaxDuty() { return fanMaxDuty; }
+
+void HAL::setPartFanDutyRange(uint8_t minimum, uint8_t maximum) {
+    fanMinDuty = minimum;
+    fanMaxDuty = maximum;
+}
+
+void HAL::setPartFanDivisor(uint8_t divisor) {
+    InterruptProtectedBlock lock;
+    if (!divisor)
+        divisor = 1;
+    fanDivisor = divisor <= PART_FAN_MODE_MAX ? divisor : PART_FAN_DEFAULT_PWM_SPEED_DIVISOR;
+}
+
+void HAL::setPartFanMode(uint8_t mode) {
+    fanMode = mode ? PART_FAN_MODE_PDM : PART_FAN_MODE_PWM;
+}
+
+void HAL::setPartFanSpeed(uint8_t speed) {
+    requestedFanSpeed = speed;
+    uint8_t duty = speed;
+    if (speed > 0 && speed < 255) {
+        const long scaled = long(speed) * (fanMaxDuty - fanMinDuty) / 255 + fanMinDuty;
+        duty = constrain(scaled, 0, 255);
+    }
+
+    InterruptProtectedBlock lock;
+    if (!fanKickstart && duty > requestedDuty[partFanChannel] && speed < PART_FAN_KICKSTART_THRESHOLD)
+        fanKickstart = PART_FAN_KICKSTART_TIME_BOOST / 10;
+    requestedDuty[partFanChannel] = duty;
+}
+
 
 #define pulseDensityModulate(pin, density, error, invert) \
     { \
@@ -590,16 +639,16 @@ ISR(PWM_TIMER_VECTOR) {
 
     if (pwm_count_heater == 0) {
 #if EXT0_HEATER_PIN > -1
-        if ((pwm_pos_set[0] = (pwm_pos[0] & heaterPwmMask)) > 0)
+        if ((pwm_pos_set[0] = (requestedDuty[0] & heaterPwmMask)) > 0)
             WRITE(EXT0_HEATER_PIN, HIGH);
 #endif // EXT0_HEATER_PIN>-1
 
 #if defined(EXT1_HEATER_PIN) && EXT1_HEATER_PIN > -1 && NUM_EXTRUDER > 1
-        if ((pwm_pos_set[1] = (pwm_pos[1] & heaterPwmMask)) > 0)
+        if ((pwm_pos_set[1] = (requestedDuty[1] & heaterPwmMask)) > 0)
             WRITE(EXT1_HEATER_PIN, HIGH);
 #endif // defined(EXT1_HEATER_PIN) && EXT1_HEATER_PIN>-1 && NUM_EXTRUDER>1
 
-        if ((pwm_pos_set[NUM_EXTRUDER] = (pwm_pos[NUM_EXTRUDER] & heaterPwmMask)) > 0)
+        if ((pwm_pos_set[NUM_EXTRUDER] = (requestedDuty[NUM_EXTRUDER] & heaterPwmMask)) > 0)
             WRITE(HEATED_BED_HEATER_PIN, HIGH);
     }
 
@@ -617,7 +666,7 @@ ISR(PWM_TIMER_VECTOR) {
 #endif // defined(EXT1_HEATER_PIN) && EXT1_HEATER_PIN > -1 && NUM_EXTRUDER > 1
 
 #if FAN_BOARD_PIN > -1
-        if ((pwm_pos_set[NUM_EXTRUDER + 1] = (pwm_pos[NUM_EXTRUDER + 1] & coolerPwmMask)) > 0)
+        if ((pwm_pos_set[NUM_EXTRUDER + 1] = (requestedDuty[NUM_EXTRUDER + 1] & coolerPwmMask)) > 0)
             WRITE(FAN_BOARD_PIN, 1);
 #endif // FAN_BOARD_PIN>-1
     }
@@ -656,28 +705,28 @@ ISR(PWM_TIMER_VECTOR) {
     /**
     PART FAN SPEED CONTROL
     */
-    if (part_fan_frequency_modulation == PART_FAN_MODE_PDM) {
-        pulseDensityModulate(FAN_PIN, (fanKickstart ? 255 : pwm_pos[NUM_EXTRUDER + 2]), pwm_pos_set[NUM_EXTRUDER + 2], false);
+    if (fanMode == PART_FAN_MODE_PDM) {
+        pulseDensityModulate(FAN_PIN, (fanKickstart ? 255 : requestedDuty[NUM_EXTRUDER + 2]), pwm_pos_set[NUM_EXTRUDER + 2], false);
     } else {
         // divide part fan 15.3Hz PWM by factor:
         static int counterSpeed15_3Div = 0;
-        if (++counterSpeed15_3Div >= part_fan_pwm_speed) {
+        if (++counterSpeed15_3Div >= fanDivisor) {
             counterSpeed15_3Div = 0;
 
             if (pwm_count_part_fan == 0) {
                 //count = 0 -> AN, wenn Powerlevel über Minimum
                 //je nach PWM-Mask zählen nur obere bits!
                 //je nach PWM-Mask (z.b. 1111 11xx b) gibts spezielle PWM-Steps (z.b. 4 = 100 b) welche den counter nur innerhalb PWM-Mask hochzählen.
-                pwm_pos_set[NUM_EXTRUDER + 2] = (pwm_pos[NUM_EXTRUDER + 2] & PART_FAN_PWM_MASK);
+                pwm_pos_set[NUM_EXTRUDER + 2] = (requestedDuty[NUM_EXTRUDER + 2] & partFanPwmMask);
                 if (pwm_pos_set[NUM_EXTRUDER + 2] > 0)
                     WRITE(FAN_PIN, 1); //AN
             }
             //count = powerlevel, aber nicht powerlevel == max. -> AUS
             uint8_t powerlevel = fanKickstart ? 255 : pwm_pos_set[NUM_EXTRUDER + 2];
-            if (powerlevel == pwm_count_part_fan && powerlevel != PART_FAN_PWM_MASK)
+            if (powerlevel == pwm_count_part_fan && powerlevel != partFanPwmMask)
                 WRITE(FAN_PIN, 0); //AUS
 
-            pwm_count_part_fan += PART_FAN_PWM_STEP;
+            pwm_count_part_fan += partFanPwmStep;
         }
     }
     /**

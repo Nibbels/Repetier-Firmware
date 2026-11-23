@@ -513,7 +513,7 @@ public:
         flag0 |= PRINTER_FLAG0_STEPPER_DISABLED;
 
 #if FAN_BOARD_PIN > -1
-        pwm_pos[NUM_EXTRUDER + 1] = 0;
+        HAL::setBoardFan(false);
 #endif // FAN_BOARD_PIN
     }  // markAllSteppersDisabled
 
@@ -521,7 +521,7 @@ public:
         flag0 &= ~PRINTER_FLAG0_STEPPER_DISABLED;
 
 #if FAN_BOARD_PIN > -1
-        pwm_pos[NUM_EXTRUDER + 1] = 255;
+        HAL::setBoardFan(true);
 #endif // FAN_BOARD_PIN
     }  // unmarkAllSteppersDisabled
 
@@ -665,12 +665,12 @@ public:
 
     static INLINE uint8_t getFanSpeed(bool percent = false) {
         if (!percent)
-            return fanSpeed; //int
-        if (!fanSpeed)
+            return HAL::partFanSpeed(); //int
+        if (!HAL::partFanSpeed())
             return 0; //0%
-        if (fanSpeed <= 3)
+        if (HAL::partFanSpeed() <= 3)
             return 1;                                       //1%
-        return (uint8_t)(((uint16_t)fanSpeed * 100) / 255); //%
+        return (uint8_t)(((uint16_t)HAL::partFanSpeed() * 100) / 255); //%
     }                                                       // getFanSpeed
 
     static void enableSenseOffsetnow(void);

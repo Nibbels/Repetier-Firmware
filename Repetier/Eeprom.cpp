@@ -294,11 +294,11 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     }
     HAL::eprSetInt16(EPR_RF_STEP_PACKING_MIN_INTERVAL, Printer::stepsPackingMinInterval);
 
-    HAL::eprSetByte(EPR_RF_FAN_MODE, part_fan_frequency_modulation);
+    HAL::eprSetByte(EPR_RF_FAN_MODE, HAL::partFanMode());
 
-    HAL::eprSetByte(EPR_RF_PART_FAN_SPEED, part_fan_pwm_speed);
-    HAL::eprSetByte(EPR_RF_PART_FAN_PWM_MIN, part_fan_pwm_min);
-    HAL::eprSetByte(EPR_RF_PART_FAN_PWM_MAX, part_fan_pwm_max);
+    HAL::eprSetByte(EPR_RF_PART_FAN_SPEED, HAL::partFanDivisor());
+    HAL::eprSetByte(EPR_RF_PART_FAN_PWM_MIN, HAL::partFanMinDuty());
+    HAL::eprSetByte(EPR_RF_PART_FAN_PWM_MAX, HAL::partFanMaxDuty());
 
     if (corrupted) {
         HAL::eprSetInt32(EPR_PRINTING_TIME, 0);
@@ -734,8 +734,7 @@ void EEPROM::readDataFromEEPROM() {
     uint8_t temp_min = HAL::eprGetByte(EPR_RF_PART_FAN_PWM_MIN);
     uint8_t temp_max = HAL::eprGetByte(EPR_RF_PART_FAN_PWM_MAX);
     if ((int)temp_max - (int)temp_min >= 16 && temp_min > 0 && temp_max < 255) {
-        part_fan_pwm_min = temp_min;
-        part_fan_pwm_max = temp_max;
+        HAL::setPartFanDutyRange(temp_min, temp_max);
     } else {
         HAL::eprSetByte(EPR_RF_PART_FAN_PWM_MIN, PART_FAN_PWM_MIN);
         HAL::eprSetByte(EPR_RF_PART_FAN_PWM_MAX, PART_FAN_PWM_MAX);

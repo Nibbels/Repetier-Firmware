@@ -38,7 +38,7 @@ void Extruder::manageTemperatures() {
 
         const bool sensorSupported = act->updateCurrentTemperature();
         if (!sensorSupported)
-            pwm_pos[act->pwmIndex] = 0;
+            HAL::setHeaterDuty(act->pwmIndex, 0);
         if (controller == autotuneIndex)
             continue; // Ignore heater we are currently testing
 
@@ -182,7 +182,7 @@ void Extruder::manageTemperatures() {
         }
         if (act->currentTemperatureC > act->heaterCutoffC)
             output = 0;
-        pwm_pos[act->pwmIndex] = output;
+        HAL::setHeaterDuty(act->pwmIndex, output);
 
 #if LED_PIN > -1
         if (act == &Extruder::current->tempControl)
@@ -740,7 +740,7 @@ bool TemperatureController::updateCurrentTemperature() {
 
 void TemperatureController::setTargetTemperature(float target) {
     if (target <= 0.0f || target < targetTemperatureC)
-        pwm_pos[pwmIndex] = 0;
+        HAL::setHeaterDuty(pwmIndex, 0);
     targetTemperatureC = target;
     stopDecouple();
 
@@ -774,7 +774,7 @@ void TemperatureController::waitForTargetTemperature(uint8_t plus_temp_tolerance
 
 void TemperatureController::autotunePID(float temp, uint8_t controllerId, int maxCycles, bool storeValues, int method) {
     if (!updateCurrentTemperature()) {
-        pwm_pos[pwmIndex] = 0;
+        HAL::setHeaterDuty(pwmIndex, 0);
         Com::printErrorFLN(PSTR("PID autotune failed: unsupported temperature sensor"));
         return;
     }
@@ -833,7 +833,7 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
 
     autotuneIndex = controllerId;
     extruder[controllerId].tempControl.stopDecouple();
-    pwm_pos[pwmIndex] = pidMax;
+    HAL::setHeaterDuty(pwmIndex, pidMax);
     if (controllerId < NUM_EXTRUDER) {
         extruder[controllerId].coolerPWM = extruder[controllerId].coolerSpeed;
         extruder[0].coolerPWM = extruder[0].coolerSpeed;
@@ -851,7 +851,7 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
         {
             if (time - t2 > (controllerId < NUM_EXTRUDER ? 2500 : 1500)) {
                 heating = false;
-                pwm_pos[pwmIndex] = (bias - d);
+                HAL::setHeaterDuty(pwmIndex, (bias - d));
                 t1 = time;
                 t_high = t1 - t2;
                 maxTemp = temp;
@@ -934,7 +934,7 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
                         Com::printFLN(Com::tAPIDKd, Kd);
                     }
                 }
-                pwm_pos[pwmIndex] = (bias + d);
+                HAL::setHeaterDuty(pwmIndex, (bias + d));
                 cycles++;
                 minTemp = temp;
             }

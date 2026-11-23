@@ -427,8 +427,7 @@ void Printer::setOrigin(float xOff, float yOff, float zOff) {
 void Printer::setup() {
     HAL::stopWatchdog();
 
-    for (uint8_t i = 0; i < NUM_EXTRUDER + 3; i++)
-        pwm_pos[i] = 0;
+    HAL::resetPwmOutputs();
 
     HAL::allowInterrupts();
 
