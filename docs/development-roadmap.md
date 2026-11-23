@@ -124,6 +124,8 @@ The AVR builds use 4 fewer bytes of global SRAM and 76–136 fewer bytes of flas
 
 ## 5. Firmware structure and hardware variants
 
+Keep the [heater safety and watchdog requirements](heater-safety.md) when splitting foreground services and scan actions. Use the existing periodic service points until each replacement action has a bounded execution time.
+
 - **Design for the installed boards.** Use the RF hardware map and factory profiles to decide which paths belong in firmware. Preserve working calibration, EEPROM data and retrofit wiring while moving their owners. Retire inherited branches once the RF entry points and dependencies have been checked.
 - **Split responsibilities where the workflows cross.** As each block settles its state and callers, bring G-code and panel actions through the same machine operations where they request the same behavior. Review which parts of `RF.cpp` belong to motion policy, print lifecycle, calibration or peripherals. Review periodic and nested waits for explicit completion conditions and a single owner of each transition. Expose small interfaces that eliminate direct cross-module writes.
 - **Review actual hardware differences.** Compare board pins, driver and timer behavior, endstop topology and calibration data. Keep model differences at the hardware or configuration boundary where they express real capabilities. Use the same exercise for heater, watchdog and peripheral hooks when those boundaries are touched. [Board selection](../Repetier/Configuration.h#L45) · [Pin mappings](../Repetier/pins.h)
