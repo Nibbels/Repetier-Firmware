@@ -109,6 +109,7 @@ void WRITE(int pin, bool high);
 #include "ExtrusionPlanner.h"
 #include "MoveTarget.h"
 #include "WobbleCorrection.h"
+#include "CartesianPlanner.h"
 
 #define PSTR(text) (text)
 #define UI_STATUS_UPD(text) ((void)0)
@@ -186,7 +187,7 @@ struct DirectDisplacement {
     long steps() const { return displacement; }
 };
 DirectDisplacement directPosition(uint8_t axis) { return {directCurrentSteps[axis]}; }
-int32_t queuedPositionSteps[3] = {};
+CartesianPlanner cartesianPlanner;
 float axisStepsPerMM[4] = { 160.0f, 160.0f, zStepsPerMm, 280.0f };
 float axisMMPerSteps[3] = { 1.0f / 160, 1.0f / 160, 1.0f / zStepsPerMm };
 float homingFeedrate[3] = { 60.0f, 60.0f, 5.0f };
@@ -995,7 +996,7 @@ void planMove(long z, bool hasZMove, bool extrudes = true, bool hasXYMove = true
     move.moveZ = hasZMove;
     move.positiveE = extrudes;
     move.moveXY = hasXYMove;
-    Printer::queuedPositionSteps[Z_AXIS] = z;
+    Printer::cartesianPlanner.setAxisSteps(Z_AXIS, z);
     trackPlannedLayer(&move);
 }
 
@@ -1437,6 +1438,21 @@ void wobbleTarget() {
     assert(!Printer::wobbleCorrection.offsetMM(X_AXIS) && !Printer::wobbleCorrection.offsetMM(Y_AXIS));
 }
 
+void cartesianPlanning() {
+    int32_t steps = 0;
+    for (int i = 0; i < 100000; ++i) {
+        Printer::moveTarget.addMM(X_AXIS, 0.0005f);
+        steps += planCartesianAxis(X_AXIS);
+    }
+    assert(steps == 8000);
+
+    Printer::axisStepsPerMM[X_AXIS] = 320.0f;
+    rescalePlannedAxis(X_AXIS);
+    assert(planCartesianAxis(X_AXIS) == 0);
+    Printer::moveTarget.setMachineMM(X_AXIS, 0.0f);
+    assert(planCartesianAxis(X_AXIS) == -16000);
+}
+
 void initializeOffsets() {
     planMove(256, true);
     Printer::zMotion.setNominalSteps(256);
@@ -1512,6 +1528,8 @@ int main(int argc, char** argv) {
         gcodeTarget();
     else if (!std::strcmp(argv[1], "wobble-target"))
         wobbleTarget();
+    else if (!std::strcmp(argv[1], "cartesian-planning"))
+        cartesianPlanning();
     else
         return 1;
     std::printf("Print lifecycle replay passed (%s)\n", argv[1]);

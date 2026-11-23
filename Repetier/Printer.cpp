@@ -41,7 +41,6 @@ uint32_t Printer::maxTravelAccelerationStepsPerSquareSecond[4];
 uint8_t Printer::relativeCoordinateMode = false;         // Determines absolute (false) or relative Coordinates (true).
 uint8_t Printer::relativeExtruderCoordinateMode = false; // Determines Absolute or Relative E Codes while in Absolute Coordinates mode. E is always relative in Relative Coordinates mode.
 
-int32_t Printer::queuedPositionSteps[3] = { 0, 0, 0 };
 uint8_t Printer::flag0 = 0;
 uint8_t Printer::flag1 = 0;
 uint8_t Printer::flag2 = 0;
@@ -81,6 +80,7 @@ StrainGauge Printer::strainGauge;
 ExtrusionPlanner Printer::extrusionPlanner;
 MoveTarget Printer::moveTarget;
 WobbleCorrection Printer::wobbleCorrection;
+CartesianPlanner Printer::cartesianPlanner;
 char Printer::ZMode = DEFAULT_Z_SCALE_MODE;                       // Z-min distance or nominal layer height
 char Printer::moveMode[3];                                        // move mode which is applied within the Position X/Y/Z menus
 bool Printer::moveKosys = KOSYS_GCODE;                            // true = GCode, false = DirectMove / OffsetMove
@@ -157,11 +157,8 @@ void Printer::updateDerivedParameter() {
 
     for (uint8_t axis = 0; axis < 4; axis++) {
         const float mmPerStep = 1.0f / axisStepsPerMM[axis];
-        if (axis < E_AXIS && mmPerStep != axisMMPerSteps[axis]) {
-            // Express the queued endpoint in the new steps/mm calibration.
-            const float queuedMM = queuedPositionSteps[axis] * axisMMPerSteps[axis];
-            queuedPositionSteps[axis] = lroundf(queuedMM * axisStepsPerMM[axis]);
-        }
+        if (axis < E_AXIS && mmPerStep != axisMMPerSteps[axis])
+            cartesianPlanner.rescaleAxis(axis, axisMMPerSteps[axis], axisStepsPerMM[axis]);
         axisMMPerSteps[axis] = mmPerStep;
 
         /** Acceleration in steps/s^2 in printing mode.*/

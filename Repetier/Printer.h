@@ -33,6 +33,7 @@
 #include "ExtrusionPlanner.h"
 #include "MoveTarget.h"
 #include "WobbleCorrection.h"
+#include "CartesianPlanner.h"
 
 // ##########################################################################################
 // ##   status flags
@@ -94,7 +95,6 @@ public:
     static unsigned long timer[2];          // used for acceleration/deceleration timing
     static unsigned long stepNumber[2];     // Step number in current move.
     static int8_t lastDirectionSovereignty;
-    static int32_t queuedPositionSteps[3];  // Last queued endpoints in steps, including the XY wobble correction.
 
     static long maxSoftEndstopSteps[2];     // X/Y software endstops. Z limits belong to zMotion.
     static float axisLengthMM[3];           // Länge des überfahrbaren Bereichs im positiven Homing. (=Schienen-Fahrweg - Homing-Offset - 2x ExtruderOffset)
@@ -117,6 +117,7 @@ public:
     static ExtrusionPlanner extrusionPlanner;
     static MoveTarget moveTarget;
     static WobbleCorrection wobbleCorrection;
+    static CartesianPlanner cartesianPlanner;
     static PrintPause pause;
     static PrintStop printStop;
     static char ZMode;                      // Z Scale
@@ -609,14 +610,16 @@ public:
 
     static INLINE void setXAxisSteps(int32_t x) {
         InterruptProtectedBlock noInts;
-        currentXYSteps[X_AXIS] = queuedPositionSteps[X_AXIS] = x;
+        cartesianPlanner.setAxisSteps(X_AXIS, x);
+        currentXYSteps[X_AXIS] = x;
         moveTarget.setMachineMM(X_AXIS, x * axisMMPerSteps[X_AXIS]);
         wobbleCorrection.clearAxis(X_AXIS);
         noInts.unprotect();
     }
     static INLINE void setYAxisSteps(int32_t y) {
         InterruptProtectedBlock noInts;
-        currentXYSteps[Y_AXIS] = queuedPositionSteps[Y_AXIS] = y;
+        cartesianPlanner.setAxisSteps(Y_AXIS, y);
+        currentXYSteps[Y_AXIS] = y;
         moveTarget.setMachineMM(Y_AXIS, y * axisMMPerSteps[Y_AXIS]);
         wobbleCorrection.clearAxis(Y_AXIS);
         noInts.unprotect();
@@ -624,7 +627,7 @@ public:
     static INLINE void setZAxisSteps(int32_t z) {
         InterruptProtectedBlock noInts;
         zMotion.setNominalSteps(z);
-        queuedPositionSteps[Z_AXIS] = z;
+        cartesianPlanner.setAxisSteps(Z_AXIS, z);
         moveTarget.setMachineMM(Z_AXIS, z * axisMMPerSteps[Z_AXIS]);
         noInts.unprotect();
     }

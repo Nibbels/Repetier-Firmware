@@ -67,6 +67,12 @@ def main():
         "int32_t planExtrusionMove() {\nint32_t steps;\n"
         + section(move_planner, "            const float targetE =", "\n        } else {")
         + "\nreturn steps;\n}",
+        "int32_t planCartesianAxis(uint8_t axis) {\nint32_t steps;\n"
+        + section(move_planner, "            const int32_t targetSteps = Printer::prepareDestinationSteps(axis);", "\n        }")
+        + "\nreturn steps;\n}",
+        "void rescalePlannedAxis(uint8_t axis) {\nusing namespace Printer;\n"
+        + section(printer, "        const float mmPerStep = 1.0f / axisStepsPerMM[axis];", "\n\n        /** Acceleration")
+        + "\n}",
         start_line.removeprefix('#include "Repetier.h"\n'),
         "void configureSenseOffset(GCode* pCommand) { switch (3909) {\n"
         + section(rf, "        case 3909:", "\n        case 3911:")
@@ -91,7 +97,7 @@ def main():
             "sense-window", "sense-settings", "sense-limit-interrupt",
             "pressure-pause", "pressure-stop", "digit-zero",
             "extrusion-planning",
-            "gcode-target", "wobble-target",
+            "gcode-target", "wobble-target", "cartesian-planning",
         ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
 

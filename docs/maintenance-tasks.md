@@ -19,6 +19,7 @@ Firmware changes are tracked on `ai-firmware-review` against `community_developm
 ### Commanded coordinates
 
 - [x] **Give the requested position and work offset one owner.** The G-code replay checks absolute work coordinates with an offset, relative moves, inches, omitted axes and E-only moves. [Commanded coordinates](../Repetier/MoveTarget.h) · [Replay](../tests/pause-sense-offset.py)
+- [x] **Give queued XYZ step endpoints one owner.** The replay checks 100,000 relative X increments, a calibration change from 160 to 320 steps/mm at the same target and a return to zero. [XYZ step planning](../Repetier/CartesianPlanner.h) · [Replay](../tests/pause-sense-offset.py)
 
 ### Z offset ownership
 

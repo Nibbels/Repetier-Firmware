@@ -329,7 +329,7 @@
 // ##   X/Y/Z movements
 // ##########################################################################################
 // The planner retains the G-code target in MoveTarget and the rounded
-// endpoint in queuedPositionSteps. Execution advances currentXYSteps and
+// endpoint in CartesianPlanner. Execution advances currentXYSteps and
 // zMotion.nominalSteps(). Each direct position tracks its own displacement.
 // ZMotion also accounts for scan travel, applied correction and actual pulses.
 

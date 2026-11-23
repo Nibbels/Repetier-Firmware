@@ -20,6 +20,8 @@ Use the architecture below throughout the blocks. Calibration can progress indep
 
 `MoveTarget` owns the commanded XYZ/E coordinates in millimetres, the retained rounding remainder and the XYZ work offset. G-code resolves units and coordinate mode before planning. Machine-coordinate moves submit millimetres directly. [Commanded coordinates](../Repetier/MoveTarget.h)
 
+`CartesianPlanner` owns the last queued XYZ step endpoints. A new rounded target produces an integer delta, and a steps/mm change expresses the saved endpoint in the new calibration. Z layer tracking reads the planned Z endpoint. [XYZ step planning](../Repetier/CartesianPlanner.h)
+
 `Printer::zOffset` owns the saved manual offset, the live SenseOffset and their combined step count. EEPROM reloads preserve the live contribution, and calibration changes recompute steps from micrometers. `Printer::zMotion` owns executed Z positions, the homing state, travel limits and pulse accounting. The planner, DMS and bed calculations submit step requests to it. [Offset owner](../Repetier/ZOffset.h) · [Z motion owner](../Repetier/ZMotion.h)
 
 `Printer::layers` owns the pending layer candidate, both confirmed layer heights and the two fade boundaries. The planner reports a move after determining its nominal step endpoint. Homing and priming reset tracking, and EEPROM loads and microstep edits update the bounds for their respective scales. [Layer state](../Repetier/PrintLayers.h)

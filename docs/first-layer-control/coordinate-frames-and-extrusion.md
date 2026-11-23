@@ -5,7 +5,7 @@
 ## Z: four different layers of meaning
 
 1. **Theoretical slicer G-code**: `G1 Z0.20` requests a nominal layer height in the G-code's current work origin, G90/G91 mode and units. This number is not necessarily physical Z motor steps.
-2. **Uncompensated planned firmware position.** `Printer::queueGCodeCoordinates()` converts units and subtracts the work-origin offset in absolute mode. The planner rounds the float target with `prepareDestinationSteps(Z_AXIS)` and records the resulting integer in `queuedPositionSteps[Z_AXIS]`. `Printer::zMotion.nominalSteps()` tracks execution. The learned `g_min` and `g_max` use the nominal planned steps.
+2. **Uncompensated planned firmware position.** `Printer::queueGCodeCoordinates()` converts units and subtracts the work-origin offset in absolute mode. The planner rounds the float target with `prepareDestinationSteps(Z_AXIS)` and records the resulting integer in `CartesianPlanner`. `Printer::zMotion.nominalSteps()` tracks execution. The learned `g_min` and `g_max` use the nominal planned steps.
 3. **Compensation and motor position.** `BedCompensation` uses executing nominal Z and planned layer bounds to determine the bed correction and ECMP. `recalculateZCompensation()` adds `Printer::zOffset.effectiveSteps()` and active Digit-Z, then publishes the Z target and ECMP ratio together. `ZMotion` accounts for the applied correction and actual motor pulses while enforcing the travel rules. [Z step execution](../development-roadmap.md#z-step-execution)
 4. **Real nozzle-to-bed clearance and printed geometry** combine nominal Z motion, actual compensation motor steps, direct Z moves, physical thermal drift and the real bed surface.
 

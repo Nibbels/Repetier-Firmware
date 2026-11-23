@@ -119,8 +119,7 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
             steps = Printer::extrusionPlanner.planSteps({targetE, targetRemainder}, flow, Printer::axisStepsPerMM[E_AXIS]);
         } else {
             const int32_t targetSteps = Printer::prepareDestinationSteps(axis);
-            steps = targetSteps - Printer::queuedPositionSteps[axis];
-            Printer::queuedPositionSteps[axis] = targetSteps;
+            steps = Printer::cartesianPlanner.queueTarget(axis, targetSteps);
         }
 
         const float distanceMM = steps * Printer::axisMMPerSteps[axis];
@@ -147,7 +146,7 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
 
     if (!Printer::startLine.active()) {
         const PrintLayers::PlannedMove move{
-            Printer::queuedPositionSteps[Z_AXIS], p->isZMove(), p->isXOrYMove(), p->isEPositiveMove()};
+            Printer::cartesianPlanner.lastQueuedSteps(Z_AXIS), p->isZMove(), p->isXOrYMove(), p->isEPositiveMove()};
         Printer::layers.recordPlannedMove(move, Printer::axisStepsPerMM[Z_AXIS], g_offsetZCompensationSteps, g_ZCompensationMax);
     }
 
