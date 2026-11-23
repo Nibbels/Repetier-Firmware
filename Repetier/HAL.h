@@ -26,6 +26,7 @@
 
 #include <avr/pgmspace.h>
 #include <avr/io.h>
+#include "UsbSerial.h"
 #define prog_char char
 
 #define INLINE __attribute__((always_inline))
@@ -159,61 +160,6 @@ typedef uint8_t ufast8_t;
 
   Modified to use only 1 queue with fixed length by Repetier
 */
-
-#define SERIAL_BUFFER_SIZE 128
-#define SERIAL_BUFFER_MASK 127
-
-constexpr uint8_t serialTxBufferSize = 64;
-constexpr uint8_t serialTxBufferMask = serialTxBufferSize - 1;
-
-struct ring_buffer_rx {
-    unsigned char buffer[SERIAL_BUFFER_SIZE];
-    volatile uint8_t head;
-    volatile uint8_t tail;
-};
-
-struct ring_buffer_tx {
-    unsigned char buffer[serialTxBufferSize];
-    volatile uint8_t head;
-    volatile uint8_t tail;
-};
-
-class RFHardwareSerial : public Stream {
-public:
-    ring_buffer_rx* _rx_buffer;
-    ring_buffer_tx* _tx_buffer;
-    volatile uint8_t* _ubrrh;
-    volatile uint8_t* _ubrrl;
-    volatile uint8_t* _ucsra;
-    volatile uint8_t* _ucsrb;
-    volatile uint8_t* _udr;
-    uint8_t _rxen;
-    uint8_t _txen;
-    uint8_t _rxcie;
-    uint8_t _udrie;
-    uint8_t _u2x;
-
-public:
-    RFHardwareSerial(ring_buffer_rx* rx_buffer, ring_buffer_tx* tx_buffer,
-                     volatile uint8_t* ubrrh, volatile uint8_t* ubrrl,
-                     volatile uint8_t* ucsra, volatile uint8_t* ucsrb,
-                     volatile uint8_t* udr,
-                     uint8_t rxen, uint8_t txen, uint8_t rxcie, uint8_t udrie, uint8_t u2x);
-    void begin(unsigned long);
-    void end();
-    virtual int available(void);
-    virtual int peek(void);
-    virtual int read(void);
-    virtual void flush(void);
-    virtual size_t write(uint8_t);
-    using Print::write; // pull in write(str) and write(buf, size) from Print
-    operator bool();
-    int outputUnused(void); // Used for output in interrupts
-};
-
-extern RFHardwareSerial RFSerial;
-#define WAIT_OUT_EMPTY \
-    while (tx_buffer.head != tx_buffer.tail) { }
 
 #define OUT_P_I(p, i) Com::printF(PSTR(p), (int)(i))
 #define OUT_P_I_LN(p, i) Com::printFLN(PSTR(p), (int)(i))
@@ -529,27 +475,27 @@ public:
     } // readFlashByte
 
     static inline void serialSetBaudrate(long baud) {
-        RFSerial.begin(baud);
+        UsbSerial::begin(baud);
 
     } // serialSetBaudrate
 
     static inline bool serialByteAvailable() {
-        return RFSerial.available() > 0;
+        return UsbSerial::available();
 
     } // serialByteAvailable
 
     static inline uint8_t serialReadByte() {
-        return RFSerial.read();
+        return UsbSerial::read();
 
     } // serialReadByte
 
     static inline void serialWriteByte(char b) {
-        RFSerial.write(b);
+        UsbSerial::write(b);
 
     } // serialWriteByte
 
     static inline void serialFlush() {
-        RFSerial.flush();
+        UsbSerial::flush();
 
     } // serialFlush
 

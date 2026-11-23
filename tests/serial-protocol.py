@@ -12,6 +12,7 @@ def main():
     tests = Path(__file__).resolve().parent
     firmware = tests.parent / "Repetier"
     receiver = (firmware / "gcode.cpp").read_text(encoding="utf-8")
+    uart = (firmware / "UsbSerial.cpp").read_text(encoding="utf-8")
     communication = (firmware / "Communication.cpp").read_text(encoding="utf-8")
     configuration = (firmware / "Configuration.h").read_text(encoding="utf-8")
     names = set(re.findall(r"\bCom::(t\w+)\b", receiver)) | {"tError"}
@@ -26,18 +27,24 @@ def main():
         build = Path(directory)
         (build / "gcode-settings.inc").write_text(f"#define GCODE_BUFFER_SIZE {capacity}\n", encoding="utf-8")
         (build / "gcode-receiver.inc").write_text(receiver.replace('#include "Repetier.h"\n', "", 1), encoding="utf-8")
+        (build / "usb-serial-firmware.inc").write_text(
+            re.sub(r"^#include <avr/\w+\.h>\n", "", uart, flags=re.M), encoding="utf-8",
+        )
         (build / "gcode-replies.inc").write_text(
             "".join(f"const char {name}[] = {value};\n" for name, value in sorted(constants.items())),
             encoding="utf-8",
         )
-        replay = build / "serial-replay"
-        subprocess.run([
+        compiler = [
             os.environ.get("CXX", "c++"), "-std=c++11", "-O2", "-Wall", "-Wextra", "-Werror",
             "-fno-strict-aliasing", "-I", str(firmware), "-I", str(build),
-            str(tests / "serial-protocol.cpp"), "-o", str(replay),
-        ], check=True)
+        ]
+        replay = build / "serial-replay"
+        subprocess.run(compiler + [str(tests / "serial-protocol.cpp"), "-o", str(replay)], check=True)
         for scenario in ("numbered", "queue", "display", "idle", "binary", "stopping"):
             subprocess.run([str(replay), scenario], check=True, timeout=10)
+        uart_replay = build / "uart-replay"
+        subprocess.run(compiler + [str(tests / "usb-serial.cpp"), "-o", str(uart_replay)], check=True)
+        subprocess.run([str(uart_replay)], check=True, timeout=10)
 
 
 if __name__ == "__main__":

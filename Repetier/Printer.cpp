@@ -1137,7 +1137,7 @@ void Printer::stopPrint() {
     Com::print(':');
 void Printer::showConfiguration() {
     Com::config(PSTR("Baudrate:"), baudrate);
-    Com::config(PSTR("InputBuffer:"), SERIAL_BUFFER_SIZE - 1);
+    Com::config(PSTR("InputBuffer:"), UsbSerial::receiveCapacity);
     Com::config(PSTR("NumExtruder:"), NUM_EXTRUDER);
     Com::config(PSTR("MixingExtruder:"), 0);
     Com::config(PSTR("HeatedBed:"), 1);
