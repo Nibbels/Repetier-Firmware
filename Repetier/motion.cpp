@@ -79,6 +79,38 @@ uint8_t PrintLine::linesWritePos = 0;       // Position where we write the next 
 volatile uint8_t PrintLine::linesCount = 0; // Number of lines cached 0 = nothing to do.
 uint8_t PrintLine::linesPos = 0;            // Position for executing line movement.
 
+void PrintLine::setAxisSteps(uint8_t axis, int32_t steps) {
+    if (steps >= 0)
+        setPositiveDirectionForAxis(axis);
+    else
+        steps = -steps;
+    delta[axis] = steps;
+    if (steps)
+        setMoveOfAxis(axis);
+}
+
+void PrintLine::setSegmentGeometry(const float axisDistanceMM[]) {
+    // The largest step count drives Bresenham, with ties ordered E, Z, X, Y.
+    if (delta[Y_AXIS] > delta[X_AXIS] && delta[Y_AXIS] > delta[Z_AXIS] && delta[Y_AXIS] > delta[E_AXIS])
+        primaryAxis = Y_AXIS;
+    else if (delta[X_AXIS] > delta[Z_AXIS] && delta[X_AXIS] > delta[E_AXIS])
+        primaryAxis = X_AXIS;
+    else if (delta[Z_AXIS] > delta[E_AXIS])
+        primaryAxis = Z_AXIS;
+    else
+        primaryAxis = E_AXIS;
+    stepsRemaining = delta[primaryAxis];
+
+    distance = axisDistanceMM[E_AXIS];
+    if (isXYZMove()) {
+        float distanceSquared = axisDistanceMM[X_AXIS] * axisDistanceMM[X_AXIS]
+            + axisDistanceMM[Y_AXIS] * axisDistanceMM[Y_AXIS];
+        if (isZMove())
+            distanceSquared += axisDistanceMM[Z_AXIS] * axisDistanceMM[Z_AXIS];
+        distance = RMath::max((float)sqrt(distanceSquared), distance);
+    }
+}
+
 /** \brief Put a move to the current destination coordinates into the movement cache.
   If the cache is full, the method will wait, until a place gets free. During
   wait communication and temperature control is enabled.
@@ -109,7 +141,6 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
 
     float axisDistanceMM[4]; // Axis movement in mm
     // Find direction
-    bool isNoStepsMove = true;
     for (uint8_t axis = 0; axis < 4; axis++) {
         int32_t steps;
         if (axis == E_AXIS) {
@@ -126,18 +157,11 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
         if (axis == E_AXIS)
             Printer::filamentPrinted += distanceMM;
         axisDistanceMM[axis] = fabs(distanceMM);
-        p->delta[axis] = abs(steps);
-
-        if (steps >= 0)
-            p->setPositiveDirectionForAxis(axis);
-        if (steps) {
-            p->setMoveOfAxis(axis);
-            isNoStepsMove = false;
-        }
+        p->setAxisSteps(axis, steps);
     }
 
     // need to delete dummy elements, otherwise commands can get locked.
-    if (isNoStepsMove) {
+    if (p->isNoMove()) {
         if (newPath)
             PrintLine::resetPathPlanner();
         // No steps included
@@ -150,26 +174,7 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
         Printer::layers.recordPlannedMove(move, Printer::axisStepsPerMM[Z_AXIS], g_offsetZCompensationSteps, g_ZCompensationMax);
     }
 
-    // Define variables that are needed for the Bresenham algorithm. Please note that Z is not currently included in the Bresenham algorithm.
-    if (p->delta[Y_AXIS] > p->delta[X_AXIS] && p->delta[Y_AXIS] > p->delta[Z_AXIS] && p->delta[Y_AXIS] > p->delta[E_AXIS])
-        p->primaryAxis = Y_AXIS;
-    else if (p->delta[X_AXIS] > p->delta[Z_AXIS] && p->delta[X_AXIS] > p->delta[E_AXIS])
-        p->primaryAxis = X_AXIS;
-    else if (p->delta[Z_AXIS] > p->delta[E_AXIS])
-        p->primaryAxis = Z_AXIS;
-    else
-        p->primaryAxis = E_AXIS;
-    p->stepsRemaining = p->delta[p->primaryAxis];
-
-    if (p->isXYZMove()) {
-        float xydist2 = axisDistanceMM[X_AXIS] * axisDistanceMM[X_AXIS] + axisDistanceMM[Y_AXIS] * axisDistanceMM[Y_AXIS];
-        if (p->isZMove())
-            p->distance = RMath::max((float)sqrt(xydist2 + axisDistanceMM[Z_AXIS] * axisDistanceMM[Z_AXIS]), axisDistanceMM[E_AXIS]);
-        else
-            p->distance = RMath::max((float)sqrt(xydist2), axisDistanceMM[E_AXIS]);
-    } else {
-        p->distance = axisDistanceMM[E_AXIS];
-    }
+    p->setSegmentGeometry(axisDistanceMM);
 
     p->calculateMove(axisDistanceMM, p->primaryAxis, feedrate);
 
@@ -198,15 +203,8 @@ void PrintLine::prepareDirectMove(bool stoppable, bool feedrateSource) {
     // Find direction
     float axisDistanceMM[4]; // Axis movement in mm
     for (uint8_t axis = 0; axis < 4; axis++) {
-        direct.delta[axis] = Printer::directPosition(axis).remaining();
-        // no special extrusion handling. this direct drive is only for manual move and button feed. no precision needed.
-        if (direct.delta[axis] >= 0)
-            direct.setPositiveDirectionForAxis(axis);
-        else
-            direct.delta[axis] = -direct.delta[axis];
+        direct.setAxisSteps(axis, Printer::directPosition(axis).remaining());
         axisDistanceMM[axis] = fabs(direct.delta[axis] * Printer::axisMMPerSteps[axis]);
-        if (direct.delta[axis])
-            direct.setMoveOfAxis(axis);
     }
     if (direct.isNoMove()) {
         direct.stepsRemaining = 0;
@@ -215,26 +213,7 @@ void PrintLine::prepareDirectMove(bool stoppable, bool feedrateSource) {
         return; // No steps included
     }
 
-    // Define variables that are needed for the Bresenham algorithm. Please note that Z is not currently included in the Bresenham algorithm.
-    if (direct.delta[Y_AXIS] > direct.delta[X_AXIS] && direct.delta[Y_AXIS] > direct.delta[Z_AXIS] && direct.delta[Y_AXIS] > direct.delta[E_AXIS])
-        direct.primaryAxis = Y_AXIS;
-    else if (direct.delta[X_AXIS] > direct.delta[Z_AXIS] && direct.delta[X_AXIS] > direct.delta[E_AXIS])
-        direct.primaryAxis = X_AXIS;
-    else if (direct.delta[Z_AXIS] > direct.delta[E_AXIS])
-        direct.primaryAxis = Z_AXIS;
-    else
-        direct.primaryAxis = E_AXIS;
-
-    if (direct.isXYZMove()) {
-        float xydist2 = axisDistanceMM[X_AXIS] * axisDistanceMM[X_AXIS] + axisDistanceMM[Y_AXIS] * axisDistanceMM[Y_AXIS];
-        if (direct.isZMove())
-            direct.distance = RMath::max((float)sqrt(xydist2 + axisDistanceMM[Z_AXIS] * axisDistanceMM[Z_AXIS]), axisDistanceMM[E_AXIS]);
-        else
-            direct.distance = RMath::max((float)sqrt(xydist2), axisDistanceMM[E_AXIS]);
-    } else
-        direct.distance = axisDistanceMM[E_AXIS];
-
-    direct.stepsRemaining = direct.delta[direct.primaryAxis];
+    direct.setSegmentGeometry(axisDistanceMM);
 
     float feedrate = (direct.isXOrYMove() ? STANDARD_POSITION_FEEDRATE_XY : direct.isZMove() ? STANDARD_POSITION_FEEDRATE_Z : STANDARD_POSITION_FEEDRATE_E);
     if (feedrateSource == FEEDRATE_GCODE) {

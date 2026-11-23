@@ -318,6 +318,7 @@ T constrain(T value, A low, B high) {
 
 namespace RMath {
 float min(float a, float b) { return std::min(a, b); }
+float max(float a, float b) { return std::max(a, b); }
 }
 
 struct Extruder {
@@ -371,9 +372,17 @@ struct PrintLine {
         return (xyDirection & (17 << axis)) == (16 << axis);
     }
     void setMoveOfAxisFinished(uint8_t axis) { xyDirection &= ~(16 << axis); }
+    void setMoveOfAxis(uint8_t axis) { xyDirection |= 16 << axis; }
+    void setPositiveDirectionForAxis(uint8_t axis) { xyDirection |= 1 << axis; }
     int32_t error[4] = {}, delta[4] = {};
+    int32_t stepsRemaining = 0;
+    float distance = 0;
+    uint8_t primaryAxis = 0;
+    void setAxisSteps(uint8_t axis, int32_t steps);
+    void setSegmentGeometry(const float axisDistanceMM[]);
     bool isEMove() const { return moveE; }
-    bool isZMove() const { return moveZ; }
+    bool isZMove() const { return moveZ || (xyDirection & (16 << Z_AXIS)); }
+    bool isXYZMove() const { return xyDirection & 112; }
     bool isEPositiveMove() const { return positiveE; }
     bool isXOrYMove() const { return moveXY; }
 
@@ -1554,6 +1563,30 @@ void ecmpStepping() {
     }
 }
 
+void segmentGeometry() {
+    PrintLine move;
+    move.setAxisSteps(X_AXIS, -10);
+    move.setAxisSteps(Y_AXIS, 10);
+    const float distances[] = {3, 4, 12, 2};
+    move.setSegmentGeometry(distances);
+    assert(move.isNegativeMoveOfAxis(X_AXIS) && move.isPositiveMoveOfAxis(Y_AXIS));
+    assert(move.primaryAxis == X_AXIS && move.stepsRemaining == 10 && move.distance == 5);
+
+    move.setAxisSteps(Z_AXIS, 10);
+    move.setSegmentGeometry(distances);
+    assert(move.primaryAxis == Z_AXIS && move.stepsRemaining == 10 && move.distance == 13);
+
+    move.setAxisSteps(E_AXIS, -10);
+    move.setSegmentGeometry(distances);
+    assert(move.primaryAxis == E_AXIS && move.stepsRemaining == 10 && move.distance == 13);
+
+    PrintLine retract;
+    retract.setAxisSteps(E_AXIS, -1);
+    retract.setSegmentGeometry(distances);
+    assert(retract.isNegativeMoveOfAxis(E_AXIS));
+    assert(retract.primaryAxis == E_AXIS && retract.stepsRemaining == 1 && retract.distance == 2);
+}
+
 void xyLimits() {
     for (uint8_t axis = X_AXIS; axis <= Y_AXIS; ++axis) {
         const uint8_t positive = 17 << axis, negative = 16 << axis;
@@ -1672,6 +1705,8 @@ int main(int argc, char** argv) {
         wobbleTarget();
     else if (!std::strcmp(argv[1], "cartesian-planning"))
         cartesianPlanning();
+    else if (!std::strcmp(argv[1], "segment-geometry"))
+        segmentGeometry();
     else if (!std::strcmp(argv[1], "ecmp-stepping"))
         ecmpStepping();
     else if (!std::strcmp(argv[1], "xy-limits"))

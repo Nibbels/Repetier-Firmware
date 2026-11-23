@@ -87,6 +87,9 @@ private:
 
     uint32_t advanceL; ///< Recomputated L value
 
+    void setAxisSteps(uint8_t axis, int32_t steps);
+    void setSegmentGeometry(const float axisDistanceMM[]);
+
 public:
     int32_t stepsRemaining; ///< Remaining steps, until move is finished
     static PrintLine* cur;

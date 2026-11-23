@@ -62,7 +62,7 @@ def main():
         + section(ui, "case UI_ACTION_RF_EXTRUDER_OUTPUT:", "case UI_ACTION_RF_PAUSE:")
         + "} }",
         "void trackPlannedLayer(PrintLine* p) {\n"
-        + section(move_planner, "    if (!Printer::startLine.active())", "\n    // Define variables that are needed")
+        + section(move_planner, "    if (!Printer::startLine.active())", "\n    p->setSegmentGeometry(")
         + "}",
         "int32_t planExtrusionMove() {\nint32_t steps;\n"
         + section(move_planner, "            const float targetE =", "\n        } else {")
@@ -70,6 +70,7 @@ def main():
         "int32_t planCartesianAxis(uint8_t axis) {\nint32_t steps;\n"
         + section(move_planner, "            const int32_t targetSteps = Printer::prepareDestinationSteps(axis);", "\n        }")
         + "\nreturn steps;\n}",
+        section(move_planner, "void PrintLine::setAxisSteps(", "\n/** \\brief Put a move"),
         "void rescalePlannedAxis(uint8_t axis) {\nusing namespace Printer;\n"
         + section(printer, "        const float mmPerStep = 1.0f / axisStepsPerMM[axis];", "\n\n        /** Acceleration")
         + "\n}",
@@ -101,7 +102,7 @@ def main():
             "sense-window", "sense-settings", "sense-limit-interrupt",
             "pressure-pause", "pressure-stop", "digit-zero",
             "extrusion-planning",
-            "gcode-target", "wobble-target", "cartesian-planning", "ecmp-stepping", "xy-limits",
+            "gcode-target", "wobble-target", "cartesian-planning", "segment-geometry", "ecmp-stepping", "xy-limits",
         ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
 
