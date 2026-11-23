@@ -521,7 +521,7 @@ long StepExecutor::performMove(PrintLine* move, uint8_t forQueue) {
             nIdle = 0; // we are not idle because the heat bed scan is going on at the moment
 
         if (queue.count() == 0 && nIdle) {
-            g_uStartOfIdle = HAL::timeInMilliseconds(); //end a move
+            Printer::idleStatus.schedule(HAL::timeInMilliseconds());
             nominalFeedrate_ = 0;
         }
 

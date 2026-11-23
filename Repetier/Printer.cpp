@@ -64,6 +64,7 @@ ZOffset Printer::zOffset;
 SenseOffsetControl Printer::senseOffsetControl{SENSIBLE_PRESSURE_MAX_OFFSET};
 ZMotion Printer::zMotion{ZAXIS_STEPS_PER_MM};
 MachineInactivity Printer::inactivity(STEPPER_INACTIVE_TIME * 1000UL, MAX_INACTIVE_TIME * 1000UL);
+IdleStatus Printer::idleStatus;
 PrintLayers Printer::layers{ZAXIS_STEPS_PER_MM};
 DigitCompensation Printer::digitCompensation{
     short(abs(EMERGENCY_PAUSE_DIGITS_MAX) * 0.7), short(abs(EMERGENCY_PAUSE_DIGITS_MAX))
@@ -1081,7 +1082,7 @@ void Printer::homeDigits() {
 
 void Printer::homeAxis(bool xaxis, bool yaxis, bool zaxis) // home non-delta printer
 {
-    g_uStartOfIdle = 0; //start of homing xyz
+    Printer::idleStatus.cancel();
 
     //Bei beliebiger user interaktion oder Homing soll G1 etc. erlaubt werden. Dann ist der Drucker nicht abgestürzt, sondern bedient worden.
     g_unlock_movement = 1;
@@ -1100,14 +1101,14 @@ void Printer::homeAxis(bool xaxis, bool yaxis, bool zaxis) // home non-delta pri
     if (xaxis && yaxis && zaxis)
         Printer::homeDigits();
 
-    g_uStartOfIdle = HAL::timeInMilliseconds(); //homing xyz just ended
+    Printer::idleStatus.schedule(HAL::timeInMilliseconds());
     Commands::printCurrentPosition();
 } // homeAxis
 
 void Printer::stopPrint() {
     if (!Printer::isPrinting())
         return;
-    g_uStartOfIdle = 0; // The stop sequence handles the transition to idle.
+    Printer::idleStatus.cancel();
 
     Com::printFLN(PSTR("RequestStop:"));     // Repetier-Server
     Com::printFLN(PSTR("// action:cancel")); // OctoPrint

@@ -73,7 +73,7 @@ void PrintPause::pressPause() {
 
     if (isWarmPause()) {
         const millis_t now = HAL::timeInMilliseconds();
-        g_uStartOfIdle = now + 30000;
+        Printer::idleStatus.schedule(now + 30000);
         standbyAt_ = now;
         UI_STATUS_UPD(UI_TEXT_COOLING_DOWN);
     }
@@ -93,7 +93,7 @@ bool PrintPause::resume() {
         phase_ = Phase::Reheating;
     }
 
-    g_uStartOfIdle = 0;
+    Printer::idleStatus.cancel();
     UI_STATUS_UPD(UI_TEXT_CONTINUING);
     uid.exitmenu();
 
@@ -105,7 +105,7 @@ bool PrintPause::resume() {
         // A first Play restores the temperature. A second Play returns to print.
         const millis_t now = HAL::timeInMilliseconds();
         UI_STATUS_UPD(UI_TEXT_CONTINUING_READY);
-        g_uStartOfIdle = now + 30000;
+        Printer::idleStatus.schedule(now + 30000);
         settle(now, reheatGraceMs);
     } else {
         phase_ = Phase::ReturnRequested;
@@ -218,7 +218,7 @@ void PrintPause::retract(Destination destination) {
     for (uint8_t axis = X_AXIS; axis <= Z_AXIS; ++axis)
         returnPosition_[axis] = Printer::directPosition(axis).steps();
     extruderReturnSteps_ = 0;
-    g_uStartOfIdle = 0;
+    Printer::idleStatus.cancel();
     Printer::setMenuMode(MENU_MODE_PAUSED, true);
     UI_STATUS_UPD(UI_TEXT_PAUSING);
     uid.exitmenu();

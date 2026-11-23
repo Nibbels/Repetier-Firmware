@@ -322,7 +322,7 @@ public:
         InterruptProtectedBlock lock;
         ++count_;
         if (startsMotion)
-            g_uStartOfIdle = 0;
+            Printer::idleStatus.cancel();
     }
 
     PrintLine* activateFront() {

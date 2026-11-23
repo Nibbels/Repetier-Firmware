@@ -17,6 +17,7 @@
 #include "ExtrusionCompensation.h"
 #include "PressureAdvance.h"
 #include "MachineInactivity.h"
+#include "IdleStatus.h"
 #include "PrintLayers.h"
 #include "BedCompensation.h"
 #include "PrintPause.h"
@@ -38,7 +39,7 @@ constexpr int16_t printingForce = 6000;
 constexpr int16_t senseThreshold = 3000;
 constexpr long parkY = 200 * 160L, parkZ = 30 * static_cast<long>(zStepsPerMm), parkE = 280;
 
-millis_t clockMs = 0, g_uStartOfIdle = 0;
+millis_t clockMs = 0;
 char g_nHeatBedScanStatus = 0, g_nZOSScanStatus = 0;
 unsigned short g_nManualSteps[4] = { 1, 1, 1, 28 };
 int32_t g_offsetZCompensationSteps = 250;
@@ -230,6 +231,7 @@ ExtrusionCompensation extrusionCompensation;
 bool blockAll = false;
 PressureAdvance pressureAdvance;
 MachineInactivity inactivity(STEPPER_INACTIVE_TIME * 1000UL, MAX_INACTIVE_TIME * 1000UL);
+IdleStatus idleStatus;
 bool advanceActive = false;
 constexpr float maxXYJerk = 8.0f, maxZJerk = 0.5f;
 volatile char doHeatBedZCompensation = true;
@@ -1715,13 +1717,13 @@ void segmentGeometry() {
 
 void moveQueue() {
     auto& queue = PrintLine::queue;
-    g_uStartOfIdle = 500;
+    Printer::idleStatus.schedule(500);
     for (int count = 1; count < MOVE_CACHE_SIZE; ++count) {
         queue.writeSlot().task = TASK_DISABLE_Z_COMPENSATION;
         queue.publish(false);
         assert(queue.count() == count && queue.active() == nullptr);
     }
-    assert(g_uStartOfIdle == 500);
+    assert(Printer::idleStatus.poll(0, 500) == IdleStatus::Transition::Deferred);
     queue.activateFront()->moveZ = true;
     assert(PrintLine::hasActiveZMove() && interruptsEnabled);
     queue.clear();
@@ -1730,7 +1732,7 @@ void moveQueue() {
     assert(queue.readIndex() == MOVE_CACHE_SIZE - 1 && queue.writeIndex() == queue.readIndex());
 
     assert(PrintLine::insertWaitMovesIfNeeded(1, 0) == 1);
-    assert(queue.count() == 4 && g_uStartOfIdle == 0);
+    assert(queue.count() == 4 && Printer::idleStatus.poll(0, 500) == IdleStatus::Transition::Waiting);
     for (int depth = 3; depth >= 0; --depth) {
         auto* move = queue.activateFront();
         assert(move->task == TASK_NO_TASK && move->flags == FLAG_WARMUP);
@@ -1744,6 +1746,28 @@ void moveQueue() {
     }
     assert(queue.count() == 0 && queue.active() == nullptr);
     assert(queue.readIndex() == 3 && queue.writeIndex() == 3);
+}
+
+void idleStatusTransitions() {
+    IdleStatus status;
+    using Transition = IdleStatus::Transition;
+    constexpr uint32_t delay = 500;
+
+    status.schedule(1000);
+    assert(status.poll(999, delay) == Transition::Deferred);
+    assert(status.poll(1500, delay) == Transition::Waiting);
+    assert(status.poll(1501, delay) == Transition::Ready);
+    assert(status.poll(1502, delay) == Transition::Waiting);
+
+    status.schedule(UINT32_MAX - 200);
+    assert(status.poll(300, delay) == Transition::Ready);
+    status.schedule(0);
+    assert(status.poll(UINT32_MAX, delay) == Transition::Deferred);
+    assert(status.poll(501, delay) == Transition::Ready);
+
+    status.schedule(1000);
+    status.cancel();
+    assert(status.poll(2000, delay) == Transition::Waiting && interruptsEnabled);
 }
 
 void lookaheadMoves() {
@@ -2013,6 +2037,8 @@ int main(int argc, char** argv) {
         segmentGeometry();
     else if (!std::strcmp(argv[1], "move-queue"))
         moveQueue();
+    else if (!std::strcmp(argv[1], "idle-status"))
+        idleStatusTransitions();
     else if (!std::strcmp(argv[1], "ecmp-stepping"))
         ecmpStepping();
     else if (!std::strcmp(argv[1], "advance-timer"))

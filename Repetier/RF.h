@@ -412,7 +412,6 @@ constexpr int32_t maxManualZOffsetMicrometers = 10000;
 #define COMPENSATION_MATRIX_MAX_Y long((Y_MAX_LENGTH - heatBedScanYStartMm - heatBedScanYEndMm) / heatBedScanMinStepMm + 4)
 #define COMPENSATION_MATRIX_SIZE long(COMPENSATION_MATRIX_MAX_X * COMPENSATION_MATRIX_MAX_Y * 2 + EEPROM_OFFSET_MATRIX_START) // [bytes]
 
-extern millis_t g_uStartOfIdle;
 
 extern long g_offsetZCompensationSteps; // this is the minimal distance between the heat bed and the extruder at the moment when the z-min endstop is hit
 extern short g_ZCompensationMax;

@@ -86,7 +86,6 @@ constexpr int zOffsetScanContactPressureDelta = 33;
 constexpr int zOffsetScanRetryPressureDelta = 30;
 constexpr int zOffsetScanIdlePressureDelta = 0;
 
-millis_t g_uStartOfIdle = 0;
 
 long g_offsetZCompensationSteps = 0;
 short g_ZCompensationMax = 0;
@@ -293,7 +292,7 @@ void scanHeatBed(void) {
             Com::printFLN(PSTR("aborted"));
         }
 
-        g_uStartOfIdle = HAL::timeInMilliseconds() + 30000; //abort scanHeatBed
+        Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 30000);
 
         // restore the compensation values from the EEPROM
         if (loadCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed))) {
@@ -328,7 +327,7 @@ void scanHeatBed(void) {
 
         switch (g_nHeatBedScanStatus) {
         case 1: {
-            g_uStartOfIdle = 0; // scanHeatBed
+            Printer::idleStatus.cancel();
             g_scanStartTime = HAL::timeInMilliseconds();
             g_abortZScan = 0;
             g_retryStatus = 0;
@@ -1024,7 +1023,7 @@ void scanHeatBed(void) {
                 Com::printFLN(PSTR("the scan has been completed"));
             }
             //UI_STATUS_UPD( UI_TEXT_HEAT_BED_SCAN_DONE );
-            g_uStartOfIdle = HAL::timeInMilliseconds(); //end scanHeatBed
+            Printer::idleStatus.schedule(HAL::timeInMilliseconds());
 
             showInformation(PSTR(UI_TEXT_HEAT_BED_SCAN_DONE), (void*)ui_text_saving_success, PSTR(UI_TEXT_OK)); //tell user the scan was a success
 
@@ -1079,7 +1078,7 @@ void searchZOScan(void) {
         switch (g_nZOSScanStatus) {
         case 1: {
             g_retryZScan = 0;
-            g_uStartOfIdle = 0; //zeige nicht gleich wieder Printer Ready an.
+            Printer::idleStatus.cancel();
             Com::printFLN(PSTR("ZOS init"));
             // when the heat bed Z offset is searched, the z-compensation must be disabled
             g_nZOSScanStatus = 2;
@@ -1497,7 +1496,7 @@ void searchZOScan(void) {
             showMyPage((void*)ui_text_heat_bed_zoffset_search_status, (void*)ui_text_heat_bed_zoffset_fix_z1, (void*)ui_text_heat_bed_zoffset_fix_z2, (void*)ui_text_statusmsg);
             g_nAutoReturnMessage = true;
             g_nAutoReturnTime = HAL::timeInMilliseconds() + 30000;
-            g_uStartOfIdle = HAL::timeInMilliseconds() + 30000; //go to printer ready/ignore status   //end searchZOScan
+            Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 30000);
 
             //Printer::zMotion.scanSteps() is 0 now.
             Com::printFLN(PSTR("ZOS finished"));
@@ -1532,7 +1531,7 @@ void abortSearchHeatBedZOffset(bool reloadMatrix) {
     Printer::disableAllSteppersNow();
 
     g_ZOS_Auto_Matrix_Leveling_State = 0;
-    g_uStartOfIdle = HAL::timeInMilliseconds() + 30000; //abort searchHeatBedZOffset
+    Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 30000);
 } /* searchHeatBedZOffset */
 
 float g_ZSchraubenSollDrehungenWarm_U = 0;
@@ -3029,17 +3028,12 @@ void handleStartStandby(millis_t uTime) {
      * Check if the Printer should reset the printing flag
      * And show Idle State within the display.
      */
-    if (g_uStartOfIdle) {
-        if (g_uStartOfIdle > uTime) {
-            return;
-        }
-        if ((uTime - g_uStartOfIdle) > MINIMAL_IDLE_TIME) //500ms nach config
-        {
-            // show that we are idle for a while already
-            showIdle();
-            g_uStartOfIdle = 0;
-            Printer::setPrinting(false);
-        }
+    const auto idleTransition = Printer::idleStatus.poll(uTime, MINIMAL_IDLE_TIME);
+    if (idleTransition == IdleStatus::Transition::Deferred)
+        return;
+    if (idleTransition == IdleStatus::Transition::Ready) {
+        showIdle();
+        Printer::setPrinting(false);
     }
 
     /**
@@ -3076,7 +3070,7 @@ void outputObject(bool showerrors) {
         return;
     }
 
-    g_uStartOfIdle = 0; //outputobject starts
+    Printer::idleStatus.cancel();
     UI_STATUS_UPD(UI_TEXT_OUTPUTTING_OBJECT);
     Com::printFLN(PSTR("outputObject"));
     Commands::printCurrentPosition();
@@ -3093,7 +3087,7 @@ void outputObject(bool showerrors) {
     // disable all steppers
     Printer::disableAllSteppersNow();
 
-    g_uStartOfIdle = HAL::timeInMilliseconds(); //outputobject ends
+    Printer::idleStatus.schedule(HAL::timeInMilliseconds());
 } // outputObject
 
 void loopFeatures() //wird so aufgerufen, dass es ein ~100ms Takt sein sollte.
@@ -5087,7 +5081,7 @@ void processSpecialGCode(GCode* pCommand) {
         {
             Commands::waitUntilEndOfAllMoves(); //loadfilament
             Com::printFLN(PSTR("Load Filament"));
-            g_uStartOfIdle = 0; //M3913
+            Printer::idleStatus.cancel();
 
                 //normalize dms sensor values to 0 if allowed in options and not already done
             if (!Printer::strainGauge.zeroOffset())
@@ -5126,14 +5120,14 @@ void processSpecialGCode(GCode* pCommand) {
 
             Printer::relativeExtruderCoordinateMode = save_relativeExtruderCoordinateMode;
             Printer::unitIsInches = saveunitIsInches;
-            g_uStartOfIdle = HAL::timeInMilliseconds() + 5000; // M3913 load filament ends
+            Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 5000);
             break;
         }
         case 3914: //M3914 coldpull filament very gently
         {
             Commands::waitUntilEndOfAllMoves(); //loadfilament
             Com::printFLN(PSTR("Unload Filament"));
-            g_uStartOfIdle = 0; //M3914
+            Printer::idleStatus.cancel();
 
             //init
             uint8_t outputLength = 100; //9cm max Output, wenn kein übertriebener wiederstand. Unser Hotend ist nicht ganz so lang.
@@ -5218,7 +5212,7 @@ void processSpecialGCode(GCode* pCommand) {
 
             Printer::relativeExtruderCoordinateMode = save_relativeExtruderCoordinateMode;
             Printer::unitIsInches = saveunitIsInches;
-            g_uStartOfIdle = HAL::timeInMilliseconds() + 5000; // M3914 unload filament ends
+            Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 5000);
             break;
         }
 
@@ -6124,7 +6118,7 @@ static void setupForPrinting() {
 
     Printer::updateDerivedParameter();
 
-    g_uStartOfIdle = HAL::timeInMilliseconds(); //setupForPrinting
+    Printer::idleStatus.schedule(HAL::timeInMilliseconds());
 } // setupForPrinting
 
 void prepareZCompensation(void) {

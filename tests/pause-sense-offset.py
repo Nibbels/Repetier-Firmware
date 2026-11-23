@@ -27,6 +27,7 @@ def main():
     printer_header = (firmware / "Printer.h").read_text(encoding="utf-8")
     eeprom = (firmware / "Eeprom.h").read_text(encoding="utf-8")
     pause = (firmware / "PrintPause.cpp").read_text(encoding="utf-8")
+    idle = (firmware / "IdleStatus.cpp").read_text(encoding="utf-8")
     stop = (firmware / "PrintStop.cpp").read_text(encoding="utf-8")
     dms = (firmware / "StrainGauge.cpp").read_text(encoding="utf-8")
     start_line = (firmware / "StartLine.cpp").read_text(encoding="utf-8")
@@ -44,6 +45,7 @@ def main():
         section(rf, "long getZMatrixDepth_CurrentXY(", "\nvoid showAbortScanReason("),
         section(rf, "static void serviceSenseOffset(", "\nvoid handleScanWorkTasks("),
         pause.removeprefix('#include "Repetier.h"\n'),
+        idle.removeprefix('#include "Repetier.h"\n'),
         stop.removeprefix('#include "Repetier.h"\n#include "GCodeInput.h"\n'),
         "namespace Printer {\n"
         + section(printer_header, "    static INLINE void setEPositionMM(", "\n    static INLINE void stopDirectAxis(")
@@ -135,7 +137,7 @@ def main():
             "sense-window", "sense-settings", "sense-limit-interrupt",
             "pressure-pause", "pressure-stop", "digit-zero",
             "extrusion-planning",
-            "gcode-target", "wobble-target", "cartesian-planning", "segment-geometry", "move-queue", "ecmp-stepping",
+            "gcode-target", "wobble-target", "cartesian-planning", "segment-geometry", "move-queue", "idle-status", "ecmp-stepping",
             "advance-timer", "step-clock", "lookahead", "direct-ramp", "xy-limits",
         ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)

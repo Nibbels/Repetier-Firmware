@@ -777,7 +777,7 @@ void TemperatureController::waitForTargetTemperature(uint8_t plus_temp_tolerance
     } else {
         UI_STATUS_UPD(UI_TEXT_COOLING_DOWN);
     }
-    g_uStartOfIdle = 0; //start waitForTargetTemperature
+    Printer::idleStatus.cancel();
     while (true) {
         Commands::checkForPeriodicalActions(WaitHeater);
         if (resumingPause && !Printer::pause.isReheating())
@@ -787,7 +787,7 @@ void TemperatureController::waitForTargetTemperature(uint8_t plus_temp_tolerance
         if (!dirRising && currentTemperatureC < MAX_ROOM_TEMPERATURE)
             break;
     }
-    g_uStartOfIdle = HAL::timeInMilliseconds(); //end waitForTargetTemperature
+    Printer::idleStatus.schedule(HAL::timeInMilliseconds());
 }
 
 void TemperatureController::autotunePID(float temp, uint8_t controllerId, int maxCycles, bool storeValues, int method) {
@@ -796,7 +796,7 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
         Com::printErrorFLN(PSTR("PID autotune failed: unsupported temperature sensor"));
         return;
     }
-    g_uStartOfIdle = 0; // start autotunePID
+    Printer::idleStatus.cancel();
     UI_STATUS_UPD(UI_TEXT_PID);
     float currentTemp;
     int cycles = 0;
@@ -980,11 +980,11 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
                 pidDGain = Kd;
                 EEPROM::storeDataIntoEEPROM();
             }
-            g_uStartOfIdle = HAL::timeInMilliseconds() + 30000; //end autotunePID cycles
+            Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 30000);
             return;
         }
     }
-    g_uStartOfIdle = HAL::timeInMilliseconds(); //end autotunePID with error
+    Printer::idleStatus.schedule(HAL::timeInMilliseconds());
 } // autotunePID
 
 void reportTempsensorAndHeaterErrors() {

@@ -441,7 +441,7 @@ void Commands::processMCode(GCode* com) {
             break;
         }
 
-        g_uStartOfIdle = 0;                 //M109
+        Printer::idleStatus.cancel();
         Commands::waitUntilEndOfAllMoves(); //M109
 
         Extruder* actExtruder = Extruder::current;
@@ -493,7 +493,7 @@ void Commands::processMCode(GCode* com) {
         } while (!isTempReached);
 
 
-        g_uStartOfIdle = HAL::timeInMilliseconds(); //end of M109
+        Printer::idleStatus.schedule(HAL::timeInMilliseconds());
         break;
     }
     case 190: // M190 - Wait bed for heater to reach target.
@@ -506,7 +506,7 @@ void Commands::processMCode(GCode* com) {
         if (Printer::debugDryrun()) {
             break;
         }
-        g_uStartOfIdle = 0;                 //M190
+        Printer::idleStatus.cancel();
         Commands::waitUntilEndOfAllMoves(); //M190
         if (com->hasS())
             Extruder::setHeatedBedTemperature(com->S);
@@ -533,7 +533,7 @@ void Commands::processMCode(GCode* com) {
                 break;
         }
 
-        g_uStartOfIdle = HAL::timeInMilliseconds() + 5000; //end of M190
+        Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 5000);
         break;
     }
     case 116: // M116 - Wait for temperatures to reach target temperature

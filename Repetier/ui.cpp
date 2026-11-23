@@ -3468,14 +3468,14 @@ void UIDisplay::mainSwitchCase(int action) {
 
 
     case UI_ACTION_PREHEAT_PLA: {
-        g_uStartOfIdle = HAL::timeInMilliseconds() + 10000; //preheat PLA just got selected
+        Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 10000);
         UI_STATUS_UPD(UI_TEXT_PREHEAT_PLA);
         Extruder::setTemperatureForAllExtruders(UI_SET_PRESET_EXTRUDER_TEMP_PLA);
         Extruder::setHeatedBedTemperature(UI_SET_PRESET_HEATED_BED_TEMP_PLA);
         break;
     }
     case UI_ACTION_PREHEAT_ABS: {
-        g_uStartOfIdle = HAL::timeInMilliseconds() + 10000; //preheat ABS just got selected
+        Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 10000);
         UI_STATUS_UPD(UI_TEXT_PREHEAT_ABS);
         Extruder::setTemperatureForAllExtruders(UI_SET_PRESET_EXTRUDER_TEMP_ABS);
         Extruder::setHeatedBedTemperature(UI_SET_PRESET_HEATED_BED_TEMP_ABS);
@@ -3509,7 +3509,7 @@ void UIDisplay::mainSwitchCase(int action) {
     case UI_ACTION_MOUNT_FILAMENT_HARD:
     case UI_ACTION_UNMOUNT_FILAMENT_SOFT:
     case UI_ACTION_UNMOUNT_FILAMENT_HARD: {
-        g_uStartOfIdle = 0;
+        Printer::idleStatus.cancel();
         while (Printer::checkAbortKeys())
             Commands::checkForPeriodicalActions(); //dont quit script by holding the ok longer than 1ms if no temp is involved. -> min einmal OK loslassen.
         bool unmount = (action == UI_ACTION_UNMOUNT_FILAMENT_SOFT || action == UI_ACTION_UNMOUNT_FILAMENT_HARD);
@@ -3538,7 +3538,7 @@ void UIDisplay::mainSwitchCase(int action) {
                 GCodeInput::executeFlashScript(Com::tMountFilamentHard);
             }
         }
-        g_uStartOfIdle = HAL::timeInMilliseconds(); // UI_ACTION_UNMOUNT_FILAMENT UI_ACTION_MOUNT_FILAMENT
+        Printer::idleStatus.schedule(HAL::timeInMilliseconds());
         break;
     }
     case UI_ACTION_SET_E_ORIGIN: {

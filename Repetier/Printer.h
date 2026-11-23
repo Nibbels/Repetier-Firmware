@@ -27,6 +27,7 @@
 #include "PrintPause.h"
 #include "PrintStop.h"
 #include "MachineInactivity.h"
+#include "IdleStatus.h"
 #include "DigitCompensation.h"
 #include "PressureProtection.h"
 #include "StrainGauge.h"
@@ -115,6 +116,7 @@ public:
     static PrintPause pause;
     static PrintStop printStop;
     static MachineInactivity inactivity;
+    static IdleStatus idleStatus;
     static char ZMode;                      // Z Scale
     static char moveMode[3];                // move mode which is applied within the Position X/Y/Z menus
     static bool moveKosys;                  // true = GCode, false = DirectMove / OffsetMove
