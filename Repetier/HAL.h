@@ -419,6 +419,11 @@ public:
 
     static int32_t CPUDivU2(unsigned int divisor);
 
+    static inline void holdStepHigh() {
+        // The DRV8711 requires at least 1.9 microseconds high on STEP.
+        __builtin_avr_delay_cycles((2UL * F_CPU + 999999UL) / 1000000UL);
+    }
+
     static inline void delayMicroseconds(unsigned int delayUs) //see https://www.arduino.cc/en/Reference/AttachInterrupt for interrupt-warning.
     {
         ::delayMicroseconds(delayUs);

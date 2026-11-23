@@ -85,6 +85,11 @@ float extrusionBeforePublish = 0.0f;
 namespace HAL {
 void allowInterrupts() { interruptsEnabled = true; }
 void forbidInterrupts() { interruptsEnabled = false; }
+unsigned stepHighHolds = 0;
+void holdStepHigh() {
+    assert(!interruptsEnabled);
+    ++stepHighHolds;
+}
 }
 
 namespace Printer {
@@ -1596,7 +1601,7 @@ void advanceTimer() {
     advance.setStepInterval(12);
     advance.addSteps(1);
     assert(advance.nextTimerCompare(0) == 12 && advance.pendingSteps() == 1);
-    assert(Extruder::stepPulses == basePulses);
+    assert(Extruder::stepPulses == basePulses && HAL::stepHighHolds == 0);
     advance.addSteps(1);
     assert(advance.nextTimerCompare(12) == 64 && Extruder::current->stepperDirection == 1);
     assert(advance.nextTimerCompare(64) == 76 && advance.pendingSteps() == 1);
@@ -1619,7 +1624,7 @@ void advanceTimer() {
     assert(advance.nextTimerCompare(240) == 36 && Extruder::current->stepperDirection == -1);
     assert(advance.nextTimerCompare(36) == 48 && advance.pendingSteps() == -1);
     assert(advance.nextTimerCompare(48) == 60 && advance.pendingSteps() == 0);
-    assert(Extruder::stepPulses == basePulses + 4);
+    assert(Extruder::stepPulses == basePulses + 4 && HAL::stepHighHolds == 4);
 }
 
 void stepClock() {

@@ -907,6 +907,7 @@ uint8_t PressureAdvance::nextTimerCompare(uint8_t compare) {
     } else if (pendingSteps()) {
         Extruder::step();
         pendingSteps_ -= direction_;
+        HAL::holdStepHigh();
         Extruder::unstep();
     }
     return compare + stepInterval_;
