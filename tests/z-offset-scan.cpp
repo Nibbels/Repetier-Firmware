@@ -6,6 +6,7 @@
 #include <cstring>
 #include <utility>
 #include <vector>
+#include "PressureMeasurement.h"
 
 namespace {
 using millis_t = uint32_t;
@@ -13,7 +14,15 @@ enum { X_AXIS, Y_AXIS, Z_AXIS };
 enum { EEPROM_FORMAT = 42, COMPENSATION_MATRIX_MAX_X = 10, COMPENSATION_MATRIX_MAX_Y = 10 };
 enum { EEPROM_SECTOR_SIZE = 4096, EEPROM_OFFSET_DIMENSION_X = 2, EEPROM_OFFSET_DIMENSION_Y = 4 };
 enum { SCAN_ABORT_REASON_CANCELED = 1, SCAN_ABORT_REASON_MISSING_MATRIX, SCAN_ABORT_REASON_AVERAGE_PRESSURE,
-       SCAN_ABORT_REASON_IDLE_PRESSURE, SCAN_ABORT_REASON_OVERFLOWING_MATRIX, SCAN_ABORT_REASON_BAD_HEIGHT_MATRIX };
+       SCAN_ABORT_REASON_IDLE_PRESSURE, SCAN_ABORT_REASON_OVERFLOWING_MATRIX, SCAN_ABORT_REASON_BAD_HEIGHT_MATRIX, SCAN_ABORT_REASON_DMS_UNAVAILABLE };
+enum {
+    SCAN_ABORT_REASON_REACHED_MAX_COMPENSATION = 30, SCAN_ABORT_REASON_SCAN_OVER_START,
+    SCAN_ABORT_REASON_SCAN_TOO_UNEVEN, SCAN_ABORT_REASON_SCAN_STEP_DELTA_OUT_OF_RANGE
+};
+template<class T>
+T constrain(T value, T minimum, T maximum) { return std::min(std::max(value, minimum), maximum); }
+
+constexpr int heatBedScanRetries = 5;
 constexpr uint8_t I2C_ADDRESS_EXTERNAL_EEPROM = 0x50;
 constexpr int heatBedScanXStartMm = 15, heatBedScanYStartMm = 30, heatBedScanDelayMs = 1000;
 constexpr int zOffsetScanContactPressureDelta = 33, zOffsetScanRetryPressureDelta = 30, zOffsetScanIdlePressureDelta = 0;
@@ -27,7 +36,11 @@ char g_retryZScan = 0, g_scanRetries = 0, g_abortZScan = 0, g_nActiveHeatBed = 1
 short g_nCurrentIdlePressure = 0, g_nMinPressureContact = 0, g_nMaxPressureContact = 0;
 short g_nMinPressureRetry = 0, g_nMaxPressureRetry = 0, g_nMinPressureIdle = 0, g_nMaxPressureIdle = 0;
 short g_nScanHeatBedUpFastSteps = -4, g_nScanHeatBedUpSlowSteps = -2;
-uint16_t g_nScanSlowStepDelay = 100;
+short g_nScanHeatBedDownSlowSteps = 2, g_nScanHeatBedDownFastSteps = 20, g_nScanZMaxCompensationSteps = 600;
+short g_nScanIdlePressureMin = -7500, g_nScanIdlePressureMax = 7500;
+uint8_t g_nScanPressureReads = 2;
+uint16_t g_nScanPressureReadDelay = 15, g_nScanPressureTolerance = 15;
+uint16_t g_nScanSlowStepDelay = 100, g_nScanFastStepDelay = 1;
 float g_scanStartZLiftMM = 1.0f;
 float g_ZOSlearningRate = 1.0f, g_ZOSlearningGradient = 0.0f;
 uint8_t g_ZOSTestPoint[2] = {3, 4}, g_uZMatrixMax[2] = {9, 9}, g_ZMatrixChangedInRam = 0;
@@ -36,8 +49,10 @@ long g_nLastZScanZPosition = 0;
 bool g_nAutoReturnMessage = false;
 uint32_t g_nAutoReturnTime = 0;
 
-unsigned homedZ = 0, homedXY = 0, reported = 0, retreats = 0, loaded = 0, shutdowns = 0, serviced = 0;
-unsigned corrected = 0, pressureSamples = 0, tickCount = 0, idleFailures = 0;
+unsigned homedZ = 0, homedXY = 0, reported = 0, positiveRetryRetreats = 0, loaded = 0, shutdowns = 0, serviced = 0;
+unsigned corrected = 0, pressureSamples = 0, tickCount = 0, negativeMoves = 0;
+bool injectNoise = false, injectDisconnection = false, disconnected = false;
+uint32_t lastUnstableAt = 0;
 char abortedWith = 0;
 bool matrixAvailable = true;
 void (*onHome)() = nullptr;
@@ -46,7 +61,6 @@ std::vector<std::pair<float, float>> probePoints;
 namespace HAL {
 uint32_t now = 0;
 uint32_t timeInMilliseconds() { return now; }
-void delayMilliseconds(uint32_t delta) { now += delta; }
 }
 
 namespace Printer {
@@ -91,6 +105,7 @@ void keepAlive(int state) {
 }
 namespace RMath {
 using std::min;
+using std::max;
 }
 namespace Com {
 const char* tAutoMatrixLeveling = "Auto";
@@ -125,22 +140,28 @@ long random(long min, long max) {
     assert(min == -3 && max == 3);
     return 0;
 }
-void moveZ(long steps) { Printer::zMotion.position += steps; }
-bool moveZPlusDownFast() { ++retreats; return false; }
-void moveZMinusUpFast() { moveZ(-150); }
-void moveZMinusUpSlow(short* digits, int) { *digits = 600; moveZ(-2); }
-void moveZPlusDownSlow(int) { moveZ(2); }
-bool readIdlePressure(short* digits) {
-    if (idleFailures) {
-        --idleFailures;
-        return true;
+void moveZ(long steps) {
+    if (steps < 0) {
+        assert(!disconnected);
+        ++negativeMoves;
+        if (injectDisconnection)
+            disconnected = true;
+    } else if (injectNoise && steps == g_nScanHeatBedDownFastSteps) {
+        assert(HAL::now - lastUnstableAt >= heatBedScanDelayMs);
+        ++positiveRetryRetreats;
     }
-    *digits = 200;
-    return false;
+    Printer::zMotion.position += steps;
 }
-bool readAveragePressure(short* digits) {
-    *digits = ++pressureSamples & 1 ? 600 : 200;
-    return false;
+bool sampleStrainGauge(int16_t& digits) {
+    if (disconnected)
+        return false;
+    if (++pressureSamples <= 10 && injectNoise) {
+        digits = pressureSamples % 2 ? 500 : 700;
+        lastUnstableAt = HAL::now;
+    } else {
+        digits = Printer::zMotion.scanSteps() <= -124 ? 600 : 500;
+    }
+    return true;
 }
 long getZMatrixDepth_CurrentXY() {
     return g_ZCompensationMatrix[g_ZOSTestPoint[X_AXIS]][g_ZOSTestPoint[Y_AXIS]];
@@ -153,6 +174,7 @@ void calculateZScrewCorrection() {
 }
 } // namespace
 
+#include "scan-pressure-firmware.inc"
 #include "z-offset-scan-firmware.inc"
 
 int main(int argc, char** argv) {
@@ -169,20 +191,20 @@ int main(int argc, char** argv) {
         };
     }
     matrixAvailable = !missing;
-    idleFailures = retry ? 1 : 0;
+    injectNoise = retry;
+    injectDisconnection = !std::strcmp(argv[1], "disconnected");
+    HAL::now = retry ? UINT32_MAX - 900 : 0;
     zOffsetScan.startOrCancel(level);
     while (zOffsetScan.active()) {
-        assert(++tickCount <= 75);
-        if (retry && tickCount == 7)
-            HAL::now = UINT32_MAX - 500;
-        if (retry && tickCount >= 8 && tickCount <= 11)
-            HAL::now += 250;
+        assert(++tickCount <= 7000);
         zOffsetScan.tick();
         assert(serviced == tickCount);
-        if (retry && tickCount >= 7 && tickCount <= 11)
-            assert(retreats == (tickCount == 11 ? 1u : 0u));
+        HAL::now += 10;
     }
-    if (cancel) {
+    if (injectDisconnection) {
+        assert(abortedWith == SCAN_ABORT_REASON_DMS_UNAVAILABLE && shutdowns == 1);
+        assert(negativeMoves == 1 && homedZ == 1 && !corrected && !reported);
+    } else if (cancel) {
         assert(abortedWith == SCAN_ABORT_REASON_CANCELED && tickCount == 3 && homedZ == 2);
         assert(shutdowns == 1 && probePoints.empty() && !corrected && !reported);
     } else if (missing) {
@@ -191,8 +213,8 @@ int main(int argc, char** argv) {
     } else {
         assert(!abortedWith && reported == 1 && g_nAutoReturnMessage && g_ZMatrixChangedInRam);
         assert(homedZ == (level ? 7u : 1u) && corrected == homedZ && homedXY == homedZ);
-        assert(tickCount == (level ? 73u : retry ? 18u : 13u) && loaded == 1);
-        assert(retreats == static_cast<unsigned>(retry));
+        assert(loaded == 1 && negativeMoves > 0);
+        assert(positiveRetryRetreats == static_cast<unsigned>(retry));
         const std::vector<std::pair<float, float>> expected = level
             ? std::vector<std::pair<float, float>>{{40, 40}, {20, 20}, {80, 80}, {40, 30}, {20, 80}, {80, 20}, {40, 50}}
             : std::vector<std::pair<float, float>>{{30, 40}};

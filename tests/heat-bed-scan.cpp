@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstring>
 #include <vector>
+#include "PressureMeasurement.h"
 
 namespace {
 using millis_t = uint32_t;
@@ -11,7 +12,14 @@ enum { X_AXIS, Y_AXIS, Z_AXIS };
 enum { EEPROM_FORMAT = 42, COMPENSATION_MATRIX_MAX_X = 8, COMPENSATION_MATRIX_MAX_Y = 8 };
 enum { HEAT_BED_SCAN_MODE_PLA = 1, HEAT_BED_SCAN_MODE_ABS = 2, EEPROM_SECTOR_SIZE = 1536 };
 enum { SCAN_ABORT_REASON_CANCELED = 1, SCAN_ABORT_REASON_AVERAGE_PRESSURE, SCAN_ABORT_REASON_IDLE_PRESSURE,
-       SCAN_ABORT_REASON_MATRIX_DIMENSION };
+       SCAN_ABORT_REASON_MATRIX_DIMENSION, SCAN_ABORT_REASON_DMS_UNAVAILABLE };
+enum {
+    SCAN_ABORT_REASON_REACHED_MAX_COMPENSATION = 30, SCAN_ABORT_REASON_SCAN_OVER_START,
+    SCAN_ABORT_REASON_SCAN_TOO_UNEVEN, SCAN_ABORT_REASON_SCAN_STEP_DELTA_OUT_OF_RANGE
+};
+template<class T>
+T constrain(T value, T minimum, T maximum) { return std::min(std::max(value, minimum), maximum); }
+
 constexpr int heatBedScanDelayMs = 1000, heatBedScanRetries = 5, heatBedScanCalibrationPointMm = 100;
 constexpr int heatBedScanPlaBedC = 60, heatBedScanPlaNozzleC = 210, heatBedScanAbsBedC = 100,
               heatBedScanAbsNozzleC = 240, heatBedScanProbeNozzleC = 100;
@@ -25,17 +33,23 @@ constexpr char UI_TEXT_HEATING[] = "Heating", UI_TEXT_HEAT_BED_SCAN[] = "Scan",
 constexpr char ui_text_heat_bed_scan[] = "Scan", ui_text_operation_denied[] = "Busy", ui_text_saving_success[] = "Saved";
 
 char g_abortZScan = 0, g_retryZScan = 0, g_scanRetries = 0, g_nHeatBedScanMode = 0, g_nActiveHeatBed = 2;
+short g_nScanHeatBedUpFastSteps = -4, g_nScanHeatBedUpSlowSteps = -2, g_nScanHeatBedDownSlowSteps = 2;
+short g_nScanHeatBedDownFastSteps = 20, g_nScanZMaxCompensationSteps = 600;
+short g_nScanIdlePressureMin = -7500, g_nScanIdlePressureMax = 7500;
+short g_nMinPressureContact = 0, g_nMaxPressureContact = 0, g_nMinPressureRetry = 0, g_nMaxPressureRetry = 0;
 short g_nFirstIdlePressure = 500, g_nCurrentIdlePressure = 500;
 long g_nLastZScanZPosition = 0;
 short g_ZCompensationMatrix[COMPENSATION_MATRIX_MAX_X][COMPENSATION_MATRIX_MAX_Y];
 uint8_t g_uZMatrixMax[2] = {};
 float g_scanStartZLiftMM = 1.0f;
-uint16_t g_nScanIdleDelay = 250;
+uint16_t g_nScanIdleDelay = 250, g_nScanFastStepDelay = 1, g_nScanSlowStepDelay = 100;
+uint8_t g_nScanPressureReads = 3;
+uint16_t g_nScanPressureReadDelay = 15, g_nScanPressureTolerance = 15;
 long g_nScanXStartSteps = 100, g_nScanYStartSteps = 100, g_nScanXStepSizeSteps = 100, g_nScanYStepSizeSteps = 100;
 long g_nScanXMaxPositionSteps = 300, g_nScanYMaxPositionSteps = 300;
 
-bool requestedRetry = false, matrixPrepared = false, matrixSaved = false;
-unsigned keepAlives = 0, homedXY = 0, homedZ = 0, idleReads = 0, approachCount = 0, probeCount = 0,
+bool injectNoise = false, injectDisconnection = false, disconnected = false, matrixPrepared = false, matrixSaved = false;
+unsigned keepAlives = 0, homedXY = 0, homedZ = 0, pressureReads = 0, negativeMoves = 0,
          disabled = 0, loaded = 0, thermalOffsets = 0, completed = 0, warmupMessages = 0;
 char aborted = 0;
 int bedTarget = 0;
@@ -51,15 +65,20 @@ float axisStepsPerMM[3] = {100, 100, 100}, homingFeedrate[3] = {60, 60, 5};
 struct { bool isBusy() const { return false; } } printJob;
 struct { void recordActivity(millis_t) {} } inactivity;
 struct { void cancel() {} void schedule(millis_t) {} } idleStatus;
-struct { short scanSteps() const { return -123; } } zMotion;
+struct {
+    long position = 0;
+    long scanSteps() const { return position; }
+} zMotion;
 bool debugErrors() { return false; }
 bool debugInfo() { return false; }
 void homeAxis(bool x, bool y, bool z) {
     assert(x || y || z);
     if (y)
         ++homedXY;
-    if (z)
+    if (z) {
         ++homedZ;
+        zMotion.position = 0;
+    }
 }
 void disableAllSteppersNow() { ++disabled; }
 bool queueRelativeStepsCoordinates(long, long, long z, long e, float, bool, bool endstop) {
@@ -96,7 +115,7 @@ enum { Calibrating };
 namespace GCodeInput {
 void keepAlive(int state) { assert(state == Calibrating); ++keepAlives; }
 }
-namespace RMath { using std::min; }
+namespace RMath { using std::min; using std::max; }
 
 void showError(void*, void*) { assert(false); }
 void showAbortScanReason(const void*, char reason) { aborted = reason; }
@@ -121,22 +140,33 @@ void saveCompensationMatrix(unsigned int address) {
 }
 int testHeatBedTemperature() { return 0; }
 int testExtruderTemperature() { return 0; }
-void moveZ(long distance) { assert(distance > 0); }
-void moveZMinusUpFast() { ++approachCount; }
-void moveZPlusDownSlow(int = 0) {}
-void moveZMinusUpSlow(short* pressure) { *pressure = 550; ++probeCount; }
-bool moveZPlusDownFast() { return false; }
-void adjustPressureLimits(short) {}
-bool readIdlePressure(short* pressure) {
-    ++idleReads;
-    *pressure = g_nFirstIdlePressure;
-    return false;
+void moveZ(long distance) {
+    if (distance < 0) {
+        assert(!disconnected);
+        ++negativeMoves;
+        if (injectDisconnection)
+            disconnected = true;
+    } else if (disconnected) {
+        assert(bedTarget == 0 && !nozzleTargets.empty() && nozzleTargets.back() == 0);
+    }
+    Printer::zMotion.position += distance;
 }
-bool readAveragePressure(short* pressure) { *pressure = g_nFirstIdlePressure; return false; }
-bool testIdlePressure() {
-    const bool retry = requestedRetry;
-    requestedRetry = false;
-    return retry;
+void adjustPressureLimits(short baseline) {
+    g_nMinPressureContact = baseline - 10;
+    g_nMaxPressureContact = baseline + 10;
+    g_nMinPressureRetry = baseline - 5;
+    g_nMaxPressureRetry = baseline + 5;
+}
+bool sampleStrainGauge(int16_t& digits) {
+    ++pressureReads;
+    if (disconnected)
+        return false;
+    if (injectNoise && pressureReads > 6 && pressureReads <= 21) {
+        digits = pressureReads % 2 ? 500 : 700;
+        return true;
+    }
+    digits = Printer::zMotion.scanSteps() <= -124 ? 600 : 500;
+    return true;
 }
 void addLong(char* text, long value, int) {
     ++warmupMessages;
@@ -144,6 +174,7 @@ void addLong(char* text, long value, int) {
 }
 } // namespace
 
+#include "scan-pressure-firmware.inc"
 #include "heat-bed-scan-firmware.inc"
 
 int main(int argc, char** argv) {
@@ -154,18 +185,22 @@ int main(int argc, char** argv) {
         g_nHeatBedScanMode = HEAT_BED_SCAN_MODE_ABS;
     const bool retry = !std::strcmp(argv[1], "retry");
     const bool cancel = !std::strcmp(argv[1], "cancel");
-    requestedRetry = retry;
+    injectNoise = retry;
+    injectDisconnection = !std::strcmp(argv[1], "disconnected");
 
     heatBedScan.startOrCancel();
     unsigned ticks = 0;
     while (heatBedScan.active()) {
-        assert(++ticks <= 250);
+        assert(++ticks <= 5000);
         heatBedScan.tick();
         if (cancel && ticks == 3)
             heatBedScan.startOrCancel();
         HAL::now += 200000;
     }
-    if (cancel) {
+    if (injectDisconnection) {
+        assert(aborted == SCAN_ABORT_REASON_DMS_UNAVAILABLE && negativeMoves == 1);
+        assert(homedZ == 1 && disabled == 1 && loaded == 1 && !matrixSaved);
+    } else if (cancel) {
         assert(aborted == SCAN_ABORT_REASON_CANCELED && loaded == 1 && disabled == 1);
         assert(!matrixSaved && !completed && ticks == 4 && keepAlives == 3);
     } else {
@@ -176,16 +211,13 @@ int main(int argc, char** argv) {
             for (int y = 2; y <= 4; ++y)
                 assert(g_ZCompensationMatrix[x][y] == -123);
         }
-        assert(keepAlives == ticks && bedTarget == 0);
-        assert(ticks == (g_nHeatBedScanMode ? 100u : retry ? 89u : 84u));
-        assert(approachCount == probeCount && probeCount == (g_nHeatBedScanMode ? 10u : 9u));
+        assert(keepAlives == ticks && bedTarget == 0 && negativeMoves > 9);
         if (g_nHeatBedScanMode) {
             assert(nozzleTargets == std::vector<int>({100, g_nHeatBedScanMode == HEAT_BED_SCAN_MODE_PLA ? 210 : 240, 0}));
             assert(thermalOffsets == 1 && warmupMessages == 4 && homedXY == 3 && homedZ == 3);
         } else {
             assert(nozzleTargets == std::vector<int>({0, 0}));
             assert(!thermalOffsets && !warmupMessages && homedXY == (retry ? 3u : 2u) && homedZ == homedXY);
-            assert(idleReads == (retry ? 2u : 1u));
         }
     }
     std::printf("Heat bed scan replay passed (%s, %u ticks)\n", argv[1], ticks);

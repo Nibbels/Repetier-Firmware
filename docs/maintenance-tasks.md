@@ -47,6 +47,8 @@ Across the four AVR builds, 64 XY instruction traces reproduce the motor displac
 
 ### Z travel and scanning
 
+- [x] **Service temperature control during DMS scans.** Scan sampling and Z probe increments yield to the foreground. The EEPROM failure, noise retry, manual cancel and missing DMS tests run the two scan workflows. The pulse replay checks a service visit every 16 Z pulses and cancellation between groups. [Bed scan](../tests/heat-bed-scan.py) · [Z-offset scan](../tests/z-offset-scan.py) · [Z pulses](../tests/z-motion.py)
+
 - [x] **Give the Z-offset scan named phases.** The scan owner keeps the current phase, probe Z and the leveling route. Each service call advances one phase and keeps the existing calibration waits. The replay checks normal completion, an unstable pressure retry, a missing EEPROM matrix and all seven leveling points. [Z-offset scan replay](../tests/z-offset-scan.py)
 - [x] **Give the bed mesh scan named phases.** The scan owner keeps the mesh cursor, timestamps and retry phase. The standard, PLA, ABS, retry and cancel replays match the old scan's phase counts and verify the saved mesh and heater targets. [Bed scan replay](../tests/heat-bed-scan.py)
 

@@ -50,7 +50,8 @@ void Commands::checkForPeriodicalActions(enum FirmwareState state) {
         GCodeInput::keepAlive(state);
     }
 
-    if (execute10msPeriodical) {
+    const bool scanTickDue = execute10msPeriodical;
+    if (scanTickDue) {
         execute10msPeriodical = 0;
         // Dieses freigabesignal sollte aus dem PWM-Timer kommen, denn dann ist klar, dass auch der noch läuft.
         // Dann laufen für den Watchdogreset der Timer und checkForPeriodicalActions().
@@ -78,6 +79,7 @@ void Commands::checkForPeriodicalActions(enum FirmwareState state) {
         loopFeatures();
     }
 
+    handleScanWorkTasks(scanTickDue);
 } // checkForPeriodicalActions
 
 bool Commands::waitForMotion(MotionWait motion, PauseWait pause) {

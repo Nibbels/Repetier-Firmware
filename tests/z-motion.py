@@ -22,7 +22,7 @@ def main():
         z_motion.removeprefix('#include "Repetier.h"\n'),
         section(executor, "void StepExecutor::stepSlowedZCompensation()", "\n/**\n  Processes the moves"),
         section(printer, "bool Printer::needsCMPwait(", "\nint8_t Printer::anyHomeDir("),
-        section(rf, "void moveZ(int nSteps) {", "\nvoid restoreDefaultScanParameters("),
+        section(rf, "void moveZ(int nSteps, bool emergencyRetreat) {", "\nvoid restoreDefaultScanParameters("),
     ]
     with TemporaryDirectory(prefix="rfx-z-motion-") as directory:
         build = Path(directory)

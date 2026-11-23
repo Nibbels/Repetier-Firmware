@@ -393,6 +393,7 @@ extern const char ui_text_saving_success[] PROGMEM;
 #define SCAN_ABORT_REASON_OVERFLOWING_MATRIX 15
 // Anscheinend crashgefährliches Hardware-Software-Setting
 #define SCAN_ABORT_REASON_BAD_HEIGHT_MATRIX 16
+#define SCAN_ABORT_REASON_DMS_UNAVAILABLE 17
 
 // Factory scan margins in mm. X depends on the installed tool count.
 constexpr int heatBedScanXStartMm = NUM_EXTRUDER == 2 ? 0 : 15;
@@ -480,6 +481,7 @@ extern void startHeatBedScan(void);
 extern bool heatBedScanRunning();
 extern bool isAnyScanRunning();
 extern void discardScans();
+extern void handleScanWorkTasks(bool tickDue);
 extern void startZOScan(bool automatrixleveling = false);
 
 //Z-Schrauben Helper
@@ -499,15 +501,9 @@ extern long getZMatrixDepth_CurrentXY(void);
 
 extern void switchActiveHeatBed(char newActiveHeatBed);
 
-extern short readIdlePressure(short* pnIdlePressure);
-extern short testIdlePressure(void);
 extern short readAveragePressure(short* pnAveragePressure);
 
-extern void moveZMinusUpFast();
-extern void moveZPlusDownSlow(uint8_t acuteness = 1);
-extern void moveZMinusUpSlow(short* pnContactPressure, uint8_t acuteness = 1);
-extern short moveZPlusDownFast();
-extern void moveZ(int nSteps);
+extern void moveZ(int nSteps, bool emergencyRetreat = false);
 extern void restoreDefaultScanParameters(void);
 extern void outputScanParameters(void);
 extern void outputCompensationMatrix(char format = 0);

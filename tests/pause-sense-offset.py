@@ -43,7 +43,7 @@ def main():
         .replace("    static bool hasStoppableDirectMove()", "bool PrintLine::hasStoppableDirectMove()", 1),
         dms.removeprefix('#include "Repetier.h"\n#include <Wire.h>\n'),
         section(rf, "static bool sampleStrainGauge(", "\nvoid adjustPressureLimits("),
-        section(rf, "static PressureMeasurement::Settings pressureMeasurementSettings()", "} // readAveragePressure") + "}",
+        section(rf, "static PressureMeasurement::Settings pressureMeasurementSettings() {", "} // readAveragePressure") + "}",
         section(rf, "long getZMatrixDepth_CurrentXY(", "\nvoid showAbortScanReason("),
         section(rf, "static void serviceSenseOffset(", "\nvoid handleScanWorkTasks("),
         section(rf, "void handleStartStandby(", "\nvoid outputObject("),
