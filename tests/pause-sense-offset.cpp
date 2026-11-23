@@ -324,6 +324,7 @@ void queueFloatCoordinates(float x, float y, float z, float e, float speed) {
     }
 }
 bool checkPlayKey() { return skipPrimeAt && primePolls >= skipPrimeAt; }
+bool checkAbortKeys() { return false; }
 void offsetRelativeStepsCoordinates(long x, long y, long z, long e, int task = TASK_NO_TASK);
 }
 
@@ -355,7 +356,7 @@ struct Extruder {
     struct {
         float targetTemperatureC = 200.0f;
         uint8_t paused = 0;
-        void waitForTargetTemperature(int, bool resumingPause) {
+        void waitForTargetTemperature(int = 0, bool resumingPause = false) {
             assert(resumingPause && Printer::pause.isReheating());
             if (duringHeatWait)
                 duringHeatWait();
@@ -511,7 +512,7 @@ struct UIDisplay {
     void senseOffsetDownAction();
 } uid;
 
-enum FirmwareState { Paused, Processing };
+enum FirmwareState { Paused, Processing, WaitHeater };
 namespace Commands {
 void checkForPeriodicalActions(FirmwareState);
 bool waitForMotionHandoff(bool waitThroughPause = false);
@@ -1961,6 +1962,33 @@ void manualExtrusionDuringPause(bool advance) {
     assert(planExtrusionMove() == untouchedPlanner.planSteps({next.E, 0}, flow, Printer::axisStepsPerMM[E_AXIS]));
 }
 
+void filamentProgramDuringPause() {
+    Printer::setEPositionMM(42.5f, 0.000125f);
+    Printer::extrusionPlanner.restoreStepRemainder(0.25f);
+    Printer::relativeExtruderCoordinateMode = true;
+    const float targetTemperature = Extruder::current->tempControl.targetTemperatureC;
+    const int queued = PrintLine::linesCount;
+
+    // A pause can freeze the print queue while the load command waits.
+    duringPeriodicActions = [] { Printer::pause.request(PrintPause::Destination::InPlace); };
+    GCode command;
+    runFilamentCommand(3913, &command);
+    duringPeriodicActions = nullptr;
+    assert(Printer::pause.isSettled() && PrintLine::linesCount == queued);
+    assert(!std::strcmp(Com::lastLine, "Filament program requires settled, unpaused motion"));
+
+    for (const int commandNumber : {3913, 3914}) {
+        runFilamentCommand(commandNumber, &command);
+        assert(!std::strcmp(Com::lastLine, "Filament program requires settled, unpaused motion"));
+        assert(Printer::pause.isSettled() && PrintLine::linesCount == queued);
+        assert(Printer::moveTarget.machineMM(E_AXIS) == 42.5f);
+        assert(Printer::moveTarget.remainderMM(E_AXIS) == 0.000125f);
+        assert(Printer::extrusionPlanner.stepRemainder() == 0.25f);
+        assert(Printer::relativeExtruderCoordinateMode);
+        assert(Extruder::current->tempControl.targetTemperatureC == targetTemperature);
+    }
+}
+
 void finishAdvanceBeforeAndAfterOutput() {
     auto& output = Printer::extrusionOutput;
     output.setAdvanceEnabled(true);
@@ -2362,6 +2390,8 @@ int main(int argc, char** argv) {
         manualExtrusionDuringPause(false);
     else if (!std::strcmp(argv[1], "pause-manual-e-advance"))
         manualExtrusionDuringPause(true);
+    else if (!std::strcmp(argv[1], "pause-filament-program"))
+        filamentProgramDuringPause();
     else if (!std::strcmp(argv[1], "short-pause"))
         pauseBetweenPolls();
     else if (!std::strcmp(argv[1], "interrupt"))

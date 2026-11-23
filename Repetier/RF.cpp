@@ -3151,6 +3151,13 @@ void setExtruderCurrent(uint8_t nr, uint8_t current) {
     }
 } // setExtruderCurrent
 
+static bool prepareFilamentProgram() {
+    if (Commands::waitForMotionHandoff())
+        return true;
+    Com::printFLN(PSTR("Filament program requires settled, unpaused motion"));
+    return false;
+}
+
 void processSpecialGCode(GCode* pCommand) {
     long nTemp;
 
@@ -5096,7 +5103,8 @@ void processSpecialGCode(GCode* pCommand) {
 
         case 3913: //M3913 input filament until DMS Sensor tells us to stop or Extrusion amount is reached
         {
-            Commands::waitUntilEndOfAllMoves(); //loadfilament
+            if (!prepareFilamentProgram())
+                break;
             Com::printFLN(PSTR("Load Filament"));
             Printer::idleStatus.cancel();
 
@@ -5142,7 +5150,8 @@ void processSpecialGCode(GCode* pCommand) {
         }
         case 3914: //M3914 coldpull filament very gently
         {
-            Commands::waitUntilEndOfAllMoves(); //loadfilament
+            if (!prepareFilamentProgram())
+                break;
             Com::printFLN(PSTR("Unload Filament"));
             Printer::idleStatus.cancel();
 

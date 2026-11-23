@@ -110,6 +110,10 @@ def main():
         "void configurePressure(int command, GCode* pCommand) { switch (command) {\n"
         + section(rf, "        case 3075:", "\n        case 3079:")
         + "} }",
+        section(rf, "static bool prepareFilamentProgram(", "\nvoid processSpecialGCode("),
+        "void runFilamentCommand(int command, GCode* pCommand) { switch (command) {\n"
+        + section(rf, "        case 3913:", "\n#ifdef X35_ADC_CHANNEL")
+        + "} }",
     ]
     with TemporaryDirectory(prefix="rfx-pause-replay-") as directory:
         build = Path(directory)
@@ -142,7 +146,7 @@ def main():
         ]
         subprocess.run([*compile_replay, "-o", str(executable)], check=True)
         for scenario in (
-            "park", "pause-manual-e", "pause-manual-e-advance", "short-pause", "interrupt", "panel", "return",
+            "park", "pause-manual-e", "pause-manual-e-advance", "pause-filament-program", "short-pause", "interrupt", "panel", "return",
             "jog", "cancel", "queue", "home", "layer-fade",
             "layer-scale", "compensation-bounds",
             "digit-flow", "prime-complete", "prime-skip", "prime-abort", "prime-parameters",
