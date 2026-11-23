@@ -2985,8 +2985,24 @@ void handleStrainGaugeFeatures(millis_t uTime) {
         }
     }
 
-    if (stopDue && protection.checkStop(uTime, pressure)
-        && PrintLine::hasActiveZMove() && !Extruder::current->stepperDirection)
+    if (!stopDue)
+        return;
+    const auto decision = protection.sampleStop(uTime, pressure);
+    if (decision == PressureProtection::StopDecision::Sampling)
+        return;
+
+    const bool blocked = decision == PressureProtection::StopDecision::LimitExceeded;
+    {
+        InterruptProtectedBlock lock;
+        auto& output = Printer::extrusionOutput;
+        if (blocked) {
+            const int16_t discarded = output.inhibit(ExtrusionOutput::Inhibit::Pressure);
+            Printer::pause.discardPendingExtrusion(discarded);
+        } else {
+            output.allow(ExtrusionOutput::Inhibit::Pressure);
+        }
+    }
+    if (blocked && PrintLine::hasActiveZMove() && !Extruder::current->stepperDirection)
         doEmergencyStop(STOP_BECAUSE_OF_Z_BLOCK);
 }
 

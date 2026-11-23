@@ -148,7 +148,8 @@ def main():
             "pressure-pause", "pressure-stop", "digit-zero",
             "extrusion-planning",
             "gcode-target", "wobble-target", "cartesian-planning", "segment-geometry", "move-queue", "idle-status", "ecmp-stepping",
-            "advance-timer", "advance-mode", "advance-cancel", "advance-peak", "step-clock", "lookahead", "direct-ramp", "xy-limits",
+            "advance-timer", "advance-mode", "advance-cancel", "pressure-advance-pause", "advance-peak",
+            "step-clock", "lookahead", "direct-ramp", "xy-limits",
         ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
         subprocess.run([*compile_replay, "-DNUM_EXTRUDER=2", "-o", str(executable)], check=True)

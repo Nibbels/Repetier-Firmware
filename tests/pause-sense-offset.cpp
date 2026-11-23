@@ -663,6 +663,10 @@ void pressureStop() {
     PrintLine::direct.stepsRemaining = 1;
     PrintLine::direct.moveZ = true;
     Extruder::current->stepperDirection = 1;
+    auto& output = Printer::extrusionOutput;
+    output.setAdvanceEnabled(true);
+    output.setLeadSteps(2);
+    output.addSteps(3);
     forceDigits = 11501;
     auto advance = [](millis_t elapsed) {
         clockMs += elapsed;
@@ -674,18 +678,37 @@ void pressureStop() {
     advance(EMERGENCY_STOP_INTERVAL);
     assert(strainGaugeReads == 1);
     advance(1);
-    assert(!Printer::pressureProtection.extrusionBlocked());
+    assert(!output.blocked() && output.pendingSteps() == 5);
     advance(EMERGENCY_STOP_INTERVAL + 1);
-    assert(Printer::pressureProtection.extrusionBlocked() && !pressureStops);
+    assert(output.blocked() && !output.pendingSteps() && !pressureStops);
+
+    PrintLine extrusion;
+    extrusion.moveE = true;
+    extrusion.positiveE = true;
+    extrusion.delta[E_AXIS] = 1;
+    extrusion.stepProfile.advanceL = 65536;
+    executeExtrusionStep(&extrusion, true);
+    executeExtrusionStep(&extrusion, false);
+    StepExecutor::updateAdvanceSteps(extrusion, 4);
+    GCode testStep;
+    testStep.S = 5;
+    runAdvanceCommand(223, &testStep);
+    assert(output.pendingSteps() == 0 && Extruder::stepPulses == 0);
 
     sample(11500, EMERGENCY_STOP_CHECKS);
-    assert(!Printer::pressureProtection.extrusionBlocked());
+    assert(!output.blocked() && !output.pendingSteps());
+    {
+        InterruptProtectedBlock lock;
+        output.onIdleTick();
+        output.nextTimerCompare(0);
+    }
+    assert(output.pendingSteps() == 0 && Extruder::stepPulses == 0);
     Extruder::current->stepperDirection = 0;
     sample(-12001, EMERGENCY_STOP_CHECKS - 1);
-    assert(!Printer::pressureProtection.extrusionBlocked());
+    assert(!Printer::extrusionOutput.blocked());
     expectPressureStop = true;
     sample(-12001);
-    assert(Printer::pressureProtection.extrusionBlocked() && pressureStops == 1);
+    assert(Printer::extrusionOutput.blocked() && pressureStops == 1);
 
     PrintLine::direct.task = TASK_NO_TASK;
     PrintLine::direct.stepsRemaining = 0;
@@ -698,10 +721,10 @@ void pressureStop() {
     assert(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN) == -12000);
     assert(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX) == 11500);
     sample(0, EMERGENCY_STOP_CHECKS);
-    assert(!Printer::pressureProtection.extrusionBlocked());
+    assert(!Printer::extrusionOutput.blocked());
     // The temporary zero band still rejects any nonzero average.
     sample(1, EMERGENCY_STOP_CHECKS);
-    assert(Printer::pressureProtection.extrusionBlocked());
+    assert(Printer::extrusionOutput.blocked());
 }
 
 bool pauseDuringQueueWait = false;
@@ -738,14 +761,23 @@ void Printer::offsetRelativeStepsCoordinates(long x, long y, long z, long e, int
         if (clipReturn[X_AXIS] && x < 0) x = 0;
         if (clipReturn[Y_AXIS] && y < 0) y = 0;
         if (clipReturn[Z_AXIS] && z < 0) z = 0;
-        if ((clipReturn[E_AXIS] && e > 0) || Printer::pressureProtection.extrusionBlocked()) e = 0;
+        if ((clipReturn[E_AXIS] && e > 0) || Printer::extrusionOutput.blocked()) e = 0;
         directCurrentSteps[X_AXIS] += x;
         directCurrentSteps[Y_AXIS] += y;
         directCurrentSteps[Z_AXIS] += z;
         directCurrentSteps[E_AXIS] += e;
         zMotion.setMotorReference(zMotion.motorSteps() + z);
-        for (long pulse = 0; pulse < std::labs(e); ++pulse)
-            pause.recordDirectExtrusion(e > 0 ? 1 : -1);
+        if (extrusionOutput.advanceEnabled()) {
+            PrintLine move;
+            move.moveE = true;
+            move.positiveE = e > 0;
+            move.delta[E_AXIS] = 1;
+            for (long pulse = 0; pulse < std::labs(e); ++pulse)
+                executeExtrusionStep(&move, false);
+        } else {
+            for (long pulse = 0; pulse < std::labs(e); ++pulse)
+                pause.recordDirectExtrusion(e > 0 ? 1 : -1);
+        }
         if (duringMove)
             duringMove(x, y, z, e);
     }
@@ -780,9 +812,9 @@ void parkAndResume() {
     assert(Printer::directCurrentSteps[Z_AXIS] == parkedZ - static_cast<long>(zStepsPerMm));
 
     sample(EMERGENCY_STOP_DIGITS_MAX + 1, 2 * EMERGENCY_STOP_CHECKS);
-    assert(Printer::pressureProtection.extrusionBlocked());
+    assert(Printer::extrusionOutput.blocked());
     sample(printingForce, 50);
-    assert(!Printer::pressureProtection.extrusionBlocked() && Printer::pause.isWarmPause());
+    assert(!Printer::extrusionOutput.blocked() && Printer::pause.isWarmPause());
     extrudeFromPanel();
     const long manualExtruderPosition = -parkE + g_nManualSteps[E_AXIS];
     assert(Printer::directCurrentSteps[E_AXIS] == manualExtruderPosition);
@@ -1843,6 +1875,55 @@ void advanceCancel() {
     assert(!output.pendingSteps() && !Extruder::stepPulses);
 }
 
+void tickAdvanceInterrupt() {
+    static uint8_t compare = 0;
+    InterruptProtectedBlock lock;
+    compare = Printer::extrusionOutput.nextTimerCompare(compare);
+}
+
+void advancePauseWithPressureLimit() {
+    auto& output = Printer::extrusionOutput;
+    output.setAdvanceEnabled(true);
+    output.setStepInterval(15);
+    output.addSteps(2);
+    output.setLeadSteps(1);
+    for (int i = 0; i < 4; ++i)
+        tickAdvanceInterrupt();
+    assert(Extruder::current->deliveredSteps == 3);
+
+    pollDuringMoves = false;
+    duringPeriodicActions = tickAdvanceInterrupt;
+    duringMove = [](long, long, long, long e) {
+        assert(e == -parkE && Extruder::current->deliveredSteps == 2);
+        for (int pulse = 0; pulse < 3; ++pulse)
+            tickAdvanceInterrupt();
+        assert(Extruder::current->deliveredSteps == -1);
+        sample(EMERGENCY_STOP_DIGITS_MAX + 1, EMERGENCY_STOP_CHECKS);
+        assert(Printer::extrusionOutput.blocked() && !Printer::extrusionOutput.pendingSteps());
+    };
+    Printer::pause.request(PrintPause::Destination::InPlace);
+    Printer::pause.serviceMotion();
+    assert(Printer::pause.isSettled() && Extruder::current->deliveredSteps == -1);
+
+    sample(0, EMERGENCY_STOP_CHECKS);
+    assert(!output.blocked());
+    duringMove = [](long, long, long, long e) {
+        assert(e == 3); // Only three physical retract steps remain to return.
+        tickAdvanceInterrupt(); // DIR changes first.
+        tickAdvanceInterrupt();
+        assert(Extruder::current->deliveredSteps == 0);
+        sample(EMERGENCY_STOP_DIGITS_MAX + 1, EMERGENCY_STOP_CHECKS);
+    };
+    assert(Printer::pause.resume() && Printer::pause.isSettled() && incompleteReturns == 1);
+
+    sample(0, EMERGENCY_STOP_CHECKS);
+    duringMove = [](long, long, long, long e) { assert(e == 2); };
+    assert(Printer::pause.resume() && Printer::pause.allowsQueueAdvance());
+    duringMove = nullptr;
+    duringPeriodicActions = nullptr;
+    assert(Extruder::current->deliveredSteps == 2 && !output.pendingSteps());
+}
+
 void stepClock() {
     PrintLine move;
     StepExecutor::StepClock queued, direct;
@@ -2243,6 +2324,8 @@ int main(int argc, char** argv) {
         advanceModeChange();
     else if (!std::strcmp(argv[1], "advance-cancel"))
         advanceCancel();
+    else if (!std::strcmp(argv[1], "pressure-advance-pause"))
+        advancePauseWithPressureLimit();
 #if NUM_EXTRUDER > 1
     else if (!std::strcmp(argv[1], "advance-tool"))
         advanceToolChange();

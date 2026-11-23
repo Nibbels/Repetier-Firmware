@@ -443,7 +443,8 @@ float Extruder::getHeatedBedTemperature() {
 void Extruder::disableAllExtruders() {
     {
         InterruptProtectedBlock lock;
-        Printer::extrusionOutput.inhibit(ExtrusionOutput::Inhibit::MotorsDisabled);
+        const int16_t discarded = Printer::extrusionOutput.inhibit(ExtrusionOutput::Inhibit::MotorsDisabled);
+        Printer::pause.discardPendingExtrusion(discarded);
         for (uint8_t i = 0; i < NUM_EXTRUDER; ++i) {
             auto& tool = extruder[i];
             if (tool.enablePin > -1)

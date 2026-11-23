@@ -29,10 +29,15 @@ public:
     int32_t limitZJog(int32_t steps) const;
     void extrudeManually(int32_t steps);
 
-    // Only accepted direct E steps change the amount to recover on resume.
+    // Track accepted direct E steps, then remove any canceled before output.
     void recordDirectExtrusion(int8_t direction) {
         if (isPaused())
             extruderReturnSteps_ -= direction;
+    }
+
+    void discardPendingExtrusion(int16_t steps) {
+        if (steps && (phase_ == Phase::Retracting || phase_ == Phase::Returning))
+            extruderReturnSteps_ += steps;
     }
 
     void setParkSteps(uint8_t axis, int32_t steps) { parkSteps_[axis] = steps; }
@@ -53,6 +58,7 @@ private:
         Running,
         RetractRequested,
         RetractAndParkRequested,
+        SettlingExtrusion,
         Retracting,
         ParkRequested,
         Parking,
@@ -71,6 +77,7 @@ private:
     bool moveBackToPrintPosition();
     bool restoreExtruderTemperatures();
     void settle(uint32_t now, uint32_t extraWarmTime = 0);
+    bool finishExtrusion(Phase phase);
     bool moveWhile(Phase phase, int32_t x, int32_t y, int32_t z, int32_t e);
     int32_t stepsToReturn(uint8_t axis) const;
 

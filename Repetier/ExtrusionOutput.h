@@ -7,7 +7,7 @@
 // Change foreground state with step interrupts masked.
 class ExtrusionOutput {
 public:
-    enum class Inhibit : uint8_t { PrintStop = 1, Emergency = 2, MotorsDisabled = 4 };
+    enum class Inhibit : uint8_t { PrintStop = 1, Emergency = 2, MotorsDisabled = 4, Pressure = 8 };
 
     bool advanceEnabled() const { return advanceEnabled_; }
 
@@ -21,9 +21,11 @@ public:
 
     bool blocked() const { return inhibitMask_ != 0; }
 
-    void inhibit(Inhibit reason) {
+    int16_t inhibit(Inhibit reason) {
         inhibitMask_ |= static_cast<uint8_t>(reason);
+        const int16_t discarded = pendingSteps_;
         clearSteps();
+        return discarded;
     }
 
     void allow(Inhibit reason) {

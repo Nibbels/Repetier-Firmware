@@ -3,10 +3,12 @@
 
 #include <stdint.h>
 
-// The foreground evaluates two pressure windows. The step executor reads the
-// single-byte extrusion inhibit published by the faster window.
+// The foreground evaluates two pressure windows and publishes motor inhibits
+// when the faster window completes.
 class PressureProtection {
 public:
+    enum class StopDecision : uint8_t { Sampling, InRange, LimitExceeded };
+
     struct Limits {
         int16_t minimum;
         int16_t maximum;
@@ -22,7 +24,6 @@ public:
     bool pauseEnabled() const { return pauseLimits_.minimum || pauseLimits_.maximum; }
     bool pauseSampleDue(uint32_t now) const { return now - pauseWindow_.sampledAt > EMERGENCY_PAUSE_INTERVAL; }
     bool stopSampleDue(uint32_t now) const { return now - stopWindow_.sampledAt > EMERGENCY_STOP_INTERVAL; }
-    bool extrusionBlocked() const { return extrusionBlocked_; }
 
     bool checkPause(uint32_t now, int16_t digits, bool printingHomed, int16_t& average) {
         pauseWindow_.sampledAt = now;
@@ -33,14 +34,12 @@ public:
         return pauseWindow_.add(digits, EMERGENCY_PAUSE_CHECKS, average) && pauseLimits_.exceededBy(average);
     }
 
-    bool checkStop(uint32_t now, int16_t digits) {
+    StopDecision sampleStop(uint32_t now, int16_t digits) {
         stopWindow_.sampledAt = now;
         int16_t average;
         if (!stopWindow_.add(digits, EMERGENCY_STOP_CHECKS, average))
-            return false;
-        const bool exceeded = stopLimits_.exceededBy(average);
-        extrusionBlocked_ = exceeded;
-        return exceeded;
+            return StopDecision::Sampling;
+        return stopLimits_.exceededBy(average) ? StopDecision::LimitExceeded : StopDecision::InRange;
     }
 
 private:
@@ -68,7 +67,6 @@ private:
     Limits stopLimits_{EMERGENCY_STOP_DIGITS_MIN, EMERGENCY_STOP_DIGITS_MAX};
     Window pauseWindow_;
     Window stopWindow_;
-    volatile bool extrusionBlocked_ = false;
 };
 
 #endif

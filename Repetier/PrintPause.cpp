@@ -213,7 +213,7 @@ void PrintPause::waitUntilSettled() {
 
 void PrintPause::retract(Destination destination) {
     // Publish the active phase before calling anything that can service the loop.
-    phase_ = Phase::Retracting;
+    phase_ = Phase::SettlingExtrusion;
     parked_ = false;
     for (uint8_t axis = X_AXIS; axis <= Z_AXIS; ++axis)
         returnPosition_[axis] = Printer::directPosition(axis).steps();
@@ -224,6 +224,11 @@ void PrintPause::retract(Destination destination) {
     uid.exitmenu();
     Com::printFLN(PSTR("RequestPause:"));
 
+    // The queued move can be frozen with E steps still due. Complete those
+    // before the pause retract starts keeping its own return distance.
+    if (!finishExtrusion(Phase::SettlingExtrusion))
+        return;
+    phase_ = Phase::Retracting;
     if (!moveWhile(Phase::Retracting, 0, 0, 0, -abs(parkSteps_[E_AXIS])))
         return;
 
@@ -253,6 +258,10 @@ void PrintPause::park() {
 }
 
 void PrintPause::returnToPrint() {
+    // A manual extrusion jog may have ended while its last E steps are due.
+    phase_ = Phase::SettlingExtrusion;
+    if (!finishExtrusion(Phase::SettlingExtrusion))
+        return;
     phase_ = Phase::Returning;
     if (moveBackToPrintPosition()) {
         Com::printFLN(PSTR("RequestContinue:"));
@@ -302,9 +311,23 @@ void PrintPause::settle(uint32_t now, uint32_t extraWarmTime) {
     phase_ = Phase::Paused;
 }
 
+bool PrintPause::finishExtrusion(Phase phase) {
+    auto& output = Printer::extrusionOutput;
+    while (phase_ == phase && !Printer::blockAll) {
+        {
+            InterruptProtectedBlock lock;
+            if (!PrintLine::directMoveActive() && output.drain())
+                return true;
+        }
+        Commands::checkForPeriodicalActions(Paused);
+    }
+    output.cancelDrain();
+    return false;
+}
+
 bool PrintPause::moveWhile(Phase phase, int32_t x, int32_t y, int32_t z, int32_t e) {
     Printer::offsetRelativeStepsCoordinates(x, y, z, e);
-    return phase_ == phase && !Printer::blockAll;
+    return phase_ == phase && !Printer::blockAll && (!e || finishExtrusion(phase));
 }
 
 int32_t PrintPause::stepsToReturn(uint8_t axis) const {
