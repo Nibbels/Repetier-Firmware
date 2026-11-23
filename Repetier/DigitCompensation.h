@@ -60,9 +60,9 @@ private:
             return false;
         }
 
-        // Retain three parts of the integer average for the next reading.
+        // Retain three quarters and the division remainder for the next sample.
         filteredDigits_ = forceSum_ / 4;
-        forceSum_ = int32_t(filteredDigits_) * 3;
+        forceSum_ -= filteredDigits_;
         --sampleCount_;
         return true;
     }

@@ -1175,6 +1175,16 @@ void compensationBoundaries() {
     settleDigitZ(5500);
     expectCompensation(256, 202 + offset + 53, 0.0f, 1);
 
+    // 5,530 digits sits just above the transition from 53 to 54 microsteps.
+    for (short sign : {1, -1}) {
+        for (short startingMagnitude : {5000, 6000}) {
+            settleDigitZ(sign * startingMagnitude);
+            settleDigitZ(sign * 5530);
+            assert(Printer::digitCompensation.filteredDigits() == sign * 5530);
+            expectCompensation(256, 202 + offset + 54, 0.0f, 1);
+        }
+    }
+
     Printer::axisStepsPerMM[Z_AXIS] = 2560.0f;
     layers.resetFadeBounds(Printer::axisStepsPerMM[Z_AXIS]);
     Printer::zOffset.refreshSteps(Printer::axisStepsPerMM[Z_AXIS]);
@@ -1272,9 +1282,9 @@ void digitFlowSamples() {
 
     Printer::doHeatBedZCompensation = true;
     readAt(95, 4500, 1);
-    check(2671, 1, 0.98f, 1044, 63);
+    check(2672, 1, 0.98f, 1044, 63);
     readAt(101, 4500, 1);
-    check(3128, 1, 0.99f, 1034, 67);
+    check(3129, 1, 0.99f, 1034, 67);
 
     assert(Printer::strainGauge.setZeroFromAverage(1000));
     readAt(112, 5500, 1);
