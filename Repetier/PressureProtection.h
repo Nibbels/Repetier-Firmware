@@ -34,6 +34,17 @@ public:
         return pauseWindow_.add(digits, EMERGENCY_PAUSE_CHECKS, average) && pauseLimits_.exceededBy(average);
     }
 
+    void readFailed(uint32_t now, bool pauseDue, bool stopDue) {
+        if (pauseDue) {
+            pauseWindow_.sampledAt = now;
+            pauseWindow_.clear();
+        }
+        if (stopDue) {
+            stopWindow_.sampledAt = now;
+            stopWindow_.clear();
+        }
+    }
+
     StopDecision sampleStop(uint32_t now, int16_t digits) {
         stopWindow_.sampledAt = now;
         int16_t average;

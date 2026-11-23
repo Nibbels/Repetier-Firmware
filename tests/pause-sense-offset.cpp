@@ -128,6 +128,7 @@ void WRITE(int pin, bool high);
 #include "DigitCompensation.h"
 #include "SenseOffsetControl.h"
 #include "PressureProtection.h"
+#include "PressureMeasurement.h"
 #include "StrainGauge.h"
 #include "StartLine.h"
 #include "ExtrusionPlanner.h"
@@ -178,16 +179,20 @@ void setExtruderCurrent(int, int) {}
 struct WireInput {
     uint8_t byteIndex = 0;
     unsigned configurations = 0;
+    bool disconnected = false;
+    uint8_t configuration = 0x8c;
+    void setWireTimeout(uint32_t timeout, bool reset) const { assert(timeout == 3000 && reset); }
     void beginTransmission(uint8_t address) const { assert(address == I2C_ADDRESS_STRAIN_GAUGE); }
     void write(uint8_t value) {
-        assert(value == 0x8c);
+        assert(value == 0x0c);
         byteIndex = 3;
         ++configurations;
     }
-    void requestFrom(uint8_t address, uint8_t length) {
+    uint8_t requestFrom(uint8_t address, uint8_t length) {
         assert(address == I2C_ADDRESS_STRAIN_GAUGE && length == 3);
         ++strainGaugeReads;
         byteIndex = 0;
+        return disconnected ? 0 : 3;
     }
     void endTransmission() const { assert(byteIndex == 3); }
     int read() {
@@ -195,7 +200,7 @@ struct WireInput {
         switch (byteIndex++) {
         case 0: return digits >> 8;
         case 1: return digits & 0xff;
-        default: return 0;
+        default: return configuration;
         }
     }
 } Wire;
@@ -613,6 +618,12 @@ void sample(short force, int count = 1) {
 }
 
 void digitZero() {
+    const auto readCurrentDigits = [] {
+        int16_t digits = 0;
+        assert(sampleStrainGauge(digits));
+        return digits;
+    };
+    duringPeriodicActions = [] { ++clockMs; };
     auto& gauge = Printer::strainGauge;
     gauge.begin();
     assert(Wire.configurations == 1);
@@ -622,20 +633,20 @@ void digitZero() {
     assert(gauge.zeroOffset() == 1000);
     assert(strainGaugeReads == 4 && clockMs == 12);
     assert(Printer::digitCompensation.latestDigits() == 1000);
-    assert(sampleStrainGauge() == 0);
+    assert(readCurrentDigits() == 0);
 
     forceDigits = -1200;
     Printer::homeDigits();
     assert(gauge.zeroOffset() == -1200); // Fresh reference, even with a prior zero.
-    assert(sampleStrainGauge() == 0);
+    assert(readCurrentDigits() == 0);
     forceDigits = -27767;
-    assert(sampleStrainGauge() == -26567);
+    assert(readCurrentDigits() == -26567);
     forceDigits = -27768;
-    assert(sampleStrainGauge() == -27768);
+    assert(readCurrentDigits() == -27768);
     forceDigits = 27766;
-    assert(sampleStrainGauge() == 28966);
+    assert(readCurrentDigits() == 28966);
     forceDigits = 27767;
-    assert(sampleStrainGauge() == 27767);
+    assert(readCurrentDigits() == 27767);
 
     gauge.setZeroingEnabled(false);
     forceDigits = 2400;
@@ -643,14 +654,54 @@ void digitZero() {
     Printer::homeDigits();
     assert(strainGaugeReads == readsBeforeZero && gauge.zeroOffset() == -1200);
     assert(gauge.effectiveZeroOffset() == 0);
-    assert(sampleStrainGauge() == 2400);
+    assert(readCurrentDigits() == 2400);
     gauge.setZeroingEnabled(true);
     assert(gauge.effectiveZeroOffset() == -1200);
-    assert(sampleStrainGauge() == 3600);
+    assert(readCurrentDigits() == 3600);
 
     forceDigits = 5000;
     Printer::homeDigits();
-    assert(!gauge.zeroOffset() && sampleStrainGauge() == 5000);
+    assert(!gauge.zeroOffset() && readCurrentDigits() == 5000);
+
+    Wire.disconnected = true;
+    int16_t digits = 5;
+    assert(!sampleStrainGauge(digits) && digits == 5);
+    short average = 5;
+    assert(readAveragePressure(&average) && average == 0);
+    assert(Printer::digitCompensation.latestDigits() == 5000);
+    Wire.disconnected = false;
+    Wire.configuration = 0;
+    assert(!sampleStrainGauge(digits) && digits == 5);
+    duringPeriodicActions = nullptr;
+}
+
+
+void pressureMeasurement() {
+    using Result = PressureMeasurement::Result;
+    PressureMeasurement measurement;
+    measurement.begin({3, 15, 15}, UINT32_MAX - 10, 5);
+    assert(!measurement.sampleDue(8) && measurement.sampleDue(9));
+    measurement.record(9, -101);
+    assert(!measurement.sampleDue(23));
+    measurement.record(24, -98);
+    measurement.record(39, -100);
+    assert(measurement.result() == Result::Stable && measurement.average() == -99);
+
+    measurement.begin({2, 10, 15}, 0);
+    uint32_t time = 10;
+    for (unsigned attempt = 0; attempt < 5; ++attempt) {
+        measurement.record(time, INT16_MIN);
+        measurement.record(time + 10, INT16_MAX);
+        if (attempt < 4) {
+            assert(measurement.result() == Result::Pending && !measurement.sampleDue(time + 119));
+            time += 120;
+            assert(measurement.sampleDue(time));
+        }
+    }
+    assert(measurement.result() == Result::Unstable && !measurement.sampleDue(time + 1000));
+    measurement.begin({2, 15, 15}, 0);
+    measurement.readFailed();
+    assert(measurement.result() == Result::ReadError && !measurement.sampleDue(15));
 }
 
 void pressurePause() {
@@ -1350,8 +1401,9 @@ void compensationBoundaries() {
 
     auto settleDigitZ = [](short digits) {
         forceDigits = digits;
+        int16_t sampled;
         for (int i = 0; i < 40; ++i)
-            sampleStrainGauge();
+            assert(sampleStrainGauge(sampled));
     };
     Printer::digitCompensation.setDigitZEnabled(true);
     settleDigitZ(-5500);
@@ -2565,6 +2617,8 @@ int main(int argc, char** argv) {
         pressureWithFrozenZ();
     else if (!std::strcmp(argv[1], "digit-zero"))
         digitZero();
+    else if (!std::strcmp(argv[1], "pressure-measurement"))
+        pressureMeasurement();
     else if (!std::strcmp(argv[1], "extrusion-planning"))
         extrusionPlanning();
     else if (!std::strcmp(argv[1], "gcode-target"))

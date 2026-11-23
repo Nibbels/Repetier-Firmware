@@ -1,27 +1,33 @@
 #include "Repetier.h"
 #include <Wire.h>
 
+namespace {
+constexpr uint8_t continuous16BitGain1 = 0x0c;
+}
+
 void StrainGauge::begin() const {
+    Wire.setWireTimeout(3000, true);
     Wire.beginTransmission(I2C_ADDRESS_STRAIN_GAUGE);
-    Wire.write(0x8c); // Single conversion, 16 bits, gain 1.
+    Wire.write(continuous16BitGain1);
     Wire.endTransmission();
 }
 
-int16_t StrainGauge::readDigits() const {
-    Wire.beginTransmission(I2C_ADDRESS_STRAIN_GAUGE);
-    Wire.requestFrom(uint8_t(I2C_ADDRESS_STRAIN_GAUGE), uint8_t(3));
+bool StrainGauge::readDigits(int16_t& digits) const {
+    if (Wire.requestFrom(uint8_t(I2C_ADDRESS_STRAIN_GAUGE), uint8_t(3)) != 3)
+        return false;
 
     const uint16_t high = Wire.read();
     const uint16_t low = Wire.read();
-    const uint16_t value = (high << 8) + low;
-    Wire.read(); // ADC status byte.
-    Wire.endTransmission();
+    const uint8_t configuration = Wire.read();
+    // ST/BSY reads high in continuous mode.
+    if ((configuration & 0x7f) != continuous16BitGain1)
+        return false;
 
-    int16_t digits = static_cast<int16_t>(value);
-    // Keep the raw reading near the ADC limits to avoid overflow.
+    digits = static_cast<int16_t>((high << 8) | low);
+    // Leave values near the ADC rails in raw digits.
     if (zeroingEnabled_ && -27768 < digits && digits < 27767)
         digits -= zeroOffset_;
-    return digits;
+    return true;
 }
 
 bool StrainGauge::setZeroFromAverage(int16_t digits) {

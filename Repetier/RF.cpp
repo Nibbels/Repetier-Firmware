@@ -17,6 +17,7 @@
 
 #include <Arduino.h> // capital A so it is error prone on case-sensitive filesystems
 #include "Repetier.h"
+#include "PressureMeasurement.h"
 #include "GCodeInput.h"
 #include "BedCompensation.h"
 #include <Wire.h>
@@ -192,13 +193,14 @@ void initRF(void) {
     setupForPrinting();
 } // initRF
 
-static short sampleStrainGauge() {
-    const short digits = Printer::strainGauge.readDigits();
+static bool sampleStrainGauge(int16_t& digits) {
+    if (!Printer::strainGauge.readDigits(digits))
+        return false;
     Printer::digitCompensation.observe(digits, Printer::doHeatBedZCompensation, [] {
         // The force brake also runs during M3912, regardless of the learned first-layer boundary.
         return Printer::zMotion.nominalSteps() > Printer::layers.fadeStartSteps() || Printer::startLine.active();
     });
-    return digits;
+    return true;
 }
 
 void adjustPressureLimits(short IdlePressure) {
@@ -2185,10 +2187,12 @@ short readIdlePressure(short* pnIdlePressure) {
             return -1;
         }
 
-        // wait some extra amount of time in case our results were not constant enough
-        HAL::delayMilliseconds(500);
-
-        Commands::checkForPeriodicalActions(Processing);
+        const millis_t settleStartedAt = HAL::timeInMilliseconds();
+        while (HAL::timeInMilliseconds() - settleStartedAt < 500) {
+            Commands::checkForPeriodicalActions(Processing);
+            if (Printer::blockAll || Printer::printJob.commandsBlocked() || g_abortZScan)
+                return -1;
+        }
     }
 
     if (Printer::debugInfo()) {
@@ -2216,57 +2220,48 @@ short testIdlePressure(void) {
     return 0;
 } // testIdlePressure
 
-short readAveragePressure(short* pnAveragePressure) {
-    short i;
-    short nTempPressure;
-    short nMinPressure;
-    short nMaxPressure;
-    long nPressureSum;
-    char nTemp;
+static PressureMeasurement::Settings pressureMeasurementSettings() {
+    return {static_cast<uint8_t>(g_nScanPressureReads), g_nScanPressureReadDelay,
+            static_cast<uint16_t>(g_nScanPressureTolerance)};
+}
 
-    nTemp = 0;
-    while (1) {
-        // we read the strain gauge multiple times and check the variance
-        nPressureSum = 0;
-        nMinPressure = 32000;
-        nMaxPressure = -32000;
-        for (i = 0; i < g_nScanPressureReads; i++) {
-            HAL::delayMilliseconds(g_nScanPressureReadDelay);
-            nTempPressure = sampleStrainGauge();
-            nPressureSum += nTempPressure;
-            if (nTempPressure < nMinPressure)
-                nMinPressure = nTempPressure;
-            if (nTempPressure > nMaxPressure)
-                nMaxPressure = nTempPressure;
-        }
-        nTempPressure = (short)(nPressureSum / g_nScanPressureReads);
+static void servicePressureMeasurement(PressureMeasurement& measurement, millis_t now) {
+    if (!measurement.sampleDue(now))
+        return;
+    int16_t digits;
+    if (sampleStrainGauge(digits))
+        measurement.record(HAL::timeInMilliseconds(), digits);
+    else
+        measurement.readFailed();
+}
 
-        if ((nMaxPressure - nMinPressure) < g_nScanPressureTolerance) {
-            // we have good results
-            *pnAveragePressure = nTempPressure;
+static void reportPressureReadFailure(const PressureMeasurement& measurement) {
+    if (measurement.result() == PressureMeasurement::Result::Unstable) {
+        Com::printF(PSTR("readAveragePressure(): the pressure is not constant: "), measurement.minimum());
+        Com::printF(PSTR(" / "), measurement.average());
+        Com::printFLN(PSTR(" / "), measurement.maximum());
+    }
+    Com::printFLN(PSTR("readAveragePressure(): the pressure is not plausible"));
+}
 
-            return 0;
-        }
-
-        Commands::checkForPeriodicalActions(Processing);
-
-        nTemp++;
-        if (nTemp >= 5) {
-            // we are unable to receive stable values - do not hang here forever
-            Com::printF(PSTR("readAveragePressure(): the pressure is not constant: "), nMinPressure);
-            Com::printF(PSTR(" / "), nTempPressure);
-            Com::printFLN(PSTR(" / "), nMaxPressure);
+short readAveragePressure(short* average) {
+    PressureMeasurement measurement;
+    measurement.begin(pressureMeasurementSettings(), HAL::timeInMilliseconds());
+    while (measurement.result() == PressureMeasurement::Result::Pending) {
+        servicePressureMeasurement(measurement, HAL::timeInMilliseconds());
+        if (measurement.result() != PressureMeasurement::Result::Pending)
             break;
-        }
-
-        // wait some extra amount of time in case our results were not constant enough
-        HAL::delayMilliseconds(100);
         Commands::checkForPeriodicalActions(Processing);
+        if (Printer::blockAll || Printer::printJob.commandsBlocked())
+            measurement.readFailed();
     }
 
-    Com::printFLN(PSTR("readAveragePressure(): the pressure is not plausible"));
-    *pnAveragePressure = 0;
-
+    if (measurement.result() == PressureMeasurement::Result::Stable) {
+        *average = measurement.average();
+        return 0;
+    }
+    reportPressureReadFailure(measurement);
+    *average = 0;
     return -1;
 } // readAveragePressure
 
@@ -3103,7 +3098,13 @@ void handleStrainGaugeFeatures(millis_t uTime) {
     const bool senseOffsetDue = Printer::senseOffsetControl.takeSampleSlot(uTime);
     const bool pauseDue = protection.pauseSampleDue(uTime);
     const bool stopDue = protection.stopSampleDue(uTime);
-    const short pressure = (senseOffsetDue || pauseDue || stopDue) ? sampleStrainGauge() : 0;
+    int16_t pressure = 0;
+    if ((senseOffsetDue || pauseDue || stopDue) && !sampleStrainGauge(pressure)) {
+        protection.readFailed(uTime, pauseDue, stopDue);
+        Printer::senseOffsetControl.resetWindow();
+        serviceSenseOffset(false, 0, pauseSample);
+        return;
+    }
 
     serviceSenseOffset(senseOffsetDue, pressure, pauseSample);
 
@@ -4936,7 +4937,8 @@ void loadFilament(GCode* pCommand) {
     float e = 0.0f;
     while (e < float(Extrusion)) {
         Commands::checkForPeriodicalActions(Processing);
-        if (Printer::printJob.commandsBlocked() || abs(sampleStrainGauge()) > maxP /* digits sind soweit gestiegen, dass abbruch.*/) {
+        int16_t digits;
+        if (Printer::printJob.commandsBlocked() || !sampleStrainGauge(digits) || abs(int32_t(digits)) > maxP) {
             UI_STATUS_UPD(UI_TEXT_OK);
             break;
         }
@@ -5003,7 +5005,13 @@ void unloadFilament(GCode* pCommand) {
             Commands::checkForPeriodicalActions(Processing);
             if (Printer::printJob.commandsBlocked())
                 break;
-            if (abs(sampleStrainGauge()) > maxForce /* digits sind soweit INS MINUS gestiegen, dass abbruch.*/) {
+            int16_t digits;
+            if (!sampleStrainGauge(digits)) {
+                e = outputLength;
+                retry = 0;
+                break;
+            }
+            if (abs(int32_t(digits)) > maxForce) {
                 t += 3.33; // +1°K
                 break;
             }

@@ -6,7 +6,7 @@
 class StrainGauge {
 public:
     void begin() const;
-    int16_t readDigits() const;
+    bool readDigits(int16_t& digits) const;
 
     bool zeroingEnabled() const { return zeroingEnabled_; }
     void setZeroingEnabled(bool enabled) { zeroingEnabled_ = enabled; }
