@@ -716,6 +716,7 @@ uint8_t PrintLine::insertWaitMovesIfNeeded(uint8_t pathOptimize, uint8_t waitExt
         uint8_t w = 4;
         while (w--) {
             PrintLine* p = getNextWriteLine();
+            p->task = TASK_NO_TASK;
             p->flags = FLAG_WARMUP;
             p->joinFlags = FLAG_JOIN_STEPPARAMS_COMPUTED | FLAG_JOIN_END_FIXED | FLAG_JOIN_START_FIXED;
             p->dir = 0;
