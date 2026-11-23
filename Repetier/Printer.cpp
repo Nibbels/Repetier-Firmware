@@ -20,6 +20,11 @@
 #include "TwiTransfer.h"
 
 ExtrusionOutput Printer::extrusionOutput;
+ManualMotion Printer::manualMotion(
+    lroundf(XAXIS_STEPS_PER_MM * DEFAULT_MANUAL_MM_X),
+    lroundf(YAXIS_STEPS_PER_MM * DEFAULT_MANUAL_MM_Y),
+    lroundf(ZAXIS_STEPS_PER_MM * DEFAULT_MANUAL_MM_Z),
+    lroundf(EXT0_STEPS_PER_MM * DEFAULT_MANUAL_MM_E));
 
 uint8_t Printer::unitIsInches = 0; // 0 = Units are mm, 1 = units are inches.
 
@@ -78,9 +83,6 @@ WobbleCorrection Printer::wobbleCorrection;
 CartesianPlanner Printer::cartesianPlanner;
 XYMotion Printer::xyMotion;
 char Printer::ZMode = DEFAULT_Z_SCALE_MODE;                       // Z-min distance or nominal layer height
-char Printer::moveMode[3];                                        // move mode which is applied within the Position X/Y/Z menus
-bool Printer::moveKosys = KOSYS_GCODE;                            // true = GCode, false = DirectMove / OffsetMove
-bool Printer::movePositionFeedrateChoice = FEEDRATE_DIRECTCONFIG; // select the feedrate for menu positioning: feedrate from last gcode or standard speed
 
 volatile char Printer::doHeatBedZCompensation = false;
 
@@ -368,7 +370,7 @@ void Printer::offsetRelativeStepsCoordinates(int32_t dx, int32_t dy, int32_t dz,
 
     const bool stoppable = configuration == TASK_MOVE_FROM_BUTTON;
     const bool feedrateSource = (stoppable || configuration == TASK_MOVE_POSITION_MANUAL)
-        ? movePositionFeedrateChoice : FEEDRATE_DIRECTCONFIG;
+        ? manualMotion.feedrateSource() : FEEDRATE_DIRECTCONFIG;
     const int32_t steps[4] = {dx, dy, dz, de};
     {
         InterruptProtectedBlock lock;
@@ -556,9 +558,9 @@ void Printer::setup() {
 
     flag0 = PRINTER_FLAG0_STEPPER_DISABLED;
 
-    moveMode[X_AXIS] = DEFAULT_MOVE_MODE_X;
-    moveMode[Y_AXIS] = DEFAULT_MOVE_MODE_Y;
-    moveMode[Z_AXIS] = DEFAULT_MOVE_MODE_Z;
+    Printer::manualMotion.setMode(X_AXIS, DEFAULT_MOVE_MODE_X);
+    Printer::manualMotion.setMode(Y_AXIS, DEFAULT_MOVE_MODE_Y);
+    Printer::manualMotion.setMode(Z_AXIS, DEFAULT_MOVE_MODE_Z);
 
     doHeatBedZCompensation = 0; //init
 

@@ -102,7 +102,7 @@ have problems with other modules using the eeprom */
 
 //vorsicht bei mehrbytigen Variablen, dann freilassen.
 
-#define EPR_RF_MOD_Z_STEP_SIZE 1900 //+1901 g_nManualSteps[Z_AXIS] [2byte unsigned short]
+#define EPR_RF_MOD_Z_STEP_SIZE 1900 //+1901 Manual Z jog increment in steps [uint16_t]
 //+1902+1903 waren mal verwendet, long -> short, nun frei.
 #define EPR_RF_MOD_ZOS_SCAN_POINT_X 1904 // Z-offset scan point X [uint8_t]
 #define EPR_RF_MOD_ZOS_SCAN_POINT_Y 1905 // Z-offset scan point Y [uint8_t]

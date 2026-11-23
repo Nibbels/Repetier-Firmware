@@ -137,14 +137,6 @@ short g_nScanPressureTolerance = 0;
 char g_debugLevel = 0;
 char g_debugLog = 0;
 
-// other configurable parameters
-unsigned short g_nManualSteps[4] = {
-    lroundf(XAXIS_STEPS_PER_MM * DEFAULT_MANUAL_MM_X),
-    lroundf(YAXIS_STEPS_PER_MM* DEFAULT_MANUAL_MM_Y),
-    lroundf(ZAXIS_STEPS_PER_MM* DEFAULT_MANUAL_MM_Z),
-    lroundf(EXT0_STEPS_PER_MM* DEFAULT_MANUAL_MM_E)
-}; //pre init
-
 #ifdef RGB_LIGHT_R_PIN
 unsigned char g_uRGBHeatingR = RGB_HEATING_R;
 unsigned char g_uRGBHeatingG = RGB_HEATING_G;
@@ -2006,7 +1998,7 @@ void configureMANUAL_STEPS_Z(int8_t increment) {
     int loop = 0;
     //suche die aktuelle Einstellungsposition (oder aufgerundet) in der Tabelle:
     for (loop = 0; loop < NUM_ACCEPTABLE_STEP_SIZE_TABLE; loop++)
-        if (stepsize_table[loop] >= g_nManualSteps[Z_AXIS])
+        if (stepsize_table[loop] >= Printer::manualMotion.steps(Z_AXIS))
             break;
 
     //ändere die Position in die Wunschposition:
@@ -2022,9 +2014,9 @@ void configureMANUAL_STEPS_Z(int8_t increment) {
         loop = NUM_ACCEPTABLE_STEP_SIZE_TABLE - 1;
 
     //nutze neuen Wert:
-    g_nManualSteps[Z_AXIS] = stepsize_table[loop];
+    Printer::manualMotion.setSteps(Z_AXIS, stepsize_table[loop]);
 
-    HAL::eprSetInt16(EPR_RF_MOD_Z_STEP_SIZE, g_nManualSteps[Z_AXIS]);
+    HAL::eprSetInt16(EPR_RF_MOD_Z_STEP_SIZE, Printer::manualMotion.steps(Z_AXIS));
     EEPROM::updateChecksum();
 } // configureMANUAL_STEPS_Z()
 /**************************************************************************************************************************************/
@@ -5110,7 +5102,7 @@ bool isAnyScanRunning() {
 }
 
 void moveXAction(int8_t direction) {
-    bool moveKosys = Printer::moveKosys;
+    bool moveKosys = Printer::manualMotion.coordinateSystem();
 
     if (Printer::pause.isPaused()) {
         moveKosys = KOSYS_DIRECTOFFSET;
@@ -5134,9 +5126,9 @@ void moveXAction(int8_t direction) {
     // show that we are active
     Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
 
-    switch (Printer::moveMode[X_AXIS]) {
+    switch (Printer::manualMotion.mode(X_AXIS)) {
     case MOVE_MODE_SINGLE_STEPS: {
-        int32_t steps = int32_t(g_nManualSteps[X_AXIS]) * direction;
+        int32_t steps = int32_t(Printer::manualMotion.steps(X_AXIS)) * direction;
 
         if (direction < 0 && Printer::xyMotion.motorSteps(X_AXIS) + steps < 0 && Printer::isAxisHomed(X_AXIS)) {
             // If we are very close to the homed known Y-Endstop go to 0-Coordinate
@@ -5145,12 +5137,12 @@ void moveXAction(int8_t direction) {
 
         if (moveKosys == KOSYS_GCODE) {
             float feedrate = STANDARD_POSITION_FEEDRATE_XY;
-            if (Printer::movePositionFeedrateChoice == FEEDRATE_GCODE) {
+            if (Printer::manualMotion.feedrateSource() == FEEDRATE_GCODE) {
                 feedrate = Printer::feedrate;
             }
             Printer::queueRelativeStepsCoordinates(steps, 0, 0, 0, feedrate, true);
             Commands::printCurrentPosition();
-        } else /*if (Printer::moveKosys == KOSYS_DIRECTOFFSET) */
+        } else /*if (Printer::manualMotion.coordinateSystem() == KOSYS_DIRECTOFFSET) */
         {
             Printer::offsetRelativeStepsCoordinates(steps, 0, 0, 0, TASK_MOVE_POSITION_MANUAL);
         }
@@ -5161,9 +5153,9 @@ void moveXAction(int8_t direction) {
     case MOVE_MODE_10_MM:
     case MOVE_MODE_50_MM: {
         uint8_t distanceMM = 1;
-        if (Printer::moveMode[X_AXIS] == MOVE_MODE_10_MM)
+        if (Printer::manualMotion.mode(X_AXIS) == MOVE_MODE_10_MM)
             distanceMM = 10;
-        if (Printer::moveMode[X_AXIS] == MOVE_MODE_50_MM)
+        if (Printer::manualMotion.mode(X_AXIS) == MOVE_MODE_50_MM)
             distanceMM = 50;
 
         int32_t plannedDestination = Printer::getPlannedDirectAxisSteps(X_AXIS) + (int32_t)(direction * distanceMM * Printer::axisStepsPerMM[X_AXIS]);
@@ -5174,12 +5166,12 @@ void moveXAction(int8_t direction) {
 
         if (moveKosys == KOSYS_GCODE) {
             float feedrate = STANDARD_POSITION_FEEDRATE_XY;
-            if (Printer::movePositionFeedrateChoice == FEEDRATE_GCODE) {
+            if (Printer::manualMotion.feedrateSource() == FEEDRATE_GCODE) {
                 feedrate = Printer::feedrate;
             }
             Printer::queueRelativeMMCoordinates(distanceMM * direction, 0, 0, 0, feedrate, true);
             Commands::printCurrentPosition();
-        } else /*if (Printer::moveKosys == KOSYS_DIRECTOFFSET) */
+        } else /*if (Printer::manualMotion.coordinateSystem() == KOSYS_DIRECTOFFSET) */
         {
             Printer::offsetRelativeStepsCoordinates(distanceMM * Printer::axisStepsPerMM[Y_AXIS] * direction, 0, 0, 0, TASK_MOVE_POSITION_MANUAL);
         }
@@ -5206,7 +5198,7 @@ void moveXAction(int8_t direction) {
 } // moveXAction
 
 void moveYAction(int8_t direction) {
-    bool moveKosys = Printer::moveKosys;
+    bool moveKosys = Printer::manualMotion.coordinateSystem();
 
     if (Printer::pause.isPaused()) {
         moveKosys = KOSYS_DIRECTOFFSET;
@@ -5230,9 +5222,9 @@ void moveYAction(int8_t direction) {
     // show that we are active
     Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
 
-    switch (Printer::moveMode[Y_AXIS]) {
+    switch (Printer::manualMotion.mode(Y_AXIS)) {
     case MOVE_MODE_SINGLE_STEPS: {
-        int32_t steps = int32_t(g_nManualSteps[Y_AXIS]) * direction;
+        int32_t steps = int32_t(Printer::manualMotion.steps(Y_AXIS)) * direction;
 
         if (direction < 0 && Printer::xyMotion.motorSteps(Y_AXIS) + steps < 0 && Printer::isAxisHomed(Y_AXIS)) {
             // If we are very close to the homed known Y-Endstop go to 0-Coordinate
@@ -5241,12 +5233,12 @@ void moveYAction(int8_t direction) {
 
         if (moveKosys == KOSYS_GCODE) {
             float feedrate = STANDARD_POSITION_FEEDRATE_XY;
-            if (Printer::movePositionFeedrateChoice == FEEDRATE_GCODE) {
+            if (Printer::manualMotion.feedrateSource() == FEEDRATE_GCODE) {
                 feedrate = Printer::feedrate;
             }
             Printer::queueRelativeStepsCoordinates(0, steps, 0, 0, feedrate, true);
             Commands::printCurrentPosition();
-        } else /*if (Printer::moveKosys == KOSYS_DIRECTOFFSET) */
+        } else /*if (Printer::manualMotion.coordinateSystem() == KOSYS_DIRECTOFFSET) */
         {
             Printer::offsetRelativeStepsCoordinates(0, steps, 0, 0, TASK_MOVE_POSITION_MANUAL);
         }
@@ -5257,9 +5249,9 @@ void moveYAction(int8_t direction) {
     case MOVE_MODE_10_MM:
     case MOVE_MODE_50_MM: {
         uint8_t distanceMM = 1;
-        if (Printer::moveMode[Y_AXIS] == MOVE_MODE_10_MM)
+        if (Printer::manualMotion.mode(Y_AXIS) == MOVE_MODE_10_MM)
             distanceMM = 10;
-        if (Printer::moveMode[Y_AXIS] == MOVE_MODE_50_MM)
+        if (Printer::manualMotion.mode(Y_AXIS) == MOVE_MODE_50_MM)
             distanceMM = 50;
 
         int32_t plannedDestination = Printer::getPlannedDirectAxisSteps(Y_AXIS) + (int32_t)(direction * distanceMM * Printer::axisStepsPerMM[Y_AXIS]);
@@ -5270,12 +5262,12 @@ void moveYAction(int8_t direction) {
 
         if (moveKosys == KOSYS_GCODE) {
             float feedrate = STANDARD_POSITION_FEEDRATE_XY;
-            if (Printer::movePositionFeedrateChoice == FEEDRATE_GCODE) {
+            if (Printer::manualMotion.feedrateSource() == FEEDRATE_GCODE) {
                 feedrate = Printer::feedrate;
             }
             Printer::queueRelativeMMCoordinates(0, distanceMM * direction, 0, 0, feedrate, true);
             Commands::printCurrentPosition();
-        } else /*if (Printer::moveKosys == KOSYS_DIRECTOFFSET) */
+        } else /*if (Printer::manualMotion.coordinateSystem() == KOSYS_DIRECTOFFSET) */
         {
             Printer::offsetRelativeStepsCoordinates(0, distanceMM * Printer::axisStepsPerMM[Y_AXIS] * direction, 0, 0, TASK_MOVE_POSITION_MANUAL);
         }
@@ -5310,7 +5302,7 @@ void moveZAction(int8_t direction) {
     // show that we are active
     Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
 
-    char moveMode = Printer::moveMode[Z_AXIS];
+    char moveMode = Printer::manualMotion.mode(Z_AXIS);
 
     if (uid.lastButtonAction == UI_ACTION_RF_HEAT_BED_DOWN || uid.lastButtonAction == UI_ACTION_RF_HEAT_BED_UP) {
         //es wäre evtl. cooler die variable durchzuschleifen, aber so gehts auch!
@@ -5350,7 +5342,7 @@ void moveZAction(int8_t direction) {
 
     switch (moveMode) {
     case MOVE_MODE_SINGLE_STEPS: {
-        int32_t steps = int32_t(g_nManualSteps[Z_AXIS]) * direction;
+        int32_t steps = int32_t(Printer::manualMotion.steps(Z_AXIS)) * direction;
 
         if (Printer::zMotion.manualStepExceedsMinimum(steps)) {
             showInformation((void*)ui_text_z_axis, (void*)ui_text_min_reached);
@@ -5380,7 +5372,7 @@ void moveZAction(int8_t direction) {
         }
 
         // Approach the switch coordinate first, then allow small single moves.
-        const long steps = motorZ > 0 ? -motorZ : -int32_t(g_nManualSteps[Z_AXIS]);
+        const long steps = motorZ > 0 ? -motorZ : -int32_t(Printer::manualMotion.steps(Z_AXIS));
         Printer::offsetRelativeStepsCoordinates(0, 0, steps, 0, TASK_MOVE_POSITION_MANUAL);
         break;
     }

@@ -395,8 +395,6 @@ extern unsigned short g_nScanRetryPressureDelta;
 
 extern char g_debugLevel;
 extern char g_debugLog;
-// other configurable parameters
-extern unsigned short g_nManualSteps[4];
 
 
 // SenseOffset adds clearance when DMS force is high on the first layer.

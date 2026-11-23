@@ -318,7 +318,7 @@ void Extruder::applyCurrentSettings() {
         Com::printFLN(PSTR("E jerk was too low, setting to "), minimumESpeed);
     }
 
-    g_nManualSteps[E_AXIS] = (unsigned short)lroundf(Printer::axisStepsPerMM[E_AXIS] * DEFAULT_MANUAL_MM_E);
+    Printer::manualMotion.setSteps(E_AXIS, (unsigned short)lroundf(Printer::axisStepsPerMM[E_AXIS] * DEFAULT_MANUAL_MM_E));
     Printer::pause.setParkSteps(E_AXIS, long(Printer::axisStepsPerMM[E_AXIS] * SCRIPT_RETRACT_MM));
 
     uint8_t stepInterval = (uint8_t)floor(HAL::maxExtruderTimerFrequency() / (Extruder::current->maxFeedrate * Extruder::current->stepsPerMM));

@@ -139,11 +139,11 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     Printer::maxXYJerk = MAX_JERK;
     Printer::maxZJerk = MAX_ZJERK;
 
-    Printer::moveMode[X_AXIS] = DEFAULT_MOVE_MODE_X;
-    Printer::moveMode[Y_AXIS] = DEFAULT_MOVE_MODE_Y;
-    Printer::moveMode[Z_AXIS] = DEFAULT_MOVE_MODE_Z;
-    Printer::moveKosys = KOSYS_GCODE;
-    Printer::movePositionFeedrateChoice = FEEDRATE_DIRECTCONFIG;
+    Printer::manualMotion.setMode(X_AXIS, DEFAULT_MOVE_MODE_X);
+    Printer::manualMotion.setMode(Y_AXIS, DEFAULT_MOVE_MODE_Y);
+    Printer::manualMotion.setMode(Z_AXIS, DEFAULT_MOVE_MODE_Z);
+    Printer::manualMotion.setCoordinateSystem(KOSYS_GCODE);
+    Printer::manualMotion.setFeedrateSource(FEEDRATE_DIRECTCONFIG);
 
     Printer::maxAccelerationMMPerSquareSecond[X_AXIS] = MAX_ACCELERATION_UNITS_PER_SQ_SECOND_X;
     Printer::maxAccelerationMMPerSquareSecond[Y_AXIS] = MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Y;
@@ -217,10 +217,10 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     Printer::applyAdvanceSettings();
     Extruder::initHeatedBed();
 
-    g_nManualSteps[X_AXIS] = (unsigned short)lroundf(Printer::axisStepsPerMM[X_AXIS] * DEFAULT_MANUAL_MM_X);
-    g_nManualSteps[Y_AXIS] = (unsigned short)lroundf(Printer::axisStepsPerMM[Y_AXIS] * DEFAULT_MANUAL_MM_Y);
-    g_nManualSteps[Z_AXIS] = (unsigned short)lroundf(Printer::axisStepsPerMM[Z_AXIS] * DEFAULT_MANUAL_MM_Z);
-    g_nManualSteps[E_AXIS] = (unsigned short)lroundf(Extruder::current->stepsPerMM * DEFAULT_MANUAL_MM_E);
+    Printer::manualMotion.setSteps(X_AXIS, (unsigned short)lroundf(Printer::axisStepsPerMM[X_AXIS] * DEFAULT_MANUAL_MM_X));
+    Printer::manualMotion.setSteps(Y_AXIS, (unsigned short)lroundf(Printer::axisStepsPerMM[Y_AXIS] * DEFAULT_MANUAL_MM_Y));
+    Printer::manualMotion.setSteps(Z_AXIS, (unsigned short)lroundf(Printer::axisStepsPerMM[Z_AXIS] * DEFAULT_MANUAL_MM_Z));
+    Printer::manualMotion.setSteps(E_AXIS, (unsigned short)lroundf(Extruder::current->stepsPerMM * DEFAULT_MANUAL_MM_E));
 
     Com::printInfoFLN(Com::tEPRConfigResetDefaults);
 
@@ -256,11 +256,11 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     HAL::eprSetFloat(EPR_Z_MAX_FEEDRATE, Printer::maxFeedrate[Z_AXIS]);
     HAL::eprSetInt32(EPR_RF_Z_OFFSET, Printer::zOffset.manualMicrometers());
     HAL::eprSetByte(EPR_RF_Z_MODE, Printer::ZMode);
-    HAL::eprSetByte(EPR_RF_MOVE_MODE_X, Printer::moveMode[X_AXIS]);
-    HAL::eprSetByte(EPR_RF_MOVE_MODE_Y, Printer::moveMode[Y_AXIS]);
-    HAL::eprSetByte(EPR_RF_MOVE_MODE_Z, Printer::moveMode[Z_AXIS]);
-    HAL::eprSetByte(EPR_RF_MOVE_MODE_XY_KOSYS, Printer::moveKosys);
-    HAL::eprSetByte(EPR_RF_MOVE_POSITION_FEEDRATE, Printer::movePositionFeedrateChoice);
+    HAL::eprSetByte(EPR_RF_MOVE_MODE_X, Printer::manualMotion.mode(X_AXIS));
+    HAL::eprSetByte(EPR_RF_MOVE_MODE_Y, Printer::manualMotion.mode(Y_AXIS));
+    HAL::eprSetByte(EPR_RF_MOVE_MODE_Z, Printer::manualMotion.mode(Z_AXIS));
+    HAL::eprSetByte(EPR_RF_MOVE_MODE_XY_KOSYS, Printer::manualMotion.coordinateSystem());
+    HAL::eprSetByte(EPR_RF_MOVE_POSITION_FEEDRATE, Printer::manualMotion.feedrateSource());
 
     HAL::eprSetFloat(EPR_X_HOMING_FEEDRATE_PRINT, Printer::homingFeedrate[X_AXIS]);
     HAL::eprSetFloat(EPR_Y_HOMING_FEEDRATE_PRINT, Printer::homingFeedrate[Y_AXIS]);
@@ -320,7 +320,7 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     // HAL::eprSetByte( EPR_RF_230V_OUTPUT_MODE, Printer::enable230VOutput );
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
-    HAL::eprSetInt16(EPR_RF_MOD_Z_STEP_SIZE, g_nManualSteps[Z_AXIS]);
+    HAL::eprSetInt16(EPR_RF_MOD_Z_STEP_SIZE, Printer::manualMotion.steps(Z_AXIS));
     const auto scanPoint = zOffsetScanPoint();
     HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_X, scanPoint.x);
     HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y, scanPoint.y);
@@ -430,11 +430,11 @@ void EEPROM::readDataFromEEPROM() {
 
     Printer::layers.resetFadeBounds(Printer::axisStepsPerMM[Z_AXIS]);
 
-    Printer::moveMode[X_AXIS] = HAL::eprGetByte(EPR_RF_MOVE_MODE_X);
-    Printer::moveMode[Y_AXIS] = HAL::eprGetByte(EPR_RF_MOVE_MODE_Y);
-    Printer::moveMode[Z_AXIS] = HAL::eprGetByte(EPR_RF_MOVE_MODE_Z);
-    Printer::moveKosys = (bool)HAL::eprGetByte(EPR_RF_MOVE_MODE_XY_KOSYS);
-    Printer::movePositionFeedrateChoice = (bool)HAL::eprGetByte(EPR_RF_MOVE_POSITION_FEEDRATE);
+    Printer::manualMotion.setMode(X_AXIS, HAL::eprGetByte(EPR_RF_MOVE_MODE_X));
+    Printer::manualMotion.setMode(Y_AXIS, HAL::eprGetByte(EPR_RF_MOVE_MODE_Y));
+    Printer::manualMotion.setMode(Z_AXIS, HAL::eprGetByte(EPR_RF_MOVE_MODE_Z));
+    Printer::manualMotion.setCoordinateSystem((bool)HAL::eprGetByte(EPR_RF_MOVE_MODE_XY_KOSYS));
+    Printer::manualMotion.setFeedrateSource((bool)HAL::eprGetByte(EPR_RF_MOVE_POSITION_FEEDRATE));
 
     Printer::maxXYJerk = HAL::eprGetFloat(EPR_MAX_XYJERK);
     Printer::maxZJerk = HAL::eprGetFloat(EPR_MAX_ZJERK);
@@ -623,11 +623,11 @@ void EEPROM::readDataFromEEPROM() {
     }
 
 
-    g_nManualSteps[X_AXIS] = (unsigned short)lroundf(Printer::axisStepsPerMM[X_AXIS] * DEFAULT_MANUAL_MM_X);
-    g_nManualSteps[Y_AXIS] = (unsigned short)lroundf(Printer::axisStepsPerMM[Y_AXIS] * DEFAULT_MANUAL_MM_Y);
+    Printer::manualMotion.setSteps(X_AXIS, (unsigned short)lroundf(Printer::axisStepsPerMM[X_AXIS] * DEFAULT_MANUAL_MM_X));
+    Printer::manualMotion.setSteps(Y_AXIS, (unsigned short)lroundf(Printer::axisStepsPerMM[Y_AXIS] * DEFAULT_MANUAL_MM_Y));
     const unsigned short stepsize_table[NUM_ACCEPTABLE_STEP_SIZE_TABLE] PROGMEM = ACCEPTABLE_STEP_SIZE_TABLE;
-    g_nManualSteps[Z_AXIS] = (unsigned short)constrain((unsigned short)HAL::eprGetInt16(EPR_RF_MOD_Z_STEP_SIZE), 1, stepsize_table[NUM_ACCEPTABLE_STEP_SIZE_TABLE - 1]); //limit stepsize to value in config.
-    g_nManualSteps[E_AXIS] = (unsigned short)lroundf(Extruder::current->stepsPerMM * DEFAULT_MANUAL_MM_E);                                                               //current extruder stepsPerMM weil hier noch kein update für Printer::axisStepsPerMM[E_AXIS] gemacht wurde!
+    Printer::manualMotion.setSteps(Z_AXIS, (unsigned short)constrain((unsigned short)HAL::eprGetInt16(EPR_RF_MOD_Z_STEP_SIZE), 1, stepsize_table[NUM_ACCEPTABLE_STEP_SIZE_TABLE - 1])); //limit stepsize to value in config.
+    Printer::manualMotion.setSteps(E_AXIS, (unsigned short)lroundf(Extruder::current->stepsPerMM * DEFAULT_MANUAL_MM_E));                                                               //current extruder stepsPerMM weil hier noch kein update für Printer::axisStepsPerMM[E_AXIS] gemacht wurde!
 
     // The matrix is loaded later. Clamp to the compiled grid capacity here
     // and preserve the legacy zero value until the matrix is available.

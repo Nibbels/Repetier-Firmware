@@ -43,7 +43,6 @@ constexpr long parkY = 200 * 160L, parkZ = 30 * static_cast<long>(zStepsPerMm), 
 
 millis_t clockMs = 0;
 char g_nHeatBedScanStatus = 0, g_nZOSScanStatus = 0;
-unsigned short g_nManualSteps[4] = { 1, 1, 1, 28 };
 int32_t g_offsetZCompensationSteps = 250;
 short g_ZCompensationMax = 200;
 long bedMatrixHighestZSteps() { return g_offsetZCompensationSteps; }
@@ -131,6 +130,7 @@ void WRITE(int pin, bool high);
 #include "SenseOffsetControl.h"
 #include "PressureProtection.h"
 #include "CalibrationScan.h"
+#include "ManualMotion.h"
 #include "PressureMeasurement.h"
 #include "StrainGauge.h"
 #include "StartLine.h"
@@ -256,7 +256,7 @@ volatile char doHeatBedZCompensation = true;
 bool menuPaused = false;
 bool axesHomed = true;
 int feedrateMultiply = 100, motorCurrent[3 + NUM_EXTRUDER] = {};
-char moveMode[3] = { MOVE_MODE_SINGLE_STEPS, MOVE_MODE_SINGLE_STEPS, MOVE_MODE_SINGLE_STEPS };
+ManualMotion manualMotion(1, 1, 1, 28);
 
 bool debugErrors() { return false; }
 bool infoLogging = false;
@@ -927,7 +927,7 @@ void parkAndResume() {
     sample(printingForce, 50);
     assert(!Printer::extrusionOutput.blocked() && Printer::pause.isWarmPause());
     extrudeFromPanel();
-    const long manualExtruderPosition = -parkE + g_nManualSteps[E_AXIS];
+    const long manualExtruderPosition = -parkE + Printer::manualMotion.steps(E_AXIS);
     assert(Printer::directCurrentSteps[E_AXIS] == manualExtruderPosition);
 
     const auto& offset = Printer::zOffset;
@@ -2085,14 +2085,14 @@ void manualExtrusionDuringPause(bool advance) {
 
     // Play can arrive once Timer1 releases the slot but the foreground is
     // still completing the manual move.
-    g_nManualSteps[E_AXIS] = 2 * parkE;
+    Printer::manualMotion.setSteps(E_AXIS, 2 * parkE);
     duringMove = [](long, long, long, long e) {
-        if (e == g_nManualSteps[E_AXIS])
+        if (e == Printer::manualMotion.steps(E_AXIS))
             assert(!Printer::pause.resume());
     };
     extrudeFromPanel();
     duringMove = nullptr;
-    g_nManualSteps[E_AXIS] = parkE / 4;
+    Printer::manualMotion.setSteps(E_AXIS, parkE / 4);
     extrudeFromPanel(UI_ACTION_RF_EXTRUDER_RETRACT);
     assert(motor() == 3 * parkE / 4 && output.pendingSteps() == 0);
 
@@ -2110,7 +2110,7 @@ void manualExtrusionDuringPause(bool advance) {
     assert(motor() == preparedFilament - parkE);
     if (advance) {
         duringMove = [](long, long, long, long e) {
-            if (e == g_nManualSteps[E_AXIS]) {
+            if (e == Printer::manualMotion.steps(E_AXIS)) {
                 // Timer1 admitted the jog. DMS trips before COMPA emits it.
                 sample(EMERGENCY_STOP_DIGITS_MAX + 1, 2 * EMERGENCY_STOP_CHECKS);
             }
@@ -2552,6 +2552,8 @@ void initializeOffsets() {
 }
 
 int main(int argc, char** argv) {
+    for (uint8_t axis = X_AXIS; axis <= Z_AXIS; ++axis)
+        Printer::manualMotion.setMode(axis, MOVE_MODE_SINGLE_STEPS);
     assert(argc == 2);
     Printer::xyMotion.setNominalSteps(X_AXIS, 6400);
     Printer::xyMotion.setNominalSteps(Y_AXIS, 12800);

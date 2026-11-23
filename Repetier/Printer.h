@@ -20,6 +20,8 @@
 #ifndef PRINTER_H
 #define PRINTER_H
 
+#include "ManualMotion.h"
+
 #include "ZOffset.h"
 #include "SenseOffsetControl.h"
 #include "ZMotion.h"
@@ -117,9 +119,7 @@ public:
     static MachineInactivity inactivity;
     static IdleStatus idleStatus;
     static char ZMode;                      // Z Scale
-    static char moveMode[3];                // move mode which is applied within the Position X/Y/Z menus
-    static bool moveKosys;                  // true = GCode, false = DirectMove / OffsetMove
-    static bool movePositionFeedrateChoice; // select the feedrate for menu positioning: feedrate from last gcode or standard speed
+    static ManualMotion manualMotion;
 
     static volatile char doHeatBedZCompensation;
 

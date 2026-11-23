@@ -1491,34 +1491,34 @@ void UIDisplay::parse(char* txt, bool ram) {
 
             if (c2 == 'k') // %sk : Positioning coordinate system for XY (move by gode or directoffset)
             {
-                if (Printer::moveKosys == KOSYS_GCODE) {
+                if (Printer::manualMotion.coordinateSystem() == KOSYS_GCODE) {
                     addStringP(PSTR(UI_TEXT_MOVE_MODE_GCODE));
-                } else /* if (Printer::moveKosys == KOSYS_DIRECTOFFSET) */ {
+                } else /* if (Printer::manualMotion.coordinateSystem() == KOSYS_DIRECTOFFSET) */ {
                     addStringP(PSTR(UI_TEXT_MOVE_MODE_OFFSET));
                 }
             }
 
             if (c2 == 'K') // %sK : Feedrate source config for direct positioning moves
             {
-                if (Printer::movePositionFeedrateChoice == FEEDRATE_DIRECTCONFIG) {
+                if (Printer::manualMotion.feedrateSource() == FEEDRATE_DIRECTCONFIG) {
                     addStringP(PSTR(UI_TEXT_MOVE_FEEDRATE_STANDARD));
-                } else /* if (Printer::movePositionFeedrateChoice == FEEDRATE_GCODE) */ {
+                } else /* if (Printer::manualMotion.feedrateSource() == FEEDRATE_GCODE) */ {
                     addStringP(PSTR(UI_TEXT_MOVE_MODE_GCODE));
                 }
             }
 
             if (c2 == 'f') // %sf : Feedrate for menu postition xy
             {
-                if (Printer::movePositionFeedrateChoice == FEEDRATE_DIRECTCONFIG) {
+                if (Printer::manualMotion.feedrateSource() == FEEDRATE_DIRECTCONFIG) {
                     addInt(STANDARD_POSITION_FEEDRATE_XY, 3);
-                } else /* if (Printer::movePositionFeedrateChoice == FEEDRATE_GCODE) */ {
+                } else /* if (Printer::manualMotion.feedrateSource() == FEEDRATE_GCODE) */ {
                     addInt(Printer::feedrate, 3);
                 }
                 addStringP(PSTR("mm/s"));
             }
             if (c2 == 'F') // %sF : Feedrate for menu postition z
             {
-                if (Printer::movePositionFeedrateChoice == FEEDRATE_GCODE && Printer::feedrate <= STANDARD_POSITION_FEEDRATE_Z) {
+                if (Printer::manualMotion.feedrateSource() == FEEDRATE_GCODE && Printer::feedrate <= STANDARD_POSITION_FEEDRATE_Z) {
                     addInt(Printer::feedrate, 3);
                 } else {
                     addInt(STANDARD_POSITION_FEEDRATE_Z, 3);
@@ -1536,7 +1536,7 @@ void UIDisplay::parse(char* txt, bool ram) {
             else if (c2 == 'e')
                 addFloat(Extruder::current->stepsPerMM, 3, 0); // %Se : Steps per mm current extruder
             else if (c2 == 'z')
-                addFloat(g_nManualSteps[Z_AXIS] * Printer::axisMMPerSteps[Z_AXIS] * 1000.0f, 4, 1); // %Sz : Mikrometer per Z-Single_Step (Z_Axis)
+                addFloat(Printer::manualMotion.steps(Z_AXIS) * Printer::axisMMPerSteps[Z_AXIS] * 1000.0f, 4, 1); // %Sz : Mikrometer per Z-Single_Step (Z_Axis)
             else if (c2 == 'M' && col < MAX_COLS) {
                 if (bedMatrixHasUnsavedChanges())
                     printCols[col++] = '*';
@@ -1548,9 +1548,9 @@ void UIDisplay::parse(char* txt, bool ram) {
         case 'p': {
             if (c2 == 'x') // %px: mode of the Position X menu
             {
-                switch (Printer::moveMode[X_AXIS]) {
+                switch (Printer::manualMotion.mode(X_AXIS)) {
                 case MOVE_MODE_SINGLE_STEPS: {
-                    addFloat(g_nManualSteps[X_AXIS] * Printer::axisMMPerSteps[X_AXIS] * 1000.0f, 1, 0);
+                    addFloat(Printer::manualMotion.steps(X_AXIS) * Printer::axisMMPerSteps[X_AXIS] * 1000.0f, 1, 0);
                     addStringP(PSTR(" um"));
                     break;
                 }
@@ -1571,7 +1571,7 @@ void UIDisplay::parse(char* txt, bool ram) {
                     break;
                 }
                 }
-                if (Printer::moveMode[X_AXIS] == MOVE_MODE_SINGLE_MOVE || Printer::moveKosys == KOSYS_DIRECTOFFSET || Printer::pause.isPaused()) {
+                if (Printer::manualMotion.mode(X_AXIS) == MOVE_MODE_SINGLE_MOVE || Printer::manualMotion.coordinateSystem() == KOSYS_DIRECTOFFSET || Printer::pause.isPaused()) {
                     addStringP(PSTR(" ("));
                     addStringP(PSTR(UI_TEXT_MOVE_MODE_OFFSET));
                     addStringP(PSTR(")"));
@@ -1584,9 +1584,9 @@ void UIDisplay::parse(char* txt, bool ram) {
             }
             if (c2 == 'y') // %py: mode of the Position Y menu
             {
-                switch (Printer::moveMode[Y_AXIS]) {
+                switch (Printer::manualMotion.mode(Y_AXIS)) {
                 case MOVE_MODE_SINGLE_STEPS: {
-                    addFloat(g_nManualSteps[Y_AXIS] * Printer::axisMMPerSteps[Y_AXIS] * 1000.0f, 1, 0);
+                    addFloat(Printer::manualMotion.steps(Y_AXIS) * Printer::axisMMPerSteps[Y_AXIS] * 1000.0f, 1, 0);
                     addStringP(PSTR(" um"));
                     break;
                 }
@@ -1607,7 +1607,7 @@ void UIDisplay::parse(char* txt, bool ram) {
                     break;
                 }
                 }
-                if (Printer::moveMode[Y_AXIS] == MOVE_MODE_SINGLE_MOVE || Printer::moveKosys == KOSYS_DIRECTOFFSET || Printer::pause.isPaused()) {
+                if (Printer::manualMotion.mode(Y_AXIS) == MOVE_MODE_SINGLE_MOVE || Printer::manualMotion.coordinateSystem() == KOSYS_DIRECTOFFSET || Printer::pause.isPaused()) {
                     addStringP(PSTR(" ("));
                     addStringP(PSTR(UI_TEXT_MOVE_MODE_OFFSET));
                     addStringP(PSTR(")"));
@@ -1623,9 +1623,9 @@ void UIDisplay::parse(char* txt, bool ram) {
                 if (Printer::pause.isPaused()) {
                     addStringP(PSTR(UI_TEXT_MOVE_MODE_SINGLE_MOVE));
                 } else {
-                    switch (Printer::moveMode[Z_AXIS]) {
+                    switch (Printer::manualMotion.mode(Z_AXIS)) {
                     case MOVE_MODE_SINGLE_STEPS: {
-                        addFloat(g_nManualSteps[Z_AXIS] * Printer::axisMMPerSteps[Z_AXIS] * 1000.0f, 1, 1);
+                        addFloat(Printer::manualMotion.steps(Z_AXIS) * Printer::axisMMPerSteps[Z_AXIS] * 1000.0f, 1, 1);
                         addStringP(PSTR(" um"));
                         break;
                     }
@@ -2122,40 +2122,32 @@ void UIDisplay::zOffsetMinusAction() {
 }
 
 void UIDisplay::rightAction() {
-    if (menuLevel == 0 && menuPos[0] == 1) { //wenn im Mod-Menü für Z-Offset/Matrix Sense-Offset/Limiter, dann anders!
+    if (menuLevel == 0 && menuPos[0] == 1) {
         senseOffsetUpAction();
-    } else
-    {
-        if (menu[menuLevel] == &ui_menu_xpos) {
-            Printer::moveMode[X_AXIS]++;
-            if (Printer::moveMode[X_AXIS] > MOVE_MODE_SINGLE_MOVE) {
-                Printer::moveMode[X_AXIS] = MOVE_MODE_SINGLE_STEPS;
-            }
-            refreshPage();
-
-            HAL::eprSetByte(EPR_RF_MOVE_MODE_X, Printer::moveMode[X_AXIS]);
-            EEPROM::updateChecksum();
-        } else if (menu[menuLevel] == &ui_menu_ypos) {
-            Printer::moveMode[Y_AXIS]++;
-            if (Printer::moveMode[Y_AXIS] > MOVE_MODE_SINGLE_MOVE) {
-                Printer::moveMode[Y_AXIS] = MOVE_MODE_SINGLE_STEPS;
-            }
-            refreshPage();
-
-            HAL::eprSetByte(EPR_RF_MOVE_MODE_Y, Printer::moveMode[Y_AXIS]);
-            EEPROM::updateChecksum();
-        } else if (menu[menuLevel] == &ui_menu_zpos) {
-            Printer::moveMode[Z_AXIS]++;
-            if (Printer::moveMode[Z_AXIS] > MOVE_MODE_SINGLE_MOVE) {
-                Printer::moveMode[Z_AXIS] = MOVE_MODE_SINGLE_STEPS;
-            }
-            refreshPage();
-
-            HAL::eprSetByte(EPR_RF_MOVE_MODE_Z, Printer::moveMode[Z_AXIS]);
-            EEPROM::updateChecksum();
-        }
+        return;
     }
-} // rightAction
+
+    uint8_t axis;
+    int address;
+    const auto* currentMenu = menu[menuLevel];
+    if (currentMenu == &ui_menu_xpos) {
+        axis = X_AXIS;
+        address = EPR_RF_MOVE_MODE_X;
+    } else if (currentMenu == &ui_menu_ypos) {
+        axis = Y_AXIS;
+        address = EPR_RF_MOVE_MODE_Y;
+    } else if (currentMenu == &ui_menu_zpos) {
+        axis = Z_AXIS;
+        address = EPR_RF_MOVE_MODE_Z;
+    } else {
+        return;
+    }
+
+    Printer::manualMotion.cycleMode(axis);
+    refreshPage();
+    HAL::eprSetByte(address, Printer::manualMotion.mode(axis));
+    EEPROM::updateChecksum();
+}
 
 void UIDisplay::backAction() {
     if (menuLevel == 0 && menuPos[0] == 1) {
@@ -3147,8 +3139,8 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
                         if (i == Z_AXIS) {
                             Printer::zMotion.rescaleMotorReference(stepsmm_korrekturfactor);
                             Printer::layers.rescaleFadeBounds(stepsmm_korrekturfactor);
-                            g_nManualSteps[Z_AXIS] *= stepsmm_korrekturfactor;
-                            HAL::eprSetInt16(EPR_RF_MOD_Z_STEP_SIZE, g_nManualSteps[Z_AXIS]);
+                            Printer::manualMotion.rescaleSteps(Z_AXIS, stepsmm_korrekturfactor);
+                            HAL::eprSetInt16(EPR_RF_MOD_Z_STEP_SIZE, Printer::manualMotion.steps(Z_AXIS));
                             invalidateBedMatrixForReload();
                                                                              //korrektur der aktiven kompensation/zoffset ist durch fehlendes homing unterbunden.
                         }
@@ -3261,7 +3253,7 @@ void UIDisplay::mainSwitchCase(int action) {
         if (uid.menuLevel == 0 && uid.menuPos[0] == 1)
             Commands::changeFeedrateMultiply(Printer::feedrateMultiply + direction);
         else
-            Printer::pause.extrudeManually(int32_t(g_nManualSteps[E_AXIS]) * direction);
+            Printer::pause.extrudeManually(int32_t(Printer::manualMotion.steps(E_AXIS)) * direction);
         break;
     }
     case UI_ACTION_RF_PAUSE: {
@@ -3442,23 +3434,17 @@ void UIDisplay::mainSwitchCase(int action) {
     }
 
     case UI_ACTION_CONFIG_SINGLE_STEPS_KOSYS: {
-        if (Printer::moveKosys)
-            Printer::moveKosys = false;
-        else
-            Printer::moveKosys = true;
+        Printer::manualMotion.setCoordinateSystem(!Printer::manualMotion.coordinateSystem());
 
-        HAL::eprSetByte(EPR_RF_MOVE_MODE_XY_KOSYS, Printer::moveKosys);
+        HAL::eprSetByte(EPR_RF_MOVE_MODE_XY_KOSYS, Printer::manualMotion.coordinateSystem());
         EEPROM::updateChecksum();
         break;
     }
 
     case UI_ACTION_CONFIG_POSITION_FEEDRATE: {
-        if (Printer::movePositionFeedrateChoice)
-            Printer::movePositionFeedrateChoice = false;
-        else
-            Printer::movePositionFeedrateChoice = true;
+        Printer::manualMotion.setFeedrateSource(!Printer::manualMotion.feedrateSource());
 
-        HAL::eprSetByte(EPR_RF_MOVE_POSITION_FEEDRATE, Printer::movePositionFeedrateChoice);
+        HAL::eprSetByte(EPR_RF_MOVE_POSITION_FEEDRATE, Printer::manualMotion.feedrateSource());
         EEPROM::updateChecksum();
         break;
     }
