@@ -461,7 +461,7 @@ extern short testHeatBedTemperature(void);
 extern long getZMatrixDepth(long x, long y);
 extern long getZMatrixDepth_CurrentXY(void);
 
-extern void switchActiveHeatBed(char newActiveHeatBed);
+extern bool switchActiveHeatBed(char newActiveHeatBed);
 
 extern short readAveragePressure(short* pnAveragePressure);
 
@@ -471,15 +471,12 @@ extern void outputCompensationMatrix(char format = 0);
 extern void initCompensationMatrix(void);
 extern void determineCompensationOffsetZ(void);
 extern void adjustCompensationMatrix(short nZ);
-extern void saveCompensationMatrix(unsigned int uAddress);
-extern void clearCompensationMatrix(unsigned int uAddress);
+extern bool saveCompensationMatrix(unsigned int uAddress);
 
 extern char prepareCompensationMatrix(void);
 extern char loadCompensationMatrix(unsigned int uAddress);
 
 extern void clearExternalEEPROM(void);
-extern void writeByte24C256(int addressI2C, unsigned int addressEEPROM, unsigned char data);
-extern void writeWord24C256(int addressI2C, unsigned int addressEEPROM, unsigned short data);
 
 extern unsigned short readWord24C256(int addressI2C, unsigned int addressEEPROM);
 

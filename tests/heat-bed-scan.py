@@ -29,7 +29,7 @@ def main():
         ], check=True)
         for scenario in (
             "standard", "pla", "abs", "retry", "cancel", "disconnected", "overload",
-            "overload-and-cancel", "stop-mid-grid", "invalid-grid",
+            "overload-and-cancel", "stop-mid-grid", "invalid-grid", "save-failed",
         ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
 

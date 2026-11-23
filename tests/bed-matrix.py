@@ -1,4 +1,4 @@
-"""Replay bed matrix loading, preparation and interpolation with simulated EEPROM."""
+"""Replay bed matrix storage, preparation and interpolation with simulated EEPROM."""
 
 import os
 from pathlib import Path
@@ -11,9 +11,11 @@ def main():
     firmware = tests.parent / "Repetier"
     source = (firmware / "RF.cpp").read_text(encoding="utf-8")
     sections = (
-        ("static bool readByte24C256(", "static void serviceSenseOffset("),
+        ("static bool writeByte24C256(int addressI2C, unsigned int addressEEPROM, unsigned char data) {",
+         "static void serviceSenseOffset("),
+        ("void initCompensationMatrix(", "void outputCompensationMatrix("),
         ("char prepareCompensationMatrix(", "void adjustCompensationMatrix("),
-        ("char loadCompensationMatrix(", "void clearCompensationMatrix("),
+        ("static bool writeMatrixSector(", "void clearExternalEEPROM("),
         ("namespace {\nstruct MatrixSpan", "long getZMatrixDepth_CurrentXY("),
     )
     with TemporaryDirectory(prefix="rfx-bed-matrix-") as directory:

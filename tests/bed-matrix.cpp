@@ -1,5 +1,6 @@
 #include <cassert>
 #include <cstdint>
+#include <cstring>
 #include "TwiTransfer.h"
 
 using byte = uint8_t;
@@ -8,7 +9,8 @@ enum { COMPENSATION_MATRIX_MAX_X = 6, COMPENSATION_MATRIX_MAX_Y = 5 };
 enum { EEPROM_FORMAT = 7, EEPROM_DELAY = 10, I2C_ADDRESS_EXTERNAL_EEPROM = 0x50 };
 enum { EEPROM_OFFSET_HEADER_FORMAT = 0, EEPROM_OFFSET_SECTOR_FORMAT = 0,
        EEPROM_OFFSET_DIMENSION_X = 2, EEPROM_OFFSET_DIMENSION_Y = 4,
-       EEPROM_OFFSET_MICRO_STEPS = 6, EEPROM_OFFSET_MATRIX_START = 28 };
+       EEPROM_OFFSET_MICRO_STEPS = 6, EEPROM_OFFSET_MATRIX_START = 28,
+       EEPROM_OFFSET_ACTIVE_HEAT_BED_Z_MATRIX = 4, EEPROM_MAX_HEAT_BED_SECTORS = 9 };
 #define PSTR(text) text
 
 short g_ZCompensationMatrix[COMPENSATION_MATRIX_MAX_X][COMPENSATION_MATRIX_MAX_Y];
@@ -16,13 +18,19 @@ uint8_t g_uZMatrixMax[2];
 bool g_ZMatrixChangedInRam;
 long g_offsetZCompensationSteps;
 short g_ZCompensationMax;
+char g_nActiveHeatBed = 1;
 
-constexpr unsigned int sector = 128;
+constexpr unsigned int EEPROM_SECTOR_SIZE = 128;
+constexpr unsigned int sector = EEPROM_SECTOR_SIZE;
 constexpr unsigned int payload = sector + EEPROM_OFFSET_MATRIX_START;
 uint8_t eeprom[512]{};
 unsigned address = 0;
 int readFailure = -1;
+int writeFailure = -1;
 unsigned payloadReads = 0;
+unsigned writes = 0;
+bool writeProtected = false;
+bool scanning = false;
 
 namespace HAL {
 uint32_t timeInMilliseconds() { return 0; }
@@ -33,6 +41,7 @@ float axisLengthMM[3] = {50, 40, 200};
 float axisStepsPerMM[3] = {100, 100, 100};
 uint8_t motorMicroStepsModeValue[3] = {5, 5, 5};
 bool debugErrors() { return true; }
+bool debugInfo() { return false; }
 void disableCMPnow(bool wait) { assert(wait); }
 }
 namespace Com {
@@ -45,14 +54,22 @@ void keepAlive(int state) { assert(state == Processing); }
 }
 unsigned short drv8711ModeValue_2_MicroSteps(uint8_t mode) { return 1 << mode; }
 void determineCompensationOffsetZ();
+bool isAnyScanRunning() { return scanning; }
 
 void TwiTransfer::finishActive() {}
 
 bool TwiTransfer::write(uint8_t device, const uint8_t* bytes, uint8_t length, uint32_t) {
-    assert(device == I2C_ADDRESS_EXTERNAL_EEPROM && length == 2);
+    assert(device == I2C_ADDRESS_EXTERNAL_EEPROM && (length == 2 || length == 3));
     address = (unsigned(bytes[0]) << 8) | bytes[1];
     assert(address < sizeof(eeprom));
     state_ = State::Done;
+    if (length == 3) {
+        ++writes;
+        if (int(address) == writeFailure)
+            state_ = State::Error;
+        else if (!writeProtected)
+            eeprom[address] = bytes[2];
+    }
     return true;
 }
 
@@ -152,4 +169,33 @@ int main() {
     assert(g_ZCompensationMatrix[1][0] == 0 && g_ZCompensationMatrix[0][1] == 0);
     assert(g_ZCompensationMatrix[5][0] == 50 && g_ZCompensationMatrix[0][4] == 41);
     assert(g_ZCompensationMatrix[5][4] == g_ZCompensationMatrix[4][3]);
+
+    g_ZMatrixChangedInRam = true;
+    writeProtected = true;
+    assert(!saveCompensationMatrix(sector));
+    assert(g_ZMatrixChangedInRam && readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, sector) == EEPROM_FORMAT);
+    writeProtected = false;
+    writeFailure = payload + 7;
+    assert(!saveCompensationMatrix(sector));
+    assert(g_ZMatrixChangedInRam && readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, sector) == 0);
+    writeFailure = -1;
+    assert(saveCompensationMatrix(sector * 2) && g_ZMatrixChangedInRam);
+    assert(saveCompensationMatrix(sector) && !g_ZMatrixChangedInRam);
+    assert(loadCompensationMatrix(sector) == 0 && g_ZCompensationMatrix[0][4] == 41);
+
+    const unsigned writesBefore = writes;
+    scanning = true;
+    assert(!saveCompensationMatrix(sector) && writes == writesBefore);
+    scanning = false;
+    initCompensationMatrix();
+    assert(!saveCompensationMatrix(sector) && writes == writesBefore);
+    assert(loadCompensationMatrix(sector) == 0);
+    assert(clearCompensationMatrix(sector) && loadCompensationMatrix(sector) != 0);
+
+    storeWord(EEPROM_OFFSET_ACTIVE_HEAT_BED_Z_MATRIX, 1);
+    writeProtected = true;
+    assert(!saveActiveHeatBedToExtEEPROM(2));
+    assert(loadActiveHeatBedFromExtEEPROM() && g_nActiveHeatBed == 1);
+    writeProtected = false;
+    assert(saveActiveHeatBedToExtEEPROM(2) && loadActiveHeatBedFromExtEEPROM() && g_nActiveHeatBed == 2);
 }

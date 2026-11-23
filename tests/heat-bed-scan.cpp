@@ -29,6 +29,7 @@ constexpr char UI_TEXT_HEATING[] = "Heating", UI_TEXT_HEAT_BED_SCAN[] = "Scan",
 constexpr char ui_text_heat_bed_scan[] = "Scan", ui_text_operation_denied[] = "Busy", ui_text_saving_success[] = "Saved";
 
 char g_nActiveHeatBed = 2;
+bool g_ZMatrixChangedInRam = false;
 short g_nScanHeatBedUpFastSteps = -4, g_nScanHeatBedUpSlowSteps = -2, g_nScanHeatBedDownSlowSteps = 2;
 short g_nScanHeatBedDownFastSteps = 20, g_nScanZMaxCompensationSteps = 600;
 short g_nScanIdlePressureMin = -7500, g_nScanIdlePressureMax = 7500;
@@ -43,9 +44,9 @@ long g_nScanXStartSteps = 100, g_nScanYStartSteps = 100, g_nScanXStepSizeSteps =
 long g_nScanXMaxPositionSteps = 300, g_nScanYMaxPositionSteps = 300;
 
 bool injectNoise = false, injectDisconnection = false, injectOverload = false, invalidGrid = false;
-bool matrixPrepared = false, matrixSaved = false;
+bool matrixPrepared = false, matrixSaved = false, saveFailed = false;
 unsigned keepAlives = 0, homedXY = 0, homedZ = 0, pressureReads = 0, negativeMoves = 0,
-         disabled = 0, loaded = 0, thermalOffsets = 0, completed = 0, warmupMessages = 0;
+         disabled = 0, loaded = 0, thermalOffsets = 0, completed = 0, warmupMessages = 0, errors = 0;
 ScanAbort aborted = ScanAbort::None;
 uint32_t lastMoveAt = 0, acceptedAt = 0;
 bool moved = false;
@@ -116,12 +117,13 @@ void keepAlive(int state) { assert(state == Calibrating); ++keepAlives; }
 }
 namespace RMath { using std::min; using std::max; }
 
-void showError(void*, void*) { assert(false); }
+void showError(const void*, const void*) { ++errors; }
 void showAbortScanReason(const void*, ScanAbort reason) { aborted = reason; }
 void showInformation(const void*, const void*, const void*) { ++completed; }
 void initCompensationMatrix() {
     std::memset(g_ZCompensationMatrix, 0, sizeof(g_ZCompensationMatrix));
     g_uZMatrixMax[X_AXIS] = g_uZMatrixMax[Y_AXIS] = 0;
+    g_ZMatrixChangedInRam = false;
 }
 void outputScanParameters() {}
 void outputCompensationMatrix() {}
@@ -136,9 +138,13 @@ int loadCompensationMatrix(unsigned int address) {
     ++loaded;
     return 0;
 }
-void saveCompensationMatrix(unsigned int address) {
+bool saveWorkingMatrix(unsigned int address) {
     assert(matrixPrepared && address == static_cast<unsigned int>(EEPROM_SECTOR_SIZE * g_nActiveHeatBed));
+    if (saveFailed)
+        return false;
     matrixSaved = true;
+    g_ZMatrixChangedInRam = false;
+    return true;
 }
 int testHeatBedTemperature() { return 0; }
 int testExtruderTemperature() { return 0; }
@@ -192,6 +198,7 @@ int main(int argc, char** argv) {
     injectDisconnection = !std::strcmp(argv[1], "disconnected");
     injectOverload = cancelOnOverload || !std::strcmp(argv[1], "overload");
     invalidGrid = !std::strcmp(argv[1], "invalid-grid");
+    saveFailed = !std::strcmp(argv[1], "save-failed");
 
     heatBedScan.startOrCancel(mode);
     unsigned ticks = 0;
@@ -217,13 +224,16 @@ int main(int argc, char** argv) {
     } else if (invalidGrid) {
         assert(aborted == ScanAbort::MatrixDimensions && loaded == 1 && disabled == 1);
         assert(!matrixPrepared && !matrixSaved && !completed);
+    } else if (saveFailed) {
+        assert(aborted == ScanAbort::None && errors == 1 && disabled == 1);
+        assert(matrixPrepared && !matrixSaved && !completed && !loaded && g_ZMatrixChangedInRam);
     } else if (stop) {
         assert(aborted == ScanAbort::None && !g_ZCompensationMatrix[0][0] && !matrixSaved);
     } else if (cancel) {
         assert(aborted == ScanAbort::Canceled && loaded == 1 && disabled == 1);
         assert(!matrixSaved && !completed && ticks == 4 && keepAlives == 3);
     } else {
-        assert(aborted == ScanAbort::None && !loaded && matrixSaved && completed == 1 && disabled == 1);
+        assert(aborted == ScanAbort::None && !errors && !loaded && matrixSaved && completed == 1 && disabled == 1);
         assert(g_uZMatrixMax[X_AXIS] == 4 && g_uZMatrixMax[Y_AXIS] == 4);
         for (int x = 2; x <= 4; ++x) {
             assert(g_ZCompensationMatrix[x][0] == x - 1);

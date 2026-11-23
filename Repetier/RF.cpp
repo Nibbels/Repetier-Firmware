@@ -163,7 +163,10 @@ unsigned char g_uRGBTargetB = 0;
 #endif // RGB_LIGHT_R_PIN
 
 static void setupForPrinting();
+static bool writeWord24C256(int addressI2C, unsigned int addressEEPROM, unsigned short data);
 static bool readWord24C256(int addressI2C, unsigned int addressEEPROM, unsigned short& data);
+static bool writeByte24C256(int addressI2C, unsigned int addressEEPROM, unsigned char data);
+static bool saveWorkingMatrix(unsigned int address);
 static void showAbortScanReason(const void* scanName, ScanAbort reason);
 static bool moveZ(int nSteps, bool emergencyRetreat = false);
 
@@ -704,8 +707,6 @@ void HeatBedScan::initialize() {
     // Suspend compensation before replacing its working matrix.
     Printer::disableCMPnow(false);
     initCompensationMatrix();
-
-    g_uZMatrixMax[X_AXIS] = g_uZMatrixMax[Y_AXIS] = 0;
 
     // output the currently used scan parameters
     outputScanParameters();
@@ -1260,7 +1261,14 @@ void HeatBedScan::switchOffAfterScan() {
 
 void HeatBedScan::saveMatrix() {
     // save the determined values to the EEPROM
-    saveCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed));
+    g_ZMatrixChangedInRam = 1;
+    const bool saved = saveWorkingMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed));
+    Printer::idleStatus.schedule(HAL::timeInMilliseconds());
+    if (!saved) {
+        showError(ui_text_heat_bed_scan, PSTR("Matrix save failed"));
+        finish();
+        return;
+    }
     if (Printer::debugInfo()) {
         Com::printF(Com::tscanHeatBed);
         Com::printFLN(PSTR("the heat bed z matrix has been saved"));
@@ -1270,9 +1278,6 @@ void HeatBedScan::saveMatrix() {
         Com::printF(Com::tscanHeatBed);
         Com::printFLN(PSTR("the scan has been completed"));
     }
-    //UI_STATUS_UPD( UI_TEXT_HEAT_BED_SCAN_DONE );
-    Printer::idleStatus.schedule(HAL::timeInMilliseconds());
-
     showInformation(PSTR(UI_TEXT_HEAT_BED_SCAN_DONE), (void*)ui_text_saving_success, PSTR(UI_TEXT_OK)); //tell user the scan was a success
 
     finish();
@@ -2421,7 +2426,11 @@ void outputScanParameters(void) {
 
 void initCompensationMatrix(void) {
     // clear all fields of the compensation matrix
-    memset(g_ZCompensationMatrix, 0, COMPENSATION_MATRIX_MAX_X * COMPENSATION_MATRIX_MAX_Y * 2);
+    memset(g_ZCompensationMatrix, 0, sizeof(g_ZCompensationMatrix));
+    g_uZMatrixMax[X_AXIS] = g_uZMatrixMax[Y_AXIS] = 0;
+    g_offsetZCompensationSteps = 0;
+    g_ZCompensationMax = 0;
+    g_ZMatrixChangedInRam = 0;
 } // initCompensationMatrix
 
 void outputCompensationMatrix(char format) {
@@ -2616,105 +2625,89 @@ void adjustCompensationMatrix(short nZ) {
     determineCompensationOffsetZ();
 } // adjustCompensationMatrix
 
-void saveCompensationMatrix(unsigned int uAddress) {
-    unsigned int uOffset;
-    short x;
-    short y;
+static bool writeMatrixSector(unsigned int address, bool clear) {
+    const uint8_t eeprom = I2C_ADDRESS_EXTERNAL_EEPROM;
+    const unsigned int formatAddress = address + EEPROM_OFFSET_SECTOR_FORMAT;
+    const unsigned short format = clear ? 0 : EEPROM_FORMAT;
+    const uint8_t lastX = clear ? COMPENSATION_MATRIX_MAX_X - 1 : g_uZMatrixMax[X_AXIS];
+    const uint8_t lastY = clear ? COMPENSATION_MATRIX_MAX_Y - 1 : g_uZMatrixMax[Y_AXIS];
+    const unsigned short microsteps = clear ? 0 : drv8711ModeValue_2_MicroSteps(Printer::motorMicroStepsModeValue[Z_AXIS]);
 
-    if (uAddress == 0) {
-        Com::printFLN(PSTR("saveMatrix(): valid uAddress - aborted!"));
-
-        return;
+    // Invalidate the sector before replacing any payload. A reset mid-save
+    // must leave this sector unavailable to the loader.
+    unsigned short storedFormat;
+    if (!writeWord24C256(eeprom, formatAddress, 0)
+        || !readWord24C256(eeprom, formatAddress, storedFormat) || storedFormat != 0
+        || !writeWord24C256(eeprom, EEPROM_OFFSET_HEADER_FORMAT, EEPROM_FORMAT)
+        || !writeWord24C256(eeprom, address + EEPROM_OFFSET_DIMENSION_X, clear ? 0 : lastX)
+        || !writeWord24C256(eeprom, address + EEPROM_OFFSET_DIMENSION_Y, clear ? 0 : lastY)
+        || !writeWord24C256(eeprom, address + EEPROM_OFFSET_MICRO_STEPS, microsteps)) {
+        return false;
     }
 
-    if (g_ZCompensationMatrix[0][0] && g_uZMatrixMax[X_AXIS] && g_uZMatrixMax[Y_AXIS]) //valid in RAM means writing ok
-    {
-        // we have valid compensation values
-        if (Printer::debugInfo()) {
-            Com::printFLN(PSTR("saveMatrix(): valid data"));
+    unsigned int offset = address + EEPROM_OFFSET_MATRIX_START;
+    for (uint8_t x = 0; x <= lastX; ++x) {
+        for (uint8_t y = 0; y <= lastY; ++y) {
+            if (!writeWord24C256(eeprom, offset, clear ? 0 : g_ZCompensationMatrix[x][y]))
+                return false;
+            offset += 2;
         }
+        GCodeInput::keepAlive(Processing);
+    }
 
-        // write the current header version
-        writeWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, EEPROM_OFFSET_HEADER_FORMAT, EEPROM_FORMAT);
+    // A read after the marker write also waits for the last EEPROM write cycle.
+    return (clear || writeWord24C256(eeprom, formatAddress, format))
+        && readWord24C256(eeprom, formatAddress, storedFormat) && storedFormat == format;
+}
 
-        // write the current sector version
-        writeWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_SECTOR_FORMAT, EEPROM_FORMAT);
-
-        // write the current x dimension
-        writeWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_DIMENSION_X, g_uZMatrixMax[X_AXIS]);
-
-        // write the current y dimension
-        writeWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_DIMENSION_Y, g_uZMatrixMax[Y_AXIS]);
-
-        // write the current micro steps
-        writeWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_MICRO_STEPS,
-                        drv8711ModeValue_2_MicroSteps(Printer::motorMicroStepsModeValue[Z_AXIS])
-        );
-
-        uOffset = uAddress + EEPROM_OFFSET_MATRIX_START;
-        for (x = 0; x <= g_uZMatrixMax[X_AXIS]; x++) {
-            for (y = 0; y <= g_uZMatrixMax[Y_AXIS]; y++) {
-                writeWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uOffset, g_ZCompensationMatrix[x][y]);
-                uOffset += 2;
-            }
-            GCodeInput::keepAlive(Processing);
-        }
-    } else {
-        // we do not have valid heat bed compensation values - clear the EEPROM data
-        if (Printer::debugErrors()) {
-            Com::printF(PSTR("saveMatrix(): invalid data ("), g_ZCompensationMatrix[0][0]);
-            Com::printF(PSTR("/"), g_uZMatrixMax[X_AXIS]);
-            Com::printF(PSTR("/"), g_uZMatrixMax[Y_AXIS]);
-            Com::printFLN(PSTR(")"));
-        }
-
-        // write the current version
-        writeWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, EEPROM_OFFSET_HEADER_FORMAT, EEPROM_FORMAT);
-
-        // write the current sector version
-        writeWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_SECTOR_FORMAT, 0);
-
-        // write the current x dimension
-        writeWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_DIMENSION_X, 0);
-
-        // write the current y dimension
-        writeWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_DIMENSION_Y, 0);
-
-        // write the current micro steps
-        writeWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_MICRO_STEPS, 0);
-
-        uOffset = uAddress + EEPROM_OFFSET_MATRIX_START;
-        for (x = 0; x < COMPENSATION_MATRIX_MAX_X; x++) {
-            for (y = 0; y < COMPENSATION_MATRIX_MAX_Y; y++) {
-                writeWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, uOffset, 0);
-                uOffset += 2;
-            }
-            GCodeInput::keepAlive(Processing);
-        }
+static bool saveWorkingMatrix(unsigned int address) {
+    if (!address || g_ZCompensationMatrix[0][0] != EEPROM_FORMAT
+        || g_uZMatrixMax[X_AXIS] < 2 || g_uZMatrixMax[X_AXIS] >= COMPENSATION_MATRIX_MAX_X
+        || g_uZMatrixMax[Y_AXIS] < 2 || g_uZMatrixMax[Y_AXIS] >= COMPENSATION_MATRIX_MAX_Y) {
+        Com::printFLN(PSTR("saveMatrix(): invalid matrix"));
+        return false;
+    }
+    if (!writeMatrixSector(address, false)) {
+        Com::printFLN(PSTR("saveMatrix(): EEPROM write failed"));
+        return false;
     }
 
     determineCompensationOffsetZ();
-    g_ZMatrixChangedInRam = 0;
-} // saveCompensationMatrix
+    if (address == static_cast<unsigned int>(EEPROM_SECTOR_SIZE * g_nActiveHeatBed))
+        g_ZMatrixChangedInRam = 0;
+    return true;
+}
+
+bool saveCompensationMatrix(unsigned int address) {
+    if (isAnyScanRunning()) {
+        Com::printFLN(PSTR("saveMatrix(): scan in progress"));
+        return false;
+    }
+    return saveWorkingMatrix(address);
+}
 
 bool saveActiveHeatBedToExtEEPROM(char newActiveHeatBed) {
     if (newActiveHeatBed < 1 || newActiveHeatBed > EEPROM_MAX_HEAT_BED_SECTORS) {
         return false;
     }
 
-    char oldActiveHeatBed = (char)readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, EEPROM_OFFSET_ACTIVE_HEAT_BED_Z_MATRIX);
-    if (oldActiveHeatBed != newActiveHeatBed) {
-        writeWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, EEPROM_OFFSET_ACTIVE_HEAT_BED_Z_MATRIX, newActiveHeatBed);
-    }
-
-    return true;
+    const uint8_t device = I2C_ADDRESS_EXTERNAL_EEPROM;
+    const unsigned int address = EEPROM_OFFSET_ACTIVE_HEAT_BED_Z_MATRIX;
+    unsigned short stored;
+    if (readWord24C256(device, address, stored) && stored == static_cast<unsigned short>(newActiveHeatBed))
+        return true;
+    if (writeWord24C256(device, address, newActiveHeatBed)
+        && readWord24C256(device, address, stored) && stored == static_cast<unsigned short>(newActiveHeatBed))
+        return true;
+    Com::printFLN(PSTR("selectMatrix(): EEPROM write failed"));
+    return false;
 }
 
 bool loadActiveHeatBedFromExtEEPROM() {
-    char uTemp = (char)readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, EEPROM_OFFSET_ACTIVE_HEAT_BED_Z_MATRIX);
+    const unsigned short slot = readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, EEPROM_OFFSET_ACTIVE_HEAT_BED_Z_MATRIX);
 
-    if (uTemp < 1 || uTemp > EEPROM_MAX_HEAT_BED_SECTORS) {
-        Com::printFLN(PSTR("Invalid active heat bed within ext. EEPROM detected: "), (int)uTemp);
+    if (slot < 1 || slot > EEPROM_MAX_HEAT_BED_SECTORS) {
+        Com::printFLN(PSTR("Invalid active heat bed within ext. EEPROM detected: "), uint32_t(slot));
         if (g_nActiveHeatBed < 1 || g_nActiveHeatBed > EEPROM_MAX_HEAT_BED_SECTORS) {
             g_nActiveHeatBed = 1;
         }
@@ -2723,7 +2716,7 @@ bool loadActiveHeatBedFromExtEEPROM() {
         return false;
     }
 
-    g_nActiveHeatBed = uTemp;
+    g_nActiveHeatBed = slot;
     return true;
 }
 
@@ -2865,17 +2858,18 @@ char loadCompensationMatrix(unsigned int uAddress) {
     return 0;
 } // loadCompensationMatrix
 
-void clearCompensationMatrix(unsigned int uAddress) {
-    // clear all fields of the compensation matrix
+static bool clearCompensationMatrix(unsigned int address) {
+    // The caller has selected this sector. Invalidate the RAM copy even if the
+    // sector could only be partially cleared.
     initCompensationMatrix();
-
-    // store the cleared compensation matrix to the EEPROM
-    saveCompensationMatrix(uAddress);
-
-    if (Printer::debugInfo()) {
-        Com::printFLN(PSTR("clearMatrix(): matrix cleared"));
+    if (!writeMatrixSector(address, true)) {
+        Com::printFLN(PSTR("clearMatrix(): EEPROM write failed"));
+        return false;
     }
-} // clearCompensationMatrix
+    if (Printer::debugInfo())
+        Com::printFLN(PSTR("clearMatrix(): matrix cleared"));
+    return true;
+}
 
 void clearExternalEEPROM(void) {
     unsigned short i;
@@ -2889,7 +2883,10 @@ void clearExternalEEPROM(void) {
 
     // the external EEPROM is able to store 262.144 kBit (= 32.768 kByte)
     for (i = 0; i < uMax; i++) {
-        writeByte24C256(I2C_ADDRESS_EXTERNAL_EEPROM, i, 0);
+        if (!writeByte24C256(I2C_ADDRESS_EXTERNAL_EEPROM, i, 0)) {
+            Com::printFLN(PSTR("clearExtEEPROM(): EEPROM write failed"));
+            return;
+        }
         Commands::checkForPeriodicalActions(Processing);
 
         if (Printer::debugInfo()) {
@@ -2907,25 +2904,18 @@ void clearExternalEEPROM(void) {
     }
 } // clearExternalEEPROM
 
-void writeByte24C256(int addressI2C, unsigned int addressEEPROM, unsigned char data) {
+static bool writeByte24C256(int addressI2C, unsigned int addressEEPROM, unsigned char data) {
     TwiTransfer::finishActive();
     HAL::delayMilliseconds(EEPROM_DELAY);
     const uint8_t bytes[] = {byte(addressEEPROM >> 8), byte(addressEEPROM), data};
     TwiTransfer transfer;
-    if (transfer.write(addressI2C, bytes, sizeof(bytes), HAL::timeInMilliseconds()))
-        transfer.wait();
-} // writeByte24C256
+    return transfer.write(addressI2C, bytes, sizeof(bytes), HAL::timeInMilliseconds()) && transfer.wait();
+}
 
-void writeWord24C256(int addressI2C, unsigned int addressEEPROM, unsigned short data) {
-    unsigned short Temp;
-
-    Temp = byte(data >> 8);
-    writeByte24C256(addressI2C, addressEEPROM, Temp);
-    Temp = byte(data & 0x00FF);
-    writeByte24C256(addressI2C, addressEEPROM + 1, Temp);
-    return;
-
-} // writeWord24C256
+static bool writeWord24C256(int addressI2C, unsigned int addressEEPROM, unsigned short data) {
+    return writeByte24C256(addressI2C, addressEEPROM, byte(data >> 8))
+        && writeByte24C256(addressI2C, addressEEPROM + 1, byte(data));
+}
 
 static bool readByte24C256(int addressI2C, unsigned int addressEEPROM, uint8_t& data) {
     TwiTransfer::finishActive();
@@ -3339,6 +3329,10 @@ void requestHeatBedScan(GCode* pCommand) {
 
 void clearBedMatrix(GCode* pCommand) {
     long nTemp;
+    if (isAnyScanRunning()) {
+        Com::printFLN(PSTR("M3011: scan in progress"));
+        return;
+    }
     if (Printer::doHeatBedZCompensation) {
         if (Printer::debugErrors()) {
             Com::printFLN(PSTR("M3011: the heat bed z matrix can not be cleared while the z-compensation is active"));
@@ -3365,8 +3359,8 @@ void clearBedMatrix(GCode* pCommand) {
     if (saveActiveHeatBedToExtEEPROM((char)nTemp)) {
         // switch to the specified z-compensation matrix
         g_nActiveHeatBed = (char)nTemp;
-        clearCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed));
-        Com::printFLN(PSTR("M3011: cleared heat bed z matrix: "), nTemp);
+        if (clearCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed)))
+            Com::printFLN(PSTR("M3011: cleared heat bed z matrix: "), nTemp);
     }
 }
 
@@ -3400,7 +3394,8 @@ void reportBedMatrix(GCode* pCommand) {
         // remember current z-compensation matrix
         nOldHeatBed = g_nActiveHeatBed;
         // we have to switch to another z-compensation matrix
-        switchActiveHeatBed((char)nTemp);
+        if (!switchActiveHeatBed((char)nTemp))
+            return;
     }
 
     if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
@@ -4037,6 +4032,10 @@ void testWatchdog(GCode* pCommand) {
 }
 
 void eraseMatrixEeprom() {
+    if (isAnyScanRunning()) {
+        Com::printFLN(PSTR("clearExtEEPROM(): scan in progress"));
+        return;
+    }
     clearExternalEEPROM();
 }
 
@@ -4441,6 +4440,10 @@ void setRgbLightMode(GCode* pCommand) {
 #endif // RGB_LIGHT_R_PIN
 // Z-offset scan, matrix correction and filament control.
 void configureZOffsetScan(GCode* pCommand) {
+    if (heatBedScan.active()) {
+        Com::printFLN(PSTR("M3900/M3901: bed scan in progress"));
+        return;
+    }
     bool err3900r = false;
     if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
         // we load the z compensation matrix before its first usage because this can take some time
@@ -4597,6 +4600,10 @@ void configureZOffsetScan(GCode* pCommand) {
 }
 
 void adjustBedMatrix(GCode* pCommand) {
+    if (isAnyScanRunning()) {
+        Com::printFLN(PSTR("M3902: scan in progress"));
+        return;
+    }
     //NMM Funktion 1 - R=Repair
     if (pCommand->hasR()) {
         //search for a hole within the heat beds z-Matrix
@@ -4720,8 +4727,10 @@ void adjustBedMatrix(GCode* pCommand) {
         if (pCommand->S >= 1 && pCommand->S <= EEPROM_MAX_HEAT_BED_SECTORS) {
             // save the determined values to the EEPROM @ savepoint "pCommand->S" Standard: 1..9
             unsigned int savepoint = (unsigned int)pCommand->S;
-            saveCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * savepoint)); //g_nActiveHeatBed --> pCommand->S
-            Com::printFLN(PSTR("M3902: Save the Matrix::OK"));
+            if (saveCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * savepoint)))
+                Com::printFLN(PSTR("M3902: Save the Matrix::OK"));
+            else
+                Com::printFLN(PSTR("M3902: Save the Matrix::ERROR"));
         } else {
             Com::printFLN(PSTR("M3902: Save the Matrix::ERROR::invalid savepoint, invalid active heatbedmatrix"));
         }
@@ -5734,10 +5743,14 @@ void cleanupEPositions(void) {
     noInts.unprotect();
 } // cleanupEPositions
 
-void switchActiveHeatBed(char newActiveHeatBed) {
+bool switchActiveHeatBed(char newActiveHeatBed) {
+    if (isAnyScanRunning()) {
+        Com::printFLN(PSTR("selectMatrix(): scan in progress"));
+        return false;
+    }
     if (!saveActiveHeatBedToExtEEPROM(newActiveHeatBed)) {
         // do not allow not-supported z-compensation matrix
-        return;
+        return false;
     }
 
     g_nActiveHeatBed = newActiveHeatBed;
@@ -5746,6 +5759,7 @@ void switchActiveHeatBed(char newActiveHeatBed) {
         // there is no valid z-compensation matrix available
         initCompensationMatrix();
     }
+    return true;
 } // switchActiveHeatBed
 
 #ifdef RGB_LIGHT_R_PIN

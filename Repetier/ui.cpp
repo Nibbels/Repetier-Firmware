@@ -2778,8 +2778,9 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
             break;
         }
 
-        INCREMENT_MIN_MAX(g_nActiveHeatBed, 1, 1, EEPROM_MAX_HEAT_BED_SECTORS);
-        switchActiveHeatBed(g_nActiveHeatBed);
+        char nextHeatBed = g_nActiveHeatBed;
+        INCREMENT_MIN_MAX(nextHeatBed, 1, 1, EEPROM_MAX_HEAT_BED_SECTORS);
+        switchActiveHeatBed(nextHeatBed);
         break;
     }
 
@@ -3666,7 +3667,10 @@ void UIDisplay::mainSwitchCase(int action) {
         // save the determined values to the EEPROM
         if (g_ZMatrixChangedInRam) {
             exitmenu();
-            saveCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed));
+            if (!saveCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed))) {
+                showError(ui_text_manual, PSTR("Matrix save failed"));
+                break;
+            }
             if (Printer::debugInfo()) {
                 Com::printFLN(PSTR("Manual Input: the heat bed compensation matrix has been saved"));
             }
