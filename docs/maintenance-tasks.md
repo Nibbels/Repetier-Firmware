@@ -72,6 +72,8 @@ The firmware restricted Play to a completed pause in 1.37t2. The 1.43.56 pause r
 
 - [x] **Initialize first-layer state with Z homing.** The host replay covers Z homing between first layers of 0.40 mm and 0.20 mm, a fresh SenseOffset sample window, and model extrusion without `M3912`. Physical verification remains open. [USB print start](first-layer-control/README.md#usb-print-start)
 
+- [x] **Give generated priming one owner.** The replay runs `M3912` through completion, skip and cancellation and checks its admission, parameter limits, generated moves and restoration of the flow and E state. The layer and SenseOffset replays use the actual priming phase. [Start line](../Repetier/StartLine.cpp) · [State ledger](first-layer-control/m3912-state-boundary.md)
+
 ### SenseOffset
 
 - [x] **Give SenseOffset learning one owner.** The replay covers the ten-sample window, both force polarities, a falling average, tapering near the cap, pause, priming and crossing the first-layer boundary. It exercises queued settings activation, `M3909 P0`, Mod Menu thresholds and disabling bed compensation. It also checks that a queued limit change invalidates an increment that was calculated before the new limits arrived. The four AVR builds use 1 fewer byte of global SRAM and 22–32 more flash bytes. The 36 stepper instruction traces match the previous cycles and Z step counts. Physical verification remains open. [SenseOffset control](../Repetier/SenseOffsetControl.h) · [Host replay](../tests/pause-sense-offset.py)

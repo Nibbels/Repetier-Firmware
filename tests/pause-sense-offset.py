@@ -25,6 +25,7 @@ def main():
     pause = (firmware / "PrintPause.cpp").read_text(encoding="utf-8")
     stop = (firmware / "PrintStop.cpp").read_text(encoding="utf-8")
     dms = (firmware / "StrainGauge.cpp").read_text(encoding="utf-8")
+    start_line = (firmware / "StartLine.cpp").read_text(encoding="utf-8")
     fragments = [
         section(eeprom, "#define EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX", "#define EPR_RF_HEATED_BED_SENSOR_TYPE"),
         section(rf_header, "#define UI_ACTION_RF_HEAT_BED_UP", "#define UI_ACTION_RF_PAUSE"),
@@ -52,11 +53,9 @@ def main():
         + section(ui, "case UI_ACTION_RF_EXTRUDER_OUTPUT:", "case UI_ACTION_RF_PAUSE:")
         + "} }",
         "void trackPlannedLayer(PrintLine* p) {\n"
-        + section(move_planner, "    if (!g_startLineActive)", "\n    // Define variables that are needed")
+        + section(move_planner, "    if (!Printer::startLine.active())", "\n    // Define variables that are needed")
         + "}",
-        "void runStartLine(GCode* pCommand) { switch (3912) {\n"
-        + section(rf, "        case 3912:", "\n        case 3913:")
-        + "} }",
+        start_line.removeprefix('#include "Repetier.h"\n'),
         "void configureSenseOffset(GCode* pCommand) { switch (3909) {\n"
         + section(rf, "        case 3909:", "\n        case 3911:")
         + "} }",
@@ -76,7 +75,7 @@ def main():
         for scenario in (
             "park", "short-pause", "interrupt", "panel", "return", "jog", "cancel", "queue", "home", "layer-fade",
             "layer-scale", "compensation-bounds",
-            "digit-flow", "prime-complete", "prime-skip", "prime-abort",
+            "digit-flow", "prime-complete", "prime-skip", "prime-abort", "prime-parameters",
             "sense-window", "sense-settings", "sense-limit-interrupt",
             "pressure-pause", "pressure-stop", "digit-zero",
         ):

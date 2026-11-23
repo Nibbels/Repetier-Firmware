@@ -34,7 +34,7 @@ CompensationTarget =
   + application-specific bounds/special cases
 ```
 
-This formula describes the compensation target. Endstop constraints and the executing movement determine the resulting motor position. The implementation handles negative Z, zero-height clearance, and disabled compensation. [Bed correction](../../Repetier/BedCompensation.h) · [Target publication](../../Repetier/RF.cpp#L1944)
+This formula describes the compensation target. Endstop constraints and the executing movement determine the resulting motor position. The implementation handles negative Z, zero-height clearance, and disabled compensation. [Bed correction](../../Repetier/BedCompensation.h) · [Target publication](../../Repetier/RF.cpp#L1907)
 
 **Sign:** positive menu Z offset / positive SenseOffset raises nozzle-to-bed clearance by moving the bed away in printing convention. An edit to a matrix shifts the baseline and may change clearance without changing the menu Z-offset.
 

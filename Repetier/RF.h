@@ -444,7 +444,6 @@ extern long g_nScanYStepSizeSteps;
 extern unsigned short g_nScanContactPressureDelta;
 extern unsigned short g_nScanRetryPressureDelta;
 
-extern volatile uint8_t g_startLineActive;
 extern char g_debugLevel;
 extern char g_debugLog;
 // other configurable parameters

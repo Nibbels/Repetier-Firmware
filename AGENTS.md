@@ -4,7 +4,7 @@
 
 **Verified coordinate semantics.** `Printer::layers` owns the pending and confirmed model layers and both fade boundaries in nominal planned Z steps. The foreground compares them with the nominal position executing in `ZMotion`. The M3912 patch restores the incoming logical E coordinate. [Coordinate frames and extrusion timeline](docs/first-layer-control/coordinate-frames-and-extrusion.md) · [M3912 patch](https://github.com/Nibbels/Repetier-Firmware/commit/5f848c9a5cd0347c6d45fd9d3f13afd7344cb775)
 
-**M3912 uses an isolated pressure-braked priming phase.** `g_startLineActive` identifies generated prime moves. High DMS force progressively constrains XY speed and reduces E flow, like the audible change when a chainsaw enters wood. Manual start code enables SenseOffset with `M3909` after priming. [State ledger and test plan](docs/first-layer-control/m3912-state-boundary.md)
+**M3912 uses an isolated pressure-braked priming phase.** `Printer::startLine` owns the phase, generates its moves and restores the temporary state after draining the queue. High DMS force progressively constrains XY speed and reduces E flow, like the audible change when a chainsaw enters wood. Manual start code enables SenseOffset with `M3909` after priming. [State ledger and test plan](docs/first-layer-control/m3912-state-boundary.md)
 
 **Start with [docs/first-layer-control/README.md](docs/first-layer-control/README.md) before editing first-layer, Z compensation, DMS or priming behavior. For the full Z-offset sum, boot/print lifecycle, matrix EEPROM and thermal/scanning risks, read [docs/z-offset/README.md](docs/z-offset/README.md).** The linked documentation explains original intent, actual execution paths, risks and test scenarios.
 

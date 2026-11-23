@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <functional>
 
 #include "Constants.h"
 #undef uint
@@ -28,7 +29,6 @@ constexpr int16_t senseThreshold = 3000;
 constexpr long parkY = 200 * 160L, parkZ = 30 * static_cast<long>(zStepsPerMm), parkE = 280;
 
 millis_t clockMs = 0, g_uStartOfIdle = 0, previousMillisCmd = 0;
-volatile uint8_t g_startLineActive = 0;
 char g_nHeatBedScanStatus = 0, g_nZOSScanStatus = 0;
 unsigned short g_nManualSteps[4] = { 1, 1, 1, 28 };
 int32_t g_offsetZCompensationSteps = 250;
@@ -45,8 +45,13 @@ unsigned matrixDepthReads = 0;
 unsigned strainGaugeReads = 0;
 void (*duringMove)(long, long, long, long) = nullptr;
 void (*duringHeatWait)() = nullptr;
-void (*duringPeriodicActions)() = nullptr;
+std::function<void()> duringPeriodicActions;
 unsigned primePolls = 0, primeMoves = 0, primeWaits = 0, skipPrimeAt = 0, abortPrimeAt = 0;
+unsigned primeSpacingMoves = 0;
+struct PrimeMove {
+    float x, y, z, e, speed;
+};
+PrimeMove primeApproach{}, firstPrimeSegment{};
 bool observedPrimeBrake = false;
 
 void poll();
@@ -100,6 +105,7 @@ void WRITE(int pin, bool high);
 #include "SenseOffsetControl.h"
 #include "PressureProtection.h"
 #include "StrainGauge.h"
+#include "StartLine.h"
 
 #define PSTR(text) (text)
 #define UI_STATUS_UPD(text) ((void)0)
@@ -157,6 +163,7 @@ struct WireInput {
 namespace Printer {
 extern PrintPause pause;
 extern PrintStop printStop;
+extern StartLine startLine;
 ZOffset zOffset;
 SenseOffsetControl senseOffsetControl{SENSIBLE_PRESSURE_MAX_OFFSET};
 PressureProtection pressureProtection;
@@ -235,9 +242,15 @@ void setEPositionMM(float value, float remainder = 0) {
     destinationMM[E_AXIS] = value;
     destinationRemainderMM[E_AXIS] = remainder;
 }
-void queueFloatCoordinates(float, float, float z, float e, float) {
-    assert(g_startLineActive && !printStop.commandsBlocked());
+void queueFloatCoordinates(float x, float y, float z, float e, float speed) {
+    assert(startLine.active() && !printStop.commandsBlocked());
     ++primeMoves;
+    if (primeMoves == 1)
+        primeApproach = {x, y, z, e, speed};
+    if (primeMoves == 2)
+        firstPrimeSegment = {x, y, z, e, speed};
+    if (x == IGNORE_COORDINATE && y != IGNORE_COORDINATE && e == IGNORE_COORDINATE)
+        ++primeSpacingMoves;
     if (z != IGNORE_COORDINATE)
         zMotion.setNominalSteps(std::lround(z * axisStepsPerMM[Z_AXIS]));
     if (e != IGNORE_COORDINATE) {
@@ -388,6 +401,19 @@ long getZMatrixDepth(long x, long y) {
 }
 
 #include "pause-sense-offset-firmware.inc"
+
+void withStartLine(const std::function<void()>& action) {
+    assert(!duringPeriodicActions);
+    skipPrimeAt = primePolls + 1;
+    duringPeriodicActions = [&] {
+        ++primePolls;
+        action();
+    };
+    GCode command;
+    Printer::startLine.run(command);
+    duringPeriodicActions = nullptr;
+    skipPrimeAt = 0;
+}
 
 void poll() {
     clockMs += EMERGENCY_PAUSE_INTERVAL + 1;
@@ -681,10 +707,11 @@ void senseOffsetWindow() {
     sample(printingForce);
     assert(offset.senseMicrometers() == 67);
 
-    g_startLineActive = true;
-    sample(printingForce, 12);
-    assert(offset.senseMicrometers() == 67 && !controller.inLearningRange());
-    g_startLineActive = false;
+    withStartLine([&] {
+        Printer::zMotion.setNominalSteps(256);
+        sample(printingForce, 12);
+        assert(offset.senseMicrometers() == 67 && !controller.inLearningRange());
+    });
     sample(-3150, 10);
     assert(offset.senseMicrometers() == 67 && controller.inLearningRange());
     sample(-9000, 5);
@@ -978,10 +1005,10 @@ void homeBetweenPrints() {
     assert(!layers.currentLayerSteps() && !layers.previousLayerSteps());
 
     Printer::doHeatBedZCompensation = true;
-    g_startLineActive = true;
-    planMove(primeZ, true);
-    assert(layers.fadeStartSteps() == defaultMin && !layers.currentLayerSteps());
-    g_startLineActive = false;
+    withStartLine([&] {
+        planMove(primeZ, true);
+        assert(layers.fadeStartSteps() == defaultMin && !layers.currentLayerSteps());
+    });
     planMove(newLayer, true);
     assert(layers.fadeStartSteps() == newLayer && layers.fadeEndSteps() == newLayer + fadeSpan);
     assert(layers.currentLayerSteps() == newLayer && !layers.previousLayerSteps());
@@ -1022,10 +1049,10 @@ void layerFadeAndZHop() {
     Printer::digitCompensation.setDigitZEnabled(false);
     const long offset = Printer::zOffset.effectiveSteps();
 
-    g_startLineActive = true;
-    planMove(primeZ, true);
-    g_startLineActive = false;
-    assert(!layers.currentLayerSteps());
+    withStartLine([&] {
+        planMove(primeZ, true);
+        assert(!layers.currentLayerSteps());
+    });
 
     planMove(primeZ, false, true, false); // E-only unretract.
     assert(!layers.currentLayerSteps());
@@ -1171,12 +1198,10 @@ void digitFlowSamples() {
     readAt(62, 1500, 1);
     check(3750, 0.4375f, 0.98f, 1044, 74);
 
-    Printer::zMotion.setNominalSteps(256);
-    g_startLineActive = true;
     readAt(73, -3000, 1);
-    check(2062, 0.8595f, 0.97f, 1055, 57);
+    check(2062, 0.8595f, 0.97f, 1055, 58);
 
-    g_startLineActive = false;
+    Printer::zMotion.setNominalSteps(256);
     Printer::doHeatBedZCompensation = false;
     readAt(84, 5000, 1);
     assert(compensation.latestDigits() == 5000);
@@ -1216,7 +1241,7 @@ void primeFlowCleanup(unsigned skipAt, unsigned abortAt) {
     skipPrimeAt = skipAt;
     abortPrimeAt = abortAt;
     duringPeriodicActions = [] {
-        assert(g_startLineActive);
+        assert(Printer::startLine.active());
         ++primePolls;
         if (primePolls == abortPrimeAt) {
             Printer::stopPrint();
@@ -1230,7 +1255,7 @@ void primeFlowCleanup(unsigned skipAt, unsigned abortAt) {
             && compensation.feedrateFactor() < 1.0f && compensation.intervalScale() > 1024;
     };
     GCode command;
-    runStartLine(&command);
+    Printer::startLine.run(command);
     duringPeriodicActions = nullptr;
 
     assert(observedPrimeBrake && primeWaits == 2);
@@ -1239,7 +1264,7 @@ void primeFlowCleanup(unsigned skipAt, unsigned abortAt) {
     assert(profile.minDigits == 2000 && profile.maxDigits == 6100);
     assert(profile.extrusionPercent == 21 && profile.speedPercent == -30);
     assert(compensation.extrusionFactor() == 1 && compensation.feedrateFactor() == 1 && !compensation.intervalScale());
-    assert(!g_startLineActive && Printer::relativeExtruderCoordinateMode);
+    assert(!Printer::startLine.active() && Printer::relativeExtruderCoordinateMode);
     assert(Printer::feedrateMultiply == 85 && Printer::menuExtrusionFactor == 0.93f);
     if (abortAt) {
         assert(Printer::printStop.commandsBlocked() && Printer::destinationMM[E_AXIS] == 0.0f);
@@ -1247,6 +1272,38 @@ void primeFlowCleanup(unsigned skipAt, unsigned abortAt) {
         assert(Printer::destinationMM[E_AXIS] == 10.0f && Printer::destinationRemainderMM[E_AXIS] == 0.00001f);
         assert(Printer::extrudeMultiplyErrorSteps == 0.125f && Printer::compensatedPositionCollectTinyE == 0.75f);
     }
+}
+
+void primeParameters() {
+    GCode command;
+    command.S = 6000;
+    command.P = 2000;
+    command.E = 1;
+    command.F = 100;
+    command.I = 9;
+    command.Y = 500;
+
+    Printer::axesHomed = false;
+    Printer::startLine.run(command);
+    assert(!primeMoves && primeWaits == 1);
+    Printer::axesHomed = true;
+    Printer::doHeatBedZCompensation = false;
+    Printer::startLine.run(command);
+    assert(!primeMoves && primeWaits == 2);
+    Printer::doHeatBedZCompensation = true;
+
+    duringPeriodicActions = [] {
+        const auto profile = Printer::digitCompensation.flowProfile();
+        assert(profile.minDigits == 2000 && profile.maxDigits == 6000);
+    };
+    Printer::startLine.run(command);
+    duringPeriodicActions = nullptr;
+    assert(primeWaits == 4 && primeSpacingMoves == 5);
+    assert(primeApproach.x == 15.0f && primeApproach.y == 122.5f && primeApproach.z == 0.35f);
+    assert(primeApproach.e == IGNORE_COORDINATE && primeApproach.speed == 60.0f);
+    assert(firstPrimeSegment.speed == 50.0f && firstPrimeSegment.y == 122.5f);
+    assert(std::abs(firstPrimeSegment.x - 15.35f) < 0.00001f);
+    assert(std::abs(firstPrimeSegment.e - 0.0175f) < 0.00001f);
 }
 
 void initializeOffsets() {
@@ -1304,6 +1361,8 @@ int main(int argc, char** argv) {
         primeFlowCleanup(8, 0);
     else if (!std::strcmp(argv[1], "prime-abort"))
         primeFlowCleanup(0, 8);
+    else if (!std::strcmp(argv[1], "prime-parameters"))
+        primeParameters();
     else if (!std::strcmp(argv[1], "sense-window"))
         senseOffsetWindow();
     else if (!std::strcmp(argv[1], "sense-settings"))

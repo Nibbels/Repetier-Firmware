@@ -29,6 +29,7 @@
 #include "DigitCompensation.h"
 #include "PressureProtection.h"
 #include "StrainGauge.h"
+#include "StartLine.h"
 
 // ##########################################################################################
 // ##   status flags
@@ -115,6 +116,7 @@ public:
     static DigitCompensation digitCompensation;
     static PressureProtection pressureProtection;
     static StrainGauge strainGauge;
+    static StartLine startLine;
     static PrintPause pause;
     static PrintStop printStop;
     static char ZMode;                      // Z Scale

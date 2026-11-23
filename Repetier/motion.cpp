@@ -160,7 +160,7 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
         return;
     }
 
-    if (!g_startLineActive) {
+    if (!Printer::startLine.active()) {
         const PrintLayers::PlannedMove move{
             Printer::queuedPositionSteps[Z_AXIS], p->isZMove(), p->isXOrYMove(), p->isEPositiveMove()};
         Printer::layers.recordPlannedMove(move, Printer::axisStepsPerMM[Z_AXIS], g_offsetZCompensationSteps, g_ZCompensationMax);

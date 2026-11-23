@@ -156,8 +156,6 @@ char g_nScanPressureReads = 0;
 unsigned short g_nScanPressureReadDelay = 0;
 short g_nScanPressureTolerance = 0;
 
-// Enabled only while firmware-generated M3912 moves are planned/executed.
-volatile uint8_t g_startLineActive = 0;
 char g_debugLevel = 0;
 char g_debugLog = 0;
 
@@ -206,7 +204,7 @@ static short sampleStrainGauge() {
     const short digits = Printer::strainGauge.readDigits();
     Printer::digitCompensation.observe(digits, Printer::doHeatBedZCompensation, [] {
         // The force brake also runs during M3912, regardless of the learned first-layer boundary.
-        return Printer::zMotion.nominalSteps() > Printer::layers.fadeStartSteps() || g_startLineActive;
+        return Printer::zMotion.nominalSteps() > Printer::layers.fadeStartSteps() || Printer::startLine.active();
     });
     return digits;
 }
@@ -2937,7 +2935,7 @@ static void serviceSenseOffset(bool sampleDue, short pressure, const PrintPause:
 
     const auto limits = controller.limits();
     const bool canLearn = limits.thresholdDigits && Printer::doHeatBedZCompensation
-        && !g_startLineActive && !pauseSample.wasPaused && Printer::pause.allowsSenseOffsetLearning();
+        && !Printer::startLine.active() && !pauseSample.wasPaused && Printer::pause.allowsSenseOffsetLearning();
     if (!canLearn || pauseSample.resetWindow)
         controller.resetWindow();
     if (!sampleDue || !canLearn)
@@ -5079,176 +5077,9 @@ void processSpecialGCode(GCode* pCommand) {
             break;
         }
 
-        case 3912: //M3912 lay down automatic startmade which you can abort (when the hotend is moving) by pressing play
-        {
-            Commands::waitUntilEndOfAllMoves(); //feature startline
-            if (Printer::areAxisHomed() && Printer::doHeatBedZCompensation && !Printer::printStop.commandsBlocked()) {
-
-                Com::printFLN(PSTR("Auto-Startmade"));
-                short min = 1500;
-                short max = 4500;
-
-                const auto savedFlowProfile = Printer::digitCompensation.flowProfile();
-                bool save_relativeExtruderCoordinateMode = Printer::relativeExtruderCoordinateMode;
-                float save_logicalE;
-                float save_logicalERemainder;
-                float save_extrudeMultiplyErrorSteps;
-                float save_compensatedPositionCollectTinyE;
-                {
-                    InterruptProtectedBlock noInts;
-                    save_logicalE = Printer::destinationMM[E_AXIS];
-                    save_logicalERemainder = Printer::destinationRemainderMM[E_AXIS];
-                    save_extrudeMultiplyErrorSteps = Printer::extrudeMultiplyErrorSteps;
-                    save_compensatedPositionCollectTinyE = Printer::compensatedPositionCollectTinyE;
-                    Printer::layers.resetTracking();
-                    g_startLineActive = 1;
-                }
-
-                if (pCommand->hasS() && pCommand->hasP()) {
-                    min = abs(static_cast<short>(pCommand->S));
-                    max = abs(static_cast<short>(pCommand->P));
-                    if (min > max) {
-                        min = abs(static_cast<short>(pCommand->P));
-                        max = abs(static_cast<short>(pCommand->S));
-                    }
-                    if (min < 500)
-                        min = 500; //weniger ist in jedem fall sinnfrei, selbst mit ninjaflex und digit homing
-                    if (max < min)
-                        max = min; //geht: flowsprung.
-                }
-
-                uint8_t Extrusion = 20;
-                uint8_t Lines = 2;
-
-                if (pCommand->hasE()) {
-                    Extrusion = (uint8_t)pCommand->E;
-                    if (Extrusion < 10)
-                        Extrusion = 10; //sinnvoll war bei mir ca. 10..30 pro linie.
-                    if (Extrusion > 30)
-                        Extrusion = 30;
-                }
-
-                uint8_t lineFeedrate = 15;
-                if (pCommand->hasF()) {
-                    lineFeedrate = (uint8_t)pCommand->F;
-                    if (lineFeedrate < 5)
-                        lineFeedrate = 5; //sinnvoll war bei mir ca. 10..30 pro linie.
-                    if (lineFeedrate > 50)
-                        lineFeedrate = 50;
-                }
-
-                if (pCommand->hasI()) {
-                    Lines = (uint8_t)pCommand->I;
-                    if (Lines < 1)
-                        Lines = 1;
-                    if (Lines > 5)
-                        Lines = 5;
-                }
-
-                float y = 23.0f;
-                if (pCommand->hasY()) {
-                    y = (float)pCommand->Y;
-                    if (y < 0.5f)
-                        y = 0.5f;
-                    // Länge y Achse - halbe Bahnbreite - 1.5 pro Versatz - Schrägversatz nur bei Dual. Übertrieben aber das sollte genau sein.
-                    float maxY = Printer::maxSoftEndstopSteps[Y_AXIS] * Printer::axisMMPerSteps[Y_AXIS] - 0.5f - Lines * 1.5f - (NUM_EXTRUDER > 1 ? 5.0f : 0.0f);
-                    if (y > maxY)
-                        y = maxY;
-                }
-
-                Printer::digitCompensation.setFlowProfile({min, max, -75, -90});
-                //M82:
-                Printer::relativeExtruderCoordinateMode = false;
-
-                Printer::setEPositionMM(0); // G92 E0
-
-                //Abstand links und rechts.
-                const float spacerX = 15.0f;
-                //spacerXd for my personal safety when I flash dual and forget the axis length.
-                const float spacerXd = (NUM_EXTRUDER > 1 ? extruder[1].offsetMM[X_AXIS] : 0);
-
-                float x = spacerX;
-                if (Extruder::current->id != 0) {
-                    //if you use T1 then dont make the start line ontop of the startline of T0
-                    //shift the y-position according to the extruders number.
-                    y += (float)Extruder::current->id; /* times 1mm */
-                    ;
-                }
-                if (pCommand->hasY()) { //override y with user value
-                    y = (float)pCommand->Y;
-                    float max = Printer::maxSoftEndstopSteps[Y_AXIS] * Printer::axisMMPerSteps[Y_AXIS] * 0.5;
-                    if (y > max)
-                        y = max;
-                    if (y < 0.0f)
-                        y = 0.0f;
-                }
-                float e = 0.0f;
-
-                bool skip_by_keys = false;
-
-                const float startLineZ = 0.35f;
-                if (!Printer::printStop.commandsBlocked())
-                    Printer::queueFloatCoordinates(x, y, startLineZ, IGNORE_COORDINATE, RMath::min(Printer::homingFeedrate[X_AXIS], Printer::homingFeedrate[Y_AXIS]));
-
-                for (uint8_t i = 1; i <= Lines && !Printer::printStop.commandsBlocked(); i++) {
-                    float x_0 = x;
-                    float y_0 = y;
-                    float e_0 = e;
-                    if (i % 2 != 0) { //ungerade zahl.
-                        x += (Printer::axisLengthMM[X_AXIS]) - 2 * spacerX - spacerXd;
-                        y += (NUM_EXTRUDER > 1 ? 5.0f : 0.0f); //fahre nur bei Dual-Setting schräg.
-                        e += (float)Extrusion * ((Printer::axisLengthMM[X_AXIS]) - 2 * spacerX - spacerXd) / 200;
-                    } else {
-                        x -= (Printer::axisLengthMM[X_AXIS]) - 2 * spacerX - spacerXd;
-                        y -= (NUM_EXTRUDER > 1 ? 5.0f : 0.0f); //fahre nur bei Dual-Setting schräg.
-                        e += (float)Extrusion * ((Printer::axisLengthMM[X_AXIS]) - 2 * spacerX - spacerXd) / 200;
-                    }
-                    for (float i = 0.0025f; i <= 1.0f; i += 0.0025f) {
-                        Commands::checkForPeriodicalActions(Processing);
-                        if (Printer::printStop.commandsBlocked())
-                            break; // No further moves after cancellation.
-                        if (Printer::checkPlayKey()) {
-                            skip_by_keys = true;
-                            break;
-                        }
-                        // Short segments let the DMS brake respond to nozzle load.
-                        Printer::queueFloatCoordinates(x_0 + (x - x_0) * i,
-                                                       y_0 + (y - y_0) * i,
-                                                       IGNORE_COORDINATE,
-                                                       e_0 + (e - e_0) * i, lineFeedrate);
-                    }
-                    if (Printer::printStop.commandsBlocked() || skip_by_keys)
-                        break; // No extra Y travel after skip/abort.
-                    y += 1.5f;
-                    //if you use T1 then dont make the start line ontop of the startline of T0
-                    y += float(NUM_EXTRUDER - 1); /* +1mm spacing for each extruder involved */
-                    ;
-                    Printer::queueFloatCoordinates(IGNORE_COORDINATE, y, IGNORE_COORDINATE, IGNORE_COORDINATE, Printer::homingFeedrate[Y_AXIS]);
-                    if (skip_by_keys)
-                        break; //mache die Startmade überspringbar -> weiter zum Druck.
-                }
-                Commands::waitUntilEndOfAllMoves(); // Prime queue fully drained.
-                Printer::digitCompensation.setFlowProfile(savedFlowProfile);
-                Printer::digitCompensation.resetFlow();
-
-                {
-                    InterruptProtectedBlock noInts;
-                    if (!Printer::printStop.commandsBlocked()) {
-                        // Physical filament stays extruded; restore only the
-                        // slicer's logical E timeline, including its substeps.
-                        Printer::setEPositionMM(save_logicalE, save_logicalERemainder);
-                        Printer::extrudeMultiplyErrorSteps = save_extrudeMultiplyErrorSteps;
-                        Printer::compensatedPositionCollectTinyE = save_compensatedPositionCollectTinyE;
-                    }
-                    Printer::layers.resetTracking();
-                    g_startLineActive = 0;
-                }
-                Printer::relativeExtruderCoordinateMode = save_relativeExtruderCoordinateMode;
-            } else {
-                Com::printFLN(PSTR("M3912 error missing homing or zCMP"));
-            }
+        case 3912: // M3912 - pressure-braked priming line.
+            Printer::startLine.run(*pCommand);
             break;
-        }
 
         case 3913: //M3913 input filament until DMS Sensor tells us to stop or Extrusion amount is reached
         {

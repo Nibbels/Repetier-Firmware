@@ -55,8 +55,8 @@ An untested fork's RF2000v2-only reset-after-M3912 is not backed by model-specif
 
 - [Layer detector and dynamic boundaries](../../Repetier/PrintLayers.h)
 - [Fade interpolation and material correction](../../Repetier/BedCompensation.h)
-- [Offset composition and publication](../../Repetier/RF.cpp#L1944)
+- [Offset composition and publication](../../Repetier/RF.cpp#L1907)
 - [Stepper E compensation](../../Repetier/motion.cpp#L1093)
-- [M3912 reset](../../Repetier/RF.cpp#L5161)
+- [M3912 reset](../../Repetier/StartLine.cpp)
 - [Z-stepper reset](../../Repetier/Printer.h#L355-L371)
 - [RF1000](../../Repetier/RF1000.h) · [RF2000 family](../../Repetier/RF2000.h)

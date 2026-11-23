@@ -10,7 +10,7 @@ Digit-Z uses a reversible force-to-Z estimate for elastic hotend deflection. Sen
 
 ## Input, gating and response
 
-`Printer::senseOffsetControl` manages the active force threshold, maximum clearance, AutoStart and the sampling history. An accepted sample can propose an increment in micrometres. The foreground checks eligibility and applies the increment to `ZOffset`, which owns the applied clearance. [Controller](../../Repetier/SenseOffsetControl.h) · [Application](../../Repetier/RF.cpp#L2958)
+`Printer::senseOffsetControl` manages the active force threshold, maximum clearance, AutoStart and the sampling history. An accepted sample can propose an increment in micrometres. The foreground checks eligibility and applies the increment to `ZOffset`, which owns the applied clearance. [Controller](../../Repetier/SenseOffsetControl.h) · [Application](../../Repetier/RF.cpp#L2921)
 
 - `Configuration.h` sets `SENSIBLE_PRESSURE_INTERVAL=50 ms` and `SENSIBLE_PRESSURE_MAX_OFFSET=180 um` as defaults.
 - `M3909 P<digits> S<max_um>` sets threshold and maximum additional offset; source bounds `S` to **1..300 um**. `M3909 P0` disables control. EEPROM may retain thresholds. `M3001` may queue an auto-enable of SenseOffset if configured.
@@ -21,7 +21,7 @@ Digit-Z uses a reversible force-to-Z estimate for elastic hotend deflection. Sen
 - `Printer::zOffset` converts the sum of the manual and live values to `effectiveSteps()`. [Offset ledger](../z-offset/offset-ledger.md)
 - Below the pressure threshold, the additional offset **does not decrease**. It persists when leaving the low-Z region; loss/disable of bed compensation is a separate deactivation/reset path.
 
-`M3909 P` stores a positive threshold for activation when the queue reaches the enable task. `P0` disables learning immediately and retains the stored threshold for later activation. The queue can also enable learning through `M3001` AutoStart. A poll snapshots the active limit pair and checks it again when committing a calculated increment. This rejects a pending increase if the queue changes either limit during the calculation. [Command](../../Repetier/RF.cpp#L5054) · [Queued settings load](../../Repetier/Printer.cpp#L778)
+`M3909 P` stores a positive threshold for activation when the queue reaches the enable task. `P0` disables learning immediately and retains the stored threshold for later activation. The queue can also enable learning through `M3001` AutoStart. A poll snapshots the active limit pair and checks it again when committing a calculated increment. This rejects a pending increase if the queue changes either limit during the calculation. [Command](../../Repetier/RF.cpp#L4973) · [Queued settings load](../../Repetier/Printer.cpp#L778)
 
 This is deliberately **not** a bidirectional PID loop. It is a bounded, positive-only first-layer clearance correction; the cap limits inappropriate reactions to a clogged nozzle or sensor error.
 
@@ -49,6 +49,6 @@ The operator can use alternating Z/bed DOWN and UP buttons in Mod Menu page 2 to
 
 ## Relevant source
 - [Controller and runtime state](../../Repetier/SenseOffsetControl.h)
-- [Shared strain-gauge sampling](../../Repetier/RF.cpp#L2999)
+- [Shared strain-gauge sampling](../../Repetier/RF.cpp#L2962)
 - [Configuration defaults](../../Repetier/Configuration.h#L73)
 - [Original intention in changelog](../../changelog.txt#L1775-L1784)

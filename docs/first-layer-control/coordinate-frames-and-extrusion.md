@@ -89,7 +89,7 @@ Suppose the slicer is at absolute `E10`, then calls `M3912`, whose internal prim
 | Patched M3912: restore entry logical E10 | +1 E unit | **Correct** |
 | Conventional start script: entry E0, next slicer command E1 | +1 E unit | Both reset-to-E0 and restore-entry-E0 produce the correct result |
 
-At entry, M3912 drains the queue, saves the incoming logical E and its millimetre remainder, and primes on its own E0 timeline. After the line it restores logical E with its remainder, E mode and fractional step accounting. Print cancellation retains the stop handler's E0. [Save and restore](../../Repetier/RF.cpp#L5161)
+At entry, M3912 drains the queue, saves the incoming logical E and its millimetre remainder, and primes on its own E0 timeline. After the line it restores logical E with its remainder, E mode and fractional step accounting. Print cancellation retains the stop handler's E0. [Save and restore](../../Repetier/StartLine.cpp)
 
 In relative E mode, firmware-generated absolute E coordinates remain internal to `queueFloatCoordinates()`; restoring logical E is still harmless and preserves later G-code interpretation. Retracts cause occasional decreases in the logical E timeline, but do not invalidate this model.
 
@@ -126,6 +126,6 @@ Digit-Z is built into all three models and enabled by default in `Printer::digit
 - [Nominal step coordinate](../../Repetier/Printer.h#L1071-L1073), [layer recognition / g_min g_max](../../Repetier/motion.cpp#L173-L220)
 - [Bed profile, fade and ECMP](../../Repetier/RF.cpp#L3192-L3302), [matrix extrema](../../Repetier/RF.cpp#L5145-L5167)
 - [Actual E-step multiplier](../../Repetier/motion.cpp#L122-L135), [ECMP stepping](../../Repetier/motion.cpp#L1468-L1494)
-- [Logical E reset](../../Repetier/Printer.h#L1035-L1042), [M3912 entry and exit](../../Repetier/RF.cpp#L5161)
+- [Logical E reset](../../Repetier/Printer.h), [M3912 entry and exit](../../Repetier/StartLine.cpp)
 - [User speed/flow overrides](../../Repetier/Commands.cpp#L210-L227), [runtime XY timing](../../Repetier/motion.cpp#L1230)
-- [Digit-Z and Digit Flow state](../../Repetier/DigitCompensation.h), [additive Z correction](../../Repetier/RF.cpp#L1944)
+- [Digit-Z and Digit Flow state](../../Repetier/DigitCompensation.h), [additive Z correction](../../Repetier/RF.cpp#L1907)

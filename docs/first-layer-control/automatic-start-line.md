@@ -53,7 +53,7 @@ Place `M3909` with a positive `P` threshold after the final priming move and bef
 The layer detector sees manual priming as regular extrusion. A manual line above the model's first layer lets the descent to that layer establish the new compensation boundary.
 
 ## Source
-- [M3912 generation, overrides, save/restore](../../Repetier/RF.cpp#L5161)
+- [M3912 generation, overrides, save/restore](../../Repetier/StartLine.cpp)
 - [DMS → E/feed factors](../../Repetier/RF.cpp#L319-L398)
 - [E factor at planner time](../../Repetier/motion.cpp#L118-L138)
 - [Feed factor at ISR timer interval](../../Repetier/motion.cpp#L1625-L1671)
