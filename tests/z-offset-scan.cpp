@@ -1,3 +1,4 @@
+#include "ScanSettings.h"
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -30,13 +31,22 @@ constexpr char ui_text_heat_bed_zoffset_search_status[] = "status", ui_text_heat
                ui_text_heat_bed_zoffset_fix_z2[] = "z2", ui_text_statusmsg[] = "message";
 
 char g_nActiveHeatBed = 1;
-short g_nScanHeatBedUpFastSteps = -4, g_nScanHeatBedUpSlowSteps = -2;
-short g_nScanHeatBedDownSlowSteps = 2, g_nScanHeatBedDownFastSteps = 20, g_nScanZMaxCompensationSteps = 600;
-short g_nScanIdlePressureMin = -7500, g_nScanIdlePressureMax = 7500;
-uint8_t g_nScanPressureReads = 2;
-uint16_t g_nScanPressureReadDelay = 15, g_nScanPressureTolerance = 15;
-uint16_t g_nScanSlowStepDelay = 100, g_nScanFastStepDelay = 1;
-float g_scanStartZLiftMM = 1.0f;
+ScanSettings scanSettings = [] {
+    ScanSettings settings(1.0f);
+    settings.fastApproachSteps = -4;
+    settings.slowApproachSteps = -2;
+    settings.slowRetreatSteps = 2;
+    settings.fastRetreatSteps = 20;
+    settings.maxTravelSteps = 600;
+    settings.idlePressureMin = -7500;
+    settings.idlePressureMax = 7500;
+    settings.pressureReadCount = 2;
+    settings.pressureReadDelayMs = 15;
+    settings.pressureTolerance = 15;
+    settings.slowStepDelayMs = 100;
+    settings.fastStepDelayMs = 1;
+    return settings;
+}();
 uint8_t g_uZMatrixMax[2] = {9, 9}, g_ZMatrixChangedInRam = 0;
 short g_ZCompensationMatrix[COMPENSATION_MATRIX_MAX_X][COMPENSATION_MATRIX_MAX_Y];
 bool g_nAutoReturnMessage = false;
@@ -147,7 +157,7 @@ bool moveZ(long steps) {
         ++negativeMoves;
         if (injectDisconnection)
             Printer::strainGauge.disconnected = true;
-    } else if (!returningToZero && injectNoise && steps == g_nScanHeatBedDownFastSteps) {
+    } else if (!returningToZero && injectNoise && steps == scanSettings.fastRetreatSteps) {
         assert(HAL::now - lastUnstableAt >= heatBedScanDelayMs);
         ++positiveRetryRetreats;
     }

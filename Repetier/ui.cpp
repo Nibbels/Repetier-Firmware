@@ -746,9 +746,9 @@ void UIDisplay::parse(char* txt, bool ram) {
         }
         case 'D': {
             if (c2 == 'x')
-                addLong(g_nScanXStepSizeMM, 3); // %Dx : scan step size x
+                addLong(scanStrideMm(X_AXIS), 3); // %Dx : scan step size x
             else if (c2 == 'y')
-                addLong(g_nScanYStepSizeMM, 3); // %Dy : scan step size y
+                addLong(scanStrideMm(Y_AXIS), 3); // %Dy : scan step size y
             break;
         }
 
@@ -1542,7 +1542,7 @@ void UIDisplay::parse(char* txt, bool ram) {
                     printCols[col++] = '*';
             } // %SM : Matrix has changed in Ram and is ready to Save. -> *)
             else if (c2 == 's')
-                addFloat(g_scanStartZLiftMM, 1, 1); // %Ss : active current value of defaultHeatBedScanLiftMm
+                addFloat(scanStartLiftMm(), 1, 1); // %Ss : active current value of defaultHeatBedScanLiftMm
             break;
         }
         case 'p': {
@@ -2777,8 +2777,10 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
     }
 
     case UI_ACTION_RF_SCAN_START_HEIGHT: {
-        INCREMENT_MIN_MAX(g_scanStartZLiftMM, 0.1f, 0.3f, 6.0f);
-        HAL::eprSetFloat(EPR_ZSCAN_START_MM, g_scanStartZLiftMM); //mm zlift vor den scans.
+        float liftMm = scanStartLiftMm();
+        INCREMENT_MIN_MAX(liftMm, 0.1f, 0.3f, 6.0f);
+        setScanStartLiftMm(liftMm);
+        HAL::eprSetFloat(EPR_ZSCAN_START_MM, scanStartLiftMm()); //mm zlift vor den scans.
         EEPROM::updateChecksum();
         break;
     }

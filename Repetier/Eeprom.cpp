@@ -353,7 +353,7 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     HAL::eprSetByte(EPR_RF_ZERO_DIGIT_STATE, Printer::strainGauge.zeroingEnabled() ? 1 : 2);
     HAL::eprSetByte(EPR_RF_DIGIT_CMP_STATE, Printer::digitCompensation.digitZEnabled() ? 1 : 2);
 
-    HAL::eprSetFloat(EPR_ZSCAN_START_MM, g_scanStartZLiftMM);
+    HAL::eprSetFloat(EPR_ZSCAN_START_MM, scanStartLiftMm());
 
     // Save version and build checksum
     HAL::eprSetByte(EPR_VERSION, EEPROM_PROTOCOL_VERSION);
@@ -688,7 +688,7 @@ void EEPROM::readDataFromEEPROM() {
 
     float tmpss = HAL::eprGetFloat(EPR_ZSCAN_START_MM);
     if (tmpss >= 0.3f && tmpss <= 6.0f) {
-        g_scanStartZLiftMM = tmpss;
+        setScanStartLiftMm(tmpss);
     } else {
         HAL::eprSetFloat(EPR_ZSCAN_START_MM, defaultHeatBedScanLiftMm);
         change = true;

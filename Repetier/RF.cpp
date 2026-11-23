@@ -18,6 +18,7 @@
 #include <Arduino.h> // capital A so it is error prone on case-sensitive filesystems
 #include "Repetier.h"
 #include "PressureMeasurement.h"
+#include "ScanSettings.h"
 #include "GCodeInput.h"
 #include "BedCompensation.h"
 #include "TwiTransfer.h"
@@ -94,7 +95,11 @@ static char g_nActiveHeatBed = 1;
 // g_ZMatrixChangedInRam soll 1 werden, wenn ZOS, Offsetänderung der Matrix etc. Sonst wäre Sichern der Matrix unnötig.
 static volatile unsigned char g_ZMatrixChangedInRam = 0;
 
-float g_scanStartZLiftMM = defaultHeatBedScanLiftMm;
+static ScanSettings scanSettings(defaultHeatBedScanLiftMm);
+
+float scanStartLiftMm() { return scanSettings.startLiftMm; }
+void setScanStartLiftMm(float liftMm) { scanSettings.startLiftMm = liftMm; }
+long scanStrideMm(uint8_t axis) { return axis == X_AXIS ? scanSettings.x.strideMm : scanSettings.y.strideMm; }
 
 static short g_ZCompensationMatrix[COMPENSATION_MATRIX_MAX_X][COMPENSATION_MATRIX_MAX_Y];
 static unsigned char g_uZMatrixMax[2] = { 0, 0 };
@@ -105,34 +110,6 @@ bool bedMatrixHasUnsavedChanges() { return g_ZMatrixChangedInRam; }
 long bedMatrixHighestZSteps() { return g_offsetZCompensationSteps; }
 short bedMatrixLowestZSteps() { return g_ZCompensationMax; }
 void invalidateBedMatrixForReload() { g_ZCompensationMatrix[0][0] = EEPROM_FORMAT - 1; }
-
-// configurable scan parameters - the proper default values are set by restoreDefaultScanParameters()
-long g_nScanXStartSteps = 0;
-long g_nScanXStepSizeMM = 0;
-long g_nScanXStepSizeSteps = 0;
-long g_nScanXEndSteps = 0;
-long g_nScanXMaxPositionSteps = 0;
-long g_nScanYStartSteps = 0;
-long g_nScanYStepSizeMM = 0;
-long g_nScanYStepSizeSteps = 0;
-long g_nScanYEndSteps = 0;
-long g_nScanYMaxPositionSteps = 0;
-short g_nScanHeatBedUpFastSteps = 0;
-short g_nScanHeatBedUpSlowSteps = 0;
-short g_nScanHeatBedDownFastSteps = 0;
-short g_nScanHeatBedDownSlowSteps = 0;
-short g_nScanZMaxCompensationSteps = 0;
-unsigned short g_nScanFastStepDelay = 0;
-unsigned short g_nScanSlowStepDelay = 0;
-unsigned short g_nScanIdleDelay = 0;
-unsigned short g_nScanContactPressureDelta = 0;
-unsigned short g_nScanRetryPressureDelta = 0;
-unsigned short g_nScanIdlePressureDelta = 0;
-short g_nScanIdlePressureMin = 0;
-short g_nScanIdlePressureMax = 0;
-char g_nScanPressureReads = 0;
-unsigned short g_nScanPressureReadDelay = 0;
-short g_nScanPressureTolerance = 0;
 
 char g_debugLevel = 0;
 char g_debugLog = 0;
@@ -221,7 +198,7 @@ public:
 
         if (abs(static_cast<int32_t>(digits) - previousIdle_) <= 5) {
             reset();
-            if (digits >= g_nScanIdlePressureMin && digits <= g_nScanIdlePressureMax)
+            if (digits >= scanSettings.idlePressureMin && digits <= scanSettings.idlePressureMax)
                 return PressureResult::Stable;
             return PressureResult::Unstable;
         }
@@ -357,14 +334,14 @@ ProbeProgress ScanProbe::advancePoint(ProbeProgress progress, PointPhase next) {
 
 ProbeProgress ScanProbe::approach(bool fine) {
     const long currentZ = Printer::zMotion.scanSteps();
-    const long limit = RMath::max(-static_cast<long>(g_nScanZMaxCompensationSteps), -32768L);
+    const long limit = RMath::max(-static_cast<long>(scanSettings.maxTravelSteps), -32768L);
     if (currentZ <= limit) {
         Com::printFLN(PSTR("Probe reached the Z scan limit: "), currentZ);
         return travelLimit(ScanAbort::MaxCompensation);
     }
 
     short digits;
-    const auto result = scanPressure.afterStep(digits, fine ? g_nScanSlowStepDelay : g_nScanFastStepDelay);
+    const auto result = scanPressure.afterStep(digits, fine ? scanSettings.slowStepDelayMs : scanSettings.fastStepDelayMs);
     if (result == PressureResult::Pending)
         return ProbeProgress::Pending;
     if (result != PressureResult::Stable) {
@@ -374,7 +351,7 @@ ProbeProgress ScanProbe::approach(bool fine) {
     if (digits > contactMax_ || digits < contactMin_)
         return ProbeProgress::Done;
 
-    const int step = fine ? g_nScanHeatBedUpSlowSteps : g_nScanHeatBedUpFastSteps;
+    const int step = fine ? scanSettings.slowApproachSteps : scanSettings.fastApproachSteps;
     if (step >= 0)
         return travelLimit(ScanAbort::MaxCompensation);
     return moveZ(RMath::max(static_cast<long>(step), limit - currentZ))
@@ -388,7 +365,7 @@ ProbeProgress ScanProbe::release(uint8_t divisor) {
     }
 
     short digits;
-    const auto result = scanPressure.afterStep(digits, g_nScanSlowStepDelay);
+    const auto result = scanPressure.afterStep(digits, scanSettings.slowStepDelayMs);
     if (result == PressureResult::Pending)
         return ProbeProgress::Pending;
     if (result != PressureResult::Stable) {
@@ -400,14 +377,14 @@ ProbeProgress ScanProbe::release(uint8_t divisor) {
         return ProbeProgress::Done;
     }
 
-    const int step = RMath::max(1, g_nScanHeatBedDownSlowSteps / divisor);
+    const int step = RMath::max(1, scanSettings.slowRetreatSteps / divisor);
     const long nextZ = Printer::zMotion.scanSteps() + step;
-    const long startHeight = static_cast<long>(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM);
+    const long startHeight = static_cast<long>(Printer::axisStepsPerMM[Z_AXIS] * scanSettings.startLiftMm);
     if (nextZ > startHeight || nextZ > 32767)
         return travelLimit(ScanAbort::AboveStart);
 
     const int retryAllowance = constrain(heatBedScanRetries - scanSession.retriesRemaining(), 0, 2);
-    const long fastRetreatSteps = g_nScanHeatBedDownFastSteps;
+    const long fastRetreatSteps = scanSettings.fastRetreatSteps;
     if (lastProbeZ_ && abs(nextZ - lastProbeZ_) > fastRetreatSteps * (2 + retryAllowance))
         return travelLimit(ScanAbort::UnevenBed);
     if (abs(nextZ - releaseStartZ_) > fastRetreatSteps * 2 / divisor)
@@ -425,9 +402,9 @@ ProbeProgress ScanProbe::retreat() {
         retreatPhase_ = RetreatPhase::BeforeMove;
         return ProbeProgress::Pending;
     case RetreatPhase::BeforeMove:
-        if (now - retreatStartedAt_ < g_nScanFastStepDelay)
+        if (now - retreatStartedAt_ < scanSettings.fastStepDelayMs)
             return ProbeProgress::Pending;
-        if (!moveZ(g_nScanHeatBedDownFastSteps))
+        if (!moveZ(scanSettings.fastRetreatSteps))
             return ProbeProgress::Failed;
         retreatPhase_ = RetreatPhase::AfterMove;
         return ProbeProgress::Pending;
@@ -796,7 +773,7 @@ void HeatBedScan::warmupAndHome() {
         return;
 
     // move a bit away from the heat bed in order to achieve better measurements in case of hardware configurations where the extruder is very close to the heat bed after the z-homing
-    if (!moveZ(long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM)))
+    if (!moveZ(long(Printer::axisStepsPerMM[Z_AXIS] * scanSettings.startLiftMm)))
         return;
 
     phase_ = Phase::MoveToMeshStart;
@@ -805,8 +782,8 @@ void HeatBedScan::warmupAndHome() {
 
 void HeatBedScan::moveToMeshStart() {
     // move to the first position
-    Printer::queueRelativeStepsCoordinates(g_nScanXStartSteps, 0, 0, 0, Printer::homingFeedrate[X_AXIS], false, true);
-    Printer::queueRelativeStepsCoordinates(0, g_nScanYStartSteps, 0, 0, Printer::homingFeedrate[Y_AXIS], true, true);
+    Printer::queueRelativeStepsCoordinates(scanSettings.x.startSteps, 0, 0, 0, Printer::homingFeedrate[X_AXIS], false, true);
+    Printer::queueRelativeStepsCoordinates(0, scanSettings.y.startSteps, 0, 0, Printer::homingFeedrate[Y_AXIS], true, true);
 
     phase_ = Phase::MeasureInitialPressure;
     lastCheckMs_ = HAL::timeInMilliseconds();
@@ -829,9 +806,9 @@ void HeatBedScan::measureInitialPressure() {
 }
 
 void HeatBedScan::initializeGrid() {
-    xSteps_ = g_nScanXStartSteps;
-    ySteps_ = g_nScanYStartSteps;
-    yStrideSteps_ = g_nScanYStepSizeSteps; // we start to move the heat bed from the back to the front
+    xSteps_ = scanSettings.x.startSteps;
+    ySteps_ = scanSettings.y.startSteps;
+    yStrideSteps_ = scanSettings.y.strideSteps; // we start to move the heat bed from the back to the front
     yIndexDirection_ = 1;
     xIndex_ = 2;
     yIndex_ = 2;
@@ -843,8 +820,8 @@ void HeatBedScan::initializeGrid() {
 }
 
 void HeatBedScan::advanceColumn() {
-    const long nextPosition = xSteps_ + g_nScanXStepSizeSteps;
-    if (nextPosition > g_nScanXMaxPositionSteps) {
+    const long nextPosition = xSteps_ + scanSettings.x.strideSteps;
+    if (nextPosition > scanSettings.x.maxPositionSteps) {
         // we end up here when the scan is complete
         phase_ = Phase::HomeAfterMesh;
 
@@ -852,8 +829,8 @@ void HeatBedScan::advanceColumn() {
     }
 
     // move to the next x-position
-    Printer::queueRelativeStepsCoordinates(g_nScanXStepSizeSteps, 0, 0, 0, Printer::homingFeedrate[X_AXIS], true, true);
-    xSteps_ += g_nScanXStepSizeSteps;
+    Printer::queueRelativeStepsCoordinates(scanSettings.x.strideSteps, 0, 0, 0, Printer::homingFeedrate[X_AXIS], true, true);
+    xSteps_ += scanSettings.x.strideSteps;
     xIndex_++;
 
     if (xIndex_ >= COMPENSATION_MATRIX_MAX_X) {
@@ -863,11 +840,11 @@ void HeatBedScan::advanceColumn() {
 
     if (yStrideSteps_ > 0) {
         // we were moving from the front to the back during this column, so we have to move from the back to the front during the next column
-        yStrideSteps_ = -g_nScanYStepSizeSteps; // we start to move the heat bed from the back to the front
+        yStrideSteps_ = -scanSettings.y.strideSteps; // we start to move the heat bed from the back to the front
         yIndexDirection_ = -1;
     } else {
         // we were moving from the back to the front during this column, so we have to move from the front to the back during the next column
-        yStrideSteps_ = g_nScanYStepSizeSteps; // we start to move the heat bed from the back to the front
+        yStrideSteps_ = scanSettings.y.strideSteps; // we start to move the heat bed from the back to the front
         yIndexDirection_ = 1;
     }
 
@@ -876,7 +853,7 @@ void HeatBedScan::advanceColumn() {
 
 void HeatBedScan::startColumn() {
     // safety checks
-    if (xSteps_ <= g_nScanXMaxPositionSteps) {
+    if (xSteps_ <= scanSettings.x.maxPositionSteps) {
         // remember also the exact x-position of this row/column
         g_ZCompensationMatrix[xIndex_][0] = (short)((float)xSteps_ / Printer::axisStepsPerMM[X_AXIS] + 0.5); // convert to mm
 
@@ -891,7 +868,7 @@ void HeatBedScan::startColumn() {
 }
 
 void HeatBedScan::retryHomeY() {
-    if (!moveZ(long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM)))
+    if (!moveZ(long(Printer::axisStepsPerMM[Z_AXIS] * scanSettings.startLiftMm)))
         return;
     Printer::homeAxis(false, true, false);                             //Home Y
 
@@ -903,7 +880,7 @@ void HeatBedScan::retryHomeY() {
 void HeatBedScan::retryHomeZ() {
     // home the z-axis in order to find the starting point again
     Printer::homeAxis(false, false, true);                             //Neben Bett: Home Z
-    if (!moveZ(long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM)))
+    if (!moveZ(long(Printer::axisStepsPerMM[Z_AXIS] * scanSettings.startLiftMm)))
         return;
     scanProbe.forgetPreviousPoint();
 
@@ -940,7 +917,7 @@ void HeatBedScan::armPointRetries() {
 }
 
 void HeatBedScan::checkProbePressure(Phase next) {
-    if (HAL::timeInMilliseconds() - lastCheckMs_ < g_nScanIdleDelay)
+    if (HAL::timeInMilliseconds() - lastCheckMs_ < scanSettings.idleDelayMs)
         return;
 
     short baseline;
@@ -952,7 +929,7 @@ void HeatBedScan::checkProbePressure(Phase next) {
         return;
     }
 
-    scanProbe.setPressureLimits(baseline, g_nScanContactPressureDelta, g_nScanRetryPressureDelta);
+    scanProbe.setPressureLimits(baseline, scanSettings.contactPressureDelta, scanSettings.retryPressureDelta);
     if (next == Phase::MeasureThermalProbe)
         scanProbe.forgetPreviousPoint();
     phase_ = next;
@@ -984,8 +961,8 @@ void HeatBedScan::advanceRow() {
         return;
 
     const long nextPosition = ySteps_ + yStrideSteps_;
-    const bool columnComplete = yStrideSteps_ > 0 ? nextPosition > g_nScanYMaxPositionSteps
-                                                  : nextPosition < g_nScanYStartSteps;
+    const bool columnComplete = yStrideSteps_ > 0 ? nextPosition > scanSettings.y.maxPositionSteps
+                                                  : nextPosition < scanSettings.y.startSteps;
     if (columnComplete) {
         phase_ = Phase::AdvanceColumn;
         return;
@@ -1182,7 +1159,7 @@ void HeatBedScan::stabilizeCalibrationTemperature() {
 }
 
 void HeatBedScan::thermalRetryHomeY() {
-    if (!moveZ(long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM)))
+    if (!moveZ(long(Printer::axisStepsPerMM[Z_AXIS] * scanSettings.startLiftMm)))
         return;
     Printer::homeAxis(false, true, false);                             //Home Y
 
@@ -1194,7 +1171,7 @@ void HeatBedScan::thermalRetryHomeY() {
 void HeatBedScan::thermalRetryHomeZ() {
     // home the z-axis in order to find the starting point again
     Printer::homeAxis(false, false, true);                             //Neben Bett: Home Z
-    if (!moveZ(long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM)))
+    if (!moveZ(long(Printer::axisStepsPerMM[Z_AXIS] * scanSettings.startLiftMm)))
         return;
     scanProbe.forgetPreviousPoint();
 
@@ -1460,7 +1437,7 @@ void ZOffsetScan::selectLevelingPoint(unsigned short maxX, unsigned short maxY) 
 
     settings_.learningRate = pass == LevelingPass::Center ? 1.0f : 0.8f;
     settings_.learningGradient = pass == LevelingPass::Center ? 0.0f : 1.0f;
-    probeZSteps_ = long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM);
+    probeZSteps_ = long(Printer::axisStepsPerMM[Z_AXIS] * scanSettings.startLiftMm);
     Com::printF(Com::tAutoMatrixLeveling, settings_.point.x);
     Com::printFLN(PSTR(" Y:"), settings_.point.y);
 }
@@ -1469,7 +1446,7 @@ void ZOffsetScan::initialize() {
     Printer::idleStatus.cancel();
     Com::printFLN(PSTR("ZOS init"));
     phase_ = Phase::HomeForProbe;
-    probeZSteps_ = long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM); //nur nutzen wenn kleiner.
+    probeZSteps_ = long(Printer::axisStepsPerMM[Z_AXIS] * scanSettings.startLiftMm); //nur nutzen wenn kleiner.
 }
 
 void ZOffsetScan::homeForProbe() {
@@ -1648,7 +1625,7 @@ void ZOffsetScan::applyMatrixCorrection() {
                 overflow = true;
             if (newValue > 0)
                 overnull = true; //darf nicht positiv werden. //darf nicht über limit sein.
-            if (newValue > (long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM) + g_nScanHeatBedUpFastSteps))
+            if (newValue > (long(Printer::axisStepsPerMM[Z_AXIS] * scanSettings.startLiftMm) + scanSettings.fastApproachSteps))
                 overH = true; //darf nicht positiv werden. //darf nicht über limit sein.
             g_ZCompensationMatrix[x][y] = (short)newValue;
         }
@@ -2246,8 +2223,8 @@ static void showAbortScanReason(const void* scanName, ScanAbort reason) {
 }
 
 static PressureMeasurement::Settings pressureMeasurementSettings() {
-    return {static_cast<uint8_t>(g_nScanPressureReads), g_nScanPressureReadDelay,
-            static_cast<uint16_t>(g_nScanPressureTolerance)};
+    return {static_cast<uint8_t>(scanSettings.pressureReadCount), scanSettings.pressureReadDelayMs,
+            static_cast<uint16_t>(scanSettings.pressureTolerance)};
 }
 
 static ScanAbort servicePressureMeasurement(PressureMeasurement& measurement, millis_t now, bool scanning) {
@@ -2333,41 +2310,41 @@ static bool moveZ(int nSteps, bool emergencyRetreat) {
 
 void restoreDefaultScanParameters(void) {
     // we must restore the default scan parameters for the heat bed scan
-    g_nScanXStartSteps = long(Printer::axisStepsPerMM[X_AXIS] * heatBedScanXStartMm);
-    g_nScanXStepSizeMM = heatBedScanStepMm;
-    g_nScanXStepSizeSteps = long(Printer::axisStepsPerMM[X_AXIS] * heatBedScanStepMm);
-    g_nScanXEndSteps = long(Printer::axisStepsPerMM[X_AXIS] * heatBedScanXEndMm);
-    g_nScanXMaxPositionSteps = long((Printer::axisLengthMM[X_AXIS] - heatBedScanXEndMm) * Printer::axisStepsPerMM[X_AXIS]);
+    scanSettings.x.startSteps = long(Printer::axisStepsPerMM[X_AXIS] * heatBedScanXStartMm);
+    scanSettings.x.strideMm = heatBedScanStepMm;
+    scanSettings.x.strideSteps = long(Printer::axisStepsPerMM[X_AXIS] * heatBedScanStepMm);
+    scanSettings.x.endMarginSteps = long(Printer::axisStepsPerMM[X_AXIS] * heatBedScanXEndMm);
+    scanSettings.x.maxPositionSteps = long((Printer::axisLengthMM[X_AXIS] - heatBedScanXEndMm) * Printer::axisStepsPerMM[X_AXIS]);
 
-    g_nScanYStartSteps = long(Printer::axisStepsPerMM[Y_AXIS] * heatBedScanYStartMm);
-    g_nScanYStepSizeMM = heatBedScanStepMm;
-    g_nScanYStepSizeSteps = long(Printer::axisStepsPerMM[Y_AXIS] * heatBedScanStepMm);
-    g_nScanYEndSteps = long(Printer::axisStepsPerMM[Y_AXIS] * heatBedScanYEndMm);
-    g_nScanYMaxPositionSteps = long((Printer::axisLengthMM[Y_AXIS] - heatBedScanYEndMm) * Printer::axisStepsPerMM[Y_AXIS]);
+    scanSettings.y.startSteps = long(Printer::axisStepsPerMM[Y_AXIS] * heatBedScanYStartMm);
+    scanSettings.y.strideMm = heatBedScanStepMm;
+    scanSettings.y.strideSteps = long(Printer::axisStepsPerMM[Y_AXIS] * heatBedScanStepMm);
+    scanSettings.y.endMarginSteps = long(Printer::axisStepsPerMM[Y_AXIS] * heatBedScanYEndMm);
+    scanSettings.y.maxPositionSteps = long((Printer::axisLengthMM[Y_AXIS] - heatBedScanYEndMm) * Printer::axisStepsPerMM[Y_AXIS]);
 
-    g_nScanHeatBedUpFastSteps = short(Printer::axisStepsPerMM[Z_AXIS] * heatBedScanUpFastMm);
-    g_nScanHeatBedUpSlowSteps = short(Printer::axisStepsPerMM[Z_AXIS] * heatBedScanUpSlowMm);
-    g_nScanHeatBedDownFastSteps = short(Printer::axisStepsPerMM[Z_AXIS] * HEAT_BED_SCAN_DOWN_FAST_MM);
-    g_nScanHeatBedDownSlowSteps = short(Printer::axisStepsPerMM[Z_AXIS] * heatBedScanDownSlowMm);
+    scanSettings.fastApproachSteps = short(Printer::axisStepsPerMM[Z_AXIS] * heatBedScanUpFastMm);
+    scanSettings.slowApproachSteps = short(Printer::axisStepsPerMM[Z_AXIS] * heatBedScanUpSlowMm);
+    scanSettings.fastRetreatSteps = short(Printer::axisStepsPerMM[Z_AXIS] * HEAT_BED_SCAN_DOWN_FAST_MM);
+    scanSettings.slowRetreatSteps = short(Printer::axisStepsPerMM[Z_AXIS] * heatBedScanDownSlowMm);
 
     /* Maximum number of steps to scan after the Z-min switch has been reached. If the probe cannot find the surface
        within this travel, it retries before aborting.
        Note that the head bed scan matrix consists of 16 bit signed values, thus more then 32767 steps will lead to an overflow! */
-    g_nScanZMaxCompensationSteps = short(Z_ENDSTOP_DRIVE_OVER * Printer::axisStepsPerMM[Z_AXIS]);
+    scanSettings.maxTravelSteps = short(Z_ENDSTOP_DRIVE_OVER * Printer::axisStepsPerMM[Z_AXIS]);
 
-    g_nScanFastStepDelay = heatBedScanFastStepDelayMs;
-    g_nScanSlowStepDelay = heatBedScanSlowStepDelayMs;
-    g_nScanIdleDelay = heatBedScanIdleDelayMs;
+    scanSettings.fastStepDelayMs = heatBedScanFastStepDelayMs;
+    scanSettings.slowStepDelayMs = heatBedScanSlowStepDelayMs;
+    scanSettings.idleDelayMs = heatBedScanIdleDelayMs;
 
-    g_nScanContactPressureDelta = heatBedScanContactPressureDelta;
-    g_nScanRetryPressureDelta = heatBedScanRetryPressureDelta;
-    g_nScanIdlePressureDelta = heatBedScanIdlePressureDelta;
-    g_nScanIdlePressureMin = heatBedScanIdlePressureMin;
-    g_nScanIdlePressureMax = heatBedScanIdlePressureMax;
+    scanSettings.contactPressureDelta = heatBedScanContactPressureDelta;
+    scanSettings.retryPressureDelta = heatBedScanRetryPressureDelta;
+    scanSettings.idlePressureDelta = heatBedScanIdlePressureDelta;
+    scanSettings.idlePressureMin = heatBedScanIdlePressureMin;
+    scanSettings.idlePressureMax = heatBedScanIdlePressureMax;
 
-    g_nScanPressureReads = heatBedScanPressureReads;
-    g_nScanPressureTolerance = heatBedScanPressureTolerance;
-    g_nScanPressureReadDelay = heatBedScanPressureReadDelayMs;
+    scanSettings.pressureReadCount = heatBedScanPressureReads;
+    scanSettings.pressureTolerance = heatBedScanPressureTolerance;
+    scanSettings.pressureReadDelayMs = heatBedScanPressureReadDelayMs;
 } // restoreDefaultScanParameters
 
 void outputScanParameters(void) {
@@ -2381,51 +2358,51 @@ void outputScanParameters(void) {
         Com::printF(PSTR(""), Printer::axisStepsPerMM[Z_AXIS]);
         Com::printFLN(PSTR(";[steps];axisStepsPerMM[Z_AXIS]"));
 
-        Com::printF(PSTR(""), g_nScanXStartSteps);
+        Com::printF(PSTR(""), scanSettings.x.startSteps);
         Com::printFLN(PSTR(";[steps];g_nScanXStartSteps"));
-        Com::printF(PSTR(""), g_nScanXStepSizeSteps);
+        Com::printF(PSTR(""), scanSettings.x.strideSteps);
         Com::printFLN(PSTR(";[steps];g_nScanXStepSizeSteps"));
-        Com::printF(PSTR(""), g_nScanXEndSteps);
+        Com::printF(PSTR(""), scanSettings.x.endMarginSteps);
         Com::printFLN(PSTR(";[steps];g_nScanXEndSteps"));
-        Com::printF(PSTR(""), g_nScanXMaxPositionSteps);
+        Com::printF(PSTR(""), scanSettings.x.maxPositionSteps);
         Com::printFLN(PSTR(";[steps];g_nScanXMaxPositionSteps"));
 
-        Com::printF(PSTR(""), g_nScanYStartSteps);
+        Com::printF(PSTR(""), scanSettings.y.startSteps);
         Com::printFLN(PSTR(";[steps];g_nScanYStartSteps"));
-        Com::printF(PSTR(""), g_nScanYStepSizeSteps);
+        Com::printF(PSTR(""), scanSettings.y.strideSteps);
         Com::printFLN(PSTR(";[steps];g_nScanYStepSizeSteps"));
-        Com::printF(PSTR(""), g_nScanYEndSteps);
+        Com::printF(PSTR(""), scanSettings.y.endMarginSteps);
         Com::printFLN(PSTR(";[steps];g_nScanYEndSteps"));
-        Com::printF(PSTR(""), g_nScanYMaxPositionSteps);
+        Com::printF(PSTR(""), scanSettings.y.maxPositionSteps);
         Com::printFLN(PSTR(";[steps];g_nScanYMaxPositionSteps"));
 
-        Com::printF(PSTR(""), (int)g_nScanHeatBedUpFastSteps);
+        Com::printF(PSTR(""), (int)scanSettings.fastApproachSteps);
         Com::printFLN(PSTR(";[steps];g_nScanHeatBedUpFastSteps"));
-        Com::printF(PSTR(""), (int)g_nScanHeatBedUpSlowSteps);
+        Com::printF(PSTR(""), (int)scanSettings.slowApproachSteps);
         Com::printFLN(PSTR(";[steps];g_nScanHeatBedUpSlowSteps"));
-        Com::printF(PSTR(""), (int)g_nScanHeatBedDownFastSteps);
+        Com::printF(PSTR(""), (int)scanSettings.fastRetreatSteps);
         Com::printFLN(PSTR(";[steps];g_nScanHeatBedDownFastSteps"));
-        Com::printF(PSTR(""), (int)g_nScanHeatBedDownSlowSteps);
+        Com::printF(PSTR(""), (int)scanSettings.slowRetreatSteps);
         Com::printFLN(PSTR(";[steps];g_nScanHeatBedDownSlowSteps"));
-        Com::printF(PSTR(""), (int)g_nScanFastStepDelay);
+        Com::printF(PSTR(""), (int)scanSettings.fastStepDelayMs);
         Com::printFLN(PSTR(";[ms];g_nScanFastStepDelay"));
-        Com::printF(PSTR(""), (int)g_nScanSlowStepDelay);
+        Com::printF(PSTR(""), (int)scanSettings.slowStepDelayMs);
         Com::printFLN(PSTR(";[ms];g_nScanSlowStepDelay"));
-        Com::printF(PSTR(""), (int)g_nScanIdleDelay);
+        Com::printF(PSTR(""), (int)scanSettings.idleDelayMs);
         Com::printFLN(PSTR(";[ms];g_nScanIdleDelay"));
 
-        Com::printF(PSTR(""), (int)g_nScanContactPressureDelta);
+        Com::printF(PSTR(""), (int)scanSettings.contactPressureDelta);
         Com::printFLN(PSTR(";[digits];g_nScanContactPressureDelta"));
-        Com::printF(PSTR(""), (int)g_nScanRetryPressureDelta);
+        Com::printF(PSTR(""), (int)scanSettings.retryPressureDelta);
         Com::printFLN(PSTR(";[digits];g_nScanRetryPressureDelta"));
-        Com::printF(PSTR(""), (int)g_nScanIdlePressureDelta);
+        Com::printF(PSTR(""), (int)scanSettings.idlePressureDelta);
         Com::printFLN(PSTR(";[digits];g_nScanIdlePressureDelta"));
 
-        Com::printF(PSTR(""), (int)g_nScanPressureReads);
+        Com::printF(PSTR(""), (int)scanSettings.pressureReadCount);
         Com::printFLN(PSTR(";[-];g_nScanPressureReads"));
-        Com::printF(PSTR(""), (int)g_nScanPressureTolerance);
+        Com::printF(PSTR(""), (int)scanSettings.pressureTolerance);
         Com::printFLN(PSTR(";[digits];g_nScanPressureTolerance"));
-        Com::printF(PSTR(""), (int)g_nScanPressureReadDelay);
+        Com::printF(PSTR(""), (int)scanSettings.pressureReadDelayMs);
         Com::printFLN(PSTR(";[ms];g_nScanPressureReadDelay"));
     }
 } // outputScanParameters
@@ -3444,10 +3421,10 @@ void setScanXStart(GCode* pCommand) {
         if (nTemp > (Printer::axisLengthMM[X_AXIS] - 5))
             nTemp = Printer::axisLengthMM[X_AXIS] - 5;
 
-        g_nScanXStartSteps = (long)((float)nTemp * Printer::axisStepsPerMM[X_AXIS]);
+        scanSettings.x.startSteps = (long)((float)nTemp * Printer::axisStepsPerMM[X_AXIS]);
         if (Printer::debugInfo()) {
             Com::printF(PSTR("M3020: new x start position: "), nTemp);
-            Com::printF(PSTR(" [mm], "), (int)g_nScanXStartSteps);
+            Com::printF(PSTR(" [mm], "), (int)scanSettings.x.startSteps);
             Com::printFLN(PSTR(" [steps]"));
         }
     } else {
@@ -3465,10 +3442,10 @@ void setScanYStart(GCode* pCommand) {
         if (nTemp > (Printer::axisLengthMM[Y_AXIS] - 5))
             nTemp = Printer::axisLengthMM[Y_AXIS] - 5;
 
-        g_nScanYStartSteps = (long)((float)nTemp * Printer::axisStepsPerMM[Y_AXIS]);
+        scanSettings.y.startSteps = (long)((float)nTemp * Printer::axisStepsPerMM[Y_AXIS]);
         if (Printer::debugInfo()) {
             Com::printF(PSTR("M3021: new y start position: "), nTemp);
-            Com::printF(PSTR(" [mm], "), (int)g_nScanYStartSteps);
+            Com::printF(PSTR(" [mm], "), (int)scanSettings.y.startSteps);
             Com::printFLN(PSTR(" [steps]"));
         }
     } else {
@@ -3486,10 +3463,10 @@ void setScanXStep(GCode* pCommand) {
         if (nTemp > 100)
             nTemp = 100;
 
-        g_nScanXStepSizeSteps = (long)((float)nTemp * Printer::axisStepsPerMM[X_AXIS]);
+        scanSettings.x.strideSteps = (long)((float)nTemp * Printer::axisStepsPerMM[X_AXIS]);
         if (Printer::debugInfo()) {
             Com::printF(PSTR("M3022: new x step size: "), (int)nTemp);
-            Com::printF(PSTR(" [mm], "), (int)g_nScanXStepSizeSteps);
+            Com::printF(PSTR(" [mm], "), (int)scanSettings.x.strideSteps);
             Com::printFLN(PSTR(" [steps]"));
         }
     } else {
@@ -3507,10 +3484,10 @@ void setScanYStep(GCode* pCommand) {
         if (nTemp > 100)
             nTemp = 100;
 
-        g_nScanYStepSizeSteps = (long)((float)nTemp * Printer::axisStepsPerMM[Y_AXIS]);
+        scanSettings.y.strideSteps = (long)((float)nTemp * Printer::axisStepsPerMM[Y_AXIS]);
         if (Printer::debugInfo()) {
             Com::printF(PSTR("M3023: new y step size: "), (int)nTemp);
-            Com::printF(PSTR(" [mm], "), (int)g_nScanYStepSizeSteps);
+            Com::printF(PSTR(" [mm], "), (int)scanSettings.y.strideSteps);
             Com::printFLN(PSTR(" [steps]"));
         }
     } else {
@@ -3528,16 +3505,16 @@ void setScanXEnd(GCode* pCommand) {
         if (nTemp > (Printer::axisLengthMM[X_AXIS] - 5))
             nTemp = Printer::axisLengthMM[X_AXIS] - 5;
 
-        g_nScanXEndSteps = (long)((float)nTemp * Printer::axisStepsPerMM[X_AXIS]);
+        scanSettings.x.endMarginSteps = (long)((float)nTemp * Printer::axisStepsPerMM[X_AXIS]);
         if (Printer::debugInfo()) {
             Com::printF(PSTR("M3024: new x end position: "), nTemp);
-            Com::printF(PSTR(" [mm], "), (int)g_nScanXEndSteps);
+            Com::printF(PSTR(" [mm], "), (int)scanSettings.x.endMarginSteps);
             Com::printFLN(PSTR(" [steps]"));
         }
 
-        g_nScanXMaxPositionSteps = long(Printer::axisLengthMM[X_AXIS] * Printer::axisStepsPerMM[X_AXIS] - g_nScanXEndSteps);
+        scanSettings.x.maxPositionSteps = long(Printer::axisLengthMM[X_AXIS] * Printer::axisStepsPerMM[X_AXIS] - scanSettings.x.endMarginSteps);
         if (Printer::debugInfo()) {
-            Com::printF(PSTR("M3024: new x max position: "), (int)g_nScanXMaxPositionSteps);
+            Com::printF(PSTR("M3024: new x max position: "), (int)scanSettings.x.maxPositionSteps);
             Com::printFLN(PSTR(" [steps]"));
         }
     } else {
@@ -3555,16 +3532,16 @@ void setScanYEnd(GCode* pCommand) {
         if (nTemp > (Printer::axisLengthMM[Y_AXIS] - 5))
             nTemp = Printer::axisLengthMM[Y_AXIS] - 5;
 
-        g_nScanYEndSteps = (long)((float)nTemp * Printer::axisStepsPerMM[Y_AXIS]);
+        scanSettings.y.endMarginSteps = (long)((float)nTemp * Printer::axisStepsPerMM[Y_AXIS]);
         if (Printer::debugInfo()) {
             Com::printF(PSTR("M3025: new y end position: "), nTemp);
-            Com::printF(PSTR(" [mm], "), (int)g_nScanYEndSteps);
+            Com::printF(PSTR(" [mm], "), (int)scanSettings.y.endMarginSteps);
             Com::printFLN(PSTR(" [steps]"));
         }
 
-        g_nScanYMaxPositionSteps = long(Printer::axisLengthMM[Y_AXIS] * Printer::axisStepsPerMM[Y_AXIS] - g_nScanYEndSteps);
+        scanSettings.y.maxPositionSteps = long(Printer::axisLengthMM[Y_AXIS] * Printer::axisStepsPerMM[Y_AXIS] - scanSettings.y.endMarginSteps);
         if (Printer::debugInfo()) {
-            Com::printF(PSTR("M3025: new y max position: "), (int)g_nScanYMaxPositionSteps);
+            Com::printF(PSTR("M3025: new y max position: "), (int)scanSettings.y.maxPositionSteps);
             Com::printFLN(PSTR(" [steps]"));
         }
     } else {
@@ -3673,9 +3650,9 @@ void setFastApproachStep(GCode* pCommand) {
         if (nTemp < 1)
             nTemp = 1;
 
-        g_nScanHeatBedUpFastSteps = -nTemp;
+        scanSettings.fastApproachSteps = -nTemp;
         if (Printer::debugInfo()) {
-            Com::printF(PSTR("M3030: new fast step size for moving of the bed up: "), (int)g_nScanHeatBedUpFastSteps);
+            Com::printF(PSTR("M3030: new fast step size for moving of the bed up: "), (int)scanSettings.fastApproachSteps);
             Com::printFLN(PSTR(" [steps]"));
         }
     } else {
@@ -3693,9 +3670,9 @@ void setSlowApproachStep(GCode* pCommand) {
         if (nTemp < 1)
             nTemp = 1;
 
-        g_nScanHeatBedUpSlowSteps = -nTemp;
+        scanSettings.slowApproachSteps = -nTemp;
         if (Printer::debugInfo()) {
-            Com::printF(PSTR("M3031: new slow step size for moving of the bed up: "), (int)g_nScanHeatBedUpSlowSteps);
+            Com::printF(PSTR("M3031: new slow step size for moving of the bed up: "), (int)scanSettings.slowApproachSteps);
             Com::printFLN(PSTR(" [steps]"));
         }
     } else {
@@ -3713,9 +3690,9 @@ void setFastRetreatStep(GCode* pCommand) {
         if (nTemp > Printer::axisStepsPerMM[Z_AXIS] * 5)
             nTemp = Printer::axisStepsPerMM[Z_AXIS] * 5;
 
-        g_nScanHeatBedDownFastSteps = nTemp;
+        scanSettings.fastRetreatSteps = nTemp;
         if (Printer::debugInfo()) {
-            Com::printF(PSTR("M3032: new fast step size for moving of the bed down: "), (int)g_nScanHeatBedDownFastSteps);
+            Com::printF(PSTR("M3032: new fast step size for moving of the bed down: "), (int)scanSettings.fastRetreatSteps);
             Com::printFLN(PSTR(" [steps]"));
         }
     } else {
@@ -3733,9 +3710,9 @@ void setSlowRetreatStep(GCode* pCommand) {
         if (nTemp > 50)
             nTemp = 50;
 
-        g_nScanHeatBedDownSlowSteps = nTemp;
+        scanSettings.slowRetreatSteps = nTemp;
         if (Printer::debugInfo()) {
-            Com::printF(PSTR("M3033: new slow step size for moving of the bed down: "), (int)g_nScanHeatBedDownSlowSteps);
+            Com::printF(PSTR("M3033: new slow step size for moving of the bed down: "), (int)scanSettings.slowRetreatSteps);
             Com::printFLN(PSTR(" [steps]"));
         }
     } else {
@@ -3753,9 +3730,9 @@ void setFastScanDelay(GCode* pCommand) {
         if (nTemp > 1000)
             nTemp = 1000;
 
-        g_nScanFastStepDelay = nTemp;
+        scanSettings.fastStepDelayMs = nTemp;
         if (Printer::debugInfo()) {
-            Com::printF(PSTR("M3040: new delay between two fast movements: "), (int)g_nScanFastStepDelay);
+            Com::printF(PSTR("M3040: new delay between two fast movements: "), (int)scanSettings.fastStepDelayMs);
             Com::printFLN(PSTR(" [ms]"));
         }
     } else {
@@ -3773,9 +3750,9 @@ void setSlowScanDelay(GCode* pCommand) {
         if (nTemp > 1000)
             nTemp = 1000;
 
-        g_nScanSlowStepDelay = nTemp;
+        scanSettings.slowStepDelayMs = nTemp;
         if (Printer::debugInfo()) {
-            Com::printF(PSTR("M3041: new delay between two slow movements: "), (int)g_nScanSlowStepDelay);
+            Com::printF(PSTR("M3041: new delay between two slow movements: "), (int)scanSettings.slowStepDelayMs);
             Com::printFLN(PSTR(" [ms]"));
         }
     } else {
@@ -3793,9 +3770,9 @@ void setScanIdleDelay(GCode* pCommand) {
         if (nTemp > 10000)
             nTemp = 10000;
 
-        g_nScanIdleDelay = nTemp;
+        scanSettings.idleDelayMs = nTemp;
         if (Printer::debugInfo()) {
-            Com::printF(PSTR("M3042: new idle delay: "), (int)g_nScanIdleDelay);
+            Com::printF(PSTR("M3042: new idle delay: "), (int)scanSettings.idleDelayMs);
             Com::printFLN(PSTR(" [ms]"));
         }
     } else {
@@ -3813,9 +3790,9 @@ void setContactPressureDelta(GCode* pCommand) {
         if (nTemp > 1000)
             nTemp = 1000;
 
-        g_nScanContactPressureDelta = nTemp;
+        scanSettings.contactPressureDelta = nTemp;
         if (Printer::debugInfo()) {
-            Com::printF(PSTR("M3050: new contact pressure delta: "), (int)g_nScanContactPressureDelta);
+            Com::printF(PSTR("M3050: new contact pressure delta: "), (int)scanSettings.contactPressureDelta);
             Com::printFLN(PSTR(" [digits]"));
         }
     } else {
@@ -3833,9 +3810,9 @@ void setRetryPressureDelta(GCode* pCommand) {
         if (nTemp > 1000)
             nTemp = 1000;
 
-        g_nScanRetryPressureDelta = nTemp;
+        scanSettings.retryPressureDelta = nTemp;
         if (Printer::debugInfo()) {
-            Com::printF(PSTR("M3051: new retry pressure delta: "), (int)g_nScanRetryPressureDelta);
+            Com::printF(PSTR("M3051: new retry pressure delta: "), (int)scanSettings.retryPressureDelta);
             Com::printFLN(PSTR(" [digits]"));
         }
     } else {
@@ -3853,9 +3830,9 @@ void setIdlePressureTolerance(GCode* pCommand) {
         if (nTemp > 1000)
             nTemp = 1000;
 
-        g_nScanIdlePressureDelta = nTemp;
+        scanSettings.idlePressureDelta = nTemp;
         if (Printer::debugInfo()) {
-            Com::printF(PSTR("M3052: new idle pressure delta: "), (int)g_nScanIdlePressureDelta);
+            Com::printF(PSTR("M3052: new idle pressure delta: "), (int)scanSettings.idlePressureDelta);
             Com::printFLN(PSTR(" [digits]"));
         }
     } else {
@@ -3873,9 +3850,9 @@ void setPressureReadCount(GCode* pCommand) {
         if (nTemp > 100)
             nTemp = 100;
 
-        g_nScanPressureReads = nTemp;
+        scanSettings.pressureReadCount = nTemp;
         if (Printer::debugInfo()) {
-            Com::printF(PSTR("M3053: new pressure reads per measurement: "), (int)g_nScanPressureReads);
+            Com::printF(PSTR("M3053: new pressure reads per measurement: "), (int)scanSettings.pressureReadCount);
         }
     } else {
         showInvalidSyntax(pCommand->M);
@@ -3892,9 +3869,9 @@ void setPressureReadDelay(GCode* pCommand) {
         if (nTemp > 1000)
             nTemp = 1000;
 
-        g_nScanPressureReadDelay = nTemp;
+        scanSettings.pressureReadDelayMs = nTemp;
         if (Printer::debugInfo()) {
-            Com::printF(PSTR("M3054: new delay between two pressure reads: "), (int)g_nScanPressureReadDelay);
+            Com::printF(PSTR("M3054: new delay between two pressure reads: "), (int)scanSettings.pressureReadDelayMs);
             Com::printFLN(PSTR(" [ms]"));
         }
     } else {
@@ -3912,9 +3889,9 @@ void setPressureReadTolerance(GCode* pCommand) {
         if (nTemp > 1000)
             nTemp = 1000;
 
-        g_nScanPressureTolerance = nTemp;
+        scanSettings.pressureTolerance = nTemp;
         if (Printer::debugInfo()) {
-            Com::printF(PSTR("M3055: new scan pressure tolerance: "), (int)g_nScanPressureTolerance);
+            Com::printF(PSTR("M3055: new scan pressure tolerance: "), (int)scanSettings.pressureTolerance);
             Com::printFLN(PSTR(" [digits]"));
         }
     } else {
@@ -4670,7 +4647,7 @@ void adjustBedMatrix(GCode* pCommand) {
             }
 
             //das ist ein negativer wert! Je mehr Abstand, desto negativer. Positiv verboten.
-            if (g_offsetZCompensationSteps + hochrunterSteps > (long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM) - -1 * g_nScanHeatBedUpFastSteps)) {
+            if (g_offsetZCompensationSteps + hochrunterSteps > (long(Printer::axisStepsPerMM[Z_AXIS] * scanSettings.startLiftMm) - -1 * scanSettings.fastApproachSteps)) {
                 Com::printF(PSTR("M3902: Fehler::Z-Matrix wuerde positiv werden. Das waere eine Kollision um "), (int)(g_offsetZCompensationSteps + hochrunterSteps));
                 Com::printFLN(PSTR(" [Steps] bzw. "), Printer::axisMMPerSteps[Z_AXIS] * (float)(g_offsetZCompensationSteps + hochrunterSteps), 2);
                 Com::printFLN(PSTR(" [mm]"));
@@ -4692,7 +4669,7 @@ void adjustBedMatrix(GCode* pCommand) {
                             g_ZCompensationMatrix[x][y] += deltaZ;
                             if (g_ZCompensationMatrix[x][y] > 0)
                                 overnull = true; //overflow oder kollision, kann einfach nicht sein und abfrage ist kurz.
-                            if (g_ZCompensationMatrix[x][y] > (long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM) - -1 * g_nScanHeatBedUpFastSteps))
+                            if (g_ZCompensationMatrix[x][y] > (long(Printer::axisStepsPerMM[Z_AXIS] * scanSettings.startLiftMm) - -1 * scanSettings.fastApproachSteps))
                                 overH = true;
                         }
                     }

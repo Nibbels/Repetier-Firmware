@@ -383,15 +383,9 @@ constexpr int32_t maxManualZOffsetMicrometers = 10000;
 #define COMPENSATION_MATRIX_SIZE long(COMPENSATION_MATRIX_MAX_X * COMPENSATION_MATRIX_MAX_Y * 2 + EEPROM_OFFSET_MATRIX_START) // [bytes]
 
 
-extern float g_scanStartZLiftMM;
-
-extern long g_nScanXStepSizeMM;
-extern long g_nScanXStepSizeSteps;
-extern long g_nScanYStepSizeMM;
-extern long g_nScanYStepSizeSteps;
-
-extern unsigned short g_nScanContactPressureDelta;
-extern unsigned short g_nScanRetryPressureDelta;
+float scanStartLiftMm();
+void setScanStartLiftMm(float liftMm);
+long scanStrideMm(uint8_t axis);
 
 extern char g_debugLevel;
 extern char g_debugLog;

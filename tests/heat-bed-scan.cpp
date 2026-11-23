@@ -1,3 +1,4 @@
+#include "ScanSettings.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
@@ -30,18 +31,33 @@ constexpr char ui_text_heat_bed_scan[] = "Scan", ui_text_operation_denied[] = "B
 
 char g_nActiveHeatBed = 2;
 bool g_ZMatrixChangedInRam = false;
-short g_nScanHeatBedUpFastSteps = -4, g_nScanHeatBedUpSlowSteps = -2, g_nScanHeatBedDownSlowSteps = 2;
-short g_nScanHeatBedDownFastSteps = 20, g_nScanZMaxCompensationSteps = 600;
-short g_nScanIdlePressureMin = -7500, g_nScanIdlePressureMax = 7500;
-uint16_t g_nScanContactPressureDelta = 10, g_nScanRetryPressureDelta = 5;
+ScanSettings scanSettings = [] {
+    ScanSettings settings(1.0f);
+    settings.fastApproachSteps = -4;
+    settings.slowApproachSteps = -2;
+    settings.slowRetreatSteps = 2;
+    settings.fastRetreatSteps = 20;
+    settings.maxTravelSteps = 600;
+    settings.idlePressureMin = -7500;
+    settings.idlePressureMax = 7500;
+    settings.contactPressureDelta = 10;
+    settings.retryPressureDelta = 5;
+    settings.idleDelayMs = 250;
+    settings.fastStepDelayMs = 1;
+    settings.slowStepDelayMs = 100;
+    settings.pressureReadCount = 3;
+    settings.pressureReadDelayMs = 15;
+    settings.pressureTolerance = 15;
+    settings.x.startSteps = 100;
+    settings.y.startSteps = 100;
+    settings.x.strideSteps = 100;
+    settings.y.strideSteps = 100;
+    settings.x.maxPositionSteps = 300;
+    settings.y.maxPositionSteps = 300;
+    return settings;
+}();
 short g_ZCompensationMatrix[COMPENSATION_MATRIX_MAX_X][COMPENSATION_MATRIX_MAX_Y];
 uint8_t g_uZMatrixMax[2] = {};
-float g_scanStartZLiftMM = 1.0f;
-uint16_t g_nScanIdleDelay = 250, g_nScanFastStepDelay = 1, g_nScanSlowStepDelay = 100;
-uint8_t g_nScanPressureReads = 3;
-uint16_t g_nScanPressureReadDelay = 15, g_nScanPressureTolerance = 15;
-long g_nScanXStartSteps = 100, g_nScanYStartSteps = 100, g_nScanXStepSizeSteps = 100, g_nScanYStepSizeSteps = 100;
-long g_nScanXMaxPositionSteps = 300, g_nScanYMaxPositionSteps = 300;
 
 bool injectNoise = false, injectDisconnection = false, injectOverload = false, invalidGrid = false;
 bool matrixPrepared = false, matrixSaved = false, saveFailed = false;

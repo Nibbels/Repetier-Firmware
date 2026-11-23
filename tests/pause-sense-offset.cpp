@@ -1,3 +1,4 @@
+#include "ScanSettings.h"
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -48,9 +49,13 @@ short g_ZCompensationMax = 200;
 long bedMatrixHighestZSteps() { return g_offsetZCompensationSteps; }
 short bedMatrixLowestZSteps() { return g_ZCompensationMax; }
 short forceDigits = 0;
-char g_nScanPressureReads = 4;
-unsigned short g_nScanPressureReadDelay = 3;
-short g_nScanPressureTolerance = 10;
+ScanSettings scanSettings = [] {
+    ScanSettings settings(1.0f);
+    settings.pressureReadCount = 4;
+    settings.pressureReadDelayMs = 3;
+    settings.pressureTolerance = 10;
+    return settings;
+}();
 bool pollDuringMoves = true;
 bool clipReturn[4] = {};
 int incompleteReturns = 0;
