@@ -418,12 +418,9 @@ extern short g_ZCompensationMax;
 extern volatile unsigned char g_nHeatBedScanStatus;
 extern char g_nActiveHeatBed;
 //ZOS:
-extern volatile unsigned char g_nZOSScanStatus;
 extern unsigned char g_ZOSTestPoint[2];
 extern float g_ZOSlearningRate;
 extern float g_ZOSlearningGradient;
-extern long g_min_nZScanZPosition;
-extern unsigned char g_ZOS_Auto_Matrix_Leveling_State;
 //Matrix speichern über Menü: Sinnmarker
 extern volatile unsigned char g_ZMatrixChangedInRam;
 
@@ -481,9 +478,9 @@ extern void initRF(void);
 extern void showAbortScanReason(const void* scanName, char abortScanIdentifier);
 
 extern void startHeatBedScan(void);
-extern void scanHeatBed(void);
+extern bool isAnyScanRunning();
+extern void discardScans();
 extern void startZOScan(bool automatrixleveling = false);
-extern void searchZOScan(void);
 
 //Z-Schrauben Helper
 extern float g_ZSchraubenSollDrehungenWarm_U;
@@ -495,7 +492,6 @@ extern void calculateZScrewCorrection(void);
 //Menüumschalter für Z-Step-Höhe
 extern void configureMANUAL_STEPS_Z(int8_t increment);
 
-extern void abortSearchHeatBedZOffset(bool reloadMatrix);
 extern short testExtruderTemperature(void);
 extern short testHeatBedTemperature(void);
 extern long getZMatrixDepth(long x, long y);

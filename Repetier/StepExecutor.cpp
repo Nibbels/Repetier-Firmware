@@ -360,8 +360,7 @@ inline void StepExecutor::finishMove(PrintLine& move, bool queued) {
         move.task = DIRECT_IDLE;
     }
 
-    const bool scanning = g_nHeatBedScanStatus || g_nZOSScanStatus;
-    if (queue.count() == 0 && !scanning) {
+    if (queue.count() == 0 && !isAnyScanRunning()) {
         Printer::idleStatus.schedule(HAL::timeInMilliseconds());
         nominalFeedrate_ = 0;
     }

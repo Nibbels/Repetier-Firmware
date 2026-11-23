@@ -93,16 +93,12 @@ volatile unsigned char g_nHeatBedScanStatus = 0;
 char g_nActiveHeatBed = 1;
 
 //ZOS
-//Nibbels: Das ist wie die g_nHeatBedScanStatus, die Schwestervariable, für den ZOS-Scan -> Vorsicht, wenn man sowas einführt müssen die überall vermerkt werden, weil sonst z.B. der G-Code weiter vorgeführt wird.
 // g_ZMatrixChangedInRam soll 1 werden, wenn ZOS, Offsetänderung der Matrix etc. Sonst wäre Sichern der Matrix unnötig.
 volatile unsigned char g_ZMatrixChangedInRam = 0;
-volatile unsigned char g_nZOSScanStatus = 0;
 //Nibbels:
 unsigned char g_ZOSTestPoint[2] = { defaultZOffsetScanIndex, defaultZOffsetScanIndex };
 float g_ZOSlearningRate = 1.0f;
 float g_ZOSlearningGradient = 0.0f;
-long g_min_nZScanZPosition = 0;
-unsigned char g_ZOS_Auto_Matrix_Leveling_State = 0; //if 1 do multiple scans to correct matrix. while correcting this is rising for switch cases see state 50+
 
 float g_scanStartZLiftMM = defaultHeatBedScanLiftMm;
 
@@ -218,9 +214,11 @@ void adjustPressureLimits(short IdlePressure) {
     g_nMaxPressureIdle = IdlePressure + g_nScanIdlePressureDelta;
 }
 
+static bool zOffsetScanRunning();
+
 void startHeatBedScan(void) {
     //if( g_nHeatBedScanStatus ) return;
-    if (g_nZOSScanStatus)
+    if (zOffsetScanRunning())
         return;
     if (g_nHeatBedScanStatus) {
         // abort the heat bed scan
@@ -248,7 +246,7 @@ void startHeatBedScan(void) {
 
 void scanHeatBed(void) {
     //if( g_nHeatBedScanStatus ) return;
-    if (g_nZOSScanStatus)
+    if (zOffsetScanRunning())
         return;
 
     static unsigned char nIndexX;
@@ -654,9 +652,8 @@ void scanHeatBed(void) {
         }
         case 55: {
             // move away from the surface
-            if (moveZPlusDownFast()) {
-                g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
-            }
+            if (moveZPlusDownFast())
+        g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
 
             if (nYDirection > 0) {
                 nTempPosition = nY + nYDirection;
@@ -1038,477 +1035,489 @@ void scanHeatBed(void) {
 } // scanHeatBed
 
 /**************************************************************************************************************************************/
-void startZOScan(bool automatrixleveling) {
-    if (g_nHeatBedScanStatus)
-        return;
-        //if( g_nZOSScanStatus ) return;
+namespace {
 
-    if (g_nZOSScanStatus) {
-        // abort the heat bed scan
+class ZOffsetScan {
+public:
+    bool active() const { return phase_ != Phase::Idle; }
+    void startOrCancel(bool levelMatrix);
+    void tick();
+    void discard() {
+        phase_ = Phase::Idle;
+        levelingPass_ = LevelingPass::None;
+    }
+
+private:
+    enum class Phase : uint8_t {
+        Idle,
+        Initialize,
+        HomeForProbe,
+        LiftForProbe,
+        LoadMatrix,
+        PositionProbe,
+        ArmPressureRetries,
+        RetreatForRetry,
+        MeasureBaseline,
+        ApproachSurface,
+        ProbeSurface,
+        ApplyMatrixCorrection,
+        ContinueLeveling,
+        RetreatForFinish,
+        ReportScrewAdjustment,
+    };
+    enum class LevelingPass : uint8_t {
+        None, Center, MinXMinY, MaxXMaxY, CenterYMinusOne, MinXMaxY, MaxXMinY, CenterYPlusOne
+    };
+
+    void abort(bool reloadMatrix);
+    void selectLevelingPoint(unsigned short maxX, unsigned short maxY);
+    void initialize();
+    void homeForProbe();
+    void liftForProbe();
+    void loadMatrix();
+    void positionProbe();
+    void armPressureRetries();
+    void retreatForRetry();
+    void measureBaseline();
+    void approachSurface();
+    void probeSurface();
+    void applyMatrixCorrection();
+    void continueLeveling();
+    void retreatForFinish();
+    void reportScrewAdjustment();
+
+    volatile Phase phase_ = Phase::Idle;
+    LevelingPass levelingPass_ = LevelingPass::None;
+    long probeZSteps_ = 0;
+};
+
+ZOffsetScan zOffsetScan;
+
+void ZOffsetScan::startOrCancel(bool levelMatrix) {
+    if (active()) {
         Com::printFLN(PSTR("ZOS cancelled"));
         g_abortZScan = SCAN_ABORT_REASON_CANCELED;
-        abortSearchHeatBedZOffset(false);
+        abort(false);
+        return;
+    }
+
+    Com::printFLN(PSTR("ZOS started"));
+    phase_ = Phase::Initialize;
+    g_abortZScan = 0;
+    levelingPass_ = levelMatrix ? LevelingPass::Center : LevelingPass::None;
+}
+
+void ZOffsetScan::tick() {
+    if (!active())
+        return;
+
+    Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
+    GCodeInput::keepAlive(Calibrating);
+
+    // Run one phase per service call. Calibration waits still pump the foreground.
+    switch (phase_) {
+    case Phase::Idle: break;
+    case Phase::Initialize: initialize(); break;
+    case Phase::HomeForProbe: homeForProbe(); break;
+    case Phase::LiftForProbe: liftForProbe(); break;
+    case Phase::LoadMatrix: loadMatrix(); break;
+    case Phase::PositionProbe: positionProbe(); break;
+    case Phase::ArmPressureRetries: armPressureRetries(); break;
+    case Phase::RetreatForRetry: retreatForRetry(); break;
+    case Phase::MeasureBaseline: measureBaseline(); break;
+    case Phase::ApproachSurface: approachSurface(); break;
+    case Phase::ProbeSurface: probeSurface(); break;
+    case Phase::ApplyMatrixCorrection: applyMatrixCorrection(); break;
+    case Phase::ContinueLeveling: continueLeveling(); break;
+    case Phase::RetreatForFinish: retreatForFinish(); break;
+    case Phase::ReportScrewAdjustment: reportScrewAdjustment(); break;
+    }
+}
+
+void ZOffsetScan::selectLevelingPoint(unsigned short maxX, unsigned short maxY) {
+    const LevelingPass pass = levelingPass_;
+    switch (pass) {
+    case LevelingPass::None: return;
+    case LevelingPass::Center:
+        g_ZOSTestPoint[X_AXIS] = maxX / 2;
+        g_ZOSTestPoint[Y_AXIS] = maxY / 2;
+        levelingPass_ = LevelingPass::MinXMinY;
+        break;
+    case LevelingPass::MinXMinY:
+        g_ZOSTestPoint[X_AXIS] = 1;
+        g_ZOSTestPoint[Y_AXIS] = 1;
+        levelingPass_ = LevelingPass::MaxXMaxY;
+        break;
+    case LevelingPass::MaxXMaxY:
+        g_ZOSTestPoint[X_AXIS] = maxX;
+        g_ZOSTestPoint[Y_AXIS] = maxY;
+        levelingPass_ = LevelingPass::CenterYMinusOne;
+        break;
+    case LevelingPass::CenterYMinusOne:
+        g_ZOSTestPoint[X_AXIS] = maxX / 2;
+        g_ZOSTestPoint[Y_AXIS] = maxY / 2 - 1;
+        levelingPass_ = LevelingPass::MinXMaxY;
+        break;
+    case LevelingPass::MinXMaxY:
+        g_ZOSTestPoint[X_AXIS] = 1;
+        g_ZOSTestPoint[Y_AXIS] = maxY;
+        levelingPass_ = LevelingPass::MaxXMinY;
+        break;
+    case LevelingPass::MaxXMinY:
+        g_ZOSTestPoint[X_AXIS] = maxX;
+        g_ZOSTestPoint[Y_AXIS] = 1;
+        levelingPass_ = LevelingPass::CenterYPlusOne;
+        break;
+    case LevelingPass::CenterYPlusOne:
+        g_ZOSTestPoint[X_AXIS] = maxX / 2;
+        g_ZOSTestPoint[Y_AXIS] = maxY / 2 + 1;
+        levelingPass_ = LevelingPass::None;
+        break;
+    }
+
+    g_ZOSlearningRate = pass == LevelingPass::Center ? 1.0f : 0.8f;
+    g_ZOSlearningGradient = pass == LevelingPass::Center ? 0.0f : 1.0f;
+    probeZSteps_ = long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM);
+    Com::printF(Com::tAutoMatrixLeveling, g_ZOSTestPoint[X_AXIS]);
+    Com::printFLN(PSTR(" Y:"), g_ZOSTestPoint[Y_AXIS]);
+}
+
+void ZOffsetScan::initialize() {
+    g_retryZScan = 0;
+    Printer::idleStatus.cancel();
+    Com::printFLN(PSTR("ZOS init"));
+    phase_ = Phase::HomeForProbe;
+    probeZSteps_ = long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM); //nur nutzen wenn kleiner.
+    g_scanRetries = 0;                                                                  // never retry   TODO allow retries?
+    g_abortZScan = 0;                                                                   // will be set in case of error inside moveZMinusUpFast/Slow
+    g_nLastZScanZPosition = 0;                                                          //sodass dass bei mehreren scans nicht die letzte position als abstands limit feststeht.
+}
+
+void ZOffsetScan::homeForProbe() {
+    //bissel übertrieben, sollte aber jede eventualität abfangen: Wir brauchen die maximale Matrix-Dimension auch schon hier (ganz grob) und wollen nicht so lange warten.
+    unsigned short uDimensionX, uDimensionY;
+    if (g_ZCompensationMatrix[0][0] == EEPROM_FORMAT) {
+        uDimensionX = g_uZMatrixMax[X_AXIS] - 1;
+        uDimensionY = g_uZMatrixMax[Y_AXIS] - 1;
     } else {
-        Com::printFLN(PSTR("ZOS started"));
-        g_nZOSScanStatus = 1;
-        // start the heat bed scan
-        g_abortZScan = 0; //dont kill job on start
-        if (automatrixleveling)
-            g_ZOS_Auto_Matrix_Leveling_State = 1; //aktiviert besonderer modus, bei dem der ZOffsetScan mehrfach in schleife scant und ein schiefes Bett geraderückt, aber die Welligkeit des ursprünglichen HBS behält.
+        uDimensionX = (unsigned char)readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, EEPROM_SECTOR_SIZE * g_nActiveHeatBed + EEPROM_OFFSET_DIMENSION_X) - 1;
+        uDimensionY = (unsigned char)readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, EEPROM_SECTOR_SIZE * g_nActiveHeatBed + EEPROM_OFFSET_DIMENSION_Y) - 1;
     }
-} // startZOScan
+    if (uDimensionX > COMPENSATION_MATRIX_MAX_X - 1)
+        uDimensionX = (unsigned char)(COMPENSATION_MATRIX_MAX_X - 1);
+    if (uDimensionY > COMPENSATION_MATRIX_MAX_Y - 1)
+        uDimensionY = (unsigned char)(COMPENSATION_MATRIX_MAX_Y - 1);
 
-void searchZOScan(void) {
-    if (g_nHeatBedScanStatus)
+    selectLevelingPoint(uDimensionX, uDimensionY);
+
+    // start at the home position
+    Printer::homeAxis(true, true, true); //home z resets ZCMP
+    phase_ = Phase::LiftForProbe;
+}
+
+void ZOffsetScan::liftForProbe() {
+    // Keep the lift in scan coordinates. The probe uses its own Z travel counter.
+    moveZ(probeZSteps_);
+    UI_STATUS_UPD(UI_TEXT_ZCALIB);
+    phase_ = Phase::LoadMatrix;
+}
+
+void ZOffsetScan::loadMatrix() {
+    // load the unaltered compensation matrix from the EEPROM
+    if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT || g_ZOSlearningRate == 1.0) {
+        Com::printFLN(PSTR("Loading zMatrix from EEPROM"));
+        if (loadCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed))) {
+            // Error: there is no valid compensation matrix available
+            initCompensationMatrix();
+        }
+    } else {
+        Com::printFLN(PSTR("Reusing existing zMatrix"));
+    }
+
+    // safety check on the current matrix
+    if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
+        Com::printFLN(PSTR("ERROR::prev. matrix invalid!"));
+        g_abortZScan = SCAN_ABORT_REASON_MISSING_MATRIX;
+        abort(false);
         return;
-        //if( g_nZOSScanStatus ) return;
+    }
+    phase_ = Phase::PositionProbe;
+}
 
-    if (!g_nZOSScanStatus)
-        return;
+void ZOffsetScan::positionProbe() {
+    //Constrain X-Y for Scanposition to valid locations at noninterpolated matrix-scanpoints.
+    if (g_ZOSTestPoint[X_AXIS] < 1 + ((heatBedScanXStartMm == 0) ? 0 : 1))
+        g_ZOSTestPoint[X_AXIS] = 1 + ((heatBedScanXStartMm == 0) ? 0 : 1);
+    if (g_ZOSTestPoint[X_AXIS] > g_uZMatrixMax[X_AXIS] - 1)
+        g_ZOSTestPoint[X_AXIS] = g_uZMatrixMax[X_AXIS] - 1; //2..n-1
+    if (g_ZOSTestPoint[Y_AXIS] < 1 + ((heatBedScanYStartMm == 0) ? 0 : 1))
+        g_ZOSTestPoint[Y_AXIS] = 1 + ((heatBedScanYStartMm == 0) ? 0 : 1);
+    if (g_ZOSTestPoint[Y_AXIS] > g_uZMatrixMax[Y_AXIS] - 1)
+        g_ZOSTestPoint[Y_AXIS] = g_uZMatrixMax[Y_AXIS] - 1; //2..n-1
+    // move to the first scan position of the heat bed scan matrix
+    float xScanPosition = g_ZCompensationMatrix[g_ZOSTestPoint[X_AXIS]][0]; // + g_nScanXStartSteps; <-- NEIN! Man muss nur die jeweils erste und letzte Matrix-Zeile meiden, ausser heatBedScanXStartMm ist 0 oder heatBedScanYStartMm ist 0
+    float yScanPosition = g_ZCompensationMatrix[0][g_ZOSTestPoint[Y_AXIS]]; // + g_nScanYStartSteps; <-- NEIN!
 
-    if (g_nHeatBedScanStatus
-    ) {
-        g_nZOSScanStatus = 0;
-        g_ZOS_Auto_Matrix_Leveling_State = 0;
+    constexpr long scanPositionJitterMm = 3;
+    xScanPosition += random(-scanPositionJitterMm, scanPositionJitterMm);
+    yScanPosition += random(-scanPositionJitterMm, scanPositionJitterMm);
+
+    Printer::queueRelativeMMCoordinates(xScanPosition, yScanPosition, 0, 0, RMath::min(Printer::homingFeedrate[X_AXIS], Printer::homingFeedrate[Y_AXIS]), true, true);
+    phase_ = Phase::ArmPressureRetries;
+}
+
+void ZOffsetScan::armPressureRetries() {
+    g_scanRetries = 20; //für 9, 10, 20
+    phase_ = Phase::MeasureBaseline;
+}
+
+void ZOffsetScan::retreatForRetry() {
+    HAL::delayMilliseconds(heatBedScanDelayMs);
+    if (moveZPlusDownFast()) {
+        g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
+    }
+    phase_ = Phase::MeasureBaseline;
+}
+
+void ZOffsetScan::measureBaseline() {
+    if (readIdlePressure(&g_nCurrentIdlePressure)) {
+        //Problem mit Digits, die wackeln:
+        if (g_scanRetries-- > 0) {
+            phase_ = Phase::RetreatForRetry;
+            g_abortZScan = 0;
+            return;
+        } else {
+            Com::printFLN(PSTR("ERROR::the idle pressure could not be determined"));
+            g_abortZScan = SCAN_ABORT_REASON_IDLE_PRESSURE;
+            abort(false);
+        }
         return;
     }
 
-    if (g_nZOSScanStatus) {
-        Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
-        GCodeInput::keepAlive(Calibrating);
+    g_nMinPressureContact = g_nCurrentIdlePressure - zOffsetScanContactPressureDelta;
+    g_nMaxPressureContact = g_nCurrentIdlePressure + zOffsetScanContactPressureDelta;
+    g_nMinPressureRetry = g_nCurrentIdlePressure - zOffsetScanRetryPressureDelta;
+    g_nMaxPressureRetry = g_nCurrentIdlePressure + zOffsetScanRetryPressureDelta;
+    g_nMinPressureIdle = g_nCurrentIdlePressure - zOffsetScanIdlePressureDelta;
+    g_nMaxPressureIdle = g_nCurrentIdlePressure + zOffsetScanIdlePressureDelta;
 
-        switch (g_nZOSScanStatus) {
-        case 1: {
-            g_retryZScan = 0;
-            Printer::idleStatus.cancel();
-            Com::printFLN(PSTR("ZOS init"));
-            // when the heat bed Z offset is searched, the z-compensation must be disabled
-            g_nZOSScanStatus = 2;
-            g_min_nZScanZPosition = long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM); //nur nutzen wenn kleiner.
-            g_scanRetries = 0;                                                                  // never retry   TODO allow retries?
-            g_abortZScan = 0;                                                                   // will be set in case of error inside moveZMinusUpFast/Slow
-            g_nLastZScanZPosition = 0;                                                          //sodass dass bei mehreren scans nicht die letzte position als abstands limit feststeht.
-            break;
+    phase_ = Phase::ApproachSurface;
+}
+
+void ZOffsetScan::approachSurface() {
+    Com::printFLN(PSTR("Approaching HeatBed"));
+
+    // move to the surface
+    long oldZsteps = Printer::zMotion.scanSteps();
+
+    moveZMinusUpFast(); // ------
+    HAL::delayMilliseconds(g_nScanSlowStepDelay);
+
+    //Wenn Filament langsam nachgibt, wandert evtl. die Kraft langsam. Hier prüfen, ob idle digits gültig.
+    short nTempPressure;
+    if (readAveragePressure(&nTempPressure)) {
+        if (g_scanRetries <= 0) {
+            g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
         }
-        case 2: {
+        g_retryZScan = 1;
+    }
 
-            //bissel übertrieben, sollte aber jede eventualität abfangen: Wir brauchen die maximale Matrix-Dimension auch schon hier (ganz grob) und wollen nicht so lange warten.
-            unsigned short uDimensionX, uDimensionY;
-            if (g_ZCompensationMatrix[0][0] == EEPROM_FORMAT) {
-                uDimensionX = g_uZMatrixMax[X_AXIS] - 1;
-                uDimensionY = g_uZMatrixMax[Y_AXIS] - 1;
-            } else {
-                uDimensionX = (unsigned char)readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, EEPROM_SECTOR_SIZE * g_nActiveHeatBed + EEPROM_OFFSET_DIMENSION_X) - 1;
-                uDimensionY = (unsigned char)readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, EEPROM_SECTOR_SIZE * g_nActiveHeatBed + EEPROM_OFFSET_DIMENSION_Y) - 1;
-            }
-            if (uDimensionX > COMPENSATION_MATRIX_MAX_X - 1)
-                uDimensionX = (unsigned char)(COMPENSATION_MATRIX_MAX_X - 1);
-            if (uDimensionY > COMPENSATION_MATRIX_MAX_Y - 1)
-                uDimensionY = (unsigned char)(COMPENSATION_MATRIX_MAX_Y - 1);
+    long didZsteps = abs(Printer::zMotion.scanSteps() - oldZsteps);
+    Com::printFLN(PSTR("FastUp:"), didZsteps);
 
-            //HERE THE FUNCTION MIGHT JUMP IN TO REDO SCANS FOR AUTO_MATRIX_LEVELING
-            switch (g_ZOS_Auto_Matrix_Leveling_State) {
-            case 1: {
-                //Normal start, but overwrite first scan coordinate:
-                g_ZOSTestPoint[X_AXIS] = (unsigned char)(uDimensionX / 2);
-                g_ZOSTestPoint[Y_AXIS] = (unsigned char)(uDimensionY / 2);
-                g_ZOSlearningRate = 1.0f;
-                g_ZOSlearningGradient = 0.0f;
-                g_min_nZScanZPosition = long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM); //nur nutzen wenn kleiner.
-                Com::printF(Com::tAutoMatrixLeveling, g_ZOSTestPoint[X_AXIS]);
-                Com::printFLN(PSTR(" Y:"), g_ZOSTestPoint[Y_AXIS]);
-                break;
-            }
-            case 2: {
-                g_ZOSTestPoint[X_AXIS] = 1; //will be constrained
-                g_ZOSTestPoint[Y_AXIS] = 1; //will be constrained
-                g_ZOSlearningRate = 0.8f;
-                g_ZOSlearningGradient = 1.0f;
-                g_min_nZScanZPosition = long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM); //nur nutzen wenn kleiner.
-                Com::printF(Com::tAutoMatrixLeveling, g_ZOSTestPoint[X_AXIS]);
-                Com::printFLN(PSTR(" Y:"), g_ZOSTestPoint[Y_AXIS]);
-                break;
-            }
-            case 3: {
-                g_ZOSTestPoint[X_AXIS] = uDimensionX; //will be constrained
-                g_ZOSTestPoint[Y_AXIS] = uDimensionY; //will be constrained
-                g_ZOSlearningRate = 0.8f;
-                g_ZOSlearningGradient = 1.0f;
-                g_min_nZScanZPosition = long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM); //nur nutzen wenn kleiner.
-                Com::printF(Com::tAutoMatrixLeveling, g_ZOSTestPoint[X_AXIS]);
-                Com::printFLN(PSTR(" Y:"), g_ZOSTestPoint[Y_AXIS]);
-                break;
-            }
-            case 4: {
-                g_ZOSTestPoint[X_AXIS] = (unsigned char)(uDimensionX / 2);
-                g_ZOSTestPoint[Y_AXIS] = (unsigned char)(uDimensionY / 2 - 1);
-                g_ZOSlearningRate = 0.8f;
-                g_ZOSlearningGradient = 1.0f;
-                g_min_nZScanZPosition = long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM); //nur nutzen wenn kleiner.
-                Com::printF(Com::tAutoMatrixLeveling, g_ZOSTestPoint[X_AXIS]);
-                Com::printFLN(PSTR(" Y:"), g_ZOSTestPoint[Y_AXIS]);
-                break;
-            }
-            case 5: {
-                g_ZOSTestPoint[X_AXIS] = 1;           //will be constrained
-                g_ZOSTestPoint[Y_AXIS] = uDimensionY; //will be constrained
-                g_ZOSlearningRate = 0.8f;
-                g_ZOSlearningGradient = 1.0f;
-                g_min_nZScanZPosition = long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM); //nur nutzen wenn kleiner.
-                Com::printF(Com::tAutoMatrixLeveling, g_ZOSTestPoint[X_AXIS]);
-                Com::printFLN(PSTR(" Y:"), g_ZOSTestPoint[Y_AXIS]);
-                break;
-            }
-            case 6: {
-                g_ZOSTestPoint[X_AXIS] = uDimensionX; //will be constrained
-                g_ZOSTestPoint[Y_AXIS] = 1;           //will be constrained
-                g_ZOSlearningRate = 0.8f;
-                g_ZOSlearningGradient = 1.0f;
-                g_min_nZScanZPosition = long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM); //nur nutzen wenn kleiner.
-                Com::printF(Com::tAutoMatrixLeveling, g_ZOSTestPoint[X_AXIS]);
-                Com::printFLN(PSTR(" Y:"), g_ZOSTestPoint[Y_AXIS]);
-                break;
-            }
-            case 7: {
-                g_ZOSTestPoint[X_AXIS] = (unsigned char)(uDimensionX / 2);
-                g_ZOSTestPoint[Y_AXIS] = (unsigned char)(uDimensionY / 2 + 1);
-                g_ZOSlearningRate = 0.8f;
-                g_ZOSlearningGradient = 1.0f;
-                g_min_nZScanZPosition = long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM); //nur nutzen wenn kleiner.
-                Com::printF(Com::tAutoMatrixLeveling, g_ZOSTestPoint[X_AXIS]);
-                Com::printFLN(PSTR(" Y:"), g_ZOSTestPoint[Y_AXIS]);
-                g_ZOS_Auto_Matrix_Leveling_State = 0; //Auto-Matrix-Leveling ends after last scan.
-                break;
-            }
-            default: {
+    // move 2 intervals (but not more that you went down!) back away from the surface
+    long revertZsteps = (didZsteps > 2 * abs(g_nScanHeatBedUpFastSteps) ? 2 * abs(g_nScanHeatBedUpFastSteps) : didZsteps);
+    Com::printFLN(PSTR("RevertDown:"), revertZsteps);
+    moveZ(revertZsteps); // ++
 
-            } // No AUTO_MATRIX_LEVELING
-            //Normal start: End after this scan.
-            }
-
-            // start at the home position
-            Printer::homeAxis(true, true, true); //home z resets ZCMP
-            g_nZOSScanStatus = 3;
-            break;
+    HAL::delayMilliseconds(g_nScanSlowStepDelay);
+    //rescan force and look if you reverted the contact pressure to the old state:
+    short nTempPressureUp;
+    if (readAveragePressure(&nTempPressureUp)) {
+        if (g_scanRetries <= 0) {
+            g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
         }
-        case 3: {
+        g_retryZScan = 1;
+    }
+    //check if the old pressure state is reached again, retry if not. If not you measured some melted plastic or your DMS is driving away.
+    if (abs(nTempPressureUp - nTempPressure) < zOffsetScanContactPressureDelta) {
+        if (g_scanRetries > 0) g_abortZScan = 0;
+        g_retryZScan = 1;
+    }
+    Com::printF(PSTR("RevertPdelta:"), abs(nTempPressureUp - nTempPressure));
+    Com::printFLN(PSTR("/"), zOffsetScanContactPressureDelta);
 
-            moveZ(g_min_nZScanZPosition); //Wenn man hier mit queueRelativeStepsCoordinates über die queue Z verfährt, zeigt das display 10mm statt 5mm an. Weil currentZPositionSteps addiert und man die hier braucht. Also während dem Scan immer nur die moveZ verwenden.
+    if (g_scanRetries > 0 && g_retryZScan) {
+        g_retryZScan = 0;
+        g_scanRetries--;
+        Com::printFLN(PSTR("Bettsuchproblem 10 -> 7 :"), g_scanRetries);
+        phase_ = Phase::RetreatForRetry;
+        return;
+    }
 
-            // move a bit away from the heat bed in order to achieve better measurements in case of hardware configurations where the extruder is very close to the heat bed after the z-homing
-            UI_STATUS_UPD(UI_TEXT_ZCALIB);
-            g_nZOSScanStatus = 4;
-            break;
-        }
-        case 4: {
+    // check for error
+    if (g_abortZScan) {
+        // will be set in case of error inside moveZMinusUpFast/Slow -> != 0 AFTER RETURN would temper with normal HBS-Scan function @ABORT
+        Com::printFLN(PSTR("ERROR::Cannot find surface"));
+        abort(false);
+        return;
+    }
 
-            // load the unaltered compensation matrix from the EEPROM
-            if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT || g_ZOSlearningRate == 1.0) {
-                Com::printFLN(PSTR("Loading zMatrix from EEPROM"));
-                if (loadCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed))) {
-                    // Error: there is no valid compensation matrix available
-                    initCompensationMatrix();
-                }
-            } else {
-                Com::printFLN(PSTR("Reusing existing zMatrix"));
-            }
+    phase_ = Phase::ProbeSurface;
+}
 
-            // safety check on the current matrix
-            if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
-                Com::printFLN(PSTR("ERROR::prev. matrix invalid!"));
-                g_abortZScan = SCAN_ABORT_REASON_MISSING_MATRIX;
-                abortSearchHeatBedZOffset(false);
-                break;
-            }
-            g_nZOSScanStatus = 5;
-            break;
-        }
-        case 5: {
-            //Constrain X-Y for Scanposition to valid locations at noninterpolated matrix-scanpoints.
-            if (g_ZOSTestPoint[X_AXIS] < 1 + ((heatBedScanXStartMm == 0) ? 0 : 1))
-                g_ZOSTestPoint[X_AXIS] = 1 + ((heatBedScanXStartMm == 0) ? 0 : 1);
-            if (g_ZOSTestPoint[X_AXIS] > g_uZMatrixMax[X_AXIS] - 1)
-                g_ZOSTestPoint[X_AXIS] = g_uZMatrixMax[X_AXIS] - 1; //2..n-1
-            if (g_ZOSTestPoint[Y_AXIS] < 1 + ((heatBedScanYStartMm == 0) ? 0 : 1))
-                g_ZOSTestPoint[Y_AXIS] = 1 + ((heatBedScanYStartMm == 0) ? 0 : 1);
-            if (g_ZOSTestPoint[Y_AXIS] > g_uZMatrixMax[Y_AXIS] - 1)
-                g_ZOSTestPoint[Y_AXIS] = g_uZMatrixMax[Y_AXIS] - 1; //2..n-1
-            // move to the first scan position of the heat bed scan matrix
-            float xScanPosition = g_ZCompensationMatrix[g_ZOSTestPoint[X_AXIS]][0]; // + g_nScanXStartSteps; <-- NEIN! Man muss nur die jeweils erste und letzte Matrix-Zeile meiden, ausser heatBedScanXStartMm ist 0 oder heatBedScanYStartMm ist 0
-            float yScanPosition = g_ZCompensationMatrix[0][g_ZOSTestPoint[Y_AXIS]]; // + g_nScanYStartSteps; <-- NEIN!
+void ZOffsetScan::probeSurface() {
+    Com::printFLN(PSTR("Testing Surface "));
+    Com::printFLN(PSTR("10.1"));
+    long previousZ = Printer::zMotion.scanSteps();
 
-            constexpr long scanPositionJitterMm = 3;
-            xScanPosition += random(-scanPositionJitterMm, scanPositionJitterMm);
-            yScanPosition += random(-scanPositionJitterMm, scanPositionJitterMm);
+    // Back off from the coarse approach before probing slowly.
+    moveZ(abs(g_nScanHeatBedUpSlowSteps));
+    Com::printFLN(PSTR("DownFine:"), Printer::zMotion.scanSteps() - previousZ);
+    previousZ = Printer::zMotion.scanSteps();
 
-            Printer::queueRelativeMMCoordinates(xScanPosition, yScanPosition, 0, 0, RMath::min(Printer::homingFeedrate[X_AXIS], Printer::homingFeedrate[Y_AXIS]), true, true);
-            g_nZOSScanStatus = 6;
-            break;
-        }
-        case 6: {
-            g_scanRetries = 20; //für 9, 10, 20
-            g_nZOSScanStatus = 9;
-            break;
-        }
+    short nTempPressure;
+    moveZMinusUpSlow(&nTempPressure, 2);
+    Com::printFLN(PSTR("UpFine:"), Printer::zMotion.scanSteps() - previousZ);
+    previousZ = Printer::zMotion.scanSteps();
 
-        case 7: //ab hier bei Fehler:
-        {
-            HAL::delayMilliseconds(heatBedScanDelayMs);
-            if (moveZPlusDownFast()) {
-				g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
-			}
-            g_nZOSScanStatus = 9;
-            break;
-        }
-        case 9: {
-            if (readIdlePressure(&g_nCurrentIdlePressure)) {
-                //Problem mit Digits, die wackeln:
-                if (g_scanRetries-- > 0) {
-                    g_nZOSScanStatus = 7;
-                    g_abortZScan = 0;
-                    break;
-                } else {
-                    Com::printFLN(PSTR("ERROR::the idle pressure could not be determined"));
-                    g_abortZScan = SCAN_ABORT_REASON_IDLE_PRESSURE;
-                    abortSearchHeatBedZOffset(false);
-                }
-                break;
-            }
+    // Release contact force without comparing against the previous probe position.
+    g_nLastZScanZPosition = 0;
+    moveZPlusDownSlow(8);
+    Com::printFLN(PSTR("DownFine:"), Printer::zMotion.scanSteps() - previousZ);
 
-            g_nMinPressureContact = g_nCurrentIdlePressure - zOffsetScanContactPressureDelta;
-            g_nMaxPressureContact = g_nCurrentIdlePressure + zOffsetScanContactPressureDelta;
-            g_nMinPressureRetry = g_nCurrentIdlePressure - zOffsetScanRetryPressureDelta;
-            g_nMaxPressureRetry = g_nCurrentIdlePressure + zOffsetScanRetryPressureDelta;
-            g_nMinPressureIdle = g_nCurrentIdlePressure - zOffsetScanIdlePressureDelta;
-            g_nMaxPressureIdle = g_nCurrentIdlePressure + zOffsetScanIdlePressureDelta;
+    if (g_scanRetries > 0 && g_retryZScan) {
+        g_retryZScan = 0;
+        g_scanRetries--;
+        Com::printFLN(PSTR("Suchproblem 20 -> 7:"), g_scanRetries);
+        phase_ = Phase::RetreatForRetry;
+        return;
+    }
+    if (g_abortZScan) {
+        Com::printFLN(PSTR("ERROR::cannot find surface in slow scan"));
+        abort(false);
+        return;
+    }
 
-            g_nZOSScanStatus = 10;
-            break;
-        }
-        case 10: {
-            Com::printFLN(PSTR("Approaching HeatBed"));
+    if (Printer::zMotion.scanSteps() < probeZSteps_)
+        probeZSteps_ = Printer::zMotion.scanSteps();
 
-            // move to the surface
-            long oldZsteps = Printer::zMotion.scanSteps();
+    Com::printFLN(PSTR("Z = "), Printer::zMotion.scanSteps() * Printer::axisMMPerSteps[Z_AXIS], 4);
+    phase_ = Phase::ApplyMatrixCorrection;
+}
 
-            moveZMinusUpFast(); // ------
-            HAL::delayMilliseconds(g_nScanSlowStepDelay);
+void ZOffsetScan::applyMatrixCorrection() {
+    // compute number of steps we need to shift the entire matrix by
+    long matrixwert = getZMatrixDepth_CurrentXY();
+    long nZ = probeZSteps_ - matrixwert; //g_ZCompensationMatrix[g_ZOSTestPoint[X_AXIS]][g_ZOSTestPoint[Y_AXIS]]; --> NEU: Mit Interpolation, also können wir überall scannen.
 
-            //Wenn Filament langsam nachgibt, wandert evtl. die Kraft langsam. Hier prüfen, ob idle digits gültig.
-            short nTempPressure;
-            if (readAveragePressure(&nTempPressure)) {
-                if (g_scanRetries <= 0) {
-                    g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
-                }
-                g_retryZScan = 1;
-            }
+    Com::printFLN(PSTR("Matrix-Wert Z = "), matrixwert);
+    Com::printF(PSTR("Minimum Z = "), probeZSteps_);
+    Com::printFLN(PSTR(" dZ = "), nZ);
 
-            long didZsteps = abs(Printer::zMotion.scanSteps() - oldZsteps);
-            Com::printFLN(PSTR("FastUp:"), didZsteps);
+    // update the matrix: shift by nZ and check for integer overflow
+    bool overflow = false;
+    bool overH = false;
+    bool overnull = false;
 
-            // move 2 intervals (but not more that you went down!) back away from the surface
-            long revertZsteps = (didZsteps > 2 * abs(g_nScanHeatBedUpFastSteps) ? 2 * abs(g_nScanHeatBedUpFastSteps) : didZsteps);
-            Com::printFLN(PSTR("RevertDown:"), revertZsteps);
-            moveZ(revertZsteps); // ++
+    //Nibbels: scaling nZ according to learning Rate for additional corrective scans
+    nZ = (long)((float)nZ * g_ZOSlearningRate);
 
-            HAL::delayMilliseconds(g_nScanSlowStepDelay);
-            //rescan force and look if you reverted the contact pressure to the old state:
-            short nTempPressureUp;
-            if (readAveragePressure(&nTempPressureUp)) {
-                if (g_scanRetries <= 0) {
-                    g_abortZScan = SCAN_ABORT_REASON_AVERAGE_PRESSURE;
-                }
-                g_retryZScan = 1;
-            }
-            //check if the old pressure state is reached again, retry if not. If not you measured some melted plastic or your DMS is driving away.
-            if (abs(nTempPressureUp - nTempPressure) < zOffsetScanContactPressureDelta) {
-                if (g_scanRetries > 0) g_abortZScan = 0;
-                g_retryZScan = 1;
-            }
-            Com::printF(PSTR("RevertPdelta:"), abs(nTempPressureUp - nTempPressure));
-            Com::printFLN(PSTR("/"), zOffsetScanContactPressureDelta);
+    //Nibbels: weight change because of distance. lerne bettwinkelausgleich.
+    float x_bed_len_quadrat = (float)((g_uZMatrixMax[X_AXIS] - 2) * (g_uZMatrixMax[X_AXIS] - 2)); //index zwischenabstamd x_n - x_0
+    float y_bed_len_quadrat = (float)((g_uZMatrixMax[Y_AXIS] - 2) * (g_uZMatrixMax[Y_AXIS] - 2));
+    float x_dist = 0;
+    float y_dist = 0;
+    float xy_weight = 0;
+    long weighted_nZ = 0;
+    long newValue = 0;
 
-            if (g_scanRetries > 0 && g_retryZScan) {
-                g_retryZScan = 0;
-                g_scanRetries--;
-                Com::printFLN(PSTR("Bettsuchproblem 10 -> 7 :"), g_scanRetries);
-                g_nZOSScanStatus = 7;
-                break;
-            }
-
-            // check for error
-            if (g_abortZScan) {
-                // will be set in case of error inside moveZMinusUpFast/Slow -> != 0 AFTER RETURN would temper with normal HBS-Scan function @ABORT
-                Com::printFLN(PSTR("ERROR::Cannot find surface"));
-                abortSearchHeatBedZOffset(false);
-                break;
-            }
-
-            g_nZOSScanStatus = 20;
-            break;
-        }
-        case 20: {
-            Com::printFLN(PSTR("Testing Surface "));
-            Com::printFLN(PSTR("10.1"));
-            long previousZ = Printer::zMotion.scanSteps();
-
-            // Back off from the coarse approach before probing slowly.
-            moveZ(abs(g_nScanHeatBedUpSlowSteps));
-            Com::printFLN(PSTR("DownFine:"), Printer::zMotion.scanSteps() - previousZ);
-            previousZ = Printer::zMotion.scanSteps();
-
-            short nTempPressure;
-            moveZMinusUpSlow(&nTempPressure, 2);
-            Com::printFLN(PSTR("UpFine:"), Printer::zMotion.scanSteps() - previousZ);
-            previousZ = Printer::zMotion.scanSteps();
-
-            // Release contact force without comparing against the previous probe position.
-            g_nLastZScanZPosition = 0;
-            moveZPlusDownSlow(8);
-            Com::printFLN(PSTR("DownFine:"), Printer::zMotion.scanSteps() - previousZ);
-
-            if (g_scanRetries > 0 && g_retryZScan) {
-                g_retryZScan = 0;
-                g_scanRetries--;
-                Com::printFLN(PSTR("Suchproblem 20 -> 7:"), g_scanRetries);
-                g_nZOSScanStatus = 7;
-                break;
-            }
-            if (g_abortZScan) {
-                Com::printFLN(PSTR("ERROR::cannot find surface in slow scan"));
-                abortSearchHeatBedZOffset(false);
-                break;
-            }
-
-            if (Printer::zMotion.scanSteps() < g_min_nZScanZPosition)
-                g_min_nZScanZPosition = Printer::zMotion.scanSteps();
-
-            Com::printFLN(PSTR("Z = "), Printer::zMotion.scanSteps() * Printer::axisMMPerSteps[Z_AXIS], 4);
-            g_nZOSScanStatus = 50;
-            break;
-        }
-        case 50: {
-            // compute number of steps we need to shift the entire matrix by
-            long matrixwert = getZMatrixDepth_CurrentXY();
-            long nZ = g_min_nZScanZPosition - matrixwert; //g_ZCompensationMatrix[g_ZOSTestPoint[X_AXIS]][g_ZOSTestPoint[Y_AXIS]]; --> NEU: Mit Interpolation, also können wir überall scannen.
-
-            Com::printFLN(PSTR("Matrix-Wert Z = "), matrixwert);
-            Com::printF(PSTR("Minimum Z = "), g_min_nZScanZPosition);
-            Com::printFLN(PSTR(" dZ = "), nZ);
-
-            // update the matrix: shift by nZ and check for integer overflow
-            bool overflow = false;
-            bool overH = false;
-            bool overnull = false;
-
-            //Nibbels: scaling nZ according to learning Rate for additional corrective scans
-            nZ = (long)((float)nZ * g_ZOSlearningRate);
-
-            //Nibbels: weight change because of distance. lerne bettwinkelausgleich.
-            float x_bed_len_quadrat = (float)((g_uZMatrixMax[X_AXIS] - 2) * (g_uZMatrixMax[X_AXIS] - 2)); //index zwischenabstamd x_n - x_0
-            float y_bed_len_quadrat = (float)((g_uZMatrixMax[Y_AXIS] - 2) * (g_uZMatrixMax[Y_AXIS] - 2));
-            float x_dist = 0;
-            float y_dist = 0;
-            float xy_weight = 0;
-            long weighted_nZ = 0;
-            long newValue = 0;
-
-            for (short x = 1; x <= g_uZMatrixMax[X_AXIS]; x++) {
-                for (short y = 1; y <= g_uZMatrixMax[Y_AXIS]; y++) {
-                    x_dist = (g_ZOSTestPoint[X_AXIS] - x) * (g_ZOSTestPoint[X_AXIS] - x) / x_bed_len_quadrat; //normierter indexabstand
-                    y_dist = (g_ZOSTestPoint[Y_AXIS] - y) * (g_ZOSTestPoint[Y_AXIS] - y) / y_bed_len_quadrat; //normierter indexabstand
-                    x_dist = sqrt(x_dist);                                                                    //Linearisieren. für Auto-Matrix-Leveling
-                    y_dist = sqrt(y_dist);                                                                    //Linearisieren. für Auto-Matrix-Leveling
-                    //das ist nur ein kreisabstand, wenn die messpunkte quadratisch angeordnet sind, ist aber nicht so?
-                    // evtl. todo: achse faktor skalieren, sodass kreis x/y=(10/13)
-                    xy_weight = 1 - sqrt(x_dist * x_dist + y_dist * y_dist); //linear gewichtet
-                    if (xy_weight < 0.0)
-                        xy_weight = 0;
-                    if (xy_weight > 1.0)
-                        xy_weight = 1.0; //kann aber nicht wirklich vorkommen.
-                    weighted_nZ = (long)(g_ZOSlearningGradient * xy_weight * (float)nZ + (1.0 - g_ZOSlearningGradient) * (float)nZ);
-                    newValue = (long)g_ZCompensationMatrix[x][y] + weighted_nZ;
-                    if (newValue > 32767 || newValue < -32768)
-                        overflow = true;
-                    if (newValue > 0)
-                        overnull = true; //darf nicht positiv werden. //darf nicht über limit sein.
-                    if (newValue > (long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM) + g_nScanHeatBedUpFastSteps))
-                        overH = true; //darf nicht positiv werden. //darf nicht über limit sein.
-                    g_ZCompensationMatrix[x][y] = (short)newValue;
-                }
-            }
-            // fail if overflow occurred
-            if (overflow) {
-                // load the unaltered compensation matrix from the EEPROM since the current in-memory matrix is invalid
-                Com::printFLN(PSTR("Matrix Overflow!"));
-                g_abortZScan = SCAN_ABORT_REASON_OVERFLOWING_MATRIX;
-                abortSearchHeatBedZOffset(true);
-                break;
-            }
-            // fail if z>(Starthöhe - ein bisschen) occurred
-            if (overH) {
-                // load the unaltered compensation matrix from the EEPROM since the current in-memory matrix is bigger than z=zero
-                Com::printFLN(PSTR("ERROR::Z-Matrix höher Start-Z!"));
-                g_abortZScan = SCAN_ABORT_REASON_BAD_HEIGHT_MATRIX;
-                abortSearchHeatBedZOffset(true);
-                break;
-            }
-            // fail if z>0 occurred
-            if (overnull) {
-                // load the unaltered compensation matrix from the EEPROM since the current in-memory matrix is bigger than z=zero
-                Com::printFLN(PSTR("FIX::Clean Hotend-Nozzle"));
-                Com::printFLN(PSTR("FIX::Fix Z-Schraube"));
-            }
-            // determine the minimal distance between extruder and heat bed
-            determineCompensationOffsetZ();
-            g_ZMatrixChangedInRam = 1; //man kan die matrix mit diesem marker nun sichern.
-
-            g_nZOSScanStatus = 51;
-            break;
-        }
-        case 51: {
-            //HERE THE ZOS MIGHT REDO SCANS FOR AUTO_MATRIX_LEVELING
-            switch (g_ZOS_Auto_Matrix_Leveling_State) {
-            case 0: {
-                g_nZOSScanStatus = 99; // No AUTO_MATRIX_LEVELING
-                break;
-            }
-            default: {
-                g_nZOSScanStatus = 2; // Goto next AUTO_MATRIX_LEVELING Setting
-                g_ZOS_Auto_Matrix_Leveling_State++;
-                moveZ(Printer::axisStepsPerMM[Z_AXIS]);
-                Printer::homeAxis(true, true, false);
-                moveZ(-Printer::zMotion.scanSteps()); // Printer::zMotion.scanSteps() counts z-steps. we need to move the heatbed down to be at z=0 again
-                outputCompensationMatrix(1);
-            }
-            }
-            break;
-        }
-        case 99: {
-            moveZ(Printer::axisStepsPerMM[Z_AXIS]);
-            Printer::homeAxis(false, true, false);
-            moveZ(-Printer::zMotion.scanSteps()); // Printer::zMotion.scanSteps() counts z-steps. we need to move the heatbed down to be at z=0 again
-            g_nZOSScanStatus = 100;    // No AUTO_MATRIX_LEVELING
-            break;
-        }
-        case 100: {
-            g_nZOSScanStatus = 0;
-            calculateZScrewCorrection();
-
-            showMyPage((void*)ui_text_heat_bed_zoffset_search_status, (void*)ui_text_heat_bed_zoffset_fix_z1, (void*)ui_text_heat_bed_zoffset_fix_z2, (void*)ui_text_statusmsg);
-            g_nAutoReturnMessage = true;
-            g_nAutoReturnTime = HAL::timeInMilliseconds() + 30000;
-            Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 30000);
-
-            //Printer::zMotion.scanSteps() is 0 now.
-            Com::printFLN(PSTR("ZOS finished"));
-            break;
-        }
+    for (short x = 1; x <= g_uZMatrixMax[X_AXIS]; x++) {
+        for (short y = 1; y <= g_uZMatrixMax[Y_AXIS]; y++) {
+            x_dist = (g_ZOSTestPoint[X_AXIS] - x) * (g_ZOSTestPoint[X_AXIS] - x) / x_bed_len_quadrat; //normierter indexabstand
+            y_dist = (g_ZOSTestPoint[Y_AXIS] - y) * (g_ZOSTestPoint[Y_AXIS] - y) / y_bed_len_quadrat; //normierter indexabstand
+            x_dist = sqrt(x_dist);                                                                    //Linearisieren. für Auto-Matrix-Leveling
+            y_dist = sqrt(y_dist);                                                                    //Linearisieren. für Auto-Matrix-Leveling
+            //das ist nur ein kreisabstand, wenn die messpunkte quadratisch angeordnet sind, ist aber nicht so?
+            // evtl. todo: achse faktor skalieren, sodass kreis x/y=(10/13)
+            xy_weight = 1 - sqrt(x_dist * x_dist + y_dist * y_dist); //linear gewichtet
+            if (xy_weight < 0.0)
+                xy_weight = 0;
+            if (xy_weight > 1.0)
+                xy_weight = 1.0; //kann aber nicht wirklich vorkommen.
+            weighted_nZ = (long)(g_ZOSlearningGradient * xy_weight * (float)nZ + (1.0 - g_ZOSlearningGradient) * (float)nZ);
+            newValue = (long)g_ZCompensationMatrix[x][y] + weighted_nZ;
+            if (newValue > 32767 || newValue < -32768)
+                overflow = true;
+            if (newValue > 0)
+                overnull = true; //darf nicht positiv werden. //darf nicht über limit sein.
+            if (newValue > (long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM) + g_nScanHeatBedUpFastSteps))
+                overH = true; //darf nicht positiv werden. //darf nicht über limit sein.
+            g_ZCompensationMatrix[x][y] = (short)newValue;
         }
     }
-} // searchZOScan
+    // fail if overflow occurred
+    if (overflow) {
+        // load the unaltered compensation matrix from the EEPROM since the current in-memory matrix is invalid
+        Com::printFLN(PSTR("Matrix Overflow!"));
+        g_abortZScan = SCAN_ABORT_REASON_OVERFLOWING_MATRIX;
+        abort(true);
+        return;
+    }
+    // fail if z>(Starthöhe - ein bisschen) occurred
+    if (overH) {
+        // load the unaltered compensation matrix from the EEPROM since the current in-memory matrix is bigger than z=zero
+        Com::printFLN(PSTR("ERROR::Z-Matrix höher Start-Z!"));
+        g_abortZScan = SCAN_ABORT_REASON_BAD_HEIGHT_MATRIX;
+        abort(true);
+        return;
+    }
+    // fail if z>0 occurred
+    if (overnull) {
+        // load the unaltered compensation matrix from the EEPROM since the current in-memory matrix is bigger than z=zero
+        Com::printFLN(PSTR("FIX::Clean Hotend-Nozzle"));
+        Com::printFLN(PSTR("FIX::Fix Z-Schraube"));
+    }
+    // determine the minimal distance between extruder and heat bed
+    determineCompensationOffsetZ();
+    g_ZMatrixChangedInRam = 1; //man kan die matrix mit diesem marker nun sichern.
 
-void abortSearchHeatBedZOffset(bool reloadMatrix) {
+    phase_ = Phase::ContinueLeveling;
+}
+
+void ZOffsetScan::continueLeveling() {
+    if (levelingPass_ == LevelingPass::None) {
+        phase_ = Phase::RetreatForFinish;
+        return;
+    }
+    phase_ = Phase::HomeForProbe;
+    moveZ(Printer::axisStepsPerMM[Z_AXIS]);
+    Printer::homeAxis(true, true, false);
+    moveZ(-Printer::zMotion.scanSteps());
+    outputCompensationMatrix(1);
+}
+
+void ZOffsetScan::retreatForFinish() {
+    moveZ(Printer::axisStepsPerMM[Z_AXIS]);
+    Printer::homeAxis(false, true, false);
+    moveZ(-Printer::zMotion.scanSteps()); // Printer::zMotion.scanSteps() counts z-steps. we need to move the heatbed down to be at z=0 again
+    phase_ = Phase::ReportScrewAdjustment;    // No AUTO_MATRIX_LEVELING
+}
+
+void ZOffsetScan::reportScrewAdjustment() {
+    phase_ = Phase::Idle;
+    calculateZScrewCorrection();
+
+    showMyPage((void*)ui_text_heat_bed_zoffset_search_status, (void*)ui_text_heat_bed_zoffset_fix_z1, (void*)ui_text_heat_bed_zoffset_fix_z2, (void*)ui_text_statusmsg);
+    g_nAutoReturnMessage = true;
+    g_nAutoReturnTime = HAL::timeInMilliseconds() + 30000;
+    Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 30000);
+
+    //Printer::zMotion.scanSteps() is 0 now.
+    Com::printFLN(PSTR("ZOS finished"));
+}
+
+void ZOffsetScan::abort(bool reloadMatrix) {
     showAbortScanReason(PSTR(UI_TEXT_DO_MHIER_BED_SCAN), g_abortZScan);
 
     if (reloadMatrix) {
@@ -1518,7 +1527,7 @@ void abortSearchHeatBedZOffset(bool reloadMatrix) {
         }
     }
     g_abortZScan = 0;
-    g_nZOSScanStatus = 0;
+    phase_ = Phase::Idle;
     g_retryZScan = 0;
     g_nLastZScanZPosition = 0;
 
@@ -1532,9 +1541,25 @@ void abortSearchHeatBedZOffset(bool reloadMatrix) {
     // turn off all steppers and extruders
     Printer::disableAllSteppersNow();
 
-    g_ZOS_Auto_Matrix_Leveling_State = 0;
+    levelingPass_ = LevelingPass::None;
     Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 30000);
-} /* searchHeatBedZOffset */
+}
+
+} // namespace
+
+void startZOScan(bool autoLevelMatrix) {
+    if (!g_nHeatBedScanStatus)
+        zOffsetScan.startOrCancel(autoLevelMatrix);
+}
+
+static bool zOffsetScanRunning() {
+    return zOffsetScan.active();
+}
+
+void discardScans() {
+    g_nHeatBedScanStatus = 0;
+    zOffsetScan.discard();
+}
 
 float g_ZSchraubenSollDrehungenWarm_U = 0;
 float g_ZSchraubenSollKorrekturWarm_mm = 0;
@@ -3014,9 +3039,7 @@ void handleScanWorkTasks() {
     if (g_nHeatBedScanStatus) {
         scanHeatBed();
     }
-    if (g_nZOSScanStatus) {
-        searchZOScan();
-    }
+    zOffsetScan.tick();
 }
 
 void handleStartStandby(millis_t uTime) {
@@ -4839,7 +4862,7 @@ void processSpecialGCode(GCode* pCommand) {
                         // mit R im GCode macht der Scan ein Auto-Matrix-Leveling, anstatt die anderen Schalter zu bedienen.
                         startZOScan(pCommand->hasR());
                         // Warte bis Z-Offset-Scan beendet wurde.
-                        while (g_nZOSScanStatus) {
+                        while (zOffsetScan.active()) {
                             Commands::checkForPeriodicalActions(Calibrating);
                         }
                     }
@@ -5263,12 +5286,7 @@ void queueTask(char task) {
 } // queueTask
 
 bool isAnyScanRunning() {
-    if (g_nHeatBedScanStatus)
-        return true;
-    if (g_nZOSScanStatus)
-        return true;
-
-    return false;
+    return g_nHeatBedScanStatus || zOffsetScan.active();
 }
 
 void moveXAction(int8_t direction) {
@@ -6179,8 +6197,7 @@ unsigned char isMovingAllowed(const char* pszCommand, char outputLog) {
         return 0;
     }
 
-    if (g_nHeatBedScanStatus || g_nZOSScanStatus
-    ) {
+    if (isAnyScanRunning()) {
         // do not allow manual movements while the heat bed scan is in progress
         if (Printer::debugErrors() && outputLog) {
             Com::printF(pszCommand);
@@ -6196,7 +6213,7 @@ unsigned char isMovingAllowed(const char* pszCommand, char outputLog) {
 
 unsigned char isHomingAllowed(GCode* com, char outputLog) {
 
-    if (g_nHeatBedScanStatus || g_nZOSScanStatus) {
+    if (isAnyScanRunning()) {
         // do not allow homing while the heat bed scan is in progress
         if (Printer::debugErrors() && outputLog) {
             Com::printFLN(PSTR("G28: homing can not be performed while the heat bed scan is in progress"));

@@ -17,8 +17,7 @@ void PrintJob::service(uint32_t now) {
 
         Extruder::setHeatedBedTemperature(0);
         Extruder::setTemperatureForAllExtruders(0);
-        g_nZOSScanStatus = 0;
-        g_nHeatBedScanStatus = 0;
+        discardScans();
         Com::printFLN(PSTR("Stop complete"));
         phaseSince_ = now;
         phase_ = Phase::WaitingToOutput;

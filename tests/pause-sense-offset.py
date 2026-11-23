@@ -62,7 +62,8 @@ def main():
         section(printer, "void Printer::stopPrint()", "\n#define START_EXTRUDER_CONFIG"),
         section(printer, "void Printer::homeZAxis()", "\nvoid Printer::homeAxis("),
         section(printer, "void Printer::enableSenseOffsetnow(", "\nvoid Printer::enableCMPnow("),
-        section(rf, "bool isAnyScanRunning()", "\nvoid moveXAction("),
+        section(rf, "bool isAnyScanRunning()", "\nvoid moveXAction(")
+        .replace("zOffsetScan.active()", "zOffsetScanRunning()"),
         section(rf, "void moveZAction(int8_t direction) {", "} // moveZAction") + "}",
         section(ui, "void UIDisplay::pressPlay()", "\nvoid UIDisplay::mainSwitchCase("),
         section(ui, "void UIDisplay::fastAction()", "} // fastAction") + "}",

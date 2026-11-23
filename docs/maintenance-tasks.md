@@ -47,6 +47,8 @@ Across the four AVR builds, 64 XY instruction traces reproduce the motor displac
 
 ### Z travel and scanning
 
+- [x] **Give the Z-offset scan named phases.** The scan owner keeps the current phase, probe Z and the leveling route. Each service call advances one phase and keeps the existing calibration waits. The replay checks normal completion, an unstable pressure retry, a missing EEPROM matrix and all seven leveling points. [Z-offset scan replay](../tests/z-offset-scan.py)
+
 - [x] **Give Z step execution one owner.** `ZMotion` tracks nominal progress, direct displacement, scan travel, requested and applied correction, missed queued steps and emitted motor steps. The host replay covers endstop clipping, overtravel repayment, opposing correction, compensation waits, scan retreat and microstep scale changes. Run `python3 tests/z-motion.py` for all three model policies. [Execution and limits](development-roadmap.md#z-step-execution)
 
 - [x] **Allow scan retreat from the exact lower bound.** A homed scan stops further approach at the configured Z-min overtravel limit and can still drive the bed away. [Scan step output](../Repetier/ZMotion.cpp) · [Scan reach](z-offset/scans-and-persistence.md#z-min-screw-adjustment-and-scan-reach)
