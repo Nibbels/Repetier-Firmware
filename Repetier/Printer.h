@@ -70,18 +70,55 @@
 
 class Printer {
     static uint8_t menuMode_;
+    static float axisStepsPerMM_[4];
+    static float axisMMPerSteps_[4];
+    static float maxFeedrate_[4];
+    static float homingFeedrate_[3];
+    static float axisLengthMM_[3];
+    static float maxAccelerationMMPerSquareSecond_[4];
+    static float maxTravelAccelerationMMPerSquareSecond_[4];
+    static long maxSoftEndstopSteps_[2];
+    static uint32_t maxPrintAccelerationStepsPerSquareSecond_[4];
+    static uint32_t maxTravelAccelerationStepsPerSquareSecond_[4];
+    static float maxXYJerk_;
+    static float maxZJerk_;
 
 public:
     static ExtrusionOutput extrusionOutput;
 
-    static float axisStepsPerMM[];
-    static float axisMMPerSteps[];
-    static float maxFeedrate[];
-    static float homingFeedrate[];
-    static float maxAccelerationMMPerSquareSecond[];
-    static float maxTravelAccelerationMMPerSquareSecond[];
-    static uint32_t maxPrintAccelerationStepsPerSquareSecond[];
-    static uint32_t maxTravelAccelerationStepsPerSquareSecond[];
+    // Set raw calibration and publish the derived limits with updateDerivedParameter().
+    static float stepsPerMm(uint8_t axis) { return axisStepsPerMM_[axis]; }
+    static void setStepsPerMm(uint8_t axis, float value) { axisStepsPerMM_[axis] = value; }
+    static float mmPerStep(uint8_t axis) { return axisMMPerSteps_[axis]; }
+    static float axisMaxFeedrate(uint8_t axis) { return maxFeedrate_[axis]; }
+    static void setAxisMaxFeedrate(uint8_t axis, float value) { maxFeedrate_[axis] = value; }
+    static float axisHomingFeedrate(uint8_t axis) { return homingFeedrate_[axis]; }
+    static void setAxisHomingFeedrate(uint8_t axis, float value) { homingFeedrate_[axis] = value; }
+    static float axisLengthMm(uint8_t axis) { return axisLengthMM_[axis]; }
+    static void setAxisLengthMm(uint8_t axis, float value) { axisLengthMM_[axis] = value; }
+    static float printAcceleration(uint8_t axis) { return maxAccelerationMMPerSquareSecond_[axis]; }
+    static void setPrintAcceleration(uint8_t axis, float value) { maxAccelerationMMPerSquareSecond_[axis] = value; }
+    static float travelAcceleration(uint8_t axis) { return maxTravelAccelerationMMPerSquareSecond_[axis]; }
+    static void setTravelAcceleration(uint8_t axis, float value) { maxTravelAccelerationMMPerSquareSecond_[axis] = value; }
+    static long xyMaxSteps(uint8_t axis) { return maxSoftEndstopSteps_[axis]; }
+    static float xyJerkLimit() { return maxXYJerk_; }
+    static void setXYJerkLimit(float value) { maxXYJerk_ = value; }
+    static float zJerkLimit() { return maxZJerk_; }
+    static void setZJerkLimit(float value) { maxZJerk_ = value; }
+    static const uint32_t* accelerationSteps(bool printing) {
+        return printing ? maxPrintAccelerationStepsPerSquareSecond_ : maxTravelAccelerationStepsPerSquareSecond_;
+    }
+    static void applyToolMotionSettings(float stepsPerMm, float feedrate, float acceleration) {
+        axisStepsPerMM_[E_AXIS] = stepsPerMm;
+        axisMMPerSteps_[E_AXIS] = 1.0f / stepsPerMm;
+        maxFeedrate_[E_AXIS] = feedrate;
+        maxTravelAccelerationMMPerSquareSecond_[E_AXIS] = acceleration;
+        maxAccelerationMMPerSquareSecond_[E_AXIS] = acceleration;
+        const auto accelerationSteps = uint32_t(acceleration * stepsPerMm);
+        maxTravelAccelerationStepsPerSquareSecond_[E_AXIS] = accelerationSteps;
+        maxPrintAccelerationStepsPerSquareSecond_[E_AXIS] = accelerationSteps;
+    }
+
     static GCodeModes gcodeModes;
     static uint8_t debugLevel;
     static uint8_t flag0;
@@ -90,13 +127,9 @@ public:
     static uint8_t flag3;
     static uint16_t stepsPackingMinInterval;
 
-    static long maxSoftEndstopSteps[2];     // X/Y software endstops. Z limits belong to zMotion.
-    static float axisLengthMM[3];           // Länge des überfahrbaren Bereichs im positiven Homing. (=Schienen-Fahrweg - Homing-Offset - 2x ExtruderOffset)
     static float feedrate;                  // Last requested feedrate.
     static int feedrateMultiply;            // Multiplier for feedrate in percent (factor 1 = 100)
     static float menuExtrusionFactor;       // Flow multiplier factor (1.0 = 100%)
-    static float maxXYJerk;                 // Maximum allowed jerk in mm/s
-    static float maxZJerk;                  // Maximum allowed jerk in z direction in mm/s
     static unsigned long msecondsPrinting;  // Milliseconds of printing time (means time with heated extruder)
     static float filamentPrinted;           // mm of filament printed since counting started
     static ZOffset zOffset;
@@ -464,11 +497,11 @@ public:
     }  // isZMinEndstopHit
 
     static INLINE bool isXMaxEndstopHit() {
-        return Printer::xyMotion.motorSteps(X_AXIS) >= Printer::maxSoftEndstopSteps[X_AXIS];
+        return Printer::xyMotion.motorSteps(X_AXIS) >= Printer::xyMaxSteps(X_AXIS);
     }  // isXMaxEndstopHit
 
     static INLINE bool isYMaxEndstopHit() {
-        return Printer::xyMotion.motorSteps(Y_AXIS) >= Printer::maxSoftEndstopSteps[Y_AXIS];
+        return Printer::xyMotion.motorSteps(Y_AXIS) >= Printer::xyMaxSteps(Y_AXIS);
     }  // isYMaxEndstopHit
 
     static inline bool isZMaxEndstopHit() {
@@ -476,7 +509,7 @@ public:
     }  // isZMaxEndstopHit
 
     static inline int32_t softwareEndstopSteps(uint8_t axis) {
-        return axis == Z_AXIS ? zMotion.maxSteps() : maxSoftEndstopSteps[axis];
+        return axis == Z_AXIS ? zMotion.maxSteps() : maxSoftEndstopSteps_[axis];
     }
 
     static INLINE bool isMinEndstopHit(uint8_t axis) {
@@ -550,12 +583,12 @@ public:
     static inline float currentZPositionMM() {
         if (Printer::ZMode == Z_VALUE_MODE_Z_MIN) {
             // show the Enstop distance
-            return zMotion.motorSteps() * Printer::axisMMPerSteps[Z_AXIS];
+            return zMotion.motorSteps() * Printer::mmPerStep(Z_AXIS);
         }
 
         // Z_VALUE_MODE_LAYER:
         // show the G-Code Commanded Z
-        return zMotion.nominalSteps() * Printer::axisMMPerSteps[Z_AXIS];
+        return zMotion.nominalSteps() * Printer::mmPerStep(Z_AXIS);
     } // currentZPositionMM
 
 #if NUM_EXTRUDER > 1
@@ -577,7 +610,7 @@ public:
         InterruptProtectedBlock noInts;
         cartesianPlanner.setAxisSteps(X_AXIS, x);
         xyMotion.setNominalSteps(X_AXIS, x);
-        moveTarget.setMachineMM(X_AXIS, x * axisMMPerSteps[X_AXIS]);
+        moveTarget.setMachineMM(X_AXIS, x * axisMMPerSteps_[X_AXIS]);
         wobbleCorrection.clearAxis(X_AXIS);
         noInts.unprotect();
     }
@@ -585,7 +618,7 @@ public:
         InterruptProtectedBlock noInts;
         cartesianPlanner.setAxisSteps(Y_AXIS, y);
         xyMotion.setNominalSteps(Y_AXIS, y);
-        moveTarget.setMachineMM(Y_AXIS, y * axisMMPerSteps[Y_AXIS]);
+        moveTarget.setMachineMM(Y_AXIS, y * axisMMPerSteps_[Y_AXIS]);
         wobbleCorrection.clearAxis(Y_AXIS);
         noInts.unprotect();
     }
@@ -593,7 +626,7 @@ public:
         InterruptProtectedBlock noInts;
         zMotion.setNominalSteps(z);
         cartesianPlanner.setAxisSteps(Z_AXIS, z);
-        moveTarget.setMachineMM(Z_AXIS, z * axisMMPerSteps[Z_AXIS]);
+        moveTarget.setMachineMM(Z_AXIS, z * axisMMPerSteps_[Z_AXIS]);
         noInts.unprotect();
     }
     static INLINE void setEPositionMM(float e, float remainder = 0.0f) {
@@ -653,7 +686,7 @@ public:
         InterruptProtectedBlock lock;
         const int32_t target = directPosition(axis).target();
         lock.unprotect();
-        return target * Printer::axisMMPerSteps[axis];
+        return target * Printer::mmPerStep(axis);
     } // getDirectMM
 
     static INLINE uint8_t getFanSpeed(bool percent = false) {

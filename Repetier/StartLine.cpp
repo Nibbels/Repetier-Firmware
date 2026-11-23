@@ -28,7 +28,7 @@ Settings readSettings(GCode& command) {
     if (command.hasI())
         settings.lines = constrain(uint8_t(command.I), 1, 5);
     if (command.hasY()) {
-        const float maxY = Printer::maxSoftEndstopSteps[Y_AXIS] * Printer::axisMMPerSteps[Y_AXIS] * 0.5f;
+        const float maxY = Printer::xyMaxSteps(Y_AXIS) * Printer::mmPerStep(Y_AXIS) * 0.5f;
         settings.y = command.Y;
         if (settings.y > maxY)
             settings.y = maxY;
@@ -50,11 +50,11 @@ void queueLines(const Settings& settings) {
     float y = settings.y;
     float e = 0.0f;
     Printer::queueFloatCoordinates(x, y, startZ, IGNORE_COORDINATE,
-                                   RMath::min(Printer::homingFeedrate[X_AXIS], Printer::homingFeedrate[Y_AXIS]));
+                                   RMath::min(Printer::axisHomingFeedrate(X_AXIS), Printer::axisHomingFeedrate(Y_AXIS)));
 
     for (uint8_t line = 0; line < settings.lines && !Printer::printJob.commandsBlocked(); ++line) {
         const float startX = x, startY = y, startE = e;
-        const float length = Printer::axisLengthMM[X_AXIS] - 2 * xMargin - toolOffsetX;
+        const float length = Printer::axisLengthMm(X_AXIS) - 2 * xMargin - toolOffsetX;
         if (line & 1) {
             x -= length;
             y -= diagonalY;
@@ -80,7 +80,7 @@ void queueLines(const Settings& settings) {
 
         y += 1.5f;
         y += float(NUM_EXTRUDER - 1);
-        Printer::queueFloatCoordinates(IGNORE_COORDINATE, y, IGNORE_COORDINATE, IGNORE_COORDINATE, Printer::homingFeedrate[Y_AXIS]);
+        Printer::queueFloatCoordinates(IGNORE_COORDINATE, y, IGNORE_COORDINATE, IGNORE_COORDINATE, Printer::axisHomingFeedrate(Y_AXIS));
     }
 }
 

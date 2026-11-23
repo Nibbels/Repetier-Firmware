@@ -713,21 +713,21 @@ void UIDisplay::parse(char* txt, bool ram) {
         case 'a': // Acceleration settings
         {
             if (c2 == 'x')
-                addFloat(Printer::maxAccelerationMMPerSquareSecond[X_AXIS], 5, 0); // %ax : X acceleration during print moves
+                addFloat(Printer::printAcceleration(X_AXIS), 5, 0); // %ax : X acceleration during print moves
             else if (c2 == 'y')
-                addFloat(Printer::maxAccelerationMMPerSquareSecond[Y_AXIS], 5, 0); // %ay : Y acceleration during print moves
+                addFloat(Printer::printAcceleration(Y_AXIS), 5, 0); // %ay : Y acceleration during print moves
             else if (c2 == 'z')
-                addFloat(Printer::maxAccelerationMMPerSquareSecond[Z_AXIS], 5, 0); // %az : Z acceleration during print moves
+                addFloat(Printer::printAcceleration(Z_AXIS), 5, 0); // %az : Z acceleration during print moves
             else if (c2 == 'X')
-                addFloat(Printer::maxTravelAccelerationMMPerSquareSecond[X_AXIS], 5, 0); // %aX : X acceleration during travel moves
+                addFloat(Printer::travelAcceleration(X_AXIS), 5, 0); // %aX : X acceleration during travel moves
             else if (c2 == 'Y')
-                addFloat(Printer::maxTravelAccelerationMMPerSquareSecond[Y_AXIS], 5, 0); // %aY : Y acceleration during travel moves
+                addFloat(Printer::travelAcceleration(Y_AXIS), 5, 0); // %aY : Y acceleration during travel moves
             else if (c2 == 'Z')
-                addFloat(Printer::maxTravelAccelerationMMPerSquareSecond[Z_AXIS], 5, 0); // %aZ : Z acceleration during travel moves
+                addFloat(Printer::travelAcceleration(Z_AXIS), 5, 0); // %aZ : Z acceleration during travel moves
             else if (c2 == 'j')
-                addFloat(Printer::maxXYJerk, 3, 1); // %aj : Max. jerk
+                addFloat(Printer::xyJerkLimit(), 3, 1); // %aj : Max. jerk
             else if (c2 == 'J')
-                addFloat(Printer::maxZJerk, 3, 2); // %aJ : Max. Z-jerk
+                addFloat(Printer::zJerkLimit(), 3, 2); // %aJ : Max. Z-jerk
             break;
         }
         case 'd': {
@@ -753,7 +753,7 @@ void UIDisplay::parse(char* txt, bool ram) {
             if (c2 == 'B')
                 addLong(activeBedMatrixSlot(), 1); // %HB : active heat bed z matrix
             else if (c2 == 'O')
-                addFloat((float)bedMatrixHighestZSteps() * Printer::axisMMPerSteps[Z_AXIS] * 1000.0f, 3, 0); // %HO : active heat bed min z offset in um
+                addFloat((float)bedMatrixHighestZSteps() * Printer::mmPerStep(Z_AXIS) * 1000.0f, 3, 0); // %HO : active heat bed min z offset in um
             break;
         }
 
@@ -869,11 +869,11 @@ void UIDisplay::parse(char* txt, bool ram) {
         }
         case 'f': {
             if (c2 == 'x')
-                addFloat(Printer::maxFeedrate[X_AXIS], 5, 0); // %fx : Max. feedrate x direction
+                addFloat(Printer::axisMaxFeedrate(X_AXIS), 5, 0); // %fx : Max. feedrate x direction
             else if (c2 == 'y')
-                addFloat(Printer::maxFeedrate[Y_AXIS], 5, 0); // %fy : Max. feedrate y direction
+                addFloat(Printer::axisMaxFeedrate(Y_AXIS), 5, 0); // %fy : Max. feedrate y direction
             else if (c2 == 'z')
-                addFloat(Printer::maxFeedrate[Z_AXIS], 5, 0); // %fz : Max. feedrate z direction
+                addFloat(Printer::axisMaxFeedrate(Z_AXIS), 5, 0); // %fz : Max. feedrate z direction
             else if (c2 == 'e')
                 addFloat(extruder[0].maxFeedrate, 5, 0); // %fe : Max. feedrate extruder 0
 #if NUM_EXTRUDER > 1
@@ -881,11 +881,11 @@ void UIDisplay::parse(char* txt, bool ram) {
                 addFloat(extruder[1].maxFeedrate, 5, 0); // %fE : Max. feedrate extruder 1
 #endif                                                   // NUM_EXTRUDER>1
             else if (c2 == 'X')
-                addFloat(Printer::homingFeedrate[X_AXIS], 5, 0); // %fX : Homing feedrate x direction
+                addFloat(Printer::axisHomingFeedrate(X_AXIS), 5, 0); // %fX : Homing feedrate x direction
             else if (c2 == 'Y')
-                addFloat(Printer::homingFeedrate[Y_AXIS], 5, 0); // %fY : Homing feedrate y direction
+                addFloat(Printer::axisHomingFeedrate(Y_AXIS), 5, 0); // %fY : Homing feedrate y direction
             else if (c2 == 'Z')
-                addFloat(Printer::homingFeedrate[Z_AXIS], 5, 0); // %fZ : Homing feedrate z direction
+                addFloat(Printer::axisHomingFeedrate(Z_AXIS), 5, 0); // %fZ : Homing feedrate z direction
 
             break;
         }
@@ -1177,7 +1177,7 @@ void UIDisplay::parse(char* txt, bool ram) {
                         // we can not move any more
                         bDefect = true;
                     } else {
-                        fvalue = Printer::xyMotion.nominalSteps(X_AXIS) * Printer::axisMMPerSteps[X_AXIS];
+                        fvalue = Printer::xyMotion.nominalSteps(X_AXIS) * Printer::mmPerStep(X_AXIS);
                     }
                 } else if (c2 == '1') // %x1 : Y position
                 {
@@ -1185,7 +1185,7 @@ void UIDisplay::parse(char* txt, bool ram) {
                         // we can not move any more
                         bDefect = true;
                     } else {
-                        fvalue = Printer::xyMotion.nominalSteps(Y_AXIS) * Printer::axisMMPerSteps[Y_AXIS];
+                        fvalue = Printer::xyMotion.nominalSteps(Y_AXIS) * Printer::mmPerStep(Y_AXIS);
                     }
                 } else if (c2 == '2') // %x2 : Z position
                 {
@@ -1201,7 +1201,7 @@ void UIDisplay::parse(char* txt, bool ram) {
                         // we can not move any more
                         bDefect = true;
                     } else {
-                        fvalue = Printer::directSteps(X_AXIS) * Printer::axisMMPerSteps[X_AXIS];
+                        fvalue = Printer::directSteps(X_AXIS) * Printer::mmPerStep(X_AXIS);
                     }
                 } else if (c2 == '4') // %x4 : Y offset position
                 {
@@ -1209,7 +1209,7 @@ void UIDisplay::parse(char* txt, bool ram) {
                         // we can not move any more
                         bDefect = true;
                     } else {
-                        fvalue = Printer::directSteps(Y_AXIS) * Printer::axisMMPerSteps[Y_AXIS];
+                        fvalue = Printer::directSteps(Y_AXIS) * Printer::mmPerStep(Y_AXIS);
                     }
                 } else if (c2 == '5') // %x5 : Z offset position
                 {
@@ -1224,7 +1224,7 @@ void UIDisplay::parse(char* txt, bool ram) {
                             if (col < MAX_COLS)
                                 printCols[col++] = 'm';
                         } else {
-                            fvalue = Printer::zMotion.motorOffsetSteps() * Printer::axisMMPerSteps[Z_AXIS];
+                            fvalue = Printer::zMotion.motorOffsetSteps() * Printer::mmPerStep(Z_AXIS);
                             if (col < MAX_COLS)
                                 printCols[col++] = ' ';
                             addFloat(fvalue, 3, 2);
@@ -1533,7 +1533,7 @@ void UIDisplay::parse(char* txt, bool ram) {
             else if (c2 == 'e')
                 addFloat(Extruder::current->stepsPerMM, 3, 0); // %Se : Steps per mm current extruder
             else if (c2 == 'z')
-                addFloat(Printer::manualMotion.steps(Z_AXIS) * Printer::axisMMPerSteps[Z_AXIS] * 1000.0f, 4, 1); // %Sz : Mikrometer per Z-Single_Step (Z_Axis)
+                addFloat(Printer::manualMotion.steps(Z_AXIS) * Printer::mmPerStep(Z_AXIS) * 1000.0f, 4, 1); // %Sz : Mikrometer per Z-Single_Step (Z_Axis)
             else if (c2 == 'M' && col < MAX_COLS) {
                 if (bedMatrixHasUnsavedChanges())
                     printCols[col++] = '*';
@@ -1547,7 +1547,7 @@ void UIDisplay::parse(char* txt, bool ram) {
             {
                 switch (Printer::manualMotion.mode(X_AXIS)) {
                 case MOVE_MODE_SINGLE_STEPS: {
-                    addFloat(Printer::manualMotion.steps(X_AXIS) * Printer::axisMMPerSteps[X_AXIS] * 1000.0f, 1, 0);
+                    addFloat(Printer::manualMotion.steps(X_AXIS) * Printer::mmPerStep(X_AXIS) * 1000.0f, 1, 0);
                     addStringP(PSTR(" um"));
                     break;
                 }
@@ -1583,7 +1583,7 @@ void UIDisplay::parse(char* txt, bool ram) {
             {
                 switch (Printer::manualMotion.mode(Y_AXIS)) {
                 case MOVE_MODE_SINGLE_STEPS: {
-                    addFloat(Printer::manualMotion.steps(Y_AXIS) * Printer::axisMMPerSteps[Y_AXIS] * 1000.0f, 1, 0);
+                    addFloat(Printer::manualMotion.steps(Y_AXIS) * Printer::mmPerStep(Y_AXIS) * 1000.0f, 1, 0);
                     addStringP(PSTR(" um"));
                     break;
                 }
@@ -1622,7 +1622,7 @@ void UIDisplay::parse(char* txt, bool ram) {
                 } else {
                     switch (Printer::manualMotion.mode(Z_AXIS)) {
                     case MOVE_MODE_SINGLE_STEPS: {
-                        addFloat(Printer::manualMotion.steps(Z_AXIS) * Printer::axisMMPerSteps[Z_AXIS] * 1000.0f, 1, 1);
+                        addFloat(Printer::manualMotion.steps(Z_AXIS) * Printer::mmPerStep(Z_AXIS) * 1000.0f, 1, 1);
                         addStringP(PSTR(" um"));
                         break;
                     }
@@ -1716,15 +1716,15 @@ void UIDisplay::parse(char* txt, bool ram) {
             const auto& layers = Printer::layers;
             if (c2 == 'L') // %LL : Last Layer (Queue)
             {
-                addFloat(layers.previousLayerSteps() * Printer::axisMMPerSteps[Z_AXIS], 3, 2);
+                addFloat(layers.previousLayerSteps() * Printer::mmPerStep(Z_AXIS), 3, 2);
                 break;
             } else if (c2 == 'C') // %LC : Current Layer (Queue)
             {
-                addFloat(layers.currentLayerSteps() * Printer::axisMMPerSteps[Z_AXIS], 3, 2);
+                addFloat(layers.currentLayerSteps() * Printer::mmPerStep(Z_AXIS), 3, 2);
                 break;
             } else if (c2 == 'H') // %LH : Layer Height
             {
-                addFloat((layers.currentLayerSteps() - layers.previousLayerSteps()) * Printer::axisMMPerSteps[Z_AXIS], 1, 2);
+                addFloat((layers.currentLayerSteps() - layers.previousLayerSteps()) * Printer::mmPerStep(Z_AXIS), 1, 2);
                 break;
             } else if (c2 == 'P') // %LP : ECMP %
             {
@@ -1732,11 +1732,11 @@ void UIDisplay::parse(char* txt, bool ram) {
                 break;
             } else if (c2 == 'm') // %Lm : Fade start
             {
-                addFloat(layers.fadeStartSteps() * Printer::axisMMPerSteps[Z_AXIS], 1, 2);
+                addFloat(layers.fadeStartSteps() * Printer::mmPerStep(Z_AXIS), 1, 2);
                 break;
             } else if (c2 == 'M') // %LM : Fade end
             {
-                addFloat(layers.fadeEndSteps() * Printer::axisMMPerSteps[Z_AXIS], 2, 2);
+                addFloat(layers.fadeEndSteps() * Printer::mmPerStep(Z_AXIS), 2, 2);
                 break;
             }
             break;
@@ -2115,12 +2115,12 @@ void UIDisplay::senseOffsetDownAction() {
 }
 
 void UIDisplay::zOffsetPlusAction() {
-    Printer::zOffset.adjustWithBedButton(Z_OFFSET_BUTTON_STEPS, maxManualZOffsetMicrometers, Printer::axisStepsPerMM[Z_AXIS]);
+    Printer::zOffset.adjustWithBedButton(Z_OFFSET_BUTTON_STEPS, maxManualZOffsetMicrometers, Printer::stepsPerMm(Z_AXIS));
     EEPROM::storeManualZOffset();
 }
 
 void UIDisplay::zOffsetMinusAction() {
-    Printer::zOffset.adjustWithBedButton(-Z_OFFSET_BUTTON_STEPS, maxManualZOffsetMicrometers, Printer::axisStepsPerMM[Z_AXIS]);
+    Printer::zOffset.adjustWithBedButton(-Z_OFFSET_BUTTON_STEPS, maxManualZOffsetMicrometers, Printer::stepsPerMm(Z_AXIS));
     EEPROM::storeManualZOffset();
 }
 
@@ -2387,7 +2387,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
     case UI_ACTION_ZOFFSET: {
         int32_t manual = Printer::zOffset.manualMicrometers();
         INCREMENT_MIN_MAX(manual, Z_OFFSET_MENU_STEPS, -maxManualZOffsetMicrometers, maxManualZOffsetMicrometers);
-        Printer::zOffset.setManualMicrometers(manual, Printer::axisStepsPerMM[Z_AXIS]);
+        Printer::zOffset.setManualMicrometers(manual, Printer::stepsPerMm(Z_AXIS));
         EEPROM::storeManualZOffset();
         break;
     }
@@ -2446,7 +2446,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
 
         if (Printer::isAxisHomed(X_AXIS) && Extruder::current->id == extruder[1].id) {
             // Shift the extruder-offset negatively to stay at the same point after switch
-            int32_t dx = (extruder[1].offsetMM[X_AXIS] - oldXOffset) * Printer::axisStepsPerMM[X_AXIS];
+            int32_t dx = (extruder[1].offsetMM[X_AXIS] - oldXOffset) * Printer::stepsPerMm(X_AXIS);
             Printer::offsetRelativeStepsCoordinates(-dx, 0, 0, 0);
         }
 
@@ -2459,7 +2459,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         INCREMENT_MIN_MAX(extruder[1].offsetMM[Y_AXIS], 0.25, -2, 2);
 
         if (Printer::isAxisHomed(Y_AXIS) && Extruder::current->id == extruder[1].id) {
-            int32_t dy = (extruder[1].offsetMM[Y_AXIS] - oldYOffset) * Printer::axisStepsPerMM[Y_AXIS];
+            int32_t dy = (extruder[1].offsetMM[Y_AXIS] - oldYOffset) * Printer::stepsPerMm(Y_AXIS);
             // Shift the extruder-offset negatively to stay at the same point after switch
             Printer::offsetRelativeStepsCoordinates(0, -dy, 0, 0);
         }
@@ -2501,106 +2501,134 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         break;
     }
     case UI_ACTION_PRINT_ACCEL_X: {
-        INCREMENT_MIN_MAX(Printer::maxAccelerationMMPerSquareSecond[X_AXIS], ACCELERATION_MENU_CHANGE_XY, ACCELERATION_MIN_XY, ACCELERATION_MAX_XY);
+        float value = Printer::printAcceleration(X_AXIS);
+        INCREMENT_MIN_MAX(value, ACCELERATION_MENU_CHANGE_XY, ACCELERATION_MIN_XY, ACCELERATION_MAX_XY);
+        Printer::setPrintAcceleration(X_AXIS, value);
         Printer::updateDerivedParameter();
 
-        HAL::eprSetFloat(EPR_X_MAX_ACCEL, Printer::maxAccelerationMMPerSquareSecond[X_AXIS]);
+        HAL::eprSetFloat(EPR_X_MAX_ACCEL, Printer::printAcceleration(X_AXIS));
         EEPROM::updateChecksum();
         break;
     }
     case UI_ACTION_PRINT_ACCEL_Y: {
-        INCREMENT_MIN_MAX(Printer::maxAccelerationMMPerSquareSecond[Y_AXIS], ACCELERATION_MENU_CHANGE_XY, ACCELERATION_MIN_XY, ACCELERATION_MAX_XY);
+        float value = Printer::printAcceleration(Y_AXIS);
+        INCREMENT_MIN_MAX(value, ACCELERATION_MENU_CHANGE_XY, ACCELERATION_MIN_XY, ACCELERATION_MAX_XY);
+        Printer::setPrintAcceleration(Y_AXIS, value);
         Printer::updateDerivedParameter();
 
-        HAL::eprSetFloat(EPR_Y_MAX_ACCEL, Printer::maxAccelerationMMPerSquareSecond[Y_AXIS]);
+        HAL::eprSetFloat(EPR_Y_MAX_ACCEL, Printer::printAcceleration(Y_AXIS));
         EEPROM::updateChecksum();
         break;
     }
     case UI_ACTION_PRINT_ACCEL_Z: {
-        INCREMENT_MIN_MAX(Printer::maxAccelerationMMPerSquareSecond[Z_AXIS], ACCELERATION_MENU_CHANGE_Z, ACCELERATION_MIN_Z, ACCELERATION_MAX_Z);
+        float value = Printer::printAcceleration(Z_AXIS);
+        INCREMENT_MIN_MAX(value, ACCELERATION_MENU_CHANGE_Z, ACCELERATION_MIN_Z, ACCELERATION_MAX_Z);
+        Printer::setPrintAcceleration(Z_AXIS, value);
         Printer::updateDerivedParameter();
 
-        HAL::eprSetFloat(EPR_Z_MAX_ACCEL, Printer::maxAccelerationMMPerSquareSecond[Z_AXIS]);
+        HAL::eprSetFloat(EPR_Z_MAX_ACCEL, Printer::printAcceleration(Z_AXIS));
         EEPROM::updateChecksum();
         break;
     }
     case UI_ACTION_MOVE_ACCEL_X: {
-        INCREMENT_MIN_MAX(Printer::maxTravelAccelerationMMPerSquareSecond[X_AXIS], ACCELERATION_MENU_CHANGE_XY, ACCELERATION_MIN_XY, ACCELERATION_MAX_XY);
+        float value = Printer::travelAcceleration(X_AXIS);
+        INCREMENT_MIN_MAX(value, ACCELERATION_MENU_CHANGE_XY, ACCELERATION_MIN_XY, ACCELERATION_MAX_XY);
+        Printer::setTravelAcceleration(X_AXIS, value);
         Printer::updateDerivedParameter();
 
-        HAL::eprSetFloat(EPR_X_MAX_TRAVEL_ACCEL, Printer::maxTravelAccelerationMMPerSquareSecond[X_AXIS]);
+        HAL::eprSetFloat(EPR_X_MAX_TRAVEL_ACCEL, Printer::travelAcceleration(X_AXIS));
         EEPROM::updateChecksum();
         break;
     }
     case UI_ACTION_MOVE_ACCEL_Y: {
-        INCREMENT_MIN_MAX(Printer::maxTravelAccelerationMMPerSquareSecond[Y_AXIS], ACCELERATION_MENU_CHANGE_XY, ACCELERATION_MIN_XY, ACCELERATION_MAX_XY);
+        float value = Printer::travelAcceleration(Y_AXIS);
+        INCREMENT_MIN_MAX(value, ACCELERATION_MENU_CHANGE_XY, ACCELERATION_MIN_XY, ACCELERATION_MAX_XY);
+        Printer::setTravelAcceleration(Y_AXIS, value);
         Printer::updateDerivedParameter();
 
-        HAL::eprSetFloat(EPR_Y_MAX_TRAVEL_ACCEL, Printer::maxTravelAccelerationMMPerSquareSecond[Y_AXIS]);
+        HAL::eprSetFloat(EPR_Y_MAX_TRAVEL_ACCEL, Printer::travelAcceleration(Y_AXIS));
         EEPROM::updateChecksum();
         break;
     }
     case UI_ACTION_MOVE_ACCEL_Z: {
-        INCREMENT_MIN_MAX(Printer::maxTravelAccelerationMMPerSquareSecond[Z_AXIS], ACCELERATION_MENU_CHANGE_Z, ACCELERATION_MIN_Z, ACCELERATION_MAX_Z);
+        float value = Printer::travelAcceleration(Z_AXIS);
+        INCREMENT_MIN_MAX(value, ACCELERATION_MENU_CHANGE_Z, ACCELERATION_MIN_Z, ACCELERATION_MAX_Z);
+        Printer::setTravelAcceleration(Z_AXIS, value);
         Printer::updateDerivedParameter();
 
-        HAL::eprSetFloat(EPR_Z_MAX_TRAVEL_ACCEL, Printer::maxTravelAccelerationMMPerSquareSecond[Z_AXIS]);
+        HAL::eprSetFloat(EPR_Z_MAX_TRAVEL_ACCEL, Printer::travelAcceleration(Z_AXIS));
         EEPROM::updateChecksum();
         break;
     }
     case UI_ACTION_MAX_JERK: {
-        INCREMENT_MIN_MAX(Printer::maxXYJerk, 0.1f, 1.0f, 33.3f); //RFx000: Limit 33.3 sind willkürlich grob faktor 3 von normalwert.
+        float value = Printer::xyJerkLimit();
+        INCREMENT_MIN_MAX(value, 0.1f, 1.0f, 33.3f);
+        Printer::setXYJerkLimit(value); //RFx000: Limit 33.3 sind willkürlich grob faktor 3 von normalwert.
 
-        HAL::eprSetFloat(EPR_MAX_XYJERK, Printer::maxXYJerk);
+        HAL::eprSetFloat(EPR_MAX_XYJERK, Printer::xyJerkLimit());
         EEPROM::updateChecksum();
         break;
     }
     case UI_ACTION_MAX_ZJERK: {
-        INCREMENT_MIN_MAX(Printer::maxZJerk, 0.05f, 0.05f, 2.0f); //RFx000: Limit 2 sind Max XY-Jerk / Stepratenverhältnis XY->Z von ~16.8 gibt etwas unter 2.
+        float value = Printer::zJerkLimit();
+        INCREMENT_MIN_MAX(value, 0.05f, 0.05f, 2.0f);
+        Printer::setZJerkLimit(value); //RFx000: Limit 2 sind Max XY-Jerk / Stepratenverhältnis XY->Z von ~16.8 gibt etwas unter 2.
 
-        HAL::eprSetFloat(EPR_MAX_ZJERK, Printer::maxZJerk);
+        HAL::eprSetFloat(EPR_MAX_ZJERK, Printer::zJerkLimit());
         EEPROM::updateChecksum();
         break;
     }
     case UI_ACTION_HOMING_FEEDRATE_X: {
-        INCREMENT_MIN_MAX(Printer::homingFeedrate[X_AXIS], 5, 5, MAX_FEEDRATE_X);
+        float value = Printer::axisHomingFeedrate(X_AXIS);
+        INCREMENT_MIN_MAX(value, 5, 5, MAX_FEEDRATE_X);
+        Printer::setAxisHomingFeedrate(X_AXIS, value);
 
-        HAL::eprSetFloat(EPR_X_HOMING_FEEDRATE_PRINT, Printer::homingFeedrate[X_AXIS]);
+        HAL::eprSetFloat(EPR_X_HOMING_FEEDRATE_PRINT, Printer::axisHomingFeedrate(X_AXIS));
         EEPROM::updateChecksum();
         break;
     }
     case UI_ACTION_HOMING_FEEDRATE_Y: {
-        INCREMENT_MIN_MAX(Printer::homingFeedrate[Y_AXIS], 5, 5, MAX_FEEDRATE_Y);
+        float value = Printer::axisHomingFeedrate(Y_AXIS);
+        INCREMENT_MIN_MAX(value, 5, 5, MAX_FEEDRATE_Y);
+        Printer::setAxisHomingFeedrate(Y_AXIS, value);
 
-        HAL::eprSetFloat(EPR_Y_HOMING_FEEDRATE_PRINT, Printer::homingFeedrate[Y_AXIS]);
+        HAL::eprSetFloat(EPR_Y_HOMING_FEEDRATE_PRINT, Printer::axisHomingFeedrate(Y_AXIS));
         EEPROM::updateChecksum();
         break;
     }
     case UI_ACTION_HOMING_FEEDRATE_Z: {
-        INCREMENT_MIN_MAX(Printer::homingFeedrate[Z_AXIS], 1, 1, MAX_FEEDRATE_Z);
+        float value = Printer::axisHomingFeedrate(Z_AXIS);
+        INCREMENT_MIN_MAX(value, 1, 1, MAX_FEEDRATE_Z);
+        Printer::setAxisHomingFeedrate(Z_AXIS, value);
 
-        HAL::eprSetFloat(EPR_Z_HOMING_FEEDRATE_PRINT, Printer::homingFeedrate[Z_AXIS]);
+        HAL::eprSetFloat(EPR_Z_HOMING_FEEDRATE_PRINT, Printer::axisHomingFeedrate(Z_AXIS));
         EEPROM::updateChecksum();
         break;
     }
     case UI_ACTION_MAX_FEEDRATE_X: {
-        INCREMENT_MIN_MAX(Printer::maxFeedrate[X_AXIS], 5, 1, MAX_FEEDRATE_X);
+        float value = Printer::axisMaxFeedrate(X_AXIS);
+        INCREMENT_MIN_MAX(value, 5, 1, MAX_FEEDRATE_X);
+        Printer::setAxisMaxFeedrate(X_AXIS, value);
 
-        HAL::eprSetFloat(EPR_X_MAX_FEEDRATE, Printer::maxFeedrate[X_AXIS]);
+        HAL::eprSetFloat(EPR_X_MAX_FEEDRATE, Printer::axisMaxFeedrate(X_AXIS));
         EEPROM::updateChecksum();
         break;
     }
     case UI_ACTION_MAX_FEEDRATE_Y: {
-        INCREMENT_MIN_MAX(Printer::maxFeedrate[Y_AXIS], 5, 1, MAX_FEEDRATE_Y);
+        float value = Printer::axisMaxFeedrate(Y_AXIS);
+        INCREMENT_MIN_MAX(value, 5, 1, MAX_FEEDRATE_Y);
+        Printer::setAxisMaxFeedrate(Y_AXIS, value);
 
-        HAL::eprSetFloat(EPR_Y_MAX_FEEDRATE, Printer::maxFeedrate[Y_AXIS]);
+        HAL::eprSetFloat(EPR_Y_MAX_FEEDRATE, Printer::axisMaxFeedrate(Y_AXIS));
         EEPROM::updateChecksum();
         break;
     }
     case UI_ACTION_MAX_FEEDRATE_Z: {
-        INCREMENT_MIN_MAX(Printer::maxFeedrate[Z_AXIS], 1, 1, MAX_FEEDRATE_Z);
+        float value = Printer::axisMaxFeedrate(Z_AXIS);
+        INCREMENT_MIN_MAX(value, 1, 1, MAX_FEEDRATE_Z);
+        Printer::setAxisMaxFeedrate(Z_AXIS, value);
 
-        HAL::eprSetFloat(EPR_Z_MAX_FEEDRATE, Printer::maxFeedrate[Z_AXIS]);
+        HAL::eprSetFloat(EPR_Z_MAX_FEEDRATE, Printer::axisMaxFeedrate(Z_AXIS));
         EEPROM::updateChecksum();
         break;
     }
@@ -3111,7 +3139,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
                     case X_AXIS:
                     case Y_AXIS:
                     case Z_AXIS: {
-                        Printer::axisStepsPerMM[i] *= stepsmm_korrekturfactor;
+                        Printer::setStepsPerMm(i, Printer::stepsPerMm(i) * stepsmm_korrekturfactor);
                         Printer::pause.scaleParkSteps(i, stepsmm_korrekturfactor);
                         if (i == Z_AXIS) {
                             Printer::zMotion.rescaleMotorReference(stepsmm_korrekturfactor);
@@ -3122,7 +3150,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
                                                                              //korrektur der aktiven kompensation/zoffset ist durch fehlendes homing unterbunden.
                         }
                         updatederived = true; //übernehmen der werte in offsets und infaxissteps, accel usw..
-                        HAL::eprSetFloat(EPR_XAXIS_STEPS_PER_MM + 4 * i, Printer::axisStepsPerMM[i]);
+                        HAL::eprSetFloat(EPR_XAXIS_STEPS_PER_MM + 4 * i, Printer::stepsPerMm(i));
                         break;
                     }
                     case E_AXIS:
@@ -3147,7 +3175,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
                 HAL::eprSetByte(EPR_RF_MICRO_STEPS_USED, 0xAB); //erstes schreiben markiert eepromwerte als gültig
             noInts.unprotect();
             if (changed[Z_AXIS])
-                Printer::zOffset.refreshSteps(Printer::axisStepsPerMM[Z_AXIS]);
+                Printer::zOffset.refreshSteps(Printer::stepsPerMm(Z_AXIS));
             EEPROM::updateChecksum();
         }
         break;

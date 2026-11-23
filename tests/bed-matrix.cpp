@@ -39,6 +39,9 @@ void delayMilliseconds(unsigned int) {}
 namespace Printer {
 float axisLengthMM[3] = {50, 40, 200};
 float axisStepsPerMM[3] = {100, 100, 100};
+float stepsPerMm(uint8_t axis) { return axisStepsPerMM[axis]; }
+float axisLengthMm(uint8_t axis) { return axisLengthMM[axis]; }
+void setAxisLengthMm(uint8_t axis, float value) { axisLengthMM[axis] = value; }
 uint8_t motorMicroStepsModeValue[3] = {5, 5, 5};
 bool debugErrors() { return true; }
 bool debugInfo() { return false; }
@@ -156,10 +159,10 @@ int main() {
 
     storeMatrix(COMPENSATION_MATRIX_MAX_X - 1, COMPENSATION_MATRIX_MAX_Y - 1);
     assert(loadCompensationMatrix(sector) == 0);
-    Printer::axisLengthMM[X_AXIS] = 51;
+    Printer::setAxisLengthMm(X_AXIS, 51);
     assert(prepareCompensationMatrix() != 0 && g_ZCompensationMatrix[1][0] == 10);
-    Printer::axisLengthMM[X_AXIS] = 50;
-    Printer::axisLengthMM[Y_AXIS] = 41;
+    Printer::setAxisLengthMm(X_AXIS, 50);
+    Printer::setAxisLengthMm(Y_AXIS, 41);
     assert(prepareCompensationMatrix() != 0 && g_ZCompensationMatrix[0][1] == 10);
 
     storeMatrix(COMPENSATION_MATRIX_MAX_X - 2, COMPENSATION_MATRIX_MAX_Y - 2);

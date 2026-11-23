@@ -84,6 +84,9 @@ struct {
 float axisStepsPerMM[3] = {160, 160, 100};
 float axisMMPerSteps[3] = {1.0f / 160, 1.0f / 160, 1.0f / 100};
 float homingFeedrate[3] = {60, 60, 5};
+float stepsPerMm(uint8_t axis) { return axisStepsPerMM[axis]; }
+float mmPerStep(uint8_t axis) { return axisMMPerSteps[axis]; }
+float axisHomingFeedrate(uint8_t axis) { return homingFeedrate[axis]; }
 void homeAxis(bool x, bool y, bool z) {
     assert(y);
     if (onHome)

@@ -24,11 +24,15 @@ This is shared AVR/ATmega2560 Repetier firmware for **RF1000, RF2000 and RF2000v
 
 **HAL events and ADC.** HAL owns pending periodic ticks, the watchdog heartbeat and the temperature ADC buffers. Foreground code consumes ticks through HAL and fetches a complete ADC sample through `temperatureAdcSample()`.
 
+**PWM and RGB.** HAL owns heater and fan duty requests and part fan settings. The PWM interrupt applies them on its existing frames. `RgbLighting` owns RGB profiles, mode, automatic status and fades. The panel and G-code share mode selection. [PWM](Repetier/HAL.cpp) · [RGB](Repetier/RgbLighting.cpp)
+
 **Calibration scans.** The bed mesh, hot-nozzle calibration and Z-offset scans use a shared point probe and a foreground pressure sampling service. `ScanSession` owns aborts and retries. `ScanProbe` owns the pressure bands and the preceding Z position. Keep contact, overload and hardware travel rules independent. Use the [scan handover](docs/z-offset/scans-and-persistence.md) for the guarded-motion design and the [mesh replay](tests/heat-bed-scan.py) and [Z-offset replay](tests/z-offset-scan.py) for motion, retry, cancel and sensor faults.
 
 **Scan parameters.** Calibration owns `ScanSettings` in `RF.cpp`. The panel reads the scan stride and changes the starting lift through the scan interface. [Scan settings](Repetier/ScanSettings.h)
 
 **Motion planning.** `MotionPlanner` prepares the step profile and owns the junction calculations. The planner updates queue slots in place and releases them with complete profiles. For a direct move, `Printer::offsetRelativeStepsCoordinates()` reserves the slot under interrupt protection, then the foreground plans and publishes the move. Replay early jog release and queue wrap with `python3 tests/pause-sense-offset.py`. [Planner and executor boundary](docs/motion-timing.md#planner-and-executor-boundary)
+
+**Axis calibration.** `Printer` owns steps/mm, travel, feedrate, acceleration and jerk. Callers set raw values and publish derived values through `updateDerivedParameter()`. Tool selection applies its E calibration together. [Calibration and travel limits](Repetier/Printer.cpp)
 
 **Step execution.** `StepExecutor` owns both step clocks, cached primary-axis counts, pulse packing, direction and the feedrate snapshot for the panel. Timer1 selects the move and the executor runs its prepared profile. Keep hardware operations in the executor and check the AVR pulse traces when changing a hot path. [Executor](Repetier/StepExecutor.cpp)
 

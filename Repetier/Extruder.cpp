@@ -265,9 +265,9 @@ bool Extruder::selectExtruderById(uint8_t extruderId, bool waitThroughPause) {
     int32_t dx = 0;
     int32_t dy = 0;
     if (Printer::isAxisHomed(X_AXIS))
-        dx = (extruder[extruderId].offsetMM[X_AXIS] - current->offsetMM[X_AXIS]) * Printer::axisStepsPerMM[X_AXIS];
+        dx = (extruder[extruderId].offsetMM[X_AXIS] - current->offsetMM[X_AXIS]) * Printer::stepsPerMm(X_AXIS);
     if (Printer::isAxisHomed(Y_AXIS))
-        dy = (extruder[extruderId].offsetMM[Y_AXIS] - current->offsetMM[Y_AXIS]) * Printer::axisStepsPerMM[Y_AXIS];
+        dy = (extruder[extruderId].offsetMM[Y_AXIS] - current->offsetMM[Y_AXIS]) * Printer::stepsPerMm(Y_AXIS);
 
     {
         InterruptProtectedBlock lock;
@@ -287,11 +287,8 @@ bool Extruder::selectExtruderById(uint8_t extruderId, bool waitThroughPause) {
 }
 
 void Extruder::applyCurrentSettings() {
-    Printer::axisStepsPerMM[E_AXIS] = Extruder::current->stepsPerMM;
-    Printer::axisMMPerSteps[E_AXIS] = 1.0f / Printer::axisStepsPerMM[E_AXIS];
-    Printer::maxFeedrate[E_AXIS] = Extruder::current->maxFeedrate;
-    Printer::maxAccelerationMMPerSquareSecond[E_AXIS] = Printer::maxTravelAccelerationMMPerSquareSecond[E_AXIS] = Extruder::current->maxAcceleration;
-    Printer::maxPrintAccelerationStepsPerSquareSecond[E_AXIS] = Printer::maxTravelAccelerationStepsPerSquareSecond[E_AXIS] = uint32_t(Printer::maxAccelerationMMPerSquareSecond[E_AXIS] * Printer::axisStepsPerMM[E_AXIS]);
+    Printer::applyToolMotionSettings(Extruder::current->stepsPerMM,
+                                    Extruder::current->maxFeedrate, Extruder::current->maxAcceleration);
 
     float minimumESpeed = 1.41 * Extruder::current->maxAcceleration * sqrt(2.0f / (Extruder::current->stepsPerMM * Extruder::current->maxAcceleration));
     if (minimumESpeed > Extruder::current->maxEJerk) {
@@ -299,17 +296,17 @@ void Extruder::applyCurrentSettings() {
         Com::printFLN(PSTR("E jerk was too low, setting to "), minimumESpeed);
     }
 
-    Printer::manualMotion.setSteps(E_AXIS, (unsigned short)lroundf(Printer::axisStepsPerMM[E_AXIS] * DEFAULT_MANUAL_MM_E));
-    Printer::pause.setParkSteps(E_AXIS, long(Printer::axisStepsPerMM[E_AXIS] * SCRIPT_RETRACT_MM));
+    Printer::manualMotion.setSteps(E_AXIS, (unsigned short)lroundf(Printer::stepsPerMm(E_AXIS) * DEFAULT_MANUAL_MM_E));
+    Printer::pause.setParkSteps(E_AXIS, long(Printer::stepsPerMm(E_AXIS) * SCRIPT_RETRACT_MM));
 
     uint8_t stepInterval = (uint8_t)floor(HAL::maxExtruderTimerFrequency() / (Extruder::current->maxFeedrate * Extruder::current->stepsPerMM));
     if (stepInterval > 15)
         stepInterval = 15;
     Printer::extrusionOutput.setStepInterval(stepInterval);
-    float fmax = HAL::maxExtruderTimerFrequency() / (float(stepInterval) * Printer::axisStepsPerMM[E_AXIS]);
+    float fmax = HAL::maxExtruderTimerFrequency() / (float(stepInterval) * Printer::stepsPerMm(E_AXIS));
     // Limit feedrate to interrupt speed
-    if (fmax < Printer::maxFeedrate[E_AXIS])
-        Printer::maxFeedrate[E_AXIS] = fmax;
+    if (fmax < Printer::axisMaxFeedrate(E_AXIS))
+        Printer::setAxisMaxFeedrate(E_AXIS, fmax);
     Extruder::current->tempControl.updateTempControlVars();
 }
 

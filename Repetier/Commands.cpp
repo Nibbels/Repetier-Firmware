@@ -126,8 +126,8 @@ bool Commands::waitForMotion(MotionWait motion, PauseWait pause) {
 void Commands::printCurrentPosition() {
     // Wir zeigen dem Repetier-Host wo wir gerade stehen.
     // Hier ist die reine GCode-Position interessant, sonst würde das Einrechnen des GCode-Origin auch keinen Sinn machen.
-    float x = Printer::xyMotion.nominalSteps(X_AXIS) * Printer::axisMMPerSteps[X_AXIS];
-    float y = Printer::xyMotion.nominalSteps(Y_AXIS) * Printer::axisMMPerSteps[Y_AXIS];
+    float x = Printer::xyMotion.nominalSteps(X_AXIS) * Printer::mmPerStep(X_AXIS);
+    float y = Printer::xyMotion.nominalSteps(Y_AXIS) * Printer::mmPerStep(Y_AXIS);
     // Z bleibt ein Sonderfall. Normalerweise auch hier GCode-Position
     float z = Printer::currentZPositionMM();
 
@@ -709,26 +709,26 @@ void Commands::processMCode(GCode* com) {
     case 201: // M201
     {
         if (com->hasX())
-            Printer::maxAccelerationMMPerSquareSecond[X_AXIS] = constrain(com->X, ACCELERATION_MIN_XY, ACCELERATION_MAX_XY);
+            Printer::setPrintAcceleration(X_AXIS, constrain(com->X, ACCELERATION_MIN_XY, ACCELERATION_MAX_XY));
         if (com->hasY())
-            Printer::maxAccelerationMMPerSquareSecond[Y_AXIS] = constrain(com->Y, ACCELERATION_MIN_XY, ACCELERATION_MAX_XY);
+            Printer::setPrintAcceleration(Y_AXIS, constrain(com->Y, ACCELERATION_MIN_XY, ACCELERATION_MAX_XY));
         if (com->hasZ())
-            Printer::maxAccelerationMMPerSquareSecond[Z_AXIS] = constrain(com->Z, ACCELERATION_MIN_Z, ACCELERATION_MAX_Z);
+            Printer::setPrintAcceleration(Z_AXIS, constrain(com->Z, ACCELERATION_MIN_Z, ACCELERATION_MAX_Z));
         if (com->hasE())
-            Printer::maxAccelerationMMPerSquareSecond[E_AXIS] = com->E;
+            Printer::setPrintAcceleration(E_AXIS, com->E);
         Printer::updateDerivedParameter();
         break;
     }
     case 202: // M202
     {
         if (com->hasX())
-            Printer::maxTravelAccelerationMMPerSquareSecond[X_AXIS] = constrain(com->X, ACCELERATION_MIN_XY, ACCELERATION_MAX_XY);
+            Printer::setTravelAcceleration(X_AXIS, constrain(com->X, ACCELERATION_MIN_XY, ACCELERATION_MAX_XY));
         if (com->hasY())
-            Printer::maxTravelAccelerationMMPerSquareSecond[Y_AXIS] = constrain(com->Y, ACCELERATION_MIN_XY, ACCELERATION_MAX_XY);
+            Printer::setTravelAcceleration(Y_AXIS, constrain(com->Y, ACCELERATION_MIN_XY, ACCELERATION_MAX_XY));
         if (com->hasZ())
-            Printer::maxTravelAccelerationMMPerSquareSecond[Z_AXIS] = constrain(com->Z, ACCELERATION_MIN_Z, ACCELERATION_MAX_Z);
+            Printer::setTravelAcceleration(Z_AXIS, constrain(com->Z, ACCELERATION_MIN_Z, ACCELERATION_MAX_Z));
         if (com->hasE())
-            Printer::maxTravelAccelerationMMPerSquareSecond[E_AXIS] = com->E;
+            Printer::setTravelAcceleration(E_AXIS, com->E);
         Printer::updateDerivedParameter();
         break;
     }
@@ -779,13 +779,13 @@ void Commands::processMCode(GCode* com) {
     {
         // Die Minimalwerte für XYZ sind hier eigentlich egal. Denn sie werden durch die Acceleration innerhalb updateDerivedParameter() auf ein Minimum angehoben.
         if (com->hasX()) {
-            Printer::maxXYJerk = constrain(com->X, 0.001f, 33.3f);
-            Com::printFLN(Com::tXYJerkColon, Printer::maxXYJerk);
+            Printer::setXYJerkLimit(constrain(com->X, 0.001f, 33.3f));
+            Com::printFLN(Com::tXYJerkColon, Printer::xyJerkLimit());
             Printer::updateDerivedParameter();
         }
         if (com->hasZ()) {
-            Printer::maxZJerk = constrain(com->Z, 0.001f, 2.0f);
-            Com::printFLN(Com::tZJerkColon, Printer::maxZJerk);
+            Printer::setZJerkLimit(constrain(com->Z, 0.001f, 2.0f));
+            Com::printFLN(Com::tZJerkColon, Printer::zJerkLimit());
             Printer::updateDerivedParameter();
         }
 
@@ -812,12 +812,12 @@ void Commands::processMCode(GCode* com) {
             int32_t dy = 0;
             if (com->hasX()) {
                 if (Printer::isAxisHomed(X_AXIS))
-                    dx = (com->X - extruder[extId].offsetMM[X_AXIS]) * Printer::axisStepsPerMM[X_AXIS];
+                    dx = (com->X - extruder[extId].offsetMM[X_AXIS]) * Printer::stepsPerMm(X_AXIS);
                 extruder[extId].offsetMM[X_AXIS] = com->X;
             }
             if (com->hasY()) {
                 if (Printer::isAxisHomed(Y_AXIS))
-                    dy = (com->Y - extruder[extId].offsetMM[Y_AXIS]) * Printer::axisStepsPerMM[Y_AXIS];
+                    dy = (com->Y - extruder[extId].offsetMM[Y_AXIS]) * Printer::stepsPerMm(Y_AXIS);
                 extruder[extId].offsetMM[Y_AXIS] = com->Y;
             }
 

@@ -204,8 +204,8 @@ void PrintPause::extrudeManually(int32_t steps) {
 void PrintPause::restoreDefaultParking() {
     // The selected extruder supplies the E retract.
     setParkSteps(X_AXIS, 0);
-    setParkSteps(Y_AXIS, long(Printer::axisStepsPerMM[Y_AXIS] * 200));
-    setParkSteps(Z_AXIS, long(Printer::axisStepsPerMM[Z_AXIS] * DEFAULT_PAUSE_MM_Z_PRINT));
+    setParkSteps(Y_AXIS, long(Printer::stepsPerMm(Y_AXIS) * 200));
+    setParkSteps(Z_AXIS, long(Printer::stepsPerMm(Z_AXIS) * DEFAULT_PAUSE_MM_Z_PRINT));
 }
 
 PrintPause::SenseOffsetSample PrintPause::beginSenseOffsetSample() {

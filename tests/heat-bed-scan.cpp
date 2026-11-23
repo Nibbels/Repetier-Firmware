@@ -77,6 +77,8 @@ millis_t timeInMilliseconds() { return now; }
 namespace Printer {
 ScanStrainGauge strainGauge;
 float axisStepsPerMM[3] = {100, 100, 100}, homingFeedrate[3] = {60, 60, 5};
+float stepsPerMm(uint8_t axis) { return axisStepsPerMM[axis]; }
+float axisHomingFeedrate(uint8_t axis) { return homingFeedrate[axis]; }
 struct { bool isBusy() const { return false; } } printJob;
 struct { void recordActivity(millis_t) {} } inactivity;
 struct { void cancel() {} void schedule(millis_t) {} } idleStatus;

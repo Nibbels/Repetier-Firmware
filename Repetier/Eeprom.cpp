@@ -107,15 +107,15 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     baudrate = BAUDRATE;
     Printer::inactivity.setShutdownTimeout(MAX_INACTIVE_TIME * 1000L);
     Printer::inactivity.setStepperTimeout(STEPPER_INACTIVE_TIME * 1000L);
-    Printer::axisStepsPerMM[X_AXIS] = XAXIS_STEPS_PER_MM;
-    Printer::axisStepsPerMM[Y_AXIS] = YAXIS_STEPS_PER_MM;
-    Printer::axisStepsPerMM[Z_AXIS] = ZAXIS_STEPS_PER_MM;
-    Printer::zOffset.refreshSteps(Printer::axisStepsPerMM[Z_AXIS]);
-    Printer::axisStepsPerMM[E_AXIS] = 1; //man könnte auch vom current extruder die id auslesen und dann EXT0_STEPS_PER_MM oder EXT1_STEPS_PER_MM ?
+    Printer::setStepsPerMm(X_AXIS, XAXIS_STEPS_PER_MM);
+    Printer::setStepsPerMm(Y_AXIS, YAXIS_STEPS_PER_MM);
+    Printer::setStepsPerMm(Z_AXIS, ZAXIS_STEPS_PER_MM);
+    Printer::zOffset.refreshSteps(Printer::stepsPerMm(Z_AXIS));
+    Printer::setStepsPerMm(E_AXIS, 1); //man könnte auch vom current extruder die id auslesen und dann EXT0_STEPS_PER_MM oder EXT1_STEPS_PER_MM ?
                                          // -> ist autokorrigiert wenn man einmal einen extruder auswählt. Siehe unten.
-    Printer::maxFeedrate[X_AXIS] = MAX_FEEDRATE_X;
-    Printer::maxFeedrate[Y_AXIS] = MAX_FEEDRATE_Y;
-    Printer::maxFeedrate[Z_AXIS] = MAX_FEEDRATE_Z;
+    Printer::setAxisMaxFeedrate(X_AXIS, MAX_FEEDRATE_X);
+    Printer::setAxisMaxFeedrate(Y_AXIS, MAX_FEEDRATE_Y);
+    Printer::setAxisMaxFeedrate(Z_AXIS, MAX_FEEDRATE_Z);
 
     //microsteps should be updated but we need to update the driver then.
     bool ms_changed = false;
@@ -132,12 +132,12 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
         }
     }
 
-        Printer::homingFeedrate[X_AXIS] = HOMING_FEEDRATE_X_PRINT;
-        Printer::homingFeedrate[Y_AXIS] = HOMING_FEEDRATE_Y_PRINT;
-        Printer::homingFeedrate[Z_AXIS] = HOMING_FEEDRATE_Z_PRINT;
+        Printer::setAxisHomingFeedrate(X_AXIS, HOMING_FEEDRATE_X_PRINT);
+        Printer::setAxisHomingFeedrate(Y_AXIS, HOMING_FEEDRATE_Y_PRINT);
+        Printer::setAxisHomingFeedrate(Z_AXIS, HOMING_FEEDRATE_Z_PRINT);
 
-    Printer::maxXYJerk = MAX_JERK;
-    Printer::maxZJerk = MAX_ZJERK;
+    Printer::setXYJerkLimit(MAX_JERK);
+    Printer::setZJerkLimit(MAX_ZJERK);
 
     Printer::manualMotion.setMode(X_AXIS, DEFAULT_MOVE_MODE_X);
     Printer::manualMotion.setMode(Y_AXIS, DEFAULT_MOVE_MODE_Y);
@@ -145,12 +145,12 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     Printer::manualMotion.setCoordinateSystem(KOSYS_GCODE);
     Printer::manualMotion.setFeedrateSource(FEEDRATE_DIRECTCONFIG);
 
-    Printer::maxAccelerationMMPerSquareSecond[X_AXIS] = MAX_ACCELERATION_UNITS_PER_SQ_SECOND_X;
-    Printer::maxAccelerationMMPerSquareSecond[Y_AXIS] = MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Y;
-    Printer::maxAccelerationMMPerSquareSecond[Z_AXIS] = MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Z;
-    Printer::maxTravelAccelerationMMPerSquareSecond[X_AXIS] = MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_X;
-    Printer::maxTravelAccelerationMMPerSquareSecond[Y_AXIS] = MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Y;
-    Printer::maxTravelAccelerationMMPerSquareSecond[Z_AXIS] = MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Z;
+    Printer::setPrintAcceleration(X_AXIS, MAX_ACCELERATION_UNITS_PER_SQ_SECOND_X);
+    Printer::setPrintAcceleration(Y_AXIS, MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Y);
+    Printer::setPrintAcceleration(Z_AXIS, MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Z);
+    Printer::setTravelAcceleration(X_AXIS, MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_X);
+    Printer::setTravelAcceleration(Y_AXIS, MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Y);
+    Printer::setTravelAcceleration(Z_AXIS, MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Z);
 
     heatedBedController.pidDriveMax = HEATED_BED_PID_INTEGRAL_DRIVE_MAX;
     heatedBedController.pidDriveMin = HEATED_BED_PID_INTEGRAL_DRIVE_MIN;
@@ -160,10 +160,10 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     heatedBedController.pidMax = HEATED_BED_PID_MAX;
     heatedBedController.sensorType = HEATED_BED_SENSOR_TYPE;
 
-        Printer::axisLengthMM[X_AXIS] = X_MAX_LENGTH_PRINT;
+        Printer::setAxisLengthMm(X_AXIS, X_MAX_LENGTH_PRINT);
 
-    Printer::axisLengthMM[Y_AXIS] = Y_MAX_LENGTH;
-    Printer::axisLengthMM[Z_AXIS] = Z_MAX_LENGTH;
+    Printer::setAxisLengthMm(Y_AXIS, Y_MAX_LENGTH);
+    Printer::setAxisLengthMm(Z_AXIS, Z_MAX_LENGTH);
 
     EEPROM::restoreEEPROMExtruderSettingsFromConfiguration(0);
 #if NUM_EXTRUDER > 1
@@ -215,9 +215,9 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     Printer::applyAdvanceSettings();
     Extruder::initHeatedBed();
 
-    Printer::manualMotion.setSteps(X_AXIS, (unsigned short)lroundf(Printer::axisStepsPerMM[X_AXIS] * DEFAULT_MANUAL_MM_X));
-    Printer::manualMotion.setSteps(Y_AXIS, (unsigned short)lroundf(Printer::axisStepsPerMM[Y_AXIS] * DEFAULT_MANUAL_MM_Y));
-    Printer::manualMotion.setSteps(Z_AXIS, (unsigned short)lroundf(Printer::axisStepsPerMM[Z_AXIS] * DEFAULT_MANUAL_MM_Z));
+    Printer::manualMotion.setSteps(X_AXIS, (unsigned short)lroundf(Printer::stepsPerMm(X_AXIS) * DEFAULT_MANUAL_MM_X));
+    Printer::manualMotion.setSteps(Y_AXIS, (unsigned short)lroundf(Printer::stepsPerMm(Y_AXIS) * DEFAULT_MANUAL_MM_Y));
+    Printer::manualMotion.setSteps(Z_AXIS, (unsigned short)lroundf(Printer::stepsPerMm(Z_AXIS) * DEFAULT_MANUAL_MM_Z));
     Printer::manualMotion.setSteps(E_AXIS, (unsigned short)lroundf(Extruder::current->stepsPerMM * DEFAULT_MANUAL_MM_E));
 
     Com::printInfoFLN(Com::tEPRConfigResetDefaults);
@@ -246,12 +246,12 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     HAL::eprSetInt32(EPR_BAUDRATE, baudrate);
     HAL::eprSetInt32(EPR_MAX_INACTIVE_TIME, Printer::inactivity.shutdownTimeout());
     HAL::eprSetInt32(EPR_STEPPER_INACTIVE_TIME, Printer::inactivity.stepperTimeout());
-    HAL::eprSetFloat(EPR_XAXIS_STEPS_PER_MM, Printer::axisStepsPerMM[X_AXIS]);
-    HAL::eprSetFloat(EPR_YAXIS_STEPS_PER_MM, Printer::axisStepsPerMM[Y_AXIS]);
-    HAL::eprSetFloat(EPR_ZAXIS_STEPS_PER_MM, Printer::axisStepsPerMM[Z_AXIS]);
-    HAL::eprSetFloat(EPR_X_MAX_FEEDRATE, Printer::maxFeedrate[X_AXIS]);
-    HAL::eprSetFloat(EPR_Y_MAX_FEEDRATE, Printer::maxFeedrate[Y_AXIS]);
-    HAL::eprSetFloat(EPR_Z_MAX_FEEDRATE, Printer::maxFeedrate[Z_AXIS]);
+    HAL::eprSetFloat(EPR_XAXIS_STEPS_PER_MM, Printer::stepsPerMm(X_AXIS));
+    HAL::eprSetFloat(EPR_YAXIS_STEPS_PER_MM, Printer::stepsPerMm(Y_AXIS));
+    HAL::eprSetFloat(EPR_ZAXIS_STEPS_PER_MM, Printer::stepsPerMm(Z_AXIS));
+    HAL::eprSetFloat(EPR_X_MAX_FEEDRATE, Printer::axisMaxFeedrate(X_AXIS));
+    HAL::eprSetFloat(EPR_Y_MAX_FEEDRATE, Printer::axisMaxFeedrate(Y_AXIS));
+    HAL::eprSetFloat(EPR_Z_MAX_FEEDRATE, Printer::axisMaxFeedrate(Z_AXIS));
     HAL::eprSetInt32(EPR_RF_Z_OFFSET, Printer::zOffset.manualMicrometers());
     HAL::eprSetByte(EPR_RF_Z_MODE, Printer::ZMode);
     HAL::eprSetByte(EPR_RF_MOVE_MODE_X, Printer::manualMotion.mode(X_AXIS));
@@ -260,19 +260,19 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     HAL::eprSetByte(EPR_RF_MOVE_MODE_XY_KOSYS, Printer::manualMotion.coordinateSystem());
     HAL::eprSetByte(EPR_RF_MOVE_POSITION_FEEDRATE, Printer::manualMotion.feedrateSource());
 
-    HAL::eprSetFloat(EPR_X_HOMING_FEEDRATE_PRINT, Printer::homingFeedrate[X_AXIS]);
-    HAL::eprSetFloat(EPR_Y_HOMING_FEEDRATE_PRINT, Printer::homingFeedrate[Y_AXIS]);
-    HAL::eprSetFloat(EPR_Z_HOMING_FEEDRATE_PRINT, Printer::homingFeedrate[Z_AXIS]);
+    HAL::eprSetFloat(EPR_X_HOMING_FEEDRATE_PRINT, Printer::axisHomingFeedrate(X_AXIS));
+    HAL::eprSetFloat(EPR_Y_HOMING_FEEDRATE_PRINT, Printer::axisHomingFeedrate(Y_AXIS));
+    HAL::eprSetFloat(EPR_Z_HOMING_FEEDRATE_PRINT, Printer::axisHomingFeedrate(Z_AXIS));
 
-    HAL::eprSetFloat(EPR_MAX_XYJERK, Printer::maxXYJerk);
-    HAL::eprSetFloat(EPR_MAX_ZJERK, Printer::maxZJerk);
+    HAL::eprSetFloat(EPR_MAX_XYJERK, Printer::xyJerkLimit());
+    HAL::eprSetFloat(EPR_MAX_ZJERK, Printer::zJerkLimit());
 
-    HAL::eprSetFloat(EPR_X_MAX_ACCEL, Printer::maxAccelerationMMPerSquareSecond[X_AXIS]);
-    HAL::eprSetFloat(EPR_Y_MAX_ACCEL, Printer::maxAccelerationMMPerSquareSecond[Y_AXIS]);
-    HAL::eprSetFloat(EPR_Z_MAX_ACCEL, Printer::maxAccelerationMMPerSquareSecond[Z_AXIS]);
-    HAL::eprSetFloat(EPR_X_MAX_TRAVEL_ACCEL, Printer::maxTravelAccelerationMMPerSquareSecond[X_AXIS]);
-    HAL::eprSetFloat(EPR_Y_MAX_TRAVEL_ACCEL, Printer::maxTravelAccelerationMMPerSquareSecond[Y_AXIS]);
-    HAL::eprSetFloat(EPR_Z_MAX_TRAVEL_ACCEL, Printer::maxTravelAccelerationMMPerSquareSecond[Z_AXIS]);
+    HAL::eprSetFloat(EPR_X_MAX_ACCEL, Printer::printAcceleration(X_AXIS));
+    HAL::eprSetFloat(EPR_Y_MAX_ACCEL, Printer::printAcceleration(Y_AXIS));
+    HAL::eprSetFloat(EPR_Z_MAX_ACCEL, Printer::printAcceleration(Z_AXIS));
+    HAL::eprSetFloat(EPR_X_MAX_TRAVEL_ACCEL, Printer::travelAcceleration(X_AXIS));
+    HAL::eprSetFloat(EPR_Y_MAX_TRAVEL_ACCEL, Printer::travelAcceleration(Y_AXIS));
+    HAL::eprSetFloat(EPR_Z_MAX_TRAVEL_ACCEL, Printer::travelAcceleration(Z_AXIS));
 
     HAL::eprSetByte(EPR_BED_DRIVE_MAX, heatedBedController.pidDriveMax);
     HAL::eprSetByte(EPR_BED_DRIVE_MIN, heatedBedController.pidDriveMin);
@@ -282,9 +282,9 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     HAL::eprSetByte(EPR_BED_PID_MAX, heatedBedController.pidMax);
     HAL::eprSetByte(EPR_RF_HEATED_BED_SENSOR_TYPE, heatedBedController.sensorType);
 
-        HAL::eprSetFloat(EPR_X_LENGTH, Printer::axisLengthMM[X_AXIS]);
-    HAL::eprSetFloat(EPR_Y_LENGTH, Printer::axisLengthMM[Y_AXIS]);
-    HAL::eprSetFloat(EPR_Z_LENGTH, Printer::axisLengthMM[Z_AXIS]);
+        HAL::eprSetFloat(EPR_X_LENGTH, Printer::axisLengthMm(X_AXIS));
+    HAL::eprSetFloat(EPR_Y_LENGTH, Printer::axisLengthMm(Y_AXIS));
+    HAL::eprSetFloat(EPR_Z_LENGTH, Printer::axisLengthMm(Z_AXIS));
 
     // now the extruder
     for (uint8_t i = 0; i < NUM_EXTRUDER; i++) {
@@ -404,29 +404,29 @@ void EEPROM::readDataFromEEPROM() {
     baudrate = HAL::eprGetInt32(EPR_BAUDRATE);
     Printer::inactivity.setShutdownTimeout(HAL::eprGetInt32(EPR_MAX_INACTIVE_TIME));
     Printer::inactivity.setStepperTimeout(HAL::eprGetInt32(EPR_STEPPER_INACTIVE_TIME));
-    Printer::axisStepsPerMM[X_AXIS] = HAL::eprGetFloat(EPR_XAXIS_STEPS_PER_MM);
-    Printer::axisStepsPerMM[Y_AXIS] = HAL::eprGetFloat(EPR_YAXIS_STEPS_PER_MM);
-    Printer::axisStepsPerMM[Z_AXIS] = HAL::eprGetFloat(EPR_ZAXIS_STEPS_PER_MM);
+    Printer::setStepsPerMm(X_AXIS, HAL::eprGetFloat(EPR_XAXIS_STEPS_PER_MM));
+    Printer::setStepsPerMm(Y_AXIS, HAL::eprGetFloat(EPR_YAXIS_STEPS_PER_MM));
+    Printer::setStepsPerMm(Z_AXIS, HAL::eprGetFloat(EPR_ZAXIS_STEPS_PER_MM));
 
     //check da früher mehr speed erlaubt, was keinen sinn gemacht hat.
-    Printer::maxFeedrate[X_AXIS] = MAX_FEEDRATE_X;
-    Printer::maxFeedrate[Y_AXIS] = MAX_FEEDRATE_Y;
-    Printer::maxFeedrate[Z_AXIS] = MAX_FEEDRATE_Z;
+    Printer::setAxisMaxFeedrate(X_AXIS, MAX_FEEDRATE_X);
+    Printer::setAxisMaxFeedrate(Y_AXIS, MAX_FEEDRATE_Y);
+    Printer::setAxisMaxFeedrate(Z_AXIS, MAX_FEEDRATE_Z);
     for (uint8_t axis = X_AXIS; axis <= Z_AXIS; axis++) {
         float tmp = HAL::eprGetFloat(EPR_X_MAX_FEEDRATE + axis * 4); //X dann EPR_Y_MAX_FEEDRATE dann EPR_Z_MAX_FEEDRATE
-        if (tmp > Printer::maxFeedrate[axis]) {
-            HAL::eprSetFloat(EPR_X_MAX_FEEDRATE + axis * 4, Printer::maxFeedrate[axis]);
+        if (tmp > Printer::axisMaxFeedrate(axis)) {
+            HAL::eprSetFloat(EPR_X_MAX_FEEDRATE + axis * 4, Printer::axisMaxFeedrate(axis));
             change = true; //update checksum later in this function
         } else {
-            Printer::maxFeedrate[axis] = tmp;
+            Printer::setAxisMaxFeedrate(axis, tmp);
         }
     }
 
     // Reload the saved value in the current scale and keep the live SenseOffset.
-    Printer::zOffset.setManualMicrometers(HAL::eprGetInt32(EPR_RF_Z_OFFSET), Printer::axisStepsPerMM[Z_AXIS]);
+    Printer::zOffset.setManualMicrometers(HAL::eprGetInt32(EPR_RF_Z_OFFSET), Printer::stepsPerMm(Z_AXIS));
     Printer::ZMode = HAL::eprGetByte(EPR_RF_Z_MODE);
 
-    Printer::layers.resetFadeBounds(Printer::axisStepsPerMM[Z_AXIS]);
+    Printer::layers.resetFadeBounds(Printer::stepsPerMm(Z_AXIS));
 
     Printer::manualMotion.setMode(X_AXIS, HAL::eprGetByte(EPR_RF_MOVE_MODE_X));
     Printer::manualMotion.setMode(Y_AXIS, HAL::eprGetByte(EPR_RF_MOVE_MODE_Y));
@@ -434,43 +434,43 @@ void EEPROM::readDataFromEEPROM() {
     Printer::manualMotion.setCoordinateSystem((bool)HAL::eprGetByte(EPR_RF_MOVE_MODE_XY_KOSYS));
     Printer::manualMotion.setFeedrateSource((bool)HAL::eprGetByte(EPR_RF_MOVE_POSITION_FEEDRATE));
 
-    Printer::maxXYJerk = HAL::eprGetFloat(EPR_MAX_XYJERK);
-    Printer::maxZJerk = HAL::eprGetFloat(EPR_MAX_ZJERK);
+    Printer::setXYJerkLimit(HAL::eprGetFloat(EPR_MAX_XYJERK));
+    Printer::setZJerkLimit(HAL::eprGetFloat(EPR_MAX_ZJERK));
 
-    Printer::maxAccelerationMMPerSquareSecond[X_AXIS] = HAL::eprGetFloat(EPR_X_MAX_ACCEL);
-    Printer::maxAccelerationMMPerSquareSecond[Y_AXIS] = HAL::eprGetFloat(EPR_Y_MAX_ACCEL);
-    Printer::maxAccelerationMMPerSquareSecond[Z_AXIS] = HAL::eprGetFloat(EPR_Z_MAX_ACCEL);
-    if (Printer::maxAccelerationMMPerSquareSecond[X_AXIS] < ACCELERATION_MIN_XY || Printer::maxAccelerationMMPerSquareSecond[X_AXIS] > ACCELERATION_MAX_XY) {
-        Printer::maxAccelerationMMPerSquareSecond[X_AXIS] = MAX_ACCELERATION_UNITS_PER_SQ_SECOND_X;
+    Printer::setPrintAcceleration(X_AXIS, HAL::eprGetFloat(EPR_X_MAX_ACCEL));
+    Printer::setPrintAcceleration(Y_AXIS, HAL::eprGetFloat(EPR_Y_MAX_ACCEL));
+    Printer::setPrintAcceleration(Z_AXIS, HAL::eprGetFloat(EPR_Z_MAX_ACCEL));
+    if (Printer::printAcceleration(X_AXIS) < ACCELERATION_MIN_XY || Printer::printAcceleration(X_AXIS) > ACCELERATION_MAX_XY) {
+        Printer::setPrintAcceleration(X_AXIS, MAX_ACCELERATION_UNITS_PER_SQ_SECOND_X);
         HAL::eprSetFloat(EPR_X_MAX_ACCEL, MAX_ACCELERATION_UNITS_PER_SQ_SECOND_X);
         change = true; //update checksum later in this function
     }
-    if (Printer::maxAccelerationMMPerSquareSecond[Y_AXIS] < ACCELERATION_MIN_XY || Printer::maxAccelerationMMPerSquareSecond[Y_AXIS] > ACCELERATION_MAX_XY) {
-        Printer::maxAccelerationMMPerSquareSecond[Y_AXIS] = MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Y;
+    if (Printer::printAcceleration(Y_AXIS) < ACCELERATION_MIN_XY || Printer::printAcceleration(Y_AXIS) > ACCELERATION_MAX_XY) {
+        Printer::setPrintAcceleration(Y_AXIS, MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Y);
         HAL::eprSetFloat(EPR_Y_MAX_ACCEL, MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Y);
         change = true; //update checksum later in this function
     }
-    if (Printer::maxAccelerationMMPerSquareSecond[Z_AXIS] < ACCELERATION_MIN_Z || Printer::maxAccelerationMMPerSquareSecond[Z_AXIS] > ACCELERATION_MAX_Z) {
-        Printer::maxAccelerationMMPerSquareSecond[Z_AXIS] = MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Z;
+    if (Printer::printAcceleration(Z_AXIS) < ACCELERATION_MIN_Z || Printer::printAcceleration(Z_AXIS) > ACCELERATION_MAX_Z) {
+        Printer::setPrintAcceleration(Z_AXIS, MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Z);
         HAL::eprSetFloat(EPR_Z_MAX_ACCEL, MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Z);
         change = true; //update checksum later in this function
     }
 
-    Printer::maxTravelAccelerationMMPerSquareSecond[X_AXIS] = HAL::eprGetFloat(EPR_X_MAX_TRAVEL_ACCEL);
-    Printer::maxTravelAccelerationMMPerSquareSecond[Y_AXIS] = HAL::eprGetFloat(EPR_Y_MAX_TRAVEL_ACCEL);
-    Printer::maxTravelAccelerationMMPerSquareSecond[Z_AXIS] = HAL::eprGetFloat(EPR_Z_MAX_TRAVEL_ACCEL);
-    if (Printer::maxTravelAccelerationMMPerSquareSecond[X_AXIS] < ACCELERATION_MIN_XY || Printer::maxTravelAccelerationMMPerSquareSecond[X_AXIS] > ACCELERATION_MAX_XY) {
-        Printer::maxTravelAccelerationMMPerSquareSecond[X_AXIS] = MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_X;
+    Printer::setTravelAcceleration(X_AXIS, HAL::eprGetFloat(EPR_X_MAX_TRAVEL_ACCEL));
+    Printer::setTravelAcceleration(Y_AXIS, HAL::eprGetFloat(EPR_Y_MAX_TRAVEL_ACCEL));
+    Printer::setTravelAcceleration(Z_AXIS, HAL::eprGetFloat(EPR_Z_MAX_TRAVEL_ACCEL));
+    if (Printer::travelAcceleration(X_AXIS) < ACCELERATION_MIN_XY || Printer::travelAcceleration(X_AXIS) > ACCELERATION_MAX_XY) {
+        Printer::setTravelAcceleration(X_AXIS, MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_X);
         HAL::eprSetFloat(EPR_X_MAX_TRAVEL_ACCEL, MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_X);
         change = true; //update checksum later in this function
     }
-    if (Printer::maxTravelAccelerationMMPerSquareSecond[Y_AXIS] < ACCELERATION_MIN_XY || Printer::maxTravelAccelerationMMPerSquareSecond[Y_AXIS] > ACCELERATION_MAX_XY) {
-        Printer::maxTravelAccelerationMMPerSquareSecond[Y_AXIS] = MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Y;
+    if (Printer::travelAcceleration(Y_AXIS) < ACCELERATION_MIN_XY || Printer::travelAcceleration(Y_AXIS) > ACCELERATION_MAX_XY) {
+        Printer::setTravelAcceleration(Y_AXIS, MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Y);
         HAL::eprSetFloat(EPR_Y_MAX_TRAVEL_ACCEL, MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Y);
         change = true; //update checksum later in this function
     }
-    if (Printer::maxTravelAccelerationMMPerSquareSecond[Z_AXIS] < ACCELERATION_MIN_Z || Printer::maxTravelAccelerationMMPerSquareSecond[Z_AXIS] > ACCELERATION_MAX_Z) {
-        Printer::maxTravelAccelerationMMPerSquareSecond[Z_AXIS] = MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Z;
+    if (Printer::travelAcceleration(Z_AXIS) < ACCELERATION_MIN_Z || Printer::travelAcceleration(Z_AXIS) > ACCELERATION_MAX_Z) {
+        Printer::setTravelAcceleration(Z_AXIS, MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Z);
         HAL::eprSetFloat(EPR_Z_MAX_TRAVEL_ACCEL, MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Z);
         change = true; //update checksum later in this function
     }
@@ -483,14 +483,14 @@ void EEPROM::readDataFromEEPROM() {
     heatedBedController.pidMax = HAL::eprGetByte(EPR_BED_PID_MAX);
     heatedBedController.sensorType = (HAL::eprGetByte(EPR_RF_HEATED_BED_SENSOR_TYPE) != 0) ? HAL::eprGetByte(EPR_RF_HEATED_BED_SENSOR_TYPE) : HEATED_BED_SENSOR_TYPE;
 
-    Printer::axisLengthMM[X_AXIS] = HAL::eprGetFloat(EPR_X_LENGTH);
-    if (Printer::axisLengthMM[X_AXIS] <= 0 || Printer::axisLengthMM[X_AXIS] > 245.0f) {
-        Printer::axisLengthMM[X_AXIS] = X_MAX_LENGTH_PRINT;
-        HAL::eprSetFloat(EPR_X_LENGTH, Printer::axisLengthMM[X_AXIS]);
+    Printer::setAxisLengthMm(X_AXIS, HAL::eprGetFloat(EPR_X_LENGTH));
+    if (Printer::axisLengthMm(X_AXIS) <= 0 || Printer::axisLengthMm(X_AXIS) > 245.0f) {
+        Printer::setAxisLengthMm(X_AXIS, X_MAX_LENGTH_PRINT);
+        HAL::eprSetFloat(EPR_X_LENGTH, Printer::axisLengthMm(X_AXIS));
         change = true; //update checksum later in this function
     }
-    Printer::axisLengthMM[Y_AXIS] = HAL::eprGetFloat(EPR_Y_LENGTH);
-    Printer::axisLengthMM[Z_AXIS] = HAL::eprGetFloat(EPR_Z_LENGTH);
+    Printer::setAxisLengthMm(Y_AXIS, HAL::eprGetFloat(EPR_Y_LENGTH));
+    Printer::setAxisLengthMm(Z_AXIS, HAL::eprGetFloat(EPR_Z_LENGTH));
 
     // now the extruder
     for (uint8_t i = 0; i < NUM_EXTRUDER; i++) {
@@ -594,9 +594,9 @@ void EEPROM::readDataFromEEPROM() {
     //reinit for check if eeprom values are too high.
     unsigned int eeprom_homing_feedrate_position;
         eeprom_homing_feedrate_position = EPR_X_HOMING_FEEDRATE_PRINT;
-        Printer::homingFeedrate[X_AXIS] = HOMING_FEEDRATE_X_PRINT;
-        Printer::homingFeedrate[Y_AXIS] = HOMING_FEEDRATE_Y_PRINT;
-        Printer::homingFeedrate[Z_AXIS] = HOMING_FEEDRATE_Z_PRINT;
+        Printer::setAxisHomingFeedrate(X_AXIS, HOMING_FEEDRATE_X_PRINT);
+        Printer::setAxisHomingFeedrate(Y_AXIS, HOMING_FEEDRATE_Y_PRINT);
+        Printer::setAxisHomingFeedrate(Z_AXIS, HOMING_FEEDRATE_Z_PRINT);
     //check if values are too high
     //this is no super complete check but if someone uses the printer bad values from old firmwares get corrected after one restart in each mode.
     // and update them to max according configuration consts if too high.
@@ -606,20 +606,20 @@ void EEPROM::readDataFromEEPROM() {
         //Alle Homing-Geschwindigkeiten höher max-Speed werden mit der Standard-Config-Homing-Speed überschrieben.
         //Das betrifft gerade noch die alten RF-Speeds, die viel zu hoch waren:
         //z.B: https://github.com/RF1000/Repetier-Firmware/blob/0e52693eaed1f606af411e4898030b033304b94f/RF2000/Repetier/RF2000.h#L781
-        if (tmp > Printer::maxFeedrate[axis]) {
-            HAL::eprSetFloat(eeprom_homing_feedrate_position + axis * 4, Printer::homingFeedrate[axis]);
+        if (tmp > Printer::axisMaxFeedrate(axis)) {
+            HAL::eprSetFloat(eeprom_homing_feedrate_position + axis * 4, Printer::axisHomingFeedrate(axis));
             change = true; //update checksum later in this function
         } else {
-            Printer::homingFeedrate[axis] = tmp;
+            Printer::setAxisHomingFeedrate(axis, tmp);
         }
     }
 
 
-    Printer::manualMotion.setSteps(X_AXIS, (unsigned short)lroundf(Printer::axisStepsPerMM[X_AXIS] * DEFAULT_MANUAL_MM_X));
-    Printer::manualMotion.setSteps(Y_AXIS, (unsigned short)lroundf(Printer::axisStepsPerMM[Y_AXIS] * DEFAULT_MANUAL_MM_Y));
+    Printer::manualMotion.setSteps(X_AXIS, (unsigned short)lroundf(Printer::stepsPerMm(X_AXIS) * DEFAULT_MANUAL_MM_X));
+    Printer::manualMotion.setSteps(Y_AXIS, (unsigned short)lroundf(Printer::stepsPerMm(Y_AXIS) * DEFAULT_MANUAL_MM_Y));
     const unsigned short stepsize_table[NUM_ACCEPTABLE_STEP_SIZE_TABLE] PROGMEM = ACCEPTABLE_STEP_SIZE_TABLE;
     Printer::manualMotion.setSteps(Z_AXIS, (unsigned short)constrain((unsigned short)HAL::eprGetInt16(EPR_RF_MOD_Z_STEP_SIZE), 1, stepsize_table[NUM_ACCEPTABLE_STEP_SIZE_TABLE - 1])); //limit stepsize to value in config.
-    Printer::manualMotion.setSteps(E_AXIS, (unsigned short)lroundf(Extruder::current->stepsPerMM * DEFAULT_MANUAL_MM_E));                                                               //current extruder stepsPerMM weil hier noch kein update für Printer::axisStepsPerMM[E_AXIS] gemacht wurde!
+    Printer::manualMotion.setSteps(E_AXIS, (unsigned short)lroundf(Extruder::current->stepsPerMM * DEFAULT_MANUAL_MM_E));                                                               //current extruder stepsPerMM weil hier noch kein update für Printer::stepsPerMm(E_AXIS) gemacht wurde!
 
     // The matrix is loaded later. Clamp to the compiled grid capacity here
     // and preserve the legacy zero value until the matrix is available.
@@ -797,7 +797,7 @@ void EEPROM::init() {
         EEPROM::restoreEEPROMExtruderSettingsFromConfiguration(1);
         EEPROM::storeExtruderDataIntoEEPROM(1);
         // auto-adjust x axis length:
-        Printer::axisLengthMM[X_AXIS] = X_MAX_LENGTH_PRINT;
+        Printer::setAxisLengthMm(X_AXIS, X_MAX_LENGTH_PRINT);
         HAL::eprSetFloat(EPR_X_LENGTH, X_MAX_LENGTH_PRINT);
 
         HAL::eprSetByte(EPR_CHECK_NUM_EXTRUDERS, NUM_EXTRUDER);
@@ -812,7 +812,7 @@ void EEPROM::init() {
 
     if (update_eeprom_num_extruders_changed_1) {
         // auto-adjust x axis length:
-        Printer::axisLengthMM[X_AXIS] = X_MAX_LENGTH_PRINT;
+        Printer::setAxisLengthMm(X_AXIS, X_MAX_LENGTH_PRINT);
         HAL::eprSetFloat(EPR_X_LENGTH, X_MAX_LENGTH_PRINT);
 
         HAL::eprSetByte(EPR_CHECK_NUM_EXTRUDERS, NUM_EXTRUDER);

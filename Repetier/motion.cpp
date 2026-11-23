@@ -150,13 +150,13 @@ bool PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
             const float targetE = Printer::moveTarget.machineMM(E_AXIS);
             const float targetRemainder = Printer::moveTarget.remainderMM(E_AXIS);
             const float flow = Printer::menuExtrusionFactor * Printer::digitCompensation.extrusionFactor();
-            steps = Printer::extrusionPlanner.planSteps({targetE, targetRemainder}, flow, Printer::axisStepsPerMM[E_AXIS]);
+            steps = Printer::extrusionPlanner.planSteps({targetE, targetRemainder}, flow, Printer::stepsPerMm(E_AXIS));
         } else {
             const int32_t targetSteps = Printer::prepareDestinationSteps(axis);
             steps = Printer::cartesianPlanner.queueTarget(axis, targetSteps);
         }
 
-        const float distanceMM = steps * Printer::axisMMPerSteps[axis];
+        const float distanceMM = steps * Printer::mmPerStep(axis);
         if (axis == E_AXIS)
             Printer::filamentPrinted += distanceMM;
         axisDistanceMM[axis] = fabs(distanceMM);
@@ -173,7 +173,7 @@ bool PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
     if (!Printer::startLine.active()) {
         const PrintLayers::PlannedMove move{
             Printer::cartesianPlanner.lastQueuedSteps(Z_AXIS), p->isZMove(), p->isXOrYMove(), p->isEPositiveMove()};
-        Printer::layers.recordPlannedMove(move, Printer::axisStepsPerMM[Z_AXIS], bedMatrixHighestZSteps(), bedMatrixLowestZSteps());
+        Printer::layers.recordPlannedMove(move, Printer::stepsPerMm(Z_AXIS), bedMatrixHighestZSteps(), bedMatrixLowestZSteps());
     }
 
     p->setSegmentGeometry(axisDistanceMM);
@@ -198,7 +198,7 @@ void PrintLine::prepareDirectMove(const int32_t steps[4], bool stoppable, bool f
     float axisDistanceMM[4];
     for (uint8_t axis = 0; axis < 4; axis++) {
         direct.setAxisSteps(axis, steps[axis]);
-        axisDistanceMM[axis] = fabs(direct.delta[axis] * Printer::axisMMPerSteps[axis]);
+        axisDistanceMM[axis] = fabs(direct.delta[axis] * Printer::mmPerStep(axis));
     }
     if (direct.isNoMove()) {
         direct.stepsRemaining = 0;

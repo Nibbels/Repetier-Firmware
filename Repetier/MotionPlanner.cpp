@@ -28,11 +28,11 @@ MotionPlanner::AdvancePeak MotionPlanner::takeAdvancePeak() {
 
 inline float MotionPlanner::safeSpeed(PrintLine& move, int8_t drivingAxis) {
     const auto& lookahead = move.lookahead;
-    float xyMin = Printer::maxXYJerk * 0.5f;
+    float xyMin = Printer::xyJerkLimit() * 0.5f;
     float mz = 0;
     float safe(xyMin);
     if (move.isZMove()) {
-        mz = Printer::maxZJerk * 0.5f;
+        mz = Printer::zJerkLimit() * 0.5f;
         if (move.isXOrYMove()) {
             if (fabs(lookahead.speedZ) > mz)
                 safe = RMath::min(safe, mz * move.fullSpeed / fabs(lookahead.speedZ));
@@ -78,26 +78,26 @@ void MotionPlanner::prepareMove(PrintLine& move, const float axisDistanceMM[4], 
 
     int32_t axisInterval[4];
     if (move.isXMove()) {
-        axisInterval[X_AXIS] = axisDistanceMM[X_AXIS] * toTicks / (Printer::maxFeedrate[X_AXIS]); // mm*ticks/s/(mm/s*steps) = ticks/step
+        axisInterval[X_AXIS] = axisDistanceMM[X_AXIS] * toTicks / (Printer::axisMaxFeedrate(X_AXIS)); // mm*ticks/s/(mm/s*steps) = ticks/step
         limitInterval = RMath::max(axisInterval[X_AXIS], limitInterval);
     } else
         axisInterval[X_AXIS] = 0;
 
     if (move.isYMove()) {
-        axisInterval[Y_AXIS] = axisDistanceMM[Y_AXIS] * toTicks / Printer::maxFeedrate[Y_AXIS];
+        axisInterval[Y_AXIS] = axisDistanceMM[Y_AXIS] * toTicks / Printer::axisMaxFeedrate(Y_AXIS);
         limitInterval = RMath::max(axisInterval[Y_AXIS], limitInterval);
     } else
         axisInterval[Y_AXIS] = 0;
 
     if (move.isZMove()) // normally no move in z direction
     {
-        axisInterval[Z_AXIS] = axisDistanceMM[Z_AXIS] * toTicks / Printer::maxFeedrate[Z_AXIS]; // must prevent overflow!
+        axisInterval[Z_AXIS] = axisDistanceMM[Z_AXIS] * toTicks / Printer::axisMaxFeedrate(Z_AXIS); // must prevent overflow!
         limitInterval = RMath::max(axisInterval[Z_AXIS], limitInterval);
     } else
         axisInterval[Z_AXIS] = 0;
 
     if (move.isEMove()) {
-        axisInterval[E_AXIS] = axisDistanceMM[E_AXIS] * toTicks / Printer::maxFeedrate[E_AXIS];
+        axisInterval[E_AXIS] = axisDistanceMM[E_AXIS] * toTicks / Printer::axisMaxFeedrate(E_AXIS);
         limitInterval = RMath::max(axisInterval[E_AXIS], limitInterval);
     } else
         axisInterval[E_AXIS] = 0;
@@ -109,28 +109,28 @@ void MotionPlanner::prepareMove(PrintLine& move, const float axisDistanceMM[4], 
     }
     float inverseTimeS = static_cast<float>(F_CPU) / timeForMove;
     if (move.isXMove()) {
-        axisInterval[X_AXIS] = static_cast<int32_t>(timeForMove / (axisDistanceMM[X_AXIS] * Printer::axisStepsPerMM[X_AXIS]));
+        axisInterval[X_AXIS] = static_cast<int32_t>(timeForMove / (axisDistanceMM[X_AXIS] * Printer::stepsPerMm(X_AXIS)));
         lookahead.speedX = axisDistanceMM[X_AXIS] * inverseTimeS;
         if (move.isXNegativeMove())
             lookahead.speedX = -lookahead.speedX;
     } else
         lookahead.speedX = 0;
     if (move.isYMove()) {
-        axisInterval[Y_AXIS] = static_cast<int32_t>(timeForMove / (axisDistanceMM[Y_AXIS] * Printer::axisStepsPerMM[Y_AXIS]));
+        axisInterval[Y_AXIS] = static_cast<int32_t>(timeForMove / (axisDistanceMM[Y_AXIS] * Printer::stepsPerMm(Y_AXIS)));
         lookahead.speedY = axisDistanceMM[Y_AXIS] * inverseTimeS;
         if (move.isYNegativeMove())
             lookahead.speedY = -lookahead.speedY;
     } else
         lookahead.speedY = 0;
     if (move.isZMove()) {
-        axisInterval[Z_AXIS] = static_cast<int32_t>(timeForMove / (axisDistanceMM[Z_AXIS] * Printer::axisStepsPerMM[Z_AXIS]));
+        axisInterval[Z_AXIS] = static_cast<int32_t>(timeForMove / (axisDistanceMM[Z_AXIS] * Printer::stepsPerMm(Z_AXIS)));
         lookahead.speedZ = axisDistanceMM[Z_AXIS] * inverseTimeS;
         if (move.isZNegativeMove())
             lookahead.speedZ = -lookahead.speedZ;
     } else
         lookahead.speedZ = 0;
     if (move.isEMove()) {
-        axisInterval[E_AXIS] = static_cast<int32_t>(timeForMove / (axisDistanceMM[E_AXIS] * Printer::axisStepsPerMM[E_AXIS]));
+        axisInterval[E_AXIS] = static_cast<int32_t>(timeForMove / (axisDistanceMM[E_AXIS] * Printer::stepsPerMm(E_AXIS)));
         lookahead.speedE = axisDistanceMM[E_AXIS] * inverseTimeS;
         if (move.isENegativeMove())
             lookahead.speedE = -lookahead.speedE;
@@ -143,7 +143,7 @@ void MotionPlanner::prepareMove(PrintLine& move, const float axisDistanceMM[4], 
     // slowest time to accelerate from v0 to limitInterval determines used acceleration
     // t = (v_end-v_start)/a
     float slowestAxisPlateauTimeRepro = 1e15; // repro to reduce division Unit: 1/s
-    uint32_t* accel = (move.isEPositiveMove() ? Printer::maxPrintAccelerationStepsPerSquareSecond : Printer::maxTravelAccelerationStepsPerSquareSecond);
+    const uint32_t* accel = Printer::accelerationSteps(move.isEPositiveMove());
 
     for (uint8_t axis = 0; axis < 4; axis++) {
         if (move.isMoveOfAxis(axis)) {
@@ -175,7 +175,7 @@ void MotionPlanner::prepareMove(PrintLine& move, const float axisDistanceMM[4], 
     if (!move.isXYZMove() || !move.isEPositiveMove()) { // No head move or E move only or sucking filament back
         stepProfile.advanceL = 0;
     } else {
-        float advlin = fabs(lookahead.speedE) * Extruder::current->advanceL * 0.001 * Printer::axisStepsPerMM[E_AXIS];
+        float advlin = fabs(lookahead.speedE) * Extruder::current->advanceL * 0.001 * Printer::stepsPerMm(E_AXIS);
         stepProfile.advanceL = ((65536L * advlin) / stepProfile.vMax);
         if (advlin > advancePeak_.steps) {
             advancePeak_.steps = advlin;
@@ -228,16 +228,16 @@ inline void MotionPlanner::limitJunction(PrintLine& previous, const PrintLine& n
         * (1.0 - (to.speedX * from.speedX + to.speedY * from.speedY + to.speedZ * from.speedZ)
             / (next.fullSpeed * previous.fullSpeed));
 
-    if (calculatedJerk > Printer::maxXYJerk) {
-        factor = Printer::maxXYJerk / calculatedJerk;
-        if (factor * maxJoinSpeed * 2.0 < Printer::maxXYJerk)
-            factor = Printer::maxXYJerk / (2.0 * maxJoinSpeed);
+    if (calculatedJerk > Printer::xyJerkLimit()) {
+        factor = Printer::xyJerkLimit() / calculatedJerk;
+        if (factor * maxJoinSpeed * 2.0 < Printer::xyJerkLimit())
+            factor = Printer::xyJerkLimit() / (2.0 * maxJoinSpeed);
     }
 
     if ((previous.dir | next.dir) & (16 << Z_AXIS)) {
         const float zJerk = fabs(to.speedZ - from.speedZ);
-        if (zJerk > Printer::maxZJerk)
-            factor = RMath::min(factor, Printer::maxZJerk / zJerk);
+        if (zJerk > Printer::zJerkLimit())
+            factor = RMath::min(factor, Printer::zJerkLimit() / zJerk);
     }
 
     const float eJerk = fabs(to.speedE - from.speedE);

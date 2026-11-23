@@ -102,7 +102,7 @@ def main():
         + section(commands, "    case 233:", "    case 360:")
         + "} }",
         "void rescalePlannedAxis(uint8_t axis) {\nusing namespace Printer;\n"
-        + section(printer, "        const float mmPerStep = 1.0f / axisStepsPerMM[axis];", "\n\n        /** Acceleration")
+        + section(printer, "        const float mmPerStep = 1.0f / axisStepsPerMM_[axis];", "\n\n        /** Acceleration")
         + "\n}",
         "void executeExtrusionStep(PrintLine* move, bool forQueue) {\n"
         + section(executor, "        if (move->isEMove()) {", "\n        if (move->isXMove()) {")

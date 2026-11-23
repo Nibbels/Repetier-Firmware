@@ -239,14 +239,14 @@ struct DirectDisplacement {
 };
 DirectDisplacement directPosition(uint8_t axis) { return {directCurrentSteps[axis]}; }
 CartesianPlanner cartesianPlanner;
-float axisStepsPerMM[4] = { 160.0f, 160.0f, zStepsPerMm, 280.0f };
-float axisMMPerSteps[4] = { 1.0f / 160, 1.0f / 160, 1.0f / zStepsPerMm, 1.0f / 280 };
+float axisStepsPerMM_[4] = { 160.0f, 160.0f, zStepsPerMm, 280.0f };
+float axisMMPerSteps_[4] = { 1.0f / 160, 1.0f / 160, 1.0f / zStepsPerMm, 1.0f / 280 };
 float maxFeedrate[4] = { 200, 200, 9, 25 };
 uint32_t maxPrintAccelerationStepsPerSquareSecond[4] = { 100000, 100000, 100000, 100000 };
 uint32_t maxTravelAccelerationStepsPerSquareSecond[4] = { 100000, 100000, 100000, 100000 };
-float homingFeedrate[3] = { 60.0f, 60.0f, 5.0f };
+float homingFeedrate_[3] = { 60.0f, 60.0f, 5.0f };
 float axisLengthMM[3] = { 170.0f, 245.0f, 200.0f };
-long maxSoftEndstopSteps[2] = { 170 * 160L, 245 * 160L };
+long maxSoftEndstopSteps_[2] = { 170 * 160L, 245 * 160L };
 MoveTarget moveTarget;
 float feedrate = 10.0f;
 GCodeModes gcodeModes;
@@ -257,6 +257,16 @@ ExtrusionOutput extrusionOutput;
 MachineInactivity inactivity(STEPPER_INACTIVE_TIME * 1000UL, MAX_INACTIVE_TIME * 1000UL);
 IdleStatus idleStatus;
 constexpr float maxXYJerk = 8.0f, maxZJerk = 0.5f;
+float stepsPerMm(uint8_t axis) { return axisStepsPerMM_[axis]; }
+void setStepsPerMm(uint8_t axis, float value) { axisStepsPerMM_[axis] = value; }
+float mmPerStep(uint8_t axis) { return axisMMPerSteps_[axis]; }
+float axisMaxFeedrate(uint8_t axis) { return maxFeedrate[axis]; }
+float axisHomingFeedrate(uint8_t axis) { return homingFeedrate_[axis]; }
+float axisLengthMm(uint8_t axis) { return axisLengthMM[axis]; }
+long xyMaxSteps(uint8_t axis) { return maxSoftEndstopSteps_[axis]; }
+float xyJerkLimit() { return maxXYJerk; }
+float zJerkLimit() { return maxZJerk; }
+const uint32_t* accelerationSteps(bool printing) { return printing ? maxPrintAccelerationStepsPerSquareSecond : maxTravelAccelerationStepsPerSquareSecond; }
 volatile char doHeatBedZCompensation = true;
 bool menuPaused = false;
 bool axesHomed = true;
@@ -306,7 +316,7 @@ bool queueRelativeStepsCoordinates(long, long, long z, long, float, bool, bool c
     return true;
 }
 bool queueRelativeMMCoordinates(float, float, float z, float, float, bool, bool checkEndstop = false) {
-    const int32_t steps = zMotion.motorSteps() + int32_t(z * axisStepsPerMM[Z_AXIS]);
+    const int32_t steps = zMotion.motorSteps() + int32_t(z * axisStepsPerMM_[Z_AXIS]);
     zMotion.setMotorReference(checkEndstop ? std::max(int32_t(0), steps) : steps);
     return true;
 }
@@ -318,9 +328,9 @@ void setFeedrate(float value);
 bool queueGCodeCoordinates(GCode*);
 void updateWobbleFixOffsets();
 int32_t prepareDestinationSteps(uint8_t axis);
-float getDirectMM(uint8_t axis) { return directCurrentSteps[axis] * axisMMPerSteps[axis]; }
+float getDirectMM(uint8_t axis) { return directCurrentSteps[axis] * axisMMPerSteps_[axis]; }
 int32_t softwareEndstopSteps(uint8_t axis) {
-    return axis == Z_AXIS ? zMotion.maxSteps() : maxSoftEndstopSteps[axis];
+    return axis == Z_AXIS ? zMotion.maxSteps() : maxSoftEndstopSteps_[axis];
 }
 void queueFloatCoordinates(float x, float y, float z, float e, float speed);
 bool checkPlayKey() { return skipPrimeAt && primePolls >= skipPrimeAt; }
@@ -497,7 +507,7 @@ void Printer::queueFloatCoordinates(float x, float y, float z, float e, float sp
     if (x == IGNORE_COORDINATE && y != IGNORE_COORDINATE && e == IGNORE_COORDINATE)
         ++primeSpacingMoves;
     if (z != IGNORE_COORDINATE)
-        zMotion.setNominalSteps(std::lround(z * axisStepsPerMM[Z_AXIS]));
+        zMotion.setNominalSteps(std::lround(z * axisStepsPerMM_[Z_AXIS]));
     if (e != IGNORE_COORDINATE) {
         setEPositionMM(e);
         extrusionPlanner.restoreStepRemainder(0.375f);
@@ -1428,9 +1438,9 @@ void compensationBoundaries() {
         }
     }
 
-    Printer::axisStepsPerMM[Z_AXIS] = 2560.0f;
-    layers.resetFadeBounds(Printer::axisStepsPerMM[Z_AXIS]);
-    Printer::zOffset.refreshSteps(Printer::axisStepsPerMM[Z_AXIS]);
+    Printer::setStepsPerMm(Z_AXIS, 2560.0f);
+    layers.resetFadeBounds(Printer::stepsPerMm(Z_AXIS));
+    Printer::zOffset.refreshSteps(Printer::stepsPerMm(Z_AXIS));
     const long scaledOffset = Printer::zOffset.effectiveSteps();
     settleDigitZ(32767);
     expectCompensation(0, 215 + scaledOffset + 600, 0.0f, 1);
@@ -1457,12 +1467,12 @@ void layerScaleTransitions() {
     planMove(511, true);
     planMove(601, true, false, false);
 
-    Printer::axisStepsPerMM[Z_AXIS] = 640.0f;
+    Printer::setStepsPerMm(Z_AXIS, 640.0f);
     layers.rescaleFadeBounds(0.5f);
     assert(layers.fadeStartSteps() == 126 && layers.fadeEndSteps() == 626);
     assert(layers.currentLayerSteps() == 511 && layers.previousLayerSteps() == 253);
 
-    layers.resetFadeBounds(Printer::axisStepsPerMM[Z_AXIS]);
+    layers.resetFadeBounds(Printer::stepsPerMm(Z_AXIS));
     assert(layers.fadeStartSteps() == 211 && layers.fadeEndSteps() == 6400);
     assert(layers.currentLayerSteps() == 511 && layers.previousLayerSteps() == 253);
 
@@ -1623,7 +1633,7 @@ void primeParameters() {
 }
 
 void extrusionPlanning() {
-    Printer::axisStepsPerMM[E_AXIS] = 1.0f;
+    Printer::setStepsPerMm(E_AXIS, 1.0f);
     Printer::setEPositionMM(0);
     Printer::moveTarget.addMM(E_AXIS, 0.5f);
     assert(planExtrusionMove() == 1 && Printer::extrusionPlanner.stepRemainder() == -0.5f);
@@ -1642,7 +1652,7 @@ void extrusionPlanning() {
 
     Printer::setEPositionMM(0);
     Printer::menuExtrusionFactor = 1.0f;
-    Printer::axisStepsPerMM[E_AXIS] = 280.0f;
+    Printer::setStepsPerMm(E_AXIS, 280.0f);
     int32_t steps = 0;
     for (int i = 0; i < 100000; ++i) {
         Printer::moveTarget.addMM(E_AXIS, 0.008f);
@@ -1744,7 +1754,7 @@ void wobbleTarget() {
     }
 
     Printer::wobbleCorrection.setProfile({0, 100, 100, 300});
-    Printer::xyMotion.setMotorSteps(X_AXIS, Printer::maxSoftEndstopSteps[X_AXIS] / 2);
+    Printer::xyMotion.setMotorSteps(X_AXIS, Printer::xyMaxSteps(X_AXIS) / 2);
     Printer::zMotion.setMotorReference(1600); // A quarter turn of the 5 mm lead screw.
     Printer::updateWobbleFixOffsets();
     assert(std::abs(Printer::wobbleCorrection.offsetMM(Y_AXIS) - 0.2f) < 0.00001f);
@@ -1775,7 +1785,7 @@ void cartesianPlanning() {
     }
     assert(steps == 8000);
 
-    Printer::axisStepsPerMM[X_AXIS] = 320.0f;
+    Printer::setStepsPerMm(X_AXIS, 320.0f);
     rescalePlannedAxis(X_AXIS);
     assert(planCartesianAxis(X_AXIS) == 0);
     Printer::moveTarget.setMachineMM(X_AXIS, 0.0f);
@@ -2134,7 +2144,7 @@ void manualExtrusionDuringPause(bool advance) {
     next.E = 43.0f;
     assert(Printer::queueGCodeCoordinates(&next));
     const float flow = Printer::menuExtrusionFactor * Printer::digitCompensation.extrusionFactor();
-    assert(planExtrusionMove() == untouchedPlanner.planSteps({next.E, 0}, flow, Printer::axisStepsPerMM[E_AXIS]));
+    assert(planExtrusionMove() == untouchedPlanner.planSteps({next.E, 0}, flow, Printer::stepsPerMm(E_AXIS)));
 }
 
 void filamentProgramDuringPause() {
