@@ -254,8 +254,8 @@ int32_t HAL::CPUDivU2(unsigned int divisor) {
 } // CPUDivU2
 
 void HAL::setupTimer() {
-    EXTRUDER_TCCR = 0;                      // need Normal not fastPWM set by arduino init
-    EXTRUDER_TIMSK |= (1 << EXTRUDER_OCIE); // Activate compa interrupt on timer 0
+    EXTRUDER_TCCR = 0;                       // Normal mode on the shared timer.
+    EXTRUDER_TIMSK &= ~_BV(EXTRUDER_OCIE);   // Arm Compare A when Advance has work.
 
     PWM_TCCR = 0; // Setup PWM interrupt
     PWM_OCR = 64;
@@ -802,25 +802,68 @@ ISR(PWM_TIMER_VECTOR) {
 #endif // RGB_LIGHT_R_PIN
 } // ISR(PWM_TIMER_VECTOR)
 
-uint8_t ExtrusionOutput::nextTimerCompare(uint8_t compare) {
+namespace {
+constexpr uint8_t advanceCompareGuard = 2;
+constexpr uint8_t advanceDirectionDelay = 40;
+
+uint8_t advanceStepDelay(uint8_t interval) {
+    return interval < advanceCompareGuard ? advanceCompareGuard : interval;
+}
+
+void scheduleAdvanceCompare(uint8_t delay, uint8_t latestElapsed) {
+    const uint8_t due = EXTRUDER_OCR;
+    const uint8_t now = TCNT0;
+    const uint8_t elapsed = now - due;
+    // Keep the cadence when the compare is still reachable. A late handler
+    // starts a new interval so the counter does not have to wrap to reach it.
+    EXTRUDER_OCR = (elapsed <= latestElapsed ? due : now) + delay;
+    // The old compare can match again during a handler delayed by a wrap.
+    TIFR0 = _BV(OCF0A);
+}
+} // namespace
+
+void ExtrusionOutput::startTimer(int16_t pending, uint8_t mask) {
+    if (!advanceEnabled() || !pending || blocked())
+        return;
+
+    const int8_t direction = pending > 0 ? 1 : -1;
+    if (direction_ != direction && !canChangeDirection(pending))
+        return;
+
+    EXTRUDER_OCR = TCNT0 + advanceStepDelay(stepInterval_);
+    TIFR0 = _BV(OCF0A); // A masked match can leave the flag set.
+    EXTRUDER_TIMSK = mask | _BV(EXTRUDER_OCIE);
+}
+
+void ExtrusionOutput::stopTimer() {
+    EXTRUDER_TIMSK &= ~_BV(EXTRUDER_OCIE);
+}
+
+void ExtrusionOutput::serviceTimerCompare() {
     const int16_t pending = pendingSteps();
     if (pending) {
         const int8_t direction = pending > 0 ? 1 : -1;
         if (direction_ == direction) {
-            Extruder::timedStep(pendingSteps_, pending - direction);
-        } else if (pending >= 2 || pending <= -2 || draining_) {
+            const int16_t remaining = pending - direction;
+            Extruder::timedStep(pendingSteps_, remaining);
+            if (remaining) {
+                const uint8_t delay = advanceStepDelay(stepInterval_);
+                scheduleAdvanceCompare(delay, delay - advanceCompareGuard);
+                return;
+            }
+        } else if (canChangeDirection(pending)) {
             Extruder::setDirection(direction > 0);
             direction_ = direction;
-            compare += 40;
+            scheduleAdvanceCompare(stepInterval_ + advanceDirectionDelay, stepInterval_);
+            return;
         }
     }
-    return compare + stepInterval_;
+    stopTimer();
 }
 
 // Inline the direction path so the interrupt only saves the registers it uses.
 ISR(EXTRUDER_TIMER_VECTOR, __attribute__((flatten))) {
-    if (Printer::extrusionOutput.advanceEnabled())
-        EXTRUDER_OCR = Printer::extrusionOutput.nextTimerCompare(EXTRUDER_OCR);
+    Printer::extrusionOutput.serviceTimerCompare();
 }
 
 #if !defined CASE_LIGHT_PIN || CASE_LIGHT_PIN < 0

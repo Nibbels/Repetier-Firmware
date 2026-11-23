@@ -8,6 +8,12 @@
 #include <cstring>
 #include <functional>
 
+constexpr uint8_t EXTRUDER_OCIE = 1;
+constexpr uint8_t otherTimer0Interrupts = 0x05; // Compare B and overflow.
+uint8_t EXTRUDER_TIMSK = otherTimer0Interrupts;
+#define _BV(bit) (1U << (bit))
+#define INLINE inline
+
 #include "Constants.h"
 #undef uint
 #define MOTHERBOARD DEVICE_TYPE_RF2000
@@ -127,7 +133,6 @@ public:
 
 enum { Z_MIN_PIN, Z_MAX_PIN, Z_DIR_PIN, Z_STEP_PIN };
 constexpr bool LOW = false, HIGH = true;
-#define INLINE inline
 bool READ(int pin);
 void WRITE(int pin, bool high);
 #include "ZMotion.h"
@@ -607,7 +612,31 @@ long getZMatrixDepth(long x, long y) {
     return 37 + x / 32 - y / 64;
 }
 
+constexpr uint8_t OCF0A = 1;
+uint8_t EXTRUDER_OCR = 0, TCNT0 = 0;
+struct Timer0Flags {
+    uint8_t pending = 0;
+    void operator=(uint8_t clear) { pending &= ~clear; }
+} TIFR0;
+#define ISR(vector, ...) void vector()
+#define EXTRUDER_TIMER_VECTOR advanceCompareInterrupt
+
 #include "pause-sense-offset-firmware.inc"
+
+bool advanceTimerArmed() {
+    assert((EXTRUDER_TIMSK & ~_BV(EXTRUDER_OCIE)) == otherTimer0Interrupts);
+    return EXTRUDER_TIMSK & _BV(EXTRUDER_OCIE);
+}
+
+bool fireAdvanceCompare(uint8_t latency = 0) {
+    if (!advanceTimerArmed())
+        return false;
+    InterruptProtectedBlock lock;
+    TCNT0 = EXTRUDER_OCR + latency;
+    TIFR0.pending &= ~_BV(OCF0A); // The AVR clears this flag on vector entry.
+    advanceCompareInterrupt();
+    return true;
+}
 
 void withStartLine(const std::function<void()>& action) {
     assert(!duringPeriodicActions);
@@ -803,7 +832,7 @@ void pressureStop() {
     {
         InterruptProtectedBlock lock;
         output.onIdleTick();
-        output.nextTimerCompare(0);
+        assert(!fireAdvanceCompare());
     }
     assert(output.pendingSteps() == 0 && Extruder::stepPulses == 0);
     PrintLine::direct.setMoveOfAxisFinished(E_AXIS);
@@ -1840,37 +1869,84 @@ void ecmpStepping() {
 }
 
 void advanceTimer() {
-    ExtrusionOutput advance;
+    auto& advance = Printer::extrusionOutput;
     const unsigned basePulses = Extruder::stepPulses;
     const unsigned baseTrailingEdges = Extruder::trailingEdges;
     InterruptProtectedBlock lock;
     advance.setStepInterval(12);
+    assert(!advanceTimerArmed());
+    advance.setAdvanceEnabled(true);
+    assert(!advanceTimerArmed());
+
     advance.addSteps(1);
-    assert(advance.nextTimerCompare(0) == 12 && advance.pendingSteps() == 1);
+    assert(!fireAdvanceCompare() && advance.pendingSteps() == 1);
     assert(Extruder::stepPulses == basePulses && Extruder::trailingEdges == baseTrailingEdges);
+    TCNT0 = 250;
+    TIFR0.pending = 0x07; // Stale A and pending B and overflow flags.
     advance.addSteps(1);
-    assert(advance.nextTimerCompare(12) == 64 && Extruder::current->stepperDirection == 1);
-    assert(advance.nextTimerCompare(64) == 76 && advance.pendingSteps() == 1);
-    assert(advance.nextTimerCompare(76) == 88 && advance.pendingSteps() == 0);
+    assert(advanceTimerArmed() && EXTRUDER_OCR == 6 && TIFR0.pending == 0x05);
+    assert(fireAdvanceCompare() && EXTRUDER_OCR == 58 && Extruder::current->stepperDirection == 1);
+    assert(fireAdvanceCompare() && EXTRUDER_OCR == 70 && advance.pendingSteps() == 1);
+    assert(fireAdvanceCompare() && advance.pendingSteps() == 0 && !advanceTimerArmed());
     assert(Extruder::stepPulses == basePulses + 2);
 
     advance.setLeadSteps(3);
     advance.setLeadSteps(5);
+    for (int i = 0; i < 5; ++i)
+        assert(fireAdvanceCompare());
+    assert(advance.pendingSteps() == 0 && !advanceTimerArmed());
     advance.postponeRelaxation();
     for (int tick = 0; tick < 70; ++tick) {
         assert(!advance.relaxDelayElapsed());
         advance.onIdleTick();
-        assert(advance.pendingSteps() == 5);
+        assert(!advanceTimerArmed());
     }
     assert(advance.relaxDelayElapsed());
+    TCNT0 = 228;
     advance.onIdleTick();
-    assert(advance.pendingSteps() == 0);
+    assert(advance.pendingSteps() == -5 && advanceTimerArmed() && EXTRUDER_OCR == 240);
+    assert(fireAdvanceCompare() && EXTRUDER_OCR == 36 && Extruder::current->stepperDirection == -1);
+    for (int i = 0; i < 5; ++i)
+        assert(fireAdvanceCompare());
+    assert(advance.pendingSteps() == 0 && !advanceTimerArmed());
 
-    advance.addSteps(-2);
-    assert(advance.nextTimerCompare(240) == 36 && Extruder::current->stepperDirection == -1);
-    assert(advance.nextTimerCompare(36) == 48 && advance.pendingSteps() == -1);
-    assert(advance.nextTimerCompare(48) == 60 && advance.pendingSteps() == 0);
-    assert(Extruder::stepPulses == basePulses + 4 && Extruder::trailingEdges == baseTrailingEdges + 4);
+    // A single reversal wakes for a drain. Canceling the drain lets the
+    // pending compare retire without a pulse.
+    advance.addSteps(1);
+    assert(!advanceTimerArmed() && !advance.drain() && advanceTimerArmed());
+    advance.cancelDrain();
+    assert(fireAdvanceCompare() && !advanceTimerArmed() && advance.pendingSteps() == 1);
+    assert(!advance.drain());
+    assert(fireAdvanceCompare() && Extruder::current->stepperDirection == 1);
+    assert(fireAdvanceCompare() && advance.drain() && !advanceTimerArmed());
+
+    TCNT0 = 229;
+    advance.addSteps(2);
+    assert(EXTRUDER_OCR == 241);
+    assert(fireAdvanceCompare(17) && EXTRUDER_OCR == 14);
+    assert(fireAdvanceCompare() && !advanceTimerArmed());
+    assert(Extruder::stepPulses == basePulses + 15 && Extruder::trailingEdges == baseTrailingEdges + 15);
+
+    advance.addSteps(2);
+    assert(advanceTimerArmed());
+    const auto reason = ExtrusionOutput::Inhibit::Pressure;
+    assert(advance.inhibit(reason) == 2 && !advanceTimerArmed());
+    advance.allow(reason);
+    assert(!fireAdvanceCompare() && !advance.pendingSteps());
+    advance.addSteps(1);
+    assert(advanceTimerArmed());
+    advance.setAdvanceEnabled(false);
+    assert(!fireAdvanceCompare());
+    advance.clearSteps();
+
+    advance.setStepInterval(1);
+    advance.setAdvanceEnabled(true);
+    TCNT0 = 255;
+    advance.addSteps(2);
+    assert(EXTRUDER_OCR == 1);
+    assert(fireAdvanceCompare() && EXTRUDER_OCR == 42);
+    assert(fireAdvanceCompare() && EXTRUDER_OCR == 44 && TIFR0.pending == otherTimer0Interrupts);
+    assert(fireAdvanceCompare() && advance.pendingSteps() == 0 && !advanceTimerArmed());
 }
 
 #if NUM_EXTRUDER > 1
@@ -1882,11 +1958,7 @@ void advanceToolChange() {
     extruder[1].offsetMM[X_AXIS] = 2.0f;
     extruder[0].enabled = true;
 
-    uint8_t compare = 0;
-    const auto tick = [&] {
-        InterruptProtectedBlock lock;
-        compare = advance.nextTimerCompare(compare);
-    };
+    const auto tick = [] { fireAdvanceCompare(); };
     advance.addSteps(2);
     tick();
     tick();
@@ -1970,11 +2042,7 @@ void advanceModeChange() {
     testStep.S = 2;
     runAdvanceCommand(223, &testStep);
     advance.setLeadSteps(1);
-    uint8_t compare = 0;
-    const auto tick = [&] {
-        InterruptProtectedBlock lock;
-        compare = advance.nextTimerCompare(compare);
-    };
+    const auto tick = [] { fireAdvanceCompare(); };
     for (int i = 0; i < 4; ++i)
         tick();
     assert(Extruder::current->deliveredSteps == 3 && advance.pendingSteps() == 0);
@@ -2054,7 +2122,7 @@ void advanceCancel() {
     {
         InterruptProtectedBlock lock;
         output.onIdleTick();
-        output.nextTimerCompare(0);
+        assert(!fireAdvanceCompare());
     }
     assert(!output.pendingSteps() && !Extruder::stepPulses);
 
@@ -2068,15 +2136,13 @@ void advanceCancel() {
     {
         InterruptProtectedBlock lock;
         output.onIdleTick();
-        output.nextTimerCompare(0);
+        assert(!fireAdvanceCompare());
     }
     assert(!output.pendingSteps() && !Extruder::stepPulses);
 }
 
 void tickAdvanceInterrupt() {
-    static uint8_t compare = 0;
-    InterruptProtectedBlock lock;
-    compare = Printer::extrusionOutput.nextTimerCompare(compare);
+    fireAdvanceCompare();
 }
 
 void manualExtrusionDuringPause(bool advance) {

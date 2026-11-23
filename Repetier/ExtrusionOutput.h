@@ -16,6 +16,10 @@ public:
         if (advanceEnabled_ != enabled) {
             resetDirection();
             advanceEnabled_ = enabled;
+            if (enabled)
+                armTimer(pendingSteps_);
+            else
+                stopTimer();
         }
     }
 
@@ -36,22 +40,33 @@ public:
         pendingSteps_ = 0;
         leadSteps_ = 0;
         cancelDrain();
+        stopTimer();
     }
 
     int16_t pendingSteps() const { return pendingSteps_; }
-    void addSteps(int16_t steps) { pendingSteps_ += steps; }
+    INLINE void addSteps(int16_t steps) {
+        const int16_t pending = pendingSteps_ + steps;
+        pendingSteps_ = pending;
+        armTimer(pending);
+    }
 
     void setLeadSteps(int32_t steps) {
-        pendingSteps_ += steps - leadSteps_;
-        leadSteps_ = steps;
+        const int32_t difference = steps - leadSteps_;
+        if (difference) {
+            leadSteps_ = steps;
+            addSteps(static_cast<int16_t>(difference));
+        }
     }
 
     // At a handoff the old motion is finished. Release its lead and let the
     // timer emit a final step even if it requires a reversal.
     bool drain() {
         setLeadSteps(0);
-        draining_ = pendingSteps_ != 0;
-        return !draining_;
+        const int16_t pending = pendingSteps_;
+        draining_ = pending != 0;
+        if (pending)
+            armTimer(pending);
+        return pending == 0;
     }
 
     void cancelDrain() { draining_ = false; }
@@ -63,16 +78,26 @@ public:
         if (relaxTicks_) {
             --relaxTicks_;
         } else if (leadSteps_) {
-            pendingSteps_ -= leadSteps_;
-            leadSteps_ = 0;
+            setLeadSteps(0);
         }
     }
 
     void setStepInterval(uint8_t ticks) { stepInterval_ = ticks; }
     void resetDirection() { direction_ = 0; }
-    uint8_t nextTimerCompare(uint8_t compare);
+    void serviceTimerCompare();
 
 private:
+    INLINE void armTimer(int16_t pending) {
+        const uint8_t mask = EXTRUDER_TIMSK;
+        if (!(mask & _BV(EXTRUDER_OCIE)))
+            startTimer(pending, mask);
+    }
+    void startTimer(int16_t pending, uint8_t mask);
+    static void stopTimer();
+    bool canChangeDirection(int16_t pending) const {
+        return pending >= 2 || pending <= -2 || draining_;
+    }
+
     volatile int16_t pendingSteps_ = 0;
     volatile int16_t leadSteps_ = 0;
     volatile uint8_t relaxTicks_ = 0;

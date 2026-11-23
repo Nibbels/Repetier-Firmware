@@ -92,7 +92,7 @@ def main():
         .replace("void PrintLine::stopDirectMove() {", "void PrintLine::applyDirectStop() {", 1),
         planner.split('#include "MotionPlanner.h"\n', 1)[1],
         section(move_planner, "uint8_t PrintLine::insertWaitMovesIfNeeded(", "\nbool PrintLine::waitForXFreeLines("),
-        section(hal, "uint8_t ExtrusionOutput::nextTimerCompare(", "\nISR(EXTRUDER_TIMER_VECTOR"),
+        section(hal, "namespace {\nconstexpr uint8_t advanceCompareGuard", "\n#if !defined CASE_LIGHT_PIN"),
         section(executor, "inline void StepExecutor::updateAdvanceSteps(", "\nvoid StepExecutor::stepSlowedZCompensation("),
         section(commands, "bool Commands::waitForMotion(", "\nvoid Commands::printCurrentPosition()"),
         section(extruder, "bool Extruder::selectExtruderById(", "\nvoid Extruder::applyCurrentSettings("),
