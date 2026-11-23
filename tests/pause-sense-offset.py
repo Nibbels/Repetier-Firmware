@@ -86,10 +86,11 @@ def main():
         .replace("void PrintLine::stopDirectMove() {", "void PrintLine::applyDirectStop() {", 1),
         planner.split('#include "MotionPlanner.h"\n', 1)[1],
         section(move_planner, "uint8_t PrintLine::insertWaitMovesIfNeeded(", "\nvoid PrintLine::waitForXFreeLines("),
-        section(hal, "uint8_t PressureAdvance::nextTimerCompare(", "\nISR(EXTRUDER_TIMER_VECTOR"),
+        section(hal, "uint8_t ExtrusionOutput::nextTimerCompare(", "\nISR(EXTRUDER_TIMER_VECTOR"),
+        section(executor, "inline void StepExecutor::updateAdvanceSteps(", "\nvoid StepExecutor::stepSlowedZCompensation("),
         section(commands, "bool Commands::waitForMotionHandoff(", "\nvoid Commands::printCurrentPosition()"),
         section(extruder, "bool Extruder::selectExtruderById(", "\nvoid Extruder::applyCurrentSettings("),
-        section(printer, "void Printer::applyPressureAdvanceSettings(", "\nvoid Printer::updateWobbleFixOffsets("),
+        section(printer, "void Printer::applyAdvanceSettings(", "\nvoid Printer::updateWobbleFixOffsets("),
         "void runAdvanceCommand(int command, GCode* com) { switch (command) {\n"
         + section(commands, "    case 223:", "    case 232:")
         + section(commands, "    case 233:", "    case 360:")
@@ -147,7 +148,7 @@ def main():
             "pressure-pause", "pressure-stop", "digit-zero",
             "extrusion-planning",
             "gcode-target", "wobble-target", "cartesian-planning", "segment-geometry", "move-queue", "idle-status", "ecmp-stepping",
-            "advance-timer", "advance-mode", "advance-peak", "step-clock", "lookahead", "direct-ramp", "xy-limits",
+            "advance-timer", "advance-mode", "advance-cancel", "advance-peak", "step-clock", "lookahead", "direct-ramp", "xy-limits",
         ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
         subprocess.run([*compile_replay, "-DNUM_EXTRUDER=2", "-o", str(executable)], check=True)

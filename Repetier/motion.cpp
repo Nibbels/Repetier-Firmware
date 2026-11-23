@@ -176,7 +176,7 @@ void PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
 
     MotionPlanner::updateLookahead(queue);
     if (pathOptimize)
-        Printer::pressureAdvance.postponeRelaxation();
+        Printer::extrusionOutput.postponeRelaxation();
 
     // Make result permanent
     queue.publish(true);
@@ -255,7 +255,7 @@ processing.
 */
 uint8_t PrintLine::insertWaitMovesIfNeeded(uint8_t pathOptimize, uint8_t waitExtraLines) {
     if (queue.count() == 0
-        && Printer::pressureAdvance.relaxDelayElapsed()
+        && Printer::extrusionOutput.relaxDelayElapsed()
         && pathOptimize) // First line after some time - warmup needed
     {
         uint8_t w = 4;

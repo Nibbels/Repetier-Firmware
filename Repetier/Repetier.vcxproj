@@ -138,7 +138,7 @@
     <ClInclude Include="StartLine.h" />
     <ClInclude Include="ExtrusionPlanner.h" />
     <ClInclude Include="ExtrusionCompensation.h" />
-    <ClInclude Include="PressureAdvance.h" />
+    <ClInclude Include="ExtrusionOutput.h" />
     <ClInclude Include="MoveTarget.h" />
     <ClInclude Include="WobbleCorrection.h" />
     <ClInclude Include="CartesianPlanner.h" />

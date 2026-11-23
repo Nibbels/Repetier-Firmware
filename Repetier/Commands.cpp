@@ -110,7 +110,7 @@ bool Commands::waitForMotionHandoff(bool waitThroughPause) {
     waiting = true;
 
     bool settled = false;
-    auto& advance = Printer::pressureAdvance;
+    auto& advance = Printer::extrusionOutput;
     while (!Printer::blockAll && !Printer::printStop.commandsBlocked()) {
         bool paused;
         {
@@ -633,8 +633,8 @@ void Commands::processMCode(GCode* com) {
         if (com->hasS()) {
             Printer::inactivity.setStepperTimeout(com->S * 1000);
         } else {
-            Commands::waitUntilEndOfAllMoves(); //M84
-            Printer::disableAllSteppersNow();
+            if (Commands::waitForMotionHandoff(true))
+                Printer::disableAllSteppersNow();
         }
         break;
     }
@@ -886,10 +886,10 @@ void Commands::processMCode(GCode* com) {
 
     case 223: // M223 - Extruder interrupt test
     {
-        if (com->hasS() && Printer::pressureAdvance.active() && !Printer::pause.isPaused()
-            && !Printer::printStop.commandsBlocked() && !Printer::blockAll) {
+        if (com->hasS() && Printer::extrusionOutput.advanceEnabled() && !Printer::pause.isPaused()
+            && !Printer::extrusionOutput.blocked()) {
             InterruptProtectedBlock lock;
-            Printer::pressureAdvance.addSteps(com->S);
+            Printer::extrusionOutput.addSteps(com->S);
         }
         break;
     }
@@ -906,7 +906,7 @@ void Commands::processMCode(GCode* com) {
     {
         if (com->hasY() && com->Y != Extruder::current->advanceL && Commands::waitForMotionHandoff(true)) {
             Extruder::current->advanceL = com->Y;
-            Printer::applyPressureAdvanceSettings();
+            Printer::applyAdvanceSettings();
         }
         Com::printF(Com::tLinearLColon, Extruder::current->advanceL);
         Com::println();
@@ -944,7 +944,7 @@ void Commands::processMCode(GCode* com) {
     // Ende Idee und Teilcode von WESSIX
     case 400: // M400 - Finish all moves
     {
-        Commands::waitUntilEndOfAllMoves(); //M400 (normal gcode wait)
+        Commands::waitForMotionHandoff(true);
         break;
     }
 

@@ -291,7 +291,7 @@ bool Extruder::selectExtruderById(uint8_t extruderId, bool waitThroughPause) {
         InterruptProtectedBlock lock;
         current->enabled = 0;
         current = &extruder[extruderId];
-        Printer::pressureAdvance.resetDirection();
+        Printer::extrusionOutput.resetDirection();
     }
     applyCurrentSettings();
     Printer::offsetRelativeStepsCoordinates(-dx, -dy, 0, 0);
@@ -323,7 +323,7 @@ void Extruder::applyCurrentSettings() {
     uint8_t stepInterval = (uint8_t)floor(HAL::maxExtruderTimerFrequency() / (Extruder::current->maxFeedrate * Extruder::current->stepsPerMM));
     if (stepInterval > 15)
         stepInterval = 15;
-    Printer::pressureAdvance.setStepInterval(stepInterval);
+    Printer::extrusionOutput.setStepInterval(stepInterval);
     float fmax = HAL::maxExtruderTimerFrequency() / (float(stepInterval) * Printer::axisStepsPerMM[E_AXIS]);
     // Limit feedrate to interrupt speed
     if (fmax < Printer::maxFeedrate[E_AXIS])
@@ -441,14 +441,16 @@ float Extruder::getHeatedBedTemperature() {
 } // getHeatedBedTemperature
 
 void Extruder::disableAllExtruders() {
-    Extruder* e;
-    for (uint8_t i = 0; i < NUM_EXTRUDER; i++) {
-        e = &extruder[i];
+    {
+        InterruptProtectedBlock lock;
+        Printer::extrusionOutput.inhibit(ExtrusionOutput::Inhibit::MotorsDisabled);
+        for (uint8_t i = 0; i < NUM_EXTRUDER; ++i) {
+            auto& tool = extruder[i];
+            if (tool.enablePin > -1)
+                HAL::digitalWrite(tool.enablePin, !tool.enableOn);
 
-        if (e->enablePin > -1)
-            HAL::digitalWrite(e->enablePin, !e->enableOn);
-
-        e->enabled = 0;
+            tool.enabled = 0;
+        }
     }
 
     cleanupEPositions();

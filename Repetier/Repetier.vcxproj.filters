@@ -95,7 +95,7 @@
     <ClInclude Include="XYMotion.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="PressureAdvance.h">
+    <ClInclude Include="ExtrusionOutput.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Repetier.h">

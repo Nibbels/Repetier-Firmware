@@ -19,7 +19,7 @@
 #include "GCodeInput.h"
 #include <Wire.h>
 
-PressureAdvance Printer::pressureAdvance;
+ExtrusionOutput Printer::extrusionOutput;
 
 uint8_t Printer::unitIsInches = 0; // 0 = Units are mm, 1 = units are inches.
 
@@ -199,7 +199,7 @@ void Printer::switchEverythingOff() {
     Printer::setAllSwitchedOff(true);
 } // switchEverythingOff
 
-void Printer::applyPressureAdvanceSettings() {
+void Printer::applyAdvanceSettings() {
     bool active = false;
     for (uint8_t i = 0; i < NUM_EXTRUDER; ++i) {
         if (extruder[i].advanceL != 0) {
@@ -208,7 +208,7 @@ void Printer::applyPressureAdvanceSettings() {
         }
     }
     InterruptProtectedBlock lock;
-    pressureAdvance.setActive(active);
+    extrusionOutput.setAdvanceEnabled(active);
 }
 
 void Printer::updateWobbleFixOffsets() {
@@ -547,7 +547,7 @@ void Printer::setup() {
     WRITE(EXT1_EXTRUDER_COOLER_PIN, LOW);
 #endif // defined(EXT1_EXTRUDER_COOLER_PIN) && EXT1_EXTRUDER_COOLER_PIN >- 1 && NUM_EXTRUDER > 1
 
-    pressureAdvance.clearSteps();
+    extrusionOutput.clearSteps();
 
     maxXYJerk = MAX_JERK;
     maxZJerk = MAX_ZJERK;
@@ -1111,12 +1111,9 @@ void Printer::stopPrint() {
         return;
     Printer::idleStatus.cancel();
 
-    Com::printFLN(PSTR("RequestStop:"));     // Repetier-Server
-    Com::printFLN(PSTR("// action:cancel")); // OctoPrint
-    Com::printFLN(PSTR("USB print stopped."));
-
     InterruptProtectedBlock noInts;
     printStop.begin(HAL::timeInMilliseconds());
+    extrusionOutput.inhibit(ExtrusionOutput::Inhibit::PrintStop);
     if (pause.isPaused() && PrintLine::directMoveActive())
         PrintLine::stopDirectMove();
     pause.cancel();
@@ -1130,6 +1127,10 @@ void Printer::stopPrint() {
     Printer::setEPositionMM(0); // G92 E0
 
     noInts.unprotect();
+
+    Com::printFLN(PSTR("RequestStop:"));     // Repetier-Server
+    Com::printFLN(PSTR("// action:cancel")); // OctoPrint
+    Com::printFLN(PSTR("USB print stopped."));
 
     Commands::printCurrentPosition();
     UI_STATUS_UPD(UI_TEXT_STOP_PRINT);

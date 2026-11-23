@@ -1,20 +1,33 @@
-#ifndef PRESSURE_ADVANCE_H
-#define PRESSURE_ADVANCE_H
+#ifndef EXTRUSION_OUTPUT_H
+#define EXTRUSION_OUTPUT_H
 
 #include <stdint.h>
 
-// Base E steps and changes in the pressure lead share the extruder timer.
-// Writers of multi-byte state run with step interrupts masked.
-class PressureAdvance {
+// Owns the E pulse writer and the Advance timer's signed step balance.
+// Change foreground state with step interrupts masked.
+class ExtrusionOutput {
 public:
-    bool active() const { return active_; }
+    enum class Inhibit : uint8_t { PrintStop = 1, Emergency = 2, MotorsDisabled = 4 };
+
+    bool advanceEnabled() const { return advanceEnabled_; }
 
     // The foreground settles the old motion before changing the E pulse writer.
-    void setActive(bool active) {
-        if (active_ != active) {
+    void setAdvanceEnabled(bool enabled) {
+        if (advanceEnabled_ != enabled) {
             resetDirection();
-            active_ = active;
+            advanceEnabled_ = enabled;
         }
+    }
+
+    bool blocked() const { return inhibitMask_ != 0; }
+
+    void inhibit(Inhibit reason) {
+        inhibitMask_ |= static_cast<uint8_t>(reason);
+        clearSteps();
+    }
+
+    void allow(Inhibit reason) {
+        inhibitMask_ &= ~static_cast<uint8_t>(reason);
     }
 
     void clearSteps() {
@@ -64,7 +77,8 @@ private:
     uint8_t stepInterval_ = 0;
     int8_t direction_ = 0;
     volatile bool draining_ = false;
-    volatile bool active_ = false;
+    volatile bool advanceEnabled_ = false;
+    volatile uint8_t inhibitMask_ = 0;
 };
 
 #endif

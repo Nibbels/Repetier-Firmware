@@ -215,7 +215,7 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
 
     Printer::updateDerivedParameter();
     Extruder::applyCurrentSettings();
-    Printer::applyPressureAdvanceSettings();
+    Printer::applyAdvanceSettings();
     Extruder::initHeatedBed();
 
     g_nManualSteps[X_AXIS] = (unsigned short)lroundf(Printer::axisStepsPerMM[X_AXIS] * DEFAULT_MANUAL_MM_X);
@@ -764,7 +764,7 @@ void EEPROM::readDataFromEEPROM() {
     }
     Printer::updateDerivedParameter();
     Extruder::applyCurrentSettings();
-    Printer::applyPressureAdvanceSettings();
+    Printer::applyAdvanceSettings();
     Extruder::initHeatedBed();
 
 } // readDataFromEEPROM

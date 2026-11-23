@@ -650,7 +650,7 @@ ISR(TIMER1_COMPA_vect) {
         return;
     }
 
-    Printer::pressureAdvance.onIdleTick();
+    Printer::extrusionOutput.onIdleTick();
 
     stepperWait = 0; // Important because of optimization in asm at begin
     OCR1A = 3000;
@@ -891,7 +891,7 @@ ISR(PWM_TIMER_VECTOR) {
 #endif // RGB_LIGHT_R_PIN
 } // ISR(PWM_TIMER_VECTOR)
 
-uint8_t PressureAdvance::nextTimerCompare(uint8_t compare) {
+uint8_t ExtrusionOutput::nextTimerCompare(uint8_t compare) {
     const int16_t pending = pendingSteps();
     if (pending) {
         const int8_t direction = pending > 0 ? 1 : -1;
@@ -908,8 +908,8 @@ uint8_t PressureAdvance::nextTimerCompare(uint8_t compare) {
 
 // Inline the direction path so the interrupt only saves the registers it uses.
 ISR(EXTRUDER_TIMER_VECTOR, __attribute__((flatten))) {
-    if (Printer::pressureAdvance.active())
-        EXTRUDER_OCR = Printer::pressureAdvance.nextTimerCompare(EXTRUDER_OCR);
+    if (Printer::extrusionOutput.advanceEnabled())
+        EXTRUDER_OCR = Printer::extrusionOutput.nextTimerCompare(EXTRUDER_OCR);
 }
 
 #if !defined CASE_LIGHT_PIN || CASE_LIGHT_PIN < 0

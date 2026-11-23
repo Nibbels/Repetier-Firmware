@@ -2711,7 +2711,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
                 extruder[eNr].advanceL = 0;
             }
         }
-        Printer::applyPressureAdvanceSettings();
+        Printer::applyAdvanceSettings();
 
         HAL::eprSetFloat(EEPROM::getExtruderOffset(eNr) + EPR_EXTRUDER_ADVANCE_L, extruder[eNr].advanceL);
         EEPROM::updateChecksum();

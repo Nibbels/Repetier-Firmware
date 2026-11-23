@@ -34,7 +34,7 @@
 #include "StartLine.h"
 #include "ExtrusionPlanner.h"
 #include "ExtrusionCompensation.h"
-#include "PressureAdvance.h"
+#include "ExtrusionOutput.h"
 #include "MoveTarget.h"
 #include "WobbleCorrection.h"
 #include "CartesianPlanner.h"
@@ -68,7 +68,7 @@
 
 class Printer {
 public:
-    static PressureAdvance pressureAdvance;
+    static ExtrusionOutput extrusionOutput;
 
     static uint8_t menuMode;
     static float axisStepsPerMM[];
@@ -584,7 +584,7 @@ public:
 
     static void updateDerivedParameter();
     static void switchEverythingOff();
-    static void applyPressureAdvanceSettings();
+    static void applyAdvanceSettings();
 
     static INLINE void setXAxisSteps(int32_t x) {
         InterruptProtectedBlock noInts;

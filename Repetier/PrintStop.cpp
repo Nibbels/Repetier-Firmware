@@ -27,7 +27,11 @@ void PrintStop::service(uint32_t now) {
 
     case Phase::WaitingToOutput:
         if (static_cast<int32_t>(now - phaseSince_) > 1000) {
-            phase_ = Phase::Idle;
+            {
+                InterruptProtectedBlock lock;
+                Printer::extrusionOutput.allow(ExtrusionOutput::Inhibit::PrintStop);
+                phase_ = Phase::Idle;
+            }
             outputObject(false);
         }
         return;

@@ -3082,7 +3082,8 @@ void outputObject(bool showerrors) {
         GCodeInput::executeFlashScript(Com::tOutputObjectPrint);
     }
 
-    Commands::waitUntilEndOfAllMoves(); //output object
+    if (!Commands::waitForMotionHandoff())
+        return;
 
     // disable all steppers
     Printer::disableAllSteppersNow();
@@ -6377,8 +6378,11 @@ void showMyPage(const void* line1, const void* line2, const void* line3, const v
 } // showMyPage
 
 void doEmergencyStop(char reason) {
-    // block any further movement
-    Printer::blockAll = 1;
+    {
+        InterruptProtectedBlock lock;
+        Printer::blockAll = 1;
+        Printer::extrusionOutput.inhibit(ExtrusionOutput::Inhibit::Emergency);
+    }
 
     showError((void*)ui_text_emergency_stop);
 

@@ -17,7 +17,7 @@
 #include "RF2000.h"
 #include "ZOffset.h"
 #include "ExtrusionCompensation.h"
-#include "PressureAdvance.h"
+#include "ExtrusionOutput.h"
 #include "MachineInactivity.h"
 #include "IdleStatus.h"
 #include "PrintLayers.h"
@@ -233,7 +233,7 @@ float menuExtrusionFactor = 1.0f;
 bool relativeExtruderCoordinateMode = false;
 ExtrusionCompensation extrusionCompensation;
 bool blockAll = false;
-PressureAdvance pressureAdvance;
+ExtrusionOutput extrusionOutput;
 MachineInactivity inactivity(STEPPER_INACTIVE_TIME * 1000UL, MAX_INACTIVE_TIME * 1000UL);
 IdleStatus idleStatus;
 constexpr float maxXYJerk = 8.0f, maxZJerk = 0.5f;
@@ -263,7 +263,7 @@ void setMenuMode(int mode, bool active) {
     menuPaused = active;
 }
 void stopPrint();
-void applyPressureAdvanceSettings();
+void applyAdvanceSettings();
 void homeZAxis();
 void homeDigits();
 void enableSenseOffsetnow();
@@ -484,6 +484,7 @@ bool hasQueuedOvertravel() { return false; }
 struct StepExecutor {
 #include "step-clock-firmware.inc"
     static speed_t nextStepSpeed(PrintLine& move, StepClock& clock, uint8_t pulses, uint32_t interval);
+    static void updateAdvanceSteps(const PrintLine& move, uint16_t speed);
 };
 
 struct UIDisplay {
@@ -1610,8 +1611,8 @@ void ecmpStepping() {
     assert(Printer::extrusionCompensation.remainder() == 0.0f);
 
     auto replayReversal = [&](bool advance, float ratio, float remainder, unsigned count, int expectedSteps) {
-        Printer::pressureAdvance.setActive(advance);
-        Printer::pressureAdvance.clearSteps();
+        Printer::extrusionOutput.setAdvanceEnabled(advance);
+        Printer::extrusionOutput.clearSteps();
         Printer::extrusionCompensation.publishRatio(ExtrusionCompensation::prepareRatio(ratio));
         Printer::extrusionCompensation.restoreRemainder(remainder);
         const unsigned before = Extruder::stepPulses;
@@ -1620,16 +1621,16 @@ void ecmpStepping() {
         for (unsigned i = 0; i < count; ++i)
             executeExtrusionStep(&move, true);
         const unsigned afterRetract = Extruder::stepPulses;
-        const int retracted = advance ? -Printer::pressureAdvance.pendingSteps() : int(afterRetract - before);
+        const int retracted = advance ? -Printer::extrusionOutput.pendingSteps() : int(afterRetract - before);
 
         move.positiveE = true;
         for (unsigned i = 0; i < count; ++i)
             executeExtrusionStep(&move, true);
-        const int returned = advance ? Printer::pressureAdvance.pendingSteps() + retracted
+        const int returned = advance ? Printer::extrusionOutput.pendingSteps() + retracted
                                       : int(Extruder::stepPulses - afterRetract);
         assert(retracted == expectedSteps && returned == retracted);
         assert(Printer::extrusionCompensation.remainder() == remainder);
-        assert(Printer::pressureAdvance.pendingSteps() == 0);
+        assert(Printer::extrusionOutput.pendingSteps() == 0);
         if (advance)
             assert(Extruder::stepPulses == before);
     };
@@ -1642,7 +1643,7 @@ void ecmpStepping() {
 }
 
 void advanceTimer() {
-    PressureAdvance advance;
+    ExtrusionOutput advance;
     const unsigned basePulses = Extruder::stepPulses;
     const unsigned baseTrailingEdges = Extruder::trailingEdges;
     InterruptProtectedBlock lock;
@@ -1677,8 +1678,8 @@ void advanceTimer() {
 
 #if NUM_EXTRUDER > 1
 void advanceToolChange() {
-    auto& advance = Printer::pressureAdvance;
-    advance.setActive(true);
+    auto& advance = Printer::extrusionOutput;
+    advance.setAdvanceEnabled(true);
     advance.setStepInterval(12);
     extruder[1].id = 1;
     extruder[1].offsetMM[X_AXIS] = 2.0f;
@@ -1748,7 +1749,7 @@ void advanceToolChange() {
 #endif
 
 void advanceModeChange() {
-    auto& advance = Printer::pressureAdvance;
+    auto& advance = Printer::extrusionOutput;
     advance.setStepInterval(15);
 
     GCode testStep;
@@ -1762,11 +1763,11 @@ void advanceModeChange() {
     unsigned calls = 0;
     duringPeriodicActions = [&] {
         ++calls;
-        assert(!advance.active() && Extruder::current->advanceL == 0);
+        assert(!advance.advanceEnabled() && Extruder::current->advanceL == 0);
     };
     runAdvanceCommand(233, &setting);
     duringPeriodicActions = nullptr;
-    assert(calls == 2 && advance.active() && Extruder::current->advanceL == 20);
+    assert(calls == 2 && advance.advanceEnabled() && Extruder::current->advanceL == 20);
     assert(advance.pendingSteps() == 0);
 
     testStep.S = 2;
@@ -1784,18 +1785,62 @@ void advanceModeChange() {
     setting.explicitY = true;
     setting.Y = 0;
     duringPeriodicActions = [&] {
-        assert(advance.active() && Extruder::current->advanceL == 20);
+        assert(advance.advanceEnabled() && Extruder::current->advanceL == 20);
         tick();
     };
     runAdvanceCommand(233, &setting);
     duringPeriodicActions = nullptr;
-    assert(!advance.active() && Extruder::current->advanceL == 0);
+    assert(!advance.advanceEnabled() && Extruder::current->advanceL == 0);
     assert(Extruder::current->deliveredSteps == 2 && advance.pendingSteps() == 0);
 
     runAdvanceCommand(223, &testStep);
     setting.Y = 30;
     runAdvanceCommand(233, &setting);
-    assert(advance.active() && advance.pendingSteps() == 0);
+    assert(advance.advanceEnabled() && advance.pendingSteps() == 0);
+}
+
+void advanceCancel() {
+    auto& output = Printer::extrusionOutput;
+    output.setAdvanceEnabled(true);
+    output.setStepInterval(15);
+    output.setLeadSteps(3);
+    output.addSteps(2);
+    Printer::stopPrint();
+    assert(output.blocked() && output.pendingSteps() == 0);
+    assert(Printer::printStop.commandsBlocked() && !PrintLine::hasLines());
+    assert(!Commands::waitForMotionHandoff(true));
+
+    PrintLine move;
+    move.moveE = true;
+    move.positiveE = true;
+    move.delta[E_AXIS] = 1;
+    move.stepProfile.advanceL = 65536;
+
+    executeExtrusionStep(&move, false); // A paused jog can still have an XYZ tail.
+    StepExecutor::updateAdvanceSteps(move, 4);
+    GCode testStep;
+    testStep.S = 5;
+    runAdvanceCommand(223, &testStep);
+    {
+        InterruptProtectedBlock lock;
+        output.onIdleTick();
+        output.nextTimerCompare(0);
+    }
+    assert(!output.pendingSteps() && !Extruder::stepPulses);
+
+    // Cleanup releases its own inhibit, preserving any motor shutdown.
+    output.inhibit(ExtrusionOutput::Inhibit::MotorsDisabled);
+    Printer::printStop.service(clockMs + 2001);
+    Printer::printStop.service(clockMs + 3002);
+    assert(objectOutputs == 1 && !Printer::printStop.commandsBlocked() && output.blocked());
+    output.allow(ExtrusionOutput::Inhibit::MotorsDisabled);
+    assert(!output.blocked());
+    {
+        InterruptProtectedBlock lock;
+        output.onIdleTick();
+        output.nextTimerCompare(0);
+    }
+    assert(!output.pendingSteps() && !Extruder::stepPulses);
 }
 
 void stepClock() {
@@ -1950,7 +1995,7 @@ void lookaheadMoves() {
     };
     uint32_t trace = 0;
     const auto run = [&](uint8_t axes, bool advance, float junctionSpeed) {
-        Printer::pressureAdvance.setActive(advance);
+        Printer::extrusionOutput.setAdvanceEnabled(advance);
         queue.clear();
         PrintLine& front = prepare(printX);
         MotionPlanner::updateLookahead(queue);
@@ -2196,6 +2241,8 @@ int main(int argc, char** argv) {
         advanceTimer();
     else if (!std::strcmp(argv[1], "advance-mode"))
         advanceModeChange();
+    else if (!std::strcmp(argv[1], "advance-cancel"))
+        advanceCancel();
 #if NUM_EXTRUDER > 1
     else if (!std::strcmp(argv[1], "advance-tool"))
         advanceToolChange();

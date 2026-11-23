@@ -53,6 +53,8 @@ inline void StepExecutor::enableSteppers(PrintLine& move) {
     if (move.isEMove()) {
         Printer::unmarkAllSteppersDisabled(); //doesnt fit into Extruder::enable() because of forward declare -> TODO
         Extruder::enable();
+        InterruptProtectedBlock lock;
+        Printer::extrusionOutput.allow(ExtrusionOutput::Inhibit::MotorsDisabled);
     }
 }
 
@@ -72,18 +74,18 @@ inline void StepExecutor::adjustDirections(PrintLine& move) {
         ZMotion::setDirection(move.isZPositiveMove());
     }
     if (move.isEMove()) {
-        if (!Printer::pressureAdvance.active())
+        if (!Printer::extrusionOutput.advanceEnabled())
             Extruder::setDirection(move.isEPositiveMove());
     }
 }
 
 inline void StepExecutor::updateAdvanceSteps(const PrintLine& move, uint16_t speed) {
-    if (!Printer::pressureAdvance.active())
+    if (!Printer::extrusionOutput.advanceEnabled() || Printer::extrusionOutput.blocked())
         return;
 
     const int32_t leadSteps = (speed * move.stepProfile.advanceL) >> 16;
     HAL::forbidInterrupts();
-    Printer::pressureAdvance.setLeadSteps(leadSteps);
+    Printer::extrusionOutput.setLeadSteps(leadSteps);
     HAL::allowInterrupts();
 }
 
@@ -387,7 +389,7 @@ long StepExecutor::performMove(PrintLine* move, uint8_t forQueue) {
             }
 
             // Queue overtravel belongs to the frozen print path. The pressure guard applies to both paths.
-            if (Printer::pressureProtection.extrusionBlocked() || (forQueue && hasQueuedOvertravel())) {
+            if (Printer::extrusionOutput.blocked() || Printer::pressureProtection.extrusionBlocked() || (forQueue && hasQueuedOvertravel())) {
                 doESteps = false;
             }
             HAL::forbidInterrupts();
@@ -395,8 +397,8 @@ long StepExecutor::performMove(PrintLine* move, uint8_t forQueue) {
             if (doESteps) {
                 const bool forward = move->isEPositiveMove();
                 const int8_t dir = forward ? 1 : -1;
-                if (Printer::pressureAdvance.active())
-                    Printer::pressureAdvance.addSteps(dir);
+                if (Printer::extrusionOutput.advanceEnabled())
+                    Printer::extrusionOutput.addSteps(dir);
                 else
                 {
                     Extruder::step();
@@ -405,8 +407,8 @@ long StepExecutor::performMove(PrintLine* move, uint8_t forQueue) {
                     Printer::pause.recordDirectExtrusion(dir);
 
                 if (forQueue && Printer::extrusionCompensation.addBaseStep(forward)) {
-                    if (Printer::pressureAdvance.active()) {
-                        Printer::pressureAdvance.addSteps(dir);
+                    if (Printer::extrusionOutput.advanceEnabled()) {
+                        Printer::extrusionOutput.addSteps(dir);
                         Printer::extrusionCompensation.consumeExtraStep(forward);
                     } else {
                         // Normalize the remainder between the two step pulses.
@@ -479,7 +481,7 @@ long StepExecutor::performMove(PrintLine* move, uint8_t forQueue) {
         move->stepsRemaining--;
 
 
-        if (!Printer::pressureAdvance.active())
+        if (!Printer::extrusionOutput.advanceEnabled())
             Extruder::unstep();
 
         Printer::endXYZSteps();
@@ -509,7 +511,7 @@ long StepExecutor::performMove(PrintLine* move, uint8_t forQueue) {
     stepsPerTimerCall = 1;
     unsigned long one_interval = interval;
     uint16_t minInterval = Printer::stepsPackingMinInterval;
-    if (Printer::pressureAdvance.active()) {
+    if (Printer::extrusionOutput.advanceEnabled()) {
         minInterval += 64;
     }
     while (interval < Printer::stepsPackingMinInterval) {
