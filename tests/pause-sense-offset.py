@@ -48,6 +48,7 @@ def main():
         .replace("float remainder = 0.0f", "float remainder")
         + "\n}",
         section(printer, "inline bool isExtrusionAllowed(", "\nbool Printer::isZMoveActive("),
+        section(printer, "void Printer::updateWobbleFixOffsets(", "\ninline bool isExtrusionAllowed("),
         section(printer, "void Printer::setFeedrate(", "\n/** Move to machine coordinates"),
         section(printer, "void Printer::stopPrint()", "\n#define START_EXTRUDER_CONFIG"),
         section(printer, "void Printer::homeZAxis()", "\nvoid Printer::homeAxis("),
@@ -90,7 +91,7 @@ def main():
             "sense-window", "sense-settings", "sense-limit-interrupt",
             "pressure-pause", "pressure-stop", "digit-zero",
             "extrusion-planning",
-            "gcode-target",
+            "gcode-target", "wobble-target",
         ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
 

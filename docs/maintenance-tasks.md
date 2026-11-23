@@ -50,6 +50,8 @@ The pressure protection, sensor, start-line and extrusion-planner extractions to
 
 ### Wobble correction
 
+- [x] **Give the WobbleFix profile and cached offsets one owner.** The replay checks 50 successive Y targets, Y amplitude interpolation across X, a clipped correction retained for the next move and the transition to zero amplitudes. [Wobble correction](../Repetier/WobbleCorrection.h) · [Replay](../tests/pause-sense-offset.py)
+
 - [x] **Keep the WobbleFix offset out of the retained G-code target.** Previously, each absolute `G1 Y…` added another 100 µm to X with an X amplitude of 100 µm at machine Z=0 and phase zero. The planner now adds the correction to the step endpoint. In a host replay, all 50 Y-only moves retained the same X after the first corrected target. Relative moves, `G92`, E-only moves, homing resets and software limits also passed. Physical verification remains open. [Correction](../Repetier/Printer.cpp#L255) · [Step endpoint](../Repetier/Printer.cpp#L285)
 
 ### Pause and resume

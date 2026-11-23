@@ -83,6 +83,9 @@
     <ClInclude Include="MoveTarget.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="WobbleCorrection.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="Repetier.h">
       <Filter>Header Files</Filter>
     </ClInclude>

@@ -1741,29 +1741,29 @@ void UIDisplay::parse(char* txt, bool ram) {
         {
             if (c2 == 'x') // %wx : current wobblefix offset in x [um] (Bauchtanz)
             {
-                addInt(Printer::lastWobbleFixOffset[X_AXIS] * 1000, 4);
+                addInt(Printer::wobbleCorrection.offsetMM(X_AXIS) * 1000, 4);
                 break;
             } else if (c2 == 'y') // %wy : current wobblefix offset in y [um] (Bauchtanz)
             {
-                addInt(Printer::lastWobbleFixOffset[Y_AXIS] * 1000, 4);
+                addInt(Printer::wobbleCorrection.offsetMM(Y_AXIS) * 1000, 4);
                 break;
             }
 
             else if (c2 == 'a') // %wa : current wobblefix amplitude for X
             {
-                addInt(Printer::wobbleAmplitudes[0], 4);
+                addInt(Printer::wobbleCorrection.profile().xMicrometers, 4);
                 break;
             } else if (c2 == 'b') // %wb : current wobblefix amplitude for Y(x_0)
             {
-                addInt(Printer::wobbleAmplitudes[1], 4);
+                addInt(Printer::wobbleCorrection.profile().yAtXMinMicrometers, 4);
                 break;
             } else if (c2 == 'c') // %wc : current wobblefix amplitude for Y(x_245)
             {
-                addInt(Printer::wobbleAmplitudes[2], 4);
+                addInt(Printer::wobbleCorrection.profile().yAtXMaxMicrometers, 4);
                 break;
             } else if (c2 == 'P') // %wP : current wobblefix phase for YX-wobble (Bauchtanz)
             {
-                addInt(long(float(Printer::wobblePhaseXY) * 1.8f), 4);
+                addInt(long(float(Printer::wobbleCorrection.profile().phase) * 1.8f), 4);
                 break;
             }
 
@@ -2843,34 +2843,41 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         break;
     }
 
-    //Antibauchtanz:
     case UI_ACTION_WOBBLE_FIX_PHASEXY: {
-        INCREMENT_MIN_MAX(Printer::wobblePhaseXY, 1, -100, 101);
-        if (Printer::wobblePhaseXY == 101) {
-            Printer::wobblePhaseXY = -99;
+        auto phase = Printer::wobbleCorrection.profile().phase;
+        INCREMENT_MIN_MAX(phase, 1, -100, 101);
+        if (phase == 101) {
+            phase = -99;
         }
-        if (Printer::wobblePhaseXY == -100) {
-            Printer::wobblePhaseXY = 100;
+        if (phase == -100) {
+            phase = 100;
         }
-        HAL::eprSetByte(EPR_RF_MOD_WOBBLE_FIX_PHASEXY, Printer::wobblePhaseXY);
+        Printer::wobbleCorrection.setPhase(phase);
+        HAL::eprSetByte(EPR_RF_MOD_WOBBLE_FIX_PHASEXY, phase);
         EEPROM::updateChecksum();
         break;
     }
     case UI_ACTION_WOBBLE_FIX_AMPX: {
-        INCREMENT_MIN_MAX(Printer::wobbleAmplitudes[0], 5, -995, 995);
-        HAL::eprSetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPX, Printer::wobbleAmplitudes[0]);
+        auto amplitude = Printer::wobbleCorrection.profile().xMicrometers;
+        INCREMENT_MIN_MAX(amplitude, 5, -995, 995);
+        Printer::wobbleCorrection.setXAmplitude(amplitude);
+        HAL::eprSetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPX, amplitude);
         EEPROM::updateChecksum();
         break;
     }
     case UI_ACTION_WOBBLE_FIX_AMPY1: {
-        INCREMENT_MIN_MAX(Printer::wobbleAmplitudes[1], 5, -995, 995);
-        HAL::eprSetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPY1, Printer::wobbleAmplitudes[1]);
+        auto amplitude = Printer::wobbleCorrection.profile().yAtXMinMicrometers;
+        INCREMENT_MIN_MAX(amplitude, 5, -995, 995);
+        Printer::wobbleCorrection.setYMinAmplitude(amplitude);
+        HAL::eprSetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPY1, amplitude);
         EEPROM::updateChecksum();
         break;
     }
     case UI_ACTION_WOBBLE_FIX_AMPY2: {
-        INCREMENT_MIN_MAX(Printer::wobbleAmplitudes[2], 5, -995, 995);
-        HAL::eprSetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPY2, Printer::wobbleAmplitudes[2]);
+        auto amplitude = Printer::wobbleCorrection.profile().yAtXMaxMicrometers;
+        INCREMENT_MIN_MAX(amplitude, 5, -995, 995);
+        Printer::wobbleCorrection.setYMaxAmplitude(amplitude);
+        HAL::eprSetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPY2, amplitude);
         EEPROM::updateChecksum();
         break;
     }

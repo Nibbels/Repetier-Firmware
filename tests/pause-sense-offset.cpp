@@ -108,6 +108,7 @@ void WRITE(int pin, bool high);
 #include "StartLine.h"
 #include "ExtrusionPlanner.h"
 #include "MoveTarget.h"
+#include "WobbleCorrection.h"
 
 #define PSTR(text) (text)
 #define UI_STATUS_UPD(text) ((void)0)
@@ -177,6 +178,8 @@ DigitCompensation digitCompensation{
     short(std::abs(EMERGENCY_PAUSE_DIGITS_MAX) * 0.7), short(std::abs(EMERGENCY_PAUSE_DIGITS_MAX))
 };
 long currentXYSteps[2] = { 6400, 12800 };
+long currentXSteps = 0;
+WobbleCorrection wobbleCorrection;
 long directCurrentSteps[4] = { 0, 16, 8, 0 };
 struct DirectDisplacement {
     long displacement;
@@ -248,6 +251,12 @@ void setZAxisSteps(long steps) { zMotion.setNominalSteps(steps); }
 void setEPositionMM(float value, float remainder = 0.0f);
 void setFeedrate(float value);
 bool queueGCodeCoordinates(GCode*);
+void updateWobbleFixOffsets();
+int32_t prepareDestinationSteps(uint8_t axis);
+float getDirectMM(uint8_t axis) { return directCurrentSteps[axis] * axisMMPerSteps[axis]; }
+int32_t softwareEndstopSteps(uint8_t axis) {
+    return axis == Z_AXIS ? zMotion.maxSteps() : maxSoftEndstopSteps[axis];
+}
 void queueFloatCoordinates(float x, float y, float z, float e, float speed) {
     assert(startLine.active() && !printStop.commandsBlocked());
     ++primeMoves;
@@ -1392,6 +1401,42 @@ void gcodeTarget() {
     assert(PrintLine::plannedMoves == 4);
 }
 
+void wobbleTarget() {
+    auto& target = Printer::moveTarget;
+    Printer::zMotion.setMotorReference(0);
+    Printer::wobbleCorrection.setProfile({0, 100, 0, 0});
+    target.setMachineMM(X_AXIS, 10.0f);
+    for (unsigned i = 0; i < 50; ++i) {
+        target.setMachineMM(Y_AXIS, float(i));
+        Printer::updateWobbleFixOffsets();
+        assert(Printer::prepareDestinationSteps(X_AXIS) == 1616);
+        assert(target.machineMM(X_AXIS) == 10.0f);
+    }
+
+    Printer::wobbleCorrection.setProfile({0, 100, 100, 300});
+    Printer::currentXSteps = Printer::maxSoftEndstopSteps[X_AXIS] / 2;
+    Printer::zMotion.setMotorReference(1600); // A quarter turn of the 5 mm lead screw.
+    Printer::updateWobbleFixOffsets();
+    assert(std::abs(Printer::wobbleCorrection.offsetMM(Y_AXIS) - 0.2f) < 0.00001f);
+
+    Printer::zMotion.setMotorReference(0);
+    Printer::wobbleCorrection.setProfile({0, 200, 100, 300});
+    Printer::updateWobbleFixOffsets();
+    target.setMachineMM(X_AXIS, 169.98f);
+    assert(Printer::prepareDestinationSteps(X_AXIS) == 27216);
+    assert(target.machineMM(X_AXIS) == 169.98f);
+    assert(std::abs(Printer::wobbleCorrection.offsetMM(X_AXIS) - 0.12f) < 0.00002f);
+    assert(Printer::prepareDestinationSteps(X_AXIS) == 27216);
+
+    target.setMachineMM(X_AXIS, 175.0f, 0.00001f);
+    assert(Printer::prepareDestinationSteps(X_AXIS) == 27216);
+    assert(target.machineMM(X_AXIS) == 170.1f && target.remainderMM(X_AXIS) == 0.0f);
+
+    Printer::wobbleCorrection.setProfile({});
+    Printer::updateWobbleFixOffsets();
+    assert(!Printer::wobbleCorrection.offsetMM(X_AXIS) && !Printer::wobbleCorrection.offsetMM(Y_AXIS));
+}
+
 void initializeOffsets() {
     planMove(256, true);
     Printer::zMotion.setNominalSteps(256);
@@ -1465,6 +1510,8 @@ int main(int argc, char** argv) {
         extrusionPlanning();
     else if (!std::strcmp(argv[1], "gcode-target"))
         gcodeTarget();
+    else if (!std::strcmp(argv[1], "wobble-target"))
+        wobbleTarget();
     else
         return 1;
     std::printf("Print lifecycle replay passed (%s)\n", argv[1]);

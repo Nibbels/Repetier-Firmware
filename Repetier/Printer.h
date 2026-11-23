@@ -32,6 +32,7 @@
 #include "StartLine.h"
 #include "ExtrusionPlanner.h"
 #include "MoveTarget.h"
+#include "WobbleCorrection.h"
 
 // ##########################################################################################
 // ##   status flags
@@ -115,6 +116,7 @@ public:
     static StartLine startLine;
     static ExtrusionPlanner extrusionPlanner;
     static MoveTarget moveTarget;
+    static WobbleCorrection wobbleCorrection;
     static PrintPause pause;
     static PrintStop printStop;
     static char ZMode;                      // Z Scale
@@ -168,10 +170,6 @@ public:
 
 
     static uint8_t motorMicroStepsModeValue[DRV8711_NUM_CHANNELS]; //1=2MS, 2=4MS, 3=8MS, 4=16MS, 5=32MS, 6=64MS, 7=128MS, 8=256MS
-
-    static int8_t wobblePhaseXY;
-    static int16_t wobbleAmplitudes[3]; // X, Y at X-min, Y at X-max, in micrometres.
-    static float lastWobbleFixOffset[2]; // Queued X/Y correction in millimetres.
 
     static INLINE void setMenuMode(uint8_t mode, bool on) {
         if (on)
@@ -613,14 +611,14 @@ public:
         InterruptProtectedBlock noInts;
         currentXYSteps[X_AXIS] = queuedPositionSteps[X_AXIS] = x;
         moveTarget.setMachineMM(X_AXIS, x * axisMMPerSteps[X_AXIS]);
-        clearWobbleFixOffset(X_AXIS);
+        wobbleCorrection.clearAxis(X_AXIS);
         noInts.unprotect();
     }
     static INLINE void setYAxisSteps(int32_t y) {
         InterruptProtectedBlock noInts;
         currentXYSteps[Y_AXIS] = queuedPositionSteps[Y_AXIS] = y;
         moveTarget.setMachineMM(Y_AXIS, y * axisMMPerSteps[Y_AXIS]);
-        clearWobbleFixOffset(Y_AXIS);
+        wobbleCorrection.clearAxis(Y_AXIS);
         noInts.unprotect();
     }
     static INLINE void setZAxisSteps(int32_t z) {
@@ -712,12 +710,6 @@ private:
     static DirectPosition extruderDirect;
     static INLINE DirectPosition& otherDirectPosition(uint8_t axis) {
         return axis == E_AXIS ? extruderDirect : xyDirect[axis];
-    }
-
-    static uint8_t queuedWobbleAxes;
-    static INLINE void clearWobbleFixOffset(uint8_t axis) {
-        lastWobbleFixOffset[axis] = 0.0f;
-        queuedWobbleAxes &= ~(1U << axis);
     }
 
     static void homeXAxis();

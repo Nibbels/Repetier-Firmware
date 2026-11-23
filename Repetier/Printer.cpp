@@ -80,6 +80,7 @@ PressureProtection Printer::pressureProtection;
 StrainGauge Printer::strainGauge;
 ExtrusionPlanner Printer::extrusionPlanner;
 MoveTarget Printer::moveTarget;
+WobbleCorrection Printer::wobbleCorrection;
 char Printer::ZMode = DEFAULT_Z_SCALE_MODE;                       // Z-min distance or nominal layer height
 char Printer::moveMode[3];                                        // move mode which is applied within the Position X/Y/Z menus
 bool Printer::moveKosys = KOSYS_GCODE;                            // true = GCode, false = DirectMove / OffsetMove
@@ -137,11 +138,6 @@ uint8_t Printer::motorCurrent[DRV8711_NUM_CHANNELS] = { 0 };
 
 //RF_MICRO_STEPS_ have values 0=FULL 1=2MS, 2=4MS, 3=8MS, 4=16MS, 5=32MS, 6=64MS, 7=128MS, 8=256MS
 uint8_t Printer::motorMicroStepsModeValue[DRV8711_NUM_CHANNELS] = { 0 }; //init later because of recalculation of value
-
-int8_t Printer::wobblePhaseXY = 0; // +100 = +pi, -100 = -pi.
-int16_t Printer::wobbleAmplitudes[3] = { 0 };
-float Printer::lastWobbleFixOffset[2] = { 0 };
-uint8_t Printer::queuedWobbleAxes = 0;
 
 void Printer::updateDerivedParameter() {
     // das extruder offset dürfen wir zur achslänge addieren, weil in dem Axis-Length von z.b. 180 mm schon angenommen wird, dass der extruder mit beiden nozzles jeden punkt erreicht.
@@ -234,11 +230,8 @@ void Printer::updateAdvanceActivated() {
 
 void Printer::updateWobbleFixOffsets() {
     // The factory settings bypass all floating-point work.
-    if (!(wobbleAmplitudes[0] | wobbleAmplitudes[1] | wobbleAmplitudes[2])) {
-        if (queuedWobbleAxes) {
-            clearWobbleFixOffset(X_AXIS);
-            clearWobbleFixOffset(Y_AXIS);
-        }
+    if (!wobbleCorrection.enabled()) {
+        wobbleCorrection.clear();
         return;
     }
 
@@ -247,39 +240,21 @@ void Printer::updateWobbleFixOffsets() {
     const long motorZ = zMotion.motorSteps();
     noInts.unprotect();
 
-    // The spindle advances 5 mm per rotation, measured from the machine Z reference.
-    const float zMM = motorZ * axisMMPerSteps[Z_AXIS];
-    const float phase = 6.2832f * (zMM / 5.0f) - wobblePhaseXY * 0.031428f;
-    const bool correctX = wobbleAmplitudes[0] != 0;
-    const bool correctY = wobbleAmplitudes[1] || wobbleAmplitudes[2];
-    lastWobbleFixOffset[X_AXIS] = correctX ? wobbleAmplitudes[0] * cos(phase) * 0.001f : 0.0f;
-    lastWobbleFixOffset[Y_AXIS] = 0.0f;
-    if (correctY) {
-        const float xFraction = float(motorX) / maxSoftEndstopSteps[X_AXIS];
-        const float amplitude = (1 - xFraction) * wobbleAmplitudes[1] + xFraction * wobbleAmplitudes[2];
-        lastWobbleFixOffset[Y_AXIS] = amplitude * sin(phase) * 0.001f;
-    }
-    queuedWobbleAxes = (correctX << X_AXIS) | (correctY << Y_AXIS);
+    wobbleCorrection.update(motorX, motorZ * axisMMPerSteps[Z_AXIS], maxSoftEndstopSteps[X_AXIS]);
 }
 
 int32_t Printer::prepareDestinationSteps(uint8_t axis) {
     const float direct = getDirectMM(axis);
     const float endstop = softwareEndstopSteps(axis) * axisMMPerSteps[axis];
+    const double limit = endstop + 0.1;
     float targetMM = moveTarget.machineMM(axis);
-    if (targetMM + direct >= endstop + 0.1) {
-        targetMM = endstop + 0.1 - direct;
+    if (targetMM + direct >= limit) {
+        targetMM = limit - direct;
         moveTarget.setMachineMM(axis, targetMM);
     }
 
-    if (queuedWobbleAxes && axis < Z_AXIS) {
-        const float nominalMM = targetMM;
-        targetMM += lastWobbleFixOffset[axis];
-        if (targetMM + direct >= endstop + 0.1) {
-            targetMM = endstop + 0.1 - direct;
-            // Later E-only moves carry the correction actually applied at the limit.
-            lastWobbleFixOffset[axis] = targetMM - nominalMM;
-        }
-    }
+    if (axis < Z_AXIS)
+        targetMM = wobbleCorrection.applyToTarget(axis, targetMM, direct, limit);
 
     return lroundf(targetMM * axisStepsPerMM[axis]);
 }
@@ -366,11 +341,11 @@ bool Printer::queueGCodeCoordinates(GCode* com) {
 void Printer::queueFloatCoordinates(float x, float y, float z, float e, float feedrate) {
     if (x != IGNORE_COORDINATE) {
         moveTarget.setMachineMM(X_AXIS, x);
-        clearWobbleFixOffset(X_AXIS);
+        wobbleCorrection.clearAxis(X_AXIS);
     }
     if (y != IGNORE_COORDINATE) {
         moveTarget.setMachineMM(Y_AXIS, y);
-        clearWobbleFixOffset(Y_AXIS);
+        wobbleCorrection.clearAxis(Y_AXIS);
     }
     if (z != IGNORE_COORDINATE)
         moveTarget.setMachineMM(Z_AXIS, z);

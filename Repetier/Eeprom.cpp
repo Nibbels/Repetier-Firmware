@@ -195,10 +195,7 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     Printer::senseOffsetControl.setMaxMicrometers(SENSIBLE_PRESSURE_MAX_OFFSET);
     Printer::senseOffsetControl.setAutoStart(false);
 
-    Printer::wobblePhaseXY = 0;
-    Printer::wobbleAmplitudes[0] = 0;
-    Printer::wobbleAmplitudes[1] = 0;
-    Printer::wobbleAmplitudes[2] = 0;
+    Printer::wobbleCorrection.setProfile({});
 
     Printer::pressureProtection.setPauseLimits({EMERGENCY_PAUSE_DIGITS_MIN, EMERGENCY_PAUSE_DIGITS_MAX});
     Printer::pressureProtection.setStopLimits({EMERGENCY_STOP_DIGITS_MIN, EMERGENCY_STOP_DIGITS_MAX});
@@ -331,10 +328,11 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX, Printer::senseOffsetControl.limits().maxMicrometers);
     HAL::eprSetByte(EPR_RF_MOD_SENSEOFFSET_AUTOSTART, Printer::senseOffsetControl.autoStart());
 
-    HAL::eprSetByte(EPR_RF_MOD_WOBBLE_FIX_PHASEXY, Printer::wobblePhaseXY);
-    HAL::eprSetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPX, Printer::wobbleAmplitudes[0]);
-    HAL::eprSetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPY1, Printer::wobbleAmplitudes[1]);
-    HAL::eprSetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPY2, Printer::wobbleAmplitudes[2]);
+    const auto& wobble = Printer::wobbleCorrection.profile();
+    HAL::eprSetByte(EPR_RF_MOD_WOBBLE_FIX_PHASEXY, wobble.phase);
+    HAL::eprSetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPX, wobble.xMicrometers);
+    HAL::eprSetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPY1, wobble.yAtXMinMicrometers);
+    HAL::eprSetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPY2, wobble.yAtXMaxMicrometers);
 
     const auto pauseLimits = Printer::pressureProtection.pauseLimits();
     HAL::eprSetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMIN, pauseLimits.minimum);
@@ -653,10 +651,12 @@ void EEPROM::readDataFromEEPROM() {
     Printer::senseOffsetControl.setMaxMicrometers(savedSenseLimit == 0 ? SENSIBLE_PRESSURE_MAX_OFFSET : constrain(savedSenseLimit, 1, 300));
     Printer::senseOffsetControl.setAutoStart(HAL::eprGetByte(EPR_RF_MOD_SENSEOFFSET_AUTOSTART));
 
-    Printer::wobblePhaseXY = HAL::eprGetByte(EPR_RF_MOD_WOBBLE_FIX_PHASEXY);
-    Printer::wobbleAmplitudes[0] = HAL::eprGetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPX);
-    Printer::wobbleAmplitudes[1] = HAL::eprGetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPY1);
-    Printer::wobbleAmplitudes[2] = HAL::eprGetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPY2);
+    Printer::wobbleCorrection.setProfile({
+        int8_t(HAL::eprGetByte(EPR_RF_MOD_WOBBLE_FIX_PHASEXY)),
+        HAL::eprGetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPX),
+        HAL::eprGetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPY1),
+        HAL::eprGetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPY2)
+    });
 
     const int32_t storedPauseMin = HAL::eprGetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMIN);
     const int32_t storedPauseMax = HAL::eprGetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMAX);
