@@ -1453,12 +1453,13 @@ void UIDisplay::parse(char* txt, bool ram) {
 
             if (c2 == 'M') // %sM : State of the sensible offset
             {
-                if (Printer::doHeatBedZCompensation && g_nSensiblePressureDigits > 0) {
-                    if (g_nSensiblePressure1stMarke && Printer::pause.allowsQueueAdvance())
+                const int16_t threshold = Printer::senseOffsetControl.limits().thresholdDigits;
+                if (Printer::doHeatBedZCompensation && threshold > 0) {
+                    if (Printer::senseOffsetControl.inLearningRange() && Printer::pause.allowsQueueAdvance())
                         addStringP(PSTR("^"));
                     else
                         addStringP(PSTR("@"));
-                    addInt((int)g_nSensiblePressureDigits, 5);
+                    addInt(threshold, 5);
                 } else {
                     addStringP(ui_text_off);
                 }
@@ -1473,7 +1474,7 @@ void UIDisplay::parse(char* txt, bool ram) {
             }
             if (c2 == 'a') // %sa : State of the sensible pressure autostarter
             {
-                addStringP(Printer::g_senseoffset_autostart ? ui_text_on : ui_text_off);
+                addStringP(Printer::senseOffsetControl.autoStart() ? ui_text_on : ui_text_off);
             }
 
             if (c2 == '1') // %s1 : current value of the strain gauge
@@ -2063,52 +2064,43 @@ void UIDisplay::okAction() {
     menuEsc();
 } // okAction
 
-void UIDisplay::senseOffsetUpAction() {
-    //we are in the Mod menu
-    if (g_nSensiblePressureDigits == EMERGENCY_PAUSE_DIGITS_MAX * 0.8 || g_nSensiblePressureDigits == 32767) {
-        //ist max, dann auf 0.
-        g_nSensiblePressureDigits = 0;
-    } else if (g_nSensiblePressureDigits > EMERGENCY_PAUSE_DIGITS_MAX * 0.8 - 250 || g_nSensiblePressureDigits > 32767 - 250) {
-        //stößt oben an, hier noch check auf overflow:
-        if (EMERGENCY_PAUSE_DIGITS_MAX * 0.8 < 32767) {
-            g_nSensiblePressureDigits = EMERGENCY_PAUSE_DIGITS_MAX * 0.8; //maximalstellung, das ist aber schon irre hoch. abhängig von messdose und maximaltragkraft vs. genauigkeit der zelle.
-        } else {
-            g_nSensiblePressureDigits = 32767; //die variable ist short, nie mehr rein als nötig ^^.
-        }
-    } else {
-        //TPE braucht mini werte, wenn es sinnvoll sein soll. Darum der Ternary, sodass man per Knopf auch kleinste Zahlen justieren kann.
-        g_nSensiblePressureDigits += (g_nSensiblePressureDigits >= 2000) ? 250 : (g_nSensiblePressureDigits >= 500) ? 100 : 50; //decrement pro Knopfklick. Man kann ja auf der Taste bleiben.
-                                                                                                                                //g_nSensiblePressureDigits += 250; //decrement pro Knopfklick. Man kann ja auf der Taste bleiben.
+namespace {
+constexpr double modMenuSenseLimit = EMERGENCY_PAUSE_DIGITS_MAX * 0.8;
+constexpr int16_t modMenuSenseMax = modMenuSenseLimit < 32767 ? int16_t(modMenuSenseLimit) : 32767;
 
-        //Wir speichern nur Werte automatisch per Knopf, die im Alltag sinn machen können. Ab 500:
-        short oldval = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS);
-        if (g_nSensiblePressureDigits >= 500 && oldval != g_nSensiblePressureDigits) {
-            HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS, g_nSensiblePressureDigits);
-            EEPROM::updateChecksum(); //deshalb die prüfung
-        }
+void adjustModMenuSenseOffset(int16_t digits) {
+    Printer::senseOffsetControl.setThresholdDigits(digits);
+    // The Mod Menu remembers ordinary adjustments from 500 digits upwards.
+    if (digits >= 500 && HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS) != digits) {
+        HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS, digits);
+        EEPROM::updateChecksum();
+    }
+}
+}
+
+void UIDisplay::senseOffsetUpAction() {
+    auto& controller = Printer::senseOffsetControl;
+    const int16_t digits = controller.limits().thresholdDigits;
+    if (digits == modMenuSenseLimit || digits == 32767) {
+        controller.setThresholdDigits(0);
+    } else if (digits > modMenuSenseLimit - 250 || digits > 32767 - 250) {
+        controller.setThresholdDigits(modMenuSenseMax);
+    } else {
+        const int16_t step = digits >= 2000 ? 250 : digits >= 500 ? 100 : 50;
+        adjustModMenuSenseOffset(digits + step);
     }
 }
 
 void UIDisplay::senseOffsetDownAction() {
-    if (g_nSensiblePressureDigits == 0) {
-        if (EMERGENCY_PAUSE_DIGITS_MAX * 0.8 < 32767) {
-            g_nSensiblePressureDigits = EMERGENCY_PAUSE_DIGITS_MAX * 0.8; //maximalstellung, das ist aber schon irre hoch. abhängig von messdose und maximaltragkraft vs. genauigkeit der zelle.
-        } else {
-            g_nSensiblePressureDigits = 32767; //die variable ist short, nie mehr rein als nötig ^^.
-        }
-    } else if (g_nSensiblePressureDigits < 50) { // ex 250
-        g_nSensiblePressureDigits = 0;
+    auto& controller = Printer::senseOffsetControl;
+    const int16_t digits = controller.limits().thresholdDigits;
+    if (digits == 0) {
+        controller.setThresholdDigits(modMenuSenseMax);
+    } else if (digits < 50) {
+        controller.setThresholdDigits(0);
     } else {
-        //TPE braucht mini werte, wenn es sinnvoll sein soll. Darum der Ternary, sodass man per Knopf auch kleinste Zahlen justieren kann.
-        //g_nSensiblePressureDigits -= 250; //decrement pro Knopfklick. Man kann ja auf der Taste bleiben.
-        g_nSensiblePressureDigits -= (g_nSensiblePressureDigits >= 2000) ? 250 : (g_nSensiblePressureDigits >= 500) ? 100 : 50; //decrement pro Knopfklick. Man kann ja auf der Taste bleiben.
-
-        //Wir speichern nur Werte automatisch per Knopf, die im Alltag sinn machen können. Ab 500:
-        short oldval = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS);
-        if (g_nSensiblePressureDigits >= 500 && oldval != g_nSensiblePressureDigits) {
-            HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS, g_nSensiblePressureDigits);
-            EEPROM::updateChecksum(); //deshalb die prüfung
-        }
+        const int16_t step = digits >= 2000 ? 250 : digits >= 500 ? 100 : 50;
+        adjustModMenuSenseOffset(digits - step);
     }
 }
 
@@ -3618,8 +3610,9 @@ void UIDisplay::mainSwitchCase(int action) {
         break;
     }
     case UI_ACTION_SENSEOFFSET_AUTOSTART: {
-        Printer::g_senseoffset_autostart = (Printer::g_senseoffset_autostart ? false : true);
-        HAL::eprSetByte(EPR_RF_MOD_SENSEOFFSET_AUTOSTART, (int8_t)Printer::g_senseoffset_autostart);
+        const bool enabled = !Printer::senseOffsetControl.autoStart();
+        Printer::senseOffsetControl.setAutoStart(enabled);
+        HAL::eprSetByte(EPR_RF_MOD_SENSEOFFSET_AUTOSTART, enabled);
         EEPROM::updateChecksum();
         break;
     }

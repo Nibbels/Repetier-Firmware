@@ -10,6 +10,8 @@ Digit-Z uses a reversible force-to-Z estimate for elastic hotend deflection. Sen
 
 ## Input, gating and response
 
+`Printer::senseOffsetControl` manages the active force threshold, maximum clearance, AutoStart and the sampling history. An accepted sample can propose an increment in micrometres. The foreground checks eligibility and applies the increment to `ZOffset`, which owns the applied clearance. [Controller](../../Repetier/SenseOffsetControl.h) · [Application](../../Repetier/RF.cpp#L2958)
+
 - `Configuration.h` sets `SENSIBLE_PRESSURE_INTERVAL=50 ms` and `SENSIBLE_PRESSURE_MAX_OFFSET=180 um` as defaults.
 - `M3909 P<digits> S<max_um>` sets threshold and maximum additional offset; source bounds `S` to **1..300 um**. `M3909 P0` disables control. EEPROM may retain thresholds. `M3001` may queue an auto-enable of SenseOffset if configured.
 - SenseOffset needs active bed Z compensation and an enabled positive force threshold.
@@ -19,13 +21,15 @@ Digit-Z uses a reversible force-to-Z estimate for elastic hotend deflection. Sen
 - `Printer::zOffset` converts the sum of the manual and live values to `effectiveSteps()`. [Offset ledger](../z-offset/offset-ledger.md)
 - Below the pressure threshold, the additional offset **does not decrease**. It persists when leaving the low-Z region; loss/disable of bed compensation is a separate deactivation/reset path.
 
+`M3909 P` stores a positive threshold for activation when the queue reaches the enable task. `P0` disables learning immediately and retains the stored threshold for later activation. The queue can also enable learning through `M3001` AutoStart. A poll snapshots the active limit pair and checks it again when committing a calculated increment. This rejects a pending increase if the queue changes either limit during the calculation. [Command](../../Repetier/RF.cpp#L5054) · [Queued settings load](../../Repetier/Printer.cpp#L778)
+
 This is deliberately **not** a bidirectional PID loop. It is a bounded, positive-only first-layer clearance correction; the cap limits inappropriate reactions to a clogged nozzle or sensor error.
 
 ## Coupling to learned layer height
 
 `Printer::layers.fadeStartSteps()` controls both where full scanned-bed following ends and where SenseOffset may regulate. The fallback limit is 0.33 mm. Generated `M3912` priming suspends SenseOffset for the entire line, including with a higher limit inherited from an earlier print. For a manually scripted prime, enable SenseOffset after priming and account for `M3001` AutoStart. [Manual start-line ordering](automatic-start-line.md#manual-start-lines)
 
-SenseOffset checks the executing nominal Z against the learned limit. The G-code origin is resolved before this check.
+SenseOffset checks the executing nominal Z against the learned limit. The G-code origin is resolved before this check. On the first sample outside the range the legacy window clears a positive sum and its sample count. The previous average and a nonpositive sum can carry across that boundary. Priming, pause and Z homing clear the whole window.
 
 ## Pause and resume
 
@@ -44,9 +48,7 @@ python3 tests/pause-sense-offset.py
 The operator can use alternating Z/bed DOWN and UP buttons in Mod Menu page 2 to transfer the positive SenseOffset adjustment into the saved manual Z offset in 5 µm increments while approximately maintaining the combined correction. This is explicitly documented in the original 2017 changelog and must survive future fixes. See [live transfer procedure and conditions](../z-offset/history-and-workflows.md).
 
 ## Relevant source
-- [Globals, names and defaults](../../Repetier/RF.cpp#L193-L199)
-- [Strain-gauge reads and controller](../../Repetier/RF.cpp#L5622-L5775)
-- [M3909 and EEPROM handling](../../Repetier/RF.cpp#L9012-L9076)
-- [Enable via queue task](../../Repetier/Printer.cpp#L1098-L1109)
-- [Config](../../Repetier/Configuration.h#L87-L100)
+- [Controller and runtime state](../../Repetier/SenseOffsetControl.h)
+- [Shared strain-gauge sampling](../../Repetier/RF.cpp#L2999)
+- [Configuration defaults](../../Repetier/Configuration.h#L73)
 - [Original intention in changelog](../../changelog.txt#L1775-L1784)

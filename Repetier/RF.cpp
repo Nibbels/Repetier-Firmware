@@ -176,12 +176,6 @@ short g_nEmergencyStopZAndEMin = EMERGENCY_STOP_DIGITS_MIN;
 short g_nEmergencyStopZAndEMax = EMERGENCY_STOP_DIGITS_MAX;
 bool g_nEmergencyESkip = false;
 
-// SenseOffset was proposed by Wessix and implemented by Nibbels.
-// It adds clearance when DMS force is high on the first layer.
-short g_nSensiblePressureDigits = 0; //init auf zahl bringt stand 1.37r2 nur was wenn zcompensation an. darum lesen aus eeprom oder setzen auf wert nur durch Mcode
-short g_nSensiblePressureOffsetMax = SENSIBLE_PRESSURE_MAX_OFFSET;
-char g_nSensiblePressure1stMarke = 0; //sagt, ob regelung aktiv oder inaktiv, wegen Z-Limits
-
 #ifdef RGB_LIGHT_R_PIN
 unsigned char g_uRGBHeatingR = RGB_HEATING_R;
 unsigned char g_uRGBHeatingG = RGB_HEATING_G;
@@ -2961,214 +2955,106 @@ unsigned short readWord24C256(int addressI2C, unsigned int addressEEPROM) {
 
 } // readWord24C256
 
-namespace {
-struct SenseOffsetSamples {
-    long sum = 0;
-    char count = 0;
-    short lastAverage = 0;
-};
-SenseOffsetSamples senseOffsetSamples;
+static void serviceSenseOffset(bool sampleDue, short pressure, const PrintPause::SenseOffsetSample& pauseSample) {
+    auto& controller = Printer::senseOffsetControl;
+    auto& offset = Printer::zOffset;
 
-void clearSenseOffsetSamples() {
-    senseOffsetSamples = {};
-    g_nSensiblePressure1stMarke = 0;
-}
-}
+    if (!Printer::doHeatBedZCompensation) {
+        const bool wasEnabled = controller.disable();
+        if (offset.senseMicrometers()) {
+            Com::printF(PSTR("SensiblePressure(): offset reverted from "), offset.senseMicrometers());
+            Com::printFLN(PSTR(" [um] to 0 [um] "));
+            offset.clearSenseOffset(Printer::axisStepsPerMM[Z_AXIS]);
+        }
+        if (wasEnabled)
+            Com::printFLN(PSTR("SensiblePressure(): now disabled because of no z-CMP. "), offset.senseMicrometers());
+    }
 
-void resetSenseOffsetForPrint() {
-    Printer::zOffset.clearSenseOffset(Printer::axisStepsPerMM[Z_AXIS]);
-    g_nSensiblePressureDigits = 0;
-    clearSenseOffsetSamples();
+    const auto limits = controller.limits();
+    const bool canLearn = limits.thresholdDigits && Printer::doHeatBedZCompensation
+        && !g_startLineActive && !pauseSample.wasPaused && Printer::pause.allowsSenseOffsetLearning();
+    if (!canLearn || pauseSample.resetWindow)
+        controller.resetWindow();
+    if (!sampleDue || !canLearn)
+        return;
+
+    if (Printer::zMotion.nominalSteps() > Printer::layers.fadeStartSteps()) {
+        controller.leaveLearningRange();
+        return;
+    }
+
+    const uint8_t step = controller.observe(pressure, offset.senseMicrometers(), limits);
+    if (!step)
+        return;
+
+    const auto increment = offset.prepareSenseIncrement(step, limits.maxMicrometers, Printer::axisStepsPerMM[Z_AXIS]);
+    // Finish the conversion before masking step interrupts.
+    asm volatile("" : : "m"(increment));
+    InterruptProtectedBlock lock;
+    // A queued pause or settings change can arrive while calculating the increment.
+    if (Printer::pause.allowsSenseOffsetLearning() && Printer::doHeatBedZCompensation && controller.limitsMatch(limits))
+        offset.applySenseIncrement(increment);
 }
 
 void handleStrainGaugeFeatures(millis_t uTime) {
     const auto pauseSample = Printer::pause.beginSenseOffsetSample();
 
-    // Share one scheduled DMS reading among SenseOffset, emergency pause and emergency stop.
-    bool i_need_strain_value = 0;
-
-    static millis_t nSensiblePressureTime = 0;
-    if ((uTime - nSensiblePressureTime) > SENSIBLE_PRESSURE_INTERVAL) //max. jede 50ms
-    {
-        i_need_strain_value = 1;
-    }
-
     static millis_t uLastPressureTime = 0;
     static long nPressureSum = 0;
     static char nPressureChecks = 0;
-    if ((uTime - uLastPressureTime) > EMERGENCY_PAUSE_INTERVAL) //max. jede 100ms
-    {
-        i_need_strain_value = 1;
-    }
 
     static millis_t uLastZPressureTime = 0;
     static long nZPressureSum = 0;
     static char nZPressureChecks = 0;
-    if ((uTime - uLastZPressureTime) > EMERGENCY_STOP_INTERVAL) //max. jede 10ms
-    {
-        i_need_strain_value = 1;
-    }
 
-    static short pressure = 0;
-    if (i_need_strain_value) {
-        pressure = sampleStrainGauge();
-    }
+    // Share one scheduled DMS reading among SenseOffset, emergency pause and emergency stop.
+    const bool senseOffsetDue = Printer::senseOffsetControl.takeSampleSlot(uTime);
+    const bool pauseDue = uTime - uLastPressureTime > EMERGENCY_PAUSE_INTERVAL;
+    const bool stopDue = uTime - uLastZPressureTime > EMERGENCY_STOP_INTERVAL;
+    const short pressure = (senseOffsetDue || pauseDue || stopDue) ? sampleStrainGauge() : 0;
 
-    short nPressure;
-    // When bed compensation is disabled, any remaining live SenseOffset is
-    // safe to discard, including after M3909 P0 disabled its threshold.
-    if (!Printer::doHeatBedZCompensation) {
-        bool wasEnabled = g_nSensiblePressureDigits != 0;
-        g_nSensiblePressureDigits = 0;
-        if (Printer::zOffset.senseMicrometers()) {
-            Com::printF(PSTR("SensiblePressure(): offset reverted from "), Printer::zOffset.senseMicrometers());
-            Com::printFLN(PSTR(" [um] to 0 [um] "));
-            Printer::zOffset.clearSenseOffset(Printer::axisStepsPerMM[Z_AXIS]);
-        }
-        if (wasEnabled)
-            Com::printFLN(PSTR("SensiblePressure(): now disabled because of no z-CMP. "), Printer::zOffset.senseMicrometers());
-    }
+    serviceSenseOffset(senseOffsetDue, pressure, pauseSample);
 
-    const bool learnSenseOffset = g_nSensiblePressureDigits && Printer::doHeatBedZCompensation
-        && !g_startLineActive && !pauseSample.wasPaused && Printer::pause.allowsSenseOffsetLearning();
-    // Start a fresh window after a pause, even if it ended before this poll.
-    if (!learnSenseOffset || pauseSample.resetWindow)
-        clearSenseOffsetSamples();
+    if (pauseDue && (g_nEmergencyPauseDigitsMin || g_nEmergencyPauseDigitsMax)) {
+        uLastPressureTime = uTime;
 
-    if ((uTime - nSensiblePressureTime) > SENSIBLE_PRESSURE_INTERVAL) {
-        nSensiblePressureTime = uTime;
-        /* brief: This is for correcting too close Z at first layer // Idee Wessix, coded by Nibbels  */
+        if (!Printer::pause.isPaused() && Printer::isPrinting() && Printer::areAxisHomed()) {
+            // This check applies to printing moves.
+            nPressureSum += pressure;
+            nPressureChecks += 1;
 
-        if (learnSenseOffset) {
-            // SenseOffset learns within the full bed-profile range in nominal Z steps.
-            if (Printer::zMotion.nominalSteps() <= Printer::layers.fadeStartSteps()) {
-                g_nSensiblePressure1stMarke = 1; //marker für display: wir sind in regelhöhe
-                //wenn durch Gcode gefüllt, prüfe, ob Z-Korrektur (weg vom Bett) notwendig ist, in erstem Layer.
-                senseOffsetSamples.sum += pressure;
-                senseOffsetSamples.count += 1;
-                //jede 1 sekunden, bzw 0.5sekunden. => 100ms * 10 ::
-                if (senseOffsetSamples.count >= 10) {
-
-                    nPressure = (short)(senseOffsetSamples.sum / senseOffsetSamples.count);
-
-                    //half interval, remember old values 50% -> gibt etwas value-trägheit in den regler -> aber verursacht doppelte schrittgeschwindigkeit bei 0,5
-                    senseOffsetSamples.sum *= 0.5;
-                    senseOffsetSamples.count *= 0.5;
-
-                    //größer, kleiner, falls Messzellen falschrum eingebaut. -> abs() // später einfacher zu verrechnen.
-                    nPressure = abs(nPressure);
-                    if ((nPressure > g_nSensiblePressureDigits)) {
-                        /* here the action is defined if digits are > g_nSensiblePressureDigits while printing */
-
-                        //wie stark reagieren?
-                        //PID -Regler wollen wir uns aber sparen...
-                        unsigned char step = 1; //0..255!! standardincrement
-                        float inc = 0.0;
-                        //mehr offsetincrement je höher digits oberhalb limit. linear
-                        if (nPressure > g_nSensiblePressureDigits * 1.1) {
-                            //je größer der Fehler, desto beschränkt größer der step
-                            inc = (float)nPressure / (float)g_nSensiblePressureDigits - 1; //0.1 ... riesig
-                            if (inc > 2.0)
-                                inc = 2.0;
-                            inc *= 12; // 1,2..24,0
-                            step += (short)inc;
-                        }
-
-                        if (senseOffsetSamples.lastAverage - nPressure > 0) {
-                            //digits sinken gerade -> egal wie hoch, regelspeed raus!
-                            step = 1;
-                        } else {
-                            //digits steigen gerade -> je höher mein aktuelles zusätzliches offset, desto weniger regelspeed.
-                            inc = (float)Printer::zOffset.senseMicrometers() / (float)g_nSensiblePressureOffsetMax; //0.25 .. 1
-                            if (inc >= 0.25) {
-                                step = step - (short)(inc * (step - 1)); //über der viertel offsetstrecke, das zusätzliche offset stark ausbremsen.
-                            }
-                            if (inc >= 0.33) {
-                                if (nPressure < g_nSensiblePressureDigits * 1.1)
-                                    step = 0; //wenn schon etwas offset da und die kräfte nur um +10% rumpendeln, dann nicht weiter erhöhen.
-                            }
-                        }
-
-                        if (step > 0) {
-                            const auto increment = Printer::zOffset.prepareSenseIncrement(step, g_nSensiblePressureOffsetMax, Printer::axisStepsPerMM[Z_AXIS]);
-                            // Finish the conversion before masking step interrupts.
-                            asm volatile("" : : "m"(increment));
-                            // The queue can request a pause while the increment is calculated.
-                            InterruptProtectedBlock noInts;
-                            if (Printer::pause.allowsSenseOffsetLearning() && Printer::doHeatBedZCompensation)
-                                Printer::zOffset.applySenseIncrement(increment);
-                        }
-                    } else {
-                        //kleinere digits sind natürlich zugelassen, runtergeregelt wird nicht wegen kleinerer digits bei z.B. retracts
-                    }
-                    senseOffsetSamples.lastAverage = nPressure; //save last pressure.
-                }
-            } else {
-                g_nSensiblePressure1stMarke = 0; //marker für display: auf dieser Höhe regeln wir nichts mehr oder noch nichts.
-                // if sensible not active
-                // if z-compensation not active
-                if (senseOffsetSamples.sum > 0) {
-                    senseOffsetSamples.sum = 0; //close down counters if function deactivated.
-                    senseOffsetSamples.count = 0;
-                }
-                // Keep the applied clearance when the learning conditions no longer hold.
-            }
-        }
-    }
-
-    if (g_nEmergencyPauseDigitsMin || g_nEmergencyPauseDigitsMax) {
-        if ((uTime - uLastPressureTime) > EMERGENCY_PAUSE_INTERVAL) //jede 100ms -> das macht hier drin wenig sinn.
-        {
-            uLastPressureTime = uTime;
-
-            if (!Printer::pause.isPaused() && Printer::isPrinting() && Printer::areAxisHomed()) {
-                // this check shall be done only during the printing (for example, it shall not be done in case filament is extruded manually)
-                nPressureSum += pressure;
-                nPressureChecks += 1;
-
-                if (nPressureChecks == EMERGENCY_PAUSE_CHECKS) {
-                    short nPressure = (short)(nPressureSum / nPressureChecks);
-                    nPressureSum = 0;
-                    nPressureChecks = 0;
-
-                    if ((nPressure < g_nEmergencyPauseDigitsMin) || (nPressure > g_nEmergencyPauseDigitsMax)) {
-                        // the pressure is outside the allowed range, we must perform the emergency pause
-                        Com::printF(PSTR("emergency pause: "), nPressure);
-                        showWarning((void*)ui_text_emergency_pause);
-
-                        Printer::pause.request(PrintPause::Destination::Park);
-                    }
-                }
-            } else {
+            if (nPressureChecks == EMERGENCY_PAUSE_CHECKS) {
+                const short nPressure = nPressureSum / nPressureChecks;
                 nPressureSum = 0;
                 nPressureChecks = 0;
+
+                if (nPressure < g_nEmergencyPauseDigitsMin || nPressure > g_nEmergencyPauseDigitsMax) {
+                    Com::printF(PSTR("emergency pause: "), nPressure);
+                    showWarning((void*)ui_text_emergency_pause);
+                    Printer::pause.request(PrintPause::Destination::Park);
+                }
             }
+        } else {
+            nPressureSum = 0;
+            nPressureChecks = 0;
         }
     }
 
-    if ((uTime - uLastZPressureTime) > EMERGENCY_STOP_INTERVAL) //jede 10ms -> das macht hier drin überhaupt garkeinen sinn.
-    {
+    if (stopDue) {
         uLastZPressureTime = uTime;
-
-        // this check shall be done only when there is some moving into z-direction in progress and the extruder is not doing anything
         nZPressureSum += pressure;
         nZPressureChecks += 1;
 
         if (nZPressureChecks == EMERGENCY_STOP_CHECKS) {
-            nPressure = (short)(nZPressureSum / nZPressureChecks);
-
+            const short nPressure = nZPressureSum / nZPressureChecks;
             nZPressureSum = 0;
             nZPressureChecks = 0;
 
             if (nPressure < g_nEmergencyStopZAndEMin || g_nEmergencyStopZAndEMax < nPressure) {
-                // Forbid Extrusion at high levels
+                // Suppress extrusion and stop a Z move at excessive force.
                 g_nEmergencyESkip = true;
-
-                // Block if we are driving Z rightnow
-                if (Printer::isZMoveActive() && !Extruder::current->stepperDirection) {
-                    // the pressure is outside the allowed range, we must perform the emergency stop
+                if (Printer::isZMoveActive() && !Extruder::current->stepperDirection)
                     doEmergencyStop(STOP_BECAUSE_OF_Z_BLOCK);
-                }
             } else {
                 g_nEmergencyESkip = false;
             }
@@ -3370,7 +3256,7 @@ void processSpecialGCode(GCode* pCommand) {
 
             //wenn der nutzer im menü "autostart" gewählt hat, dann senseoffset sofort mit M3001 mitstarten.
             //Die Einstellwerte kommen dann aus dem EEPROM
-            if (Printer::g_senseoffset_autostart)
+            if (Printer::senseOffsetControl.autoStart())
                 queueTask(TASK_ENABLE_SENSE_OFFSET);
             break;
         }
@@ -5167,6 +5053,7 @@ void processSpecialGCode(GCode* pCommand) {
 
         case 3909: // M3909 [P]PressureDigits - configure the sensible pressure value threshold || by Wessix and Nibbels
         {
+            auto& controller = Printer::senseOffsetControl;
             bool error = false;
             //Statusänderung P10000 ([digits])
             if (pCommand->hasP()) {
@@ -5182,7 +5069,7 @@ void processSpecialGCode(GCode* pCommand) {
                             EEPROM::updateChecksum(); //deshalb die prüfung
                         }
                     } else {
-                        g_nSensiblePressureDigits = 0;
+                        controller.setThresholdDigits(0);
                         error = true;
                         Com::printFLN(PSTR("M3909: SensiblePressure disabled"));
                     }
@@ -5194,13 +5081,13 @@ void processSpecialGCode(GCode* pCommand) {
 
             if (pCommand->hasS()) {
                 if (pCommand->S > 0 && pCommand->S <= 300) {
-                    //max darf nie 0 werden!! div/0 bei zeile ~5600
-                    g_nSensiblePressureOffsetMax = (short)pCommand->S;
-                    Com::printFLN(PSTR("M3909: SensiblePressure max. [S]Offset changed to "), g_nSensiblePressureOffsetMax);
+                    const int16_t maxMicrometers = pCommand->S;
+                    controller.setMaxMicrometers(maxMicrometers);
+                    Com::printFLN(PSTR("M3909: SensiblePressure max. [S]Offset changed to "), maxMicrometers);
                     short oldval = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX);
-                    if (oldval != g_nSensiblePressureOffsetMax) {
+                    if (oldval != maxMicrometers) {
                         Com::printFLN(PSTR("M3909: S change"));
-                        HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX, g_nSensiblePressureOffsetMax);
+                        HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX, maxMicrometers);
                         EEPROM::updateChecksum(); //deshalb die prüfung
                     }
                 } else {
@@ -5212,10 +5099,11 @@ void processSpecialGCode(GCode* pCommand) {
             }
 
             //Statusausgabe per M3909
-            if (g_nSensiblePressureDigits) {
-                Com::printF(PSTR("M3909: INFO SensiblePressure active. [P]PressureDigit = +-"), g_nSensiblePressureDigits);
+            const auto limits = controller.limits();
+            if (limits.thresholdDigits) {
+                Com::printF(PSTR("M3909: INFO SensiblePressure active. [P]PressureDigit = +-"), limits.thresholdDigits);
                 Com::printFLN(PSTR(" [digits] (Standard: use `standard print digits` +20%)"));
-                Com::printF(PSTR("M3909: INFO SensiblePressures [S]max. offset is "), g_nSensiblePressureOffsetMax);
+                Com::printF(PSTR("M3909: INFO SensiblePressures [S]max. offset is "), limits.maxMicrometers);
                 Com::printFLN(PSTR(" [um] (Standard: 180um, Max: 300um)"));
             } else {
                 Com::printFLN(PSTR("M3909: INFO SensiblePressure is currently disabled."));

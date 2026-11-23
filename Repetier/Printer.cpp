@@ -76,6 +76,7 @@ unsigned int Printer::vMaxReached[2];                             // Maximum rea
 unsigned long Printer::msecondsPrinting = 0;                      // Milliseconds of printing time (means time with heated extruder)
 float Printer::filamentPrinted = 0.0f;                            // mm of filament printed since counting started
 ZOffset Printer::zOffset;
+SenseOffsetControl Printer::senseOffsetControl{SENSIBLE_PRESSURE_MAX_OFFSET};
 ZMotion Printer::zMotion{ZAXIS_STEPS_PER_MM};
 PrintLayers Printer::layers{ZAXIS_STEPS_PER_MM};
 DigitCompensation Printer::digitCompensation{
@@ -132,7 +133,6 @@ unsigned char Printer::wrongType;
 //When the printer resets, we should not do movement, because it would not be homed. At least some interaction with buttons or temperature-commands are needed to allow movement.
 unsigned char Printer::g_unlock_movement = 0;
 
-bool Printer::g_senseoffset_autostart = false;
 
 uint8_t Printer::motorCurrent[DRV8711_NUM_CHANNELS] = { 0 };
 
@@ -776,14 +776,9 @@ void Printer::setup() {
 } // setup()
 
 void Printer::enableSenseOffsetnow(void) {
-    short oldval = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS);
-    if (oldval > 0 && oldval < EMERGENCY_PAUSE_DIGITS_MAX) {
-        g_nSensiblePressureDigits = oldval;
-    }
-    oldval = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX);
-    if (oldval > 0 && oldval < 300) {
-        g_nSensiblePressureOffsetMax = oldval;
-    }
+    const int16_t storedDigits = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS);
+    const int16_t storedLimit = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX);
+    senseOffsetControl.activateStoredLimits(storedDigits, storedLimit);
 }
 
 void Printer::enableCMPnow(void) {
@@ -1119,7 +1114,9 @@ void Printer::homeZAxis() {
         // Establish the first-layer defaults for the print that follows this Z home.
         layers.resetFadeBounds(axisStepsPerMM[Z_AXIS]);
         layers.resetTracking();
-        resetSenseOffsetForPrint();
+        zOffset.clearSenseOffset(axisStepsPerMM[Z_AXIS]);
+        senseOffsetControl.setThresholdDigits(0);
+        senseOffsetControl.resetWindow();
 
         InterruptProtectedBlock noInts;
         compensatedPositionOverPercE = 0.0f;

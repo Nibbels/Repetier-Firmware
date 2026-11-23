@@ -21,6 +21,7 @@
 #define PRINTER_H
 
 #include "ZOffset.h"
+#include "SenseOffsetControl.h"
 #include "ZMotion.h"
 #include "PrintLayers.h"
 #include "PrintPause.h"
@@ -106,6 +107,7 @@ public:
     static unsigned long msecondsPrinting;  // Milliseconds of printing time (means time with heated extruder)
     static float filamentPrinted;           // mm of filament printed since counting started
     static ZOffset zOffset;
+    static SenseOffsetControl senseOffsetControl;
     static ZMotion zMotion;
     static PrintLayers layers;
     static DigitCompensation digitCompensation;
@@ -157,7 +159,6 @@ public:
 
     static unsigned char g_unlock_movement;
 
-    static bool g_senseoffset_autostart;
 
     static uint8_t motorCurrent[DRV8711_NUM_CHANNELS];
 

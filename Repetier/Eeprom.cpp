@@ -192,8 +192,8 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     g_ZOSTestPoint[X_AXIS] = defaultZOffsetScanIndex;
     g_ZOSTestPoint[Y_AXIS] = defaultZOffsetScanIndex;
 
-    g_nSensiblePressureOffsetMax = (short)SENSIBLE_PRESSURE_MAX_OFFSET;
-    Printer::g_senseoffset_autostart = false;
+    Printer::senseOffsetControl.setMaxMicrometers(SENSIBLE_PRESSURE_MAX_OFFSET);
+    Printer::senseOffsetControl.setAutoStart(false);
 
     Printer::wobblePhaseXY = 0;
     Printer::wobbleAmplitudes[0] = 0;
@@ -330,8 +330,8 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_X, g_ZOSTestPoint[0]);
     HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y, g_ZOSTestPoint[1]);
     //Do not update EPR_RF_MOD_SENSEOFFSET_DIGITS here
-    HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX, g_nSensiblePressureOffsetMax);
-    HAL::eprSetByte(EPR_RF_MOD_SENSEOFFSET_AUTOSTART, Printer::g_senseoffset_autostart);
+    HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX, Printer::senseOffsetControl.limits().maxMicrometers);
+    HAL::eprSetByte(EPR_RF_MOD_SENSEOFFSET_AUTOSTART, Printer::senseOffsetControl.autoStart());
 
     HAL::eprSetByte(EPR_RF_MOD_WOBBLE_FIX_PHASEXY, Printer::wobblePhaseXY);
     HAL::eprSetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPX, Printer::wobbleAmplitudes[0]);
@@ -649,8 +649,9 @@ void EEPROM::readDataFromEEPROM() {
     }
 
     //Do not read EPR_RF_MOD_SENSEOFFSET_DIGITS here
-    g_nSensiblePressureOffsetMax = (HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX) == 0) ? (short)SENSIBLE_PRESSURE_MAX_OFFSET : (short)constrain(HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX), 1, 300);
-    Printer::g_senseoffset_autostart = HAL::eprGetByte(EPR_RF_MOD_SENSEOFFSET_AUTOSTART);
+    const int16_t savedSenseLimit = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX);
+    Printer::senseOffsetControl.setMaxMicrometers(savedSenseLimit == 0 ? SENSIBLE_PRESSURE_MAX_OFFSET : constrain(savedSenseLimit, 1, 300));
+    Printer::senseOffsetControl.setAutoStart(HAL::eprGetByte(EPR_RF_MOD_SENSEOFFSET_AUTOSTART));
 
     Printer::wobblePhaseXY = HAL::eprGetByte(EPR_RF_MOD_WOBBLE_FIX_PHASEXY);
     Printer::wobbleAmplitudes[0] = HAL::eprGetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPX);

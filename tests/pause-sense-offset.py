@@ -21,9 +21,11 @@ def main():
     motion = (firmware / "motion.h").read_text(encoding="utf-8")
     move_planner = (firmware / "motion.cpp").read_text(encoding="utf-8")
     printer = (firmware / "Printer.cpp").read_text(encoding="utf-8")
+    eeprom = (firmware / "Eeprom.h").read_text(encoding="utf-8")
     pause = (firmware / "PrintPause.cpp").read_text(encoding="utf-8")
     stop = (firmware / "PrintStop.cpp").read_text(encoding="utf-8")
     fragments = [
+        section(eeprom, "#define EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX", "#define EPR_RF_EMERGENCYPAUSEDIGITSMIN"),
         section(rf_header, "#define UI_ACTION_RF_HEAT_BED_UP", "#define UI_ACTION_RF_PAUSE"),
         section(ui_header, "#define UI_FLAG_FAST_KEY_ACTION", "#define UI_FLAG_KEY_TEST_RUNNING")
         + section(ui_header, "#define UI_FLAG_KEY_TEST_RUNNING", "\n"),
@@ -33,15 +35,17 @@ def main():
         section(rf, "long g_nEmergencyPauseDigitsMin", "\n#ifdef RGB_LIGHT_R_PIN"),
         section(rf, "static short readStrainGauge()", "\nvoid adjustPressureLimits("),
         section(rf, "long getZMatrixDepth_CurrentXY(", "\nvoid showAbortScanReason("),
-        section(rf, "namespace {\nstruct SenseOffsetSamples", "\nvoid handleScanWorkTasks("),
+        section(rf, "static void serviceSenseOffset(", "\nvoid handleScanWorkTasks("),
         pause.removeprefix('#include "Repetier.h"\n'),
         stop.removeprefix('#include "Repetier.h"\n'),
         section(printer, "void Printer::stopPrint()", "\n#define START_EXTRUDER_CONFIG"),
         section(printer, "void Printer::homeZAxis()", "\nvoid Printer::homeDigits("),
+        section(printer, "void Printer::enableSenseOffsetnow(", "\nvoid Printer::enableCMPnow("),
         section(rf, "bool isAnyScanRunning()", "\nvoid moveXAction("),
         section(rf, "void moveZAction(int8_t direction) {", "} // moveZAction") + "}",
         section(ui, "void UIDisplay::pressPlay()", "\nvoid UIDisplay::mainSwitchCase("),
         section(ui, "void UIDisplay::fastAction()", "} // fastAction") + "}",
+        section(ui, "namespace {\nconstexpr double modMenuSenseLimit", "\nvoid UIDisplay::zOffsetPlusAction()"),
         "void extrudeFromPanel() { const int action = UI_ACTION_RF_EXTRUDER_OUTPUT; switch (action) {\n"
         + section(ui, "case UI_ACTION_RF_EXTRUDER_OUTPUT:", "case UI_ACTION_RF_PAUSE:")
         + "} }",
@@ -50,6 +54,9 @@ def main():
         + "}",
         "void runStartLine(GCode* pCommand) { switch (3912) {\n"
         + section(rf, "        case 3912:", "\n        case 3913:")
+        + "} }",
+        "void configureSenseOffset(GCode* pCommand) { switch (3909) {\n"
+        + section(rf, "        case 3909:", "\n        case 3911:")
         + "} }",
     ]
     with TemporaryDirectory(prefix="rfx-pause-replay-") as directory:
@@ -65,6 +72,7 @@ def main():
             "park", "short-pause", "interrupt", "panel", "return", "jog", "cancel", "queue", "home", "layer-fade",
             "layer-scale", "compensation-bounds",
             "digit-flow", "prime-complete", "prime-skip", "prime-abort",
+            "sense-window", "sense-settings", "sense-limit-interrupt",
         ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
 

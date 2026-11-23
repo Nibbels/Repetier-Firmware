@@ -46,15 +46,22 @@ void (*duringPeriodicActions)() = nullptr;
 unsigned primePolls = 0, primeMoves = 0, primeWaits = 0, skipPrimeAt = 0, abortPrimeAt = 0;
 bool observedPrimeBrake = false;
 
-void requestInterruptPause();
 void poll();
 
 namespace HAL {
 millis_t timeInMilliseconds() { return clockMs; }
+int16_t eepromWords[2048] = {};
+int16_t eprGetInt16(unsigned address) { return eepromWords[address]; }
+void eprSetInt16(unsigned address, int16_t value) { eepromWords[address] = value; }
+}
+
+namespace EEPROM {
+void updateChecksum() {}
 }
 
 bool interruptsEnabled = true;
-unsigned pauseBeforeLock = 0;
+unsigned interruptBeforeLock = 0;
+void (*onInterrupt)() = nullptr;
 unsigned locksUntilCompensationPublish = 0;
 float extrusionBeforePublish = 0.0f;
 
@@ -67,8 +74,8 @@ class InterruptProtectedBlock {
 
 public:
     InterruptProtectedBlock() {
-        if (interruptsEnabled && pauseBeforeLock && --pauseBeforeLock == 0)
-            requestInterruptPause();
+        if (interruptsEnabled && interruptBeforeLock && --interruptBeforeLock == 0)
+            onInterrupt();
         if (interruptsEnabled && locksUntilCompensationPublish && --locksUntilCompensationPublish == 0)
             extrusionBeforePublish = Printer::compensatedPositionOverPercE;
         interruptsEnabled = false;
@@ -84,6 +91,7 @@ bool READ(int pin);
 void WRITE(int pin, bool high);
 #include "ZMotion.h"
 #include "DigitCompensation.h"
+#include "SenseOffsetControl.h"
 
 #define PSTR(text) (text)
 #define UI_STATUS_UPD(text) ((void)0)
@@ -129,6 +137,7 @@ namespace Printer {
 extern PrintPause pause;
 extern PrintStop printStop;
 ZOffset zOffset;
+SenseOffsetControl senseOffsetControl{SENSIBLE_PRESSURE_MAX_OFFSET};
 ZMotion zMotion(zStepsPerMm);
 PrintLayers layers{zStepsPerMm};
 DigitCompensation digitCompensation{
@@ -174,6 +183,7 @@ void setMenuMode(int mode, bool active) {
 }
 void stopPrint();
 void homeZAxis();
+void enableSenseOffsetnow();
 char anyHomeDir(uint8_t axis) {
     assert(axis == Z_AXIS);
     return -1;
@@ -306,6 +316,8 @@ struct UIDisplay {
     void ui_check_keys(int16_t& action) { action = nextKey; }
     void pressPlay();
     void fastAction();
+    void senseOffsetUpAction();
+    void senseOffsetDownAction();
 } uid;
 
 enum FirmwareState { Paused, Processing };
@@ -319,8 +331,9 @@ void printCurrentPosition() {}
 struct GCode {
     long S = 0, P = 0;
     float E = 0, F = 0, I = 1, Y = 0;
+    bool explicitP = false;
     bool hasS() const { return S != 0; }
-    bool hasP() const { return P != 0; }
+    bool hasP() const { return explicitP || P != 0; }
     bool hasE() const { return E != 0; }
     bool hasF() const { return F != 0; }
     bool hasI() const { return I != 0; }
@@ -331,6 +344,13 @@ struct GCode {
         ++incomingReads;
     }
 };
+
+unsigned queuedSenseOffsetEnables = 0;
+void queueTask(char task) {
+    assert(task == TASK_ENABLE_SENSE_OFFSET);
+    ++queuedSenseOffsetEnables;
+}
+
 void outputObject(bool showerrors) {
     assert(!showerrors && !PrintLine::hasLines() && !PrintLine::direct.task);
     assert(!Printer::printStop.commandsBlocked());
@@ -405,7 +425,7 @@ void Printer::offsetRelativeStepsCoordinates(long x, long y, long z, long e, int
 
 void parkAndResume() {
     sample(printingForce, 9);
-    assert(Printer::zOffset.senseMicrometers() == initialClearance && g_nSensiblePressure1stMarke);
+    assert(Printer::zOffset.senseMicrometers() == initialClearance && Printer::senseOffsetControl.inLearningRange());
     const long firstTarget = Printer::zMotion.correctionTarget();
     const long originalY = Printer::directCurrentSteps[Y_AXIS];
     const long originalZ = Printer::directCurrentSteps[Z_AXIS];
@@ -413,7 +433,7 @@ void parkAndResume() {
     Printer::pause.request(PrintPause::Destination::Park);
     assert(Printer::pause.isPaused() && !Printer::pause.isSettled());
     sample(0);
-    assert(Printer::zOffset.senseMicrometers() == initialClearance && !g_nSensiblePressure1stMarke);
+    assert(Printer::zOffset.senseMicrometers() == initialClearance && !Printer::senseOffsetControl.inLearningRange());
     Printer::pause.serviceMotion();
     assert(Printer::pause.isSettled());
     assert(Printer::directCurrentSteps[Y_AXIS] == originalY + parkY);
@@ -480,10 +500,125 @@ void interruptDuringLearning() {
     sample(printingForce, 9);
     // Let the poll capture its pause state and the nominal Z. Enter a queued
     // pause just before the lock that would publish the SenseOffset update.
-    pauseBeforeLock = 3;
+    onInterrupt = requestInterruptPause;
+    interruptBeforeLock = 5;
     sample(printingForce);
-    assert(!pauseBeforeLock && Printer::pause.isPaused() && !Printer::pause.isSettled());
+    assert(!interruptBeforeLock && Printer::pause.isPaused() && !Printer::pause.isSettled());
     assert(Printer::zOffset.senseMicrometers() == initialClearance);
+}
+
+void senseOffsetWindow() {
+    const auto& offset = Printer::zOffset;
+    const auto& controller = Printer::senseOffsetControl;
+    forceDigits = printingForce;
+    clockMs += SENSIBLE_PRESSURE_INTERVAL;
+    handleStrainGaugeFeatures(clockMs);
+    assert(!controller.inLearningRange());
+
+    sample(printingForce, 9);
+    assert(offset.senseMicrometers() == 20 && controller.inLearningRange());
+    sample(printingForce);
+    assert(offset.senseMicrometers() == 33);
+    sample(printingForce, 4);
+    assert(offset.senseMicrometers() == 33);
+    sample(printingForce);
+    assert(offset.senseMicrometers() == 46);
+    sample(printingForce, 5);
+    assert(offset.senseMicrometers() == 56); // Taper once above a quarter of the cap.
+    sample(3300, 5);
+    assert(offset.senseMicrometers() == 57); // A falling average adds one micrometre.
+
+    Printer::zMotion.setNominalSteps(257);
+    sample(printingForce);
+    assert(offset.senseMicrometers() == 57 && !controller.inLearningRange());
+    Printer::zMotion.setNominalSteps(256);
+    sample(printingForce, 9);
+    assert(offset.senseMicrometers() == 57);
+    sample(printingForce);
+    assert(offset.senseMicrometers() == 67);
+
+    g_startLineActive = true;
+    sample(printingForce, 12);
+    assert(offset.senseMicrometers() == 67 && !controller.inLearningRange());
+    g_startLineActive = false;
+    sample(-3150, 10);
+    assert(offset.senseMicrometers() == 67 && controller.inLearningRange());
+    sample(-9000, 5);
+    assert(offset.senseMicrometers() == 76);
+
+    // The legacy window clears positive sums above the first layer.
+    Printer::zMotion.setNominalSteps(257);
+    sample(-9000);
+    assert(offset.senseMicrometers() == 76 && !controller.inLearningRange());
+    Printer::zMotion.setNominalSteps(256);
+    sample(-9000, 4);
+    assert(offset.senseMicrometers() == 76);
+    sample(-9000);
+    assert(offset.senseMicrometers() == 88);
+}
+
+void senseOffsetSettings() {
+    const auto& controller = Printer::senseOffsetControl;
+    GCode command;
+    command.P = 3200;
+    command.S = 55;
+    configureSenseOffset(&command);
+    assert(queuedSenseOffsetEnables == 1 && controller.limits().thresholdDigits == senseThreshold);
+    assert(controller.limits().maxMicrometers == 55);
+    assert(HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS) == 3200);
+    assert(HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX) == 55);
+    Printer::enableSenseOffsetnow();
+    assert(controller.limits().thresholdDigits == 3200);
+
+    // The queue accepts only stored thresholds strictly inside its bounds.
+    HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS, EMERGENCY_PAUSE_DIGITS_MAX);
+    HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX, 300);
+    Printer::enableSenseOffsetnow();
+    const auto limits = controller.limits();
+    assert(limits.thresholdDigits == 3200 && limits.maxMicrometers == 55);
+    HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS, 3200);
+    HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX, 55);
+
+    command.explicitP = true;
+    command.P = 0;
+    command.S = 0;
+    configureSenseOffset(&command);
+    assert(queuedSenseOffsetEnables == 1 && !controller.limits().thresholdDigits);
+    assert(HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS) == 3200);
+    sample(printingForce, 10);
+    assert(Printer::zOffset.senseMicrometers() == initialClearance);
+
+    Printer::doHeatBedZCompensation = false;
+    sample(printingForce);
+    assert(!Printer::zOffset.senseMicrometers() && Printer::zOffset.manualMicrometers() == 50);
+
+    // The Mod Menu wraps through its endpoints without overwriting the saved threshold.
+    uid.senseOffsetDownAction();
+    assert(controller.limits().thresholdDigits == EMERGENCY_PAUSE_DIGITS_MAX * 0.8);
+    uid.senseOffsetUpAction();
+    assert(controller.limits().thresholdDigits == 0);
+    assert(HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS) == 3200);
+    for (int i = 0; i < 10; ++i)
+        uid.senseOffsetUpAction();
+    assert(controller.limits().thresholdDigits == 500);
+    assert(HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS) == 500);
+    uid.senseOffsetDownAction();
+    assert(controller.limits().thresholdDigits == 400);
+    assert(HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS) == 500);
+}
+
+void senseOffsetLimitInterrupt() {
+    sample(printingForce, 9);
+    // Activate a tighter cap from the step queue just before the increment write.
+    HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS, 4500);
+    HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX, 21);
+    onInterrupt = Printer::enableSenseOffsetnow;
+    interruptBeforeLock = 5;
+    sample(printingForce);
+    assert(!interruptBeforeLock && Printer::senseOffsetControl.limits().maxMicrometers == 21);
+    assert(Printer::zOffset.senseMicrometers() == initialClearance);
+    sample(printingForce, 5);
+    assert(Printer::zOffset.senseMicrometers() == 21);
 }
 
 void panelSequence() {
@@ -693,7 +828,7 @@ void homeBetweenPrints() {
     assert(Printer::zOffset.manualMicrometers() == manualZ && Printer::zOffset.senseMicrometers() == 0);
     assert(Printer::zMotion.correctionTarget() == 0);
     assert(Printer::compensatedPositionOverPercE == 0.0f && Printer::compensatedPositionCollectTinyE == 0.0f);
-    assert(g_nSensiblePressureDigits == 0 && !g_nSensiblePressure1stMarke);
+    assert(Printer::senseOffsetControl.limits().thresholdDigits == 0 && !Printer::senseOffsetControl.inLearningRange());
     assert(layers.fadeStartSteps() == defaultMin && layers.fadeEndSteps() == 12800);
     planMove(0, false, true, false); // An E-only move must not confirm the pre-home candidate.
     assert(!layers.currentLayerSteps() && !layers.previousLayerSteps());
@@ -709,7 +844,7 @@ void homeBetweenPrints() {
 
     // Re-enable SenseOffset before the first DMS poll of the new job.
     Printer::zMotion.setNominalSteps(newLayer);
-    g_nSensiblePressureDigits = senseThreshold;
+    Printer::senseOffsetControl.setThresholdDigits(senseThreshold);
     sample(printingForce, 9);
     assert(!Printer::zOffset.senseMicrometers());
     sample(printingForce);
@@ -976,14 +1111,14 @@ void initializeOffsets() {
     Printer::zMotion.setNominalSteps(256);
     Printer::zMotion.setMotorReference(256 + Printer::directCurrentSteps[Z_AXIS]);
     Printer::zOffset.setManualMicrometers(50, zStepsPerMm);
-    g_nSensiblePressureDigits = senseThreshold;
-    g_nSensiblePressureOffsetMax = initialClearance;
+    Printer::senseOffsetControl.setThresholdDigits(senseThreshold);
+    Printer::senseOffsetControl.setMaxMicrometers(initialClearance);
     sample(3 * senseThreshold, 10);
     assert(Printer::zOffset.senseMicrometers() == initialClearance);
-    g_nSensiblePressureDigits = 0;
+    Printer::senseOffsetControl.setThresholdDigits(0);
     sample(printingForce, 40);
-    g_nSensiblePressureOffsetMax = SENSIBLE_PRESSURE_MAX_OFFSET;
-    g_nSensiblePressureDigits = senseThreshold;
+    Printer::senseOffsetControl.setMaxMicrometers(SENSIBLE_PRESSURE_MAX_OFFSET);
+    Printer::senseOffsetControl.setThresholdDigits(senseThreshold);
 }
 
 int main(int argc, char** argv) {
@@ -1026,6 +1161,12 @@ int main(int argc, char** argv) {
         primeFlowCleanup(8, 0);
     else if (!std::strcmp(argv[1], "prime-abort"))
         primeFlowCleanup(0, 8);
+    else if (!std::strcmp(argv[1], "sense-window"))
+        senseOffsetWindow();
+    else if (!std::strcmp(argv[1], "sense-settings"))
+        senseOffsetSettings();
+    else if (!std::strcmp(argv[1], "sense-limit-interrupt"))
+        senseOffsetLimitInterrupt();
     else
         return 1;
     std::printf("Print lifecycle replay passed (%s)\n", argv[1]);

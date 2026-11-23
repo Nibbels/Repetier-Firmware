@@ -60,4 +60,4 @@ The host replay runs the production M3912 case with pressure braking and checks 
 
 ## Source
 
-[M3912](../../Repetier/RF.cpp#L5273) · [Digit Flow controller](../../Repetier/DigitCompensation.h) · [SenseOffset](sense-offset.md) · [first-layer planner](../../Repetier/motion.cpp) · [coordinate frames and ECMP](coordinate-frames-and-extrusion.md).
+[M3912](../../Repetier/RF.cpp#L5161) · [Digit Flow controller](../../Repetier/DigitCompensation.h) · [SenseOffset](sense-offset.md) · [first-layer planner](../../Repetier/motion.cpp) · [coordinate frames and ECMP](coordinate-frames-and-extrusion.md).

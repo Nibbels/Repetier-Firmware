@@ -458,9 +458,6 @@ extern short g_nEmergencyStopZAndEMax;
 extern bool g_nEmergencyESkip;
 
 // SenseOffset adds clearance when DMS force is high on the first layer.
-extern short g_nSensiblePressureDigits;
-extern short g_nSensiblePressureOffsetMax;
-extern char g_nSensiblePressure1stMarke; //sagt, ob regelung aktiv oder inaktiv, wegen Z-Limits
 
 
 #ifdef RGB_LIGHT_R_PIN
@@ -544,7 +541,6 @@ extern unsigned char readByte24C256(int addressI2C, unsigned int addressEEPROM);
 extern unsigned short readWord24C256(int addressI2C, unsigned int addressEEPROM);
 
 extern void recalculateZCompensation(void);
-extern void resetSenseOffsetForPrint();
 extern void loopFeatures(void);
 extern void outputObject(bool showerrors = true);
 

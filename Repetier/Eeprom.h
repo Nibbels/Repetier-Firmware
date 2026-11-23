@@ -107,8 +107,8 @@ have problems with other modules using the eeprom */
 #define EPR_RF_MOD_ZOS_SCAN_POINT_X 1904 //g_ZOSTestPoint[0] [1byte unsigned char]
 #define EPR_RF_MOD_ZOS_SCAN_POINT_Y 1905 //g_ZOSTestPoint[1] [1byte unsigned char]
 
-#define EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX 1906 //+1907 g_nSensiblePressureOffsetMax [2byte short]
-#define EPR_RF_MOD_SENSEOFFSET_DIGITS 1908     //+1909 g_nSensiblePressureDigits [2byte short]
+#define EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX 1906 // Maximum SenseOffset in micrometers [int16_t]
+#define EPR_RF_MOD_SENSEOFFSET_DIGITS 1908     // Saved SenseOffset threshold in DMS digits [int16_t]
 
 #define EPR_RF_EMERGENCYPAUSEDIGITSMIN 1910 //+1911+1912+1913 g_nEmergencyPauseDigitsMin [4byte long]
 #define EPR_RF_EMERGENCYPAUSEDIGITSMAX 1914 //+1915+1916+1917 g_nEmergencyPauseDigitsMax [4byte long]

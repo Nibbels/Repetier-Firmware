@@ -20,6 +20,8 @@ This is shared AVR/ATmega2560 Repetier firmware for **RF1000, RF2000 and RF2000v
 
 **Digit compensation.** `Printer::digitCompensation` owns the DMS filter, the Digit-Z switch, the Digit Flow profile and its live factors. Keep sampling and regulation in the foreground. Timer1 reads the atomically published `intervalScale()` for queued XY moves. M220 and M221 still control the user speed and flow overrides. Run `python3 tests/pause-sense-offset.py` for the DMS sample and M3912 replays. [DMS controls](docs/development-roadmap.md#job-boundaries-and-dms)
 
+**SenseOffset.** `Printer::senseOffsetControl` owns the active limits, AutoStart and the pressure learning window. `ZOffset` owns the applied clearance. The foreground proposes an increment from one snapshot of the limits and checks that snapshot and the print phase when applying it. The step queue can activate stored limits during the calculation. [SenseOffset settings and replay](docs/first-layer-control/sense-offset.md)
+
 **Pause and stop.** `Printer::pause` owns the pause phase and return position. The queue, the panel and the DMS handler use its request and query methods. `Printer::printStop` owns timed abort cleanup and command admission during a stop. Run `python3 tests/pause-sense-offset.py` when changing these transitions. [Pause and stop transitions](docs/development-roadmap.md#pause-and-stop-transitions)
 
 **Print input.** USB over UART0 is the sole external G-code input. All three models buffer 24 planned moves. The SD removal record links to the commit containing the full deletion and to the last revision with the card implementation. [SD support removal](docs/maintenance-tasks.md#sd-support-removal)

@@ -132,6 +132,7 @@
     <ClInclude Include="DigitCompensation.h" />
     <ClInclude Include="PrintLayers.h" />
     <ClInclude Include="ZOffset.h" />
+    <ClInclude Include="SenseOffsetControl.h" />
     <ClInclude Include="Repetier.h" />
     <ClInclude Include="RF.h" />
     <ClInclude Include="RF1000.h" />
