@@ -1893,6 +1893,74 @@ void tickAdvanceInterrupt() {
     compare = Printer::extrusionOutput.nextTimerCompare(compare);
 }
 
+void manualExtrusionDuringPause(bool advance) {
+    auto& output = Printer::extrusionOutput;
+    output.setAdvanceEnabled(advance);
+    output.setStepInterval(15);
+    if (advance)
+        duringPeriodicActions = tickAdvanceInterrupt;
+
+    Printer::setEPositionMM(42.5f, 0.000125f);
+    Printer::extrusionPlanner.restoreStepRemainder(0.25f);
+    Printer::extrusionCompensation.restoreRemainder(0.375f);
+    auto untouchedPlanner = Printer::extrusionPlanner;
+    const auto motor = [&] {
+        return advance ? long(Extruder::current->deliveredSteps) : Printer::directCurrentSteps[E_AXIS];
+    };
+
+    Printer::pause.request(PrintPause::Destination::InPlace);
+    Printer::pause.serviceMotion();
+    assert(Printer::pause.isSettled() && motor() == -parkE);
+
+    // Play can arrive once Timer1 releases the slot but the foreground is
+    // still completing the manual move.
+    g_nManualSteps[E_AXIS] = 2 * parkE;
+    duringMove = [](long, long, long, long e) {
+        if (e == g_nManualSteps[E_AXIS])
+            assert(!Printer::pause.resume());
+    };
+    extrudeFromPanel();
+    duringMove = nullptr;
+    g_nManualSteps[E_AXIS] = parkE / 4;
+    extrudeFromPanel(UI_ACTION_RF_EXTRUDER_RETRACT);
+    assert(motor() == 3 * parkE / 4 && output.pendingSteps() == 0);
+
+    const long preparedFilament = motor();
+    assert(Printer::pause.resume() && Printer::pause.allowsQueueAdvance());
+    assert(motor() == preparedFilament);
+    assert(Printer::moveTarget.machineMM(E_AXIS) == 42.5f);
+    assert(Printer::moveTarget.remainderMM(E_AXIS) == 0.000125f);
+    assert(Printer::extrusionPlanner.stepRemainder() == 0.25f);
+    assert(Printer::extrusionCompensation.remainder() == 0.375f);
+
+    // A completely blocked attempt leaves the automatic retract to recover.
+    Printer::pause.request(PrintPause::Destination::InPlace);
+    Printer::pause.serviceMotion();
+    assert(motor() == preparedFilament - parkE);
+    if (advance) {
+        duringMove = [](long, long, long, long e) {
+            if (e == g_nManualSteps[E_AXIS]) {
+                // Timer1 admitted the jog. DMS trips before COMPA emits it.
+                sample(EMERGENCY_STOP_DIGITS_MAX + 1, 2 * EMERGENCY_STOP_CHECKS);
+            }
+        };
+    } else {
+        sample(EMERGENCY_STOP_DIGITS_MAX + 1, 2 * EMERGENCY_STOP_CHECKS);
+    }
+    extrudeFromPanel();
+    duringMove = nullptr;
+    assert(output.blocked() && !output.pendingSteps() && motor() == preparedFilament - parkE);
+    sample(0, 2 * EMERGENCY_STOP_CHECKS);
+    assert(Printer::pause.resume() && Printer::pause.allowsQueueAdvance());
+    assert(motor() == preparedFilament);
+
+    GCode next;
+    next.E = 43.0f;
+    assert(Printer::queueGCodeCoordinates(&next));
+    const float flow = Printer::menuExtrusionFactor * Printer::digitCompensation.extrusionFactor();
+    assert(planExtrusionMove() == untouchedPlanner.planSteps({next.E, 0}, flow, Printer::axisStepsPerMM[E_AXIS]));
+}
+
 void finishAdvanceBeforeAndAfterOutput() {
     auto& output = Printer::extrusionOutput;
     output.setAdvanceEnabled(true);
@@ -2290,6 +2358,10 @@ int main(int argc, char** argv) {
 
     if (!std::strcmp(argv[1], "park"))
         parkAndResume();
+    else if (!std::strcmp(argv[1], "pause-manual-e"))
+        manualExtrusionDuringPause(false);
+    else if (!std::strcmp(argv[1], "pause-manual-e-advance"))
+        manualExtrusionDuringPause(true);
     else if (!std::strcmp(argv[1], "short-pause"))
         pauseBetweenPolls();
     else if (!std::strcmp(argv[1], "interrupt"))

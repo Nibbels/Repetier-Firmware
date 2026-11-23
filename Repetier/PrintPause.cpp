@@ -180,16 +180,25 @@ int32_t PrintPause::limitZJog(int32_t steps) const {
 }
 
 void PrintPause::extrudeManually(int32_t steps) {
-    if (!allowsManualMove())
+    if (!steps || !allowsManualMove())
         return;
 
-    const bool editingPause = isSettled();
-    Printer::offsetRelativeStepsCoordinates(0, 0, 0, steps);
+    if (!isSettled()) {
+        Printer::offsetRelativeStepsCoordinates(0, 0, 0, steps);
+        return;
+    }
 
-    // Keep the manual filament adjustment when returning to print.
-    InterruptProtectedBlock noInts;
-    if (editingPause && isSettled())
+    const Phase settledPhase = phase_;
+    const int32_t returnBeforeJog = extruderReturnSteps_;
+    phase_ = Phase::ManualExtrusion;
+    if (!moveWhile(Phase::ManualExtrusion, 0, 0, 0, steps))
+        return;
+
+    // The signed change is the motion delivered by the motor. Honor the new
+    // filament position after a jog and keep the retract if all steps were blocked.
+    if (extruderReturnSteps_ != returnBeforeJog)
         extruderReturnSteps_ = 0;
+    phase_ = settledPhase;
 }
 
 void PrintPause::restoreDefaultParking() {

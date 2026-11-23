@@ -85,6 +85,7 @@ On the RF2000 build, an instruction trace of an idle tick with 400 steps of pend
 | First panel Pause | Freeze the queue, save the direct XYZ position, and retract E. The second Pause lifts Z and parks XY. |
 | Queued M3070 or DMS pause | Accept the request in place or with a park according to its source. A queued pause command returns when a pause freezes the queue. |
 | Automatic or requested standby | Reduce the hotend target and motor current while keeping the saved return position. The third panel Pause requests immediate standby after parking. |
+| Manual E during pause | The extruder buttons and their `M3029 P516` / `P517` equivalents move the motor directly. The print's logical E and fractional step carry survive. Once the manual steps finish, Play keeps the prepared filament position. A fully inhibited jog leaves the automatic pause retract to recover. |
 | Play | Restore heat first if needed. After a reheat the next Play starts the return. Complete XY before Z, then recover E. A clipped return leaves the print paused for another attempt. |
 | Stop | Cancel the pause and end any active pause jog. The stop sequence drains input and waits for motion to finish, turns off the heaters and releases the command block after the output delay. |
 

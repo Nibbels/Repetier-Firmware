@@ -31,12 +31,12 @@ public:
 
     // Track accepted direct E steps, then remove any canceled before output.
     void recordDirectExtrusion(int8_t direction) {
-        if (isPaused())
+        if (tracksDirectExtrusion())
             extruderReturnSteps_ -= direction;
     }
 
     void discardPendingExtrusion(int16_t steps) {
-        if (steps && (phase_ == Phase::Retracting || phase_ == Phase::Returning))
+        if (steps && tracksDirectExtrusion())
             extruderReturnSteps_ += steps;
     }
 
@@ -59,15 +59,21 @@ private:
         RetractRequested,
         RetractAndParkRequested,
         SettlingExtrusion,
-        Retracting,
         ParkRequested,
         Parking,
         Paused,
         Standby,
         Reheating,
         ReturnRequested,
-        Returning
+        Retracting,
+        Returning,
+        ManualExtrusion
     };
+
+    bool tracksDirectExtrusion() const {
+        const Phase phase = phase_;
+        return phase == Phase::Retracting || phase == Phase::Returning || phase == Phase::ManualExtrusion;
+    }
 
     void waitUntilSettled();
     bool acceptsPauseRequest() const;

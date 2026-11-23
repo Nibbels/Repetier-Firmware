@@ -66,7 +66,7 @@ def main():
         section(ui, "void UIDisplay::pressPlay()", "\nvoid UIDisplay::mainSwitchCase("),
         section(ui, "void UIDisplay::fastAction()", "} // fastAction") + "}",
         section(ui, "namespace {\nconstexpr double modMenuSenseLimit", "\nvoid UIDisplay::zOffsetPlusAction()"),
-        "void extrudeFromPanel() { const int action = UI_ACTION_RF_EXTRUDER_OUTPUT; switch (action) {\n"
+        "void extrudeFromPanel(int action = UI_ACTION_RF_EXTRUDER_OUTPUT) { switch (action) {\n"
         + section(ui, "case UI_ACTION_RF_EXTRUDER_OUTPUT:", "case UI_ACTION_RF_PAUSE:")
         + "} }",
         "void trackPlannedLayer(PrintLine* p) {\n"
@@ -142,7 +142,8 @@ def main():
         ]
         subprocess.run([*compile_replay, "-o", str(executable)], check=True)
         for scenario in (
-            "park", "short-pause", "interrupt", "panel", "return", "jog", "cancel", "queue", "home", "layer-fade",
+            "park", "pause-manual-e", "pause-manual-e-advance", "short-pause", "interrupt", "panel", "return",
+            "jog", "cancel", "queue", "home", "layer-fade",
             "layer-scale", "compensation-bounds",
             "digit-flow", "prime-complete", "prime-skip", "prime-abort", "prime-parameters",
             "sense-window", "sense-settings", "sense-limit-interrupt",
