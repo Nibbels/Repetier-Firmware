@@ -20,13 +20,13 @@ public:
         result_ = settings_.readings ? Result::Pending : Result::ReadError;
     }
 
-    bool sampleDue(uint32_t now) const {
-        return result_ == Result::Pending && static_cast<int32_t>(now - nextAt_) >= 0;
+    bool acceptsSample(uint32_t startedAtMs) const {
+        return result_ == Result::Pending && static_cast<int32_t>(startedAtMs - nextAt_) >= 0;
     }
 
-    void record(uint32_t now, int16_t digits) {
-        if (!sampleDue(now))
-            return;
+    bool record(uint32_t startedAtMs, uint32_t readAtMs, int16_t digits) {
+        if (!acceptsSample(startedAtMs))
+            return false;
 
         sum_ += digits;
         if (digits < minimum_)
@@ -34,8 +34,8 @@ public:
         if (digits > maximum_)
             maximum_ = digits;
         if (++count_ < settings_.readings) {
-            nextAt_ = now + settings_.spacingMs;
-            return;
+            nextAt_ = startedAtMs + minimumSpacing();
+            return true;
         }
 
         if (static_cast<int32_t>(maximum_) - minimum_ < settings_.tolerance) {
@@ -43,8 +43,9 @@ public:
         } else if (++attempts_ >= 5) {
             result_ = Result::Unstable;
         } else {
-            startBatch(now, 100);
+            startBatch(readAtMs, 100);
         }
+        return true;
     }
 
     void readFailed() { result_ = Result::ReadError; }
@@ -56,12 +57,15 @@ public:
     int16_t average() const { return sum_ / count_; }
 
 private:
+    uint16_t minimumSpacing() const { return settings_.spacingMs ? settings_.spacingMs : 1; }
+
     void startBatch(uint32_t now, uint16_t settleMs) {
         sum_ = 0;
         count_ = 0;
         minimum_ = INT16_MAX;
         maximum_ = INT16_MIN;
-        nextAt_ = now + settleMs + settings_.spacingMs;
+        // Require the start of a different conversion after settling.
+        nextAt_ = now + settleMs + minimumSpacing();
     }
 
     Settings settings_{};

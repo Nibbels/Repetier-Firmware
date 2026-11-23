@@ -7,6 +7,7 @@
 #include <utility>
 #include <vector>
 #include "PressureMeasurement.h"
+#include "scan-strain-gauge.h"
 
 namespace {
 using millis_t = uint32_t;
@@ -51,8 +52,10 @@ uint32_t g_nAutoReturnTime = 0;
 
 unsigned homedZ = 0, homedXY = 0, reported = 0, positiveRetryRetreats = 0, loaded = 0, shutdowns = 0, serviced = 0;
 unsigned corrected = 0, pressureSamples = 0, tickCount = 0, negativeMoves = 0;
-bool injectNoise = false, injectDisconnection = false, injectOverload = false, disconnected = false;
+bool injectNoise = false, injectDisconnection = false, injectOverload = false;
 uint32_t lastUnstableAt = 0;
+uint32_t lastMoveAt = 0, acceptedAt = 0;
+bool moved = false, returningToZero = false;
 char abortedWith = 0;
 bool matrixAvailable = true;
 void (*onHome)() = nullptr;
@@ -64,6 +67,7 @@ uint32_t timeInMilliseconds() { return now; }
 }
 
 namespace Printer {
+ScanStrainGauge strainGauge;
 struct { void cancel() {} void schedule(uint32_t) {} } idleStatus;
 struct { void recordActivity(uint32_t) {} } inactivity;
 struct {
@@ -83,6 +87,7 @@ void homeAxis(bool x, bool y, bool z) {
         zMotion.position = 0;
     } else {
         ++homedXY;
+        returningToZero = true;
     }
 }
 bool queueRelativeMMCoordinates(float x, float y, float z, float e, float, bool wait, bool endstop) {
@@ -141,32 +146,33 @@ long random(long min, long max) {
     return 0;
 }
 bool moveZ(long steps) {
-    if (steps < 0) {
-        assert(!disconnected && (!injectOverload || !negativeMoves));
+    if (steps < 0 && !returningToZero) {
+        assert(!Printer::strainGauge.disconnected && (!injectOverload || !negativeMoves));
+        assert(!moved || static_cast<int32_t>(acceptedAt - lastMoveAt) > 0);
         ++negativeMoves;
         if (injectDisconnection)
-            disconnected = true;
-    } else if (injectNoise && steps == g_nScanHeatBedDownFastSteps) {
+            Printer::strainGauge.disconnected = true;
+    } else if (!returningToZero && injectNoise && steps == g_nScanHeatBedDownFastSteps) {
         assert(HAL::now - lastUnstableAt >= heatBedScanDelayMs);
         ++positiveRetryRetreats;
     }
+    returningToZero = false;
+    lastMoveAt = HAL::now;
+    moved = true;
     Printer::zMotion.position += steps;
     return true;
 }
-bool sampleStrainGauge(int16_t& digits) {
-    if (disconnected)
-        return false;
-    if (injectOverload && negativeMoves) {
-        digits = -10000;
-        return true;
-    }
-    if (++pressureSamples <= 10 && injectNoise) {
-        digits = pressureSamples % 2 ? 500 : 700;
+void observeStrainGauge(int16_t) {
+    acceptedAt = Printer::strainGauge.latestStart();
+    if (++pressureSamples <= 10 && injectNoise)
         lastUnstableAt = HAL::now;
-    } else {
-        digits = Printer::zMotion.scanSteps() <= -124 ? 600 : 500;
-    }
-    return true;
+}
+int16_t probeDigits() {
+    if (injectOverload && negativeMoves)
+        return -10000;
+    if (injectNoise && pressureSamples < 10)
+        return Printer::strainGauge.conversionsStarted() % 2 ? 700 : 500;
+    return Printer::zMotion.scanSteps() <= -124 ? 600 : 500;
 }
 long getZMatrixDepth_CurrentXY() {
     return g_ZCompensationMatrix[g_ZOSTestPoint[X_AXIS]][g_ZOSTestPoint[Y_AXIS]];
@@ -202,7 +208,8 @@ int main(int argc, char** argv) {
     HAL::now = retry ? UINT32_MAX - 900 : 0;
     zOffsetScan.startOrCancel(level);
     while (zOffsetScan.active()) {
-        assert(++tickCount <= 7000);
+        assert(++tickCount <= 15000);
+        Printer::strainGauge.service(HAL::now, probeDigits());
         if (!g_abortZScan)
             scanPressure.service(HAL::now);
         zOffsetScan.tick();

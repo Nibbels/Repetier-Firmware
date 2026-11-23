@@ -41,8 +41,8 @@ def main():
         + section(ui_header, "#define UI_FLAG_KEY_TEST_RUNNING", "\n"),
         section(motion, "    static bool hasStoppableDirectMove()", "\n\n")
         .replace("    static bool hasStoppableDirectMove()", "bool PrintLine::hasStoppableDirectMove()", 1),
-        dms.removeprefix('#include "Repetier.h"\n#include "TwiTransfer.h"\n'),
-        section(rf, "static bool sampleStrainGauge(", "\nvoid adjustPressureLimits("),
+        dms[dms.index("int16_t StrainGauge::correctedDigits("):],
+        section(rf, "static void observeStrainGauge(", "\nvoid adjustPressureLimits("),
         "#define SCAN_ABORT_REASON_DMS_OVERLOAD 18",
         "char g_abortZScan = 0;",
         'static void servicePressureMeasurement(PressureMeasurement&, millis_t, bool scanning = false);',

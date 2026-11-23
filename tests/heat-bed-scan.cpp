@@ -5,6 +5,7 @@
 #include <cstring>
 #include <vector>
 #include "PressureMeasurement.h"
+#include "scan-strain-gauge.h"
 
 namespace {
 using millis_t = uint32_t;
@@ -48,10 +49,12 @@ uint16_t g_nScanPressureReadDelay = 15, g_nScanPressureTolerance = 15;
 long g_nScanXStartSteps = 100, g_nScanYStartSteps = 100, g_nScanXStepSizeSteps = 100, g_nScanYStepSizeSteps = 100;
 long g_nScanXMaxPositionSteps = 300, g_nScanYMaxPositionSteps = 300;
 
-bool injectNoise = false, injectDisconnection = false, injectOverload = false, disconnected = false, matrixPrepared = false, matrixSaved = false;
+bool injectNoise = false, injectDisconnection = false, injectOverload = false, matrixPrepared = false, matrixSaved = false;
 unsigned keepAlives = 0, homedXY = 0, homedZ = 0, pressureReads = 0, negativeMoves = 0,
          disabled = 0, loaded = 0, thermalOffsets = 0, completed = 0, warmupMessages = 0;
 char aborted = 0;
+uint32_t lastMoveAt = 0, acceptedAt = 0;
+bool moved = false;
 int bedTarget = 0;
 std::vector<int> nozzleTargets;
 
@@ -61,6 +64,7 @@ millis_t timeInMilliseconds() { return now; }
 }
 
 namespace Printer {
+ScanStrainGauge strainGauge;
 float axisStepsPerMM[3] = {100, 100, 100}, homingFeedrate[3] = {60, 60, 5};
 struct { bool isBusy() const { return false; } } printJob;
 struct { void recordActivity(millis_t) {} } inactivity;
@@ -142,13 +146,16 @@ int testHeatBedTemperature() { return 0; }
 int testExtruderTemperature() { return 0; }
 bool moveZ(long distance) {
     if (distance < 0) {
-        assert(!disconnected && (!injectOverload || !negativeMoves));
+        assert(!Printer::strainGauge.disconnected && (!injectOverload || !negativeMoves));
+        assert(!moved || static_cast<int32_t>(acceptedAt - lastMoveAt) > 0);
         ++negativeMoves;
         if (injectDisconnection)
-            disconnected = true;
-    } else if (disconnected || (injectOverload && negativeMoves)) {
+            Printer::strainGauge.disconnected = true;
+    } else if (Printer::strainGauge.disconnected || (injectOverload && negativeMoves)) {
         assert(bedTarget == 0 && !nozzleTargets.empty() && nozzleTargets.back() == 0);
     }
+    lastMoveAt = HAL::now;
+    moved = true;
     Printer::zMotion.position += distance;
     return true;
 }
@@ -158,20 +165,16 @@ void adjustPressureLimits(short baseline) {
     g_nMinPressureRetry = baseline - 5;
     g_nMaxPressureRetry = baseline + 5;
 }
-bool sampleStrainGauge(int16_t& digits) {
+void observeStrainGauge(int16_t) {
     ++pressureReads;
-    if (disconnected)
-        return false;
-    if (injectOverload && negativeMoves) {
-        digits = 10000;
-        return true;
-    }
-    if (injectNoise && pressureReads > 6 && pressureReads <= 21) {
-        digits = pressureReads % 2 ? 500 : 700;
-        return true;
-    }
-    digits = Printer::zMotion.scanSteps() <= -124 ? 600 : 500;
-    return true;
+    acceptedAt = Printer::strainGauge.latestStart();
+}
+int16_t probeDigits() {
+    if (injectOverload && negativeMoves)
+        return 10000;
+    if (injectNoise && pressureReads >= 6 && pressureReads < 21)
+        return pressureReads % 2 ? 700 : 500;
+    return Printer::zMotion.scanSteps() <= -124 ? 600 : 500;
 }
 void addLong(char* text, long value, int) {
     ++warmupMessages;
@@ -198,6 +201,7 @@ int main(int argc, char** argv) {
     unsigned ticks = 0;
     while (heatBedScan.active()) {
         assert(++ticks <= 5000);
+        Printer::strainGauge.service(HAL::now, probeDigits());
         if (!g_abortZScan)
             scanPressure.service(HAL::now);
         heatBedScan.tick();

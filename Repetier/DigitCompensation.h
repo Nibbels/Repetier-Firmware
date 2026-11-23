@@ -25,7 +25,6 @@ public:
     bool digitZEnabled() const { return digitZEnabled_; }
     void setDigitZEnabled(bool enabled) { digitZEnabled_ = enabled; }
 
-    int16_t latestDigits() const { return latestDigits_; }
     int16_t filteredDigits() const { return filteredDigits_; }
     float extrusionFactor() const { return extrusionFactor_; }
     float feedrateFactor() const { return feedrateFactor_; }
@@ -49,7 +48,6 @@ public:
         // Queued M3000/M3001 can change the flag in the step interrupt.
         publishIntervalScale(feedrateFactor_ == 1.0f || !bedCompensation
             ? 0 : uint16_t(1024.0f / feedrateFactor_));
-        latestDigits_ = digits;
     }
 
 private:
@@ -104,7 +102,6 @@ private:
 
     FlowProfile profile_;
     int32_t forceSum_ = 0;
-    int16_t latestDigits_ = 0;
     int16_t filteredDigits_ = 0;
     uint8_t sampleCount_ = 0;
     bool digitZEnabled_ = true;

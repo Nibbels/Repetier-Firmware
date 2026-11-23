@@ -1486,7 +1486,7 @@ void UIDisplay::parse(char* txt, bool ram) {
 
             if (c2 == '1') // %s1 : current value of the strain gauge
             {
-                addInt(Printer::digitCompensation.latestDigits(), 5);
+                addInt(Printer::strainGauge.lastKnownDigits(), 5);
             }
 
             if (c2 == 'k') // %sk : Positioning coordinate system for XY (move by gode or directoffset)

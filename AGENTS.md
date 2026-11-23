@@ -38,7 +38,7 @@ This is shared AVR/ATmega2560 Repetier firmware for **RF1000, RF2000 and RF2000v
 
 **Digit compensation.** `Printer::digitCompensation` owns the DMS filter, the Digit-Z switch, the Digit Flow profile and its live factors. Keep sampling and regulation in the foreground. Timer1 reads the atomically published `intervalScale()` for queued XY moves. M220 and M221 still control the user speed and flow overrides. Run `python3 tests/pause-sense-offset.py` for the DMS sample and M3912 replays. [DMS controls](docs/development-roadmap.md#job-boundaries-and-dms)
 
-**Strain gauge.** `Printer::strainGauge` owns ADC access and the Digit Homing reference. Keep the I²C driver independent of motion. `sampleStrainGauge()` supplies the corrected sample to the filter and to its caller. [Driver](Repetier/StrainGauge.cpp)
+**Strain gauge.** `Printer::strainGauge` owns single-shot ADS1100 acquisition, the last eight raw samples and the Digit Homing reference. The foreground advances hardware TWI without waiting. Consumers copy the latest sample, and probe increments require a conversion started after Z settled. [DMS acquisition and scan timing](docs/z-offset/scans-and-persistence.md#shared-dms-acquisition) · [ADC and bus replay](tests/twi-transfer.py)
 
 **SenseOffset.** `Printer::senseOffsetControl` owns the active limits, AutoStart and the pressure learning window. `ZOffset` owns the applied clearance. The foreground proposes an increment from one snapshot of the limits and checks that snapshot and the print phase when applying it. The step queue can activate stored limits during the calculation. [SenseOffset settings and replay](docs/first-layer-control/sense-offset.md)
 

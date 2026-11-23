@@ -73,7 +73,7 @@ constexpr int heatBedScanSlowStepDelayMs = 100;
 constexpr int heatBedScanIdleDelayMs = 250;
 constexpr int heatBedScanDelayMs = 1000;
 constexpr int heatBedScanRetries = 5;
-constexpr int heatBedScanPressureReads = 15;
+constexpr int heatBedScanPressureReads = 3;
 constexpr int heatBedScanPressureTolerance = 15;
 constexpr int heatBedScanPressureReadDelayMs = 15;
 
@@ -187,19 +187,23 @@ unsigned char g_uRGBTargetB = 0;
 static void setupForPrinting();
 
 void initRF(void) {
-    Printer::strainGauge.begin();
+    Printer::strainGauge.begin(HAL::timeInMilliseconds());
 
     Printer::disableCMPnow(true);
     setupForPrinting();
 } // initRF
 
-static bool sampleStrainGauge(int16_t& digits) {
-    if (!Printer::strainGauge.readDigits(digits))
-        return false;
+static void observeStrainGauge(int16_t digits) {
     Printer::digitCompensation.observe(digits, Printer::doHeatBedZCompensation, [] {
         // The force brake also runs during M3912, regardless of the learned first-layer boundary.
         return Printer::zMotion.nominalSteps() > Printer::layers.fadeStartSteps() || Printer::startLine.active();
     });
+}
+
+static bool sampleStrainGauge(int16_t& digits) {
+    if (!Printer::strainGauge.readDigits(HAL::timeInMilliseconds(), digits))
+        return false;
+    observeStrainGauge(digits);
     return true;
 }
 
@@ -228,23 +232,11 @@ bool scanRequiresRetreatOnly() {
 class ScanPressure {
 public:
     PressureResult average(short& digits, uint16_t settleMs = 0) {
-        const millis_t now = HAL::timeInMilliseconds();
-        if (measurement_.result() == PressureResult::Idle)
-            measurement_.begin(pressureMeasurementSettings(), now, settleMs);
+        return measure(digits, settleMs, pressureMeasurementSettings());
+    }
 
-        const auto result = measurement_.result();
-        if (result == PressureResult::Pending)
-            return result;
-
-        if (result == PressureResult::Stable) {
-            digits = measurement_.average();
-        } else {
-            reportPressureReadFailure(measurement_);
-            if (result == PressureResult::ReadError && !g_abortZScan)
-                g_abortZScan = SCAN_ABORT_REASON_DMS_UNAVAILABLE;
-        }
-        measurement_.reset();
-        return result;
+    PressureResult afterStep(short& digits, uint16_t settleMs) {
+        return measure(digits, settleMs, {1, 0, 1});
     }
 
     PressureResult idle(short& digits) {
@@ -270,7 +262,7 @@ public:
     }
 
     bool service(millis_t now) {
-        if (!measurement_.sampleDue(now))
+        if (measurement_.result() != PressureResult::Pending)
             return false;
         servicePressureMeasurement(measurement_, now, true);
         return measurement_.result() != PressureResult::Pending;
@@ -283,6 +275,25 @@ public:
     }
 
 private:
+    PressureResult measure(short& digits, uint16_t settleMs, PressureMeasurement::Settings settings) {
+        if (measurement_.result() == PressureResult::Idle)
+            measurement_.begin(settings, HAL::timeInMilliseconds(), settleMs);
+
+        const auto result = measurement_.result();
+        if (result == PressureResult::Pending)
+            return result;
+
+        if (result == PressureResult::Stable) {
+            digits = measurement_.average();
+        } else {
+            reportPressureReadFailure(measurement_);
+            if (result == PressureResult::ReadError && !g_abortZScan)
+                g_abortZScan = SCAN_ABORT_REASON_DMS_UNAVAILABLE;
+        }
+        measurement_.reset();
+        return result;
+    }
+
     PressureMeasurement measurement_;
     uint8_t idleComparisons_ = 0;
     short previousIdle_ = 0;
@@ -368,7 +379,7 @@ ProbeProgress ScanProbe::approach(bool fine) {
     }
 
     short digits;
-    const auto result = scanPressure.average(digits, fine ? g_nScanSlowStepDelay : g_nScanFastStepDelay);
+    const auto result = scanPressure.afterStep(digits, fine ? g_nScanSlowStepDelay : g_nScanFastStepDelay);
     if (result == PressureResult::Pending)
         return ProbeProgress::Pending;
     if (result != PressureResult::Stable) {
@@ -393,7 +404,7 @@ ProbeProgress ScanProbe::release(uint8_t divisor) {
     }
 
     short digits;
-    const auto result = scanPressure.average(digits, g_nScanSlowStepDelay);
+    const auto result = scanPressure.afterStep(digits, g_nScanSlowStepDelay);
     if (result == PressureResult::Pending)
         return ProbeProgress::Pending;
     if (result != PressureResult::Stable) {
@@ -2285,19 +2296,23 @@ static PressureMeasurement::Settings pressureMeasurementSettings() {
 }
 
 static void servicePressureMeasurement(PressureMeasurement& measurement, millis_t now, bool scanning) {
-    if (!measurement.sampleDue(now))
+    const auto& gauge = Printer::strainGauge;
+    StrainGauge::Sample sample;
+    const auto availability = gauge.latest(now, sample);
+    if (availability == StrainGauge::Availability::Waiting)
         return;
-    int16_t digits;
-    if (!sampleStrainGauge(digits)) {
+    if (availability == StrainGauge::Availability::Fault) {
         measurement.readFailed();
         return;
     }
+    const int16_t digits = gauge.correctedDigits(sample);
     if (scanning && abs(static_cast<int32_t>(digits)) >= scanOverloadDigits) {
         g_abortZScan = SCAN_ABORT_REASON_DMS_OVERLOAD;
         measurement.readFailed();
         return;
     }
-    measurement.record(HAL::timeInMilliseconds(), digits);
+    if (measurement.record(sample.startedAtMs, sample.readAtMs, digits))
+        observeStrainGauge(digits);
 }
 
 static void reportPressureReadFailure(const PressureMeasurement& measurement) {

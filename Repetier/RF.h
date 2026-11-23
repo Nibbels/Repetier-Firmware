@@ -185,17 +185,15 @@
   - Examples:
   - M3052 S5 ; during the heat-bed scan, the idle pressure must not drift more than 5 [digits]
 
-- M3053 [S] - configure the number of A/D converter reads per pressure measurement
-  - Examples:
-  - M3053 S15 ; during the heat-bed scan, each presure value shall be build up as average of 15 measurements
+- M3053 [S] - set the number of fresh DMS conversions in a stability measurement
+  - M3053 S3 ; average three conversions for the idle reference and stability checks
 
-- M3054 [S] - configure the delay between two A/D converter reads ( units are [ms] )
-  - Examples:
-  - M3054 S15 ; during the heat-bed scan, it shall be waited 15 [ms] between every two measurements of the pressure
+- M3054 [S] - set the minimum spacing in ms between the starts of conversions in a stability measurement
+  - M3054 S15 ; allow successive conversions at the normal DMS rate
 
 - M3055 [S] - configure the pressure tolerance per pressure measurement ( units are [digits] )
   - Examples:
-  - M3055 S15 ; during the heat-bed scan, the difference between the minimal measured pressure and the maximal measured pressure at one measurement point must not exceed 15 [digits]
+  - M3055 S15 ; require a spread below 15 digits in a stability measurement
 
 - M3060 - output the device type and firmware version
   - Examples:

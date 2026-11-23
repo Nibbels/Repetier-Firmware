@@ -118,6 +118,8 @@ The firmware restricted Play to a completed pause in 1.37t2. The 1.43.56 pause r
 
 ### Strain gauge and Digit-Z
 
+- [x] **Acquire fresh DMS samples independently of motion.** The foreground hardware TWI driver fetches single-shot results from the ADS1100. An eight-entry ring retains raw values and timestamps. Scans reject pre-step conversions. The replays cover a busy ADC, a stale or lost feed, ring wrap, rate changes and scan retreat. All four AVR builds use 68 fewer SRAM bytes than `2f761f0`. The 54 Advance and 48 Timer1 instruction traces match the previous pulse widths and cycle counts. [Acquisition and remaining hardware measurements](z-offset/scans-and-persistence.md#shared-dms-acquisition) · [ADC replay](../tests/twi-transfer.py)
+
 - [x] **Extract sensor access and Digit Homing.** The driver configures and reads the ADC and owns the zero offset. The replay checks the signed I²C reading, fresh zero measurement, enable and disable, the raw-reading limits and rejection at 5000 digits. [Sensor driver](../Repetier/StrainGauge.cpp) · [Host replay](../tests/pause-sense-offset.py)
 
 - [x] **Give the DMS filter and Digit Flow one owner.** The host replay checks the sampling schedule, filter output, first-layer gating, live Z target and both flow factors. It runs M3912 through completion, skip and cancellation. The four AVR builds retain the same instruction sequence for applying the interval scale and mask both byte writes when publishing it. The 36 stepper traces match the previous cycles and Z step counts. Global SRAM drops by 3 bytes per build. Physical verification remains open. [Digit compensation](../Repetier/DigitCompensation.h) · [Host replay](../tests/pause-sense-offset.py)

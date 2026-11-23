@@ -2,7 +2,7 @@
 
 ## One point probe for both scan jobs
 
-`ScanProbe` returns a measured machine Z position. The shared sequence establishes a stable idle reference, approaches in coarse increments until it sees contact, backs off into the idle-force band, then measures and releases contact with the configured fine increments. The result is the position after fine release. The DMS service collects the configured samples one at a time. The probe advances from stable results and keeps the travel limit, retry budget and cancel state active.
+`ScanProbe` returns a measured machine Z position. The shared sequence establishes a stable idle reference, approaches in coarse increments until it sees contact, backs off into the idle-force band, then measures and releases contact with the configured fine increments. The result is the position after fine release. Before each approach or release decision, the probe waits for one conversion that started after the settling delay. The scan keeps the travel limit, retry budget and cancel state active.
 
 | Caller | Use of the measured point |
 | --- | --- |
@@ -13,11 +13,23 @@ The current contact deltas are 10 digits by default for the mesh and 33 for Z-of
 
 Repeatability depends on nozzle cleanliness, surface compliance, filament, cable load and thermal state. Compare repeated measurements at the same XY across both callers on the intended bed and hotend. [Probe implementation](../../Repetier/RF.cpp) · [Mesh replay](../../tests/heat-bed-scan.py) · [Point scan replay](../../tests/z-offset-scan.py)
 
+## Shared DMS acquisition
+
+`Printer::strainGauge` starts individual 16-bit ADS1100 conversions on its foreground schedule. It waits for the busy indication to clear and fetches the result in a separate I²C frame. This covers a conversion completing between the result bytes and the status byte. The maximum start rate defaults to 8 Hz. Firmware code can lower it to 1–7 Hz through `setSampleRateHz()`. TI specifies 6.5 to 11.5 conversions/s at this resolution, with 8 typical. Conversion time and foreground scheduling determine the delivered rate. [ADC settings and timing](https://www.ti.com/lit/ds/symlink/ads1100.pdf) · [Acquisition code](../../Repetier/StrainGauge.cpp)
+
+The AVR TWI peripheral clocks the I²C bytes at 100 kHz. The foreground handles each byte completion as it services the printer and resumes the transfer. It returns while events are pending and leaves the TWI interrupt disabled. The external matrix EEPROM shares the bus and still waits for its own reads and writes. [Bus driver](../../Repetier/TwiTransfer.cpp) · [Foreground schedule](../../Repetier/Commands.cpp) · [Bus and ADC replay](../../tests/twi-transfer.py)
+
+Each new conversion adds its raw digits, sequence number, earliest possible conversion start and read time to an eight-entry ring. A new entry overwrites the oldest when full, and `history(0, sample)` copies the newest without removing it. The bytes of a new entry are written outside the brief publication lock. Foreground modules or an interrupt can copy a published snapshot. The current motion timers use the existing prepared compensation values.
+
+The consumer applies the current Digit Homing offset to the raw sample. Printing controls reuse the latest valid sample between conversions to preserve their service cadence. On bus or converter failure the live result becomes unavailable and the service retries. The last valid value stays in the history for diagnostics and the serial `F:` field. A live result also expires when its age from conversion start exceeds the configured interval plus 200 ms.
+
+Idle references, stability checks and Digit Homing average three fresh conversions by default. `M3053` sets the count, `M3054` sets minimum start spacing and `M3055` sets the allowable spread. The old default of fifteen reads 15 ms apart could reread the same conversion several times. One fresh conversion per settled probe increment keeps the measurement count separate from the stability windows. The new per-step decision and the effect of force noise on contact and release need repeatability measurements on the printer. [Pressure windows](../../Repetier/PressureMeasurement.h)
+
 ## Guarded moves on the common motion path
 
 Use a bounded machine-space Z move with a cancellation condition and a result containing the executed position and stop reason. The planner prepares its move and speed cap. The step executor checks hard endstops and a published stop condition before emitting another forward step. The DMS service owns I²C transactions, sample validity and measurement timing in the foreground. A stale sample, sensor error or travel limit ends the approach. Probe moves preserve the job's logical coordinates and leave the retry and retreat decisions to the scan.
 
-The service can keep the current raw and filtered readings available to every consumer. Each use supplies its own policy. A scan wants a low contact threshold, a short verified reaction and a controlled retreat. The start line wants a continuously adjusted speed and extrusion factor. Both use the same measurement source and movement interface. Keep the scan's hard stop separate from the smoothed print response so a filter does not consume its time budget.
+The DMS service now supplies the shared measurement. A scan wants a low contact threshold, a short verified reaction and a controlled retreat. The start line wants a continuously adjusted speed and extrusion factor. A common motion interface can serve both policies. The scan's hard stop uses the raw sample with the Digit Homing correction so a smoothing filter does not consume its time budget.
 
 For a continuous probe, bound the maximum travel after the trigger by
 
@@ -27,7 +39,7 @@ v_z × T_detection,max + d_stop(v_z) + d_quantization + d_uncertainty ≤ d_budg
 
 `T_detection,max` includes ADC integration and phase, filtering, sample age, the longest foreground service gap, I²C and stop publication. `d_stop` includes any planner or step-executor tail after publication. Establish `d_budget` on the actual mount and bed using the smaller of their respective margins after the trigger. The historical calibration gives about 0.05 mm of deflection at 5,500 digits. The firmware's Digit-Z estimate is about 0.076 mm at 10,000 digits and 0.084 mm at 11,000 digits before quantization. Use these numbers to size a displacement measurement. The bed force limit and worst measured stopping distance set the usable speed. The [deflection history](thermal-and-force.md#elastic-hotend-deflection-and-digit-z) records the calibration.
 
-The ADS1100 on the published RF1000 and RF2000 boards runs at a nominal eight 16-bit conversions per second. TI specifies a minimum of 6.5 at that setting, about 154 ms per conversion. The continuous-mode status bit cannot certify a newly completed conversion. A foreground timestamp currently dates the I²C read. Prototype timestamped conversions with the ADC busy indication and measure their latency and noise before accepting a continuous Z move. Rapid repeated reads can still contain the same hardware conversion. First characterize nozzle deflection, point repeatability and peak bed load at the existing step sizes. Then compare a bounded approach on the shared step executor with that baseline, including abort, stale data and endstop traces. [ADS1100 datasheet](https://www.ti.com/lit/ds/symlink/ads1100.pdf) · [Watchdog and heater service budgets](../heater-safety.md)
+At the ADS1100 datasheet minimum of 6.5 conversions/s, one 16-bit conversion takes about 154 ms before bus and software delays. Measure acquisition latency and noise, nozzle deflection, point repeatability and peak bed load at the existing step sizes. Then compare a bounded approach on the shared step executor with that baseline, including abort, stale data and endstop traces. [ADS1100 datasheet](https://www.ti.com/lit/ds/symlink/ads1100.pdf) · [Watchdog and heater service budgets](../heater-safety.md)
 
 ## Z-min screw adjustment and scan reach
 

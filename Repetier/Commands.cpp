@@ -74,6 +74,8 @@ void Commands::checkForPeriodicalActions(enum FirmwareState state) {
         UI_SLOW;
     }
 
+    Printer::strainGauge.service(HAL::timeInMilliseconds());
+
     if (execute50msPeriodical) {
         execute50msPeriodical = 0;
         loopFeatures();
@@ -191,7 +193,7 @@ void Commands::printTemperatures(bool showRaw) {
 
         Com::printF(Com::tSpace);
         Com::printF(Com::tF);
-        Com::printF(Com::tColon, (int)Printer::digitCompensation.latestDigits()); //Kraft
+        Com::printF(Com::tColon, (int)Printer::strainGauge.lastKnownDigits()); //Kraft
         Com::printF(Com::tSpaceSlash, (int)Printer::strainGauge.effectiveZeroOffset());
         Com::printF(Com::tSpaceAtColon, 0); //Ziel ^^, nein ich halte mich nur an die PWM-Syntax
         Com::println();

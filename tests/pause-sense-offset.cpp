@@ -130,7 +130,6 @@ void WRITE(int pin, bool high);
 #include "PressureProtection.h"
 #include "PressureMeasurement.h"
 #include "StrainGauge.h"
-#include "TwiTransfer.h"
 #include "StartLine.h"
 #include "ExtrusionPlanner.h"
 #include "MoveTarget.h"
@@ -178,28 +177,33 @@ void discardScans() { g_nHeatBedScanStatus = g_nZOSScanStatus = 0; }
 void setExtruderCurrent(int, int) {}
 
 struct DmsInput {
-    unsigned configurations = 0;
     bool disconnected = false;
-    uint8_t configuration = 0x8c;
+    bool wrongConfiguration = false;
+    bool timed = false;
+    uint32_t startedAt = 0;
+    StrainGauge::Sample published{};
+
+    void tick() {
+        if (++clockMs - startedAt < 125)
+            return;
+        published = {startedAt, clockMs, static_cast<uint16_t>(published.sequence + 1), forceDigits};
+        startedAt = clockMs;
+    }
 } dmsInput;
 
-bool TwiTransfer::write(uint8_t address, const uint8_t* bytes, uint8_t length, uint32_t) {
-    assert(address == I2C_ADDRESS_STRAIN_GAUGE && length == 1 && bytes[0] == 0x0c);
-    ++dmsInput.configurations;
+bool StrainGauge::history(uint8_t age, Sample& sample) const {
+    if (age || (dmsInput.timed && !dmsInput.published.sequence))
+        return false;
+    sample = dmsInput.timed ? dmsInput.published : Sample{clockMs, clockMs, 1, forceDigits};
     return true;
 }
 
-bool TwiTransfer::read(uint8_t address, uint8_t length, uint32_t) {
-    assert(address == I2C_ADDRESS_STRAIN_GAUGE && length == 3);
+StrainGauge::Availability StrainGauge::latest(uint32_t, Sample& sample) const {
     ++strainGaugeReads;
-    const uint16_t digits = static_cast<uint16_t>(forceDigits);
-    bytes_[0] = digits >> 8;
-    bytes_[1] = digits & 0xff;
-    bytes_[2] = dmsInput.configuration;
-    return true;
+    if (dmsInput.disconnected || dmsInput.wrongConfiguration)
+        return Availability::Fault;
+    return history(0, sample) ? Availability::Ready : Availability::Waiting;
 }
-
-bool TwiTransfer::wait() { return !dmsInput.disconnected; }
 
 namespace Printer {
 extern PrintPause pause;
@@ -619,20 +623,22 @@ void digitZero() {
         assert(sampleStrainGauge(digits));
         return digits;
     };
-    duringPeriodicActions = [] { ++clockMs; };
+    duringPeriodicActions = [] { dmsInput.tick(); };
     auto& gauge = Printer::strainGauge;
-    gauge.begin();
-    assert(dmsInput.configurations == 1);
+    const auto homeWithConversions = [] {
+        dmsInput.timed = true;
+        Printer::homeDigits();
+        dmsInput.timed = false;
+    };
     assert(gauge.zeroingEnabled());
     forceDigits = 1000;
-    Printer::homeDigits();
+    homeWithConversions();
     assert(gauge.zeroOffset() == 1000);
-    assert(strainGaugeReads == 4 && clockMs == 12);
-    assert(Printer::digitCompensation.latestDigits() == 1000);
+    assert(dmsInput.published.sequence == 5 && clockMs == 625);
     assert(readCurrentDigits() == 0);
 
     forceDigits = -1200;
-    Printer::homeDigits();
+    homeWithConversions();
     assert(gauge.zeroOffset() == -1200); // Fresh reference, even with a prior zero.
     assert(readCurrentDigits() == 0);
     forceDigits = -27767;
@@ -656,7 +662,7 @@ void digitZero() {
     assert(readCurrentDigits() == 3600);
 
     forceDigits = 5000;
-    Printer::homeDigits();
+    homeWithConversions();
     assert(!gauge.zeroOffset() && readCurrentDigits() == 5000);
 
     dmsInput.disconnected = true;
@@ -664,9 +670,8 @@ void digitZero() {
     assert(!sampleStrainGauge(digits) && digits == 5);
     short average = 5;
     assert(readAveragePressure(&average) && average == 0);
-    assert(Printer::digitCompensation.latestDigits() == 5000);
     dmsInput.disconnected = false;
-    dmsInput.configuration = 0;
+    dmsInput.wrongConfiguration = true;
     assert(!sampleStrainGauge(digits) && digits == 5);
     duringPeriodicActions = nullptr;
 }
@@ -676,28 +681,28 @@ void pressureMeasurement() {
     using Result = PressureMeasurement::Result;
     PressureMeasurement measurement;
     measurement.begin({3, 15, 15}, UINT32_MAX - 10, 5);
-    assert(!measurement.sampleDue(8) && measurement.sampleDue(9));
-    measurement.record(9, -101);
-    assert(!measurement.sampleDue(23));
-    measurement.record(24, -98);
-    measurement.record(39, -100);
+    assert(!measurement.record(8, 133, -300));
+    assert(measurement.record(9, 134, -101));
+    assert(!measurement.record(9, 135, -300) && !measurement.acceptsSample(23));
+    measurement.record(135, 260, -98);
+    measurement.record(261, 386, -100);
     assert(measurement.result() == Result::Stable && measurement.average() == -99);
 
     measurement.begin({2, 10, 15}, 0);
     uint32_t time = 10;
     for (unsigned attempt = 0; attempt < 5; ++attempt) {
-        measurement.record(time, INT16_MIN);
-        measurement.record(time + 10, INT16_MAX);
+        measurement.record(time, time + 125, INT16_MIN);
+        measurement.record(time + 126, time + 251, INT16_MAX);
         if (attempt < 4) {
-            assert(measurement.result() == Result::Pending && !measurement.sampleDue(time + 119));
-            time += 120;
-            assert(measurement.sampleDue(time));
+            assert(measurement.result() == Result::Pending && !measurement.acceptsSample(time + 360));
+            time += 361;
+            assert(measurement.acceptsSample(time));
         }
     }
-    assert(measurement.result() == Result::Unstable && !measurement.sampleDue(time + 1000));
+    assert(measurement.result() == Result::Unstable && !measurement.acceptsSample(time + 1000));
     measurement.begin({2, 15, 15}, 0);
     measurement.readFailed();
-    assert(measurement.result() == Result::ReadError && !measurement.sampleDue(15));
+    assert(measurement.result() == Result::ReadError && !measurement.acceptsSample(15));
 }
 
 void pressurePause() {
@@ -1492,7 +1497,6 @@ void digitFlowSamples() {
         check(4500, 1, 1, 0, 80);
     }
     readAt(50, 5500, 0);
-    assert(compensation.latestDigits() == 4500);
 
     // SenseOffset's 50 ms deadline also feeds the shared Digit-Z filter.
     Printer::zMotion.setNominalSteps(257);
@@ -1509,7 +1513,6 @@ void digitFlowSamples() {
     Printer::zMotion.setNominalSteps(256);
     Printer::doHeatBedZCompensation = false;
     readAt(84, 5000, 1);
-    assert(compensation.latestDigits() == 5000);
     check(2062, 0.8595f, 0.97f, 0, 0);
 
     Printer::doHeatBedZCompensation = true;
@@ -1520,7 +1523,7 @@ void digitFlowSamples() {
 
     assert(Printer::strainGauge.setZeroFromAverage(1000));
     readAt(112, 5500, 1);
-    assert(compensation.latestDigits() == 4500);
+    assert(Printer::strainGauge.lastKnownDigits() == 4500);
     check(3471, 1, 1, 0, 70);
 
     // The step interrupt can process M3000 during the foreground calculation.
