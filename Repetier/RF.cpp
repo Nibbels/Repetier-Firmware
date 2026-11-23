@@ -91,13 +91,8 @@ long g_offsetZCompensationSteps = 0;
 short g_ZCompensationMax = 0;
 char g_nActiveHeatBed = 1;
 
-//ZOS
 // g_ZMatrixChangedInRam soll 1 werden, wenn ZOS, Offsetänderung der Matrix etc. Sonst wäre Sichern der Matrix unnötig.
 volatile unsigned char g_ZMatrixChangedInRam = 0;
-//Nibbels:
-unsigned char g_ZOSTestPoint[2] = { defaultZOffsetScanIndex, defaultZOffsetScanIndex };
-float g_ZOSlearningRate = 1.0f;
-float g_ZOSlearningGradient = 0.0f;
 
 float g_scanStartZLiftMM = defaultHeatBedScanLiftMm;
 
@@ -1298,6 +1293,16 @@ namespace {
 
 class ZOffsetScan {
 public:
+    struct Settings {
+        ZOffsetScanPoint point{defaultZOffsetScanIndex, defaultZOffsetScanIndex};
+        float learningRate = 1.0f;
+        float learningGradient = 0.0f;
+    };
+
+    Settings settings() const { return settings_; }
+    void configure(const Settings& settings) { settings_ = settings; }
+    void restorePoint(ZOffsetScanPoint point) { settings_.point = point; }
+
     bool active() const { return phase_ != Phase::Idle; }
     void startOrCancel(bool levelMatrix);
     void tick();
@@ -1354,6 +1359,7 @@ private:
 
     volatile Phase phase_ = Phase::Idle;
     LevelingPass levelingPass_ = LevelingPass::None;
+    Settings settings_;
     void retryProbe(ScanAbort failure);
     long probeZSteps_ = 0;
     millis_t retryWaitStartedMs_ = 0;
@@ -1412,47 +1418,40 @@ void ZOffsetScan::selectLevelingPoint(unsigned short maxX, unsigned short maxY) 
     switch (pass) {
     case LevelingPass::None: return;
     case LevelingPass::Center:
-        g_ZOSTestPoint[X_AXIS] = maxX / 2;
-        g_ZOSTestPoint[Y_AXIS] = maxY / 2;
+        settings_.point = {uint8_t(maxX / 2), uint8_t(maxY / 2)};
         levelingPass_ = LevelingPass::MinXMinY;
         break;
     case LevelingPass::MinXMinY:
-        g_ZOSTestPoint[X_AXIS] = 1;
-        g_ZOSTestPoint[Y_AXIS] = 1;
+        settings_.point = {1, 1};
         levelingPass_ = LevelingPass::MaxXMaxY;
         break;
     case LevelingPass::MaxXMaxY:
-        g_ZOSTestPoint[X_AXIS] = maxX;
-        g_ZOSTestPoint[Y_AXIS] = maxY;
+        settings_.point = {uint8_t(maxX), uint8_t(maxY)};
         levelingPass_ = LevelingPass::CenterYMinusOne;
         break;
     case LevelingPass::CenterYMinusOne:
-        g_ZOSTestPoint[X_AXIS] = maxX / 2;
-        g_ZOSTestPoint[Y_AXIS] = maxY / 2 - 1;
+        settings_.point = {uint8_t(maxX / 2), uint8_t(maxY / 2 - 1)};
         levelingPass_ = LevelingPass::MinXMaxY;
         break;
     case LevelingPass::MinXMaxY:
-        g_ZOSTestPoint[X_AXIS] = 1;
-        g_ZOSTestPoint[Y_AXIS] = maxY;
+        settings_.point = {1, uint8_t(maxY)};
         levelingPass_ = LevelingPass::MaxXMinY;
         break;
     case LevelingPass::MaxXMinY:
-        g_ZOSTestPoint[X_AXIS] = maxX;
-        g_ZOSTestPoint[Y_AXIS] = 1;
+        settings_.point = {uint8_t(maxX), 1};
         levelingPass_ = LevelingPass::CenterYPlusOne;
         break;
     case LevelingPass::CenterYPlusOne:
-        g_ZOSTestPoint[X_AXIS] = maxX / 2;
-        g_ZOSTestPoint[Y_AXIS] = maxY / 2 + 1;
+        settings_.point = {uint8_t(maxX / 2), uint8_t(maxY / 2 + 1)};
         levelingPass_ = LevelingPass::None;
         break;
     }
 
-    g_ZOSlearningRate = pass == LevelingPass::Center ? 1.0f : 0.8f;
-    g_ZOSlearningGradient = pass == LevelingPass::Center ? 0.0f : 1.0f;
+    settings_.learningRate = pass == LevelingPass::Center ? 1.0f : 0.8f;
+    settings_.learningGradient = pass == LevelingPass::Center ? 0.0f : 1.0f;
     probeZSteps_ = long(Printer::axisStepsPerMM[Z_AXIS] * g_scanStartZLiftMM);
-    Com::printF(Com::tAutoMatrixLeveling, g_ZOSTestPoint[X_AXIS]);
-    Com::printFLN(PSTR(" Y:"), g_ZOSTestPoint[Y_AXIS]);
+    Com::printF(Com::tAutoMatrixLeveling, settings_.point.x);
+    Com::printFLN(PSTR(" Y:"), settings_.point.y);
 }
 
 void ZOffsetScan::initialize() {
@@ -1494,7 +1493,7 @@ void ZOffsetScan::liftForProbe() {
 
 void ZOffsetScan::loadMatrix() {
     // load the unaltered compensation matrix from the EEPROM
-    if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT || g_ZOSlearningRate == 1.0) {
+    if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT || settings_.learningRate == 1.0) {
         Com::printFLN(PSTR("Loading zMatrix from EEPROM"));
         if (loadCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed))) {
             // Error: there is no valid compensation matrix available
@@ -1515,18 +1514,14 @@ void ZOffsetScan::loadMatrix() {
 }
 
 void ZOffsetScan::positionProbe() {
-    //Constrain X-Y for Scanposition to valid locations at noninterpolated matrix-scanpoints.
-    if (g_ZOSTestPoint[X_AXIS] < 1 + ((heatBedScanXStartMm == 0) ? 0 : 1))
-        g_ZOSTestPoint[X_AXIS] = 1 + ((heatBedScanXStartMm == 0) ? 0 : 1);
-    if (g_ZOSTestPoint[X_AXIS] > g_uZMatrixMax[X_AXIS] - 1)
-        g_ZOSTestPoint[X_AXIS] = g_uZMatrixMax[X_AXIS] - 1; //2..n-1
-    if (g_ZOSTestPoint[Y_AXIS] < 1 + ((heatBedScanYStartMm == 0) ? 0 : 1))
-        g_ZOSTestPoint[Y_AXIS] = 1 + ((heatBedScanYStartMm == 0) ? 0 : 1);
-    if (g_ZOSTestPoint[Y_AXIS] > g_uZMatrixMax[Y_AXIS] - 1)
-        g_ZOSTestPoint[Y_AXIS] = g_uZMatrixMax[Y_AXIS] - 1; //2..n-1
-    // move to the first scan position of the heat bed scan matrix
-    float xScanPosition = g_ZCompensationMatrix[g_ZOSTestPoint[X_AXIS]][0]; // + g_nScanXStartSteps; <-- NEIN! Man muss nur die jeweils erste und letzte Matrix-Zeile meiden, ausser heatBedScanXStartMm ist 0 oder heatBedScanYStartMm ist 0
-    float yScanPosition = g_ZCompensationMatrix[0][g_ZOSTestPoint[Y_AXIS]]; // + g_nScanYStartSteps; <-- NEIN!
+    // Prefer measured points inside the padded edges whenever the grid allows it.
+    const int minX = heatBedScanXStartMm == 0 ? 1 : 2;
+    const int minY = heatBedScanYStartMm == 0 ? 1 : 2;
+    auto& point = settings_.point;
+    point.x = RMath::min(RMath::max(int(point.x), minX), g_uZMatrixMax[X_AXIS] - 1);
+    point.y = RMath::min(RMath::max(int(point.y), minY), g_uZMatrixMax[Y_AXIS] - 1);
+    float xScanPosition = g_ZCompensationMatrix[point.x][0];
+    float yScanPosition = g_ZCompensationMatrix[0][point.y];
 
     constexpr long scanPositionJitterMm = 3;
     xScanPosition += random(-scanPositionJitterMm, scanPositionJitterMm);
@@ -1598,7 +1593,7 @@ void ZOffsetScan::measureSurface() {
 void ZOffsetScan::applyMatrixCorrection() {
     // compute number of steps we need to shift the entire matrix by
     long matrixwert = getZMatrixDepth_CurrentXY();
-    long nZ = probeZSteps_ - matrixwert; //g_ZCompensationMatrix[g_ZOSTestPoint[X_AXIS]][g_ZOSTestPoint[Y_AXIS]]; --> NEU: Mit Interpolation, also können wir überall scannen.
+    long nZ = probeZSteps_ - matrixwert;
 
     Com::printFLN(PSTR("Matrix-Wert Z = "), matrixwert);
     Com::printF(PSTR("Minimum Z = "), probeZSteps_);
@@ -1610,7 +1605,7 @@ void ZOffsetScan::applyMatrixCorrection() {
     bool overnull = false;
 
     //Nibbels: scaling nZ according to learning Rate for additional corrective scans
-    nZ = (long)((float)nZ * g_ZOSlearningRate);
+    nZ = (long)((float)nZ * settings_.learningRate);
 
     //Nibbels: weight change because of distance. lerne bettwinkelausgleich.
     const int xIntervals = RMath::max(1, g_uZMatrixMax[X_AXIS] - 2);
@@ -1625,8 +1620,8 @@ void ZOffsetScan::applyMatrixCorrection() {
 
     for (short x = 1; x <= g_uZMatrixMax[X_AXIS]; x++) {
         for (short y = 1; y <= g_uZMatrixMax[Y_AXIS]; y++) {
-            x_dist = (g_ZOSTestPoint[X_AXIS] - x) * (g_ZOSTestPoint[X_AXIS] - x) / x_bed_len_quadrat; //normierter indexabstand
-            y_dist = (g_ZOSTestPoint[Y_AXIS] - y) * (g_ZOSTestPoint[Y_AXIS] - y) / y_bed_len_quadrat; //normierter indexabstand
+            x_dist = (settings_.point.x - x) * (settings_.point.x - x) / x_bed_len_quadrat; //normierter indexabstand
+            y_dist = (settings_.point.y - y) * (settings_.point.y - y) / y_bed_len_quadrat; //normierter indexabstand
             x_dist = sqrt(x_dist);                                                                    //Linearisieren. für Auto-Matrix-Leveling
             y_dist = sqrt(y_dist);                                                                    //Linearisieren. für Auto-Matrix-Leveling
             //das ist nur ein kreisabstand, wenn die messpunkte quadratisch angeordnet sind, ist aber nicht so?
@@ -1636,7 +1631,7 @@ void ZOffsetScan::applyMatrixCorrection() {
                 xy_weight = 0;
             if (xy_weight > 1.0)
                 xy_weight = 1.0; //kann aber nicht wirklich vorkommen.
-            weighted_nZ = (long)(g_ZOSlearningGradient * xy_weight * (float)nZ + (1.0 - g_ZOSlearningGradient) * (float)nZ);
+            weighted_nZ = (long)(settings_.learningGradient * xy_weight * (float)nZ + (1.0 - settings_.learningGradient) * (float)nZ);
             newValue = (long)g_ZCompensationMatrix[x][y] + weighted_nZ;
             if (newValue > 32767 || newValue < -32768)
                 overflow = true;
@@ -1748,6 +1743,14 @@ void startZOScan(bool autoLevelMatrix) {
 
 static bool zOffsetScanRunning() {
     return zOffsetScan.active();
+}
+
+ZOffsetScanPoint zOffsetScanPoint() {
+    return zOffsetScan.settings().point;
+}
+
+void restoreZOffsetScanPoint(ZOffsetScanPoint point) {
+    zOffsetScan.restorePoint(point);
 }
 
 void discardScans() {
@@ -4447,6 +4450,7 @@ void configureZOffsetScan(GCode* pCommand) {
 
     if (g_ZCompensationMatrix[0][0] == EEPROM_FORMAT) {
         if (!pCommand->hasR()) { //Normaler ZOS, kein Auto-Matrix-Leveling.
+            auto settings = zOffsetScan.settings();
             if (pCommand->hasX()) {
                 // test and take over the specified value
                 unsigned char nTempUC = (unsigned char)pCommand->X;
@@ -4461,11 +4465,11 @@ void configureZOffsetScan(GCode* pCommand) {
                 if (nTempUC > g_uZMatrixMax[X_AXIS] - 1)
                     nTempUC = g_uZMatrixMax[X_AXIS] - 1; //2..n-1
 
-                g_ZOSTestPoint[X_AXIS] = nTempUC;
+                settings.point.x = nTempUC;
 
                 unsigned char oldval = HAL::eprGetByte(EPR_RF_MOD_ZOS_SCAN_POINT_X);
-                if (oldval != g_ZOSTestPoint[X_AXIS]) {
-                    HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_X, g_ZOSTestPoint[X_AXIS]);
+                if (oldval != settings.point.x) {
+                    HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_X, settings.point.x);
                     EEPROM::updateChecksum(); //deshalb die prüfung
                 }
 
@@ -4493,11 +4497,11 @@ void configureZOffsetScan(GCode* pCommand) {
                 if (nTempUC > g_uZMatrixMax[Y_AXIS] - 1)
                     nTempUC = g_uZMatrixMax[Y_AXIS] - 1; //2..n-1
 
-                g_ZOSTestPoint[Y_AXIS] = nTempUC;
+                settings.point.y = nTempUC;
 
                 unsigned char oldval = HAL::eprGetByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y);
-                if (oldval != g_ZOSTestPoint[Y_AXIS]) {
-                    HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y, g_ZOSTestPoint[Y_AXIS]);
+                if (oldval != settings.point.y) {
+                    HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y, settings.point.y);
                     EEPROM::updateChecksum(); //deshalb die prüfung
                 }
 
@@ -4515,8 +4519,8 @@ void configureZOffsetScan(GCode* pCommand) {
             if (pCommand->hasS()) {
                 // M3900 S set learning rate to limit changes caused of z-Offset Scan. This might proof handy for multiple positions scans.
                 if (pCommand->S >= 0 && pCommand->S <= 100) {
-                    g_ZOSlearningRate = (float)pCommand->S * 0.01f;
-                    Com::printFLN(PSTR("M3900/M3901: CHANGED [S] ZOS learning rate : "), g_ZOSlearningRate);
+                    settings.learningRate = (float)pCommand->S * 0.01f;
+                    Com::printFLN(PSTR("M3900/M3901: CHANGED [S] ZOS learning rate : "), settings.learningRate);
                 } else {
                     Com::printFLN(PSTR("M3900/M3901: ERROR [S] ZOS learning rate ignored, out of range {0...100}"));
                     err3900r = true;
@@ -4526,45 +4530,46 @@ void configureZOffsetScan(GCode* pCommand) {
             if (pCommand->hasP()) {
                 // M3900 P set distance weight: This can be used as something like the auto-bed-leveling (if used in all corners) but technically affects the Z_Matrix
                 if (pCommand->P >= 0 && pCommand->P <= 100) {
-                    g_ZOSlearningGradient = (float)pCommand->P * 0.01f;
-                    Com::printFLN(PSTR("M3900/M3901: CHANGED [P] ZOS learning linear distance weight : "), g_ZOSlearningGradient);
+                    settings.learningGradient = (float)pCommand->P * 0.01f;
+                    Com::printFLN(PSTR("M3900/M3901: CHANGED [P] ZOS learning linear distance weight : "), settings.learningGradient);
                 } else {
                     Com::printFLN(PSTR("M3900/M3901: ERROR [P] ZOS learning DistanceWeight, out of range {0...100}"));
                     err3900r = true;
                 }
             }
 
+            if (pCommand->hasX() || pCommand->hasY() || pCommand->hasS() || pCommand->hasP())
+                zOffsetScan.configure(settings);
+
             // Anzeige der aktuellen Settings
             Com::printFLN(PSTR("M3900/M3901: ### AKTIVE ZOS SETTINGS ###"));
-            Com::printF(PSTR("M3900/M3901: Testposition [X]: "), g_ZOSTestPoint[X_AXIS]);
-            Com::printF(PSTR(" Testposition [Y]: "), g_ZOSTestPoint[Y_AXIS]);
+            Com::printF(PSTR("M3900/M3901: Testposition [X]: "), settings.point.x);
+            Com::printF(PSTR(" Testposition [Y]: "), settings.point.y);
             Com::printFLN(PSTR(" [Z-Matrix index]"));
-            Com::printFLN(PSTR("M3900/M3901: [S] ZOS learning rate is : "), g_ZOSlearningRate);
-            if (g_ZOSlearningRate == 1.0f) {
+            Com::printFLN(PSTR("M3900/M3901: [S] ZOS learning rate is : "), settings.learningRate);
+            if (settings.learningRate == 1.0f) {
                 Com::printFLN(PSTR("M3900/M3901: INFO [S] ZOS::overwrite mode (1.00)"));
             } else {
                 Com::printFLN(PSTR("M3900/M3901: INFO [S] ZOS::additiv / learning mode (0.00 - 0.99)"));
             }
-            Com::printFLN(PSTR("M3900/M3901: [P] ZOS learning linear distance weight is : "), g_ZOSlearningGradient);
-            if (g_ZOSlearningGradient == 0.0f) {
+            Com::printFLN(PSTR("M3900/M3901: [P] ZOS learning linear distance weight is : "), settings.learningGradient);
+            if (settings.learningGradient == 0.0f) {
                 Com::printFLN(PSTR("M3900/M3901: INFO [P] ZOS::reiner Offset-Scan"));
-            } else if (g_ZOSlearningGradient == 1.0f) {
+            } else if (settings.learningGradient == 1.0f) {
                 Com::printFLN(PSTR("M3900/M3901: INFO [P] ZOS::rein linear abstandsgewichteter Scan"));
             } else {
                 Com::printFLN(PSTR("M3900/M3901: INFO [P] ZOS::Das Ergebnis-Offset setzt sich zusammen aus Abstandsgewichtung und Offset"));
             }
 
-            if (g_ZOSlearningGradient > 0.0f) {
+            if (settings.learningGradient > 0.0f) {
                 Com::printFLN(PSTR("M3900/M3901: INFO [P] Set 0 => 0.0 for Offset only, set 100 => 1.0 for distance weight only"));
                 Com::printFLN(PSTR("M3900/M3901: INFO [P] Combine linear distance weight with low learning rate and multiple checks at corners (for example) against bed warping!"));
             }
-            if (g_ZOSlearningRate == 1.0f) {
+            if (settings.learningRate == 1.0f) {
                 Com::printFLN(PSTR("M3900/M3901: FORMEL Z-Matrix = EEPROM-Matrix + g_ZOSlearningRate*(g_ZOSlearningGradient*weight(x,y)*Offset + (1.0-g_ZOSlearningGradient)*Offset)"));
             } else {
                 Com::printFLN(PSTR("M3900/M3901: FORMEL Z-Matrix = Z-Matrix + g_ZOSlearningRate*(g_ZOSlearningGradient*weight(x,y)*Offset + (1.0-g_ZOSlearningGradient)*Offset)"));
             }
-        } else { // pCommand->hasR() //Auto-Matrix-Leveling.
-                 //Auto-Matrix-Leveling aktiv.
         }
         if (pCommand->M == 3901) {
             //M3901

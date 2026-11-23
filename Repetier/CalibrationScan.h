@@ -5,6 +5,11 @@
 
 enum class HeatBedScanMode : uint8_t { Standard = 0, Pla = 1, Abs = 2 };
 
+struct ZOffsetScanPoint {
+    uint8_t x;
+    uint8_t y;
+};
+
 enum class ScanAbort : uint8_t {
     None = 0,
     Canceled = 1,

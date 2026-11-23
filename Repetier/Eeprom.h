@@ -104,8 +104,8 @@ have problems with other modules using the eeprom */
 
 #define EPR_RF_MOD_Z_STEP_SIZE 1900 //+1901 g_nManualSteps[Z_AXIS] [2byte unsigned short]
 //+1902+1903 waren mal verwendet, long -> short, nun frei.
-#define EPR_RF_MOD_ZOS_SCAN_POINT_X 1904 //g_ZOSTestPoint[0] [1byte unsigned char]
-#define EPR_RF_MOD_ZOS_SCAN_POINT_Y 1905 //g_ZOSTestPoint[1] [1byte unsigned char]
+#define EPR_RF_MOD_ZOS_SCAN_POINT_X 1904 // Z-offset scan point X [uint8_t]
+#define EPR_RF_MOD_ZOS_SCAN_POINT_Y 1905 // Z-offset scan point Y [uint8_t]
 
 #define EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX 1906 // Maximum SenseOffset in micrometers [int16_t]
 #define EPR_RF_MOD_SENSEOFFSET_DIGITS 1908     // Saved SenseOffset threshold in DMS digits [int16_t]

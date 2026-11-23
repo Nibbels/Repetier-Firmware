@@ -386,10 +386,6 @@ constexpr int32_t maxManualZOffsetMicrometers = 10000;
 extern long g_offsetZCompensationSteps; // this is the minimal distance between the heat bed and the extruder at the moment when the z-min endstop is hit
 extern short g_ZCompensationMax;
 extern char g_nActiveHeatBed;
-//ZOS:
-extern unsigned char g_ZOSTestPoint[2];
-extern float g_ZOSlearningRate;
-extern float g_ZOSlearningGradient;
 //Matrix speichern über Menü: Sinnmarker
 extern volatile unsigned char g_ZMatrixChangedInRam;
 
@@ -447,6 +443,8 @@ extern bool isAnyScanRunning();
 extern void discardScans();
 extern void handleScanWorkTasks(bool tickDue);
 extern void startZOScan(bool automatrixleveling = false);
+ZOffsetScanPoint zOffsetScanPoint();
+void restoreZOffsetScanPoint(ZOffsetScanPoint point);
 
 //Z-Schrauben Helper
 extern float g_ZSchraubenSollDrehungenWarm_U;

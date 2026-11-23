@@ -188,8 +188,7 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     Printer::enableFET3 = FET3_DEFAULT_ON;
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
-    g_ZOSTestPoint[X_AXIS] = defaultZOffsetScanIndex;
-    g_ZOSTestPoint[Y_AXIS] = defaultZOffsetScanIndex;
+    restoreZOffsetScanPoint({defaultZOffsetScanIndex, defaultZOffsetScanIndex});
 
     Printer::senseOffsetControl.setMaxMicrometers(SENSIBLE_PRESSURE_MAX_OFFSET);
     Printer::senseOffsetControl.setAutoStart(false);
@@ -322,8 +321,9 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
     HAL::eprSetInt16(EPR_RF_MOD_Z_STEP_SIZE, g_nManualSteps[Z_AXIS]);
-    HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_X, g_ZOSTestPoint[0]);
-    HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y, g_ZOSTestPoint[1]);
+    const auto scanPoint = zOffsetScanPoint();
+    HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_X, scanPoint.x);
+    HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y, scanPoint.y);
     //Do not update EPR_RF_MOD_SENSEOFFSET_DIGITS here
     HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX, Printer::senseOffsetControl.limits().maxMicrometers);
     HAL::eprSetByte(EPR_RF_MOD_SENSEOFFSET_AUTOSTART, Printer::senseOffsetControl.autoStart());
@@ -629,22 +629,15 @@ void EEPROM::readDataFromEEPROM() {
     g_nManualSteps[Z_AXIS] = (unsigned short)constrain((unsigned short)HAL::eprGetInt16(EPR_RF_MOD_Z_STEP_SIZE), 1, stepsize_table[NUM_ACCEPTABLE_STEP_SIZE_TABLE - 1]); //limit stepsize to value in config.
     g_nManualSteps[E_AXIS] = (unsigned short)lroundf(Extruder::current->stepsPerMM * DEFAULT_MANUAL_MM_E);                                                               //current extruder stepsPerMM weil hier noch kein update für Printer::axisStepsPerMM[E_AXIS] gemacht wurde!
 
-    g_ZOSTestPoint[X_AXIS] = HAL::eprGetByte(EPR_RF_MOD_ZOS_SCAN_POINT_X);
-    if (g_ZOSTestPoint[X_AXIS] != 0) { //constrain if not 0 = random.
-                                       //wenn die Startposition nicht 0 ist, wird eine Dummy-Matrix-Linie ergänzt. Mit der sollten wir nicht arbeiten.
-        if (g_ZOSTestPoint[X_AXIS] < 1 + ((heatBedScanXStartMm == 0) ? 0 : 1))
-            g_ZOSTestPoint[X_AXIS] = 1 + ((heatBedScanXStartMm == 0) ? 0 : 1);
-        if (g_ZOSTestPoint[X_AXIS] > COMPENSATION_MATRIX_MAX_X - 1)
-            g_ZOSTestPoint[X_AXIS] = COMPENSATION_MATRIX_MAX_X - 1; //2..n-1 //COMPENSATION_MATRIX_MAX_X -> g_uZMatrixMax[X_AXIS] erst voll wenn matrix initialisiert, aber die normale ultra-max-grenze reicht hier! constrain nachher.
-    }
-    g_ZOSTestPoint[Y_AXIS] = HAL::eprGetByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y);
-    if (g_ZOSTestPoint[Y_AXIS] != 0) { //constrain if not 0 = random.
-                                       //wenn die Startposition nicht 0 ist, wird eine Dummy-Matrix-Linie ergänzt. Mit der sollten wir nicht arbeiten.
-        if (g_ZOSTestPoint[Y_AXIS] < 1 + ((heatBedScanYStartMm == 0) ? 0 : 1))
-            g_ZOSTestPoint[Y_AXIS] = 1 + ((heatBedScanYStartMm == 0) ? 0 : 1);
-        if (g_ZOSTestPoint[Y_AXIS] > COMPENSATION_MATRIX_MAX_Y - 1)
-            g_ZOSTestPoint[Y_AXIS] = COMPENSATION_MATRIX_MAX_Y - 1; //2..n-1 //COMPENSATION_MATRIX_MAX_Y -> g_uZMatrixMax[Y_AXIS] erst voll wenn matrix initialisiert, aber die normale ultra-max-grenze reicht hier! constrain nachher.
-    }
+    // The matrix is loaded later. Clamp to the compiled grid capacity here
+    // and preserve the legacy zero value until the matrix is available.
+    const auto storedScanIndex = [](uint8_t index, int minimum, int maximum) {
+        return index ? uint8_t(constrain(index, minimum, maximum)) : uint8_t(0);
+    };
+    restoreZOffsetScanPoint({
+        storedScanIndex(HAL::eprGetByte(EPR_RF_MOD_ZOS_SCAN_POINT_X), heatBedScanXStartMm == 0 ? 1 : 2, COMPENSATION_MATRIX_MAX_X - 1),
+        storedScanIndex(HAL::eprGetByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y), heatBedScanYStartMm == 0 ? 1 : 2, COMPENSATION_MATRIX_MAX_Y - 1),
+    });
 
     //Do not read EPR_RF_MOD_SENSEOFFSET_DIGITS here
     const int16_t savedSenseLimit = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX);

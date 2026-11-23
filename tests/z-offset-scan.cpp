@@ -21,6 +21,7 @@ T constrain(T value, T minimum, T maximum) { return std::min(std::max(value, min
 constexpr int heatBedScanRetries = 5;
 constexpr uint8_t I2C_ADDRESS_EXTERNAL_EEPROM = 0x50;
 constexpr int heatBedScanXStartMm = 15, heatBedScanYStartMm = 30, heatBedScanDelayMs = 1000;
+constexpr uint8_t defaultZOffsetScanIndex = 5;
 constexpr int zOffsetScanContactPressureDelta = 33, zOffsetScanRetryPressureDelta = 30;
 #define PSTR(text) text
 #define UI_STATUS_UPD(text) ((void)(text))
@@ -36,8 +37,7 @@ uint8_t g_nScanPressureReads = 2;
 uint16_t g_nScanPressureReadDelay = 15, g_nScanPressureTolerance = 15;
 uint16_t g_nScanSlowStepDelay = 100, g_nScanFastStepDelay = 1;
 float g_scanStartZLiftMM = 1.0f;
-float g_ZOSlearningRate = 1.0f, g_ZOSlearningGradient = 0.0f;
-uint8_t g_ZOSTestPoint[2] = {3, 4}, g_uZMatrixMax[2] = {9, 9}, g_ZMatrixChangedInRam = 0;
+uint8_t g_uZMatrixMax[2] = {9, 9}, g_ZMatrixChangedInRam = 0;
 short g_ZCompensationMatrix[COMPENSATION_MATRIX_MAX_X][COMPENSATION_MATRIX_MAX_Y];
 bool g_nAutoReturnMessage = false;
 uint32_t g_nAutoReturnTime = 0;
@@ -170,7 +170,9 @@ int16_t probeDigits() {
     return Printer::zMotion.scanSteps() <= -124 ? 600 : 500;
 }
 long getZMatrixDepth_CurrentXY() {
-    return g_ZCompensationMatrix[g_ZOSTestPoint[X_AXIS]][g_ZOSTestPoint[Y_AXIS]];
+    assert(!probePoints.empty());
+    const auto point = probePoints.back();
+    return g_ZCompensationMatrix[int(point.first / 10)][int(point.second / 10)];
 }
 void determineCompensationOffsetZ() { ++corrected; }
 void outputCompensationMatrix(int mode) { assert(mode == 1); }
@@ -224,6 +226,7 @@ int main(int argc, char** argv) {
     injectDisconnection = !std::strcmp(argv[1], "disconnected");
     injectOverload = !std::strcmp(argv[1], "overload");
     HAL::now = retry ? UINT32_MAX - 900 : 0;
+    zOffsetScan.restorePoint({3, 4});
     zOffsetScan.startOrCancel(level);
     while (zOffsetScan.active()) {
         assert(++tickCount <= 15000);
