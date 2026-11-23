@@ -25,14 +25,13 @@ def main():
     pause = (firmware / "PrintPause.cpp").read_text(encoding="utf-8")
     stop = (firmware / "PrintStop.cpp").read_text(encoding="utf-8")
     fragments = [
-        section(eeprom, "#define EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX", "#define EPR_RF_EMERGENCYPAUSEDIGITSMIN"),
+        section(eeprom, "#define EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX", "#define EPR_RF_HEATED_BED_SENSOR_TYPE"),
         section(rf_header, "#define UI_ACTION_RF_HEAT_BED_UP", "#define UI_ACTION_RF_PAUSE"),
         section(ui_header, "#define UI_FLAG_FAST_KEY_ACTION", "#define UI_FLAG_KEY_TEST_RUNNING")
         + section(ui_header, "#define UI_FLAG_KEY_TEST_RUNNING", "\n"),
         section(motion, "#define DIRECT_IDLE", "#define FOR_DIRECT"),
         section(motion, "    static bool hasStoppableDirectMove()", "\n\n")
         .replace("    static bool hasStoppableDirectMove()", "bool PrintLine::hasStoppableDirectMove()", 1),
-        section(rf, "long g_nEmergencyPauseDigitsMin", "\n#ifdef RGB_LIGHT_R_PIN"),
         section(rf, "static short readStrainGauge()", "\nvoid adjustPressureLimits("),
         section(rf, "long getZMatrixDepth_CurrentXY(", "\nvoid showAbortScanReason("),
         section(rf, "static void serviceSenseOffset(", "\nvoid handleScanWorkTasks("),
@@ -58,6 +57,9 @@ def main():
         "void configureSenseOffset(GCode* pCommand) { switch (3909) {\n"
         + section(rf, "        case 3909:", "\n        case 3911:")
         + "} }",
+        "void configurePressure(int command, GCode* pCommand) { switch (command) {\n"
+        + section(rf, "        case 3075:", "\n        case 3079:")
+        + "} }",
     ]
     with TemporaryDirectory(prefix="rfx-pause-replay-") as directory:
         build = Path(directory)
@@ -73,6 +75,7 @@ def main():
             "layer-scale", "compensation-bounds",
             "digit-flow", "prime-complete", "prime-skip", "prime-abort",
             "sense-window", "sense-settings", "sense-limit-interrupt",
+            "pressure-pause", "pressure-stop",
         ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
 

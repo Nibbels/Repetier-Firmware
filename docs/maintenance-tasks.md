@@ -82,6 +82,11 @@ The firmware restricted Play to a completed pause in 1.37t2. The 1.43.56 pause r
 
 - [ ] **Recover the same elastic correction at the same steady DMS reading.** Retain the integer filter remainder to eliminate the one-microstep difference reproduced at 5,530 digits. Verify rising and falling force, then measure the force-to-deflection slope and the delay from load change to applied Z on the printer. [Formula, timing and replay](z-offset/thermal-and-force.md#elastic-hotend-deflection-and-digit-z)
 
+### Pressure protection
+
+- [x] **Give the DMS emergency windows one owner.** The replay exercises `M3075` and `M3076`, the saved limits, the exact-boundary samples, the homing gate, emergency park, the Z stop and the extrusion inhibit. The four AVR builds match the prior 36 step traces. [Pressure protection](../Repetier/PressureProtection.h) · [Host replay](../tests/pause-sense-offset.py)
+- [ ] **Clarify the `M3076 S0 P0` status message.** The command sets a temporary [0, 0] band and currently reports that the Z stop is disabled. The active rule inhibits extrusion for any nonzero average outside that band. The ordinary settings remain in EEPROM. [G-code handler](../Repetier/RF.cpp) · [Replay](../tests/pause-sense-offset.cpp)
+
 ## Calibration and persistence
 
 - [ ] **Make the `M3902 Z0` offset transfer durable.** The command saves zero for the manual offset immediately. A reset before saving the RAM bed matrix can lose the transferred correction. [Matrix persistence](z-offset/scans-and-persistence.md#critical-transfer-operation-m3902-z0)

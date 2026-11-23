@@ -200,10 +200,8 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     Printer::wobbleAmplitudes[1] = 0;
     Printer::wobbleAmplitudes[2] = 0;
 
-    g_nEmergencyPauseDigitsMax = EMERGENCY_PAUSE_DIGITS_MAX;
-    g_nEmergencyPauseDigitsMin = EMERGENCY_PAUSE_DIGITS_MIN;
-    g_nEmergencyStopZAndEMin = EMERGENCY_STOP_DIGITS_MIN; //limit to value in config.
-    g_nEmergencyStopZAndEMax = EMERGENCY_STOP_DIGITS_MAX; //limit to value in config.
+    Printer::pressureProtection.setPauseLimits({EMERGENCY_PAUSE_DIGITS_MIN, EMERGENCY_PAUSE_DIGITS_MAX});
+    Printer::pressureProtection.setStopLimits({EMERGENCY_STOP_DIGITS_MIN, EMERGENCY_STOP_DIGITS_MAX});
 
 #ifdef RGB_LIGHT_R_PIN
     Printer::RGBLightMode = RGB_MODE_AUTOMATIC;
@@ -338,11 +336,13 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     HAL::eprSetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPY1, Printer::wobbleAmplitudes[1]);
     HAL::eprSetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPY2, Printer::wobbleAmplitudes[2]);
 
-    HAL::eprSetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMIN, g_nEmergencyPauseDigitsMin);
-    HAL::eprSetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMAX, g_nEmergencyPauseDigitsMax);
+    const auto pauseLimits = Printer::pressureProtection.pauseLimits();
+    HAL::eprSetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMIN, pauseLimits.minimum);
+    HAL::eprSetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMAX, pauseLimits.maximum);
 
-    HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN, g_nEmergencyStopZAndEMin);
-    HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX, g_nEmergencyStopZAndEMax);
+    const auto stopLimits = Printer::pressureProtection.stopLimits();
+    HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN, stopLimits.minimum);
+    HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX, stopLimits.maximum);
 
     HAL::eprSetByte(EPR_RF_MOTOR_CURRENT + X_AXIS, Printer::motorCurrent[X_AXIS]);
     HAL::eprSetByte(EPR_RF_MOTOR_CURRENT + Y_AXIS, Printer::motorCurrent[Y_AXIS]);
@@ -658,28 +658,37 @@ void EEPROM::readDataFromEEPROM() {
     Printer::wobbleAmplitudes[1] = HAL::eprGetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPY1);
     Printer::wobbleAmplitudes[2] = HAL::eprGetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPY2);
 
-    g_nEmergencyPauseDigitsMin = (long)constrain(HAL::eprGetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMIN), EMERGENCY_PAUSE_DIGITS_MIN, EMERGENCY_PAUSE_DIGITS_MAX); //limit to value in config.
-    g_nEmergencyPauseDigitsMax = (long)constrain(HAL::eprGetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMAX), EMERGENCY_PAUSE_DIGITS_MIN, EMERGENCY_PAUSE_DIGITS_MAX); //limit to value in config.
-    //min = 0 and max = 0 -> means feature off
+    const int32_t storedPauseMin = HAL::eprGetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMIN);
+    const int32_t storedPauseMax = HAL::eprGetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMAX);
+    const PressureProtection::Limits pauseLimits = {
+        int16_t(constrain(storedPauseMin, EMERGENCY_PAUSE_DIGITS_MIN, EMERGENCY_PAUSE_DIGITS_MAX)),
+        int16_t(constrain(storedPauseMax, EMERGENCY_PAUSE_DIGITS_MIN, EMERGENCY_PAUSE_DIGITS_MAX))
+    };
+    Printer::pressureProtection.setPauseLimits(pauseLimits);
 
     // Default flow limits depend on the emergency pause limit.
     auto flowProfile = Printer::digitCompensation.flowProfile();
-    flowProfile.minDigits = RMath::min(short(abs(g_nEmergencyPauseDigitsMax) * 0.7), 4000);
-    flowProfile.maxDigits = short(abs(g_nEmergencyPauseDigitsMax));
+    flowProfile.minDigits = RMath::min(short(abs(pauseLimits.maximum) * 0.7), 4000);
+    flowProfile.maxDigits = short(abs(pauseLimits.maximum));
     Printer::digitCompensation.setFlowProfile(flowProfile);
 
-    g_nEmergencyStopZAndEMin = (short)constrain(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN), EMERGENCY_STOP_DIGITS_MIN, EMERGENCY_STOP_DIGITS_MAX); //limit to value in config.
-    g_nEmergencyStopZAndEMax = (short)constrain(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX), EMERGENCY_STOP_DIGITS_MIN, EMERGENCY_STOP_DIGITS_MAX); //limit to value in config.
-    if (g_nEmergencyStopZAndEMin == 0) {
-        g_nEmergencyStopZAndEMin = EMERGENCY_STOP_DIGITS_MIN;
-        HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN, g_nEmergencyStopZAndEMin);
+    const int16_t storedStopMin = HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN);
+    const int16_t storedStopMax = HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX);
+    PressureProtection::Limits stopLimits = {
+        int16_t(constrain(storedStopMin, EMERGENCY_STOP_DIGITS_MIN, EMERGENCY_STOP_DIGITS_MAX)),
+        int16_t(constrain(storedStopMax, EMERGENCY_STOP_DIGITS_MIN, EMERGENCY_STOP_DIGITS_MAX))
+    };
+    if (stopLimits.minimum == 0) {
+        stopLimits.minimum = EMERGENCY_STOP_DIGITS_MIN;
+        HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN, stopLimits.minimum);
         change = true;
     }
-    if (g_nEmergencyStopZAndEMax == 0) {
-        g_nEmergencyStopZAndEMax = EMERGENCY_STOP_DIGITS_MAX;
-        HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX, g_nEmergencyStopZAndEMax);
+    if (stopLimits.maximum == 0) {
+        stopLimits.maximum = EMERGENCY_STOP_DIGITS_MAX;
+        HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX, stopLimits.maximum);
         change = true;
     }
+    Printer::pressureProtection.setStopLimits(stopLimits);
 
     Printer::g_pressure_offset_active = (HAL::eprGetByte(EPR_RF_ZERO_DIGIT_STATE) > 1 ? false : true); //2 ist false, < 1 ist true
     Printer::digitCompensation.setDigitZEnabled(HAL::eprGetByte(EPR_RF_DIGIT_CMP_STATE) <= 1);

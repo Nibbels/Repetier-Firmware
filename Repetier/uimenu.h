@@ -163,10 +163,10 @@ List of placeholder:
 %px : mode of the Position X menu
 %py : mode of the Position Y menu
 %pz : mode of the Position Z menu
-%pl : g_nEmergencyPauseDigitsMin [1700/kg]
-%ph : g_nEmergencyPauseDigitsMax [1700/kg]
-%pL : g_nEmergencyStopZAndEMin [1700/kg]
-%pH : g_nEmergencyStopZAndEMax [1700/kg]
+%pl : Emergency pause minimum [DMS digits]
+%ph : Emergency pause maximum [DMS digits]
+%pL : Z stop and extrusion inhibit minimum [DMS digits]
+%pH : Z stop and extrusion inhibit maximum [DMS digits]
 %HB : active heat bed z matrix
 %HO : active heat bed min z offset in um
 %Z5-Z8: Page4 printing time

@@ -27,6 +27,7 @@
 #include "PrintPause.h"
 #include "PrintStop.h"
 #include "DigitCompensation.h"
+#include "PressureProtection.h"
 
 // ##########################################################################################
 // ##   status flags
@@ -111,6 +112,7 @@ public:
     static ZMotion zMotion;
     static PrintLayers layers;
     static DigitCompensation digitCompensation;
+    static PressureProtection pressureProtection;
     static PrintPause pause;
     static PrintStop printStop;
     static char ZMode;                      // Z Scale

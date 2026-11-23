@@ -450,12 +450,6 @@ extern char g_debugLog;
 // other configurable parameters
 extern unsigned short g_nManualSteps[4];
 
-extern long g_nEmergencyPauseDigitsMin; //short reicht eigentlich
-extern long g_nEmergencyPauseDigitsMax; //short reicht eigentlich
-
-extern short g_nEmergencyStopZAndEMin;
-extern short g_nEmergencyStopZAndEMax;
-extern bool g_nEmergencyESkip;
 
 // SenseOffset adds clearance when DMS force is high on the first layer.
 

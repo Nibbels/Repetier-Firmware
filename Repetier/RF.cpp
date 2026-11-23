@@ -169,13 +169,6 @@ unsigned short g_nManualSteps[4] = {
     lroundf(EXT0_STEPS_PER_MM* DEFAULT_MANUAL_MM_E)
 }; //pre init
 
-long g_nEmergencyPauseDigitsMin = EMERGENCY_PAUSE_DIGITS_MIN; //short reicht eigentlich
-long g_nEmergencyPauseDigitsMax = EMERGENCY_PAUSE_DIGITS_MAX; //short reicht eigentlich
-
-short g_nEmergencyStopZAndEMin = EMERGENCY_STOP_DIGITS_MIN;
-short g_nEmergencyStopZAndEMax = EMERGENCY_STOP_DIGITS_MAX;
-bool g_nEmergencyESkip = false;
-
 #ifdef RGB_LIGHT_R_PIN
 unsigned char g_uRGBHeatingR = RGB_HEATING_R;
 unsigned char g_uRGBHeatingG = RGB_HEATING_G;
@@ -2998,68 +2991,29 @@ static void serviceSenseOffset(bool sampleDue, short pressure, const PrintPause:
 
 void handleStrainGaugeFeatures(millis_t uTime) {
     const auto pauseSample = Printer::pause.beginSenseOffsetSample();
-
-    static millis_t uLastPressureTime = 0;
-    static long nPressureSum = 0;
-    static char nPressureChecks = 0;
-
-    static millis_t uLastZPressureTime = 0;
-    static long nZPressureSum = 0;
-    static char nZPressureChecks = 0;
+    auto& protection = Printer::pressureProtection;
 
     // Share one scheduled DMS reading among SenseOffset, emergency pause and emergency stop.
     const bool senseOffsetDue = Printer::senseOffsetControl.takeSampleSlot(uTime);
-    const bool pauseDue = uTime - uLastPressureTime > EMERGENCY_PAUSE_INTERVAL;
-    const bool stopDue = uTime - uLastZPressureTime > EMERGENCY_STOP_INTERVAL;
+    const bool pauseDue = protection.pauseSampleDue(uTime);
+    const bool stopDue = protection.stopSampleDue(uTime);
     const short pressure = (senseOffsetDue || pauseDue || stopDue) ? sampleStrainGauge() : 0;
 
     serviceSenseOffset(senseOffsetDue, pressure, pauseSample);
 
-    if (pauseDue && (g_nEmergencyPauseDigitsMin || g_nEmergencyPauseDigitsMax)) {
-        uLastPressureTime = uTime;
-
-        if (!Printer::pause.isPaused() && Printer::isPrinting() && Printer::areAxisHomed()) {
-            // This check applies to printing moves.
-            nPressureSum += pressure;
-            nPressureChecks += 1;
-
-            if (nPressureChecks == EMERGENCY_PAUSE_CHECKS) {
-                const short nPressure = nPressureSum / nPressureChecks;
-                nPressureSum = 0;
-                nPressureChecks = 0;
-
-                if (nPressure < g_nEmergencyPauseDigitsMin || nPressure > g_nEmergencyPauseDigitsMax) {
-                    Com::printF(PSTR("emergency pause: "), nPressure);
-                    showWarning((void*)ui_text_emergency_pause);
-                    Printer::pause.request(PrintPause::Destination::Park);
-                }
-            }
-        } else {
-            nPressureSum = 0;
-            nPressureChecks = 0;
+    if (pauseDue && protection.pauseEnabled()) {
+        const bool printingHomed = !Printer::pause.isPaused() && Printer::isPrinting() && Printer::areAxisHomed();
+        int16_t average;
+        if (protection.checkPause(uTime, pressure, printingHomed, average)) {
+            Com::printF(PSTR("emergency pause: "), average);
+            showWarning((void*)ui_text_emergency_pause);
+            Printer::pause.request(PrintPause::Destination::Park);
         }
     }
 
-    if (stopDue) {
-        uLastZPressureTime = uTime;
-        nZPressureSum += pressure;
-        nZPressureChecks += 1;
-
-        if (nZPressureChecks == EMERGENCY_STOP_CHECKS) {
-            const short nPressure = nZPressureSum / nZPressureChecks;
-            nZPressureSum = 0;
-            nZPressureChecks = 0;
-
-            if (nPressure < g_nEmergencyStopZAndEMin || g_nEmergencyStopZAndEMax < nPressure) {
-                // Suppress extrusion and stop a Z move at excessive force.
-                g_nEmergencyESkip = true;
-                if (Printer::isZMoveActive() && !Extruder::current->stepperDirection)
-                    doEmergencyStop(STOP_BECAUSE_OF_Z_BLOCK);
-            } else {
-                g_nEmergencyESkip = false;
-            }
-        }
-    }
+    if (stopDue && protection.checkStop(uTime, pressure)
+        && Printer::isZMoveActive() && !Extruder::current->stepperDirection)
+        doEmergencyStop(STOP_BECAUSE_OF_Z_BLOCK);
 }
 
 void handleScanWorkTasks() {
@@ -3959,8 +3913,9 @@ void processSpecialGCode(GCode* pCommand) {
 
         case 3075: // M3075 [S] [P] - configure the emergency pause digits
         {
-            long nMin = g_nEmergencyPauseDigitsMin;
-            long nMax = g_nEmergencyPauseDigitsMax;
+            const auto limits = Printer::pressureProtection.pauseLimits();
+            long nMin = limits.minimum;
+            long nMax = limits.maximum;
 
             if (pCommand->hasS()) {
                 // test and take over the specified value - this is our new min value
@@ -3976,25 +3931,20 @@ void processSpecialGCode(GCode* pCommand) {
             if (nMax > EMERGENCY_PAUSE_DIGITS_MAX)
                 nMax = EMERGENCY_PAUSE_DIGITS_MAX;
 
-            if (nMin == 0 && nMax == 0) {
-                g_nEmergencyPauseDigitsMin = 0;
-                g_nEmergencyPauseDigitsMax = 0;
-                HAL::eprSetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMIN, g_nEmergencyPauseDigitsMin);
-                HAL::eprSetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMAX, g_nEmergencyPauseDigitsMax);
+            const bool disable = nMin == 0 && nMax == 0;
+            if (disable || nMin < nMax) {
+                Printer::pressureProtection.setPauseLimits({int16_t(nMin), int16_t(nMax)});
+                HAL::eprSetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMIN, nMin);
+                HAL::eprSetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMAX, nMax);
                 EEPROM::updateChecksum();
                 if (Printer::debugInfo()) {
-                    Com::printFLN(PSTR("M3075: emergency pause disabled"));
-                }
-            } else if (nMin < nMax) {
-                g_nEmergencyPauseDigitsMin = nMin;
-                g_nEmergencyPauseDigitsMax = nMax;
-                HAL::eprSetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMIN, g_nEmergencyPauseDigitsMin);
-                HAL::eprSetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMAX, g_nEmergencyPauseDigitsMax);
-                EEPROM::updateChecksum(); //deshalb die prüfung
-                if (Printer::debugInfo()) {
-                    Com::printF(PSTR("M3075: new min: "), (int)g_nEmergencyPauseDigitsMin);
-                    Com::printF(PSTR(" [digits], new max: "), (int)g_nEmergencyPauseDigitsMax);
-                    Com::printFLN(PSTR(" [digits]"));
+                    if (disable) {
+                        Com::printFLN(PSTR("M3075: emergency pause disabled"));
+                    } else {
+                        Com::printF(PSTR("M3075: new min: "), (int)nMin);
+                        Com::printF(PSTR(" [digits], new max: "), (int)nMax);
+                        Com::printFLN(PSTR(" [digits]"));
+                    }
                 }
             } else {
                 if (Printer::debugErrors()) {
@@ -4009,8 +3959,9 @@ void processSpecialGCode(GCode* pCommand) {
 
         case 3076: // M3076 [S] [P] - configure the emergency stop digits
         {
-            long nMin = g_nEmergencyStopZAndEMin;
-            long nMax = g_nEmergencyStopZAndEMax;
+            const auto limits = Printer::pressureProtection.stopLimits();
+            long nMin = limits.minimum;
+            long nMax = limits.maximum;
 
             if (pCommand->hasS()) {
                 // test and take over the specified value - this is our new min value
@@ -4022,23 +3973,21 @@ void processSpecialGCode(GCode* pCommand) {
             }
 
             if (nMin == 0 && nMax == 0) {
-                g_nEmergencyStopZAndEMin = 0;
-                g_nEmergencyStopZAndEMax = 0;
+                Printer::pressureProtection.setStopLimits({0, 0});
 
                 if (Printer::debugInfo()) {
                     Com::printFLN(PSTR("M3076: emerg zstop temp. disabled"));
                 }
             } else if (nMin < nMax && nMin >= -32768 && nMax <= 32767) {
-                g_nEmergencyStopZAndEMin = (short)nMin;
-                g_nEmergencyStopZAndEMax = (short)nMax;
+                Printer::pressureProtection.setStopLimits({int16_t(nMin), int16_t(nMax)});
 
                 if (Printer::debugInfo()) {
-                    Com::printF(PSTR("M3076: new min: "), (int)g_nEmergencyStopZAndEMin);
-                    Com::printF(PSTR(" [digits], new max: "), (int)g_nEmergencyStopZAndEMax);
+                    Com::printF(PSTR("M3076: new min: "), (int)nMin);
+                    Com::printF(PSTR(" [digits], new max: "), (int)nMax);
                     Com::printFLN(PSTR(" [digits]"));
                 }
-                HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX, g_nEmergencyStopZAndEMax);
-                HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN, g_nEmergencyStopZAndEMin);
+                HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX, nMax);
+                HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN, nMin);
                 EEPROM::updateChecksum();
             } else {
                 if (Printer::debugErrors()) {

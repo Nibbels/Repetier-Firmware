@@ -1653,24 +1653,24 @@ void UIDisplay::parse(char* txt, bool ram) {
                 //}
                 break;
             }
-            if (c2 == 'l') // %pl : g_nEmergencyPauseDigitsMin [1700/kg]
+            if (c2 == 'l') // Emergency pause minimum in DMS digits.
             {
-                addLong(g_nEmergencyPauseDigitsMin, 6);
+                addLong(Printer::pressureProtection.pauseLimits().minimum, 6);
                 break;
             }
-            if (c2 == 'h') // %ph : g_nEmergencyPauseDigitsMax [1700/kg]
+            if (c2 == 'h') // Emergency pause maximum in DMS digits.
             {
-                addLong(g_nEmergencyPauseDigitsMax, 6);
+                addLong(Printer::pressureProtection.pauseLimits().maximum, 6);
                 break;
             }
-            if (c2 == 'L') // %pL : g_nEmergencyStopZAndEMin [1700/kg]
+            if (c2 == 'L') // Z stop and extrusion inhibit minimum in DMS digits.
             {
-                addLong(g_nEmergencyStopZAndEMin, 6);
+                addLong(Printer::pressureProtection.stopLimits().minimum, 6);
                 break;
             }
-            if (c2 == 'H') // %pH : g_nEmergencyStopZAndEMax [1700/kg]
+            if (c2 == 'H') // Z stop and extrusion inhibit maximum in DMS digits.
             {
-                addLong(g_nEmergencyStopZAndEMax, 6);
+                addLong(Printer::pressureProtection.stopLimits().maximum, 6);
                 break;
             }
             break;
@@ -2791,27 +2791,39 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
     }
 
     case UI_ACTION_EMERGENCY_PAUSE_MIN: {
-        INCREMENT_MIN_MAX(g_nEmergencyPauseDigitsMin, 200, EMERGENCY_PAUSE_DIGITS_MIN, g_nEmergencyPauseDigitsMax);
-        HAL::eprSetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMIN, g_nEmergencyPauseDigitsMin);
+        auto limits = Printer::pressureProtection.pauseLimits();
+        long minimum = limits.minimum;
+        INCREMENT_MIN_MAX(minimum, 200, EMERGENCY_PAUSE_DIGITS_MIN, limits.maximum);
+        limits.minimum = minimum;
+        Printer::pressureProtection.setPauseLimits(limits);
+        HAL::eprSetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMIN, minimum);
         EEPROM::updateChecksum();
         break;
     }
     case UI_ACTION_EMERGENCY_PAUSE_MAX: {
-        INCREMENT_MIN_MAX(g_nEmergencyPauseDigitsMax, 200, g_nEmergencyPauseDigitsMin, EMERGENCY_PAUSE_DIGITS_MAX);
-        HAL::eprSetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMAX, g_nEmergencyPauseDigitsMax);
+        auto limits = Printer::pressureProtection.pauseLimits();
+        long maximum = limits.maximum;
+        INCREMENT_MIN_MAX(maximum, 200, limits.minimum, EMERGENCY_PAUSE_DIGITS_MAX);
+        limits.maximum = maximum;
+        Printer::pressureProtection.setPauseLimits(limits);
+        HAL::eprSetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMAX, maximum);
         EEPROM::updateChecksum();
         break;
     }
 
     case UI_ACTION_EMERGENCY_ZSTOP_MIN: {
-        INCREMENT_MIN_MAX(g_nEmergencyStopZAndEMin, 200, EMERGENCY_STOP_DIGITS_MIN, g_nEmergencyStopZAndEMax);
-        HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN, g_nEmergencyStopZAndEMin);
+        auto limits = Printer::pressureProtection.stopLimits();
+        INCREMENT_MIN_MAX(limits.minimum, 200, EMERGENCY_STOP_DIGITS_MIN, limits.maximum);
+        Printer::pressureProtection.setStopLimits(limits);
+        HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN, limits.minimum);
         EEPROM::updateChecksum();
         break;
     }
     case UI_ACTION_EMERGENCY_ZSTOP_MAX: {
-        INCREMENT_MIN_MAX(g_nEmergencyStopZAndEMax, 200, g_nEmergencyStopZAndEMin, EMERGENCY_STOP_DIGITS_MAX);
-        HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX, g_nEmergencyStopZAndEMax);
+        auto limits = Printer::pressureProtection.stopLimits();
+        INCREMENT_MIN_MAX(limits.maximum, 200, limits.minimum, EMERGENCY_STOP_DIGITS_MAX);
+        Printer::pressureProtection.setStopLimits(limits);
+        HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX, limits.maximum);
         EEPROM::updateChecksum();
         break;
     }
@@ -3028,7 +3040,8 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         break;
     }
     case UI_ACTION_FLOW_MAX: {
-        short max = (g_nEmergencyPauseDigitsMax ? abs(g_nEmergencyPauseDigitsMax) : abs(EMERGENCY_PAUSE_DIGITS_MAX));
+        const int16_t pauseMax = Printer::pressureProtection.pauseLimits().maximum;
+        const int16_t max = pauseMax ? abs(pauseMax) : abs(EMERGENCY_PAUSE_DIGITS_MAX);
         auto profile = Printer::digitCompensation.flowProfile();
         INCREMENT_MIN_MAX(profile.maxDigits, 200, profile.minDigits, max);
         Printer::digitCompensation.setFlowProfile(profile);

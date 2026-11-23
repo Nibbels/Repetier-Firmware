@@ -68,6 +68,9 @@
     <ClInclude Include="SenseOffsetControl.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="PressureProtection.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="Repetier.h">
       <Filter>Header Files</Filter>
     </ClInclude>

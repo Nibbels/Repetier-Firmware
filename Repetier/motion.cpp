@@ -1074,7 +1074,7 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
             }
 
             // Queue overtravel belongs to the frozen print path. The pressure guard applies to both paths.
-            if (g_nEmergencyESkip || (forQueue && PrintLine::hasQueuedOvertravel())) {
+            if (Printer::pressureProtection.extrusionBlocked() || (forQueue && PrintLine::hasQueuedOvertravel())) {
                 doESteps = false;
             }
             HAL::forbidInterrupts();

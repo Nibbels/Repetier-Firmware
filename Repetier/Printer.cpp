@@ -82,6 +82,7 @@ PrintLayers Printer::layers{ZAXIS_STEPS_PER_MM};
 DigitCompensation Printer::digitCompensation{
     short(abs(EMERGENCY_PAUSE_DIGITS_MAX) * 0.7), short(abs(EMERGENCY_PAUSE_DIGITS_MAX))
 };
+PressureProtection Printer::pressureProtection;
 char Printer::ZMode = DEFAULT_Z_SCALE_MODE;                       // Z-min distance or nominal layer height
 char Printer::moveMode[3];                                        // move mode which is applied within the Position X/Y/Z menus
 bool Printer::moveKosys = KOSYS_GCODE;                            // true = GCode, false = DirectMove / OffsetMove

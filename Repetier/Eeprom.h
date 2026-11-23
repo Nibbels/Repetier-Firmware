@@ -110,11 +110,11 @@ have problems with other modules using the eeprom */
 #define EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX 1906 // Maximum SenseOffset in micrometers [int16_t]
 #define EPR_RF_MOD_SENSEOFFSET_DIGITS 1908     // Saved SenseOffset threshold in DMS digits [int16_t]
 
-#define EPR_RF_EMERGENCYPAUSEDIGITSMIN 1910 //+1911+1912+1913 g_nEmergencyPauseDigitsMin [4byte long]
-#define EPR_RF_EMERGENCYPAUSEDIGITSMAX 1914 //+1915+1916+1917 g_nEmergencyPauseDigitsMax [4byte long]
+#define EPR_RF_EMERGENCYPAUSEDIGITSMIN 1910 // Emergency pause minimum [int32_t]
+#define EPR_RF_EMERGENCYPAUSEDIGITSMAX 1914 // Emergency pause maximum [int32_t]
 
-#define EPR_RF_EMERGENCYZSTOPDIGITSMIN 1918 //+1919 g_nEmergencyStopZAndEMin [2byte short]
-#define EPR_RF_EMERGENCYZSTOPDIGITSMAX 1920 //+1921 g_nEmergencyStopZAndEMax [2byte short]
+#define EPR_RF_EMERGENCYZSTOPDIGITSMIN 1918 // Z stop and extrusion inhibit minimum [int16_t]
+#define EPR_RF_EMERGENCYZSTOPDIGITSMAX 1920 // Z stop and extrusion inhibit maximum [int16_t]
 
 #define EPR_RF_HEATED_BED_SENSOR_TYPE 1922 //[1byte]
 

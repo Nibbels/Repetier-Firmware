@@ -51,8 +51,10 @@ void poll();
 namespace HAL {
 millis_t timeInMilliseconds() { return clockMs; }
 int16_t eepromWords[2048] = {};
+int32_t eepromDWords[2048] = {};
 int16_t eprGetInt16(unsigned address) { return eepromWords[address]; }
 void eprSetInt16(unsigned address, int16_t value) { eepromWords[address] = value; }
+void eprSetInt32(unsigned address, int32_t value) { eepromDWords[address] = value; }
 }
 
 namespace EEPROM {
@@ -92,6 +94,7 @@ void WRITE(int pin, bool high);
 #include "ZMotion.h"
 #include "DigitCompensation.h"
 #include "SenseOffsetControl.h"
+#include "PressureProtection.h"
 
 #define PSTR(text) (text)
 #define UI_STATUS_UPD(text) ((void)0)
@@ -103,6 +106,7 @@ const char ui_text_z_axis[] = "", ui_text_max_reached[] = "", ui_text_min_reache
 const char ui_text_emergency_pause[] = "";
 
 struct Com {
+    static constexpr const char* tSlash = "/";
     template<class... Args> static void printF(Args...) {}
     template<class... Args> static void printFLN(Args...) {}
 };
@@ -110,7 +114,13 @@ struct Com {
 template<class... Args> void showWarning(Args...) { ++incompleteReturns; }
 template<class... Args> void showError(Args...) { assert(false); }
 template<class... Args> void showInformation(Args...) { assert(false); }
-void doEmergencyStop(int) { assert(false); }
+unsigned pressureStops = 0;
+bool expectPressureStop = false;
+void doEmergencyStop(int reason) {
+    assert(expectPressureStop && reason == STOP_BECAUSE_OF_Z_BLOCK);
+    ++pressureStops;
+    expectPressureStop = false;
+}
 bool isAnyScanRunning();
 void setExtruderCurrent(int, int) {}
 
@@ -138,6 +148,7 @@ extern PrintPause pause;
 extern PrintStop printStop;
 ZOffset zOffset;
 SenseOffsetControl senseOffsetControl{SENSIBLE_PRESSURE_MAX_OFFSET};
+PressureProtection pressureProtection;
 ZMotion zMotion(zStepsPerMm);
 PrintLayers layers{zStepsPerMm};
 DigitCompensation digitCompensation{
@@ -164,16 +175,18 @@ float compensatedPositionCollectTinyE = 0.0f;
 bool blockAll = false, g_pressure_offset_active = false;
 volatile char doHeatBedZCompensation = true;
 bool printing = true, menuPaused = false;
+bool axesHomed = true, movingZ = false;
 short g_pressure_offset = 0;
 int feedrateMultiply = 100, motorCurrent[4] = {};
 char moveMode[3] = { MOVE_MODE_SINGLE_STEPS, MOVE_MODE_SINGLE_STEPS, MOVE_MODE_SINGLE_STEPS };
 
 bool debugErrors() { return false; }
+bool debugInfo() { return false; }
 bool isPrinting() { return printing; }
 void setPrinting(bool active) { printing = active; }
-bool areAxisHomed() { return true; }
+bool areAxisHomed() { return axesHomed; }
 bool isAxisHomed(int) { return true; }
-bool isZMoveActive() { return false; }
+bool isZMoveActive() { return movingZ; }
 bool isZMaxEndstopHit() { return zMotion.maxEndstopHit(); }
 bool isZMinEndstopHit() { return ZMotion::minSwitchHit(); }
 bool needsCMPwait() { return false; }
@@ -331,8 +344,8 @@ void printCurrentPosition() {}
 struct GCode {
     long S = 0, P = 0;
     float E = 0, F = 0, I = 1, Y = 0;
-    bool explicitP = false;
-    bool hasS() const { return S != 0; }
+    bool explicitP = false, explicitS = false;
+    bool hasS() const { return explicitS || S != 0; }
     bool hasP() const { return explicitP || P != 0; }
     bool hasE() const { return E != 0; }
     bool hasF() const { return F != 0; }
@@ -376,6 +389,84 @@ void sample(short force, int count = 1) {
         poll();
 }
 
+void pressurePause() {
+    GCode command;
+    command.S = -99999;
+    command.P = 99999;
+    configurePressure(3075, &command);
+    assert(HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMIN] == EMERGENCY_PAUSE_DIGITS_MIN);
+    assert(HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMAX] == EMERGENCY_PAUSE_DIGITS_MAX);
+    sample(EMERGENCY_PAUSE_DIGITS_MAX, EMERGENCY_PAUSE_CHECKS);
+    assert(!Printer::pause.isPaused());
+
+    command.explicitS = command.explicitP = true;
+    command.S = command.P = 0;
+    configurePressure(3075, &command);
+    assert(!HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMIN] && !HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMAX]);
+    sample(EMERGENCY_PAUSE_DIGITS_MAX + 1, EMERGENCY_PAUSE_CHECKS);
+    assert(!Printer::pause.isPaused());
+
+    command.S = -7000;
+    command.P = 7000;
+    configurePressure(3075, &command);
+    sample(-7500, EMERGENCY_PAUSE_CHECKS - 1);
+    assert(!Printer::pause.isPaused());
+    Printer::axesHomed = false;
+    sample(-7500);
+    Printer::axesHomed = true;
+    sample(-7500, EMERGENCY_PAUSE_CHECKS - 1);
+    assert(!Printer::pause.isPaused());
+    sample(-7500);
+    assert(Printer::pause.isPaused() && !Printer::pause.isSettled());
+}
+
+void pressureStop() {
+    GCode command;
+    command.S = -12000;
+    command.P = 11500;
+    configurePressure(3076, &command);
+    assert(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN) == -12000);
+    assert(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX) == 11500);
+
+    Printer::movingZ = true;
+    Extruder::current->stepperDirection = 1;
+    forceDigits = 11501;
+    auto advance = [](millis_t elapsed) {
+        clockMs += elapsed;
+        handleStrainGaugeFeatures(clockMs);
+    };
+    advance(EMERGENCY_STOP_INTERVAL);
+    assert(strainGaugeReads == 0);
+    advance(1);
+    advance(EMERGENCY_STOP_INTERVAL);
+    assert(strainGaugeReads == 1);
+    advance(1);
+    assert(!Printer::pressureProtection.extrusionBlocked());
+    advance(EMERGENCY_STOP_INTERVAL + 1);
+    assert(Printer::pressureProtection.extrusionBlocked() && !pressureStops);
+
+    sample(11500, EMERGENCY_STOP_CHECKS);
+    assert(!Printer::pressureProtection.extrusionBlocked());
+    Extruder::current->stepperDirection = 0;
+    sample(-12001, EMERGENCY_STOP_CHECKS - 1);
+    assert(!Printer::pressureProtection.extrusionBlocked());
+    expectPressureStop = true;
+    sample(-12001);
+    assert(Printer::pressureProtection.extrusionBlocked() && pressureStops == 1);
+
+    Printer::movingZ = false;
+    command.explicitS = command.explicitP = true;
+    command.S = command.P = 0;
+    configurePressure(3076, &command);
+    assert(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN) == -12000);
+    assert(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX) == 11500);
+    sample(0, EMERGENCY_STOP_CHECKS);
+    assert(!Printer::pressureProtection.extrusionBlocked());
+    // The temporary zero band still rejects any nonzero average.
+    sample(1, EMERGENCY_STOP_CHECKS);
+    assert(Printer::pressureProtection.extrusionBlocked());
+}
+
 bool pauseDuringQueueWait = false;
 void Commands::checkForPeriodicalActions(FirmwareState state) {
     if (duringPeriodicActions)
@@ -410,7 +501,7 @@ void Printer::offsetRelativeStepsCoordinates(long x, long y, long z, long e, int
         if (clipReturn[X_AXIS] && x < 0) x = 0;
         if (clipReturn[Y_AXIS] && y < 0) y = 0;
         if (clipReturn[Z_AXIS] && z < 0) z = 0;
-        if ((clipReturn[E_AXIS] && e > 0) || g_nEmergencyESkip) e = 0;
+        if ((clipReturn[E_AXIS] && e > 0) || Printer::pressureProtection.extrusionBlocked()) e = 0;
         directCurrentSteps[X_AXIS] += x;
         directCurrentSteps[Y_AXIS] += y;
         directCurrentSteps[Z_AXIS] += z;
@@ -452,9 +543,9 @@ void parkAndResume() {
     assert(Printer::directCurrentSteps[Z_AXIS] == parkedZ - static_cast<long>(zStepsPerMm));
 
     sample(EMERGENCY_STOP_DIGITS_MAX + 1, 2 * EMERGENCY_STOP_CHECKS);
-    assert(g_nEmergencyESkip);
+    assert(Printer::pressureProtection.extrusionBlocked());
     sample(printingForce, 50);
-    assert(!g_nEmergencyESkip && Printer::pause.isWarmPause());
+    assert(!Printer::pressureProtection.extrusionBlocked() && Printer::pause.isWarmPause());
     extrudeFromPanel();
     const long manualExtruderPosition = -parkE + g_nManualSteps[E_AXIS];
     assert(Printer::directCurrentSteps[E_AXIS] == manualExtruderPosition);
@@ -1124,7 +1215,7 @@ void initializeOffsets() {
 int main(int argc, char** argv) {
     assert(argc == 2);
     const bool digitFlowReplay = !std::strcmp(argv[1], "digit-flow");
-    if (!digitFlowReplay)
+    if (!digitFlowReplay && std::strncmp(argv[1], "pressure-", 9))
         initializeOffsets();
     Printer::pause.restoreDefaultParking();
     Printer::pause.setParkSteps(E_AXIS, parkE);
@@ -1167,6 +1258,10 @@ int main(int argc, char** argv) {
         senseOffsetSettings();
     else if (!std::strcmp(argv[1], "sense-limit-interrupt"))
         senseOffsetLimitInterrupt();
+    else if (!std::strcmp(argv[1], "pressure-pause"))
+        pressurePause();
+    else if (!std::strcmp(argv[1], "pressure-stop"))
+        pressureStop();
     else
         return 1;
     std::printf("Print lifecycle replay passed (%s)\n", argv[1]);
