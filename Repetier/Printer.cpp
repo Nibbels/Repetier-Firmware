@@ -49,7 +49,6 @@ uint8_t Printer::debugLevel = 6; ///< Bitfield defining debug output. 1 = echo, 
 uint16_t Printer::stepsPackingMinInterval = STEP_PACKING_MIN_INTERVAL;
 uint8_t Printer::menuMode = 0;
 
-volatile float Printer::v = 0;                    // Last planned printer speed.
 
 long Printer::maxSoftEndstopSteps[2] = { 0 };
 float Printer::axisLengthMM[3] = { 0 };       // Länge des überfahrbaren Bereichs im positiven Homing. (=Schienen-Fahrweg - Homing-Offset - 2x ExtruderOffset)

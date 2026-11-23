@@ -1114,7 +1114,7 @@ void UIDisplay::parse(char* txt, bool ram) {
             }
             if (c2 == 'v') // %ov : Active Speed
             {
-                addFloat(Printer::v * Printer::digitCompensation.feedrateFactor(), 3, 1);
+                addFloat(StepExecutor::nominalFeedrate() * Printer::digitCompensation.feedrateFactor(), 3, 1);
                 break;
             }
             if (c2 == 'p') // %op : Is single double or quadstepping?

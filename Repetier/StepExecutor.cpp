@@ -24,6 +24,68 @@ volatile uint32_t StepExecutor::stepIntervalTicks = 10000;
 uint8_t StepExecutor::stepsPerTimerCall = 1;
 volatile int32_t StepExecutor::queuedPrimarySteps;
 int32_t StepExecutor::directPrimarySteps;
+volatile float StepExecutor::nominalFeedrate_ = 0;
+
+float StepExecutor::nominalFeedrate() {
+    InterruptProtectedBlock lock;
+    return nominalFeedrate_;
+}
+
+static inline bool hasQueuedOvertravel() {
+    return Printer::xyMotion.hasQueuedOvertravel() || Printer::zMotion.hasQueuedOvertravel();
+}
+
+inline void StepExecutor::enableSteppers(PrintLine& move) {
+    if (Printer::blockAll) {
+        // do not enable anything in case everything is blocked
+        return;
+    }
+
+    if (move.isXMove()) {
+        Printer::enableXStepper();
+    }
+    if (move.isYMove()) {
+        Printer::enableYStepper();
+    }
+    if (move.isZMove()) {
+        Printer::enableZStepper();
+    }
+    if (move.isEMove()) {
+        Printer::unmarkAllSteppersDisabled(); //doesnt fit into Extruder::enable() because of forward declare -> TODO
+        Extruder::enable();
+    }
+}
+
+inline void StepExecutor::adjustDirections(PrintLine& move) {
+    if (Printer::blockAll) {
+        // do not enable anything in case everything is blocked
+        return;
+    }
+
+    if (move.isXMove()) {
+        Printer::setXDirection(move.isXPositiveMove());
+    }
+    if (move.isYMove()) {
+        Printer::setYDirection(move.isYPositiveMove());
+    }
+    if (move.isZMove()) {
+        ZMotion::setDirection(move.isZPositiveMove());
+    }
+    if (move.isEMove()) {
+        if (!Printer::isAdvanceActivated()) // Set direction if no advance/OPS enabled
+            Extruder::setDirection(move.isEPositiveMove());
+    }
+}
+
+inline void StepExecutor::updateAdvanceSteps(const PrintLine& move, uint16_t speed) {
+    if (!Printer::isAdvanceActivated())
+        return;
+
+    const int32_t leadSteps = (speed * move.stepProfile.advanceL) >> 16;
+    HAL::forbidInterrupts();
+    Printer::pressureAdvance.setLeadSteps(leadSteps);
+    HAL::allowInterrupts();
+}
 
 void StepExecutor::stepSlowedZCompensation() {
     if (Printer::blockAll || Printer::zMotion.scanInProgress()) {
@@ -157,27 +219,27 @@ long StepExecutor::performQueueMove() {
             return (wait); // waste some time for path optimization to fill up
         }
 
-        move->enableSteppers(); //set Z direction etc.
-        move->adjustDirections();
+        enableSteppers(*move); //set Z direction etc.
+        adjustDirections(*move);
         directionOwner = DirectionOwner::Queued;
         move->fixStartAndEndSpeed();
 
         queuedPrimarySteps = move->delta[move->primaryAxis];
         stepClocks[FOR_QUEUE].start(move->stepProfile.vStart);
-        Printer::v = move->fullSpeed;
+        nominalFeedrate_ = move->fullSpeed;
 
         HAL::forbidInterrupts();
 
-        move->updateAdvanceSteps(move->stepProfile.vStart); //startet advance extruder "etwas" vor der ersten bewegung: gut? ist stepIntervalTicks immer klein genug?
+        updateAdvanceSteps(*move, move->stepProfile.vStart);
 
         return (stepIntervalTicks >> 1); //wait 50% to next interrupt.
     }
 
     if (directionOwner != DirectionOwner::Queued) {
         directionOwner = DirectionOwner::Queued;
-        Printer::v = move->fullSpeed;
-        move->adjustDirections();
-        move->updateAdvanceSteps(stepClocks[FOR_QUEUE].peak);
+        nominalFeedrate_ = move->fullSpeed;
+        adjustDirections(*move);
+        updateAdvanceSteps(*move, stepClocks[FOR_QUEUE].peak);
     }
 
     return performMove(move, FOR_QUEUE);
@@ -230,24 +292,24 @@ long StepExecutor::performDirectMove() {
     if (direct.task == DIRECT_PREPARED_STOPPABLE || direct.task == DIRECT_PREPARED) {
         direct.task = (direct.task == DIRECT_PREPARED_STOPPABLE ? DIRECT_RUNNING_STOPPABLE : DIRECT_RUNNING);
 
-        direct.enableSteppers();
-        direct.adjustDirections();
+        enableSteppers(direct);
+        adjustDirections(direct);
         directionOwner = DirectionOwner::Direct;
 
         directPrimarySteps = direct.delta[direct.primaryAxis];
         stepClocks[FOR_DIRECT].start(direct.stepProfile.vStart);
-        Printer::v = direct.fullSpeed;
+        nominalFeedrate_ = direct.fullSpeed;
 
-        direct.updateAdvanceSteps(direct.stepProfile.vStart); //startet advance extruder "etwas" vor der ersten bewegung: gut? ist stepIntervalTicks immer klein genug?
+        updateAdvanceSteps(direct, direct.stepProfile.vStart);
 
         return (stepIntervalTicks >> 1); //wait 50% to next interrupt.
     }
 
     if (directionOwner != DirectionOwner::Direct) {
         directionOwner = DirectionOwner::Direct;
-        Printer::v = direct.fullSpeed;
-        direct.adjustDirections();
-        direct.updateAdvanceSteps(stepClocks[FOR_DIRECT].peak);
+        nominalFeedrate_ = direct.fullSpeed;
+        adjustDirections(direct);
+        updateAdvanceSteps(direct, stepClocks[FOR_DIRECT].peak);
     }
 
     return performMove(&direct, FOR_DIRECT);
@@ -301,7 +363,7 @@ long StepExecutor::performMove(PrintLine* move, uint8_t forQueue) {
             }
 
             // Queue overtravel belongs to the frozen print path. The pressure guard applies to both paths.
-            if (Printer::pressureProtection.extrusionBlocked() || (forQueue && PrintLine::hasQueuedOvertravel())) {
+            if (Printer::pressureProtection.extrusionBlocked() || (forQueue && hasQueuedOvertravel())) {
                 doESteps = false;
             }
             HAL::forbidInterrupts();
@@ -373,9 +435,12 @@ long StepExecutor::performMove(PrintLine* move, uint8_t forQueue) {
 
         if (move->isZMove()) {
             if ((move->error[Z_AXIS] -= move->delta[Z_AXIS]) < 0) {
-                const bool continuing = Printer::zMotion.stepPath(move->zPath(forQueue));
+                const auto path = forQueue
+                    ? (move->isAbortAtEndstops() ? ZMotion::Path::QueuedUntilEndstop : ZMotion::Path::Queued)
+                    : (move->task == DIRECT_RUNNING_STOPPABLE ? ZMotion::Path::StoppableDirect : ZMotion::Path::Direct);
+                const bool continuing = Printer::zMotion.stepPath(path);
                 if (!continuing)
-                    move->setZMoveFinished();
+                    move->setMoveOfAxisFinished(Z_AXIS);
 
                 if (forQueue)
                     move->error[Z_AXIS] += queuedPrimarySteps;
@@ -398,7 +463,7 @@ long StepExecutor::performMove(PrintLine* move, uint8_t forQueue) {
     HAL::allowInterrupts(); // Allow interrupts for other types, timer1 is still disabled
 
     const speed_t v = nextStepSpeed(*move, stepClocks[forQueue], max_loops, stepIntervalTicks);
-    move->updateAdvanceSteps(v);
+    updateAdvanceSteps(*move, v);
 
     stepIntervalTicks = HAL::CPUDivU2(v);
 
@@ -430,9 +495,9 @@ long StepExecutor::performMove(PrintLine* move, uint8_t forQueue) {
 
     if (move->stepsRemaining <= 0 || move->isNoMove()) // line finished
     {
-        //Wenn keine Steps mehr da, sollten alle Achsen die benutzt wurden wieder freigegeben werden. Bei Z ist der Sonderfall, dass die Z-Kompensation sich reinschummeln könnte.
-        move->setXYZEMoveFinished(); // Wichtig, das die Z-Kompensation wieder weiterarbeiten kann, auch wichtig bei PrintLine::direct!
-                                     // Auch wenn kein Z-Move, könnte die Z-Kompensation die Achse Z benutzt haben.
+        // Release every axis so Z compensation can resume between moves.
+        move->dir &= ~240;
+        Extruder::current->stepperDirection = 0;
 
         auto& queue = PrintLine::queue;
         if (forQueue) {
@@ -457,7 +522,7 @@ long StepExecutor::performMove(PrintLine* move, uint8_t forQueue) {
 
         if (queue.count() == 0 && nIdle) {
             g_uStartOfIdle = HAL::timeInMilliseconds(); //end a move
-            Printer::v = 0;
+            nominalFeedrate_ = 0;
         }
 
         interval >>= 1; // 50% of time to next call to do cur=0, which will fire another interrupt at 50% of the active stepIntervalTicks step time. This works like "move 1 end -> 50% -> prepare move 2 -> 50% -> move 2 begin"

@@ -87,7 +87,6 @@ public:
     static uint8_t flag2;
     static uint8_t flag3;
     static uint16_t stepsPackingMinInterval;
-    static volatile float v;                // Last planned printer speed.
 
     static long maxSoftEndstopSteps[2];     // X/Y software endstops. Z limits belong to zMotion.
     static float axisLengthMM[3];           // Länge des überfahrbaren Bereichs im positiven Homing. (=Schienen-Fahrweg - Homing-Offset - 2x ExtruderOffset)

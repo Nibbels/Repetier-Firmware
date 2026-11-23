@@ -22,20 +22,12 @@
 #define FLAG_WARMUP 1
 #define FLAG_NOMINAL 2
 #define FLAG_DECELERATING 4
-#define FLAG_ACCELERATION_ENABLED 8
 #define FLAG_ABORT_AT_ENDSTOPS 16
-#define FLAG_SKIP_ACCELERATING 32
-#define FLAG_SKIP_DEACCELERATING 64
 #define FLAG_BLOCKED 128
 
 #define FLAG_JOIN_STEP_PROFILE_READY 1  // The foreground has prepared the step ramp.
 #define FLAG_JOIN_END_FIXED 2            // The right speed is fixed. Don't check this block or any block to the left.
 #define FLAG_JOIN_START_FIXED 4          // The left speed is fixed. Don't check left block.
-#define FLAG_JOIN_START_RETRACT 8        // Start filament retraction at move start
-#define FLAG_JOIN_END_RETRACT 16         // Wait for filament pushback, before ending move
-#define FLAG_JOIN_NO_RETRACT 32          // Disable retract for this line
-#define FLAG_JOIN_WAIT_EXTRUDER_UP 64    // Wait for the extruder to finish it's up movement
-#define FLAG_JOIN_WAIT_EXTRUDER_DOWN 128 // Wait for the extruder to finish it's down movement
 
 enum DirectMovePhase : char {
     DIRECT_IDLE,
@@ -51,19 +43,16 @@ enum DirectMovePhase : char {
 #define FOR_DIRECT 0
 #define FOR_QUEUE 1
 
-class UIDisplay;
 class MoveQueue;
 class PrintLine {
-    friend class UIDisplay;
     friend class MoveQueue;
     friend class MotionPlanner;
     friend class StepExecutor;
 
-public:
+private:
     flag8_t joinFlags;
     volatile flag8_t flags;
 
-private:
     static MoveQueue queue;
     static PrintLine direct;
     inline bool isStepProfileReady() const {
@@ -135,10 +124,6 @@ public:
         return task == DIRECT_PREPARING_STOPPABLE || task == DIRECT_PREPARED_STOPPABLE || task == DIRECT_RUNNING_STOPPABLE;
     }
 
-    inline bool isStartSpeedFixed() {
-        return joinFlags & FLAG_JOIN_START_FIXED;
-    } // isStartSpeedFixed
-
     inline void setStartSpeedFixed(bool newState) {
         joinFlags = (newState ? joinFlags | FLAG_JOIN_START_FIXED : joinFlags & ~FLAG_JOIN_START_FIXED);
     } // setStartSpeedFixed
@@ -173,10 +158,6 @@ public:
         primaryAxis = b;
     } // setWaitForXLinesFilled
 
-    inline bool isExtruderForwardMove() {
-        return (dir & 136) == 136; //isEPositiveMove()
-    }                              // isExtruderForwardMove
-
     inline void block() {
         flags |= FLAG_BLOCKED;
     } // block
@@ -196,16 +177,6 @@ public:
         return flags & FLAG_ABORT_AT_ENDSTOPS;
     } // isAbortAtEndstops
 
-    ZMotion::Path zPath(bool queued) {
-        if (queued)
-            return isAbortAtEndstops() ? ZMotion::Path::QueuedUntilEndstop : ZMotion::Path::Queued;
-        return task == DIRECT_RUNNING_STOPPABLE ? ZMotion::Path::StoppableDirect : ZMotion::Path::Direct;
-    }
-
-    static bool hasQueuedOvertravel() {
-        return Printer::xyMotion.hasQueuedOvertravel() || Printer::zMotion.hasQueuedOvertravel();
-    }
-
     inline bool isNominalMove() {
         return flags & FLAG_NOMINAL;
     } // isNominalMove
@@ -213,32 +184,6 @@ public:
     inline void setNominalMove() {
         flags |= FLAG_NOMINAL;
     } // setNominalMove
-
-    inline void setXMoveFinished() {
-        dir &= ~16;
-    } // setXMoveFinished
-
-    inline void setYMoveFinished() {
-        dir &= ~32;
-    } // setYMoveFinished
-
-    inline void setZMoveFinished() {
-        dir &= ~64;
-    } // setZMoveFinished
-
-    inline void setEMoveFinished() {
-        dir &= ~128;
-        Extruder::current->stepperDirection = 0;
-    } // setEMoveFinished
-
-    inline void setXYMoveFinished() {
-        dir &= ~48;
-    } // setXYMoveFinished
-
-    inline void setXYZEMoveFinished() {
-        dir &= ~240;
-        Extruder::current->stepperDirection = 0;
-    } // setXYMoveFinished
 
     inline bool isXPositiveMove() {
         return (dir & 17) == 17;
@@ -330,15 +275,6 @@ public:
         dir |= 1 << axis;
     } // setPositiveDirectionForAxis
 
-    inline void updateAdvanceSteps(speed_t v) {
-        if (!Printer::isAdvanceActivated())
-            return;
-
-        const int32_t leadSteps = (v * stepProfile.advanceL) >> 16;
-        HAL::forbidInterrupts();
-        Printer::pressureAdvance.setLeadSteps(leadSteps);
-        HAL::allowInterrupts();
-    }  // updateAdvanceSteps
 
 
     INLINE long getWaitTicks() {
@@ -368,49 +304,7 @@ public:
 
     static void queueTask(char task);
 
-    inline void enableSteppers(void) {
-        if (Printer::blockAll) {
-            // do not enable anything in case everything is blocked
-            return;
-        }
 
-        // Only enable axis that are moving. If the axis doesn't need to move then it can stay disabled depending on configuration.
-        if (isXMove()) {
-            Printer::enableXStepper();
-        }
-        if (isYMove()) {
-            Printer::enableYStepper();
-        }
-        if (isZMove()) {
-            Printer::enableZStepper();
-        }
-        if (isEMove()) {
-            Printer::unmarkAllSteppersDisabled(); //doesnt fit into Extruder::enable() because of forward declare -> TODO
-            Extruder::enable();
-        }
-    } // enableSteppers
-
-    inline void adjustDirections(void) {
-        if (Printer::blockAll) {
-            // do not enable anything in case everything is blocked
-            return;
-        }
-
-        // Only enable axis that are moving. If the axis doesn't need to move then it can stay disabled depending on configuration.
-        if (isXMove()) {
-            Printer::setXDirection(isXPositiveMove());
-        }
-        if (isYMove()) {
-            Printer::setYDirection(isYPositiveMove());
-        }
-        if (isZMove()) {
-            ZMotion::setDirection(isZPositiveMove());
-        }
-        if (isEMove()) {
-            if (!Printer::isAdvanceActivated()) // Set direction if no advance/OPS enabled
-                Extruder::setDirection(isEPositiveMove());
-        }
-    } // adjustDirections
 };
 
 // The foreground fills and publishes slots. The step timer activates and retires them.

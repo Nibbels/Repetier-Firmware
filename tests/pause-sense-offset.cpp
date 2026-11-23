@@ -444,7 +444,6 @@ struct PrintLine {
     static bool hasActiveZMove();
     static int queuedMoveCount() { return linesCount; }
     static bool hasStoppableDirectMove();
-    static bool hasQueuedOvertravel() { return false; }
     static unsigned plannedMoves;
     static bool updatesWobble;
     static void prepareQueueMove(bool, bool, float, bool wobble) {
@@ -468,6 +467,7 @@ int PrintLine::stopRequests = 0;
 unsigned PrintLine::plannedMoves = 0;
 bool PrintLine::updatesWobble = false;
 const int32_t queuedPrimarySteps = 1, directPrimarySteps = 1;
+bool hasQueuedOvertravel() { return false; }
 
 struct StepExecutor {
 #include "step-clock-firmware.inc"

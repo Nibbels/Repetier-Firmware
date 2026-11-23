@@ -24,6 +24,7 @@ class PrintLine;
 
 class StepExecutor {
 public:
+    static float nominalFeedrate();
     static uint8_t stepsPerInterrupt() { return stepsPerTimerCall; }
     static void stepSlowedZCompensation();
     static bool needCmpWait();
@@ -49,6 +50,11 @@ private:
     static uint8_t stepsPerTimerCall;
     static volatile int32_t queuedPrimarySteps;
     static int32_t directPrimarySteps;
+    static volatile float nominalFeedrate_;
+
+    static void enableSteppers(PrintLine& move);
+    static void adjustDirections(PrintLine& move);
+    static void updateAdvanceSteps(const PrintLine& move, uint16_t speed);
 
     static uint16_t nextStepSpeed(PrintLine& move, StepClock& clock, uint8_t pulses, uint32_t interval);
     static long performMove(PrintLine* move, uint8_t forQueue);
