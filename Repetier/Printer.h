@@ -36,7 +36,7 @@
 #include "MoveTarget.h"
 #include "WobbleCorrection.h"
 #include "CartesianPlanner.h"
-#include "XYOvertravel.h"
+#include "XYMotion.h"
 
 // ##########################################################################################
 // ##   status flags
@@ -120,7 +120,7 @@ public:
     static MoveTarget moveTarget;
     static WobbleCorrection wobbleCorrection;
     static CartesianPlanner cartesianPlanner;
-    static XYOvertravel xyOvertravel;
+    static XYMotion xyMotion;
     static PrintPause pause;
     static PrintStop printStop;
     static char ZMode;                      // Z Scale
@@ -130,11 +130,7 @@ public:
 
     static volatile char doHeatBedZCompensation;
 
-    static volatile long currentXYSteps[2];
     static volatile char blockAll;
-
-    static volatile long currentXSteps;
-    static volatile long currentYSteps;
 
     static char enabledStepper[3];
 
@@ -210,7 +206,7 @@ public:
         InterruptProtectedBlock noInts; //HAL::forbidInterrupts();
 
         Printer::setXAxisSteps(0);
-        Printer::currentXSteps = 0;
+        Printer::xyMotion.setMotorSteps(X_AXIS, 0);
         Printer::resetDirectAxis(X_AXIS);
 
         pause.cancel();
@@ -234,7 +230,7 @@ public:
         InterruptProtectedBlock noInts; //HAL::forbidInterrupts();
 
         Printer::setYAxisSteps(0);
-        Printer::currentYSteps = 0;
+        Printer::xyMotion.setMotorSteps(Y_AXIS, 0);
         Printer::resetDirectAxis(Y_AXIS);
 
         pause.cancel();
@@ -334,12 +330,12 @@ public:
 
     static INLINE void startXStep(int8_t dir = (Printer::getXDirectionIsPos() ? 1 : -1)) {
         WRITE(X_STEP_PIN, HIGH);
-        Printer::currentXSteps += dir;
+        Printer::xyMotion.recordMotorStep(X_AXIS, dir);
     } // startXStep
 
     static INLINE void startYStep(int8_t dir = (Printer::getYDirectionIsPos() ? 1 : -1)) {
         WRITE(Y_STEP_PIN, HIGH);
-        Printer::currentYSteps += dir;
+        Printer::xyMotion.recordMotorStep(Y_AXIS, dir);
     } // startYStep
 
     static INLINE void endYStep(void) {
@@ -401,7 +397,7 @@ public:
         bool problematisch = false;
         if (g_offsetZCompensationSteps > 0)
             problematisch = true; //wenn matrix positiv, dann evtl. problem
-        if (isAxisHomed(Y_AXIS) && Printer::currentYSteps <= 5 * YAXIS_STEPS_PER_MM)
+        if (isAxisHomed(Y_AXIS) && Printer::xyMotion.motorSteps(Y_AXIS) <= 5 * YAXIS_STEPS_PER_MM)
             problematisch = false; //vorherige Probleme egal, wenn bett nach hinten gefahren
         if (g_nHeatBedScanStatus)
             problematisch = false; //das homing passiert in Z einzeln, liegt aber neben dem Bett.
@@ -434,9 +430,9 @@ public:
         if (z != -1)
             zMotion.setHomed(!printStop.commandsBlocked() && z);
         if (x == false)
-            xyOvertravel.clear(X_AXIS);
+            xyMotion.clearQueuedOvertravel(X_AXIS);
         if (y == false)
-            xyOvertravel.clear(Y_AXIS);
+            xyMotion.clearQueuedOvertravel(Y_AXIS);
         if (!isAxisHomed(Z_AXIS)) {
             Printer::disableCMPnow(true); //true == wait for move while HOMING
         }
@@ -496,11 +492,11 @@ public:
     }  // isZMinEndstopHit
 
     static INLINE bool isXMaxEndstopHit() {
-        return Printer::currentXSteps >= Printer::maxSoftEndstopSteps[X_AXIS];
+        return Printer::xyMotion.motorSteps(X_AXIS) >= Printer::maxSoftEndstopSteps[X_AXIS];
     }  // isXMaxEndstopHit
 
     static INLINE bool isYMaxEndstopHit() {
-        return Printer::currentYSteps >= Printer::maxSoftEndstopSteps[Y_AXIS];
+        return Printer::xyMotion.motorSteps(Y_AXIS) >= Printer::maxSoftEndstopSteps[Y_AXIS];
     }  // isYMaxEndstopHit
 
     static inline bool isZMaxEndstopHit() {
@@ -608,7 +604,7 @@ public:
     static INLINE void setXAxisSteps(int32_t x) {
         InterruptProtectedBlock noInts;
         cartesianPlanner.setAxisSteps(X_AXIS, x);
-        currentXYSteps[X_AXIS] = x;
+        xyMotion.setNominalSteps(X_AXIS, x);
         moveTarget.setMachineMM(X_AXIS, x * axisMMPerSteps[X_AXIS]);
         wobbleCorrection.clearAxis(X_AXIS);
         noInts.unprotect();
@@ -616,7 +612,7 @@ public:
     static INLINE void setYAxisSteps(int32_t y) {
         InterruptProtectedBlock noInts;
         cartesianPlanner.setAxisSteps(Y_AXIS, y);
-        currentXYSteps[Y_AXIS] = y;
+        xyMotion.setNominalSteps(Y_AXIS, y);
         moveTarget.setMachineMM(Y_AXIS, y * axisMMPerSteps[Y_AXIS]);
         wobbleCorrection.clearAxis(Y_AXIS);
         noInts.unprotect();
@@ -636,29 +632,32 @@ public:
     static INLINE void stopDirectAxis(uint8_t axis) {
         if (axis == Z_AXIS)
             zMotion.stopDirectMove();
+        else if (axis == E_AXIS)
+            extruderDirect.stop();
         else
-            otherDirectPosition(axis).stop();
+            xyMotion.stopDirect(axis);
     }
     static INLINE void resetDirectAxis(uint8_t axis) {
         if (axis == Z_AXIS)
             zMotion.resetDirectPosition();
+        else if (axis == E_AXIS)
+            extruderDirect.reset();
         else
-            otherDirectPosition(axis).reset();
+            xyMotion.resetDirect(axis);
     }
     static INLINE const DirectPosition& directPosition(uint8_t axis) {
-        return axis == Z_AXIS ? zMotion.directPosition() : otherDirectPosition(axis);
+        if (axis == Z_AXIS)
+            return zMotion.directPosition();
+        return axis == E_AXIS ? extruderDirect : xyMotion.directPosition(axis);
     }
     static INLINE int32_t directSteps(uint8_t axis) {
         InterruptProtectedBlock lock;
         return directPosition(axis).steps();
     }
-    static INLINE void advanceDirectXY(uint8_t axis, int8_t direction) {
-        xyDirect[axis].advance(direction);
-    }
 
     static int32_t getPlannedDirectAxisSteps(uint8_t axis) {
         InterruptProtectedBlock noInts;
-        int32_t plannedAxisSteps = axis == Z_AXIS ? zMotion.nominalSteps() : currentXYSteps[axis];
+        int32_t plannedAxisSteps = axis == Z_AXIS ? zMotion.nominalSteps() : xyMotion.nominalSteps(axis);
         plannedAxisSteps += directPosition(axis).target();
         noInts.unprotect();
 
@@ -706,11 +705,7 @@ public:
     static void showConfiguration();
 
 private:
-    static DirectPosition xyDirect[2];
     static DirectPosition extruderDirect;
-    static INLINE DirectPosition& otherDirectPosition(uint8_t axis) {
-        return axis == E_AXIS ? extruderDirect : xyDirect[axis];
-    }
 
     static void homeXAxis();
     static void homeYAxis();

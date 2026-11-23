@@ -80,7 +80,7 @@ ExtrusionCompensation Printer::extrusionCompensation;
 MoveTarget Printer::moveTarget;
 WobbleCorrection Printer::wobbleCorrection;
 CartesianPlanner Printer::cartesianPlanner;
-XYOvertravel Printer::xyOvertravel;
+XYMotion Printer::xyMotion;
 char Printer::ZMode = DEFAULT_Z_SCALE_MODE;                       // Z-min distance or nominal layer height
 char Printer::moveMode[3];                                        // move mode which is applied within the Position X/Y/Z menus
 bool Printer::moveKosys = KOSYS_GCODE;                            // true = GCode, false = DirectMove / OffsetMove
@@ -88,14 +88,8 @@ bool Printer::movePositionFeedrateChoice = FEEDRATE_DIRECTCONFIG; // select the 
 
 volatile char Printer::doHeatBedZCompensation = false;
 
-volatile long Printer::currentXYSteps[2] = { 0 };
 volatile char Printer::blockAll = 0;
 
-volatile long Printer::currentXSteps = 0;                                                  //das ist der X-Zähler der GCodes zum Zählen des tiefsten Schalterdruckpunkts /Schaltercrash.
-volatile long Printer::currentYSteps = 0;                                                  //das ist der Y-Zähler der GCodes zum Zählen des tiefsten Schalterdruckpunkts /Schaltercrash.
-
-
-DirectPosition Printer::xyDirect[2];
 DirectPosition Printer::extruderDirect;
 
 char Printer::enabledStepper[3] = { 0, 0, 0 };
@@ -228,7 +222,7 @@ void Printer::updateWobbleFixOffsets() {
     }
 
     InterruptProtectedBlock noInts;
-    const long motorX = currentXSteps;
+    const long motorX = xyMotion.motorSteps(X_AXIS);
     const long motorZ = zMotion.motorSteps();
     noInts.unprotect();
 
@@ -377,8 +371,8 @@ void Printer::offsetRelativeStepsCoordinates(int32_t dx, int32_t dy, int32_t dz,
         }
 
         InterruptProtectedBlock noInts;
-        xyDirect[X_AXIS].request(dx);
-        xyDirect[Y_AXIS].request(dy);
+        xyMotion.requestDirect(X_AXIS, dx);
+        xyMotion.requestDirect(Y_AXIS, dy);
         zMotion.requestDirectMove(dz);
         extruderDirect.request(de);
 
@@ -826,9 +820,9 @@ int8_t Printer::checkHome(int8_t axis) //X_AXIS 0, Y_AXIS 1, Z_AXIS 2
     if (axis == Z_AXIS)
         oldCurrentSteps = zMotion.motorSteps();
     else if (axis == Y_AXIS)
-        oldCurrentSteps = Printer::currentYSteps;
+        oldCurrentSteps = Printer::xyMotion.motorSteps(Y_AXIS);
     else
-        oldCurrentSteps = Printer::currentXSteps;
+        oldCurrentSteps = Printer::xyMotion.motorSteps(X_AXIS);
     //write previous motion state to log
     Com::printFLN(PSTR("Current position steps="), oldCurrentSteps);
 
@@ -916,9 +910,9 @@ int8_t Printer::checkHome(int8_t axis) //X_AXIS 0, Y_AXIS 1, Z_AXIS 2
     if (axis == Z_AXIS)
         delta = zMotion.motorSteps();
     else if (axis == Y_AXIS)
-        delta = Printer::currentYSteps;
+        delta = Printer::xyMotion.motorSteps(Y_AXIS);
     else
-        delta = Printer::currentXSteps;
+        delta = Printer::xyMotion.motorSteps(X_AXIS);
 
     Com::printFLN(PSTR("Steps delta="), delta);
 
@@ -965,8 +959,7 @@ void Printer::homeXAxis() {
         Printer::queueRelativeMMCoordinates(-1 * ENDSTOP_X_BACK_MOVE * nHomeDir, 0, 0, 0, homingFeedrate[X_AXIS] / ENDSTOP_X_RETEST_REDUCTION_FACTOR, false);
         Printer::queueRelativeMMCoordinates(2 * ENDSTOP_X_BACK_MOVE * nHomeDir, 0, 0, 0, homingFeedrate[X_AXIS] / ENDSTOP_X_RETEST_REDUCTION_FACTOR, true, true); //stop at endstop, wait
 
-        // currentXSteps ist die Schalter-X-Koordinate, die die X-Steps per Dir-Pin abzählt.																																			//currentYSteps ist die Schalter-Y-Koordinate, die die Y-Steps per Dir-Pin abzählt.
-        Printer::currentXSteps = (nHomeDir == -1) ? 0 : maxSoftEndstopSteps[X_AXIS];
+        Printer::xyMotion.setMotorSteps(X_AXIS, (nHomeDir == -1) ? 0 : maxSoftEndstopSteps[X_AXIS]);
 
 #if NUM_EXTRUDER > 1
         if (offX) {
@@ -1006,8 +999,7 @@ void Printer::homeYAxis() {
         Printer::queueRelativeMMCoordinates(0, -1 * ENDSTOP_Y_BACK_MOVE * nHomeDir, 0, 0, homingFeedrate[Y_AXIS] / ENDSTOP_Y_RETEST_REDUCTION_FACTOR, false);
         Printer::queueRelativeMMCoordinates(0, 2 * ENDSTOP_Y_BACK_MOVE * nHomeDir, 0, 0, homingFeedrate[Y_AXIS] / ENDSTOP_Y_RETEST_REDUCTION_FACTOR, true, true); //stop at endstop, wait
 
-        //currentYSteps ist die Schalter-Y-Koordinate, die die Y-Steps per Dir-Pin abzählt.
-        Printer::currentYSteps = (nHomeDir == -1) ? 0 : maxSoftEndstopSteps[Y_AXIS];
+        Printer::xyMotion.setMotorSteps(Y_AXIS, (nHomeDir == -1) ? 0 : maxSoftEndstopSteps[Y_AXIS]);
 #if NUM_EXTRUDER > 1
         if (offY) {
             //Wir halten z.B. von Links soviel Abstand wie der größte Extruder-Offset. Wir fahren aber nur so weit, dass das aktuelle Hotend dort steht.
@@ -1148,8 +1140,8 @@ void Printer::stopPrint() {
     //erase the coordinates and kill the current taskplaner:
     PrintLine::discardQueuedMoves();
 
-    setXAxisSteps(currentXYSteps[X_AXIS]);
-    setYAxisSteps(currentXYSteps[Y_AXIS]);
+    setXAxisSteps(xyMotion.nominalSteps(X_AXIS));
+    setYAxisSteps(xyMotion.nominalSteps(Y_AXIS));
     setZAxisSteps(zMotion.nominalSteps());
     Printer::setEPositionMM(0); // G92 E0
 

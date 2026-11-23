@@ -39,7 +39,8 @@ The four AVR builds matched the previous revision's CPU cycles and Z step counts
 
 ### XY travel limits
 
-- [x] **Share the XY limit rule and own the skipped steps.** The replay checks both axes, either limit, repayment with the switch held and after it opens, and the difference between clipped queued and direct moves. [Accounting](../Repetier/XYOvertravel.h) · [Replay](../tests/pause-sense-offset.py)
+- [x] **Share the XY limit rule and own the skipped steps.** The replay checks both axes, either limit, repayment with the switch held and after it opens, and the difference between clipped queued and direct moves. [Accounting](../Repetier/XYMotion.h) · [Replay](../tests/pause-sense-offset.py)
+- [x] **Give executed XY coordinates one owner.** `XYMotion` holds nominal steps, motor steps, the direct displacement and skipped queue steps for both axes. Homing, step output, compensation and reporting use the matching coordinate through its methods. [XY execution positions](../Repetier/XYMotion.h) · [Replay](../tests/pause-sense-offset.py)
 
 Across the four AVR builds, 64 XY instruction traces reproduce the motor displacements and skipped-step counts from `92f2b10`. An unobstructed queued X step takes one more CPU cycle and the corresponding Y step takes the same number. Limit paths range from ten fewer to six more cycles. Physical pulse timing remains open.
 

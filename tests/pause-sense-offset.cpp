@@ -117,7 +117,7 @@ void WRITE(int pin, bool high);
 #include "MoveTarget.h"
 #include "WobbleCorrection.h"
 #include "CartesianPlanner.h"
-#include "XYOvertravel.h"
+#include "XYMotion.h"
 
 #define PSTR(text) (text)
 #define UI_STATUS_UPD(text) ((void)0)
@@ -190,11 +190,9 @@ PrintLayers layers{zStepsPerMm};
 DigitCompensation digitCompensation{
     short(std::abs(EMERGENCY_PAUSE_DIGITS_MAX) * 0.7), short(std::abs(EMERGENCY_PAUSE_DIGITS_MAX))
 };
-long currentXYSteps[2] = { 6400, 12800 };
-XYOvertravel xyOvertravel;
+XYMotion xyMotion;
 bool xyMinHit[2] = {}, xyMaxHit[2] = {};
 int8_t stoppedDirectAxis = -1;
-long currentXSteps = 0;
 WobbleCorrection wobbleCorrection;
 long directCurrentSteps[4] = { 0, 16, 8, 0 };
 struct DirectDisplacement {
@@ -709,7 +707,7 @@ void parkAndResume() {
 
     sample(0, 40);
     const long zeroForceTarget = Printer::zMotion.correctionTarget();
-    const long printMatrix = getZMatrixDepth(Printer::currentXYSteps[X_AXIS], Printer::currentXYSteps[Y_AXIS]);
+    const long printMatrix = getZMatrixDepth(Printer::xyMotion.nominalSteps(X_AXIS), Printer::xyMotion.nominalSteps(Y_AXIS));
     assert(zeroForceTarget == printMatrix + Printer::zOffset.effectiveSteps());
 
     sample(printingForce, 40);
@@ -1142,8 +1140,8 @@ void layerFadeAndZHop() {
     const long primeZ = 448; // 0.35 mm
     const long fadeEnd = primeZ + 1000; // 50 steps of matrix relief.
     layers.resetTracking();
-    Printer::currentXYSteps[X_AXIS] = 5280; // Interpolated bed depth of 202 steps.
-    Printer::currentXYSteps[Y_AXIS] = 0;
+    Printer::xyMotion.setNominalSteps(X_AXIS, 5280); // Interpolated bed depth of 202 steps.
+    Printer::xyMotion.setNominalSteps(Y_AXIS, 0);
     Printer::digitCompensation.setDigitZEnabled(false);
     const long offset = Printer::zOffset.effectiveSteps();
 
@@ -1177,8 +1175,8 @@ void layerFadeAndZHop() {
 
 void compensationBoundaries() {
     auto& layers = Printer::layers;
-    Printer::currentXYSteps[X_AXIS] = 5280; // Interpolated bed depth of 202 steps.
-    Printer::currentXYSteps[Y_AXIS] = 0;
+    Printer::xyMotion.setNominalSteps(X_AXIS, 5280); // Interpolated bed depth of 202 steps.
+    Printer::xyMotion.setNominalSteps(Y_AXIS, 0);
     Printer::digitCompensation.setDigitZEnabled(false);
     const long offset = Printer::zOffset.effectiveSteps();
     const long fadeStart = layers.fadeStartSteps();
@@ -1235,7 +1233,7 @@ void compensationBoundaries() {
     Printer::doHeatBedZCompensation = true;
     Printer::digitCompensation.setDigitZEnabled(false);
     g_ZCompensationMax = g_offsetZCompensationSteps;
-    Printer::currentXYSteps[X_AXIS] = 6816; // Interpolated bed depth of 250 steps.
+    Printer::xyMotion.setNominalSteps(X_AXIS, 6816); // Interpolated bed depth of 250 steps.
     layers.resetTracking();
     planMove(256, true);
     assert(layers.fadeStartSteps() == 256 && layers.fadeEndSteps() == 256);
@@ -1497,7 +1495,7 @@ void wobbleTarget() {
     }
 
     Printer::wobbleCorrection.setProfile({0, 100, 100, 300});
-    Printer::currentXSteps = Printer::maxSoftEndstopSteps[X_AXIS] / 2;
+    Printer::xyMotion.setMotorSteps(X_AXIS, Printer::maxSoftEndstopSteps[X_AXIS] / 2);
     Printer::zMotion.setMotorReference(1600); // A quarter turn of the 5 mm lead screw.
     Printer::updateWobbleFixOffsets();
     assert(std::abs(Printer::wobbleCorrection.offsetMM(Y_AXIS) - 0.2f) < 0.00001f);
@@ -1680,36 +1678,47 @@ void xyLimits() {
         Printer::xyMaxHit[axis] = true;
         assert(!canStepXY(axis, &move, true));
         assert(!canStepXY(axis, &move, true));
-        assert(Printer::xyOvertravel.steps(axis) == 2);
+        assert(Printer::xyMotion.queuedOvertravel(axis) == 2);
 
         move.xyDirection = negative;
         assert(!canStepXY(axis, &move, true));
         Printer::xyMaxHit[axis] = false;
         assert(!canStepXY(axis, &move, true));
-        assert(canStepXY(axis, &move, true) && !Printer::xyOvertravel.steps(axis));
+        assert(canStepXY(axis, &move, true) && !Printer::xyMotion.queuedOvertravel(axis));
 
         Printer::xyMinHit[axis] = true;
         assert(!canStepXY(axis, &move, true));
-        assert(Printer::xyOvertravel.steps(axis) == -1);
+        assert(Printer::xyMotion.queuedOvertravel(axis) == -1);
         move.xyDirection = positive;
         move.abortAtEndstops = true;
         assert(canStepXY(axis, &move, false)); // A direct retreat leaves the queue's debt alone.
-        assert(Printer::xyOvertravel.steps(axis) == -1);
+        assert(Printer::xyMotion.queuedOvertravel(axis) == -1);
         assert(!canStepXY(axis, &move, true));
-        assert(canStepXY(axis, &move, true) && !Printer::xyOvertravel.steps(axis));
+        assert(canStepXY(axis, &move, true) && !Printer::xyMotion.queuedOvertravel(axis));
 
         move.xyDirection = negative;
         move.abortAtEndstops = false;
         assert(!canStepXY(axis, &move, true));
         move.abortAtEndstops = true;
         assert(!canStepXY(axis, &move, true));
-        assert(!move.isNegativeMoveOfAxis(axis) && !Printer::xyOvertravel.steps(axis));
+        assert(!move.isNegativeMoveOfAxis(axis) && !Printer::xyMotion.queuedOvertravel(axis));
         assert(Printer::stoppedDirectAxis != axis);
 
         move.xyDirection = negative;
         assert(!canStepXY(axis, &move, false));
         assert(!move.isNegativeMoveOfAxis(axis) && Printer::stoppedDirectAxis == axis);
         Printer::xyMinHit[axis] = false;
+
+        auto& xy = Printer::xyMotion;
+        xy.setNominalSteps(axis, 320);
+        xy.setMotorSteps(axis, 319);
+        xy.requestDirect(axis, -4);
+        xy.recordMotorStep(axis, -1);
+        xy.advanceDirect(axis, -1);
+        assert(xy.nominalSteps(axis) == 320 && xy.motorSteps(axis) == 318);
+        assert(xy.directPosition(axis).remaining() == -3);
+        xy.stopDirect(axis);
+        assert(xy.directPosition(axis).steps() == -1 && xy.directPosition(axis).remaining() == 0);
     }
 }
 
@@ -1730,6 +1739,8 @@ void initializeOffsets() {
 
 int main(int argc, char** argv) {
     assert(argc == 2);
+    Printer::xyMotion.setNominalSteps(X_AXIS, 6400);
+    Printer::xyMotion.setNominalSteps(Y_AXIS, 12800);
     const bool digitFlowReplay = !std::strcmp(argv[1], "digit-flow");
     if (!digitFlowReplay && std::strcmp(argv[1], "digit-zero") && std::strncmp(argv[1], "pressure-", 9))
         initializeOffsets();

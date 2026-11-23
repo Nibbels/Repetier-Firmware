@@ -181,7 +181,7 @@ public:
     }
 
     static bool hasQueuedOvertravel() {
-        return Printer::xyOvertravel.any() || Printer::zMotion.hasQueuedOvertravel();
+        return Printer::xyMotion.hasQueuedOvertravel() || Printer::zMotion.hasQueuedOvertravel();
     }
 
     inline bool isNominalMove() {

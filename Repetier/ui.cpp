@@ -1173,7 +1173,7 @@ void UIDisplay::parse(char* txt, bool ram) {
                         // we can not move any more
                         bDefect = true;
                     } else {
-                        fvalue = Printer::currentXYSteps[X_AXIS] * Printer::axisMMPerSteps[X_AXIS];
+                        fvalue = Printer::xyMotion.nominalSteps(X_AXIS) * Printer::axisMMPerSteps[X_AXIS];
                     }
                 } else if (c2 == '1') // %x1 : Y position
                 {
@@ -1181,7 +1181,7 @@ void UIDisplay::parse(char* txt, bool ram) {
                         // we can not move any more
                         bDefect = true;
                     } else {
-                        fvalue = Printer::currentXYSteps[Y_AXIS] * Printer::axisMMPerSteps[Y_AXIS];
+                        fvalue = Printer::xyMotion.nominalSteps(Y_AXIS) * Printer::axisMMPerSteps[Y_AXIS];
                     }
                 } else if (c2 == '2') // %x2 : Z position
                 {

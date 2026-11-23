@@ -901,19 +901,19 @@ long PrintLine::performQueueMove() {
 
 template <int8_t limitDirection>
 static bool canStepAtXYLimit(uint8_t axis, PrintLine* move, uint8_t forQueue) {
-    auto& overtravel = Printer::xyOvertravel;
+    auto& xy = Printer::xyMotion;
     const bool towardLimit = limitDirection > 0 ? move->isPositiveMoveOfAxis(axis) : move->isNegativeMoveOfAxis(axis);
     if (!towardLimit)
-        return !forQueue || !overtravel.payBack(axis, -limitDirection);
+        return !forQueue || !xy.repayQueuedOvertravel(axis, -limitDirection);
 
     if (move->isAbortAtEndstops()) {
         move->setMoveOfAxisFinished(axis);
         if (forQueue)
-            overtravel.clear(axis);
+            xy.clearQueuedOvertravel(axis);
         else
             Printer::stopDirectAxis(axis);
     } else {
-        overtravel.recordBlockedStep(axis, limitDirection);
+        xy.recordSkippedStep(axis, limitDirection);
     }
     return false;
 }
@@ -924,13 +924,13 @@ static bool canStepXY(uint8_t axis, PrintLine* move, uint8_t forQueue) {
     if (Printer::isMinEndstopHit(axis))
         return canStepAtXYLimit<-1>(axis, move, forQueue);
 
-    auto& overtravel = Printer::xyOvertravel;
+    auto& xy = Printer::xyMotion;
     // A returning queue move still accounts for skipped steps when the switch opens.
-    if (forQueue && overtravel.steps(axis)) {
+    if (forQueue && xy.queuedOvertravel(axis)) {
         if (move->isNegativeMoveOfAxis(axis))
-            return !overtravel.payBack(axis, -1);
+            return !xy.repayQueuedOvertravel(axis, -1);
         if (move->isPositiveMoveOfAxis(axis))
-            return !overtravel.payBack(axis, 1);
+            return !xy.repayQueuedOvertravel(axis, 1);
     }
     return true;
 }
@@ -1038,11 +1038,11 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
 
                 if (forQueue) {
                     move->error[X_AXIS] += queueError;
-                    Printer::currentXYSteps[X_AXIS] += dir;
+                    Printer::xyMotion.advanceNominal(X_AXIS, dir);
                 } else if (move->isXMove()) {
                     // Endstop handling clears the axis flag when it rejects a direct step and stops the axis.
                     move->error[X_AXIS] += directError;
-                    Printer::advanceDirectXY(X_AXIS, dir);
+                    Printer::xyMotion.advanceDirect(X_AXIS, dir);
                 }
             }
         }
@@ -1058,10 +1058,10 @@ long PrintLine::performMove(PrintLine* move, uint8_t forQueue) {
 
                 if (forQueue) {
                     move->error[Y_AXIS] += queueError;
-                    Printer::currentXYSteps[Y_AXIS] += dir;
+                    Printer::xyMotion.advanceNominal(Y_AXIS, dir);
                 } else if (move->isYMove()) {
                     move->error[Y_AXIS] += directError;
-                    Printer::advanceDirectXY(Y_AXIS, dir);
+                    Printer::xyMotion.advanceDirect(Y_AXIS, dir);
                 }
             }
         }

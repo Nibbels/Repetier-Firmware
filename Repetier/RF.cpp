@@ -1900,8 +1900,8 @@ long getZMatrixDepth_CurrentXY(void) {
     // We need to insert where the nozzle is, relative to 0 homing coordinates which are always min endstop because we dropped axis offsets.
     // Because our RF2000 Matrix is 180mm width. That is the center of the bed. left and right are spaces. -> Center buildarea starts at 0 gcode coordinates and thats what we want.
     return getZMatrixDepth(
-        Printer::currentXYSteps[X_AXIS],
-        Printer::currentXYSteps[Y_AXIS]);
+        Printer::xyMotion.nominalSteps(X_AXIS),
+        Printer::xyMotion.nominalSteps(Y_AXIS));
 }
 
 void recalculateZCompensation(void) {
@@ -5284,9 +5284,9 @@ void moveXAction(int8_t direction) {
     case MOVE_MODE_SINGLE_STEPS: {
         int32_t steps = int32_t(g_nManualSteps[X_AXIS]) * direction;
 
-        if (direction < 0 && Printer::currentXSteps + steps < 0 && Printer::isAxisHomed(X_AXIS)) {
+        if (direction < 0 && Printer::xyMotion.motorSteps(X_AXIS) + steps < 0 && Printer::isAxisHomed(X_AXIS)) {
             // If we are very close to the homed known Y-Endstop go to 0-Coordinate
-            steps = -Printer::currentXSteps;
+            steps = -Printer::xyMotion.motorSteps(X_AXIS);
         }
 
         if (moveKosys == KOSYS_GCODE) {
@@ -5341,9 +5341,9 @@ void moveXAction(int8_t direction) {
         int32_t steps;
         //errate homed möglichst den erzwungenen stop-punkt wegen dem bonus der decelleration
         if (direction < 0)
-            steps = (Printer::isAxisHomed(X_AXIS) ? -Printer::currentXSteps : -Printer::maxSoftEndstopSteps[X_AXIS]);
+            steps = (Printer::isAxisHomed(X_AXIS) ? -Printer::xyMotion.motorSteps(X_AXIS) : -Printer::maxSoftEndstopSteps[X_AXIS]);
         else
-            steps = (Printer::isAxisHomed(X_AXIS) ? Printer::maxSoftEndstopSteps[X_AXIS] - Printer::currentXSteps : Printer::maxSoftEndstopSteps[X_AXIS]);
+            steps = (Printer::isAxisHomed(X_AXIS) ? Printer::maxSoftEndstopSteps[X_AXIS] - Printer::xyMotion.motorSteps(X_AXIS) : Printer::maxSoftEndstopSteps[X_AXIS]);
 
         Printer::offsetRelativeStepsCoordinates(steps, 0, 0, 0, TASK_MOVE_FROM_BUTTON);
         break;
@@ -5380,9 +5380,9 @@ void moveYAction(int8_t direction) {
     case MOVE_MODE_SINGLE_STEPS: {
         int32_t steps = int32_t(g_nManualSteps[Y_AXIS]) * direction;
 
-        if (direction < 0 && Printer::currentYSteps + steps < 0 && Printer::isAxisHomed(Y_AXIS)) {
+        if (direction < 0 && Printer::xyMotion.motorSteps(Y_AXIS) + steps < 0 && Printer::isAxisHomed(Y_AXIS)) {
             // If we are very close to the homed known Y-Endstop go to 0-Coordinate
-            steps = -Printer::currentYSteps;
+            steps = -Printer::xyMotion.motorSteps(Y_AXIS);
         }
 
         if (moveKosys == KOSYS_GCODE) {
@@ -5437,9 +5437,9 @@ void moveYAction(int8_t direction) {
         int32_t steps;
         //errate homed möglichst den erzwungenen stop-punkt wegen dem bonus der decelleration
         if (direction < 0)
-            steps = (Printer::isAxisHomed(Y_AXIS) ? -Printer::currentYSteps : -Printer::maxSoftEndstopSteps[Y_AXIS]);
+            steps = (Printer::isAxisHomed(Y_AXIS) ? -Printer::xyMotion.motorSteps(Y_AXIS) : -Printer::maxSoftEndstopSteps[Y_AXIS]);
         else
-            steps = (Printer::isAxisHomed(Y_AXIS) ? Printer::maxSoftEndstopSteps[Y_AXIS] - Printer::currentYSteps : Printer::maxSoftEndstopSteps[Y_AXIS]);
+            steps = (Printer::isAxisHomed(Y_AXIS) ? Printer::maxSoftEndstopSteps[Y_AXIS] - Printer::xyMotion.motorSteps(Y_AXIS) : Printer::maxSoftEndstopSteps[Y_AXIS]);
 
         Printer::offsetRelativeStepsCoordinates(0, steps, 0, 0, TASK_MOVE_FROM_BUTTON);
         break;

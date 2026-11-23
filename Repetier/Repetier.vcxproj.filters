@@ -92,7 +92,7 @@
     <ClInclude Include="CartesianPlanner.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="XYOvertravel.h">
+    <ClInclude Include="XYMotion.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="PressureAdvance.h">
