@@ -118,6 +118,7 @@
   <ItemGroup>
     <ClInclude Include="Commands.h" />
     <ClInclude Include="Communication.h" />
+    <ClInclude Include="BoardConfiguration.h" />
     <ClInclude Include="Configuration.h" />
     <ClInclude Include="Constants.h" />
     <ClInclude Include="Eeprom.h" />

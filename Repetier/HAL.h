@@ -24,6 +24,7 @@
   all hardware related code should be packed into the hal files.
 */
 
+#include "BoardConfiguration.h"
 #include <avr/pgmspace.h>
 #include <avr/io.h>
 #include "UsbSerial.h"

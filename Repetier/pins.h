@@ -22,6 +22,15 @@
 #error Select Arduino Mega with ATmega2560 for the RFx000 boards.
 #endif
 
+/** \brief Defines the I2C address for the strain gauge */
+#define I2C_ADDRESS_STRAIN_GAUGE            0x49
+
+/** \brief Defines the I2C address for the external EEPROM which stores the z-compensation matrix */
+#define I2C_ADDRESS_EXTERNAL_EEPROM         0x50
+
+/** \brief Defines the I2C address for the external EEPROM which stores type information */
+#define I2C_ADDRESS_TYPE_EEPROM             0x51
+
 // Physical connector signals shared by the RF boards. Digital numbers are
 // those used by fastio. Temperature inputs use ADC channels.
 #define X4_PIN 10            // PB4 / HZ1 / hotend 0 heater

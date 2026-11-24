@@ -19,7 +19,6 @@
 #define CONSTANTS_H
 
 #define REPETIER_VERSION "1.45.03"
-#define UI_PRINTER_COMPANY "Conrad Community"
 #define UI_VERSION_STRING "V " REPETIER_VERSION
 
 #define BIGC0 "\001\002\003    " UI_SPACER "Renkforce"
@@ -42,7 +41,6 @@ constexpr unsigned int stepperEnableDelayMs = 25;
 #define Y_AXIS 1
 #define Z_AXIS 2
 #define E_AXIS 3
-#define VIRTUAL_AXIS 4
 
 
 #define MENU_MODE_PAUSED 4
