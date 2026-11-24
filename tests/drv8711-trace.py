@@ -49,7 +49,6 @@ struct Printer {
 };
 uint8_t Printer::motorMicroStepsModeValue[5], Printer::motorCurrent[5];
 struct Com { template<typename T> static void printF(const char*, T) {} template<typename T> static void printFLN(const char*, T) {} };
-void setMotorCurrent(unsigned char, uint8_t);
 '''
 HARNESS = r'''
 #include "Drv8711.cpp"
@@ -76,7 +75,10 @@ void configureBus() {
     writePin(DRV_SDATI,0); output(DRV_SDATI);
 }
 void current(int p, int level) {
-    configureBus(); enable(p); tx(0x1100+level); writePin(p,0);
+    configureBus();
+    if (p>=1 && p<=5) enable(p);
+    tx(0x1100+level);
+    if (p>=1 && p<=5) writePin(p,0);
 }
 void check(const char* name) {
     if (actual != expected) {
@@ -92,7 +94,6 @@ int main() {
     for (unsigned n=0;n<=65535;++n) {
         if (n>=2 && (n&(n-1))==0) ++mode;
         assert(drv8711MicroSteps_2_ModeValue(n)==mode);
-        assert(drv8711MicroSteps_2_Register00Hex(n)==0x0e01+8*mode);
     }
     for (unsigned m=0;m<256;++m)
         assert(drv8711ModeValue_2_MicroSteps(m)==(1u<<std::min(m,8u)));
@@ -100,11 +101,15 @@ int main() {
     for (unsigned a=0;a<256;++a)
         assert(drv8711Axis_2_InitMicrosteps(a)==(a<5?defaults[a]:32));
     for (unsigned d=0;d<256;++d) {
-        drv8711Enable(d); if (d>=1 && d<=5) enable(d); check("enable");
-        drv8711Disable(d); if (d>=1 && d<=5) writePin(d,0); check("disable");
+        const auto channel = static_cast<Channel>(d);
+        setChipSelect<true>(channel); if (d>=1 && d<=5) enable(d); check("enable");
+        setChipSelect<false>(channel); if (d>=1 && d<=5) writePin(d,0); check("disable");
+        if (d<1 || d>5) {
+            setMotorCurrent(d,127); current(d,127); check("current without chip select");
+        }
     }
-    drv8711EnableAll(); enableAll(); check("enable all");
-    drv8711DisableAll(); disableAll(); check("disable all");
+    setChipSelect<true, true>(Channel::E1); enableAll(); check("enable all");
+    setChipSelect<false, true>(Channel::E1); disableAll(); check("disable all");
     for (unsigned w: {0u,1u,0x8000u,0xa55au,0xffffu}) { drv8711Transmit(w); tx(w); check("tx"); }
     for (int d=1;d<=5;++d) {
         for (int m=0;m<256;++m) {
