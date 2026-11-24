@@ -27,6 +27,10 @@ jobs:
           arduino-cli core install arduino:avr@1.8.6
       - name: Verify merge candidate
         run: python3 tools/task0003-baseline.py "$RUNNER_TEMP/firmware-evidence"
+      - name: Compare Task0015 AVR preprocessor and include evidence
+        run: |
+          git fetch --no-tags --depth=1 origin fd95f9f140dcfb772315100a0568d7f474abef55
+          python3 coordination/audits/Task0015-preprocessor.py "$RUNNER_TEMP/firmware-evidence" fd95f9f140dcfb772315100a0568d7f474abef55
       - uses: actions/upload-artifact@v4
         if: always()
         with:
