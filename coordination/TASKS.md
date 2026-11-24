@@ -5,6 +5,8 @@ This index and the per-task files are the durable coordination state, following 
 
 ## Delivery and stopping point
 
+Modernize the whole maintained firmware. Use the Task0004 inventory plus all files added since to account for every production module at final review. Clear state ownership, understandable control flow and removal of proven duplication are concrete benefits. Record a reason when an existing implementation already meets the standard. File moves, line churn and source-size reduction alone do not demonstrate completion.
+
 For each task, identify the concrete benefit and the smallest change that delivers it. Close the task once its agreed scope and applicable checks are satisfied. An audit can recommend keeping the implementation when further restructuring has no demonstrated benefit. Record optional improvements as follow-ups. Use integrated wave commits as reproducible software checkpoints. Continue the planned refactoring through Task0016 with host replays, four AVR builds and task-specific evidence. Record each hardware-only question once for the consolidated final printer session; intermediate device runs are not wave prerequisites. Schedule further refactoring according to its contribution to a usable firmware release. Record any deferred scope and review downstream dependencies before rescheduling it.
 
 ## Waves
