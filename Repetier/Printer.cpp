@@ -573,7 +573,7 @@ void Printer::setup() {
     RgbLighting::reset();
 #endif // RGB_LIGHT_R_PIN
 
-    UI_INITIALIZE;
+    uid.initialize();
 
     EEPROM::initBaudrate();
     HAL::serialSetBaudrate(baudrate);

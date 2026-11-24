@@ -15,11 +15,9 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#define UI_MAIN
 #include "Repetier.h"
 #include "GCodeInput.h"
 #include "StepExecutor.h"
-extern const int8_t encoder_table[16] PROGMEM;
 
 #include <math.h>
 #include <stdlib.h>
@@ -1863,12 +1861,6 @@ void UIDisplay::refreshPage() {
     char cache[UI_ROWS][MAX_COLS + 1];
     adjustMenuPos();
 
-    // Reset timeout on menu back when user active on menu
-    if (encoderLast != encoderStartScreen)
-        autoReturnTime_ = HAL::timeInMilliseconds() + menuAutoReturnDelayMs;
-
-    encoderStartScreen = encoderLast;
-
     // Copy result into cache
     if (menuLevel == 0) {
         UIMenu* men = (UIMenu*)pgm_read_word(&(ui_pages[menuPos[0]]));
@@ -1947,38 +1939,14 @@ void UIDisplay::refreshPage() {
     while (r < UI_ROWS)
         strcpy(cache[r++], printCols);
 
-    // Compute transition
-    uint8_t transition = 0; // 0 = display, 1 = up, 2 = down, 3 = left, 4 = right
+    for (uint8_t row = 0; row < UI_ROWS; ++row)
+        strcpy(displayCache[row], cache[row]);
 
-    uint8_t loops = 1;
-    uint8_t dt = 1, y;
-    if (transition == 1 || transition == 2)
-        loops = UI_ROWS;
-    else if (transition > 2) {
-        dt = (UI_COLS + UI_COLS - 1) / 16;
-        loops = UI_COLS + 1 / dt;
-    }
-    uint8_t off0 = (shift <= 0 ? 0 : shift);
-    uint8_t scroll = dt;
-    uint8_t off[UI_ROWS];
-    if (transition == 0) {
-        for (y = 0; y < UI_ROWS; y++)
-            strcpy(displayCache[y], cache[y]);
-    }
-    for (y = 0; y < UI_ROWS; y++) {
-        uint8_t len = strlen(displayCache[y]);
-        off[y] = len > UI_COLS ? RMath::min(len - UI_COLS, off0) : 0;
-    }
-    for (uint8_t l = 0; l < loops; l++) {
-        if (encoderLast != encoderStartScreen) {
-            scroll = 200;
-        }
-        scroll += dt;
-
-        if (transition == 0) {
-            for (y = 0; y < UI_ROWS; y++)
-                printRow(y, &cache[y][off[y]], NULL, UI_COLS);
-        }
+    const uint8_t scroll = shift > 0 ? shift : 0;
+    for (uint8_t row = 0; row < UI_ROWS; ++row) {
+        const uint8_t length = strlen(cache[row]);
+        const uint8_t offset = length > UI_COLS ? RMath::min(length - UI_COLS, scroll) : 0;
+        printRow(row, &cache[row][offset], NULL, UI_COLS);
     }
 } // refreshPage
 
@@ -3845,16 +3813,6 @@ void UIDisplay::slowAction() {
     if ((flags & UI_FLAG_SLOW_ACTION_RUNNING) == 0) {
         flags |= UI_FLAG_SLOW_ACTION_RUNNING;
 
-        // Reset click encoder
-        //HAL::forbidInterrupts(); //_-> Ist schon protected!! in jedem aller fälle. entweder ist das mist oder vorher n bug.
-        int8_t epos = encoderPos;
-        encoderPos = 0;
-        noInts.unprotect(); //HAL::allowInterrupts();
-        if (epos) {
-            nextPreviousAction(epos); //Nibbels: Funktion, die rechts links auswertet oder Errors wegklicken lässt. abhängig von this->encoderPos .. sonst verwendet mit -1 oder 1
-            refresh = 1;
-        }
-        noInts.protect();
         const int buttonAction = lastButtonAction;
         const millis_t buttonAge = HAL::timeInMilliseconds() - lastButtonStart;
         noInts.unprotect();
@@ -3863,8 +3821,6 @@ void UIDisplay::slowAction() {
             Printer::g_unlock_movement = 1;
             if (buttonAction == 0) {
                 lastAction = 0;
-                noInts.protect(); //HAL::forbidInterrupts();
-                flags &= ~3;
             } else if (buttonAge > UI_KEY_BOUNCETIME) // New key pressed
             {
                 lastAction = buttonAction;
@@ -3929,7 +3885,7 @@ void UIDisplay::fastAction() {
     // Check keys
     InterruptProtectedBlock noInts;
 
-    if ((flags & (UI_FLAG_KEY_TEST_RUNNING + UI_FLAG_SLOW_KEY_ACTION)) == 0) {
+    if ((flags & UI_FLAG_KEY_TEST_RUNNING) == 0) {
         flags |= UI_FLAG_KEY_TEST_RUNNING;
 
         int16_t nextAction = 0;
@@ -3938,7 +3894,6 @@ void UIDisplay::fastAction() {
         if (lastButtonAction != nextAction) {
             lastButtonStart = HAL::timeInMilliseconds();
             lastButtonAction = nextAction;
-            flags |= UI_FLAG_FAST_KEY_ACTION;
         }
 
         const bool jogKeyStillPressed = nextAction && nextAction == jogButtonAction;
@@ -3968,5 +3923,3 @@ void UIDisplay::exitmenu() {
         uid.menuPos[menuLevel] = 0;
     return;
 } // unlock
-
-const int8_t encoder_table[16] PROGMEM = { 0, 0, -1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, -1, 0, 0 }; // Half speed

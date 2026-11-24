@@ -41,8 +41,7 @@ def main():
     fragments = [
         section(eeprom, "#define EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX", "#define EPR_RF_HEATED_BED_SENSOR_TYPE"),
         section(rf_header, "#define UI_ACTION_RF_HEAT_BED_UP", "#define UI_ACTION_RF_PAUSE"),
-        section(ui_header, "#define UI_FLAG_FAST_KEY_ACTION", "#define UI_FLAG_KEY_TEST_RUNNING")
-        + section(ui_header, "#define UI_FLAG_KEY_TEST_RUNNING", "\n"),
+        section(ui_header, "#define UI_FLAG_KEY_TEST_RUNNING", "\n"),
         section(motion, "    static bool hasStoppableDirectMove()", "\n\n")
         .replace("    static bool hasStoppableDirectMove()", "bool PrintLine::hasStoppableDirectMove()", 1),
         dms[dms.index("int16_t StrainGauge::correctedDigits("):],

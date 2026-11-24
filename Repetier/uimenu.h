@@ -210,12 +210,7 @@ Especially if you have only a small display it is convenient to have
 more then one information page.
 */
 
-/* Define your pages using dynamic strings. To define a page use
-UI_PAGE4(name,row1,row2,row3,row4);
-for 4 row displays and
-UI_PAGE2(name,row1,row2);
-for 2 row displays. You can add additional pages or change the default pages like you want.
-*/
+// Define the four rows of each information page with UI_PAGE4.
 
         #if UI_COLS<=16
             UI_PAGE4(ui_page1,"%U1%ec/%EcB%eb/%Eb%U2","Z%hZ%x2%x5%sC",UI_TEXT_STRAIN_GAUGE,"%os")
@@ -774,23 +769,5 @@ UI_MENU_SUBMENU(ui_menu_main5, UI_TEXT_CONFIGURATION,  ui_menu_configuration)
 
 #define UI_MENU_MAIN {UI_MENU_QUICK_SETTINGS_ENTRY UI_MENU_POSITION_ENTRY UI_MENU_PAUSE_POSITION_ENTRY UI_MENU_EXTRUDER_ENTRY &ui_menu_fan_sub, UI_MENU_CONFIGURATION_ENTRY}
 UI_MENU(ui_menu_main,UI_MENU_MAIN,UI_MENU_QUICK_SETTINGS_COUNT+UI_MENU_PAUSE_POSITION_COUNT+UI_MENU_POSITION_COUNT+UI_MENU_EXTRUDER_COUNT+1+UI_MENU_CONFIGURATION_COUNT)
-
-/* Define menus accessible by action commands
-
-You can create up to 10 user menus which are accessible by the action commands UI_ACTION_SHOW_USERMENU1 until UI_ACTION_SHOW_USERMENU10
-Do this the same way as with the menus above or you use one of the above menus. Then add a define like
-
-#define UI_USERMENU1 ui_menu_conf_feed
-
-which assigns the menu stored in ui_menu_conf_feed to the action UI_ACTION_SHOW_USERMENU1. Make sure only to change the numbers and not the name of the define.
-
-When do you need this? You might want a fast button to change the temperature. In the default menu you have no menu
-to change the temperature and view it the same time. So you need to make an action menu for this like:
-UI_MENU_ACTION4(ui_menu_extrtemp,UI_ACTION_EXTRUDER0_TEMP,"Temp. 0  :%E0\002C","","","");
-Then you assign this menu to a usermenu:
-#define UI_USERMENU2 ui_menu_extrtemp
-
-Now you can assign the action  UI_ACTION_SHOW_USERMENU2+UI_ACTION_TOPMENU to a key and that will now show the temperture screen and allows
-the change of temperature with the next/previous buttons. */
 
 #endif // UI_MENU_H

@@ -794,7 +794,8 @@ ISR(PWM_TIMER_VECTOR) {
         ADCSRA |= _BV(ADSC); // start next conversion
     }
 
-    UI_FAST; // Short timed user interface action
+    if (pwm_count_heater & 4)
+        uid.fastAction();
 
 #ifdef RGB_LIGHT_R_PIN
     if (rgb_10ms_change_should_be_now)

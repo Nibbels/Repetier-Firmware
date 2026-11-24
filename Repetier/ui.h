@@ -43,11 +43,6 @@
 #define UI_ACTION_YPOSITION 1006
 #define UI_ACTION_ZPOSITION 1007
 #define UI_ACTION_EPOSITION 1008
-#define UI_ACTION_BED_TEMP 1009
-#define UI_ACTION_EXTRUDER_TEMP 1010
-#define UI_ACTION_XPOSITION_FAST 1018
-#define UI_ACTION_YPOSITION_FAST 1019
-#define UI_ACTION_ZPOSITION_FAST 1020
 #define UI_ACTION_HOME_ALL 1021
 #define UI_ACTION_HOME_X 1022
 #define UI_ACTION_HOME_Y 1023
@@ -75,9 +70,6 @@
 #define UI_ACTION_FAN_FULL 1054
 #define UI_ACTION_FEEDRATE_MULTIPLY 1055
 #define UI_ACTION_STEPPER_INACTIVE 1056
-#define UI_ACTION_X_OFFSET 1063
-#define UI_ACTION_Y_OFFSET 1064
-#define UI_ACTION_EXTR_WATCH_PERIOD 1070
 #define UI_ACTION_DEBUG_ECHO 1074
 #define UI_ACTION_DEBUG_INFO 1075
 #define UI_ACTION_DEBUG_ERROR 1076
@@ -90,9 +82,6 @@
 #define UI_ACTION_HEATED_BED_TEMP 1084
 #define UI_ACTION_EXTRUDER0_TEMP 1085
 #define UI_ACTION_EXTRUDER1_TEMP 1086
-#define UI_ACTION_OPS_OFF 1087
-#define UI_ACTION_OPS_CLASSIC 1088
-#define UI_ACTION_OPS_FAST 1089
 #define UI_ACTION_DISABLE_STEPPER 1090
 #define UI_ACTION_SET_E_ORIGIN 1091
 #define UI_ACTION_EXTRUDER_RELATIVE 1092
@@ -113,7 +102,6 @@
 
 #define UI_ACTION_MAX_INACTIVE 1114
 
-#define UI_ACTION_HOTEND_TYPE 1120
 #define UI_ACTION_230V_OUTPUT 1122
 #define UI_ACTION_RGB_LIGHT_MODE 1123
 #define UI_ACTION_EXTRUDER_OFFSET_X 1124
@@ -203,16 +191,6 @@
 #define UI_ACTION_MENU_EXTRUDER 4008
 #define UI_ACTION_MENU_POSITIONS 4009
 
-#define UI_ACTION_SHOW_USERMENU1 4101
-#define UI_ACTION_SHOW_USERMENU2 4102
-#define UI_ACTION_SHOW_USERMENU3 4103
-#define UI_ACTION_SHOW_USERMENU4 4104
-#define UI_ACTION_SHOW_USERMENU5 4105
-#define UI_ACTION_SHOW_USERMENU6 4106
-#define UI_ACTION_SHOW_USERMENU7 4107
-#define UI_ACTION_SHOW_USERMENU8 4108
-#define UI_ACTION_SHOW_USERMENU9 4109
-#define UI_ACTION_SHOW_USERMENU10 4110
 
 // Load basic language definition to make sure all values are defined
 #include "uilang.h"
@@ -232,12 +210,11 @@
 //mtype usw.
 #define UI_MENU_TYPE_SUBMENU 2
 #define UI_MENU_TYPE_MODIFICATION_MENU 3
-#define UI_MENU_TYPE_WIZARD 5
 
 typedef struct
 {
     const char* text;    // Menu text
-    uint8_t menuType;    // 0 = Info, 1 = Headline, 2 = submenu ref, 3 = direct action command, 4 = modify action command
+    uint8_t menuType;    // 0 = info, 2 = submenu, 3 = direct action, 4 = modify action
     unsigned int action; // must be int so it gets 32 bit on arm!
     uint8_t filter;      // allows dynamic menu filtering based on active menu mode bits set.
     uint8_t nofilter;    // Hide if one of these bits are set
@@ -259,208 +236,21 @@ typedef struct
 
 } const UIMenu;
 
-extern const int8_t encoder_table[16] PROGMEM;
-
-
 
 // Key codes
-#define UI_KEYS_INIT_CLICKENCODER_LOW(pinA, pinB) \
-    SET_INPUT(pinA); \
-    SET_INPUT(pinB); \
-    PULLUP(pinA, HIGH); \
-    PULLUP(pinB, HIGH);
 #define UI_KEYS_INIT_BUTTON_LOW(pin) \
     SET_INPUT(pin); \
     PULLUP(pin, HIGH);
-#define UI_KEYS_INIT_CLICKENCODER_HIGH(pinA, pinB) \
-    SET_INPUT(pinA); \
-    SET_INPUT(pinB); \
-    PULLUP(pinA, LOW); \
-    PULLUP(pinB, LOW);
-#define UI_KEYS_INIT_BUTTON_HIGH(pin) \
-    SET_INPUT(pin); \
-    PULLUP(pin, LOW);
 
-#define UI_KEYS_CLICKENCODER_LOW(pinA, pinB) \
-    uid.encoderLast = (uid.encoderLast << 2) & 0x0F; \
-    if (!READ(pinA)) \
-        uid.encoderLast |= 2; \
-    if (!READ(pinB)) \
-        uid.encoderLast |= 1; \
-    uid.encoderPos += pgm_read_byte(&encoder_table[uid.encoderLast]);
-#define UI_KEYS_CLICKENCODER_LOW_REV(pinA, pinB) \
-    uid.encoderLast = (uid.encoderLast << 2) & 0x0F; \
-    if (!READ(pinA)) \
-        uid.encoderLast |= 2; \
-    if (!READ(pinB)) \
-        uid.encoderLast |= 1; \
-    uid.encoderPos -= pgm_read_byte(&encoder_table[uid.encoderLast]);
 #define UI_KEYS_BUTTON_LOW(pin, action_) \
     if (READ(pin) == 0) \
         action = action_;
-#define UI_KEYS_CLICKENCODER_HIGH(pinA, pinB) \
-    uid.encoderLast = (uid.encoderLast << 2) & 0x0F; \
-    if (READ(pinA)) \
-        uid.encoderLast |= 2; \
-    if (READ(pinB)) \
-        uid.encoderLast |= 1; \
-    uid.encoderPos += pgm_read_byte(&encoder_table[uid.encoderLast]);
-#define UI_KEYS_CLICKENCODER_HIGH_REV(pinA, pinB) \
-    uid.encoderLast = (uid.encoderLast << 2) & 0x0F; \
-    if (READ(pinA)) \
-        uid.encoderLast |= 2; \
-    if (READ(pinB)) \
-        uid.encoderLast |= 1; \
-    uid.encoderPos -= pgm_read_byte(&encoder_table[uid.encoderLast]);
-#define UI_KEYS_BUTTON_HIGH(pin, action_) \
-    if (READ(pin) != 0) \
-        action = action_;
-#define UI_KEYS_INIT_MATRIX(r1, r2, r3, r4, c1, c2, c3, c4) \
-    if (c1 >= 0) { \
-        SET_INPUT(c1); \
-        WRITE(c1, HIGH); \
-    } \
-    if (c2 >= 0) { \
-        SET_INPUT(c2); \
-        WRITE(c2, HIGH); \
-    } \
-    if (c3 >= 0) { \
-        SET_INPUT(c3); \
-        WRITE(c3, HIGH); \
-    } \
-    if (c4 >= 0) { \
-        SET_INPUT(c4); \
-        WRITE(c4, HIGH); \
-    } \
-    if (r1 >= 0) \
-        SET_OUTPUT(r1); \
-    if (r2 >= 0) \
-        SET_OUTPUT(r2); \
-    if (r3 >= 0) \
-        SET_OUTPUT(r3); \
-    if (r4 >= 0) \
-        SET_OUTPUT(r4); \
-    if (r1 >= 0) \
-        WRITE(r1, LOW); \
-    if (r2 >= 0) \
-        WRITE(r2, LOW); \
-    if (r3 >= 0) \
-        WRITE(r3, LOW); \
-    if (r4 >= 0) \
-        WRITE(r4, LOW);
 
-#define UI_KEYS_MATRIX(r1, r2, r3, r4, c1, c2, c3, c4) \
-    { \
-        uint8_t r = (c1 >= 0 ? READ(c1) : 0) && (c2 >= 0 ? READ(c2) : 0) && (c3 >= 0 ? READ(c3) : 0) && (c4 >= 0 ? READ(c4) : 0); \
-        if (!r) { \
-            r = 255; \
-            if (r2 >= 0) \
-                WRITE(r2, HIGH); \
-            if (r3 >= 0) \
-                WRITE(r3, HIGH); \
-            if (r4 >= 0) \
-                WRITE(r4, HIGH); \
-            if (r1 >= 0) { \
-                asm volatile("nop\nnop\nnop\nnop\nnop"); \
-                if (!((c1 >= 0 ? READ(c1) : 1) && (c2 >= 0 ? READ(c2) : 1) && (c3 >= 0 ? READ(c3) : 1) && (c4 >= 0 ? READ(c4) : 1))) \
-                    r = 0; \
-                else \
-                    WRITE(r1, HIGH); \
-            } \
-            if (r == 255 && r2 >= 0) { \
-                WRITE(r2, LOW); \
-                asm volatile("nop\nnop\nnop\nnop\nnop"); \
-                if (!((c1 >= 0 ? READ(c1) : 1) && (c2 >= 0 ? READ(c2) : 1) && (c3 >= 0 ? READ(c3) : 1) && (c4 >= 0 ? READ(c4) : 1))) \
-                    r = 4; \
-                else \
-                    WRITE(r2, HIGH); \
-            } \
-            if (r == 255 && r3 >= 0) { \
-                WRITE(r3, LOW); \
-                asm volatile("nop\nnop\nnop\nnop\nnop"); \
-                if (!((c1 >= 0 ? READ(c1) : 0) && (c2 >= 0 ? READ(c2) : 1) && (c3 >= 0 ? READ(c3) : 1) && (c4 >= 0 ? READ(c4) : 1))) \
-                    r = 8; \
-                else \
-                    WRITE(r3, HIGH); \
-            } \
-            if (r == 255 && r4 >= 0) { \
-                WRITE(r4, LOW); \
-                asm volatile("nop\nnop\nnop\nnop\nnop"); \
-                if (!((c1 >= 0 ? READ(c1) : 1) && (c2 >= 0 ? READ(c2) : 1) && (c3 >= 0 ? READ(c3) : 1) && (c4 >= 0 ? READ(c4) : 1))) \
-                    r = 12; \
-                else \
-                    WRITE(r4, HIGH); \
-            } \
-            if (c2 >= 0 && !READ(c2)) \
-                r += 1; \
-            else if (c3 >= 0 && !READ(c3)) \
-                r += 2; \
-            else if (c4 >= 0 && !READ(c4)) \
-                r += 3; \
-            if (r < 16) { \
-                action = pgm_read_word(&(matrixActions[r])); \
-            } \
-        } \
-        if (r1 >= 0) \
-            WRITE(r1, LOW); \
-        if (r2 >= 0) \
-            WRITE(r2, LOW); \
-        if (r3 >= 0) \
-            WRITE(r3, LOW); \
-        if (r4 >= 0) \
-            WRITE(r4, LOW); \
-    }
 
 // I2C keymask tests
-#define UI_KEYS_I2C_CLICKENCODER_LOW(pinA, pinB) \
-    uid.encoderLast = (uid.encoderLast << 2) & 0x0F; \
-    if (!(keymask & pinA)) \
-        uid.encoderLast |= 2; \
-    if (!(keymask & pinB)) \
-        uid.encoderLast |= 1; \
-    uid.encoderPos += pgm_read_byte(&encoder_table[uid.encoderLast]);
-#define UI_KEYS_I2C_CLICKENCODER_LOW_REV(pinA, pinB) \
-    uid.encoderLast = (uid.encoderLast << 2) & 0x0F; \
-    if (!(keymask & pinA)) \
-        uid.encoderLast |= 2; \
-    if (!(keymask & pinB)) \
-        uid.encoderLast |= 1; \
-    uid.encoderPos -= pgm_read_byte(&encoder_table[uid.encoderLast]);
-#define UI_KEYS_I2C_BUTTON_LOW(pin, action_) \
-    if ((keymask & pin) == 0) \
-        action = action_;
-#define UI_KEYS_I2C_CLICKENCODER_HIGH(pinA, pinB) \
-    uid.encoderLast = (uid.encoderLast << 2) & 0x0F; \
-    if (keymask & pinA) \
-        uid.encoderLast |= 2; \
-    if (keymask & pinB) \
-        uid.encoderLast |= 1; \
-    uid.encoderPos += pgm_read_byte(&encoder_table[uid.encoderLast]);
-#define UI_KEYS_I2C_CLICKENCODER_HIGH_REV(pinA, pinB) \
-    uid.encoderLast = (uid.encoderLast << 2) & 0x0F; \
-    if (keymask & pinA) \
-        uid.encoderLast |= 2; \
-    if (keymask & pinB) \
-        uid.encoderLast |= 1; \
-    uid.encoderPos -= pgm_read_byte(&encoder_table[uid.encoderLast]);
-#define UI_KEYS_I2C_BUTTON_HIGH(pin, action_) \
-    if ((pin & keymask) != 0) \
-        action = action_;
 
 #define UI_STRING(name, text) const char PROGMEM name[] = text;
 
-#define UI_PAGE6(name, row1, row2, row3, row4, row5, row6) \
-    UI_STRING(name##_1txt, row1) \
-    UI_STRING(name##_2txt, row2) UI_STRING(name##_3txt, row3) UI_STRING(name##_4txt, row4) UI_STRING(name##_5txt, row5) UI_STRING(name##_6txt, row6) \
-        UIMenuEntry name##_1 PROGMEM \
-        = { name##_1txt, 0, 0, 0, 0 }; \
-    UIMenuEntry name##_2 PROGMEM = { name##_2txt, 0, 0, 0, 0 }; \
-    UIMenuEntry name##_3 PROGMEM = { name##_3txt, 0, 0, 0, 0 }; \
-    UIMenuEntry name##_4 PROGMEM = { name##_4txt, 0, 0, 0, 0 }; \
-    UIMenuEntry name##_5 PROGMEM = { name##_5txt, 0, 0, 0, 0 }; \
-    UIMenuEntry name##_6 PROGMEM = { name##_6txt, 0, 0, 0, 0 }; \
-    const UIMenuEntry* const name##_entries[] PROGMEM = { &name##_1, &name##_2, &name##_3, &name##_4, &name##_5, &name##_6 }; \
-    const UIMenu name PROGMEM = { 0, 0, 6, name##_entries };
 
 #define UI_PAGE4(name, row1, row2, row3, row4) \
     UI_STRING(name##_1txt, row1) \
@@ -473,14 +263,6 @@ extern const int8_t encoder_table[16] PROGMEM;
     const UIMenuEntry* const name##_entries[] PROGMEM = { &name##_1, &name##_2, &name##_3, &name##_4 }; \
     const UIMenu name PROGMEM = { 0, 0, 4, name##_entries };
 
-#define UI_PAGE2(name, row1, row2) \
-    UI_STRING(name##_1txt, row1) \
-    UI_STRING(name##_2txt, row2) \
-        UIMenuEntry name##_1 PROGMEM \
-        = { name##_1txt, 0, 0, 0, 0 }; \
-    UIMenuEntry name##_2 PROGMEM = { name##_2txt, 0, 0, 0, 0 }; \
-    const UIMenuEntry* const name##_entries[] PROGMEM = { &name##_1, &name##_2 }; \
-    const UIMenu name PROGMEM = { 0, 0, 2, name##_entries };
 
 #define UI_MENU_ACTION4(name, action, row1, row2, row3, row4) \
     UI_STRING(name##_1txt, row1) \
@@ -502,8 +284,6 @@ extern const int8_t encoder_table[16] PROGMEM;
     const UIMenuEntry* const name##_entries[] PROGMEM = { &name##_1, &name##_2 }; \
     const UIMenu name PROGMEM = { 3, action, 2, name##_entries };
 
-#define UI_MENU_HEADLINE(name, text) UI_STRING(name##_txt, text) \
-                                     UIMenuEntry name PROGMEM = { name##_txt, 1, 0, 0, 0 };
 #define UI_MENU_CHANGEACTION(name, row, action) UI_STRING(name##_txt, row) \
                                                 UIMenuEntry name PROGMEM = { name##_txt, 4, action, 0, 0 };
 #define UI_MENU_ACTIONCOMMAND(name, row, action) UI_STRING(name##_txt, row) \
@@ -526,8 +306,6 @@ extern const int8_t encoder_table[16] PROGMEM;
 // Maximum size of a row - if row is larger, text gets scrolled
 #define MAX_COLS 28 //Anzahl Speicherplätze für Bytes in Display-Zeile, wenn mehr als Display, dann Scrolling. Kann gleich oder größer Displayzeilenlänge sein.
 
-#define UI_FLAG_FAST_KEY_ACTION 1
-#define UI_FLAG_SLOW_KEY_ACTION 2
 #define UI_FLAG_SLOW_ACTION_RUNNING 4
 #define UI_FLAG_KEY_TEST_RUNNING 8
 
@@ -542,7 +320,6 @@ public:
     void* menu[MAX_MENU_LEVELS];      // Menus active
     uint8_t menuTop[MAX_MENU_LEVELS]; // Top row in menu
     int8_t shift;                     // Display shift for scrolling text
-    int pageDelay;                    // Counter. If 0 page is refreshed if menuLevel is 0.
     int activeAction; // action for ok/next/previous
     int lastAction;
     volatile int jogButtonAction; // Key that started the current stoppable move.
@@ -554,12 +331,8 @@ public:
     millis_t lastNextPrev; // for increasing speed settings
     float lastNextAccumul; // Accumulated value
     int repeatDuration;    // Time beween to actions if autorepeat is enabled
-    uint8_t encoderStartScreen;
     char statusMsg[MAX_COLS + 1];
     char printCols[MAX_COLS + 1];
-    int8_t encoderPos;
-    int8_t encoderLast;
-    PGM_P statusText;
     char locked;
 
     UIDisplay();
@@ -634,38 +407,16 @@ extern UIDisplay uid;
 #include "uilang.h"
 #include "uimenu.h"
 
-#define UI_INITIALIZE uid.initialize();
-#define UI_FAST \
-    if (pwm_count_heater & 4) { \
-        uid.fastAction(); \
-    }
-#define UI_SLOW uid.slowAction();
 #define UI_STATUS(status) uid.setStatusP(PSTR(status));
 #define UI_STATUS_UPD(status) \
     { \
         uid.setStatusP(PSTR(status)); \
         uid.refreshPage(); \
     }
-#define UI_STATUS_RAM(status) uid.setStatus(status);
 #define UI_STATUS_UPD_RAM(status) \
     { \
         uid.setStatus(status); \
         uid.refreshPage(); \
     }
-#define UI_ERROR(status) uid.setStatusP(PSTR(status), true);
-#define UI_ERROR_P(status) uid.setStatusP(status, true);
-#define UI_ERROR_UPD(status) \
-    { \
-        uid.setStatusP(PSTR(status), true); \
-        uid.refreshPage(); \
-    }
-#define UI_ERROR_RAM(status) uid.setStatus(status, true);
-#define UI_ERROR_UPD_RAM(status) \
-    { \
-        uid.setStatus(status, true); \
-        uid.refreshPage(); \
-    }
-#define UI_CLEAR_STATUS \
-    { uid.statusMsg[0] = 0; }
 
 #endif // UI_H

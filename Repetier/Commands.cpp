@@ -59,7 +59,7 @@ void Commands::checkForPeriodicalActions(enum FirmwareState state) {
     if (HAL::takeCompensationTick()) {
         bool buttonSpeedBoost = (!HAL::temperatureTickPending() && HAL::timeInMilliseconds() - uid.lastButtonStart < 20000);
         if (buttonSpeedBoost)
-            UI_SLOW;
+            uid.slowAction();
         recalculateZCompensation();
     }
 
@@ -67,7 +67,7 @@ void Commands::checkForPeriodicalActions(enum FirmwareState state) {
         Extruder::manageTemperatures();
         if (state == WaitHeater)
             Commands::printTemperatures(); //selfcontrolling timediff
-        UI_SLOW;
+        uid.slowAction();
     }
 
     Printer::strainGauge.service(HAL::timeInMilliseconds());

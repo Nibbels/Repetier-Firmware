@@ -149,7 +149,6 @@
     <ClInclude Include="RF1000.h" />
     <ClInclude Include="RF2000.h" />
     <ClInclude Include="ui.h" />
-    <ClInclude Include="uiconfig.h" />
     <ClInclude Include="uilang.h" />
     <ClInclude Include="uimenu.h" />
     <ClInclude Include="__vm\.Repetier.vsarduino.h" />
