@@ -4,7 +4,7 @@ Date: 2026-11-24 (Europe/Berlin). User wants a long-lived manager chat in ChatGP
 
 ## Current wave 5 status
 
-Tasks 0001–0013 are merged. Task0013 [PR #81](https://github.com/Nibbels/Repetier-Firmware/pull/81) merged at 3bd44b9 with a [successful full host and four-variant AVR check](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45464921108). Task0014 is ready as the exclusive production worker. Follow with 0015, then 0016 and the separate manager review of the integrated candidate at maximum reasoning effort before owner acceptance and hardware testing.
+Tasks 0001–0013 are merged. Task0013 [PR #81](https://github.com/Nibbels/Repetier-Firmware/pull/81) merged at 3bd44b9 with a [successful full host and four-variant AVR check](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45464921108). Task0014 is ready as the exclusive production worker. Follow with 0015, then [0017 operator dry-run removal](tasks/Task0017.md), then 0016 and the separate manager review of the integrated candidate at maximum reasoning effort before owner acceptance and hardware testing.
 
 ## Wave 3 dispatch (2026-11-24)
 
