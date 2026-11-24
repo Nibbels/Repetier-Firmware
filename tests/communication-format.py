@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Golden output replay of Com numeric formatting, with a byte-capture HAL.
 
-Host int32_t is int, unlike AVR. Exercise the actual 32-bit implementation
-and omit the distinct AVR 16-bit int forwarding overloads. This is not an
-AVR timing, float ABI or full serial-protocol test.
+The host replay maps AVR int parameters to int16_t to preserve overload
+resolution. It captures output bytes using the host's floating-point ABI.
 """
 import argparse
 import os
@@ -20,10 +19,9 @@ def main():
     firmware = Path(__file__).resolve().parent.parent / 'Repetier'
     source = (firmware / 'Communication.cpp').read_text(encoding='utf-8')
     header = (firmware / 'Communication.h').read_text(encoding='utf-8')
-    # On the host the 16-bit AVR int overloads collide with int32_t.
-    header = re.sub(r'^.*\bint value\).*\n', '', header, flags=re.M)
-    methods = source[source.index('void Com::cap('):]
-    methods = re.sub(r'^void Com::\w+\(FSTRINGPARAM\(text\), int value\) \{\n.*?^\}[^\n]*\n', '', methods, flags=re.M | re.S)
+    # Keep the AVR int overloads distinct on a host where int32_t is int.
+    header = header.replace('int value)', 'int16_t value)')
+    methods = source[source.index('void Com::cap('):].replace('int value)', 'int16_t value)')
     constants = '\n'.join(re.findall(r'^FSTRINGVALUE\(Com::t\w+, "(?:[^"\\]|\\.)*"\)', source, re.M))
     harness = r'''
 #include <cmath>
@@ -71,6 +69,9 @@ int main() {
     Com::printFloat(std::numeric_limits<float>::infinity(), 2); expect("Inf", "INF");
     Com::printFloat(-std::numeric_limits<float>::infinity(), 2); expect("negative Inf", "INF");
     Com::printF("N:", int32_t(-12)); expect("signed prefix", "N:-12");
+    Com::printF("N:", std::numeric_limits<int16_t>::min()); expect("16-bit signed prefix", "N:-32768");
+    Com::printFLN("N:", std::numeric_limits<int16_t>::max()); expect("16-bit signed line", "N:32767\r\n");
+    Com::printFLN("N:", std::numeric_limits<int32_t>::min()); expect("32-bit signed line", "N:-2147483648\r\n");
     Com::printFLN("U:", std::numeric_limits<uint32_t>::max()); expect("unsigned line", "U:4294967295\r\n");
     Com::printFLN("F:", 1.25f, 2, true); expect("float line", "F:1,25\r\n");
     Com::printFLN("S:", "abc"); expect("text line", "S:abc\r\n");
@@ -78,6 +79,7 @@ int main() {
     Com::printWarningFLN("bad"); expect("warning", "Warning:bad\r\n");
     Com::printInfoFLN("ok"); expect("info", "Info:ok\r\n");
     Com::cap("X:1"); expect("cap", "Cap:X:1\r\n");
+    Com::config("V:", int16_t(-17)); expect("config 16-bit signed", "Config:V:-17\r\n");
     Com::config("V:", int32_t(-17)); expect("config signed", "Config:V:-17\r\n");
     Com::config("V:", uint32_t(17)); expect("config unsigned", "Config:V:17\r\n");
     Com::config("V:", 1.25f, 2); expect("config float", "Config:V:1.25\r\n");

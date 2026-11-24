@@ -287,9 +287,7 @@ void Com::config(FSTRINGPARAM(text), int value) {
 }
 void Com::config(FSTRINGPARAM(text), const char* msg) {
     printF(tConfig);
-    printF(text);
-    print(msg);
-    println();
+    printFLN(text, msg);
 }
 void Com::config(FSTRINGPARAM(text), int32_t value) {
     printF(tConfig);
@@ -339,8 +337,7 @@ void Com::printFLN(FSTRINGPARAM(text)) {
 } // printFLN
 
 void Com::printFLN(FSTRINGPARAM(text), const char* msg) {
-    printF(text);
-    print(msg);
+    printF(text, msg);
     println();
 } // printFLN
 
@@ -356,8 +353,7 @@ void Com::printF(FSTRINGPARAM(text), const char* msg) {
 } // printF
 
 void Com::printF(FSTRINGPARAM(text), int value) {
-    printF(text);
-    print(value);
+    printF(text, static_cast<int32_t>(value));
 } // printF
 
 void Com::printF(FSTRINGPARAM(text), int32_t value) {
@@ -371,26 +367,22 @@ void Com::printF(FSTRINGPARAM(text), uint32_t value) {
 } // printF
 
 void Com::printFLN(FSTRINGPARAM(text), int value) {
-    printF(text);
-    print(value);
+    printF(text, value);
     println();
 } // printFLN
 
 void Com::printFLN(FSTRINGPARAM(text), int32_t value) {
-    printF(text);
-    print(value);
+    printF(text, value);
     println();
 } // printFLN
 
 void Com::printFLN(FSTRINGPARAM(text), uint32_t value) {
-    printF(text);
-    printNumber(value);
+    printF(text, value);
     println();
 } // printFLN
 
 void Com::printFLN(FSTRINGPARAM(text), float value, uint8_t digits, bool komma_as_dot) {
-    printF(text);
-    printFloat(value, digits, komma_as_dot);
+    printF(text, value, digits, komma_as_dot);
     println();
 } // printFLN
 
@@ -412,11 +404,12 @@ void Com::print(const char* text) {
 } // print
 
 void Com::print(int32_t value) {
+    uint32_t magnitude = static_cast<uint32_t>(value);
     if (value < 0) {
-        HAL::serialWriteByte('-');
-        value = -value;
+        print('-');
+        magnitude = 0U - magnitude;
     }
-    printNumber(value);
+    printNumber(magnitude);
 } // print
 
 void Com::printNumber(uint32_t n) {
@@ -479,10 +472,8 @@ void Com::printFloat(float number, uint8_t digits, bool komma_as_dot) {
     printNumber(int_part);
 
     // Print the decimal point, but only if there are digits beyond
-    if (digits > 0 && komma_as_dot)
-        print(',');
-    if (digits > 0 && !komma_as_dot)
-        print('.');
+    if (digits > 0)
+        print(komma_as_dot ? ',' : '.');
 
     // Extract digits from the remainder one at a time
     while (digits-- > 0) {
