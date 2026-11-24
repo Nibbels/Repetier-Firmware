@@ -18,6 +18,22 @@
 #include "Repetier.h"
 
 static uint8_t autotuneIndex = 255;
+static bool autotuneSampleFault = false;
+
+static bool validTemperatureSample(bool supported, float temperature) {
+    return supported && temperature >= MIN_DEFECT_TEMPERATURE && temperature <= MAX_DEFECT_TEMPERATURE;
+}
+
+static void stopAllHeaters() {
+    for (uint8_t controller = 0; controller < NUM_TEMPERATURE_LOOPS; controller++)
+        tempController[controller]->setTargetTemperature(0);
+}
+
+static void finishAutotune(TemperatureController& controller) {
+    // Revoke the duty request and normal setpoint before reporting or storing results.
+    controller.setTargetTemperature(0);
+    autotuneIndex = 255;
+}
 
 /** Makes updates to temperatures and heater state every call.
 Is called every 100ms.
@@ -31,10 +47,18 @@ void Extruder::manageTemperatures() {
         TemperatureController* act = tempController[controller];
 
         const bool sensorSupported = act->updateCurrentTemperature();
-        if (!sensorSupported)
+        const bool sampleValid = validTemperatureSample(sensorSupported, act->currentTemperatureC);
+        if (!sampleValid || act->sensorType == 0)
             HAL::setHeaterDuty(act->pwmIndex, 0);
-        if (controller == autotuneIndex)
-            continue; // Ignore heater we are currently testing
+        if (controller == autotuneIndex) {
+            // Remember even a transient invalid sample observed by the periodic service.
+            if (!sampleValid || act->sensorType == 0 || act->currentTemperatureC > act->heaterCutoffC
+                || Printer::isAnyTempsensorDefect() || Printer::debugDryrun()) {
+                HAL::setHeaterDuty(act->pwmIndex, 0);
+                autotuneSampleFault = true;
+            }
+            continue; // Autotune owns this heater's duty request.
+        }
 
         if (controller < NUM_EXTRUDER) {
 #if NUM_EXTRUDER >= 2 && EXT0_EXTRUDER_COOLER_PIN == EXT1_EXTRUDER_COOLER_PIN && EXT0_EXTRUDER_COOLER_PIN >= 0
@@ -52,7 +76,7 @@ void Extruder::manageTemperatures() {
                     extruder[controller].coolerPWM = extruder[controller].coolerSpeed;
         }
 
-        if (!act->isSensorDefect() && (act->currentTemperatureC < MIN_DEFECT_TEMPERATURE || act->currentTemperatureC > MAX_DEFECT_TEMPERATURE)) // no temp sensor or short in sensor, disable heater
+        if (!act->isSensorDefect() && !sampleValid) // Count faults separately from immediate duty inhibition.
         {
             extruderTempErrors++; //pro sensor. max +10+1+1+1.... bleibt also < 255
             errorDetected = 1;
@@ -62,6 +86,7 @@ void Extruder::manageTemperatures() {
                 act->setSensorDefect(true);
                 if (!Printer::isAnyTempsensorDefect()) {
                     Printer::setSomeTempsensorDefect(true);
+                    stopAllHeaters();
                     Printer::flag2 |= PRINTER_FLAG2_GOT_TEMPS; //we are not waiting for first temp measurements anymore.
 
                     reportTempsensorAndHeaterErrors();
@@ -71,8 +96,8 @@ void Extruder::manageTemperatures() {
                 }
             }
         }
-        if (!sensorSupported || Printer::isAnyTempsensorDefect())
-            continue;
+        if (!sampleValid || act->sensorType == 0 || Printer::isAnyTempsensorDefect())
+            continue; // Never feed an invalid or disabled sensor sample into PID.
 
         uint8_t on = act->currentTemperatureC >= act->targetTemperatureC ? LOW : HIGH;
 
@@ -89,6 +114,7 @@ void Extruder::manageTemperatures() {
                         act->setSensorDecoupled(true);
                         if (!Printer::isAnyTempsensorDefect()) {
                             Printer::setSomeTempsensorDefect(true);
+                            stopAllHeaters();
 
                             Com::printErrorFLN(Com::tHeaterDecoupledWarning);
                             Com::printF(PSTR("Error:Temp. raised to slow. Rise = "), act->currentTemperatureC - act->lastDecoupleTemp);
@@ -115,6 +141,7 @@ void Extruder::manageTemperatures() {
                         act->setSensorDecoupled(true);
                         if (!Printer::isAnyTempsensorDefect()) {
                             Printer::setSomeTempsensorDefect(true);
+                            stopAllHeaters();
 
                             Com::printErrorFLN(Com::tHeaterDecoupledWarning);
                             Com::printF(PSTR("Error:Could not hold temperature "), act->lastDecoupleTemp);
@@ -188,9 +215,7 @@ void Extruder::manageTemperatures() {
         extruderTempErrors--;
 
     if (Printer::isAnyTempsensorDefect()) {
-        for (uint8_t controller = 0; controller < NUM_TEMPERATURE_LOOPS; controller++) {
-            tempController[controller]->setTargetTemperature(0);
-        }
+        stopAllHeaters();
         Printer::debugLevel |= 8; // Go into dry mode
     } else {
         if (!errorDetected)
@@ -240,9 +265,26 @@ void TemperatureController::waitForTargetTemperature(uint8_t plus_temp_tolerance
 }
 
 void TemperatureController::autotunePID(float temp, uint8_t controllerId, int maxCycles, bool storeValues, int method) {
-    if (!updateCurrentTemperature()) {
-        HAL::setHeaterDuty(pwmIndex, 0);
+    if (autotuneIndex != 255) {
+        Com::printErrorFLN(PSTR("PID autotune already active"));
+        return; // Do not interfere with the existing autotune owner.
+    }
+    setTargetTemperature(0);
+    if (controllerId >= NUM_TEMPERATURE_LOOPS || tempController[controllerId] != this
+        || Printer::isAnyTempsensorDefect() || Printer::debugDryrun()
+        || isSensorDefect() || isSensorDecoupled()
+        || !(temp >= MAX_ROOM_TEMPERATURE && temp <= heaterCutoffC)) {
+        Com::printErrorFLN(PSTR("PID autotune failed: heater unavailable or target invalid"));
+        return;
+    }
+    const bool sensorSupported = updateCurrentTemperature();
+    if (!sensorSupported) {
         Com::printErrorFLN(PSTR("PID autotune failed: unsupported temperature sensor"));
+        return;
+    }
+    if (!validTemperatureSample(sensorSupported, currentTemperatureC) || sensorType == 0
+        || currentTemperatureC > heaterCutoffC || currentTemperatureC > temp + 40) {
+        Com::printErrorFLN(PSTR("PID autotune failed: invalid temperature"));
         return;
     }
     Printer::idleStatus.cancel();
@@ -298,8 +340,9 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
     }
     }
 
+    autotuneSampleFault = false;
     autotuneIndex = controllerId;
-    extruder[controllerId].tempControl.stopDecouple();
+    stopDecouple(); // Also valid when this controller is the heated bed.
     HAL::setHeaterDuty(pwmIndex, pidMax);
     if (controllerId < NUM_EXTRUDER) {
         extruder[controllerId].coolerPWM = extruder[controllerId].coolerSpeed;
@@ -308,10 +351,30 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
 
     for (;;) {
         Commands::checkForPeriodicalActions(WaitHeater); // update heaters etc. https://github.com/repetier/Repetier-Firmware/commit/241c550ac004023842d6886c6e0db15a1f6b56d7
-        updateCurrentTemperature();
+        const bool supported = updateCurrentTemperature();
         currentTemp = currentTemperatureC;
+        if (autotuneSampleFault || Printer::isAnyTempsensorDefect() || Printer::debugDryrun()
+            || isSensorDefect() || isSensorDecoupled() || sensorType == 0
+            || !validTemperatureSample(supported, currentTemp)) {
+            finishAutotune(*this);
+            Com::printErrorFLN(PSTR("PID autotune failed: invalid sensor or heater fault"));
+            showError((void*)ui_text_autodetect_pid, (void*)ui_text_temperature_wrong);
+            break;
+        }
 
         millis_t time = HAL::timeInMilliseconds();
+        if (currentTemp > temp + 40 || currentTemp > heaterCutoffC) {
+            finishAutotune(*this);
+            Com::printErrorFLN(Com::tAPIDFailedHigh);
+            showError((void*)ui_text_autodetect_pid, (void*)ui_text_temperature_wrong);
+            break;
+        }
+        if (((time - t1) + (time - t2)) > (10L * 60L * 1000L * 2L)) {
+            finishAutotune(*this);
+            Com::printErrorFLN(Com::tAPIDFailedTimeout);
+            showError((void*)ui_text_autodetect_pid, (void*)ui_text_timeout);
+            break;
+        }
         maxTemp = RMath::max(maxTemp, currentTemp);
         minTemp = RMath::min(minTemp, currentTemp);
         if (heating == true && currentTemp > temp) // switch heating -> off
@@ -401,28 +464,16 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
                         Com::printFLN(Com::tAPIDKd, Kd);
                     }
                 }
-                HAL::setHeaterDuty(pwmIndex, (bias + d));
                 cycles++;
+                if (cycles <= maxCycles)
+                    HAL::setHeaterDuty(pwmIndex, (bias + d));
                 minTemp = temp;
             }
         }
-        if (currentTemp > (temp + 40)) {
-            Com::printErrorFLN(Com::tAPIDFailedHigh);
-            showError((void*)ui_text_autodetect_pid, (void*)ui_text_temperature_wrong);
-            autotuneIndex = 255;
-            break;
-        }
-        if (((time - t1) + (time - t2)) > (10L * 60L * 1000L * 2L)) // 20 Minutes
-        {
-            Com::printErrorFLN(Com::tAPIDFailedTimeout);
-            showError((void*)ui_text_autodetect_pid, (void*)ui_text_timeout);
-            autotuneIndex = 255;
-            break;
-        }
         if (cycles > maxCycles) {
+            finishAutotune(*this);
             Com::printInfoFLN(Com::tAPIDFinished);
             UI_STATUS_UPD(UI_TEXT_AUTODETECT_PID_DONE);
-            autotuneIndex = 255;
             if (storeValues) {
                 pidPGain = Kp;
                 pidIGain = Ki;
