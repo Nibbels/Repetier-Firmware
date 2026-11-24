@@ -2,6 +2,10 @@
 
 Date: 2026-11-24 (Europe/Berlin). User wants a long-lived manager chat in ChatGPT Work (Astra selected by user); worker chats currently use GPT-6.2 High outside Work. Repository [Nibbels/Repetier-Firmware](https://github.com/Nibbels/Repetier-Firmware), integration branch **ai-firmware-review**, never community_development. Read [AGENTS.md](../AGENTS.md), [TASKS.md](TASKS.md), individual task files and live branches/PRs first. Repository is the authoritative durable state, not chat memory.
 
+## Current wave 3 status
+
+Production PRs [#77](https://github.com/Nibbels/Repetier-Firmware/pull/77) (heater fault and autotune), [#79](https://github.com/Nibbels/Repetier-Firmware/pull/79) (RGB), and [#78](https://github.com/Nibbels/Repetier-Firmware/pull/78) (scan settings) merged with green host and four-AVR checks. Task0009's preparation PR #75 is merged; its production refactor is in progress per owner. After that worker self-merges and combined verification is confirmed, dispatch exclusive Task0013 (HAL, Arduino/fastio and build). Hardware tests remain deferred to final owner acceptance.
+
 ## Wave 3 dispatch (2026-11-24)
 
 Tasks 0001–0008 are merged. Wave 2 software checkpoint: [214baf4](https://github.com/Nibbels/Repetier-Firmware/commit/214baf4b504be71c0fce8661207930bd01d459f6), [four firmware images and evidence](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45449055408/artifacts/14946438316). The owner defers all live printer testing until the planned refactoring and final software audit are complete. Keep the checkpoint for comparison. Workers continue with CI and record physical unknowns for Task0016.
