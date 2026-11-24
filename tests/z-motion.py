@@ -21,7 +21,7 @@ def main():
     fragments = [
         z_motion.removeprefix('#include "Repetier.h"\n'),
         section(executor, "void StepExecutor::stepSlowedZCompensation()", "\n/**\n  Processes the moves"),
-        section(printer, "bool Printer::needsCMPwait(", "\nint8_t Printer::anyHomeDir("),
+        section(printer, "bool Printer::needsCMPwait(", "\nvoid Printer::stopPrint("),
         section(probe, "bool moveZ(int nSteps, bool emergencyRetreat) {", "\n} // namespace Calibration"),
     ]
     with TemporaryDirectory(prefix="rfx-z-motion-") as directory:

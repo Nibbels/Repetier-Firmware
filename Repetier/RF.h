@@ -400,17 +400,9 @@ extern void startZOScan(bool automatrixleveling = false);
 ZOffsetScanPoint zOffsetScanPoint();
 void restoreZOffsetScanPoint(ZOffsetScanPoint point);
 
-//Z-Schrauben Helper
-extern float g_ZSchraubenSollDrehungenWarm_U;
-extern float g_ZSchraubenSollKorrekturWarm_mm;
-extern char g_ZSchraubeOk;
-
-extern void calculateZScrewCorrection(void);
-
 //Menüumschalter für Z-Step-Höhe
 extern void configureMANUAL_STEPS_Z(int8_t increment);
 
-extern long getZMatrixDepth(long x, long y);
 extern long getZMatrixDepth_CurrentXY(void);
 
 extern bool switchActiveHeatBed(char newActiveHeatBed);

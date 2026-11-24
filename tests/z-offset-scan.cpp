@@ -192,9 +192,11 @@ long getZMatrixDepth_CurrentXY() {
 }
 void determineCompensationOffsetZ() { ++corrected; }
 void outputCompensationMatrix(int mode) { assert(mode == 1); }
-void calculateZScrewCorrection() {
+namespace ZScrewAdjustment {
+void calculate() {
     assert(Printer::zMotion.scanSteps() == 0);
     ++reported;
+}
 }
 } // namespace
 

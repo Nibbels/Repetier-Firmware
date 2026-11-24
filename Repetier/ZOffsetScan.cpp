@@ -18,6 +18,7 @@
 #include "Repetier.h"
 #include "BedMatrix.h"
 #include "ScanProbe.h"
+#include "ZScrewAdjustment.h"
 #include "GCodeCommands.h"
 #include "GCodeInput.h"
 
@@ -401,7 +402,7 @@ void ZOffsetScan::retreatForFinish() {
 
 void ZOffsetScan::reportScrewAdjustment() {
     discard();
-    calculateZScrewCorrection();
+    ZScrewAdjustment::calculate();
 
     showMyPage((void*)ui_text_heat_bed_zoffset_search_status, (void*)ui_text_heat_bed_zoffset_fix_z1, (void*)ui_text_heat_bed_zoffset_fix_z2, (void*)ui_text_statusmsg);
     uid.scheduleMessageReturn(HAL::timeInMilliseconds() + 30000);

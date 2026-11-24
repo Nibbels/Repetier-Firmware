@@ -128,6 +128,7 @@
     <ClInclude Include="motion.h" />
     <ClInclude Include="pins.h" />
     <ClInclude Include="PreheatProfiles.h" />
+    <ClInclude Include="ZScrewAdjustment.h" />
     <ClInclude Include="Printer.h" />
     <ClInclude Include="BedCompensation.h" />
     <ClInclude Include="DigitCompensation.h" />
@@ -168,6 +169,8 @@
     <ClCompile Include="gcode.cpp" />
     <ClCompile Include="HAL.cpp" />
     <ClCompile Include="motion.cpp" />
+    <ClCompile Include="Homing.cpp" />
+    <ClCompile Include="ZScrewAdjustment.cpp" />
     <ClCompile Include="Printer.cpp" />
     <ClCompile Include="PreheatProfiles.cpp" />
     <ClCompile Include="RF.cpp" />

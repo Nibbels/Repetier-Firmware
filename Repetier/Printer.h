@@ -178,7 +178,9 @@ public:
 
     static unsigned char wrongType;
 
-    static unsigned char g_unlock_movement;
+    static bool movementUnlocked() { return movementUnlocked_; }
+    static void allowMovement() { movementUnlocked_ = true; }
+    static void lockMovement() { movementUnlocked_ = false; }
 
 
     static uint8_t motorCurrent[DRV8711_NUM_CHANNELS];
@@ -557,7 +559,7 @@ public:
         if (!areAllSteppersDisabled()) {
             UI_STATUS_UPD(UI_TEXT_STEPPER_DISABLED);
         }
-        Printer::g_unlock_movement = 0; //again lock movement until homing or keypress or another print happens. --> toooooo much? Ich aktiviers: http://www.rf1000.de/viewtopic.php?f=70&t=2282
+        lockMovement(); // Homing or a panel key authorizes the next move.
         disableXStepper();
         disableYStepper();
         disableZStepper();
@@ -712,6 +714,7 @@ public:
     static void showConfiguration();
 
 private:
+    static bool movementUnlocked_;
     static DirectPosition extruderDirect;
 
     static void homeXAxis();

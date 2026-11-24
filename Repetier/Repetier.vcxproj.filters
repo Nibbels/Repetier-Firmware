@@ -53,6 +53,9 @@
     <ClInclude Include="PreheatProfiles.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ZScrewAdjustment.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="Printer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -164,6 +167,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="motion.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Homing.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ZScrewAdjustment.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Printer.cpp">

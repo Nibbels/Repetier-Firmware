@@ -82,7 +82,7 @@ The point Z-offset scan (`M3900`) updates the current RAM matrix. For a full lea
 
 The pre-patch `homeZAxis()` did not clear layer markers or learned min/max. **It now does** after disabling CMP, whether or not the stepper was disabled first ([ba93708](https://github.com/Nibbels/Repetier-Firmware/commit/ba93708d41c84fcce16872720b6b954da70ea157)). `disableZStepper()` still clears only `Current` and `Last`; a subsequent Z home resolves this discrepancy. X-only and Y-only homing deliberately do not reset Z first-layer state.
 
-[Source: homeZAxis](../../Repetier/Printer.cpp#L1556-L1657) · [disableZStepper](../../Repetier/Printer.h#L333-L370).
+[Source: homeZAxis](../../Repetier/Homing.cpp) · [disableZStepper](../../Repetier/Printer.h#L333-L370).
 
 ### Finding F8 (DESIGN CONSTRAINT): future lifecycle reset must distinguish durable takeover from disposable correction
 

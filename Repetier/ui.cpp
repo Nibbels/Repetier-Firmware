@@ -967,7 +967,7 @@ void UIDisplay::slowAction() {
         noInts.unprotect();
         if (lastAction != buttonAction) {
             //Bei beliebiger user interaktion oder Homing soll G1 etc. erlaubt werden. Dann ist der Drucker nicht abgestürzt, sondern bedient worden.
-            Printer::g_unlock_movement = 1;
+            Printer::allowMovement();
             if (buttonAction == 0) {
                 lastAction = 0;
             } else if (buttonAge > UI_KEY_BOUNCETIME) // New key pressed

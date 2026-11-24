@@ -17,6 +17,7 @@
 
 #include "Repetier.h"
 #include "StepExecutor.h"
+#include "ZScrewAdjustment.h"
 
 void UIDisplay::addInt(int16_t value, uint8_t digits, char fillChar) {
     if (col >= MAX_COLS)
@@ -754,21 +755,21 @@ void UIDisplay::parse(char* txt, bool ram) {
                 addStringP(Printer::ZMode == Z_VALUE_MODE_Z_MIN ? ui_text_z_mode_min : ui_text_z_mode_gcode);
             } else if (c2 == 's') // %zs : Z-Schraube korrektur mm
             {
-                addFloat(g_ZSchraubenSollKorrekturWarm_mm, 1, 3);
+                addFloat(ZScrewAdjustment::current().millimetres, 1, 3);
             } else if (c2 == 'S') // %zS : Z-Schraube korrektur Umdrehungen
             {
-                addFloat(g_ZSchraubenSollDrehungenWarm_U, 1, 1);
+                addFloat(ZScrewAdjustment::current().turns, 1, 1);
             } else if (c2 == 'F') // %zF : Z-Schraube falsch
             {
-                if (g_ZSchraubeOk < 0)
+                if (ZScrewAdjustment::current().status == ZScrewAdjustment::Status::Ok)
                     addStringP(ui_ok); //ok
-                else if (g_ZSchraubeOk > 0)
+                else if (ZScrewAdjustment::current().status == ZScrewAdjustment::Status::BedTooHigh)
                     addStringP(ui_neetfix); //zu hohes bett
                 else
                     addStringP(ui_fail); //fail
             } else if (c2 == 'D')        // %zD : Z-Schraube richtung
             {
-                if (g_ZSchraubenSollKorrekturWarm_mm > 0)
+                if (ZScrewAdjustment::current().millimetres > 0)
                     addStringP(ui_up);
                 else
                     addStringP(ui_down);

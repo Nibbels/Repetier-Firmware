@@ -31,6 +31,7 @@ def main():
     executor = (firmware / "StepExecutor.cpp").read_text(encoding="utf-8")
     executor_header = (firmware / "StepExecutor.h").read_text(encoding="utf-8")
     printer = (firmware / "Printer.cpp").read_text(encoding="utf-8")
+    homing = (firmware / "Homing.cpp").read_text(encoding="utf-8")
     printer_header = (firmware / "Printer.h").read_text(encoding="utf-8")
     eeprom = (firmware / "Eeprom.h").read_text(encoding="utf-8")
     pause = (firmware / "PrintPause.cpp").read_text(encoding="utf-8")
@@ -71,7 +72,7 @@ def main():
         section(printer, "void Printer::updateWobbleFixOffsets(", "\ninline bool isExtrusionAllowed("),
         section(printer, "void Printer::setFeedrate(", "\n/** Move to machine coordinates"),
         section(printer, "void Printer::stopPrint()", "\n#define START_EXTRUDER_CONFIG"),
-        section(printer, "void Printer::homeZAxis()", "\nvoid Printer::homeAxis("),
+        section(homing, "void Printer::homeZAxis()", "\nvoid Printer::homeAxis("),
         section(printer, "void Printer::enableSenseOffsetnow(", "\nvoid Printer::enableCMPnow("),
         section(rf, "bool isAnyScanRunning()", "\nvoid discardScans(").replace("Calibration::", ""),
         section(panel_motion, "void moveZAction(int8_t direction) {", "} // moveZAction") + "}",

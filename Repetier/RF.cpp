@@ -210,7 +210,7 @@ void cleanupEPositions(void) {
 } // cleanupEPositions
 
 unsigned char isMovingAllowed(const char* pszCommand, char outputLog) {
-    if (!Printer::g_unlock_movement) {
+    if (!Printer::movementUnlocked()) {
         // A host may keep sending motion commands after a controller reset.
         Com::printF(pszCommand);
         Com::printFLN(PSTR(": movement locked until homing or panel input"));
