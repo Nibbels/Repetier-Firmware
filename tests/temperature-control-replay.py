@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Task0010 characterization: actual sensor, controller, PWM and scheduler code.
+"""Task0010: actual sensor, controller, PWM and scheduler safety replays.
 
-This is a baseline replay, NOT a heater-safety certification. Assertions marked
-GAP describe existing unsafe/insufficient behavior; replace them with safety
-requirements when that behavior is deliberately fixed. No AVR/pin timing or
-physical sensor/relay behavior is modeled.
+GAP marks unresolved sensor validity behavior, not a safety requirement.
+Software duty requests and simulated pin transitions are distinct; this is
+not physical sensor/relay or AVR timing certification.
 """
 import os
 from pathlib import Path
@@ -78,6 +77,7 @@ struct Extruder {
     uint8_t coolerPWM, coolerSpeed;
     static Extruder* current;
     static void manageTemperatures();
+    static void setHeatedBedTemperature(float);
 };
 static Extruder extruder[] = {
     {{0, 13, 0, 280}, 0, 255},
@@ -86,7 +86,8 @@ static Extruder extruder[] = {
 #endif
 };
 Extruder* Extruder::current = &extruder[0];
-static TemperatureController bed{NUM_EXTRUDER, 13, NUM_EXTRUDER, 150};
+static TemperatureController bed{NUM_EXTRUDER, 13, NUM_EXTRUDER, BED_MEASURED_CUTOFF};
+static TemperatureController& heatedBedController = bed;
 static TemperatureController* tempController[NUM_TEMPERATURE_LOOPS] = {
     &extruder[0].tempControl,
 #if NUM_EXTRUDER > 1
@@ -100,25 +101,40 @@ namespace Printer {
     static unsigned flag2, debugLevel;
     static bool isAnyTempsensorDefect() { return fault; }
     static void setSomeTempsensorDefect(bool f) { fault = f; }
-    static void stopPrint() { ++stops; }
+    static void stopPrint() {
+        for (auto* t : tempController)
+            assert(t->targetTemperatureC == 0 && HAL::outputDuty(t->pwmIndex) == 0);
+        ++stops;
+    }
     static bool debugDryrun() { return (debugLevel & 8) != 0; }
+    static bool debugInfo() { return false; }
     struct { void cancel() {} void schedule(millis_t) {} } idleStatus;
     struct { bool isReheating() { return true; } } pause;
     struct { void service(millis_t) {} } strainGauge;
 }
 namespace Com {
     #include "com.inc"
+    constexpr int tTargetBedColon = 0;
     template<class... T> void printErrorFLN(T...) {}
     template<class... T> void printInfoFLN(T...) {}
     template<class... T> void printF(T...) {}
     template<class... T> void printFLN(T...) {}
     void println() {}
 }
-namespace EEPROM { void storeDataIntoEEPROM() {} }
+static unsigned stores;
+static TemperatureController* tuned;
+namespace EEPROM {
+    void storeDataIntoEEPROM() {
+        assert(tuned && tuned->targetTemperatureC == 0 && HAL::outputDuty(tuned->pwmIndex) == 0);
+        ++stores;
+    }
+}
 namespace RMath { using std::min; using std::max; }
 static int ui_text_temperature_manager, ui_text_sensor_error, ui_text_heater_error;
 static int ui_text_autodetect_pid, ui_text_temperature_wrong, ui_text_timeout;
-static void showError(void*, void*) {}
+static void showError(void*, void*) {
+    if (tuned) assert(HAL::outputDuty(tuned->pwmIndex) == 0);
+}
 enum FirmwareState { NotBusy, WaitHeater };
 struct Commands {
     static void checkForPeriodicalActions(FirmwareState);
@@ -128,9 +144,10 @@ static void reportTempsensorAndHeaterErrors();
 #include "conversion.inc"
 #include "hal.inc"
 #include "control.inc"
+#include "bed-setter.inc"
 static unsigned visits;
 static millis_t stride = 10;
-enum class Injection { None, Reach, LateUnsupported };
+enum class Injection { None, Reach, LateUnsupported, LateLow, Transient, High, TransientHigh, Cutoff, Cycles, OtherFault, Cancel, Reentrant };
 static Injection injection;
 static bool postTemperature = true;
 namespace GCodeInput {
@@ -140,15 +157,49 @@ namespace GCodeInput {
         now += stride;
         scanTick = true;
         if (postTemperature) temperatureTick = true;
-        if (injection == Injection::Reach && visits == 3)
-            extruder[0].tempControl.sensorType = 0;
-        if (injection == Injection::LateUnsupported)
-            extruder[0].tempControl.sensorType = 255;
+        if (injection == Injection::Reach && visits == 3) {
+            extruder[0].tempControl.sensorType = 60;
+            temperatureAdcValues[0] = 102;
+        }
+        if (injection == Injection::LateUnsupported || injection == Injection::Transient)
+            tuned->sensorType = 255;
+        if (injection == Injection::LateLow) {
+            tuned->sensorType = 14;
+            temperatureAdcValues[tuned->sensorPin] = 4092;
+        }
+        if (injection == Injection::High || injection == Injection::TransientHigh)
+            temperatureAdcValues[tuned->sensorPin] = 820; // ~190-200 C
+        if (injection == Injection::Cutoff)
+            temperatureAdcValues[tuned->sensorPin] = 1195; // valid converted range, above 280 C cutoff
+        if (injection == Injection::Cancel) {
+            if (tuned == &bed)
+                Extruder::setHeatedBedTemperature(0);
+            else
+                tuned->setTargetTemperature(0);
+            assert(HAL::outputDuty(tuned->pwmIndex) == 0);
+        }
+        if (injection == Injection::Reentrant && visits == 1) {
+            const auto oldDuty = HAL::outputDuty(tuned->pwmIndex);
+            tuned->autotunePID(100, tuned->pwmIndex, 5, false, 0);
+            assert(autotuneIndex == tuned->pwmIndex && HAL::outputDuty(tuned->pwmIndex) == oldDuty);
+            tuned->setTargetTemperature(0); // terminate original tune after checking guard
+        }
+        if (injection == Injection::Cycles)
+            temperatureAdcValues[tuned->sensorPin] = visits % 2 ? 470 : 330;
+        if (injection == Injection::OtherFault)
+            assert(tuned != &bed); // bed already has 10 consecutive invalid samples
+
     }
 }
 static struct {
     millis_t lastButtonTime() { return 0; }
-    void slowAction() {}
+    void slowAction() {
+        if (injection == Injection::Transient || injection == Injection::TransientHigh) {
+            assert(HAL::outputDuty(tuned->pwmIndex) == 0);
+            tuned->sensorType = 60; // valid again before autotune's next read
+            temperatureAdcValues[tuned->sensorPin] = 330;
+        }
+    }
 } uid;
 static void recalculateZCompensation() {}
 static void loopFeatures() {}
@@ -169,9 +220,13 @@ int main(int argc, char** argv) {
     const char* name = argv[1];
     auto& c = extruder[0].tempControl;
     for (auto* t : tempController) {
-        t->sensorType = 0; // fixed 25 C sentinel for uninjected controllers
+        t->sensorType = 60;
+        temperatureAdcValues[t->sensorPin] = 102; // plausible room-temperature sample
         t->pidMax = 255;
         t->targetTemperatureC = 100;
+        t->pidPGain = 2;
+        t->pidIGain = 0.5;
+        t->pidDGain = 3;
         t->decoupleTestPeriod = EXT0_DECOUPLE_TEST_PERIOD;
     }
     if (!std::strcmp(name, "rail")) {
@@ -187,13 +242,72 @@ int main(int argc, char** argv) {
         c.sensorType = 14;
         temperatureAdcValues[0] = 4092;
         for (int i = 0; i < 10; ++i) {
+            HAL::setHeaterDuty(0, 255);
             service();
-            // GAP: out-of-range low values still feed the regulator.
             assert(c.currentTemperatureC < MIN_DEFECT_TEMPERATURE);
-            assert(!Printer::fault && HAL::outputDuty(0) == 255);
+            assert(!Printer::fault && HAL::outputDuty(0) == 0);
+            assert(HAL::outputDuty(bed.pwmIndex) == 255);
+            assert(c.tempPointer == 0); // invalid readings never enter the PID history
         }
         service();
         assert(c.isSensorDefect());
+        allOff();
+    } else if (!std::strcmp(name, "recovery")) {
+        service();
+        assert(HAL::outputDuty(0) == 255);
+        c.sensorType = 14;
+        temperatureAdcValues[0] = 4092;
+        service();
+        assert(HAL::outputDuty(0) == 0 && !Printer::fault);
+        c.sensorType = 60;
+        temperatureAdcValues[0] = 102;
+        service();
+        assert(HAL::outputDuty(0) == 255 && !Printer::fault);
+    } else if (!std::strcmp(name, "disabled")) {
+        c.sensorType = 0;
+        bed.sensorType = 0;
+        HAL::setHeaterDuty(0, 255);
+        HAL::setHeaterDuty(bed.pwmIndex, 255);
+        service();
+        assert(!Printer::fault && HAL::outputDuty(0) == 0 && HAL::outputDuty(bed.pwmIndex) == 0);
+    } else if (!std::strcmp(name, "invalid-high")) {
+        c.sensorType = 60;
+        temperatureAdcValues[0] = 4092;
+        HAL::setHeaterDuty(0, 255);
+        service();
+        assert(c.currentTemperatureC > MAX_DEFECT_TEMPERATURE);
+        assert(!Printer::fault && HAL::outputDuty(0) == 0 && c.tempPointer == 0);
+    } else if (!std::strcmp(name, "bed-invalid")) {
+        bed.sensorType = 14;
+        temperatureAdcValues[bed.sensorPin] = 4092;
+        HAL::setHeaterDuty(bed.pwmIndex, 255);
+        service();
+        assert(HAL::outputDuty(bed.pwmIndex) == 0 && HAL::outputDuty(0) == 255 && !Printer::fault);
+    } else if (!std::strcmp(name, "dual-invalid")) {
+#if NUM_EXTRUDER > 1
+        auto& second = extruder[1].tempControl;
+        second.sensorType = 14;
+        temperatureAdcValues[second.sensorPin] = 4092;
+        HAL::setHeaterDuty(second.pwmIndex, 255);
+        service();
+        assert(HAL::outputDuty(second.pwmIndex) == 0 && HAL::outputDuty(0) == 255
+            && HAL::outputDuty(bed.pwmIndex) == 255 && !Printer::fault);
+#else
+        assert(false);
+#endif
+    } else if (!std::strcmp(name, "hold-drift")) {
+        for (auto* other : tempController) if (other != &c) other->setTargetTemperature(0);
+        temperatureAdcValues[0] = 410; // ~100 C in both calibrations
+        service();
+        assert(c.isDecoupleHold());
+        temperatureAdcValues[0] = 318; // drift >20 C but within the +/-30 C PID band
+        now += EXT0_DECOUPLE_TEST_PERIOD;
+        for (int i = 0; i < 10; ++i) {
+            service();
+            assert(!Printer::fault);
+        }
+        service();
+        assert(c.isSensorDecoupled());
         allOff();
     } else if (!std::strcmp(name, "unsupported")) {
         c.sensorType = 255;
@@ -248,40 +362,84 @@ int main(int argc, char** argv) {
     } else if (!std::strcmp(name, "wait")) {
         c.sensorType = 13;
         temperatureAdcValues[0] = 4092;
+        c.currentTemperatureC = 0;
         c.setTargetTemperature(25);
         injection = Injection::Reach;
         c.waitForTargetTemperature();
         assert(visits == 3 && watchdogHeartbeat == now);
-        assert(c.currentTemperatureC == 25 && HAL::outputDuty(0) == 0);
-    } else if (!std::strcmp(name, "autotune-entry")) {
-        c.sensorType = 255;
-        HAL::setHeaterDuty(0, 255);
-        c.autotunePID(150, 0, 5, false, 0);
-        assert(visits == 0 && HAL::outputDuty(0) == 0);
-    } else if (!std::strcmp(name, "autotune-late")) {
-        c.sensorType = 13;
-        temperatureAdcValues[0] = 4092;
-        injection = Injection::LateUnsupported;
-        postTemperature = false; // fault between 100 ms services
-        c.autotunePID(150, 0, 5, false, 0);
-        // GAP: ignored false conversion; high exit does not clear duty.
-        assert(visits == 1 && watchdogHeartbeat == now);
-        assert(c.currentTemperatureC > MAX_DEFECT_TEMPERATURE);
-        assert(autotuneIndex == 255 && HAL::outputDuty(0) == 255);
-    } else if (!std::strcmp(name, "autotune-timeout")) {
-        c.sensorType = 13;
-        temperatureAdcValues[0] = 4092;
-        stride = 100000; // synthetic clock progression, not physical timing
-        // Avoid another controller's decoupling fault in this isolated replay.
-        for (auto* t : tempController) if (t != &c) t->setTargetTemperature(0);
-        c.autotunePID(150, 0, 5, false, 0);
-        // GAP: timeout clears autotuneIndex, not requested duty.
-        assert(visits > 1 && watchdogHeartbeat == now && !Printer::fault);
-        assert(autotuneIndex == 255 && HAL::outputDuty(0) == 255);
+        assert(std::fabs(c.currentTemperatureC - 25) <= TEMP_TOLERANCE && HAL::outputDuty(0) == 0);
+    } else if (!std::strncmp(name, "autotune-", 9)) {
+        const bool useBed = std::strstr(name, "-bed-") != nullptr;
+        tuned = useBed ? &bed : &c;
+        auto& t = *tuned;
+        for (auto* other : tempController) other->setTargetTemperature(0);
+        t.setTargetTemperature(100); // must not restart normal heating after autotune
+        HAL::setHeaterDuty(t.pwmIndex, 255);
+        t.sensorType = 60;
+        temperatureAdcValues[t.sensorPin] = 330;
+        float target = 100;
+        bool store = false;
+        const float oldP = t.pidPGain, oldI = t.pidIGain, oldD = t.pidDGain;
+        const bool entry = std::strstr(name, "entry") != nullptr;
+        if (!std::strcmp(name, "autotune-entry-unsupported")) t.sensorType = 255;
+        else if (!std::strcmp(name, "autotune-entry-low")) {
+            t.sensorType = 14;
+            temperatureAdcValues[t.sensorPin] = 4092;
+        } else if (!std::strcmp(name, "autotune-entry-disabled")) t.sensorType = 0;
+        else if (!std::strcmp(name, "autotune-entry-latched")) Printer::fault = true;
+        else if (!std::strcmp(name, "autotune-entry-decoupled")) t.setSensorDecoupled(true);
+        else if (!std::strcmp(name, "autotune-entry-dryrun")) Printer::debugLevel = 8;
+        else if (!std::strcmp(name, "autotune-entry-high")) temperatureAdcValues[t.sensorPin] = 820;
+        else if (!std::strcmp(name, "autotune-entry-target")) target = 500;
+        else if (!std::strcmp(name, "autotune-bed-entry-target")) target = HEATED_BED_MAX_TEMP + 1;
+        else if (!std::strcmp(name, "autotune-entry-controller")) {}
+        else if (std::strstr(name, "-late")) {
+            injection = Injection::LateUnsupported;
+            postTemperature = false; // fault between periodic temperature services
+        } else if (!std::strcmp(name, "autotune-low")) {
+            injection = Injection::LateLow;
+            postTemperature = false;
+        } else if (!std::strcmp(name, "autotune-transient")) injection = Injection::Transient;
+        else if (!std::strcmp(name, "autotune-transient-high")) injection = Injection::TransientHigh;
+        else if (!std::strcmp(name, "autotune-cancel") || !std::strcmp(name, "autotune-bed-cancel")) injection = Injection::Cancel;
+        else if (!std::strcmp(name, "autotune-reentrant")) injection = Injection::Reentrant;
+        else if (!std::strcmp(name, "autotune-high") || !std::strcmp(name, "autotune-bed-high")) {
+            injection = Injection::High;
+            postTemperature = false;
+        } else if (!std::strcmp(name, "autotune-cutoff")) {
+            target = 270;
+            injection = Injection::Cutoff;
+            postTemperature = false;
+        } else if (std::strstr(name, "-timeout")) stride = 100000;
+        else if (std::strstr(name, "-success")) {
+            injection = Injection::Cycles;
+            stride = 6000;
+            store = std::strstr(name, "-store") != nullptr;
+        } else if (!std::strcmp(name, "autotune-other-fault")) {
+            bed.sensorType = 255;
+            for (int i = 0; i < 10; ++i) service();
+            assert(!Printer::fault);
+            injection = Injection::OtherFault;
+        } else assert(false);
+        const uint8_t id = !std::strcmp(name, "autotune-entry-controller") ? NUM_TEMPERATURE_LOOPS : t.pwmIndex;
+        t.autotunePID(target, id, 5, store, 0);
+        assert(autotuneIndex == 255 && HAL::outputDuty(t.pwmIndex) == 0 && t.targetTemperatureC == 0);
+        if (entry) assert(visits == 0);
+        else assert(visits > 0 && watchdogHeartbeat == now);
+        if (std::strstr(name, "-success")) {
+            assert(visits == 12 && !Printer::fault);
+            assert(stores == unsigned(store));
+            if (store) assert(t.pidPGain != oldP && std::isfinite(t.pidPGain) && std::isfinite(t.pidIGain) && std::isfinite(t.pidDGain));
+        } else assert(stores == 0);
+        if (!store) assert(t.pidPGain == oldP && t.pidIGain == oldI && t.pidDGain == oldD);
+        if (injection == Injection::OtherFault) allOff();
+        // One subsequent normal service must not re-enable the old target.
+        service();
+        assert(HAL::outputDuty(t.pwmIndex) == 0);
     } else {
         assert(false);
     }
-    std::printf("%s: characterized\n", name);
+    std::printf("%s: passed\n", name);
 }
 '''
 
@@ -292,12 +450,14 @@ def main():
     conversion = (FW / "TemperatureSensors.cpp").read_text()
     hal = (FW / "HAL.cpp").read_text()
     config = (FW / "Configuration.h").read_text()
+    extruder = (FW / "Extruder.cpp").read_text()
     commands = (FW / "Commands.cpp").read_text()
     include = '#include "Repetier.h"'
     fragments = {
         "controller.inc": section(header, "#define TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_FULL", "}; // TemperatureController") + "};",
         "conversion.inc": conversion.split(include, 1)[1],
         "control.inc": control.split(include, 1)[1],
+        "bed-setter.inc": section(extruder, "void Extruder::setHeatedBedTemperature(", "float Extruder::getHeatedBedTemperature("),
         "scheduler.inc": section(commands, "void Commands::checkForPeriodicalActions(", "bool Commands::waitForMotion("),
         "com.inc": "\n".join("constexpr int " + n + " = 0;" for n in sorted(set(re.findall(r"Com::(t[A-Z]\w*)", control)))),
         "hal.inc": (
@@ -313,8 +473,14 @@ def main():
         ),
     }
     scenarios = (
-        "rail", "invalid-low", "unsupported", "no-rise", "pwm", "watchdog",
-        "wait", "autotune-entry", "autotune-late", "autotune-timeout",
+        "rail", "invalid-low", "invalid-high", "bed-invalid", "recovery", "disabled",
+        "unsupported", "no-rise", "hold-drift", "pwm", "watchdog", "wait",
+        "autotune-entry-unsupported", "autotune-entry-low", "autotune-entry-disabled",
+        "autotune-entry-latched", "autotune-entry-decoupled", "autotune-entry-dryrun", "autotune-entry-high",
+        "autotune-entry-target", "autotune-bed-entry-target", "autotune-entry-controller", "autotune-late",
+        "autotune-low", "autotune-transient", "autotune-transient-high", "autotune-high", "autotune-cutoff", "autotune-timeout",
+        "autotune-cancel", "autotune-reentrant", "autotune-other-fault", "autotune-success", "autotune-success-store",
+        "autotune-bed-late", "autotune-bed-timeout", "autotune-bed-high", "autotune-bed-cancel", "autotune-bed-success-store",
     )
     with TemporaryDirectory(prefix="rfx-temperature-control-") as tmp:
         work = Path(tmp)
@@ -324,7 +490,8 @@ def main():
         for board, tools in (("RF1000", 1), ("RF2000", 2), ("RF2000", 1)):
             profile = (FW / (board + ".h")).read_text()
             defines = {n: macro(profile, n) for n in (
-                "SENSOR_TEMPERATURE_OFFSETS_C", "MIN_DEFECT_TEMPERATURE", "MAX_DEFECT_TEMPERATURE")}
+                "SENSOR_TEMPERATURE_OFFSETS_C", "MIN_DEFECT_TEMPERATURE", "MAX_DEFECT_TEMPERATURE", "HEATED_BED_MAX_TEMP")}
+            defines["BED_MEASURED_CUTOFF"] = re.search(r"constexpr uint16_t bedHeaterCutoffC = (\d+);", (FW / "Extruder.cpp").read_text())[1]
             defines.update({n: macro(config, n) for n in (
                 "EXTRUDER_FAN_COOL_TEMP", "DECOUPLING_TEST_MAX_HOLD_VARIANCE",
                 "DECOUPLING_TEST_MIN_TEMP_RISE", "EXT0_DECOUPLE_TEST_PERIOD",
@@ -338,9 +505,10 @@ def main():
             subprocess.run([os.environ.get("CXX", "c++"), "-std=c++11", "-O2",
                             *[f"-D{k}={v}" for k, v in defines.items()],
                             str(work / "replay.cpp"), "-o", str(exe)], check=True)
-            for scenario in scenarios:
+            selected = scenarios + (("dual-invalid",) if tools > 1 else ())
+            for scenario in selected:
                 subprocess.run([str(exe), scenario], check=True, timeout=10)
-            print(f"{board} / {tools} hotend(s): {len(scenarios)} characterization cases passed", flush=True)
+            print(f"{board} / {tools} hotend(s): {len(selected)} cases passed", flush=True)
 
 
 if __name__ == "__main__":

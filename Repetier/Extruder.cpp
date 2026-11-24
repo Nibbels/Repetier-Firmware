@@ -185,8 +185,13 @@ void Extruder::setHeatedBedTemperature(float temperatureInCelsius) {
     if (heatedBedController.isSensorDefect() || heatedBedController.isSensorDecoupled())
         temperatureInCelsius = 0;
 
-    if (heatedBedController.targetTemperatureC == temperatureInCelsius)
+    if (heatedBedController.targetTemperatureC == temperatureInCelsius) {
+        // Autotune holds a zero normal target while driving its own PWM.
+        // An explicit off command must still revoke duty and cancel that tune.
+        if (temperatureInCelsius == 0)
+            heatedBedController.setTargetTemperature(0);
         return; // don't flood log with messages if killed
+    }
 
     heatedBedController.setTargetTemperature(temperatureInCelsius);
 
