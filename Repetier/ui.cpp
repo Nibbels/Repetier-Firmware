@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// LCD transport, startup screen, key sampling and menu navigation; see UiFormatting, UiSettings and UiActions.
+
 #include "Repetier.h"
 #include "UiMenus.h"
 #include "uimenu.h"

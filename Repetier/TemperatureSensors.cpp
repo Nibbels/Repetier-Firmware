@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// Sensor lookup tables, ADC sample conversion and calibration; no heater control policy.
+
 #include "Repetier.h"
 
 #define NUMTEMPS_1 28

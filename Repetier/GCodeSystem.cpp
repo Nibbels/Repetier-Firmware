@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// System, diagnostics and configuration G-code handlers, including legacy simulation refusal.
+
 #include "Repetier.h"
 #include "GCodeCommands.h"
 

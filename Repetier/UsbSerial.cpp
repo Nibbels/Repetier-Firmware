@@ -16,7 +16,7 @@
 */
 
 /*
-  HardwareSerial.h - Hardware serial library for Wiring
+  UsbSerial.cpp - RFx000 USART0 transport, derived from the Wiring HardwareSerial library
   Copyright (c) 2006 Nicholas Zambetti.  All right reserved.
 
   This library is free software; you can redistribute it and/or

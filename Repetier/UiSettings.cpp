@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// Panel setting edits, confirmation and value validation; navigation and rendering are separate.
+
 #include "Repetier.h"
 #include "StepExecutor.h"
 

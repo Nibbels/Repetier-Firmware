@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// Temperature regulation, thermal fault latching, heater waits and autotune; ADC conversion is separate.
+
 #include "Repetier.h"
 
 static uint8_t autotuneIndex = 255;

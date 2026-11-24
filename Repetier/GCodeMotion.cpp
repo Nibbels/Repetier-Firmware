@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// Motion and extrusion G-code handlers; planning and pulse execution are delegated to motion owners.
+
 #include "Repetier.h"
 #include "GCodeCommands.h"
 #include "MotionPlanner.h"
