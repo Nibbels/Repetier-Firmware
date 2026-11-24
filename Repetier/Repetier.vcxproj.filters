@@ -148,6 +148,12 @@
     <ClCompile Include="Eeprom.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="TemperatureControl.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="TemperatureSensors.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="Extruder.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

@@ -23,7 +23,6 @@
 // Updates the temperature of all extruders and heated bed if it's time.
 // Toggels the heater power if necessary.
 extern void reportTempsensorAndHeaterErrors(); ///< Report defect sensors
-extern uint8_t manageMonitor;
 
 #define TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_FULL 2  ///< Full heating enabled
 #define TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_HOLD 4  ///< Holding target temperature
@@ -324,6 +323,5 @@ extern TemperatureController optTempController;
 #define TEMP_FLOAT_TO_INT(temp) ((int)((temp) * (1 << CELSIUS_EXTRA_BITS)))
 
 extern TemperatureController* tempController[NUM_TEMPERATURE_LOOPS];
-extern uint8_t autotuneIndex;
 
 #endif // EXTRUDER_H

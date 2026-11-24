@@ -162,6 +162,8 @@
     <ClCompile Include="Commands.cpp" />
     <ClCompile Include="Communication.cpp" />
     <ClCompile Include="Eeprom.cpp" />
+    <ClCompile Include="TemperatureControl.cpp" />
+    <ClCompile Include="TemperatureSensors.cpp" />
     <ClCompile Include="Extruder.cpp" />
     <ClCompile Include="gcode.cpp" />
     <ClCompile Include="HAL.cpp" />

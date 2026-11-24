@@ -191,15 +191,6 @@ void waitForBed(GCode* com) {
     Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 5000);
 }
 
-void selectTemperatureMonitor(GCode* com) {
-    if (com->hasS()) {
-        if (com->S < NUM_EXTRUDER)
-            manageMonitor = com->S;
-        else
-            manageMonitor = NUM_EXTRUDER; // Set 100 to heated bed
-    }
-}
-
 void setPidGains(GCode* com) {
     TemperatureController* temp = &Extruder::current->tempControl;
     if (com->hasS()) {

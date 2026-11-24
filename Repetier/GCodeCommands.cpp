@@ -75,7 +75,7 @@ void dispatchMachine(GCode* com) {
     case 116: return waitForTemperatures();
     case 140: return setBedTemperature(com);
     case 190: return waitForBed(com);
-    case 203: return selectTemperatureMonitor(com);
+    case 203: return; // Legacy temperature monitor selection.
     case 204: return setPidGains(com);
     case 303: return tunePid(com);
     case 355: return setCaseLight(com);

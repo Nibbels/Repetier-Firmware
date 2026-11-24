@@ -57,7 +57,6 @@ void waitForHotend(GCode* com);
 void waitForTemperatures();
 void setBedTemperature(GCode* com);
 void waitForBed(GCode* com);
-void selectTemperatureMonitor(GCode* com);
 void setPidGains(GCode* com);
 void tunePid(GCode* com);
 void setCaseLight(GCode* com);
