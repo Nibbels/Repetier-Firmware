@@ -5,7 +5,7 @@ namespace RgbLighting {
 namespace {
 char selectedMode;
 char lightStatus;
-unsigned long idleStartedAt;
+uint32_t idleStartedAt;
 bool whiteToggleRequested;
 bool forceWhite;
 unsigned char g_uRGBHeatingR = RGB_HEATING_R;
@@ -180,7 +180,7 @@ void setRgbComponent(GCode& command, const RgbProfile& profile) {
     component.level = command.S;
     HAL::eprSetByte(component.address, component.level);
     EEPROM::updateChecksum();
-    if (profile.active)
+    if (profile.active && !forceWhite)
         setTargetColors(profile.components[0].level, profile.components[1].level, profile.components[2].level);
     Com::printF(profile.messagePrefix);
     Com::print(channelName);
@@ -341,8 +341,9 @@ void updateStatus() {
         }
     }
 
-    if (lightStatus == RGB_STATUS_IDLE && idleStartedAt) {
-        if ((HAL::timeInMilliseconds() - idleStartedAt) / 1000 > RGB_LIGHT_COLOR_CHANGE_DELAY) {
+    // Entering IDLE always records the start, including clock value zero.
+    if (lightStatus == RGB_STATUS_IDLE) {
+        if ((static_cast<uint32_t>(HAL::timeInMilliseconds()) - idleStartedAt) / 1000 > RGB_LIGHT_COLOR_CHANGE_DELAY) {
             lightStatus = RGB_STATUS_COLOR_CHANGE;
             idleStartedAt = 0;
 
