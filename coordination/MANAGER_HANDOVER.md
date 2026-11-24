@@ -4,7 +4,7 @@ Date: 2026-11-24 (Europe/Berlin). User wants a long-lived manager chat in ChatGP
 
 ## Wave 3 dispatch (2026-11-24)
 
-Tasks 0001–0008 are merged. Wave 2 printer-test candidate: [214baf4](https://github.com/Nibbels/Repetier-Firmware/commit/214baf4b504be71c0fce8661207930bd01d459f6), [four firmware images and evidence](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45449055408/artifacts/14946438316). Start with cold panel/navigation and serial identification checks. Defer powered heating, autotune and USB printing pending the Task0010 findings and physical verification.
+Tasks 0001–0008 are merged. Wave 2 software checkpoint: [214baf4](https://github.com/Nibbels/Repetier-Firmware/commit/214baf4b504be71c0fce8661207930bd01d459f6), [four firmware images and evidence](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45449055408/artifacts/14946438316). The owner defers all live printer testing until the planned refactoring and final software audit are complete. Keep the checkpoint for comparison. Workers continue with CI and record physical unknowns for Task0016.
 
 Preparation PRs [#75](https://github.com/Nibbels/Repetier-Firmware/pull/75) and [#76](https://github.com/Nibbels/Repetier-Firmware/pull/76) merged with passing checks; neither claims production changes. Park the broader 0009 UI split until a concrete need arises. Highest priority: continue 0010 in its existing worker chat, starting with explicit zero heater demand on invalid readings, fault and autotune exit paths; test the bed-controller path and keep HAL freshness/physical latency separate. 0012 scan settings and 0011 RGB are independent wave-3 assignments. Stop after verifying behavior if no worthwhile change is identified. Keep 0013–0016 queued.
 
@@ -20,7 +20,7 @@ All four workers self-merged [#65](https://github.com/Nibbels/Repetier-Firmware/
 
 ## Delivery priority
 
-The user's 30% example illustrates the cost/time tradeoff. Choose infrastructure by total cost to a verified result, including worker waiting, repeated setup and operator effort. Continue wave 2 on the functioning Work setup. Its intended outcome is a reproducible printer-test candidate with an exact commit, build artifacts and a short record of open checks that can be resumed after a break. Apply the [stopping criteria](TASKS.md#delivery-and-stopping-point) before opening another refactoring wave.
+The user's 30% example illustrates the cost/time tradeoff. Choose infrastructure by total cost to a verified result, including worker waiting, repeated setup and operator effort. Use the hosted PR checks throughout the remaining waves. Task0016 identifies the final reproducible candidate and consolidates the device checks for the owner. Apply the [stopping criteria](TASKS.md#delivery-and-stopping-point) before opening another refactoring wave.
 
 ## Mandate
 

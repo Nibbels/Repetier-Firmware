@@ -197,6 +197,7 @@ void setScanXStep(GCode* pCommand) {
         if (nTemp > 100)
             nTemp = 100;
 
+        scanSettings.x.strideMm = nTemp;
         scanSettings.x.strideSteps = (long)((float)nTemp * Printer::stepsPerMm(X_AXIS));
         if (Printer::debugInfo()) {
             Com::printF(PSTR("M3022: new x step size: "), (int)nTemp);
@@ -218,6 +219,7 @@ void setScanYStep(GCode* pCommand) {
         if (nTemp > 100)
             nTemp = 100;
 
+        scanSettings.y.strideMm = nTemp;
         scanSettings.y.strideSteps = (long)((float)nTemp * Printer::stepsPerMm(Y_AXIS));
         if (Printer::debugInfo()) {
             Com::printF(PSTR("M3023: new y step size: "), (int)nTemp);
