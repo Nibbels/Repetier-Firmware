@@ -1,0 +1,2613 @@
+{
+  "ref": "1fe264b804cc67aa5bf197d0106d84f2d7cf8796",
+  "batch": 6,
+  "warning": "Lexical candidates only, no preprocessing or resolved call graph; function spans approximate.",
+  "files": [
+    {
+      "path": "UsbSerial.h",
+      "sha": "53cc0d1c5031e56fcfd96860fd60b97ee1a5fa76",
+      "physicalLines": 56,
+      "normalizedLines": 29,
+      "functions": [
+        [
+          "next",
+          47,
+          49
+        ]
+      ],
+      "stateCandidates": [
+        [
+          25,
+          "static constexpr uint8_t receiveBufferSize = 128;"
+        ],
+        [
+          26,
+          "static constexpr uint8_t transmitBufferSize = 64;"
+        ],
+        [
+          29,
+          "static constexpr uint8_t receiveCapacity = receiveBufferSize - 1;"
+        ],
+        [
+          31,
+          "static void begin(unsigned long baud);"
+        ],
+        [
+          32,
+          "static bool available();"
+        ],
+        [
+          33,
+          "static int read();"
+        ],
+        [
+          34,
+          "static void write(uint8_t byte);"
+        ],
+        [
+          35,
+          "static void flush();"
+        ],
+        [
+          37,
+          "static void receiveInterrupt();"
+        ],
+        [
+          38,
+          "static void transmitInterrupt();"
+        ],
+        [
+          44,
+          "volatile uint8_t head;"
+        ],
+        [
+          45,
+          "volatile uint8_t tail;"
+        ],
+        [
+          52,
+          "static Ring<receiveBufferSize> rx_;"
+        ],
+        [
+          53,
+          "static Ring<transmitBufferSize> tx_;"
+        ]
+      ],
+      "guards": [
+        [
+          18,
+          "#ifndef USB_SERIAL_H"
+        ],
+        [
+          56,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          21,
+          "#include <stdint.h>"
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "WobbleCorrection.h",
+      "sha": "d017a8e36e01327921ffeef481ddb924ffb103b6",
+      "physicalLines": 71,
+      "normalizedLines": 59,
+      "functions": [
+        [
+          "update",
+          37,
+          50
+        ],
+        [
+          "applyToTarget",
+          52,
+          63
+        ],
+        [
+          "clear",
+          30,
+          35
+        ],
+        [
+          "clearAxis",
+          25,
+          28
+        ],
+        [
+          "profile",
+          16,
+          16
+        ],
+        [
+          "setProfile",
+          17,
+          17
+        ],
+        [
+          "setPhase",
+          18,
+          18
+        ],
+        [
+          "setXAmplitude",
+          19,
+          19
+        ],
+        [
+          "setYMinAmplitude",
+          20,
+          20
+        ],
+        [
+          "setYMaxAmplitude",
+          21,
+          21
+        ],
+        [
+          "enabled",
+          22,
+          22
+        ],
+        [
+          "offsetMM",
+          23,
+          23
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [
+        [
+          1,
+          "#ifndef WOBBLE_CORRECTION_H"
+        ],
+        [
+          71,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include <math.h>"
+        ],
+        [
+          5,
+          "#include <stdint.h>"
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "XYMotion.h",
+      "sha": "1672e598e627ea4960c8c9fd6d298ee2d51662a3",
+      "physicalLines": 45,
+      "normalizedLines": 35,
+      "functions": [
+        [
+          "repayQueuedOvertravel",
+          30,
+          36
+        ],
+        [
+          "nominalSteps",
+          11,
+          11
+        ],
+        [
+          "setNominalSteps",
+          12,
+          12
+        ],
+        [
+          "advanceNominal",
+          13,
+          13
+        ],
+        [
+          "motorSteps",
+          15,
+          15
+        ],
+        [
+          "setMotorSteps",
+          16,
+          16
+        ],
+        [
+          "recordMotorStep",
+          17,
+          17
+        ],
+        [
+          "directPosition",
+          19,
+          19
+        ],
+        [
+          "requestDirect",
+          20,
+          20
+        ],
+        [
+          "advanceDirect",
+          21,
+          21
+        ],
+        [
+          "stopDirect",
+          22,
+          22
+        ],
+        [
+          "resetDirect",
+          23,
+          23
+        ],
+        [
+          "queuedOvertravel",
+          25,
+          25
+        ],
+        [
+          "hasQueuedOvertravel",
+          26,
+          26
+        ],
+        [
+          "clearQueuedOvertravel",
+          27,
+          27
+        ],
+        [
+          "recordSkippedStep",
+          28,
+          28
+        ]
+      ],
+      "stateCandidates": [
+        [
+          39,
+          "volatile int32_t nominalSteps_[2] = {};"
+        ],
+        [
+          40,
+          "volatile int32_t motorSteps_[2] = {};"
+        ],
+        [
+          42,
+          "volatile int16_t skippedSteps_[2] = {};"
+        ]
+      ],
+      "guards": [
+        [
+          1,
+          "#ifndef XY_MOTION_H"
+        ],
+        [
+          45,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include <stdint.h>"
+        ],
+        [
+          5,
+          "#include \"DirectPosition.h\""
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "ZMotion.cpp",
+      "sha": "228439bbb5dedd48b29254906c99fca31e3f1d1e",
+      "physicalLines": 171,
+      "normalizedLines": 141,
+      "functions": [
+        [
+          "ZMotion::checkQueuedStep",
+          88,
+          110
+        ],
+        [
+          "ZMotion::stepPath",
+          126,
+          148
+        ],
+        [
+          "ZMotion::correctionDelaysQueue",
+          39,
+          52
+        ],
+        [
+          "ZMotion::stepCorrection",
+          54,
+          66
+        ],
+        [
+          "ZMotion::checkDirectStep",
+          112,
+          124
+        ],
+        [
+          "ZMotion::correctionLimited",
+          14,
+          25
+        ],
+        [
+          "ZMotion::balanceOpposingCorrection",
+          68,
+          78
+        ],
+        [
+          "ZMotion::configureTravel",
+          3,
+          12
+        ],
+        [
+          "ZMotion::ScanMove::step",
+          159,
+          167
+        ],
+        [
+          "ZMotion::timedPulse",
+          150,
+          157
+        ],
+        [
+          "ZMotion::recoverQueuedOvertravel",
+          80,
+          86
+        ],
+        [
+          "ZMotion::correctionFollowsDirection",
+          32,
+          37
+        ],
+        [
+          "ZMotion::correctionCanMove",
+          27,
+          30
+        ],
+        [
+          "ZMotion::stepHomeCheck",
+          169,
+          171
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [
+        [
+          20,
+          "#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2"
+        ],
+        [
+          22,
+          "#else"
+        ],
+        [
+          24,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          1,
+          "#include \"Repetier.h\""
+        ]
+      ],
+      "waits": [
+        [
+          151,
+          "HAL::delayMicroseconds(XYZ_STEPPER_HIGH_DELAY * delayMultiplier);"
+        ],
+        [
+          154,
+          "HAL::delayMicroseconds(XYZ_STEPPER_LOW_DELAY * delayMultiplier);"
+        ]
+      ],
+      "commentCandidates": []
+    },
+    {
+      "path": "ZMotion.h",
+      "sha": "c1988ac046e06902781e40de66bc2d5fefcba211",
+      "physicalLines": 147,
+      "normalizedLines": 122,
+      "functions": [
+        [
+          "motorOffsetSteps",
+          26,
+          32
+        ],
+        [
+          "atUpperEndstop",
+          111,
+          117
+        ],
+        [
+          "setHomed",
+          45,
+          50
+        ],
+        [
+          "maxEndstopHit",
+          65,
+          70
+        ],
+        [
+          "motorSteps",
+          18,
+          21
+        ],
+        [
+          "nominalSteps",
+          22,
+          25
+        ],
+        [
+          "clearScanAndCorrection",
+          55,
+          58
+        ],
+        [
+          "startPulse",
+          127,
+          130
+        ],
+        [
+          "manualStepExceedsMinimum",
+          71,
+          73
+        ],
+        [
+          "setDirection",
+          76,
+          78
+        ],
+        [
+          "ScanMove",
+          92,
+          94
+        ],
+        [
+          "queueWaitSteps_",
+          14,
+          14
+        ],
+        [
+          "scanSteps",
+          33,
+          33
+        ],
+        [
+          "hasQueuedOvertravel",
+          34,
+          34
+        ],
+        [
+          "isHomed",
+          35,
+          35
+        ],
+        [
+          "maxSteps",
+          36,
+          36
+        ],
+        [
+          "minOvertravel",
+          37,
+          37
+        ],
+        [
+          "directPosition",
+          38,
+          38
+        ],
+        [
+          "setNominalSteps",
+          41,
+          41
+        ],
+        [
+          "setMotorReference",
+          42,
+          42
+        ],
+        [
+          "rescaleMotorReference",
+          43,
+          43
+        ],
+        [
+          "requestDirectMove",
+          52,
+          52
+        ],
+        [
+          "stopDirectMove",
+          53,
+          53
+        ],
+        [
+          "resetDirectPosition",
+          54,
+          54
+        ],
+        [
+          "requestCorrection",
+          61,
+          61
+        ],
+        [
+          "correctionTarget",
+          62,
+          62
+        ],
+        [
+          "minSwitchHit",
+          64,
+          64
+        ],
+        [
+          "directionIsPositive",
+          75,
+          75
+        ],
+        [
+          "finishPulse",
+          79,
+          79
+        ],
+        [
+          "scanInProgress",
+          88,
+          88
+        ],
+        [
+          "ScanMove",
+          95,
+          95
+        ],
+        [
+          "atSoftwareMaximum",
+          118,
+          118
+        ],
+        [
+          "atMinOvertravel",
+          119,
+          119
+        ],
+        [
+          "pendingCorrection",
+          126,
+          126
+        ]
+      ],
+      "stateCandidates": [
+        [
+          64,
+          "static INLINE bool minSwitchHit() { return READ(Z_MIN_PIN) == LOW; }"
+        ],
+        [
+          75,
+          "static INLINE bool directionIsPositive() { return (READ(Z_DIR_PIN) != 0) ^ INVERT_Z_DIR; }"
+        ],
+        [
+          79,
+          "static INLINE void finishPulse() { WRITE(Z_STEP_PIN, LOW); }"
+        ],
+        [
+          133,
+          "volatile int32_t motorSteps_ = 0;"
+        ],
+        [
+          134,
+          "volatile int32_t nominalSteps_ = 0;"
+        ],
+        [
+          135,
+          "volatile int32_t queuedOvertravel_ = 0;"
+        ],
+        [
+          136,
+          "volatile int32_t correctionTarget_ = 0;"
+        ],
+        [
+          137,
+          "volatile int32_t appliedCorrection_ = 0;"
+        ],
+        [
+          140,
+          "volatile int32_t maxSteps_ = 0;"
+        ],
+        [
+          141,
+          "volatile uint16_t minOvertravel_;"
+        ],
+        [
+          142,
+          "volatile uint16_t queueWaitSteps_;"
+        ],
+        [
+          143,
+          "volatile bool scanInProgress_ = false;"
+        ],
+        [
+          144,
+          "volatile bool homed_ = false;"
+        ]
+      ],
+      "guards": [
+        [
+          1,
+          "#ifndef Z_MOTION_H"
+        ],
+        [
+          66,
+          "#if MOTHERBOARD == DEVICE_TYPE_RF1000"
+        ],
+        [
+          68,
+          "#endif"
+        ],
+        [
+          112,
+          "#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2"
+        ],
+        [
+          114,
+          "#else"
+        ],
+        [
+          116,
+          "#endif"
+        ],
+        [
+          147,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include \"DirectPosition.h\""
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "ZOffset.h",
+      "sha": "0520e5d951e9bb380c24a5c14e2c6f542263359a",
+      "physicalLines": 85,
+      "normalizedLines": 65,
+      "functions": [
+        [
+          "adjustWithBedButton",
+          51,
+          69
+        ],
+        [
+          "prepareSenseIncrement",
+          35,
+          39
+        ],
+        [
+          "setManualMicrometers",
+          22,
+          25
+        ],
+        [
+          "applySenseIncrement",
+          41,
+          44
+        ],
+        [
+          "clearSenseOffset",
+          46,
+          49
+        ],
+        [
+          "manualSteps",
+          18,
+          20
+        ],
+        [
+          "refreshSteps",
+          71,
+          73
+        ],
+        [
+          "toSteps",
+          76,
+          78
+        ],
+        [
+          "manualMicrometers",
+          14,
+          14
+        ],
+        [
+          "senseMicrometers",
+          15,
+          15
+        ],
+        [
+          "effectiveSteps",
+          16,
+          16
+        ],
+        [
+          "SenseIncrement",
+          29,
+          29
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [
+        [
+          1,
+          "#ifndef Z_OFFSET_H"
+        ],
+        [
+          85,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include <stdint.h>"
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "ZOffsetScan.cpp",
+      "sha": "a31e352f6009df288f8c93cfa85c2313e4c7bbd9",
+      "physicalLines": 628,
+      "normalizedLines": 495,
+      "functions": [
+        [
+          "configureZOffsetScan",
+          467,
+          625
+        ],
+        [
+          "ZOffsetScan::applyMatrixCorrection",
+          338,
+          378
+        ],
+        [
+          "ZOffsetScan::selectLevelingPoint",
+          161,
+          200
+        ],
+        [
+          "ZOffsetScan::tick",
+          130,
+          159
+        ],
+        [
+          "ZOffsetScan::abort",
+          415,
+          440
+        ],
+        [
+          "ZOffsetScan::homeForProbe",
+          209,
+          229
+        ],
+        [
+          "ZOffsetScan::loadMatrix",
+          239,
+          259
+        ],
+        [
+          "ZOffsetScan::positionProbe",
+          261,
+          277
+        ],
+        [
+          "ZOffsetScan::measureBaseline",
+          297,
+          312
+        ],
+        [
+          "ZOffsetScan::measureSurface",
+          322,
+          336
+        ],
+        [
+          "ZOffsetScan::startOrCancel",
+          115,
+          128
+        ],
+        [
+          "ZOffsetScan::continueLeveling",
+          380,
+          392
+        ],
+        [
+          "ZOffsetScan::reportScrewAdjustment",
+          403,
+          413
+        ],
+        [
+          "ZOffsetScan::retreatForFinish",
+          394,
+          401
+        ],
+        [
+          "discard",
+          54,
+          60
+        ],
+        [
+          "ZOffsetScan::liftForProbe",
+          231,
+          237
+        ],
+        [
+          "ZOffsetScan::retryProbe",
+          314,
+          320
+        ],
+        [
+          "ZOffsetScan::initialize",
+          202,
+          207
+        ],
+        [
+          "ZOffsetScan::retreatForRetry",
+          290,
+          295
+        ],
+        [
+          "ZOffsetScan::beginRetryWait",
+          284,
+          288
+        ],
+        [
+          "ZOffsetScan::armPressureRetries",
+          279,
+          282
+        ],
+        [
+          "startZOScan",
+          444,
+          447
+        ],
+        [
+          "Calibration::zOffsetScanRunning",
+          449,
+          451
+        ],
+        [
+          "zOffsetScanPoint",
+          453,
+          455
+        ],
+        [
+          "restoreZOffsetScanPoint",
+          457,
+          459
+        ],
+        [
+          "settings",
+          47,
+          47
+        ],
+        [
+          "configure",
+          48,
+          48
+        ],
+        [
+          "restorePoint",
+          49,
+          49
+        ],
+        [
+          "active",
+          51,
+          51
+        ],
+        [
+          "Calibration::tickZOffsetScan",
+          461,
+          461
+        ],
+        [
+          "Calibration::discardZOffsetScan",
+          462,
+          462
+        ]
+      ],
+      "stateCandidates": [
+        [
+          105,
+          "volatile Phase phase_ = Phase::Idle;"
+        ]
+      ],
+      "guards": [],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ],
+        [
+          19,
+          "#include \"BedMatrix.h\""
+        ],
+        [
+          20,
+          "#include \"ScanProbe.h\""
+        ],
+        [
+          21,
+          "#include \"ZScrewAdjustment.h\""
+        ],
+        [
+          22,
+          "#include \"GCodeCommands.h\""
+        ],
+        [
+          23,
+          "#include \"GCodeInput.h\""
+        ]
+      ],
+      "waits": [
+        [
+          615,
+          "while (::Calibration::zOffsetScanRunning()) {"
+        ]
+      ],
+      "commentCandidates": []
+    },
+    {
+      "path": "ZScrewAdjustment.cpp",
+      "sha": "9dfe54584574844efc843e69c60b44e783c3fed4",
+      "physicalLines": 132,
+      "normalizedLines": 65,
+      "functions": [
+        [
+          "calculate",
+          26,
+          130
+        ],
+        [
+          "current",
+          24,
+          24
+        ]
+      ],
+      "stateCandidates": [
+        [
+          23,
+          "static Advice advice{};"
+        ]
+      ],
+      "guards": [
+        [
+          109,
+          "#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2"
+        ],
+        [
+          121,
+          "#else"
+        ],
+        [
+          128,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ],
+        [
+          19,
+          "#include \"ZScrewAdjustment.h\""
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": [
+        [
+          109,
+          "#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2        //TODO: Prüfen ob das beim RF2000v2 stimmen wird."
+        ]
+      ]
+    },
+    {
+      "path": "ZScrewAdjustment.h",
+      "sha": "e11aaacddf81c7d2cd9c6b47a5dadb047d99eec7",
+      "physicalLines": 20,
+      "normalizedLines": 14,
+      "functions": [],
+      "stateCandidates": [],
+      "guards": [
+        [
+          1,
+          "#ifndef Z_SCREW_ADJUSTMENT_H"
+        ],
+        [
+          20,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include <stdint.h>"
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "fastio.h",
+      "sha": "5ae6083773d1e626a2bb44fd913eb7a4a33227f5",
+      "physicalLines": 504,
+      "normalizedLines": 365,
+      "functions": [],
+      "stateCandidates": [],
+      "guards": [
+        [
+          18,
+          "#ifndef FASTIO_H"
+        ],
+        [
+          27,
+          "#ifndef     MASK"
+        ],
+        [
+          30,
+          "#endif"
+        ],
+        [
+          65,
+          "#if defined (__AVR_ATmega1280__) || defined (__AVR_ATmega2560__)"
+        ],
+        [
+          498,
+          "#endif"
+        ],
+        [
+          500,
+          "#ifndef DIO0_PIN"
+        ],
+        [
+          502,
+          "#endif"
+        ],
+        [
+          504,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          21,
+          "#include    <avr/io.h>"
+        ]
+      ],
+      "waits": [
+        [
+          42,
+          "#define     _WRITE(IO, v)       do { if (v) {DIO ##  IO ## _WPORT |= MASK(DIO ## IO ## _PIN); } else {DIO ##  IO ## _WPORT &= ~MASK(DIO ## IO ## _PIN); }; } while (0)"
+        ],
+        [
+          45,
+          "#define     _SET_INPUT(IO)      do {DIO ##  IO ## _DDR &= ~MASK(DIO ## IO ## _PIN); } while (0)"
+        ],
+        [
+          48,
+          "#define     _SET_OUTPUT(IO)     do {DIO ##  IO ## _DDR |=  MASK(DIO ## IO ## _PIN); } while (0)"
+        ]
+      ],
+      "commentCandidates": []
+    },
+    {
+      "path": "gcode.cpp",
+      "sha": "9cd383b4ad229ee9e2c5571ddc9881a5a90684de",
+      "physicalLines": 101,
+      "normalizedLines": 81,
+      "functions": [
+        [
+          "GCode::printCommand",
+          21,
+          101
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "gcode.h",
+      "sha": "914f9dc1f5a4de6a9f23c02071ef800fc9ad5561",
+      "physicalLines": 201,
+      "normalizedLines": 145,
+      "functions": [
+        [
+          "setX",
+          81,
+          86
+        ],
+        [
+          "setY",
+          92,
+          97
+        ],
+        [
+          "setZ",
+          103,
+          108
+        ],
+        [
+          "hasM",
+          69,
+          71
+        ],
+        [
+          "hasN",
+          73,
+          75
+        ],
+        [
+          "hasG",
+          77,
+          79
+        ],
+        [
+          "hasX",
+          88,
+          90
+        ],
+        [
+          "hasY",
+          99,
+          101
+        ],
+        [
+          "hasZ",
+          110,
+          112
+        ],
+        [
+          "hasNoXYZ",
+          114,
+          116
+        ],
+        [
+          "hasE",
+          118,
+          120
+        ],
+        [
+          "hasF",
+          124,
+          126
+        ],
+        [
+          "hasT",
+          128,
+          130
+        ],
+        [
+          "hasS",
+          132,
+          134
+        ],
+        [
+          "hasP",
+          136,
+          138
+        ],
+        [
+          "isV2",
+          140,
+          142
+        ],
+        [
+          "hasString",
+          144,
+          146
+        ],
+        [
+          "hasI",
+          148,
+          150
+        ],
+        [
+          "hasJ",
+          152,
+          154
+        ],
+        [
+          "hasR",
+          156,
+          158
+        ],
+        [
+          "hasD",
+          161,
+          163
+        ],
+        [
+          "hasC",
+          164,
+          166
+        ],
+        [
+          "hasH",
+          167,
+          169
+        ],
+        [
+          "hasA",
+          170,
+          172
+        ],
+        [
+          "hasB",
+          173,
+          175
+        ],
+        [
+          "hasK",
+          176,
+          178
+        ],
+        [
+          "hasL",
+          179,
+          181
+        ],
+        [
+          "hasO",
+          182,
+          184
+        ],
+        [
+          "getS",
+          186,
+          188
+        ],
+        [
+          "getP",
+          189,
+          191
+        ],
+        [
+          "setFormatError",
+          192,
+          194
+        ],
+        [
+          "hasFormatError",
+          195,
+          197
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [
+        [
+          18,
+          "#ifndef GCODE_H"
+        ],
+        [
+          201,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          21,
+          "#include <stdint.h>"
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "motion.cpp",
+      "sha": "46e4d2da6c05365198563dbe9ff4634f2e717a20",
+      "physicalLines": 290,
+      "normalizedLines": 206,
+      "functions": [
+        [
+          "PrintLine::prepareQueueMove",
+          123,
+          189
+        ],
+        [
+          "PrintLine::prepareDirectMove",
+          191,
+          226
+        ],
+        [
+          "PrintLine::setSegmentGeometry",
+          93,
+          113
+        ],
+        [
+          "PrintLine::insertWaitMovesIfNeeded",
+          262,
+          281
+        ],
+        [
+          "PrintLine::activeMove",
+          67,
+          81
+        ],
+        [
+          "PrintLine::limitToStopTail",
+          238,
+          248
+        ],
+        [
+          "PrintLine::setAxisSteps",
+          83,
+          91
+        ],
+        [
+          "PrintLine::stopDirectMove",
+          229,
+          236
+        ],
+        [
+          "PrintLine::waitForXFreeLines",
+          283,
+          290
+        ],
+        [
+          "PrintLine::fitRampToRemainingSteps",
+          250,
+          256
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [
+        [
+          22,
+          "#ifndef STEP_PACKING_MIN_INTERVAL"
+        ],
+        [
+          24,
+          "#else"
+        ],
+        [
+          25,
+          "#if STEP_PACKING_MIN_INTERVAL < MIN_STEP_PACKING_MIN_INTERVAL || STEP_PACKING_MIN_INTERVAL > MAX_STEP_PACKING_MIN_INTERVAL"
+        ],
+        [
+          27,
+          "#endif"
+        ],
+        [
+          28,
+          "#endif"
+        ],
+        [
+          30,
+          "#ifdef EXTRUDER_SPEED"
+        ],
+        [
+          32,
+          "#endif"
+        ],
+        [
+          34,
+          "#ifdef ENDSTOPPULLUPS"
+        ],
+        [
+          36,
+          "#endif"
+        ],
+        [
+          38,
+          "#ifdef EXT0_PID_PGAIN"
+        ],
+        [
+          40,
+          "#endif"
+        ],
+        [
+          45,
+          "#if X_STEP_PIN < 0 || Y_STEP_PIN < 0 || Z_STEP_PIN < 0"
+        ],
+        [
+          47,
+          "#endif"
+        ],
+        [
+          49,
+          "#if EXT0_STEP_PIN < 0"
+        ],
+        [
+          51,
+          "#endif"
+        ],
+        [
+          53,
+          "#if EXT0_DIR_PIN < 0"
+        ],
+        [
+          55,
+          "#endif"
+        ],
+        [
+          57,
+          "#if MOVE_CACHE_SIZE < 5"
+        ],
+        [
+          59,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ],
+        [
+          19,
+          "#include \"MotionPlanner.h\""
+        ]
+      ],
+      "waits": [
+        [
+          268,
+          "while (w--) {"
+        ],
+        [
+          284,
+          "while (!Printer::blockAll && !Printer::printJob.commandsBlocked()) {"
+        ]
+      ],
+      "commentCandidates": []
+    },
+    {
+      "path": "motion.h",
+      "sha": "07a46f62d253a84c975f037304d69a56242f3ece",
+      "physicalLines": 321,
+      "normalizedLines": 223,
+      "functions": [
+        [
+          "getWaitForXLinesFilled",
+          148,
+          156
+        ],
+        [
+          "isPositiveMoveOfAxis",
+          261,
+          265
+        ],
+        [
+          "hasStoppableDirectMove",
+          123,
+          126
+        ],
+        [
+          "isStepProfileReady",
+          59,
+          61
+        ],
+        [
+          "invalidateStepProfile",
+          63,
+          65
+        ],
+        [
+          "markStepProfileReady",
+          67,
+          69
+        ],
+        [
+          "directMovePreparing",
+          74,
+          76
+        ],
+        [
+          "setStartSpeedFixed",
+          128,
+          130
+        ],
+        [
+          "fixStartAndEndSpeed",
+          132,
+          134
+        ],
+        [
+          "isEndSpeedFixed",
+          136,
+          138
+        ],
+        [
+          "setEndSpeedFixed",
+          140,
+          142
+        ],
+        [
+          "isWarmUp",
+          144,
+          146
+        ],
+        [
+          "setWaitForXLinesFilled",
+          158,
+          160
+        ],
+        [
+          "block",
+          162,
+          164
+        ],
+        [
+          "unblock",
+          166,
+          168
+        ],
+        [
+          "isBlocked",
+          170,
+          172
+        ],
+        [
+          "isAbortAtEndstops",
+          177,
+          179
+        ],
+        [
+          "isNominalMove",
+          181,
+          183
+        ],
+        [
+          "setNominalMove",
+          185,
+          187
+        ],
+        [
+          "isXPositiveMove",
+          189,
+          191
+        ],
+        [
+          "isXNegativeMove",
+          193,
+          195
+        ],
+        [
+          "isYPositiveMove",
+          197,
+          199
+        ],
+        [
+          "isYNegativeMove",
+          201,
+          203
+        ],
+        [
+          "isZPositiveMove",
+          205,
+          207
+        ],
+        [
+          "isZNegativeMove",
+          209,
+          211
+        ],
+        [
+          "isEPositiveMove",
+          213,
+          215
+        ],
+        [
+          "isENegativeMove",
+          217,
+          219
+        ],
+        [
+          "isXMove",
+          221,
+          223
+        ],
+        [
+          "isYMove",
+          225,
+          227
+        ],
+        [
+          "isXOrYMove",
+          229,
+          231
+        ],
+        [
+          "isZMove",
+          233,
+          235
+        ],
+        [
+          "isEMove",
+          237,
+          239
+        ],
+        [
+          "isEOnlyMove",
+          241,
+          243
+        ],
+        [
+          "isNoMove",
+          245,
+          247
+        ],
+        [
+          "isXYZMove",
+          249,
+          251
+        ],
+        [
+          "isMoveOfAxis",
+          253,
+          255
+        ],
+        [
+          "setMoveOfAxisFinished",
+          257,
+          259
+        ],
+        [
+          "isNegativeMoveOfAxis",
+          267,
+          269
+        ],
+        [
+          "setMoveOfAxis",
+          271,
+          273
+        ],
+        [
+          "setPositiveDirectionForAxis",
+          275,
+          277
+        ],
+        [
+          "getWaitTicks",
+          281,
+          283
+        ],
+        [
+          "setWaitTicks",
+          285,
+          287
+        ],
+        [
+          "reserveDirectMove",
+          310,
+          312
+        ],
+        [
+          "directMoveActive",
+          122,
+          122
+        ],
+        [
+          "hasLines",
+          291,
+          291
+        ],
+        [
+          "usesAxis",
+          299,
+          299
+        ]
+      ],
+      "stateCandidates": [
+        [
+          55,
+          "volatile flag8_t flags;"
+        ],
+        [
+          57,
+          "static MoveQueue queue;"
+        ],
+        [
+          58,
+          "static PrintLine direct;"
+        ],
+        [
+          119,
+          "volatile char task;"
+        ],
+        [
+          122,
+          "static bool directMoveActive() { return direct.task != DIRECT_IDLE; }"
+        ],
+        [
+          289,
+          "static const MoveQueue& queuedMoves();"
+        ],
+        [
+          290,
+          "static uint8_t queuedMoveCount();"
+        ],
+        [
+          291,
+          "static INLINE bool hasLines() { return queuedMoveCount() != 0; }"
+        ],
+        [
+          292,
+          "static bool hasActiveQueuedMove();"
+        ],
+        [
+          301,
+          "static ActiveMove activeMove();"
+        ],
+        [
+          303,
+          "static void discardQueuedMoves();"
+        ],
+        [
+          306,
+          "static bool waitForXFreeLines(uint8_t b = 1);"
+        ],
+        [
+          307,
+          "static uint8_t insertWaitMovesIfNeeded(uint8_t pathOptimize, uint8_t waitExtraLines);"
+        ],
+        [
+          308,
+          "static bool prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, float feedrate, bool updateWobble = false);"
+        ],
+        [
+          313,
+          "static void prepareDirectMove(const int32_t steps[4], bool stoppable, bool feedrateSource);"
+        ],
+        [
+          314,
+          "static void stopDirectMove();"
+        ],
+        [
+          316,
+          "static void queueTask(char task);"
+        ]
+      ],
+      "guards": [
+        [
+          18,
+          "#ifndef MOTION_H"
+        ],
+        [
+          321,
+          "#endif"
+        ]
+      ],
+      "includes": [],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "pins.h",
+      "sha": "080dca019308c614d7458a612a9be2872d0aa5a3",
+      "physicalLines": 512,
+      "normalizedLines": 249,
+      "functions": [],
+      "stateCandidates": [],
+      "guards": [
+        [
+          18,
+          "#ifndef PINS_H"
+        ],
+        [
+          21,
+          "#if !defined(__AVR_ATmega2560__)"
+        ],
+        [
+          23,
+          "#endif"
+        ],
+        [
+          38,
+          "#if MOTHERBOARD == DEVICE_TYPE_RF1000"
+        ],
+        [
+          77,
+          "#if NUM_EXTRUDER == 2"
+        ],
+        [
+          84,
+          "#else"
+        ],
+        [
+          88,
+          "#endif"
+        ],
+        [
+          102,
+          "#if NUM_EXTRUDER == 2"
+        ],
+        [
+          105,
+          "#else"
+        ],
+        [
+          107,
+          "#endif"
+        ],
+        [
+          243,
+          "#endif"
+        ],
+        [
+          248,
+          "#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2"
+        ],
+        [
+          445,
+          "#endif"
+        ],
+        [
+          447,
+          "#ifndef FAN_BOARD_PIN"
+        ],
+        [
+          449,
+          "#endif"
+        ],
+        [
+          451,
+          "#if NUM_EXTRUDER == 1"
+        ],
+        [
+          454,
+          "#endif"
+        ],
+        [
+          491,
+          "#ifndef EXT0_EXTRUDER_COOLER_PIN"
+        ],
+        [
+          493,
+          "#endif"
+        ],
+        [
+          494,
+          "#ifndef EXT1_EXTRUDER_COOLER_PIN"
+        ],
+        [
+          496,
+          "#endif"
+        ],
+        [
+          500,
+          "#if HOTEND_COOLER_USES_PIN(FAN_PIN) || HOTEND_COOLER_USES_PIN(HEATER_0_PIN) || HOTEND_COOLER_USES_PIN(HEATER_2_PIN) \\"
+        ],
+        [
+          503,
+          "#endif"
+        ],
+        [
+          504,
+          "#if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && HOTEND_COOLER_USES_PIN(CASE_FAN_PIN)"
+        ],
+        [
+          506,
+          "#endif"
+        ],
+        [
+          507,
+          "#if FAN_BOARD_PIN > -1 && HOTEND_COOLER_USES_PIN(FAN_BOARD_PIN)"
+        ],
+        [
+          509,
+          "#endif"
+        ],
+        [
+          511,
+          "#endif"
+        ]
+      ],
+      "includes": [],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "ui.cpp",
+      "sha": "c6c6459462695089f8119b889c741d7817d26c48",
+      "physicalLines": 1084,
+      "normalizedLines": 784,
+      "functions": [
+        [
+          "UIDisplay::nextPreviousAction",
+          819,
+          927
+        ],
+        [
+          "UIDisplay::refreshPage",
+          544,
+          636
+        ],
+        [
+          "UIDisplay::slowAction",
+          955,
+          1031
+        ],
+        [
+          "UIDisplay::initializeLCD",
+          351,
+          412
+        ],
+        [
+          "UIDisplay::okAction",
+          679,
+          728
+        ],
+        [
+          "UIDisplay::printRow",
+          416,
+          459
+        ],
+        [
+          "lcdWriteByte",
+          286,
+          328
+        ],
+        [
+          "UIDisplay::adjustMenuPos",
+          777,
+          817
+        ],
+        [
+          "UIDisplay::initialize",
+          491,
+          518
+        ],
+        [
+          "UIDisplay::rightAction",
+          730,
+          756
+        ],
+        [
+          "UIDisplay::fastAction",
+          1043,
+          1066
+        ],
+        [
+          "UIDisplay::executeAction",
+          931,
+          953
+        ],
+        [
+          "lcdWriteNibble",
+          264,
+          284
+        ],
+        [
+          "UIDisplay::backAction",
+          758,
+          775
+        ],
+        [
+          "UIDisplay::pushMenu",
+          652,
+          668
+        ],
+        [
+          "UIMenuEntry::showEntry",
+          26,
+          39
+        ],
+        [
+          "UIDisplay::ui_init_keys",
+          461,
+          474
+        ],
+        [
+          "UIDisplay::ui_check_keys",
+          476,
+          489
+        ],
+        [
+          "UIDisplay::loadStartupCharacters",
+          330,
+          339
+        ],
+        [
+          "UIDisplay::loadNormalCharacters",
+          341,
+          349
+        ],
+        [
+          "UIDisplay::printRowP",
+          529,
+          537
+        ],
+        [
+          "UIDisplay::createChar",
+          520,
+          527
+        ],
+        [
+          "UIDisplay::showMessage",
+          638,
+          645
+        ],
+        [
+          "UIDisplay::menuEsc",
+          670,
+          677
+        ],
+        [
+          "UIDisplay::exitmenu",
+          1079,
+          1084
+        ],
+        [
+          "UIDisplay::lock",
+          1068,
+          1072
+        ],
+        [
+          "UIDisplay::scheduleMessageReturn",
+          647,
+          650
+        ],
+        [
+          "UIDisplay::lastButtonTime",
+          1033,
+          1036
+        ],
+        [
+          "UIDisplay::activeButton",
+          1038,
+          1041
+        ],
+        [
+          "UIDisplay::unlock",
+          1074,
+          1077
+        ],
+        [
+          "UIDisplay::cachedRow",
+          43,
+          45
+        ],
+        [
+          "::UIDisplay",
+          260,
+          262
+        ]
+      ],
+      "stateCandidates": [
+        [
+          256,
+          "static const uint8_t LCDLineOffsets[] PROGMEM = UI_LINE_OFFSETS;"
+        ],
+        [
+          257,
+          "static const char versionString[] PROGMEM = UI_VERSION_STRING;"
+        ]
+      ],
+      "guards": [
+        [
+          417,
+          "#if MAX_COLS < UI_COLS"
+        ],
+        [
+          419,
+          "#endif"
+        ],
+        [
+          766,
+          "#ifdef RGB_LIGHT_R_PIN"
+        ],
+        [
+          770,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ],
+        [
+          19,
+          "#include \"UiMenus.h\""
+        ],
+        [
+          20,
+          "#include \"uimenu.h\""
+        ]
+      ],
+      "waits": [
+        [
+          287,
+          "HAL::delayMicroseconds(320);"
+        ],
+        [
+          366,
+          "HAL::delayMilliseconds(500);"
+        ],
+        [
+          389,
+          "HAL::delayMicroseconds(10);"
+        ],
+        [
+          391,
+          "HAL::delayMicroseconds(5000);"
+        ],
+        [
+          394,
+          "HAL::delayMicroseconds(150);"
+        ],
+        [
+          397,
+          "HAL::delayMicroseconds(150);"
+        ],
+        [
+          400,
+          "HAL::delayMicroseconds(150);"
+        ],
+        [
+          405,
+          "HAL::delayMilliseconds(2);"
+        ],
+        [
+          429,
+          "while ((c = *txt) != 0x00 && col < changeAtCol) {"
+        ],
+        [
+          436,
+          "while (col < changeAtCol) {"
+        ],
+        [
+          444,
+          "while ((c = *txt2) != 0x00 && col < UI_COLS) {"
+        ],
+        [
+          451,
+          "while (col < UI_COLS) {"
+        ],
+        [
+          579,
+          "while (col < UI_COLS - 1)"
+        ],
+        [
+          624,
+          "while (r < UI_ROWS)"
+        ],
+        [
+          786,
+          "while (menuPos[menuLevel] > 0) {"
+        ],
+        [
+          792,
+          "while (1) {"
+        ],
+        [
+          816,
+          "} while (modified);"
+        ],
+        [
+          870,
+          "while (menuPos[menuLevel] != vorher) {"
+        ],
+        [
+          895,
+          "while (menuPos[menuLevel] != vorher) {"
+        ],
+        [
+          935,
+          "HAL::delayMilliseconds(100);"
+        ]
+      ],
+      "commentCandidates": [
+        [
+          979,
+          "//TODO hier ist ein anderer Code bei REpetier. \"DelayedAction\" -> Prüfen, warum."
+        ],
+        [
+          984,
+          "//TODO hier ist ein anderer Code bei REpetier. \"DelayedAction\" -> Prüfen, warum."
+        ]
+      ]
+    },
+    {
+      "path": "ui.h",
+      "sha": "97cc888c2a3a5bcb0c836a2a8184100800d9f0cf",
+      "physicalLines": 380,
+      "normalizedLines": 284,
+      "functions": [
+        [
+          "rememberJogButton",
+          290,
+          290
+        ],
+        [
+          "isLocked",
+          325,
+          325
+        ]
+      ],
+      "stateCandidates": [
+        [
+          264,
+          "volatile uint8_t flags;"
+        ],
+        [
+          332,
+          "volatile int jogButtonAction;"
+        ],
+        [
+          333,
+          "volatile int lastButtonAction;"
+        ],
+        [
+          334,
+          "volatile millis_t lastButtonStart;"
+        ],
+        [
+          335,
+          "volatile char locked;"
+        ],
+        [
+          353,
+          "extern UIDisplay uid;"
+        ]
+      ],
+      "guards": [
+        [
+          18,
+          "#ifndef UI_H"
+        ],
+        [
+          204,
+          "#if MOTHERBOARD == DEVICE_TYPE_RF1000"
+        ],
+        [
+          207,
+          "#endif"
+        ],
+        [
+          209,
+          "#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2"
+        ],
+        [
+          212,
+          "#endif"
+        ],
+        [
+          355,
+          "#if UI_COLS == 16"
+        ],
+        [
+          358,
+          "#elif UI_COLS == 20"
+        ],
+        [
+          362,
+          "#else"
+        ],
+        [
+          364,
+          "#endif"
+        ],
+        [
+          380,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          21,
+          "#include \"gcode.h\""
+        ],
+        [
+          200,
+          "#include \"uilang.h\""
+        ],
+        [
+          366,
+          "#include \"uilang.h\""
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "uilang.h",
+      "sha": "41440652774d53cfa2e7ad6be6ea291cbf63de23",
+      "physicalLines": 404,
+      "normalizedLines": 353,
+      "functions": [],
+      "stateCandidates": [],
+      "guards": [
+        [
+          18,
+          "#ifndef UI_LANG_H"
+        ],
+        [
+          32,
+          "#if MOTHERBOARD == DEVICE_TYPE_RF1000"
+        ],
+        [
+          43,
+          "#else"
+        ],
+        [
+          54,
+          "#endif"
+        ],
+        [
+          295,
+          "#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2"
+        ],
+        [
+          350,
+          "#else"
+        ],
+        [
+          402,
+          "#endif"
+        ],
+        [
+          404,
+          "#endif"
+        ]
+      ],
+      "includes": [],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "uimenu.h",
+      "sha": "8bd2d7f491074bc4efd4a67b7619d761f5811266",
+      "physicalLines": 775,
+      "normalizedLines": 409,
+      "functions": [],
+      "stateCandidates": [],
+      "guards": [
+        [
+          19,
+          "#if !defined(UI_MENU_H)"
+        ],
+        [
+          270,
+          "#if UI_COLS<=16"
+        ],
+        [
+          272,
+          "#else"
+        ],
+        [
+          274,
+          "#endif"
+        ],
+        [
+          278,
+          "#if NUM_EXTRUDER>1"
+        ],
+        [
+          280,
+          "#else"
+        ],
+        [
+          282,
+          "#endif"
+        ],
+        [
+          288,
+          "#if UI_COLS<=16"
+        ],
+        [
+          293,
+          "#else"
+        ],
+        [
+          298,
+          "#endif"
+        ],
+        [
+          301,
+          "#if UI_COLS<=16"
+        ],
+        [
+          307,
+          "#else"
+        ],
+        [
+          313,
+          "#endif"
+        ],
+        [
+          317,
+          "#if UI_COLS <= 16"
+        ],
+        [
+          322,
+          "#else"
+        ],
+        [
+          327,
+          "#endif"
+        ],
+        [
+          420,
+          "#if UI_COLS <= 16"
+        ],
+        [
+          423,
+          "#else"
+        ],
+        [
+          426,
+          "#endif"
+        ],
+        [
+          461,
+          "#if NUM_EXTRUDER>1"
+        ],
+        [
+          463,
+          "#else"
+        ],
+        [
+          465,
+          "#endif"
+        ],
+        [
+          485,
+          "#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2"
+        ],
+        [
+          488,
+          "#else"
+        ],
+        [
+          490,
+          "#endif"
+        ],
+        [
+          492,
+          "#if !HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)"
+        ],
+        [
+          495,
+          "#else"
+        ],
+        [
+          497,
+          "#endif"
+        ],
+        [
+          499,
+          "#if FET1 > -1 && !HOTEND_COOLER_USES_PIN(FET1)"
+        ],
+        [
+          502,
+          "#else"
+        ],
+        [
+          504,
+          "#endif"
+        ],
+        [
+          506,
+          "#if FET2 > -1 && !HOTEND_COOLER_USES_PIN(FET2)"
+        ],
+        [
+          509,
+          "#else"
+        ],
+        [
+          511,
+          "#endif"
+        ],
+        [
+          560,
+          "#if NUM_EXTRUDER>1"
+        ],
+        [
+          562,
+          "#else"
+        ],
+        [
+          564,
+          "#endif"
+        ],
+        [
+          580,
+          "#if NUM_EXTRUDER>1"
+        ],
+        [
+          582,
+          "#else"
+        ],
+        [
+          584,
+          "#endif"
+        ],
+        [
+          596,
+          "#ifdef RGB_LIGHT_R_PIN"
+        ],
+        [
+          599,
+          "#else"
+        ],
+        [
+          601,
+          "#endif"
+        ],
+        [
+          603,
+          "#if NUM_EXTRUDER>1"
+        ],
+        [
+          610,
+          "#else"
+        ],
+        [
+          613,
+          "#endif"
+        ],
+        [
+          691,
+          "#if NUM_EXTRUDER>1"
+        ],
+        [
+          694,
+          "#else"
+        ],
+        [
+          696,
+          "#endif"
+        ],
+        [
+          716,
+          "#if NUM_EXTRUDER>1"
+        ],
+        [
+          720,
+          "#else"
+        ],
+        [
+          722,
+          "#endif"
+        ],
+        [
+          775,
+          "#endif"
+        ]
+      ],
+      "includes": [],
+      "waits": [],
+      "commentCandidates": []
+    }
+  ]
+}
