@@ -2,7 +2,13 @@
 
 Date: 2026-11-24 (Europe/Berlin). User wants a long-lived manager chat in ChatGPT Work (Astra selected by user); worker chats currently use GPT-6.2 High outside Work. Repository [Nibbels/Repetier-Firmware](https://github.com/Nibbels/Repetier-Firmware), integration branch **ai-firmware-review**, never community_development. Read [AGENTS.md](../AGENTS.md), [TASKS.md](TASKS.md), individual task files and live branches/PRs first. Repository is the authoritative durable state, not chat memory.
 
-## Wave 2 progress
+## Wave 3 dispatch (2026-11-24)
+
+Tasks 0001–0008 are merged. Wave 2 printer-test candidate: [214baf4](https://github.com/Nibbels/Repetier-Firmware/commit/214baf4b504be71c0fce8661207930bd01d459f6), [four firmware images and evidence](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45449055408/artifacts/14946438316). Start with cold panel/navigation and serial identification checks. Defer powered heating, autotune and USB printing pending the Task0010 findings and physical verification.
+
+Preparation PRs [#75](https://github.com/Nibbels/Repetier-Firmware/pull/75) and [#76](https://github.com/Nibbels/Repetier-Firmware/pull/76) merged with passing checks; neither claims production changes. Park the broader 0009 UI split until a concrete need arises. Highest priority: continue 0010 in its existing worker chat, starting with explicit zero heater demand on invalid readings, fault and autotune exit paths; test the bed-controller path and keep HAL freshness/physical latency separate. 0012 scan settings and 0011 RGB are independent wave-3 assignments. Stop after verifying behavior if no worthwhile change is identified. Keep 0013–0016 queued.
+
+## Historical wave 2 progress
 
 Task0005 merged in [#73](https://github.com/Nibbels/Repetier-Firmware/pull/73). Task0007 merged in [#74](https://github.com/Nibbels/Repetier-Firmware/pull/74) with a [green four-variant check](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45440129585). Task0006 is the sole outstanding wave-2 merge. Refresh its candidate against the integrated EEPROM and sensor changes and capture the resulting printer-test candidate. Tasks 0009 and 0010 may prepare scoped host replays using the now-merged EEPROM and sensor contracts. Task0006's [candidate check passed](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45430403246); its worker owns final synchronization and merge of [#72](https://github.com/Nibbels/Repetier-Firmware/pull/72). Task0009 may prepare a task-private host replay or audit of both LCD widths, preheat presets and the manual Z handoff using the merged EEPROM contract. Production UI changes await the wave-2 printer-test checkpoint. Carry the M3902 Z0 interrupted-save finding into that checkpoint: distinguish unsaved RAM edits from durable active-slot saves and decide the intended recovery behavior before designing a cross-EEPROM change.
 
