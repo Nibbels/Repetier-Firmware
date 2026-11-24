@@ -116,6 +116,9 @@
     <ClInclude Include="ExtrusionOutput.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="RMath.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="Repetier.h">
       <Filter>Header Files</Filter>
     </ClInclude>

@@ -18,6 +18,9 @@
 #ifndef RF_H
 #define RF_H
 
+#include "HAL.h"
+#include "gcode.h"
+
 #include "CalibrationScan.h"
 #include "RgbLighting.h"
 

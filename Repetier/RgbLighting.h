@@ -3,6 +3,19 @@
 
 #include <stdint.h>
 
+#define RGB_MODE_OFF 0
+#define RGB_MODE_WHITE 1
+#define RGB_MODE_AUTOMATIC 2
+#define RGB_MODE_MANUAL 3
+
+#define RGB_STATUS_NOT_AUTOMATIC 0
+#define RGB_STATUS_AUTOMATIC 1
+#define RGB_STATUS_PRINTING 11
+#define RGB_STATUS_HEATING 12
+#define RGB_STATUS_COOLING 13
+#define RGB_STATUS_IDLE 14
+#define RGB_STATUS_COLOR_CHANGE 15
+
 class GCode;
 
 namespace RgbLighting {

@@ -59,10 +59,8 @@ All known arduino boards use 64. This value is needed for the extruder timing. *
     HAL::stepWithCount(_SFR_IO_ADDR(DIO ## IO ## _WPORT), DIO ## IO ## _PIN, pending, remaining)
 #define STEP_WITH_COUNT(IO, pending, remaining) _STEP_WITH_COUNT(IO, pending, remaining)
 
-#ifdef MOTHERBOARD
 #ifndef WATCHDOG_PIN
 #error Watchdog pin not defined. We really need some Watchdog pin with a working watchdogtimer!
-#endif
 #endif
 
 //7 means down till 2.1hz is possible:
@@ -70,6 +68,19 @@ All known arduino boards use 64. This value is needed for the extruder timing. *
 
 #define PART_FAN_MODE_PWM 0
 #define PART_FAN_MODE_PDM 1
+
+// Indices follow the temperature ADC channel order in HAL.cpp.
+enum TemperatureAdcIndex : uint8_t {
+    Hotend0AdcIndex,
+#if NUM_EXTRUDER > 1
+    Hotend1AdcIndex,
+#endif
+    BedAdcIndex,
+#ifdef X35_ADC_CHANNEL
+    ChamberAdcIndex,
+#endif
+    TemperatureAdcCount
+};
 
 class InterruptProtectedBlock {
 private:

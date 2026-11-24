@@ -1,6 +1,8 @@
 #ifndef MOVE_QUEUE_H
 #define MOVE_QUEUE_H
 
+#include "Printer.h"
+
 #include "motion.h"
 
 // The foreground fills and publishes slots. The step timer activates and retires them.

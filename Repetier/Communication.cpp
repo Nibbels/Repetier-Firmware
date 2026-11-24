@@ -15,7 +15,7 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "Repetier.h"
+#include "Communication.h"
 
 #ifndef FIRMWARE_URL
 #define FIRMWARE_URL "https://github.com/RF1000community/Repetier-Firmware"

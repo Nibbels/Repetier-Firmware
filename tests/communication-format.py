@@ -20,7 +20,7 @@ def main():
     source = (firmware / 'Communication.cpp').read_text(encoding='utf-8')
     header = (firmware / 'Communication.h').read_text(encoding='utf-8')
     # Keep the AVR int overloads distinct on a host where int32_t is int.
-    header = header.replace('int value)', 'int16_t value)')
+    header = header.replace('#include "HAL.h"\n', '').replace('int value)', 'int16_t value)')
     methods = source[source.index('void Com::cap('):].replace('int value)', 'int16_t value)')
     constants = '\n'.join(re.findall(r'^FSTRINGVALUE\(Com::t\w+, "(?:[^"\\]|\\.)*"\)', source, re.M))
     harness = r'''

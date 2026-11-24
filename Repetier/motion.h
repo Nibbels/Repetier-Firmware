@@ -18,6 +18,8 @@
 #ifndef MOTION_H
 #define MOTION_H
 
+#include <stdint.h>
+
 /** Marks the first step of a new move */
 #define FLAG_WARMUP 1
 #define FLAG_NOMINAL 2
