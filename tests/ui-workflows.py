@@ -73,7 +73,7 @@ def main():
         + section(act, "    case UI_ACTION_RF_HEAT_BED_UP:", "    case UI_ACTION_RF_EXTRUDER_OUTPUT:")
         + section(act, "    case UI_ACTION_PREHEAT_A:\n", "    case UI_ACTION_COOLDOWN:")
         + "default: assert(false); } }\n"
-        + section(settings, "#define INCREMENT_MIN_MAX(", "\n#define INCREMENT_MAX(")
+        + section(settings, "\n#define INCREMENT_MIN_MAX(", "\n#define INCREMENT_MAX(")
         + "\n" + section(settings, "void UIDisplay::changeSwitchCase(", "// Actual setting changes")
         + "void UIDisplay::changeSetting(int action, int8_t increment) { switch(action) {\n"
         + section(settings, "    case UI_ACTION_PREHEAT_A_BED:", "    case UI_ACTION_FANSPEED:")
