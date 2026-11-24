@@ -3,6 +3,10 @@
 Baseline audit: 2026-11-24, `3a27bd83dfc4711fa2694d18b311b67426f91936` on `ai-firmware-review`; original comparison: `community_development` (read-only).
 This index and the per-task files are the durable coordination state, following the Gamemation Manager/Worker pattern with **worker self-merge**. All tasks initially OPEN; only wave 1 READY. A later wave is ready when every prior wave task is merged and verified; derive status from its task file and GitHub history, not edits to this index.
 
+## Delivery and stopping point
+
+For each task, identify the concrete benefit and the smallest change that delivers it. Close the task once its agreed scope and applicable checks are satisfied. An audit can recommend keeping the implementation when further restructuring has no demonstrated benefit. Record optional improvements as follow-ups. At the end of wave 2, identify an exact candidate commit, its build evidence, remaining release blockers and the next printer check. Schedule further refactoring according to its contribution to a usable firmware release. Record any deferred scope and review downstream dependencies before rescheduling it.
+
 ## Waves
 
 | Wave | Parallel tasks | Shared-file policy |
