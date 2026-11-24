@@ -816,6 +816,26 @@ void UIDisplay::adjustMenuPos() {
     } while (modified);
 } // adjustMenuPos
 
+// Browse visible menu entries in either direction, retaining the original selection
+// if a full pass finds no visible alternative.
+void UIDisplay::navigateMenuItems(UIMenuEntry** entries, uint8_t count, int8_t next) {
+    uint8_t& position = menuPos[menuLevel];
+    const uint8_t previous = position;
+    do {
+        if (next > 0)
+            position = position < count - 1 ? position + 1 : 0;
+        else
+            position = position > 0 ? position - 1 : count - 1;
+        if (position == previous)
+            break;
+        if (((UIMenuEntry*)pgm_read_word(&(entries[position])))->showEntry())
+            break;
+    } while (true);
+
+    if (!((UIMenuEntry*)pgm_read_word(&(entries[position])))->showEntry())
+        position = previous;
+}
+
 void UIDisplay::nextPreviousAction(int8_t next) {
     if (Printer::isUIErrorMessage()) {
         Printer::setUIErrorMessage(false);
@@ -852,69 +872,16 @@ void UIDisplay::nextPreviousAction(int8_t next) {
     uint8_t mtype = HAL::readFlashByte((const prog_char*)&(men->menuType));
     UIMenuEntry** entries = (UIMenuEntry**)pgm_read_word(&(men->entries));
     UIMenuEntry* ent = (UIMenuEntry*)pgm_read_word(&(entries[menuPos[menuLevel]]));
-    UIMenuEntry* testEnt;
     uint8_t entType = HAL::readFlashByte((const prog_char*)&(ent->menuType)); // 0 = Info, 1 = Headline, 2 = submenu ref, 3 = direct action command
     (void)entType;                                                            //ignore unused error Nibbels
     int action = pgm_read_word(&(ent->action));
 
-    if (mtype == UI_MENU_TYPE_SUBMENU && activeAction == 0) // browse through menu items
-    {
-        if (next > 0) {
-            //up-to-bottom-Patch
-            uint8_t vorher = menuPos[menuLevel];
-            if (menuPos[menuLevel] < nr - 1)
-                menuPos[menuLevel]++;
-            else
-                menuPos[menuLevel] = 0;
-            //gehe maximal einmal im kreis, auch wenn keins der menüpunkte sauber konfiguriert ist ^^.
-            while (menuPos[menuLevel] != vorher) {
-                testEnt = (UIMenuEntry*)pgm_read_word(&(entries[menuPos[menuLevel]]));
-                if (testEnt->showEntry())
-                    break;
-
-                if (menuPos[menuLevel] < nr - 1)
-                    menuPos[menuLevel]++;
-                else
-                    menuPos[menuLevel] = 0; //0..nr-1; nr ist anzahl submenüpunkte
-            }
-            //alle untermenüpunkte sind entweder nicht vorhanden oder falsch oder unzulässig: also geh einfach zurück auf das was anfangs dastand.
-            testEnt = (UIMenuEntry*)pgm_read_word(&(entries[menuPos[menuLevel]]));
-            if (!testEnt->showEntry()) {
-                // this new chosen menu item shall not be displayed - revert the so-far used menu item
-                menuPos[menuLevel] = vorher;
-            }
-            //up-to-bottom-Patch
-        } else {
-            //down-to-top-Patch
-            uint8_t vorher = menuPos[menuLevel];
-            if (menuPos[menuLevel] > 0)
-                menuPos[menuLevel]--;
-            else
-                menuPos[menuLevel] = nr - 1; //0..nr-1; nr ist anzahl submenüpunkte
-            //gehe maximal einmal im kreis, auch wenn keins der menüpunkte sauber konfiguriert ist ^^.
-            while (menuPos[menuLevel] != vorher) {
-                testEnt = (UIMenuEntry*)pgm_read_word(&(entries[menuPos[menuLevel]]));
-                if (testEnt->showEntry())
-                    break;
-
-                if (menuPos[menuLevel] > 0)
-                    menuPos[menuLevel]--;
-                else
-                    menuPos[menuLevel] = nr - 1; //0..nr-1; nr ist anzahl submenüpunkte
-            }
-            //alle untermenüpunkte sind entweder nicht vorhanden oder falsch oder unzulässig: also geh einfach zurück auf das was anfangs dastand.
-            testEnt = (UIMenuEntry*)pgm_read_word(&(entries[menuPos[menuLevel]]));
-            if (!testEnt->showEntry()) {
-                // this new chosen menu item shall not be displayed - revert the so-far used menu item
-                menuPos[menuLevel] = vorher;
-            }
-            //down-to-top-Patch ende
-        }
+    if (mtype == UI_MENU_TYPE_SUBMENU && activeAction == 0) {
+        navigateMenuItems(entries, nr, next);
         shift = -2; // reset shift position
         adjustMenuPos();
         return;
     }
-
 
     if (mtype == UI_MENU_TYPE_MODIFICATION_MENU)
         action = pgm_read_word(&(men->id));

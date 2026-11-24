@@ -13,9 +13,10 @@ def main():
         start = ui.index(first)
         return ui[start:ui.index(last, start + len(first))]
 
-    parse_prefix = section("void UIDisplay::parse(", "        case 'V':")
-    parse_prefix = parse_prefix.replace("    int ivalue = 0;\n    float fvalue = 0;\n", "")
-    finish_parse = "            break;\n        }\n        }\n    }\n    printCols[col] = 0;\n}\n"
+    parse_prefix = (section("void UIDisplay::parse(", "// Format a complete placeholder")
+                    + section("void UIDisplay::renderField(", "        case 'V':"))
+    parse_prefix = parse_prefix.replace("    switch (c1) {", "    (void)ivalue; (void)fvalue;\n    switch (c1) {")
+    finish_parse = "            break;\n        }\n    }\n}\n"
     formatting = (
         section("void UIDisplay::addInt(", "void UIDisplay::addStringP(")
         + parse_prefix

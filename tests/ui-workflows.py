@@ -29,13 +29,13 @@ def main():
     defs = "\n".join(read(n) for n in
         ("Configuration.h", "Eeprom.h", "HAL.h", "RF.h", "ui.h", "uilang.h"))
     macros = "\n".join(re.findall(
-        r"^#define (?:PREHEAT_\w+|EPR_RF_PREHEAT_\w+|EPR_RF_Z_OFFSET|EPR_RF_MOD_SENSEOFFSET_DIGITS|EPR_INTEGRITY_BYTE|EEPROM_OFFSET|PERIODICAL_ACTIONS_CALL_INTERVAL|RF_MICRO_STEPS_Z|Z_OFFSET_(?:BUTTON|MENU)_STEPS|UI_ACTION_PREHEAT_\w+|UI_ACTION_RF_HEAT_BED_(?:UP|DOWN)|UI_SET_(?:MIN|MAX)_\w+_TEMP|UI_ACTION_ZOFFSET|UI_MENU_TYPE_SUBMENU|MAX_COLS|UI_TEXT_PREHEAT_\w+)\s+[^\n]+",
+        r"^#define (?:PREHEAT_\w+|EPR_RF_PREHEAT_\w+|EPR_RF_Z_OFFSET|EPR_RF_MOD_SENSEOFFSET_DIGITS|EPR_INTEGRITY_BYTE|EEPROM_OFFSET|PERIODICAL_ACTIONS_CALL_INTERVAL|RF_MICRO_STEPS_Z|Z_OFFSET_(?:BUTTON|MENU)_STEPS|UI_ACTION_PREHEAT_\w+|UI_ACTION_RF_HEAT_BED_(?:UP|DOWN)|UI_SET_(?:MIN|MAX)_\w+_TEMP|UI_ACTION_ZOFFSET|UI_ACTION_(?:XPOSITION|YPOSITION|ZPOSITION|EPOSITION|RF_RESET_ACK|STOP_ACK|RESTORE_DEFAULTS|CHOOSE_LESSERINTEGRAL|CHOOSE_CLASSICPID|CHOOSE_NO|CHOOSE_TYREUS_LYBEN)|UI_MENU_TYPE_(?:SUBMENU|MODIFICATION_MENU)|XYZ_POSITION_BUTTON_DIRECTION|UI_SET_EXTRUDER_FEEDRATE|SPEED_(?:MIN_MILLIS|MAX_MILLIS|MAGNIFICATION)|MAX_COLS|UI_TEXT_PREHEAT_\w+)\s+[^\n]+",
         defs, re.M))
     geometry = section(header, "#define UI_ROWS 4", "//mtype usw.")
     # Both character ROMs (only the cursor glyphs are relevant).
     rom = re.search(r"#if MOTHERBOARD == DEVICE_TYPE_RF1000[^\n]*\n((?:#define CHAR_\w+[^\n]*\n)+)", read("uilang.h"))[1] + "#else\n" + re.search(r"#else // RF2000 family LCD character ROM\n((?:#define CHAR_\w+[^\n]*\n)+)", read("uilang.h"))[1]
     # Keep the actual source condition rather than assigning UI_COLS directly.
-    macros += "\n" + geometry + "\n#if MOTHERBOARD == DEVICE_TYPE_RF1000\n" + rom + "#endif\n"
+    macros += "\n" + re.search(r"^constexpr millis_t menuAutoReturnDelayMs[^\n]+", ui, re.M)[0] + "\n" + geometry + "\n#if MOTHERBOARD == DEVICE_TYPE_RF1000\n" + rom + "#endif\n"
     macros += "\n" + section(header, "#if UI_COLS == 16", "\n#include \"uilang.h\"") + "\n"
     macros += "\n" + re.search(r"^constexpr int32_t maxManualZOffsetMicrometers[^\n]+", read("RF.h"), re.M)[0] + "\n"
     # Check the real parent menu links and Mod Menu page/key mapping (not a key electrical test).
@@ -57,21 +57,25 @@ def main():
         assert f"UI_KEYS_BUTTON_LOW(ENABLE_KEY_{key}, UI_ACTION_RF_HEAT_BED_{action})" in ui
     assert "Printer::zOffset.setManualMicrometers(HAL::eprGetInt32(EPR_RF_Z_OFFSET), Printer::stepsPerMm(Z_AXIS));" in epr
 
-    parser = section(fmt, "void UIDisplay::parse(", "        case 'a':")
-    parser = parser.replace("    int ivalue = 0;\n    float fvalue = 0;\n", "")
+    parser = (section(fmt, "void UIDisplay::parse(", "// Format a complete placeholder")
+              + section(fmt, "void UIDisplay::renderField(", "        case 'a':"))
+    parser = parser.replace("    switch (c1) {", "    (void)ram; (void)ivalue; (void)fvalue;\n    switch (c1) {")
     generated = (
         section(fmt, "void UIDisplay::addInt(", "void UIDisplay::addLong(")
-        + parser + "\n        default: assert(false); break;\n        }\n    }\n    printCols[col] = 0;\n}\n"
+        + parser + "\n        default: assert(false); break;\n    }\n}\n"
         + section(ui, "void UIDisplay::printRow(", "void UIDisplay::ui_init_keys(")
         + section(ui, "bool UIMenuEntry::showEntry()", "} // showEntry") + "}\n"
         + section(ui, "void UIDisplay::adjustMenuPos()", "} // adjustMenuPos") + "}\n"
+        + section(ui, "void UIDisplay::navigateMenuItems(", "} // nextPreviousAction") + "}\n"
         + section(ui, "void UIDisplay::refreshPage()", "} // refreshPage") + "}\n"
         + section(act, "void UIDisplay::zOffsetPlusAction()", "void UIDisplay::pressPlay()")
         + "void UIDisplay::mainSwitchCase(int action) { switch (action) {\n"
         + section(act, "    case UI_ACTION_RF_HEAT_BED_UP:", "    case UI_ACTION_RF_EXTRUDER_OUTPUT:")
         + section(act, "    case UI_ACTION_PREHEAT_A:\n", "    case UI_ACTION_COOLDOWN:")
         + "default: assert(false); } }\n"
-        + "void UIDisplay::changeSwitchCase(int action, int8_t increment) { switch(action) {\n"
+        + section(settings, "\n#define INCREMENT_MIN_MAX(", "\n#define INCREMENT_MAX(")
+        + "\n" + section(settings, "void UIDisplay::changeSwitchCase(", "// Actual setting changes")
+        + "void UIDisplay::changeSetting(int action, int8_t increment) { switch(action) {\n"
         + section(settings, "    case UI_ACTION_PREHEAT_A_BED:", "    case UI_ACTION_FANSPEED:")
         + "default: assert(false); } }\n"
         + section(epr, "void EEPROM::updateChecksum()", "void EEPROM::readDataFromEEPROM()")
@@ -111,13 +115,13 @@ HARNESS = r'''
 #define DEVICE_TYPE_RF1000 1
 #define DEVICE_TYPE_RF2000 2
 #define DEVICE_TYPE_RF2000v2 3
+using millis_t = uint32_t;
 #include "defs.inc"
 #include "PreheatProfiles.h"
 #include "ZOffset.h"
 #define PROGMEM
 #define PSTR(x) x
 using prog_char = char;
-using millis_t = uint32_t;
 constexpr int Z_AXIS = 2;
 constexpr float scale = 80.0f * RF_MICRO_STEPS_Z;
 static_assert(UI_COLS == EXPECTED_COLS && UI_ROWS == 4, "panel geometry");
@@ -149,12 +153,21 @@ void eprSetInt32(unsigned p, int32_t v) {
 }
 }
 enum { Processing };
-namespace Commands { void checkForPeriodicalActions(int) {} }
+namespace Commands { void checkForPeriodicalActions(int) {} void printCurrentPosition() {} }
+template<class T, class L, class H> T constrain(T v, L low, H high) { return v < low ? low : v > high ? high : v; }
 namespace Printer {
 PreheatProfiles preheatProfiles;
 ZOffset zOffset;
 float stepsPerMm(int axis) { assert(axis == Z_AXIS); return scale; }
-uint8_t activeMenuModes() { return 0; }
+uint8_t activeModes=0;
+uint8_t activeMenuModes() { return activeModes; }
+bool uiError=false;
+bool isUIErrorMessage() { return uiError; }
+void setUIErrorMessage(bool v) { uiError=v; }
+float menuExtrusionFactor=1.0f, lastE=0;
+void queueRelativeMMCoordinates(float x,float y,float z,float e,float speed,bool wait) {
+    assert(x==0 && y==0 && z==0 && speed==UI_SET_EXTRUDER_FEEDRATE && wait); lastE=e;
+}
 struct { unsigned calls=0; void recordActivity(millis_t t) { assert(t==5); ++calls; } } inactivity;
 struct { void schedule(millis_t t) { assert(t==10005); } } idleStatus;
 }
@@ -173,11 +186,15 @@ typedef struct { const char* text; uint8_t menuType; unsigned int action;
     uint8_t filter,nofilter; bool showEntry() const; } const UIMenuEntry;
 typedef struct { uint8_t menuType; int id,numEntries; const UIMenuEntry* const* entries; } const UIMenu;
 #include "menus.inc"
-const UIMenu* const ui_pages[] = {nullptr}; // information page branch not exercised
+const UIMenu* const ui_pages[] = {nullptr}; // information page rendering not exercised
+constexpr uint8_t panelPageCount=5;
 const uint8_t LCDLineOffsets[] = UI_LINE_OFFSETS;
 struct UIDisplay {
     uint8_t col=0,menuLevel=0,menuPos[6]={},menuTop[6]={};
     int shift=0,activeAction=0;
+    millis_t lastSwitch=0,lastNextPrev=0,autoReturnTime_=0;
+    float lastNextAccumul=0;
+    char confirmation_=0;
     const UIMenu* menu[6]={};
     char printCols[MAX_COLS+1]={},displayCache_[UI_ROWS][MAX_COLS+1]={};
     std::string lcd[UI_ROWS];
@@ -189,7 +206,13 @@ struct UIDisplay {
     }
     void lcdPutChar(char c) { assert(row>=0 && lcd[row].size()<UI_COLS); lcd[row]+=c; }
     void moveZAction(int direction) { jog=direction; ++jogCalls; }
+    void moveXAction(int direction) { jog=direction; ++jogCalls; }
+    void moveYAction(int direction) { jog=direction; ++jogCalls; }
     void parse(char*,bool);
+    void renderField(char,char,bool,int&,float&);
+    void navigateMenuItems(UIMenuEntry**,uint8_t,int8_t);
+    void nextPreviousAction(int8_t);
+    void changeSetting(int,int8_t);
     void addInt(int16_t,uint8_t,char=' ');
     void printRow(uint8_t,char*,char*,uint8_t);
     void adjustMenuPos();
@@ -334,7 +357,38 @@ void offset() {
     assert(z.manualMicrometers()==50 && z.senseMicrometers()==25);
     assert(HAL::eprGetInt16(1908)==700); checkChecksum();
 }
-int main() { preheat(); offset(); }
+void navigation() {
+    // Real navigation path: wrap, hidden-entry skip, edit routing, page wrap.
+    const UIMenuEntry a={"A",4,UI_ACTION_PREHEAT_A_BED,0,0};
+    const UIMenuEntry hidden={"hidden",4,UI_ACTION_PREHEAT_B_BED,1,0};
+    const UIMenuEntry c={"C",4,UI_ACTION_PREHEAT_A_HOTEND,0,0};
+    const UIMenuEntry* const entries[]={&a,&hidden,&c};
+    const UIMenu browse={UI_MENU_TYPE_SUBMENU,0,3,entries};
+    uid.menuLevel=1; uid.menu[1]=&browse; uid.menuPos[1]=0; uid.menuTop[1]=0; uid.activeAction=0;
+    uid.nextPreviousAction(1); assert(uid.menuPos[1]==2 && uid.shift==-2);
+    uid.nextPreviousAction(1); assert(uid.menuPos[1]==0);
+    uid.nextPreviousAction(-1); assert(uid.menuPos[1]==2);
+    uid.nextPreviousAction(-1); assert(uid.menuPos[1]==0);
+    Printer::activeModes=1; uid.nextPreviousAction(1); assert(uid.menuPos[1]==1);
+    Printer::activeModes=0; uid.menuPos[1]=0;
+    uid.activeAction=UI_ACTION_PREHEAT_A_BED;
+    const int old=HAL::eprGetInt16(1970);
+    uid.nextPreviousAction(1); assert(uid.menuPos[1]==0 && HAL::eprGetInt16(1970)==old-1);
+    assert(uid.autoReturnTime_==5+menuAutoReturnDelayMs);
+    Printer::uiError=true; uid.nextPreviousAction(1);
+    assert(!Printer::uiError && HAL::eprGetInt16(1970)==old-1);
+    uid.activeAction=0; uid.menuLevel=0; uid.menuPos[0]=0;
+    uid.nextPreviousAction(-1); assert(uid.menuPos[0]==panelPageCount-1);
+    uid.nextPreviousAction(1); assert(uid.menuPos[0]==0);
+    HAL::writes.clear(); uid.changeSwitchCase(UI_ACTION_STOP_ACK,1); assert(uid.confirmation_==1);
+    uid.changeSwitchCase(UI_ACTION_STOP_ACK,-1); assert(uid.confirmation_==0);
+    uid.changeSwitchCase(UI_ACTION_XPOSITION,1); assert(uid.jog==XYZ_POSITION_BUTTON_DIRECTION);
+    uid.changeSwitchCase(UI_ACTION_YPOSITION,-1); assert(uid.jog==-XYZ_POSITION_BUTTON_DIRECTION);
+    uid.changeSwitchCase(UI_ACTION_ZPOSITION,2); assert(uid.jog==2*XYZ_POSITION_BUTTON_DIRECTION);
+    uid.changeSwitchCase(UI_ACTION_EPOSITION,-2); assert(Printer::lastE==-2);
+    assert(HAL::writes.empty());
+}
+int main() { preheat(); offset(); navigation(); }
 '''
 
 

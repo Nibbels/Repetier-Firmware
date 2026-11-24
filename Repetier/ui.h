@@ -334,6 +334,20 @@ private:
     volatile millis_t lastButtonStart;
     volatile char locked;
 
+    // Private foreground rendering and edit/navigation helpers; no new state.
+    void renderField(char c1, char c2, bool ram, int& ivalue, float& fvalue);
+    void renderTemperatureField(char c1, char c2, float& fvalue);
+    void renderPositionField(char c1, char c2, float& fvalue);
+    void renderExtruderField(char c1, char c2);
+    void renderCalibrationField(char c1, char c2);
+    void renderCompensationField(char c1, char c2);
+    void changeSetting(int action, int8_t increment);
+    void changeMotionSetting(int action, int8_t increment);
+    void changeExtruderSetting(int action, int8_t increment);
+    void changePressureSetting(int action, int8_t increment);
+    void changeHeaterSetting(int action, int8_t increment);
+    void navigateMenuItems(UIMenuEntry** entries, uint8_t count, int8_t next);
+
     void loadStartupCharacters();
     void loadNormalCharacters();
 
