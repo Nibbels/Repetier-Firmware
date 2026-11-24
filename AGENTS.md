@@ -77,3 +77,5 @@ This is shared AVR/ATmega2560 Repetier firmware for **RF1000, RF2000 and RF2000v
 **Git workflow:** `ai-firmware-review` is the isolated working branch; keep `community_development` unchanged until specifically instructed. The DRV8711 BLANK invalid read command was removed without changing actual default electrical timings in [commit 8f00ed8](https://github.com/Nibbels/Repetier-Firmware/commit/8f00ed8df6a0e825dee368c1233ffc4934349faa).
 
 For future chats: read this file and the mechanism docs, verify against code and changelog, distinguish verified behavior from hypotheses, then propose isolated changes and tests rather than guessing.
+
+**Parallel worker tasks.** Read [coordination/TASKS.md](coordination/TASKS.md) before starting refactoring work. It defines the active waves, exclusive write scopes, shared-file integration and worker self-merge protocol. Work on the assigned task branch; merge only to `ai-firmware-review` after the task checks pass. Workers update their own task file, not the shared index.
