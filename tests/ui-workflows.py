@@ -32,7 +32,6 @@ def main():
         r"^#define (?:PREHEAT_\w+|EPR_RF_PREHEAT_\w+|EPR_RF_Z_OFFSET|EPR_RF_MOD_SENSEOFFSET_DIGITS|EPR_INTEGRITY_BYTE|EEPROM_OFFSET|PERIODICAL_ACTIONS_CALL_INTERVAL|RF_MICRO_STEPS_Z|Z_OFFSET_(?:BUTTON|MENU)_STEPS|UI_ACTION_PREHEAT_\w+|UI_ACTION_RF_HEAT_BED_(?:UP|DOWN)|UI_SET_(?:MIN|MAX)_\w+_TEMP|UI_ACTION_ZOFFSET|UI_MENU_TYPE_SUBMENU|MAX_COLS|UI_TEXT_PREHEAT_\w+)\s+[^\n]+",
         defs, re.M))
     geometry = section(header, "#define UI_ROWS 4", "//mtype usw.")
-    rom = section(read("uilang.h"), "#if MOTHERBOARD == DEVICE_TYPE_RF1000", "#define STR_auml")
     # Both character ROMs (only the cursor glyphs are relevant).
     rom = re.search(r"#if MOTHERBOARD == DEVICE_TYPE_RF1000[^\n]*\n((?:#define CHAR_\w+[^\n]*\n)+)", read("uilang.h"))[1] + "#else\n" + re.search(r"#else // RF2000 family LCD character ROM\n((?:#define CHAR_\w+[^\n]*\n)+)", read("uilang.h"))[1]
     # Keep the actual source condition rather than assigning UI_COLS directly.
@@ -271,6 +270,8 @@ void preheat() {
         assert(HAL::eprGetInt16(addresses[i])==0);
         HAL::writes.clear(); uid.changeSwitchCase(action,-1); assert(HAL::writes.empty());
         uid.changeSwitchCase(action,1); assert(HAL::eprGetInt16(addresses[i])==min);
+        uid.changeSwitchCase(action,127);
+        assert(HAL::eprGetInt16(addresses[i])==std::min(max,min+127));
         uid.changeSwitchCase(action,127); assert(HAL::eprGetInt16(addresses[i])==max);
     }
     show(&ui_menu_preheat,2); rowIs(0,' ',"A Bed 160 C"); rowIs(1,' ',"A Ext 270 C");
