@@ -49,6 +49,7 @@ private:
 CommandQueue commandQueue;
 
 constexpr uint8_t maxCommandSize = 96;
+constexpr uint8_t maxBinaryTextSize = 80; // V2 text length byte plus payload.
 
 struct ReceiveFrame {
     uint8_t bytes[maxCommandSize];
@@ -216,7 +217,7 @@ uint8_t GCodeInput::computeBinarySize(char* ptr) // unsigned int bitfield) {
             s += 4;
         // ENDE ich rechne len nach dem aktuellsten Stand aus aber nutze diesen nicht.
         if (bitfield & 32768)
-            s += RMath::min((uint8_t)80, (uint8_t)ptr[4] + 1);
+            s += RMath::min(maxBinaryTextSize, (uint8_t)ptr[4] + 1);
     } else {
         if (bitfield & 2)
             s += 1;
@@ -491,8 +492,13 @@ bool GCodeInput::parseBinary(GCode& command, uint8_t* buffer, int8_t length) {
     if (command.isV2()) {
         command.params2 = *(uint16_t*)p;
         p += 2;
-        if (command.hasString())
+        if (command.hasString()) {
             textlen = *p++;
+            // The frame size is capped including the length byte. A clipped
+            // frame may have a valid checksum but not the declared text.
+            if (textlen >= maxBinaryTextSize)
+                return false;
+        }
     } else
         command.params2 = 0;
 

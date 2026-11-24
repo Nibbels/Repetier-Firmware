@@ -23,6 +23,7 @@ bool echo = false;
 bool stopped = false;
 unsigned flushes = 0;
 unsigned scriptCommands = 0;
+struct EmergencyReached {};
 GCode lastScriptCommand{};
 }
 
@@ -49,7 +50,7 @@ struct { bool isPaused() const { return false; } } pause;
 
 namespace Commands {
 void commandLoop();
-void emergencyStop() { std::abort(); }
+void emergencyStop() { throw EmergencyReached{}; }
 void executeGCode(GCode* code) {
     assert(code->internalCommand);
     ++scriptCommands;
@@ -99,17 +100,28 @@ std::string numbered(const std::string& line) {
     return line + "*" + std::to_string(checksum) + "\n";
 }
 
-std::string binary(std::initializer_list<uint8_t> payload) {
-    std::string bytes;
+std::string withBinaryChecksum(std::string bytes) {
     unsigned first = 0, second = 0;
-    for (uint8_t byte : payload) {
-        bytes += static_cast<char>(byte);
+    for (unsigned char byte : bytes) {
         first = (first + byte) % 255;
         second = (second + first) % 255;
     }
     bytes += static_cast<char>(first);
     bytes += static_cast<char>(second);
     return bytes;
+}
+
+std::string binary(std::initializer_list<uint8_t> payload) {
+    return withBinaryChecksum(std::string(payload.begin(), payload.end()));
+}
+
+std::string panelPacket(uint8_t declaredLength, unsigned transmittedLength) {
+    std::string payload("\x82\x90\x00\x00", 4); // Binary V2, M and text.
+    payload += static_cast<char>(declaredLength);
+    payload += '\x75'; // M117, little-endian.
+    payload += '\0';
+    payload.append(transmittedLength, 'Q');
+    return withBinaryChecksum(payload);
 }
 
 void readReply(const std::string& expected) {
@@ -222,6 +234,86 @@ void binaryFrames() {
     popM(105);
 }
 
+void overflowAndRecovery() {
+    feed(std::string(96, 'X'));
+    readReply("\r\nResend:1\r\nok\r\n");
+    assert(flushes == 1 && !GCodeInput::peekCurrentCommand());
+    feed(numbered("N1 M105"));
+    readReply("ok 1\r\n");
+    popM(105);
+
+    // A terminator in byte 96 is still a complete ASCII frame.
+    feed("M105" + std::string(91, ' ') + "\n");
+    readReply("ok 1\r\n");
+    popM(105);
+}
+
+void binaryText() {
+    const auto packet = panelPacket(79, 79);
+    const auto next = binary({0x82, 0x00, 105});
+    feed(packet.substr(0, 5));
+    readReply("");
+    feed(packet.substr(5) + next);
+    readReply("ok 0\r\n");
+    const auto waiting = incoming.size();
+    readReply("");
+    assert(incoming.size() == waiting);
+    const auto* display = GCodeInput::peekCurrentCommand();
+    assert(display && display->text == std::string(79, 'Q'));
+    popM(117);
+    readReply("ok 0\r\n");
+    popM(105);
+
+    // A clipped packet with a correct Fletcher checksum must not make the
+    // declared length escape the received payload or overwrite receiver state.
+    for (uint8_t badLength : {80, 255}) {
+        feed(panelPacket(badLength, 79));
+        readReply("\r\nResend:1\r\nok\r\n");
+        assert(!GCodeInput::peekCurrentCommand());
+        feed(std::string(31, '\0') + next);
+        readReply("ok 0\r\n");
+        popM(105);
+    }
+    assert(flushes == 2);
+
+    // A binary text frame without any text is also valid.
+    feed(panelPacket(0, 0));
+    readReply("ok 0\r\n");
+    assert(GCodeInput::peekCurrentCommand()->text == std::string());
+    popM(117);
+}
+
+void sustainedAdmission() {
+    feed("N65534 M110\n");
+    readReply("ok\r\n");
+    // Exercise line-number wrap, slot wrap and backpressure, without making
+    // host wall-clock timings into claims about the AVR's throughput.
+    for (unsigned line = 65535; line < 65535 + 256; line += 2) {
+        feed(numbered("N" + std::to_string(line) + " M105") +
+             numbered("N" + std::to_string(line + 1) + " M114"));
+        readReply("ok " + std::to_string(line) + "\r\n");
+        readReply("ok " + std::to_string(line + 1) + "\r\n");
+        readReply("");
+        assert(GCodeInput::peekCurrentCommand()->N == static_cast<uint16_t>(line));
+        popM(105);
+        assert(GCodeInput::peekCurrentCommand()->N == static_cast<uint16_t>(line + 1));
+        popM(114);
+    }
+    assert(incoming.empty() && !GCodeInput::peekCurrentCommand() && flushes == 0);
+}
+
+void emergencyAdmission() {
+    stopped = true;
+    // M112 is handled before line-number validation and command blocking.
+    feed("N99 M112\n");
+    try {
+        GCodeInput::readFromSerial();
+        assert(false && "Emergency stop must not return to admission");
+    } catch (const EmergencyReached&) {
+        assert(replies.empty() && !GCodeInput::peekCurrentCommand() && flushes == 0);
+    }
+}
+
 void stopDrainsInput() {
     feed("N1 M104 S200\n");
     readReply("ok 1\r\n");
@@ -257,6 +349,10 @@ int main(int argc, char** argv) {
     else if (scenario == "display") displayText();
     else if (scenario == "idle") idleAndPartialLine();
     else if (scenario == "binary") binaryFrames();
+    else if (scenario == "overflow") overflowAndRecovery();
+    else if (scenario == "binary-text") binaryText();
+    else if (scenario == "sustained") sustainedAdmission();
+    else if (scenario == "emergency") emergencyAdmission();
     else if (scenario == "stopping") stopDrainsInput();
     else if (scenario == "script") flashScript();
     else return 1;
