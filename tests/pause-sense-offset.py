@@ -33,6 +33,8 @@ def main():
     start_line = (firmware / "StartLine.cpp").read_text(encoding="utf-8")
     hal = (firmware / "HAL.cpp").read_text(encoding="utf-8")
     commands = (firmware / "Commands.cpp").read_text(encoding="utf-8")
+    motion_commands = (firmware / "GCodeMotion.cpp").read_text(encoding="utf-8")
+    thermal_commands = (firmware / "GCodeThermal.cpp").read_text(encoding="utf-8")
     extruder = (firmware / "Extruder.cpp").read_text(encoding="utf-8")
     fragments = [
         section(eeprom, "#define EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX", "#define EPR_RF_HEATED_BED_SENSOR_TYPE"),
@@ -42,7 +44,7 @@ def main():
         section(motion, "    static bool hasStoppableDirectMove()", "\n\n")
         .replace("    static bool hasStoppableDirectMove()", "bool PrintLine::hasStoppableDirectMove()", 1),
         dms[dms.index("int16_t StrainGauge::correctedDigits("):],
-        section(rf, "static void updateDigitCompensation(", "\nstatic PressureMeasurement::Settings pressureMeasurementSettings();"),
+        section(rf, "void updateDigitCompensation(", "\nstatic PressureMeasurement::Settings pressureMeasurementSettings();"),
         'static ScanAbort servicePressureMeasurement(PressureMeasurement&, millis_t, bool scanning = false);',
         section(rf, "constexpr int16_t scanOverloadDigits =", "\n\nScanSession scanSession;"),
         section(rf, "static PressureMeasurement::Settings pressureMeasurementSettings() {", "} // readAveragePressure") + "}",
@@ -97,10 +99,10 @@ def main():
         section(commands, "bool Commands::waitForMotion(", "\nvoid Commands::printCurrentPosition()"),
         section(extruder, "bool Extruder::selectExtruderById(", "\nvoid Extruder::applyCurrentSettings("),
         section(printer, "void Printer::applyAdvanceSettings(", "\nvoid Printer::updateWobbleFixOffsets("),
-        "void runAdvanceCommand(int command, GCode* com) { switch (command) {\n"
-        + section(commands, "    case 223:", "    case 232:")
-        + section(commands, "    case 233:", "    case 360:")
-        + "} }",
+        section(motion_commands, "void testAdvanceSteps(", "void reportAdvancePeak("),
+        section(motion_commands, "void configureAdvance(", "void finishMotion("),
+        "void runAdvanceCommand(int command, GCode* com) {"
+        " if (command == 223) testAdvanceSteps(com); else configureAdvance(com); }",
         "void rescalePlannedAxis(uint8_t axis) {\nusing namespace Printer;\n"
         + section(printer, "        const float mmPerStep = 1.0f / axisStepsPerMM_[axis];", "\n\n        /** Acceleration")
         + "\n}",
@@ -109,13 +111,12 @@ def main():
         + "\n}",
         section(executor, "template <int8_t limitDirection>", "\n/**\n  Processes the one-and-only direct move"),
         start_line.removeprefix('#include "Repetier.h"\n'),
-        section(rf, "void setSenseOffsetParameters(", "\nvoid setDigitFlowParameters("),
+        section(motion_commands, "void setSenseOffsetParameters(", "\nvoid setDigitFlowParameters("),
         "void configureSenseOffset(GCode* command) { setSenseOffsetParameters(command); }",
-        section(rf, "void setEmergencyPauseDigits(", "\nvoid testWatchdog("),
+        section(motion_commands, "void setEmergencyPauseDigits(", "\nvoid setSenseOffsetParameters("),
         "void configurePressure(int code, GCode* command) {"
         " if (code == 3075) setEmergencyPauseDigits(command); else setEmergencyStopDigits(command); }",
-        section(rf, "static bool prepareFilamentProgram(", "\nnamespace {"),
-        section(rf, "void loadFilament(", "\n#ifdef X35_ADC_CHANNEL"),
+        section(thermal_commands, "static bool prepareFilamentProgram(", "\n#ifdef X35_ADC_CHANNEL"),
         "void runFilamentCommand(int code, GCode* command) {"
         " if (code == 3913) loadFilament(command); else unloadFilament(command); }",
     ]

@@ -17,6 +17,7 @@
 
 #include "Repetier.h"
 #include "GCodeInput.h"
+#include "GCodeCommands.h"
 
 namespace {
 class CommandQueue {
@@ -268,14 +269,14 @@ If not, a resend and ok is send.
 */
 void GCodeInput::checkAndPushCommand(GCode& command) {
     if (command.hasM()) {
-        if (command.M == 110) // Reset line number
+        if (command.M == GCodeCommands::ResetLineNumber)
         {
             serialReceive.lastLineNumber = serialReceive.currentLineNumber;
             Com::printFLN(Com::tOk);
             serialReceive.waitingForResend = -1;
             return;
         }
-        if (command.M == 112) // Emergency kill - freeze/reset printer
+        if (command.M == GCodeCommands::EmergencyReset)
         {
             Commands::emergencyStop();
         }
@@ -519,7 +520,7 @@ bool GCodeInput::parseBinary(GCode& command, uint8_t* buffer, int8_t length) {
     }
 
     // Special behaviour for text Gcodes for RFx000, they have no additional switches - just text.
-    if (command.hasM() && (command.M == 117 || command.M == 3117)) {
+    if (command.hasM() && GCodeCommands::takesPanelText(command.M)) {
         if (command.hasString()) // set text pointer to string
         {
             command.text = (char*)p;
@@ -654,7 +655,7 @@ bool GCodeInput::parseAscii(GCode& command, char* line, bool fromSerial) {
             command.M = parseLongValue(pos) & 0xffff;
             command.params |= 2;
             // handle non standard text arguments that some M codes have
-            if (command.M == 117 || command.M == 3117) {
+            if (GCodeCommands::takesPanelText(command.M)) {
                 char digit;
                 while ((digit = *pos)) {
                     if (digit < '0' || digit > '9')

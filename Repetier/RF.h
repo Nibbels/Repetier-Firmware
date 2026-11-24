@@ -58,7 +58,7 @@
 
 /*
 // ##########################################################################################
-// ##   RF specific M codes
+// ##   Historical command notes. Active dispatch is in GCodeCommands.cpp.
 // ##########################################################################################
 
 // ##########################################################################################
@@ -438,10 +438,10 @@ extern void outputScanParameters(void);
 
 extern void recalculateZCompensation(void);
 extern void loopFeatures(void);
+void updateDigitCompensation(int16_t digits);
 extern void outputObject(bool showerrors = true);
 
 extern void setExtruderCurrent(uint8_t nr, uint8_t current);
-extern void processSpecialGCode(GCode* pCommand);
 extern void queueTask(char task);
 extern void processButton(int nAction);
 extern void moveXAction(int8_t increment);
@@ -464,7 +464,6 @@ extern void cleanupEPositions(void);
 extern void prepareZCompensation(void);
 extern unsigned char isMovingAllowed(const char* pszCommand, char outputLog = 1);
 extern unsigned char isHomingAllowed(GCode* com, char outputLog = 1);
-extern void showInvalidSyntax(unsigned int currentMCode);
 extern void addUInt32(char* pszString, uint32_t uNumber);
 extern void addFloat(char* pszString, float fNumber, uint8_t uDigits);
 

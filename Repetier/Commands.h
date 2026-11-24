@@ -23,8 +23,6 @@ public:
     static void commandLoop();
     static void checkForPeriodicalActions(enum FirmwareState state = NotBusy);
     static void executeGCode(GCode* com);
-    static void processGCode(GCode* com);
-    static void processMCode(GCode* com);
     enum class MotionWait { QueueAndZ, AllOutputs };
     enum class PauseWait { Resume, Cancel };
     static bool waitForMotion(MotionWait motion, PauseWait pause);
