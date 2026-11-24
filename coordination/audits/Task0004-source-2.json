@@ -1,0 +1,2976 @@
+{
+  "ref": "1fe264b804cc67aa5bf197d0106d84f2d7cf8796",
+  "batch": 2,
+  "warning": "Lexical candidates only, no preprocessing or resolved call graph; function spans approximate.",
+  "files": [
+    {
+      "path": "ExternalEeprom.cpp",
+      "sha": "2ad5a8262ebbecbccb635fb52ce3ab519c95d1ce",
+      "physicalLines": 62,
+      "normalizedLines": 38,
+      "functions": [
+        [
+          "readByte",
+          37,
+          47
+        ],
+        [
+          "writeByte",
+          24,
+          30
+        ],
+        [
+          "readWord",
+          49,
+          55
+        ],
+        [
+          "writeWord",
+          32,
+          35
+        ],
+        [
+          "readWord",
+          57,
+          60
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ],
+        [
+          19,
+          "#include \"ExternalEeprom.h\""
+        ],
+        [
+          20,
+          "#include \"TwiTransfer.h\""
+        ]
+      ],
+      "waits": [
+        [
+          25,
+          "TwiTransfer::finishActive();"
+        ],
+        [
+          26,
+          "HAL::delayMilliseconds(EEPROM_DELAY);"
+        ],
+        [
+          29,
+          "return transfer.write(addressI2C, bytes, sizeof(bytes), HAL::timeInMilliseconds()) && transfer.wait();"
+        ],
+        [
+          38,
+          "TwiTransfer::finishActive();"
+        ],
+        [
+          39,
+          "HAL::delayMilliseconds(EEPROM_DELAY);"
+        ],
+        [
+          42,
+          "if (!transfer.write(addressI2C, bytes, sizeof(bytes), HAL::timeInMilliseconds()) || !transfer.wait()"
+        ],
+        [
+          43,
+          "|| !transfer.read(addressI2C, 1, HAL::timeInMilliseconds()) || !transfer.wait())"
+        ]
+      ],
+      "commentCandidates": []
+    },
+    {
+      "path": "ExternalEeprom.h",
+      "sha": "59bc47276ac3a3e11d59e26f5d432276ac18f317",
+      "physicalLines": 14,
+      "normalizedLines": 9,
+      "functions": [],
+      "stateCandidates": [],
+      "guards": [
+        [
+          1,
+          "#ifndef EXTERNAL_EEPROM_H"
+        ],
+        [
+          14,
+          "#endif"
+        ]
+      ],
+      "includes": [],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "Extruder.cpp",
+      "sha": "01265a6e15f605f394a99d1c89bbc5dd35d161bd",
+      "physicalLines": 355,
+      "normalizedLines": 279,
+      "functions": [
+        [
+          "Extruder::setTemperatureForExtruder",
+          131,
+          173
+        ],
+        [
+          "Extruder::selectExtruderById",
+          66,
+          98
+        ],
+        [
+          "Extruder::initExtruder",
+          37,
+          64
+        ],
+        [
+          "Extruder::applyCurrentSettings",
+          100,
+          122
+        ],
+        [
+          "Extruder::setHeatedBedTemperature",
+          180,
+          196
+        ],
+        [
+          "Extruder::disableAllExtruders",
+          202,
+          217
+        ],
+        [
+          "Extruder::hasActiveHotendTarget",
+          124,
+          129
+        ],
+        [
+          "Extruder::setTemperatureForAllExtruders",
+          175,
+          178
+        ],
+        [
+          "Extruder::initHeatedBed",
+          27,
+          29
+        ],
+        [
+          "Extruder::getHeatedBedTemperature",
+          198,
+          200
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [
+        [
+          44,
+          "#if defined(EXT0_STEP_PIN) && EXT0_STEP_PIN > -1"
+        ],
+        [
+          47,
+          "#endif"
+        ],
+        [
+          49,
+          "#if defined(EXT1_STEP_PIN) && EXT1_STEP_PIN > -1 && NUM_EXTRUDER > 1"
+        ],
+        [
+          52,
+          "#endif"
+        ],
+        [
+          71,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          94,
+          "#else"
+        ],
+        [
+          96,
+          "#endif"
+        ],
+        [
+          161,
+          "#if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1"
+        ],
+        [
+          163,
+          "#endif"
+        ],
+        [
+          257,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          293,
+          "#endif"
+        ],
+        [
+          317,
+          "#ifdef X35_ADC_CHANNEL"
+        ],
+        [
+          343,
+          "#endif"
+        ],
+        [
+          348,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          351,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ],
+        [
+          19,
+          "#include \"pins_arduino.h\""
+        ],
+        [
+          21,
+          "#include \"Eeprom.h\""
+        ],
+        [
+          22,
+          "#include \"CaseFan.h\""
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": [
+        [
+          321,
+          "TODO: Making a totally clean class, without the logic to controll something."
+        ]
+      ]
+    },
+    {
+      "path": "Extruder.h",
+      "sha": "9669017351f18f6f7ddd472b59cb78b6c9bee490",
+      "physicalLines": 328,
+      "normalizedLines": 235,
+      "functions": [
+        [
+          "setDirection",
+          248,
+          284
+        ],
+        [
+          "unstep",
+          204,
+          224
+        ],
+        [
+          "step",
+          180,
+          199
+        ],
+        [
+          "timedStep",
+          227,
+          245
+        ],
+        [
+          "enable",
+          286,
+          302
+        ],
+        [
+          "startHoldDecoupleTest",
+          110,
+          123
+        ],
+        [
+          "startFullDecoupleTest",
+          93,
+          100
+        ],
+        [
+          "setSensorDefect",
+          126,
+          131
+        ],
+        [
+          "setSensorDecoupled",
+          135,
+          140
+        ],
+        [
+          "setDecoupleFull",
+          77,
+          80
+        ],
+        [
+          "setDecoupleHold",
+          84,
+          87
+        ],
+        [
+          "isDecoupleFull",
+          74,
+          76
+        ],
+        [
+          "isDecoupleHold",
+          81,
+          83
+        ],
+        [
+          "stopDecouple",
+          88,
+          90
+        ],
+        [
+          "isSensorDefect",
+          132,
+          134
+        ],
+        [
+          "isSensorDecoupled",
+          141,
+          143
+        ]
+      ],
+      "stateCandidates": [
+        [
+          25,
+          "extern void reportTempsensorAndHeaterErrors();"
+        ],
+        [
+          147,
+          "extern Extruder extruder[];"
+        ],
+        [
+          157,
+          "static Extruder* current;"
+        ],
+        [
+          167,
+          "volatile int8_t stepperDirection;"
+        ],
+        [
+          303,
+          "static void manageTemperatures();"
+        ],
+        [
+          304,
+          "static bool hasActiveHotendTarget();"
+        ],
+        [
+          305,
+          "static void disableAllExtruders();"
+        ],
+        [
+          306,
+          "static bool selectExtruderById(uint8_t extruderId, bool waitThroughPause = false);"
+        ],
+        [
+          307,
+          "static void applyCurrentSettings();"
+        ],
+        [
+          308,
+          "static void initExtruder();"
+        ],
+        [
+          309,
+          "static void initHeatedBed();"
+        ],
+        [
+          310,
+          "static void setHeatedBedTemperature(float temperatureInCelsius);"
+        ],
+        [
+          311,
+          "static float getHeatedBedTemperature();"
+        ],
+        [
+          312,
+          "static void setTemperatureForExtruder(float temperatureInCelsius, uint8_t extr);"
+        ],
+        [
+          313,
+          "static void setTemperatureForAllExtruders(float temperatureInCelsius);"
+        ],
+        [
+          317,
+          "extern TemperatureController heatedBedController;"
+        ],
+        [
+          320,
+          "extern TemperatureController optTempController;"
+        ],
+        [
+          326,
+          "extern TemperatureController* tempController[NUM_TEMPERATURE_LOOPS];"
+        ]
+      ],
+      "guards": [
+        [
+          18,
+          "#ifndef EXTRUDER_H"
+        ],
+        [
+          181,
+          "#if NUM_EXTRUDER == 1"
+        ],
+        [
+          183,
+          "#else"
+        ],
+        [
+          191,
+          "#if defined(EXT1_STEP_PIN) && NUM_EXTRUDER > 1"
+        ],
+        [
+          196,
+          "#endif"
+        ],
+        [
+          198,
+          "#endif"
+        ],
+        [
+          205,
+          "#if NUM_EXTRUDER == 1"
+        ],
+        [
+          207,
+          "#else"
+        ],
+        [
+          215,
+          "#if defined(EXT1_STEP_PIN) && NUM_EXTRUDER > 1"
+        ],
+        [
+          220,
+          "#endif"
+        ],
+        [
+          222,
+          "#endif"
+        ],
+        [
+          228,
+          "#if NUM_EXTRUDER == 1"
+        ],
+        [
+          230,
+          "#else"
+        ],
+        [
+          235,
+          "#ifdef EXT1_STEP_PIN"
+        ],
+        [
+          239,
+          "#endif"
+        ],
+        [
+          244,
+          "#endif"
+        ],
+        [
+          249,
+          "#if NUM_EXTRUDER == 1"
+        ],
+        [
+          261,
+          "#else"
+        ],
+        [
+          272,
+          "#if defined(EXT1_DIR_PIN) && NUM_EXTRUDER > 1"
+        ],
+        [
+          280,
+          "#endif"
+        ],
+        [
+          282,
+          "#endif"
+        ],
+        [
+          287,
+          "#if NUM_EXTRUDER == 1"
+        ],
+        [
+          288,
+          "#if EXT0_ENABLE_PIN > -1"
+        ],
+        [
+          290,
+          "#endif"
+        ],
+        [
+          291,
+          "#else"
+        ],
+        [
+          295,
+          "#endif"
+        ],
+        [
+          319,
+          "#ifdef X35_ADC_CHANNEL"
+        ],
+        [
+          321,
+          "#endif"
+        ],
+        [
+          328,
+          "#endif"
+        ]
+      ],
+      "includes": [],
+      "waits": [
+        [
+          299,
+          "HAL::delayMilliseconds(stepperEnableDelayMs);"
+        ]
+      ],
+      "commentCandidates": []
+    },
+    {
+      "path": "ExtrusionCompensation.h",
+      "sha": "e93e0d9ca3f8eb0e292c14d65a67fe410546371f",
+      "physicalLines": 55,
+      "normalizedLines": 40,
+      "functions": [
+        [
+          "prepareRatio",
+          10,
+          21
+        ],
+        [
+          "addBaseStep",
+          33,
+          44
+        ],
+        [
+          "reset",
+          28,
+          31
+        ],
+        [
+          "consumeExtraStep",
+          46,
+          48
+        ],
+        [
+          "ratio",
+          23,
+          23
+        ],
+        [
+          "publishRatio",
+          24,
+          24
+        ],
+        [
+          "remainder",
+          25,
+          25
+        ],
+        [
+          "restoreRemainder",
+          26,
+          26
+        ]
+      ],
+      "stateCandidates": [
+        [
+          51,
+          "volatile float ratio_ = 0.0f;"
+        ],
+        [
+          52,
+          "volatile float remainder_ = 0.0f;"
+        ]
+      ],
+      "guards": [
+        [
+          1,
+          "#ifndef EXTRUSION_COMPENSATION_H"
+        ],
+        [
+          55,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include <math.h>"
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "ExtrusionOutput.h",
+      "sha": "570b2064532ded2b85fbfb329a25d27e6481eedb",
+      "physicalLines": 111,
+      "normalizedLines": 88,
+      "functions": [
+        [
+          "setAdvanceEnabled",
+          15,
+          24
+        ],
+        [
+          "drain",
+          63,
+          70
+        ],
+        [
+          "setLeadSteps",
+          53,
+          59
+        ],
+        [
+          "onIdleTick",
+          77,
+          83
+        ],
+        [
+          "inhibit",
+          28,
+          33
+        ],
+        [
+          "clearSteps",
+          39,
+          44
+        ],
+        [
+          "addSteps",
+          47,
+          51
+        ],
+        [
+          "armTimer",
+          90,
+          94
+        ],
+        [
+          "allow",
+          35,
+          37
+        ],
+        [
+          "canChangeDirection",
+          97,
+          99
+        ],
+        [
+          "advanceEnabled",
+          12,
+          12
+        ],
+        [
+          "blocked",
+          26,
+          26
+        ],
+        [
+          "pendingSteps",
+          46,
+          46
+        ],
+        [
+          "cancelDrain",
+          72,
+          72
+        ],
+        [
+          "relaxDelayElapsed",
+          74,
+          74
+        ],
+        [
+          "postponeRelaxation",
+          75,
+          75
+        ],
+        [
+          "setStepInterval",
+          85,
+          85
+        ],
+        [
+          "resetDirection",
+          86,
+          86
+        ]
+      ],
+      "stateCandidates": [
+        [
+          96,
+          "static void stopTimer();"
+        ],
+        [
+          101,
+          "volatile int16_t pendingSteps_ = 0;"
+        ],
+        [
+          102,
+          "volatile int16_t leadSteps_ = 0;"
+        ],
+        [
+          103,
+          "volatile uint8_t relaxTicks_ = 0;"
+        ],
+        [
+          106,
+          "volatile bool draining_ = false;"
+        ],
+        [
+          107,
+          "volatile bool advanceEnabled_ = false;"
+        ],
+        [
+          108,
+          "volatile uint8_t inhibitMask_ = 0;"
+        ]
+      ],
+      "guards": [
+        [
+          1,
+          "#ifndef EXTRUSION_OUTPUT_H"
+        ],
+        [
+          111,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include <stdint.h>"
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "ExtrusionPlanner.h",
+      "sha": "cf3ac3bba64b1d4fd4e8bacd6f07f00fce300c11",
+      "physicalLines": 42,
+      "normalizedLines": 34,
+      "functions": [
+        [
+          "planSteps",
+          15,
+          31
+        ],
+        [
+          "setLogicalPosition",
+          33,
+          33
+        ],
+        [
+          "stepRemainder",
+          34,
+          34
+        ],
+        [
+          "restoreStepRemainder",
+          35,
+          35
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [
+        [
+          1,
+          "#ifndef EXTRUSION_PLANNER_H"
+        ],
+        [
+          42,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include <math.h>"
+        ],
+        [
+          5,
+          "#include <stdint.h>"
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "GCodeCommands.cpp",
+      "sha": "b353e0c8e1a646d56ca7654d4ad6d620ee077e6d",
+      "physicalLines": 184,
+      "normalizedLines": 153,
+      "functions": [
+        [
+          "dispatchMachine",
+          39,
+          161
+        ],
+        [
+          "Commands::executeGCode",
+          166,
+          184
+        ],
+        [
+          "dispatchMotion",
+          24,
+          37
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [
+        [
+          82,
+          "#if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1"
+        ],
+        [
+          85,
+          "#endif"
+        ],
+        [
+          86,
+          "#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2"
+        ],
+        [
+          89,
+          "#endif"
+        ],
+        [
+          90,
+          "#ifdef RGB_LIGHT_R_PIN"
+        ],
+        [
+          97,
+          "#endif"
+        ],
+        [
+          98,
+          "#ifdef X35_ADC_CHANNEL"
+        ],
+        [
+          100,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ],
+        [
+          19,
+          "#include \"GCodeCommands.h\""
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "GCodeCommands.h",
+      "sha": "e1719d70c1f610e041871faaf298045f15efb882",
+      "physicalLines": 124,
+      "normalizedLines": 108,
+      "functions": [
+        [
+          "takesPanelText",
+          12,
+          12
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [
+        [
+          1,
+          "#ifndef GCODE_COMMANDS_H"
+        ],
+        [
+          124,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include <stdint.h>"
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "GCodeInput.cpp",
+      "sha": "c3e8e394229d6b6bf371b27a4c395f502f68e005",
+      "physicalLines": 837,
+      "normalizedLines": 695,
+      "functions": [
+        [
+          "GCodeInput::parseAscii",
+          622,
+          826
+        ],
+        [
+          "GCodeInput::parseBinary",
+          459,
+          617
+        ],
+        [
+          "GCodeInput::readFromSerial",
+          376,
+          454
+        ],
+        [
+          "GCodeInput::checkAndPushCommand",
+          270,
+          317
+        ],
+        [
+          "GCodeInput::executeFlashScript",
+          339,
+          373
+        ],
+        [
+          "GCodeInput::keepAlive",
+          231,
+          252
+        ],
+        [
+          "GCodeInput::requestResend",
+          254,
+          264
+        ],
+        [
+          "GCodeInput::popCurrentCommand",
+          328,
+          337
+        ],
+        [
+          "parseFloatValue",
+          73,
+          81
+        ],
+        [
+          "parseLongValue",
+          82,
+          90
+        ],
+        [
+          "GCodeInput::reportCorruptCommand",
+          829,
+          837
+        ],
+        [
+          "publish",
+          30,
+          34
+        ],
+        [
+          "retireFront",
+          36,
+          40
+        ],
+        [
+          "GCodeInput::peekCurrentCommand",
+          323,
+          325
+        ],
+        [
+          "empty",
+          25,
+          25
+        ],
+        [
+          "full",
+          26,
+          26
+        ],
+        [
+          "writeSlot",
+          27,
+          27
+        ],
+        [
+          "front",
+          28,
+          28
+        ]
+      ],
+      "stateCandidates": [
+        [
+          46,
+          "volatile uint8_t count_ = 0;"
+        ]
+      ],
+      "guards": [],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ],
+        [
+          19,
+          "#include \"GCodeInput.h\""
+        ],
+        [
+          20,
+          "#include \"GCodeCommands.h\""
+        ]
+      ],
+      "waits": [
+        [
+          75,
+          "while (*s == 32)"
+        ],
+        [
+          84,
+          "while (*s == 32)"
+        ],
+        [
+          358,
+          "} while (buflen < 79);"
+        ],
+        [
+          372,
+          "} while (c);"
+        ],
+        [
+          396,
+          "while (HAL::serialByteAvailable() && frame.length < maxCommandSize) {"
+        ],
+        [
+          466,
+          "while (len) {"
+        ],
+        [
+          476,
+          "} while (--tlen);"
+        ],
+        [
+          629,
+          "while ((c = *(pos++))) {"
+        ],
+        [
+          660,
+          "while ((digit = *pos)) {"
+        ],
+        [
+          665,
+          "while ((digit = *pos)) {"
+        ],
+        [
+          672,
+          "while (*pos && *pos !=    )"
+        ],
+        [
+          798,
+          "while (line != (pos - 1))"
+        ]
+      ],
+      "commentCandidates": []
+    },
+    {
+      "path": "GCodeInput.h",
+      "sha": "b70ae9bbd28014345f2fd72c3a890b562c64013d",
+      "physicalLines": 42,
+      "normalizedLines": 20,
+      "functions": [],
+      "stateCandidates": [
+        [
+          25,
+          "static constexpr uint32_t keepAliveIntervalMs = 2000;"
+        ],
+        [
+          27,
+          "static void readFromSerial();"
+        ],
+        [
+          28,
+          "static GCode* peekCurrentCommand();"
+        ],
+        [
+          29,
+          "static void popCurrentCommand();"
+        ],
+        [
+          30,
+          "static void keepAlive(FirmwareState state);"
+        ],
+        [
+          31,
+          "static void executeFlashScript(const char* cmd);"
+        ],
+        [
+          34,
+          "static bool parseAscii(GCode& command, char* line, bool fromSerial);"
+        ],
+        [
+          35,
+          "static bool parseBinary(GCode& command, uint8_t* buffer, int8_t length);"
+        ],
+        [
+          36,
+          "static uint8_t computeBinarySize(char* frame);"
+        ],
+        [
+          37,
+          "static void requestResend();"
+        ],
+        [
+          38,
+          "static void checkAndPushCommand(GCode& command);"
+        ],
+        [
+          39,
+          "static void reportCorruptCommand(GCode& command);"
+        ]
+      ],
+      "guards": [
+        [
+          18,
+          "#ifndef GCODE_INPUT_H"
+        ],
+        [
+          42,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          21,
+          "#include \"gcode.h\""
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "GCodeModes.h",
+      "sha": "43db7fa508021fb23f98f53cb05bc9d2c3edbd99",
+      "physicalLines": 23,
+      "normalizedLines": 17,
+      "functions": [
+        [
+          "inches",
+          6,
+          6
+        ],
+        [
+          "setInches",
+          7,
+          7
+        ],
+        [
+          "relativeXYZ",
+          9,
+          9
+        ],
+        [
+          "setRelativeXYZ",
+          10,
+          10
+        ],
+        [
+          "relativeEOverride",
+          12,
+          12
+        ],
+        [
+          "setRelativeEOverride",
+          13,
+          13
+        ],
+        [
+          "relativeE",
+          15,
+          15
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [
+        [
+          1,
+          "#ifndef GCODE_MODES_H"
+        ],
+        [
+          23,
+          "#endif"
+        ]
+      ],
+      "includes": [],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "GCodeMotion.cpp",
+      "sha": "f6a1ef46e8d651890fa09255eba1b82c3c9d8d77",
+      "physicalLines": 602,
+      "normalizedLines": 501,
+      "functions": [
+        [
+          "setSenseOffsetParameters",
+          499,
+          558
+        ],
+        [
+          "setPauseParkingOffsets",
+          355,
+          409
+        ],
+        [
+          "setEmergencyPauseDigits",
+          416,
+          457
+        ],
+        [
+          "setDigitFlowParameters",
+          560,
+          600
+        ],
+        [
+          "setEmergencyStopDigits",
+          459,
+          497
+        ],
+        [
+          "setStepperCurrent",
+          270,
+          306
+        ],
+        [
+          "setToolOffset",
+          193,
+          227
+        ],
+        [
+          "setManualZOffset",
+          308,
+          336
+        ],
+        [
+          "suspendAxes",
+          125,
+          146
+        ],
+        [
+          "setLogicalPosition",
+          78,
+          97
+        ],
+        [
+          "setJerkLimits",
+          172,
+          191
+        ],
+        [
+          "dwell",
+          31,
+          44
+        ],
+        [
+          "homeAxes",
+          54,
+          64
+        ],
+        [
+          "setPrintAcceleration",
+          148,
+          158
+        ],
+        [
+          "setTravelAcceleration",
+          160,
+          170
+        ],
+        [
+          "testHomingRepeatability",
+          338,
+          348
+        ],
+        [
+          "configureStepperShutdown",
+          107,
+          114
+        ],
+        [
+          "configureAdvance",
+          257,
+          264
+        ],
+        [
+          "setFlowMultiplier",
+          233,
+          239
+        ],
+        [
+          "testAdvanceSteps",
+          241,
+          247
+        ],
+        [
+          "reportAdvancePeak",
+          249,
+          255
+        ],
+        [
+          "queueLinearMove",
+          24,
+          29
+        ],
+        [
+          "configureInactivityShutdown",
+          116,
+          121
+        ],
+        [
+          "selectAbsolutePositioning",
+          66,
+          70
+        ],
+        [
+          "selectRelativePositioning",
+          72,
+          76
+        ],
+        [
+          "requestPrintPause",
+          350,
+          353
+        ],
+        [
+          "setXYOrigin",
+          411,
+          414
+        ],
+        [
+          "selectInches",
+          46,
+          48
+        ],
+        [
+          "selectMillimeters",
+          50,
+          52
+        ],
+        [
+          "selectAbsoluteExtrusion",
+          99,
+          101
+        ],
+        [
+          "selectRelativeExtrusion",
+          103,
+          105
+        ],
+        [
+          "setFeedrateMultiplier",
+          229,
+          231
+        ],
+        [
+          "finishMotion",
+          266,
+          268
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ],
+        [
+          19,
+          "#include \"GCodeCommands.h\""
+        ],
+        [
+          20,
+          "#include \"MotionPlanner.h\""
+        ]
+      ],
+      "waits": [
+        [
+          41,
+          "while ((uint32_t)(codenum - HAL::timeInMilliseconds()) < 2000000000) {"
+        ],
+        [
+          137,
+          "while (wait - HAL::timeInMilliseconds() < 100000L) {"
+        ]
+      ],
+      "commentCandidates": []
+    },
+    {
+      "path": "GCodeSystem.cpp",
+      "sha": "5a043697ccaa92f3af6d3d31daf1944f136e01fd",
+      "physicalLines": 351,
+      "normalizedLines": 273,
+      "functions": [
+        [
+          "accessPanel",
+          159,
+          234
+        ],
+        [
+          "runRfDiagnostic",
+          266,
+          328
+        ],
+        [
+          "reportEndstops",
+          64,
+          95
+        ],
+        [
+          "testWatchdog",
+          241,
+          264
+        ],
+        [
+          "setPanelStatusOverride",
+          330,
+          349
+        ],
+        [
+          "configureRfDebug",
+          135,
+          149
+        ],
+        [
+          "reportFirmware",
+          45,
+          56
+        ],
+        [
+          "setDebugLevel",
+          31,
+          39
+        ],
+        [
+          "loadConfiguration",
+          115,
+          123
+        ],
+        [
+          "restoreConfigurationDefaults",
+          125,
+          133
+        ],
+        [
+          "requestHeatBedScan",
+          151,
+          157
+        ],
+        [
+          "showInvalidSyntax",
+          23,
+          28
+        ],
+        [
+          "setPanelMessage",
+          58,
+          62
+        ],
+        [
+          "setEepromValue",
+          101,
+          104
+        ],
+        [
+          "saveConfiguration",
+          110,
+          113
+        ],
+        [
+          "reportDeviceVersion",
+          236,
+          239
+        ],
+        [
+          "reportPosition",
+          41,
+          43
+        ],
+        [
+          "reportEeprom",
+          97,
+          99
+        ],
+        [
+          "reportConfiguration",
+          106,
+          108
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [
+        [
+          88,
+          "#if MOTHERBOARD == DEVICE_TYPE_RF1000"
+        ],
+        [
+          90,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ],
+        [
+          19,
+          "#include \"GCodeCommands.h\""
+        ]
+      ],
+      "waits": [
+        [
+          253,
+          "HAL::delayMilliseconds(10000);"
+        ],
+        [
+          256,
+          "HAL::delayMicroseconds(10000);"
+        ],
+        [
+          261,
+          "HAL::delayMilliseconds(100);"
+        ]
+      ],
+      "commentCandidates": []
+    },
+    {
+      "path": "GCodeThermal.cpp",
+      "sha": "dee4b88cffb97903976c53f3b2262fe233b499be",
+      "physicalLines": 544,
+      "normalizedLines": 455,
+      "functions": [
+        [
+          "unloadFilament",
+          434,
+          532
+        ],
+        [
+          "setAccessoryFet",
+          288,
+          354
+        ],
+        [
+          "waitForHotend",
+          58,
+          122
+        ],
+        [
+          "loadFilament",
+          382,
+          432
+        ],
+        [
+          "waitForBed",
+          155,
+          193
+        ],
+        [
+          "setCaseLight",
+          234,
+          256
+        ],
+        [
+          "setHotendTemperature",
+          24,
+          44
+        ],
+        [
+          "scheduleCaseFanOff",
+          265,
+          284
+        ],
+        [
+          "tunePid",
+          214,
+          232
+        ],
+        [
+          "waitForTemperatures",
+          124,
+          141
+        ],
+        [
+          "setPidGains",
+          195,
+          212
+        ],
+        [
+          "setMainsOutput",
+          356,
+          370
+        ],
+        [
+          "setBedTemperature",
+          143,
+          153
+        ],
+        [
+          "prepareFilamentProgram",
+          373,
+          380
+        ],
+        [
+          "readOptionalTemperature",
+          535,
+          541
+        ],
+        [
+          "turnOnCaseFan",
+          259,
+          263
+        ],
+        [
+          "reportTemperature",
+          46,
+          48
+        ],
+        [
+          "startPartFan",
+          50,
+          52
+        ],
+        [
+          "stopPartFan",
+          54,
+          56
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [
+        [
+          235,
+          "#if HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)"
+        ],
+        [
+          238,
+          "#else"
+        ],
+        [
+          255,
+          "#endif"
+        ],
+        [
+          258,
+          "#if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1"
+        ],
+        [
+          285,
+          "#endif"
+        ],
+        [
+          287,
+          "#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2"
+        ],
+        [
+          296,
+          "#if FET1 > -1 && !HOTEND_COOLER_USES_PIN(FET1)"
+        ],
+        [
+          313,
+          "#endif"
+        ],
+        [
+          314,
+          "#if FET2 > -1 && !HOTEND_COOLER_USES_PIN(FET2)"
+        ],
+        [
+          331,
+          "#endif"
+        ],
+        [
+          332,
+          "#if FET3 > -1"
+        ],
+        [
+          349,
+          "#endif"
+        ],
+        [
+          371,
+          "#endif"
+        ],
+        [
+          534,
+          "#ifdef X35_ADC_CHANNEL"
+        ],
+        [
+          542,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ],
+        [
+          19,
+          "#include \"GCodeCommands.h\""
+        ],
+        [
+          20,
+          "#include \"CaseFan.h\""
+        ]
+      ],
+      "waits": [
+        [
+          118,
+          "} while (!isTempReached);"
+        ],
+        [
+          129,
+          "while (!allReached) {"
+        ],
+        [
+          173,
+          "while (fabs(heatedBedController.currentTemperatureC - heatedBedController.targetTemperatureC) > TEMP_TOLERANCE) {"
+        ],
+        [
+          407,
+          "while (e < float(Extrusion)) {"
+        ],
+        [
+          467,
+          "while (t < float(UI_SET_EXTRUDER_MAX_TEMP_UNMOUNT) && fabs(e) < float(outputLength)) {"
+        ],
+        [
+          469,
+          "while (HAL::timeInMilliseconds() <= time) {"
+        ],
+        [
+          477,
+          "while (fabs(e) < float(outputLength)) {"
+        ]
+      ],
+      "commentCandidates": [
+        [
+          33,
+          "//TODO man müsste das in den Movecache legen!"
+        ]
+      ]
+    },
+    {
+      "path": "HAL.cpp",
+      "sha": "2873c6f6332d9482e9c12953e0deb53287a1f80a",
+      "physicalLines": 872,
+      "normalizedLines": 653,
+      "functions": [
+        [
+          "HAL::CPUDivU2",
+          143,
+          254
+        ],
+        [
+          "HAL::integerSqrt",
+          74,
+          132
+        ],
+        [
+          "setTimer",
+          424,
+          474
+        ],
+        [
+          "HAL::setupTimer",
+          256,
+          291
+        ],
+        [
+          "HAL::analogStart",
+          340,
+          367
+        ],
+        [
+          "HAL::showStartReason",
+          293,
+          313
+        ],
+        [
+          "ExtrusionOutput::serviceTimerCompare",
+          843,
+          863
+        ],
+        [
+          "HAL::WDT_Init",
+          370,
+          387
+        ],
+        [
+          "HAL::setPartFanSpeed",
+          604,
+          616
+        ],
+        [
+          "HAL::getFreeRam",
+          315,
+          326
+        ],
+        [
+          "ExtrusionOutput::startTimer",
+          826,
+          837
+        ],
+        [
+          "scheduleAdvanceCompare",
+          814,
+          823
+        ],
+        [
+          "HAL::startWatchdog",
+          397,
+          405
+        ],
+        [
+          "takeTick",
+          46,
+          51
+        ],
+        [
+          "HAL::stopWatchdog",
+          407,
+          412
+        ],
+        [
+          "HAL::setPartFanDivisor",
+          593,
+          598
+        ],
+        [
+          "HAL::temperatureAdcSample",
+          334,
+          338
+        ],
+        [
+          "HAL::tellWatchdogOk",
+          414,
+          418
+        ],
+        [
+          "pingWatchdog",
+          53,
+          56
+        ],
+        [
+          "HAL::resetPwmOutputs",
+          574,
+          577
+        ],
+        [
+          "HAL::setPartFanDutyRange",
+          588,
+          591
+        ],
+        [
+          "::HAL",
+          66,
+          68
+        ],
+        [
+          "::~HAL",
+          70,
+          72
+        ],
+        [
+          "HAL::resetHardware",
+          330,
+          332
+        ],
+        [
+          "HAL::setPartFanMode",
+          600,
+          602
+        ],
+        [
+          "advanceStepDelay",
+          810,
+          812
+        ],
+        [
+          "ExtrusionOutput::stopTimer",
+          839,
+          841
+        ],
+        [
+          "HAL::takeScanTick",
+          59,
+          59
+        ],
+        [
+          "HAL::takeCompensationTick",
+          60,
+          60
+        ],
+        [
+          "HAL::takeFeatureTick",
+          61,
+          61
+        ],
+        [
+          "HAL::takeTemperatureTick",
+          62,
+          62
+        ],
+        [
+          "HAL::temperatureTickPending",
+          63,
+          63
+        ],
+        [
+          "HAL::watchdogEnabled",
+          64,
+          64
+        ],
+        [
+          "HAL::outputDuty",
+          579,
+          579
+        ],
+        [
+          "HAL::setHeaterDuty",
+          580,
+          580
+        ],
+        [
+          "HAL::setBoardFan",
+          581,
+          581
+        ],
+        [
+          "HAL::partFanSpeed",
+          582,
+          582
+        ],
+        [
+          "HAL::partFanDivisor",
+          583,
+          583
+        ],
+        [
+          "HAL::partFanMode",
+          584,
+          584
+        ],
+        [
+          "HAL::partFanMinDuty",
+          585,
+          585
+        ],
+        [
+          "HAL::partFanMaxDuty",
+          586,
+          586
+        ]
+      ],
+      "stateCandidates": [
+        [
+          32,
+          "volatile uint8 temperatureAdcCount[TemperatureAdcCount] = { 0 };"
+        ],
+        [
+          33,
+          "volatile uint temperatureAdcSum[TemperatureAdcCount] = { 0 };"
+        ],
+        [
+          34,
+          "volatile uint8 temperatureAdcPosition = 0;"
+        ],
+        [
+          35,
+          "volatile uint temperatureAdcValues[TemperatureAdcCount] = { 0 };"
+        ],
+        [
+          37,
+          "volatile unsigned long watchdogHeartbeat = 0;"
+        ],
+        [
+          38,
+          "volatile bool watchdogActive = false;"
+        ],
+        [
+          41,
+          "volatile bool scanTick = false;"
+        ],
+        [
+          42,
+          "volatile bool compensationTick = false;"
+        ],
+        [
+          43,
+          "volatile bool featureTick = false;"
+        ],
+        [
+          44,
+          "volatile bool temperatureTick = false;"
+        ],
+        [
+          476,
+          "volatile long __attribute__((used)) stepperWait = 0;"
+        ],
+        [
+          563,
+          "volatile uint8_t requestedDuty[NUM_EXTRUDER + 3];"
+        ],
+        [
+          567,
+          "volatile uint8_t fanKickstart = 0;"
+        ],
+        [
+          568,
+          "volatile uint8_t fanMode = PART_FAN_MODE_PWM;"
+        ],
+        [
+          569,
+          "volatile uint8_t fanDivisor = PART_FAN_DEFAULT_PWM_SPEED_DIVISOR;"
+        ],
+        [
+          630,
+          "static uint8_t pwm_count_heater = 0;"
+        ],
+        [
+          631,
+          "static uint8_t pwm_count_cooler = 0;"
+        ],
+        [
+          632,
+          "static uint8_t pwm_count_part_fan = 0;"
+        ],
+        [
+          634,
+          "static uint8_t pwm_pos_set[NUM_EXTRUDER + 3];"
+        ],
+        [
+          636,
+          "static uint8_t pwm_cooler_pos_set[NUM_EXTRUDER];"
+        ],
+        [
+          712,
+          "static int counterSpeed15_3Div = 0;"
+        ],
+        [
+          736,
+          "static int counter100Periodical = 0;"
+        ],
+        [
+          752,
+          "static char counter10Periodical = 0;"
+        ]
+      ],
+      "guards": [
+        [
+          24,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          26,
+          "#endif"
+        ],
+        [
+          28,
+          "#ifdef X35_ADC_CHANNEL"
+        ],
+        [
+          30,
+          "#endif"
+        ],
+        [
+          271,
+          "#ifdef RGB_LIGHT_R_PIN"
+        ],
+        [
+          290,
+          "#endif"
+        ],
+        [
+          357,
+          "#if defined(ADCSRB) && defined(MUX5)"
+        ],
+        [
+          362,
+          "#endif"
+        ],
+        [
+          635,
+          "#if ((defined(EXT0_HEATER_PIN) && EXT0_HEATER_PIN > -1 && EXT0_EXTRUDER_COOLER_PIN > -1) || (NUM_EXTRUDER > 1 && EXT1_EXTRUDER_COOLER_PIN > -1 && EXT1_EXTRUDER_COOLER_PIN != EXT0_EXTRUDER_COOLER_PIN))"
+        ],
+        [
+          637,
+          "#endif"
+        ],
+        [
+          641,
+          "#if EXT0_HEATER_PIN > -1"
+        ],
+        [
+          644,
+          "#endif"
+        ],
+        [
+          646,
+          "#if defined(EXT1_HEATER_PIN) && EXT1_HEATER_PIN > -1 && NUM_EXTRUDER > 1"
+        ],
+        [
+          649,
+          "#endif"
+        ],
+        [
+          656,
+          "#if EXT0_HEATER_PIN > -1 && EXT0_EXTRUDER_COOLER_PIN > -1"
+        ],
+        [
+          659,
+          "#endif"
+        ],
+        [
+          661,
+          "#if defined(EXT1_HEATER_PIN) && EXT1_HEATER_PIN > -1 && NUM_EXTRUDER > 1"
+        ],
+        [
+          662,
+          "#if EXT1_EXTRUDER_COOLER_PIN > -1 && EXT1_EXTRUDER_COOLER_PIN != EXT0_EXTRUDER_COOLER_PIN"
+        ],
+        [
+          665,
+          "#endif"
+        ],
+        [
+          666,
+          "#endif"
+        ],
+        [
+          668,
+          "#if FAN_BOARD_PIN > -1"
+        ],
+        [
+          671,
+          "#endif"
+        ],
+        [
+          674,
+          "#if EXT0_HEATER_PIN > -1"
+        ],
+        [
+          677,
+          "#if EXT0_EXTRUDER_COOLER_PIN > -1"
+        ],
+        [
+          680,
+          "#endif"
+        ],
+        [
+          681,
+          "#endif"
+        ],
+        [
+          683,
+          "#if defined(EXT1_HEATER_PIN) && EXT1_HEATER_PIN > -1 && NUM_EXTRUDER > 1"
+        ],
+        [
+          686,
+          "#if EXT1_EXTRUDER_COOLER_PIN > -1 && EXT1_EXTRUDER_COOLER_PIN != EXT0_EXTRUDER_COOLER_PIN"
+        ],
+        [
+          689,
+          "#endif"
+        ],
+        [
+          690,
+          "#endif"
+        ],
+        [
+          695,
+          "#if FAN_BOARD_PIN > -1"
+        ],
+        [
+          698,
+          "#endif"
+        ],
+        [
+          748,
+          "#ifdef RGB_LIGHT_R_PIN"
+        ],
+        [
+          750,
+          "#endif"
+        ],
+        [
+          756,
+          "#ifdef RGB_LIGHT_R_PIN"
+        ],
+        [
+          758,
+          "#endif"
+        ],
+        [
+          785,
+          "#if defined(ADCSRB) && defined(MUX5)"
+        ],
+        [
+          790,
+          "#endif"
+        ],
+        [
+          800,
+          "#ifdef RGB_LIGHT_R_PIN"
+        ],
+        [
+          803,
+          "#endif"
+        ],
+        [
+          870,
+          "#if !defined CASE_LIGHT_PIN || CASE_LIGHT_PIN < 0"
+        ],
+        [
+          872,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ],
+        [
+          19,
+          "#include \"StepExecutor.h\""
+        ]
+      ],
+      "waits": [
+        [
+          349,
+          "while (ADCSRA & _BV(ADSC)) { }"
+        ]
+      ],
+      "commentCandidates": [
+        [
+          379,
+          "// timeout in XXX millisecond, disable reset mode. Must be done in one operation --> S66  http://www.atmel.com/Images/Atmel-2549-8-bit-AVR-Microcontroller-ATmega640-1280-1281-2560-2561_datasheet.pdf"
+        ]
+      ]
+    },
+    {
+      "path": "HAL.h",
+      "sha": "2ecdf609d5a39a3baa2cae08e7f560dca21741d5",
+      "physicalLines": 548,
+      "normalizedLines": 386,
+      "functions": [
+        [
+          "Div4U2U",
+          184,
+          273
+        ],
+        [
+          "ComputeV",
+          298,
+          340
+        ],
+        [
+          "U16SquaredToU32",
+          275,
+          296
+        ],
+        [
+          "stepWithCount",
+          359,
+          379
+        ],
+        [
+          "eprSetByte",
+          390,
+          395
+        ],
+        [
+          "eprSetInt16",
+          397,
+          402
+        ],
+        [
+          "eprSetInt32",
+          404,
+          409
+        ],
+        [
+          "eprSetFloat",
+          411,
+          416
+        ],
+        [
+          "eprGetFloat",
+          433,
+          438
+        ],
+        [
+          "InterruptProtectedBlock",
+          88,
+          92
+        ],
+        [
+          "digitalWrite",
+          342,
+          345
+        ],
+        [
+          "digitalRead",
+          347,
+          350
+        ],
+        [
+          "pinMode",
+          352,
+          355
+        ],
+        [
+          "eprGetByte",
+          418,
+          421
+        ],
+        [
+          "eprGetInt16",
+          423,
+          426
+        ],
+        [
+          "eprGetInt32",
+          428,
+          431
+        ],
+        [
+          "readFlashByte",
+          459,
+          462
+        ],
+        [
+          "serialSetBaudrate",
+          464,
+          467
+        ],
+        [
+          "serialByteAvailable",
+          469,
+          472
+        ],
+        [
+          "serialReadByte",
+          474,
+          477
+        ],
+        [
+          "serialWriteByte",
+          479,
+          482
+        ],
+        [
+          "serialFlush",
+          484,
+          487
+        ],
+        [
+          "testWatchdog",
+          523,
+          526
+        ],
+        [
+          "maxExtruderTimerFrequency",
+          528,
+          531
+        ],
+        [
+          "protect",
+          80,
+          82
+        ],
+        [
+          "unprotect",
+          84,
+          86
+        ],
+        [
+          "InterruptProtectedBlock",
+          94,
+          96
+        ],
+        [
+          "delayMilliseconds",
+          386,
+          388
+        ],
+        [
+          "allowInterrupts",
+          443,
+          445
+        ],
+        [
+          "forbidInterrupts",
+          447,
+          449
+        ],
+        [
+          "timeInMilliseconds",
+          451,
+          453
+        ],
+        [
+          "timeInMicroseconds",
+          455,
+          457
+        ]
+      ],
+      "stateCandidates": [
+        [
+          37,
+          "#define FSTRINGVAR(var) static const char var[] PROGMEM;"
+        ],
+        [
+          176,
+          "static uint16_t integerSqrt(int32_t a);"
+        ],
+        [
+          357,
+          "static int32_t CPUDivU2(unsigned int divisor);"
+        ],
+        [
+          489,
+          "static void setupTimer();"
+        ],
+        [
+          491,
+          "static void resetPwmOutputs();"
+        ],
+        [
+          492,
+          "static uint8_t outputDuty(uint8_t channel);"
+        ],
+        [
+          493,
+          "static void setHeaterDuty(uint8_t channel, uint8_t duty);"
+        ],
+        [
+          494,
+          "static void setBoardFan(bool enabled);"
+        ],
+        [
+          495,
+          "static uint8_t partFanSpeed();"
+        ],
+        [
+          496,
+          "static void setPartFanSpeed(uint8_t speed);"
+        ],
+        [
+          497,
+          "static uint8_t partFanDivisor();"
+        ],
+        [
+          498,
+          "static void setPartFanDivisor(uint8_t divisor);"
+        ],
+        [
+          499,
+          "static uint8_t partFanMode();"
+        ],
+        [
+          500,
+          "static void setPartFanMode(uint8_t mode);"
+        ],
+        [
+          501,
+          "static uint8_t partFanMinDuty();"
+        ],
+        [
+          502,
+          "static uint8_t partFanMaxDuty();"
+        ],
+        [
+          503,
+          "static void setPartFanDutyRange(uint8_t minimum, uint8_t maximum);"
+        ],
+        [
+          504,
+          "static void showStartReason();"
+        ],
+        [
+          505,
+          "static int getFreeRam();"
+        ],
+        [
+          506,
+          "static void resetHardware();"
+        ],
+        [
+          509,
+          "static void WDT_Init(void);"
+        ],
+        [
+          512,
+          "static void startWatchdog();"
+        ],
+        [
+          513,
+          "static void stopWatchdog();"
+        ],
+        [
+          514,
+          "static void tellWatchdogOk();"
+        ],
+        [
+          515,
+          "static bool watchdogEnabled();"
+        ],
+        [
+          517,
+          "static bool takeScanTick();"
+        ],
+        [
+          518,
+          "static bool takeCompensationTick();"
+        ],
+        [
+          519,
+          "static bool takeFeatureTick();"
+        ],
+        [
+          520,
+          "static bool takeTemperatureTick();"
+        ],
+        [
+          521,
+          "static bool temperatureTickPending();"
+        ],
+        [
+          533,
+          "static void analogStart();"
+        ],
+        [
+          534,
+          "static uint16_t temperatureAdcSample(uint8_t index);"
+        ]
+      ],
+      "guards": [
+        [
+          18,
+          "#ifndef HAL_H"
+        ],
+        [
+          63,
+          "#ifdef MOTHERBOARD"
+        ],
+        [
+          64,
+          "#ifndef WATCHDOG_PIN"
+        ],
+        [
+          66,
+          "#endif"
+        ],
+        [
+          67,
+          "#endif"
+        ],
+        [
+          111,
+          "#ifndef cbi"
+        ],
+        [
+          113,
+          "#endif"
+        ],
+        [
+          114,
+          "#ifndef sbi"
+        ],
+        [
+          116,
+          "#endif"
+        ],
+        [
+          548,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          27,
+          "#include <avr/pgmspace.h>"
+        ],
+        [
+          28,
+          "#include <avr/io.h>"
+        ],
+        [
+          29,
+          "#include \"UsbSerial.h\""
+        ],
+        [
+          40,
+          "#include <avr/eeprom.h>"
+        ],
+        [
+          41,
+          "#include <avr/wdt.h>"
+        ],
+        [
+          52,
+          "#include <inttypes.h>"
+        ],
+        [
+          53,
+          "#include \"Stream.h\""
+        ],
+        [
+          54,
+          "#include \"Print.h\""
+        ],
+        [
+          56,
+          "#include \"Arduino.h\""
+        ],
+        [
+          57,
+          "#include \"fastio.h\""
+        ]
+      ],
+      "waits": [
+        [
+          381,
+          "static inline void delayMicroseconds(unsigned int delayUs)"
+        ],
+        [
+          383,
+          "::delayMicroseconds(delayUs);"
+        ],
+        [
+          386,
+          "static inline void delayMilliseconds(unsigned int delayMs) {"
+        ],
+        [
+          387,
+          "::delay(delayMs);"
+        ],
+        [
+          524,
+          "while (1) {"
+        ]
+      ],
+      "commentCandidates": []
+    },
+    {
+      "path": "HeatBedScan.cpp",
+      "sha": "a6e1d62f86846345e37a54bf4db27f440a8d4245",
+      "physicalLines": 978,
+      "normalizedLines": 748,
+      "functions": [
+        [
+          "HeatBedScan::tick",
+          272,
+          333
+        ],
+        [
+          "addLong",
+          93,
+          130
+        ],
+        [
+          "HeatBedScan::checkFinalPressure",
+          745,
+          777
+        ],
+        [
+          "HeatBedScan::prepareMatrix",
+          712,
+          743
+        ],
+        [
+          "HeatBedScan::advanceColumn",
+          528,
+          558
+        ],
+        [
+          "HeatBedScan::warmupAndHome",
+          460,
+          487
+        ],
+        [
+          "HeatBedScan::advanceRow",
+          657,
+          681
+        ],
+        [
+          "HeatBedScan::abort",
+          348,
+          370
+        ],
+        [
+          "HeatBedScan::saveMatrix",
+          943,
+          964
+        ],
+        [
+          "HeatBedScan::startOrCancel",
+          250,
+          270
+        ],
+        [
+          "HeatBedScan::waitForProbeTemperature",
+          438,
+          458
+        ],
+        [
+          "HeatBedScan::waitForCalibrationTemperature",
+          815,
+          835
+        ],
+        [
+          "HeatBedScan::stabilizeCalibrationTemperature",
+          837,
+          857
+        ],
+        [
+          "HeatBedScan::initialize",
+          387,
+          404
+        ],
+        [
+          "HeatBedScan::checkProbePressure",
+          625,
+          642
+        ],
+        [
+          "HeatBedScan::prepareProbeTemperature",
+          406,
+          421
+        ],
+        [
+          "HeatBedScan::homeAfterMesh",
+          683,
+          698
+        ],
+        [
+          "HeatBedScan::measureInitialPressure",
+          498,
+          512
+        ],
+        [
+          "HeatBedScan::startColumn",
+          560,
+          574
+        ],
+        [
+          "HeatBedScan::thermalRetryMeasureBaseline",
+          887,
+          901
+        ],
+        [
+          "HeatBedScan::waitForBedTemperature",
+          423,
+          436
+        ],
+        [
+          "HeatBedScan::retryMeasureBaseline",
+          604,
+          617
+        ],
+        [
+          "HeatBedScan::initializeGrid",
+          514,
+          526
+        ],
+        [
+          "HeatBedScan::applyThermalOffset",
+          908,
+          920
+        ],
+        [
+          "HeatBedScan::showStatus",
+          335,
+          346
+        ],
+        [
+          "HeatBedScan::reportRawMatrix",
+          700,
+          710
+        ],
+        [
+          "HeatBedScan::heatNozzleForCalibration",
+          803,
+          813
+        ],
+        [
+          "HeatBedScan::retryHomeZ",
+          586,
+          595
+        ],
+        [
+          "HeatBedScan::thermalRetryHomeZ",
+          869,
+          878
+        ],
+        [
+          "HeatBedScan::switchOffAfterScan",
+          932,
+          941
+        ],
+        [
+          "HeatBedScan::retryHomeY",
+          576,
+          584
+        ],
+        [
+          "HeatBedScan::thermalRetryHomeY",
+          859,
+          867
+        ],
+        [
+          "HeatBedScan::homeAfterThermalProbe",
+          922,
+          930
+        ],
+        [
+          "HeatBedScan::moveToMeshStart",
+          489,
+          496
+        ],
+        [
+          "HeatBedScan::finish",
+          379,
+          385
+        ],
+        [
+          "HeatBedScan::recordMeshPoint",
+          649,
+          655
+        ],
+        [
+          "HeatBedScan::moveToThermalProbe",
+          779,
+          785
+        ],
+        [
+          "HeatBedScan::liftForThermalProbe",
+          787,
+          793
+        ],
+        [
+          "HeatBedScan::extendThermalClearance",
+          795,
+          801
+        ],
+        [
+          "HeatBedScan::discard",
+          372,
+          377
+        ],
+        [
+          "HeatBedScan::retryReturnToPoint",
+          597,
+          602
+        ],
+        [
+          "HeatBedScan::thermalRetryReturnToPoint",
+          880,
+          885
+        ],
+        [
+          "HeatBedScan::armPointRetries",
+          619,
+          623
+        ],
+        [
+          "HeatBedScan::measureMeshPoint",
+          644,
+          647
+        ],
+        [
+          "HeatBedScan::measureThermalProbe",
+          903,
+          906
+        ],
+        [
+          "startHeatBedScan",
+          972,
+          975
+        ],
+        [
+          "heatBedScanRunning",
+          968,
+          970
+        ],
+        [
+          "active",
+          139,
+          139
+        ],
+        [
+          "Calibration::tickHeatBedScan",
+          977,
+          977
+        ],
+        [
+          "Calibration::discardHeatBedScan",
+          978,
+          978
+        ]
+      ],
+      "stateCandidates": [
+        [
+          234,
+          "volatile Phase phase_ = Phase::Idle;"
+        ]
+      ],
+      "guards": [],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ],
+        [
+          19,
+          "#include \"BedMatrix.h\""
+        ],
+        [
+          20,
+          "#include \"ScanProbe.h\""
+        ],
+        [
+          21,
+          "#include \"GCodeInput.h\""
+        ]
+      ],
+      "waits": [
+        [
+          113,
+          "} while (value);"
+        ],
+        [
+          119,
+          "while (dig < digits) {"
+        ],
+        [
+          125,
+          "while (*str) {"
+        ]
+      ],
+      "commentCandidates": []
+    }
+  ]
+}
