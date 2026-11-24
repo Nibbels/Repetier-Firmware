@@ -45,7 +45,7 @@ static void outputCompensationMatrix(char format = 0);
 static char prepareCompensationMatrix();
 static void determineCompensationOffsetZ();
 static void adjustCompensationMatrix(short steps);
-static char loadCompensationMatrix(unsigned int address);
+static char loadCompensationMatrix(unsigned int address, void (*progress)() = nullptr);
 static bool saveWorkingMatrix(unsigned int address);
 
 #include "BedMatrixInterpolation.h"
@@ -102,10 +102,10 @@ static void initCompensationMatrix(void) {
 
 namespace BedMatrix {
 
-void restoreAtStartup() {
+void restoreAtStartup(void (*progress)()) {
     loadActiveHeatBedFromExtEEPROM();
     if (!bedMatrixAvailable())
-        prepareZCompensation();
+        prepareZCompensationWithProgress(progress);
 }
 
 void clearWorking() { initCompensationMatrix(); }

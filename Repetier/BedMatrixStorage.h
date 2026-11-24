@@ -101,7 +101,7 @@ static bool loadActiveHeatBedFromExtEEPROM() {
     return true;
 }
 
-static char loadCompensationMatrix(unsigned int uAddress) {
+static char loadCompensationMatrix(unsigned int uAddress, void (*progress)()) {
     if (uAddress == 0) {
         Com::printFLN(PSTR("loadMatrix(): valid uAddress - aborted!"));
 
@@ -226,6 +226,8 @@ static char loadCompensationMatrix(unsigned int uAddress) {
                 g_ZCompensationMatrix[x][y] = short(transformedMatrixElement);
             }
             uOffset += 2;
+            if (progress)
+                progress(); // completed EEPROM word; no TWI transaction is active
         }
         GCodeInput::keepAlive(Processing);
     }
@@ -304,7 +306,7 @@ bool switchActiveHeatBed(char newActiveHeatBed) {
     return true;
 } // switchActiveHeatBed
 
-void prepareZCompensation(void) {
+static void prepareZCompensationWithProgress(void (*progress)()) {
     if (COMPENSATION_MATRIX_SIZE > EEPROM_SECTOR_SIZE) {
         if (Printer::debugErrors()) {
             Com::printFLN(PSTR("prepareZCompensation(): the size of the compensation matrix is too big"));
@@ -319,13 +321,17 @@ void prepareZCompensation(void) {
 
     // restore the last known compensation matrix
     // this operation must be performed after restoring of the default scan parameters because the values from the EEPROM can overwrite some scan parameters
-    if (loadCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed))) {
+    if (loadCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed), progress)) {
         // there is no valid compensation matrix available
         initCompensationMatrix();
         Com::printFLN(PSTR("prepareZCompensation(): the compensation matrix is not available"));
     }
 
-} // prepareZCompensation
+} // prepareZCompensationWithProgress
+
+void prepareZCompensation(void) {
+    prepareZCompensationWithProgress(nullptr);
+}
 
 
 /**************************************************************************************************************************************/
