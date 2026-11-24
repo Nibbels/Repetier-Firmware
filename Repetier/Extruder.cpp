@@ -121,6 +121,13 @@ void Extruder::applyCurrentSettings() {
     Extruder::current->tempControl.updateTempControlVars();
 }
 
+bool Extruder::hasActiveHotendTarget() {
+    for (uint8_t i = 0; i < NUM_EXTRUDER; ++i)
+        if (tempController[i]->targetTemperatureC > 0)
+            return true;
+    return false;
+}
+
 void Extruder::setTemperatureForExtruder(float temperatureInCelsius, uint8_t extr) {
     if (extr >= NUM_EXTRUDER) {
         // do not set the temperature for an extruder which is not present - this attempt could heat up the extruder without any control and could significantly overheat the extruder
@@ -129,10 +136,7 @@ void Extruder::setTemperatureForExtruder(float temperatureInCelsius, uint8_t ext
         return;
     }
 
-    bool alloffs = true;
-    for (uint8_t i = 0; i < NUM_EXTRUDER; i++)
-        if (tempController[i]->targetTemperatureC > 0)
-            alloffs = false;
+    const bool wasHeating = hasActiveHotendTarget();
 
     TemperatureController* tc = tempController[extr];
     if (temperatureInCelsius > tc->heaterCutoffC)
@@ -158,21 +162,13 @@ void Extruder::setTemperatureForExtruder(float temperatureInCelsius, uint8_t ext
     CaseFan::updateFromHotendTargets();
 #endif // (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
 
-    bool alloff = true;
-    for (uint8_t i = 0; i < NUM_EXTRUDER; i++)
-        if (tempController[i]->targetTemperatureC > 0)
-            alloff = false;
-
-    if (alloff && !alloffs) // All heaters are now switched off?
-    {
-        EEPROM::updatePrinterUsage();
-    }
-
-    if (alloffs && !alloff) // heaters are turned on, start measuring printing time
-    {
-        Printer::msecondsPrinting = HAL::timeInMilliseconds();
-        Printer::filamentPrinted = 0; // new print, new counter
-        Printer::flag2 &= ~PRINTER_FLAG2_RESET_FILAMENT_USAGE;
+    const bool heating = hasActiveHotendTarget();
+    if (heating != wasHeating) {
+        const auto now = HAL::timeInMilliseconds();
+        if (heating)
+            Printer::printUsage.beginHeating(now);
+        else
+            Printer::printUsage.finishHeating(now);
     }
 } // setTemperatureForExtruder
 

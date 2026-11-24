@@ -66,6 +66,8 @@ This is shared AVR/ATmega2560 Repetier firmware for **RF1000, RF2000 and RF2000v
 
 **Panel.** The LCD transport, key sampling and navigation are in `ui.cpp`. `UiFormatting.cpp` renders live values, `UiSettings.cpp` handles edits and `UiActions.cpp` executes commands. The menu tables in `uimenu.h` are instantiated once in the LCD translation unit.
 
+**Print usage.** `Printer::printUsage` counts time with a hotend target and planned filament. The final hotend cooldown posts the accumulated usage to the existing internal EEPROM fields. The panel and serial reports read the same totals.
+
 **Print input.** `UsbSerial` owns USART0 and the byte rings. `GCodeInput` owns the receiver state and two parsed command slots. All three models buffer 24 planned moves. Run `python3 tests/serial-protocol.py` when changing transport, admission or framing. [Serial compatibility](docs/development-roadmap.md#serial-printing-compatibility) · [SD support removal](docs/maintenance-tasks.md#sd-support-removal)
 
 **Non-negotiable operator workflow:** In Mod Menu page 2 the Z/bed DOWN→UP button pair intentionally transfers 5 µm of live SenseOffset into the EEPROM-backed manual part of `Printer::zOffset` with approximately unchanged final clearance (see [live takeover procedure](docs/z-offset/history-and-workflows.md) and the original January 2017 changelog). Do not “fix” the asymmetric button behavior or reset dynamic offsets while a manual transfer is underway.

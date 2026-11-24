@@ -231,32 +231,21 @@ void Commands::adjustFanMode(uint8_t output_mode) {
 }
 
 void Commands::reportPrinterUsage() {
-    if (Printer::debugInfo()) {
-        float dist = Printer::filamentPrinted * 0.001 + HAL::eprGetFloat(EPR_PRINTING_DISTANCE);
-        Com::printF(Com::tPrintedFilament, dist, 2);
-        Com::printF(Com::tSpacem);
-    }
-    bool alloff = true;
+    if (!Printer::debugInfo())
+        return;
+    Com::printF(Com::tPrintedFilament, Printer::printUsage.filamentMetres(), 2);
+    Com::printF(Com::tSpacem);
 
-    for (uint8_t i = 0; i < NUM_EXTRUDER; i++)
-        if (tempController[i]->targetTemperatureC > 0)
-            alloff = false;
-
-    if (Printer::debugInfo()) {
-        int32_t seconds = (alloff ? 0 : (HAL::timeInMilliseconds() - Printer::msecondsPrinting) / 1000) + HAL::eprGetInt32(EPR_PRINTING_TIME);
-        int32_t tmp = seconds / 86400;
-        seconds -= tmp * 86400;
-
-        Com::printF(Com::tPrintingTime, tmp);
-        tmp = seconds / 3600;
-        Com::printF(Com::tSpaceDaysSpace, tmp);
-        seconds -= tmp * 3600;
-        tmp = seconds / 60;
-
-        Com::printF(Com::tSpaceHoursSpace, tmp);
-        Com::printFLN(Com::tSpaceMin);
-    }
-} // reportPrinterUsage
+    int32_t seconds = Printer::printUsage.heatedSeconds();
+    const int32_t days = seconds / 86400;
+    seconds -= days * 86400;
+    const int32_t hours = seconds / 3600;
+    seconds -= hours * 3600;
+    Com::printF(Com::tPrintingTime, days);
+    Com::printF(Com::tSpaceDaysSpace, hours);
+    Com::printF(Com::tSpaceHoursSpace, seconds / 60);
+    Com::printFLN(Com::tSpaceMin);
+}
 
 void Commands::emergencyStop() {
     HAL::resetHardware(); //RF2000 / RF1000!

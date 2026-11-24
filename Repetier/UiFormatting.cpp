@@ -1274,12 +1274,7 @@ void UIDisplay::parse(char* txt, bool ram) {
                 addStringP(PSTR(UI_TEXT_PRINT_TIME));
             } else if (c2 == '6') // Shows printing time
             {
-                bool alloff = true;
-                for (uint8_t i = 0; i < NUM_EXTRUDER; i++)
-                    if (tempController[i]->targetTemperatureC > 0)
-                        alloff = false;
-
-                long seconds = (alloff ? 0 : (HAL::timeInMilliseconds() - Printer::msecondsPrinting) / 1000) + HAL::eprGetInt32(EPR_PRINTING_TIME);
+                long seconds = Printer::printUsage.heatedSeconds();
                 long tmp = seconds / 86400;
                 seconds -= tmp * 86400;
                 addInt(tmp, 5);
@@ -1296,8 +1291,7 @@ void UIDisplay::parse(char* txt, bool ram) {
                 addStringP(PSTR(UI_TEXT_PRINT_FILAMENT));
             } else if (c2 == '8') // Shows printed filament
             {
-                float dist = Printer::filamentPrinted * 0.001 + HAL::eprGetFloat(EPR_PRINTING_DISTANCE);
-                addFloat(dist, 6, 1);
+                addFloat(Printer::printUsage.filamentMetres(), 6, 1);
                 addStringP(PSTR(" m"));
             }
             break;

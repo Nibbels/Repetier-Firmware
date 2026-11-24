@@ -34,6 +34,7 @@
 #include "DigitCompensation.h"
 #include "PressureProtection.h"
 #include "PreheatProfiles.h"
+#include "PrintUsage.h"
 #include "StrainGauge.h"
 #include "StartLine.h"
 #include "ExtrusionPlanner.h"
@@ -57,7 +58,6 @@
 #define PRINTER_FLAG1_ALLSWITCHEDOFF 8
 #define PRINTER_FLAG1_UI_ERROR_MESSAGE 16
 
-#define PRINTER_FLAG2_RESET_FILAMENT_USAGE 4
 #define PRINTER_FLAG2_GOT_TEMPS 32
 
 #define PRINTER_FLAG3_X_HOMED 1  // flag3 alike original repetier
@@ -132,8 +132,7 @@ public:
     static float feedrate;                  // Last requested feedrate.
     static int feedrateMultiply;            // Multiplier for feedrate in percent (factor 1 = 100)
     static float menuExtrusionFactor;       // Flow multiplier factor (1.0 = 100%)
-    static unsigned long msecondsPrinting;  // Milliseconds of printing time (means time with heated extruder)
-    static float filamentPrinted;           // mm of filament printed since counting started
+    static PrintUsage printUsage;
     static ZOffset zOffset;
     static SenseOffsetControl senseOffsetControl;
     static ZMotion zMotion;

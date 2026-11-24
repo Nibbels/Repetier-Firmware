@@ -63,8 +63,7 @@ int Printer::feedrateMultiply = 100;          // Multiplier for feedrate in perc
 float Printer::menuExtrusionFactor = 1.0;     // Flow multiplier factor (1.0 = 100%)
 float Printer::maxXYJerk_;                                         // Maximum allowed jerk in mm/s
 float Printer::maxZJerk_;                                          // Maximum allowed jerk in z direction in mm/s
-unsigned long Printer::msecondsPrinting = 0;                      // Milliseconds of printing time (means time with heated extruder)
-float Printer::filamentPrinted = 0.0f;                            // mm of filament printed since counting started
+PrintUsage Printer::printUsage;
 ZOffset Printer::zOffset;
 SenseOffsetControl Printer::senseOffsetControl{SENSIBLE_PRESSURE_MAX_OFFSET};
 ZMotion Printer::zMotion{ZAXIS_STEPS_PER_MM};

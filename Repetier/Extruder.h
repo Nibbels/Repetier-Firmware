@@ -301,6 +301,7 @@ public:
 
     } // enable
     static void manageTemperatures();
+    static bool hasActiveHotendTarget();
     static void disableAllExtruders();
     static bool selectExtruderById(uint8_t extruderId, bool waitThroughPause = false);
     static void applyCurrentSettings();

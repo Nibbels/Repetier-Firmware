@@ -209,7 +209,6 @@ public:
     static void clearEEPROM();
     static void writeSettings();
     static void update(GCode* com);
-    static void updatePrinterUsage();
     static int getExtruderOffset(uint8_t extruder = 0);
 
 private:
