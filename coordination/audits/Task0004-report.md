@@ -96,22 +96,22 @@ Use the compiler from `compile_commands.json` for the corresponding `avr-size -A
 | `9da743f79af4d44f06a387b58cbddc7f77432186f7b4b0909e291023c44fe5f0` | RF2000v2 |
 | `b4ed4cd89d635728664c8ee09252e7a15259da058ebfa76dd23b80170ee5bb40` | RF2000 X44 |
 
-### Integration refresh after the Communication refactor
+### Integration refresh after Communication and DRV8711
 
-[PR #66](https://github.com/Nibbels/Repetier-Firmware/pull/66) merged while this audit was in progress. The full lexical scan, all four AVR builds and compiler inventories, and all 14 host replays passed again on `5388b4fe3b5719c9352fd45de71e953f0780b7ee`. Only `Communication.cpp` changed in the firmware tree. There are still 109 source files with 1,109,522 bytes. The updated tree has 14,139 matches in 21,821 normalized lines and 6,304 matches in 21,385 five-line windows against the legacy tree. The compiler state and guard counts below are unchanged.
+[PR #66](https://github.com/Nibbels/Repetier-Firmware/pull/66) changed `Communication.cpp` and [PR #65](https://github.com/Nibbels/Repetier-Firmware/pull/65) changed `Drv8711.cpp` during the audit. Repeated the full lexical scan, four AVR builds and compiler inventories, and 15 host replays on `c15f86b879983429d01021ca8ad11d4b26403864`. The latest tree still contains 109 source files, with 1,104,815 bytes. It has 13,981 matches in 21,754 normalized lines and 6,123 matches in 21,318 five-line windows against the legacy tree.
 
-| Target at `5388b4fe` | Flash bytes | Global SRAM bytes |
+| Target at `c15f86b8` | Flash bytes | Global SRAM bytes |
 |---|---:|---:|
-| RF1000 | 179,006 | 6,484 |
-| RF2000 | 184,240 | 6,638 |
-| RF2000v2 | 184,242 | 6,758 |
-| RF2000 X44 | 179,132 | 6,620 |
+| RF1000 | 178,952 | 6,484 |
+| RF2000 | 184,192 | 6,638 |
+| RF2000v2 | 184,194 | 6,758 |
+| RF2000 X44 | 179,078 | 6,620 |
 
-The 100-byte Flash decrease per target comes from PR #66. The Task0004 firmware and replay tree IDs match the refreshed integration target.
+The changes in Flash figures come from PRs #66 and #65. The Task0004 candidate at `64bb78b8` has the same firmware and replay Git trees as the tested integration target. Rebuilding both produced byte-identical HEX and EEP for all four variants. The current inventory has the same state and guard counts as the original snapshot and four fewer observed macro names per variant.
 
 ## Compiler inventory
 
-The audit tool replays the compilation database with GCC directive traces and macro use logging, collects included files from dependency files and reads direct references to mutable static storage from the initial GCC call graph. The generated JSON records all observed reads, writes and address-taking sites by function and translation unit. Indirect access through an object or pointer and symbols in inline assembly still need source review. The guard report lists builds that emitted lines in each branch body. An outer condition can match while its entire body is suppressed by a nested guard.
+The audit tool replays the compilation database with GCC directive traces and macro use logging, collects included files from dependency files and reads direct references to mutable static storage from the initial GCC call graph. The generated JSON records all observed reads, writes and address-taking sites by function and translation unit. Indirect access through an object or pointer and symbols in inline assembly still need source review. The guard report lists builds that emitted lines in each branch body. An outer condition can match while its entire body is suppressed by a nested guard. The counts below use the original tested audit snapshot.
 
 | Evidence across four builds | RF1000 | RF2000 | RF2000v2 | RF2000 X44 |
 |---|---:|---:|---:|---:|
