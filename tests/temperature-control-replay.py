@@ -77,6 +77,7 @@ struct Extruder {
     uint8_t coolerPWM, coolerSpeed;
     static Extruder* current;
     static void manageTemperatures();
+    static void setHeatedBedTemperature(float);
 };
 static Extruder extruder[] = {
     {{0, 13, 0, 280}, 0, 255},
@@ -86,6 +87,7 @@ static Extruder extruder[] = {
 };
 Extruder* Extruder::current = &extruder[0];
 static TemperatureController bed{NUM_EXTRUDER, 13, NUM_EXTRUDER, BED_MEASURED_CUTOFF};
+static TemperatureController& heatedBedController = bed;
 static TemperatureController* tempController[NUM_TEMPERATURE_LOOPS] = {
     &extruder[0].tempControl,
 #if NUM_EXTRUDER > 1
@@ -105,12 +107,14 @@ namespace Printer {
         ++stops;
     }
     static bool debugDryrun() { return (debugLevel & 8) != 0; }
+    static bool debugInfo() { return false; }
     struct { void cancel() {} void schedule(millis_t) {} } idleStatus;
     struct { bool isReheating() { return true; } } pause;
     struct { void service(millis_t) {} } strainGauge;
 }
 namespace Com {
     #include "com.inc"
+    constexpr int tTargetBedColon = 0;
     template<class... T> void printErrorFLN(T...) {}
     template<class... T> void printInfoFLN(T...) {}
     template<class... T> void printF(T...) {}
@@ -140,6 +144,7 @@ static void reportTempsensorAndHeaterErrors();
 #include "conversion.inc"
 #include "hal.inc"
 #include "control.inc"
+#include "bed-setter.inc"
 static unsigned visits;
 static millis_t stride = 10;
 enum class Injection { None, Reach, LateUnsupported, LateLow, Transient, High, TransientHigh, Cutoff, Cycles, OtherFault, Cancel, Reentrant };
@@ -166,8 +171,13 @@ namespace GCodeInput {
             temperatureAdcValues[tuned->sensorPin] = 820; // ~190-200 C
         if (injection == Injection::Cutoff)
             temperatureAdcValues[tuned->sensorPin] = 1195; // valid converted range, above 280 C cutoff
-        if (injection == Injection::Cancel)
-            tuned->setTargetTemperature(0);
+        if (injection == Injection::Cancel) {
+            if (tuned == &bed)
+                Extruder::setHeatedBedTemperature(0);
+            else
+                tuned->setTargetTemperature(0);
+            assert(HAL::outputDuty(tuned->pwmIndex) == 0);
+        }
         if (injection == Injection::Reentrant && visits == 1) {
             const auto oldDuty = HAL::outputDuty(tuned->pwmIndex);
             tuned->autotunePID(100, tuned->pwmIndex, 5, false, 0);
@@ -391,7 +401,7 @@ int main(int argc, char** argv) {
             postTemperature = false;
         } else if (!std::strcmp(name, "autotune-transient")) injection = Injection::Transient;
         else if (!std::strcmp(name, "autotune-transient-high")) injection = Injection::TransientHigh;
-        else if (!std::strcmp(name, "autotune-cancel")) injection = Injection::Cancel;
+        else if (!std::strcmp(name, "autotune-cancel") || !std::strcmp(name, "autotune-bed-cancel")) injection = Injection::Cancel;
         else if (!std::strcmp(name, "autotune-reentrant")) injection = Injection::Reentrant;
         else if (!std::strcmp(name, "autotune-high") || !std::strcmp(name, "autotune-bed-high")) {
             injection = Injection::High;
@@ -440,12 +450,14 @@ def main():
     conversion = (FW / "TemperatureSensors.cpp").read_text()
     hal = (FW / "HAL.cpp").read_text()
     config = (FW / "Configuration.h").read_text()
+    extruder = (FW / "Extruder.cpp").read_text()
     commands = (FW / "Commands.cpp").read_text()
     include = '#include "Repetier.h"'
     fragments = {
         "controller.inc": section(header, "#define TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_FULL", "}; // TemperatureController") + "};",
         "conversion.inc": conversion.split(include, 1)[1],
         "control.inc": control.split(include, 1)[1],
+        "bed-setter.inc": section(extruder, "void Extruder::setHeatedBedTemperature(", "float Extruder::getHeatedBedTemperature("),
         "scheduler.inc": section(commands, "void Commands::checkForPeriodicalActions(", "bool Commands::waitForMotion("),
         "com.inc": "\n".join("constexpr int " + n + " = 0;" for n in sorted(set(re.findall(r"Com::(t[A-Z]\w*)", control)))),
         "hal.inc": (
@@ -468,7 +480,7 @@ def main():
         "autotune-entry-target", "autotune-bed-entry-target", "autotune-entry-controller", "autotune-late",
         "autotune-low", "autotune-transient", "autotune-transient-high", "autotune-high", "autotune-cutoff", "autotune-timeout",
         "autotune-cancel", "autotune-reentrant", "autotune-other-fault", "autotune-success", "autotune-success-store",
-        "autotune-bed-late", "autotune-bed-timeout", "autotune-bed-high", "autotune-bed-success-store",
+        "autotune-bed-late", "autotune-bed-timeout", "autotune-bed-high", "autotune-bed-cancel", "autotune-bed-success-store",
     )
     with TemporaryDirectory(prefix="rfx-temperature-control-") as tmp:
         work = Path(tmp)
