@@ -192,6 +192,8 @@ have problems with other modules using the eeprom */
 class EEPROM {
     static uint8_t computeChecksum();
     static void writeExtruderPrefix(uint pos);
+    static void beginReport(uint pos, PGM_P type);
+    static void finishReport(uint pos, PGM_P text);
     static void writeFloat(uint pos, PGM_P text, uint8_t digits = 3);
     static void writeLong(uint pos, PGM_P text);
     static void writeInt(uint pos, PGM_P text);

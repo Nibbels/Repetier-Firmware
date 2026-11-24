@@ -996,42 +996,39 @@ void EEPROM::writeExtruderPrefix(uint pos) {
 
 } // writeExtruderPrefix
 
-void EEPROM::writeFloat(uint pos, PGM_P text, uint8_t digits) {
-    Com::printF(Com::tEPR3, (int)pos);
+void EEPROM::beginReport(uint pos, PGM_P type) {
+    Com::printF(type, (int)pos);
     Com::print(' ');
-    Com::printFloat(HAL::eprGetFloat(pos), digits);
+}
+
+void EEPROM::finishReport(uint pos, PGM_P text) {
     Com::print(' ');
     writeExtruderPrefix(pos);
     Com::printFLN(text);
-    HAL::delayMilliseconds(4); // reduces somehow transmission errors https://github.com/repetier/Repetier-Firmware/commit/6bdd97e83b656d15cafe51958ba1504e1bfb97de
+    // Preserve the established serial pacing after each complete EPR line.
+    HAL::delayMilliseconds(4);
+}
+
+void EEPROM::writeFloat(uint pos, PGM_P text, uint8_t digits) {
+    beginReport(pos, Com::tEPR3);
+    Com::printFloat(HAL::eprGetFloat(pos), digits);
+    finishReport(pos, text);
 } // writeFloat
 
 void EEPROM::writeLong(uint pos, PGM_P text) {
-    Com::printF(Com::tEPR2, (int)pos);
-    Com::print(' ');
+    beginReport(pos, Com::tEPR2);
     Com::print(HAL::eprGetInt32(pos));
-    Com::print(' ');
-    writeExtruderPrefix(pos);
-    Com::printFLN(text);
-    HAL::delayMilliseconds(4); // reduces somehow transmission errors https://github.com/repetier/Repetier-Firmware/commit/6bdd97e83b656d15cafe51958ba1504e1bfb97de
+    finishReport(pos, text);
 } // writeLong
 
 void EEPROM::writeInt(uint pos, PGM_P text) {
-    Com::printF(Com::tEPR1, (int)pos);
-    Com::print(' ');
+    beginReport(pos, Com::tEPR1);
     Com::print(HAL::eprGetInt16(pos));
-    Com::print(' ');
-    writeExtruderPrefix(pos);
-    Com::printFLN(text);
-    HAL::delayMilliseconds(4); // reduces somehow transmission errors https://github.com/repetier/Repetier-Firmware/commit/6bdd97e83b656d15cafe51958ba1504e1bfb97de
+    finishReport(pos, text);
 } // writeInt
 
 void EEPROM::writeByte(uint pos, PGM_P text) {
-    Com::printF(Com::tEPR0, (int)pos);
-    Com::print(' ');
+    beginReport(pos, Com::tEPR0);
     Com::print((int)HAL::eprGetByte(pos));
-    Com::print(' ');
-    writeExtruderPrefix(pos);
-    Com::printFLN(text);
-    HAL::delayMilliseconds(4); // reduces somehow transmission errors https://github.com/repetier/Repetier-Firmware/commit/6bdd97e83b656d15cafe51958ba1504e1bfb97de
+    finishReport(pos, text);
 } // writeByte
