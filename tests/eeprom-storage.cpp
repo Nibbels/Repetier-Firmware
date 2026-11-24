@@ -75,14 +75,22 @@ struct Controller { uint8_t pidDriveMax=0,pidDriveMin=0,pidMax=0,sensorType=0; f
 struct Extruder {float stepsPerMM=0,maxFeedrate=0,maxEJerk=0,maxAcceleration=0,offsetMM[2]{},advanceL=0; uint8_t coolerSpeed=0; Controller tempControl; static Extruder* current; static void applyCurrentSettings(){} static void initHeatedBed(){} } extruder[2]; Extruder* Extruder::current=extruder;
 struct Point {uint8_t x,y;}; Point point{}; float lift=defaultHeatBedScanLiftMm; void restoreZOffsetScanPoint(Point p){point=p;} Point zOffsetScanPoint(){return point;} float scanStartLiftMm(){return lift;} void setScanStartLiftMm(float v){lift=v;}
 namespace RgbLighting {uint8_t m=0;void restoreMode(uint8_t v){m=v;}uint8_t mode(){return m;}}
-uint8_t drv8711Axis_2_InitMicrosteps(int){return 16;} uint8_t drv8711MicroSteps_2_ModeValue(int){return 4;} void drv8711adjustMicroSteps(int){} void setMotorCurrent(int,int){}
+uint8_t drv8711Axis_2_InitMicrosteps(int){return 16;} uint8_t drv8711MicroSteps_2_ModeValue(int){return 4;}
+namespace Drv8711 {
+    uint8_t modes[5]{}, currents[5]{};
+    uint8_t microstepMode(uint8_t i){return modes[i];}
+    void setMicrostepMode(uint8_t i,uint8_t v){modes[i]=v;}
+    uint8_t configuredCurrent(uint8_t i){return currents[i];}
+    void stageCurrent(uint8_t i,uint8_t v){currents[i]=v;}
+    void applyConfiguredCurrent(uint8_t){}
+}
 namespace Printer {
     PreheatProfiles preheatProfiles; MachineInactivity inactivity(0,0); ManualMotion manualMotion(0,0,0,0); ZOffset zOffset; WobbleCorrection wobbleCorrection; PressureProtection pressureProtection;
     struct Sense {struct Limits{int16_t maxMicrometers;};Limits l{};bool a=false; void setMaxMicrometers(int16_t v){l.maxMicrometers=v;} Limits limits(){return l;} bool autoStart(){return a;} void setAutoStart(bool v){a=v;}} senseOffsetControl;
     struct Gauge {bool v=true;bool zeroingEnabled(){return v;}void setZeroingEnabled(bool x){v=x;}} strainGauge;
     struct Digit {struct Flow{int16_t minDigits,maxDigits;};Flow p{};bool v=true;Flow flowProfile(){return p;}void setFlowProfile(Flow x){p=x;}bool digitZEnabled(){return v;}void setDigitZEnabled(bool x){v=x;}} digitCompensation;
     struct Pause {void restoreDefaultParking(){}} pause; struct Layers{void resetFadeBounds(float){}} layers;
-    uint8_t motorMicroStepsModeValue[5]{},motorCurrent[5]{},ZMode=0,enableCaseLight=0,enable230VOutput=0,enableFET1=0,enableFET2=0,enableFET3=0;
+    uint8_t ZMode=0,enableCaseLight=0,enable230VOutput=0,enableFET1=0,enableFET2=0,enableFET3=0;
     uint16_t stepsPackingMinInterval=0; float xy=0,z=0;
     #define AXIS_STORAGE(getter,setter) float getter##Values[4]{}; float getter(int i){return getter##Values[i];} void setter(int i,float v){getter##Values[i]=v;}
     AXIS_STORAGE(stepsPerMm,setStepsPerMm) AXIS_STORAGE(axisMaxFeedrate,setAxisMaxFeedrate) AXIS_STORAGE(axisHomingFeedrate,setAxisHomingFeedrate) AXIS_STORAGE(printAcceleration,setPrintAcceleration) AXIS_STORAGE(travelAcceleration,setTravelAcceleration) AXIS_STORAGE(axisLengthMm,setAxisLengthMm)

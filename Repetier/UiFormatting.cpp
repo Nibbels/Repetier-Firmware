@@ -454,31 +454,31 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
         case 'M': {
             if (c2 == 'X' && col < MAX_COLS) // %MX : Motorcurrent X
             {
-                addFloat(Printer::motorCurrent[X_AXIS] / 63.0f, 1, 2); //(126 = ~2A) *2.0f/126.0f
+                addFloat(Drv8711::configuredCurrent(X_AXIS) / 63.0f, 1, 2); //(126 = ~2A) *2.0f/126.0f
                 if (col < MAX_COLS)
                     printCols[col++] = 'A';
                 if (col < MAX_COLS)
                     printCols[col++] = ' ';
-                addInt((int)Printer::motorCurrent[X_AXIS], 3);
+                addInt((int)Drv8711::configuredCurrent(X_AXIS), 3);
             } else if (c2 == 'Y' && col < MAX_COLS) // %MY : Motorcurrent Y
             {
-                addFloat(Printer::motorCurrent[Y_AXIS] / 63.0f, 1, 2); //(126 = ~2A) *2.0f/126.0f
+                addFloat(Drv8711::configuredCurrent(Y_AXIS) / 63.0f, 1, 2); //(126 = ~2A) *2.0f/126.0f
                 if (col < MAX_COLS)
                     printCols[col++] = 'A';
                 if (col < MAX_COLS)
                     printCols[col++] = ' ';
-                addInt((int)Printer::motorCurrent[Y_AXIS], 3);
+                addInt((int)Drv8711::configuredCurrent(Y_AXIS), 3);
             } else if (c2 == 'Z') // %MZ : Motorcurrent Z
             {
-                addFloat(Printer::motorCurrent[Z_AXIS] / 63.0f, 1, 2); //(126 = ~2A) *2.0f/126.0f
+                addFloat(Drv8711::configuredCurrent(Z_AXIS) / 63.0f, 1, 2); //(126 = ~2A) *2.0f/126.0f
                 if (col < MAX_COLS)
                     printCols[col++] = 'A';
                 if (col < MAX_COLS)
                     printCols[col++] = ' ';
-                addInt((int)Printer::motorCurrent[Z_AXIS], 3);
+                addInt((int)Drv8711::configuredCurrent(Z_AXIS), 3);
             } else if (c2 == '0') // %M0 : Motorcurrent T0
             {
-                addFloat(Printer::motorCurrent[E_AXIS] / 63.0f, 1, 2); //(126 = ~2A) *2.0f/126.0f
+                addFloat(Drv8711::configuredCurrent(E_AXIS) / 63.0f, 1, 2); //(126 = ~2A) *2.0f/126.0f
                 if (col < MAX_COLS)
                     printCols[col++] = 'A';
                 if (col < MAX_COLS)
@@ -486,10 +486,10 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
                 if (Printer::pause.isWarmPause())
                     addStringP(PSTR(UI_TEXT_PAUSED));
                 else
-                    addInt((int)Printer::motorCurrent[E_AXIS], 3);
+                    addInt((int)Drv8711::configuredCurrent(E_AXIS), 3);
             } else if (c2 == '1') // %M1 : Motorcurrent T1
             {
-                addFloat(Printer::motorCurrent[E_AXIS + 1] / 63.0f, 1, 2); //(126 = ~2A) *2.0f/126.0f
+                addFloat(Drv8711::configuredCurrent(E_AXIS + 1) / 63.0f, 1, 2); //(126 = ~2A) *2.0f/126.0f
                 if (col < MAX_COLS)
                     printCols[col++] = 'A';
                 if (col < MAX_COLS)
@@ -497,7 +497,7 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
                 if (Printer::pause.isWarmPause())
                     addStringP(PSTR(UI_TEXT_PAUSED));
                 else
-                    addInt((int)Printer::motorCurrent[E_AXIS + 1], 3);
+                    addInt((int)Drv8711::configuredCurrent(E_AXIS + 1), 3);
             }
             break;
         }
@@ -985,7 +985,7 @@ void UIDisplay::renderExtruderField(char c1, char c2) {
 
             else if (c2 == 'E') // %XE : Extruder Stepper Microsteps
             {
-                addInt(drv8711ModeValue_2_MicroSteps(Printer::motorMicroStepsModeValue[E_AXIS]), 3);
+                addInt(drv8711ModeValue_2_MicroSteps(Drv8711::microstepMode(E_AXIS)), 3);
             }
             else if (c2 == 'g') // %Xg : Printer::stepsPackingMinInterval
             {
@@ -993,10 +993,10 @@ void UIDisplay::renderExtruderField(char c1, char c2) {
             }
             else if (c2 == 'x') // %Xx : XY Stepper Microsteps
             {
-                addInt(drv8711ModeValue_2_MicroSteps(Printer::motorMicroStepsModeValue[X_AXIS]), 3);
+                addInt(drv8711ModeValue_2_MicroSteps(Drv8711::microstepMode(X_AXIS)), 3);
             } else if (c2 == 'z') // %Xz : Z Stepper Microsteps
             {
-                addInt(drv8711ModeValue_2_MicroSteps(Printer::motorMicroStepsModeValue[Z_AXIS]), 3);
+                addInt(drv8711ModeValue_2_MicroSteps(Drv8711::microstepMode(Z_AXIS)), 3);
             }
             break;
         }

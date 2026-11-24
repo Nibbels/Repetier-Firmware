@@ -109,11 +109,6 @@ unsigned char Printer::wrongType;
 bool Printer::movementUnlocked_ = false;
 
 
-uint8_t Printer::motorCurrent[DRV8711_NUM_CHANNELS] = { 0 };
-
-
-//RF_MICRO_STEPS_ have values 0=FULL 1=2MS, 2=4MS, 3=8MS, 4=16MS, 5=32MS, 6=64MS, 7=128MS, 8=256MS
-uint8_t Printer::motorMicroStepsModeValue[DRV8711_NUM_CHANNELS] = { 0 }; //init later because of recalculation of value
 
 void Printer::updateDerivedParameter() {
     // das extruder offset dürfen wir zur achslänge addieren, weil in dem Axis-Length von z.b. 180 mm schon angenommen wird, dass der extruder mit beiden nozzles jeden punkt erreicht.

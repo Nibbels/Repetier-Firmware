@@ -179,10 +179,6 @@ public:
     static void lockMovement() { movementUnlocked_ = false; }
 
 
-    static uint8_t motorCurrent[DRV8711_NUM_CHANNELS];
-
-
-    static uint8_t motorMicroStepsModeValue[DRV8711_NUM_CHANNELS]; //1=2MS, 2=4MS, 3=8MS, 4=16MS, 5=32MS, 6=64MS, 7=128MS, 8=256MS
 
     static INLINE void setMenuMode(uint8_t mode, bool on) {
         if (on)

@@ -431,13 +431,25 @@ extern void moveXAction(int8_t increment);
 extern void moveYAction(int8_t increment);
 extern void moveZAction(int8_t increment);
 
+// Temporary register writes do not change the configured current shadow.
 extern void setMotorCurrent(unsigned char driver, uint8_t level);
+
+namespace Drv8711 {
+// Zero-based axis indices (X, Y, Z, E0, E1); foreground only.
+// Staging does not program the register. Persistence may occur before apply.
+uint8_t configuredCurrent(uint8_t axis);
+void stageCurrent(uint8_t axis, uint8_t level);
+void applyConfiguredCurrent(uint8_t axis);
+uint8_t microstepMode(uint8_t axis);
+void setMicrostepMode(uint8_t axis, uint8_t mode);
+// firstAxis is X_AXIS or E_AXIS; returns the original paired change decision.
+bool setPairedMicrostepMode(uint8_t firstAxis, uint8_t mode);
+}
 
 // adjust/set Microsteps()
 extern unsigned short drv8711Axis_2_InitMicrosteps(uint8_t axis);
 extern unsigned short drv8711ModeValue_2_MicroSteps(uint8_t modeValue);
 extern uint8_t drv8711MicroSteps_2_ModeValue(unsigned short microsteps);
-extern void drv8711adjustMicroSteps(unsigned char driver);
 
 extern void drv8711Init(void);
 
