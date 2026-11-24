@@ -31,6 +31,7 @@ struct UIDisplay {
     const void* messageLine3 = nullptr;
     const void* messageLine4 = nullptr;
     void parse(char* text, bool ram);
+    void renderField(char c1, char c2, bool ram, int& ivalue, float& fvalue);
     void setStatusP(PGM_P text, bool error = false);
     void setStatus(char* text, bool error = false, bool force = false);
     void addInt(int16_t value, uint8_t digits, char fillChar = ' ');
