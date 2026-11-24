@@ -290,7 +290,7 @@ int main(int argc, char** argv) {
         temperatureAdcValues[0] = 410; // ~100 C in both calibrations
         service();
         assert(c.isDecoupleHold());
-        temperatureAdcValues[0] = 102;
+        temperatureAdcValues[0] = 318; // drift >20 C but within the +/-30 C PID band
         now += EXT0_DECOUPLE_TEST_PERIOD;
         for (int i = 0; i < 10; ++i) {
             service();
