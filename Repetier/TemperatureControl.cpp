@@ -18,7 +18,8 @@
 #include "Repetier.h"
 
 static uint8_t autotuneIndex = 255;
-static bool autotuneSampleFault = false;
+static bool autotuneAbortRequested = false;
+static float autotuneTemperatureLimit;
 
 static bool validTemperatureSample(bool supported, float temperature) {
     return supported && temperature >= MIN_DEFECT_TEMPERATURE && temperature <= MAX_DEFECT_TEMPERATURE;
@@ -52,10 +53,10 @@ void Extruder::manageTemperatures() {
             HAL::setHeaterDuty(act->pwmIndex, 0);
         if (controller == autotuneIndex) {
             // Remember even a transient invalid sample observed by the periodic service.
-            if (!sampleValid || act->sensorType == 0 || act->currentTemperatureC > act->heaterCutoffC
+            if (!sampleValid || act->sensorType == 0 || act->currentTemperatureC > autotuneTemperatureLimit
                 || Printer::isAnyTempsensorDefect() || Printer::debugDryrun()) {
                 HAL::setHeaterDuty(act->pwmIndex, 0);
-                autotuneSampleFault = true;
+                autotuneAbortRequested = true;
             }
             continue; // Autotune owns this heater's duty request.
         }
@@ -233,6 +234,8 @@ void TemperatureController::updateTempControlVars() {
 } // updateTempControlVars
 
 void TemperatureController::setTargetTemperature(float target) {
+    if (target <= 0.0f && autotuneIndex < NUM_TEMPERATURE_LOOPS && tempController[autotuneIndex] == this)
+        autotuneAbortRequested = true;
     if (target <= 0.0f || target < targetTemperatureC)
         HAL::setHeaterDuty(pwmIndex, 0);
     targetTemperatureC = target;
@@ -273,7 +276,8 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
     if (controllerId >= NUM_TEMPERATURE_LOOPS || tempController[controllerId] != this
         || Printer::isAnyTempsensorDefect() || Printer::debugDryrun()
         || isSensorDefect() || isSensorDecoupled()
-        || !(temp >= MAX_ROOM_TEMPERATURE && temp <= heaterCutoffC)) {
+        || !(temp >= MAX_ROOM_TEMPERATURE && temp <= heaterCutoffC)
+        || (controllerId == NUM_EXTRUDER && temp > HEATED_BED_MAX_TEMP)) {
         Com::printErrorFLN(PSTR("PID autotune failed: heater unavailable or target invalid"));
         return;
     }
@@ -340,7 +344,10 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
     }
     }
 
-    autotuneSampleFault = false;
+    autotuneAbortRequested = false;
+    autotuneTemperatureLimit = temp + 40;
+    if (autotuneTemperatureLimit > heaterCutoffC)
+        autotuneTemperatureLimit = heaterCutoffC;
     autotuneIndex = controllerId;
     stopDecouple(); // Also valid when this controller is the heated bed.
     HAL::setHeaterDuty(pwmIndex, pidMax);
@@ -353,17 +360,17 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
         Commands::checkForPeriodicalActions(WaitHeater); // update heaters etc. https://github.com/repetier/Repetier-Firmware/commit/241c550ac004023842d6886c6e0db15a1f6b56d7
         const bool supported = updateCurrentTemperature();
         currentTemp = currentTemperatureC;
-        if (autotuneSampleFault || Printer::isAnyTempsensorDefect() || Printer::debugDryrun()
+        if (autotuneAbortRequested || Printer::isAnyTempsensorDefect() || Printer::debugDryrun()
             || isSensorDefect() || isSensorDecoupled() || sensorType == 0
             || !validTemperatureSample(supported, currentTemp)) {
             finishAutotune(*this);
-            Com::printErrorFLN(PSTR("PID autotune failed: invalid sensor or heater fault"));
+            Com::printErrorFLN(PSTR("PID autotune aborted: invalid sensor, heater fault or cancellation"));
             showError((void*)ui_text_autodetect_pid, (void*)ui_text_temperature_wrong);
             break;
         }
 
         millis_t time = HAL::timeInMilliseconds();
-        if (currentTemp > temp + 40 || currentTemp > heaterCutoffC) {
+        if (currentTemp > autotuneTemperatureLimit) {
             finishAutotune(*this);
             Com::printErrorFLN(Com::tAPIDFailedHigh);
             showError((void*)ui_text_autodetect_pid, (void*)ui_text_temperature_wrong);
