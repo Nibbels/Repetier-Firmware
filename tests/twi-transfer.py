@@ -17,7 +17,7 @@ def main():
             source[source.index("namespace {"):], encoding="utf-8",
         )
         (build / "strain-gauge-firmware.inc").write_text(
-            gauge.removeprefix('#include "Repetier.h"\n'), encoding="utf-8",
+            gauge[gauge.index("namespace {"):], encoding="utf-8",
         )
         for test in ("twi-transfer", "strain-gauge"):
             executable = build / test

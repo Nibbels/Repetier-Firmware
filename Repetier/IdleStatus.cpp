@@ -1,4 +1,5 @@
-#include "Repetier.h"
+#include "HAL.h"
+#include "IdleStatus.h"
 
 void IdleStatus::schedule(uint32_t startAt) {
     InterruptProtectedBlock lock;

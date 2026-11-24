@@ -15,7 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "Repetier.h"
+#include "HAL.h"
+#include "Extruder.h"
 #include "CaseFan.h"
 
 #if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1

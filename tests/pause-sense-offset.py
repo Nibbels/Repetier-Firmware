@@ -61,7 +61,7 @@ def main():
         section(rf, "void handleStartStandby(", "\nvoid outputObject("),
         section(rf, "void outputObject(bool showerrors)", "\nvoid loopFeatures("),
         pause.removeprefix('#include "Repetier.h"\n'),
-        idle.removeprefix('#include "Repetier.h"\n'),
+        idle[idle.index("void IdleStatus::schedule("):],
         stop.removeprefix('#include "Repetier.h"\n#include "GCodeInput.h"\n'),
         "namespace Printer {\n"
         + section(printer_header, "    static INLINE void setEPositionMM(", "\n    static INLINE void stopDirectAxis(")

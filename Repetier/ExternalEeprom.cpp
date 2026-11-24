@@ -15,7 +15,7 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "Repetier.h"
+#include "HAL.h"
 #include "ExternalEeprom.h"
 #include "TwiTransfer.h"
 
