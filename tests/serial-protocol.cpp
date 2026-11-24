@@ -23,6 +23,9 @@ bool echo = false;
 bool stopped = false;
 unsigned flushes = 0;
 unsigned scriptCommands = 0;
+unsigned dispatchedCommands = 0, statusCommands = 0, stopRequests = 0;
+bool legacyRejected = false;
+unsigned heaterRequests = 0, extrusionRequests = 0;
 struct EmergencyReached {};
 GCode lastScriptCommand{};
 }
@@ -40,7 +43,13 @@ char readFlashByte(const char* position) { return *position; }
 }
 
 namespace Printer {
-bool debugErrors() { return false; }
+static uint8_t debugLevel;
+#include "debug-mask.inc"
+bool debugErrors() { return (debugLevel & 4) != 0; }
+bool legacySimulationRejected() { return legacyRejected; }
+void latchOutputInhibit(bool thermalFault) { assert(!thermalFault); legacyRejected = true; }
+void stopPrint() { ++stopRequests; }
+void setFeedrate(float) { ++dispatchedCommands; }
 bool debugEcho() { return echo; }
 struct {
     bool commandsBlocked() const { return stopped; }
@@ -51,11 +60,7 @@ struct { bool isPaused() const { return false; } } pause;
 namespace Commands {
 void commandLoop();
 void emergencyStop() { throw EmergencyReached{}; }
-void executeGCode(GCode* code) {
-    assert(code->internalCommand);
-    ++scriptCommands;
-    lastScriptCommand = *code;
-}
+void executeGCode(GCode* code);
 void checkForPeriodicalActions(FirmwareState) {}
 }
 
@@ -85,6 +90,27 @@ void printFLN(const char* prefix, Number value) { printF(prefix, value); println
 void printErrorFLN(const char* text) { print(tError); printFLN(text); }
 }
 
+// Real receiver, M111 handler and dispatch entry; downstream command effects
+// are represented by counters, not physical hardware.
+namespace GCodeCommands {
+void setDebugLevel(GCode*);
+void dispatchMotion(GCode* code) {
+    ++dispatchedCommands;
+    if (code->internalCommand) { ++scriptCommands; lastScriptCommand = *code; }
+    if (code->hasE()) ++extrusionRequests;
+}
+void dispatchMachine(GCode* code) {
+    if (code->M == 111) { setDebugLevel(code); return; }
+    if (code->M == 105 || code->M == 114 || code->M == 115) { ++statusCommands; return; }
+    ++dispatchedCommands;
+    if (code->M == 104 || code->M == 109 || code->M == 140 || code->M == 190 || code->M == 303)
+        ++heaterRequests;
+    if (code->M == 223 || code->M == 3912 || code->M == 3913 || code->M == 3914)
+        ++extrusionRequests;
+}
+}
+namespace Extruder { void selectExtruderById(uint8_t, bool) { ++dispatchedCommands; } }
+#include "legacy-dispatch.inc"
 #include "gcode-receiver.inc"
 
 namespace {
@@ -330,6 +356,51 @@ void stopDrainsInput() {
     popM(105);
 }
 
+void legacyStream(const std::string& scenario) {
+    // Positive control: normal commands reach their owner, normal masks work.
+    feed("M111 S7\nM104 S100\nM140 S40\nG1 E1\n");
+    while (!incoming.empty()) Commands::commandLoop();
+    assert(!legacyRejected && Printer::debugMask() == 7 && heaterRequests == 2 && extrusionRequests == 1);
+    Printer::setDebugMask(0);
+    replies.clear();
+    const unsigned normalDispatches = dispatchedCommands;
+    if (scenario == "legacy-during-stop") stopped = true;
+    if (scenario == "legacy-binary") {
+        // Binary V1 M111 S15 (M and 32-bit S).
+        feed(binary({0x82, 0x04, 111, 15, 0, 0, 0}));
+    } else {
+        feed("N1 M111 S8*0\n");
+        Commands::commandLoop();
+        assert(!legacyRejected && stopRequests == 0);
+        replies.clear();
+        feed(numbered("N1 M111 S15"));
+    }
+    Commands::commandLoop();
+    assert(legacyRejected && stopRequests == 1 && Printer::debugMask() == 7);
+    assert(replies.find("M111 bit 8 unsupported") != std::string::npos);
+    assert(replies.find("ok ") != std::string::npos);
+    assert(!GCodeInput::peekCurrentCommand());
+    stopped = false; // stop cleanup finished; legacy rejection must survive it
+    // A legacy host clears debug, resets line numbers and blindly keeps streaming.
+    replies.clear();
+    feed("M111 S0\nM110\nM104 S200\nM109 S200\nM140 S60\nM190 S60\nM116\n"
+         "G28\nG90\nM83\nG1 X1 E5\nG1 E2\nM303 S150\nM223 S10\n"
+         "M3912\nM3913\nM3914\nT0\nF1200\nM3029 S1077\nM105\nM114\nM115\n");
+    unsigned loops = 0;
+    while (!incoming.empty() || GCodeInput::peekCurrentCommand()) {
+        assert(++loops < 100);
+        Commands::commandLoop();
+    }
+    assert(legacyRejected && Printer::debugMask() == 0 && stopRequests == 1);
+    assert(dispatchedCommands == normalDispatches && heaterRequests == 2 && extrusionRequests == 1);
+    assert(statusCommands == 3 && replies.find("Job rejected;") != std::string::npos);
+    GCodeInput::executeFlashScript("G1 E1\nM104 S200\n");
+    assert(dispatchedCommands == normalDispatches && heaterRequests == 2 && extrusionRequests == 1);
+    feed("M111 S8\n");
+    Commands::commandLoop();
+    assert(legacyRejected && stopRequests == 1);
+}
+
 void flashScript() {
     GCodeInput::executeFlashScript("; comment\nG91\nG1 X0.5 ; jog\n");
     assert(scriptCommands == 2 && lastScriptCommand.G == 1 && lastScriptCommand.X == 0.5f);
@@ -355,6 +426,7 @@ int main(int argc, char** argv) {
     else if (scenario == "emergency") emergencyAdmission();
     else if (scenario == "stopping") stopDrainsInput();
     else if (scenario == "script") flashScript();
+    else if (scenario == "legacy-ascii" || scenario == "legacy-binary" || scenario == "legacy-during-stop") legacyStream(scenario);
     else return 1;
     std::printf("Serial protocol replay passed (%s)\n", argv[1]);
 }

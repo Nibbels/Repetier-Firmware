@@ -285,7 +285,7 @@ ManualMotion manualMotion(1, 1, 1, 28);
 bool debugErrors() { return false; }
 bool infoLogging = false;
 bool debugInfo() { return infoLogging; }
-bool debugDryrun() { return false; }
+bool heatingInhibited() { return false; }
 float convertToMM(float value) { return gcodeModes.inches() ? value * 25.4 : value; }
 bool areAxisHomed() { return axesHomed; }
 bool isAxisHomed(int) { return true; }
