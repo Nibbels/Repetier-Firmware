@@ -147,7 +147,7 @@ bool PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
         if (axis == E_AXIS) {
             const float targetE = Printer::moveTarget.machineMM(E_AXIS);
             const float targetRemainder = Printer::moveTarget.remainderMM(E_AXIS);
-            const float flow = Printer::menuExtrusionFactor * Printer::digitCompensation.extrusionFactor();
+            const float flow = Printer::flowMultiplier() * Printer::digitCompensation.extrusionFactor();
             steps = Printer::extrusionPlanner.planSteps({targetE, targetRemainder}, flow, Printer::stepsPerMm(E_AXIS));
         } else {
             const int32_t targetSteps = Printer::prepareDestinationSteps(axis);
@@ -208,7 +208,7 @@ void PrintLine::prepareDirectMove(const int32_t steps[4], bool stoppable, bool f
 
     float feedrate = (direct.isXOrYMove() ? STANDARD_POSITION_FEEDRATE_XY : direct.isZMove() ? STANDARD_POSITION_FEEDRATE_Z : STANDARD_POSITION_FEEDRATE_E);
     if (feedrateSource == FEEDRATE_GCODE) {
-        feedrate = Printer::feedrate;
+        feedrate = Printer::requestedFeedrate();
         // Menu positioning means only one axis moves at once. Hoever this is not valid for continue moves etc. but they should not have gcode feedrates at all.
         if (direct.isZMove() && feedrate > STANDARD_POSITION_FEEDRATE_Z) {
             feedrate = STANDARD_POSITION_FEEDRATE_Z;

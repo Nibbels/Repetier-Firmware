@@ -142,7 +142,7 @@ void UIDisplay::mainSwitchCase(int action) {
         Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
         const int8_t direction = action == UI_ACTION_RF_EXTRUDER_OUTPUT ? 1 : -1;
         if (uid.menuLevel == 0 && uid.menuPos[0] == 1)
-            Commands::changeFeedrateMultiply(Printer::feedrateMultiply + direction);
+            Commands::changeFeedrateMultiply(Printer::feedrateMultiplier() + direction);
         else
             Printer::pause.extrudeManually(int32_t(Printer::manualMotion.steps(E_AXIS)) * direction);
         break;
@@ -228,31 +228,19 @@ void UIDisplay::mainSwitchCase(int action) {
         break;
     }
     case UI_ACTION_DEBUG_ECHO: {
-        if (Printer::debugEcho())
-            Printer::debugLevel -= 1;
-        else
-            Printer::debugLevel += 1;
+        Printer::toggleDebugFlag(1);
         break;
     }
     case UI_ACTION_DEBUG_INFO: {
-        if (Printer::debugInfo())
-            Printer::debugLevel -= 2;
-        else
-            Printer::debugLevel += 2;
+        Printer::toggleDebugFlag(2);
         break;
     }
     case UI_ACTION_DEBUG_ERROR: {
-        if (Printer::debugErrors())
-            Printer::debugLevel -= 4;
-        else
-            Printer::debugLevel += 4;
+        Printer::toggleDebugFlag(4);
         break;
     }
     case UI_ACTION_DEBUG_DRYRUN: {
-        if (Printer::debugDryrun())
-            Printer::debugLevel -= 8;
-        else
-            Printer::debugLevel += 8;
+        Printer::toggleDebugFlag(8);
         if (Printer::debugDryrun()) // simulate movements without printing
         {
             Extruder::setTemperatureForAllExtruders(0);
@@ -325,12 +313,9 @@ void UIDisplay::mainSwitchCase(int action) {
     }
 
     case UI_ACTION_ZMODE: {
-        if (Printer::ZMode == 1)
-            Printer::ZMode = 2;
-        else
-            Printer::ZMode = 1;
+        Printer::toggleZDisplayMode();
 
-        HAL::eprSetByte(EPR_RF_Z_MODE, Printer::ZMode);
+        HAL::eprSetByte(EPR_RF_Z_MODE, Printer::zDisplayMode());
         EEPROM::updateChecksum();
         break;
     }

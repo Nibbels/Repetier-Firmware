@@ -277,6 +277,9 @@ volatile char doHeatBedZCompensation = true;
 bool menuPaused = false;
 bool axesHomed = true;
 int feedrateMultiply = 100;
+float requestedFeedrate() { return feedrate; }
+int feedrateMultiplier() { return feedrateMultiply; }
+float flowMultiplier() { return menuExtrusionFactor; }
 ManualMotion manualMotion(1, 1, 1, 28);
 
 bool debugErrors() { return false; }

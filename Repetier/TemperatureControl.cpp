@@ -217,7 +217,7 @@ void Extruder::manageTemperatures() {
 
     if (Printer::isAnyTempsensorDefect()) {
         stopAllHeaters();
-        Printer::debugLevel |= 8; // Go into dry mode
+        Printer::enableDebugDryrun(); // Go into dry mode
     } else {
         if (!errorDetected)
             Printer::markTemperatureReadingsAvailable(); //we are not waiting for first temp measurements anymore.

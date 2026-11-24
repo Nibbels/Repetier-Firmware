@@ -148,7 +148,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         break;
     }
     case UI_ACTION_EPOSITION: {
-        Printer::queueRelativeMMCoordinates(0, 0, 0, (float)increment / Printer::menuExtrusionFactor, UI_SET_EXTRUDER_FEEDRATE, true); //klappt nicht in Pause!!
+        Printer::queueRelativeMMCoordinates(0, 0, 0, (float)increment / Printer::flowMultiplier(), UI_SET_EXTRUDER_FEEDRATE, true); //klappt nicht in Pause!!
         Commands::printCurrentPosition();
         break;
     }
@@ -312,13 +312,13 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
 #endif // NUM_EXTRUDER>1
 
     case UI_ACTION_FEEDRATE_MULTIPLY: {
-        int fr = Printer::feedrateMultiply;
+        int fr = Printer::feedrateMultiplier();
         INCREMENT_MIN_MAX(fr, 1, 25, 500);
         Commands::changeFeedrateMultiply(fr);
         break;
     }
     case UI_ACTION_FLOWRATE_MULTIPLY: {
-        float eF = Printer::menuExtrusionFactor;
+        float eF = Printer::flowMultiplier();
         INCREMENT_MIN_MAX(eF, 0.01f, 0.25f, 2.0f);
         Commands::changeFlowrateMultiply(eF);
         break;

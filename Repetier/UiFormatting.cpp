@@ -521,7 +521,7 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
             }
             if (c2 == 'f') // %of : flow multiplier
             {
-                addInt(100 * Printer::menuExtrusionFactor
+                addInt(100 * Printer::flowMultiplier()
                            * Printer::digitCompensation.extrusionFactor()
                        ,
                        3);
@@ -529,12 +529,12 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
             }
             if (c2 == 'm') // %om : Speed multiplier
             {
-                addInt(Printer::feedrateMultiply * Printer::digitCompensation.feedrateFactor(), 3);
+                addInt(Printer::feedrateMultiplier() * Printer::digitCompensation.feedrateFactor(), 3);
                 break;
             }
-            if (c2 == 'M') // %oM : Printer::feedrate
+            if (c2 == 'M') // %oM : Printer::requestedFeedrate()
             {
-                addInt(Printer::feedrate, 3);
+                addInt(Printer::requestedFeedrate(), 3);
                 break;
             }
             if (c2 == 'v') // %ov : Active Speed
@@ -802,7 +802,7 @@ void UIDisplay::renderPositionField(char c1, char c2, float& fvalue) {
                         bDefect = true;
                     } else {
                         // Wenn nur CurrentSteps[Z_AXIS] ausgegeben wird, ist auch interssant, viel die differenz aller anderer versätze ist:
-                        if (Printer::ZMode == Z_VALUE_MODE_Z_MIN) { //->Z_VALUE_MODE_LAYER
+                        if (Printer::zDisplayMode() == Z_VALUE_MODE_Z_MIN) { //->Z_VALUE_MODE_LAYER
                             if (col < MAX_COLS)
                                 printCols[col++] = 'm';
                             if (col < MAX_COLS)
@@ -842,7 +842,7 @@ void UIDisplay::renderPositionField(char c1, char c2, float& fvalue) {
                 addInt(Printer::zOffset.manualMicrometers(), 4);
             } else if (c2 == 'm') // %zm : Z Scale
             {
-                addStringP(Printer::ZMode == Z_VALUE_MODE_Z_MIN ? ui_text_z_mode_min : ui_text_z_mode_gcode);
+                addStringP(Printer::zDisplayMode() == Z_VALUE_MODE_Z_MIN ? ui_text_z_mode_min : ui_text_z_mode_gcode);
             } else if (c2 == 's') // %zs : Z-Schraube korrektur mm
             {
                 addFloat(ZScrewAdjustment::current().millimetres, 1, 3);
@@ -1103,14 +1103,14 @@ void UIDisplay::renderCalibrationField(char c1, char c2) {
                 if (Printer::manualMotion.feedrateSource() == FEEDRATE_DIRECTCONFIG) {
                     addInt(STANDARD_POSITION_FEEDRATE_XY, 3);
                 } else /* if (Printer::manualMotion.feedrateSource() == FEEDRATE_GCODE) */ {
-                    addInt(Printer::feedrate, 3);
+                    addInt(Printer::requestedFeedrate(), 3);
                 }
                 addStringP(PSTR("mm/s"));
             }
             if (c2 == 'F') // %sF : Feedrate for menu postition z
             {
-                if (Printer::manualMotion.feedrateSource() == FEEDRATE_GCODE && Printer::feedrate <= STANDARD_POSITION_FEEDRATE_Z) {
-                    addInt(Printer::feedrate, 3);
+                if (Printer::manualMotion.feedrateSource() == FEEDRATE_GCODE && Printer::requestedFeedrate() <= STANDARD_POSITION_FEEDRATE_Z) {
+                    addInt(Printer::requestedFeedrate(), 3);
                 } else {
                     addInt(STANDARD_POSITION_FEEDRATE_Z, 3);
                 }

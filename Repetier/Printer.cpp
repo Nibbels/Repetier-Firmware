@@ -222,7 +222,7 @@ inline bool isExtrusionAllowed(float e) {
         de = (e - Printer::moveTarget.machineMM(E_AXIS)) - Printer::moveTarget.remainderMM(E_AXIS);
     }
 
-    if (fabs(de) * Printer::menuExtrusionFactor * Printer::digitCompensation.extrusionFactor() > EXTRUDE_MAXLENGTH) {
+    if (fabs(de) * Printer::flowMultiplier() * Printer::digitCompensation.extrusionFactor() > EXTRUDE_MAXLENGTH) {
         return false;
     }
 

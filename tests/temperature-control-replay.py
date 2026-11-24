@@ -119,6 +119,7 @@ namespace Printer {
         ++stops;
     }
     static bool debugDryrun() { return (debugLevel & 8) != 0; }
+    static void enableDebugDryrun() { debugLevel |= 8; }
     static bool debugInfo() { return false; }
     struct { void cancel() {} void schedule(millis_t) {} } idleStatus;
     struct { bool isReheating() { return true; } } pause;

@@ -30,7 +30,7 @@ void showInvalidSyntax(unsigned int currentMCode) {
 
 void setDebugLevel(GCode* com) {
     if (com->hasS()) {
-        Printer::debugLevel = com->S;
+        Printer::setDebugMask(com->S);
     }
     if (Printer::debugDryrun()) // simulate movements without printing
     {
@@ -307,7 +307,7 @@ void runRfDiagnostic(GCode* pCommand) {
 
 
         case 9: {
-            Com::printFLN(PSTR("debug level: "), Printer::debugLevel);
+            Com::printFLN(PSTR("debug level: "), Printer::debugMask());
             break;
         }
 

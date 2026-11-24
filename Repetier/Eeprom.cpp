@@ -178,7 +178,7 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
 
     StepExecutor::setPackingInterval(STEP_PACKING_MIN_INTERVAL);
 
-    Printer::ZMode = DEFAULT_Z_SCALE_MODE; //wichtig, weils im Mod einen dritten Mode gibt. Für Zurückmigration
+    Printer::restoreZDisplayMode(DEFAULT_Z_SCALE_MODE); //wichtig, weils im Mod einen dritten Mode gibt. Für Zurückmigration
 
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
     //hier nur config laden nicht mosfets schalten!
@@ -254,7 +254,7 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     HAL::eprSetFloat(EPR_Y_MAX_FEEDRATE, Printer::axisMaxFeedrate(Y_AXIS));
     HAL::eprSetFloat(EPR_Z_MAX_FEEDRATE, Printer::axisMaxFeedrate(Z_AXIS));
     HAL::eprSetInt32(EPR_RF_Z_OFFSET, Printer::zOffset.manualMicrometers());
-    HAL::eprSetByte(EPR_RF_Z_MODE, Printer::ZMode);
+    HAL::eprSetByte(EPR_RF_Z_MODE, Printer::zDisplayMode());
     HAL::eprSetByte(EPR_RF_MOVE_MODE_X, Printer::manualMotion.mode(X_AXIS));
     HAL::eprSetByte(EPR_RF_MOVE_MODE_Y, Printer::manualMotion.mode(Y_AXIS));
     HAL::eprSetByte(EPR_RF_MOVE_MODE_Z, Printer::manualMotion.mode(Z_AXIS));
@@ -426,7 +426,7 @@ void EEPROM::readDataFromEEPROM() {
 
     // Reload the saved value in the current scale and keep the live SenseOffset.
     Printer::zOffset.setManualMicrometers(HAL::eprGetInt32(EPR_RF_Z_OFFSET), Printer::stepsPerMm(Z_AXIS));
-    Printer::ZMode = HAL::eprGetByte(EPR_RF_Z_MODE);
+    Printer::restoreZDisplayMode(HAL::eprGetByte(EPR_RF_Z_MODE));
 
     Printer::layers.resetFadeBounds(Printer::stepsPerMm(Z_AXIS));
 

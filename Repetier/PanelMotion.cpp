@@ -88,7 +88,7 @@ void moveXAction(int8_t direction) {
         if (moveKosys == KOSYS_GCODE) {
             float feedrate = STANDARD_POSITION_FEEDRATE_XY;
             if (Printer::manualMotion.feedrateSource() == FEEDRATE_GCODE) {
-                feedrate = Printer::feedrate;
+                feedrate = Printer::requestedFeedrate();
             }
             Printer::queueRelativeStepsCoordinates(steps, 0, 0, 0, feedrate, true);
             Commands::printCurrentPosition();
@@ -117,7 +117,7 @@ void moveXAction(int8_t direction) {
         if (moveKosys == KOSYS_GCODE) {
             float feedrate = STANDARD_POSITION_FEEDRATE_XY;
             if (Printer::manualMotion.feedrateSource() == FEEDRATE_GCODE) {
-                feedrate = Printer::feedrate;
+                feedrate = Printer::requestedFeedrate();
             }
             Printer::queueRelativeMMCoordinates(distanceMM * direction, 0, 0, 0, feedrate, true);
             Commands::printCurrentPosition();
@@ -184,7 +184,7 @@ void moveYAction(int8_t direction) {
         if (moveKosys == KOSYS_GCODE) {
             float feedrate = STANDARD_POSITION_FEEDRATE_XY;
             if (Printer::manualMotion.feedrateSource() == FEEDRATE_GCODE) {
-                feedrate = Printer::feedrate;
+                feedrate = Printer::requestedFeedrate();
             }
             Printer::queueRelativeStepsCoordinates(0, steps, 0, 0, feedrate, true);
             Commands::printCurrentPosition();
@@ -213,7 +213,7 @@ void moveYAction(int8_t direction) {
         if (moveKosys == KOSYS_GCODE) {
             float feedrate = STANDARD_POSITION_FEEDRATE_XY;
             if (Printer::manualMotion.feedrateSource() == FEEDRATE_GCODE) {
-                feedrate = Printer::feedrate;
+                feedrate = Printer::requestedFeedrate();
             }
             Printer::queueRelativeMMCoordinates(0, distanceMM * direction, 0, 0, feedrate, true);
             Commands::printCurrentPosition();
