@@ -9,18 +9,31 @@ from tempfile import TemporaryDirectory
 def main():
     tests = Path(__file__).resolve().parent
     firmware = tests.parent / "Repetier"
-    source = (firmware / "RF.cpp").read_text(encoding="utf-8")
-    start = source.index("namespace {\n\nclass HeatBedScan")
+    source = (firmware / "HeatBedScan.cpp").read_text(encoding="utf-8")
+    probe = (firmware / "ScanProbe.cpp").read_text(encoding="utf-8")
+    matrix = (firmware / "BedMatrix.cpp").read_text(encoding="utf-8")
+    start = source.rindex("namespace {", 0, source.index("class HeatBedScan"))
     end = source.index("\nbool heatBedScanRunning(", start)
     with TemporaryDirectory(prefix="rfx-bed-scan-") as temp:
         build = Path(temp)
         (build / "heat-bed-scan-firmware.inc").write_text(source[start:end], encoding="utf-8")
-        pressure_start = source.index("static PressureMeasurement::Settings pressureMeasurementSettings();")
-        pressure_end = source.index("static bool zOffsetScanRunning();", pressure_start)
-        service_start = source.index("static PressureMeasurement::Settings pressureMeasurementSettings() {")
-        service_end = source.index("short readAveragePressure(", service_start)
         (build / "scan-pressure-firmware.inc").write_text(
-            source[pressure_start:pressure_end] + source[service_start:service_end], encoding="utf-8",
+            '#include "ScanProbe.h"\n'
+            + probe[probe.index("namespace Calibration {"):probe.index("void showAbortScanReason(")]
+            + "} // namespace Calibration\n",
+            encoding="utf-8",
+        )
+        matrix_sections = (
+            ("void clearWorking()", "uint8_t storedMaxIndex("),
+            ("char prepareWorking()", "ZOffsetResult applyZOffset("),
+        )
+        (build / "bed-matrix-scan-firmware.inc").write_text(
+            '#include "BedMatrix.h"\n'
+            + "namespace BedMatrix {\n"
+            + "\n".join(matrix[matrix.index(first):matrix.index(last, matrix.index(first))]
+                        for first, last in matrix_sections)
+            + "\n} // namespace BedMatrix\n",
+            encoding="utf-8",
         )
         executable = build / "scan"
         subprocess.run([

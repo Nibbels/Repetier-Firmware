@@ -9,10 +9,9 @@ from tempfile import TemporaryDirectory
 def main():
     tests = Path(__file__).resolve().parent
     firmware = tests.parent / "Repetier"
-    source = (firmware / "RF.cpp").read_text(encoding="utf-8")
+    source = (firmware / "BedMatrix.cpp").read_text(encoding="utf-8")
+    eeprom = (firmware / "ExternalEeprom.cpp").read_text(encoding="utf-8")
     sections = (
-        ("static bool writeByte24C256(int addressI2C, unsigned int addressEEPROM, unsigned char data) {",
-         "static void serviceSenseOffset("),
         ("static void initCompensationMatrix(void) {", "static void outputCompensationMatrix("),
         ("static char prepareCompensationMatrix(void) {", "static void adjustCompensationMatrix("),
         ("static bool writeMatrixSector(", "static void clearExternalEEPROM("),
@@ -20,7 +19,8 @@ def main():
     )
     with TemporaryDirectory(prefix="rfx-bed-matrix-") as directory:
         build = Path(directory)
-        (build / "bed-matrix-firmware.inc").write_text("\n".join(
+        (build / "bed-matrix-firmware.inc").write_text(
+            eeprom[eeprom.index("namespace ExternalEeprom {"):] + "\n" + "\n".join(
             source[source.index(start):source.index(end, source.index(start))]
             for start, end in sections
         ), encoding="utf-8")

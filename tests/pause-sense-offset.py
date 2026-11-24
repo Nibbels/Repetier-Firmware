@@ -15,6 +15,10 @@ def main():
     tests = Path(__file__).resolve().parent
     firmware = tests.parent / "Repetier"
     rf = (firmware / "RF.cpp").read_text(encoding="utf-8")
+    probe = (firmware / "ScanProbe.cpp").read_text(encoding="utf-8")
+    pressure = (firmware / "PressureFeatures.cpp").read_text(encoding="utf-8")
+    matrix = (firmware / "BedMatrix.cpp").read_text(encoding="utf-8")
+    panel_motion = (firmware / "PanelMotion.cpp").read_text(encoding="utf-8")
     rf_header = (firmware / "RF.h").read_text(encoding="utf-8")
     ui = (firmware / "ui.cpp").read_text(encoding="utf-8")
     ui_header = (firmware / "ui.h").read_text(encoding="utf-8")
@@ -45,12 +49,13 @@ def main():
         section(motion, "    static bool hasStoppableDirectMove()", "\n\n")
         .replace("    static bool hasStoppableDirectMove()", "bool PrintLine::hasStoppableDirectMove()", 1),
         dms[dms.index("int16_t StrainGauge::correctedDigits("):],
-        section(rf, "void updateDigitCompensation(", "\nstatic PressureMeasurement::Settings pressureMeasurementSettings();"),
-        'static ScanAbort servicePressureMeasurement(PressureMeasurement&, millis_t, bool scanning = false);',
-        section(rf, "constexpr int16_t scanOverloadDigits =", "\n\nScanSession scanSession;"),
-        section(rf, "static PressureMeasurement::Settings pressureMeasurementSettings() {", "} // readAveragePressure") + "}",
-        section(rf, "long getZMatrixDepth_CurrentXY(", "\nstatic void showAbortScanReason("),
-        section(rf, "static void serviceSenseOffset(", "\nvoid handleScanWorkTasks("),
+        section(pressure, "void updateDigitCompensation(", "static void serviceSenseOffset("),
+        'const ScanSettings& probeSettings() { return scanSettings; }',
+        section(probe, "constexpr int16_t scanOverloadDigits =", "\n"),
+        section(probe, "static PressureMeasurement::Settings pressureMeasurementSettings() {", "PressureResult ScanPressure::average"),
+        probe[probe.index("short readAveragePressure("):].replace("    using namespace Calibration;\n", ""),
+        section(matrix, "long getZMatrixDepth_CurrentXY(", "static void initCompensationMatrix(void) {"),
+        pressure[pressure.index("static void serviceSenseOffset("):],
         section(rf, "void handleStartStandby(", "\nvoid outputObject("),
         section(rf, "void outputObject(bool showerrors)", "\nvoid loopFeatures("),
         pause.removeprefix('#include "Repetier.h"\n'),
@@ -67,10 +72,8 @@ def main():
         section(printer, "void Printer::stopPrint()", "\n#define START_EXTRUDER_CONFIG"),
         section(printer, "void Printer::homeZAxis()", "\nvoid Printer::homeAxis("),
         section(printer, "void Printer::enableSenseOffsetnow(", "\nvoid Printer::enableCMPnow("),
-        section(rf, "bool isAnyScanRunning()", "\nvoid moveXAction(")
-        .replace("zOffsetScan.active()", "zOffsetScanRunning()")
-        .replace("heatBedScan.active()", "heatBedScanRunning()"),
-        section(rf, "void moveZAction(int8_t direction) {", "} // moveZAction") + "}",
+        section(rf, "bool isAnyScanRunning()", "\nvoid discardScans(").replace("Calibration::", ""),
+        section(panel_motion, "void moveZAction(int8_t direction) {", "} // moveZAction") + "}",
         section(ui, "void UIDisplay::pressPlay()", "\nvoid UIDisplay::mainSwitchCase("),
         section(ui, "void UIDisplay::fastAction()", "} // fastAction") + "}",
         section(ui, "namespace {\nconstexpr double modMenuSenseLimit", "\nvoid UIDisplay::zOffsetPlusAction()"),

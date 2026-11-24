@@ -110,6 +110,15 @@
     <ClInclude Include="RF.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ExternalEeprom.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="BedMatrix.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ScanProbe.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="RF1000.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -155,6 +164,36 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="RF.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ExternalEeprom.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="BedMatrix.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Drv8711.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="HeatBedScan.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="PanelMessages.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="PanelMotion.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="PressureFeatures.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ScanProbe.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ScanSettings.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ZOffsetScan.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="StrainGauge.cpp">

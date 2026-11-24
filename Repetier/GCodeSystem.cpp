@@ -140,9 +140,8 @@ void configureRfDebug(GCode* pCommand) {
         if (nTemp < 0)
             nTemp = 0;
 
-        g_debugLevel = (char)nTemp;
         if (Printer::debugInfo()) {
-            Com::printFLN(PSTR("M3005: new debug level: "), g_debugLevel);
+            Com::printFLN(PSTR("M3005: new debug level: "), (char)nTemp);
         }
     } else {
         showInvalidSyntax(pCommand->M);

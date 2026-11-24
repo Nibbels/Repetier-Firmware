@@ -17,7 +17,7 @@ enum { EEPROM_SECTOR_SIZE = 1536 };
 template<class T>
 T constrain(T value, T minimum, T maximum) { return std::min(std::max(value, minimum), maximum); }
 
-constexpr int heatBedScanDelayMs = 1000, heatBedScanRetries = 5, heatBedScanCalibrationPointMm = 100;
+constexpr int heatBedScanDelayMs = 1000, heatBedScanCalibrationPointMm = 100;
 constexpr int heatBedScanPlaBedC = 60, heatBedScanPlaNozzleC = 210, heatBedScanAbsBedC = 100,
               heatBedScanAbsNozzleC = 240, heatBedScanProbeNozzleC = 100;
 constexpr millis_t preciseBedScanWarmupSeconds = 600, preciseBedScanCalibrationSeconds = 600;
@@ -144,7 +144,7 @@ void initCompensationMatrix() {
     g_ZMatrixChangedInRam = false;
 }
 void outputScanParameters() {}
-void outputCompensationMatrix() {}
+void outputCompensationMatrix(char) {}
 char prepareCompensationMatrix() {
     matrixPrepared = !invalidGrid;
     return invalidGrid ? -1 : 0;
@@ -199,6 +199,12 @@ void addLong(char* text, long value, int) {
 } // namespace
 
 #include "scan-pressure-firmware.inc"
+#include "bed-matrix-scan-firmware.inc"
+
+const ScanSettings& Calibration::probeSettings() { return scanSettings; }
+bool Calibration::moveZ(int steps, bool) { return ::moveZ(steps); }
+void Calibration::showAbortScanReason(const void* text, ScanAbort reason) { ::showAbortScanReason(text, reason); }
+
 #include "heat-bed-scan-firmware.inc"
 
 int main(int argc, char** argv) {
@@ -223,9 +229,9 @@ int main(int argc, char** argv) {
     while (heatBedScan.active()) {
         assert(++ticks <= 5000);
         Printer::strainGauge.service(HAL::now, probeDigits());
-        if (!scanSession.aborting())
-            scanPressure.service(HAL::now);
-        if (cancelOnOverload && scanSession.aborting())
+        if (!Calibration::scanSession.aborting())
+            Calibration::scanPressure.service(HAL::now);
+        if (cancelOnOverload && Calibration::scanSession.aborting())
             heatBedScan.startOrCancel(HeatBedScanMode::Abs);
         heatBedScan.tick();
         if (cancel && ticks == 3)

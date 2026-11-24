@@ -34,7 +34,7 @@ CompensationTarget =
   + application-specific bounds/special cases
 ```
 
-This formula describes the compensation target. Endstop constraints and the executing movement determine the resulting motor position. The implementation handles negative Z, zero-height clearance, and disabled compensation. [Bed correction](../../Repetier/BedCompensation.h) · [Target publication](../../Repetier/RF.cpp#L1907)
+This formula describes the compensation target. Endstop constraints and the executing movement determine the resulting motor position. The implementation handles negative Z, zero-height clearance, and disabled compensation. [Bed correction](../../Repetier/BedCompensation.h) · [Target publication](../../Repetier/BedMatrix.cpp)
 
 **Sign:** positive menu Z offset / positive SenseOffset raises nozzle-to-bed clearance by moving the bed away in printing convention. An edit to a matrix shifts the baseline and may change clearance without changing the menu Z-offset.
 
@@ -51,7 +51,7 @@ In the Mod Menu (page 2), **alternating the Z/bed DOWN and UP buttons transfers 
 
 ## EEPROM reload and steps/mm
 
-`M501` and `M206` reload the saved manual value and use the current live SenseOffset to derive the combined steps. With +50 µm saved and +30 µm live at 1,280 steps/mm, a reload now keeps 102 steps. The previous calculation dropped to 64 steps while retaining +30 µm in RAM. Firmware startup begins with zero live offset. Changes to Z steps/mm, including the microstep menu and factory restore, recompute from the two micrometer values. The step timer still consumes the published compensation target. [Offset owner](../../Repetier/ZOffset.h) · [EEPROM reload](../../Repetier/Eeprom.cpp#L404) · [Compensation target](../../Repetier/RF.cpp#L2045)
+`M501` and `M206` reload the saved manual value and use the current live SenseOffset to derive the combined steps. With +50 µm saved and +30 µm live at 1,280 steps/mm, a reload now keeps 102 steps. The previous calculation dropped to 64 steps while retaining +30 µm in RAM. Firmware startup begins with zero live offset. Changes to Z steps/mm, including the microstep menu and factory restore, recompute from the two micrometer values. The step timer still consumes the published compensation target. [Offset owner](../../Repetier/ZOffset.h) · [EEPROM reload](../../Repetier/Eeprom.cpp#L404) · [Compensation target](../../Repetier/BedMatrix.cpp)
 
 Run the host regression from the repository root.
 
@@ -62,8 +62,8 @@ c++ -std=c++11 -Wall -Wextra -Werror tests/z-offset.cpp -o /tmp/rfx-z-offset-tes
 
 ## Code paths
 
-- [Mod Menu buttons](../../Repetier/ui.cpp#L2335) and [M3006](../../Repetier/RF.cpp#L3895) edit the manual and live values through the owner.
-- [M3902 Z0](../../Repetier/RF.cpp#L5539) transfers the manual offset into the matrix. [Matrix extrema](../../Repetier/RF.cpp#L2807) determine the baseline for the interpolated correction.
+- [Mod Menu buttons](../../Repetier/ui.cpp#L2335) and [M3006](../../Repetier/GCodeMotion.cpp) edit the manual and live values through the owner.
+- [M3902 Z0](../../Repetier/BedMatrix.cpp) transfers the manual offset into the matrix. [Matrix extrema](../../Repetier/BedMatrix.cpp) determine the baseline for the interpolated correction.
 - [Layer detection](../../Repetier/motion.cpp#L173) sets the learned fade boundaries.
 
 Related: [lifecycle and findings](lifecycle-and-findings.md).

@@ -19,9 +19,8 @@ enum { EEPROM_SECTOR_SIZE = 4096, EEPROM_OFFSET_DIMENSION_X = 2, EEPROM_OFFSET_D
 template<class T>
 T constrain(T value, T minimum, T maximum) { return std::min(std::max(value, minimum), maximum); }
 
-constexpr int heatBedScanRetries = 5;
 constexpr uint8_t I2C_ADDRESS_EXTERNAL_EEPROM = 0x50;
-constexpr int heatBedScanXStartMm = 15, heatBedScanYStartMm = 30, heatBedScanDelayMs = 1000;
+constexpr int heatBedScanXStartMm = 15, heatBedScanYStartMm = 30, zOffsetScanRetryDelayMs = 1000;
 constexpr uint8_t defaultZOffsetScanIndex = 5;
 constexpr int zOffsetScanContactPressureDelta = 33, zOffsetScanRetryPressureDelta = 30;
 #define PSTR(text) text
@@ -146,10 +145,12 @@ int loadCompensationMatrix(unsigned int address) {
     }
     return 0;
 }
-uint16_t readWord24C256(int address, unsigned int offset) {
+namespace ExternalEeprom {
+uint16_t readWord(int address, unsigned int offset) {
     assert(address == I2C_ADDRESS_EXTERNAL_EEPROM);
     assert(offset == EEPROM_SECTOR_SIZE + EEPROM_OFFSET_DIMENSION_X || offset == EEPROM_SECTOR_SIZE + EEPROM_OFFSET_DIMENSION_Y);
     return 9;
+}
 }
 long random(long min, long max) {
     assert(min == -3 && max == 3);
@@ -163,7 +164,7 @@ bool moveZ(long steps) {
         if (injectDisconnection)
             Printer::strainGauge.disconnected = true;
     } else if (!returningToZero && injectNoise && steps == scanSettings.fastRetreatSteps) {
-        assert(HAL::now - lastUnstableAt >= heatBedScanDelayMs);
+        assert(HAL::now - lastUnstableAt >= zOffsetScanRetryDelayMs);
         ++positiveRetryRetreats;
     }
     returningToZero = false;
@@ -198,16 +199,24 @@ void calculateZScrewCorrection() {
 } // namespace
 
 #include "scan-pressure-firmware.inc"
+#include "bed-matrix-scan-firmware.inc"
+
+const ScanSettings& Calibration::probeSettings() { return scanSettings; }
+bool Calibration::moveZ(int steps, bool) { return ::moveZ(steps); }
+void Calibration::showAbortScanReason(const void* text, ScanAbort reason) {
+    ::showAbortScanReason(static_cast<const char*>(text), reason);
+}
+
+bool isAnyScanRunning();
+
 #include "z-offset-scan-firmware.inc"
 
-namespace {
-struct {
-    bool active() const { return false; }
-    void tick() { assert(false); }
-    void discard() {}
-} heatBedScan;
-bool isAnyScanRunning() { return zOffsetScan.active(); }
-}
+bool heatBedScanRunning() { return false; }
+bool Calibration::zOffsetScanRunning() { return zOffsetScan.active(); }
+void Calibration::tickHeatBedScan() { assert(false); }
+void Calibration::discardHeatBedScan() {}
+void Calibration::tickZOffsetScan() { zOffsetScan.tick(); }
+void Calibration::discardZOffsetScan() { zOffsetScan.discard(); }
 
 #include "scan-dispatch-firmware.inc"
 

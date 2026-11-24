@@ -9,25 +9,40 @@ from tempfile import TemporaryDirectory
 def main():
     tests = Path(__file__).resolve().parent
     firmware = tests.parent / "Repetier"
-    source = (firmware / "RF.cpp").read_text(encoding="utf-8")
-    start = source.index("namespace {\n\nclass ZOffsetScan")
+    source = (firmware / "ZOffsetScan.cpp").read_text(encoding="utf-8")
+    probe = (firmware / "ScanProbe.cpp").read_text(encoding="utf-8")
+    matrix = (firmware / "BedMatrix.cpp").read_text(encoding="utf-8")
+    start = source.rindex("namespace {", 0, source.index("class ZOffsetScan"))
     end = source.index("\nvoid startZOScan(", start)
     with TemporaryDirectory(prefix="rfx-z-offset-scan-") as temp:
         build = Path(temp)
         (build / "z-offset-scan-firmware.inc").write_text(source[start:end], encoding="utf-8")
-        pressure_start = source.index("static PressureMeasurement::Settings pressureMeasurementSettings();")
-        pressure_end = source.index("static bool zOffsetScanRunning();", pressure_start)
-        service_start = source.index("static PressureMeasurement::Settings pressureMeasurementSettings() {")
-        service_end = source.index("short readAveragePressure(", service_start)
         (build / "scan-pressure-firmware.inc").write_text(
-            source[pressure_start:pressure_end] + source[service_start:service_end], encoding="utf-8",
+            '#include "ScanProbe.h"\n'
+            + probe[probe.index("namespace Calibration {"):probe.index("void showAbortScanReason(")]
+            + "} // namespace Calibration\n",
+            encoding="utf-8",
         )
-        discard_start = source.index("void discardScans()")
-        discard_end = source.index("\nfloat g_ZSchraubenSollDrehungenWarm_U", discard_start)
-        dispatch_start = source.index("void handleScanWorkTasks(")
-        dispatch_end = source.index("\nvoid handleStartStandby(", dispatch_start)
+        matrix_sections = (
+            ("void clearWorking()", "void beginScanGrid()"),
+            ("uint8_t maxIndex(", "char prepareWorking()"),
+            ("void report(char format)", "void applyThermalOffset("),
+            ("ZOffsetResult applyZOffset(", "} // namespace BedMatrix"),
+        )
+        (build / "bed-matrix-scan-firmware.inc").write_text(
+            '#include "BedMatrix.h"\n'
+            + matrix[matrix.index("bool bedMatrixAvailable()"):matrix.index("\n", matrix.index("bool bedMatrixAvailable()"))]
+            + "\n"
+            + "namespace BedMatrix {\n"
+            + "\n".join(matrix[matrix.index(first):matrix.index(last, matrix.index(first))]
+                        for first, last in matrix_sections)
+            + "\n} // namespace BedMatrix\n",
+            encoding="utf-8",
+        )
+        runtime = (firmware / "RF.cpp").read_text(encoding="utf-8")
         (build / "scan-dispatch-firmware.inc").write_text(
-            source[discard_start:discard_end] + source[dispatch_start:dispatch_end], encoding="utf-8",
+            runtime[runtime.index("bool isAnyScanRunning("):runtime.index("void handleStartStandby(")],
+            encoding="utf-8",
         )
         executable = build / "scan"
         subprocess.run([

@@ -54,7 +54,7 @@ The layer detector sees manual priming as regular extrusion. A manual line above
 
 ## Source
 - [M3912 generation, overrides, save/restore](../../Repetier/StartLine.cpp)
-- [DMS → E/feed factors](../../Repetier/RF.cpp#L319-L398)
+- [DMS → E/feed factors](../../Repetier/PressureFeatures.cpp)
 - [E factor at planner time](../../Repetier/motion.cpp#L118-L138)
 - [Feed factor at ISR timer interval](../../Repetier/motion.cpp#L1625-L1671)
 - [Phase flag and first-layer detection](../../Repetier/motion.cpp#L170-L203)

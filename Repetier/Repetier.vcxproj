@@ -147,6 +147,9 @@
     <ClInclude Include="XYMotion.h" />
     <ClInclude Include="Repetier.h" />
     <ClInclude Include="RF.h" />
+    <ClInclude Include="ExternalEeprom.h" />
+    <ClInclude Include="BedMatrix.h" />
+    <ClInclude Include="ScanProbe.h" />
     <ClInclude Include="RF1000.h" />
     <ClInclude Include="RF2000.h" />
     <ClInclude Include="ui.h" />
@@ -165,6 +168,16 @@
     <ClCompile Include="Printer.cpp" />
     <ClCompile Include="PreheatProfiles.cpp" />
     <ClCompile Include="RF.cpp" />
+    <ClCompile Include="ExternalEeprom.cpp" />
+    <ClCompile Include="BedMatrix.cpp" />
+    <ClCompile Include="Drv8711.cpp" />
+    <ClCompile Include="HeatBedScan.cpp" />
+    <ClCompile Include="PanelMessages.cpp" />
+    <ClCompile Include="PanelMotion.cpp" />
+    <ClCompile Include="PressureFeatures.cpp" />
+    <ClCompile Include="ScanProbe.cpp" />
+    <ClCompile Include="ScanSettings.cpp" />
+    <ClCompile Include="ZOffsetScan.cpp" />
     <ClCompile Include="StrainGauge.cpp" />
     <ClCompile Include="TwiTransfer.cpp" />
     <ClCompile Include="StartLine.cpp" />

@@ -36,7 +36,7 @@ The original patch added the live value to the manual offset when handling `M300
 
 Sequential prints without Z homing and physical verification remain open.
 
-[M3006](../../Repetier/RF.cpp#L3895) · [Mod Menu buttons](../../Repetier/ui.cpp#L2335) · [SenseOffset controller](../../Repetier/RF.cpp#L3171).
+[M3006](../../Repetier/GCodeMotion.cpp) · [Mod Menu buttons](../../Repetier/ui.cpp#L2335) · [SenseOffset controller](../../Repetier/PressureFeatures.cpp).
 
 ### Finding F2 (FIXED): previously disabled SenseOffset can now be cleaned up
 
@@ -46,7 +46,7 @@ Before [733833a](https://github.com/Nibbels/Repetier-Firmware/commit/733833a7c06
 
 Tests still required on a physical printer: `M3909 P0` during a first layer, subsequent `M3000`, re-enable with `M3001`/autostart, and cancellation.
 
-[Source](../../Repetier/RF.cpp#L5623-L5710).
+[Source](../../Repetier/PressureFeatures.cpp).
 
 ### Finding F3 (PARTIALLY FIXED): consecutive-print lifecycle
 
@@ -60,7 +60,7 @@ If the printer resets or power is lost before that external write, the persisten
 
 No implicit transaction or rollback makes both stores atomic. **Treat an offset transfer as an unsafe two-step operation unless both parts are verified saved.**
 
-[Source: M3902 Z0](../../Repetier/RF.cpp#L8850-L8953) · [save operation](../../Repetier/RF.cpp#L8953-L8965) · [external write](../../Repetier/RF.cpp#L5184-L5284).
+[M3902 Z0 and matrix save](../../Repetier/BedMatrix.cpp) · [External EEPROM transport](../../Repetier/ExternalEeprom.cpp).
 
 ### Finding F5 (INTENTIONAL FEATURE, NOT A BUG): repeated Z-up/down transfers transient SenseOffset into saved manual Z-offset
 
@@ -76,7 +76,7 @@ The invariant is approximate around clamps, zero snapping and concurrently risin
 
 The point Z-offset scan (`M3900`) updates the current RAM matrix. For a full learning rate, it first reloads the unmodified matrix from external EEPROM; unsaved RAM edits can be discarded on the next scan. After a successful scan, the matrix is marked dirty and must be **explicitly saved**. `g_offsetZCompensationSteps` and `g_ZCompensationMax` are recomputed, affecting the current Z baseline even if menu Z-offset stays constant.
 
-[Source: ZOS load](../../Repetier/RF.cpp#L2255-L2277) · [edit and dirty flag](../../Repetier/RF.cpp#L2483-L2561) · [successful finish](../../Repetier/RF.cpp#L2585-L2606).
+[Z-offset scan](../../Repetier/ZOffsetScan.cpp) · [Matrix edit and pending save](../../Repetier/BedMatrix.cpp).
 
 ### Finding F7 (FIXED FOR Z HOME): homing resets all layer markers
 

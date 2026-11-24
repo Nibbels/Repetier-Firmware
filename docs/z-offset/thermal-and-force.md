@@ -20,7 +20,7 @@ To establish whether the response is fast enough, measure nozzle deflection thro
 
 ## Historical values found in source: advisory only
 
-`RF.cpp::calculateZScrewCorrection()` uses:
+`calculateZScrewCorrection()` in `BedMatrix.cpp` uses:
 - **0.95 µm / °C** for hotend length change;
 - **1.5 µm / °C** for bed expansion;
 - **150 µm** as a maximum additional 'Nachdehnung' / warming allowance;
@@ -30,7 +30,7 @@ It prints **Z-screw correction advice** after ZOS and does **not** apply live co
 
 This distinction is essential for diagnosing a 'random Z-offset': an observed physical gap change can occur while every software offset variable is unchanged.
 
-[Source: helper and values](../../Repetier/RF.cpp#L2638-L2750) · [helper called on ZOS finish](../../Repetier/RF.cpp#L2585-L2605).
+[Screw calculation](../../Repetier/BedMatrix.cpp) · [Z-offset scan finish](../../Repetier/ZOffsetScan.cpp).
 
 ## Illustrative SenseOffset thresholds (not universal defaults)
 

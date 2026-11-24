@@ -21,12 +21,12 @@ The relevant original decisions were documented over years. Read these before re
 | Compile-time DMS features, time/offset constants | [Configuration.h](../../Repetier/Configuration.h#L86-L100) |
 | Common nominal boundaries / special prime height | [RF1000.h](../../Repetier/RF1000.h#L762-L773), [RF2000 family](../../Repetier/RF2000.h) |
 | Planner first-layer detector, auto bounds | [motion.cpp](../../Repetier/motion.cpp#L173-L219) |
-| Matrix Z interpolation, fade-out, ECMP | [RF.cpp](../../Repetier/RF.cpp#L3192-L3302) |
+| Matrix Z interpolation, fade-out, ECMP | [BedMatrix.cpp](../../Repetier/BedMatrix.cpp) · [BedCompensation.h](../../Repetier/BedCompensation.h) |
 | Realized E-stepping / material correction | [motion.cpp](../../Repetier/motion.cpp#L1385-L1500) |
-| DMS feed/material adjustment | [RF.cpp](../../Repetier/RF.cpp#L319-L398) |
-| SenseOffset control | [RF.cpp](../../Repetier/RF.cpp#L5622-L5775) |
-| M3909 / M3912 | [RF.cpp](../../Repetier/RF.cpp#L8975-L9035), [RF.cpp](../../Repetier/RF.cpp#L9085-L9255) |
-| M3001 optional SenseOffset auto-enable | [RF.cpp](../../Repetier/RF.cpp#L6530-L6566) |
+| DMS feed/material adjustment | [PressureFeatures.cpp](../../Repetier/PressureFeatures.cpp) |
+| SenseOffset control | [PressureFeatures.cpp](../../Repetier/PressureFeatures.cpp) |
+| M3909 / M3912 | [GCodeMotion.cpp](../../Repetier/GCodeMotion.cpp) · [StartLine.cpp](../../Repetier/StartLine.cpp) |
+| M3001 optional SenseOffset auto-enable | [BedMatrix.cpp](../../Repetier/BedMatrix.cpp) |
 | Layer marker reset on Z disabling | [Printer.h](../../Repetier/Printer.h#L355-L371) |
 
 **Terminology:** SenseOffset adjusts clearance from excessive force. Digit Flow Compensation adjusts extrusion and feed from DMS. ECMP adjusts extrusion for geometric layer-thickness changes through the Z fade. These are three distinct mechanisms.

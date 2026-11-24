@@ -13,7 +13,7 @@ The current contact deltas are 10 digits by default for the mesh and 33 for Z-of
 
 The active scan uses one `ScanSession` for aborts and retries. A detected DMS fault takes precedence over another cancel request. `ScanProbe` owns the pressure bands and the preceding Z position. A stop during a nested homing or move wait defers cleanup until the scan phase returns. Discarding an unfinished mesh invalidates its working copy, so compensation can reload the saved sector. `ZOffsetScan` owns its selected point and learning settings. EEPROM restores the saved point through the scan interface.
 
-Repeatability depends on nozzle cleanliness, surface compliance, filament, cable load and thermal state. Compare repeated measurements at the same XY across both callers on the intended bed and hotend. [Probe implementation](../../Repetier/RF.cpp) · [Mesh replay](../../tests/heat-bed-scan.py) · [Point scan replay](../../tests/z-offset-scan.py)
+Repeatability depends on nozzle cleanliness, surface compliance, filament, cable load and thermal state. Compare repeated measurements at the same XY across both callers on the intended bed and hotend. [Probe implementation](../../Repetier/ScanProbe.cpp) · [Mesh replay](../../tests/heat-bed-scan.py) · [Point scan replay](../../tests/z-offset-scan.py)
 
 ## Shared DMS acquisition
 
@@ -45,11 +45,11 @@ At the ADS1100 datasheet minimum of 6.5 conversions/s, one 16-bit conversion tak
 
 ## Z-min screw adjustment and scan reach
 
-The Z-min switch establishes physical motor Z zero during homing. Adjust the trigger position to keep clearance at the closest point of the bed under the expected warm conditions and allow the nozzle to touch the deepest point anywhere in the scanned XY area. When all contact points lie past the trigger, the deepest point needs travel equal to the gap at the closest point plus the bed's peak-to-valley variation. Both HBS and ZOS need room to detect DMS contact before the approach limit. HBS measures the grid, and ordinary ZOS updates its reference from one location. [Homing reference](../../Repetier/Printer.cpp#L1641-L1655) · [Scan approach limits](../../Repetier/RF.cpp#L4684-L4758)
+The Z-min switch establishes physical motor Z zero during homing. Adjust the trigger position to keep clearance at the closest point of the bed under the expected warm conditions and allow the nozzle to touch the deepest point anywhere in the scanned XY area. When all contact points lie past the trigger, the deepest point needs travel equal to the gap at the closest point plus the bed's peak-to-valley variation. Both HBS and ZOS need room to detect DMS contact before the approach limit. HBS measures the grid, and ordinary ZOS updates its reference from one location. [Homing reference](../../Repetier/Printer.cpp#L1641-L1655) · [Scan approach limits](../../Repetier/ScanProbe.cpp)
 
-The screw adjustment minimizes unnecessary approach distance. An early trigger puts the bed farther from the nozzle at home. Extra travel on approaches from that reference costs additional moves, settling delays and DMS reads. Both scans use the same coarse and fine approach. The scan uses `Z_ENDSTOP_DRIVE_OVER` to derive the mechanical approach limit. The time spent probing depends on the distance and the sampling delays at each increment. [Scan probe and limits](../../Repetier/RF.cpp)
+The screw adjustment minimizes unnecessary approach distance. An early trigger puts the bed farther from the nozzle at home. Extra travel on approaches from that reference costs additional moves, settling delays and DMS reads. Both scans use the same coarse and fine approach. The scan uses `Z_ENDSTOP_DRIVE_OVER` to derive the mechanical approach limit. The time spent probing depends on the distance and the sampling delays at each increment. [Scan probe and limits](../../Repetier/ScanProbe.cpp)
 
-After ZOS updates the matrix, `calculateZScrewCorrection()` uses its largest signed contact value, `g_offsetZCompensationSteps`, which represents the closest point to the nozzle at Z zero. It estimates further thermal expansion and aims for about 50 µm of clearance there under the projected warm conditions. It converts the suggested shift to screw turns assuming 0.5 mm per turn. Full-bed reach still depends on the most negative contact value and the switch assembly's configured overtravel. Both extrema matter when evaluating the adjustment. [Matrix extrema](../../Repetier/RF.cpp#L5157-L5175) · [Screw-turn advice](../../Repetier/RF.cpp#L2650-L2729) · [Thermal assumptions](thermal-and-force.md#historical-values-found-in-source-advisory-only)
+After ZOS updates the matrix, `calculateZScrewCorrection()` uses its largest signed contact value, `g_offsetZCompensationSteps`, which represents the closest point to the nozzle at Z zero. It estimates further thermal expansion and aims for about 50 µm of clearance there under the projected warm conditions. It converts the suggested shift to screw turns assuming 0.5 mm per turn. Full-bed reach still depends on the most negative contact value and the switch assembly's configured overtravel. Both extrema matter when evaluating the adjustment. [Matrix extrema and screw-turn advice](../../Repetier/BedMatrix.cpp) · [Thermal assumptions](thermal-and-force.md#historical-values-found-in-source-advisory-only)
 
 ## The HBS heating sequence
 
@@ -57,7 +57,7 @@ In heated scan modes, the firmware sets scan bed targets around **60 °C PLA** o
 
 For repeatability, record bed and nozzle temperature, heating duration, material in the nozzle, sensor idle force and the matrix slot. A cold-state scan can be repeatable, as can a properly heat-soaked scan, but don't blend drifting mechanical states unknowingly. Heating conditions depend on machine build and the intended printing process.
 
-[Source: scan heating stages](../../Repetier/RF.cpp#L590-L680) · [hot nozzle stage](../../Repetier/RF.cpp#L1498-L1557) · [temperature checks](../../Repetier/RF.cpp#L3030-L3120) · [hot-nozzle matrix shift](../../Repetier/RF.cpp#L1715-L1735).
+[Scan heating stages and temperature checks](../../Repetier/HeatBedScan.cpp) · [Matrix shift](../../Repetier/BedMatrix.cpp).
 
 ## ZOS (M3900) details
 
@@ -70,7 +70,7 @@ The firmware:
 
 The measurement requires a bounded spread within each sample window. Slow baseline drift remains possible even when each window is stable.
 
-[Z-offset scan implementation](../../Repetier/RF.cpp) · [Offset scan replay](../../tests/z-offset-scan.py)
+[Z-offset scan implementation](../../Repetier/ZOffsetScan.cpp) · [Offset scan replay](../../tests/z-offset-scan.py)
 
 ## Two separate nonvolatile stores: DO NOT CONFUSE THEM
 
@@ -98,7 +98,7 @@ For a consistent restart, save the corrected matrix to the intended **active boo
 - Save after modifying RAM matrix and verify the active slot. Reboot/reload verification can reveal RAM-vs-EEPROM divergence, but never do so while the nozzle is very near the bed.
 - Avoid transferring the manual offset into the matrix while printing or when uncertain about which store will be committed.
 
-[Source: M3902 matrix manipulation](../../Repetier/RF.cpp#L8820-L8966) · [matrix save/load](../../Repetier/RF.cpp#L5184-L5504) · [matrix selection](../../Repetier/RF.cpp#L6640-L6680) · [save UI](../../Repetier/ui.cpp#L4785-L4800).
+[Matrix operations and G-code handlers](../../Repetier/BedMatrix.cpp) · [EEPROM transfers](../../Repetier/ExternalEeprom.cpp).
 
 ## Reliability issues to investigate later
 

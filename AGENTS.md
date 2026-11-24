@@ -28,7 +28,7 @@ This is shared AVR/ATmega2560 Repetier firmware for **RF1000, RF2000 and RF2000v
 
 **Calibration scans.** The bed mesh, hot-nozzle calibration and Z-offset scans use a shared point probe and a foreground pressure sampling service. `ScanSession` owns aborts and retries. `ScanProbe` owns the pressure bands and the preceding Z position. Keep contact, overload and hardware travel rules independent. Use the [scan handover](docs/z-offset/scans-and-persistence.md) for the guarded-motion design and the [mesh replay](tests/heat-bed-scan.py) and [Z-offset replay](tests/z-offset-scan.py) for motion, retry, cancel and sensor faults.
 
-**Scan parameters.** Calibration owns `ScanSettings` in `RF.cpp`. The panel reads the scan stride and changes the starting lift through the scan interface. [Scan settings](Repetier/ScanSettings.h)
+**Scan parameters.** `ScanSettings.cpp` owns the active probe and grid settings. The panel reads the scan stride and changes the starting lift through the scan interface. [Scan settings](Repetier/ScanSettings.h)
 
 **Motion planning.** `MotionPlanner` prepares the step profile and owns the junction calculations. The planner updates queue slots in place and releases them with complete profiles. For a direct move, `Printer::offsetRelativeStepsCoordinates()` reserves the slot under interrupt protection, then the foreground plans and publishes the move. Replay early jog release and queue wrap with `python3 tests/pause-sense-offset.py`. [Planner and executor boundary](docs/motion-timing.md#planner-and-executor-boundary)
 
@@ -48,7 +48,7 @@ This is shared AVR/ATmega2560 Repetier firmware for **RF1000, RF2000 and RF2000v
 
 **Bed compensation.** `BedCompensation` calculates the bed-profile correction and ECMP ratio from executing nominal Z, planned layer bounds and a matrix reader. `recalculateZCompensation()` adds the effective offset and active Digit-Z, then publishes the Z target and ECMP ratio together under interrupt protection. [Calculation and test cases](docs/first-layer-control/z-compensation-and-ecmp.md)
 
-**Bed matrix.** The calibration code in `RF.cpp` owns the working mesh, extents, active sector and pending save. Use the matrix queries from the planner and panel. Mutations go through the slot, reload and save operations. Run `python3 tests/bed-matrix.py` for persistence and grid boundary replays. [Matrix storage](docs/z-offset/scans-and-persistence.md)
+**Bed matrix.** `BedMatrix.cpp` owns the working mesh, extents, active sector and pending save. Use the matrix queries from the planner and panel. Mutations go through the slot, reload and save operations. Run `python3 tests/bed-matrix.py` for persistence and grid boundary replays. [Matrix storage](docs/z-offset/scans-and-persistence.md)
 
 **Digit compensation.** `Printer::digitCompensation` owns the DMS filter, the Digit-Z switch, the Digit Flow profile and its live factors. Keep sampling and regulation in the foreground. Timer1 reads the atomically published `intervalScale()` for queued XY moves. M220 and M221 still control the user speed and flow overrides. Run `python3 tests/pause-sense-offset.py` for the DMS sample and M3912 replays. [DMS controls](docs/development-roadmap.md#job-boundaries-and-dms)
 

@@ -17,12 +17,12 @@ def main():
     z_motion = (firmware / "ZMotion.cpp").read_text(encoding="utf-8")
     executor = (firmware / "StepExecutor.cpp").read_text(encoding="utf-8")
     printer = (firmware / "Printer.cpp").read_text(encoding="utf-8")
-    rf = (firmware / "RF.cpp").read_text(encoding="utf-8")
+    probe = (firmware / "ScanProbe.cpp").read_text(encoding="utf-8")
     fragments = [
         z_motion.removeprefix('#include "Repetier.h"\n'),
         section(executor, "void StepExecutor::stepSlowedZCompensation()", "\n/**\n  Processes the moves"),
         section(printer, "bool Printer::needsCMPwait(", "\nint8_t Printer::anyHomeDir("),
-        section(rf, "static bool moveZ(int nSteps, bool emergencyRetreat) {", "\nvoid restoreDefaultScanParameters("),
+        section(probe, "bool moveZ(int nSteps, bool emergencyRetreat) {", "\n} // namespace Calibration"),
     ]
     with TemporaryDirectory(prefix="rfx-z-motion-") as directory:
         build = Path(directory)

@@ -176,11 +176,11 @@ int main() {
     g_ZMatrixChangedInRam = true;
     writeProtected = true;
     assert(!saveCompensationMatrix(sector));
-    assert(g_ZMatrixChangedInRam && readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, sector) == EEPROM_FORMAT);
+    assert(g_ZMatrixChangedInRam && ExternalEeprom::readWord(I2C_ADDRESS_EXTERNAL_EEPROM, sector) == EEPROM_FORMAT);
     writeProtected = false;
     writeFailure = payload + 7;
     assert(!saveCompensationMatrix(sector));
-    assert(g_ZMatrixChangedInRam && readWord24C256(I2C_ADDRESS_EXTERNAL_EEPROM, sector) == 0);
+    assert(g_ZMatrixChangedInRam && ExternalEeprom::readWord(I2C_ADDRESS_EXTERNAL_EEPROM, sector) == 0);
     writeFailure = -1;
     assert(saveCompensationMatrix(sector * 2) && g_ZMatrixChangedInRam);
     assert(saveActiveBedMatrix() && !g_ZMatrixChangedInRam);

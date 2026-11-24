@@ -130,8 +130,8 @@ The firmware restricted Play to a completed pause in 1.37t2. The 1.43.56 pause r
 ### Pressure protection
 
 - [x] **Give the DMS emergency windows one owner.** The replay exercises `M3075` and `M3076`, the saved limits, the exact-boundary samples, the homing gate, emergency park, the Z stop and the extrusion inhibit. The four AVR builds match the prior 36 step traces. [Pressure protection](../Repetier/PressureProtection.h) · [Host replay](../tests/pause-sense-offset.py)
-- [x] **Decide DMS Z stop from the executing move.** Read the active axes with the same direct-move priority and pause gate as Timer1. A pressure fault inhibits E and requests Z stop for an executing move with Z and no E axis. Host replays cover mixed Z/E, Z with a cached E direction and paused queued Z with direct E on both tool-count builds. Physical verification remains open. [DMS decisions](../Repetier/RF.cpp) · [Motion snapshot](../Repetier/motion.cpp)
-- [x] **Report the temporary stop band set by `M3076 S0 P0`.** The status now names the active [0, 0] band. The replay checks the message, the inhibit for a nonzero average, and retention of the saved EEPROM limits. [G-code handler](../Repetier/RF.cpp) · [Replay](../tests/pause-sense-offset.cpp)
+- [x] **Decide DMS Z stop from the executing move.** Read the active axes with the same direct-move priority and pause gate as Timer1. A pressure fault inhibits E and requests Z stop for an executing move with Z and no E axis. Host replays cover mixed Z/E, Z with a cached E direction and paused queued Z with direct E on both tool-count builds. Physical verification remains open. [DMS decisions](../Repetier/PressureFeatures.cpp) · [Motion snapshot](../Repetier/motion.cpp)
+- [x] **Report the temporary stop band set by `M3076 S0 P0`.** The status now names the active [0, 0] band. The replay checks the message, the inhibit for a nonzero average, and retention of the saved EEPROM limits. [G-code handler](../Repetier/GCodeMotion.cpp) · [Replay](../tests/pause-sense-offset.cpp)
 
 ## Calibration and persistence
 

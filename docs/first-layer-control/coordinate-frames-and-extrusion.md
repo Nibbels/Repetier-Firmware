@@ -124,8 +124,8 @@ Digit-Z is built into all three models and enabled by default in `Printer::digit
 
 - [G-code transform and origin handling](../../Repetier/Printer.cpp#L458-L510), [origin storage](../../Repetier/Printer.cpp#L639-L665)
 - [Nominal step coordinate](../../Repetier/Printer.h#L1071-L1073), [layer recognition / g_min g_max](../../Repetier/motion.cpp#L173-L220)
-- [Bed profile, fade and ECMP](../../Repetier/RF.cpp#L3192-L3302), [matrix extrema](../../Repetier/RF.cpp#L5145-L5167)
+- [Fade and ECMP](../../Repetier/BedCompensation.h) · [Matrix interpolation and extrema](../../Repetier/BedMatrix.cpp)
 - [Actual E-step multiplier](../../Repetier/motion.cpp#L122-L135), [ECMP stepping](../../Repetier/motion.cpp#L1468-L1494)
 - [Logical E reset](../../Repetier/Printer.h), [M3912 entry and exit](../../Repetier/StartLine.cpp)
 - [User speed/flow overrides](../../Repetier/Commands.cpp#L210-L227), [runtime XY timing](../../Repetier/motion.cpp#L1230)
-- [Digit-Z and Digit Flow state](../../Repetier/DigitCompensation.h), [additive Z correction](../../Repetier/RF.cpp#L1907)
+- [Digit-Z and Digit Flow state](../../Repetier/DigitCompensation.h), [additive Z correction](../../Repetier/BedMatrix.cpp)

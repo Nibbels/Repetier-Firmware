@@ -388,14 +388,6 @@ float scanStartLiftMm();
 void setScanStartLiftMm(float liftMm);
 long scanStrideMm(uint8_t axis);
 
-extern char g_debugLevel;
-extern char g_debugLog;
-
-
-// SenseOffset adds clearance when DMS force is high on the first layer.
-
-
-
 extern void initRF(void);
 
 extern void startHeatBedScan(HeatBedScanMode mode);
@@ -417,8 +409,6 @@ extern void calculateZScrewCorrection(void);
 //Menüumschalter für Z-Step-Höhe
 extern void configureMANUAL_STEPS_Z(int8_t increment);
 
-extern short testExtruderTemperature(void);
-extern short testHeatBedTemperature(void);
 extern long getZMatrixDepth(long x, long y);
 extern long getZMatrixDepth_CurrentXY(void);
 
@@ -439,11 +429,11 @@ extern void outputScanParameters(void);
 extern void recalculateZCompensation(void);
 extern void loopFeatures(void);
 void updateDigitCompensation(int16_t digits);
+void handleStrainGaugeFeatures(millis_t now);
 extern void outputObject(bool showerrors = true);
 
 extern void setExtruderCurrent(uint8_t nr, uint8_t current);
 extern void queueTask(char task);
-extern void processButton(int nAction);
 extern void moveXAction(int8_t increment);
 extern void moveYAction(int8_t increment);
 extern void moveZAction(int8_t increment);
@@ -464,8 +454,6 @@ extern void cleanupEPositions(void);
 extern void prepareZCompensation(void);
 extern unsigned char isMovingAllowed(const char* pszCommand, char outputLog = 1);
 extern unsigned char isHomingAllowed(GCode* com, char outputLog = 1);
-extern void addUInt32(char* pszString, uint32_t uNumber);
-extern void addFloat(char* pszString, float fNumber, uint8_t uDigits);
 
 extern void determineHardwareType(void);
 extern void showIdle(void);
@@ -475,5 +463,4 @@ extern void showInformation(const void* line2, const void* line3 = NULL, const v
 extern void showMyPage(const void* line1, const void* line2 = NULL, const void* line3 = NULL, const void* line4 = NULL);
 
 void doEmergencyStop(char reason);
-void addLong(char* string, long value, char digits);
 #endif // RF_H
