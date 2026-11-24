@@ -80,7 +80,7 @@ def main():
         + "default: assert(false); } }\n"
         + section(epr, "void EEPROM::updateChecksum()", "void EEPROM::readDataFromEEPROM()")
         + section(epr, "uint8_t EEPROM::computeChecksum()", "} // computeChecksum") + "}\n"
-        + read("PreheatProfiles.cpp").replace('#include "Repetier.h"', "")
+        + read("PreheatProfiles.cpp")[read("PreheatProfiles.cpp").index("namespace {"):]
     )
     # Use the real menu definitions and their actual entry types/IDs, but
     # construct a two-entry quick-menu window rather than the entire unrelated tree.

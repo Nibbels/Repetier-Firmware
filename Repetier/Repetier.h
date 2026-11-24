@@ -18,122 +18,18 @@
 #ifndef REPETIER_H
 #define REPETIER_H
 
-#include "Constants.h"
-
-//https://gcc.gnu.org/onlinedocs/cpp/Stringizing.html#Stringizing for using number-#defines in string-#defines
-#define xstr(a) str(a)
-#define str(a) #a
-
-#include "Configuration.h"
-
-#if MOTHERBOARD == DEVICE_TYPE_RF1000
-#include "RF1000.h"
-#elif MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
-#include "RF2000.h"
-#else
-#error Unsupported RFx000 model
-#endif
-
-#ifndef EXT0_HOTEND_PROFILE
-#define EXT0_HOTEND_PROFILE DEFAULT_HOTEND_PROFILE
-#endif
-#ifndef EXT1_HOTEND_PROFILE
-#define EXT1_HOTEND_PROFILE DEFAULT_HOTEND_PROFILE
-#endif
-#ifndef EXT0_TEMPSENSOR_TYPE
-#define EXT0_TEMPSENSOR_TYPE DEFAULT_HOTEND_SENSOR_TYPE
-#endif
-#ifndef EXT1_TEMPSENSOR_TYPE
-#define EXT1_TEMPSENSOR_TYPE DEFAULT_HOTEND_SENSOR_TYPE
-#endif
-
-#include "pins.h"
+#include "BoardConfiguration.h"
 #include "HAL.h"
 #include "gcode.h"
 #include "RF.h"
 #include "ui.h"
 #include "Communication.h"
 
-#undef min
-#undef max
-
-class RMath {
-public:
-    static inline float min(float a, float b) {
-        if (a < b)
-            return a;
-        return b;
-    } // min
-
-    static inline float max(float a, float b) {
-        if (a < b)
-            return b;
-        return a;
-    } // max
-
-    static inline long min(long a, long b) {
-        if (a < b)
-            return a;
-        return b;
-    } // min
-
-    static inline long max(long a, long b) {
-        if (a < b)
-            return b;
-        return a;
-    } // max
-
-    static inline int min(int a, int b) {
-        if (a < b)
-            return a;
-        return b;
-    } // min
-
-    static inline int max(int a, int b) {
-        if (a < b)
-            return b;
-        return a;
-    } // max
-
-    static inline unsigned int min(unsigned int a, unsigned int b) {
-        if (a < b)
-            return a;
-        return b;
-    } // min
-
-    static inline unsigned int max(unsigned int a, unsigned int b) {
-        if (a < b)
-            return b;
-        return a;
-    } // max
-
-    static inline long sqr(long a) {
-        return a * a;
-    } // sqr
-
-    static inline float sqr(float a) {
-        return a * a;
-    } // sqr
-};
-
-// Indices follow the temperature ADC channel order in HAL.cpp.
-enum TemperatureAdcIndex : uint8_t {
-    Hotend0AdcIndex,
-#if NUM_EXTRUDER > 1
-    Hotend1AdcIndex,
-#endif
-    BedAdcIndex,
-#ifdef X35_ADC_CHANNEL
-    ChamberAdcIndex,
-#endif
-    TemperatureAdcCount
-};
-
+#include "RMath.h"
 
 #include "Extruder.h"
 
 
-extern void drv8711Init();
 
 #include "Printer.h"
 #include "motion.h"

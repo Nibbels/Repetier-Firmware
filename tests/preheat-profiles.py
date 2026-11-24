@@ -27,7 +27,7 @@ def main():
             r"^#define (?:PREHEAT_\w+|EPR_RF_PREHEAT_\w+|UI_\w+_PREHEAT_\w+|UI_SET_(?:MIN|MAX)_\w+_TEMP)\s+[^\n]+",
             definitions, re.M)), encoding="utf-8")
         (build / "preheat-firmware.inc").write_text(
-            (firmware / "PreheatProfiles.cpp").read_text(encoding="utf-8").removeprefix('#include "Repetier.h"\n'),
+            "namespace {" + (firmware / "PreheatProfiles.cpp").read_text(encoding="utf-8").split("namespace {", 1)[1],
             encoding="utf-8")
         (build / "preheat-panel.inc").write_text(
             "void edit(int action, int8_t increment) { switch (action) {\n"

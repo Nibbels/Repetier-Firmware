@@ -22,6 +22,7 @@
 #define __AVR_ATmega2560__ 1
 #include "pins.h"
 #include "ManualMotion.h"
+#include "RgbLighting.h"
 #include "MachineInactivity.h"
 #include "PreheatProfiles.h"
 #include "ZOffset.h"
@@ -73,7 +74,7 @@ void showInformation(const char*,const char*,const char*){}
 struct Controller { uint8_t pidDriveMax=0,pidDriveMin=0,pidMax=0,sensorType=0; float pidPGain=0,pidIGain=0,pidDGain=0; } heatedBedController;
 struct Extruder {float stepsPerMM=0,maxFeedrate=0,maxEJerk=0,maxAcceleration=0,offsetMM[2]{},advanceL=0; uint8_t coolerSpeed=0; Controller tempControl; static Extruder* current; static void applyCurrentSettings(){} static void initHeatedBed(){} } extruder[2]; Extruder* Extruder::current=extruder;
 struct Point {uint8_t x,y;}; Point point{}; float lift=defaultHeatBedScanLiftMm; void restoreZOffsetScanPoint(Point p){point=p;} Point zOffsetScanPoint(){return point;} float scanStartLiftMm(){return lift;} void setScanStartLiftMm(float v){lift=v;}
-namespace RgbLighting {uint8_t m=0;void restoreMode(uint8_t v){m=v;}uint8_t mode(){return m;}}
+namespace RgbLighting {char m=0;void restoreMode(char v){m=v;}char mode(){return m;}}
 uint8_t drv8711Axis_2_InitMicrosteps(int){return 16;} uint8_t drv8711MicroSteps_2_ModeValue(int){return 4;}
 namespace Drv8711 {
     uint8_t modes[5]{}, currents[5]{};

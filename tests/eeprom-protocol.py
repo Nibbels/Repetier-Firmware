@@ -72,7 +72,7 @@ def main():
     assert re.search(r"^#define EEPROM_PROTOCOL_VERSION 8\b", header, re.M)
     assert re.search(r"^constexpr uint8_t eepromMagic = 44;", source, re.M)
     communication = (FW / "Communication.cpp").read_text()
-    com_header = (FW / "Communication.h").read_text().replace("int value)", "int16_t value)")
+    com_header = (FW / "Communication.h").read_text().replace('#include "HAL.h"\n', '').replace("int value)", "int16_t value)")
     constants = "\n".join(re.findall(
         r'^FSTRINGVALUE\(Com::t\w+, "(?:[^"\\]|\\.)*"\)', communication, re.M))
     # The 16-bit host mapping follows tests/communication-format.py. On

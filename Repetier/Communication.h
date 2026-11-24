@@ -18,7 +18,7 @@
 #ifndef COMMUNICATION_H
 #define COMMUNICATION_H
 
-extern const char* const axisNames[] PROGMEM;
+#include "HAL.h"
 
 class Com {
 public:

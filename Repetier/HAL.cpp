@@ -61,12 +61,10 @@ inline __attribute__((always_inline)) void serviceTemperatureAdc() {
         const uint8_t next = index < TemperatureAdcCount - 1 ? index + 1 : 0;
         temperatureAdcPosition = next;
         const uint8_t channel = pgm_read_byte(&temperatureAdcChannels[next]);
-#if defined(ADCSRB) && defined(MUX5)
         if (channel & 8)
             ADCSRB |= _BV(MUX5);
         else
             ADCSRB &= ~_BV(MUX5);
-#endif
         ADMUX = (ADMUX & ~(0x1F)) | (channel & 7);
     } else {
         temperatureAdcSum = sum;
@@ -427,12 +425,10 @@ void HAL::analogStart() {
     // The Timer0 COMPB handler services the conversion loop.
     uint8_t channel = pgm_read_byte(&temperatureAdcChannels[temperatureAdcPosition]);
 
-#if defined(ADCSRB) && defined(MUX5)
     if (channel & 8) // Reading channel 0-7 or 8-15?
         ADCSRB |= _BV(MUX5);
     else
         ADCSRB &= ~_BV(MUX5);
-#endif // defined(ADCSRB) && defined(MUX5)
 
     ADMUX = (ADMUX & ~(0x1F)) | (channel & 7);
     ADCSRA |= _BV(ADIF) | _BV(ADSC); // Discard dummy result and start the first channel.

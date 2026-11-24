@@ -1,4 +1,6 @@
-#include "Repetier.h"
+#include "Printer.h"
+#include "PreheatProfiles.h"
+#include "Eeprom.h"
 
 namespace {
 constexpr int32_t preheatProfileTag = 0x50524831L;

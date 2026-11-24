@@ -18,6 +18,8 @@
 #ifndef COMMANDS_H
 #define COMMANDS_H
 
+#include "gcode.h"
+
 class Commands {
 public:
     static void commandLoop();

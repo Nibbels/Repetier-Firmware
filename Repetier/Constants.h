@@ -19,7 +19,6 @@
 #define CONSTANTS_H
 
 #define REPETIER_VERSION "1.45.03"
-#define UI_PRINTER_COMPANY "Conrad Community"
 #define UI_VERSION_STRING "V " REPETIER_VERSION
 
 #define BIGC0 "\001\002\003    " UI_SPACER "Renkforce"
@@ -42,7 +41,6 @@ constexpr unsigned int stepperEnableDelayMs = 25;
 #define Y_AXIS 1
 #define Z_AXIS 2
 #define E_AXIS 3
-#define VIRTUAL_AXIS 4
 
 
 #define MENU_MODE_PAUSED 4
@@ -61,25 +59,6 @@ constexpr unsigned int stepperEnableDelayMs = 25;
 #define TASK_MOVE_POSITION_MANUAL 11
 #define TASK_ENABLE_SENSE_OFFSET 100
 #define TASK_UNLOCK_DISPLAY_MSG 101
-
-#define RGB_MODE_OFF 0
-#define RGB_MODE_WHITE 1
-#define RGB_MODE_AUTOMATIC 2
-#define RGB_MODE_MANUAL 3
-
-#define RGB_STATUS_NOT_AUTOMATIC 0
-#define RGB_STATUS_AUTOMATIC 1
-#define RGB_STATUS_PRINTING 11
-#define RGB_STATUS_HEATING 12
-#define RGB_STATUS_COOLING 13
-#define RGB_STATUS_IDLE 14
-#define RGB_STATUS_COLOR_CHANGE 15
-
-#define MOVE_MODE_SINGLE_STEPS 1
-#define MOVE_MODE_1_MM 2
-#define MOVE_MODE_10_MM 3
-#define MOVE_MODE_50_MM 4
-#define MOVE_MODE_SINGLE_MOVE 5
 
 #define Z_VALUE_MODE_Z_MIN 1 // show the distance to Z-min
 #define Z_VALUE_MODE_LAYER 3 // show the nominal layer height

@@ -15,7 +15,11 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "Repetier.h"
+#include "HAL.h"
+#include "PrintUsage.h"
+#include "Extruder.h"
+#include "Commands.h"
+#include "Eeprom.h"
 
 namespace {
 int32_t totalHeatedSeconds(uint32_t extraSeconds) {

@@ -20,6 +20,7 @@
 #define CONFIGURATION_H
 
 #include <stdint.h>
+#include "Constants.h"
 
 // ##########################################################################################
 // ##   IMPORTANT
@@ -448,15 +449,6 @@ we use blocks of 2 kByte size for the structure of our EEPROM
 #ifndef MAX_ROOM_TEMPERATURE
 #define MAX_ROOM_TEMPERATURE                33                                                  // [°C]
 #endif
-
-/** \brief Defines the I2C address for the strain gauge */
-#define I2C_ADDRESS_STRAIN_GAUGE            0x49
-
-/** \brief Defines the I2C address for the external EEPROM which stores the z-compensation matrix */
-#define I2C_ADDRESS_EXTERNAL_EEPROM         0x50
-
-/** \brief Defines the I2C address for the external EEPROM which stores type information */
-#define I2C_ADDRESS_TYPE_EEPROM             0x51
 
 /** 
  * \brief Configuration of the external watchdog

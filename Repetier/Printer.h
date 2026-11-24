@@ -15,10 +15,15 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "Commands.h"
-
 #ifndef PRINTER_H
 #define PRINTER_H
+
+#include "HAL.h"
+#include "RMath.h"
+#include "Commands.h"
+#include "Extruder.h"
+#include "ui.h"
+#include "RF.h"
 
 #include "ManualMotion.h"
 #include "GCodeModes.h"

@@ -4,6 +4,12 @@
 #include <stdint.h>
 #include "Constants.h"
 
+#define MOVE_MODE_SINGLE_STEPS 1
+#define MOVE_MODE_1_MM 2
+#define MOVE_MODE_10_MM 3
+#define MOVE_MODE_50_MM 4
+#define MOVE_MODE_SINGLE_MOVE 5
+
 class ManualMotion {
 public:
     constexpr ManualMotion(uint16_t x, uint16_t y, uint16_t z, uint16_t e)

@@ -118,6 +118,7 @@
   <ItemGroup>
     <ClInclude Include="Commands.h" />
     <ClInclude Include="Communication.h" />
+    <ClInclude Include="BoardConfiguration.h" />
     <ClInclude Include="Configuration.h" />
     <ClInclude Include="Constants.h" />
     <ClInclude Include="Eeprom.h" />
@@ -148,6 +149,7 @@
     <ClInclude Include="WobbleCorrection.h" />
     <ClInclude Include="CartesianPlanner.h" />
     <ClInclude Include="XYMotion.h" />
+    <ClInclude Include="RMath.h" />
     <ClInclude Include="Repetier.h" />
     <ClInclude Include="RF.h" />
     <ClInclude Include="ExternalEeprom.h" />

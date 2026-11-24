@@ -1,4 +1,5 @@
-#include "Repetier.h"
+#include "HAL.h"
+#include "StrainGauge.h"
 
 namespace {
 constexpr uint8_t singleShot16BitGain1 = 0x1c;

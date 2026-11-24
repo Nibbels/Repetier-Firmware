@@ -18,6 +18,8 @@
 #ifndef EXTRUDER_H
 #define EXTRUDER_H
 
+#include "HAL.h"
+
 #define CELSIUS_EXTRA_BITS 3
 
 // Updates the temperature of all extruders and heated bed if it's time.
