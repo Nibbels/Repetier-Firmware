@@ -19,6 +19,12 @@ For each task, identify the concrete benefit and the smallest change that delive
 | 6 | 0015 | Exclusive common headers/configuration |
 | 7 | 0016 | Exclusive integration and final audit |
 
+## Firmware PR checks
+
+Open or update your PR against `ai-firmware-review`. GitHub Actions runs **RFx000 firmware / Host replays and four AVR builds** for changes outside documentation and coordination. Each PR has an independent job. Use the check on your latest PR revision for the standard host suite and AVR evidence. The checkout is GitHub's test merge commit; record the PR head, tested SHA from summary.json and run link in the task record. Download the firmware-evidence artifact for the four ELF/HEX files, maps, resource totals and logs (available for seven days). Keep important deltas in the task record. Compare against the appropriate target baseline and run any task-specific tests or timing checks. If the target advances, follow the synchronization rule below; a documentation-only update may reuse evidence for identical build and test inputs.
+
+For local diagnosis, run the affected replay or use `python3 tools/task0003-baseline.py --avr-only ../new-evidence-dir` from a clean checkout with the pinned tools. A green hosted run covers the same standard build; workers need no local AVR installation to use CI. On failure inspect the first failing step and logs, then fix the task and update the same PR.
+
 ## Worker contract (read before work)
 
 1. Read AGENTS.md, this index, own task and relevant mechanism docs. Verify actual current target HEAD and open PRs/branches. Target is `ai-firmware-review`, NEVER community_development. Check predecessor merge evidence. One worker per Task ID; claim with unique branch `task/TaskNNNN-short-name` from latest target. Check for an existing branch/PR for same task, resume rather than duplicate. Record status and ownership in own task file on branch; other task files and index are read-only.
