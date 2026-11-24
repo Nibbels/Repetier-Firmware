@@ -50,8 +50,6 @@ All known arduino boards use 64. This value is needed for the extruder timing. *
 #define HardwareSerial_h // Don't use standard serial console
 
 #include <inttypes.h>
-#include "Stream.h"
-#include "Print.h"
 
 #include "Arduino.h"
 #include "fastio.h"

@@ -62,7 +62,7 @@
 /// set pin as output wrapper
 #define     SET_OUTPUT(IO)      _SET_OUTPUT(IO)
 
-#if defined (__AVR_ATmega1280__) || defined (__AVR_ATmega2560__)
+#if defined (__AVR_ATmega2560__)
 
 // GPIO register map for Arduino Mega pin numbers.
 #define DIO0_PIN        PINE0
@@ -495,7 +495,7 @@
 #define DIO98_WPORT     PORTJ
 #define DIO98_DDR       DDRJ
 
-#endif // defined (__AVR_ATmega1280__) || defined (__AVR_ATmega2560__)
+#endif // defined (__AVR_ATmega2560__)
 
 #ifndef DIO0_PIN
 #error pins for this chip not defined in arduino.h! If you write an appropriate pin definition and have this firmware work on your chip, please submit a pull request
