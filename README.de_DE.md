@@ -42,6 +42,10 @@ Unter Linux kann man diese Firmwares mit
 ```avrdude -patmega2560 -cwiring -P/dev/ttyUSB0 -b115200 -D -Uflash:w:Repetier.hex:i``` 
 in die Drucker einspielen.
 
+## Vorheizprofile
+
+Unter **Configuration → Preheat profiles** stellst du Bett- und Extrudertemperatur für Profil A und B ein. Der Drucker speichert jede Änderung im internen EEPROM. Unter **Extruder** startest du das Profil anhand der angezeigten Temperaturen. Das Bett steht zuerst. Mit 0 °C schaltest du die jeweilige Heizung aus. Die Werkseinstellungen sind 60/180 °C für A und 100/210 °C für B.
+
 ## Wenn du von einer älteren Version als 1.37r.Mod oder der offiziellen Firmware bis 1.39 updatest, führe bitte einen neuen M303 PID-Autotune bei allen Heizelementen aus!  
 - RF2000/RF1000 Extruder links: Menü -> Configuration -> Temperatures -> Extruder 0 -> PID Pessen-Rule  
 - RF2000 Extruder rechts:       Menü -> Configuration -> Temperatures -> Extruder 1 -> PID Pessen-Rule  

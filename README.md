@@ -41,6 +41,10 @@ Find more information and discussion here: http://www.rf1000.de/viewtopic.php?f=
 Using linux you can flash the .hex-files to your printer with this command:
 ```avrdude -patmega2560 -cwiring -P/dev/ttyUSB0 -b115200 -D -Uflash:w:Repetier.hex:i``` 
 
+## Preheat profiles
+
+Set the bed and hotend temperatures for profiles A and B under **Configuration → Preheat profiles**. Each edit is saved in the controller EEPROM. Choose A or B in **Extruder**, where the label shows the bed temperature first. A target of 0 turns off that heater. Factory values are 60/180 °C for A and 100/210 °C for B.
+
 ## If you upgrade to this Version from 1.37r or earlier or from the official Firmware until 1.39 please execute a fresh M303 PID-Autotune on all heaters!  
 - RF2000/RF1000 Extruder left: Menu -> Configuration -> Temperatures -> Extruder 0 -> PID Pessen-Rule  
 - RF2000 Extruder right:       Menu -> Configuration -> Temperatures -> Extruder 1 -> PID Pessen-Rule  

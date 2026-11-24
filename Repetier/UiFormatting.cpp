@@ -169,9 +169,19 @@ void UIDisplay::parse(char* txt, bool ram) {
             continue;
         }
 
-        // dynamic parameter, parse meaning and replace
-        char c1 = (ram ? *(txt++) : pgm_read_byte(txt++));
-        char c2 = (ram ? *(txt++) : pgm_read_byte(txt++));
+        // A status can be clipped at the display width in the middle of a field.
+        const char c1 = ram ? *txt++ : pgm_read_byte(txt++);
+        if (!c1) {
+            printCols[col++] = '%';
+            break;
+        }
+        const char c2 = ram ? *txt++ : pgm_read_byte(txt++);
+        if (!c2) {
+            printCols[col++] = '%';
+            if (col < MAX_COLS)
+                printCols[col++] = c1;
+            break;
+        }
         switch (c1) {
         case '%': {
             if (c2 == '%' && col < MAX_COLS)
@@ -480,28 +490,28 @@ void UIDisplay::parse(char* txt, bool ram) {
                     printCols[col++] = ' ';
                 else
                     printCols[col++] = CHAR_SELECTED;
-            } else if (c2 == '1') // %m1 : message line 1
+            } else if (!ram && c2 == '1') // %m1 : message line 1
             {
                 if (messageLine1 != 0) {
                     col = 0;                                   //Nibbels: kill first space because this is menutab
                     parse((char PROGMEM*)messageLine1, false); //addStringP((char PROGMEM *)messageLine1);
                 }
                 break;
-            } else if (c2 == '2') // %m2 : message line 2
+            } else if (!ram && c2 == '2') // %m2 : message line 2
             {
                 if (messageLine2 != 0) {
                     col = 0;                                   //Nibbels: kill first space because this is menutab
                     parse((char PROGMEM*)messageLine2, false); //addStringP((char PROGMEM *)messageLine2);
                 }
                 break;
-            } else if (c2 == '3') // %m3 : message line 3
+            } else if (!ram && c2 == '3') // %m3 : message line 3
             {
                 if (messageLine3 != 0) {
                     col = 0;                                   //Nibbels: kill first space because this is menutab
                     parse((char PROGMEM*)messageLine3, false); //addStringP((char PROGMEM *)messageLine3);
                 }
                 break;
-            } else if (c2 == '4') // %m4 : message line 4
+            } else if (!ram && c2 == '4') // %m4 : message line 4
             {
                 if (messageLine4 != 0) {
                     col = 0;                                   //Nibbels: kill first space because this is menutab
@@ -564,9 +574,15 @@ void UIDisplay::parse(char* txt, bool ram) {
         }
 
         case 'o': {
-            if (c2 == 's') // %os : Status message
-            {
-                parse(statusMsg, true);
+            if (c2 == 's') {
+                if (!ram) {
+                    if (statusIsTemplate_) {
+                        parse(statusMsg, true);
+                    } else {
+                        for (const char* text = statusMsg; col < MAX_COLS && *text; ++text)
+                            printCols[col++] = *text;
+                    }
+                }
                 break;
             }
             if (c2 == 'c') // %oc : Connection baudrate
@@ -1308,6 +1324,7 @@ void UIDisplay::setStatusP(PGM_P txt, bool error) {
         statusMsg[i++] = c;
     }
     statusMsg[i] = 0;
+    statusIsTemplate_ = true;
     if (error)
         Printer::setUIErrorMessage(true);
 
@@ -1325,6 +1342,7 @@ void UIDisplay::setStatus(char* txt, bool error, bool force) {
     while (*txt && i < UI_COLS)
         statusMsg[i++] = *txt++;
     statusMsg[i] = 0;
+    statusIsTemplate_ = false;
 
     if (error)
         Printer::setUIErrorMessage(true);

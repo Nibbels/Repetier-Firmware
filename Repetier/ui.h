@@ -333,6 +333,7 @@ private:
     void loadNormalCharacters();
 
     bool normalCharacters_ = false;
+    bool statusIsTemplate_ = false;
     char displayCache_[UI_ROWS][MAX_COLS + 1];
     char statusMsg[MAX_COLS + 1];
     const void* messageLine1;

@@ -536,7 +536,8 @@ void UIDisplay::printRowP(uint8_t r, PGM_P txt) {
 
 } // printRowP
 
-const UIMenu* const ui_pages[UI_NUM_PAGES] PROGMEM = UI_PAGES;
+const UIMenu* const ui_pages[] PROGMEM = UI_PAGES;
+constexpr uint8_t panelPageCount = sizeof(ui_pages) / sizeof(ui_pages[0]);
 
 
 // Refresh current menu page
@@ -838,10 +839,10 @@ void UIDisplay::nextPreviousAction(int8_t next) {
         lastSwitch = HAL::timeInMilliseconds();
         if (next > 0) {
             menuPos[0]++;
-            if (menuPos[0] >= UI_NUM_PAGES)
+            if (menuPos[0] >= panelPageCount)
                 menuPos[0] = 0;
         } else {
-            menuPos[0] = (menuPos[0] == 0 ? UI_NUM_PAGES - 1 : menuPos[0] - 1);
+            menuPos[0] = (menuPos[0] == 0 ? panelPageCount - 1 : menuPos[0] - 1);
         }
         return;
     }
