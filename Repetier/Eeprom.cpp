@@ -104,6 +104,7 @@ void EEPROM::restoreEEPROMExtruderSettingsFromConfiguration(uint8_t extruderId) 
 }
 
 void EEPROM::restoreEEPROMSettingsFromConfiguration() {
+    Printer::preheatProfiles.restoreDefaults();
     baudrate = BAUDRATE;
     Printer::inactivity.setShutdownTimeout(MAX_INACTIVE_TIME * 1000L);
     Printer::inactivity.setStepperTimeout(STEPPER_INACTIVE_TIME * 1000L);
@@ -352,6 +353,7 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     HAL::eprSetByte(EPR_RF_DIGIT_CMP_STATE, Printer::digitCompensation.digitZEnabled() ? 1 : 2);
 
     HAL::eprSetFloat(EPR_ZSCAN_START_MM, scanStartLiftMm());
+    writePreheatProfiles();
 
     // Save version and build checksum
     HAL::eprSetByte(EPR_VERSION, EEPROM_PROTOCOL_VERSION);
@@ -398,7 +400,7 @@ void EEPROM::storeManualZOffset() {
 }
 
 void EEPROM::readDataFromEEPROM() {
-    bool change = false;
+    bool change = readPreheatProfiles();
 
     uint8_t version = HAL::eprGetByte(EPR_VERSION); // This is the saved version. Don't copy data not set in older versions!
     baudrate = HAL::eprGetInt32(EPR_BAUDRATE);
@@ -967,6 +969,10 @@ void EEPROM::writeSettings() {
     writeLong(EPR_BAUDRATE, Com::tEPRBaudrate);
     writeLong(EPR_MAX_INACTIVE_TIME, Com::tEPRMaxInactiveTime);
     writeLong(EPR_STEPPER_INACTIVE_TIME, Com::tEPRStopAfterInactivty);
+    writeInt(EPR_RF_PREHEAT_A_BED, PSTR("Preheat A bed [C]"));
+    writeInt(EPR_RF_PREHEAT_A_HOTEND, PSTR("Preheat A hotend [C]"));
+    writeInt(EPR_RF_PREHEAT_B_BED, PSTR("Preheat B bed [C]"));
+    writeInt(EPR_RF_PREHEAT_B_HOTEND, PSTR("Preheat B hotend [C]"));
     // RF specific
 
     writeFloat(EPR_PRINTING_DISTANCE, Com::tEPRFilamentPrinted);

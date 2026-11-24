@@ -127,6 +127,7 @@
     <ClInclude Include="HAL.h" />
     <ClInclude Include="motion.h" />
     <ClInclude Include="pins.h" />
+    <ClInclude Include="PreheatProfiles.h" />
     <ClInclude Include="Printer.h" />
     <ClInclude Include="BedCompensation.h" />
     <ClInclude Include="DigitCompensation.h" />
@@ -162,6 +163,7 @@
     <ClCompile Include="HAL.cpp" />
     <ClCompile Include="motion.cpp" />
     <ClCompile Include="Printer.cpp" />
+    <ClCompile Include="PreheatProfiles.cpp" />
     <ClCompile Include="RF.cpp" />
     <ClCompile Include="StrainGauge.cpp" />
     <ClCompile Include="TwiTransfer.cpp" />

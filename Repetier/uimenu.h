@@ -374,8 +374,13 @@ UI_MENU(ui_menu_z,UI_MENU_Z,10)
 /** \brief Extruder menu */
 UI_MENU_CHANGEACTION(ui_menu_quick_flowmultiply,UI_TEXT_FLOW_MULTIPLY,UI_ACTION_FLOWRATE_MULTIPLY)
 
-UI_MENU_ACTIONCOMMAND(ui_menu_quick_preheat_pla,UI_TEXT_PREHEAT_PLA,UI_ACTION_PREHEAT_PLA)
-UI_MENU_ACTIONCOMMAND(ui_menu_quick_preheat_abs,UI_TEXT_PREHEAT_ABS,UI_ACTION_PREHEAT_ABS)
+#if UI_COLS <= 16
+UI_MENU_ACTIONCOMMAND(ui_menu_quick_preheat_a, "A B%Vb E%Ve", UI_ACTION_PREHEAT_A)
+UI_MENU_ACTIONCOMMAND(ui_menu_quick_preheat_b, "B B%VB E%VE", UI_ACTION_PREHEAT_B)
+#else
+UI_MENU_ACTIONCOMMAND(ui_menu_quick_preheat_a, "A Bed %Vb Ext %Ve", UI_ACTION_PREHEAT_A)
+UI_MENU_ACTIONCOMMAND(ui_menu_quick_preheat_b, "B Bed %VB Ext %VE", UI_ACTION_PREHEAT_B)
+#endif
 UI_MENU_ACTIONCOMMAND(ui_menu_quick_cooldown,UI_TEXT_COOLDOWN,UI_ACTION_COOLDOWN)
 
 UI_MENU_CHANGEACTION(ui_menu_ext_temp0,UI_TEXT_EXTR0_TEMP,UI_ACTION_EXTRUDER0_TEMP)
@@ -422,7 +427,7 @@ UI_MENU_SUBMENU_FILTER(ui_submenu_extruder_unmount, UI_TEXT_UNMOUNT_FILAMENT, ui
 #define UI_MENU_BEDCOND &ui_menu_bed_temp,
 #define UI_MENU_BEDCNT 1
 
-#define UI_MENU_EXTRUDER {UI_MENU_BEDCOND UI_MENU_EXTCOND &ui_menu_go_epos, &ui_menu_quick_preheat_pla, &ui_menu_quick_preheat_abs, &ui_menu_quick_cooldown, UI_MENU_EXTRUDER_MOUNT_COND &ui_menu_quick_flowmultiply, &ui_menu_ext_origin}
+#define UI_MENU_EXTRUDER {UI_MENU_BEDCOND UI_MENU_EXTCOND &ui_menu_go_epos, &ui_menu_quick_preheat_a, &ui_menu_quick_preheat_b, &ui_menu_quick_cooldown, UI_MENU_EXTRUDER_MOUNT_COND &ui_menu_quick_flowmultiply, &ui_menu_ext_origin}
 UI_MENU(ui_menu_extruder,UI_MENU_EXTRUDER,UI_MENU_BEDCNT+UI_MENU_EXTCNT+4+1+UI_MENU_EXTRUDER_MOUNT_COUNT+1)
 
 /** \brief Quick menu */
@@ -731,6 +736,14 @@ UI_MENU(ui_menu_motor,UI_MENU_MOTOR_COND,UI_MENU_MOTOR_COUNT)
 UI_MENU(ui_menu_general,UI_MENU_GENERAL,3+RGB_LIGHT_COUNT+EXTRUDER_OFFSET_TYPE_COUNT_XY)
 
 /** \brief Configuration menu */
+UI_MENU_CHANGEACTION(ui_menu_preheat_a_bed, "A Bed %Vb C", UI_ACTION_PREHEAT_A_BED)
+UI_MENU_CHANGEACTION(ui_menu_preheat_a_hotend, "A Ext %Ve C", UI_ACTION_PREHEAT_A_HOTEND)
+UI_MENU_CHANGEACTION(ui_menu_preheat_b_bed, "B Bed %VB C", UI_ACTION_PREHEAT_B_BED)
+UI_MENU_CHANGEACTION(ui_menu_preheat_b_hotend, "B Ext %VE C", UI_ACTION_PREHEAT_B_HOTEND)
+#define UI_MENU_PREHEAT {&ui_menu_preheat_a_bed, &ui_menu_preheat_a_hotend, &ui_menu_preheat_b_bed, &ui_menu_preheat_b_hotend}
+UI_MENU(ui_menu_preheat, UI_MENU_PREHEAT, 4)
+UI_MENU_SUBMENU(ui_menu_conf_preheat, UI_TEXT_PREHEAT_PROFILES, ui_menu_preheat)
+
 UI_MENU_SUBMENU(ui_menu_conf_general,  UI_TEXT_GENERAL,        ui_menu_general)
 UI_MENU_SUBMENU(ui_menu_conf_accel,    UI_TEXT_ACCELERATION,   ui_menu_accel)
 UI_MENU_SUBMENU(ui_menu_conf_feed,     UI_TEXT_FEEDRATE,       ui_menu_feedrate)
@@ -743,9 +756,9 @@ UI_MENU_ACTION4(ui_menu_restore_defaults_ack,UI_ACTION_RESTORE_DEFAULTS, UI_TEXT
 UI_MENU_ACTIONSELECTOR_FILTER(ui_menu_restore_defaults,UI_TEXT_RESTORE_DEFAULTS,ui_menu_restore_defaults_ack, 0, MENU_MODE_PRINTING | MENU_MODE_PAUSED)
 
 #define UI_MENU_CONFIGURATION {&ui_menu_conf_general, &ui_menu_z_calibration, &ui_menu_conf_dms, \
-    &ui_menu_conf_wobble, UI_MENU_CONFIGURATION_FAN_COND &ui_menu_conf_pid, &ui_menu_conf_motor, \
+    &ui_menu_conf_wobble, UI_MENU_CONFIGURATION_FAN_COND &ui_menu_conf_pid, &ui_menu_conf_preheat, &ui_menu_conf_motor, \
     &ui_menu_conf_accel, &ui_menu_conf_feed, &ui_menu_restore_defaults}
-UI_MENU(ui_menu_configuration,UI_MENU_CONFIGURATION,9+UI_MENU_CONFIGURATION_FAN_COUNT)
+UI_MENU(ui_menu_configuration,UI_MENU_CONFIGURATION,10+UI_MENU_CONFIGURATION_FAN_COUNT)
 
 /** \brief Main menu */
 UI_MENU_SUBMENU(ui_menu_main1, UI_TEXT_QUICK_SETTINGS,  ui_menu_quick)

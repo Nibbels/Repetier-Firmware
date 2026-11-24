@@ -20,6 +20,7 @@
 #include "TwiTransfer.h"
 
 ExtrusionOutput Printer::extrusionOutput;
+PreheatProfiles Printer::preheatProfiles;
 GCodeModes Printer::gcodeModes;
 ManualMotion Printer::manualMotion(
     lroundf(XAXIS_STEPS_PER_MM * DEFAULT_MANUAL_MM_X),

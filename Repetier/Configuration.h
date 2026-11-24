@@ -356,13 +356,14 @@ Overridden if EEPROM activated. */
 /** \brief Lowest repeat time. */
 #define UI_KEY_MIN_REPEAT                   50
 
-/** \brief Values used for preheat */
-#define UI_SET_PRESET_HEATED_BED_TEMP_PLA   60
-#define UI_SET_PRESET_EXTRUDER_TEMP_PLA     180
-#define UI_SET_PRESET_HEATED_BED_TEMP_ABS   100
-#define UI_SET_PRESET_EXTRUDER_TEMP_ABS     210
+/** \brief Factory values for the editable preheat profiles */
+#define PREHEAT_A_BED_C                      60
+#define PREHEAT_A_HOTEND_C                   180
+#define PREHEAT_B_BED_C                      100
+#define PREHEAT_B_HOTEND_C                   210
 
 /** \brief Values used for unload(unmount)/load(mount) filament */
+#define UI_SET_EXTRUDER_TEMP_MOUNT         180
 #define UI_SET_EXTRUDER_MIN_TEMP_UNMOUNT     90                                                 //hat anfangs hohe toleranz.
 #define UI_SET_EXTRUDER_MAX_TEMP_UNMOUNT    240
 

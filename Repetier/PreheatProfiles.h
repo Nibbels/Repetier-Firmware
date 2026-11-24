@@ -1,0 +1,28 @@
+#ifndef PREHEAT_PROFILES_H
+#define PREHEAT_PROFILES_H
+
+#include <stdint.h>
+
+class PreheatProfiles {
+public:
+    enum class Profile : uint8_t { A, B };
+    enum class Heater : uint8_t { Bed, Hotend };
+
+    struct Temperatures {
+        int16_t bed;
+        int16_t hotend;
+    };
+
+    constexpr PreheatProfiles()
+        : profiles_{{PREHEAT_A_BED_C, PREHEAT_A_HOTEND_C}, {PREHEAT_B_BED_C, PREHEAT_B_HOTEND_C}} {}
+
+    Temperatures get(Profile profile) const { return profiles_[static_cast<uint8_t>(profile)]; }
+    void restoreDefaults() { *this = PreheatProfiles{}; }
+    bool readStored(Profile profile, Temperatures temperatures);
+    bool adjust(Profile profile, Heater heater, int8_t increment);
+
+private:
+    Temperatures profiles_[2];
+};
+
+#endif

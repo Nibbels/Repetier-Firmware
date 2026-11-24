@@ -708,6 +708,15 @@ void UIDisplay::parse(char* txt, bool ram) {
                 printCols[col++] = '%'; // %%% : The % char
             break;
         }
+        case 'V': {
+            using Profile = PreheatProfiles::Profile;
+            const bool profileA = c2 == 'b' || c2 == 'e';
+            if (profileA || c2 == 'B' || c2 == 'E') {
+                const auto temperatures = Printer::preheatProfiles.get(profileA ? Profile::A : Profile::B);
+                addInt(c2 == 'b' || c2 == 'B' ? temperatures.bed : temperatures.hotend, 0);
+            }
+            break;
+        }
         case 'a': // Acceleration settings
         {
             if (c2 == 'x')
@@ -2280,6 +2289,19 @@ void UIDisplay::finishAction(int action) {
 
 void UIDisplay::changeSwitchCase(int action, int8_t increment) {
     switch (action) {
+    case UI_ACTION_PREHEAT_A_BED:
+    case UI_ACTION_PREHEAT_A_HOTEND:
+    case UI_ACTION_PREHEAT_B_BED:
+    case UI_ACTION_PREHEAT_B_HOTEND: {
+        using Profile = PreheatProfiles::Profile;
+        using Heater = PreheatProfiles::Heater;
+        const bool profileA = action == UI_ACTION_PREHEAT_A_BED || action == UI_ACTION_PREHEAT_A_HOTEND;
+        const bool bed = action == UI_ACTION_PREHEAT_A_BED || action == UI_ACTION_PREHEAT_B_BED;
+        if (Printer::preheatProfiles.adjust(profileA ? Profile::A : Profile::B,
+                                           bed ? Heater::Bed : Heater::Hotend, increment))
+            EEPROM::storePreheatProfiles();
+        break;
+    }
     case UI_ACTION_FANSPEED: {
         int speed = (int)Printer::getFanSpeed() + (int)increment;
         if (speed > 255)
@@ -3434,18 +3456,18 @@ void UIDisplay::mainSwitchCase(int action) {
     }
 
 
-    case UI_ACTION_PREHEAT_PLA: {
+    case UI_ACTION_PREHEAT_A:
+    case UI_ACTION_PREHEAT_B: {
+        const bool profileA = action == UI_ACTION_PREHEAT_A;
+        const auto temperatures = Printer::preheatProfiles.get(profileA ? PreheatProfiles::Profile::A : PreheatProfiles::Profile::B);
         Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 10000);
-        UI_STATUS_UPD(UI_TEXT_PREHEAT_PLA);
-        Extruder::setTemperatureForAllExtruders(UI_SET_PRESET_EXTRUDER_TEMP_PLA);
-        Extruder::setHeatedBedTemperature(UI_SET_PRESET_HEATED_BED_TEMP_PLA);
-        break;
-    }
-    case UI_ACTION_PREHEAT_ABS: {
-        Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 10000);
-        UI_STATUS_UPD(UI_TEXT_PREHEAT_ABS);
-        Extruder::setTemperatureForAllExtruders(UI_SET_PRESET_EXTRUDER_TEMP_ABS);
-        Extruder::setHeatedBedTemperature(UI_SET_PRESET_HEATED_BED_TEMP_ABS);
+        if (profileA) {
+            UI_STATUS_UPD(UI_TEXT_PREHEAT_A);
+        } else {
+            UI_STATUS_UPD(UI_TEXT_PREHEAT_B);
+        }
+        Extruder::setTemperatureForAllExtruders(temperatures.hotend);
+        Extruder::setHeatedBedTemperature(temperatures.bed);
         break;
     }
     case UI_ACTION_COOLDOWN: {
@@ -3493,8 +3515,8 @@ void UIDisplay::mainSwitchCase(int action) {
             UI_STATUS_UPD(UI_TEXT_MOUNT_FILAMENT);
             if (action == UI_ACTION_MOUNT_FILAMENT_SOFT) {
                 /* Diese PLA Temp ist bei ~180 °C, die meisten Filamente werden gerade so weich. Wenn man keine mindesetens "weiche" Temperatur eingestellt hat, soll geheizt werden.*/
-                if (Extruder::current->tempControl.targetTemperatureC < UI_SET_PRESET_EXTRUDER_TEMP_PLA) {
-                    Extruder::setTemperatureForExtruder(UI_SET_PRESET_EXTRUDER_TEMP_PLA, Extruder::current->id);
+                if (Extruder::current->tempControl.targetTemperatureC < UI_SET_EXTRUDER_TEMP_MOUNT) {
+                    Extruder::setTemperatureForExtruder(UI_SET_EXTRUDER_TEMP_MOUNT, Extruder::current->id);
                     Extruder::current->tempControl.waitForTargetTemperature();
                     GCodeInput::executeFlashScript(Com::tMountFilamentSoft);
                     Extruder::setTemperatureForExtruder(0, Extruder::current->id);

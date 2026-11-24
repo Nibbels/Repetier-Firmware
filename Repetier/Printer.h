@@ -33,6 +33,7 @@
 #include "IdleStatus.h"
 #include "DigitCompensation.h"
 #include "PressureProtection.h"
+#include "PreheatProfiles.h"
 #include "StrainGauge.h"
 #include "StartLine.h"
 #include "ExtrusionPlanner.h"
@@ -85,6 +86,7 @@ class Printer {
 
 public:
     static ExtrusionOutput extrusionOutput;
+    static PreheatProfiles preheatProfiles;
 
     // Set raw calibration and publish the derived limits with updateDerivedParameter().
     static float stepsPerMm(uint8_t axis) { return axisStepsPerMM_[axis]; }

@@ -150,6 +150,12 @@ have problems with other modules using the eeprom */
 
 #define EPR_RF_STEP_PACKING_MIN_INTERVAL 1964 //1965 2byte für uint16 -> StepPackingMinInterval
 
+#define EPR_RF_PREHEAT_PROFILE_TAG 1966 // 4 bytes
+#define EPR_RF_PREHEAT_A_BED 1970       // int16_t, Celsius
+#define EPR_RF_PREHEAT_A_HOTEND 1972
+#define EPR_RF_PREHEAT_B_BED 1974
+#define EPR_RF_PREHEAT_B_HOTEND 1976
+
 //Nibbels: Computechecksum geht bis 2047
 
 #define EEPROM_EXTRUDER_OFFSET 200
@@ -196,6 +202,7 @@ public:
     static void initBaudrate();
     static void storeDataIntoEEPROM(uint8_t corrupted = 0);
     static void storeManualZOffset();
+    static void storePreheatProfiles();
     static void updateChecksum();
     static void readDataFromEEPROM();
     static void restoreEEPROMSettingsFromConfiguration();
@@ -206,6 +213,8 @@ public:
     static int getExtruderOffset(uint8_t extruder = 0);
 
 private:
+    static bool readPreheatProfiles();
+    static void writePreheatProfiles();
     static void restoreEEPROMExtruderSettingsFromConfiguration(uint8_t extruderId);
     static void storeExtruderDataIntoEEPROM(uint8_t extruderId);
 }; // EEPROM
