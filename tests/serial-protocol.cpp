@@ -367,6 +367,7 @@ void legacyStream(const std::string& scenario) {
     replies.clear();
     const unsigned normalDispatches = dispatchedCommands;
     if (scenario == "legacy-during-stop") stopped = true;
+    const unsigned legacyMask = scenario == "legacy-ascii" ? 8 : 15;
     if (scenario == "legacy-binary") {
         // Binary V1 M111 S15 (M and 32-bit S).
         feed(binary({0x82, 0x04, 111, 15, 0, 0, 0}));
@@ -375,17 +376,24 @@ void legacyStream(const std::string& scenario) {
         Commands::commandLoop();
         assert(!legacyRejected && stopRequests == 0);
         replies.clear();
-        feed(numbered("N1 M111 S15"));
+        feed(numbered("N1 M111 S" + std::to_string(legacyMask)));
     }
     Commands::commandLoop();
-    assert(legacyRejected && stopRequests == 1 && Printer::debugMask() == 7);
+    assert(legacyRejected && stopRequests == 1 && Printer::debugMask() == (legacyMask & ~8u));
     assert(replies.find("M111 bit 8 unsupported") != std::string::npos);
     assert(replies.find("ok ") != std::string::npos);
     assert(!GCodeInput::peekCurrentCommand());
     stopped = false; // stop cleanup finished; legacy rejection must survive it
     // A legacy host clears debug, resets line numbers and blindly keeps streaming.
     replies.clear();
-    feed("M111 S0\nM110\nM104 S200\nM109 S200\nM140 S60\nM190 S60\nM116\n"
+    if (scenario == "legacy-binary") {
+        feed(binary({0x82, 0x04, 104, 200, 0, 0, 0}));
+        Commands::commandLoop();
+        assert(heaterRequests == 2 && dispatchedCommands == normalDispatches);
+    }
+    // Switching from binary to ASCII requires a checksummed frame.
+    feed(numbered("M111 S0"));
+    feed("M110\nM104 S200\nM109 S200\nM140 S60\nM190 S60\nM116\n"
          "G28\nG90\nM83\nG1 X1 E5\nG1 E2\nM303 S150\nM223 S10\n"
          "M3912\nM3913\nM3914\nT0\nF1200\nM3029 S1077\nM105\nM114\nM115\n");
     unsigned loops = 0;
