@@ -546,26 +546,24 @@ void UIDisplay::printRowP(uint8_t r, PGM_P txt) {
 
 } // printRowP
 
-void UIDisplay::addInt(int value, uint8_t digits, char fillChar) {
+void UIDisplay::addInt(int16_t value, uint8_t digits, char fillChar) {
     if (col >= MAX_COLS)
         return;
-    uint8_t dig = 0, neg = 0;
-    if (value < 0) {
-        value = -value;
-        neg = 1;
-        dig++;
-    }
+    const bool negative = value < 0;
+    uint16_t magnitude = static_cast<uint16_t>(value);
+    if (negative)
+        magnitude = 0U - magnitude;
+    uint8_t dig = negative;
     char buf[7]; // Assumes 8-bit chars plus zero byte.
     char* str = &buf[6];
     buf[6] = 0;
     do {
-        unsigned int m = value;
-        value /= 10;
-        char c = m - 10 * value;
-        *--str = c + '0';
+        const uint16_t quotient = magnitude / 10;
+        *--str = '0' + (magnitude - 10 * quotient);
+        magnitude = quotient;
         dig++;
-    } while (value);
-    if (neg)
+    } while (magnitude);
+    if (negative)
         printCols[col++] = '-';
     if (digits < 6)
         while (dig < digits) {
@@ -579,26 +577,24 @@ void UIDisplay::addInt(int value, uint8_t digits, char fillChar) {
 
 } // addInt
 
-void UIDisplay::addLong(long value, char digits) {
+void UIDisplay::addLong(int32_t value, char digits) {
     if (col >= MAX_COLS)
         return;
-    uint8_t dig = 0, neg = 0;
-    if (value < 0) {
-        neg = 1;
-        value = -value;
-        dig++;
-    }
+    const bool negative = value < 0;
+    uint32_t magnitude = static_cast<uint32_t>(value);
+    if (negative)
+        magnitude = 0UL - magnitude;
+    uint8_t dig = negative;
     char buf[13]; // Assumes 8-bit chars plus zero byte.
     char* str = &buf[12];
     buf[12] = 0;
     do {
-        unsigned long m = value;
-        value /= 10;
-        char c = m - 10 * value;
-        *--str = c + '0';
+        const uint32_t quotient = magnitude / 10;
+        *--str = '0' + (magnitude - 10 * quotient);
+        magnitude = quotient;
         dig++;
-    } while (value);
-    if (neg)
+    } while (magnitude);
+    if (negative)
         printCols[col++] = '-';
     if (digits <= 11)
         while (dig < digits) {
@@ -628,9 +624,13 @@ void UIDisplay::addFloat(float number, char fixdigits, uint8_t digits) {
     digits = (digits <= 4 ? digits : 4);
     number += pgm_read_float(&roundingTable[digits]); // for correct rounding
 
-    // Extract the integer part of the number and print it
-    unsigned long int_part = (unsigned long)number;
-    float remainder = number - (float)int_part;
+    // The signed 32-bit formatter needs a finite, representable integer part.
+    if (!(number < 2147483648.0f)) {
+        printCols[col++] = '?';
+        return;
+    }
+    const int32_t int_part = static_cast<int32_t>(number);
+    float remainder = number - float(int_part);
     addLong(int_part, fixdigits);
     if (col >= UI_COLS)
         return;

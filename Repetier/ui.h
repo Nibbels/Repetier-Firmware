@@ -337,8 +337,8 @@ public:
 
     UIDisplay();
 
-    void addInt(int value, uint8_t digits, char fillChar = ' '); // Print int into printCols
-    void addLong(long value, char digits);
+    void addInt(int16_t value, uint8_t digits, char fillChar = ' '); // Print int into printCols
+    void addLong(int32_t value, char digits);
     void addFloat(float number, char fixdigits, uint8_t digits);
     void addStringP(FSTRINGPARAM(text));
     void ui_init_keys();
