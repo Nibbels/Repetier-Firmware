@@ -49,7 +49,7 @@ const short temptable_8[NUMTEMPS_8][2] PROGMEM = {
 };
 
 // 100k Honeywell 135-104LAG-J01
-#define NUMTEMPS_9 67
+#define NUMTEMPS_9 58 // 58 explicit points; no zero-filled tail after the 0 C endpoint
 const short temptable_9[NUMTEMPS_9][2] PROGMEM = {
     { 1 * 4, 941 * 8 }, { 19 * 4, 362 * 8 }, { 37 * 4, 299 * 8 }, //top rating 300C
     { 55 * 4, 266 * 8 },
