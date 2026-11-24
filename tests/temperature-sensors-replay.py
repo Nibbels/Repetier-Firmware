@@ -35,8 +35,8 @@ static const int16_t* pgm_read_word(const int16_t* const* p) { return *p; }
 static unsigned reads;
 static uint16_t sample;
 struct HAL {
-    static uint16_t temperatureAdcSample(uint8_t index) {
-        assert(index == 2); ++reads; return sample;
+    static bool temperatureAdcSample(uint8_t index, uint16_t& value) {
+        assert(index == 2); ++reads; value = sample; return true;
     }
 };
 struct TemperatureController {

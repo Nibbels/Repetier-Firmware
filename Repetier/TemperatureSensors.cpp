@@ -216,7 +216,9 @@ float calibratedSensorTemperature(float sensorCelsius) {
 
 bool TemperatureController::updateCurrentTemperature() {
     const uint8_t type = sensorType;
-    // get raw temperature
+    bool sampleFresh = true; // Type 0 is the existing non-measuring sentinel.
+    uint16_t raw;
+    // Get one coherent raw sample and its freshness status.
     switch (type) {
     case 0:
         currentTemperature = 25;
@@ -233,14 +235,16 @@ bool TemperatureController::updateCurrentTemperature() {
     case 13: // NTC 3950 100k thermistor - Conrad V3
     case 14: // Thermistor NTC 3950 100k Ohm
     {
-        currentTemperature = (1023 << (2 - ANALOG_REDUCE_BITS)) - (HAL::temperatureAdcSample(sensorPin) >> (ANALOG_REDUCE_BITS)); // Convert to 10 bit result
+        sampleFresh = HAL::temperatureAdcSample(sensorPin, raw);
+        currentTemperature = (1023 << (2 - ANALOG_REDUCE_BITS)) - (raw >> ANALOG_REDUCE_BITS);
         break;
     }
     case 53:  // E3D PT100 Board
     case 60:  // HEATER_USES_AD8495 (Delivers 5mV/degC)
     case 100: // AD595
     {
-        currentTemperature = (HAL::temperatureAdcSample(sensorPin) >> (ANALOG_REDUCE_BITS));
+        sampleFresh = HAL::temperatureAdcSample(sensorPin, raw);
+        currentTemperature = (raw >> ANALOG_REDUCE_BITS);
         break;
     }
 
@@ -290,7 +294,7 @@ bool TemperatureController::updateCurrentTemperature() {
             if (newraw > currentTemperature) {
                 const float sensorCelsius = TEMP_INT_TO_FLOAT(oldtemp + (float)(currentTemperature - oldraw) * (float)(newtemp - oldtemp) / (newraw - oldraw));
                 currentTemperatureC = calibratedSensorTemperature(sensorCelsius);
-                return true;
+                return sampleFresh;
             }
             oldtemp = newtemp;
             oldraw = newraw;
@@ -313,5 +317,5 @@ bool TemperatureController::updateCurrentTemperature() {
         break;
     }
     }
-    return true;
+    return sampleFresh;
 } // updateCurrentTemperature
