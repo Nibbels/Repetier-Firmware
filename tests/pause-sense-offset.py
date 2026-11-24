@@ -170,7 +170,7 @@ def main():
             "sense-window", "sense-settings", "sense-limit-interrupt",
             "pressure-pause", "pressure-stop", "pressure-frozen-z", "digit-zero", "pressure-measurement",
             "extrusion-planning",
-            "gcode-target", "wobble-target", "cartesian-planning", "segment-geometry", "move-queue", "move-reserve",
+            "gcode-target", "output-safety-lock", "wobble-target", "cartesian-planning", "segment-geometry", "move-queue", "move-reserve",
             "idle-status", "print-job", "ecmp-stepping",
             "advance-timer", "advance-mode", "advance-cancel", "motion-wait", "pressure-advance-pause", "advance-output", "advance-peak",
             "step-clock", "lookahead", "acceleration-limits", "short-move-pacing", "direct-ramp", "xy-limits",

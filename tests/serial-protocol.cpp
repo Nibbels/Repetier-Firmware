@@ -361,6 +361,8 @@ void legacyStream(const std::string& scenario) {
     feed("M111 S7\nM104 S100\nM140 S40\nG1 E1\n");
     while (!incoming.empty()) Commands::commandLoop();
     assert(!legacyRejected && Printer::debugMask() == 7 && heaterRequests == 2 && extrusionRequests == 1);
+    Printer::toggleDebugFlag(8); // retired bit cannot be set via the debug API
+    assert(Printer::debugMask() == 7);
     Printer::setDebugMask(0);
     replies.clear();
     const unsigned normalDispatches = dispatchedCommands;
