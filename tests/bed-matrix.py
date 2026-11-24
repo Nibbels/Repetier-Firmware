@@ -11,18 +11,23 @@ def main():
     firmware = tests.parent / "Repetier"
     source = (firmware / "BedMatrix.cpp").read_text(encoding="utf-8")
     eeprom = (firmware / "ExternalEeprom.cpp").read_text(encoding="utf-8")
+    interpolation = (firmware / "BedMatrixInterpolation.h").read_text(encoding="utf-8")
+    grid = (firmware / "BedMatrixGrid.h").read_text(encoding="utf-8")
+    storage = (firmware / "BedMatrixStorage.h").read_text(encoding="utf-8")
+    diagnostics = (firmware / "BedMatrixDiagnostics.h").read_text(encoding="utf-8")
     sections = (
-        ("static void initCompensationMatrix(void) {", "static void outputCompensationMatrix("),
-        ("static char prepareCompensationMatrix(void) {", "static void adjustCompensationMatrix("),
-        ("static bool writeMatrixSector(", "static void clearExternalEEPROM("),
-        ("namespace {\nstruct MatrixSpan", "long getZMatrixDepth_CurrentXY("),
+        (source, "static void initCompensationMatrix(void) {", '#include "BedMatrixGrid.h"'),
+        (interpolation, "namespace {\nstruct MatrixSpan", "#endif"),
+        (grid, "static char prepareCompensationMatrix(void) {", "#endif"),
+        (storage, "static bool writeMatrixSector(", "static void clearExternalEEPROM("),
+        (diagnostics, "void fixKeramikLochInMatrix(", "#endif"),
     )
     with TemporaryDirectory(prefix="rfx-bed-matrix-") as directory:
         build = Path(directory)
         (build / "bed-matrix-firmware.inc").write_text(
             eeprom[eeprom.index("namespace ExternalEeprom {"):] + "\n" + "\n".join(
-            source[source.index(start):source.index(end, source.index(start))]
-            for start, end in sections
+            part[part.index(start):part.index(end, part.index(start))]
+            for part, start, end in sections
         ), encoding="utf-8")
         executable = build / "bed-matrix"
         subprocess.run([
