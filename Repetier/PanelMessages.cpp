@@ -45,6 +45,7 @@ FSTRINGVALUE(ui_text_timeout, UI_TEXT_TIMEOUT)
 FSTRINGVALUE(ui_text_sensor_error, UI_TEXT_SENSOR_ERROR)
 FSTRINGVALUE(ui_text_heater_error, UI_TEXT_HEATER_ERROR)
 
+FSTRINGVALUE(ui_text_manual, UI_TEXT_MANUAL)
 FSTRINGVALUE(ui_text_saving_success, UI_TEXT_SAVING_SUCCESS)
 
 void showIdle(void) {

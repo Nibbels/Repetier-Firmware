@@ -15,7 +15,8 @@ def section(source, start, end):
 def main():
     tests = Path(__file__).resolve().parent
     firmware = tests.parent / "Repetier"
-    ui = (firmware / "ui.cpp").read_text(encoding="utf-8")
+    actions = (firmware / "UiActions.cpp").read_text(encoding="utf-8")
+    formatting = (firmware / "UiFormatting.cpp").read_text(encoding="utf-8")
     menu = (firmware / "uimenu.h").read_text(encoding="utf-8")
     definitions = "\n".join((firmware / name).read_text(encoding="utf-8")
                             for name in ("Configuration.h", "Eeprom.h", "ui.h", "uilang.h"))
@@ -29,11 +30,11 @@ def main():
             encoding="utf-8")
         (build / "preheat-panel.inc").write_text(
             "void edit(int action, int8_t increment) { switch (action) {\n"
-            + section(ui, "    case UI_ACTION_PREHEAT_A_BED:", "    case UI_ACTION_FANSPEED:")
+            + section(actions, "    case UI_ACTION_PREHEAT_A_BED:", "    case UI_ACTION_FANSPEED:")
             + "} }\nvoid activate(int action) { switch (action) {\n"
-            + section(ui, "    case UI_ACTION_PREHEAT_A:\n", "    case UI_ACTION_COOLDOWN:")
+            + section(actions, "    case UI_ACTION_PREHEAT_A:\n", "    case UI_ACTION_COOLDOWN:")
             + "} }\nvoid renderField(char c2) { switch ('V') {\n"
-            + section(ui, "        case 'V':", "        case 'a':")
+            + section(formatting, "        case 'V':", "        case 'a':")
             + "} }\n#define UI_MENU_ACTIONCOMMAND(name, text, action) constexpr char name[] = text;\n"
             + section(menu, '#if UI_COLS <= 16\nUI_MENU_ACTIONCOMMAND(ui_menu_quick_preheat_a', "UI_MENU_ACTIONCOMMAND(ui_menu_quick_cooldown"),
             encoding="utf-8")

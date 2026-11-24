@@ -62,7 +62,7 @@ c++ -std=c++11 -Wall -Wextra -Werror tests/z-offset.cpp -o /tmp/rfx-z-offset-tes
 
 ## Code paths
 
-- [Mod Menu buttons](../../Repetier/ui.cpp#L2335) and [M3006](../../Repetier/GCodeMotion.cpp) edit the manual and live values through the owner.
+- [Mod Menu buttons](../../Repetier/UiActions.cpp) and [M3006](../../Repetier/GCodeMotion.cpp) edit the manual and live values through the owner.
 - [M3902 Z0](../../Repetier/BedMatrix.cpp) transfers the manual offset into the matrix. [Matrix extrema](../../Repetier/BedMatrix.cpp) determine the baseline for the interpolated correction.
 - [Layer detection](../../Repetier/motion.cpp#L173) sets the learned fade boundaries.
 

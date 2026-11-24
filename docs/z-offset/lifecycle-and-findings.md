@@ -36,7 +36,7 @@ The original patch added the live value to the manual offset when handling `M300
 
 Sequential prints without Z homing and physical verification remain open.
 
-[M3006](../../Repetier/GCodeMotion.cpp) · [Mod Menu buttons](../../Repetier/ui.cpp#L2335) · [SenseOffset controller](../../Repetier/PressureFeatures.cpp).
+[M3006](../../Repetier/GCodeMotion.cpp) · [Mod Menu buttons](../../Repetier/UiActions.cpp) · [SenseOffset controller](../../Repetier/PressureFeatures.cpp).
 
 ### Finding F2 (FIXED): previously disabled SenseOffset can now be cleaned up
 
@@ -70,7 +70,7 @@ Within Mod Menu page 2, bed DOWN adds +5 µm to the saved manual offset. Bed UP 
 
 The invariant is approximate around clamps, zero snapping and concurrently rising SenseOffset. Each persistent increment writes internal EEPROM. The real risk is **changing or resetting either component without preserving this operator-controlled state transfer**, not the asymmetric button mapping itself.
 
-[Detailed workflow, pitfalls and test cases](history-and-workflows.md) · [Button implementation](../../Repetier/ui.cpp#L2821-L2879) · [Button mapping](../../Repetier/ui.cpp#L4100-L4126) · [Original 2017 changelog](../../changelog.txt#L1760-L1768).
+[Detailed workflow, pitfalls and test cases](history-and-workflows.md) · [Button implementation](../../Repetier/UiActions.cpp) · [Button mapping](../../Repetier/UiActions.cpp) · [Original 2017 changelog](../../changelog.txt#L1760-L1768).
 
 ### Finding F6 (MEDIUM): Z-offset scan uses volatile RAM matrix state
 

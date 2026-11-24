@@ -1,6 +1,6 @@
 # Mod Menu: transferring learned SenseOffset into persistent Z-offset
 
-> **This is intentional behavior, not a random Z-offset bug.** Confirmed from `ui.cpp`, `Configuration.h` and the original **2017-01-25 RF.01.37.mod changelog**, which explicitly states: “Within the Mod Menu you can alter your Z-Offset and easily push SenseOffset to your Z-Offset with the Z-Up and Z-Down Button.”
+> **This is intentional behavior, not a random Z-offset bug.** Confirmed from the panel actions, `Configuration.h` and the original **2017-01-25 RF.01.37.mod changelog**, which explicitly states: “Within the Mod Menu you can alter your Z-Offset and easily push SenseOffset to your Z-Offset with the Z-Up and Z-Down Button.”
 
 ## Why this exists
 
@@ -50,8 +50,8 @@ After 40 completed pairs, approximately +200 µm has moved from dynamic to manua
 
 ## Source and history
 
-- [Mod-menu buttons mapped to plus/minus](../../Repetier/ui.cpp#L4100-L4126)
-- [Offset plus/minus logic and immediate EEPROM persistence](../../Repetier/ui.cpp#L2335-L2343)
+- [Mod-menu buttons mapped to plus/minus](../../Repetier/UiActions.cpp)
+- [Offset plus/minus logic and immediate EEPROM persistence](../../Repetier/UiActions.cpp)
 - [5 µm per Mod-menu button](../../Repetier/Configuration.h#L901-L908)
 - [Historical first-hand design intent, January 25, 2017](../../changelog.txt#L1760-L1768)
 - [All offset terms and storage](offset-ledger.md) · [Lifecycle risks](lifecycle-and-findings.md)

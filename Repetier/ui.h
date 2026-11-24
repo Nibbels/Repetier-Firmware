@@ -227,7 +227,7 @@ typedef struct
 
 } const UIMenuEntry;
 
-typedef struct
+typedef struct UIMenuData
 {
     // 0 = info page
     // 2 = submenu
@@ -251,62 +251,6 @@ typedef struct
         action = action_;
 
 
-// I2C keymask tests
-
-#define UI_STRING(name, text) const char PROGMEM name[] = text;
-
-
-#define UI_PAGE4(name, row1, row2, row3, row4) \
-    UI_STRING(name##_1txt, row1) \
-    UI_STRING(name##_2txt, row2) UI_STRING(name##_3txt, row3) UI_STRING(name##_4txt, row4) \
-        UIMenuEntry name##_1 PROGMEM \
-        = { name##_1txt, 0, 0, 0, 0 }; \
-    UIMenuEntry name##_2 PROGMEM = { name##_2txt, 0, 0, 0, 0 }; \
-    UIMenuEntry name##_3 PROGMEM = { name##_3txt, 0, 0, 0, 0 }; \
-    UIMenuEntry name##_4 PROGMEM = { name##_4txt, 0, 0, 0, 0 }; \
-    const UIMenuEntry* const name##_entries[] PROGMEM = { &name##_1, &name##_2, &name##_3, &name##_4 }; \
-    const UIMenu name PROGMEM = { 0, 0, 4, name##_entries };
-
-
-#define UI_MENU_ACTION4(name, action, row1, row2, row3, row4) \
-    UI_STRING(name##_1txt, row1) \
-    UI_STRING(name##_2txt, row2) UI_STRING(name##_3txt, row3) UI_STRING(name##_4txt, row4) \
-        UIMenuEntry name##_1 PROGMEM \
-        = { name##_1txt, 0, 0, 0, 0 }; \
-    UIMenuEntry name##_2 PROGMEM = { name##_2txt, 0, 0, 0, 0 }; \
-    UIMenuEntry name##_3 PROGMEM = { name##_3txt, 0, 0, 0, 0 }; \
-    UIMenuEntry name##_4 PROGMEM = { name##_4txt, 0, 0, 0, 0 }; \
-    const UIMenuEntry* const name##_entries[] PROGMEM = { &name##_1, &name##_2, &name##_3, &name##_4 }; \
-    const UIMenu name PROGMEM = { 3, action, 4, name##_entries };
-
-#define UI_MENU_ACTION2(name, action, row1, row2) \
-    UI_STRING(name##_1txt, row1) \
-    UI_STRING(name##_2txt, row2) \
-        UIMenuEntry name##_1 PROGMEM \
-        = { name##_1txt, 0, 0, 0, 0 }; \
-    UIMenuEntry name##_2 PROGMEM = { name##_2txt, 0, 0, 0, 0 }; \
-    const UIMenuEntry* const name##_entries[] PROGMEM = { &name##_1, &name##_2 }; \
-    const UIMenu name PROGMEM = { 3, action, 2, name##_entries };
-
-#define UI_MENU_CHANGEACTION(name, row, action) UI_STRING(name##_txt, row) \
-                                                UIMenuEntry name PROGMEM = { name##_txt, 4, action, 0, 0 };
-#define UI_MENU_ACTIONCOMMAND(name, row, action) UI_STRING(name##_txt, row) \
-                                                 UIMenuEntry name PROGMEM = { name##_txt, 3, action, 0, 0 };
-#define UI_MENU_ACTIONSELECTOR(name, row, entries) UI_STRING(name##_txt, row) \
-                                                   UIMenuEntry name PROGMEM = { name##_txt, 2, (unsigned int)&entries, 0, 0 };
-#define UI_MENU_SUBMENU(name, row, entries) UI_STRING(name##_txt, row) \
-                                            UIMenuEntry name PROGMEM = { name##_txt, 2, (unsigned int)&entries, 0, 0 };
-#define UI_MENU_CHANGEACTION_FILTER(name, row, action, filter, nofilter) UI_STRING(name##_txt, row) \
-                                                                         UIMenuEntry name PROGMEM = { name##_txt, 4, action, filter, nofilter };
-#define UI_MENU_ACTIONCOMMAND_FILTER(name, row, action, filter, nofilter) UI_STRING(name##_txt, row) \
-                                                                          UIMenuEntry name PROGMEM = { name##_txt, 3, action, filter, nofilter };
-#define UI_MENU_ACTIONSELECTOR_FILTER(name, row, entries, filter, nofilter) UI_STRING(name##_txt, row) \
-                                                                            UIMenuEntry name PROGMEM = { name##_txt, 2, (unsigned int)&entries, filter, nofilter };
-#define UI_MENU_SUBMENU_FILTER(name, row, entries, filter, nofilter) UI_STRING(name##_txt, row) \
-                                                                     UIMenuEntry name PROGMEM = { name##_txt, 2, (unsigned int)&entries, filter, nofilter };
-#define UI_MENU(name, items, itemsCnt) \
-    const UIMenuEntry* const name##_entries[] PROGMEM = items; \
-    const UIMenu name PROGMEM = { 2, 0, itemsCnt, name##_entries };
 // Maximum size of a row - if row is larger, text gets scrolled
 #define MAX_COLS 28 //Anzahl Speicherplätze für Bytes in Display-Zeile, wenn mehr als Display, dann Scrolling. Kann gleich oder größer Displayzeilenlänge sein.
 
@@ -335,7 +279,6 @@ public:
     millis_t lastNextPrev; // for increasing speed settings
     float lastNextAccumul; // Accumulated value
     int repeatDuration;    // Time beween to actions if autorepeat is enabled
-    char statusMsg[MAX_COLS + 1];
     char printCols[MAX_COLS + 1];
     char locked;
 
@@ -386,6 +329,12 @@ public:
     void exitmenu();
 
 private:
+    void loadStartupCharacters();
+    void loadNormalCharacters();
+
+    bool normalCharacters_ = false;
+    char displayCache_[UI_ROWS][MAX_COLS + 1];
+    char statusMsg[MAX_COLS + 1];
     const void* messageLine1;
     const void* messageLine2;
     const void* messageLine3;
@@ -409,7 +358,6 @@ extern UIDisplay uid;
 #endif // UI_COLS==16
 
 #include "uilang.h"
-#include "uimenu.h"
 
 #define UI_STATUS(status) uid.setStatusP(PSTR(status));
 #define UI_STATUS_UPD(status) \

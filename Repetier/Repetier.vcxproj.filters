@@ -125,6 +125,9 @@
     <ClInclude Include="RF2000.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="UiMenus.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="ui.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -203,6 +206,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="StartLine.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="UiActions.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="UiFormatting.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="ui.cpp">

@@ -21,6 +21,7 @@ def main():
     panel_motion = (firmware / "PanelMotion.cpp").read_text(encoding="utf-8")
     rf_header = (firmware / "RF.h").read_text(encoding="utf-8")
     ui = (firmware / "ui.cpp").read_text(encoding="utf-8")
+    ui_actions = (firmware / "UiActions.cpp").read_text(encoding="utf-8")
     ui_header = (firmware / "ui.h").read_text(encoding="utf-8")
     motion = (firmware / "motion.h").read_text(encoding="utf-8")
     move_queue = (firmware / "MoveQueue.h").read_text(encoding="utf-8")
@@ -74,11 +75,11 @@ def main():
         section(printer, "void Printer::enableSenseOffsetnow(", "\nvoid Printer::enableCMPnow("),
         section(rf, "bool isAnyScanRunning()", "\nvoid discardScans(").replace("Calibration::", ""),
         section(panel_motion, "void moveZAction(int8_t direction) {", "} // moveZAction") + "}",
-        section(ui, "void UIDisplay::pressPlay()", "\nvoid UIDisplay::mainSwitchCase("),
+        section(ui_actions, "void UIDisplay::pressPlay()", "\nvoid UIDisplay::mainSwitchCase("),
         section(ui, "void UIDisplay::fastAction()", "} // fastAction") + "}",
-        section(ui, "namespace {\nconstexpr double modMenuSenseLimit", "\nvoid UIDisplay::zOffsetPlusAction()"),
+        section(ui_actions, "namespace {\nconstexpr double modMenuSenseLimit", "\nvoid UIDisplay::zOffsetPlusAction()"),
         "void extrudeFromPanel(int action = UI_ACTION_RF_EXTRUDER_OUTPUT) { switch (action) {\n"
-        + section(ui, "case UI_ACTION_RF_EXTRUDER_OUTPUT:", "case UI_ACTION_RF_PAUSE:")
+        + section(ui_actions, "case UI_ACTION_RF_EXTRUDER_OUTPUT:", "case UI_ACTION_RF_PAUSE:")
         + "} }",
         "void trackPlannedLayer(PrintLine* p) {\n"
         + section(move_planner, "    if (!Printer::startLine.active())", "\n    p->setSegmentGeometry(")

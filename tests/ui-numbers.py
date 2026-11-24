@@ -8,7 +8,7 @@ from tempfile import TemporaryDirectory
 
 def main():
     tests = Path(__file__).resolve().parent
-    ui = (tests.parent / "Repetier" / "ui.cpp").read_text(encoding="utf-8")
+    ui = (tests.parent / "Repetier" / "UiFormatting.cpp").read_text(encoding="utf-8")
     start = ui.index("void UIDisplay::addInt(")
     end = ui.index("void UIDisplay::addStringP(", start)
     with TemporaryDirectory(prefix="rfx-ui-numbers-") as directory:
