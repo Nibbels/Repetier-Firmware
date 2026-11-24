@@ -183,7 +183,14 @@ void UIDisplay::parse(char* txt, bool ram) {
                 printCols[col++] = c1;
             break;
         }
-        switch (c1) {
+        renderField(c1, c2, ram, ivalue, fvalue);
+    }
+    printCols[col] = 0;
+} // parse
+
+// Format a complete placeholder. Keep the legacy scratch values for the whole template.
+void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fvalue) {
+    switch (c1) {
         case '%': {
             if (c2 == '%' && col < MAX_COLS)
                 printCols[col++] = '%'; // %%% : The % char
@@ -245,89 +252,10 @@ void UIDisplay::parse(char* txt, bool ram) {
             break;
         }
 
-        case 'e': // Extruder temperature
-        {
-            if (c2 == 'r') // %er : Extruder relative mode
-            {
-                addStringP(Printer::gcodeModes.relativeEOverride() ? ui_yes : ui_no);
-                break;
-            }
-
-
-            if (c2 == 'w') { //%ew : tell me which sensor(s) are defect.
-                bool addone = false;
-                for (uint8_t controller = 0; controller < NUM_TEMPERATURE_LOOPS; controller++) {
-                    TemperatureController* act = tempController[controller];
-                    if (act->isSensorDefect() || act->isSensorDecoupled()) {
-                        if (addone)
-                            addStringP(Com::tSlash);
-                        addone = true;
-                        if (controller < NUM_EXTRUDER) {
-                            if (col < MAX_COLS)
-                                printCols[col++] = 'E';
-                            addInt(controller, 1);
-                        } else if (controller <= NUM_EXTRUDER) {
-                            addStringP(PSTR("Bed"));
-                        } else {
-                            addStringP(PSTR("Opt"));
-                        }
-                    }
-                }
-                break;
-            }
-
-            if (Printer::isAnyTempsensorDefect()) {
-                uint8_t countDefect = 0;
-                uint8_t countDecoupled = 0;
-                for (uint8_t controller = 0; controller < NUM_TEMPERATURE_LOOPS; controller++) {
-                    TemperatureController* act = tempController[controller];
-                    if (act->isSensorDefect()) {
-                        countDefect++;
-                    }
-                    if (act->isSensorDecoupled()) {
-                        countDecoupled++;
-                    }
-                }
-                if (countDecoupled > countDefect) {
-                    addStringP(PSTR("dec"));
-                } else {
-                    addStringP(PSTR("def"));
-                }
-                break;
-            }
-
-            if (!(Printer::flag2 & PRINTER_FLAG2_GOT_TEMPS)) {
-                // avoid to show the current temperatures before we have measured them
-                addStringP(PSTR(" ? "));
-                break;
-            }
-
-            if (c2 == 'c') {
-                fvalue = Extruder::current->tempControl.currentTemperatureC; // %ec : Current extruder temperature
-            } else if (c2 >= '0' && c2 <= '9') {
-                uint8_t nr = c2 - '0';
-                fvalue = extruder[nr].tempControl.currentTemperatureC; // %e0..9 : Temp. of extruder 0..9
-            }
-            else if (c2 == 'b') {
-                fvalue = Extruder::getHeatedBedTemperature(); // %eb : Current heated bed temperature
-            }
-            addFloat(fvalue, 3, 0);
+        case 'e':
+        case 'E':
+            renderTemperatureField(c1, c2, fvalue);
             break;
-        }
-        case 'E': // Target extruder temperature
-        {
-
-            if (c2 == 'c') {
-                fvalue = Extruder::current->tempControl.targetTemperatureC; // %Ec : Target temperature of current extruder
-            } else if (c2 >= '0' && c2 <= '9') {
-                fvalue = extruder[c2 - '0'].tempControl.targetTemperatureC; // %E0-9 : Target temperature of extruder 0..9
-            }
-            else if (c2 == 'b') {
-                fvalue = heatedBedController.targetTemperatureC; // %Eb : Target temperature of heated bed
-            }
-            addFloat(fvalue, 3, 0);
-            break;
-        }
 
         case 'F': // FAN speed
         {
@@ -661,6 +589,168 @@ void UIDisplay::parse(char* txt, bool ram) {
                 printCols[col++] = '%';
             break;
         }
+        case 'x':
+        case 'y':
+        case 'z':
+            renderPositionField(c1, c2, fvalue);
+            break;
+
+        case 'X':
+            renderExtruderField(c1, c2);
+            break;
+
+        case 's':
+        case 'S':
+        case 'p':
+            renderCalibrationField(c1, c2);
+            break;
+
+        case 'P': {
+            if (c2 == 'N')
+                addStringP(PSTR(UI_PRINTER_NAME)); // %PN : Printer name
+            break;
+        }
+        case 'U': // %U1: Page1
+        {
+            if (c2 == '1') // temperature icon
+            {
+                if (!normalCharacters_)
+                    loadNormalCharacters();
+                addStringP(PSTR("\005"));
+            } else if (c2 == '2') // replace line with new line
+            {
+            }
+            break;
+        }
+        case 'C':
+        case 'L':
+        case 'w':
+            renderCompensationField(c1, c2);
+            break;
+
+        case 'Z': // %Z5-Z8: Printing statistics
+        {
+            if (c2 == '5') // Shows text printing time
+            {
+                addStringP(PSTR(UI_TEXT_PRINT_TIME));
+            } else if (c2 == '6') // Shows printing time
+            {
+                long seconds = Printer::printUsage.heatedSeconds();
+                long tmp = seconds / 86400;
+                seconds -= tmp * 86400;
+                addInt(tmp, 5);
+                addStringP(PSTR(UI_TEXT_PRINTTIME_DAYS));
+                tmp = seconds / 3600;
+                addInt(tmp, 2);
+                addStringP(PSTR(UI_TEXT_PRINTTIME_HOURS));
+                seconds -= tmp * 3600;
+                tmp = seconds / 60;
+                addInt(tmp, 2, '0');
+                addStringP(PSTR(UI_TEXT_PRINTTIME_MINUTES));
+            } else if (c2 == '7') // Shows text printed filament
+            {
+                addStringP(PSTR(UI_TEXT_PRINT_FILAMENT));
+            } else if (c2 == '8') // Shows printed filament
+            {
+                addFloat(Printer::printUsage.filamentMetres(), 6, 1);
+                addStringP(PSTR(" m"));
+            }
+            break;
+        }
+    }
+}
+
+void UIDisplay::renderTemperatureField(char c1, char c2, float& fvalue) {
+    switch (c1) {
+        case 'e': // Extruder temperature
+        {
+            if (c2 == 'r') // %er : Extruder relative mode
+            {
+                addStringP(Printer::gcodeModes.relativeEOverride() ? ui_yes : ui_no);
+                break;
+            }
+
+
+            if (c2 == 'w') { //%ew : tell me which sensor(s) are defect.
+                bool addone = false;
+                for (uint8_t controller = 0; controller < NUM_TEMPERATURE_LOOPS; controller++) {
+                    TemperatureController* act = tempController[controller];
+                    if (act->isSensorDefect() || act->isSensorDecoupled()) {
+                        if (addone)
+                            addStringP(Com::tSlash);
+                        addone = true;
+                        if (controller < NUM_EXTRUDER) {
+                            if (col < MAX_COLS)
+                                printCols[col++] = 'E';
+                            addInt(controller, 1);
+                        } else if (controller <= NUM_EXTRUDER) {
+                            addStringP(PSTR("Bed"));
+                        } else {
+                            addStringP(PSTR("Opt"));
+                        }
+                    }
+                }
+                break;
+            }
+
+            if (Printer::isAnyTempsensorDefect()) {
+                uint8_t countDefect = 0;
+                uint8_t countDecoupled = 0;
+                for (uint8_t controller = 0; controller < NUM_TEMPERATURE_LOOPS; controller++) {
+                    TemperatureController* act = tempController[controller];
+                    if (act->isSensorDefect()) {
+                        countDefect++;
+                    }
+                    if (act->isSensorDecoupled()) {
+                        countDecoupled++;
+                    }
+                }
+                if (countDecoupled > countDefect) {
+                    addStringP(PSTR("dec"));
+                } else {
+                    addStringP(PSTR("def"));
+                }
+                break;
+            }
+
+            if (!(Printer::flag2 & PRINTER_FLAG2_GOT_TEMPS)) {
+                // avoid to show the current temperatures before we have measured them
+                addStringP(PSTR(" ? "));
+                break;
+            }
+
+            if (c2 == 'c') {
+                fvalue = Extruder::current->tempControl.currentTemperatureC; // %ec : Current extruder temperature
+            } else if (c2 >= '0' && c2 <= '9') {
+                uint8_t nr = c2 - '0';
+                fvalue = extruder[nr].tempControl.currentTemperatureC; // %e0..9 : Temp. of extruder 0..9
+            }
+            else if (c2 == 'b') {
+                fvalue = Extruder::getHeatedBedTemperature(); // %eb : Current heated bed temperature
+            }
+            addFloat(fvalue, 3, 0);
+            break;
+        }
+        case 'E': // Target extruder temperature
+        {
+
+            if (c2 == 'c') {
+                fvalue = Extruder::current->tempControl.targetTemperatureC; // %Ec : Target temperature of current extruder
+            } else if (c2 >= '0' && c2 <= '9') {
+                fvalue = extruder[c2 - '0'].tempControl.targetTemperatureC; // %E0-9 : Target temperature of extruder 0..9
+            }
+            else if (c2 == 'b') {
+                fvalue = heatedBedController.targetTemperatureC; // %Eb : Target temperature of heated bed
+            }
+            addFloat(fvalue, 3, 0);
+            break;
+        }
+
+    }
+}
+
+void UIDisplay::renderPositionField(char c1, char c2, float& fvalue) {
+    switch (c1) {
         case 'x': {
             char bDefect = false;
 
@@ -776,6 +866,11 @@ void UIDisplay::parse(char* txt, bool ram) {
             }
             break;
         }
+    }
+}
+
+void UIDisplay::renderExtruderField(char c1, char c2) {
+    switch (c1) {
         case 'X': // Extruder related
         {
             if (c2 >= '0' && c2 <= '9') // %X0..9 : Extruder selected marker
@@ -905,6 +1000,11 @@ void UIDisplay::parse(char* txt, bool ram) {
             }
             break;
         }
+    }
+}
+
+void UIDisplay::renderCalibrationField(char c1, char c2) {
+    switch (c1) {
         case 's': // Endstop positions
         {
             if (c2 == 'x') // %sx : State of x min endstop
@@ -1173,23 +1273,11 @@ void UIDisplay::parse(char* txt, bool ram) {
             }
             break;
         }
-        case 'P': {
-            if (c2 == 'N')
-                addStringP(PSTR(UI_PRINTER_NAME)); // %PN : Printer name
-            break;
-        }
-        case 'U': // %U1: Page1
-        {
-            if (c2 == '1') // temperature icon
-            {
-                if (!normalCharacters_)
-                    loadNormalCharacters();
-                addStringP(PSTR("\005"));
-            } else if (c2 == '2') // replace line with new line
-            {
-            }
-            break;
-        }
+    }
+}
+
+void UIDisplay::renderCompensationField(char c1, char c2) {
+    switch (c1) {
         case 'C': {
             if (c2 == 'U') // %CU : digit flow lower limit
             {
@@ -1267,40 +1355,8 @@ void UIDisplay::parse(char* txt, bool ram) {
 
             break;
         }
-        case 'Z': // %Z5-Z8: Printing statistics
-        {
-            if (c2 == '5') // Shows text printing time
-            {
-                addStringP(PSTR(UI_TEXT_PRINT_TIME));
-            } else if (c2 == '6') // Shows printing time
-            {
-                long seconds = Printer::printUsage.heatedSeconds();
-                long tmp = seconds / 86400;
-                seconds -= tmp * 86400;
-                addInt(tmp, 5);
-                addStringP(PSTR(UI_TEXT_PRINTTIME_DAYS));
-                tmp = seconds / 3600;
-                addInt(tmp, 2);
-                addStringP(PSTR(UI_TEXT_PRINTTIME_HOURS));
-                seconds -= tmp * 3600;
-                tmp = seconds / 60;
-                addInt(tmp, 2, '0');
-                addStringP(PSTR(UI_TEXT_PRINTTIME_MINUTES));
-            } else if (c2 == '7') // Shows text printed filament
-            {
-                addStringP(PSTR(UI_TEXT_PRINT_FILAMENT));
-            } else if (c2 == '8') // Shows printed filament
-            {
-                addFloat(Printer::printUsage.filamentMetres(), 6, 1);
-                addStringP(PSTR(" m"));
-            }
-            break;
-        }
-        }
     }
-    printCols[col] = 0;
-
-} // parse
+}
 
 void UIDisplay::setStatusP(PGM_P txt, bool error) {
     if (locked) {
