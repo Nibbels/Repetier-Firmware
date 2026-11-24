@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// PrintLine move preparation and queue/direct-move integration; lookahead and pulse execution belong to MotionPlanner and StepExecutor.
+
 #include "Repetier.h"
 #include "MotionPlanner.h"
 

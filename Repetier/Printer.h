@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// Machine integration facade and service instances; individual motion, job and compensation owners define their own state.
+
 #ifndef PRINTER_H
 #define PRINTER_H
 

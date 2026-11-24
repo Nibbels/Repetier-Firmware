@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// Foreground command loop, periodic services and waits; GCodeCommands.cpp dispatches command handlers.
+
 #include "Repetier.h"
 #include "GCodeInput.h"
 

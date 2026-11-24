@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// Machine setup, axis calibration and foreground motion admission; see MotionPlanner and StepExecutor for planning and execution.
+
 #include "Repetier.h"
 #include "GCodeInput.h"
 #include "TwiTransfer.h"

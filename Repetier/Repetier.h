@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// Shared firmware umbrella for existing callers; board selection is in BoardConfiguration.h.
+
 #ifndef REPETIER_H
 #define REPETIER_H
 

@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// RF board integration and accessory outputs; scan, pressure, matrix and lighting services live in their own modules.
+
 #include "Repetier.h"
 #include "BedMatrix.h"
 #include "CaseFan.h"

@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// Prepared move representation and queue interface shared by the foreground planner and timer executor.
+
 #ifndef MOTION_H
 #define MOTION_H
 
