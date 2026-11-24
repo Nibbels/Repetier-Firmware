@@ -52,7 +52,6 @@ uint8_t Printer::flag3 = 0;
 
 uint8_t Printer::debugLevel = 6; ///< Bitfield defining debug output. 1 = echo, 2 = info, 4 = error, 8 = dry run., 16 = Only communication, 32 = No moves
 
-uint16_t Printer::stepsPackingMinInterval = STEP_PACKING_MIN_INTERVAL;
 uint8_t Printer::menuMode_ = 0;
 
 
@@ -91,29 +90,12 @@ DirectPosition Printer::extruderDirect;
 
 char Printer::enabledStepper[3] = { 0, 0, 0 };
 
-char Printer::enableCaseLight = CASE_LIGHTS_DEFAULT_ON;
 
-
-#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
-char Printer::enable230VOutput;
-
-char Printer::enableFET1 = FET1_DEFAULT_ON;
-char Printer::enableFET2 = FET2_DEFAULT_ON;
-char Printer::enableFET3 = FET3_DEFAULT_ON;
-
-#endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
-
-unsigned char Printer::wrongType;
 
 //When the printer resets, we should not do movement, because it would not be homed. At least some interaction with buttons or temperature-commands are needed to allow movement.
 bool Printer::movementUnlocked_ = false;
 
 
-uint8_t Printer::motorCurrent[DRV8711_NUM_CHANNELS] = { 0 };
-
-
-//RF_MICRO_STEPS_ have values 0=FULL 1=2MS, 2=4MS, 3=8MS, 4=16MS, 5=32MS, 6=64MS, 7=128MS, 8=256MS
-uint8_t Printer::motorMicroStepsModeValue[DRV8711_NUM_CHANNELS] = { 0 }; //init later because of recalculation of value
 
 void Printer::updateDerivedParameter() {
     // das extruder offset dürfen wir zur achslänge addieren, weil in dem Axis-Length von z.b. 180 mm schon angenommen wird, dass der extruder mit beiden nozzles jeden punkt erreicht.
@@ -240,7 +222,7 @@ inline bool isExtrusionAllowed(float e) {
         de = (e - Printer::moveTarget.machineMM(E_AXIS)) - Printer::moveTarget.remainderMM(E_AXIS);
     }
 
-    if (fabs(de) * Printer::menuExtrusionFactor * Printer::digitCompensation.extrusionFactor() > EXTRUDE_MAXLENGTH) {
+    if (fabs(de) * Printer::flowMultiplier() * Printer::digitCompensation.extrusionFactor() > EXTRUDE_MAXLENGTH) {
         return false;
     }
 
@@ -424,11 +406,9 @@ void Printer::setup() {
 
     TwiTransfer::beginBus();
 
-    determineHardwareType();
-
-    if (wrongType) {
+    if (!hardwareTypeMatches()) {
         EEPROM::initBaudrate();
-        HAL::serialSetBaudrate(baudrate);
+        HAL::serialSetBaudrate(EEPROM::configuredBaudrate());
         Com::printErrorFLN(PSTR(UI_TEXT_WRONG_FIRMWARE));
 
         // Halt before initializing hardware outputs for a different board.
@@ -570,7 +550,7 @@ void Printer::setup() {
     uid.initialize();
 
     EEPROM::initBaudrate();
-    HAL::serialSetBaudrate(baudrate);
+    HAL::serialSetBaudrate(EEPROM::configuredBaudrate());
 
     // sending of this information tells the Repetier-Host that the firmware has restarted - never delete or change this to-be-sent information
     Com::println();
@@ -591,33 +571,11 @@ void Printer::setup() {
     // Read settings from eeprom if wanted [readDataFromEEPROM or destroy corrupted eeprom]
     EEPROM::init();
 
-#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
-    enable230VOutput = 0;
-    SET_OUTPUT(OUTPUT_230V_PIN);
-    WRITE(OUTPUT_230V_PIN, enable230VOutput);
-
-#if FET1 > -1 && !HOTEND_COOLER_USES_PIN(FET1)
-    SET_OUTPUT(FET1);
-    WRITE(FET1, enableFET1);
-#endif // FET1 accessory output
-#if FET2 > -1 && !HOTEND_COOLER_USES_PIN(FET2)
-    SET_OUTPUT(FET2);
-    WRITE(FET2, enableFET2);
-#endif // FET2 accessory output
-#if FET3 > -1 && CASE_FAN_PIN < 0
-    SET_OUTPUT(FET3);
-    WRITE(FET3, enableFET3);
-#endif // FET3
-
-#if CASE_FAN_PIN > -1
+    AccessoryOutputs::initializeBoardOutputs();
+#if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
     CaseFan::initialize();
-#endif // CASE_FAN_PIN > -1
-#endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
-
-#if !HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)
-    SET_OUTPUT(CASE_LIGHT_PIN);
-    WRITE(CASE_LIGHT_PIN, enableCaseLight);
 #endif
+    AccessoryOutputs::initializeCaseLight();
 
     updateDerivedParameter();
     Commands::checkFreeMemory();
@@ -705,7 +663,7 @@ void Printer::stopPrint() {
     Com::printF(Com::tExtrDot, i + 1); \
     Com::print(':');
 void Printer::showConfiguration() {
-    Com::config(PSTR("Baudrate:"), baudrate);
+    Com::config(PSTR("Baudrate:"), EEPROM::configuredBaudrate());
     Com::config(PSTR("InputBuffer:"), UsbSerial::receiveCapacity);
     Com::config(PSTR("NumExtruder:"), NUM_EXTRUDER);
     Com::config(PSTR("MixingExtruder:"), 0);

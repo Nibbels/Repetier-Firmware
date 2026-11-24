@@ -184,7 +184,7 @@ List of placeholder:
 %Xl : Advance L value
 %Xb : E0 Advance L value
 %Xc : E1 Advance L value
-%Xg : Printer::stepsPackingMinInterval
+%Xg : StepExecutor::packingInterval()
 %Xf : Extruder 0 Acceleration
 %XF : Extruder 1 Acceleration
 %XE : Extruder Stepper Microsteps

@@ -165,6 +165,7 @@ bool uiError=false;
 bool isUIErrorMessage() { return uiError; }
 void setUIErrorMessage(bool v) { uiError=v; }
 float menuExtrusionFactor=1.0f, lastE=0;
+float flowMultiplier() { return menuExtrusionFactor; }
 void queueRelativeMMCoordinates(float x,float y,float z,float e,float speed,bool wait) {
     assert(x==0 && y==0 && z==0 && speed==UI_SET_EXTRUDER_FEEDRATE && wait); lastE=e;
 }

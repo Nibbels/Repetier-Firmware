@@ -50,7 +50,6 @@ struct GCode { int T=0,P=0; int32_t S=0; float X=0; bool hasT(){return true;} bo
 static std::array<uint8_t,2048> image{};
 static bool keys=false;
 #define READ(pin) (!keys)
-static uint32_t baudrate=0;
 namespace HAL {
     template<class T> T get(int p) {assert(p>=0 && size_t(p)+sizeof(T)<=image.size()); T v; memcpy(&v,image.data()+p,sizeof v); return v;}
     template<class T> void set(int p,T v){assert(p>=0 && size_t(p)+sizeof(T)<=image.size());memcpy(image.data()+p,&v,sizeof v);}
@@ -75,19 +74,40 @@ struct Controller { uint8_t pidDriveMax=0,pidDriveMin=0,pidMax=0,sensorType=0; f
 struct Extruder {float stepsPerMM=0,maxFeedrate=0,maxEJerk=0,maxAcceleration=0,offsetMM[2]{},advanceL=0; uint8_t coolerSpeed=0; Controller tempControl; static Extruder* current; static void applyCurrentSettings(){} static void initHeatedBed(){} } extruder[2]; Extruder* Extruder::current=extruder;
 struct Point {uint8_t x,y;}; Point point{}; float lift=defaultHeatBedScanLiftMm; void restoreZOffsetScanPoint(Point p){point=p;} Point zOffsetScanPoint(){return point;} float scanStartLiftMm(){return lift;} void setScanStartLiftMm(float v){lift=v;}
 namespace RgbLighting {uint8_t m=0;void restoreMode(uint8_t v){m=v;}uint8_t mode(){return m;}}
-uint8_t drv8711Axis_2_InitMicrosteps(int){return 16;} uint8_t drv8711MicroSteps_2_ModeValue(int){return 4;} void drv8711adjustMicroSteps(int){} void setMotorCurrent(int,int){}
+uint8_t drv8711Axis_2_InitMicrosteps(int){return 16;} uint8_t drv8711MicroSteps_2_ModeValue(int){return 4;}
+namespace Drv8711 {
+    uint8_t modes[5]{}, currents[5]{};
+    uint8_t microstepMode(uint8_t i){return modes[i];}
+    void setMicrostepMode(uint8_t i,uint8_t v){modes[i]=v;}
+    uint8_t configuredCurrent(uint8_t i){return currents[i];}
+    void stageCurrent(uint8_t i,uint8_t v){currents[i]=v;}
+    void applyConfiguredCurrent(uint8_t){}
+}
 namespace Printer {
     PreheatProfiles preheatProfiles; MachineInactivity inactivity(0,0); ManualMotion manualMotion(0,0,0,0); ZOffset zOffset; WobbleCorrection wobbleCorrection; PressureProtection pressureProtection;
     struct Sense {struct Limits{int16_t maxMicrometers;};Limits l{};bool a=false; void setMaxMicrometers(int16_t v){l.maxMicrometers=v;} Limits limits(){return l;} bool autoStart(){return a;} void setAutoStart(bool v){a=v;}} senseOffsetControl;
     struct Gauge {bool v=true;bool zeroingEnabled(){return v;}void setZeroingEnabled(bool x){v=x;}} strainGauge;
     struct Digit {struct Flow{int16_t minDigits,maxDigits;};Flow p{};bool v=true;Flow flowProfile(){return p;}void setFlowProfile(Flow x){p=x;}bool digitZEnabled(){return v;}void setDigitZEnabled(bool x){v=x;}} digitCompensation;
     struct Pause {void restoreDefaultParking(){}} pause; struct Layers{void resetFadeBounds(float){}} layers;
-    uint8_t motorMicroStepsModeValue[5]{},motorCurrent[5]{},ZMode=0,enableCaseLight=0,enable230VOutput=0,enableFET1=0,enableFET2=0,enableFET3=0;
-    uint16_t stepsPackingMinInterval=0; float xy=0,z=0;
+    uint8_t ZMode=0;
+    uint8_t zDisplayMode(){ return ZMode; }
+    void restoreZDisplayMode(uint8_t value){ ZMode=value; }
+    float xy=0,z=0;
     #define AXIS_STORAGE(getter,setter) float getter##Values[4]{}; float getter(int i){return getter##Values[i];} void setter(int i,float v){getter##Values[i]=v;}
     AXIS_STORAGE(stepsPerMm,setStepsPerMm) AXIS_STORAGE(axisMaxFeedrate,setAxisMaxFeedrate) AXIS_STORAGE(axisHomingFeedrate,setAxisHomingFeedrate) AXIS_STORAGE(printAcceleration,setPrintAcceleration) AXIS_STORAGE(travelAcceleration,setTravelAcceleration) AXIS_STORAGE(axisLengthMm,setAxisLengthMm)
     float xyJerkLimit(){return xy;} void setXYJerkLimit(float v){xy=v;} float zJerkLimit(){return z;} void setZJerkLimit(float v){z=v;}
     void disableAllSteppersNow(){} void updateDerivedParameter(){} void applyAdvanceSettings(){}
+}
+namespace StepExecutor {
+    uint16_t interval=0;
+    uint16_t packingInterval(){return interval;}
+    void setPackingInterval(uint16_t v){interval=v;}
+}
+namespace AccessoryOutputs {
+    enum class Output : uint8_t { CaseLight, Mains, Fet1, Fet2, Fet3 };
+    char states[5]{};
+    char state(Output o){return states[static_cast<uint8_t>(o)];}
+    void stage(Output o,char v){states[static_cast<uint8_t>(o)]=v;}
 }
 #include "storage-source.inc"
 static void checksum(){unsigned c=0;for(size_t i=0;i<image.size();++i)if(i!=EPR_INTEGRITY_BYTE)c+=image[i];assert(uint8_t(c)==image[EPR_INTEGRITY_BYTE]);}

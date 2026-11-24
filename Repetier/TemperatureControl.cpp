@@ -88,7 +88,7 @@ void Extruder::manageTemperatures() {
                 if (!Printer::isAnyTempsensorDefect()) {
                     Printer::setSomeTempsensorDefect(true);
                     stopAllHeaters();
-                    Printer::flag2 |= PRINTER_FLAG2_GOT_TEMPS; //we are not waiting for first temp measurements anymore.
+                    Printer::markTemperatureReadingsAvailable(); //we are not waiting for first temp measurements anymore.
 
                     reportTempsensorAndHeaterErrors();
                     Printer::stopPrint();
@@ -217,10 +217,10 @@ void Extruder::manageTemperatures() {
 
     if (Printer::isAnyTempsensorDefect()) {
         stopAllHeaters();
-        Printer::debugLevel |= 8; // Go into dry mode
+        Printer::enableDebugDryrun(); // Go into dry mode
     } else {
         if (!errorDetected)
-            Printer::flag2 |= PRINTER_FLAG2_GOT_TEMPS; //we are not waiting for first temp measurements anymore.
+            Printer::markTemperatureReadingsAvailable(); //we are not waiting for first temp measurements anymore.
     }
 
 } // manageTemperatures

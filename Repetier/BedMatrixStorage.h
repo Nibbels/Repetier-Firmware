@@ -8,7 +8,7 @@ static bool writeMatrixSector(unsigned int address, bool clear) {
     const unsigned short format = clear ? 0 : EEPROM_FORMAT;
     const uint8_t lastX = clear ? COMPENSATION_MATRIX_MAX_X - 1 : g_uZMatrixMax[X_AXIS];
     const uint8_t lastY = clear ? COMPENSATION_MATRIX_MAX_Y - 1 : g_uZMatrixMax[Y_AXIS];
-    const unsigned short microsteps = clear ? 0 : drv8711ModeValue_2_MicroSteps(Printer::motorMicroStepsModeValue[Z_AXIS]);
+    const unsigned short microsteps = clear ? 0 : drv8711ModeValue_2_MicroSteps(Drv8711::microstepMode(Z_AXIS));
 
     // Invalidate the sector before replacing any payload. A reset mid-save
     // must leave this sector unavailable to the loader.
@@ -180,20 +180,20 @@ static char loadCompensationMatrix(unsigned int uAddress) {
     }
 
     if (uMicroSteps ==
-        drv8711ModeValue_2_MicroSteps(Printer::motorMicroStepsModeValue[Z_AXIS])
+        drv8711ModeValue_2_MicroSteps(Drv8711::microstepMode(Z_AXIS))
     ) {
         // the current z-compensation matrix has been determined with the current micro step setting, there is nothing to recalculate
         fMicroStepCorrection = 1.0;
     } else {
         // the current z-compensation matrix has been determined with a higher than the current micro step setting, we must divide all z-correction values
         fMicroStepCorrection = (float)
-                                   drv8711ModeValue_2_MicroSteps(Printer::motorMicroStepsModeValue[Z_AXIS])
+                                   drv8711ModeValue_2_MicroSteps(Drv8711::microstepMode(Z_AXIS))
             / (float)uMicroSteps;
 
         Com::printF(PSTR("loadMatrix(): micro step correction = "), fMicroStepCorrection);
         Com::printF(PSTR(" (stored="), (int)uMicroSteps);
         Com::printF(PSTR(", current="), (int)
-                                            drv8711ModeValue_2_MicroSteps(Printer::motorMicroStepsModeValue[Z_AXIS])
+                                            drv8711ModeValue_2_MicroSteps(Drv8711::microstepMode(Z_AXIS))
         );
         Com::printFLN(PSTR(")"));
     }

@@ -142,7 +142,7 @@ void UIDisplay::mainSwitchCase(int action) {
         Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
         const int8_t direction = action == UI_ACTION_RF_EXTRUDER_OUTPUT ? 1 : -1;
         if (uid.menuLevel == 0 && uid.menuPos[0] == 1)
-            Commands::changeFeedrateMultiply(Printer::feedrateMultiply + direction);
+            Commands::changeFeedrateMultiply(Printer::feedrateMultiplier() + direction);
         else
             Printer::pause.extrudeManually(int32_t(Printer::manualMotion.steps(E_AXIS)) * direction);
         break;
@@ -228,31 +228,19 @@ void UIDisplay::mainSwitchCase(int action) {
         break;
     }
     case UI_ACTION_DEBUG_ECHO: {
-        if (Printer::debugEcho())
-            Printer::debugLevel -= 1;
-        else
-            Printer::debugLevel += 1;
+        Printer::toggleDebugFlag(1);
         break;
     }
     case UI_ACTION_DEBUG_INFO: {
-        if (Printer::debugInfo())
-            Printer::debugLevel -= 2;
-        else
-            Printer::debugLevel += 2;
+        Printer::toggleDebugFlag(2);
         break;
     }
     case UI_ACTION_DEBUG_ERROR: {
-        if (Printer::debugErrors())
-            Printer::debugLevel -= 4;
-        else
-            Printer::debugLevel += 4;
+        Printer::toggleDebugFlag(4);
         break;
     }
     case UI_ACTION_DEBUG_DRYRUN: {
-        if (Printer::debugDryrun())
-            Printer::debugLevel -= 8;
-        else
-            Printer::debugLevel += 8;
+        Printer::toggleDebugFlag(8);
         if (Printer::debugDryrun()) // simulate movements without printing
         {
             Extruder::setTemperatureForAllExtruders(0);
@@ -263,13 +251,9 @@ void UIDisplay::mainSwitchCase(int action) {
 
 #if !HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)
     case UI_ACTION_LIGHTS_ONOFF: {
-        if (Printer::enableCaseLight)
-            Printer::enableCaseLight = 0;
-        else
-            Printer::enableCaseLight = 1;
-        WRITE(CASE_LIGHT_PIN, Printer::enableCaseLight);
+        AccessoryOutputs::toggle(AccessoryOutputs::Output::CaseLight);
 
-        HAL::eprSetByte(EPR_RF_CASE_LIGHT_MODE, Printer::enableCaseLight);
+        HAL::eprSetByte(EPR_RF_CASE_LIGHT_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::CaseLight));
         EEPROM::updateChecksum();
 
         break;
@@ -278,14 +262,10 @@ void UIDisplay::mainSwitchCase(int action) {
 
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
     case UI_ACTION_230V_OUTPUT: {
-        if (Printer::enable230VOutput)
-            Printer::enable230VOutput = 0;
-        else
-            Printer::enable230VOutput = 1;
-        WRITE(OUTPUT_230V_PIN, Printer::enable230VOutput);
+        AccessoryOutputs::toggle(AccessoryOutputs::Output::Mains);
 
         // after a power-on, the 230 V plug always shall be turned off - thus, we do not store this setting to the EEPROM
-        // HAL::eprSetByte( EPR_RF_230V_OUTPUT_MODE, Printer::enable230VOutput );
+        // HAL::eprSetByte( EPR_RF_230V_OUTPUT_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::Mains) );
         // EEPROM::updateChecksum();
 
         break;
@@ -293,26 +273,18 @@ void UIDisplay::mainSwitchCase(int action) {
 
 #if FET1 > -1 && !HOTEND_COOLER_USES_PIN(FET1)
     case UI_ACTION_FET1_OUTPUT: {
-        if (Printer::enableFET1)
-            Printer::enableFET1 = 0;
-        else
-            Printer::enableFET1 = 1;
-        WRITE(FET1, Printer::enableFET1);
+        AccessoryOutputs::toggle(AccessoryOutputs::Output::Fet1);
 
-        HAL::eprSetByte(EPR_RF_FET1_MODE, Printer::enableFET1);
+        HAL::eprSetByte(EPR_RF_FET1_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::Fet1));
         EEPROM::updateChecksum();
         break;
     }
 #endif // FET1 accessory output
 #if FET2 > -1 && !HOTEND_COOLER_USES_PIN(FET2)
     case UI_ACTION_FET2_OUTPUT: {
-        if (Printer::enableFET2)
-            Printer::enableFET2 = 0;
-        else
-            Printer::enableFET2 = 1;
-        WRITE(FET2, Printer::enableFET2);
+        AccessoryOutputs::toggle(AccessoryOutputs::Output::Fet2);
 
-        HAL::eprSetByte(EPR_RF_FET2_MODE, Printer::enableFET2);
+        HAL::eprSetByte(EPR_RF_FET2_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::Fet2));
         EEPROM::updateChecksum();
         break;
     }
@@ -341,12 +313,9 @@ void UIDisplay::mainSwitchCase(int action) {
     }
 
     case UI_ACTION_ZMODE: {
-        if (Printer::ZMode == 1)
-            Printer::ZMode = 2;
-        else
-            Printer::ZMode = 1;
+        Printer::toggleZDisplayMode();
 
-        HAL::eprSetByte(EPR_RF_Z_MODE, Printer::ZMode);
+        HAL::eprSetByte(EPR_RF_Z_MODE, Printer::zDisplayMode());
         EEPROM::updateChecksum();
         break;
     }

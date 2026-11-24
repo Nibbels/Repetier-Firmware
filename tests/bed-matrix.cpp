@@ -42,7 +42,7 @@ float axisStepsPerMM[3] = {100, 100, 100};
 float stepsPerMm(uint8_t axis) { return axisStepsPerMM[axis]; }
 float axisLengthMm(uint8_t axis) { return axisLengthMM[axis]; }
 void setAxisLengthMm(uint8_t axis, float value) { axisLengthMM[axis] = value; }
-uint8_t motorMicroStepsModeValue[3] = {5, 5, 5};
+
 bool debugErrors() { return true; }
 bool debugInfo() { return false; }
 void disableCMPnow(bool wait) { assert(wait); }
@@ -56,6 +56,7 @@ enum { Processing };
 namespace GCodeInput {
 void keepAlive(int state) { assert(state == Processing); }
 }
+namespace Drv8711 { uint8_t microstepMode(uint8_t) { return 5; } }
 unsigned short drv8711ModeValue_2_MicroSteps(uint8_t mode) { return 1 << mode; }
 static void determineCompensationOffsetZ();
 bool isAnyScanRunning() { return scanning; }

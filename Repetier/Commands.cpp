@@ -199,14 +199,13 @@ void Commands::printTemperatures(bool showRaw) {
 
 void Commands::changeFeedrateMultiply(int factor) {
     factor = constrain(factor, 25, 500);
-    Printer::feedrate *= (float)factor / (float)Printer::feedrateMultiply;
-    Printer::feedrateMultiply = factor;
+    Printer::setFeedrateMultiplier(factor);
 
     Com::printFLN(Com::tSpeedMultiply, factor);
 } // changeFeedrateMultiply
 
 void Commands::changeFlowrateMultiply(float newExtrusionFactor) {
-    Printer::menuExtrusionFactor = constrain(newExtrusionFactor, 0.1f, 2.0f);
+    Printer::setFlowMultiplier(constrain(newExtrusionFactor, 0.1f, 2.0f));
 
     Com::printFLN(Com::tFlowMultiply, (int)lroundf(100 * newExtrusionFactor));
 } // changeFlowrateMultiply

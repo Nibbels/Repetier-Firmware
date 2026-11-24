@@ -16,9 +16,11 @@
 */
 
 #include "Repetier.h"
+#include "StepExecutor.h"
 
 // Persisted signature for the existing internal EEPROM layout.
 constexpr uint8_t eepromMagic = 44;
+long EEPROM::configuredBaudrate_ = BAUDRATE;
 
 void EEPROM::update(GCode* com) {
     if (com->hasT() && com->hasP())
@@ -105,7 +107,7 @@ void EEPROM::restoreEEPROMExtruderSettingsFromConfiguration(uint8_t extruderId) 
 
 void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     Printer::preheatProfiles.restoreDefaults();
-    baudrate = BAUDRATE;
+    configuredBaudrate_ = BAUDRATE;
     Printer::inactivity.setShutdownTimeout(MAX_INACTIVE_TIME * 1000L);
     Printer::inactivity.setStepperTimeout(STEPPER_INACTIVE_TIME * 1000L);
     Printer::setStepsPerMm(X_AXIS, XAXIS_STEPS_PER_MM);
@@ -121,15 +123,14 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     //microsteps should be updated but we need to update the driver then.
     bool ms_changed = false;
     for (int ax = 0; ax <= E_AXIS + 1; ax++) {
-        if (Printer::motorMicroStepsModeValue[ax] != drv8711MicroSteps_2_ModeValue(drv8711Axis_2_InitMicrosteps(ax))) {
+        if (Drv8711::microstepMode(ax) != drv8711MicroSteps_2_ModeValue(drv8711Axis_2_InitMicrosteps(ax))) {
             if (!ms_changed) {
                 ms_changed = true;
                 Printer::disableAllSteppersNow();               //Stepper und Homing ausmachen.
                                                                 //We cannot use the old coordinates anymore.
                 HAL::eprSetByte(EPR_RF_MICRO_STEPS_USED, 0x00); //make all Microstep eeprom settings invalid for next boot.
             }
-            Printer::motorMicroStepsModeValue[ax] = drv8711MicroSteps_2_ModeValue(drv8711Axis_2_InitMicrosteps(ax));
-            drv8711adjustMicroSteps(ax + 1); //adjust driver chip X=1, Y=2 .. ,E1=5 according to motorMicroStepsModeValue[]
+            Drv8711::setMicrostepMode(ax, drv8711MicroSteps_2_ModeValue(drv8711Axis_2_InitMicrosteps(ax)));
         }
     }
 
@@ -175,18 +176,18 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     ich glaube gesehen zu haben, dass acceleration und feedrates nicht neu eingelesen werden. will man das?
     */
 
-    Printer::stepsPackingMinInterval = STEP_PACKING_MIN_INTERVAL;
+    StepExecutor::setPackingInterval(STEP_PACKING_MIN_INTERVAL);
 
-    Printer::ZMode = DEFAULT_Z_SCALE_MODE; //wichtig, weils im Mod einen dritten Mode gibt. Für Zurückmigration
+    Printer::restoreZDisplayMode(DEFAULT_Z_SCALE_MODE); //wichtig, weils im Mod einen dritten Mode gibt. Für Zurückmigration
 
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
     //hier nur config laden nicht mosfets schalten!
-    Printer::enable230VOutput = 0;
+    AccessoryOutputs::stage(AccessoryOutputs::Output::Mains, 0);
 
     //hier nur config laden nicht mosfets schalten!
-    Printer::enableFET1 = FET1_DEFAULT_ON;
-    Printer::enableFET2 = FET2_DEFAULT_ON;
-    Printer::enableFET3 = FET3_DEFAULT_ON;
+    AccessoryOutputs::stage(AccessoryOutputs::Output::Fet1, FET1_DEFAULT_ON);
+    AccessoryOutputs::stage(AccessoryOutputs::Output::Fet2, FET2_DEFAULT_ON);
+    AccessoryOutputs::stage(AccessoryOutputs::Output::Fet3, FET3_DEFAULT_ON);
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
     restoreZOffsetScanPoint({defaultZOffsetScanIndex, defaultZOffsetScanIndex});
@@ -205,8 +206,7 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
 
     const unsigned short uMotorCurrentUse[] = MOTOR_CURRENT_NORMAL; //Standardwert
     for (uint8_t stp = 0; stp < 3 + NUM_EXTRUDER; stp++) {          //0..4 bei 5 steppern.
-        Printer::motorCurrent[stp] = uMotorCurrentUse[stp];
-        //setMotorCurrent( stp+1, uMotorCurrentUse[stp] ); //driver ist 1-basiert //hier nur config laden
+        Drv8711::stageCurrent(stp, uMotorCurrentUse[stp]); // Restore configuration without a register write.
     }
 
     Printer::pause.restoreDefaultParking();
@@ -244,7 +244,7 @@ void EEPROM::clearEEPROM() {
 void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     HAL::eprSetByte(EPR_MAGIC_BYTE, eepromMagic);
     HAL::eprSetByte(EPR_CHECK_NUM_EXTRUDERS, NUM_EXTRUDER);
-    HAL::eprSetInt32(EPR_BAUDRATE, baudrate);
+    HAL::eprSetInt32(EPR_BAUDRATE, configuredBaudrate_);
     HAL::eprSetInt32(EPR_MAX_INACTIVE_TIME, Printer::inactivity.shutdownTimeout());
     HAL::eprSetInt32(EPR_STEPPER_INACTIVE_TIME, Printer::inactivity.stepperTimeout());
     HAL::eprSetFloat(EPR_XAXIS_STEPS_PER_MM, Printer::stepsPerMm(X_AXIS));
@@ -254,7 +254,7 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     HAL::eprSetFloat(EPR_Y_MAX_FEEDRATE, Printer::axisMaxFeedrate(Y_AXIS));
     HAL::eprSetFloat(EPR_Z_MAX_FEEDRATE, Printer::axisMaxFeedrate(Z_AXIS));
     HAL::eprSetInt32(EPR_RF_Z_OFFSET, Printer::zOffset.manualMicrometers());
-    HAL::eprSetByte(EPR_RF_Z_MODE, Printer::ZMode);
+    HAL::eprSetByte(EPR_RF_Z_MODE, Printer::zDisplayMode());
     HAL::eprSetByte(EPR_RF_MOVE_MODE_X, Printer::manualMotion.mode(X_AXIS));
     HAL::eprSetByte(EPR_RF_MOVE_MODE_Y, Printer::manualMotion.mode(Y_AXIS));
     HAL::eprSetByte(EPR_RF_MOVE_MODE_Z, Printer::manualMotion.mode(Z_AXIS));
@@ -291,7 +291,7 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     for (uint8_t i = 0; i < NUM_EXTRUDER; i++) {
         storeExtruderDataIntoEEPROM(i);
     }
-    HAL::eprSetInt16(EPR_RF_STEP_PACKING_MIN_INTERVAL, Printer::stepsPackingMinInterval);
+    HAL::eprSetInt16(EPR_RF_STEP_PACKING_MIN_INTERVAL, StepExecutor::packingInterval());
 
     HAL::eprSetByte(EPR_RF_FAN_MODE, HAL::partFanMode());
 
@@ -304,19 +304,19 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
         HAL::eprSetFloat(EPR_PRINTING_DISTANCE, 0);
     }
 
-    HAL::eprSetByte(EPR_RF_CASE_LIGHT_MODE, Printer::enableCaseLight);
+    HAL::eprSetByte(EPR_RF_CASE_LIGHT_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::CaseLight));
 
 #ifdef RGB_LIGHT_R_PIN
     HAL::eprSetByte(EPR_RF_RGB_LIGHT_MODE, RgbLighting::mode());
 #endif // RGB_LIGHT_R_PIN
 
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
-    HAL::eprSetByte(EPR_RF_FET1_MODE, Printer::enableFET1);
-    HAL::eprSetByte(EPR_RF_FET2_MODE, Printer::enableFET2);
-    HAL::eprSetByte(EPR_RF_FET3_MODE, Printer::enableFET3);
+    HAL::eprSetByte(EPR_RF_FET1_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::Fet1));
+    HAL::eprSetByte(EPR_RF_FET2_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::Fet2));
+    HAL::eprSetByte(EPR_RF_FET3_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::Fet3));
 
     // after a power-on, the 230 V plug always shall be turned off - thus, we do not store this setting to the EEPROM
-    // HAL::eprSetByte( EPR_RF_230V_OUTPUT_MODE, Printer::enable230VOutput );
+    // HAL::eprSetByte( EPR_RF_230V_OUTPUT_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::Mains) );
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
     HAL::eprSetInt16(EPR_RF_MOD_Z_STEP_SIZE, Printer::manualMotion.steps(Z_AXIS));
@@ -341,12 +341,12 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN, stopLimits.minimum);
     HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX, stopLimits.maximum);
 
-    HAL::eprSetByte(EPR_RF_MOTOR_CURRENT + X_AXIS, Printer::motorCurrent[X_AXIS]);
-    HAL::eprSetByte(EPR_RF_MOTOR_CURRENT + Y_AXIS, Printer::motorCurrent[Y_AXIS]);
-    HAL::eprSetByte(EPR_RF_MOTOR_CURRENT + Z_AXIS, Printer::motorCurrent[Z_AXIS]);
-    HAL::eprSetByte(EPR_RF_MOTOR_CURRENT + E_AXIS + 0, Printer::motorCurrent[E_AXIS + 0]);
+    HAL::eprSetByte(EPR_RF_MOTOR_CURRENT + X_AXIS, Drv8711::configuredCurrent(X_AXIS));
+    HAL::eprSetByte(EPR_RF_MOTOR_CURRENT + Y_AXIS, Drv8711::configuredCurrent(Y_AXIS));
+    HAL::eprSetByte(EPR_RF_MOTOR_CURRENT + Z_AXIS, Drv8711::configuredCurrent(Z_AXIS));
+    HAL::eprSetByte(EPR_RF_MOTOR_CURRENT + E_AXIS + 0, Drv8711::configuredCurrent(E_AXIS + 0));
 #if NUM_EXTRUDER > 1
-    HAL::eprSetByte(EPR_RF_MOTOR_CURRENT + E_AXIS + 1, Printer::motorCurrent[E_AXIS + 1]);
+    HAL::eprSetByte(EPR_RF_MOTOR_CURRENT + E_AXIS + 1, Drv8711::configuredCurrent(E_AXIS + 1));
 #endif //NUM_EXTRUDER > 1
 
     HAL::eprSetByte(EPR_RF_ZERO_DIGIT_STATE, Printer::strainGauge.zeroingEnabled() ? 1 : 2);
@@ -403,7 +403,7 @@ void EEPROM::readDataFromEEPROM() {
     bool change = readPreheatProfiles();
 
     uint8_t version = HAL::eprGetByte(EPR_VERSION); // This is the saved version. Don't copy data not set in older versions!
-    baudrate = HAL::eprGetInt32(EPR_BAUDRATE);
+    configuredBaudrate_ = HAL::eprGetInt32(EPR_BAUDRATE);
     Printer::inactivity.setShutdownTimeout(HAL::eprGetInt32(EPR_MAX_INACTIVE_TIME));
     Printer::inactivity.setStepperTimeout(HAL::eprGetInt32(EPR_STEPPER_INACTIVE_TIME));
     Printer::setStepsPerMm(X_AXIS, HAL::eprGetFloat(EPR_XAXIS_STEPS_PER_MM));
@@ -426,7 +426,7 @@ void EEPROM::readDataFromEEPROM() {
 
     // Reload the saved value in the current scale and keep the live SenseOffset.
     Printer::zOffset.setManualMicrometers(HAL::eprGetInt32(EPR_RF_Z_OFFSET), Printer::stepsPerMm(Z_AXIS));
-    Printer::ZMode = HAL::eprGetByte(EPR_RF_Z_MODE);
+    Printer::restoreZDisplayMode(HAL::eprGetByte(EPR_RF_Z_MODE));
 
     Printer::layers.resetFadeBounds(Printer::stepsPerMm(Z_AXIS));
 
@@ -575,22 +575,22 @@ void EEPROM::readDataFromEEPROM() {
             e->coolerSpeed = HAL::eprGetByte(o + EPR_EXTRUDER_COOLER_SPEED);
     }
 
-    Printer::enableCaseLight = HAL::eprGetByte(EPR_RF_CASE_LIGHT_MODE);
+    AccessoryOutputs::stage(AccessoryOutputs::Output::CaseLight, HAL::eprGetByte(EPR_RF_CASE_LIGHT_MODE));
 
 #ifdef RGB_LIGHT_R_PIN
     RgbLighting::restoreMode(HAL::eprGetByte(EPR_RF_RGB_LIGHT_MODE));
 #endif // RGB_LIGHT_R_PIN
 
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
-    Printer::enableFET1 = HAL::eprGetByte(EPR_RF_FET1_MODE);
-    Printer::enableFET2 = HAL::eprGetByte(EPR_RF_FET2_MODE);
+    AccessoryOutputs::stage(AccessoryOutputs::Output::Fet1, HAL::eprGetByte(EPR_RF_FET1_MODE));
+    AccessoryOutputs::stage(AccessoryOutputs::Output::Fet2, HAL::eprGetByte(EPR_RF_FET2_MODE));
 #if CASE_FAN_PIN < 0
     // Do not load the FET3 EEPROM state if it is being used as case fan
-    Printer::enableFET3 = HAL::eprGetByte(EPR_RF_FET3_MODE);
+    AccessoryOutputs::stage(AccessoryOutputs::Output::Fet3, HAL::eprGetByte(EPR_RF_FET3_MODE));
 #endif // CASE_FAN_PIN < 0
 
     // after a power-on, the 230 V plug always shall be turned off - thus, we do not store this setting to the EEPROM
-    // Printer::enable230VOutput = HAL::eprGetByte( EPR_RF_230V_OUTPUT_MODE );
+    // AccessoryOutputs::stage(AccessoryOutputs::Output::Mains, HAL::eprGetByte( EPR_RF_230V_OUTPUT_MODE ));
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
     //reinit for check if eeprom values are too high.
@@ -694,8 +694,8 @@ void EEPROM::readDataFromEEPROM() {
     for (uint8_t axis = 0; axis < DRV8711_NUM_CHANNELS; axis++) { //0..4 bei 5 steppern.
         current = HAL::eprGetByte(EPR_RF_MOTOR_CURRENT + axis);
         if (MOTOR_CURRENT_MIN <= current && current <= uMotorCurrentMax[axis]) {
-            Printer::motorCurrent[axis] = current;
-            setMotorCurrent(axis + 1, current); //driver ist 1-basiert
+            Drv8711::stageCurrent(axis, current);
+            Drv8711::applyConfiguredCurrent(axis);
         } else {
             HAL::eprSetByte(EPR_RF_MOTOR_CURRENT + axis, uMotorCurrentUse[axis]); //wenn mist im EEPROM, dann Silent-Wert reinschreiben.
             change = true;
@@ -710,19 +710,18 @@ void EEPROM::readDataFromEEPROM() {
                #define EPR_RF_MICRO_STEPS_E0             1946 //[1byte]
                #define EPR_RF_MICRO_STEPS_E1             1947 //[1byte] */
             uint8_t epr = HAL::eprGetByte(EPR_RF_MICRO_STEPS_X + axis);
-            if (epr <= 8 && Printer::motorMicroStepsModeValue[axis] != epr) {
-                Printer::motorMicroStepsModeValue[axis] = epr;
-                drv8711adjustMicroSteps(axis + 1);
+            if (epr <= 8 && Drv8711::microstepMode(axis) != epr) {
+                Drv8711::setMicrostepMode(axis, epr);
             }
         }
     }
 
     if (!HAL::eprGetInt16(EPR_RF_STEP_PACKING_MIN_INTERVAL)) {
-        Printer::stepsPackingMinInterval = STEP_PACKING_MIN_INTERVAL;
+        StepExecutor::setPackingInterval(STEP_PACKING_MIN_INTERVAL);
         HAL::eprSetInt16(EPR_RF_STEP_PACKING_MIN_INTERVAL, STEP_PACKING_MIN_INTERVAL);
         change = true;
     } else {
-        Printer::stepsPackingMinInterval = constrain(HAL::eprGetInt16(EPR_RF_STEP_PACKING_MIN_INTERVAL), MIN_STEP_PACKING_MIN_INTERVAL, MAX_STEP_PACKING_MIN_INTERVAL);
+        StepExecutor::setPackingInterval(constrain(HAL::eprGetInt16(EPR_RF_STEP_PACKING_MIN_INTERVAL), MIN_STEP_PACKING_MIN_INTERVAL, MAX_STEP_PACKING_MIN_INTERVAL));
     }
 
     uint8_t temp_min = HAL::eprGetByte(EPR_RF_PART_FAN_PWM_MIN);
@@ -757,7 +756,7 @@ void EEPROM::readDataFromEEPROM() {
 
 void EEPROM::initBaudrate() {
     if (HAL::eprGetByte(EPR_MAGIC_BYTE) == eepromMagic) {
-        baudrate = HAL::eprGetInt32(EPR_BAUDRATE);
+        configuredBaudrate_ = HAL::eprGetInt32(EPR_BAUDRATE);
     }
 } // initBaudrate
 

@@ -44,10 +44,8 @@ struct InterruptProtectedBlock {
     ~InterruptProtectedBlock() { if (active) unprotect(); }
 };
 struct Printer {
-    static uint8_t motorMicroStepsModeValue[5], motorCurrent[5];
     static bool debugInfo() { return false; }
 };
-uint8_t Printer::motorMicroStepsModeValue[5], Printer::motorCurrent[5];
 struct Com { template<typename T> static void printF(const char*, T) {} template<typename T> static void printFLN(const char*, T) {} };
 '''
 HARNESS = r'''
@@ -113,15 +111,32 @@ int main() {
     for (unsigned w: {0u,1u,0x8000u,0xa55au,0xffffu}) { drv8711Transmit(w); tx(w); check("tx"); }
     for (int d=1;d<=5;++d) {
         for (int m=0;m<256;++m) {
-            Printer::motorMicroStepsModeValue[d-1]=m;
-            drv8711adjustMicroSteps(d); adjust(d,m); check("adjust microsteps");
+            Drv8711::setMicrostepMode(d-1,m); adjust(d,m); check("adjust microsteps");
+            assert(Drv8711::microstepMode(d-1)==m);
         }
         for (int level=0;level<256;++level) {
+            const auto saved = Drv8711::configuredCurrent(d-1);
             setMotorCurrent(d,level); current(d,level); check("current");
+            assert(Drv8711::configuredCurrent(d-1)==saved);
+            Drv8711::stageCurrent(d-1,level);
+            assert(Drv8711::configuredCurrent(d-1)==level);
+            check("staging has no GPIO side effect");
+            Drv8711::applyConfiguredCurrent(d-1); current(d,level); check("apply saved current");
         }
     }
     for (int n=0;n<256;++n) {
         setExtruderCurrent(n,127); current(4+std::min(n,NUM_EXTRUDER-1),127); check("extruder clamp");
+    }
+    for (int first : {0,3}) {
+        for (int a=0;a<=8;++a) for (int b=0;b<=8;++b) for (int next=0;next<=8;++next) {
+            Drv8711::setMicrostepMode(first,a); adjust(first+1,a);
+            Drv8711::setMicrostepMode(first+1,b); adjust(first+2,b);
+            check("pair setup");
+            assert(Drv8711::setPairedMicrostepMode(first,next)==(b!=next));
+            if (b!=next) { adjust(first+1,next); adjust(first+2,next); }
+            check("paired mode");
+            assert(Drv8711::microstepMode(first)==next && Drv8711::microstepMode(first+1)==next);
+        }
     }
     drv8711Init();
     writePin(DRV_RESET1,0); output(DRV_RESET1); configureBus();
@@ -129,13 +144,13 @@ int main() {
     writePin(DRV_RESET1,1); delay(5000); writePin(DRV_RESET1,0); delay(5000);
     const int modes[]={5,5,4,6,6};
     for (int p=1;p<=5;++p) {
-        assert(Printer::motorMicroStepsModeValue[p-1]==modes[p-1]);
+        assert(Drv8711::microstepMode(p-1)==modes[p-1]);
         adjust(p,modes[p-1]);
     }
     const unsigned words[]={0x2020,0x4504,0x583c,0x60f0,0x7000};
     for (unsigned w:words) { enableAll(); tx(w); disableAll(); if (w!=0x7000) delay(1); }
     for (int p=1;p<=5;++p) {
-        assert(Printer::motorCurrent[p-1]==10*p);
+        assert(Drv8711::configuredCurrent(p-1)==10*p);
         if (p<=3+NUM_EXTRUDER) current(p,10*p);
     }
     check("init including BLANK omission");

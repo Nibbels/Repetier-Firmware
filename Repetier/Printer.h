@@ -83,6 +83,13 @@ class Printer {
     static uint32_t maxTravelAccelerationStepsPerSquareSecond_[4];
     static float maxXYJerk_;
     static float maxZJerk_;
+    static uint8_t flag0, flag1, flag2, flag3;
+    static char enabledStepper[3];
+    static uint8_t debugLevel;
+    static float feedrate; // Last requested feedrate (mm/s, including multiplier).
+    static int feedrateMultiply;
+    static float menuExtrusionFactor;
+    static char ZMode; // Display scale, independent of physical Z correction.
 
 public:
     static ExtrusionOutput extrusionOutput;
@@ -122,16 +129,25 @@ public:
     }
 
     static GCodeModes gcodeModes;
-    static uint8_t debugLevel;
-    static uint8_t flag0;
-    static uint8_t flag1;
-    static uint8_t flag2;
-    static uint8_t flag3;
-    static uint16_t stepsPackingMinInterval;
+    static float requestedFeedrate() { return feedrate; }
+    static int feedrateMultiplier() { return feedrateMultiply; }
+    static float flowMultiplier() { return menuExtrusionFactor; }
+    // Commands clamps the factor before publishing the coupled speed/multiplier.
+    static void setFeedrateMultiplier(int factor) {
+        feedrate *= (float)factor / (float)feedrateMultiply;
+        feedrateMultiply = factor;
+    }
+    static void setFlowMultiplier(float factor) { menuExtrusionFactor = factor; }
+    static uint8_t debugMask() { return debugLevel; }
+    static void setDebugMask(uint8_t mask) { debugLevel = mask; }
+    static void toggleDebugFlag(uint8_t bit) { debugLevel ^= bit; }
+    static void enableDebugDryrun() { debugLevel |= 8; }
+    static char zDisplayMode() { return ZMode; }
+    static void restoreZDisplayMode(char mode) { ZMode = mode; }
+    static void toggleZDisplayMode() { ZMode = ZMode == 1 ? 2 : 1; }
+    static void markTemperatureReadingsAvailable() { flag2 |= PRINTER_FLAG2_GOT_TEMPS; }
+    static bool temperatureReadingsAvailable() { return flag2 & PRINTER_FLAG2_GOT_TEMPS; }
 
-    static float feedrate;                  // Last requested feedrate.
-    static int feedrateMultiply;            // Multiplier for feedrate in percent (factor 1 = 100)
-    static float menuExtrusionFactor;       // Flow multiplier factor (1.0 = 100%)
     static PrintUsage printUsage;
     static ZOffset zOffset;
     static SenseOffsetControl senseOffsetControl;
@@ -151,38 +167,20 @@ public:
     static PrintJob printJob;
     static MachineInactivity inactivity;
     static IdleStatus idleStatus;
-    static char ZMode;                      // Z Scale
     static ManualMotion manualMotion;
 
     static volatile char doHeatBedZCompensation;
 
     static volatile char blockAll;
 
-    static char enabledStepper[3];
-
-    static char enableCaseLight;
 
 
-#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
-    static char enable230VOutput;
-
-    static char enableFET1;
-    static char enableFET2;
-    static char enableFET3;
-
-#endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
-
-    static unsigned char wrongType;
 
     static bool movementUnlocked() { return movementUnlocked_; }
     static void allowMovement() { movementUnlocked_ = true; }
     static void lockMovement() { movementUnlocked_ = false; }
 
 
-    static uint8_t motorCurrent[DRV8711_NUM_CHANNELS];
-
-
-    static uint8_t motorMicroStepsModeValue[DRV8711_NUM_CHANNELS]; //1=2MS, 2=4MS, 3=8MS, 4=16MS, 5=32MS, 6=64MS, 7=128MS, 8=256MS
 
     static INLINE void setMenuMode(uint8_t mode, bool on) {
         if (on)

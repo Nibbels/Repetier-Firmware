@@ -341,11 +341,11 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
         case 'h': {
             if (c2 == 'x' && col < MAX_COLS) // %hx : x homed
             {
-                if (Printer::flag3 & PRINTER_FLAG3_X_HOMED)
+                if (Printer::isAxisHomed(X_AXIS))
                     printCols[col++] = '*';
             } else if (c2 == 'y' && col < MAX_COLS) // %hy : y homed
             {
-                if (Printer::flag3 & PRINTER_FLAG3_Y_HOMED)
+                if (Printer::isAxisHomed(Y_AXIS))
                     printCols[col++] = '*';
             } else if (c2 == 'z' && col < MAX_COLS) // %hz : z homed
             {
@@ -353,13 +353,13 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
                     printCols[col++] = '*';
             } else if (c2 == 'X' && col < MAX_COLS) // %hX : x homed
             {
-                if (Printer::flag3 & PRINTER_FLAG3_X_HOMED)
+                if (Printer::isAxisHomed(X_AXIS))
                     printCols[col++] = ':';
                 else
                     printCols[col++] = '?';
             } else if (c2 == 'Y' && col < MAX_COLS) // %hY : y homed
             {
-                if (Printer::flag3 & PRINTER_FLAG3_Y_HOMED)
+                if (Printer::isAxisHomed(Y_AXIS))
                     printCols[col++] = ':';
                 else
                     printCols[col++] = '?';
@@ -377,7 +377,7 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
                 addInt(lastAction, 4);
 
             else if (c2 == 'o')
-                addStringP(Printer::enableCaseLight ? ui_text_on : ui_text_off); // %lo : Lights on/off
+                addStringP(AccessoryOutputs::state(AccessoryOutputs::Output::CaseLight) ? ui_text_on : ui_text_off); // %lo : Lights on/off
 
 #ifdef RGB_LIGHT_R_PIN
             else if (c2 == 'i') // %li : Light: White/Color
@@ -454,31 +454,31 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
         case 'M': {
             if (c2 == 'X' && col < MAX_COLS) // %MX : Motorcurrent X
             {
-                addFloat(Printer::motorCurrent[X_AXIS] / 63.0f, 1, 2); //(126 = ~2A) *2.0f/126.0f
+                addFloat(Drv8711::configuredCurrent(X_AXIS) / 63.0f, 1, 2); //(126 = ~2A) *2.0f/126.0f
                 if (col < MAX_COLS)
                     printCols[col++] = 'A';
                 if (col < MAX_COLS)
                     printCols[col++] = ' ';
-                addInt((int)Printer::motorCurrent[X_AXIS], 3);
+                addInt((int)Drv8711::configuredCurrent(X_AXIS), 3);
             } else if (c2 == 'Y' && col < MAX_COLS) // %MY : Motorcurrent Y
             {
-                addFloat(Printer::motorCurrent[Y_AXIS] / 63.0f, 1, 2); //(126 = ~2A) *2.0f/126.0f
+                addFloat(Drv8711::configuredCurrent(Y_AXIS) / 63.0f, 1, 2); //(126 = ~2A) *2.0f/126.0f
                 if (col < MAX_COLS)
                     printCols[col++] = 'A';
                 if (col < MAX_COLS)
                     printCols[col++] = ' ';
-                addInt((int)Printer::motorCurrent[Y_AXIS], 3);
+                addInt((int)Drv8711::configuredCurrent(Y_AXIS), 3);
             } else if (c2 == 'Z') // %MZ : Motorcurrent Z
             {
-                addFloat(Printer::motorCurrent[Z_AXIS] / 63.0f, 1, 2); //(126 = ~2A) *2.0f/126.0f
+                addFloat(Drv8711::configuredCurrent(Z_AXIS) / 63.0f, 1, 2); //(126 = ~2A) *2.0f/126.0f
                 if (col < MAX_COLS)
                     printCols[col++] = 'A';
                 if (col < MAX_COLS)
                     printCols[col++] = ' ';
-                addInt((int)Printer::motorCurrent[Z_AXIS], 3);
+                addInt((int)Drv8711::configuredCurrent(Z_AXIS), 3);
             } else if (c2 == '0') // %M0 : Motorcurrent T0
             {
-                addFloat(Printer::motorCurrent[E_AXIS] / 63.0f, 1, 2); //(126 = ~2A) *2.0f/126.0f
+                addFloat(Drv8711::configuredCurrent(E_AXIS) / 63.0f, 1, 2); //(126 = ~2A) *2.0f/126.0f
                 if (col < MAX_COLS)
                     printCols[col++] = 'A';
                 if (col < MAX_COLS)
@@ -486,10 +486,10 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
                 if (Printer::pause.isWarmPause())
                     addStringP(PSTR(UI_TEXT_PAUSED));
                 else
-                    addInt((int)Printer::motorCurrent[E_AXIS], 3);
+                    addInt((int)Drv8711::configuredCurrent(E_AXIS), 3);
             } else if (c2 == '1') // %M1 : Motorcurrent T1
             {
-                addFloat(Printer::motorCurrent[E_AXIS + 1] / 63.0f, 1, 2); //(126 = ~2A) *2.0f/126.0f
+                addFloat(Drv8711::configuredCurrent(E_AXIS + 1) / 63.0f, 1, 2); //(126 = ~2A) *2.0f/126.0f
                 if (col < MAX_COLS)
                     printCols[col++] = 'A';
                 if (col < MAX_COLS)
@@ -497,7 +497,7 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
                 if (Printer::pause.isWarmPause())
                     addStringP(PSTR(UI_TEXT_PAUSED));
                 else
-                    addInt((int)Printer::motorCurrent[E_AXIS + 1], 3);
+                    addInt((int)Drv8711::configuredCurrent(E_AXIS + 1), 3);
             }
             break;
         }
@@ -516,12 +516,12 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
             }
             if (c2 == 'c') // %oc : Connection baudrate
             {
-                addLong(baudrate, 6);
+                addLong(EEPROM::configuredBaudrate(), 6);
                 break;
             }
             if (c2 == 'f') // %of : flow multiplier
             {
-                addInt(100 * Printer::menuExtrusionFactor
+                addInt(100 * Printer::flowMultiplier()
                            * Printer::digitCompensation.extrusionFactor()
                        ,
                        3);
@@ -529,12 +529,12 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
             }
             if (c2 == 'm') // %om : Speed multiplier
             {
-                addInt(Printer::feedrateMultiply * Printer::digitCompensation.feedrateFactor(), 3);
+                addInt(Printer::feedrateMultiplier() * Printer::digitCompensation.feedrateFactor(), 3);
                 break;
             }
-            if (c2 == 'M') // %oM : Printer::feedrate
+            if (c2 == 'M') // %oM : Printer::requestedFeedrate()
             {
-                addInt(Printer::feedrate, 3);
+                addInt(Printer::requestedFeedrate(), 3);
                 break;
             }
             if (c2 == 'v') // %ov : Active Speed
@@ -552,17 +552,17 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
 
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
             if (c2 == 'u') {
-                addStringP(Printer::enable230VOutput ? ui_text_on : ui_text_off); // %ou : 230V output on/off
+                addStringP(AccessoryOutputs::state(AccessoryOutputs::Output::Mains) ? ui_text_on : ui_text_off); // %ou : 230V output on/off
                 break;
             }
 
             if (c2 == 'l') {
-                addStringP(Printer::enableFET1 ? ui_text_on : ui_text_off); // %ol : FET 1 X42 output on/off
+                addStringP(AccessoryOutputs::state(AccessoryOutputs::Output::Fet1) ? ui_text_on : ui_text_off); // %ol : FET 1 X42 output on/off
                 break;
             }
 
             if (c2 == 'n') {
-                addStringP(Printer::enableFET2 ? ui_text_on : ui_text_off); // %on : FET 2 X44 output on/off
+                addStringP(AccessoryOutputs::state(AccessoryOutputs::Output::Fet2) ? ui_text_on : ui_text_off); // %on : FET 2 X44 output on/off
                 break;
             }
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
@@ -713,7 +713,7 @@ void UIDisplay::renderTemperatureField(char c1, char c2, float& fvalue) {
                 break;
             }
 
-            if (!(Printer::flag2 & PRINTER_FLAG2_GOT_TEMPS)) {
+            if (!(Printer::temperatureReadingsAvailable())) {
                 // avoid to show the current temperatures before we have measured them
                 addStringP(PSTR(" ? "));
                 break;
@@ -802,7 +802,7 @@ void UIDisplay::renderPositionField(char c1, char c2, float& fvalue) {
                         bDefect = true;
                     } else {
                         // Wenn nur CurrentSteps[Z_AXIS] ausgegeben wird, ist auch interssant, viel die differenz aller anderer versätze ist:
-                        if (Printer::ZMode == Z_VALUE_MODE_Z_MIN) { //->Z_VALUE_MODE_LAYER
+                        if (Printer::zDisplayMode() == Z_VALUE_MODE_Z_MIN) { //->Z_VALUE_MODE_LAYER
                             if (col < MAX_COLS)
                                 printCols[col++] = 'm';
                             if (col < MAX_COLS)
@@ -842,7 +842,7 @@ void UIDisplay::renderPositionField(char c1, char c2, float& fvalue) {
                 addInt(Printer::zOffset.manualMicrometers(), 4);
             } else if (c2 == 'm') // %zm : Z Scale
             {
-                addStringP(Printer::ZMode == Z_VALUE_MODE_Z_MIN ? ui_text_z_mode_min : ui_text_z_mode_gcode);
+                addStringP(Printer::zDisplayMode() == Z_VALUE_MODE_Z_MIN ? ui_text_z_mode_min : ui_text_z_mode_gcode);
             } else if (c2 == 's') // %zs : Z-Schraube korrektur mm
             {
                 addFloat(ZScrewAdjustment::current().millimetres, 1, 3);
@@ -985,18 +985,18 @@ void UIDisplay::renderExtruderField(char c1, char c2) {
 
             else if (c2 == 'E') // %XE : Extruder Stepper Microsteps
             {
-                addInt(drv8711ModeValue_2_MicroSteps(Printer::motorMicroStepsModeValue[E_AXIS]), 3);
+                addInt(drv8711ModeValue_2_MicroSteps(Drv8711::microstepMode(E_AXIS)), 3);
             }
-            else if (c2 == 'g') // %Xg : Printer::stepsPackingMinInterval
+            else if (c2 == 'g') // %Xg : StepExecutor::packingInterval()
             {
-                addInt(Printer::stepsPackingMinInterval, 4);
+                addInt(StepExecutor::packingInterval(), 4);
             }
             else if (c2 == 'x') // %Xx : XY Stepper Microsteps
             {
-                addInt(drv8711ModeValue_2_MicroSteps(Printer::motorMicroStepsModeValue[X_AXIS]), 3);
+                addInt(drv8711ModeValue_2_MicroSteps(Drv8711::microstepMode(X_AXIS)), 3);
             } else if (c2 == 'z') // %Xz : Z Stepper Microsteps
             {
-                addInt(drv8711ModeValue_2_MicroSteps(Printer::motorMicroStepsModeValue[Z_AXIS]), 3);
+                addInt(drv8711ModeValue_2_MicroSteps(Drv8711::microstepMode(Z_AXIS)), 3);
             }
             break;
         }
@@ -1103,14 +1103,14 @@ void UIDisplay::renderCalibrationField(char c1, char c2) {
                 if (Printer::manualMotion.feedrateSource() == FEEDRATE_DIRECTCONFIG) {
                     addInt(STANDARD_POSITION_FEEDRATE_XY, 3);
                 } else /* if (Printer::manualMotion.feedrateSource() == FEEDRATE_GCODE) */ {
-                    addInt(Printer::feedrate, 3);
+                    addInt(Printer::requestedFeedrate(), 3);
                 }
                 addStringP(PSTR("mm/s"));
             }
             if (c2 == 'F') // %sF : Feedrate for menu postition z
             {
-                if (Printer::manualMotion.feedrateSource() == FEEDRATE_GCODE && Printer::feedrate <= STANDARD_POSITION_FEEDRATE_Z) {
-                    addInt(Printer::feedrate, 3);
+                if (Printer::manualMotion.feedrateSource() == FEEDRATE_GCODE && Printer::requestedFeedrate() <= STANDARD_POSITION_FEEDRATE_Z) {
+                    addInt(Printer::requestedFeedrate(), 3);
                 } else {
                     addInt(STANDARD_POSITION_FEEDRATE_Z, 3);
                 }

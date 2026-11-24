@@ -22,6 +22,83 @@
 #include "ScanProbe.h"
 #include "GCodeInput.h"
 
+namespace AccessoryOutputs {
+namespace {
+char states[] = {
+    CASE_LIGHTS_DEFAULT_ON,
+#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
+    0, FET1_DEFAULT_ON, FET2_DEFAULT_ON, FET3_DEFAULT_ON
+#endif
+};
+}
+
+char state(Output output) {
+    return states[static_cast<uint8_t>(output)];
+}
+
+void stage(Output output, char value) {
+    states[static_cast<uint8_t>(output)] = value;
+}
+
+void apply(Output output) {
+    switch (output) {
+#if !HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)
+    case Output::CaseLight: WRITE(CASE_LIGHT_PIN, state(output)); break;
+#endif
+#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
+    case Output::Mains: WRITE(OUTPUT_230V_PIN, state(output)); break;
+#if FET1 > -1 && !HOTEND_COOLER_USES_PIN(FET1)
+    case Output::Fet1: WRITE(FET1, state(output)); break;
+#endif
+#if FET2 > -1 && !HOTEND_COOLER_USES_PIN(FET2)
+    case Output::Fet2: WRITE(FET2, state(output)); break;
+#endif
+#if FET3 > -1
+    // Legacy M3300 P3 is a raw override even when CaseFan uses X45.
+    case Output::Fet3: WRITE(FET3, state(output)); break;
+#endif
+#endif
+    default: break;
+    }
+}
+
+void set(Output output, char value) {
+    stage(output, value);
+    apply(output);
+}
+
+void toggle(Output output) {
+    set(output, !state(output));
+}
+
+void initializeBoardOutputs() {
+#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
+    stage(Output::Mains, 0);
+    SET_OUTPUT(OUTPUT_230V_PIN);
+    apply(Output::Mains);
+#if FET1 > -1 && !HOTEND_COOLER_USES_PIN(FET1)
+    SET_OUTPUT(FET1);
+    apply(Output::Fet1);
+#endif
+#if FET2 > -1 && !HOTEND_COOLER_USES_PIN(FET2)
+    SET_OUTPUT(FET2);
+    apply(Output::Fet2);
+#endif
+#if FET3 > -1 && CASE_FAN_PIN < 0
+    SET_OUTPUT(FET3);
+    apply(Output::Fet3);
+#endif
+#endif
+}
+
+void initializeCaseLight() {
+#if !HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)
+    SET_OUTPUT(CASE_LIGHT_PIN);
+    apply(Output::CaseLight);
+#endif
+}
+} // namespace AccessoryOutputs
+
 static void setupForPrinting() {
     Printer::setSomeTempsensorDefect(false);
 
@@ -243,10 +320,8 @@ unsigned char isHomingAllowed(GCode* com, char outputLog) {
     return 1;
 } // isHomingAllowed
 
-void determineHardwareType(void) {
+bool hardwareTypeMatches() {
     unsigned short uTemp;
-
-    Printer::wrongType = 0;
 
     // check the stored header format
     uTemp = ExternalEeprom::readWord(I2C_ADDRESS_TYPE_EEPROM, TYPE_EEPROM_OFFSET_HEADER_FORMAT);
@@ -261,28 +336,25 @@ void determineHardwareType(void) {
         if (uTemp != TYPE_EEPROM_FORMAT) {
             if (MOTHERBOARD == DEVICE_TYPE_RF1000) {
                 // the RF1000 does not provide the type EEPROM, thus we should run at an RF1000 board when we end up here
-                return;
+                return true;
             }
 
             // we end up here in case this firmware is for the RF2000, but the current board does not seem to be an RF2000 board
-            Printer::wrongType = 1;
-            return;
+            return false;
         }
 
         if (MOTHERBOARD == DEVICE_TYPE_RF1000) {
             // we end up here in case this firmware is for the RF1000, but the current board seems to be an RF2000 board
-            Printer::wrongType = 1;
-            return;
+            return false;
         }
 
         // when we end up here this firmware is for the RF2000 and the current board seems to be an RF2000 board
-        return;
+        return true;
     }
 
     if (MOTHERBOARD == DEVICE_TYPE_RF1000) {
         // we end up here in case this firmware is for the RF1000, but the current board seems to be an RF2000 board
-        Printer::wrongType = 1;
-        return;
+        return false;
     }
 
     // when we end up here this firmware is for the RF2000 and the current board seems to be an RF2000 board
@@ -290,9 +362,9 @@ void determineHardwareType(void) {
         ExternalEeprom::writeWord(I2C_ADDRESS_TYPE_EEPROM, TYPE_EEPROM_OFFSET_BOARD_TYPE, MOTHERBOARD);
     }
 
-    return;
+    return true;
 
-} // determineHardwareType
+} // hardwareTypeMatches
 
 void doEmergencyStop(char reason) {
     {

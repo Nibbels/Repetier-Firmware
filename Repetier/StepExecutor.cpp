@@ -21,6 +21,12 @@
 StepExecutor::StepClock StepExecutor::stepClocks[2];
 StepExecutor::DirectionOwner StepExecutor::directionOwner = DirectionOwner::None;
 volatile uint32_t StepExecutor::stepIntervalTicks = 10000;
+volatile uint16_t StepExecutor::packingInterval_ = STEP_PACKING_MIN_INTERVAL;
+
+void StepExecutor::setPackingInterval(uint16_t interval) {
+    InterruptProtectedBlock lock;
+    packingInterval_ = interval;
+}
 uint8_t StepExecutor::stepsPerTimerCall = 1;
 volatile int32_t StepExecutor::queuedPrimarySteps;
 int32_t StepExecutor::directPrimarySteps;
@@ -509,11 +515,10 @@ long StepExecutor::performMove(PrintLine* move, uint8_t forQueue) {
     //we know that next time will be a (as example) double or quad step so we let pass twice the time and set the stepsPerTimerCall accordingly.
     stepsPerTimerCall = 1;
     unsigned long one_interval = interval;
-    uint16_t minInterval = Printer::stepsPackingMinInterval;
-    if (Printer::extrusionOutput.advanceEnabled()) {
-        minInterval += 64;
-    }
-    while (interval < Printer::stepsPackingMinInterval) {
+    // Keep the existing threshold. The previous unused +64 advance local
+    // did not affect this loop; changing that policy is not an ownership refactor.
+    const uint16_t packingInterval = packingInterval_;
+    while (interval < packingInterval) {
         interval += one_interval;
         stepsPerTimerCall += 1;
     }

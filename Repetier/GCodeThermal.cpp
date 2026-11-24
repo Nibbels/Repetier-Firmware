@@ -240,18 +240,15 @@ void setCaseLight(GCode* com) {
     // Code schaltet X19, das ist nicht zwingend das Licht!
     if (com->hasS()) {
         if (com->S == 1 || com->S == 0) {
-            Printer::enableCaseLight = com->S;
+            AccessoryOutputs::stage(AccessoryOutputs::Output::CaseLight, com->S);
         } else {
             Com::printFLN(PSTR("M355 Error S=0||1"));
         }
     } else {
-        if (Printer::enableCaseLight)
-            Printer::enableCaseLight = 0;
-        else
-            Printer::enableCaseLight = 1;
+        AccessoryOutputs::stage(AccessoryOutputs::Output::CaseLight, !AccessoryOutputs::state(AccessoryOutputs::Output::CaseLight));
     }
-    WRITE(CASE_LIGHT_PIN, Printer::enableCaseLight);
-    Com::printFLN(PSTR("M355: X19 set to "), Printer::enableCaseLight);
+    AccessoryOutputs::apply(AccessoryOutputs::Output::CaseLight);
+    Com::printFLN(PSTR("M355: X19 set to "), AccessoryOutputs::state(AccessoryOutputs::Output::CaseLight));
 #endif
 }
 
@@ -297,15 +294,13 @@ void setAccessoryFet(GCode* pCommand) {
         case 1: {
             if (pCommand->hasS()) {
                 if (pCommand->S == 0) {
-                    Printer::enableFET1 = 0;
-                    WRITE(FET1, Printer::enableFET1);
+                    AccessoryOutputs::set(AccessoryOutputs::Output::Fet1, 0);
                     Com::printFLN(PSTR("24V X42 FET1-output = off"));
                 } else {
-                    Printer::enableFET1 = 1;
-                    WRITE(FET1, Printer::enableFET1);
+                    AccessoryOutputs::set(AccessoryOutputs::Output::Fet1, 1);
                     Com::printFLN(PSTR("24V X42 FET1-output = on"));
                 }
-                HAL::eprSetByte(EPR_RF_FET1_MODE, Printer::enableFET1);
+                HAL::eprSetByte(EPR_RF_FET1_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::Fet1));
                 EEPROM::updateChecksum();
             }
             break;
@@ -315,15 +310,13 @@ void setAccessoryFet(GCode* pCommand) {
         case 2: {
             if (pCommand->hasS()) {
                 if (pCommand->S == 0) {
-                    Printer::enableFET2 = 0;
-                    WRITE(FET2, Printer::enableFET2);
+                    AccessoryOutputs::set(AccessoryOutputs::Output::Fet2, 0);
                     Com::printFLN(PSTR("24V X44 FET2-output = off"));
                 } else {
-                    Printer::enableFET2 = 1;
-                    WRITE(FET2, Printer::enableFET2);
+                    AccessoryOutputs::set(AccessoryOutputs::Output::Fet2, 1);
                     Com::printFLN(PSTR("24V X44 FET2-output = on"));
                 }
-                HAL::eprSetByte(EPR_RF_FET2_MODE, Printer::enableFET2);
+                HAL::eprSetByte(EPR_RF_FET2_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::Fet2));
                 EEPROM::updateChecksum();
             }
             break;
@@ -333,15 +326,13 @@ void setAccessoryFet(GCode* pCommand) {
         case 3: {
             if (pCommand->hasS()) {
                 if (pCommand->S == 0) {
-                    Printer::enableFET3 = 0;
-                    WRITE(FET3, Printer::enableFET3);
+                    AccessoryOutputs::set(AccessoryOutputs::Output::Fet3, 0);
                     Com::printFLN(PSTR("24V X45/BoardFan FET3-output = off"));
                 } else {
-                    Printer::enableFET3 = 1;
-                    WRITE(FET3, Printer::enableFET3);
+                    AccessoryOutputs::set(AccessoryOutputs::Output::Fet3, 1);
                     Com::printFLN(PSTR("24V X45/BoardFan FET3-output = on"));
                 }
-                HAL::eprSetByte(EPR_RF_FET3_MODE, Printer::enableFET3);
+                HAL::eprSetByte(EPR_RF_FET3_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::Fet3));
                 EEPROM::updateChecksum();
             }
             break;
@@ -356,12 +347,10 @@ void setAccessoryFet(GCode* pCommand) {
 void setMainsOutput(GCode* pCommand) {
     if (pCommand->hasS()) {
         if (pCommand->S == 0) {
-            Printer::enable230VOutput = 0;
-            WRITE(OUTPUT_230V_PIN, Printer::enable230VOutput);
+            AccessoryOutputs::set(AccessoryOutputs::Output::Mains, 0);
             Com::printFLN(PSTR("230V output = off"));
         } else {
-            Printer::enable230VOutput = 1;
-            WRITE(OUTPUT_230V_PIN, Printer::enable230VOutput);
+            AccessoryOutputs::set(AccessoryOutputs::Output::Mains, 1);
             Com::printFLN(PSTR("230V output = on"));
         }
     } else {

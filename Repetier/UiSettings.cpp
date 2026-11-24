@@ -16,6 +16,7 @@
 */
 
 #include "Repetier.h"
+#include "StepExecutor.h"
 
 const long baudrates[] PROGMEM = { 9600, 14400, 19200, 28800, 38400, 56000, 57600, 76800, 111112, 115200, 128000, 230400, 250000, 256000,
                                    460800, 500000, 921600, 1000000, 1500000, 0 };
@@ -147,7 +148,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         break;
     }
     case UI_ACTION_EPOSITION: {
-        Printer::queueRelativeMMCoordinates(0, 0, 0, (float)increment / Printer::menuExtrusionFactor, UI_SET_EXTRUDER_FEEDRATE, true); //klappt nicht in Pause!!
+        Printer::queueRelativeMMCoordinates(0, 0, 0, (float)increment / Printer::flowMultiplier(), UI_SET_EXTRUDER_FEEDRATE, true); //klappt nicht in Pause!!
         Commands::printCurrentPosition();
         break;
     }
@@ -311,13 +312,13 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
 #endif // NUM_EXTRUDER>1
 
     case UI_ACTION_FEEDRATE_MULTIPLY: {
-        int fr = Printer::feedrateMultiply;
+        int fr = Printer::feedrateMultiplier();
         INCREMENT_MIN_MAX(fr, 1, 25, 500);
         Commands::changeFeedrateMultiply(fr);
         break;
     }
     case UI_ACTION_FLOWRATE_MULTIPLY: {
-        float eF = Printer::menuExtrusionFactor;
+        float eF = Printer::flowMultiplier();
         INCREMENT_MIN_MAX(eF, 0.01f, 0.25f, 2.0f);
         Commands::changeFlowrateMultiply(eF);
         break;
@@ -362,7 +363,7 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
         int32_t rate;
         do {
             rate = pgm_read_dword(&(baudrates[p]));
-            if (rate == baudrate)
+            if (rate == EEPROM::configuredBaudrate())
                 break;
             p++;
 
@@ -382,9 +383,9 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
         rate = pgm_read_dword(&(baudrates[p]));
         if (rate == 0 && p >= 1)
             p--;
-        baudrate = pgm_read_dword(&(baudrates[p]));
+        EEPROM::setConfiguredBaudrate(pgm_read_dword(&(baudrates[p])));
 
-        HAL::eprSetInt32(EPR_BAUDRATE, baudrate);
+        HAL::eprSetInt32(EPR_BAUDRATE, EEPROM::configuredBaudrate());
         EEPROM::updateChecksum();
         break;
     }
@@ -497,13 +498,13 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
         if (steppernr == 6)
             steppernr = 4;   //das ist etwas stümperhaft, aber ich brauche die Zeilennummer um auszuwählen und die Einstellungen für die Extruderstepper gehören drüber, also muss Extruder 2 zwei Zeilen runter...
         if (steppernr < 5) { // aktuell gibts nur 5
-            int drive = Printer::motorCurrent[steppernr];
+            int drive = Drv8711::configuredCurrent(steppernr);
             const short uMotorCurrentMax[] = MOTOR_CURRENT_MAX;
             INCREMENT_MIN_MAX(drive, 1, MOTOR_CURRENT_MIN + 1, uMotorCurrentMax[steppernr]); //von 40 bis maximal das was in der config steht.
-            Printer::motorCurrent[steppernr] = drive;
+            Drv8711::stageCurrent(steppernr, drive);
             HAL::eprSetByte(EPR_RF_MOTOR_CURRENT + steppernr, (uint8_t)drive);
             EEPROM::updateChecksum();
-            setMotorCurrent(steppernr + 1, drive);
+            Drv8711::applyConfiguredCurrent(steppernr);
             Com::printF(PSTR("Stepper"), steppernr + 1);
             Com::printFLN(PSTR(" = "), drive);
         }
@@ -536,8 +537,10 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
         break;
     }
     case UI_ACTION_SHIFT_INTERVAL: {
-        INCREMENT_MIN_MAX(Printer::stepsPackingMinInterval, -100, MIN_STEP_PACKING_MIN_INTERVAL, MAX_STEP_PACKING_MIN_INTERVAL);
-        HAL::eprSetInt16(EPR_RF_STEP_PACKING_MIN_INTERVAL, Printer::stepsPackingMinInterval);
+        uint16_t interval = StepExecutor::packingInterval();
+        INCREMENT_MIN_MAX(interval, -100, MIN_STEP_PACKING_MIN_INTERVAL, MAX_STEP_PACKING_MIN_INTERVAL);
+        StepExecutor::setPackingInterval(interval);
+        HAL::eprSetInt16(EPR_RF_STEP_PACKING_MIN_INTERVAL, StepExecutor::packingInterval());
         EEPROM::updateChecksum();
         break;
     }
@@ -552,32 +555,27 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
             bool changed[5] = { false, false, false, false, false };
             switch (action) {
             case UI_ACTION_MICROSTEPS_XY: {
-                INCREMENT_MIN_MAX(Printer::motorMicroStepsModeValue[0], 1, 4, 6);
-                if (Printer::motorMicroStepsModeValue[1] != Printer::motorMicroStepsModeValue[0]) { //only adjust, when changed.
-                    Printer::motorMicroStepsModeValue[1] = Printer::motorMicroStepsModeValue[0];    //sync x and y
-                    drv8711adjustMicroSteps(1);                                                     //adjust driver chip X=1
-                    drv8711adjustMicroSteps(2);                                                     //adjust driver chip Y=2
+                uint8_t mode = Drv8711::microstepMode(X_AXIS);
+                INCREMENT_MIN_MAX(mode, 1, 4, 6);
+                if (Drv8711::setPairedMicrostepMode(X_AXIS, mode))
                     changed[0] = changed[1] = true;
-                }
                 break;
             }
             case UI_ACTION_MICROSTEPS_Z: {
-                uint8_t temp = Printer::motorMicroStepsModeValue[2];
-                INCREMENT_MIN_MAX(Printer::motorMicroStepsModeValue[2], 1, 4, 5);
-                if (temp != Printer::motorMicroStepsModeValue[2]) { //only adjust, when changed.
-                    drv8711adjustMicroSteps(3);                     //adjust driver chip Z=3
+                const uint8_t previous = Drv8711::microstepMode(Z_AXIS);
+                uint8_t mode = previous;
+                INCREMENT_MIN_MAX(mode, 1, 4, 5);
+                if (previous != mode) {
+                    Drv8711::setMicrostepMode(Z_AXIS, mode);
                     changed[2] = true;
                 }
                 break;
             }
             case UI_ACTION_MICROSTEPS_E: {
-                INCREMENT_MIN_MAX(Printer::motorMicroStepsModeValue[3], 1, 4, 7);
-                if (Printer::motorMicroStepsModeValue[4] != Printer::motorMicroStepsModeValue[3]) { //only adjust, when changed.
-                    Printer::motorMicroStepsModeValue[4] = Printer::motorMicroStepsModeValue[3];    //sync E0 and E1
-                    drv8711adjustMicroSteps(4);                                                     //adjust driver chip E0=4
-                    drv8711adjustMicroSteps(5);                                                     //adjust driver chip E1=5
+                uint8_t mode = Drv8711::microstepMode(E_AXIS);
+                INCREMENT_MIN_MAX(mode, 1, 4, 7);
+                if (Drv8711::setPairedMicrostepMode(E_AXIS, mode))
                     changed[3] = changed[4] = true;
-                }
                 break;
             }
             }
@@ -592,7 +590,7 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
             //anpassen der eeprom-werte und anpassen der steps/mm sodass die geschwindigkeit weiterhin passt.
             for (int i = 0; i < DRV8711_NUM_CHANNELS; i++) {
                 if ((!changed[i] && updateall) || changed[i]) { //erstes oder veränderndes schreiben
-                    HAL::eprSetByte(EPR_RF_MICRO_STEPS_X + i, Printer::motorMicroStepsModeValue[i]);
+                    HAL::eprSetByte(EPR_RF_MICRO_STEPS_X + i, Drv8711::microstepMode(i));
                 }
                 if (changed[i]) { //nur dann die axis-steps anpassen, wenn wirklich was geändert wurde.
                     switch (i) {

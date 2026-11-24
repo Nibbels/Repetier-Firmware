@@ -10,11 +10,12 @@ float pgm_read_float(const float* value) { return *value; }
 
 using PGM_P = const char*;
 #define pgm_read_byte(address) (*(address))
-enum { CHAR_SELECTED = 3, PRINTER_FLAG3_X_HOMED = 1, PRINTER_FLAG3_Y_HOMED = 2 };
+enum { X_AXIS = 0, Y_AXIS = 1, CHAR_SELECTED = 3, PRINTER_FLAG3_X_HOMED = 1, PRINTER_FLAG3_Y_HOMED = 2 };
 
 namespace Printer {
 bool uiError = false;
 int flag3 = PRINTER_FLAG3_X_HOMED;
+bool isAxisHomed(int axis) { return flag3 & (axis == X_AXIS ? PRINTER_FLAG3_X_HOMED : PRINTER_FLAG3_Y_HOMED); }
 bool isUIErrorMessage() { return uiError; }
 void setUIErrorMessage(bool error) { uiError = error; }
 struct { bool isHomed() const { return false; } } zMotion;
