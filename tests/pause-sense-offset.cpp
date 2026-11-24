@@ -189,6 +189,7 @@ bool heatBedScanRunning() { return g_nHeatBedScanStatus != 0; }
 bool zOffsetScanRunning() { return g_nZOSScanStatus != 0; }
 void discardScans() { g_nHeatBedScanStatus = g_nZOSScanStatus = 0; }
 void setExtruderCurrent(int, int) {}
+namespace Drv8711 { uint8_t configuredCurrent(uint8_t) { return 0; } }
 
 struct DmsInput {
     bool disconnected = false;
@@ -275,7 +276,7 @@ const uint32_t* accelerationSteps(bool printing) { return printing ? maxPrintAcc
 volatile char doHeatBedZCompensation = true;
 bool menuPaused = false;
 bool axesHomed = true;
-int feedrateMultiply = 100, motorCurrent[3 + NUM_EXTRUDER] = {};
+int feedrateMultiply = 100;
 ManualMotion manualMotion(1, 1, 1, 28);
 
 bool debugErrors() { return false; }

@@ -302,7 +302,7 @@ bool PrintPause::moveBackToPrintPosition() {
 bool PrintPause::restoreExtruderTemperatures() {
     bool waitForHeat = false;
     for (uint8_t i = 0; i < NUM_EXTRUDER; ++i) {
-        setExtruderCurrent(i, Printer::motorCurrent[E_AXIS + i]);
+        setExtruderCurrent(i, Drv8711::configuredCurrent(E_AXIS + i));
         auto& heater = extruder[i].tempControl;
         if (heater.paused) {
             Extruder::setTemperatureForExtruder(heater.targetTemperatureC + heater.paused, i);
