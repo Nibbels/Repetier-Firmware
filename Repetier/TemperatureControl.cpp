@@ -30,6 +30,15 @@ static void stopAllHeaters() {
         tempController[controller]->setTargetTemperature(0);
 }
 
+void Printer::latchOutputInhibit(bool thermalFault) {
+    {
+        InterruptProtectedBlock lock;
+        flag0 |= thermalFault ? PRINTER_FLAG0_TEMPSENSOR_DEFECT : PRINTER_FLAG0_LEGACY_SIMULATION_REJECTED;
+        extrusionOutput.inhibit(ExtrusionOutput::Inhibit::SafetyLock);
+    }
+    stopAllHeaters();
+}
+
 static void finishAutotune(TemperatureController& controller) {
     // Revoke the duty request and normal setpoint before reporting or storing results.
     controller.setTargetTemperature(0);
@@ -54,7 +63,7 @@ void Extruder::manageTemperatures() {
         if (controller == autotuneIndex) {
             // Remember even a transient invalid sample observed by the periodic service.
             if (!sampleValid || act->sensorType == 0 || act->currentTemperatureC > autotuneTemperatureLimit
-                || Printer::isAnyTempsensorDefect() || Printer::debugDryrun()) {
+                || Printer::heatingInhibited()) {
                 HAL::setHeaterDuty(act->pwmIndex, 0);
                 autotuneAbortRequested = true;
             }
@@ -86,8 +95,7 @@ void Extruder::manageTemperatures() {
             {
                 act->setSensorDefect(true);
                 if (!Printer::isAnyTempsensorDefect()) {
-                    Printer::setSomeTempsensorDefect(true);
-                    stopAllHeaters();
+                    Printer::latchOutputInhibit(true);
                     Printer::markTemperatureReadingsAvailable(); //we are not waiting for first temp measurements anymore.
 
                     reportTempsensorAndHeaterErrors();
@@ -97,7 +105,7 @@ void Extruder::manageTemperatures() {
                 }
             }
         }
-        if (!sampleValid || act->sensorType == 0 || Printer::isAnyTempsensorDefect())
+        if (!sampleValid || act->sensorType == 0 || Printer::heatingInhibited())
             continue; // Never feed an invalid or disabled sensor sample into PID.
 
         uint8_t on = act->currentTemperatureC >= act->targetTemperatureC ? LOW : HIGH;
@@ -114,8 +122,7 @@ void Extruder::manageTemperatures() {
                     if (extruderTempErrors > 10) { // Ignore short temporary failures
                         act->setSensorDecoupled(true);
                         if (!Printer::isAnyTempsensorDefect()) {
-                            Printer::setSomeTempsensorDefect(true);
-                            stopAllHeaters();
+                            Printer::latchOutputInhibit(true);
 
                             Com::printErrorFLN(Com::tHeaterDecoupledWarning);
                             Com::printF(PSTR("Error:Temp. raised to slow. Rise = "), act->currentTemperatureC - act->lastDecoupleTemp);
@@ -141,8 +148,7 @@ void Extruder::manageTemperatures() {
                     if (extruderTempErrors > 10) { // Ignore short temporary failures
                         act->setSensorDecoupled(true);
                         if (!Printer::isAnyTempsensorDefect()) {
-                            Printer::setSomeTempsensorDefect(true);
-                            stopAllHeaters();
+                            Printer::latchOutputInhibit(true);
 
                             Com::printErrorFLN(Com::tHeaterDecoupledWarning);
                             Com::printF(PSTR("Error:Could not hold temperature "), act->lastDecoupleTemp);
@@ -161,7 +167,7 @@ void Extruder::manageTemperatures() {
                 }
             }
         }
-        if (Printer::isAnyTempsensorDefect())
+        if (Printer::heatingInhibited())
             continue;
 
         act->tempArray[act->tempPointer++] = act->currentTemperatureC; //ist in jedem fall voll mit gültigen temperaturen, wenn der regelbereich erreicht wird.
@@ -215,13 +221,8 @@ void Extruder::manageTemperatures() {
     if (errorDetected == 0 && extruderTempErrors > 0)
         extruderTempErrors--;
 
-    if (Printer::isAnyTempsensorDefect()) {
-        stopAllHeaters();
-        Printer::enableDebugDryrun(); // Go into dry mode
-    } else {
-        if (!errorDetected)
-            Printer::markTemperatureReadingsAvailable(); //we are not waiting for first temp measurements anymore.
-    }
+    if (!Printer::isAnyTempsensorDefect() && !errorDetected)
+        Printer::markTemperatureReadingsAvailable();
 
 } // manageTemperatures
 
@@ -234,6 +235,8 @@ void TemperatureController::updateTempControlVars() {
 } // updateTempControlVars
 
 void TemperatureController::setTargetTemperature(float target) {
+    if (Printer::heatingInhibited())
+        target = 0;
     if (target <= 0.0f && autotuneIndex < NUM_TEMPERATURE_LOOPS && tempController[autotuneIndex] == this)
         autotuneAbortRequested = true;
     if (target <= 0.0f || target < targetTemperatureC)
@@ -246,7 +249,7 @@ void TemperatureController::setTargetTemperature(float target) {
 } // setTargetTemperature
 
 void TemperatureController::waitForTargetTemperature(uint8_t plus_temp_tolerance, bool resumingPause) {
-    if (Printer::debugDryrun())
+    if (Printer::heatingInhibited())
         return;
     bool dirRising = targetTemperatureC > currentTemperatureC;
     if (dirRising) {
@@ -257,7 +260,7 @@ void TemperatureController::waitForTargetTemperature(uint8_t plus_temp_tolerance
     Printer::idleStatus.cancel();
     while (true) {
         Commands::checkForPeriodicalActions(WaitHeater);
-        if (resumingPause && !Printer::pause.isReheating())
+        if (Printer::heatingInhibited() || (resumingPause && !Printer::pause.isReheating()))
             return;
         if (fabs(targetTemperatureC - currentTemperatureC) <= TEMP_TOLERANCE + plus_temp_tolerance)
             break;
@@ -274,7 +277,7 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
     }
     setTargetTemperature(0);
     if (controllerId >= NUM_TEMPERATURE_LOOPS || tempController[controllerId] != this
-        || Printer::isAnyTempsensorDefect() || Printer::debugDryrun()
+        || Printer::heatingInhibited()
         || isSensorDefect() || isSensorDecoupled()
         || !(temp >= MAX_ROOM_TEMPERATURE && temp <= heaterCutoffC)
         || (controllerId == NUM_EXTRUDER && temp > HEATED_BED_MAX_TEMP)) {
@@ -360,7 +363,7 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
         Commands::checkForPeriodicalActions(WaitHeater); // update heaters etc. https://github.com/repetier/Repetier-Firmware/commit/241c550ac004023842d6886c6e0db15a1f6b56d7
         const bool supported = updateCurrentTemperature();
         currentTemp = currentTemperatureC;
-        if (autotuneAbortRequested || Printer::isAnyTempsensorDefect() || Printer::debugDryrun()
+        if (autotuneAbortRequested || Printer::heatingInhibited()
             || isSensorDefect() || isSensorDecoupled() || sensorType == 0
             || !validTemperatureSample(supported, currentTemp)) {
             finishAutotune(*this);
@@ -513,5 +516,5 @@ void reportTempsensorAndHeaterErrors() {
         }
         Com::println();
     }
-    Com::printErrorFLN(Com::tDryModeUntilRestart);
+    Com::printErrorFLN(Com::tThermalFaultUntilRestart);
 } // reportTempsensorAndHeaterErrors

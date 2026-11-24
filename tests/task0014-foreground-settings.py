@@ -43,14 +43,13 @@ int main() {
         for(uint8_t bit : {1,2,4,8}) {
             Printer::setDebugMask(i);
             Printer::toggleDebugFlag(bit);
-            int expected = (i & bit) ? i-bit : i+bit;
+            int expected = (i & ~8) ^ (bit & ~8);
             assert(Printer::debugMask()==expected);
             Printer::toggleDebugFlag(bit);
-            assert(Printer::debugMask()==i);
+            assert(Printer::debugMask()==(i & ~8));
         }
         Printer::setDebugMask(i);
-        Printer::enableDebugDryrun();
-        assert(Printer::debugMask()==(i|8));
+        assert(Printer::debugMask()==(i & ~8));
         Printer::restoreZDisplayMode(static_cast<char>(i));
         assert(static_cast<uint8_t>(Printer::zDisplayMode())==i);
         Printer::toggleZDisplayMode();

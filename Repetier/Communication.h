@@ -154,7 +154,7 @@ public:
     FSTRINGVAR(tTempSensorDefect)
     FSTRINGVAR(tTempHeaterDefect)
     FSTRINGVAR(tTempSensorWorking)
-    FSTRINGVAR(tDryModeUntilRestart)
+    FSTRINGVAR(tThermalFaultUntilRestart)
 
     FSTRINGVAR(tWait)
 

@@ -28,14 +28,23 @@ void showInvalidSyntax(unsigned int currentMCode) {
 }
 
 
+// Process the retired bit at receive admission, even while a stop drains input.
+// Never let a subsequent debug mask re-arm machine outputs.
+bool rejectLegacySimulation(GCode* com) {
+    if (!com->hasM() || com->M != 111 || !com->hasS() || !(static_cast<uint8_t>(com->S) & 8))
+        return false;
+    Printer::setDebugMask(com->S);
+    if (!Printer::legacySimulationRejected()) {
+        Printer::latchOutputInhibit(false);
+        Printer::stopPrint();
+    }
+    Com::printErrorFLN(PSTR("M111 bit 8 unsupported; job rejected. Stop host and restart printer."));
+    return true;
+}
+
 void setDebugLevel(GCode* com) {
-    if (com->hasS()) {
+    if (com->hasS())
         Printer::setDebugMask(com->S);
-    }
-    if (Printer::debugDryrun()) // simulate movements without printing
-    {
-        Extruder::setTemperatureForAllExtruders(0);
-    }
 }
 
 void reportPosition() {
@@ -299,7 +308,8 @@ void runRfDiagnostic(GCode* pCommand) {
             TemperatureController* act1 = tempController[1];
             act1->setSensorDecoupled(true);
             //generelle defekt-einstufung
-            Printer::setSomeTempsensorDefect(true);
+            Printer::latchOutputInhibit(true);
+            Printer::stopPrint();
             //fehlermeldung ausgeben
             reportTempsensorAndHeaterErrors();
             break;

@@ -306,7 +306,7 @@ void GCodeInput::checkAndPushCommand(GCode& command) {
         }
         serialReceive.lastLineNumber = serialReceive.currentLineNumber;
     }
-    if (!Printer::printJob.commandsBlocked()) {
+    if (!GCodeCommands::rejectLegacySimulation(&command) && !Printer::printJob.commandsBlocked()) {
         commandQueue.publish();
     }
 

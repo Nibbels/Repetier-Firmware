@@ -143,7 +143,7 @@ void Extruder::setTemperatureForExtruder(float temperatureInCelsius, uint8_t ext
         temperatureInCelsius = tc->heaterCutoffC;
     if (temperatureInCelsius < 0)
         temperatureInCelsius = 0;
-    if (tc->isSensorDefect() || tc->isSensorDecoupled())
+    if (Printer::heatingInhibited() || tc->isSensorDefect() || tc->isSensorDecoupled())
         temperatureInCelsius = 0;
     if (tc->sensorType == 0)
         temperatureInCelsius = 0;
@@ -182,7 +182,7 @@ void Extruder::setHeatedBedTemperature(float temperatureInCelsius) {
         temperatureInCelsius = HEATED_BED_MAX_TEMP;
     if (temperatureInCelsius < 0)
         temperatureInCelsius = 0;
-    if (heatedBedController.isSensorDefect() || heatedBedController.isSensorDecoupled())
+    if (Printer::heatingInhibited() || heatedBedController.isSensorDefect() || heatedBedController.isSensorDecoupled())
         temperatureInCelsius = 0;
 
     if (heatedBedController.targetTemperatureC == temperatureInCelsius) {

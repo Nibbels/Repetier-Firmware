@@ -239,15 +239,6 @@ void UIDisplay::mainSwitchCase(int action) {
         Printer::toggleDebugFlag(4);
         break;
     }
-    case UI_ACTION_DEBUG_DRYRUN: {
-        Printer::toggleDebugFlag(8);
-        if (Printer::debugDryrun()) // simulate movements without printing
-        {
-            Extruder::setTemperatureForAllExtruders(0);
-            Extruder::setHeatedBedTemperature(0);
-        }
-        break;
-    }
 
 #if !HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)
     case UI_ACTION_LIGHTS_ONOFF: {

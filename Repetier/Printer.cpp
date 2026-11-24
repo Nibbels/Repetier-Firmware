@@ -50,7 +50,7 @@ uint8_t Printer::flag1 = 0;
 uint8_t Printer::flag2 = 0;
 uint8_t Printer::flag3 = 0;
 
-uint8_t Printer::debugLevel = 6; ///< Bitfield defining debug output. 1 = echo, 2 = info, 4 = error, 8 = dry run., 16 = Only communication, 32 = No moves
+uint8_t Printer::debugLevel = 6; ///< Debug output: 1 echo, 2 info, 4 error; bit 8 retired.
 
 uint8_t Printer::menuMode_ = 0;
 
@@ -226,7 +226,7 @@ inline bool isExtrusionAllowed(float e) {
         return false;
     }
 
-    if (Printer::debugDryrun()) {
+    if (Printer::heatingInhibited()) {
         return false;
     }
 

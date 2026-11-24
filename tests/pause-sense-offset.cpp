@@ -285,7 +285,8 @@ ManualMotion manualMotion(1, 1, 1, 28);
 bool debugErrors() { return false; }
 bool infoLogging = false;
 bool debugInfo() { return infoLogging; }
-bool debugDryrun() { return false; }
+bool outputSafetyLatched = false;
+bool heatingInhibited() { return outputSafetyLatched; }
 float convertToMM(float value) { return gcodeModes.inches() ? value * 25.4 : value; }
 bool areAxisHomed() { return axesHomed; }
 bool isAxisHomed(int) { return true; }
@@ -864,6 +865,52 @@ void pressureStop() {
     // The temporary zero band still rejects any nonzero average.
     sample(1, EMERGENCY_STOP_CHECKS);
     assert(Printer::extrusionOutput.blocked());
+}
+
+void outputSafetyLock() {
+    auto& output = Printer::extrusionOutput;
+    Printer::gcodeModes.setRelativeEOverride(true);
+    GCode command;
+    command.E = 1;
+    assert(Printer::queueGCodeCoordinates(&command));
+    const float saved = Printer::moveTarget.machineMM(E_AXIS);
+    output.setAdvanceEnabled(true);
+    output.setLeadSteps(2);
+    output.addSteps(3);
+    assert(advanceTimerArmed() && output.pendingSteps() == 5);
+    {
+        InterruptProtectedBlock lock;
+        Printer::outputSafetyLatched = true;
+        output.inhibit(ExtrusionOutput::Inhibit::SafetyLock);
+    }
+    assert(output.blocked() && output.pendingSteps() == 0 && !advanceTimerArmed());
+    assert(!Printer::queueGCodeCoordinates(&command));
+    assert(Printer::moveTarget.machineMM(E_AXIS) == saved);
+    command.X = 1;
+    assert(Printer::queueGCodeCoordinates(&command));
+    assert(Printer::moveTarget.machineMM(E_AXIS) == saved);
+    const unsigned oldPulses = Extruder::stepPulses;
+    for (bool advance : {true, false}) {
+        output.setAdvanceEnabled(advance);
+        // Clearing transient reasons must never clear the sticky safety reason.
+        output.allow(ExtrusionOutput::Inhibit::PrintStop);
+        output.allow(ExtrusionOutput::Inhibit::MotorsDisabled);
+        output.allow(ExtrusionOutput::Inhibit::Pressure);
+        assert(output.blocked());
+        PrintLine extrusion;
+        extrusion.moveE = true;
+        extrusion.positiveE = true;
+        extrusion.delta[E_AXIS] = 1;
+        extrusion.stepProfile.advanceL = 65536;
+        executeExtrusionStep(&extrusion, true);
+        executeExtrusionStep(&extrusion, false);
+        StepExecutor::updateAdvanceSteps(extrusion, 4);
+        GCode testStep;
+        testStep.S = 5;
+        runAdvanceCommand(223, &testStep);
+        assert(output.pendingSteps() == 0 && !fireAdvanceCompare());
+        assert(Extruder::stepPulses == oldPulses);
+    }
 }
 
 void pressureWithFrozenZ() {
@@ -2946,6 +2993,8 @@ int main(int argc, char** argv) {
         pressureMeasurement();
     else if (!std::strcmp(argv[1], "extrusion-planning"))
         extrusionPlanning();
+    else if (!std::strcmp(argv[1], "output-safety-lock"))
+        outputSafetyLock();
     else if (!std::strcmp(argv[1], "gcode-target"))
         gcodeTarget();
     else if (!std::strcmp(argv[1], "wobble-target"))

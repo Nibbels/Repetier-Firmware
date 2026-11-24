@@ -100,8 +100,6 @@ void initializeCaseLight() {
 } // namespace AccessoryOutputs
 
 static void setupForPrinting() {
-    Printer::setSomeTempsensorDefect(false);
-
     // read the settings from the EEPROM
     Printer::setAxisHomingFeedrate(X_AXIS, HAL::eprGetFloat(EPR_X_HOMING_FEEDRATE_PRINT));
     Printer::setAxisHomingFeedrate(Y_AXIS, HAL::eprGetFloat(EPR_Y_HOMING_FEEDRATE_PRINT));
