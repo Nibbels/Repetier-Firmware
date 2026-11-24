@@ -2,6 +2,10 @@
 
 Date: 2026-11-24 (Europe/Berlin). User wants a long-lived manager chat in ChatGPT Work (Astra selected by user); worker chats currently use GPT-6.2 High outside Work. Repository [Nibbels/Repetier-Firmware](https://github.com/Nibbels/Repetier-Firmware), integration branch **ai-firmware-review**, never community_development. Read [AGENTS.md](../AGENTS.md), [TASKS.md](TASKS.md), individual task files and live branches/PRs first. Repository is the authoritative durable state, not chat memory.
 
+## Wave 2 progress
+
+Task0008 completed in a normal Sol High chat with hosted verification and worker self-merge ([PR #71](https://github.com/Nibbels/Repetier-Firmware/pull/71), [green check](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45425850940)). The receiver retains its architecture. Invalid binary text frames use the resend path. All four variants add 6 bytes of Flash and zero bytes of global SRAM. Physical throughput and a USB print remain open. Continue wave 2 with 0005 EEPROM, 0006 BedMatrix and 0007 temperature sensors.
+
 ## Current status after wave 1 (2026-11-24)
 
 All four workers self-merged [#65](https://github.com/Nibbels/Repetier-Firmware/pull/65), [#66](https://github.com/Nibbels/Repetier-Firmware/pull/66), [#67](https://github.com/Nibbels/Repetier-Firmware/pull/67) and [#68](https://github.com/Nibbels/Repetier-Firmware/pull/68). Wave 2 is ready: 0005 EEPROM, 0006 BedMatrix, 0007 temperature sensors and 0008 G-code input may proceed in parallel within their existing scopes. Use the hosted [firmware PR check](TASKS.md#firmware-pr-checks) for standard PR verification. Direct Work builds serve local diagnosis. Task0003 measured 51.7 seconds for 15 host replays and four AVR builds with packages present. T14 is an optional fallback pending comparable measurements. The combined firmware saves 148–154 Flash bytes with unchanged global SRAM. Physical timing and stack measurements remain open. Task0013 owns the 14 missing Visual Micro source entries identified by Task0004. Earlier snapshots below are historical.
