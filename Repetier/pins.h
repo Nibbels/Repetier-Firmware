@@ -441,7 +441,7 @@
 #define RESERVE_DIGITAL_PIN_PE4 2
 // RF2000 X34.2 "EXT_IRQ"/INT3
 #define RESERVE_DIGITAL_PIN_PD3 18
-/* X34.3=SCL und X34.4=SDA ist I²C siehe wire.h. (X34.1=5V und X34.5/X34.6=VSS) An diesem Bus sind auch die DMS und EEPROMs für Geräteidentifikation (EEPROM 2) und das EEPROM für die Z-Matrix (EEPROM 1) angeschlossen. */
+/* X34.3=SCL und X34.4=SDA ist I²C siehe TwiTransfer.cpp. (X34.1=5V und X34.5/X34.6=VSS) An diesem Bus sind auch die DMS und EEPROMs für Geräteidentifikation (EEPROM 2) und das EEPROM für die Z-Matrix (EEPROM 1) angeschlossen. */
 #endif // RF2000 / RF2000v2
 
 #ifndef FAN_BOARD_PIN
