@@ -102,7 +102,7 @@ int main() {
     assert(transfers-n<=16);
     n=transfers; u.serviceBootEye(); assert(transfers==n);
     HAL::now=start+350; u.serviceBootEye(); expectPupil(UI_COLS/2-3);
-    HAL::now=start+2800; u.serviceBootEye(); expectPupil(UI_COLS/2-3,true);
+    HAL::now=start+2850; u.serviceBootEye(); expectPupil(UI_COLS/2-3,true);
     HAL::now=start+3000; u.serviceBootEye(); expectPupil(UI_COLS/2-1);
     HAL::now=start+3900; u.serviceBootEye(); assert(u.normalCharacters_);
     assert(memcmp(cgram+8,character_back,8)==0);
