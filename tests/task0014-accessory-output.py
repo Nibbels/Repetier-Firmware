@@ -105,7 +105,7 @@ with tempfile.TemporaryDirectory() as tmp:
         ("RF1000", ["-DMOTHERBOARD=DEVICE_TYPE_RF1000"]),
         ("RF2000", ["-DMOTHERBOARD=DEVICE_TYPE_RF2000"]),
         ("RF2000v2", ["-DMOTHERBOARD=DEVICE_TYPE_RF2000v2"]),
-        ("RF2000-X44", ["-DMOTHERBOARD=DEVICE_TYPE_RF2000", "-DEXT0_EXTRUDER_COOLER_PIN=X44_PIN"]),
+        ("RF2000-X44", ["-DMOTHERBOARD=DEVICE_TYPE_RF2000", "-DNUM_EXTRUDER=1", "-DEXT0_EXTRUDER_COOLER_PIN=X44_PIN"]),
     ]:
         executable = pathlib.Path(tmp)/model
         subprocess.run(["g++","-std=c++11","-I",str(SRC),*flags,str(source),"-o",str(executable)],check=True)
