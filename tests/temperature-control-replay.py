@@ -85,7 +85,7 @@ static Extruder extruder[] = {
 #endif
 };
 Extruder* Extruder::current = &extruder[0];
-static TemperatureController bed{NUM_EXTRUDER, 13, NUM_EXTRUDER, 150};
+static TemperatureController bed{NUM_EXTRUDER, 13, NUM_EXTRUDER, BED_MEASURED_CUTOFF};
 static TemperatureController* tempController[NUM_TEMPERATURE_LOOPS] = {
     &extruder[0].tempControl,
 #if NUM_EXTRUDER > 1
@@ -142,7 +142,7 @@ static void reportTempsensorAndHeaterErrors();
 #include "control.inc"
 static unsigned visits;
 static millis_t stride = 10;
-enum class Injection { None, Reach, LateUnsupported, LateLow, Transient, High, Cutoff, Cycles, OtherFault };
+enum class Injection { None, Reach, LateUnsupported, LateLow, Transient, High, TransientHigh, Cutoff, Cycles, OtherFault, Cancel, Reentrant };
 static Injection injection;
 static bool postTemperature = true;
 namespace GCodeInput {
@@ -162,10 +162,18 @@ namespace GCodeInput {
             tuned->sensorType = 14;
             temperatureAdcValues[tuned->sensorPin] = 4092;
         }
-        if (injection == Injection::High)
+        if (injection == Injection::High || injection == Injection::TransientHigh)
             temperatureAdcValues[tuned->sensorPin] = 820; // ~190-200 C
         if (injection == Injection::Cutoff)
-            temperatureAdcValues[tuned->sensorPin] = 670; // ~153-164 C, above bed cutoff but below target+40
+            temperatureAdcValues[tuned->sensorPin] = 1195; // valid converted range, above 280 C cutoff
+        if (injection == Injection::Cancel)
+            tuned->setTargetTemperature(0);
+        if (injection == Injection::Reentrant && visits == 1) {
+            const auto oldDuty = HAL::outputDuty(tuned->pwmIndex);
+            tuned->autotunePID(100, tuned->pwmIndex, 5, false, 0);
+            assert(autotuneIndex == tuned->pwmIndex && HAL::outputDuty(tuned->pwmIndex) == oldDuty);
+            tuned->setTargetTemperature(0); // terminate original tune after checking guard
+        }
         if (injection == Injection::Cycles)
             temperatureAdcValues[tuned->sensorPin] = visits % 2 ? 470 : 330;
         if (injection == Injection::OtherFault)
@@ -176,9 +184,10 @@ namespace GCodeInput {
 static struct {
     millis_t lastButtonTime() { return 0; }
     void slowAction() {
-        if (injection == Injection::Transient) {
+        if (injection == Injection::Transient || injection == Injection::TransientHigh) {
             assert(HAL::outputDuty(tuned->pwmIndex) == 0);
             tuned->sensorType = 60; // valid again before autotune's next read
+            temperatureAdcValues[tuned->sensorPin] = 330;
         }
     }
 } uid;
@@ -264,6 +273,32 @@ int main(int argc, char** argv) {
         HAL::setHeaterDuty(bed.pwmIndex, 255);
         service();
         assert(HAL::outputDuty(bed.pwmIndex) == 0 && HAL::outputDuty(0) == 255 && !Printer::fault);
+    } else if (!std::strcmp(name, "dual-invalid")) {
+#if NUM_EXTRUDER > 1
+        auto& second = extruder[1].tempControl;
+        second.sensorType = 14;
+        temperatureAdcValues[second.sensorPin] = 4092;
+        HAL::setHeaterDuty(second.pwmIndex, 255);
+        service();
+        assert(HAL::outputDuty(second.pwmIndex) == 0 && HAL::outputDuty(0) == 255
+            && HAL::outputDuty(bed.pwmIndex) == 255 && !Printer::fault);
+#else
+        assert(false);
+#endif
+    } else if (!std::strcmp(name, "hold-drift")) {
+        for (auto* other : tempController) if (other != &c) other->setTargetTemperature(0);
+        temperatureAdcValues[0] = 410; // ~100 C in both calibrations
+        service();
+        assert(c.isDecoupleHold());
+        temperatureAdcValues[0] = 102;
+        now += EXT0_DECOUPLE_TEST_PERIOD;
+        for (int i = 0; i < 10; ++i) {
+            service();
+            assert(!Printer::fault);
+        }
+        service();
+        assert(c.isSensorDecoupled());
+        allOff();
     } else if (!std::strcmp(name, "unsupported")) {
         c.sensorType = 255;
         HAL::setHeaterDuty(0, 255);
@@ -342,9 +377,11 @@ int main(int argc, char** argv) {
             temperatureAdcValues[t.sensorPin] = 4092;
         } else if (!std::strcmp(name, "autotune-entry-disabled")) t.sensorType = 0;
         else if (!std::strcmp(name, "autotune-entry-latched")) Printer::fault = true;
+        else if (!std::strcmp(name, "autotune-entry-decoupled")) t.setSensorDecoupled(true);
         else if (!std::strcmp(name, "autotune-entry-dryrun")) Printer::debugLevel = 8;
         else if (!std::strcmp(name, "autotune-entry-high")) temperatureAdcValues[t.sensorPin] = 820;
         else if (!std::strcmp(name, "autotune-entry-target")) target = 500;
+        else if (!std::strcmp(name, "autotune-bed-entry-target")) target = HEATED_BED_MAX_TEMP + 1;
         else if (!std::strcmp(name, "autotune-entry-controller")) {}
         else if (std::strstr(name, "-late")) {
             injection = Injection::LateUnsupported;
@@ -353,11 +390,14 @@ int main(int argc, char** argv) {
             injection = Injection::LateLow;
             postTemperature = false;
         } else if (!std::strcmp(name, "autotune-transient")) injection = Injection::Transient;
-        else if (!std::strcmp(name, "autotune-high")) {
+        else if (!std::strcmp(name, "autotune-transient-high")) injection = Injection::TransientHigh;
+        else if (!std::strcmp(name, "autotune-cancel")) injection = Injection::Cancel;
+        else if (!std::strcmp(name, "autotune-reentrant")) injection = Injection::Reentrant;
+        else if (!std::strcmp(name, "autotune-high") || !std::strcmp(name, "autotune-bed-high")) {
             injection = Injection::High;
             postTemperature = false;
-        } else if (!std::strcmp(name, "autotune-bed-cutoff")) {
-            target = 130;
+        } else if (!std::strcmp(name, "autotune-cutoff")) {
+            target = 270;
             injection = Injection::Cutoff;
             postTemperature = false;
         } else if (std::strstr(name, "-timeout")) stride = 100000;
@@ -422,13 +462,13 @@ def main():
     }
     scenarios = (
         "rail", "invalid-low", "invalid-high", "bed-invalid", "recovery", "disabled",
-        "unsupported", "no-rise", "pwm", "watchdog", "wait",
+        "unsupported", "no-rise", "hold-drift", "pwm", "watchdog", "wait",
         "autotune-entry-unsupported", "autotune-entry-low", "autotune-entry-disabled",
-        "autotune-entry-latched", "autotune-entry-dryrun", "autotune-entry-high",
-        "autotune-entry-target", "autotune-entry-controller", "autotune-late",
-        "autotune-low", "autotune-transient", "autotune-high", "autotune-timeout",
-        "autotune-other-fault", "autotune-success", "autotune-success-store",
-        "autotune-bed-late", "autotune-bed-timeout", "autotune-bed-cutoff", "autotune-bed-success-store",
+        "autotune-entry-latched", "autotune-entry-decoupled", "autotune-entry-dryrun", "autotune-entry-high",
+        "autotune-entry-target", "autotune-bed-entry-target", "autotune-entry-controller", "autotune-late",
+        "autotune-low", "autotune-transient", "autotune-transient-high", "autotune-high", "autotune-cutoff", "autotune-timeout",
+        "autotune-cancel", "autotune-reentrant", "autotune-other-fault", "autotune-success", "autotune-success-store",
+        "autotune-bed-late", "autotune-bed-timeout", "autotune-bed-high", "autotune-bed-success-store",
     )
     with TemporaryDirectory(prefix="rfx-temperature-control-") as tmp:
         work = Path(tmp)
@@ -438,7 +478,8 @@ def main():
         for board, tools in (("RF1000", 1), ("RF2000", 2), ("RF2000", 1)):
             profile = (FW / (board + ".h")).read_text()
             defines = {n: macro(profile, n) for n in (
-                "SENSOR_TEMPERATURE_OFFSETS_C", "MIN_DEFECT_TEMPERATURE", "MAX_DEFECT_TEMPERATURE")}
+                "SENSOR_TEMPERATURE_OFFSETS_C", "MIN_DEFECT_TEMPERATURE", "MAX_DEFECT_TEMPERATURE", "HEATED_BED_MAX_TEMP")}
+            defines["BED_MEASURED_CUTOFF"] = re.search(r"constexpr uint16_t bedHeaterCutoffC = (\d+);", (FW / "Extruder.cpp").read_text())[1]
             defines.update({n: macro(config, n) for n in (
                 "EXTRUDER_FAN_COOL_TEMP", "DECOUPLING_TEST_MAX_HOLD_VARIANCE",
                 "DECOUPLING_TEST_MIN_TEMP_RISE", "EXT0_DECOUPLE_TEST_PERIOD",
@@ -452,9 +493,10 @@ def main():
             subprocess.run([os.environ.get("CXX", "c++"), "-std=c++11", "-O2",
                             *[f"-D{k}={v}" for k, v in defines.items()],
                             str(work / "replay.cpp"), "-o", str(exe)], check=True)
-            for scenario in scenarios:
+            selected = scenarios + (("dual-invalid",) if tools > 1 else ())
+            for scenario in selected:
                 subprocess.run([str(exe), scenario], check=True, timeout=10)
-            print(f"{board} / {tools} hotend(s): {len(scenarios)} cases passed", flush=True)
+            print(f"{board} / {tools} hotend(s): {len(selected)} cases passed", flush=True)
 
 
 if __name__ == "__main__":
