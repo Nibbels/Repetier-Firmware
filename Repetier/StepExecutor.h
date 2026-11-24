@@ -24,6 +24,8 @@ class PrintLine;
 
 class StepExecutor {
 public:
+    static constexpr uint16_t minimumStepIntervalTicks = 512;
+
     static float nominalFeedrate();
     static uint8_t stepsPerInterrupt() { return stepsPerTimerCall; }
     static void stepSlowedZCompensation();

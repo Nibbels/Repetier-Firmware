@@ -19,6 +19,8 @@ def main():
     ui = (firmware / "ui.cpp").read_text(encoding="utf-8")
     ui_header = (firmware / "ui.h").read_text(encoding="utf-8")
     motion = (firmware / "motion.h").read_text(encoding="utf-8")
+    move_queue = (firmware / "MoveQueue.h").read_text(encoding="utf-8")
+    move_reserve = (firmware / "MoveQueue.cpp").read_text(encoding="utf-8")
     move_planner = (firmware / "motion.cpp").read_text(encoding="utf-8")
     planner = (firmware / "MotionPlanner.cpp").read_text(encoding="utf-8")
     executor = (firmware / "StepExecutor.cpp").read_text(encoding="utf-8")
@@ -86,8 +88,9 @@ def main():
         + section(move_planner, "            const int32_t targetSteps = Printer::prepareDestinationSteps(axis);", "\n        }")
         + "\nreturn steps;\n}",
         section(move_planner, "void PrintLine::setAxisSteps(", "\n/** \\brief Put a move"),
-        section(motion, "class MoveQueue {", "\ninline uint8_t PrintLine::queuedMoveCount"),
+        section(move_queue, "class MoveQueue {", "\ninline const MoveQueue& PrintLine::queuedMoves"),
         "MoveQueue PrintLine::queue;",
+        move_reserve[move_reserve.index("MoveQueue::RemainingMotion"):],
         section(move_planner, "PrintLine::ActiveMove PrintLine::activeMove()", "\nvoid PrintLine::setAxisSteps("),
         section(executor, "speed_t StepExecutor::nextStepSpeed(", "\n// Isolate completion"),
         move_planner[move_planner.index("void PrintLine::prepareDirectMove("):move_planner.index("/** \\brief Check if move is new.")]
@@ -124,7 +127,8 @@ def main():
         build = Path(directory)
         (build / "pause-sense-offset-firmware.inc").write_text("\n".join(fragments), encoding="utf-8")
         (build / "step-clock-firmware.inc").write_text(
-            section(executor_header, "    struct StepClock {", "    enum class DirectionOwner"), encoding="utf-8",
+            section(executor_header, "    static constexpr uint16_t minimumStepIntervalTicks", "\n\n")
+            + "\n" + section(executor_header, "    struct StepClock {", "    enum class DirectionOwner"), encoding="utf-8",
         )
         (build / "step-profile-firmware.inc").write_text(
             section(motion, "    struct LookaheadData {", "    LookaheadData lookahead;"), encoding="utf-8",
@@ -162,7 +166,8 @@ def main():
             "sense-window", "sense-settings", "sense-limit-interrupt",
             "pressure-pause", "pressure-stop", "pressure-frozen-z", "digit-zero", "pressure-measurement",
             "extrusion-planning",
-            "gcode-target", "wobble-target", "cartesian-planning", "segment-geometry", "move-queue", "idle-status", "print-job", "ecmp-stepping",
+            "gcode-target", "wobble-target", "cartesian-planning", "segment-geometry", "move-queue", "move-reserve",
+            "idle-status", "print-job", "ecmp-stepping",
             "advance-timer", "advance-mode", "advance-cancel", "motion-wait", "pressure-advance-pause", "advance-output", "advance-peak",
             "step-clock", "lookahead", "short-move-pacing", "direct-ramp", "xy-limits",
         ):

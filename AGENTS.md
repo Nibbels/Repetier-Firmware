@@ -32,6 +32,8 @@ This is shared AVR/ATmega2560 Repetier firmware for **RF1000, RF2000 and RF2000v
 
 **Motion planning.** `MotionPlanner` prepares the step profile and owns the junction calculations. The planner updates queue slots in place and releases them with complete profiles. For a direct move, `Printer::offsetRelativeStepsCoordinates()` reserves the slot under interrupt protection, then the foreground plans and publishes the move. Replay early jog release and queue wrap with `python3 tests/pause-sense-offset.py`. [Planner and executor boundary](docs/motion-timing.md#planner-and-executor-boundary)
 
+**Motion buffer.** `MoveQueue` owns the 24 prepared slots. Foreground diagnostics can ask for the remaining XYZ and E paths and estimated running time. Keep the estimator outside the step interrupt. Review new pacing policies separately against the queue replay and the configured acceleration limits. [Buffer diagnostics](docs/motion-timing.md#querying-buffered-motion)
+
 **Axis calibration.** `Printer` owns steps/mm, travel, feedrate, acceleration and jerk. Callers set raw values and publish derived values through `updateDerivedParameter()`. Tool selection applies its E calibration together. [Calibration and travel limits](Repetier/Printer.cpp)
 
 **Step execution.** `StepExecutor` owns both step clocks, cached primary-axis counts, pulse packing, direction and the feedrate snapshot for the panel. Timer1 selects the move and the executor runs its prepared profile. Keep hardware operations in the executor and check the AVR pulse traces when changing a hot path. [Executor](Repetier/StepExecutor.cpp)

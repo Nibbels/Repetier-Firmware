@@ -137,6 +137,7 @@ extern void drv8711Init();
 
 #include "Printer.h"
 #include "motion.h"
+#include "MoveQueue.h"
 
 extern long baudrate;
 

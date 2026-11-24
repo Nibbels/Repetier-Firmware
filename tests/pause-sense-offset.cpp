@@ -361,6 +361,7 @@ T constrain(T value, A low, B high) {
 }
 
 namespace RMath {
+float sqr(float value) { return value * value; }
 float min(float a, float b) { return std::min(a, b); }
 int32_t min(int32_t a, int32_t b) { return std::min(a, b); }
 float max(float a, float b) { return std::max(a, b); }
@@ -2396,6 +2397,82 @@ void moveQueue() {
     assert(queue.readIndex() == 3 && queue.writeIndex() == 3);
 }
 
+void moveReserve() {
+    MoveQueue queue;
+    const auto check = [&](float xyz, float filament, float seconds) {
+        const auto reserve = queue.remainingMotion();
+        assert(std::abs(reserve.xyzMm - xyz) < 0.001f);
+        assert(std::abs(reserve.filamentMm - filament) < 0.001f);
+        assert(std::abs(reserve.seconds - seconds) < 0.0001f);
+        assert(interruptsEnabled);
+    };
+    check(0, 0, 0);
+    for (int i = 0; i < MOVE_CACHE_SIZE - 1; ++i) {
+        queue.publishTask(TASK_ENABLE_Z_COMPENSATION);
+        queue.activateFront();
+        queue.retireFront();
+        HAL::allowInterrupts();
+    }
+
+    PrintLine& travel = queue.writeSlot();
+    travel = PrintLine{};
+    travel.setAxisSteps(X_AXIS, 16000);
+    const float travelDistances[] = {100, 0, 0, 0};
+    travel.setSegmentGeometry(travelDistances);
+    travel.lookahead.speedX = 100;
+    travel.lookahead.invFullSpeed = 0.01f;
+    travel.lookahead.accelerationPrim = 100000;
+    travel.stepProfile.vStart = 4000;
+    travel.stepProfile.vEnd = 8000;
+    travel.stepProfile.vMax = 16000;
+    travel.stepProfile.accelSteps = 1200;
+    travel.stepProfile.decelSteps = 960;
+    queue.publish(true);
+    assert(queue.writeIndex() == 0);
+
+    // Reused task and warmup slots can contain geometry from an earlier move.
+    queue.writeSlot() = travel;
+    queue.publishTask(TASK_ENABLE_Z_COMPENSATION);
+    queue.writeSlot() = travel;
+    queue.writeSlot().flags = FLAG_WARMUP;
+    queue.publish(true);
+
+    PrintLine& retract = queue.writeSlot();
+    retract = PrintLine{};
+    retract.setAxisSteps(E_AXIS, -2800);
+    const float retractDistances[] = {0, 0, 0, 10};
+    retract.setSegmentGeometry(retractDistances);
+    retract.lookahead.speedE = -25;
+    retract.lookahead.invFullSpeed = 0.04f;
+    retract.stepProfile.vStart = retract.stepProfile.vEnd = retract.stepProfile.vMax = 7000;
+    queue.publish(true);
+
+    check(100, 10, 1.465f);
+    assert(queue.activateFront() == &travel);
+    travel.stepsRemaining = 8000;
+    check(50, 10, 0.920f);
+    queue.retireFront();
+    HAL::allowInterrupts();
+    check(0, 10, 0.4f);
+    queue.clear();
+    check(0, 0, 0);
+
+    PrintLine& mixed = queue.writeSlot();
+    mixed = PrintLine{};
+    mixed.setAxisSteps(X_AXIS, 480);
+    mixed.setAxisSteps(Y_AXIS, 640);
+    mixed.setAxisSteps(E_AXIS, 2800);
+    const float mixedDistances[] = {3, 4, 0, 10};
+    mixed.setSegmentGeometry(mixedDistances);
+    MotionPlanner::prepareMove(mixed, mixedDistances, 100, queue);
+    MotionPlanner::prepareStepProfile(mixed);
+    queue.publish(true);
+    const auto reserve = queue.remainingMotion();
+    assert(std::abs(reserve.xyzMm - 5) < 0.001f);
+    assert(std::abs(reserve.filamentMm - 10) < 0.001f);
+    assert(reserve.seconds >= 0.399f);
+}
+
 void idleStatusTransitions() {
     IdleStatus status;
     using Transition = IdleStatus::Transition;
@@ -2844,6 +2921,8 @@ int main(int argc, char** argv) {
         segmentGeometry();
     else if (!std::strcmp(argv[1], "move-queue"))
         moveQueue();
+    else if (!std::strcmp(argv[1], "move-reserve"))
+        moveReserve();
     else if (!std::strcmp(argv[1], "idle-status"))
         idleStatusTransitions();
     else if (!std::strcmp(argv[1], "print-job"))

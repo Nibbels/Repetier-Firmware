@@ -62,7 +62,6 @@ long baudrate = BAUDRATE; // Communication speed rate.
 
 
 
-MoveQueue PrintLine::queue;
 PrintLine PrintLine::direct;
 
 PrintLine::ActiveMove PrintLine::activeMove() {

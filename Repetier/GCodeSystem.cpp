@@ -315,6 +315,14 @@ void runRfDiagnostic(GCode* pCommand) {
         case 13: {
             Com::printFLN(PSTR("LCD re-initialization"));
             uid.initializeLCD();
+            break;
+        }
+        case 14: {
+            const auto reserve = PrintLine::queuedMoves().remainingMotion();
+            Com::printF(PSTR("Motion buffer XYZ mm: "), reserve.xyzMm, 3);
+            Com::printF(PSTR(" E mm: "), reserve.filamentMm, 3);
+            Com::printFLN(PSTR(" s: "), reserve.seconds, 4);
+            break;
         }
         }
     }

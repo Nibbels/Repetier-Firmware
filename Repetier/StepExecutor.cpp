@@ -493,8 +493,8 @@ long StepExecutor::performMove(PrintLine* move, uint8_t forQueue) {
     stepIntervalTicks = HAL::CPUDivU2(v);
 
     // Dieses Limit bedeutet max. 31250 steps/s bei 16mhz.
-    if (stepIntervalTicks < 512)
-        stepIntervalTicks = 512;
+    if (stepIntervalTicks < minimumStepIntervalTicks)
+        stepIntervalTicks = minimumStepIntervalTicks;
 
     //RETURN manipulated value:
     unsigned long interval = stepIntervalTicks;

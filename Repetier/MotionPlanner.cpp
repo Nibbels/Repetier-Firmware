@@ -56,6 +56,13 @@ inline float MotionPlanner::safeSpeed(PrintLine& move, int8_t drivingAxis) {
     return RMath::min(safe, move.fullSpeed);
 } // safeSpeed
 
+static float paceShortMove(float ticks, uint8_t queuedEntries) {
+    // This admission policy stretches short segments while the queue refills.
+    if (queuedEntries < MOVE_CACHE_LOW && ticks < LOW_TICKS_PER_MOVE)
+        ticks += (LOW_TICKS_PER_MOVE - ticks) * 3 / (queuedEntries + 1);
+    return ticks;
+}
+
 void MotionPlanner::prepareMove(PrintLine& move, const float axisDistanceMM[4], float feedrate, const MoveQueue& queue) {
     const fast8_t drivingAxis = move.primaryAxis;
     auto& lookahead = move.lookahead;
@@ -63,12 +70,7 @@ void MotionPlanner::prepareMove(PrintLine& move, const float axisDistanceMM[4], 
     if (move.stepsRemaining == 0) { // need at least one step for bresenham
         return;
     }
-    float timeForMove = (float)(F_CPU)*lookahead.distance / feedrate; // time is in ticks
-    // Stretch short moves while the queue is low.
-    if (queue.count() < MOVE_CACHE_LOW && timeForMove < LOW_TICKS_PER_MOVE) // Limit speed to keep cache full.
-    {
-        timeForMove += ((LOW_TICKS_PER_MOVE - timeForMove)) * 3 / (queue.count() + 1); // Increase time if queue gets empty. Add more time if queue gets smaller.
-    }
+    float timeForMove = paceShortMove(float(F_CPU) * lookahead.distance / feedrate, queue.count());
     move.timeInTicks = timeForMove;
 
     // Use the slowest allowed step interval across all moving axes.
