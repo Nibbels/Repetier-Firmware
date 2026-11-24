@@ -1,0 +1,2097 @@
+{
+  "ref": "1fe264b804cc67aa5bf197d0106d84f2d7cf8796",
+  "batch": 1,
+  "warning": "Lexical candidates only, no preprocessing or resolved call graph; function spans approximate.",
+  "files": [
+    {
+      "path": "BedCompensation.h",
+      "sha": "6d18bd4942b802235444baa2aa0487af238e1b64",
+      "physicalLines": 74,
+      "normalizedLines": 60,
+      "functions": [
+        [
+          "calculate",
+          27,
+          62
+        ],
+        [
+          "digitZSteps",
+          64,
+          71
+        ],
+        [
+          "extrusionRatio",
+          21,
+          23
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [
+        [
+          1,
+          "#ifndef BED_COMPENSATION_H"
+        ],
+        [
+          74,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include <stdint.h>"
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "BedMatrix.cpp",
+      "sha": "dd2a2498ea0095acda257143a0f4fb01e21222ee",
+      "physicalLines": 1172,
+      "normalizedLines": 888,
+      "functions": [
+        [
+          "loadCompensationMatrix",
+          426,
+          562
+        ],
+        [
+          "adjustBedMatrix",
+          1033,
+          1169
+        ],
+        [
+          "prepareCompensationMatrix",
+          177,
+          289
+        ],
+        [
+          "fixKeramikLochInMatrix",
+          657,
+          724
+        ],
+        [
+          "reportBedMatrix",
+          965,
+          1023
+        ],
+        [
+          "outputCompensationMatrix",
+          135,
+          175
+        ],
+        [
+          "applyZOffset",
+          801,
+          839
+        ],
+        [
+          "clearBedMatrix",
+          928,
+          963
+        ],
+        [
+          "enableBedCompensation",
+          858,
+          892
+        ],
+        [
+          "writeMatrixSector",
+          327,
+          360
+        ],
+        [
+          "selectBedMatrix",
+          894,
+          926
+        ],
+        [
+          "clearExternalEEPROM",
+          577,
+          608
+        ],
+        [
+          "recalculateZCompensation",
+          100,
+          124
+        ],
+        [
+          "prepareZCompensation",
+          629,
+          650
+        ],
+        [
+          "setMatrixNull",
+          730,
+          751
+        ],
+        [
+          "matrixSpan",
+          61,
+          80
+        ],
+        [
+          "determineCompensationOffsetZ",
+          291,
+          309
+        ],
+        [
+          "switchActiveHeatBed",
+          610,
+          627
+        ],
+        [
+          "saveWorkingMatrix",
+          362,
+          378
+        ],
+        [
+          "saveActiveHeatBedToExtEEPROM",
+          392,
+          407
+        ],
+        [
+          "loadActiveHeatBedFromExtEEPROM",
+          409,
+          424
+        ],
+        [
+          "adjustCompensationMatrix",
+          311,
+          325
+        ],
+        [
+          "clearCompensationMatrix",
+          564,
+          575
+        ],
+        [
+          "getZMatrixDepth_CurrentXY",
+          91,
+          98
+        ],
+        [
+          "initCompensationMatrix",
+          126,
+          133
+        ],
+        [
+          "recordScanPoint",
+          773,
+          780
+        ],
+        [
+          "getZMatrixDepth",
+          83,
+          89
+        ],
+        [
+          "saveCompensationMatrix",
+          380,
+          386
+        ],
+        [
+          "eraseMatrixEeprom",
+          1025,
+          1031
+        ],
+        [
+          "disableBedCompensation",
+          851,
+          856
+        ],
+        [
+          "restoreAtStartup",
+          762,
+          766
+        ],
+        [
+          "storedMaxIndex",
+          784,
+          788
+        ],
+        [
+          "saveScannedGrid",
+          796,
+          799
+        ],
+        [
+          "finishZOffset",
+          841,
+          844
+        ],
+        [
+          "depth",
+          56,
+          58
+        ],
+        [
+          "saveActiveBedMatrix",
+          388,
+          390
+        ],
+        [
+          "activeBedMatrixSlot",
+          36,
+          36
+        ],
+        [
+          "bedMatrixAvailable",
+          37,
+          37
+        ],
+        [
+          "bedMatrixHasUnsavedChanges",
+          38,
+          38
+        ],
+        [
+          "bedMatrixHighestZSteps",
+          39,
+          39
+        ],
+        [
+          "bedMatrixLowestZSteps",
+          40,
+          40
+        ],
+        [
+          "invalidateBedMatrixForReload",
+          41,
+          41
+        ],
+        [
+          "clearWorking",
+          768,
+          768
+        ],
+        [
+          "reloadActive",
+          769,
+          769
+        ],
+        [
+          "beginScanGrid",
+          770,
+          770
+        ],
+        [
+          "recordScanColumn",
+          771,
+          771
+        ],
+        [
+          "maxIndex",
+          782,
+          782
+        ],
+        [
+          "entry",
+          790,
+          790
+        ],
+        [
+          "prepareWorking",
+          791,
+          791
+        ],
+        [
+          "updateExtents",
+          792,
+          792
+        ],
+        [
+          "report",
+          793,
+          793
+        ],
+        [
+          "applyThermalOffset",
+          794,
+          794
+        ]
+      ],
+      "stateCandidates": [
+        [
+          26,
+          "static long g_offsetZCompensationSteps = 0;"
+        ],
+        [
+          27,
+          "static short g_ZCompensationMax = 0;"
+        ],
+        [
+          28,
+          "static char g_nActiveHeatBed = 1;"
+        ],
+        [
+          31,
+          "static volatile unsigned char g_ZMatrixChangedInRam = 0;"
+        ],
+        [
+          33,
+          "static short g_ZCompensationMatrix[COMPENSATION_MATRIX_MAX_X][COMPENSATION_MATRIX_MAX_Y];"
+        ],
+        [
+          34,
+          "static unsigned char g_uZMatrixMax[2] = { 0, 0 };"
+        ],
+        [
+          43,
+          "static void initCompensationMatrix();"
+        ],
+        [
+          44,
+          "static void outputCompensationMatrix(char format = 0);"
+        ],
+        [
+          45,
+          "static char prepareCompensationMatrix();"
+        ],
+        [
+          46,
+          "static void determineCompensationOffsetZ();"
+        ],
+        [
+          47,
+          "static void adjustCompensationMatrix(short steps);"
+        ],
+        [
+          48,
+          "static char loadCompensationMatrix(unsigned int address);"
+        ],
+        [
+          49,
+          "static bool saveWorkingMatrix(unsigned int address);"
+        ],
+        [
+          120,
+          "asm volatile(   : :    (ratio));"
+        ]
+      ],
+      "guards": [],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ],
+        [
+          19,
+          "#include \"BedMatrix.h\""
+        ],
+        [
+          20,
+          "#include \"BedCompensation.h\""
+        ],
+        [
+          21,
+          "#include \"GCodeInput.h\""
+        ],
+        [
+          22,
+          "#include \"GCodeCommands.h\""
+        ],
+        [
+          23,
+          "#include \"ScanProbe.h\""
+        ],
+        [
+          24,
+          "#include \"ExternalEeprom.h\""
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": [
+        [
+          635,
+          "// TODO: show a message at the display in this case"
+        ]
+      ]
+    },
+    {
+      "path": "BedMatrix.h",
+      "sha": "2d0a8c1d5252ed59f01c0bc58b4d5ab7d8f41ce2",
+      "physicalLines": 34,
+      "normalizedLines": 27,
+      "functions": [],
+      "stateCandidates": [],
+      "guards": [
+        [
+          1,
+          "#ifndef BED_MATRIX_H"
+        ],
+        [
+          34,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include \"CalibrationScan.h\""
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "CalibrationScan.h",
+      "sha": "a989da0e641465783263f55d97052b56054ce5af",
+      "physicalLines": 114,
+      "normalizedLines": 95,
+      "functions": [
+        [
+          "requestRetryOrAbort",
+          64,
+          71
+        ],
+        [
+          "consumeRetry",
+          79,
+          85
+        ],
+        [
+          "deferDiscard",
+          92,
+          97
+        ],
+        [
+          "finishDispatch",
+          99,
+          104
+        ],
+        [
+          "requestAbort",
+          45,
+          49
+        ],
+        [
+          "takeAbort",
+          53,
+          57
+        ],
+        [
+          "takeRetryRequest",
+          73,
+          77
+        ],
+        [
+          "reset",
+          36,
+          39
+        ],
+        [
+          "armRetries",
+          59,
+          62
+        ],
+        [
+          "retreatOnly",
+          41,
+          43
+        ],
+        [
+          "aborting",
+          51,
+          51
+        ],
+        [
+          "retriesRemaining",
+          87,
+          87
+        ],
+        [
+          "dispatching",
+          89,
+          89
+        ],
+        [
+          "beginDispatch",
+          90,
+          90
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [
+        [
+          1,
+          "#ifndef CALIBRATION_SCAN_H"
+        ],
+        [
+          114,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include <stdint.h>"
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "CartesianPlanner.h",
+      "sha": "b395f4d995de574d930f7df7b16ce2146d96856f",
+      "physicalLines": 28,
+      "normalizedLines": 21,
+      "functions": [
+        [
+          "queueTarget",
+          10,
+          14
+        ],
+        [
+          "rescaleAxis",
+          19,
+          22
+        ],
+        [
+          "lastQueuedSteps",
+          16,
+          16
+        ],
+        [
+          "setAxisSteps",
+          17,
+          17
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [
+        [
+          1,
+          "#ifndef CARTESIAN_PLANNER_H"
+        ],
+        [
+          28,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include <math.h>"
+        ],
+        [
+          5,
+          "#include <stdint.h>"
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "CaseFan.cpp",
+      "sha": "ac8f013114d23db5441f31c5dff723b35fd26fb4",
+      "physicalLines": 85,
+      "normalizedLines": 58,
+      "functions": [
+        [
+          "updateFromHotendTargets",
+          61,
+          74
+        ],
+        [
+          "requestOff",
+          46,
+          56
+        ],
+        [
+          "service",
+          76,
+          82
+        ],
+        [
+          "requestOn",
+          30,
+          33
+        ],
+        [
+          "initialize",
+          36,
+          39
+        ],
+        [
+          "turnOn",
+          41,
+          44
+        ],
+        [
+          "setOffDelay",
+          58,
+          58
+        ],
+        [
+          "offDelay",
+          59,
+          59
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [
+        [
+          21,
+          "#if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1"
+        ],
+        [
+          85,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ],
+        [
+          19,
+          "#include \"CaseFan.h\""
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "CaseFan.h",
+      "sha": "5d535f556f33d16076241978a71d8bd2944f7cd3",
+      "physicalLines": 18,
+      "normalizedLines": 13,
+      "functions": [],
+      "stateCandidates": [],
+      "guards": [
+        [
+          1,
+          "#ifndef CASE_FAN_H"
+        ],
+        [
+          18,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include <stdint.h>"
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "Commands.cpp",
+      "sha": "efc460310497fd1705320a4f680564295d20b28b",
+      "physicalLines": 270,
+      "normalizedLines": 200,
+      "functions": [
+        [
+          "Commands::printTemperatures",
+          145,
+          198
+        ],
+        [
+          "Commands::waitForMotion",
+          84,
+          125
+        ],
+        [
+          "Commands::checkForPeriodicalActions",
+          43,
+          82
+        ],
+        [
+          "Commands::commandLoop",
+          24,
+          41
+        ],
+        [
+          "Commands::printCurrentPosition",
+          127,
+          143
+        ],
+        [
+          "Commands::reportPrinterUsage",
+          233,
+          248
+        ],
+        [
+          "Commands::writeLowestFreeRAM",
+          261,
+          270
+        ],
+        [
+          "Commands::setFanSpeed",
+          214,
+          222
+        ],
+        [
+          "Commands::changeFeedrateMultiply",
+          200,
+          206
+        ],
+        [
+          "Commands::checkFreeMemory",
+          254,
+          259
+        ],
+        [
+          "Commands::changeFlowrateMultiply",
+          208,
+          212
+        ],
+        [
+          "Commands::adjustFanMode",
+          228,
+          231
+        ],
+        [
+          "Commands::adjustFanFrequency",
+          224,
+          226
+        ],
+        [
+          "Commands::emergencyStop",
+          250,
+          252
+        ]
+      ],
+      "stateCandidates": [
+        [
+          87,
+          "static bool drainingOutputs = false;"
+        ],
+        [
+          146,
+          "static millis_t lastTemperatureSignal = 0;"
+        ]
+      ],
+      "guards": [
+        [
+          165,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          179,
+          "#endif"
+        ],
+        [
+          181,
+          "#ifdef X35_ADC_CHANNEL"
+        ],
+        [
+          189,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ],
+        [
+          19,
+          "#include \"GCodeInput.h\""
+        ]
+      ],
+      "waits": [
+        [
+          96,
+          "while (!Printer::blockAll && !Printer::printJob.commandsBlocked()) {"
+        ]
+      ],
+      "commentCandidates": []
+    },
+    {
+      "path": "Commands.h",
+      "sha": "4d2f0619f3863bd71c75fe372a3d9af01b66d3bb",
+      "physicalLines": 44,
+      "normalizedLines": 25,
+      "functions": [],
+      "stateCandidates": [
+        [
+          23,
+          "static void commandLoop();"
+        ],
+        [
+          24,
+          "static void checkForPeriodicalActions(enum FirmwareState state = NotBusy);"
+        ],
+        [
+          25,
+          "static void executeGCode(GCode* com);"
+        ],
+        [
+          28,
+          "static bool waitForMotion(MotionWait motion, PauseWait pause);"
+        ],
+        [
+          29,
+          "static void printCurrentPosition();"
+        ],
+        [
+          30,
+          "static void printTemperatures(bool showRaw = false);"
+        ],
+        [
+          31,
+          "static void setFanSpeed(uint8_t speed, bool recalc = false);"
+        ],
+        [
+          32,
+          "static void adjustFanFrequency(uint8_t speed_mode);"
+        ],
+        [
+          33,
+          "static void adjustFanMode(uint8_t output_mode = 0);"
+        ],
+        [
+          34,
+          "static void changeFeedrateMultiply(int factorInPercent);"
+        ],
+        [
+          35,
+          "static void changeFlowrateMultiply(float newExtrusionFactor);"
+        ],
+        [
+          36,
+          "static void reportPrinterUsage();"
+        ],
+        [
+          37,
+          "static void emergencyStop();"
+        ],
+        [
+          38,
+          "static void checkFreeMemory();"
+        ],
+        [
+          39,
+          "static void writeLowestFreeRAM();"
+        ],
+        [
+          40,
+          "static int lowestRAMValue;"
+        ],
+        [
+          41,
+          "static int lowestRAMValueSend;"
+        ]
+      ],
+      "guards": [
+        [
+          18,
+          "#ifndef COMMANDS_H"
+        ],
+        [
+          44,
+          "#endif"
+        ]
+      ],
+      "includes": [],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "Communication.cpp",
+      "sha": "f7a2514cd7723116eddaf2bb69522604c71676a0",
+      "physicalLines": 494,
+      "normalizedLines": 418,
+      "functions": [
+        [
+          "Com::printFloat",
+          450,
+          494
+        ],
+        [
+          "Com::printNumber",
+          422,
+          434
+        ],
+        [
+          "Com::print",
+          414,
+          420
+        ],
+        [
+          "Com::config",
+          288,
+          293
+        ],
+        [
+          "Com::printArrayFLN",
+          436,
+          441
+        ],
+        [
+          "Com::printArrayFLN",
+          443,
+          448
+        ],
+        [
+          "Com::printFLN",
+          341,
+          345
+        ],
+        [
+          "Com::printF",
+          347,
+          351
+        ],
+        [
+          "Com::printFLN",
+          373,
+          377
+        ],
+        [
+          "Com::printFLN",
+          379,
+          383
+        ],
+        [
+          "Com::printFLN",
+          385,
+          389
+        ],
+        [
+          "Com::printFLN",
+          391,
+          395
+        ],
+        [
+          "Com::printSharpLine",
+          402,
+          406
+        ],
+        [
+          "Com::print",
+          408,
+          412
+        ],
+        [
+          "Com::cap",
+          276,
+          279
+        ],
+        [
+          "Com::config",
+          280,
+          283
+        ],
+        [
+          "Com::config",
+          284,
+          287
+        ],
+        [
+          "Com::config",
+          294,
+          297
+        ],
+        [
+          "Com::config",
+          298,
+          301
+        ],
+        [
+          "Com::config",
+          302,
+          305
+        ],
+        [
+          "Com::printWarningF",
+          306,
+          309
+        ],
+        [
+          "Com::printWarningFLN",
+          311,
+          314
+        ],
+        [
+          "Com::printInfoF",
+          316,
+          319
+        ],
+        [
+          "Com::printInfoFLN",
+          321,
+          324
+        ],
+        [
+          "Com::printErrorF",
+          326,
+          329
+        ],
+        [
+          "Com::printErrorFLN",
+          331,
+          334
+        ],
+        [
+          "Com::printFLN",
+          336,
+          339
+        ],
+        [
+          "Com::printF",
+          353,
+          356
+        ],
+        [
+          "Com::printF",
+          358,
+          361
+        ],
+        [
+          "Com::printF",
+          363,
+          366
+        ],
+        [
+          "Com::printF",
+          368,
+          371
+        ],
+        [
+          "Com::printF",
+          397,
+          400
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [
+        [
+          20,
+          "#ifndef FIRMWARE_URL"
+        ],
+        [
+          22,
+          "#endif"
+        ],
+        [
+          24,
+          "#ifndef MACHINE_TYPE"
+        ],
+        [
+          26,
+          "#endif"
+        ],
+        [
+          251,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          253,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ]
+      ],
+      "waits": [
+        [
+          349,
+          "while ((c = HAL::readFlashByte(ptr++)) != 0)"
+        ],
+        [
+          409,
+          "while (*text) {"
+        ],
+        [
+          431,
+          "} while (n);"
+        ],
+        [
+          488,
+          "while (digits-- > 0) {"
+        ]
+      ],
+      "commentCandidates": []
+    },
+    {
+      "path": "Communication.h",
+      "sha": "d098fd66d4867f186c9deaeb00c32a9b864202be",
+      "physicalLines": 311,
+      "normalizedLines": 279,
+      "functions": [
+        [
+          "println",
+          305,
+          308
+        ],
+        [
+          "print",
+          301,
+          303
+        ],
+        [
+          "print",
+          298,
+          298
+        ],
+        [
+          "print",
+          299,
+          299
+        ]
+      ],
+      "stateCandidates": [
+        [
+          21,
+          "extern const char* const axisNames[] PROGMEM;"
+        ],
+        [
+          268,
+          "static void cap(FSTRINGPARAM(text));"
+        ],
+        [
+          269,
+          "static void config(FSTRINGPARAM(text));"
+        ],
+        [
+          270,
+          "static void config(FSTRINGPARAM(text), int value);"
+        ],
+        [
+          271,
+          "static void config(FSTRINGPARAM(text), const char* msg);"
+        ],
+        [
+          272,
+          "static void config(FSTRINGPARAM(text), int32_t value);"
+        ],
+        [
+          273,
+          "static void config(FSTRINGPARAM(text), uint32_t value);"
+        ],
+        [
+          274,
+          "static void config(FSTRINGPARAM(text), float value, uint8_t digits = 2);"
+        ],
+        [
+          275,
+          "static void printNumber(uint32_t n);"
+        ],
+        [
+          276,
+          "static void printWarningF(FSTRINGPARAM(text));"
+        ],
+        [
+          277,
+          "static void printInfoF(FSTRINGPARAM(text));"
+        ],
+        [
+          278,
+          "static void printErrorF(FSTRINGPARAM(text));"
+        ],
+        [
+          279,
+          "static void printWarningFLN(FSTRINGPARAM(text));"
+        ],
+        [
+          280,
+          "static void printInfoFLN(FSTRINGPARAM(text));"
+        ],
+        [
+          281,
+          "static void printErrorFLN(FSTRINGPARAM(text));"
+        ],
+        [
+          282,
+          "static void printFLN(FSTRINGPARAM(text));"
+        ],
+        [
+          283,
+          "static void printF(FSTRINGPARAM(ptr));"
+        ],
+        [
+          284,
+          "static void printF(FSTRINGPARAM(text), int value);"
+        ],
+        [
+          285,
+          "static void printF(FSTRINGPARAM(text), const char* msg);"
+        ],
+        [
+          286,
+          "static void printF(FSTRINGPARAM(text), int32_t value);"
+        ],
+        [
+          287,
+          "static void printF(FSTRINGPARAM(text), uint32_t value);"
+        ],
+        [
+          288,
+          "static void printF(FSTRINGPARAM(text), float value, uint8_t digits = 2, bool komma_as_dot = false);"
+        ],
+        [
+          289,
+          "static void printFLN(FSTRINGPARAM(text), int value);"
+        ],
+        [
+          290,
+          "static void printFLN(FSTRINGPARAM(text), int32_t value);"
+        ],
+        [
+          291,
+          "static void printFLN(FSTRINGPARAM(text), uint32_t value);"
+        ],
+        [
+          292,
+          "static void printFLN(FSTRINGPARAM(text), const char* msg);"
+        ],
+        [
+          293,
+          "static void printFLN(FSTRINGPARAM(text), float value, uint8_t digits = 2, bool komma_as_dot = false);"
+        ],
+        [
+          294,
+          "static void printArrayFLN(FSTRINGPARAM(text), float* arr, uint8_t n = 4, uint8_t digits = 2);"
+        ],
+        [
+          295,
+          "static void printArrayFLN(FSTRINGPARAM(text), int32_t* arr, uint8_t n = 4);"
+        ],
+        [
+          296,
+          "static void printSharpLine();"
+        ],
+        [
+          297,
+          "static void print(int32_t value);"
+        ],
+        [
+          298,
+          "static inline void print(uint32_t value) { printNumber(value); }"
+        ],
+        [
+          299,
+          "static inline void print(int value) { print((int32_t)value); }"
+        ],
+        [
+          300,
+          "static void print(const char* text);"
+        ],
+        [
+          304,
+          "static void printFloat(float number, uint8_t digits, bool komma_as_dot = false);"
+        ]
+      ],
+      "guards": [
+        [
+          18,
+          "#ifndef COMMUNICATION_H"
+        ],
+        [
+          248,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          250,
+          "#endif"
+        ],
+        [
+          311,
+          "#endif"
+        ]
+      ],
+      "includes": [],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "Configuration.h",
+      "sha": "7d7187126f4cec37e247d93e7b92cb1b4229a2c3",
+      "physicalLines": 526,
+      "normalizedLines": 157,
+      "functions": [],
+      "stateCandidates": [],
+      "guards": [
+        [
+          19,
+          "#ifndef CONFIGURATION_H"
+        ],
+        [
+          61,
+          "#ifndef MOTHERBOARD"
+        ],
+        [
+          63,
+          "#endif"
+        ],
+        [
+          188,
+          "#if ACCELERATION_MAX_XY < MAX_ACCELERATION_UNITS_PER_SQ_SECOND_X || MAX_ACCELERATION_UNITS_PER_SQ_SECOND_X < ACCELERATION_MIN_XY"
+        ],
+        [
+          190,
+          "#endif"
+        ],
+        [
+          191,
+          "#if ACCELERATION_MAX_XY < MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Y || MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Y < ACCELERATION_MIN_XY"
+        ],
+        [
+          193,
+          "#endif"
+        ],
+        [
+          194,
+          "#if ACCELERATION_MAX_Z < MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Z || MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Z < ACCELERATION_MAX_Z"
+        ],
+        [
+          196,
+          "#endif"
+        ],
+        [
+          197,
+          "#if ACCELERATION_MAX_XY < MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_X || MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_X < ACCELERATION_MIN_XY"
+        ],
+        [
+          199,
+          "#endif"
+        ],
+        [
+          200,
+          "#if ACCELERATION_MAX_XY < MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Y || MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Y < ACCELERATION_MIN_XY"
+        ],
+        [
+          202,
+          "#endif"
+        ],
+        [
+          203,
+          "#if ACCELERATION_MAX_Z < MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Z || MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Z < ACCELERATION_MAX_Z"
+        ],
+        [
+          205,
+          "#endif"
+        ],
+        [
+          448,
+          "#ifndef MAX_ROOM_TEMPERATURE"
+        ],
+        [
+          450,
+          "#endif"
+        ],
+        [
+          526,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          22,
+          "#include <stdint.h>"
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "Constants.h",
+      "sha": "f6c8e260bd3c3cfcaa84429524e56690edc91f5c",
+      "physicalLines": 100,
+      "normalizedLines": 58,
+      "functions": [],
+      "stateCandidates": [],
+      "guards": [
+        [
+          18,
+          "#ifndef CONSTANTS_H"
+        ],
+        [
+          100,
+          "#endif"
+        ]
+      ],
+      "includes": [],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "DigitCompensation.h",
+      "sha": "54f6b287724a44acd4c2267dd1855f2e2004f625",
+      "physicalLines": 113,
+      "normalizedLines": 88,
+      "functions": [
+        [
+          "filter",
+          54,
+          66
+        ],
+        [
+          "observe",
+          40,
+          51
+        ],
+        [
+          "updateFlow",
+          68,
+          78
+        ],
+        [
+          "factorAt",
+          85,
+          92
+        ],
+        [
+          "publishIntervalScale",
+          94,
+          101
+        ],
+        [
+          "resetFlow",
+          33,
+          36
+        ],
+        [
+          "neutralizeFactors",
+          80,
+          83
+        ],
+        [
+          "flowProfile",
+          22,
+          22
+        ],
+        [
+          "setFlowProfile",
+          23,
+          23
+        ],
+        [
+          "digitZEnabled",
+          25,
+          25
+        ],
+        [
+          "setDigitZEnabled",
+          26,
+          26
+        ],
+        [
+          "filteredDigits",
+          28,
+          28
+        ],
+        [
+          "extrusionFactor",
+          29,
+          29
+        ],
+        [
+          "feedrateFactor",
+          30,
+          30
+        ],
+        [
+          "intervalScale",
+          31,
+          31
+        ]
+      ],
+      "stateCandidates": [
+        [
+          110,
+          "volatile uint16_t intervalScale_ = 0;"
+        ]
+      ],
+      "guards": [
+        [
+          1,
+          "#ifndef DIGIT_COMPENSATION_H"
+        ],
+        [
+          113,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include <stdint.h>"
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "DirectPosition.h",
+      "sha": "25aef73839ffbbc077045a25a42c6d06e3073810",
+      "physicalLines": 24,
+      "normalizedLines": 17,
+      "functions": [
+        [
+          "steps",
+          10,
+          10
+        ],
+        [
+          "target",
+          11,
+          11
+        ],
+        [
+          "remaining",
+          12,
+          12
+        ],
+        [
+          "request",
+          14,
+          14
+        ],
+        [
+          "advance",
+          15,
+          15
+        ],
+        [
+          "stop",
+          16,
+          16
+        ],
+        [
+          "reset",
+          17,
+          17
+        ]
+      ],
+      "stateCandidates": [
+        [
+          20,
+          "volatile int32_t steps_ = 0;"
+        ],
+        [
+          21,
+          "volatile int32_t target_ = 0;"
+        ]
+      ],
+      "guards": [
+        [
+          1,
+          "#ifndef DIRECT_POSITION_H"
+        ],
+        [
+          24,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include <stdint.h>"
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "Drv8711.cpp",
+      "sha": "461e609b22dc39df385d09e83b5ca57476f673aa",
+      "physicalLines": 380,
+      "normalizedLines": 232,
+      "functions": [
+        [
+          "drv8711Init",
+          233,
+          338
+        ],
+        [
+          "drv8711MicroSteps_2_Register00Hex",
+          180,
+          217
+        ],
+        [
+          "drv8711Enable",
+          92,
+          127
+        ],
+        [
+          "drv8711EnableAll",
+          38,
+          68
+        ],
+        [
+          "drv8711Disable",
+          129,
+          154
+        ],
+        [
+          "setMotorCurrent",
+          340,
+          365
+        ],
+        [
+          "drv8711DisableAll",
+          70,
+          90
+        ],
+        [
+          "setExtruderCurrent",
+          367,
+          380
+        ],
+        [
+          "drv8711Transmit",
+          24,
+          36
+        ],
+        [
+          "drv8711adjustMicroSteps",
+          219,
+          231
+        ],
+        [
+          "getmsb",
+          156,
+          163
+        ],
+        [
+          "drv8711ModeValue_2_MicroSteps",
+          174,
+          178
+        ],
+        [
+          "drv8711Axis_2_InitMicrosteps",
+          169,
+          172
+        ],
+        [
+          "drv8711MicroSteps_2_ModeValue",
+          165,
+          167
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [
+        [
+          20,
+          "#if DRV8711_NUM_CHANNELS != 5"
+        ],
+        [
+          22,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ]
+      ],
+      "waits": [
+        [
+          29,
+          "HAL::delayMicroseconds(1);"
+        ],
+        [
+          31,
+          "HAL::delayMicroseconds(5);"
+        ],
+        [
+          160,
+          "while (x >>= 1)"
+        ],
+        [
+          230,
+          "HAL::delayMicroseconds(1);"
+        ],
+        [
+          257,
+          "HAL::delayMicroseconds(5000);"
+        ],
+        [
+          261,
+          "HAL::delayMicroseconds(5000);"
+        ],
+        [
+          304,
+          "HAL::delayMicroseconds(1);"
+        ],
+        [
+          309,
+          "HAL::delayMicroseconds(1);"
+        ],
+        [
+          314,
+          "HAL::delayMicroseconds(1);"
+        ],
+        [
+          319,
+          "HAL::delayMicroseconds(1);"
+        ]
+      ],
+      "commentCandidates": []
+    },
+    {
+      "path": "Eeprom.cpp",
+      "sha": "463a6230185187e6aaa424094cad3f2dfd95f199",
+      "physicalLines": 1037,
+      "normalizedLines": 783,
+      "functions": [
+        [
+          "EEPROM::readDataFromEEPROM",
+          402,
+          756
+        ],
+        [
+          "EEPROM::restoreEEPROMSettingsFromConfiguration",
+          106,
+          226
+        ],
+        [
+          "EEPROM::writeSettings",
+          848,
+          967
+        ],
+        [
+          "EEPROM::storeDataIntoEEPROM",
+          244,
+          362
+        ],
+        [
+          "EEPROM::init",
+          764,
+          831
+        ],
+        [
+          "EEPROM::restoreEEPROMExtruderSettingsFromConfiguration",
+          53,
+          104
+        ],
+        [
+          "EEPROM::update",
+          23,
+          51
+        ],
+        [
+          "EEPROM::storeExtruderDataIntoEEPROM",
+          364,
+          387
+        ],
+        [
+          "EEPROM::computeChecksum",
+          969,
+          988
+        ],
+        [
+          "EEPROM::clearEEPROM",
+          228,
+          242
+        ],
+        [
+          "EEPROM::writeFloat",
+          999,
+          1007
+        ],
+        [
+          "EEPROM::writeLong",
+          1009,
+          1017
+        ],
+        [
+          "EEPROM::writeInt",
+          1019,
+          1027
+        ],
+        [
+          "EEPROM::writeByte",
+          1029,
+          1037
+        ],
+        [
+          "EEPROM::writeExtruderPrefix",
+          990,
+          997
+        ],
+        [
+          "EEPROM::storeManualZOffset",
+          394,
+          400
+        ],
+        [
+          "EEPROM::initBaudrate",
+          758,
+          762
+        ],
+        [
+          "EEPROM::updateChecksum",
+          389,
+          392
+        ],
+        [
+          "EEPROM::getExtruderOffset",
+          833,
+          835
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [
+        [
+          79,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          103,
+          "#endif"
+        ],
+        [
+          170,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          172,
+          "#endif"
+        ],
+        [
+          182,
+          "#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2"
+        ],
+        [
+          190,
+          "#endif"
+        ],
+        [
+          202,
+          "#ifdef RGB_LIGHT_R_PIN"
+        ],
+        [
+          204,
+          "#endif"
+        ],
+        [
+          309,
+          "#ifdef RGB_LIGHT_R_PIN"
+        ],
+        [
+          311,
+          "#endif"
+        ],
+        [
+          313,
+          "#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2"
+        ],
+        [
+          320,
+          "#endif"
+        ],
+        [
+          348,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          350,
+          "#endif"
+        ],
+        [
+          539,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          542,
+          "#else"
+        ],
+        [
+          545,
+          "#endif"
+        ],
+        [
+          580,
+          "#ifdef RGB_LIGHT_R_PIN"
+        ],
+        [
+          582,
+          "#endif"
+        ],
+        [
+          584,
+          "#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2"
+        ],
+        [
+          587,
+          "#if CASE_FAN_PIN < 0"
+        ],
+        [
+          590,
+          "#endif"
+        ],
+        [
+          594,
+          "#endif"
+        ],
+        [
+          871,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          873,
+          "#endif"
+        ],
+        [
+          943,
+          "#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2"
+        ],
+        [
+          947,
+          "#endif"
+        ],
+        [
+          951,
+          "#ifdef RGB_LIGHT_R_PIN"
+        ],
+        [
+          953,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ]
+      ],
+      "waits": [
+        [
+          1006,
+          "HAL::delayMilliseconds(4);"
+        ],
+        [
+          1016,
+          "HAL::delayMilliseconds(4);"
+        ],
+        [
+          1026,
+          "HAL::delayMilliseconds(4);"
+        ],
+        [
+          1036,
+          "HAL::delayMilliseconds(4);"
+        ]
+      ],
+      "commentCandidates": [
+        [
+          174,
+          "/* TODO : Restliche Parameter neu einlesen. ...."
+        ]
+      ]
+    },
+    {
+      "path": "Eeprom.h",
+      "sha": "db8a268910fd2190c749fcbea876805024c36ee2",
+      "physicalLines": 221,
+      "normalizedLines": 152,
+      "functions": [],
+      "stateCandidates": [
+        [
+          193,
+          "static uint8_t computeChecksum();"
+        ],
+        [
+          194,
+          "static void writeExtruderPrefix(uint pos);"
+        ],
+        [
+          195,
+          "static void writeFloat(uint pos, PGM_P text, uint8_t digits = 3);"
+        ],
+        [
+          196,
+          "static void writeLong(uint pos, PGM_P text);"
+        ],
+        [
+          197,
+          "static void writeInt(uint pos, PGM_P text);"
+        ],
+        [
+          198,
+          "static void writeByte(uint pos, PGM_P text);"
+        ],
+        [
+          201,
+          "static void init();"
+        ],
+        [
+          202,
+          "static void initBaudrate();"
+        ],
+        [
+          203,
+          "static void storeDataIntoEEPROM(uint8_t corrupted = 0);"
+        ],
+        [
+          204,
+          "static void storeManualZOffset();"
+        ],
+        [
+          205,
+          "static void storePreheatProfiles();"
+        ],
+        [
+          206,
+          "static void updateChecksum();"
+        ],
+        [
+          207,
+          "static void readDataFromEEPROM();"
+        ],
+        [
+          208,
+          "static void restoreEEPROMSettingsFromConfiguration();"
+        ],
+        [
+          209,
+          "static void clearEEPROM();"
+        ],
+        [
+          210,
+          "static void writeSettings();"
+        ],
+        [
+          211,
+          "static void update(GCode* com);"
+        ],
+        [
+          212,
+          "static int getExtruderOffset(uint8_t extruder = 0);"
+        ],
+        [
+          215,
+          "static bool readPreheatProfiles();"
+        ],
+        [
+          216,
+          "static void writePreheatProfiles();"
+        ],
+        [
+          217,
+          "static void restoreEEPROMExtruderSettingsFromConfiguration(uint8_t extruderId);"
+        ],
+        [
+          218,
+          "static void storeExtruderDataIntoEEPROM(uint8_t extruderId);"
+        ]
+      ],
+      "guards": [
+        [
+          18,
+          "#ifndef EEPROM_H"
+        ],
+        [
+          221,
+          "#endif"
+        ]
+      ],
+      "includes": [],
+      "waits": [],
+      "commentCandidates": []
+    }
+  ]
+}
