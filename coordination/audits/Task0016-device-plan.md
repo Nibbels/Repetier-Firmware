@@ -19,7 +19,19 @@
 
 M3902 Z0 durability is a distinct software policy risk, not a routine live test. Back up both stores, use disposable test data and only test interrupted writes on isolated bench equipment. Do not deliberately interrupt a production matrix save. Saving to a different slot is not durability for the active boot slot. Review intended policy before relying on this transfer.
 
-Task0018 is a separate pending PR at the time of this plan; if integrated, add its boot-only eye observation to stage 1: both LCD widths/ROM glyph appearance, valid/missing/invalid matrix, early finish/no extra delay, version fallback, normal icon restoration and error preemption. Recheck boot timing and watchdog while EEPROM reads and LCD transfers overlap. No physical results claimed.
+## Stage 1a — Task0018 boot-only LCD acceptance (both 16×4 and 20×4 panels)
+
+Execute after owner software approval on the exact integrated candidate, with heater power isolated and outputs instrumented as in stage 1. Keep original EEPROM backups and use disposable matrix fixtures only on a safe bench. Capture the entire reset-to-ready sequence with a camera and serial log; if available capture LCD E, TWI SCL and watchdog/RESET on an analyzer. Compare against the preceding known-good boot (same board, matrix contents and peripherals). No G-code triggers the animation.
+
+| Scenario | Expected observation | Stop condition |
+|---|---|---|
+| Valid active matrix, ordinary cold boot | Original startup logo, then centered 10-column eye only while the startup matrix is restored. Check ROM '-'/'|' on each panel; eight custom tiles including direct slot 0, no truncated row; pupil moves in discrete phases (nominal 50 ms, 2 Hz if checkpoints permit), 200 ms blink around 2.8 s only if still active. | Corrupt glyphs/rows, wrong matrix/offset, unexpected motor or heater state, reset. |
+| Fast restore, absent or invalid matrix | Early finish or brief/no visible eye is acceptable. No deliberate wait to complete the animation. Preserve original matrix validity/fallback and serial diagnostics, no extra EEPROM writes caused by animation; normal screen/version and icons restored. | Startup stuck, mandatory added wait, lost error/matrix handling. |
+| Slow but bounded restore | At first progress checkpoint at/after 3900 ms the eye terminates, version fallback or normal UI appears. Record last eye frame, actual time of next checkpoint and total reset-to-ready; cutoff is cooperative, not an independent timeout. Confirm no idle/repeated animation. | Animation persists after return, watchdog reset, missed required service or blocked error display. |
+| Existing error / normal menu preemption | With safe error fixture or startup error, do not obscure error/menu; normal glyphs restored immediately on normal refresh, or at next boot service/finish as appropriate. Never unplug live sensors. Verify degree, back, selection, temperature and ready icons, and that custom slot 0 does not appear as a normal UI glyph. | Error obscured or delayed beyond safe service budget; stale startup tiles in normal UI. |
+| Boot timing and bus ownership | Capture TWI progress, LCD transfers, watchdog and startup latency; callback runs after completed EEPROM words, no TWI transaction is active. Compare actual matrix result, checksum and settings with baseline; no new heater/E output. | Unexpected EEPROM mutation, bus collision, watchdog reset or significant unexplained service delay. |
+
+Task0018 [PR #85](https://github.com/Nibbels/Repetier-Firmware/pull/85) was still pending during preparation of this addition. These cases are planned, not physical evidence; verify implementation and final firmware SHA after merge. Normal LCD workflow in stage 2 and the Task0017 sequence below remain unchanged.
 
 References: [heater safety](../../docs/heater-safety.md), [motion timing](../../docs/motion-timing.md), [scan and persistence](../../docs/z-offset/scans-and-persistence.md), [first-layer scenarios](../../docs/first-layer-control/test-scenarios.md), [maintenance](../../docs/maintenance-tasks.md), [connectors](../../docs/board-connectors.md).
 
