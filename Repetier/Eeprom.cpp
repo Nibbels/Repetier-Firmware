@@ -16,6 +16,7 @@
 */
 
 #include "Repetier.h"
+#include "StepExecutor.h"
 
 // Persisted signature for the existing internal EEPROM layout.
 constexpr uint8_t eepromMagic = 44;
@@ -174,7 +175,7 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     ich glaube gesehen zu haben, dass acceleration und feedrates nicht neu eingelesen werden. will man das?
     */
 
-    Printer::stepsPackingMinInterval = STEP_PACKING_MIN_INTERVAL;
+    StepExecutor::setPackingInterval(STEP_PACKING_MIN_INTERVAL);
 
     Printer::ZMode = DEFAULT_Z_SCALE_MODE; //wichtig, weils im Mod einen dritten Mode gibt. Für Zurückmigration
 
@@ -289,7 +290,7 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     for (uint8_t i = 0; i < NUM_EXTRUDER; i++) {
         storeExtruderDataIntoEEPROM(i);
     }
-    HAL::eprSetInt16(EPR_RF_STEP_PACKING_MIN_INTERVAL, Printer::stepsPackingMinInterval);
+    HAL::eprSetInt16(EPR_RF_STEP_PACKING_MIN_INTERVAL, StepExecutor::packingInterval());
 
     HAL::eprSetByte(EPR_RF_FAN_MODE, HAL::partFanMode());
 
@@ -715,11 +716,11 @@ void EEPROM::readDataFromEEPROM() {
     }
 
     if (!HAL::eprGetInt16(EPR_RF_STEP_PACKING_MIN_INTERVAL)) {
-        Printer::stepsPackingMinInterval = STEP_PACKING_MIN_INTERVAL;
+        StepExecutor::setPackingInterval(STEP_PACKING_MIN_INTERVAL);
         HAL::eprSetInt16(EPR_RF_STEP_PACKING_MIN_INTERVAL, STEP_PACKING_MIN_INTERVAL);
         change = true;
     } else {
-        Printer::stepsPackingMinInterval = constrain(HAL::eprGetInt16(EPR_RF_STEP_PACKING_MIN_INTERVAL), MIN_STEP_PACKING_MIN_INTERVAL, MAX_STEP_PACKING_MIN_INTERVAL);
+        StepExecutor::setPackingInterval(constrain(HAL::eprGetInt16(EPR_RF_STEP_PACKING_MIN_INTERVAL), MIN_STEP_PACKING_MIN_INTERVAL, MAX_STEP_PACKING_MIN_INTERVAL));
     }
 
     uint8_t temp_min = HAL::eprGetByte(EPR_RF_PART_FAN_PWM_MIN);

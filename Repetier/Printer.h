@@ -127,7 +127,6 @@ public:
     static uint8_t flag1;
     static uint8_t flag2;
     static uint8_t flag3;
-    static uint16_t stepsPackingMinInterval;
 
     static float feedrate;                  // Last requested feedrate.
     static int feedrateMultiply;            // Multiplier for feedrate in percent (factor 1 = 100)

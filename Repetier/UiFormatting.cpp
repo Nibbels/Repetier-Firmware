@@ -987,9 +987,9 @@ void UIDisplay::renderExtruderField(char c1, char c2) {
             {
                 addInt(drv8711ModeValue_2_MicroSteps(Drv8711::microstepMode(E_AXIS)), 3);
             }
-            else if (c2 == 'g') // %Xg : Printer::stepsPackingMinInterval
+            else if (c2 == 'g') // %Xg : StepExecutor::packingInterval()
             {
-                addInt(Printer::stepsPackingMinInterval, 4);
+                addInt(StepExecutor::packingInterval(), 4);
             }
             else if (c2 == 'x') // %Xx : XY Stepper Microsteps
             {

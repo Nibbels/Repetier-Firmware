@@ -91,11 +91,16 @@ namespace Printer {
     struct Digit {struct Flow{int16_t minDigits,maxDigits;};Flow p{};bool v=true;Flow flowProfile(){return p;}void setFlowProfile(Flow x){p=x;}bool digitZEnabled(){return v;}void setDigitZEnabled(bool x){v=x;}} digitCompensation;
     struct Pause {void restoreDefaultParking(){}} pause; struct Layers{void resetFadeBounds(float){}} layers;
     uint8_t ZMode=0,enableCaseLight=0,enable230VOutput=0,enableFET1=0,enableFET2=0,enableFET3=0;
-    uint16_t stepsPackingMinInterval=0; float xy=0,z=0;
+    float xy=0,z=0;
     #define AXIS_STORAGE(getter,setter) float getter##Values[4]{}; float getter(int i){return getter##Values[i];} void setter(int i,float v){getter##Values[i]=v;}
     AXIS_STORAGE(stepsPerMm,setStepsPerMm) AXIS_STORAGE(axisMaxFeedrate,setAxisMaxFeedrate) AXIS_STORAGE(axisHomingFeedrate,setAxisHomingFeedrate) AXIS_STORAGE(printAcceleration,setPrintAcceleration) AXIS_STORAGE(travelAcceleration,setTravelAcceleration) AXIS_STORAGE(axisLengthMm,setAxisLengthMm)
     float xyJerkLimit(){return xy;} void setXYJerkLimit(float v){xy=v;} float zJerkLimit(){return z;} void setZJerkLimit(float v){z=v;}
     void disableAllSteppersNow(){} void updateDerivedParameter(){} void applyAdvanceSettings(){}
+}
+namespace StepExecutor {
+    uint16_t interval=0;
+    uint16_t packingInterval(){return interval;}
+    void setPackingInterval(uint16_t v){interval=v;}
 }
 #include "storage-source.inc"
 static void checksum(){unsigned c=0;for(size_t i=0;i<image.size();++i)if(i!=EPR_INTEGRITY_BYTE)c+=image[i];assert(uint8_t(c)==image[EPR_INTEGRITY_BYTE]);}

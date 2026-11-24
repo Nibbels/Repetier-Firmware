@@ -52,7 +52,6 @@ uint8_t Printer::flag3 = 0;
 
 uint8_t Printer::debugLevel = 6; ///< Bitfield defining debug output. 1 = echo, 2 = info, 4 = error, 8 = dry run., 16 = Only communication, 32 = No moves
 
-uint16_t Printer::stepsPackingMinInterval = STEP_PACKING_MIN_INTERVAL;
 uint8_t Printer::menuMode_ = 0;
 
 

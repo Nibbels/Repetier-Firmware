@@ -28,6 +28,9 @@ public:
 
     static float nominalFeedrate();
     static uint8_t stepsPerInterrupt() { return stepsPerTimerCall; }
+    // Foreground configuration; the timer reads the published 16-bit value.
+    static uint16_t packingInterval() { return packingInterval_; }
+    static void setPackingInterval(uint16_t interval);
     static void stepSlowedZCompensation();
     static bool needCmpWait();
     static long performQueueMove();
@@ -49,6 +52,7 @@ private:
     static StepClock stepClocks[2];
     static DirectionOwner directionOwner;
     static volatile uint32_t stepIntervalTicks;
+    static volatile uint16_t packingInterval_;
     static uint8_t stepsPerTimerCall;
     static volatile int32_t queuedPrimarySteps;
     static int32_t directPrimarySteps;

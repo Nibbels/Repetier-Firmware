@@ -16,6 +16,7 @@
 */
 
 #include "Repetier.h"
+#include "StepExecutor.h"
 
 const long baudrates[] PROGMEM = { 9600, 14400, 19200, 28800, 38400, 56000, 57600, 76800, 111112, 115200, 128000, 230400, 250000, 256000,
                                    460800, 500000, 921600, 1000000, 1500000, 0 };
@@ -536,8 +537,10 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
         break;
     }
     case UI_ACTION_SHIFT_INTERVAL: {
-        INCREMENT_MIN_MAX(Printer::stepsPackingMinInterval, -100, MIN_STEP_PACKING_MIN_INTERVAL, MAX_STEP_PACKING_MIN_INTERVAL);
-        HAL::eprSetInt16(EPR_RF_STEP_PACKING_MIN_INTERVAL, Printer::stepsPackingMinInterval);
+        uint16_t interval = StepExecutor::packingInterval();
+        INCREMENT_MIN_MAX(interval, -100, MIN_STEP_PACKING_MIN_INTERVAL, MAX_STEP_PACKING_MIN_INTERVAL);
+        StepExecutor::setPackingInterval(interval);
+        HAL::eprSetInt16(EPR_RF_STEP_PACKING_MIN_INTERVAL, StepExecutor::packingInterval());
         EEPROM::updateChecksum();
         break;
     }
