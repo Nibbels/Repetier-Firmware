@@ -187,6 +187,7 @@
     <ClCompile Include="StrainGauge.cpp" />
     <ClCompile Include="TwiTransfer.cpp" />
     <ClCompile Include="StartLine.cpp" />
+    <ClCompile Include="UiSettings.cpp" />
     <ClCompile Include="UiActions.cpp" />
     <ClCompile Include="UiFormatting.cpp" />
     <ClCompile Include="ui.cpp" />

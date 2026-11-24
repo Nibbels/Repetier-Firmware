@@ -269,18 +269,13 @@ public:
     uint8_t menuTop[MAX_MENU_LEVELS]; // Top row in menu
     int8_t shift;                     // Display shift for scrolling text
     int activeAction; // action for ok/next/previous
-    int lastAction;
-    volatile int jogButtonAction; // Key that started the current stoppable move.
     millis_t lastSwitch; // Last time display switched pages
     millis_t lastRefresh;
-    volatile int lastButtonAction;
-    volatile millis_t lastButtonStart;
     millis_t nextRepeat;   // Time of next autorepeat
     millis_t lastNextPrev; // for increasing speed settings
     float lastNextAccumul; // Accumulated value
     int repeatDuration;    // Time beween to actions if autorepeat is enabled
     char printCols[MAX_COLS + 1];
-    char locked;
 
     UIDisplay();
 
@@ -290,6 +285,9 @@ public:
     void addStringP(FSTRINGPARAM(text));
     void ui_init_keys();
     void ui_check_keys(int& action);
+    millis_t lastButtonTime() const;
+    int activeButton() const;
+    void rememberJogButton() { jogButtonAction = lastAction; }
     void menuEsc();
     void okAction();
     void rightAction();
@@ -324,11 +322,18 @@ public:
     void setStatus(char* txt, bool error = false, bool force = false);
 
 
+    bool isLocked() const { return locked; }
     void lock();
     void unlock();
     void exitmenu();
 
 private:
+    int lastAction;
+    volatile int jogButtonAction; // Key that started the current stoppable move.
+    volatile int lastButtonAction;
+    volatile millis_t lastButtonStart;
+    volatile char locked;
+
     void loadStartupCharacters();
     void loadNormalCharacters();
 

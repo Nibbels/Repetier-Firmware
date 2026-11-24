@@ -371,7 +371,7 @@ void Printer::offsetRelativeStepsCoordinates(int32_t dx, int32_t dy, int32_t dz,
         zMotion.requestDirectMove(dz);
         extruderDirect.request(de);
         if (stoppable)
-            uid.jogButtonAction = uid.lastAction;
+            uid.rememberJogButton();
         PrintLine::reserveDirectMove(stoppable);
     }
 

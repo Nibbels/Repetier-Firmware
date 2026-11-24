@@ -535,6 +535,7 @@ struct StepExecutor {
 };
 
 struct UIDisplay {
+    int activeButton() const { return lastButtonAction; }
     int lastButtonAction = 0, menuLevel = 1, menuPos[1] = {};
     int flags = 0, jogButtonAction = 0;
     int16_t nextKey = 0;

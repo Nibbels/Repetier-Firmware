@@ -223,6 +223,9 @@
     <ClCompile Include="StartLine.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="UiSettings.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="UiActions.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

@@ -254,7 +254,8 @@ void moveZAction(int8_t direction) {
 
     char moveMode = Printer::manualMotion.mode(Z_AXIS);
 
-    if (uid.lastButtonAction == UI_ACTION_RF_HEAT_BED_DOWN || uid.lastButtonAction == UI_ACTION_RF_HEAT_BED_UP) {
+    const int button = uid.activeButton();
+    if (button == UI_ACTION_RF_HEAT_BED_DOWN || button == UI_ACTION_RF_HEAT_BED_UP) {
         //es wäre evtl. cooler die variable durchzuschleifen, aber so gehts auch!
         //VORSICHT: ES könnte evtl. sein dass sich lastbuttonaction während der ausführung ändert. (??)
 

@@ -57,9 +57,11 @@ void Commands::checkForPeriodicalActions(enum FirmwareState state) {
     }
 
     if (HAL::takeCompensationTick()) {
-        bool buttonSpeedBoost = (!HAL::temperatureTickPending() && HAL::timeInMilliseconds() - uid.lastButtonStart < 20000);
-        if (buttonSpeedBoost)
-            uid.slowAction();
+        if (!HAL::temperatureTickPending()) {
+            const millis_t lastButtonAt = uid.lastButtonTime();
+            if (HAL::timeInMilliseconds() - lastButtonAt < 20000)
+                uid.slowAction();
+        }
         recalculateZCompensation();
     }
 

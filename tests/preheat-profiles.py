@@ -15,6 +15,7 @@ def section(source, start, end):
 def main():
     tests = Path(__file__).resolve().parent
     firmware = tests.parent / "Repetier"
+    settings = (firmware / "UiSettings.cpp").read_text(encoding="utf-8")
     actions = (firmware / "UiActions.cpp").read_text(encoding="utf-8")
     formatting = (firmware / "UiFormatting.cpp").read_text(encoding="utf-8")
     menu = (firmware / "uimenu.h").read_text(encoding="utf-8")
@@ -30,7 +31,7 @@ def main():
             encoding="utf-8")
         (build / "preheat-panel.inc").write_text(
             "void edit(int action, int8_t increment) { switch (action) {\n"
-            + section(actions, "    case UI_ACTION_PREHEAT_A_BED:", "    case UI_ACTION_FANSPEED:")
+            + section(settings, "    case UI_ACTION_PREHEAT_A_BED:", "    case UI_ACTION_FANSPEED:")
             + "} }\nvoid activate(int action) { switch (action) {\n"
             + section(actions, "    case UI_ACTION_PREHEAT_A:\n", "    case UI_ACTION_COOLDOWN:")
             + "} }\nvoid renderField(char c2) { switch ('V') {\n"

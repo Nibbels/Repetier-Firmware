@@ -1030,6 +1030,16 @@ void UIDisplay::slowAction() {
     }
 } // slowAction
 
+millis_t UIDisplay::lastButtonTime() const {
+    InterruptProtectedBlock lock;
+    return lastButtonStart;
+}
+
+int UIDisplay::activeButton() const {
+    InterruptProtectedBlock lock;
+    return lastButtonAction;
+}
+
 void UIDisplay::fastAction() {
     // Check keys
     InterruptProtectedBlock noInts;
@@ -1038,7 +1048,7 @@ void UIDisplay::fastAction() {
         flags |= UI_FLAG_KEY_TEST_RUNNING;
 
         int16_t nextAction = 0;
-        uid.ui_check_keys(nextAction);
+        ui_check_keys(nextAction);
 
         if (lastButtonAction != nextAction) {
             lastButtonStart = HAL::timeInMilliseconds();

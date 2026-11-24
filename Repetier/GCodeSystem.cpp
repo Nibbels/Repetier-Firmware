@@ -329,7 +329,7 @@ void runRfDiagnostic(GCode* pCommand) {
 
 void setPanelStatusOverride(GCode* pCommand) {
     if (pCommand->hasString()) {
-        if (!uid.locked) {
+        if (!uid.isLocked()) {
             // ensure that the current text won't be overwritten
             uid.lock();
             if (Printer::debugInfo()) {
@@ -339,7 +339,7 @@ void setPanelStatusOverride(GCode* pCommand) {
         uid.setStatus(pCommand->text, false, true);
         uid.refreshPage();
     } else {
-        if (uid.locked) {
+        if (uid.isLocked()) {
             // allow to overwrite the current string again
             // Put the unlock into queue to avoid racetime conditions with prior commands
             queueTask(TASK_UNLOCK_DISPLAY_MSG);
