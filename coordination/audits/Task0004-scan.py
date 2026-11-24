@@ -14,6 +14,8 @@ WORD = re.compile(r'\b[A-Za-z_]\w*\b')
 GUARD = re.compile(r'^\s*#\s*(?:if|ifdef|ifndef|elif|else|endif)\b')
 MACRO = re.compile(r'^\s*#\s*define\s+([A-Za-z_]\w*)')
 INCLUDE = re.compile(r'^\s*#\s*include\s*([<"][^>"]+[>"])')
+CONSTANT = re.compile(r"^\s*(?!\s*#)[^;{}()]*\b(?:const|constexpr)\b[^;{}()]*?"
+                      r"\b([A-Za-z_]\w*)\s*(?:\[[^\]]*\]\s*)?(?:PROGMEM\s*)?[={;]")
 STATIC = re.compile(r'\b(?:static|volatile|extern)\b.*[;=]')
 WAIT = re.compile(r'\b(?:while\s*\(|delay(?:Milliseconds|Microseconds)?\s*\(|'
                   r'wait\s*\(|finishActive\s*\()')
@@ -46,6 +48,25 @@ def normalized(text):
 def shingles(lines, n=5):
     return Counter(tuple(lines[i:i+n]) for i in range(len(lines)-n+1))
 
+def tree_tokens(tree):
+    all_lines = Counter()
+    windows = Counter()
+    for raw in tree.values():
+        lines = normalized(raw.decode("utf-8", "replace"))
+        all_lines.update(lines)
+        windows.update(shingles(lines))
+    return all_lines, windows
+
+def overlap(old_files, new_files):
+    old_lines, old_windows = tree_tokens(old_files)
+    new_lines, new_windows = tree_tokens(new_files)
+    return {
+        "lines": sum(new_lines.values()),
+        "matched_lines": sum((old_lines & new_lines).values()),
+        "windows": sum(new_windows.values()),
+        "matched_windows": sum((old_windows & new_windows).values()),
+    }
+
 def functions(code):
     # Single-line signatures only; conditionals and macro-heavy functions may
     # be skipped or mis-sized. Braces in comments and literals are masked.
@@ -65,12 +86,7 @@ def functions(code):
 def scan(files, old_files):
     all_words = Counter()
     references = {}
-    old_lines = Counter()
-    old_sequences = Counter()
-    for raw in old_files.values():
-        lines = normalized(raw.decode("utf-8", "replace"))
-        old_lines.update(lines)
-        old_sequences.update(shingles(lines))
+    old_lines, old_sequences = tree_tokens(old_files)
     texts = {p: raw.decode("utf-8", "replace") for p, raw in files.items()}
     for p, t in texts.items():
         words = Counter(WORD.findall(strip(t, literals=True)))
@@ -100,6 +116,7 @@ def scan(files, old_files):
             "bytes": len(files[p]), "physical_lines": len(rows),
             "normalized_lines": len(lines),
             "same_path_line_multiset_matches": sum(same.values()),
+            "same_path_5line_matches": sum((shingles(lines) & shingles(prev)).values()),
             "old_any_path_line_multiset_matches": sum((Counter(lines) & old_lines).values()),
             "old_any_path_5line_matches": sum((shingles(lines) & old_sequences).values()),
             "functions_heuristic": fn,
@@ -107,6 +124,9 @@ def scan(files, old_files):
                 [name, start, all_words[name.split("::")[-1]]]
                 for name, start, _, _ in fn if all_words[name.split("::")[-1]] <= 2],
             "static_volatile_extern_candidates": state,
+            "constant_declaration_candidates": [
+                [i+1, m.group(1), all_words[m.group(1)]]
+                for i, row in enumerate(rows) if (m := CONSTANT.match(row))],
             "macro_definitions_with_token_count": macros,
             "includes": [[i+1, m.group(1)] for i, row in enumerate(clean.splitlines())
                          if (m := INCLUDE.match(row))],
@@ -136,6 +156,9 @@ def self_test():
     assert f["Repetier/A.cpp"]["old_any_path_line_multiset_matches"] == 4
     assert f["Repetier/A.cpp"]["static_volatile_extern_candidates"][0][0] == 3
     assert not d
+    old = {"old.cpp": b"a\nb\nc\nd\ne\n"}
+    copies = {"new.cpp": old["old.cpp"], "copy.cpp": old["old.cpp"]}
+    assert overlap(old, copies) == {"lines": 10, "matched_lines": 5, "windows": 2, "matched_windows": 1}
     print("Task0004 lexical fixture tests passed")
 
 def main():
@@ -155,6 +178,7 @@ def main():
     print(json.dumps({
         "base": b, "head": h, "source_files": [len(bf), len(hf)],
         "source_bytes": [sum(map(len, bf.values())), sum(map(len, hf.values()))],
+        "cross_tree_overlap": overlap(bf, hf),
         "removed_paths": sorted(set(bp) - set(hp)),
         "added_paths": sorted(set(hp) - set(bp)),
         "unchanged_source_paths": sorted(p for p in bf if bf[p] == hf.get(p)),
