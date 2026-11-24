@@ -29,10 +29,52 @@ const uint8 temperatureAdcChannels[TemperatureAdcCount] PROGMEM = {
     TEMP_3_PIN,
 #endif
 };
-volatile uint8 temperatureAdcCount[TemperatureAdcCount] = { 0 };
-volatile uint temperatureAdcSum[TemperatureAdcCount] = { 0 };
-volatile uint8 temperatureAdcPosition = 0; // Current sampling position
-volatile uint temperatureAdcValues[TemperatureAdcCount] = { 0 };
+// Only the currently selected channel accumulates; a complete batch resets both.
+volatile uint8_t temperatureAdcCount = 0;
+volatile uint16_t temperatureAdcSum = 0;
+volatile uint8_t temperatureAdcPosition = 0;
+volatile uint16_t temperatureAdcValues[TemperatureAdcCount] = { 0 };
+// A full scan takes at most 32.768 ms at the nominal 256 us compare cadence.
+// Permit a 100 ms publication age; this is a software limit, not a physical bound.
+constexpr uint32_t temperatureAdcMaxAgeMs = 100;
+volatile uint32_t temperatureAdcPublishedAt[TemperatureAdcCount] = { 0 };
+volatile bool temperatureAdcReady[TemperatureAdcCount] = { false };
+
+inline __attribute__((always_inline)) void serviceTemperatureAdc() {
+    // ADSC alone can also be clear when the ADC has been disabled.
+    // ADIF proves a conversion completed since the last acknowledged result.
+    const uint8_t control = ADCSRA;
+    if ((control & (_BV(ADEN) | _BV(ADSC) | _BV(ADIF))) != (_BV(ADEN) | _BV(ADIF)))
+        return;
+
+    const uint16_t sum = temperatureAdcSum + ADCW;
+    const uint8_t count = temperatureAdcCount + 1;
+    if (count >= 32) {
+        const uint8_t index = temperatureAdcPosition;
+        // Scale 32 ten-bit samples to the sensor tables' 12-bit range.
+        temperatureAdcValues[index] = sum >> 3;
+        temperatureAdcPublishedAt[index] = HAL::timeInMilliseconds();
+        temperatureAdcReady[index] = true;
+        temperatureAdcSum = 0;
+        temperatureAdcCount = 0;
+
+        const uint8_t next = index < TemperatureAdcCount - 1 ? index + 1 : 0;
+        temperatureAdcPosition = next;
+        const uint8_t channel = pgm_read_byte(&temperatureAdcChannels[next]);
+#if defined(ADCSRB) && defined(MUX5)
+        if (channel & 8)
+            ADCSRB |= _BV(MUX5);
+        else
+            ADCSRB &= ~_BV(MUX5);
+#endif
+        ADMUX = (ADMUX & ~(0x1F)) | (channel & 7);
+    } else {
+        temperatureAdcSum = sum;
+        temperatureAdcCount = count;
+    }
+    // ADIF is write-one-to-clear; acknowledge the old result and start the next.
+    ADCSRA |= _BV(ADIF) | _BV(ADSC);
+}
 
 volatile unsigned long watchdogHeartbeat = 0;
 volatile bool watchdogActive = false;
@@ -337,21 +379,52 @@ uint16_t HAL::temperatureAdcSample(uint8_t index) {
     return temperatureAdcValues[index];
 }
 
-void HAL::analogStart() {
-    ADMUX = _BV(REFS0); // Use AVCC as the temperature ADC reference.
-    for (uint8_t i = 0; i < TemperatureAdcCount; i++) {
-        temperatureAdcCount[i] = 0;
-        temperatureAdcSum[i] = 0;
-        temperatureAdcValues[i] = 0;
+bool HAL::temperatureAdcSample(uint8_t index, uint16_t& sample) {
+    if (index >= TemperatureAdcCount) {
+        sample = 0;
+        return false;
     }
-    ADCSRA = _BV(ADEN) | _BV(ADSC) | ANALOG_PRESCALER;
-    //ADCSRA |= _BV(ADSC);                  // start ADC-conversion
+    uint32_t publishedAt;
+    {
+        // Value, readiness and timestamp describe the same complete batch.
+        InterruptProtectedBlock lock;
+        sample = temperatureAdcValues[index];
+        if (!temperatureAdcReady[index])
+            return false;
+        publishedAt = temperatureAdcPublishedAt[index];
+    }
+    // Read the clock after the snapshot so a just-published timestamp is not
+    // in the future. Unsigned subtraction works across ordinary millis wrap.
+    if (static_cast<uint32_t>(timeInMilliseconds() - publishedAt) <= temperatureAdcMaxAgeMs)
+        return true;
+    {
+        // Expired data must not become valid again on a later clock wrap.
+        // Do not invalidate a newer batch published since the snapshot.
+        InterruptProtectedBlock lock;
+        if (temperatureAdcPublishedAt[index] == publishedAt)
+            temperatureAdcReady[index] = false;
+    }
+    return false;
+}
+
+void HAL::analogStart() {
+    // Called during boot before enabling Timer0 COMPB.
+    ADMUX = _BV(REFS0); // Use AVCC as the temperature ADC reference.
+    temperatureAdcPosition = 0;
+    temperatureAdcCount = 0;
+    temperatureAdcSum = 0;
+    for (uint8_t i = 0; i < TemperatureAdcCount; i++) {
+        temperatureAdcValues[i] = 0;
+        temperatureAdcPublishedAt[i] = 0;
+        temperatureAdcReady[i] = false;
+    }
+    ADCSRA = _BV(ADEN) | _BV(ADSC) | _BV(ADIF) | ANALOG_PRESCALER;
     while (ADCSRA & _BV(ADSC)) { } // wait for conversion
     /* ADCW must be read once, otherwise the next result is wrong. */
     uint dummyADCResult;
     dummyADCResult = ADCW;
     (void)dummyADCResult;
-    // Enable interrupt driven conversion loop
+    // The Timer0 COMPB handler services the conversion loop.
     uint8_t channel = pgm_read_byte(&temperatureAdcChannels[temperatureAdcPosition]);
 
 #if defined(ADCSRB) && defined(MUX5)
@@ -362,7 +435,7 @@ void HAL::analogStart() {
 #endif // defined(ADCSRB) && defined(MUX5)
 
     ADMUX = (ADMUX & ~(0x1F)) | (channel & 7);
-    ADCSRA |= _BV(ADSC); // start conversion without interrupt!
+    ADCSRA |= _BV(ADIF) | _BV(ADSC); // Discard dummy result and start the first channel.
 
 } // analogStart
 
@@ -763,36 +836,7 @@ ISR(PWM_TIMER_VECTOR) {
             fanKickstart--;
     }
 
-    // read analog values
-    if ((ADCSRA & _BV(ADSC)) == 0) // Conversion finished?
-    {
-        temperatureAdcSum[temperatureAdcPosition] += ADCW;
-        if (++temperatureAdcCount[temperatureAdcPosition] >= 32) {
-
-            // Scale 32 ten-bit samples to the sensor tables' 12-bit range.
-            temperatureAdcValues[temperatureAdcPosition] = temperatureAdcSum[temperatureAdcPosition] >> 3;
-
-
-            temperatureAdcSum[temperatureAdcPosition] = 0;
-            temperatureAdcCount[temperatureAdcPosition] = 0;
-            // Start next conversion
-            if (temperatureAdcPosition < TemperatureAdcCount - 1)
-                temperatureAdcPosition++;
-            else
-                temperatureAdcPosition = 0;
-            uint8_t channel = pgm_read_byte(&temperatureAdcChannels[temperatureAdcPosition]);
-
-#if defined(ADCSRB) && defined(MUX5)
-            if (channel & 8) // Reading channel 0-7 or 8-15?
-                ADCSRB |= _BV(MUX5);
-            else
-                ADCSRB &= ~_BV(MUX5);
-#endif // #if defined(ADCSRB) && defined(MUX5)
-
-            ADMUX = (ADMUX & ~(0x1F)) | (channel & 7);
-        }
-        ADCSRA |= _BV(ADSC); // start next conversion
-    }
+    serviceTemperatureAdc();
 
     if (pwm_count_heater & 4)
         uid.fastAction();

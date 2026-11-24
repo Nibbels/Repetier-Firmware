@@ -65,7 +65,7 @@ public:
     uint8_t paused;
 
     void setTargetTemperature(float target);
-    bool updateCurrentTemperature(); ///< False for an unsupported sensor type.
+    bool updateCurrentTemperature(); ///< False for an unsupported sensor type or stale/unpublished ADC sample.
     void updateTempControlVars();
     void waitForTargetTemperature(uint8_t plus_temp_tolerance = 0, bool resumingPause = false);
     void autotunePID(float temp, uint8_t controllerId, int maxCycles, bool storeResult, int method);

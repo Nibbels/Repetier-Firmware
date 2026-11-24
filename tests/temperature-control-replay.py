@@ -53,7 +53,17 @@ static uint8_t pins[8];
 #define READ(pin) (pins[pin])
 static uint16_t PWM_OCR;
 static millis_t now;
-static volatile uint16_t temperatureAdcValues[NUM_TEMPERATURE_LOOPS];
+constexpr uint8_t TemperatureAdcCount = NUM_TEMPERATURE_LOOPS;
+#include "adc-state.inc"
+static int stalledChannel = -1;
+static void publishAdc() {
+    for (uint8_t i = 0; i < TemperatureAdcCount; ++i) {
+        if (i != stalledChannel) {
+            temperatureAdcPublishedAt[i] = now;
+            temperatureAdcReady[i] = true;
+        }
+    }
+}
 struct InterruptProtectedBlock {};
 static uint8_t pgm_read_byte(const uint8_t* p) { return *p; }
 static int16_t pgm_read_word(const int16_t* p) { return *p; }
@@ -61,6 +71,7 @@ static const int16_t* pgm_read_word(const int16_t* const* p) { return *p; }
 struct HAL {
     static millis_t timeInMilliseconds() { return now; }
     static uint16_t temperatureAdcSample(uint8_t);
+    static bool temperatureAdcSample(uint8_t, uint16_t&);
     static void setHeaterDuty(uint8_t, uint8_t);
     static uint8_t outputDuty(uint8_t);
     static void tellWatchdogOk();
@@ -147,7 +158,7 @@ static void reportTempsensorAndHeaterErrors();
 #include "bed-setter.inc"
 static unsigned visits;
 static millis_t stride = 10;
-enum class Injection { None, Reach, LateUnsupported, LateLow, Transient, High, TransientHigh, Cutoff, Cycles, OtherFault, Cancel, Reentrant };
+enum class Injection { None, Reach, LateUnsupported, LateLow, Transient, High, TransientHigh, Cutoff, Cycles, OtherFault, Cancel, Reentrant, Stale };
 static Injection injection;
 static bool postTemperature = true;
 namespace GCodeInput {
@@ -155,6 +166,8 @@ namespace GCodeInput {
         ++visits;
         assert(visits < 1000);
         now += stride;
+        if (injection == Injection::Stale) stalledChannel = tuned->sensorPin;
+        publishAdc();
         scanTick = true;
         if (postTemperature) temperatureTick = true;
         if (injection == Injection::Reach && visits == 3) {
@@ -208,6 +221,7 @@ static void handleScanWorkTasks(bool) {}
 
 static void service() {
     now += 100;
+    publishAdc();
     Extruder::manageTemperatures();
 }
 static void allOff() {
@@ -229,7 +243,29 @@ int main(int argc, char** argv) {
         t->pidDGain = 3;
         t->decoupleTestPeriod = EXT0_DECOUPLE_TEST_PERIOD;
     }
-    if (!std::strcmp(name, "rail")) {
+    publishAdc();
+    if (!std::strcmp(name, "stale") || !std::strcmp(name, "bed-stale")) {
+        auto& affected = !std::strcmp(name, "bed-stale") ? bed : c;
+        auto& other = &affected == &bed ? c : bed;
+        service();
+        assert(HAL::outputDuty(affected.pwmIndex) == 255);
+        stalledChannel = affected.sensorPin;
+        ++now;
+        const auto oldPointer = affected.tempPointer;
+        service();
+        assert(HAL::outputDuty(affected.pwmIndex) == 0 && !Printer::fault);
+        assert(HAL::outputDuty(other.pwmIndex) == 255 && affected.tempPointer == oldPointer);
+        stalledChannel = -1;
+        service();
+        assert(HAL::outputDuty(affected.pwmIndex) == 255 && !Printer::fault);
+    } else if (!std::strcmp(name, "unpublished")) {
+        temperatureAdcReady[c.sensorPin] = false;
+        stalledChannel = c.sensorPin;
+        HAL::setHeaterDuty(c.pwmIndex, 255);
+        service();
+        assert(HAL::outputDuty(c.pwmIndex) == 0 && HAL::outputDuty(bed.pwmIndex) == 255);
+        assert(!Printer::fault && c.tempPointer == 0);
+    } else if (!std::strcmp(name, "rail")) {
         c.sensorType = 13;
         temperatureAdcValues[0] = 4092;
         service();
@@ -385,7 +421,8 @@ int main(int argc, char** argv) {
         else if (!std::strcmp(name, "autotune-entry-low")) {
             t.sensorType = 14;
             temperatureAdcValues[t.sensorPin] = 4092;
-        } else if (!std::strcmp(name, "autotune-entry-disabled")) t.sensorType = 0;
+        } else if (!std::strcmp(name, "autotune-entry-stale")) now += 101;
+        else if (!std::strcmp(name, "autotune-entry-disabled")) t.sensorType = 0;
         else if (!std::strcmp(name, "autotune-entry-latched")) Printer::fault = true;
         else if (!std::strcmp(name, "autotune-entry-decoupled")) t.setSensorDecoupled(true);
         else if (!std::strcmp(name, "autotune-entry-dryrun")) Printer::debugLevel = 8;
@@ -396,6 +433,10 @@ int main(int argc, char** argv) {
         else if (std::strstr(name, "-late")) {
             injection = Injection::LateUnsupported;
             postTemperature = false; // fault between periodic temperature services
+        } else if (std::strstr(name, "-stale")) {
+            injection = Injection::Stale;
+            stride = 101;
+            postTemperature = false;
         } else if (!std::strcmp(name, "autotune-low")) {
             injection = Injection::LateLow;
             postTemperature = false;
@@ -454,6 +495,7 @@ def main():
     commands = (FW / "Commands.cpp").read_text()
     include = '#include "Repetier.h"'
     fragments = {
+        "adc-state.inc": section(hal, "volatile uint16_t temperatureAdcValues", "inline __attribute__((always_inline)) void serviceTemperatureAdc"),
         "controller.inc": section(header, "#define TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_FULL", "}; // TemperatureController") + "};",
         "conversion.inc": conversion.split(include, 1)[1],
         "control.inc": control.split(include, 1)[1],
@@ -474,6 +516,7 @@ def main():
     }
     scenarios = (
         "rail", "invalid-low", "invalid-high", "bed-invalid", "recovery", "disabled",
+        "stale", "bed-stale", "unpublished", "autotune-entry-stale", "autotune-stale", "autotune-bed-stale",
         "unsupported", "no-rise", "hold-drift", "pwm", "watchdog", "wait",
         "autotune-entry-unsupported", "autotune-entry-low", "autotune-entry-disabled",
         "autotune-entry-latched", "autotune-entry-decoupled", "autotune-entry-dryrun", "autotune-entry-high",

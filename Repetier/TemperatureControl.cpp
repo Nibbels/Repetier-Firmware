@@ -283,7 +283,7 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
     }
     const bool sensorSupported = updateCurrentTemperature();
     if (!sensorSupported) {
-        Com::printErrorFLN(PSTR("PID autotune failed: unsupported temperature sensor"));
+        Com::printErrorFLN(PSTR("PID autotune failed: unsupported or stale temperature sensor"));
         return;
     }
     if (!validTemperatureSample(sensorSupported, currentTemperatureC) || sensorType == 0

@@ -531,7 +531,9 @@ public:
     } // maxExtruderTimerFrequency
 
     static void analogStart();
-    static uint16_t temperatureAdcSample(uint8_t index);
+    static uint16_t temperatureAdcSample(uint8_t index); // Raw diagnostic snapshot.
+    // Non-consuming snapshot; false before first publication or after expiry.
+    static bool temperatureAdcSample(uint8_t index, uint16_t& sample);
 };
 
 #define EXTRUDER_TIMER_VECTOR TIMER0_COMPA_vect
