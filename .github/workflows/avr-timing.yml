@@ -1,0 +1,27 @@
+name: AVR build timing
+on:
+  pull_request:
+    branches: [ai-firmware-review]
+    paths: ['.github/workflows/avr-timing.yml']
+permissions:
+  contents: read
+jobs:
+  benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 8655a4921a82406ca7f85bbebc89e9402e235b8e
+      - uses: arduino/setup-arduino-cli@v2
+        with:
+          version: 1.2.2
+      - name: Install pinned AVR core
+        run: |
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+      - name: Measure the four AVR builds
+        run: |
+          TIMEFORMAT='%3R seconds'
+          time python3 tools/task0003-baseline.py --avr-only "$RUNNER_TEMP/evidence"
+          sha256sum "$RUNNER_TEMP"/evidence/*/build/Repetier.ino.hex
