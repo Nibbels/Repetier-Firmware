@@ -19,6 +19,7 @@
 #include "pins_arduino.h"
 
 #include "Eeprom.h"
+#include "CaseFan.h"
 
 // Preserve the heated bed's existing measured-temperature cutoff. Its setpoint has its own limit.
 constexpr uint16_t bedHeaterCutoffC = 275;
@@ -154,34 +155,7 @@ void Extruder::setTemperatureForExtruder(float temperatureInCelsius, uint8_t ext
     }
 
 #if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
-    if (Printer::ignoreFanOn) {
-        //ignore the case fan whenever there is another cooling solution available // Nibbels
-        //the fan should still be connected within the rf2000 but might be avoided to suppress noise.
-        //the ignore-flag has to be set at runtime to prevent unlearned persons to risk overheat having the wrong startcode.
-        //enable and disable the fan with M3120 or M3121 or M3300 P3 S{1,0}
-        Printer::prepareFanOff = 0;
-        Printer::fanOffDelay = 0;
-    } else {
-        bool isheating = false;
-        for (uint8_t i = 0; i < NUM_EXTRUDER; i++)
-            if (tempController[i]->targetTemperatureC > CASE_FAN_ON_TEMPERATURE)
-                isheating = true;
-        if (isheating) {
-            // enable the case fan in case any extruder is turned on
-            Printer::prepareFanOff = 0;
-            WRITE(CASE_FAN_PIN, 1);
-        } else {
-            // disable the case fan in case the extruder is turned off
-            if (Printer::fanOffDelay) {
-                // we are going to disable the case fan after the delay
-                Printer::prepareFanOff = HAL::timeInMilliseconds();
-            } else {
-                // we are going to disable the case fan now
-                Printer::prepareFanOff = 0;
-                WRITE(CASE_FAN_PIN, 0);
-            }
-        }
-    }
+    CaseFan::updateFromHotendTargets();
 #endif // (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
 
     bool alloff = true;

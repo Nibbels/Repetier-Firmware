@@ -17,6 +17,7 @@
 
 #include "Repetier.h"
 #include "BedMatrix.h"
+#include "CaseFan.h"
 #include "ExternalEeprom.h"
 #include "ScanProbe.h"
 #include "GCodeInput.h"
@@ -88,23 +89,9 @@ void handleScanWorkTasks(bool tickDue) {
 }
 
 void handleStartStandby(millis_t uTime) {
-    /**
-     * Check if the Fan shall be turned off.
-     */
 #if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
-    if (Printer::prepareFanOff) {
-        if (Printer::prepareFanOff > uTime) {
-            return;
-        }
-        if ((uTime - Printer::prepareFanOff) > Printer::fanOffDelay) //60s wäre standard nach config
-        {
-            // it is time to turn the case fan off
-            Printer::prepareFanOff = 0;
-            if (!Printer::ignoreFanOn)
-                WRITE(CASE_FAN_PIN, 0);
-        }
-    }
-#endif // (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
+    CaseFan::service();
+#endif
 
     if (!Printer::pause.isPaused() && !Printer::startLine.active()) {
         const auto idleTransition = Printer::idleStatus.poll(uTime, MINIMAL_IDLE_TIME);

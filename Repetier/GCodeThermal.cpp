@@ -17,6 +17,7 @@
 
 #include "Repetier.h"
 #include "GCodeCommands.h"
+#include "CaseFan.h"
 
 namespace GCodeCommands {
 
@@ -256,45 +257,27 @@ void setCaseLight(GCode* com) {
 
 #if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
 void turnOnCaseFan() {
-    //disable fan-temp-ignore to original state // Nibbels
-    Printer::ignoreFanOn = false;
-
-    // enable the case fan
-    Printer::prepareFanOff = 0;
-    WRITE(CASE_FAN_PIN, 1);
-
-    if (Printer::debugInfo()) {
+    CaseFan::turnOn();
+    if (Printer::debugInfo())
         Com::printFLN(PSTR("M3120: fan on"));
-    }
 }
 
 void scheduleCaseFanOff(GCode* pCommand) {
-    // disable the case fan
     if (pCommand->hasS()) {
-        // we shall set a new case fan off delay
-        Printer::fanOffDelay = pCommand->S;
-        Printer::fanOffDelay *= 1000; // convert from [s] to [ms]
-    }
-
-    if (pCommand->hasP()) {
-        // the fan should be disabled even if the print starts // temp > fan on temp // Nibbels
-        Printer::ignoreFanOn = true;
-    }
-
-    if (Printer::fanOffDelay) {
-        // we are going to disable the case fan after the delay
-        Printer::prepareFanOff = HAL::timeInMilliseconds();
-
-        if (Printer::debugInfo()) {
-            Com::printF(PSTR("M3121: fan off in "), pCommand->S);
-            Com::printFLN(PSTR(" [s]"));
+        const auto seconds = pCommand->S;
+        if (seconds < 0 || static_cast<uint32_t>(seconds) > UINT32_MAX / 1000UL) {
+            showInvalidSyntax(pCommand->M);
+            return;
         }
-    } else {
-        // we are going to disable the case fan now
-        Printer::prepareFanOff = 0;
-        WRITE(CASE_FAN_PIN, 0);
+        CaseFan::setOffDelay(static_cast<uint32_t>(seconds) * 1000UL);
+    }
 
-        if (Printer::debugInfo()) {
+    const bool delayed = CaseFan::requestOff(pCommand->hasP());
+    if (Printer::debugInfo()) {
+        if (delayed) {
+            Com::printF(PSTR("M3121: fan off in "), CaseFan::offDelay() / 1000UL);
+            Com::printFLN(PSTR(" [s]"));
+        } else {
             Com::printFLN(PSTR("M3121: fan off"));
         }
     }

@@ -171,9 +171,6 @@ public:
     static char enableFET2;
     static char enableFET3;
 
-    static bool ignoreFanOn;
-    static millis_t prepareFanOff;
-    static unsigned long fanOffDelay;
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
     static unsigned char wrongType;

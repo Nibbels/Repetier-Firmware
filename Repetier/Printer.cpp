@@ -18,6 +18,7 @@
 #include "Repetier.h"
 #include "GCodeInput.h"
 #include "TwiTransfer.h"
+#include "CaseFan.h"
 
 ExtrusionOutput Printer::extrusionOutput;
 PreheatProfiles Printer::preheatProfiles;
@@ -101,9 +102,6 @@ char Printer::enableFET1 = FET1_DEFAULT_ON;
 char Printer::enableFET2 = FET2_DEFAULT_ON;
 char Printer::enableFET3 = FET3_DEFAULT_ON;
 
-bool Printer::ignoreFanOn = false;
-millis_t Printer::prepareFanOff = 0;
-unsigned long Printer::fanOffDelay = 0;
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
 unsigned char Printer::wrongType;
@@ -566,10 +564,6 @@ void Printer::setup() {
     Printer::setAxisLengthMm(Y_AXIS, Y_MAX_LENGTH);
     Printer::setAxisLengthMm(Z_AXIS, Z_MAX_LENGTH);
 
-#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
-    fanOffDelay = CASE_FAN_OFF_DELAY;
-#endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
-
 #ifdef RGB_LIGHT_R_PIN
     RgbLighting::reset();
 #endif // RGB_LIGHT_R_PIN
@@ -617,9 +611,7 @@ void Printer::setup() {
 #endif // FET3
 
 #if CASE_FAN_PIN > -1
-    SET_OUTPUT(CASE_FAN_PIN);
-
-    WRITE(CASE_FAN_PIN, 0);
+    CaseFan::initialize();
 #endif // CASE_FAN_PIN > -1
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
