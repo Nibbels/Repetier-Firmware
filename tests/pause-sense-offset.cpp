@@ -2587,6 +2587,36 @@ void lookaheadMoves() {
     assert(trace == 0x670f3ba6U); // Step intervals captured before extracting the planner.
 }
 
+void plannerAccelerationLimits() {
+    MoveQueue queue;
+    const auto plan = [&](int32_t x, int32_t y, int32_t e, float requestedTicks) {
+        PrintLine move{};
+        move.setAxisSteps(X_AXIS, x);
+        move.setAxisSteps(Y_AXIS, y);
+        move.setAxisSteps(E_AXIS, e);
+        const float distances[] = {
+            x * Printer::mmPerStep(X_AXIS), y * Printer::mmPerStep(Y_AXIS), 0, e * Printer::mmPerStep(E_AXIS)
+        };
+        move.setSegmentGeometry(distances);
+        const float feedrate = F_CPU * move.lookahead.distance / requestedTicks;
+        MotionPlanner::prepareMove(move, distances, feedrate, queue);
+        assert(move.primaryAxis == X_AXIS);
+        return move.lookahead.accelerationPrim;
+    };
+
+    Printer::maxTravelAccelerationStepsPerSquareSecond[X_AXIS] = 240000;
+    Printer::maxTravelAccelerationStepsPerSquareSecond[Y_AXIS] = 40000;
+    assert(plan(400, 200, 0, 410280) == 80000);
+
+    // This axis allowance exceeds 32 bits before division.
+    Printer::maxTravelAccelerationStepsPerSquareSecond[Y_AXIS] = 165000;
+    assert(plan(38400, 32000, 0, 90000000) == 198000);
+
+    // Printing uses a separate set of limits, including the active extruder.
+    Printer::maxPrintAccelerationStepsPerSquareSecond[E_AXIS] = 5000;
+    assert(plan(6400, 0, 3200, 3000000) == 10000);
+}
+
 void shortMovePacing() {
     constexpr unsigned prefill = 12, segmentCount = 300;
     constexpr uint32_t sendPeriod = F_CPU / 200;
@@ -2951,6 +2981,8 @@ int main(int argc, char** argv) {
         stepClock();
     else if (!std::strcmp(argv[1], "lookahead"))
         lookaheadMoves();
+    else if (!std::strcmp(argv[1], "acceleration-limits"))
+        plannerAccelerationLimits();
     else if (!std::strcmp(argv[1], "short-move-pacing"))
         shortMovePacing();
     else if (!std::strcmp(argv[1], "direct-ramp"))
