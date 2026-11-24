@@ -91,7 +91,6 @@ DirectPosition Printer::extruderDirect;
 char Printer::enabledStepper[3] = { 0, 0, 0 };
 
 
-unsigned char Printer::wrongType;
 
 //When the printer resets, we should not do movement, because it would not be homed. At least some interaction with buttons or temperature-commands are needed to allow movement.
 bool Printer::movementUnlocked_ = false;
@@ -407,11 +406,9 @@ void Printer::setup() {
 
     TwiTransfer::beginBus();
 
-    determineHardwareType();
-
-    if (wrongType) {
+    if (!hardwareTypeMatches()) {
         EEPROM::initBaudrate();
-        HAL::serialSetBaudrate(baudrate);
+        HAL::serialSetBaudrate(EEPROM::configuredBaudrate());
         Com::printErrorFLN(PSTR(UI_TEXT_WRONG_FIRMWARE));
 
         // Halt before initializing hardware outputs for a different board.
@@ -553,7 +550,7 @@ void Printer::setup() {
     uid.initialize();
 
     EEPROM::initBaudrate();
-    HAL::serialSetBaudrate(baudrate);
+    HAL::serialSetBaudrate(EEPROM::configuredBaudrate());
 
     // sending of this information tells the Repetier-Host that the firmware has restarted - never delete or change this to-be-sent information
     Com::println();
@@ -666,7 +663,7 @@ void Printer::stopPrint() {
     Com::printF(Com::tExtrDot, i + 1); \
     Com::print(':');
 void Printer::showConfiguration() {
-    Com::config(PSTR("Baudrate:"), baudrate);
+    Com::config(PSTR("Baudrate:"), EEPROM::configuredBaudrate());
     Com::config(PSTR("InputBuffer:"), UsbSerial::receiveCapacity);
     Com::config(PSTR("NumExtruder:"), NUM_EXTRUDER);
     Com::config(PSTR("MixingExtruder:"), 0);

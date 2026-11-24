@@ -320,10 +320,8 @@ unsigned char isHomingAllowed(GCode* com, char outputLog) {
     return 1;
 } // isHomingAllowed
 
-void determineHardwareType(void) {
+bool hardwareTypeMatches() {
     unsigned short uTemp;
-
-    Printer::wrongType = 0;
 
     // check the stored header format
     uTemp = ExternalEeprom::readWord(I2C_ADDRESS_TYPE_EEPROM, TYPE_EEPROM_OFFSET_HEADER_FORMAT);
@@ -338,28 +336,25 @@ void determineHardwareType(void) {
         if (uTemp != TYPE_EEPROM_FORMAT) {
             if (MOTHERBOARD == DEVICE_TYPE_RF1000) {
                 // the RF1000 does not provide the type EEPROM, thus we should run at an RF1000 board when we end up here
-                return;
+                return true;
             }
 
             // we end up here in case this firmware is for the RF2000, but the current board does not seem to be an RF2000 board
-            Printer::wrongType = 1;
-            return;
+            return false;
         }
 
         if (MOTHERBOARD == DEVICE_TYPE_RF1000) {
             // we end up here in case this firmware is for the RF1000, but the current board seems to be an RF2000 board
-            Printer::wrongType = 1;
-            return;
+            return false;
         }
 
         // when we end up here this firmware is for the RF2000 and the current board seems to be an RF2000 board
-        return;
+        return true;
     }
 
     if (MOTHERBOARD == DEVICE_TYPE_RF1000) {
         // we end up here in case this firmware is for the RF1000, but the current board seems to be an RF2000 board
-        Printer::wrongType = 1;
-        return;
+        return false;
     }
 
     // when we end up here this firmware is for the RF2000 and the current board seems to be an RF2000 board
@@ -367,9 +362,9 @@ void determineHardwareType(void) {
         ExternalEeprom::writeWord(I2C_ADDRESS_TYPE_EEPROM, TYPE_EEPROM_OFFSET_BOARD_TYPE, MOTHERBOARD);
     }
 
-    return;
+    return true;
 
-} // determineHardwareType
+} // hardwareTypeMatches
 
 void doEmergencyStop(char reason) {
     {

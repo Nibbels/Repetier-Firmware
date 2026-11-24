@@ -472,7 +472,7 @@ extern void prepareZCompensation(void);
 extern unsigned char isMovingAllowed(const char* pszCommand, char outputLog = 1);
 extern unsigned char isHomingAllowed(GCode* com, char outputLog = 1);
 
-extern void determineHardwareType(void);
+bool hardwareTypeMatches();
 extern void showIdle(void);
 extern void showError(const void* line2, const void* line3 = NULL, const void* line4 = NULL);
 extern void showWarning(const void* line2, const void* line3 = NULL, const void* line4 = NULL);

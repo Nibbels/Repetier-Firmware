@@ -20,6 +20,7 @@
 
 // Persisted signature for the existing internal EEPROM layout.
 constexpr uint8_t eepromMagic = 44;
+long EEPROM::configuredBaudrate_ = BAUDRATE;
 
 void EEPROM::update(GCode* com) {
     if (com->hasT() && com->hasP())
@@ -106,7 +107,7 @@ void EEPROM::restoreEEPROMExtruderSettingsFromConfiguration(uint8_t extruderId) 
 
 void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     Printer::preheatProfiles.restoreDefaults();
-    baudrate = BAUDRATE;
+    configuredBaudrate_ = BAUDRATE;
     Printer::inactivity.setShutdownTimeout(MAX_INACTIVE_TIME * 1000L);
     Printer::inactivity.setStepperTimeout(STEPPER_INACTIVE_TIME * 1000L);
     Printer::setStepsPerMm(X_AXIS, XAXIS_STEPS_PER_MM);
@@ -243,7 +244,7 @@ void EEPROM::clearEEPROM() {
 void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     HAL::eprSetByte(EPR_MAGIC_BYTE, eepromMagic);
     HAL::eprSetByte(EPR_CHECK_NUM_EXTRUDERS, NUM_EXTRUDER);
-    HAL::eprSetInt32(EPR_BAUDRATE, baudrate);
+    HAL::eprSetInt32(EPR_BAUDRATE, configuredBaudrate_);
     HAL::eprSetInt32(EPR_MAX_INACTIVE_TIME, Printer::inactivity.shutdownTimeout());
     HAL::eprSetInt32(EPR_STEPPER_INACTIVE_TIME, Printer::inactivity.stepperTimeout());
     HAL::eprSetFloat(EPR_XAXIS_STEPS_PER_MM, Printer::stepsPerMm(X_AXIS));
@@ -402,7 +403,7 @@ void EEPROM::readDataFromEEPROM() {
     bool change = readPreheatProfiles();
 
     uint8_t version = HAL::eprGetByte(EPR_VERSION); // This is the saved version. Don't copy data not set in older versions!
-    baudrate = HAL::eprGetInt32(EPR_BAUDRATE);
+    configuredBaudrate_ = HAL::eprGetInt32(EPR_BAUDRATE);
     Printer::inactivity.setShutdownTimeout(HAL::eprGetInt32(EPR_MAX_INACTIVE_TIME));
     Printer::inactivity.setStepperTimeout(HAL::eprGetInt32(EPR_STEPPER_INACTIVE_TIME));
     Printer::setStepsPerMm(X_AXIS, HAL::eprGetFloat(EPR_XAXIS_STEPS_PER_MM));
@@ -755,7 +756,7 @@ void EEPROM::readDataFromEEPROM() {
 
 void EEPROM::initBaudrate() {
     if (HAL::eprGetByte(EPR_MAGIC_BYTE) == eepromMagic) {
-        baudrate = HAL::eprGetInt32(EPR_BAUDRATE);
+        configuredBaudrate_ = HAL::eprGetInt32(EPR_BAUDRATE);
     }
 } // initBaudrate
 

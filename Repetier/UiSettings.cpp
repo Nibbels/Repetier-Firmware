@@ -363,7 +363,7 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
         int32_t rate;
         do {
             rate = pgm_read_dword(&(baudrates[p]));
-            if (rate == baudrate)
+            if (rate == EEPROM::configuredBaudrate())
                 break;
             p++;
 
@@ -383,9 +383,9 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
         rate = pgm_read_dword(&(baudrates[p]));
         if (rate == 0 && p >= 1)
             p--;
-        baudrate = pgm_read_dword(&(baudrates[p]));
+        EEPROM::setConfiguredBaudrate(pgm_read_dword(&(baudrates[p])));
 
-        HAL::eprSetInt32(EPR_BAUDRATE, baudrate);
+        HAL::eprSetInt32(EPR_BAUDRATE, EEPROM::configuredBaudrate());
         EEPROM::updateChecksum();
         break;
     }

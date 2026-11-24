@@ -110,6 +110,7 @@ namespace Printer {
     static bool fault;
     static unsigned stops;
     static unsigned flag2, debugLevel;
+    static void markTemperatureReadingsAvailable() { flag2 |= PRINTER_FLAG2_GOT_TEMPS; }
     static bool isAnyTempsensorDefect() { return fault; }
     static void setSomeTempsensorDefect(bool f) { fault = f; }
     static void stopPrint() {

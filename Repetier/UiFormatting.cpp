@@ -341,11 +341,11 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
         case 'h': {
             if (c2 == 'x' && col < MAX_COLS) // %hx : x homed
             {
-                if (Printer::flag3 & PRINTER_FLAG3_X_HOMED)
+                if (Printer::isAxisHomed(X_AXIS))
                     printCols[col++] = '*';
             } else if (c2 == 'y' && col < MAX_COLS) // %hy : y homed
             {
-                if (Printer::flag3 & PRINTER_FLAG3_Y_HOMED)
+                if (Printer::isAxisHomed(Y_AXIS))
                     printCols[col++] = '*';
             } else if (c2 == 'z' && col < MAX_COLS) // %hz : z homed
             {
@@ -353,13 +353,13 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
                     printCols[col++] = '*';
             } else if (c2 == 'X' && col < MAX_COLS) // %hX : x homed
             {
-                if (Printer::flag3 & PRINTER_FLAG3_X_HOMED)
+                if (Printer::isAxisHomed(X_AXIS))
                     printCols[col++] = ':';
                 else
                     printCols[col++] = '?';
             } else if (c2 == 'Y' && col < MAX_COLS) // %hY : y homed
             {
-                if (Printer::flag3 & PRINTER_FLAG3_Y_HOMED)
+                if (Printer::isAxisHomed(Y_AXIS))
                     printCols[col++] = ':';
                 else
                     printCols[col++] = '?';
@@ -516,7 +516,7 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
             }
             if (c2 == 'c') // %oc : Connection baudrate
             {
-                addLong(baudrate, 6);
+                addLong(EEPROM::configuredBaudrate(), 6);
                 break;
             }
             if (c2 == 'f') // %of : flow multiplier
@@ -713,7 +713,7 @@ void UIDisplay::renderTemperatureField(char c1, char c2, float& fvalue) {
                 break;
             }
 
-            if (!(Printer::flag2 & PRINTER_FLAG2_GOT_TEMPS)) {
+            if (!(Printer::temperatureReadingsAvailable())) {
                 // avoid to show the current temperatures before we have measured them
                 addStringP(PSTR(" ? "));
                 break;

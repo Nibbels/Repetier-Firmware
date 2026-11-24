@@ -83,6 +83,8 @@ class Printer {
     static uint32_t maxTravelAccelerationStepsPerSquareSecond_[4];
     static float maxXYJerk_;
     static float maxZJerk_;
+    static uint8_t flag0, flag1, flag2, flag3;
+    static char enabledStepper[3];
 
 public:
     static ExtrusionOutput extrusionOutput;
@@ -122,11 +124,9 @@ public:
     }
 
     static GCodeModes gcodeModes;
+    static void markTemperatureReadingsAvailable() { flag2 |= PRINTER_FLAG2_GOT_TEMPS; }
+    static bool temperatureReadingsAvailable() { return flag2 & PRINTER_FLAG2_GOT_TEMPS; }
     static uint8_t debugLevel;
-    static uint8_t flag0;
-    static uint8_t flag1;
-    static uint8_t flag2;
-    static uint8_t flag3;
 
     static float feedrate;                  // Last requested feedrate.
     static int feedrateMultiply;            // Multiplier for feedrate in percent (factor 1 = 100)
@@ -157,10 +157,8 @@ public:
 
     static volatile char blockAll;
 
-    static char enabledStepper[3];
 
 
-    static unsigned char wrongType;
 
     static bool movementUnlocked() { return movementUnlocked_; }
     static void allowMovement() { movementUnlocked_ = true; }

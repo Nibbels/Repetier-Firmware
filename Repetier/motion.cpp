@@ -58,7 +58,6 @@
 #error MOVE_CACHE_SIZE must be at least 5
 #endif // MOVE_CACHE_SIZE<5
 
-long baudrate = BAUDRATE; // Communication speed rate.
 
 
 

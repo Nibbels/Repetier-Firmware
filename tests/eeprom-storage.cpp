@@ -50,7 +50,6 @@ struct GCode { int T=0,P=0; int32_t S=0; float X=0; bool hasT(){return true;} bo
 static std::array<uint8_t,2048> image{};
 static bool keys=false;
 #define READ(pin) (!keys)
-static uint32_t baudrate=0;
 namespace HAL {
     template<class T> T get(int p) {assert(p>=0 && size_t(p)+sizeof(T)<=image.size()); T v; memcpy(&v,image.data()+p,sizeof v); return v;}
     template<class T> void set(int p,T v){assert(p>=0 && size_t(p)+sizeof(T)<=image.size());memcpy(image.data()+p,&v,sizeof v);}
