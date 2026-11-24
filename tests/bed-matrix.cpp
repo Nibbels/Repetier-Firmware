@@ -48,6 +48,7 @@ bool debugInfo() { return false; }
 void disableCMPnow(bool wait) { assert(wait); }
 }
 namespace Com {
+constexpr const char* tError = "error";
 template<typename... T> void printF(T...) {}
 template<typename... T> void printFLN(T...) {}
 }
@@ -87,7 +88,10 @@ bool TwiTransfer::read(uint8_t device, uint8_t length, uint32_t) {
 
 bool TwiTransfer::wait() { return succeeded(); }
 
+long getZMatrixDepth_CurrentXY();
+void prepareZCompensation() { assert(false && "unexpected reload in diagnostic replay"); }
 #include "bed-matrix-firmware.inc"
+long getZMatrixDepth_CurrentXY() { return getZMatrixDepth(0, 0); }
 
 void storeWord(unsigned offset, uint16_t value) {
     eeprom[offset] = value >> 8;
@@ -133,6 +137,24 @@ int main() {
     assert(getZMatrixDepth(2000, 0) == -7);
     assert(getZMatrixDepth(9999, 1500) == -27);
     assert(getZMatrixDepth(9999, 9999) == -37);
+
+    adjustCompensationMatrix(-20);
+    assert(g_offsetZCompensationSteps == -20 && g_ZCompensationMax == -56);
+    assert(getZMatrixDepth(1500, 1500) == -25 && !g_ZMatrixChangedInRam);
+    setMatrixNull();
+    assert(g_ZMatrixChangedInRam && g_offsetZCompensationSteps == 0 && g_ZCompensationMax == 0);
+    g_ZCompensationMatrix[3][2] = -250;
+    g_ZMatrixChangedInRam = false;
+    fixKeramikLochInMatrix();
+    assert(g_ZCompensationMatrix[3][2] == 0 && g_ZMatrixChangedInRam);
+    assert(g_offsetZCompensationSteps == 0 && g_ZCompensationMax == 0);
+    assert(g_ZCompensationMatrix[1][0] == 10 && g_ZCompensationMatrix[0][1] == 10);
+    g_ZMatrixChangedInRam = false;
+    fixKeramikLochInMatrix();
+    assert(!g_ZMatrixChangedInRam);
+    g_ZCompensationMatrix[1][1] = -250;
+    fixKeramikLochInMatrix();
+    assert(g_ZCompensationMatrix[1][1] == -250 && !g_ZMatrixChangedInRam);
 
     storeMatrix(COMPENSATION_MATRIX_MAX_X, 2);
     assert(loadCompensationMatrix(sector) != 0 && payloadReads == 0 && !g_ZCompensationMatrix[0][0]);
@@ -184,6 +206,17 @@ int main() {
     writeFailure = -1;
     assert(saveCompensationMatrix(sector * 2) && g_ZMatrixChangedInRam);
     assert(saveActiveBedMatrix() && !g_ZMatrixChangedInRam);
+    assert(ExternalEeprom::readWord(I2C_ADDRESS_EXTERNAL_EEPROM, sector) == EEPROM_FORMAT);
+    assert(ExternalEeprom::readWord(I2C_ADDRESS_EXTERNAL_EEPROM, sector + EEPROM_OFFSET_DIMENSION_X) == g_uZMatrixMax[X_AXIS]);
+    assert(ExternalEeprom::readWord(I2C_ADDRESS_EXTERNAL_EEPROM, sector + EEPROM_OFFSET_DIMENSION_Y) == g_uZMatrixMax[Y_AXIS]);
+    assert(ExternalEeprom::readWord(I2C_ADDRESS_EXTERNAL_EEPROM, sector + EEPROM_OFFSET_MICRO_STEPS) == 32);
+    unsigned offset = payload;
+    for (unsigned x = 0; x <= g_uZMatrixMax[X_AXIS]; ++x)
+        for (unsigned y = 0; y <= g_uZMatrixMax[Y_AXIS]; ++y) {
+            const uint16_t word = static_cast<uint16_t>(g_ZCompensationMatrix[x][y]);
+            assert(eeprom[offset++] == (word >> 8));
+            assert(eeprom[offset++] == (word & 0xff));
+        }
     assert(loadCompensationMatrix(sector) == 0 && g_ZCompensationMatrix[0][4] == 41);
 
     const unsigned writesBefore = writes;
