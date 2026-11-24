@@ -206,6 +206,7 @@ int main(int argc, char** argv) {
         assert(c.isSensorDefect());
         allOff();
     } else if (!std::strcmp(name, "no-rise")) {
+        for (auto* t : tempController) if (t != &c) t->setTargetTemperature(0);
         service();
         assert(c.isDecoupleFull() && HAL::outputDuty(0) == 255);
         now += EXT0_DECOUPLE_TEST_PERIOD;
