@@ -91,6 +91,7 @@ bool TwiTransfer::wait() { return succeeded(); }
 
 long getZMatrixDepth_CurrentXY();
 void prepareZCompensation() { assert(false && "unexpected reload in diagnostic replay"); }
+static char loadCompensationMatrix(unsigned int, void (*progress)() = nullptr);
 #include "bed-matrix-firmware.inc"
 long getZMatrixDepth_CurrentXY() { return getZMatrixDepth(0, 0); }
 

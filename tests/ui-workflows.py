@@ -217,6 +217,9 @@ struct UIDisplay {
     void addInt(int16_t,uint8_t,char=' ');
     void printRow(uint8_t,char*,char*,uint8_t);
     void adjustMenuPos();
+    bool normalCharacters_=true;
+    void loadNormalCharacters() { normalCharacters_=true; }
+    void lcdCommand(int) { assert(false && "unexpected boot clear during normal UI replay"); }
     void refreshPage();
     void zOffsetPlusAction(); void zOffsetMinusAction();
     void mainSwitchCase(int); void changeSwitchCase(int,int8_t);

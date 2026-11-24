@@ -112,7 +112,9 @@ static void setupForPrinting() {
         EEPROM::updateChecksum();
     }
 
-    BedMatrix::restoreAtStartup();
+    uid.beginBootEye();
+    BedMatrix::restoreAtStartup([]() { uid.serviceBootEye(); });
+    uid.finishBootEye();
 
     Printer::pause.restoreDefaultParking();
 
