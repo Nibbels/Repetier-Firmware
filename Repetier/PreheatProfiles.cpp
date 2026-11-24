@@ -9,12 +9,12 @@ bool validTemperature(int16_t temperature, int16_t minimum, int16_t maximum) {
 }
 
 bool PreheatProfiles::readStored(Profile profile, Temperatures temperatures) {
-    const auto defaults = PreheatProfiles{}.get(profile);
+    const auto factory = defaults(profile);
     auto& target = profiles_[static_cast<uint8_t>(profile)];
     target.bed = validTemperature(temperatures.bed, UI_SET_MIN_HEATED_BED_TEMP, UI_SET_MAX_HEATED_BED_TEMP)
-        ? temperatures.bed : defaults.bed;
+        ? temperatures.bed : factory.bed;
     target.hotend = validTemperature(temperatures.hotend, UI_SET_MIN_EXTRUDER_TEMP, UI_SET_MAX_EXTRUDER_TEMP)
-        ? temperatures.hotend : defaults.hotend;
+        ? temperatures.hotend : factory.hotend;
     return target.bed != temperatures.bed || target.hotend != temperatures.hotend;
 }
 
