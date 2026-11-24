@@ -45,7 +45,7 @@ def main():
         ]
         replay = build / "serial-replay"
         subprocess.run(compiler + [str(tests / "serial-protocol.cpp"), "-o", str(replay)], check=True)
-        for scenario in ("numbered", "queue", "display", "idle", "binary", "stopping", "script"):
+        for scenario in ("numbered", "queue", "display", "idle", "binary", "overflow", "binary-text", "sustained", "emergency", "stopping", "script"):
             subprocess.run([str(replay), scenario], check=True, timeout=10)
         uart_replay = build / "uart-replay"
         subprocess.run(compiler + [str(tests / "usb-serial.cpp"), "-o", str(uart_replay)], check=True)
