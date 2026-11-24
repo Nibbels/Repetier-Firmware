@@ -2,9 +2,9 @@
 
 Date: 2026-11-24 (Europe/Berlin). User wants a long-lived manager chat in ChatGPT Work (Astra selected by user); worker chats currently use GPT-6.2 High outside Work. Repository [Nibbels/Repetier-Firmware](https://github.com/Nibbels/Repetier-Firmware), integration branch **ai-firmware-review**, never community_development. Read [AGENTS.md](../AGENTS.md), [TASKS.md](TASKS.md), individual task files and live branches/PRs first. Repository is the authoritative durable state, not chat memory.
 
-## Current wave 6 status
+## Current wave 6b status
 
-Tasks 0001–0014 are merged. [PR #82](https://github.com/Nibbels/Repetier-Firmware/pull/82) merged at 17a1f2d with a [green full host and four-variant AVR check](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45504473579). Task0015 is ready as the exclusive production worker. Follow with 0017 (operator dry-run removal), then 0016 and the maximum-effort manager review ahead of owner acceptance and hardware testing.
+Tasks 0001–0015 are merged. Task0015 [PR #83](https://github.com/Nibbels/Repetier-Firmware/pull/83) merged at 7e02625 with a [green final host and four-variant AVR check](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45508122323). [Task0017](tasks/Task0017.md) is ready as the sole production worker. Follow with Task0016 and the maximum-effort manager review before owner acceptance and the consolidated live test.
 
 ## Wave 3 dispatch (2026-11-24)
 
