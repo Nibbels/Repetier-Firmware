@@ -1,0 +1,1123 @@
+{
+  "ref": "1fe264b804cc67aa5bf197d0106d84f2d7cf8796",
+  "batch": 3,
+  "warning": "Lexical candidates only, no preprocessing or resolved call graph; function spans approximate.",
+  "files": [
+    {
+      "path": "Homing.cpp",
+      "sha": "c23677d882da785379b74c0de5a980c39c3db407",
+      "physicalLines": 423,
+      "normalizedLines": 290,
+      "functions": [
+        [
+          "Printer::homeZAxis",
+          316,
+          382
+        ],
+        [
+          "Printer::homeXAxis",
+          229,
+          271
+        ],
+        [
+          "Printer::homeYAxis",
+          273,
+          314
+        ],
+        [
+          "Printer::anyEndstop",
+          24,
+          43
+        ],
+        [
+          "Printer::changeAxisDirection",
+          45,
+          60
+        ],
+        [
+          "Printer::stepAxisStep",
+          62,
+          77
+        ],
+        [
+          "Printer::homeDigits",
+          384,
+          398
+        ],
+        [
+          "Printer::anyHomeDir",
+          20,
+          22
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [
+        [
+          237,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          243,
+          "#endif"
+        ],
+        [
+          256,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          261,
+          "#endif"
+        ],
+        [
+          281,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          287,
+          "#endif"
+        ],
+        [
+          299,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          304,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ]
+      ],
+      "waits": [
+        [
+          67,
+          "HAL::delayMicroseconds(XYZ_STEPPER_HIGH_DELAY * slower);"
+        ],
+        [
+          72,
+          "HAL::delayMicroseconds(XYZ_STEPPER_LOW_DELAY * slower);"
+        ],
+        [
+          122,
+          "while (1) {"
+        ],
+        [
+          211,
+          "while (returnSteps > 0) {"
+        ]
+      ],
+      "commentCandidates": []
+    },
+    {
+      "path": "IdleStatus.cpp",
+      "sha": "17610020824bc55271e04f21ce15da6ce90ac5e1",
+      "physicalLines": 22,
+      "normalizedLines": 18,
+      "functions": [
+        [
+          "IdleStatus::poll",
+          9,
+          22
+        ],
+        [
+          "IdleStatus::schedule",
+          3,
+          7
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [],
+      "includes": [
+        [
+          1,
+          "#include \"Repetier.h\""
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "IdleStatus.h",
+      "sha": "e00fb8320223e252145c558b5cf95410fc69a1ff",
+      "physicalLines": 20,
+      "normalizedLines": 14,
+      "functions": [
+        [
+          "cancel",
+          11,
+          11
+        ]
+      ],
+      "stateCandidates": [
+        [
+          16,
+          "volatile uint32_t startAt_ = 0;"
+        ],
+        [
+          17,
+          "volatile bool pending_ = false;"
+        ]
+      ],
+      "guards": [
+        [
+          1,
+          "#ifndef IDLE_STATUS_H"
+        ],
+        [
+          20,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include <stdint.h>"
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "MachineInactivity.h",
+      "sha": "cd80aac4e62854ea837eb75c9d1bbdcaa3e1d9f1",
+      "physicalLines": 31,
+      "normalizedLines": 24,
+      "functions": [
+        [
+          "stepperTimeoutExpired",
+          18,
+          20
+        ],
+        [
+          "shutdownTimeoutExpired",
+          21,
+          23
+        ],
+        [
+          "stepperTimeout_",
+          9,
+          9
+        ],
+        [
+          "recordActivity",
+          11,
+          11
+        ],
+        [
+          "stepperTimeout",
+          13,
+          13
+        ],
+        [
+          "shutdownTimeout",
+          14,
+          14
+        ],
+        [
+          "setStepperTimeout",
+          15,
+          15
+        ],
+        [
+          "setShutdownTimeout",
+          16,
+          16
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [
+        [
+          1,
+          "#ifndef MACHINE_INACTIVITY_H"
+        ],
+        [
+          31,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include <stdint.h>"
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "ManualMotion.h",
+      "sha": "1845a574d95747ba2e8e858abd7a595c042190e6",
+      "physicalLines": 36,
+      "normalizedLines": 28,
+      "functions": [
+        [
+          "cycleMode",
+          18,
+          21
+        ],
+        [
+          "steps",
+          12,
+          12
+        ],
+        [
+          "setSteps",
+          13,
+          13
+        ],
+        [
+          "rescaleSteps",
+          14,
+          14
+        ],
+        [
+          "mode",
+          16,
+          16
+        ],
+        [
+          "setMode",
+          17,
+          17
+        ],
+        [
+          "coordinateSystem",
+          24,
+          24
+        ],
+        [
+          "setCoordinateSystem",
+          25,
+          25
+        ],
+        [
+          "feedrateSource",
+          26,
+          26
+        ],
+        [
+          "setFeedrateSource",
+          27,
+          27
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [
+        [
+          1,
+          "#ifndef MANUAL_MOTION_H"
+        ],
+        [
+          36,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include <stdint.h>"
+        ],
+        [
+          5,
+          "#include \"Constants.h\""
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "MotionPlanner.cpp",
+      "sha": "c7c82645fb669dcb55de1dd66e7a775d2ab1969d",
+      "physicalLines": 364,
+      "normalizedLines": 291,
+      "functions": [
+        [
+          "MotionPlanner::prepareMove",
+          66,
+          163
+        ],
+        [
+          "MotionPlanner::updateLookahead",
+          299,
+          364
+        ],
+        [
+          "MotionPlanner::planAcceleration",
+          260,
+          297
+        ],
+        [
+          "MotionPlanner::limitJunction",
+          194,
+          225
+        ],
+        [
+          "MotionPlanner::planDeceleration",
+          227,
+          258
+        ],
+        [
+          "MotionPlanner::safeSpeed",
+          29,
+          57
+        ],
+        [
+          "MotionPlanner::prepareStepProfile",
+          166,
+          192
+        ],
+        [
+          "paceShortMove",
+          59,
+          64
+        ],
+        [
+          "MotionPlanner::takeAdvancePeak",
+          23,
+          27
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ],
+        [
+          19,
+          "#include \"MotionPlanner.h\""
+        ]
+      ],
+      "waits": [
+        [
+          231,
+          "while (start != first) {"
+        ],
+        [
+          263,
+          "while (first != end) {"
+        ],
+        [
+          310,
+          "while (reservedTicks < planningReserveTicks && limit != end) {"
+        ],
+        [
+          316,
+          "while (first != limit && !queue.slot(first).isEndSpeedFixed())"
+        ],
+        [
+          360,
+          "} while (first != end);"
+        ]
+      ],
+      "commentCandidates": []
+    },
+    {
+      "path": "MotionPlanner.h",
+      "sha": "b1768363ad337e764cee5ff0f22f5be85c2bcf94",
+      "physicalLines": 46,
+      "normalizedLines": 23,
+      "functions": [],
+      "stateCandidates": [
+        [
+          33,
+          "static AdvancePeak takeAdvancePeak();"
+        ],
+        [
+          34,
+          "static void prepareMove(PrintLine& move, const float axisDistanceMM[4], float feedrate, const MoveQueue& queue);"
+        ],
+        [
+          35,
+          "static void prepareStepProfile(PrintLine& move);"
+        ],
+        [
+          36,
+          "static void updateLookahead(MoveQueue& queue);"
+        ],
+        [
+          39,
+          "static AdvancePeak advancePeak_;"
+        ],
+        [
+          40,
+          "static float safeSpeed(PrintLine& move, int8_t drivingAxis);"
+        ],
+        [
+          41,
+          "static void limitJunction(PrintLine& previous, const PrintLine& next);"
+        ],
+        [
+          42,
+          "static void planDeceleration(MoveQueue& queue, uint8_t start, uint8_t first);"
+        ],
+        [
+          43,
+          "static void planAcceleration(MoveQueue& queue, uint8_t first, uint8_t end);"
+        ]
+      ],
+      "guards": [
+        [
+          18,
+          "#ifndef MOTION_PLANNER_H"
+        ],
+        [
+          46,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          21,
+          "#include <stdint.h>"
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "MoveQueue.cpp",
+      "sha": "96ced744122ddedadbfd89fd26e1144b1e78c9a0",
+      "physicalLines": 71,
+      "normalizedLines": 60,
+      "functions": [
+        [
+          "MoveQueue::estimateSeconds",
+          39,
+          71
+        ],
+        [
+          "MoveQueue::remainingMotion",
+          6,
+          37
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [],
+      "includes": [
+        [
+          1,
+          "#include \"Repetier.h\""
+        ],
+        [
+          2,
+          "#include \"StepExecutor.h\""
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "MoveQueue.h",
+      "sha": "40728ff9bbc9443cb8e3acd0bac3e2aa47ab02e5",
+      "physicalLines": 87,
+      "normalizedLines": 68,
+      "functions": [
+        [
+          "publish",
+          25,
+          31
+        ],
+        [
+          "retireFront",
+          47,
+          53
+        ],
+        [
+          "publishTask",
+          33,
+          38
+        ],
+        [
+          "clear",
+          55,
+          60
+        ],
+        [
+          "activateFront",
+          40,
+          43
+        ],
+        [
+          "nextIndex",
+          62,
+          64
+        ],
+        [
+          "previousIndex",
+          66,
+          68
+        ],
+        [
+          "count",
+          18,
+          18
+        ],
+        [
+          "readIndex",
+          19,
+          19
+        ],
+        [
+          "writeIndex",
+          20,
+          20
+        ],
+        [
+          "active",
+          21,
+          21
+        ],
+        [
+          "slot",
+          22,
+          22
+        ],
+        [
+          "writeSlot",
+          23,
+          23
+        ],
+        [
+          "releaseFront",
+          45,
+          45
+        ],
+        [
+          "PrintLine::queuedMoves",
+          80,
+          80
+        ],
+        [
+          "PrintLine::queuedMoveCount",
+          81,
+          81
+        ],
+        [
+          "PrintLine::hasActiveQueuedMove",
+          82,
+          82
+        ],
+        [
+          "PrintLine::discardQueuedMoves",
+          83,
+          83
+        ],
+        [
+          "PrintLine::queueTask",
+          85,
+          85
+        ]
+      ],
+      "stateCandidates": [
+        [
+          71,
+          "static float estimateSeconds(const PrintLine& move, uint32_t totalSteps, uint32_t remainingSteps);"
+        ],
+        [
+          77,
+          "volatile uint8_t count_ = 0;"
+        ]
+      ],
+      "guards": [
+        [
+          1,
+          "#ifndef MOVE_QUEUE_H"
+        ],
+        [
+          87,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include \"motion.h\""
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "MoveTarget.h",
+      "sha": "5075d021117d2d38334a754dd068c78ab50f22ca",
+      "physicalLines": 47,
+      "normalizedLines": 36,
+      "functions": [
+        [
+          "addMM",
+          18,
+          30
+        ],
+        [
+          "setFromGCodeMM",
+          32,
+          37
+        ],
+        [
+          "setMachineMM",
+          13,
+          16
+        ],
+        [
+          "machineMM",
+          9,
+          9
+        ],
+        [
+          "remainderMM",
+          10,
+          10
+        ],
+        [
+          "workOffsetMM",
+          11,
+          11
+        ],
+        [
+          "setWorkOffsetMM",
+          39,
+          39
+        ]
+      ],
+      "stateCandidates": [
+        [
+          42,
+          "volatile float machineMM_[4] = {};"
+        ]
+      ],
+      "guards": [
+        [
+          1,
+          "#ifndef MOVE_TARGET_H"
+        ],
+        [
+          47,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include <stdint.h>"
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "PanelMessages.cpp",
+      "sha": "3e6e7cf64b7923c981b4025157b5c6f5623604be",
+      "physicalLines": 73,
+      "normalizedLines": 45,
+      "functions": [
+        [
+          "showError",
+          55,
+          58
+        ],
+        [
+          "showWarning",
+          60,
+          63
+        ],
+        [
+          "showInformation",
+          65,
+          68
+        ],
+        [
+          "showMyPage",
+          70,
+          73
+        ],
+        [
+          "showIdle",
+          51,
+          53
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "PanelMotion.cpp",
+      "sha": "5922957f31b129215dbed369c1c39ef5b4875925",
+      "physicalLines": 347,
+      "normalizedLines": 243,
+      "functions": [
+        [
+          "moveZAction",
+          246,
+          347
+        ],
+        [
+          "moveXAction",
+          54,
+          148
+        ],
+        [
+          "moveYAction",
+          150,
+          244
+        ],
+        [
+          "configureMANUAL_STEPS_Z",
+          25,
+          51
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "PreheatProfiles.cpp",
+      "sha": "d7013be611fde5fd2cf57f08a224c45694220f12",
+      "physicalLines": 73,
+      "normalizedLines": 65,
+      "functions": [
+        [
+          "PreheatProfiles::adjust",
+          21,
+          39
+        ],
+        [
+          "EEPROM::readPreheatProfiles",
+          52,
+          68
+        ],
+        [
+          "EEPROM::writePreheatProfiles",
+          41,
+          50
+        ],
+        [
+          "PreheatProfiles::readStored",
+          11,
+          19
+        ],
+        [
+          "EEPROM::storePreheatProfiles",
+          70,
+          73
+        ],
+        [
+          "validTemperature",
+          6,
+          8
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [],
+      "includes": [
+        [
+          1,
+          "#include \"Repetier.h\""
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "PreheatProfiles.h",
+      "sha": "7f6b3a3f4acb6a695b9096cd9f0b145134276c62",
+      "physicalLines": 36,
+      "normalizedLines": 28,
+      "functions": [
+        [
+          "restoreDefaults",
+          20,
+          23
+        ],
+        [
+          "defaults",
+          28,
+          31
+        ],
+        [
+          "get",
+          19,
+          19
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [
+        [
+          1,
+          "#ifndef PREHEAT_PROFILES_H"
+        ],
+        [
+          36,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include <stdint.h>"
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "PressureFeatures.cpp",
+      "sha": "1694bf5609b6a858431913c5b41b45c12e28c1fb",
+      "physicalLines": 121,
+      "normalizedLines": 87,
+      "functions": [
+        [
+          "handleStrainGaugeFeatures",
+          68,
+          121
+        ],
+        [
+          "serviceSenseOffset",
+          27,
+          66
+        ],
+        [
+          "updateDigitCompensation",
+          20,
+          25
+        ]
+      ],
+      "stateCandidates": [
+        [
+          61,
+          "asm volatile(   : :    (increment));"
+        ]
+      ],
+      "guards": [],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "PressureMeasurement.h",
+      "sha": "119d01eaee10e39d32382a5bfc185a4e6ce8a2ae",
+      "physicalLines": 81,
+      "normalizedLines": 66,
+      "functions": [
+        [
+          "record",
+          27,
+          49
+        ],
+        [
+          "startBatch",
+          62,
+          69
+        ],
+        [
+          "begin",
+          16,
+          21
+        ],
+        [
+          "acceptsSample",
+          23,
+          25
+        ],
+        [
+          "readFailed",
+          51,
+          51
+        ],
+        [
+          "reset",
+          52,
+          52
+        ],
+        [
+          "result",
+          54,
+          54
+        ],
+        [
+          "minimum",
+          55,
+          55
+        ],
+        [
+          "maximum",
+          56,
+          56
+        ],
+        [
+          "average",
+          57,
+          57
+        ],
+        [
+          "minimumSpacing",
+          60,
+          60
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [
+        [
+          1,
+          "#ifndef PRESSURE_MEASUREMENT_H"
+        ],
+        [
+          81,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include <stdint.h>"
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "PressureProtection.h",
+      "sha": "c5e3ffd22d09563818d926a72916926a5670ff92",
+      "physicalLines": 83,
+      "normalizedLines": 67,
+      "functions": [
+        [
+          "readFailed",
+          37,
+          46
+        ],
+        [
+          "checkPause",
+          28,
+          35
+        ],
+        [
+          "add",
+          67,
+          74
+        ],
+        [
+          "sampleStop",
+          48,
+          54
+        ],
+        [
+          "clear",
+          62,
+          65
+        ],
+        [
+          "exceededBy",
+          16,
+          16
+        ],
+        [
+          "pauseLimits",
+          19,
+          19
+        ],
+        [
+          "setPauseLimits",
+          20,
+          20
+        ],
+        [
+          "stopLimits",
+          21,
+          21
+        ],
+        [
+          "setStopLimits",
+          22,
+          22
+        ],
+        [
+          "pauseEnabled",
+          24,
+          24
+        ],
+        [
+          "pauseSampleDue",
+          25,
+          25
+        ],
+        [
+          "stopSampleDue",
+          26,
+          26
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [
+        [
+          1,
+          "#ifndef PRESSURE_PROTECTION_H"
+        ],
+        [
+          83,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include <stdint.h>"
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "PrintJob.cpp",
+      "sha": "11abb13ad848e699b1165b02e4abc63526148b76",
+      "physicalLines": 42,
+      "normalizedLines": 36,
+      "functions": [
+        [
+          "PrintJob::service",
+          6,
+          42
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [],
+      "includes": [
+        [
+          1,
+          "#include \"Repetier.h\""
+        ],
+        [
+          2,
+          "#include \"GCodeInput.h\""
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    }
+  ]
+}

@@ -1,0 +1,1595 @@
+{
+  "ref": "1fe264b804cc67aa5bf197d0106d84f2d7cf8796",
+  "batch": 5,
+  "warning": "Lexical candidates only, no preprocessing or resolved call graph; function spans approximate.",
+  "files": [
+    {
+      "path": "ScanSettings.cpp",
+      "sha": "f9c1514ab07e3ae1f6759943e7ea3ef7af40fba7",
+      "physicalLines": 546,
+      "normalizedLines": 446,
+      "functions": [
+        [
+          "outputScanParameters",
+          85,
+          143
+        ],
+        [
+          "restoreDefaultScanParameters",
+          46,
+          83
+        ],
+        [
+          "setScanXEnd",
+          232,
+          257
+        ],
+        [
+          "setScanYEnd",
+          259,
+          284
+        ],
+        [
+          "setScanXStart",
+          148,
+          167
+        ],
+        [
+          "setScanYStart",
+          169,
+          188
+        ],
+        [
+          "setScanXStep",
+          190,
+          209
+        ],
+        [
+          "setScanYStep",
+          211,
+          230
+        ],
+        [
+          "setFastApproachStep",
+          286,
+          304
+        ],
+        [
+          "setSlowApproachStep",
+          306,
+          324
+        ],
+        [
+          "setFastRetreatStep",
+          326,
+          344
+        ],
+        [
+          "setSlowRetreatStep",
+          346,
+          364
+        ],
+        [
+          "setFastScanDelay",
+          366,
+          384
+        ],
+        [
+          "setSlowScanDelay",
+          386,
+          404
+        ],
+        [
+          "setScanIdleDelay",
+          406,
+          424
+        ],
+        [
+          "setContactPressureDelta",
+          426,
+          444
+        ],
+        [
+          "setRetryPressureDelta",
+          446,
+          464
+        ],
+        [
+          "setIdlePressureTolerance",
+          466,
+          484
+        ],
+        [
+          "setPressureReadDelay",
+          505,
+          523
+        ],
+        [
+          "setPressureReadTolerance",
+          525,
+          543
+        ],
+        [
+          "setPressureReadCount",
+          486,
+          503
+        ],
+        [
+          "scanStartLiftMm",
+          40,
+          40
+        ],
+        [
+          "setScanStartLiftMm",
+          41,
+          41
+        ],
+        [
+          "scanStrideMm",
+          42,
+          42
+        ],
+        [
+          "Calibration::probeSettings",
+          44,
+          44
+        ]
+      ],
+      "stateCandidates": [
+        [
+          38,
+          "static ScanSettings scanSettings(defaultHeatBedScanLiftMm);"
+        ]
+      ],
+      "guards": [],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ],
+        [
+          19,
+          "#include \"ScanProbe.h\""
+        ],
+        [
+          20,
+          "#include \"GCodeCommands.h\""
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "ScanSettings.h",
+      "sha": "bcdda4242470a504ed2a365bbff648d5009ac9f8",
+      "physicalLines": 36,
+      "normalizedLines": 32,
+      "functions": [
+        [
+          "ScanSettings",
+          13,
+          13
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [
+        [
+          1,
+          "#ifndef SCAN_SETTINGS_H"
+        ],
+        [
+          36,
+          "#endif"
+        ]
+      ],
+      "includes": [],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "SenseOffsetControl.h",
+      "sha": "912e2afa933f5c0fd77c224ef2c33cf885acd75e",
+      "physicalLines": 130,
+      "normalizedLines": 104,
+      "functions": [
+        [
+          "observe",
+          82,
+          117
+        ],
+        [
+          "leaveLearningRange",
+          73,
+          80
+        ],
+        [
+          "activateStoredLimits",
+          40,
+          46
+        ],
+        [
+          "disable",
+          48,
+          53
+        ],
+        [
+          "takeSampleSlot",
+          59,
+          64
+        ],
+        [
+          "resetWindow",
+          66,
+          71
+        ],
+        [
+          "limits",
+          19,
+          22
+        ],
+        [
+          "setThresholdDigits",
+          29,
+          32
+        ],
+        [
+          "setMaxMicrometers",
+          34,
+          37
+        ],
+        [
+          "limitsMatch",
+          25,
+          27
+        ],
+        [
+          "maxMicrometers_",
+          15,
+          15
+        ],
+        [
+          "autoStart",
+          55,
+          55
+        ],
+        [
+          "setAutoStart",
+          56,
+          56
+        ],
+        [
+          "inLearningRange",
+          57,
+          57
+        ]
+      ],
+      "stateCandidates": [
+        [
+          120,
+          "volatile int16_t thresholdDigits_ = 0;"
+        ],
+        [
+          121,
+          "volatile int16_t maxMicrometers_;"
+        ]
+      ],
+      "guards": [
+        [
+          1,
+          "#ifndef SENSE_OFFSET_CONTROL_H"
+        ],
+        [
+          130,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include <stdint.h>"
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "StartLine.cpp",
+      "sha": "11116da3ce3dcb670596f2bf0e9f3dabca903d53",
+      "physicalLines": 136,
+      "normalizedLines": 121,
+      "functions": [
+        [
+          "queueLines",
+          41,
+          85
+        ],
+        [
+          "StartLine::run",
+          95,
+          136
+        ],
+        [
+          "readSettings",
+          14,
+          39
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [],
+      "includes": [
+        [
+          1,
+          "#include \"Repetier.h\""
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "StartLine.h",
+      "sha": "8670595643c2e816d6835c47a94cc86487d163aa",
+      "physicalLines": 15,
+      "normalizedLines": 11,
+      "functions": [
+        [
+          "active",
+          8,
+          8
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [
+        [
+          1,
+          "#ifndef START_LINE_H"
+        ],
+        [
+          15,
+          "#endif"
+        ]
+      ],
+      "includes": [],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "StepExecutor.cpp",
+      "sha": "2ef874479abe94700b006da1a3071c79192e4faa",
+      "physicalLines": 527,
+      "normalizedLines": 398,
+      "functions": [
+        [
+          "StepExecutor::performMove",
+          369,
+          527
+        ],
+        [
+          "StepExecutor::performQueueMove",
+          139,
+          248
+        ],
+        [
+          "StepExecutor::stepSlowedZCompensation",
+          92,
+          126
+        ],
+        [
+          "StepExecutor::performDirectMove",
+          289,
+          318
+        ],
+        [
+          "StepExecutor::nextStepSpeed",
+          320,
+          344
+        ],
+        [
+          "StepExecutor::enableSteppers",
+          38,
+          59
+        ],
+        [
+          "StepExecutor::finishMove",
+          347,
+          367
+        ],
+        [
+          "StepExecutor::adjustDirections",
+          61,
+          80
+        ],
+        [
+          "canStepAtXYLimit",
+          251,
+          267
+        ],
+        [
+          "canStepXY",
+          269,
+          284
+        ],
+        [
+          "StepExecutor::updateAdvanceSteps",
+          82,
+          90
+        ],
+        [
+          "StepExecutor::needCmpWait",
+          128,
+          134
+        ],
+        [
+          "StepExecutor::nominalFeedrate",
+          29,
+          32
+        ],
+        [
+          "hasQueuedOvertravel",
+          34,
+          36
+        ]
+      ],
+      "stateCandidates": [
+        [
+          23,
+          "volatile uint32_t StepExecutor::stepIntervalTicks = 10000;"
+        ],
+        [
+          25,
+          "volatile int32_t StepExecutor::queuedPrimarySteps;"
+        ],
+        [
+          27,
+          "volatile float StepExecutor::nominalFeedrate_ = 0;"
+        ],
+        [
+          105,
+          "static uint8_t waitSteps = 0;"
+        ],
+        [
+          106,
+          "static uint8_t mass = massWeight;"
+        ]
+      ],
+      "guards": [],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ],
+        [
+          19,
+          "#include \"StepExecutor.h\""
+        ]
+      ],
+      "waits": [
+        [
+          516,
+          "while (interval < Printer::stepsPackingMinInterval) {"
+        ]
+      ],
+      "commentCandidates": [
+        [
+          54,
+          "Printer::unmarkAllSteppersDisabled(); //doesnt fit into Extruder::enable() because of forward declare -> TODO"
+        ]
+      ]
+    },
+    {
+      "path": "StepExecutor.h",
+      "sha": "8d90f2d8ef97d037783c3b6401d4c8dc5dbf9544",
+      "physicalLines": 66,
+      "normalizedLines": 40,
+      "functions": [
+        [
+          "start",
+          42,
+          46
+        ],
+        [
+          "stepsPerInterrupt",
+          30,
+          30
+        ]
+      ],
+      "stateCandidates": [
+        [
+          27,
+          "static constexpr uint16_t minimumStepIntervalTicks = 512;"
+        ],
+        [
+          29,
+          "static float nominalFeedrate();"
+        ],
+        [
+          30,
+          "static uint8_t stepsPerInterrupt() { return stepsPerTimerCall; }"
+        ],
+        [
+          31,
+          "static void stepSlowedZCompensation();"
+        ],
+        [
+          32,
+          "static bool needCmpWait();"
+        ],
+        [
+          33,
+          "static long performQueueMove();"
+        ],
+        [
+          34,
+          "static long performDirectMove();"
+        ],
+        [
+          49,
+          "static StepClock stepClocks[2];"
+        ],
+        [
+          50,
+          "static DirectionOwner directionOwner;"
+        ],
+        [
+          51,
+          "static volatile uint32_t stepIntervalTicks;"
+        ],
+        [
+          52,
+          "static uint8_t stepsPerTimerCall;"
+        ],
+        [
+          53,
+          "static volatile int32_t queuedPrimarySteps;"
+        ],
+        [
+          54,
+          "static int32_t directPrimarySteps;"
+        ],
+        [
+          55,
+          "static volatile float nominalFeedrate_;"
+        ],
+        [
+          57,
+          "static void enableSteppers(PrintLine& move);"
+        ],
+        [
+          58,
+          "static void adjustDirections(PrintLine& move);"
+        ],
+        [
+          59,
+          "static void updateAdvanceSteps(const PrintLine& move, uint16_t speed);"
+        ],
+        [
+          61,
+          "static uint16_t nextStepSpeed(PrintLine& move, StepClock& clock, uint8_t pulses, uint32_t interval);"
+        ],
+        [
+          62,
+          "static long performMove(PrintLine* move, uint8_t forQueue);"
+        ],
+        [
+          63,
+          "static void finishMove(PrintLine& move, bool queued);"
+        ]
+      ],
+      "guards": [
+        [
+          18,
+          "#ifndef STEP_EXECUTOR_H"
+        ],
+        [
+          66,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          21,
+          "#include <stdint.h>"
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "StrainGauge.cpp",
+      "sha": "eb9456d65ebd55456fb0dd042c86dc1d48e05925",
+      "physicalLines": 190,
+      "normalizedLines": 167,
+      "functions": [
+        [
+          "StrainGauge::completeTransfer",
+          70,
+          103
+        ],
+        [
+          "StrainGauge::startTransfer",
+          44,
+          68
+        ],
+        [
+          "StrainGauge::service",
+          28,
+          42
+        ],
+        [
+          "StrainGauge::checkStatus",
+          105,
+          117
+        ],
+        [
+          "StrainGauge::publish",
+          125,
+          137
+        ],
+        [
+          "StrainGauge::latest",
+          147,
+          156
+        ],
+        [
+          "StrainGauge::begin",
+          13,
+          19
+        ],
+        [
+          "StrainGauge::history",
+          139,
+          145
+        ],
+        [
+          "StrainGauge::correctedDigits",
+          158,
+          164
+        ],
+        [
+          "StrainGauge::readDigits",
+          166,
+          172
+        ],
+        [
+          "StrainGauge::setZeroFromAverage",
+          184,
+          190
+        ],
+        [
+          "StrainGauge::setSampleRateHz",
+          21,
+          26
+        ],
+        [
+          "StrainGauge::retry",
+          119,
+          123
+        ],
+        [
+          "StrainGauge::lastKnownDigits",
+          174,
+          177
+        ],
+        [
+          "StrainGauge::clearZeroOffset",
+          179,
+          182
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [],
+      "includes": [
+        [
+          1,
+          "#include \"Repetier.h\""
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "StrainGauge.h",
+      "sha": "5d668ed49f93e463f71bf486ea7af7680ce2caa3",
+      "physicalLines": 68,
+      "normalizedLines": 53,
+      "functions": [
+        [
+          "zeroingEnabled",
+          31,
+          31
+        ],
+        [
+          "setZeroingEnabled",
+          32,
+          32
+        ],
+        [
+          "zeroOffset",
+          33,
+          33
+        ],
+        [
+          "effectiveZeroOffset",
+          34,
+          34
+        ]
+      ],
+      "stateCandidates": [
+        [
+          17,
+          "static constexpr uint8_t historyCapacity = 8;"
+        ],
+        [
+          51,
+          "static constexpr uint8_t historySlots = historyCapacity + 1;"
+        ],
+        [
+          57,
+          "volatile uint16_t sampleIntervalMs_ = 125;"
+        ],
+        [
+          58,
+          "volatile int16_t zeroOffset_ = 0;"
+        ],
+        [
+          59,
+          "volatile uint8_t historyNext_ = 0;"
+        ],
+        [
+          60,
+          "volatile uint8_t historySize_ = 0;"
+        ],
+        [
+          61,
+          "volatile Availability availability_ = Availability::Fault;"
+        ],
+        [
+          62,
+          "volatile bool zeroingEnabled_ = true;"
+        ]
+      ],
+      "guards": [
+        [
+          1,
+          "#ifndef STRAIN_GAUGE_H"
+        ],
+        [
+          68,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include <stdint.h>"
+        ],
+        [
+          5,
+          "#include \"TwiTransfer.h\""
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "TemperatureControl.cpp",
+      "sha": "bdb2fb1d212160770b317b037ca363e7e2447536",
+      "physicalLines": 459,
+      "normalizedLines": 370,
+      "functions": [
+        [
+          "TemperatureController::autotunePID",
+          242,
+          437
+        ],
+        [
+          "Extruder::manageTemperatures",
+          25,
+          200
+        ],
+        [
+          "TemperatureController::waitForTargetTemperature",
+          220,
+          240
+        ],
+        [
+          "reportTempsensorAndHeaterErrors",
+          439,
+          459
+        ],
+        [
+          "TemperatureController::setTargetTemperature",
+          210,
+          218
+        ],
+        [
+          "TemperatureController::updateTempControlVars",
+          202,
+          208
+        ]
+      ],
+      "stateCandidates": [
+        [
+          20,
+          "static uint8_t autotuneIndex = 255;"
+        ],
+        [
+          26,
+          "static uint8_t extruderTempErrors = 0;"
+        ]
+      ],
+      "guards": [
+        [
+          40,
+          "#if NUM_EXTRUDER >= 2 && EXT0_EXTRUDER_COOLER_PIN == EXT1_EXTRUDER_COOLER_PIN && EXT0_EXTRUDER_COOLER_PIN >= 0"
+        ],
+        [
+          47,
+          "#endif"
+        ],
+        [
+          181,
+          "#if LED_PIN > -1"
+        ],
+        [
+          184,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ]
+      ],
+      "waits": [
+        [
+          230,
+          "while (true) {"
+        ]
+      ],
+      "commentCandidates": []
+    },
+    {
+      "path": "TemperatureSensors.cpp",
+      "sha": "f8937ccbd2e2e9efaeb4d184f24ec195831d9a39",
+      "physicalLines": 317,
+      "normalizedLines": 243,
+      "functions": [
+        [
+          "TemperatureController::updateCurrentTemperature",
+          217,
+          317
+        ],
+        [
+          "calibratedSensorTemperature",
+          194,
+          214
+        ],
+        [
+          "hasTemperatureCalibration",
+          189,
+          192
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ]
+      ],
+      "waits": [
+        [
+          287,
+          "while (i < num) {"
+        ]
+      ],
+      "commentCandidates": [
+        [
+          140,
+          "//TODO: Tabelle startet erst bei 92°C ... Kleine Rundungszacken am Anfang, weil alles *4."
+        ]
+      ]
+    },
+    {
+      "path": "TwiTransfer.cpp",
+      "sha": "c7b21a5b7d163dcda0e53c4a27f0ed6407eb8534",
+      "physicalLines": 128,
+      "normalizedLines": 111,
+      "functions": [
+        [
+          "TwiTransfer::service",
+          61,
+          117
+        ],
+        [
+          "TwiTransfer::start",
+          21,
+          32
+        ],
+        [
+          "TwiTransfer::beginBus",
+          13,
+          19
+        ],
+        [
+          "TwiTransfer::write",
+          34,
+          40
+        ],
+        [
+          "TwiTransfer::wait",
+          119,
+          123
+        ],
+        [
+          "TwiTransfer::stop",
+          46,
+          49
+        ],
+        [
+          "TwiTransfer::finish",
+          51,
+          54
+        ],
+        [
+          "TwiTransfer::receiveByte",
+          56,
+          59
+        ],
+        [
+          "TwiTransfer::finishActive",
+          125,
+          128
+        ],
+        [
+          "TwiTransfer::read",
+          42,
+          44
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [],
+      "includes": [
+        [
+          1,
+          "#include \"TwiTransfer.h\""
+        ],
+        [
+          2,
+          "#include <Arduino.h>"
+        ],
+        [
+          3,
+          "#include <util/twi.h>"
+        ]
+      ],
+      "waits": [
+        [
+          119,
+          "bool TwiTransfer::wait() {"
+        ],
+        [
+          120,
+          "while (busy())"
+        ],
+        [
+          125,
+          "void TwiTransfer::finishActive() {"
+        ],
+        [
+          127,
+          "active_->wait();"
+        ]
+      ],
+      "commentCandidates": []
+    },
+    {
+      "path": "TwiTransfer.h",
+      "sha": "7adfb02077c6a596fb1966356f8d5a4e83631367",
+      "physicalLines": 43,
+      "normalizedLines": 32,
+      "functions": [
+        [
+          "busy",
+          22,
+          22
+        ],
+        [
+          "succeeded",
+          23,
+          23
+        ],
+        [
+          "byteAt",
+          24,
+          24
+        ]
+      ],
+      "stateCandidates": [
+        [
+          14,
+          "static void beginBus();"
+        ],
+        [
+          15,
+          "static void finishActive();"
+        ],
+        [
+          28,
+          "static TwiTransfer* active_;"
+        ]
+      ],
+      "guards": [
+        [
+          1,
+          "#ifndef TWI_TRANSFER_H"
+        ],
+        [
+          43,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include <stdint.h>"
+        ]
+      ],
+      "waits": [
+        [
+          15,
+          "static void finishActive();"
+        ],
+        [
+          20,
+          "bool wait();"
+        ]
+      ],
+      "commentCandidates": []
+    },
+    {
+      "path": "UiActions.cpp",
+      "sha": "23fff43f00df517bc367c0e3674a1f391f53716a",
+      "physicalLines": 586,
+      "normalizedLines": 502,
+      "functions": [
+        [
+          "UIDisplay::mainSwitchCase",
+          88,
+          586
+        ],
+        [
+          "UIDisplay::pressPlay",
+          72,
+          86
+        ],
+        [
+          "UIDisplay::senseOffsetUpAction",
+          36,
+          47
+        ],
+        [
+          "UIDisplay::senseOffsetDownAction",
+          49,
+          60
+        ],
+        [
+          "adjustModMenuSenseOffset",
+          26,
+          33
+        ],
+        [
+          "UIDisplay::zOffsetPlusAction",
+          62,
+          65
+        ],
+        [
+          "UIDisplay::zOffsetMinusAction",
+          67,
+          70
+        ]
+      ],
+      "stateCandidates": [
+        [
+          73,
+          "static uint8_t idlePlayCount = 0;"
+        ]
+      ],
+      "guards": [
+        [
+          264,
+          "#if !HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)"
+        ],
+        [
+          277,
+          "#endif"
+        ],
+        [
+          279,
+          "#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2"
+        ],
+        [
+          294,
+          "#if FET1 > -1 && !HOTEND_COOLER_USES_PIN(FET1)"
+        ],
+        [
+          306,
+          "#endif"
+        ],
+        [
+          307,
+          "#if FET2 > -1 && !HOTEND_COOLER_USES_PIN(FET2)"
+        ],
+        [
+          319,
+          "#endif"
+        ],
+        [
+          320,
+          "#endif"
+        ],
+        [
+          384,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          386,
+          "#endif"
+        ],
+        [
+          442,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          444,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ],
+        [
+          19,
+          "#include \"GCodeInput.h\""
+        ],
+        [
+          20,
+          "#include \"UiMenus.h\""
+        ]
+      ],
+      "waits": [
+        [
+          398,
+          "while (Printer::checkAbortKeys())"
+        ]
+      ],
+      "commentCandidates": []
+    },
+    {
+      "path": "UiFormatting.cpp",
+      "sha": "a38a9b8eecae936ca8bcc065323f887f958df29d",
+      "physicalLines": 1345,
+      "normalizedLines": 1233,
+      "functions": [
+        [
+          "UIDisplay::parse",
+          160,
+          1303
+        ],
+        [
+          "UIDisplay::addFloat",
+          85,
+          124
+        ],
+        [
+          "UIDisplay::addInt",
+          22,
+          51
+        ],
+        [
+          "UIDisplay::addLong",
+          53,
+          82
+        ],
+        [
+          "UIDisplay::setStatusP",
+          1305,
+          1326
+        ],
+        [
+          "UIDisplay::setStatus",
+          1328,
+          1345
+        ],
+        [
+          "UIDisplay::addStringP",
+          126,
+          134
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [
+        [
+          367,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          370,
+          "#endif"
+        ],
+        [
+          389,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          398,
+          "#endif"
+        ],
+        [
+          400,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          409,
+          "#endif"
+        ],
+        [
+          454,
+          "#ifdef RGB_LIGHT_R_PIN"
+        ],
+        [
+          476,
+          "#endif"
+        ],
+        [
+          625,
+          "#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2"
+        ],
+        [
+          640,
+          "#endif"
+        ],
+        [
+          874,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          879,
+          "#endif"
+        ],
+        [
+          884,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          889,
+          "#endif"
+        ],
+        [
+          929,
+          "#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2"
+        ],
+        [
+          931,
+          "#else"
+        ],
+        [
+          933,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ],
+        [
+          19,
+          "#include \"StepExecutor.h\""
+        ],
+        [
+          20,
+          "#include \"ZScrewAdjustment.h\""
+        ]
+      ],
+      "waits": [
+        [
+          38,
+          "} while (magnitude);"
+        ],
+        [
+          42,
+          "while (dig < digits) {"
+        ],
+        [
+          46,
+          "while (*str && col < MAX_COLS) {"
+        ],
+        [
+          69,
+          "} while (magnitude);"
+        ],
+        [
+          73,
+          "while (dig < digits) {"
+        ],
+        [
+          77,
+          "while (*str && col < MAX_COLS) {"
+        ],
+        [
+          117,
+          "while (col < MAX_COLS && digits-- > 0) {"
+        ],
+        [
+          127,
+          "while (col < MAX_COLS) {"
+        ],
+        [
+          164,
+          "while (col < MAX_COLS) {"
+        ],
+        [
+          1315,
+          "while (i < UI_COLS) {"
+        ],
+        [
+          1337,
+          "while (*txt && i < UI_COLS)"
+        ]
+      ],
+      "commentCandidates": []
+    },
+    {
+      "path": "UiMenus.h",
+      "sha": "68885235649293734bc142f18fba4a9919ad9cf3",
+      "physicalLines": 12,
+      "normalizedLines": 9,
+      "functions": [],
+      "stateCandidates": [
+        [
+          5,
+          "extern UIMenu ui_menu_xpos PROGMEM;"
+        ],
+        [
+          6,
+          "extern UIMenu ui_menu_ypos PROGMEM;"
+        ],
+        [
+          7,
+          "extern UIMenu ui_menu_zpos PROGMEM;"
+        ],
+        [
+          8,
+          "extern UIMenu ui_menu_quick PROGMEM;"
+        ],
+        [
+          9,
+          "extern UIMenu ui_menu_extruder PROGMEM;"
+        ],
+        [
+          10,
+          "extern UIMenu ui_menu_positions PROGMEM;"
+        ]
+      ],
+      "guards": [
+        [
+          1,
+          "#ifndef UI_MENUS_H"
+        ],
+        [
+          12,
+          "#endif"
+        ]
+      ],
+      "includes": [],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "UiSettings.cpp",
+      "sha": "45543fa3580dacbc6c7825c9f1274999c83a723b",
+      "physicalLines": 1004,
+      "normalizedLines": 874,
+      "functions": [
+        [
+          "UIDisplay::changeSwitchCase",
+          120,
+          1004
+        ],
+        [
+          "UIDisplay::finishAction",
+          23,
+          103
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [
+        [
+          248,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          258,
+          "#endif"
+        ],
+        [
+          262,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          291,
+          "#endif"
+        ],
+        [
+          487,
+          "#ifdef RGB_LIGHT_R_PIN"
+        ],
+        [
+          494,
+          "#endif"
+        ],
+        [
+          499,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          501,
+          "#else"
+        ],
+        [
+          503,
+          "#endif"
+        ],
+        [
+          518,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          520,
+          "#else"
+        ],
+        [
+          522,
+          "#endif"
+        ],
+        [
+          543,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          545,
+          "#else"
+        ],
+        [
+          547,
+          "#endif"
+        ],
+        [
+          559,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          561,
+          "#else"
+        ],
+        [
+          563,
+          "#endif"
+        ],
+        [
+          575,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          577,
+          "#else"
+        ],
+        [
+          579,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ]
+      ],
+      "waits": [
+        [
+          31,
+          "HAL::delayMilliseconds(100);"
+        ],
+        [
+          464,
+          "} while (rate != 0);"
+        ]
+      ],
+      "commentCandidates": []
+    },
+    {
+      "path": "UsbSerial.cpp",
+      "sha": "0c40470a6142353e90468a28a2ff4e1045d88c1a",
+      "physicalLines": 125,
+      "normalizedLines": 70,
+      "functions": [
+        [
+          "UsbSerial::begin",
+          48,
+          70
+        ],
+        [
+          "UsbSerial::write",
+          84,
+          92
+        ],
+        [
+          "UsbSerial::transmitInterrupt",
+          109,
+          117
+        ],
+        [
+          "UsbSerial::receiveInterrupt",
+          100,
+          107
+        ],
+        [
+          "UsbSerial::read",
+          76,
+          82
+        ],
+        [
+          "UsbSerial::flush",
+          94,
+          98
+        ],
+        [
+          "UsbSerial::available",
+          72,
+          74
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [
+        [
+          50,
+          "#if F_CPU == 16000000UL"
+        ],
+        [
+          53,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          41,
+          "#include \"UsbSerial.h\""
+        ],
+        [
+          42,
+          "#include <avr/io.h>"
+        ],
+        [
+          43,
+          "#include <avr/interrupt.h>"
+        ]
+      ],
+      "waits": [
+        [
+          86,
+          "while (next == tx_.tail) {"
+        ],
+        [
+          95,
+          "while (tx_.head != tx_.tail) {"
+        ]
+      ],
+      "commentCandidates": []
+    }
+  ]
+}

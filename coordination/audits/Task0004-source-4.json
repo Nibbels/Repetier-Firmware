@@ -1,0 +1,3156 @@
+{
+  "ref": "1fe264b804cc67aa5bf197d0106d84f2d7cf8796",
+  "batch": 4,
+  "warning": "Lexical candidates only, no preprocessing or resolved call graph; function spans approximate.",
+  "files": [
+    {
+      "path": "PrintJob.h",
+      "sha": "8c4d1b3bfe9e9256e2b6cd0a233738b0980142de",
+      "physicalLines": 56,
+      "normalizedLines": 44,
+      "functions": [
+        [
+          "beginStop",
+          39,
+          45
+        ],
+        [
+          "isBusy",
+          10,
+          13
+        ],
+        [
+          "commandsBlocked",
+          15,
+          18
+        ],
+        [
+          "admitPrintMotion",
+          20,
+          23
+        ],
+        [
+          "finishPrintMotion",
+          24,
+          27
+        ],
+        [
+          "beginFilamentService",
+          29,
+          32
+        ],
+        [
+          "finishFilamentService",
+          33,
+          36
+        ],
+        [
+          "isPrinting",
+          8,
+          8
+        ]
+      ],
+      "stateCandidates": [
+        [
+          52,
+          "volatile Phase phase_ = Phase::Idle;"
+        ]
+      ],
+      "guards": [
+        [
+          1,
+          "#ifndef PRINT_JOB_H"
+        ],
+        [
+          56,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include <stdint.h>"
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "PrintLayers.h",
+      "sha": "88b1627d14a7fed202eabbf852c135f5efd9915b",
+      "physicalLines": 87,
+      "normalizedLines": 68,
+      "functions": [
+        [
+          "recordPlannedMove",
+          28,
+          54
+        ],
+        [
+          "resetTracking",
+          56,
+          59
+        ],
+        [
+          "clearConfirmedLayers",
+          61,
+          64
+        ],
+        [
+          "resetFadeBounds",
+          66,
+          69
+        ],
+        [
+          "rescaleFadeBounds",
+          71,
+          74
+        ],
+        [
+          "fadeEndSteps_",
+          19,
+          19
+        ],
+        [
+          "currentLayerSteps",
+          23,
+          23
+        ],
+        [
+          "previousLayerSteps",
+          24,
+          24
+        ],
+        [
+          "fadeStartSteps",
+          25,
+          25
+        ],
+        [
+          "fadeEndSteps",
+          26,
+          26
+        ],
+        [
+          "defaultFadeStart",
+          77,
+          77
+        ],
+        [
+          "defaultFadeEnd",
+          78,
+          78
+        ]
+      ],
+      "stateCandidates": [
+        [
+          77,
+          "static constexpr int32_t defaultFadeStart(float stepsPerMm) { return int32_t(0.33f * stepsPerMm); }"
+        ],
+        [
+          78,
+          "static constexpr int32_t defaultFadeEnd(float stepsPerMm) { return int32_t(10.0f * stepsPerMm); }"
+        ]
+      ],
+      "guards": [
+        [
+          1,
+          "#ifndef PRINT_LAYERS_H"
+        ],
+        [
+          87,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include <stdint.h>"
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "PrintPause.cpp",
+      "sha": "35401edc9cc6c7862ce01e81e78ce4514ec1b031",
+      "physicalLines": 347,
+      "normalizedLines": 288,
+      "functions": [
+        [
+          "PrintPause::pressPause",
+          43,
+          80
+        ],
+        [
+          "PrintPause::resume",
+          82,
+          115
+        ],
+        [
+          "PrintPause::retract",
+          223,
+          250
+        ],
+        [
+          "PrintPause::returnToPrint",
+          269,
+          290
+        ],
+        [
+          "PrintPause::serviceMotion",
+          126,
+          146
+        ],
+        [
+          "PrintPause::extrudeManually",
+          182,
+          202
+        ],
+        [
+          "PrintPause::queueRequest",
+          24,
+          41
+        ],
+        [
+          "PrintPause::serviceStandby",
+          148,
+          164
+        ],
+        [
+          "PrintPause::restoreExtruderTemperatures",
+          302,
+          318
+        ],
+        [
+          "PrintPause::park",
+          252,
+          267
+        ],
+        [
+          "PrintPause::finishExtrusion",
+          325,
+          337
+        ],
+        [
+          "PrintPause::limitZJog",
+          172,
+          180
+        ],
+        [
+          "PrintPause::moveBackToPrintPosition",
+          292,
+          300
+        ],
+        [
+          "PrintPause::request",
+          15,
+          22
+        ],
+        [
+          "PrintPause::cancel",
+          117,
+          124
+        ],
+        [
+          "PrintPause::restoreDefaultParking",
+          204,
+          209
+        ],
+        [
+          "PrintPause::beginSenseOffsetSample",
+          211,
+          216
+        ],
+        [
+          "PrintPause::allowsManualMove",
+          166,
+          170
+        ],
+        [
+          "PrintPause::waitUntilSettled",
+          218,
+          221
+        ],
+        [
+          "PrintPause::settle",
+          320,
+          323
+        ],
+        [
+          "PrintPause::moveWhile",
+          339,
+          342
+        ],
+        [
+          "PrintPause::stepsToReturn",
+          344,
+          347
+        ],
+        [
+          "PrintPause::acceptsPauseRequest",
+          11,
+          13
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [],
+      "includes": [
+        [
+          1,
+          "#include \"Repetier.h\""
+        ]
+      ],
+      "waits": [
+        [
+          25,
+          "while (PrintLine::queuedMoveCount() >= MOVE_CACHE_SIZE) {"
+        ],
+        [
+          39,
+          "while (acceptsPauseRequest() && (PrintLine::hasLines() || Printer::needsCMPwait()))"
+        ],
+        [
+          219,
+          "while (isPaused() && !isSettled() && !Printer::blockAll)"
+        ],
+        [
+          327,
+          "while (phase_ == phase && !Printer::blockAll) {"
+        ]
+      ],
+      "commentCandidates": []
+    },
+    {
+      "path": "PrintPause.h",
+      "sha": "7ab7cc7b284c6aa6fdccc18d71bc8476efec30e1",
+      "physicalLines": 99,
+      "normalizedLines": 83,
+      "functions": [
+        [
+          "isSettled",
+          13,
+          16
+        ],
+        [
+          "recordDirectExtrusion",
+          33,
+          36
+        ],
+        [
+          "discardPendingExtrusion",
+          38,
+          41
+        ],
+        [
+          "tracksDirectExtrusion",
+          73,
+          76
+        ],
+        [
+          "allowsSenseOffsetLearning",
+          52,
+          54
+        ],
+        [
+          "allowsQueueAdvance",
+          11,
+          11
+        ],
+        [
+          "isPaused",
+          12,
+          12
+        ],
+        [
+          "isWarmPause",
+          17,
+          17
+        ],
+        [
+          "isReheating",
+          18,
+          18
+        ],
+        [
+          "setParkSteps",
+          43,
+          43
+        ],
+        [
+          "scaleParkSteps",
+          44,
+          44
+        ]
+      ],
+      "stateCandidates": [
+        [
+          90,
+          "volatile Phase phase_ = Phase::Running;"
+        ],
+        [
+          91,
+          "volatile bool pauseSinceSenseSample_ = false;"
+        ],
+        [
+          96,
+          "volatile int32_t extruderReturnSteps_ = 0;"
+        ]
+      ],
+      "guards": [
+        [
+          1,
+          "#ifndef PRINT_PAUSE_H"
+        ],
+        [
+          99,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include <stdint.h>"
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "PrintUsage.cpp",
+      "sha": "3ab5855560e4ae0b3bd4c4655c89b4324bb72486",
+      "physicalLines": 49,
+      "normalizedLines": 27,
+      "functions": [
+        [
+          "PrintUsage::finishHeating",
+          28,
+          38
+        ],
+        [
+          "PrintUsage::heatedSeconds",
+          40,
+          45
+        ],
+        [
+          "totalHeatedSeconds",
+          21,
+          25
+        ],
+        [
+          "PrintUsage::filamentMetres",
+          47,
+          49
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "PrintUsage.h",
+      "sha": "b86335f3ea1afb88f40c4c72f2adfca5df7f281c",
+      "physicalLines": 24,
+      "normalizedLines": 18,
+      "functions": [
+        [
+          "beginHeating",
+          8,
+          11
+        ],
+        [
+          "recordPlannedFilament",
+          13,
+          13
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [
+        [
+          1,
+          "#ifndef PRINT_USAGE_H"
+        ],
+        [
+          24,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include <stdint.h>"
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "Printer.cpp",
+      "sha": "dc1b7372521a11ffc32bc604955e3ceba6674708",
+      "physicalLines": 784,
+      "normalizedLines": 577,
+      "functions": [
+        [
+          "Printer::setup",
+          418,
+          636
+        ],
+        [
+          "Printer::showConfiguration",
+          707,
+          764
+        ],
+        [
+          "Printer::updateDerivedParameter",
+          118,
+          174
+        ],
+        [
+          "Printer::offsetRelativeStepsCoordinates",
+          350,
+          382
+        ],
+        [
+          "Printer::setOrigin",
+          384,
+          416
+        ],
+        [
+          "Printer::queueGCodeCoordinates",
+          268,
+          296
+        ],
+        [
+          "Printer::stopPrint",
+          675,
+          701
+        ],
+        [
+          "Printer::queueFloatCoordinates",
+          299,
+          318
+        ],
+        [
+          "Printer::disableCMPnow",
+          656,
+          673
+        ],
+        [
+          "isExtrusionAllowed",
+          236,
+          252
+        ],
+        [
+          "Printer::queueRelativeMMCoordinates",
+          328,
+          344
+        ],
+        [
+          "Printer::switchEverythingOff",
+          177,
+          191
+        ],
+        [
+          "Printer::prepareDestinationSteps",
+          220,
+          234
+        ],
+        [
+          "Printer::updateWobbleFixOffsets",
+          205,
+          218
+        ],
+        [
+          "Printer::applyAdvanceSettings",
+          193,
+          203
+        ],
+        [
+          "Printer::checkPlayKey",
+          775,
+          784
+        ],
+        [
+          "Printer::setFeedrate",
+          257,
+          265
+        ],
+        [
+          "Printer::checkAbortKeys",
+          766,
+          773
+        ],
+        [
+          "Printer::enableCMPnow",
+          644,
+          649
+        ],
+        [
+          "Printer::queueRelativeStepsCoordinates",
+          321,
+          325
+        ],
+        [
+          "Printer::enableSenseOffsetnow",
+          638,
+          642
+        ],
+        [
+          "Printer::needsCMPwait",
+          651,
+          654
+        ]
+      ],
+      "stateCandidates": [
+        [
+          86,
+          "volatile char Printer::doHeatBedZCompensation = false;"
+        ],
+        [
+          88,
+          "volatile char Printer::blockAll = 0;"
+        ]
+      ],
+      "guards": [
+        [
+          97,
+          "#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2"
+        ],
+        [
+          104,
+          "#endif"
+        ],
+        [
+          123,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          125,
+          "#endif"
+        ],
+        [
+          128,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          130,
+          "#endif"
+        ],
+        [
+          445,
+          "#if X_DIR_PIN > -1"
+        ],
+        [
+          447,
+          "#endif"
+        ],
+        [
+          449,
+          "#if Y_DIR_PIN > -1"
+        ],
+        [
+          451,
+          "#endif"
+        ],
+        [
+          453,
+          "#if Z_DIR_PIN > -1"
+        ],
+        [
+          455,
+          "#endif"
+        ],
+        [
+          458,
+          "#if X_ENABLE_PIN > -1"
+        ],
+        [
+          463,
+          "#endif"
+        ],
+        [
+          465,
+          "#if Y_ENABLE_PIN > -1"
+        ],
+        [
+          470,
+          "#endif"
+        ],
+        [
+          472,
+          "#if Z_ENABLE_PIN > -1"
+        ],
+        [
+          477,
+          "#endif"
+        ],
+        [
+          480,
+          "#if X_MIN_PIN > -1"
+        ],
+        [
+          484,
+          "#else"
+        ],
+        [
+          486,
+          "#endif"
+        ],
+        [
+          488,
+          "#if Y_MIN_PIN > -1"
+        ],
+        [
+          492,
+          "#else"
+        ],
+        [
+          494,
+          "#endif"
+        ],
+        [
+          496,
+          "#if Z_MIN_PIN > -1"
+        ],
+        [
+          500,
+          "#else"
+        ],
+        [
+          502,
+          "#endif"
+        ],
+        [
+          504,
+          "#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2"
+        ],
+        [
+          505,
+          "#if Z_MAX_PIN > -1"
+        ],
+        [
+          509,
+          "#else"
+        ],
+        [
+          511,
+          "#endif"
+        ],
+        [
+          512,
+          "#endif"
+        ],
+        [
+          517,
+          "#if FAN_BOARD_PIN > -1"
+        ],
+        [
+          520,
+          "#endif"
+        ],
+        [
+          522,
+          "#if EXT0_HEATER_PIN > -1"
+        ],
+        [
+          525,
+          "#endif"
+        ],
+        [
+          527,
+          "#if defined(EXT1_HEATER_PIN) && EXT1_HEATER_PIN > -1 && NUM_EXTRUDER > 1"
+        ],
+        [
+          530,
+          "#endif"
+        ],
+        [
+          532,
+          "#if EXT0_EXTRUDER_COOLER_PIN > -1"
+        ],
+        [
+          535,
+          "#endif"
+        ],
+        [
+          537,
+          "#if defined(EXT1_EXTRUDER_COOLER_PIN) && EXT1_EXTRUDER_COOLER_PIN > -1 && NUM_EXTRUDER > 1"
+        ],
+        [
+          540,
+          "#endif"
+        ],
+        [
+          566,
+          "#ifdef RGB_LIGHT_R_PIN"
+        ],
+        [
+          568,
+          "#endif"
+        ],
+        [
+          594,
+          "#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2"
+        ],
+        [
+          599,
+          "#if FET1 > -1 && !HOTEND_COOLER_USES_PIN(FET1)"
+        ],
+        [
+          602,
+          "#endif"
+        ],
+        [
+          603,
+          "#if FET2 > -1 && !HOTEND_COOLER_USES_PIN(FET2)"
+        ],
+        [
+          606,
+          "#endif"
+        ],
+        [
+          607,
+          "#if FET3 > -1 && CASE_FAN_PIN < 0"
+        ],
+        [
+          610,
+          "#endif"
+        ],
+        [
+          612,
+          "#if CASE_FAN_PIN > -1"
+        ],
+        [
+          614,
+          "#endif"
+        ],
+        [
+          615,
+          "#endif"
+        ],
+        [
+          617,
+          "#if !HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)"
+        ],
+        [
+          620,
+          "#endif"
+        ],
+        [
+          629,
+          "#ifdef RGB_LIGHT_R_PIN"
+        ],
+        [
+          631,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ],
+        [
+          19,
+          "#include \"GCodeInput.h\""
+        ],
+        [
+          20,
+          "#include \"TwiTransfer.h\""
+        ],
+        [
+          21,
+          "#include \"CaseFan.h\""
+        ]
+      ],
+      "waits": [
+        [
+          356,
+          "while (PrintLine::directMoveActive()) {"
+        ],
+        [
+          379,
+          "while (PrintLine::directMoveActive()) {"
+        ],
+        [
+          435,
+          "while (1) {"
+        ],
+        [
+          663,
+          "while (wait) {"
+        ],
+        [
+          670,
+          "HAL::delayMilliseconds(1);"
+        ]
+      ],
+      "commentCandidates": []
+    },
+    {
+      "path": "Printer.h",
+      "sha": "459e0694a6cac72415d9b46a2b3fadca3bc99ec0",
+      "physicalLines": 721,
+      "normalizedLines": 557,
+      "functions": [
+        [
+          "disableZStepper",
+          266,
+          292
+        ],
+        [
+          "disableYStepper",
+          242,
+          263
+        ],
+        [
+          "disableXStepper",
+          219,
+          239
+        ],
+        [
+          "setHomed",
+          435,
+          453
+        ],
+        [
+          "enableXStepper",
+          295,
+          305
+        ],
+        [
+          "enableYStepper",
+          308,
+          318
+        ],
+        [
+          "enableZStepper",
+          321,
+          331
+        ],
+        [
+          "disableAllSteppersNow",
+          554,
+          564
+        ],
+        [
+          "applyToolMotionSettings",
+          113,
+          122
+        ],
+        [
+          "currentZPositionMM",
+          583,
+          592
+        ],
+        [
+          "setXDirection",
+          333,
+          341
+        ],
+        [
+          "setYDirection",
+          343,
+          351
+        ],
+        [
+          "isMinEndstopHit",
+          515,
+          523
+        ],
+        [
+          "isMaxEndstopHit",
+          524,
+          532
+        ],
+        [
+          "getFanSpeed",
+          692,
+          700
+        ],
+        [
+          "getMaxExtruderOffsetMM",
+          595,
+          602
+        ],
+        [
+          "setXAxisSteps",
+          609,
+          616
+        ],
+        [
+          "setYAxisSteps",
+          617,
+          624
+        ],
+        [
+          "stopDirectAxis",
+          637,
+          644
+        ],
+        [
+          "resetDirectAxis",
+          645,
+          652
+        ],
+        [
+          "getPlannedDirectAxisSteps",
+          663,
+          670
+        ],
+        [
+          "markAllSteppersDisabled",
+          538,
+          544
+        ],
+        [
+          "unmarkAllSteppersDisabled",
+          546,
+          552
+        ],
+        [
+          "setZAxisSteps",
+          625,
+          631
+        ],
+        [
+          "setMenuMode",
+          187,
+          192
+        ],
+        [
+          "getDirectMM",
+          685,
+          690
+        ],
+        [
+          "endXYZSteps",
+          371,
+          375
+        ],
+        [
+          "directPosition",
+          653,
+          657
+        ],
+        [
+          "startXStep",
+          353,
+          356
+        ],
+        [
+          "startYStep",
+          358,
+          361
+        ],
+        [
+          "isAnyTempsensorDefect",
+          570,
+          573
+        ],
+        [
+          "setEPositionMM",
+          632,
+          635
+        ],
+        [
+          "directSteps",
+          658,
+          661
+        ],
+        [
+          "accelerationSteps",
+          110,
+          112
+        ],
+        [
+          "activeMenuModes",
+          194,
+          196
+        ],
+        [
+          "isMenuMode",
+          198,
+          200
+        ],
+        [
+          "debugEcho",
+          202,
+          204
+        ],
+        [
+          "debugInfo",
+          206,
+          208
+        ],
+        [
+          "debugErrors",
+          210,
+          212
+        ],
+        [
+          "debugDryrun",
+          214,
+          216
+        ],
+        [
+          "endYStep",
+          363,
+          365
+        ],
+        [
+          "endXStep",
+          367,
+          369
+        ],
+        [
+          "getYDirectionIsPos",
+          377,
+          379
+        ],
+        [
+          "getXDirectionIsPos",
+          381,
+          383
+        ],
+        [
+          "isLargeMachine",
+          385,
+          387
+        ],
+        [
+          "setLargeMachine",
+          389,
+          391
+        ],
+        [
+          "isAllSwitchedOff",
+          455,
+          457
+        ],
+        [
+          "setAllSwitchedOff",
+          459,
+          461
+        ],
+        [
+          "isAnimation",
+          463,
+          465
+        ],
+        [
+          "setAnimation",
+          467,
+          469
+        ],
+        [
+          "isUIErrorMessage",
+          471,
+          473
+        ],
+        [
+          "setUIErrorMessage",
+          475,
+          477
+        ],
+        [
+          "toggleAnimation",
+          479,
+          481
+        ],
+        [
+          "convertToMM",
+          483,
+          485
+        ],
+        [
+          "isXMinEndstopHit",
+          487,
+          489
+        ],
+        [
+          "isYMinEndstopHit",
+          491,
+          493
+        ],
+        [
+          "isZMinEndstopHit",
+          495,
+          497
+        ],
+        [
+          "isXMaxEndstopHit",
+          499,
+          501
+        ],
+        [
+          "isYMaxEndstopHit",
+          503,
+          505
+        ],
+        [
+          "isZMaxEndstopHit",
+          507,
+          509
+        ],
+        [
+          "softwareEndstopSteps",
+          511,
+          513
+        ],
+        [
+          "areAllSteppersDisabled",
+          534,
+          536
+        ],
+        [
+          "setSomeTempsensorDefect",
+          566,
+          568
+        ],
+        [
+          "isManualMoveMode",
+          575,
+          577
+        ],
+        [
+          "setManualMoveMode",
+          579,
+          581
+        ],
+        [
+          "stepsPerMm",
+          92,
+          92
+        ],
+        [
+          "setStepsPerMm",
+          93,
+          93
+        ],
+        [
+          "mmPerStep",
+          94,
+          94
+        ],
+        [
+          "axisMaxFeedrate",
+          95,
+          95
+        ],
+        [
+          "setAxisMaxFeedrate",
+          96,
+          96
+        ],
+        [
+          "axisHomingFeedrate",
+          97,
+          97
+        ],
+        [
+          "setAxisHomingFeedrate",
+          98,
+          98
+        ],
+        [
+          "axisLengthMm",
+          99,
+          99
+        ],
+        [
+          "setAxisLengthMm",
+          100,
+          100
+        ],
+        [
+          "printAcceleration",
+          101,
+          101
+        ],
+        [
+          "setPrintAcceleration",
+          102,
+          102
+        ],
+        [
+          "travelAcceleration",
+          103,
+          103
+        ],
+        [
+          "setTravelAcceleration",
+          104,
+          104
+        ],
+        [
+          "xyMaxSteps",
+          105,
+          105
+        ],
+        [
+          "xyJerkLimit",
+          106,
+          106
+        ],
+        [
+          "setXYJerkLimit",
+          107,
+          107
+        ],
+        [
+          "zJerkLimit",
+          108,
+          108
+        ],
+        [
+          "setZJerkLimit",
+          109,
+          109
+        ],
+        [
+          "movementUnlocked",
+          177,
+          177
+        ],
+        [
+          "allowMovement",
+          178,
+          178
+        ],
+        [
+          "lockMovement",
+          179,
+          179
+        ]
+      ],
+      "stateCandidates": [
+        [
+          73,
+          "static uint8_t menuMode_;"
+        ],
+        [
+          74,
+          "static float axisStepsPerMM_[4];"
+        ],
+        [
+          75,
+          "static float axisMMPerSteps_[4];"
+        ],
+        [
+          76,
+          "static float maxFeedrate_[4];"
+        ],
+        [
+          77,
+          "static float homingFeedrate_[3];"
+        ],
+        [
+          78,
+          "static float axisLengthMM_[3];"
+        ],
+        [
+          79,
+          "static float maxAccelerationMMPerSquareSecond_[4];"
+        ],
+        [
+          80,
+          "static float maxTravelAccelerationMMPerSquareSecond_[4];"
+        ],
+        [
+          81,
+          "static long maxSoftEndstopSteps_[2];"
+        ],
+        [
+          82,
+          "static uint32_t maxPrintAccelerationStepsPerSquareSecond_[4];"
+        ],
+        [
+          83,
+          "static uint32_t maxTravelAccelerationStepsPerSquareSecond_[4];"
+        ],
+        [
+          84,
+          "static float maxXYJerk_;"
+        ],
+        [
+          85,
+          "static float maxZJerk_;"
+        ],
+        [
+          88,
+          "static ExtrusionOutput extrusionOutput;"
+        ],
+        [
+          89,
+          "static PreheatProfiles preheatProfiles;"
+        ],
+        [
+          92,
+          "static float stepsPerMm(uint8_t axis) { return axisStepsPerMM_[axis]; }"
+        ],
+        [
+          93,
+          "static void setStepsPerMm(uint8_t axis, float value) { axisStepsPerMM_[axis] = value; }"
+        ],
+        [
+          94,
+          "static float mmPerStep(uint8_t axis) { return axisMMPerSteps_[axis]; }"
+        ],
+        [
+          95,
+          "static float axisMaxFeedrate(uint8_t axis) { return maxFeedrate_[axis]; }"
+        ],
+        [
+          96,
+          "static void setAxisMaxFeedrate(uint8_t axis, float value) { maxFeedrate_[axis] = value; }"
+        ],
+        [
+          97,
+          "static float axisHomingFeedrate(uint8_t axis) { return homingFeedrate_[axis]; }"
+        ],
+        [
+          98,
+          "static void setAxisHomingFeedrate(uint8_t axis, float value) { homingFeedrate_[axis] = value; }"
+        ],
+        [
+          99,
+          "static float axisLengthMm(uint8_t axis) { return axisLengthMM_[axis]; }"
+        ],
+        [
+          100,
+          "static void setAxisLengthMm(uint8_t axis, float value) { axisLengthMM_[axis] = value; }"
+        ],
+        [
+          101,
+          "static float printAcceleration(uint8_t axis) { return maxAccelerationMMPerSquareSecond_[axis]; }"
+        ],
+        [
+          102,
+          "static void setPrintAcceleration(uint8_t axis, float value) { maxAccelerationMMPerSquareSecond_[axis] = value; }"
+        ],
+        [
+          103,
+          "static float travelAcceleration(uint8_t axis) { return maxTravelAccelerationMMPerSquareSecond_[axis]; }"
+        ],
+        [
+          104,
+          "static void setTravelAcceleration(uint8_t axis, float value) { maxTravelAccelerationMMPerSquareSecond_[axis] = value; }"
+        ],
+        [
+          105,
+          "static long xyMaxSteps(uint8_t axis) { return maxSoftEndstopSteps_[axis]; }"
+        ],
+        [
+          106,
+          "static float xyJerkLimit() { return maxXYJerk_; }"
+        ],
+        [
+          107,
+          "static void setXYJerkLimit(float value) { maxXYJerk_ = value; }"
+        ],
+        [
+          108,
+          "static float zJerkLimit() { return maxZJerk_; }"
+        ],
+        [
+          109,
+          "static void setZJerkLimit(float value) { maxZJerk_ = value; }"
+        ],
+        [
+          124,
+          "static GCodeModes gcodeModes;"
+        ],
+        [
+          125,
+          "static uint8_t debugLevel;"
+        ],
+        [
+          126,
+          "static uint8_t flag0;"
+        ],
+        [
+          127,
+          "static uint8_t flag1;"
+        ],
+        [
+          128,
+          "static uint8_t flag2;"
+        ],
+        [
+          129,
+          "static uint8_t flag3;"
+        ],
+        [
+          130,
+          "static uint16_t stepsPackingMinInterval;"
+        ],
+        [
+          132,
+          "static float feedrate;"
+        ],
+        [
+          133,
+          "static int feedrateMultiply;"
+        ],
+        [
+          134,
+          "static float menuExtrusionFactor;"
+        ],
+        [
+          135,
+          "static PrintUsage printUsage;"
+        ],
+        [
+          136,
+          "static ZOffset zOffset;"
+        ],
+        [
+          137,
+          "static SenseOffsetControl senseOffsetControl;"
+        ],
+        [
+          138,
+          "static ZMotion zMotion;"
+        ],
+        [
+          139,
+          "static PrintLayers layers;"
+        ],
+        [
+          140,
+          "static DigitCompensation digitCompensation;"
+        ],
+        [
+          141,
+          "static PressureProtection pressureProtection;"
+        ],
+        [
+          142,
+          "static StrainGauge strainGauge;"
+        ],
+        [
+          143,
+          "static StartLine startLine;"
+        ],
+        [
+          144,
+          "static ExtrusionPlanner extrusionPlanner;"
+        ],
+        [
+          145,
+          "static ExtrusionCompensation extrusionCompensation;"
+        ],
+        [
+          146,
+          "static MoveTarget moveTarget;"
+        ],
+        [
+          147,
+          "static WobbleCorrection wobbleCorrection;"
+        ],
+        [
+          148,
+          "static CartesianPlanner cartesianPlanner;"
+        ],
+        [
+          149,
+          "static XYMotion xyMotion;"
+        ],
+        [
+          150,
+          "static PrintPause pause;"
+        ],
+        [
+          151,
+          "static PrintJob printJob;"
+        ],
+        [
+          152,
+          "static MachineInactivity inactivity;"
+        ],
+        [
+          153,
+          "static IdleStatus idleStatus;"
+        ],
+        [
+          154,
+          "static char ZMode;"
+        ],
+        [
+          155,
+          "static ManualMotion manualMotion;"
+        ],
+        [
+          157,
+          "static volatile char doHeatBedZCompensation;"
+        ],
+        [
+          159,
+          "static volatile char blockAll;"
+        ],
+        [
+          161,
+          "static char enabledStepper[3];"
+        ],
+        [
+          163,
+          "static char enableCaseLight;"
+        ],
+        [
+          167,
+          "static char enable230VOutput;"
+        ],
+        [
+          169,
+          "static char enableFET1;"
+        ],
+        [
+          170,
+          "static char enableFET2;"
+        ],
+        [
+          171,
+          "static char enableFET3;"
+        ],
+        [
+          175,
+          "static unsigned char wrongType;"
+        ],
+        [
+          177,
+          "static bool movementUnlocked() { return movementUnlocked_; }"
+        ],
+        [
+          178,
+          "static void allowMovement() { movementUnlocked_ = true; }"
+        ],
+        [
+          179,
+          "static void lockMovement() { movementUnlocked_ = false; }"
+        ],
+        [
+          182,
+          "static uint8_t motorCurrent[DRV8711_NUM_CHANNELS];"
+        ],
+        [
+          185,
+          "static uint8_t motorMicroStepsModeValue[DRV8711_NUM_CHANNELS];"
+        ],
+        [
+          353,
+          "static INLINE void startXStep(int8_t dir = (Printer::getXDirectionIsPos() ? 1 : -1)) {"
+        ],
+        [
+          358,
+          "static INLINE void startYStep(int8_t dir = (Printer::getYDirectionIsPos() ? 1 : -1)) {"
+        ],
+        [
+          424,
+          "static int8_t anyHomeDir(uint8_t axis);"
+        ],
+        [
+          425,
+          "static bool anyEndstop(uint8_t axis);"
+        ],
+        [
+          426,
+          "static void changeAxisDirection(uint8_t axis, int8_t direction);"
+        ],
+        [
+          427,
+          "static void stepAxisStep(uint8_t axis, uint8_t slower = 1);"
+        ],
+        [
+          428,
+          "static int8_t checkHome(int8_t axis);"
+        ],
+        [
+          435,
+          "static inline void setHomed(int8_t x = -1, int8_t y = -1, int8_t z = -1) {"
+        ],
+        [
+          605,
+          "static void updateDerivedParameter();"
+        ],
+        [
+          606,
+          "static void switchEverythingOff();"
+        ],
+        [
+          607,
+          "static void applyAdvanceSettings();"
+        ],
+        [
+          632,
+          "static INLINE void setEPositionMM(float e, float remainder = 0.0f) {"
+        ],
+        [
+          672,
+          "static void setup();"
+        ],
+        [
+          673,
+          "static void setFeedrate(float feedrate);"
+        ],
+        [
+          674,
+          "static bool queueGCodeCoordinates(GCode* com);"
+        ],
+        [
+          675,
+          "static void queueFloatCoordinates(float x, float y, float z, float e, float feedrate);"
+        ],
+        [
+          676,
+          "static bool queueRelativeStepsCoordinates(long x, long y, long z, long e, float feedrate, bool waitEnd, bool abortAtEndstops = false);"
+        ],
+        [
+          677,
+          "static bool queueRelativeMMCoordinates(float x, float y, float z, float e, float feedrate, bool waitEnd, bool abortAtEndstops = false);"
+        ],
+        [
+          678,
+          "static void offsetRelativeStepsCoordinates(int32_t dx, int32_t dy, int32_t dz, int32_t de, uint8_t configuration = 0);"
+        ],
+        [
+          679,
+          "static void homeDigits();"
+        ],
+        [
+          680,
+          "static void homeAxis(bool xaxis, bool yaxis, bool zaxis);"
+        ],
+        [
+          681,
+          "static void setOrigin(float xOff, float yOff, float zOff);"
+        ],
+        [
+          682,
+          "static void updateWobbleFixOffsets();"
+        ],
+        [
+          683,
+          "static int32_t prepareDestinationSteps(uint8_t axis);"
+        ],
+        [
+          692,
+          "static INLINE uint8_t getFanSpeed(bool percent = false) {"
+        ],
+        [
+          702,
+          "static void enableSenseOffsetnow(void);"
+        ],
+        [
+          703,
+          "static bool needsCMPwait(void);"
+        ],
+        [
+          704,
+          "static void enableCMPnow(void);"
+        ],
+        [
+          705,
+          "static void disableCMPnow(bool wait = false);"
+        ],
+        [
+          707,
+          "static void stopPrint();"
+        ],
+        [
+          708,
+          "static bool checkAbortKeys(void);"
+        ],
+        [
+          709,
+          "static bool checkPlayKey(void);"
+        ],
+        [
+          710,
+          "static void showConfiguration();"
+        ],
+        [
+          713,
+          "static bool movementUnlocked_;"
+        ],
+        [
+          714,
+          "static DirectPosition extruderDirect;"
+        ],
+        [
+          716,
+          "static void homeXAxis();"
+        ],
+        [
+          717,
+          "static void homeYAxis();"
+        ],
+        [
+          718,
+          "static void homeZAxis();"
+        ]
+      ],
+      "guards": [
+        [
+          20,
+          "#ifndef PRINTER_H"
+        ],
+        [
+          166,
+          "#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2"
+        ],
+        [
+          173,
+          "#endif"
+        ],
+        [
+          220,
+          "#if (X_ENABLE_PIN > -1)"
+        ],
+        [
+          222,
+          "#endif"
+        ],
+        [
+          243,
+          "#if (Y_ENABLE_PIN > -1)"
+        ],
+        [
+          245,
+          "#endif"
+        ],
+        [
+          274,
+          "#if (Z_ENABLE_PIN > -1)"
+        ],
+        [
+          276,
+          "#endif"
+        ],
+        [
+          297,
+          "#if (X_ENABLE_PIN > -1)"
+        ],
+        [
+          299,
+          "#endif"
+        ],
+        [
+          310,
+          "#if (Y_ENABLE_PIN > -1)"
+        ],
+        [
+          312,
+          "#endif"
+        ],
+        [
+          323,
+          "#if (Z_ENABLE_PIN > -1)"
+        ],
+        [
+          325,
+          "#endif"
+        ],
+        [
+          541,
+          "#if FAN_BOARD_PIN > -1"
+        ],
+        [
+          543,
+          "#endif"
+        ],
+        [
+          549,
+          "#if FAN_BOARD_PIN > -1"
+        ],
+        [
+          551,
+          "#endif"
+        ],
+        [
+          594,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          603,
+          "#endif"
+        ],
+        [
+          721,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          18,
+          "#include \"Commands.h\""
+        ],
+        [
+          23,
+          "#include \"ManualMotion.h\""
+        ],
+        [
+          24,
+          "#include \"GCodeModes.h\""
+        ],
+        [
+          26,
+          "#include \"ZOffset.h\""
+        ],
+        [
+          27,
+          "#include \"SenseOffsetControl.h\""
+        ],
+        [
+          28,
+          "#include \"ZMotion.h\""
+        ],
+        [
+          29,
+          "#include \"PrintLayers.h\""
+        ],
+        [
+          30,
+          "#include \"PrintPause.h\""
+        ],
+        [
+          31,
+          "#include \"PrintJob.h\""
+        ],
+        [
+          32,
+          "#include \"MachineInactivity.h\""
+        ],
+        [
+          33,
+          "#include \"IdleStatus.h\""
+        ],
+        [
+          34,
+          "#include \"DigitCompensation.h\""
+        ],
+        [
+          35,
+          "#include \"PressureProtection.h\""
+        ],
+        [
+          36,
+          "#include \"PreheatProfiles.h\""
+        ],
+        [
+          37,
+          "#include \"PrintUsage.h\""
+        ],
+        [
+          38,
+          "#include \"StrainGauge.h\""
+        ],
+        [
+          39,
+          "#include \"StartLine.h\""
+        ],
+        [
+          40,
+          "#include \"ExtrusionPlanner.h\""
+        ],
+        [
+          41,
+          "#include \"ExtrusionCompensation.h\""
+        ],
+        [
+          42,
+          "#include \"ExtrusionOutput.h\""
+        ],
+        [
+          43,
+          "#include \"MoveTarget.h\""
+        ],
+        [
+          44,
+          "#include \"WobbleCorrection.h\""
+        ],
+        [
+          45,
+          "#include \"CartesianPlanner.h\""
+        ],
+        [
+          46,
+          "#include \"XYMotion.h\""
+        ]
+      ],
+      "waits": [
+        [
+          303,
+          "HAL::delayMilliseconds(stepperEnableDelayMs);"
+        ],
+        [
+          316,
+          "HAL::delayMilliseconds(stepperEnableDelayMs);"
+        ],
+        [
+          329,
+          "HAL::delayMilliseconds(stepperEnableDelayMs);"
+        ]
+      ],
+      "commentCandidates": [
+        [
+          409,
+          "static inline uint8_t isZHomeSafe() //experimentelle funktion, die nicht viel abdeckt, das ist ein test. ... TODO: merge with function isHomingAllowed"
+        ]
+      ]
+    },
+    {
+      "path": "RF.cpp",
+      "sha": "45b93e7a1928096967e603b9c8dacb3c8d51870e",
+      "physicalLines": 319,
+      "normalizedLines": 213,
+      "functions": [
+        [
+          "determineHardwareType",
+          246,
+          295
+        ],
+        [
+          "handleStartStandby",
+          91,
+          125
+        ],
+        [
+          "outputObject",
+          127,
+          158
+        ],
+        [
+          "isMovingAllowed",
+          199,
+          223
+        ],
+        [
+          "setupForPrinting",
+          25,
+          47
+        ],
+        [
+          "doEmergencyStop",
+          297,
+          319
+        ],
+        [
+          "handleScanWorkTasks",
+          69,
+          89
+        ],
+        [
+          "isHomingAllowed",
+          225,
+          244
+        ],
+        [
+          "discardScans",
+          60,
+          67
+        ],
+        [
+          "cleanupEPositions",
+          190,
+          197
+        ],
+        [
+          "initRF",
+          49,
+          54
+        ],
+        [
+          "queueTask",
+          185,
+          188
+        ],
+        [
+          "isAnyScanRunning",
+          56,
+          58
+        ]
+      ],
+      "stateCandidates": [
+        [
+          162,
+          "static char nEntered = 0;"
+        ]
+      ],
+      "guards": [
+        [
+          92,
+          "#if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1"
+        ],
+        [
+          94,
+          "#endif"
+        ],
+        [
+          174,
+          "#ifdef RGB_LIGHT_R_PIN"
+        ],
+        [
+          176,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ],
+        [
+          19,
+          "#include \"BedMatrix.h\""
+        ],
+        [
+          20,
+          "#include \"CaseFan.h\""
+        ],
+        [
+          21,
+          "#include \"ExternalEeprom.h\""
+        ],
+        [
+          22,
+          "#include \"ScanProbe.h\""
+        ],
+        [
+          23,
+          "#include \"GCodeInput.h\""
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "RF.h",
+      "sha": "f203708b317d580b82b2100740edd62778ee43db",
+      "physicalLines": 459,
+      "normalizedLines": 123,
+      "functions": [],
+      "stateCandidates": [
+        [
+          339,
+          "extern const char ui_text_error[] PROGMEM;"
+        ],
+        [
+          340,
+          "extern const char ui_text_warning[] PROGMEM;"
+        ],
+        [
+          341,
+          "extern const char ui_text_set_origin[] PROGMEM;"
+        ],
+        [
+          342,
+          "extern const char ui_text_information[] PROGMEM;"
+        ],
+        [
+          343,
+          "extern const char ui_text_heat_bed_scan[] PROGMEM;"
+        ],
+        [
+          344,
+          "extern const char ui_text_output_object[] PROGMEM;"
+        ],
+        [
+          345,
+          "extern const char ui_text_pause[] PROGMEM;"
+        ],
+        [
+          346,
+          "extern const char ui_text_home[] PROGMEM;"
+        ],
+        [
+          347,
+          "extern const char ui_text_z_compensation[] PROGMEM;"
+        ],
+        [
+          348,
+          "extern const char ui_text_x_axis[] PROGMEM;"
+        ],
+        [
+          349,
+          "extern const char ui_text_y_axis[] PROGMEM;"
+        ],
+        [
+          350,
+          "extern const char ui_text_z_axis[] PROGMEM;"
+        ],
+        [
+          351,
+          "extern const char ui_text_extruder[] PROGMEM;"
+        ],
+        [
+          352,
+          "extern const char ui_text_autodetect_pid[] PROGMEM;"
+        ],
+        [
+          353,
+          "extern const char ui_text_temperature_manager[] PROGMEM;"
+        ],
+        [
+          354,
+          "extern const char ui_text_home_unknown[] PROGMEM;"
+        ],
+        [
+          355,
+          "extern const char ui_text_saving_needless[] PROGMEM;"
+        ],
+        [
+          356,
+          "extern const char ui_text_operation_denied[] PROGMEM;"
+        ],
+        [
+          357,
+          "extern const char ui_text_emergency_pause[] PROGMEM;"
+        ],
+        [
+          358,
+          "extern const char ui_text_emergency_stop[] PROGMEM;"
+        ],
+        [
+          359,
+          "extern const char ui_text_invalid_matrix[] PROGMEM;"
+        ],
+        [
+          360,
+          "extern const char ui_text_min_reached[] PROGMEM;"
+        ],
+        [
+          361,
+          "extern const char ui_text_max_reached[] PROGMEM;"
+        ],
+        [
+          362,
+          "extern const char ui_text_temperature_wrong[] PROGMEM;"
+        ],
+        [
+          363,
+          "extern const char ui_text_timeout[] PROGMEM;"
+        ],
+        [
+          364,
+          "extern const char ui_text_sensor_error[] PROGMEM;"
+        ],
+        [
+          365,
+          "extern const char ui_text_heater_error[] PROGMEM;"
+        ],
+        [
+          366,
+          "extern const char ui_text_manual[] PROGMEM;"
+        ],
+        [
+          367,
+          "extern const char ui_text_saving_success[] PROGMEM;"
+        ],
+        [
+          392,
+          "extern void initRF(void);"
+        ],
+        [
+          394,
+          "extern void startHeatBedScan(HeatBedScanMode mode);"
+        ],
+        [
+          395,
+          "extern bool heatBedScanRunning();"
+        ],
+        [
+          396,
+          "extern bool isAnyScanRunning();"
+        ],
+        [
+          397,
+          "extern void discardScans();"
+        ],
+        [
+          398,
+          "extern void handleScanWorkTasks(bool tickDue);"
+        ],
+        [
+          399,
+          "extern void startZOScan(bool automatrixleveling = false);"
+        ],
+        [
+          404,
+          "extern void configureMANUAL_STEPS_Z(int8_t increment);"
+        ],
+        [
+          406,
+          "extern long getZMatrixDepth_CurrentXY(void);"
+        ],
+        [
+          408,
+          "extern bool switchActiveHeatBed(char newActiveHeatBed);"
+        ],
+        [
+          417,
+          "extern short readAveragePressure(short* pnAveragePressure);"
+        ],
+        [
+          419,
+          "extern void restoreDefaultScanParameters(void);"
+        ],
+        [
+          420,
+          "extern void outputScanParameters(void);"
+        ],
+        [
+          422,
+          "extern void recalculateZCompensation(void);"
+        ],
+        [
+          423,
+          "extern void loopFeatures(void);"
+        ],
+        [
+          426,
+          "extern void outputObject(bool showerrors = true);"
+        ],
+        [
+          428,
+          "extern void setExtruderCurrent(uint8_t nr, uint8_t current);"
+        ],
+        [
+          429,
+          "extern void queueTask(char task);"
+        ],
+        [
+          430,
+          "extern void moveXAction(int8_t increment);"
+        ],
+        [
+          431,
+          "extern void moveYAction(int8_t increment);"
+        ],
+        [
+          432,
+          "extern void moveZAction(int8_t increment);"
+        ],
+        [
+          434,
+          "extern void setMotorCurrent(unsigned char driver, uint8_t level);"
+        ],
+        [
+          437,
+          "extern unsigned short drv8711Axis_2_InitMicrosteps(uint8_t axis);"
+        ],
+        [
+          438,
+          "extern unsigned short drv8711ModeValue_2_MicroSteps(uint8_t modeValue);"
+        ],
+        [
+          439,
+          "extern uint8_t drv8711MicroSteps_2_ModeValue(unsigned short microsteps);"
+        ],
+        [
+          440,
+          "extern void drv8711adjustMicroSteps(unsigned char driver);"
+        ],
+        [
+          442,
+          "extern void drv8711Init(void);"
+        ],
+        [
+          444,
+          "extern void cleanupEPositions(void);"
+        ],
+        [
+          447,
+          "extern void prepareZCompensation(void);"
+        ],
+        [
+          448,
+          "extern unsigned char isMovingAllowed(const char* pszCommand, char outputLog = 1);"
+        ],
+        [
+          449,
+          "extern unsigned char isHomingAllowed(GCode* com, char outputLog = 1);"
+        ],
+        [
+          451,
+          "extern void determineHardwareType(void);"
+        ],
+        [
+          452,
+          "extern void showIdle(void);"
+        ],
+        [
+          453,
+          "extern void showError(const void* line2, const void* line3 = NULL, const void* line4 = NULL);"
+        ],
+        [
+          454,
+          "extern void showWarning(const void* line2, const void* line3 = NULL, const void* line4 = NULL);"
+        ],
+        [
+          455,
+          "extern void showInformation(const void* line2, const void* line3 = NULL, const void* line4 = NULL);"
+        ],
+        [
+          456,
+          "extern void showMyPage(const void* line1, const void* line2 = NULL, const void* line3 = NULL, const void* line4 = NULL);"
+        ]
+      ],
+      "guards": [
+        [
+          18,
+          "#ifndef RF_H"
+        ],
+        [
+          459,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          21,
+          "#include \"CalibrationScan.h\""
+        ],
+        [
+          22,
+          "#include \"RgbLighting.h\""
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "RF1000.h",
+      "sha": "b2b8407cd472a7318a246f5ed0f4934b5ac55b0d",
+      "physicalLines": 344,
+      "normalizedLines": 105,
+      "functions": [],
+      "stateCandidates": [],
+      "guards": [
+        [
+          18,
+          "#ifndef RF1000_H"
+        ],
+        [
+          25,
+          "#ifndef NUM_EXTRUDER"
+        ],
+        [
+          27,
+          "#endif"
+        ],
+        [
+          44,
+          "#if NUM_EXTRUDER < 1 || NUM_EXTRUDER > 2"
+        ],
+        [
+          46,
+          "#endif"
+        ],
+        [
+          59,
+          "#if NUM_EXTRUDER == 2"
+        ],
+        [
+          61,
+          "#else"
+        ],
+        [
+          63,
+          "#endif"
+        ],
+        [
+          128,
+          "#if NUM_EXTRUDER == 2"
+        ],
+        [
+          178,
+          "#endif"
+        ],
+        [
+          344,
+          "#endif"
+        ]
+      ],
+      "includes": [],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "RF2000.h",
+      "sha": "d2cdcac096cc9621d8227cfa46fd34fe4f3dc6e6",
+      "physicalLines": 422,
+      "normalizedLines": 150,
+      "functions": [],
+      "stateCandidates": [],
+      "guards": [
+        [
+          18,
+          "#ifndef RF2000_H"
+        ],
+        [
+          23,
+          "#if MOTHERBOARD == DEVICE_TYPE_RF2000v2"
+        ],
+        [
+          52,
+          "#else"
+        ],
+        [
+          81,
+          "#endif"
+        ],
+        [
+          84,
+          "#ifndef NUM_EXTRUDER"
+        ],
+        [
+          86,
+          "#endif"
+        ],
+        [
+          92,
+          "#if NUM_EXTRUDER < 1 || NUM_EXTRUDER > 2"
+        ],
+        [
+          94,
+          "#endif"
+        ],
+        [
+          104,
+          "#if NUM_EXTRUDER == 2"
+        ],
+        [
+          106,
+          "#else"
+        ],
+        [
+          108,
+          "#endif"
+        ],
+        [
+          167,
+          "#if NUM_EXTRUDER == 2"
+        ],
+        [
+          211,
+          "#endif"
+        ],
+        [
+          422,
+          "#endif"
+        ]
+      ],
+      "includes": [],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "Repetier.h",
+      "sha": "996393cfe4142a2d9e93a790741e93777bf7dfcf",
+      "physicalLines": 149,
+      "normalizedLines": 102,
+      "functions": [
+        [
+          "min",
+          62,
+          66
+        ],
+        [
+          "max",
+          68,
+          72
+        ],
+        [
+          "min",
+          74,
+          78
+        ],
+        [
+          "max",
+          80,
+          84
+        ],
+        [
+          "min",
+          86,
+          90
+        ],
+        [
+          "max",
+          92,
+          96
+        ],
+        [
+          "min",
+          98,
+          102
+        ],
+        [
+          "max",
+          104,
+          108
+        ],
+        [
+          "sqr",
+          110,
+          112
+        ],
+        [
+          "sqr",
+          114,
+          116
+        ]
+      ],
+      "stateCandidates": [
+        [
+          136,
+          "extern void drv8711Init();"
+        ],
+        [
+          142,
+          "extern long baudrate;"
+        ]
+      ],
+      "guards": [
+        [
+          18,
+          "#ifndef REPETIER_H"
+        ],
+        [
+          29,
+          "#if MOTHERBOARD == DEVICE_TYPE_RF1000"
+        ],
+        [
+          31,
+          "#elif MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2"
+        ],
+        [
+          33,
+          "#else"
+        ],
+        [
+          35,
+          "#endif"
+        ],
+        [
+          37,
+          "#ifndef EXT0_HOTEND_PROFILE"
+        ],
+        [
+          39,
+          "#endif"
+        ],
+        [
+          40,
+          "#ifndef EXT1_HOTEND_PROFILE"
+        ],
+        [
+          42,
+          "#endif"
+        ],
+        [
+          43,
+          "#ifndef EXT0_TEMPSENSOR_TYPE"
+        ],
+        [
+          45,
+          "#endif"
+        ],
+        [
+          46,
+          "#ifndef EXT1_TEMPSENSOR_TYPE"
+        ],
+        [
+          48,
+          "#endif"
+        ],
+        [
+          122,
+          "#if NUM_EXTRUDER > 1"
+        ],
+        [
+          124,
+          "#endif"
+        ],
+        [
+          126,
+          "#ifdef X35_ADC_CHANNEL"
+        ],
+        [
+          128,
+          "#endif"
+        ],
+        [
+          149,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          21,
+          "#include \"Constants.h\""
+        ],
+        [
+          27,
+          "#include \"Configuration.h\""
+        ],
+        [
+          30,
+          "#include \"RF1000.h\""
+        ],
+        [
+          32,
+          "#include \"RF2000.h\""
+        ],
+        [
+          50,
+          "#include \"pins.h\""
+        ],
+        [
+          51,
+          "#include \"HAL.h\""
+        ],
+        [
+          52,
+          "#include \"gcode.h\""
+        ],
+        [
+          53,
+          "#include \"RF.h\""
+        ],
+        [
+          54,
+          "#include \"ui.h\""
+        ],
+        [
+          55,
+          "#include \"Communication.h\""
+        ],
+        [
+          133,
+          "#include \"Extruder.h\""
+        ],
+        [
+          138,
+          "#include \"Printer.h\""
+        ],
+        [
+          139,
+          "#include \"motion.h\""
+        ],
+        [
+          140,
+          "#include \"MoveQueue.h\""
+        ],
+        [
+          146,
+          "#include \"Commands.h\""
+        ],
+        [
+          147,
+          "#include \"Eeprom.h\""
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "Repetier.ino",
+      "sha": "8f39f70d5dc5ba04e9a4e704a9b71ad7b34777e6",
+      "physicalLines": 48,
+      "normalizedLines": 8,
+      "functions": [
+        [
+          "setup",
+          41,
+          44
+        ],
+        [
+          "loop",
+          46,
+          48
+        ]
+      ],
+      "stateCandidates": [],
+      "guards": [],
+      "includes": [
+        [
+          39,
+          "#include \"Repetier.h\""
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "RgbLighting.cpp",
+      "sha": "2fc5f9f3007fb221c8209831581373ac665e25f9",
+      "physicalLines": 377,
+      "normalizedLines": 317,
+      "functions": [
+        [
+          "updateStatus",
+          235,
+          374
+        ],
+        [
+          "advanceFade",
+          126,
+          153
+        ],
+        [
+          "writeLeds",
+          40,
+          66
+        ],
+        [
+          "setRgbComponent",
+          166,
+          188
+        ],
+        [
+          "initialize",
+          104,
+          125
+        ],
+        [
+          "selectMode",
+          91,
+          102
+        ],
+        [
+          "restoreMode",
+          74,
+          82
+        ],
+        [
+          "setTargetColors",
+          32,
+          38
+        ],
+        [
+          "setHeatingLight",
+          191,
+          197
+        ],
+        [
+          "setPrintingLight",
+          199,
+          205
+        ],
+        [
+          "setCoolingLight",
+          207,
+          213
+        ],
+        [
+          "setIdleLight",
+          215,
+          221
+        ],
+        [
+          "setManualLight",
+          223,
+          229
+        ],
+        [
+          "reset",
+          84,
+          89
+        ],
+        [
+          "setRgbLightMode",
+          231,
+          234
+        ],
+        [
+          "mode",
+          70,
+          70
+        ],
+        [
+          "forcedWhite",
+          71,
+          71
+        ],
+        [
+          "requestWhiteToggle",
+          72,
+          72
+        ]
+      ],
+      "stateCandidates": [
+        [
+          26,
+          "volatile unsigned char g_uRGBCurrentR = 0;"
+        ],
+        [
+          27,
+          "volatile unsigned char g_uRGBCurrentG = 0;"
+        ],
+        [
+          28,
+          "volatile unsigned char g_uRGBCurrentB = 0;"
+        ],
+        [
+          29,
+          "volatile unsigned char g_uRGBTargetR = 0;"
+        ],
+        [
+          30,
+          "volatile unsigned char g_uRGBTargetG = 0;"
+        ],
+        [
+          31,
+          "volatile unsigned char g_uRGBTargetB = 0;"
+        ]
+      ],
+      "guards": [
+        [
+          3,
+          "#ifdef RGB_LIGHT_R_PIN"
+        ],
+        [
+          377,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          1,
+          "#include \"Repetier.h\""
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "RgbLighting.h",
+      "sha": "bafb6ac738d79ba4d5f3e87748940b0ada47cdbc",
+      "physicalLines": 27,
+      "normalizedLines": 22,
+      "functions": [],
+      "stateCandidates": [],
+      "guards": [
+        [
+          1,
+          "#ifndef RGB_LIGHTING_H"
+        ],
+        [
+          27,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include <stdint.h>"
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    },
+    {
+      "path": "ScanProbe.cpp",
+      "sha": "d9d830f45f45dd5638f2b0343f6de849310ca97c",
+      "physicalLines": 386,
+      "normalizedLines": 321,
+      "functions": [
+        [
+          "showAbortScanReason",
+          245,
+          331
+        ],
+        [
+          "ScanProbe::release",
+          181,
+          214
+        ],
+        [
+          "moveZ",
+          333,
+          362
+        ],
+        [
+          "ScanProbe::retreat",
+          216,
+          243
+        ],
+        [
+          "ScanProbe::approach",
+          155,
+          179
+        ],
+        [
+          "ScanPressure::idle",
+          71,
+          91
+        ],
+        [
+          "readAveragePressure",
+          366,
+          386
+        ],
+        [
+          "servicePressureMeasurement",
+          34,
+          52
+        ],
+        [
+          "ScanProbe::measurePoint",
+          127,
+          145
+        ],
+        [
+          "ScanPressure::measure",
+          108,
+          125
+        ],
+        [
+          "reportPressureReadFailure",
+          54,
+          61
+        ],
+        [
+          "ScanPressure::service",
+          93,
+          100
+        ],
+        [
+          "ScanProbe::advancePoint",
+          147,
+          153
+        ],
+        [
+          "ScanPressure::reset",
+          102,
+          106
+        ],
+        [
+          "pressureMeasurementSettings",
+          29,
+          32
+        ],
+        [
+          "ScanPressure::average",
+          63,
+          65
+        ],
+        [
+          "ScanPressure::afterStep",
+          67,
+          69
+        ]
+      ],
+      "stateCandidates": [
+        [
+          34,
+          "static ScanAbort servicePressureMeasurement(PressureMeasurement& measurement, millis_t now, bool scanning = false) {"
+        ]
+      ],
+      "guards": [],
+      "includes": [
+        [
+          18,
+          "#include \"Repetier.h\""
+        ],
+        [
+          19,
+          "#include \"ScanProbe.h\""
+        ]
+      ],
+      "waits": [
+        [
+          339,
+          "while (Printer::needsCMPwait()) {"
+        ],
+        [
+          370,
+          "while (measurement.result() == PressureMeasurement::Result::Pending) {"
+        ]
+      ],
+      "commentCandidates": []
+    },
+    {
+      "path": "ScanProbe.h",
+      "sha": "ff3f750614a4b6c4c3e196a43368452e3a59e15e",
+      "physicalLines": 101,
+      "normalizedLines": 75,
+      "functions": [
+        [
+          "setPressureLimits",
+          56,
+          61
+        ],
+        [
+          "reset",
+          65,
+          70
+        ],
+        [
+          "travelLimit",
+          79,
+          82
+        ],
+        [
+          "measuredZ",
+          54,
+          54
+        ],
+        [
+          "forgetPreviousPoint",
+          63,
+          63
+        ]
+      ],
+      "stateCandidates": [
+        [
+          14,
+          "extern ScanSession scanSession;"
+        ],
+        [
+          45,
+          "extern ScanPressure scanPressure;"
+        ],
+        [
+          97,
+          "extern ScanProbe scanProbe;"
+        ]
+      ],
+      "guards": [
+        [
+          1,
+          "#ifndef SCAN_PROBE_H"
+        ],
+        [
+          101,
+          "#endif"
+        ]
+      ],
+      "includes": [
+        [
+          4,
+          "#include \"CalibrationScan.h\""
+        ],
+        [
+          5,
+          "#include \"PressureMeasurement.h\""
+        ],
+        [
+          6,
+          "#include \"ScanSettings.h\""
+        ]
+      ],
+      "waits": [],
+      "commentCandidates": []
+    }
+  ]
+}
