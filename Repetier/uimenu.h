@@ -132,7 +132,6 @@ List of placeholder:
 %do : Debug echo state
 %di : Debug info state
 %de : Debug error state
-%dd : Debug dry run state
 %O0 : OPS mode = 0
 %O1 : OPS mode = 1
 %O2 : OPS mode = 2

@@ -158,7 +158,7 @@ FSTRINGVALUE(Com::tExtruderSpace, "extruder ")
 FSTRINGVALUE(Com::tTempSensorDefect, ": temp sensor defect")
 FSTRINGVALUE(Com::tTempHeaterDefect, ": heater decoupled")
 FSTRINGVALUE(Com::tTempSensorWorking, ": working")
-FSTRINGVALUE(Com::tDryModeUntilRestart, "Printer set into dry run mode until restart!")
+FSTRINGVALUE(Com::tThermalFaultUntilRestart, "Thermal fault: heaters and extrusion inhibited until restart!")
 
 FSTRINGVALUE(Com::tWait, "wait")
 

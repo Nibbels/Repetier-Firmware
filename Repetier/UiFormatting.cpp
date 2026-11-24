@@ -232,8 +232,6 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
                 addStringP(Printer::debugInfo() ? ui_text_on : ui_text_off); // %di : Debug info state
             else if (c2 == 'e')
                 addStringP(Printer::debugErrors() ? ui_text_on : ui_text_off); // %de : Debug error state
-            else if (c2 == 'd')
-                addStringP(Printer::debugDryrun() ? ui_text_on : ui_text_off); // %dd : Debug dry run state
             break;
         }
         case 'D': {

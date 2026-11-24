@@ -164,6 +164,16 @@ void dispatchMachine(GCode* com) {
 } // namespace GCodeCommands
 
 void Commands::executeGCode(GCode* com) {
+    if (GCodeCommands::rejectLegacySimulation(com))
+        return;
+    // A rejected simulation is not a motion mode. Discard all work, including
+    // already buffered commands and internal scripts, except status/debug.
+    if (Printer::legacySimulationRejected()
+        && (com->hasG() || !com->hasM()
+            || (com->M != 105 && com->M != 111 && com->M != 114 && com->M != 115))) {
+        Com::printErrorFLN(PSTR("Job rejected; stop host and restart printer."));
+        return;
+    }
     if (com->hasG()) {
         GCodeCommands::dispatchMotion(com);
     } else if (com->hasM()) // Process M Code

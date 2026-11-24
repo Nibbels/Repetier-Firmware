@@ -55,6 +55,7 @@
 // ##########################################################################################
 
 #define PRINTER_FLAG0_STEPPER_DISABLED 1
+#define PRINTER_FLAG0_LEGACY_SIMULATION_REJECTED 2
 #define PRINTER_FLAG0_TEMPSENSOR_DEFECT 4
 #define PRINTER_FLAG0_MANUAL_MOVE_MODE 16
 #define PRINTER_FLAG0_LARGE_MACHINE 128
@@ -144,9 +145,8 @@ public:
     }
     static void setFlowMultiplier(float factor) { menuExtrusionFactor = factor; }
     static uint8_t debugMask() { return debugLevel; }
-    static void setDebugMask(uint8_t mask) { debugLevel = mask; }
-    static void toggleDebugFlag(uint8_t bit) { debugLevel ^= bit; }
-    static void enableDebugDryrun() { debugLevel |= 8; }
+    static void setDebugMask(uint8_t mask) { debugLevel = mask & ~8u; }
+    static void toggleDebugFlag(uint8_t bit) { debugLevel ^= bit & ~8u; }
     static char zDisplayMode() { return ZMode; }
     static void restoreZDisplayMode(char mode) { ZMode = mode; }
     static void toggleZDisplayMode() { ZMode = ZMode == 1 ? 2 : 1; }
@@ -213,10 +213,6 @@ public:
     static INLINE bool debugErrors() {
         return ((debugLevel & 4) != 0);
     } // debugErrors
-
-    static INLINE bool debugDryrun() {
-        return ((debugLevel & 8) != 0);
-    } // debugDryrun
 
     /** \brief Disable stepper motor for x direction. */
     static INLINE void disableXStepper() {
@@ -566,14 +562,11 @@ public:
         Extruder::disableAllExtruders();
     } // disableAllSteppersNow
 
-    static INLINE void setSomeTempsensorDefect(bool defect) {
-        Printer::flag0 = (defect ? flag0 | PRINTER_FLAG0_TEMPSENSOR_DEFECT : flag0 & ~PRINTER_FLAG0_TEMPSENSOR_DEFECT);
-    } // setSomeTempsensorDefect
-
-    static INLINE bool isAnyTempsensorDefect() {
-
-        return (flag0 & PRINTER_FLAG0_TEMPSENSOR_DEFECT);
-    } // isAnyTempsensorDefect
+    // Both causes are sticky until hardware restart. Neither is a debug flag.
+    static void latchOutputInhibit(bool thermalFault);
+    static bool isAnyTempsensorDefect() { return flag0 & PRINTER_FLAG0_TEMPSENSOR_DEFECT; }
+    static bool legacySimulationRejected() { return flag0 & PRINTER_FLAG0_LEGACY_SIMULATION_REJECTED; }
+    static bool heatingInhibited() { return flag0 & (PRINTER_FLAG0_TEMPSENSOR_DEFECT | PRINTER_FLAG0_LEGACY_SIMULATION_REJECTED); }
 
     static INLINE bool isManualMoveMode() {
         return (flag0 & PRINTER_FLAG0_MANUAL_MOVE_MODE);

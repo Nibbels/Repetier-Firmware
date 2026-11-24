@@ -27,8 +27,6 @@ void setHotendTemperature(GCode* com) {
         return;
     }
     Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
-    if (Printer::debugDryrun())
-        return;
 
     //TODO man müsste das in den Movecache legen!
     const bool heaterOff = com->hasS() && com->S == 0;
@@ -59,9 +57,6 @@ void waitForHotend(GCode* com) {
     Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
     if (Printer::isAnyTempsensorDefect()) {
         reportTempsensorAndHeaterErrors();
-        return;
-    }
-    if (Printer::debugDryrun()) {
         return;
     }
 
@@ -122,11 +117,9 @@ void waitForHotend(GCode* com) {
 }
 
 void waitForTemperatures() {
-    if (Printer::debugDryrun())
-        return;
     {
         bool allReached = false;
-        while (!allReached) {
+        while (!allReached && !Printer::heatingInhibited()) {
             allReached = true;
             Commands::checkForPeriodicalActions(WaitHeater);
 
@@ -146,8 +139,6 @@ void setBedTemperature(GCode* com) {
         return;
     }
     Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
-    if (Printer::debugDryrun())
-        return;
     if (com->hasS())
         Extruder::setHeatedBedTemperature(com->S);
 }
@@ -156,9 +147,6 @@ void waitForBed(GCode* com) {
     Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
     if (Printer::isAnyTempsensorDefect()) {
         reportTempsensorAndHeaterErrors();
-        return;
-    }
-    if (Printer::debugDryrun()) {
         return;
     }
     Printer::idleStatus.cancel();
