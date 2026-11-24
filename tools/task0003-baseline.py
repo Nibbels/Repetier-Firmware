@@ -70,9 +70,10 @@ def build_target(out, cli, name, definitions):
     build = directory / "build"
     map_file = build / "firmware.map"
     flags = "-DMOTHERBOARD=" + definitions[0] + "".join(" -D" + d for d in definitions[1:])
+    map_flags = f'-Xlinker -Map -Xlinker "{map_file.as_posix()}" -Wl,--cref'
     command = [cli, "compile", "--fqbn", FQBN, "--build-path", build,
                "--build-property", "compiler.cpp.extra_flags=" + flags,
-               "--build-property", f'compiler.c.elf.extra_flags=-Wl,-Map,"{map_file}",--cref', ROOT / "Repetier"]
+               "--build-property", "compiler.c.elf.extra_flags=" + map_flags, ROOT / "Repetier"]
     properties = run(directory, "properties", [*command, "--show-properties=expanded"])
     props = dict(line.split("=", 1) for line in properties.splitlines() if "=" in line)
     if "compiler.path" not in props:
@@ -92,7 +93,7 @@ def build_target(out, cli, name, definitions):
     run(directory, "size", [tool("avr-size"), elf])
     run(directory, "symbols", [tool("avr-nm"), "-a", "-S", "-C", elf])
     run(directory, "symbols-by-size", [tool("avr-nm"), "-S", "--size-sort", "--radix=d", "-C", elf])
-    run(directory, "disassembly", [tool("avr-objdump"), "-h", "-d", "-S", "-C", elf])
+    run(directory, "disassembly", [tool("avr-objdump"), "-h", "-d", "-S", "-C", "-z", elf])
     dependencies = sorted(str(path.relative_to(directory)) for path in build.rglob("*.d"))
     (directory / "dependency-files.txt").write_text("\n".join(dependencies) + "\n", encoding="utf-8")
     return sizes
