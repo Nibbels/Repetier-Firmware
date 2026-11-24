@@ -263,13 +263,9 @@ void UIDisplay::mainSwitchCase(int action) {
 
 #if !HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)
     case UI_ACTION_LIGHTS_ONOFF: {
-        if (Printer::enableCaseLight)
-            Printer::enableCaseLight = 0;
-        else
-            Printer::enableCaseLight = 1;
-        WRITE(CASE_LIGHT_PIN, Printer::enableCaseLight);
+        AccessoryOutputs::toggle(AccessoryOutputs::Output::CaseLight);
 
-        HAL::eprSetByte(EPR_RF_CASE_LIGHT_MODE, Printer::enableCaseLight);
+        HAL::eprSetByte(EPR_RF_CASE_LIGHT_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::CaseLight));
         EEPROM::updateChecksum();
 
         break;
@@ -278,14 +274,10 @@ void UIDisplay::mainSwitchCase(int action) {
 
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
     case UI_ACTION_230V_OUTPUT: {
-        if (Printer::enable230VOutput)
-            Printer::enable230VOutput = 0;
-        else
-            Printer::enable230VOutput = 1;
-        WRITE(OUTPUT_230V_PIN, Printer::enable230VOutput);
+        AccessoryOutputs::toggle(AccessoryOutputs::Output::Mains);
 
         // after a power-on, the 230 V plug always shall be turned off - thus, we do not store this setting to the EEPROM
-        // HAL::eprSetByte( EPR_RF_230V_OUTPUT_MODE, Printer::enable230VOutput );
+        // HAL::eprSetByte( EPR_RF_230V_OUTPUT_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::Mains) );
         // EEPROM::updateChecksum();
 
         break;
@@ -293,26 +285,18 @@ void UIDisplay::mainSwitchCase(int action) {
 
 #if FET1 > -1 && !HOTEND_COOLER_USES_PIN(FET1)
     case UI_ACTION_FET1_OUTPUT: {
-        if (Printer::enableFET1)
-            Printer::enableFET1 = 0;
-        else
-            Printer::enableFET1 = 1;
-        WRITE(FET1, Printer::enableFET1);
+        AccessoryOutputs::toggle(AccessoryOutputs::Output::Fet1);
 
-        HAL::eprSetByte(EPR_RF_FET1_MODE, Printer::enableFET1);
+        HAL::eprSetByte(EPR_RF_FET1_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::Fet1));
         EEPROM::updateChecksum();
         break;
     }
 #endif // FET1 accessory output
 #if FET2 > -1 && !HOTEND_COOLER_USES_PIN(FET2)
     case UI_ACTION_FET2_OUTPUT: {
-        if (Printer::enableFET2)
-            Printer::enableFET2 = 0;
-        else
-            Printer::enableFET2 = 1;
-        WRITE(FET2, Printer::enableFET2);
+        AccessoryOutputs::toggle(AccessoryOutputs::Output::Fet2);
 
-        HAL::eprSetByte(EPR_RF_FET2_MODE, Printer::enableFET2);
+        HAL::eprSetByte(EPR_RF_FET2_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::Fet2));
         EEPROM::updateChecksum();
         break;
     }

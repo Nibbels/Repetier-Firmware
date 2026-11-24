@@ -90,17 +90,6 @@ DirectPosition Printer::extruderDirect;
 
 char Printer::enabledStepper[3] = { 0, 0, 0 };
 
-char Printer::enableCaseLight = CASE_LIGHTS_DEFAULT_ON;
-
-
-#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
-char Printer::enable230VOutput;
-
-char Printer::enableFET1 = FET1_DEFAULT_ON;
-char Printer::enableFET2 = FET2_DEFAULT_ON;
-char Printer::enableFET3 = FET3_DEFAULT_ON;
-
-#endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
 unsigned char Printer::wrongType;
 
@@ -585,33 +574,11 @@ void Printer::setup() {
     // Read settings from eeprom if wanted [readDataFromEEPROM or destroy corrupted eeprom]
     EEPROM::init();
 
-#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
-    enable230VOutput = 0;
-    SET_OUTPUT(OUTPUT_230V_PIN);
-    WRITE(OUTPUT_230V_PIN, enable230VOutput);
-
-#if FET1 > -1 && !HOTEND_COOLER_USES_PIN(FET1)
-    SET_OUTPUT(FET1);
-    WRITE(FET1, enableFET1);
-#endif // FET1 accessory output
-#if FET2 > -1 && !HOTEND_COOLER_USES_PIN(FET2)
-    SET_OUTPUT(FET2);
-    WRITE(FET2, enableFET2);
-#endif // FET2 accessory output
-#if FET3 > -1 && CASE_FAN_PIN < 0
-    SET_OUTPUT(FET3);
-    WRITE(FET3, enableFET3);
-#endif // FET3
-
-#if CASE_FAN_PIN > -1
+    AccessoryOutputs::initializeBoardOutputs();
+#if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
     CaseFan::initialize();
-#endif // CASE_FAN_PIN > -1
-#endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
-
-#if !HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)
-    SET_OUTPUT(CASE_LIGHT_PIN);
-    WRITE(CASE_LIGHT_PIN, enableCaseLight);
 #endif
+    AccessoryOutputs::initializeCaseLight();
 
     updateDerivedParameter();
     Commands::checkFreeMemory();

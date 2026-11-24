@@ -181,12 +181,12 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
 
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
     //hier nur config laden nicht mosfets schalten!
-    Printer::enable230VOutput = 0;
+    AccessoryOutputs::stage(AccessoryOutputs::Output::Mains, 0);
 
     //hier nur config laden nicht mosfets schalten!
-    Printer::enableFET1 = FET1_DEFAULT_ON;
-    Printer::enableFET2 = FET2_DEFAULT_ON;
-    Printer::enableFET3 = FET3_DEFAULT_ON;
+    AccessoryOutputs::stage(AccessoryOutputs::Output::Fet1, FET1_DEFAULT_ON);
+    AccessoryOutputs::stage(AccessoryOutputs::Output::Fet2, FET2_DEFAULT_ON);
+    AccessoryOutputs::stage(AccessoryOutputs::Output::Fet3, FET3_DEFAULT_ON);
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
     restoreZOffsetScanPoint({defaultZOffsetScanIndex, defaultZOffsetScanIndex});
@@ -303,19 +303,19 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
         HAL::eprSetFloat(EPR_PRINTING_DISTANCE, 0);
     }
 
-    HAL::eprSetByte(EPR_RF_CASE_LIGHT_MODE, Printer::enableCaseLight);
+    HAL::eprSetByte(EPR_RF_CASE_LIGHT_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::CaseLight));
 
 #ifdef RGB_LIGHT_R_PIN
     HAL::eprSetByte(EPR_RF_RGB_LIGHT_MODE, RgbLighting::mode());
 #endif // RGB_LIGHT_R_PIN
 
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
-    HAL::eprSetByte(EPR_RF_FET1_MODE, Printer::enableFET1);
-    HAL::eprSetByte(EPR_RF_FET2_MODE, Printer::enableFET2);
-    HAL::eprSetByte(EPR_RF_FET3_MODE, Printer::enableFET3);
+    HAL::eprSetByte(EPR_RF_FET1_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::Fet1));
+    HAL::eprSetByte(EPR_RF_FET2_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::Fet2));
+    HAL::eprSetByte(EPR_RF_FET3_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::Fet3));
 
     // after a power-on, the 230 V plug always shall be turned off - thus, we do not store this setting to the EEPROM
-    // HAL::eprSetByte( EPR_RF_230V_OUTPUT_MODE, Printer::enable230VOutput );
+    // HAL::eprSetByte( EPR_RF_230V_OUTPUT_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::Mains) );
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
     HAL::eprSetInt16(EPR_RF_MOD_Z_STEP_SIZE, Printer::manualMotion.steps(Z_AXIS));
@@ -574,22 +574,22 @@ void EEPROM::readDataFromEEPROM() {
             e->coolerSpeed = HAL::eprGetByte(o + EPR_EXTRUDER_COOLER_SPEED);
     }
 
-    Printer::enableCaseLight = HAL::eprGetByte(EPR_RF_CASE_LIGHT_MODE);
+    AccessoryOutputs::stage(AccessoryOutputs::Output::CaseLight, HAL::eprGetByte(EPR_RF_CASE_LIGHT_MODE));
 
 #ifdef RGB_LIGHT_R_PIN
     RgbLighting::restoreMode(HAL::eprGetByte(EPR_RF_RGB_LIGHT_MODE));
 #endif // RGB_LIGHT_R_PIN
 
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
-    Printer::enableFET1 = HAL::eprGetByte(EPR_RF_FET1_MODE);
-    Printer::enableFET2 = HAL::eprGetByte(EPR_RF_FET2_MODE);
+    AccessoryOutputs::stage(AccessoryOutputs::Output::Fet1, HAL::eprGetByte(EPR_RF_FET1_MODE));
+    AccessoryOutputs::stage(AccessoryOutputs::Output::Fet2, HAL::eprGetByte(EPR_RF_FET2_MODE));
 #if CASE_FAN_PIN < 0
     // Do not load the FET3 EEPROM state if it is being used as case fan
-    Printer::enableFET3 = HAL::eprGetByte(EPR_RF_FET3_MODE);
+    AccessoryOutputs::stage(AccessoryOutputs::Output::Fet3, HAL::eprGetByte(EPR_RF_FET3_MODE));
 #endif // CASE_FAN_PIN < 0
 
     // after a power-on, the 230 V plug always shall be turned off - thus, we do not store this setting to the EEPROM
-    // Printer::enable230VOutput = HAL::eprGetByte( EPR_RF_230V_OUTPUT_MODE );
+    // AccessoryOutputs::stage(AccessoryOutputs::Output::Mains, HAL::eprGetByte( EPR_RF_230V_OUTPUT_MODE ));
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
     //reinit for check if eeprom values are too high.

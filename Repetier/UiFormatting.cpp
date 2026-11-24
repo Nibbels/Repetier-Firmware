@@ -377,7 +377,7 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
                 addInt(lastAction, 4);
 
             else if (c2 == 'o')
-                addStringP(Printer::enableCaseLight ? ui_text_on : ui_text_off); // %lo : Lights on/off
+                addStringP(AccessoryOutputs::state(AccessoryOutputs::Output::CaseLight) ? ui_text_on : ui_text_off); // %lo : Lights on/off
 
 #ifdef RGB_LIGHT_R_PIN
             else if (c2 == 'i') // %li : Light: White/Color
@@ -552,17 +552,17 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
 
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
             if (c2 == 'u') {
-                addStringP(Printer::enable230VOutput ? ui_text_on : ui_text_off); // %ou : 230V output on/off
+                addStringP(AccessoryOutputs::state(AccessoryOutputs::Output::Mains) ? ui_text_on : ui_text_off); // %ou : 230V output on/off
                 break;
             }
 
             if (c2 == 'l') {
-                addStringP(Printer::enableFET1 ? ui_text_on : ui_text_off); // %ol : FET 1 X42 output on/off
+                addStringP(AccessoryOutputs::state(AccessoryOutputs::Output::Fet1) ? ui_text_on : ui_text_off); // %ol : FET 1 X42 output on/off
                 break;
             }
 
             if (c2 == 'n') {
-                addStringP(Printer::enableFET2 ? ui_text_on : ui_text_off); // %on : FET 2 X44 output on/off
+                addStringP(AccessoryOutputs::state(AccessoryOutputs::Output::Fet2) ? ui_text_on : ui_text_off); // %on : FET 2 X44 output on/off
                 break;
             }
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2

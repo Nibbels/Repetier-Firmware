@@ -159,17 +159,6 @@ public:
 
     static char enabledStepper[3];
 
-    static char enableCaseLight;
-
-
-#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
-    static char enable230VOutput;
-
-    static char enableFET1;
-    static char enableFET2;
-    static char enableFET3;
-
-#endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
     static unsigned char wrongType;
 

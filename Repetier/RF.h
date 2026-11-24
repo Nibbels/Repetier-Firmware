@@ -425,6 +425,18 @@ void updateDigitCompensation(int16_t digits);
 void handleStrainGaugeFeatures(millis_t now);
 extern void outputObject(bool showerrors = true);
 
+namespace AccessoryOutputs {
+enum class Output : uint8_t { CaseLight, Mains, Fet1, Fet2, Fet3 };
+// Keep EEPROM staging distinct from GPIO application; raw char values preserve the ABI.
+char state(Output output);
+void stage(Output output, char value);
+void apply(Output output);
+void set(Output output, char value);
+void toggle(Output output);
+void initializeBoardOutputs();
+void initializeCaseLight();
+} // namespace AccessoryOutputs
+
 extern void setExtruderCurrent(uint8_t nr, uint8_t current);
 extern void queueTask(char task);
 extern void moveXAction(int8_t increment);

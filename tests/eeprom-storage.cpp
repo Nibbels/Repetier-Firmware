@@ -90,7 +90,7 @@ namespace Printer {
     struct Gauge {bool v=true;bool zeroingEnabled(){return v;}void setZeroingEnabled(bool x){v=x;}} strainGauge;
     struct Digit {struct Flow{int16_t minDigits,maxDigits;};Flow p{};bool v=true;Flow flowProfile(){return p;}void setFlowProfile(Flow x){p=x;}bool digitZEnabled(){return v;}void setDigitZEnabled(bool x){v=x;}} digitCompensation;
     struct Pause {void restoreDefaultParking(){}} pause; struct Layers{void resetFadeBounds(float){}} layers;
-    uint8_t ZMode=0,enableCaseLight=0,enable230VOutput=0,enableFET1=0,enableFET2=0,enableFET3=0;
+    uint8_t ZMode=0;
     float xy=0,z=0;
     #define AXIS_STORAGE(getter,setter) float getter##Values[4]{}; float getter(int i){return getter##Values[i];} void setter(int i,float v){getter##Values[i]=v;}
     AXIS_STORAGE(stepsPerMm,setStepsPerMm) AXIS_STORAGE(axisMaxFeedrate,setAxisMaxFeedrate) AXIS_STORAGE(axisHomingFeedrate,setAxisHomingFeedrate) AXIS_STORAGE(printAcceleration,setPrintAcceleration) AXIS_STORAGE(travelAcceleration,setTravelAcceleration) AXIS_STORAGE(axisLengthMm,setAxisLengthMm)
@@ -101,6 +101,12 @@ namespace StepExecutor {
     uint16_t interval=0;
     uint16_t packingInterval(){return interval;}
     void setPackingInterval(uint16_t v){interval=v;}
+}
+namespace AccessoryOutputs {
+    enum class Output : uint8_t { CaseLight, Mains, Fet1, Fet2, Fet3 };
+    char states[5]{};
+    char state(Output o){return states[static_cast<uint8_t>(o)];}
+    void stage(Output o,char v){states[static_cast<uint8_t>(o)]=v;}
 }
 #include "storage-source.inc"
 static void checksum(){unsigned c=0;for(size_t i=0;i<image.size();++i)if(i!=EPR_INTEGRITY_BYTE)c+=image[i];assert(uint8_t(c)==image[EPR_INTEGRITY_BYTE]);}
