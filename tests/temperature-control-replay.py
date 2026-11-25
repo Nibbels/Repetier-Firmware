@@ -509,13 +509,12 @@ int main(int argc, char** argv) {
             t->setTargetTemperature(0);
             assert(HAL::outputDuty(t->pwmIndex) == 0);
         }
-        // Request zero is not a synchronous pin clear; frame must advance.
-        for (int i = 0; i < 127; ++i) {
-            pwmSlice();
-            for (auto* t : tempController) assert(pins[t->pwmIndex] == HIGH);
-        }
-        pwmSlice();
+        // Revocation is synchronous, even with the previous full-duty frame latched.
         for (auto* t : tempController) assert(pins[t->pwmIndex] == LOW);
+        for (int i = 0; i < 128; ++i) {
+            pwmSlice();
+            for (auto* t : tempController) assert(pins[t->pwmIndex] == LOW);
+        }
     } else if (!std::strcmp(name, "watchdog")) {
         watchdogActive = true;
         now = 100;
