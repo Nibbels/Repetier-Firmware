@@ -121,6 +121,8 @@
     <ClInclude Include="BoardConfiguration.h" />
     <ClInclude Include="Configuration.h" />
     <ClInclude Include="Constants.h" />
+    <ClInclude Include="DisplayModes.h" />
+    <ClInclude Include="QueueTask.h" />
     <ClInclude Include="Eeprom.h" />
     <ClInclude Include="Extruder.h" />
     <ClInclude Include="fastio.h" />

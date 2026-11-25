@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// Sensor lookup tables, ADC sample conversion and calibration; no heater control policy.
+
 #include "Repetier.h"
 
 #define NUMTEMPS_1 28
@@ -51,7 +53,7 @@ const short temptable_8[NUMTEMPS_8][2] PROGMEM = {
 // 100k Honeywell 135-104LAG-J01
 #define NUMTEMPS_9 58 // 58 explicit points; no zero-filled tail after the 0 C endpoint
 const short temptable_9[NUMTEMPS_9][2] PROGMEM = {
-    { 1 * 4, 941 * 8 }, { 19 * 4, 362 * 8 }, { 37 * 4, 299 * 8 }, //top rating 300C
+    { 1 * 4, 941 * 8 }, { 19 * 4, 362 * 8 }, { 37 * 4, 299 * 8 }, // Top rating 300C
     { 55 * 4, 266 * 8 },
     { 73 * 4, 245 * 8 },
     { 91 * 4, 229 * 8 },
@@ -284,7 +286,7 @@ bool TemperatureController::updateCurrentTemperature() {
         int16_t oldtemp = pgm_read_word(&temptable[1]);
         int16_t newtemp = 0;
 
-        //NTC: Suche Temperatur andersrum, weil Steigung der Umrechnungskurve invertiert ist.
+        // NTC: Suche Temperatur andersrum, weil Steigung der Umrechnungskurve invertiert ist.
         if (isNtc)
             currentTemperature = (1023 << (2 - ANALOG_REDUCE_BITS)) - currentTemperature;
 

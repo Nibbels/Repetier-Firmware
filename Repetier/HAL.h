@@ -19,9 +19,9 @@
 #define HAL_H
 
 /**
-  This is the main Hardware Abstraction Layer (HAL).
-  To make the firmware work with different processors and toolchains,
-  all hardware related code should be packed into the hal files.
+  ATmega2560 hardware access, timers, ADC publication and PWM requests.
+  BoardConfiguration.h selects RF model and pins; UsbSerial and TwiTransfer
+  own the respective peripheral transports. Other MCUs are not supported.
 */
 
 #include "BoardConfiguration.h"
@@ -33,6 +33,9 @@
 #define INLINE __attribute__((always_inline))
 
 #define PACK
+
+// Give an enabled stepper driver time to settle before the first step.
+constexpr unsigned int stepperEnableDelayMs = 25;
 
 #define FSTRINGVALUE(var, value) const char var[] PROGMEM = value;
 #define FSTRINGVAR(var) static const char var[] PROGMEM;

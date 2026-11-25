@@ -15,11 +15,14 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// RF-specific integration declarations, panel action IDs and accessory interfaces; not the owner of all RF services.
+
 #ifndef RF_H
 #define RF_H
 
 #include "HAL.h"
 #include "gcode.h"
+#include "QueueTask.h"
 
 #include "CalibrationScan.h"
 #include "RgbLighting.h"
@@ -28,7 +31,7 @@
 // ##   RF specific UI Actions
 // ##########################################################################################
 
-// Diese Events sind alle in ProcessButton() in den case`s verlinkt. Der rest nicht, siehe ui.h und executeAction()
+// Action IDs are consumed by the panel dispatcher (UiActions.cpp) and menu definitions; see ui.h.
 
 #define UI_ACTION_RF_MIN_REPEATABLE 500
 
@@ -403,7 +406,7 @@ extern void startZOScan(bool automatrixleveling = false);
 ZOffsetScanPoint zOffsetScanPoint();
 void restoreZOffsetScanPoint(ZOffsetScanPoint point);
 
-//Menüumschalter für Z-Step-Höhe
+// Menüumschalter für Z-Step-Höhe
 extern void configureMANUAL_STEPS_Z(int8_t increment);
 
 extern long getZMatrixDepth_CurrentXY(void);
@@ -441,7 +444,7 @@ void initializeCaseLight();
 } // namespace AccessoryOutputs
 
 extern void setExtruderCurrent(uint8_t nr, uint8_t current);
-extern void queueTask(char task);
+extern void queueTask(QueueTask task);
 extern void moveXAction(int8_t increment);
 extern void moveYAction(int8_t increment);
 extern void moveZAction(int8_t increment);
@@ -482,5 +485,6 @@ extern void showWarning(const void* line2, const void* line3 = NULL, const void*
 extern void showInformation(const void* line2, const void* line3 = NULL, const void* line4 = NULL);
 extern void showMyPage(const void* line1, const void* line2 = NULL, const void* line3 = NULL, const void* line4 = NULL);
 
-void doEmergencyStop(char reason);
+enum class StopReason : char { ZMin = 1, ZBlock = 2 };
+void doEmergencyStop(StopReason reason);
 #endif // RF_H

@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// System, diagnostics and configuration G-code handlers, including legacy simulation refusal.
+
 #include "Repetier.h"
 #include "GCodeCommands.h"
 
@@ -295,7 +297,7 @@ void runRfDiagnostic(GCode* pCommand) {
             // simulate blocking of all axes
             Com::printFLN(PSTR("M3200: block all"));
 
-            doEmergencyStop(STOP_BECAUSE_OF_Z_BLOCK);
+            doEmergencyStop(StopReason::ZBlock);
             break;
         }
         case 5: {
@@ -352,7 +354,7 @@ void setPanelStatusOverride(GCode* pCommand) {
         if (uid.isLocked()) {
             // allow to overwrite the current string again
             // Put the unlock into queue to avoid racetime conditions with prior commands
-            queueTask(TASK_UNLOCK_DISPLAY_MSG);
+            queueTask(QueueTask::UnlockDisplay);
             Com::printFLN(PSTR("M3117: queued unlock"));
         }
     }

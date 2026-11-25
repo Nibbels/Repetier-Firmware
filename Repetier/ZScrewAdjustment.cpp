@@ -88,7 +88,7 @@ void calculate() {
     Com::printF(PSTR(" [um] = "), SollkorrekturWarm * 0.001f, 3);
     Com::printFLN(PSTR(" [mm]"));
 
-    //meldung:
+    // Meldung:
     advice.millimetres = SollkorrekturWarm * 0.001f;
 
     float ZSchraubenDrehungenWarm = SollkorrekturWarm * 0.002f; //[Sollkorrektur in mm] geteilt durch [Gewinde: 0.5 mm/Umdrehung] -> Sollkorrektur / 1000 / 0.5
@@ -96,7 +96,7 @@ void calculate() {
     Com::printF(PSTR(" [U] = "), ZSchraubenDrehungenWarm * 360, 0);
     Com::printF(PSTR(" [Grad]"));
 
-    //meldung:
+    // Meldung:
     advice.turns = ZSchraubenDrehungenWarm;
 
     if (ZSchraubenDrehungenWarm > 0)
@@ -109,12 +109,12 @@ void calculate() {
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2        // TODO: Prüfen ob das beim RF2000v2 stimmen wird.
     if (-0.5f <= ZSchraubenDrehungenWarm && SollkorrekturWarm < 40.0f /* [um] */) { // < 0.25mm = 0.5Umdrehungen ist mit dem RF2000 nicht machbar.
         Com::printFLN(PSTR(" (Die Z-Schraube ist ok!)"));                           // Das ist die Änderung in M3-Regelgewinde-Z-Schrauben-Umdrehungen
-        //meldung:
+        // Meldung:
         advice.status = Status::Ok;                                                                        //neg
     } else if (SollkorrekturWarm >= 40.0f /* [um] */) {                                            // Dann bin ich rechnerisch um Z = 0 (50um mit 10um toleranz, die ich fordere.)
                                                                                                    // Eine korrektur von mehr als +40um heißt, ich bin gerade vermutlich im Z>0
         Com::printFLN(PSTR(" (Die Z-Schraube weiter raus! Das Bett scheint zu hoch zu liegen.)")); // Das ist die Änderung in M3-Regelgewinde-Z-Schrauben-Umdrehungen
-        //meldung:
+        // Meldung:
         advice.status = Status::BedTooHigh; //pos
     }
     Com::printFLN(PSTR(" (RF2000: Minimal eine halbe Schraubendrehung (dZ=0.25mm-Schritte) einstellbar.)")); // Das ist die Änderung in M3-Regelgewinde-Z-Schrauben-Umdrehungen
@@ -122,7 +122,7 @@ void calculate() {
     if (SollkorrekturWarm >= 40.0f /* [um] */) { // Dann bin ich rechnerisch um Z = 0 (50um mit 10um toleranz, die ich fordere.)
         // Eine korrektur von mehr als +40um heißt, ich bin gerade vermutlich im Z>0
         Com::printFLN(PSTR(" (Die Z-Schraube weiter raus! Das Bett scheint zu hoch zu liegen.)")); // Das ist die Änderung in M3-Regelgewinde-Z-Schrauben-Umdrehungen
-        //meldung:
+        // Meldung:
         advice.status = Status::BedTooHigh; //pos
     }
 #endif

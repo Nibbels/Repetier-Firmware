@@ -15,10 +15,13 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// Panel interface and action identifiers; implemented across ui.cpp and the Ui* modules.
+
 #ifndef UI_H
 #define UI_H
 
 #include "HAL.h"
+#include "DisplayModes.h"
 
 #include "gcode.h"
 
@@ -31,7 +34,7 @@
 // Add UI_ACTION_TOPMENU to show a menu as top menu
 // ----------------------------------------------------------------------------
 
-// Vorsicht: Hier beim Topmenü wird extra das Bit abgefragt: Kein anderer Befehl sollte 2^13 drin haben, sonst siehe ui.cpp :: case UI_ACTION_TOPMENU -> Rückfall ins Hauptmenü.
+// Vorsicht: Hier beim Topmenü wird extra das Bit abgefragt: Kein anderer Befehl sollte 2^13 drin haben, sonst siehe Panel-Aktionsdispatch :: UI_ACTION_TOPMENU -> Rückfall ins Hauptmenü.
 #define UI_ACTION_TOPMENU 8192
 
 #define UI_ACTION_NEXT 1

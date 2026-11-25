@@ -117,5 +117,5 @@ void handleStrainGaugeFeatures(millis_t uTime) {
         }
     }
     if (stopZ)
-        doEmergencyStop(STOP_BECAUSE_OF_Z_BLOCK);
+        doEmergencyStop(StopReason::ZBlock);
 }

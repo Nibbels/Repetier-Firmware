@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// Machine integration facade and service instances; individual motion, job and compensation owners define their own state.
+
 #ifndef PRINTER_H
 #define PRINTER_H
 
@@ -415,7 +417,7 @@ public:
         if (heatBedScanRunning())
             problematisch = false; // Das homing passiert in Z einzeln, liegt aber neben dem Bett.
         if (problematisch)
-            return 0; //während Z-Scan gibts einen homeZ, der ist aber nicht relevant, den case gibts nicht!
+            return 0; // Während Z-Scan gibts einen homeZ, der ist aber nicht relevant, den case gibts nicht!
         else
             return 1;
     } // isZHomeSafe
@@ -671,7 +673,7 @@ public:
     static void queueFloatCoordinates(float x, float y, float z, float e, float feedrate);
     static bool queueRelativeStepsCoordinates(long x, long y, long z, long e, float feedrate, bool waitEnd, bool abortAtEndstops = false);
     static bool queueRelativeMMCoordinates(float x, float y, float z, float e, float feedrate, bool waitEnd, bool abortAtEndstops = false);
-    static void offsetRelativeStepsCoordinates(int32_t dx, int32_t dy, int32_t dz, int32_t de, uint8_t configuration = 0);
+    static void offsetRelativeStepsCoordinates(int32_t dx, int32_t dy, int32_t dz, int32_t de, DirectMoveMode configuration = DirectMoveMode::Configured);
     static void homeDigits();
     static void homeAxis(bool xaxis, bool yaxis, bool zaxis); /// Home axis
     static void setOrigin(float xOff, float yOff, float zOff);

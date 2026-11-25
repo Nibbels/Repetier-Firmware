@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// Machine setup, axis calibration and foreground motion admission; see MotionPlanner and StepExecutor for planning and execution.
+
 #include "Repetier.h"
 #include "GCodeInput.h"
 #include "TwiTransfer.h"
@@ -329,18 +331,18 @@ bool Printer::queueRelativeMMCoordinates(float dx, float dy, float dz, float de,
  * This function transfers the axis without affecting the axis values.
  * This is expecially usefull to transfer the extruder 0 to 1 and backwards.
  */
-void Printer::offsetRelativeStepsCoordinates(int32_t dx, int32_t dy, int32_t dz, int32_t de, uint8_t configuration) {
+void Printer::offsetRelativeStepsCoordinates(int32_t dx, int32_t dy, int32_t dz, int32_t de, DirectMoveMode configuration) {
     if (dx == 0 && dy == 0 && dz == 0 && de == 0)
         return;
-    if (configuration && !pause.allowsManualMove())
+    if (configuration != DirectMoveMode::Configured && !pause.allowsManualMove())
         return;
 
     while (PrintLine::directMoveActive()) {
         Commands::checkForPeriodicalActions(Processing);
     }
 
-    const bool stoppable = configuration == TASK_MOVE_FROM_BUTTON;
-    const bool feedrateSource = (stoppable || configuration == TASK_MOVE_POSITION_MANUAL)
+    const bool stoppable = configuration == DirectMoveMode::Button;
+    const bool feedrateSource = (stoppable || configuration == DirectMoveMode::ManualPosition)
         ? manualMotion.feedrateSource() : FEEDRATE_DIRECTCONFIG;
     const int32_t steps[4] = {dx, dy, dz, de};
     {

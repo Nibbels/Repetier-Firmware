@@ -153,31 +153,31 @@ long StepExecutor::performQueueMove() {
 
         move = queue.activateFront();
 
-        switch (move->task) {
-        case TASK_NO_TASK: {
+        switch (move->queueTaskId()) {
+        case QueueTask::None: {
             break;
         }
 
-        case TASK_PAUSE_PRINT: {
+        case QueueTask::Pause: {
             queue.retireFront();
             Printer::pause.request(PrintPause::Destination::InPlace);
             return 1000;
         }
 
-        case TASK_PAUSE_PRINT_AND_MOVE: {
+        case QueueTask::PauseAndPark: {
             queue.retireFront();
             Printer::pause.request(PrintPause::Destination::Park);
             return 1000;
         }
 
-        case TASK_ENABLE_Z_COMPENSATION: // M3001
+        case QueueTask::EnableZCompensation: // M3001
         {
             Printer::enableCMPnow();
             queue.retireFront();
             return 1000;
         }
 
-        case TASK_DISABLE_Z_COMPENSATION: // M3000
+        case QueueTask::DisableZCompensation: // M3000
         {
             // disable the z compensation
             Printer::disableCMPnow(); // Hier nicht unbedingt warten, das soll im fluss der queue einfach abgeschaltet werden. zu große abstände regelt die needCmpWait
@@ -185,14 +185,14 @@ long StepExecutor::performQueueMove() {
             return 1000;
         }
 
-        case TASK_ENABLE_SENSE_OFFSET: // M3909
+        case QueueTask::EnableSenseOffset: // M3909
         {
             Printer::enableSenseOffsetnow();
             queue.retireFront();
             return 1000;
         }
 
-        case TASK_UNLOCK_DISPLAY_MSG: // M3117 unlock
+        case QueueTask::UnlockDisplay: // M3117 unlock
         {
             // allow to overwrite the current string again
             uid.unlock();

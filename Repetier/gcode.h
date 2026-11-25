@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// Decoded command data and firmware busy-state values; see GCodeInput for receiver ownership.
+
 #ifndef GCODE_H
 #define GCODE_H
 

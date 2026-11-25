@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// Motion and extrusion G-code handlers; planning and pulse execution are delegated to motion owners.
+
 #include "Repetier.h"
 #include "GCodeCommands.h"
 #include "MotionPlanner.h"
@@ -499,7 +501,7 @@ void setEmergencyStopDigits(GCode* pCommand) {
 void setSenseOffsetParameters(GCode* pCommand) {
     auto& controller = Printer::senseOffsetControl;
     bool error = false;
-    //Statusänderung P10000 ([digits])
+    // Statusänderung P10000 ([digits])
     if (pCommand->hasP()) {
         if (pCommand->P > 32767)
             pCommand->P = 32767;
@@ -554,7 +556,7 @@ void setSenseOffsetParameters(GCode* pCommand) {
     }
 
     if (!error)
-        queueTask(TASK_ENABLE_SENSE_OFFSET);
+        queueTask(QueueTask::EnableSenseOffset);
 }
 
 void setDigitFlowParameters(GCode* pCommand) {
@@ -569,7 +571,7 @@ void setDigitFlowParameters(GCode* pCommand) {
         if (min < 500)
             min = 500; // Weniger ist in jedem fall sinnfrei, selbst mit ninjaflex und digit homing
         if (max < min)
-            max = min; //geht: flowsprung.
+            max = min; // Geht: flowsprung.
         profile.minDigits = min;
         profile.maxDigits = max;
     }

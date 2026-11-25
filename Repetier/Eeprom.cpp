@@ -120,7 +120,7 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     Printer::setAxisMaxFeedrate(Y_AXIS, MAX_FEEDRATE_Y);
     Printer::setAxisMaxFeedrate(Z_AXIS, MAX_FEEDRATE_Z);
 
-    //microsteps should be updated but we need to update the driver then.
+    // Microsteps should be updated but we need to update the driver then.
     bool ms_changed = false;
     for (int ax = 0; ax <= E_AXIS + 1; ax++) {
         if (Drv8711::microstepMode(ax) != drv8711MicroSteps_2_ModeValue(drv8711Axis_2_InitMicrosteps(ax))) {
@@ -387,7 +387,7 @@ void EEPROM::storeExtruderDataIntoEEPROM(uint8_t extruderId) {
 }
 
 void EEPROM::updateChecksum() {
-    //ändert sich die checksumme nicht, wird nicht geschrieben. doppelprüfung ist überflüssig.
+    // Ändert sich die checksumme nicht, wird nicht geschrieben. doppelprüfung ist überflüssig.
     HAL::eprSetByte(EPR_INTEGRITY_BYTE, computeChecksum());
 } // updateChecksum
 
@@ -808,7 +808,7 @@ void EEPROM::init() {
         Com::printFLN(PSTR(UI_TEXT_EXTRUDER1_ADD));
         showInformation(PSTR(UI_TEXT_CONFIGURATION), PSTR(UI_TEXT_EXTRUDER1_ADD), PSTR(UI_TEXT_UPDATE_MATRIX));
 
-        //continue loading data.
+        // Continue loading data.
     }
 
     if (update_eeprom_num_extruders_changed_1) {
@@ -823,7 +823,7 @@ void EEPROM::init() {
         Com::printFLN(PSTR(UI_TEXT_EXTRUDER1_REMOVED));
         showInformation(PSTR(UI_TEXT_CONFIGURATION), PSTR(UI_TEXT_EXTRUDER1_REMOVED), PSTR(UI_TEXT_UPDATE_MATRIX));
 
-        //continue loading data.
+        // Continue loading data.
     }
 
     EEPROM::readDataFromEEPROM();
@@ -986,7 +986,7 @@ uint8_t EEPROM::computeChecksum() {
     return checksum;
 } // computeChecksum
 
-void EEPROM::writeExtruderPrefix(uint pos) {
+void EEPROM::writeExtruderPrefix(uint16_t pos) {
     if (pos < EEPROM_EXTRUDER_OFFSET || pos >= 800)
         return;
     int n = (pos - EEPROM_EXTRUDER_OFFSET) / EEPROM_EXTRUDER_LENGTH + 1;
@@ -995,12 +995,12 @@ void EEPROM::writeExtruderPrefix(uint pos) {
 
 } // writeExtruderPrefix
 
-void EEPROM::beginReport(uint pos, PGM_P type) {
+void EEPROM::beginReport(uint16_t pos, PGM_P type) {
     Com::printF(type, (int)pos);
     Com::print(' ');
 }
 
-void EEPROM::finishReport(uint pos, PGM_P text) {
+void EEPROM::finishReport(uint16_t pos, PGM_P text) {
     Com::print(' ');
     writeExtruderPrefix(pos);
     Com::printFLN(text);
@@ -1008,25 +1008,25 @@ void EEPROM::finishReport(uint pos, PGM_P text) {
     HAL::delayMilliseconds(4);
 }
 
-void EEPROM::writeFloat(uint pos, PGM_P text, uint8_t digits) {
+void EEPROM::writeFloat(uint16_t pos, PGM_P text, uint8_t digits) {
     beginReport(pos, Com::tEPR3);
     Com::printFloat(HAL::eprGetFloat(pos), digits);
     finishReport(pos, text);
 } // writeFloat
 
-void EEPROM::writeLong(uint pos, PGM_P text) {
+void EEPROM::writeLong(uint16_t pos, PGM_P text) {
     beginReport(pos, Com::tEPR2);
     Com::print(HAL::eprGetInt32(pos));
     finishReport(pos, text);
 } // writeLong
 
-void EEPROM::writeInt(uint pos, PGM_P text) {
+void EEPROM::writeInt(uint16_t pos, PGM_P text) {
     beginReport(pos, Com::tEPR1);
     Com::print(HAL::eprGetInt16(pos));
     finishReport(pos, text);
 } // writeInt
 
-void EEPROM::writeByte(uint pos, PGM_P text) {
+void EEPROM::writeByte(uint16_t pos, PGM_P text) {
     beginReport(pos, Com::tEPR0);
     Com::print((int)HAL::eprGetByte(pos));
     finishReport(pos, text);

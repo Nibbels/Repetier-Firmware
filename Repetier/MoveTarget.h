@@ -3,6 +3,9 @@
 
 #include <stdint.h>
 
+// queueFloatCoordinates leaves an axis or feedrate unchanged at this sentinel.
+constexpr float IGNORE_COORDINATE = 99999.0f;
+
 // Retained machine coordinates in millimetres and the G-code work offset.
 class MoveTarget {
 public:

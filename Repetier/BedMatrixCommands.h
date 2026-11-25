@@ -9,7 +9,7 @@ void disableBedCompensation() {
     if (Printer::debugInfo()) {
         Com::printFLN(PSTR("M3000: disabling z compensation"));
     }
-    queueTask(TASK_DISABLE_Z_COMPENSATION);
+    queueTask(QueueTask::DisableZCompensation);
 }
 
 void enableBedCompensation() {
@@ -40,12 +40,12 @@ void enableBedCompensation() {
         return;
     }
 
-    queueTask(TASK_ENABLE_Z_COMPENSATION);
+    queueTask(QueueTask::EnableZCompensation);
 
     // Wenn der nutzer im menü "autostart" gewählt hat, dann senseoffset sofort mit M3001 mitstarten.
     // Die Einstellwerte kommen dann aus dem EEPROM
     if (Printer::senseOffsetControl.autoStart())
-        queueTask(TASK_ENABLE_SENSE_OFFSET);
+        queueTask(QueueTask::EnableSenseOffset);
 }
 
 void selectBedMatrix(GCode* pCommand) {
@@ -232,10 +232,10 @@ void adjustBedMatrix(GCode* pCommand) {
             Com::printSharpLine();
 
             // determine the minimal distance between extruder and heat bed
-            determineCompensationOffsetZ(); //-> schreibt kleinsten abstand in g_offsetZCompensationSteps, sollte schon drin sein, aber man weiß nie.
+            determineCompensationOffsetZ(); // -> schreibt kleinsten abstand in g_offsetZCompensationSteps, sollte schon drin sein, aber man weiß nie.
             Com::printFLN(PSTR("M3902: Alt::Min. Bett-Hotend Abstand [Steps] = "), -1 * (int)g_offsetZCompensationSteps);
 
-            long hochrunterSteps = long(hochrunter * Printer::stepsPerMm(Z_AXIS)); //axissteps ist auch float
+            long hochrunterSteps = long(hochrunter * Printer::stepsPerMm(Z_AXIS)); // axissteps ist auch float
 
             Com::printFLN(PSTR("M3902: Veraenderung Z [mm] = "), hochrunter);
             Com::printFLN(PSTR("M3902: Veraenderung Z [Steps] = "), hochrunterSteps);

@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// LCD transport, startup screen, key sampling and menu navigation; see UiFormatting, UiSettings and UiActions.
+
 #include "Repetier.h"
 #include "UiMenus.h"
 #include "uimenu.h"
@@ -430,13 +432,13 @@ void UIDisplay::printRow(uint8_t r, char* txt, char* txt2, uint8_t changeAtCol) 
     while ((c = *txt) != 0x00 && col < changeAtCol) {
         txt++;
         lcdPutChar(c);
-        //cache whatever you write to the display!
+        // Cache whatever you write to the display!
         displayCache_[r][col] = c;
         col++;
     }
     while (col < changeAtCol) {
         lcdPutChar(' ');
-        //cache whatever you write to the display!
+        // Cache whatever you write to the display!
         displayCache_[r][col] = ' ';
         col++;
     }
@@ -445,13 +447,13 @@ void UIDisplay::printRow(uint8_t r, char* txt, char* txt2, uint8_t changeAtCol) 
         while ((c = *txt2) != 0x00 && col < UI_COLS) {
             txt2++;
             lcdPutChar(c);
-            //cache whatever you write to the display!
+            // Cache whatever you write to the display!
             displayCache_[r][col] = c;
             col++;
         }
         while (col < UI_COLS) {
             lcdPutChar(' ');
-            //cache whatever you write to the display!
+            // Cache whatever you write to the display!
             displayCache_[r][col] = ' ';
             col++;
         }
@@ -489,6 +491,11 @@ void UIDisplay::ui_check_keys(int& action) {
     UI_KEYS_BUTTON_LOW(ENABLE_KEY_E6, UI_ACTION_RF_PAUSE);            // PINH.2, 86, X12.7 - push button, connects gnd to pin
 } // ui_check_keys
 
+#define BIGC0 "\001\002\003    " UI_SPACER "Renkforce"
+#define BIGC1 "\004         " UI_SPACER UI_PRINTER_NAME
+#define BIGC2 "\005\006\007ommunity Mod"
+#define BIGC3 UI_SPACER REPETIER_VERSION
+
 void UIDisplay::initialize() {
     flags = 0;
     exitmenu();
@@ -517,6 +524,11 @@ void UIDisplay::initialize() {
     printRowP(UI_ROWS - 1, PSTR(BIGC3));
 
 } // initialize
+
+#undef BIGC0
+#undef BIGC1
+#undef BIGC2
+#undef BIGC3
 
 // Boot-only animation. Cache codes 1..8 stand for CGRAM slots 1..7,0.
 // Slot zero is written directly, never passed through a C string.
@@ -1054,12 +1066,12 @@ void UIDisplay::slowAction() {
                 executeAction(lastAction);
                 nextRepeat = time + UI_KEY_FIRST_REPEAT;
                 repeatDuration = UI_KEY_FIRST_REPEAT;
-                //TODO hier ist ein anderer Code bei REpetier. "DelayedAction" -> Prüfen, warum.
+                // TODO hier ist ein anderer Code bei REpetier. "DelayedAction" -> Prüfen, warum.
             }
         } else if (lastAction < 1000 && lastAction) // Repeatable key
         {
             if (time - nextRepeat < 10000) {
-                //TODO hier ist ein anderer Code bei REpetier. "DelayedAction" -> Prüfen, warum.
+                // TODO hier ist ein anderer Code bei REpetier. "DelayedAction" -> Prüfen, warum.
                 executeAction(lastAction);
                 repeatDuration -= UI_KEY_REDUCE_REPEAT;
                 if (repeatDuration < UI_KEY_MIN_REPEAT)

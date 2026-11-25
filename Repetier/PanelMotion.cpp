@@ -31,7 +31,7 @@ void configureMANUAL_STEPS_Z(int8_t increment) {
         if (stepsize_table[loop] >= Printer::manualMotion.steps(Z_AXIS))
             break;
 
-    //ändere die Position in die Wunschposition:
+    // Ändere die Position in die Wunschposition:
     if (increment >= 0)
         loop += 1;
     else
@@ -93,7 +93,7 @@ void moveXAction(int8_t direction) {
             Commands::printCurrentPosition();
         } else /*if (Printer::manualMotion.coordinateSystem() == KOSYS_DIRECTOFFSET) */
         {
-            Printer::offsetRelativeStepsCoordinates(steps, 0, 0, 0, TASK_MOVE_POSITION_MANUAL);
+            Printer::offsetRelativeStepsCoordinates(steps, 0, 0, 0, DirectMoveMode::ManualPosition);
         }
 
         break;
@@ -122,7 +122,7 @@ void moveXAction(int8_t direction) {
             Commands::printCurrentPosition();
         } else /*if (Printer::manualMotion.coordinateSystem() == KOSYS_DIRECTOFFSET) */
         {
-            Printer::offsetRelativeStepsCoordinates(distanceMM * Printer::stepsPerMm(Y_AXIS) * direction, 0, 0, 0, TASK_MOVE_POSITION_MANUAL);
+            Printer::offsetRelativeStepsCoordinates(distanceMM * Printer::stepsPerMm(Y_AXIS) * direction, 0, 0, 0, DirectMoveMode::ManualPosition);
         }
 
         break;
@@ -140,7 +140,7 @@ void moveXAction(int8_t direction) {
         else
             steps = (Printer::isAxisHomed(X_AXIS) ? Printer::xyMaxSteps(X_AXIS) - Printer::xyMotion.motorSteps(X_AXIS) : Printer::xyMaxSteps(X_AXIS));
 
-        Printer::offsetRelativeStepsCoordinates(steps, 0, 0, 0, TASK_MOVE_FROM_BUTTON);
+        Printer::offsetRelativeStepsCoordinates(steps, 0, 0, 0, DirectMoveMode::Button);
         break;
     }
     }
@@ -189,7 +189,7 @@ void moveYAction(int8_t direction) {
             Commands::printCurrentPosition();
         } else /*if (Printer::manualMotion.coordinateSystem() == KOSYS_DIRECTOFFSET) */
         {
-            Printer::offsetRelativeStepsCoordinates(0, steps, 0, 0, TASK_MOVE_POSITION_MANUAL);
+            Printer::offsetRelativeStepsCoordinates(0, steps, 0, 0, DirectMoveMode::ManualPosition);
         }
 
         break;
@@ -218,7 +218,7 @@ void moveYAction(int8_t direction) {
             Commands::printCurrentPosition();
         } else /*if (Printer::manualMotion.coordinateSystem() == KOSYS_DIRECTOFFSET) */
         {
-            Printer::offsetRelativeStepsCoordinates(0, distanceMM * Printer::stepsPerMm(Y_AXIS) * direction, 0, 0, TASK_MOVE_POSITION_MANUAL);
+            Printer::offsetRelativeStepsCoordinates(0, distanceMM * Printer::stepsPerMm(Y_AXIS) * direction, 0, 0, DirectMoveMode::ManualPosition);
         }
 
         break;
@@ -236,7 +236,7 @@ void moveYAction(int8_t direction) {
         else
             steps = (Printer::isAxisHomed(Y_AXIS) ? Printer::xyMaxSteps(Y_AXIS) - Printer::xyMotion.motorSteps(Y_AXIS) : Printer::xyMaxSteps(Y_AXIS));
 
-        Printer::offsetRelativeStepsCoordinates(0, steps, 0, 0, TASK_MOVE_FROM_BUTTON);
+        Printer::offsetRelativeStepsCoordinates(0, steps, 0, 0, DirectMoveMode::Button);
         break;
     }
     }
@@ -301,7 +301,7 @@ void moveZAction(int8_t direction) {
 
         steps = Printer::pause.limitZJog(steps);
 
-        Printer::offsetRelativeStepsCoordinates(0, 0, steps, 0, TASK_MOVE_POSITION_MANUAL);
+        Printer::offsetRelativeStepsCoordinates(0, 0, steps, 0, DirectMoveMode::ManualPosition);
         break;
     }
     case MOVE_MODE_1_MM:
@@ -317,13 +317,13 @@ void moveZAction(int8_t direction) {
         if (!Printer::isAxisHomed(Z_AXIS)
             || direction > 0
             || motorZ * Printer::mmPerStep(Z_AXIS) >= distanceMM) {
-            Printer::offsetRelativeStepsCoordinates(0, 0, distanceMM * Printer::stepsPerMm(Z_AXIS) * direction, 0, TASK_MOVE_POSITION_MANUAL);
+            Printer::offsetRelativeStepsCoordinates(0, 0, distanceMM * Printer::stepsPerMm(Z_AXIS) * direction, 0, DirectMoveMode::ManualPosition);
             return;
         }
 
         // Approach the switch coordinate first, then allow small single moves.
         const long steps = motorZ > 0 ? -motorZ : -int32_t(Printer::manualMotion.steps(Z_AXIS));
-        Printer::offsetRelativeStepsCoordinates(0, 0, steps, 0, TASK_MOVE_POSITION_MANUAL);
+        Printer::offsetRelativeStepsCoordinates(0, 0, steps, 0, DirectMoveMode::ManualPosition);
         break;
     }
     case MOVE_MODE_SINGLE_MOVE: {
@@ -339,7 +339,7 @@ void moveZAction(int8_t direction) {
 
         steps = Printer::pause.limitZJog(steps);
 
-        Printer::offsetRelativeStepsCoordinates(0, 0, steps, 0, TASK_MOVE_FROM_BUTTON);
+        Printer::offsetRelativeStepsCoordinates(0, 0, steps, 0, DirectMoveMode::Button);
         break;
     }
     }

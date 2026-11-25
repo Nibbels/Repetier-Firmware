@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// Temperature/fan command handlers; control and sensor conversion live in TemperatureControl.cpp and TemperatureSensors.cpp.
+
 #include "Repetier.h"
 #include "GCodeCommands.h"
 #include "CaseFan.h"
@@ -28,7 +30,7 @@ void setHotendTemperature(GCode* com) {
     }
     Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
 
-    //TODO man müsste das in den Movecache legen!
+    // TODO man müsste das in den Movecache legen!
     const bool heaterOff = com->hasS() && com->S == 0;
     if ((com->hasP() || heaterOff) && !Commands::waitForMotion(Commands::MotionWait::QueueAndZ, Commands::PauseWait::Resume) && !heaterOff)
         return;
@@ -159,7 +161,7 @@ void waitForBed(GCode* com) {
     float settarget = -1;  // random init in °C
 
     while (fabs(heatedBedController.currentTemperatureC - heatedBedController.targetTemperatureC) > TEMP_TOLERANCE) {
-        //Init und Anpassung an die neue Situation falls der Bediener am Display-Menü des Druckers während Aufheizzeit was umstellt.
+        // Init und Anpassung an die neue Situation falls der Bediener am Display-Menü des Druckers während Aufheizzeit was umstellt.
         if (settarget != heatedBedController.targetTemperatureC) {
             settarget = heatedBedController.targetTemperatureC; // In °C
             dirRising = (heatedBedController.targetTemperatureC > heatedBedController.currentTemperatureC);
@@ -422,7 +424,7 @@ void unloadFilament(GCode* pCommand) {
         maxForce = constrain(abs(static_cast<short>(pCommand->P)), 0, EMERGENCY_PAUSE_DIGITS_MAX);
     float t = float(UI_SET_EXTRUDER_MIN_TEMP_UNMOUNT);
 
-    //preheat / precool
+    // Preheat / precool
     Extruder::setTemperatureForExtruder(t, Extruder::current->id);
     Extruder::current->tempControl.waitForTargetTemperature(10);
 

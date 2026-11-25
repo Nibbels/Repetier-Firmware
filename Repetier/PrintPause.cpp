@@ -32,7 +32,7 @@ void PrintPause::queueRequest(Destination destination) {
         InterruptProtectedBlock noInts;
         if (!acceptsPauseRequest())
             return;
-        PrintLine::queueTask(destination == Destination::Park ? TASK_PAUSE_PRINT_AND_MOVE : TASK_PAUSE_PRINT);
+        PrintLine::queueTask(destination == Destination::Park ? QueueTask::PauseAndPark : QueueTask::Pause);
     }
 
     // Another pause can take effect while the request waits for its place in the queue.

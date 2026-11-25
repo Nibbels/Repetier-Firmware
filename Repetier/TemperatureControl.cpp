@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// Temperature regulation, thermal fault latching, heater waits and autotune; ADC conversion is separate.
+
 #include "Repetier.h"
 
 static uint8_t autotuneIndex = 255;
@@ -88,7 +90,7 @@ void Extruder::manageTemperatures() {
 
         if (!act->isSensorDefect() && !sampleValid) // Count faults separately from immediate duty inhibition.
         {
-            extruderTempErrors++; //pro sensor. max +10+1+1+1.... bleibt also < 255
+            extruderTempErrors++; // Pro sensor. max +10+1+1+1.... bleibt also < 255
             errorDetected = 1;
 
             if (extruderTempErrors > 10) // Ignore short temporary failures
@@ -179,7 +181,7 @@ void Extruder::manageTemperatures() {
         float error = act->targetTemperatureC - act->currentTemperatureC;
 
         if (act->targetTemperatureC < 20.0f || act->targetTemperatureC < MAX_ROOM_TEMPERATURE) {
-            //targetTemperature is off
+            // targetTemperature is off
             // We never set heating on if the commanded temperature might be lower than max room temperature.
             output = 0; // off is off, even if damping term wants a heat peak!
             act->stopDecouple();

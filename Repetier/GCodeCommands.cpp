@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// G/M/T dispatch and rejected-job admission; domain handlers are in GCodeMotion, GCodeThermal and GCodeSystem.
+
 #include "Repetier.h"
 #include "GCodeCommands.h"
 

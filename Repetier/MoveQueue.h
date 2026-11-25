@@ -32,10 +32,10 @@ public:
             Printer::idleStatus.cancel();
     }
 
-    void publishTask(char task) {
+    void publishTask(QueueTask task) {
         PrintLine& move = writeSlot();
         move.flags |= FLAG_QUEUE_TASK;
-        move.task = task;
+        move.setQueueTaskId(task);
         publish(false);
     }
 
@@ -49,7 +49,7 @@ public:
     void retireFront() {
         HAL::forbidInterrupts();
         nextIndex(readIndex_);
-        active_->task = TASK_NO_TASK;
+        active_->setQueueTaskId(QueueTask::None);
         active_ = nullptr;
         --count_;
     }
@@ -84,6 +84,6 @@ inline uint8_t PrintLine::queuedMoveCount() { return queue.count(); }
 inline bool PrintLine::hasActiveQueuedMove() { return queue.active() != nullptr; }
 inline void PrintLine::discardQueuedMoves() { queue.clear(); }
 
-inline void PrintLine::queueTask(char task) { queue.publishTask(task); }
+inline void PrintLine::queueTask(QueueTask task) { queue.publishTask(task); }
 
 #endif

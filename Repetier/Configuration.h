@@ -21,6 +21,7 @@
 
 #include <stdint.h>
 #include "Constants.h"
+#include "DisplayModes.h"
 
 // ##########################################################################################
 // ##   IMPORTANT

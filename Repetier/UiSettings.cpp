@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// Panel setting edits, confirmation and value validation; navigation and rendering are separate.
+
 #include "Repetier.h"
 #include "StepExecutor.h"
 
@@ -68,7 +70,7 @@ void UIDisplay::finishAction(int action) {
         unsigned char heater = menuPos[menuLevel - 2]; // The bed follows the hotends in the PID menu.
         int method = menuPos[menuLevel - 1];           //0..1..2..3 passt nicht mehr zum J-Listing des M303
 
-        //Esthetics: Switch method for better order in menu. I want the menu to start with pessen integral, because it is the most responsive one. We dont need some overshoot within menu because it has no known use for us.
+        // Esthetics: Switch method for better order in menu. I want the menu to start with pessen integral, because it is the most responsive one. We dont need some overshoot within menu because it has no known use for us.
         /*
                                              responsiveness of tunings: J1pessen++ J0classic+ J2someovershoot J3noovershoot- J4tyreuslyben--
                                              -- is for slow beds
@@ -607,7 +609,7 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
                             invalidateBedMatrixForReload();
                                                                              // Korrektur der aktiven kompensation/zoffset ist durch fehlendes homing unterbunden.
                         }
-                        updatederived = true; //übernehmen der werte in offsets und infaxissteps, accel usw..
+                        updatederived = true; // Übernehmen der werte in offsets und infaxissteps, accel usw..
                         HAL::eprSetFloat(EPR_XAXIS_STEPS_PER_MM + 4 * i, Printer::stepsPerMm(i));
                         break;
                     }
@@ -618,13 +620,13 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
                         extruder[etr].stepsPerMM *= stepsmm_korrekturfactor;
                         HAL::eprSetFloat(EEPROM::getExtruderOffset(etr) + EPR_EXTRUDER_STEPS_PER_MM, extruder[etr].stepsPerMM);
                         if (etr == Extruder::current->id)
-                            updateextruder = true; //übernehmen der werte in offsets und infaxissteps, accel usw..
+                            updateextruder = true; // Übernehmen der werte in offsets und infaxissteps, accel usw..
                         break;
                     }
                     }
                 }
             }
-            //übernehmen der werte in offsets und infaxissteps, accel usw..
+            // Übernehmen der werte in offsets und infaxissteps, accel usw..
             if (updatederived)
                 Printer::updateDerivedParameter();
             if (updateextruder)

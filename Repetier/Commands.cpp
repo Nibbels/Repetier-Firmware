@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// Foreground command loop, periodic services and waits; GCodeCommands.cpp dispatches command handlers.
+
 #include "Repetier.h"
 #include "GCodeInput.h"
 
@@ -68,7 +70,7 @@ void Commands::checkForPeriodicalActions(enum FirmwareState state) {
     if (HAL::takeTemperatureTick()) {
         Extruder::manageTemperatures();
         if (state == WaitHeater)
-            Commands::printTemperatures(); //selfcontrolling timediff
+            Commands::printTemperatures(); // Selfcontrolling timediff
         uid.slowAction();
     }
 

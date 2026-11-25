@@ -39,7 +39,7 @@ bool Printer::anyEndstop(uint8_t axis) {
         }
         }
     }
-    return (bool)(endstop > 1); //endstop muss sauber gedrückt sein.
+    return (bool)(endstop > 1); // endstop muss sauber gedrückt sein.
 }
 
 void Printer::changeAxisDirection(uint8_t axis, int8_t direction) {
@@ -140,7 +140,7 @@ int8_t Printer::checkHome(int8_t axis) //X_AXIS 0, Y_AXIS 1, Z_AXIS 2
             break;
     }
 
-    //steps to log
+    // Steps to log
     Com::printFLN(PSTR("Return steps="), returnSteps);
 
     Com::printFLN(PSTR("Recheck endstop:"));
@@ -319,7 +319,7 @@ void Printer::homeZAxis() {
     if (nHomeDir) {
         UI_STATUS_UPD(UI_TEXT_HOME_Z);
 
-        //homing ausschalten und zCMP (...) auch.
+        // Homing ausschalten und zCMP (...) auch.
         setHomed(-1, -1, false);
 
         // Establish the first-layer defaults for the print that follows this Z home.

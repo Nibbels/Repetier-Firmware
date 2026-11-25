@@ -22,16 +22,15 @@
 
 #define CELSIUS_EXTRA_BITS 3
 
-// Updates the temperature of all extruders and heated bed if it's time.
-// Toggels the heater power if necessary.
-extern void reportTempsensorAndHeaterErrors(); ///< Report defect sensors
+// Report latched sensor/heater faults; regulation is in TemperatureControl.cpp.
+extern void reportTempsensorAndHeaterErrors();
 
 #define TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_FULL 2  ///< Full heating enabled
 #define TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_HOLD 4  ///< Holding target temperature
 #define TEMPERATURE_CONTROLLER_FLAG_SENSDEFECT 8     ///< Indicating sensor defect
 #define TEMPERATURE_CONTROLLER_FLAG_SENSDECOUPLED 16 ///< Indicating sensor decoupling
-/** TemperatureController manages one heater-temperature sensore loop. You can have up to
-4 loops allowing pid for up to 3 extruder and the heated bed.
+/** TemperatureController represents one heater/sensor loop.
+The supported RF builds use one or two hotends plus the heated bed.
 
 */
 class TemperatureController {
@@ -97,7 +96,7 @@ public:
             return;
         lastDecoupleTest = t;
         lastDecoupleTemp = currentTemperatureC;
-        //switch active test method to "temperature has to rise":
+        // Switch active test method to "temperature has to rise":
         setDecoupleFull();
     }
 
@@ -120,7 +119,7 @@ public:
         // Erst danach macht der code jede sekunde den "Wackelcheck".
         lastDecoupleTest = t;
         lastDecoupleTemp = targetTemperatureC;
-        //switch active test method to "temperature has to stay where it was":
+        // Switch active test method to "temperature has to stay where it was":
         setDecoupleHold();
     }
 

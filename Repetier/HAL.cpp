@@ -19,7 +19,7 @@
 #include "StepExecutor.h"
 
 namespace {
-const uint8 temperatureAdcChannels[TemperatureAdcCount] PROGMEM = {
+const uint8_t temperatureAdcChannels[TemperatureAdcCount] PROGMEM = {
     EXT0_TEMPSENSOR_PIN,
 #if NUM_EXTRUDER > 1
     EXT1_TEMPSENSOR_PIN,
@@ -419,7 +419,7 @@ void HAL::analogStart() {
     ADCSRA = _BV(ADEN) | _BV(ADSC) | _BV(ADIF) | ANALOG_PRESCALER;
     while (ADCSRA & _BV(ADSC)) { } // wait for conversion
     /* ADCW must be read once, otherwise the next result is wrong. */
-    uint dummyADCResult;
+    uint16_t dummyADCResult;
     dummyADCResult = ADCW;
     (void)dummyADCResult;
     // The Timer0 COMPB handler services the conversion loop.
@@ -827,7 +827,7 @@ ISR(PWM_TIMER_VECTOR) {
 #endif // RGB_LIGHT_R_PIN
 
         // Hier her versetzt, um 10ms einstell-auflösung zu erhalten. Darum /10 statt bisher /100 beim Init in setFanSpeed().
-        //fan anfangs auf high zum anlaufen, aber das muss beendet werden:
+        // Fan anfangs auf high zum anlaufen, aber das muss beendet werden:
         if (fanKickstart)
             fanKickstart--;
     }
