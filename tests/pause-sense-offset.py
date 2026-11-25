@@ -114,6 +114,7 @@ def main():
         + section(printer, "        const float mmPerStep = 1.0f / axisStepsPerMM_[axis];", "\n\n        /** Acceleration")
         + "\n}",
         "void executeExtrusionStep(PrintLine* move, bool forQueue) {\n"
+        + "    auto& errors = StepExecutor::stepErrors[forQueue];\n"
         + section(executor, "        if (move->isEMove()) {", "\n        if (move->isXMove()) {")
         + "\n}",
         section(executor, "template <int8_t limitDirection>", "\n/**\n  Processes the one-and-only direct move"),

@@ -22,12 +22,27 @@ constexpr int heatBedScanPlaBedC = 60, heatBedScanPlaNozzleC = 210, heatBedScanA
               heatBedScanAbsNozzleC = 240, heatBedScanProbeNozzleC = 100;
 constexpr millis_t preciseBedScanWarmupSeconds = 600, preciseBedScanCalibrationSeconds = 600;
 #define PSTR(text) text
+#define strcpy_P(destination, source) std::strcpy(destination, source)
+#define strcat_P(destination, source) std::strcat(destination, source)
 #define UI_STATUS(text) ((void)(text))
 #define UI_STATUS_UPD(text) ((void)(text))
-#define UI_STATUS_UPD_RAM(text) ((void)(text))
-constexpr char UI_TEXT_HEATING[] = "Heating", UI_TEXT_HEAT_BED_SCAN[] = "Scan",
+#define UI_STATUS_UPD_RAM(text) checkHeatingStatus(text)
+constexpr char UI_TEXT_HEATING[] = "Heating...", UI_TEXT_HEAT_BED_SCAN[] = "Scan",
                UI_TEXT_HEAT_BED_SCAN_DONE[] = "Done", UI_TEXT_OK[] = "OK";
 constexpr char ui_text_heat_bed_scan[] = "Scan", ui_text_operation_denied[] = "Busy", ui_text_saving_success[] = "Saved";
+
+void checkHeatingStatus(const char* text) {
+    const auto prefix = std::strlen(UI_TEXT_HEATING);
+    assert(std::strncmp(text, UI_TEXT_HEATING, prefix) == 0);
+    const char* end = text + std::strlen(text) - 3;
+    assert(end > text + prefix && std::strcmp(end, "[s]") == 0);
+    unsigned seconds = 0;
+    for (auto p = text + prefix; p < end; ++p) {
+        assert(*p >= '0' && *p <= '9');
+        seconds = seconds * 10 + unsigned(*p - '0');
+    }
+    assert(seconds >= 1 && seconds <= 600);
+}
 
 char g_nActiveHeatBed = 2;
 bool g_ZMatrixChangedInRam = false;

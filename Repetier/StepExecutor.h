@@ -48,8 +48,27 @@ private:
             ticks = 0;
         }
     };
+    // Each live execution path owns its Bresenham phase. Suspended queued
+    // motion keeps its phase while a direct jog runs.
+    struct StepErrors {
+        int32_t value[4];
+
+        void start(int32_t primarySteps) {
+            value[0] = value[1] = value[2] = primarySteps >> 1;
+            value[3] = 0; // E starts at the original zero phase.
+        }
+
+        bool advance(uint8_t axis, int32_t delta) {
+            return (value[axis] -= delta) < 0;
+        }
+
+        void account(uint8_t axis, int32_t primarySteps) {
+            value[axis] += primarySteps;
+        }
+    };
     enum class DirectionOwner : int8_t { None, Direct = -1, Queued = 1 };
     static StepClock stepClocks[2];
+    static StepErrors stepErrors[2];
     static DirectionOwner directionOwner;
     static volatile uint32_t stepIntervalTicks;
     static volatile uint16_t packingInterval_;
@@ -63,7 +82,10 @@ private:
     static void updateAdvanceSteps(const PrintLine& move, uint16_t speed);
 
     static uint16_t nextStepSpeed(PrintLine& move, StepClock& clock, uint8_t pulses, uint32_t interval);
-    static long performMove(PrintLine* move, uint8_t forQueue);
+    // Compile the two execution paths separately; avoid runtime indexing and
+    // branching on the fixed motion owner in the pulse loop.
+    template<uint8_t forQueue>
+    static long __attribute__((noinline)) performMove(PrintLine* move);
     static void finishMove(PrintLine& move, bool queued);
 };
 

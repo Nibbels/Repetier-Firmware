@@ -469,9 +469,9 @@ void HeatBedScan::warmupAndHome() {
         uRemainingSeconds = (HAL::timeInMilliseconds() - lastCheckMs_) / 1000;
         if (uRemainingSeconds < preciseBedScanWarmupSeconds) {
             char szStatus[32];
-            strcpy(szStatus, UI_TEXT_HEATING);
+            strcpy_P(szStatus, PSTR(UI_TEXT_HEATING));
             addLong(szStatus, preciseBedScanWarmupSeconds - uRemainingSeconds, 3);
-            strcat(szStatus, "[s]");
+            strcat_P(szStatus, PSTR("[s]"));
             UI_STATUS_UPD_RAM(szStatus);
             return;
         }
@@ -846,9 +846,9 @@ void HeatBedScan::stabilizeCalibrationTemperature() {
         uRemainingSeconds = (HAL::timeInMilliseconds() - lastCheckMs_) / 1000;
         if (uRemainingSeconds < preciseBedScanCalibrationSeconds) {
             char szStatus[32];
-            strcpy(szStatus, UI_TEXT_HEATING);
+            strcpy_P(szStatus, PSTR(UI_TEXT_HEATING));
             addLong(szStatus, preciseBedScanCalibrationSeconds - uRemainingSeconds, 3);
-            strcat(szStatus, "[s]");
+            strcat_P(szStatus, PSTR("[s]"));
             UI_STATUS_UPD_RAM(szStatus);
             return;
         }

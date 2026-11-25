@@ -279,9 +279,9 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     RgbLighting::restoreMode(RGB_MODE_AUTOMATIC);
 #endif // RGB_LIGHT_R_PIN
 
-    const unsigned short uMotorCurrentUse[] = MOTOR_CURRENT_NORMAL; //Standardwert
+    static const unsigned short uMotorCurrentUse[] PROGMEM = MOTOR_CURRENT_NORMAL; //Standardwert
     for (uint8_t stp = 0; stp < 3 + NUM_EXTRUDER; stp++) {          //0..4 bei 5 steppern.
-        Drv8711::stageCurrent(stp, uMotorCurrentUse[stp]); // Restore configuration without a register write.
+        Drv8711::stageCurrent(stp, pgm_read_word(&uMotorCurrentUse[stp])); // Restore configuration without a register write.
     }
 
     Printer::pause.restoreDefaultParking();
@@ -698,8 +698,8 @@ void EEPROM::readDataFromEEPROM() {
 
     Printer::manualMotion.setSteps(X_AXIS, (unsigned short)lroundf(Printer::stepsPerMm(X_AXIS) * DEFAULT_MANUAL_MM_X));
     Printer::manualMotion.setSteps(Y_AXIS, (unsigned short)lroundf(Printer::stepsPerMm(Y_AXIS) * DEFAULT_MANUAL_MM_Y));
-    const unsigned short stepsize_table[NUM_ACCEPTABLE_STEP_SIZE_TABLE] PROGMEM = ACCEPTABLE_STEP_SIZE_TABLE;
-    Printer::manualMotion.setSteps(Z_AXIS, (unsigned short)constrain((unsigned short)HAL::eprGetInt16(EPR_RF_MOD_Z_STEP_SIZE), 1, stepsize_table[NUM_ACCEPTABLE_STEP_SIZE_TABLE - 1])); // Limit stepsize to value in config.
+    static const unsigned short stepsize_table[NUM_ACCEPTABLE_STEP_SIZE_TABLE] PROGMEM = ACCEPTABLE_STEP_SIZE_TABLE;
+    Printer::manualMotion.setSteps(Z_AXIS, (unsigned short)constrain((unsigned short)HAL::eprGetInt16(EPR_RF_MOD_Z_STEP_SIZE), 1, static_cast<unsigned short>(pgm_read_word(&stepsize_table[NUM_ACCEPTABLE_STEP_SIZE_TABLE - 1])))); // Limit stepsize to value in config.
     Printer::manualMotion.setSteps(E_AXIS, (unsigned short)lroundf(Extruder::current->stepsPerMM * DEFAULT_MANUAL_MM_E));                                                               //current extruder stepsPerMM weil hier noch kein update für Printer::stepsPerMm(E_AXIS) gemacht wurde!
 
     // The matrix is loaded later. Clamp to the compiled grid capacity here
@@ -767,16 +767,16 @@ void EEPROM::readDataFromEEPROM() {
         change = true;
     }
 
-    const unsigned short uMotorCurrentMax[] = MOTOR_CURRENT_MAX;    // Oberes Amperelimit
-    const unsigned short uMotorCurrentUse[] = MOTOR_CURRENT_NORMAL; //Standardwert
+    static const unsigned short uMotorCurrentMax[] PROGMEM = MOTOR_CURRENT_MAX;    // Oberes Amperelimit
+    static const unsigned short uMotorCurrentUse[] PROGMEM = MOTOR_CURRENT_NORMAL; //Standardwert
     uint8_t current = 0;
     for (uint8_t axis = 0; axis < DRV8711_NUM_CHANNELS; axis++) { //0..4 bei 5 steppern.
         current = HAL::eprGetByte(EPR_RF_MOTOR_CURRENT + axis);
-        if (MOTOR_CURRENT_MIN <= current && current <= uMotorCurrentMax[axis]) {
+        if (MOTOR_CURRENT_MIN <= current && current <= pgm_read_word(&uMotorCurrentMax[axis])) {
             Drv8711::stageCurrent(axis, current);
             Drv8711::applyConfiguredCurrent(axis);
         } else {
-            HAL::eprSetByte(EPR_RF_MOTOR_CURRENT + axis, uMotorCurrentUse[axis]); // Wenn mist im EEPROM, dann Silent-Wert reinschreiben.
+            HAL::eprSetByte(EPR_RF_MOTOR_CURRENT + axis, pgm_read_word(&uMotorCurrentUse[axis])); // Wenn mist im EEPROM, dann Silent-Wert reinschreiben.
             change = true;
         }
     }

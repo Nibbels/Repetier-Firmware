@@ -245,8 +245,8 @@ void accessPanel(GCode* pCommand) {
 }
 
 void reportDeviceVersion() {
-    Com::printFLN(PSTR("Device Type: "), UI_PRINTER_NAME);
-    Com::printFLN(PSTR("Firmware Version: "), UI_VERSION_STRING);
+    Com::printFLN(PSTR("Device Type: " UI_PRINTER_NAME));
+    Com::printFLN(PSTR("Firmware Version: " UI_VERSION_STRING));
 }
 
 void testWatchdog(GCode* pCommand) {

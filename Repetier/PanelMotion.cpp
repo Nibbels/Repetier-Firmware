@@ -23,12 +23,12 @@ FSTRINGVALUE(ui_text_min_reached_unhomed, UI_TEXT_MIN_REACHED_UNHOMED)
 /* Noch ist das statisch über eine Tabelle, aber man könnte das später auch berechnen */
 
 void configureMANUAL_STEPS_Z(int8_t increment) {
-    const unsigned short stepsize_table[NUM_ACCEPTABLE_STEP_SIZE_TABLE] PROGMEM = ACCEPTABLE_STEP_SIZE_TABLE;
+    static const unsigned short stepsize_table[NUM_ACCEPTABLE_STEP_SIZE_TABLE] PROGMEM = ACCEPTABLE_STEP_SIZE_TABLE;
 
     int loop = 0;
     // Suche die aktuelle Einstellungsposition (oder aufgerundet) in der Tabelle:
     for (loop = 0; loop < NUM_ACCEPTABLE_STEP_SIZE_TABLE; loop++)
-        if (stepsize_table[loop] >= Printer::manualMotion.steps(Z_AXIS))
+        if (pgm_read_word(&stepsize_table[loop]) >= Printer::manualMotion.steps(Z_AXIS))
             break;
 
     // Ändere die Position in die Wunschposition:
@@ -44,7 +44,7 @@ void configureMANUAL_STEPS_Z(int8_t increment) {
         loop = NUM_ACCEPTABLE_STEP_SIZE_TABLE - 1;
 
     // Nutze neuen Wert:
-    Printer::manualMotion.setSteps(Z_AXIS, stepsize_table[loop]);
+    Printer::manualMotion.setSteps(Z_AXIS, pgm_read_word(&stepsize_table[loop]));
 
     HAL::eprSetInt16(EPR_RF_MOD_Z_STEP_SIZE, Printer::manualMotion.steps(Z_AXIS));
     EEPROM::updateChecksum();

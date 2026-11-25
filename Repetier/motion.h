@@ -84,7 +84,6 @@ private:
     int32_t timeInTicks;
     flag8_t dir;                 ///< Direction of movement. 1 = X+, 2 = Y+, 4= Z+, values can be combined.
     int32_t delta[4];            ///< Steps we want to move.
-    int32_t error[4];            ///< Error calculation for Bresenham algorithm
     float fullSpeed; ///< Segment feed in mm/s, also published to the status display.
 
     // Lookahead revises these values while the slot is owned by the planner.

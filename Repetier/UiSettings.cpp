@@ -476,8 +476,8 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
             steppernr = 4;   // Das ist etwas stümperhaft, aber ich brauche die Zeilennummer um auszuwählen und die Einstellungen für die Extruderstepper gehören drüber, also muss Extruder 2 zwei Zeilen runter...
         if (steppernr < 5) { // aktuell gibts nur 5
             int drive = Drv8711::configuredCurrent(steppernr);
-            const short uMotorCurrentMax[] = MOTOR_CURRENT_MAX;
-            INCREMENT_MIN_MAX(drive, 1, MOTOR_CURRENT_MIN + 1, uMotorCurrentMax[steppernr]); // Von 40 bis maximal das was in der config steht.
+            static const short uMotorCurrentMax[] PROGMEM = MOTOR_CURRENT_MAX;
+            INCREMENT_MIN_MAX(drive, 1, MOTOR_CURRENT_MIN + 1, static_cast<short>(pgm_read_word(&uMotorCurrentMax[steppernr]))); // Von 40 bis maximal das was in der config steht.
             Drv8711::stageCurrent(steppernr, drive);
             HAL::eprSetByte(EPR_RF_MOTOR_CURRENT + steppernr, (uint8_t)drive);
             EEPROM::updateChecksum();

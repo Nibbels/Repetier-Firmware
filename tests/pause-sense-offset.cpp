@@ -446,7 +446,7 @@ struct PrintLine {
     void setMoveOfAxisFinished(uint8_t axis) { dir &= ~(16 << axis); }
     void setMoveOfAxis(uint8_t axis) { dir |= 16 << axis; }
     void setPositiveDirectionForAxis(uint8_t axis) { dir |= 1 << axis; }
-    int32_t error[4] = {}, delta[4] = {};
+    int32_t delta[4] = {};
     int32_t stepsRemaining = 0;
 #include "step-profile-firmware.inc"
     LookaheadData lookahead{};
@@ -540,9 +540,11 @@ bool hasQueuedOvertravel() { return false; }
 
 struct StepExecutor {
 #include "step-clock-firmware.inc"
+    static StepErrors stepErrors[2];
     static speed_t nextStepSpeed(PrintLine& move, StepClock& clock, uint8_t pulses, uint32_t interval);
     static void updateAdvanceSteps(const PrintLine& move, uint16_t speed);
 };
+StepExecutor::StepErrors StepExecutor::stepErrors[2] = {};
 
 struct UIDisplay {
     int activeButton() const { return lastButtonAction; }
