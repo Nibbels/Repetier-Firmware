@@ -34,6 +34,7 @@ For each task, identify the concrete benefit and the smallest change that delive
 | 17 | 0028 | Exclusive ATmega2560: Foreground-Scheduler und G-Code-Durchsatz |
 | 18 | 0029 | Exclusive ATmega2560: Verbleibende Arduino-Abhängigkeiten |
 | 19 | 0030 | Exclusive ATmega2560: Gesamtbenchmark und Regression |
+| P0 | 0034 | Exclusive heater fail-off and interrupt optimization; before 0032/0033 production |
 | 20 | 0032 | Exclusive print core: quality-first packing and real-time maintenance budget |
 | 20a | 0033 | UART 500 kbaud and loss-aware transport; read-only prep in parallel, serialized production window with 0032 |
 
@@ -43,7 +44,7 @@ Owner authorized sequential autonomous implementation on 2026-11-25. Task0021 is
 
 ## Current simulation-first print-core priority
 
-Task0032 is the active next research assignment after the merged native wave. See its full owner continuation for the G-code throughput and adaptive packing objective, simulation stages and optional T14/ALUBUTYL compute strategy. Physical printer testing is deferred indefinitely pending separate owner approval; software research and reproducible benchmark milestones may proceed without a printer. Do not merge unproven timing policy or imply hardware qualification. #91 remains held; coordinate before touching its UI scope.
+**P0 [Task0034](tasks/Task0034.md) supersedes the print-core work in production priority.** Owner explicitly requests expiring heater authorization and bounded power-off; 0032/0033 research retained, production held until 0034 software gate and baseline refresh. Task0032 is the existing research assignment after the merged native wave. See its full owner continuation for the G-code throughput and adaptive packing objective, simulation stages and optional T14/ALUBUTYL compute strategy. Physical printer testing is deferred indefinitely pending separate owner approval; software research and reproducible benchmark milestones may proceed without a printer. Do not merge unproven timing policy or imply hardware qualification. #91 remains held; coordinate before touching its UI scope.
 
 Task0033 is the owner-requested UART workstream targeting 500000 baud with exact nominal clock division, loss-aware reception and bounded IRQ latency. Read-only preparation may overlap Task0032; manager serializes production changes and refreshes Task0032 evidence after transport integration. See [Task0033](tasks/Task0033.md). No unqualified default change or hardware test.
 
@@ -104,6 +105,7 @@ Production edits still start in their assigned wave. A worker can implement and 
 | [Task0028](tasks/Task0028.md) | 17 | Foreground-Scheduler und G-Code-Durchsatz | WAITING |
 | [Task0029](tasks/Task0029.md) | 18 | Verbleibende Arduino-Abhängigkeiten | WAITING |
 | [Task0030](tasks/Task0030.md) | 19 | Gesamtbenchmark und Regression | WAITING |
+| [Task0034](tasks/Task0034.md) | P0 | Expiring heater authorization and bounded power-off | READY / highest priority |
 | [Task0032](tasks/Task0032.md) | 20 | Quality-first automatic step packing and maintenance budget | READY |
 | [Task0033](tasks/Task0033.md) | 20a | 500 kbaud UART and loss-aware serial input | READY for research; production serialized |
 
