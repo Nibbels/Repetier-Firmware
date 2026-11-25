@@ -57,7 +57,7 @@ inline void StepExecutor::enableSteppers(PrintLine& move) {
         Printer::enableZStepper();
     }
     if (move.isEMove()) {
-        Printer::unmarkAllSteppersDisabled(); //doesnt fit into Extruder::enable() because of forward declare -> TODO
+        Printer::unmarkAllSteppersDisabled(); // Doesnt fit into Extruder::enable() because of forward declare -> TODO
         Extruder::enable();
         InterruptProtectedBlock lock;
         Printer::extrusionOutput.allow(ExtrusionOutput::Inhibit::MotorsDisabled);
@@ -180,7 +180,7 @@ long StepExecutor::performQueueMove() {
         case TASK_DISABLE_Z_COMPENSATION: // M3000
         {
             // disable the z compensation
-            Printer::disableCMPnow(); //hier nicht unbedingt warten, das soll im fluss der queue einfach abgeschaltet werden. zu große abstände regelt die needCmpWait
+            Printer::disableCMPnow(); // Hier nicht unbedingt warten, das soll im fluss der queue einfach abgeschaltet werden. zu große abstände regelt die needCmpWait
             queue.retireFront();
             return 1000;
         }
@@ -227,7 +227,7 @@ long StepExecutor::performQueueMove() {
             return (wait); // waste some time for path optimization to fill up
         }
 
-        enableSteppers(*move); //set Z direction etc.
+        enableSteppers(*move); // Set Z direction etc.
         adjustDirections(*move);
         directionOwner = DirectionOwner::Queued;
         move->fixStartAndEndSpeed();
@@ -240,7 +240,7 @@ long StepExecutor::performQueueMove() {
 
         updateAdvanceSteps(*move, move->stepProfile.vStart);
 
-        return (stepIntervalTicks >> 1); //wait 50% to next interrupt.
+        return (stepIntervalTicks >> 1); // Wait 50% to next interrupt.
     }
 
     if (directionOwner != DirectionOwner::Queued) {
@@ -310,7 +310,7 @@ long StepExecutor::performDirectMove() {
 
         updateAdvanceSteps(direct, direct.stepProfile.vStart);
 
-        return (stepIntervalTicks >> 1); //wait 50% to next interrupt.
+        return (stepIntervalTicks >> 1); // Wait 50% to next interrupt.
     }
 
     if (directionOwner != DirectionOwner::Direct) {
@@ -386,7 +386,7 @@ long StepExecutor::performMove(PrintLine* move, uint8_t forQueue) {
             HAL::allowInterrupts();
             bool doESteps = (move->error[E_AXIS] -= move->delta[E_AXIS]) < 0;
             if (doESteps) {
-                //count step as done, we wont need it later.
+                // Count step as done, we wont need it later.
                 if (forQueue)
                     move->error[E_AXIS] += queuedPrimarySteps;
                 else
@@ -511,8 +511,8 @@ long StepExecutor::performMove(PrintLine* move, uint8_t forQueue) {
         interval >>= 10;
     }
 
-    //Now manipulate step-width=interval according to single-, double-, tripple-, ... steppings needs:
-    //we know that next time will be a (as example) double or quad step so we let pass twice the time and set the stepsPerTimerCall accordingly.
+    // Now manipulate step-width=interval according to single-, double-, tripple-, ... steppings needs:
+    // We know that next time will be a (as example) double or quad step so we let pass twice the time and set the stepsPerTimerCall accordingly.
     stepsPerTimerCall = 1;
     unsigned long one_interval = interval;
     // Keep the existing threshold. The previous unused +64 advance local

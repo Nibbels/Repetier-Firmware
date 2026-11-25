@@ -441,7 +441,7 @@
 // PINJ.0, 63, PJ0
 #define DEBUG_TEST_J0_PIN 15
 
-//RF spare pins:
+// RF spare pins:
 // X25.12 on RF1000 / X33.3 on the RF2000 family (RX3)
 #define RESERVE_DIGITAL_PIN_PJ0 15
 // X25.13 on RF1000 / X33.4 on the RF2000 family (TX3)

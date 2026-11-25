@@ -29,7 +29,7 @@ constexpr int heatBedScanAbsNozzleC = 240;
 constexpr int heatBedScanCalibrationPointMm = 100;
 constexpr int heatBedScanDelayMs = 1000;
 
-static short testExtruderTemperature(void) //Funktion ist speziell für HBS Scan.
+static short testExtruderTemperature(void) // Funktion ist speziell für HBS Scan.
 {
     if (Extruder::current->tempControl.targetTemperatureC > MAX_ROOM_TEMPERATURE) {
         // we have to wait until the target temperature is reached
@@ -58,7 +58,7 @@ static short testExtruderTemperature(void) //Funktion ist speziell für HBS Scan
 
 } // testExtruderTemperature
 
-static short testHeatBedTemperature(void) //Funktion ist speziell für HBS Scan.
+static short testHeatBedTemperature(void) // Funktion ist speziell für HBS Scan.
 {
     if (heatedBedController.targetTemperatureC > (MAX_ROOM_TEMPERATURE >= heatBedScanPlaBedC - TEMP_TOLERANCE
                                                       ? heatBedScanPlaBedC - TEMP_TOLERANCE
@@ -585,7 +585,7 @@ void HeatBedScan::retryHomeY() {
 
 void HeatBedScan::retryHomeZ() {
     // home the z-axis in order to find the starting point again
-    Printer::homeAxis(false, false, true);                             //Neben Bett: Home Z
+    Printer::homeAxis(false, false, true);                             // Neben Bett: Home Z
     if (!Calibration::moveZ(long(Printer::stepsPerMm(Z_AXIS) * Calibration::probeSettings().startLiftMm)))
         return;
     Calibration::scanProbe.forgetPreviousPoint();
@@ -868,7 +868,7 @@ void HeatBedScan::thermalRetryHomeY() {
 
 void HeatBedScan::thermalRetryHomeZ() {
     // home the z-axis in order to find the starting point again
-    Printer::homeAxis(false, false, true);                             //Neben Bett: Home Z
+    Printer::homeAxis(false, false, true);                             // Neben Bett: Home Z
     if (!Calibration::moveZ(long(Printer::stepsPerMm(Z_AXIS) * Calibration::probeSettings().startLiftMm)))
         return;
     Calibration::scanProbe.forgetPreviousPoint();
@@ -958,7 +958,7 @@ void HeatBedScan::saveMatrix() {
         Com::printF(Com::tscanHeatBed);
         Com::printFLN(PSTR("the scan has been completed"));
     }
-    showInformation(PSTR(UI_TEXT_HEAT_BED_SCAN_DONE), (void*)ui_text_saving_success, PSTR(UI_TEXT_OK)); //tell user the scan was a success
+    showInformation(PSTR(UI_TEXT_HEAT_BED_SCAN_DONE), (void*)ui_text_saving_success, PSTR(UI_TEXT_OK)); // Tell user the scan was a success
 
     finish();
 }

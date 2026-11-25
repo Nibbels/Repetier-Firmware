@@ -28,7 +28,7 @@
 // ##   RF specific UI Actions
 // ##########################################################################################
 
-//Diese Events sind alle in ProcessButton() in den case`s verlinkt. Der rest nicht, siehe ui.h und executeAction()
+// Diese Events sind alle in ProcessButton() in den case`s verlinkt. Der rest nicht, siehe ui.h und executeAction()
 
 #define UI_ACTION_RF_MIN_REPEATABLE 500
 

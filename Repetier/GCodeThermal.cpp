@@ -82,9 +82,9 @@ void waitForHotend(GCode* com) {
     do {
         Commands::checkForPeriodicalActions(WaitHeater);
 
-        //Anpassung an die neue Situation falls der Bediener am Display-Menü des Druckers während Aufheizzeit was umstellt.
+        // Anpassung an die neue Situation falls der Bediener am Display-Menü des Druckers während Aufheizzeit was umstellt.
         if (settarget != actExtruder->tempControl.targetTemperatureC) {
-            settarget = actExtruder->tempControl.targetTemperatureC; //in °C
+            settarget = actExtruder->tempControl.targetTemperatureC; // In °C
             dirRising = (actExtruder->tempControl.targetTemperatureC > actExtruder->tempControl.currentTemperatureC);
             if (dirRising) {
                 UI_STATUS_UPD(UI_TEXT_HEATING_EXTRUDER);
@@ -98,8 +98,8 @@ void waitForHotend(GCode* com) {
         if (!dirRising) {
             if (actExtruder->tempControl.currentTemperatureC <= MAX_ROOM_TEMPERATURE) {
                 break;
-                //never wait longer than reaching lowest allowed temperature.
-                //This might still be a long-run-bug if you have heated chamber/hot summer and wrong settings in MAX_ROOM_TEMPERATURE!
+                // Never wait longer than reaching lowest allowed temperature.
+                // This might still be a long-run-bug if you have heated chamber/hot summer and wrong settings in MAX_ROOM_TEMPERATURE!
             }
         }
         if (abs(HAL::timeInMilliseconds() - currentTime) > 300000) {
@@ -161,7 +161,7 @@ void waitForBed(GCode* com) {
     while (fabs(heatedBedController.currentTemperatureC - heatedBedController.targetTemperatureC) > TEMP_TOLERANCE) {
         //Init und Anpassung an die neue Situation falls der Bediener am Display-Menü des Druckers während Aufheizzeit was umstellt.
         if (settarget != heatedBedController.targetTemperatureC) {
-            settarget = heatedBedController.targetTemperatureC; //in °C
+            settarget = heatedBedController.targetTemperatureC; // In °C
             dirRising = (heatedBedController.targetTemperatureC > heatedBedController.currentTemperatureC);
             if (dirRising) {
                 UI_STATUS_UPD(UI_TEXT_HEATING_BED);
@@ -205,13 +205,13 @@ void tunePid(GCode* com) {
     int cycles = 10;
     int method = 0; //0 = Classic PID
     if (com->hasS())
-        temp = com->S; //Verwechsle ich immer, weil T wie Temperatur, aber T ist 0..255
+        temp = com->S; // Verwechsle ich immer, weil T wie Temperatur, aber T ist 0..255
     if (com->hasP())
         cont = com->P;
     if (com->hasR())
         cycles = static_cast<int>(com->R);
     if (com->hasJ())
-        method = static_cast<int>(com->J); //original Repetier used hasC, we dont have that in this version of repetier.
+        method = static_cast<int>(com->J); // Original Repetier used hasC, we dont have that in this version of repetier.
     if (cont >= NUM_TEMPERATURE_LOOPS)
         cont = NUM_TEMPERATURE_LOOPS - 1;
     if (cont < 0)
@@ -362,7 +362,7 @@ void loadFilament(GCode* pCommand) {
     Com::printFLN(PSTR("Load Filament"));
     Printer::idleStatus.cancel();
 
-        //normalize dms sensor values to 0 if allowed in options and not already done
+        // Normalize dms sensor values to 0 if allowed in options and not already done
     if (!Printer::strainGauge.zeroOffset())
         Printer::homeDigits();
 
@@ -370,13 +370,13 @@ void loadFilament(GCode* pCommand) {
     uint8_t eFeedrate = 1;
     if (pCommand->hasF())
         eFeedrate = constrain(abs(static_cast<uint8_t>(pCommand->F)), 1, 50);
-    short maxP = 2000; //to overwrite .. safety.
+    short maxP = 2000; // To overwrite .. safety.
     if (pCommand->hasP())
         maxP = constrain(abs(static_cast<short>(pCommand->P)), 0, 20000);
     const bool savedRelativeE = Printer::gcodeModes.relativeEOverride();
     Printer::gcodeModes.setRelativeEOverride(false); //M82:
     const bool savedInches = Printer::gcodeModes.inches();
-    Printer::gcodeModes.setInches(0); //to save possible G21 .. weiß net ob das so wichtig wäre ^^.
+    Printer::gcodeModes.setInches(0); // To save possible G21 .. weiß net ob das so wichtig wäre ^^.
 
     Printer::setEPositionMM(0); // G92 E0
 
@@ -396,7 +396,7 @@ void loadFilament(GCode* pCommand) {
             UI_STATUS_UPD(UI_TEXT_ABORT_KEYPRESSED);
             break;
         }
-        e += 0.02; //kleine schritte
+        e += 0.02; // Kleine schritte
         Printer::queueFloatCoordinates(IGNORE_COORDINATE, IGNORE_COORDINATE, IGNORE_COORDINATE, e, eFeedrate);
     }
 
@@ -426,14 +426,14 @@ void unloadFilament(GCode* pCommand) {
     Extruder::setTemperatureForExtruder(t, Extruder::current->id);
     Extruder::current->tempControl.waitForTargetTemperature(10);
 
-    //set stuff
+    // Set stuff
     const bool savedRelativeE = Printer::gcodeModes.relativeEOverride();
     Printer::gcodeModes.setRelativeEOverride(false); //M82:
     const bool savedInches = Printer::gcodeModes.inches();
-    Printer::gcodeModes.setInches(0); //to save possible G21 .. weiß net ob das so wichtig wäre ^^.
+    Printer::gcodeModes.setInches(0); // To save possible G21 .. weiß net ob das so wichtig wäre ^^.
     Printer::setEPositionMM(0); // G92 E0
 
-        //normalize dms sensor values to 0 if allowed in options and not already done
+        // Normalize dms sensor values to 0 if allowed in options and not already done
     if (!Printer::strainGauge.zeroOffset())
         Printer::homeDigits();
 
@@ -467,12 +467,12 @@ void unloadFilament(GCode* pCommand) {
                 break;
             }
             if (Printer::checkAbortKeys()) {
-                e = float(outputLength); //for sure exits because of no retrys
-                retry = 0;               //exits moves
+                e = float(outputLength); // For sure exits because of no retrys
+                retry = 0;               // Exits moves
                 UI_STATUS_UPD(UI_TEXT_ABORT_KEYPRESSED);
                 break;
             }
-            e -= de; //mm - kleine schritte auf Zug
+            e -= de; // mm - kleine schritte auf Zug
             if (fabs(e) > 5.0f /*mm*/ && eFeedrate < 10.0f /*mm/s*/) {
                 eFeedrate += (fabs(e) > 10.0f ? 0.01f : 0.001f); // mm/s
             }
@@ -486,11 +486,11 @@ void unloadFilament(GCode* pCommand) {
         if (Printer::printJob.commandsBlocked())
             break;
         if (t > Extruder::current->tempControl.targetTemperatureC && fabs(e) < 10.0f /*mm*/) {
-            //wenn der extruder nicht weiterkommt und die bisherige wegstrecke unter 10mm ist, dann etwas die Temperatur erhöhen und nochmal ziehen.
+            // Wenn der extruder nicht weiterkommt und die bisherige wegstrecke unter 10mm ist, dann etwas die Temperatur erhöhen und nochmal ziehen.
             Extruder::setTemperatureForExtruder(t, Extruder::current->id);
             Extruder::current->tempControl.waitForTargetTemperature();
         } else if (fabs(e) >= 10.0f /*mm*/) {
-            //das filament kam schon etwas raus, hängt aber nun.
+            // Das filament kam schon etwas raus, hängt aber nun.
             if (!retry--) {
                 break;
             }

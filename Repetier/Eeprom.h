@@ -98,9 +98,9 @@ have problems with other modules using the eeprom */
 #define EPR_RF_MOVE_MODE_Z 1044
 #define EPR_RF_Z_MODE 1045
 #define EPR_RF_MOVE_MODE_XY_KOSYS 1046
-#define EPR_RF_MOVE_POSITION_FEEDRATE 1047 //das ist byte, 1048 wäre frei.
+#define EPR_RF_MOVE_POSITION_FEEDRATE 1047 // Das ist byte, 1048 wäre frei.
 
-//vorsicht bei mehrbytigen Variablen, dann freilassen.
+// Vorsicht bei mehrbytigen Variablen, dann freilassen.
 
 #define EPR_RF_MOD_Z_STEP_SIZE 1900 //+1901 Manual Z jog increment in steps [uint16_t]
 //+1902+1903 waren mal verwendet, long -> short, nun frei.
@@ -156,7 +156,7 @@ have problems with other modules using the eeprom */
 #define EPR_RF_PREHEAT_B_BED 1974
 #define EPR_RF_PREHEAT_B_HOTEND 1976
 
-//Nibbels: Computechecksum geht bis 2047
+// Nibbels: Computechecksum geht bis 2047
 
 #define EEPROM_EXTRUDER_OFFSET 200
 
@@ -172,7 +172,7 @@ have problems with other modules using the eeprom */
 
 // Acceleration in mm/s^2
 #define EPR_EXTRUDER_MAX_ACCELERATION 12
-//old #define EPR_EXTRUDER_HEAT_MANAGER       16
+// Old #define EPR_EXTRUDER_HEAT_MANAGER       16
 #define EPR_EXTRUDER_DRIVE_MAX 17
 #define EPR_EXTRUDER_PID_PGAIN 18
 #define EPR_EXTRUDER_PID_IGAIN 22
@@ -180,7 +180,7 @@ have problems with other modules using the eeprom */
 #define EPR_EXTRUDER_PID_MAX 30
 #define EPR_EXTRUDER_X_OFFSET 31
 #define EPR_EXTRUDER_Y_OFFSET 35
-//old #define EPR_EXTRUDER_WATCH_PERIOD       39
+// Old #define EPR_EXTRUDER_WATCH_PERIOD       39
 #define EPR_EXTRUDER_ADVANCE_K 41
 #define EPR_EXTRUDER_DRIVE_MIN 45
 #define EPR_EXTRUDER_ADVANCE_L 46

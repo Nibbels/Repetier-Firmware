@@ -372,7 +372,7 @@ UI_MENU_ACTIONSELECTOR(ui_menu_go_ypos, UI_TEXT_Y_POSITION, ui_menu_ypos)
 UI_MENU_ACTIONSELECTOR(ui_menu_go_zpos, UI_TEXT_Z_POSITION, ui_menu_zpos)
 #define UI_SPEED_COND &ui_menu_go_xpos, &ui_menu_go_ypos, &ui_menu_go_zpos,
 
-//Nibbels: Das Einstellmenü für die Z-Step-Höhe:
+// Nibbels: Das Einstellmenü für die Z-Step-Höhe:
 UI_MENU_ACTIONCOMMAND(ui_menu_config_single_steps, UI_TEXT_CONFIG_SINGLE_STEPS, UI_ACTION_CONFIG_SINGLE_STEPS)
 #define UI_CONFIG_SINGLE_STEPS &ui_menu_config_single_steps,
 
@@ -470,7 +470,7 @@ UI_MENU(ui_menu_extruder,UI_MENU_EXTRUDER)
 /** \brief Quick menu */
 
 UI_MENU_ACTION4(ui_menu_quick_stop_print_ack, UI_ACTION_STOP_ACK, UI_TEXT_STOP_PRINT_ACK, "", UI_ACTION_TEXT_YES, UI_ACTION_TEXT_NO)
-//das stoppen kann auch über den repetierserver laufen, wenn man dem "RequestStop:" schickt, also parallel machen!! und für normale drucke das menü auch zulassen:
+// Das stoppen kann auch über den repetierserver laufen, wenn man dem "RequestStop:" schickt, also parallel machen!! und für normale drucke das menü auch zulassen:
 UI_MENU_ACTIONSELECTOR_FILTER(ui_menu_quick_stop_print, UI_TEXT_STOP_PRINT, ui_menu_quick_stop_print_ack, MENU_MODE_PRINTING, 0)
 
 

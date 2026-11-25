@@ -115,9 +115,9 @@ void UIDisplay::mainSwitchCase(int action) {
         // show that we are active
         Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
 
-        //DO NOT MOVE Z: ALTER Z-OFFSET
+        // DO NOT MOVE Z: ALTER Z-OFFSET
         if (uid.menuLevel == 0 && uid.menuPos[0] == 1) {
-            //wenn im Mod-Menü für Z-Offset/Matrix Sense-Offset/Limiter, dann anders!
+            // Wenn im Mod-Menü für Z-Offset/Matrix Sense-Offset/Limiter, dann anders!
             zOffsetMinusAction();
         } //ELSE DO MOVE Z:
         else {
@@ -128,8 +128,8 @@ void UIDisplay::mainSwitchCase(int action) {
     case UI_ACTION_RF_HEAT_BED_DOWN: {
         // show that we are active
         Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
-                                                         //DO NOT MOVE Z: ALTER Z-OFFSET
-        if (uid.menuLevel == 0 && uid.menuPos[0] == 1) { //wenn im Mod-Menü für Z-Offset/Matrix Z-Offset/Matrix Sense-Offset/Limiter, dann anders!
+                                                         // DO NOT MOVE Z: ALTER Z-OFFSET
+        if (uid.menuLevel == 0 && uid.menuPos[0] == 1) { // Wenn im Mod-Menü für Z-Offset/Matrix Z-Offset/Matrix Sense-Offset/Limiter, dann anders!
             zOffsetPlusAction();
         } //ELSE DO MOVE Z:
         else {
@@ -356,7 +356,7 @@ void UIDisplay::mainSwitchCase(int action) {
     case UI_ACTION_UNMOUNT_FILAMENT_HARD: {
         Printer::idleStatus.cancel();
         while (Printer::checkAbortKeys())
-            Commands::checkForPeriodicalActions(); //dont quit script by holding the ok longer than 1ms if no temp is involved. -> min einmal OK loslassen.
+            Commands::checkForPeriodicalActions(); // Dont quit script by holding the ok longer than 1ms if no temp is involved. -> min einmal OK loslassen.
         bool unmount = (action == UI_ACTION_UNMOUNT_FILAMENT_SOFT || action == UI_ACTION_UNMOUNT_FILAMENT_HARD);
         exitmenu();
 
@@ -487,16 +487,16 @@ void UIDisplay::mainSwitchCase(int action) {
         break;
     }
     case UI_ACTION_RF_DO_MHIER_BED_SCAN: {
-        //macht an, wenn an, macht aus:
+        // Macht an, wenn an, macht aus:
         startZOScan();
-        //gehe zurück und zeige dem User was passiert.
+        // Gehe zurück und zeige dem User was passiert.
         exitmenu();
         break;
     }
     case UI_ACTION_RF_DO_MHIER_AUTO_MATRIX_LEVELING: {
-        //macht an, wenn an, macht aus:
-        startZOScan(true); //Scan aber an vielen Punkten und Gewichtet.
-                           //gehe zurück und zeige dem User was passiert.
+        // Macht an, wenn an, macht aus:
+        startZOScan(true); // Scan aber an vielen Punkten und Gewichtet.
+                           // Gehe zurück und zeige dem User was passiert.
         exitmenu();
         break;
     }
@@ -520,25 +520,25 @@ void UIDisplay::mainSwitchCase(int action) {
 
     case UI_ACTION_RF_SCAN_HEAT_BED: {
         startHeatBedScan(HeatBedScanMode::Standard);
-        //gehe zurück und zeige dem User was passiert.
+        // Gehe zurück und zeige dem User was passiert.
         uid.exitmenu();
         break;
     }
     case UI_ACTION_RF_SCAN_HEAT_BED_PLA: {
         startHeatBedScan(HeatBedScanMode::Pla);
-        //gehe zurück und zeige dem User was passiert.
+        // Gehe zurück und zeige dem User was passiert.
         uid.exitmenu();
         break;
     }
     case UI_ACTION_RF_SCAN_HEAT_BED_ABS: {
         startHeatBedScan(HeatBedScanMode::Abs);
-        //gehe zurück und zeige dem User was passiert.
+        // Gehe zurück und zeige dem User was passiert.
         uid.exitmenu();
         break;
     }
 
     case UI_ACTION_RF_OUTPUT_OBJECT: {
-        outputObject(); //als UI_ACTION_RF_OUTPUT_OBJECT
+        outputObject(); // Als UI_ACTION_RF_OUTPUT_OBJECT
         break;
     }
     }

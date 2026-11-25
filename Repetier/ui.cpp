@@ -378,7 +378,7 @@ void UIDisplay::initializeLCD(bool normal) {
     WRITE(UI_DISPLAY_RS_PIN, LOW);
     WRITE(UI_DISPLAY_ENABLE_PIN, LOW);
 
-    //put the LCD into 4 bit mode
+    // Put the LCD into 4 bit mode
     // this is according to the hitachi HD44780 datasheet
     // figure 24, pg 46
 
@@ -780,7 +780,7 @@ void UIDisplay::pushMenu(void* men, bool refresh) {
 
 void UIDisplay::menuEsc() {
     if (menuLevel == 1 && menuPos[0] == 1) {
-        //der würde in das modmenü zurückgehen, da sind aber die rechtst links tasten anders belegt, daher nicht da rein! sonst evtl. verstellen von DigitLimit.
+        // Der würde in das modmenü zurückgehen, da sind aber die rechtst links tasten anders belegt, daher nicht da rein! sonst evtl. verstellen von DigitLimit.
         menuPos[0] = 0;
     }
     if (menuLevel > 0)
@@ -868,9 +868,9 @@ void UIDisplay::rightAction() {
 
 void UIDisplay::backAction() {
     if (menuLevel == 0 && menuPos[0] == 1) {
-        //wenn im Mod-Menü für Z-Offset/Matrix Sense-Offset/Limiter, dann anders!
-        //we are in the Mod menu
-        //verkleinern des Digit-Limits
+        // Wenn im Mod-Menü für Z-Offset/Matrix Sense-Offset/Limiter, dann anders!
+        // We are in the Mod menu
+        // Verkleinern des Digit-Limits
         senseOffsetDownAction();
     } else
     {
@@ -984,7 +984,7 @@ void UIDisplay::nextPreviousAction(int8_t next) {
     UIMenuEntry** entries = (UIMenuEntry**)pgm_read_word(&(men->entries));
     UIMenuEntry* ent = (UIMenuEntry*)pgm_read_word(&(entries[menuPos[menuLevel]]));
     uint8_t entType = HAL::readFlashByte((const prog_char*)&(ent->menuType)); // 0 = Info, 1 = Headline, 2 = submenu ref, 3 = direct action command
-    (void)entType;                                                            //ignore unused error Nibbels
+    (void)entType;                                                            // Ignore unused error Nibbels
     int action = pgm_read_word(&(ent->action));
 
     if (mtype == UI_MENU_TYPE_SUBMENU && activeAction == 0) {
@@ -1044,7 +1044,7 @@ void UIDisplay::slowAction() {
         const millis_t buttonAge = HAL::timeInMilliseconds() - lastButtonStart;
         noInts.unprotect();
         if (lastAction != buttonAction) {
-            //Bei beliebiger user interaktion oder Homing soll G1 etc. erlaubt werden. Dann ist der Drucker nicht abgestürzt, sondern bedient worden.
+            // Bei beliebiger user interaktion oder Homing soll G1 etc. erlaubt werden. Dann ist der Drucker nicht abgestürzt, sondern bedient worden.
             Printer::allowMovement();
             if (buttonAction == 0) {
                 lastAction = 0;

@@ -236,7 +236,7 @@ static char loadCompensationMatrix(unsigned int uAddress, void (*progress)()) {
     g_uZMatrixMax[Y_AXIS] = uDimensionY;
     determineCompensationOffsetZ();
     g_ZCompensationMatrix[0][0] = EEPROM_FORMAT;
-    g_ZMatrixChangedInRam = 0; //Nibbels: Marker, dass die Matrix gespeichert werden kann oder eben nicht, weils unverändert keinen Sinn macht.
+    g_ZMatrixChangedInRam = 0; // Nibbels: Marker, dass die Matrix gespeichert werden kann oder eben nicht, weils unverändert keinen Sinn macht.
 
     return 0;
 } // loadCompensationMatrix
@@ -332,10 +332,5 @@ static void prepareZCompensationWithProgress(void (*progress)()) {
 void prepareZCompensation(void) {
     prepareZCompensationWithProgress(nullptr);
 }
-
-
-/**************************************************************************************************************************************/
-
-/**************************************************************************************************************************************/
 
 #endif // BED_MATRIX_STORAGE_H

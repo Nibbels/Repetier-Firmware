@@ -26,7 +26,7 @@ void configureMANUAL_STEPS_Z(int8_t increment) {
     const unsigned short stepsize_table[NUM_ACCEPTABLE_STEP_SIZE_TABLE] PROGMEM = ACCEPTABLE_STEP_SIZE_TABLE;
 
     int loop = 0;
-    //suche die aktuelle Einstellungsposition (oder aufgerundet) in der Tabelle:
+    // Suche die aktuelle Einstellungsposition (oder aufgerundet) in der Tabelle:
     for (loop = 0; loop < NUM_ACCEPTABLE_STEP_SIZE_TABLE; loop++)
         if (stepsize_table[loop] >= Printer::manualMotion.steps(Z_AXIS))
             break;
@@ -37,19 +37,18 @@ void configureMANUAL_STEPS_Z(int8_t increment) {
     else
         loop -= 1;
 
-    //begrenze ringmenge
+    // Begrenze ringmenge
     if (loop > NUM_ACCEPTABLE_STEP_SIZE_TABLE - 1)
         loop = 0;
     else if (loop < 0)
         loop = NUM_ACCEPTABLE_STEP_SIZE_TABLE - 1;
 
-    //nutze neuen Wert:
+    // Nutze neuen Wert:
     Printer::manualMotion.setSteps(Z_AXIS, stepsize_table[loop]);
 
     HAL::eprSetInt16(EPR_RF_MOD_Z_STEP_SIZE, Printer::manualMotion.steps(Z_AXIS));
     EEPROM::updateChecksum();
 } // configureMANUAL_STEPS_Z()
-/**************************************************************************************************************************************/
 
 void moveXAction(int8_t direction) {
     bool moveKosys = Printer::manualMotion.coordinateSystem();
@@ -135,7 +134,7 @@ void moveXAction(int8_t direction) {
         }
 
         int32_t steps;
-        //errate homed möglichst den erzwungenen stop-punkt wegen dem bonus der decelleration
+        // Errate homed möglichst den erzwungenen stop-punkt wegen dem bonus der decelleration
         if (direction < 0)
             steps = (Printer::isAxisHomed(X_AXIS) ? -Printer::xyMotion.motorSteps(X_AXIS) : -Printer::xyMaxSteps(X_AXIS));
         else
@@ -231,7 +230,7 @@ void moveYAction(int8_t direction) {
         }
 
         int32_t steps;
-        //errate homed möglichst den erzwungenen stop-punkt wegen dem bonus der decelleration
+        // Errate homed möglichst den erzwungenen stop-punkt wegen dem bonus der decelleration
         if (direction < 0)
             steps = (Printer::isAxisHomed(Y_AXIS) ? -Printer::xyMotion.motorSteps(Y_AXIS) : -Printer::xyMaxSteps(Y_AXIS));
         else
@@ -256,10 +255,10 @@ void moveZAction(int8_t direction) {
 
     const int button = uid.activeButton();
     if (button == UI_ACTION_RF_HEAT_BED_DOWN || button == UI_ACTION_RF_HEAT_BED_UP) {
-        //es wäre evtl. cooler die variable durchzuschleifen, aber so gehts auch!
-        //VORSICHT: ES könnte evtl. sein dass sich lastbuttonaction während der ausführung ändert. (??)
+        // Es wäre evtl. cooler die variable durchzuschleifen, aber so gehts auch!
+        // VORSICHT: ES könnte evtl. sein dass sich lastbuttonaction während der ausführung ändert. (??)
 
-        //sollte diese Aktion durch die Knöpfe ausgeführt worden sein, dann in der Sprungweite limitieren:
+        // Sollte diese Aktion durch die Knöpfe ausgeführt worden sein, dann in der Sprungweite limitieren:
         if (PrintLine::hasLines()) {
             // there is some printing in progress at the moment - do not allow single move in this case
             moveMode = MOVE_MODE_SINGLE_STEPS;
@@ -275,7 +274,7 @@ void moveZAction(int8_t direction) {
         moveMode = MOVE_MODE_SINGLE_STEPS;
     }
 
-    //Limits für die Bewegung in Z
+    // Limits für die Bewegung in Z
     if (direction > 0 && Printer::isZMaxEndstopHit()) {
         // we shall move to the front but the end of the y-axis has been reached already, so we do nothing
         showInformation((void*)ui_text_z_axis, (void*)ui_text_max_reached);
@@ -286,7 +285,7 @@ void moveZAction(int8_t direction) {
         if (!Printer::isAxisHomed(Z_AXIS)) {
             return;
         } else {
-            //fall down to Single Steps @Endstop
+            // Fall down to Single Steps @Endstop
             moveMode = MOVE_MODE_SINGLE_STEPS;
         }
     }

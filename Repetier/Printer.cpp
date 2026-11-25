@@ -30,7 +30,7 @@ ManualMotion Printer::manualMotion(
     lroundf(EXT0_STEPS_PER_MM * DEFAULT_MANUAL_MM_E));
 
 
-//Stepper Movement Variables
+// Stepper Movement Variables
 float Printer::axisStepsPerMM_[4] = { XAXIS_STEPS_PER_MM, YAXIS_STEPS_PER_MM, ZAXIS_STEPS_PER_MM, 1 };                      ///< Number of steps per mm needed.
 float Printer::axisMMPerSteps_[4] = { 1.0f / XAXIS_STEPS_PER_MM, 1.0f / YAXIS_STEPS_PER_MM, 1.0f / ZAXIS_STEPS_PER_MM, 1 }; ///< Inverse of axisStepsPerMM for faster conversion
 float Printer::maxFeedrate_[4] = { MAX_FEEDRATE_X, MAX_FEEDRATE_Y, MAX_FEEDRATE_Z, STANDARD_POSITION_FEEDRATE_E };          ///< Maximum allowed feedrate. //STANDARD_POSITION_FEEDRATE_E added by nibbels, wird aber überschrieben.
@@ -92,7 +92,7 @@ char Printer::enabledStepper[3] = { 0, 0, 0 };
 
 
 
-//When the printer resets, we should not do movement, because it would not be homed. At least some interaction with buttons or temperature-commands are needed to allow movement.
+// When the printer resets, we should not do movement, because it would not be homed. At least some interaction with buttons or temperature-commands are needed to allow movement.
 bool Printer::movementUnlocked_ = false;
 
 
@@ -416,12 +416,12 @@ void Printer::setup() {
         }
     }
 
-    //Initialize Step Pins
+    // Initialize Step Pins
     SET_OUTPUT(X_STEP_PIN);
     SET_OUTPUT(Y_STEP_PIN);
     SET_OUTPUT(Z_STEP_PIN);
 
-    //Initialize Dir Pins
+    // Initialize Dir Pins
 #if X_DIR_PIN > -1
     SET_OUTPUT(X_DIR_PIN);
 #endif // X_DIR_PIN>-1
@@ -434,7 +434,7 @@ void Printer::setup() {
     SET_OUTPUT(Z_DIR_PIN);
 #endif // Z_DIR_PIN>-1
 
-    //Steppers default to disabled.
+    // Steppers default to disabled.
 #if X_ENABLE_PIN > -1
     SET_OUTPUT(X_ENABLE_PIN);
     if (!X_ENABLE_ON)
@@ -640,7 +640,7 @@ void Printer::stopPrint() {
         PrintLine::stopDirectMove();
     pause.cancel();
 
-    //erase the coordinates and kill the current taskplaner:
+    // Erase the coordinates and kill the current taskplaner:
     PrintLine::discardQueuedMoves();
 
     setXAxisSteps(xyMotion.nominalSteps(X_AXIS));

@@ -420,28 +420,28 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
             } else if (!ram && c2 == '1') // %m1 : message line 1
             {
                 if (messageLine1 != 0) {
-                    col = 0;                                   //Nibbels: kill first space because this is menutab
+                    col = 0;                                   // Nibbels: kill first space because this is menutab
                     parse((char PROGMEM*)messageLine1, false); //addStringP((char PROGMEM *)messageLine1);
                 }
                 break;
             } else if (!ram && c2 == '2') // %m2 : message line 2
             {
                 if (messageLine2 != 0) {
-                    col = 0;                                   //Nibbels: kill first space because this is menutab
+                    col = 0;                                   // Nibbels: kill first space because this is menutab
                     parse((char PROGMEM*)messageLine2, false); //addStringP((char PROGMEM *)messageLine2);
                 }
                 break;
             } else if (!ram && c2 == '3') // %m3 : message line 3
             {
                 if (messageLine3 != 0) {
-                    col = 0;                                   //Nibbels: kill first space because this is menutab
+                    col = 0;                                   // Nibbels: kill first space because this is menutab
                     parse((char PROGMEM*)messageLine3, false); //addStringP((char PROGMEM *)messageLine3);
                 }
                 break;
             } else if (!ram && c2 == '4') // %m4 : message line 4
             {
                 if (messageLine4 != 0) {
-                    col = 0;                                   //Nibbels: kill first space because this is menutab
+                    col = 0;                                   // Nibbels: kill first space because this is menutab
                     parse((char PROGMEM*)messageLine4, false); //addStringP((char PROGMEM *)messageLine4);
                 }
                 break;
@@ -852,7 +852,7 @@ void UIDisplay::renderPositionField(char c1, char c2, float& fvalue) {
                 if (ZScrewAdjustment::current().status == ZScrewAdjustment::Status::Ok)
                     addStringP(ui_ok); //ok
                 else if (ZScrewAdjustment::current().status == ZScrewAdjustment::Status::BedTooHigh)
-                    addStringP(ui_neetfix); //zu hohes bett
+                    addStringP(ui_neetfix); // Zu hohes bett
                 else
                     addStringP(ui_fail); //fail
             } else if (c2 == 'D')        // %zD : Z-Schraube richtung
@@ -898,7 +898,7 @@ void UIDisplay::renderExtruderField(char c1, char c2) {
             } else if (c2 == 'S') // %XS : Temperature Sensor
             {
                 if (menuLevel == 4 && menuPos[menuLevel - 1] < NUM_TEMPERATURE_LOOPS) {
-                    addInt(tempController[menuPos[menuLevel - 1]]->sensorType, 2); //mit type 100 wärens 3 zeichen, aber das kommt in praxis nicht vor.
+                    addInt(tempController[menuPos[menuLevel - 1]]->sensorType, 2); // Mit type 100 wärens 3 zeichen, aber das kommt in praxis nicht vor.
                     switch (tempController[menuPos[menuLevel - 1]]->sensorType) {
                     case 1: {
                         addStringP(PSTR(UI_TEXT_SENSOR_1));
@@ -928,22 +928,22 @@ void UIDisplay::renderExtruderField(char c1, char c2) {
 
             else if (c2 == 't') // %Xt : Description for PID autotune type in menu
             {
-                col = 0;                          //reset linemarker -> start at first display char. overwrite things before this %tag -> erstes Zeichen brauchen wir in diesem menü nicht.
-                switch (menuPos[menuLevel - 1]) { //das sagt mir, in welchem untermenü ich bin. die zahl drin entspricht fast dem Jx aus dem M303, aber J0 und J1 sind der intuitiven Ordnung halber vertauscht. J2 ist rausgelassen worden, weil wir das eigentlich nicht brauchen. J3->2 J4->3
+                col = 0;                          // Reset linemarker -> start at first display char. overwrite things before this %tag -> erstes Zeichen brauchen wir in diesem menü nicht.
+                switch (menuPos[menuLevel - 1]) { // Das sagt mir, in welchem untermenü ich bin. die zahl drin entspricht fast dem Jx aus dem M303, aber J0 und J1 sind der intuitiven Ordnung halber vertauscht. J2 ist rausgelassen worden, weil wir das eigentlich nicht brauchen. J3->2 J4->3
                 case 0: {
-                    addStringP(PSTR(UI_ACTION_TEXT_PESSEN_TIPP)); //tipp für pessen integral rule
+                    addStringP(PSTR(UI_ACTION_TEXT_PESSEN_TIPP)); // Tipp für pessen integral rule
                     break;
                 }
                 case 1: {
-                    addStringP(PSTR(UI_ACTION_TEXT_CLASSICPID_TIPP)); //tipp für classic pid
+                    addStringP(PSTR(UI_ACTION_TEXT_CLASSICPID_TIPP)); // Tipp für classic pid
                     break;
                 }
                 case 2: {
-                    addStringP(PSTR(UI_ACTION_TEXT_NO_TIPP)); //tipp für no overshoot
+                    addStringP(PSTR(UI_ACTION_TEXT_NO_TIPP)); // Tipp für no overshoot
                     break;
                 }
                 case 3: {
-                    addStringP(PSTR(UI_ACTION_TEXT_TYREUS_LYBEN_TIPP)); //tipp für tyreus lyben
+                    addStringP(PSTR(UI_ACTION_TEXT_TYREUS_LYBEN_TIPP)); // Tipp für tyreus lyben
                     break;
                 }
                 }

@@ -203,11 +203,11 @@ void ZOffsetScan::initialize() {
     Printer::idleStatus.cancel();
     Com::printFLN(PSTR("ZOS init"));
     phase_ = Phase::HomeForProbe;
-    probeZSteps_ = long(Printer::stepsPerMm(Z_AXIS) * Calibration::probeSettings().startLiftMm); //nur nutzen wenn kleiner.
+    probeZSteps_ = long(Printer::stepsPerMm(Z_AXIS) * Calibration::probeSettings().startLiftMm); // Nur nutzen wenn kleiner.
 }
 
 void ZOffsetScan::homeForProbe() {
-    //bissel übertrieben, sollte aber jede eventualität abfangen: Wir brauchen die maximale Matrix-Dimension auch schon hier (ganz grob) und wollen nicht so lange warten.
+    // Bissel übertrieben, sollte aber jede eventualität abfangen: Wir brauchen die maximale Matrix-Dimension auch schon hier (ganz grob) und wollen nicht so lange warten.
     unsigned short uDimensionX, uDimensionY;
     if (bedMatrixAvailable()) {
         uDimensionX = BedMatrix::maxIndex(X_AXIS) - 1;
@@ -477,17 +477,17 @@ void configureZOffsetScan(GCode* pCommand) {
     }
 
     if (bedMatrixAvailable()) {
-        if (!pCommand->hasR()) { //Normaler ZOS, kein Auto-Matrix-Leveling.
+        if (!pCommand->hasR()) { // Normaler ZOS, kein Auto-Matrix-Leveling.
             auto settings = zOffsetScan.settings();
             if (pCommand->hasX()) {
                 // test and take over the specified value
                 unsigned char nTempUC = (unsigned char)pCommand->X;
 
-                //Wessix idee: zufalls-Scanpunkt wegen DDP-Platten-Schonung.
+                // Wessix idee: zufalls-Scanpunkt wegen DDP-Platten-Schonung.
                 if (nTempUC == 0)
                     nTempUC = (unsigned char)random((heatBedScanXStartMm == 0) ? 1 : 2, BedMatrix::maxIndex(X_AXIS)); // ergibt min bis max-1
 
-                //wenn die Startposition nicht 0 ist, wird eine Dummy-Matrix-Linie ergänzt. Mit der sollten wir nicht arbeiten.
+                // Wenn die Startposition nicht 0 ist, wird eine Dummy-Matrix-Linie ergänzt. Mit der sollten wir nicht arbeiten.
                 if (nTempUC < 1 + ((heatBedScanXStartMm == 0) ? 0 : 1))
                     nTempUC = 1 + ((heatBedScanXStartMm == 0) ? 0 : 1);
                 if (nTempUC > BedMatrix::maxIndex(X_AXIS) - 1)
@@ -498,7 +498,7 @@ void configureZOffsetScan(GCode* pCommand) {
                 unsigned char oldval = HAL::eprGetByte(EPR_RF_MOD_ZOS_SCAN_POINT_X);
                 if (oldval != settings.point.x) {
                     HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_X, settings.point.x);
-                    EEPROM::updateChecksum(); //deshalb die prüfung
+                    EEPROM::updateChecksum(); // Deshalb die prüfung
                 }
 
                 if (Printer::debugInfo()) {
@@ -516,7 +516,7 @@ void configureZOffsetScan(GCode* pCommand) {
                 // test and take over the specified value
                 unsigned char nTempUC = (unsigned char)pCommand->Y;
 
-                //Wessix idee: zufalls-Scanpunkt wegen DDP-Platten-Schonung.
+                // Wessix idee: zufalls-Scanpunkt wegen DDP-Platten-Schonung.
                 if (nTempUC == 0)
                     nTempUC = (unsigned char)random((heatBedScanYStartMm == 0) ? 1 : 2, BedMatrix::maxIndex(Y_AXIS)); // ergibt min bis max-1
 
@@ -530,7 +530,7 @@ void configureZOffsetScan(GCode* pCommand) {
                 unsigned char oldval = HAL::eprGetByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y);
                 if (oldval != settings.point.y) {
                     HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y, settings.point.y);
-                    EEPROM::updateChecksum(); //deshalb die prüfung
+                    EEPROM::updateChecksum(); // Deshalb die prüfung
                 }
 
                 if (Printer::debugInfo()) {

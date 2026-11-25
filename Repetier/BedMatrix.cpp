@@ -143,7 +143,7 @@ bool saveScannedGrid() {
 
 ZOffsetResult applyZOffset(long nZ, ZOffsetScanPoint point, float gradient, long maximumHeight) {
     ZOffsetResult result{};
-    //Nibbels: weight change because of distance. lerne bettwinkelausgleich.
+    // Nibbels: weight change because of distance. lerne bettwinkelausgleich.
     const int xIntervals = RMath::max(1, g_uZMatrixMax[X_AXIS] - 2);
     const int yIntervals = RMath::max(1, g_uZMatrixMax[Y_AXIS] - 2);
     const float x_bed_len_quadrat = xIntervals * xIntervals;
@@ -156,25 +156,25 @@ ZOffsetResult applyZOffset(long nZ, ZOffsetScanPoint point, float gradient, long
 
     for (short x = 1; x <= g_uZMatrixMax[X_AXIS]; x++) {
         for (short y = 1; y <= g_uZMatrixMax[Y_AXIS]; y++) {
-            x_dist = (point.x - x) * (point.x - x) / x_bed_len_quadrat; //normierter indexabstand
-            y_dist = (point.y - y) * (point.y - y) / y_bed_len_quadrat; //normierter indexabstand
+            x_dist = (point.x - x) * (point.x - x) / x_bed_len_quadrat; // Normierter indexabstand
+            y_dist = (point.y - y) * (point.y - y) / y_bed_len_quadrat; // Normierter indexabstand
             x_dist = sqrt(x_dist);                                                                    //Linearisieren. für Auto-Matrix-Leveling
             y_dist = sqrt(y_dist);                                                                    //Linearisieren. für Auto-Matrix-Leveling
-            //das ist nur ein kreisabstand, wenn die messpunkte quadratisch angeordnet sind, ist aber nicht so?
+            // Das ist nur ein kreisabstand, wenn die messpunkte quadratisch angeordnet sind, ist aber nicht so?
             // evtl. todo: achse faktor skalieren, sodass kreis x/y=(10/13)
-            xy_weight = 1 - sqrt(x_dist * x_dist + y_dist * y_dist); //linear gewichtet
+            xy_weight = 1 - sqrt(x_dist * x_dist + y_dist * y_dist); // Linear gewichtet
             if (xy_weight < 0.0)
                 xy_weight = 0;
             if (xy_weight > 1.0)
-                xy_weight = 1.0; //kann aber nicht wirklich vorkommen.
+                xy_weight = 1.0; // Kann aber nicht wirklich vorkommen.
             weighted_nZ = (long)(gradient * xy_weight * (float)nZ + (1.0 - gradient) * (float)nZ);
             newValue = (long)g_ZCompensationMatrix[x][y] + weighted_nZ;
             if (newValue > 32767 || newValue < -32768)
                 result.overflow = true;
             if (newValue > 0)
-                result.aboveZero = true; //darf nicht positiv werden. //darf nicht über limit sein.
+                result.aboveZero = true; // Darf nicht positiv werden. //darf nicht über limit sein.
             if (newValue > maximumHeight)
-                result.tooHigh = true; //darf nicht positiv werden. //darf nicht über limit sein.
+                result.tooHigh = true; // Darf nicht positiv werden. //darf nicht über limit sein.
             g_ZCompensationMatrix[x][y] = (short)newValue;
         }
     }

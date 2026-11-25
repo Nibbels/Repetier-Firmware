@@ -46,7 +46,7 @@ public:
     float I;    ///< G-code I value if set
     float J;    ///< G-code J value if set
     float R;    ///< G-code R value if set
-    //protocol version 3:
+    // Protocol version 3:
     float D; ///< G-code D value if set
     float C; ///< G-code C value if set
     float H; ///< G-code H value if set
@@ -57,7 +57,7 @@ public:
     float O; ///< G-code O value if set
 
     char* text; ///< Text message of g-code if present.
-    //moved the byte to the end and aligned ints on short boundary
+    // Moved the byte to the end and aligned ints on short boundary
     // Old habit from PC, which require alignments for data types such as int and long to be on 2 or 4 byte boundary
     // Otherwise, the compiler adds padding, wasted space.
     uint8_t T; // This may not matter on any of these controllers, but it can't hurt
@@ -157,7 +157,7 @@ public:
         return ((params2 & 4) != 0);
     } // hasR
 
-    //new identifiers
+    // New identifiers
     inline bool hasD() {
         return ((params2 & 8) != 0);
     }

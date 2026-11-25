@@ -388,7 +388,7 @@ public:
             : "cc", "memory");
     }
 
-    static inline void delayMicroseconds(unsigned int delayUs) //see https://www.arduino.cc/en/Reference/AttachInterrupt for interrupt-warning.
+    static inline void delayMicroseconds(unsigned int delayUs) // See https://www.arduino.cc/en/Reference/AttachInterrupt for interrupt-warning.
     {
         ::delayMicroseconds(delayUs);
     } // delayMicroseconds
@@ -515,7 +515,7 @@ public:
     static int getFreeRam();
     static void resetHardware();
 
-    //Nibbels: Use watchdog to trigger external watchdog with constant time function according to command loop.
+    // Nibbels: Use watchdog to trigger external watchdog with constant time function according to command loop.
     static void WDT_Init(void);
 
     // Watchdog support

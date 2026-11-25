@@ -96,7 +96,7 @@ void Extruder::manageTemperatures() {
                 act->setSensorDefect(true);
                 if (!Printer::isAnyTempsensorDefect()) {
                     Printer::latchOutputInhibit(true);
-                    Printer::markTemperatureReadingsAvailable(); //we are not waiting for first temp measurements anymore.
+                    Printer::markTemperatureReadingsAvailable(); // We are not waiting for first temp measurements anymore.
 
                     reportTempsensorAndHeaterErrors();
                     Printer::stopPrint();
@@ -136,9 +136,9 @@ void Extruder::manageTemperatures() {
                         }
                     }
                 } else {
-                    //wir ziehen hier die zeit und die temperatur hoch: starten einen neuen test auf einer neuen stufe.
-                    act->stopDecouple();              //without stop no clean start.
-                    act->startFullDecoupleTest(time); //set new time and current temp
+                    // Wir ziehen hier die zeit und die temperatur hoch: starten einen neuen test auf einer neuen stufe.
+                    act->stopDecouple();              // Without stop no clean start.
+                    act->startFullDecoupleTest(time); // Set new time and current temp
                 }
             } else if (act->isDecoupleHold()) {                                                                     // Phase 2: Holding temperature inside a target corridor
                 if (fabs(act->currentTemperatureC - act->targetTemperatureC) > DECOUPLING_TEST_MAX_HOLD_VARIANCE) { // failed test
@@ -162,7 +162,7 @@ void Extruder::manageTemperatures() {
                         }
                     }
                 } else {
-                    //this test ignores decoupleTestPeriod in configuration: "- act->decoupleTestPeriod" and runs every second. But not at first hold-start-time.
+                    // This test ignores decoupleTestPeriod in configuration: "- act->decoupleTestPeriod" and runs every second. But not at first hold-start-time.
                     act->lastDecoupleTest = time - act->decoupleTestPeriod + 1000; // once running test every second
                 }
             }
@@ -170,7 +170,7 @@ void Extruder::manageTemperatures() {
         if (Printer::heatingInhibited())
             continue;
 
-        act->tempArray[act->tempPointer++] = act->currentTemperatureC; //ist in jedem fall voll mit gültigen temperaturen, wenn der regelbereich erreicht wird.
+        act->tempArray[act->tempPointer++] = act->currentTemperatureC; // Ist in jedem fall voll mit gültigen temperaturen, wenn der regelbereich erreicht wird.
         //act->tempPointer &= 3; // 3 = springe von 4 = 100b auf 0 zurück,    wenn 3. -> 1/300ms  -> 3.33 = reciproke     !!tempArray needs [4] ...
         //act->tempPointer &= 7; // 7 = springe von 8 = 1000b auf 0 zurück,   wenn 7. -> 1/700ms  -> 1.42 = reciproke     !!tempArray needs [8] ...
         act->tempPointer &= 15; // 15 = springe von 16 = 10000b zurück auf 0, wenn 15 -> 1/1500ms -> 0.666 = reciproke    !!tempArray needs [16] ...
@@ -180,17 +180,17 @@ void Extruder::manageTemperatures() {
 
         if (act->targetTemperatureC < 20.0f || act->targetTemperatureC < MAX_ROOM_TEMPERATURE) {
             //targetTemperature is off
-            //we never set heating on if the commanded temperature might be lower than max room temperature.
+            // We never set heating on if the commanded temperature might be lower than max room temperature.
             output = 0; // off is off, even if damping term wants a heat peak!
             act->stopDecouple();
             act->tempIState = 0;
         } else if (error > PID_CONTROL_RANGE) {
-            //heating up to targetTemperature
+            // Heating up to targetTemperature
             output = act->pidMax;
             act->startFullDecoupleTest(time);
             act->tempIState = 0;
         } else if (error < -PID_CONTROL_RANGE) {
-            //cooling down to targetTemperature
+            // Cooling down to targetTemperature
             output = 0;
             act->tempIState = 0;
         } else {
@@ -230,7 +230,7 @@ void TemperatureController::updateTempControlVars() {
     if (pidIGain != 0) // prevent division by zero
     {
         tempIStateLimitMax = (float)pidDriveMax * PID_CONTROL_DRIVE_MAX_LIMIT_FACTOR / pidIGain;
-        tempIStateLimitMin = (float)pidDriveMin * PID_CONTROL_DRIVE_MIN_LIMIT_FACTOR / pidIGain; //Bisher hatte der PID-Regler keinen negativen I-Anteil, weil die Limits nicht ins Negative dürfen. Jetzt schon. Es ist das Minus in der Config, das die Stabilität bringt.
+        tempIStateLimitMin = (float)pidDriveMin * PID_CONTROL_DRIVE_MIN_LIMIT_FACTOR / pidIGain; // Bisher hatte der PID-Regler keinen negativen I-Anteil, weil die Limits nicht ins Negative dürfen. Jetzt schon. Es ist das Minus in der Config, das die Stabilität bringt.
     }
 } // updateTempControlVars
 
@@ -244,7 +244,7 @@ void TemperatureController::setTargetTemperature(float target) {
     targetTemperatureC = target;
     stopDecouple();
 
-    //do not set back temperatures to "not idle temperatures" after pause, if they have been changed manually within the pause.
+    // Do not set back temperatures to "not idle temperatures" after pause, if they have been changed manually within the pause.
     paused = 0;
 } // setTargetTemperature
 
@@ -325,25 +325,25 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
         Com::printFLN(Com::tAPIDTyreusLyben);
         break;
     }
-    case 3: //PID no overshoot
+    case 3: // PID no overshoot
     {
         Com::printFLN(Com::tAPIDNone);
         break;
     }
-    case 2: //PID some overshoot
+    case 2: // PID some overshoot
     {
         Com::printFLN(Com::tAPIDSome);
         break;
     }
-    case 1: //PID Pessen Integral Rule
+    case 1: // PID Pessen Integral Rule
     {
         Com::printFLN(Com::tAPIDPessen);
         break;
     }
-    default: //PID classic Ziegler-Nichols
+    default: // PID classic Ziegler-Nichols
     {
         Com::printFLN(Com::tAPIDClassic);
-        method = 0; //filter not available methods.
+        method = 0; // Filter not available methods.
     }
     }
 
@@ -434,35 +434,35 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
                         see also: http://www.mstarlabs.com/control/znrule.html
                         */
                         switch (method) {
-                        case 4: {                //PID Tyreus-Lyben ("lazy--" -> Heated Bed!)
+                        case 4: {                // PID Tyreus-Lyben ("lazy--" -> Heated Bed!)
                             Kp = 0.4545f * Ku;   //1/2.2 KRkrit
                             Ki = Kp / Tu / 2.2f; //2.2 Tkrit
                             Kd = Kp * Tu / 6.3f; //1/6.3 Tkrit[/code]
                             Com::printFLN(Com::tAPIDTyreusLyben);
                             break;
                         }
-                        case 3: {                //PID no overshoot ("lazy-" -> Heated Bed!)
+                        case 3: {                // PID no overshoot ("lazy-" -> Heated Bed!)
                             Kp = 0.2f * Ku;      //0.2 KRkrit
                             Ki = 2.0f * Kp / Tu; //0.5 Tkrit
                             Kd = Kp * Tu / 3.0f; //0.333 Tkrit
                             Com::printFLN(Com::tAPIDNone);
                             break;
                         }
-                        case 2: {                //PID some overshoot
+                        case 2: {                // PID some overshoot
                             Kp = 0.33f * Ku;     //0.33 KRkrit
                             Ki = 2.0f * Kp / Tu; //0.5 Tkrit
                             Kd = Kp * Tu / 3.0f; //0.333 Tkrit
                             Com::printFLN(Com::tAPIDSome);
                             break;
                         }
-                        case 1: {                        //PID Pessen Integral Rule ("dynamic++" -> fast Hotend!)
+                        case 1: {                        // PID Pessen Integral Rule ("dynamic++" -> fast Hotend!)
                             Kp = 0.7f * Ku;              //0.7 KRkrit
                             Ki = 2.5f * Kp / Tu;         //0.4 Tkrit
                             Kd = Kp * Tu * 3.0f / 20.0f; //0.15 Tkrit
                             Com::printFLN(Com::tAPIDPessen);
                             break;
                         }
-                        default: {               //PID classic Ziegler-Nichols  ("dynamic+" -> Hotend!)
+                        default: {               // PID classic Ziegler-Nichols  ("dynamic+" -> Hotend!)
                             Kp = 0.6f * Ku;      //0.6 KRkrit
                             Ki = 2.0f * Kp / Tu; //0.5 Tkrit
                             Kd = Kp * Tu / 8.0f; //0.125 Tkrit
@@ -498,7 +498,7 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
 } // autotunePID
 
 void reportTempsensorAndHeaterErrors() {
-    //Write full status list to console output
+    // Write full status list to console output
     for (uint8_t i = 0; i < NUM_TEMPERATURE_LOOPS; i++) {
         if (i == NUM_EXTRUDER)
             Com::printF(Com::tHeatedBed);
