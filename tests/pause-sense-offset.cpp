@@ -2876,8 +2876,8 @@ void directRamp() {
 static bool replayCanStepXY(uint8_t axis, PrintLine* move, bool queued) {
     assert(axis == X_AXIS || axis == Y_AXIS);
     if (axis == X_AXIS)
-        return queued ? canStepXY<X_AXIS, FOR_QUEUE>(move) : canStepXY<X_AXIS, FOR_DIRECT>(move);
-    return queued ? canStepXY<Y_AXIS, FOR_QUEUE>(move) : canStepXY<Y_AXIS, FOR_DIRECT>(move);
+        return queued ? canStepXY<X_AXIS, true>(move) : canStepXY<X_AXIS, false>(move);
+    return queued ? canStepXY<Y_AXIS, true>(move) : canStepXY<Y_AXIS, false>(move);
 }
 
 void xyLimits() {
