@@ -66,6 +66,7 @@ static void publishAdc() {
 }
 struct InterruptProtectedBlock {};
 static uint8_t pgm_read_byte(const uint8_t* p) { return *p; }
+static float pgm_read_float(const float* p) { return *p; }
 static int16_t pgm_read_word(const int16_t* p) { return *p; }
 static const int16_t* pgm_read_word(const int16_t* const* p) { return *p; }
 struct HAL {

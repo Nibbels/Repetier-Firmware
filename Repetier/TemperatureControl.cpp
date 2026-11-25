@@ -458,13 +458,17 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
                 }
                 if (stable >= 3 && cycles >= limit) {
                     const float ku = kuSum / stable, tu = tuSum / stable;
-                    float p, ti, td;
-                    switch (method) {
-                    case 0: p = 0.45f; ti = 1.6f; td = 0.08f; break;
-                    case 1: p = 1.0f / 2.2f; ti = 2.2f; td = 1.0f / 6.3f; break;
-                    case 2: p = 0.65f; ti = 1.6f; td = 0.16f; break;
-                    default: p = 0.45f; ti = 3.0f; td = 0.08f; break;
-                    }
+                    // Immutable tuning rules; read once after the measured cycles.
+                    static const float rules[4][3] PROGMEM = {
+                        {0.45f, 1.6f, 0.08f},
+                        {1.0f / 2.2f, 2.2f, 1.0f / 6.3f},
+                        {0.65f, 1.6f, 0.16f},
+                        {0.45f, 3.0f, 0.08f}
+                    };
+                    // Admission above restricts method to 0..3.
+                    const float p = pgm_read_float(&rules[method][0]);
+                    const float ti = pgm_read_float(&rules[method][1]);
+                    const float td = pgm_read_float(&rules[method][2]);
                     const float kp = p * ku, ki = kp / (ti * tu), kd = kp * td * tu;
                     finishAutotune(*this);
                     if (!validPidGains(kp, ki, kd)) {
