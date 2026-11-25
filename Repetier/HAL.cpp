@@ -266,8 +266,31 @@ static const uint16_t high16Periods[3072] PROGMEM = {
 #undef RF_PERIOD_2
 #undef RF_PERIOD_1
 
+// Split the nibble shift into byte operations. AVR-GCC otherwise emits a
+// four-iteration 16-bit shift loop for the most frequently used high range.
+inline uint16_t periodIndex16(uint16_t divisor) {
+    const uint8_t high = divisor >> 8;
+    const uint8_t low = divisor;
+    return (static_cast<uint16_t>(high >> 4) << 8) |
+           static_cast<uint8_t>((high << 4) | (low >> 4));
+}
+
 inline uint16_t unpackPeriod(uint16_t packed, uint8_t offset) {
-    return (packed & 0x0fffU) + (offset < (packed >> 12));
+    const uint8_t threshold = packed >> 12;
+    uint16_t period = packed & 0x0fffU;
+#if defined(__AVR__)
+    // Add the comparison carry directly: fixed cost, no conditional branch.
+    __asm__ volatile(
+        "cp %[offset],%[threshold] \n\t"
+        "adc %A[period],__zero_reg__ \n\t"
+        "adc %B[period],__zero_reg__"
+        : [period] "+&r"(period)
+        : [offset] "r"(offset), [threshold] "r"(threshold)
+        : "cc");
+#else
+    period += offset < threshold;
+#endif
+    return period;
 }
 } // namespace
 
@@ -275,7 +298,7 @@ inline uint16_t unpackPeriod(uint16_t packed, uint8_t offset) {
 // live in program memory; no SRAM, variable-length division or interpolation.
 int32_t HAL::CPUDivU2(unsigned int divisor) {
     if (divisor >= 16384)
-        return unpackPeriod(pgm_read_word(&high16Periods[(divisor >> 4) - 1024]), divisor & 15);
+        return unpackPeriod(pgm_read_word(&high16Periods[periodIndex16(divisor) - 1024]), divisor & 15);
     if (divisor >= 12288)
         return unpackPeriod(pgm_read_word(&high8Periods[(divisor >> 3) - 1536]), divisor & 7);
     if (divisor >= 8192)
