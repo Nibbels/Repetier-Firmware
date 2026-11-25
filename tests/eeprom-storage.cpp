@@ -146,6 +146,7 @@ int main(){
     image=factory; image[1000]^=1; EEPROM::init(); assert(image[1000]==0); snapshot("bad-checksum");
     image=factory; image[EPR_MAGIC_BYTE]=0; EEPROM::updateChecksum(); EEPROM::init(); assert(image[EPR_MAGIC_BYTE]==44); snapshot("bad-magic");
     image=factory; image[1000]=0xa5; EEPROM::updateChecksum(); keys=true; EEPROM::init(); assert(image[1000]==0); snapshot("key-reset");
+    keys=false;
     // Upgrade a version-8 image containing apparently valid gains: no heater authorized.
     image=factory; image[EPR_VERSION]=8;
     for (int i=0;i<9;++i) image[EPR_RF_PID_CALIBRATION+i]=0xA9;

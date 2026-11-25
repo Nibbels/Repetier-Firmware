@@ -560,7 +560,7 @@ void EEPROM::readDataFromEEPROM() {
     heatedBedController.pidIGain = HAL::eprGetFloat(EPR_BED_PID_IGAIN);
     heatedBedController.pidDGain = HAL::eprGetFloat(EPR_BED_PID_DGAIN);
     heatedBedController.pidMax = HAL::eprGetByte(EPR_BED_PID_MAX);
-    heatedBedController.sensorType = (HAL::eprGetByte(EPR_RF_HEATED_BED_SENSOR_TYPE) != 0) ? HAL::eprGetByte(EPR_RF_HEATED_BED_SENSOR_TYPE) : HEATED_BED_SENSOR_TYPE;
+    heatedBedController.sensorType = (version >= 9 || HAL::eprGetByte(EPR_RF_HEATED_BED_SENSOR_TYPE) != 0) ? HAL::eprGetByte(EPR_RF_HEATED_BED_SENSOR_TYPE) : HEATED_BED_SENSOR_TYPE;
     change |= readPidCalibrationTag(NUM_EXTRUDER, version);
 
     Printer::setAxisLengthMm(X_AXIS, HAL::eprGetFloat(EPR_X_LENGTH));
@@ -628,7 +628,7 @@ void EEPROM::readDataFromEEPROM() {
         e->tempControl.pidPGain = HAL::eprGetFloat(o + EPR_EXTRUDER_PID_PGAIN);
         e->tempControl.pidIGain = HAL::eprGetFloat(o + EPR_EXTRUDER_PID_IGAIN);
         e->tempControl.pidDGain = HAL::eprGetFloat(o + EPR_EXTRUDER_PID_DGAIN);
-        if (HAL::eprGetByte(o + EPR_EXTRUDER_PID_MAX) > 0) {
+        if (version >= 9 || HAL::eprGetByte(o + EPR_EXTRUDER_PID_MAX) > 0) {
             e->tempControl.pidMax = HAL::eprGetByte(o + EPR_EXTRUDER_PID_MAX);
         } else {
             HAL::eprSetByte(o + EPR_EXTRUDER_PID_MAX, e->tempControl.pidMax);
@@ -636,7 +636,7 @@ void EEPROM::readDataFromEEPROM() {
         }
 
         uint8_t sensortype_temp = HAL::eprGetByte(o + EPR_EXTRUDER_SENSOR_TYPE);
-        if (sensortype_temp > 0 && sensortype_temp <= 100) {
+        if (version >= 9 || (sensortype_temp > 0 && sensortype_temp <= 100)) {
             e->tempControl.sensorType = sensortype_temp;
         }
 

@@ -218,7 +218,7 @@ namespace GCodeInput {
             temperatureAdcValues[tuned->sensorPin] = visits % 2 ? 470 : 330;
         if (injection == Injection::ProfileCycles || injection == Injection::Unstable)
             temperatureAdcValues[tuned->sensorPin] = (visits - 1) % 4 < 2
-                ? ((injection == Injection::Unstable && ((visits - 1)/4)%2) ? 460 : 430) : 390;
+                ? ((injection == Injection::Unstable && ((visits - 1)/4)%2) ? 465 : 445) : 390;
         if (injection == Injection::PowerChange) tuned->pidMax = 10;
         if (injection == Injection::OtherFault)
             assert(tuned != &bed); // bed already has 10 consecutive invalid samples
@@ -583,7 +583,7 @@ int main(int argc, char** argv) {
             postTemperature = false;
         } else if (std::strstr(name, "-power-change")) injection = Injection::PowerChange;
         else if (std::strstr(name, "-timeout")) {
-            temperatureAdcValues[t.sensorPin] = 430; // cooling phase, no crossing
+            temperatureAdcValues[t.sensorPin] = 445; // cooling phase, no crossing
             stride = 1000;
         } else if (std::strstr(name, "-no-rise")) stride = 1000;
         else if (std::strstr(name, "-unstable")) { injection = Injection::Unstable; stride = 1000; store = true; }
@@ -614,7 +614,7 @@ int main(int argc, char** argv) {
         const bool expectSuccess = std::strstr(name, "-success") && !lowMax && !wrongProfile;
         float high = 0, low = 0;
         if (expectSuccess) {
-            temperatureAdcValues[t.sensorPin] = 430;
+            temperatureAdcValues[t.sensorPin] = 445;
             assert(t.updateCurrentTemperature());
             high = t.currentTemperatureC;
             temperatureAdcValues[t.sensorPin] = 390;
