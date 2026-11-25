@@ -371,7 +371,9 @@ public:
 
     static INLINE void stepWithCount(uint8_t port, uint8_t bit, volatile int16_t& pending, int16_t remaining) {
         // Book the step while STEP is high. The stores take four cycles and CBI takes two.
-        constexpr unsigned long highCycles = (2UL * F_CPU + 999999UL) / 1000000UL;
+        // DRV8711 requires STEP high >= 1.9 us. Round UP to whole CPU cycles
+        // (31 at 16 MHz = 1.9375 us). Shorter pulses are hardware experiments only.
+        constexpr unsigned long highCycles = (19UL * F_CPU + 9999999UL) / 10000000UL;
         constexpr unsigned long waitCycles = highCycles - 6;
         uint8_t counter;
         asm volatile(
