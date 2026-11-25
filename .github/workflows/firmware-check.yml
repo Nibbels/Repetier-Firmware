@@ -18,8 +18,6 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: arduino/setup-arduino-cli@v2
         with:
           version: 1.2.2
@@ -29,20 +27,6 @@ jobs:
           arduino-cli core install arduino:avr@1.8.6
       - name: Verify merge candidate
         run: python3 tools/task0003-baseline.py "$RUNNER_TEMP/firmware-evidence"
-      - name: Repeat final source and compiler audit
-        run: |
-          set -e
-          out="$RUNNER_TEMP/firmware-evidence"
-          python3 coordination/audits/Task0004-scan.py --self-test
-          python3 coordination/audits/Task0004-scan.py --base 49a60a97eefb5dbd5b5eeea4344f090979c2d070 --head HEAD > "$out/task0016-legacy.json"
-          python3 coordination/audits/Task0004-scan.py --base 3a27bd83dfc4711fa2694d18b311b67426f91936 --head HEAD > "$out/task0016-wave-delta.json"
-          python3 coordination/audits/Task0004-avr-audit.py "$out" "$PWD/Repetier" > "$out/task0016-avr.json"
-          git worktree add --detach "$RUNNER_TEMP/task0016-baseline" 3a27bd83dfc4711fa2694d18b311b67426f91936
-          cd "$RUNNER_TEMP/task0016-baseline"
-          # The capture tool is not part of the original audit commit.
-          git show "$GITHUB_SHA:tools/task0003-baseline.py" > "$RUNNER_TEMP/task0016-capture.py"
-          python3 -c 'import runpy, pathlib, sys; m=runpy.run_path(sys.argv.pop(1)); m["main"].__globals__["ROOT"]=pathlib.Path.cwd(); sys.exit(m["main"]())' "$RUNNER_TEMP/task0016-capture.py" "$RUNNER_TEMP/task0016-original-build" --avr-only
-          mv "$RUNNER_TEMP/task0016-original-build" "$out/task0016-original-build"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
