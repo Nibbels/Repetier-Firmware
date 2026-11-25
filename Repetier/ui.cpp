@@ -813,10 +813,22 @@ void UIDisplay::okAction() {
         return;
     }
 
+    // Consume the key if a mode change invalidated the displayed selection.
+    // Never execute or edit a replacement entry with the same keypress.
+    const uint8_t previousLevel = menuLevel;
+    const uint8_t previousPosition = menuPos[menuLevel];
+    adjustMenuPos();
+    if (menuLevel != previousLevel || menuPos[menuLevel] != previousPosition)
+        return;
+
     UIMenu* men = (UIMenu*)menu[menuLevel];
     uint8_t mtype = pgm_read_byte(&(men->menuType));
     UIMenuEntry** entries = (UIMenuEntry**)pgm_read_word(&(men->entries));
     UIMenuEntry* ent = (UIMenuEntry*)pgm_read_word(&(entries[menuPos[menuLevel]]));
+    if (mtype == UI_MENU_TYPE_SUBMENU && !ent->showEntry()) {
+        adjustMenuPos();
+        return;
+    }
     unsigned char entType = pgm_read_byte(&(ent->menuType)); // 0 = Info, 1 = Headline, 2 = submenu ref, 3 = direct action command, 4 = modify action
     int action = pgm_read_word(&(ent->action));
 
@@ -898,50 +910,59 @@ void UIDisplay::backAction() {
 } // backAction
 
 void UIDisplay::adjustMenuPos() {
-    if (menuLevel == 0)
-        return;
-    UIMenu* men = (UIMenu*)menu[menuLevel];
-    UIMenuEntry** entries = (UIMenuEntry**)pgm_read_word(&(men->entries));
-    uint8_t mtype = HAL::readFlashByte((const prog_char*)&(men->menuType));
-    if (mtype != UI_MENU_TYPE_SUBMENU)
-        return;
+    while (menuLevel > 0) {
+        UIMenu* men = (UIMenu*)menu[menuLevel];
+        if (HAL::readFlashByte((const prog_char*)&(men->menuType)) != UI_MENU_TYPE_SUBMENU)
+            return;
 
-    while (menuPos[menuLevel] > 0) {
-        if (((UIMenuEntry*)pgm_read_word(&(entries[menuPos[menuLevel]])))->showEntry())
-            break;
+        UIMenuEntry** entries = (UIMenuEntry**)pgm_read_word(&(men->entries));
+        const uint8_t count = (uint8_t)pgm_read_word(&(men->numEntries));
+        uint8_t& position = menuPos[menuLevel];
+        const uint8_t previous = position;
+        if (count && position >= count)
+            position = count - 1;
 
-        menuPos[menuLevel]--;
-    }
-    while (1) {
-        if (((UIMenuEntry*)pgm_read_word(&(entries[menuPos[menuLevel]])))->showEntry())
-            break;
+        // Prefer the preceding visible entry; otherwise search forward.
+        while (position > 0 && position < count &&
+               !((UIMenuEntry*)pgm_read_word(&(entries[position])))->showEntry())
+            --position;
+        while (position < count &&
+               !((UIMenuEntry*)pgm_read_word(&(entries[position])))->showEntry())
+            ++position;
 
-        menuPos[menuLevel]++;
-    }
-    uint8_t skipped = 0;
-    bool modified;
+        if (position != previous || position >= count) {
+            activeAction = 0;
+            confirmation_ = 0;
+            shift = -2;
+        }
+        if (position >= count) {
+            // Load/unload menus can become entirely hidden when printing starts.
+            // Return to the parent and validate its selection before rendering.
+            position = menuTop[menuLevel] = 0;
+            menuEsc();
+            continue;
+        }
 
-    if (menuTop[menuLevel] > menuPos[menuLevel])
-        menuTop[menuLevel] = menuPos[menuLevel];
-    do {
-        skipped = 0;
-        modified = false;
-        for (uint8_t r = menuTop[menuLevel]; r < menuPos[menuLevel]; r++) {
+        uint8_t& top = menuTop[menuLevel];
+        if (top > position)
+            top = position;
+        uint8_t skipped = 0;
+        for (uint8_t r = top; r < position; ++r) {
             UIMenuEntry* ent = (UIMenuEntry*)pgm_read_word(&(entries[r]));
             if (!ent->showEntry())
-                skipped++;
+                ++skipped;
         }
-        if (menuTop[menuLevel] + skipped + UI_ROWS - 1 < menuPos[menuLevel]) {
-            menuTop[menuLevel] = menuPos[menuLevel] + 1 - UI_ROWS;
-            modified = true;
-        }
-
-    } while (modified);
+        if (top + skipped + UI_ROWS - 1 < position)
+            top = position + 1 - UI_ROWS;
+        return;
+    }
 } // adjustMenuPos
 
 // Browse visible menu entries in either direction, retaining the original selection
 // if a full pass finds no visible alternative.
 void UIDisplay::navigateMenuItems(UIMenuEntry** entries, uint8_t count, int8_t next) {
+    if (!count)
+        return;
     uint8_t& position = menuPos[menuLevel];
     const uint8_t previous = position;
     do {
@@ -990,15 +1011,18 @@ void UIDisplay::nextPreviousAction(int8_t next) {
         return;
     }
 
+    // Consume the key if a mode change invalidated the displayed selection.
+    // Never execute or edit a replacement entry with the same keypress.
+    const uint8_t previousLevel = menuLevel;
+    const uint8_t previousPosition = menuPos[menuLevel];
+    adjustMenuPos();
+    if (menuLevel != previousLevel || menuPos[menuLevel] != previousPosition)
+        return;
+
     UIMenu* men = (UIMenu*)menu[menuLevel];
     uint8_t nr = (uint8_t)pgm_read_word(&(men->numEntries));
     uint8_t mtype = HAL::readFlashByte((const prog_char*)&(men->menuType));
     UIMenuEntry** entries = (UIMenuEntry**)pgm_read_word(&(men->entries));
-    UIMenuEntry* ent = (UIMenuEntry*)pgm_read_word(&(entries[menuPos[menuLevel]]));
-    uint8_t entType = HAL::readFlashByte((const prog_char*)&(ent->menuType)); // 0 = Info, 1 = Headline, 2 = submenu ref, 3 = direct action command
-    (void)entType;                                                            // Ignore unused error Nibbels
-    int action = pgm_read_word(&(ent->action));
-
     if (mtype == UI_MENU_TYPE_SUBMENU && activeAction == 0) {
         navigateMenuItems(entries, nr, next);
         shift = -2; // reset shift position
@@ -1006,11 +1030,12 @@ void UIDisplay::nextPreviousAction(int8_t next) {
         return;
     }
 
-    if (mtype == UI_MENU_TYPE_MODIFICATION_MENU)
-        action = pgm_read_word(&(men->id));
-    else
-        action = activeAction;
-
+    if (mtype == UI_MENU_TYPE_SUBMENU &&
+        !((UIMenuEntry*)pgm_read_word(&(entries[menuPos[menuLevel]])))->showEntry()) {
+        adjustMenuPos();
+        return;
+    }
+    const int action = mtype == UI_MENU_TYPE_MODIFICATION_MENU ? pgm_read_word(&(men->id)) : activeAction;
     changeSwitchCase(action, -next);
 
     autoReturnTime_ = HAL::timeInMilliseconds() + menuAutoReturnDelayMs;
