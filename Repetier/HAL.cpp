@@ -675,7 +675,28 @@ void HAL::resetPwmOutputs() {
 }
 
 uint8_t HAL::outputDuty(uint8_t channel) { return requestedDuty[channel]; }
-void HAL::setHeaterDuty(uint8_t channel, uint8_t duty) { requestedDuty[channel] = duty; }
+void HAL::setHeaterDuty(uint8_t channel, uint8_t duty) {
+    if (channel > NUM_EXTRUDER)
+        return;
+    if (duty) {
+        requestedDuty[channel] = duty;
+        return;
+    }
+
+    // Revoke the requested duty and the active output together. The PWM
+    // handler can only raise a heater at frame start, from requestedDuty.
+    InterruptProtectedBlock lock;
+    requestedDuty[channel] = 0;
+    switch (channel) {
+#if EXT0_HEATER_PIN > -1
+        case 0: WRITE(EXT0_HEATER_PIN, LOW); break;
+#endif
+#if defined(EXT1_HEATER_PIN) && EXT1_HEATER_PIN > -1 && NUM_EXTRUDER > 1
+        case 1: WRITE(EXT1_HEATER_PIN, LOW); break;
+#endif
+        case NUM_EXTRUDER: WRITE(HEATED_BED_HEATER_PIN, LOW); break;
+    }
+}
 void HAL::setBoardFan(bool enabled) { requestedDuty[boardFanChannel] = enabled ? 255 : 0; }
 uint8_t HAL::partFanSpeed() { return requestedFanSpeed; }
 uint8_t HAL::partFanDivisor() { return fanDivisor; }
