@@ -26,6 +26,7 @@ unsigned scriptCommands = 0;
 unsigned dispatchedCommands = 0, statusCommands = 0, stopRequests = 0;
 bool legacyRejected = false;
 unsigned heaterRequests = 0, extrusionRequests = 0;
+unsigned periodicVisits = 0;
 struct EmergencyReached {};
 GCode lastScriptCommand{};
 }
@@ -61,7 +62,7 @@ namespace Commands {
 void commandLoop();
 void emergencyStop() { throw EmergencyReached{}; }
 void executeGCode(GCode* code);
-void checkForPeriodicalActions(FirmwareState) {}
+void checkForPeriodicalActions(FirmwareState) { ++periodicVisits; }
 }
 
 namespace RMath {
@@ -309,6 +310,43 @@ void binaryText() {
     popM(117);
 }
 
+// Long discarded input must yield to foreground services even though it
+// never fills the command frame. Preserve comment and binary resync state
+// across the visit boundary; no command is acknowledged prematurely.
+void boundedReceive() {
+    feed("M105;" + std::string(400, 'x') + "\nM114\n");
+    for (unsigned i = 0; i < 3; ++i) {
+        const auto before = incoming.size();
+        Commands::commandLoop();
+        assert(before - incoming.size() == 127);
+        assert(periodicVisits == i + 1 && replies.empty());
+        assert(!GCodeInput::peekCurrentCommand());
+    }
+    Commands::commandLoop();
+    assert(periodicVisits == 4 && replies == "ok 0\r\n" && statusCommands == 1);
+    replies.clear();
+    Commands::commandLoop();
+    assert(periodicVisits == 5 && replies == "ok 0\r\n" && statusCommands == 2);
+    assert(incoming.empty());
+    replies.clear();
+
+    auto packet = binary({0x82, 0x00, 105});
+    auto bad = packet;
+    bad.back() ^= 1;
+    feed(bad);
+    readReply("\r\nResend:1\r\nok\r\n");
+    feed(std::string(300, 'x') + std::string(31, '\0') + packet);
+    for (unsigned i = 0; i < 2; ++i) {
+        const auto before = incoming.size();
+        readReply("");
+        assert(before - incoming.size() == 127);
+        assert(!GCodeInput::peekCurrentCommand());
+    }
+    readReply("ok 0\r\n");
+    popM(105);
+    assert(incoming.empty());
+}
+
 void sustainedAdmission() {
     feed("N65534 M110\n");
     readReply("ok\r\n");
@@ -433,6 +471,7 @@ int main(int argc, char** argv) {
     else if (scenario == "overflow") overflowAndRecovery();
     else if (scenario == "binary-text") binaryText();
     else if (scenario == "sustained") sustainedAdmission();
+    else if (scenario == "bounded-receive") boundedReceive();
     else if (scenario == "emergency") emergencyAdmission();
     else if (scenario == "stopping") stopDrainsInput();
     else if (scenario == "script") flashScript();
