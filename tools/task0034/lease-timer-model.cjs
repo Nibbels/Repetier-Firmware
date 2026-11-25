@@ -23,7 +23,7 @@ function leaseModel(){
     }
     // Output gate must also look at the sticky flag; lower-priority expiry
     // ISR may still be pending when a PWM frame wants to start.
-    startFrame(){if(this.fault||!this.armed||this.flag){this.fail();return false;}this.high=true;return true;}
+    startFrame(){const remaining=u16(this.ocr-this.now);if(this.fault||!this.armed||this.flag||remaining<=GUARD||remaining>LEASE){this.fail();return false;}this.high=true;return true;}
   }
   let checked=0,accepted=0,rejected=0,expired=0,wrap=0;
   const gaps=[];
@@ -58,6 +58,8 @@ function leaseModel(){
   // OCF during renewal would erase evidence of an expired lease.
   const edge=new Timer(1234,1234);
   if(edge.flag||edge.renew([0,0,0,0])||edge.high)throw Error("equality guard");
+  const edgeFrame=new Timer(1234,1234);
+  if(edgeFrame.flag||edgeFrame.startFrame()||edgeFrame.high)throw Error("equality gate");
   const lost=new Timer(65530,65531);lost.tick(2);
   if(!lost.flag)throw Error("expected pending compare");
   lost.flag=false;lost.ocr=u16(lost.now+LEASE);
