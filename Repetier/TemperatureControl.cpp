@@ -286,6 +286,13 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
         Com::printErrorFLN(PSTR("PID autotune failed: heater unavailable or target invalid"));
         return;
     }
+    // The relay bias clamp needs non-inverted bounds [20, pidMax - 20].
+    // Reject insufficient tuning power before authorizing any heater duty.
+    if (pidMax < 40) {
+        Com::printErrorFLN(PSTR("PID autotune failed: PWM limit below 40"));
+        return;
+    }
+    const uint8_t tunePowerLimit = pidMax;
     const bool sensorSupported = updateCurrentTemperature();
     if (!sensorSupported) {
         Com::printErrorFLN(PSTR("PID autotune failed: unsupported or stale temperature sensor"));
@@ -365,11 +372,11 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
         Commands::checkForPeriodicalActions(WaitHeater); // update heaters etc. https://github.com/repetier/Repetier-Firmware/commit/241c550ac004023842d6886c6e0db15a1f6b56d7
         const bool supported = updateCurrentTemperature();
         currentTemp = currentTemperatureC;
-        if (autotuneAbortRequested || Printer::heatingInhibited()
+        if (autotuneAbortRequested || Printer::heatingInhibited() || pidMax != tunePowerLimit
             || isSensorDefect() || isSensorDecoupled() || sensorType == 0
             || !validTemperatureSample(supported, currentTemp)) {
             finishAutotune(*this);
-            Com::printErrorFLN(PSTR("PID autotune aborted: invalid sensor, heater fault or cancellation"));
+            Com::printErrorFLN(PSTR("PID autotune aborted: invalid sensor, heater fault, PWM limit change or cancellation"));
             showError((void*)ui_text_autodetect_pid, (void*)ui_text_temperature_wrong);
             break;
         }
@@ -418,6 +425,7 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
                     Com::printFLN(Com::tAPIDMax, maxTemp);
                     if (cycles > 2) {
                         // Parameter according Ziegler¡§CNichols method: http://en.wikipedia.org/wiki/Ziegler%E2%80%93Nichols_method
+                        // Legacy RFx000 scaling (peak-to-peak, not half-amplitude). Keep existing J0-J4 calibration.
                         Ku = (4.0 * d) / (3.14159 * (maxTemp - minTemp));
                         Tu = static_cast<float>(t_low + t_high) / 1000.0;
                         Com::printF(Com::tAPIDKu, Ku);
@@ -490,6 +498,8 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
                 pidPGain = Kp;
                 pidIGain = Ki;
                 pidDGain = Kd;
+                tempIState = 0;
+                updateTempControlVars();
                 EEPROM::storeDataIntoEEPROM();
             }
             Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 30000);
