@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Capture RFx000 host replays and four linked AVR resource inventories."""
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -96,6 +97,11 @@ def build_target(out, cli, name, definitions):
     run(directory, "disassembly", [tool("avr-objdump"), "-h", "-d", "-S", "-C", "-z", elf])
     dependencies = sorted(str(path.relative_to(directory)) for path in build.rglob("*.d"))
     (directory / "dependency-files.txt").write_text("\n".join(dependencies) + "\n", encoding="utf-8")
+    # Record deployable image identities in the CI log and summary as well as the archive.
+    images = sorted(path for path in build.iterdir()
+                    if path.is_file() and path.suffix in {".hex", ".bin", ".eep"})
+    sizes["image_sha256"] = {path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+                             for path in images}
     return sizes
 
 

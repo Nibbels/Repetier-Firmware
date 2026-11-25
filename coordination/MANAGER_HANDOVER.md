@@ -2,7 +2,7 @@
 
 ## Final cleanup after Tasks 0019 and 0020
 
-Move `Repetier/overflow_decompile.txt` to `docs/overflow_decompile.txt` as part of the final source-directory cleanup. Preserve its AVR disassembly and RAM inspection commands and links. Update any references to the old path.
+The source-directory cleanup moves the AVR diagnosis note to [docs/overflow_decompile.txt](../docs/overflow_decompile.txt), preserving its commands and links. See [final cleanup audit](audits/final-cleanup.md) for dispositions, build compatibility and evidence.
 
 Review the following repository-root files during final cleanup. Record current consumers and a keep, move, update or retire recommendation for each. Check working links in both READMEs, licensing, and compatibility with supported build and flash workflows before proposing changes.
 
