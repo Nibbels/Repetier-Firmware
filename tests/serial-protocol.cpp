@@ -331,6 +331,10 @@ void boundedReceive() {
     replies.clear();
 
     auto packet = binary({0x82, 0x00, 105});
+    // Establish binary mode before exercising the binary resend handshake.
+    feed(packet);
+    readReply("ok 0\r\n");
+    popM(105);
     auto bad = packet;
     bad.back() ^= 1;
     feed(bad);
