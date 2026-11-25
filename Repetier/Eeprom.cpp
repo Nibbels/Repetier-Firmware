@@ -114,21 +114,21 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     Printer::setStepsPerMm(Y_AXIS, YAXIS_STEPS_PER_MM);
     Printer::setStepsPerMm(Z_AXIS, ZAXIS_STEPS_PER_MM);
     Printer::zOffset.refreshSteps(Printer::stepsPerMm(Z_AXIS));
-    Printer::setStepsPerMm(E_AXIS, 1); //man könnte auch vom current extruder die id auslesen und dann EXT0_STEPS_PER_MM oder EXT1_STEPS_PER_MM ?
+    Printer::setStepsPerMm(E_AXIS, 1); // Man könnte auch vom current extruder die id auslesen und dann EXT0_STEPS_PER_MM oder EXT1_STEPS_PER_MM ?
                                          // -> ist autokorrigiert wenn man einmal einen extruder auswählt. Siehe unten.
     Printer::setAxisMaxFeedrate(X_AXIS, MAX_FEEDRATE_X);
     Printer::setAxisMaxFeedrate(Y_AXIS, MAX_FEEDRATE_Y);
     Printer::setAxisMaxFeedrate(Z_AXIS, MAX_FEEDRATE_Z);
 
-    //microsteps should be updated but we need to update the driver then.
+    // Microsteps should be updated but we need to update the driver then.
     bool ms_changed = false;
     for (int ax = 0; ax <= E_AXIS + 1; ax++) {
         if (Drv8711::microstepMode(ax) != drv8711MicroSteps_2_ModeValue(drv8711Axis_2_InitMicrosteps(ax))) {
             if (!ms_changed) {
                 ms_changed = true;
-                Printer::disableAllSteppersNow();               //Stepper und Homing ausmachen.
-                                                                //We cannot use the old coordinates anymore.
-                HAL::eprSetByte(EPR_RF_MICRO_STEPS_USED, 0x00); //make all Microstep eeprom settings invalid for next boot.
+                Printer::disableAllSteppersNow();               // Stepper und Homing ausmachen.
+                                                                // We cannot use the old coordinates anymore.
+                HAL::eprSetByte(EPR_RF_MICRO_STEPS_USED, 0x00); // Make all Microstep eeprom settings invalid for next boot.
             }
             Drv8711::setMicrostepMode(ax, drv8711MicroSteps_2_ModeValue(drv8711Axis_2_InitMicrosteps(ax)));
         }
@@ -181,10 +181,10 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     Printer::restoreZDisplayMode(DEFAULT_Z_SCALE_MODE); //wichtig, weils im Mod einen dritten Mode gibt. Für Zurückmigration
 
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
-    //hier nur config laden nicht mosfets schalten!
+    // Hier nur config laden nicht mosfets schalten!
     AccessoryOutputs::stage(AccessoryOutputs::Output::Mains, 0);
 
-    //hier nur config laden nicht mosfets schalten!
+    // Hier nur config laden nicht mosfets schalten!
     AccessoryOutputs::stage(AccessoryOutputs::Output::Fet1, FET1_DEFAULT_ON);
     AccessoryOutputs::stage(AccessoryOutputs::Output::Fet2, FET2_DEFAULT_ON);
     AccessoryOutputs::stage(AccessoryOutputs::Output::Fet3, FET3_DEFAULT_ON);
@@ -323,7 +323,7 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     const auto scanPoint = zOffsetScanPoint();
     HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_X, scanPoint.x);
     HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y, scanPoint.y);
-    //Do not update EPR_RF_MOD_SENSEOFFSET_DIGITS here
+    // Do not update EPR_RF_MOD_SENSEOFFSET_DIGITS here
     HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX, Printer::senseOffsetControl.limits().maxMicrometers);
     HAL::eprSetByte(EPR_RF_MOD_SENSEOFFSET_AUTOSTART, Printer::senseOffsetControl.autoStart());
 
@@ -387,7 +387,7 @@ void EEPROM::storeExtruderDataIntoEEPROM(uint8_t extruderId) {
 }
 
 void EEPROM::updateChecksum() {
-    //ändert sich die checksumme nicht, wird nicht geschrieben. doppelprüfung ist überflüssig.
+    // Ändert sich die checksumme nicht, wird nicht geschrieben. doppelprüfung ist überflüssig.
     HAL::eprSetByte(EPR_INTEGRITY_BYTE, computeChecksum());
 } // updateChecksum
 
@@ -410,7 +410,7 @@ void EEPROM::readDataFromEEPROM() {
     Printer::setStepsPerMm(Y_AXIS, HAL::eprGetFloat(EPR_YAXIS_STEPS_PER_MM));
     Printer::setStepsPerMm(Z_AXIS, HAL::eprGetFloat(EPR_ZAXIS_STEPS_PER_MM));
 
-    //check da früher mehr speed erlaubt, was keinen sinn gemacht hat.
+    // Check da früher mehr speed erlaubt, was keinen sinn gemacht hat.
     Printer::setAxisMaxFeedrate(X_AXIS, MAX_FEEDRATE_X);
     Printer::setAxisMaxFeedrate(Y_AXIS, MAX_FEEDRATE_Y);
     Printer::setAxisMaxFeedrate(Z_AXIS, MAX_FEEDRATE_Z);
@@ -418,7 +418,7 @@ void EEPROM::readDataFromEEPROM() {
         float tmp = HAL::eprGetFloat(EPR_X_MAX_FEEDRATE + axis * 4); //X dann EPR_Y_MAX_FEEDRATE dann EPR_Z_MAX_FEEDRATE
         if (tmp > Printer::axisMaxFeedrate(axis)) {
             HAL::eprSetFloat(EPR_X_MAX_FEEDRATE + axis * 4, Printer::axisMaxFeedrate(axis));
-            change = true; //update checksum later in this function
+            change = true; // Update checksum later in this function
         } else {
             Printer::setAxisMaxFeedrate(axis, tmp);
         }
@@ -445,17 +445,17 @@ void EEPROM::readDataFromEEPROM() {
     if (Printer::printAcceleration(X_AXIS) < ACCELERATION_MIN_XY || Printer::printAcceleration(X_AXIS) > ACCELERATION_MAX_XY) {
         Printer::setPrintAcceleration(X_AXIS, MAX_ACCELERATION_UNITS_PER_SQ_SECOND_X);
         HAL::eprSetFloat(EPR_X_MAX_ACCEL, MAX_ACCELERATION_UNITS_PER_SQ_SECOND_X);
-        change = true; //update checksum later in this function
+        change = true; // Update checksum later in this function
     }
     if (Printer::printAcceleration(Y_AXIS) < ACCELERATION_MIN_XY || Printer::printAcceleration(Y_AXIS) > ACCELERATION_MAX_XY) {
         Printer::setPrintAcceleration(Y_AXIS, MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Y);
         HAL::eprSetFloat(EPR_Y_MAX_ACCEL, MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Y);
-        change = true; //update checksum later in this function
+        change = true; // Update checksum later in this function
     }
     if (Printer::printAcceleration(Z_AXIS) < ACCELERATION_MIN_Z || Printer::printAcceleration(Z_AXIS) > ACCELERATION_MAX_Z) {
         Printer::setPrintAcceleration(Z_AXIS, MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Z);
         HAL::eprSetFloat(EPR_Z_MAX_ACCEL, MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Z);
-        change = true; //update checksum later in this function
+        change = true; // Update checksum later in this function
     }
 
     Printer::setTravelAcceleration(X_AXIS, HAL::eprGetFloat(EPR_X_MAX_TRAVEL_ACCEL));
@@ -464,17 +464,17 @@ void EEPROM::readDataFromEEPROM() {
     if (Printer::travelAcceleration(X_AXIS) < ACCELERATION_MIN_XY || Printer::travelAcceleration(X_AXIS) > ACCELERATION_MAX_XY) {
         Printer::setTravelAcceleration(X_AXIS, MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_X);
         HAL::eprSetFloat(EPR_X_MAX_TRAVEL_ACCEL, MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_X);
-        change = true; //update checksum later in this function
+        change = true; // Update checksum later in this function
     }
     if (Printer::travelAcceleration(Y_AXIS) < ACCELERATION_MIN_XY || Printer::travelAcceleration(Y_AXIS) > ACCELERATION_MAX_XY) {
         Printer::setTravelAcceleration(Y_AXIS, MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Y);
         HAL::eprSetFloat(EPR_Y_MAX_TRAVEL_ACCEL, MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Y);
-        change = true; //update checksum later in this function
+        change = true; // Update checksum later in this function
     }
     if (Printer::travelAcceleration(Z_AXIS) < ACCELERATION_MIN_Z || Printer::travelAcceleration(Z_AXIS) > ACCELERATION_MAX_Z) {
         Printer::setTravelAcceleration(Z_AXIS, MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Z);
         HAL::eprSetFloat(EPR_Z_MAX_TRAVEL_ACCEL, MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Z);
-        change = true; //update checksum later in this function
+        change = true; // Update checksum later in this function
     }
 
     heatedBedController.pidDriveMax = HAL::eprGetByte(EPR_BED_DRIVE_MAX);
@@ -489,7 +489,7 @@ void EEPROM::readDataFromEEPROM() {
     if (Printer::axisLengthMm(X_AXIS) <= 0 || Printer::axisLengthMm(X_AXIS) > 245.0f) {
         Printer::setAxisLengthMm(X_AXIS, X_MAX_LENGTH_PRINT);
         HAL::eprSetFloat(EPR_X_LENGTH, Printer::axisLengthMm(X_AXIS));
-        change = true; //update checksum later in this function
+        change = true; // Update checksum later in this function
     }
     Printer::setAxisLengthMm(Y_AXIS, HAL::eprGetFloat(EPR_Y_LENGTH));
     Printer::setAxisLengthMm(Z_AXIS, HAL::eprGetFloat(EPR_Z_LENGTH));
@@ -499,11 +499,11 @@ void EEPROM::readDataFromEEPROM() {
         int o = EEPROM::getExtruderOffset(i);
         Extruder* e = &extruder[i];
         float tmp = HAL::eprGetFloat(o + EPR_EXTRUDER_STEPS_PER_MM);
-        if (tmp < 5540.0f) { //da hat einer ein komma vergessen ^^ so hohe Werte können kaum sinn machen, ausser wir ändern die CPU. Das wären auch zu viele interrupts pro sekunde.
+        if (tmp < 5540.0f) { // Da hat einer ein komma vergessen ^^ so hohe Werte können kaum sinn machen, ausser wir ändern die CPU. Das wären auch zu viele interrupts pro sekunde.
             e->stepsPerMM = tmp;
         } else {
             HAL::eprSetFloat(o + EPR_EXTRUDER_STEPS_PER_MM, e->stepsPerMM);
-            change = true; //update checksum later in this function
+            change = true; // Update checksum later in this function
         }
 
         tmp = HAL::eprGetFloat(o + EPR_EXTRUDER_MAX_FEEDRATE);
@@ -511,7 +511,7 @@ void EEPROM::readDataFromEEPROM() {
             e->maxFeedrate = tmp;
         } else {
             HAL::eprSetFloat(o + EPR_EXTRUDER_MAX_FEEDRATE, e->maxFeedrate);
-            change = true; //update checksum later in this function
+            change = true; // Update checksum later in this function
         }
 
         tmp = HAL::eprGetFloat(o + EPR_EXTRUDER_MAX_START_FEEDRATE);
@@ -520,7 +520,7 @@ void EEPROM::readDataFromEEPROM() {
         } else {
             e->maxEJerk = RMath::min(e->maxFeedrate, e->maxEJerk);
             HAL::eprSetFloat(o + EPR_EXTRUDER_MAX_START_FEEDRATE, e->maxEJerk);
-            change = true; //update checksum later in this function
+            change = true; // Update checksum later in this function
         }
 
         tmp = HAL::eprGetFloat(o + EPR_EXTRUDER_MAX_ACCELERATION);
@@ -528,7 +528,7 @@ void EEPROM::readDataFromEEPROM() {
             e->maxAcceleration = tmp;
         } else {
             HAL::eprSetFloat(o + EPR_EXTRUDER_MAX_ACCELERATION, e->maxAcceleration);
-            change = true; //update checksum later in this function
+            change = true; // Update checksum later in this function
         }
 
         e->tempControl.pidDriveMax = HAL::eprGetByte(o + EPR_EXTRUDER_DRIVE_MAX);
@@ -545,7 +545,7 @@ void EEPROM::readDataFromEEPROM() {
 #endif
             HAL::eprSetByte(o + EPR_EXTRUDER_DRIVE_MIN, e->tempControl.pidDriveMin);
             HAL::eprSetByte(o + EPR_EXTRUDER_DRIVE_MAX, e->tempControl.pidDriveMax);
-            change = true; //update checksum later in this function
+            change = true; // Update checksum later in this function
         }
         e->tempControl.pidPGain = HAL::eprGetFloat(o + EPR_EXTRUDER_PID_PGAIN);
         e->tempControl.pidIGain = HAL::eprGetFloat(o + EPR_EXTRUDER_PID_IGAIN);
@@ -554,7 +554,7 @@ void EEPROM::readDataFromEEPROM() {
             e->tempControl.pidMax = HAL::eprGetByte(o + EPR_EXTRUDER_PID_MAX);
         } else {
             HAL::eprSetByte(o + EPR_EXTRUDER_PID_MAX, e->tempControl.pidMax);
-            change = true; //update checksum later in this function
+            change = true; // Update checksum later in this function
         }
 
         uint8_t sensortype_temp = HAL::eprGetByte(o + EPR_EXTRUDER_SENSOR_TYPE);
@@ -593,24 +593,24 @@ void EEPROM::readDataFromEEPROM() {
     // AccessoryOutputs::stage(AccessoryOutputs::Output::Mains, HAL::eprGetByte( EPR_RF_230V_OUTPUT_MODE ));
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
-    //reinit for check if eeprom values are too high.
+    // Reinit for check if eeprom values are too high.
     unsigned int eeprom_homing_feedrate_position;
         eeprom_homing_feedrate_position = EPR_X_HOMING_FEEDRATE_PRINT;
         Printer::setAxisHomingFeedrate(X_AXIS, HOMING_FEEDRATE_X_PRINT);
         Printer::setAxisHomingFeedrate(Y_AXIS, HOMING_FEEDRATE_Y_PRINT);
         Printer::setAxisHomingFeedrate(Z_AXIS, HOMING_FEEDRATE_Z_PRINT);
-    //check if values are too high
-    //this is no super complete check but if someone uses the printer bad values from old firmwares get corrected after one restart in each mode.
+    // Check if values are too high
+    // This is no super complete check but if someone uses the printer bad values from old firmwares get corrected after one restart in each mode.
     // and update them to max according configuration consts if too high.
     for (uint8_t axis = X_AXIS; axis <= Z_AXIS; axis++) {
         float tmp = HAL::eprGetFloat(eeprom_homing_feedrate_position + axis * 4); // EPR_X_HOMING_FEEDRATE_PRINT EPR_Y_HOMING_FEEDRATE_PRINT EPR_Z_HOMING_FEEDRATE_PRINT
 
-        //Alle Homing-Geschwindigkeiten höher max-Speed werden mit der Standard-Config-Homing-Speed überschrieben.
-        //Das betrifft gerade noch die alten RF-Speeds, die viel zu hoch waren:
+        // Alle Homing-Geschwindigkeiten höher max-Speed werden mit der Standard-Config-Homing-Speed überschrieben.
+        // Das betrifft gerade noch die alten RF-Speeds, die viel zu hoch waren:
         //z.B: https://github.com/RF1000/Repetier-Firmware/blob/0e52693eaed1f606af411e4898030b033304b94f/RF2000/Repetier/RF2000.h#L781
         if (tmp > Printer::axisMaxFeedrate(axis)) {
             HAL::eprSetFloat(eeprom_homing_feedrate_position + axis * 4, Printer::axisHomingFeedrate(axis));
-            change = true; //update checksum later in this function
+            change = true; // Update checksum later in this function
         } else {
             Printer::setAxisHomingFeedrate(axis, tmp);
         }
@@ -620,7 +620,7 @@ void EEPROM::readDataFromEEPROM() {
     Printer::manualMotion.setSteps(X_AXIS, (unsigned short)lroundf(Printer::stepsPerMm(X_AXIS) * DEFAULT_MANUAL_MM_X));
     Printer::manualMotion.setSteps(Y_AXIS, (unsigned short)lroundf(Printer::stepsPerMm(Y_AXIS) * DEFAULT_MANUAL_MM_Y));
     const unsigned short stepsize_table[NUM_ACCEPTABLE_STEP_SIZE_TABLE] PROGMEM = ACCEPTABLE_STEP_SIZE_TABLE;
-    Printer::manualMotion.setSteps(Z_AXIS, (unsigned short)constrain((unsigned short)HAL::eprGetInt16(EPR_RF_MOD_Z_STEP_SIZE), 1, stepsize_table[NUM_ACCEPTABLE_STEP_SIZE_TABLE - 1])); //limit stepsize to value in config.
+    Printer::manualMotion.setSteps(Z_AXIS, (unsigned short)constrain((unsigned short)HAL::eprGetInt16(EPR_RF_MOD_Z_STEP_SIZE), 1, stepsize_table[NUM_ACCEPTABLE_STEP_SIZE_TABLE - 1])); // Limit stepsize to value in config.
     Printer::manualMotion.setSteps(E_AXIS, (unsigned short)lroundf(Extruder::current->stepsPerMM * DEFAULT_MANUAL_MM_E));                                                               //current extruder stepsPerMM weil hier noch kein update für Printer::stepsPerMm(E_AXIS) gemacht wurde!
 
     // The matrix is loaded later. Clamp to the compiled grid capacity here
@@ -633,7 +633,7 @@ void EEPROM::readDataFromEEPROM() {
         storedScanIndex(HAL::eprGetByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y), heatBedScanYStartMm == 0 ? 1 : 2, COMPENSATION_MATRIX_MAX_Y - 1),
     });
 
-    //Do not read EPR_RF_MOD_SENSEOFFSET_DIGITS here
+    // Do not read EPR_RF_MOD_SENSEOFFSET_DIGITS here
     const int16_t savedSenseLimit = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX);
     Printer::senseOffsetControl.setMaxMicrometers(savedSenseLimit == 0 ? SENSIBLE_PRESSURE_MAX_OFFSET : constrain(savedSenseLimit, 1, 300));
     Printer::senseOffsetControl.setAutoStart(HAL::eprGetByte(EPR_RF_MOD_SENSEOFFSET_AUTOSTART));
@@ -688,7 +688,7 @@ void EEPROM::readDataFromEEPROM() {
         change = true;
     }
 
-    const unsigned short uMotorCurrentMax[] = MOTOR_CURRENT_MAX;    //oberes Amperelimit
+    const unsigned short uMotorCurrentMax[] = MOTOR_CURRENT_MAX;    // Oberes Amperelimit
     const unsigned short uMotorCurrentUse[] = MOTOR_CURRENT_NORMAL; //Standardwert
     uint8_t current = 0;
     for (uint8_t axis = 0; axis < DRV8711_NUM_CHANNELS; axis++) { //0..4 bei 5 steppern.
@@ -697,11 +697,11 @@ void EEPROM::readDataFromEEPROM() {
             Drv8711::stageCurrent(axis, current);
             Drv8711::applyConfiguredCurrent(axis);
         } else {
-            HAL::eprSetByte(EPR_RF_MOTOR_CURRENT + axis, uMotorCurrentUse[axis]); //wenn mist im EEPROM, dann Silent-Wert reinschreiben.
+            HAL::eprSetByte(EPR_RF_MOTOR_CURRENT + axis, uMotorCurrentUse[axis]); // Wenn mist im EEPROM, dann Silent-Wert reinschreiben.
             change = true;
         }
     }
-    //does EEPROM have valid values for microsteps?
+    // Does EEPROM have valid values for microsteps?
     if (HAL::eprGetByte(EPR_RF_MICRO_STEPS_USED) == 0xAB) {
         for (uint8_t axis = 0; axis < DRV8711_NUM_CHANNELS; axis++) {
             /* #define EPR_RF_MICRO_STEPS_X              1943 //[1byte]
@@ -771,7 +771,7 @@ void EEPROM::init() {
     if (kill_eeprom_wrong_version_update || kill_eeprom_because_corrupted || kill_eeprom_by_back_ok_play) {
         EEPROM::clearEEPROM();
         EEPROM::restoreEEPROMSettingsFromConfiguration();
-        EEPROM::storeDataIntoEEPROM(kill_eeprom_because_corrupted); //wenn corrupted dann auch die betriebszähler löschen.
+        EEPROM::storeDataIntoEEPROM(kill_eeprom_because_corrupted); // Wenn corrupted dann auch die betriebszähler löschen.
 
         Com::printF(PSTR("EEPROM reset "));
 
@@ -808,7 +808,7 @@ void EEPROM::init() {
         Com::printFLN(PSTR(UI_TEXT_EXTRUDER1_ADD));
         showInformation(PSTR(UI_TEXT_CONFIGURATION), PSTR(UI_TEXT_EXTRUDER1_ADD), PSTR(UI_TEXT_UPDATE_MATRIX));
 
-        //continue loading data.
+        // Continue loading data.
     }
 
     if (update_eeprom_num_extruders_changed_1) {
@@ -823,7 +823,7 @@ void EEPROM::init() {
         Com::printFLN(PSTR(UI_TEXT_EXTRUDER1_REMOVED));
         showInformation(PSTR(UI_TEXT_CONFIGURATION), PSTR(UI_TEXT_EXTRUDER1_REMOVED), PSTR(UI_TEXT_UPDATE_MATRIX));
 
-        //continue loading data.
+        // Continue loading data.
     }
 
     EEPROM::readDataFromEEPROM();

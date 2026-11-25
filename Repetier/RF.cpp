@@ -236,7 +236,7 @@ void outputObject(bool showerrors) {
     Printer::idleStatus.schedule(HAL::timeInMilliseconds());
 } // outputObject
 
-void loopFeatures() //wird so aufgerufen, dass es ein ~100ms Takt sein sollte.
+void loopFeatures() // Wird so aufgerufen, dass es ein ~100ms Takt sein sollte.
 {
     static char nEntered = 0;
     if (!nEntered) {
@@ -384,7 +384,7 @@ void doEmergencyStop(StopReason reason) {
         Com::printFLN(PSTR(" (Z-Block)"));
     }
 
-    Printer::stopPrint(); //and tell usb senders to stop
+    Printer::stopPrint(); // And tell usb senders to stop
 
     Calibration::moveZ(int(Printer::stepsPerMm(Z_AXIS) * 5), true);
 

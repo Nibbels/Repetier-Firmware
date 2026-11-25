@@ -372,7 +372,7 @@ UI_MENU_ACTIONSELECTOR(ui_menu_go_ypos, UI_TEXT_Y_POSITION, ui_menu_ypos)
 UI_MENU_ACTIONSELECTOR(ui_menu_go_zpos, UI_TEXT_Z_POSITION, ui_menu_zpos)
 #define UI_SPEED_COND &ui_menu_go_xpos, &ui_menu_go_ypos, &ui_menu_go_zpos,
 
-//Nibbels: Das Einstellmenü für die Z-Step-Höhe:
+// Nibbels: Das Einstellmenü für die Z-Step-Höhe:
 UI_MENU_ACTIONCOMMAND(ui_menu_config_single_steps, UI_TEXT_CONFIG_SINGLE_STEPS, UI_ACTION_CONFIG_SINGLE_STEPS)
 #define UI_CONFIG_SINGLE_STEPS &ui_menu_config_single_steps,
 
@@ -470,7 +470,7 @@ UI_MENU(ui_menu_extruder,UI_MENU_EXTRUDER)
 /** \brief Quick menu */
 
 UI_MENU_ACTION4(ui_menu_quick_stop_print_ack, UI_ACTION_STOP_ACK, UI_TEXT_STOP_PRINT_ACK, "", UI_ACTION_TEXT_YES, UI_ACTION_TEXT_NO)
-//das stoppen kann auch über den repetierserver laufen, wenn man dem "RequestStop:" schickt, also parallel machen!! und für normale drucke das menü auch zulassen:
+// Das stoppen kann auch über den repetierserver laufen, wenn man dem "RequestStop:" schickt, also parallel machen!! und für normale drucke das menü auch zulassen:
 UI_MENU_ACTIONSELECTOR_FILTER(ui_menu_quick_stop_print, UI_TEXT_STOP_PRINT, ui_menu_quick_stop_print_ack, MENU_MODE_PRINTING, 0)
 
 
@@ -526,7 +526,7 @@ UI_MENU_ACTIONCOMMAND(ui_menu_fan_50,UI_TEXT_FAN_50,UI_ACTION_FAN_50)
 UI_MENU_ACTIONCOMMAND(ui_menu_fan_75,UI_TEXT_FAN_75,UI_ACTION_FAN_75)
 UI_MENU_ACTIONCOMMAND(ui_menu_fan_full,UI_TEXT_FAN_FULL,UI_ACTION_FAN_FULL)
 
-//fan settings for part fan and frequency setting for secondary coolers, but they are factor 4 faster in PWM.
+// Fan settings for part fan and frequency setting for secondary coolers, but they are factor 4 faster in PWM.
 UI_MENU_CHANGEACTION_FILTER(ui_menu_fan_hz,      UI_TEXT_FAN_HZ,             UI_ACTION_FAN_HZ,    0, MENU_MODE_FAN_MODE_PDM)
 UI_MENU_ACTIONCOMMAND(      ui_menu_fan_mode,    UI_TEXT_FAN_MODE,           UI_ACTION_FAN_MODE)
 UI_MENU_CHANGEACTION(       ui_menu_fan_pwm_min, UI_TEXT_FAN_PART_FAN_PWM_MIN, UI_ACTION_FAN_PART_FAN_PWM_MIN)
@@ -708,12 +708,12 @@ UI_MENU_CHANGEACTION(ui_menu_motor_y,UI_TEXT_MOTOR_Y,UI_ACTION_CHOOSE_MOTOR_Y)
 #define UI_MENU_MOTOR_Y_COND   ,&ui_menu_motor_y
 UI_MENU_CHANGEACTION(ui_menu_motor_z,UI_TEXT_MOTOR_Z,UI_ACTION_CHOOSE_MOTOR_Z)
 #define UI_MENU_MOTOR_Z_COND   ,&ui_menu_motor_z
-UI_MENU_CHANGEACTION(ui_menu_motor_e0,     UI_TEXT_MOTOR_E0,          UI_ACTION_CHOOSE_MOTOR_E0) //extruder nur bei printermode
+UI_MENU_CHANGEACTION(ui_menu_motor_e0,     UI_TEXT_MOTOR_E0,          UI_ACTION_CHOOSE_MOTOR_E0) // Extruder nur bei printermode
 UI_MENU_CHANGEACTION(ui_menu_motorsteps_e0,UI_TEXT_EXTR_STEPS0,       UI_ACTION_EXTR_STEPS_E0)
 #define UI_MENU_MOTOR_E0_COND   ,&ui_menu_motor_e0, &ui_menu_motorsteps_e0
 
 #if NUM_EXTRUDER>1
- UI_MENU_CHANGEACTION(ui_menu_motor_e1,     UI_TEXT_MOTOR_E1,          UI_ACTION_CHOOSE_MOTOR_E1) //extruder nur bei printermode
+ UI_MENU_CHANGEACTION(ui_menu_motor_e1,     UI_TEXT_MOTOR_E1,          UI_ACTION_CHOOSE_MOTOR_E1) // Extruder nur bei printermode
  UI_MENU_CHANGEACTION(ui_menu_motorsteps_e1,UI_TEXT_EXTR_STEPS1,       UI_ACTION_EXTR_STEPS_E1)
  #define UI_MENU_MOTOR_E1_COND   ,&ui_menu_motor_e1, &ui_menu_motorsteps_e1
 #else

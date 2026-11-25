@@ -71,36 +71,36 @@ public:
     void waitForTargetTemperature(uint8_t plus_temp_tolerance = 0, bool resumingPause = false);
     void autotunePID(float temp, uint8_t controllerId, int maxCycles, bool storeResult, int method);
 
-    //Code für den Decouple-Test der Heizkreisläufe:
+    // Code für den Decouple-Test der Heizkreisläufe:
     inline bool isDecoupleFull() {
         return flags & TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_FULL;
     }
     inline void setDecoupleFull() {
-        flags &= ~(TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_HOLD); //hold aus
-        flags |= TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_FULL;    //full an
+        flags &= ~(TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_HOLD); // Hold aus
+        flags |= TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_FULL;    // Full an
     }
     inline bool isDecoupleHold() {
         return flags & TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_HOLD;
     }
     inline void setDecoupleHold() {
-        flags &= ~(TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_FULL); //full aus
-        flags |= TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_HOLD;    //hold an
+        flags &= ~(TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_FULL); // Full aus
+        flags |= TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_HOLD;    // Hold an
     }
     inline void stopDecouple() {
         flags &= ~(TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_FULL | TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_HOLD);
     }
 
-    //Phase 1: wir stehen auf einer Stufe und merken uns die Zeit und die Temperatur. Das wird später mit der neuen Temperatur verglichen und dann muss die Temperatur gestiegen sein.
+    // Phase 1: wir stehen auf einer Stufe und merken uns die Zeit und die Temperatur. Das wird später mit der neuen Temperatur verglichen und dann muss die Temperatur gestiegen sein.
     inline void startFullDecoupleTest(millis_t& t) {
         if (isDecoupleFull())
             return;
         lastDecoupleTest = t;
         lastDecoupleTemp = currentTemperatureC;
-        //switch active test method to "temperature has to rise":
+        // Switch active test method to "temperature has to rise":
         setDecoupleFull();
     }
 
-    //Phase 2: Wir sind voll aufgeheizt und prüfen ob die Temperatur ohne Änderung der Zieltemperatur abdriftet.
+    // Phase 2: Wir sind voll aufgeheizt und prüfen ob die Temperatur ohne Änderung der Zieltemperatur abdriftet.
     //         Schlägt an, wenn die Heizkartusche kaputt geht oder rausrutscht. Oder auch wenn der Sensorwert willkürlich wandert.
     //         Ist der Sensor ausserhalb der bekannten MIN-MAX Limits wird das auch erkannt.
     //
@@ -109,17 +109,17 @@ public:
     //         Solange der PID-Regler den Drift kompensieren kann und das System glaubt, die Temperaturen sind im Rahmen von MIN-MAX könnte der Heizblock heißer sein als gewollt!
     //         Allerdings sollte der Thermistor > 300°C schnell das Zeitliche segnen völligen Mist anzeigen und dann greifen die Checks wieder.
     inline void startHoldDecoupleTest(millis_t& t) {
-        //nur starten, wenn es nicht schon läuft.
+        // Nur starten, wenn es nicht schon läuft.
         if (isDecoupleHold())
             return;
-        //nicht starten, wenn die temperatur "noch" ausserhalb der decoupling varianz liegt. kann z.b. sein, dass die pid-control-range 30 grad ist und das hier 20.
+        // Nicht starten, wenn die temperatur "noch" ausserhalb der decoupling varianz liegt. kann z.b. sein, dass die pid-control-range 30 grad ist und das hier 20.
         if (fabs(currentTemperatureC - targetTemperatureC) + 1 > DECOUPLING_TEST_MAX_HOLD_VARIANCE)
             return;
-        //beim ersten start setzt man den timer auf "jetzt". Es dauert also bis zum ersten check nicht 1 sekunde sondern so wie die config eingestellt ist.
-        //erst danach macht der code jede sekunde den "Wackelcheck".
+        // Beim ersten start setzt man den timer auf "jetzt". Es dauert also bis zum ersten check nicht 1 sekunde sondern so wie die config eingestellt ist.
+        // Erst danach macht der code jede sekunde den "Wackelcheck".
         lastDecoupleTest = t;
         lastDecoupleTemp = targetTemperatureC;
-        //switch active test method to "temperature has to stay where it was":
+        // Switch active test method to "temperature has to stay where it was":
         setDecoupleHold();
     }
 

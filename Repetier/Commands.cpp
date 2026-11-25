@@ -31,14 +31,14 @@ void Commands::commandLoop() {
         if (!Printer::printJob.commandsBlocked())
             Commands::executeGCode(code);
         GCodeInput::popCurrentCommand();
-        Commands::checkForPeriodicalActions(Processing); //check heater and other stuff every n milliseconds
+        Commands::checkForPeriodicalActions(Processing); // Check heater and other stuff every n milliseconds
     } else {
         enum FirmwareState state = NotBusy;
         if (Printer::pause.isPaused()) {
             state = Paused;
         }
 
-        Commands::checkForPeriodicalActions(state); //check heater and other stuff every n milliseconds
+        Commands::checkForPeriodicalActions(state); // Check heater and other stuff every n milliseconds
     }
 } // commandLoop
 
@@ -70,7 +70,7 @@ void Commands::checkForPeriodicalActions(enum FirmwareState state) {
     if (HAL::takeTemperatureTick()) {
         Extruder::manageTemperatures();
         if (state == WaitHeater)
-            Commands::printTemperatures(); //selfcontrolling timediff
+            Commands::printTemperatures(); // Selfcontrolling timediff
         uid.slowAction();
     }
 
@@ -181,7 +181,7 @@ void Commands::printTemperatures(bool showRaw) {
 #endif // NUM_EXTRUDER
 
 #ifdef X35_ADC_CHANNEL
-        //Act as heated chamber ambient temperature for Repetier-Server 0.86.2+ ---> Letter C
+        // Act as heated chamber ambient temperature for Repetier-Server 0.86.2+ ---> Letter C
         TemperatureController* act = &optTempController;
         act->updateCurrentTemperature();
         Com::printF(Com::tSpaceChamber);
@@ -194,7 +194,7 @@ void Commands::printTemperatures(bool showRaw) {
         Com::printF(Com::tF);
         Com::printF(Com::tColon, (int)Printer::strainGauge.lastKnownDigits()); //Kraft
         Com::printF(Com::tSpaceSlash, (int)Printer::strainGauge.effectiveZeroOffset());
-        Com::printF(Com::tSpaceAtColon, 0); //Ziel ^^, nein ich halte mich nur an die PWM-Syntax
+        Com::printF(Com::tSpaceAtColon, 0); // Ziel ^^, nein ich halte mich nur an die PWM-Syntax
         Com::println();
     }
 } // printTemperatures

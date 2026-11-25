@@ -137,7 +137,7 @@ void suspendAxes(GCode* com) {
     wait += HAL::timeInMilliseconds();
 
     while (wait - HAL::timeInMilliseconds() < 100000L) {
-        Commands::checkForPeriodicalActions(Paused); //check heater and other stuff every n milliseconds
+        Commands::checkForPeriodicalActions(Paused); // Check heater and other stuff every n milliseconds
     }
     if (com->hasX())
         Printer::enableXStepper();
@@ -387,7 +387,7 @@ void setPauseParkingOffsets(GCode* pCommand) {
             // test and take over the specified value
             nTemp = pCommand->Z * Printer::stepsPerMm(Z_AXIS);
             if (nTemp < 0)
-                nTemp = 0; //no pause within printed part.
+                nTemp = 0; // No pause within printed part.
             if (nTemp > Printer::zMotion.maxSteps())
                 nTemp = Printer::zMotion.maxSteps();
 
@@ -401,7 +401,7 @@ void setPauseParkingOffsets(GCode* pCommand) {
             if (nTemp < 0)
                 nTemp = 0;
             if (nTemp > 5)
-                nTemp = 5; //Zahl immer positiv, sie wird abgezogen = Retract!
+                nTemp = 5; // Zahl immer positiv, sie wird abgezogen = Retract!
 
             Printer::pause.setParkSteps(E_AXIS, long(nTemp * Extruder::current->stepsPerMM));
             Com::printF(PSTR("M3105: new extruder pause offset: "), nTemp);
@@ -501,7 +501,7 @@ void setEmergencyStopDigits(GCode* pCommand) {
 void setSenseOffsetParameters(GCode* pCommand) {
     auto& controller = Printer::senseOffsetControl;
     bool error = false;
-    //Statusänderung P10000 ([digits])
+    // Statusänderung P10000 ([digits])
     if (pCommand->hasP()) {
         if (pCommand->P > 32767)
             pCommand->P = 32767;
@@ -512,7 +512,7 @@ void setSenseOffsetParameters(GCode* pCommand) {
                 if (oldval != pCommand->P) {
                     Com::printFLN(PSTR("M3909: P change"));
                     HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS, pCommand->P);
-                    EEPROM::updateChecksum(); //deshalb die prüfung
+                    EEPROM::updateChecksum(); // Deshalb die prüfung
                 }
             } else {
                 controller.setThresholdDigits(0);
@@ -534,7 +534,7 @@ void setSenseOffsetParameters(GCode* pCommand) {
             if (oldval != maxMicrometers) {
                 Com::printFLN(PSTR("M3909: S change"));
                 HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX, maxMicrometers);
-                EEPROM::updateChecksum(); //deshalb die prüfung
+                EEPROM::updateChecksum(); // Deshalb die prüfung
             }
         } else {
             Com::printFLN(PSTR("M3909: ERROR::>0.3mm=S300 - This function is ment to compensate minimal amounts of too close distance."));
@@ -544,7 +544,7 @@ void setSenseOffsetParameters(GCode* pCommand) {
         }
     }
 
-    //Statusausgabe per M3909
+    // Statusausgabe per M3909
     const auto limits = controller.limits();
     if (limits.thresholdDigits) {
         Com::printF(PSTR("M3909: INFO SensiblePressure active. [P]PressureDigit = +-"), limits.thresholdDigits);
@@ -569,9 +569,9 @@ void setDigitFlowParameters(GCode* pCommand) {
             max = abs(static_cast<short>(pCommand->S));
         }
         if (min < 500)
-            min = 500; //weniger ist in jedem fall sinnfrei, selbst mit ninjaflex und digit homing
+            min = 500; // Weniger ist in jedem fall sinnfrei, selbst mit ninjaflex und digit homing
         if (max < min)
-            max = min; //geht: flowsprung.
+            max = min; // Geht: flowsprung.
         profile.minDigits = min;
         profile.maxDigits = max;
     }

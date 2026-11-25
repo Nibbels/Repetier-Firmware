@@ -34,7 +34,7 @@
 // Add UI_ACTION_TOPMENU to show a menu as top menu
 // ----------------------------------------------------------------------------
 
-//Vorsicht: Hier beim Topmenü wird extra das Bit abgefragt: Kein anderer Befehl sollte 2^13 drin haben, sonst siehe Panel-Aktionsdispatch :: UI_ACTION_TOPMENU -> Rückfall ins Hauptmenü.
+// Vorsicht: Hier beim Topmenü wird extra das Bit abgefragt: Kein anderer Befehl sollte 2^13 drin haben, sonst siehe Panel-Aktionsdispatch :: UI_ACTION_TOPMENU -> Rückfall ins Hauptmenü.
 #define UI_ACTION_TOPMENU 8192
 
 #define UI_ACTION_NEXT 1
@@ -124,7 +124,7 @@
 #define UI_ACTION_EXTR_MAX_FEEDRATE_E1 1141
 #define UI_ACTION_EXTR_START_FEEDRATE_E1 1142
 
-//Nibbels : nicht in processbutton sondern in executeaction!
+// Nibbels : nicht in processbutton sondern in executeaction!
 #define UI_ACTION_RF_DO_MHIER_BED_SCAN 1666
 #define UI_ACTION_CONFIG_SINGLE_STEPS 1667
 #define UI_ACTION_RF_DO_SAVE_ACTIVE_ZMATRIX 1668
@@ -206,12 +206,12 @@
 // Stock LCD geometry, with separate widths for the two panels.
 #define UI_ROWS 4
 #if MOTHERBOARD == DEVICE_TYPE_RF1000
-#define UI_COLS 16        //check MAX_COLS when changed
+#define UI_COLS 16        // Check MAX_COLS when changed
 #define UI_SPACER ""
 #endif // MOTHERBOARD == DEVICE_TYPE_RF1000
 
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
-#define UI_COLS 20        //check MAX_COLS when changed
+#define UI_COLS 20        // Check MAX_COLS when changed
 #define UI_SPACER "    "
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
@@ -256,7 +256,7 @@ typedef struct UIMenuData
 
 
 // Maximum size of a row - if row is larger, text gets scrolled
-#define MAX_COLS 28 //Anzahl Speicherplätze für Bytes in Display-Zeile, wenn mehr als Display, dann Scrolling. Kann gleich oder größer Displayzeilenlänge sein.
+#define MAX_COLS 28 // Anzahl Speicherplätze für Bytes in Display-Zeile, wenn mehr als Display, dann Scrolling. Kann gleich oder größer Displayzeilenlänge sein.
 
 #define UI_FLAG_SLOW_ACTION_RUNNING 4
 #define UI_FLAG_KEY_TEST_RUNNING 8

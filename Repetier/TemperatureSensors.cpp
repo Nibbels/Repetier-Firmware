@@ -53,7 +53,7 @@ const short temptable_8[NUMTEMPS_8][2] PROGMEM = {
 // 100k Honeywell 135-104LAG-J01
 #define NUMTEMPS_9 58 // 58 explicit points; no zero-filled tail after the 0 C endpoint
 const short temptable_9[NUMTEMPS_9][2] PROGMEM = {
-    { 1 * 4, 941 * 8 }, { 19 * 4, 362 * 8 }, { 37 * 4, 299 * 8 }, //top rating 300C
+    { 1 * 4, 941 * 8 }, { 19 * 4, 362 * 8 }, { 37 * 4, 299 * 8 }, // Top rating 300C
     { 55 * 4, 266 * 8 },
     { 73 * 4, 245 * 8 },
     { 91 * 4, 229 * 8 },
@@ -108,7 +108,7 @@ const short temptable_9[NUMTEMPS_9][2] PROGMEM = {
     { 973 * 4, 27 * 8 },
     { 991 * 4, 17 * 8 },
     { 1009 * 4, 1 * 8 },
-    { 1023 * 4, 0 } //to allow internal 0 degrees C
+    { 1023 * 4, 0 } // To allow internal 0 degrees C
 };
 
 // 100k 0603 SMD Vishay NTCS0603E3104FXT (4.7k pullup)
@@ -139,7 +139,7 @@ const short temptable_13[NUMTEMPS_13][2] PROGMEM =
 };
 */
 
-//TODO: Tabelle startet erst bei 92°C ... Kleine Rundungszacken am Anfang, weil alles *4.
+// TODO: Tabelle startet erst bei 92°C ... Kleine Rundungszacken am Anfang, weil alles *4.
 #define NUMTEMPS_13 61 // NTC 3950 100k thermistor - Conrad V3
 const short temptable_13[NUMTEMPS_13][2] PROGMEM = {
     { 23 * 4, 300 * 8 }, { 25 * 4, 295 * 8 }, { 27 * 4, 290 * 8 }, { 28 * 4, 285 * 8 }, { 31 * 4, 280 * 8 }, { 33 * 4, 275 * 8 }, { 35 * 4, 270 * 8 }, { 38 * 4, 265 * 8 }, { 41 * 4, 260 * 8 }, { 44 * 4, 255 * 8 }, { 48 * 4, 250 * 8 }, { 52 * 4, 245 * 8 }, { 56 * 4, 240 * 8 }, { 61 * 4, 235 * 8 }, { 66 * 4, 230 * 8 }, { 71 * 4, 225 * 8 }, { 78 * 4, 220 * 8 }, { 84 * 4, 215 * 8 }, { 92 * 4, 210 * 8 }, { 100 * 4, 205 * 8 }, { 109 * 4, 200 * 8 }, { 120 * 4, 195 * 8 }, { 131 * 4, 190 * 8 }, { 143 * 4, 185 * 8 }, { 156 * 4, 180 * 8 }, { 171 * 4, 175 * 8 }, { 187 * 4, 170 * 8 }, { 205 * 4, 165 * 8 }, { 224 * 4, 160 * 8 }, { 245 * 4, 155 * 8 }, { 268 * 4, 150 * 8 }, { 293 * 4, 145 * 8 }, { 320 * 4, 140 * 8 }, { 348 * 4, 135 * 8 }, { 379 * 4, 130 * 8 }, { 411 * 4, 125 * 8 }, { 445 * 4, 120 * 8 }, { 480 * 4, 115 * 8 }, { 516 * 4, 110 * 8 }, { 553 * 4, 105 * 8 }, { 591 * 4, 100 * 8 }, { 628 * 4, 95 * 8 }, { 665 * 4, 90 * 8 }, { 702 * 4, 85 * 8 }, { 737 * 4, 80 * 8 }, { 770 * 4, 75 * 8 }, { 801 * 4, 70 * 8 }, { 830 * 4, 65 * 8 }, { 857 * 4, 60 * 8 }, { 881 * 4, 55 * 8 }, { 903 * 4, 50 * 8 }, { 922 * 4, 45 * 8 }, { 939 * 4, 40 * 8 }, { 954 * 4, 35 * 8 }, { 966 * 4, 30 * 8 }, { 977 * 4, 25 * 8 }, { 985 * 4, 20 * 8 }, { 993 * 4, 15 * 8 }, { 999 * 4, 10 * 8 }, { 1004 * 4, 5 * 8 }, { 1008 * 4, 0 * 8 }
@@ -286,7 +286,7 @@ bool TemperatureController::updateCurrentTemperature() {
         int16_t oldtemp = pgm_read_word(&temptable[1]);
         int16_t newtemp = 0;
 
-        //NTC: Suche Temperatur andersrum, weil Steigung der Umrechnungskurve invertiert ist.
+        // NTC: Suche Temperatur andersrum, weil Steigung der Umrechnungskurve invertiert ist.
         if (isNtc)
             currentTemperature = (1023 << (2 - ANALOG_REDUCE_BITS)) - currentTemperature;
 

@@ -62,25 +62,25 @@ void fixKeramikLochInMatrix(void) {
         long heights = 0;
         char div = 0;
 
-        for (short x = 1; x <= g_uZMatrixMax[X_AXIS]; x++) { //in der matrix ist alles von 1 an (?) -> also vermutlich anzahl = indexmax.
+        for (short x = 1; x <= g_uZMatrixMax[X_AXIS]; x++) { // In der matrix ist alles von 1 an (?) -> also vermutlich anzahl = indexmax.
             for (short y = 1; y <= g_uZMatrixMax[Y_AXIS]; y++) {
 
                 heights = 0;
                 div = 0;
 
-                //circle around matrixposition
+                // Circle around matrixposition
                 for (short xx = x - 1; xx <= x + 1; xx++) {
-                    for (short yy = y - 1; yy <= y + 1; yy++) {                                                     //iterate all points
-                        if (xx != x || yy != y) {                                                                   //nicht den punkt in der mitte
-                            if (xx <= g_uZMatrixMax[X_AXIS] && xx >= 1 && yy <= g_uZMatrixMax[Y_AXIS] && yy >= 1) { //nicht punkte ausserhalb der matrix
+                    for (short yy = y - 1; yy <= y + 1; yy++) {                                                     // Iterate all points
+                        if (xx != x || yy != y) {                                                                   // Nicht den punkt in der mitte
+                            if (xx <= g_uZMatrixMax[X_AXIS] && xx >= 1 && yy <= g_uZMatrixMax[Y_AXIS] && yy >= 1) { // Nicht punkte ausserhalb der matrix
                                 heights += (long)g_ZCompensationMatrix[xx][yy];
                                 div += 1;
                             }
                         }
                     }
                 }
-                deepness = (long)((float)heights / div) - g_ZCompensationMatrix[x][y]; //nur täler, negative werte.
-                if (deepness > peak_hole && div > 3) {                                 //nicht an ecken, sonst immer das tiefste loch suchen.
+                deepness = (long)((float)heights / div) - g_ZCompensationMatrix[x][y]; // Nur täler, negative werte.
+                if (deepness > peak_hole && div > 3) {                                 // Nicht an ecken, sonst immer das tiefste loch suchen.
                     peak_hole = deepness;
                     peak_x = x;
                     peak_y = y;
@@ -95,7 +95,7 @@ void fixKeramikLochInMatrix(void) {
         //Com::printFLN( PSTR( "g_ZCompensationMatrix[peak_x,peak_y] =" ), g_ZCompensationMatrix[peak_x][peak_y] );
 
         if (peak_hole > 100 && peak_x > 0 && peak_y > 0) {
-            //loch groß genug
+            // Loch groß genug
             g_ZCompensationMatrix[peak_x][peak_y] += peak_hole;
             Com::printF(PSTR("Fixed: [peak_x,peak_y]="), g_ZCompensationMatrix[peak_x][peak_y]);
             g_ZMatrixChangedInRam = 1;
@@ -107,44 +107,33 @@ void fixKeramikLochInMatrix(void) {
         Com::printFLN(Com::tError);
     }
 
-    determineCompensationOffsetZ(); //zur sicherheit und zukünftiger kompatibilität (Popel rausrechnen, würde den minimalen Z-Abstand verändern.)
+    determineCompensationOffsetZ(); // Zur sicherheit und zukünftiger kompatibilität (Popel rausrechnen, würde den minimalen Z-Abstand verändern.)
 
     //Com::printFLN( PSTR( "fixKeramikLochInMatrix(): finished" ) );
     return;
 } // fixKeramikLochInMatrix
 
-/**************************************************************************************************************************************/
-
-/**************************************************************************************************************************************/
-
 void setMatrixNull(void) {
-    //Damit kann die Matrix eingeebnet werden. Anschließend mit M3902 Zx.x verschoben, dann mit dem M3900/M3901 mit Distance-Schalter ein Auto-Bed-Leveling auf die Alte Art gemacht werden.
-    //Man hätte dann eine total ebene Matrix. Die Z-Kompensation ist dann faktisch aus, kann aber weiterlaufen.
+    // Damit kann die Matrix eingeebnet werden. Anschließend mit M3902 Zx.x verschoben, dann mit dem M3900/M3901 mit Distance-Schalter ein Auto-Bed-Leveling auf die Alte Art gemacht werden.
+    // Man hätte dann eine total ebene Matrix. Die Z-Kompensation ist dann faktisch aus, kann aber weiterlaufen.
 
     if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
         // we load the z compensation matrix before its first usage because this can take some time
         prepareZCompensation();
     }
     if (g_ZCompensationMatrix[0][0] == EEPROM_FORMAT) {
-        for (short x = 1; x <= g_uZMatrixMax[X_AXIS]; x++) { //in der matrix ist alles von 1 an (?) -> also vermutlich anzahl = indexmax.
+        for (short x = 1; x <= g_uZMatrixMax[X_AXIS]; x++) { // In der matrix ist alles von 1 an (?) -> also vermutlich anzahl = indexmax.
             for (short y = 1; y <= g_uZMatrixMax[Y_AXIS]; y++) {
                 g_ZCompensationMatrix[x][y] = 0;
             }
         }
-        g_ZMatrixChangedInRam = 1; //man kan die matrix mit diesem marker nun sichern.
+        g_ZMatrixChangedInRam = 1; // Man kan die matrix mit diesem marker nun sichern.
         Com::printFLN(PSTR("Matrix set to 0!"));
     } else {
         Com::printFLN(Com::tError);
     }
-    determineCompensationOffsetZ(); //zur sicherheit und zukünftiger kompatibilität (Popel rausrechnen, würde den minimalen Z-Abstand verändern.)
+    determineCompensationOffsetZ(); // Zur sicherheit und zukünftiger kompatibilität (Popel rausrechnen, würde den minimalen Z-Abstand verändern.)
     return;
 } // setMatrixNull
-
-/**************************************************************************************************************************************/
-
-/**************************************************************************************************************************************/
-/**************************************************************************************************************************************/
-
-/**************************************************************************************************************************************/
 
 #endif // BED_MATRIX_DIAGNOSTICS_H

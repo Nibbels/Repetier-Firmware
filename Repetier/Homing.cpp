@@ -39,7 +39,7 @@ bool Printer::anyEndstop(uint8_t axis) {
         }
         }
     }
-    return (bool)(endstop > 1); //endstop muss sauber gedrückt sein.
+    return (bool)(endstop > 1); // endstop muss sauber gedrückt sein.
 }
 
 void Printer::changeAxisDirection(uint8_t axis, int8_t direction) {
@@ -78,32 +78,32 @@ void Printer::stepAxisStep(uint8_t axis, uint8_t slower) {
 
 int8_t Printer::checkHome(int8_t axis) //X_AXIS 0, Y_AXIS 1, Z_AXIS 2
 {
-    //do not allow Z jet because we have to check compensation behaviour
+    // Do not allow Z jet because we have to check compensation behaviour
     Com::printFLN(PSTR("checkHome: start axis"), axis);
     //if(axis == Z_AXIS) return -1; //noch verboten, weil solange das läuft der emergency-Stop nicht funktioniert. funktion wird evtl. wie HBS oder ZOS geteilt.
 
     if (axis > Z_AXIS)
         return -1;
 
-    //do not allow checkHome without Home
+    // Do not allow checkHome without Home
     if (!Printer::isAxisHomed(axis))
         return -1;
     Com::printFLN(PSTR("ishomed!"));
 
-    //do not allow checkHome when some endstop is already reached
+    // Do not allow checkHome when some endstop is already reached
     if (Printer::anyEndstop(axis))
-        return -1; //knopf gedrückt = kein sinnvoller rückfahrweg bzw. nicht vertrauenswürdige coordinaten.
+        return -1; // Knopf gedrückt = kein sinnvoller rückfahrweg bzw. nicht vertrauenswürdige coordinaten.
 
-    //get the right homeDirection for moving -> 0 is none.
+    // Get the right homeDirection for moving -> 0 is none.
     char nHomeDir = Printer::anyHomeDir(axis);
     Com::printFLN(PSTR("nHomeDir="), nHomeDir);
     if (!nHomeDir)
         return -1;
 
-    //set stepper direction as homing direction
+    // Set stepper direction as homing direction
     Printer::changeAxisDirection(axis, nHomeDir);
 
-    //previous motion state:
+    // Previous motion state:
     long oldCurrentSteps;
     if (axis == Z_AXIS)
         oldCurrentSteps = zMotion.motorSteps();
@@ -111,13 +111,13 @@ int8_t Printer::checkHome(int8_t axis) //X_AXIS 0, Y_AXIS 1, Z_AXIS 2
         oldCurrentSteps = Printer::xyMotion.motorSteps(Y_AXIS);
     else
         oldCurrentSteps = Printer::xyMotion.motorSteps(X_AXIS);
-    //write previous motion state to log
+    // Write previous motion state to log
     Com::printFLN(PSTR("Current position steps="), oldCurrentSteps);
 
-    //drive axis towards endstop:
+    // Drive axis towards endstop:
     long returnSteps = 0;
     bool finish = false;
-    int mmLoops = Printer::stepsPerMm(axis); //fahre in mm-Blöcken.
+    int mmLoops = Printer::stepsPerMm(axis); // Fahre in mm-Blöcken.
 
     while (1) {
         Commands::checkForPeriodicalActions(Calibrating);
@@ -129,7 +129,7 @@ int8_t Printer::checkHome(int8_t axis) //X_AXIS 0, Y_AXIS 1, Z_AXIS 2
             } else {
                 returnSteps += nHomeDir;
             }
-            //verbot unendlich weiterzufahren, wenn endstop kaputt
+            // Verbot unendlich weiterzufahren, wenn endstop kaputt
             if (abs(returnSteps) > abs(softwareEndstopSteps(axis)) * 110 / 100)
                 finish = true;
 
@@ -140,21 +140,21 @@ int8_t Printer::checkHome(int8_t axis) //X_AXIS 0, Y_AXIS 1, Z_AXIS 2
             break;
     }
 
-    //steps to log
+    // Steps to log
     Com::printFLN(PSTR("Return steps="), returnSteps);
 
     Com::printFLN(PSTR("Recheck endstop:"));
-    //check ob endstop da (oder defekt oder nicht erreicht: return)
+    // Check ob endstop da (oder defekt oder nicht erreicht: return)
     if (!Printer::anyEndstop(axis))
         return -1;
 
-    //change stepper direction to drive against homing direction
+    // Change stepper direction to drive against homing direction
     Printer::changeAxisDirection(axis, -1 * nHomeDir);
-    //Ein paar steps zurück, bis schalter wieder losgelassen wurde:
+    // Ein paar steps zurück, bis schalter wieder losgelassen wurde:
     finish = false; // Neue Abbruchbedingung
     for (int i = 0; i < mmLoops; i++) {
         Printer::stepAxisStep(axis, 20 /*20x langsamer*/);
-        //end if button is not pressed anymore.
+        // End if button is not pressed anymore.
         if (!Printer::anyEndstop(axis)) {
             finish = true;
         } else {
@@ -164,20 +164,20 @@ int8_t Printer::checkHome(int8_t axis) //X_AXIS 0, Y_AXIS 1, Z_AXIS 2
             break;
     }
 
-    //check ob endstop nach 1mm immernoch gedrückt:
+    // Check ob endstop nach 1mm immernoch gedrückt:
     if (Printer::anyEndstop(axis))
         return -1;
 
-    //merke schalter-aus-punkt für hysteresemessung:
+    // Merke schalter-aus-punkt für hysteresemessung:
     long hysterese = returnSteps;
 
-    //Neu und langsamer in den Schalter fahren:
-    //change stepper direction to drive against homing direction
+    // Neu und langsamer in den Schalter fahren:
+    // Change stepper direction to drive against homing direction
     Printer::changeAxisDirection(axis, nHomeDir);
     finish = false; // Neue Abbruchbedingung
     for (int i = 0; i < mmLoops; i++) {
         Printer::stepAxisStep(axis, 20 /*20x langsamer*/);
-        //end if button is not pressed anymore.
+        // End if button is not pressed anymore.
         if (Printer::anyEndstop(axis)) {
             finish = true;
         } else {
@@ -186,14 +186,14 @@ int8_t Printer::checkHome(int8_t axis) //X_AXIS 0, Y_AXIS 1, Z_AXIS 2
         if (finish)
             break;
     }
-    //check ob endstop nach 1mm immernoch nicht gedrückt:
+    // Check ob endstop nach 1mm immernoch nicht gedrückt:
     if (!Printer::anyEndstop(axis))
         return -1;
 
     hysterese -= returnSteps;
     Com::printFLN(PSTR("aus-ein-hysterese="), hysterese);
 
-    //check ob steps verloren gehen:
+    // Check ob steps verloren gehen:
     long delta;
     if (axis == Z_AXIS)
         delta = zMotion.motorSteps();
@@ -204,7 +204,7 @@ int8_t Printer::checkHome(int8_t axis) //X_AXIS 0, Y_AXIS 1, Z_AXIS 2
 
     Com::printFLN(PSTR("Steps delta="), delta);
 
-    //fahre zurück an Startpunkt:
+    // Fahre zurück an Startpunkt:
     Printer::changeAxisDirection(axis, -1 * nHomeDir);
 
     returnSteps = abs(returnSteps);
@@ -255,7 +255,7 @@ void Printer::homeXAxis() {
 
 #if NUM_EXTRUDER > 1
         if (offX) {
-            //Wir halten z.B. von Links soviel Abstand wie der größte Extruder-Offset. Wir fahren aber nur so weit, dass das aktuelle Hotend dort steht.
+            // Wir halten z.B. von Links soviel Abstand wie der größte Extruder-Offset. Wir fahren aber nur so weit, dass das aktuelle Hotend dort steht.
             Printer::offsetRelativeStepsCoordinates(-1 * nHomeDir * (offX * axisMMPerSteps_[X_AXIS] - Extruder::current->offsetMM[X_AXIS]) * Printer::stepsPerMm(X_AXIS), 0, 0, 0);
         }
 #endif // NUM_EXTRUDER>1
@@ -298,7 +298,7 @@ void Printer::homeYAxis() {
         Printer::xyMotion.setMotorSteps(Y_AXIS, (nHomeDir == -1) ? 0 : maxSoftEndstopSteps_[Y_AXIS]);
 #if NUM_EXTRUDER > 1
         if (offY) {
-            //Wir halten z.B. von Links soviel Abstand wie der größte Extruder-Offset. Wir fahren aber nur so weit, dass das aktuelle Hotend dort steht.
+            // Wir halten z.B. von Links soviel Abstand wie der größte Extruder-Offset. Wir fahren aber nur so weit, dass das aktuelle Hotend dort steht.
             Printer::offsetRelativeStepsCoordinates(0, -1 * nHomeDir * (offY * axisMMPerSteps_[Y_AXIS] - Extruder::current->offsetMM[Y_AXIS]) * Printer::stepsPerMm(Y_AXIS), 0, 0);
         }
 #endif // NUM_EXTRUDER>1
@@ -319,7 +319,7 @@ void Printer::homeZAxis() {
     if (nHomeDir) {
         UI_STATUS_UPD(UI_TEXT_HOME_Z);
 
-        //homing ausschalten und zCMP (...) auch.
+        // Homing ausschalten und zCMP (...) auch.
         setHomed(-1, -1, false);
 
         // Establish the first-layer defaults for the print that follows this Z home.
@@ -338,20 +338,20 @@ void Printer::homeZAxis() {
         noInts.unprotect();
 
         //1. Schnelles Fahren bis zum Schalterkontakt:
-        //Ist der Schalter gedrückt, wird sofort geskipped.
+        // Ist der Schalter gedrückt, wird sofort geskipped.
         if (!Printer::queueRelativeStepsCoordinates(0, 0, (zMotion.maxSteps() + 2 * int32_t(zMotion.minOvertravel())) * nHomeDir, 0, homingFeedrate_[Z_AXIS], true, true))
             return;
 
         //2. in jedem Fall Freifahren vom Schalterkontakt:
         //ENDSTOP_Z_BACK_MOVE größer als 32768 ist eigentlich nicht möglich, nicht sinnvoll und würde, da das überfahren bei 32microsteps von der z-matrix >-12,7mm abhängig ist verboten sein.
-        //darum ist uint16_t in jedem fall ohne overflow.
+        // Darum ist uint16_t in jedem fall ohne overflow.
         for (uint16_t step = 0; step < uint16_t(axisStepsPerMM_[Z_AXIS] * ENDSTOP_Z_BACK_MOVE); step += uint16_t(0.1f * axisStepsPerMM_[Z_AXIS])) {
-            //faktor *2 und *5 : doppelt/5x so schnell beim Zurücksetzen als nachher beim langsamst hinfahren. Sonst dauert das ewig.
+            // Faktor *2 und *5 : doppelt/5x so schnell beim Zurücksetzen als nachher beim langsamst hinfahren. Sonst dauert das ewig.
             if (Printer::isZMinEndstopHit()) {
-                //schalter noch gedrückt, wir müssen weiter aus dem schalter rausfahren, aber keinesfalls mehr als ENDSTOP_Z_BACK_MOVE
+                // Schalter noch gedrückt, wir müssen weiter aus dem schalter rausfahren, aber keinesfalls mehr als ENDSTOP_Z_BACK_MOVE
                 if (!Printer::queueRelativeMMCoordinates(0, 0, 0.1f * (-1 * nHomeDir), 0, float(homingFeedrate_[Z_AXIS] / ENDSTOP_Z_RETEST_REDUCTION_FACTOR * 5.0f), true))
                     return;
-            } else { //wir sind aus dem schalterbereich raus, müssten also nicht weiter zurücksetzen:
+            } else { // Wir sind aus dem schalterbereich raus, müssten also nicht weiter zurücksetzen:
                      //1) egal ob der schalter zu anfang überfahren war oder nicht: etwas zurücksetzen, nachdem der schalter angefahren wurde.
                      //2) hier wird in jedem Fall etwas weiter weggefahren, sodass man wieder neu auf Z anfahren kann.
                 if (!Printer::queueRelativeMMCoordinates(0, 0, Z_ENDSTOP_MAX_HYSTERESIS * (-1 * nHomeDir), 0, float(homingFeedrate_[Z_AXIS] / ENDSTOP_Z_RETEST_REDUCTION_FACTOR * 2.0f), true))
@@ -401,7 +401,7 @@ void Printer::homeAxis(bool xaxis, bool yaxis, bool zaxis) // home non-delta pri
 {
     Printer::idleStatus.cancel();
 
-    //Bei beliebiger user interaktion oder Homing soll G1 etc. erlaubt werden. Dann ist der Drucker nicht abgestürzt, sondern bedient worden.
+    // Bei beliebiger user interaktion oder Homing soll G1 etc. erlaubt werden. Dann ist der Drucker nicht abgestürzt, sondern bedient worden.
     allowMovement();
 
     // Clear a positive bed matrix before homing Z when Y was omitted.

@@ -406,7 +406,7 @@ extern void startZOScan(bool automatrixleveling = false);
 ZOffsetScanPoint zOffsetScanPoint();
 void restoreZOffsetScanPoint(ZOffsetScanPoint point);
 
-//Menüumschalter für Z-Step-Höhe
+// Menüumschalter für Z-Step-Höhe
 extern void configureMANUAL_STEPS_Z(int8_t increment);
 
 extern long getZMatrixDepth_CurrentXY(void);

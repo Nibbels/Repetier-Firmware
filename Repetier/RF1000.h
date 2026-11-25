@@ -335,7 +335,7 @@ This value must be high enough, that the buffer has time to fill up. The problem
 if you are printing many very short segments at high speed.*/
 #define LOW_TICKS_PER_MOVE 250000
 
-//For configuration of speed vs. cpu RF_MICRO_STEPS_ @ CONFIGURATION.h as well!
+// For configuration of speed vs. cpu RF_MICRO_STEPS_ @ CONFIGURATION.h as well!
 
 // Model-specific movement for the bed scan and print pause.
 #define HEAT_BED_SCAN_DOWN_FAST_MM 0.2f // [mm]

@@ -367,7 +367,7 @@ This value must be high enough, that the buffer has time to fill up. The problem
 if you are printing many very short segments at high speed.*/
 #define LOW_TICKS_PER_MOVE 250000
 
-//For configuration of speed vs. cpu RF_MICRO_STEPS_ @ CONFIGURATION.h as well!
+// For configuration of speed vs. cpu RF_MICRO_STEPS_ @ CONFIGURATION.h as well!
 
 #define DEFAULT_PAUSE_MM_Z_PRINT 30 // [mm] Lift during print pause
 

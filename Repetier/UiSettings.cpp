@@ -70,7 +70,7 @@ void UIDisplay::finishAction(int action) {
         unsigned char heater = menuPos[menuLevel - 2]; // The bed follows the hotends in the PID menu.
         int method = menuPos[menuLevel - 1];           //0..1..2..3 passt nicht mehr zum J-Listing des M303
 
-        //Esthetics: Switch method for better order in menu. I want the menu to start with pessen integral, because it is the most responsive one. We dont need some overshoot within menu because it has no known use for us.
+        // Esthetics: Switch method for better order in menu. I want the menu to start with pessen integral, because it is the most responsive one. We dont need some overshoot within menu because it has no known use for us.
         /*
                                              responsiveness of tunings: J1pessen++ J0classic+ J2someovershoot J3noovershoot- J4tyreuslyben--
                                              -- is for slow beds
@@ -89,23 +89,23 @@ void UIDisplay::finishAction(int action) {
         int temperature = heatBedScanPlaNozzleC;
         int cycles = 10;
         if (NUM_EXTRUDER == heater) {
-            //Das ist das Heizbett und kein Extruder
-            temperature = heatBedScanPlaBedC; //Bett nicht so hoch testen, wie Extruder.
-            cycles = 16;                                      //Bett ist erfahrungsgemäß viel träger. Mehr Zyklen erhöhen die Genauigkeit des Ergebnis.
+            // Das ist das Heizbett und kein Extruder
+            temperature = heatBedScanPlaBedC; // Bett nicht so hoch testen, wie Extruder.
+            cycles = 16;                                      // Bett ist erfahrungsgemäß viel träger. Mehr Zyklen erhöhen die Genauigkeit des Ergebnis.
         }
         bool writeeeprom = true;
         if (heater >= NUM_TEMPERATURE_LOOPS)
             heater = NUM_TEMPERATURE_LOOPS - 1;
-        //show menu and message to user: He cant do anything until autotune is over.
+        // Show menu and message to user: He cant do anything until autotune is over.
         exitmenu();
-        menuPos[0] = 3; //show temps
+        menuPos[0] = 3; // Show temps
         tempController[heater]->autotunePID(temperature, heater, cycles, writeeeprom, method);
         break;
     }
     }
 } // finishAction
 
-//increment ist ne variable, global -> Knopfrichtung.
+// Increment ist ne variable, global -> Knopfrichtung.
 //#define INCREMENT_MIN_MAX(a,steps,_min,_max) if ( (increment<0) && (_min>=0) && (a<_min-increment*steps) ) {a=_min;} else { a+=increment*steps; if(a<_min) a=_min; else if(a>_max) a=_max;};
 // this version not have single byte variable rollover bug
 #define INCREMENT_MIN_MAX(a, steps, _min, _max) a = constrain((a + increment * steps), _min, _max);
@@ -150,7 +150,7 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         break;
     }
     case UI_ACTION_EPOSITION: {
-        Printer::queueRelativeMMCoordinates(0, 0, 0, (float)increment / Printer::flowMultiplier(), UI_SET_EXTRUDER_FEEDRATE, true); //klappt nicht in Pause!!
+        Printer::queueRelativeMMCoordinates(0, 0, 0, (float)increment / Printer::flowMultiplier(), UI_SET_EXTRUDER_FEEDRATE, true); // Klappt nicht in Pause!!
         Commands::printCurrentPosition();
         break;
     }
@@ -212,7 +212,7 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
         if (temp <= (int)HAL::partFanMaxDuty() - 16) {
             HAL::setPartFanDutyRange(temp, HAL::partFanMaxDuty());
         }
-        //recalculate active pwm value out of HAL::partFanSpeed() for easy tune-in.
+        // Recalculate active pwm value out of HAL::partFanSpeed() for easy tune-in.
         //(Tune-In: set fan to 1% and rise minimum until it starts.)
         Commands::setFanSpeed(HAL::partFanSpeed(), true);
         HAL::eprSetByte(EPR_RF_PART_FAN_PWM_MIN, HAL::partFanMinDuty());
@@ -225,7 +225,7 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
         if (temp >= HAL::partFanMinDuty() + 16) {
             HAL::setPartFanDutyRange(HAL::partFanMinDuty(), temp);
         }
-        //recalculate active pwm value out of HAL::partFanSpeed() for easy tune-in.
+        // Recalculate active pwm value out of HAL::partFanSpeed() for easy tune-in.
         //(Tune-In: set fan to 100% and decrease maximum until fan slows down slightly.)
         Commands::setFanSpeed(HAL::partFanSpeed(), true);
         HAL::eprSetByte(EPR_RF_PART_FAN_PWM_MAX, HAL::partFanMaxDuty());
@@ -431,7 +431,7 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
         float liftMm = scanStartLiftMm();
         INCREMENT_MIN_MAX(liftMm, 0.1f, 0.3f, 6.0f);
         setScanStartLiftMm(liftMm);
-        HAL::eprSetFloat(EPR_ZSCAN_START_MM, scanStartLiftMm()); //mm zlift vor den scans.
+        HAL::eprSetFloat(EPR_ZSCAN_START_MM, scanStartLiftMm()); // mm zlift vor den scans.
         EEPROM::updateChecksum();
         break;
     }
@@ -498,11 +498,11 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
     case UI_ACTION_CHOOSE_MOTOR_E1: {
         uint8_t steppernr = menuPos[menuLevel];
         if (steppernr == 6)
-            steppernr = 4;   //das ist etwas stümperhaft, aber ich brauche die Zeilennummer um auszuwählen und die Einstellungen für die Extruderstepper gehören drüber, also muss Extruder 2 zwei Zeilen runter...
+            steppernr = 4;   // Das ist etwas stümperhaft, aber ich brauche die Zeilennummer um auszuwählen und die Einstellungen für die Extruderstepper gehören drüber, also muss Extruder 2 zwei Zeilen runter...
         if (steppernr < 5) { // aktuell gibts nur 5
             int drive = Drv8711::configuredCurrent(steppernr);
             const short uMotorCurrentMax[] = MOTOR_CURRENT_MAX;
-            INCREMENT_MIN_MAX(drive, 1, MOTOR_CURRENT_MIN + 1, uMotorCurrentMax[steppernr]); //von 40 bis maximal das was in der config steht.
+            INCREMENT_MIN_MAX(drive, 1, MOTOR_CURRENT_MIN + 1, uMotorCurrentMax[steppernr]); // Von 40 bis maximal das was in der config steht.
             Drv8711::stageCurrent(steppernr, drive);
             HAL::eprSetByte(EPR_RF_MOTOR_CURRENT + steppernr, (uint8_t)drive);
             EEPROM::updateChecksum();
@@ -550,8 +550,8 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
     case UI_ACTION_MICROSTEPS_Z:
     case UI_ACTION_MICROSTEPS_E: {
         if (!Printer::printJob.isBusy() && !PrintLine::hasLines() && Printer::pause.allowsQueueAdvance()) {
-            Printer::disableAllSteppersNow(); //Stepper und Homing ausmachen.
-                                              //We cannot use the old coordinates anymore.
+            Printer::disableAllSteppersNow(); // Stepper und Homing ausmachen.
+                                              // We cannot use the old coordinates anymore.
 
             InterruptProtectedBlock noInts;
             bool changed[5] = { false, false, false, false, false };
@@ -589,12 +589,12 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
             bool updatederived = false;
             bool updateextruder = false;
 
-            //anpassen der eeprom-werte und anpassen der steps/mm sodass die geschwindigkeit weiterhin passt.
+            // Anpassen der eeprom-werte und anpassen der steps/mm sodass die geschwindigkeit weiterhin passt.
             for (int i = 0; i < DRV8711_NUM_CHANNELS; i++) {
-                if ((!changed[i] && updateall) || changed[i]) { //erstes oder veränderndes schreiben
+                if ((!changed[i] && updateall) || changed[i]) { // Erstes oder veränderndes schreiben
                     HAL::eprSetByte(EPR_RF_MICRO_STEPS_X + i, Drv8711::microstepMode(i));
                 }
-                if (changed[i]) { //nur dann die axis-steps anpassen, wenn wirklich was geändert wurde.
+                if (changed[i]) { // Nur dann die axis-steps anpassen, wenn wirklich was geändert wurde.
                     switch (i) {
                     case X_AXIS:
                     case Y_AXIS:
@@ -607,9 +607,9 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
                             Printer::manualMotion.rescaleSteps(Z_AXIS, stepsmm_korrekturfactor);
                             HAL::eprSetInt16(EPR_RF_MOD_Z_STEP_SIZE, Printer::manualMotion.steps(Z_AXIS));
                             invalidateBedMatrixForReload();
-                                                                             //korrektur der aktiven kompensation/zoffset ist durch fehlendes homing unterbunden.
+                                                                             // Korrektur der aktiven kompensation/zoffset ist durch fehlendes homing unterbunden.
                         }
-                        updatederived = true; //übernehmen der werte in offsets und infaxissteps, accel usw..
+                        updatederived = true; // Übernehmen der werte in offsets und infaxissteps, accel usw..
                         HAL::eprSetFloat(EPR_XAXIS_STEPS_PER_MM + 4 * i, Printer::stepsPerMm(i));
                         break;
                     }
@@ -620,19 +620,19 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
                         extruder[etr].stepsPerMM *= stepsmm_korrekturfactor;
                         HAL::eprSetFloat(EEPROM::getExtruderOffset(etr) + EPR_EXTRUDER_STEPS_PER_MM, extruder[etr].stepsPerMM);
                         if (etr == Extruder::current->id)
-                            updateextruder = true; //übernehmen der werte in offsets und infaxissteps, accel usw..
+                            updateextruder = true; // Übernehmen der werte in offsets und infaxissteps, accel usw..
                         break;
                     }
                     }
                 }
             }
-            //übernehmen der werte in offsets und infaxissteps, accel usw..
+            // Übernehmen der werte in offsets und infaxissteps, accel usw..
             if (updatederived)
                 Printer::updateDerivedParameter();
             if (updateextruder)
                 Extruder::applyCurrentSettings();
             if (updateall)
-                HAL::eprSetByte(EPR_RF_MICRO_STEPS_USED, 0xAB); //erstes schreiben markiert eepromwerte als gültig
+                HAL::eprSetByte(EPR_RF_MICRO_STEPS_USED, 0xAB); // Erstes schreiben markiert eepromwerte als gültig
             noInts.unprotect();
             if (changed[Z_AXIS])
                 Printer::zOffset.refreshSteps(Printer::stepsPerMm(Z_AXIS));
@@ -939,19 +939,19 @@ void UIDisplay::changePressureSetting(int action, int8_t increment) {
 void UIDisplay::changeHeaterSetting(int action, int8_t increment) {
     switch (action) {
     case UI_ACTION_CHOOSE_DMIN: {
-        if (menuLevel == 4) {                        //identifikation des temperaturzyklus anhand der position im menü. Das ist nicht 100% sauber, aber funktioniert.
+        if (menuLevel == 4) {                        // Identifikation des temperaturzyklus anhand der position im menü. Das ist nicht 100% sauber, aber funktioniert.
             uint8_t heater = menuPos[menuLevel - 1]; // The bed follows the hotends in the PID menu.
             if (heater < NUM_TEMPERATURE_LOOPS) {
                 int drive = tempController[heater]->pidDriveMin;
                 INCREMENT_MIN_MAX(drive, 1, 1, 255);
                 tempController[heater]->pidDriveMin = drive;
                 if (NUM_EXTRUDER == heater) {
-                    //Das ist das Heizbett
+                    // Das ist das Heizbett
                     HAL::eprSetByte(EPR_BED_DRIVE_MIN, (uint8_t)drive);
                     EEPROM::updateChecksum();
                 } else {
                     //Extruder
-                    if (heater <= NUM_EXTRUDER - 1) { //paranoid doublecheck
+                    if (heater <= NUM_EXTRUDER - 1) { // Paranoid doublecheck
                         HAL::eprSetByte(EEPROM::getExtruderOffset(heater) + EPR_EXTRUDER_DRIVE_MIN, (uint8_t)drive);
                         EEPROM::updateChecksum();
                     }
@@ -961,19 +961,19 @@ void UIDisplay::changeHeaterSetting(int action, int8_t increment) {
         break;
     }
     case UI_ACTION_CHOOSE_DMAX: {
-        if (menuLevel == 4) {                        //identifikation des temperaturzyklus anhand der position im menü. Das ist nicht 100% sauber, aber funktioniert.
+        if (menuLevel == 4) {                        // Identifikation des temperaturzyklus anhand der position im menü. Das ist nicht 100% sauber, aber funktioniert.
             uint8_t heater = menuPos[menuLevel - 1]; // The bed follows the hotends in the PID menu.
             if (heater < NUM_TEMPERATURE_LOOPS) {
                 int drive = tempController[heater]->pidDriveMax;
                 INCREMENT_MIN_MAX(drive, 1, 1, 255);
                 tempController[heater]->pidDriveMax = drive;
                 if (NUM_EXTRUDER == heater) {
-                    //Das ist das Heizbett
+                    // Das ist das Heizbett
                     HAL::eprSetByte(EPR_BED_DRIVE_MAX, (uint8_t)drive);
                     EEPROM::updateChecksum();
                 } else {
                     //Extruder
-                    if (heater <= NUM_EXTRUDER - 1) { //paranoid doublecheck
+                    if (heater <= NUM_EXTRUDER - 1) { // Paranoid doublecheck
                         HAL::eprSetByte(EEPROM::getExtruderOffset(heater) + EPR_EXTRUDER_DRIVE_MAX, (uint8_t)drive);
                         EEPROM::updateChecksum();
                     }
@@ -983,19 +983,19 @@ void UIDisplay::changeHeaterSetting(int action, int8_t increment) {
         break;
     }
     case UI_ACTION_CHOOSE_PIDMAX: {
-        if (menuLevel == 4) {                        //identifikation des temperaturzyklus anhand der position im menü. Das ist nicht 100% sauber, aber funktioniert.
+        if (menuLevel == 4) {                        // Identifikation des temperaturzyklus anhand der position im menü. Das ist nicht 100% sauber, aber funktioniert.
             uint8_t heater = menuPos[menuLevel - 1]; // The bed follows the hotends in the PID menu.
             if (heater < NUM_TEMPERATURE_LOOPS) {
                 int drive = tempController[heater]->pidMax;
                 INCREMENT_MIN_MAX(drive, 1, 1, 255);
                 tempController[heater]->pidMax = drive;
                 if (NUM_EXTRUDER == heater) {
-                    //Das ist das Heizbett
+                    // Das ist das Heizbett
                     HAL::eprSetByte(EPR_BED_PID_MAX, (uint8_t)drive);
                     EEPROM::updateChecksum();
                 } else {
                     //Extruder
-                    if (heater <= NUM_EXTRUDER - 1) { //paranoid doublecheck
+                    if (heater <= NUM_EXTRUDER - 1) { // Paranoid doublecheck
                         HAL::eprSetByte(EEPROM::getExtruderOffset(heater) + EPR_EXTRUDER_PID_MAX, (uint8_t)drive);
                         EEPROM::updateChecksum();
                     }
@@ -1005,12 +1005,12 @@ void UIDisplay::changeHeaterSetting(int action, int8_t increment) {
         break;
     }
     case UI_ACTION_CHOOSE_SENSOR: {
-        if (menuLevel == 4) {                        //identifikation des temperaturzyklus anhand der position im menü. Das ist nicht 100% sauber, aber funktioniert.
+        if (menuLevel == 4) {                        // Identifikation des temperaturzyklus anhand der position im menü. Das ist nicht 100% sauber, aber funktioniert.
             uint8_t heater = menuPos[menuLevel - 1]; // The bed follows the hotends in the PID menu.
             if (heater < NUM_TEMPERATURE_LOOPS) {
                 int drive = tempController[heater]->sensorType;
                 if (NUM_EXTRUDER == heater) {
-                    //Das ist das Heizbett
+                    // Das ist das Heizbett
                     switch (drive) {
                     case 3: {
                         drive = 4;
@@ -1035,7 +1035,7 @@ void UIDisplay::changeHeaterSetting(int action, int8_t increment) {
                         case 8: {
                             drive = 13;
                             break;
-                        } //add more sensors for menu-tweaking here, those are the most common for RFx000
+                        } // Add more sensors for menu-tweaking here, those are the most common for RFx000
                         case 13: {
                             drive = 1;
                             break;
@@ -1058,7 +1058,7 @@ void UIDisplay::changeHeaterSetting(int action, int8_t increment) {
                         case 13: {
                             drive = 8;
                             break;
-                        } //add more sensors for menu-tweaking here, those are the most common for RFx000
+                        } // Add more sensors for menu-tweaking here, those are the most common for RFx000
                         default: {
                             drive = 3;
                             break;
@@ -1066,7 +1066,7 @@ void UIDisplay::changeHeaterSetting(int action, int8_t increment) {
                         }
                     }
                     tempController[heater]->sensorType = drive;
-                    if (heater <= NUM_EXTRUDER - 1) { //paranoid doublecheck
+                    if (heater <= NUM_EXTRUDER - 1) { // Paranoid doublecheck
                         HAL::eprSetByte(EEPROM::getExtruderOffset(heater) + EPR_EXTRUDER_SENSOR_TYPE, (uint8_t)drive);
                         EEPROM::updateChecksum();
                     }

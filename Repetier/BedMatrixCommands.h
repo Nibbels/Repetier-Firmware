@@ -42,8 +42,8 @@ void enableBedCompensation() {
 
     queueTask(QueueTask::EnableZCompensation);
 
-    //wenn der nutzer im menü "autostart" gewählt hat, dann senseoffset sofort mit M3001 mitstarten.
-    //Die Einstellwerte kommen dann aus dem EEPROM
+    // Wenn der nutzer im menü "autostart" gewählt hat, dann senseoffset sofort mit M3001 mitstarten.
+    // Die Einstellwerte kommen dann aus dem EEPROM
     if (Printer::senseOffsetControl.autoStart())
         queueTask(QueueTask::EnableSenseOffset);
 }
@@ -192,17 +192,17 @@ void adjustBedMatrix(GCode* pCommand) {
         Com::printFLN(PSTR("M3902: scan in progress"));
         return;
     }
-    //NMM Funktion 1 - R=Repair
+    // NMM Funktion 1 - R=Repair
     if (pCommand->hasR()) {
-        //search for a hole within the heat beds z-Matrix
+        // Search for a hole within the heat beds z-Matrix
         fixKeramikLochInMatrix();
     }
 
     if (pCommand->hasE()) {
-        //completly wipe the matrix-data to zero->flatten the matrix to nothing.
+        // Completly wipe the matrix-data to zero->flatten the matrix to nothing.
         setMatrixNull();
     }
-    //NMM Funktion 2 - Z=Offset manuell nachstellen
+    // NMM Funktion 2 - Z=Offset manuell nachstellen
     if (pCommand->hasZ()) {
         if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
             // we load the z compensation matrix before its first usage because this can take some time
@@ -210,7 +210,7 @@ void adjustBedMatrix(GCode* pCommand) {
             prepareZCompensation();
         }
         if (g_ZCompensationMatrix[0][0] == EEPROM_FORMAT) {
-            //search for a hole within the heat beds z-Matrix
+            // Search for a hole within the heat beds z-Matrix
             float hochrunter = (float)pCommand->Z;
             if (hochrunter > 0.2f)
                 hochrunter = 0.2f;
@@ -232,22 +232,22 @@ void adjustBedMatrix(GCode* pCommand) {
             Com::printSharpLine();
 
             // determine the minimal distance between extruder and heat bed
-            determineCompensationOffsetZ(); //-> schreibt kleinsten abstand in g_offsetZCompensationSteps, sollte schon drin sein, aber man weiß nie.
+            determineCompensationOffsetZ(); // -> schreibt kleinsten abstand in g_offsetZCompensationSteps, sollte schon drin sein, aber man weiß nie.
             Com::printFLN(PSTR("M3902: Alt::Min. Bett-Hotend Abstand [Steps] = "), -1 * (int)g_offsetZCompensationSteps);
 
-            long hochrunterSteps = long(hochrunter * Printer::stepsPerMm(Z_AXIS)); //axissteps ist auch float
+            long hochrunterSteps = long(hochrunter * Printer::stepsPerMm(Z_AXIS)); // axissteps ist auch float
 
             Com::printFLN(PSTR("M3902: Veraenderung Z [mm] = "), hochrunter);
             Com::printFLN(PSTR("M3902: Veraenderung Z [Steps] = "), hochrunterSteps);
 
             if (hochrunter == 0.00f) {
-                //wenn Z=0.0 soll alles so bleibenk aber das Offset ins Matrix-Offset reingerechnet und genullt werden.
-                //das Offset muss negativ eingehen, denn wenn die Matrix "weniger tief" ist, bleibt die Düse weiter weg vom Bett.
+                // Wenn Z=0.0 soll alles so bleibenk aber das Offset ins Matrix-Offset reingerechnet und genullt werden.
+                // Das Offset muss negativ eingehen, denn wenn die Matrix "weniger tief" ist, bleibt die Düse weiter weg vom Bett.
                 hochrunterSteps = Printer::zOffset.manualSteps(Printer::stepsPerMm(Z_AXIS));
                 Com::printFLN(PSTR("M3902: Veraenderung = zOffset --> zMatrix; Offset = 0;"));
             }
 
-            //das ist ein negativer wert! Je mehr Abstand, desto negativer. Positiv verboten.
+            // Das ist ein negativer wert! Je mehr Abstand, desto negativer. Positiv verboten.
             if (g_offsetZCompensationSteps + hochrunterSteps > (long(Printer::stepsPerMm(Z_AXIS) * ::Calibration::probeSettings().startLiftMm) - -1 * ::Calibration::probeSettings().fastApproachSteps)) {
                 Com::printF(PSTR("M3902: Fehler::Z-Matrix wuerde positiv werden. Das waere eine Kollision um "), (int)(g_offsetZCompensationSteps + hochrunterSteps));
                 Com::printFLN(PSTR(" [Steps] bzw. "), Printer::mmPerStep(Z_AXIS) * (float)(g_offsetZCompensationSteps + hochrunterSteps), 2);
@@ -269,7 +269,7 @@ void adjustBedMatrix(GCode* pCommand) {
                         } else {
                             g_ZCompensationMatrix[x][y] += deltaZ;
                             if (g_ZCompensationMatrix[x][y] > 0)
-                                overnull = true; //overflow oder kollision, kann einfach nicht sein und abfrage ist kurz.
+                                overnull = true; // Overflow oder kollision, kann einfach nicht sein und abfrage ist kurz.
                             if (g_ZCompensationMatrix[x][y] > (long(Printer::stepsPerMm(Z_AXIS) * ::Calibration::probeSettings().startLiftMm) - -1 * ::Calibration::probeSettings().fastApproachSteps))
                                 overH = true;
                         }
@@ -310,7 +310,7 @@ void adjustBedMatrix(GCode* pCommand) {
         }
     }
 
-    //NMM Funktion 3 - S=Save,Sichern der Matrix an spezielle EEPROM-Position
+    // NMM Funktion 3 - S=Save,Sichern der Matrix an spezielle EEPROM-Position
     if (pCommand->hasS()) {
         if (pCommand->S >= 1 && pCommand->S <= EEPROM_MAX_HEAT_BED_SECTORS) {
             // save the determined values to the EEPROM @ savepoint "pCommand->S" Standard: 1..9

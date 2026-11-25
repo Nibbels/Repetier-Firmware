@@ -29,13 +29,13 @@ void calculate() {
 
     /*IDEAL ist es, wenn mand den Drucker "kalt" und frisch aufgeheizt einstellt.*/
 
-    //Gerade eben muss ein Z-Scan die Matrix korrigiert haben.
-    //Der Extruder darf sich seither nicht verändert (T0 -> T1) und nicht abgekühlt haben
-    //Dann wird pro °C des aktiven Extruders ~0.001mm Längung angenommen.
-    //Dann wird pro °C des Heizbettes ~0.0015mm Längung angenommen.
+    // Gerade eben muss ein Z-Scan die Matrix korrigiert haben.
+    // Der Extruder darf sich seither nicht verändert (T0 -> T1) und nicht abgekühlt haben
+    // Dann wird pro °C des aktiven Extruders ~0.001mm Längung angenommen.
+    // Dann wird pro °C des Heizbettes ~0.0015mm Längung angenommen.
 
-    //Wegen der unbekannten Nachlängung werden 0.15mm Puffer auf Z=0 angestrebt.
-    //Einfach so: wird ein Puffer von 0.05 angestrebt. Die ideale Matrix-Verschiebung wird auf 260°C Hotend / 120°C Bett, was ein Extremwert darstellen soll auf -0.05mm angepeilt.
+    // Wegen der unbekannten Nachlängung werden 0.15mm Puffer auf Z=0 angestrebt.
+    // Einfach so: wird ein Puffer von 0.05 angestrebt. Die ideale Matrix-Verschiebung wird auf 260°C Hotend / 120°C Bett, was ein Extremwert darstellen soll auf -0.05mm angepeilt.
 
     //Config
     const float maxExtruderTemperature = Extruder::current->tempControl.heaterCutoffC;
@@ -50,11 +50,11 @@ void calculate() {
 
     float ExtruderTemperature = Extruder::current->tempControl.currentTemperatureC;
     if (ExtruderTemperature < 20.0f)
-        ExtruderTemperature = 20.0f; //Wenn zu kalt oder undefiniert dann Standardbedingungen annehmen.
+        ExtruderTemperature = 20.0f; // Wenn zu kalt oder undefiniert dann Standardbedingungen annehmen.
 
     float BedTemperature = Extruder::getHeatedBedTemperature();
 
-    //Umrechnung des aktuellen Zustandes auf die heißesten Werte:
+    // Umrechnung des aktuellen Zustandes auf die heißesten Werte:
     float MinDistanceInMikronsKalt = MatrixMaximumInMikrons
         + (maxExtruderTemperature - ExtruderTemperature) * ExtruderThermalExpansionInMikrons
         + (maxBedTemperature - BedTemperature) * BedThermalExplansionInMikrons;
@@ -68,7 +68,7 @@ void calculate() {
     Com::printFLN(PSTR("Maximalwert-zMatrix bei Maximaltemperaturen (durchgewaermter Drucker): "), MinDistanceInMikronsWarm);
 
     //z.B. -200 <-- um diesen Wert dürfte man korrigieren, wenn der Drucker zum Messzeitpunkt voll durchgewärmt wäre. Weiß er aber nicht!
-    //Ein vorgewärmter Drucker justiert das Heizbett eher auf -0.2, ein kalter Drucker justiert es eher auf -0.05 bei Spitzentemperaturen. Beides ist ok.
+    // Ein vorgewärmter Drucker justiert das Heizbett eher auf -0.2, ein kalter Drucker justiert es eher auf -0.05 bei Spitzentemperaturen. Beides ist ok.
     //float SollkorrekturKalt = (MinDistanceInMikronsKalt + RestAbstandInMikrons);
     //z.B.  -50 <-- diesen Wert darf man in jedem Fall korrigieren.
     float SollkorrekturWarm = (MinDistanceInMikronsWarm + RestAbstandInMikrons);
@@ -88,7 +88,7 @@ void calculate() {
     Com::printF(PSTR(" [um] = "), SollkorrekturWarm * 0.001f, 3);
     Com::printFLN(PSTR(" [mm]"));
 
-    //meldung:
+    // Meldung:
     advice.millimetres = SollkorrekturWarm * 0.001f;
 
     float ZSchraubenDrehungenWarm = SollkorrekturWarm * 0.002f; //[Sollkorrektur in mm] geteilt durch [Gewinde: 0.5 mm/Umdrehung] -> Sollkorrektur / 1000 / 0.5
@@ -96,33 +96,33 @@ void calculate() {
     Com::printF(PSTR(" [U] = "), ZSchraubenDrehungenWarm * 360, 0);
     Com::printF(PSTR(" [Grad]"));
 
-    //meldung:
+    // Meldung:
     advice.turns = ZSchraubenDrehungenWarm;
 
     if (ZSchraubenDrehungenWarm > 0)
-        Com::printFLN(PSTR(" (+ heisst rausdrehen/linksrum/gegen die Uhr)")); //Bett wird nach unten justiert
+        Com::printFLN(PSTR(" (+ heisst rausdrehen/linksrum/gegen die Uhr)")); // Bett wird nach unten justiert
     else
-        Com::printFLN(PSTR(" (- heisst reindrehen/rechtsrum/im Uhrzeigersinn)")); //Bett wird nach oben justiert
+        Com::printFLN(PSTR(" (- heisst reindrehen/rechtsrum/im Uhrzeigersinn)")); // Bett wird nach oben justiert
 
     Com::printFLN(PSTR("Je kaelter der Gesamtdrucker aktuell ist (nach langer Pause frisch angeschaltet), desto besser der Korrekturwert."));
-    advice.status = Status::Ok;                                                             //neg -> Matrix negativ -> ok. ausser, wenn:
-#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2        //TODO: Prüfen ob das beim RF2000v2 stimmen wird.
+    advice.status = Status::Ok;                                                             // Neg -> Matrix negativ -> ok. ausser, wenn:
+#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2        // TODO: Prüfen ob das beim RF2000v2 stimmen wird.
     if (-0.5f <= ZSchraubenDrehungenWarm && SollkorrekturWarm < 40.0f /* [um] */) { // < 0.25mm = 0.5Umdrehungen ist mit dem RF2000 nicht machbar.
-        Com::printFLN(PSTR(" (Die Z-Schraube ist ok!)"));                           //das ist die Änderung in M3-Regelgewinde-Z-Schrauben-Umdrehungen
-        //meldung:
+        Com::printFLN(PSTR(" (Die Z-Schraube ist ok!)"));                           // Das ist die Änderung in M3-Regelgewinde-Z-Schrauben-Umdrehungen
+        // Meldung:
         advice.status = Status::Ok;                                                                        //neg
-    } else if (SollkorrekturWarm >= 40.0f /* [um] */) {                                            //dann bin ich rechnerisch um Z = 0 (50um mit 10um toleranz, die ich fordere.)
-                                                                                                   //eine korrektur von mehr als +40um heißt, ich bin gerade vermutlich im Z>0
-        Com::printFLN(PSTR(" (Die Z-Schraube weiter raus! Das Bett scheint zu hoch zu liegen.)")); //das ist die Änderung in M3-Regelgewinde-Z-Schrauben-Umdrehungen
-        //meldung:
+    } else if (SollkorrekturWarm >= 40.0f /* [um] */) {                                            // Dann bin ich rechnerisch um Z = 0 (50um mit 10um toleranz, die ich fordere.)
+                                                                                                   // Eine korrektur von mehr als +40um heißt, ich bin gerade vermutlich im Z>0
+        Com::printFLN(PSTR(" (Die Z-Schraube weiter raus! Das Bett scheint zu hoch zu liegen.)")); // Das ist die Änderung in M3-Regelgewinde-Z-Schrauben-Umdrehungen
+        // Meldung:
         advice.status = Status::BedTooHigh; //pos
     }
-    Com::printFLN(PSTR(" (RF2000: Minimal eine halbe Schraubendrehung (dZ=0.25mm-Schritte) einstellbar.)")); //das ist die Änderung in M3-Regelgewinde-Z-Schrauben-Umdrehungen
+    Com::printFLN(PSTR(" (RF2000: Minimal eine halbe Schraubendrehung (dZ=0.25mm-Schritte) einstellbar.)")); // Das ist die Änderung in M3-Regelgewinde-Z-Schrauben-Umdrehungen
 #else                                                                                                        //if MOTHERBOARD == DEVICE_TYPE_RF1000
-    if (SollkorrekturWarm >= 40.0f /* [um] */) { //dann bin ich rechnerisch um Z = 0 (50um mit 10um toleranz, die ich fordere.)
-        //eine korrektur von mehr als +40um heißt, ich bin gerade vermutlich im Z>0
-        Com::printFLN(PSTR(" (Die Z-Schraube weiter raus! Das Bett scheint zu hoch zu liegen.)")); //das ist die Änderung in M3-Regelgewinde-Z-Schrauben-Umdrehungen
-        //meldung:
+    if (SollkorrekturWarm >= 40.0f /* [um] */) { // Dann bin ich rechnerisch um Z = 0 (50um mit 10um toleranz, die ich fordere.)
+        // Eine korrektur von mehr als +40um heißt, ich bin gerade vermutlich im Z>0
+        Com::printFLN(PSTR(" (Die Z-Schraube weiter raus! Das Bett scheint zu hoch zu liegen.)")); // Das ist die Änderung in M3-Regelgewinde-Z-Schrauben-Umdrehungen
+        // Meldung:
         advice.status = Status::BedTooHigh; //pos
     }
 #endif

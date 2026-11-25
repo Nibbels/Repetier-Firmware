@@ -439,27 +439,27 @@ void HAL::analogStart() {
 void HAL::WDT_Init(void) {
     // Just to be safe since we can not clear WDE if WDRF is set
     MCUSR &= ~(1 << WDRF);
-    //disable interrupts
+    // Disable interrupts
     cli();
-    //reset watchdog
+    // Reset watchdog
     wdt_reset();
-    //set up WDT interrupt
+    // Set up WDT interrupt
     WDTCSR = (1 << WDCE) | (1 << WDE);
     // timeout in XXX millisecond, disable reset mode. Must be done in one operation --> S66  http://www.atmel.com/Images/Atmel-2549-8-bit-AVR-Microcontroller-ATmega640-1280-1281-2560-2561_datasheet.pdf
     //WDTCSR = 1<<WDP0; //32ms
     WDTCSR = 0; //16ms
-    //Enable global interrupts
+    // Enable global interrupts
     sei();
 
     // enable watchdog interrupt only mode
     WDTCSR |= _BV(WDIE);
 }
 
-//Watchdog timeout ISR
+// Watchdog timeout ISR
 ISR(WDT_vect) {
     pingWatchdog();
-    WDTCSR |= (1 << WDIE); //Nibbels: nächstes mal kein Reset durch internen Watchdog, sondern wieder dieser interrupt.
-    compensationTick = true; //Tell commandloop that 16ms have passed
+    WDTCSR |= (1 << WDIE); // Nibbels: nächstes mal kein Reset durch internen Watchdog, sondern wieder dieser interrupt.
+    compensationTick = true; // Tell commandloop that 16ms have passed
 }
 
 // Watchdog support
@@ -469,14 +469,14 @@ void HAL::startWatchdog() {
     SET_OUTPUT(WATCHDOG_PIN);
     tellWatchdogOk();
     watchdogActive = true;
-    pingWatchdog();      //Nibbels: Hier macht der mehr sinn!
-    HAL::WDT_Init();     //Nibbels: use watchdogtimer to test var and trigger
+    pingWatchdog();      // Nibbels: Hier macht der mehr sinn!
+    HAL::WDT_Init();     // Nibbels: use watchdogtimer to test var and trigger
 } // startWatchdog
 
 void HAL::stopWatchdog() {
     watchdogActive = false;
                               // external watchdog
-    WRITE(WATCHDOG_PIN, LOW); //Nibbels: In case you stop the watchdog it has to be set floating. thatwhy disable internal pullup as this will make the state like OUTPUT-high. This is not really needed as this function does not do anything when starting the arduino. rightnow at start it sets a pin to input which is already input.
+    WRITE(WATCHDOG_PIN, LOW); // Nibbels: In case you stop the watchdog it has to be set floating. thatwhy disable internal pullup as this will make the state like OUTPUT-high. This is not really needed as this function does not do anything when starting the arduino. rightnow at start it sets a pin to input which is already input.
     SET_INPUT(WATCHDOG_PIN);
 } // stopWatchdog
 
@@ -783,14 +783,14 @@ ISR(PWM_TIMER_VECTOR) {
             counterSpeed15_3Div = 0;
 
             if (pwm_count_part_fan == 0) {
-                //count = 0 -> AN, wenn Powerlevel über Minimum
-                //je nach PWM-Mask zählen nur obere bits!
-                //je nach PWM-Mask (z.b. 1111 11xx b) gibts spezielle PWM-Steps (z.b. 4 = 100 b) welche den counter nur innerhalb PWM-Mask hochzählen.
+                // count = 0 -> AN, wenn Powerlevel über Minimum
+                // Je nach PWM-Mask zählen nur obere bits!
+                // Je nach PWM-Mask (z.b. 1111 11xx b) gibts spezielle PWM-Steps (z.b. 4 = 100 b) welche den counter nur innerhalb PWM-Mask hochzählen.
                 pwm_pos_set[NUM_EXTRUDER + 2] = (requestedDuty[NUM_EXTRUDER + 2] & partFanPwmMask);
                 if (pwm_pos_set[NUM_EXTRUDER + 2] > 0)
                     WRITE(FAN_PIN, 1); //AN
             }
-            //count = powerlevel, aber nicht powerlevel == max. -> AUS
+            // count = powerlevel, aber nicht powerlevel == max. -> AUS
             uint8_t powerlevel = fanKickstart ? 255 : pwm_pos_set[NUM_EXTRUDER + 2];
             if (powerlevel == pwm_count_part_fan && powerlevel != partFanPwmMask)
                 WRITE(FAN_PIN, 0); //AUS
@@ -804,14 +804,14 @@ ISR(PWM_TIMER_VECTOR) {
 
     static int counter100Periodical = 0; // Approximate a 100ms timer :: blocks pingwatchdog s commandloop if not working
     counter100Periodical++;
-    if (counter100Periodical == 196) //halbe 100ms Zeit -> Ping 50ms
+    if (counter100Periodical == 196) // Halbe 100ms Zeit -> Ping 50ms
     {
         featureTick = true;
     } else if (counter100Periodical >= 391) //(int)(F_CPU/40960))
     {
         counter100Periodical = 0;
         temperatureTick = true;
-        featureTick = true; //volle 100ms Zeit -> Ping 50ms
+        featureTick = true; // Volle 100ms Zeit -> Ping 50ms
     }
 
 #ifdef RGB_LIGHT_R_PIN
@@ -826,8 +826,8 @@ ISR(PWM_TIMER_VECTOR) {
         rgb_10ms_change_should_be_now = true;
 #endif // RGB_LIGHT_R_PIN
 
-        //hier her versetzt, um 10ms einstell-auflösung zu erhalten. Darum /10 statt bisher /100 beim Init in setFanSpeed().
-        //fan anfangs auf high zum anlaufen, aber das muss beendet werden:
+        // Hier her versetzt, um 10ms einstell-auflösung zu erhalten. Darum /10 statt bisher /100 beim Init in setFanSpeed().
+        // Fan anfangs auf high zum anlaufen, aber das muss beendet werden:
         if (fanKickstart)
             fanKickstart--;
     }

@@ -407,17 +407,17 @@ public:
         return 0;
     } // isAxisHomed
 
-    static inline uint8_t isZHomeSafe() //experimentelle funktion, die nicht viel abdeckt, das ist ein test. ... TODO: merge with function isHomingAllowed
+    static inline uint8_t isZHomeSafe() // Experimentelle funktion, die nicht viel abdeckt, das ist ein test. ... TODO: merge with function isHomingAllowed
     {
         bool problematisch = false;
         if (bedMatrixHighestZSteps() > 0)
-            problematisch = true; //wenn matrix positiv, dann evtl. problem
+            problematisch = true; // Wenn matrix positiv, dann evtl. problem
         if (isAxisHomed(Y_AXIS) && Printer::xyMotion.motorSteps(Y_AXIS) <= 5 * YAXIS_STEPS_PER_MM)
-            problematisch = false; //vorherige Probleme egal, wenn bett nach hinten gefahren
+            problematisch = false; // Vorherige Probleme egal, wenn bett nach hinten gefahren
         if (heatBedScanRunning())
-            problematisch = false; //das homing passiert in Z einzeln, liegt aber neben dem Bett.
+            problematisch = false; // Das homing passiert in Z einzeln, liegt aber neben dem Bett.
         if (problematisch)
-            return 0; //während Z-Scan gibts einen homeZ, der ist aber nicht relevant, den case gibts nicht!
+            return 0; // Während Z-Scan gibts einen homeZ, der ist aber nicht relevant, den case gibts nicht!
         else
             return 1;
     } // isZHomeSafe

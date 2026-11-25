@@ -332,9 +332,9 @@ Overridden if EEPROM activated. */
 #define DEFAULT_MANUAL_MM_Z                    0.01f                           // [mm] -> Wert im Menü->Position->Z-Steps: xxx um!
 #define DEFAULT_MANUAL_MM_E                    0.25f                           // [mm]
 
-//Das hier drunter sind einigermaßen sinnvolle Stepsizes, wenn man Microsteps = 32 eingestellt hat, bei 16 verdoppeln sich die Zahlenwerte in mm.
+// Das hier drunter sind einigermaßen sinnvolle Stepsizes, wenn man Microsteps = 32 eingestellt hat, bei 16 verdoppeln sich die Zahlenwerte in mm.
 //Siehe: https://github.com/RF1000community/Repetier-Firmware/issues/4
-//Dieser statische Ansatz wird evtl. mal umgebaut. Man könnte auch eine Funktion schreiben, die sinnvolle Einstellwerte automatisch anhand Microsteps und Mikrometertabelle sucht.
+// Dieser statische Ansatz wird evtl. mal umgebaut. Man könnte auch eine Funktion schreiben, die sinnvolle Einstellwerte automatisch anhand Microsteps und Mikrometertabelle sucht.
 #define NUM_ACCEPTABLE_STEP_SIZE_TABLE    7
 // (Jeder dieser Werte muss in unsigned short passen)
 #define ACCEPTABLE_STEP_SIZE_TABLE { 5,13,26,51,64,128,256 }
@@ -366,7 +366,7 @@ Overridden if EEPROM activated. */
 
 /** \brief Values used for unload(unmount)/load(mount) filament */
 #define UI_SET_EXTRUDER_TEMP_MOUNT         180
-#define UI_SET_EXTRUDER_MIN_TEMP_UNMOUNT     90                                                 //hat anfangs hohe toleranz.
+#define UI_SET_EXTRUDER_MIN_TEMP_UNMOUNT     90                                                 // Hat anfangs hohe toleranz.
 #define UI_SET_EXTRUDER_MAX_TEMP_UNMOUNT    240
 
 /** \brief Extreme values */
@@ -472,8 +472,8 @@ we use blocks of 2 kByte size for the structure of our EEPROM
  */
 #define PID_CONTROL_RANGE                   30
 /** \brief If you change those you might have to do fresh autotunePIDs on your heaters. */
-#define PID_CONTROL_DRIVE_MAX_LIMIT_FACTOR  10.0f //this was 10
-#define PID_CONTROL_DRIVE_MIN_LIMIT_FACTOR  -1.0f //this was 10 but -1.0 works well with drive max 100 and drive min 5. If this number is negative you get a real PID control, no PD+posI-control anymore.
+#define PID_CONTROL_DRIVE_MAX_LIMIT_FACTOR  10.0f // This was 10
+#define PID_CONTROL_DRIVE_MIN_LIMIT_FACTOR  -1.0f // This was 10 but -1.0 works well with drive max 100 and drive min 5. If this number is negative you get a real PID control, no PD+posI-control anymore.
 
 /**
  * \brief Prevent extrusions longer then x mm for one command. This is especially important if you abort a print. Then the

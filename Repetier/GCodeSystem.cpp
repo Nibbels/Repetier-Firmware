@@ -193,7 +193,7 @@ void accessPanel(GCode* pCommand) {
         Com::printF(PSTR(","), MAX_COLS + 1);
         Com::printF(PSTR(":"));
         if (pCommand->hasL()) {
-            //print line by line for human readability
+            // Print line by line for human readability
             Com::println();
             Com::println();
         }
@@ -236,7 +236,7 @@ void accessPanel(GCode* pCommand) {
                 }
             }
             if (pCommand->hasL()) {
-                //print line by line for human readability
+                // Print line by line for human readability
                 Com::println();
             }
         }
@@ -309,10 +309,10 @@ void runRfDiagnostic(GCode* pCommand) {
             //ext 1/bett soll decoupled aussehen
             TemperatureController* act1 = tempController[1];
             act1->setSensorDecoupled(true);
-            //generelle defekt-einstufung
+            // Generelle defekt-einstufung
             Printer::latchOutputInhibit(true);
             Printer::stopPrint();
-            //fehlermeldung ausgeben
+            // Fehlermeldung ausgeben
             reportTempsensorAndHeaterErrors();
             break;
         }
