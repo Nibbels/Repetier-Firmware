@@ -4,6 +4,13 @@ These are source-grounded design documents, complementary to [README.md](../READ
 
 Start with the [development roadmap](development-roadmap.md) for the active coordinate and motion-compensation block and the intended firmware architecture. The [maintenance list](maintenance-tasks.md) tracks fixes and open tasks by development block.
 
+## Build, licensing and diagnostics
+
+- [Final build and cleanup audit](../coordination/audits/final-cleanup.md)
+- [AVR disassembly and RAM inspection commands](overflow_decompile.txt)
+- [Historical Repetier communication protocol](../repetier%20communication%20protocol.txt) (not a complete current specification)
+- [GNU GPL v3](../gpl.txt)
+
 ## Motion throughput and real-time timing
 
 The [performance goal and timing plan](motion-timing.md) traces step generation, serial streaming and peripheral service on the ATmega2560. It defines the preparation and measurements for changing Pressure Advance scheduling and step packing.

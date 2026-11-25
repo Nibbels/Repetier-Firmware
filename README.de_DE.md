@@ -18,9 +18,9 @@ https://github.com/RF1000/Repetier-Firmware (siehe Branch developement. Oder auc
 
 ## Installationsanleitung
 
-- Das Firmwarepaket `Branch: community_development` herunterladen und entpacken.  
+- Diesen Branch (`ai-firmware-review`) herunterladen und entpacken. Dies ist ein Software-Review-Kandidat; die gesammelten Druckertests stehen noch aus.  
 - Installiere die Arduino.cc IDE 1.8.12 oder neuer, wenn es nicht bereits installiert ist.  
-- Man bearbeitet und speichert die Configuration.h bei Zeile 46 bis 48, je nachdem welchen Drucker man besitzt mit einem Texteditor. Man muss die zwei **//** vor dem Druckermodell entfernen, welches man aktivieren will:  
+- Man bearbeitet und speichert `Repetier/Configuration.h` passend zum Druckermodell mit einem Texteditor. Man muss die zwei **//** vor dem Druckermodell entfernen, welches man aktivieren will:  
 `#define MOTHERBOARD                         DEVICE_TYPE_RF1000` or  
 `#define MOTHERBOARD                         DEVICE_TYPE_RF2000` or  
 `#define MOTHERBOARD                         DEVICE_TYPE_RF2000v2`  
@@ -36,7 +36,7 @@ Port: Der Port des Druckers, wie `COM3`, wenn er korrekt verbunden ist.
 
 ## Vorbereitete Hex-Files / automatisches Build-System
 
-Wer mit den Standard-Konfigurationen zufrieden ist, kann auf der Seite https://jenkins.beta-centauri.de/view/Repetier/ fertig compilierte Hex-Files dieser Firmware herunterladen. Dort sind zwei Versionen zu finden, eine "stable" und eine "development".
+Für diesen Review-Branch erzeugen die [GitHub Actions Firmware-Prüfungen](https://github.com/Nibbels/Repetier-Firmware/actions/workflows/firmware-check.yml) vier Varianten mit Arduino CLI 1.2.2 und AVR Boards 1.8.6. Die Artefakte sind sieben Tage verfügbar. Der [Build- und Cleanup-Audit](coordination/audits/final-cleanup.md) erläutert den geprüften Buildweg und die älteren Alternativen. Historische Community-Builds wurden unter https://jenkins.beta-centauri.de/view/Repetier/ veröffentlicht; sie gehören nicht zu diesem Review-Branch.
 Siehe auch http://www.rf1000.de/viewtopic.php?f=7&t=2057
 Unter Linux kann man diese Firmwares mit 
 ```avrdude -patmega2560 -cwiring -P/dev/ttyUSB0 -b115200 -D -Uflash:w:Repetier.hex:i``` 
