@@ -130,8 +130,6 @@ void MotionPlanner::prepareMove(PrintLine& move, const float axisDistanceMM[4], 
     }
 
     // Initialize every segment, including when reusing a slot from an aborted move.
-    move.error[X_AXIS] = move.error[Y_AXIS] = move.error[Z_AXIS] = move.delta[move.primaryAxis] >> 1;
-    move.error[E_AXIS] = 0;
 
     lookahead.invFullSpeed = 1.0 / move.fullSpeed;
     lookahead.accelerationPrim = primaryAcceleration;

@@ -18,7 +18,10 @@
 #include "Repetier.h"
 #include "StepExecutor.h"
 
+static_assert(X_AXIS == 0 && Y_AXIS == 1 && Z_AXIS == 2 && E_AXIS == 3,
+              "StepErrors initialization requires the established axis order");
 StepExecutor::StepClock StepExecutor::stepClocks[2];
+StepExecutor::StepErrors StepExecutor::stepErrors[2];
 StepExecutor::DirectionOwner StepExecutor::directionOwner = DirectionOwner::None;
 volatile uint32_t StepExecutor::stepIntervalTicks = 10000;
 volatile uint16_t StepExecutor::packingInterval_ = STEP_PACKING_MIN_INTERVAL;
@@ -233,6 +236,7 @@ long StepExecutor::performQueueMove() {
         move->fixStartAndEndSpeed();
 
         queuedPrimarySteps = move->delta[move->primaryAxis];
+        stepErrors[FOR_QUEUE].start(queuedPrimarySteps);
         stepClocks[FOR_QUEUE].start(move->stepProfile.vStart);
         nominalFeedrate_ = move->fullSpeed;
 
@@ -305,6 +309,7 @@ long StepExecutor::performDirectMove() {
         directionOwner = DirectionOwner::Direct;
 
         directPrimarySteps = direct.delta[direct.primaryAxis];
+        stepErrors[FOR_DIRECT].start(directPrimarySteps);
         stepClocks[FOR_DIRECT].start(direct.stepProfile.vStart);
         nominalFeedrate_ = direct.fullSpeed;
 
@@ -373,6 +378,7 @@ inline void StepExecutor::finishMove(PrintLine& move, bool queued) {
 }
 
 long StepExecutor::performMove(PrintLine* move, uint8_t forQueue) {
+    auto& errors = stepErrors[forQueue];
     HAL::allowInterrupts();
     fast8_t max_loops = stepsPerTimerCall;
     if (move->stepsRemaining < max_loops)
@@ -384,13 +390,13 @@ long StepExecutor::performMove(PrintLine* move, uint8_t forQueue) {
 
         if (move->isEMove()) {
             HAL::allowInterrupts();
-            bool doESteps = (move->error[E_AXIS] -= move->delta[E_AXIS]) < 0;
+            bool doESteps = errors.advance(E_AXIS, move->delta[E_AXIS]);
             if (doESteps) {
                 // Count step as done, we wont need it later.
                 if (forQueue)
-                    move->error[E_AXIS] += queuedPrimarySteps;
+                    errors.account(E_AXIS, queuedPrimarySteps);
                 else
-                    move->error[E_AXIS] += directPrimarySteps;
+                    errors.account(E_AXIS, directPrimarySteps);
             }
 
             // Queue overtravel belongs to the frozen print path. The pressure guard applies to both paths.
@@ -426,7 +432,7 @@ long StepExecutor::performMove(PrintLine* move, uint8_t forQueue) {
         }
 
         if (move->isXMove()) {
-            if ((move->error[X_AXIS] -= move->delta[X_AXIS]) < 0) {
+            if (errors.advance(X_AXIS, move->delta[X_AXIS])) {
                 HAL::allowInterrupts();
                 int8_t dir = (Printer::getXDirectionIsPos() ? 1 : -1);
                 if (canStepXY(X_AXIS, move, forQueue)) {
@@ -435,18 +441,18 @@ long StepExecutor::performMove(PrintLine* move, uint8_t forQueue) {
                 HAL::forbidInterrupts();
 
                 if (forQueue) {
-                    move->error[X_AXIS] += queuedPrimarySteps;
+                    errors.account(X_AXIS, queuedPrimarySteps);
                     Printer::xyMotion.advanceNominal(X_AXIS, dir);
                 } else if (move->isXMove()) {
                     // Endstop handling clears the axis flag when it rejects a direct step and stops the axis.
-                    move->error[X_AXIS] += directPrimarySteps;
+                    errors.account(X_AXIS, directPrimarySteps);
                     Printer::xyMotion.advanceDirect(X_AXIS, dir);
                 }
             }
         }
 
         if (move->isYMove()) {
-            if ((move->error[Y_AXIS] -= move->delta[Y_AXIS]) < 0) {
+            if (errors.advance(Y_AXIS, move->delta[Y_AXIS])) {
                 HAL::allowInterrupts();
                 int8_t dir = (Printer::getYDirectionIsPos() ? 1 : -1);
                 if (canStepXY(Y_AXIS, move, forQueue)) {
@@ -455,17 +461,17 @@ long StepExecutor::performMove(PrintLine* move, uint8_t forQueue) {
                 HAL::forbidInterrupts();
 
                 if (forQueue) {
-                    move->error[Y_AXIS] += queuedPrimarySteps;
+                    errors.account(Y_AXIS, queuedPrimarySteps);
                     Printer::xyMotion.advanceNominal(Y_AXIS, dir);
                 } else if (move->isYMove()) {
-                    move->error[Y_AXIS] += directPrimarySteps;
+                    errors.account(Y_AXIS, directPrimarySteps);
                     Printer::xyMotion.advanceDirect(Y_AXIS, dir);
                 }
             }
         }
 
         if (move->isZMove()) {
-            if ((move->error[Z_AXIS] -= move->delta[Z_AXIS]) < 0) {
+            if (errors.advance(Z_AXIS, move->delta[Z_AXIS])) {
                 const auto path = forQueue
                     ? (move->isAbortAtEndstops() ? ZMotion::Path::QueuedUntilEndstop : ZMotion::Path::Queued)
                     : (move->task == DIRECT_RUNNING_STOPPABLE ? ZMotion::Path::StoppableDirect : ZMotion::Path::Direct);
@@ -474,9 +480,9 @@ long StepExecutor::performMove(PrintLine* move, uint8_t forQueue) {
                     move->setMoveOfAxisFinished(Z_AXIS);
 
                 if (forQueue)
-                    move->error[Z_AXIS] += queuedPrimarySteps;
+                    errors.account(Z_AXIS, queuedPrimarySteps);
                 else if (continuing)
-                    move->error[Z_AXIS] += directPrimarySteps;
+                    errors.account(Z_AXIS, directPrimarySteps);
             }
         }
         else if (move->isXOrYMove()) {
