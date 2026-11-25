@@ -39,6 +39,10 @@ void Printer::latchOutputInhibit(bool thermalFault) {
         InterruptProtectedBlock lock;
         flag0 |= thermalFault ? PRINTER_FLAG0_TEMPSENSOR_DEFECT : PRINTER_FLAG0_LEGACY_SIMULATION_REJECTED;
         extrusionOutput.inhibit(ExtrusionOutput::Inhibit::SafetyLock);
+        // Revoke every physical heater output before releasing the safety lock.
+        // Target and controller cleanup below may run with interrupts enabled.
+        for (uint8_t controller = 0; controller < NUM_TEMPERATURE_LOOPS; ++controller)
+            HAL::setHeaterDuty(tempController[controller]->pwmIndex, 0);
     }
     stopAllHeaters();
 }
