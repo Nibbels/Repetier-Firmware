@@ -123,6 +123,10 @@ ZMotion::Step ZMotion::checkDirectStep(int8_t direction, bool stopAtMinSwitch) {
     return Step::Pulse;
 }
 
+// With AVR LTO, keep the hot Z path in the specialized step executor.
+#if defined(__AVR__)
+__attribute__((always_inline))
+#endif
 bool ZMotion::stepPath(Path path) {
     const int8_t direction = directionIsPositive() ? 1 : -1;
     const bool queued = path == Path::Queued || path == Path::QueuedUntilEndstop;
