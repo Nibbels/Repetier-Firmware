@@ -20,7 +20,8 @@ For each task, identify the concrete benefit and the smallest change that delive
 | 5 | 0014 | Exclusive global ownership/API migration |
 | 6 | 0015 | Exclusive common headers/configuration |
 | 6b | 0017 | Exclusive operator dry-run retirement and legacy host handling |
-| 7 | 0016 | Exclusive integration and final audit |
+| 7 | 0016 | Integration audit and baseline for 0019 |
+| 8 | 0019 | Exclusive constants cleanup; refresh final candidate for manager review |
 
 ## Firmware PR checks
 
@@ -66,6 +67,7 @@ Production edits still start in their assigned wave. A worker can implement and 
 | [Task0015](tasks/Task0015.md) | 6 | Header, Konfiguration und Abhängigkeiten | WAITING |
 | [Task0017](tasks/Task0017.md) | 6b | Operator-Dry-Run entfernen und thermische Fehlersperre erhalten | WAITING |
 | [Task0016](tasks/Task0016.md) | 7 | Abschlussaudit und Integration | WAITING |
+| [Task0019](tasks/Task0019.md) | 8 | Constants.h: ownership, typed interfaces and final evidence | WAITING |
 
 ## Audit coverage
 

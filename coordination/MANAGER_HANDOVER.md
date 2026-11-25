@@ -2,7 +2,11 @@
 
 Date: 2026-11-24 (Europe/Berlin). User wants a long-lived manager chat in ChatGPT Work (Astra selected by user); worker chats currently use GPT-6.2 High outside Work. Repository [Nibbels/Repetier-Firmware](https://github.com/Nibbels/Repetier-Firmware), integration branch **ai-firmware-review**, never community_development. Read [AGENTS.md](../AGENTS.md), [TASKS.md](TASKS.md), individual task files and live branches/PRs first. Repository is the authoritative durable state, not chat memory.
 
-## Current final audit status
+## Current dispatch
+
+Finish the active Task0016 audit PR #86 first. Then run [Task0019](tasks/Task0019.md) as the sole production worker, refresh the final audit evidence and firmware images and review that resulting SHA at maximum effort. Read-only inventory for 0019 may start while #86 is open.
+
+## Earlier final audit dispatch
 
 Tasks 0001–0015 and 0017 are merged. [PR #84](https://github.com/Nibbels/Repetier-Firmware/pull/84) merged at 08caec4d with [green host and four-variant AVR verification](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45509948156). Task0016 is ready for the exclusive worker audit. After worker integration the manager reviews the resulting SHA at maximum effort. Hardware testing awaits owner software acceptance.
 
