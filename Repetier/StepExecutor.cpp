@@ -276,7 +276,9 @@ static bool canStepAtXYLimit(uint8_t axis, PrintLine* move, uint8_t forQueue) {
     return false;
 }
 
-static bool canStepXY(uint8_t axis, PrintLine* move, uint8_t forQueue) {
+template <uint8_t axis, uint8_t forQueue>
+static inline __attribute__((always_inline)) bool canStepXY(PrintLine* move) {
+    static_assert(axis == X_AXIS || axis == Y_AXIS, "XY limit check requires X or Y");
     if (Printer::isMaxEndstopHit(axis))
         return canStepAtXYLimit<1>(axis, move, forQueue);
     if (Printer::isMinEndstopHit(axis))
@@ -438,7 +440,7 @@ long StepExecutor::performMove(PrintLine* move) {
             if (errors.advance(X_AXIS, move->delta[X_AXIS])) {
                 HAL::allowInterrupts();
                 int8_t dir = (Printer::getXDirectionIsPos() ? 1 : -1);
-                if (canStepXY(X_AXIS, move, forQueue)) {
+                if (canStepXY<X_AXIS, forQueue>(move)) {
                     Printer::startXStep(dir);
                 }
                 HAL::forbidInterrupts();
@@ -458,7 +460,7 @@ long StepExecutor::performMove(PrintLine* move) {
             if (errors.advance(Y_AXIS, move->delta[Y_AXIS])) {
                 HAL::allowInterrupts();
                 int8_t dir = (Printer::getYDirectionIsPos() ? 1 : -1);
-                if (canStepXY(Y_AXIS, move, forQueue)) {
+                if (canStepXY<Y_AXIS, forQueue>(move)) {
                     Printer::startYStep(dir);
                 }
                 HAL::forbidInterrupts();

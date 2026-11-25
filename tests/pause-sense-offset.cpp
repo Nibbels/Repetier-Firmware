@@ -2871,42 +2871,51 @@ void directRamp() {
     assert(!PrintLine::directMoveActive() && move.stepsRemaining == 0);
 }
 
+// Dispatch the replay's runtime fixture to the same four specializations used
+// by the firmware. Do not duplicate the limit decision or its state changes.
+static bool replayCanStepXY(uint8_t axis, PrintLine* move, bool queued) {
+    assert(axis == X_AXIS || axis == Y_AXIS);
+    if (axis == X_AXIS)
+        return queued ? canStepXY<X_AXIS, true>(move) : canStepXY<X_AXIS, false>(move);
+    return queued ? canStepXY<Y_AXIS, true>(move) : canStepXY<Y_AXIS, false>(move);
+}
+
 void xyLimits() {
     for (uint8_t axis = X_AXIS; axis <= Y_AXIS; ++axis) {
         const uint8_t positive = 17 << axis, negative = 16 << axis;
         PrintLine move;
         move.dir = positive;
         Printer::xyMaxHit[axis] = true;
-        assert(!canStepXY(axis, &move, true));
-        assert(!canStepXY(axis, &move, true));
+        assert(!replayCanStepXY(axis, &move, true));
+        assert(!replayCanStepXY(axis, &move, true));
         assert(Printer::xyMotion.queuedOvertravel(axis) == 2);
 
         move.dir = negative;
-        assert(!canStepXY(axis, &move, true));
+        assert(!replayCanStepXY(axis, &move, true));
         Printer::xyMaxHit[axis] = false;
-        assert(!canStepXY(axis, &move, true));
-        assert(canStepXY(axis, &move, true) && !Printer::xyMotion.queuedOvertravel(axis));
+        assert(!replayCanStepXY(axis, &move, true));
+        assert(replayCanStepXY(axis, &move, true) && !Printer::xyMotion.queuedOvertravel(axis));
 
         Printer::xyMinHit[axis] = true;
-        assert(!canStepXY(axis, &move, true));
+        assert(!replayCanStepXY(axis, &move, true));
         assert(Printer::xyMotion.queuedOvertravel(axis) == -1);
         move.dir = positive;
         move.abortAtEndstops = true;
-        assert(canStepXY(axis, &move, false)); // A direct retreat leaves the queue's debt alone.
+        assert(replayCanStepXY(axis, &move, false)); // A direct retreat leaves the queue's debt alone.
         assert(Printer::xyMotion.queuedOvertravel(axis) == -1);
-        assert(!canStepXY(axis, &move, true));
-        assert(canStepXY(axis, &move, true) && !Printer::xyMotion.queuedOvertravel(axis));
+        assert(!replayCanStepXY(axis, &move, true));
+        assert(replayCanStepXY(axis, &move, true) && !Printer::xyMotion.queuedOvertravel(axis));
 
         move.dir = negative;
         move.abortAtEndstops = false;
-        assert(!canStepXY(axis, &move, true));
+        assert(!replayCanStepXY(axis, &move, true));
         move.abortAtEndstops = true;
-        assert(!canStepXY(axis, &move, true));
+        assert(!replayCanStepXY(axis, &move, true));
         assert(!move.isNegativeMoveOfAxis(axis) && !Printer::xyMotion.queuedOvertravel(axis));
         assert(Printer::stoppedDirectAxis != axis);
 
         move.dir = negative;
-        assert(!canStepXY(axis, &move, false));
+        assert(!replayCanStepXY(axis, &move, false));
         assert(!move.isNegativeMoveOfAxis(axis) && Printer::stoppedDirectAxis == axis);
         Printer::xyMinHit[axis] = false;
 
