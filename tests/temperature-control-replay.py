@@ -170,7 +170,7 @@ static void reportTempsensorAndHeaterErrors();
 static unsigned visits;
 static unsigned observedPeakDuty;
 static millis_t stride = 10;
-enum class Injection { None, Reach, LateUnsupported, LateLow, Transient, High, TransientHigh, Cutoff, Cycles, ProfileCycles, OtherFault, Cancel, Reentrant, Stale };
+enum class Injection { None, Reach, LateUnsupported, LateLow, Transient, High, TransientHigh, Cutoff, Cycles, ProfileCycles, PowerChange, OtherFault, Cancel, Reentrant, Stale };
 static Injection injection;
 static bool postTemperature = true;
 namespace GCodeInput {
@@ -214,6 +214,7 @@ namespace GCodeInput {
             temperatureAdcValues[tuned->sensorPin] = visits % 2 ? 470 : 330;
         if (injection == Injection::ProfileCycles)
             temperatureAdcValues[tuned->sensorPin] = (visits - 1) % 4 < 2 ? 470 : 330;
+        if (injection == Injection::PowerChange) tuned->pidMax = 10;
         if (injection == Injection::OtherFault)
             assert(tuned != &bed); // bed already has 10 consecutive invalid samples
 
@@ -540,7 +541,8 @@ int main(int argc, char** argv) {
             target = 270;
             injection = Injection::Cutoff;
             postTemperature = false;
-        } else if (std::strstr(name, "-timeout")) stride = 100000;
+        } else if (std::strstr(name, "-power-change")) injection = Injection::PowerChange;
+        else if (std::strstr(name, "-timeout")) stride = 100000;
         else if (std::strstr(name, "-success")) {
             injection = Injection::Cycles;
             stride = 6000;
@@ -554,7 +556,13 @@ int main(int argc, char** argv) {
         const uint8_t id = !std::strcmp(name, "autotune-entry-controller") ? NUM_TEMPERATURE_LOOPS : t.pwmIndex;
         const char* methodSuffix = std::strstr(name, "-j");
         const int method = methodSuffix ? methodSuffix[2] - '0' : 0;
-        const bool lowMax = std::strstr(name, "-lowmax") != nullptr;
+        const char* limitSuffix = std::strstr(name, "-limit");
+        if (limitSuffix) {
+            unsigned limit = 0;
+            assert(std::sscanf(limitSuffix + 6, "%u", &limit) == 1 && limit <= 255);
+            t.pidMax = uint8_t(limit);
+        }
+        const bool lowMax = t.pidMax < 40;
         float high = 0, low = 0, oldLimit = 0;
         if (methodSuffix) {
             // Each extreme persists past the transition (which resets the opposite extremum).
@@ -573,12 +581,11 @@ int main(int argc, char** argv) {
             t.updateTempControlVars();
             oldLimit = t.tempIStateLimitMax;
         }
-        if (lowMax) t.pidMax = 10;
         t.autotunePID(target, id, 5, store, method);
         assert(autotuneIndex == 255 && HAL::outputDuty(t.pwmIndex) == 0 && t.targetTemperatureC == 0);
-        if (entry) assert(visits == 0);
+        if (entry || lowMax) assert(visits == 0);
         else assert(visits > 0 && watchdogHeartbeat == now);
-        if (std::strstr(name, "-success")) {
+        if (std::strstr(name, "-success") && !lowMax) {
             assert(visits == (methodSuffix ? 23 : 12) && !Printer::isAnyTempsensorDefect());
             assert(stores == unsigned(store));
             if (store) assert(t.pidPGain != oldP && std::isfinite(t.pidPGain) && std::isfinite(t.pidIGain) && std::isfinite(t.pidDGain));
@@ -594,19 +601,17 @@ int main(int argc, char** argv) {
                 assert(std::fabs(t.pidPGain - expectedP) < 0.001f);
                 assert(std::fabs(t.pidIGain - expectedP / (12 * ti[rule])) < 0.001f);
                 assert(std::fabs(t.pidDGain - expectedP * 12 * td[rule]) < 0.01f);
-                // GAP: newly saved Ki does not refresh the derived I-state limits.
-                assert(t.tempIStateLimitMax == oldLimit);
-                std::printf("rule %d: P=%f I=%f D=%f (legacy Ku; stale I limit)\n",
+                assert(t.tempIStateLimitMax != oldLimit);
+                assert(std::fabs(t.tempIStateLimitMax - 1000.0f / t.pidIGain) < 0.01f);
+                assert(std::fabs(t.tempIStateLimitMin + 30.0f / t.pidIGain) < 0.01f);
+                assert(t.tempIState == 0);
+                std::printf("rule %d: P=%f I=%f D=%f (legacy Ku; refreshed I limits)\n",
                             method, t.pidPGain, t.pidIGain, t.pidDGain);
             }
-            if (lowMax) {
-                // GAP: fixed 20-count bias bounds are inverted for pidMax < 40.
-                assert(observedPeakDuty > t.pidMax && t.pidPGain < 0);
-                std::printf("GAP: pidMax=%u peak request=%u P=%f\n",
-                            unsigned(t.pidMax), observedPeakDuty, t.pidPGain);
-            }
+            if (limitSuffix) assert(observedPeakDuty <= t.pidMax && t.pidPGain > 0 && t.pidIGain > 0);
         } else assert(stores == 0);
-        if (!store) assert(t.pidPGain == oldP && t.pidIGain == oldI && t.pidDGain == oldD);
+        if (lowMax) assert(observedPeakDuty == 0 && stores == 0);
+        if (!store || lowMax) assert(t.pidPGain == oldP && t.pidIGain == oldI && t.pidDGain == oldD);
         if (injection == Injection::OtherFault) allOff();
         // One subsequent normal service must not re-enable the old target.
         service();
@@ -661,7 +666,9 @@ def main():
         "autotune-low", "autotune-transient", "autotune-transient-high", "autotune-high", "autotune-cutoff", "autotune-timeout",
         "autotune-cancel", "autotune-reentrant", "autotune-other-fault", "autotune-success", "autotune-success-store",
         "autotune-bed-late", "autotune-bed-timeout", "autotune-bed-high", "autotune-bed-cancel", "autotune-bed-success-store",
-        "pid-components", "autotune-success-store-lowmax",
+        "pid-components", "autotune-power-change", "autotune-bed-power-change",
+        *(f"autotune-success-store-limit{n}" for n in (0, 10, 39, 40, 41, 255)),
+        *(f"autotune-bed-success-store-limit{n}" for n in (0, 10, 39, 40, 41, 255)),
         *(f"autotune-success-store-j{j}" for j in range(6)),
         *(f"autotune-bed-success-store-j{j}" for j in range(6)),
     )
