@@ -139,6 +139,7 @@ std::array<uint8_t,2048> eeprom;
 std::vector<unsigned> writes;
 uint8_t readFlashByte(const char* p) { return uint8_t(*p); }
 millis_t timeInMilliseconds() { return 5; }
+void delayMilliseconds(unsigned) { assert(false && "unexpected LCD clear in normal UI replay"); }
 uint8_t eprGetByte(unsigned p) { return eeprom.at(p); }
 void eprSetByte(unsigned p, uint8_t v) { writes.push_back(p); eeprom.at(p) = v; }
 int16_t eprGetInt16(unsigned p) { return int16_t(uint16_t(eeprom.at(p)) | uint16_t(eeprom.at(p+1))<<8); }
@@ -217,6 +218,10 @@ struct UIDisplay {
     void addInt(int16_t,uint8_t,char=' ');
     void printRow(uint8_t,char*,char*,uint8_t);
     void adjustMenuPos();
+    bool normalCharacters_=true;
+    void loadNormalCharacters() { normalCharacters_=true; }
+    static constexpr int LCD_CLEAR = 1;
+    void lcdCommand(int) { assert(false && "unexpected boot clear during normal UI replay"); }
     void refreshPage();
     void zOffsetPlusAction(); void zOffsetMinusAction();
     void mainSwitchCase(int); void changeSwitchCase(int,int8_t);

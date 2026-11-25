@@ -5,7 +5,7 @@
 
 namespace BedMatrix {
 
-void restoreAtStartup();
+void restoreAtStartup(void (*progress)() = nullptr);
 void clearWorking();
 bool reloadActive();
 void beginScanGrid();

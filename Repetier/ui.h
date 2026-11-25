@@ -302,6 +302,9 @@ public:
     void zOffsetMinusAction();
     void createChar(uint8_t location, const uint8_t charmap[]);
     void initialize(); // Initialize display and keys
+    void beginBootEye();
+    void serviceBootEye();
+    void finishBootEye();
     void initializeLCD(bool normal = true);
     void printRow(uint8_t r, char* txt, char* txt2, uint8_t changeAtCol); // Print row on display
     void printRowP(uint8_t r, PGM_P txt);
@@ -351,6 +354,7 @@ private:
     void changeHeaterSetting(int action, int8_t increment);
     void navigateMenuItems(UIMenuEntry** entries, uint8_t count, int8_t next);
 
+    void drawBootEye(uint16_t elapsed);
     void loadStartupCharacters();
     void loadNormalCharacters();
 

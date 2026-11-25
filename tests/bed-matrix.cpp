@@ -28,6 +28,8 @@ unsigned address = 0;
 int readFailure = -1;
 int writeFailure = -1;
 unsigned payloadReads = 0;
+unsigned progressCalls = 0;
+void matrixProgress() { ++progressCalls; assert(payloadReads == progressCalls * 2); }
 unsigned writes = 0;
 bool writeProtected = false;
 bool scanning = false;
@@ -91,6 +93,7 @@ bool TwiTransfer::wait() { return succeeded(); }
 
 long getZMatrixDepth_CurrentXY();
 void prepareZCompensation() { assert(false && "unexpected reload in diagnostic replay"); }
+static char loadCompensationMatrix(unsigned int, void (*progress)() = nullptr);
 #include "bed-matrix-firmware.inc"
 long getZMatrixDepth_CurrentXY() { return getZMatrixDepth(0, 0); }
 
@@ -127,7 +130,8 @@ void storeMatrix(unsigned lastX, unsigned lastY, unsigned microsteps = 32) {
 int main() {
     storeMatrix(COMPENSATION_MATRIX_MAX_X - 1, COMPENSATION_MATRIX_MAX_Y - 1);
     g_ZMatrixChangedInRam = true;
-    assert(loadCompensationMatrix(sector) == 0);
+    assert(loadCompensationMatrix(sector, matrixProgress) == 0);
+    assert(progressCalls == COMPENSATION_MATRIX_MAX_X * COMPENSATION_MATRIX_MAX_Y);
     assert(g_ZCompensationMatrix[0][0] == EEPROM_FORMAT && g_ZCompensationMatrix[1][1] == -1);
     assert(g_offsetZCompensationSteps == -1 && g_ZCompensationMax == -37 && !g_ZMatrixChangedInRam);
     assert(g_uZMatrixMax[X_AXIS] == COMPENSATION_MATRIX_MAX_X - 1);

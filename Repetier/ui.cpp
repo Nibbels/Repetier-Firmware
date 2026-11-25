@@ -346,6 +346,7 @@ void UIDisplay::loadNormalCharacters() {
     createChar(3, character_selected);
     createChar(4, character_unselected);
     createChar(5, character_temperature);
+    createChar(6, c8); // preserve the previous startup glyph in the otherwise unused slot
     createChar(7, character_ready);
     normalCharacters_ = true;
 }
@@ -519,6 +520,111 @@ void UIDisplay::initialize() {
 
 } // initialize
 
+// Boot-only animation. Cache codes 1..8 stand for CGRAM slots 1..7,0.
+// Slot zero is written directly, never passed through a C string.
+static const uint8_t bootEyeGlyphs[8][8] PROGMEM = {
+    { 0, 0, 0, 7, 4, 4, 4, 4 },
+    { 0, 0, 0, 28, 4, 4, 4, 4 },
+    { 4, 4, 4, 4, 7, 0, 0, 0 },
+    { 4, 4, 4, 4, 28, 0, 0, 0 },
+    { 0, 1, 3, 6, 12, 25, 27, 27 },
+    { 0, 16, 24, 12, 6, 19, 27, 27 },
+    { 27, 27, 25, 12, 6, 3, 1, 0 },
+    { 27, 27, 19, 6, 12, 24, 16, 0 }
+};
+static const int8_t bootEyePositions[] PROGMEM = { 0, 1, 2, 2, 1, 0, -1, -2, -2, -1 };
+
+void UIDisplay::drawBootEye(uint16_t elapsed) {
+    const uint8_t left = UI_COLS / 2 - 5;
+    const uint8_t right = left + 9;
+    const uint8_t pupil = UI_COLS / 2 - 1
+        + static_cast<int8_t>(pgm_read_byte(&bootEyePositions[(elapsed / 50) % 10]));
+    const bool blink = elapsed >= 2800 && elapsed < 3000;
+    for (uint8_t row = 0; row < UI_ROWS; ++row) {
+        bool cursorSet = false;
+        for (uint8_t x = 0; x < UI_COLS; ++x) {
+            char desired = ' ';
+            if (row == 0 || row == 3) {
+                if (x == left)
+                    desired = row == 0 ? 1 : 3;
+                else if (x == right)
+                    desired = row == 0 ? 2 : 4;
+                else if (x > left && x < right)
+                    desired = '-';
+            } else if (x == left || x == right) {
+                desired = '|';
+            } else if (x == pupil || x == pupil + 1) {
+                if (blink)
+                    desired = row == 1 ? '-' : ' ';
+                else
+                    desired = 5 + (row - 1) * 2 + (x - pupil);
+            }
+            if (displayCache_[row][x] == desired) {
+                cursorSet = false;
+                continue;
+            }
+            if (!cursorSet) {
+                lcdCommand(128 + pgm_read_byte(&LCDLineOffsets[row]) + x);
+                cursorSet = true;
+            }
+            lcdPutChar(desired == 8 ? 0 : desired);
+            displayCache_[row][x] = desired;
+        }
+        displayCache_[row][UI_COLS] = 0;
+    }
+}
+
+void UIDisplay::beginBootEye() {
+    // Only the startup screen may be replaced; never cover an existing error/menu.
+    if (normalCharacters_ || Printer::isUIErrorMessage() || menuLevel != 0)
+        return;
+    lcdCommand(LCD_CLEAR);
+    HAL::delayMilliseconds(2); // existing LCD clear execution time
+    for (uint8_t i = 0; i < 8; ++i)
+        createChar((i + 1) & 7, bootEyeGlyphs[i]);
+    for (uint8_t row = 0; row < UI_ROWS; ++row)
+        for (uint8_t x = 0; x < UI_COLS; ++x)
+            displayCache_[row][x] = ' ';
+    // These clocks are owned by the boot screen until normal rendering resumes.
+    lastSwitch = lastRefresh = HAL::timeInMilliseconds();
+    drawBootEye(0);
+}
+
+void UIDisplay::serviceBootEye() {
+    if (normalCharacters_)
+        return;
+    const millis_t now = HAL::timeInMilliseconds();
+    const millis_t elapsed = now - lastSwitch;
+    // Leave time for a final LCD transfer and the next EEPROM checkpoint.
+    if (elapsed >= 3900 || Printer::isUIErrorMessage() || menuLevel != 0) {
+        finishBootEye();
+        return;
+    }
+    if (elapsed / 50 == (lastRefresh - lastSwitch) / 50)
+        return;
+    drawBootEye(static_cast<uint16_t>(elapsed));
+    lastRefresh = now;
+}
+
+void UIDisplay::finishBootEye() {
+    if (normalCharacters_)
+        return;
+    // Clear the boot tiles before changing their meanings.
+    lcdCommand(LCD_CLEAR);
+    HAL::delayMilliseconds(2);
+    loadNormalCharacters();
+    if (Printer::isUIErrorMessage() || menuLevel != 0) {
+        refreshPage();
+    } else {
+        // Static fallback if the remaining boot work outlasts the animation.
+        printRowP(0, PSTR(UI_PRINTER_NAME));
+        printRowP(1, PSTR(""));
+        printRowP(2, PSTR("Community Mod"));
+        printRowP(3, versionString);
+    }
+    lastSwitch = lastRefresh = HAL::timeInMilliseconds();
+}
+
 void UIDisplay::createChar(uint8_t location, const uint8_t charmap[]) {
     location &= 0x7; // we only have 8 locations 0-7
     lcdCommand(LCD_SETCGRAMADDR | (location << 3));
@@ -544,6 +650,11 @@ constexpr uint8_t panelPageCount = sizeof(ui_pages) / sizeof(ui_pages[0]);
 
 // Refresh current menu page
 void UIDisplay::refreshPage() {
+    if (!normalCharacters_) {
+        lcdCommand(LCD_CLEAR);
+        HAL::delayMilliseconds(2);
+        loadNormalCharacters();
+    }
     uint16_t r;
     char cache[UI_ROWS][MAX_COLS + 1];
     adjustMenuPos();
