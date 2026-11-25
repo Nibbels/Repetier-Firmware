@@ -416,8 +416,11 @@ int main(int argc, char** argv) {
         }
     } else if (!std::strcmp(name, "legacy-output-inhibit")) {
         service();
+        pwmSlice();
+        for (auto* t : tempController) assert(pins[t->pwmIndex] == HIGH);
         Printer::extrusionOutput.addSteps(20);
         Printer::latchOutputInhibit(false);
+        for (auto* t : tempController) assert(pins[t->pwmIndex] == LOW);
         assert(!Printer::isAnyTempsensorDefect() && Printer::legacySimulationRejected());
         assert(Printer::extrusionOutput.blocked() && Printer::extrusionOutput.pendingSteps() == 0 && advanceTimerMask == 0);
         for (auto* t : tempController) {
