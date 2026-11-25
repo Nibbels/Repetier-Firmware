@@ -34,6 +34,7 @@ For each task, identify the concrete benefit and the smallest change that delive
 | 17 | 0028 | Exclusive ATmega2560: Foreground-Scheduler und G-Code-Durchsatz |
 | 18 | 0029 | Exclusive ATmega2560: Verbleibende Arduino-Abhängigkeiten |
 | 19 | 0030 | Exclusive ATmega2560: Gesamtbenchmark und Regression |
+| 20 | 0032 | Exclusive print core: quality-first packing and real-time maintenance budget |
 
 ## ATmega2560 native optimization
 
@@ -96,6 +97,7 @@ Production edits still start in their assigned wave. A worker can implement and 
 | [Task0028](tasks/Task0028.md) | 17 | Foreground-Scheduler und G-Code-Durchsatz | WAITING |
 | [Task0029](tasks/Task0029.md) | 18 | Verbleibende Arduino-Abhängigkeiten | WAITING |
 | [Task0030](tasks/Task0030.md) | 19 | Gesamtbenchmark und Regression | WAITING |
+| [Task0032](tasks/Task0032.md) | 20 | Quality-first automatic step packing and maintenance budget | READY |
 
 ## Audit coverage
 
