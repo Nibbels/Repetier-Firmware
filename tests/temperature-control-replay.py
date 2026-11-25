@@ -170,7 +170,7 @@ static void reportTempsensorAndHeaterErrors();
 static unsigned visits;
 static unsigned observedPeakDuty;
 static millis_t stride = 10;
-enum class Injection { None, Reach, LateUnsupported, LateLow, Transient, High, TransientHigh, Cutoff, Cycles, OtherFault, Cancel, Reentrant, Stale };
+enum class Injection { None, Reach, LateUnsupported, LateLow, Transient, High, TransientHigh, Cutoff, Cycles, ProfileCycles, OtherFault, Cancel, Reentrant, Stale };
 static Injection injection;
 static bool postTemperature = true;
 namespace GCodeInput {
@@ -212,6 +212,8 @@ namespace GCodeInput {
         }
         if (injection == Injection::Cycles)
             temperatureAdcValues[tuned->sensorPin] = visits % 2 ? 470 : 330;
+        if (injection == Injection::ProfileCycles)
+            temperatureAdcValues[tuned->sensorPin] = (visits - 1) % 4 < 2 ? 470 : 330;
         if (injection == Injection::OtherFault)
             assert(tuned != &bed); // bed already has 10 consecutive invalid samples
 
@@ -555,6 +557,9 @@ int main(int argc, char** argv) {
         const bool lowMax = std::strstr(name, "-lowmax") != nullptr;
         float high = 0, low = 0, oldLimit = 0;
         if (methodSuffix) {
+            // Each extreme persists past the transition (which resets the opposite extremum).
+            injection = Injection::ProfileCycles;
+            stride = 3000;
             // Use the actual sensor conversion at both synthetic relay extrema.
             temperatureAdcValues[t.sensorPin] = 470;
             assert(t.updateCurrentTemperature());
@@ -574,7 +579,7 @@ int main(int argc, char** argv) {
         if (entry) assert(visits == 0);
         else assert(visits > 0 && watchdogHeartbeat == now);
         if (std::strstr(name, "-success")) {
-            assert(visits == 12 && !Printer::isAnyTempsensorDefect());
+            assert(visits == (methodSuffix ? 23 : 12) && !Printer::isAnyTempsensorDefect());
             assert(stores == unsigned(store));
             if (store) assert(t.pidPGain != oldP && std::isfinite(t.pidPGain) && std::isfinite(t.pidIGain) && std::isfinite(t.pidDGain));
             if (methodSuffix) {
