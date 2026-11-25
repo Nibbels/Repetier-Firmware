@@ -168,6 +168,7 @@ static void reportTempsensorAndHeaterErrors();
 #include "control.inc"
 #include "bed-setter.inc"
 static unsigned visits;
+static unsigned observedPeakDuty;
 static millis_t stride = 10;
 enum class Injection { None, Reach, LateUnsupported, LateLow, Transient, High, TransientHigh, Cutoff, Cycles, OtherFault, Cancel, Reentrant, Stale };
 static Injection injection;
@@ -175,6 +176,7 @@ static bool postTemperature = true;
 namespace GCodeInput {
     void keepAlive(FirmwareState) {
         ++visits;
+        if (tuned) observedPeakDuty = std::max(observedPeakDuty, unsigned(HAL::outputDuty(tuned->pwmIndex)));
         assert(visits < 1000);
         now += stride;
         if (injection == Injection::Stale) stalledChannel = tuned->sensorPin;
@@ -261,7 +263,34 @@ int main(int argc, char** argv) {
         t->decoupleTestPeriod = EXT0_DECOUPLE_TEST_PERIOD;
     }
     publishAdc();
-    if (!std::strcmp(name, "stale") || !std::strcmp(name, "bed-stale")) {
+    if (!std::strcmp(name, "pid-components")) {
+        for (auto* t : tempController) t->setTargetTemperature(0);
+        temperatureAdcValues[c.sensorPin] = 330;
+        assert(c.updateCurrentTemperature());
+        const float measured = c.currentTemperatureC;
+        c.pidDriveMax = 100;
+        c.pidDriveMin = 30;
+        c.pidPGain = 4;
+        c.pidIGain = 2;
+        c.pidDGain = 3;
+        c.updateTempControlVars();
+        c.setTargetTemperature(measured + 5);
+        for (auto& v : c.tempArray) v = measured + 3;
+        c.tempIState = 0;
+        service();
+        assert(HAL::outputDuty(c.pwmIndex) == 26); // P=20, I=1, D=5.994
+        assert(std::fabs(c.tempIState - 5) < 0.001f);
+        c.setTargetTemperature(measured - 5);
+        for (auto& v : c.tempArray) v = measured - 3;
+        service();
+        assert(HAL::outputDuty(c.pwmIndex) == 0);
+        c.setTargetTemperature(measured + PID_CONTROL_RANGE + 1);
+        service();
+        assert(HAL::outputDuty(c.pwmIndex) == c.pidMax && c.tempIState == 0);
+        c.setTargetTemperature(0);
+        service();
+        assert(HAL::outputDuty(c.pwmIndex) == 0 && c.tempIState == 0);
+    } else if (!std::strcmp(name, "stale") || !std::strcmp(name, "bed-stale")) {
         auto& affected = !std::strcmp(name, "bed-stale") ? bed : c;
         auto& other = &affected == &bed ? c : bed;
         service();
@@ -521,7 +550,26 @@ int main(int argc, char** argv) {
             injection = Injection::OtherFault;
         } else assert(false);
         const uint8_t id = !std::strcmp(name, "autotune-entry-controller") ? NUM_TEMPERATURE_LOOPS : t.pwmIndex;
-        t.autotunePID(target, id, 5, store, 0);
+        const char* methodSuffix = std::strstr(name, "-j");
+        const int method = methodSuffix ? methodSuffix[2] - '0' : 0;
+        const bool lowMax = std::strstr(name, "-lowmax") != nullptr;
+        float high = 0, low = 0, oldLimit = 0;
+        if (methodSuffix) {
+            // Use the actual sensor conversion at both synthetic relay extrema.
+            temperatureAdcValues[t.sensorPin] = 470;
+            assert(t.updateCurrentTemperature());
+            high = t.currentTemperatureC;
+            temperatureAdcValues[t.sensorPin] = 330;
+            assert(t.updateCurrentTemperature());
+            low = t.currentTemperatureC;
+            assert(high > target && low < target);
+            t.pidDriveMax = 100;
+            t.pidDriveMin = 30;
+            t.updateTempControlVars();
+            oldLimit = t.tempIStateLimitMax;
+        }
+        if (lowMax) t.pidMax = 10;
+        t.autotunePID(target, id, 5, store, method);
         assert(autotuneIndex == 255 && HAL::outputDuty(t.pwmIndex) == 0 && t.targetTemperatureC == 0);
         if (entry) assert(visits == 0);
         else assert(visits > 0 && watchdogHeartbeat == now);
@@ -529,6 +577,29 @@ int main(int argc, char** argv) {
             assert(visits == 12 && !Printer::isAnyTempsensorDefect());
             assert(stores == unsigned(store));
             if (store) assert(t.pidPGain != oldP && std::isfinite(t.pidPGain) && std::isfinite(t.pidIGain) && std::isfinite(t.pidDGain));
+            if (methodSuffix) {
+                // Existing rules, in parallel PID form. Equal 6 s half cycles.
+                const float p[] = {0.6f, 0.7f, 0.33f, 0.2f, 0.4545f};
+                const float ti[] = {0.5f, 0.4f, 0.5f, 0.5f, 2.2f};
+                const float td[] = {0.125f, 0.15f, 1.0f/3, 1.0f/3, 1.0f/6.3f};
+                const unsigned rule = method <= 4 ? method : 0;
+                // GAP: legacy Ku uses peak-to-peak rather than half-amplitude.
+                const float ku = 4.0f * 127 / (3.14159f * (high - low));
+                const float expectedP = p[rule] * ku;
+                assert(std::fabs(t.pidPGain - expectedP) < 0.001f);
+                assert(std::fabs(t.pidIGain - expectedP / (12 * ti[rule])) < 0.001f);
+                assert(std::fabs(t.pidDGain - expectedP * 12 * td[rule]) < 0.01f);
+                // GAP: newly saved Ki does not refresh the derived I-state limits.
+                assert(t.tempIStateLimitMax == oldLimit);
+                std::printf("rule %d: P=%f I=%f D=%f (legacy Ku; stale I limit)\n",
+                            method, t.pidPGain, t.pidIGain, t.pidDGain);
+            }
+            if (lowMax) {
+                // GAP: fixed 20-count bias bounds are inverted for pidMax < 40.
+                assert(observedPeakDuty > t.pidMax && t.pidPGain < 0);
+                std::printf("GAP: pidMax=%u peak request=%u P=%f\n",
+                            unsigned(t.pidMax), observedPeakDuty, t.pidPGain);
+            }
         } else assert(stores == 0);
         if (!store) assert(t.pidPGain == oldP && t.pidIGain == oldI && t.pidDGain == oldD);
         if (injection == Injection::OtherFault) allOff();
@@ -585,6 +656,9 @@ def main():
         "autotune-low", "autotune-transient", "autotune-transient-high", "autotune-high", "autotune-cutoff", "autotune-timeout",
         "autotune-cancel", "autotune-reentrant", "autotune-other-fault", "autotune-success", "autotune-success-store",
         "autotune-bed-late", "autotune-bed-timeout", "autotune-bed-high", "autotune-bed-cancel", "autotune-bed-success-store",
+        "pid-components", "autotune-success-store-lowmax",
+        *(f"autotune-success-store-j{j}" for j in range(6)),
+        *(f"autotune-bed-success-store-j{j}" for j in range(6)),
     )
     with TemporaryDirectory(prefix="rfx-temperature-control-") as tmp:
         work = Path(tmp)
