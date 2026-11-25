@@ -21,6 +21,7 @@
 #define MOTION_H
 
 #include <stdint.h>
+#include "QueueTask.h"
 
 /** Marks the first step of a new move */
 #define FLAG_WARMUP 1
@@ -120,7 +121,10 @@ private:
     void setSegmentGeometry(const float axisDistanceMM[]);
 
     int32_t stepsRemaining; ///< Remaining steps, until move is finished
+    // Queue commands and the dedicated direct slot share the original one-byte storage.
     volatile char task;
+    QueueTask queueTaskId() const { return static_cast<QueueTask>(static_cast<uint8_t>(task)); }
+    void setQueueTaskId(QueueTask value) { task = static_cast<char>(value); }
 
 public:
     static bool directMoveActive() { return direct.task != DIRECT_IDLE; }
@@ -317,7 +321,7 @@ public:
     static void prepareDirectMove(const int32_t steps[4], bool stoppable, bool feedrateSource);
     static void stopDirectMove();
 
-    static void queueTask(char task);
+    static void queueTask(QueueTask task);
 
 
 };

@@ -22,6 +22,7 @@
 
 #include "HAL.h"
 #include "gcode.h"
+#include "QueueTask.h"
 
 #include "CalibrationScan.h"
 #include "RgbLighting.h"
@@ -443,7 +444,7 @@ void initializeCaseLight();
 } // namespace AccessoryOutputs
 
 extern void setExtruderCurrent(uint8_t nr, uint8_t current);
-extern void queueTask(char task);
+extern void queueTask(QueueTask task);
 extern void moveXAction(int8_t increment);
 extern void moveYAction(int8_t increment);
 extern void moveZAction(int8_t increment);

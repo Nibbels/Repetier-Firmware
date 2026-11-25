@@ -261,7 +261,7 @@ void loopFeatures() //wird so aufgerufen, dass es ein ~100ms Takt sein sollte.
     Printer::pause.serviceMotion();
 } // loopFeatures
 
-void queueTask(char task) {
+void queueTask(QueueTask task) {
     if (PrintLine::waitForXFreeLines(1))
         PrintLine::queueTask(task);
 } // queueTask

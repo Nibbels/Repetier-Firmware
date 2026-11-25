@@ -35,6 +35,9 @@
     <ClInclude Include="DisplayModes.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="QueueTask.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="Eeprom.h">
       <Filter>Header Files</Filter>
     </ClInclude>

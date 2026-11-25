@@ -556,7 +556,7 @@ void setSenseOffsetParameters(GCode* pCommand) {
     }
 
     if (!error)
-        queueTask(TASK_ENABLE_SENSE_OFFSET);
+        queueTask(QueueTask::EnableSenseOffset);
 }
 
 void setDigitFlowParameters(GCode* pCommand) {
