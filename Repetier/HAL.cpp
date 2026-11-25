@@ -380,17 +380,20 @@ void HAL::showStartReason() {
     MCUSR = 0;
 } // showStartReason
 
-int HAL::getFreeRam() {
-    int freeram = 0;
-    InterruptProtectedBlock noInts; //BEGIN_INTERRUPT_PROTECTED
-    uint8_t *heapptr, *stackptr;
-    heapptr = (uint8_t*)malloc(4); // get heap pointer
-    free(heapptr);                 // free up the memory again (sets heapptr to 0)
-    stackptr = (uint8_t*)(SP);     // save value of stack pointer
-    freeram = (int)stackptr - (int)heapptr;
-    //END_INTERRUPT_PROTECTED
-    return freeram;
+// AVR linker symbol: first byte beyond static storage. The weak allocator
+// frontier is optional, so diagnostics alone do not pull malloc into the image.
+extern "C" {
+extern char __heap_start;
+extern char* __brkval __attribute__((weak));
+}
 
+int HAL::getFreeRam() {
+    InterruptProtectedBlock lock;
+    uintptr_t heapEnd = reinterpret_cast<uintptr_t>(&__heap_start);
+    if (&__brkval && __brkval)
+        heapEnd = reinterpret_cast<uintptr_t>(__brkval);
+    // Contiguous stack-to-heap gap, not total free blocks or an ISR watermark.
+    return static_cast<int>(SP) - static_cast<int>(heapEnd);
 } // getFreeRam
 
 void (*resetFunc)(void) = 0; // declare reset function @ address 0
