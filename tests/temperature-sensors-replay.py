@@ -57,17 +57,19 @@ int main() {
             sample = raw; reads = 0;
             TemperatureController c{uint8_t(type), 2, -123, -999.0f};
             const bool supported = c.updateCurrentTemperature();
-            assert(supported == (analog || type == 0));
+            assert(supported == ((analog && raw > 0 && raw < 4092) || type == 0));
             assert(reads == unsigned(analog));
             assert(c.currentTemperature == (analog ? int(raw) : type == 0 ? 25 : 4095));
             assert(std::isfinite(c.currentTemperatureC));
-            if (!supported) assert(c.currentTemperatureC == MAX_DEFECT_TEMPERATURE + 1.0f);
+            if (!analog && type != 0) assert(c.currentTemperatureC == MAX_DEFECT_TEMPERATURE + 1.0f);
             if (type == 0) assert(c.currentTemperatureC == 25.0f);
             const bool outsideRange = c.currentTemperatureC < MIN_DEFECT_TEMPERATURE ||
                                       c.currentTemperatureC > MAX_DEFECT_TEMPERATURE;
             uint32_t bits; std::memcpy(&bits, &c.currentTemperatureC, 4);
             emit(uint16_t(c.currentTemperature), 2); emit(bits, 4);
-            emit(supported, 1); emit(outsideRange, 1);
+            // Retain the old supported-type bit in the conversion-only golden transcript.
+            // Rail authorization is separately asserted above.
+            emit(analog || type == 0, 1); emit(outsideRange, 1);
         }
     }
 }

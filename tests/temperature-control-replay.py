@@ -122,6 +122,7 @@ namespace Printer {
     static ExtrusionOutput extrusionOutput;
     #include "printer-safety.inc"
     static unsigned stops;
+    static struct { bool busy = false; bool isBusy() const { return busy; } } printJob;
     static unsigned flag2, debugLevel;
     static void markTemperatureReadingsAvailable() { flag2 |= PRINTER_FLAG2_GOT_TEMPS; }
     static void stopPrint() {
@@ -134,6 +135,8 @@ namespace Printer {
     struct { bool isReheating() { return true; } } pause;
     struct { void service(millis_t) {} } strainGauge;
 }
+namespace PrintLine { bool hasLines() { return false; } bool directMoveActive() { return false; } }
+static bool isAnyScanRunning() { return false; }
 namespace Com {
     #include "com.inc"
     constexpr int tTargetBedColon = 0;
@@ -146,7 +149,8 @@ namespace Com {
 static unsigned stores;
 static TemperatureController* tuned;
 namespace EEPROM {
-    void storeDataIntoEEPROM() {
+    void storePidCalibration(uint8_t heater) {
+        assert(tuned == tempController[heater] && tuned->pidCalibrationValid());
         assert(tuned && tuned->targetTemperatureC == 0 && HAL::outputDuty(tuned->pwmIndex) == 0);
         ++stores;
     }
@@ -170,14 +174,14 @@ static void reportTempsensorAndHeaterErrors();
 static unsigned visits;
 static unsigned observedPeakDuty;
 static millis_t stride = 10;
-enum class Injection { None, Reach, LateUnsupported, LateLow, Transient, High, TransientHigh, Cutoff, Cycles, ProfileCycles, PowerChange, OtherFault, Cancel, Reentrant, Stale };
+enum class Injection { None, Reach, LateUnsupported, LateLow, Transient, High, TransientHigh, Cutoff, Cycles, ProfileCycles, Unstable, PowerChange, OtherFault, Cancel, Reentrant, Stale };
 static Injection injection;
 static bool postTemperature = true;
 namespace GCodeInput {
     void keepAlive(FirmwareState) {
         ++visits;
         if (tuned) observedPeakDuty = std::max(observedPeakDuty, unsigned(HAL::outputDuty(tuned->pwmIndex)));
-        assert(visits < 1000);
+        assert(visits < 100000);
         now += stride;
         if (injection == Injection::Stale) stalledChannel = tuned->sensorPin;
         publishAdc();
@@ -212,8 +216,9 @@ namespace GCodeInput {
         }
         if (injection == Injection::Cycles)
             temperatureAdcValues[tuned->sensorPin] = visits % 2 ? 470 : 330;
-        if (injection == Injection::ProfileCycles)
-            temperatureAdcValues[tuned->sensorPin] = (visits - 1) % 4 < 2 ? 470 : 330;
+        if (injection == Injection::ProfileCycles || injection == Injection::Unstable)
+            temperatureAdcValues[tuned->sensorPin] = (visits - 1) % 4 < 2
+                ? ((injection == Injection::Unstable && ((visits - 1)/4)%2) ? 460 : 430) : 390;
         if (injection == Injection::PowerChange) tuned->pidMax = 10;
         if (injection == Injection::OtherFault)
             assert(tuned != &bed); // bed already has 10 consecutive invalid samples
@@ -260,9 +265,14 @@ int main(int argc, char** argv) {
         temperatureAdcValues[t->sensorPin] = 102; // plausible room-temperature sample
         t->pidMax = 255;
         t->targetTemperatureC = 100;
-        t->pidPGain = 2;
+        t->pidPGain = 20;
         t->pidIGain = 0.5;
         t->pidDGain = 3;
+        t->pidDriveMax = 255;
+        t->pidDriveMin = 20;
+        t->tunedSensorType = t->sensorType;
+        t->tunedPowerLimit = t->pidMax;
+        t->updateTempControlVars();
         t->decoupleTestPeriod = EXT0_DECOUPLE_TEST_PERIOD;
     }
     publishAdc();
@@ -278,21 +288,51 @@ int main(int argc, char** argv) {
         c.pidDGain = 3;
         c.updateTempControlVars();
         c.setTargetTemperature(measured + 5);
-        for (auto& v : c.tempArray) v = measured + 3;
+        c.pidHistoryValid = true;
+        c.previousTemperature = measured + 3;
+        c.filteredSlope = 0;
+        c.lastTemperatureUpdate = now;
         c.tempIState = 0;
         service();
-        assert(HAL::outputDuty(c.pwmIndex) == 26); // P=20, I=1, D=5.994
-        assert(std::fabs(c.tempIState - 5) < 0.001f);
+        assert(HAL::outputDuty(c.pwmIndex) == 36); // P=20, I=1, filtered D=15
+        assert(std::fabs(c.tempIState - 1) < 0.001f);
+        // 200 ms elapsed: integrate actual time, not a hard-coded 100 ms.
+        now += 100;
+        c.previousTemperature = measured;
+        c.filteredSlope = 0;
+        service();
+        assert(HAL::outputDuty(c.pwmIndex) == 23);
+        assert(std::fabs(c.tempIState - 3) < 0.001f);
+        c.setTargetTemperature(measured + 50);
+        c.pidPGain = 100;
+        c.filteredSlope = 0;
+        service();
+        assert(HAL::outputDuty(c.pwmIndex) == c.pidMax && std::fabs(c.tempIState - 3) < 0.001f);
         c.setTargetTemperature(measured - 5);
-        for (auto& v : c.tempArray) v = measured - 3;
         service();
         assert(HAL::outputDuty(c.pwmIndex) == 0);
-        c.setTargetTemperature(measured + PID_CONTROL_RANGE + 1);
-        service();
-        assert(HAL::outputDuty(c.pwmIndex) == c.pidMax && c.tempIState == 0);
         c.setTargetTemperature(0);
         service();
         assert(HAL::outputDuty(c.pwmIndex) == 0 && c.tempIState == 0);
+    } else if (!std::strcmp(name, "untuned") || !std::strcmp(name, "bed-untuned")) {
+        auto& t = !std::strcmp(name, "bed-untuned") ? bed : c;
+        t.invalidatePidCalibration();
+        assert(!t.pidCalibrationValid());
+        t.setTargetTemperature(100);
+        service();
+        assert(t.targetTemperatureC == 0 && HAL::outputDuty(t.pwmIndex) == 0);
+        // A raw target write cannot bypass the regulator's authorization.
+        t.targetTemperatureC = 100;
+        service();
+        assert(t.targetTemperatureC == 0 && HAL::outputDuty(t.pwmIndex) == 0);
+    } else if (!std::strcmp(name, "invalid-gains")) {
+        assert(!TemperatureController::validPidGains(NAN, 1, 1));
+        assert(!TemperatureController::validPidGains(1, INFINITY, 1));
+        assert(!TemperatureController::validPidGains(1, 1, -1));
+        assert(!TemperatureController::validPidGains(0, 1, 0));
+        c.pidPGain = NAN;
+        service();
+        assert(!c.pidCalibrationValid() && HAL::outputDuty(c.pwmIndex) == 0);
     } else if (!std::strcmp(name, "stale") || !std::strcmp(name, "bed-stale")) {
         auto& affected = !std::strcmp(name, "bed-stale") ? bed : c;
         auto& other = &affected == &bed ? c : bed;
@@ -300,10 +340,10 @@ int main(int argc, char** argv) {
         assert(HAL::outputDuty(affected.pwmIndex) == 255);
         stalledChannel = affected.sensorPin;
         ++now;
-        const auto oldPointer = affected.tempPointer;
+        const auto oldSampleTime = affected.lastTemperatureUpdate;
         service();
         assert(HAL::outputDuty(affected.pwmIndex) == 0 && !Printer::isAnyTempsensorDefect());
-        assert(HAL::outputDuty(other.pwmIndex) == 255 && affected.tempPointer == oldPointer);
+        assert(HAL::outputDuty(other.pwmIndex) == 255 && affected.lastTemperatureUpdate == oldSampleTime && !affected.pidHistoryValid);
         stalledChannel = -1;
         service();
         assert(HAL::outputDuty(affected.pwmIndex) == 255 && !Printer::isAnyTempsensorDefect());
@@ -313,14 +353,14 @@ int main(int argc, char** argv) {
         HAL::setHeaterDuty(c.pwmIndex, 255);
         service();
         assert(HAL::outputDuty(c.pwmIndex) == 0 && HAL::outputDuty(bed.pwmIndex) == 255);
-        assert(!Printer::isAnyTempsensorDefect() && c.tempPointer == 0);
+        assert(!Printer::isAnyTempsensorDefect() && !c.pidHistoryValid);
     } else if (!std::strcmp(name, "rail")) {
         c.sensorType = 13;
         temperatureAdcValues[0] = 4092;
         service();
-        // GAP: supported rail maps to 0 C, so max duty is requested.
+        // The numeric conversion is preserved, but rail samples cannot heat.
         assert(c.currentTemperatureC == 0 && !Printer::isAnyTempsensorDefect());
-        assert(HAL::outputDuty(0) == 255);
+        assert(HAL::outputDuty(0) == 0);
         c.setTargetTemperature(0);
         assert(HAL::outputDuty(0) == 0);
     } else if (!std::strcmp(name, "invalid-low")) {
@@ -332,7 +372,7 @@ int main(int argc, char** argv) {
             assert(c.currentTemperatureC < MIN_DEFECT_TEMPERATURE);
             assert(!Printer::isAnyTempsensorDefect() && HAL::outputDuty(0) == 0);
             assert(HAL::outputDuty(bed.pwmIndex) == 255);
-            assert(c.tempPointer == 0); // invalid readings never enter the PID history
+            assert(!c.pidHistoryValid); // invalid readings never enter the PID history
         }
         service();
         assert(c.isSensorDefect());
@@ -402,7 +442,7 @@ int main(int argc, char** argv) {
         HAL::setHeaterDuty(0, 255);
         service();
         assert(c.currentTemperatureC > MAX_DEFECT_TEMPERATURE);
-        assert(!Printer::isAnyTempsensorDefect() && HAL::outputDuty(0) == 0 && c.tempPointer == 0);
+        assert(!Printer::isAnyTempsensorDefect() && HAL::outputDuty(0) == 0 && !c.pidHistoryValid);
     } else if (!std::strcmp(name, "bed-invalid")) {
         bed.sensorType = 14;
         temperatureAdcValues[bed.sensorPin] = 4092;
@@ -542,10 +582,16 @@ int main(int argc, char** argv) {
             injection = Injection::Cutoff;
             postTemperature = false;
         } else if (std::strstr(name, "-power-change")) injection = Injection::PowerChange;
-        else if (std::strstr(name, "-timeout")) stride = 100000;
+        else if (std::strstr(name, "-timeout")) {
+            temperatureAdcValues[t.sensorPin] = 430; // cooling phase, no crossing
+            stride = 1000;
+        } else if (std::strstr(name, "-no-rise")) stride = 1000;
+        else if (std::strstr(name, "-unstable")) { injection = Injection::Unstable; stride = 1000; store = true; }
+        else if (std::strstr(name, "-entry-profile")) {}
+        else if (std::strstr(name, "-entry-busy")) Printer::printJob.busy = true;
         else if (std::strstr(name, "-success")) {
-            injection = Injection::Cycles;
-            stride = 6000;
+            injection = Injection::ProfileCycles;
+            stride = 1000;
             store = std::strstr(name, "-store") != nullptr;
         } else if (!std::strcmp(name, "autotune-other-fault")) {
             bed.sensorType = 255;
@@ -555,7 +601,7 @@ int main(int argc, char** argv) {
         } else assert(false);
         const uint8_t id = !std::strcmp(name, "autotune-entry-controller") ? NUM_TEMPERATURE_LOOPS : t.pwmIndex;
         const char* methodSuffix = std::strstr(name, "-j");
-        const int method = methodSuffix ? methodSuffix[2] - '0' : 0;
+        const int method = methodSuffix ? methodSuffix[2] - '0' : (useBed ? 3 : 1);
         const char* limitSuffix = std::strstr(name, "-limit");
         if (limitSuffix) {
             unsigned limit = 0;
@@ -563,55 +609,48 @@ int main(int argc, char** argv) {
             t.pidMax = uint8_t(limit);
         }
         const bool lowMax = t.pidMax < 40;
-        float high = 0, low = 0, oldLimit = 0;
-        if (methodSuffix) {
-            // Each extreme persists past the transition (which resets the opposite extremum).
-            injection = Injection::ProfileCycles;
-            stride = 3000;
-            // Use the actual sensor conversion at both synthetic relay extrema.
-            temperatureAdcValues[t.sensorPin] = 470;
+        const bool wrongProfile = !TemperatureController::autotuneProfileAllowed(t.pwmIndex, method);
+        const bool busy = Printer::printJob.busy;
+        const bool expectSuccess = std::strstr(name, "-success") && !lowMax && !wrongProfile;
+        float high = 0, low = 0;
+        if (expectSuccess) {
+            temperatureAdcValues[t.sensorPin] = 430;
             assert(t.updateCurrentTemperature());
             high = t.currentTemperatureC;
-            temperatureAdcValues[t.sensorPin] = 330;
+            temperatureAdcValues[t.sensorPin] = 390;
             assert(t.updateCurrentTemperature());
             low = t.currentTemperatureC;
             assert(high > target && low < target);
-            t.pidDriveMax = 100;
-            t.pidDriveMin = 30;
-            t.updateTempControlVars();
-            oldLimit = t.tempIStateLimitMax;
+            t.invalidatePidCalibration();
         }
+        if (wrongProfile || busy) t.setTargetTemperature(0);
         t.autotunePID(target, id, 5, store, method);
         assert(autotuneIndex == 255 && HAL::outputDuty(t.pwmIndex) == 0 && t.targetTemperatureC == 0);
-        if (entry || lowMax) assert(visits == 0);
+        if (entry || lowMax || wrongProfile || busy) assert(visits == 0);
         else assert(visits > 0 && watchdogHeartbeat == now);
-        if (std::strstr(name, "-success") && !lowMax) {
-            assert(visits == (methodSuffix ? 23 : 12) && !Printer::isAnyTempsensorDefect());
+        if (expectSuccess) {
+            assert(visits == 19 && !Printer::isAnyTempsensorDefect());
             assert(stores == unsigned(store));
-            if (store) assert(t.pidPGain != oldP && std::isfinite(t.pidPGain) && std::isfinite(t.pidIGain) && std::isfinite(t.pidDGain));
-            if (methodSuffix) {
-                // Existing rules, in parallel PID form. Equal 6 s half cycles.
-                const float p[] = {0.6f, 0.7f, 0.33f, 0.2f, 0.4545f};
-                const float ti[] = {0.5f, 0.4f, 0.5f, 0.5f, 2.2f};
-                const float td[] = {0.125f, 0.15f, 1.0f/3, 1.0f/3, 1.0f/6.3f};
-                const unsigned rule = method <= 4 ? method : 0;
-                // GAP: legacy Ku uses peak-to-peak rather than half-amplitude.
-                const float ku = 4.0f * 127 / (3.14159f * (high - low));
-                const float expectedP = p[rule] * ku;
+            assert(t.pidCalibrationValid() == store);
+            if (store) {
+                const float p[] = {0.45f, 1.0f/2.2f, 0.65f, 0.45f};
+                const float ti[] = {1.6f, 2.2f, 1.6f, 3.0f};
+                const float td[] = {0.08f, 1.0f/6.3f, 0.16f, 0.08f};
+                // Full PWM relay (low=0), 2 s high and 2 s low.
+                const float ku = 4.0f * t.pidMax / (3.14159265f * (high - low));
+                const float expectedP = p[method] * ku;
                 assert(std::fabs(t.pidPGain - expectedP) < 0.001f);
-                assert(std::fabs(t.pidIGain - expectedP / (12 * ti[rule])) < 0.001f);
-                assert(std::fabs(t.pidDGain - expectedP * 12 * td[rule]) < 0.01f);
-                assert(t.tempIStateLimitMax != oldLimit);
-                assert(std::fabs(t.tempIStateLimitMax - 1000.0f / t.pidIGain) < 0.01f);
-                assert(std::fabs(t.tempIStateLimitMin + 30.0f / t.pidIGain) < 0.01f);
-                assert(t.tempIState == 0);
-                std::printf("rule %d: P=%f I=%f D=%f (legacy Ku; refreshed I limits)\n",
-                            method, t.pidPGain, t.pidIGain, t.pidDGain);
+                assert(std::fabs(t.pidIGain - expectedP / (4 * ti[method])) < 0.001f);
+                assert(std::fabs(t.pidDGain - expectedP * 4 * td[method]) < 0.01f);
+                assert(t.tempIStateLimitMax == t.pidMax && t.tempIStateLimitMin == -20);
+                assert(t.tempIState == 0 && !t.pidHistoryValid);
+                std::printf("rule J%d: P=%f I=%f D=%f\n", method, t.pidPGain, t.pidIGain, t.pidDGain);
             }
-            if (limitSuffix) assert(observedPeakDuty <= t.pidMax && t.pidPGain > 0 && t.pidIGain > 0);
+            assert(observedPeakDuty <= t.pidMax);
         } else assert(stores == 0);
-        if (lowMax) assert(observedPeakDuty == 0 && stores == 0);
-        if (!store || lowMax) assert(t.pidPGain == oldP && t.pidIGain == oldI && t.pidDGain == oldD);
+        if (lowMax || wrongProfile) assert(observedPeakDuty == 0 && stores == 0);
+        if (!expectSuccess || !store) assert(t.pidPGain == oldP && t.pidIGain == oldI && t.pidDGain == oldD);
+        if (std::strstr(name, "-no-rise")) { assert(t.isSensorDecoupled()); allOff(); }
         if (injection == Injection::OtherFault) allOff();
         // One subsequent normal service must not re-enable the old target.
         service();
@@ -666,7 +705,10 @@ def main():
         "autotune-low", "autotune-transient", "autotune-transient-high", "autotune-high", "autotune-cutoff", "autotune-timeout",
         "autotune-cancel", "autotune-reentrant", "autotune-other-fault", "autotune-success", "autotune-success-store",
         "autotune-bed-late", "autotune-bed-timeout", "autotune-bed-high", "autotune-bed-cancel", "autotune-bed-success-store",
-        "pid-components", "autotune-power-change", "autotune-bed-power-change",
+        "pid-components", "untuned", "bed-untuned", "invalid-gains",
+        "autotune-power-change", "autotune-bed-power-change",
+        "autotune-no-rise", "autotune-bed-no-rise", "autotune-unstable", "autotune-bed-unstable",
+        "autotune-entry-busy", "autotune-bed-entry-busy",
         *(f"autotune-success-store-limit{n}" for n in (0, 10, 39, 40, 41, 255)),
         *(f"autotune-bed-success-store-limit{n}" for n in (0, 10, 39, 40, 41, 255)),
         *(f"autotune-success-store-j{j}" for j in range(6)),
@@ -686,8 +728,7 @@ def main():
                 "EXTRUDER_FAN_COOL_TEMP", "DECOUPLING_TEST_MAX_HOLD_VARIANCE",
                 "DECOUPLING_TEST_MIN_TEMP_RISE", "EXT0_DECOUPLE_TEST_PERIOD",
                 "MAX_ROOM_TEMPERATURE", "WATCHDOG_MAIN_LOOP_TIMEOUT",
-                "PID_CONTROL_RANGE", "TEMP_TOLERANCE",
-                "PID_CONTROL_DRIVE_MAX_LIMIT_FACTOR", "PID_CONTROL_DRIVE_MIN_LIMIT_FACTOR")})
+                "TEMP_TOLERANCE")})
             defines["ANALOG_REDUCE_BITS"] = macro((FW / "HAL.h").read_text(), "ANALOG_REDUCE_BITS")
             defines["CELSIUS_EXTRA_BITS"] = macro(header, "CELSIUS_EXTRA_BITS")
             defines["NUM_EXTRUDER"] = str(tools)

@@ -45,17 +45,18 @@ public:
 
     uint32_t lastTemperatureUpdate; ///< Time in millis of the last temperature update.
 
-    float tempIState;    ///< Temp. var. for PID computation.
+    float tempIState;    ///< Integral contribution in PWM counts, not accumulated error.
     uint8_t pidDriveMax; ///< Used for windup in PID calculation.
     uint8_t pidDriveMin; ///< Used for windup in PID calculation.
-    float pidPGain;      ///< Pgain (proportional gain) for PID temperature control [0,01 Units].
-    float pidIGain;      ///< Igain (integral) for PID temperature control [0,01 Units].
-    float pidDGain;      ///< Dgain (damping) for PID temperature control [0,01 Units].
+    float pidPGain;      ///< Pgain (proportional gain) for parallel PID (PWM counts, Celsius, seconds).
+    float pidIGain;      ///< Igain (integral) for parallel PID (PWM counts, Celsius, seconds).
+    float pidDGain;      ///< Dgain (damping) for parallel PID (PWM counts, Celsius, seconds).
     uint8_t pidMax;      ///< Maximum PWM value, the heater should be set.
     float tempIStateLimitMax;
     float tempIStateLimitMin;
-    uint8_t tempPointer;
-    float tempArray[16];
+    bool pidHistoryValid;
+    float previousTemperature;
+    float filteredSlope;
 
     uint8_t flags;
 
@@ -64,6 +65,22 @@ public:
     millis_t decoupleTestPeriod; ///< Time between setting and testing decoupling.
 
     uint8_t paused;
+    // A saved tune is tied to the actual sensor and power limit.
+    uint8_t tunedSensorType;
+    uint8_t tunedPowerLimit;
+
+    static bool validPidGains(float p, float i, float d) {
+        return p > 0 && p <= 1000 && i > 0 && i <= 1000 && d >= 0 && d <= 100000;
+    }
+    bool pidCalibrationValid() const {
+        return sensorType != 0 && tunedSensorType == sensorType && tunedPowerLimit == pidMax
+            && pidMax >= 40 && validPidGains(pidPGain, pidIGain, pidDGain);
+    }
+    void invalidatePidCalibration();
+    static bool autotuneProfileAllowed(uint8_t controller, int method) {
+        return controller <= NUM_EXTRUDER
+            && (controller == NUM_EXTRUDER ? method == 2 || method == 3 : method == 0 || method == 1);
+    }
 
     void setTargetTemperature(float target);
     bool updateCurrentTemperature(); ///< False for an unsupported sensor type or stale/unpublished ADC sample.

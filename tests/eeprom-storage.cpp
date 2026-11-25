@@ -62,7 +62,7 @@ namespace HAL {
 }
 constexpr int Processing=0;
 namespace Commands {void checkForPeriodicalActions(int){} void adjustFanFrequency(uint8_t v){HAL::divisor=v;} void adjustFanMode(uint8_t v){HAL::mode=v;}}
-namespace Com { const char* tEPRConfigResetDefaults="defaults"; const char* tEPRProtocolChanged="version"; void printInfoFLN(const char*){} void printF(const char*){} void printFLN(const char*){} void println(){} }
+namespace Com { const char* tEPRConfigResetDefaults="defaults"; const char* tEPRProtocolChanged="version"; void printInfoFLN(const char*){} void printErrorFLN(const char*){} void printF(const char*){} void printFLN(const char*){} void println(){} }
 #define UI_TEXT_CONFIGURATION "config"
 #define UI_TEXT_UPDATE "update"
 #define UI_TEXT_RESTORE_DEFAULTS "defaults"
@@ -71,8 +71,23 @@ namespace Com { const char* tEPRConfigResetDefaults="defaults"; const char* tEPR
 #define UI_TEXT_EXTRUDER1_REMOVED "remove"
 #define UI_TEXT_UPDATE_MATRIX "matrix"
 void showInformation(const char*,const char*,const char*){}
-struct Controller { uint8_t pidDriveMax=0,pidDriveMin=0,pidMax=0,sensorType=0; float pidPGain=0,pidIGain=0,pidDGain=0; } heatedBedController;
+struct Controller {
+    uint8_t pidDriveMax=0,pidDriveMin=0,pidMax=0,sensorType=0,tunedSensorType=0,tunedPowerLimit=0;
+    float pidPGain=0,pidIGain=0,pidDGain=0;
+    bool pidCalibrationValid() const {
+        return sensorType != 0 && tunedSensorType == sensorType && tunedPowerLimit == pidMax
+            && pidMax >= 40 && pidPGain > 0 && pidPGain <= 1000 && pidIGain > 0 && pidIGain <= 1000 && pidDGain >= 0 && pidDGain <= 100000;
+    }
+    void invalidatePidCalibration(){tunedSensorType=tunedPowerLimit=0;}
+    void updateTempControlVars(){}
+} heatedBedController;
 struct Extruder {float stepsPerMM=0,maxFeedrate=0,maxEJerk=0,maxAcceleration=0,offsetMM[2]{},advanceL=0; uint8_t coolerSpeed=0; Controller tempControl; static Extruder* current; static void applyCurrentSettings(){} static void initHeatedBed(){} } extruder[2]; Extruder* Extruder::current=extruder;
+#define NUM_TEMPERATURE_LOOPS (NUM_EXTRUDER+1)
+Controller* tempController[NUM_TEMPERATURE_LOOPS] = {&extruder[0].tempControl,
+#if NUM_EXTRUDER>1
+    &extruder[1].tempControl,
+#endif
+    &heatedBedController};
 struct Point {uint8_t x,y;}; Point point{}; float lift=defaultHeatBedScanLiftMm; void restoreZOffsetScanPoint(Point p){point=p;} Point zOffsetScanPoint(){return point;} float scanStartLiftMm(){return lift;} void setScanStartLiftMm(float v){lift=v;}
 namespace RgbLighting {char m=0;void restoreMode(char v){m=v;}char mode(){return m;}}
 uint8_t drv8711Axis_2_InitMicrosteps(int){return 16;} uint8_t drv8711MicroSteps_2_ModeValue(int){return 4;}
@@ -131,4 +146,36 @@ int main(){
     image=factory; image[1000]^=1; EEPROM::init(); assert(image[1000]==0); snapshot("bad-checksum");
     image=factory; image[EPR_MAGIC_BYTE]=0; EEPROM::updateChecksum(); EEPROM::init(); assert(image[EPR_MAGIC_BYTE]==44); snapshot("bad-magic");
     image=factory; image[1000]=0xa5; EEPROM::updateChecksum(); keys=true; EEPROM::init(); assert(image[1000]==0); snapshot("key-reset");
+    // Upgrade a version-8 image containing apparently valid gains: no heater authorized.
+    image=factory; image[EPR_VERSION]=8;
+    for (int i=0;i<9;++i) image[EPR_RF_PID_CALIBRATION+i]=0xA9;
+    image[1000]=0x5a; EEPROM::updateChecksum(); EEPROM::init();
+    assert(image[1000]==0x5a && image[EPR_VERSION]==9);
+    for (auto* c:tempController) assert(!c->pidCalibrationValid());
+    // Successful tune of a single physical heater persists only its thermal fields.
+    for (uint8_t i=0;i<NUM_TEMPERATURE_LOOPS;++i) {
+        auto& c=*tempController[i];
+        c.pidPGain=12.5f; c.pidIGain=.5f; c.pidDGain=22.0f;
+        c.pidDriveMax=c.pidMax; c.pidDriveMin=20;
+        c.tunedSensorType=c.sensorType; c.tunedPowerLimit=c.pidMax;
+        EEPROM::storePidCalibration(i); checksum();
+        assert(c.pidCalibrationValid());
+        assert(image[EPR_RF_PID_CALIBRATION+3*(i==NUM_EXTRUDER?2:i)]==0xA9);
+        for (uint8_t j=i+1;j<NUM_TEMPERATURE_LOOPS;++j) assert(!tempController[j]->pidCalibrationValid());
+    }
+    const auto calibrated=image;
+    for (auto* c:tempController) c->invalidatePidCalibration();
+    EEPROM::init();
+    for (auto* c:tempController) assert(c->pidCalibrationValid() && c->pidPGain==12.5f);
+    // A sensor or PWM change revokes exactly that heater, including after reboot.
+    HAL::eprSetByte(EPR_BED_PID_MAX, 100); EEPROM::updateChecksum(); EEPROM::init();
+    assert(!heatedBedController.pidCalibrationValid() && extruder[0].tempControl.pidCalibrationValid());
+    HAL::eprSetByte(EPR_BED_PID_MAX, calibrated[EPR_BED_PID_MAX]); EEPROM::updateChecksum(); EEPROM::init();
+    assert(!heatedBedController.pidCalibrationValid());
+    // Non-finite raw EEPROM gain cannot authorize a heater.
+    HAL::eprSetFloat(EEPROM::getExtruderOffset(0)+EPR_EXTRUDER_PID_PGAIN, NAN);
+    EEPROM::updateChecksum(); EEPROM::init(); assert(!extruder[0].tempControl.pidCalibrationValid());
+    EEPROM::restoreEEPROMSettingsFromConfiguration(); EEPROM::storeDataIntoEEPROM(); EEPROM::init();
+    for (auto* c:tempController) assert(!c->pidCalibrationValid());
+
 }

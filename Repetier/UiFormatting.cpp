@@ -928,27 +928,13 @@ void UIDisplay::renderExtruderField(char c1, char c2) {
                 }
             }
 
-            else if (c2 == 't') // %Xt : Description for PID autotune type in menu
+            else if (c2 == 't') // %Xt : autotune profile confirmation
             {
-                col = 0;                          // Reset linemarker -> start at first display char. overwrite things before this %tag -> erstes Zeichen brauchen wir in diesem menü nicht.
-                switch (menuPos[menuLevel - 1]) { // Das sagt mir, in welchem untermenü ich bin. die zahl drin entspricht fast dem Jx aus dem M303, aber J0 und J1 sind der intuitiven Ordnung halber vertauscht. J2 ist rausgelassen worden, weil wir das eigentlich nicht brauchen. J3->2 J4->3
-                case 0: {
-                    addStringP(PSTR(UI_ACTION_TEXT_PESSEN_TIPP)); // Tipp für pessen integral rule
-                    break;
-                }
-                case 1: {
-                    addStringP(PSTR(UI_ACTION_TEXT_CLASSICPID_TIPP)); // Tipp für classic pid
-                    break;
-                }
-                case 2: {
-                    addStringP(PSTR(UI_ACTION_TEXT_NO_TIPP)); // Tipp für no overshoot
-                    break;
-                }
-                case 3: {
-                    addStringP(PSTR(UI_ACTION_TEXT_TYREUS_LYBEN_TIPP)); // Tipp für tyreus lyben
-                    break;
-                }
-                }
+                col = 0;
+                if (menuPos[menuLevel - 1] == 0)
+                    addStringP(PSTR("Less overshoot"));
+                else
+                    addStringP(PSTR("Faster response"));
             }
 
             else if (c2 == 'l') // %Xl : Advance L value

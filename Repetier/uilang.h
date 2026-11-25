@@ -257,10 +257,6 @@
 #define UI_TEXT_STOP_PRINT "Stop Print"
 #define UI_TEXT_STOP_PRINT_ACK "Stop Print now?"
 
-#define UI_ACTION_TEXT_CLASSICPID "PID ZieglerNichols"
-#define UI_ACTION_TEXT_PESSEN "PID Pessen-Rule"
-#define UI_ACTION_TEXT_NO_OVER "PID No-Overshoot"
-#define UI_ACTION_TEXT_TYREUS_LYBEN "PID Tyreus-Lyben"
 
 #define UI_TEXT_MOTOR_X "I_x: %MX"
 #define UI_TEXT_MOTOR_Y "I_y: %MY"
@@ -284,10 +280,6 @@
 #define UI_TEXT_MICRO_STEPS_Z "MicroStepsZ:%Xz"
 #define UI_TEXT_MICRO_STEPS_E "MicroStepsE:%XE"
 
-#define UI_ACTION_TEXT_PESSEN_TIPP "(choose for hotends)"
-#define UI_ACTION_TEXT_CLASSICPID_TIPP "(alternat. for hotends)"
-#define UI_ACTION_TEXT_NO_TIPP "(alternat. for beds)"
-#define UI_ACTION_TEXT_TYREUS_LYBEN_TIPP "(choose for highpower bed)"
 
 #define UI_ACTION_TEXT_YES "%mYJa"
 #define UI_ACTION_TEXT_NO "%mNNein"

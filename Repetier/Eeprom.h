@@ -19,7 +19,7 @@
 #define EEPROM_H
 
 // Keep the existing addresses when retiring settings. Legacy cells remain reserved.
-#define EEPROM_PROTOCOL_VERSION 8
+#define EEPROM_PROTOCOL_VERSION 9
 
 /** Where to start with our datablock in memory. Can be moved if you
 have problems with other modules using the eeprom */
@@ -156,6 +156,9 @@ have problems with other modules using the eeprom */
 #define EPR_RF_PREHEAT_B_BED 1974
 #define EPR_RF_PREHEAT_B_HOTEND 1976
 
+// Three fixed physical heater slots (E0, E1, bed), 3 bytes each: tag, sensor, PWM.
+#define EPR_RF_PID_CALIBRATION 1978
+
 // Nibbels: Computechecksum geht bis 2047
 
 #define EEPROM_EXTRUDER_OFFSET 200
@@ -209,6 +212,7 @@ public:
     static void storeDataIntoEEPROM(uint8_t corrupted = 0);
     static void storeManualZOffset();
     static void storePreheatProfiles();
+    static void storePidCalibration(uint8_t heater);
     static void updateChecksum();
     static void readDataFromEEPROM();
     static void restoreEEPROMSettingsFromConfiguration();

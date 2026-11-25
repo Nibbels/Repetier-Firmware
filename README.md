@@ -18,9 +18,9 @@ https://github.com/RF1000/Repetier-Firmware (see branch development. Or else loo
 
 ## HowTo Install
 
-- Download the Firmware `Branch: community_development` and unzip all the files.  
+- Download this branch (`ai-firmware-review`) and unzip all the files. This is a software-review candidate; consolidated printer testing is still pending.  
 - Install Arduino.cc IDE 1.8.12 and later if it is not installed on your computer already.  
-- Edit and save Configuration.h Line 46 to 48 according to your printers model. You have to remove the two **//** in front of the printers name you wish to activate:  
+- Edit and save `Repetier/Configuration.h` according to your printer model. You have to remove the two **//** in front of the printers name you wish to activate:  
 `#define MOTHERBOARD                         DEVICE_TYPE_RF1000` or  
 `#define MOTHERBOARD                         DEVICE_TYPE_RF2000` or  
 `#define MOTHERBOARD                         DEVICE_TYPE_RF2000v2`  
@@ -36,7 +36,7 @@ Port: Your printers Port like `COM3`, if successfully connected.
 
 ## compiled Hex-Files / automatic build system
 
-You want to get precompiled firmware images with stock settings? Visit this website https://jenkins.beta-centauri.de/view/Repetier/ . You will find two versions, one is "stable" the other one is marked as "development".
+For this review branch, the [GitHub Actions firmware checks](https://github.com/Nibbels/Repetier-Firmware/actions/workflows/firmware-check.yml) produce four variants with the pinned Arduino CLI 1.2.2 and AVR Boards 1.8.6. Artifacts expire after seven days. See the [build and cleanup audit](coordination/audits/final-cleanup.md) for the supported build path and the status of legacy alternatives. Historical community builds were published at https://jenkins.beta-centauri.de/view/Repetier/ ; they are not builds of this review branch.
 Find more information and discussion here: http://www.rf1000.de/viewtopic.php?f=7&t=2057
 Using linux you can flash the .hex-files to your printer with this command:
 ```avrdude -patmega2560 -cwiring -P/dev/ttyUSB0 -b115200 -D -Uflash:w:Repetier.hex:i``` 
