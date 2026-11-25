@@ -264,6 +264,10 @@ void HeatBedScan::startOrCancel(HeatBedScanMode mode) {
         return;
     }
 
+    if (mode != HeatBedScanMode::Standard && !Extruder::allHeatersCalibrated()) {
+        Com::printFLN(PSTR("Error: PID tune required before heated scan"));
+        return;
+    }
     Calibration::scanSession.reset();
     mode_ = mode;
     phase_ = Phase::Initialize;

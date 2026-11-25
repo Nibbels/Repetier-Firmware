@@ -375,7 +375,10 @@ int32_t max(int32_t a, int32_t b) { return std::max(a, b); }
 }
 
 struct Extruder {
+    static bool allHeatersCalibrated() { return current->tempControl.pidCalibrationValid(); }
     struct {
+        bool calibrationValid = true;
+        bool pidCalibrationValid() const { return calibrationValid; }
         float targetTemperatureC = 200.0f;
         uint8_t paused = 0;
         void waitForTargetTemperature(int = 0, bool resumingPause = false) {

@@ -318,6 +318,7 @@ public:
         }
 
     } // enable
+    static bool allHeatersCalibrated();
     static void manageTemperatures();
     static bool hasActiveHotendTarget();
     static void disableAllExtruders();

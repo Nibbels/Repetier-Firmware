@@ -87,6 +87,7 @@ struct Extruder {
     TemperatureController tempControl;
     uint8_t coolerPWM, coolerSpeed;
     static Extruder* current;
+    static bool allHeatersCalibrated();
     static void manageTemperatures();
     static void setHeatedBedTemperature(float);
 };

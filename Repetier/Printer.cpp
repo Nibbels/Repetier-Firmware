@@ -250,6 +250,10 @@ void Printer::setFeedrate(float feedrate) {
 
 // Convert G-code positions to millimetres in the planner's coordinate frame.
 bool Printer::queueGCodeCoordinates(GCode* com) {
+    if (com->hasE() && !Extruder::allHeatersCalibrated()) {
+        Com::printFLN(PSTR("Error: PID tune required before printing"));
+        return false;
+    }
     const bool isXYZMove = !com->hasNoXYZ();
     if (com->hasX())
         moveTarget.setFromGCodeMM(X_AXIS, convertToMM(com->X), gcodeModes.relativeXYZ());
@@ -310,6 +314,10 @@ bool Printer::queueRelativeStepsCoordinates(long dx, long dy, long dz, long de, 
 
 /** \brief Move printer the given number of mm. Puts the move into the queue. */
 bool Printer::queueRelativeMMCoordinates(float dx, float dy, float dz, float de, float feedrate, bool waitEnd, bool abortAtEndstops) {
+    if (de != 0 && !Extruder::current->tempControl.pidCalibrationValid()) {
+        Com::printFLN(PSTR("Error: PID tune required before extrusion"));
+        return false;
+    }
     if (Printer::blockAll || Printer::printJob.commandsBlocked())
         return false;
 

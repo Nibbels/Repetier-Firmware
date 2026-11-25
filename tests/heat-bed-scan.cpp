@@ -119,6 +119,7 @@ bool waitForMotion(MotionWait motion, PauseWait pause) {
 }
 }
 namespace Extruder {
+bool allHeatersCalibrated() { return true; }
 bool selectExtruderById(unsigned int tool) { return tool == 0; }
 void setHeatedBedTemperature(int target) { bedTarget = target; }
 void setTemperatureForAllExtruders(int target) { nozzleTargets.push_back(target); }

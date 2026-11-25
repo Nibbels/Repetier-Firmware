@@ -365,6 +365,10 @@ void setMainsOutput(GCode* pCommand) {
 #endif
 
 static bool prepareFilamentProgram() {
+    if (!Extruder::current->tempControl.pidCalibrationValid()) {
+        Com::printFLN(PSTR("Error: PID tune required before filament service"));
+        return false;
+    }
     if (Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Cancel)) {
         Printer::printJob.beginFilamentService();
         return true;

@@ -17,6 +17,7 @@
 
 // Temperature regulation, thermal fault latching, heater waits and autotune; ADC conversion is separate.
 
+#include "CaseFan.h"
 #include "Repetier.h"
 
 static uint8_t autotuneIndex = 255;
@@ -42,10 +43,19 @@ void Printer::latchOutputInhibit(bool thermalFault) {
     stopAllHeaters();
 }
 
+bool Extruder::allHeatersCalibrated() {
+    for (uint8_t h = 0; h < NUM_TEMPERATURE_LOOPS; ++h)
+        if (!tempController[h]->pidCalibrationValid()) return false;
+    return true;
+}
+
 static void finishAutotune(TemperatureController& controller) {
     // Revoke the duty request and normal setpoint before reporting or storing results.
     controller.setTargetTemperature(0);
     autotuneIndex = 255;
+#if defined(CASE_FAN_PIN) && (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
+    CaseFan::updateFromHotendTargets();
+#endif
 }
 
 /** Makes updates to temperatures and heater state every call.
@@ -352,6 +362,9 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
     bool completeCycle = heating;
     HAL::setHeaterDuty(pwmIndex, heating ? autotunePowerLimit : 0);
     if (!bed) {
+#if defined(CASE_FAN_PIN) && (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
+        CaseFan::turnOn();
+#endif
         extruder[controllerId].coolerPWM = extruder[controllerId].coolerSpeed;
         extruder[0].coolerPWM = extruder[0].coolerSpeed;
     }
