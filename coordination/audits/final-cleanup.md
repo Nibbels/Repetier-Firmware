@@ -42,4 +42,17 @@ No changes to compile order, class layout, include guards, version, board flags,
 
 Task0020 integrated baseline: [CI 45521424012](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45521424012), [four-variant artifact 14979823911](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45521424012/artifacts/14979823911); the Task0020 record reports all 16 output files and allocated ELF sections identical to Task0019. Baseline flash/global SRAM: RF1000 181372/6495, RF2000 186570/6653, RF2000v2 186574/6773, X44 181542/6633 bytes. Exact application/bootloader HEX and EEP hashes are in [Task0019](../tasks/Task0019.md).
 
-Final PR CI and candidate comparison pending. Physical printer checks remain in [Task0016 device plan](Task0016-device-plan.md); Astra review and owner acceptance still required. Local checkout is unavailable due DNS/network restriction; no local AVR, Visual Micro or Doxygen toolchain. Inspection via pinned GitHub blobs, not a claim of a complete local git grep or a legacy build. 
+Final PR CI and candidate comparison passed; see final verification below. Physical printer checks remain in [Task0016 device plan](Task0016-device-plan.md); Astra review and owner acceptance still required. Local checkout is unavailable due DNS/network restriction; no local AVR, Visual Micro or Doxygen toolchain. Inspection via pinned GitHub blobs, not a claim of a complete local git grep or a legacy build. 
+
+## Final verification
+
+[PR #89](https://github.com/Nibbels/Repetier-Firmware/pull/89), head `fa454fcc0fbda785f472bcc3121becc73503b3f2`, tested merge checkout `f848aa9795d29d4a125ec0865033d77f383f6805`. [CI run 45522064800](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45522064800) completed successfully, all host replays and all four AVR variants, failures=[]; [firmware evidence archive 14981100689](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45522064800/artifacts/14981100689), uploaded ZIP SHA-256 `f6ac8629d83bec69d4ac9d41210ef646e6e6dbcd6c9d29f3b68121ee3eade4dc`. The recursive Git-tree comparison (not truncated) found all 118 firmware C/C++/INO source blobs and all test blobs unchanged, and the diagnostic note retained blob `2aec3e3bdd0f47b66722a03b20469badadf29319`.
+
+| Variant | Flash B | Global SRAM B | Flash/SRAM delta | Application HEX / bootloader HEX / EEP |
+|---|---:|---:|---|---|
+| RF1000 | 181372 | 6495 | 0 / 0 | all three identical |
+| RF2000 | 186570 | 6653 | 0 / 0 | all three identical |
+| RF2000v2 | 186574 | 6773 | 0 / 0 | all three identical |
+| RF2000-X44 | 181542 | 6633 | 0 / 0 | all three identical |
+
+The 12 SHA-256 comparisons were performed on the CI summary against the recorded Task0019 hashes carried forward unchanged by Task0020. The identical HEX hashes also establish unchanged flash bytes, including interrupt code. The archive additionally contains bootloader BIN, ELF, maps, disassembly and section inventory. BIN hashes are logged but not independently compared to baseline BIN hashes in this session; the ZIP was not independently unpacked. This is software evidence only. Doxygen generation, legacy CMake/Visual Micro builds, external links and consolidated physical printer checks remain unverified. See [Task0016 device plan](Task0016-device-plan.md). The report-only evidence commit does not modify any tested inputs.
