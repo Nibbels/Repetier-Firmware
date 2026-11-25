@@ -3,8 +3,9 @@
 
 Extract focused production functions/branches, not a second implementation.
 Native flash pointers and an in-memory EEPROM/LCD replace physical AVR devices.
-The menu entry lists and geometry come from the firmware. Only the two preheat
-menus are rendered; the rest of the LCD parser is covered by other replays.
+The menu tree, filters and geometry come from the firmware. Preheat fields
+are rendered exactly; unrelated dynamic fields are stubbed only in the
+visibility replay. Actions are recorded at the navigation boundary.
 """
 import os
 from pathlib import Path
@@ -31,6 +32,10 @@ def main():
     macros = "\n".join(re.findall(
         r"^#define (?:PREHEAT_\w+|EPR_RF_PREHEAT_\w+|EPR_RF_Z_OFFSET|EPR_RF_MOD_SENSEOFFSET_DIGITS|EPR_INTEGRITY_BYTE|EEPROM_OFFSET|PERIODICAL_ACTIONS_CALL_INTERVAL|RF_MICRO_STEPS_Z|Z_OFFSET_(?:BUTTON|MENU)_STEPS|UI_ACTION_PREHEAT_\w+|UI_ACTION_RF_HEAT_BED_(?:UP|DOWN)|UI_SET_(?:MIN|MAX)_\w+_TEMP|UI_ACTION_ZOFFSET|UI_ACTION_(?:XPOSITION|YPOSITION|ZPOSITION|EPOSITION|RF_RESET_ACK|STOP_ACK|RESTORE_DEFAULTS|CHOOSE_LESSERINTEGRAL|CHOOSE_CLASSICPID|CHOOSE_NO|CHOOSE_TYREUS_LYBEN)|UI_MENU_TYPE_(?:SUBMENU|MODIFICATION_MENU)|XYZ_POSITION_BUTTON_DIRECTION|UI_SET_EXTRUDER_FEEDRATE|SPEED_(?:MIN_MILLIS|MAX_MILLIS|MAGNIFICATION)|MAX_COLS|UI_TEXT_PREHEAT_\w+)\s+[^\n]+",
         defs, re.M))
+    # The full menu table needs all action IDs (the original focused replay
+    # extracted only the IDs it invoked). Preserve the actual masks and labels.
+    macros += "\n" + "\n".join(re.findall(r"^#define UI_ACTION_\w+\s+[^\n]+", header + "\n" + read("RF.h"), re.M))
+    macros += "\n#include \"DisplayModes.h\"\n#include \"uilang.h\"\n#define MAX_MENU_LEVELS 6\n"
     geometry = section(header, "#define UI_ROWS 4", "//mtype usw.")
     # Both character ROMs (only the cursor glyphs are relevant).
     rom = re.search(r"#if MOTHERBOARD == DEVICE_TYPE_RF1000[^\n]*\n((?:#define CHAR_\w+[^\n]*\n)+)", read("uilang.h"))[1] + "#else\n" + re.search(r"#else // RF2000 family LCD character ROM\n((?:#define CHAR_\w+[^\n]*\n)+)", read("uilang.h"))[1]
@@ -60,11 +65,18 @@ def main():
     parser = (section(fmt, "void UIDisplay::parse(", "// Format a complete placeholder")
               + section(fmt, "void UIDisplay::renderField(", "        case 'a':"))
     parser = parser.replace("    switch (c1) {", "    (void)ram; (void)ivalue; (void)fvalue;\n    switch (c1) {")
+    # AVR stores menu pointers in an unsigned int. The non-PIE host executable
+    # has static menu addresses below INT_MAX; adapt only the pointer casts.
+    ok = section(ui, "void UIDisplay::pushMenu(", "} // okAction") + "}\n"
+    ok = ok.replace("menu[menuLevel] = men;", "menu[menuLevel] = static_cast<UIMenu*>(men);")
+    ok = ok.replace("menu[1] = (void*)&ui_menu_main;", "menu[1] = &ui_menu_main;")
+    ok = ok.replace("(void*)action", "(void*)(intptr_t)action")
     generated = (
         section(fmt, "void UIDisplay::addInt(", "void UIDisplay::addLong(")
-        + parser + "\n        default: assert(false); break;\n    }\n}\n"
+        + parser + "\n        default: assert(visibilityRendering); if (col < MAX_COLS) printCols[col++]=\'?\'; break;\n    }\n}\n"
         + section(ui, "void UIDisplay::printRow(", "void UIDisplay::ui_init_keys(")
         + section(ui, "bool UIMenuEntry::showEntry()", "} // showEntry") + "}\n"
+        + ok
         + section(ui, "void UIDisplay::adjustMenuPos()", "} // adjustMenuPos") + "}\n"
         + section(ui, "void UIDisplay::navigateMenuItems(", "} // nextPreviousAction") + "}\n"
         + section(ui, "void UIDisplay::refreshPage()", "} // refreshPage") + "}\n"
@@ -82,26 +94,34 @@ def main():
         + section(epr, "uint8_t EEPROM::computeChecksum()", "} // computeChecksum") + "}\n"
         + read("PreheatProfiles.cpp")[read("PreheatProfiles.cpp").index("namespace {"):]
     )
-    # Use the real menu definitions and their actual entry types/IDs, but
-    # construct a two-entry quick-menu window rather than the entire unrelated tree.
-    menu_defs = section(menu, "#define UI_STRING", "/*\nThe menu configuration")
-    menu_defs += section(menu, "#if UI_COLS <= 16\nUI_MENU_ACTIONCOMMAND(ui_menu_quick_preheat_a", "UI_MENU_ACTIONCOMMAND(ui_menu_quick_cooldown")
-    menu_defs += section(menu, "UI_MENU_CHANGEACTION(ui_menu_preheat_a_bed", "UI_MENU_SUBMENU(ui_menu_conf_preheat")
+    # Compile the complete real tree, not synthetic copies of the filtered lists.
+    menu_defs = menu.replace("(unsigned int)&entries", "(uintptr_t)&entries")
     menu_defs += "\n#define QUICK_WINDOW {&ui_menu_quick_preheat_a, &ui_menu_quick_preheat_b}\nUI_MENU(quick_window, QUICK_WINDOW)\n"
     with TemporaryDirectory(prefix="rfx-ui-workflows-") as d:
         build = Path(d)
         for name, text in (("defs.inc", macros), ("firmware.inc", generated), ("menus.inc", menu_defs)):
             (build / name).write_text(text, encoding="utf-8")
         (build / "test.cpp").write_text(HARNESS, encoding="utf-8")
-        for board, columns in ((1, 16), (2, 20), (3, 20)):
+        # Match stock extruder counts and the X44 retrofit from the AVR build.
+        for board, columns, extruders, x44 in ((1, 16, 1, False), (2, 20, 2, False),
+                                              (3, 20, 2, False), (2, 20, 1, True)):
+            # Only these pin feature conditions affect the menu table.
+            features = ["-DCASE_LIGHT_PIN=25", "-DFET1=" + ("-1" if board == 1 else "33"),
+                        "-DFET2=" + ("-1" if board == 1 else "32"),
+                        "-DEXT0_EXTRUDER_COOLER_PIN=" + ("32" if x44 else "-1"),
+                        "-DEXT1_EXTRUDER_COOLER_PIN=-1",
+                        "-DHOTEND_COOLER_USES_PIN(pin)=(EXT0_EXTRUDER_COOLER_PIN==(pin)||(NUM_EXTRUDER>1&&EXT1_EXTRUDER_COOLER_PIN==(pin)))"]
+            if board != 1:
+                features.append("-DRGB_LIGHT_R_PIN=1")
             exe = build / "test"
             subprocess.run([
                 os.environ.get("CXX", "c++"), "-std=c++11", "-O1", "-Wall", "-Wextra", "-Werror",
                 "-fsanitize=address,undefined", "-fno-sanitize-recover=all", "-fno-pie", "-no-pie",
                 "-I", str(build), "-I", str(fw), f"-DMOTHERBOARD={board}", f"-DEXPECTED_COLS={columns}",
+                f"-DNUM_EXTRUDER={extruders}", *features,
                 str(build / "test.cpp"), "-o", str(exe)], check=True)
             subprocess.run([str(exe)], check=True, timeout=10, env={**os.environ, "ASAN_OPTIONS": "detect_leaks=0"})
-            print(f"UI workflow replay: model {board}, {columns} columns PASS", flush=True)
+            print(f"UI workflow replay: model {board}, {columns} columns, X44={x44} PASS", flush=True)
 
 
 HARNESS = r'''
@@ -112,6 +132,8 @@ HARNESS = r'''
 #include <cstring>
 #include <string>
 #include <vector>
+#include <set>
+#include <limits>
 #define DEVICE_TYPE_RF1000 1
 #define DEVICE_TYPE_RF2000 2
 #define DEVICE_TYPE_RF2000v2 3
@@ -184,12 +206,13 @@ uint8_t computeChecksum(); void updateChecksum(); void storeManualZOffset();
 }
 std::string status;
 #define UI_STATUS_UPD(x) status=x
-typedef struct { const char* text; uint8_t menuType; unsigned int action;
+typedef struct { const char* text; uint8_t menuType; uintptr_t action;
     uint8_t filter,nofilter; bool showEntry() const; } const UIMenuEntry;
 typedef struct { uint8_t menuType; int id,numEntries; const UIMenuEntry* const* entries; } const UIMenu;
 #include "menus.inc"
-const UIMenu* const ui_pages[] = {nullptr}; // information page rendering not exercised
-constexpr uint8_t panelPageCount=5;
+const UIMenu* const ui_pages[] = UI_PAGES;
+constexpr uint8_t panelPageCount=sizeof(ui_pages)/sizeof(ui_pages[0]);
+bool visibilityRendering=false;
 const uint8_t LCDLineOffsets[] = UI_LINE_OFFSETS;
 struct UIDisplay {
     uint8_t col=0,menuLevel=0,menuPos[6]={},menuTop[6]={};
@@ -218,6 +241,11 @@ struct UIDisplay {
     void addInt(int16_t,uint8_t,char=' ');
     void printRow(uint8_t,char*,char*,uint8_t);
     void adjustMenuPos();
+    int executed=0, finished=0;
+    void executeAction(int action) { executed=action; }
+    void finishAction(int action) { finished=action; }
+    void pushMenu(void*,bool);
+    void menuEsc(); void okAction();
     bool normalCharacters_=true;
     void loadNormalCharacters() { normalCharacters_=true; }
     static constexpr int LCD_CLEAR = 1;
@@ -394,7 +422,111 @@ void navigation() {
     uid.changeSwitchCase(UI_ACTION_EPOSITION,-2); assert(Printer::lastE==-2);
     assert(HAL::writes.empty());
 }
-int main() { preheat(); offset(); navigation(); }
+// Enumerate the structural tree and every combination of the four actual
+// mode bits. An ancestor's current filter is not a lifetime guarantee.
+void auditMenus(UIMenu* menu, std::set<UIMenu*>& seen) {
+    if (!seen.insert(menu).second) return;
+    if (menu->menuType != UI_MENU_TYPE_SUBMENU) return;
+    assert(menu->numEntries>0 && menu->numEntries<=255);
+    bool unconditional=false;
+    for(int i=0;i<menu->numEntries;++i) {
+        auto e=menu->entries[i];
+        unconditional |= !e->filter && !e->nofilter;
+        if(e->menuType==2) {
+            assert(e->action <= uintptr_t(std::numeric_limits<int>::max()));
+            auditMenus(reinterpret_cast<UIMenu*>(e->action),seen);
+        }
+    }
+    const bool filament = menu==&ui_menu_extruder_mount || menu==&ui_menu_extruder_unmount;
+    assert(unconditional != filament);
+    for(unsigned bits=0;bits<16;++bits) {
+        Printer::activeModes=(bits&1?MENU_MODE_PRINTING:0)|(bits&2?MENU_MODE_PAUSED:0)|
+            (bits&4?MENU_MODE_FAN_RUNNING:0)|(bits&8?MENU_MODE_FAN_MODE_PDM:0);
+        unsigned visible=0;
+        for(int i=0;i<menu->numEntries;++i) visible+=menu->entries[i]->showEntry();
+        const bool empty=filament && (bits&3);
+        assert((visible==0)==empty);
+    }
+}
+int indexOf(UIMenu* menu,UIMenuEntry* entry) {
+    for(int i=0;i<menu->numEntries;++i) if(menu->entries[i]==entry) return i;
+    assert(false); return -1;
+}
+void cursorAt(unsigned row) {
+    assert(row<UI_ROWS);
+    for(unsigned i=0;i<UI_ROWS;++i) {
+        assert(uid.lcd[i].size()==UI_COLS);
+        assert((uid.lcd[i][0]==char(CHAR_SELECTOR))==(i==row));
+    }
+}
+void visibility() {
+    std::set<UIMenu*> seen;
+    auditMenus(&ui_menu_main,seen);
+    assert(seen.count(&ui_menu_extruder_mount) && seen.count(&ui_menu_extruder_unmount));
+    visibilityRendering=true;
+    Printer::activeModes=0;
+    uid.executed=uid.finished=0;
+    // Main: Position disappears before OK, which must not enter Quick Settings.
+    show(&ui_menu_main,1);
+    cursorAt(1);
+    Printer::activeModes=MENU_MODE_PRINTING;
+    uid.okAction();
+    assert(uid.menuLevel==1 && uid.menuPos[1]==0 && uid.menuTop[1]==0);
+    assert(!uid.executed && !uid.finished);
+    uid.refreshPage(); cursorAt(0);
+    uid.okAction();
+    assert(uid.menuLevel==2 && uid.menu[2]==&ui_menu_quick);
+    // Main: Pause Position disappears on resume/idle.
+    Printer::activeModes=MENU_MODE_PRINTING|MENU_MODE_PAUSED;
+    show(&ui_menu_main,2); cursorAt(1);
+    Printer::activeModes=0;
+    uid.refreshPage(); assert(uid.menuPos[1]==1 && uid.menuTop[1]==0); cursorAt(1);
+    uid.okAction(); assert(uid.menu[2]==&ui_menu_positions);
+    // Entire real filament submenu disappears. Exercise refresh, OK and both
+    // navigation directions before refresh, for load/unload and each busy bit.
+    for(auto parentEntry : {&ui_submenu_extruder_mount,&ui_submenu_extruder_unmount}) {
+        auto child=reinterpret_cast<UIMenu*>(parentEntry->action);
+        for(uint8_t mode : {MENU_MODE_PRINTING,MENU_MODE_PAUSED,MENU_MODE_PRINTING|MENU_MODE_PAUSED}) {
+            for(int event=0;event<4;++event) {
+                Printer::activeModes=0; uid.executed=uid.finished=0;
+                const int parent=indexOf(&ui_menu_extruder,parentEntry);
+                show(&ui_menu_extruder,parent);
+                assert(uid.menuTop[1]==parent-3); cursorAt(3);
+                uid.okAction();
+                assert(uid.menuLevel==2 && uid.menu[2]==child);
+                uid.nextPreviousAction(1); uid.refreshPage(); cursorAt(1);
+                assert(uid.menuPos[2]==1 && uid.menuTop[2]==0);
+                Printer::activeModes=mode;
+                if(event==0) uid.refreshPage();
+                if(event==1) uid.okAction();
+                if(event==2) uid.nextPreviousAction(1);
+                if(event==3) uid.nextPreviousAction(-1);
+                assert(uid.menuLevel==1 && uid.menu[1]==&ui_menu_extruder);
+                assert(uid.menuPos[1]==indexOf(&ui_menu_extruder,&ui_menu_quick_cooldown));
+                assert(uid.menuTop[1]==parent-3 && uid.menuPos[2]==0 && uid.menuTop[2]==0);
+                assert(!uid.executed && !uid.finished && !uid.activeAction);
+                uid.refreshPage(); cursorAt(uid.menuPos[1]-uid.menuTop[1]);
+                uid.okAction(); assert(uid.executed==UI_ACTION_COOLDOWN);
+            }
+        }
+    }
+    // Filtered edit: PWM frequency is hidden when PDM is selected.
+    for(int event=0;event<3;++event) {
+        Printer::activeModes=0; uid.executed=uid.finished=0;
+        show(&ui_menu_settings_fan,1);
+        uid.okAction(); assert(uid.activeAction==UI_ACTION_FAN_HZ);
+        Printer::activeModes=MENU_MODE_FAN_MODE_PDM;
+        if(event==0) uid.refreshPage();
+        if(event==1) uid.okAction();
+        if(event==2) uid.nextPreviousAction(1);
+        assert(!uid.activeAction && !uid.executed && !uid.finished);
+        assert(uid.menuPos[1]==0 && uid.menuTop[1]==0);
+        uid.refreshPage(); cursorAt(0);
+        uid.okAction(); assert(uid.executed==UI_ACTION_FAN_MODE);
+    }
+    Printer::activeModes=0; visibilityRendering=false;
+}
+int main() { preheat(); offset(); navigation(); visibility(); }
 '''
 
 
