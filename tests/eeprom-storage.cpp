@@ -31,6 +31,7 @@
 using millis_t = uint32_t;
 using PGM_P = const char*;
 #define PROGMEM
+static uint16_t pgm_read_word(const uint16_t* p) { return *p; }
 #define PSTR(s) s
 #define EEPROM_OFFSET 0
 #define DRV8711_NUM_CHANNELS 5
