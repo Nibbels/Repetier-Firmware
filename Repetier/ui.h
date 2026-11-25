@@ -21,6 +21,7 @@
 #define UI_H
 
 #include "HAL.h"
+#include "DisplayModes.h"
 
 #include "gcode.h"
 

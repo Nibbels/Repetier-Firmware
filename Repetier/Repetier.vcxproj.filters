@@ -32,6 +32,9 @@
     <ClInclude Include="Constants.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="DisplayModes.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="Eeprom.h">
       <Filter>Header Files</Filter>
     </ClInclude>

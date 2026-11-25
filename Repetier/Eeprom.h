@@ -186,19 +186,19 @@ have problems with other modules using the eeprom */
 #define EPR_EXTRUDER_ADVANCE_L 46
 // Offsets 50–53 are reserved for the former M109 heat-up retract settings.
 #define EPR_EXTRUDER_COOLER_SPEED 54 //byte
-#define EPR_EXTRUDER_SENSOR_TYPE 94  //uint8
+#define EPR_EXTRUDER_SENSOR_TYPE 94  //uint8_t
 // Offsets 95–98 in each extruder block are reserved for the former TipDown setting.
 
 class EEPROM {
     static long configuredBaudrate_;
     static uint8_t computeChecksum();
-    static void writeExtruderPrefix(uint pos);
-    static void beginReport(uint pos, PGM_P type);
-    static void finishReport(uint pos, PGM_P text);
-    static void writeFloat(uint pos, PGM_P text, uint8_t digits = 3);
-    static void writeLong(uint pos, PGM_P text);
-    static void writeInt(uint pos, PGM_P text);
-    static void writeByte(uint pos, PGM_P text);
+    static void writeExtruderPrefix(uint16_t pos);
+    static void beginReport(uint16_t pos, PGM_P type);
+    static void finishReport(uint16_t pos, PGM_P text);
+    static void writeFloat(uint16_t pos, PGM_P text, uint8_t digits = 3);
+    static void writeLong(uint16_t pos, PGM_P text);
+    static void writeInt(uint16_t pos, PGM_P text);
+    static void writeByte(uint16_t pos, PGM_P text);
 
 public:
     static void init();

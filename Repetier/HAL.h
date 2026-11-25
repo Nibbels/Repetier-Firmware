@@ -34,6 +34,9 @@
 
 #define PACK
 
+// Give an enabled stepper driver time to settle before the first step.
+constexpr unsigned int stepperEnableDelayMs = 25;
+
 #define FSTRINGVALUE(var, value) const char var[] PROGMEM = value;
 #define FSTRINGVAR(var) static const char var[] PROGMEM;
 #define FSTRINGPARAM(var) PGM_P var
