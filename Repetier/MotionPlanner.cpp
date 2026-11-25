@@ -129,7 +129,7 @@ void MotionPlanner::prepareMove(PrintLine& move, const float axisDistanceMM[4], 
         }
     }
 
-    // Initialize every segment, including when reusing a slot from an aborted move.
+    // Bresenham phase is now initialized by the executor when the move starts.
 
     lookahead.invFullSpeed = 1.0 / move.fullSpeed;
     lookahead.accelerationPrim = primaryAcceleration;

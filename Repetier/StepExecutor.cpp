@@ -254,7 +254,7 @@ long StepExecutor::performQueueMove() {
         updateAdvanceSteps(*move, stepClocks[FOR_QUEUE].peak);
     }
 
-    return performMove(move, FOR_QUEUE);
+    return performMove<FOR_QUEUE>(move);
 } // performQueueMove
 
 template <int8_t limitDirection>
@@ -325,7 +325,7 @@ long StepExecutor::performDirectMove() {
         updateAdvanceSteps(direct, stepClocks[FOR_DIRECT].peak);
     }
 
-    return performMove(&direct, FOR_DIRECT);
+    return performMove<FOR_DIRECT>(&direct);
 } // performDirectMove
 
 speed_t StepExecutor::nextStepSpeed(PrintLine& move, StepClock& clock, uint8_t pulses, uint32_t interval) {
@@ -377,7 +377,9 @@ inline void StepExecutor::finishMove(PrintLine& move, bool queued) {
     }
 }
 
-long StepExecutor::performMove(PrintLine* move, uint8_t forQueue) {
+template<uint8_t forQueue>
+long StepExecutor::performMove(PrintLine* move) {
+    static_assert(forQueue == FOR_QUEUE || forQueue == FOR_DIRECT, "Invalid execution owner");
     auto& errors = stepErrors[forQueue];
     HAL::allowInterrupts();
     fast8_t max_loops = stepsPerTimerCall;

@@ -82,7 +82,10 @@ private:
     static void updateAdvanceSteps(const PrintLine& move, uint16_t speed);
 
     static uint16_t nextStepSpeed(PrintLine& move, StepClock& clock, uint8_t pulses, uint32_t interval);
-    static long performMove(PrintLine* move, uint8_t forQueue);
+    // Compile the two execution paths separately; avoid runtime indexing and
+    // branching on the fixed motion owner in the pulse loop.
+    template<uint8_t forQueue>
+    static long __attribute__((noinline)) performMove(PrintLine* move);
     static void finishMove(PrintLine& move, bool queued);
 };
 

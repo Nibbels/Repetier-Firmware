@@ -18,6 +18,9 @@ assert "move.error[" not in planner
 assert executor.count("stepErrors[FOR_QUEUE].start(queuedPrimarySteps);") == 1
 assert executor.count("stepErrors[FOR_DIRECT].start(directPrimarySteps);") == 1
 assert executor.count("auto& errors = stepErrors[forQueue];") == 1
+assert "template<uint8_t forQueue>\nlong StepExecutor::performMove(PrintLine* move)" in executor
+assert executor.count("performMove<FOR_QUEUE>(move)") == 1
+assert executor.count("performMove<FOR_DIRECT>(&direct)") == 1
 assert executor.count("errors.advance(") == 4
 assert executor.count("errors.account(") == 8
 # The actual activation sites must occur before the first-step half interval,
