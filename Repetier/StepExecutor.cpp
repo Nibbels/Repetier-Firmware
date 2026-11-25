@@ -522,16 +522,24 @@ long StepExecutor::performMove(PrintLine* move) {
         interval >>= 10;
     }
 
-    // Now manipulate step-width=interval according to single-, double-, tripple-, ... steppings needs:
-    // We know that next time will be a (as example) double or quad step so we let pass twice the time and set the stepsPerTimerCall accordingly.
+    // Packing keeps the legacy threshold and pulse count. The configured
+    // threshold is at most 5000 ticks; when the loop is entered, its last
+    // addition cannot reach twice that threshold. Use 16-bit arithmetic
+    // within the loop, while preserving the full-width slow-move interval.
+    static_assert(MAX_STEP_PACKING_MIN_INTERVAL <= UINT16_MAX / 2,
+                  "Packed interval must fit in uint16_t");
     stepsPerTimerCall = 1;
-    unsigned long one_interval = interval;
-    // Keep the existing threshold. The previous unused +64 advance local
-    // did not affect this loop; changing that policy is not an ownership refactor.
     const uint16_t packingInterval = packingInterval_;
-    while (interval < packingInterval) {
-        interval += one_interval;
-        stepsPerTimerCall += 1;
+    if (interval < packingInterval) {
+        const uint16_t oneInterval = static_cast<uint16_t>(interval);
+        uint16_t packedInterval = oneInterval;
+        uint8_t pulses = 1;
+        do {
+            packedInterval += oneInterval;
+            ++pulses;
+        } while (packedInterval < packingInterval);
+        interval = packedInterval;
+        stepsPerTimerCall = pulses;
     }
 
     if (move->stepsRemaining <= 0 || move->isNoMove()) {
