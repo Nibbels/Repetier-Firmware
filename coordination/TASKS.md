@@ -24,6 +24,21 @@ For each task, identify the concrete benefit and the smallest change that delive
 | 8 | 0019 | Exclusive constants cleanup |
 | 9 | 0020 | Comment cleanup prepared separately; integrate after 0019 and refresh final candidate |
 
+| 10 | 0021 | Existing PID/autotune worker PR #90; finish and verify first |
+| 11 | 0022 | Exclusive ATmega2560: CPU, SRAM, Stack und Timing-Baseline |
+| 12 | 0023 | Exclusive ATmega2560: Compiler- und Linker-Optimierung |
+| 13 | 0024 | Exclusive ATmega2560: SRAM und Motion-Queue-Komprimierung |
+| 14 | 0025 | Exclusive ATmega2560: AVR-Arithmetik und Festkomma |
+| 15 | 0026 | Exclusive ATmega2560: ISR- und GPIO-Optimierung |
+| 16 | 0027 | Exclusive ATmega2560: Hardwaretimer und Step Packing |
+| 17 | 0028 | Exclusive ATmega2560: Foreground-Scheduler und G-Code-Durchsatz |
+| 18 | 0029 | Exclusive ATmega2560: Verbleibende Arduino-Abhängigkeiten |
+| 19 | 0030 | Exclusive ATmega2560: Gesamtbenchmark und Regression |
+
+## ATmega2560 native optimization
+
+Owner authorized sequential autonomous implementation on 2026-11-25. Task0021 is already reserved for PID/autotune (#90); native tasks are 0022–0030. Preserve the final-cleanup checkpoint and allow Task0021 and any already claimed production work to finish before the first production optimization. Read-only baseline preparation may start now. Exactly one native task active at a time; use separate task branches/PRs, self-merge only after latest-target gates, then update own task record and start the next. No forced performance change: measured no-change is a valid result. Preserve all board variants, X44, EEPROM/protocol, watchdog/thermal protection, Z/DMS/ECMP/Advance and operator workflow; maintain Arduino sketch entry. Physical checks deferred to consolidated owner-approved device session. Report actual measured wins and rejected experiments, not target percentages.
+
 ## Firmware PR checks
 
 Open or update your PR against `ai-firmware-review`. GitHub Actions runs **RFx000 firmware / Host replays and four AVR builds** for changes outside documentation and coordination. Each PR has an independent job. Use the check on your latest PR revision for the standard host suite and AVR evidence. The checkout is GitHub's test merge commit; record the PR head, tested SHA from summary.json and run link in the task record. Download the firmware-evidence artifact for the four ELF/HEX files, maps, resource totals and logs (available for seven days). Keep important deltas in the task record. Compare against the appropriate target baseline and run any task-specific tests or timing checks. If the target advances, follow the synchronization rule below; a documentation-only update may reuse evidence for identical build and test inputs.
@@ -70,6 +85,17 @@ Production edits still start in their assigned wave. A worker can implement and 
 | [Task0016](tasks/Task0016.md) | 7 | Abschlussaudit und Integration | WAITING |
 | [Task0019](tasks/Task0019.md) | 8 | Constants.h: ownership, typed interfaces and final evidence | WAITING |
 | [Task0020](tasks/Task0020.md) | 9 | Kommentarstil und leere Trennlinien | READY for preparation |
+
+| [Task0021 (PR #90)](https://github.com/Nibbels/Repetier-Firmware/pull/90) | 10 | PID und Autotune (existing PR #90) | IN_PROGRESS on worker branch |
+| [Task0022](tasks/Task0022.md) | 11 | CPU, SRAM, Stack und Timing-Baseline | WAITING |
+| [Task0023](tasks/Task0023.md) | 12 | Compiler- und Linker-Optimierung | WAITING |
+| [Task0024](tasks/Task0024.md) | 13 | SRAM und Motion-Queue-Komprimierung | WAITING |
+| [Task0025](tasks/Task0025.md) | 14 | AVR-Arithmetik und Festkomma | WAITING |
+| [Task0026](tasks/Task0026.md) | 15 | ISR- und GPIO-Optimierung | WAITING |
+| [Task0027](tasks/Task0027.md) | 16 | Hardwaretimer und Step Packing | WAITING |
+| [Task0028](tasks/Task0028.md) | 17 | Foreground-Scheduler und G-Code-Durchsatz | WAITING |
+| [Task0029](tasks/Task0029.md) | 18 | Verbleibende Arduino-Abhängigkeiten | WAITING |
+| [Task0030](tasks/Task0030.md) | 19 | Gesamtbenchmark und Regression | WAITING |
 
 ## Audit coverage
 
