@@ -1,5 +1,21 @@
 # Task0016 — final integrated audit through Task0018
 
+## Current candidate — final bootlogo correction c484e193
+
+**Supersedes every earlier candidate and image hash below.** Target `c484e193c1a6bf4da3477704ba9315f134a3775e`, includes Task0018 #85 and the final two-row CGRAM correction. Synchronized PR #86 at `fc81e4e9efe56202d5f9bd6eabbd6ede7cb8a75f`, verified synthetic checkout `c03c820063aa475c2747b493105ba2c0a481e0e8`. [Full audit CI 45516842966](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45516842966) succeeded; [firmware-evidence artifact 14978117811](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45516842966/artifacts/14978117811) downloaded, summary SHA matches and failures=[]; complete 28 host replay entry points (26 Python, two standalone), all four builds, original pre-wave baseline rebuilt, full Task0004 lexical and 192-unit compiler audit. The boot-eye replay independently asserts actual lower-left and lower-right CGRAM bytes and their DDRAM positions, not just equality to the source table; both 16- and 20-column logs PASS. Local targeted negative/positive replay of the previous artifact's real glyph renderer with just c484e193 applied rejects the old pattern and accepts the correction for both widths. No added firmware behavior in #86 relative to current target.
+
+| Variant | Flash B | Pre-wave delta B | Global SRAM B | Pre-wave delta B | Remaining B | SHA-256 application HEX |
+|---|---:|---:|---:|---:|---:|---|
+| RF1000 | 181372 | +2266 | 6495 | +11 | 1697 | `94b56a665798b7fc3bbc5c6082533918a85a85e55c9fbc8310dfefbb5ab02931` |
+| RF2000 | 186570 | +2230 | 6653 | +15 | 1539 | `d2faca3a9b2320fb4aa89395498155092e313ee62f223d953b0f41c2489cb23b` |
+| RF2000v2 | 186574 | +2232 | 6773 | +15 | 1419 | `552edc2cddec77d8dec7d67d8384d8f94587fefe528cd2f38adfc2da765d047f` |
+| RF2000-X44 | 181542 | +2310 | 6633 | +13 | 1559 | `650d75ad368903765beb11c0be4c2ba7b96416529c943abab03a7898b4e45616` |
+
+Compared to previous combined audit artifact 14976774249, **exactly four changed loaded bytes in each of the eight application and bootloader-inclusive images** (Intel HEX checksums validated and addresses decoded). All changes lie in the symbol `bootEyeGlyphs`, offsets 19/20/27/28 (4→7, 7→0, 4→28, 28→0). Addresses: RF1000 0x505a/0x505b/0x5062/0x5063; RF2000 0x5388/0x5389/0x5390/0x5391; v2 0x538a/0x538b/0x5392/0x5393; X44 0x52dc/0x52dd/0x52e4/0x52e5. Every other loaded byte, all four EEP files, .text/.data/.bss sizes and ISR symbol addresses/sizes unchanged. Thus this patch does not change executable AVR timing or EEPROM ABI. Full source inventory unchanged (116 source files, 1,124,676 B; lexical counts and all per-file metrics identical to prior combined audit; all four AVR target inventories and guard maps exactly equal). The physical appearance, LCD ROM, boot duration, stack and watchdog behavior remain unmeasured.
+
+Temporary full-audit workflow restored byte-for-byte to current target after verification. Final standard CI and integration evidence recorded below/in Task0016. No flash or physical operation authorized; separate Astra-Max review and owner acceptance required.
+
+
 ## Exact verification
 
 Starting integration target `a15dbbdfa9212802bab5c5253e520b2e2d37f81a` (Task0001–0015 and 0017 integrated; checked merged PRs #65–68, #70–84, #69 closed unmerged infrastructure experiment). [PR #86](https://github.com/Nibbels/Repetier-Firmware/pull/86). Before header edits: branch 0601935c06e053501767117241763cfdbea3bf26, tested merge 3624703f3218be8a01d8f8383efc6c9fda64a9a1, [green run 45512426057](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45512426057), artifact 14976851011. After header edits: branch `4a80df0b52a5bb3a268067764661a85494e6fbb0`, exact tested merge `e82ca9059c379000381a78e4a5bdd21fa434fa8f`, [green run 45513102069](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45513102069), [artifact 14977071921](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45513102069/artifacts/14977071921). All 27 host replay entry points (25 Python and two standalone), four AVR builds, full lexical and compiler audit and rebuilt original wave baseline passed. The artifact contains both original and current build evidence, source/AVR inventory JSONs, ELF/map/disassembly and images. All 12 application/bootloader HEX and EEP images before/after header edits byte-identical; source comparison across all 116 RF1000 sketch source/header files after removing comments and generated line directives and normalizing whitespace gave zero non-comment differences. 28 modified files. Preserved licenses and attribution. No executable firmware changes by this worker. The temporary audit CI steps were restored to target workflow after capturing evidence.
@@ -38,7 +54,7 @@ Original is pre-wave audit, not the already-reduced Task0003 final synchronized 
 
 Verified isolated Timer0 COMPA STEP pulse from linked disassembly for all six enabled E outputs on both baseline and pre-header candidate; instruction sequence from rising edge to falling edge: two 2-cycle stores, LDI 1, 8 DEC 8 cycles, 7 taken and 1 untaken BRNE 15 cycles, two NOP 2 cycles, CBI 2 cycles = 32 cycles (2 µs at 16 MHz), unchanged. Byte-identical header images carry this result forward. Timer0 COMPB changed for ADC freshness (Task0013); smaller size does not establish worst-case cycles. Task0013 compared corresponding isolated hot paths and documented ADC service budget; Task0014 documented 6-cycle atomic threshold write; Task0017 compared 32 control-flow/opcode structures (not all operands). No claim of whole-firmware cycle equivalence or concurrent interrupt/physical timing. See predecessor task records and device plan.
 
-### Application image SHA-256 (exact checked candidate)
+### Historical application image SHA-256 (superseded checkpoint)
 
 | Variant | Repetier.ino.hex SHA-256 |
 |---|---|
@@ -67,7 +83,7 @@ Linked core maps retain WMath.cpp.o, hooks.c.o, main.cpp.o, new.cpp.o, wiring.c.
 
 Owner requires PR #85 in the final candidate. Its standalone green [CI 45512454790](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45512454790) at test merge `fe236e9144349bd0be945af52825de3adc91882d` has artifact [14975592524](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45512454790/artifacts/14975592524), downloaded and checked summary failures=[]; boot-eye replay present. Relative to the Task0017 checkpoint: Flash +1176/+1176/+1178/+1176 B, global SRAM unchanged (RF1000/RF2000/RF2000v2/X44). See inventory for the six existing production paths and boot callback design, and stage 1a of the device plan for both LCD widths, error handling and boot latency. These are standalone PR results; no final combined audit or image claim until #85 merges and #86 is synchronized and tested.
 
-## Final combined audit — exact evidence
+## Historical combined audit before c484e193 (superseded image set)
 
 Task0018 #85 merged as `9abbdd9444a63cbfaaa0b6edaa0988e9651f58f7`; current target before #86 `1ffaeb49fb7968df7b69ee8087be858b17af1cbd`. Only #86 remains. Both parents merged on worker branch, preserving the three overlapping header comments in RF.cpp/ui.cpp/ui.h without changing Task0018 code. [Run 45515228916](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45515228916) **success**, tested head `00285d07db5f76ddc950161cc8cb146cc12f54af`, exact tested checkout `f23628147be0ef34b2e99250d22b027b4b957eb4`. [Artifact 14976774249](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45515228916/artifacts/14976774249) downloaded and verified, summary failures=[], baseline rebuild and both source comparisons and full compiler audit green. 28 host entry points (26 Python, two standalone), including boot-eye 16/20 columns PASS, four AVR builds. Original toolchain and baseline unchanged. Temporary workflow restored for normal PR check. No live test.
 
