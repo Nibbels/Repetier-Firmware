@@ -1,5 +1,9 @@
 # RFx000 Manager 01 → Manager 02 handover
 
+## Current owner decision on review timing (2026-11-25)
+
+The owner wants to discuss individual modules and direct engineering questions across the firmware first. Earlier references to an Astra Max review describe a possible later step. Completing the chip or LCD tasks does not trigger planning or starting that review. Wait for the owner to reopen the topic explicitly. Continue current worker assignments on their own terms.
+
 ## ATmega2560 native optimization dispatch (2026-11-25)
 
 Owner requests the next optimization block and sequential direct manager/worker execution with task records kept current. Task0021 is already owned by the PID/autotune worker ([PR #90](https://github.com/Nibbels/Repetier-Firmware/pull/90)); do not duplicate or interfere. New native tasks are [0022–0030](TASKS.md#atmega2560-native-optimization). Begin Task0022 read-only baseline preparation immediately; freeze exact integrated baseline after #90 and any other existing production worker merges. Only one native task at a time. Self-merge each tested PR before starting its successor. The previous cleanup baseline is [96f2c8b](https://github.com/Nibbels/Repetier-Firmware/commit/96f2c8b95f021ec3291c15207fbf61063e2f986e) with [CI evidence](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45522064800/artifacts/14981100689). Preserve it as a comparison checkpoint. No physical flash or test authorization. Reject changes without measurable benefit or with safety/behavior regressions.
