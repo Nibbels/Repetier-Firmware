@@ -1,6 +1,10 @@
 # RFx000 Manager 01 → Manager 02 handover
 
-## Current priority — Task0032 quality-first print core (2026-11-25)
+## P0 current priority — Task0034 heater fail-off (2026-11-25)
+
+Owner explicitly prioritizes preventing persistent heating on crash over all throughput work, based on repeated historical experience. [Task0034](tasks/Task0034.md) owns expiring thermal authorization, bounded heater pulses including 100% duty, immediate revoke, actual thermal-progress watchdog and event-driven heater scheduling research. Independent hardware compare-clear where routed; PE2 bed requires separate fail-off path. No stale rearm, no fault energy catch-up. Hold Task0032/#101 and Task0033 production, resume against updated baseline; #91 remains held. No printer flash or physical qualification. Manager/worker starts Task0034 now.
+
+## Previous priority — Task0032 quality-first print core (2026-11-25)
 
 Owner explicitly reopens print-core optimization with [Task0032](tasks/Task0032.md): preserve configured microsteps, minimize pulse bunching/packing subject to sufficient CPU capacity and hard service/safety deadlines. Measure full Timer1 cost by motion class and actual foreground demand, including planner/lookahead, UART, temperature/ADC, DMS/Z/ECMP, Advance and watchdog. Compare justified fixed/internal thresholds versus workload-class selection and bounded adaptation. No premature packing, no automatic microstep reduction, no removal of the 512-tick base floor or guard without evidence. Owner reports historical stuck heater PWM during crashes; verify no same-ISR reentry, bounded nested service, actual thermal completion and independent fail-off. Eliminate DblFq adjustment only after justified policy, preserve legacy EEPROM/protocol compatibility. Phase A ready; no new production code or thresholds selected. Claim exclusive Task0032 branch; coordinate #91 UI scope. Task0030 baseline retained; no hardware flash or Astra Max review, manual triggers only.
 
