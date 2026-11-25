@@ -20,6 +20,7 @@
 #include "Repetier.h"
 #include "GCodeInput.h"
 #include "GCodeCommands.h"
+#include "UsbSerial.h"
 
 namespace {
 class CommandQueue {
@@ -396,8 +397,14 @@ void GCodeInput::readFromSerial() {
         }
     }
 
-    while (HAL::serialByteAvailable() && frame.length < maxCommandSize) {
-        serialReceive.timeOfLastDataPacket = now;
+    // Consume at most one RX ring's usable capacity per foreground visit.
+    // Comments, blank lines and binary resynchronization can otherwise keep
+    // frame.length small indefinitely while the UART continues receiving.
+    if (frame.length >= maxCommandSize || !HAL::serialByteAvailable())
+        return;
+    serialReceive.timeOfLastDataPacket = now;
+    uint8_t budget = UsbSerial::receiveCapacity;
+    do {
         frame.bytes[frame.length++] = HAL::serialReadByte();
         if (frame.length == 1 && !frame.comment) {
             if (serialReceive.waitingForResend >= 0 && serialReceive.lastCommandWasBinary) {
@@ -415,13 +422,13 @@ void GCodeInput::readFromSerial() {
             frame.binary = (frame.bytes[0] & 128) != 0;
         }
 
-        GCode& command = commandQueue.writeSlot();
         if (frame.binary) {
             if (frame.length < 2)
                 continue;
             if (frame.length == 4 || frame.length == 5)
                 frame.expectedLength = computeBinarySize((char*)frame.bytes);
             if (frame.length == frame.expectedLength) {
+                GCode& command = commandQueue.writeSlot();
                 if (parseBinary(command, frame.bytes, frame.expectedLength))
                     checkAndPushCommand(command);
                 else
@@ -438,6 +445,7 @@ void GCodeInput::readFromSerial() {
                     frame.length = 0;
                     continue;
                 }
+                GCode& command = commandQueue.writeSlot();
                 if (parseAscii(command, (char*)frame.bytes, true))
                     checkAndPushCommand(command);
                 else
@@ -453,7 +461,7 @@ void GCodeInput::readFromSerial() {
 
         if (frame.length == maxCommandSize)
             requestResend();
-    }
+    } while (--budget && frame.length < maxCommandSize && HAL::serialByteAvailable());
 } // readFromSerial
 
 /** \brief Converts a binary uint8_tfield containing one GCode line into a GCode structure.
