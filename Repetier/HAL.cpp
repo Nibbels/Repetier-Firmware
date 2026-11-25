@@ -171,126 +171,118 @@ uint16_t HAL::integerSqrt(int32_t a) {
     return b;
 } // integerSqrt
 
-const uint16_t fast_div_lut[17] PROGMEM = { 0, F_CPU / 4096, F_CPU / 8192, F_CPU / 12288, F_CPU / 16384, F_CPU / 20480, F_CPU / 24576, F_CPU / 28672, F_CPU / 32768, F_CPU / 36864, F_CPU / 40960, F_CPU / 45056, F_CPU / 49152, F_CPU / 53248, F_CPU / 57344, F_CPU / 61440, F_CPU / 65536 };
+// Task0025 period tables: preserve the legacy interpolation exactly.
+namespace {
+static_assert(F_CPU == 16000000UL, "Period table encoding requires the RFx000 16 MHz clock");
 
-const uint16_t slow_div_lut[257] PROGMEM = { 0, 0, 0, 0, 0, 0, 0, 0, F_CPU / 256, F_CPU / 288, F_CPU / 320, F_CPU / 352, F_CPU / 384, F_CPU / 416, F_CPU / 448, F_CPU / 480, F_CPU / 512, F_CPU / 544, F_CPU / 576, F_CPU / 608, F_CPU / 640, F_CPU / 672, F_CPU / 704, F_CPU / 736, F_CPU / 768, F_CPU / 800, F_CPU / 832, F_CPU / 864, F_CPU / 896, F_CPU / 928, F_CPU / 960, F_CPU / 992, F_CPU / 1024, F_CPU / 1056, F_CPU / 1088, F_CPU / 1120, F_CPU / 1152, F_CPU / 1184, F_CPU / 1216, F_CPU / 1248, F_CPU / 1280, F_CPU / 1312, F_CPU / 1344, F_CPU / 1376, F_CPU / 1408, F_CPU / 1440, F_CPU / 1472, F_CPU / 1504, F_CPU / 1536, F_CPU / 1568, F_CPU / 1600, F_CPU / 1632, F_CPU / 1664, F_CPU / 1696, F_CPU / 1728, F_CPU / 1760, F_CPU / 1792, F_CPU / 1824, F_CPU / 1856, F_CPU / 1888, F_CPU / 1920, F_CPU / 1952, F_CPU / 1984, F_CPU / 2016, F_CPU / 2048, F_CPU / 2080, F_CPU / 2112, F_CPU / 2144, F_CPU / 2176, F_CPU / 2208, F_CPU / 2240, F_CPU / 2272, F_CPU / 2304, F_CPU / 2336, F_CPU / 2368, F_CPU / 2400, F_CPU / 2432, F_CPU / 2464, F_CPU / 2496, F_CPU / 2528, F_CPU / 2560, F_CPU / 2592, F_CPU / 2624, F_CPU / 2656, F_CPU / 2688, F_CPU / 2720, F_CPU / 2752, F_CPU / 2784, F_CPU / 2816, F_CPU / 2848, F_CPU / 2880, F_CPU / 2912, F_CPU / 2944, F_CPU / 2976, F_CPU / 3008, F_CPU / 3040, F_CPU / 3072, F_CPU / 3104, F_CPU / 3136, F_CPU / 3168, F_CPU / 3200, F_CPU / 3232, F_CPU / 3264, F_CPU / 3296, F_CPU / 3328, F_CPU / 3360, F_CPU / 3392, F_CPU / 3424, F_CPU / 3456, F_CPU / 3488, F_CPU / 3520, F_CPU / 3552, F_CPU / 3584, F_CPU / 3616, F_CPU / 3648, F_CPU / 3680, F_CPU / 3712, F_CPU / 3744, F_CPU / 3776, F_CPU / 3808, F_CPU / 3840, F_CPU / 3872, F_CPU / 3904, F_CPU / 3936, F_CPU / 3968, F_CPU / 4000, F_CPU / 4032, F_CPU / 4064, F_CPU / 4096, F_CPU / 4128, F_CPU / 4160, F_CPU / 4192, F_CPU / 4224, F_CPU / 4256, F_CPU / 4288, F_CPU / 4320, F_CPU / 4352, F_CPU / 4384, F_CPU / 4416, F_CPU / 4448, F_CPU / 4480, F_CPU / 4512, F_CPU / 4544, F_CPU / 4576, F_CPU / 4608, F_CPU / 4640, F_CPU / 4672, F_CPU / 4704, F_CPU / 4736, F_CPU / 4768, F_CPU / 4800, F_CPU / 4832, F_CPU / 4864, F_CPU / 4896, F_CPU / 4928, F_CPU / 4960, F_CPU / 4992, F_CPU / 5024, F_CPU / 5056, F_CPU / 5088, F_CPU / 5120, F_CPU / 5152, F_CPU / 5184, F_CPU / 5216, F_CPU / 5248, F_CPU / 5280, F_CPU / 5312, F_CPU / 5344, F_CPU / 5376, F_CPU / 5408, F_CPU / 5440, F_CPU / 5472, F_CPU / 5504, F_CPU / 5536, F_CPU / 5568, F_CPU / 5600, F_CPU / 5632, F_CPU / 5664, F_CPU / 5696, F_CPU / 5728, F_CPU / 5760, F_CPU / 5792, F_CPU / 5824, F_CPU / 5856, F_CPU / 5888, F_CPU / 5920, F_CPU / 5952, F_CPU / 5984, F_CPU / 6016, F_CPU / 6048, F_CPU / 6080, F_CPU / 6112, F_CPU / 6144, F_CPU / 6176, F_CPU / 6208, F_CPU / 6240, F_CPU / 6272, F_CPU / 6304, F_CPU / 6336, F_CPU / 6368, F_CPU / 6400, F_CPU / 6432, F_CPU / 6464, F_CPU / 6496, F_CPU / 6528, F_CPU / 6560, F_CPU / 6592, F_CPU / 6624, F_CPU / 6656, F_CPU / 6688, F_CPU / 6720, F_CPU / 6752, F_CPU / 6784, F_CPU / 6816, F_CPU / 6848, F_CPU / 6880, F_CPU / 6912, F_CPU / 6944, F_CPU / 6976, F_CPU / 7008, F_CPU / 7040, F_CPU / 7072, F_CPU / 7104, F_CPU / 7136, F_CPU / 7168, F_CPU / 7200, F_CPU / 7232, F_CPU / 7264, F_CPU / 7296, F_CPU / 7328, F_CPU / 7360, F_CPU / 7392, F_CPU / 7424, F_CPU / 7456, F_CPU / 7488, F_CPU / 7520, F_CPU / 7552, F_CPU / 7584, F_CPU / 7616, F_CPU / 7648, F_CPU / 7680, F_CPU / 7712, F_CPU / 7744, F_CPU / 7776, F_CPU / 7808, F_CPU / 7840, F_CPU / 7872, F_CPU / 7904, F_CPU / 7936, F_CPU / 7968, F_CPU / 8000, F_CPU / 8032, F_CPU / 8064, F_CPU / 8096, F_CPU / 8128, F_CPU / 8160, F_CPU / 8192 };
+// The legacy interval used an exact division below 512 and linear interpolation
+// between integer quotients above it. All calculations here are compile-time.
+constexpr uint32_t interpolatedPeriod(uint32_t d, uint32_t width) {
+    return F_CPU / (d / width * width) -
+           ((F_CPU / (d / width * width) - F_CPU / (d / width * width + width))
+            * (d % width)) / width;
+}
+constexpr uint32_t legacyPeriod(uint32_t d) {
+    return d < 512 ? F_CPU / (d < 10 ? 10 : d) :
+           interpolatedPeriod(d, d < 8192 ? 32 : 4096);
+}
 
-/** \brief approximates division of F_CPU/divisor
-In the stepper interrupt a division is needed, which is a slow operation.
-The result is used for timer calculation where small errors are ok. This
-function uses lookup tables to find a fast approximation of the result.
-*/
+// On the three upper ranges the period decreases by at most one tick over
+// a block of 4, 8 or 16 divisors respectively. Pack the final (lower) period
+// in 12 bits and the number of leading entries one tick higher in 4 bits.
+// These are compile-time calculations, not an ISR search or interpolation.
+constexpr uint16_t leadingHigher(uint32_t start, uint32_t last) {
+    return legacyPeriod(start) == last ? 0 : 1 + leadingHigher(start + 1, last);
+}
+constexpr uint16_t packedPeriod(uint32_t start, uint32_t width) {
+    return static_cast<uint16_t>(legacyPeriod(start + width - 1) |
+           (leadingHigher(start, legacyPeriod(start + width - 1)) << 12));
+}
+constexpr uint32_t lowPeriod(uint32_t d) { return legacyPeriod(d); }
+constexpr uint16_t midPeriod(uint32_t d) { return static_cast<uint16_t>(legacyPeriod(d)); }
+constexpr uint16_t high4Period(uint32_t d) { return packedPeriod(d, 4); }
+constexpr uint16_t high8Period(uint32_t d) { return packedPeriod(d, 8); }
+constexpr uint16_t high16Period(uint32_t d) { return packedPeriod(d, 16); }
+
+// Expand regular compile-time table entries without a generated source dump.
+#define RF_PERIOD_1(F, B, S) F(B)
+#define RF_PERIOD_2(F, B, S) RF_PERIOD_1(F, B, S), RF_PERIOD_1(F, (B) + 1UL * (S), S)
+#define RF_PERIOD_4(F, B, S) RF_PERIOD_2(F, B, S), RF_PERIOD_2(F, (B) + 2UL * (S), S)
+#define RF_PERIOD_8(F, B, S) RF_PERIOD_4(F, B, S), RF_PERIOD_4(F, (B) + 4UL * (S), S)
+#define RF_PERIOD_16(F, B, S) RF_PERIOD_8(F, B, S), RF_PERIOD_8(F, (B) + 8UL * (S), S)
+#define RF_PERIOD_32(F, B, S) RF_PERIOD_16(F, B, S), RF_PERIOD_16(F, (B) + 16UL * (S), S)
+#define RF_PERIOD_64(F, B, S) RF_PERIOD_32(F, B, S), RF_PERIOD_32(F, (B) + 32UL * (S), S)
+#define RF_PERIOD_128(F, B, S) RF_PERIOD_64(F, B, S), RF_PERIOD_64(F, (B) + 64UL * (S), S)
+#define RF_PERIOD_256(F, B, S) RF_PERIOD_128(F, B, S), RF_PERIOD_128(F, (B) + 128UL * (S), S)
+#define RF_PERIOD_512(F, B, S) RF_PERIOD_256(F, B, S), RF_PERIOD_256(F, (B) + 256UL * (S), S)
+static const uint32_t lowPeriods[512] PROGMEM = {
+    RF_PERIOD_512(lowPeriod, 0UL, 1UL),
+};
+
+static const uint16_t midPeriods[7680] PROGMEM = {
+    RF_PERIOD_512(midPeriod, 512UL, 1UL),
+    RF_PERIOD_512(midPeriod, 1024UL, 1UL),
+    RF_PERIOD_512(midPeriod, 1536UL, 1UL),
+    RF_PERIOD_512(midPeriod, 2048UL, 1UL),
+    RF_PERIOD_512(midPeriod, 2560UL, 1UL),
+    RF_PERIOD_512(midPeriod, 3072UL, 1UL),
+    RF_PERIOD_512(midPeriod, 3584UL, 1UL),
+    RF_PERIOD_512(midPeriod, 4096UL, 1UL),
+    RF_PERIOD_512(midPeriod, 4608UL, 1UL),
+    RF_PERIOD_512(midPeriod, 5120UL, 1UL),
+    RF_PERIOD_512(midPeriod, 5632UL, 1UL),
+    RF_PERIOD_512(midPeriod, 6144UL, 1UL),
+    RF_PERIOD_512(midPeriod, 6656UL, 1UL),
+    RF_PERIOD_512(midPeriod, 7168UL, 1UL),
+    RF_PERIOD_512(midPeriod, 7680UL, 1UL),
+};
+
+static const uint16_t high4Periods[1024] PROGMEM = {
+    RF_PERIOD_512(high4Period, 8192UL, 4UL),
+    RF_PERIOD_512(high4Period, 10240UL, 4UL),
+};
+
+static const uint16_t high8Periods[512] PROGMEM = {
+    RF_PERIOD_512(high8Period, 12288UL, 8UL),
+};
+
+static const uint16_t high16Periods[3072] PROGMEM = {
+    RF_PERIOD_512(high16Period, 16384UL, 16UL),
+    RF_PERIOD_512(high16Period, 24576UL, 16UL),
+    RF_PERIOD_512(high16Period, 32768UL, 16UL),
+    RF_PERIOD_512(high16Period, 40960UL, 16UL),
+    RF_PERIOD_512(high16Period, 49152UL, 16UL),
+    RF_PERIOD_512(high16Period, 57344UL, 16UL),
+};
+
+#undef RF_PERIOD_512
+#undef RF_PERIOD_256
+#undef RF_PERIOD_128
+#undef RF_PERIOD_64
+#undef RF_PERIOD_32
+#undef RF_PERIOD_16
+#undef RF_PERIOD_8
+#undef RF_PERIOD_4
+#undef RF_PERIOD_2
+#undef RF_PERIOD_1
+
+inline uint16_t unpackPeriod(uint16_t packed, uint8_t offset) {
+    return (packed & 0x0fffU) + (offset < (packed >> 12));
+}
+} // namespace
+
+// Convert step frequency into exactly the legacy timer interval. The tables
+// live in program memory; no SRAM, variable-length division or interpolation.
 int32_t HAL::CPUDivU2(unsigned int divisor) {
-    int32_t res;
-    unsigned short table;
-
-    if (divisor < 8192) {
-        if (divisor < 512) {
-            if (divisor < 10)
-                divisor = 10;
-            return Div4U2U(F_CPU, divisor); // These entries have overflows in lookuptable!
-        }
-        table = (unsigned short)&slow_div_lut[0];
-        __asm volatile( // needs 64 ticks neu 49 Ticks
-            "mov r18,%A1 \n\t"
-            "andi r18,31 \n\t" // divisor & 31 in r18
-            "lsr %B1 \n\t"     // divisor >> 4
-            "ror %A1 \n\t"
-            "lsr %B1 \n\t"
-            "ror %A1 \n\t"
-            "lsr %B1 \n\t"
-            "ror %A1 \n\t"
-            "lsr %B1 \n\t"
-            "ror %A1 \n\t"
-            "andi %A1,254 \n\t"
-            "add %A2,%A1 \n\t" // table+divisor>>3
-            "adc %B2,%B1 \n\t"
-            "lpm %A0,Z+ \n\t"  // y0 in res
-            "lpm %B0,Z+ \n\t"  // %C0,%D0 are 0
-            "movw r4,%A0 \n\t" // y0 nach gain (r4-r5)
-            "lpm r0,Z+ \n\t"   // gain = gain-y1
-            "sub r4,r0 \n\t"
-            "lpm r0,Z+ \n\t"
-            "sbc r5,r0 \n\t"
-            "mul r18,r4 \n\t"  // gain*(divisor & 31)
-            "movw %A1,r0 \n\t" // divisor not needed any more, use for byte 0,1 of result
-            "mul r18,r5 \n\t"
-            "add %B1,r0 \n\t"
-            "mov %A2,r1 \n\t"
-            "lsl %A1 \n\t"
-            "rol %B1 \n\t"
-            "rol %A2 \n\t"
-            "lsl %A1 \n\t"
-            "rol %B1 \n\t"
-            "rol %A2 \n\t"
-            "lsl %A1 \n\t"
-            "rol %B1 \n\t"
-            "rol %A2 \n\t"
-            "sub %A0,%B1 \n\t"
-            "sbc %B0,%A2 \n\t"
-            "clr %C0 \n\t"
-            "clr %D0 \n\t"
-            "clr r1 \n\t"
-            : "=&r"(res), "=&d"(divisor), "=&z"(table)
-            : "1"(divisor), "2"(table)
-            : "r18", "r4", "r5");
-        return res;
-        /*unsigned short adr0 = (unsigned short)&slow_div_lut+(divisor>>4)&1022;
-        long y0=    pgm_read_dword_near(adr0);
-        long gain = y0-pgm_read_dword_near(adr0+2);
-        return y0-((gain*(divisor & 31))>>5);*/
-    } else {
-        table = (unsigned short)&fast_div_lut[0];
-        __asm volatile( // needs 49 ticks
-            "movw r18,%A1 \n\t"
-            "andi r19,15 \n\t" // divisor & 4095 in r18,r19
-            "lsr %B1 \n\t"     // divisor >> 3, then %B1 is 2*(divisor >> 12)
-            "lsr %B1 \n\t"
-            "lsr %B1 \n\t"
-            "andi %B1,254 \n\t"
-            "add %A2,%B1 \n\t" // table+divisor>>11
-            "adc %B2,r1 \n\t"  //
-            "lpm %A0,Z+ \n\t"  // y0 in res
-            "lpm %B0,Z+ \n\t"
-            "movw r4,%A0 \n\t" // y0 to gain (r4-r5)
-            "lpm r0,Z+ \n\t"   // gain = gain-y1
-            "sub r4,r0 \n\t"
-            "lpm r0,Z+ \n\t"
-            "sbc r5,r0 \n\t"   // finished - result has max. 16 bit
-            "mul r18,r4 \n\t"  // gain*(divisor & 4095)
-            "movw %A1,r0 \n\t" // divisor not needed any more, use for byte 0,1 of result
-            "mul r19,r5 \n\t"
-            "mov %A2,r0 \n\t" // %A2 = byte 3 of result
-            "mul r18,r5 \n\t"
-            "add %B1,r0 \n\t"
-            "adc %A2,r1 \n\t"
-            "mul r19,r4 \n\t"
-            "add %B1,r0 \n\t"
-            "adc %A2,r1 \n\t"
-            "andi %B1,240 \n\t" // >> 12
-            "swap %B1 \n\t"
-            "swap %A2 \r\n"
-            "mov %A1,%A2 \r\n"
-            "andi %A1,240 \r\n"
-            "or %B1,%A1 \r\n"
-            "andi %A2,15 \r\n"
-            "sub %A0,%B1 \n\t"
-            "sbc %B0,%A2 \n\t"
-            "clr %C0 \n\t"
-            "clr %D0 \n\t"
-            "clr r1 \n\t"
-            : "=&r"(res), "=&d"(divisor), "=&z"(table)
-            : "1"(divisor), "2"(table)
-            : "r18", "r19", "r4", "r5");
-        return res;
-        /*
-        // The asm mimics the following code
-        unsigned short adr0 = (unsigned short)&fast_div_lut+(divisor>>11)&254;
-        unsigned short y0=  pgm_read_word_near(adr0);
-        unsigned short gain = y0-pgm_read_word_near(adr0+2);
-        return y0-(((long)gain*(divisor & 4095))>>12);*/
-    }
-
+    if (divisor >= 16384)
+        return unpackPeriod(pgm_read_word(&high16Periods[(divisor >> 4) - 1024]), divisor & 15);
+    if (divisor >= 12288)
+        return unpackPeriod(pgm_read_word(&high8Periods[(divisor >> 3) - 1536]), divisor & 7);
+    if (divisor >= 8192)
+        return unpackPeriod(pgm_read_word(&high4Periods[(divisor >> 2) - 2048]), divisor & 3);
+    if (divisor >= 512)
+        return pgm_read_word(&midPeriods[divisor - 512]);
+    return pgm_read_dword(&lowPeriods[divisor]);
 } // CPUDivU2
 
 void HAL::setupTimer() {
