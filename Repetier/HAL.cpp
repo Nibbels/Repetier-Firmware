@@ -577,16 +577,14 @@ volatile long __attribute__((used)) stepperWait = 0;
 ISR(TIMER1_COMPA_vect) {
     uint8_t doExit;
     __asm volatile(
-        "ldi %[ex],0 \n\t"
         "lds r23,stepperWait+2 \n\t"
-        "tst r23 \n\t"     //if(stepperWait<65536) {
-        "brne else%= \n\t" // Still > 65535
-        "lds r23,stepperWait+1 \n\t"
         "tst r23 \n\t"
-        "brne last%= \n\t" // Still not 0, go ahead
-        "lds r22,stepperWait \n\t"
-        "breq end%= \n\t" // stepperWait is 0, do your work
-        "last%=: \n\t"
+        "brne else%= \n\t" // At least 65536 ticks remain.
+        "lds r23,stepperWait+1 \n\t"
+        "lds r22,stepperWait \n\t" // Always load BOTH bytes of the final interval.
+        "mov %[ex],r22 \n\t"
+        "or %[ex],r23 \n\t"
+        "breq end%= \n\t" // Both bytes zero: execute the move.
         "sts %[ocr]+1,r23 \n\t" //  OCR1A = stepper wait;
         "sts %[ocr],r22 \n\t"
         "sts stepperWait,r1 \n\t"
@@ -601,7 +599,7 @@ ISR(TIMER1_COMPA_vect) {
         "end%=: \n\t"
         : [ ex ] "=&d"(doExit)
         : [ ocr ] "i"(_SFR_MEM_ADDR(OCR1A))
-        : "r22", "r23");
+        : "r22", "r23", "cc", "memory");
     if (doExit)
         return;
 
