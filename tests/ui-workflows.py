@@ -29,7 +29,7 @@ def main():
     defs = "\n".join(read(n) for n in
         ("Configuration.h", "Eeprom.h", "HAL.h", "RF.h", "ui.h", "uilang.h"))
     macros = "\n".join(re.findall(
-        r"^#define (?:PREHEAT_\w+|EPR_RF_PREHEAT_\w+|EPR_RF_Z_OFFSET|EPR_RF_MOD_SENSEOFFSET_DIGITS|EPR_INTEGRITY_BYTE|EEPROM_OFFSET|PERIODICAL_ACTIONS_CALL_INTERVAL|RF_MICRO_STEPS_Z|Z_OFFSET_(?:BUTTON|MENU)_STEPS|UI_ACTION_PREHEAT_\w+|UI_ACTION_RF_HEAT_BED_(?:UP|DOWN)|UI_SET_(?:MIN|MAX)_\w+_TEMP|UI_ACTION_ZOFFSET|UI_ACTION_(?:XPOSITION|YPOSITION|ZPOSITION|EPOSITION|RF_RESET_ACK|STOP_ACK|RESTORE_DEFAULTS|CHOOSE_LESSERINTEGRAL|CHOOSE_CLASSICPID|CHOOSE_NO|CHOOSE_TYREUS_LYBEN)|UI_MENU_TYPE_(?:SUBMENU|MODIFICATION_MENU)|XYZ_POSITION_BUTTON_DIRECTION|UI_SET_EXTRUDER_FEEDRATE|SPEED_(?:MIN_MILLIS|MAX_MILLIS|MAGNIFICATION)|MAX_COLS|UI_TEXT_PREHEAT_\w+)\s+[^\n]+",
+        r"^#define (?:PREHEAT_\w+|EPR_RF_PREHEAT_\w+|EPR_RF_Z_OFFSET|EPR_RF_MOD_SENSEOFFSET_DIGITS|EPR_INTEGRITY_BYTE|EEPROM_OFFSET|PERIODICAL_ACTIONS_CALL_INTERVAL|RF_MICRO_STEPS_Z|Z_OFFSET_(?:BUTTON|MENU)_STEPS|UI_ACTION_PREHEAT_\w+|UI_ACTION_RF_HEAT_BED_(?:UP|DOWN)|UI_SET_(?:MIN|MAX)_\w+_TEMP|UI_ACTION_ZOFFSET|UI_ACTION_(?:XPOSITION|YPOSITION|ZPOSITION|EPOSITION|RF_RESET_ACK|STOP_ACK|RESTORE_DEFAULTS|CHOOSE_PID_ROBUST|CHOOSE_PID_DYNAMIC)|UI_MENU_TYPE_(?:SUBMENU|MODIFICATION_MENU)|XYZ_POSITION_BUTTON_DIRECTION|UI_SET_EXTRUDER_FEEDRATE|SPEED_(?:MIN_MILLIS|MAX_MILLIS|MAGNIFICATION)|MAX_COLS|UI_TEXT_PREHEAT_\w+)\s+[^\n]+",
         defs, re.M))
     geometry = section(header, "#define UI_ROWS 4", "//mtype usw.")
     # Both character ROMs (only the cursor glyphs are relevant).
@@ -38,6 +38,13 @@ def main():
     macros += "\n" + re.search(r"^constexpr millis_t menuAutoReturnDelayMs[^\n]+", ui, re.M)[0] + "\n" + geometry + "\n#if MOTHERBOARD == DEVICE_TYPE_RF1000\n" + rom + "#endif\n"
     macros += "\n" + section(header, "#if UI_COLS == 16", "\n#include \"uilang.h\"") + "\n"
     macros += "\n" + re.search(r"^constexpr int32_t maxManualZOffsetMicrometers[^\n]+", read("RF.h"), re.M)[0] + "\n"
+    # Exactly two tune actions, shared menu mapped to the selected heater in settings.
+    pid_menu = next(line for line in menu.splitlines() if line.startswith("#define UI_MENU_PID_CHOOSE "))
+    assert pid_menu.count('ui_menu_pid_choose_robust') == 1
+    assert pid_menu.count('ui_menu_pid_choose_dynamic') == 1
+    for obsolete in ('lesserintegral', 'classicpid', 'tyreus_lyben', 'someovershoot'):
+        assert obsolete not in pid_menu.lower()
+    assert '(bed ? 2 : 0) + (action == UI_ACTION_CHOOSE_PID_ROBUST ? 1 : 0)' in settings
     # Check the real parent menu links and Mod Menu page/key mapping (not a key electrical test).
     for name, entries in (
         ("UI_MENU_PREHEAT", ("&ui_menu_preheat_a_bed", "&ui_menu_preheat_a_hotend",

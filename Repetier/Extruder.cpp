@@ -150,6 +150,7 @@ void Extruder::setTemperatureForExtruder(float temperatureInCelsius, uint8_t ext
     if (tc->sensorType == 0)
         temperatureInCelsius = 0;
     tc->setTargetTemperature(temperatureInCelsius);
+    temperatureInCelsius = tc->targetTemperatureC;
     tc->updateTempControlVars();
 
     if (temperatureInCelsius >= EXTRUDER_FAN_COOL_TEMP)
@@ -249,7 +250,7 @@ Extruder extruder[NUM_EXTRUDER] = {
           0,
           0,
           0,
-          { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+          0, 0,
           0,
           0,
           0,
@@ -286,7 +287,7 @@ Extruder extruder[NUM_EXTRUDER] = {
           0,
           0,
           0,
-          { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+          0, 0,
           0,
           0,
           0,
@@ -313,7 +314,7 @@ TemperatureController heatedBedController = {
     0,
     0,
     0,
-    { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+    0, 0,
     0,
     0,
     0,
@@ -340,7 +341,7 @@ TemperatureController optTempController = {
     0,
     0,
     0,
-    { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+    0, 0,
     0,
     0,
     0,

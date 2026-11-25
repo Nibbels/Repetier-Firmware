@@ -40,7 +40,17 @@ def main():
             output = subprocess.check_output([str(exe)])
             rows = output.decode("ascii").splitlines()
             assert len(rows) == 8 and all(len(bytes.fromhex(row.split()[1])) == 2048 for row in rows)
-            digest = hashlib.sha256(output).hexdigest()
+            # Version and the newly allocated calibration slots are the only
+            # intentional snapshot differences. Retain byte-exact legacy comparison.
+            normalized = []
+            for row in rows:
+                name, data = row.split()
+                image = bytearray.fromhex(data)
+                assert image[105] == 9 and image[1978:1987] == bytes(9)
+                image[105] = 8
+                image[104] = sum(image[:104] + image[105:]) & 255
+                normalized.append(f"{name} {image.hex()}\n")
+            digest = hashlib.sha256("".join(normalized).encode("ascii")).hexdigest()
             assert digest == expected, (model, expected, digest)
             print(f"{model}: eight EEPROM snapshots match baseline ({digest})")
 

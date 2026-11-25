@@ -466,16 +466,6 @@ we use blocks of 2 kByte size for the structure of our EEPROM
 #define MINIMAL_IDLE_TIME                   500                                                 // [ms]
 
 /**
- * \brief PID control only works target temperature +/- PID_CONTROL_RANGE.
- * If you get much overshoot at the first temperature set, because the heater is going full power too long, you
- * need to increase this value. For one 6.8 Ohm heater 10 is ok. With two 6.8 Ohm heater use 15.
- */
-#define PID_CONTROL_RANGE                   30
-/** \brief If you change those you might have to do fresh autotunePIDs on your heaters. */
-#define PID_CONTROL_DRIVE_MAX_LIMIT_FACTOR  10.0f // This was 10
-#define PID_CONTROL_DRIVE_MIN_LIMIT_FACTOR  -1.0f // This was 10 but -1.0 works well with drive max 100 and drive min 5. If this number is negative you get a real PID control, no PD+posI-control anymore.
-
-/**
  * \brief Prevent extrusions longer then x mm for one command. This is especially important if you abort a print. Then the
  * extrusion position might be at any value like 23344. If you then have an G1 E-2 it will roll back 23 meter!
  */

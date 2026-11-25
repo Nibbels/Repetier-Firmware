@@ -59,43 +59,20 @@ void UIDisplay::finishAction(int action) {
         break;
     }
 
-    case UI_ACTION_CHOOSE_LESSERINTEGRAL:
-    case UI_ACTION_CHOOSE_CLASSICPID:
-    case UI_ACTION_CHOOSE_NO:
-    case UI_ACTION_CHOOSE_TYREUS_LYBEN: {
+    case UI_ACTION_CHOOSE_PID_ROBUST:
+    case UI_ACTION_CHOOSE_PID_DYNAMIC: {
         if (confirmation_ != 1) {
             // continue only in case the user has chosen "Yes"
             break;
         }
-        unsigned char heater = menuPos[menuLevel - 2]; // The bed follows the hotends in the PID menu.
-        int method = menuPos[menuLevel - 1];           //0..1..2..3 passt nicht mehr zum J-Listing des M303
-
-        // Esthetics: Switch method for better order in menu. I want the menu to start with pessen integral, because it is the most responsive one. We dont need some overshoot within menu because it has no known use for us.
-        /*
-                                             responsiveness of tunings: J1pessen++ J0classic+ J2someovershoot J3noovershoot- J4tyreuslyben--
-                                             -- is for slow beds
-                                             ++ is for fast hotends
-                                             */
-        if (method == 0) {
-            method = 1; //J1
-        } else if (method == 1) {
-            method = 0; //J0
-        } else if (method == 2) {
-            method = 3; //J3
-        } else if (method == 3) {
-            method = 4; //J4
-        }
-
-        int temperature = heatBedScanPlaNozzleC;
-        int cycles = 10;
-        if (NUM_EXTRUDER == heater) {
-            // Das ist das Heizbett und kein Extruder
-            temperature = heatBedScanPlaBedC; // Bett nicht so hoch testen, wie Extruder.
-            cycles = 16;                                      // Bett ist erfahrungsgemäß viel träger. Mehr Zyklen erhöhen die Genauigkeit des Ergebnis.
-        }
-        bool writeeeprom = true;
+        const uint8_t heater = menuPos[menuLevel - 2];
         if (heater >= NUM_TEMPERATURE_LOOPS)
-            heater = NUM_TEMPERATURE_LOOPS - 1;
+            break;
+        const bool bed = heater == NUM_EXTRUDER;
+        const int method = (bed ? 2 : 0) + (action == UI_ACTION_CHOOSE_PID_ROBUST ? 1 : 0);
+        const int temperature = bed ? heatBedScanPlaBedC : heatBedScanPlaNozzleC;
+        const int cycles = bed ? 16 : 10;
+        bool writeeeprom = true;
         // Show menu and message to user: He cant do anything until autotune is over.
         exitmenu();
         menuPos[0] = 3; // Show temps
@@ -157,10 +134,8 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
     case UI_ACTION_RF_RESET_ACK:
     case UI_ACTION_STOP_ACK:
     case UI_ACTION_RESTORE_DEFAULTS:
-    case UI_ACTION_CHOOSE_LESSERINTEGRAL:
-    case UI_ACTION_CHOOSE_CLASSICPID:
-    case UI_ACTION_CHOOSE_NO:
-    case UI_ACTION_CHOOSE_TYREUS_LYBEN: {
+    case UI_ACTION_CHOOSE_PID_ROBUST:
+    case UI_ACTION_CHOOSE_PID_DYNAMIC: {
         INCREMENT_MIN_MAX(confirmation_, 1, 0, 1);
         break;
     }
@@ -945,6 +920,7 @@ void UIDisplay::changeHeaterSetting(int action, int8_t increment) {
                 int drive = tempController[heater]->pidDriveMin;
                 INCREMENT_MIN_MAX(drive, 1, 1, 255);
                 tempController[heater]->pidDriveMin = drive;
+                tempController[heater]->updateTempControlVars();
                 if (NUM_EXTRUDER == heater) {
                     // Das ist das Heizbett
                     HAL::eprSetByte(EPR_BED_DRIVE_MIN, (uint8_t)drive);
@@ -967,6 +943,7 @@ void UIDisplay::changeHeaterSetting(int action, int8_t increment) {
                 int drive = tempController[heater]->pidDriveMax;
                 INCREMENT_MIN_MAX(drive, 1, 1, 255);
                 tempController[heater]->pidDriveMax = drive;
+                tempController[heater]->updateTempControlVars();
                 if (NUM_EXTRUDER == heater) {
                     // Das ist das Heizbett
                     HAL::eprSetByte(EPR_BED_DRIVE_MAX, (uint8_t)drive);
@@ -988,18 +965,12 @@ void UIDisplay::changeHeaterSetting(int action, int8_t increment) {
             if (heater < NUM_TEMPERATURE_LOOPS) {
                 int drive = tempController[heater]->pidMax;
                 INCREMENT_MIN_MAX(drive, 1, 1, 255);
+                if (tempController[heater]->pidMax == drive)
+                    break;
+                tempController[heater]->invalidatePidCalibration();
                 tempController[heater]->pidMax = drive;
-                if (NUM_EXTRUDER == heater) {
-                    // Das ist das Heizbett
-                    HAL::eprSetByte(EPR_BED_PID_MAX, (uint8_t)drive);
-                    EEPROM::updateChecksum();
-                } else {
-                    //Extruder
-                    if (heater <= NUM_EXTRUDER - 1) { // Paranoid doublecheck
-                        HAL::eprSetByte(EEPROM::getExtruderOffset(heater) + EPR_EXTRUDER_PID_MAX, (uint8_t)drive);
-                        EEPROM::updateChecksum();
-                    }
-                }
+                tempController[heater]->updateTempControlVars();
+                EEPROM::storePidCalibration(heater);
             }
         }
         break;
@@ -1021,9 +992,12 @@ void UIDisplay::changeHeaterSetting(int action, int8_t increment) {
                         break;
                     }
                     }
+                    if (tempController[heater]->sensorType == drive)
+                        break;
+                    tempController[heater]->invalidatePidCalibration();
                     tempController[heater]->sensorType = drive;
-                    HAL::eprSetByte(EPR_RF_HEATED_BED_SENSOR_TYPE, (uint8_t)drive);
-                    EEPROM::updateChecksum();
+                    EEPROM::storePidCalibration(heater);
+
                 } else {
                     //Extruder
                     if (increment > 0) {
@@ -1065,11 +1039,12 @@ void UIDisplay::changeHeaterSetting(int action, int8_t increment) {
                         }
                         }
                     }
+                    if (tempController[heater]->sensorType == drive)
+                        break;
+                    tempController[heater]->invalidatePidCalibration();
                     tempController[heater]->sensorType = drive;
-                    if (heater <= NUM_EXTRUDER - 1) { // Paranoid doublecheck
-                        HAL::eprSetByte(EEPROM::getExtruderOffset(heater) + EPR_EXTRUDER_SENSOR_TYPE, (uint8_t)drive);
-                        EEPROM::updateChecksum();
-                    }
+                    EEPROM::storePidCalibration(heater);
+
                 }
             }
         }

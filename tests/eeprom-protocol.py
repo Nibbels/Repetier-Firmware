@@ -69,7 +69,7 @@ def main():
     actual_layout = dict(re.findall(
         r"^#define (EPR_\w+|EEPROM_EXTRUDER_\w+)\s+(\d+)\b", header, re.M))
     assert actual_layout == dict(rows(TEST / "eeprom-layout-golden.tsv"))
-    assert re.search(r"^#define EEPROM_PROTOCOL_VERSION 8\b", header, re.M)
+    assert re.search(r"^#define EEPROM_PROTOCOL_VERSION 9\b", header, re.M)
     assert re.search(r"^constexpr uint8_t eepromMagic = 44;", source, re.M)
     communication = (FW / "Communication.cpp").read_text()
     com_header = (FW / "Communication.h").read_text().replace('#include "HAL.h"\n', '').replace("int value)", "int16_t value)")
@@ -203,6 +203,15 @@ int main() {
     code.s = true; code.t = false; expectWrite(code, {});
     code.t = true; code.p = false; expectWrite(code, {});
     code.p = true; code.T = 9; expectWrite(code, {});
+    // Read-only marker, including a write straddling its first byte.
+    code.T = 0; code.P = EPR_RF_PID_CALIBRATION; auto before = loads;
+    uint8_t marker = bytes[code.P]; EEPROM::update(&code);
+    assert(loads == before && bytes[code.P] == marker);
+    code.T = 2; code.P = EPR_RF_PID_CALIBRATION - 3;
+    EEPROM::update(&code); assert(loads == before);
+    // Adjacent preheat setting is still writable as a 16-bit value.
+    code.T = 1; code.P = EPR_RF_PREHEAT_B_HOTEND; code.S = 215;
+    expectWrite(code, {215, 0});
     uint8_t expected[sizeof bytes]; std::memcpy(expected, bytes, sizeof bytes);
     expected[1038] = 0xc7; expected[1039] = 0xcf;
     expected[1040] = expected[1041] = 0xff;

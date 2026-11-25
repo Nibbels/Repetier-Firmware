@@ -669,20 +669,16 @@ UI_MENU_SUBMENU(ui_menu_conf_dms, UI_TEXT_DMS, ui_menu_dms)
 
 //############################################################### PID MENU
 
-UI_MENU_ACTION4(ui_menu_pid_choose_classicpid_ack,UI_ACTION_CHOOSE_CLASSICPID, UI_TEXT_AUTODETECT_PID "?", "%Xt", UI_ACTION_TEXT_YES, UI_ACTION_TEXT_NO)
-UI_MENU_ACTIONSELECTOR(ui_menu_pid_choose_classicpid,UI_ACTION_TEXT_CLASSICPID,ui_menu_pid_choose_classicpid_ack)
-UI_MENU_ACTION4(ui_menu_pid_choose_lesserintegral_ack,UI_ACTION_CHOOSE_LESSERINTEGRAL, UI_TEXT_AUTODETECT_PID "?", "%Xt", UI_ACTION_TEXT_YES, UI_ACTION_TEXT_NO)
-UI_MENU_ACTIONSELECTOR(ui_menu_pid_choose_lesserintegral,UI_ACTION_TEXT_PESSEN,ui_menu_pid_choose_lesserintegral_ack)
-UI_MENU_ACTION4(ui_menu_pid_choose_no_ack,UI_ACTION_CHOOSE_NO, UI_TEXT_AUTODETECT_PID "?", "%Xt", UI_ACTION_TEXT_YES, UI_ACTION_TEXT_NO)
-UI_MENU_ACTIONSELECTOR(ui_menu_pid_choose_no, UI_ACTION_TEXT_NO_OVER,ui_menu_pid_choose_no_ack)
-UI_MENU_ACTION4(ui_menu_pid_choose_tyreus_lyben_ack,UI_ACTION_CHOOSE_TYREUS_LYBEN, UI_TEXT_AUTODETECT_PID "?", "%Xt", UI_ACTION_TEXT_YES, UI_ACTION_TEXT_NO)
-UI_MENU_ACTIONSELECTOR(ui_menu_pid_choose_tyreus_lyben,UI_ACTION_TEXT_TYREUS_LYBEN,ui_menu_pid_choose_tyreus_lyben_ack)
+UI_MENU_ACTION4(ui_menu_pid_choose_robust_ack,UI_ACTION_CHOOSE_PID_ROBUST, UI_TEXT_AUTODETECT_PID "?", "%Xt", UI_ACTION_TEXT_YES, UI_ACTION_TEXT_NO)
+UI_MENU_ACTIONSELECTOR(ui_menu_pid_choose_robust,"PID Robust",ui_menu_pid_choose_robust_ack)
+UI_MENU_ACTION4(ui_menu_pid_choose_dynamic_ack,UI_ACTION_CHOOSE_PID_DYNAMIC, UI_TEXT_AUTODETECT_PID "?", "%Xt", UI_ACTION_TEXT_YES, UI_ACTION_TEXT_NO)
+UI_MENU_ACTIONSELECTOR(ui_menu_pid_choose_dynamic,"PID Dynamic",ui_menu_pid_choose_dynamic_ack)
 UI_MENU_CHANGEACTION(ui_menu_pid_choose_drivemin,UI_TEXT_EXTR_DMIN,UI_ACTION_CHOOSE_DMIN)
 UI_MENU_CHANGEACTION(ui_menu_pid_choose_drivemax,UI_TEXT_EXTR_DMAX,UI_ACTION_CHOOSE_DMAX)
 UI_MENU_CHANGEACTION(ui_menu_pid_choose_PIDmax,UI_TEXT_EXTR_PMAX,UI_ACTION_CHOOSE_PIDMAX)
 UI_MENU_CHANGEACTION(ui_menu_pid_choose_sensor,UI_TEXT_EXTR_SENSOR_TYPE,UI_ACTION_CHOOSE_SENSOR)
 
-#define UI_MENU_PID_CHOOSE {&ui_menu_pid_choose_lesserintegral, &ui_menu_pid_choose_classicpid, &ui_menu_pid_choose_no, &ui_menu_pid_choose_tyreus_lyben, &ui_menu_pid_choose_drivemin, &ui_menu_pid_choose_drivemax, &ui_menu_pid_choose_PIDmax, &ui_menu_pid_choose_sensor}
+#define UI_MENU_PID_CHOOSE {&ui_menu_pid_choose_robust, &ui_menu_pid_choose_dynamic, &ui_menu_pid_choose_drivemin, &ui_menu_pid_choose_drivemax, &ui_menu_pid_choose_PIDmax, &ui_menu_pid_choose_sensor}
 UI_MENU(ui_menu_pid_choose, UI_MENU_PID_CHOOSE)
 UI_MENU_SUBMENU(ui_menu_pid_ext0_cond,  UI_TEXT_EXTRUDER " 0", ui_menu_pid_choose)
 #define UI_MENU_PID_EXT0_COND   &ui_menu_pid_ext0_cond

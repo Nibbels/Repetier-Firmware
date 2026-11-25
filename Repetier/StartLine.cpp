@@ -93,6 +93,10 @@ struct ExtrusionState {
 }
 
 void StartLine::run(GCode& command) {
+    if (!Extruder::allHeatersCalibrated()) {
+        Com::printFLN(PSTR("Error: PID tune required before printing"));
+        return;
+    }
     if (!Commands::waitForMotion(Commands::MotionWait::QueueAndZ, Commands::PauseWait::Resume))
         return;
     if (!Printer::areAxisHomed() || !Printer::doHeatBedZCompensation) {

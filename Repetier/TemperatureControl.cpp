@@ -17,11 +17,13 @@
 
 // Temperature regulation, thermal fault latching, heater waits and autotune; ADC conversion is separate.
 
+#include "CaseFan.h"
 #include "Repetier.h"
 
 static uint8_t autotuneIndex = 255;
 static bool autotuneAbortRequested = false;
 static float autotuneTemperatureLimit;
+static uint8_t autotuneSensorType, autotunePowerLimit;
 
 static bool validTemperatureSample(bool supported, float temperature) {
     return supported && temperature >= MIN_DEFECT_TEMPERATURE && temperature <= MAX_DEFECT_TEMPERATURE;
@@ -41,10 +43,19 @@ void Printer::latchOutputInhibit(bool thermalFault) {
     stopAllHeaters();
 }
 
+bool Extruder::allHeatersCalibrated() {
+    for (uint8_t h = 0; h < NUM_TEMPERATURE_LOOPS; ++h)
+        if (!tempController[h]->pidCalibrationValid()) return false;
+    return true;
+}
+
 static void finishAutotune(TemperatureController& controller) {
     // Revoke the duty request and normal setpoint before reporting or storing results.
     controller.setTargetTemperature(0);
     autotuneIndex = 255;
+#if defined(CASE_FAN_PIN) && (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
+    CaseFan::updateFromHotendTargets();
+#endif
 }
 
 /** Makes updates to temperatures and heater state every call.
@@ -60,11 +71,15 @@ void Extruder::manageTemperatures() {
 
         const bool sensorSupported = act->updateCurrentTemperature();
         const bool sampleValid = validTemperatureSample(sensorSupported, act->currentTemperatureC);
-        if (!sampleValid || act->sensorType == 0)
+        if (!sampleValid || act->sensorType == 0) {
             HAL::setHeaterDuty(act->pwmIndex, 0);
+            act->pidHistoryValid = false;
+            act->tempIState = 0;
+        }
         if (controller == autotuneIndex) {
             // Remember even a transient invalid sample observed by the periodic service.
             if (!sampleValid || act->sensorType == 0 || act->currentTemperatureC > autotuneTemperatureLimit
+                || act->sensorType != autotuneSensorType || act->pidMax != autotunePowerLimit
                 || Printer::heatingInhibited()) {
                 HAL::setHeaterDuty(act->pwmIndex, 0);
                 autotuneAbortRequested = true;
@@ -110,6 +125,10 @@ void Extruder::manageTemperatures() {
         if (!sampleValid || act->sensorType == 0 || Printer::heatingInhibited())
             continue; // Never feed an invalid or disabled sensor sample into PID.
 
+        if (act->targetTemperatureC >= MAX_ROOM_TEMPERATURE && !act->pidCalibrationValid()) {
+            act->invalidatePidCalibration();
+            continue;
+        }
         uint8_t on = act->currentTemperatureC >= act->targetTemperatureC ? LOW : HIGH;
 
         millis_t time = HAL::timeInMilliseconds(); // compare time for decouple tests
@@ -172,43 +191,40 @@ void Extruder::manageTemperatures() {
         if (Printer::heatingInhibited())
             continue;
 
-        act->tempArray[act->tempPointer++] = act->currentTemperatureC; // Ist in jedem fall voll mit gültigen temperaturen, wenn der regelbereich erreicht wird.
-        //act->tempPointer &= 3; // 3 = springe von 4 = 100b auf 0 zurück,    wenn 3. -> 1/300ms  -> 3.33 = reciproke     !!tempArray needs [4] ...
-        //act->tempPointer &= 7; // 7 = springe von 8 = 1000b auf 0 zurück,   wenn 7. -> 1/700ms  -> 1.42 = reciproke     !!tempArray needs [8] ...
-        act->tempPointer &= 15; // 15 = springe von 16 = 10000b zurück auf 0, wenn 15 -> 1/1500ms -> 0.666 = reciproke    !!tempArray needs [16] ...
+        // Elapsed time and derivative on measurement with a 0.5 s low-pass filter.
+        // Do not integrate unobserved error after a missed service or invalid sample.
+        const millis_t elapsed = time - act->lastTemperatureUpdate;
+        const float dt = act->pidHistoryValid && elapsed > 0 && elapsed <= 1000 ? elapsed * 0.001f : 0;
+        if (dt > 0) {
+            const float slope = (act->currentTemperatureC - act->previousTemperature) / dt;
+            act->filteredSlope += dt / (0.5f + dt) * (slope - act->filteredSlope);
+        } else {
+            act->filteredSlope = 0;
+        }
+        act->previousTemperature = act->currentTemperatureC;
+        act->lastTemperatureUpdate = time;
+        act->pidHistoryValid = true;
 
-        uint8_t output;
-        float error = act->targetTemperatureC - act->currentTemperatureC;
-
-        if (act->targetTemperatureC < 20.0f || act->targetTemperatureC < MAX_ROOM_TEMPERATURE) {
-            // targetTemperature is off
-            // We never set heating on if the commanded temperature might be lower than max room temperature.
-            output = 0; // off is off, even if damping term wants a heat peak!
+        uint8_t output = 0;
+        const float error = act->targetTemperatureC - act->currentTemperatureC;
+        if (act->targetTemperatureC < MAX_ROOM_TEMPERATURE) {
             act->stopDecouple();
             act->tempIState = 0;
-        } else if (error > PID_CONTROL_RANGE) {
-            // Heating up to targetTemperature
-            output = act->pidMax;
-            act->startFullDecoupleTest(time);
-            act->tempIState = 0;
-        } else if (error < -PID_CONTROL_RANGE) {
-            // Cooling down to targetTemperature
-            output = 0;
-            act->tempIState = 0;
         } else {
-            act->startHoldDecoupleTest(time);
-
-            float pidTerm = 0;
-            float pgain = act->pidPGain * error;
-            pidTerm += pgain;
-            act->tempIState = constrain(act->tempIState + error, act->tempIStateLimitMin, act->tempIStateLimitMax);
-            float igain = act->pidIGain * act->tempIState * 0.1; // 0.1 = 10Hz
-            pidTerm += igain;
-            float dgain = act->pidDGain * (act->tempArray[act->tempPointer] - act->currentTemperatureC) * 0.666f; // raising dT/dt, 0.666 = reciproke of time interval (1500 ms) -> temparray greift weiter zurück als letzte messung.
-            pidTerm += dgain;
-
-
-            output = constrain((int)pidTerm, 0, act->pidMax);
+            const float pd = act->pidPGain * error - act->pidDGain * act->filteredSlope;
+            const float candidate = constrain(act->tempIState + act->pidIGain * error * dt,
+                                              act->tempIStateLimitMin, act->tempIStateLimitMax);
+            // Integrate only when unsaturated or when unwinding saturation.
+            if ((pd + candidate <= act->pidMax || error < 0)
+                && (pd + candidate >= 0 || error > 0))
+                act->tempIState = candidate;
+            // Clamp in float before converting to the AVR's narrow integer type.
+            const float duty = constrain(pd + act->tempIState, 0.0f, float(act->pidMax));
+            output = static_cast<uint8_t>(duty);
+            if (!act->isDecoupleHold() && error > DECOUPLING_TEST_MAX_HOLD_VARIANCE && output > 0)
+                act->startFullDecoupleTest(time);
+            else
+                act->startHoldDecoupleTest(time);
         }
         if (act->currentTemperatureC > act->heaterCutoffC)
             output = 0;
@@ -229,16 +245,32 @@ void Extruder::manageTemperatures() {
 } // manageTemperatures
 
 void TemperatureController::updateTempControlVars() {
-    if (pidIGain != 0) // prevent division by zero
-    {
-        tempIStateLimitMax = (float)pidDriveMax * PID_CONTROL_DRIVE_MAX_LIMIT_FACTOR / pidIGain;
-        tempIStateLimitMin = (float)pidDriveMin * PID_CONTROL_DRIVE_MIN_LIMIT_FACTOR / pidIGain; // Bisher hatte der PID-Regler keinen negativen I-Anteil, weil die Limits nicht ins Negative dürfen. Jetzt schon. Es ist das Minus in der Config, das die Stabilität bringt.
-    }
-} // updateTempControlVars
+    tempIStateLimitMax = RMath::min(int(pidDriveMax), int(pidMax));
+    tempIStateLimitMin = -float(RMath::min(int(pidDriveMin), int(pidMax)));
+    tempIState = constrain(tempIState, tempIStateLimitMin, tempIStateLimitMax);
+}
+
+void TemperatureController::invalidatePidCalibration() {
+    tunedSensorType = tunedPowerLimit = 0;
+    setTargetTemperature(0);
+}
 
 void TemperatureController::setTargetTemperature(float target) {
-    if (Printer::heatingInhibited())
+    if (!(target >= 0 && target <= heaterCutoffC) || Printer::heatingInhibited())
         target = 0;
+    if (target >= MAX_ROOM_TEMPERATURE && autotuneIndex != 255) {
+        Com::printErrorFLN(PSTR("PID autotune active"));
+        target = 0;
+    }
+    if (target >= MAX_ROOM_TEMPERATURE && !pidCalibrationValid()) {
+        Com::printErrorFLN(PSTR("PID tune required; use menu or M303 with X"));
+        UI_STATUS_UPD("PID tune needed");
+        target = 0;
+    }
+    if (target <= 0) {
+        tempIState = 0;
+        pidHistoryValid = false;
+    }
     if (target <= 0.0f && autotuneIndex < NUM_TEMPERATURE_LOOPS && tempController[autotuneIndex] == this)
         autotuneAbortRequested = true;
     if (target <= 0.0f || target < targetTemperatureC)
@@ -251,7 +283,7 @@ void TemperatureController::setTargetTemperature(float target) {
 } // setTargetTemperature
 
 void TemperatureController::waitForTargetTemperature(uint8_t plus_temp_tolerance, bool resumingPause) {
-    if (Printer::heatingInhibited())
+    if (Printer::heatingInhibited() || (targetTemperatureC >= MAX_ROOM_TEMPERATURE && !pidCalibrationValid()))
         return;
     bool dirRising = targetTemperatureC > currentTemperatureC;
     if (dirRising) {
@@ -262,7 +294,7 @@ void TemperatureController::waitForTargetTemperature(uint8_t plus_temp_tolerance
     Printer::idleStatus.cancel();
     while (true) {
         Commands::checkForPeriodicalActions(WaitHeater);
-        if (Printer::heatingInhibited() || (resumingPause && !Printer::pause.isReheating()))
+        if (Printer::heatingInhibited() || (dirRising && targetTemperatureC <= 0) || (resumingPause && !Printer::pause.isReheating()))
             return;
         if (fabs(targetTemperatureC - currentTemperatureC) <= TEMP_TOLERANCE + plus_temp_tolerance)
             break;
@@ -272,228 +304,207 @@ void TemperatureController::waitForTargetTemperature(uint8_t plus_temp_tolerance
     Printer::idleStatus.schedule(HAL::timeInMilliseconds());
 }
 
+// Fixed duty levels for every measured cycle. The asymmetric rectangular
+// relay fundamental accounts for unequal on/off times; span is peak-to-peak.
+// J0/J1 hotend dynamic/robust, J2/J3 bed dynamic/robust. No legacy scaling.
 void TemperatureController::autotunePID(float temp, uint8_t controllerId, int maxCycles, bool storeValues, int method) {
     if (autotuneIndex != 255) {
         Com::printErrorFLN(PSTR("PID autotune already active"));
-        return; // Do not interfere with the existing autotune owner.
+        return;
+    }
+    if (controllerId >= NUM_TEMPERATURE_LOOPS || tempController[controllerId] != this) {
+        setTargetTemperature(0);
+        Com::printErrorFLN(PSTR("PID autotune: invalid heater"));
+        return;
+    }
+    if (Printer::printJob.isBusy() || PrintLine::hasLines() || PrintLine::directMoveActive() || isAnyScanRunning()) {
+        Com::printErrorFLN(PSTR("PID autotune requires idle printer"));
+        return;
+    }
+    if (!autotuneProfileAllowed(controllerId, method)) {
+        Com::printErrorFLN(PSTR("PID autotune: invalid profile for heater"));
+        return;
     }
     setTargetTemperature(0);
-    if (controllerId >= NUM_TEMPERATURE_LOOPS || tempController[controllerId] != this
-        || Printer::heatingInhibited()
-        || isSensorDefect() || isSensorDecoupled()
-        || !(temp >= MAX_ROOM_TEMPERATURE && temp <= heaterCutoffC)
-        || (controllerId == NUM_EXTRUDER && temp > HEATED_BED_MAX_TEMP)) {
-        Com::printErrorFLN(PSTR("PID autotune failed: heater unavailable or target invalid"));
+    const bool bed = controllerId == NUM_EXTRUDER;
+    const float hysteresis = 0.375f;
+    const float cutoff = RMath::min(float(heaterCutoffC), temp + (bed ? 15.0f : 20.0f));
+    const bool initialSampleValid = updateCurrentTemperature();
+    if (Printer::heatingInhibited() || isSensorDefect() || isSensorDecoupled()
+        || sensorType == 0 || pidMax < 40
+        || !(temp > MAX_ROOM_TEMPERATURE + hysteresis && temp + hysteresis < cutoff)
+        || (bed && temp > HEATED_BED_MAX_TEMP)
+        || !validTemperatureSample(initialSampleValid, currentTemperatureC)
+        || currentTemperatureC > cutoff) {
+        Com::printErrorFLN(PSTR("PID autotune: heater, target, sensor or PWM limit invalid"));
         return;
     }
-    const bool sensorSupported = updateCurrentTemperature();
-    if (!sensorSupported) {
-        Com::printErrorFLN(PSTR("PID autotune failed: unsupported or stale temperature sensor"));
-        return;
-    }
-    if (!validTemperatureSample(sensorSupported, currentTemperatureC) || sensorType == 0
-        || currentTemperatureC > heaterCutoffC || currentTemperatureC > temp + 40) {
-        Com::printErrorFLN(PSTR("PID autotune failed: invalid temperature"));
-        return;
-    }
+    // No other heater may perturb the experiment.
+    stopAllHeaters();
     Printer::idleStatus.cancel();
     UI_STATUS_UPD(UI_TEXT_PID);
-    float currentTemp;
-    int cycles = 0;
-    bool heating = true;
-
-    uint32_t temp_millis = HAL::timeInMilliseconds();
-    uint32_t t1 = temp_millis;
-    uint32_t t2 = temp_millis;
-    int32_t t_high = 0;
-    int32_t t_low = 0;
-
-    int32_t bias = pidMax >> 1;
-    int32_t d = pidMax >> 1;
-    float Ku, Tu;
-    float Kp = 0, Ki = 0, Kd = 0;
-    float maxTemp = 20, minTemp = 20;
-    if (maxCycles < 5) {
-        maxCycles = 5;
-    }
-    if (maxCycles > 20) {
-        maxCycles = 20;
-    }
     Com::printInfoFLN(Com::tPIDAutotuneStart);
-    Com::printF(PSTR("Ruleset: "), (int)method);
-    switch (method) {
-    case 4: //Tyreus-Lyben
-    {
-        Com::printFLN(Com::tAPIDTyreusLyben);
-        break;
-    }
-    case 3: // PID no overshoot
-    {
-        Com::printFLN(Com::tAPIDNone);
-        break;
-    }
-    case 2: // PID some overshoot
-    {
-        Com::printFLN(Com::tAPIDSome);
-        break;
-    }
-    case 1: // PID Pessen Integral Rule
-    {
-        Com::printFLN(Com::tAPIDPessen);
-        break;
-    }
-    default: // PID classic Ziegler-Nichols
-    {
-        Com::printFLN(Com::tAPIDClassic);
-        method = 0; // Filter not available methods.
-    }
-    }
-
+    Com::printFLN(PSTR("Profile J: "), method);
     autotuneAbortRequested = false;
-    autotuneTemperatureLimit = temp + 40;
-    if (autotuneTemperatureLimit > heaterCutoffC)
-        autotuneTemperatureLimit = heaterCutoffC;
+    autotuneTemperatureLimit = cutoff;
+    autotuneSensorType = sensorType;
+    autotunePowerLimit = pidMax;
     autotuneIndex = controllerId;
-    stopDecouple(); // Also valid when this controller is the heated bed.
-    HAL::setHeaterDuty(pwmIndex, pidMax);
-    if (controllerId < NUM_EXTRUDER) {
+    stopDecouple();
+    const millis_t started = HAL::timeInMilliseconds();
+    millis_t phaseStart = started, cycleStart = started, riseStart = started, lastSample = started;
+    float riseTemp = currentTemperatureC, low = currentTemperatureC, high = currentTemperatureC;
+    float kuSum = 0, tuSum = 0, prevKu = 0, prevTu = 0;
+    millis_t onTime = 0;
+    unsigned cycles = 0, stable = 0;
+    const unsigned limit = constrain(maxCycles, 5, 20);
+    bool heating = currentTemperatureC < temp - hysteresis;
+    bool completeCycle = heating;
+    HAL::setHeaterDuty(pwmIndex, heating ? autotunePowerLimit : 0);
+    if (!bed) {
+#if defined(CASE_FAN_PIN) && (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
+        CaseFan::turnOn();
+#endif
         extruder[controllerId].coolerPWM = extruder[controllerId].coolerSpeed;
         extruder[0].coolerPWM = extruder[0].coolerSpeed;
     }
 
     for (;;) {
-        Commands::checkForPeriodicalActions(WaitHeater); // update heaters etc. https://github.com/repetier/Repetier-Firmware/commit/241c550ac004023842d6886c6e0db15a1f6b56d7
+        Commands::checkForPeriodicalActions(WaitHeater);
         const bool supported = updateCurrentTemperature();
-        currentTemp = currentTemperatureC;
+        const float measured = currentTemperatureC;
+        const millis_t now = HAL::timeInMilliseconds();
         if (autotuneAbortRequested || Printer::heatingInhibited()
-            || isSensorDefect() || isSensorDecoupled() || sensorType == 0
-            || !validTemperatureSample(supported, currentTemp)) {
+            || Printer::printJob.isBusy() || PrintLine::hasLines() || PrintLine::directMoveActive() || isAnyScanRunning()
+            || sensorType != autotuneSensorType || pidMax != autotunePowerLimit
+            || isSensorDefect() || isSensorDecoupled() || !validTemperatureSample(supported, measured)) {
             finishAutotune(*this);
-            Com::printErrorFLN(PSTR("PID autotune aborted: invalid sensor, heater fault or cancellation"));
+            Com::printErrorFLN(PSTR("PID autotune aborted: sensor, settings, fault or cancellation"));
             showError((void*)ui_text_autodetect_pid, (void*)ui_text_temperature_wrong);
             break;
         }
-
-        millis_t time = HAL::timeInMilliseconds();
-        if (currentTemp > autotuneTemperatureLimit) {
+        if (measured > cutoff) {
             finishAutotune(*this);
             Com::printErrorFLN(Com::tAPIDFailedHigh);
             showError((void*)ui_text_autodetect_pid, (void*)ui_text_temperature_wrong);
             break;
         }
-        if (((time - t1) + (time - t2)) > (10L * 60L * 1000L * 2L)) {
+        if (now - started > (bed ? 3600000UL : 1200000UL)
+            || now - phaseStart > (bed ? 600000UL : 180000UL)) {
             finishAutotune(*this);
             Com::printErrorFLN(Com::tAPIDFailedTimeout);
             showError((void*)ui_text_autodetect_pid, (void*)ui_text_timeout);
             break;
         }
-        maxTemp = RMath::max(maxTemp, currentTemp);
-        minTemp = RMath::min(minTemp, currentTemp);
-        if (heating == true && currentTemp > temp) // switch heating -> off
-        {
-            if (time - t2 > (controllerId < NUM_EXTRUDER ? 2500 : 1500)) {
-                heating = false;
-                HAL::setHeaterDuty(pwmIndex, (bias - d));
-                t1 = time;
-                t_high = t1 - t2;
-                maxTemp = temp;
-            }
-        }
-        if (heating == false && currentTemp < temp) {
-            if (time - t1 > (controllerId < NUM_EXTRUDER ? 5000 : 3000)) {
-                heating = true;
-                t2 = time;
-                t_low = t2 - t1; // half wave length
-                if (cycles > 0) {
-                    bias += (d * (t_high - t_low)) / (t_low + t_high);
-                    bias = constrain(bias, 20, pidMax - 20);
-                    if (bias > pidMax / 2)
-                        d = pidMax - 1 - bias;
-                    else
-                        d = bias;
-
-                    Com::printF(Com::tAPIDBias, bias);
-                    Com::printF(Com::tAPIDD, d);
-                    Com::printF(Com::tAPIDMin, minTemp);
-                    Com::printFLN(Com::tAPIDMax, maxTemp);
-                    if (cycles > 2) {
-                        // Parameter according Ziegler¡§CNichols method: http://en.wikipedia.org/wiki/Ziegler%E2%80%93Nichols_method
-                        Ku = (4.0 * d) / (3.14159 * (maxTemp - minTemp));
-                        Tu = static_cast<float>(t_low + t_high) / 1000.0;
-                        Com::printF(Com::tAPIDKu, Ku);
-                        Com::printFLN(Com::tAPIDTu, Tu);
-                        /**
-                        https://en.wikipedia.org/wiki/Ziegler%E2%80%93Nichols_method
-                        KP = KP
-                        KI = KP / Ti
-                        KD = KP * Td
-                        wegen Formel u(t) = KP*( rest )
-
-                        Ti = Tu / Maßzahl lt. Tabelle
-                        Td = Tu / Maßzahl lt. Tabelle
-                        KP = Ku * Maßzahl lt. Tabelle
-
-                        see also: http://www.mstarlabs.com/control/znrule.html
-                        */
-                        switch (method) {
-                        case 4: {                // PID Tyreus-Lyben ("lazy--" -> Heated Bed!)
-                            Kp = 0.4545f * Ku;   //1/2.2 KRkrit
-                            Ki = Kp / Tu / 2.2f; //2.2 Tkrit
-                            Kd = Kp * Tu / 6.3f; //1/6.3 Tkrit[/code]
-                            Com::printFLN(Com::tAPIDTyreusLyben);
-                            break;
-                        }
-                        case 3: {                // PID no overshoot ("lazy-" -> Heated Bed!)
-                            Kp = 0.2f * Ku;      //0.2 KRkrit
-                            Ki = 2.0f * Kp / Tu; //0.5 Tkrit
-                            Kd = Kp * Tu / 3.0f; //0.333 Tkrit
-                            Com::printFLN(Com::tAPIDNone);
-                            break;
-                        }
-                        case 2: {                // PID some overshoot
-                            Kp = 0.33f * Ku;     //0.33 KRkrit
-                            Ki = 2.0f * Kp / Tu; //0.5 Tkrit
-                            Kd = Kp * Tu / 3.0f; //0.333 Tkrit
-                            Com::printFLN(Com::tAPIDSome);
-                            break;
-                        }
-                        case 1: {                        // PID Pessen Integral Rule ("dynamic++" -> fast Hotend!)
-                            Kp = 0.7f * Ku;              //0.7 KRkrit
-                            Ki = 2.5f * Kp / Tu;         //0.4 Tkrit
-                            Kd = Kp * Tu * 3.0f / 20.0f; //0.15 Tkrit
-                            Com::printFLN(Com::tAPIDPessen);
-                            break;
-                        }
-                        default: {               // PID classic Ziegler-Nichols  ("dynamic+" -> Hotend!)
-                            Kp = 0.6f * Ku;      //0.6 KRkrit
-                            Ki = 2.0f * Kp / Tu; //0.5 Tkrit
-                            Kd = Kp * Tu / 8.0f; //0.125 Tkrit
-                            Com::printFLN(Com::tAPIDClassic);
-                        }
-                        }
-                        Com::printFLN(Com::tAPIDKp, Kp);
-                        Com::printFLN(Com::tAPIDKi, Ki);
-                        Com::printFLN(Com::tAPIDKd, Kd);
-                    }
-                }
-                cycles++;
-                if (cycles <= maxCycles)
-                    HAL::setHeaterDuty(pwmIndex, (bias + d));
-                minTemp = temp;
-            }
-        }
-        if (cycles > maxCycles) {
+        // An excessively late sample invalidates timing/identification, even
+        // if the ADC itself is still fresh.
+        if (now - lastSample > 1000) {
             finishAutotune(*this);
-            Com::printInfoFLN(Com::tAPIDFinished);
-            UI_STATUS_UPD(UI_TEXT_AUTODETECT_PID_DONE);
-            if (storeValues) {
-                pidPGain = Kp;
-                pidIGain = Ki;
-                pidDGain = Kd;
-                EEPROM::storeDataIntoEEPROM();
+            Com::printErrorFLN(PSTR("PID autotune: temperature service delayed"));
+            break;
+        }
+        if (now - lastSample < 100)
+            continue;
+        lastSample = now;
+        low = RMath::min(low, measured);
+        high = RMath::max(high, measured);
+        if (heating && measured >= temp + hysteresis) {
+            HAL::setHeaterDuty(pwmIndex, 0);
+            heating = false;
+            onTime = now - cycleStart;
+            phaseStart = now;
+        } else if (heating && now - riseStart >= (bed ? 60000UL : 20000UL)) {
+            if (measured - riseTemp < DECOUPLING_TEST_MIN_TEMP_RISE) {
+                finishAutotune(*this);
+                setSensorDecoupled(true);
+                Printer::latchOutputInhibit(true);
+                Com::printErrorFLN(PSTR("PID autotune: no temperature rise"));
+                Printer::stopPrint();
+                showError((void*)ui_text_temperature_manager, (void*)ui_text_heater_error);
+                break;
             }
-            Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 30000);
-            return;
+            riseStart = now;
+            riseTemp = measured;
+        } else if (!heating && measured <= temp - hysteresis) {
+            if (completeCycle) {
+                ++cycles;
+                const millis_t period = now - cycleStart;
+                const float fraction = float(onTime) / float(period);
+                const float span = high - low;
+                // Discard heat-up and the next transient cycle.
+                if (cycles > 2 && period >= 1000 && span >= 0.75f
+                    && fraction >= 0.05f && fraction <= 0.95f) {
+                    const float ku = (4.0f * autotunePowerLimit * sinf(3.14159265f * fraction)) / (3.14159265f * span);
+                    const float tu = period * 0.001f;
+                    if (ku > 0 && ku <= 1000 && tu > 0) {
+                        if (stable && (fabsf(ku - prevKu) > 0.15f * prevKu || fabsf(tu - prevTu) > 0.15f * prevTu)) {
+                            stable = 0;
+                            kuSum = tuSum = 0;
+                        }
+                        if (stable == 0) {
+                            prevKu = ku;
+                            prevTu = tu;
+                        }
+                        ++stable;
+                        kuSum += ku;
+                        tuSum += tu;
+                    } else {
+                        stable = 0;
+                        kuSum = tuSum = 0;
+                    }
+                } else {
+                    stable = 0;
+                    kuSum = tuSum = 0;
+                }
+                if (stable >= 3 && cycles >= limit) {
+                    const float ku = kuSum / stable, tu = tuSum / stable;
+                    float p, ti, td;
+                    switch (method) {
+                    case 0: p = 0.45f; ti = 1.6f; td = 0.08f; break;
+                    case 1: p = 1.0f / 2.2f; ti = 2.2f; td = 1.0f / 6.3f; break;
+                    case 2: p = 0.65f; ti = 1.6f; td = 0.16f; break;
+                    default: p = 0.45f; ti = 3.0f; td = 0.08f; break;
+                    }
+                    const float kp = p * ku, ki = kp / (ti * tu), kd = kp * td * tu;
+                    finishAutotune(*this);
+                    if (!validPidGains(kp, ki, kd)) {
+                        Com::printErrorFLN(PSTR("PID autotune: invalid gains"));
+                        break;
+                    }
+                    Com::printF(Com::tAPIDKu, ku);
+                    Com::printFLN(Com::tAPIDTu, tu);
+                    Com::printFLN(Com::tAPIDKp, kp);
+                    Com::printFLN(Com::tAPIDKi, ki);
+                    Com::printFLN(Com::tAPIDKd, kd);
+                    if (storeValues) {
+                        pidPGain = kp;
+                        pidIGain = ki;
+                        pidDGain = kd;
+                        pidDriveMax = pidMax;
+                        pidDriveMin = RMath::min(20, int(pidMax));
+                        tunedSensorType = sensorType;
+                        tunedPowerLimit = pidMax;
+                        tempIState = 0;
+                        pidHistoryValid = false;
+                        updateTempControlVars();
+                        EEPROM::storePidCalibration(controllerId);
+                    }
+                    Com::printInfoFLN(Com::tAPIDFinished);
+                    UI_STATUS_UPD(UI_TEXT_AUTODETECT_PID_DONE);
+                    Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 30000);
+                    return;
+                }
+                if (cycles >= limit) {
+                    finishAutotune(*this);
+                    Com::printErrorFLN(PSTR("PID autotune: oscillation did not converge"));
+                    break;
+                }
+            }
+            completeCycle = true;
+            heating = true;
+            phaseStart = cycleStart = riseStart = now;
+            riseTemp = low = high = measured;
+            HAL::setHeaterDuty(pwmIndex, autotunePowerLimit);
         }
     }
     Printer::idleStatus.schedule(HAL::timeInMilliseconds());

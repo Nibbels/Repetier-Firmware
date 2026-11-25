@@ -22,7 +22,79 @@
 constexpr uint8_t eepromMagic = 44;
 long EEPROM::configuredBaudrate_ = BAUDRATE;
 
+// A changed algorithm requires a new stored tune, not a full settings reset.
+// Bed is always slot 2, independent of the number of fitted extruders.
+static constexpr uint8_t pidCalibrationTag = 0xA9;
+static uint16_t pidCalibrationAddress(uint8_t heater) {
+    return EPR_RF_PID_CALIBRATION + 3 * (heater == NUM_EXTRUDER ? 2 : heater);
+}
+static void writePidCalibrationTag(uint8_t heater) {
+    auto& c = *tempController[heater];
+    const uint16_t address = pidCalibrationAddress(heater);
+    if (!c.pidCalibrationValid()) {
+        HAL::eprSetByte(address, 0);
+        return;
+    }
+    HAL::eprSetByte(address + 1, c.tunedSensorType);
+    HAL::eprSetByte(address + 2, c.tunedPowerLimit);
+    HAL::eprSetByte(address, pidCalibrationTag);
+}
+static bool readPidCalibrationTag(uint8_t heater, uint8_t version) {
+    auto& c = *tempController[heater];
+    const uint16_t address = pidCalibrationAddress(heater);
+    const uint8_t tag = HAL::eprGetByte(address);
+    if (version == EEPROM_PROTOCOL_VERSION && tag == pidCalibrationTag) {
+        c.tunedSensorType = HAL::eprGetByte(address + 1);
+        c.tunedPowerLimit = HAL::eprGetByte(address + 2);
+        if (c.pidCalibrationValid()) {
+            c.updateTempControlVars();
+            return false;
+        }
+    }
+    c.invalidatePidCalibration();
+    c.updateTempControlVars();
+    if (tag != 0) {
+        HAL::eprSetByte(address, 0);
+        return true;
+    }
+    return false;
+}
+
+void EEPROM::storePidCalibration(uint8_t heater) {
+    if (heater >= NUM_TEMPERATURE_LOOPS)
+        return;
+    auto& c = *tempController[heater];
+    const uint16_t address = pidCalibrationAddress(heater);
+    HAL::eprSetByte(address, 0); // revoke marker before changing coefficients
+    if (heater == NUM_EXTRUDER) {
+        HAL::eprSetFloat(EPR_BED_PID_PGAIN, c.pidPGain);
+        HAL::eprSetFloat(EPR_BED_PID_IGAIN, c.pidIGain);
+        HAL::eprSetFloat(EPR_BED_PID_DGAIN, c.pidDGain);
+        HAL::eprSetByte(EPR_BED_DRIVE_MAX, c.pidDriveMax);
+        HAL::eprSetByte(EPR_BED_DRIVE_MIN, c.pidDriveMin);
+        HAL::eprSetByte(EPR_BED_PID_MAX, c.pidMax);
+        HAL::eprSetByte(EPR_RF_HEATED_BED_SENSOR_TYPE, c.sensorType);
+    } else {
+        const int o = getExtruderOffset(heater);
+        HAL::eprSetFloat(o + EPR_EXTRUDER_PID_PGAIN, c.pidPGain);
+        HAL::eprSetFloat(o + EPR_EXTRUDER_PID_IGAIN, c.pidIGain);
+        HAL::eprSetFloat(o + EPR_EXTRUDER_PID_DGAIN, c.pidDGain);
+        HAL::eprSetByte(o + EPR_EXTRUDER_DRIVE_MAX, c.pidDriveMax);
+        HAL::eprSetByte(o + EPR_EXTRUDER_DRIVE_MIN, c.pidDriveMin);
+        HAL::eprSetByte(o + EPR_EXTRUDER_PID_MAX, c.pidMax);
+        HAL::eprSetByte(o + EPR_EXTRUDER_SENSOR_TYPE, c.sensorType);
+    }
+    writePidCalibrationTag(heater);
+    updateChecksum();
+}
+
 void EEPROM::update(GCode* com) {
+    // Calibration authorization is not a user-editable EEPROM setting.
+    const int width = com->hasT() && com->T == 0 ? 1 : (com->hasT() && com->T == 1 ? 2 : 4);
+    if (com->hasP() && com->P >= EPR_RF_PID_CALIBRATION - width + 1 && com->P < EPR_RF_PID_CALIBRATION + 9) {
+        Com::printErrorFLN(PSTR("PID calibration record is read-only"));
+        return;
+    }
     if (com->hasT() && com->hasP())
         switch (com->T) {
         case 0: {
@@ -57,6 +129,7 @@ void EEPROM::restoreEEPROMExtruderSettingsFromConfiguration(uint8_t extruderId) 
 
     if (extruderId == 0) {
         e = &extruder[0];
+        e->tempControl.invalidatePidCalibration();
         e->stepsPerMM = EXT0_STEPS_PER_MM;
         e->maxFeedrate = EXT0_MAX_FEEDRATE;
         e->maxEJerk = EXT0_MAX_START_FEEDRATE;
@@ -81,6 +154,7 @@ void EEPROM::restoreEEPROMExtruderSettingsFromConfiguration(uint8_t extruderId) 
 #if NUM_EXTRUDER > 1
     if (extruderId == 1) {
         e = &extruder[1];
+        e->tempControl.invalidatePidCalibration();
         e->stepsPerMM = EXT1_STEPS_PER_MM;
         e->maxFeedrate = EXT1_MAX_FEEDRATE;
         e->maxEJerk = EXT1_MAX_START_FEEDRATE;
@@ -154,6 +228,7 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     Printer::setTravelAcceleration(Y_AXIS, MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Y);
     Printer::setTravelAcceleration(Z_AXIS, MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Z);
 
+    heatedBedController.invalidatePidCalibration();
     heatedBedController.pidDriveMax = HEATED_BED_PID_INTEGRAL_DRIVE_MAX;
     heatedBedController.pidDriveMin = HEATED_BED_PID_INTEGRAL_DRIVE_MIN;
     heatedBedController.pidPGain = HEATED_BED_PID_PGAIN;
@@ -282,6 +357,7 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     HAL::eprSetFloat(EPR_BED_PID_DGAIN, heatedBedController.pidDGain);
     HAL::eprSetByte(EPR_BED_PID_MAX, heatedBedController.pidMax);
     HAL::eprSetByte(EPR_RF_HEATED_BED_SENSOR_TYPE, heatedBedController.sensorType);
+    writePidCalibrationTag(NUM_EXTRUDER);
 
         HAL::eprSetFloat(EPR_X_LENGTH, Printer::axisLengthMm(X_AXIS));
     HAL::eprSetFloat(EPR_Y_LENGTH, Printer::axisLengthMm(Y_AXIS));
@@ -376,6 +452,7 @@ void EEPROM::storeExtruderDataIntoEEPROM(uint8_t extruderId) {
     HAL::eprSetFloat(o + EPR_EXTRUDER_PID_DGAIN, e->tempControl.pidDGain);
     HAL::eprSetByte(o + EPR_EXTRUDER_PID_MAX, e->tempControl.pidMax);
     HAL::eprSetByte(o + EPR_EXTRUDER_SENSOR_TYPE, e->tempControl.sensorType);
+    writePidCalibrationTag(extruderId);
 
     HAL::eprSetFloat(o + EPR_EXTRUDER_X_OFFSET, e->offsetMM[X_AXIS]);
     HAL::eprSetFloat(o + EPR_EXTRUDER_Y_OFFSET, e->offsetMM[Y_AXIS]);
@@ -483,7 +560,8 @@ void EEPROM::readDataFromEEPROM() {
     heatedBedController.pidIGain = HAL::eprGetFloat(EPR_BED_PID_IGAIN);
     heatedBedController.pidDGain = HAL::eprGetFloat(EPR_BED_PID_DGAIN);
     heatedBedController.pidMax = HAL::eprGetByte(EPR_BED_PID_MAX);
-    heatedBedController.sensorType = (HAL::eprGetByte(EPR_RF_HEATED_BED_SENSOR_TYPE) != 0) ? HAL::eprGetByte(EPR_RF_HEATED_BED_SENSOR_TYPE) : HEATED_BED_SENSOR_TYPE;
+    heatedBedController.sensorType = (version >= 9 || HAL::eprGetByte(EPR_RF_HEATED_BED_SENSOR_TYPE) != 0) ? HAL::eprGetByte(EPR_RF_HEATED_BED_SENSOR_TYPE) : HEATED_BED_SENSOR_TYPE;
+    change |= readPidCalibrationTag(NUM_EXTRUDER, version);
 
     Printer::setAxisLengthMm(X_AXIS, HAL::eprGetFloat(EPR_X_LENGTH));
     if (Printer::axisLengthMm(X_AXIS) <= 0 || Printer::axisLengthMm(X_AXIS) > 245.0f) {
@@ -550,7 +628,7 @@ void EEPROM::readDataFromEEPROM() {
         e->tempControl.pidPGain = HAL::eprGetFloat(o + EPR_EXTRUDER_PID_PGAIN);
         e->tempControl.pidIGain = HAL::eprGetFloat(o + EPR_EXTRUDER_PID_IGAIN);
         e->tempControl.pidDGain = HAL::eprGetFloat(o + EPR_EXTRUDER_PID_DGAIN);
-        if (HAL::eprGetByte(o + EPR_EXTRUDER_PID_MAX) > 0) {
+        if (version >= 9 || HAL::eprGetByte(o + EPR_EXTRUDER_PID_MAX) > 0) {
             e->tempControl.pidMax = HAL::eprGetByte(o + EPR_EXTRUDER_PID_MAX);
         } else {
             HAL::eprSetByte(o + EPR_EXTRUDER_PID_MAX, e->tempControl.pidMax);
@@ -558,10 +636,11 @@ void EEPROM::readDataFromEEPROM() {
         }
 
         uint8_t sensortype_temp = HAL::eprGetByte(o + EPR_EXTRUDER_SENSOR_TYPE);
-        if (sensortype_temp > 0 && sensortype_temp <= 100) {
+        if (version >= 9 || (sensortype_temp > 0 && sensortype_temp <= 100)) {
             e->tempControl.sensorType = sensortype_temp;
         }
 
+        change |= readPidCalibrationTag(i, version);
         e->offsetMM[X_AXIS] = HAL::eprGetFloat(o + EPR_EXTRUDER_X_OFFSET);
         e->offsetMM[Y_AXIS] = HAL::eprGetFloat(o + EPR_EXTRUDER_Y_OFFSET);
 

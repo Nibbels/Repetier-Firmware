@@ -238,6 +238,9 @@ bool TemperatureController::updateCurrentTemperature() {
     case 14: // Thermistor NTC 3950 100k Ohm
     {
         sampleFresh = HAL::temperatureAdcSample(sensorPin, raw);
+        // The ADC accumulates 32 conversions and publishes a 12-bit sum / 8.
+        // Exact rails are saturation/open/short candidates, not heat authorization.
+        sampleFresh = sampleFresh && raw > 0 && raw < 4092;
         currentTemperature = (1023 << (2 - ANALOG_REDUCE_BITS)) - (raw >> ANALOG_REDUCE_BITS);
         break;
     }
@@ -246,6 +249,9 @@ bool TemperatureController::updateCurrentTemperature() {
     case 100: // AD595
     {
         sampleFresh = HAL::temperatureAdcSample(sensorPin, raw);
+        // The ADC accumulates 32 conversions and publishes a 12-bit sum / 8.
+        // Exact rails are saturation/open/short candidates, not heat authorization.
+        sampleFresh = sampleFresh && raw > 0 && raw < 4092;
         currentTemperature = (raw >> ANALOG_REDUCE_BITS);
         break;
     }

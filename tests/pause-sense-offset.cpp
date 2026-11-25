@@ -375,7 +375,10 @@ int32_t max(int32_t a, int32_t b) { return std::max(a, b); }
 }
 
 struct Extruder {
+    static bool allHeatersCalibrated() { return current->tempControl.pidCalibrationValid(); }
     struct {
+        bool calibrationValid = true;
+        bool pidCalibrationValid() const { return calibrationValid; }
         float targetTemperatureC = 200.0f;
         uint8_t paused = 0;
         void waitForTargetTemperature(int = 0, bool resumingPause = false) {
@@ -1749,6 +1752,16 @@ void printJob() {
     auto& job = Printer::printJob;
     assert(!job.isBusy() && !job.commandsBlocked());
     assert(PrintLine::hasLines()); // Artificial queue entries alone do not start a print.
+
+    Extruder::current->tempControl.calibrationValid = false;
+    GCode untuned;
+    untuned.X = 10;
+    untuned.E = 1;
+    const float beforeX = Printer::moveTarget.machineMM(X_AXIS);
+    const float beforeE = Printer::moveTarget.machineMM(E_AXIS);
+    assert(!Printer::queueGCodeCoordinates(&untuned) && !job.isPrinting());
+    assert(Printer::moveTarget.machineMM(X_AXIS) == beforeX && Printer::moveTarget.machineMM(E_AXIS) == beforeE);
+    Extruder::current->tempControl.calibrationValid = true;
 
     GCode command;
     command.X = 10;

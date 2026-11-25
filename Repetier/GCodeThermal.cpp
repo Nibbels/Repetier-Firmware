@@ -69,8 +69,13 @@ void waitForHotend(GCode* com) {
     Extruder* actExtruder = Extruder::current;
     if (com->hasT() && com->T < NUM_EXTRUDER)
         actExtruder = &extruder[com->T];
-    if (com->hasS())
+    if (com->hasS()) {
         Extruder::setTemperatureForExtruder(com->S, actExtruder->id);
+        if (com->S > 0 && actExtruder->tempControl.targetTemperatureC == 0) {
+            Printer::idleStatus.schedule(HAL::timeInMilliseconds());
+            return;
+        }
+    }
 
     if (fabs(actExtruder->tempControl.targetTemperatureC - actExtruder->tempControl.currentTemperatureC) < TEMP_TOLERANCE) {
         return;
@@ -154,8 +159,13 @@ void waitForBed(GCode* com) {
     Printer::idleStatus.cancel();
     if (!Commands::waitForMotion(Commands::MotionWait::QueueAndZ, Commands::PauseWait::Resume))
         return;
-    if (com->hasS())
+    if (com->hasS()) {
         Extruder::setHeatedBedTemperature(com->S);
+        if (com->S > 0 && heatedBedController.targetTemperatureC == 0) {
+            Printer::idleStatus.schedule(HAL::timeInMilliseconds());
+            return;
+        }
+    }
 
     bool dirRising = true; // random init
     float settarget = -1;  // random init in °C
@@ -183,42 +193,47 @@ void waitForBed(GCode* com) {
 }
 
 void setPidGains(GCode* com) {
-    TemperatureController* temp = &Extruder::current->tempControl;
+    TemperatureController* c = &Extruder::current->tempControl;
     if (com->hasS()) {
-        if (com->S < 0)
+        if (com->S < 0 || com->S >= NUM_TEMPERATURE_LOOPS) {
+            Com::printErrorFLN(PSTR("M204: invalid heater"));
             return;
-        if (com->S < NUM_EXTRUDER)
-            temp = &extruder[com->S].tempControl;
-        else
-            temp = &heatedBedController;
+        }
+        c = tempController[com->S];
     }
-    if (com->hasX())
-        temp->pidPGain = com->X;
-    if (com->hasY())
-        temp->pidIGain = com->Y;
-    if (com->hasZ())
-        temp->pidDGain = com->Z;
-    temp->updateTempControlVars();
+    // Manual adjustment does not create a first-tune authorization.
+    const float p = com->hasX() ? com->X : c->pidPGain;
+    const float i = com->hasY() ? com->Y : c->pidIGain;
+    const float d = com->hasZ() ? com->Z : c->pidDGain;
+    if (!c->pidCalibrationValid() || !TemperatureController::validPidGains(p, i, d)) {
+        Com::printErrorFLN(PSTR("M204: tune required or invalid gains"));
+        return;
+    }
+    c->pidPGain = p;
+    c->pidIGain = i;
+    c->pidDGain = d;
+    c->tempIState = 0;
+    c->pidHistoryValid = false;
+    c->updateTempControlVars();
 }
 
 void tunePid(GCode* com) {
-    int temp = 150;
-    int cont = 0;
-    int cycles = 10;
-    int method = 0; //0 = Classic PID
-    if (com->hasS())
-        temp = com->S; // Verwechsle ich immer, weil T wie Temperatur, aber T ist 0..255
-    if (com->hasP())
-        cont = com->P;
-    if (com->hasR())
-        cycles = static_cast<int>(com->R);
-    if (com->hasJ())
-        method = static_cast<int>(com->J); // Original Repetier used hasC, we dont have that in this version of repetier.
-    if (cont >= NUM_TEMPERATURE_LOOPS)
-        cont = NUM_TEMPERATURE_LOOPS - 1;
-    if (cont < 0)
-        cont = 0;
-    tempController[cont]->autotunePID(temp, cont, cycles, com->hasX(), method);
+    const int32_t controller = com->hasP() ? com->P : 0;
+    if (controller < 0 || controller >= NUM_TEMPERATURE_LOOPS) {
+        Com::printErrorFLN(PSTR("M303: invalid heater P"));
+        return;
+    }
+    const bool bed = controller == NUM_EXTRUDER;
+    const float rule = com->hasJ() ? com->J : (bed ? 3 : 1);
+    const float cycles = com->hasR() ? com->R : (bed ? 16 : 10);
+    if (!(rule >= 0 && rule <= 3) || rule != int(rule)
+        || !TemperatureController::autotuneProfileAllowed(controller, int(rule))
+        || !(cycles >= 5 && cycles <= 20) || cycles != int(cycles)) {
+        Com::printErrorFLN(PSTR("M303: hotend J0/J1; bed J2/J3; R5..20"));
+        return;
+    }
+    const float temp = com->hasS() ? com->S : (bed ? heatBedScanPlaBedC : heatBedScanPlaNozzleC);
+    tempController[controller]->autotunePID(temp, controller, int(cycles), com->hasX(), int(rule));
 }
 
 void setCaseLight(GCode* com) {
@@ -350,6 +365,10 @@ void setMainsOutput(GCode* pCommand) {
 #endif
 
 static bool prepareFilamentProgram() {
+    if (!Extruder::current->tempControl.pidCalibrationValid()) {
+        Com::printFLN(PSTR("Error: PID tune required before filament service"));
+        return false;
+    }
     if (Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Cancel)) {
         Printer::printJob.beginFilamentService();
         return true;
