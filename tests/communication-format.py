@@ -19,6 +19,9 @@ def main():
     firmware = Path(__file__).resolve().parent.parent / 'Repetier'
     source = (firmware / 'Communication.cpp').read_text(encoding='utf-8')
     header = (firmware / 'Communication.h').read_text(encoding='utf-8')
+    system = (firmware / 'GCodeSystem.cpp').read_text(encoding='utf-8')
+    first = system.index('void reportDeviceVersion() {')
+    version_report = system[first:system.index('\n}', first) + 2]
     # Keep the AVR int overloads distinct on a host where int32_t is int.
     header = header.replace('#include "HAL.h"\n', '').replace('int value)', 'int16_t value)')
     methods = source[source.index('void Com::cap('):].replace('int value)', 'int16_t value)')
@@ -45,6 +48,9 @@ struct HAL {
 #define NUM_EXTRUDER 2
 #include "communication-host.h"
 #include "communication-methods.inc"
+#define UI_PRINTER_NAME "RF2000v2"
+#define UI_VERSION_STRING "V test-version"
+#include "device-version.inc"
 static void expect(const char* label, const std::string& wanted) {
     if (output != wanted) {
         std::cerr << label << ": expected [" << wanted << "] got [" << output << "]\n";
@@ -53,6 +59,7 @@ static void expect(const char* label, const std::string& wanted) {
     output.clear();
 }
 int main() {
+    reportDeviceVersion(); expect("device version", "Device Type: RF2000v2\r\nFirmware Version: V test-version\r\n");
     Com::print(int32_t(0)); expect("zero", "0");
     Com::print(int32_t(-17)); expect("negative", "-17");
     Com::print(std::numeric_limits<int32_t>::max()); expect("signed max", "2147483647");
@@ -96,6 +103,7 @@ int main() {
         build = Path(directory)
         (build / 'communication-host.h').write_text(header, encoding='utf-8')
         (build / 'communication-methods.inc').write_text(constants + '\n' + methods, encoding='utf-8')
+        (build / 'device-version.inc').write_text(version_report, encoding='utf-8')
         (build / 'replay.cpp').write_text(harness, encoding='utf-8')
         executable = build / 'replay'
         flags = ['-fsanitize=undefined', '-fno-sanitize-recover=undefined'] if args.ubsan else []
