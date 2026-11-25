@@ -4,6 +4,13 @@
 
 Move `Repetier/overflow_decompile.txt` to `docs/overflow_decompile.txt` as part of the final source-directory cleanup. Preserve its AVR disassembly and RAM inspection commands and links. Update any references to the old path.
 
+Review the following repository-root files during final cleanup. Record current consumers and a keep, move, update or retire recommendation for each. Check working links in both READMEs, licensing, and compatibility with supported build and flash workflows before proposing changes.
+
+- Formatting, ignore rules and worker instructions: `.clang-format`, `.gitignore`, `AGENTS.md`.
+- Documentation and language links: `Doxyfile`, `README.de_DE.md`, `README.md`, `de.png`, `us.png`.
+- Build and flashing: `Repetier.sln` (review together with the Visual Micro manifests), `flash_arduino.sh`.
+- History, license and protocol reference: `changelog.txt`, `gpl.txt`, `repetier communication protocol.txt`.
+
 Date: 2026-11-24 (Europe/Berlin). User wants a long-lived manager chat in ChatGPT Work (Astra selected by user); worker chats currently use GPT-6.2 High outside Work. Repository [Nibbels/Repetier-Firmware](https://github.com/Nibbels/Repetier-Firmware), integration branch **ai-firmware-review**, never community_development. Read [AGENTS.md](../AGENTS.md), [TASKS.md](TASKS.md), individual task files and live branches/PRs first. Repository is the authoritative durable state, not chat memory.
 
 ## Comment cleanup dispatch
