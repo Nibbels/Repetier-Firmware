@@ -65,7 +65,40 @@ def host_tests(out):
     return failures
 
 
-def build_target(out, cli, name, definitions):
+# Experimental flags are opt-in; ordinary captures preserve the pinned recipes.
+EXPERIMENTS = ("O2", "O3", "relax", "no-lto")
+
+
+def expanded_properties(text):
+    return dict(line.split("=", 1) for line in text.splitlines() if "=" in line)
+
+
+def experimental_properties(props, experiment):
+    keys = ("compiler.c.flags", "compiler.cpp.flags", "compiler.c.elf.flags")
+    if experiment == "no-lto":
+        keys += ("compiler.S.flags",)
+    result = {}
+    for key in keys:
+        flags = props[key]
+        if experiment in ("O2", "O3"):
+            flags, count = re.subn(r"(?<!\S)-Os(?!\S)", "-" + experiment, flags)
+            if count != 1:
+                raise ValueError(f"{key}: expected exactly one -Os, found {count}")
+        elif experiment == "relax":
+            if re.search(r"(?<!\S)-mrelax(?!\S)", flags):
+                raise ValueError(f"{key}: relaxation already enabled")
+            flags += " -mrelax"
+        elif experiment == "no-lto":
+            flags, count = re.subn(r"(?<!\S)-(?:flto(?:=\S+)?|fuse-linker-plugin|fno-fat-lto-objects)(?!\S)", "", flags)
+            if key != "compiler.S.flags" and count == 0:
+                raise ValueError(f"{key}: no LTO-related flag to remove")
+        else:
+            raise ValueError(f"Unknown experiment: {experiment}")
+        result[key] = flags.strip()
+    return result
+
+
+def build_target(out, cli, name, definitions, experiment=None):
     directory = out / name
     directory.mkdir()
     build = directory / "build"
@@ -75,8 +108,17 @@ def build_target(out, cli, name, definitions):
     command = [cli, "compile", "--fqbn", FQBN, "--build-path", build,
                "--build-property", "compiler.cpp.extra_flags=" + flags,
                "--build-property", "compiler.c.elf.extra_flags=" + map_flags, ROOT / "Repetier"]
+    overrides = {}
+    if experiment:
+        baseline = run(directory, "baseline-properties", [*command, "--show-properties=expanded"])
+        overrides = experimental_properties(expanded_properties(baseline), experiment)
+        for key, value in overrides.items():
+            command[-1:-1] = ["--build-property", f"{key}={value}"]
     properties = run(directory, "properties", [*command, "--show-properties=expanded"])
-    props = dict(line.split("=", 1) for line in properties.splitlines() if "=" in line)
+    props = expanded_properties(properties)
+    for key, value in overrides.items():
+        if props.get(key) != value:
+            raise ValueError(f"Effective {key} did not match experimental override")
     if "compiler.path" not in props:
         raise ValueError("No expanded compiler.path in Arduino build properties")
     bin_dir = Path(props["compiler.path"])
@@ -102,6 +144,8 @@ def build_target(out, cli, name, definitions):
             if 0x800200 <= address < 0x802200:
                 rows.append({"name": match[4], "bytes": size, "address": address})
     sizes["largest_sram_symbols"] = sorted(rows, key=lambda row: -row["bytes"])[:20]
+    if experiment:
+        sizes["experimental_properties"] = overrides
     sizes["elf_sha256"] = hashlib.sha256(elf.read_bytes()).hexdigest()
     sizes["map_sha256"] = hashlib.sha256(map_file.read_bytes()).hexdigest()
     run(directory, "disassembly", [tool("avr-objdump"), "-h", "-d", "-S", "-C", "-z", elf])
@@ -119,10 +163,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output", type=Path, help="new evidence directory outside checkout")
     parser.add_argument("--cli", default="arduino-cli")
+    parser.add_argument("--experiment", choices=EXPERIMENTS,
+                        help="opt-in compiler trial, not a release configuration")
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--host-only", action="store_true")
     modes.add_argument("--avr-only", action="store_true")
     args = parser.parse_args()
+    if args.experiment and args.host_only:
+        parser.error("compiler experiments require AVR builds")
     out = args.output.resolve()
     if out == ROOT or ROOT in out.parents or out.exists():
         parser.error("output must be a new directory outside the checkout")
@@ -132,6 +180,8 @@ def main():
     report = {"sha": git("rev-parse", "HEAD"), "arduino_core_required": CORE,
               "fqbn": FQBN, "targets": {}, "failures": [],
               "host_requested": not args.avr_only, "avr_requested": not args.host_only}
+    if args.experiment:
+        report["compiler_experiment"] = args.experiment
     if not args.avr_only:
         report["failures"] += host_tests(out)
     if not args.host_only:
@@ -146,7 +196,7 @@ def main():
         else:
             for name, definitions in TARGETS.items():
                 try:
-                    report["targets"][name] = build_target(out, args.cli, name, definitions)
+                    report["targets"][name] = build_target(out, args.cli, name, definitions, args.experiment)
                 except (OSError, ValueError, subprocess.CalledProcessError) as error:
                     report["failures"].append(f"{name}: {error}")
     if git("status", "--porcelain", "--untracked-files=all") or git("rev-parse", "HEAD") != report["sha"]:

@@ -1,0 +1,35 @@
+name: RFx000 Task0023 compiler experiments
+on:
+  pull_request:
+    branches: [ai-firmware-review]
+permissions:
+  contents: read
+concurrency:
+  group: rfx000-task0023-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  compiler-trial:
+    if: github.head_ref == 'task/Task0023-avr-compiler'
+    strategy:
+      fail-fast: false
+      matrix:
+        trial: [O2, O3, relax, no-lto]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-arduino-cli@v2
+        with:
+          version: 1.2.2
+      - name: Install Arduino AVR Boards
+        run: |
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+      - name: Capture compiler trial
+        run: python3 tools/task0003-baseline.py --avr-only --experiment "${{ matrix.trial }}" "$RUNNER_TEMP/trial"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compiler-${{ matrix.trial }}-${{ github.sha }}
+          path: ${{ runner.temp }}/trial
+          retention-days: 7
