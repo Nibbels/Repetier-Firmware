@@ -95,6 +95,13 @@ int main() {
     assert(!u.normalCharacters_ && clears==1);
     for(unsigned i=0;i<8;++i)
         assert(memcmp(cgram+8*((i+1)&7),bootEyeGlyphs[i],8)==0);
+    // Independent expected values: corrected lower frame corners (c484e193).
+    // Comparing uploaded CGRAM to the firmware table alone would also pass the old art.
+    const uint8_t lowerLeft[8] = {4,4,4,7,0,0,0,0};
+    const uint8_t lowerRight[8] = {4,4,4,28,0,0,0,0};
+    assert(memcmp(cgram+8*3,lowerLeft,8)==0);
+    assert(memcmp(cgram+8*4,lowerRight,8)==0);
+    assert(pixel(3,UI_COLS/2-5)==3 && pixel(3,UI_COLS/2+4)==4);
     expectPupil(UI_COLS/2-1);
     auto n=transfers;
     HAL::now=start+49; u.serviceBootEye(); assert(transfers==n);
