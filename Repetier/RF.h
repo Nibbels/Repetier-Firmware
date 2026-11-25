@@ -485,5 +485,6 @@ extern void showWarning(const void* line2, const void* line3 = NULL, const void*
 extern void showInformation(const void* line2, const void* line3 = NULL, const void* line4 = NULL);
 extern void showMyPage(const void* line1, const void* line2 = NULL, const void* line3 = NULL, const void* line4 = NULL);
 
-void doEmergencyStop(char reason);
+enum class StopReason : char { ZMin = 1, ZBlock = 2 };
+void doEmergencyStop(StopReason reason);
 #endif // RF_H

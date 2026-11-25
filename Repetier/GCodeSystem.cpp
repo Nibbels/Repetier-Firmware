@@ -297,7 +297,7 @@ void runRfDiagnostic(GCode* pCommand) {
             // simulate blocking of all axes
             Com::printFLN(PSTR("M3200: block all"));
 
-            doEmergencyStop(STOP_BECAUSE_OF_Z_BLOCK);
+            doEmergencyStop(StopReason::ZBlock);
             break;
         }
         case 5: {

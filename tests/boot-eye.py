@@ -19,7 +19,8 @@ HARNESS = r'''
 #define UI_PRINTER_NAME "RFx000"
 using millis_t = uint32_t;
 using byte = uint8_t;
-static const char versionString[] = "V test";
+#include "Constants.h"
+#include "version-firmware.inc"
 static const uint8_t LCDLineOffsets[] = {0,0x40,UI_COLS,0x40+UI_COLS};
 template<class T> uint8_t pgm_read_byte(const T* p) { return uint8_t(*p); }
 namespace HAL {
@@ -116,7 +117,8 @@ int main() {
     assert(memcmp(cgram+40,character_temperature,8)==0);
     assert(memcmp(cgram+48,c8,8)==0);
     assert(memcmp(cgram+56,character_ready,8)==0);
-    assert(pixel(3,0)=='V');
+    for (unsigned i=0; i<strlen(UI_VERSION_STRING); ++i)
+        assert(pixel(3,i)==UI_VERSION_STRING[i]);
     n=transfers; u.serviceBootEye(); u.finishBootEye(); assert(transfers==n);
     UIDisplay fast; fast.beginBootEye(); fast.finishBootEye(); assert(fast.normalCharacters_);
     n=transfers; fast.serviceBootEye(); assert(transfers==n);
@@ -130,7 +132,9 @@ int main() {
 '''
 
 def main():
-    source = (Path(__file__).resolve().parents[1] / "Repetier" / "ui.cpp").read_text()
+    firmware = Path(__file__).resolve().parents[1] / "Repetier"
+    source = (firmware / "ui.cpp").read_text()
+    version = re.search(r"^static const char versionString\[\] PROGMEM = UI_VERSION_STRING;", source, re.M)[0]
     glyphs = source[source.index("const uint8_t character_back"):source.index("#define LCD_ENTRYMODE")]
     glyphs = re.sub(r"\bB([01]{5})\b", r"0b\1", glyphs)
     normal = source[source.index("void UIDisplay::loadNormalCharacters()"):source.index("void UIDisplay::initializeLCD")]
@@ -138,12 +142,13 @@ def main():
     with TemporaryDirectory(prefix="rfx-boot-eye-") as tmp:
         p = Path(tmp)
         (p / "firmware.inc").write_text(glyphs + normal + boot)
+        (p / "version-firmware.inc").write_text(version)
         (p / "test.cpp").write_text(HARNESS)
         for width in (16,20):
             exe = p / "test"
             subprocess.run([os.environ.get("CXX", "c++"), "-std=c++14", "-O2",
                             "-Wall", "-Wextra", "-Werror", f"-DUI_COLS={width}",
-                            str(p / "test.cpp"), "-o", str(exe)], check=True)
+                            "-I", str(firmware), str(p / "test.cpp"), "-o", str(exe)], check=True)
             subprocess.run([str(exe)], check=True, timeout=10)
 
 if __name__ == "__main__":

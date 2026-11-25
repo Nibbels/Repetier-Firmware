@@ -34,7 +34,4 @@
 #define Z_AXIS 2
 #define E_AXIS 3
 
-#define STOP_BECAUSE_OF_Z_MIN 1
-#define STOP_BECAUSE_OF_Z_BLOCK 2
-
 #endif // CONSTANTS_H
