@@ -93,7 +93,17 @@ def build_target(out, cli, name, definitions):
     sizes = section_sizes(run(directory, "sections", [tool("avr-size"), "-A", elf]))
     run(directory, "size", [tool("avr-size"), elf])
     run(directory, "symbols", [tool("avr-nm"), "-a", "-S", "-C", elf])
-    run(directory, "symbols-by-size", [tool("avr-nm"), "-S", "--size-sort", "--radix=d", "-C", elf])
+    symbols = run(directory, "symbols-by-size", [tool("avr-nm"), "-S", "--size-sort", "--radix=d", "-C", elf])
+    rows = []
+    for line in symbols.splitlines():
+        match = re.match(r"^\s*(\d+)\s+(\d+)\s+([bBdD])\s+(.+)$", line)
+        if match:
+            address, size = int(match[1]), int(match[2])
+            if 0x800200 <= address < 0x802200:
+                rows.append({"name": match[4], "bytes": size, "address": address})
+    sizes["largest_sram_symbols"] = sorted(rows, key=lambda row: -row["bytes"])[:20]
+    sizes["elf_sha256"] = hashlib.sha256(elf.read_bytes()).hexdigest()
+    sizes["map_sha256"] = hashlib.sha256(map_file.read_bytes()).hexdigest()
     run(directory, "disassembly", [tool("avr-objdump"), "-h", "-d", "-S", "-C", "-z", elf])
     dependencies = sorted(str(path.relative_to(directory)) for path in build.rglob("*.d"))
     (directory / "dependency-files.txt").write_text("\n".join(dependencies) + "\n", encoding="utf-8")
