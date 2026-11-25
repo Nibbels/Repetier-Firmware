@@ -15,9 +15,11 @@ jobs:
   verify:
     name: Host replays and four AVR builds
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: arduino/setup-arduino-cli@v2
         with:
           version: 1.2.2
@@ -27,6 +29,20 @@ jobs:
           arduino-cli core install arduino:avr@1.8.6
       - name: Verify merge candidate
         run: python3 tools/task0003-baseline.py "$RUNNER_TEMP/firmware-evidence"
+      - name: Compare Task0019 exact AVR baseline
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git worktree add --detach "$RUNNER_TEMP/task0019-base" "$BASE_SHA"
+          python3 "$RUNNER_TEMP/task0019-base/tools/task0003-baseline.py" "$RUNNER_TEMP/task0019-baseline" --avr-only
+          python3 coordination/audits/Task0019-compare.py "$RUNNER_TEMP/task0019-baseline" "$RUNNER_TEMP/firmware-evidence"
+          mv "$RUNNER_TEMP/task0019-baseline" "$RUNNER_TEMP/firmware-evidence/task0019-baseline"
+      - name: Refresh Task0016 source and compiler inventories
+        run: |
+          python3 coordination/audits/Task0004-scan.py --self-test
+          python3 coordination/audits/Task0004-scan.py --base 49a60a97eefb5dbd5b5eeea4344f090979c2d070 --head HEAD > "$RUNNER_TEMP/firmware-evidence/task0019-legacy.json"
+          python3 coordination/audits/Task0004-scan.py --base 1df0b8c12173d8248095be2926c3e83a9a276938 --head HEAD > "$RUNNER_TEMP/firmware-evidence/task0019-delta.json"
+          python3 coordination/audits/Task0004-avr-audit.py "$RUNNER_TEMP/firmware-evidence" "$PWD/Repetier" > "$RUNNER_TEMP/firmware-evidence/task0019-avr.json"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
