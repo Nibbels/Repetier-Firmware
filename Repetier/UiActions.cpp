@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// Panel action dispatch and operator commands; setting edits and formatting are separate modules.
+
 #include "Repetier.h"
 #include "GCodeInput.h"
 #include "UiMenus.h"

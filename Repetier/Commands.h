@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// Foreground scheduling, wait and reporting interface; individual G-code handlers are declared in GCodeCommands.h.
+
 #ifndef COMMANDS_H
 #define COMMANDS_H
 

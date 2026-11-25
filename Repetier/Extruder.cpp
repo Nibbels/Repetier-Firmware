@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// Tool selection, E calibration and heater target interfaces; regulation and sensor conversion are in TemperatureControl.cpp and TemperatureSensors.cpp.
+
 #include "Repetier.h"
 #include "pins_arduino.h"
 

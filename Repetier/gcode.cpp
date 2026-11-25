@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// Decoded G-code command utilities and reporting; serial framing and parsing belong to GCodeInput.cpp.
+
 #include "Repetier.h"
 
 /** \brief Print command on serial console */

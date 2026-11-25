@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// Serial framing, command decoding, receive queue and acknowledgments; not machine command execution.
+
 #include "Repetier.h"
 #include "GCodeInput.h"
 #include "GCodeCommands.h"

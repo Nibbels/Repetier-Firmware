@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// LCD template parsing and field rendering; no menu navigation or setting edits.
+
 #include "Repetier.h"
 #include "StepExecutor.h"
 #include "ZScrewAdjustment.h"

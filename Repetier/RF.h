@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// RF-specific integration declarations, panel action IDs and accessory interfaces; not the owner of all RF services.
+
 #ifndef RF_H
 #define RF_H
 
@@ -28,7 +30,7 @@
 // ##   RF specific UI Actions
 // ##########################################################################################
 
-//Diese Events sind alle in ProcessButton() in den case`s verlinkt. Der rest nicht, siehe ui.h und executeAction()
+// Action IDs are consumed by the panel dispatcher (UiActions.cpp) and menu definitions; see ui.h.
 
 #define UI_ACTION_RF_MIN_REPEATABLE 500
 

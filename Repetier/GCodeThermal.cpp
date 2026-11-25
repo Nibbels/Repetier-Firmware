@@ -15,6 +15,8 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// Temperature/fan command handlers; control and sensor conversion live in TemperatureControl.cpp and TemperatureSensors.cpp.
+
 #include "Repetier.h"
 #include "GCodeCommands.h"
 #include "CaseFan.h"
