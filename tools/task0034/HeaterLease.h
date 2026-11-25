@@ -19,6 +19,16 @@ class HeaterLease {
         const uint16_t left = uint16_t(timer_.deadline(channel) - now);
         return left > Guard && left <= Duration && !timer_.pending(channel);
     }
+    bool checkAll() {
+        if (failed_) return false;
+        for (uint8_t c = 0; c < Channels; ++c) {
+            if (duty_[c] && !live(c, timer_.now())) {
+                fail();
+                return false;
+            }
+        }
+        return true;
+    }
     void stop(uint8_t channel) {
         timer_.off(channel);
         duty_[channel] = 0;
@@ -35,7 +45,7 @@ public:
 
     // Called only after a fresh, completed thermal check, not from PWM.
     bool authorize(uint8_t channel, uint8_t demand) {
-        if (channel >= Channels || failed_) return false;
+        if (channel >= Channels || !checkAll()) return false;
         const uint16_t now = timer_.now();
         const bool active = duty_[channel] != 0;
         if (active && !live(channel, now)) {
@@ -67,7 +77,7 @@ public:
     // Admission at frame start: a pending expiry is a failure even if the
     // compare ISR has lower priority than the PWM handler.
     uint8_t frameDuty(uint8_t channel) {
-        if (channel >= Channels || failed_ || !duty_[channel]) return 0;
+        if (channel >= Channels || !checkAll() || !duty_[channel]) return 0;
         if (!live(channel, timer_.now())) {
             fail();
             return 0;
