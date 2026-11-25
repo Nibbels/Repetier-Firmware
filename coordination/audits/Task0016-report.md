@@ -113,3 +113,30 @@ Source audit: 116 files / 1,124,676 B; no new firmware paths from Task0018. 22,1
 ## Latest green normal CI and coordination-only update
 
 - [Normal CI 45517585016](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45517585016) green on branch `3bb84bfb9e0f6466f07805041a2a1a82b863fb6e`, exact tested checkout `95165a255953b8eff18cff5d4c950a28736a8959`; [artifact 14978807360](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45517585016/artifacts/14978807360). Downloaded and verified: failures=[], boot-eye PASS both widths, all four target resource/section records identical to full-audit run 45516842966, all twelve HEX/EEP binaries byte-identical. These are the current firmware images and hashes from the final bootlogo-inclusive table. Target advanced again to `aee88053345ac21b8987a52350e939f3d35973d0` exclusively in MANAGER_HANDOVER.md, TASKS.md and Task0020.md; no firmware/build/test inputs changed. Preserve the new dispatch, synchronize with both parents, reuse green evidence per worker contract for documentation-only updates. No redundant build required for documentation-only delta. Task0016 closes as the verified baseline, with Task0019 then Task0020 scheduled before the maximum-effort manager review. No hardware authorization.
+
+
+## Task0019 — verified constant ownership candidate
+
+- [PR #88](https://github.com/Nibbels/Repetier-Firmware/pull/88), audited head `64d56cadf1154bb4eecb5d80c35885923540e113`, tested merge checkout `07f3d1d38c3184522a2c4553267f8c3877c21f19`; exact pre-change baseline `1df0b8c12173d8248095be2926c3e83a9a276938`.
+- [CI 45519464162](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45519464162) success; [comparison/build artifact 14979104812](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45519464162/artifacts/14979104812). Both summaries report failures=[]; all 28 host replay entry points, all four AVR variants and full repeated lexical/compiler audit passed. Pinned Arduino CLI 1.2.2/core 1.8.6, matching AVR tool versions and build flags. Artifact contains both captures, task0019-comparison.json, task0019-legacy.json, task0019-delta.json and task0019-avr.json. Evidence transcribed from completed CI log; archive not independently unpacked in this session.
+- All variants: 24 slots, 119 B per slot (also the direct PrintLine), queue object 2861 B before and after (24 × 119 + 5). No change in flash or global SRAM; no stack measurement. All 25 compared affected function instruction streams per variant are raw-machine-code identical; every loaded byte in application and bootloader-inclusive HEX is identical, as is EEP. Thus ISR dispatch, instruction operands and static path cycle costs remain unchanged, including paths inlined into other functions; physical concurrent timing remains unmeasured. No differing loaded byte requires an exception.
+
+| Variant | Flash before = after (B) | SRAM before = after (B) |
+|---|---:|---:|
+| RF1000 | 181372 | 6495 |
+| RF2000 | 186570 | 6653 |
+| RF2000v2 | 186574 | 6773 |
+| RF2000-X44 | 181542 | 6633 |
+
+| Variant | Application HEX SHA-256 | Bootloader-inclusive HEX SHA-256 |
+|---|---|---|
+| RF1000 | 94b56a665798b7fc3bbc5c6082533918a85a85e55c9fbc8310dfefbb5ab02931 | 3e2cbb5119953a27116e859fb78357131d3e75cceb8f96ad9f4f2c1d795ce9fa |
+| RF2000 | d2faca3a9b2320fb4aa89395498155092e313ee62f223d953b0f41c2489cb23b | 4870ece86b3e7b2f35e3fa00d74e29b1e5d4799040e37302fd6f3a278d8af25e |
+| RF2000v2 | 552edc2cddec77d8dec7d67d8384d8f94587fefe528cd2f38adfc2da765d047f | bd628352ab0397aab1025f581ed54cbe00f0f25c7ffd38d1dbeec52e45a551da |
+| RF2000-X44 | 650d75ad368903765beb11c0be4c2ba7b96416529c943abab03a7898b4e45616 | 5e506be8a8f72ca6d3f16c4b08b23a8b5cbf07ffa8d8b9a53b762e84df1343ac |
+
+All four EEP SHA-256: `788e5ffc44ae4ee912fe01f495951f96b0accd5705e184dcaea197d8b64856a6`. Application hashes match the Task0016 integrated evidence. Boot strings, artwork, both LCD widths and the shared baseline version `1.45.03` are preserved; the LCD replay now checks the entire version string.
+
+Source inventory: 118 firmware C/C++/INO files, 1,125,667 bytes; all previous 116 paths retained, exactly two new headers. [Updated ownership ledger](Task0016-inventory.md). No physical tests. All existing device-plan checks, electrical sensor validity, independent heater protection, timing/stack and manager/owner acceptance remain open. Task0020 and final cleanup will require a fresh candidate before maximum-effort review.
+
+Target advanced to `5fea16b8ba3dc045b46be32de498feabe44a1872` exclusively in coordination/MANAGER_HANDOVER.md (two manager commits); no build/test input changed. Preserve both parents and the manager's new scope, restore the standard workflow exactly from target, and verify the resulting PR's ordinary CI before self-merge.
