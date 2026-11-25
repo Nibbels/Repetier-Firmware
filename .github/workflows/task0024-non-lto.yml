@@ -1,0 +1,31 @@
+name: RFx000 Task0024 non-LTO compatibility
+on:
+  pull_request:
+    branches: [ai-firmware-review]
+permissions:
+  contents: read
+concurrency:
+  group: rfx000-task0024-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  non-lto:
+    if: github.head_ref == 'task/Task0024-avr-sram'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-arduino-cli@v2
+        with:
+          version: 1.2.2
+      - name: Install Arduino AVR Boards
+        run: |
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+      - name: Capture non-LTO build
+        run: python3 tools/task0003-baseline.py --avr-only --experiment no-lto "$RUNNER_TEMP/trial"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0024-no-lto-${{ github.sha }}
+          path: ${{ runner.temp }}/trial
+          retention-days: 7
