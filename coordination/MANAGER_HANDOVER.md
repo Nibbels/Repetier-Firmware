@@ -1,11 +1,15 @@
 # RFx000 Manager 01 → Manager 02 handover
 
+## Current priority — Task0032 quality-first print core (2026-11-25)
+
+Owner explicitly reopens print-core optimization with [Task0032](tasks/Task0032.md): preserve configured microsteps, minimize pulse bunching/packing subject to sufficient CPU capacity and hard service/safety deadlines. Measure full Timer1 cost by motion class and actual foreground demand, including planner/lookahead, UART, temperature/ADC, DMS/Z/ECMP, Advance and watchdog. Compare justified fixed/internal thresholds versus workload-class selection and bounded adaptation. No premature packing, no automatic microstep reduction, no removal of the 512-tick base floor or guard without evidence. Owner reports historical stuck heater PWM during crashes; verify no same-ISR reentry, bounded nested service, actual thermal completion and independent fail-off. Eliminate DblFq adjustment only after justified policy, preserve legacy EEPROM/protocol compatibility. Phase A ready; no new production code or thresholds selected. Claim exclusive Task0032 branch; coordinate #91 UI scope. Task0030 baseline retained; no hardware flash or Astra Max review, manual triggers only.
+
 ## Current continuation — ATmega2560 optimization, 2026-11-25
 
 **Native optimization Tasks0022–0030 complete and merged.** Task0030 [PR #100](https://github.com/Nibbels/Repetier-Firmware/pull/100) merge ca21f0374f4a8a035d432deec706a87254e5f123. [Final CI 45673748654](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45673748654), [artifact 15050792432](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45673748654/artifacts/15050792432), [full benchmark](tasks/Task0030.md). All 33 host replays and four builds passed; final deployable files identical to Task0029; unchanged bootloader/EEPROM, 3200 paired isolated linked-motion fixtures matched, 262144 actual linked table values matched. RF2000v2 globals 6595->6103 B, reserve 1597->2089 B, Flash 190046->217034 B. Keep 31-cycle Advance HIGH, existing speed/pacing/packing/baud limits, pinned -Os/LTO.
 
 - Native wave software gate complete; owner acceptance and physical gates open. No actual printer speed, full-system WCET, concurrent interrupt deadline, physical STEP/DIR, stack high-water or hardware safety assertion. Worst sampled isolated executor demand 97.4% at 16k steps/s, greater than 100% at 24k/31.25k; dense/burst limits remain. Detailed physical acceptance plan in Task0030. Local restricted AVR interpreter/results delivered separately in owner chat ZIP with recorded SHA; artifact comparison tool is in repository.
-- **Stop here and await explicit owner direction.** LCD #91 still held; no device flash, no new work wave, no Astra Max review unless owner explicitly requests. No automation.
+- Native wave closed at owner-approved software checkpoint; LCD #91 still held. See new Task0032 direction above. No device flash, Astra Max review or automation.
 
 ## Current owner decision on review timing (2026-11-25)
 
