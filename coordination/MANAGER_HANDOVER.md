@@ -1,5 +1,9 @@
 # RFx000 Manager 01 → Manager 02 handover
 
+## Final cleanup after Tasks 0019 and 0020
+
+Move `Repetier/overflow_decompile.txt` to `docs/overflow_decompile.txt` as part of the final source-directory cleanup. Preserve its AVR disassembly and RAM inspection commands and links. Update any references to the old path.
+
 Date: 2026-11-24 (Europe/Berlin). User wants a long-lived manager chat in ChatGPT Work (Astra selected by user); worker chats currently use GPT-6.2 High outside Work. Repository [Nibbels/Repetier-Firmware](https://github.com/Nibbels/Repetier-Firmware), integration branch **ai-firmware-review**, never community_development. Read [AGENTS.md](../AGENTS.md), [TASKS.md](TASKS.md), individual task files and live branches/PRs first. Repository is the authoritative durable state, not chat memory.
 
 ## Comment cleanup dispatch
