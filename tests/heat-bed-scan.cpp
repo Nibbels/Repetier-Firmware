@@ -119,7 +119,8 @@ bool waitForMotion(MotionWait motion, PauseWait pause) {
 }
 }
 namespace Extruder {
-bool allHeatersCalibrated() { return true; }
+bool calibrated = true;
+bool allHeatersCalibrated() { return calibrated; }
 bool selectExtruderById(unsigned int tool) { return tool == 0; }
 void setHeatedBedTemperature(int target) { bedTarget = target; }
 void setTemperatureForAllExtruders(int target) { nozzleTargets.push_back(target); }
@@ -225,6 +226,12 @@ int main(int argc, char** argv) {
     invalidGrid = !std::strcmp(argv[1], "invalid-grid");
     saveFailed = !std::strcmp(argv[1], "save-failed");
 
+    Extruder::calibrated = false;
+    heatBedScan.startOrCancel(HeatBedScanMode::Pla);
+    assert(!heatBedScan.active());
+    heatBedScan.startOrCancel(HeatBedScanMode::Abs);
+    assert(!heatBedScan.active());
+    Extruder::calibrated = true;
     heatBedScan.startOrCancel(mode);
     unsigned ticks = 0;
     while (heatBedScan.active()) {

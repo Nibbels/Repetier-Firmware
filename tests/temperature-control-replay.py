@@ -317,7 +317,9 @@ int main(int argc, char** argv) {
         assert(HAL::outputDuty(c.pwmIndex) == 0 && c.tempIState == 0);
     } else if (!std::strcmp(name, "untuned") || !std::strcmp(name, "bed-untuned")) {
         auto& t = !std::strcmp(name, "bed-untuned") ? bed : c;
+        assert(Extruder::allHeatersCalibrated());
         t.invalidatePidCalibration();
+        assert(!Extruder::allHeatersCalibrated());
         assert(!t.pidCalibrationValid());
         t.setTargetTemperature(100);
         service();

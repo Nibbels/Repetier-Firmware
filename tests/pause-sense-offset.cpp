@@ -1753,6 +1753,16 @@ void printJob() {
     assert(!job.isBusy() && !job.commandsBlocked());
     assert(PrintLine::hasLines()); // Artificial queue entries alone do not start a print.
 
+    Extruder::current->tempControl.calibrationValid = false;
+    GCode untuned;
+    untuned.X = 10;
+    untuned.E = 1;
+    const float beforeX = Printer::moveTarget.machineMM(X_AXIS);
+    const float beforeE = Printer::moveTarget.machineMM(E_AXIS);
+    assert(!Printer::queueGCodeCoordinates(&untuned) && !job.isPrinting());
+    assert(Printer::moveTarget.machineMM(X_AXIS) == beforeX && Printer::moveTarget.machineMM(E_AXIS) == beforeE);
+    Extruder::current->tempControl.calibrationValid = true;
+
     GCode command;
     command.X = 10;
     command.internalCommand = true;
