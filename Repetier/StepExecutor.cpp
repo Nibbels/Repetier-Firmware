@@ -328,7 +328,8 @@ long StepExecutor::performDirectMove() {
     return performMove<FOR_DIRECT>(&direct);
 } // performDirectMove
 
-speed_t StepExecutor::nextStepSpeed(PrintLine& move, StepClock& clock, uint8_t pulses, uint32_t interval) {
+// Keep the ramp update in the specialized executor, as in the original AVR build.
+inline __attribute__((always_inline)) speed_t StepExecutor::nextStepSpeed(PrintLine& move, StepClock& clock, uint8_t pulses, uint32_t interval) {
     const auto& stepProfile = move.stepProfile;
     clock.steps += pulses;
     clock.ticks += interval * pulses;
