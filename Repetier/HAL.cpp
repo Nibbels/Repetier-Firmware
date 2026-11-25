@@ -266,13 +266,26 @@ static const uint16_t high16Periods[3072] PROGMEM = {
 #undef RF_PERIOD_2
 #undef RF_PERIOD_1
 
-// Split the nibble shift into byte operations. AVR-GCC otherwise emits a
-// four-iteration 16-bit shift loop for the most frequently used high range.
+// AVR-GCC -Os expands the 16-bit shift by four into a loop. Exchange
+// nibbles explicitly; seven instructions, independent of the divisor.
 inline uint16_t periodIndex16(uint16_t divisor) {
-    const uint8_t high = divisor >> 8;
-    const uint8_t low = divisor;
-    return (static_cast<uint16_t>(high >> 4) << 8) |
-           static_cast<uint8_t>((high << 4) | (low >> 4));
+#if defined(__AVR__)
+    uint8_t upperLow;
+    __asm__ volatile(
+        "swap %A[value] \n\t"
+        "swap %B[value] \n\t"
+        "andi %A[value],0x0f \n\t"
+        "mov %[tmp],%B[value] \n\t"
+        "andi %[tmp],0xf0 \n\t"
+        "or %A[value],%[tmp] \n\t"
+        "andi %B[value],0x0f"
+        : [value] "+d"(divisor), [tmp] "=&d"(upperLow)
+        :
+        : "cc");
+    return divisor;
+#else
+    return divisor >> 4;
+#endif
 }
 
 inline uint16_t unpackPeriod(uint16_t packed, uint8_t offset) {
