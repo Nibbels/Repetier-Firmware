@@ -147,8 +147,12 @@ def main():
         (build / "direct-phase-firmware.inc").write_text(
             section(motion, "enum DirectMovePhase", "#define FOR_DIRECT"), encoding="utf-8",
         )
+        (build / "stop-reason-firmware.inc").write_text(
+            section(rf_header, "enum class StopReason", "void doEmergencyStop("), encoding="utf-8",
+        )
         (build / "direct-control-firmware.inc").write_text(
-            section(motion, "    static bool directMovePreparing(", "\n\n")
+            section(motion, "    QueueTask queueTaskId() const", "\n\npublic:") + "\n"
+            + section(motion, "    static bool directMovePreparing(", "\n\n")
             + section(motion, "    static void reserveDirectMove(", "    static void stopDirectMove()"),
             encoding="utf-8",
         )

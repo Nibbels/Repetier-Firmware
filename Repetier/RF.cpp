@@ -261,7 +261,7 @@ void loopFeatures() //wird so aufgerufen, dass es ein ~100ms Takt sein sollte.
     Printer::pause.serviceMotion();
 } // loopFeatures
 
-void queueTask(char task) {
+void queueTask(QueueTask task) {
     if (PrintLine::waitForXFreeLines(1))
         PrintLine::queueTask(task);
 } // queueTask
@@ -368,7 +368,7 @@ bool hardwareTypeMatches() {
 
 } // hardwareTypeMatches
 
-void doEmergencyStop(char reason) {
+void doEmergencyStop(StopReason reason) {
     {
         InterruptProtectedBlock lock;
         Printer::blockAll = 1;
@@ -378,9 +378,9 @@ void doEmergencyStop(char reason) {
     showError((void*)ui_text_emergency_stop);
 
     Com::printF(PSTR("doEmergencyStop(): block all"));
-    if (reason == STOP_BECAUSE_OF_Z_MIN) {
+    if (reason == StopReason::ZMin) {
         Com::printFLN(PSTR(" (Z-Min)"));
-    } else if (reason == STOP_BECAUSE_OF_Z_BLOCK) {
+    } else if (reason == StopReason::ZBlock) {
         Com::printFLN(PSTR(" (Z-Block)"));
     }
 

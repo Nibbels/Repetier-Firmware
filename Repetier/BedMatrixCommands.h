@@ -9,7 +9,7 @@ void disableBedCompensation() {
     if (Printer::debugInfo()) {
         Com::printFLN(PSTR("M3000: disabling z compensation"));
     }
-    queueTask(TASK_DISABLE_Z_COMPENSATION);
+    queueTask(QueueTask::DisableZCompensation);
 }
 
 void enableBedCompensation() {
@@ -40,12 +40,12 @@ void enableBedCompensation() {
         return;
     }
 
-    queueTask(TASK_ENABLE_Z_COMPENSATION);
+    queueTask(QueueTask::EnableZCompensation);
 
     //wenn der nutzer im menü "autostart" gewählt hat, dann senseoffset sofort mit M3001 mitstarten.
     //Die Einstellwerte kommen dann aus dem EEPROM
     if (Printer::senseOffsetControl.autoStart())
-        queueTask(TASK_ENABLE_SENSE_OFFSET);
+        queueTask(QueueTask::EnableSenseOffset);
 }
 
 void selectBedMatrix(GCode* pCommand) {

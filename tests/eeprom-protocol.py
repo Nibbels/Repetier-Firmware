@@ -97,7 +97,6 @@ def main():
 #include <vector>
 using std::isnan;
 using std::isinf;
-using uint = unsigned int;
 using millis_t = uint32_t;
 using PGM_P = const char*;
 #define PROGMEM

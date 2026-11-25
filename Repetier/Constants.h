@@ -21,11 +21,6 @@
 #define REPETIER_VERSION "1.45.03"
 #define UI_VERSION_STRING "V " REPETIER_VERSION
 
-#define BIGC0 "\001\002\003    " UI_SPACER "Renkforce"
-#define BIGC1 "\004         " UI_SPACER UI_PRINTER_NAME
-#define BIGC2 "\005\006\007ommunity Mod"
-#define BIGC3 UI_SPACER REPETIER_VERSION
-
 // ##########################################################################################
 // ##    basic definitions
 // ##########################################################################################
@@ -34,46 +29,9 @@
 #define DEVICE_TYPE_RF2000 14
 #define DEVICE_TYPE_RF2000v2 15
 
-// Give an enabled stepper driver time to settle before the first step.
-constexpr unsigned int stepperEnableDelayMs = 25;
-
 #define X_AXIS 0
 #define Y_AXIS 1
 #define Z_AXIS 2
 #define E_AXIS 3
-
-
-#define MENU_MODE_PAUSED 4
-#define MENU_MODE_FAN_RUNNING 8
-#define MENU_MODE_PRINTING 16
-#define MENU_MODE_FAN_MODE_PDM 128
-
-#define IGNORE_COORDINATE 99999.0f
-
-#define TASK_NO_TASK 0
-#define TASK_ENABLE_Z_COMPENSATION 1
-#define TASK_DISABLE_Z_COMPENSATION 2
-#define TASK_PAUSE_PRINT 4
-#define TASK_PAUSE_PRINT_AND_MOVE 5
-#define TASK_MOVE_FROM_BUTTON 10
-#define TASK_MOVE_POSITION_MANUAL 11
-#define TASK_ENABLE_SENSE_OFFSET 100
-#define TASK_UNLOCK_DISPLAY_MSG 101
-
-#define Z_VALUE_MODE_Z_MIN 1 // show the distance to Z-min
-#define Z_VALUE_MODE_LAYER 3 // show the nominal layer height
-
-#define STOP_BECAUSE_OF_Z_MIN 1
-#define STOP_BECAUSE_OF_Z_BLOCK 2
-
-// ##########################################################################################
-// ##    data types
-// ##########################################################################################
-
-#define uint uint16_t
-#define uint8 uint8_t
-#define int8 int8_t
-#define uint32 uint32_t
-#define int32 int32_t
 
 #endif // CONSTANTS_H

@@ -15,7 +15,8 @@ uint8_t EXTRUDER_TIMSK = otherTimer0Interrupts;
 #define INLINE inline
 
 #include "Constants.h"
-#undef uint
+#include "QueueTask.h"
+#include "stop-reason-firmware.inc"
 #define MOTHERBOARD DEVICE_TYPE_RF2000
 #ifndef NUM_EXTRUDER
 #define NUM_EXTRUDER 1
@@ -179,8 +180,8 @@ template<class... Args> void showError(Args...) { assert(false); }
 template<class... Args> void showInformation(Args...) { assert(false); }
 unsigned pressureStops = 0;
 bool expectPressureStop = false;
-void doEmergencyStop(int reason) {
-    assert(expectPressureStop && reason == STOP_BECAUSE_OF_Z_BLOCK);
+void doEmergencyStop(StopReason reason) {
+    assert(expectPressureStop && reason == StopReason::ZBlock);
     ++pressureStops;
     expectPressureStop = false;
 }
@@ -345,7 +346,7 @@ int32_t softwareEndstopSteps(uint8_t axis) {
 void queueFloatCoordinates(float x, float y, float z, float e, float speed);
 bool checkPlayKey() { return skipPrimeAt && primePolls >= skipPrimeAt; }
 bool checkAbortKeys() { return false; }
-void offsetRelativeStepsCoordinates(long x, long y, long z, long e, int task = TASK_NO_TASK);
+void offsetRelativeStepsCoordinates(long x, long y, long z, long e, DirectMoveMode task = DirectMoveMode::Configured);
 }
 
 void requestInterruptPause() {
@@ -452,7 +453,7 @@ struct PrintLine {
     float fullSpeed = 0;
     int32_t timeInTicks = 0;
     uint8_t primaryAxis = 0;
-    char task = TASK_NO_TASK;
+    volatile char task = DIRECT_IDLE;
     uint8_t flags = 0, joinFlags = 0, dir = 0;
 #include "lookahead-flags-firmware.inc"
     uint8_t warmupDepth = 0;
@@ -480,9 +481,10 @@ struct PrintLine {
     static MoveQueue queue;
     static uint8_t insertWaitMovesIfNeeded(uint8_t pathOptimize, uint8_t waitExtraLines);
     static int linesCount;
-    static int queuedTask, stopRequests;
+    static QueueTask queuedTask;
+    static int stopRequests;
     static bool hasLines() { return linesCount; }
-    static bool directMoveActive() { return direct.task != TASK_NO_TASK; }
+    static bool directMoveActive() { return direct.task != DIRECT_IDLE; }
 #include "active-move-firmware.inc"
     static int queuedMoveCount() { return linesCount; }
     static bool hasStoppableDirectMove();
@@ -496,8 +498,8 @@ struct PrintLine {
     }
     static void applyDirectStop();
     static void stopDirectMove() { ++stopRequests; applyDirectStop(); }
-    static void discardQueuedMoves() { linesCount = 0; queuedTask = TASK_NO_TASK; }
-    static void queueTask(int task) {
+    static void discardQueuedMoves() { linesCount = 0; queuedTask = QueueTask::None; }
+    static void queueTask(QueueTask task) {
         assert(!interruptsEnabled && linesCount < MOVE_CACHE_SIZE);
         queuedTask = task;
         ++linesCount;
@@ -526,7 +528,7 @@ void Printer::queueFloatCoordinates(float x, float y, float z, float e, float sp
     }
 }
 int PrintLine::linesCount = 3;
-int PrintLine::queuedTask = TASK_NO_TASK;
+QueueTask PrintLine::queuedTask = QueueTask::None;
 int PrintLine::stopRequests = 0;
 unsigned PrintLine::plannedMoves = 0;
 bool PrintLine::updatesWobble = false;
@@ -599,8 +601,8 @@ struct GCodeInput {
 };
 
 unsigned queuedSenseOffsetEnables = 0;
-void queueTask(char task) {
-    assert(task == TASK_ENABLE_SENSE_OFFSET);
+void queueTask(QueueTask task) {
+    assert(task == QueueTask::EnableSenseOffset);
     ++queuedSenseOffsetEnables;
 }
 
@@ -850,7 +852,7 @@ void pressureStop() {
     sample(-12001);
     assert(Printer::extrusionOutput.blocked() && pressureStops == 1);
 
-    PrintLine::direct.task = TASK_NO_TASK;
+    PrintLine::direct.task = DIRECT_IDLE;
     PrintLine::direct.stepsRemaining = 0;
     command.explicitS = command.explicitP = true;
     command.S = command.P = 0;
@@ -943,10 +945,10 @@ void Commands::checkForPeriodicalActions(FirmwareState state) {
         if (pauseDuringQueueWait) {
             pauseDuringQueueWait = false;
             Printer::pause.request(PrintPause::Destination::InPlace);
-        } else if (--PrintLine::linesCount == 0 && PrintLine::queuedTask != TASK_NO_TASK) {
-            const auto destination = PrintLine::queuedTask == TASK_PAUSE_PRINT_AND_MOVE
+        } else if (--PrintLine::linesCount == 0 && PrintLine::queuedTask != QueueTask::None) {
+            const auto destination = PrintLine::queuedTask == QueueTask::PauseAndPark
                 ? PrintPause::Destination::Park : PrintPause::Destination::InPlace;
-            PrintLine::queuedTask = TASK_NO_TASK;
+            PrintLine::queuedTask = QueueTask::None;
             Printer::pause.request(destination);
         }
     }
@@ -954,14 +956,14 @@ void Commands::checkForPeriodicalActions(FirmwareState state) {
         const long stopTail = -32;
         Printer::directCurrentSteps[Z_AXIS] += stopTail;
         Printer::zMotion.setMotorReference(Printer::zMotion.motorSteps() + stopTail);
-        PrintLine::direct.task = TASK_NO_TASK;
+        PrintLine::direct.task = DIRECT_IDLE;
     }
     Printer::pause.serviceMotion();
 }
 
-void Printer::offsetRelativeStepsCoordinates(long x, long y, long z, long e, int task) {
+void Printer::offsetRelativeStepsCoordinates(long x, long y, long z, long e, DirectMoveMode task) {
     // A short jog toward the print point travels one mm before key release.
-    if (task == TASK_MOVE_FROM_BUTTON)
+    if (task == DirectMoveMode::Button)
         z = std::max(z, -static_cast<long>(zStepsPerMm));
     if (x || y || z || e) {
         if (pollDuringMoves)
@@ -1321,7 +1323,7 @@ void cancelAndCleanup() {
 
     Printer::printJob.service(clockMs + 2001);
     assert(Printer::printJob.isBusy() && incomingReads == 1 && !objectOutputs);
-    PrintLine::direct.task = TASK_NO_TASK;
+    PrintLine::direct.task = DIRECT_IDLE;
     g_nHeatBedScanStatus = g_nZOSScanStatus = 1;
     Printer::printJob.service(clockMs + 4001);
     assert(Printer::printJob.isBusy() && !objectOutputs);
@@ -1359,7 +1361,7 @@ void queuedPause() {
     pauseDuringQueueWait = true;
     Printer::pause.queueRequest(PrintPause::Destination::Park);
     assert(Printer::pause.isSettled() && PrintLine::linesCount == MOVE_CACHE_SIZE);
-    assert(PrintLine::queuedTask == TASK_NO_TASK);
+    assert(PrintLine::queuedTask == QueueTask::None);
 }
 
 void planMove(long z, bool hasZMove, bool extrudes = true, bool hasXYMove = true) {
@@ -2413,14 +2415,14 @@ void moveQueue() {
     auto& queue = PrintLine::queue;
     Printer::idleStatus.schedule(500);
     for (int count = 1; count < MOVE_CACHE_SIZE; ++count) {
-        queue.writeSlot().task = TASK_DISABLE_Z_COMPENSATION;
+        queue.writeSlot().setQueueTaskId(QueueTask::DisableZCompensation);
         queue.publish(false);
         assert(queue.count() == count && queue.active() == nullptr);
     }
     assert(Printer::idleStatus.poll(0, 500) == IdleStatus::Transition::Deferred);
     auto* move = queue.activateFront();
     assert(PrintLine::activeMove().source == PrintLine::ActiveMove::Source::None);
-    move->task = TASK_NO_TASK;
+    move->setQueueTaskId(QueueTask::None);
     move->setAxisSteps(Z_AXIS, 1);
     move->stepsRemaining = 1;
     assert(PrintLine::activeMove().usesAxis(Z_AXIS) && interruptsEnabled);
@@ -2436,7 +2438,7 @@ void moveQueue() {
     assert(queue.count() == 4 && Printer::idleStatus.poll(0, 500) == IdleStatus::Transition::Waiting);
     for (int depth = 3; depth >= 0; --depth) {
         auto* move = queue.activateFront();
-        assert(move->task == TASK_NO_TASK && move->flags == FLAG_WARMUP);
+        assert(move->queueTaskId() == QueueTask::None && move->flags == FLAG_WARMUP);
         assert(move->warmupDepth == depth && move->warmupTicks == 100000);
         queue.releaseFront();
         assert(queue.count() == depth + 1 && queue.active() == nullptr);
@@ -2460,7 +2462,7 @@ void moveReserve() {
     };
     check(0, 0, 0);
     for (int i = 0; i < MOVE_CACHE_SIZE - 1; ++i) {
-        queue.publishTask(TASK_ENABLE_Z_COMPENSATION);
+        queue.publishTask(QueueTask::EnableZCompensation);
         queue.activateFront();
         queue.retireFront();
         HAL::allowInterrupts();
@@ -2484,7 +2486,7 @@ void moveReserve() {
 
     // Reused task and warmup slots can contain geometry from an earlier move.
     queue.writeSlot() = travel;
-    queue.publishTask(TASK_ENABLE_Z_COMPENSATION);
+    queue.publishTask(QueueTask::EnableZCompensation);
     queue.writeSlot() = travel;
     queue.writeSlot().flags = FLAG_WARMUP;
     queue.publish(true);

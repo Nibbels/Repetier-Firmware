@@ -10,6 +10,9 @@
 #define MOVE_MODE_50_MM 4
 #define MOVE_MODE_SINGLE_MOVE 5
 
+// Foreground direct-move admission and feedrate selection, not a queued command.
+enum class DirectMoveMode : uint8_t { Configured = 0, Button = 10, ManualPosition = 11 };
+
 class ManualMotion {
 public:
     constexpr ManualMotion(uint16_t x, uint16_t y, uint16_t z, uint16_t e)

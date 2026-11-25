@@ -74,7 +74,7 @@ PrintLine::ActiveMove PrintLine::activeMove() {
                 return {ActiveMove::Source::Direct, uint8_t(direct.dir >> 4)};
         } else if (Printer::pause.allowsQueueAdvance()) {
             const auto* move = queue.active();
-            if (move && move->task == TASK_NO_TASK && !move->isWarmUp() && move->stepsRemaining > 0)
+            if (move && move->queueTaskId() == QueueTask::None && !move->isWarmUp() && move->stepsRemaining > 0)
                 return {ActiveMove::Source::Queued, uint8_t(move->dir >> 4)};
         }
     }
@@ -132,7 +132,7 @@ bool PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
     uint8_t newPath = PrintLine::insertWaitMovesIfNeeded(pathOptimize, 0);
     PrintLine* p = &queue.writeSlot();
 
-    p->task = TASK_NO_TASK;
+    p->setQueueTaskId(QueueTask::None);
     p->flags = (abortAtEndstops ? FLAG_ABORT_AT_ENDSTOPS : 0);
     p->joinFlags = 0;
     p->dir = 0;
@@ -268,7 +268,7 @@ uint8_t PrintLine::insertWaitMovesIfNeeded(uint8_t pathOptimize, uint8_t waitExt
         uint8_t w = 4;
         while (w--) {
             PrintLine* p = &queue.writeSlot();
-            p->task = TASK_NO_TASK;
+            p->setQueueTaskId(QueueTask::None);
             p->flags = FLAG_WARMUP;
             p->joinFlags = FLAG_JOIN_STEP_PROFILE_READY | FLAG_JOIN_END_FIXED | FLAG_JOIN_START_FIXED;
             p->dir = 0;

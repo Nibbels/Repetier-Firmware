@@ -36,8 +36,6 @@ HARNESS = r'''
 #define X35_ADC_CHANNEL 12
 #define TEMP_3_PIN X35_ADC_CHANNEL
 #endif
-using uint8 = uint8_t;
-using uint = unsigned int;
 constexpr uint8_t TemperatureAdcCount = NUM_EXTRUDER + 1 + CHAMBER;
 static uint16_t ADCW;
 static uint8_t ADMUX, muxB;
@@ -173,7 +171,7 @@ int main() {
 def main():
     source = (FW / "HAL.cpp").read_text()
     adc = ("namespace {\n"
-           + section(source, "const uint8 temperatureAdcChannels", "volatile unsigned long watchdogHeartbeat")
+           + section(source, "const uint8_t temperatureAdcChannels", "volatile unsigned long watchdogHeartbeat")
            + "}\n"
            + section(source, "uint16_t HAL::temperatureAdcSample(", "//initialize watchdog"))
     with TemporaryDirectory(prefix="rfx-hal-adc-") as tmp:

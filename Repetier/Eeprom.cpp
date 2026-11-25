@@ -986,7 +986,7 @@ uint8_t EEPROM::computeChecksum() {
     return checksum;
 } // computeChecksum
 
-void EEPROM::writeExtruderPrefix(uint pos) {
+void EEPROM::writeExtruderPrefix(uint16_t pos) {
     if (pos < EEPROM_EXTRUDER_OFFSET || pos >= 800)
         return;
     int n = (pos - EEPROM_EXTRUDER_OFFSET) / EEPROM_EXTRUDER_LENGTH + 1;
@@ -995,12 +995,12 @@ void EEPROM::writeExtruderPrefix(uint pos) {
 
 } // writeExtruderPrefix
 
-void EEPROM::beginReport(uint pos, PGM_P type) {
+void EEPROM::beginReport(uint16_t pos, PGM_P type) {
     Com::printF(type, (int)pos);
     Com::print(' ');
 }
 
-void EEPROM::finishReport(uint pos, PGM_P text) {
+void EEPROM::finishReport(uint16_t pos, PGM_P text) {
     Com::print(' ');
     writeExtruderPrefix(pos);
     Com::printFLN(text);
@@ -1008,25 +1008,25 @@ void EEPROM::finishReport(uint pos, PGM_P text) {
     HAL::delayMilliseconds(4);
 }
 
-void EEPROM::writeFloat(uint pos, PGM_P text, uint8_t digits) {
+void EEPROM::writeFloat(uint16_t pos, PGM_P text, uint8_t digits) {
     beginReport(pos, Com::tEPR3);
     Com::printFloat(HAL::eprGetFloat(pos), digits);
     finishReport(pos, text);
 } // writeFloat
 
-void EEPROM::writeLong(uint pos, PGM_P text) {
+void EEPROM::writeLong(uint16_t pos, PGM_P text) {
     beginReport(pos, Com::tEPR2);
     Com::print(HAL::eprGetInt32(pos));
     finishReport(pos, text);
 } // writeLong
 
-void EEPROM::writeInt(uint pos, PGM_P text) {
+void EEPROM::writeInt(uint16_t pos, PGM_P text) {
     beginReport(pos, Com::tEPR1);
     Com::print(HAL::eprGetInt16(pos));
     finishReport(pos, text);
 } // writeInt
 
-void EEPROM::writeByte(uint pos, PGM_P text) {
+void EEPROM::writeByte(uint16_t pos, PGM_P text) {
     beginReport(pos, Com::tEPR0);
     Com::print((int)HAL::eprGetByte(pos));
     finishReport(pos, text);
