@@ -340,6 +340,9 @@ bool Printer::queueRelativeMMCoordinates(float dx, float dy, float dz, float de,
  * This is expecially usefull to transfer the extruder 0 to 1 and backwards.
  */
 void Printer::offsetRelativeStepsCoordinates(int32_t dx, int32_t dy, int32_t dz, int32_t de, DirectMoveMode configuration) {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(printJob.emergencyLocked())return;
+#endif
     if (dx == 0 && dy == 0 && dz == 0 && de == 0)
         return;
     if (configuration != DirectMoveMode::Configured && !pause.allowsManualMove())
@@ -349,6 +352,9 @@ void Printer::offsetRelativeStepsCoordinates(int32_t dx, int32_t dy, int32_t dz,
         Commands::checkForPeriodicalActions(Processing);
     }
 
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(printJob.emergencyLocked())return; // A wait above can latch the fault.
+#endif
     const bool stoppable = configuration == DirectMoveMode::Button;
     const bool feedrateSource = (stoppable || configuration == DirectMoveMode::ManualPosition)
         ? manualMotion.feedrateSource() : FEEDRATE_DIRECTCONFIG;
@@ -642,6 +648,25 @@ void Printer::disableCMPnow(bool wait) {
 
 void Printer::stopPrint() {
     InterruptProtectedBlock noInts;
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(isAnyTempsensorDefect()) {
+        if(!printJob.beginThermalEmergency())return;
+        // Heater revoke and SafetyLock precede this entry. Also handle
+        // idle/jog/scan and normal stop's delayed output phase.
+        blockAll=1;
+        lockMovement();
+        idleStatus.cancel();
+        extrusionOutput.inhibit(ExtrusionOutput::Inhibit::Emergency);
+        pause.cancel();
+        PrintLine::abortDirectMoveForEmergency();
+        PrintLine::discardQueuedMoves();
+        // Keep existing motor enable state: dropping Z holding torque may
+        // create a separate mechanical hazard. No new STEP admission.
+        noInts.unprotect();
+        discardScans();
+        return;
+    }
+#endif
     if (!printJob.beginStop(HAL::timeInMilliseconds()))
         return;
     Printer::idleStatus.cancel();
