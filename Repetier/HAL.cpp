@@ -1078,10 +1078,16 @@ bool checkHeaterLeases() {
 #ifdef RF_HEATER_LEASE_EXPERIMENT
 bool HAL::heaterLeaseFault() { return heaterLeaseFailed; }
 #ifdef RF_HEATER_RESET_WDT_EXPERIMENT
-void HAL::completeThermalWatchdogPass(bool heatDemand) {
+// The regular thermal pass and autotune may complete in either order.
+// Bit 7 is consumed once with the per-channel grant bits. Autotune cannot
+// keep the watchdog alive on its own if the regular service is stalled.
+constexpr uint8_t thermalPassComplete=0x80;
+static void tryThermalWatchdogFeed(bool heatDemand,bool regularPass) {
     InterruptProtectedBlock lock;
     if(!watchdogActive || !heaterLeaseReady) return;
     checkHeaterLeases(); // expired demands are removed before considering feed
+    if(regularPass) heaterGrantProgress |= thermalPassComplete;
+    if(!(heaterGrantProgress&thermalPassComplete)) return;
     bool anyPower=false;
     for(uint8_t c=0;c<=NUM_EXTRUDER;++c) {
         if(!requestedDuty[c]) continue;
@@ -1098,6 +1104,12 @@ void HAL::completeThermalWatchdogPass(bool heatDemand) {
     if(heatDemand || anyPower) heaterResetCookie=heaterLiveCookie;
     else if(!heaterLeaseFailed && !Printer::heatingInhibited()) heaterResetCookie=0;
     wdt_reset();
+}
+void HAL::completeThermalWatchdogPass(bool heatDemand) {
+    tryThermalWatchdogFeed(heatDemand,true);
+}
+void HAL::completeAutotuneWatchdogPass() {
+    tryThermalWatchdogFeed(true,false);
 }
 #endif
 ISR(TIMER3_COMPA_vect) { failHeaterLease(); }
