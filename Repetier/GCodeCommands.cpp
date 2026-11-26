@@ -166,6 +166,9 @@ void dispatchMachine(GCode* com) {
 } // namespace GCodeCommands
 
 void Commands::executeGCode(GCode* com) {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(Printer::printJob.emergencyLocked())return; // includes internal scripts
+#endif
     if (GCodeCommands::rejectLegacySimulation(com))
         return;
     // A rejected simulation is not a motion mode. Discard all work, including
