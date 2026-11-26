@@ -239,6 +239,11 @@ volatile unsigned long watchdogHeartbeat = 0;
 volatile bool watchdogActive = false;
 
 #ifdef RF_HEATER_RESET_WDT_EXPERIMENT
+// Distinguish pre-start boot from a runtime stop. Once armed, the external
+// supervisor must stay driven until a real reset, even on repeated stops.
+// Likewise never restart an expired progress clock via startWatchdog().
+bool watchdogStarted=false;
+
 // Timer5 is borrowed by this experiment as an interrupt-free progress clock.
 // It runs in normal mode with every OC pin disconnected (OC5A is a STEP pin
 // on RF1000!). No Timer5 IRQ and no hardware waveform output are enabled.
@@ -634,7 +639,7 @@ void HAL::resetHardware() {
     // jump into CRT with live timers; no WDI pulses or WDR here. External
     // supervisor should win, internal WDT is independent backup. During
     // pre-watchdog boot retain the legacy safe-output fallback.
-    if(watchdogActive) for(;;) {}
+    if(watchdogStarted) for(;;) {}
 #endif
     resetFunc();
     // A restart must not return to an interrupted print.
@@ -791,6 +796,9 @@ ISR(WDT_vect) {
 
 // Watchdog support
 void HAL::startWatchdog() {
+#ifdef RF_HEATER_RESET_WDT_EXPERIMENT
+    if(watchdogStarted) return;
+#endif
     Com::printFLN(Com::tStartWatchdog);
     // external watchdog
 #ifdef RF_HEATER_RESET_WDT_EXPERIMENT
@@ -815,6 +823,7 @@ void HAL::startWatchdog() {
     WRITE(WATCHDOG_PIN,LOW);
     SET_OUTPUT(WATCHDOG_PIN);
     beginWatchdogProgress();
+    watchdogStarted=true;
     watchdogActive=true;
     pingWatchdog();
     HAL::WDT_Init();
@@ -831,7 +840,7 @@ void HAL::stopWatchdog() {
 #ifdef RF_HEATER_RESET_WDT_EXPERIMENT
     // Only pre-start boot may float WDI. A runtime stop must not disable
     // the external supervisor or feed the internal one.
-    if(watchdogActive) {
+    if(watchdogStarted) {
         InterruptProtectedBlock lock;
         watchdogActive=false;
         for(uint8_t c=0;c<=NUM_EXTRUDER;++c) setHeaterDuty(c,0);
