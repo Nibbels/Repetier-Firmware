@@ -14,7 +14,7 @@ BOOT_START = 0x3e000
 ENTRY_SIZE = 30
 
 
-def make_script(bin_dir, directory, fill_named_text=False):
+def make_script(bin_dir, directory, fill_named_text=False, partitions=(0,), probe=False):
     # Retain the pinned toolchain's own memory, vector, PROGMEM, trampoline,
     # CRT, .data LMA, .noinit, EEPROM and debug section rules. Fail closed
     # when the expected script shape/partition layout changes.
@@ -59,6 +59,15 @@ def make_script(bin_dir, directory, fill_named_text=False):
         if script.count("*(.text.*)") != 1:
             raise ValueError("Unexpected named-text wildcard")
         snippet = snippet.replace("*ltrans0.ltrans.o(.text)", "*(.text.*)\n    *ltrans0.ltrans.o(.text)")
+    if tuple(sorted(set(partitions))) != tuple(partitions) or any(not isinstance(p,int) or p<0 or p>63 for p in partitions):
+        raise ValueError("Invalid LTO partition selection")
+    snippet = snippet.replace("*ltrans0.ltrans.o(.text)", "\n    ".join(f"*ltrans{p}.ltrans.o(.text)" for p in partitions))
+    if probe:
+        # Diagnostic link only: no fixed recovery address or padding.
+        # Never pass this ELF to verify_image or publish it as a candidate.
+        snippet = snippet.replace(". = 0x20000;", "/* sizing probe: no reserved hole */")
+        snippet = snippet.replace('ASSERT(heaterWatchdogRecoveryEntry == 0x20000, "RF recovery entry moved");',
+                                  '/* sizing probe: recovery address intentionally unconstrained */')
     script = script.replace(old, snippet)
     path = directory / "avr6-recovery.x"
     path.write_text(script)
@@ -102,6 +111,52 @@ def named_text_retry(map_text, compile_log):
         return None
     return {"used":used,"maximum":maximum,"padding":gap,"named_text":named,
             "projected_used":used-named}
+
+
+def select_probe_layout(map_text, used):
+    """Choose whole input blocks from a successful no-hole sizing link.
+    All ordinary final image audits still run; never assume LTO stability.
+    """
+    import itertools
+    m = re.search(r"^\s*(0x[0-9a-f]+)\s+__rf_near_parser_end = ABSOLUTE", map_text, re.M)
+    if not m:
+        raise ValueError("No complete near parser end in probe map")
+    start = int(m[1],16)
+    if not 0 < start < RECOVERY or used > BOOT_START:
+        raise ValueError("Invalid or oversized sizing probe")
+    rows = re.findall(r"^\s+\.text\s+0x[0-9a-f]+\s+(0x[0-9a-f]+)\s+\S*\.ltrans(\d+)\.ltrans\.o\s*$", map_text, re.M)
+    blocks = {}
+    for size, index in rows:
+        index = int(index)
+        if index in blocks:
+            raise ValueError("Ambiguous LTO block")
+        blocks[index] = int(size,16)
+    if not 1 <= len(blocks) <= 16 or 0 not in blocks:
+        raise ValueError("Unexpected LTO partition inventory")
+    # Named sections after the recovery entry, excluding parser and CRT.
+    guard = map_text.index("__rf_watchdog_recovery_link_guard")
+    begin = map_text.index("\n *(.text.*)", guard)
+    block = map_text[begin:]
+    stop = re.search(r"^\s*0x[0-9a-f]+\s+\. = ALIGN",block,re.M)
+    if not stop:
+        raise ValueError("Missing end of named text")
+    named = sum(int(n,16) for n in re.findall(
+        r"^\s+\.text\.\S+\s+0x[0-9a-f]+\s+(0x[0-9a-f]+)\s+\S+",block[:stop.start()],re.M))
+    options=[]
+    ids=sorted(blocks)
+    for count in range(1,len(ids)+1):
+        for chosen in itertools.combinations(ids,count):
+            for fill in (False,True):
+                if fill and not named:continue
+                gap=RECOVERY-start-sum(blocks[i] for i in chosen)-(named if fill else 0)
+                if gap>=256 and used+gap+256<=BOOT_START:
+                    options.append((gap,fill,chosen))
+    if not options:
+        raise ValueError("No whole-partition layout with 256-byte margins")
+    gap,fill,chosen=min(options)
+    return {"partitions":list(chosen),"fill_named_text":fill,"padding":gap,
+            "projected_used":used+gap,"probe_used":used,"parser_end":start,
+            "blocks":blocks,"named_text":named}
 
 
 def decode_hex(path):

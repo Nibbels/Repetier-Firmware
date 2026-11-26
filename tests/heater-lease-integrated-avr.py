@@ -55,17 +55,32 @@ with tempfile.TemporaryDirectory() as temp:
                     for name in ("compile.txt","properties.txt","properties-with-linker.txt","avr6-recovery.x","build/firmware.map"):
                         if (board_dir/name).is_file():
                             shutil.copy2(board_dir/name,failed/Path(name).name)
-                retry=recovery.named_text_retry(map_file.read_text(),log_text) if extra and map_file.exists() else None
-                if not retry:
+                if not extra or not ("cannot move location counter backwards" in log_text or
+                                     "text section exceeds available space in board" in log_text):
                     raise
-                print("Recovery named-text retry",board,json.dumps(retry),flush=True)
-                # Do not publish or audit the oversized probe as a candidate.
-                # Use a separate directory and repeat every linked check below.
-                retry_dir=mode_dir/"named-text-retry"
+                # A backwards-counter failure often leaves an incomplete map.
+                # Link a disposable sizing probe with no fixed recovery hole.
+                # Only its map and statistics are evidence, never its image.
+                probe_dir=mode_dir/"layout-probe"
+                probe_dir.mkdir(exist_ok=True)
+                probe_stats=baseline.build_target(probe_dir,cli,board,definitions,
+                    linker_script_factory=lambda bin_dir,directory: recovery.make_script(bin_dir,directory,probe=True))
+                probe_board=probe_dir/board
+                probe_map=probe_board/"build/firmware.map"
+                if archive:
+                    dest=archive/mode/(board+"-layout-probe")
+                    dest.mkdir()
+                    shutil.copy2(probe_map,dest/"firmware.map")
+                    shutil.copy2(probe_board/"avr6-recovery.x",dest/"avr6-recovery.x")
+                    (dest/"stats.json").write_text(json.dumps(probe_stats,indent=2)+"\n")
+                retry=recovery.select_probe_layout(probe_map.read_text(),probe_stats["flash_bytes"])
+                print("Recovery whole-partition retry",board,json.dumps(retry),flush=True)
+                retry_dir=mode_dir/"layout-retry"
                 retry_dir.mkdir(exist_ok=True)
                 board_dir=retry_dir/board
                 stats=baseline.build_target(retry_dir,cli,board,definitions,
-                    linker_script_factory=lambda bin_dir,directory: recovery.make_script(bin_dir,directory,fill_named_text=True))
+                    linker_script_factory=lambda bin_dir,directory: recovery.make_script(bin_dir,directory,
+                        fill_named_text=retry["fill_named_text"],partitions=tuple(retry["partitions"])))
                 stats["recovery_layout_retry"]=retry
             print(mode,board,json.dumps(stats),flush=True)
             if archive:
