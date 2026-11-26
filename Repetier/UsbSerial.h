@@ -32,6 +32,9 @@ public:
     static bool available();
     static int read();
     static void write(uint8_t byte);
+    // Single foreground producer, like write(). Never wait for TX space.
+    // False means no byte was accepted; retry from the same log cursor.
+    static bool tryWrite(uint8_t byte);
     static void flush();
 
     static void receiveInterrupt();
