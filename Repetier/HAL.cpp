@@ -516,11 +516,12 @@ bool HAL::HeaterSample::read(uint8_t index,uint16_t& raw) {
     InterruptProtectedBlock lock;
     raw=0;
     if(index_!=255 || index>=TemperatureAdcCount || !heaterLeaseReady) return false;
-    raw=temperatureAdcValues[index];
-    if(!heaterSampleLive(index)) return false;
-    // A diagnostic read of an already consumed publication may still be valid,
-    // but it cannot authorize another positive request.
-    if((heaterSampleState[index] & (SampleFresh|SampleBusy))==SampleFresh) {
+    // Preserve diagnostic validity independently from grant eligibility.
+    // In particular a conservative wrap invalidation must not impersonate
+    // a broken sensor during a healthy autotune. No valid ticket, no renewal.
+    if(!HAL::temperatureAdcSample(index,raw)) return false;
+    if(heaterSampleLive(index) &&
+       (heaterSampleState[index] & (SampleFresh|SampleBusy))==SampleFresh) {
         heaterSampleState[index] |= SampleBusy|SampleMatch;
         index_=index;
     }
