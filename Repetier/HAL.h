@@ -505,9 +505,26 @@ public:
 
     static void resetPwmOutputs();
     static uint8_t outputDuty(uint8_t channel);
-    static void setHeaterDuty(uint8_t channel, uint8_t duty);
 #ifdef RF_HEATER_LEASE_EXPERIMENT
+    // A foreground reservation for one exact ADC publication. Conversion
+    // runs outside the IRQ lock; grant checks the reservation under lock.
+    class HeaterSample {
+        uint8_t index_ = 255;
+    public:
+        HeaterSample() = default;
+        ~HeaterSample();
+        HeaterSample(const HeaterSample&) = delete;
+        HeaterSample& operator=(const HeaterSample&) = delete;
+        bool read(uint8_t index, uint16_t& raw);
+        void release();
+    private:
+        friend class HAL;
+        bool consume(uint8_t channel);
+    };
+    static void setHeaterDuty(uint8_t channel, uint8_t duty, HeaterSample* sample = nullptr);
     static bool heaterLeaseFault();
+#else
+    static void setHeaterDuty(uint8_t channel, uint8_t duty);
 #endif
     static void setBoardFan(bool enabled);
     static uint8_t partFanSpeed();
