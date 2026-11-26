@@ -46,6 +46,9 @@
 // ##########################################################################################
 #if MOTHERBOARD == DEVICE_TYPE_RF1000
 #define KNOWN_BOARD 1
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+#define THERMAL_ALARM_PIN 23 // historical BEEPER_PIN, PA1
+#endif
 
 // digital pin mappings
 #define ORIG_X_STEP_PIN 54
@@ -256,6 +259,9 @@
 // ##########################################################################################
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 #define KNOWN_BOARD 1
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+#define THERMAL_ALARM_PIN 5 // historical BEEPER_PIN, PE3
+#endif
 
 // digital pin mappings
 #define ORIG_X_STEP_PIN 54
