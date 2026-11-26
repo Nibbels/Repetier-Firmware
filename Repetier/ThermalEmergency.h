@@ -95,7 +95,7 @@ public:
     // False means invalid cause/channel or repeated observation; original
     // records are never overwritten by consequences of the shutdown.
     bool record(uint8_t channel, Cause cause, const Evidence& evidence) {
-        const uint16_t mask=bit(cause);
+        const uint16_t mask=causeBit(cause);
         if(channel>System || !mask || (masks_[channel]&mask)) return false;
         masks_[channel] |= mask;
         ++revision_;
