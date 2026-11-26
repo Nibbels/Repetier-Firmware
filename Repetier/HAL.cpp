@@ -44,7 +44,7 @@ volatile uint32_t temperatureAdcPublishedAt[TemperatureAdcCount] = { 0 };
 volatile bool temperatureAdcReady[TemperatureAdcCount] = { false };
 #ifdef RF_HEATER_LEASE_EXPERIMENT
 // Timer3 is independent of Arduino millis and owns TOV3 exclusively here.
-enum : uint8_t { SampleValid=1, SampleFresh=2, SampleBusy=4, SampleMatch=8 };
+enum : uint8_t { SampleValid=1, SampleFresh=2, SampleBusy=4, SampleReserved=8, SampleMatch=16 };
 volatile uint8_t heaterSampleState[TemperatureAdcCount] = {};
 volatile uint16_t heaterSampleStamp[TemperatureAdcCount] = {};
 volatile uint16_t heaterBatchStart=0;
@@ -68,16 +68,19 @@ bool heaterSampleLive(uint8_t c) {
     }
     if(!(heaterSampleState[c]&SampleValid)) return false;
     if(uint16_t(now-heaterSampleStamp[c])>heaterSampleMaxAge) {
-        heaterSampleState[c] &= SampleBusy;
+        heaterSampleState[c] &= SampleBusy|SampleReserved;
         return false;
     }
     return true;
 }
-void publishHeaterSample(uint8_t index) {
+void publishHeaterSample(uint8_t index, uint16_t raw) {
     synchronizeHeaterSamples();
     const uint16_t now=TCNT3;
     if(TIFR3 & _BV(TOV3)) synchronizeHeaterSamples();
-    heaterSampleState[index] &= SampleBusy;
+    // Preserve the exact old reservation, not its relation to the latest
+    // publication. An observed ADC rail invalidates it immediately.
+    heaterSampleState[index] &= SampleBusy|SampleReserved;
+    if(raw==0 || raw>=4092) heaterSampleState[index] &= SampleBusy;
     if(heaterLeaseReady && heaterBatchValid &&
        uint16_t(now-heaterBatchStart)<=heaterSampleMaxAge) {
         heaterSampleStamp[index]=heaterBatchStart;
@@ -101,7 +104,7 @@ inline __attribute__((always_inline)) void serviceTemperatureAdc() {
     if (count >= 32) {
         const uint8_t index = temperatureAdcPosition;
 #ifdef RF_HEATER_LEASE_EXPERIMENT
-        publishHeaterSample(index);
+        publishHeaterSample(index, sum >> 3);
 #endif
         // Scale 32 ten-bit samples to the sensor tables' 12-bit range.
         temperatureAdcValues[index] = sum >> 3;
@@ -522,17 +525,28 @@ bool HAL::HeaterSample::read(uint8_t index,uint16_t& raw) {
     if(!HAL::temperatureAdcSample(index,raw)) return false;
     if(heaterSampleLive(index) &&
        (heaterSampleState[index] & (SampleFresh|SampleBusy))==SampleFresh) {
-        heaterSampleState[index] |= SampleBusy|SampleMatch;
+        heaterSampleState[index] |= SampleBusy|SampleReserved|SampleMatch;
+        stamp_=heaterSampleStamp[index];
         index_=index;
     }
     return true;
 }
 bool HAL::HeaterSample::consume(uint8_t channel) {
     // Caller holds the IRQ lock through grant publication.
-    if(index_!=channel || index_==255 || !heaterSampleLive(index_) ||
-       heaterSampleState[index_]!=(SampleValid|SampleFresh|SampleBusy|SampleMatch)) return false;
-    heaterSampleState[index_] = SampleValid|SampleBusy;
-    return true;
+    if(index_!=channel || index_==255) return false;
+    synchronizeHeaterSamples();
+    const uint16_t now=TCNT3;
+    if(TIFR3 & _BV(TOV3)) {
+        synchronizeHeaterSamples();
+        return false;
+    }
+    if(!(heaterSampleState[index_]&SampleReserved)) return false;
+    const bool young=uint16_t(now-stamp_)<=heaterSampleMaxAge;
+    // Consume only the reserved batch. A newer batch retains its eligibility.
+    if(heaterSampleState[index_]&SampleMatch)
+        heaterSampleState[index_] &= uint8_t(~SampleFresh);
+    heaterSampleState[index_] &= uint8_t(~(SampleReserved|SampleMatch));
+    return young;
 }
 #endif
 
@@ -859,7 +873,7 @@ void HAL::setHeaterDuty(uint8_t channel, uint8_t duty
     const bool allowed=checkHeaterLeases();
     if (duty) {
         if (!allowed || Printer::heatingInhibited()) return;
-        // No new grant from a diagnostic read, superseded or consumed batch.
+        // No new grant from a diagnostic read, expired or consumed reservation.
         // Existing power can only survive until its previous deadline.
         if(!sample || !sample->consume(channel)) return;
         const bool active=requestedDuty[channel]!=0;
@@ -873,6 +887,10 @@ void HAL::setHeaterDuty(uint8_t channel, uint8_t duty
         TIMSK3 |= leaseMask(channel);
         return;
     }
+    // A pending decision made before this revoke cannot rearm the heater.
+    if(heaterSampleState[channel]&SampleMatch)
+        heaterSampleState[channel] &= uint8_t(~SampleFresh);
+    heaterSampleState[channel] &= uint8_t(~(SampleReserved|SampleMatch));
     TIMSK3 &= uint8_t(~leaseMask(channel));
 #else
     if (duty) {
