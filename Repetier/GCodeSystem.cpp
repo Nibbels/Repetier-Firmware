@@ -120,6 +120,9 @@ void reportConfiguration() {
 
 void saveConfiguration() {
     EEPROM::storeDataIntoEEPROM(false);
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(Printer::printJob.emergencyLocked())return;
+#endif
     Com::printInfoF(Com::tConfigStoredEEPROM);
 }
 
@@ -127,6 +130,9 @@ void loadConfiguration() {
     if (!Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Resume))
         return;
     EEPROM::readDataFromEEPROM();
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(Printer::printJob.emergencyLocked())return;
+#endif
 
     if (Printer::debugInfo()) {
         Com::printInfoF(Com::tConfigLoadedEEPROM);
@@ -138,6 +144,9 @@ void restoreConfigurationDefaults() {
         return;
     EEPROM::restoreEEPROMSettingsFromConfiguration();
     EEPROM::storeDataIntoEEPROM(false);
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(Printer::printJob.emergencyLocked())return;
+#endif
 
     UI_STATUS(UI_TEXT_RESTORE_DEFAULTS);
     showInformation(PSTR(UI_TEXT_CONFIGURATION), PSTR(UI_TEXT_RESTORE_DEFAULTS), PSTR(UI_TEXT_OK));
