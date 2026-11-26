@@ -84,6 +84,24 @@ public:
 
 enum class ReportProgress : uint8_t { Idle, Sent, Blocked, Skipped, Overflow };
 
+// Host cancellation is independent of diagnostic replay/revision. Do not
+// cancel a second time when the host requests the retained evidence again.
+class CancellationCursor {
+    uint8_t cursor_=0;
+public:
+    template<class Sink>
+    ReportProgress service(bool active,Sink& sink) {
+        if(!active||cursor_>=2)return ReportProgress::Idle;
+        ReportLine line;
+        if(!cursor_)line.text(RF_THERMAL_TEXT("RequestStop:"));
+        else line.text(RF_THERMAL_TEXT("// action:cancel"));
+        if(!line.finish())return ReportProgress::Overflow;
+        if(!sink.tryWriteSpan(line.data(),line.size()))return ReportProgress::Blocked;
+        ++cursor_;
+        return ReportProgress::Sent;
+    }
+};
+
 template<uint8_t N>
 class ReportCursor {
     static constexpr uint8_t recordLines=13;
