@@ -510,6 +510,7 @@ public:
     // runs outside the IRQ lock; grant checks the reservation under lock.
     class HeaterSample {
         uint8_t index_ = 255;
+        uint16_t stamp_ = 0;
     public:
         HeaterSample() = default;
         ~HeaterSample();
