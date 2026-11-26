@@ -11,7 +11,7 @@ code=r"""
 #include <cstdio>
 using namespace ThermalEmergency;
 constexpr uint8_t count=uint8_t(Cause::Count);
-static_assert(sizeof(Ledger<3>)<=84,"unexpected host storage growth");
+static_assert(sizeof(Ledger<3>)<=96,"unexpected host storage growth");
 static_assert(severity(Cause::WatchdogReset)==Severity::ThermalError,"reset is not fire");
 static_assert(severity(Cause::OverTemperature)==Severity::FireWarning,"overtemperature");
 static_assert(severity(Cause::ExcessiveRise)==Severity::FireWarning,"excessive rise");
@@ -21,8 +21,9 @@ static_assert(bit(Cause::None)==0 && bit(Cause::Count)==0,"invalid masks");
 Evidence evidence(unsigned seed) {
     return {uint32_t(0xfffffff0u+seed),12000u+seed,float(seed)+0.25f,
             210.f+seed,0.5f+seed,1.f, uint16_t(seed),255,128,3,200,1,
-            uint8_t(Evidence::Measured|Evidence::Target|Evidence::Delta|
-            Evidence::Threshold|Evidence::Raw|Evidence::Requested|Evidence::Admitted|Evidence::Profile)};
+            uint16_t(Evidence::Measured|Evidence::Target|Evidence::Delta|
+            Evidence::Threshold|Evidence::Raw|Evidence::Requested|Evidence::Admitted|Evidence::Profile|
+            Evidence::Uptime|Evidence::Window|Evidence::SensorType|Evidence::PowerLimit)};
 }
 void equal(const Evidence& a,const Evidence& b) {
     assert(a.uptimeMs==b.uptimeMs&&a.windowMs==b.windowMs);
@@ -37,7 +38,7 @@ template<uint8_t N> unsigned replay() {
     for(uint8_t x=0;x<=N;++x)
     for(uint8_t y=0;y<=N;++y) {
         Ledger<N> log;
-        assert(!log.active()&&log.level()==Severity::None);
+        assert(!log.active()&&log.level()==Severity::None&&log.revision()==0);
         auto original=evidence(0),later=evidence(32);
         assert(!log.record(N+1,Cause(a),original));
         assert(!log.record(x,Cause::None,original));
@@ -49,6 +50,7 @@ template<uint8_t N> unsigned replay() {
         original.targetC=0;original.requestedDuty=0;
         assert(!log.record(x,Cause(a),later));
         assert(log.record(y,Cause(b),later)==(a!=b||x!=y));
+        assert(log.revision()==1+(a!=b||x!=y));
         equal(log.first().evidence,evidence(0));
         assert(log.first().cause==Cause(a)&&log.first().channel==x);
         const bool fireA=severity(Cause(a))==Severity::FireWarning;
@@ -68,6 +70,7 @@ template<uint8_t N> unsigned replay() {
             log.record(c,Cause(k),later);
         equal(log.first().evidence,evidence(0));
         assert(log.level()==Severity::FireWarning);
+        assert(log.revision()==(N+1)*(count-1));
         for(uint8_t c=0;c<=N;++c)assert(log.reasons(c)==uint16_t((1u<<(count-1))-1));
         ++cases;
     }
