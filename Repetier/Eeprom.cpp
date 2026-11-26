@@ -465,6 +465,10 @@ void EEPROM::storeExtruderDataIntoEEPROM(uint8_t extruderId) {
 
 void EEPROM::updateChecksum() {
     // Ändert sich die checksumme nicht, wird nicht geschrieben. doppelprüfung ist überflüssig.
+    // Do not truncate computeChecksum on a thermal emergency: callers
+    // have already written the data, and a partial sum would corrupt the
+    // integrity record. The checksum scan continues yielding to the
+    // emergency scheduler; ordinary work must unwind after it returns.
     HAL::eprSetByte(EPR_INTEGRITY_BYTE, computeChecksum());
 } // updateChecksum
 
@@ -485,6 +489,9 @@ void EEPROM::storeManualZOffset() {
 __attribute__((noinline, section(".text.rf_cold_eeprom")))
 #endif
 void EEPROM::readDataFromEEPROM() {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(Printer::printJob.emergencyLocked())return;
+#endif
     bool change = readPreheatProfiles();
 
     uint8_t version = HAL::eprGetByte(EPR_VERSION); // This is the saved version. Don't copy data not set in older versions!
@@ -829,11 +836,19 @@ void EEPROM::readDataFromEEPROM() {
 
     if (change)
         EEPROM::updateChecksum();
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    // Finish an already-started integrity update, but do not continue
+    // applying ordinary settings/hardware changes after a terminal fault.
+    if(Printer::printJob.emergencyLocked())return;
+#endif
 
     if (version != EEPROM_PROTOCOL_VERSION) {
         Com::printInfoFLN(Com::tEPRProtocolChanged);
         storeDataIntoEEPROM(false); // Store new fields for changed version
     }
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(Printer::printJob.emergencyLocked())return;
+#endif
     Printer::updateDerivedParameter();
     Extruder::applyCurrentSettings();
     Printer::applyAdvanceSettings();
