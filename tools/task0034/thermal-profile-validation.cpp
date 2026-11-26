@@ -226,4 +226,5 @@ int main(int argc,char** argv){
         auto& d=a.delays[i];std::sort(d.begin(),d.end());
         std::printf("%s,%s,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%d,%d,%d\n",k?"bed":"hotend",names[s],i,a.traces,a.settled,a.cutoff,a.alarms[i],a.safeAlarms[i],a.prefault[i],a.detected[i],a.wrongCause[i],a.beforeCutoff[i],d.empty()?-1:d.front(),d.empty()?-1:d[d.size()/2],d.empty()?-1:d.back());
     }}
+    return 0;
 }
