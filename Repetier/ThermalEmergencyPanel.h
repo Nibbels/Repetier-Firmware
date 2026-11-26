@@ -91,12 +91,12 @@ template<uint8_t N> PanelFault panelFault(const Ledger<N>& ledger,uint32_t page)
 
 // 16x2: heading is invariant; alternate cause and current/old-target on
 // the second line every two seconds, then advance to the next fault.
-// 20x4: cause + current/old-target simultaneously, next fault every 2s.
+// 16x4/20x4: cause + current/old-target simultaneously, next fault every 2s.
 // Values labelled now/old in the code and in full serial report.
 template<uint8_t Cols,uint8_t Rows,uint8_t N>
 void panelRow(char (&out)[Cols+1],uint8_t row,const Ledger<N>& ledger,
               const PanelFault& fault,bool temperatures,bool liveValid,float liveC){
-    static_assert((Cols==16&&Rows==2)||(Cols==20&&Rows==4),"RF LCD dimensions");
+    static_assert((Cols==16&&(Rows==2||Rows==4))||(Cols==20&&Rows==4),"RF LCD dimensions");
     PanelLine<Cols> line(out);
     if(row==0){
         if(ledger.level()==Severity::FireWarning)line.text(RF_PANEL_TEXT("FIRE WARNING"));
@@ -115,7 +115,7 @@ void panelRow(char (&out)[Cols+1],uint8_t row,const Ledger<N>& ledger,
             line.text(RF_PANEL_TEXT(" C"));
         }
     }else if(row==3){
-        if(ledger.level()==Severity::FireWarning)line.text(RF_PANEL_TEXT("POWER OFF - CHECK"));
+        if(ledger.level()==Severity::FireWarning)line.text(RF_PANEL_TEXT("POWER OFF! CHECK"));
         else line.text(RF_PANEL_TEXT("CHECK SERIAL LOG"));
     }
 }
