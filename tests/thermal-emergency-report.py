@@ -22,7 +22,7 @@ struct Sink {
         ++attempts;
         assert(n>=2&&n<=63&&p[n-2]=='\r'&&p[n-1]=='\n');
         last.assign(p,n);
-        assert(last.find('\r')==n-2&&last.find('\n')==n-1);
+        assert(last.find('\r')==size_t(n-2)&&last.find('\n')==size_t(n-1));
         if(block)return false;
         lines.push_back(last);return true;
     }
