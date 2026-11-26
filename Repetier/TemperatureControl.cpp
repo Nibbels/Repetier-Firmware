@@ -83,7 +83,13 @@ void Extruder::manageTemperatures() {
     for (uint8_t controller = 0; controller < NUM_TEMPERATURE_LOOPS; controller++) {
         TemperatureController* act = tempController[controller];
 
+#ifdef RF_HEATER_LEASE_EXPERIMENT
+        HAL::HeaterSample sample;
+        const uint8_t checkedType=act->sensorType, checkedLimit=act->pidMax;
+        const bool sensorSupported = act->updateCurrentTemperature(&sample);
+#else
         const bool sensorSupported = act->updateCurrentTemperature();
+#endif
         const bool sampleValid = validTemperatureSample(sensorSupported, act->currentTemperatureC);
         if (!sampleValid || act->sensorType == 0) {
             HAL::setHeaterDuty(act->pwmIndex, 0);
@@ -242,7 +248,12 @@ void Extruder::manageTemperatures() {
         }
         if (act->currentTemperatureC > act->heaterCutoffC)
             output = 0;
+#ifdef RF_HEATER_LEASE_EXPERIMENT
+        if(act->sensorType!=checkedType || act->pidMax!=checkedLimit) output=0;
+        HAL::setHeaterDuty(act->pwmIndex, output, &sample);
+#else
         HAL::setHeaterDuty(act->pwmIndex, output);
+#endif
 
 #if LED_PIN > -1
         if (act == &Extruder::current->tempControl)
@@ -367,7 +378,12 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
     stopDecouple();
     // Admission diagnostics can take time. Do not use the earlier sample
     // to authorize the first positive power request.
+#ifdef RF_HEATER_LEASE_EXPERIMENT
+    HAL::HeaterSample firstSample;
+    const bool firstSampleValid = updateCurrentTemperature(&firstSample);
+#else
     const bool firstSampleValid = updateCurrentTemperature();
+#endif
     if (autotuneAbortRequested || Printer::heatingInhibited()
         || sensorType != autotuneSensorType || pidMax != autotunePowerLimit
         || isSensorDefect() || isSensorDecoupled()
@@ -386,7 +402,17 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
     const unsigned limit = constrain(maxCycles, 5, 20);
     bool heating = currentTemperatureC < temp - hysteresis;
     bool completeCycle = heating;
+#ifdef RF_HEATER_LEASE_EXPERIMENT
+    HAL::setHeaterDuty(pwmIndex, heating ? autotunePowerLimit : 0, &firstSample);
+    firstSample.release();
+    if(heating && !HAL::outputDuty(pwmIndex)) {
+        finishAutotune(*this);
+        Com::printErrorFLN(PSTR("PID autotune: initial sample not authorized"));
+        return;
+    }
+#else
     HAL::setHeaterDuty(pwmIndex, heating ? autotunePowerLimit : 0);
+#endif
     if (!bed) {
 #if defined(CASE_FAN_PIN) && (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
         CaseFan::turnOn();
@@ -397,7 +423,12 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
 
     for (;;) {
         Commands::checkForPeriodicalActions(WaitHeater);
+#ifdef RF_HEATER_LEASE_EXPERIMENT
+        HAL::HeaterSample sample;
+        const bool supported = updateCurrentTemperature(&sample);
+#else
         const bool supported = updateCurrentTemperature();
+#endif
         const float measured = currentTemperatureC;
         const millis_t now = HAL::timeInMilliseconds();
         if (autotuneAbortRequested || Printer::heatingInhibited()
@@ -537,8 +568,18 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
         }
         // Renew only after the full sampled autotune decision, including
         // cutoff, cancellation, timing and rise checks. No ISR renewal.
-        if (heating)
+        if (heating) {
+#ifdef RF_HEATER_LEASE_EXPERIMENT
+            HAL::setHeaterDuty(pwmIndex, autotunePowerLimit, &sample);
+            if(!HAL::outputDuty(pwmIndex)) {
+                finishAutotune(*this);
+                Com::printErrorFLN(PSTR("PID autotune: sample not authorized"));
+                break;
+            }
+#else
             HAL::setHeaterDuty(pwmIndex, autotunePowerLimit);
+#endif
+        }
     }
     Printer::idleStatus.schedule(HAL::timeInMilliseconds());
 } // autotunePID
