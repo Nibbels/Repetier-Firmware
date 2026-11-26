@@ -548,6 +548,9 @@ public:
     static void startWatchdog();
     static void stopWatchdog();
     static void tellWatchdogOk();
+#ifdef RF_HEATER_RESET_WDT_EXPERIMENT
+    static void completeThermalWatchdogPass();
+#endif
     static bool watchdogEnabled();
 
     static bool takeScanTick();
