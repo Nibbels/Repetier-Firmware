@@ -34,6 +34,10 @@ void PrintJob::service(uint32_t now) {
         }
         return;
 
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    case Phase::ThermalEmergency:
+        return; // Never drain into outputObject or release the safety lock.
+#endif
     case Phase::Idle:
     case Phase::Printing:
     case Phase::FilamentService:
