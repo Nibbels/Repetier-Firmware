@@ -103,6 +103,24 @@ bool UsbSerial::tryWrite(uint8_t byte) {
     return true;
 }
 
+bool UsbSerial::tryWriteSpan(const char* bytes, uint8_t count) {
+    // Only the foreground publishes head; ISR consumption can increase
+    // free space after this snapshot but cannot invalidate our reservation.
+    if (!count) return true;
+    if (!bytes || count >= transmitBufferSize) return false;
+    uint8_t head = tx_.head;
+    const uint8_t free = uint8_t(tx_.tail - head - 1) & (transmitBufferSize - 1);
+    if (count > free) return false;
+    do {
+        tx_.bytes[head] = uint8_t(*bytes++);
+        head = tx_.next(head);
+    } while (--count);
+    // Publish exactly once so the ISR never observes an incomplete span.
+    tx_.head = head;
+    UCSR0B |= _BV(UDRIE0);
+    return true;
+}
+
 void UsbSerial::flush() {
     while (tx_.head != tx_.tail) {
         // Wait for the interrupt to hand the queued bytes to the UART.
