@@ -126,6 +126,12 @@ static void setupForPrinting() {
 } // setupForPrinting
 
 void initRF(void) {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    // Recovery was recognized by startWatchdog() at the end of setup.
+    // Do not run the normal matrix/boot-animation/idle initialization
+    // after that terminal state. Diagnostic-only scheduler owns progress.
+    if(Printer::printJob.emergencyLocked())return;
+#endif
     Printer::strainGauge.begin(HAL::timeInMilliseconds());
 
     Printer::disableCMPnow(true);
