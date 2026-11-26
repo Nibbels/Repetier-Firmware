@@ -159,6 +159,7 @@ namespace Printer {
 }
 namespace PrintLine { bool hasLines() { return false; } bool directMoveActive() { return false; } }
 static bool isAnyScanRunning() { return false; }
+static unsigned relayReports,relayUnavailable;
 namespace Com {
     #include "com.inc"
     constexpr int tTargetBedColon = 0;
@@ -166,6 +167,13 @@ namespace Com {
     template<class... T> void printInfoFLN(T...) {}
     template<class... T> void printF(T...) {}
     template<class... T> void printFLN(T...) {}
+    void printFLN(const char* msg) {
+        if(!std::strcmp(msg,"Thermal relay observation (diagnostic only)")) {
+            for(auto* c:tempController)assert(c->targetTemperatureC==0&&HAL::outputDuty(c->pwmIndex)==0);
+            ++relayReports;
+        }
+        if(!std::strcmp(msg,"Thermal relay observation unavailable"))++relayUnavailable;
+    }
     void println() {}
 }
 static unsigned stores;
@@ -772,6 +780,11 @@ int main(int argc, char** argv) {
         assert(autotuneIndex == 255 && HAL::outputDuty(t.pwmIndex) == 0 && t.targetTemperatureC == 0);
         if (entry || lowMax || wrongProfile || busy) assert(visits == 0);
         else assert(visits > 0 && watchdogHeartbeat == now);
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        assert(relayReports==unsigned(expectSuccess)&&relayUnavailable==0);
+#else
+        assert(relayReports==0&&relayUnavailable==0);
+#endif
         if (expectSuccess) {
             assert(visits == 19 && !Printer::isAnyTempsensorDefect());
             assert(stores == unsigned(store));

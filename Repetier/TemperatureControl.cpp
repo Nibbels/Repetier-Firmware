@@ -21,6 +21,7 @@
 #include "Repetier.h"
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
 #include "ThermalEmergencyReport.h"
+#include "ThermalRelayProfile.h"
 #include "UsbSerial.h"
 #endif
 
@@ -194,6 +195,38 @@ bool Extruder::allHeatersCalibrated() {
         if (!tempController[h]->pidCalibrationValid()) return false;
     return true;
 }
+
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+// Ordinary post-tune diagnostics, only after the heaters have been revoked.
+// No per-sample serial output and no safety threshold derived from this data.
+static void reportRelayObservation(const ThermalRelayProfile::Summary* p, uint8_t sensor,
+                                   uint8_t cap, float target, uint8_t method) {
+    for(uint8_t c=0;c<NUM_TEMPERATURE_LOOPS;++c)
+        if(HAL::outputDuty(tempController[c]->pwmIndex)||tempController[c]->targetTemperatureC>0)return;
+    if(!p) {
+        Com::printFLN(PSTR("Thermal relay observation unavailable"));
+        return;
+    }
+    Com::printFLN(PSTR("Thermal relay observation (diagnostic only)"));
+    Com::printF(PSTR("Sensor: "),int(sensor));
+    Com::printF(PSTR(" PWM cap: "),int(cap));
+    Com::printF(PSTR(" J: "),int(method));
+    Com::printFLN(PSTR(" target C: "),target);
+    // Order: first heating 1s/5s, later heating 1s/5s, cooling 1s/5s.
+    Com::printF(PSTR("Observed C/s [first1,first5,later1,later5,cool1,cool5]:"));
+    for(uint8_t i=0;i<6;++i) {
+        Com::printF(PSTR(" "));
+        if(p->mask&(1u<<i))Com::printF(PSTR(""),p->rates[i]);
+        else Com::printF(PSTR("?"));
+    }
+    Com::println();
+    Com::printFLN(PSTR("Completed off phases: "),int(p->completed));
+    Com::printFLN(PSTR("Observed max off rebound C: "),p->rebound);
+    Com::printFLN(PSTR("Observed max time to peak ms: "),p->peakDelayMs);
+    Com::printF(PSTR("Observed off duration ms min: "),p->minOffMs);
+    Com::printFLN(PSTR(" max: "),p->maxOffMs);
+}
+#endif
 
 static void finishAutotune(TemperatureController& controller) {
     // Revoke the duty request and normal setpoint before reporting or storing results.
@@ -654,6 +687,10 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
 #else
     HAL::setHeaterDuty(pwmIndex, heating ? autotunePowerLimit : 0);
 #endif
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    ThermalRelayProfile::Recorder relayObservation;
+    relayObservation.begin(started,currentTemperatureC,autotunePowerLimit,HAL::outputDuty(pwmIndex));
+#endif
     if (!bed) {
 #if defined(CASE_FAN_PIN) && (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
         CaseFan::turnOn();
@@ -722,6 +759,9 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
         if (now - lastSample < 100)
             continue;
         lastSample = now;
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        relayObservation.sample(now,measured,HAL::outputDuty(pwmIndex));
+#endif
         low = RMath::min(low, measured);
         high = RMath::max(high, measured);
         if (heating && measured >= temp + hysteresis) {
@@ -761,6 +801,9 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
             riseStart = now;
             riseTemp = measured;
         } else if (!heating && measured <= temp - hysteresis) {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+            relayObservation.completeOff(now);
+#endif
             if (completeCycle) {
                 ++cycles;
                 const millis_t period = now - cycleStart;
@@ -831,6 +874,10 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
                         if(Printer::printJob.emergencyLocked())return;
 #endif
                     }
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+                    reportRelayObservation(relayObservation.completedProfile(),
+                                           autotuneSensorType,autotunePowerLimit,temp,uint8_t(method));
+#endif
                     Com::printInfoFLN(Com::tAPIDFinished);
                     UI_STATUS_UPD(UI_TEXT_AUTODETECT_PID_DONE);
                     Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 30000);
@@ -861,6 +908,9 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
             HAL::setHeaterDuty(pwmIndex, autotunePowerLimit);
 #endif
         }
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        relayObservation.afterDecision(now,measured,HAL::outputDuty(pwmIndex));
+#endif
 #ifdef RF_HEATER_RESET_WDT_EXPERIMENT
         // Complete the second half of the watchdog handshake only after
         // the entire sampled relay decision and its safety checks finished.

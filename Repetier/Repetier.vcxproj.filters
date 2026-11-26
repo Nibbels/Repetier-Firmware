@@ -131,6 +131,9 @@
     <ClInclude Include="ThermalEmergencyPanel.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ThermalRelayProfile.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="RMath.h">
       <Filter>Header Files</Filter>
     </ClInclude>
