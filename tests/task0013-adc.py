@@ -171,7 +171,7 @@ int main() {
 def main():
     source = (FW / "HAL.cpp").read_text()
     adc = ("namespace {\n"
-           + section(source, "const uint8_t temperatureAdcChannels", "volatile unsigned long watchdogHeartbeat")
+           + section(source, "const uint8_t temperatureAdcChannels", "#ifndef RF_HEATER_RESET_WDT_EXPERIMENT\nvolatile unsigned long watchdogHeartbeat")
            + "}\n"
            + section(source, "uint16_t HAL::temperatureAdcSample(", "//initialize watchdog"))
     with TemporaryDirectory(prefix="rfx-hal-adc-") as tmp:
