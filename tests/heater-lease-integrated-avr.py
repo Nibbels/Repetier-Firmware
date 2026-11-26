@@ -20,6 +20,9 @@ baseline=importlib.util.module_from_spec(spec)
 # Keep CI checkout clean.
 sys.dont_write_bytecode=True
 spec.loader.exec_module(baseline)
+recovery_spec=importlib.util.spec_from_file_location("recovery_link",root/"tools/task0034/recovery-link.py")
+recovery=importlib.util.module_from_spec(recovery_spec)
+recovery_spec.loader.exec_module(recovery)
 with tempfile.TemporaryDirectory() as temp:
     out=Path(temp)
     for mode,extra in (("lease",[]),("reset-wdt",["RF_HEATER_RESET_WDT_EXPERIMENT=1"])):
@@ -27,7 +30,8 @@ with tempfile.TemporaryDirectory() as temp:
         mode_dir.mkdir()
         for board,defs in baseline.TARGETS.items():
             try:
-                stats=baseline.build_target(mode_dir,cli,board,[*defs,"RF_HEATER_LEASE_EXPERIMENT=1",*extra])
+                stats=baseline.build_target(mode_dir,cli,board,[*defs,"RF_HEATER_LEASE_EXPERIMENT=1",*extra],
+                                            linker_script_factory=recovery.make_script if extra else None)
             except subprocess.CalledProcessError:
                 log=mode_dir/board/"compile.txt"
                 if log.exists():
@@ -46,6 +50,7 @@ with tempfile.TemporaryDirectory() as temp:
                 if m:
                     assert int(m[1] or m[2],16) not in vectors.values(),(board,line)
             if extra:
+                recovery.verify_image(mode_dir/board)
                 assert vectors[12] == vectors[2], (board,"WDT vector unexpectedly active")
                 assert "heaterWatchdogEarlyInit" in dump, board
                 start=dump.index("<heaterWatchdogEarlyInit>:")
