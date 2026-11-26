@@ -87,9 +87,17 @@ public:
 
     void setTargetTemperature(float target);
 #ifdef RF_HEATER_LEASE_EXPERIMENT
-    bool updateCurrentTemperature(HAL::HeaterSample* sample = nullptr);
+    bool updateCurrentTemperature(HAL::HeaterSample* sample = nullptr
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        , ThermalEmergency::SensorObservation* observation = nullptr
+#endif
+    );
 #else
-    bool updateCurrentTemperature();
+    bool updateCurrentTemperature(
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        ThermalEmergency::SensorObservation* observation = nullptr
+#endif
+    );
 #endif
     // ///< False for an unsupported sensor type or stale/unpublished ADC sample.
     void updateTempControlVars();
