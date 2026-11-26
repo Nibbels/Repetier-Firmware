@@ -359,6 +359,11 @@ void HeatBedScan::abort() {
     const bool retreated = Calibration::moveZ(int(Printer::stepsPerMm(Z_AXIS) * 5));
     if (retreated && !ScanSession::retreatOnly(reason))
         Printer::homeAxis(true, true, true);
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    // A nested move/homing wait can latch the terminal stop. Let the
+    // outer scan dispatcher perform the deferred discard without releasing torque.
+    if(Printer::printJob.emergencyLocked())return;
+#endif
     Printer::disableAllSteppersNow();
 
     if (Printer::debugInfo()) {
