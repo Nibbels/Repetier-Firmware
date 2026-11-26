@@ -25,14 +25,14 @@ def git(*args):
     return subprocess.check_output(["git", *args], cwd=ROOT, text=True).strip()
 
 
-def run(directory, name, command):
+def run(directory, name, command, env=None):
     command = [str(arg) for arg in command]
     with (directory / "commands.txt").open("a", encoding="utf-8") as log:
         log.write(shlex.join(command) + "\n")
     path = directory / (name + ".txt")
     print(f"{name}: {shlex.join(command)}", flush=True)
     with path.open("w", encoding="utf-8") as output:
-        subprocess.run(command, cwd=ROOT, stdout=output, stderr=subprocess.STDOUT, check=True)
+        subprocess.run(command, cwd=ROOT, stdout=output, stderr=subprocess.STDOUT, check=True, env=env)
     return path.read_text(encoding="utf-8", errors="replace")
 
 
@@ -59,7 +59,12 @@ def host_tests(out):
                  (stem, [exe])]
     for name, command in [("compiler-version", [cxx, "--version"]), *jobs]:
         try:
-            run(host, name, command)
+            env = None
+            if name == "heater-lease-integrated-avr":
+                # Retain actual experimental ELF/HEX/maps, not merely
+                # disassembly and summaries in this host test's stdout.
+                env = dict(os.environ, RF_EXPERIMENT_EVIDENCE_DIR=str(host / "experimental-avr"))
+            run(host, name, command, env=env)
         except (OSError, subprocess.CalledProcessError) as error:
             failures.append(f"host/{name}: {error}")
     return failures
