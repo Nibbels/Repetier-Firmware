@@ -5,10 +5,11 @@
 #pragma once
 #include <stdint.h>
 
-template<class Timer, class Lease, uint8_t Channels, uint16_t Guard>
+template<class Timer, class Lease, uint8_t Channels, uint16_t Guard, uint16_t FullOffGap = Guard>
 class EventHeaterPwm {
     static_assert(Channels > 0 && Channels <= 3, "compare channels");
-    static_assert(Guard > 0 && Guard < 512, "prototype guard");
+    static_assert(Guard > 0 && Guard < 512, "prototype arm guard");
+    static_assert(FullOffGap >= Guard && FullOffGap <= 1024, "prototype full-duty off gap");
     Timer& timer_;
     Lease& lease_;
     volatile uint8_t active_ = 0;
@@ -30,7 +31,7 @@ public:
     static uint16_t width(uint8_t demand) {
         const uint8_t quantized = demand & 254;
         // Preserve stock non-full duty; bound nominal full-duty high interval.
-        return quantized == 254 ? uint16_t(0u - Guard) : uint16_t(quantized) << 8;
+        return quantized == 254 ? uint16_t(0u - FullOffGap) : uint16_t(quantized) << 8;
     }
     bool failed() const { return failed_; }
 
