@@ -28,6 +28,7 @@ using Clock = AvrTimer3Lease<off>;
 static Clock clock;
 static HeaterLease<Clock,3,12500,3> lease(clock);
 volatile uint8_t channel, demand, result;
+volatile uint8_t frameResult[3];
 extern "C" __attribute__((noinline,used,externally_visible)) void probeGrant() {
     const uint8_t sreg = SREG; cli();
     result=lease.authorize(channel,demand);
@@ -35,7 +36,9 @@ extern "C" __attribute__((noinline,used,externally_visible)) void probeGrant() {
 }
 extern "C" __attribute__((noinline,used,externally_visible)) void probeFrame() {
     const uint8_t sreg=SREG; cli();
-    result=lease.frameDuty(channel);
+    uint8_t duties[3];
+    lease.frameDuties(duties);
+    for (uint8_t c=0;c<3;++c) frameResult[c]=duties[c];
     SREG=sreg;
 }
 ISR(TIMER3_COMPA_vect) {lease.expired(0);}
