@@ -19,6 +19,9 @@
 #include "StepExecutor.h"
 
 namespace {
+#ifdef RF_HEATER_LEASE_EXPERIMENT
+void beginHeaterLease();
+#endif
 const uint8_t temperatureAdcChannels[TemperatureAdcCount] PROGMEM = {
     EXT0_TEMPSENSOR_PIN,
 #if NUM_EXTRUDER > 1
@@ -322,6 +325,9 @@ int32_t HAL::CPUDivU2(unsigned int divisor) {
 } // CPUDivU2
 
 void HAL::setupTimer() {
+#ifdef RF_HEATER_LEASE_EXPERIMENT
+    beginHeaterLease();
+#endif
     EXTRUDER_TCCR = 0;                       // Normal mode on the shared timer.
     EXTRUDER_TIMSK &= ~_BV(EXTRUDER_OCIE);   // Arm Compare A when Advance has work.
 
@@ -405,6 +411,10 @@ void HAL::resetHardware() {
     for (uint8_t channel = 0; channel <= NUM_EXTRUDER; ++channel)
         setHeaterDuty(channel, 0);
     PWM_TIMSK &= ~_BV(PWM_OCIE);
+#ifdef RF_HEATER_LEASE_EXPERIMENT
+    TIMSK3 = 0;
+    TCCR3B = 0;
+#endif
     resetFunc();
     // A restart must not return to an interrupted print.
     for (;;) {}
@@ -675,7 +685,74 @@ volatile uint8_t fanMode = PART_FAN_MODE_PWM;
 volatile uint8_t fanDivisor = PART_FAN_DEFAULT_PWM_SPEED_DIVISOR;
 uint8_t fanMaxDuty = PART_FAN_PWM_MAX;
 uint8_t fanMinDuty = PART_FAN_PWM_MIN;
+#ifdef RF_HEATER_LEASE_EXPERIMENT
+// Non-release candidate: /256, 16us/tick, nominal 200ms lease.
+// Deadline and guard require full-system timing qualification.
+constexpr uint16_t heaterLeaseDuration = 12500;
+constexpr uint16_t heaterLeaseGuard = 4;
+volatile bool heaterLeaseReady = false;
+volatile bool heaterLeaseFailed = false;
+static_assert(F_CPU == 16000000UL && NUM_EXTRUDER <= 2, "lease clock assumptions");
+static_assert(OCIE3A == OCF3A && OCIE3B == OCF3B && OCIE3C == OCF3C
+              && OCIE3B == OCIE3A+1 && OCIE3C == OCIE3A+2, "compare bit mapping");
+inline uint8_t leaseMask(uint8_t channel) { return uint8_t(_BV(OCIE3A) << channel); }
+inline uint16_t leaseDeadline(uint8_t channel) {
+    switch (channel) { case 0: return OCR3A; case 1: return OCR3B; default: return OCR3C; }
+}
+inline void writeLeaseDeadline(uint8_t channel, uint16_t deadline) {
+    switch (channel) { case 0: OCR3A=deadline; break; case 1: OCR3B=deadline; break; default: OCR3C=deadline; break; }
+}
+void beginHeaterLease() {
+    InterruptProtectedBlock lock;
+    TIMSK3=0;
+    TCCR3B=0;
+    TCCR3A=0;
+    TCCR3C=0;
+    TCNT3=0;
+    OCR3A=OCR3B=OCR3C=0;
+    TIFR3=_BV(OCF3A)|_BV(OCF3B)|_BV(OCF3C)|_BV(TOV3);
+    TCCR3B=_BV(CS32);
+    heaterLeaseReady=true;
+}
+// IRQs masked by caller. No serial, no float, no motion calls.
+void failHeaterLease() {
+    heaterLeaseFailed=true;
+#if EXT0_HEATER_PIN > -1
+    WRITE(EXT0_HEATER_PIN, LOW);
+#endif
+#if defined(EXT1_HEATER_PIN) && EXT1_HEATER_PIN > -1 && NUM_EXTRUDER > 1
+    WRITE(EXT1_HEATER_PIN, LOW);
+#endif
+    WRITE(HEATED_BED_HEATER_PIN, LOW);
+    for(uint8_t c=0;c<=NUM_EXTRUDER;++c) requestedDuty[c]=0;
+    TIMSK3=0;
+}
+bool leaseLive(uint8_t c,uint16_t now) {
+    const uint16_t left=uint16_t(leaseDeadline(c)-now);
+    return left>heaterLeaseGuard && left<=heaterLeaseDuration && !(TIFR3 & leaseMask(c));
+}
+bool checkHeaterLeases() {
+    if (!heaterLeaseReady || heaterLeaseFailed) return false;
+    const uint16_t now=TCNT3;
+    for(uint8_t c=0;c<=NUM_EXTRUDER;++c) {
+        if(requestedDuty[c] && !leaseLive(c,now)) {
+            failHeaterLease();
+            return false;
+        }
+    }
+    return true;
+}
+#endif
 } // namespace
+
+#ifdef RF_HEATER_LEASE_EXPERIMENT
+bool HAL::heaterLeaseFault() { return heaterLeaseFailed; }
+ISR(TIMER3_COMPA_vect) { failHeaterLease(); }
+ISR(TIMER3_COMPB_vect, ISR_ALIASOF(TIMER3_COMPA_vect));
+#if NUM_EXTRUDER > 1
+ISR(TIMER3_COMPC_vect, ISR_ALIASOF(TIMER3_COMPA_vect));
+#endif
+#endif
 
 void HAL::resetPwmOutputs() {
     for (auto& duty : requestedDuty)
@@ -686,14 +763,33 @@ uint8_t HAL::outputDuty(uint8_t channel) { return requestedDuty[channel]; }
 void HAL::setHeaterDuty(uint8_t channel, uint8_t duty) {
     if (channel > NUM_EXTRUDER)
         return;
+#ifdef RF_HEATER_LEASE_EXPERIMENT
+    InterruptProtectedBlock lock;
+    const bool allowed=checkHeaterLeases();
+    if (duty) {
+        if (!allowed || Printer::heatingInhibited()) return;
+        const bool active=requestedDuty[channel]!=0;
+        const uint16_t now=TCNT3;
+        if(active && !leaseLive(channel,now)) { failHeaterLease(); return; }
+        writeLeaseDeadline(channel,uint16_t(now+heaterLeaseDuration));
+        // W1C only while previously inactive.
+        if(!active) TIFR3=leaseMask(channel);
+        if(!leaseLive(channel,TCNT3)) { failHeaterLease(); return; }
+        requestedDuty[channel]=duty;
+        TIMSK3 |= leaseMask(channel);
+        return;
+    }
+    TIMSK3 &= uint8_t(~leaseMask(channel));
+#else
     if (duty) {
         requestedDuty[channel] = duty;
         return;
     }
+    InterruptProtectedBlock lock;
+#endif
 
     // Revoke the requested duty and the active output together. The PWM
     // handler can only raise a heater at frame start, from requestedDuty.
-    InterruptProtectedBlock lock;
     requestedDuty[channel] = 0;
     switch (channel) {
 #if EXT0_HEATER_PIN > -1
@@ -765,6 +861,9 @@ ISR(PWM_TIMER_VECTOR) {
     PWM_OCR += 64;
 
     if (pwm_count_heater == 0) {
+#ifdef RF_HEATER_LEASE_EXPERIMENT
+        checkHeaterLeases(); // pending expiry wins before any rising edge
+#endif
 #if EXT0_HEATER_PIN > -1
         if ((pwm_pos_set[0] = (requestedDuty[0] & heaterPwmMask)) > 0)
             WRITE(EXT0_HEATER_PIN, HIGH);
