@@ -215,11 +215,10 @@ inline void pingWatchdog() {
 #ifdef RF_HEATER_RESET_WDT_EXPERIMENT
     // External supervisor remains a second path, not the independent
     // internal reset guarantee. Its board routing still needs qualification.
-    constexpr uint16_t heartbeatLimit = 250;
+    if (watchdogActive && HAL::timeInMilliseconds() - watchdogHeartbeat < 250)
 #else
-    constexpr uint16_t heartbeatLimit = WATCHDOG_MAIN_LOOP_TIMEOUT;
+    if (watchdogActive && HAL::timeInMilliseconds() - watchdogHeartbeat < WATCHDOG_MAIN_LOOP_TIMEOUT)
 #endif
-    if (watchdogActive && HAL::timeInMilliseconds() - watchdogHeartbeat < heartbeatLimit)
         WRITE(WATCHDOG_PIN, READ(WATCHDOG_PIN) ? 0 : 1);
 }
 } // namespace
@@ -493,11 +492,12 @@ void HAL::showStartReason() {
     // Check startup - does nothing if bootloader sets MCUSR to 0
 #ifdef RF_HEATER_RESET_WDT_EXPERIMENT
     uint8_t mcu = heaterWatchdogResetCause;
+    if (mcu != 0)
 #else
     uint8_t mcu = MCUSR;
-#endif
 
-    if (mcu != 0) //Printer::debugInfo()
+    if (MCUSR != 0)
+#endif //Printer::debugInfo()
     {
         if (mcu & 1)
             Com::printInfoFLN(Com::tPowerUp);
