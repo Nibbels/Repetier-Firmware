@@ -47,7 +47,8 @@ using millis_t = uint32_t;
 #define NUM_TEMPERATURE_LOOPS (NUM_EXTRUDER + 1)
 #define PRINTER_FLAG2_GOT_TEMPS 1
 #define PSTR(s) s
-#define UI_STATUS_UPD(x) do {} while (0)
+#define UI_STATUS_UPD(x) do { if (delayAutotuneAdmission) { now += 101; delayAutotuneAdmission = false; } } while (0)
+static bool delayAutotuneAdmission;
 static uint8_t pins[8];
 #define WRITE(pin,value) (pins[pin] = (value))
 #define READ(pin) (pins[pin])
@@ -558,6 +559,7 @@ int main(int argc, char** argv) {
             t.sensorType = 14;
             temperatureAdcValues[t.sensorPin] = 4092;
         } else if (!std::strcmp(name, "autotune-entry-stale")) now += 101;
+        else if (std::strstr(name, "-entry-admission-stale")) delayAutotuneAdmission = true;
         else if (!std::strcmp(name, "autotune-entry-disabled")) t.sensorType = 0;
         else if (!std::strcmp(name, "autotune-entry-latched")) Printer::latchOutputInhibit(true);
         else if (!std::strcmp(name, "autotune-entry-decoupled")) t.setSensorDecoupled(true);
@@ -703,7 +705,7 @@ def main():
     }
     scenarios = (
         "rail", "invalid-low", "invalid-high", "bed-invalid", "recovery", "disabled", "latched-fault-wait", "legacy-output-inhibit",
-        "stale", "bed-stale", "unpublished", "autotune-entry-stale", "autotune-stale", "autotune-bed-stale",
+        "stale", "bed-stale", "unpublished", "autotune-entry-stale", "autotune-entry-admission-stale", "autotune-bed-entry-admission-stale", "autotune-stale", "autotune-bed-stale",
         "unsupported", "no-rise", "hold-drift", "pwm", "watchdog", "wait",
         "autotune-entry-unsupported", "autotune-entry-low", "autotune-entry-disabled",
         "autotune-entry-latched", "autotune-entry-decoupled", "autotune-entry-legacy-rejected", "autotune-entry-high",
