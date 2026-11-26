@@ -506,6 +506,9 @@ public:
     static void resetPwmOutputs();
     static uint8_t outputDuty(uint8_t channel);
     static void setHeaterDuty(uint8_t channel, uint8_t duty);
+#ifdef RF_HEATER_LEASE_EXPERIMENT
+    static bool heaterLeaseFault();
+#endif
     static void setBoardFan(bool enabled);
     static uint8_t partFanSpeed();
     static void setPartFanSpeed(uint8_t speed);
