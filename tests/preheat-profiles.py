@@ -39,11 +39,12 @@ def main():
             + "} }\n#define UI_MENU_ACTIONCOMMAND(name, text, action) constexpr char name[] = text;\n"
             + section(menu, '#if UI_COLS <= 16\nUI_MENU_ACTIONCOMMAND(ui_menu_quick_preheat_a', "UI_MENU_ACTIONCOMMAND(ui_menu_quick_cooldown"),
             encoding="utf-8")
-        for columns in (16, 20):
+        for columns, emergency in ((16,False),(20,False),(16,True),(20,True)):
             executable = build / "preheat"
+            extra=["-DRF_THERMAL_EMERGENCY_EXPERIMENT=1"] if emergency else []
             subprocess.run([
                 os.environ.get("CXX", "c++"), "-std=c++11", "-O2", "-Wall", "-Wextra", "-Werror",
-                "-I", str(build), "-I", str(firmware), f"-DUI_COLS={columns}", str(tests / "preheat-profiles.cpp"),
+                *extra, "-I", str(build), "-I", str(firmware), f"-DUI_COLS={columns}", str(tests / "preheat-profiles.cpp"),
                 "-o", str(executable),
             ], check=True)
             subprocess.run([str(executable)], check=True, timeout=10)

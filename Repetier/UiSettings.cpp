@@ -226,8 +226,11 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
             tmp = UI_SET_MIN_HEATED_BED_TEMP;
         if (tmp < UI_SET_MIN_HEATED_BED_TEMP)
             tmp = 0;
-        else if (tmp > UI_SET_MAX_HEATED_BED_TEMP)
-            tmp = UI_SET_MAX_HEATED_BED_TEMP;
+        else {
+            const int maximum=RMath::min(int(UI_SET_MAX_HEATED_BED_TEMP), int(heatedBedController.maximumTargetC()));
+            if(maximum<UI_SET_MIN_HEATED_BED_TEMP)tmp=0;
+            else if(tmp>maximum)tmp=maximum;
+        }
         Extruder::setHeatedBedTemperature(tmp);
         break;
     }

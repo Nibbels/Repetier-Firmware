@@ -268,6 +268,15 @@ void HeatBedScan::startOrCancel(HeatBedScanMode mode) {
         Com::printFLN(PSTR("Error: PID tune required before heated scan"));
         return;
     }
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(mode!=HeatBedScanMode::Standard) {
+        const int requested=mode==HeatBedScanMode::Pla?heatBedScanPlaBedC:heatBedScanAbsBedC;
+        if(requested>heatedBedController.maximumTargetC()) {
+            Com::printErrorFLN(PSTR("Bed safety limit too low for heated scan"));
+            return;
+        }
+    }
+#endif
     Calibration::scanSession.reset();
     mode_ = mode;
     phase_ = Phase::Initialize;
@@ -425,11 +434,31 @@ void HeatBedScan::prepareProbeTemperature() {
         Extruder::setTemperatureForAllExtruders(heatBedScanProbeNozzleC);
     }
 
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(mode_!=HeatBedScanMode::Standard) {
+        const int requested=mode_==HeatBedScanMode::Pla?heatBedScanPlaBedC:heatBedScanAbsBedC;
+        if(heatedBedController.targetTemperatureC!=requested) {
+            Com::printErrorFLN(PSTR("Heated scan bed target not admitted"));
+            Calibration::scanSession.requestAbort(ScanAbort::Canceled);
+            return;
+        }
+    }
+#endif
     phase_ = Phase::WaitForBedTemperature;
     lastCheckMs_ = HAL::timeInMilliseconds();
 }
 
 void HeatBedScan::waitForBedTemperature() {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(mode_!=HeatBedScanMode::Standard) {
+        const int requested=mode_==HeatBedScanMode::Pla?heatBedScanPlaBedC:heatBedScanAbsBedC;
+        if(heatedBedController.targetTemperatureC!=requested) {
+            Com::printErrorFLN(PSTR("Heated scan bed target changed"));
+            Calibration::scanSession.requestAbort(ScanAbort::Canceled);
+            return;
+        }
+    }
+#endif
     if ((HAL::timeInMilliseconds() - lastCheckMs_) < heatBedScanDelayMs) {
         // do not check too often
         return;

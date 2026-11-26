@@ -68,8 +68,9 @@ struct HAL {
     static void eprSetInt32(unsigned p,int32_t v){for(unsigned i=0;i<4;++i)put(p+i,uint32_t(v)>>(8*i));}
     static void eprSetFloat(unsigned p,float v){uint32_t raw;memcpy(&raw,&v,4);eprSetInt32(p,raw);}
 };
-struct Controller {uint8_t slot;void invalidatePidCalibration(){invalidated|=1u<<slot;}};
+struct Controller {uint8_t slot;void invalidatePidCalibration(){invalidated|=1u<<slot;}int maximumTargetC()const{return 110;}};
 static Controller e0{0},bed{2};
+static Controller& heatedBedController=bed;
 #if NUM_EXTRUDER==2
 static Controller e1{1};
 static Controller* tempController[]={&e0,&e1,&bed};
@@ -153,10 +154,10 @@ int main(){
     }
     reset();GCode c;c.P=125;c.T=2;c.S=1;denied(c);++count;
     reset();c.P=129;c.T=3;c.X=1;denied(c);++count;
-    for(int32_t value:{-1,0,49,50,100,160,161,32768}){
+    for(int32_t value:{-1,0,49,50,100,110,111,160,161,32768}){
         reset();c=GCode{};c.P=1970;c.T=1;c.S=value;
         if(value==0){EEPROM::update(&c);assert(!errors&&!writes&&!loads);}
-        else if(value>=50&&value<=160)admitted(c,0);else denied(c);
+        else if(value>=50&&value<=110)admitted(c,0);else denied(c);
         ++count;
     }
     std::printf("M206 exact fields: %u cases, %u absent/wrong-type denied, %u exact no-ops, %d extruders\n",count,rejected,noops,NUM_EXTRUDER);

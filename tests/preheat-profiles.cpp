@@ -36,6 +36,9 @@ unsigned checksumWrites = 0;
 void updateChecksum() { ++checksumWrites; }
 }
 
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+struct BedFixture {int maximum=110;int maximumTargetC()const{return maximum;}} heatedBedController;
+#endif
 #include "preheat-firmware.inc"
 
 namespace Extruder {
@@ -98,4 +101,16 @@ int main() {
     assert(HAL::eprGetInt16(EPR_RF_PREHEAT_A_BED) == UI_SET_MIN_HEATED_BED_TEMP);
     edit(UI_ACTION_PREHEAT_A_HOTEND, 127);
     assert(HAL::eprGetInt16(EPR_RF_PREHEAT_A_HOTEND) == UI_SET_MAX_EXTRUDER_TEMP);
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    HAL::eprSetInt16(EPR_RF_PREHEAT_B_BED,150);
+    assert(EEPROM::readPreheatProfiles());
+    assert(HAL::eprGetInt16(EPR_RF_PREHEAT_B_BED)==100);
+    edit(UI_ACTION_PREHEAT_B_BED,100);
+    assert(HAL::eprGetInt16(EPR_RF_PREHEAT_B_BED)==110);
+    heatedBedController.maximum=45;
+    assert(EEPROM::readPreheatProfiles());
+    assert(!HAL::eprGetInt16(EPR_RF_PREHEAT_A_BED)&&!HAL::eprGetInt16(EPR_RF_PREHEAT_B_BED));
+    edit(UI_ACTION_PREHEAT_A_BED,1);
+    assert(!HAL::eprGetInt16(EPR_RF_PREHEAT_A_BED));
+#endif
 }

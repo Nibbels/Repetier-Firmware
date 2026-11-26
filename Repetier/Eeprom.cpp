@@ -119,7 +119,7 @@ static bool validHostThermalValue(const GCode* com,uint16_t address) {
     if(address==EPR_BED_PID_MAX)return com->S==0||com->S>=40;
     if(address==EPR_BED_DRIVE_MIN||address==EPR_BED_DRIVE_MAX)return com->S>=1;
     if(address==EPR_RF_PREHEAT_A_BED||address==EPR_RF_PREHEAT_B_BED)
-        return com->S==0||(com->S>=UI_SET_MIN_HEATED_BED_TEMP&&com->S<=UI_SET_MAX_HEATED_BED_TEMP);
+        return com->S==0||(com->S>=UI_SET_MIN_HEATED_BED_TEMP&&com->S<=UI_SET_MAX_HEATED_BED_TEMP&&com->S<=heatedBedController.maximumTargetC());
     if(address==EPR_RF_PREHEAT_A_HOTEND||address==EPR_RF_PREHEAT_B_HOTEND)
         return com->S==0||(com->S>=UI_SET_MIN_EXTRUDER_TEMP&&com->S<=UI_SET_MAX_EXTRUDER_TEMP);
     for(uint8_t slot=0;slot<NUM_EXTRUDER;++slot) {
