@@ -9,7 +9,7 @@ hal=(root/"Repetier/HAL.cpp").read_text()
 start=hal.index("#ifdef RF_HEATER_LEASE_EXPERIMENT\n// Non-release candidate")
 end=hal.index("#endif\n} // namespace",start)+len("#endif")
 state=hal[start:end]
-start=hal.index('void HAL::completeThermalWatchdogPass(bool heatDemand)')
+start=hal.index('constexpr uint8_t thermalPassComplete=0x80;')
 feed=hal[start:hal.index('\n#endif',start)]
 start=hal.index("#ifdef RF_HEATER_RESET_WDT_EXPERIMENT\n// Timer5 is borrowed")
 progress=hal[start:hal.index("\n#endif",start)+len("\n#endif")]
@@ -74,6 +74,7 @@ struct HAL {
     TICKET_DECL
 #ifdef RF_HEATER_RESET_WDT_EXPERIMENT
     static void completeThermalWatchdogPass(bool heatDemand=false);
+    static void completeAutotuneWatchdogPass();
     static void tellWatchdogOk();
     static uint32_t timeInMilliseconds(){return simulatedMs;}
     static uint32_t simulatedMs;
@@ -343,6 +344,18 @@ int main(){
     advanceProgress(12501);startFrame(0);
     assert(heaterLeaseFailed&&!pins[0]);
     HAL::completeThermalWatchdogPass(false);assert(watchdogFeeds==3);
+    // A regular pass without a new autotune grant waits. The sampled
+    // autotune decision may complete that pass, but never supply a new
+    // regular pass by itself.
+    resetFixture(0);grant(0,255);
+    HAL::completeThermalWatchdogPass(true);assert(watchdogFeeds==1);
+    advanceProgress(6250);
+    HAL::completeThermalWatchdogPass(true);assert(watchdogFeeds==1);
+    grant(0,255);HAL::completeAutotuneWatchdogPass();assert(watchdogFeeds==2);
+    advanceProgress(6250);
+    grant(0,255);HAL::completeAutotuneWatchdogPass();assert(watchdogFeeds==2);
+    HAL::completeThermalWatchdogPass(true);assert(watchdogFeeds==3);
+    HAL::completeAutotuneWatchdogPass();assert(watchdogFeeds==3);
     std::puts("thermal watchdog progress checks passed; 524288 sticky Timer5 deadline cases");
 #endif
     std::printf("heaters=%u actual HAL grant/expiry cases=%lu; exact sample checks passed\n",NUM_EXTRUDER+1,cases);
