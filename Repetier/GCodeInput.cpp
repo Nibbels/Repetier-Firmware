@@ -282,6 +282,13 @@ void GCodeInput::checkAndPushCommand(GCode& command) {
         }
         if (command.M == GCodeCommands::EmergencyReset)
         {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+            if(Printer::printJob.emergencyLocked()) {
+                // Already stopped; keep the original diagnostics instead of
+                // deliberately rebooting on a queued host cancellation.
+                return;
+            }
+#endif
             Commands::emergencyStop();
         }
     }
