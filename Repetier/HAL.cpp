@@ -73,6 +73,20 @@ bool heaterSampleLive(uint8_t c) {
     }
     return true;
 }
+void publishHeaterSample(uint8_t index) {
+    synchronizeHeaterSamples();
+    const uint16_t now=TCNT3;
+    if(TIFR3 & _BV(TOV3)) synchronizeHeaterSamples();
+    heaterSampleState[index] &= SampleBusy;
+    if(heaterLeaseReady && heaterBatchValid &&
+       uint16_t(now-heaterBatchStart)<=heaterSampleMaxAge) {
+        heaterSampleStamp[index]=heaterBatchStart;
+        heaterSampleState[index] |= SampleValid|SampleFresh;
+    }
+    heaterBatchStart=TCNT3;
+    heaterBatchValid=heaterLeaseReady;
+    if(TIFR3 & _BV(TOV3)) synchronizeHeaterSamples();
+}
 #endif
 
 inline __attribute__((always_inline)) void serviceTemperatureAdc() {
@@ -87,18 +101,7 @@ inline __attribute__((always_inline)) void serviceTemperatureAdc() {
     if (count >= 32) {
         const uint8_t index = temperatureAdcPosition;
 #ifdef RF_HEATER_LEASE_EXPERIMENT
-        synchronizeHeaterSamples();
-        const uint16_t now=TCNT3;
-        if(TIFR3 & _BV(TOV3)) synchronizeHeaterSamples();
-        heaterSampleState[index] &= SampleBusy;
-        if(heaterLeaseReady && heaterBatchValid &&
-           uint16_t(now-heaterBatchStart)<=heaterSampleMaxAge) {
-            heaterSampleStamp[index]=heaterBatchStart;
-            heaterSampleState[index] |= SampleValid|SampleFresh;
-        }
-        heaterBatchStart=TCNT3;
-        heaterBatchValid=heaterLeaseReady;
-        if(TIFR3 & _BV(TOV3)) synchronizeHeaterSamples();
+        publishHeaterSample(index);
 #endif
         // Scale 32 ten-bit samples to the sensor tables' 12-bit range.
         temperatureAdcValues[index] = sum >> 3;
@@ -843,11 +846,11 @@ void HAL::resetPwmOutputs() {
 }
 
 uint8_t HAL::outputDuty(uint8_t channel) { return requestedDuty[channel]; }
+void HAL::setHeaterDuty(uint8_t channel, uint8_t duty
 #ifdef RF_HEATER_LEASE_EXPERIMENT
-void HAL::setHeaterDuty(uint8_t channel, uint8_t duty, HeaterSample* sample) {
-#else
-void HAL::setHeaterDuty(uint8_t channel, uint8_t duty) {
+    , HeaterSample* sample
 #endif
+) {
     if (channel > NUM_EXTRUDER)
         return;
 #ifdef RF_HEATER_LEASE_EXPERIMENT
