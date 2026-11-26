@@ -35,6 +35,8 @@ public:
     // Single foreground producer, like write(). Never wait for TX space.
     // False means no byte was accepted; retry from the same log cursor.
     static bool tryWrite(uint8_t byte);
+    // Whole short diagnostic record or nothing. No partially published line.
+    static bool tryWriteSpan(const char* bytes, uint8_t count);
     static void flush();
 
     static void receiveInterrupt();
