@@ -332,6 +332,10 @@ void showAbortScanReason(const void* scanName, ScanAbort reason) {
 
 bool moveZ(int nSteps, bool emergencyRetreat) {
     const auto interrupted = [emergencyRetreat] {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        // A thermal stop also prohibits the special mechanical retreat.
+        if(Printer::printJob.emergencyLocked())return true;
+#endif
         return !emergencyRetreat && (scanSession.aborting() || Printer::blockAll || Printer::printJob.commandsBlocked());
     };
     if (interrupted())
