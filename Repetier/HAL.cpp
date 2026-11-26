@@ -822,7 +822,9 @@ void HAL::startWatchdog() {
         Printer::latchOutputInhibit(true);
 #endif
         Printer::markTemperatureReadingsAvailable();
+#ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
         Com::printErrorFLN(PSTR("Watchdog/recovery: heating inhibited until restart"));
+#endif
     }
     // One-shot retained marker. An unrecognized power cycle may latch once
     // if SRAM survives and MCUSR is lost; the next restart can clear it.
