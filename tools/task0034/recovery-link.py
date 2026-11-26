@@ -90,7 +90,7 @@ def decode_hex(path):
 
 
 
-def verify_watchdog_instructions(dump, cookie_address):
+def verify_watchdog_instructions(dump, cookie_address, padding):
     """Static linked audit, not a model of reset, silicon or WCET.
 
     Match actual disassembled instruction lines; ignore mixed-in C++ source.
@@ -125,13 +125,17 @@ def verify_watchdog_instructions(dump, cookie_address):
     # r25=0x0e (WDE | WDP2 | WDP1), r24=0x18 (WDCE | WDE).
     assert following(enable-4,4)==["88e1","9ee0","0fb6","f894"], instructions[enable-4:enable]
     thermal = next(ins for _,ins in feeds if ins[4].startswith("tryThermalWatchdogFeed("))
+    # No fall-through from the low code partition into linker padding.
+    padding_start = RECOVERY-padding
+    last = next(ins for ins in reversed(instructions) if ins[0]<padding_start)
+    assert last[0]+len(last[1])==padding_start and last[2] in ("ret","reti","jmp","rjmp"), last
     # No ordinary direct transfer to the special entry or its interior.
     # This is not proof against corrupted PC or arbitrary indirect transfers.
     for addr,raw,op,operands,fn in instructions:
         if op in ("jmp","call","rjmp","rcall") or op.startswith("br"):
             target = re.search(r"(?:^|;\s*)0x([0-9a-f]+)\b",operands)
             if target:
-                assert not RECOVERY <= int(target[1],16) < RECOVERY+ENTRY_SIZE, (addr,op,operands,fn)
+                assert not padding_start <= int(target[1],16) < RECOVERY+ENTRY_SIZE, (addr,op,operands,fn)
     result={"wdr_sites":[{"address":hex(ins[0]),"function":ins[4]} for _,ins in feeds],
             "noinit_range":[hex(start),hex(start+size)],"direct_recovery_transfers":0}
     print("Recovery watchdog instruction audit",json.dumps(result),flush=True)
@@ -181,6 +185,6 @@ def verify_image(directory):
     report = {"entry_byte_address":hex(RECOVERY), "entry_bytes":actual.hex(),
               "padding_bytes":padding, "cookie_sram_address":hex(cookie),
               "last_application_byte":hex(max(image))}
-    report["watchdog_audit"] = verify_watchdog_instructions((directory/"disassembly.txt").read_text(),cookie)
+    report["watchdog_audit"] = verify_watchdog_instructions((directory/"disassembly.txt").read_text(),cookie,padding)
     print("Recovery ELF/HEX verified",json.dumps(report),flush=True)
     return report
