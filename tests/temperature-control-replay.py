@@ -194,6 +194,7 @@ static void reportTempsensorAndHeaterErrors();
 #include "control.inc"
 #include "bed-setter.inc"
 static unsigned visits;
+static unsigned diagnosticRefreshes, ordinaryServices;
 static unsigned observedPeakDuty;
 static millis_t stride = 10;
 enum class Injection { None, Reach, LateUnsupported, LateLow, Transient, High, TransientHigh, Cutoff, Cycles, ProfileCycles, Unstable, PowerChange, OtherFault, Cancel, Reentrant, Stale };
@@ -249,8 +250,9 @@ namespace GCodeInput {
 }
 static struct {
     millis_t lastButtonTime() { return 0; }
-    void refreshPage() {}
+    void refreshPage() {++diagnosticRefreshes;}
     void slowAction() {
+        ++ordinaryServices;
         if (injection == Injection::Transient || injection == Injection::TransientHigh) {
             assert(HAL::outputDuty(tuned->pwmIndex) == 0);
             tuned->sensorType = 60; // valid again before autotune's next read
@@ -258,9 +260,9 @@ static struct {
         }
     }
 } uid;
-static void recalculateZCompensation() {}
-static void loopFeatures() {}
-static void handleScanWorkTasks(bool) {}
+static void recalculateZCompensation() {++ordinaryServices;}
+static void loopFeatures() {++ordinaryServices;}
+static void handleScanWorkTasks(bool) {++ordinaryServices;}
 #include "scheduler.inc"
 
 static void service() {
@@ -358,6 +360,28 @@ int main(int argc, char** argv) {
         assert(r.cause==Cause::StaleSample&&r.channel==0);
         assert(r.evidence.uptimeMs==started&&r.evidence.admittedDuty==255);
         assert(!(r.evidence.valid&(Evidence::Raw|Evidence::Measured)));
+    } else if (!std::strcmp(name, "emergency-scheduler")) {
+        using namespace ThermalEmergency;
+        latchSystemFault(Cause::WatchdogReset);
+        const auto initialVisits=visits,initialOrdinary=ordinaryServices,initialRefresh=diagnosticRefreshes;
+        diagnosticTxBlocked=true;
+        for(unsigned n=0;n<100;++n) {
+            now+=100;publishAdc();
+            scanTick=compensationTick=featureTick=temperatureTick=true;
+            Commands::checkForPeriodicalActions(WaitHeater);
+            assert(!scanTick&&!compensationTick&&!featureTick&&!temperatureTick);
+            assert(visits==initialVisits&&ordinaryServices==initialOrdinary);
+            assert(diagnosticRefreshes==initialRefresh+n+1);
+            for(auto* h:tempController)assert(HAL::outputDuty(h->pwmIndex)==0);
+            for(unsigned h=0;h<NUM_EXTRUDER;++h)assert(extruder[h].coolerPWM==255);
+        }
+        assert(diagnosticLines==0);
+        diagnosticTxBlocked=false;
+        for(unsigned n=0;n<100;++n) {
+            now+=100;publishAdc();temperatureTick=true;
+            Commands::checkForPeriodicalActions(NotBusy);
+        }
+        assert(diagnosticLines>2&&ordinaryServices==initialOrdinary);
     } else if (!std::strcmp(name, "emergency-recovery")) {
         using namespace ThermalEmergency;
         latchSystemFault(Cause::InterruptedHeating);
@@ -870,7 +894,7 @@ def main():
                                 "-I", str(FW), str(work / "replay.cpp"), "-o", str(exe)], check=True)
                 selected = scenarios + (("dual-invalid",) if tools > 1 else ())
                 if emergency:
-                    selected += ("emergency-invalid-episode", "emergency-stale-episode", "emergency-recovery")
+                    selected += ("emergency-invalid-episode", "emergency-stale-episode", "emergency-recovery", "emergency-scheduler")
                 for scenario in selected:
                     subprocess.run([str(exe), scenario], check=True, timeout=10)
                 print(f"{board} / {tools} hotend(s) / emergency={emergency}: {len(selected)} cases passed", flush=True)
