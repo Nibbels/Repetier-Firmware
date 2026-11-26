@@ -89,6 +89,54 @@ def decode_hex(path):
     return image
 
 
+
+def verify_watchdog_instructions(dump, cookie_address):
+    """Static linked audit, not a model of reset, silicon or WCET.
+
+    Match actual disassembled instruction lines; ignore mixed-in C++ source.
+    Reject a new WDR site, timed-register sequence or recovery branch until
+    explicitly reviewed. This guard is intentionally pinned to AVR GCC7.
+    """
+    instructions = []
+    function = ""
+    for line in dump.splitlines():
+        symbol = re.match(r"^[0-9a-f]+ <(.+)>:$", line)
+        if symbol:
+            function = symbol[1]
+        match = re.match(r"^\s*([0-9a-f]+):\s+((?:[0-9a-f]{2} )+[0-9a-f]{2})\s+(\S+)(?:\s+(.*))?$", line)
+        if match:
+            addr, raw, op, operands = match.groups()
+            instructions.append((int(addr,16), bytes.fromhex(raw), op, operands or "", function))
+    assert instructions
+    # The retained cookie has to lie beyond BSS, in the actual .noinit.
+    noinit = re.search(r"^\s*\d+\s+\.noinit\s+([0-9a-f]+)\s+([0-9a-f]+)\s+",dump,re.M)
+    assert noinit, "No linked .noinit"
+    size,start = (int(x,16) for x in noinit.groups())
+    assert start <= 0x800000+cookie_address <= start+size-4
+    feeds = [(i, ins) for i, ins in enumerate(instructions) if ins[1] == b"\xa8\x95"]
+    assert len(feeds)==3, feeds
+    def following(index,n):
+        return [ins[1].hex() for ins in instructions[index:index+n]]
+    early = next(i for i,ins in feeds if ins[4]=="heaterWatchdogEarlyInit")
+    assert following(early,4)==["a895","88e1","80936000","10926000"]
+    enable = next(i for i,ins in feeds if ins[4]=="HAL::startWatchdog()")
+    assert following(enable,4)==["a895","80936000","0fbe","90936000"]
+    # Actual register values immediately before the enable sequence.
+    # r25=0x0e (WDE | WDP2 | WDP1), r24=0x18 (WDCE | WDE).
+    assert following(enable-4,4)==["88e1","9ee0","0fb6","f894"], instructions[enable-4:enable]
+    thermal = next(ins for _,ins in feeds if ins[4].startswith("tryThermalWatchdogFeed("))
+    # No ordinary direct transfer to the special entry or its interior.
+    # This is not proof against corrupted PC or arbitrary indirect transfers.
+    for addr,raw,op,operands,fn in instructions:
+        if op in ("jmp","call","rjmp","rcall") or op.startswith("br"):
+            target = re.search(r"(?:^|;\s*)0x([0-9a-f]+)\b",operands)
+            if target:
+                assert not RECOVERY <= int(target[1],16) < RECOVERY+ENTRY_SIZE, (addr,op,operands,fn)
+    result={"wdr_sites":[{"address":hex(ins[0]),"function":ins[4]} for _,ins in feeds],
+            "noinit_range":[hex(start),hex(start+size)],"direct_recovery_transfers":0}
+    print("Recovery watchdog instruction audit",json.dumps(result),flush=True)
+    return result
+
 def verify_image(directory):
     symbols = (directory / "symbols.txt").read_text()
     def symbol(name):
@@ -133,5 +181,6 @@ def verify_image(directory):
     report = {"entry_byte_address":hex(RECOVERY), "entry_bytes":actual.hex(),
               "padding_bytes":padding, "cookie_sram_address":hex(cookie),
               "last_application_byte":hex(max(image))}
+    report["watchdog_audit"] = verify_watchdog_instructions((directory/"disassembly.txt").read_text(),cookie)
     print("Recovery ELF/HEX verified",json.dumps(report),flush=True)
     return report
