@@ -432,6 +432,13 @@ void Printer::setup() {
         }
     }
 
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    // Historical active-HIGH beeper polarity; only after board identity
+    // check. Fitted sounder/driver/polarity still require qualification.
+    WRITE(THERMAL_ALARM_PIN,LOW);
+    SET_OUTPUT(THERMAL_ALARM_PIN);
+#endif
+
     // Initialize Step Pins
     SET_OUTPUT(X_STEP_PIN);
     SET_OUTPUT(Y_STEP_PIN);
