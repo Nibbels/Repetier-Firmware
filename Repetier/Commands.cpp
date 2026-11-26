@@ -24,6 +24,16 @@ int Commands::lowestRAMValue = MAX_RAM;
 int Commands::lowestRAMValueSend = MAX_RAM;
 
 void Commands::commandLoop() {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(Printer::printJob.emergencyLocked()) {
+        // Give retained fault output and the actual thermal pass priority
+        // over even a continuous stream of incoming rejected commands.
+        checkForPeriodicalActions(NotBusy);
+        GCodeInput::readFromSerial();
+        GCodeInput::popCurrentCommand(); // old admitted work, never execute
+        return;
+    }
+#endif
     GCodeInput::readFromSerial();
 
     GCode* code = GCodeInput::peekCurrentCommand();
