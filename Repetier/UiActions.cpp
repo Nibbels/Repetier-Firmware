@@ -357,8 +357,12 @@ void UIDisplay::mainSwitchCase(int action) {
     case UI_ACTION_UNMOUNT_FILAMENT_SOFT:
     case UI_ACTION_UNMOUNT_FILAMENT_HARD: {
         Printer::idleStatus.cancel();
-        while (Printer::checkAbortKeys())
+        while (Printer::checkAbortKeys()) {
             Commands::checkForPeriodicalActions(); // Dont quit script by holding the ok longer than 1ms if no temp is involved. -> min einmal OK loslassen.
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+            if(Printer::printJob.emergencyLocked())return;
+#endif
+        }
         bool unmount = (action == UI_ACTION_UNMOUNT_FILAMENT_SOFT || action == UI_ACTION_UNMOUNT_FILAMENT_HARD);
         exitmenu();
 
