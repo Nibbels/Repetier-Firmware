@@ -58,7 +58,7 @@ Ledger<NUM_TEMPERATURE_LOOPS> ledger;
 ReportCursor<NUM_TEMPERATURE_LOOPS> report;
 CancellationCursor cancellation;
 uint8_t liveValid=0;
-bool liveRequested=false;
+bool liveRequested=false,replayRequestedOnce=false;
 uint32_t lastLiveReport=0,lastReplayRequest=0;
 uint8_t liveChannel=0;
 // Preserve the start of a contiguous invalid-sample episode across the
@@ -132,7 +132,8 @@ bool liveTemperatureValid(uint8_t channel) {
 void requestLiveReport() {liveRequested=true;}
 void requestDiagnosticReplay() {
     const uint32_t now=HAL::timeInMilliseconds();
-    if(uint32_t(now-lastReplayRequest)>=5000) {
+    if(!replayRequestedOnce || uint32_t(now-lastReplayRequest)>=5000) {
+        replayRequestedOnce=true;
         lastReplayRequest=now;
         report.requestReplay();
     }
@@ -472,9 +473,10 @@ void Extruder::manageTemperatures() {
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     if(Printer::isAnyTempsensorDefect()) {
 #if defined(THERMAL_ALARM_PIN) && THERMAL_ALARM_PIN >= 0
-        // Provisional active-HIGH safety annunciation; no blocking beep()
-        // or extra timer. Actual sound and final pattern not qualified.
-        WRITE(THERMAL_ALARM_PIN,HIGH);
+        // Provisional slow active-HIGH alarm gate, not a qualified tone.
+        // No continuous DC request, blocking delay or extra timer. Passive
+        // transducers may need a different carrier; verify the fitted driver.
+        WRITE(THERMAL_ALARM_PIN, (HAL::timeInMilliseconds()%1000)<250 ? HIGH : LOW);
 #endif
         // Do not use an invalid sensor's apparent cold value to stop
         // heatsink cooling. Keep named cooler outputs on in this state.
