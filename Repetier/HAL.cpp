@@ -42,6 +42,38 @@ volatile uint16_t temperatureAdcValues[TemperatureAdcCount] = { 0 };
 constexpr uint32_t temperatureAdcMaxAgeMs = 100;
 volatile uint32_t temperatureAdcPublishedAt[TemperatureAdcCount] = { 0 };
 volatile bool temperatureAdcReady[TemperatureAdcCount] = { false };
+#ifdef RF_HEATER_LEASE_EXPERIMENT
+// Timer3 is independent of Arduino millis and owns TOV3 exclusively here.
+enum : uint8_t { SampleValid=1, SampleFresh=2, SampleBusy=4, SampleMatch=8 };
+volatile uint8_t heaterSampleState[TemperatureAdcCount] = {};
+volatile uint16_t heaterSampleStamp[TemperatureAdcCount] = {};
+volatile uint16_t heaterBatchStart=0;
+volatile bool heaterBatchValid=false;
+volatile bool heaterLeaseReady=false;
+constexpr uint16_t heaterSampleMaxAge=6250; // experimental 100ms from batch start
+void synchronizeHeaterSamples() {
+    if (TIFR3 & _BV(TOV3)) {
+        for(uint8_t c=0;c<TemperatureAdcCount;++c)
+            heaterSampleState[c] &= SampleBusy;
+        heaterBatchValid=false;
+        TIFR3=_BV(TOV3); // never clear compare expiry flags here
+    }
+}
+bool heaterSampleLive(uint8_t c) {
+    synchronizeHeaterSamples();
+    const uint16_t now=TCNT3;
+    if(TIFR3 & _BV(TOV3)) {
+        synchronizeHeaterSamples();
+        return false;
+    }
+    if(!(heaterSampleState[c]&SampleValid)) return false;
+    if(uint16_t(now-heaterSampleStamp[c])>heaterSampleMaxAge) {
+        heaterSampleState[c] &= SampleBusy;
+        return false;
+    }
+    return true;
+}
+#endif
 
 inline __attribute__((always_inline)) void serviceTemperatureAdc() {
     // ADSC alone can also be clear when the ADC has been disabled.
@@ -54,6 +86,20 @@ inline __attribute__((always_inline)) void serviceTemperatureAdc() {
     const uint8_t count = temperatureAdcCount + 1;
     if (count >= 32) {
         const uint8_t index = temperatureAdcPosition;
+#ifdef RF_HEATER_LEASE_EXPERIMENT
+        synchronizeHeaterSamples();
+        const uint16_t now=TCNT3;
+        if(TIFR3 & _BV(TOV3)) synchronizeHeaterSamples();
+        heaterSampleState[index] &= SampleBusy;
+        if(heaterLeaseReady && heaterBatchValid &&
+           uint16_t(now-heaterBatchStart)<=heaterSampleMaxAge) {
+            heaterSampleStamp[index]=heaterBatchStart;
+            heaterSampleState[index] |= SampleValid|SampleFresh;
+        }
+        heaterBatchStart=TCNT3;
+        heaterBatchValid=heaterLeaseReady;
+        if(TIFR3 & _BV(TOV3)) synchronizeHeaterSamples();
+#endif
         // Scale 32 ten-bit samples to the sensor tables' 12-bit range.
         temperatureAdcValues[index] = sum >> 3;
         temperatureAdcPublishedAt[index] = HAL::timeInMilliseconds();
@@ -454,6 +500,38 @@ bool HAL::temperatureAdcSample(uint8_t index, uint16_t& sample) {
     return false;
 }
 
+#ifdef RF_HEATER_LEASE_EXPERIMENT
+HAL::HeaterSample::~HeaterSample() { release(); }
+void HAL::HeaterSample::release() {
+    InterruptProtectedBlock lock;
+    if(index_!=255) {
+        heaterSampleState[index_] &= SampleValid|SampleFresh;
+        index_=255;
+    }
+}
+bool HAL::HeaterSample::read(uint8_t index,uint16_t& raw) {
+    InterruptProtectedBlock lock;
+    raw=0;
+    if(index_!=255 || index>=TemperatureAdcCount || !heaterLeaseReady) return false;
+    raw=temperatureAdcValues[index];
+    if(!heaterSampleLive(index)) return false;
+    // A diagnostic read of an already consumed publication may still be valid,
+    // but it cannot authorize another positive request.
+    if((heaterSampleState[index] & (SampleFresh|SampleBusy))==SampleFresh) {
+        heaterSampleState[index] |= SampleBusy|SampleMatch;
+        index_=index;
+    }
+    return true;
+}
+bool HAL::HeaterSample::consume(uint8_t channel) {
+    // Caller holds the IRQ lock through grant publication.
+    if(index_!=channel || index_==255 || !heaterSampleLive(index_) ||
+       heaterSampleState[index_]!=(SampleValid|SampleFresh|SampleBusy|SampleMatch)) return false;
+    heaterSampleState[index_] = SampleValid|SampleBusy;
+    return true;
+}
+#endif
+
 void HAL::analogStart() {
     // Called during boot before enabling Timer0 COMPB.
     ADMUX = _BV(REFS0); // Use AVCC as the temperature ADC reference.
@@ -464,7 +542,13 @@ void HAL::analogStart() {
         temperatureAdcValues[i] = 0;
         temperatureAdcPublishedAt[i] = 0;
         temperatureAdcReady[i] = false;
+#ifdef RF_HEATER_LEASE_EXPERIMENT
+        heaterSampleState[i]=0;
+#endif
     }
+#ifdef RF_HEATER_LEASE_EXPERIMENT
+    heaterBatchValid=false;
+#endif
     ADCSRA = _BV(ADEN) | _BV(ADSC) | _BV(ADIF) | ANALOG_PRESCALER;
     while (ADCSRA & _BV(ADSC)) { } // wait for conversion
     /* ADCW must be read once, otherwise the next result is wrong. */
@@ -690,7 +774,6 @@ uint8_t fanMinDuty = PART_FAN_PWM_MIN;
 // Deadline and guard require full-system timing qualification.
 constexpr uint16_t heaterLeaseDuration = 12500;
 constexpr uint16_t heaterLeaseGuard = 4;
-volatile bool heaterLeaseReady = false;
 volatile bool heaterLeaseFailed = false;
 static_assert(F_CPU == 16000000UL && NUM_EXTRUDER <= 2, "lease clock assumptions");
 static_assert(OCIE3A == OCF3A && OCIE3B == OCF3B && OCIE3C == OCF3C
@@ -760,7 +843,11 @@ void HAL::resetPwmOutputs() {
 }
 
 uint8_t HAL::outputDuty(uint8_t channel) { return requestedDuty[channel]; }
+#ifdef RF_HEATER_LEASE_EXPERIMENT
+void HAL::setHeaterDuty(uint8_t channel, uint8_t duty, HeaterSample* sample) {
+#else
 void HAL::setHeaterDuty(uint8_t channel, uint8_t duty) {
+#endif
     if (channel > NUM_EXTRUDER)
         return;
 #ifdef RF_HEATER_LEASE_EXPERIMENT
@@ -768,6 +855,9 @@ void HAL::setHeaterDuty(uint8_t channel, uint8_t duty) {
     const bool allowed=checkHeaterLeases();
     if (duty) {
         if (!allowed || Printer::heatingInhibited()) return;
+        // No new grant from a diagnostic read, superseded or consumed batch.
+        // Existing power can only survive until its previous deadline.
+        if(!sample || !sample->consume(channel)) return;
         const bool active=requestedDuty[channel]!=0;
         const uint16_t now=TCNT3;
         if(active && !leaseLive(channel,now)) { failHeaterLease(); return; }
