@@ -53,6 +53,9 @@ void UIDisplay::finishAction(int action) {
         }
         EEPROM::restoreEEPROMSettingsFromConfiguration();
         EEPROM::storeDataIntoEEPROM(false);
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        if(Printer::printJob.emergencyLocked())return;
+#endif
 
         exitmenu();
         UI_STATUS(UI_TEXT_RESTORE_DEFAULTS);
