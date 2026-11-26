@@ -355,6 +355,18 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
     autotunePowerLimit = pidMax;
     autotuneIndex = controllerId;
     stopDecouple();
+    // Admission diagnostics can take time. Do not use the earlier sample
+    // to authorize the first positive power request.
+    const bool firstSampleValid = updateCurrentTemperature();
+    if (autotuneAbortRequested || Printer::heatingInhibited()
+        || sensorType != autotuneSensorType || pidMax != autotunePowerLimit
+        || isSensorDefect() || isSensorDecoupled()
+        || !validTemperatureSample(firstSampleValid, currentTemperatureC)
+        || currentTemperatureC > cutoff) {
+        finishAutotune(*this);
+        Com::printErrorFLN(PSTR("PID autotune: initial authorization lost"));
+        return;
+    }
     const millis_t started = HAL::timeInMilliseconds();
     millis_t phaseStart = started, cycleStart = started, riseStart = started, lastSample = started;
     float riseTemp = currentTemperatureC, low = currentTemperatureC, high = currentTemperatureC;
@@ -512,8 +524,11 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
             heating = true;
             phaseStart = cycleStart = riseStart = now;
             riseTemp = low = high = measured;
-            HAL::setHeaterDuty(pwmIndex, autotunePowerLimit);
         }
+        // Renew only after the full sampled autotune decision, including
+        // cutoff, cancellation, timing and rise checks. No ISR renewal.
+        if (heating)
+            HAL::setHeaterDuty(pwmIndex, autotunePowerLimit);
     }
     Printer::idleStatus.schedule(HAL::timeInMilliseconds());
 } // autotunePID
