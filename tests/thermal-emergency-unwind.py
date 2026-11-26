@@ -19,6 +19,7 @@ prelude=r"""
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
+#include <initializer_list>
 #define PSTR(x) x
 #define UI_TEXT_DO_MHIER_BED_SCAN "ZOS"
 using millis_t=uint32_t;
