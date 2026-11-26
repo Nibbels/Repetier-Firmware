@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Actual compact LCD renderer for RF1000 16x2 and RF2000 20x4."""
+"""Actual compact LCD renderer for RF1000 16x4 and RF2000 20x4 (plus 16x2 renderer fixture)."""
 from pathlib import Path
 import subprocess
 import tempfile
@@ -26,6 +26,7 @@ template<uint8_t C,uint8_t R,uint8_t N> void test(){
     auto f=panelFault(l,0);
     assert((row<C,R>(l,f,0,false)=="THERMAL ERROR"));
     assert((row<C,R>(l,f,1,false)=="E0:NO RISE"));
+    if(R==4)assert((row<C,R>(l,f,3,false)=="CHECK SERIAL LOG"));
     assert((row<C,R>(l,f,R==2?1:2,true)=="E0:145/210 C"));
     assert((row<C,R>(l,f,R==2?1:2,true,false)=="E0:?/210 C"));
     // Fire escalation selects the actual fire cause, not the earlier
@@ -35,6 +36,7 @@ template<uint8_t C,uint8_t R,uint8_t N> void test(){
     f=panelFault(l,0);
     assert((row<C,R>(l,f,0,false)=="FIRE WARNING"));
     assert((row<C,R>(l,f,1,false)=="BED:OVER TEMP"));
+    if(R==4)assert((row<C,R>(l,f,3,false)=="POWER OFF! CHECK"));
     assert((row<C,R>(l,f,R==2?1:2,true)=="BED:145/90 C"));
     f=panelFault(l,1);
     assert(f.channel==0&&f.cause==Cause::NoRise);
@@ -68,8 +70,8 @@ template<uint8_t C,uint8_t R,uint8_t N> void test(){
     assert((row<C,R>(empty,panelFault(empty,0),1,false)=="SYS:LOCKED"));
 }
 int main(){
-    test<16,2,2>();test<20,4,3>();test<20,4,2>();
-    std::puts("Emergency LCD: 16x2 and 20x4, every cause/channel, severity escalation, unknown temperatures and reset distinctions passed");
+    test<16,2,2>();test<16,4,2>();test<20,4,3>();test<20,4,2>();
+    std::puts("Emergency LCD: 16x2, 16x4 and 20x4, every cause/channel, severity escalation, unknown temperatures and reset distinctions passed");
 }
 """
 # assert is a macro; template argument commas need extra parentheses.
