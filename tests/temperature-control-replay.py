@@ -692,7 +692,7 @@ def main():
         "scheduler.inc": section(commands, "void Commands::checkForPeriodicalActions(", "bool Commands::waitForMotion("),
         "com.inc": "\n".join("constexpr int " + n + " = 0;" for n in sorted(set(re.findall(r"Com::(t[A-Z]\w*)", control)))),
         "hal.inc": (
-            "namespace {\n" + section(hal, "volatile unsigned long watchdogHeartbeat", "HAL::HAL()")
+            "namespace {\n" + section(hal, "#ifndef RF_HEATER_RESET_WDT_EXPERIMENT\nvolatile unsigned long watchdogHeartbeat", "HAL::HAL()")
             + section(hal, "uint16_t HAL::temperatureAdcSample(", "void HAL::analogStart(")
             + section(hal, "void HAL::tellWatchdogOk()", "\n}") + "\n}\n"
             + section(hal, "constexpr uint8_t heaterPwmStep", "constexpr uint8_t partFanPwmStep")
