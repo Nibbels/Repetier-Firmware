@@ -660,6 +660,11 @@ void Printer::stopPrint() {
 
     noInts.unprotect();
 
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    // Emergency cancellation/reporting has its own nonblocking cursor.
+    // All existing stop-state cleanup above still runs.
+    if(ThermalEmergency::faultLedger().active()) return;
+#endif
     Com::printFLN(PSTR("RequestStop:"));     // Repetier-Server
     Com::printFLN(PSTR("// action:cancel")); // OctoPrint
     Com::printFLN(PSTR("USB print stopped."));
