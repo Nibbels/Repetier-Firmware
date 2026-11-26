@@ -186,5 +186,20 @@ def verify_image(directory):
               "padding_bytes":padding, "cookie_sram_address":hex(cookie),
               "last_application_byte":hex(max(image))}
     report["watchdog_audit"] = verify_watchdog_instructions((directory/"disassembly.txt").read_text(),cookie,padding)
+    # Replay the real bootloader from the pinned Arduino core, not a
+    # synthetic EICALL at a guessed address. The restricted interpreter
+    # stops at application entry (or the non-WDRF branch), and does not
+    # model peripherals, oscillator timing or RWW protection.
+    boot_path = Path(props["runtime.platform.path"])/"bootloaders/stk500v2/stk500boot_v2_mega2560.hex"
+    boot_image = decode_hex(boot_path)
+    import hashlib
+    report["bootloader_hex_sha256"] = hashlib.sha256(boot_path.read_bytes()).hexdigest()
+    payload = {"boot":boot_image, "app":{RECOVERY+i:b for i,b in enumerate(actual)}, "cookie":cookie}
+    result = subprocess.check_output(["node",str(Path(__file__).with_name("boot-recovery-replay.cjs"))],
+                                     input=json.dumps(payload),text=True)
+    replay = json.loads(result)
+    assert replay["cases"] == 36
+    report["boot_replay"] = {"cases":replay["cases"], "wdt_entry":next(r for r in replay["results"] if r["cause"]==8)}
+    print("Recovery boot opcode replay",result,flush=True)
     print("Recovery ELF/HEX verified",json.dumps(report),flush=True)
     return report
