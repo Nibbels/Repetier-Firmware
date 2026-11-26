@@ -588,6 +588,11 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
             HAL::setHeaterDuty(pwmIndex, autotunePowerLimit);
 #endif
         }
+#ifdef RF_HEATER_RESET_WDT_EXPERIMENT
+        // Complete the second half of the watchdog handshake only after
+        // the entire sampled relay decision and its safety checks finished.
+        HAL::completeAutotuneWatchdogPass();
+#endif
     }
     Printer::idleStatus.schedule(HAL::timeInMilliseconds());
 } // autotunePID
