@@ -57,6 +57,10 @@ namespace {
 Ledger<NUM_TEMPERATURE_LOOPS> ledger;
 ReportCursor<NUM_TEMPERATURE_LOOPS> report;
 CancellationCursor cancellation;
+uint8_t liveValid=0;
+bool liveRequested=false;
+uint32_t lastLiveReport=0,lastReplayRequest=0;
+uint8_t liveChannel=0;
 // Preserve the start of a contiguous invalid-sample episode across the
 // existing debounce. No normal valid-sample copies or history allocation.
 // Raw ADC and freshness come from the SAME conversion; do not pretend
@@ -122,12 +126,44 @@ static bool confirm(uint8_t channel, Cause cause, const Evidence& e) {
 void latchSystemFault(Cause cause) {
     confirm(Ledger<NUM_TEMPERATURE_LOOPS>::System,cause,Evidence{});
 }
+bool liveTemperatureValid(uint8_t channel) {
+    return channel<NUM_TEMPERATURE_LOOPS && (liveValid&(1u<<channel));
+}
+void requestLiveReport() {liveRequested=true;}
+void requestDiagnosticReplay() {
+    const uint32_t now=HAL::timeInMilliseconds();
+    if(uint32_t(now-lastReplayRequest)>=5000) {
+        lastReplayRequest=now;
+        report.requestReplay();
+    }
+}
 static void serviceReport() {
-    // At most one whole nonblocking line after the thermal pass.
-    // The full emergency scheduler/admission gate is a separate step.
+    if(!ledger.active())return;
+    // At most one whole nonblocking span after the thermal pass. A live
+    // request cannot starve the retained diagnosis: cancellation first,
+    // then one report line, then a periodic/live reading when idle.
     UsbSerial sink;
-    if(cancellation.service(ledger.active(),sink)==ReportProgress::Idle)
-        report.service(ledger,sink);
+    if(cancellation.service(true,sink)!=ReportProgress::Idle)return;
+    const auto progress=report.service(ledger,sink);
+    if(progress!=ReportProgress::Idle)return;
+    const uint32_t now=HAL::timeInMilliseconds();
+    if(!liveRequested&&uint32_t(now-lastLiveReport)<1000)return;
+    // Individual channel lines keep even a 3-heater report <=63 bytes and
+    // never claim an invalid measurement as 0 C. These diagnostic lines
+    // are not a replacement for measured electrical current.
+    ReportLine line;
+    line.text(PSTR("Thermal live "));
+    line.channel<NUM_TEMPERATURE_LOOPS>(liveChannel);
+    line.text(PSTR(" C: "));
+    Evidence e{};
+    if(liveTemperatureValid(liveChannel))e.valid=Evidence::Measured;
+    line.optionalDecimal(e,Evidence::Measured,tempController[liveChannel]->currentTemperatureC);
+    line.text(PSTR(" PWM:0"));
+    if(line.finish()&&sink.tryWriteSpan(line.data(),line.size())) {
+        if(++liveChannel==NUM_TEMPERATURE_LOOPS) {
+            liveChannel=0;liveRequested=false;lastLiveReport=now;
+        }else liveRequested=true;
+    }
 }
 }
 #endif
@@ -193,6 +229,10 @@ void Extruder::manageTemperatures() {
         );
 #endif
         const bool sampleValid = validTemperatureSample(sensorSupported, act->currentTemperatureC);
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        if(sampleValid&&act->sensorType) ThermalEmergency::liveValid |= uint8_t(1u<<controller);
+        else ThermalEmergency::liveValid &= uint8_t(~(1u<<controller));
+#endif
         if (!sampleValid || act->sensorType == 0) {
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
             const uint8_t priorDuty=HAL::outputDuty(act->pwmIndex);
@@ -409,6 +449,20 @@ void Extruder::manageTemperatures() {
 
     if (!Printer::isAnyTempsensorDefect() && !errorDetected)
         Printer::markTemperatureReadingsAvailable();
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(Printer::isAnyTempsensorDefect()) {
+        // Do not use an invalid sensor's apparent cold value to stop
+        // heatsink cooling. Keep named cooler outputs on in this state.
+        for(uint8_t h=0;h<NUM_EXTRUDER;++h)extruder[h].coolerPWM=255;
+#if defined(CASE_FAN_PIN) && (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
+        CaseFan::turnOn();
+#endif
+        // Revoke again before the completed watchdog pass, independently
+        // of any controller/auto-tune branch above.
+        for(uint8_t h=0;h<NUM_TEMPERATURE_LOOPS;++h)
+            HAL::setHeaterDuty(tempController[h]->pwmIndex,0);
+    }
+#endif
 #ifdef RF_HEATER_RESET_WDT_EXPERIMENT
     // A momentarily zero PID duty does not mean the heating session ended.
     // Retain reset evidence across the whole target/autotune session.
