@@ -267,7 +267,12 @@ void Extruder::manageTemperatures() {
     if (!Printer::isAnyTempsensorDefect() && !errorDetected)
         Printer::markTemperatureReadingsAvailable();
 #ifdef RF_HEATER_RESET_WDT_EXPERIMENT
-    HAL::completeThermalWatchdogPass();
+    // A momentarily zero PID duty does not mean the heating session ended.
+    // Retain reset evidence across the whole target/autotune session.
+    bool heatDemand=autotuneIndex!=255;
+    for(uint8_t c=0;c<NUM_TEMPERATURE_LOOPS;++c)
+        heatDemand=heatDemand || tempController[c]->targetTemperatureC>=MAX_ROOM_TEMPERATURE;
+    HAL::completeThermalWatchdogPass(heatDemand);
 #endif
 
 } // manageTemperatures
