@@ -38,6 +38,11 @@ def make_script(bin_dir, directory, fill_named_text=False):
     snippet = """/* RFx000 historical STK500v2 watchdog/EIND compatibility.
        Byte 0x20000 is WORD PC 0x10000, not an ordinary callable function.
        Keep this even if no call sites exist; see HAL.cpp Task0034. */
+    __rf_near_parser_start = ABSOLUTE(.);
+    *(.text.rf_near_parser)
+    __rf_near_parser_end = ABSOLUTE(.);
+    ASSERT(__rf_near_parser_end > __rf_near_parser_start, "RF near parser missing");
+    ASSERT(__rf_near_parser_end <= 0x20000, "RF near parser beyond word range");
     *ltrans0.ltrans.o(.text)
     __rf_watchdog_padding_start = ABSOLUTE(.);
     . = 0x20000;
@@ -238,6 +243,10 @@ def verify_image(directory):
     assert symbol("__vectors") == 0
     assert symbol("heaterWatchdogRecoveryEntry") == RECOVERY
     assert symbol("__rf_watchdog_recovery_link_guard") == RECOVERY
+    parser = re.search(r"^([0-9a-f]+) ([0-9a-f]+) [tT] GCodeInput::parseAscii\(GCode&, char\*, bool\)$", symbols, re.M)
+    assert parser, "Missing exact linked parser function"
+    parser_start, parser_size = (int(x,16) for x in parser.groups())
+    assert symbol("__rf_near_parser_start") <= parser_start < parser_start+parser_size <= symbol("__rf_near_parser_end") <= RECOVERY
     padding = RECOVERY-symbol("__rf_watchdog_padding_start")
     assert 0 <= padding < RECOVERY
     cookie = symbol("heaterResetCookie")-0x800000

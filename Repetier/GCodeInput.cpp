@@ -752,6 +752,12 @@ bool GCodeInput::parseBinary(GCode& command, uint8_t* buffer, int8_t length) {
 /**
   Converts a ASCII GCode line into a GCode structure.
 */
+#if defined(__AVR__) && defined(RF_HEATER_RESET_WDT_EXPERIMENT)
+// GCC7's inline switch table contains 16-bit WORD destinations used
+// with EIND=0. Keep the entire parser below byte 0x20000 in the recovery
+// linker experiment. The linked audit must prove all table destinations.
+__attribute__((noinline, section(".text.rf_near_parser")))
+#endif
 bool GCodeInput::parseAscii(GCode& command, char* line, bool fromSerial) {
     char* pos = line;
     command.params = 0;
