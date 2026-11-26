@@ -18,7 +18,7 @@ heartbeat=hal[start:hal.index('\n// ================== Interrupt handling',start
 start=hal.index("#ifdef RF_HEATER_LEASE_EXPERIMENT\n// Timer3 is independent")
 adc=hal[start:hal.index("\n#endif",start)+len("\n#endif")]
 start=hal.index("#ifdef RF_HEATER_LEASE_EXPERIMENT\nHAL::HeaterSample::~HeaterSample")
-ticket=hal[start:hal.index("\n#endif",start)+len("\n#endif")]
+ticket=hal[start:hal.index("\nvoid HAL::analogStart(",start)]
 header=(root/"Repetier/HAL.h").read_text()
 start=header.index("    class HeaterSample {")
 ticket_decl=header[start:header.index("    static bool heaterLeaseFault();",start)]
@@ -76,7 +76,7 @@ struct HAL {
 #endif
     ) {
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-        if(publication)*publication=temperatureAdcPublishedAt[c];
+        if(publication)*publication=0; // fixture models grant identity separately
 #endif
         raw=temperatureAdcValues[c];return true;
     }
