@@ -11,7 +11,7 @@ namespace ThermalEmergency {
 enum class Cause : uint8_t {
     None, SensorInvalid, StaleSample, NoRise, ExcessiveRise, HoldFailure,
     OverTemperature, HeatingWhileOff, LeaseExpired, WatchdogReset,
-    CalibrationMismatch, Count
+    CalibrationMismatch, InterruptedHeating, Count
 };
 enum class Severity : uint8_t { None, ThermalError, FireWarning };
 
