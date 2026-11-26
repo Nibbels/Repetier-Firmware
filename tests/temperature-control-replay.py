@@ -30,6 +30,9 @@ HARNESS = r'''
 #include <cstdio>
 #include <cstring>
 #include <algorithm>
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+#include "ThermalEmergency.h"
+#endif
 using millis_t = uint32_t;
 #define PROGMEM
 #define TEMP_INT_TO_FLOAT(t) ((float)(t) / (float)(1 << CELSIUS_EXTRA_BITS))
@@ -279,6 +282,70 @@ int main(int argc, char** argv) {
         t->decoupleTestPeriod = EXT0_DECOUPLE_TEST_PERIOD;
     }
     publishAdc();
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if (!std::strcmp(name, "emergency-invalid-episode")) {
+        using namespace ThermalEmergency;
+        service();
+        assert(HAL::outputDuty(0)==255);
+        c.sensorType=14;temperatureAdcValues[0]=4092;
+        service();
+        assert(HAL::outputDuty(0)==0&&!faultLedger().active());
+        // A recovered episode must not be reported as a later confirmed
+        // fault. The second episode has distinct type/target/time/duty.
+        c.sensorType=60;temperatureAdcValues[0]=102;
+        service();
+        assert(HAL::outputDuty(0)==255&&!faultLedger().active());
+        c.setTargetTemperature(140);
+        c.sensorType=14;temperatureAdcValues[0]=0;
+        const auto started=now+100;
+        service();
+        assert(HAL::outputDuty(0)==0&&!faultLedger().active());
+        c.setTargetTemperature(120);
+        for(unsigned i=0;i<11&&!Printer::heatingInhibited();++i)service();
+        allOff();
+        const auto& first=faultLedger().first();
+        assert(first.cause==Cause::SensorInvalid&&first.channel==0);
+        const auto& e=first.evidence;
+        assert(e.uptimeMs==started&&e.targetC==140&&e.admittedDuty==255);
+        assert(e.rawAdc==0&&(e.valid&Evidence::Raw));
+        assert(!(e.valid&Evidence::Measured)&&!(e.valid&Evidence::Requested));
+        assert(e.sensorType==14&&e.powerLimit==255);
+        // Additional sensor fault after global latch: original evidence
+        // survives, affected heater mask grows, no new stop/heat.
+        bed.sensorType=255;
+        for(unsigned i=0;i<15;++i)service();
+        assert(faultLedger().reasons(NUM_EXTRUDER)&bit(Cause::SensorInvalid));
+        assert(faultLedger().first().evidence.uptimeMs==started);
+        assert(faultLedger().first().evidence.targetC==140);
+        assert(faultLedger().level()==Severity::ThermalError);
+        allOff();
+    } else if (!std::strcmp(name, "emergency-stale-episode")) {
+        using namespace ThermalEmergency;
+        service();
+        assert(HAL::outputDuty(0)==255);
+        stalledChannel=0;
+        // First stale batch is diagnosed before clearing its duty.
+        now+=101;
+        const auto started=now+100;
+        for(unsigned i=0;i<11;++i)service();
+        allOff();
+        const auto& r=faultLedger().first();
+        assert(r.cause==Cause::StaleSample&&r.channel==0);
+        assert(r.evidence.uptimeMs==started&&r.evidence.admittedDuty==255);
+        assert(!(r.evidence.valid&(Evidence::Raw|Evidence::Measured)));
+    } else if (!std::strcmp(name, "emergency-recovery")) {
+        using namespace ThermalEmergency;
+        latchSystemFault(Cause::InterruptedHeating);
+        assert(Printer::heatingInhibited()&&faultLedger().active());
+        assert(faultLedger().first().cause==Cause::InterruptedHeating);
+        assert(faultLedger().first().channel==NUM_TEMPERATURE_LOOPS);
+        assert(faultLedger().first().evidence.valid==0);
+        latchSystemFault(Cause::WatchdogReset);
+        assert(faultLedger().first().cause==Cause::InterruptedHeating);
+        assert(faultLedger().level()==Severity::ThermalError);
+        for(auto* t:tempController)assert(t->targetTemperatureC==0&&HAL::outputDuty(t->pwmIndex)==0);
+    } else
+#endif
     if (!std::strcmp(name, "pid-components")) {
         for (auto* t : tempController) t->setTargetTemperature(0);
         temperatureAdcValues[c.sensorPin] = 330;
@@ -483,6 +550,15 @@ int main(int argc, char** argv) {
         service();
         assert(c.isSensorDecoupled());
         allOff();
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        {
+            using namespace ThermalEmergency;
+            const auto& first=faultLedger().first();
+            assert(first.cause==Cause::HoldFailure&&first.channel==0);
+            assert(first.evidence.targetC==100&&first.evidence.threshold==DECOUPLING_TEST_MAX_HOLD_VARIANCE);
+            assert(first.evidence.deltaC<-DECOUPLING_TEST_MAX_HOLD_VARIANCE);
+        }
+#endif
     } else if (!std::strcmp(name, "unsupported")) {
         c.sensorType = 255;
         HAL::setHeaterDuty(0, 255);
@@ -505,6 +581,17 @@ int main(int argc, char** argv) {
         service();
         assert(c.isSensorDecoupled());
         allOff();
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        {
+            using namespace ThermalEmergency;
+            const auto& first=faultLedger().first();
+            assert(first.cause==Cause::NoRise&&first.channel==0);
+            assert(first.evidence.targetC==100&&first.evidence.admittedDuty==255);
+            assert(first.evidence.deltaC==0&&first.evidence.threshold==DECOUPLING_TEST_MIN_TEMP_RISE);
+            assert(first.evidence.rawAdc==102&&(first.evidence.valid&Evidence::Raw));
+            assert(first.evidence.windowMs>EXT0_DECOUPLE_TEST_PERIOD);
+        }
+#endif
     } else if (!std::strcmp(name, "pwm")) {
         for (auto* t : tempController) HAL::setHeaterDuty(t->pwmIndex, 255);
         pwmSlice();
@@ -658,7 +745,17 @@ int main(int argc, char** argv) {
         } else assert(stores == 0);
         if (lowMax || wrongProfile) assert(observedPeakDuty == 0 && stores == 0);
         if (!expectSuccess || !store) assert(t.pidPGain == oldP && t.pidIGain == oldI && t.pidDGain == oldD);
-        if (std::strstr(name, "-no-rise")) { assert(t.isSensorDecoupled()); allOff(); }
+        if (std::strstr(name, "-no-rise")) {
+            assert(t.isSensorDecoupled()); allOff();
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+            using namespace ThermalEmergency;
+            const auto& first=faultLedger().first();
+            assert(first.cause==Cause::NoRise&&first.channel==t.pwmIndex);
+            assert(first.evidence.targetC==target&&first.evidence.admittedDuty>0);
+            assert(first.evidence.valid&Evidence::Profile);
+            assert(first.evidence.windowMs>=uint32_t(t.pwmIndex==NUM_EXTRUDER?60000:20000));
+#endif
+        }
         if (injection == Injection::OtherFault) allOff();
         // One subsequent normal service must not re-enable the old target.
         service();
@@ -740,14 +837,18 @@ def main():
             defines["ANALOG_REDUCE_BITS"] = macro((FW / "HAL.h").read_text(), "ANALOG_REDUCE_BITS")
             defines["CELSIUS_EXTRA_BITS"] = macro(header, "CELSIUS_EXTRA_BITS")
             defines["NUM_EXTRUDER"] = str(tools)
-            exe = work / "replay"
-            subprocess.run([os.environ.get("CXX", "c++"), "-std=c++11", "-O2",
-                            *[f"-D{k}={v}" for k, v in defines.items()],
-                            "-I", str(FW), str(work / "replay.cpp"), "-o", str(exe)], check=True)
-            selected = scenarios + (("dual-invalid",) if tools > 1 else ())
-            for scenario in selected:
-                subprocess.run([str(exe), scenario], check=True, timeout=10)
-            print(f"{board} / {tools} hotend(s): {len(selected)} cases passed", flush=True)
+            for emergency in (False, True):
+                exe = work / "replay"
+                extra = ["-DRF_THERMAL_EMERGENCY_EXPERIMENT=1"] if emergency else []
+                subprocess.run([os.environ.get("CXX", "c++"), "-std=c++11", "-O2", *extra,
+                                *[f"-D{k}={v}" for k, v in defines.items()],
+                                "-I", str(FW), str(work / "replay.cpp"), "-o", str(exe)], check=True)
+                selected = scenarios + (("dual-invalid",) if tools > 1 else ())
+                if emergency:
+                    selected += ("emergency-invalid-episode", "emergency-stale-episode", "emergency-recovery")
+                for scenario in selected:
+                    subprocess.run([str(exe), scenario], check=True, timeout=10)
+                print(f"{board} / {tools} hotend(s) / emergency={emergency}: {len(selected)} cases passed", flush=True)
 
 
 if __name__ == "__main__":
