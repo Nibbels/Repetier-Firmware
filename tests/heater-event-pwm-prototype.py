@@ -12,12 +12,12 @@ code = r"""
 struct Clock {
     uint16_t count=0, deadline[3]={};
     bool flags[3]={}, masks[3]={}, pins[3]={}, overflow=false;
-    unsigned highs=0;
+    unsigned highs=0, delayAfterWrite=0, delayAfterClear=0;
     uint16_t now() const {return count;}
     bool wrapped() const {return overflow;}
     bool pending(uint8_t c) const {return flags[c];}
-    void writeDeadline(uint8_t c,uint16_t x){deadline[c]=x;}
-    void clearPending(uint8_t c){assert(!pins[c]&&!masks[c]);flags[c]=false;}
+    void writeDeadline(uint8_t c,uint16_t x){deadline[c]=x;advance(delayAfterWrite);}
+    void clearPending(uint8_t c){assert(!pins[c]&&!masks[c]);flags[c]=false;advance(delayAfterClear);}
     void enable(uint8_t c){masks[c]=true;}
     void disable(uint8_t c){masks[c]=false;}
     void on(uint8_t c){assert(masks[c]&&!flags[c]&&!overflow);pins[c]=true;++highs;}
@@ -82,6 +82,17 @@ template<uint8_t N> void check(){
         assert(p.failed()&&l.fault);
         for(uint8_t c=0;c<N;++c)assert(!t.pins[c]&&!t.masks[c]);
         t.overflow=false;p.frame();assert(t.highs==N);
+    }
+    // Timer keeps running while I=0: inject delay in register arming.
+    for(unsigned gap : {1u,63u,64u,65u,511u,512u,65536u}){
+        for(bool atClear : {false,true}){
+            Clock v;Lease<N> g;Pwm e(v,g);
+            g.demand[0]=2;
+            if(atClear)v.delayAfterClear=gap;else v.delayAfterWrite=gap;
+            e.frame();
+            assert(v.pins[0]==(gap+64<512));
+            assert(e.failed()==(gap>=65536));
+        }
     }
     // A revoke arriving after wrap cannot conceal an overdue pulse.
     Clock t;Lease<N> l;Pwm p(t,l);l.demand[0]=255;p.frame();
