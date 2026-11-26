@@ -523,7 +523,7 @@ bool HAL::HeaterSample::read(uint8_t index,uint16_t& raw) {
     // In particular a conservative wrap invalidation must not impersonate
     // a broken sensor during a healthy autotune. No valid ticket, no renewal.
     if(!HAL::temperatureAdcSample(index,raw)) return false;
-    if(heaterSampleLive(index) &&
+    if(raw>0 && raw<4092 && heaterSampleLive(index) &&
        (heaterSampleState[index] & (SampleFresh|SampleBusy))==SampleFresh) {
         heaterSampleState[index] |= SampleBusy|SampleReserved|SampleMatch;
         stamp_=heaterSampleStamp[index];
