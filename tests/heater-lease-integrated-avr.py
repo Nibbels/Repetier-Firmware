@@ -3,6 +3,7 @@
 Never flash these experimental images. Standard builds remain unchanged.
 """
 import importlib.util
+import os
 import json
 from pathlib import Path
 import re
@@ -23,6 +24,14 @@ spec.loader.exec_module(baseline)
 recovery_spec=importlib.util.spec_from_file_location("recovery_link",root/"tools/task0034/recovery-link.py")
 recovery=importlib.util.module_from_spec(recovery_spec)
 recovery_spec.loader.exec_module(recovery)
+timing_spec=importlib.util.spec_from_file_location("renew_bound",root/"tools/task0034/renew-bound.py")
+timing=importlib.util.module_from_spec(timing_spec)
+timing_spec.loader.exec_module(timing)
+archive=os.environ.get("RF_EXPERIMENT_EVIDENCE_DIR")
+if archive:
+    archive=Path(archive)
+    archive.mkdir(parents=True,exist_ok=False)
+    (archive/"README.txt").write_text("RESEARCH ONLY. Never flash these experimental candidates.\n")
 with tempfile.TemporaryDirectory() as temp:
     out=Path(temp)
     for mode,extra in (("lease",[]),("reset-wdt",["RF_HEATER_RESET_WDT_EXPERIMENT=1"])):
@@ -38,7 +47,20 @@ with tempfile.TemporaryDirectory() as temp:
                     print(log.read_text(errors="replace")[-24000:],flush=True)
                 raise
             print(mode,board,json.dumps(stats),flush=True)
-            dump=(mode_dir/board/"disassembly.txt").read_text()
+            board_dir=mode_dir/board
+            if archive:
+                dest=archive/mode/board
+                dest.mkdir(parents=True)
+                for pattern in ("*.elf","*.ino.hex","firmware.map"):
+                    paths=list((board_dir/"build").glob(pattern))
+                    assert len(paths)==1,(board,mode,pattern,paths)
+                    shutil.copy2(paths[0],dest/paths[0].name)
+                for name in ("symbols.txt","sections.txt","properties.txt","disassembly.txt",
+                             "properties-with-linker.txt","avr6-recovery.x"):
+                    if (board_dir/name).exists():
+                        shutil.copy2(board_dir/name,dest/name)
+                (dest/"stats.json").write_text(json.dumps(stats,indent=2)+"\n")
+            dump=(board_dir/"disassembly.txt").read_text()
             symbols=(mode_dir/board/"symbols.txt").read_text()
             vectors={int(m[2]):int(m[1],16) for m in re.finditer(
                 r"^([0-9a-f]+)\s+(?:[0-9a-f]+\s+)?[TtWw]\s+__vector_(\d+)$",symbols,re.M)}
@@ -50,7 +72,8 @@ with tempfile.TemporaryDirectory() as temp:
                 if m:
                     assert int(m[1] or m[2],16) not in vectors.values(),(board,line)
             if extra:
-                recovery.verify_image(mode_dir/board)
+                recovery.verify_image(board_dir)
+                print("Linked renewal guard",board,json.dumps(timing.audit(dump)),flush=True)
                 assert vectors[12] == vectors[2], (board,"WDT vector unexpectedly active")
                 assert "heaterWatchdogEarlyInit" in dump, board
                 start=dump.index("<heaterWatchdogEarlyInit>:")
