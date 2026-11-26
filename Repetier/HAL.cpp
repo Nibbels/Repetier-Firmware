@@ -818,6 +818,7 @@ void HAL::startWatchdog() {
             cookie==heaterRecoveryCookie || (heaterWatchdogResetCause&_BV(WDRF))
             ? ThermalEmergency::Cause::WatchdogReset
             : ThermalEmergency::Cause::InterruptedHeating);
+        Printer::stopPrint();
 #else
         Printer::latchOutputInhibit(true);
 #endif
@@ -933,6 +934,14 @@ volatile long __attribute__((used)) stepperWait = 0;
 /** \brief Timer interrupt routine to drive the stepper motors.
 */
 ISR(TIMER1_COMPA_vect) {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    // A terminal thermal stop is not a normal queue drain. No new STEP
+    // output or queued control task, even if an old caller republishes work.
+    if(Printer::printJob.emergencyLocked()) {
+        cbi(TIMSK1,OCIE1A);
+        return;
+    }
+#endif
     uint8_t doExit;
     __asm volatile(
         "lds r23,stepperWait+2 \n\t"
