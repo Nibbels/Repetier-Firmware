@@ -9,7 +9,6 @@ fw=root/"Repetier"
 source=(fw/"Eeprom.cpp").read_text()
 a=source.index("#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT\n// Identify actual changed bytes")
 b=source.index("void EEPROM::restoreEEPROMExtruderSettingsFromConfiguration",a)
-header=(fw/"Eeprom.h").read_text()
 gcode=(fw/"gcode.h").read_text()
 assert "int32_t P;" in gcode and "uint8_t T;" in gcode
 pre=r'''
@@ -31,7 +30,6 @@ static uint8_t bytes[2048];
 static unsigned writes,loads,checks,errors,invalidated;
 static int ignore=-1;
 static bool requireRevoke=false;
-static uint8_t expectedSlots=0;
 static uint8_t slotFor(unsigned pos){
     if((pos>=107&&pos<=120)||pos==124||pos==1922)return 4;
     if((pos>=217&&pos<=230)||pos==245||pos==294)return 1;
