@@ -32,6 +32,16 @@ HARNESS = r'''
 #include <algorithm>
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
 #include "ThermalEmergency.h"
+// Test transport for actual report calls; no blocking dependency.
+static bool diagnosticTxBlocked=false;
+static unsigned diagnosticLines=0;
+struct UsbSerial {
+    static bool tryWriteSpan(const char*,uint8_t count) {
+        assert(count<=63);
+        if(diagnosticTxBlocked)return false;
+        ++diagnosticLines;return true;
+    }
+};
 #endif
 using millis_t = uint32_t;
 #define PROGMEM
@@ -301,7 +311,14 @@ int main(int argc, char** argv) {
         service();
         assert(HAL::outputDuty(0)==0&&!faultLedger().active());
         c.setTargetTemperature(120);
+        diagnosticTxBlocked=true;
         for(unsigned i=0;i<11&&!Printer::heatingInhibited();++i)service();
+        assert(diagnosticLines==0);
+        for(unsigned i=0;i<10;++i)service(); // blocked TX cannot stall thermal pass
+        assert(diagnosticLines==0);
+        diagnosticTxBlocked=false;
+        for(unsigned i=0;i<100;++i)service();
+        assert(diagnosticLines>2);
         allOff();
         const auto& first=faultLedger().first();
         assert(first.cause==Cause::SensorInvalid&&first.channel==0);
@@ -784,7 +801,7 @@ def main():
         "adc-state.inc": section(hal, "volatile uint16_t temperatureAdcValues", "inline __attribute__((always_inline)) void serviceTemperatureAdc"),
         "controller.inc": section(header, "#define TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_FULL", "}; // TemperatureController") + "};",
         "conversion.inc": conversion.split(include, 1)[1],
-        "control.inc": control.split(include, 1)[1],
+        "control.inc": control.split(include, 1)[1].replace('#include "UsbSerial.h"', ''),
         "bed-setter.inc": section(extruder, "void Extruder::setHeatedBedTemperature(", "float Extruder::getHeatedBedTemperature("),
         "scheduler.inc": section(commands, "void Commands::checkForPeriodicalActions(", "bool Commands::waitForMotion("),
         "com.inc": "\n".join("constexpr int " + n + " = 0;" for n in sorted(set(re.findall(r"Com::(t[A-Z]\w*)", control)))),
