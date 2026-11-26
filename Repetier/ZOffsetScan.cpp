@@ -433,6 +433,11 @@ void ZOffsetScan::abort(bool reloadMatrix) {
     }
 
     // turn off all steppers and extruders
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    // A nested wait may have latched the terminal stop. Deferred discard
+    // belongs to the scan dispatcher, not the normal mechanical abort.
+    if(Printer::printJob.emergencyLocked())return;
+#endif
     Printer::disableAllSteppersNow();
 
     discard();
