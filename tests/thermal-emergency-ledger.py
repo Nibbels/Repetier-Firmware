@@ -16,7 +16,7 @@ static_assert(severity(Cause::WatchdogReset)==Severity::ThermalError,"reset is n
 static_assert(severity(Cause::OverTemperature)==Severity::FireWarning,"overtemperature");
 static_assert(severity(Cause::ExcessiveRise)==Severity::FireWarning,"excessive rise");
 static_assert(severity(Cause::HeatingWhileOff)==Severity::FireWarning,"off-state heating");
-static_assert(bit(Cause::None)==0 && bit(Cause::Count)==0,"invalid masks");
+static_assert(causeBit(Cause::None)==0 && causeBit(Cause::Count)==0,"invalid masks");
 
 Evidence evidence(unsigned seed) {
     return {uint32_t(0xfffffff0u+seed),12000u+seed,float(seed)+0.25f,
@@ -62,7 +62,7 @@ template<uint8_t N> unsigned replay() {
             equal(log.firstFire().evidence,evidence(fireA?0:32));
         }else assert(log.firstFire().cause==Cause::None);
         for(uint8_t c=0;c<=N;++c)
-            assert(log.reasons(c)==((c==x?bit(Cause(a)):0)|(c==y?bit(Cause(b)):0)));
+            assert(log.reasons(c)==((c==x?causeBit(Cause(a)):0)|(c==y?causeBit(Cause(b)):0)));
         assert(log.reasons(255)==0);
         // All causes on all channels, including a late fire escalation,
         // leave first evidence untouched.
