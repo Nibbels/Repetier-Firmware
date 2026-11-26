@@ -14,6 +14,9 @@ using PGM_P = const char*;
 #define PSTR(text) text
 #include "gcode-settings.inc"
 #include "GCodeInput.h"
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+#include "UsbSerial.h"
+#endif
 
 namespace {
 std::deque<uint8_t> incoming;
@@ -21,6 +24,11 @@ std::string replies;
 millis_t clockMs = 0;
 bool echo = false;
 bool stopped = false;
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+bool thermalLocked=false;
+uint8_t txFree=63;
+unsigned liveRequests=0,replayRequests=0;
+#endif
 unsigned flushes = 0;
 unsigned scriptCommands = 0;
 unsigned dispatchedCommands = 0, statusCommands = 0, stopRequests = 0;
@@ -31,6 +39,19 @@ struct EmergencyReached {};
 GCode lastScriptCommand{};
 }
 
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+uint8_t UsbSerial::transmitFree(){return txFree;}
+bool UsbSerial::tryWriteSpan(const char* bytes,uint8_t count) {
+    assert(count<=txFree);
+    replies.append(bytes,count);
+    txFree-=count;
+    return true;
+}
+namespace ThermalEmergency {
+void requestLiveReport(){++liveRequests;}
+void requestDiagnosticReplay(){++replayRequests;}
+}
+#endif
 namespace HAL {
 millis_t timeInMilliseconds() { return clockMs; }
 bool serialByteAvailable() { return !incoming.empty(); }
@@ -39,7 +60,12 @@ uint8_t serialReadByte() {
     incoming.pop_front();
     return byte;
 }
-void serialFlush() { ++flushes; }
+void serialFlush() {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    assert(!thermalLocked);
+#endif
+    ++flushes;
+}
 char readFlashByte(const char* position) { return *position; }
 }
 
@@ -53,7 +79,14 @@ void stopPrint() { ++stopRequests; }
 void setFeedrate(float) { ++dispatchedCommands; }
 bool debugEcho() { return echo; }
 struct {
-    bool commandsBlocked() const { return stopped; }
+    bool commandsBlocked() const { return stopped
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        ||thermalLocked
+#endif
+        ; }
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    bool emergencyLocked() const {return thermalLocked;}
+#endif
 } printJob;
 struct { bool isPaused() const { return false; } } pause;
 }
@@ -71,8 +104,18 @@ int min(int a, int b) { return std::min(a, b); }
 
 namespace Com {
 #include "gcode-replies.inc"
-void print(char value) { replies += value; }
-void print(const char* text) { replies += text; }
+void print(char value) {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    assert(!thermalLocked);
+#endif
+    replies += value;
+}
+void print(const char* text) {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    assert(!thermalLocked);
+#endif
+    replies += text;
+}
 void print(char* text) { print(static_cast<const char*>(text)); }
 template <class Number>
 void print(Number value) { replies += std::to_string(value); }
@@ -157,6 +200,9 @@ void readReply(const std::string& expected) {
         std::fprintf(stderr, "Expected [%s], received [%s]\n", expected.c_str(), replies.c_str());
     assert(replies == expected);
     replies.clear();
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    txFree=63;
+#endif
 }
 
 void popM(unsigned number) {
@@ -453,6 +499,38 @@ void legacyStream(const std::string& scenario) {
     assert(legacyRejected && stopRequests == 1);
 }
 
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+void thermalEmergency() {
+    feed("N1 M104 S200\n");
+    readReply("ok 1\r\n");
+    assert(GCodeInput::peekCurrentCommand());
+    thermalLocked=true;echo=true;
+    Commands::commandLoop(); // old admitted command is retired without execution/echo
+    assert(!GCodeInput::peekCurrentCommand()&&dispatchedCommands==0&&replies.empty());
+    feed(numbered("N2 M105"));
+    txFree=0;
+    for(unsigned n=0;n<1000;++n)Commands::commandLoop();
+    assert(!incoming.empty()&&replies.empty()&&liveRequests==0&&periodicVisits==1001);
+    txFree=63;
+    readReply("ok 2\r\n");
+    assert(liveRequests==1&&!GCodeInput::peekCurrentCommand());
+    feed(numbered("N2 M105"));readReply("skip 2\r\nok\r\n");
+    assert(liveRequests==1);
+    feed(numbered("N4 M105"));readReply("\r\nResend:3\r\nok\r\n");
+    feed("N3 M105*0\n");readReply("\r\nResend:3\r\nok\r\n");
+    feed(numbered("N3 M112"));readReply("Error: THERMAL EMERGENCY\r\nok 3\r\n");
+    feed(numbered("N4 M999"));readReply("Error: THERMAL EMERGENCY\r\nok 4\r\n");
+    feed(numbered("N5 M115"));readReply("ok 5\r\n");
+    assert(replayRequests==1);
+    feed(binary({0x83,0x00,0x06,0x00,105}));readReply("ok 6\r\n");
+    assert(liveRequests==2);
+    feed(binary({0x85,0x00,0x07,0x00,1}));readReply("Error: THERMAL EMERGENCY\r\nok 7\r\n");
+    feed(numbered("N8 M110"));readReply("ok\r\n");
+    GCodeInput::executeFlashScript("G1 X1\nM104 S200\n");
+    assert(!GCodeInput::peekCurrentCommand()&&dispatchedCommands==0&&heaterRequests==0&&flushes==0);
+}
+#endif
+
 void flashScript() {
     GCodeInput::executeFlashScript("; comment\nG91\nG1 X0.5 ; jog\n");
     assert(scriptCommands == 2 && lastScriptCommand.G == 1 && lastScriptCommand.X == 0.5f);
@@ -479,6 +557,9 @@ int main(int argc, char** argv) {
     else if (scenario == "emergency") emergencyAdmission();
     else if (scenario == "stopping") stopDrainsInput();
     else if (scenario == "script") flashScript();
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    else if (scenario == "thermal-emergency") thermalEmergency();
+#endif
     else if (scenario == "legacy-ascii" || scenario == "legacy-binary" || scenario == "legacy-during-stop") legacyStream(scenario);
     else return 1;
     std::printf("Serial protocol replay passed (%s)\n", argv[1]);
