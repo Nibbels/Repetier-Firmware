@@ -53,13 +53,16 @@ namespace {
 Ledger<NUM_TEMPERATURE_LOOPS> ledger;
 // Preserve the start of a contiguous invalid-sample episode across the
 // existing debounce. No normal valid-sample copies or history allocation.
-// The raw conversion result and actual physical power are not exposed
-// here; do not pretend that a converted invalid value is a measurement.
+// Raw ADC and freshness come from the SAME conversion; do not pretend
+// that a converted invalid value or software PWM is a valid measurement
+// of temperature or actual electrical power.
 struct InvalidEpisode {
     uint32_t started;
     float target;
+    uint16_t raw;
     uint8_t admitted, sensor, limit;
-    bool active;
+    Cause cause;
+    bool rawKnown, active;
 };
 InvalidEpisode invalid[NUM_TEMPERATURE_LOOPS]{};
 }
@@ -78,7 +81,8 @@ static Evidence capture(const TemperatureController& act, bool measured, millis_
 }
 // Called only after the offending output was revoked. Duty is the
 // pre-revoke software value, sampled by the caller immediately before.
-static void observeInvalid(uint8_t channel, const TemperatureController& act, uint8_t priorDuty) {
+static void observeInvalid(uint8_t channel, const TemperatureController& act, uint8_t priorDuty,
+                           const SensorObservation& observation) {
     auto& p=invalid[channel];
     if(!p.active) {
         p.started=HAL::timeInMilliseconds();
@@ -86,6 +90,7 @@ static void observeInvalid(uint8_t channel, const TemperatureController& act, ui
         p.admitted=priorDuty;
         p.sensor=act.sensorType;
         p.limit=act.pidMax;
+        p.raw=observation.raw;p.rawKnown=observation.rawKnown;p.cause=observation.invalidCause;
         p.active=true;
     }
 }
@@ -96,6 +101,7 @@ static Evidence invalidEvidence(uint8_t channel) {
         e.uptimeMs=p.started;e.targetC=p.target;e.admittedDuty=p.admitted;
         e.sensorType=p.sensor;e.powerLimit=p.limit;
         e.valid=Evidence::Uptime|Evidence::Target|Evidence::Admitted|Evidence::SensorType|Evidence::PowerLimit;
+        if(p.rawKnown) {e.rawAdc=p.raw;e.valid|=Evidence::Raw;}
     }
     return e;
 }
@@ -152,13 +158,24 @@ void Extruder::manageTemperatures() {
 
     for (uint8_t controller = 0; controller < NUM_TEMPERATURE_LOOPS; controller++) {
         TemperatureController* act = tempController[controller];
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        ThermalEmergency::SensorObservation observation;
+#endif
 
 #ifdef RF_HEATER_LEASE_EXPERIMENT
         HAL::HeaterSample sample;
         const uint8_t checkedType=act->sensorType, checkedLimit=act->pidMax;
-        const bool sensorSupported = act->updateCurrentTemperature(&sample);
+        const bool sensorSupported = act->updateCurrentTemperature(&sample
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+            , &observation
+#endif
+        );
 #else
-        const bool sensorSupported = act->updateCurrentTemperature();
+        const bool sensorSupported = act->updateCurrentTemperature(
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+            &observation
+#endif
+        );
 #endif
         const bool sampleValid = validTemperatureSample(sensorSupported, act->currentTemperatureC);
         if (!sampleValid || act->sensorType == 0) {
@@ -167,7 +184,7 @@ void Extruder::manageTemperatures() {
 #endif
             HAL::setHeaterDuty(act->pwmIndex, 0);
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-            if(!sampleValid) ThermalEmergency::observeInvalid(controller,*act,priorDuty);
+            if(!sampleValid) ThermalEmergency::observeInvalid(controller,*act,priorDuty,observation);
             else ThermalEmergency::invalid[controller].active=false;
 #endif
             act->pidHistoryValid = false;
@@ -212,7 +229,7 @@ void Extruder::manageTemperatures() {
             {
                 act->setSensorDefect(true);
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-                if (ThermalEmergency::confirm(controller,ThermalEmergency::Cause::SensorInvalid,
+                if (ThermalEmergency::confirm(controller,ThermalEmergency::invalid[controller].cause,
                                              ThermalEmergency::invalidEvidence(controller))) {
 #else
                 if (!Printer::isAnyTempsensorDefect()) {
@@ -249,6 +266,7 @@ void Extruder::manageTemperatures() {
                         act->setSensorDecoupled(true);
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
                         auto evidence=ThermalEmergency::capture(*act,true,time);
+                        observation.apply(evidence);
                         evidence.windowMs=time-act->lastDecoupleTest;
                         evidence.deltaC=act->currentTemperatureC-act->lastDecoupleTemp;
                         evidence.threshold=DECOUPLING_TEST_MIN_TEMP_RISE;
@@ -284,6 +302,7 @@ void Extruder::manageTemperatures() {
                         act->setSensorDecoupled(true);
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
                         auto evidence=ThermalEmergency::capture(*act,true,time);
+                        observation.apply(evidence);
                         evidence.windowMs=time-act->lastDecoupleTest;
                         evidence.deltaC=act->currentTemperatureC-act->targetTemperatureC;
                         evidence.threshold=DECOUPLING_TEST_MAX_HOLD_VARIANCE;
@@ -534,11 +553,22 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
 
     for (;;) {
         Commands::checkForPeriodicalActions(WaitHeater);
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        ThermalEmergency::SensorObservation observation;
+#endif
 #ifdef RF_HEATER_LEASE_EXPERIMENT
         HAL::HeaterSample sample;
-        const bool supported = updateCurrentTemperature(&sample);
+        const bool supported = updateCurrentTemperature(&sample
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+            , &observation
+#endif
+        );
 #else
-        const bool supported = updateCurrentTemperature();
+        const bool supported = updateCurrentTemperature(
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+            &observation
+#endif
+        );
 #endif
         const float measured = currentTemperatureC;
         const millis_t now = HAL::timeInMilliseconds();
@@ -585,6 +615,7 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
             if (measured - riseTemp < DECOUPLING_TEST_MIN_TEMP_RISE) {
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
                 auto evidence=ThermalEmergency::capture(*this,true,now);
+                observation.apply(evidence);
                 evidence.targetC=temp; // relay tune uses its own target, not normal setpoint
                 evidence.deltaC=measured-riseTemp;
                 evidence.windowMs=now-riseStart;
