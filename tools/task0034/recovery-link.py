@@ -90,6 +90,44 @@ def decode_hex(path):
 
 
 
+def proven_parser_tables(instructions):
+    """Recognize the pinned GCC7 bounded inline switch word table only.
+
+    Linear objdump decodes table data as instructions (0x95a8 can be
+    a code pointer, not a WDR). Do not whitelist a function or WDR address.
+    Validate the dispatch instruction sequence, derived table base/size,
+    actual table words and all destinations before excluding the data.
+    """
+    def word(ins): return int.from_bytes(ins[1],"little")
+    def imm(w): return (w&15)|((w>>4)&0xf0)
+    def target(ins): return int(re.search(r"(?:^|;\s*)0x([0-9a-f]+)\b",ins[3])[1],16)
+    by_addr={ins[0]:ins for ins in instructions}
+    flash={ins[0]+j:b for ins in instructions for j,b in enumerate(ins[1])}
+    helper=[ins[1].hex() for ins in instructions if ins[4]=="__tablejump2__"]
+    tables=[]
+    for i,ins in enumerate(instructions):
+        if ins[4]!="GCodeInput::parseAscii(GCode&, char*, bool)" or ins[2]!="jmp" or "<__tablejump2__>" not in ins[3]: continue
+        seq=instructions[i-11:i+1]
+        if len(seq)!=12 or any(x[4]!=ins[4] for x in seq):continue
+        w=[word(x) for x in seq]
+        if (w[0]&0xf0f0)!=0x50e0 or (w[1]&0xf0f0)!=0x30e0 or w[2]!=0xf008 or (w[3]&0xf000)!=0xc000:continue
+        if w[4:8]!=[0x2e0e,0x0c00,0x0bff,0x2788]:continue
+        if [x&0xf0f0 for x in w[8:11]]!=[0x50e0,0x40f0,0x4080]:continue
+        assert helper==['ee0f','ff1f','881f','8bbf','0790','f691','e02d','1994'],helper
+        assert all(a[0]+len(a[1])==b[0] for a,b in zip(seq,seq[1:]))
+        assert target(seq[2])==seq[4][0]
+        count=imm(w[1]);assert 0<count<128
+        start=ins[0]+len(ins[1]);end=start+2*count
+        neg_base=imm(w[8])|(imm(w[9])<<8)|(imm(w[10])<<16)
+        assert ((-neg_base)&0xffffff)*2==start
+        assert target(seq[3])>=end
+        words=[2*(flash[a]|flash[a+1]<<8) for a in range(start,end,2)]
+        assert all(a in by_addr and by_addr[a][4]==ins[4] and not start<=a<end for a in words),words
+        assert all(not (x[0]<start<x[0]+len(x[1]) or x[0]<end<x[0]+len(x[1])) for x in instructions)
+        tables.append((start,end))
+    return tables
+
+
 def verify_watchdog_instructions(dump, cookie_address, padding):
     """Static linked audit, not a model of reset, silicon or WCET.
 
@@ -108,6 +146,8 @@ def verify_watchdog_instructions(dump, cookie_address, padding):
             addr, raw, op, operands = match.groups()
             instructions.append((int(addr,16), bytes.fromhex(raw), op, operands or "", function))
     assert instructions
+    tables=proven_parser_tables(instructions)
+    instructions=[ins for ins in instructions if not any(a<=ins[0]<b for a,b in tables)]
     # The retained cookie has to lie beyond BSS, in the actual .noinit.
     noinit = re.search(r"^\s*\d+\s+\.noinit\s+([0-9a-f]+)\s+([0-9a-f]+)\s+",dump,re.M)
     assert noinit, "No linked .noinit"
@@ -135,9 +175,11 @@ def verify_watchdog_instructions(dump, cookie_address, padding):
         if op in ("jmp","call","rjmp","rcall") or op.startswith("br"):
             target = re.search(r"(?:^|;\s*)0x([0-9a-f]+)\b",operands)
             if target:
-                assert not padding_start <= int(target[1],16) < RECOVERY+ENTRY_SIZE, (addr,op,operands,fn)
+                dest=int(target[1],16)
+                assert not padding_start <= dest < RECOVERY+ENTRY_SIZE, (addr,op,operands,fn)
+                assert not any(a<=dest<b for a,b in tables), (addr,op,operands,fn)
     result={"wdr_sites":[{"address":hex(ins[0]),"function":ins[4]} for _,ins in feeds],
-            "noinit_range":[hex(start),hex(start+size)],"direct_recovery_transfers":0}
+            "noinit_range":[hex(start),hex(start+size)],"direct_recovery_transfers":0,"proven_parser_table_ranges":[[hex(a),hex(b)] for a,b in tables]}
     print("Recovery watchdog instruction audit",json.dumps(result),flush=True)
     return result
 
