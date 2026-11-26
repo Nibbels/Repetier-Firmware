@@ -652,7 +652,11 @@ uint16_t HAL::temperatureAdcSample(uint8_t index) {
     return temperatureAdcValues[index];
 }
 
-bool HAL::temperatureAdcSample(uint8_t index, uint16_t& sample) {
+bool HAL::temperatureAdcSample(uint8_t index, uint16_t& sample
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+                              , uint32_t* publication
+#endif
+) {
     if (index >= TemperatureAdcCount) {
         sample = 0;
         return false;
@@ -668,8 +672,12 @@ bool HAL::temperatureAdcSample(uint8_t index, uint16_t& sample) {
     }
     // Read the clock after the snapshot so a just-published timestamp is not
     // in the future. Unsigned subtraction works across ordinary millis wrap.
-    if (static_cast<uint32_t>(timeInMilliseconds() - publishedAt) <= temperatureAdcMaxAgeMs)
+    if (static_cast<uint32_t>(timeInMilliseconds() - publishedAt) <= temperatureAdcMaxAgeMs) {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        if(publication)*publication=publishedAt;
+#endif
         return true;
+    }
     {
         // Expired data must not become valid again on a later clock wrap.
         // Do not invalidate a newer batch published since the snapshot.
@@ -689,14 +697,22 @@ void HAL::HeaterSample::release() {
         index_=255;
     }
 }
-bool HAL::HeaterSample::read(uint8_t index,uint16_t& raw) {
+bool HAL::HeaterSample::read(uint8_t index,uint16_t& raw
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+                            , uint32_t* publication
+#endif
+) {
     InterruptProtectedBlock lock;
     raw=0;
     if(index_!=255 || index>=TemperatureAdcCount || !heaterLeaseReady) return false;
     // Preserve diagnostic validity independently from grant eligibility.
     // In particular a conservative wrap invalidation must not impersonate
     // a broken sensor during a healthy autotune. No valid ticket, no renewal.
-    if(!HAL::temperatureAdcSample(index,raw)) return false;
+    if(!HAL::temperatureAdcSample(index,raw
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+                                  ,publication
+#endif
+    )) return false;
     if(raw>0 && raw<4092 && heaterSampleLive(index) &&
        (heaterSampleState[index] & (SampleFresh|SampleBusy))==SampleFresh) {
         heaterSampleState[index] |= SampleBusy|SampleReserved|SampleMatch;

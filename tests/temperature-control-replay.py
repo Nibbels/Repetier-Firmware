@@ -86,7 +86,11 @@ static const int16_t* pgm_read_word(const int16_t* const* p) { return *p; }
 struct HAL {
     static millis_t timeInMilliseconds() { return now; }
     static uint16_t temperatureAdcSample(uint8_t);
-    static bool temperatureAdcSample(uint8_t, uint16_t&);
+    static bool temperatureAdcSample(uint8_t, uint16_t&
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+                                     ,uint32_t* publication=nullptr
+#endif
+    );
     static void setHeaterDuty(uint8_t, uint8_t);
     static uint8_t outputDuty(uint8_t);
     static void tellWatchdogOk();
@@ -865,7 +869,7 @@ int main(int argc, char** argv) {
             else assert(e.targetC==0&&e.admittedDuty==0);
         }
         if(injection==Injection::High||injection==Injection::TransientHigh)
-            assert(faultLedger().level()!=ThermalEmergency::Severity::FireWarning);
+            assert(ThermalEmergency::faultLedger().level()!=ThermalEmergency::Severity::FireWarning);
 #endif
         // One subsequent normal service must not re-enable the old target.
         service();

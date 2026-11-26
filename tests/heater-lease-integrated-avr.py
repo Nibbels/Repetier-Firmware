@@ -46,6 +46,15 @@ with tempfile.TemporaryDirectory() as temp:
                 log=mode_dir/board/"compile.txt"
                 if log.exists():
                     print(log.read_text(errors="replace")[-24000:],flush=True)
+                # Retain failed link maps too: partition padding can make a
+                # validly linked application exceed the bootloader boundary.
+                if archive:
+                    failed=archive/mode/(board+"-failed")
+                    failed.mkdir(parents=True,exist_ok=True)
+                    source=mode_dir/board
+                    for name in ("compile.txt","properties.txt","properties-with-linker.txt","avr6-recovery.x","build/firmware.map"):
+                        if (source/name).is_file():
+                            shutil.copy2(source/name,failed/Path(name).name)
                 raise
             print(mode,board,json.dumps(stats),flush=True)
             board_dir=mode_dir/board

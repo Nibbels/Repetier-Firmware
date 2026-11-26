@@ -15,6 +15,22 @@ struct Summary {
 // One local recorder during the existing relay experiment. The windows are
 // non-overlapping within each phase; they are NOT rolling maxima or bounds
 // on unobserved between-sample temperature. Initial cooling is excluded.
+// Diagnostic publication identity, not a heater authorization token.
+// The existing 100ms ADC age and 100..1000ms foreground sample interval
+// bound successive publication deltas to <=1100ms. Equal timestamps or
+// ambiguous/out-of-order gaps conservatively invalidate the observation.
+// Arduino millis is not an independent hardware clock; the lease/watchdog
+// retain their separate Timer3/Timer5 checks.
+class PublicationTracker {
+    uint32_t last_;
+public:
+    explicit PublicationTracker(uint32_t first):last_(first){}
+    bool next(uint32_t publication) {
+        const uint32_t elapsed=publication-last_;
+        last_=publication;
+        return elapsed>0&&elapsed<=1100;
+    }
+};
 class Recorder {
     enum class Phase : uint8_t { Invalid, InitialOff, Heat, Off, Between };
     struct Anchor { uint32_t at; float temp; };
@@ -36,6 +52,7 @@ class Recorder {
         a={now,t};
     }
 public:
+    void invalidate() { phase_=Phase::Invalid; }
     void begin(uint32_t now,float t,uint8_t cap,uint8_t admitted) {
         result_=Summary{};cap_=cap;last_=now;
         phase_=!plausible(t)||cap<40||(admitted!=0&&admitted!=cap)?Phase::Invalid:

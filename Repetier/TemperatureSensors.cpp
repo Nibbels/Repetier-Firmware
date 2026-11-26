@@ -252,13 +252,18 @@ bool TemperatureController::updateCurrentTemperature(
     case 13: // NTC 3950 100k thermistor - Conrad V3
     case 14: // Thermistor NTC 3950 100k Ohm
     {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        uint32_t* publication=observation?&observation->publishedAt:nullptr;
 #ifdef RF_HEATER_LEASE_EXPERIMENT
+        sampleFresh = sample ? sample->read(sensorPin,raw,publication) : HAL::temperatureAdcSample(sensorPin,raw,publication);
+#else
+        sampleFresh = HAL::temperatureAdcSample(sensorPin,raw,publication);
+#endif
+        if(observation) observation->observe(sampleFresh,raw);
+#elif defined(RF_HEATER_LEASE_EXPERIMENT)
         sampleFresh = sample ? sample->read(sensorPin,raw) : HAL::temperatureAdcSample(sensorPin,raw);
 #else
         sampleFresh = HAL::temperatureAdcSample(sensorPin, raw);
-#endif
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-        if(observation) observation->observe(sampleFresh,raw);
 #endif
         // The ADC accumulates 32 conversions and publishes a 12-bit sum / 8.
         // Exact rails are saturation/open/short candidates, not heat authorization.
@@ -270,13 +275,18 @@ bool TemperatureController::updateCurrentTemperature(
     case 60:  // HEATER_USES_AD8495 (Delivers 5mV/degC)
     case 100: // AD595
     {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        uint32_t* publication=observation?&observation->publishedAt:nullptr;
 #ifdef RF_HEATER_LEASE_EXPERIMENT
+        sampleFresh = sample ? sample->read(sensorPin,raw,publication) : HAL::temperatureAdcSample(sensorPin,raw,publication);
+#else
+        sampleFresh = HAL::temperatureAdcSample(sensorPin,raw,publication);
+#endif
+        if(observation) observation->observe(sampleFresh,raw);
+#elif defined(RF_HEATER_LEASE_EXPERIMENT)
         sampleFresh = sample ? sample->read(sensorPin,raw) : HAL::temperatureAdcSample(sensorPin,raw);
 #else
         sampleFresh = HAL::temperatureAdcSample(sensorPin, raw);
-#endif
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-        if(observation) observation->observe(sampleFresh,raw);
 #endif
         // The ADC accumulates 32 conversions and publishes a 12-bit sum / 8.
         // Exact rails are saturation/open/short candidates, not heat authorization.

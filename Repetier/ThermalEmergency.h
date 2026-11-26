@@ -52,6 +52,9 @@ struct Evidence {
 // Same ADC batch used by conversion/authorization. Only a fresh batch
 // is marked raw-known; an unavailable/stale batch is not new evidence.
 struct SensorObservation {
+    // Millisecond timestamp from the SAME atomic snapshot as raw.
+    // Meaningful only if rawKnown; equal timestamps are ambiguous.
+    uint32_t publishedAt=0;
     uint16_t raw=0;
     bool rawKnown=false;
     Cause invalidCause=Cause::SensorInvalid;

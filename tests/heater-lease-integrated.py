@@ -70,7 +70,14 @@ constexpr uint8_t TemperatureAdcCount=NUM_EXTRUDER+1;
 static uint16_t temperatureAdcValues[TemperatureAdcCount]={};
 struct HAL {
     // Diagnostic validity is modeled independently of grant freshness.
-    static bool temperatureAdcSample(uint8_t c,uint16_t& raw) {
+    static bool temperatureAdcSample(uint8_t c,uint16_t& raw
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+                                     ,uint32_t* publication=nullptr
+#endif
+    ) {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        if(publication)*publication=temperatureAdcPublishedAt[c];
+#endif
         raw=temperatureAdcValues[c];return true;
     }
     TICKET_DECL

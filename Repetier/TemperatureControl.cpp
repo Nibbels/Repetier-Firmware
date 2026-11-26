@@ -756,7 +756,9 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
 #endif
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     ThermalRelayProfile::Recorder relayObservation;
+    ThermalRelayProfile::PublicationTracker relayPublication(firstObservation.publishedAt);
     relayObservation.begin(started,currentTemperatureC,autotunePowerLimit,HAL::outputDuty(pwmIndex));
+    if(!firstObservation.rawKnown)relayObservation.invalidate();
 #endif
     if (!bed) {
 #if defined(CASE_FAN_PIN) && (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
@@ -834,6 +836,8 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
             continue;
         lastSample = now;
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        if(!observation.rawKnown||!relayPublication.next(observation.publishedAt))
+            relayObservation.invalidate();
         relayObservation.sample(now,measured,HAL::outputDuty(pwmIndex));
 #endif
         low = RMath::min(low, measured);
