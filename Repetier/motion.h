@@ -319,6 +319,14 @@ public:
     }
     static void prepareDirectMove(const int32_t steps[4], bool stoppable, bool feedrateSource);
     static void stopDirectMove();
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    // Caller holds IRQ lock and has permanently blocked motion admission.
+    // No deceleration tail or target restoration after a thermal fault.
+    static void abortDirectMoveForEmergency() {
+        direct.stepsRemaining=0;
+        direct.task=DIRECT_IDLE;
+    }
+#endif
 
     static void queueTask(QueueTask task);
 
