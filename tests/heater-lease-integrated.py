@@ -11,9 +11,9 @@ end=hal.index("#endif\n} // namespace",start)+len("#endif")
 state=hal[start:end]
 start=hal.index('constexpr uint8_t thermalPassComplete=0x80;')
 feed=hal[start:hal.index('\n#endif',start)]
-start=hal.index("#ifdef RF_HEATER_RESET_WDT_EXPERIMENT\n// Timer5 is borrowed")
+start=hal.index("#ifdef RF_HEATER_RESET_WDT_EXPERIMENT\n// Distinguish pre-start boot")
 progress=hal[start:hal.index("\n#endif",start)+len("\n#endif")]
-start=hal.index('void HAL::tellWatchdogOk()')
+start=hal.index('void HAL::stopWatchdog()')
 heartbeat=hal[start:hal.index('\n// ================== Interrupt handling',start)]
 start=hal.index("#ifdef RF_HEATER_LEASE_EXPERIMENT\n// Timer3 is independent")
 adc=hal[start:hal.index("\n#endif",start)+len("\n#endif")]
@@ -47,7 +47,8 @@ prelude=r"""
 #define OCF3C 3
 #define TOV3 0
 #define CS32 2
-static bool irq=true,pins[3];
+static bool irq=true,pins[4];
+#define WATCHDOG_PIN 3
 static uint8_t TIMSK3,TCCR3A,TCCR3B,TCCR3C;
 static uint16_t TCNT3,OCR3A,OCR3B,OCR3C;
 struct W1C {
@@ -76,6 +77,7 @@ struct HAL {
     static void completeThermalWatchdogPass(bool heatDemand=false);
     static void completeAutotuneWatchdogPass();
     static void tellWatchdogOk();
+    static void stopWatchdog();
     static uint32_t timeInMilliseconds(){return simulatedMs;}
     static uint32_t simulatedMs;
 #endif
@@ -83,6 +85,8 @@ struct HAL {
 #ifdef RF_HEATER_RESET_WDT_EXPERIMENT
 uint32_t HAL::simulatedMs=0;
 static bool watchdogActive=true;
+static bool watchdogPinOutput=true;
+#define SET_INPUT(pin) do {assert(pin==WATCHDOG_PIN);watchdogPinOutput=false;} while(0)
 static unsigned watchdogFeeds;
 static uint8_t TIMSK5,TCCR5A,TCCR5B,TCCR5C;
 static uint16_t TCNT5,OCR5A;
@@ -102,7 +106,8 @@ static void resetFixture(uint16_t start){
     for(auto& p:pins)p=false;
     heaterLeaseReady=false;heaterLeaseFailed=false;
 #ifdef RF_HEATER_RESET_WDT_EXPERIMENT
-    heaterGrantProgress=0;watchdogActive=true;watchdogFeeds=0;heaterResetCookie=0;
+    heaterGrantProgress=0;watchdogActive=true;watchdogStarted=true;
+    watchdogPinOutput=true;watchdogFeeds=0;heaterResetCookie=0;
     beginWatchdogProgress();
     HAL::simulatedMs=0;
 #endif
@@ -356,6 +361,17 @@ int main(){
     grant(0,255);HAL::completeAutotuneWatchdogPass();assert(watchdogFeeds==2);
     HAL::completeThermalWatchdogPass(true);assert(watchdogFeeds==3);
     HAL::completeAutotuneWatchdogPass();assert(watchdogFeeds==3);
+    // Repeated runtime stop must not float the external supervisor or
+    // leave any heat power enabled. Only a new boot may float WDI.
+    resetFixture(0);grant(0,255);startFrame(0);
+    pins[WATCHDOG_PIN]=true;
+    HAL::stopWatchdog();HAL::stopWatchdog();
+    assert(watchdogStarted&&!watchdogActive&&watchdogPinOutput&&pins[WATCHDOG_PIN]);
+    assert(!pins[0]&&!requestedDuty[0]);
+    HAL::completeThermalWatchdogPass(true);assert(watchdogFeeds==0);
+    resetFixture(0);watchdogStarted=false;watchdogActive=false;irq=false;
+    HAL::stopWatchdog();assert(!watchdogPinOutput&&!pins[WATCHDOG_PIN]);
+    irq=true;
     std::puts("thermal watchdog progress checks passed; 524288 sticky Timer5 deadline cases");
 #endif
     std::printf("heaters=%u actual HAL grant/expiry cases=%lu; exact sample checks passed\n",NUM_EXTRUDER+1,cases);
