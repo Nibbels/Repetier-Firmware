@@ -105,6 +105,10 @@ bool UsbSerial::tryWrite(uint8_t byte) {
     return true;
 }
 
+uint8_t UsbSerial::transmitFree() {
+    return uint8_t(tx_.tail-tx_.head-1)&(transmitBufferSize-1);
+}
+
 bool UsbSerial::tryWriteSpan(const char* bytes, uint8_t count) {
     // Only the foreground publishes head; ISR consumption can increase
     // free space after this snapshot but cannot invalidate our reservation.
