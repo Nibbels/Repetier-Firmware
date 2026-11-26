@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import shutil
 import sys
+import subprocess
 import tempfile
 root=Path(__file__).resolve().parents[1]
 cli=shutil.which("arduino-cli")
@@ -25,7 +26,13 @@ with tempfile.TemporaryDirectory() as temp:
         mode_dir=out/mode
         mode_dir.mkdir()
         for board,defs in baseline.TARGETS.items():
-            stats=baseline.build_target(mode_dir,cli,board,[*defs,"RF_HEATER_LEASE_EXPERIMENT=1",*extra])
+            try:
+                stats=baseline.build_target(mode_dir,cli,board,[*defs,"RF_HEATER_LEASE_EXPERIMENT=1",*extra])
+            except subprocess.CalledProcessError:
+                log=mode_dir/board/"compile.txt"
+                if log.exists():
+                    print(log.read_text(errors="replace")[-24000:],flush=True)
+                raise
             print(mode,board,json.dumps(stats),flush=True)
             dump=(mode_dir/board/"disassembly.txt").read_text()
             symbols=(mode_dir/board/"symbols.txt").read_text()
