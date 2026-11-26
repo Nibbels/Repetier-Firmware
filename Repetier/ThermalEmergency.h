@@ -49,6 +49,20 @@ struct Evidence {
         Window=512, SensorType=1024, PowerLimit=2048
     };
 };
+// Same ADC batch used by conversion/authorization. Only a fresh batch
+// is marked raw-known; an unavailable/stale batch is not new evidence.
+struct SensorObservation {
+    uint16_t raw=0;
+    bool rawKnown=false;
+    Cause invalidCause=Cause::SensorInvalid;
+    void observe(bool fresh,uint16_t value) {
+        raw=value;rawKnown=fresh;
+        invalidCause=fresh?Cause::SensorInvalid:Cause::StaleSample;
+    }
+    void apply(Evidence& e) const {
+        if(rawKnown) {e.rawAdc=raw;e.valid|=Evidence::Raw;}
+    }
+};
 struct Record {
     Evidence evidence;
     Cause cause;
