@@ -1123,6 +1123,18 @@ static void tryThermalWatchdogFeed(bool heatDemand,bool regularPass) {
         anyPower=true;
         if(!(heaterGrantProgress & _BV(c))) return;
     }
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(Printer::isAnyTempsensorDefect()) {
+        // Retain diagnostics only while the real completed thermal pass
+        // demonstrates all software heater outputs off. Read GPIO, not
+        // current: a failed-closed MOSFET/triac is outside this proof.
+        if(!regularPass || anyPower || TIMSK3 || READ(EXT0_HEATER_PIN)
+#if NUM_EXTRUDER > 1
+            || READ(EXT1_HEATER_PIN)
+#endif
+            || READ(HEATED_BED_HEATER_PIN))return;
+    }
+#endif
     // Do not resurrect a missed hardware progress deadline, even if a
     // delayed foreground pass now looks healthy. Both watchdogs must expire.
     if(!renewWatchdogProgress()) return;
