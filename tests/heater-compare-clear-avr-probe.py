@@ -2,6 +2,9 @@
 """Link the actual Timer2 compare-clear adapter for inspection, never flash."""
 from pathlib import Path
 import re
+import json
+import importlib.util
+import sys
 import shutil
 import subprocess
 import tempfile
@@ -53,5 +56,10 @@ with tempfile.TemporaryDirectory() as temp:
     assert vectors[13]==vectors[14]==vectors[15]==vectors[2]
     for name in ("<probePulse>:","<probeRevoke>:"):
         assert name in dump,name
+    sys.dont_write_bytecode=True
+    spec=importlib.util.spec_from_file_location("arm_bound",root/"tools/task0034/compare-arm-bound.py")
+    bound=importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(bound)
+    print("Linked Timer2 arm bound",json.dumps(bound.audit(dump)),flush=True)
     print(dump)
     print("Timer2 compare-clear linked; no Timer2 interrupt handlers. No physical or WCET claim.")
