@@ -471,6 +471,11 @@ void Extruder::manageTemperatures() {
         Printer::markTemperatureReadingsAvailable();
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     if(Printer::isAnyTempsensorDefect()) {
+#if defined(THERMAL_ALARM_PIN) && THERMAL_ALARM_PIN >= 0
+        // Provisional active-HIGH safety annunciation; no blocking beep()
+        // or extra timer. Actual sound and final pattern not qualified.
+        WRITE(THERMAL_ALARM_PIN,HIGH);
+#endif
         // Do not use an invalid sensor's apparent cold value to stop
         // heatsink cooling. Keep named cooler outputs on in this state.
         for(uint8_t h=0;h<NUM_EXTRUDER;++h)extruder[h].coolerPWM=255;
