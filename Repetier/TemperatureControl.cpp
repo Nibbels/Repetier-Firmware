@@ -318,7 +318,9 @@ void Extruder::manageTemperatures() {
 #endif
                     Printer::stopPrint();
 
+#ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
                     showError((void*)ui_text_temperature_manager, (void*)ui_text_sensor_error);
+#endif
                 }
             }
         }
@@ -365,7 +367,9 @@ void Extruder::manageTemperatures() {
 #endif
                             Printer::stopPrint();
 
+#ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
                             showError((void*)ui_text_temperature_manager, (void*)ui_text_heater_error);
+#endif
                         }
                     }
                 } else {
@@ -403,7 +407,9 @@ void Extruder::manageTemperatures() {
 #endif
                             Printer::stopPrint();
 
+#ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
                             showError((void*)ui_text_temperature_manager, (void*)ui_text_heater_error);
+#endif
                         }
                     }
                 } else {
@@ -743,7 +749,9 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
                 Com::printErrorFLN(PSTR("PID autotune: no temperature rise"));
 #endif
                 Printer::stopPrint();
+#ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
                 showError((void*)ui_text_temperature_manager, (void*)ui_text_heater_error);
+#endif
                 break;
             }
             riseStart = now;
