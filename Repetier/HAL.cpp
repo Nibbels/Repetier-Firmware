@@ -811,7 +811,16 @@ void HAL::startWatchdog() {
         && !(heaterWatchdogResetCause&_BV(PORF));
     if(cookie==heaterRecoveryCookie || resetDuringHeat
         || (heaterWatchdogResetCause&_BV(WDRF))) {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        // The live cookie alone cannot distinguish a watchdog from another
+        // reset. Only WDRF or the known watchdog recovery entry is evidence.
+        ThermalEmergency::latchSystemFault(
+            cookie==heaterRecoveryCookie || (heaterWatchdogResetCause&_BV(WDRF))
+            ? ThermalEmergency::Cause::WatchdogReset
+            : ThermalEmergency::Cause::InterruptedHeating);
+#else
         Printer::latchOutputInhibit(true);
+#endif
         Printer::markTemperatureReadingsAvailable();
         Com::printErrorFLN(PSTR("Watchdog/recovery: heating inhibited until restart"));
     }
