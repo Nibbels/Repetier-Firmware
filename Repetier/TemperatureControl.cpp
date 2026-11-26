@@ -665,6 +665,10 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
     for (;;) {
         Commands::checkForPeriodicalActions(WaitHeater);
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        if(Printer::printJob.emergencyLocked()) {
+            finishAutotune(*this);
+            return;
+        }
         ThermalEmergency::SensorObservation observation;
 #endif
 #ifdef RF_HEATER_LEASE_EXPERIMENT
@@ -689,7 +693,7 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
             || isSensorDefect() || isSensorDecoupled() || !validTemperatureSample(supported, measured)) {
             finishAutotune(*this);
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-            if(!ThermalEmergency::faultLedger().active())
+            if(ThermalEmergency::faultLedger().active())return;
 #endif
             Com::printErrorFLN(PSTR("PID autotune aborted: sensor, settings, fault or cancellation"));
             showError((void*)ui_text_autodetect_pid, (void*)ui_text_temperature_wrong);
@@ -823,6 +827,9 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
                         pidHistoryValid = false;
                         updateTempControlVars();
                         EEPROM::storePidCalibration(controllerId);
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+                        if(Printer::printJob.emergencyLocked())return;
+#endif
                     }
                     Com::printInfoFLN(Com::tAPIDFinished);
                     UI_STATUS_UPD(UI_TEXT_AUTODETECT_PID_DONE);
@@ -860,6 +867,9 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
         HAL::completeAutotuneWatchdogPass();
 #endif
     }
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(Printer::printJob.emergencyLocked())return;
+#endif
     Printer::idleStatus.schedule(HAL::timeInMilliseconds());
 } // autotunePID
 
