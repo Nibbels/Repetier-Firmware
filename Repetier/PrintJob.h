@@ -14,9 +14,23 @@ public:
 
     bool commandsBlocked() const {
         const Phase phase = phase_;
-        return phase == Phase::Draining || phase == Phase::WaitingToOutput;
+        return phase == Phase::Draining || phase == Phase::WaitingToOutput
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+            || phase == Phase::ThermalEmergency
+#endif
+            ;
     }
 
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    bool emergencyLocked() const { return phase_ == Phase::ThermalEmergency; }
+    // Caller holds the interrupt lock. Terminal for this boot, even if the
+    // old job was idle or already waiting for its automatic output move.
+    bool beginThermalEmergency() {
+        if(emergencyLocked()) return false;
+        phase_=Phase::ThermalEmergency;
+        return true;
+    }
+#endif
     void admitPrintMotion() {
         if (phase_ == Phase::Idle)
             phase_ = Phase::Printing;
@@ -47,7 +61,11 @@ public:
     void service(uint32_t now);
 
 private:
-    enum class Phase : uint8_t { Idle, Printing, FilamentService, Draining, WaitingToOutput };
+    enum class Phase : uint8_t { Idle, Printing, FilamentService, Draining, WaitingToOutput
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        , ThermalEmergency
+#endif
+    };
 
     volatile Phase phase_ = Phase::Idle;
     uint32_t phaseSince_ = 0;
