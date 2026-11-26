@@ -67,6 +67,16 @@ Is called every 100ms.
 */
 void Extruder::manageTemperatures() {
     static uint8_t extruderTempErrors = 0;
+#ifdef RF_HEATER_LEASE_EXPERIMENT
+    // Expiry ISR has already removed power. Defer the print/UI/serial work.
+    if (HAL::heaterLeaseFault() && !Printer::isAnyTempsensorDefect()) {
+        Printer::latchOutputInhibit(true);
+        Printer::markTemperatureReadingsAvailable();
+        Com::printErrorFLN(PSTR("Heater authorization expired"));
+        Printer::stopPrint();
+        autotuneAbortRequested = true;
+    }
+#endif
 
     uint8_t errorDetected = 0;
 
