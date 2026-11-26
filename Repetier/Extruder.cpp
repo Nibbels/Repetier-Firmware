@@ -23,8 +23,13 @@
 #include "Eeprom.h"
 #include "CaseFan.h"
 
-// Preserve the heated bed's existing measured-temperature cutoff. Its setpoint has its own limit.
+// The experimental ceiling is independent of the sensor conversion range.
+// Until the EEPROM transaction is qualified, use its conservative default.
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+constexpr uint16_t bedHeaterCutoffC = TemperatureController::BedAbsoluteCeilingC;
+#else
 constexpr uint16_t bedHeaterCutoffC = 275;
+#endif
 
 void Extruder::initHeatedBed() {
     heatedBedController.updateTempControlVars();
@@ -181,8 +186,9 @@ void Extruder::setTemperatureForAllExtruders(float temperatureInCelsius) {
 }
 
 void Extruder::setHeatedBedTemperature(float temperatureInCelsius) {
-    if (temperatureInCelsius > HEATED_BED_MAX_TEMP)
-        temperatureInCelsius = HEATED_BED_MAX_TEMP;
+    const float limit = RMath::min(float(HEATED_BED_MAX_TEMP), float(heatedBedController.maximumTargetC()));
+    if (temperatureInCelsius > limit)
+        temperatureInCelsius = limit;
     if (temperatureInCelsius < 0)
         temperatureInCelsius = 0;
     if (Printer::heatingInhibited() || heatedBedController.isSensorDefect() || heatedBedController.isSensorDecoupled())

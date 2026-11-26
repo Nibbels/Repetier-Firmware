@@ -117,7 +117,11 @@ static Extruder extruder[] = {
 #endif
 };
 Extruder* Extruder::current = &extruder[0];
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+static TemperatureController bed{NUM_EXTRUDER, 13, NUM_EXTRUDER, TemperatureController::BedAbsoluteCeilingC};
+#else
 static TemperatureController bed{NUM_EXTRUDER, 13, NUM_EXTRUDER, BED_MEASURED_CUTOFF};
+#endif
 static TemperatureController& heatedBedController = bed;
 static TemperatureController* tempController[NUM_TEMPERATURE_LOOPS] = {
     &extruder[0].tempControl,
@@ -233,7 +237,11 @@ namespace GCodeInput {
             temperatureAdcValues[tuned->sensorPin] = 4092;
         }
         if (injection == Injection::High || injection == Injection::TransientHigh)
-            temperatureAdcValues[tuned->sensorPin] = 820; // ~190-200 C
+            temperatureAdcValues[tuned->sensorPin] =
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+                tuned==&bed?476:
+#endif
+                820; // relative overshoot; bed fixture ~108..116 C below absolute 120 C
         if (injection == Injection::Cutoff)
             temperatureAdcValues[tuned->sensorPin] = 1195; // valid converted range, above 280 C cutoff
         if (injection == Injection::Cancel) {
@@ -314,7 +322,18 @@ int main(int argc, char** argv) {
     }
     publishAdc();
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-    if (!std::strncmp(name,"absolute-",9)) {
+    if (!std::strcmp(name,"bed-limit")) {
+        assert(bed.heaterCutoffC==150&&bed.effectiveCutoffC()==120&&bed.maximumTargetC()==110);
+        bed.setTargetTemperature(110);
+        assert(bed.targetTemperatureC==110);
+        bed.setTargetTemperature(111);
+        assert(!bed.targetTemperatureC&&!HAL::outputDuty(bed.pwmIndex));
+        Extruder::setHeatedBedTemperature(180);
+        assert(bed.targetTemperatureC==110);
+        bed.targetTemperatureC=111;
+        service();
+        assert(!bed.targetTemperatureC&&!HAL::outputDuty(bed.pwmIndex));
+    } else if (!std::strncmp(name,"absolute-",9)) {
         using namespace ThermalEmergency;
         const bool bedCase=std::strcmp(name,"absolute-hotend")!=0;
         auto& act=bedCase?bed:c;
@@ -322,7 +341,7 @@ int main(int argc, char** argv) {
         const bool idle=!std::strcmp(name,"absolute-idle");
         SensorObservation valid;valid.observe(true,1195);
         // Existing strict boundary, not a new numerical threshold.
-        act.currentTemperatureC=act.heaterCutoffC;
+        act.currentTemperatureC=act.effectiveCutoffC();
         assert(!checkAbsoluteCutoff(act.pwmIndex,act,true,valid));
         service();
         if(idle)for(auto* h:tempController)h->setTargetTemperature(0);
@@ -339,8 +358,8 @@ int main(int argc, char** argv) {
         assert(faultLedger().level()==Severity::FireWarning);
         const auto& fire=faultLedger().firstFire();
         assert(fire.cause==Cause::OverTemperature&&fire.channel==act.pwmIndex);
-        assert(fire.evidence.measuredC>act.heaterCutoffC&&fire.evidence.measuredC<=MAX_DEFECT_TEMPERATURE);
-        assert(fire.evidence.threshold==act.heaterCutoffC&&fire.evidence.deltaC>0);
+        assert(fire.evidence.measuredC>act.effectiveCutoffC()&&fire.evidence.measuredC<=MAX_DEFECT_TEMPERATURE);
+        assert(fire.evidence.threshold==act.effectiveCutoffC()&&fire.evidence.deltaC>0);
         assert(fire.evidence.rawAdc==1195&&(fire.evidence.valid&Evidence::Raw));
         assert(fire.evidence.targetC==oldTarget&&fire.evidence.admittedDuty==oldDuty);
         if(escalate)assert(faultLedger().first().cause==Cause::SensorInvalid);
@@ -734,6 +753,9 @@ int main(int argc, char** argv) {
         t.sensorType = 60;
         temperatureAdcValues[t.sensorPin] = 330;
         float target = 100;
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        if(!std::strcmp(name,"autotune-bed-high"))target=90;
+#endif
         bool store = false;
         const float oldP = t.pidPGain, oldI = t.pidIGain, oldD = t.pidDGain;
         const bool entry = std::strstr(name, "entry") != nullptr;
@@ -864,7 +886,7 @@ int main(int argc, char** argv) {
             using namespace ThermalEmergency;
             allOff();
             const auto& e=faultLedger().firstFire().evidence;
-            assert(faultLedger().firstFire().cause==Cause::OverTemperature&&e.threshold==t.heaterCutoffC);
+            assert(faultLedger().firstFire().cause==Cause::OverTemperature&&e.threshold==t.effectiveCutoffC());
             if(injection==Injection::Cutoff)assert(e.targetC==target&&e.profile==method&&(e.valid&Evidence::Profile)&&e.admittedDuty>0);
             else assert(e.targetC==0&&e.admittedDuty==0);
         }
@@ -960,7 +982,7 @@ def main():
                 selected = scenarios + (("dual-invalid",) if tools > 1 else ())
                 if emergency:
                     selected += ("emergency-invalid-episode", "emergency-stale-episode", "emergency-recovery", "emergency-scheduler",
-                                 "absolute-hotend", "absolute-bed", "absolute-idle", "absolute-escalation",
+                                 "absolute-hotend", "absolute-bed", "absolute-idle", "absolute-escalation", "bed-limit",
                                  "autotune-entry-absolute", "autotune-cutoff-periodic")
                 for scenario in selected:
                     subprocess.run([str(exe), scenario], check=True, timeout=10)

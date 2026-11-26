@@ -136,10 +136,10 @@ static bool confirm(uint8_t channel, Cause cause, const Evidence& e) {
 static bool checkAbsoluteCutoff(uint8_t channel, TemperatureController& act,
                                 bool sampleValid, const SensorObservation& observation) {
     if(!sampleValid||!act.sensorType||!observation.rawKnown||
-       !(act.currentTemperatureC>act.heaterCutoffC))return false;
+       !(act.currentTemperatureC>act.effectiveCutoffC()))return false;
     auto e=capture(act,true,HAL::timeInMilliseconds());
     observation.apply(e);
-    e.threshold=float(act.heaterCutoffC);
+    e.threshold=float(act.effectiveCutoffC());
     e.deltaC=act.currentTemperatureC-e.threshold;
     e.valid|=Evidence::Threshold|Evidence::Delta;
     if(channel==autotuneIndex) {
@@ -394,6 +394,14 @@ void Extruder::manageTemperatures() {
         if (!sampleValid || act->sensorType == 0 || Printer::heatingInhibited())
             continue; // Never feed an invalid or disabled sensor sample into PID.
 
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        // No raw/internal target assignment may bypass the heater-specific
+        // target ceiling, even if a future caller forgets the public setter.
+        if(!(act->targetTemperatureC>=0&&act->targetTemperatureC<=act->maximumTargetC())) {
+            act->setTargetTemperature(0);
+            continue;
+        }
+#endif
         if (act->targetTemperatureC >= MAX_ROOM_TEMPERATURE && !act->pidCalibrationValid()) {
             act->invalidatePidCalibration();
             continue;
@@ -523,7 +531,7 @@ void Extruder::manageTemperatures() {
             else
                 act->startHoldDecoupleTest(time);
         }
-        if (act->currentTemperatureC > act->heaterCutoffC)
+        if (act->currentTemperatureC > act->effectiveCutoffC())
             output = 0;
 #ifdef RF_HEATER_LEASE_EXPERIMENT
         if(act->sensorType!=checkedType || act->pidMax!=checkedLimit) output=0;
@@ -589,7 +597,7 @@ void TemperatureController::invalidatePidCalibration() {
 }
 
 void TemperatureController::setTargetTemperature(float target) {
-    if (!(target >= 0 && target <= heaterCutoffC) || Printer::heatingInhibited())
+    if (!(target >= 0 && target <= maximumTargetC()) || Printer::heatingInhibited())
         target = 0;
     if (target >= MAX_ROOM_TEMPERATURE && autotuneIndex != 255) {
         Com::printErrorFLN(PSTR("PID autotune active"));
@@ -661,7 +669,7 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
     setTargetTemperature(0);
     const bool bed = controllerId == NUM_EXTRUDER;
     const float hysteresis = 0.375f;
-    const float cutoff = RMath::min(float(heaterCutoffC), temp + (bed ? 15.0f : 20.0f));
+    const float cutoff = RMath::min(float(effectiveCutoffC()), temp + (bed ? 15.0f : 20.0f));
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     ThermalEmergency::SensorObservation initialObservation;
     const bool initialSampleValid = updateCurrentTemperature(
@@ -677,7 +685,7 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
     if (Printer::heatingInhibited() || isSensorDefect() || isSensorDecoupled()
         || sensorType == 0 || pidMax < 40
         || !(temp > MAX_ROOM_TEMPERATURE + hysteresis && temp + hysteresis < cutoff)
-        || (bed && temp > HEATED_BED_MAX_TEMP)
+        || (bed && (temp > HEATED_BED_MAX_TEMP || temp > maximumTargetC()))
         || !validTemperatureSample(initialSampleValid, currentTemperatureC)
         || currentTemperatureC > cutoff) {
         Com::printErrorFLN(PSTR("PID autotune: heater, target, sensor or PWM limit invalid"));

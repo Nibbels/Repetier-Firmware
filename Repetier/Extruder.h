@@ -41,7 +41,22 @@ public:
     uint8_t pwmIndex;           ///< pwm index for output control. 0-2 = Extruder, 3 = Fan, 4 = Heated Bed
     uint8_t sensorType;         ///< Type of temperature sensor.
     uint8_t sensorPin;          ///< Index into the ADC sample array.
-    const uint16_t heaterCutoffC; ///< Switch the heater off above this temperature.
+    const uint16_t heaterCutoffC; ///< Immutable measured-temperature ceiling.
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    // Separate immutable material ceiling, adjustable-limit default and
+    // provisional target margin. Persistence is deliberately not yet wired.
+    enum : uint16_t { BedAbsoluteCeilingC=150, BedDefaultCutoffC=120, BedTargetMarginC=10 };
+    uint16_t effectiveCutoffC() const {
+        return pwmIndex==NUM_EXTRUDER && heaterCutoffC>BedDefaultCutoffC
+            ? uint16_t(BedDefaultCutoffC) : heaterCutoffC;
+    }
+    uint16_t maximumTargetC() const {
+        return pwmIndex==NUM_EXTRUDER ? effectiveCutoffC()-BedTargetMarginC : heaterCutoffC;
+    }
+#else
+    uint16_t effectiveCutoffC() const { return heaterCutoffC; }
+    uint16_t maximumTargetC() const { return heaterCutoffC; }
+#endif
     int16_t currentTemperature; ///< Currenttemperature value read from sensor.
     float currentTemperatureC;  ///< Current temperature in degC.
     float targetTemperatureC;   ///< Target temperature in degC.

@@ -19,7 +19,7 @@ prelude=r'''
 using millis_t=uint32_t;
 #define MIN_DEFECT_TEMPERATURE -10
 #define MAX_DEFECT_TEMPERATURE 300
-struct TemperatureController {uint8_t pwmIndex,sensorType,pidMax;float currentTemperatureC,targetTemperatureC;uint16_t heaterCutoffC;};
+struct TemperatureController {uint8_t pwmIndex,sensorType,pidMax;float currentTemperatureC,targetTemperatureC;uint16_t heaterCutoffC;uint16_t effectiveCutoffC() const{return heaterCutoffC;}};
 static TemperatureController acts[3];static uint8_t duties[3];
 static bool locked,autotuneAbortRequested;static uint8_t autotuneIndex,autotuneMethod;
 static float autotuneTargetC;static unsigned latches,stops,marks;
