@@ -20,6 +20,9 @@
 #include "Repetier.h"
 #include "UiMenus.h"
 #include "uimenu.h"
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+#include "ThermalEmergencyPanel.h"
+#endif
 
 constexpr millis_t menuAutoReturnDelayMs = 120000;
 
@@ -665,6 +668,22 @@ void UIDisplay::refreshPage() {
         HAL::delayMilliseconds(2);
         loadNormalCharacters();
     }
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(Printer::printJob.emergencyLocked()) {
+        const auto& ledger=ThermalEmergency::faultLedger();
+        const uint32_t page=HAL::timeInMilliseconds()/2000;
+        const auto fault=ThermalEmergency::panelFault(ledger,UI_ROWS==2?page/2:page);
+        const bool valid=ThermalEmergency::liveTemperatureValid(fault.channel);
+        const float live=valid?tempController[fault.channel]->currentTemperatureC:0;
+        for(uint8_t row=0;row<UI_ROWS;++row) {
+            char line[UI_COLS+1];
+            ThermalEmergency::panelRow<UI_COLS,UI_ROWS>(line,row,ledger,fault,page&1,valid,live);
+            // Existing LCD transport fills remaining columns with spaces.
+            printRow(row,line,nullptr,UI_COLS);
+        }
+        return;
+    }
+#endif
     uint16_t r;
     char cache[UI_ROWS][MAX_COLS + 1];
     adjustMenuPos();
