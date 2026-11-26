@@ -88,13 +88,85 @@ void EEPROM::storePidCalibration(uint8_t heater) {
     updateChecksum();
 }
 
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+// Identify actual changed bytes of thermal calibration settings, including
+// unaligned typed writes. Fixed EEPROM slots do not depend on fitted tools.
+static uint8_t rawThermalSlot(uint16_t pos) {
+    if((pos>=EPR_BED_DRIVE_MAX&&pos<=EPR_BED_PID_MAX)||
+       pos==EPR_BED_DRIVE_MIN||pos==EPR_RF_HEATED_BED_SENSOR_TYPE)return 4;
+    for(uint8_t slot=0;slot<2;++slot) {
+        const uint16_t base=EEPROM_EXTRUDER_OFFSET+slot*EEPROM_EXTRUDER_LENGTH;
+        if((pos>=base+EPR_EXTRUDER_DRIVE_MAX&&pos<=base+EPR_EXTRUDER_PID_MAX)||
+           pos==base+EPR_EXTRUDER_DRIVE_MIN||pos==base+EPR_EXTRUDER_SENSOR_TYPE)
+            return uint8_t(1u<<slot);
+    }
+    return 0;
+}
+static bool prepareRawThermalWrite(GCode* com,uint8_t width) {
+    // Caller validated the full signed address and write width first.
+    // Preserve no-op M206 transfers from host configuration tools.
+    if(!(com->T==3?com->hasX():com->hasS()))return true;
+    uint32_t bits=0;
+    if(com->T==3) {
+        static_assert(sizeof(float)==sizeof(bits),"EEPROM float encoding");
+        memcpy(&bits,&com->X,sizeof(bits));
+    }else bits=uint32_t(com->S);
+    uint8_t slots=0;
+    const uint16_t pos=uint16_t(com->P);
+    for(uint8_t i=0;i<width;++i) {
+        const uint8_t slot=rawThermalSlot(pos+i);
+        if(slot&&HAL::eprGetByte(pos+i)!=uint8_t(bits>>(8*i)))slots|=slot;
+    }
+    // Stop any affected fitted heater before EEPROM mutation; the absent
+    // E1 slot still has a persistent calibration marker to revoke.
+    for(uint8_t slot=0;slot<3;++slot)if(slots&(1u<<slot)) {
+        if(slot==2||slot<NUM_EXTRUDER)
+            tempController[slot==2?NUM_EXTRUDER:slot]->invalidatePidCalibration();
+    }
+    for(uint8_t slot=0;slot<3;++slot)if(slots&(1u<<slot)) {
+        const uint16_t marker=EPR_RF_PID_CALIBRATION+3*slot;
+        HAL::eprSetByte(marker,0);
+        if(HAL::eprGetByte(marker)!=0) {
+            Com::printErrorFLN(PSTR("PID calibration revoke failed"));
+            return false;
+        }
+    }
+    return true;
+}
+#endif
+
 void EEPROM::update(GCode* com) {
     // Calibration authorization is not a user-editable EEPROM setting.
     const int width = com->hasT() && com->T == 0 ? 1 : (com->hasT() && com->T == 1 ? 2 : 4);
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    // M206 P is int32_t but HAL takes a 16-bit unsigned AVR address.
+    // Reject the whole span before narrowing; upper-bank research records
+    // are not part of the existing 2048-byte public settings ABI.
+    if(com->hasT()&&com->hasP()&&com->T<=3) {
+        if(com->P<0||com->P>2048-width) {
+            Com::printErrorFLN(PSTR("EEPROM address outside settings"));
+            return;
+        }
+    }
+#endif
     if (com->hasP() && com->P >= EPR_RF_PID_CALIBRATION - width + 1 && com->P < EPR_RF_PID_CALIBRATION + 9) {
         Com::printErrorFLN(PSTR("PID calibration record is read-only"));
         return;
     }
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(com->hasT()&&com->hasP()&&com->T<=3) {
+        const int32_t end=com->P+width;
+        // Internal version, integrity and fitted-tool metadata must remain
+        // owned by EEPROM migration, not be forged with raw writes.
+        if(com->P==EPR_MAGIC_BYTE||
+           (com->P<=EPR_VERSION&&end>EPR_INTEGRITY_BYTE)||
+           (com->P<=EPR_CHECK_NUM_EXTRUDERS&&end>EPR_CHECK_NUM_EXTRUDERS)) {
+            Com::printErrorFLN(PSTR("EEPROM metadata is read-only"));
+            return;
+        }
+        if(!prepareRawThermalWrite(com,uint8_t(width)))return;
+    }
+#endif
     if (com->hasT() && com->hasP())
         switch (com->T) {
         case 0: {
