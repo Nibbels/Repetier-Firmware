@@ -14,7 +14,7 @@ def main():
     commands = (firmware / "gcode.cpp").read_text(encoding="utf-8")
     receiver = (firmware / "GCodeInput.cpp").read_text(encoding="utf-8")
     command_loop = (firmware / "Commands.cpp").read_text(encoding="utf-8")
-    command_loop = command_loop[command_loop.index("void Commands::commandLoop()"):command_loop.index("void Commands::checkForPeriodicalActions(")]
+    command_loop = command_loop[command_loop.index("void Commands::commandLoop()"):command_loop.index("} // commandLoop")+len("} // commandLoop")]
     system = (firmware / "GCodeSystem.cpp").read_text(encoding="utf-8")
     dispatch = (firmware / "GCodeCommands.cpp").read_text(encoding="utf-8")
     printer = (firmware / "Printer.h").read_text(encoding="utf-8")
@@ -54,6 +54,9 @@ def main():
         replay = build / "serial-replay"
         subprocess.run(compiler + [str(tests / "serial-protocol.cpp"), "-o", str(replay)], check=True)
         for scenario in ("numbered", "queue", "display", "idle", "binary", "overflow", "binary-text", "sustained", "bounded-receive", "emergency", "stopping", "script", "legacy-ascii", "legacy-binary", "legacy-during-stop"):
+            subprocess.run([str(replay), scenario], check=True, timeout=10)
+        subprocess.run(compiler + ["-DRF_THERMAL_EMERGENCY_EXPERIMENT=1",str(tests / "serial-protocol.cpp"), "-o", str(replay)], check=True)
+        for scenario in ("thermal-emergency", "numbered", "binary", "emergency"):
             subprocess.run([str(replay), scenario], check=True, timeout=10)
         uart_replay = build / "uart-replay"
         subprocess.run(compiler + [str(tests / "usb-serial.cpp"), "-o", str(uart_replay)], check=True)
