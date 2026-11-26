@@ -12,8 +12,8 @@ class HeaterLease {
     static_assert(Channels > 0 && Channels <= 3, "one compare per heater");
     static_assert(Duration > Guard && Duration < 32768, "unambiguous interval");
     Timer& timer_;
-    uint8_t duty_[Channels] = {};
-    bool failed_ = false;
+    volatile uint8_t duty_[Channels] = {};
+    volatile bool failed_ = false;
 
     bool live(uint8_t channel, uint16_t now) const {
         const uint16_t left = uint16_t(timer_.deadline(channel) - now);
@@ -21,8 +21,9 @@ class HeaterLease {
     }
     bool checkAll() {
         if (failed_) return false;
+        const uint16_t now = timer_.now();
         for (uint8_t c = 0; c < Channels; ++c) {
-            if (duty_[c] && !live(c, timer_.now())) {
+            if (duty_[c] && !live(c, now)) {
                 fail();
                 return false;
             }
@@ -83,6 +84,16 @@ public:
             return 0;
         }
         return duty_[channel];
+    }
+
+    // Validate all channels once per frame; caller must keep IRQs masked
+    // through the final GPIO write and prove the total guard in linked code.
+    // Failure overwrites every output, including any prior caller snapshot.
+    bool frameDuties(uint8_t (&out)[Channels]) {
+        const bool allowed = checkAll();
+        for (uint8_t c = 0; c < Channels; ++c)
+            out[c] = allowed ? duty_[c] : 0;
+        return allowed;
     }
 
     // Hardware clears compare flag on vector entry. Do not require the flag
