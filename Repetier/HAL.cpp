@@ -76,51 +76,85 @@ volatile uint32_t temperatureAdcPublishedAt[TemperatureAdcCount] = { 0 };
 volatile bool temperatureAdcReady[TemperatureAdcCount] = { false };
 #ifdef RF_HEATER_LEASE_EXPERIMENT
 // Timer3 is independent of Arduino millis and owns TOV3 exclusively here.
-enum : uint8_t { SampleValid=1, SampleFresh=2, SampleBusy=4, SampleReserved=8, SampleMatch=16 };
+enum : uint8_t {
+    SampleValid=1, SampleFresh=2, SampleBusy=4, SampleReserved=8, SampleMatch=16,
+    SamplePrevious=32, ReservationPrevious=64
+};
+bool heaterClockContinuity();
 volatile uint8_t heaterSampleState[TemperatureAdcCount] = {};
 volatile uint16_t heaterSampleStamp[TemperatureAdcCount] = {};
 volatile uint16_t heaterBatchStart=0;
 volatile bool heaterBatchValid=false;
+volatile bool heaterBatchPrevious=false;
 volatile bool heaterLeaseReady=false;
 constexpr uint16_t heaterSampleMaxAge=6250; // experimental 100ms from batch start
+// A live active compare proves less than one wrap since its last grant,
+// which followed a synchronized sample consume. Never clear an active
+// compare flag at renewal. This requires a bounded consume-to-arm path.
 void synchronizeHeaterSamples() {
-    if (TIFR3 & _BV(TOV3)) {
-        for(uint8_t c=0;c<TemperatureAdcCount;++c)
-            heaterSampleState[c] &= SampleBusy;
-        heaterBatchValid=false;
-        TIFR3=_BV(TOV3); // never clear compare expiry flags here
+    if (!(TIFR3 & _BV(TOV3))) return;
+    const bool continuous=heaterClockContinuity();
+    for(uint8_t c=0;c<TemperatureAdcCount;++c) {
+        uint8_t s=heaterSampleState[c];
+        if(!continuous) {
+            s &= SampleBusy;
+        } else {
+            if(s&SamplePrevious)
+                s &= uint8_t(~(SampleValid|SampleFresh|SampleMatch|SamplePrevious));
+            else if(s&SampleValid)
+                s |= SamplePrevious;
+            if(s&ReservationPrevious)
+                s &= uint8_t(~(SampleReserved|SampleMatch|ReservationPrevious));
+            else if(s&SampleReserved)
+                s |= ReservationPrevious;
+        }
+        heaterSampleState[c]=s;
     }
+    if(!continuous || heaterBatchPrevious) heaterBatchValid=false;
+    heaterBatchPrevious=heaterBatchValid;
+    TIFR3=_BV(TOV3); // never clear compare expiry flags here
+}
+bool heaterClockSnapshot(uint16_t& now) {
+    // Counter can cross BOTTOM during the register read. Retry once only.
+    for(uint8_t attempt=0;attempt<2;++attempt) {
+        synchronizeHeaterSamples();
+        now=TCNT3;
+        if(!(TIFR3&_BV(TOV3))) return true;
+    }
+    synchronizeHeaterSamples();
+    return false;
+}
+bool heaterAgeLive(uint16_t now,uint16_t stamp,bool previous) {
+    return (previous ? now<stamp : now>=stamp)
+        && uint16_t(now-stamp)<=heaterSampleMaxAge;
 }
 bool heaterSampleLive(uint8_t c) {
-    synchronizeHeaterSamples();
-    const uint16_t now=TCNT3;
-    if(TIFR3 & _BV(TOV3)) {
-        synchronizeHeaterSamples();
-        return false;
-    }
-    if(!(heaterSampleState[c]&SampleValid)) return false;
-    if(uint16_t(now-heaterSampleStamp[c])>heaterSampleMaxAge) {
-        heaterSampleState[c] &= SampleBusy|SampleReserved;
+    uint16_t now;
+    if(!heaterClockSnapshot(now) || !(heaterSampleState[c]&SampleValid)) return false;
+    if(!heaterAgeLive(now,heaterSampleStamp[c],heaterSampleState[c]&SamplePrevious)) {
+        heaterSampleState[c] &= SampleBusy|SampleReserved|ReservationPrevious;
         return false;
     }
     return true;
 }
 void publishHeaterSample(uint8_t index, uint16_t raw) {
-    synchronizeHeaterSamples();
-    const uint16_t now=TCNT3;
-    if(TIFR3 & _BV(TOV3)) synchronizeHeaterSamples();
+    uint16_t now;
+    const bool clockValid=heaterClockSnapshot(now);
     // Preserve the exact old reservation, not its relation to the latest
     // publication. An observed ADC rail invalidates it immediately.
-    heaterSampleState[index] &= SampleBusy|SampleReserved;
+    heaterSampleState[index] &= SampleBusy|SampleReserved|ReservationPrevious;
     if(raw==0 || raw>=4092) heaterSampleState[index] &= SampleBusy;
-    if(heaterLeaseReady && heaterBatchValid &&
-       uint16_t(now-heaterBatchStart)<=heaterSampleMaxAge) {
+    if(clockValid && heaterLeaseReady && heaterBatchValid &&
+       heaterAgeLive(now,heaterBatchStart,heaterBatchPrevious)) {
         heaterSampleStamp[index]=heaterBatchStart;
-        heaterSampleState[index] |= SampleValid|SampleFresh;
+        heaterSampleState[index] |= SampleValid|SampleFresh|
+            (heaterBatchPrevious?SamplePrevious:0);
     }
-    heaterBatchStart=TCNT3;
-    heaterBatchValid=heaterLeaseReady;
-    if(TIFR3 & _BV(TOV3)) synchronizeHeaterSamples();
+    // Use the coherent snapshot, before the next conversion begins.
+    // Any later wrap is processed before the next use of these records.
+    heaterBatchStart=now;
+    heaterBatchValid=clockValid && heaterLeaseReady;
+    heaterBatchPrevious=false;
 }
 #endif
 
@@ -554,7 +588,7 @@ HAL::HeaterSample::~HeaterSample() { release(); }
 void HAL::HeaterSample::release() {
     InterruptProtectedBlock lock;
     if(index_!=255) {
-        heaterSampleState[index_] &= SampleValid|SampleFresh;
+        heaterSampleState[index_] &= SampleValid|SampleFresh|SamplePrevious;
         index_=255;
     }
 }
@@ -569,6 +603,7 @@ bool HAL::HeaterSample::read(uint8_t index,uint16_t& raw) {
     if(raw>0 && raw<4092 && heaterSampleLive(index) &&
        (heaterSampleState[index] & (SampleFresh|SampleBusy))==SampleFresh) {
         heaterSampleState[index] |= SampleBusy|SampleReserved|SampleMatch;
+        if(heaterSampleState[index]&SamplePrevious) heaterSampleState[index] |= ReservationPrevious;
         stamp_=heaterSampleStamp[index];
         index_=index;
     }
@@ -577,18 +612,13 @@ bool HAL::HeaterSample::read(uint8_t index,uint16_t& raw) {
 bool HAL::HeaterSample::consume(uint8_t channel) {
     // Caller holds the IRQ lock through grant publication.
     if(index_!=channel || index_==255) return false;
-    synchronizeHeaterSamples();
-    const uint16_t now=TCNT3;
-    if(TIFR3 & _BV(TOV3)) {
-        synchronizeHeaterSamples();
-        return false;
-    }
-    if(!(heaterSampleState[index_]&SampleReserved)) return false;
-    const bool young=uint16_t(now-stamp_)<=heaterSampleMaxAge;
+    uint16_t now;
+    if(!heaterClockSnapshot(now) || !(heaterSampleState[index_]&SampleReserved)) return false;
+    const bool young=heaterAgeLive(now,stamp_,heaterSampleState[index_]&ReservationPrevious);
     // Consume only the reserved batch. A newer batch retains its eligibility.
     if(heaterSampleState[index_]&SampleMatch)
         heaterSampleState[index_] &= uint8_t(~SampleFresh);
-    heaterSampleState[index_] &= uint8_t(~(SampleReserved|SampleMatch));
+    heaterSampleState[index_] &= uint8_t(~(SampleReserved|SampleMatch|ReservationPrevious));
     return young;
 }
 #endif
@@ -609,6 +639,7 @@ void HAL::analogStart() {
     }
 #ifdef RF_HEATER_LEASE_EXPERIMENT
     heaterBatchValid=false;
+    heaterBatchPrevious=false;
 #endif
     ADCSRA = _BV(ADEN) | _BV(ADSC) | _BV(ADIF) | ANALOG_PRESCALER;
     while (ADCSRA & _BV(ADSC)) { } // wait for conversion
@@ -899,6 +930,14 @@ bool leaseLive(uint8_t c,uint16_t now) {
     const uint16_t left=uint16_t(leaseDeadline(c)-now);
     return left>heaterLeaseGuard && left<=heaterLeaseDuration && !(TIFR3 & leaseMask(c));
 }
+bool heaterClockContinuity() {
+    if(!heaterLeaseReady || heaterLeaseFailed) return false;
+    const uint16_t now=TCNT3;
+    for(uint8_t c=0;c<=NUM_EXTRUDER;++c)
+        if(requestedDuty[c] && (TIMSK3&leaseMask(c)) && leaseLive(c,now))
+            return true;
+    return false;
+}
 bool checkHeaterLeases() {
     if (!heaterLeaseReady || heaterLeaseFailed) return false;
     const uint16_t now=TCNT3;
@@ -975,7 +1014,7 @@ void HAL::setHeaterDuty(uint8_t channel, uint8_t duty
     // A pending decision made before this revoke cannot rearm the heater.
     if(heaterSampleState[channel]&SampleMatch)
         heaterSampleState[channel] &= uint8_t(~SampleFresh);
-    heaterSampleState[channel] &= uint8_t(~(SampleReserved|SampleMatch));
+    heaterSampleState[channel] &= uint8_t(~(SampleReserved|SampleMatch|ReservationPrevious));
     TIMSK3 &= uint8_t(~leaseMask(channel));
 #ifdef RF_HEATER_RESET_WDT_EXPERIMENT
     heaterGrantProgress &= uint8_t(~_BV(channel));
