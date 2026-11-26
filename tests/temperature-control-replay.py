@@ -47,7 +47,7 @@ using millis_t = uint32_t;
 #define NUM_TEMPERATURE_LOOPS (NUM_EXTRUDER + 1)
 #define PRINTER_FLAG2_GOT_TEMPS 1
 #define PSTR(s) s
-#define UI_STATUS_UPD(x) do { if (delayAutotuneAdmission) { now += 101; delayAutotuneAdmission = false; } } while (0)
+#define UI_STATUS_UPD(x) do { if (::delayAutotuneAdmission) { ::now += 101; ::delayAutotuneAdmission = false; } } while (0)
 static bool delayAutotuneAdmission;
 static uint8_t pins[8];
 #define WRITE(pin,value) (pins[pin] = (value))
