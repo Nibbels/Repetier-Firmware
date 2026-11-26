@@ -42,7 +42,9 @@ with tempfile.TemporaryDirectory() as temp:
                 assert vectors[12] == vectors[2], (board,"WDT vector unexpectedly active")
                 assert "heaterWatchdogEarlyInit" in dump, board
                 start=dump.index("<heaterWatchdogEarlyInit>:")
-                early=dump[start:dump.find("\n\n",start)]
+                end=re.search(r"^[0-9a-f]+ <[^\n]+>:",dump[start+1:],re.M)
+                assert end,board
+                early=dump[start:start+1+end.start()]
                 assert re.search(r"\bwdr\b",early),early
                 assert not re.search(r"\bret[i]?\b",early),early
                 # Timed reset configuration and feed locations are retained for
