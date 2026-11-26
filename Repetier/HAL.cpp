@@ -25,26 +25,26 @@
 // Non-release candidate. AVR CRT .init2 has initialized SP and r1.
 // Capture reset cause before disabling a watchdog inherited from reset.
 // The actual installed bootloader runs before this code and is unqualified.
+#ifndef __AVR_ATmega2560__
+#error Early watchdog reset sequence is specific to ATmega2560.
+#endif
+static_assert(WDRF==3 && WDCE==4 && WDE==3, "watchdog bit mapping");
 extern "C" {
-uint8_t heaterWatchdogResetCause __attribute__((section(".noinit"), used));
+volatile uint8_t heaterWatchdogResetCause __attribute__((section(".noinit"), used, externally_visible));
 void heaterWatchdogEarlyInit() __attribute__((naked, used, externally_visible, section(".init3")));
 void heaterWatchdogEarlyInit() {
+    // Basic assembly only in a naked function. ATmega2560 MCUSR I/O=0x34,
+    // WDTCSR data address=0x60; r1 is zero after CRT .init2.
     asm volatile(
         "cli\n\t"
-        "in r24,%[cause]\n\t"
+        "in r24,0x34\n\t"
         "sts heaterWatchdogResetCause,r24\n\t"
-        "andi r24,%[clear]\n\t"
-        "out %[cause],r24\n\t"
+        "andi r24,0xf7\n\t"
+        "out 0x34,r24\n\t"
         "wdr\n\t"
-        "ldi r24,%[unlock]\n\t"
-        "sts %[control],r24\n\t"
-        "sts %[control],__zero_reg__\n\t"
-        :
-        : [cause] "I" (_SFR_IO_ADDR(MCUSR)),
-          [clear] "M" (uint8_t(~_BV(WDRF))),
-          [unlock] "M" (_BV(WDCE)|_BV(WDE)),
-          [control] "n" (_SFR_MEM_ADDR(WDTCSR))
-        : "r24", "memory");
+        "ldi r24,0x18\n\t"
+        "sts 0x60,r24\n\t"
+        "sts 0x60,r1\n\t");
     // Fall through to .init4, never RET.
 }
 }
