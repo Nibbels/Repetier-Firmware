@@ -550,6 +550,7 @@ public:
     static void tellWatchdogOk();
 #ifdef RF_HEATER_RESET_WDT_EXPERIMENT
     static void completeThermalWatchdogPass(bool heatDemand);
+    static void completeAutotuneWatchdogPass();
 #endif
     static bool watchdogEnabled();
 
