@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build four lease and four reset-WDT candidates, retain linked evidence in host log.
+"""Build four lease, four reset-WDT and four emergency candidates, retain linked evidence in host log.
 Never flash these experimental images. Standard builds remain unchanged.
 """
 import importlib.util
@@ -34,7 +34,8 @@ if archive:
     (archive/"README.txt").write_text("RESEARCH ONLY. Never flash these experimental candidates.\n")
 with tempfile.TemporaryDirectory() as temp:
     out=Path(temp)
-    for mode,extra in (("lease",[]),("reset-wdt",["RF_HEATER_RESET_WDT_EXPERIMENT=1"])):
+    for mode,extra in (("lease",[]),("reset-wdt",["RF_HEATER_RESET_WDT_EXPERIMENT=1"]),
+                       ("emergency",["RF_HEATER_RESET_WDT_EXPERIMENT=1","RF_THERMAL_EMERGENCY_EXPERIMENT=1"])):
         mode_dir=out/mode
         mode_dir.mkdir()
         for board,defs in baseline.TARGETS.items():
