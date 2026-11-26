@@ -9,6 +9,7 @@ hal = (root / "Repetier/HAL.cpp").read_text()
 start = hal.index("void HAL::setHeaterDuty(")
 end = hal.index("\nvoid HAL::setBoardFan", start)
 setter = hal[start:end]
+reset = hal[hal.index('void HAL::resetHardware()'):hal.index('} // resetHardware')+1]
 start = hal.index("    if (pwm_count_heater == 0) {", hal.index("ISR(PWM_TIMER_VECTOR)"))
 end = hal.index("    if (pwm_count_cooler == 0)", start)
 frame = hal[start:end]
@@ -38,7 +39,24 @@ struct InterruptProtectedBlock {
 static volatile uint8_t requestedDuty[NUM_EXTRUDER + 3];
 static constexpr uint8_t heaterPwmMask = 0xfe;
 static uint8_t pwm_pos_set[NUM_EXTRUDER + 3];
-struct HAL { static void setHeaterDuty(uint8_t, uint8_t); };
+static uint8_t PWM_TIMSK;
+#define PWM_OCIE 2
+#define _BV(x) (1u << (x))
+struct HAL {
+    static void setHeaterDuty(uint8_t, uint8_t);
+    static void forbidInterrupts() { irq=false; }
+    static void resetHardware();
+};
+struct Restart {};
+static void restart() {
+    assert(!irq && !(PWM_TIMSK & _BV(PWM_OCIE)));
+    for (unsigned c=0;c<=NUM_EXTRUDER;++c) {
+        assert(requestedDuty[c]==0);
+        assert(!pins[c==NUM_EXTRUDER?HEATED_BED_HEATER_PIN:c]);
+    }
+    throw Restart{};
+}
+static void (*resetFunc)() = restart;
 static void startFrame(uint8_t pwm_count_heater) {
     InterruptProtectedBlock lock;
 """
@@ -84,12 +102,24 @@ int main() {
         HAL::setHeaterDuty(channel, 255);
         assert(writes == before);
     }
-    std::printf("heaters=%u revoke cases=%u\n", NUM_EXTRUDER + 1, cases);
+    for (bool enabled : {false,true}) {
+        irq=enabled;
+        PWM_TIMSK=255;
+        for(auto& p:pins)p=true;
+        for(auto& d:requestedDuty)d=255;
+        try { HAL::resetHardware(); assert(false); }
+        catch(const Restart&) {}
+        assert(!irq && PWM_TIMSK==uint8_t(255 & ~_BV(PWM_OCIE)));
+        startFrame(0);
+        for(unsigned c=0;c<=NUM_EXTRUDER;++c)
+            assert(!pins[c==NUM_EXTRUDER?HEATED_BED_HEATER_PIN:c]);
+    }
+    std::printf("heaters=%u revoke cases=%u, restart cases=2\\n", NUM_EXTRUDER + 1, cases);
 }
 """
 with tempfile.TemporaryDirectory() as temp:
     source = Path(temp) / "revoke.cpp"
-    source.write_text("#include <initializer_list>\n" + prelude + frame + "\n}\n" + setter + "\n" + main)
+    source.write_text("#include <initializer_list>\n" + prelude + frame + "\n}\n" + setter + "\n" + reset + "\n" + main)
     for count in (1, 2):
         exe = Path(temp) / "revoke"
         subprocess.run(["g++", "-std=c++11", "-Wall", "-Wextra", "-O2",
