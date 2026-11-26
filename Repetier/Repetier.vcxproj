@@ -124,6 +124,7 @@
     <ClInclude Include="DisplayModes.h" />
     <ClInclude Include="QueueTask.h" />
     <ClInclude Include="Eeprom.h" />
+    <ClInclude Include="EepromHostFields.h" />
     <ClInclude Include="Extruder.h" />
     <ClInclude Include="fastio.h" />
     <ClInclude Include="gcode.h" />

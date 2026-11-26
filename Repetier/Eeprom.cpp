@@ -89,15 +89,15 @@ void EEPROM::storePidCalibration(uint8_t heater) {
 }
 
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-// Identify actual changed bytes of thermal calibration settings, including
-// unaligned typed writes. Fixed EEPROM slots do not depend on fitted tools.
+// Identify changed calibration identity/gains. DMIN/DMAX are operator
+// fine tuning (same semantics as the LCD menu), not sensor/power identity.
 static uint8_t rawThermalSlot(uint16_t pos) {
-    if((pos>=EPR_BED_DRIVE_MAX&&pos<=EPR_BED_PID_MAX)||
-       pos==EPR_BED_DRIVE_MIN||pos==EPR_RF_HEATED_BED_SENSOR_TYPE)return 4;
+    if((pos>=EPR_BED_PID_PGAIN&&pos<=EPR_BED_PID_MAX)||
+       pos==EPR_RF_HEATED_BED_SENSOR_TYPE)return 4;
     for(uint8_t slot=0;slot<2;++slot) {
         const uint16_t base=EEPROM_EXTRUDER_OFFSET+slot*EEPROM_EXTRUDER_LENGTH;
-        if((pos>=base+EPR_EXTRUDER_DRIVE_MAX&&pos<=base+EPR_EXTRUDER_PID_MAX)||
-           pos==base+EPR_EXTRUDER_DRIVE_MIN||pos==base+EPR_EXTRUDER_SENSOR_TYPE)
+        if((pos>=base+EPR_EXTRUDER_PID_PGAIN&&pos<=base+EPR_EXTRUDER_PID_MAX)||
+           pos==base+EPR_EXTRUDER_SENSOR_TYPE)
             return uint8_t(1u<<slot);
     }
     return 0;
@@ -136,6 +136,43 @@ static bool prepareRawThermalWrite(GCode* com,uint8_t width) {
 #endif
 
 void EEPROM::update(GCode* com) {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    // A public settings field must match the exact M205 start and wire type.
+    // Validate before narrowing, reading or writing any EEPROM address.
+    if(!com->hasP()||!com->hasT()||com->P<0||com->P>=2048||com->T>3||
+       !(com->T==3?com->hasX():com->hasS())) {
+        Com::printErrorFLN(PSTR("Invalid EEPROM setting command"));
+        return;
+    }
+    const uint16_t address=uint16_t(com->P);
+    bool listed=false, writable=false;
+#define RF_EPR_FIELD(type, pos, label, digits, access) \
+    if(address==(pos)&&com->T==(type)){listed=true;writable=(access);}
+#include "EepromHostFields.h"
+#undef RF_EPR_FIELD
+    if(!listed) {
+        Com::printErrorFLN(PSTR("Unknown EEPROM setting or type"));
+        return;
+    }
+    if((com->T==0&&(com->S<0||com->S>255))||
+       (com->T==1&&(com->S<-32768L||com->S>32767L))||
+       (com->T==3&&!isfinite(com->X))) {
+        Com::printErrorFLN(PSTR("Invalid EEPROM value"));
+        return;
+    }
+    const uint8_t bytes=com->T==0?1:com->T==1?2:4;
+    uint32_t bits=uint32_t(com->S);
+    if(com->T==3)memcpy(&bits,&com->X,4);
+    bool changed=false;
+    for(uint8_t i=0;i<bytes;++i)changed|=HAL::eprGetByte(address+i)!=uint8_t(bits>>(8*i));
+    // Exact read-only echoes are harmless; skip checksum/reload for all
+    // exact no-ops, including live DMAX adjustment already saved by LCD.
+    if(!changed)return;
+    if(!writable) {
+        Com::printErrorFLN(PSTR("EEPROM setting is read-only"));
+        return;
+    }
+#endif
     // Calibration authorization is not a user-editable EEPROM setting.
     const int width = com->hasT() && com->T == 0 ? 1 : (com->hasT() && com->T == 1 ? 2 : 4);
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
@@ -1019,124 +1056,17 @@ With
 - description = Definition of the value
 */
 void EEPROM::writeSettings() {
-
-    writeFloat(EPR_X_MAX_FEEDRATE, Com::tEPRXMaxFeedrate);
-    writeFloat(EPR_X_HOMING_FEEDRATE_PRINT, Com::tEPRXHomingFeedrate);
-    writeFloat(EPR_Y_MAX_FEEDRATE, Com::tEPRYMaxFeedrate);
-    writeFloat(EPR_Y_HOMING_FEEDRATE_PRINT, Com::tEPRYHomingFeedrate);
-    writeFloat(EPR_Z_MAX_FEEDRATE, Com::tEPRZMaxFeedrate);
-    writeFloat(EPR_Z_HOMING_FEEDRATE_PRINT, Com::tEPRZHomingFeedrate);
-
-    writeFloat(EPR_X_MAX_ACCEL, Com::tEPRXAcceleration);
-    writeFloat(EPR_X_MAX_TRAVEL_ACCEL, Com::tEPRXTravelAcceleration);
-    writeFloat(EPR_Y_MAX_ACCEL, Com::tEPRYAcceleration);
-    writeFloat(EPR_Y_MAX_TRAVEL_ACCEL, Com::tEPRYTravelAcceleration);
-    writeFloat(EPR_Z_MAX_ACCEL, Com::tEPRZAcceleration);
-    writeFloat(EPR_Z_MAX_TRAVEL_ACCEL, Com::tEPRZTravelAcceleration);
-
-    writeFloat(EPR_MAX_XYJERK, Com::tEPRMaxXYJerk);
-    writeFloat(EPR_MAX_ZJERK, Com::tEPRMaxZJerk);
-
-    writeByte(EPR_RF_MOTOR_CURRENT + X_AXIS, Com::tEPRPrinter_STEPPER_X);
-    writeByte(EPR_RF_MOTOR_CURRENT + Y_AXIS, Com::tEPRPrinter_STEPPER_Y);
-    writeByte(EPR_RF_MOTOR_CURRENT + Z_AXIS, Com::tEPRPrinter_STEPPER_Z);
-    writeByte(EPR_RF_MOTOR_CURRENT + E_AXIS + 0, Com::tEPRPrinter_STEPPER_E0);
-#if NUM_EXTRUDER > 1
-    writeByte(EPR_RF_MOTOR_CURRENT + E_AXIS + 1, Com::tEPRPrinter_STEPPER_E1);
-#endif //NUM_EXTRUDER > 1
-
-    writeFloat(EPR_XAXIS_STEPS_PER_MM, Com::tEPRXStepsPerMM, 4);
-    writeFloat(EPR_YAXIS_STEPS_PER_MM, Com::tEPRYStepsPerMM, 4);
-    writeFloat(EPR_ZAXIS_STEPS_PER_MM, Com::tEPRZStepsPerMM, 4);
-    writeInt(EPR_RF_STEP_PACKING_MIN_INTERVAL, Com::tEPRInterruptSpacingInterval);
-
-    writeFloat(EPR_X_LENGTH, Com::tEPRXMaxLength);
-    writeFloat(EPR_Y_LENGTH, Com::tEPRYMaxLength);
-    writeFloat(EPR_Z_LENGTH, Com::tEPRZMaxLength);
-
-    writeLong(EPR_RF_Z_OFFSET, Com::tEPRZOffset);
-    writeByte(EPR_RF_Z_MODE, Com::tEPRZMode);
-
-    writeInt(EPR_RF_MOD_Z_STEP_SIZE, Com::tEPRPrinterZ_STEP_SIZE);
-
-    writeByte(EPR_RF_ZERO_DIGIT_STATE, Com::tEPRZERO_DIGIT_STATE);
-    writeByte(EPR_RF_DIGIT_CMP_STATE, Com::tEPRZDIGIT_CMP_STATE);
-
-    writeInt(EPR_RF_MOD_SENSEOFFSET_DIGITS, Com::tEPRPrinterEPR_RF_MOD_SENSEOFFSET_DIGITS);
-    writeInt(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX, Com::tEPRPrinterMOD_SENSEOFFSET_OFFSET_MAX);
-
-    writeLong(EPR_RF_EMERGENCYPAUSEDIGITSMIN, Com::tEPRPrinterEPR_RF_EmergencyPauseDigitsMin);
-    writeLong(EPR_RF_EMERGENCYPAUSEDIGITSMAX, Com::tEPRPrinterEPR_RF_EmergencyPauseDigitsMax);
-
-    writeInt(EPR_RF_EMERGENCYZSTOPDIGITSMIN, Com::tEPRPrinterEPR_RF_EmergencyStopAllMin);
-    writeInt(EPR_RF_EMERGENCYZSTOPDIGITSMAX, Com::tEPRPrinterEPR_RF_EmergencyStopAllMax);
-
-    writeByte(EPR_RF_MOD_ZOS_SCAN_POINT_X, Com::tEPRPrinterMOD_ZOS_SCAN_POINT_X);
-    writeByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y, Com::tEPRPrinterMOD_ZOS_SCAN_POINT_Y);
-    writeFloat(EPR_ZSCAN_START_MM, Com::tEPRZScanStartLift);
-
-    writeByte(EPR_RF_HEATED_BED_SENSOR_TYPE, Com::tEPRBedsensorType);
-    writeFloat(EPR_BED_PID_PGAIN, Com::tEPRBedPGain);
-    writeFloat(EPR_BED_PID_IGAIN, Com::tEPRBedIGain);
-    writeFloat(EPR_BED_PID_DGAIN, Com::tEPRBedDGain);
-    writeByte(EPR_BED_PID_MAX, Com::tEPRBedPIDMaxValue);
-    writeByte(EPR_BED_DRIVE_MIN, Com::tEPRBedPIDDriveMin);
-    writeByte(EPR_BED_DRIVE_MAX, Com::tEPRBedPIDDriveMax);
-
-    // now the extruder
-    for (uint8_t i = 0; i < NUM_EXTRUDER; i++) {
-        int o = EEPROM::getExtruderOffset(i);
-        writeFloat(o + EPR_EXTRUDER_STEPS_PER_MM, Com::tEPRStepsPerMM);
-        writeFloat(o + EPR_EXTRUDER_MAX_FEEDRATE, Com::tEPRMaxFeedrate);
-        writeFloat(o + EPR_EXTRUDER_MAX_ACCELERATION, Com::tEPRAcceleration);
-        writeFloat(o + EPR_EXTRUDER_MAX_START_FEEDRATE, Com::tEPReJerk);
-
-        writeFloat(o + EPR_EXTRUDER_ADVANCE_L, Com::tEPRAdvanceL);
-
-        writeByte(o + EPR_EXTRUDER_SENSOR_TYPE, Com::tEPRsensorType);
-        writeFloat(o + EPR_EXTRUDER_PID_PGAIN, Com::tEPRPGain, 4);
-        writeFloat(o + EPR_EXTRUDER_PID_IGAIN, Com::tEPRIGain, 4);
-        writeFloat(o + EPR_EXTRUDER_PID_DGAIN, Com::tEPRDGain, 4);
-        writeByte(o + EPR_EXTRUDER_PID_MAX, Com::tEPRPIDMaxValue);
-        writeByte(o + EPR_EXTRUDER_DRIVE_MIN, Com::tEPRDriveMin);
-        writeByte(o + EPR_EXTRUDER_DRIVE_MAX, Com::tEPRDriveMax);
-
-        writeFloat(o + EPR_EXTRUDER_X_OFFSET, Com::tEPRXOffset);
-        writeFloat(o + EPR_EXTRUDER_Y_OFFSET, Com::tEPRYOffset);
-
-
-        writeByte(o + EPR_EXTRUDER_COOLER_SPEED, Com::tEPRExtruderCoolerSpeed);
-    }
-
-    writeByte(EPR_RF_FAN_MODE, Com::tEPRPrinter_FAN_MODE);
-    writeByte(EPR_RF_PART_FAN_SPEED, Com::tEPRPrinter_FAN_SPEED);
-    writeByte(EPR_RF_PART_FAN_PWM_MIN, Com::tEPRPrinter_FAN_PART_FAN_PWM_MIN);
-    writeByte(EPR_RF_PART_FAN_PWM_MAX, Com::tEPRPrinter_FAN_PART_FAN_PWM_MAX);
-
-#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
-    writeByte(EPR_RF_FET1_MODE, Com::tEPRFET1Mode);
-    writeByte(EPR_RF_FET2_MODE, Com::tEPRFET2Mode);
-    writeByte(EPR_RF_FET3_MODE, Com::tEPRFET3Mode);
-#endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
-
-    writeByte(EPR_RF_CASE_LIGHT_MODE, Com::tEPRCaseLightsMode);
-
-#ifdef RGB_LIGHT_R_PIN
-    writeByte(EPR_RF_RGB_LIGHT_MODE, Com::tEPRRGBLightMode);
-#endif // RGB_LIGHT_R_PIN
-
-    writeLong(EPR_BAUDRATE, Com::tEPRBaudrate);
-    writeLong(EPR_MAX_INACTIVE_TIME, Com::tEPRMaxInactiveTime);
-    writeLong(EPR_STEPPER_INACTIVE_TIME, Com::tEPRStopAfterInactivty);
-    writeInt(EPR_RF_PREHEAT_A_BED, PSTR("Preheat A bed [C]"));
-    writeInt(EPR_RF_PREHEAT_A_HOTEND, PSTR("Preheat A hotend [C]"));
-    writeInt(EPR_RF_PREHEAT_B_BED, PSTR("Preheat B bed [C]"));
-    writeInt(EPR_RF_PREHEAT_B_HOTEND, PSTR("Preheat B hotend [C]"));
-    // RF specific
-
-    writeFloat(EPR_PRINTING_DISTANCE, Com::tEPRFilamentPrinted);
-    writeLong(EPR_PRINTING_TIME, Com::tEPRPrinterActive);
-
+#define RF_EPR_REPORT_0(pos, label, digits) writeByte(pos, label)
+#define RF_EPR_REPORT_1(pos, label, digits) writeInt(pos, label)
+#define RF_EPR_REPORT_2(pos, label, digits) writeLong(pos, label)
+#define RF_EPR_REPORT_3(pos, label, digits) writeFloat(pos, label, digits)
+#define RF_EPR_FIELD(type, pos, label, digits, writable) RF_EPR_REPORT_##type(pos, label, digits)
+#include "EepromHostFields.h"
+#undef RF_EPR_FIELD
+#undef RF_EPR_REPORT_0
+#undef RF_EPR_REPORT_1
+#undef RF_EPR_REPORT_2
+#undef RF_EPR_REPORT_3
 } // writeSettings
 
 uint8_t EEPROM::computeChecksum() {
