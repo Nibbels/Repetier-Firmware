@@ -73,6 +73,7 @@ public:
         case Cause::LeaseExpired: text(RF_THERMAL_TEXT("LEASE EXPIRED"));break;
         case Cause::WatchdogReset: text(RF_THERMAL_TEXT("WATCHDOG RESET"));break;
         case Cause::CalibrationMismatch: text(RF_THERMAL_TEXT("CALIBRATION MISMATCH"));break;
+        case Cause::InterruptedHeating: text(RF_THERMAL_TEXT("HEATING INTERRUPTED"));break;
         default: unknown();break;
         }
     }
