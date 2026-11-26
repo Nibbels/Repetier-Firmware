@@ -91,6 +91,18 @@ void UsbSerial::write(uint8_t byte) {
     UCSR0B |= _BV(UDRIE0);
 }
 
+// Task0034: emergency reporting must not stall when the TX ring is full.
+// Keep legacy write/flush semantics unchanged for ordinary protocol traffic.
+bool UsbSerial::tryWrite(uint8_t byte) {
+    const uint8_t next = tx_.next(tx_.head);
+    if (next == tx_.tail)
+        return false;
+    tx_.bytes[tx_.head] = byte;
+    tx_.head = next;
+    UCSR0B |= _BV(UDRIE0);
+    return true;
+}
+
 void UsbSerial::flush() {
     while (tx_.head != tx_.tail) {
         // Wait for the interrupt to hand the queued bytes to the UART.
