@@ -98,6 +98,8 @@ bool UsbSerial::tryWrite(uint8_t byte) {
     if (next == tx_.tail)
         return false;
     tx_.bytes[tx_.head] = byte;
+    // Publish payload before the ISR can observe the new head, including LTO.
+    asm volatile("" ::: "memory");
     tx_.head = next;
     UCSR0B |= _BV(UDRIE0);
     return true;
@@ -116,6 +118,7 @@ bool UsbSerial::tryWriteSpan(const char* bytes, uint8_t count) {
         head = tx_.next(head);
     } while (--count);
     // Publish exactly once so the ISR never observes an incomplete span.
+    asm volatile("" ::: "memory");
     tx_.head = head;
     UCSR0B |= _BV(UDRIE0);
     return true;
