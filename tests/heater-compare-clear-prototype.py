@@ -27,10 +27,11 @@ struct Timer {
         }
     } channels[2];
     uint8_t now=0;
-    unsigned gap=0,operations=0,crash=0;
+    unsigned gap=0,operations=0,crash=0,compareLatency=0;
     void advance(unsigned ticks) {
         for(auto& ch:channels){
-            unsigned delta=uint8_t(ch.ocr-now);
+            // Replay both immediate and next-timer-clock compare action.
+            unsigned delta=unsigned(uint8_t(ch.ocr-now))+compareLatency;
             if(!delta)delta=256;
             if(ticks<delta){ch.account(ticks);continue;}
             ch.account(delta);
@@ -66,8 +67,9 @@ int main(){
     for(unsigned phase=0;phase<256;++phase)
       for(unsigned duty=2;duty<256;duty+=2)
        for(unsigned gap:{0u,1u,3u})
-        for(unsigned crash=0;crash<=15;++crash){
-            Timer t;t.now=uint8_t(phase);t.gap=gap;t.crash=crash;
+        for(unsigned latency:{0u,1u})
+         for(unsigned crash=0;crash<=15;++crash){
+            Timer t;t.now=uint8_t(phase);t.gap=gap;t.crash=crash;t.compareLatency=latency;
             auto& ch=t.channels[0];
             ch.ocr=uint8_t(phase+gap+1);ch.latch=true;ch.flag=true;
             // A stale OC latch is deliberately allowed when disconnected.
@@ -75,16 +77,16 @@ int main(){
             bool committed=false;
             try{committed=pwm.pulse(0,uint8_t(duty));}catch(Crash&){}
             t.advance(512);
-            assert(!ch.high()&&ch.maxRun<=duty);
+            assert(!ch.high()&&ch.maxRun<=duty+latency);
             assert(!t.channels[1].high());
             if(ch.total)++positive;
-            if(!crash && !gap)assert(committed&&ch.total==duty);
+            if(!crash && !gap)assert(committed&&ch.total==duty+latency);
             maxTicks=std::max(maxTicks,ch.maxRun);++cases;
         }
     // Two independently armed channels must retain their distinct deadlines,
     // no catch-up/extension if the half-frame arrives before the old compare.
-    for(unsigned phase=0;phase<256;++phase){
-        Timer t;t.now=uint8_t(phase);
+    for(unsigned phase=0;phase<256;++phase)for(unsigned latency:{0u,1u}){
+        Timer t;t.now=uint8_t(phase);t.compareLatency=latency;
         CompareClearHotends<Timer,2> pwm(t);
         assert(pwm.pulse(0,255)&&pwm.pulse(1,128));
         const auto d0=t.channels[0].ocr,d1=t.channels[1].ocr;
@@ -93,7 +95,7 @@ int main(){
         assert(t.channels[0].ocr==d0&&t.channels[1].ocr==d1);
         pwm.revoke(1);
         assert(t.channels[0].high()&&!t.channels[1].high());
-        t.advance(190);
+        t.advance(190+latency);
         assert(!t.channels[0].high()&&!t.channels[1].high());
         assert(pwm.pulse(0,2)&&pwm.pulse(1,255));
         t.advance(512);
@@ -101,15 +103,36 @@ int main(){
         pwm.revokeAll();
         assert(!t.channels[0].high()&&!t.channels[1].high());
     }
+    // Rearm after a genuinely completed pulse, with CLEAR override still
+    // connected, instead of only testing a disconnected startup latch.
+    unsigned rearmCases=0;
+    for(unsigned phase=0;phase<256;++phase)
+      for(unsigned latency:{0u,1u})
+       for(unsigned width:{2u,64u,128u,254u})
+        for(unsigned gap:{0u,1u,3u})
+         for(unsigned crash=0;crash<=16;++crash){
+            Timer t;t.now=uint8_t(phase);t.compareLatency=latency;
+            CompareClearHotends<Timer,2> pwm(t);
+            assert(pwm.pulse(0,254));t.advance(256);
+            auto& ch=t.channels[0];
+            assert(!ch.high()&&ch.flag&&ch.mode==2);
+            ch.total=ch.run=ch.maxRun=0;
+            t.operations=0;t.gap=gap;t.crash=crash;
+            try{pwm.pulse(0,uint8_t(width));}catch(Crash&){}
+            t.advance(512);
+            assert(!ch.high()&&ch.maxRun<=width+latency);
+            ++rearmCases;
+         }
+    std::printf("Compare-clear completed-pulse rearm: %u cases\n",rearmCases);
     // Revocation can be interrupted at any operation: either the bounded
     // previous pulse remains or the GPIO LOW has already taken ownership.
-    for(unsigned crash=1;crash<=3;++crash){
-        Timer t;CompareClearHotends<Timer,1> pwm(t);
+    for(unsigned crash=1;crash<=3;++crash)for(unsigned latency:{0u,1u}){
+        Timer t;t.compareLatency=latency;CompareClearHotends<Timer,1> pwm(t);
         assert(pwm.pulse(0,255));t.advance(10);
         t.operations=0;t.crash=crash;
         try{pwm.revoke(0);}catch(Crash&){}
         t.advance(512);
-        assert(!t.channels[0].high()&&t.channels[0].maxRun<=254);
+        assert(!t.channels[0].high()&&t.channels[0].maxRun<=254+latency);
     }
     std::printf("Compare-clear actual template: %u crash-prefix cases, %u produced heat, max %u ticks; two-channel/revoke passed\n",cases,positive,maxTicks);
 }
