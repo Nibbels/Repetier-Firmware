@@ -78,6 +78,15 @@ void Printer::stepAxisStep(uint8_t axis, uint8_t slower) {
 
 int8_t Printer::checkHome(int8_t axis) //X_AXIS 0, Y_AXIS 1, Z_AXIS 2
 {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(printJob.emergencyLocked())return -1;
+    // The test emits STEP directly in foreground, outside Timer1.
+    // Every service visit can latch an irreversible thermal stop.
+    const auto serviceCheckHome=[] {
+        Commands::checkForPeriodicalActions(Calibrating);
+        return !Printer::printJob.emergencyLocked();
+    };
+#endif
     // Do not allow Z jet because we have to check compensation behaviour
     Com::printFLN(PSTR("checkHome: start axis"), axis);
     //if(axis == Z_AXIS) return -1; //noch verboten, weil solange das läuft der emergency-Stop nicht funktioniert. funktion wird evtl. wie HBS oder ZOS geteilt.
@@ -120,9 +129,17 @@ int8_t Printer::checkHome(int8_t axis) //X_AXIS 0, Y_AXIS 1, Z_AXIS 2
     int mmLoops = Printer::stepsPerMm(axis); // Fahre in mm-Blöcken.
 
     while (1) {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        if(!serviceCheckHome())return -1;
+#else
         Commands::checkForPeriodicalActions(Calibrating);
+#endif
 
         for (int i = 0; i < mmLoops; i++) {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+            // 16 fast pulses: nominal 3.2ms edge delays, plus overhead.
+            if(i && !(i & 15) && !serviceCheckHome())return -1;
+#endif
             Printer::stepAxisStep(axis);
             if (Printer::anyEndstop(axis)) {
                 finish = true;
@@ -153,6 +170,10 @@ int8_t Printer::checkHome(int8_t axis) //X_AXIS 0, Y_AXIS 1, Z_AXIS 2
     // Ein paar steps zurück, bis schalter wieder losgelassen wurde:
     finish = false; // Neue Abbruchbedingung
     for (int i = 0; i < mmLoops; i++) {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        // At 20x slower, eight pulses already consume nominally 32ms.
+        if(!(i & 7) && !serviceCheckHome())return -1;
+#endif
         Printer::stepAxisStep(axis, 20 /*20x langsamer*/);
         // End if button is not pressed anymore.
         if (!Printer::anyEndstop(axis)) {
@@ -176,6 +197,10 @@ int8_t Printer::checkHome(int8_t axis) //X_AXIS 0, Y_AXIS 1, Z_AXIS 2
     Printer::changeAxisDirection(axis, nHomeDir);
     finish = false; // Neue Abbruchbedingung
     for (int i = 0; i < mmLoops; i++) {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        // At 20x slower, eight pulses already consume nominally 32ms.
+        if(!(i & 7) && !serviceCheckHome())return -1;
+#endif
         Printer::stepAxisStep(axis, 20 /*20x langsamer*/);
         // End if button is not pressed anymore.
         if (Printer::anyEndstop(axis)) {
@@ -209,7 +234,11 @@ int8_t Printer::checkHome(int8_t axis) //X_AXIS 0, Y_AXIS 1, Z_AXIS 2
 
     returnSteps = abs(returnSteps);
     while (returnSteps > 0) {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        if(!serviceCheckHome())return -1;
+#else
         Commands::checkForPeriodicalActions(Calibrating);
+#endif
 
         if (returnSteps >= mmLoops) {
             returnSteps -= mmLoops;
@@ -219,6 +248,10 @@ int8_t Printer::checkHome(int8_t axis) //X_AXIS 0, Y_AXIS 1, Z_AXIS 2
         }
 
         for (int i = 0; i < mmLoops; i++) {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+            // 16 fast pulses: nominal 3.2ms edge delays, plus overhead.
+            if(i && !(i & 15) && !serviceCheckHome())return -1;
+#endif
             Printer::stepAxisStep(axis);
         }
     }
