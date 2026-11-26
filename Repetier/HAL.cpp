@@ -18,6 +18,38 @@
 #include "Repetier.h"
 #include "StepExecutor.h"
 
+#ifdef RF_HEATER_RESET_WDT_EXPERIMENT
+#ifndef RF_HEATER_LEASE_EXPERIMENT
+#error Reset watchdog experiment requires the heater lease experiment.
+#endif
+// Non-release candidate. AVR CRT .init2 has initialized SP and r1.
+// Capture reset cause before disabling a watchdog inherited from reset.
+// The actual installed bootloader runs before this code and is unqualified.
+extern "C" {
+uint8_t heaterWatchdogResetCause __attribute__((section(".noinit"), used));
+void heaterWatchdogEarlyInit() __attribute__((naked, used, externally_visible, section(".init3")));
+void heaterWatchdogEarlyInit() {
+    asm volatile(
+        "cli\n\t"
+        "in r24,%[cause]\n\t"
+        "sts heaterWatchdogResetCause,r24\n\t"
+        "andi r24,%[clear]\n\t"
+        "out %[cause],r24\n\t"
+        "wdr\n\t"
+        "ldi r24,%[unlock]\n\t"
+        "sts %[control],r24\n\t"
+        "sts %[control],__zero_reg__\n\t"
+        :
+        : [cause] "I" (_SFR_IO_ADDR(MCUSR)),
+          [clear] "M" (uint8_t(~_BV(WDRF))),
+          [unlock] "M" (_BV(WDCE)|_BV(WDE)),
+          [control] "n" (_SFR_MEM_ADDR(WDTCSR))
+        : "r24", "memory");
+    // Fall through to .init4, never RET.
+}
+}
+#endif
+
 namespace {
 #ifdef RF_HEATER_LEASE_EXPERIMENT
 void beginHeaterLease();
@@ -146,7 +178,14 @@ bool takeTick(volatile bool& pending) {
 }
 
 inline void pingWatchdog() {
-    if (watchdogActive && HAL::timeInMilliseconds() - watchdogHeartbeat < WATCHDOG_MAIN_LOOP_TIMEOUT)
+#ifdef RF_HEATER_RESET_WDT_EXPERIMENT
+    // External supervisor remains a second path, not the independent
+    // internal reset guarantee. Its board routing still needs qualification.
+    constexpr uint16_t heartbeatLimit = 250;
+#else
+    constexpr uint16_t heartbeatLimit = WATCHDOG_MAIN_LOOP_TIMEOUT;
+#endif
+    if (watchdogActive && HAL::timeInMilliseconds() - watchdogHeartbeat < heartbeatLimit)
         WRITE(WATCHDOG_PIN, READ(WATCHDOG_PIN) ? 0 : 1);
 }
 } // namespace
@@ -418,9 +457,13 @@ void HAL::setupTimer() {
 
 void HAL::showStartReason() {
     // Check startup - does nothing if bootloader sets MCUSR to 0
+#ifdef RF_HEATER_RESET_WDT_EXPERIMENT
+    uint8_t mcu = heaterWatchdogResetCause;
+#else
     uint8_t mcu = MCUSR;
+#endif
 
-    if (MCUSR != 0) //Printer::debugInfo()
+    if (mcu != 0) //Printer::debugInfo()
     {
         if (mcu & 1)
             Com::printInfoFLN(Com::tPowerUp);
@@ -588,6 +631,11 @@ void HAL::analogStart() {
 
 //initialize watchdog
 void HAL::WDT_Init(void) {
+#ifdef RF_HEATER_RESET_WDT_EXPERIMENT
+    // avr-libc emits the timed WDTCSR unlock sequence. Reset-only, not WDIE.
+    // 500ms nominal for this experiment; not a selected safety bound.
+    wdt_enable(WDTO_500MS);
+#else
     // Just to be safe since we can not clear WDE if WDRF is set
     MCUSR &= ~(1 << WDRF);
     // Disable interrupts
@@ -604,21 +652,32 @@ void HAL::WDT_Init(void) {
 
     // enable watchdog interrupt only mode
     WDTCSR |= _BV(WDIE);
+#endif
 }
 
+#ifndef RF_HEATER_RESET_WDT_EXPERIMENT
 // Watchdog timeout ISR
 ISR(WDT_vect) {
     pingWatchdog();
     WDTCSR |= (1 << WDIE); // Nibbels: nächstes mal kein Reset durch internen Watchdog, sondern wieder dieser interrupt.
     compensationTick = true; // Tell commandloop that 16ms have passed
 }
+#endif
 
 // Watchdog support
 void HAL::startWatchdog() {
     Com::printFLN(Com::tStartWatchdog);
     // external watchdog
     SET_OUTPUT(WATCHDOG_PIN);
+#ifdef RF_HEATER_RESET_WDT_EXPERIMENT
+    // Do not automatically admit heating again after a recognized WDT reset.
+    // Bootloaders may erase MCUSR; that limitation remains open.
+    if(heaterWatchdogResetCause & _BV(WDRF))
+        Printer::latchOutputInhibit(true);
+    watchdogHeartbeat=HAL::timeInMilliseconds();
+#else
     tellWatchdogOk();
+#endif
     watchdogActive = true;
     pingWatchdog();      // Nibbels: Hier macht der mehr sinn!
     HAL::WDT_Init();     // Nibbels: use watchdogtimer to test var and trigger
@@ -632,9 +691,11 @@ void HAL::stopWatchdog() {
 } // stopWatchdog
 
 void HAL::tellWatchdogOk() {
+#ifndef RF_HEATER_RESET_WDT_EXPERIMENT
     const auto now = HAL::timeInMilliseconds();
     InterruptProtectedBlock lock;
     watchdogHeartbeat = now;
+#endif
 }
 
 // ================== Interrupt handling ======================
@@ -793,6 +854,9 @@ uint8_t fanMinDuty = PART_FAN_PWM_MIN;
 constexpr uint16_t heaterLeaseDuration = 12500;
 constexpr uint16_t heaterLeaseGuard = 4;
 volatile bool heaterLeaseFailed = false;
+#ifdef RF_HEATER_RESET_WDT_EXPERIMENT
+volatile uint8_t heaterGrantProgress = 0;
+#endif
 static_assert(F_CPU == 16000000UL && NUM_EXTRUDER <= 2, "lease clock assumptions");
 static_assert(OCIE3A == OCF3A && OCIE3B == OCF3B && OCIE3C == OCF3C
               && OCIE3B == OCIE3A+1 && OCIE3C == OCIE3A+2, "compare bit mapping");
@@ -818,6 +882,9 @@ void beginHeaterLease() {
 // IRQs masked by caller. No serial, no float, no motion calls.
 void failHeaterLease() {
     heaterLeaseFailed=true;
+#ifdef RF_HEATER_RESET_WDT_EXPERIMENT
+    heaterGrantProgress=0;
+#endif
 #if EXT0_HEATER_PIN > -1
     WRITE(EXT0_HEATER_PIN, LOW);
 #endif
@@ -848,6 +915,21 @@ bool checkHeaterLeases() {
 
 #ifdef RF_HEATER_LEASE_EXPERIMENT
 bool HAL::heaterLeaseFault() { return heaterLeaseFailed; }
+#ifdef RF_HEATER_RESET_WDT_EXPERIMENT
+void HAL::completeThermalWatchdogPass() {
+    InterruptProtectedBlock lock;
+    if(!watchdogActive || !heaterLeaseReady) return;
+    checkHeaterLeases(); // expired demands are removed before considering feed
+    for(uint8_t c=0;c<=NUM_EXTRUDER;++c)
+        if(requestedDuty[c] && !(heaterGrantProgress & _BV(c))) return;
+    // Feed only after a complete foreground thermal pass and fresh grants
+    // for all currently powered channels since the previous feed.
+    // A latched all-off fault may retain diagnostics without resetting.
+    heaterGrantProgress=0;
+    watchdogHeartbeat=HAL::timeInMilliseconds();
+    wdt_reset();
+}
+#endif
 ISR(TIMER3_COMPA_vect) { failHeaterLease(); }
 ISR(TIMER3_COMPB_vect, ISR_ALIASOF(TIMER3_COMPA_vect));
 #if NUM_EXTRUDER > 1
@@ -885,6 +967,9 @@ void HAL::setHeaterDuty(uint8_t channel, uint8_t duty
         if(!leaseLive(channel,TCNT3)) { failHeaterLease(); return; }
         requestedDuty[channel]=duty;
         TIMSK3 |= leaseMask(channel);
+#ifdef RF_HEATER_RESET_WDT_EXPERIMENT
+        heaterGrantProgress |= _BV(channel);
+#endif
         return;
     }
     // A pending decision made before this revoke cannot rearm the heater.
@@ -892,6 +977,9 @@ void HAL::setHeaterDuty(uint8_t channel, uint8_t duty
         heaterSampleState[channel] &= uint8_t(~SampleFresh);
     heaterSampleState[channel] &= uint8_t(~(SampleReserved|SampleMatch));
     TIMSK3 &= uint8_t(~leaseMask(channel));
+#ifdef RF_HEATER_RESET_WDT_EXPERIMENT
+    heaterGrantProgress &= uint8_t(~_BV(channel));
+#endif
 #else
     if (duty) {
         requestedDuty[channel] = duty;
@@ -971,6 +1059,20 @@ ISR(PWM_TIMER_VECTOR) {
     static uint8_t pwm_cooler_pos_set[NUM_EXTRUDER];
 #endif
     PWM_OCR += 64;
+
+#ifdef RF_HEATER_RESET_WDT_EXPERIMENT
+    // Move the legacy nominal 16ms compensation/WDI event away from WDT.
+    // Alternate 62/63 serviced compares: 125 * 256us = 32ms.
+    // Coalescence/overload can delay this event; WDT reset is independent.
+    static uint8_t compensationCountdown=62;
+    static bool longCompensationPeriod=false;
+    if(--compensationCountdown==0) {
+        longCompensationPeriod=!longCompensationPeriod;
+        compensationCountdown=longCompensationPeriod?63:62;
+        compensationTick=true;
+        pingWatchdog();
+    }
+#endif
 
     if (pwm_count_heater == 0) {
 #ifdef RF_HEATER_LEASE_EXPERIMENT
