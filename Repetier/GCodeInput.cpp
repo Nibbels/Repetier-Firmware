@@ -21,6 +21,9 @@
 #include "GCodeInput.h"
 #include "GCodeCommands.h"
 #include "UsbSerial.h"
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+#include "ThermalEmergencyReport.h"
+#endif
 
 namespace {
 class CommandQueue {
@@ -73,6 +76,21 @@ struct ReceiveSession {
     bool lastCommandWasBinary = false;
     uint8_t formatErrors = 0;
 } serialReceive;
+
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+// Reuse the normal framing and checksum code, but all emergency replies
+// are short atomic spans. The receive service reserves an EMPTY TX ring
+// before reading, so the sole foreground producer cannot be blocked.
+static void emergencyReply(ThermalEmergency::ReportLine& line) {
+    if(line.finish())UsbSerial::tryWriteSpan(line.data(),line.size());
+}
+static void emergencyOk(bool numbered) {
+    ThermalEmergency::ReportLine line;
+    line.text(PSTR("ok"));
+    if(numbered){line.character(' ');line.number(serialReceive.currentLineNumber);}
+    emergencyReply(line);
+}
+#endif
 
 inline float parseFloatValue(char* s) {
     char* endPtr;
@@ -233,6 +251,9 @@ uint8_t GCodeInput::computeBinarySize(char* ptr) // unsigned int bitfield) {
 } // computeBinarySize
 
 void GCodeInput::keepAlive(enum FirmwareState state) {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(Printer::printJob.emergencyLocked())return;
+#endif
     millis_t now = HAL::timeInMilliseconds();
 
     if (state != NotBusy) {
@@ -256,6 +277,18 @@ void GCodeInput::keepAlive(enum FirmwareState state) {
 } // keepAlive
 
 void GCodeInput::requestResend() {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(Printer::printJob.emergencyLocked()) {
+        frame.length=0;
+        serialReceive.waitingForResend=frame.binary?30:14;
+        ThermalEmergency::ReportLine line;
+        line.text(PSTR("\r\nResend:"));
+        line.number(serialReceive.lastLineNumber+1);
+        line.text(PSTR("\r\nok"));
+        emergencyReply(line);
+        return;
+    }
+#endif
     HAL::serialFlush();
     frame.length = 0;
     if (frame.binary)
@@ -272,6 +305,48 @@ Check if result is plausible. If it is, an ok is send and the command is stored 
 If not, a resend and ok is send.
 */
 void GCodeInput::checkAndPushCommand(GCode& command) {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(Printer::printJob.emergencyLocked()) {
+        // No machine command ever reaches the queue from this state, even
+        // M112/M999 or a script-like command. Preserve protocol sequencing.
+        if(command.hasM() && command.M==GCodeCommands::ResetLineNumber) {
+            serialReceive.lastLineNumber=serialReceive.currentLineNumber;
+            serialReceive.waitingForResend=-1;
+            emergencyOk(false);
+            return;
+        }
+        if(command.hasN() && uint16_t(serialReceive.lastLineNumber+1)!=uint16_t(serialReceive.currentLineNumber)) {
+            if(uint16_t(serialReceive.lastLineNumber-serialReceive.currentLineNumber)<40 ||
+               serialReceive.waitingForResend>=0) {
+                if(serialReceive.waitingForResend>=0)--serialReceive.waitingForResend;
+                ThermalEmergency::ReportLine line;
+                line.text(PSTR("skip "));
+                line.number(serialReceive.currentLineNumber);
+                line.text(PSTR("\r\nok"));
+                emergencyReply(line);
+            }else requestResend();
+            return;
+        }
+        if(command.hasN())serialReceive.lastLineNumber=serialReceive.currentLineNumber;
+        serialReceive.lastCommandWasBinary=frame.binary;
+        serialReceive.waitingForResend=-1;
+        if(!command.hasG() && command.hasM() && command.M==105) {
+            ThermalEmergency::requestLiveReport();
+            emergencyOk(true);
+        }else if(!command.hasG() && command.hasM() && command.M==115) {
+            // Request retained evidence on reconnect; not a normal
+            // firmware capability reply in the terminal state.
+            ThermalEmergency::requestDiagnosticReplay();
+            emergencyOk(true);
+        }else {
+            ThermalEmergency::ReportLine line;
+            line.text(PSTR("Error: THERMAL EMERGENCY\r\nok "));
+            line.number(serialReceive.currentLineNumber);
+            emergencyReply(line);
+        }
+        return;
+    }
+#endif
     if (command.hasM()) {
         if (command.M == GCodeCommands::ResetLineNumber)
         {
@@ -340,7 +415,11 @@ void GCodeInput::popCurrentCommand() {
     GCode* command = commandQueue.front();
     if (!command)
         return;
-    if (Printer::debugEcho()) {
+    if (Printer::debugEcho()
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        && !Printer::printJob.emergencyLocked()
+#endif
+    ) {
         Com::printF(Com::tEcho);
         command->printCommand();
     }
@@ -348,6 +427,9 @@ void GCodeInput::popCurrentCommand() {
 }
 
 void GCodeInput::executeFlashScript(const char* cmd) {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(Printer::printJob.emergencyLocked())return;
+#endif
     char buf[80];
     uint8_t buflen;
     char c = 0;
@@ -379,12 +461,20 @@ void GCodeInput::executeFlashScript(const char* cmd) {
         {
             Commands::executeGCode(&code);
             Commands::checkForPeriodicalActions(Processing);
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+            if(Printer::printJob.emergencyLocked())return;
+#endif
         }
     } while (c);
 } // executeFString
 
 // Receive one complete command from the USB serial port per call.
 void GCodeInput::readFromSerial() {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    // A reply fits in 63 bytes. No other foreground sender can run
+    // during this bounded visit; RX/TX ISRs do not publish TX head.
+    if(Printer::printJob.emergencyLocked() && UsbSerial::transmitFree()!=63)return;
+#endif
     if (commandQueue.full() || (frame.borrowedText && !commandQueue.empty())) {
         keepAlive(Processing);
         return;
@@ -397,8 +487,20 @@ void GCodeInput::readFromSerial() {
         if ((serialReceive.waitingForResend >= 0 || frame.length > 0) && idleTime > 200) {
             requestResend();
             serialReceive.timeOfLastDataPacket = now;
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+            if(Printer::printJob.emergencyLocked())return;
+#endif
         } else if (commandQueue.empty() && idleTime > 1000) {
             // Unblock the host if an acknowledgement was lost.
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+            if(Printer::printJob.emergencyLocked()) {
+                ThermalEmergency::ReportLine line;
+                line.text(PSTR("wait"));
+                emergencyReply(line);
+                serialReceive.timeOfLastDataPacket=now;
+                return;
+            }
+#endif
             Com::printFLN(Com::tWait);
             serialReceive.timeOfLastDataPacket = now;
         }
@@ -466,8 +568,12 @@ void GCodeInput::readFromSerial() {
                 --frame.length;
         }
 
-        if (frame.length == maxCommandSize)
+        if (frame.length == maxCommandSize) {
             requestResend();
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+            if(Printer::printJob.emergencyLocked())return;
+#endif
+        }
     } while (--budget && frame.length < maxCommandSize && HAL::serialByteAvailable());
 } // readFromSerial
 
@@ -496,7 +602,11 @@ bool GCodeInput::parseBinary(GCode& command, uint8_t* buffer, int8_t length) {
     sum1 -= *p++;
     sum2 -= *p;
     if (sum1 | sum2) {
-        if (Printer::debugErrors()) {
+        if (Printer::debugErrors()
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+            && !Printer::printJob.emergencyLocked()
+#endif
+        ) {
             Com::printErrorFLN(Com::tWrongChecksum);
         }
         return false;
@@ -821,8 +931,14 @@ bool GCodeInput::parseAscii(GCode& command, char* line, bool fromSerial) {
             while (line != (pos - 1))
                 checksum ^= *line++;
             if (checksum != checksum_given) {
-                Com::printErrorFLN(Com::tWrongChecksum);
-                reportCorruptCommand(command);
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+                if(!Printer::printJob.emergencyLocked()) {
+#endif
+                    Com::printErrorFLN(Com::tWrongChecksum);
+                    reportCorruptCommand(command);
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+                }
+#endif
                 return false; // mismatch
             }
             hasChecksum = true;
@@ -833,13 +949,20 @@ bool GCodeInput::parseAscii(GCode& command, char* line, bool fromSerial) {
         } // end switch
     }     // end while
     if (serialReceive.lastCommandWasBinary && !hasChecksum && fromSerial && !frame.borrowedText) {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        if(!Printer::printJob.emergencyLocked())
+#endif
         Com::printErrorFLN(PSTR("Checksum required when switching back to ASCII protocol."));
         return false;
     }
     if (command.hasFormatError() /*|| (params & 518) == 0*/) // Must contain G, M or T command and parameter need to have variables!
     {
         serialReceive.formatErrors++;
-        if (Printer::debugErrors())
+        if (Printer::debugErrors()
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+            && !Printer::printJob.emergencyLocked()
+#endif
+        )
             Com::printErrorFLN(Com::tFormatError);
         if (serialReceive.formatErrors < 3)
             return false;
