@@ -19,6 +19,9 @@
 #define EXTRUDER_H
 
 #include "HAL.h"
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+#include "ThermalEmergency.h"
+#endif
 
 #define CELSIUS_EXTRA_BITS 3
 
@@ -348,5 +351,12 @@ extern TemperatureController optTempController;
 #define TEMP_FLOAT_TO_INT(temp) ((int)((temp) * (1 << CELSIUS_EXTRA_BITS)))
 
 extern TemperatureController* tempController[NUM_TEMPERATURE_LOOPS];
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+namespace ThermalEmergency {
+    const Ledger<NUM_TEMPERATURE_LOOPS>& faultLedger();
+    // Foreground only, after safe GPIO initialization.
+    void latchSystemFault(Cause cause);
+}
+#endif
 
 #endif // EXTRUDER_H
