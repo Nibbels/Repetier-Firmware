@@ -96,7 +96,7 @@ static void resetFixture(uint16_t start){
     heaterGrantProgress=0;watchdogActive=true;watchdogHeartbeat=0;watchdogFeeds=0;
     HAL::simulatedMs=0;
 #endif
-    heaterBatchValid=false;
+    heaterBatchValid=false;heaterBatchPrevious=false;
     for(auto& s:heaterSampleState)s=0;
     Printer::blocked=false;irq=true;
     beginHeaterLease();TCNT3=start;
@@ -110,7 +110,7 @@ static void advance(uint32_t ticks){
 static void publish(uint8_t c,uint16_t raw=1234){
     InterruptProtectedBlock lock;
     synchronizeHeaterSamples();
-    heaterBatchStart=TCNT3;heaterBatchValid=true;
+    heaterBatchStart=TCNT3;heaterBatchValid=true;heaterBatchPrevious=false;
     publishHeaterSample(c,raw);temperatureAdcValues[c]=raw;
 }
 static void grant(uint8_t c,uint8_t duty){
@@ -186,6 +186,40 @@ int main(){
     resetFixture(65530);publish(0);
     {HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw));advance(10);
      HAL::setHeaterDuty(0,255,&a);assert(!requestedDuty[0]);}
+    // Every start phase near wrap: a live independent compare is a witness,
+    // not a renewal of any other channel's reservation.
+    for(unsigned start=65536-6250;start<65536;++start){
+        resetFixture(uint16_t(start));grant(1,255);publish(0);
+        HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw));
+        const unsigned elapsed=65536-start;
+        advance(elapsed);
+        HAL::setHeaterDuty(0,255,&a);
+        assert(requestedDuty[0]==255&&requestedDuty[1]==255&&!heaterLeaseFailed);
+        assert(!(TIFR3.bits&_BV(TOV3)));
+    }
+    // The same retained sample cannot be rejuvenated by the modular age
+    // alias after a second witnessed wrap, even with continuous other heat.
+    resetFixture(65530);grant(1,255);publish(0);
+    {HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw));advance(10);
+     synchronizeHeaterSamples();assert(heaterSampleState[0]&ReservationPrevious);
+     for(unsigned i=0;i<11;++i){advance(6000);grant(1,255);}
+     assert(!(heaterSampleState[0]&SampleReserved));
+     HAL::setHeaterDuty(0,255,&a);
+     assert(!requestedDuty[0]&&requestedDuty[1]==255&&!heaterLeaseFailed);}
+    // A witnessed wrap may preserve a partial ADC batch and its old start.
+    resetFixture(65530);grant(1,255);
+    heaterBatchStart=TCNT3;heaterBatchValid=true;heaterBatchPrevious=false;
+    advance(10);publishHeaterSample(0,1234);temperatureAdcValues[0]=1234;
+    assert(heaterSampleState[0]&SamplePrevious);
+    {HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw)&&raw==1234);
+     HAL::setHeaterDuty(0,255,&a);assert(requestedDuty[0]==255);}
+    // An expired compare is not a witness. Its sticky flag must survive
+    // sample synchronization and cause fail-off, even after many wraps.
+    resetFixture(65530);grant(1,255);publish(0);
+    {HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw));advance(131072);
+     synchronizeHeaterSamples();
+     assert(!(heaterSampleState[0]&SampleReserved)&&(TIFR3.bits&leaseMask(1)));
+     HAL::setHeaterDuty(0,255,&a);assert(heaterLeaseFailed&&TIMSK3==0&&!requestedDuty[0]);}
     // No ABA, even with identical values and arbitrary publication count.
     resetFixture(0);publish(0);
     {HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw));
@@ -225,7 +259,7 @@ int main(){
     {HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw));}
     {HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw));
      HAL::setHeaterDuty(0,255,&a);assert(requestedDuty[0]==255);}
-    resetFixture(0);heaterBatchStart=0;heaterBatchValid=true;advance(6251);
+    resetFixture(0);heaterBatchStart=0;heaterBatchValid=true;heaterBatchPrevious=false;advance(6251);
     publishHeaterSample(0,1234);
     {HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw));HAL::setHeaterDuty(0,255,&a);
      assert(!requestedDuty[0]);}
