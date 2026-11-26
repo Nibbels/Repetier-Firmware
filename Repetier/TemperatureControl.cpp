@@ -152,15 +152,35 @@ static void serviceReport() {
     // never claim an invalid measurement as 0 C. These diagnostic lines
     // are not a replacement for measured electrical current.
     ReportLine line;
-    line.text(PSTR("Thermal live "));
-    line.channel<NUM_TEMPERATURE_LOOPS>(liveChannel);
-    line.text(PSTR(" C: "));
     Evidence e{};
-    if(liveTemperatureValid(liveChannel))e.valid=Evidence::Measured;
-    line.optionalDecimal(e,Evidence::Measured,tempController[liveChannel]->currentTemperatureC);
-    line.text(PSTR(" PWM:0"));
+    // First a conventional Repetier temperature line for valid readings,
+    // then explicit per-channel evidence (including unknown readings).
+    if(liveChannel==0) {
+        const uint8_t selected=Extruder::current->tempControl.pwmIndex;
+        if(liveTemperatureValid(selected)) {
+            e.valid=Evidence::Measured;
+            line.text(PSTR("T:"));
+            line.optionalDecimal(e,Evidence::Measured,tempController[selected]->currentTemperatureC);
+            line.text(PSTR(" /0 @:0 "));
+        }
+        if(liveTemperatureValid(NUM_EXTRUDER)) {
+            e.valid=Evidence::Measured;
+            line.text(PSTR("B:"));
+            line.optionalDecimal(e,Evidence::Measured,tempController[NUM_EXTRUDER]->currentTemperatureC);
+            line.text(PSTR(" /0 B@:0"));
+        }
+        if(!line.size())line.text(PSTR("Thermal live: no valid T/B reading"));
+    }else {
+        const uint8_t channel=liveChannel-1;
+        line.text(PSTR("Thermal live "));
+        line.channel<NUM_TEMPERATURE_LOOPS>(channel);
+        line.text(PSTR(" C: "));
+        if(liveTemperatureValid(channel))e.valid=Evidence::Measured;
+        line.optionalDecimal(e,Evidence::Measured,tempController[channel]->currentTemperatureC);
+        line.text(PSTR(" commanded PWM:0"));
+    }
     if(line.finish()&&sink.tryWriteSpan(line.data(),line.size())) {
-        if(++liveChannel==NUM_TEMPERATURE_LOOPS) {
+        if(++liveChannel>NUM_TEMPERATURE_LOOPS) {
             liveChannel=0;liveRequested=false;lastLiveReport=now;
         }else liveRequested=true;
     }
