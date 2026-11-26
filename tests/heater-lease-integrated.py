@@ -186,7 +186,13 @@ int main(){
      {HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw));
       publish(0,rail);publish(0);
       HAL::setHeaterDuty(0,255,&a);assert(!requestedDuty[0]);}
+     publish(0,rail);
+     {HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw)&&raw==rail);
+      HAL::setHeaterDuty(0,255,&a);assert(!requestedDuty[0]);}
     }
+    resetFixture(0);publish(0);
+    {HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw));advance(131072);
+     publish(0);HAL::setHeaterDuty(0,255,&a);assert(!requestedDuty[0]);}
     resetFixture(0);publish(0);
     {HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw));
      HAL::setHeaterDuty(0,0);HAL::setHeaterDuty(0,255,&a);
