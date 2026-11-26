@@ -221,6 +221,12 @@ void PrintLine::prepareDirectMove(const int32_t steps[4], bool stoppable, bool f
     MotionPlanner::prepareStepProfile(direct);
 
     InterruptProtectedBlock publish;
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(Printer::printJob.emergencyLocked()) {
+        abortDirectMoveForEmergency();
+        return;
+    }
+#endif
     if (direct.task == DIRECT_PREPARING_STOPPED)
         direct.limitToStopTail(true);
     direct.task = stoppable ? DIRECT_PREPARED_STOPPABLE : DIRECT_PREPARED;
