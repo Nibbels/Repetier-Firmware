@@ -138,7 +138,13 @@ namespace Printer {
     static ExtrusionOutput extrusionOutput;
     #include "printer-safety.inc"
     static unsigned stops;
-    static struct { bool busy = false; bool isBusy() const { return busy; } } printJob;
+    static struct {
+        bool busy = false;
+        bool isBusy() const { return busy; }
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        bool emergencyLocked() const { return isAnyTempsensorDefect(); }
+#endif
+    } printJob;
     static unsigned flag2, debugLevel;
     static void markTemperatureReadingsAvailable() { flag2 |= PRINTER_FLAG2_GOT_TEMPS; }
     static void stopPrint() {
@@ -243,6 +249,7 @@ namespace GCodeInput {
 }
 static struct {
     millis_t lastButtonTime() { return 0; }
+    void refreshPage() {}
     void slowAction() {
         if (injection == Injection::Transient || injection == Injection::TransientHigh) {
             assert(HAL::outputDuty(tuned->pwmIndex) == 0);
@@ -335,6 +342,7 @@ int main(int argc, char** argv) {
         assert(faultLedger().first().evidence.uptimeMs==started);
         assert(faultLedger().first().evidence.targetC==140);
         assert(faultLedger().level()==Severity::ThermalError);
+        for(unsigned h=0;h<NUM_EXTRUDER;++h)assert(extruder[h].coolerPWM==255);
         allOff();
     } else if (!std::strcmp(name, "emergency-stale-episode")) {
         using namespace ThermalEmergency;
@@ -803,7 +811,7 @@ def main():
         "conversion.inc": conversion.split(include, 1)[1],
         "control.inc": control.split(include, 1)[1].replace('#include "UsbSerial.h"', ''),
         "bed-setter.inc": section(extruder, "void Extruder::setHeatedBedTemperature(", "float Extruder::getHeatedBedTemperature("),
-        "scheduler.inc": section(commands, "void Commands::checkForPeriodicalActions(", "bool Commands::waitForMotion("),
+        "scheduler.inc": section(commands, "#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT\nstatic void serviceThermalEmergency()", "bool Commands::waitForMotion("),
         "com.inc": "\n".join("constexpr int " + n + " = 0;" for n in sorted(set(re.findall(r"Com::(t[A-Z]\w*)", control)))),
         "hal.inc": (
             "namespace {\n" + section(hal, "#ifndef RF_HEATER_RESET_WDT_EXPERIMENT\nvolatile unsigned long watchdogHeartbeat", "HAL::HAL()")
