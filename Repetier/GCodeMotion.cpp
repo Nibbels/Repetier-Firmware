@@ -42,6 +42,9 @@ void dwell(GCode* com) {
 
     while ((uint32_t)(codenum - HAL::timeInMilliseconds()) < 2000000000) {
         Commands::checkForPeriodicalActions(Processing);
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        if(Printer::printJob.emergencyLocked())return;
+#endif
     }
 }
 
@@ -138,6 +141,10 @@ void suspendAxes(GCode* com) {
 
     while (wait - HAL::timeInMilliseconds() < 100000L) {
         Commands::checkForPeriodicalActions(Paused); // Check heater and other stuff every n milliseconds
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        // Do not change motor enable state after the terminal stop.
+        if(Printer::printJob.emergencyLocked())return;
+#endif
     }
     if (com->hasX())
         Printer::enableXStepper();
