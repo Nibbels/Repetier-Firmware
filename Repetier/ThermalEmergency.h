@@ -42,10 +42,11 @@ struct Evidence {
     uint8_t sensorType;
     uint8_t powerLimit;
     uint8_t profile; // J0..J3, or unavailable
-    uint8_t valid;
-    enum : uint8_t {
+    uint16_t valid;
+    enum : uint16_t {
         Measured=1, Target=2, Delta=4, Threshold=8, Raw=16,
-        Requested=32, Admitted=64, Profile=128
+        Requested=32, Admitted=64, Profile=128, Uptime=256,
+        Window=512, SensorType=1024, PowerLimit=2048
     };
 };
 struct Record {
@@ -62,9 +63,12 @@ class Ledger {
     Record first_{};
     Record fire_{};
     uint16_t masks_[HeaterCount+1]{}; // final slot: system/unknown heater
+    // At most (HeaterCount+1)*(Count-1) unique observations, never wraps.
+    uint8_t revision_=0;
 public:
     static constexpr uint8_t System=HeaterCount;
     bool active() const { return first_.cause!=Cause::None; }
+    uint8_t revision() const { return revision_; }
     Severity level() const {
         return fire_.cause!=Cause::None ? Severity::FireWarning :
             active() ? Severity::ThermalError : Severity::None;
@@ -80,6 +84,7 @@ public:
         const uint16_t mask=bit(cause);
         if(channel>System || !mask || (masks_[channel]&mask)) return false;
         masks_[channel] |= mask;
+        ++revision_;
         if(!active()) first_={evidence,cause,channel};
         if(severity(cause)==Severity::FireWarning && fire_.cause==Cause::None)
             fire_={evidence,cause,channel};
