@@ -20,7 +20,7 @@ constexpr Severity severity(Cause c) {
         c==Cause::OverTemperature || c==Cause::ExcessiveRise ||
         c==Cause::HeatingWhileOff ? Severity::FireWarning : Severity::ThermalError;
 }
-constexpr uint16_t bit(Cause c) {
+constexpr uint16_t causeBit(Cause c) {
     return c>Cause::None && c<Cause::Count ? uint16_t(1u << (uint8_t(c)-1)) : 0;
 }
 static_assert(uint8_t(Cause::Count)<=17, "Fault mask capacity exceeded");
