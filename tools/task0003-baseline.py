@@ -98,7 +98,7 @@ def experimental_properties(props, experiment):
     return result
 
 
-def build_target(out, cli, name, definitions, experiment=None):
+def build_target(out, cli, name, definitions, experiment=None, linker_script_factory=None):
     directory = out / name
     directory.mkdir()
     build = directory / "build"
@@ -122,6 +122,17 @@ def build_target(out, cli, name, definitions, experiment=None):
     if "compiler.path" not in props:
         raise ValueError("No expanded compiler.path in Arduino build properties")
     bin_dir = Path(props["compiler.path"])
+    if linker_script_factory is not None:
+        # Opt-in research only. Generate from the exact selected toolchain,
+        # never change the standard Arduino linker recipe silently.
+        script = linker_script_factory(bin_dir, directory)
+        map_flags += f' -Xlinker -T -Xlinker "{script.as_posix()}"'
+        index = next(i for i, arg in enumerate(command)
+                     if str(arg).startswith("compiler.c.elf.extra_flags="))
+        command[index] = "compiler.c.elf.extra_flags=" + map_flags
+        props = expanded_properties(run(directory, "properties-with-linker", [*command, "--show-properties=expanded"]))
+        if props.get("compiler.c.elf.extra_flags") != map_flags:
+            raise ValueError("Recovery linker flags not effective")
     for tool in ("avr-gcc", "avr-g++", "avr-size", "avr-nm", "avr-objdump"):
         executable = bin_dir / (tool + (".exe" if os.name == "nt" else ""))
         run(directory, tool + "-version", [executable, "--version"])
