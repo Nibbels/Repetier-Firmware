@@ -1019,6 +1019,9 @@ void UIDisplay::nextPreviousAction(int8_t next) {
 // Actions are events from user input. Depending on the current state, each
 // action can behave differently. Other actions do always the same like home, disable extruder etc.
 void UIDisplay::executeAction(int action) {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(Printer::printJob.emergencyLocked())return;
+#endif
     if (Printer::blockAll) {
         if (action == UI_ACTION_OK || action == UI_ACTION_RF_CONTINUE) {
             Com::printFLN(PSTR("Restart after Emergency-Stop"));
@@ -1043,6 +1046,9 @@ void UIDisplay::executeAction(int action) {
 } // executeAction
 
 void UIDisplay::slowAction() {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(Printer::printJob.emergencyLocked()){refreshPage();return;}
+#endif
     millis_t time = HAL::timeInMilliseconds();
     uint8_t refresh = 0;
 
