@@ -834,6 +834,7 @@ void HAL::stopWatchdog() {
     if(watchdogActive) {
         InterruptProtectedBlock lock;
         watchdogActive=false;
+        for(uint8_t c=0;c<=NUM_EXTRUDER;++c) setHeaterDuty(c,0);
         return;
     }
 #endif
@@ -1254,7 +1255,9 @@ ISR(PWM_TIMER_VECTOR) {
     if (pwm_count_heater == 0) {
 #ifdef RF_HEATER_LEASE_EXPERIMENT
 #ifdef RF_HEATER_RESET_WDT_EXPERIMENT
-        if(!watchdogActive || !watchdogProgressLive()) failHeaterLease();
+        // PWM timer starts before startWatchdog() during setup. There is
+        // no heater demand then; do not latch a boot-time false fault.
+        if(watchdogActive && !watchdogProgressLive()) failHeaterLease();
 #endif
         checkHeaterLeases(); // pending expiry wins before any rising edge
 #endif
