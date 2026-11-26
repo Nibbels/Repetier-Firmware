@@ -9,8 +9,10 @@ hal=(root/"Repetier/HAL.cpp").read_text()
 start=hal.index("#ifdef RF_HEATER_LEASE_EXPERIMENT\n// Non-release candidate")
 end=hal.index("#endif\n} // namespace",start)+len("#endif")
 state=hal[start:end]
-start=hal.index('void HAL::completeThermalWatchdogPass()')
+start=hal.index('void HAL::completeThermalWatchdogPass(bool heatDemand)')
 feed=hal[start:hal.index('\n#endif',start)]
+start=hal.index("#ifdef RF_HEATER_RESET_WDT_EXPERIMENT\n// Timer5 is borrowed")
+progress=hal[start:hal.index("\n#endif",start)+len("\n#endif")]
 start=hal.index('void HAL::tellWatchdogOk()')
 heartbeat=hal[start:hal.index('\n// ================== Interrupt handling',start)]
 start=hal.index("#ifdef RF_HEATER_LEASE_EXPERIMENT\n// Timer3 is independent")
@@ -71,7 +73,7 @@ struct HAL {
     }
     TICKET_DECL
 #ifdef RF_HEATER_RESET_WDT_EXPERIMENT
-    static void completeThermalWatchdogPass();
+    static void completeThermalWatchdogPass(bool heatDemand=false);
     static void tellWatchdogOk();
     static uint32_t timeInMilliseconds(){return simulatedMs;}
     static uint32_t simulatedMs;
@@ -80,8 +82,14 @@ struct HAL {
 #ifdef RF_HEATER_RESET_WDT_EXPERIMENT
 uint32_t HAL::simulatedMs=0;
 static bool watchdogActive=true;
-static uint32_t watchdogHeartbeat;
 static unsigned watchdogFeeds;
+static uint8_t TIMSK5,TCCR5A,TCCR5B,TCCR5C;
+static uint16_t TCNT5,OCR5A;
+static W1C TIFR5;
+#define OCF5A 1
+#define CS52 2
+static uint32_t heaterResetCookie;
+constexpr uint32_t heaterLiveCookie=0xd39a6c51UL;
 #define wdt_reset() do {assert(!irq);++watchdogFeeds;} while(0)
 #endif
 namespace Printer {static bool blocked=false;bool heatingInhibited(){return blocked;}}
@@ -93,7 +101,8 @@ static void resetFixture(uint16_t start){
     for(auto& p:pins)p=false;
     heaterLeaseReady=false;heaterLeaseFailed=false;
 #ifdef RF_HEATER_RESET_WDT_EXPERIMENT
-    heaterGrantProgress=0;watchdogActive=true;watchdogHeartbeat=0;watchdogFeeds=0;
+    heaterGrantProgress=0;watchdogActive=true;watchdogFeeds=0;heaterResetCookie=0;
+    beginWatchdogProgress();
     HAL::simulatedMs=0;
 #endif
     heaterBatchValid=false;heaterBatchPrevious=false;
@@ -107,6 +116,15 @@ static void advance(uint32_t ticks){
     if(ticks>=65536u-TCNT3)TIFR3.bits|=_BV(TOV3);
     TCNT3=uint16_t(TCNT3+ticks);
 }
+#ifdef RF_HEATER_RESET_WDT_EXPERIMENT
+// Keep the Timer5 clock frozen during isolated Timer3/ADC replay cases.
+// Advance both hardware clocks explicitly in the staged-watchdog cases.
+static void advanceProgress(uint32_t ticks){
+    if(ticks>=uint16_t(OCR5A-TCNT5))TIFR5.bits|=_BV(OCF5A);
+    TCNT5=uint16_t(TCNT5+ticks);
+    advance(ticks);
+}
+#endif
 static void publish(uint8_t c,uint16_t raw=1234){
     InterruptProtectedBlock lock;
     synchronizeHeaterSamples();
@@ -267,9 +285,9 @@ int main(){
     resetFixture(0);
     HAL::completeThermalWatchdogPass();assert(watchdogFeeds==1);
     HAL::simulatedMs=100;
-    HAL::tellWatchdogOk();assert(watchdogFeeds==1&&watchdogHeartbeat==0);
+    HAL::tellWatchdogOk();assert(watchdogFeeds==1&&OCR5A==watchdogProgressDuration);
     grant(0,255);startFrame(0);
-    HAL::completeThermalWatchdogPass();assert(watchdogFeeds==2&&watchdogHeartbeat==100);
+    HAL::completeThermalWatchdogPass();assert(watchdogFeeds==2&&heaterResetCookie==heaterLiveCookie);
     HAL::completeThermalWatchdogPass();assert(watchdogFeeds==2);
     grant(1,255);HAL::completeThermalWatchdogPass();assert(watchdogFeeds==2);
     grant(0,255);HAL::completeThermalWatchdogPass();assert(watchdogFeeds==3);
@@ -287,14 +305,52 @@ int main(){
     publish(0);HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw));advance(6251);
     HAL::setHeaterDuty(0,255,&a);HAL::completeThermalWatchdogPass();
     assert(watchdogFeeds==1); // stale reservation cannot count as progress
-    std::puts("thermal watchdog progress checks passed");
+    // Phase/guard and sticky compare replay on the actual Timer5 functions.
+    // A successful new thermal pass can renew only a still-live permission.
+    for(uint32_t phase=0;phase<65536;++phase){
+        for(uint32_t elapsed:{0u,1u,12495u,12496u,12500u,12501u,65536u,131072u}){
+            resetFixture(0);
+            TCNT5=uint16_t(phase);
+            OCR5A=uint16_t(phase+watchdogProgressDuration);
+            advanceProgress(elapsed);
+            const bool live=elapsed<watchdogProgressDuration-watchdogProgressGuard;
+            assert(watchdogProgressLive()==live);
+            const uint16_t previous=OCR5A;
+            HAL::completeThermalWatchdogPass();
+            assert(watchdogFeeds==unsigned(live));
+            if(live) assert(OCR5A==uint16_t(TCNT5+watchdogProgressDuration));
+            else {
+                assert(OCR5A==previous);
+                grant(0,255);assert(!requestedDuty[0]&&heaterLeaseFailed);
+                if(elapsed>=watchdogProgressDuration)
+                    assert(TIFR5.bits&_BV(OCF5A));
+            }
+        }
+    }
+    resetFixture(0);
+    watchdogActive=false;
+    startFrame(0);assert(!heaterLeaseFailed); // pre-start PWM boot
+    watchdogActive=true;
+    grant(0,255);startFrame(0);assert(pins[0]);
+    HAL::completeThermalWatchdogPass(true);assert(watchdogFeeds==1);
+    HAL::setHeaterDuty(0,0);
+    advanceProgress(6250);
+    HAL::completeThermalWatchdogPass(true);
+    assert(watchdogFeeds==2&&heaterResetCookie==heaterLiveCookie);
+    advanceProgress(6250);
+    HAL::completeThermalWatchdogPass(false);
+    assert(watchdogFeeds==3&&heaterResetCookie==0);
+    advanceProgress(12501);startFrame(0);
+    assert(heaterLeaseFailed&&!pins[0]);
+    HAL::completeThermalWatchdogPass(false);assert(watchdogFeeds==3);
+    std::puts("thermal watchdog progress checks passed; 524288 sticky Timer5 deadline cases");
 #endif
     std::printf("heaters=%u actual HAL grant/expiry cases=%lu; exact sample checks passed\n",NUM_EXTRUDER+1,cases);
 }
 """
 with tempfile.TemporaryDirectory() as temp:
     cpp=Path(temp)/"lease.cpp";exe=Path(temp)/"lease"
-    cpp.write_text(prelude.replace("TICKET_DECL",ticket_decl)+adc+"\n"+state+"\n"+ticket+"\n"+setter+"\n#ifdef RF_HEATER_RESET_WDT_EXPERIMENT\n"+feed+"\n"+heartbeat+"\n#endif\n"+
+    cpp.write_text(prelude.replace("TICKET_DECL",ticket_decl)+adc+"\n"+progress+"\n"+state+"\n"+ticket+"\n"+setter+"\n#ifdef RF_HEATER_RESET_WDT_EXPERIMENT\n"+feed+"\n"+heartbeat+"\n#endif\n"+
                    "\nstatic void startFrame(uint8_t pwm_count_heater){InterruptProtectedBlock lock;\n"+frame+"\n}\n"+main)
     for n in (1,2):
         for flags in ([], ["-DRF_HEATER_RESET_WDT_EXPERIMENT=1"]):
