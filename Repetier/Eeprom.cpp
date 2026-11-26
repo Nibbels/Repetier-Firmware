@@ -476,6 +476,14 @@ void EEPROM::storeManualZOffset() {
     }
 }
 
+#if defined(__AVR__) && defined(RF_THERMAL_EMERGENCY_EXPERIMENT)
+// The experimental watchdog recovery entry is fixed at byte 0x20000.
+// Keep this cold, foreground-only settings loader outside the first LTO
+// .text block; .text.* is placed after the recovery entry by recovery-link.py.
+// No change to near PROGMEM placement or EEPROM contents. Linked evidence
+// must still pass all recovery, address and resource checks.
+__attribute__((noinline, section(".text.rf_cold_eeprom")))
+#endif
 void EEPROM::readDataFromEEPROM() {
     bool change = readPreheatProfiles();
 
