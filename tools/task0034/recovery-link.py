@@ -14,7 +14,7 @@ BOOT_START = 0x3e000
 ENTRY_SIZE = 30
 
 
-def make_script(bin_dir, directory):
+def make_script(bin_dir, directory, fill_named_text=False):
     # Retain the pinned toolchain's own memory, vector, PROGMEM, trampoline,
     # CRT, .data LMA, .noinit, EEPROM and debug section rules. Fail closed
     # when the expected script shape/partition layout changes.
@@ -46,6 +46,14 @@ def make_script(bin_dir, directory):
     ASSERT(heaterWatchdogRecoveryEntry == 0x20000, "RF recovery entry moved");
     ASSERT((. - __rf_watchdog_recovery_link_guard) == 30, "RF recovery entry size changed");
     *(.text)"""
+    if fill_named_text:
+        # Move the existing ordinary named code sections, not near
+        # PROGMEM, vectors, CRT init/fini or the recovery entry.
+        # The ltrans0 block remains last before padding, so the existing
+        # no-fallthrough audit still applies. Never change entry address.
+        if script.count("*(.text.*)") != 1:
+            raise ValueError("Unexpected named-text wildcard")
+        snippet = snippet.replace("*ltrans0.ltrans.o(.text)", "*(.text.*)\n    *ltrans0.ltrans.o(.text)")
     script = script.replace(old, snippet)
     path = directory / "avr6-recovery.x"
     path.write_text(script)
@@ -53,6 +61,42 @@ def make_script(bin_dir, directory):
     print(script)
     print("END GENERATED AVR6 RECOVERY SCRIPT", flush=True)
     return path
+
+
+def named_text_retry(map_text, compile_log):
+    """Only retry a size-rejected linked image with a proven padding opportunity.
+
+    The first map is evidence for a candidate, not an assurance that LTO
+    will reproduce sizes. A second link must pass all ordinary checks.
+    """
+    if "text section exceeds available space in board" not in compile_log:
+        return None
+    size = re.search(r"Sketch uses (\d+) bytes .*Maximum is (\d+) bytes", compile_log)
+    padding = re.search(r"^\s*(0x[0-9a-f]+)\s+__rf_watchdog_padding_start = ABSOLUTE", map_text, re.M)
+    if not size or not padding:
+        return None
+    used, maximum = map(int,size.groups())
+    if maximum != BOOT_START or used <= maximum:
+        return None
+    gap = RECOVERY-int(padding[1],16)
+    # The pinned default script places this wildcard immediately before
+    # the align/fini sequence. Count only live ordinary named text there.
+    start=map_text.find("\n *(.text.*)", map_text.find("__rf_watchdog_recovery_link_guard"))
+    if start<0:
+        return None
+    # Parse the section rows (some names wrap onto a separate line).
+    block=map_text[start:]
+    stop=re.search(r"^\s*0x[0-9a-f]+\s+\. = ALIGN",block,re.M)
+    if not stop:
+        return None
+    rows=re.findall(r"^\s+\.text\.\S+\s+0x[0-9a-f]+\s+(0x[0-9a-f]+)\s+\S+",block[:stop.start()],re.M)
+    named=sum(int(n,16) for n in rows)
+    # Leave a conservative 256-byte layout margin on both sides;
+    # if this cannot fit, keep the failing build and investigate.
+    if named < used-maximum+256 or named+256 > gap:
+        return None
+    return {"used":used,"maximum":maximum,"padding":gap,"named_text":named,
+            "projected_used":used-named}
 
 
 def decode_hex(path):

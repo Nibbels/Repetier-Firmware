@@ -39,25 +39,35 @@ with tempfile.TemporaryDirectory() as temp:
         mode_dir=out/mode
         mode_dir.mkdir()
         for board,defs in baseline.TARGETS.items():
+            board_dir=mode_dir/board
+            definitions=[*defs,"RF_HEATER_LEASE_EXPERIMENT=1",*extra]
             try:
-                stats=baseline.build_target(mode_dir,cli,board,[*defs,"RF_HEATER_LEASE_EXPERIMENT=1",*extra],
+                stats=baseline.build_target(mode_dir,cli,board,definitions,
                                             linker_script_factory=recovery.make_script if extra else None)
             except subprocess.CalledProcessError:
-                log=mode_dir/board/"compile.txt"
-                if log.exists():
-                    print(log.read_text(errors="replace")[-24000:],flush=True)
-                # Retain failed link maps too: partition padding can make a
-                # validly linked application exceed the bootloader boundary.
+                log=board_dir/"compile.txt"
+                map_file=board_dir/"build/firmware.map"
+                log_text=log.read_text(errors="replace") if log.exists() else ""
+                print(log_text[-24000:],flush=True)
                 if archive:
                     failed=archive/mode/(board+"-failed")
                     failed.mkdir(parents=True,exist_ok=True)
-                    source=mode_dir/board
                     for name in ("compile.txt","properties.txt","properties-with-linker.txt","avr6-recovery.x","build/firmware.map"):
-                        if (source/name).is_file():
-                            shutil.copy2(source/name,failed/Path(name).name)
-                raise
+                        if (board_dir/name).is_file():
+                            shutil.copy2(board_dir/name,failed/Path(name).name)
+                retry=recovery.named_text_retry(map_file.read_text(),log_text) if extra and map_file.exists() else None
+                if not retry:
+                    raise
+                print("Recovery named-text retry",board,json.dumps(retry),flush=True)
+                # Do not publish or audit the oversized probe as a candidate.
+                # Use a separate directory and repeat every linked check below.
+                retry_dir=mode_dir/"named-text-retry"
+                retry_dir.mkdir(exist_ok=True)
+                board_dir=retry_dir/board
+                stats=baseline.build_target(retry_dir,cli,board,definitions,
+                    linker_script_factory=lambda bin_dir,directory: recovery.make_script(bin_dir,directory,fill_named_text=True))
+                stats["recovery_layout_retry"]=retry
             print(mode,board,json.dumps(stats),flush=True)
-            board_dir=mode_dir/board
             if archive:
                 dest=archive/mode/board
                 dest.mkdir(parents=True)
@@ -71,7 +81,7 @@ with tempfile.TemporaryDirectory() as temp:
                         shutil.copy2(board_dir/name,dest/name)
                 (dest/"stats.json").write_text(json.dumps(stats,indent=2)+"\n")
             dump=(board_dir/"disassembly.txt").read_text()
-            symbols=(mode_dir/board/"symbols.txt").read_text()
+            symbols=(board_dir/"symbols.txt").read_text()
             vectors={int(m[2]):int(m[1],16) for m in re.finditer(
                 r"^([0-9a-f]+)\s+(?:[0-9a-f]+\s+)?[TtWw]\s+__vector_(\d+)$",symbols,re.M)}
             assert vectors[32]==vectors[33],board
