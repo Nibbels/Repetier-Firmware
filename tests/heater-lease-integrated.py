@@ -90,7 +90,7 @@ static void publish(uint8_t c,uint16_t raw=1234){
     InterruptProtectedBlock lock;
     synchronizeHeaterSamples();
     heaterBatchStart=TCNT3;heaterBatchValid=true;
-    publishHeaterSample(c);temperatureAdcValues[c]=raw;
+    publishHeaterSample(c,raw);temperatureAdcValues[c]=raw;
 }
 static void grant(uint8_t c,uint8_t duty){
     publish(c);
@@ -142,8 +142,8 @@ int main(){
     resetFixture(0);grant(0,255);startFrame(0);
     advance(12501);HAL::setHeaterDuty(0,0);
     assert(heaterLeaseFailed&&!pins[0]&&TIMSK3==0);
-    // An unbound positive call, a repeated reading, and a superseded
-    // reservation must never renew the old deadline.
+    // An unbound positive call and a repeated reading cannot renew.
+    // A reserved young batch may survive a newer publication exactly once.
     resetFixture(0);HAL::setHeaterDuty(0,255);assert(!requestedDuty[0]);
     publish(0);
     {HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw));HAL::setHeaterDuty(0,255,&a);
@@ -152,19 +152,54 @@ int main(){
     {HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw));HAL::setHeaterDuty(0,128,&a);
      assert(requestedDuty[0]==255&&OCR3A==12500);}
     publish(0);
-    {HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw));publish(0);
-     HAL::setHeaterDuty(0,128,&a);assert(requestedDuty[0]==255&&OCR3A==12500);}
-    {HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw));
+    {HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw)&&raw==1234);
+     publish(0,2345);advance(10);
+     HAL::setHeaterDuty(0,128,&a);assert(requestedDuty[0]==128&&OCR3A==12610);
+     HAL::setHeaterDuty(0,255,&a);assert(requestedDuty[0]==128&&OCR3A==12610);}
+    {HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw)&&raw==2345);
      HAL::setHeaterDuty(1,128,&a);assert(!requestedDuty[1]);
-     HAL::setHeaterDuty(0,128,&a);assert(requestedDuty[0]==128&&OCR3A==12600);}
+     advance(10);HAL::setHeaterDuty(0,128,&a);assert(requestedDuty[0]==128&&OCR3A==12620);}
     resetFixture(0);publish(0);
     {HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw));advance(6251);
      HAL::setHeaterDuty(0,255,&a);assert(!requestedDuty[0]);}
     resetFixture(65530);publish(0);
     {HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw));advance(10);
      HAL::setHeaterDuty(0,255,&a);assert(!requestedDuty[0]);}
+    // No ABA, even with identical values and arbitrary publication count.
+    resetFixture(0);publish(0);
+    {HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw));
+     for(unsigned i=0;i<131073;++i)publish(0);
+     HAL::HeaterSample nested;assert(nested.read(0,raw));
+     HAL::setHeaterDuty(0,255,&nested);assert(!requestedDuty[0]);
+     HAL::setHeaterDuty(0,255,&a);assert(requestedDuty[0]==255);
+     HAL::setHeaterDuty(0,128,&a);assert(requestedDuty[0]==255);}
+    // New publication cannot make old ticket young.
+    resetFixture(0);publish(0);
+    {HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw));advance(6251);
+     publish(0);HAL::setHeaterDuty(0,255,&a);assert(!requestedDuty[0]);}
+    {HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw));
+     HAL::setHeaterDuty(0,255,&a);assert(requestedDuty[0]==255);}
+    // A newer rail invalidates the outstanding decision, even if a later
+    // plausible sample is published before it attempts to grant.
+    for(uint16_t rail:{0,4092}){
+     resetFixture(0);publish(0);
+     {HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw));
+      publish(0,rail);publish(0);
+      HAL::setHeaterDuty(0,255,&a);assert(!requestedDuty[0]);}
+    }
+    resetFixture(0);publish(0);
+    {HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw));
+     HAL::setHeaterDuty(0,0);HAL::setHeaterDuty(0,255,&a);
+     assert(!requestedDuty[0]);}
+    {HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw));
+     HAL::setHeaterDuty(0,255,&a);assert(!requestedDuty[0]);}
+    // Abandoning an unused reservation does not burn the batch (autotune).
+    resetFixture(0);publish(0);
+    {HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw));}
+    {HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw));
+     HAL::setHeaterDuty(0,255,&a);assert(requestedDuty[0]==255);}
     resetFixture(0);heaterBatchStart=0;heaterBatchValid=true;advance(6251);
-    publishHeaterSample(0);
+    publishHeaterSample(0,1234);
     {HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw));HAL::setHeaterDuty(0,255,&a);
      assert(!requestedDuty[0]);}
     std::printf("heaters=%u actual HAL grant/expiry cases=%lu; exact sample checks passed\n",NUM_EXTRUDER+1,cases);
