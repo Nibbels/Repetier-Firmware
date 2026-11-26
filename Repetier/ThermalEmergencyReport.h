@@ -181,7 +181,7 @@ public:
             const uint8_t offset=cursor_-1-2*recordLines;
             const uint8_t c=offset/causes;
             const Cause why=Cause(1+offset%causes);
-            if(!(masks_[c]&bit(why))) {advance();return ReportProgress::Skipped;}
+            if(!(masks_[c]&causeBit(why))) {advance();return ReportProgress::Skipped;}
             line.text(RF_THERMAL_TEXT("Thermal affected "));
             line.channel<N>(c);line.character(' ');line.cause(why);
         }
