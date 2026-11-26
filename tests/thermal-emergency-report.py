@@ -49,6 +49,22 @@ int main() {
     Ledger<3> log;
     ReportCursor<3> report;
     Sink sink;
+    CancellationCursor cancel;
+    Sink cancelSink;
+    assert(cancel.service(false,cancelSink)==ReportProgress::Idle);
+    cancelSink.block=true;
+    for(unsigned i=0;i<1000;++i)
+        assert(cancel.service(true,cancelSink)==ReportProgress::Blocked);
+    assert(cancelSink.lines.empty());
+    cancelSink.block=false;
+    assert(cancel.service(true,cancelSink)==ReportProgress::Sent);
+    cancelSink.block=true;
+    assert(cancel.service(true,cancelSink)==ReportProgress::Blocked);
+    cancelSink.block=false;
+    assert(cancel.service(true,cancelSink)==ReportProgress::Sent);
+    for(unsigned i=0;i<100;++i)
+        assert(cancel.service(true,cancelSink)==ReportProgress::Idle);
+    assert(cancelSink.count("RequestStop:")==1&&cancelSink.count("// action:cancel")==1);
     assert(report.service(log,sink)==ReportProgress::Idle&&sink.attempts==0);
     assert(log.record(0,Cause::NoRise,known()));
     sink.block=true;
@@ -119,7 +135,7 @@ int main() {
             assert(s.count("Thermal first raw_ADC: 65535")==1);
         }
     }
-    std::puts("Emergency report: blocked TX, exact line retry, escalation, replay, unknown reset fields, all 40 cause/channel combinations passed");
+    std::puts("Emergency report: blocked TX, exact line retry, escalation, replay, unknown reset fields, all cause/channel combinations passed");
 }
 """
 with tempfile.TemporaryDirectory() as temp:
