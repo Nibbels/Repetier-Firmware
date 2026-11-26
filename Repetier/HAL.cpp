@@ -399,7 +399,15 @@ int HAL::getFreeRam() {
 void (*resetFunc)(void) = 0; // declare reset function @ address 0
 
 void HAL::resetHardware() {
+    // This legacy jump to address zero is not a peripheral hardware reset.
+    // Remove heater power before restarting, even if the PWM ISR was pending.
+    forbidInterrupts();
+    for (uint8_t channel = 0; channel <= NUM_EXTRUDER; ++channel)
+        setHeaterDuty(channel, 0);
+    PWM_TIMSK &= ~_BV(PWM_OCIE);
     resetFunc();
+    // A restart must not return to an interrupted print.
+    for (;;) {}
 } // resetHardware
 
 uint16_t HAL::temperatureAdcSample(uint8_t index) {
