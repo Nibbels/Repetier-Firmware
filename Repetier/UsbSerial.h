@@ -37,6 +37,7 @@ public:
     static bool tryWrite(uint8_t byte);
     // Whole short diagnostic record or nothing. No partially published line.
     static bool tryWriteSpan(const char* bytes, uint8_t count);
+    static uint8_t transmitFree(); // snapshot; only ISR consumes
     static void flush();
 
     static void receiveInterrupt();
