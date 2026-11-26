@@ -1,6 +1,6 @@
 'use strict';
 // A53: temperature-dependent airflow, inverse sensor lookup with ADC quantization; research only.
-function study(steps,source) {
+function study(steps,source,derivativeSweep=false) {
  const clamp=(v,l,h)=>Math.max(l,Math.min(h,v)), frac=d=>d>=254?1:(d&254)/256;
  const rows=[],grid=[], results={},quantize=sensorModel(source);
  for(const bed of [false,true])for(const w of bed?[300,450,600]:[30,60,100])for(const mass of bed?[300,800]:[2,6,18])for(const coupling of bed?[8,20]:[4,12])for(const loss of bed?[2,4]:[.04,.07])for(const tau of bed?[1,5]:[.15,.75,1.5])for(const cap of [128,255])grid.push({bed,w,mass,coupling,loss,tau,cap,hc:bed?40:.75});
@@ -33,8 +33,11 @@ function study(steps,source) {
  const scenarioNames=["nominal","fan","overload","high-jitter","warm"];
  function replay(p,c,method,legacy,scenario,id,rf){
   const [rule,mode="base"]=method.split(":");
-  const f=Math.fround,[a,b,d]=rules[rule],kp=f(a*c.ku),ki=f(kp/(b*c.tu)),kd=f(kp*d*c.tu);
-  const lag=mode==="lag"||mode==="both"?c.tu:0;
+  const f=Math.fround,[a,b,d]=rules[rule],kp=f(a*c.ku),ki=f(kp/(b*c.tu));
+  const dScale=mode.includes("d2")?2:mode.includes("d15")?1.5:1;
+  const filter=mode.includes("f10")?.1:mode.includes("f25")?.25:.5;
+  const kd=f(kp*d*c.tu*dScale);
+  const lag=mode.startsWith("lag")||mode==="both"?c.tu:0;
   const tracking=mode==="track"||mode==="both";
   const trackingTime=Math.max(.1,Math.sqrt(b*d)*c.tu);
   const target=p.bed?(scenario==="high-jitter"?105:90):(scenario==="high-jitter"?250:200),cutoff=p.bed?120:275;
@@ -44,7 +47,7 @@ function study(steps,source) {
   const load=(scenario==="fan"||scenario==="overload")?Math.max(0,((scenario==="fan"?.85:1.15)*maxPower-basePower)/(1+p.loss*.15/p.coupling)):0;
   const feasible=basePower+(1+p.loss*.15/p.coupling)*load<maxPower;
   const stage=p.bed?3000:1800,end=stage*3,window=p.bed?300:200;
-  let reference=initial,I=0,slope=0,prev=0,valid=false,last=0,duty=0,trip=false,overshoot=0,release=0,iae=0,holdAbs=0,holdErr=0,finalAbs=0,finalErr=0,sat=0,mat=25,body=25,tail=0,entered=-1,lastOutside=0;
+  let reference=initial,I=0,slope=0,prev=0,valid=false,last=0,duty=0,trip=false,overshoot=0,release=0,iae=0,holdAbs=0,holdErr=0,finalAbs=0,finalErr=0,sat=0,mat=25,body=25,tail=0,entered=-1,lastOutside=0,variation=0,previousDuty=0;
   for(let n=1;n<=end;n++){
    const cooling=n>stage&&n<=2*stage;
    m.advance(p.w*frac(duty),cooling?load*Math.max(0,m.body()-25)/(target-25):0,.1/steps);
@@ -52,7 +55,7 @@ function study(steps,source) {
    if(t>cutoff)trip=true;
    if(scenario==="high-jitter"&&n%11===0&&!trip){}else{
     const dt=valid?f((n-last)*.1):0;
-    slope=dt>0?f(slope+f(f(dt/f(.5+dt))*f(f((t-prev)/dt)-slope))):0;
+    slope=dt>0?f(slope+f(f(dt/f(filter+dt))*f(f((t-prev)/dt)-slope))):0;
     prev=t;last=n;valid=true;
     reference=lag?f(reference+f(f(dt/(lag+dt))*f(target-reference))):target;
     const e=f(reference-t),pd=f(f(kp*e)-f(kd*slope)),candidate=f(clamp(f(I+f(f(ki*e)*dt)),minI,maxI));
@@ -65,24 +68,25 @@ function study(steps,source) {
    overshoot=Math.max(overshoot,t-target);
    if(n>2*stage)release=Math.max(release,t-target);
    iae+=Math.abs(target-t)*.1;
-   if(n>2*stage-window&&n<=2*stage){holdAbs+=Math.abs(target-t)/window;holdErr+=(target-t)/window;if(duty===p.cap)sat++;}
+   if(n>2*stage-window&&n<=2*stage){holdAbs+=Math.abs(target-t)/window;holdErr+=(target-t)/window;if(duty===p.cap)sat++;variation+=Math.abs(frac(duty)-frac(previousDuty))*100/(window*.1);}
+   previousDuty=duty;
    if(n>end-window){finalAbs+=Math.abs(target-t)/window;finalErr+=(target-t)/window;}
    if(n<=stage){if(Math.abs(target-t)>1)lastOutside=n;else if(entered<0)entered=n;}
    if(n>2*stage&&Math.abs(target-t)>1)tail=n-2*stage;
   }
-  return {feasible,trip,overshoot,release,iae,holdAbs,holdErr,finalAbs,finalErr,sat:sat/window,mat,body,settled:entered>=0&&lastOutside<stage-window,settle:lastOutside*.1,recover:tail*.1};
+  return {feasible,trip,overshoot,release,iae,holdAbs,holdErr,finalAbs,finalErr,sat:sat/window,variation,mat,body,settled:entered>=0&&lastOutside<stage-window,settle:lastOutside*.1,recover:tail*.1};
  }
  function add(key,r){
-  const a=results[key]??={n:0,trips:0,settled:0,within1:0,mat150:0,overshoot:0,release:0,iae:0,holdAbs:0,holdErr:0,finalAbs:0,sat:0,mat:0,body:0,recover:0,settle:0,hold:[]};
+  const a=results[key]??={n:0,trips:0,settled:0,within1:0,mat150:0,overshoot:0,release:0,iae:0,holdAbs:0,holdErr:0,finalAbs:0,sat:0,variation:0,mat:0,body:0,recover:0,settle:0,hold:[]};
   a.n++;a.trips+=+r.trip;a.settled+=+r.settled;a.within1+=+(r.holdAbs<=1);a.mat150+=+(r.mat>=150);a.hold.push(r.holdAbs);
-  for(const k of ["iae","holdAbs","holdErr","finalAbs","sat"])a[k]+=r[k];
+  for(const k of ["iae","holdAbs","holdErr","finalAbs","sat","variation"])a[k]+=r[k];
   for(const k of ["overshoot","release","mat","body","recover","settle"])a[k]=Math.max(a[k],r[k]);
  }
  let trained=[0,0],traces=0;
  for(const p of grid){const c=train(p);if(!c)continue;trained[+p.bed]++;
-  for(const method of p.bed?["J2","J3","TL"]:["J0","J1","Pessen","Pessen:lag"])for(const legacy of [false])for(const scenario of scenarioNames)for(const id of p.bed?[3,4]:[3,8,13])for(const rf of [1]){const r=replay(p,c,method,legacy,scenario,id,rf);traces++;add([p.bed?"bed":"hotend",method,id,scenario,r.feasible?"feasible":"limited"].join("/"),r);}
+  for(const method of derivativeSweep?(p.bed?["J2","TL","TL:f25","TL:d15","TL:d15f25","TL:d2f10","J2:d15f25"]:["J0","Pessen:lag","Pessen:lagf25","Pessen:lagf10","Pessen:lagd15","Pessen:lagd15f25","Pessen:lagd2f10"]):(p.bed?["J2","J3","TL"]:["J0","J1","Pessen","Pessen:lag"]))for(const legacy of [false])for(const scenario of (derivativeSweep?["nominal","fan","high-jitter","warm"]:scenarioNames))for(const id of p.bed?[3,4]:[3,8,13])for(const rf of [1]){const r=replay(p,c,method,legacy,scenario,id,rf);traces++;add([p.bed?"bed":"hotend",method,id,scenario,r.feasible?"feasible":"limited"].join("/"),r);}
  }
- for(const a of Object.values(results)){for(const k of ["iae","holdAbs","holdErr","finalAbs","sat"])a[k]/=a.n;a.hold.sort((x,y)=>x-y);a.p95=a.hold[Math.ceil(a.n*.95)-1];delete a.hold;}
+ for(const a of Object.values(results)){for(const k of ["iae","holdAbs","holdErr","finalAbs","sat","variation"])a[k]/=a.n;a.hold.sort((x,y)=>x-y);a.p95=a.hold[Math.ceil(a.n*.95)-1];delete a.hold;}
  return {steps,trained,traces,results};
 }
 
@@ -106,4 +110,4 @@ function sensorModel(source){
  return function quantize(t,id,rf,n,noise){const curve=luts[id+"/"+rf];let lo=0,hi=4095;while(hi-lo>1){let mid=(lo+hi)>>1;if(curve[mid]>t)lo=mid;else hi=mid;}let raw=Math.abs(curve[lo]-t)<=Math.abs(curve[hi]-t)?lo:hi;if(noise)raw+=n%7===0?1:n%7===3?-1:0;return curve[Math.max(1,Math.min(4091,raw))];}
 }
 module.exports=study;
-if(require.main===module)console.log(JSON.stringify(study(Number(process.argv[2]||4),require('fs').readFileSync(process.argv[3]||'Repetier/TemperatureSensors.cpp','utf8')),null,2));
+if(require.main===module)console.log(JSON.stringify(study(Number(process.argv[2]||4),require('fs').readFileSync(process.argv[3]||'Repetier/TemperatureSensors.cpp','utf8'),process.argv[4]==='--derivative'),null,2));
