@@ -75,9 +75,14 @@ template<uint8_t N> void check() {
         assert(multi.authorize(0,255));
         u.advance(100);
         assert(multi.authorize(1,255));
+        uint8_t duties[N] = {};
+        assert(multi.frameDuties(duties));
+        assert(duties[0]==255 && duties[1]==255);
+        if(N>2) assert(duties[2]==0);
         u.pins[0]=u.pins[1]=true;
         u.advance(duration-99);
-        assert(multi.frameDuty(1)==0 && multi.failed());
+        assert(!multi.frameDuties(duties) && multi.failed());
+        for(uint8_t c=0;c<N;++c) assert(duties[c]==0);
         assert(!u.pins[0]&&!u.pins[1]);
     }
     // Explicit inhibit is reset-only; no further positive demand accepted.
