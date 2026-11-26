@@ -19,6 +19,10 @@
 
 #include "CaseFan.h"
 #include "Repetier.h"
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+#include "ThermalEmergencyReport.h"
+#include "UsbSerial.h"
+#endif
 
 static uint8_t autotuneIndex = 255;
 static bool autotuneAbortRequested = false;
@@ -51,6 +55,8 @@ void Printer::latchOutputInhibit(bool thermalFault) {
 namespace ThermalEmergency {
 namespace {
 Ledger<NUM_TEMPERATURE_LOOPS> ledger;
+ReportCursor<NUM_TEMPERATURE_LOOPS> report;
+CancellationCursor cancellation;
 // Preserve the start of a contiguous invalid-sample episode across the
 // existing debounce. No normal valid-sample copies or history allocation.
 // Raw ADC and freshness come from the SAME conversion; do not pretend
@@ -116,6 +122,13 @@ static bool confirm(uint8_t channel, Cause cause, const Evidence& e) {
 void latchSystemFault(Cause cause) {
     confirm(Ledger<NUM_TEMPERATURE_LOOPS>::System,cause,Evidence{});
 }
+static void serviceReport() {
+    // At most one whole nonblocking line after the thermal pass.
+    // The full emergency scheduler/admission gate is a separate step.
+    UsbSerial sink;
+    if(cancellation.service(ledger.active(),sink)==ReportProgress::Idle)
+        report.service(ledger,sink);
+}
 }
 #endif
 
@@ -148,7 +161,9 @@ void Extruder::manageTemperatures() {
         Printer::latchOutputInhibit(true);
 #endif
         Printer::markTemperatureReadingsAvailable();
+#ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
         Com::printErrorFLN(PSTR("Heater authorization expired"));
+#endif
         Printer::stopPrint();
         autotuneAbortRequested = true;
     }
@@ -237,7 +252,9 @@ void Extruder::manageTemperatures() {
 #endif
                     Printer::markTemperatureReadingsAvailable(); // We are not waiting for first temp measurements anymore.
 
+#ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
                     reportTempsensorAndHeaterErrors();
+#endif
                     Printer::stopPrint();
 
                     showError((void*)ui_text_temperature_manager, (void*)ui_text_sensor_error);
@@ -277,12 +294,14 @@ void Extruder::manageTemperatures() {
                             Printer::latchOutputInhibit(true);
 #endif
 
+#ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
                             Com::printErrorFLN(Com::tHeaterDecoupledWarning);
                             Com::printF(PSTR("Error:Temp. raised to slow. Rise = "), act->currentTemperatureC - act->lastDecoupleTemp);
                             Com::printF(PSTR(" after "), (int32_t)(time - act->lastDecoupleTest));
                             Com::printFLN(PSTR(" ms"));
 
                             reportTempsensorAndHeaterErrors();
+#endif
                             Printer::stopPrint();
 
                             showError((void*)ui_text_temperature_manager, (void*)ui_text_heater_error);
@@ -313,12 +332,14 @@ void Extruder::manageTemperatures() {
                             Printer::latchOutputInhibit(true);
 #endif
 
+#ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
                             Com::printErrorFLN(Com::tHeaterDecoupledWarning);
                             Com::printF(PSTR("Error:Could not hold temperature "), act->lastDecoupleTemp);
                             Com::printF(PSTR(" measured "), act->currentTemperatureC);
                             Com::printFLN(Com::tC);
 
                             reportTempsensorAndHeaterErrors();
+#endif
                             Printer::stopPrint();
 
                             showError((void*)ui_text_temperature_manager, (void*)ui_text_heater_error);
@@ -395,6 +416,9 @@ void Extruder::manageTemperatures() {
     for(uint8_t c=0;c<NUM_TEMPERATURE_LOOPS;++c)
         heatDemand=heatDemand || tempController[c]->targetTemperatureC>=MAX_ROOM_TEMPERATURE;
     HAL::completeThermalWatchdogPass(heatDemand);
+#endif
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    ThermalEmergency::serviceReport();
 #endif
 
 } // manageTemperatures
@@ -577,6 +601,9 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
             || sensorType != autotuneSensorType || pidMax != autotunePowerLimit
             || isSensorDefect() || isSensorDecoupled() || !validTemperatureSample(supported, measured)) {
             finishAutotune(*this);
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+            if(!ThermalEmergency::faultLedger().active())
+#endif
             Com::printErrorFLN(PSTR("PID autotune aborted: sensor, settings, fault or cancellation"));
             showError((void*)ui_text_autodetect_pid, (void*)ui_text_temperature_wrong);
             break;
@@ -631,7 +658,9 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
 #else
                 Printer::latchOutputInhibit(true);
 #endif
+#ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
                 Com::printErrorFLN(PSTR("PID autotune: no temperature rise"));
+#endif
                 Printer::stopPrint();
                 showError((void*)ui_text_temperature_manager, (void*)ui_text_heater_error);
                 break;
