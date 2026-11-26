@@ -310,7 +310,42 @@ int main(int argc, char** argv) {
     }
     publishAdc();
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-    if (!std::strcmp(name, "emergency-invalid-episode")) {
+    if (!std::strncmp(name,"absolute-",9)) {
+        using namespace ThermalEmergency;
+        const bool bedCase=std::strcmp(name,"absolute-hotend")!=0;
+        auto& act=bedCase?bed:c;
+        const bool escalate=!std::strcmp(name,"absolute-escalation");
+        const bool idle=!std::strcmp(name,"absolute-idle");
+        SensorObservation valid;valid.observe(true,1195);
+        // Existing strict boundary, not a new numerical threshold.
+        act.currentTemperatureC=act.heaterCutoffC;
+        assert(!checkAbsoluteCutoff(act.pwmIndex,act,true,valid));
+        service();
+        if(idle)for(auto* h:tempController)h->setTargetTemperature(0);
+        if(escalate) {
+            c.sensorType=255;
+            for(unsigned i=0;i<11;++i)service();
+            assert(faultLedger().first().cause==Cause::SensorInvalid);
+        }
+        const float oldTarget=act.targetTemperatureC;
+        const uint8_t oldDuty=HAL::outputDuty(act.pwmIndex);
+        temperatureAdcValues[act.sensorPin]=1195;
+        service();
+        allOff();
+        assert(faultLedger().level()==Severity::FireWarning);
+        const auto& fire=faultLedger().firstFire();
+        assert(fire.cause==Cause::OverTemperature&&fire.channel==act.pwmIndex);
+        assert(fire.evidence.measuredC>act.heaterCutoffC&&fire.evidence.measuredC<=MAX_DEFECT_TEMPERATURE);
+        assert(fire.evidence.threshold==act.heaterCutoffC&&fire.evidence.deltaC>0);
+        assert(fire.evidence.rawAdc==1195&&(fire.evidence.valid&Evidence::Raw));
+        assert(fire.evidence.targetC==oldTarget&&fire.evidence.admittedDuty==oldDuty);
+        if(escalate)assert(faultLedger().first().cause==Cause::SensorInvalid);
+        else assert(faultLedger().first().cause==Cause::OverTemperature);
+        temperatureAdcValues[act.sensorPin]=102;
+        act.setTargetTemperature(100);
+        service();
+        allOff();
+    } else if (!std::strcmp(name, "emergency-invalid-episode")) {
         using namespace ThermalEmergency;
         service();
         assert(HAL::outputDuty(0)==255);
@@ -709,6 +744,7 @@ int main(int argc, char** argv) {
         else if (!std::strcmp(name, "autotune-entry-decoupled")) t.setSensorDecoupled(true);
         else if (!std::strcmp(name, "autotune-entry-legacy-rejected")) Printer::latchOutputInhibit(false);
         else if (!std::strcmp(name, "autotune-entry-high")) temperatureAdcValues[t.sensorPin] = 820;
+        else if (!std::strcmp(name, "autotune-entry-absolute")) temperatureAdcValues[t.sensorPin] = 1195;
         else if (!std::strcmp(name, "autotune-entry-target")) target = 500;
         else if (!std::strcmp(name, "autotune-bed-entry-target")) target = HEATED_BED_MAX_TEMP + 1;
         else if (!std::strcmp(name, "autotune-entry-controller")) {}
@@ -729,10 +765,10 @@ int main(int argc, char** argv) {
         else if (!std::strcmp(name, "autotune-high") || !std::strcmp(name, "autotune-bed-high")) {
             injection = Injection::High;
             postTemperature = false;
-        } else if (!std::strcmp(name, "autotune-cutoff")) {
+        } else if (!std::strcmp(name, "autotune-cutoff") || !std::strcmp(name, "autotune-cutoff-periodic")) {
             target = 270;
             injection = Injection::Cutoff;
-            postTemperature = false;
+            postTemperature = std::strcmp(name,"autotune-cutoff-periodic")==0;
         } else if (std::strstr(name, "-power-change")) injection = Injection::PowerChange;
         else if (std::strstr(name, "-timeout")) {
             temperatureAdcValues[t.sensorPin] = 445; // cooling phase, no crossing
@@ -819,6 +855,18 @@ int main(int argc, char** argv) {
 #endif
         }
         if (injection == Injection::OtherFault) allOff();
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        if(injection==Injection::Cutoff||!std::strcmp(name,"autotune-entry-absolute")) {
+            using namespace ThermalEmergency;
+            allOff();
+            const auto& e=faultLedger().firstFire().evidence;
+            assert(faultLedger().firstFire().cause==Cause::OverTemperature&&e.threshold==t.heaterCutoffC);
+            if(injection==Injection::Cutoff)assert(e.targetC==target&&e.profile==method&&(e.valid&Evidence::Profile)&&e.admittedDuty>0);
+            else assert(e.targetC==0&&e.admittedDuty==0);
+        }
+        if(injection==Injection::High||injection==Injection::TransientHigh)
+            assert(faultLedger().level()!=ThermalEmergency::Severity::FireWarning);
+#endif
         // One subsequent normal service must not re-enable the old target.
         service();
         assert(HAL::outputDuty(t.pwmIndex) == 0);
@@ -907,7 +955,9 @@ def main():
                                 "-I", str(FW), str(work / "replay.cpp"), "-o", str(exe)], check=True)
                 selected = scenarios + (("dual-invalid",) if tools > 1 else ())
                 if emergency:
-                    selected += ("emergency-invalid-episode", "emergency-stale-episode", "emergency-recovery", "emergency-scheduler")
+                    selected += ("emergency-invalid-episode", "emergency-stale-episode", "emergency-recovery", "emergency-scheduler",
+                                 "absolute-hotend", "absolute-bed", "absolute-idle", "absolute-escalation",
+                                 "autotune-entry-absolute", "autotune-cutoff-periodic")
                 for scenario in selected:
                     subprocess.run([str(exe), scenario], check=True, timeout=10)
                 print(f"{board} / {tools} hotend(s) / emergency={emergency}: {len(selected)} cases passed", flush=True)

@@ -29,6 +29,10 @@ static uint8_t autotuneIndex = 255;
 static bool autotuneAbortRequested = false;
 static float autotuneTemperatureLimit;
 static uint8_t autotuneSensorType, autotunePowerLimit;
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+static float autotuneTargetC;
+static uint8_t autotuneMethod;
+#endif
 
 static bool validTemperatureSample(bool supported, float temperature) {
     return supported && temperature >= MIN_DEFECT_TEMPERATURE && temperature <= MAX_DEFECT_TEMPERATURE;
@@ -123,6 +127,33 @@ static bool confirm(uint8_t channel, Cause cause, const Evidence& e) {
     if(first) Printer::latchOutputInhibit(true);
     ledger.record(channel,cause,e);
     return first;
+}
+// The existing absolute measured cutoff is independent of learned
+// profiles and the RELATIVE autotune overshoot envelope. A fresh,
+// supported, plausible reading above the absolute limit is a terminal
+// thermal fault even with a zero setpoint. Invalid/rail/stale readings
+// retain their separate sensor-fault cause, not a fictional temperature.
+static bool checkAbsoluteCutoff(uint8_t channel, TemperatureController& act,
+                                bool sampleValid, const SensorObservation& observation) {
+    if(!sampleValid||!act.sensorType||!observation.rawKnown||
+       !(act.currentTemperatureC>act.heaterCutoffC))return false;
+    auto e=capture(act,true,HAL::timeInMilliseconds());
+    observation.apply(e);
+    e.threshold=float(act.heaterCutoffC);
+    e.deltaC=act.currentTemperatureC-e.threshold;
+    e.valid|=Evidence::Threshold|Evidence::Delta;
+    if(channel==autotuneIndex) {
+        e.targetC=autotuneTargetC;
+        e.profile=autotuneMethod;
+        e.valid|=Evidence::Profile;
+    }
+    const bool first=confirm(channel,Cause::OverTemperature,e);
+    autotuneAbortRequested=true;
+    if(first) {
+        Printer::markTemperatureReadingsAvailable();
+        Printer::stopPrint();
+    }
+    return true;
 }
 void latchSystemFault(Cause cause) {
     confirm(Ledger<NUM_TEMPERATURE_LOOPS>::System,cause,Evidence{});
@@ -300,7 +331,10 @@ void Extruder::manageTemperatures() {
             act->tempIState = 0;
         }
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-        else ThermalEmergency::invalid[controller].active=false;
+        else {
+            ThermalEmergency::invalid[controller].active=false;
+            if(ThermalEmergency::checkAbsoluteCutoff(controller,*act,true,observation))continue;
+        }
 #endif
         if (controller == autotuneIndex) {
             // Remember even a transient invalid sample observed by the periodic service.
@@ -628,7 +662,18 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
     const bool bed = controllerId == NUM_EXTRUDER;
     const float hysteresis = 0.375f;
     const float cutoff = RMath::min(float(heaterCutoffC), temp + (bed ? 15.0f : 20.0f));
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    ThermalEmergency::SensorObservation initialObservation;
+    const bool initialSampleValid = updateCurrentTemperature(
+#ifdef RF_HEATER_LEASE_EXPERIMENT
+        nullptr,
+#endif
+        &initialObservation);
+    if(ThermalEmergency::checkAbsoluteCutoff(controllerId,*this,
+        validTemperatureSample(initialSampleValid,currentTemperatureC),initialObservation))return;
+#else
     const bool initialSampleValid = updateCurrentTemperature();
+#endif
     if (Printer::heatingInhibited() || isSensorDefect() || isSensorDecoupled()
         || sensorType == 0 || pidMax < 40
         || !(temp > MAX_ROOM_TEMPERATURE + hysteresis && temp + hysteresis < cutoff)
@@ -648,15 +693,37 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
     autotuneTemperatureLimit = cutoff;
     autotuneSensorType = sensorType;
     autotunePowerLimit = pidMax;
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    autotuneTargetC=temp;
+    autotuneMethod=uint8_t(method);
+#endif
     autotuneIndex = controllerId;
     stopDecouple();
     // Admission diagnostics can take time. Do not use the earlier sample
     // to authorize the first positive power request.
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    ThermalEmergency::SensorObservation firstObservation;
+#endif
 #ifdef RF_HEATER_LEASE_EXPERIMENT
     HAL::HeaterSample firstSample;
-    const bool firstSampleValid = updateCurrentTemperature(&firstSample);
+    const bool firstSampleValid = updateCurrentTemperature(&firstSample
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        , &firstObservation
+#endif
+    );
 #else
-    const bool firstSampleValid = updateCurrentTemperature();
+    const bool firstSampleValid = updateCurrentTemperature(
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        &firstObservation
+#endif
+    );
+#endif
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(ThermalEmergency::checkAbsoluteCutoff(controllerId,*this,
+        validTemperatureSample(firstSampleValid,currentTemperatureC),firstObservation)) {
+        finishAutotune(*this);
+        return;
+    }
 #endif
     if (autotuneAbortRequested || Printer::heatingInhibited()
         || sensorType != autotuneSensorType || pidMax != autotunePowerLimit
@@ -724,6 +791,13 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
 #endif
         const float measured = currentTemperatureC;
         const millis_t now = HAL::timeInMilliseconds();
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        if(ThermalEmergency::checkAbsoluteCutoff(controllerId,*this,
+            validTemperatureSample(supported,measured),observation)) {
+            finishAutotune(*this);
+            return;
+        }
+#endif
         if (autotuneAbortRequested || Printer::heatingInhibited()
             || Printer::printJob.isBusy() || PrintLine::hasLines() || PrintLine::directMoveActive() || isAnyScanRunning()
             || sensorType != autotuneSensorType || pidMax != autotunePowerLimit
