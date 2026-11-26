@@ -6,6 +6,7 @@ import tempfile
 root = Path(__file__).resolve().parents[1]
 code = r"""
 #include "EventHeaterPwm.h"
+#include "HeaterLease.h"
 #include <cassert>
 #include <cstdio>
 #include <initializer_list>
@@ -29,6 +30,20 @@ struct Clock {
         count=uint16_t(count+n);
     }
 };
+struct LeaseClock {
+    Clock& gpio;
+    uint16_t count=0, deadlines[3]={};
+    bool flags[3]={}, masks[3]={};
+    explicit LeaseClock(Clock& g):gpio(g){}
+    uint16_t now() const{return count;}
+    uint16_t deadline(uint8_t c) const{return deadlines[c];}
+    bool pending(uint8_t c) const{return flags[c];}
+    void writeDeadline(uint8_t c,uint16_t x){deadlines[c]=x;}
+    void clearPending(uint8_t c){flags[c]=false;}
+    void enable(uint8_t c){masks[c]=true;}
+    void disable(uint8_t c){masks[c]=false;}
+    void off(uint8_t c){gpio.off(c);}
+};
 template<uint8_t N> struct Lease {
     uint8_t demand[N]={};
     bool fault=false;
@@ -41,6 +56,8 @@ template<uint8_t N> struct Lease {
 };
 template<uint8_t N> void check(){
     using Pwm=EventHeaterPwm<Clock,Lease<N>,N,64>;
+    using WiderGap=EventHeaterPwm<Clock,Lease<N>,N,64,256>;
+    assert(WiderGap::width(255)==65280 && WiderGap::width(128)==32768);
     unsigned long cases=0;
     for(unsigned duty=0;duty<256;++duty){
         for(uint8_t c=0;c<N;++c){
@@ -101,7 +118,27 @@ template<uint8_t N> void check(){
     assert(q.failed()&&u.highs==0);
     std::printf("channels=%u width/phase cases=%lu\n",N,cases);
 }
-int main(){check<2>();check<3>();}
+template<uint8_t N> void combined(){
+    using RealLease=HeaterLease<LeaseClock,N,12500,3>;
+    using Pwm=EventHeaterPwm<Clock,RealLease,N,64,256>;
+    Clock t;LeaseClock lt(t);RealLease l(lt);Pwm p(t,l);
+    for(uint8_t c=0;c<N;++c)assert(l.authorize(c,255));
+    p.frame();
+    assert(t.highs==N);
+    for(uint8_t c=0;c<N;++c)p.compare(c);
+    lt.count=12501;lt.flags[0]=true;
+    t.count=0;t.overflow=false;
+    p.frame(); // pending independent expiry blocks subsequent PWM
+    assert(l.failed()&&p.failed()&&t.highs==N);
+    for(uint8_t c=0;c<N;++c)assert(!t.pins[c]&&!t.masks[c]&&!lt.masks[c]);
+    assert(!l.authorize(0,255));
+
+    Clock u;LeaseClock lu(u);RealLease fresh(lu);Pwm q(u,fresh);
+    assert(fresh.authorize(0,255));q.frame();assert(u.pins[0]);
+    q.inhibit(); // proposed Timer3 expiry vector dispatch
+    assert(!u.pins[0]&&!u.masks[0]&&!lu.masks[0]&&fresh.failed()&&q.failed());
+}
+int main(){check<2>();check<3>();combined<2>();combined<3>();}
 """
 with tempfile.TemporaryDirectory() as temp:
     cpp=Path(temp)/"pwm.cpp"
