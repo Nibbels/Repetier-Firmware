@@ -42,7 +42,27 @@ void Commands::commandLoop() {
     }
 } // commandLoop
 
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+static void serviceThermalEmergency() {
+    // No motion, DMS, idle shutdown, pause or normal UI dispatch. Drain
+    // old scheduling flags; a real fresh temperature tick owns progress.
+    HAL::takeScanTick();
+    HAL::takeCompensationTick();
+    HAL::takeFeatureTick();
+    if(HAL::takeTemperatureTick()) {
+        Extruder::manageTemperatures();
+        uid.refreshPage();
+    }
+}
+#endif
+
 void Commands::checkForPeriodicalActions(enum FirmwareState state) {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(Printer::printJob.emergencyLocked()) {
+        serviceThermalEmergency();
+        return;
+    }
+#endif
     /*
      * The execute variables are set by PWM-Timer. This timer ticks with about 3910 Hz and the ms clocks are made with software counter dividors.
      * Except this 16ms execute variable which is set by internal watchdog timer.
@@ -64,15 +84,24 @@ void Commands::checkForPeriodicalActions(enum FirmwareState state) {
             if (HAL::timeInMilliseconds() - lastButtonAt < 20000)
                 uid.slowAction();
         }
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        if(Printer::printJob.emergencyLocked()){serviceThermalEmergency();return;}
+#endif
         recalculateZCompensation();
     }
 
     if (HAL::takeTemperatureTick()) {
         Extruder::manageTemperatures();
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        if(Printer::printJob.emergencyLocked()){uid.refreshPage();return;}
+#endif
         if (state == WaitHeater)
             Commands::printTemperatures(); // Selfcontrolling timediff
         uid.slowAction();
     }
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(Printer::printJob.emergencyLocked()){serviceThermalEmergency();return;}
+#endif
 
     Printer::strainGauge.service(HAL::timeInMilliseconds());
 
@@ -249,6 +278,9 @@ void Commands::reportPrinterUsage() {
 }
 
 void Commands::emergencyStop() {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(Printer::printJob.emergencyLocked())return;
+#endif
     HAL::resetHardware(); //RF2000 / RF1000!
 } // emergencyStop
 
