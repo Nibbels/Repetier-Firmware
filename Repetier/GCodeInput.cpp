@@ -111,6 +111,74 @@ inline long parseLongValue(char* s) {
     return l;
 }
 
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+// M206 is a typed settings transaction, unlike ordinary permissive G-code.
+// Recheck its original ASCII spelling before narrowed T/M or empty numeric
+// tokens can alias a different setting. Binary T is already exactly one byte.
+static bool eepromDigit(char c){return c>='0'&&c<='9';}
+static void eepromSpace(const char*& p){while(*p==' '||*p=='\t')++p;}
+static bool eepromInteger(const char*& p,int32_t& result) {
+    eepromSpace(p);
+    const bool negative=*p=='-';
+    if(*p=='+'||*p=='-')++p;
+    if(!eepromDigit(*p))return false;
+    const uint32_t limit=negative?2147483648UL:2147483647UL;
+    uint32_t value=0;
+    do{
+        const uint8_t digit=uint8_t(*p++-'0');
+        if(value>(limit-digit)/10)return false;
+        value=value*10+digit;
+    }while(eepromDigit(*p));
+    result=negative?(value==2147483648UL?INT32_MIN:-int32_t(value)):int32_t(value);
+    return true;
+}
+static bool eepromFloatSpelling(const char*& p) {
+    eepromSpace(p);
+    if(*p=='+'||*p=='-')++p;
+    bool digit=false;
+    while(eepromDigit(*p)){digit=true;++p;}
+    if(*p=='.'){++p;while(eepromDigit(*p)){digit=true;++p;}}
+    if(!digit)return false;
+    if(*p=='e'||*p=='E'){
+        ++p;if(*p=='+'||*p=='-')++p;
+        if(!eepromDigit(*p))return false;
+        while(eepromDigit(*p))++p;
+    }
+    return true;
+}
+static bool validEepromAscii(const char* p) {
+    enum : uint8_t {M=1,P=2,T=4,S=8,X=16,N=32};
+    uint8_t seen=0,type=255;
+    for(;;){
+        eepromSpace(p);
+        if(!*p||*p=='('||*p=='%'||*p==';')break;
+        if(*p=='*'){
+            ++p;int32_t checksum=0;
+            if(!eepromInteger(p,checksum)||checksum<0||checksum>255)return false;
+            eepromSpace(p);
+            if(*p&&*p!='('&&*p!='%'&&*p!=';')return false;
+            break;
+        }
+        char key=*p++;
+        if(key>='a'&&key<='z')key=char(key-'a'+'A');
+        uint8_t bit=0;
+        if(key=='M')bit=M;else if(key=='P')bit=P;else if(key=='T')bit=T;
+        else if(key=='S')bit=S;else if(key=='X')bit=X;else if(key=='N')bit=N;
+        else return false;
+        if(seen&bit)return false;
+        if(bit==N&&(seen&M))return false;
+        seen|=bit;
+        if(bit==X){if(!eepromFloatSpelling(p))return false;continue;}
+        int32_t value;
+        if(!eepromInteger(p,value))return false;
+        if(bit==M&&value!=206)return false;
+        if(bit==P&&(value<0||value>=2048))return false;
+        if(bit==T){if(value<0||value>3)return false;type=uint8_t(value);}
+    }
+    return (seen&(M|P|T))==(M|P|T)&&(seen&(S|X))==(type==3?X:S);
+}
+#endif
+
 } // namespace
 
 /** \page Repetier-protocol
@@ -759,6 +827,9 @@ bool GCodeInput::parseBinary(GCode& command, uint8_t* buffer, int8_t length) {
 __attribute__((noinline, section(".text.rf_near_parser")))
 #endif
 bool GCodeInput::parseAscii(GCode& command, char* line, bool fromSerial) {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    const char* originalLine=line;
+#endif
     char* pos = line;
     command.params = 0;
     command.params2 = 0;
@@ -954,6 +1025,12 @@ bool GCodeInput::parseAscii(GCode& command, char* line, bool fromSerial) {
             break;
         } // end switch
     }     // end while
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(command.hasM()&&command.M==206&&!validEepromAscii(originalLine)) {
+        if(!Printer::printJob.emergencyLocked())Com::printErrorFLN(PSTR("Invalid M206 syntax"));
+        return false;
+    }
+#endif
     if (serialReceive.lastCommandWasBinary && !hasChecksum && fromSerial && !frame.borrowedText) {
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         if(!Printer::printJob.emergencyLocked())

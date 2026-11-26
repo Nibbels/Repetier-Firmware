@@ -500,6 +500,25 @@ void legacyStream(const std::string& scenario) {
 }
 
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+void strictEepromSyntax() {
+    for(const char* valid:{"M206 T0 P107 S80","m206p107t0s80","N1 M206 T3 P108 X1.25*12",
+                          "M206 T3 P108 X-1.25e+2","M206 T2 P79 S2147483647",
+                          "M206 T2 P79 S-2147483648","T0 M206 P107 S+80",
+                          "M206 T0 P107 S80 ; comment"})assert(validEepromAscii(valid));
+    for(const char* invalid:{"M206 T256 P107 S80","M206 T-256 P107 S80","M206 T P107 S80",
+        "M206 T0 P S80","M206 T0 P107 S","M206 T0 P107 S1.5","M206 T0 P107 S2147483648",
+        "M206 T0 P107 S-2147483649","M65742 T0 P107 S80","M206 T0 P65643 S80",
+        "M206 T3 P108 X","M206 T3 P108 X1e","M206 T3 P108 X1.2.3",
+        "M206 T0 T0 P107 S80","M206 T0 P107 P108 S80","M206 T0 P107 S80 X1",
+        "M206 T0 P107 S80*0 T1","M206 T3 P108 S1","M206 T0 P107 X1",
+        "M206 P107 S80","M206 T0 P107","M206 T3 P108 Xnan"})
+        assert(!validEepromAscii(invalid));
+    feed("M206 T0 P107 S80\n");readReply("ok\r\n");popM(206);
+    feed("M206 T256 P107 S80\n");
+    for(unsigned i=0;i<8;++i)GCodeInput::readFromSerial();
+    assert(!GCodeInput::peekCurrentCommand());
+    assert(replies.find("Invalid M206 syntax")!=std::string::npos);
+}
 void thermalEmergency() {
     feed("N1 M104 S200\n");
     readReply("ok 1\r\n");
@@ -559,6 +578,7 @@ int main(int argc, char** argv) {
     else if (scenario == "script") flashScript();
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     else if (scenario == "thermal-emergency") thermalEmergency();
+    else if (scenario == "m206-syntax") strictEepromSyntax();
 #endif
     else if (scenario == "legacy-ascii" || scenario == "legacy-binary" || scenario == "legacy-during-stop") legacyStream(scenario);
     else return 1;

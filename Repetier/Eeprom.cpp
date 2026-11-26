@@ -136,8 +136,8 @@ static bool validHostThermalValue(const GCode* com,uint16_t address) {
 // Use established loader/menu bounds; do not silently repair a proposed
 // out-of-range value after writing it. This is not mechanical qualification.
 static bool validHostNonthermalValue(const GCode* c,uint16_t p) {
-    const float x=c->X;
-    const int32_t v=c->S;
+    const float x=c->T==3?c->X:0;
+    const int32_t v=c->T==3?0:c->S;
     if(p==EPR_X_MAX_FEEDRATE||p==EPR_Y_MAX_FEEDRATE||p==EPR_Z_MAX_FEEDRATE||
        p==EPR_X_HOMING_FEEDRATE_PRINT||p==EPR_Y_HOMING_FEEDRATE_PRINT||p==EPR_Z_HOMING_FEEDRATE_PRINT) {
         const bool home=p>=EPR_X_HOMING_FEEDRATE_PRINT;
@@ -248,8 +248,9 @@ void EEPROM::update(GCode* com) {
         return;
     }
     const uint8_t bytes=com->T==0?1:com->T==1?2:4;
-    uint32_t bits=uint32_t(com->S);
+    uint32_t bits=0;
     if(com->T==3)memcpy(&bits,&com->X,4);
+    else bits=uint32_t(com->S);
     bool changed=false;
     for(uint8_t i=0;i<bytes;++i)changed|=HAL::eprGetByte(address+i)!=uint8_t(bits>>(8*i));
     // Exact read-only echoes are harmless; skip checksum/reload for all
