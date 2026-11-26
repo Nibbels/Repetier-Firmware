@@ -9,6 +9,10 @@ hal=(root/"Repetier/HAL.cpp").read_text()
 start=hal.index("#ifdef RF_HEATER_LEASE_EXPERIMENT\n// Non-release candidate")
 end=hal.index("#endif\n} // namespace",start)+len("#endif")
 state=hal[start:end]
+start=hal.index('void HAL::completeThermalWatchdogPass()')
+feed=hal[start:hal.index('\n#endif',start)]
+start=hal.index('void HAL::tellWatchdogOk()')
+heartbeat=hal[start:hal.index('\n// ================== Interrupt handling',start)]
 start=hal.index("#ifdef RF_HEATER_LEASE_EXPERIMENT\n// Timer3 is independent")
 adc=hal[start:hal.index("\n#endif",start)+len("\n#endif")]
 start=hal.index("#ifdef RF_HEATER_LEASE_EXPERIMENT\nHAL::HeaterSample::~HeaterSample")
@@ -66,7 +70,20 @@ struct HAL {
         raw=temperatureAdcValues[c];return true;
     }
     TICKET_DECL
+#ifdef RF_HEATER_RESET_WDT_EXPERIMENT
+    static void completeThermalWatchdogPass();
+    static void tellWatchdogOk();
+    static uint32_t timeInMilliseconds(){return simulatedMs;}
+    static uint32_t simulatedMs;
+#endif
 };
+#ifdef RF_HEATER_RESET_WDT_EXPERIMENT
+uint32_t HAL::simulatedMs=0;
+static bool watchdogActive=true;
+static uint32_t watchdogHeartbeat;
+static unsigned watchdogFeeds;
+#define wdt_reset() do {assert(!irq);++watchdogFeeds;} while(0)
+#endif
 namespace Printer {static bool blocked=false;bool heatingInhibited(){return blocked;}}
 """
 main=r"""
@@ -75,6 +92,10 @@ static void resetFixture(uint16_t start){
     for(auto& d:requestedDuty)d=0;
     for(auto& p:pins)p=false;
     heaterLeaseReady=false;heaterLeaseFailed=false;
+#ifdef RF_HEATER_RESET_WDT_EXPERIMENT
+    heaterGrantProgress=0;watchdogActive=true;watchdogHeartbeat=0;watchdogFeeds=0;
+    HAL::simulatedMs=0;
+#endif
     heaterBatchValid=false;
     for(auto& s:heaterSampleState)s=0;
     Printer::blocked=false;irq=true;
@@ -208,14 +229,41 @@ int main(){
     publishHeaterSample(0,1234);
     {HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw));HAL::setHeaterDuty(0,255,&a);
      assert(!requestedDuty[0]);}
+#ifdef RF_HEATER_RESET_WDT_EXPERIMENT
+    resetFixture(0);
+    HAL::completeThermalWatchdogPass();assert(watchdogFeeds==1);
+    HAL::simulatedMs=100;
+    HAL::tellWatchdogOk();assert(watchdogFeeds==1&&watchdogHeartbeat==0);
+    grant(0,255);startFrame(0);
+    HAL::completeThermalWatchdogPass();assert(watchdogFeeds==2&&watchdogHeartbeat==100);
+    HAL::completeThermalWatchdogPass();assert(watchdogFeeds==2);
+    grant(1,255);HAL::completeThermalWatchdogPass();assert(watchdogFeeds==2);
+    grant(0,255);HAL::completeThermalWatchdogPass();assert(watchdogFeeds==3);
+    grant(0,128);HAL::completeThermalWatchdogPass();assert(watchdogFeeds==3);
+    HAL::setHeaterDuty(1,0);
+    HAL::completeThermalWatchdogPass();assert(watchdogFeeds==4);
+    advance(12501);
+    HAL::completeThermalWatchdogPass(); // fault is all-off, retain diagnostics
+    assert(heaterLeaseFailed&&watchdogFeeds==5&&TIMSK3==0);
+    for(uint8_t c=0;c<=NUM_EXTRUDER;++c)assert(!pins[pin(c)]&&!requestedDuty[c]);
+    grant(0,255);assert(!requestedDuty[0]);
+    watchdogActive=false;HAL::completeThermalWatchdogPass();assert(watchdogFeeds==5);
+    resetFixture(0);grant(0,255);
+    HAL::completeThermalWatchdogPass();assert(watchdogFeeds==1);
+    publish(0);HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw));advance(6251);
+    HAL::setHeaterDuty(0,255,&a);HAL::completeThermalWatchdogPass();
+    assert(watchdogFeeds==1); // stale reservation cannot count as progress
+    std::puts("thermal watchdog progress checks passed");
+#endif
     std::printf("heaters=%u actual HAL grant/expiry cases=%lu; exact sample checks passed\n",NUM_EXTRUDER+1,cases);
 }
 """
 with tempfile.TemporaryDirectory() as temp:
     cpp=Path(temp)/"lease.cpp";exe=Path(temp)/"lease"
-    cpp.write_text(prelude.replace("TICKET_DECL",ticket_decl)+adc+"\n"+state+"\n"+ticket+"\n"+setter+
+    cpp.write_text(prelude.replace("TICKET_DECL",ticket_decl)+adc+"\n"+state+"\n"+ticket+"\n"+setter+"\n#ifdef RF_HEATER_RESET_WDT_EXPERIMENT\n"+feed+"\n"+heartbeat+"\n#endif\n"+
                    "\nstatic void startFrame(uint8_t pwm_count_heater){InterruptProtectedBlock lock;\n"+frame+"\n}\n"+main)
     for n in (1,2):
-        subprocess.run(["g++","-std=c++11","-Wall","-Wextra","-Werror","-O2",
-                        f"-DNUM_EXTRUDER={n}",str(cpp),"-o",str(exe)],check=True)
-        subprocess.run([str(exe)],check=True)
+        for flags in ([], ["-DRF_HEATER_RESET_WDT_EXPERIMENT=1"]):
+            subprocess.run(["g++","-std=c++11","-Wall","-Wextra","-Werror","-O2",
+                            f"-DNUM_EXTRUDER={n}",*flags,str(cpp),"-o",str(exe)],check=True)
+            subprocess.run([str(exe)],check=True)
