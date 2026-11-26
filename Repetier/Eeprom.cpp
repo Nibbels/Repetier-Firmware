@@ -102,6 +102,37 @@ static uint8_t rawThermalSlot(uint16_t pos) {
     }
     return 0;
 }
+// Validate thermal fields before revoking a previous calibration. Zero
+// sensor/PWM is an explicit disabled state, not permission to heat.
+static bool validHostSensor(int32_t value) {
+    switch(value) {
+    case 0: case 1: case 2: case 3: case 4: case 8: case 9:
+    case 10: case 11: case 12: case 13: case 14: case 53: case 60: case 100:
+        return true;
+    default: return false;
+    }
+}
+static bool validHostThermalValue(const GCode* com,uint16_t address) {
+    if(address==EPR_RF_HEATED_BED_SENSOR_TYPE)return validHostSensor(com->S);
+    if(address==EPR_BED_PID_PGAIN||address==EPR_BED_PID_IGAIN)return com->X>0&&com->X<=1000;
+    if(address==EPR_BED_PID_DGAIN)return com->X>=0&&com->X<=100000;
+    if(address==EPR_BED_PID_MAX)return com->S==0||com->S>=40;
+    if(address==EPR_BED_DRIVE_MIN||address==EPR_BED_DRIVE_MAX)return com->S>=1;
+    if(address==EPR_RF_PREHEAT_A_BED||address==EPR_RF_PREHEAT_B_BED)
+        return com->S==0||(com->S>=UI_SET_MIN_HEATED_BED_TEMP&&com->S<=UI_SET_MAX_HEATED_BED_TEMP);
+    if(address==EPR_RF_PREHEAT_A_HOTEND||address==EPR_RF_PREHEAT_B_HOTEND)
+        return com->S==0||(com->S>=UI_SET_MIN_EXTRUDER_TEMP&&com->S<=UI_SET_MAX_EXTRUDER_TEMP);
+    for(uint8_t slot=0;slot<NUM_EXTRUDER;++slot) {
+        const uint16_t base=EEPROM_EXTRUDER_OFFSET+slot*EEPROM_EXTRUDER_LENGTH;
+        if(address==base+EPR_EXTRUDER_SENSOR_TYPE)return validHostSensor(com->S);
+        if(address==base+EPR_EXTRUDER_PID_PGAIN||address==base+EPR_EXTRUDER_PID_IGAIN)
+            return com->X>0&&com->X<=1000;
+        if(address==base+EPR_EXTRUDER_PID_DGAIN)return com->X>=0&&com->X<=100000;
+        if(address==base+EPR_EXTRUDER_PID_MAX)return com->S==0||com->S>=40;
+        if(address==base+EPR_EXTRUDER_DRIVE_MIN||address==base+EPR_EXTRUDER_DRIVE_MAX)return com->S>=1;
+    }
+    return true; // Nonthermal field-specific checks are handled by their owners.
+}
 static bool prepareRawThermalWrite(GCode* com,uint8_t width) {
     // Caller validated the full signed address and write width first.
     // Preserve no-op M206 transfers from host configuration tools.
@@ -170,6 +201,10 @@ void EEPROM::update(GCode* com) {
     if(!changed)return;
     if(!writable) {
         Com::printErrorFLN(PSTR("EEPROM setting is read-only"));
+        return;
+    }
+    if(!validHostThermalValue(com,address)) {
+        Com::printErrorFLN(PSTR("Invalid thermal EEPROM value"));
         return;
     }
 #endif

@@ -7,7 +7,7 @@ import tempfile
 root=Path(__file__).resolve().parents[1]
 fw=root/"Repetier"
 source=(fw/"Eeprom.cpp").read_text()
-a=source.index("#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT\n// Identify actual changed bytes")
+a=source.index("#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT\n// Identify changed calibration identity/gains")
 b=source.index("void EEPROM::restoreEEPROMExtruderSettingsFromConfiguration",a)
 gcode=(fw/"gcode.h").read_text()
 assert "int32_t P;" in gcode and "uint8_t T;" in gcode
@@ -15,6 +15,20 @@ pre=r'''
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
+#include <cmath>
+#include <limits>
+using std::isfinite;
+#define X_AXIS 0
+#define Y_AXIS 1
+#define Z_AXIS 2
+#define E_AXIS 3
+#define DEVICE_TYPE_RF1000 1
+#define DEVICE_TYPE_RF2000 2
+#define DEVICE_TYPE_RF2000v2 3
+#define UI_SET_MIN_HEATED_BED_TEMP 50
+#define UI_SET_MAX_HEATED_BED_TEMP 160
+#define UI_SET_MIN_EXTRUDER_TEMP 70
+#define UI_SET_MAX_EXTRUDER_TEMP 270
 #include <cstring>
 #include <initializer_list>
 using PGM_P=const char*;
@@ -31,9 +45,9 @@ static unsigned writes,loads,checks,errors,invalidated;
 static int ignore=-1;
 static bool requireRevoke=false;
 static uint8_t slotFor(unsigned pos){
-    if((pos>=107&&pos<=120)||pos==124||pos==1922)return 4;
-    if((pos>=217&&pos<=230)||pos==245||pos==294)return 1;
-    if((pos>=317&&pos<=330)||pos==345||pos==394)return 2;
+    if((pos>=108&&pos<=120)||pos==1922)return 4;
+    if((pos>=218&&pos<=230)||pos==294)return 1;
+    if((pos>=318&&pos<=330)||pos==394)return 2;
     return 0;
 }
 struct HAL {
@@ -63,6 +77,7 @@ static Controller* tempController[]={&e0,&e1,&bed};
 static Controller* tempController[]={&e0,&bed};
 #endif
 struct Com {static void printErrorFLN(const char*){++errors;}};
+int EEPROM::getExtruderOffset(uint8_t i){return 200+100*i;}
 void EEPROM::updateChecksum(){++checks;}
 void EEPROM::readDataFromEEPROM(){++loads;}
 '''
@@ -70,67 +85,94 @@ void EEPROM::readDataFromEEPROM(){++loads;}
 pre=pre.replace('#include "Eeprom.h"','struct GCode;\n#include "Eeprom.h"')
 main=r'''
 static void reset(){
-    memset(bytes,0xa5,sizeof bytes);
+    memset(bytes,0,sizeof bytes);
     writes=loads=checks=errors=invalidated=0;ignore=-1;requireRevoke=true;
 }
-static bool protectedByte(int32_t p){
-    return p==0||p==104||p==105||p==141||(p>=1978&&p<1987);
+static void denied(GCode c){
+    uint8_t before[2048];memcpy(before,bytes,sizeof before);
+    EEPROM::update(&c);
+    assert(errors==1&&!writes&&!loads&&!checks&&!invalidated);
+    assert(!memcmp(before,bytes,sizeof before));
+}
+static void admitted(GCode c,unsigned slots){
+    EEPROM::update(&c);
+    assert(!errors&&loads==1&&checks==1&&invalidated==slots);
 }
 int main(){
-    unsigned count=0,noops=0,rejected=0,revocations=0;
-    for(uint8_t t=0;t<4;++t){
-        const int width=t==0?1:t==1?2:4;
-        for(int32_t p=-4;p<=2052;++p)for(bool identical:{false,true}){
-            reset();GCode c;c.P=p;c.T=t;c.S=identical?int32_t(0xa5a5a5a5u):0;
-            const uint32_t bits=identical?0xa5a5a5a5u:0;
-            memcpy(&c.X,&bits,4);
-            bool deny=p<0||p>2048-width;
-            if(!deny)for(int i=0;i<width;++i)deny|=protectedByte(p+i);
-            uint8_t slots=0;
-            if(!deny&&!identical)for(int i=0;i<width;++i)slots|=slotFor(p+i);
-            EEPROM::update(&c);
-            if(deny){assert(errors==1&&writes==0&&checks==0&&loads==0&&invalidated==0);++rejected;}
-            else{
-                assert(errors==0&&checks==1&&loads==1);
-                const uint8_t fitted=NUM_EXTRUDER==2?7:5;
-                assert(invalidated==(slots&fitted));
-                for(unsigned slot=0;slot<3;++slot)assert(bytes[1978+3*slot]==((slots&(1u<<slot))?0:0xa5));
-                for(unsigned i=0;i<sizeof bytes;++i){
-                    bool marker=false;
-                    for(unsigned slot=0;slot<3;++slot)marker|=(slots&(1u<<slot))&&i==1978+3*slot;
-                    const bool written=i>=unsigned(p)&&i<unsigned(p+width);
-                    assert(bytes[i]==((marker||(written&&!identical))?0:0xa5));
-                }
-                if(identical)++noops;
-                if(slots)++revocations;
-            }
+    unsigned count=0,noops=0,rejected=0;
+    for(uint8_t type=0;type<=4;++type)for(int32_t pos=-4;pos<=2052;++pos){
+        reset();GCode c;c.P=pos;c.T=type;
+        bool listed=false;
+        for(auto f:fields)if(f.pos==pos&&f.type==type)listed=true;
+        if(listed){EEPROM::update(&c);assert(!errors&&!writes&&!loads&&!checks&&!invalidated);++noops;}
+        else{denied(c);++rejected;}
+        ++count;
+    }
+    for(uint8_t type=0;type<4;++type)for(int32_t pos:{INT32_MIN,INT32_MAX,-65536,-65535,65536,65536+217,65536+1978}){
+        reset();GCode c;c.P=pos;c.T=type;denied(c);++count;++rejected;
+    }
+    for(unsigned missing=0;missing<4;++missing){
+        reset();GCode c;c.P=107;c.T=0;c.S=90;
+        if(missing==0)c.p=false;
+        if(missing==1)c.t=false;
+        if(missing==2)c.s=false;
+        if(missing==3){c.P=108;c.T=3;c.x=false;}
+        denied(c);++count;
+    }
+    for(unsigned slot=0;slot<3;++slot){
+        if(slot==1&&NUM_EXTRUDER==1)continue;
+        const unsigned base=slot==0?200:slot==1?300:0;
+        const unsigned drive=slot==2?107:base+17,p=slot==2?108:base+18;
+        const unsigned sensor=slot==2?1922:base+94,cap=slot==2?120:base+30;
+        const unsigned marker=1978+slot*3;
+        for(int32_t value:{-1,0,1,80,120,255,256,65536}){
+            reset();bytes[marker]=0xa9;bytes[drive]=100;GCode c;c.P=drive;c.S=value;
+            if(value<1||value>255)denied(c);else{admitted(c,0);assert(bytes[marker]==0xa9&&bytes[drive]==value);}
             ++count;
         }
-        for(int32_t p:{INT32_MIN,INT32_MAX,-65536,-65535,65536,65536+217,65536+1978}){
-            reset();GCode c;c.P=p;c.T=t;EEPROM::update(&c);
-            assert(errors==1&&writes==0&&checks==0&&loads==0&&invalidated==0);++count;++rejected;
+        for(int32_t value:{-1,0,3,7,8,13,39,53,60,100,101,255,256}){
+            reset();bytes[marker]=0xa9;bytes[sensor]=14;GCode c;c.P=sensor;c.S=value;
+            const bool valid=value==0||value==3||value==8||value==13||value==53||value==60||value==100;
+            if(valid){admitted(c,1u<<slot);assert(bytes[marker]==0&&bytes[sensor]==value);}else denied(c);
+            ++count;
         }
+        for(int32_t value:{-1,0,1,39,40,200,255,256}){
+            reset();bytes[marker]=0xa9;bytes[cap]=128;GCode c;c.P=cap;c.S=value;
+            if(value==0||(value>=40&&value<=255)){admitted(c,1u<<slot);assert(bytes[marker]==0&&bytes[cap]==value);}else denied(c);
+            ++count;
+        }
+        for(float value:{-1.f,0.f,.1f,1000.f,1001.f,std::numeric_limits<float>::infinity(),std::numeric_limits<float>::quiet_NaN()}){
+            reset();bytes[marker]=0xa9;GCode c;c.P=p;c.T=3;c.X=value;
+            if(value==0){EEPROM::update(&c);assert(!errors&&!writes&&!loads&&!invalidated);}
+            else if(value>0&&value<=1000){admitted(c,1u<<slot);assert(bytes[marker]==0);}
+            else denied(c);
+            ++count;
+        }
+        reset();bytes[marker]=0xa9;GCode c;c.P=sensor;c.S=3;ignore=marker;
+        EEPROM::update(&c);assert(errors==1&&writes==1&&!checks&&!loads&&!bytes[sensor]&&invalidated==(1u<<slot));++count;
     }
-    // Marker readback failure must stop the write, even on an unfitted E1.
-    for(unsigned slot=0;slot<3;++slot){
-        reset();GCode c;c.P=slot==0?217:slot==1?317:107;c.S=0;
-        ignore=1978+3*slot;EEPROM::update(&c);
-        assert(errors==1&&writes==1&&checks==0&&loads==0&&bytes[c.P]==0xa5);
-        assert(invalidated==((slot==2||slot<NUM_EXTRUDER)?(1u<<slot):0));++count;
+    reset();GCode c;c.P=125;c.T=2;c.S=1;denied(c);++count;
+    reset();c.P=129;c.T=3;c.X=1;denied(c);++count;
+    for(int32_t value:{-1,0,49,50,100,160,161,32768}){
+        reset();c=GCode{};c.P=1970;c.T=1;c.S=value;
+        if(value==0){EEPROM::update(&c);assert(!errors&&!writes&&!loads);}
+        else if(value>=50&&value<=160)admitted(c,0);else denied(c);
+        ++count;
     }
-    // Missing payload keeps existing no-write reload behavior.
-    reset();GCode c;c.P=217;c.s=false;EEPROM::update(&c);
-    assert(!writes&&!invalidated&&!errors&&loads==1&&checks==1);++count;
-    reset();c.T=3;c.x=false;EEPROM::update(&c);
-    assert(!writes&&!invalidated&&!errors&&loads==1&&checks==1);++count;
-    std::printf("M206 actual-source: %u cases, %u rejected, %u identical, %u thermal revocations, %d extruders\n",count,rejected,noops,revocations,NUM_EXTRUDER);
+    std::printf("M206 exact fields: %u cases, %u absent/wrong-type denied, %u exact no-ops, %d extruders\n",count,rejected,noops,NUM_EXTRUDER);
 }
 '''
 with tempfile.TemporaryDirectory() as d:
     p=Path(d)/"m206.cpp";exe=Path(d)/"m206"
-    p.write_text(pre+source[a:b]+main)
-    for n in (1,2):
+    golden=(root/"tests/eeprom-report-golden.tsv").read_text().splitlines()
+    for model,n,board in (("RF1000",1,1),("RF2000",2,2),("RF2000",2,3),("RF2000-X44",1,2)):
+        rows=[line.split("\t") for line in golden if line.startswith(model+"\t")]
+        fixture="struct Field {int pos,type;}; static const Field fields[]={"+",".join("{"+r[1]+","+r[2]+"}" for r in rows)+"};\n"
+        assert rows
+        p.write_text(pre+source[a:b]+fixture+main)
+        flags=[f"-DNUM_EXTRUDER={n}",f"-DMOTHERBOARD={board}","-DCASE_FAN_PIN=5"]
+        if board!=1:flags.append("-DRGB_LIGHT_R_PIN=1")
         subprocess.run(["c++","-std=c++11","-O2","-Wall","-Wextra","-Werror",
-                        "-DRF_THERMAL_EMERGENCY_EXPERIMENT=1",f"-DNUM_EXTRUDER={n}",
+                        "-DRF_THERMAL_EMERGENCY_EXPERIMENT=1",*flags,
                         "-I",str(fw),str(p),"-o",str(exe)],check=True)
         subprocess.run([str(exe)],check=True)
