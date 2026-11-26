@@ -133,6 +133,62 @@ static bool validHostThermalValue(const GCode* com,uint16_t address) {
     }
     return true; // Nonthermal field-specific checks are handled by their owners.
 }
+// Use established loader/menu bounds; do not silently repair a proposed
+// out-of-range value after writing it. This is not mechanical qualification.
+static bool validHostNonthermalValue(const GCode* c,uint16_t p) {
+    const float x=c->X;
+    const int32_t v=c->S;
+    if(p==EPR_X_MAX_FEEDRATE||p==EPR_Y_MAX_FEEDRATE||p==EPR_Z_MAX_FEEDRATE||
+       p==EPR_X_HOMING_FEEDRATE_PRINT||p==EPR_Y_HOMING_FEEDRATE_PRINT||p==EPR_Z_HOMING_FEEDRATE_PRINT) {
+        const bool home=p>=EPR_X_HOMING_FEEDRATE_PRINT;
+        const uint8_t axis=uint8_t((p-(home?EPR_X_HOMING_FEEDRATE_PRINT:EPR_X_MAX_FEEDRATE))/4);
+        const float limit=axis==X_AXIS?MAX_FEEDRATE_X:axis==Y_AXIS?MAX_FEEDRATE_Y:MAX_FEEDRATE_Z;
+        if(!(x>0&&x<=limit))return false;
+        // Homing is never faster than the proposed/current axis maximum.
+        return home?x<=HAL::eprGetFloat(EPR_X_MAX_FEEDRATE+4*axis)
+                   :x>=HAL::eprGetFloat(EPR_X_HOMING_FEEDRATE_PRINT+4*axis);
+    }
+    if(p==EPR_X_MAX_ACCEL||p==EPR_Y_MAX_ACCEL||p==EPR_X_MAX_TRAVEL_ACCEL||p==EPR_Y_MAX_TRAVEL_ACCEL)
+        return x>=ACCELERATION_MIN_XY&&x<=ACCELERATION_MAX_XY;
+    if(p==EPR_Z_MAX_ACCEL||p==EPR_Z_MAX_TRAVEL_ACCEL)return x>=ACCELERATION_MIN_Z&&x<=ACCELERATION_MAX_Z;
+    if(p==EPR_MAX_XYJERK)return x>=1&&x<=33.3f;
+    if(p==EPR_MAX_ZJERK)return x>=.05f&&x<=2;
+    if(p==EPR_XAXIS_STEPS_PER_MM||p==EPR_YAXIS_STEPS_PER_MM||p==EPR_ZAXIS_STEPS_PER_MM)
+        return x>0; // Upper calibration envelope still needs joint timing/travel analysis.
+    if(p==EPR_X_LENGTH)return x>0&&x<=245;
+    if(p==EPR_Y_LENGTH||p==EPR_Z_LENGTH)return x>0; // Retrofit travel envelope not yet qualified.
+    if(p==EPR_MAX_INACTIVE_TIME||p==EPR_STEPPER_INACTIVE_TIME)return v>=0;
+    if(p==EPR_RF_STEP_PACKING_MIN_INTERVAL)return v>=MIN_STEP_PACKING_MIN_INTERVAL&&v<=MAX_STEP_PACKING_MIN_INTERVAL;
+    if(p==EPR_ZSCAN_START_MM)return x>=.3f&&x<=6;
+    if(p==EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX)return v>=1&&v<=300;
+    if(p==EPR_RF_MOD_SENSEOFFSET_DIGITS)return v>=500&&v<=EMERGENCY_PAUSE_DIGITS_MAX;
+    if(p==EPR_RF_EMERGENCYPAUSEDIGITSMIN)
+        return v>=EMERGENCY_PAUSE_DIGITS_MIN&&v<=EMERGENCY_PAUSE_DIGITS_MAX&&v<=HAL::eprGetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMAX);
+    if(p==EPR_RF_EMERGENCYPAUSEDIGITSMAX)
+        return v>=EMERGENCY_PAUSE_DIGITS_MIN&&v<=EMERGENCY_PAUSE_DIGITS_MAX&&v>=HAL::eprGetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMIN);
+    if(p==EPR_RF_EMERGENCYZSTOPDIGITSMIN)
+        return v>=EMERGENCY_STOP_DIGITS_MIN&&v<=EMERGENCY_STOP_DIGITS_MAX&&v!=0&&v<=HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX);
+    if(p==EPR_RF_EMERGENCYZSTOPDIGITSMAX)
+        return v>=EMERGENCY_STOP_DIGITS_MIN&&v<=EMERGENCY_STOP_DIGITS_MAX&&v!=0&&v>=HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN);
+    if(p>=EPR_RF_MOTOR_CURRENT&&p<EPR_RF_MOTOR_CURRENT+NUM_EXTRUDER+3) {
+        static const unsigned short maximum[] PROGMEM=MOTOR_CURRENT_MAX;
+        return v>=MOTOR_CURRENT_MIN&&v<=pgm_read_word(&maximum[p-EPR_RF_MOTOR_CURRENT]);
+    }
+    if(p==EPR_RF_FAN_MODE||p==EPR_RF_CASE_LIGHT_MODE||p==EPR_RF_FET1_MODE||p==EPR_RF_FET2_MODE||p==EPR_RF_FET3_MODE)return v<=1;
+    if(p==EPR_RF_PART_FAN_SPEED)return v>=1&&v<=PART_FAN_MODE_MAX;
+    if(p==EPR_RF_PART_FAN_PWM_MIN)return v>=1&&v+16<=HAL::eprGetByte(EPR_RF_PART_FAN_PWM_MAX);
+    if(p==EPR_RF_PART_FAN_PWM_MAX)return v<=254&&v>=16+HAL::eprGetByte(EPR_RF_PART_FAN_PWM_MIN);
+    if(p==EPR_RF_ZERO_DIGIT_STATE||p==EPR_RF_DIGIT_CMP_STATE)return v==1||v==2;
+    for(uint8_t slot=0;slot<NUM_EXTRUDER;++slot) {
+        const uint16_t base=EEPROM_EXTRUDER_OFFSET+slot*EEPROM_EXTRUDER_LENGTH;
+        if(p==base+EPR_EXTRUDER_STEPS_PER_MM)return x>0&&x<5540;
+        if(p==base+EPR_EXTRUDER_MAX_FEEDRATE)return x>0&&x<100&&x>=HAL::eprGetFloat(base+EPR_EXTRUDER_MAX_START_FEEDRATE);
+        if(p==base+EPR_EXTRUDER_MAX_START_FEEDRATE)return x>0&&x<=HAL::eprGetFloat(base+EPR_EXTRUDER_MAX_FEEDRATE);
+        if(p==base+EPR_EXTRUDER_MAX_ACCELERATION)return x>0&&x<10000;
+        if(p==base+EPR_EXTRUDER_ADVANCE_L)return x==0||(x>=20&&x<=250);
+    }
+    return true; // Remaining calibration/enum/baud fields need owner-specific audit.
+}
 static bool prepareRawThermalWrite(GCode* com,uint8_t width) {
     // Caller validated the full signed address and write width first.
     // Preserve no-op M206 transfers from host configuration tools.
@@ -203,8 +259,8 @@ void EEPROM::update(GCode* com) {
         Com::printErrorFLN(PSTR("EEPROM setting is read-only"));
         return;
     }
-    if(!validHostThermalValue(com,address)) {
-        Com::printErrorFLN(PSTR("Invalid thermal EEPROM value"));
+    if(!validHostThermalValue(com,address)||!validHostNonthermalValue(com,address)) {
+        Com::printErrorFLN(PSTR("Invalid EEPROM setting value"));
         return;
     }
 #endif

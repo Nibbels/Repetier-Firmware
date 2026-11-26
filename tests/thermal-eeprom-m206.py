@@ -29,6 +29,24 @@ using std::isfinite;
 #define UI_SET_MAX_HEATED_BED_TEMP 160
 #define UI_SET_MIN_EXTRUDER_TEMP 70
 #define UI_SET_MAX_EXTRUDER_TEMP 270
+#define MAX_FEEDRATE_X 150
+#define MAX_FEEDRATE_Y 150
+#define MAX_FEEDRATE_Z 9
+#define ACCELERATION_MIN_XY 100
+#define ACCELERATION_MAX_XY 6000
+#define ACCELERATION_MIN_Z 5
+#define ACCELERATION_MAX_Z 100
+#define MIN_STEP_PACKING_MIN_INTERVAL 3300
+#define MAX_STEP_PACKING_MIN_INTERVAL 5000
+#define EMERGENCY_PAUSE_DIGITS_MIN -11000
+#define EMERGENCY_PAUSE_DIGITS_MAX 11000
+#define EMERGENCY_STOP_DIGITS_MIN -12500
+#define EMERGENCY_STOP_DIGITS_MAX 12500
+#define MOTOR_CURRENT_MIN 32
+#define MOTOR_CURRENT_MAX {126,126,126,126,126}
+#define PART_FAN_MODE_MAX 7
+#define PROGMEM
+static unsigned short pgm_read_word(const unsigned short* p){return *p;}
 #include <cstring>
 #include <initializer_list>
 using PGM_P=const char*;
@@ -63,6 +81,9 @@ struct HAL {
         }
         if(int(p)!=ignore)bytes[p]=v;
     }
+    static int32_t eprGetInt32(unsigned p){uint32_t v=0;for(unsigned i=0;i<4;++i)v|=uint32_t(eprGetByte(p+i))<<(8*i);return int32_t(v);}
+    static int16_t eprGetInt16(unsigned p){return int16_t(uint16_t(eprGetByte(p))|(uint16_t(eprGetByte(p+1))<<8));}
+    static float eprGetFloat(unsigned p){int32_t v=eprGetInt32(p);float f;memcpy(&f,&v,4);return f;}
     static void eprSetByte(unsigned p,uint8_t v){put(p,v);}
     static void eprSetInt16(unsigned p,int16_t v){for(unsigned i=0;i<2;++i)put(p+i,uint16_t(v)>>(8*i));}
     static void eprSetInt32(unsigned p,int32_t v){for(unsigned i=0;i<4;++i)put(p+i,uint32_t(v)>>(8*i));}
@@ -158,6 +179,32 @@ int main(){
         reset();c=GCode{};c.P=1970;c.T=1;c.S=value;
         if(value==0){EEPROM::update(&c);assert(!errors&&!writes&&!loads);}
         else if(value>=50&&value<=110)admitted(c,0);else denied(c);
+        ++count;
+    }
+    // Real cross-field fixtures, not the all-zero schema inventory.
+    for(float value:{-1.f,1.f,20.f,100.f,150.f,151.f}){
+        reset();HAL::eprSetFloat(15,100);HAL::eprSetFloat(27,20);writes=0;
+        c=GCode{};c.P=15;c.T=3;c.X=value;
+        if(value==100){EEPROM::update(&c);assert(!errors&&!writes&&!loads);}
+        else if(value>=20&&value<=150)admitted(c,0);else denied(c);
+        ++count;
+    }
+    for(int32_t value:{0,1,16,84,85,100,255}){
+        reset();bytes[1961]=10;bytes[1962]=100;
+        c=GCode{};c.P=1961;c.S=value;
+        if(value>=1&&value<=84)admitted(c,0);else denied(c);
+        ++count;
+    }
+    for(int32_t value:{-1,0,3299,3300,5000,5001}){
+        reset();bytes[1964]=1;
+        c=GCode{};c.P=1964;c.T=1;c.S=value;
+        if(value>=3300&&value<=5000)admitted(c,0);else denied(c);
+        ++count;
+    }
+    for(int32_t value:{-11001,-11000,-1,0,1,11000,11001}){
+        reset();HAL::eprSetInt32(1910,-100);HAL::eprSetInt32(1914,100);writes=0;
+        c=GCode{};c.P=1910;c.T=2;c.S=value;
+        if(value>=-11000&&value<=100)admitted(c,0);else denied(c);
         ++count;
     }
     std::printf("M206 exact fields: %u cases, %u absent/wrong-type denied, %u exact no-ops, %d extruders\n",count,rejected,noops,NUM_EXTRUDER);
