@@ -501,6 +501,15 @@ void legacyStream(const std::string& scenario) {
 
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
 void strictEepromSyntax() {
+    // Exhaust both signed alias neighborhoods before the 8-bit/16-bit conversion.
+    for(int32_t type=-65536;type<=65536;++type){
+        const std::string line="M206 T"+std::to_string(type)+" P107 "+(type==3?"X1":"S80");
+        assert(validEepromAscii(line.c_str())==(type>=0&&type<=3));
+    }
+    for(int32_t pos=-65536;pos<=65536;++pos){
+        const std::string line="M206 T0 P"+std::to_string(pos)+" S80";
+        assert(validEepromAscii(line.c_str())==(pos>=0&&pos<2048));
+    }
     for(const char* valid:{"M206 T0 P107 S80","m206p107t0s80","N1 M206 T3 P108 X1.25*12",
                           "M206 T3 P108 X-1.25e+2","M206 T2 P79 S2147483647",
                           "M206 T2 P79 S-2147483648","T0 M206 P107 S+80",
