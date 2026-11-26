@@ -266,6 +266,9 @@ void Extruder::manageTemperatures() {
 
     if (!Printer::isAnyTempsensorDefect() && !errorDetected)
         Printer::markTemperatureReadingsAvailable();
+#ifdef RF_HEATER_RESET_WDT_EXPERIMENT
+    HAL::completeThermalWatchdogPass();
+#endif
 
 } // manageTemperatures
 
