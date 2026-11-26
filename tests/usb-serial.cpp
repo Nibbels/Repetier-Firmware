@@ -54,6 +54,36 @@ void transmit(uint8_t firstByte, int count) {
     assert(!(UCSR0B & _BV(UDRIE0)) && (UCSR0B & _BV(TXEN0)));
 }
 
+// Every ring start position, full-buffer rejection, partial drain and
+// resumption. A rejected diagnostic byte must not overwrite queued traffic.
+void nonblockingTransmit() {
+    for (unsigned phase = 0; phase < 64; ++phase) {
+        assert(!(UCSR0B & _BV(UDRIE0)));
+        for (unsigned i = 0; i < 63; ++i)
+            assert(UsbSerial::tryWrite(uint8_t(i)));
+        assert(UCSR0B & _BV(UDRIE0));
+        for (unsigned i = 0; i < 128; ++i)
+            assert(!UsbSerial::tryWrite(0xfe));
+        USART0_UDRE_vect();
+        assert(UDR0 == 0);
+        assert(UsbSerial::tryWrite(0xa5));
+        assert(!UsbSerial::tryWrite(0xfe));
+        for (unsigned i = 1; i < 63; ++i) {
+            USART0_UDRE_vect();
+            assert(UDR0 == i);
+        }
+        USART0_UDRE_vect();
+        assert(UDR0 == 0xa5);
+        USART0_UDRE_vect();
+        assert(!(UCSR0B & _BV(UDRIE0)));
+        // Move the empty-ring cursor by one between rounds.
+        assert(UsbSerial::tryWrite(0x5a));
+        USART0_UDRE_vect();
+        assert(UDR0 == 0x5a);
+        USART0_UDRE_vect();
+    }
+}
+
 } // namespace
 
 int main() {
@@ -63,5 +93,6 @@ int main() {
     receive();
     transmit(0, 63);
     transmit(100, 40);
+    nonblockingTransmit();
     std::puts("USART0 baud and ring replay passed");
 }
