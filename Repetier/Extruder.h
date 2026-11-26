@@ -364,6 +364,9 @@ namespace ThermalEmergency {
     const Ledger<NUM_TEMPERATURE_LOOPS>& faultLedger();
     // Foreground only, after safe GPIO initialization.
     void latchSystemFault(Cause cause);
+    bool liveTemperatureValid(uint8_t channel);
+    void requestLiveReport();
+    void requestDiagnosticReplay();
 }
 #endif
 
