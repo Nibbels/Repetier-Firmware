@@ -331,7 +331,7 @@ int main(int argc, char** argv) {
         // survives, affected heater mask grows, no new stop/heat.
         bed.sensorType=255;
         for(unsigned i=0;i<15;++i)service();
-        assert(faultLedger().reasons(NUM_EXTRUDER)&bit(Cause::SensorInvalid));
+        assert(faultLedger().reasons(NUM_EXTRUDER)&causeBit(Cause::SensorInvalid));
         assert(faultLedger().first().evidence.uptimeMs==started);
         assert(faultLedger().first().evidence.targetC==140);
         assert(faultLedger().level()==Severity::ThermalError);
