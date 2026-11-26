@@ -2,6 +2,7 @@
 """Optional pinned-AVR linked probe for research-only combined Timer3/5 heater adapter."""
 from pathlib import Path
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -18,6 +19,7 @@ bindir = Path(properties["compiler.path"])
 suffix = ".exe" if os.name == "nt" else ""
 cxx = bindir / ("avr-g++" + suffix)
 objdump = bindir / ("avr-objdump" + suffix)
+nm = bindir / ("avr-nm" + suffix)
 code = r"""
 #include <avr/interrupt.h>
 #include "HeaterLease.h"
@@ -42,8 +44,10 @@ extern "C" __attribute__((noinline,used,externally_visible)) void probeGrant() {
     SREG=sreg;
 }
 ISR(TIMER3_COMPA_vect) {pwm.inhibit();}
-ISR(TIMER3_COMPB_vect) {pwm.inhibit();}
-ISR(TIMER3_COMPC_vect) {pwm.inhibit();}
+// All three expiry vectors perform the identical global shutdown. Explicit
+// aliases avoid compiler-generated CALL of a handler ending in RETI.
+ISR(TIMER3_COMPB_vect, ISR_ALIASOF(TIMER3_COMPA_vect));
+ISR(TIMER3_COMPC_vect, ISR_ALIASOF(TIMER3_COMPA_vect));
 ISR(TIMER5_COMPA_vect) {pwm.compare(0);}
 ISR(TIMER5_COMPB_vect) {pwm.compare(1);}
 ISR(TIMER5_COMPC_vect) {pwm.compare(2);}
@@ -61,7 +65,19 @@ with tempfile.TemporaryDirectory() as temp:
                     "-Os", "-flto", "-Wall", "-Wextra", "-Werror",
                     "-I", str(root / "tools/task0034"), str(cpp), "-o", str(elf)], check=True)
     dump = subprocess.check_output([str(objdump), "-d", "-C", str(elf)], text=True)
-    for symbol in ("<probeGrant>:", "<__vector_32>:", "<__vector_33>:", "<__vector_34>:", "<__vector_47>:", "<__vector_48>:", "<__vector_49>:", "<__vector_50>:"):
+    for symbol in ("<probeGrant>:", "<__vector_47>:", "<__vector_48>:", "<__vector_49>:", "<__vector_50>:"):
         assert symbol in dump, symbol
+    symbols = subprocess.check_output([str(nm), str(elf)], text=True)
+    vectors = {int(m[2]): int(m[1], 16) for m in re.finditer(
+        r"^([0-9a-f]+)\s+[TtWw]\s+__vector_(\d+)$", symbols, re.M)}
+    assert vectors[32] == vectors[33] == vectors[34], vectors
+    # No CALL/RCALL may target any linked interrupt-vector entry.
+    # Compare numeric addresses because objdump can print any alias name.
+    for line in dump.splitlines():
+        m = re.search(r"\bcall\s+0x([0-9a-f]+)\b|\brcall\s+[^;]+;\s*0x([0-9a-f]+)\b", line)
+        if m:
+            address = int(m[1] or m[2], 16)
+            assert address not in vectors.values(), line
+    print("Timer3 expiry vectors share one handler; no direct ISR calls.")
     print(dump)
     print("AVR probe linked; no runtime/cycle bound asserted.")
