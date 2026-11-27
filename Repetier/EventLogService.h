@@ -51,6 +51,7 @@ public:
     // Coalesce duplicate history requests; no command or heater admission.
     void requestHistory(){if(query_==Query::Idle)query_=Query::Begin;}
     bool historyPending()const{return query_!=Query::Idle;}
+    bool scanPending()const{return compact_.pending();}
     bool logFailed()const{return logFailed_;}
     // Admission copies six logical bytes; never accesses EEPROM. If the
     // single slot is occupied, caller retains existing live diagnosis.
