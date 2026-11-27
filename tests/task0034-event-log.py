@@ -202,6 +202,88 @@ void serviceTest(){
     assert(after.all.find("measured_C:unknown target_C:unknown")!=std::string::npos);
     assert(after.all.find("LOG END")!=std::string::npos);
 }
+void compactServiceTest(){
+    using S=Service<Slots,2,Line,Cause,Serial>;
+    // No diagnostic event for a requested cancel or a retry.
+    ScanSession session;
+    session.armRetries(1);
+    session.requestRetryOrAbort(ScanAbort::AveragePressure);
+    assert(!session.aborting()&&session.takeRetryRequest()&&session.consumeRetry());
+    session.requestAbort(ScanAbort::Canceled);
+    session.requestAbort(ScanAbort::DmsUnavailable);
+    assert(ScanSession::retreatOnly(ScanAbort::DmsUnavailable));
+    assert(session.takeAbort()==ScanAbort::DmsUnavailable);
+    assert(!ScanSession::retreatOnly(ScanAbort::HeaterTargetRejected));
+    Store store;Serial serial;S service(serial);Ledger ledger;
+    assert(!service.submitScan(ScanAbort::None,ScanContext::HeatBed,1));
+    assert(!service.submitScan(ScanAbort::Canceled,ScanContext::HeatBed,2));
+    assert(!service.submitScan(ScanAbort(255),ScanContext::HeatBed,3));
+    assert(!service.submitScan(ScanAbort::DmsOverload,ScanContext(0),4));
+    assert(service.submitScan(ScanAbort::UnevenBed,ScanContext::HeatBed,1234567));
+    assert(!service.submitScan(ScanAbort::MatrixHeight,ScanContext::ZOffset,5));
+    assert(store.launches==0&&store.reads==0);
+    store.otherOwner=true;
+    for(unsigned i=0;i<20;++i)service.service(store,ledger);
+    assert(store.launches==0&&store.reads==0);
+    store.otherOwner=false;
+    for(unsigned i=0;i<100&&!service.ring().pending();++i){
+        service.service(store,ledger);
+        if(store.busy)store.complete();
+    }
+    assert(service.ring().pending());
+    // An emergency may appear halfway through the normal record. Its
+    // immutable evidence must not be used to finish the scan record.
+    ledger.initial.cause=Cause::SensorInvalid;ledger.initial.channel=0;
+    ledger.escalation.cause=Cause::OverTemperature;ledger.escalation.channel=1;
+    for(unsigned i=0;i<400;++i){
+        service.service(store,ledger);
+        if(store.busy)store.complete();
+    }
+    assert(!service.logFailed()&&service.ring().latestSequence()==3);
+    uint8_t bytes[EntryBytes];assert(service.ring().readEntry(store,0,bytes));
+    EntryView v{bytes};
+    assert(v.reason()==18&&v.channel()==Channel::System&&v.context(0)==1);
+    assert(v.uptime()==1234567&&v.valid()==256&&v.raw()==0);
+    assert(service.ring().readEntry(store,1,bytes)&&v.reason()==1&&v.channel()==Channel::E0);
+    assert(service.ring().readEntry(store,2,bytes)&&v.reason()==6&&v.channel()==Channel::Bed);
+    // Cold boot: the shared history decoder presents both families.
+    Ledger normal;Serial after;S restarted(after);restarted.requestHistory();
+    for(unsigned i=0;i<200&&restarted.historyPending();++i)restarted.service(store,normal);
+    assert(!restarted.historyPending());
+    assert(after.all.find("LOG #3 BED OVER TEMP")!=std::string::npos);
+    assert(after.all.find("LOG #1 HBS CODE:18")!=std::string::npos);
+    assert(after.all.find("Uneven bed, dirt hole, bad ground")!=std::string::npos);
+    assert(after.all.find("uptime_ms:1234567")!=std::string::npos);
+    // If thermal and compact are both waiting before any append, thermal
+    // wins the writer. No writes or reads at fault admission.
+    Store prior;Serial tx;S priority(tx);
+    assert(priority.submitScan(ScanAbort::HeaterTargetChanged,ScanContext::HeatBed,100));
+    for(unsigned i=0;i<400;++i){
+        priority.service(prior,ledger);if(prior.busy)prior.complete();
+    }
+    assert(priority.ring().latestSequence()==3);
+    assert(priority.ring().readEntry(prior,0,bytes)&&v.reason()==1);
+    assert(priority.ring().readEntry(prior,1,bytes)&&v.reason()==6);
+    assert(priority.ring().readEntry(prior,2,bytes)&&v.reason()==29);
+    // Every stable code is unique and the common decoder fits a serial
+    // span, using actual catalogue fragments rather than a second list.
+    uint32_t seen=0;
+#define RF_TEST_SCAN(name, enumValue, code, shortText, hint) \
+    { static_assert(uint8_t(ScanAbort::name)==enumValue,"scan enum changed"); \
+      static_assert(scanFaultCode(ScanAbort::name)==code,"wire code changed"); \
+      assert(!(seen&(1UL<<(code-12))));seen|=1UL<<(code-12); \
+      CompactEvent event;assert(event.admitScan(ScanAbort::name,ScanContext::ZOffset,0xffffffffu)); \
+      std::memset(bytes,0,sizeof(bytes)); \
+      for(uint8_t k=0;k<26;++k)bytes[6+k]=event.byte(k); \
+      for(uint8_t k=2;k<6;++k)bytes[k]=255; \
+      assert(rows(v)==3&&v.reason()==code&&v.uptime()==0xffffffffu); \
+      for(uint8_t k=0;k<3;++k){Line l;entryLine<Line,Cause>(l,v,k);assert(l.finish());} \
+      Line l;entryLine<Line,Cause>(l,v,1); \
+      assert(l.buffer==std::string(shortText)+(sizeof(hint)>1?" ":"")+hint); }
+    RF_SCAN_FAULTS(RF_TEST_SCAN)
+#undef RF_TEST_SCAN
+    assert(seen==((1UL<<18)-1));
+}
 void captureTest(){
     int16_t v=0;
     assert(deciC(-3276.8f,v)&&v==-32768);
@@ -263,6 +345,7 @@ void captureTest(){
 int main(){
     captureTest();
     serviceTest();
+    compactServiceTest();
     static_assert(R::Bytes==128,"region size");
     assert(eventId(Channel::System,0)==0&&eventId(Channel::System,64)==0);
     assert(newer(0,0xffffffffu)&&!newer(0xffffffffu,0)&&!newer(5,5));
@@ -356,7 +439,7 @@ int main(){
     // Reject unsupported versions and empty reason codes; not a CRC.
     wrap.data[1]=99;wrap.data[3*EntryBytes+31]=0;
     R bad;scan(bad,wrap);assert(bad.latestSequence()==0&&bad.latestSlot()==2);
-    std::printf("Event log: 40 appends, %u torn-byte cuts, wrap, busy owner, ignored writes, thermal evidence/escalation, read order and bounded serial output PASS\n",cuts);
+    std::printf("Event log: 40 appends, %u torn-byte cuts, wrap, busy owner, ignored writes, thermal evidence/escalation, read order, bounded serial output, compact scan/thermal arbitration PASS\n",cuts);
 }
 """
 with tempfile.TemporaryDirectory() as d:
@@ -364,5 +447,5 @@ with tempfile.TemporaryDirectory() as d:
     exe=Path(d)/"event-log"
     p.write_text(source)
     subprocess.run(["c++","-std=c++11","-O2","-Wall","-Wextra","-Werror","-I",
-                    str(root/"tools/task0034/event-log"),str(p),"-o",str(exe)],check=True)
+                    str(root/"tools/task0034/event-log"),"-I",str(root/"Repetier"),str(p),"-o",str(exe)],check=True)
     subprocess.run([str(exe)],check=True)
