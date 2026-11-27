@@ -106,6 +106,9 @@ static void setupForPrinting() {
     uid.beginBootEye();
     BedMatrix::restoreAtStartup([]() { uid.serviceBootEye(); });
     uid.finishBootEye();
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+    EEPROM::reportRecovery();
+#endif
 
     Printer::pause.restoreDefaultParking();
 
@@ -298,6 +301,9 @@ unsigned char isMovingAllowed(const char* pszCommand, char outputLog) {
 } // isMovingAllowed
 
 unsigned char isHomingAllowed(GCode* com, char outputLog) {
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+    if(!EEPROM::settingsReady())return 0;
+#endif
 
     if (isAnyScanRunning()) {
         // do not allow homing while the heat bed scan is in progress

@@ -213,6 +213,7 @@ public:
     static bool commissionBedCutoff(uint8_t cutoff);
     static bool lastOperationSucceeded();
     static void reportRecovery();
+    static const void* recoveryDialogTag();
 #endif
     static void initBaudrate();
     // Persisted next-boot setting, not a report of the live UART divisor.

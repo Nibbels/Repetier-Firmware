@@ -48,7 +48,7 @@ def archive_failed(directory, mode, label):
 with tempfile.TemporaryDirectory() as temp:
     out=Path(temp)
     for mode,extra in (("lease",[]),("reset-wdt",["RF_HEATER_RESET_WDT_EXPERIMENT=1"]),
-                       ("emergency",["RF_HEATER_RESET_WDT_EXPERIMENT=1","RF_THERMAL_EMERGENCY_EXPERIMENT=1"])):
+                       ("emergency",["RF_HEATER_RESET_WDT_EXPERIMENT=1","RF_THERMAL_EMERGENCY_EXPERIMENT=1","RF_EEPROM_ZONE_EXPERIMENT=1"])):
         mode_dir=out/mode
         mode_dir.mkdir()
         for board,defs in baseline.TARGETS.items():

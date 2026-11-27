@@ -67,6 +67,22 @@ void dispatchMachine(GCode* com) {
         return;
     case 3913: return loadFilament(com);
     case 3914: return unloadFilament(com);
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+    // Qualification-only explicit recovery/commissioning command.
+    case 3915:
+        if(!com->hasP() && !com->hasS()) {EEPROM::reportRecovery();return;}
+        if(com->hasP() && com->P==1 && !com->hasS()) {
+            if(!EEPROM::acknowledgeRecovery())Com::printErrorFLN(PSTR("EEPROM acknowledgment rejected"));
+            else Com::printFLN(PSTR("EEPROM settings acknowledged"));
+            return;
+        }
+        if(com->hasP() && com->P==2 && com->hasS() && com->S>=40 && com->S<=150) {
+            if(!EEPROM::commissionBedCutoff(uint8_t(com->S)))Com::printErrorFLN(PSTR("Bed cutoff rejected"));
+            else Com::printFLN(PSTR("Bed cutoff commissioned"));
+            return;
+        }
+        return showInvalidSyntax(3915);
+#endif
 
     // Heaters, fans and board outputs.
     case 104: return setHotendTemperature(com);
@@ -179,6 +195,19 @@ void Commands::executeGCode(GCode* com) {
         Com::printErrorFLN(PSTR("Job rejected; stop host and restart printer."));
         return;
     }
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+    if(!EEPROM::settingsReady()) {
+        // Retain diagnostics and explicit settings recovery; no ordinary
+        // motion, heating, scan or script entry while settings are untrusted.
+        if(com->hasG() || !com->hasM() ||
+           (com->M!=105 && com->M!=111 && com->M!=112 && com->M!=114 &&
+            com->M!=115 && com->M!=205 && com->M!=206 && com->M!=501 &&
+            com->M!=502 && com->M!=3915)) {
+            Com::printErrorFLN(PSTR("EEPROM settings not acknowledged"));
+            return;
+        }
+    }
+#endif
     if (com->hasG()) {
         GCodeCommands::dispatchMotion(com);
     } else if (com->hasM()) // Process M Code

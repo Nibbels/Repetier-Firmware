@@ -110,8 +110,14 @@ void reportEeprom() {
 }
 
 void setEepromValue(GCode* com) {
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+    // The checked field-specific owner decides admission, including live
+    // DMIN/DMAX. Do not drain a print before validating the request.
+    EEPROM::update(com);
+#else
     if (Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Resume))
         EEPROM::update(com);
+#endif
 }
 
 void reportConfiguration() {
@@ -120,6 +126,9 @@ void reportConfiguration() {
 
 void saveConfiguration() {
     EEPROM::storeDataIntoEEPROM(false);
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+    if(!EEPROM::lastOperationSucceeded())return;
+#endif
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     if(Printer::printJob.emergencyLocked())return;
 #endif
@@ -130,6 +139,9 @@ void loadConfiguration() {
     if (!Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Resume))
         return;
     EEPROM::readDataFromEEPROM();
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+    if(!EEPROM::lastOperationSucceeded())return;
+#endif
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     if(Printer::printJob.emergencyLocked())return;
 #endif
@@ -143,7 +155,11 @@ void restoreConfigurationDefaults() {
     if (!Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Resume))
         return;
     EEPROM::restoreEEPROMSettingsFromConfiguration();
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+    if(!EEPROM::lastOperationSucceeded())return;
+#else
     EEPROM::storeDataIntoEEPROM(false);
+#endif
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     if(Printer::printJob.emergencyLocked())return;
 #endif

@@ -1008,6 +1008,9 @@ bool heatBedScanRunning() {
 }
 
 void startHeatBedScan(HeatBedScanMode mode) {
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+    if(!EEPROM::settingsReady())return;
+#endif
     if (!Calibration::zOffsetScanRunning())
         heatBedScan.startOrCancel(mode);
 }

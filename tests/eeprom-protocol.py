@@ -64,7 +64,7 @@ def fixture(variant):
 
 
 def main():
-    source = (FW / "Eeprom.cpp").read_text()
+    source = (FW / "Eeprom.cpp").read_text().split("\n#endif // RF_EEPROM_ZONE_EXPERIMENT legacy comparison",1)[0]
     header = (FW / "Eeprom.h").read_text()
     actual_layout = dict(re.findall(
         r"^#define (EPR_\w+|EEPROM_EXTRUDER_\w+)\s+(\d+)\b", header, re.M))

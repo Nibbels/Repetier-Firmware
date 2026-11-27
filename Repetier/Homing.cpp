@@ -432,6 +432,9 @@ void Printer::homeDigits() {
 
 void Printer::homeAxis(bool xaxis, bool yaxis, bool zaxis) // home non-delta printer
 {
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+    if(!EEPROM::settingsReady())return;
+#endif
     Printer::idleStatus.cancel();
 
     // Bei beliebiger user interaktion oder Homing soll G1 etc. erlaubt werden. Dann ist der Drucker nicht abgestürzt, sondern bedient worden.

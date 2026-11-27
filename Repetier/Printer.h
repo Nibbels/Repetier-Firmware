@@ -77,6 +77,9 @@
 #define FEEDRATE_GCODE true
 #define FEEDRATE_DIRECTCONFIG false
 
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+namespace EepromZones {bool machineSettingsReady();}
+#endif
 class Printer {
     static uint8_t menuMode_;
     static float axisStepsPerMM_[4];
@@ -183,8 +186,18 @@ public:
 
 
 
-    static bool movementUnlocked() { return movementUnlocked_; }
-    static void allowMovement() { movementUnlocked_ = true; }
+    static bool movementUnlocked() {
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+        if(!EepromZones::machineSettingsReady())return false;
+#endif
+        return movementUnlocked_;
+    }
+    static void allowMovement() {
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+        if(!EepromZones::machineSettingsReady())return;
+#endif
+        movementUnlocked_=true;
+    }
     static void lockMovement() { movementUnlocked_ = false; }
 
 
@@ -568,7 +581,12 @@ public:
     static void latchOutputInhibit(bool thermalFault);
     static bool isAnyTempsensorDefect() { return flag0 & PRINTER_FLAG0_TEMPSENSOR_DEFECT; }
     static bool legacySimulationRejected() { return flag0 & PRINTER_FLAG0_LEGACY_SIMULATION_REJECTED; }
-    static bool heatingInhibited() { return flag0 & (PRINTER_FLAG0_TEMPSENSOR_DEFECT | PRINTER_FLAG0_LEGACY_SIMULATION_REJECTED); }
+    static bool heatingInhibited() {
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+        if(!EepromZones::machineSettingsReady())return true;
+#endif
+        return flag0 & (PRINTER_FLAG0_TEMPSENSOR_DEFECT | PRINTER_FLAG0_LEGACY_SIMULATION_REJECTED);
+    }
 
     static INLINE bool isManualMoveMode() {
         return (flag0 & PRINTER_FLAG0_MANUAL_MOVE_MODE);

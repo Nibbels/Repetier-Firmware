@@ -10,7 +10,7 @@ bool& AvrDevice::settingsBusy(){return settingsOwned;}
 bool AvrDevice::logMayAccess(){return !settingsOwned && (SREG & _BV(SREG_I))!=0;}
 void AvrDevice::enableRuntimeServices(){runtimeServicesReady=true;}
 bool AvrDevice::foreground() const {return (SREG & _BV(SREG_I))!=0;}
-bool AvrDevice::ready() const {return eeprom_is_ready();}
+bool AvrDevice::ready() const {return eeprom_is_ready() && !(SPMCSR & _BV(SPMEN));}
 uint32_t AvrDevice::now() const {return HAL::timeInMilliseconds();}
 uint8_t AvrDevice::readReady(uint16_t pos) {return HAL::eprGetByte(pos);}
 void AvrDevice::updateReady(uint16_t pos,uint8_t value) {HAL::eprSetByte(pos,value);}

@@ -470,6 +470,9 @@ namespace GCodeCommands {
 namespace Calibration {
 
 void configureZOffsetScan(GCode* pCommand) {
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+    if(!EEPROM::settingsReady())return;
+#endif
     if (heatBedScanRunning()) {
         Com::printFLN(PSTR("M3900/M3901: bed scan in progress"));
         return;

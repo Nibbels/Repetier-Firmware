@@ -17,6 +17,7 @@ long EEPROM::configuredBaudrate_ = BAUDRATE;
 namespace {
 AvrDevice device;
 bool loaded=false;
+volatile bool outputsAdmitted=false;
 bool lastOk=false;
 uint32_t pending=AllAlerts;
 constexpr uint32_t OrdinaryAlerts=AllAlerts&~blockBit(BedSafety);
@@ -28,7 +29,7 @@ TemperatureController& controller(uint8_t block){return *tempController[block==B
 bool idle() {
     return !Printer::blockAll && !Printer::printJob.isBusy()
         && !Printer::printJob.commandsBlocked() && !Printer::pause.isPaused()
-        && !PrintLine::hasLines() && !PrintLine::directMoveActive()
+        && !PrintLine::hasLines() && !PrintLine::directMoveActive() && !Printer::needsCMPwait()
         && !isAnyScanRunning() && !TemperatureController::autotuneActive();
 }
 bool heatersOff() {
@@ -37,6 +38,7 @@ bool heatersOff() {
     return !TemperatureController::autotuneActive();
 }
 void revokeOutputs() {
+    outputsAdmitted=false;
     loaded=false;
     for(uint8_t h=0;h<NUM_TEMPERATURE_LOOPS;++h)tempController[h]->setTargetTemperature(0);
     heatedBedController.setBedEmergencyCutoff(0);
@@ -48,7 +50,8 @@ void failSettings(Result result) {
     // Not a sensor fault: report a separate settings failure. Terminal for
     // this boot after a live/durable discrepancy, so no stale admission.
     Printer::blockAll=1;
-    Com::printErrorFLN(PSTR("EEPROM settings fault"),int(result));
+    Com::printErrorFLN(PSTR("EEPROM settings fault"));
+    Com::printFLN(PSTR("EEPROM result: "),int(result));
     UI_STATUS_UPD("EEPROM fault");
 }
 bool accept(Result result) {
@@ -110,6 +113,7 @@ bool loadFull(bool reset,bool startup) {
         AccessoryOutputs::initializeCaseLight();
     }
     loaded=true;lastOk=true;
+    outputsAdmitted=!(pending&OrdinaryAlerts) && !Printer::blockAll;
     EEPROM::reportRecovery();
     return true;
 }
@@ -155,16 +159,22 @@ struct Report {
     }
 };
 }
-bool EEPROM::settingsReady(){return loaded && !(pending&OrdinaryAlerts) && !Printer::blockAll;}
+bool EEPROM::settingsReady(){return outputsAdmitted && !Printer::blockAll;}
+namespace EepromZones {bool machineSettingsReady(){return EEPROM::settingsReady();}}
 bool EEPROM::recoveryPending(){return loaded && (pending&OrdinaryAlerts);}
 bool EEPROM::lastOperationSucceeded(){return lastOk;}
+const void* EEPROM::recoveryDialogTag(){return PSTR("EEPROM recovery");}
 void EEPROM::reportRecovery() {
     if(pending&OrdinaryAlerts) {
         Com::printErrorFLN(PSTR("EEPROM recovery: verify defaults; acknowledge settings"));
         Com::printFLN(PSTR("EEPROM alert mask: "),pending);
         UI_STATUS_UPD("EEPROM check/OK");
+        showInformation(recoveryDialogTag(),PSTR("Verify defaults"),PSTR("OK to confirm"));
     }
-    if(pending&blockBit(BedSafety))Com::printFLN(PSTR("Bed cutoff not commissioned"));
+    if(pending&blockBit(BedSafety)) {
+        Com::printFLN(PSTR("Bed cutoff not commissioned; M3915 P2 S<40..150>"));
+        if(!(pending&OrdinaryAlerts))UI_STATUS_UPD("Bed cutoff unset");
+    }
 }
 bool EEPROM::acknowledgeRecovery() {
     if(!loaded || !idle() || !heatersOff())return false;
@@ -174,6 +184,7 @@ bool EEPROM::acknowledgeRecovery() {
     uint8_t cutoff=0;uint32_t alerts=AllAlerts;
     if(!accept(s.read(BedSafety,&cutoff,1,alerts)))return false;
     pending=alerts;
+    outputsAdmitted=loaded && !(pending&OrdinaryAlerts) && !Printer::blockAll;
     reportRecovery();
     return !(pending&OrdinaryAlerts);
 }
@@ -250,10 +261,11 @@ void EEPROM::update(GCode* com) {
         return true;
     };
     auto s=session();
-    const auto result=s.hostEdit(com->P,com->T,com->S,com->X,admit,publish);
+    const auto result=s.hostEdit(com->P,com->T,com->hasS()?com->S:0,com->hasX()?com->X:0,admit,publish);
     if(result==Result::Ok){lastOk=true;return;}
     if(result==Result::Invalid || result==Result::ReadOnly || result==Result::AdmissionRejected || result==Result::Busy) {
-        Com::printErrorFLN(PSTR("EEPROM edit rejected"),int(result));return;
+        Com::printErrorFLN(PSTR("EEPROM edit rejected"));
+        Com::printFLN(PSTR("EEPROM result: "),int(result));return;
     }
     failSettings(result);
 }

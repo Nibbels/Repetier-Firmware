@@ -414,7 +414,11 @@ Bytes 8 through 27 are reserved. The matrix starts at byte 28.
 #define EEPROM_OFFSET_HEADER_FORMAT                 0                                           // [bytes]
 #define EEPROM_OFFSET_ACTIVE_HEAT_BED_Z_MATRIX      4                                           // [bytes]
 
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+#define EEPROM_FORMAT                               8
+#else
 #define EEPROM_FORMAT                               7
+#endif
 
 
 // ##########################################################################################

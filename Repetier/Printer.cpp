@@ -340,6 +340,9 @@ bool Printer::queueRelativeMMCoordinates(float dx, float dy, float dz, float de,
  * This is expecially usefull to transfer the extruder 0 to 1 and backwards.
  */
 void Printer::offsetRelativeStepsCoordinates(int32_t dx, int32_t dy, int32_t dz, int32_t de, DirectMoveMode configuration) {
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+    if(!EEPROM::settingsReady())return;
+#endif
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     if(printJob.emergencyLocked())return;
 #endif

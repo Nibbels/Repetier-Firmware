@@ -826,6 +826,13 @@ void UIDisplay::menuEsc() {
 }
 
 void UIDisplay::okAction() {
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+    if(menuLevel && menu[menuLevel]==&ui_menu_message &&
+       messageLine2==EEPROM::recoveryDialogTag() && EEPROM::recoveryPending()) {
+        if(EEPROM::acknowledgeRecovery())menuEsc();
+        return;
+    }
+#endif
     if (Printer::isUIErrorMessage()) {
         Printer::setUIErrorMessage(false);
         return;

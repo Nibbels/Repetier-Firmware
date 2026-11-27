@@ -226,7 +226,7 @@ void setToolOffset(GCode* com) {
         Printer::offsetRelativeStepsCoordinates(-dx, -dy, 0, 0);
 
         if (com->hasS() && com->S > 0) {
-            EEPROM::storeToolOffsets(extId,com->X,com->Y,com->hasX(),com->hasY());
+            EEPROM::storeToolOffsets(extId,com->hasX()?com->X:0,com->hasY()?com->Y:0,com->hasX(),com->hasY());
         }
     }
 }

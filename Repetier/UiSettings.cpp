@@ -52,7 +52,11 @@ void UIDisplay::finishAction(int action) {
             break;
         }
         EEPROM::restoreEEPROMSettingsFromConfiguration();
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+        if(!EEPROM::lastOperationSucceeded())return;
+#else
         EEPROM::storeDataIntoEEPROM(false);
+#endif
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         if(Printer::printJob.emergencyLocked())return;
 #endif
@@ -846,6 +850,9 @@ void UIDisplay::changePressureSetting(int action, int8_t increment) {
 }
 
 void UIDisplay::changeHeaterSetting(int action, int8_t increment) {
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+    if(TemperatureController::autotuneActive())return;
+#endif
     switch (action) {
     case UI_ACTION_CHOOSE_DMIN: {
         if (menuLevel == 4) {                        // Identifikation des temperaturzyklus anhand der position im menü. Das ist nicht 100% sauber, aber funktioniert.
