@@ -25,15 +25,19 @@ function workload({radius, chord, speed, profile="compact"}) {
 }
 
 function transport(lines,{hostBaud=115200,deviceBaud=16000000/(8*17),window=1,ackBytes=4,ackDelayUs=0}={}){
-  if(!Number.isFinite(hostBaud)||!Number.isFinite(deviceBaud)||hostBaud<=0||deviceBaud<=0||!Number.isInteger(window)||window<1||!Number.isInteger(ackBytes)||ackBytes<1||!Number.isFinite(ackDelayUs)||ackDelayUs<0)throw Error("bad transport");
-  let rxEnd=0,txEnd=0; const ackEnds=[];
+  if(!Number.isFinite(hostBaud)||!Number.isFinite(deviceBaud)||hostBaud<=0||deviceBaud<=0||!Number.isInteger(window)||window<1||(ackBytes!=="numbered"&&(!Number.isInteger(ackBytes)||ackBytes<1))||!Number.isFinite(ackDelayUs)||ackDelayUs<0)throw Error("bad transport");
+  let rxEnd=0,txEnd=0,totalAckBytes=0; const ackEnds=[];
   for(let i=0;i<lines.length;i++){
     const start=Math.max(rxEnd,i>=window?ackEnds[i-window]:0);
     rxEnd=start+lines[i].length*10*1e6/hostBaud;
-    txEnd=Math.max(txEnd,rxEnd+ackDelayUs)+ackBytes*10*1e6/deviceBaud;
+    const match=/^N(\d+) /.exec(lines[i]);
+    if(ackBytes==="numbered"&&!match)throw Error("numbered ACK requires numbered frame");
+    const reply=ackBytes==="numbered"?5+String(Number(match[1])).length:ackBytes;
+    totalAckBytes+=reply;
+    txEnd=Math.max(txEnd,rxEnd+ackDelayUs)+reply*10*1e6/deviceBaud;
     ackEnds.push(txEnd);
   }
-  return {wireRxEndUs:rxEnd,wireLastAckEndUs:txEnd,idealReceivedFrames:lines.length,idealAckedFrames:lines.length};
+  return {wireRxEndUs:rxEnd,wireLastAckEndUs:txEnd,idealReceivedFrames:lines.length,idealAckedFrames:lines.length,totalAckBytes};
 }
 
 function scenario(spec,link) {
@@ -59,7 +63,9 @@ function selfTest(){
   check(JSON.stringify(w)===JSON.stringify(workload({radius:1,chord:1,speed:60})),"determinism");
   const rates=matrix();
   check(rates.length===11760 && new Set(rates.map(x=>x.link.hostBaud)).size===5,"baud matrix coverage");
-  return "8 groups of checks passed";
+  const numbered=transport([frame(9,"G1 X1"),frame(10,"G1 X2"),frame(99999,"G1 X3")],{ackBytes:"numbered"});
+  check(numbered.totalAckBytes===6+7+10,"numbered ACK decimal length");
+  return "9 groups of checks passed";
 }
 
 const baudRates=[115200,250000,500000,1000000,2000000];
