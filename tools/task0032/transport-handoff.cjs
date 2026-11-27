@@ -37,6 +37,24 @@ function matrix(contract){
       }
   return rows;
 }
+function admissionSweep(contract){
+  const rows=[];
+  const lengths=[...new Set(contract.stress.map(r=>r.segment_mm))].sort((a,b)=>a-b);
+  const speeds=[...new Set(contract.stress.map(r=>r.requested_mm_s))].sort((a,b)=>a-b);
+  const params=parameters(contract,"budget");
+  for(const chord of lengths)for(const speed of speeds)for(const frameWindow of [1,32]){
+    const spec={shape:"straight",count:600,radius:1.35,chord,speed,baud:contract.baud,ratio:.04};
+    const baseline=queue(spec,"adaptive",params,{frameWindow,ackPoint:"publication"});
+    for(const parseFraction of [.25,.5,.75]){
+      const current=queue(spec,"adaptive",params,{frameWindow,ackPoint:"admission",parseFraction});
+      if(current.admissionCycles!==baseline.admissionCycles||JSON.stringify(current.steps)!==JSON.stringify(baseline.steps))
+        throw Error("admission split changed total work or steps");
+      rows.push({spec,frameWindow,parseFraction,publication:{achieved:baseline.achievedMmPerSecond,gaps:baseline.starveCount,coverageMs:baseline.meanCoverageMs},
+        admission:{achieved:current.achievedMmPerSecond,gaps:current.starveCount,coverageMs:current.meanCoverageMs,acceptedWaitingSeconds:current.acceptedWaitingSeconds,maxAcceptedNotPlanned:current.maxAcceptedNotPlanned}});
+    }
+  }
+  return rows;
+}
 function selfTest(contract){
   const b=parameters(contract,"budget"),i=parameters(contract,"isolated");
   if(b.rxIsr!==80||b.txIsr!==80||b.txEmptyPerCommand!==64||
@@ -45,7 +63,8 @@ function selfTest(contract){
   if(rows.length!==360||rows.some(r=>r.spec.baud!==contract.baud&&r.planningScenarioWithin!==null))
     throw Error("matrix coverage");
   if(rows.some(r=>!Number.isFinite(r.achievedMmPerSecond)||r.spec.speed>100))throw Error("workload bounds");
-  return "3 groups of checks passed";
+  if(admissionSweep(contract).length!==90)throw Error("admission matrix coverage");
+  return "4 groups of checks passed";
 }
 if(require.main===module){
   const fs=require("node:fs"),crypto=require("node:crypto");
@@ -54,6 +73,6 @@ if(require.main===module){
   if(blob!==provenance.blob)throw Error("pinned Task0033 contract blob mismatch");
   const contract=JSON.parse(input);
   console.log(JSON.stringify({schema:1,provenance,transportStatus:contract.status,
-    caveats:"Existing fluid CPU and queue model only; historical motion/parser anchors and synthetic reserve, ACK after planner publication vs real parser admission, no real host/IRQ/safety/step timing. Numbered generated ASCII frames (LF), one illustrative empty TX IRQ per command. Planning allowance is a screen not a hard cap. Isolated costs are not qualified production costs. Travel is intentionally outside this extrusion matrix.",selfTest:selfTest(contract),rows:matrix(contract)},null,2));
+    caveats:"Existing fluid CPU and queue model only; historical motion/parser anchors and synthetic reserve, ACK after planner publication vs real parser admission, no real host/IRQ/safety/step timing. Numbered generated ASCII frames (LF), one illustrative empty TX IRQ per command. Planning allowance is a screen not a hard cap. Isolated costs are not qualified production costs. Travel is intentionally outside this extrusion matrix. Separate admissionSweep uses one live foreground command, ACK after synthetic parser stage, sensitivity split of unmeasured complete-parse/planner cost. Actual TX blocking, partial frame consumption and IRQ chronology still absent.",selfTest:selfTest(contract),rows:matrix(contract),admissionSweep:admissionSweep(contract)},null,2));
 }
-module.exports={provenance,parameters,matrix,selfTest};
+module.exports={provenance,parameters,matrix,admissionSweep,selfTest};
