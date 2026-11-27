@@ -1,0 +1,79 @@
+# Task0034 / A73 – unabhängiger Ressourcen- und Echtzeit-Audit
+
+Status: Research, keine Freigabe. Ausschließlich archivierte CI-Evidenz, gepinnte Quellen und statische Analyse. Keine Änderungen an Task0034, Taskdatei, Produktionscode oder gemeinsamen Build-Werkzeugen. Keine Hardwaretests, Flash-Vorgänge oder Merges. Priorität: sichere Funktion, berechenbare Laufzeit, freier SRAM, danach Flash.
+
+## Provenienz
+
+Research-Basis: 3676b93a28a7cb4dfad070f25676a60567b4a501 (ai-firmware-review). Gelesen: AGENTS.md, coordination/TASKS.md, docs/heater-safety.md, coordination/tasks/Task0034.md sowie Task0030. Audit-Snapshot ist NICHT der jeweils bewegliche PR-Head.
+
+| Stand | Head | getesteter Merge-SHA | CI | Artefakt | SHA256 |
+|---|---|---|---|---|---|
+| Task0030 | 0465d1fe9e08b09295e74e019b20096bcdf653eb | 0be2f23f9add40ad1b8240fb232e1c61396b4b17 | 45673748654 | 15050792432 | 1ffbe5f295d08ff4c8306900080dbcda873fd839f1f9663cdd589cdadf05d151 |
+| A37 | 06da4febf4d425446e1035f6810eb5e6c2ef9062 | 83076607348729cc772b9853ad468c3a9f9160e0 | 45845310836 | 15131017284 | 931fe466aa51464631e6dc6fda6565d17dad9b75d4797017d5df06399f2d6d53 |
+| A43 | 0fb165679b8fd723c115ea5c984678caa8473d9b | ec41f952a85d5cf4630d6d8819214da6c5606d27 | 45862600562 | 15137829365 | 557c462e22c7cf2efb8ee7b36316c8913ef5dfcf77bee1b951aa7d684cd33234 |
+| A64 | a2fbfb799cf6a57aa7b19322c29cf82dc51c56cc | f4702548560ba406d10c17849852c69d42c2ba5e | 45886778868 | 15149348060 | dd696b8f683d743080eadc5fb54e463b617f825f5b4582bb2d698f42d8412fbf |
+| Snapshot | 0f392ece7c670e3f6555b136ec0c56906f3e2401 | 920309ae09b49d95c97eeaa559ba74312af0b725 | 45929543635 | 15167769162 | 010d59089e9feb796f4b9ec3b8dc144b26edc6bce338ff5648b2725e0de454f3 |
+
+Alle fünf ZIP-SHA256 und die ELF-/Map-Hashes von insgesamt 58 archivierten ELFs geprüft. CI-URL: https://github.com/Nibbels/Repetier-Firmware/actions/runs/<CI-ID>. Task0030 tatsächlicher Merge ca21f0374f4a8a035d432deec706a87254e5f123 (Dokumentationsdelta). A37: alle 16 Varianten und Host erfolgreich. A43: Emergency RF1000 einzeln gelinkt, RF2000 Größenfehler. A64: erster Emergency-Link RF1000 rückwärts laufender Location Counter 0x20086 -> 0x20000; kein vollständiges Emergency-ELF. Snapshot: CI failure, integrierter AVR-Build und serial-protocol M206, readReply-Assertion in tests/serial-protocol.cpp:201; keine Freigabe. Standard/Lease/Reset-WDT-Erfolg nicht gleich Emergency-Erfolg. RF1000 Emergency Snapshot einzeln erfolgreich gelinkt nach Probe/Retry; RF2000 fehlgeschlagen, v2/X44 nicht erreicht. No-hole-Proben sind ausschließlich diagnostisch.
+
+## 1 Ressourcenledger (Byte)
+
+Reihenfolge RF1000 / RF2000 / RF2000v2 / RF2000-X44. Flash einschließlich initialisierter Daten und tatsächlichem Recovery-Padding; SRAM statisch .data + .bss + .noinit; 8192 minus statisch ist nur Stack/Heap-Spielraum, keine Laufzeitmessung.
+
+| Stand/Modus | Flash | statischer SRAM |
+|---|---|---|
+| Task0030 Standard | 212736 / 217030 / 217034 / 212108 | 5935 / 5985 / 6103 / 6019 |
+| A37 Standard | 213010 / 217350 / 217354 / 212376 | 5935 / 5985 / 6103 / 6019 |
+| A37 Lease | 214830 / 219262 / 219266 / 214230 | 5947 / 6003 / 6121 / 6034 |
+| A37 Reset-WDT | 220920 / 224614 / 224614 / 222418 | 5951 / 6007 / 6125 / 6038 |
+| A37 Emergency | 230546 / 231612 / 231612 / 229970 | 6091 / 6167 / 6285 / 6178 |
+| A43 Emergency RF1000 | 232730 | 6096 |
+| Snapshot Standard | 213196 / 217510 / 217514 / 212560 | 5935 / 5985 / 6103 / 6019 |
+| Snapshot Lease | 215006 / 219438 / 219442 / 214404 | 5947 / 6003 / 6121 / 6034 |
+| Snapshot Reset-WDT | 221014 / 224708 / 224708 / 222510 | 5951 / 6007 / 6125 / 6038 |
+| Snapshot Emergency RF1000 retry | 239546 | 6096 |
+| Snapshot Emergency RF2000 first link (REJECTED) | 269414 | 6172 |
+| Snapshot RF2000 no-hole PROBE (NOT firmware) | 241712 | 6172 |
+
+A37 statisches Delta gegen Task0030 +156/+182/+182/+159 B. Aufteilung Lease +12/+18/+18/+15, Reset-WDT zusätzlich +4, Emergency zusätzlich +140/+160/+160/+140. A37 SRAM-Rest 2101/2025/1907/2014; Task0030 2257/2207/2089/2173. Snapshot RF1000 2096. A37 Flash-Rest 23406/22340/22340/23982. Snapshot RF1000 14406. Physischer Flash 262144, App-Grenze 0x3e000 = 253952, Boot 8192. Recovery-Einstieg 0x20000 fest, 30 Byte. Nahe Flash-Daten (64 KiB) und nahe Code-/Wortadressen (128 KiB) sind unterschiedliche Restriktionen; Linker-/Parserprüfungen behalten.
+
+## 2 Recovery / LTO
+
+Snapshot RF1000 erster Link 257888 (verworfen), No-hole 236468, Retry mit Partitionen 1+3 und 3078 Padding = 239546. RF2000 erster Link 269414, davon 27702 Padding. No-hole 241712, theoretischer Rest vor Padding 12240. Parser-Ende 59144, Kapazität bis Recovery 71928. Vier LTO-.text-Blöcke 44226, 44932, 44218, 35470; benannte .text-Sections zusammen 12698. Vollständige Enumeration nichtleerer Partitionsmengen mit/ohne sämtliche benannten Sections: größte zulässige Belegung 57630 = 44932+12698; Rest 14298; Projektion 256010, Überschreitung 2058 beziehungsweise 2314 inklusive 256 B geforderter Reserve. Kein gültiges Layout dieser Granularität. Das ist keine echte neue Verlinkung.
+
+Empfehlung P0: feinere LTO-Partitionierung experimentell im zuständigen Worker, oder einzelne kalte Funktionen separat platzierbar halten. Bereits benannte große Sections: rf_cold_eeprom 4276 B, startup 3862 B. Mindestens 2314 zusätzliche Bytes in die Lücke verschieben (bei sonst identischer Größe); Ziel Padding 1–4 KiB, theoretisch 8–11 KiB App-Reserve für RF2000. Keine Reduktion der Sicherheitsfunktionen. Compiler-LTO-Optionen auf tatsächliche Version prüfen; andere Partitionierung kann Codegröße, Registerallokation, Inlining und Timing ändern. Alle vier Boards, WDR, Near-Parser-Indirect-Targets, Relocations/Trampolines, Recovery-Bytes/-Adresse, Bootgrenze, Reset und alle Replays erneut prüfen. Niemals Probe-ELF als Firmware freigeben, nie Recovery-Adresse verschieben.
+
+## 3 Stack (archiviertes ELF, DWARF CFI + Disassembly)
+
+CFI-Werte beinhalten beim normalen Funktionsframe 3 Byte Rücksprungadresse des ATmega2560; keine automatische vollständige Aufrufketten- oder WCET-Analyse. Bei ISR CFI zusätzlich gegen reale PUSHs prüfen: SREG/RAMPZ-Sicherungen können nicht in CFI auftauchen. Keine physischen Watermarks.
+
+| Frame inkl. PC | Task0030 | A37 Emergency | Snapshot RF1000 |
+|---|---|---|---|
+| autotunePID | 110 (alle) | 159 (alle) | 282 |
+| checkForPeriodicalActions | 70/63/63/65 | 48 (alle) | 48 |
+| manageTemperatures (eigener Frame) | in Scheduler inline | 165/159/159/157 | 165 |
+| Summe direkter Kette autotune -> scheduler -> manage | 180/173/173/175 (inline) | 372/366/366/364 | 495 |
+
+A43 RF1000 autotune bereits 282. Lokaler autotune Frame 107 ->156 ->279 B, +172 B gegen Baseline. Strukturelle Frame-Maxima, nicht bewiesene gleichzeitige Pfadmaxima. Snapshot möglicher Terminalpfad scheduler -> serviceThermalEmergency (3 B) -> manageTemperatures: Summe 498 inkl. autotune; kein vollständiger Callgraph. A37 v2 nach direkter Kette 1541 B Rest, Snapshot RF1000 1601 B, jeweils VOR äußeren Aufrufern, tieferen Callees, dynamischen Stackanteilen und Interrupts. UIDisplay::refreshPage v2 Baseline 137 B, A37 140 B, Snapshot RF1000 140 B; Com::printFloat 13 B; ThermalEmergency::confirm 43 B. Nicht blind alle Frames addieren: callsite, LTO-Inlining, Funktionsklone, indirekte/tail calls und Laufzeitpfade entscheiden.
+
+Autotune-Recorder ungefähr 80 B nach AVR-Feldlayout (Summary 42, drei Anker 24, Zeitstempel 8, peak 4, cap/phase 2), PublicationTracker 4 B. Keine Host-ABI-Größen übertragen. ReportLine bytes[63] und digits[10] sind weitere lokale Puffer; Ledger und Episode-Records sind statisch. Kandidat: kalte Diagnose-/Formatierungspfade getrennt halten, kurzlebige Temporaries nicht über den Regelloop leben lassen, Summary direkt in-place zurücksetzen statt temporärer 42-B-Kopie, sofern Compiler diese tatsächlich materialisiert. Ziel 40–120 B weniger Peak/Frame als Hypothese, nicht gemessene Einsparung. Nicht pauschal in globale Scratch-Puffer verschieben (verbraucht statischen SRAM und birgt Reentranzrisiken). Bei Aufteilung der periodischen Dienste alle Sensor-/Heater-Freigaben, anderen Heizkanäle, Watchdog-Fortschritt und Fehlerpfade unverändert behalten. Eine kleinere Einzel-CFI allein beweist keine kleinere Kette. Vollständige Worst-Case-Stack-Analyse in A73 noch nötig: äußere G-Code-/UI-Aufrufer, aktive callsite-Frames, formatierte Reports, Floating-Point-Libcalls, Interrupt-Nesting, ggf. dynamische Frames. 
+
+## 4 ISR-Kosten
+
+16 MHz. Werte aus gepinnten Disassemblies, keine vollständigen Laufzeitmessungen. Timer1 v2 Codegröße 1602 -> 1616 B (+14 B). Normalpfad neuer Phasenguard lds 2 + cpi 1 + brne taken 2 = 5 cycles/ISR (0.3125 us). Bei angenommenen 16000 tatsächlichen ISR/s 0.5% CPU, bei 31250 ISR/s 0.9766%; Schrittfrequenz ist nicht zwingend ISR-Frequenz (Packing). Terminalzweig deaktiviert TIMSK1; nicht entfernen.
+
+Timer0 COMPB nominal alle 256 us (3906.25 Hz). A37 v2 initiale Saves 24 ->26, zusätzliche push/pop 8 cycles; gewöhnlicher Countdown lds/subi/sts/cpse/rjmp 8 cycles. Lokaler inkrementeller Normalpfadanteil ~16 cycles = 1 us/tick, 0.390625% CPU; nicht gesamtes Netto-ISR-Delta. Frame-PWM 30.52 Hz, 62/63-tick-Scheduler-Ereignis 62.5 Hz. WDT im Reset-Modus ohne bisherigen WDT-IRQ, Timer5 unabhängige Zeitbasis ohne periodischen IRQ; Timer3 Compare ist Lease-Ablauf, kein gewöhnlicher zusätzlicher periodischer IRQ. ADC/Fans/Serial/Stepper-Wechselwirkungen und alle Event-Pfade offen.
+
+A37 Timer3-Ablauf ISR body (ohne Hardware-Eintritt/Vector-Dispatch/Wartezeit): Wrapper 79 cycles + failHeaterLease leaf 27/31/31/22 = 106/110/110/101 cycles, entsprechend 6.625/6.875/6.875/6.3125 us. Snapshot RF1000 106 cycles. Drei Vektornamen 32/33/34 können auf denselben Alias-Code zeigen: nicht dreifach als Last zählen. Bei Ablauf latch/off/interrupt-disable, nicht periodische Reaktivierung. P0/P1-Optimierungskandidat: failHeaterLease gezielt in Timer3-ISR inline. Potenziell CALL+RET (10 cycles) und bei neun weniger gesicherten Registern 36 cycles, zusammen bis ca. 46 cycles / 2.875 us und 12 B Stack (9 Registers + 3 PC). Abschätzung, kein gebauter Vergleich; Registerallokation und RAMPZ prüfen. Keine Auslassung von Pin-Off, Latch, Inhibit, Timer-Abschaltung oder Reihenfolge; nicht auf Kosten globaler Fehlerpfade.
+
+ISR-Nesting: Timer1 raw 24 pushes +3 PC =27 B, Timer0 A37 v2 26+3=29 B, RF1000 A37/Snapshot 25+3=28 B. Timer1 enthält SEI-Pfad (eigene OCIE1A maskiert), Timer0/Timer3 kein SEI. Paar Timer1+Timer0 daher entry-frame strukturell 56 B v2 bzw. 55 B RF1000, noch ohne aktive Callees. Timer3 raw 16 pushes+3 PC+3 leaf-return =22 B. CFI kann SREG/RAMPZ um 2 B unterschätzen. Task0030 594 cycles max beobachtetes Blackout und 32 B isolierter ISR-Stack sind Stichproben, kein globaler Grenzwert. A37 Worker dokumentiert Guard-Pfad 280/80/185 cycles gegen 1024 (nicht hier neu gemessen). Keine Aussage zur physischen Abschaltzeit oder zum absoluten IRQ-WCET; bereits blockierte Interrupts und nicht-preemptive ISR müssen in Response-Time-Analyse eingehen.
+
+## 5 Optimierungskandidaten / Priorität
+
+P0 Layout wie oben: mindestens 2314 B bessere Platzierung beim RF2000 Snapshot, ohne Sicherheitslogik zu ändern. P0 vollständige vier Emergency-Builds und Host-Fehler M206 beheben (Worker). P1 Autotune-Diagnose-Lebenszeiten und direkte Kette, 40–120 B hypothetisches Peak-Ziel; A/B ELF/CFI und vollständige Kette prüfen. P1 Timer3 Inline, bis ca. 46 cycles und 12 B hypothetisch. P2 immutable Switch-Tabellen CSWTCH.291/292, 11+13=24 B .data im Snapshot RF1000; vor PROGMEM-Verlagerung alle Zugriffe, Near/Far und Hot-Path prüfen. P2 Diagnose-Ledger nicht blind verdichten: zwei 35-B-Snapshots plus Masken/Revision 77/79 B; Invalid-Episode-Records 16 B je Heater (32/48 B). Bool-Packung evtl. 2–3 B, kleine Gewinne bei hohem Semantikrisiko. Kein Verlust diagnostischer Erstfehler-/Folgefehlerdaten. Größere SRAM-Potenziale außerhalb der Task: Queue 24 Slots, 1 B pro Slot =24 B, 4 B =96 B; nicht Queue-Tiefe reduzieren, nicht in diesem Audit ändern; ggf. Task0032. Keine Kürzung von RX/TX, Matrix, Schutzprüfungen.
+
+## 6 Reproduktion / Abnahme
+
+audit.py in diesem Verzeichnis: python3 audit.py /path/to/CI-archive.zip [...]. Python stdlib und GNU readelf erforderlich. Exportiert CFI-/Symbol-/Direktcall-Informationen. Keine lokale AVR-Toolchain, kein eigener Link und kein eigener Host-/Hardwaretest in diesem Audit. FDE-Information nicht vollständig; indirekte Calls/Assembly/Aliase ggf. manuell; Skript erfasst keine vollständige Pfad-/WCET-Analyse. Die hier genannten Optimierungen sind modellierte Kandidaten, nicht nachgewiesene Compiler-Verbesserungen.
+
+A73 nach stabiler Integration A69–A72: neuen Head UND getesteten Merge pinnen, archivierte ELF/map/hex/summary verifizieren, vier Emergency-Images plus Host-Replays erfolgreich, tatsächliche App- und SRAM-Bilanz gegen Task0030 und A37, Pfad-/Stackanalyse inkl. aller relevanten IRQs, Worst-Case-Interrupt-Response samt ADC/UART/Advance und Foreground-Serviceintervallen, abschließende Sicherheitsbeweise ohne Hardwarefreigabe. Aktueller Snapshot erfüllt Abnahme NICHT. Keine Änderungen außerhalb research/task0034-a73/.
