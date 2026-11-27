@@ -53,3 +53,17 @@ Existing branch research/Task0034-lcd-four-rows first stage fbd0997024d644163903
 2. In current HeatBedScan.cpp at pinned 7578e5a: following `Com::printErrorFLN(PSTR("Heated scan bed target not admitted"))`, change requestAbort(Canceled) to HeaterTargetRejected; following `"Heated scan bed target changed"`, change to HeaterTargetChanged. Keep serial messages and all returns. The manual cancel at start remains Canceled. Both new reasons have same existing non-retreat-only cleanup policy, DMS precedence unchanged.
 3. At actual final reason consumption in HBS/ZOS abort, submitScan(reason, context, uptime) exactly once before context is lost, with no EEPROM access or blocking. Preserve existing per-cause UI and immediate safety/retreat until durable log availability/fallback proven. A busy/failed submit must not hide specific cause. No per-retry or cancel writes. Do not wire compact source until shared EEPROM access gate and G-code retrieval are integrated; choose top-level service and current event producer ownership.
 4. Only then consider generic LCD notice and remove old bespoke branches that no longer serve needed live guidance. PID/autotune, EEPROM recovery and DMS deferred from source changes because their actual semantics depend on A70/A71 and linked safety gates; prior audit gives concrete classification, no invented resource saving. No production merge, no physical testing.
+
+
+### Final hosted consolidation gate — PASS; SRAM regression eliminated
+
+PR #104 head 5821e426229f77906489c65510a498c16172141f, target 582f52d4291e6314ef4da39029db580c0c28e792, tested merge 325a80044614ed6670de9a1da51cb1f53f9c0d56, [run 45941483018](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45941483018) completed SUCCESS. Downloaded artifact 15173351186 verified SHA256 c9144cb15b29e8106e32abcdfa42c5c9214105fd10b78d6218e5cb22c00d18ed; summary failures=[]; exact 21 scan display + 32 homing admission/axis cases PASS, event log 7424 torn-byte cuts + compact/thermal arbitration PASS, standalone AVR launch PASS. Final normal AVR builds (Flash/static SRAM bytes), vs #104 pre-consolidation checkpoint:
+
+| Board | Flash | Delta | SRAM | Delta |
+|---|---:|---:|---:|---:|
+| RF1000 | 212258 | -478 | 5935 | 0 |
+| RF2000 | 216796 | -234 | 5985 | 0 |
+| RF2000v2 | 216800 | -234 | 6103 | 0 |
+| X44 | 211600 | -508 | 6019 | 0 |
+
+All 28 retained scan catalogue symbols per board checked from actual nm: table size 0x48 (72 B) and all referenced label/hint symbols lie below byte address 0x10000; table starts 0xab28/0xae38/0xae3a/0xad8d. The two new automatic 40 B SRAM switch tables are absent; only prior unrelated 11/13 B tables remain. Relative to first candidate, -80 B SRAM and -24 B Flash on every board. No hot scheduler/ISR change; no measured full-stack/WCET or integrated Task0034 link result yet. Logger/compact admission remains task-private, so production flash/SRAM deltas measure actual scan/homing changes, NOT added logger cost. Thermal primary-only candidate on separate branch remains host-only. Current exclusive #102 head 22b23f6290612eb9a07471825683ae76d83b91a2, A71b validation pending, live settings/EEPROM owner absent; homing block verified byte-identical to pre-consolidation base. No production merge or hardware tests. Reapply exact hunks to latest active head with owner's coordination; run all combined experimental gates, check near-flash addresses and measured resources, preserve per-cause fallback until complete diagnosis assured.
