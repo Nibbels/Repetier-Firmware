@@ -68,6 +68,8 @@ This is shared AVR/ATmega2560 Repetier firmware for **RF1000, RF2000 and RF2000v
 
 **Idle and shutdown.** `Printer::idleStatus` owns the pending Ready transition shared by the foreground and Timer1. `Printer::inactivity` owns the last activity time and the two persisted `M84` and `M85` thresholds. Use elapsed clock arithmetic through rollover and take the inactivity sample after preceding foreground services. [Lifecycle tests](tests/pause-sense-offset.py) · [Timeout replay](tests/machine-inactivity.cpp)
 
+**Authoritative LCD geometry (owner clarification, 2026-11-27).** All supported stock configurations have **four LCD rows**: RF1000 = **16 columns × 4 rows (16×4)**; RF2000, RF2000v2 and RF2000-X44 = **20 columns × 4 rows (20×4)**. See [`Repetier/ui.h`](Repetier/ui.h): `UI_ROWS = 4`, board-specific `UI_COLS = 16/20`. RF1000 is NOT a two-row display. A 16×2 renderer fixture is synthetic compatibility coverage, not an RF1000 configuration. Earlier Task0034 A30 16×2 assumptions were rejected by the real RF1000 AVR build and corrected in A31; do not treat those historical notes or stale summaries as hardware facts. Verify `UI_ROWS` and `UI_COLS` before any display layout, replay or hardware description; test the actual 16×4 and 20×4 builds.
+
 **Panel.** The LCD transport, key sampling and navigation are in `ui.cpp`. `UiFormatting.cpp` renders live values, `UiSettings.cpp` handles edits and `UiActions.cpp` executes commands. The menu tables in `uimenu.h` are instantiated once in the LCD translation unit.
 
 **Print usage.** `Printer::printUsage` counts time with a hotend target and planned filament. The final hotend cooldown posts the accumulated usage to the existing internal EEPROM fields. The panel and serial reports read the same totals.
