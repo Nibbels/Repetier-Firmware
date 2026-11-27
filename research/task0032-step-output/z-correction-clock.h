@@ -79,6 +79,51 @@ public:
     void commit(const Pulse& p) {level_=p.nextLevel;direction_=p.sign;}
 };
 
+// Fast candidate: same level decisions, cache previous integer boundary
+// speed, use the existing firmware reciprocal and integer sqrt via Math.
+// The reference above is kept independent for differential qualification.
+struct FastPulse {
+    uint32_t nextLevel;
+    uint32_t interval;
+    uint16_t boundarySpeed;
+    int8_t sign;
+    bool safetyRestart;
+};
+
+template<class Math>
+class FastRamp {
+    uint32_t level_=0;
+    uint16_t speed_=0;
+    int8_t direction_=0;
+    static uint32_t period(uint32_t denominator) {
+        const uint16_t average=uint16_t(denominator>>1);
+        // Existing reciprocal clamps <10 steps/s. Never use that clamp
+        // here: at very low configured acceleration use the exact slow path.
+        return average<10 ? ceilDiv(2*cpuHz,denominator)
+                          : Math::period(average)+1;
+    }
+public:
+    uint32_t level() const {return level_;}
+    int8_t direction() const {return direction_;}
+    void cancel() {level_=0;speed_=0;direction_=0;}
+    FastPulse plan(int32_t error,const Limits& limits) const {
+        if(!error || !limits.maxLevel) return {0,0,0,0,false};
+        const uint32_t d=error<0 ? uint32_t(0)-uint32_t(error) : uint32_t(error);
+        const int8_t sign=error>0?1:-1;
+        const bool restart=level_ && (direction_!=sign || d<level_ || level_>limits.maxLevel);
+        const uint32_t l=restart?0:level_;
+        const uint16_t v0=restart?0:speed_;
+        if(d==1 && l==0)
+            return {0,period(Math::floorRoot(limits.twiceAcceleration/2)),0,sign,restart};
+        const uint32_t n=d<=l ? l-1 : (d-l>=2 && l<limits.maxLevel ? l+1 : l);
+        const uint16_t v1=n==l ? v0 : n?Math::floorRoot(limits.twiceAcceleration*n):0;
+        return {n,period(uint32_t(v0)+v1),v1,sign,restart};
+    }
+    void commit(const FastPulse& p) {
+        level_=p.nextLevel;speed_=p.boundarySpeed;direction_=p.sign;
+    }
+};
+
 // Wrap-safe on a 32-bit clock, provided all outstanding deadlines and
 // comparisons are <2^31 ticks apart. Long idle must be represented by
 // periodic housekeeping or an invalid/disarmed deadline.
