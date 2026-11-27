@@ -17,8 +17,11 @@ if not cli:
     print("Optional local AVR probe skipped; mandatory on GitHub Actions")
     raise SystemExit(0)
 
-props=subprocess.check_output([cli,"compile","--fqbn","arduino:avr:mega:cpu=atmega2560",
-                               "--show-properties=expanded",str(root/"Repetier")],text=True)
+with tempfile.TemporaryDirectory() as props_dir:
+    props=subprocess.check_output([cli,"compile","--fqbn","arduino:avr:mega:cpu=atmega2560",
+                                   "--build-path",str(Path(props_dir)/"build"),
+                                   "--show-properties=expanded",str(root/"Repetier")],
+                                  text=True,cwd=props_dir)
 bin_dir=None
 for line in props.splitlines():
     if line.startswith("compiler.path="):
@@ -66,7 +69,7 @@ with tempfile.TemporaryDirectory() as d:
     subprocess.run([tool("avr-g++"),"-mmcu=atmega2560","-std=gnu++11","-Os",
                     "-Wall","-Wextra","-Werror","-fstack-usage","-ffunction-sections",
                     "-fdata-sections","-Wl,--gc-sections","-I",str(root/"tools/task0034/event-log"),
-                    str(p),"-o",str(elf)],check=True)
+                    str(p),"-o",str(elf)],check=True,cwd=d)
     asm=subprocess.check_output([tool("avr-objdump"),"-d","-C",str(elf)],text=True)
     instructions=[line for line in asm.splitlines() if re.match(r"^\s*[0-9a-f]+:",line)]
     launches=[]
