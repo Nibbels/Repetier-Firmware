@@ -22,6 +22,8 @@ function pathWorkload(spec){
 function geometry(spec,p=defaults){
   const w=pathWorkload(spec), rows=[]; let prior=[...w.start.map(x=>Math.round(x*p.xy)),0], e=0, distance=0;
   const ratio=spec.ratio??0.04;
+  const format=spec.packetFormat??"ascii";
+  if(!["ascii","binary-v1","binary-v2","mixed"].includes(format))throw Error("unsupported packet format");
   for(let i=0;i<w.lines.length;i++){
     const line=w.lines[i],x=Number(/ X([\d.]+)/.exec(line)[1]),y=Number(/ Y([\d.]+)/.exec(line)[1]);
     distance+=w.lengths[i];e=Number((distance*ratio).toFixed(5));
@@ -30,7 +32,11 @@ function geometry(spec,p=defaults){
     const steps=d.map(Math.abs),n=Math.max(...steps);
     const cls=steps[2]&&!steps[0]&&!steps[1]?"E":steps[2]?(steps[2]/Math.max(1,n)>=.5?"denseXYE":"XYE"):(steps[0]&&steps[1]?"XY":"X");
     const body=line.slice(line.indexOf(" ")+1,line.lastIndexOf("*")).replace(/ E[\d.]+/," E"+e.toFixed(5));
-    rows.push({length:w.lengths[i],steps,d,n,cls,bytes:frame(i+1,body).length,numberedAckBytes:5+String(i+1).length});
+    // Same geometry; binary wire sizes for numbered X/Y/E, optional F,
+    // from the actual-source parser replay. No host negotiation assumed.
+    const v2=format==="binary-v2"||(format==="mixed"&&i%2===1);
+    const bytes=format==="ascii"?frame(i+1,body).length:(v2?22:19)+(/ F[\d.]+/.test(body)?4:0);
+    rows.push({length:w.lengths[i],steps,d,n,cls,bytes,numberedAckBytes:5+String(i+1).length});
   }
   return rows;
 }
@@ -113,7 +119,11 @@ function selfTest(){
   check(a.every((r,i)=>r.numberedAckBytes===5+String(i+1).length),"numbered ACK byte count");
   check(evaluate({...row,numberedAckBytes:10},1,2,{...p,ackBytes:"numbered"}).uart===740,"numbered ACK IRQ charge");
   check(evaluate({...row,bytes:40,numberedAckBytes:10},1,2,{...p,ackBytes:"numbered",rxIsr:80,txIsr:80,txEmptyPerCommand:64}).uart===4064,"contract budget charge");
-  return "15 groups of checks passed";
+  const wireSpec={shape:"straight",count:600,chord:.1,speed:60,baud:250000,ratio:.04};
+  const b1=geometry({...wireSpec,packetFormat:"binary-v1"}),b2=geometry({...wireSpec,packetFormat:"binary-v2"}),mix=geometry({...wireSpec,packetFormat:"mixed"});
+  check(b1.reduce((s,x)=>s+x.bytes,0)===11404&&b2.reduce((s,x)=>s+x.bytes,0)===13204&&mix.reduce((s,x)=>s+x.bytes,0)===12304,"binary replay byte totals");
+  check(JSON.stringify(b1.map(x=>x.d))===JSON.stringify(b2.map(x=>x.d))&&JSON.stringify(b1.map(x=>x.d))===JSON.stringify(geometry(wireSpec).map(x=>x.d)),"wire format independent of steps");
+  return "17 groups of checks passed";
 }
 function matrix(){
   const out=[];
