@@ -33,6 +33,23 @@ function corrected(m,left){
   if(braking)t+=2*braking/(end+(peak-end)*braking/d+end);
   return t;
 }
+// Conservative ramp-aware estimate: upper bound on speed from tangent to sqrt.
+// No square root; still divisions and potentially wide intermediate products on AVR.
+// Clamp reference peak with the tangent (when start > 0) and nominal ceiling.
+function tangentBound(m,left){
+  const {a,d,completed,accelerating,braking,cruising}=portions(m,left);
+  const ceiling=Math.max(1,Math.min(m.vMax,VMAX));
+  const upper=(v,squaredDelta)=>v>0?v+squaredDelta/(2*v):ceiling;
+  const peak=Math.max(1,a?Math.min(ceiling,upper(m.vStart,2*m.acceleration*a)):ceiling);
+  let t=cruising/peak;
+  if(accelerating)t+=2*accelerating/(Math.min(peak,upper(m.vStart,2*m.acceleration*completed))+peak);
+  if(braking){
+    const end=Math.min(m.vEnd,peak);
+    const from=Math.min(peak,upper(end,(peak*peak-end*end)*braking/d));
+    t+=2*braking/(from+end);
+  }
+  return t;
+}
 // Candidate cache: calculate full planned duration once after profile changes and
 // scale active remaining by steps. Can overestimate or underestimate tail; never a safety bound.
 function cached(m,left){return reference(m,m.total)*left/m.total;}
@@ -54,13 +71,13 @@ function matrix(){
       if(Math.abs(vStart*vStart-vEnd*vEnd)>2*acceleration*total)continue;
       const m=profile(total,vStart,vEnd,vMax,acceleration);
       for(const left of [...new Set([total,Math.max(1,Math.ceil(total*.75)),Math.max(1,Math.ceil(total*.5)),Math.max(1,Math.ceil(total*.25)),1])])
-        rows.push({m,left,reference:reference(m,left),lower:lower(m,left),corrected:corrected(m,left),cached:cached(m,left)});
+        rows.push({m,left,reference:reference(m,left),lower:lower(m,left),corrected:corrected(m,left),cached:cached(m,left),tangent:tangentBound(m,left)});
     }
   return rows;
 }
 function summarize(rows){
   const result={cases:rows.length};
-  for(const k of ["lower","corrected","cached"]){
+  for(const k of ["lower","corrected","cached","tangent"]){
     const errors=rows.map(r=>({relative:(r[k]-r.reference)/r.reference,row:r})).sort((a,b)=>a.relative-b.relative);
     result[k]={min:errors[0],max:errors.at(-1),median:errors[Math.floor(errors.length/2)].relative,within20:errors.filter(x=>Math.abs(x.relative)<=.2).length,over:errors.filter(x=>x.relative>1e-10).length};
   }return result;
@@ -71,10 +88,11 @@ function selfTest(){
   const rows=matrix();
   if(rows.some(r=>!Number.isFinite(r.reference)||r.reference<=0||r.lower>r.reference+1e-12))throw Error("lower bound");
   if(rows.some(r=>Math.abs(cached(r.m,r.m.total)-reference(r.m,r.m.total))>1e-12))throw Error("cache full");
-  return "3 groups of checks passed";
+  if(rows.some(r=>r.tangent>r.reference+1e-12||r.tangent<r.lower-1e-12))throw Error("tangent bound");
+  return "4 groups of checks passed";
 }
 if(require.main===module){
   if(process.argv[2]==="--self-test")console.log(selfTest());
   else console.log(JSON.stringify({schema:1,baseline:"ade95d627df5d82bb585413b678ffebe6e8a946a",selfTest:selfTest(),...summarize(matrix())},null,2));
 }
-module.exports={profile,reference,lower,corrected,cached,matrix,summarize,selfTest};
+module.exports={profile,reference,lower,corrected,cached,tangentBound,matrix,summarize,selfTest};
