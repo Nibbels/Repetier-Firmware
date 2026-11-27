@@ -12,7 +12,7 @@ jobs:
   simulation:
     if: github.event_name == 'workflow_dispatch' || github.head_ref == 'task/Task0032-quality-packing'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -48,7 +48,27 @@ jobs:
           for test in queue-estimate governor-preview rx-blackout-model rx-service-window; do
             node "tools/task0032/$test.cjs" > "$out/$test.json"
           done
+      - uses: arduino/setup-arduino-cli@v2
+        with:
+          version: 1.2.2
+      - name: Measure isolated actual AVR parser and ACK cycles
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          planner=e1b976318fd34c1e556a2f16491aaec9108d0d71
+          git fetch --no-tags --depth=1 origin "$planner"
+          git show "$planner:research/task0032-planner-queue/simavr-trace.c" > "$out/simavr-trace.c"
+          test "$(git hash-object "$out/simavr-trace.c")" = c0dfeca055159db9b918c6a8420bc2d441bae079
+          compiler="$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin/avr-g++"
+          python3 tools/task0032/parser-avr-bench.py --compiler "$compiler" --runner-source "$out/simavr-trace.c" --out "$out/parser-avr"
+          sha256sum tools/task0032/parser-avr-bench.py >> "$out/source-sha256.txt"
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: task0032-simulation-${{ github.sha }}
           path: ${{ runner.temp }}/task0032
