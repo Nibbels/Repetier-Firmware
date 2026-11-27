@@ -28,6 +28,7 @@ def edit(p, fn):
 RESET = r'''
 void UIDisplay::resetDisplayAfterClear() {
     lcdTransport_.afterClear(displayCache_,HAL::timeInMicroseconds());
+    lastDisplayCompletedMs_=HAL::timeInMilliseconds();
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     emergencyFrameRevision_=0xff;
 #endif
@@ -49,22 +50,37 @@ void UIDisplay::serviceDisplay() {
         uint32_t now() const { return HAL::timeInMicroseconds(); }
         void write(uint8_t c,bool rs) { lcdWriteByteNow(c,rs); }
     } sink;
-    lcdTransport_.service(displayCache_,emergency,sink);
+    const auto result=lcdTransport_.service(displayCache_,emergency,sink);
+    if(result==LcdPendingFrame<UI_COLS>::Result::Data && !lcdTransport_.pending())
+        lastDisplayCompletedMs_=HAL::timeInMilliseconds();
 }
 '''
 
 LOCAL_KEY = r'''
-bool UIDisplay::localKeyReady(int action) const {
+bool UIDisplay::localKeyReady(int action,bool initial,millis_t buttonStart) const {
     // A physical key must never confirm/edit a selection not yet visible.
     // The logical remote panel report is current immediately; the existing
     // local-confirmation exclusion and emergency stop remain independent.
     // Dedicated pause/continue and jog/offset buttons are never delayed.
     // Back is safe inside a menu, but on an info page it can change SenseOffset
     // or toggle the case light, so it too requires the visible context.
-    if(Printer::blockAll || !lcdTransport_.pending()) return true;
-    if(action==UI_ACTION_BACK) return menuLevel!=0;
-    return action!=UI_ACTION_OK && action!=UI_ACTION_RIGHT &&
-           action!=UI_ACTION_NEXT && action!=UI_ACTION_PREVIOUS;
+    if(Printer::blockAll || (action==UI_ACTION_BACK && menuLevel)) return true;
+    const bool contextual=action==UI_ACTION_OK || action==UI_ACTION_RIGHT ||
+                          action==UI_ACTION_NEXT || action==UI_ACTION_PREVIOUS ||
+                          action==UI_ACTION_BACK;
+    if(!contextual) return true;
+    if(lcdTransport_.pending()) return false;
+    // Do not admit a press that began before the frame was visible, even
+    // when the first foreground observation is after transfer completion.
+    // The >1 ms quantized guard also covers the final byte execution delay.
+    const millis_t now=HAL::timeInMilliseconds();
+    const millis_t displayAge=now-lastDisplayCompletedMs_;
+    if(displayAge<=1) return false;
+    if(initial) {
+        const millis_t buttonAge=now-buttonStart;
+        if(displayAge<=buttonAge || displayAge-buttonAge<=1) return false;
+    }
+    return true;
 }
 '''
 
@@ -83,7 +99,8 @@ def source_changes(root):
     LcdPendingFrame<UI_COLS> lcdTransport_;
     void resetDisplayAfterClear();
     void renderNormalPage();
-    bool localKeyReady(int action) const;
+    millis_t lastDisplayCompletedMs_ = 0;
+    bool localKeyReady(int action,bool initial,millis_t buttonStart) const;
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     uint8_t emergencyFrameRevision_ = 0xff;
 #endif""")
@@ -125,6 +142,7 @@ void UIDisplay::loadStartupCharacters()""")
     }
     lastSwitch = lastRefresh""","""        printRowP(3, versionString);
         lcdTransport_.afterSynchronous(HAL::timeInMicroseconds());
+        lastDisplayCompletedMs_=HAL::timeInMilliseconds();
     }
     lastSwitch = lastRefresh""")
         s=once(s,"// ----------- end direct LCD driver","// ----------- end direct LCD driver\n"+RESET)
@@ -183,10 +201,12 @@ void UIDisplay::loadStartupCharacters()""")
         s=s[:i]+"void UIDisplay::renderNormalPage() {\n"+normal+"\n\n"+refresh+s[j:]
         s=once(s,"} // refreshPage\n\nvoid UIDisplay::showMessage","} // refreshPage\n"+SERVICE+"\nvoid UIDisplay::showMessage")
         s=once(s,"void UIDisplay::slowAction() {",LOCAL_KEY+"\nvoid UIDisplay::slowAction() {")
+        s=once(s,"const millis_t buttonAge = HAL::timeInMilliseconds() - lastButtonStart;",
+               "const millis_t buttonStart = lastButtonStart;\n        const millis_t buttonAge = HAL::timeInMilliseconds() - buttonStart;")
         s=once(s,"                executeAction(lastAction);\n                nextRepeat",
-               "                if(localKeyReady(lastAction)) executeAction(lastAction);\n                nextRepeat")
+               "                if(localKeyReady(lastAction,true,buttonStart)) executeAction(lastAction);\n                nextRepeat")
         s=once(s,"                executeAction(lastAction);\n                repeatDuration",
-               "                if(localKeyReady(lastAction)) executeAction(lastAction);\n                repeatDuration")
+               "                if(localKeyReady(lastAction,false,buttonStart)) executeAction(lastAction);\n                repeatDuration")
         return s
     edit(fw/"ui.cpp",ui)
     edit(fw/"GCodeSystem.cpp",lambda s:once(s,"const char character = line[col];",
@@ -241,6 +261,7 @@ def test_changes(root):
         s=once(s,"    char displayCache_[4][UI_COLS+1]{};",
                """    char displayCache_[4][UI_COLS+1]{};
     LcdPendingFrame<UI_COLS> lcdTransport_;
+    millis_t lastDisplayCompletedMs_=0;
     void resetDisplayAfterClear();""")
         return once(s,'        (p / "firmware.inc").write_text(glyphs + normal + boot)',
                     '''        reset=source[source.index("void UIDisplay::resetDisplayAfterClear()"):source.index("void UIDisplay::printRow(")]
@@ -259,7 +280,8 @@ def test_changes(root):
     LcdPendingFrame<UI_COLS> lcdTransport_;
     unsigned lcdWrites=0;
     int lcdCol=0;
-    void resetDisplayAfterClear(){lcdTransport_.afterClear(displayCache_,HAL::timeInMicroseconds());}
+    millis_t lastDisplayCompletedMs_=0;
+    void resetDisplayAfterClear(){lcdTransport_.afterClear(displayCache_,HAL::timeInMicroseconds());lastDisplayCompletedMs_=HAL::timeInMilliseconds();}
     void renderNormalPage();
     void serviceDisplay();
     void drainDisplay(){
@@ -312,10 +334,15 @@ void lcdWriteByteNow(uint8_t value,uint8_t rs) {
                """constexpr int UI_ACTION_OK=1001, UI_ACTION_RIGHT=1129, UI_ACTION_NEXT=1, UI_ACTION_PREVIOUS=2, UI_ACTION_BACK=1000;
 constexpr uint8_t UI_FLAG_SLOW_ACTION_RUNNING = 4;""")
         s=once(s,"    void allowMovement() {}","    bool blockAll=false;\n    void allowMovement() {}")
+        s=once(s,"namespace HAL { millis_t timeInMilliseconds() { return 100; } }",
+               "namespace HAL { millis_t now=100; millis_t timeInMilliseconds() { return now; } }")
+        s=once(s,"millis_t lastButtonStart=0,nextRepeat=0,autoReturnTime_=0,lastSwitch=0,lastRefresh=0;",
+               "millis_t lastButtonStart=10,nextRepeat=0,autoReturnTime_=0,lastSwitch=0,lastRefresh=0;")
         s=once(s,"    unsigned calls=0, refreshes=0;",
                """    unsigned calls=0, refreshes=0;
     struct { bool dirty=false; bool pending() const {return dirty;} } lcdTransport_;
-    bool localKeyReady(int action) const;""")
+    millis_t lastDisplayCompletedMs_=0;
+    bool localKeyReady(int action,bool initial,millis_t buttonStart) const;""")
         s=once(s,"        UIDisplay busy;",
                """        UIDisplay pending;
         pending.expectedIrq=enabled;
@@ -331,16 +358,30 @@ constexpr uint8_t UI_FLAG_SLOW_ACTION_RUNNING = 4;""")
         pending.lastButtonAction=1001;
         pending.slowAction();
         assert(pending.calls==1 && irq==enabled);
-        assert(pending.localKeyReady(1));
+        assert(pending.localKeyReady(1,false,0));
         pending.lcdTransport_.dirty=true;
-        assert(!pending.localKeyReady(1)&&!pending.localKeyReady(2)&&!pending.localKeyReady(1129));
-        assert(pending.localKeyReady(1518)&&pending.localKeyReady(514)&&pending.localKeyReady(1000));
+        assert(!pending.localKeyReady(1,false,0)&&!pending.localKeyReady(2,false,0)&&!pending.localKeyReady(1129,false,0));
+        assert(pending.localKeyReady(1518,true,0)&&pending.localKeyReady(514,true,0)&&pending.localKeyReady(1000,true,0));
         pending.menuLevel=0;
-        assert(!pending.localKeyReady(1129)&&!pending.localKeyReady(1000)&&!pending.localKeyReady(1001));
-        assert(pending.localKeyReady(1518)&&pending.localKeyReady(514));
+        assert(!pending.localKeyReady(1129,true,0)&&!pending.localKeyReady(1000,true,0)&&!pending.localKeyReady(1001,true,0));
+        assert(pending.localKeyReady(1518,true,0)&&pending.localKeyReady(514,true,0));
         Printer::blockAll=true;
-        assert(pending.localKeyReady(1001)); // existing reset path
+        assert(pending.localKeyReady(1001,true,0)); // existing reset path
         Printer::blockAll=false;
+        UIDisplay delayed;
+        delayed.expectedIrq=enabled;
+        delayed.menuLevel=1;
+        delayed.lastDisplayCompletedMs_=90;
+        delayed.lastButtonStart=70;
+        delayed.slowAction();
+        assert(delayed.calls==0 && delayed.lastAction==1001); // pressed before visible, observed after
+        delayed.lastButtonAction=0;delayed.slowAction();
+        HAL::now=130;
+        delayed.lastButtonStart=93;delayed.lastButtonAction=1001;delayed.slowAction();
+        assert(delayed.calls==1);
+        delayed.lastDisplayCompletedMs_=130;
+        assert(!delayed.localKeyReady(1001,true,130));
+        HAL::now=100;
         UIDisplay busy;""")
         return s
     edit(tests/"task0034-panel-dispatch.py",panel)
