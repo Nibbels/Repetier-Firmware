@@ -47,7 +47,10 @@ void drain(LcdPendingFrame<C>& f,Frame<C>& frame,Sink& sink,bool emergency=false
         assert(r==R::Address || r==R::Data);
         assert(sink.writes==writes+1);
     }
-    assert(f.service(frame,emergency,sink)==R::Idle);
+    const unsigned before=sink.writes;
+    auto r=f.service(frame,emergency,sink);
+    if(r==R::Waiting){sink.ready();r=f.service(frame,emergency,sink);}
+    assert(r==R::Idle && !f.needsService() && sink.writes==before);
     verify<C>(frame,sink);
 }
 
@@ -142,7 +145,14 @@ void transitions() {
     f.stage(3,"boot finished",frame);
     assert(f.service(frame,false,sink)==R::Waiting);
     drain<C>(f,frame,sink);
-    std::printf("width %u: overwrite, revert, emergency ordering, wrap, clock regression, clear PASS\n",unsigned(C));
+    assert(!f.needsService());
+    // >half a 32-bit micros wrap with completely unchanged text.
+    sink.t+=0x90000000UL;
+    sink.last=sink.t-1000u;
+    f.stage(0,"long idle",frame);
+    assert(f.needsService());
+    drain<C>(f,frame,sink);
+    std::printf("width %u: overwrite, revert, emergency ordering, wrap, clock regression, clear, long idle PASS\n",unsigned(C));
 }
 
 int main() {
