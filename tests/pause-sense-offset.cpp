@@ -2716,7 +2716,7 @@ void shortMovePacing() {
     constexpr unsigned prefill = 12, segmentCount = 300;
     constexpr uint32_t sendPeriod = F_CPU / 200;
     // Forty bytes per line with 8N1 framing at the configured UART rate.
-    constexpr uint32_t wireTicks = (uint64_t(F_CPU) * 40 * 10 + BAUDRATE - 1) / BAUDRATE;
+    constexpr uint32_t wireTicks = (uint64_t(F_CPU) * 40 * 10 + firmwareSerialBaudrate - 1) / firmwareSerialBaudrate;
     constexpr float radius = 1.35f, feedrate = 100.0f;
     for (const float chord : {0.2f, 0.6f}) {
         const double angle = 2 * std::asin(chord / (2 * radius));
