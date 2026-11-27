@@ -1,0 +1,3998 @@
+{
+  "model": "task0033-priority-v1",
+  "assumptions": "Illustrative non-nested fixed vector priority, one pending flag per timer, finite 400 byte stream. Timer0 COMPB nominal period 4096 cycles, Timer0 OVF 16384 assuming Arduino core /64, WDT nominal 16ms; T1 and Advance periods and all non-UART costs synthetic sensitivity parameters, NOT linked path measurements. ADC polled inside PWM on audited baseline, not a separate vector. Does not emulate Timer1 safe nesting, actual compare reschedule, STEP edges, watchdog oscillator, UDR shift pipeline at sub-frame granularity, TX empty interrupt, stack or parser; no software ring in this model. RX FIFO two entries and full at next start conservative. TX offered work queue is synthetic and can grow without limit; not physical TX ring. Loss phases are deterministic sampled offsets, not probabilities. Timer costs include synthetic entry/return, add 1 cycle dispatch deferral. No safety claims.",
+  "profiles": [
+    {
+      "name": "light",
+      "t1Period": 1600,
+      "t1": 160,
+      "advancePeriod": 2400,
+      "advance": 100,
+      "pwm": 180,
+      "ovf": 100,
+      "wdt": 80
+    },
+    {
+      "name": "medium",
+      "t1Period": 800,
+      "t1": 320,
+      "advancePeriod": 1200,
+      "advance": 120,
+      "pwm": 280,
+      "ovf": 120,
+      "wdt": 100
+    },
+    {
+      "name": "heavy_masked",
+      "t1Period": 800,
+      "t1": 594,
+      "advancePeriod": 1200,
+      "advance": 120,
+      "pwm": 300,
+      "ovf": 120,
+      "wdt": 100
+    }
+  ],
+  "results": [
+    {
+      "baud": 115200,
+      "profile": "light",
+      "txRatio": 0,
+      "phases": 33,
+      "lossPhases": 0,
+      "worstHwLoss": 0,
+      "worstPhase": 0,
+      "maxRxReadCycles": 466,
+      "maxTxPending": 0,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 0,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 75,
+        "T1masked": 177,
+        "Advance": 332,
+        "PWM_ADC": 343,
+        "Timer0OVF": 524
+      },
+      "worstTrace": {
+        "phase": 0,
+        "rxOffered": 400,
+        "rxRead": 400,
+        "hwLoss": 0,
+        "maxRead": 361,
+        "maxFifo": 1,
+        "txOffered": 0,
+        "txDone": 0,
+        "maxTxPending": 0,
+        "txPending": 0,
+        "rxCycles": 29200,
+        "txCycles": 0,
+        "idleCycles": 418277,
+        "elapsedCycles": 555587,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 3,
+            "served": 3,
+            "coalesced": 0,
+            "maxStart": 0,
+            "maxGap": 256000,
+            "cycles": 240
+          },
+          {
+            "name": "T1masked",
+            "releases": 348,
+            "served": 348,
+            "coalesced": 0,
+            "maxStart": 117,
+            "maxGap": 1717,
+            "cycles": 55680
+          },
+          {
+            "name": "Advance",
+            "releases": 232,
+            "served": 232,
+            "coalesced": 0,
+            "maxStart": 278,
+            "maxGap": 2678,
+            "cycles": 23200
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 136,
+            "served": 136,
+            "coalesced": 0,
+            "maxStart": 343,
+            "maxGap": 4358,
+            "cycles": 24480
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 34,
+            "served": 34,
+            "coalesced": 0,
+            "maxStart": 524,
+            "maxGap": 16646,
+            "cycles": 3400
+          }
+        ]
+      }
+    },
+    {
+      "baud": 115200,
+      "profile": "light",
+      "txRatio": 0.25,
+      "phases": 33,
+      "lossPhases": 0,
+      "worstHwLoss": 0,
+      "worstPhase": 0,
+      "maxRxReadCycles": 466,
+      "maxTxPending": 1,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 0,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 75,
+        "T1masked": 177,
+        "Advance": 332,
+        "PWM_ADC": 343,
+        "Timer0OVF": 524
+      },
+      "worstTrace": {
+        "phase": 0,
+        "rxOffered": 400,
+        "rxRead": 400,
+        "hwLoss": 0,
+        "maxRead": 361,
+        "maxFifo": 1,
+        "txOffered": 100,
+        "txDone": 100,
+        "maxTxPending": 1,
+        "txPending": 0,
+        "rxCycles": 29200,
+        "txCycles": 7400,
+        "idleCycles": 410777,
+        "elapsedCycles": 555587,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 3,
+            "served": 3,
+            "coalesced": 0,
+            "maxStart": 0,
+            "maxGap": 256000,
+            "cycles": 240
+          },
+          {
+            "name": "T1masked",
+            "releases": 348,
+            "served": 348,
+            "coalesced": 0,
+            "maxStart": 117,
+            "maxGap": 1717,
+            "cycles": 55680
+          },
+          {
+            "name": "Advance",
+            "releases": 232,
+            "served": 232,
+            "coalesced": 0,
+            "maxStart": 278,
+            "maxGap": 2678,
+            "cycles": 23200
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 136,
+            "served": 136,
+            "coalesced": 0,
+            "maxStart": 343,
+            "maxGap": 4358,
+            "cycles": 24480
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 34,
+            "served": 34,
+            "coalesced": 0,
+            "maxStart": 524,
+            "maxGap": 16646,
+            "cycles": 3400
+          }
+        ]
+      }
+    },
+    {
+      "baud": 115200,
+      "profile": "light",
+      "txRatio": 1,
+      "phases": 33,
+      "lossPhases": 0,
+      "worstHwLoss": 0,
+      "worstPhase": 0,
+      "maxRxReadCycles": 466,
+      "maxTxPending": 1,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 0,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 75,
+        "T1masked": 180,
+        "Advance": 332,
+        "PWM_ADC": 343,
+        "Timer0OVF": 524
+      },
+      "worstTrace": {
+        "phase": 0,
+        "rxOffered": 400,
+        "rxRead": 400,
+        "hwLoss": 0,
+        "maxRead": 361,
+        "maxFifo": 1,
+        "txOffered": 400,
+        "txDone": 400,
+        "maxTxPending": 1,
+        "txPending": 0,
+        "rxCycles": 29200,
+        "txCycles": 29600,
+        "idleCycles": 388277,
+        "elapsedCycles": 555587,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 3,
+            "served": 3,
+            "coalesced": 0,
+            "maxStart": 0,
+            "maxGap": 256000,
+            "cycles": 240
+          },
+          {
+            "name": "T1masked",
+            "releases": 348,
+            "served": 348,
+            "coalesced": 0,
+            "maxStart": 130,
+            "maxGap": 1730,
+            "cycles": 55680
+          },
+          {
+            "name": "Advance",
+            "releases": 232,
+            "served": 232,
+            "coalesced": 0,
+            "maxStart": 291,
+            "maxGap": 2691,
+            "cycles": 23200
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 136,
+            "served": 136,
+            "coalesced": 0,
+            "maxStart": 343,
+            "maxGap": 4358,
+            "cycles": 24480
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 34,
+            "served": 34,
+            "coalesced": 0,
+            "maxStart": 524,
+            "maxGap": 16659,
+            "cycles": 3400
+          }
+        ]
+      }
+    },
+    {
+      "baud": 115200,
+      "profile": "medium",
+      "txRatio": 0,
+      "phases": 33,
+      "lossPhases": 0,
+      "worstHwLoss": 0,
+      "worstPhase": 0,
+      "maxRxReadCycles": 1195,
+      "maxTxPending": 0,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 0,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 141,
+        "T1masked": 278,
+        "Advance": 600,
+        "PWM_ADC": 543,
+        "Timer0OVF": 1145
+      },
+      "worstTrace": {
+        "phase": 0,
+        "rxOffered": 400,
+        "rxRead": 400,
+        "hwLoss": 0,
+        "maxRead": 1173,
+        "maxFifo": 1,
+        "txOffered": 0,
+        "txDone": 0,
+        "maxTxPending": 0,
+        "txPending": 0,
+        "rxCycles": 29200,
+        "txCycles": 0,
+        "idleCycles": 204279,
+        "elapsedCycles": 555587,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 3,
+            "served": 3,
+            "coalesced": 0,
+            "maxStart": 0,
+            "maxGap": 256000,
+            "cycles": 300
+          },
+          {
+            "name": "T1masked",
+            "releases": 695,
+            "served": 695,
+            "coalesced": 0,
+            "maxStart": 255,
+            "maxGap": 1055,
+            "cycles": 222400
+          },
+          {
+            "name": "Advance",
+            "releases": 463,
+            "served": 463,
+            "coalesced": 0,
+            "maxStart": 576,
+            "maxGap": 1776,
+            "cycles": 55560
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 136,
+            "served": 136,
+            "coalesced": 0,
+            "maxStart": 543,
+            "maxGap": 4639,
+            "cycles": 38080
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 34,
+            "served": 34,
+            "coalesced": 0,
+            "maxStart": 1145,
+            "maxGap": 16794,
+            "cycles": 4080
+          }
+        ]
+      }
+    },
+    {
+      "baud": 115200,
+      "profile": "medium",
+      "txRatio": 0.25,
+      "phases": 33,
+      "lossPhases": 0,
+      "worstHwLoss": 0,
+      "worstPhase": 0,
+      "maxRxReadCycles": 1195,
+      "maxTxPending": 1,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 0,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 141,
+        "T1masked": 278,
+        "Advance": 600,
+        "PWM_ADC": 543,
+        "Timer0OVF": 1145
+      },
+      "worstTrace": {
+        "phase": 0,
+        "rxOffered": 400,
+        "rxRead": 400,
+        "hwLoss": 0,
+        "maxRead": 1173,
+        "maxFifo": 1,
+        "txOffered": 100,
+        "txDone": 100,
+        "maxTxPending": 1,
+        "txPending": 0,
+        "rxCycles": 29200,
+        "txCycles": 7400,
+        "idleCycles": 196779,
+        "elapsedCycles": 555587,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 3,
+            "served": 3,
+            "coalesced": 0,
+            "maxStart": 0,
+            "maxGap": 256000,
+            "cycles": 300
+          },
+          {
+            "name": "T1masked",
+            "releases": 695,
+            "served": 695,
+            "coalesced": 0,
+            "maxStart": 255,
+            "maxGap": 1055,
+            "cycles": 222400
+          },
+          {
+            "name": "Advance",
+            "releases": 463,
+            "served": 463,
+            "coalesced": 0,
+            "maxStart": 576,
+            "maxGap": 1776,
+            "cycles": 55560
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 136,
+            "served": 136,
+            "coalesced": 0,
+            "maxStart": 543,
+            "maxGap": 4639,
+            "cycles": 38080
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 34,
+            "served": 34,
+            "coalesced": 0,
+            "maxStart": 1145,
+            "maxGap": 16794,
+            "cycles": 4080
+          }
+        ]
+      }
+    },
+    {
+      "baud": 115200,
+      "profile": "medium",
+      "txRatio": 1,
+      "phases": 33,
+      "lossPhases": 0,
+      "worstHwLoss": 0,
+      "worstPhase": 0,
+      "maxRxReadCycles": 1195,
+      "maxTxPending": 1,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 0,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 141,
+        "T1masked": 280,
+        "Advance": 600,
+        "PWM_ADC": 543,
+        "Timer0OVF": 1145
+      },
+      "worstTrace": {
+        "phase": 0,
+        "rxOffered": 400,
+        "rxRead": 400,
+        "hwLoss": 0,
+        "maxRead": 1173,
+        "maxFifo": 1,
+        "txOffered": 400,
+        "txDone": 400,
+        "maxTxPending": 1,
+        "txPending": 0,
+        "rxCycles": 29200,
+        "txCycles": 29600,
+        "idleCycles": 174279,
+        "elapsedCycles": 555587,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 3,
+            "served": 3,
+            "coalesced": 0,
+            "maxStart": 0,
+            "maxGap": 256000,
+            "cycles": 300
+          },
+          {
+            "name": "T1masked",
+            "releases": 695,
+            "served": 695,
+            "coalesced": 0,
+            "maxStart": 255,
+            "maxGap": 1055,
+            "cycles": 222400
+          },
+          {
+            "name": "Advance",
+            "releases": 463,
+            "served": 463,
+            "coalesced": 0,
+            "maxStart": 576,
+            "maxGap": 1770,
+            "cycles": 55560
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 136,
+            "served": 136,
+            "coalesced": 0,
+            "maxStart": 543,
+            "maxGap": 4639,
+            "cycles": 38080
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 34,
+            "served": 34,
+            "coalesced": 0,
+            "maxStart": 1145,
+            "maxGap": 16794,
+            "cycles": 4080
+          }
+        ]
+      }
+    },
+    {
+      "baud": 115200,
+      "profile": "heavy_masked",
+      "txRatio": 0,
+      "phases": 33,
+      "lossPhases": 33,
+      "worstHwLoss": 13,
+      "worstPhase": 301,
+      "maxRxReadCycles": 4255,
+      "maxTxPending": 0,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 6,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 260,
+        "T1masked": 361,
+        "Advance": 1490,
+        "PWM_ADC": 1533,
+        "Timer0OVF": 3145
+      },
+      "worstTrace": {
+        "phase": 301,
+        "rxOffered": 400,
+        "rxRead": 387,
+        "hwLoss": 13,
+        "maxRead": 3130,
+        "maxFifo": 2,
+        "txOffered": 0,
+        "txDone": 0,
+        "maxTxPending": 0,
+        "txPending": 0,
+        "rxCycles": 28251,
+        "txCycles": 0,
+        "idleCycles": 13564,
+        "elapsedCycles": 556334,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 3,
+            "served": 3,
+            "coalesced": 0,
+            "maxStart": 52,
+            "maxGap": 256052,
+            "cycles": 300
+          },
+          {
+            "name": "T1masked",
+            "releases": 695,
+            "served": 695,
+            "coalesced": 0,
+            "maxStart": 298,
+            "maxGap": 1098,
+            "cycles": 412830
+          },
+          {
+            "name": "Advance",
+            "releases": 463,
+            "served": 457,
+            "coalesced": 6,
+            "maxStart": 1277,
+            "maxGap": 2445,
+            "cycles": 54840
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 136,
+            "served": 136,
+            "coalesced": 0,
+            "maxStart": 696,
+            "maxGap": 4760,
+            "cycles": 40800
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 34,
+            "served": 34,
+            "coalesced": 0,
+            "maxStart": 1760,
+            "maxGap": 16800,
+            "cycles": 4080
+          }
+        ]
+      }
+    },
+    {
+      "baud": 115200,
+      "profile": "heavy_masked",
+      "txRatio": 0.25,
+      "phases": 33,
+      "lossPhases": 33,
+      "worstHwLoss": 15,
+      "worstPhase": 344,
+      "maxRxReadCycles": 5027,
+      "maxTxPending": 2,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 8,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 267,
+        "T1masked": 368,
+        "Advance": 1565,
+        "PWM_ADC": 1533,
+        "Timer0OVF": 3145
+      },
+      "worstTrace": {
+        "phase": 344,
+        "rxOffered": 400,
+        "rxRead": 385,
+        "hwLoss": 15,
+        "maxRead": 3564,
+        "maxFifo": 2,
+        "txOffered": 100,
+        "txDone": 100,
+        "maxTxPending": 2,
+        "txPending": 0,
+        "rxCycles": 28105,
+        "txCycles": 7400,
+        "idleCycles": 5529,
+        "elapsedCycles": 556377,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 3,
+            "served": 3,
+            "coalesced": 0,
+            "maxStart": 105,
+            "maxGap": 256105,
+            "cycles": 300
+          },
+          {
+            "name": "T1masked",
+            "releases": 695,
+            "served": 695,
+            "coalesced": 0,
+            "maxStart": 291,
+            "maxGap": 1091,
+            "cycles": 412830
+          },
+          {
+            "name": "Advance",
+            "releases": 463,
+            "served": 463,
+            "coalesced": 0,
+            "maxStart": 1186,
+            "maxGap": 2356,
+            "cycles": 55560
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 136,
+            "served": 136,
+            "coalesced": 0,
+            "maxStart": 788,
+            "maxGap": 4848,
+            "cycles": 40800
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 34,
+            "served": 34,
+            "coalesced": 0,
+            "maxStart": 1916,
+            "maxGap": 16836,
+            "cycles": 4080
+          }
+        ]
+      }
+    },
+    {
+      "baud": 115200,
+      "profile": "heavy_masked",
+      "txRatio": 1,
+      "phases": 33,
+      "lossPhases": 33,
+      "worstHwLoss": 24,
+      "worstPhase": 301,
+      "maxRxReadCycles": 5560,
+      "maxTxPending": 233,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 9,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 265,
+        "T1masked": 366,
+        "Advance": 1542,
+        "PWM_ADC": 1542,
+        "Timer0OVF": 3145
+      },
+      "worstTrace": {
+        "phase": 301,
+        "rxOffered": 400,
+        "rxRead": 376,
+        "hwLoss": 24,
+        "maxRead": 4598,
+        "maxFifo": 2,
+        "txOffered": 400,
+        "txDone": 308,
+        "maxTxPending": 215,
+        "txPending": 92,
+        "rxCycles": 27448,
+        "txCycles": 22792,
+        "idleCycles": 226,
+        "elapsedCycles": 565567,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 3,
+            "served": 3,
+            "coalesced": 0,
+            "maxStart": 108,
+            "maxGap": 256108,
+            "cycles": 300
+          },
+          {
+            "name": "T1masked",
+            "releases": 695,
+            "served": 695,
+            "coalesced": 0,
+            "maxStart": 296,
+            "maxGap": 1092,
+            "cycles": 412830
+          },
+          {
+            "name": "Advance",
+            "releases": 463,
+            "served": 459,
+            "coalesced": 4,
+            "maxStart": 1260,
+            "maxGap": 2430,
+            "cycles": 55080
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 136,
+            "served": 136,
+            "coalesced": 0,
+            "maxStart": 787,
+            "maxGap": 4848,
+            "cycles": 40800
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 34,
+            "served": 34,
+            "coalesced": 0,
+            "maxStart": 2277,
+            "maxGap": 17447,
+            "cycles": 4080
+          }
+        ]
+      }
+    },
+    {
+      "baud": 250000,
+      "profile": "light",
+      "txRatio": 0,
+      "phases": 32,
+      "lossPhases": 0,
+      "worstHwLoss": 0,
+      "worstPhase": 0,
+      "maxRxReadCycles": 563,
+      "maxTxPending": 0,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 0,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 0,
+        "T1masked": 175,
+        "Advance": 326,
+        "PWM_ADC": 343,
+        "Timer0OVF": 524
+      },
+      "worstTrace": {
+        "phase": 0,
+        "rxOffered": 400,
+        "rxRead": 400,
+        "hwLoss": 0,
+        "maxRead": 474,
+        "maxFifo": 1,
+        "txOffered": 0,
+        "txDone": 0,
+        "maxTxPending": 0,
+        "txPending": 0,
+        "rxCycles": 29200,
+        "txCycles": 0,
+        "idleCycles": 176807,
+        "elapsedCycles": 256273,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 2,
+            "served": 2,
+            "coalesced": 0,
+            "maxStart": 0,
+            "maxGap": 256000,
+            "cycles": 160
+          },
+          {
+            "name": "T1masked",
+            "releases": 161,
+            "served": 161,
+            "coalesced": 0,
+            "maxStart": 117,
+            "maxGap": 1717,
+            "cycles": 25760
+          },
+          {
+            "name": "Advance",
+            "releases": 107,
+            "served": 107,
+            "coalesced": 0,
+            "maxStart": 278,
+            "maxGap": 2678,
+            "cycles": 10700
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 63,
+            "served": 63,
+            "coalesced": 0,
+            "maxStart": 343,
+            "maxGap": 4294,
+            "cycles": 11340
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 16,
+            "served": 16,
+            "coalesced": 0,
+            "maxStart": 524,
+            "maxGap": 16545,
+            "cycles": 1600
+          }
+        ]
+      }
+    },
+    {
+      "baud": 250000,
+      "profile": "light",
+      "txRatio": 0.25,
+      "phases": 32,
+      "lossPhases": 0,
+      "worstHwLoss": 0,
+      "worstPhase": 0,
+      "maxRxReadCycles": 563,
+      "maxTxPending": 1,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 0,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 55,
+        "T1masked": 175,
+        "Advance": 326,
+        "PWM_ADC": 343,
+        "Timer0OVF": 524
+      },
+      "worstTrace": {
+        "phase": 0,
+        "rxOffered": 400,
+        "rxRead": 400,
+        "hwLoss": 0,
+        "maxRead": 474,
+        "maxFifo": 1,
+        "txOffered": 100,
+        "txDone": 100,
+        "maxTxPending": 1,
+        "txPending": 0,
+        "rxCycles": 29200,
+        "txCycles": 7400,
+        "idleCycles": 169307,
+        "elapsedCycles": 256273,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 2,
+            "served": 2,
+            "coalesced": 0,
+            "maxStart": 0,
+            "maxGap": 256000,
+            "cycles": 160
+          },
+          {
+            "name": "T1masked",
+            "releases": 161,
+            "served": 161,
+            "coalesced": 0,
+            "maxStart": 117,
+            "maxGap": 1717,
+            "cycles": 25760
+          },
+          {
+            "name": "Advance",
+            "releases": 107,
+            "served": 107,
+            "coalesced": 0,
+            "maxStart": 278,
+            "maxGap": 2678,
+            "cycles": 10700
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 63,
+            "served": 63,
+            "coalesced": 0,
+            "maxStart": 343,
+            "maxGap": 4294,
+            "cycles": 11340
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 16,
+            "served": 16,
+            "coalesced": 0,
+            "maxStart": 524,
+            "maxGap": 16545,
+            "cycles": 1600
+          }
+        ]
+      }
+    },
+    {
+      "baud": 250000,
+      "profile": "light",
+      "txRatio": 1,
+      "phases": 32,
+      "lossPhases": 0,
+      "worstHwLoss": 0,
+      "worstPhase": 0,
+      "maxRxReadCycles": 563,
+      "maxTxPending": 1,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 0,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 55,
+        "T1masked": 175,
+        "Advance": 326,
+        "PWM_ADC": 343,
+        "Timer0OVF": 524
+      },
+      "worstTrace": {
+        "phase": 0,
+        "rxOffered": 400,
+        "rxRead": 400,
+        "hwLoss": 0,
+        "maxRead": 474,
+        "maxFifo": 1,
+        "txOffered": 400,
+        "txDone": 400,
+        "maxTxPending": 1,
+        "txPending": 0,
+        "rxCycles": 29200,
+        "txCycles": 29600,
+        "idleCycles": 146807,
+        "elapsedCycles": 256273,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 2,
+            "served": 2,
+            "coalesced": 0,
+            "maxStart": 0,
+            "maxGap": 256000,
+            "cycles": 160
+          },
+          {
+            "name": "T1masked",
+            "releases": 161,
+            "served": 161,
+            "coalesced": 0,
+            "maxStart": 117,
+            "maxGap": 1717,
+            "cycles": 25760
+          },
+          {
+            "name": "Advance",
+            "releases": 107,
+            "served": 107,
+            "coalesced": 0,
+            "maxStart": 278,
+            "maxGap": 2678,
+            "cycles": 10700
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 63,
+            "served": 63,
+            "coalesced": 0,
+            "maxStart": 343,
+            "maxGap": 4273,
+            "cycles": 11340
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 16,
+            "served": 16,
+            "coalesced": 0,
+            "maxStart": 524,
+            "maxGap": 16667,
+            "cycles": 1600
+          }
+        ]
+      }
+    },
+    {
+      "baud": 250000,
+      "profile": "medium",
+      "txRatio": 0,
+      "phases": 32,
+      "lossPhases": 0,
+      "worstHwLoss": 0,
+      "worstPhase": 0,
+      "maxRxReadCycles": 1196,
+      "maxTxPending": 0,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 0,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 81,
+        "T1masked": 276,
+        "Advance": 594,
+        "PWM_ADC": 543,
+        "Timer0OVF": 1145
+      },
+      "worstTrace": {
+        "phase": 0,
+        "rxOffered": 400,
+        "rxRead": 400,
+        "hwLoss": 0,
+        "maxRead": 1196,
+        "maxFifo": 2,
+        "txOffered": 0,
+        "txDone": 0,
+        "maxTxPending": 0,
+        "txPending": 0,
+        "rxCycles": 29200,
+        "txCycles": 0,
+        "idleCycles": 78120,
+        "elapsedCycles": 256453,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 2,
+            "served": 2,
+            "coalesced": 0,
+            "maxStart": 0,
+            "maxGap": 256000,
+            "cycles": 200
+          },
+          {
+            "name": "T1masked",
+            "releases": 321,
+            "served": 321,
+            "coalesced": 0,
+            "maxStart": 249,
+            "maxGap": 1049,
+            "cycles": 102720
+          },
+          {
+            "name": "Advance",
+            "releases": 214,
+            "served": 214,
+            "coalesced": 0,
+            "maxStart": 570,
+            "maxGap": 1770,
+            "cycles": 25680
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 63,
+            "served": 63,
+            "coalesced": 0,
+            "maxStart": 543,
+            "maxGap": 4506,
+            "cycles": 17640
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 16,
+            "served": 16,
+            "coalesced": 0,
+            "maxStart": 1145,
+            "maxGap": 16705,
+            "cycles": 1920
+          }
+        ]
+      }
+    },
+    {
+      "baud": 250000,
+      "profile": "medium",
+      "txRatio": 0.25,
+      "phases": 32,
+      "lossPhases": 0,
+      "worstHwLoss": 0,
+      "worstPhase": 0,
+      "maxRxReadCycles": 1196,
+      "maxTxPending": 1,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 0,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 81,
+        "T1masked": 276,
+        "Advance": 594,
+        "PWM_ADC": 543,
+        "Timer0OVF": 1145
+      },
+      "worstTrace": {
+        "phase": 0,
+        "rxOffered": 400,
+        "rxRead": 400,
+        "hwLoss": 0,
+        "maxRead": 1196,
+        "maxFifo": 2,
+        "txOffered": 100,
+        "txDone": 100,
+        "maxTxPending": 1,
+        "txPending": 0,
+        "rxCycles": 29200,
+        "txCycles": 7400,
+        "idleCycles": 70620,
+        "elapsedCycles": 256453,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 2,
+            "served": 2,
+            "coalesced": 0,
+            "maxStart": 0,
+            "maxGap": 256000,
+            "cycles": 200
+          },
+          {
+            "name": "T1masked",
+            "releases": 321,
+            "served": 321,
+            "coalesced": 0,
+            "maxStart": 249,
+            "maxGap": 1049,
+            "cycles": 102720
+          },
+          {
+            "name": "Advance",
+            "releases": 214,
+            "served": 214,
+            "coalesced": 0,
+            "maxStart": 570,
+            "maxGap": 1770,
+            "cycles": 25680
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 63,
+            "served": 63,
+            "coalesced": 0,
+            "maxStart": 543,
+            "maxGap": 4506,
+            "cycles": 17640
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 16,
+            "served": 16,
+            "coalesced": 0,
+            "maxStart": 1145,
+            "maxGap": 16705,
+            "cycles": 1920
+          }
+        ]
+      }
+    },
+    {
+      "baud": 250000,
+      "profile": "medium",
+      "txRatio": 1,
+      "phases": 32,
+      "lossPhases": 0,
+      "worstHwLoss": 0,
+      "worstPhase": 0,
+      "maxRxReadCycles": 1196,
+      "maxTxPending": 3,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 0,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 81,
+        "T1masked": 276,
+        "Advance": 594,
+        "PWM_ADC": 543,
+        "Timer0OVF": 1145
+      },
+      "worstTrace": {
+        "phase": 0,
+        "rxOffered": 400,
+        "rxRead": 400,
+        "hwLoss": 0,
+        "maxRead": 1196,
+        "maxFifo": 2,
+        "txOffered": 400,
+        "txDone": 400,
+        "maxTxPending": 3,
+        "txPending": 0,
+        "rxCycles": 29200,
+        "txCycles": 29600,
+        "idleCycles": 48120,
+        "elapsedCycles": 256453,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 2,
+            "served": 2,
+            "coalesced": 0,
+            "maxStart": 0,
+            "maxGap": 256000,
+            "cycles": 200
+          },
+          {
+            "name": "T1masked",
+            "releases": 321,
+            "served": 321,
+            "coalesced": 0,
+            "maxStart": 270,
+            "maxGap": 1070,
+            "cycles": 102720
+          },
+          {
+            "name": "Advance",
+            "releases": 214,
+            "served": 214,
+            "coalesced": 0,
+            "maxStart": 591,
+            "maxGap": 1721,
+            "cycles": 25680
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 63,
+            "served": 63,
+            "coalesced": 0,
+            "maxStart": 543,
+            "maxGap": 4506,
+            "cycles": 17640
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 16,
+            "served": 16,
+            "coalesced": 0,
+            "maxStart": 1145,
+            "maxGap": 16715,
+            "cycles": 1920
+          }
+        ]
+      }
+    },
+    {
+      "baud": 250000,
+      "profile": "heavy_masked",
+      "txRatio": 0,
+      "phases": 32,
+      "lossPhases": 32,
+      "worstHwLoss": 155,
+      "worstPhase": 140,
+      "maxRxReadCycles": 5255,
+      "maxTxPending": 0,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 5,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 81,
+        "T1masked": 300,
+        "Advance": 1490,
+        "PWM_ADC": 1533,
+        "Timer0OVF": 3145
+      },
+      "worstTrace": {
+        "phase": 140,
+        "rxOffered": 400,
+        "rxRead": 245,
+        "hwLoss": 155,
+        "maxRead": 3542,
+        "maxFifo": 2,
+        "txOffered": 0,
+        "txDone": 0,
+        "maxTxPending": 0,
+        "txPending": 0,
+        "rxCycles": 17885,
+        "txCycles": 0,
+        "idleCycles": 997,
+        "elapsedCycles": 256257,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 1,
+            "served": 1,
+            "coalesced": 0,
+            "maxStart": 0,
+            "maxGap": 0,
+            "cycles": 100
+          },
+          {
+            "name": "T1masked",
+            "releases": 320,
+            "served": 320,
+            "coalesced": 0,
+            "maxStart": 291,
+            "maxGap": 1091,
+            "cycles": 190080
+          },
+          {
+            "name": "Advance",
+            "releases": 213,
+            "served": 213,
+            "coalesced": 0,
+            "maxStart": 1163,
+            "maxGap": 2308,
+            "cycles": 25560
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 63,
+            "served": 63,
+            "coalesced": 0,
+            "maxStart": 852,
+            "maxGap": 4808,
+            "cycles": 18900
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 16,
+            "served": 16,
+            "coalesced": 0,
+            "maxStart": 2305,
+            "maxGap": 16808,
+            "cycles": 1920
+          }
+        ]
+      }
+    },
+    {
+      "baud": 250000,
+      "profile": "heavy_masked",
+      "txRatio": 0.25,
+      "phases": 32,
+      "lossPhases": 32,
+      "worstHwLoss": 174,
+      "worstPhase": 20,
+      "maxRxReadCycles": 5805,
+      "maxTxPending": 84,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 4,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 81,
+        "T1masked": 300,
+        "Advance": 1488,
+        "PWM_ADC": 1533,
+        "Timer0OVF": 3796
+      },
+      "worstTrace": {
+        "phase": 20,
+        "rxOffered": 400,
+        "rxRead": 226,
+        "hwLoss": 174,
+        "maxRead": 5805,
+        "maxFifo": 2,
+        "txOffered": 100,
+        "txDone": 100,
+        "maxTxPending": 68,
+        "txPending": 0,
+        "rxCycles": 16498,
+        "txCycles": 7400,
+        "idleCycles": 0,
+        "elapsedCycles": 261201,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 1,
+            "served": 1,
+            "coalesced": 0,
+            "maxStart": 55,
+            "maxGap": 0,
+            "cycles": 100
+          },
+          {
+            "name": "T1masked",
+            "releases": 320,
+            "served": 320,
+            "coalesced": 0,
+            "maxStart": 292,
+            "maxGap": 1091,
+            "cycles": 190080
+          },
+          {
+            "name": "Advance",
+            "releases": 214,
+            "served": 212,
+            "coalesced": 2,
+            "maxStart": 1407,
+            "maxGap": 2429,
+            "cycles": 25440
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 63,
+            "served": 63,
+            "coalesced": 0,
+            "maxStart": 1508,
+            "maxGap": 4800,
+            "cycles": 18900
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 16,
+            "served": 16,
+            "coalesced": 0,
+            "maxStart": 3796,
+            "maxGap": 16847,
+            "cycles": 1920
+          }
+        ]
+      }
+    },
+    {
+      "baud": 250000,
+      "profile": "heavy_masked",
+      "txRatio": 1,
+      "phases": 32,
+      "lossPhases": 32,
+      "worstHwLoss": 174,
+      "worstPhase": 20,
+      "maxRxReadCycles": 5805,
+      "maxTxPending": 384,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 4,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 81,
+        "T1masked": 300,
+        "Advance": 1488,
+        "PWM_ADC": 1533,
+        "Timer0OVF": 3796
+      },
+      "worstTrace": {
+        "phase": 20,
+        "rxOffered": 400,
+        "rxRead": 226,
+        "hwLoss": 174,
+        "maxRead": 5805,
+        "maxFifo": 2,
+        "txOffered": 400,
+        "txDone": 163,
+        "maxTxPending": 368,
+        "txPending": 237,
+        "rxCycles": 16498,
+        "txCycles": 12062,
+        "idleCycles": 0,
+        "elapsedCycles": 266001,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 1,
+            "served": 1,
+            "coalesced": 0,
+            "maxStart": 55,
+            "maxGap": 0,
+            "cycles": 100
+          },
+          {
+            "name": "T1masked",
+            "releases": 320,
+            "served": 320,
+            "coalesced": 0,
+            "maxStart": 292,
+            "maxGap": 1091,
+            "cycles": 190080
+          },
+          {
+            "name": "Advance",
+            "releases": 214,
+            "served": 212,
+            "coalesced": 2,
+            "maxStart": 1407,
+            "maxGap": 2429,
+            "cycles": 25440
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 63,
+            "served": 63,
+            "coalesced": 0,
+            "maxStart": 1508,
+            "maxGap": 4800,
+            "cycles": 18900
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 16,
+            "served": 16,
+            "coalesced": 0,
+            "maxStart": 3796,
+            "maxGap": 16847,
+            "cycles": 1920
+          }
+        ]
+      }
+    },
+    {
+      "baud": 500000,
+      "profile": "light",
+      "txRatio": 0,
+      "phases": 32,
+      "lossPhases": 0,
+      "worstHwLoss": 0,
+      "worstPhase": 0,
+      "maxRxReadCycles": 563,
+      "maxTxPending": 0,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 0,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 0,
+        "T1masked": 175,
+        "Advance": 254,
+        "PWM_ADC": 343,
+        "Timer0OVF": 524
+      },
+      "worstTrace": {
+        "phase": 0,
+        "rxOffered": 400,
+        "rxRead": 400,
+        "hwLoss": 0,
+        "maxRead": 474,
+        "maxFifo": 2,
+        "txOffered": 0,
+        "txDone": 0,
+        "maxTxPending": 0,
+        "txPending": 0,
+        "rxCycles": 29200,
+        "txCycles": 0,
+        "idleCycles": 73459,
+        "elapsedCycles": 128192,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 1,
+            "served": 1,
+            "coalesced": 0,
+            "maxStart": 0,
+            "maxGap": 0,
+            "cycles": 80
+          },
+          {
+            "name": "T1masked",
+            "releases": 81,
+            "served": 81,
+            "coalesced": 0,
+            "maxStart": 117,
+            "maxGap": 1717,
+            "cycles": 12960
+          },
+          {
+            "name": "Advance",
+            "releases": 54,
+            "served": 54,
+            "coalesced": 0,
+            "maxStart": 242,
+            "maxGap": 2614,
+            "cycles": 5400
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 32,
+            "served": 32,
+            "coalesced": 0,
+            "maxStart": 343,
+            "maxGap": 4247,
+            "cycles": 5760
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 8,
+            "served": 8,
+            "coalesced": 0,
+            "maxStart": 524,
+            "maxGap": 16545,
+            "cycles": 800
+          }
+        ]
+      }
+    },
+    {
+      "baud": 500000,
+      "profile": "light",
+      "txRatio": 0.25,
+      "phases": 32,
+      "lossPhases": 0,
+      "worstHwLoss": 0,
+      "worstPhase": 0,
+      "maxRxReadCycles": 563,
+      "maxTxPending": 1,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 0,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 65,
+        "T1masked": 175,
+        "Advance": 287,
+        "PWM_ADC": 368,
+        "Timer0OVF": 529
+      },
+      "worstTrace": {
+        "phase": 0,
+        "rxOffered": 400,
+        "rxRead": 400,
+        "hwLoss": 0,
+        "maxRead": 474,
+        "maxFifo": 2,
+        "txOffered": 100,
+        "txDone": 100,
+        "maxTxPending": 1,
+        "txPending": 0,
+        "rxCycles": 29200,
+        "txCycles": 7400,
+        "idleCycles": 65959,
+        "elapsedCycles": 128192,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 1,
+            "served": 1,
+            "coalesced": 0,
+            "maxStart": 0,
+            "maxGap": 0,
+            "cycles": 80
+          },
+          {
+            "name": "T1masked",
+            "releases": 81,
+            "served": 81,
+            "coalesced": 0,
+            "maxStart": 117,
+            "maxGap": 1717,
+            "cycles": 12960
+          },
+          {
+            "name": "Advance",
+            "releases": 54,
+            "served": 54,
+            "coalesced": 0,
+            "maxStart": 242,
+            "maxGap": 2614,
+            "cycles": 5400
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 32,
+            "served": 32,
+            "coalesced": 0,
+            "maxStart": 343,
+            "maxGap": 4247,
+            "cycles": 5760
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 8,
+            "served": 8,
+            "coalesced": 0,
+            "maxStart": 524,
+            "maxGap": 16545,
+            "cycles": 800
+          }
+        ]
+      }
+    },
+    {
+      "baud": 500000,
+      "profile": "light",
+      "txRatio": 1,
+      "phases": 32,
+      "lossPhases": 0,
+      "worstHwLoss": 0,
+      "worstPhase": 0,
+      "maxRxReadCycles": 563,
+      "maxTxPending": 3,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 0,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 65,
+        "T1masked": 180,
+        "Advance": 287,
+        "PWM_ADC": 368,
+        "Timer0OVF": 529
+      },
+      "worstTrace": {
+        "phase": 0,
+        "rxOffered": 400,
+        "rxRead": 400,
+        "hwLoss": 0,
+        "maxRead": 474,
+        "maxFifo": 2,
+        "txOffered": 400,
+        "txDone": 400,
+        "maxTxPending": 3,
+        "txPending": 0,
+        "rxCycles": 29200,
+        "txCycles": 29600,
+        "idleCycles": 43459,
+        "elapsedCycles": 128192,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 1,
+            "served": 1,
+            "coalesced": 0,
+            "maxStart": 0,
+            "maxGap": 0,
+            "cycles": 80
+          },
+          {
+            "name": "T1masked",
+            "releases": 81,
+            "served": 81,
+            "coalesced": 0,
+            "maxStart": 117,
+            "maxGap": 1717,
+            "cycles": 12960
+          },
+          {
+            "name": "Advance",
+            "releases": 54,
+            "served": 54,
+            "coalesced": 0,
+            "maxStart": 242,
+            "maxGap": 2614,
+            "cycles": 5400
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 32,
+            "served": 32,
+            "coalesced": 0,
+            "maxStart": 343,
+            "maxGap": 4247,
+            "cycles": 5760
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 8,
+            "served": 8,
+            "coalesced": 0,
+            "maxStart": 524,
+            "maxGap": 16545,
+            "cycles": 800
+          }
+        ]
+      }
+    },
+    {
+      "baud": 500000,
+      "profile": "medium",
+      "txRatio": 0,
+      "phases": 32,
+      "lossPhases": 32,
+      "worstHwLoss": 19,
+      "worstPhase": 160,
+      "maxRxReadCycles": 1196,
+      "maxTxPending": 0,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 0,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 0,
+        "T1masked": 276,
+        "Advance": 586,
+        "PWM_ADC": 543,
+        "Timer0OVF": 1145
+      },
+      "worstTrace": {
+        "phase": 160,
+        "rxOffered": 400,
+        "rxRead": 381,
+        "hwLoss": 19,
+        "maxRead": 1196,
+        "maxFifo": 2,
+        "txOffered": 0,
+        "txDone": 0,
+        "maxTxPending": 0,
+        "txPending": 0,
+        "rxCycles": 27813,
+        "txCycles": 0,
+        "idleCycles": 25669,
+        "elapsedCycles": 128188,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 1,
+            "served": 1,
+            "coalesced": 0,
+            "maxStart": 0,
+            "maxGap": 0,
+            "cycles": 100
+          },
+          {
+            "name": "T1masked",
+            "releases": 160,
+            "served": 160,
+            "coalesced": 0,
+            "maxStart": 249,
+            "maxGap": 1008,
+            "cycles": 51200
+          },
+          {
+            "name": "Advance",
+            "releases": 107,
+            "served": 107,
+            "coalesced": 0,
+            "maxStart": 586,
+            "maxGap": 1785,
+            "cycles": 12840
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 32,
+            "served": 32,
+            "coalesced": 0,
+            "maxStart": 426,
+            "maxGap": 4522,
+            "cycles": 8960
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 8,
+            "served": 8,
+            "coalesced": 0,
+            "maxStart": 403,
+            "maxGap": 16656,
+            "cycles": 960
+          }
+        ]
+      }
+    },
+    {
+      "baud": 500000,
+      "profile": "medium",
+      "txRatio": 0.25,
+      "phases": 32,
+      "lossPhases": 32,
+      "worstHwLoss": 21,
+      "worstPhase": 130,
+      "maxRxReadCycles": 1196,
+      "maxTxPending": 2,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 0,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 65,
+        "T1masked": 276,
+        "Advance": 591,
+        "PWM_ADC": 568,
+        "Timer0OVF": 1150
+      },
+      "worstTrace": {
+        "phase": 130,
+        "rxOffered": 400,
+        "rxRead": 379,
+        "hwLoss": 21,
+        "maxRead": 1166,
+        "maxFifo": 2,
+        "txOffered": 100,
+        "txDone": 100,
+        "maxTxPending": 2,
+        "txPending": 0,
+        "rxCycles": 27667,
+        "txCycles": 7400,
+        "idleCycles": 18287,
+        "elapsedCycles": 128158,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 1,
+            "served": 1,
+            "coalesced": 0,
+            "maxStart": 0,
+            "maxGap": 0,
+            "cycles": 100
+          },
+          {
+            "name": "T1masked",
+            "releases": 160,
+            "served": 160,
+            "coalesced": 0,
+            "maxStart": 262,
+            "maxGap": 1062,
+            "cycles": 51200
+          },
+          {
+            "name": "Advance",
+            "releases": 107,
+            "served": 107,
+            "coalesced": 0,
+            "maxStart": 558,
+            "maxGap": 1697,
+            "cycles": 12840
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 32,
+            "served": 32,
+            "coalesced": 0,
+            "maxStart": 453,
+            "maxGap": 4549,
+            "cycles": 8960
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 8,
+            "served": 8,
+            "coalesced": 0,
+            "maxStart": 519,
+            "maxGap": 16819,
+            "cycles": 960
+          }
+        ]
+      }
+    },
+    {
+      "baud": 500000,
+      "profile": "medium",
+      "txRatio": 1,
+      "phases": 32,
+      "lossPhases": 32,
+      "worstHwLoss": 32,
+      "worstPhase": 0,
+      "maxRxReadCycles": 1354,
+      "maxTxPending": 61,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 0,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 65,
+        "T1masked": 280,
+        "Advance": 601,
+        "PWM_ADC": 568,
+        "Timer0OVF": 1150
+      },
+      "worstTrace": {
+        "phase": 0,
+        "rxOffered": 400,
+        "rxRead": 368,
+        "hwLoss": 32,
+        "maxRead": 1354,
+        "maxFifo": 2,
+        "txOffered": 400,
+        "txDone": 400,
+        "maxTxPending": 49,
+        "txPending": 0,
+        "rxCycles": 26864,
+        "txCycles": 29600,
+        "idleCycles": 0,
+        "elapsedCycles": 131846,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 1,
+            "served": 1,
+            "coalesced": 0,
+            "maxStart": 0,
+            "maxGap": 0,
+            "cycles": 100
+          },
+          {
+            "name": "T1masked",
+            "releases": 161,
+            "served": 161,
+            "coalesced": 0,
+            "maxStart": 253,
+            "maxGap": 1021,
+            "cycles": 51520
+          },
+          {
+            "name": "Advance",
+            "releases": 107,
+            "served": 107,
+            "coalesced": 0,
+            "maxStart": 520,
+            "maxGap": 1715,
+            "cycles": 12840
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 32,
+            "served": 32,
+            "coalesced": 0,
+            "maxStart": 543,
+            "maxGap": 4525,
+            "cycles": 8960
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 8,
+            "served": 8,
+            "coalesced": 0,
+            "maxStart": 1145,
+            "maxGap": 16683,
+            "cycles": 960
+          }
+        ]
+      }
+    },
+    {
+      "baud": 500000,
+      "profile": "heavy_masked",
+      "txRatio": 0,
+      "phases": 32,
+      "lossPhases": 32,
+      "worstHwLoss": 275,
+      "worstPhase": 30,
+      "maxRxReadCycles": 5905,
+      "maxTxPending": 0,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 2,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 0,
+        "T1masked": 300,
+        "Advance": 1480,
+        "PWM_ADC": 1533,
+        "Timer0OVF": 3145
+      },
+      "worstTrace": {
+        "phase": 30,
+        "rxOffered": 400,
+        "rxRead": 125,
+        "hwLoss": 275,
+        "maxRead": 5805,
+        "maxFifo": 2,
+        "txOffered": 0,
+        "txDone": 0,
+        "maxTxPending": 0,
+        "txPending": 0,
+        "rxCycles": 9125,
+        "txCycles": 0,
+        "idleCycles": 222,
+        "elapsedCycles": 128277,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 1,
+            "served": 1,
+            "coalesced": 0,
+            "maxStart": 0,
+            "maxGap": 0,
+            "cycles": 100
+          },
+          {
+            "name": "T1masked",
+            "releases": 160,
+            "served": 160,
+            "coalesced": 0,
+            "maxStart": 291,
+            "maxGap": 1091,
+            "cycles": 95040
+          },
+          {
+            "name": "Advance",
+            "releases": 107,
+            "served": 107,
+            "coalesced": 0,
+            "maxStart": 1021,
+            "maxGap": 1760,
+            "cycles": 12840
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 32,
+            "served": 32,
+            "coalesced": 0,
+            "maxStart": 1413,
+            "maxGap": 4800,
+            "cycles": 9600
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 8,
+            "served": 8,
+            "coalesced": 0,
+            "maxStart": 2965,
+            "maxGap": 16800,
+            "cycles": 960
+          }
+        ]
+      }
+    },
+    {
+      "baud": 500000,
+      "profile": "heavy_masked",
+      "txRatio": 0.25,
+      "phases": 32,
+      "lossPhases": 32,
+      "worstHwLoss": 290,
+      "worstPhase": 30,
+      "maxRxReadCycles": 6445,
+      "maxTxPending": 99,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 2,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 65,
+        "T1masked": 300,
+        "Advance": 1459,
+        "PWM_ADC": 1558,
+        "Timer0OVF": 3866
+      },
+      "worstTrace": {
+        "phase": 30,
+        "rxOffered": 400,
+        "rxRead": 110,
+        "hwLoss": 290,
+        "maxRead": 6445,
+        "maxFifo": 2,
+        "txOffered": 100,
+        "txDone": 100,
+        "maxTxPending": 82,
+        "txPending": 0,
+        "rxCycles": 8030,
+        "txCycles": 7400,
+        "idleCycles": 0,
+        "elapsedCycles": 134413,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 1,
+            "served": 1,
+            "coalesced": 0,
+            "maxStart": 45,
+            "maxGap": 0,
+            "cycles": 100
+          },
+          {
+            "name": "T1masked",
+            "releases": 160,
+            "served": 160,
+            "coalesced": 0,
+            "maxStart": 287,
+            "maxGap": 1044,
+            "cycles": 95040
+          },
+          {
+            "name": "Advance",
+            "releases": 107,
+            "served": 107,
+            "coalesced": 0,
+            "maxStart": 1017,
+            "maxGap": 1834,
+            "cycles": 12840
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 32,
+            "served": 32,
+            "coalesced": 0,
+            "maxStart": 1458,
+            "maxGap": 4800,
+            "cycles": 9600
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 8,
+            "served": 8,
+            "coalesced": 0,
+            "maxStart": 3010,
+            "maxGap": 16849,
+            "cycles": 960
+          }
+        ]
+      }
+    },
+    {
+      "baud": 500000,
+      "profile": "heavy_masked",
+      "txRatio": 1,
+      "phases": 32,
+      "lossPhases": 32,
+      "worstHwLoss": 290,
+      "worstPhase": 30,
+      "maxRxReadCycles": 6445,
+      "maxTxPending": 399,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 2,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 65,
+        "T1masked": 300,
+        "Advance": 1459,
+        "PWM_ADC": 1558,
+        "Timer0OVF": 3866
+      },
+      "worstTrace": {
+        "phase": 30,
+        "rxOffered": 400,
+        "rxRead": 110,
+        "hwLoss": 290,
+        "maxRead": 6445,
+        "maxFifo": 2,
+        "txOffered": 400,
+        "txDone": 147,
+        "maxTxPending": 382,
+        "txPending": 253,
+        "rxCycles": 8030,
+        "txCycles": 10878,
+        "idleCycles": 0,
+        "elapsedCycles": 138013,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 1,
+            "served": 1,
+            "coalesced": 0,
+            "maxStart": 45,
+            "maxGap": 0,
+            "cycles": 100
+          },
+          {
+            "name": "T1masked",
+            "releases": 160,
+            "served": 160,
+            "coalesced": 0,
+            "maxStart": 287,
+            "maxGap": 1044,
+            "cycles": 95040
+          },
+          {
+            "name": "Advance",
+            "releases": 107,
+            "served": 107,
+            "coalesced": 0,
+            "maxStart": 1017,
+            "maxGap": 1834,
+            "cycles": 12840
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 32,
+            "served": 32,
+            "coalesced": 0,
+            "maxStart": 1458,
+            "maxGap": 4800,
+            "cycles": 9600
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 8,
+            "served": 8,
+            "coalesced": 0,
+            "maxStart": 3010,
+            "maxGap": 16849,
+            "cycles": 960
+          }
+        ]
+      }
+    },
+    {
+      "baud": 1000000,
+      "profile": "light",
+      "txRatio": 0,
+      "phases": 32,
+      "lossPhases": 32,
+      "worstHwLoss": 7,
+      "worstPhase": 55,
+      "maxRxReadCycles": 581,
+      "maxTxPending": 0,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 0,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 0,
+        "T1masked": 180,
+        "Advance": 264,
+        "PWM_ADC": 343,
+        "Timer0OVF": 524
+      },
+      "worstTrace": {
+        "phase": 55,
+        "rxOffered": 400,
+        "rxRead": 393,
+        "hwLoss": 7,
+        "maxRead": 551,
+        "maxFifo": 2,
+        "txOffered": 0,
+        "txDone": 0,
+        "maxTxPending": 0,
+        "txPending": 0,
+        "rxCycles": 28689,
+        "txCycles": 0,
+        "idleCycles": 22444,
+        "elapsedCycles": 64031,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 1,
+            "served": 1,
+            "coalesced": 0,
+            "maxStart": 0,
+            "maxGap": 0,
+            "cycles": 80
+          },
+          {
+            "name": "T1masked",
+            "releases": 40,
+            "served": 40,
+            "coalesced": 0,
+            "maxStart": 81,
+            "maxGap": 1662,
+            "cycles": 6400
+          },
+          {
+            "name": "Advance",
+            "releases": 27,
+            "served": 27,
+            "coalesced": 0,
+            "maxStart": 132,
+            "maxGap": 2439,
+            "cycles": 2700
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 16,
+            "served": 16,
+            "coalesced": 0,
+            "maxStart": 317,
+            "maxGap": 4413,
+            "cycles": 2880
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 4,
+            "served": 4,
+            "coalesced": 0,
+            "maxStart": 194,
+            "maxGap": 16384,
+            "cycles": 400
+          }
+        ]
+      }
+    },
+    {
+      "baud": 1000000,
+      "profile": "light",
+      "txRatio": 0.25,
+      "phases": 32,
+      "lossPhases": 32,
+      "worstHwLoss": 9,
+      "worstPhase": 120,
+      "maxRxReadCycles": 581,
+      "maxTxPending": 2,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 0,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 70,
+        "T1masked": 180,
+        "Advance": 302,
+        "PWM_ADC": 393,
+        "Timer0OVF": 564
+      },
+      "worstTrace": {
+        "phase": 120,
+        "rxOffered": 400,
+        "rxRead": 391,
+        "hwLoss": 9,
+        "maxRead": 434,
+        "maxFifo": 2,
+        "txOffered": 100,
+        "txDone": 100,
+        "maxTxPending": 1,
+        "txPending": 0,
+        "rxCycles": 28543,
+        "txCycles": 7400,
+        "idleCycles": 15092,
+        "elapsedCycles": 64031,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 1,
+            "served": 1,
+            "coalesced": 0,
+            "maxStart": 0,
+            "maxGap": 0,
+            "cycles": 80
+          },
+          {
+            "name": "T1masked",
+            "releases": 40,
+            "served": 40,
+            "coalesced": 0,
+            "maxStart": 81,
+            "maxGap": 1636,
+            "cycles": 6400
+          },
+          {
+            "name": "Advance",
+            "releases": 27,
+            "served": 27,
+            "coalesced": 0,
+            "maxStart": 69,
+            "maxGap": 2435,
+            "cycles": 2700
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 16,
+            "served": 16,
+            "coalesced": 0,
+            "maxStart": 222,
+            "maxGap": 4318,
+            "cycles": 2880
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 4,
+            "served": 4,
+            "coalesced": 0,
+            "maxStart": 92,
+            "maxGap": 16452,
+            "cycles": 400
+          }
+        ]
+      }
+    },
+    {
+      "baud": 1000000,
+      "profile": "light",
+      "txRatio": 1,
+      "phases": 32,
+      "lossPhases": 32,
+      "worstHwLoss": 13,
+      "worstPhase": 20,
+      "maxRxReadCycles": 581,
+      "maxTxPending": 104,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 0,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 70,
+        "T1masked": 180,
+        "Advance": 307,
+        "PWM_ADC": 393,
+        "Timer0OVF": 564
+      },
+      "worstTrace": {
+        "phase": 20,
+        "rxOffered": 400,
+        "rxRead": 387,
+        "hwLoss": 13,
+        "maxRead": 571,
+        "maxFifo": 2,
+        "txOffered": 400,
+        "txDone": 400,
+        "maxTxPending": 96,
+        "txPending": 0,
+        "rxCycles": 28251,
+        "txCycles": 29600,
+        "idleCycles": 0,
+        "elapsedCycles": 71111,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 1,
+            "served": 1,
+            "coalesced": 0,
+            "maxStart": 55,
+            "maxGap": 0,
+            "cycles": 80
+          },
+          {
+            "name": "T1masked",
+            "releases": 40,
+            "served": 40,
+            "coalesced": 0,
+            "maxStart": 172,
+            "maxGap": 1757,
+            "cycles": 6400
+          },
+          {
+            "name": "Advance",
+            "releases": 27,
+            "served": 27,
+            "coalesced": 0,
+            "maxStart": 293,
+            "maxGap": 2689,
+            "cycles": 2700
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 16,
+            "served": 16,
+            "coalesced": 0,
+            "maxStart": 318,
+            "maxGap": 4167,
+            "cycles": 2880
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 4,
+            "served": 4,
+            "coalesced": 0,
+            "maxStart": 459,
+            "maxGap": 16394,
+            "cycles": 400
+          }
+        ]
+      }
+    },
+    {
+      "baud": 1000000,
+      "profile": "medium",
+      "txRatio": 0,
+      "phases": 32,
+      "lossPhases": 32,
+      "worstHwLoss": 120,
+      "worstPhase": 130,
+      "maxRxReadCycles": 1288,
+      "maxTxPending": 0,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 0,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 0,
+        "T1masked": 280,
+        "Advance": 595,
+        "PWM_ADC": 543,
+        "Timer0OVF": 1145
+      },
+      "worstTrace": {
+        "phase": 130,
+        "rxOffered": 400,
+        "rxRead": 280,
+        "hwLoss": 120,
+        "maxRead": 1267,
+        "maxFifo": 2,
+        "txOffered": 0,
+        "txDone": 0,
+        "maxTxPending": 0,
+        "txPending": 0,
+        "rxCycles": 20440,
+        "txCycles": 0,
+        "idleCycles": 6170,
+        "elapsedCycles": 64142,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 1,
+            "served": 1,
+            "coalesced": 0,
+            "maxStart": 0,
+            "maxGap": 0,
+            "cycles": 100
+          },
+          {
+            "name": "T1masked",
+            "releases": 80,
+            "served": 80,
+            "coalesced": 0,
+            "maxStart": 262,
+            "maxGap": 1062,
+            "cycles": 25600
+          },
+          {
+            "name": "Advance",
+            "releases": 54,
+            "served": 54,
+            "coalesced": 0,
+            "maxStart": 526,
+            "maxGap": 1665,
+            "cycles": 6480
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 16,
+            "served": 16,
+            "coalesced": 0,
+            "maxStart": 338,
+            "maxGap": 4400,
+            "cycles": 4480
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 4,
+            "served": 4,
+            "coalesced": 0,
+            "maxStart": 499,
+            "maxGap": 16524,
+            "cycles": 480
+          }
+        ]
+      }
+    },
+    {
+      "baud": 1000000,
+      "profile": "medium",
+      "txRatio": 0.25,
+      "phases": 32,
+      "lossPhases": 32,
+      "worstHwLoss": 147,
+      "worstPhase": 135,
+      "maxRxReadCycles": 1333,
+      "maxTxPending": 42,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 0,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 70,
+        "T1masked": 279,
+        "Advance": 597,
+        "PWM_ADC": 593,
+        "Timer0OVF": 1306
+      },
+      "worstTrace": {
+        "phase": 135,
+        "rxOffered": 400,
+        "rxRead": 253,
+        "hwLoss": 147,
+        "maxRead": 1272,
+        "maxFifo": 2,
+        "txOffered": 100,
+        "txDone": 100,
+        "maxTxPending": 3,
+        "txPending": 0,
+        "rxCycles": 18469,
+        "txCycles": 7400,
+        "idleCycles": 696,
+        "elapsedCycles": 64049,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 1,
+            "served": 1,
+            "coalesced": 0,
+            "maxStart": 0,
+            "maxGap": 0,
+            "cycles": 100
+          },
+          {
+            "name": "T1masked",
+            "releases": 80,
+            "served": 80,
+            "coalesced": 0,
+            "maxStart": 220,
+            "maxGap": 1020,
+            "cycles": 25600
+          },
+          {
+            "name": "Advance",
+            "releases": 53,
+            "served": 53,
+            "coalesced": 0,
+            "maxStart": 581,
+            "maxGap": 1712,
+            "cycles": 6360
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 16,
+            "served": 16,
+            "coalesced": 0,
+            "maxStart": 473,
+            "maxGap": 4545,
+            "cycles": 4480
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 4,
+            "served": 4,
+            "coalesced": 0,
+            "maxStart": 516,
+            "maxGap": 16544,
+            "cycles": 480
+          }
+        ]
+      }
+    },
+    {
+      "baud": 1000000,
+      "profile": "medium",
+      "txRatio": 1,
+      "phases": 32,
+      "lossPhases": 32,
+      "worstHwLoss": 153,
+      "worstPhase": 135,
+      "maxRxReadCycles": 1333,
+      "maxTxPending": 341,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 0,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 70,
+        "T1masked": 279,
+        "Advance": 598,
+        "PWM_ADC": 593,
+        "Timer0OVF": 1306
+      },
+      "worstTrace": {
+        "phase": 135,
+        "rxOffered": 400,
+        "rxRead": 247,
+        "hwLoss": 153,
+        "maxRead": 1274,
+        "maxFifo": 2,
+        "txOffered": 400,
+        "txDone": 247,
+        "maxTxPending": 286,
+        "txPending": 153,
+        "rxCycles": 18031,
+        "txCycles": 18278,
+        "idleCycles": 60,
+        "elapsedCycles": 74037,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 1,
+            "served": 1,
+            "coalesced": 0,
+            "maxStart": 0,
+            "maxGap": 0,
+            "cycles": 100
+          },
+          {
+            "name": "T1masked",
+            "releases": 80,
+            "served": 80,
+            "coalesced": 0,
+            "maxStart": 199,
+            "maxGap": 974,
+            "cycles": 25600
+          },
+          {
+            "name": "Advance",
+            "releases": 53,
+            "served": 53,
+            "coalesced": 0,
+            "maxStart": 570,
+            "maxGap": 1712,
+            "cycles": 6360
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 16,
+            "served": 16,
+            "coalesced": 0,
+            "maxStart": 470,
+            "maxGap": 4548,
+            "cycles": 4480
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 4,
+            "served": 4,
+            "coalesced": 0,
+            "maxStart": 505,
+            "maxGap": 16518,
+            "cycles": 480
+          }
+        ]
+      }
+    },
+    {
+      "baud": 1000000,
+      "profile": "heavy_masked",
+      "txRatio": 0,
+      "phases": 32,
+      "lossPhases": 32,
+      "worstHwLoss": 339,
+      "worstPhase": 30,
+      "maxRxReadCycles": 6225,
+      "maxTxPending": 0,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 1,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 0,
+        "T1masked": 300,
+        "Advance": 1488,
+        "PWM_ADC": 1533,
+        "Timer0OVF": 3145
+      },
+      "worstTrace": {
+        "phase": 30,
+        "rxOffered": 400,
+        "rxRead": 61,
+        "hwLoss": 339,
+        "maxRead": 6125,
+        "maxFifo": 2,
+        "txOffered": 0,
+        "txDone": 0,
+        "maxTxPending": 0,
+        "txPending": 0,
+        "rxCycles": 4453,
+        "txCycles": 0,
+        "idleCycles": 82,
+        "elapsedCycles": 64088,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 1,
+            "served": 1,
+            "coalesced": 0,
+            "maxStart": 0,
+            "maxGap": 0,
+            "cycles": 100
+          },
+          {
+            "name": "T1masked",
+            "releases": 80,
+            "served": 80,
+            "coalesced": 0,
+            "maxStart": 282,
+            "maxGap": 1017,
+            "cycles": 47520
+          },
+          {
+            "name": "Advance",
+            "releases": 54,
+            "served": 54,
+            "coalesced": 0,
+            "maxStart": 994,
+            "maxGap": 1760,
+            "cycles": 6480
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 16,
+            "served": 16,
+            "coalesced": 0,
+            "maxStart": 1413,
+            "maxGap": 4799,
+            "cycles": 4800
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 4,
+            "served": 4,
+            "coalesced": 0,
+            "maxStart": 2965,
+            "maxGap": 16772,
+            "cycles": 480
+          }
+        ]
+      }
+    },
+    {
+      "baud": 1000000,
+      "profile": "heavy_masked",
+      "txRatio": 0.25,
+      "phases": 32,
+      "lossPhases": 32,
+      "worstHwLoss": 343,
+      "worstPhase": 5,
+      "maxRxReadCycles": 6765,
+      "maxTxPending": 99,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 1,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 70,
+        "T1masked": 300,
+        "Advance": 1435,
+        "PWM_ADC": 2178,
+        "Timer0OVF": 3901
+      },
+      "worstTrace": {
+        "phase": 5,
+        "rxOffered": 400,
+        "rxRead": 57,
+        "hwLoss": 343,
+        "maxRead": 6765,
+        "maxFifo": 2,
+        "txOffered": 100,
+        "txDone": 100,
+        "maxTxPending": 95,
+        "txPending": 0,
+        "rxCycles": 4161,
+        "txCycles": 7400,
+        "idleCycles": 0,
+        "elapsedCycles": 71178,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 1,
+            "served": 1,
+            "coalesced": 0,
+            "maxStart": 70,
+            "maxGap": 0,
+            "cycles": 100
+          },
+          {
+            "name": "T1masked",
+            "releases": 80,
+            "served": 80,
+            "coalesced": 0,
+            "maxStart": 287,
+            "maxGap": 1017,
+            "cycles": 47520
+          },
+          {
+            "name": "Advance",
+            "releases": 54,
+            "served": 54,
+            "coalesced": 0,
+            "maxStart": 1067,
+            "maxGap": 1760,
+            "cycles": 6480
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 16,
+            "served": 16,
+            "coalesced": 0,
+            "maxStart": 2178,
+            "maxGap": 4726,
+            "cycles": 4800
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 4,
+            "served": 4,
+            "coalesced": 0,
+            "maxStart": 3901,
+            "maxGap": 16774,
+            "cycles": 480
+          }
+        ]
+      }
+    },
+    {
+      "baud": 1000000,
+      "profile": "heavy_masked",
+      "txRatio": 1,
+      "phases": 32,
+      "lossPhases": 32,
+      "worstHwLoss": 343,
+      "worstPhase": 5,
+      "maxRxReadCycles": 6765,
+      "maxTxPending": 399,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 1,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 70,
+        "T1masked": 300,
+        "Advance": 1435,
+        "PWM_ADC": 2178,
+        "Timer0OVF": 3901
+      },
+      "worstTrace": {
+        "phase": 5,
+        "rxOffered": 400,
+        "rxRead": 57,
+        "hwLoss": 343,
+        "maxRead": 6765,
+        "maxFifo": 2,
+        "txOffered": 400,
+        "txDone": 137,
+        "maxTxPending": 395,
+        "txPending": 263,
+        "rxCycles": 4161,
+        "txCycles": 10138,
+        "idleCycles": 0,
+        "elapsedCycles": 74028,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 1,
+            "served": 1,
+            "coalesced": 0,
+            "maxStart": 70,
+            "maxGap": 0,
+            "cycles": 100
+          },
+          {
+            "name": "T1masked",
+            "releases": 80,
+            "served": 80,
+            "coalesced": 0,
+            "maxStart": 287,
+            "maxGap": 1017,
+            "cycles": 47520
+          },
+          {
+            "name": "Advance",
+            "releases": 54,
+            "served": 54,
+            "coalesced": 0,
+            "maxStart": 1067,
+            "maxGap": 1760,
+            "cycles": 6480
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 16,
+            "served": 16,
+            "coalesced": 0,
+            "maxStart": 2178,
+            "maxGap": 4726,
+            "cycles": 4800
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 4,
+            "served": 4,
+            "coalesced": 0,
+            "maxStart": 3901,
+            "maxGap": 16774,
+            "cycles": 480
+          }
+        ]
+      }
+    },
+    {
+      "baud": 2000000,
+      "profile": "light",
+      "txRatio": 0,
+      "phases": 40,
+      "lossPhases": 40,
+      "worstHwLoss": 55,
+      "worstPhase": 52,
+      "maxRxReadCycles": 654,
+      "maxTxPending": 0,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 0,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 0,
+        "T1masked": 179,
+        "Advance": 306,
+        "PWM_ADC": 343,
+        "Timer0OVF": 524
+      },
+      "worstTrace": {
+        "phase": 52,
+        "rxOffered": 400,
+        "rxRead": 345,
+        "hwLoss": 55,
+        "maxRead": 628,
+        "maxFifo": 2,
+        "txOffered": 0,
+        "txDone": 0,
+        "maxTxPending": 0,
+        "txPending": 0,
+        "rxCycles": 25185,
+        "txCycles": 0,
+        "idleCycles": 200,
+        "elapsedCycles": 32052,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 1,
+            "served": 1,
+            "coalesced": 0,
+            "maxStart": 0,
+            "maxGap": 0,
+            "cycles": 80
+          },
+          {
+            "name": "T1masked",
+            "releases": 20,
+            "served": 20,
+            "coalesced": 0,
+            "maxStart": 123,
+            "maxGap": 1701,
+            "cycles": 3200
+          },
+          {
+            "name": "Advance",
+            "releases": 14,
+            "served": 14,
+            "coalesced": 0,
+            "maxStart": 138,
+            "maxGap": 2474,
+            "cycles": 1400
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 8,
+            "served": 8,
+            "coalesced": 0,
+            "maxStart": 204,
+            "maxGap": 4282,
+            "cycles": 1440
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 2,
+            "served": 2,
+            "coalesced": 0,
+            "maxStart": 212,
+            "maxGap": 16284,
+            "cycles": 200
+          }
+        ]
+      }
+    },
+    {
+      "baud": 2000000,
+      "profile": "light",
+      "txRatio": 0.25,
+      "phases": 40,
+      "lossPhases": 40,
+      "worstHwLoss": 66,
+      "worstPhase": 14,
+      "maxRxReadCycles": 654,
+      "maxTxPending": 88,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 0,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 73,
+        "T1masked": 170,
+        "Advance": 311,
+        "PWM_ADC": 408,
+        "Timer0OVF": 585
+      },
+      "worstTrace": {
+        "phase": 14,
+        "rxOffered": 400,
+        "rxRead": 334,
+        "hwLoss": 66,
+        "maxRead": 651,
+        "maxFifo": 2,
+        "txOffered": 100,
+        "txDone": 100,
+        "maxTxPending": 86,
+        "txPending": 0,
+        "rxCycles": 24382,
+        "txCycles": 7400,
+        "idleCycles": 0,
+        "elapsedCycles": 38506,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 1,
+            "served": 1,
+            "coalesced": 0,
+            "maxStart": 61,
+            "maxGap": 0,
+            "cycles": 80
+          },
+          {
+            "name": "T1masked",
+            "releases": 20,
+            "served": 20,
+            "coalesced": 0,
+            "maxStart": 142,
+            "maxGap": 1675,
+            "cycles": 3200
+          },
+          {
+            "name": "Advance",
+            "releases": 14,
+            "served": 14,
+            "coalesced": 0,
+            "maxStart": 275,
+            "maxGap": 2603,
+            "cycles": 1400
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 8,
+            "served": 8,
+            "coalesced": 0,
+            "maxStart": 348,
+            "maxGap": 4123,
+            "cycles": 1440
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 2,
+            "served": 2,
+            "coalesced": 0,
+            "maxStart": 501,
+            "maxGap": 16072,
+            "cycles": 200
+          }
+        ]
+      }
+    },
+    {
+      "baud": 2000000,
+      "profile": "light",
+      "txRatio": 1,
+      "phases": 40,
+      "lossPhases": 40,
+      "worstHwLoss": 66,
+      "worstPhase": 14,
+      "maxRxReadCycles": 654,
+      "maxTxPending": 388,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 0,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 73,
+        "T1masked": 170,
+        "Advance": 311,
+        "PWM_ADC": 408,
+        "Timer0OVF": 585
+      },
+      "worstTrace": {
+        "phase": 14,
+        "rxOffered": 400,
+        "rxRead": 334,
+        "hwLoss": 66,
+        "maxRead": 651,
+        "maxFifo": 2,
+        "txOffered": 400,
+        "txDone": 146,
+        "maxTxPending": 386,
+        "txPending": 254,
+        "rxCycles": 24382,
+        "txCycles": 10804,
+        "idleCycles": 0,
+        "elapsedCycles": 42031,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 1,
+            "served": 1,
+            "coalesced": 0,
+            "maxStart": 61,
+            "maxGap": 0,
+            "cycles": 80
+          },
+          {
+            "name": "T1masked",
+            "releases": 20,
+            "served": 20,
+            "coalesced": 0,
+            "maxStart": 142,
+            "maxGap": 1675,
+            "cycles": 3200
+          },
+          {
+            "name": "Advance",
+            "releases": 14,
+            "served": 14,
+            "coalesced": 0,
+            "maxStart": 275,
+            "maxGap": 2603,
+            "cycles": 1400
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 8,
+            "served": 8,
+            "coalesced": 0,
+            "maxStart": 348,
+            "maxGap": 4123,
+            "cycles": 1440
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 2,
+            "served": 2,
+            "coalesced": 0,
+            "maxStart": 501,
+            "maxGap": 16072,
+            "cycles": 200
+          }
+        ]
+      }
+    },
+    {
+      "baud": 2000000,
+      "profile": "medium",
+      "txRatio": 0,
+      "phases": 40,
+      "lossPhases": 40,
+      "worstHwLoss": 219,
+      "worstPhase": 2,
+      "maxRxReadCycles": 1402,
+      "maxTxPending": 0,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 0,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 0,
+        "T1masked": 263,
+        "Advance": 552,
+        "PWM_ADC": 543,
+        "Timer0OVF": 1145
+      },
+      "worstTrace": {
+        "phase": 2,
+        "rxOffered": 400,
+        "rxRead": 181,
+        "hwLoss": 219,
+        "maxRead": 1340,
+        "maxFifo": 2,
+        "txOffered": 0,
+        "txDone": 0,
+        "maxTxPending": 0,
+        "txPending": 0,
+        "rxCycles": 13213,
+        "txCycles": 0,
+        "idleCycles": 2,
+        "elapsedCycles": 32051,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 1,
+            "served": 1,
+            "coalesced": 0,
+            "maxStart": 0,
+            "maxGap": 0,
+            "cycles": 100
+          },
+          {
+            "name": "T1masked",
+            "releases": 40,
+            "served": 40,
+            "coalesced": 0,
+            "maxStart": 165,
+            "maxGap": 898,
+            "cycles": 12800
+          },
+          {
+            "name": "Advance",
+            "releases": 27,
+            "served": 27,
+            "coalesced": 0,
+            "maxStart": 482,
+            "maxGap": 1636,
+            "cycles": 3240
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 8,
+            "served": 8,
+            "coalesced": 0,
+            "maxStart": 535,
+            "maxGap": 4146,
+            "cycles": 2240
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 2,
+            "served": 2,
+            "coalesced": 0,
+            "maxStart": 1133,
+            "maxGap": 15577,
+            "cycles": 240
+          }
+        ]
+      }
+    },
+    {
+      "baud": 2000000,
+      "profile": "medium",
+      "txRatio": 0.25,
+      "phases": 40,
+      "lossPhases": 40,
+      "worstHwLoss": 220,
+      "worstPhase": 2,
+      "maxRxReadCycles": 1413,
+      "maxTxPending": 100,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 0,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 73,
+        "T1masked": 276,
+        "Advance": 549,
+        "PWM_ADC": 608,
+        "Timer0OVF": 1327
+      },
+      "worstTrace": {
+        "phase": 2,
+        "rxOffered": 400,
+        "rxRead": 180,
+        "hwLoss": 220,
+        "maxRead": 1413,
+        "maxFifo": 2,
+        "txOffered": 100,
+        "txDone": 100,
+        "maxTxPending": 99,
+        "txPending": 0,
+        "rxCycles": 13140,
+        "txCycles": 7400,
+        "idleCycles": 0,
+        "elapsedCycles": 39443,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 1,
+            "served": 1,
+            "coalesced": 0,
+            "maxStart": 73,
+            "maxGap": 0,
+            "cycles": 100
+          },
+          {
+            "name": "T1masked",
+            "releases": 40,
+            "served": 40,
+            "coalesced": 0,
+            "maxStart": 174,
+            "maxGap": 898,
+            "cycles": 12800
+          },
+          {
+            "name": "Advance",
+            "releases": 27,
+            "served": 27,
+            "coalesced": 0,
+            "maxStart": 491,
+            "maxGap": 1636,
+            "cycles": 3240
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 8,
+            "served": 8,
+            "coalesced": 0,
+            "maxStart": 608,
+            "maxGap": 4146,
+            "cycles": 2240
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 2,
+            "served": 2,
+            "coalesced": 0,
+            "maxStart": 1327,
+            "maxGap": 15382,
+            "cycles": 240
+          }
+        ]
+      }
+    },
+    {
+      "baud": 2000000,
+      "profile": "medium",
+      "txRatio": 1,
+      "phases": 40,
+      "lossPhases": 40,
+      "worstHwLoss": 220,
+      "worstPhase": 2,
+      "maxRxReadCycles": 1413,
+      "maxTxPending": 400,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 0,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 73,
+        "T1masked": 276,
+        "Advance": 549,
+        "PWM_ADC": 608,
+        "Timer0OVF": 1327
+      },
+      "worstTrace": {
+        "phase": 2,
+        "rxOffered": 400,
+        "rxRead": 180,
+        "hwLoss": 220,
+        "maxRead": 1413,
+        "maxFifo": 2,
+        "txOffered": 400,
+        "txDone": 134,
+        "maxTxPending": 399,
+        "txPending": 266,
+        "rxCycles": 13140,
+        "txCycles": 9916,
+        "idleCycles": 0,
+        "elapsedCycles": 42068,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 1,
+            "served": 1,
+            "coalesced": 0,
+            "maxStart": 73,
+            "maxGap": 0,
+            "cycles": 100
+          },
+          {
+            "name": "T1masked",
+            "releases": 40,
+            "served": 40,
+            "coalesced": 0,
+            "maxStart": 174,
+            "maxGap": 898,
+            "cycles": 12800
+          },
+          {
+            "name": "Advance",
+            "releases": 27,
+            "served": 27,
+            "coalesced": 0,
+            "maxStart": 491,
+            "maxGap": 1636,
+            "cycles": 3240
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 8,
+            "served": 8,
+            "coalesced": 0,
+            "maxStart": 608,
+            "maxGap": 4146,
+            "cycles": 2240
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 2,
+            "served": 2,
+            "coalesced": 0,
+            "maxStart": 1327,
+            "maxGap": 15382,
+            "cycles": 240
+          }
+        ]
+      }
+    },
+    {
+      "baud": 2000000,
+      "profile": "heavy_masked",
+      "txRatio": 0,
+      "phases": 40,
+      "lossPhases": 40,
+      "worstHwLoss": 369,
+      "worstPhase": 6,
+      "maxRxReadCycles": 6333,
+      "maxTxPending": 0,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 1,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 0,
+        "T1masked": 290,
+        "Advance": 1447,
+        "PWM_ADC": 1533,
+        "Timer0OVF": 3145
+      },
+      "worstTrace": {
+        "phase": 6,
+        "rxOffered": 400,
+        "rxRead": 31,
+        "hwLoss": 369,
+        "maxRead": 6261,
+        "maxFifo": 2,
+        "txOffered": 0,
+        "txDone": 0,
+        "maxTxPending": 0,
+        "txPending": 0,
+        "rxCycles": 2263,
+        "txCycles": 0,
+        "idleCycles": 6,
+        "elapsedCycles": 32075,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 1,
+            "served": 1,
+            "coalesced": 0,
+            "maxStart": 0,
+            "maxGap": 0,
+            "cycles": 100
+          },
+          {
+            "name": "T1masked",
+            "releases": 40,
+            "served": 40,
+            "coalesced": 0,
+            "maxStart": 282,
+            "maxGap": 1017,
+            "cycles": 23760
+          },
+          {
+            "name": "Advance",
+            "releases": 27,
+            "served": 27,
+            "coalesced": 0,
+            "maxStart": 1042,
+            "maxGap": 1760,
+            "cycles": 3240
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 8,
+            "served": 8,
+            "coalesced": 0,
+            "maxStart": 1509,
+            "maxGap": 4130,
+            "cycles": 2400
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 2,
+            "served": 2,
+            "coalesced": 0,
+            "maxStart": 3109,
+            "maxGap": 15239,
+            "cycles": 240
+          }
+        ]
+      }
+    },
+    {
+      "baud": 2000000,
+      "profile": "heavy_masked",
+      "txRatio": 0.25,
+      "phases": 40,
+      "lossPhases": 40,
+      "worstHwLoss": 369,
+      "worstPhase": 2,
+      "maxRxReadCycles": 6925,
+      "maxTxPending": 100,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 1,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 73,
+        "T1masked": 299,
+        "Advance": 1446,
+        "PWM_ADC": 2193,
+        "Timer0OVF": 3922
+      },
+      "worstTrace": {
+        "phase": 2,
+        "rxOffered": 400,
+        "rxRead": 31,
+        "hwLoss": 369,
+        "maxRead": 6925,
+        "maxFifo": 2,
+        "txOffered": 100,
+        "txDone": 100,
+        "maxTxPending": 99,
+        "txPending": 0,
+        "rxCycles": 2263,
+        "txCycles": 7400,
+        "idleCycles": 0,
+        "elapsedCycles": 39537,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 1,
+            "served": 1,
+            "coalesced": 0,
+            "maxStart": 73,
+            "maxGap": 0,
+            "cycles": 100
+          },
+          {
+            "name": "T1masked",
+            "releases": 40,
+            "served": 40,
+            "coalesced": 0,
+            "maxStart": 290,
+            "maxGap": 1017,
+            "cycles": 23760
+          },
+          {
+            "name": "Advance",
+            "releases": 27,
+            "served": 27,
+            "coalesced": 0,
+            "maxStart": 1076,
+            "maxGap": 1760,
+            "cycles": 3240
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 8,
+            "served": 8,
+            "coalesced": 0,
+            "maxStart": 2193,
+            "maxGap": 4130,
+            "cycles": 2400
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 2,
+            "served": 2,
+            "coalesced": 0,
+            "maxStart": 3922,
+            "maxGap": 14449,
+            "cycles": 240
+          }
+        ]
+      }
+    },
+    {
+      "baud": 2000000,
+      "profile": "heavy_masked",
+      "txRatio": 1,
+      "phases": 40,
+      "lossPhases": 40,
+      "worstHwLoss": 369,
+      "worstPhase": 2,
+      "maxRxReadCycles": 6925,
+      "maxTxPending": 400,
+      "maxTimerCoalesced": {
+        "WDT": 0,
+        "T1masked": 0,
+        "Advance": 1,
+        "PWM_ADC": 0,
+        "Timer0OVF": 0
+      },
+      "maxTimerStartDelay": {
+        "WDT": 73,
+        "T1masked": 299,
+        "Advance": 1446,
+        "PWM_ADC": 2193,
+        "Timer0OVF": 3922
+      },
+      "worstTrace": {
+        "phase": 2,
+        "rxOffered": 400,
+        "rxRead": 31,
+        "hwLoss": 369,
+        "maxRead": 6925,
+        "maxFifo": 2,
+        "txOffered": 400,
+        "txDone": 132,
+        "maxTxPending": 399,
+        "txPending": 268,
+        "rxCycles": 2263,
+        "txCycles": 9768,
+        "idleCycles": 0,
+        "elapsedCycles": 42012,
+        "timers": [
+          {
+            "name": "WDT",
+            "releases": 1,
+            "served": 1,
+            "coalesced": 0,
+            "maxStart": 73,
+            "maxGap": 0,
+            "cycles": 100
+          },
+          {
+            "name": "T1masked",
+            "releases": 40,
+            "served": 40,
+            "coalesced": 0,
+            "maxStart": 290,
+            "maxGap": 1017,
+            "cycles": 23760
+          },
+          {
+            "name": "Advance",
+            "releases": 27,
+            "served": 27,
+            "coalesced": 0,
+            "maxStart": 1076,
+            "maxGap": 1760,
+            "cycles": 3240
+          },
+          {
+            "name": "PWM_ADC",
+            "releases": 8,
+            "served": 8,
+            "coalesced": 0,
+            "maxStart": 2193,
+            "maxGap": 4130,
+            "cycles": 2400
+          },
+          {
+            "name": "Timer0OVF",
+            "releases": 2,
+            "served": 2,
+            "coalesced": 0,
+            "maxStart": 3922,
+            "maxGap": 14449,
+            "cycles": 240
+          }
+        ]
+      }
+    }
+  ]
+}
