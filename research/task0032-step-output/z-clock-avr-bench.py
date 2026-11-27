@@ -97,8 +97,8 @@ def main():
     # The historic inline asm rotates/subtracts every byte of a in place
     # but declared a input-only. Under LTO a caller may reuse corrupted
     # registers for the floor correction. Test the minimal ABI fix.
-    old=': "=r"(b)\\n        : "r"(a)\\n        : "r18", "r19", "r27", "r26");'
-    new=': "=r"(b), "+r"(a)\\n        :\\n        : "r18", "r19", "r27", "r26", "cc");'
+    old=': "=r"(b)\n        : "r"(a)\n        : "r18", "r19", "r27", "r26");'
+    new=': "=r"(b), "+r"(a)\n        :\n        : "r18", "r19", "r27", "r26", "cc");'
     assert math.count(old)==1
     (d/"actual-hal-math.inc").write_text(math.replace(old,new))
     elf=d/"z-clock.elf"
