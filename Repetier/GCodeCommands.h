@@ -16,8 +16,6 @@ void showInvalidSyntax(unsigned int currentMCode);
 // Motion, extrusion and pressure.
 void queueLinearMove(GCode* com);
 void dwell(GCode* com);
-void selectInches();
-void selectMillimeters();
 void homeAxes(GCode* com);
 void selectAbsolutePositioning(GCode* com);
 void selectRelativePositioning(GCode* com);
@@ -32,7 +30,6 @@ void setJerkLimits(GCode* com);
 void setToolOffset(GCode* com);
 void setFeedrateMultiplier(GCode* com);
 void setFlowMultiplier(GCode* com);
-void reportAdvancePeak();
 void configureAdvance(GCode* com);
 void finishMotion();
 void setManualZOffset(GCode* pCommand);
@@ -80,7 +77,6 @@ void loadConfiguration();
 void restoreConfigurationDefaults();
 void requestHeatBedScan(GCode* pCommand);
 void accessPanel(GCode* pCommand);
-void runRfDiagnostic(GCode* pCommand);
 void setPanelStatusOverride(GCode* pCommand);
 
 // Operations backed by calibration state in RF.cpp.

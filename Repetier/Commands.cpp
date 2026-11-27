@@ -177,10 +177,10 @@ void Commands::printCurrentPosition() {
     y += Printer::moveTarget.workOffsetMM(Y_AXIS);
     z += Printer::moveTarget.workOffsetMM(Z_AXIS);
 
-    Com::printF(Com::tXColon, x * (Printer::gcodeModes.inches() ? 0.03937 : 1), 2);
-    Com::printF(Com::tSpaceYColon, y * (Printer::gcodeModes.inches() ? 0.03937 : 1), 2);
-    Com::printF(Com::tSpaceZColon, z * (Printer::gcodeModes.inches() ? 0.03937 : 1), 2);
-    Com::printFLN(Com::tSpaceEColon, Printer::moveTarget.machineMM(E_AXIS) * (Printer::gcodeModes.inches() ? 0.03937 : 1), 2);
+    Com::printF(Com::tXColon, x, 2);
+    Com::printF(Com::tSpaceYColon, y, 2);
+    Com::printF(Com::tSpaceZColon, z, 2);
+    Com::printFLN(Com::tSpaceEColon, Printer::moveTarget.machineMM(E_AXIS), 2);
 } // printCurrentPosition
 
 void Commands::printTemperatures(bool showRaw) {

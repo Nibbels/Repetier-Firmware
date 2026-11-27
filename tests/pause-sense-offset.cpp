@@ -294,7 +294,6 @@ bool infoLogging = false;
 bool debugInfo() { return infoLogging; }
 bool outputSafetyLatched = false;
 bool heatingInhibited() { return outputSafetyLatched; }
-float convertToMM(float value) { return gcodeModes.inches() ? value * 25.4 : value; }
 bool areAxisHomed() { return axesHomed; }
 bool isAxisHomed(int) { return true; }
 bool isMinEndstopHit(uint8_t axis) { return xyMinHit[axis]; }
@@ -1850,14 +1849,12 @@ void gcodeTarget() {
 
     Printer::gcodeModes.setRelativeXYZ(false);
     Printer::gcodeModes.setRelativeEOverride(true);
-    Printer::gcodeModes.setInches(true);
-    command.X = 0.5f;
+    command.X = 12.7f;
     command.Y = command.E = command.F = 0;
     assert(Printer::queueGCodeCoordinates(&command));
     assert(std::abs(Printer::moveTarget.machineMM(X_AXIS) - 1.7f) < 0.00001f);
     assert(Printer::moveTarget.machineMM(Y_AXIS) == 40.25f);
 
-    Printer::gcodeModes.setInches(false);
     command.X = 0;
     command.E = -0.5f;
     assert(Printer::queueGCodeCoordinates(&command));
@@ -2591,7 +2588,7 @@ void idleStatusTransitions() {
     assert(status.poll(2000, delay) == Transition::Waiting && interruptsEnabled);
 }
 
-void advancePeakReport() {
+void advanceProfileReport() {
     PrintLine move;
     move.setAxisSteps(X_AXIS, 16000);
     move.setAxisSteps(E_AXIS, 5600);
@@ -2600,10 +2597,10 @@ void advancePeakReport() {
     Extruder::current->advanceL = 100.0f;
     MotionPlanner::prepareMove(move, axisDistances, 25, PrintLine::queue);
 
-    const auto peak = MotionPlanner::takeAdvancePeak();
-    assert(peak.steps == 140 && peak.extrusionSpeed == 5.0f);
-    const auto cleared = MotionPlanner::takeAdvancePeak();
-    assert(cleared.steps == 0 && cleared.extrusionSpeed == 0.0f);
+    // Verify the actual planned pressure advance, not removed telemetry.
+    assert(move.stepProfile.vMax > 0);
+    const uint32_t expected = uint32_t(65536.0f * 140.0f / move.stepProfile.vMax);
+    assert(move.stepProfile.advanceL == expected);
 }
 
 void lookaheadMoves() {
@@ -3064,8 +3061,8 @@ int main(int argc, char** argv) {
         idleStatusTransitions();
     else if (!std::strcmp(argv[1], "print-job"))
         printJob();
-    else if (!std::strcmp(argv[1], "advance-peak"))
-        advancePeakReport();
+    else if (!std::strcmp(argv[1], "advance-profile"))
+        advanceProfileReport();
     else if (!std::strcmp(argv[1], "ecmp-stepping"))
         ecmpStepping();
     else if (!std::strcmp(argv[1], "advance-timer"))

@@ -28,8 +28,7 @@ void dispatchMotion(GCode* com) {
     case 0:
     case 1: queueLinearMove(com); break;
     case 4: dwell(com); break;
-    case 20: selectInches(); break;
-    case 21: selectMillimeters(); break;
+    case 21: break; // Millimeters are the only supported unit.
     case 28: homeAxes(com); break;
     case 90: selectAbsolutePositioning(com); break;
     case 91: selectRelativePositioning(com); break;
@@ -51,7 +50,6 @@ void dispatchMachine(GCode* com) {
     case 218: return setToolOffset(com);
     case 220: return setFeedrateMultiplier(com);
     case 221: return setFlowMultiplier(com);
-    case 232: return reportAdvancePeak();
     case 233: return configureAdvance(com);
     case 400: return finishMotion();
     case 3006: return setManualZOffset(com);
@@ -167,7 +165,6 @@ void dispatchMachine(GCode* com) {
     case 3028: return testHomingRepeatability(com);
     case 3029: return accessPanel(com);
     case PanelStatusOverride: return setPanelStatusOverride(com);
-    case 3200: return runRfDiagnostic(com);
     }
 }
 
@@ -180,7 +177,7 @@ void Commands::executeGCode(GCode* com) {
 #endif
     if (GCodeCommands::rejectLegacySimulation(com))
         return;
-    // A rejected simulation is not a motion mode. Discard all work, including
+    // An unsupported input mode is not a motion mode. Discard all work, including
     // already buffered commands and internal scripts, except status/debug.
     if (Printer::legacySimulationRejected()
         && (com->hasG() || !com->hasM()

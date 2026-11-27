@@ -393,8 +393,6 @@ void loadFilament(GCode* pCommand) {
         maxP = constrain(abs(static_cast<short>(pCommand->P)), 0, 20000);
     const bool savedRelativeE = Printer::gcodeModes.relativeEOverride();
     Printer::gcodeModes.setRelativeEOverride(false); //M82:
-    const bool savedInches = Printer::gcodeModes.inches();
-    Printer::gcodeModes.setInches(0); // To save possible G21 .. weiß net ob das so wichtig wäre ^^.
 
     Printer::setEPositionMM(0); // G92 E0
 
@@ -421,7 +419,6 @@ void loadFilament(GCode* pCommand) {
     Printer::setEPositionMM(0); // G92 E0
 
     Printer::gcodeModes.setRelativeEOverride(savedRelativeE);
-    Printer::gcodeModes.setInches(savedInches);
     Printer::printJob.finishFilamentService();
     Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 5000);
 }
@@ -447,8 +444,6 @@ void unloadFilament(GCode* pCommand) {
     // Set stuff
     const bool savedRelativeE = Printer::gcodeModes.relativeEOverride();
     Printer::gcodeModes.setRelativeEOverride(false); //M82:
-    const bool savedInches = Printer::gcodeModes.inches();
-    Printer::gcodeModes.setInches(0); // To save possible G21 .. weiß net ob das so wichtig wäre ^^.
     Printer::setEPositionMM(0); // G92 E0
 
         // Normalize dms sensor values to 0 if allowed in options and not already done
@@ -521,7 +516,6 @@ void unloadFilament(GCode* pCommand) {
     Printer::setEPositionMM(0); // G92 E0
 
     Printer::gcodeModes.setRelativeEOverride(savedRelativeE);
-    Printer::gcodeModes.setInches(savedInches);
     Printer::printJob.finishFilamentService();
     Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 5000);
 }

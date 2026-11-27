@@ -48,14 +48,6 @@ void dwell(GCode* com) {
     }
 }
 
-void selectInches() {
-    Printer::gcodeModes.setInches(1);
-}
-
-void selectMillimeters() {
-    Printer::gcodeModes.setInches(0);
-}
-
 void homeAxes(GCode* com) {
     if (!isHomingAllowed(com)) {
         return;
@@ -88,16 +80,16 @@ void setLogicalPosition(GCode* com) {
         float zOff = Printer::moveTarget.workOffsetMM(Z_AXIS);
 
         if (com->hasX())
-            xOff = Printer::convertToMM(com->X) - Printer::moveTarget.machineMM(X_AXIS);
+            xOff = com->X - Printer::moveTarget.machineMM(X_AXIS);
         if (com->hasY())
-            yOff = Printer::convertToMM(com->Y) - Printer::moveTarget.machineMM(Y_AXIS);
+            yOff = com->Y - Printer::moveTarget.machineMM(Y_AXIS);
         if (com->hasZ())
-            zOff = Printer::convertToMM(com->Z) - Printer::moveTarget.machineMM(Z_AXIS);
+            zOff = com->Z - Printer::moveTarget.machineMM(Z_AXIS);
 
         Printer::setOrigin(xOff, yOff, zOff);
     }
     if (com->hasE()) {
-        Printer::setEPositionMM(Printer::convertToMM(com->E));
+        Printer::setEPositionMM(com->E);
     }
 }
 
@@ -211,14 +203,6 @@ void setFlowMultiplier(GCode* com) {
         Commands::changeFlowrateMultiply(static_cast<float>(com->S) * 0.01f);
     } else {
         Commands::changeFlowrateMultiply(1.0f);
-    }
-}
-
-void reportAdvancePeak() {
-    const auto peak = MotionPlanner::takeAdvancePeak();
-    if (Printer::debugInfo()) {
-        Com::printF(Com::tLinearStepsColon, peak.steps);
-        Com::printFLN(Com::tCommaSpeedEqual, peak.extrusionSpeed);
     }
 }
 

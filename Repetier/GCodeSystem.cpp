@@ -30,17 +30,23 @@ void showInvalidSyntax(unsigned int currentMCode) {
 }
 
 
-// Process the retired bit at receive admission, even while a stop drains input.
+// Reject retired input modes at receive admission, even while a stop drains input.
 // Never let a subsequent debug mask re-arm machine outputs.
 bool rejectLegacySimulation(GCode* com) {
-    if (!com->hasM() || com->M != 111 || !com->hasS() || !(static_cast<uint8_t>(com->S) & 8))
+    const bool inchMode = com->hasG() && com->G == 20;
+    const bool simulation = com->hasM() && com->M == 111 && com->hasS() && (static_cast<uint8_t>(com->S) & 8);
+    if (!inchMode && !simulation)
         return false;
-    Printer::setDebugMask(com->S);
+    if (simulation)
+        Printer::setDebugMask(com->S);
     if (!Printer::legacySimulationRejected()) {
         Printer::latchOutputInhibit(false);
         Printer::stopPrint();
     }
-    Com::printErrorFLN(PSTR("M111 bit 8 unsupported; job rejected. Stop host and restart printer."));
+    if (inchMode)
+        Com::printErrorFLN(PSTR("G20 unsupported; millimeters only. Stop host and restart printer."));
+    else
+        Com::printErrorFLN(PSTR("M111 bit 8 unsupported; job rejected. Stop host and restart printer."));
     return true;
 }
 
@@ -250,71 +256,6 @@ void accessPanel(GCode* pCommand) {
             }
         }
         Com::println();
-    }
-}
-
-void runRfDiagnostic(GCode* pCommand) {
-    if (pCommand->hasP()) {
-        switch (pCommand->P) {
-        case 1: {
-            Commands::checkFreeMemory();
-            Commands::writeLowestFreeRAM();
-            Com::printFLN(PSTR("lowest free RAM: "), Commands::lowestRAMValue);
-
-            Com::printFLN(PSTR("z-compensation matrix x: "), COMPENSATION_MATRIX_MAX_X);
-            Com::printFLN(PSTR("z-compensation matrix y: "), COMPENSATION_MATRIX_MAX_Y);
-            break;
-        }
-        case 2: {
-            Com::printFLN(PSTR("Homing feedrates:"));
-            Com::printF(PSTR("x = "), Printer::axisHomingFeedrate(X_AXIS));
-            Com::printF(PSTR(", y = "), Printer::axisHomingFeedrate(Y_AXIS));
-            Com::printFLN(PSTR(", z = "), Printer::axisHomingFeedrate(Z_AXIS));
-            break;
-        }
-        case 4: {
-            // simulate blocking of all axes
-            Com::printFLN(PSTR("M3200: block all"));
-
-            doEmergencyStop(StopReason::ZBlock);
-            break;
-        }
-        case 5: {
-            // simulate a temp sensor error
-            Com::printFLN(PSTR("M3200: simulating defect sensor"));
-            //ext 0 soll defekt aussehen
-            TemperatureController* act0 = tempController[0];
-            act0->setSensorDefect(true);
-            //ext 1/bett soll decoupled aussehen
-            TemperatureController* act1 = tempController[1];
-            act1->setSensorDecoupled(true);
-            // Generelle defekt-einstufung
-            Printer::latchOutputInhibit(true);
-            Printer::stopPrint();
-            // Fehlermeldung ausgeben
-            reportTempsensorAndHeaterErrors();
-            break;
-        }
-
-
-        case 9: {
-            Com::printFLN(PSTR("debug level: "), Printer::debugMask());
-            break;
-        }
-
-        case 13: {
-            Com::printFLN(PSTR("LCD re-initialization"));
-            uid.initializeLCD();
-            break;
-        }
-        case 14: {
-            const auto reserve = PrintLine::queuedMoves().remainingMotion();
-            Com::printF(PSTR("Motion buffer XYZ mm: "), reserve.xyzMm, 3);
-            Com::printF(PSTR(" E mm: "), reserve.filamentMm, 3);
-            Com::printFLN(PSTR(" s: "), reserve.seconds, 4);
-            break;
-        }
-        }
     }
 }
 

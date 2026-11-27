@@ -182,7 +182,7 @@ def main():
             "extrusion-planning",
             "gcode-target", "output-safety-lock", "wobble-target", "cartesian-planning", "segment-geometry", "move-queue", "move-reserve",
             "idle-status", "print-job", "ecmp-stepping",
-            "advance-timer", "advance-mode", "advance-cancel", "motion-wait", "pressure-advance-pause", "advance-output", "advance-peak",
+            "advance-timer", "advance-mode", "advance-cancel", "motion-wait", "pressure-advance-pause", "advance-output", "advance-profile",
             "step-clock", "lookahead", "acceleration-limits", "short-move-pacing", "direct-ramp", "xy-limits",
         ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)

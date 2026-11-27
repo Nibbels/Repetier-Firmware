@@ -494,10 +494,6 @@ public:
         setAnimation(!isAnimation());
     } // toggleAnimation
 
-    static INLINE float convertToMM(float x) {
-        return (gcodeModes.inches() ? x * 25.4 : x);
-    } // convertToMM
-
     static INLINE bool isXMinEndstopHit() {
         return READ(X_MIN_PIN) == LOW;
     }  // isXMinEndstopHit

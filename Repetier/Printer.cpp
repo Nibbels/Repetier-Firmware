@@ -242,10 +242,7 @@ void Printer::setFeedrate(float feedrate) {
     if (feedrate <= 0)
         return;
 
-    if (Printer::gcodeModes.inches())
-        Printer::feedrate = feedrate * (float)Printer::feedrateMultiply * 0.0042333f; // Factor is 25.4/60/100 = convertToMM(0.00016666666f)
-    else
-        Printer::feedrate = feedrate * (float)Printer::feedrateMultiply * 0.00016666666f;
+    Printer::feedrate = feedrate * (float)Printer::feedrateMultiply * 0.00016666666f;
 }
 
 // Convert G-code positions to millimetres in the planner's coordinate frame.
@@ -256,13 +253,13 @@ bool Printer::queueGCodeCoordinates(GCode* com) {
     }
     const bool isXYZMove = !com->hasNoXYZ();
     if (com->hasX())
-        moveTarget.setFromGCodeMM(X_AXIS, convertToMM(com->X), gcodeModes.relativeXYZ());
+        moveTarget.setFromGCodeMM(X_AXIS, com->X, gcodeModes.relativeXYZ());
     if (com->hasY())
-        moveTarget.setFromGCodeMM(Y_AXIS, convertToMM(com->Y), gcodeModes.relativeXYZ());
+        moveTarget.setFromGCodeMM(Y_AXIS, com->Y, gcodeModes.relativeXYZ());
     if (com->hasZ())
-        moveTarget.setFromGCodeMM(Z_AXIS, convertToMM(com->Z), gcodeModes.relativeXYZ());
+        moveTarget.setFromGCodeMM(Z_AXIS, com->Z, gcodeModes.relativeXYZ());
 
-    float e = convertToMM(com->E);
+    float e = com->E;
     bool isEMove = com->hasE() && isExtrusionAllowed(e);
     if (isEMove) {
         if (gcodeModes.relativeE())

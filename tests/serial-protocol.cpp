@@ -455,8 +455,14 @@ void legacyStream(const std::string& scenario) {
     replies.clear();
     const unsigned normalDispatches = dispatchedCommands;
     if (scenario == "legacy-during-stop") stopped = true;
-    const unsigned legacyMask = scenario == "legacy-ascii" ? 8 : 15;
-    if (scenario == "legacy-binary") {
+    const bool inch = scenario == "inch-ascii" || scenario == "inch-binary";
+    const unsigned legacyMask = inch ? 0 : scenario == "legacy-ascii" ? 8 : 15;
+    if (scenario == "inch-ascii") {
+        feed(numbered("N1 G20"));
+    } else if (scenario == "inch-binary") {
+        // Binary V1 G20 (G field, one byte).
+        feed(binary({0x84, 0x00, 20}));
+    } else if (scenario == "legacy-binary") {
         // Binary V1 M111 S15 (M and 32-bit S).
         feed(binary({0x82, 0x04, 111, 15, 0, 0, 0}));
     } else {
@@ -468,7 +474,7 @@ void legacyStream(const std::string& scenario) {
     }
     Commands::commandLoop();
     assert(legacyRejected && stopRequests == 1 && Printer::debugMask() == (legacyMask & ~8u));
-    assert(replies.find("M111 bit 8 unsupported") != std::string::npos);
+    assert(replies.find(inch ? "G20 unsupported" : "M111 bit 8 unsupported") != std::string::npos);
     assert(replies.find("ok ") != std::string::npos);
     assert(!GCodeInput::peekCurrentCommand());
     stopped = false; // stop cleanup finished; legacy rejection must survive it
@@ -590,7 +596,8 @@ int main(int argc, char** argv) {
     else if (scenario == "thermal-emergency") thermalEmergency();
     else if (scenario == "m206-syntax") strictEepromSyntax();
 #endif
-    else if (scenario == "legacy-ascii" || scenario == "legacy-binary" || scenario == "legacy-during-stop") legacyStream(scenario);
+    else if (scenario == "legacy-ascii" || scenario == "legacy-binary" || scenario == "legacy-during-stop" ||
+             scenario == "inch-ascii" || scenario == "inch-binary") legacyStream(scenario);
     else return 1;
     std::printf("Serial protocol replay passed (%s)\n", argv[1]);
 }
