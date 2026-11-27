@@ -18,9 +18,13 @@ def main():
     executor = (firmware / "StepExecutor.cpp").read_text(encoding="utf-8")
     printer = (firmware / "Printer.cpp").read_text(encoding="utf-8")
     probe = (firmware / "ScanProbe.cpp").read_text(encoding="utf-8")
+    printer_header = (firmware / "Printer.h").read_text(encoding="utf-8")
+    no_wait = section(printer_header, "static inline void disableCMPnow() {", "\n    static void disableCMPnow(bool wait);")
+    no_wait = no_wait.replace("static inline", "inline", 1)
     fragments = [
         z_motion.removeprefix('#include "Repetier.h"\n'),
         section(executor, "void StepExecutor::stepSlowedZCompensation()", "\n/**\n  Processes the moves"),
+        "namespace Printer {\n" + no_wait + "\n}",
         section(printer, "bool Printer::needsCMPwait(", "\nvoid Printer::stopPrint("),
         section(probe, "bool moveZ(int nSteps, bool emergencyRetreat) {", "\n} // namespace Calibration"),
     ]
