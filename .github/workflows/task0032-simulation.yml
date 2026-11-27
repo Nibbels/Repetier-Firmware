@@ -271,7 +271,7 @@ jobs:
           out="$RUNNER_TEMP/task0032-lcd-integrated"
           mkdir -p "$out"
           git rev-parse HEAD > "$out/checkout-sha.txt"
-          sha256sum tools/task0032/lcd-pending-frame.{h,cpp} tools/task0032/lcd-integration-preflight.py > "$out/source-sha256.txt"
+          sha256sum tools/task0032/lcd-pending-frame.{h,cpp} tools/task0032/lcd-{integration-preflight,emergency-integration}.py > "$out/source-sha256.txt"
           c++ -std=c++11 -O2 -Wall -Wextra -Werror tools/task0032/lcd-pending-frame.cpp -o "$out/replay"
           "$out/replay" | tee "$out/replay.log"
           c++ -std=c++11 -O1 -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all tools/task0032/lcd-pending-frame.cpp -o "$out/ubsan"
@@ -289,6 +289,7 @@ jobs:
           for test in lcd-gpio boot-eye ui-workflows task0034-panel-dispatch; do
             python3 "$candidate/tests/$test.py" 2>&1 | tee "$out/$test.log"
           done
+          python3 tools/task0032/lcd-emergency-integration.py --source "$candidate" 2>&1 | tee "$out/emergency-integration.log"
           git -C "$candidate" -c user.name="Task0032 isolated preflight" -c user.email="preflight@invalid.example" commit -m "Disposable integrated LCD counterfactual"
           git -C "$candidate" rev-parse HEAD > "$out/local-candidate-sha.txt"
       - uses: arduino/setup-arduino-cli@v2
