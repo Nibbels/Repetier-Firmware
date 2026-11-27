@@ -59,38 +59,11 @@ class FactoryDefaults {
     float scanLift_;
     uint8_t scanIndex_;
     bool gcodeCoordinates_, configuredFeedrate_;
-    static uint8_t mode(unsigned microsteps) {
-        uint8_t result=0;
-        while(microsteps>>=1) ++result;
-        return result;
+    static constexpr uint8_t mode(unsigned microsteps) {
+        return microsteps>1?uint8_t(1+mode(microsteps>>1)):0;
     }
-    static Field tool(Field e0,uint8_t id) {
-        return static_cast<Field>(address(e0)+uint16_t(id)*SlotSize);
-    }
-    static void motion(BlockEncoder& w,uint8_t id,float steps,float feed,float jerk,
-                       float accel,float advance,float x,float y) {
-        w.f32(tool(Field::F_E0_STEPS_PER_MM,id),steps);
-        w.f32(tool(Field::F_E0_MAX_FEEDRATE,id),feed);
-        w.f32(tool(Field::F_E0_MAX_START_FEEDRATE,id),jerk);
-        w.f32(tool(Field::F_E0_MAX_ACCELERATION,id),accel);
-        w.f32(tool(Field::F_E0_ADVANCE_L,id),advance);
-        w.f32(tool(Field::F_E0_X_OFFSET,id),x);
-        w.f32(tool(Field::F_E0_Y_OFFSET,id),y);
-        w.u8(tool(Field::F_RF_MICRO_STEPS_E0,id),mode(RF_MICRO_STEPS_E));
-    }
-    static void thermal(BlockEncoder& w,uint8_t id,float p,float i,float d,
-                        uint8_t min,uint8_t max,uint8_t power,uint8_t sensor,uint8_t cooler) {
-        w.f32(tool(Field::F_E0_PID_PGAIN,id),p);
-        w.f32(tool(Field::F_E0_PID_IGAIN,id),i);
-        w.f32(tool(Field::F_E0_PID_DGAIN,id),d);
-        w.u8(tool(Field::F_E0_DRIVE_MIN,id),min);
-        w.u8(tool(Field::F_E0_DRIVE_MAX,id),max);
-        w.u8(tool(Field::F_E0_PID_MAX,id),power);
-        w.u8(tool(Field::F_E0_SENSOR_TYPE,id),sensor);
-        const uint8_t identity[3]={};
-        w.bytes(tool(Field::F_PID_CALIBRATION_SLOT_0,id),identity,3);
-        w.u8(tool(Field::F_E0_COOLER_SPEED,id),cooler);
-    }
+    struct ZeroIdentity {uint8_t bytes[3];};
+    static_assert(sizeof(ZeroIdentity)==3,"factory PID identity width");
 public:
     FactoryDefaults(float scanLift,uint8_t scanIndex,bool gcodeCoordinates,bool configuredFeedrate)
         :scanLift_(scanLift),scanIndex_(scanIndex),gcodeCoordinates_(gcodeCoordinates),
@@ -139,46 +112,92 @@ public:
             const uint8_t current[5]=MOTOR_CURRENT_NORMAL;
             w.bytes(Field::F_RF_MOTOR_CURRENT,current,5);break;
         }
-        case Extruder0Motion:
-            motion(w,0,EXT0_STEPS_PER_MM,EXT0_MAX_FEEDRATE,EXT0_MAX_START_FEEDRATE,
-                   EXT0_MAX_ACCELERATION,EXT0_ADVANCE_L,EXT0_X_OFFSET_MM,EXT0_Y_OFFSET_MM);
-            break;
-        case Extruder1Motion:
+#define RF_FACTORY_Extruder0Motion(X) \
+            X(float,F_E0_STEPS_PER_MM,EXT0_STEPS_PER_MM) \
+            X(float,F_E0_MAX_FEEDRATE,EXT0_MAX_FEEDRATE) \
+            X(float,F_E0_MAX_START_FEEDRATE,EXT0_MAX_START_FEEDRATE) \
+            X(float,F_E0_MAX_ACCELERATION,EXT0_MAX_ACCELERATION) \
+            X(float,F_E0_ADVANCE_L,EXT0_ADVANCE_L) \
+            X(float,F_E0_X_OFFSET,EXT0_X_OFFSET_MM) \
+            X(float,F_E0_Y_OFFSET,EXT0_Y_OFFSET_MM) \
+            X(uint8_t,F_RF_MICRO_STEPS_E0,mode(RF_MICRO_STEPS_E))
+        RF_FACTORY_RECORD(Extruder0Motion,RF_FACTORY_Extruder0Motion)
+#undef RF_FACTORY_Extruder0Motion
 #if NUM_EXTRUDER > 1
-            motion(w,1,EXT1_STEPS_PER_MM,EXT1_MAX_FEEDRATE,EXT1_MAX_START_FEEDRATE,
-                   EXT1_MAX_ACCELERATION,EXT1_ADVANCE_L,EXT1_X_OFFSET_MM,EXT1_Y_OFFSET_MM);
+#define RF_FACTORY_Extruder1Motion(X) \
+            X(float,F_E1_STEPS_PER_MM,EXT1_STEPS_PER_MM) \
+            X(float,F_E1_MAX_FEEDRATE,EXT1_MAX_FEEDRATE) \
+            X(float,F_E1_MAX_START_FEEDRATE,EXT1_MAX_START_FEEDRATE) \
+            X(float,F_E1_MAX_ACCELERATION,EXT1_MAX_ACCELERATION) \
+            X(float,F_E1_ADVANCE_L,EXT1_ADVANCE_L) \
+            X(float,F_E1_X_OFFSET,EXT1_X_OFFSET_MM) \
+            X(float,F_E1_Y_OFFSET,EXT1_Y_OFFSET_MM) \
+            X(uint8_t,F_RF_MICRO_STEPS_E1,mode(RF_MICRO_STEPS_E))
+        RF_FACTORY_RECORD(Extruder1Motion,RF_FACTORY_Extruder1Motion)
+#undef RF_FACTORY_Extruder1Motion
 #else
-            // Physical E1 driver mode is defined even without a fitted tool.
-            motion(w,1,0,0,0,0,0,0,0);
+#define RF_FACTORY_Extruder1Motion(X) \
+            X(float,F_E1_STEPS_PER_MM,0) \
+            X(float,F_E1_MAX_FEEDRATE,0) \
+            X(float,F_E1_MAX_START_FEEDRATE,0) \
+            X(float,F_E1_MAX_ACCELERATION,0) \
+            X(float,F_E1_ADVANCE_L,0) \
+            X(float,F_E1_X_OFFSET,0) \
+            X(float,F_E1_Y_OFFSET,0) \
+            X(uint8_t,F_RF_MICRO_STEPS_E1,mode(RF_MICRO_STEPS_E))
+        RF_FACTORY_RECORD(Extruder1Motion,RF_FACTORY_Extruder1Motion)
+#undef RF_FACTORY_Extruder1Motion
 #endif
-            break;
-        case Hotend0:
-            thermal(w,0,EXT0_HOTEND_PROFILE.pidPGain,EXT0_HOTEND_PROFILE.pidIGain,
-                    EXT0_HOTEND_PROFILE.pidDGain,EXT0_HOTEND_PROFILE.pidDriveMin,
-                    EXT0_HOTEND_PROFILE.pidDriveMax,EXT0_HOTEND_PROFILE.pidMax,
-                    EXT0_TEMPSENSOR_TYPE,EXT0_EXTRUDER_COOLER_SPEED);
-            break;
-        case Hotend1:
+#define RF_FACTORY_Hotend0(X) \
+            X(float,F_E0_PID_PGAIN,EXT0_HOTEND_PROFILE.pidPGain) \
+            X(float,F_E0_PID_IGAIN,EXT0_HOTEND_PROFILE.pidIGain) \
+            X(float,F_E0_PID_DGAIN,EXT0_HOTEND_PROFILE.pidDGain) \
+            X(uint8_t,F_E0_DRIVE_MIN,EXT0_HOTEND_PROFILE.pidDriveMin) \
+            X(uint8_t,F_E0_DRIVE_MAX,EXT0_HOTEND_PROFILE.pidDriveMax) \
+            X(uint8_t,F_E0_PID_MAX,EXT0_HOTEND_PROFILE.pidMax) \
+            X(uint8_t,F_E0_SENSOR_TYPE,EXT0_TEMPSENSOR_TYPE) \
+            X(ZeroIdentity,F_PID_CALIBRATION_SLOT_0,ZeroIdentity{}) \
+            X(uint8_t,F_E0_COOLER_SPEED,EXT0_EXTRUDER_COOLER_SPEED)
+        RF_FACTORY_RECORD(Hotend0,RF_FACTORY_Hotend0)
+#undef RF_FACTORY_Hotend0
 #if NUM_EXTRUDER > 1
-            thermal(w,1,EXT1_HOTEND_PROFILE.pidPGain,EXT1_HOTEND_PROFILE.pidIGain,
-                    EXT1_HOTEND_PROFILE.pidDGain,EXT1_HOTEND_PROFILE.pidDriveMin,
-                    EXT1_HOTEND_PROFILE.pidDriveMax,EXT1_HOTEND_PROFILE.pidMax,
-                    EXT1_TEMPSENSOR_TYPE,EXT1_EXTRUDER_COOLER_SPEED);
+#define RF_FACTORY_Hotend1(X) \
+            X(float,F_E1_PID_PGAIN,EXT1_HOTEND_PROFILE.pidPGain) \
+            X(float,F_E1_PID_IGAIN,EXT1_HOTEND_PROFILE.pidIGain) \
+            X(float,F_E1_PID_DGAIN,EXT1_HOTEND_PROFILE.pidDGain) \
+            X(uint8_t,F_E1_DRIVE_MIN,EXT1_HOTEND_PROFILE.pidDriveMin) \
+            X(uint8_t,F_E1_DRIVE_MAX,EXT1_HOTEND_PROFILE.pidDriveMax) \
+            X(uint8_t,F_E1_PID_MAX,EXT1_HOTEND_PROFILE.pidMax) \
+            X(uint8_t,F_E1_SENSOR_TYPE,EXT1_TEMPSENSOR_TYPE) \
+            X(ZeroIdentity,F_PID_CALIBRATION_SLOT_1,ZeroIdentity{}) \
+            X(uint8_t,F_E1_COOLER_SPEED,EXT1_EXTRUDER_COOLER_SPEED)
+        RF_FACTORY_RECORD(Hotend1,RF_FACTORY_Hotend1)
+#undef RF_FACTORY_Hotend1
 #else
-            thermal(w,1,0,0,0,0,0,0,0,0);
+#define RF_FACTORY_Hotend1(X) \
+            X(float,F_E1_PID_PGAIN,0) \
+            X(float,F_E1_PID_IGAIN,0) \
+            X(float,F_E1_PID_DGAIN,0) \
+            X(uint8_t,F_E1_DRIVE_MIN,0) \
+            X(uint8_t,F_E1_DRIVE_MAX,0) \
+            X(uint8_t,F_E1_PID_MAX,0) \
+            X(uint8_t,F_E1_SENSOR_TYPE,0) \
+            X(ZeroIdentity,F_PID_CALIBRATION_SLOT_1,ZeroIdentity{}) \
+            X(uint8_t,F_E1_COOLER_SPEED,0)
+        RF_FACTORY_RECORD(Hotend1,RF_FACTORY_Hotend1)
+#undef RF_FACTORY_Hotend1
 #endif
-            break;
-        case BedPid: {
-            w.f32(Field::F_BED_PID_PGAIN,HEATED_BED_PID_PGAIN);
-            w.f32(Field::F_BED_PID_IGAIN,HEATED_BED_PID_IGAIN);
-            w.f32(Field::F_BED_PID_DGAIN,HEATED_BED_PID_DGAIN);
-            w.u8(Field::F_BED_DRIVE_MIN,HEATED_BED_PID_INTEGRAL_DRIVE_MIN);
-            w.u8(Field::F_BED_DRIVE_MAX,HEATED_BED_PID_INTEGRAL_DRIVE_MAX);
-            w.u8(Field::F_BED_PID_MAX,HEATED_BED_PID_MAX);
-            w.u8(Field::F_RF_HEATED_BED_SENSOR_TYPE,HEATED_BED_SENSOR_TYPE);
-            const uint8_t identity[3]={};w.bytes(Field::F_PID_CALIBRATION_SLOT_2,identity,3);
-            break;
-        }
+#define RF_FACTORY_BedPid(X) \
+            X(float,F_BED_PID_PGAIN,HEATED_BED_PID_PGAIN) \
+            X(float,F_BED_PID_IGAIN,HEATED_BED_PID_IGAIN) \
+            X(float,F_BED_PID_DGAIN,HEATED_BED_PID_DGAIN) \
+            X(uint8_t,F_BED_DRIVE_MIN,HEATED_BED_PID_INTEGRAL_DRIVE_MIN) \
+            X(uint8_t,F_BED_DRIVE_MAX,HEATED_BED_PID_INTEGRAL_DRIVE_MAX) \
+            X(uint8_t,F_BED_PID_MAX,HEATED_BED_PID_MAX) \
+            X(uint8_t,F_RF_HEATED_BED_SENSOR_TYPE,HEATED_BED_SENSOR_TYPE) \
+            X(ZeroIdentity,F_PID_CALIBRATION_SLOT_2,ZeroIdentity{})
+        RF_FACTORY_RECORD(BedPid,RF_FACTORY_BedPid)
+#undef RF_FACTORY_BedPid
         case BedSafety:
             // UI may offer 120 C for explicit commissioning; no permission
             // to heat is stored on first install or automatic repair.
