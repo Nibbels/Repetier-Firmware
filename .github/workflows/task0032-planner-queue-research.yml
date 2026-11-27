@@ -1,0 +1,49 @@
+name: Task0032-P planner queue research
+on:
+  pull_request:
+    branches: [ai-firmware-review]
+    paths:
+      - 'research/task0032-planner-queue/**'
+      - '.github/workflows/task0032-planner-queue-research.yml'
+permissions:
+  contents: read
+jobs:
+  planner-research:
+    if: github.event.pull_request.head.ref == 'research/Task0032-planner-queue' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Record actual tested source and pinned parent estimator
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/planner-research"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/tested-sha.txt"
+          git rev-parse HEAD:Repetier/MotionPlanner.cpp HEAD:Repetier/MoveQueue.cpp HEAD:Repetier/MoveQueue.h > "$out/source-blobs.txt"
+          git fetch --depth=1 origin dee72ebd8b60a003664cc9a91b054a98124f62db
+          git show dee72ebd8b60a003664cc9a91b054a98124f62db:tools/task0032/queue-estimate.cjs > "$out/queue-estimate.cjs"
+          test "$(git hash-object "$out/queue-estimate.cjs")" = 1309231cba690fd0937e4315f91fb69f3e1d010d
+          c++ --version | head -1 > "$out/host-compiler.txt"
+      - name: Actual-source smoke and workload matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          work=research/task0032-planner-queue
+          out="$RUNNER_TEMP/planner-research"
+          python3 "$work/replay.py" --scenario smoke --capacity 24 --output "$out/smoke.jsonl"
+          node "$work/analyze.cjs" "$out/smoke.jsonl" "$out/queue-estimate.cjs" > "$out/smoke-summary.json"
+          python3 "$work/replay.py" --capacity 24 28 32 --output "$out/trace.jsonl"
+          node "$work/analyze.cjs" "$out/trace.jsonl" "$out/queue-estimate.cjs" > "$out/summary.json"
+          gzip "$out/trace.jsonl" "$out/smoke.jsonl"
+          node -e 'const s=require(process.argv[1]); console.log(JSON.stringify({records:s.records,comparisons:s.comparisons,cases:s.cases.length,nonEmptyZeroMutable:s.nonEmptyZeroMutable,blockedCounterexample:s.blockedCounterexample,relative_error:s.relative_error},null,2))' "$out/summary.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-planner-queue-${{ github.sha }}
+          path: ${{ runner.temp }}/planner-research
+          retention-days: 7
+          if-no-files-found: warn
