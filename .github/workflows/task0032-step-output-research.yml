@@ -203,6 +203,9 @@ jobs:
       - name: Isolated foreground geometry preparation and service-horizon cost
         run: |
           python3 research/task0032-step-output/z-preparer-avr-bench.py --out "$RUNNER_TEMP/step-output/z-preparer-avr" --compiler "$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin/avr-g++" --runner-source "$RUNNER_TEMP/simavr-trace.c"
+      - name: Compare measured preparation service horizons and bounded prefill
+        run: |
+          python3 research/task0032-step-output/z-preparation-horizon.py "$RUNNER_TEMP/step-output/z-preparer-avr/results.json" "$RUNNER_TEMP/step-output/z-preparation-horizon.json"
       - name: Linked motor wake candidate with minimal Q23 and narrow queue masks
         if: steps.reuse.outputs.available != 'yes'
         shell: bash
