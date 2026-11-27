@@ -77,6 +77,30 @@
     <ClInclude Include="EepromZoneAvr.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="AvrEventStore.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CompactEvent.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="EventLog.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="EventLogRead.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="EventLogService.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="EventLogText.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ThermalEventSource.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DiagnosticHistory.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="EepromZoneSession.h">
       <Filter>Header Files</Filter>
     </ClInclude>
