@@ -669,15 +669,7 @@ void UIDisplay::refreshPage() {
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     if(Printer::printJob.emergencyLocked()) {
         const auto& ledger=ThermalEmergency::faultLedger();
-        static uint8_t shownRevision=255;
-        static uint32_t pageStarted=0;
-        const uint32_t now=HAL::timeInMilliseconds();
-        if(shownRevision!=ledger.revision()) {
-            shownRevision=ledger.revision();
-            pageStarted=now; // immediately present new primary/fire cause
-        }
-        const uint32_t page=uint32_t(now-pageStarted)/2000;
-        const auto fault=ThermalEmergency::panelFault(ledger,UI_ROWS==2?page/2:page);
+        const auto& fault=ThermalEmergency::primaryFault(ledger);
         const bool valid=ThermalEmergency::liveTemperatureValid(fault.channel);
         const float live=valid?tempController[fault.channel]->currentTemperatureC:0;
         for(uint8_t row=0;row<UI_ROWS;++row) {
