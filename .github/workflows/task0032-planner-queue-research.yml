@@ -42,6 +42,24 @@ jobs:
           node -e 'const s=require(process.argv[1]); console.log(JSON.stringify({capacities:s.capacities,proxy_errors:s.proxy_errors,selected_cases:s.selected_cases.filter(c=>c.capacity===24&&c.group===1&&(c.chord===0.05||c.chord===0.050000001||c.chord===0.0500000007||c.chord===100))},null,2))' "$out/decision-input.json"
           gzip "$out/trace.jsonl" "$out/smoke.jsonl"
           node -e 'const s=require(process.argv[1]); console.log(JSON.stringify({records:s.records,comparisons:s.comparisons,cases:s.cases.length,nonEmptyZeroMutable:s.nonEmptyZeroMutable,blockedCounterexample:s.blockedCounterexample,relative_error:s.relative_error},null,2))' "$out/summary.json"
+      - name: Stress arrivals and historical junction counterfactuals
+        shell: bash
+        run: |
+          set -euo pipefail
+          work=research/task0032-planner-queue
+          out="$RUNNER_TEMP/planner-research"
+          python3 "$work/replay.py" --scenario stress --capacity 24 28 32 --output "$out/stress.jsonl"
+          node "$work/analyze.cjs" "$out/stress.jsonl" "$out/queue-estimate.cjs" > "$out/stress-summary.json"
+          node "$work/derive.cjs" "$out/stress-summary.json" "$out/stress.jsonl" > "$out/stress-decision-input.json"
+          for variant in unweighted mean-length; do
+            python3 "$work/replay.py" --junction "$variant" --capacity 24 --output "$out/$variant.jsonl"
+            node "$work/analyze.cjs" "$out/$variant.jsonl" "$out/queue-estimate.cjs" > "$out/$variant-summary.json"
+            node "$work/derive.cjs" "$out/$variant-summary.json" "$out/$variant.jsonl" > "$out/$variant-decision-input.json"
+            gzip "$out/$variant.jsonl"
+          done
+          node "$work/compare-variants.cjs" "$out" > "$out/variant-comparison.json"
+          cat "$out/variant-comparison.json"
+          gzip "$out/stress.jsonl"
       - uses: arduino/setup-arduino-cli@v2
         with:
           version: 1.2.2
