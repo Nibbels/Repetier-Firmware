@@ -1,0 +1,156 @@
+{
+  "schema": 1,
+  "classification": "isolated AVR marker fixture (includes marker/sink overhead); normalized integer endpoint proof; not linked ISR, hardware or physical acceleration qualification",
+  "head": "af52a4add66132da075270f0c913d05a51deb123",
+  "tested_merge": "3e45fac082a3cc7c891f40e9548229249db71878",
+  "canonical": {
+    "run": 46001653714,
+    "artifact": 15198147370
+  },
+  "research": {
+    "run": 46001653723,
+    "job": 140514574559,
+    "artifact": 15197904143,
+    "sha256": "0fc0dc2bfc87c2cf254b7966465b55bf721d5ec1da9afb22a8ba0c00b7219a6a"
+  },
+  "bounds": {
+    "bucket_count": 458751,
+    "period_max_rel_excess": [
+      0.004123548995714987,
+      4196728831
+    ],
+    "period_z_domain_max_rel_excess": [
+      0.0008943069894731259,
+      69279743
+    ],
+    "root_max_rel_shortfall": [
+      0.42264973081037416,
+      3
+    ],
+    "root_large_max_rel_shortfall": [
+      0.002071259030835715,
+      269439
+    ],
+    "transition_checks": 50544,
+    "transition_max_rel_excess": [
+      0.2071566608211306,
+      [
+        2,
+        1
+      ]
+    ],
+    "transition_default_max_rel_excess": [
+      0.0044875400739732285,
+      [
+        256000,
+        2
+      ]
+    ],
+    "transitions_shorter_than_integer_floor_reference": 20399,
+    "table_bytes": 98
+  },
+  "summary": {
+    "HAL integer sqrt": {
+      "n": 15,
+      "min": 301,
+      "median": 313,
+      "max": 331
+    },
+    "lower table sqrt": {
+      "n": 15,
+      "min": 232,
+      "median": 323,
+      "max": 386
+    },
+    "sqrtf": {
+      "n": 15,
+      "min": 455,
+      "median": 499,
+      "max": 505
+    },
+    "Quake invsqrt": {
+      "n": 15,
+      "min": 688,
+      "median": 694,
+      "max": 723
+    },
+    "Quake period (float)": {
+      "n": 15,
+      "min": 822,
+      "median": 839,
+      "max": 869
+    },
+    "upper table period": {
+      "n": 15,
+      "min": 263,
+      "median": 301,
+      "max": 343
+    },
+    "float sqrt/div period": {
+      "n": 15,
+      "min": 929,
+      "median": 986,
+      "max": 1001
+    },
+    "HAL floor root + reciprocal": {
+      "n": 15,
+      "min": 406,
+      "median": 418,
+      "max": 1580
+    },
+    "direct adjacent ramp period": {
+      "n": 11,
+      "min": 295,
+      "median": 573,
+      "max": 623
+    },
+    "cached HAL full ramp": {
+      "n": 96,
+      "min": 168,
+      "median": 682,
+      "max": 696
+    },
+    "direct table full ramp": {
+      "n": 96,
+      "min": 355,
+      "median": 493,
+      "max": 504
+    }
+  },
+  "exploration": {
+    "tableSizes": [
+      {
+        "bytes": 26,
+        "zMaxRelative": 0.005244195962843978
+      },
+      {
+        "bytes": 50,
+        "zMaxRelative": 0.001856375946228006
+      },
+      {
+        "bytes": 98,
+        "zMaxRelative": 0.0008943069894731259
+      },
+      {
+        "bytes": 194,
+        "zMaxRelative": 0.0007691068636832554
+      },
+      {
+        "bytes": 386,
+        "zMaxRelative": 0.0007495064064777512
+      }
+    ],
+    "positiveUint32Covered": 4294967295,
+    "lowerRootMaxFloorShortfall": 7,
+    "quakeBinary32": {
+      "domain": "[1,4)",
+      "n": 16777216,
+      "under": 16762705,
+      "over": 14511,
+      "minRelative": -0.0017523386720980083,
+      "maxRelative": 1.347579552390954e-7
+    },
+    "eightBitInterpolationZMaxRelative": 0.0009764118389525844,
+    "classification": "Independent endpoint sweeps in analysis JS; not additional AVR tests"
+  }
+}
