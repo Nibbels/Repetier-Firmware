@@ -28,7 +28,7 @@ def modify(dst,tag):
         # (5000 / 512 rounded up); revalidate this condition in linked tests.
         # AVR SEI delays admission by one instruction. NOP ensures CLI
         # cannot immediately close the window before a pending IRQ enters.
-        s=q.replace(s,"        Printer::endXYZSteps();\\n    }                       // for loop",
+        s=q.replace(s,"        Printer::endXYZSteps();\n    }                       // for loop",
             """        Printer::endXYZSteps();
         if (!forQueue) {
             HAL::allowInterrupts();
