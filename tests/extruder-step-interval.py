@@ -32,7 +32,7 @@ int main() {
     assert(boundedExtruderStepInterval(std::numeric_limits<float>::infinity())==15);
     assert(boundedExtruderStepInterval(std::numeric_limits<float>::quiet_NaN())==15);
     assert(boundedExtruderStepInterval(-1.0f)==15);
-    puts("Extruder interval: 327680 ratio cases plus nonfinite/invalid values; PASS");
+    puts("Extruder interval: 327424 ratio cases plus nonfinite/invalid values; PASS");
 }
 """
 with tempfile.TemporaryDirectory(prefix="rfx-extruder-interval-") as tmp:
