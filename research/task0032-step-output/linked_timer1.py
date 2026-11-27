@@ -129,6 +129,8 @@ def execute(mod,img,kw,mode,case):
     assert img.new and img.sizes["PrintLine::queue"]==24*103+5
     assert img.sizes["PrintLine::direct"]==103
     c.mem[0x6f]=2
+    if getattr(img,"q23",False):
+        c.symput("Printer::extrusionCompensation",round(kw["ratio"]*(1<<23)),4)
     if mode in ("activation","activation_cold"):
         # Distinguish warm driver enable from actual cold hardware settling.
         # Extruder::enabled is the final char in its AVR class (no tail padding).
@@ -161,7 +163,7 @@ def execute(mod,img,kw,mode,case):
         # negative path starts at zero and immediately crosses below zero.
         import struct
         if not kw["negative"]:
-            c.symput("Printer::extrusionCompensation",struct.unpack("<I",struct.pack("<f",.75))[0],4,4)
+            c.symput("Printer::extrusionCompensation",3*(1<<21) if getattr(img,"q23",False) else struct.unpack("<I",struct.pack("<f",.75))[0],4,4)
     before=snapshot(c,move,errors,o)
     if mode=="inner":
         # Enter function in the same I-clear state as the caller, but omit wrapper.
