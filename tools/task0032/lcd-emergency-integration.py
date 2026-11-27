@@ -81,7 +81,7 @@ struct UIDisplay {
     bool normalCharacters_=true;
     uint8_t emergencyFrameRevision_=0xff;
     millis_t lastDisplayCompletedMs_=0;
-    char displayCache_[4][UI_COLS+1]{};
+    char displayCache_[4][UI_COLS]{};
     LcdPendingFrame<UI_COLS> lcdTransport_;
     unsigned refreshes=0;
     void resetDisplayAfterClear();
@@ -102,7 +102,7 @@ MAIN=r'''
 std::string row(unsigned r){
     return std::string(memory+(r&1?64:0)+(r>=2?UI_COLS:0),UI_COLS);
 }
-std::string logical(unsigned r){return uid.displayCache_[r];}
+std::string logical(unsigned r){return std::string(uid.displayCache_[r],UI_COLS);}
 std::string padded(std::string s){s.resize(UI_COLS,' ');return s;}
 void service(){
     auto n=transfers;HAL::now+=324;
