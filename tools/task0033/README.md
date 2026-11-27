@@ -52,3 +52,44 @@ Implementation sketch after P0 and manager window:
 - Real installed Host/Server behavior in a software-only trace/virtual serial endpoint, including lost ACK, resend+ok, delayed ACK, timeout, oversized frame, reconnect/reset and binary boundary.
 - Extend actual-source regression to all recovery, TX stall and emergency/order cases after coordinated implementation. Model SW ring and motion queue jointly with actual parser/foreground times; no proof of sustainable 500k yet.
 - Hardware acceptance explicitly deferred. No release of Task0034 priority and no merge.
+
+
+## Current handoff: 250 kbaud transport contract (owner decision, 2026-11-27)
+
+This section supersedes earlier 500k acceptance targets and historical fixed-cost models above. The owner selects 250000 baud as the primary optimization/qualification target, 115200 as reference/compatibility, 500000 only as a later measured-need option. Target CPU 16 MHz, USART0 8N1, normal UBRR=3 (exact nominal clock ratio). No production baud/default/EEPROM change yet. The owner's speed classes are 20 mm/s (slow/flex), 60 mm/s (ordinary), 100 mm/s (ambitious). Task0032 owns motion policy; Task0033 supplies transport boundary inputs, not a second speed governor.
+
+### Engineering timing contract
+
+| Quantity | Target CPU cycles | At 16MHz |
+| --- | ---: | ---: |
+| Nominal full UART frame | 640 | 40 us |
+| RX normal ISR incl. entry/exit | <=80 | <=5 us |
+| RX loss/error ISR incl. entry/exit | <=100 | <=6.25 us |
+| TX ordinary data ISR incl. entry/exit | <=80 | <=5 us |
+| TX empty ISR incl. entry/exit (if retained) | <=64 | <=4 us |
+| IRQ entry through UDR read complete | <=40 | <=2.5 us |
+| Total release/RX-ready to UDR read complete | <=512 | <=32 us |
+| Combined pre-entry/dispatch/interference allowance if read path takes 40 | <=472 | <=29.5 us |
+| Nominal reserve to next frame | 128 | 8 us |
+
+These are explicit **engineering budgets**, not measured integrated WCET, achieved acceptance or permission to violate other deadlines. Isolated linked checked/cached candidate achieved 77 cycles normal RX, read complete at 33, structural error paths 67/80, TX 71, empty TX 61, stack RX12/TX11 including 3-byte return. Start with one byte per RX interrupt (simplest to bound), checked status before UDR, cached ring indexes; no mandatory drain2, naked ISR, or aggressive TX-last optimization. Any gate, fault counter or recovery addition must be linked/recounted. Historical 594-cycle noninterruptible sample + checked read offset 33 = 627 cycles before any other delay: only 13 cycles nominal margin, exceeds 512 target. Aim for <=400-cycle contiguous nonpreemptible sections where feasible; NOT a universal cap or sufficient condition. With a 40-cycle read path this leaves 72 cycles of the target for other pre-entry delays; actual arbitration, residual instruction latency, pending ISR/SEI/RETI deferral, nesting and previously queued FIFO bytes must be modeled. The one-frame service condition is sufficient against accumulation for a clean stream starting with no backlog if each byte is read before the next arrives; use actual shortest permitted frame interval incl. oscillator tolerance, prove occupancy and no hardware/SW loss for accepted burst scenarios, and handle loss deterministically. Do not treat 640 or any 2-byte FIFO multiplier as universal allowable blackout; initial occupancy and recurring service windows matter. Mandatory heater, watchdog, STEP/DIR and Advance deadlines take precedence. An infeasible combined scenario must limit workload or improve scheduling; do not extend unsafe mask windows.
+
+At saturation budgeted RX uses 80/640 = 12.5% CPU; simultaneous full-rate TX another 12.5%, excluding empty IRQs/parser/other services. At equal absolute byte rates, UART work is independent of selected baud to first order. Existing 127/63 usable RX/TX ring capacities give 5.08ms RX fill from empty and 2.52ms TX drain from full at line rate, excluding hardware TX pipeline and foreground delays; these are not universal service deadlines. Retain ring sizes initially. Require host-credit/ACK accounting and bounded foreground/TX behavior before SRAM allocation changes. P0 currently adds tryWrite/tryWriteSpan/transmitFree; preserve these and emergency behavior in integration.
+
+### Workload contract and segment envelope
+
+Reproduce: `node tools/task0033/transport-contract.js`; compare to `transport-contract-results.json` in task-private CI. The script has eight assertions and 45 cases (3 frame sizes x 5 lengths x 3 requested speeds). This is arithmetic, NOT a new combined simulator or measured real print throughput. For sustained all-motion stream, command rate lambda=v/L and byte demand=lambda*B (B actual RX wire bytes per move, including line/checksum/framing). For a mixture use total bytes per delivered path distance over a relevant mutable horizon, with non-motion traffic counted separately. The normal planning allowance is 80% of 25000 bytes/s (20000 bytes/s), deliberately chosen as a first-pass reserve, not a safety guarantee or fixed governor parameter. Actual host/parse/planner/IRQ constraints may lower sustainable rate. ACK traffic travels in opposite direction, contributes CPU and host pacing but should not simply be subtracted from RX wire bandwidth.
+
+| Actual RX bytes/move | Ideal moves/s | Planning moves/s | Mean L at 20 mm/s | Mean L at 60 mm/s | Mean L at 100 mm/s |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 20 | 1250 | 1000 | 0.020 mm | 0.060 mm | 0.100 mm |
+| 40 | 625 | 500 | 0.040 mm | 0.120 mm | 0.200 mm |
+| 60 | 416.67 | 333.33 | 0.060 mm | 0.180 mm | 0.300 mm |
+
+Lengths in table are planning-budget boundaries for sustained uniform segment streams, not minimum legal segment lengths. Absolute wire thresholds at 40B/move: 0.032/0.096/0.160mm at 20/60/100mm/s. E.g. 0.1mm and 60mm/s = 600 moves/s, 24k B/s, 96% wire; within ideal limit but not comfortably below it. 0.2mm and 100mm/s =500 moves/s, 20k B/s, within planning allowance, not a guarantee of CPU/physical speed. 0.05mm and 20mm/s =400 moves/s, 16k B/s; at 60mm/s =1200 moves/s,48k B/s, impossible for 40B frames at 250k unless buffered transient; desired steady-state cap 25mm/s planning,31.25mm/s ideal. 0.025mm at 40B yields 12.5mm/s planning,15.625mm/s absolute. Do not drop, merge, or modify G-code geometry in firmware just because a segment is short. Rare short segments may consume queue reserve safely; sustained dense regions need advance braking and a filtered local supply limit, not a discontinuous per-line speed clamp. Preserve user request and acceleration/jerk/thermal/STEP limits. Task0032 to choose control policy and prove lookahead/braking, not Task0033.
+
+Slicer defaults constrain contour error, not actual output-length distributions; see Task0033 owner decision and citations. Based on that geometry analysis, 0.1–0.5mm are useful normal workload probes, 0.05mm dense and 0.025mm severe stress, no universal empirical frequency claim. Use 0.2mm as first common 40B/100mm/s workload at planning margin, 0.1mm as near-wire at 60mm/s, 0.05mm as intentional slowdown at 60/100. Validate actual traces when available (length quantiles, bytes/mm, longest dense runs, non-motion commands, mixed lengths). For actual host wire sizes, P0 candidate `6fbcd380a03f34bdb5b869a1ef05085a27ee6f7b` `GCodeInput.cpp::computeBinarySize/parseBinary` gives numbered v1 G1 with X/Y/E=19B, +F=23B; v2=22/26B (no other fields). This is decoded frame size, not proof installed host selects v1/v2 or sends these fields. Numbered ASCII examples (XOR, CRLF) are "N12345 G1 X100.123 Y95.456 E0.02345*89\r\n": 40B; "N12345 G1 X100.123 Y95.456 E0.02345 F3600*58\r\n": 46B; "N12345 G1 X100.123 Y95.456 Z0.2 E1234.56789 F6000*94\r\n": 54B. These are constructed wire examples, not measured slicer exports. Numbered ACK length is 5+decimal digits, model uses 10B/command plus pessimistic one empty TX IRQ per command for illustrative UART demand; replace with actual traces. Repetier binary is not Prusa bgcode or G2/G3. Do not use 500k as a prerequisite for Task0032.
+
+### Closure boundary
+
+Research handoff is complete for target selection, cycle-budget requirements, link capacity and provisional workload ranges; no new competing governor model. Full Task0033 software completion still requires loss-aware recovery/commit fence and actual host resend behavior, robust baud initialization/validation compatible with new P0 EEPROM design, bounded TX audit and final integration + four AVR builds and actual linked response/stack/latency tests after P0 release. Task0034 PR #102 at inspected head 6fbcd380 remains open (green CI does not release ownership); preserve its nonblocking emergency transport and persistence changes. No production edits or merge in this research step. Physical qualification deferred. Task0032 can proceed with these provisional budgets and must replace candidate values with final measurements when available.
