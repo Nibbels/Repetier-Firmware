@@ -44,6 +44,15 @@
     <ClInclude Include="EepromHostFields.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="EepromZoneLayout.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="EepromZoneIntegrity.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="EepromZoneStorage.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="Extruder.h">
       <Filter>Header Files</Filter>
     </ClInclude>

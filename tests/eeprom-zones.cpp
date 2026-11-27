@@ -58,7 +58,7 @@ static void assertOutside(const Memory& a,const Memory& b) {
         if(p<Base || p>=End || blockOf(p)>Last)
             assert(a.bytes[p]==b.bytes[p]);
         if(p>=address(1) && p<address(Last+1)
-           && (p-address(blockOf(p)))>=PayloadOffset+length(blockOf(p)))
+           && (p-address(blockOf(p)))>=unsigned(PayloadOffset+length(blockOf(p))))
             assert(a.bytes[p]==b.bytes[p]);
     }
 }

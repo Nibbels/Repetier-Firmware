@@ -125,6 +125,9 @@
     <ClInclude Include="QueueTask.h" />
     <ClInclude Include="Eeprom.h" />
     <ClInclude Include="EepromHostFields.h" />
+    <ClInclude Include="EepromZoneLayout.h" />
+    <ClInclude Include="EepromZoneIntegrity.h" />
+    <ClInclude Include="EepromZoneStorage.h" />
     <ClInclude Include="Extruder.h" />
     <ClInclude Include="fastio.h" />
     <ClInclude Include="gcode.h" />
