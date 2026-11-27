@@ -25,5 +25,13 @@ def check():
     assert not prove_weak_main(bad,{},2,target)
     bad=dict(ins);bad[10]=(2,'cp','r16, r2')
     assert not prove_weak_main(bad,{},2,target)
+    word={2:(2,'ldi','r28, 0x00'),4:(2,'ldi','r29, 0x00'),
+          6:(4,'call','0x40'),10:(2,'sbiw','r28, 0x00'),
+          12:(2,'breq','0x12'),14:(4,'call','0x0'),18:(2,'ret','')}
+    assert prove_weak_main(word,{},2,target)=={14}
+    for pc,insn in [(4,(2,'ldi','r29, 0x01')),(4,(2,'lds','r29, 0x01')),
+                    (10,(2,'sbiw','r28, 0x01')),(6,(4,'jmp','0xe'))]:
+        bad=dict(word);bad[pc]=insn
+        assert not prove_weak_main(bad,{},2,target)
 check()
-print("Task0034 weak callback guard: valid and six rejected CFGs PASS")
+print("Task0034 weak callback guard: two valid and ten rejected CFGs PASS")

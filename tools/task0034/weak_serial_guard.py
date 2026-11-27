@@ -1,11 +1,11 @@
 """Conservative zero-value tracking for optional weak Arduino serialEventRun.
 
-Track only AVR ABI registers r1 (zero), r16/r17 (callee saved). Ordinary
-branches remain unconstrained except an immediately witnessed CP/CPC/BREQ
-on known zero operands. Unknown operations clear facts. Assumes ABI-
+Track AVR ABI zero register r1 and callee-saved r16/r17, r28/r29.
+Branches remain unconstrained except a witnessed CP/CPC/BREQ or
+SBIW r28,0/BREQ on known zero operands. Unknown operations clear facts. Assumes ABI-
 conforming callees/interrupts and intact CPU state, as the frame walk does.
 """
-TRACK={1:1,16:2,17:4}
+TRACK={1:1,16:2,17:4,28:8,29:16}
 
 def zero_transfer(op,arg,mask,phase):
     a=arg.split(';')[0].strip();t=a.split(', ')
@@ -15,6 +15,7 @@ def zero_transfer(op,arg,mask,phase):
     def setbit(s,z):
         nonlocal mask
         b=bit(s);mask=(mask&~b)|(b if z else 0)
+    if op=='sbiw' and t==['r28','0x00'] and mask&24==24:return mask,2
     if op=='cp' and t==['r16','r1'] and mask&3==3:return mask,1
     if op=='cpc' and t==['r17','r1'] and phase==1 and mask&5==5:return mask,2
     if op=='ldi':setbit(t[0],int(t[1],0)==0)
