@@ -679,12 +679,12 @@ void UIDisplay::refreshPage() {
             pageStarted=now; // immediately present new primary/fire cause
         }
         const uint32_t page=uint32_t(now-pageStarted)/2000;
-        const auto fault=ThermalEmergency::panelFault(ledger,UI_ROWS==2?page/2:page);
+        const auto fault=ThermalEmergency::panelFault(ledger,page);
         const bool valid=ThermalEmergency::liveTemperatureValid(fault.channel);
         const float live=valid?tempController[fault.channel]->currentTemperatureC:0;
         for(uint8_t row=0;row<UI_ROWS;++row) {
             char line[UI_COLS+1];
-            ThermalEmergency::panelRow<UI_COLS,UI_ROWS>(line,row,ledger,fault,page&1,valid,live);
+            ThermalEmergency::panelRow<UI_COLS,UI_ROWS>(line,row,ledger,fault,valid,live);
             // Existing LCD transport fills remaining columns with spaces.
             printRow(row,line,nullptr,UI_COLS);
         }
