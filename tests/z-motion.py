@@ -25,7 +25,7 @@ def main():
         z_motion.removeprefix('#include "Repetier.h"\n'),
         section(executor, "void StepExecutor::stepSlowedZCompensation()", "\n/**\n  Processes the moves"),
         "namespace Printer {\n" + no_wait + "\n}",
-        section(printer, "bool Printer::needsCMPwait(", "\nvoid Printer::stopPrint("),
+        section(printer, "bool Printer::needsCMPwait(", "\n// The thermal caller has already revoked heater duty"),
         section(probe, "bool moveZ(int nSteps, bool emergencyRetreat) {", "\n} // namespace Calibration"),
     ]
     with TemporaryDirectory(prefix="rfx-z-motion-") as directory:
