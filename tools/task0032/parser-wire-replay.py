@@ -109,9 +109,9 @@ void unsupportedExtensionBaseline() {
     appendFloat(frameBytes, 5.0f);
     feed(withBinaryChecksum(frameBytes));
     readReply("ok 1\r\n");
-    const auto* cmd = GCodeInput::peekCurrentCommand();
+    auto* cmd = GCodeInput::peekCurrentCommand();
     assert(cmd && cmd->hasG() && cmd->G == 1 && cmd->hasX() && cmd->X == 10.0f);
-    assert(cmd->params2 & 0x0800);
+    assert(cmd->isV2()); // public API; params2 itself is private
     // Do not execute this packet, even in the stub.
     GCodeInput::popCurrentCommand();
     std::puts("TASK0032_UNSUPPORTED_EXTENSION baseline accepts unsupported U field; future positive rejection required");
