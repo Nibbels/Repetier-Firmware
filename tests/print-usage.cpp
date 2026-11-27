@@ -19,9 +19,12 @@ bool heating = false;
 bool hasActiveHotendTarget() { return heating; }
 }
 namespace EEPROM {
+struct UsageTotals {int32_t seconds;float metres;};
+UsageTotals usageTotals();void storeUsageTotals(UsageTotals);
 unsigned saves = 0;
 void updateChecksum() { ++saves; }
 }
+#include "usage-storage-firmware.inc"
 namespace Printer {
 PrintUsage printUsage;
 }
@@ -62,4 +65,6 @@ int main() {
     usage.finishHeating(HAL::now);
     assert(usage.heatedSeconds() == INT32_MAX && EEPROM::saves == 2);
     assert(std::fabs(usage.filamentMetres() - 2.25f) < 0.0001f);
+    EEPROM::storeUsageTotals(EEPROM::usageTotals());
+    assert(EEPROM::saves==2);
 }

@@ -22,8 +22,7 @@
 #include "Eeprom.h"
 
 namespace {
-int32_t totalHeatedSeconds(uint32_t extraSeconds) {
-    const int32_t saved = HAL::eprGetInt32(EPR_PRINTING_TIME);
+int32_t totalHeatedSeconds(int32_t saved,uint32_t extraSeconds) {
     const uint32_t total = (saved > 0 ? static_cast<uint32_t>(saved) : 0) + extraSeconds;
     return total > INT32_MAX ? INT32_MAX : static_cast<int32_t>(total);
 }
@@ -34,10 +33,11 @@ void PrintUsage::finishHeating(uint32_t now) {
         return;
 
     const uint32_t elapsedSeconds = (now - heatingStartedAt_) / 1000;
-    HAL::eprSetInt32(EPR_PRINTING_TIME, totalHeatedSeconds(elapsedSeconds));
-    HAL::eprSetFloat(EPR_PRINTING_DISTANCE, filamentMetres());
+    auto totals=EEPROM::usageTotals();
+    totals.seconds=totalHeatedSeconds(totals.seconds,elapsedSeconds);
+    totals.metres+=pendingFilamentMm_*0.001f;
     pendingFilamentMm_ = 0.0f;
-    EEPROM::updateChecksum();
+    EEPROM::storeUsageTotals(totals);
     Commands::reportPrinterUsage();
 }
 
@@ -45,9 +45,9 @@ int32_t PrintUsage::heatedSeconds() const {
     uint32_t elapsedSeconds = 0;
     if (Extruder::hasActiveHotendTarget())
         elapsedSeconds = (HAL::timeInMilliseconds() - heatingStartedAt_) / 1000;
-    return totalHeatedSeconds(elapsedSeconds);
+    return totalHeatedSeconds(EEPROM::usageTotals().seconds,elapsedSeconds);
 }
 
 float PrintUsage::filamentMetres() const {
-    return HAL::eprGetFloat(EPR_PRINTING_DISTANCE) + pendingFilamentMm_ * 0.001f;
+    return EEPROM::usageTotals().metres + pendingFilamentMm_ * 0.001f;
 }

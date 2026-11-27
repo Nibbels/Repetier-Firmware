@@ -18,6 +18,7 @@
 // RF board integration and accessory outputs; scan, pressure, matrix and lighting services live in their own modules.
 
 #include "Repetier.h"
+#include "EepromZoneAvr.h"
 #include "BedMatrix.h"
 #include "CaseFan.h"
 #include "ExternalEeprom.h"
@@ -102,18 +103,6 @@ void initializeCaseLight() {
 } // namespace AccessoryOutputs
 
 static void setupForPrinting() {
-    // read the settings from the EEPROM
-    Printer::setAxisHomingFeedrate(X_AXIS, HAL::eprGetFloat(EPR_X_HOMING_FEEDRATE_PRINT));
-    Printer::setAxisHomingFeedrate(Y_AXIS, HAL::eprGetFloat(EPR_Y_HOMING_FEEDRATE_PRINT));
-    Printer::setAxisHomingFeedrate(Z_AXIS, HAL::eprGetFloat(EPR_Z_HOMING_FEEDRATE_PRINT));
-
-    Printer::setAxisLengthMm(X_AXIS, HAL::eprGetFloat(EPR_X_LENGTH));
-    if (Printer::axisLengthMm(X_AXIS) <= 0 || Printer::axisLengthMm(X_AXIS) > 245.0f) {
-        Printer::setAxisLengthMm(X_AXIS, X_MAX_LENGTH_PRINT);
-        HAL::eprSetFloat(EPR_X_LENGTH, Printer::axisLengthMm(X_AXIS));
-        EEPROM::updateChecksum();
-    }
-
     uid.beginBootEye();
     BedMatrix::restoreAtStartup([]() { uid.serviceBootEye(); });
     uid.finishBootEye();
@@ -133,6 +122,7 @@ void initRF(void) {
     if(Printer::printJob.emergencyLocked())return;
 #endif
     Printer::strainGauge.begin(HAL::timeInMilliseconds());
+    EepromZones::AvrDevice::enableRuntimeServices();
 
     Printer::disableCMPnow(true);
     setupForPrinting();

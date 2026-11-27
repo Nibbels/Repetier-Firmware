@@ -1106,6 +1106,18 @@ void EEPROM::storeSenseOffsetSettings(int16_t digits, int16_t micrometers, bool 
     publishSenseOffsetSettings();
 }
 
+EEPROM::UsageTotals EEPROM::usageTotals() {
+    return {HAL::eprGetInt32(EPR_PRINTING_TIME), HAL::eprGetFloat(EPR_PRINTING_DISTANCE)};
+}
+
+void EEPROM::storeUsageTotals(UsageTotals totals) {
+    const auto old=usageTotals();
+    if(old.seconds==totals.seconds && old.metres==totals.metres) return;
+    HAL::eprSetInt32(EPR_PRINTING_TIME,totals.seconds);
+    HAL::eprSetFloat(EPR_PRINTING_DISTANCE,totals.metres);
+    updateChecksum();
+}
+
 void EEPROM::initBaudrate() {
     if (HAL::eprGetByte(EPR_MAGIC_BYTE) == eepromMagic) {
         configuredBaudrate_ = HAL::eprGetInt32(EPR_BAUDRATE);

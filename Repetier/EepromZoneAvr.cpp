@@ -2,6 +2,13 @@
 #include "EepromZoneAvr.h"
 
 namespace EepromZones {
+namespace {
+bool settingsOwned=false;
+bool runtimeServicesReady=false;
+}
+bool& AvrDevice::settingsBusy(){return settingsOwned;}
+bool AvrDevice::logMayAccess(){return !settingsOwned && (SREG & _BV(SREG_I))!=0;}
+void AvrDevice::enableRuntimeServices(){runtimeServicesReady=true;}
 bool AvrDevice::foreground() const {return (SREG & _BV(SREG_I))!=0;}
 bool AvrDevice::ready() const {return eeprom_is_ready();}
 uint32_t AvrDevice::now() const {return HAL::timeInMilliseconds();}
@@ -9,9 +16,8 @@ uint8_t AvrDevice::readReady(uint16_t pos) {return HAL::eprGetByte(pos);}
 void AvrDevice::updateReady(uint16_t pos,uint8_t value) {HAL::eprSetByte(pos,value);}
 
 void AvrDevice::service() {
-    // At initialization PWM/ADC periodic flags and the watchdog have not
-    // started. Do not execute live control or stage hardware through them.
-    if(!HAL::watchdogEnabled()) return;
+    // Startup and watchdog enable are different states.
+    if(!runtimeServicesReady) return;
     if(HAL::takeScanTick()) HAL::tellWatchdogOk();
     if(HAL::takeTemperatureTick()) Extruder::manageTemperatures();
     if(Printer::heatingInhibited() || Printer::blockAll) return;

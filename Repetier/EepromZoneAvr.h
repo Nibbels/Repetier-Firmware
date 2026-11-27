@@ -6,6 +6,10 @@
 namespace EepromZones {
 class AvrDevice {
 public:
+    // Single foreground gate for settings and the future event logger.
+    static bool& settingsBusy();
+    static bool logMayAccess();
+    static void enableRuntimeServices();
     bool foreground() const;
     bool ready() const;
     uint32_t now() const;
