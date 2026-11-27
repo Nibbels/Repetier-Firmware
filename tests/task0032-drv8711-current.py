@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Read-only baseline characterization, not desired M908 semantics.
-Runs with canonical CI's automatic tests/*.py discovery. No hardware."""
+"""M908 production-candidate acceptance using actual source, no hardware.
+Runs with canonical CI's automatic tests/*.py discovery."""
 import ast
 import json
 import os
@@ -22,6 +22,7 @@ harness = r'''
 #include <climits>
 struct GCode {
     int32_t S=110, P=0;
+    uint16_t M=908;
     float E=0;
     unsigned flags=0;
     bool hasS() { return flags&1; }
@@ -32,50 +33,63 @@ struct GCode {
     bool hasE() { return flags&32; }
 };
 #define MOTOR_CURRENT_MIN 32
+#if NUM_EXTRUDER == 1
+#define MOTOR_CURRENT_MAX {150,150,126,126,126}
+#else
+#define MOTOR_CURRENT_MAX {145,140,120,105,105}
+#endif
+static int errors=0;
+static void showInvalidSyntax(uint16_t m) { assert(m==908); ++errors; }
 ''' + function + r'''
 static void check(unsigned flags, int32_t s, int32_t p, float e,
                   int selected, int word) {
-    actual.clear();
+    actual.clear(); errors=0;
     GCode c; c.flags=flags; c.S=s; c.P=p; c.E=e;
     setStepperCurrent(&c);
-    int cs=0, rises=0, bit=0, shifted=0, masked=0, restored=0;
+    int cs=0, rises=0, bit=0, shifted=0, masked=0, restored=0, depth=0;
     for (auto v: actual) {
-        if (v[0]==3) ++masked;
-        if (v[0]==4) ++restored;
+        if (v[0]==3) { ++masked; assert(depth++==0); }
+        if (v[0]==4) { ++restored; assert(--depth==0); }
         if (v[0]!=0) continue;
-        if (v[1]>=1 && v[1]<=5 && v[2]) {
-            assert(!cs); cs=v[1];
+        if (v[1]>=1 && v[1]<=5) {
+            assert(depth==1);
+            if (v[2]) { assert(!cs); cs=v[1]; }
+            else assert(cs==v[1]);
         }
-        if (v[1]==DRV_SDATI) bit=v[2];
-        if (v[1]==DRV_SCLK && v[2]) { ++rises; shifted=(shifted<<1)|bit; }
+        if (v[1]==DRV_SDATI) { assert(depth==0); bit=v[2]; }
+        if (v[1]==DRV_SCLK && v[2]) { assert(depth==0 && cs==selected); ++rises; shifted=(shifted<<1)|bit; }
     }
     assert(cs==selected);
     assert(rises==(word<0 ? 0 : 16));
-    assert(masked==(word<0 ? 0 : 1) && restored==masked);
+    assert(masked==(word<0 ? 0 : 2) && restored==masked && depth==0);
+    assert(errors==(word<0 ? 1 : 0));
+    if (word<0) assert(actual.empty());
     if (word>=0) assert(shifted==word);
     for (uint8_t a=0;a<5;++a) assert(Drv8711::configuredCurrent(a)==80+a);
 }
 int main() {
     for (uint8_t a=0;a<5;++a) Drv8711::stageCurrent(a,80+a);
-    check(1|4,110,0,0,0,0x116e); // X: no select
-    check(1|8,110,0,0,1,0x116e); // Y: physical X
-    check(1|16,110,0,0,2,0x116e); // Z: physical Y
-    check(1|32,110,0,0,4,0x116e); // E0
-    check(1|32,110,0,1,NUM_EXTRUDER==2?5:0,NUM_EXTRUDER==2?0x116e:-1);
-    check(1|2,110,0,0,0,0x116e); // P0: clocks without select
-    for (int p=1;p<=3+NUM_EXTRUDER;++p)
-        check(1|2,150,p,0,p,0x1196); // global limit accepts above per-axis limits
-    check(1|2,150,3+NUM_EXTRUDER+1,0,0,-1);
-    check(1|2,151,1,0,0,-1);
-    check(1|2,31,1,0,0,-1);
-    check(1|2,32,1,0,1,0x1120);
-    check(1|2,366,257,0,1,0x116e); // wraps before validation
-    check(1|2,-146,-255,0,1,0x116e);
-    check(1|2,INT32_MIN+110,INT32_MIN+1,0,1,0x116e);
-    check(1|2|4|8|16|32,110,3,0,4,0x116e); // last selector wins
-    check(1|32,110,0,2,0,-1);
-    check(2,110,1,0,0,-1);
-    std::printf("M908 baseline counterexamples confirmed (tools=%d)\n", NUM_EXTRUDER);
+    const uint8_t limits[]=MOTOR_CURRENT_MAX;
+    for (int p=1;p<=3+NUM_EXTRUDER;++p) {
+        for (int s=0;s<=255;++s) {
+            bool valid=s>=32 && s<=limits[p-1];
+            check(1|2,s,p,0,valid?p:0,valid?0x1100+s:-1);
+        }
+    }
+    for (int p=-512;p<=512;++p) {
+        bool valid=p>=1 && p<=3+NUM_EXTRUDER;
+        check(1|2,100,p,0,valid?p:0,valid?0x1164:-1);
+    }
+    for (int flags=0;flags<64;++flags)
+        if(flags!=3) check(flags,100,1,0,0,-1);
+    check(3,366,257,0,0,-1);
+    check(3,-146,-255,0,0,-1);
+    check(3,INT32_MIN+110,INT32_MIN+1,0,0,-1);
+    check(3,INT32_MAX,1,0,0,-1);
+    check(3,INT32_MIN,1,0,0,-1);
+    check(3,100,INT32_MAX,0,0,-1);
+    check(3,100,INT32_MIN,0,0,-1);
+    std::printf("M908 strict P/S replay passed (tools=%d)\\n", NUM_EXTRUDER);
 }
 '''
 with tempfile.TemporaryDirectory() as tmp:
