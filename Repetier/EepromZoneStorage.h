@@ -33,7 +33,8 @@ template<class Backend> class Storage {
     uint8_t get(uint16_t pos) { return io_.read(pos); }
     bool put(uint16_t pos, uint8_t value) {
         if (pos < Base || pos >= End) return false;
-        if (get(pos) != value) io_.update(pos, value);
+        if (get(pos) == value) return true;
+        io_.update(pos, value);
         return get(pos) == value;
     }
     uint16_t get16(uint16_t pos) {
@@ -97,17 +98,50 @@ template<class Backend> class Storage {
     bool putPair(uint16_t pos, uint32_t value) {
         return put32(pos,value) && put32(pos+4,~value);
     }
+    uint8_t state() {
+        const uint8_t value=get(Header::State);
+        return get(Header::StateInverse)==uint8_t(~value) ? value : 0;
+    }
+    bool putState(uint8_t value) {
+        return put(Header::State,value) && put(Header::StateInverse,uint8_t(~value));
+    }
     bool begin(uint32_t mask) {
         // Preparing is durable before intent bytes change. No feature byte
-        // changes until the complete intent and Writing marker read back.
+        // changes until the complete intent and Writing state pair read back.
         return mask && !(mask & ~Active)
-            && put(Header::State,Header::Preparing)
+            && putState(Header::Preparing)
             && putPair(Header::Intent,mask)
-            && put(Header::State,Header::Writing);
+            && putState(Header::Writing);
+    }
+    bool beginRepair(uint32_t mask,bool wasClean) {
+        if(wasClean) return begin(mask);
+        // Never replace an unresolved Writing state with Preparing: doing
+        // so could hide a CRC-valid but incomplete multi-block transaction.
+        // Old uncertain bits are already in the alert mask; a torn intent
+        // pair itself means all active blocks are uncertain.
+        return mask && !(mask & ~Active)
+            && putPair(Header::Intent,mask)
+            && putState(Header::Writing);
     }
     bool finish() {
         return put32(Header::Master,masterCrc())
-            && put(Header::State,Header::Clean);
+            && putState(Header::Clean);
+    }
+    // Validate the old payload and compare proposed bytes in one pass.
+    // Avoid reading all changed block bytes twice just to detect a no-op.
+    bool compareBlock(uint8_t id,const uint8_t* data,uint8_t n,bool& different) {
+        if(!validPayload(id,data,n)) return false;
+        const uint16_t base=address(id);
+        if(get(base+2)!=n) return false;
+        uint16_t crc=blockSeed(id,n);
+        different=false;
+        for(uint8_t i=0;i<n;++i) {
+            const uint8_t old=get(base+PayloadOffset+i);
+            if(id==BedSafety && old!=0 && (old<40 || old>150)) return false;
+            crc=crc16Byte(crc,old);
+            different |= old!=data[i];
+        }
+        return get16(base)==crc;
     }
     bool validPayload(uint8_t id, const uint8_t* data, uint8_t n) const {
         if (!id || id>Last || !data || n!=length(id)) return false;
@@ -152,13 +186,13 @@ public:
         result.masterValid=get32(Header::Master)==masterCrc();
         result.alertsValid=pair(Header::Alerts,AllAlerts,result.alerts);
         if(!result.alertsValid) result.alerts=AllAlerts;
-        const uint8_t state=get(Header::State);
-        result.clean=state==Header::Clean;
-        if(result.clean || state==Header::Preparing) {
+        const uint8_t status=state();
+        result.clean=status==Header::Clean;
+        if(result.clean || status==Header::Preparing) {
             // Preparing never writes feature bytes; during recovery any old
             // uncertain blocks were already put in the durable alert mask.
             result.uncertain=0;
-        } else if(state==Header::Writing) {
+        } else if(status==Header::Writing) {
             uint32_t mask;
             if(pair(Header::Intent,Active,mask) && mask) result.uncertain=mask;
         }
@@ -193,7 +227,7 @@ public:
     template<class Provider> bool commit(uint32_t mask,Provider& source) {
         uint32_t alerts;
         if(!mask || (mask & ~Active) || !headerValid()
-           || get(Header::State)!=Header::Clean
+           || state()!=Header::Clean
            || !pair(Header::Alerts,AllAlerts,alerts)
            || get32(Header::Master)!=masterCrc()) return false;
         uint8_t data[MaxPayload];
@@ -201,9 +235,9 @@ public:
         for(uint8_t id=1;id<=Last;++id) {
             if(!(mask & bit(id))) continue;
             const uint8_t n=length(id);
-            if(!readBlock(id,nullptr,n) || !source(id,data,n) || !validPayload(id,data,n)) return false;
-            for(uint8_t i=0;i<n;++i)
-                if(get(address(id)+PayloadOffset+i)!=data[i]) {changed |= bit(id);break;}
+            bool different=false;
+            if(!source(id,data,n) || !compareBlock(id,data,n,different)) return false;
+            if(different) changed |= bit(id);
         }
         if(!changed) return true;
         if(!begin(changed)) return false;
@@ -228,7 +262,7 @@ public:
             | ((!before.masterValid || !before.clean || !before.alertsValid) ? bit(Admin) : 0);
         if(!putPair(Header::Alerts,alerts)) return false;
         if(mask) {
-            if(!begin(mask)) return false;
+            if(!beginRepair(mask,before.clean)) return false;
             uint8_t data[MaxPayload];
             for(uint8_t id=1;id<=Last;++id) {
                 if(!(mask & bit(id))) continue;

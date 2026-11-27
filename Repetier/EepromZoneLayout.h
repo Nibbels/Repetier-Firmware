@@ -199,6 +199,7 @@ constexpr uint16_t IntentInverse = Base+18;
 constexpr uint16_t State = Base+22;
 constexpr uint16_t Alerts = Base+23;
 constexpr uint16_t AlertsInverse = Base+27;
+constexpr uint16_t StateInverse = Base+31;
 constexpr uint32_t Signature = 0xB7584652UL; // LE bytes 'R','F','X',0xB7
 constexpr uint8_t Clean = 0xA5;
 constexpr uint8_t Preparing = 0x3C;
@@ -206,6 +207,6 @@ constexpr uint8_t Writing = 0x5A;
 }
 static_assert(address(32) == End, "settings bank boundary");
 static_assert(address(Last) + SlotSize <= End, "feature slots fit");
-static_assert(Header::AlertsInverse+4 <= Base+SlotSize, "metadata confined to slot 00");
+static_assert(Header::StateInverse+1 == Base+SlotSize, "metadata confined to slot 00");
 }
 #endif

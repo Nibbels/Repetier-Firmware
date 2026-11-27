@@ -61,7 +61,6 @@ static void assertOutside(const Memory& a,const Memory& b) {
            && (p-address(blockOf(p)))>=PayloadOffset+length(blockOf(p)))
             assert(a.bytes[p]==b.bytes[p]);
     }
-    assert(a.bytes[Base+31]==b.bytes[Base+31]);
 }
 static bool sameBlock(Store& s,uint8_t id,Values& expected) {
     uint8_t a[MaxPayload],b[MaxPayload];const uint8_t n=length(id);
@@ -294,6 +293,35 @@ int main() {
     Memory pending=bad;Store ps(pending,Profile);assert(ps.repair(bit(BedSafety),factory));
     cuts(pending,[&](Store& s){return s.acknowledge(bit(BedSafety));},[&](Memory& m,bool){
         Store s(m,Profile);assert(cutoff(s)==0);
+    });
+    // A previous explicit change may have completed all payload/CRC/master
+    // writes but not committed its state pair. Repair must NEVER hide its
+    // uncertainty, even when a second power cut interrupts the repair.
+    Values higher=changed; higher.bed=120; higher.salt=99;
+    Memory trial=low;trial.resetCounts();Store ts(trial,Profile);
+    assert(ts.commit(pairMask,higher));const unsigned commitWrites=trial.writes;
+    Memory interrupted=low;interrupted.resetCounts();
+    interrupted.cut=commitWrites; // before final state-complement byte
+    Store is(interrupted,Profile);
+    try {(void)is.commit(pairMask,higher);assert(false);}catch(const PowerCut&){}
+    interrupted.resetCounts();
+    auto interruptedInfo=is.inspect();
+    assert(interruptedInfo.headerValid && !interruptedInfo.clean && interruptedInfo.uncertain);
+    assert(cutoff(is)==0);
+    const uint32_t recoveryMask=interruptedInfo.invalid|interruptedInfo.uncertain;
+    cuts(interrupted,[&](Store& s){return s.repair(recoveryMask,factory);},[&](Memory& m,bool done){
+        Store s(m,Profile);assert(cutoff(s)<=90);
+        const auto st=s.inspect();
+        if(!st.clean || !st.masterValid || !st.alertsValid || st.invalid || st.uncertain) {
+            assert(s.repair(st.invalid|st.uncertain,factory));
+        }
+        assert(cutoff(s)<=90);
+        uint8_t c=255;
+        assert(s.readBlock(BedSafety,&c,1) && c==0);
+        const auto after=s.inspect();
+        assert(after.clean && after.masterValid && !after.invalid && !after.uncertain);
+        assert(after.alerts&bit(BedSafety));
+        if(done) assert(st.clean && st.masterValid);
     });
     // Interrupted transaction with fully valid individual payload CRCs is
     // still uncertain. Repair must cover the entire durable intent.
