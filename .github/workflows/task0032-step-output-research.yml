@@ -23,6 +23,14 @@ jobs:
       EVIDENCE: firmware-evidence-${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
+      - name: Actual-source ECMP and nonblocking wake lifecycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/step-output"
+          c++ -std=c++11 -O2 -Wall -Wextra -Werror -I Repetier research/task0032-step-output/candidate-replay.cpp -o "$RUNNER_TEMP/candidate-replay"
+          "$RUNNER_TEMP/candidate-replay" | tee "$RUNNER_TEMP/step-output/candidate-replay.txt"
+          git grep -n -E 'extrusionCompensation\.|ExtrusionCompensation::|enable[XYZ]Stepper\(|Extruder::enable\(|enabledStepper\[|stepHomeCheck\(|ScanMove' -- Repetier > "$RUNNER_TEMP/step-output/actual-callers.txt"
       - name: Fetch canonical evidence for this exact test merge
         shell: bash
         run: |
@@ -46,6 +54,16 @@ jobs:
       - name: Trace four linked AVR images
         run: |
           python3 research/task0032-step-output/linked_timer1.py "$RUNNER_TEMP/firmware-evidence.zip" "$RUNNER_TEMP/transport.json" "$RUNNER_TEMP/step-output"
+      - uses: arduino/setup-arduino-cli@v2
+        with:
+          version: 1.2.2
+      - name: Install same pinned AVR core for counterfactual only
+        run: |
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+      - name: Compare linked Q23 arithmetic with and without explicit E pulse guards
+        run: |
+          python3 research/task0032-step-output/q23-linked.py --baseline "$RUNNER_TEMP/step-output" --out "$RUNNER_TEMP/step-output/q23" --tools "$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
