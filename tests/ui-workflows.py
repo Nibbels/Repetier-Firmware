@@ -71,7 +71,7 @@ def main():
 
     parser = (section(fmt, "void UIDisplay::parse(", "// Format a complete placeholder")
               + section(fmt, "void UIDisplay::renderField(", "        case 'a':"))
-    parser = parser.replace("    switch (c1) {", "    (void)ram; (void)ivalue; (void)fvalue;\n    switch (c1) {")
+    parser = parser.replace("    switch (c1) {", "    (void)ram; (void)allowMessageExpansion; (void)ivalue; (void)fvalue;\n    switch (c1) {")
     # AVR stores menu pointers in an unsigned int. The non-PIE host executable
     # has static menu addresses below INT_MAX; adapt only the pointer casts.
     ok = section(ui, "void UIDisplay::pushMenu(", "} // okAction") + "}\n"
@@ -241,8 +241,8 @@ struct UIDisplay {
     void moveZAction(int direction) { jog=direction; ++jogCalls; }
     void moveXAction(int direction) { jog=direction; ++jogCalls; }
     void moveYAction(int direction) { jog=direction; ++jogCalls; }
-    void parse(char*,bool);
-    void renderField(char,char,bool,int&,float&);
+    void parse(char*,bool,bool allowMessageExpansion=true);
+    void renderField(char,char,bool,bool,int&,float&);
     void navigateMenuItems(UIMenuEntry**,uint8_t,int8_t);
     void nextPreviousAction(int8_t);
     void changeSetting(int,int8_t);
