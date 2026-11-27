@@ -54,25 +54,6 @@ jobs:
       - name: Trace four linked AVR images
         run: |
           python3 research/task0032-step-output/linked_timer1.py "$RUNNER_TEMP/firmware-evidence.zip" "$RUNNER_TEMP/transport.json" "$RUNNER_TEMP/step-output"
-      - name: Reuse exact prior Q23 binaries for comparator-only correction
-        id: reuse
-        shell: bash
-        run: |
-          set -euo pipefail
-          prior=3520e5c20b83983c4b384f1091815034e0c78826
-          reuse=no
-          if git fetch --depth=1 origin "$prior" && git diff --quiet "$prior" HEAD -- Repetier tools/avr-motion-diagnostics research/task0032-step-output/ecmp-q23.h research/task0032-step-output/linked_timer1.py; then
-            if gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/15180560003/zip" > "$RUNNER_TEMP/prior-q23.zip"; then
-              echo "458732831c0f67863d53a410fc104f51f78b024c2d2e0513368dbeaed898ba45  $RUNNER_TEMP/prior-q23.zip" | sha256sum -c -
-              mkdir -p "$RUNNER_TEMP/prior-q23"
-              unzip -q "$RUNNER_TEMP/prior-q23.zip" 'q23/*/candidate.zip' 'q23/*/candidate.diff' -d "$RUNNER_TEMP/prior-q23"
-              test -f "$RUNNER_TEMP/prior-q23/q23/raw/candidate.zip"
-              test -f "$RUNNER_TEMP/prior-q23/q23/guarded/candidate.zip"
-              printf '%s\n' 'prior artifact 15180560003; tested merge d350b449d98b39488d432664aa0a785e378ce908; verified digest; identical production source and candidate header' > "$RUNNER_TEMP/step-output/q23-reuse.txt"
-              reuse=yes
-            fi
-          fi
-          echo "available=$reuse" >> "$GITHUB_OUTPUT"
       - uses: arduino/setup-arduino-cli@v2
         with:
           version: 1.2.2
@@ -80,18 +61,11 @@ jobs:
         run: |
           arduino-cli core update-index
           arduino-cli core install arduino:avr@1.8.6
-      - name: Compare linked Q23 arithmetic with and without explicit E pulse guards
+      - name: Minimal fixed pulse margins and queue-only mask split
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "${{ steps.reuse.outputs.available }}" == yes ]]; then
-            python3 research/task0032-step-output/q23-linked.py --baseline "$RUNNER_TEMP/step-output" --out "$RUNNER_TEMP/step-output/q23" --reuse "$RUNNER_TEMP/prior-q23/q23"
-          else
-            python3 research/task0032-step-output/q23-linked.py --baseline "$RUNNER_TEMP/step-output" --out "$RUNNER_TEMP/step-output/q23" --tools "$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin"
-          fi
-      - name: Queue-only interrupt mask split (guarded Q23)
-        run: |
-          python3 research/task0032-step-output/q23-linked.py --baseline "$RUNNER_TEMP/step-output" --out "$RUNNER_TEMP/step-output/q23" --variant narrow --tools "$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin"
+          python3 research/task0032-step-output/q23-linked.py --baseline "$RUNNER_TEMP/step-output" --out "$RUNNER_TEMP/step-output/q23" --variant minimal --variant narrow --tools "$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
