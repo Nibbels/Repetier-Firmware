@@ -6,9 +6,6 @@ namespace GCodeCommands {
 namespace Calibration {
 
 void disableBedCompensation() {
-    if (Printer::debugInfo()) {
-        Com::printFLN(PSTR("M3000: disabling z compensation"));
-    }
     queueTask(QueueTask::DisableZCompensation);
 }
 
@@ -77,9 +74,7 @@ void selectBedMatrix(GCode* pCommand) {
         }
     }
 
-    if (Printer::debugInfo()) {
-        Com::printFLN(PSTR("M3009: currently active heat bed z matrix: "), g_nActiveHeatBed);
-    }
+    Com::printFLN(PSTR("M3009: currently active heat bed z matrix: "), g_nActiveHeatBed);
 }
 
 void reportBedMatrix(GCode* pCommand) {
@@ -122,9 +117,7 @@ void reportBedMatrix(GCode* pCommand) {
     }
 
     if (g_ZCompensationMatrix[0][0] == EEPROM_FORMAT) {
-        if (Printer::debugInfo()) {
-            Com::printFLN(PSTR("M3013: current heat bed z-compensation matrix: "));
-        }
+        Com::printFLN(PSTR("M3013: current heat bed z-compensation matrix: "));
         outputCompensationMatrix(format);
     } else {
         if (Printer::debugErrors()) {

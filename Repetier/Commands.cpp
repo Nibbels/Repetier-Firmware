@@ -271,8 +271,6 @@ void Commands::adjustFanMode(uint8_t output_mode) {
 }
 
 void Commands::reportPrinterUsage() {
-    if (!Printer::debugInfo())
-        return;
     Com::printF(Com::tPrintedFilament, Printer::printUsage.filamentMetres(), 2);
     Com::printF(Com::tSpacem);
 

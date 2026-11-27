@@ -53,9 +53,7 @@ void reportPosition() {
 }
 
 void reportFirmware() {
-    if (Printer::debugInfo()) {
-        Com::printFLN(Com::tFirmware);
-    }
+    Com::printFLN(Com::tFirmware);
     //		Com::cap(PSTR("EEPROM:1"));
     //#else
     //		Com::cap(PSTR("EEPROM:0"));
@@ -72,10 +70,6 @@ void setPanelMessage(GCode* com) {
 }
 
 void reportEndstops() {
-    if (!Printer::debugInfo()) {
-        return;
-    }
-
     Commands::waitForMotion(Commands::MotionWait::QueueAndZ, Commands::PauseWait::Resume);
 
     Com::printF(Com::tXMinColon);

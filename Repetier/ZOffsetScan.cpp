@@ -504,15 +504,6 @@ void configureZOffsetScan(GCode* pCommand) {
                 settings.point.x = nTempUC;
 
 
-                if (Printer::debugInfo()) {
-                    Com::printF(PSTR("M3900/M3901: CHANGED X ZOS Testposition: "), nTempUC);
-                    if (heatBedScanXStartMm == 0) {
-                        Com::printF(PSTR(" [Z-Matrix index] X={1.."), BedMatrix::maxIndex(X_AXIS) - 1);
-                    } else {
-                        Com::printF(PSTR(" [Z-Matrix index] X={2.."), BedMatrix::maxIndex(X_AXIS) - 1);
-                    }
-                    Com::printFLN(PSTR("}"));
-                }
             }
 
             if (pCommand->hasY()) {
@@ -531,15 +522,6 @@ void configureZOffsetScan(GCode* pCommand) {
                 settings.point.y = nTempUC;
 
 
-                if (Printer::debugInfo()) {
-                    Com::printF(PSTR("M3900/M3901: CHANGED Y ZOS Testposition: "), nTempUC);
-                    if (heatBedScanYStartMm == 0) {
-                        Com::printF(PSTR(" [Z-Matrix index] Y={1.."), BedMatrix::maxIndex(Y_AXIS) - 1);
-                    } else {
-                        Com::printF(PSTR(" [Z-Matrix index] Y={2.."), BedMatrix::maxIndex(Y_AXIS) - 1);
-                    }
-                    Com::printFLN(PSTR("}"));
-                }
             }
 
             if (pCommand->hasS()) {

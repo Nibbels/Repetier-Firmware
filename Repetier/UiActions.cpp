@@ -488,9 +488,6 @@ void UIDisplay::mainSwitchCase(int action) {
                 showError(ui_text_manual, PSTR("Matrix save failed"));
                 break;
             }
-            if (Printer::debugInfo()) {
-                Com::printFLN(PSTR("Manual Input: the heat bed compensation matrix has been saved"));
-            }
             showInformation((void*)ui_text_manual, (void*)ui_text_saving_success);
         } else {
             showInformation((void*)ui_text_manual, (void*)ui_text_saving_needless);

@@ -216,8 +216,6 @@ void setCaseLight(GCode* com) {
 #if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
 void turnOnCaseFan() {
     CaseFan::turnOn();
-    if (Printer::debugInfo())
-        Com::printFLN(PSTR("M3120: fan on"));
 }
 
 void scheduleCaseFanOff(GCode* pCommand) {
@@ -230,15 +228,7 @@ void scheduleCaseFanOff(GCode* pCommand) {
         CaseFan::setOffDelay(static_cast<uint32_t>(seconds) * 1000UL);
     }
 
-    const bool delayed = CaseFan::requestOff(pCommand->hasP());
-    if (Printer::debugInfo()) {
-        if (delayed) {
-            Com::printF(PSTR("M3121: fan off in "), CaseFan::offDelay() / 1000UL);
-            Com::printFLN(PSTR(" [s]"));
-        } else {
-            Com::printFLN(PSTR("M3121: fan off"));
-        }
-    }
+    CaseFan::requestOff(pCommand->hasP());
 }
 #endif
 

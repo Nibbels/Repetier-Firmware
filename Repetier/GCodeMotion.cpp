@@ -175,17 +175,6 @@ void setManualZOffset(GCode* pCommand) {
     }
 
     Printer::zOffset.setManualMicrometers(nTemp, Printer::stepsPerMm(Z_AXIS));
-    if (Printer::debugInfo()) {
-        if (inMillimeters) {
-            Com::printF(PSTR("M3006: new static z-offset: "), pCommand->Z);
-            Com::printF(PSTR(" [mm]"));
-        } else {
-            Com::printF(PSTR("M3006: new static z-offset: "), nTemp);
-            Com::printF(PSTR(" [um]"));
-        }
-        Com::printF(PSTR(" / "), Printer::zOffset.effectiveSteps());
-        Com::printFLN(PSTR(" [steps]"));
-    }
     EEPROM::storeManualZOffset();
 }
 
@@ -284,21 +273,8 @@ void setEmergencyPauseDigits(GCode* pCommand) {
     const bool disable = nMin == 0 && nMax == 0;
     if (disable || nMin < nMax) {
         Printer::pressureProtection.setPauseLimits({int16_t(nMin), int16_t(nMax)});
-        if (Printer::debugInfo()) {
-            if (disable) {
-                Com::printFLN(PSTR("M3075: emergency pause disabled"));
-            } else {
-                Com::printF(PSTR("M3075: new min: "), (int)nMin);
-                Com::printF(PSTR(" [digits], new max: "), (int)nMax);
-                Com::printFLN(PSTR(" [digits]"));
-            }
-        }
     } else {
-        if (Printer::debugErrors()) {
-            Com::printF(PSTR("M3075: min max ("), (int)nMin);
-            Com::printF(Com::tSlash, (int)nMin);
-            Com::printFLN(PSTR(") invalide"));
-        }
+        Com::printErrorFLN(PSTR("M3075: invalid pause band"));
     }
 }
 

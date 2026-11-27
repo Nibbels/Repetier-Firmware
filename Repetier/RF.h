@@ -410,7 +410,6 @@ bool saveActiveBedMatrix();
 extern short readAveragePressure(short* pnAveragePressure);
 
 extern void restoreDefaultScanParameters(void);
-extern void outputScanParameters(void);
 
 extern void recalculateZCompensation(void);
 extern void loopFeatures(void);

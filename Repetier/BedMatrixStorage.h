@@ -266,8 +266,6 @@ static bool clearCompensationMatrix(unsigned int address) {
         Com::printFLN(PSTR("clearMatrix(): EEPROM write failed"));
         return false;
     }
-    if (Printer::debugInfo())
-        Com::printFLN(PSTR("clearMatrix(): matrix cleared"));
     return true;
 }
 

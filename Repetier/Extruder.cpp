@@ -170,10 +170,8 @@ void Extruder::setTemperatureForExtruder(float temperatureInCelsius, uint8_t ext
     if (temperatureInCelsius >= EXTRUDER_FAN_COOL_TEMP)
         extruder[extr].coolerPWM = extruder[extr].coolerSpeed;
 
-    if (Printer::debugInfo()) {
-        Com::printF(Com::tTargetExtr, extr, 0);
-        Com::printFLN(Com::tColon, temperatureInCelsius, 0);
-    }
+    Com::printF(Com::tTargetExtr, extr, 0);
+    Com::printFLN(Com::tColon, temperatureInCelsius, 0);
 
 #if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
     CaseFan::updateFromHotendTargets();
@@ -213,9 +211,7 @@ void Extruder::setHeatedBedTemperature(float temperatureInCelsius) {
 
     heatedBedController.setTargetTemperature(temperatureInCelsius);
 
-    if (Printer::debugInfo()) {
-        Com::printFLN(Com::tTargetBedColon, heatedBedController.targetTemperatureC, 0);
-    }
+    Com::printFLN(Com::tTargetBedColon, heatedBedController.targetTemperatureC, 0);
 } // setHeatedBedTemperature
 
 float Extruder::getHeatedBedTemperature() {

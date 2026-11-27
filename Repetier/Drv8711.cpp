@@ -265,8 +265,4 @@ void setExtruderCurrent(uint8_t nr, uint8_t current) {
 
     writeMotorCurrent(channelForAxis(E_AXIS + nr), current);
 
-    if (Printer::debugInfo()) {
-        Com::printF(PSTR("Extruder"), (short)nr);
-        Com::printFLN(PSTR(" = "), (uint32_t)current);
-    }
 }
