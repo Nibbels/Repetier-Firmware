@@ -3,6 +3,7 @@
 #include "EepromZoneCodec.h"
 #include "EepromZoneValidation.h"
 #include "RgbLighting.h"
+#include "StepExecutor.h"
 
 namespace EepromZones {
 namespace {

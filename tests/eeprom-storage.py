@@ -32,7 +32,7 @@ def main():
         work = pathlib.Path(temp)
         (work / "storage-source.inc").write_text(body, encoding="utf-8")
         live = (FW / "EepromZoneLive.cpp").read_text(encoding="utf-8")
-        (work / "live-settings.inc").write_text(live.replace('#include "Repetier.h"\n', "", 1), encoding="utf-8")
+        (work / "live-settings.inc").write_text(live.replace('#include "Repetier.h"\n', "", 1).replace('#include "StepExecutor.h"\n', "", 1), encoding="utf-8")
         zone_exe = work / "zones"
         subprocess.run(["c++", "-std=c++11", "-O2", "-Wall", "-Wextra", "-Werror",
                         "-I", str(FW), str(ROOT / "tests" / "eeprom-zones.cpp"),
