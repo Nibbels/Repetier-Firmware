@@ -103,13 +103,13 @@ def create_fixture(d,capacity,instrument,ledger=False):
     header+=section(hal,"    static inline unsigned long U16SquaredToU32(","\n    static inline speed_t ComputeV(")+"\n};\n"
     header+='\n#define private public\n#include "RMath.h"\n#include "Printer.h"\n#include "motion.h"\n#include "MoveQueue.h"\n#undef private\n'
     header+=TRACE
-    if ledger: header+="\\nvoid researchLedgerHook(PrintLine&);\\n"
+    if ledger: header+="\nvoid researchLedgerHook(PrintLine&);\n"
     (d/"Repetier.h").write_text(header)
     (d/"Printer.h").write_text(PRINTER)
     planner=load("MotionPlanner.cpp")
     if ledger:
         assert planner.count("move.markStepProfileReady();")==1
-        planner=planner.replace("move.markStepProfileReady();","move.markStepProfileReady();\\n    researchLedgerHook(move);")
+        planner=planner.replace("move.markStepProfileReady();","move.markStepProfileReady();\n    researchLedgerHook(move);")
     (d/"MotionPlanner.cpp").write_text(stage_instrument(planner) if instrument else planner)
     motion=load("motion.cpp")
     geometry='#include "Repetier.h"\n'+section(motion,"void PrintLine::setAxisSteps(","\n/** \\brief Put a move")+section(motion,"void PrintLine::fitRampToRemainingSteps()","\n/** \\brief Check if move is new.")
