@@ -32,10 +32,21 @@ def configure(mod,img,kind,rate,negative=False,correction=0,unified=True,start=0
     c.put(0x88,3000,2)
     if kind=="idle":c.put(img.addr("PrintLine::queue")+24*103,0,5)
     if unified:
-        state=unique(img,"zCorrectionE.lto_priv.");assert img.sizes[state]==41
-        c.symput(state,256000,4,7)
-        c.symput(state,11520*11520//256000,4,11)
-        c.symput(state,11520,2,15)
+        state=unique(img,"zCorrectionE.lto_priv.")
+        A=256000;cap=11520*11520//A
+        if img.sizes[state]==41:
+            c.symput(state,A,4,7)
+            c.symput(state,cap,4,11)
+            c.symput(state,11520,2,15)
+        elif img.sizes[state]==43:
+            import importlib.util
+            spec=importlib.util.spec_from_file_location("inverse_root",pathlib.Path(__file__).with_name("inverse-root-research.py"))
+            ir=importlib.util.module_from_spec(spec);spec.loader.exec_module(ir)
+            c.symput(state,A,4,5)
+            c.symput(state,cap,4,9)
+            c.symput(state,A*29//64,4,13)
+            c.symput(state,ir.table_values(*ir.norm(A*cap))[1],4,17)
+        else:raise AssertionError((state,img.sizes[state]))
         c.symput(unique(img,"motionEpoch"),(start-3001)&U32,4)
         c.symput(unique(img,"nominalDeadline"),start,4)
     else:c.symput("stepperWait",0,4)
@@ -132,6 +143,7 @@ def run_scenario(mod,img,kind,rate,scenario,start=0):
         physical_correction_rises=len(rises),end_applied=zfield(c,16),elapsed_ticks=epoch-start,
         max_mask=max(e["max_mask"] for e in events),max_cycles=max(e["cycles"] for e in events),
         mean_cycles=round(statistics.mean(e["cycles"] for e in events),3),
+        total_cycles=sum(e["cycles"] for e in events),
         max_stack=max(e["stack"] for e in events),
         min_gap=min((b-a for a,b in zip(rises,rises[1:])),default=None))
 
