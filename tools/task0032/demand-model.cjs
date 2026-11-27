@@ -44,7 +44,18 @@ function evaluate(row,speed,group,p){
   const requested=row.length/speed, duration=Math.max(requested,row.n*512/CPU);
   const calls=row.n?Math.ceil(row.n/group):0;
   const stepCost=(anchors[row.cls]-p.fixed)/2;
-  const motion=row.n*stepCost+calls*(p.fixed+p.wrapper);
+  let motion=row.n*stepCost+calls*(p.fixed+p.wrapper);
+  // Optional paired full-vector measurements from 0032-S. Group 1 and 2
+  // are exact for the measured vector only; other vectors/group sizes
+  // are sensitivity estimates. No duplicate wrapper charge.
+  if(p.activeCyclesByClass){
+    const pair=p.activeCyclesByClass[row.cls];
+    if(!Array.isArray(pair)||pair.length!==2||!pair.every(Number.isFinite)||
+       !(pair[0]>0&&pair[1]>=pair[0]&&pair[1]<=2*pair[0]))
+      throw Error("invalid full-vector cycle pair "+row.cls);
+    const perStep=pair[1]-pair[0], overhead=2*pair[0]-pair[1];
+    motion=row.n*perStep+calls*overhead;
+  }
   const ackBytes=p.ackBytes==="numbered"?row.numberedAckBytes:p.ackBytes;
   if(!Number.isInteger(ackBytes)||ackBytes<0)throw Error("bad ACK byte count");
   // Historical defaults reproduce Task0030 screens. New studies supply the
@@ -130,7 +141,12 @@ function selfTest(){
   check(JSON.stringify(b1.map(x=>x.d))===JSON.stringify(b2.map(x=>x.d))&&JSON.stringify(b1.map(x=>x.d))===JSON.stringify(geometry(wireSpec).map(x=>x.d)),"wire format independent of steps");
   const full=evaluate({...row,bytes:40},1,2,{...defaults,receiverCycles:12000});
   check(full.receive===12000&&full.fore===defaults.planner+12000,"complete receiver replaces incomplete cost");
-  return "18 groups of checks passed";
+  const measured={...p,activeCyclesByClass:{X:[992,1258]}};
+  check(evaluate(row,1,1,measured).motion===1984&&evaluate(row,1,2,measured).motion===1258,"paired full-vector exact anchors");
+  check(evaluate({...row,n:5},1,2,measured).motion===2*1258+992,"paired full-vector tail accounting");
+  let rejected=false;try{evaluate(row,1,2,{...p,activeCyclesByClass:{X:[992,2000]}})}catch(e){rejected=true;}
+  check(rejected,"reject invalid measured pair");
+  return "21 groups of checks passed";
 }
 function matrix(){
   const out=[];
