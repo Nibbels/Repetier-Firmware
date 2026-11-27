@@ -63,6 +63,7 @@ def main():
     # Dense short moves require preparation on every move, even if each
     # move fits one chord. Reuse measured path0 cost, no parser/planner cost.
     workloads["dense_short_moves"]=workloads["path0"]*128
+    if "path8" in workloads:workloads["dense_short_moves_cached"]=workloads["path8"]*128
     results=[]
     for name,rows in workloads.items():
         for rate in (3048,9143,15238):
