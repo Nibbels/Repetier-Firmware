@@ -90,6 +90,11 @@ def source_changes(root):
     new=fw/"LcdPendingFrame.h"
     assert not new.exists()
     new.write_bytes((HERE/"lcd-pending-frame.h").read_bytes())
+    # Preserve the second supported IDE's explicit header manifest.
+    edit(fw/"Repetier.vcxproj",lambda s:once(s,'    <ClInclude Include="UsbSerial.h" />',
+        '    <ClInclude Include="LcdPendingFrame.h" />\n    <ClInclude Include="UsbSerial.h" />'))
+    edit(fw/"Repetier.vcxproj.filters",lambda s:once(s,'    <ClInclude Include="UsbSerial.h">',
+        '    <ClInclude Include="LcdPendingFrame.h">\n      <Filter>Header Files</Filter>\n    </ClInclude>\n    <ClInclude Include="UsbSerial.h">'))
     def header(s):
         s=once(s,'#include "DisplayModes.h"','#include "DisplayModes.h"\n#include "LcdPendingFrame.h"')
         s=once(s,"    void refreshPage();","    void refreshPage();\n    void serviceDisplay();")
@@ -385,6 +390,22 @@ constexpr uint8_t UI_FLAG_SLOW_ACTION_RUNNING = 4;""")
         UIDisplay busy;""")
         return s
     edit(tests/"task0034-panel-dispatch.py",panel)
+
+    # This replay extracts the actual periodic pump, so its mock needs
+    # the new diagnostic-only service. Keep every original heater and
+    # ordinary-service assertion, and explicitly count one LCD visit.
+    def temperature(s):
+        s=once(s,"static unsigned diagnosticRefreshes, ordinaryServices;",
+               "static unsigned diagnosticRefreshes, ordinaryServices, displayServices;")
+        s=once(s,"    void refreshPage() {++diagnosticRefreshes;}",
+               "    void refreshPage() {++diagnosticRefreshes;}\n    void serviceDisplay() {++displayServices;}")
+        s=once(s,"const auto initialVisits=visits,initialOrdinary=ordinaryServices,initialRefresh=diagnosticRefreshes;",
+               "const auto initialVisits=visits,initialOrdinary=ordinaryServices,initialRefresh=diagnosticRefreshes;\n        const auto initialDisplay=displayServices;")
+        s=once(s,"            assert(diagnosticRefreshes==initialRefresh+n+1);",
+               "            assert(diagnosticRefreshes==initialRefresh+n+1);\n            assert(displayServices==initialDisplay+n+1);")
+        return once(s,"        assert(diagnosticLines>2&&ordinaryServices==initialOrdinary);",
+                    "        assert(diagnosticLines>2&&ordinaryServices==initialOrdinary);\n        assert(displayServices==initialDisplay+200);")
+    edit(tests/"temperature-control-replay.py",temperature)
 
 
 def main():
