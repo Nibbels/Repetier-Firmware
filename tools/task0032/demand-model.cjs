@@ -52,7 +52,12 @@ function evaluate(row,speed,group,p){
   const uart=row.bytes*p.rxIsr+ackBytes*p.txIsr+p.txEmptyPerCommand;
   // Task0028: 20 B incomplete ASCII 1799 cycles; 40 B 3499.
   // Single fragment approximation; complete parse/plan is ADDITIONAL.
-  const receive=row.bytes*p.rxByte+p.rxCall, fore=p.planner+receive;
+  // A measured complete readFromSerial path includes frame decode, admission
+  // and ACK enqueue, but not ISR wire service or motion planning. Optional
+  // fixed receiverCycles replaces (does not add to) the old partial estimate.
+  const receive=p.receiverCycles??(row.bytes*p.rxByte+p.rxCall);
+  if(!Number.isFinite(receive)||receive<0)throw Error("bad receiver cost");
+  const fore=p.planner+receive;
   const budget=CPU*duration*(1-p.reserve);
   return {duration,calls,motion,uart,fore,receive,ackBytes,feasible:motion+uart+fore<=budget+1e-8,
     packedSteps:row.n>0&&group>1?row.n-(row.n%group===1?1:0):0};
@@ -123,7 +128,9 @@ function selfTest(){
   const b1=geometry({...wireSpec,packetFormat:"binary-v1"}),b2=geometry({...wireSpec,packetFormat:"binary-v2"}),mix=geometry({...wireSpec,packetFormat:"mixed"});
   check(b1.reduce((s,x)=>s+x.bytes,0)===11404&&b2.reduce((s,x)=>s+x.bytes,0)===13204&&mix.reduce((s,x)=>s+x.bytes,0)===12304,"binary replay byte totals");
   check(JSON.stringify(b1.map(x=>x.d))===JSON.stringify(b2.map(x=>x.d))&&JSON.stringify(b1.map(x=>x.d))===JSON.stringify(geometry(wireSpec).map(x=>x.d)),"wire format independent of steps");
-  return "17 groups of checks passed";
+  const full=evaluate({...row,bytes:40},1,2,{...defaults,receiverCycles:12000});
+  check(full.receive===12000&&full.fore===defaults.planner+12000,"complete receiver replaces incomplete cost");
+  return "18 groups of checks passed";
 }
 function matrix(){
   const out=[];
