@@ -32,7 +32,7 @@ def configure(mod,img,kind,rate,negative=False,correction=0,unified=True,start=0
     c.put(0x88,3000,2)
     if kind=="idle":c.put(img.addr("PrintLine::queue")+24*103,0,5)
     if unified:
-        state=unique(img,"::zCorrection");assert img.sizes[state]==41
+        state=unique(img,"zCorrectionE.lto_priv.");assert img.sizes[state]==41
         c.symput(state,256000,4,7)
         c.symput(state,11520*11520//256000,4,11)
         c.symput(state,11520,2,15)
