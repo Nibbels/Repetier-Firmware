@@ -21,6 +21,7 @@ struct Memory {
 struct BusyDevice {
     std::array<uint8_t,4096> bytes;
     bool irq=true, stuck=false;
+    bool* injectedFault=nullptr;
     bool& owner;
     uint32_t clock=0xfffffff0UL, readyAt=clock;
     unsigned programs=0, services=0, nestedRejected=0;
@@ -38,8 +39,113 @@ struct BusyDevice {
         SessionGuard nested(owner);
         assert(!nested.entered() && owner);++nestedRejected;
         ++clock;++services;
+        if(injectedFault)*injectedFault=true;
     }
 };
+// Exercise the actual foreground recovery/commission/pressure functions
+// with the production checked session and a deterministic EEPROM adapter.
+namespace Printer {
+bool blockAll=false, locked=false;
+struct Job {
+    bool fault=false,busy=false;
+    bool isBusy()const{return busy;}
+    bool commandsBlocked()const{return fault;}
+    bool emergencyLocked()const{return fault;}
+} printJob;
+struct Pause {bool isPaused()const{return false;}} pause;
+bool needsCMPwait(){return false;}
+void lockMovement(){locked=true;}
+}
+namespace PrintLine {
+bool hasLines(){return false;}
+bool directMoveActive(){return false;}
+}
+bool isAnyScanRunning(){return false;}
+struct TemperatureController {
+    float targetTemperatureC=0;
+    uint8_t cutoff=0;
+    void setTargetTemperature(float v){targetTemperatureC=v;}
+    bool setBedEmergencyCutoff(uint8_t v){cutoff=v;return true;}
+    static bool autotuneActive(){return false;}
+};
+#define NUM_TEMPERATURE_LOOPS (NUM_EXTRUDER+1)
+TemperatureController simulatedHeaters[NUM_TEMPERATURE_LOOPS];
+TemperatureController* tempController[NUM_TEMPERATURE_LOOPS];
+TemperatureController& heatedBedController=simulatedHeaters[NUM_EXTRUDER];
+namespace HAL { uint8_t outputDuty(uint8_t){return 0;} }
+namespace Com {
+    void printErrorFLN(const char*){}
+    template<class... T> void printFLN(T...){}
+}
+#define PSTR(x) x
+#define UI_STATUS_UPD(x) do{}while(0)
+void showInformation(const void*,const void*,const void*){}
+struct EEPROM {
+    static bool settingsReady();
+    static bool recoveryPending();
+    static bool lastOperationSucceeded();
+    static const void* recoveryDialogTag();
+    static void reportRecovery();
+    static bool acknowledgeRecovery();
+    static bool commissionBedCutoff(uint8_t);
+    static bool storePressureLimits(bool,int32_t,int32_t,bool,bool);
+};
+namespace {
+bool busyMenu=false,loaded=false,lastOk=false;
+volatile bool outputsAdmitted=false;
+uint32_t pending=AllAlerts;
+constexpr uint32_t OrdinaryAlerts=AllAlerts&~blockBit(BedSafety);
+BusyDevice menuDevice(busyMenu);
+Session<BusyDevice> session(){return Session<BusyDevice>(menuDevice,busyMenu,configuredProfile());}
+}
+#include "runtime-menu.inc"
+
+static void menuRuntimeReplay(FactoryDefaults& defaults) {
+    for(uint8_t h=0;h<NUM_TEMPERATURE_LOOPS;++h)tempController[h]=&simulatedHeaters[h];
+    auto s=session();Inspection state;
+    assert(s.restore(defaults,state)==Result::Ok);
+    loaded=true;pending=state.alerts;
+    assert(EEPROM::recoveryPending()&&!EEPROM::settingsReady());
+    assert(!EEPROM::commissionBedCutoff(120) && !heatedBedController.cutoff);
+    Printer::printJob.busy=true;
+    assert(!EEPROM::acknowledgeRecovery());
+    Printer::printJob.busy=false;
+    assert(EEPROM::acknowledgeRecovery() && EEPROM::settingsReady());
+    assert(!heatedBedController.cutoff);
+    assert(!EEPROM::commissionBedCutoff(39));
+    assert(!EEPROM::commissionBedCutoff(151));
+    assert(EEPROM::commissionBedCutoff(100) && heatedBedController.cutoff==100);
+    const unsigned before=menuDevice.programs;
+    // A volatile live endpoint must not allow a contradictory durable pair.
+    assert(!EEPROM::storePressureLimits(false,EMERGENCY_PAUSE_DIGITS_MAX+1L,0,true,false));
+    assert(!EEPROM::storePressureLimits(true,65536L,0,true,false));
+    assert(!EEPROM::storePressureLimits(true,0,0,true,false));
+    assert(EEPROM::settingsReady() && menuDevice.programs==before);
+    assert(EEPROM::storePressureLimits(false,-6000,6000,true,true));
+    const unsigned writes=menuDevice.programs;
+    assert(!EEPROM::storePressureLimits(false,6500,0,true,false));
+    assert(EEPROM::settingsReady() && menuDevice.programs==writes);
+    assert(EEPROM::storePressureLimits(false,-5000,0,true,false));
+    uint8_t data[MaxPayload];uint32_t alerts=AllAlerts;
+    assert(s.read(Pressure,data,length(Pressure),alerts)==Result::Ok);
+    BlockDecoder d(Pressure,data,length(Pressure));
+    assert(int32_t(d.u32(Field::F_RF_EMERGENCYPAUSEDIGITSMIN))==-5000);
+    assert(int32_t(d.u32(Field::F_RF_EMERGENCYPAUSEDIGITSMAX))==6000);
+    // Fault injected while EEPROM programming is in progress. Even if the
+    // confirmed write completes, the bed must remain inhibited in this boot.
+    menuDevice.injectedFault=&Printer::printJob.fault;
+    assert(!EEPROM::commissionBedCutoff(110) && !heatedBedController.cutoff);
+    assert(Printer::printJob.fault && !EEPROM::settingsReady());
+    menuDevice.injectedFault=nullptr;
+    Printer::printJob.fault=false;
+    assert(s.restore(defaults,state,true)==Result::Ok);
+    loaded=true;pending=state.alerts;outputsAdmitted=false;
+    menuDevice.injectedFault=&Printer::printJob.fault;
+    assert(!EEPROM::acknowledgeRecovery() && !EEPROM::settingsReady());
+    assert(Printer::printJob.fault && !heatedBedController.cutoff);
+    menuDevice.injectedFault=nullptr;
+    puts("Actual menu recovery, pressure validation and thermal-fault publication: PASS");
+}
 static void sessionReplay(FactoryDefaults& defaults) {
     bool busy=false;
     BusyDevice dev(busy);
@@ -337,6 +443,7 @@ int main(){
     integerRangeReplay();
     FactoryDefaults defaults(1.0f,5,true,false);
     sessionReplay(defaults);
+    menuRuntimeReplay(defaults);
     Memory io;Storage<Memory> store(io,configuredProfile());
     assert(store.initialize(defaults));
     const auto state=store.inspect();

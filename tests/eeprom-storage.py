@@ -33,6 +33,15 @@ def main():
         (work / "storage-source.inc").write_text(body, encoding="utf-8")
         live = (FW / "EepromZoneLive.cpp").read_text(encoding="utf-8")
         (work / "live-settings.inc").write_text(live.replace('#include "Repetier.h"\n', "", 1).replace('#include "StepExecutor.h"\n', "", 1), encoding="utf-8")
+        runtime = (FW / "EepromZoneRuntime.cpp").read_text(encoding="utf-8")
+        def section(first, last):
+            start = runtime.index(first)
+            return runtime[start:runtime.index(last, start)]
+        (work / "runtime-menu.inc").write_text(
+            section("bool idle() {", "bool persist(const Patch*")
+            + section("bool EEPROM::settingsReady()", "void EEPROM::init()")
+            + section("bool EEPROM::storePressureLimits(", "void EEPROM::storeMicrostepConfiguration("),
+            encoding="utf-8")
         zone_exe = work / "zones"
         subprocess.run(["c++", "-std=c++11", "-O2", "-Wall", "-Wextra", "-Werror",
                         "-I", str(FW), str(ROOT / "tests" / "eeprom-zones.cpp"),
@@ -57,7 +66,7 @@ def main():
                 flags += ["-DNUM_EXTRUDER=1", "-DEXT0_EXTRUDER_COOLER_PIN=X44_PIN"]
             default_exe = work / "zone-defaults"
             subprocess.run(["c++", "-std=c++11", "-O2", "-Wall", "-Wextra", "-Werror",
-                            "-I", str(FW), *flags, str(ROOT / "tests" / "eeprom-zone-defaults.cpp"),
+                            "-I", str(FW), "-I", str(work), *flags, str(ROOT / "tests" / "eeprom-zone-defaults.cpp"),
                             "-o", str(default_exe)], check=True)
             subprocess.run([str(default_exe)], check=True)
             exe = work / "replay"

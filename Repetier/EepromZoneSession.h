@@ -59,8 +59,7 @@ public:
         return saveChecked(io,store,mask,proposed);
     }
     // Read one checked block without recovery, unrelated payload reads or
-    // write side effects. In particular early UART setup can fall back to
-    // the configured baud rather than trust a corrupt/foreign image.
+    // write side effects. The application UART rate is independent of EEPROM.
     Result read(uint8_t id,uint8_t* data,uint8_t n,uint32_t& alerts) {
         SessionGuard guard(busy_);
         if(!guard.entered()) return Result::Busy;

@@ -101,6 +101,7 @@ bool loadFull(bool reset,bool startup) {
     if(!accept(s.load(consumer,state)))return false;
     if(Printer::printJob.emergencyLocked()){lastOk=false;return false;}
     live.finishMotion();
+    if(Printer::printJob.emergencyLocked()){lastOk=false;return false;}
     pending=state.alerts;
     const uint8_t cutoff=live.bedCutoff();
     if(cutoff && !heatedBedController.setBedEmergencyCutoff(cutoff)){
@@ -189,6 +190,11 @@ bool EEPROM::acknowledgeRecovery() {
     uint8_t cutoff=0;uint32_t alerts=AllAlerts;
     if(!accept(s.read(BedSafety,&cutoff,1,alerts)))return false;
     pending=alerts;
+    // The byte transport can service a terminal thermal fault while
+    // committing the operator's acknowledgment. Never reopen admission.
+    if(!idle() || !heatersOff()) {
+        lastOk=false;outputsAdmitted=false;return false;
+    }
     outputsAdmitted=loaded && !(pending&OrdinaryAlerts) && !Printer::blockAll;
     reportRecovery();
     return !(pending&OrdinaryAlerts);
@@ -202,7 +208,12 @@ bool EEPROM::commissionBedCutoff(uint8_t cutoff) {
     uint8_t actual=0;uint32_t alerts=AllAlerts;
     if(!accept(s.read(BedSafety,&actual,1,alerts)))return false;
     pending=alerts;
-    if(actual!=cutoff || (alerts&blockBit(BedSafety)) || !heatedBedController.setBedEmergencyCutoff(actual)) {
+    // A durable write is not authorization to re-arm after a terminal
+    // thermal fault during the EEPROM wait/readback.
+    if(!idle() || !heatersOff()) {
+        lastOk=false;outputsAdmitted=false;return false;
+    }
+    if(actual!=cutoff || (alerts&AllAlerts) || !heatedBedController.setBedEmergencyCutoff(actual)) {
         failSettings(Result::NeedsRecovery);return false;
     }
     return true;
