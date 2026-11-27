@@ -270,41 +270,21 @@ void finishMotion() {
 }
 
 void setStepperCurrent(GCode* com) {
-    if (com->hasS()) {
-        uint8_t current = com->S;
-        if (current > 150) {
-            return;
-        }
-        if (current < MOTOR_CURRENT_MIN) {
-            return;
-        }
-
-        uint8_t steppernr = 255; //fails
-        if (com->hasP()) {
-            steppernr = (uint8_t)com->P;
-        }
-        if (com->hasX()) {
-            steppernr = 0;
-        }
-        if (com->hasY()) {
-            steppernr = 1;
-        }
-        if (com->hasZ()) {
-            steppernr = 2;
-        }
-        if (com->hasE() && com->E == 0) { //E0
-            steppernr = 4;
-        }
-        if (com->hasE() && com->E == 1) { //E1
-            steppernr = 5;
-        }
-
-        if (steppernr > 3 + NUM_EXTRUDER) {
-            return; // Axis number too high for setup
-        }
-
-        setMotorCurrent(steppernr, current);
+    // M908 P<physical channel> S<raw TORQUE code>: temporary debug command.
+    // Validate signed wire values before converting to the 8-bit register.
+    if (!com->hasP() || !com->hasS() ||
+        com->hasX() || com->hasY() || com->hasZ() || com->hasE() ||
+        com->P < 1 || com->P > 3 + NUM_EXTRUDER ||
+        com->S < MOTOR_CURRENT_MIN) {
+        showInvalidSyntax(com->M);
+        return;
     }
+    const uint8_t limits[] = MOTOR_CURRENT_MAX;
+    if (com->S > limits[com->P - 1]) {
+        showInvalidSyntax(com->M);
+        return;
+    }
+    setMotorCurrent(static_cast<uint8_t>(com->P), static_cast<uint8_t>(com->S));
 }
 
 void setManualZOffset(GCode* pCommand) {
