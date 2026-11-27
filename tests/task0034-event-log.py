@@ -8,6 +8,8 @@ root=Path(__file__).resolve().parents[1]
 source=r"""
 #include "EventLog.h"
 #include "EventLogRead.h"
+#include "EventLogText.h"
+#include <string>
 #include "ThermalEventSource.h"
 #include <limits>
 #include <cassert>
@@ -115,6 +117,63 @@ void readAll(R& ring,Store& store,Sink& sink) {
     }
     assert(false);
 }
+struct Line {
+    std::string buffer;
+    void character(char c){buffer+=c;}
+    void text(const char* s){buffer+=s;}
+    void number(uint32_t n){buffer+=std::to_string(n);}
+    void unknown(){text("unknown");}
+    void cause(Cause c){
+        switch(c){
+        case Cause::SensorInvalid:text("SENSOR INVALID");break;
+        case Cause::OverTemperature:text("OVER TEMP");break;
+        case Cause::CalibrationMismatch:text("CALIBRATION MISMATCH");break;
+        case Cause::HeatingWhileOff:text("HEATING WHILE OFF");break;
+        default:text("OTHER THERMAL ERROR");break;
+        }
+    }
+    bool finish(){text("\r\n");return buffer.size()<=63;}
+    const char* data()const{return buffer.data();}
+    uint8_t size()const{return uint8_t(buffer.size());}
+};
+struct Serial {
+    bool blocked=false;
+    std::string all;
+    unsigned lines=0;
+    bool tryWriteSpan(const char* bytes,uint8_t count){
+        if(blocked)return false;
+        assert(count<=63);all.append(bytes,count);++lines;return true;
+    }
+};
+void textTest(R& ring,Store& store) {
+    Reader<Slots> reader;assert(reader.begin(ring));
+    Serial serial;TextSink<Line,Cause,Serial> output(serial);
+    serial.blocked=true;
+    assert(reader.step(ring,store,output)==ReadProgress::Busy&&serial.lines==0);
+    serial.blocked=false;
+    for(unsigned i=0;i<100;++i){
+        unsigned prior=serial.lines;
+        auto p=reader.step(ring,store,output);
+        assert(serial.lines-prior<=1&&!output.failed());
+        if(p==ReadProgress::Done)break;
+    }
+    assert(serial.lines==12);
+    assert(serial.all.find("LOG #2 BED OVER TEMP")!=std::string::npos);
+    assert(serial.all.find("LOG #1 E0 SENSOR INVALID")!=std::string::npos);
+    assert(serial.all.find("measured_C:unknown target_C:240.3")!=std::string::npos);
+    assert(serial.all.find("raw_ADC:0 req_PWM:unknown admitted_PWM:217")!=std::string::npos);
+    // Worst representable fields, longest labels, and unknown reason.
+    uint8_t bytes[EntryBytes];std::memset(bytes,255,sizeof(bytes));
+    bytes[31]=eventId(Channel::System,10);
+    for(uint8_t i=0;i<4;++i){bytes[14+2*i]=0;bytes[15+2*i]=128;}
+    EntryView v{bytes};
+    for(uint8_t i=0;i<rows(v);++i){
+        Line line;entryLine<Line,Cause>(line,v,i);assert(line.finish());
+    }
+    bytes[31]=eventId(Channel::System,63);
+    Line line;entryLine<Line,Cause>(line,v,0);assert(rows(v)==1&&line.finish());
+    assert(line.buffer.find("REASON:63")!=std::string::npos);
+}
 void captureTest(){
     int16_t v=0;
     assert(deciC(-3276.8f,v)&&v==-32768);
@@ -158,6 +217,7 @@ void captureTest(){
     assert(fire.channel()==Channel::Bed&&fire.reason()==6&&fire.value(0)==2800);
     Sink sink;readAll(ring,store,sink);
     assert(sink.count==2&&sink.sequences[0]==2&&sink.sequences[1]==1);
+    textTest(ring,store);
     // Initial fire is the same event, not a second duplicate append.
     Ledger lf;lf.initial=l.escalation;lf.escalation=l.escalation;
     Store sf;R rf;ThermalCapture<2> cf;
@@ -215,6 +275,11 @@ int main(){
     // arbitrary corruption is not claimed detectable.
     unsigned cuts=0;
     Store base=s;
+    // Force differences in every payload byte rather than just uptime.
+    p=record(41);p.uptime=0xfefdfcfb;p.window=0xabcdef01;
+    p.values[0]=0x1234;p.values[1]=-2;p.values[2]=0x4321;p.values[3]=0x1234;
+    p.raw=0x1234;p.context[0]=11;p.context[1]=22;p.context[2]=33;
+    p.context[3]=44;p.context[4]=55;p.valid=0x1234;p.id=eventId(Channel::E1,7);
     for(unsigned cutAt=0;cutAt<33;++cutAt){
         for(unsigned v=0;v<256;++v){
             Store trial=base;R writer;scan(writer,trial);
@@ -237,14 +302,14 @@ int main(){
             uint32_t seq=0;
             if(R::header(trial,target,seq)){
                 assert(seq==37||seq==41);
-                verify(after,trial,target,seq,record(seq));
+                verify(after,trial,target,seq,seq==41?p:record(seq));
             }
             assert(after.latestSequence()==40||after.latestSequence()==41);
             // Can continue appending after restart regardless of torn slot.
             append(after,trial,record(42));
         }
     }
-    assert(cuts>0);
+    assert(cuts>=25*256);
     Store wrap;
     inject(wrap,0,0xfffffffeu,record(1));
     inject(wrap,1,0xffffffffu,record(2));
@@ -262,7 +327,7 @@ int main(){
     // Reject unsupported versions and empty reason codes; not a CRC.
     wrap.data[1]=99;wrap.data[3*EntryBytes+31]=0;
     R bad;scan(bad,wrap);assert(bad.latestSequence()==0&&bad.latestSlot()==2);
-    std::printf("Event log: 40 appends, %u torn-byte cuts, wrap, busy owner, ignored writes, thermal evidence/escalation and read order PASS\n",cuts);
+    std::printf("Event log: 40 appends, %u torn-byte cuts, wrap, busy owner, ignored writes, thermal evidence/escalation, read order and bounded serial output PASS\n",cuts);
 }
 """
 with tempfile.TemporaryDirectory() as d:
