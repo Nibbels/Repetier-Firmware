@@ -54,6 +54,9 @@ jobs:
       - name: Trace four linked AVR images
         run: |
           python3 research/task0032-step-output/linked_timer1.py "$RUNNER_TEMP/firmware-evidence.zip" "$RUNNER_TEMP/transport.json" "$RUNNER_TEMP/step-output"
+      - name: Replay baseline jog stop writer interleavings
+        run: |
+          python3 research/task0032-step-output/jog-stop-interleave.py "$RUNNER_TEMP/firmware-evidence.zip" "$RUNNER_TEMP/step-output/jog-baseline.json"
       - uses: arduino/setup-arduino-cli@v2
         with:
           version: 1.2.2
@@ -65,11 +68,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 research/task0032-step-output/q23-linked.py --baseline "$RUNNER_TEMP/step-output" --out "$RUNNER_TEMP/step-output/q23" --variant wake --tools "$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin"
+          python3 research/task0032-step-output/q23-linked.py --baseline "$RUNNER_TEMP/step-output" --out "$RUNNER_TEMP/step-output/q23" --variant wake-jog --tools "$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin"
       - name: Replay actual cold and warm activation across successive Timer1 calls
         if: ${{ !cancelled() }}
         run: |
-          python3 research/task0032-step-output/wake-linked-replay.py "$RUNNER_TEMP/step-output/q23/wake/candidate.zip" "$RUNNER_TEMP/step-output/wake-replay.json"
+          python3 research/task0032-step-output/wake-linked-replay.py "$RUNNER_TEMP/step-output/q23/wake-jog/candidate.zip" "$RUNNER_TEMP/step-output/wake-replay.json"
+      - name: Require coherent jog stop interleavings in candidate
+        if: ${{ !cancelled() }}
+        run: |
+          python3 research/task0032-step-output/jog-stop-interleave.py "$RUNNER_TEMP/step-output/q23/wake-jog/candidate.zip" "$RUNNER_TEMP/step-output/jog-candidate.json" --require-safe
       - uses: actions/upload-artifact@v4
         if: always()
         with:
