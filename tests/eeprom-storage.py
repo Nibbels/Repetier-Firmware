@@ -31,6 +31,11 @@ def main():
     with tempfile.TemporaryDirectory(prefix="eeprom-storage-") as temp:
         work = pathlib.Path(temp)
         (work / "storage-source.inc").write_text(body, encoding="utf-8")
+        zone_exe = work / "zones"
+        subprocess.run(["c++", "-std=c++11", "-O2", "-Wall", "-Wextra", "-Werror",
+                        "-I", str(FW), str(ROOT / "tests" / "eeprom-zones.cpp"),
+                        "-o", str(zone_exe)], check=True)
+        subprocess.run([str(zone_exe)], check=True)
         setters = hal[hal.index("    static inline void eprSetByte("):hal.index("    // Faster version of InterruptProtectedBlock.")]
         (work / "hal-eeprom.inc").write_text(setters, encoding="utf-8")
         micro = ui[ui.index("    case UI_ACTION_MICROSTEPS_XY:"):ui.index("\n    }\n}\n\nvoid UIDisplay::changeMotionSetting")]
