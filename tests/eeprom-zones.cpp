@@ -224,6 +224,25 @@ int main() {
         }
     }
     assert(payload==304 && sizeof(fields)/sizeof(fields[0])==125);
+    // Independent inventory above defines the exact historical width map.
+    // Motor current is one five-byte group in the layout, but individual
+    // channels are the only writable patch units.
+    uint8_t expectedWidths[End-Base]={};
+    for(const auto& f:fields) {
+        const auto offset=address(f.field)-Base;
+        if(f.field==Field::F_RF_MOTOR_CURRENT) {
+            for(uint8_t i=0;i<5;++i)expectedWidths[offset+i]=1;
+        } else expectedWidths[offset]=f.width;
+    }
+    uint32_t widthDigest=2166136261UL;
+    for(uint32_t pos=0;pos<65536UL;++pos) {
+        const uint8_t expected=pos>=Base && pos<End?expectedWidths[pos-Base]:0;
+        const uint8_t actual=fieldWidth(uint16_t(pos));
+        assert(actual==expected);
+        widthDigest=(widthDigest^actual)*16777619UL;
+    }
+    assert(widthDigest==0x23ae8eb9UL); // pinned before Flash-table conversion
+    puts("EEPROM internal field widths: all 65536 addresses unchanged; PASS");
     uint16_t c16=0xffff;uint32_t c32=0xffffffff;
     for(char c:"123456789") if(c) {c16=crc16Byte(c16,c);c32=crc32Byte(c32,c);}
     assert(c16==0x29b1 && (c32^0xffffffffUL)==0xcbf43926UL);
