@@ -1,0 +1,44 @@
+name: Task0032 simulation checks
+on:
+  pull_request:
+    branches: [ai-firmware-review]
+    paths:
+      - 'tools/task0032/**'
+      - '.github/workflows/task0032-simulation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  simulation:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'task/Task0032-quality-packing'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.0'
+      - name: Run task-private self-tests and reproduce evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/task0032"
+          out="$RUNNER_TEMP/task0032"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          node --version > "$out/node-version.txt"
+          sha256sum tools/task0032/*.cjs > "$out/source-sha256.txt"
+          for test in link-model demand-model queue-model speed-search queue-estimate governor-preview rx-blackout-model rx-service-window; do
+            node "tools/task0032/$test.cjs" --self-test
+          done
+          for test in link-model demand-model queue-model speed-search; do
+            node "tools/task0032/$test.cjs" "$out/$test"
+          done
+          for test in queue-estimate governor-preview rx-blackout-model rx-service-window; do
+            node "tools/task0032/$test.cjs" > "$out/$test.json"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: task0032-simulation-${{ github.sha }}
+          path: ${{ runner.temp }}/task0032
+          retention-days: 7
+          if-no-files-found: error
