@@ -19,6 +19,7 @@
 
 #include "Repetier.h"
 #include "GCodeInput.h"
+#include "DiagnosticHistory.h"
 
 
 void Commands::commandLoop() {
@@ -29,6 +30,9 @@ void Commands::commandLoop() {
         checkForPeriodicalActions(NotBusy);
         GCodeInput::readFromSerial();
         GCodeInput::popCurrentCommand(); // old admitted work, never execute
+#if defined(RF_EEPROM_ZONE_EXPERIMENT)
+        DiagnosticHistory::service();
+#endif
         return;
     }
 #endif
@@ -48,6 +52,9 @@ void Commands::commandLoop() {
 
         Commands::checkForPeriodicalActions(state); // Check heater and other stuff every n milliseconds
     }
+#if defined(RF_THERMAL_EMERGENCY_EXPERIMENT) && defined(RF_EEPROM_ZONE_EXPERIMENT)
+    DiagnosticHistory::service();
+#endif
 } // commandLoop
 
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
