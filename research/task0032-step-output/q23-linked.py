@@ -106,7 +106,7 @@ def compare(archive,baseline,out,tag):
                         differences.extend(field+"."+key for key in old if old[key]!=new[key])
                     for field in ("physical_rising_edges","return_interval"):
                         if a[field]!=c[field]:differences.append(field)
-                    if [e[:2] for e in a["step_dir_edges"]]!=[e[:2] for e in c["step_dir_edges"]]:
+                    if [tuple(e[:2]) for e in a["step_dir_edges"]]!=[tuple(e[:2]) for e in c["step_dir_edges"]]:
                         differences.append("ordered_gpio_edges")
                     if differences:raise ValueError(differences)
                     summary["matched"]+=1
@@ -142,15 +142,27 @@ def main():
     p=argparse.ArgumentParser()
     p.add_argument("--baseline",type=pathlib.Path,required=True)
     p.add_argument("--out",type=pathlib.Path,required=True)
-    p.add_argument("--tools",type=pathlib.Path,required=True)
+    p.add_argument("--tools",type=pathlib.Path)
+    p.add_argument("--reuse",type=pathlib.Path,help="reuse exact prior raw/guarded candidate.zip archives")
     args=p.parse_args()
     args.out.mkdir(parents=True,exist_ok=True)
     all_results={}
     for padded in (False,True):
         tag="guarded" if padded else "raw"
-        with tempfile.TemporaryDirectory(prefix="q23-") as tmp:
-            archive=build(pathlib.Path(tmp)/"Repetier",args.out,padded,args.tools)
+        if args.reuse:
+            archive=args.reuse/tag/"candidate.zip"
+            with zipfile.ZipFile(archive) as z:
+                m=json.loads(z.read("summary.json"))
+                assert m["variant"]==tag
+                for b in lt.BOARDS:
+                    assert hashlib.sha256(z.read(b+"/build/Repetier.ino.elf")).hexdigest()==m["elf"][b]
+            (args.out/tag).mkdir()
             all_results[tag]=compare(archive,args.baseline,args.out,tag)
+        else:
+            assert args.tools is not None
+            with tempfile.TemporaryDirectory(prefix="q23-") as tmp:
+                archive=build(pathlib.Path(tmp)/"Repetier",args.out,padded,args.tools)
+                all_results[tag]=compare(archive,args.baseline,args.out,tag)
     # Raw variant is exploratory and may violate pulse timing. Guarded
     # candidate must preserve logical state and meet all sampled within-call
     # pulse minima before even considering it for integrated replay.
