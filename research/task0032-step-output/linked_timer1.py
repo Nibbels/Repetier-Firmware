@@ -131,6 +131,13 @@ def execute(mod,img,kw,mode,case):
     c.mem[0x6f]=2
     if getattr(img,"q23",False):
         c.symput("Printer::extrusionCompensation",round(kw["ratio"]*(1<<23)),4)
+    if getattr(img,"wake",False):
+        # Warm fixture for differential comparison of the existing motion
+        # paths. The actual cold/pending wake lifecycle is tested separately.
+        assert img.sizes["motorWake"]==6
+        fitted=0x1f if img.board in ("RF2000","RF2000v2") else 0x0f
+        c.symput("motorWake",fitted,1,4)
+        c.symput("motorWake",fitted,1,5)
     if mode in ("activation","activation_cold"):
         # Distinguish warm driver enable from actual cold hardware settling.
         # Extruder::enabled is the final char in its AVR class (no tail padding).
