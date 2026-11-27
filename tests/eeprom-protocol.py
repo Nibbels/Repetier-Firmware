@@ -154,7 +154,7 @@ struct HAL {
     }
 };
 struct GCode {
-    uint8_t T; uint16_t P; int32_t S; float X;
+    uint8_t T; int32_t P; int32_t S; float X;
     bool t = true, p = true, s = true, x = true;
     bool hasT() const { return t; } bool hasP() const { return p; }
     bool hasS() const { return s; } bool hasX() const { return x; }
@@ -209,6 +209,18 @@ int main() {
     assert(loads == before && bytes[code.P] == marker);
     code.T = 2; code.P = EPR_RF_PID_CALIBRATION - 3;
     EEPROM::update(&code); assert(loads == before);
+    // Menu-only motor current, including overlapping raw writes and
+    // address aliases that would previously narrow to the protected range.
+    uint8_t motorBefore[sizeof bytes]; std::memcpy(motorBefore, bytes, sizeof bytes);
+    for (int32_t p = EPR_RF_MOTOR_CURRENT-3; p < EPR_RF_MOTOR_CURRENT+5; ++p) {
+        code.T = 2; code.P = p; code.S = 0;
+        EEPROM::update(&code);
+        assert(loads == before && std::memcmp(bytes,motorBefore,sizeof bytes)==0);
+    }
+    code.T=0; code.P=EPR_RF_MOTOR_CURRENT; EEPROM::update(&code);
+    code.P=65536L+EPR_RF_MOTOR_CURRENT; EEPROM::update(&code);
+    code.P=-1; EEPROM::update(&code);
+    assert(loads == before && std::memcmp(bytes,motorBefore,sizeof bytes)==0);
     // Adjacent preheat setting is still writable as a 16-bit value.
     code.T = 1; code.P = EPR_RF_PREHEAT_B_HOTEND; code.S = 215;
     expectWrite(code, {215, 0});

@@ -170,6 +170,17 @@ static void sessionReplay(FactoryDefaults& defaults) {
     assert(session.hostEdit(dmaxPos,0,73,0,admit,hostPublish)==Result::Ok);
     assert(session.hostEdit(bedPos,0,90,0,admit,hostPublish)==Result::Ok);
     assert(session.hostEdit(bedPos,0,120,0,admit,hostPublish)==Result::ReadOnly);
+    // Motor current is menu-owned. Host echo is harmless, any change
+    // must stop before admission, writes or hardware publication.
+    uint8_t currents[5];
+    assert(session.read(MotorCurrent,currents,length(MotorCurrent),alerts)==Result::Ok);
+    for(uint8_t axis=0;axis<3+NUM_EXTRUDER;++axis) {
+        const int32_t pos=address(Field::F_RF_MOTOR_CURRENT)+axis;
+        assert(session.hostEdit(pos,0,currents[axis],0,admit,hostPublish)==Result::Ok);
+        assert(session.hostEdit(pos,0,currents[axis]^1,0,admit,hostPublish)==Result::ReadOnly);
+        assert(session.hostEdit(pos+65536L,0,currents[axis]^1,0,admit,hostPublish)==Result::Invalid);
+        assert(session.hostEdit(pos,1,currents[axis]^1,0,admit,hostPublish)==Result::Invalid);
+    }
     assert(session.hostEdit(dmaxPos,0,256,0,admit,hostPublish)==Result::Invalid);
     assert(session.hostEdit(dmaxPos,0,0,0,admit,hostPublish)==Result::Invalid);
     assert(session.hostEdit(dmaxPos,256,73,0,admit,hostPublish)==Result::Invalid);
