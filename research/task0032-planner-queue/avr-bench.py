@@ -111,6 +111,7 @@ def create_fixture(d,capacity,instrument):
     geometry='#include "Repetier.h"\n'+section(motion,"void PrintLine::setAxisSteps(","\n/** \\brief Put a move")+section(motion,"void PrintLine::fitRampToRemainingSteps()","\n/** \\brief Check if move is new.")
     (d/"geometry.cpp").write_text(geometry)
     shutil.copyfile(HERE/"avr-fixture.cpp",d/"avr-fixture.cpp")
+    shutil.copyfile(HERE/"estimator-candidate.h",d/"estimator-candidate.h")
 def parse_trace(raw):
     masks=[];start_mask=None;stack=[];rows=[]
     for line in raw.splitlines():
@@ -137,7 +138,7 @@ def parse_trace(raw):
         r["max_sampled_mask_cycles"]=max([0]+[max(0,min(b,y)-max(a,x)) for x,y in masks if x<b and y>a])
     return rows
 def stats(rows):
-    names={1:"prepareMove",2:"updateLookahead",3:"limitJunction",4:"planDeceleration",5:"planAcceleration",6:"prepareStepProfile",7:"remainingMotion",8:"exactTimeOnly",9:"lower",10:"pacedTicks"}
+    names={1:"prepareMove",2:"updateLookahead",3:"limitJunction",4:"planDeceleration",5:"planAcceleration",6:"prepareStepProfile",7:"remainingMotion",8:"exactTimeOnly",9:"lower",10:"pacedTicks",11:"fastRoot"}
     out={}
     for s in sorted({r["stage"] for r in rows}):
         rr=[r for r in rows if r["stage"]==s]
@@ -167,7 +168,7 @@ def main():
         # libsimavr and libelf are installed by the task-private hosted workflow.
         run(["cc","-O2",HERE/"simavr-trace.c","-lsimavr","-lelf","-o",runner])
         for cap in args.capacity:
-            for name,instrument,only in [("outer",False,0),("substage",True,0)]+([("diag-only",False,7),("time-only",False,8),("lower-only",False,9),("paced-only",False,10)] if cap==24 else []):
+            for name,instrument,only in [("outer",False,0),("substage",True,0)]+([("diag-only",False,7),("time-only",False,8),("lower-only",False,9),("paced-only",False,10),("fast-root-only",False,11)] if cap==24 else []):
                 d=t/f"{cap}-{name}";d.mkdir();create_fixture(d,cap,instrument)
                 elf=out/f"{cap}-{name}.elf"
                 cmd=[cc,*FLAGS,f"-DESTIMATOR_ONLY={only}",f"-I{d}",d/"MotionPlanner.cpp",d/"MoveQueue.cpp",d/"geometry.cpp",d/"avr-fixture.cpp","-Wl,--gc-sections","-Wl,-Map="+str(out/f"{cap}-{name}.map"),"-o",elf]
