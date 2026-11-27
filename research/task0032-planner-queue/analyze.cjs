@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const readline = require("node:readline");
 const CPU = 16000000;
-const methods = ["lower","corrected","cached","tangentBound"];
+const methods = ["lower","corrected","cached","tangentBound","fastRoot"];
 const expected = new Set(["publish","activate","retire","begin","end","blocked_front_successor","task_barrier","warmup_barrier","cleared"]);
 function stats(){return {n:0,min:null,max:null,sum:0,over:0,within20:0};}
 function add(s,error){
@@ -56,9 +56,9 @@ async function main(){
     requireTrue(expected.has(r.event),"unknown event "+r.event);
     const k=key(r);
     let c=cases[k];
-    if(!c)c=cases[k]={workload:r.workload,capacity:r.capacity,chord:r.chord,requested:r.requested,baud:r.baud,group:r.group,cap_mode:r.cap_mode,advance:r.advance,publishes:0,activations:0,retires:0,max_count:0,wraps:0,zero_mutable:0,mutable_min_mm:null,mutable_max_mm:0,plan_totals:{},plan_max:{},entry_exit_mismatch:0,entry_exit_mismatch_non_boundary:0,acceleration_distance_violation:0,max_full_speed:0,active_speed_jump_max:0,previous_activation:null};
+    if(!c)c=cases[k]={workload:r.workload,capacity:r.capacity,chord:r.chord,requested:r.requested,baud:r.baud,group:r.group,cap_mode:r.cap_mode,advance:r.advance,publishes:0,activations:0,retires:0,max_count:0,wraps:0,zero_mutable:0,mutable_min_mm:null,mutable_max_mm:0,plan_totals:{},plan_max:{},entry_exit_mismatch:0,entry_exit_mismatch_non_boundary:0,entry_exit_mismatch_after_empty:0,entry_exit_examples:[],acceleration_distance_violation:0,max_full_speed:0,active_speed_jump_max:0,previous_activation:null};
     if(r.event==="begin"){c.fixture={step_per_mm:r.step_per_mm,max_feed:r.max_feed,xy_jerk:r.xy_jerk,z_jerk:r.z_jerk,e_jerk:r.e_jerk};continue;}
-    if(r.event==="retire"){c.retires++;continue;}
+    if(r.event==="retire"){c.retires++;c.previous_retire_ticks=r.ticks;continue;}
     if(r.event==="end"){
       c.elapsed_ticks=r.ticks;c.idle_ticks=r.idle_ticks;c.xyz_mm=r.xyz_mm;c.mean_xyz_speed=r.xyz_mm*CPU/r.ticks;
       requireTrue(c.publishes===r.admitted&&c.retires===r.retired&&c.activations===r.retired,"event count mismatch "+k);
@@ -67,7 +67,7 @@ async function main(){
     requireTrue(r.count===r.slots.length,"slot count mismatch");
     requireTrue((r.read+r.count)%r.capacity===r.write,"ring mismatch");
     c.max_count=Math.max(c.max_count,r.count);
-    let ref=0,contig=0,barrier=false,actualLower=0;
+    let ref=0,contig=0,barrier=false,actualLower=0,fastContig=0;
     const values=Object.fromEntries(methods.map(m=>[m,0]));
     for(let i=0;i<r.slots.length;i++){
       const s=r.slots[i];
@@ -79,14 +79,17 @@ async function main(){
       requireTrue(Number.isFinite(v)&&v>0,"invalid reference");
       ref+=v;
       for(const f of methods){
-        const q=est[f](m,s.left);
+        const q=f==='fastRoot'?s.fast_s:est[f](m,s.left);
         values[f]+=q;
         add(buckets[s.active?"active":"queued"][f],(q-v)/v);
         if(m.accelSteps+m.decelSteps>=m.total&&m.accelSteps>0&&m.decelSteps>0)add(buckets.triangular[f],(q-v)/v);
       }
       actualLower+=est.lower(m,s.left);
-      if(!barrier)contig+=est.lower(m,s.left);
+      if(!barrier){contig+=est.lower(m,s.left);fastContig+=s.fast_s;}
     }
+    requireTrue(near(fastContig,r.fast_contiguous_s),'fast contiguous mismatch');
+    requireTrue(near(values.fastRoot,r.fast_s),'fast root slot sum mismatch');
+    requireTrue(values.fastRoot<=r.reference_s*(1+2e-6)+1e-8,'fast root unexpectedly above reference');
     requireTrue(near(ref,r.reference_s),"parent JS reference != actual C++ queue "+k+" "+ref+" "+r.reference_s);
     requireTrue(near(actualLower,r.lower_s)&&near(contig,r.contiguous_lower_s),"proxy mismatch");
     maxReferenceDelta=Math.max(maxReferenceDelta,Math.abs(ref-r.reference_s));
@@ -133,7 +136,12 @@ async function main(){
         const mismatch=Math.abs(prev.exit-s.entry);
         const eOnly=m=>m.steps[3]!==0&&m.steps.slice(0,3).every(n=>n===0);
         const boundary=eOnly(prev)!==eOnly(s)||(r.advance&&Boolean(prev.steps[3])!==Boolean(s.steps[3]));
-        if(mismatch>0.02){c.entry_exit_mismatch++;if(!boundary)c.entry_exit_mismatch_non_boundary++;}
+        if(mismatch>0.02){
+          c.entry_exit_mismatch++;if(!boundary)c.entry_exit_mismatch_non_boundary++;
+          const afterEmpty=r.ticks>c.previous_retire_ticks;
+          if(afterEmpty)c.entry_exit_mismatch_after_empty++;
+          if(!boundary&&c.entry_exit_examples.length<4)c.entry_exit_examples.push({id:s.id,previous_exit:prev.exit,entry:s.entry,previous_min:prev.min_speed,min:s.min_speed,previous_full:prev.full,full:s.full,after_empty:afterEmpty,ticks:r.ticks,previous_steps:prev.steps,steps:s.steps});
+        }
         c.active_speed_jump_max=Math.max(c.active_speed_jump_max,Math.abs(prev.full-s.full));
       }
       c.previous_activation=s;
