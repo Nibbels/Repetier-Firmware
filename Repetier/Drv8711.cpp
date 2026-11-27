@@ -58,32 +58,15 @@ void configureSerialOutputs() {
     SET_OUTPUT(DRV_SDATI);
 }
 
-// Chip selects on extended I/O require a read-modify-write. PORTL is
-// shared with motion pins; protect ONLY the single GPIO update, not the frame.
-// The guard restores the caller's SREG (it never unconditionally enables IRQs).
+// fastio requires the pin as a macro argument to generate direct GPIO writes.
 #define DRV8711_SET_SELECT(pin, select) \
     do {                               \
-        InterruptProtectedBlock guard; \
-        WRITE(pin, select);            \
+        WRITE(pin, LOW);               \
+        if (select) {                  \
+            SET_OUTPUT(pin);           \
+            WRITE(pin, HIGH);          \
+        }                              \
     } while (0)
-
-// Configure inactive selects once, before the first transaction. Keep each
-// latch/direction update indivisible with respect to other PORTL users.
-#define DRV8711_INIT_SELECT(pin) \
-    do {                        \
-        InterruptProtectedBlock guard; \
-        WRITE(pin, LOW);         \
-        SET_OUTPUT(pin);         \
-    } while (0)
-
-void configureChipSelects() {
-    DRV8711_INIT_SELECT(O1_SCS_PIN);
-    DRV8711_INIT_SELECT(O0_SCS_PIN);
-    DRV8711_INIT_SELECT(Z_SCS_PIN);
-    DRV8711_INIT_SELECT(Y_SCS_PIN);
-    DRV8711_INIT_SELECT(X_SCS_PIN);
-}
-#undef DRV8711_INIT_SELECT
 
 template <bool Select, bool Broadcast = false>
 void setChipSelect(Channel channel) {
@@ -116,24 +99,16 @@ void setChipSelect(Channel channel) {
 }
 #undef DRV8711_SET_SELECT
 
-// TI SLVSC40H sections 6.6 and 7.5: SCLK <=4 MHz, high/low >=25 ns,
-// SDATI setup >=5 ns, hold >=1 ns; SCS inactive >=100 ns. The supported
-// 16 MHz AVR boards use atomic SBI/CBI on PD5/PD6. No ISR owns this bus.
-// Foreground alone selects/transmits; IRQs may extend an interval, not
-// change a bit or introduce an edge. Verify linked instructions in CI.
-static inline void serialTimingMargin() {
-    __asm__ __volatile__("nop\n\tnop" ::: "memory");
-}
-
-void drv8711Transmit(uint16_t command) {
-    // Shift by a fixed one bit instead of recalculating (1 << i) on AVR.
-    for (uint8_t remaining = 16; remaining; --remaining) {
-        WRITE(DRV_SDATI, command & 0x8000U);
-        WRITE(DRV_SCLK, HIGH);
-        serialTimingMargin();
-        WRITE(DRV_SCLK, LOW);
-        command <<= 1;
+void drv8711Transmit(unsigned short command) {
+    InterruptProtectedBlock noInts;
+    for (char i = 15; i >= 0; i--) {
+        WRITE(DRV_SDATI, command & (0x01 << i));
+        HAL::delayMicroseconds(1);
+        WRITE(DRV_SCLK, 1);
+        HAL::delayMicroseconds(5);
+        WRITE(DRV_SCLK, 0);
     }
+    noInts.unprotect();
 }
 
 template <bool Broadcast = false>
@@ -141,8 +116,6 @@ void writeRegister(Channel channel, Register address, uint16_t data) {
     setChipSelect<true, Broadcast>(channel);
     drv8711Transmit(writeWord(address, data));
     setChipSelect<false, Broadcast>(channel);
-    // Two cycles at 16 MHz alone satisfy the 100 ns inactive minimum.
-    serialTimingMargin();
 }
 
 void broadcastRegister(Register address, uint16_t data) {
@@ -154,10 +127,12 @@ void adjustMicroSteps(Channel channel) {
     const uint8_t mode = clampedMode(microstepModes[axis]);
     // MODE occupies bits 3–6. Keep the configured enable, gain and dead time.
     writeRegister(channel, Register::Control, 0x0E01 | (mode << 3));
+    HAL::delayMicroseconds(1);
 }
 
 void writeMotorCurrent(Channel channel, uint8_t level) {
     // Above the motor's saturation current, additional current adds heat.
+    configureSerialOutputs();
     writeRegister(channel, Register::Torque, 0x0100 | level);
 }
 
@@ -224,7 +199,6 @@ void drv8711Init() {
     WRITE(DRV_RESET1, LOW);
     SET_OUTPUT(DRV_RESET1);
     configureSerialOutputs();
-    configureChipSelects();
 
     // Configure the inputs as pullups.
     WRITE(DRV_SDATO, HIGH);
@@ -251,16 +225,20 @@ void drv8711Init() {
 
     // TOFF = 0x20 (16 us) suppresses audible chirping. PWMMODE = 0 uses the indexer.
     broadcastRegister(Register::OffTime, 0x020);
+    HAL::delayMicroseconds(1);
 
     // Leave BLANK (0x03) at its hardware reset defaults, TBLANK = 0x80 and ABT = 0.
     // The legacy command 0xB2D7 was a read. Writing BLANK can change motor behavior.
 
     // DECMOD = 5 (automatic mixed decay), TDECAY = 0x04 (2 us).
     broadcastRegister(Register::Decay, 0x504);
+    HAL::delayMicroseconds(1);
 
     broadcastRegister(Register::Stall, 0x83C);
+    HAL::delayMicroseconds(1);
 
     broadcastRegister(Register::Drive, 0x0F0);
+    HAL::delayMicroseconds(1);
 
     broadcastRegister(Register::Status, 0x000);
 
@@ -278,9 +256,6 @@ void drv8711Init() {
 }
 
 void setMotorCurrent(unsigned char driver, uint8_t level) {
-    // Invalid raw channels must not clock an unselected bus.
-    if (driver < 1 || driver > DRV8711_NUM_CHANNELS)
-        return;
     writeMotorCurrent(static_cast<Channel>(driver), level);
 }
 
