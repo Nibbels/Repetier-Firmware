@@ -9,6 +9,7 @@
 #include "EepromZoneStorage.h"
 #include "EepromZoneHostAccess.h"
 #include "EepromZoneValidation.h"
+#include "EepromZoneSession.h"
 using namespace EepromZones;
 struct Memory {
     std::array<uint8_t,4096> bytes;
@@ -16,8 +17,84 @@ struct Memory {
     uint8_t read(uint16_t pos){assert(pos>=Base && pos<End);return bytes[pos];}
     void update(uint16_t pos,uint8_t v){assert(pos>=Base && pos<End);bytes[pos]=v;}
 };
+struct BusyDevice {
+    std::array<uint8_t,4096> bytes;
+    bool irq=true, stuck=false;
+    bool& owner;
+    uint32_t clock=0xfffffff0UL, readyAt=clock;
+    unsigned programs=0, services=0, nestedRejected=0;
+    explicit BusyDevice(bool& busy):owner(busy) {bytes.fill(0xff);}
+    bool foreground() const {return irq;}
+    bool ready() const {return !stuck && int32_t(clock-readyAt)>=0;}
+    uint32_t now() const {return clock;}
+    uint8_t readReady(uint16_t pos){assert(ready() && irq);return bytes[pos];}
+    void updateReady(uint16_t pos,uint8_t v){
+        assert(ready() && irq && owner && bytes[pos]!=v);
+        bytes[pos]=v;++programs;readyAt=clock+4;
+    }
+    void service() {
+        assert(owner && irq);
+        SessionGuard nested(owner);
+        assert(!nested.entered() && owner);++nestedRejected;
+        ++clock;++services;
+    }
+};
+static void sessionReplay(FactoryDefaults& defaults) {
+    bool busy=false;
+    BusyDevice dev(busy);
+    Session<BusyDevice> session(dev,busy,configuredProfile());
+    Inspection state;
+    assert(session.restore(defaults,state)==Result::Ok);
+    assert(!busy && state.alerts==AllAlerts && dev.services==dev.nestedRejected && dev.programs>0);
+    // Cold start crosses the uint32_t millisecond rollover.
+    assert(dev.clock<0xfffffff0UL);
+    unsigned count=0;
+    auto consumer=[&](uint8_t id,const uint8_t* data,uint8_t n,uint32_t alerts){
+        assert(busy && alerts==AllAlerts && validBlock(id,data,n));++count;return true;
+    };
+    assert(session.load(consumer,state)==Result::Ok && count==Last && !busy);
+    unsigned writes=dev.programs;
+    assert(session.save(blockBit(Feedrates),defaults)==Result::Ok && dev.programs==writes);
+    struct Edit {
+        FactoryDefaults& base;
+        uint8_t mode;
+        bool operator()(uint8_t id,uint8_t* data,uint8_t n) {
+            if(!base(id,data,n) || id!=Panel)return false;
+            data[0]=mode;return true;
+        }
+    } edit{defaults,0};
+    assert(session.save(blockBit(Panel),edit)==Result::Invalid && dev.programs==writes);
+    edit.mode=MOVE_MODE_1_MM;
+    assert(session.save(blockBit(Panel),edit)==Result::Ok && dev.programs>writes);
+    assert(session.acknowledge(AllAlerts)==Result::Ok);
+    assert(session.commission(90)==Result::Ok);
+    auto commissioned=[&](uint8_t id,const uint8_t* data,uint8_t n,uint32_t alerts){
+        assert(busy && !alerts && validBlock(id,data,n));
+        if(id==BedSafety) assert(data[0]==90);
+        return true;
+    };
+    assert(session.load(commissioned,state)==Result::Ok && !busy);
+    // Physical busy fault cannot hang or be mistaken for successful readback.
+    dev.stuck=true;const uint32_t started=dev.clock;writes=dev.programs;
+    assert(session.restore(defaults,state)==Result::TransportFault);
+    assert(dev.clock-started==20 && dev.programs==writes && !busy);
+    dev.stuck=false;
+    dev.irq=false;
+    assert(session.restore(defaults,state)==Result::TransportFault && dev.programs==writes);
+    dev.irq=true;
+    {
+        SessionGuard outer(busy);
+        assert(outer.entered() && session.restore(defaults,state)==Result::Busy);
+        assert(busy);
+    }
+    assert(!busy);
+    ReadyByteIO<BusyDevice> out(dev);
+    assert(out.read(0)==0xff && !out.good()); // never access legacy region
+    printf("EEPROM ready wait / checked session: %u services, recursion blocked; PASS\\n",dev.services);
+}
 int main(){
     FactoryDefaults defaults(1.0f,5,true,false);
+    sessionReplay(defaults);
     Memory io;Storage<Memory> store(io,configuredProfile());
     assert(store.initialize(defaults));
     const auto state=store.inspect();
