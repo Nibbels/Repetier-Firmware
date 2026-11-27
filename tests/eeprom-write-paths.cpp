@@ -8,6 +8,7 @@
 #include <cstring>
 #include <cmath>
 using PGM_P = const char*;
+struct GCode;
 #include "Eeprom.h"
 #define EEPROM_OFFSET 0
 #define DRV8711_NUM_CHANNELS 5

@@ -12,7 +12,7 @@ def extract(name,a,b):
     start=s.index(a)
     return s[start:s.index(b,start)]
 
-checksum=extract("Eeprom.cpp","void EEPROM::updateChecksum()","void EEPROM::storeManualZOffset()")
+checksum=extract("Eeprom.cpp","void EEPROM::updateChecksum()","void EEPROM::storeMicrostepConfiguration(")
 checksum+=extract("Eeprom.cpp","uint8_t EEPROM::computeChecksum()","void EEPROM::writeExtruderPrefix(")
 loader=extract("Eeprom.cpp","void EEPROM::readDataFromEEPROM()","    bool change = readPreheatProfiles();")
 loader+="    bool change=needsUpdate; uint8_t version=storedVersion;\n"
