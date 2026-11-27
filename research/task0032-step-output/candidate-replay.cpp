@@ -76,27 +76,41 @@ int main() {
     }
     printf("ECMP Q23 comparisons=%llu admissions=%llu extras=%llu\n",
            (unsigned long long)comparisons,(unsigned long long)admissions,(unsigned long long)extras);
+    // Exhaust all possible initial Arduino AVR fractional accumulator values.
+    // Earliest first counted overflow can occur immediately after assertion.
+    uint32_t min26=UINT32_MAX,min27=UINT32_MAX;
+    for (unsigned frac0=0;frac0<125;++frac0) {
+        unsigned frac=frac0, ms=0, overflows=0;
+        while(ms<27){
+            ++overflows;++ms;frac+=3;
+            if(frac>=125){frac-=125;++ms;}
+            if(ms>=26 && min26>(overflows-1)*1024)min26=(overflows-1)*1024;
+            if(ms>=27 && min27>(overflows-1)*1024)min27=(overflows-1)*1024;
+        }
+    }
+    assert(min26==24576 && min27==25600);
+    printf("Wake guard millis quantization: 26ms earliest %luus, 27ms earliest %luus\n",(unsigned long)min26,(unsigned long)min27);
     MotorWake w;
     assert(!w.readyFor(1));
     // Wake X/Y/E0 in a single transaction rather than three sequential waits.
     assert(w.newChannels(0x0b)==0x0b);
     w.afterAsserted(0x0b,100);
-    for(uint32_t t=100;t<126;++t){w.service(t);assert(!w.readyFor(0x0b));}
+    for(uint32_t t=100;t<127;++t){w.service(t);assert(!w.readyFor(0x0b));}
     w.afterAsserted(0x0b,120); // redundant enable must not reset deadline
-    w.service(126);assert(w.readyFor(0x0b));
+    w.service(127);assert(w.readyFor(0x0b));
     w.afterAsserted(4,130);assert(w.readyFor(0x0b)&&!w.readyFor(4));
     w.afterAsserted(16,140);w.service(156);assert(!w.readyFor(4)&&w.readyFor(0x0b));
-    w.service(166);assert(w.readyFor(0x1f));
+    w.service(167);assert(w.readyFor(0x1f));
     w.beforeDisable(0x08);assert(!w.readyFor(8)&&w.readyFor(0x17));
     w.afterAsserted(8,170);w.beforeDisable(0x1f);w.service(1000);assert(w.readyMask()==0);
     // Counter rollover and reset/fault invalidation.
     w.afterAsserted(7,UINT32_MAX-10);
-    w.service(14);assert(!w.readyFor(7));
-    w.service(15);assert(w.readyFor(7));
+    w.service(15);assert(!w.readyFor(7));
+    w.service(16);assert(w.readyFor(7));
     w.reset();w.service(50);assert(!w.readyFor(7));
     for(unsigned m=1;m<=31;++m){
-        w.reset();w.afterAsserted(m,0);w.service(25);assert(!w.readyFor(m));
-        w.service(26);assert(w.readyFor(m));
+        w.reset();w.afterAsserted(m,0);w.service(26);assert(!w.readyFor(m));
+        w.service(27);assert(w.readyFor(m));
         w.beforeDisable(m);assert(!w.readyFor(m));
     }
     puts("MotorWake pure lifecycle tests passed; not hardware or concurrency qualification");
