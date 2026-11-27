@@ -1,6 +1,7 @@
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include "Constants.h"
 enum {Z_MIN_PIN,Z_MAX_PIN,Z_DIR_PIN,Z_STEP_PIN};
 constexpr bool INVERT_Z_DIR=false,LOW=false,HIGH=true;
