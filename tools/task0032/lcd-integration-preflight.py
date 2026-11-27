@@ -117,7 +117,7 @@ def source_changes(root):
         # Three foreground-only flags. No shared ISR flags or GPIO state
         # are packed into this byte. C++11 constructor supplies defaults.
         s=once(s,"    bool normalCharacters_ = false;\n    bool statusIsTemplate_ = false;",
-               "    bool normalCharacters_:1;\n    bool statusIsTemplate_:1;\n    bool autoReturnMessage_:1;")
+               "    bool normalCharacters_:1;\n    bool statusIsTemplate_:1;\n    bool autoReturnMessage_:1;\n    bool suppressLocalRepeat_:1;")
         s=once(s,"    bool autoReturnMessage_ = false;\n","")
         s=once(s,"    const char* cachedRow(uint8_t row) const;",
                "    const char* cachedRow(uint8_t row) const; // exactly UI_COLS cells, no terminator")
@@ -126,7 +126,7 @@ def source_changes(root):
 
     def ui(s):
         s=once(s,"UIDisplay::UIDisplay() = default;",
-               "UIDisplay::UIDisplay() : normalCharacters_(false), statusIsTemplate_(false), autoReturnMessage_(false) {}")
+               "UIDisplay::UIDisplay() : normalCharacters_(false), statusIsTemplate_(false), autoReturnMessage_(false), suppressLocalRepeat_(false) {}")
         # No terminator in the fixed-width frame. The only synchronous
         # printRow caller is printRowP with full width (checked below).
         s=once(s,"    displayCache_[r][col] = 0;\n","")
@@ -226,8 +226,12 @@ void UIDisplay::loadStartupCharacters()""")
         s=once(s,"void UIDisplay::slowAction() {",LOCAL_KEY+"\nvoid UIDisplay::slowAction() {")
         s=once(s,"const millis_t buttonAge = HAL::timeInMilliseconds() - lastButtonStart;",
                "const millis_t buttonStart = lastButtonStart;\n        const millis_t buttonAge = HAL::timeInMilliseconds() - buttonStart;")
+        s=once(s,"                lastAction = 0;\n            } else if (buttonAge",
+               "                lastAction = 0;\n                suppressLocalRepeat_=false;\n            } else if (buttonAge")
         s=once(s,"                executeAction(lastAction);\n                nextRepeat",
-               "                if(localKeyReady(lastAction,true,buttonStart)) executeAction(lastAction);\n                nextRepeat")
+               "                suppressLocalRepeat_=!localKeyReady(lastAction,true,buttonStart);\n                if(!suppressLocalRepeat_) executeAction(lastAction);\n                nextRepeat")
+        s=once(s,"} else if (lastAction < 1000 && lastAction) // Repeatable key",
+               "} else if (lastAction < 1000 && lastAction && !suppressLocalRepeat_) // Admitted repeatable key")
         s=once(s,"                executeAction(lastAction);\n                repeatDuration",
                "                if(localKeyReady(lastAction,false,buttonStart)) executeAction(lastAction);\n                repeatDuration")
         return s
@@ -373,6 +377,7 @@ constexpr uint8_t UI_FLAG_SLOW_ACTION_RUNNING = 4;""")
                """    unsigned calls=0, refreshes=0;
     struct { bool dirty=false; bool pending() const {return dirty;} } lcdTransport_;
     millis_t lastDisplayCompletedMs_=0;
+    bool suppressLocalRepeat_=false;
     bool localKeyReady(int action,bool initial,millis_t buttonStart) const;""")
         s=once(s,"        UIDisplay busy;",
                """        UIDisplay pending;
@@ -412,6 +417,27 @@ constexpr uint8_t UI_FLAG_SLOW_ACTION_RUNNING = 4;""")
         assert(delayed.calls==1);
         delayed.lastDisplayCompletedMs_=130;
         assert(!delayed.localKeyReady(1001,true,130));
+        HAL::now=100;
+        // A rejected repeatable key must not execute later merely because
+        // the new frame drained. Test both while pending and past repeats.
+        UIDisplay held;
+        held.expectedIrq=enabled;
+        held.menuLevel=1;
+        held.lastButtonAction=1;
+        held.lcdTransport_.dirty=true;
+        held.slowAction();
+        assert(held.calls==0 && held.suppressLocalRepeat_);
+        held.lcdTransport_.dirty=false;
+        held.lastDisplayCompletedMs_=150;
+        for(HAL::now=300;HAL::now<=700;HAL::now+=100) {
+            held.slowAction();
+            assert(held.calls==0 && irq==enabled);
+        }
+        held.lastButtonAction=0;held.slowAction();
+        assert(!held.suppressLocalRepeat_);
+        held.lastButtonStart=HAL::now;held.lastButtonAction=1;
+        HAL::now+=30;held.slowAction();
+        assert(held.calls==1 && !held.suppressLocalRepeat_);
         HAL::now=100;
         UIDisplay busy;""")
         return s
