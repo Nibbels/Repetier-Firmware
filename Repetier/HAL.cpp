@@ -126,28 +126,40 @@ volatile bool heaterBatchValid=false;
 volatile bool heaterBatchPrevious=false;
 volatile bool heaterLeaseReady=false;
 constexpr uint16_t heaterSampleMaxAge=6250; // experimental 100ms from batch start
+// Exactly the prior per-sample wrap transition, specialized for the
+// fixed ADC channel count. Select continuity once, not for each channel.
+template<bool Continuous>
+inline __attribute__((always_inline)) uint8_t sampleStateAfterWrap(uint8_t s) {
+    if(!Continuous) return s & SampleBusy;
+    if(s&SamplePrevious)
+        s &= uint8_t(~(SampleValid|SampleFresh|SampleMatch|SamplePrevious));
+    else if(s&SampleValid)
+        s |= SamplePrevious;
+    if(s&ReservationPrevious)
+        s &= uint8_t(~(SampleReserved|SampleMatch|ReservationPrevious));
+    else if(s&SampleReserved)
+        s |= ReservationPrevious;
+    return s;
+}
+template<bool Continuous, uint8_t Count>
+struct HeaterSampleWrap {
+    static inline __attribute__((always_inline)) void apply() {
+        HeaterSampleWrap<Continuous,Count-1>::apply();
+        heaterSampleState[Count-1]=sampleStateAfterWrap<Continuous>(heaterSampleState[Count-1]);
+    }
+};
+template<bool Continuous>
+struct HeaterSampleWrap<Continuous,0> {
+    static inline __attribute__((always_inline)) void apply() {}
+};
 // A live active compare proves less than one wrap since its last grant,
 // which followed a synchronized sample consume. Never clear an active
 // compare flag at renewal. This requires a bounded consume-to-arm path.
 void synchronizeHeaterSamples() {
     if (!(TIFR3 & _BV(TOV3))) return;
     const bool continuous=heaterClockContinuity();
-    for(uint8_t c=0;c<TemperatureAdcCount;++c) {
-        uint8_t s=heaterSampleState[c];
-        if(!continuous) {
-            s &= SampleBusy;
-        } else {
-            if(s&SamplePrevious)
-                s &= uint8_t(~(SampleValid|SampleFresh|SampleMatch|SamplePrevious));
-            else if(s&SampleValid)
-                s |= SamplePrevious;
-            if(s&ReservationPrevious)
-                s &= uint8_t(~(SampleReserved|SampleMatch|ReservationPrevious));
-            else if(s&SampleReserved)
-                s |= ReservationPrevious;
-        }
-        heaterSampleState[c]=s;
-    }
+    if(continuous) HeaterSampleWrap<true,TemperatureAdcCount>::apply();
+    else HeaterSampleWrap<false,TemperatureAdcCount>::apply();
     if(!continuous || heaterBatchPrevious) heaterBatchValid=false;
     heaterBatchPrevious=heaterBatchValid;
     TIFR3=_BV(TOV3); // never clear compare expiry flags here

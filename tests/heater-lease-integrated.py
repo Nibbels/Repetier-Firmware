@@ -210,7 +210,33 @@ static void checkFixedChannelEquivalence() {
                 }
             }
 }
+static uint8_t oldWrapState(uint8_t s,bool continuous) {
+    if(!continuous) s &= SampleBusy;
+    else {
+        if(s&SamplePrevious)
+            s &= uint8_t(~(SampleValid|SampleFresh|SampleMatch|SamplePrevious));
+        else if(s&SampleValid) s |= SamplePrevious;
+        if(s&ReservationPrevious)
+            s &= uint8_t(~(SampleReserved|SampleMatch|ReservationPrevious));
+        else if(s&SampleReserved) s |= ReservationPrevious;
+    }
+    return s;
+}
+static void checkSampleWrapEquivalence() {
+    for(bool continuous:{false,true})for(unsigned state=0;state<256;++state) {
+        uint8_t before[TemperatureAdcCount];
+        for(uint8_t c=0;c<TemperatureAdcCount;++c) {
+            before[c]=uint8_t(state+61*c);
+            heaterSampleState[c]=before[c];
+        }
+        if(continuous) HeaterSampleWrap<true,TemperatureAdcCount>::apply();
+        else HeaterSampleWrap<false,TemperatureAdcCount>::apply();
+        for(uint8_t c=0;c<TemperatureAdcCount;++c)
+            assert(heaterSampleState[c]==oldWrapState(before[c],continuous));
+    }
+}
 int main(){
+    checkSampleWrapEquivalence();
     checkFixedChannelEquivalence();
     // Independently of duty-byte consistency, a frame without positive
     // lease authorization must never drive a rising heater edge.
