@@ -30,7 +30,7 @@ function geometry(spec,p=defaults){
     const steps=d.map(Math.abs),n=Math.max(...steps);
     const cls=steps[2]&&!steps[0]&&!steps[1]?"E":steps[2]?(steps[2]/Math.max(1,n)>=.5?"denseXYE":"XYE"):(steps[0]&&steps[1]?"XY":"X");
     const body=line.slice(line.indexOf(" ")+1,line.lastIndexOf("*")).replace(/ E[\d.]+/," E"+e.toFixed(5));
-    rows.push({length:w.lengths[i],steps,d,n,cls,bytes:frame(i+1,body).length});
+    rows.push({length:w.lengths[i],steps,d,n,cls,bytes:frame(i+1,body).length,numberedAckBytes:5+String(i+1).length});
   }
   return rows;
 }
@@ -39,12 +39,14 @@ function evaluate(row,speed,group,p){
   const calls=row.n?Math.ceil(row.n/group):0;
   const stepCost=(anchors[row.cls]-p.fixed)/2;
   const motion=row.n*stepCost+calls*(p.fixed+p.wrapper);
-  const uart=row.bytes*73+p.ackBytes*74;
+  const ackBytes=p.ackBytes==="numbered"?row.numberedAckBytes:p.ackBytes;
+  if(!Number.isInteger(ackBytes)||ackBytes<0)throw Error("bad ACK byte count");
+  const uart=row.bytes*73+ackBytes*74;
   // Task0028: 20 B incomplete ASCII 1799 cycles; 40 B 3499.
   // Single fragment approximation; complete parse/plan is ADDITIONAL.
   const receive=row.bytes*p.rxByte+p.rxCall, fore=p.planner+receive;
   const budget=CPU*duration*(1-p.reserve);
-  return {duration,calls,motion,uart,fore,receive,feasible:motion+uart+fore<=budget+1e-8,
+  return {duration,calls,motion,uart,fore,receive,ackBytes,feasible:motion+uart+fore<=budget+1e-8,
     packedSteps:row.n>0&&group>1?row.n-(row.n%group===1?1:0):0};
 }
 function groupFor(row,speed,policy,p){
@@ -106,7 +108,9 @@ function selfTest(){
   check(zig.length===120&&zig.some(x=>x.d[1]>0)&&zig.some(x=>x.d[1]<0)&&zig.some(x=>x.steps[2]===x.n),"zigzag and mixed E primary");
   check(scenario(spec,"adaptive-margin",{selectionMargin:0}).motionCycles===rs[3].motionCycles,"zero selection margin equals adaptive");
   for(const x of a)check(groupFor(x,spec.speed,"adaptive-margin",defaults)>=groupFor(x,spec.speed,"adaptive",defaults),"headroom never reduces group");
-  return "12 groups of checks passed";
+  check(a.every((r,i)=>r.numberedAckBytes===5+String(i+1).length),"numbered ACK byte count");
+  check(evaluate({...row,numberedAckBytes:10},1,2,{...p,ackBytes:"numbered"}).uart===740,"numbered ACK IRQ charge");
+  return "14 groups of checks passed";
 }
 function matrix(){
   const out=[];
