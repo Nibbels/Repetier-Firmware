@@ -28,15 +28,6 @@ inline bool sensorSupported(uint8_t v) {
     default:return false;
     }
 }
-inline bool validBaud(uint32_t v) {
-    switch(v) {
-    case 9600: case 14400: case 19200: case 28800: case 38400: case 56000:
-    case 57600: case 76800: case 111112: case 115200: case 128000:
-    case 230400: case 250000: case 256000: case 460800: case 500000:
-    case 921600: case 1000000: case 1500000: return true;
-    default:return false;
-    }
-}
 inline bool validPreheat(uint16_t v,bool bed) {
     // The stored preference is independent of the currently commissioned
     // cutoff; target admission is a separate, dynamic check.
@@ -211,7 +202,7 @@ inline bool validBlock(uint8_t id,const uint8_t* data,uint8_t n) {
             && min && max<255 && int(max)-int(min)>=16;break;
     }
     case System:
-        ok=validBaud(d.u32(Field::F_BAUDRATE)) && d.u32(Field::F_MAX_INACTIVE_TIME)<=0x7FFFFFFFUL
+        ok=d.u32(Field::F_BAUDRATE)==firmwareSerialBaudrate && d.u32(Field::F_MAX_INACTIVE_TIME)<=0x7FFFFFFFUL
             && d.u32(Field::F_STEPPER_INACTIVE_TIME)<=0x7FFFFFFFUL;break;
     case Usage:
         ok=d.u32(Field::F_PRINTING_TIME)<=0x7FFFFFFFUL && isfinite(d.f32(Field::F_PRINTING_DISTANCE))

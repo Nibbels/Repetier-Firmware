@@ -483,11 +483,6 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
                 }
                 break;
             }
-            if (c2 == 'c') // %oc : Connection baudrate
-            {
-                addLong(EEPROM::configuredBaudrate(), 6);
-                break;
-            }
             if (c2 == 'f') // %of : flow multiplier
             {
                 addInt(100 * Printer::flowMultiplier()

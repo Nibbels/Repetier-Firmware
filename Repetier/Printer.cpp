@@ -422,8 +422,7 @@ void Printer::setup() {
     TwiTransfer::beginBus();
 
     if (!hardwareTypeMatches()) {
-        EEPROM::initBaudrate();
-        HAL::serialSetBaudrate(EEPROM::configuredBaudrate());
+        HAL::serialSetBaudrate(firmwareSerialBaudrate);
         Com::printErrorFLN(PSTR(UI_TEXT_WRONG_FIRMWARE));
 
         // Halt before initializing hardware outputs for a different board.
@@ -568,8 +567,7 @@ void Printer::setup() {
 
     uid.initialize();
 
-    EEPROM::initBaudrate();
-    HAL::serialSetBaudrate(EEPROM::configuredBaudrate());
+    HAL::serialSetBaudrate(firmwareSerialBaudrate);
 
     // sending of this information tells the Repetier-Host that the firmware has restarted - never delete or change this to-be-sent information
     Com::println();
@@ -699,7 +697,7 @@ void Printer::stopPrint() {
     Com::printF(Com::tExtrDot, i + 1); \
     Com::print(':');
 void Printer::showConfiguration() {
-    Com::config(PSTR("Baudrate:"), EEPROM::configuredBaudrate());
+    Com::config(PSTR("Baudrate:"), firmwareSerialBaudrate);
     Com::config(PSTR("InputBuffer:"), UsbSerial::receiveCapacity);
     Com::config(PSTR("NumExtruder:"), NUM_EXTRUDER);
     Com::config(PSTR("MixingExtruder:"), 0);

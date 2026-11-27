@@ -99,7 +99,6 @@ List of placeholder:
 %ov : active Speed
 %op : Is double or quadstepping?
 %of : flow multiplier
-%oc : Connection baudrate
 %o0..9 : Output level extruder 0..9 is % including %sign
 %oC : Output level current extruder
 %ob : Output level heated bed
@@ -584,7 +583,6 @@ UI_MENU(ui_menu_feedrate, UI_MENU_FEEDRATE)
 
 UI_MENU_ACTION2(ui_menu_stepper2,UI_ACTION_STEPPER_INACTIVE, UI_TEXT_STEPPER_OFF2_a, UI_TEXT_STEPPER_OFF2_b)
 UI_MENU_ACTION2(ui_menu_maxinactive2,UI_ACTION_MAX_INACTIVE, UI_TEXT_ALL_OFF2_a, UI_TEXT_ALL_OFF2_b)
-UI_MENU_CHANGEACTION(ui_menu_general_baud,UI_TEXT_BAUDRATE,UI_ACTION_BAUDRATE)
 UI_MENU_ACTIONSELECTOR(ui_menu_general_stepper_inactive,UI_TEXT_STEPPER_OFF,ui_menu_stepper2)
 UI_MENU_ACTIONSELECTOR(ui_menu_general_max_inactive,UI_TEXT_ALL_OFF,ui_menu_maxinactive2)
 
@@ -714,7 +712,7 @@ UI_MENU_CHANGEACTION_FILTER(ui_menu_microsteps_e,  UI_TEXT_MICRO_STEPS_E , UI_AC
 UI_MENU(ui_menu_motor,UI_MENU_MOTOR_COND)
 //############################################################### MOTOR MENU
 
-#define UI_MENU_GENERAL {&ui_menu_general_baud,&ui_menu_general_stepper_inactive,&ui_menu_general_max_inactive EXTRUDER_OFFSET_TYPE_ENTRY_XY}
+#define UI_MENU_GENERAL {&ui_menu_general_stepper_inactive,&ui_menu_general_max_inactive EXTRUDER_OFFSET_TYPE_ENTRY_XY}
 UI_MENU(ui_menu_general,UI_MENU_GENERAL)
 /** \brief Configuration menu */
 UI_MENU_CHANGEACTION(ui_menu_preheat_a_bed, "A Bed %Vb C", UI_ACTION_PREHEAT_A_BED)

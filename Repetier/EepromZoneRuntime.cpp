@@ -14,7 +14,6 @@
 #include "GCodeInput.h"
 
 using namespace EepromZones;
-long EEPROM::configuredBaudrate_ = BAUDRATE;
 namespace {
 AvrDevice device;
 bool loaded=false;
@@ -208,15 +207,6 @@ bool EEPROM::commissionBedCutoff(uint8_t cutoff) {
     }
     return true;
 }
-void EEPROM::initBaudrate() {
-    configuredBaudrate_=BAUDRATE;
-    uint8_t data[MaxPayload];uint32_t alerts=AllAlerts;
-    auto s=session();
-    if(s.read(System,data,length(System),alerts)==Result::Ok && !(alerts&blockBit(System))) {
-        BlockDecoder d(System,data,length(System));
-        configuredBaudrate_=d.u32(Field::F_BAUDRATE);
-    }
-}
 void EEPROM::init() {
     const bool reset=READ(ENABLE_KEY_1)==0 && READ(ENABLE_KEY_4)==0 && READ(ENABLE_KEY_E5)==0;
     loadFull(reset,true);
@@ -367,7 +357,6 @@ void EEPROM::storeToolOffsets(uint8_t tool,float x,float y,bool saveX,bool saveY
     if(n)persist(p,n);
 }
 void EEPROM::storeInactivity(bool stepper,uint32_t duration){persist(Patch::dword(stepper?Field::F_STEPPER_INACTIVE_TIME:Field::F_MAX_INACTIVE_TIME,duration));}
-void EEPROM::storeBaudrate(){persist(Patch::dword(Field::F_BAUDRATE,configuredBaudrate_));}
 void EEPROM::storeScanLift(float lift){persist(Patch::real(Field::F_ZSCAN_START_MM,lift));}
 void EEPROM::storeWobblePhase(int8_t phase){persist(Patch::byte(Field::F_RF_MOD_WOBBLE_FIX_PHASEXY,phase));}
 void EEPROM::storeWobbleAmplitude(uint8_t component,int16_t amplitude){if(component<3)persist(Patch::word(at(Field::F_RF_MOD_WOBBLE_FIX_AMPX,2*component),amplitude));}

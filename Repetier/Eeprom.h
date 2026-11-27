@@ -177,7 +177,6 @@ have problems with other modules using the eeprom */
 // Offsets 95–98 in each extruder block are reserved for the former TipDown setting.
 
 class EEPROM {
-    static long configuredBaudrate_;
     static uint8_t computeChecksum();
     static void writeExtruderPrefix(uint16_t pos);
     static void beginReport(uint16_t pos, PGM_P type);
@@ -199,10 +198,6 @@ public:
     static void reportRecovery();
     static const void* recoveryDialogTag();
 #endif
-    static void initBaudrate();
-    // Persisted next-boot setting, not a report of the live UART divisor.
-    static long configuredBaudrate() { return configuredBaudrate_; }
-    static void setConfiguredBaudrate(long rate) { configuredBaudrate_ = rate; }
     static void storeDataIntoEEPROM(uint8_t corrupted = 0);
     struct UsageTotals { int32_t seconds; float metres; };
     static UsageTotals usageTotals();
@@ -228,7 +223,6 @@ public:
     static void storeFanDuty(bool maximum,uint8_t duty);
     static void storeToolOffsets(uint8_t tool,float x,float y,bool saveX,bool saveY);
     static void storeInactivity(bool stepper,uint32_t duration);
-    static void storeBaudrate();
     static void storeScanLift(float lift);
     static void storeWobblePhase(int8_t phase);
     static void storeWobbleAmplitude(uint8_t component,int16_t amplitude);

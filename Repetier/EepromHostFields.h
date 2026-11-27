@@ -104,7 +104,7 @@
     RF_EPR_FIELD(0, EPR_RF_CASE_LIGHT_MODE, Com::tEPRCaseLightsMode, 3, true);
 
 
-    RF_EPR_FIELD(2, EPR_BAUDRATE, Com::tEPRBaudrate, 3, true);
+    RF_EPR_FIELD(2, EPR_BAUDRATE, Com::tEPRBaudrate, 3, false);
     RF_EPR_FIELD(2, EPR_MAX_INACTIVE_TIME, Com::tEPRMaxInactiveTime, 3, true);
     RF_EPR_FIELD(2, EPR_STEPPER_INACTIVE_TIME, Com::tEPRStopAfterInactivty, 3, true);
     RF_EPR_FIELD(1, EPR_RF_PREHEAT_A_BED, PSTR("Preheat A bed [C]"), 3, true);

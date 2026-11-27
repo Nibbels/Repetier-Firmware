@@ -20,8 +20,6 @@
 #include "Repetier.h"
 #include "StepExecutor.h"
 
-const long baudrates[] PROGMEM = { 9600, 14400, 19200, 28800, 38400, 56000, 57600, 76800, 111112, 115200, 128000, 230400, 250000, 256000,
-                                   460800, 500000, 921600, 1000000, 1500000, 0 };
 
 void UIDisplay::finishAction(int action) {
     switch (action) {
@@ -359,38 +357,6 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
     case UI_ACTION_MAX_FEEDRATE_Z:
         changeMotionSetting(action, increment);
         break;
-
-    case UI_ACTION_BAUDRATE: {
-        unsigned char p = 0;
-        int32_t rate;
-        do {
-            rate = pgm_read_dword(&(baudrates[p]));
-            if (rate == EEPROM::configuredBaudrate())
-                break;
-            p++;
-
-        } while (rate != 0);
-
-        if (rate == 0 && p >= 2)
-            p -= 2;
-        else if (rate == 0 && p == 1)
-            p = 0;
-
-        if (p + increment >= 0)
-            p += increment;
-        else if (p + increment <= 0)
-            p = 0;
-
-        //if(p<0) p = 0;
-        rate = pgm_read_dword(&(baudrates[p]));
-        if (rate == 0 && p >= 1)
-            p--;
-        EEPROM::setConfiguredBaudrate(pgm_read_dword(&(baudrates[p])));
-
-        EEPROM::storeBaudrate();
-        break;
-    }
-
 
     case UI_ACTION_EXTR_STEPS_E0:
     case UI_ACTION_EXTR_STEPS_E1:

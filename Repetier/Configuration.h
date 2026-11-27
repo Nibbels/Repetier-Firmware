@@ -486,9 +486,6 @@ we use blocks of 2 kByte size for the structure of our EEPROM
  */
 #define ADD_CONTINUE_AFTER_PAUSE_TEMP_TOLERANCE         2                                      // [°C]
 
-/** \brief Communication speed. Overridden if EEPROM activated. */
-#define BAUDRATE                            115200
-
 /**
  * \brief Cache size for incoming commands.
  * There should be no reason to increase this cache. Commands are nearly immediately sent to

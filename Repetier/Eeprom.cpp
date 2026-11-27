@@ -22,7 +22,6 @@
 
 // Persisted signature for the existing internal EEPROM layout.
 constexpr uint8_t eepromMagic = 44;
-long EEPROM::configuredBaudrate_ = BAUDRATE;
 
 // A changed algorithm requires a new stored tune, not a full settings reset.
 // Bed is always slot 2, independent of the number of fitted extruders.
@@ -307,7 +306,8 @@ void EEPROM::update(GCode* com) {
         // owned by EEPROM migration, not be forged with raw writes.
         if(com->P==EPR_MAGIC_BYTE||
            (com->P<=EPR_VERSION&&end>EPR_INTEGRITY_BYTE)||
-           (com->P<=EPR_CHECK_NUM_EXTRUDERS&&end>EPR_CHECK_NUM_EXTRUDERS)) {
+           (com->P<=EPR_CHECK_NUM_EXTRUDERS&&end>EPR_CHECK_NUM_EXTRUDERS)||
+           (com->P<EPR_BAUDRATE+4&&end>EPR_BAUDRATE)) {
             Com::printErrorFLN(PSTR("EEPROM metadata is read-only"));
             return;
         }
@@ -400,7 +400,6 @@ void EEPROM::restoreEEPROMExtruderSettingsFromConfiguration(uint8_t extruderId) 
 
 void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     Printer::preheatProfiles.restoreDefaults();
-    configuredBaudrate_ = BAUDRATE;
     Printer::inactivity.setShutdownTimeout(MAX_INACTIVE_TIME * 1000L);
     Printer::inactivity.setStepperTimeout(STEPPER_INACTIVE_TIME * 1000L);
     Printer::setStepsPerMm(X_AXIS, XAXIS_STEPS_PER_MM);
@@ -535,7 +534,8 @@ void EEPROM::clearEEPROM() {
 void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     HAL::eprSetByte(EPR_MAGIC_BYTE, eepromMagic);
     HAL::eprSetByte(EPR_CHECK_NUM_EXTRUDERS, NUM_EXTRUDER);
-    HAL::eprSetInt32(EPR_BAUDRATE, configuredBaudrate_);
+    // Frozen legacy comparison image only. Never used to configure UART.
+    HAL::eprSetInt32(EPR_BAUDRATE, 115200L);
     HAL::eprSetInt32(EPR_MAX_INACTIVE_TIME, Printer::inactivity.shutdownTimeout());
     HAL::eprSetInt32(EPR_STEPPER_INACTIVE_TIME, Printer::inactivity.stepperTimeout());
     HAL::eprSetFloat(EPR_XAXIS_STEPS_PER_MM, Printer::stepsPerMm(X_AXIS));
@@ -736,7 +736,6 @@ void EEPROM::readDataFromEEPROM() {
     bool change = readPreheatProfiles();
 
     uint8_t version = HAL::eprGetByte(EPR_VERSION); // This is the saved version. Don't copy data not set in older versions!
-    configuredBaudrate_ = HAL::eprGetInt32(EPR_BAUDRATE);
     Printer::inactivity.setShutdownTimeout(HAL::eprGetInt32(EPR_MAX_INACTIVE_TIME));
     Printer::inactivity.setStepperTimeout(HAL::eprGetInt32(EPR_STEPPER_INACTIVE_TIME));
     Printer::setStepsPerMm(X_AXIS, HAL::eprGetFloat(EPR_XAXIS_STEPS_PER_MM));
@@ -1224,7 +1223,6 @@ void EEPROM::storeToolOffsets(uint8_t tool,float x,float y,bool saveX,bool saveY
     if(changed)updateChecksum();
 }
 void EEPROM::storeInactivity(bool stepper,uint32_t duration) {saveLegacyLong(stepper?EPR_STEPPER_INACTIVE_TIME:EPR_MAX_INACTIVE_TIME,duration);}
-void EEPROM::storeBaudrate() {saveLegacyLong(EPR_BAUDRATE,configuredBaudrate_);}
 void EEPROM::storeScanLift(float lift) {saveLegacyFloat(EPR_ZSCAN_START_MM,lift);}
 void EEPROM::storeWobblePhase(int8_t phase) {saveLegacyByte(EPR_RF_MOD_WOBBLE_FIX_PHASEXY,uint8_t(phase));}
 void EEPROM::storeWobbleAmplitude(uint8_t component,int16_t amplitude) {
@@ -1270,12 +1268,6 @@ void EEPROM::storeUsageTotals(UsageTotals totals) {
     HAL::eprSetFloat(EPR_PRINTING_DISTANCE,totals.metres);
     updateChecksum();
 }
-
-void EEPROM::initBaudrate() {
-    if (HAL::eprGetByte(EPR_MAGIC_BYTE) == eepromMagic) {
-        configuredBaudrate_ = HAL::eprGetInt32(EPR_BAUDRATE);
-    }
-} // initBaudrate
 
 void EEPROM::init() {
     bool kill_eeprom_because_corrupted = (computeChecksum() != HAL::eprGetByte(EPR_INTEGRITY_BYTE));

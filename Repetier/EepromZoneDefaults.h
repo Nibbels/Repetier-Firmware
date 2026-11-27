@@ -264,7 +264,7 @@ public:
         RF_FACTORY_RECORD(PartFan,RF_FACTORY_PartFan)
 #undef RF_FACTORY_PartFan
 #define RF_FACTORY_System(X) \
-            X(uint32_t,F_BAUDRATE,BAUDRATE) \
+            X(uint32_t,F_BAUDRATE,firmwareSerialBaudrate) \
             X(uint32_t,F_MAX_INACTIVE_TIME,uint32_t(MAX_INACTIVE_TIME)*1000) \
             X(uint32_t,F_STEPPER_INACTIVE_TIME,uint32_t(STEPPER_INACTIVE_TIME)*1000)
         RF_FACTORY_RECORD(System,RF_FACTORY_System)
