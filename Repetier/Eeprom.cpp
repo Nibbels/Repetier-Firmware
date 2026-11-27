@@ -270,6 +270,11 @@ void EEPROM::update(GCode* com) {
         Com::printErrorFLN(PSTR("Motor current is menu-only"));
         return;
     }
+    // The retired baud preference is not writable in the raw comparison build.
+    if(com->hasP() && com->P<EPR_BAUDRATE+4 && com->P+width>EPR_BAUDRATE) {
+        Com::printErrorFLN(PSTR("Firmware serial baudrate is fixed"));
+        return;
+    }
     // P/I/D are owned by autotune, even in the raw comparison build.
     if(com->hasP()) {
         const int32_t end=com->P+width;
