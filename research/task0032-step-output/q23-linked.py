@@ -44,7 +44,7 @@ def modify(dst,tag):
         s=replace(s,"                        Extruder::unstep();\n                        Printer::extrusionCompensation.consumeExtraStep(forward);\n                        Extruder::step();",
                   "                        Extruder::unstep();\n                        Printer::extrusionCompensation.consumeExtraStep(forward);\n                        __builtin_avr_delay_cycles(31);\n                        Extruder::step();\n                        __builtin_avr_delay_cycles(31);")
         changes[p]=s
-    if tag in ("minimal","narrow","wake","jog","wake-jog"):
+    if tag in ("minimal","narrow","wake","jog","wake-jog","wake-jog-idle"):
         # Owner prefers simple fixed margin. Raw linked E-low minimum was
         # 30 cycles; add two cycles only at the ECMP extra-low transition.
         # Avoid adding 31 cycles to already sufficient HIGH phases.
@@ -56,7 +56,7 @@ def modify(dst,tag):
         p="ZMotion.cpp";s=(FW/p).read_text()
         changes[p]=replace(s,"    if (directionIsPositive() != positive)\n        setDirection(positive);\n    const int8_t direction",
                            "    if (directionIsPositive() != positive) {\n        setDirection(positive);\n        __builtin_avr_delay_cycles(2);\n    }\n    const int8_t direction")
-    if tag in ("narrow","wake","jog","wake-jog"):
+    if tag in ("narrow","wake","jog","wake-jog","wake-jog-idle"):
         # Exploratory queue-only mask split. E output transaction and
         # Z/tail masks unchanged. Queue's Timer1-private XY phase/position
         # no longer globally masked. Direct (including PWM key release)
@@ -71,11 +71,11 @@ def modify(dst,tag):
         xy=xy.replace("                HAL::forbidInterrupts();","                if (!forQueue) HAL::forbidInterrupts();")
         s=s[:start]+"        if (forQueue) HAL::allowInterrupts();\n\n"+xy+"        if (forQueue) HAL::forbidInterrupts();\n\n"+s[end:]
         changes[p]=s
-    if tag in ("wake","wake-jog"):
+    if tag in ("wake","wake-jog","wake-jog-idle"):
         spec=importlib.util.spec_from_file_location("wake_source",HERE/"motor-wake-source.py")
         wake_source=importlib.util.module_from_spec(spec);spec.loader.exec_module(wake_source)
         wake_source.apply(FW,HERE,changes,replace)
-    if tag in ("jog","wake-jog"):
+    if tag in ("jog","wake-jog","wake-jog-idle"):
         # PWM key release is a real nested writer of the direct remaining
         # counter. On AVR a 32-bit read is not atomic. Keep only the reads
         # masked, never the surrounding ramp math or direction setup.
@@ -114,6 +114,62 @@ def modify(dst,tag):
         s=replace(s,"if (move->stepsRemaining <= 0 || move->isNoMove())",
                     "if (remainingAfter <= 0 || move->isNoMove())")
         changes[p]=s
+    if tag=="wake-jog-idle":
+        # Idle correction is Timer1-owned. Foreground cannot run during this
+        # vector; PWM key-release only edits a live direct move (none here).
+        # Keep OCIE1A off; preserve the masked timer/Advance tail and atomic
+        # Z GPIO writes (especially PORTL extended I/O on RF1000).
+        p="HAL.cpp";s=(FW/p).read_text()
+        s=replace(s,"""    if (!PrintLine::hasActiveQueuedMove() && !PrintLine::directMoveActive()) {
+        StepExecutor::stepSlowedZCompensation();""",
+                    """    if (!PrintLine::hasActiveQueuedMove() && !PrintLine::directMoveActive()) {
+        HAL::allowInterrupts();
+        StepExecutor::stepSlowedZCompensation();""")
+        s=replace(s,"""            return;
+        }
+    }
+
+    if (PrintLine::directMoveActive()) {
+        setTimer(StepExecutor::performDirectMove());""",
+                    """            return;
+        }
+        HAL::forbidInterrupts();
+    }
+
+    if (PrintLine::directMoveActive()) {
+        setTimer(StepExecutor::performDirectMove());""")
+        changes[p]=s
+        p="ZMotion.cpp";s=changes[p]
+        changes[p]=replace(s,"""    const bool positive = pending > 0;
+    if (directionIsPositive() != positive) {""",
+                    """    // Protect the physical direction/rise transaction and counters,
+    // not the entire idle dispatch or correction limit evaluation.
+    InterruptProtectedBlock pulseLock;
+    if (Printer::blockAll)
+        return 0;
+    const bool positive = pending > 0;
+    if (directionIsPositive() != positive) {""")
+        p="StepExecutor.cpp";s=changes[p]
+        changes[p]=replace(s,"""        ZMotion::finishPulse();
+    } else if (mass < massWeight) {""",
+                    """        {
+            InterruptProtectedBlock pulseLock;
+            ZMotion::finishPulse();
+        }
+    } else if (mass < massWeight) {""")
+        # Physical E enable pins are compile-time fixed on the supported
+        # boards. Avoid Arduino digitalWrite pin lookup on cold dual tool.
+        p="Extruder.h";s=changes[p]
+        changes[p]=replace(s,"""        if (Extruder::current->enablePin > -1)
+            HAL::digitalWrite(Extruder::current->enablePin, Extruder::current->enableOn);""",
+                    """#if EXT0_ENABLE_PIN > -1
+        if (Extruder::current->id == 0)
+            WRITE(EXT0_ENABLE_PIN, EXT0_ENABLE_ON);
+#endif
+#if EXT1_ENABLE_PIN > -1
+        if (Extruder::current->id == 1)
+            WRITE(EXT1_ENABLE_PIN, EXT1_ENABLE_ON);
+#endif""")
     diff=[]
     for p,s in changes.items():
         old=(FW/p).read_text() if (FW/p).is_file() else ""
@@ -178,7 +234,7 @@ def compare(archive,baseline,out,tag):
     mod=lt.load_interpreter()
     result={}
     for b in lt.BOARDS:
-        img=mod.Image(archive,b);img.q23=True;img.wake=tag in ("wake","wake-jog")
+        img=mod.Image(archive,b);img.q23=True;img.wake=tag in ("wake","wake-jog","wake-jog-idle")
         img.step_pins.update({(0x31,1):"DIR_X",(0x31,7):"DIR_Y",(0x10b,1):"DIR_Z",(0x22,6):"DIR_E0",(0x28,3):"DIR_E1"})
         if b=="RF1000":img.step_pins.pop((0x28,3),None)
         rows=[json.loads(l) for l in (baseline/(b+".jsonl")).read_text().splitlines()]
@@ -264,7 +320,7 @@ def main():
     p.add_argument("--out",type=pathlib.Path,required=True)
     p.add_argument("--tools",type=pathlib.Path)
     p.add_argument("--reuse",type=pathlib.Path,help="reuse exact prior raw/guarded candidate.zip archives")
-    p.add_argument("--variant",choices=("raw","guarded","minimal","narrow","wake","jog","wake-jog"),action="append")
+    p.add_argument("--variant",choices=("raw","guarded","minimal","narrow","wake","jog","wake-jog","wake-jog-idle"),action="append")
     args=p.parse_args()
     args.out.mkdir(parents=True,exist_ok=True)
     all_results={}
@@ -291,6 +347,6 @@ def main():
             assert s["failed"]==0,(variant,board,s["mismatch_examples"])
             # The historical guarded comparator did not fix inherited
             # Z direction setup. Retain the finding, not a shipping pass.
-            if variant in ("minimal","narrow","wake","jog","wake-jog"):assert s["short_pulses"]==0,(board,s["short_examples"])
+            if variant in ("minimal","narrow","wake","jog","wake-jog","wake-jog-idle"):assert s["short_pulses"]==0,(board,s["short_examples"])
             if variant=="guarded":assert s["short_pulses"]<=s["baseline_short_pulses"],(board,s["short_examples"])
 if __name__=="__main__":main()
