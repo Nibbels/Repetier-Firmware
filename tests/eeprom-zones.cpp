@@ -188,22 +188,6 @@ int main() {
     {Field::F_RF_FET1_MODE, 1},
     {Field::F_RF_FET2_MODE, 1},
     {Field::F_RF_FET3_MODE, 1},
-    {Field::F_RF_RGB_LIGHT_MODE, 1},
-    {Field::F_RF_RGB_PRINTING_R, 1},
-    {Field::F_RF_RGB_PRINTING_G, 1},
-    {Field::F_RF_RGB_PRINTING_B, 1},
-    {Field::F_RF_RGB_HEATING_R, 1},
-    {Field::F_RF_RGB_HEATING_G, 1},
-    {Field::F_RF_RGB_HEATING_B, 1},
-    {Field::F_RF_RGB_COOLING_R, 1},
-    {Field::F_RF_RGB_COOLING_G, 1},
-    {Field::F_RF_RGB_COOLING_B, 1},
-    {Field::F_RF_RGB_IDLE_R, 1},
-    {Field::F_RF_RGB_IDLE_G, 1},
-    {Field::F_RF_RGB_IDLE_B, 1},
-    {Field::F_RF_RGB_MANUAL_R, 1},
-    {Field::F_RF_RGB_MANUAL_G, 1},
-    {Field::F_RF_RGB_MANUAL_B, 1},
     {Field::F_RF_FAN_MODE, 1},
     {Field::F_RF_PART_FAN_SPEED, 1},
     {Field::F_RF_PART_FAN_PWM_MIN, 1},
@@ -241,8 +225,8 @@ int main() {
         assert(actual==expected);
         widthDigest=(widthDigest^actual)*16777619UL;
     }
-    assert(widthDigest==0x23ae8eb9UL); // pinned before Flash-table conversion
-    puts("EEPROM internal field widths: all 65536 addresses unchanged; PASS");
+    assert(widthDigest==0xd0ac0e89UL); // prior map minus exactly 16 retired RGB fields
+    puts("EEPROM internal field widths: all 65536 addresses match schema; PASS");
     uint16_t c16=0xffff;uint32_t c32=0xffffffff;
     for(char c:"123456789") if(c) {c16=crc16Byte(c16,c);c32=crc32Byte(c32,c);}
     assert(c16==0x29b1 && (c32^0xffffffffUL)==0xcbf43926UL);

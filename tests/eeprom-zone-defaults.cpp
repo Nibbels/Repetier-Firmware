@@ -257,13 +257,13 @@ static void factoryImageReplay() {
                 }
     uint32_t expected=0;
     switch(configuredProfile()) {
-    case 0x0d10:expected=0xd4905079UL;break;
-    case 0x0e20:expected=0x941b89c9UL;break;
-    case 0x0f20:expected=0x6e0c6269UL;break;
-    case 0x0e11:expected=0xa3e79259UL;break;
+    case 0x0d10:expected=0x9871e8f9UL;break;
+    case 0x0e20:expected=0x4e467e41UL;break;
+    case 0x0f20:expected=0xf9d98831UL;break;
+    case 0x0e11:expected=0x2f98e2c1UL;break;
     default:assert(false);
     }
-    assert(bytes==7296 && digest==expected);
+    assert(bytes==6912 && digest==expected);
     printf("Factory payload baseline: %u bytes match; PASS\n",bytes);
 }
 template<class T,class L,class H> static unsigned compareIntegerRange(int first,int last,L lo,H hi,bool (*range)(T,T,T)) {
@@ -382,11 +382,8 @@ int main(){
     assert(system.u32(Field::F_STEPPER_INACTIVE_TIME)==uint32_t(STEPPER_INACTIVE_TIME)*1000);
     assert(store.readBlock(Lighting,block,length(Lighting)));
     BlockDecoder light(Lighting,block,length(Lighting));
-#ifdef RGB_LIGHT_R_PIN
-    assert(light.u8(Field::F_RF_RGB_LIGHT_MODE)==RGB_LIGHT_DEFAULT_MODE);
-    assert(light.u8(Field::F_RF_RGB_PRINTING_R)==RGB_PRINTING_R);
-    assert(light.u8(Field::F_RF_RGB_MANUAL_B)==RGB_MANUAL_B);
-#endif
+    assert(length(Lighting)==4 && light.u8(Field::F_RF_CASE_LIGHT_MODE)==CASE_LIGHTS_DEFAULT_ON);
+    for(uint16_t pos=0x0A67;pos<=0x0A76;++pos)assert(fieldWidth(pos)==0);
 #ifdef X44_PIN
     if(HOTEND_COOLER_USES_PIN(X44_PIN)) {
         assert(configuredProfile()&1);assert(light.u8(Field::F_RF_FET2_MODE)==0);

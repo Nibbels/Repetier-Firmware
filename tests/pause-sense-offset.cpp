@@ -174,6 +174,7 @@ struct Com {
     static constexpr const char* tOutputObjectPrint = "output";
     static const char* lastLine;
     static void printFLN(const char* line) { lastLine = line; }
+    static void printErrorFLN(const char* line) { lastLine = line; }
     template<class... Args> static void printF(Args...) {}
     template<class... Args> static void printFLN(Args...) {}
     static void println() {}
@@ -775,10 +776,15 @@ void pressurePause() {
     GCode command;
     command.S = -99999;
     command.P = 99999;
-    configurePressure(3075, &command);
-    assert(HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMIN] == EMERGENCY_PAUSE_DIGITS_MIN);
-    assert(HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMAX] == EMERGENCY_PAUSE_DIGITS_MAX);
+    HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMIN] = -6000;
+    HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMAX] = 6000;
     const unsigned saves=EEPROM::checksumCalls;
+    configurePressure(3075, &command);
+    assert(Printer::pressureProtection.pauseLimits().minimum==EMERGENCY_PAUSE_DIGITS_MIN);
+    assert(Printer::pressureProtection.pauseLimits().maximum==EMERGENCY_PAUSE_DIGITS_MAX);
+    assert(HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMIN] == -6000);
+    assert(HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMAX] == 6000);
+    assert(EEPROM::checksumCalls==saves);
     configurePressure(3075,&command);
     assert(EEPROM::checksumCalls==saves);
     sample(EMERGENCY_PAUSE_DIGITS_MAX, EMERGENCY_PAUSE_CHECKS);
@@ -787,7 +793,8 @@ void pressurePause() {
     command.explicitS = command.explicitP = true;
     command.S = command.P = 0;
     configurePressure(3075, &command);
-    assert(!HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMIN] && !HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMAX]);
+    assert(HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMIN]==-6000 && HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMAX]==6000);
+    assert(EEPROM::checksumCalls==saves);
     sample(EMERGENCY_PAUSE_DIGITS_MAX + 1, EMERGENCY_PAUSE_CHECKS);
     assert(!Printer::pause.isPaused());
 
@@ -806,14 +813,14 @@ void pressurePause() {
 }
 
 void pressureStop() {
-    GCode command;
-    command.S = -12000;
-    command.P = 11500;
-    configurePressure(3076, &command);
+    // M3076 is gone. Exercise the same pressure owner and persistent
+    // menu settings, not a removed serial interface.
+    Printer::pressureProtection.setStopLimits({-12000,11500});
+    EEPROM::storePressureLimits(true,-12000,11500,true,true);
     assert(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN) == -12000);
     assert(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX) == 11500);
     const unsigned saves=EEPROM::checksumCalls;
-    configurePressure(3076,&command);
+    EEPROM::storePressureLimits(true,-12000,11500,true,true);
     assert(EEPROM::checksumCalls==saves);
     // A one-sided menu save does not capture an unrelated temporary limit.
     EEPROM::storePressureLimits(true,-11900,0,true,false);
@@ -874,12 +881,7 @@ void pressureStop() {
 
     PrintLine::direct.task = DIRECT_IDLE;
     PrintLine::direct.stepsRemaining = 0;
-    command.explicitS = command.explicitP = true;
-    command.S = command.P = 0;
-    Printer::infoLogging = true;
-    configurePressure(3076, &command);
-    Printer::infoLogging = false;
-    assert(Com::lastLine && !std::strcmp(Com::lastLine, "M3076: temporary stop band [0, 0] digits"));
+    Printer::pressureProtection.setStopLimits({0,0});
     assert(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN) == -12000);
     assert(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX) == 11500);
     sample(0, EMERGENCY_STOP_CHECKS);

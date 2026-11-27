@@ -262,8 +262,6 @@ int main() {
             (build / "fixture.inc").write_text(fixture(variant))
             executable = build / "replay"
             flags = [f"-DNUM_EXTRUDER={n}", f"-DMOTHERBOARD={board}"]
-            if board != 1:
-                flags.append("-DRGB_LIGHT_R_PIN=1")
             subprocess.run([os.environ.get("CXX", "c++"), "-std=c++11", "-O2",
                             "-Wall", "-Wextra", "-Werror", *flags, "-I", str(FW),
                             str(build / "replay.cpp"), "-o", str(executable)], check=True)

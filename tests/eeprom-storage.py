@@ -75,6 +75,11 @@ def main():
                 image = bytearray.fromhex(data)
                 assert image[105] == 9 and image[1978:1987] == bytes(9)
                 image[105] = 8
+                # Removed legacy RGB mode was 2 in all old RF2000 snapshots.
+                # Normalize only this retired field; the live code no longer
+                # reads/writes it. Other bytes retain the pinned old digest.
+                if model != "RF1000":
+                    image[1019] = 2
                 image[104] = sum(image[:104] + image[105:]) & 255
                 normalized.append(f"{name} {image.hex()}\n")
             digest = hashlib.sha256("".join(normalized).encode("ascii")).hexdigest()

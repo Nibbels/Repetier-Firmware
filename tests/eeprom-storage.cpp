@@ -22,7 +22,6 @@
 #define __AVR_ATmega2560__ 1
 #include "pins.h"
 #include "ManualMotion.h"
-#include "RgbLighting.h"
 #include "MachineInactivity.h"
 #include "PreheatProfiles.h"
 #include "ZOffset.h"
@@ -93,7 +92,6 @@ Controller* tempController[NUM_TEMPERATURE_LOOPS] = {&extruder[0].tempControl,
 #endif
     &heatedBedController};
 struct Point {uint8_t x,y;}; Point point{}; float lift=defaultHeatBedScanLiftMm; void restoreZOffsetScanPoint(Point p){point=p;} Point zOffsetScanPoint(){return point;} float scanStartLiftMm(){return lift;} void setScanStartLiftMm(float v){lift=v;}
-namespace RgbLighting {char m=0; uint8_t colors[15]={}; void restoreMode(char v){m=v;}char mode(){return m;} void captureProfiles(uint8_t* d){memcpy(d,colors,15);} void restoreProfiles(const uint8_t* d){memcpy(colors,d,15);}}
 uint8_t drv8711Axis_2_InitMicrosteps(int){return 16;} uint8_t drv8711MicroSteps_2_ModeValue(int){return 4;}
 namespace Drv8711 {
     uint8_t modes[5]{}, currents[5]{};

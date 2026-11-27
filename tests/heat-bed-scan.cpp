@@ -101,8 +101,6 @@ struct {
     long position = 0;
     long scanSteps() const { return position; }
 } zMotion;
-bool debugErrors() { return false; }
-bool debugInfo() { return false; }
 void disableCMPnow(bool wait) { assert(!wait); }
 void homeAxis(bool x, bool y, bool z) {
     assert(x || y || z);
@@ -142,7 +140,6 @@ void setTemperatureForAllExtruders(int target) { nozzleTargets.push_back(target)
 }
 namespace Com {
 const char* tPrintingIsInProcessError = "Busy";
-const char* tscanHeatBed = "Scan";
 template<typename... T> void printF(T...) {}
 template<typename... T> void printFLN(T...) {}
 }
@@ -160,7 +157,6 @@ void initCompensationMatrix() {
     g_uZMatrixMax[X_AXIS] = g_uZMatrixMax[Y_AXIS] = 0;
     g_ZMatrixChangedInRam = false;
 }
-void outputScanParameters() {}
 void outputCompensationMatrix(char) {}
 char prepareCompensationMatrix() {
     matrixPrepared = !invalidGrid;

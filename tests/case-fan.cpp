@@ -45,7 +45,7 @@ int main() {
     turnOnCaseFan();
     GCode timed(1, true);
     scheduleCaseFanOff(&timed);
-    assert(fanOn && Com::reportedSeconds == 1);
+    assert(fanOn && CaseFan::offDelay() == 1000);
     HAL::now = 1000;
     CaseFan::service();
     assert(fanOn);

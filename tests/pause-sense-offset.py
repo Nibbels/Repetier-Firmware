@@ -128,7 +128,7 @@ def main():
         "void configureSenseOffset(GCode* command) { setSenseOffsetParameters(command); }",
         section(motion_commands, "void setEmergencyPauseDigits(", "\nvoid setSenseOffsetParameters("),
         "void configurePressure(int code, GCode* command) {"
-        " if (code == 3075) setEmergencyPauseDigits(command); else setEmergencyStopDigits(command); }",
+        " assert(code == 3075); setEmergencyPauseDigits(command); }",
         section(thermal_commands, "static bool prepareFilamentProgram(", "\n#ifdef X35_ADC_CHANNEL"),
         "void runFilamentCommand(int code, GCode* command) {"
         " if (code == 3913) loadFilament(command); else unloadFilament(command); }",

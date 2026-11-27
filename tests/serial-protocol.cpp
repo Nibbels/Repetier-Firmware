@@ -378,7 +378,7 @@ void boundedReceive() {
     auto bad = packet;
     bad.back() ^= 1;
     feed(bad);
-    readReply("\r\nResend:1\r\nok\r\n");
+    readReply("Error:Wrong checksum\r\n\r\nResend:1\r\nok\r\n");
     feed(std::string(300, 'x') + std::string(31, '\0') + packet);
     for (unsigned i = 0; i < 2; ++i) {
         const auto before = incoming.size();
