@@ -96,3 +96,31 @@ jobs:
           path: ${{ runner.temp }}/task0032
           retention-days: 7
           if-no-files-found: error
+
+  archived-linked-costs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.0'
+      - name: Validate immutable archived cost evidence and shared model
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-linked-costs"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          node --version > "$out/node-version.txt"
+          node tools/task0032/demand-model.cjs --self-test
+          node tools/task0032/queue-model.cjs --self-test
+          node tools/task0032/linked-cost-sweep.cjs > "$out/linked-cost-sweep.json"
+          node -e 'const r=require(process.argv[1]); console.log(JSON.stringify({cases:r.rows.length,summary:r.summary},null,2))' "$out/linked-cost-sweep.json"
+          sha256sum tools/task0032/*.cjs > "$out/source-sha256.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: task0032-linked-costs-${{ github.sha }}
+          path: ${{ runner.temp }}/task0032-linked-costs
+          retention-days: 7
+          if-no-files-found: error
