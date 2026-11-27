@@ -1074,28 +1074,47 @@ void failHeaterLease() {
     for(uint8_t c=0;c<=NUM_EXTRUDER;++c) requestedDuty[c]=0;
     TIMSK3=0;
 }
+inline __attribute__((always_inline)) bool leaseWindowLive(uint16_t deadline,uint8_t mask,uint16_t now) {
+    const uint16_t left=uint16_t(deadline-now);
+    return left>heaterLeaseGuard && left<=heaterLeaseDuration && !(TIFR3 & mask);
+}
 bool leaseLive(uint8_t c,uint16_t now) {
-    const uint16_t left=uint16_t(leaseDeadline(c)-now);
-    return left>heaterLeaseGuard && left<=heaterLeaseDuration && !(TIFR3 & leaseMask(c));
+    return leaseWindowLive(leaseDeadline(c),leaseMask(c),now);
+}
+// Fixed channels in the frame and clock-continuity checks avoid the variable
+// register selection and bit shifts in the generic grant/renewal path.
+template<uint8_t c>
+inline __attribute__((always_inline)) bool fixedLeaseLive(uint16_t now) {
+    static_assert(c<=NUM_EXTRUDER,"heater channel");
+    return leaseWindowLive(leaseDeadline(c),leaseMask(c),now);
+}
+template<uint8_t c>
+inline __attribute__((always_inline)) bool continuityChannel(uint16_t now) {
+    return requestedDuty[c] && (TIMSK3&leaseMask(c)) && fixedLeaseLive<c>(now);
+}
+template<uint8_t c>
+inline __attribute__((always_inline)) bool validActiveChannel(uint16_t now) {
+    return !requestedDuty[c] || fixedLeaseLive<c>(now);
 }
 bool heaterClockContinuity() {
     if(!heaterLeaseReady || heaterLeaseFailed) return false;
     const uint16_t now=TCNT3;
-    for(uint8_t c=0;c<=NUM_EXTRUDER;++c)
-        if(requestedDuty[c] && (TIMSK3&leaseMask(c)) && leaseLive(c,now))
-            return true;
-    return false;
+    return continuityChannel<0>(now) || continuityChannel<1>(now)
+#if NUM_EXTRUDER > 1
+        || continuityChannel<2>(now)
+#endif
+        ;
 }
 bool checkHeaterLeases() {
     if (!heaterLeaseReady || heaterLeaseFailed) return false;
     const uint16_t now=TCNT3;
-    for(uint8_t c=0;c<=NUM_EXTRUDER;++c) {
-        if(requestedDuty[c] && !leaseLive(c,now)) {
-            failHeaterLease();
-            return false;
-        }
-    }
-    return true;
+    if(validActiveChannel<0>(now) && validActiveChannel<1>(now)
+#if NUM_EXTRUDER > 1
+        && validActiveChannel<2>(now)
+#endif
+        ) return true;
+    failHeaterLease();
+    return false;
 }
 #endif
 } // namespace
