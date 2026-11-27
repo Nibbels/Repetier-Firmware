@@ -43,6 +43,13 @@ jobs:
           git show "$transport:tools/task0033/loss-replay.py" > "$out/prior-loss-replay.py"
           python3 tools/task0032/loss-gate-replay.py --prior-replay "$out/prior-loss-replay.py" | tee "$out/loss-gate-replay.log"
           sha256sum tools/task0032/loss-gate-replay.py "$out/prior-loss-replay.py" >> "$out/source-sha256.txt"
+          p0=2195b822c89795359cd73052b0c43ff2830a4d56
+          git fetch --no-tags --depth=1 origin "$p0"
+          mkdir -p "$out/p0-tx"
+          for name in UsbSerial.h UsbSerial.cpp; do git show "$p0:Repetier/$name" > "$out/p0-tx/$name"; done
+          git show "$p0:tests/usb-serial.cpp" > "$out/p0-tx/usb-serial.cpp"
+          python3 tools/task0032/tx-ack-replay.py --p0 "$out/p0-tx" | tee "$out/tx-ack-replay.log"
+          sha256sum tools/task0032/tx-ack-replay.py "$out"/p0-tx/* >> "$out/source-sha256.txt"
           sha256sum tools/task0032/parser-wire-replay.py tools/task0032/fixed-uart-init.py tools/task0032/fixed-queue-capacity.py >> "$out/source-sha256.txt"
           for test in link-model demand-model queue-model speed-search queue-estimate governor-preview rx-blackout-model rx-service-window; do
             node "tools/task0032/$test.cjs" --self-test
