@@ -27,10 +27,10 @@ public:
         awake_ |= newly;
         // A shared pending-batch deadline conservatively delays earlier pending
         // channels if another joins. Already ready axes are never delayed.
-        deadline_ = now + settleTicks;
+        assertedAt_ = now;
     }
     void service(uint32_t now) {
-        if (awake_ != ready_ && uint32_t(now - deadline_) < UINT32_C(0x80000000))
+        if (awake_ != ready_ && uint32_t(now - assertedAt_) >= settleTicks)
             ready_ = awake_;
     }
     // Clear eligibility BEFORE lowering SLEEPn, and invalidate on reset/fault.
@@ -43,9 +43,9 @@ public:
     }
     Mask readyMask() const { return ready_; }
     Mask awakeMask() const { return awake_; }
-    void reset() { ready_ = awake_ = 0; deadline_ = 0; }
+    void reset() { ready_ = awake_ = 0; assertedAt_ = 0; }
 private:
-    uint32_t deadline_ = 0;
+    uint32_t assertedAt_ = 0;
     uint8_t awake_ = 0;
     volatile uint8_t ready_ = 0;
 };
