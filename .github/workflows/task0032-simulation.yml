@@ -36,6 +36,8 @@ jobs:
           python3 tools/task0032/parser-wire-replay.py | tee "$out/parser-wire-replay.log"
           grep '^TASK0032_WIRE ' "$out/parser-wire-replay.log" | sed 's/^TASK0032_WIRE //' > "$out/parser-wire-results.jsonl"
           test "$(wc -l < "$out/parser-wire-results.jsonl")" -eq 4
+          python3 tools/task0032/parser-wire-replay.py --reject-unsupported | tee "$out/parser-unsupported-candidate.log"
+          grep -q '^TASK0032_UNSUPPORTED_REJECT ' "$out/parser-unsupported-candidate.log"
           python3 tools/task0032/fixed-uart-init.py | tee "$out/fixed-uart-init.log"
           python3 tools/task0032/fixed-queue-capacity.py | tee "$out/fixed-queue-capacity.log"
           sha256sum tools/task0032/parser-wire-replay.py tools/task0032/fixed-uart-init.py tools/task0032/fixed-queue-capacity.py >> "$out/source-sha256.txt"
