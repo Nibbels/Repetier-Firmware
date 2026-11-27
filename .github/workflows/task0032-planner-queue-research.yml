@@ -1,0 +1,101 @@
+name: Task0032-P planner queue research
+on:
+  pull_request:
+    branches: [ai-firmware-review]
+    paths:
+      - 'research/task0032-planner-queue/**'
+      - '.github/workflows/task0032-planner-queue-research.yml'
+permissions:
+  contents: read
+jobs:
+  planner-research:
+    if: github.event.pull_request.head.ref == 'research/Task0032-planner-queue' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Record actual tested source and pinned parent estimator
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/planner-research"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/tested-sha.txt"
+          git rev-parse HEAD:Repetier/MotionPlanner.cpp HEAD:Repetier/MoveQueue.cpp HEAD:Repetier/MoveQueue.h > "$out/source-blobs.txt"
+          git fetch --depth=1 origin dee72ebd8b60a003664cc9a91b054a98124f62db
+          git show dee72ebd8b60a003664cc9a91b054a98124f62db:tools/task0032/queue-estimate.cjs > "$out/queue-estimate.cjs"
+          test "$(git hash-object "$out/queue-estimate.cjs")" = 1309231cba690fd0937e4315f91fb69f3e1d010d
+          c++ --version | head -1 > "$out/host-compiler.txt"
+      - name: Actual-source smoke and workload matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          work=research/task0032-planner-queue
+          out="$RUNNER_TEMP/planner-research"
+          python3 "$work/replay.py" --scenario smoke --capacity 24 --output "$out/smoke.jsonl"
+          node "$work/analyze.cjs" "$out/smoke.jsonl" "$out/queue-estimate.cjs" > "$out/smoke-summary.json"
+          python3 "$work/replay.py" --capacity 24 28 32 --output "$out/trace.jsonl"
+          node "$work/analyze.cjs" "$out/trace.jsonl" "$out/queue-estimate.cjs" > "$out/summary.json"
+          node "$work/derive.cjs" "$out/summary.json" "$out/trace.jsonl" > "$out/decision-input.json"
+          node -e 'const s=require(process.argv[1]); console.log(JSON.stringify({capacities:s.capacities,proxy_errors:s.proxy_errors,selected_cases:s.selected_cases.filter(c=>c.capacity===24&&c.group===1&&(c.chord===0.05||c.chord===0.050000001||c.chord===0.0500000007||c.chord===100))},null,2))' "$out/decision-input.json"
+          gzip "$out/trace.jsonl" "$out/smoke.jsonl"
+          node -e 'const s=require(process.argv[1]); console.log(JSON.stringify({records:s.records,comparisons:s.comparisons,cases:s.cases.length,nonEmptyZeroMutable:s.nonEmptyZeroMutable,blockedCounterexample:s.blockedCounterexample,relative_error:s.relative_error},null,2))' "$out/summary.json"
+      - name: Stress arrivals and historical junction counterfactuals
+        shell: bash
+        run: |
+          set -euo pipefail
+          work=research/task0032-planner-queue
+          out="$RUNNER_TEMP/planner-research"
+          python3 "$work/replay.py" --scenario stress --capacity 24 28 32 --output "$out/stress.jsonl"
+          node "$work/analyze.cjs" "$out/stress.jsonl" "$out/queue-estimate.cjs" > "$out/stress-summary.json"
+          node "$work/derive.cjs" "$out/stress-summary.json" "$out/stress.jsonl" > "$out/stress-decision-input.json"
+          for variant in unweighted mean-length; do
+            python3 "$work/replay.py" --junction "$variant" --capacity 24 --output "$out/$variant.jsonl"
+            node "$work/analyze.cjs" "$out/$variant.jsonl" "$out/queue-estimate.cjs" > "$out/$variant-summary.json"
+            node "$work/derive.cjs" "$out/$variant-summary.json" "$out/$variant.jsonl" > "$out/$variant-decision-input.json"
+            gzip "$out/$variant.jsonl"
+          done
+          node "$work/compare-variants.cjs" "$out" > "$out/variant-comparison.json"
+          cat "$out/variant-comparison.json"
+          gzip "$out/stress.jsonl"
+      - name: Incremental ledger lifecycle and no-pacing counterfactual
+        shell: bash
+        run: |
+          set -euo pipefail
+          work=research/task0032-planner-queue
+          out="$RUNNER_TEMP/planner-research"
+          c++ -std=c++11 -Wall -Wextra -Werror -O2 "$work/duration-ledger-test.cpp" -o "$RUNNER_TEMP/duration-ledger-test"
+          "$RUNNER_TEMP/duration-ledger-test" | tee "$out/ledger-unit-test.txt"
+          python3 "$work/replay.py" --pacing disabled --capacity 24 28 32 --output "$out/no-pacing.jsonl"
+          node "$work/analyze.cjs" "$out/no-pacing.jsonl" "$out/queue-estimate.cjs" > "$out/no-pacing-summary.json"
+          python3 "$work/replay.py" --pacing disabled --scenario stress --capacity 24 28 32 --output "$out/no-pacing-stress.jsonl"
+          node "$work/analyze.cjs" "$out/no-pacing-stress.jsonl" "$out/queue-estimate.cjs" > "$out/no-pacing-stress-summary.json"
+          node "$work/ledger-results.cjs" "$out" > "$out/ledger-results.json"
+          node -e 'const s=require(process.argv[1]);console.log(JSON.stringify({ledger:s.ledger,normal:s.pacing.normal,stress:s.pacing.stress},null,2))' "$out/ledger-results.json"
+          gzip "$out/no-pacing.jsonl" "$out/no-pacing-stress.jsonl"
+      - uses: arduino/setup-arduino-cli@v2
+        with:
+          version: 1.2.2
+      - name: Install pinned AVR core and isolated emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+      - name: Measure isolated AVR actual-source planner and estimator cycles
+        shell: bash
+        run: |
+          set -euo pipefail
+          compiler="$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin/avr-g++"
+          python3 research/task0032-planner-queue/avr-bench.py --compiler "$compiler" --out "$RUNNER_TEMP/planner-research/avr"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-planner-queue-${{ github.sha }}
+          path: ${{ runner.temp }}/planner-research
+          retention-days: 7
+          if-no-files-found: warn
