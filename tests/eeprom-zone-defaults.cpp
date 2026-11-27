@@ -129,6 +129,61 @@ static void sessionReplay(FactoryDefaults& defaults) {
     auto refuse=[](uint8_t,const uint8_t*,uint8_t,uint32_t,const Patch*,uint8_t){return false;};
     assert(session.patchAndPublish(limits,2,refuse)==Result::PublishRejected);
     assert(!busy);
+    // Real M206 transaction semantics: exact typed address, no-op echo,
+    // no mutation until admission, atomic revoke of tuning identity.
+    struct Tuned {
+        FactoryDefaults& base;
+        bool operator()(uint8_t id,uint8_t* d,uint8_t n) {
+            if(id!=Hotend0 || !base(id,d,n))return false;
+            BlockDecoder decoder(id,d,n);
+            const uint8_t sensor=decoder.u8(Field::F_E0_SENSOR_TYPE);
+            const uint8_t power=decoder.u8(Field::F_E0_PID_MAX);
+            const uint8_t tag=address(Field::F_PID_CALIBRATION_SLOT_0)-address(id)-PayloadOffset;
+            d[tag]=0xA9;d[tag+1]=sensor;d[tag+2]=power;return true;
+        }
+    } tuned{defaults};
+    assert(session.save(blockBit(Hotend0),tuned)==Result::Ok);
+    unsigned admissions=0,applies=0;
+    bool allow=true;
+    auto admit=[&](uint8_t id,uint32_t pending,const Patch* p,uint8_t count){
+        assert(busy && id==Hotend0 && !pending && p && count>=1 && count<=2);
+        ++admissions;return allow;
+    };
+    auto hostPublish=[&](uint8_t id,const uint8_t* data,uint8_t n,uint32_t pending,const Patch* p,uint8_t count){
+        assert(busy && id==Hotend0 && !pending && p && dev.ready());
+        BlockDecoder decoder(id,data,n);
+        if(count==2) {
+            assert(p[1].pos==address(Field::F_PID_CALIBRATION_SLOT_0));
+            assert(decoder.u8(Field::F_PID_CALIBRATION_SLOT_0)==0);
+        } else {
+            assert(p[0].pos==address(Field::F_E0_DRIVE_MAX));
+            assert(decoder.u8(Field::F_PID_CALIBRATION_SLOT_0)==0xA9);
+        }
+        ++applies;return true;
+    };
+    const int32_t dmaxPos=address(Field::F_E0_DRIVE_MAX);
+    const int32_t gainPos=address(Field::F_E0_PID_PGAIN);
+    const int32_t bedPos=address(Field::F_NEW_BED_EMERGENCY_C);
+    assert(session.hostEdit(dmaxPos,0,73,0,admit,hostPublish)==Result::Ok && admissions==1 && applies==1);
+    writes=dev.programs;
+    assert(session.hostEdit(dmaxPos,0,73,0,admit,hostPublish)==Result::Ok);
+    assert(session.hostEdit(bedPos,0,90,0,admit,hostPublish)==Result::Ok);
+    assert(session.hostEdit(bedPos,0,120,0,admit,hostPublish)==Result::ReadOnly);
+    assert(session.hostEdit(dmaxPos,0,256,0,admit,hostPublish)==Result::Invalid);
+    assert(session.hostEdit(dmaxPos,0,0,0,admit,hostPublish)==Result::Invalid);
+    assert(session.hostEdit(dmaxPos,256,73,0,admit,hostPublish)==Result::Invalid);
+    assert(session.hostEdit(dmaxPos+65536L,0,73,0,admit,hostPublish)==Result::Invalid);
+    assert(session.hostEdit(gainPos,3,0,NAN,admit,hostPublish)==Result::Invalid);
+    assert(dev.programs==writes && admissions==1 && applies==1);
+    allow=false;
+    assert(session.hostEdit(gainPos,3,0,12.345f,admit,hostPublish)==Result::AdmissionRejected);
+    assert(dev.programs==writes && admissions==2 && applies==1);
+    allow=true;
+    assert(session.hostEdit(gainPos,3,0,12.345f,admit,hostPublish)==Result::Ok && admissions==3 && applies==2);
+    assert(session.read(Hotend0,readback,length(Hotend0),alerts)==Result::Ok);
+    BlockDecoder finalThermal(Hotend0,readback,length(Hotend0));
+    assert(finalThermal.f32(Field::F_E0_PID_PGAIN)==12.345f && !finalThermal.u8(Field::F_PID_CALIBRATION_SLOT_0));
+    assert(finalThermal.u8(Field::F_E0_DRIVE_MAX)==73);
     // Physical busy fault cannot hang or be mistaken for successful readback.
     dev.stuck=true;const uint32_t started=dev.clock;writes=dev.programs;
     assert(session.restore(defaults,state)==Result::TransportFault);
