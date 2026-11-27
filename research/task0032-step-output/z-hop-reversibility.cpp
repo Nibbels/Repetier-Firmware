@@ -39,6 +39,24 @@ void delayMicroseconds(int){}
 }
 #include "ZMotion.h"
 #include "actual-z-motion.inc"
+#include <cmath>
+#include <algorithm>
+#include "BedCompensation.h"
+#include "MoveTarget.h"
+#include "CartesianPlanner.h"
+#include "PrintLayers.h"
+enum {X_AXIS,Y_AXIS,Z_AXIS};
+namespace Printer {float stepsPerMm(uint8_t){return 152.38f;}}
+static short g_ZCompensationMatrix[5][5]={
+    {0,0,20,40,60},
+    {0,-80,-280,-90,-320},
+    {20,-310,-30,-390,-40},
+    {40,-60,-420,-20,-240},
+    {60,-220,-50,-300,0}
+};
+static uint8_t g_uZMatrixMax[2]={4,4};
+#include "BedMatrixInterpolation.h"
+
 
 using Path=ZMotion::Path;
 static ZMotion z(100.0f);
@@ -154,7 +172,86 @@ static void limits(){
     for(int i=0;i<3;i++)assert(nominalRaw(Path::Queued,-1));
     assert(z.nominalSteps()==100000&&physical==100000&&!z.hasQueuedOvertravel());
 }
+
+// Combine actual integer endpoint planner, bed interpolation/fade and
+// ZMotion pulse accounting. No scheduler timing or parser emulation:
+// nominal XYZ steps use an independent Bresenham fixture, target updates
+// use deliberate variable sample cadence and E-independent live offsets.
+static void geometricHops(){
+    MoveTarget mt;
+    CartesianPlanner planner;
+    PrintLayers layers(1280.0f);
+    constexpr float scale[3]={152.38f,152.38f,1280.0f};
+    const float initial[3]={10.123f,12.345f,0.5f};
+    int32_t xyz[3];
+    for(uint8_t k=0;k<3;k++){
+        mt.setMachineMM(k,initial[k]);xyz[k]=lroundf(initial[k]*scale[k]);
+        planner.setAxisSteps(k,xyz[k]);
+    }
+    reset(xyz[2]);layers.recordPlannedMove({xyz[2],true,true,true},1280.0f,0,-420);
+    int32_t live=0;
+    auto geom=[&](){
+        const BedCompensation::Geometry g{xyz[2],layers.fadeStartSteps(),layers.fadeEndSteps(),
+            layers.previousLayerSteps(),layers.currentLayerSteps(),0};
+        return BedCompensation::calculate(g,[&]{return int32_t(getZMatrixDepth(xyz[0],xyz[1]));}).zCorrectionSteps+live;
+    };
+    target(geom());settle();const auto origin=physical;
+    const auto initialTarget=T;
+    unsigned paths=0;uint64_t nodes=0;
+    auto segment=[&](float x,float y,float zz,bool rel){
+        const float input[3]={x,y,zz};int32_t d[3],ep[3];
+        int n=0;
+        for(uint8_t k=0;k<3;k++){
+            mt.setFromGCodeMM(k,input[k],rel);
+            ep[k]=lroundf(mt.machineMM(k)*scale[k]); // same endpoint rounding as prepareDestinationSteps, no wobble/limits
+            d[k]=planner.queueTarget(k,ep[k]);
+            assert(d[k]==ep[k]-xyz[k]);
+            n=std::max(n,std::abs(d[k]));
+        }
+        int32_t e[3]={n/2,n/2,n/2};
+        for(int i=0;i<n;i++){
+            int8_t dz=0;
+            for(uint8_t k=0;k<3;k++){
+                e[k]-=std::abs(d[k]);
+                if(e[k]<0){
+                    e[k]+=n;const int8_t sign=d[k]>0?1:-1;xyz[k]+=sign;
+                    if(k==2)dz=sign;
+                }
+            }
+            // Current position target, including simultaneous XY and Z.
+            // Publish at varied path cadence, with deliberately stale debt.
+            if(i%17==0)target(geom());
+            if(dz)nominalStep(dz);
+            if(i%3==0)correctionStep();
+            ++nodes;
+        }
+        for(uint8_t k=0;k<3;k++)assert(xyz[k]==ep[k]);
+        target(geom());settle();
+        assert(physical==xyz[2]+T&&N==xyz[2]);++paths;
+    };
+    for(int i=0;i<128;i++){
+        // Pure hop into fade, combined descending/XY wipe, settle at
+        // different XY, then a different return trajectory. Every fourth
+        // cycle traverses the upper fade boundary as a stress case.
+        const float lift=i%4==0?7.25f:0.35f;
+        segment(0,0,lift,true);
+        live=(i%9)-4;
+        segment(22.345f,34.567f,0,true);
+        segment(-11.234f,3.456f,-lift,true);
+        // Same nominal Z, but generally different matrix/offset height.
+        assert(xyz[2]==lroundf(initial[2]*scale[2]));
+        assert(physical==xyz[2]+geom());
+        // Restore dynamic target and the original represented XYZ via
+        // another (not retraced) route. Include absolute/relative rounding.
+        live=0;
+        segment(initial[0],initial[1],initial[2],false);
+        assert(T==initialTarget&&physical==origin&&D==0);
+    }
+    std::printf("Z hop geometry explicit=%d cycles=128 segments=%u primary_samples=%llu exact_closures=128\n",
+        EXPLICIT_DIR,paths,(unsigned long long)nodes);
+}
 int main(){
     counterexample();reversibility();limits();
     std::printf("Z hop explicit=%d cycles=10000 nominal=%llu corrections=%llu cancelled=%llu physical_rises=%llu\n",EXPLICIT_DIR,(unsigned long long)nominal,(unsigned long long)correction,(unsigned long long)cancelled,(unsigned long long)pulses);
+    geometricHops();
 }
