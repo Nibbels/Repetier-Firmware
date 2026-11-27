@@ -45,7 +45,6 @@ void delayMicroseconds(int){}
 #include "MoveTarget.h"
 #include "CartesianPlanner.h"
 #include "PrintLayers.h"
-enum {X_AXIS,Y_AXIS,Z_AXIS};
 namespace Printer {float stepsPerMm(uint8_t){return 152.38f;}}
 static short g_ZCompensationMatrix[5][5]={
     {0,0,20,40,60},
