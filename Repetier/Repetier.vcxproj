@@ -136,6 +136,14 @@
     <ClInclude Include="EepromZoneValidation.h" />
     <ClInclude Include="EepromZoneByteIO.h" />
     <ClInclude Include="EepromZoneAvr.h" />
+    <ClInclude Include="AvrEventStore.h" />
+    <ClInclude Include="CompactEvent.h" />
+    <ClInclude Include="EventLog.h" />
+    <ClInclude Include="EventLogRead.h" />
+    <ClInclude Include="EventLogService.h" />
+    <ClInclude Include="EventLogText.h" />
+    <ClInclude Include="ThermalEventSource.h" />
+    <ClInclude Include="DiagnosticHistory.h" />
     <ClInclude Include="EepromZoneSession.h" />
     <ClInclude Include="EepromZoneLive.h" />
     <ClInclude Include="EepromZonePatch.h" />
