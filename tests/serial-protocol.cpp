@@ -33,7 +33,7 @@ unsigned scriptCommands = 0;
 unsigned dispatchedCommands = 0, statusCommands = 0, stopRequests = 0;
 bool legacyRejected = false;
 unsigned heaterRequests = 0, extrusionRequests = 0;
-unsigned periodicVisits = 0;
+unsigned periodicVisits = 0, pendingOutputVisits = 0;
 struct EmergencyReached {};
 GCode lastScriptCommand{};
 }
@@ -75,6 +75,13 @@ void latchOutputInhibit(bool thermalFault) { assert(!thermalFault); legacyReject
 void stopPrint() { ++stopRequests; }
 void setFeedrate(float) { ++dispatchedCommands; }
 struct {
+    void servicePendingOutput(millis_t) {
+        assert(!GCodeInput::peekCurrentCommand());
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        assert(!thermalLocked);
+#endif
+        ++pendingOutputVisits;
+    }
     bool commandsBlocked() const { return stopped
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         ||thermalLocked
@@ -557,6 +564,24 @@ void thermalEmergency() {
 }
 #endif
 
+void postStopOutputBoundary() {
+    feed("G1 X1\nG1 X2\n");
+    GCodeInput::readFromSerial();
+    GCodeInput::readFromSerial();
+    assert(GCodeInput::peekCurrentCommand());
+    stopped = true;
+    Commands::commandLoop();
+    assert(GCodeInput::peekCurrentCommand() && !pendingOutputVisits);
+    Commands::commandLoop();
+    assert(!GCodeInput::peekCurrentCommand() && pendingOutputVisits == 1);
+    assert(!dispatchedCommands);
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    thermalLocked = true;
+    Commands::commandLoop();
+    assert(pendingOutputVisits == 1);
+#endif
+}
+
 void flashScript() {
     GCodeInput::executeFlashScript("; comment\nG91\nG1 X0.5 ; jog\n");
     assert(scriptCommands == 2 && lastScriptCommand.G == 1 && lastScriptCommand.X == 0.5f);
@@ -583,6 +608,7 @@ int main(int argc, char** argv) {
     else if (scenario == "emergency") emergencyAdmission();
     else if (scenario == "stopping") stopDrainsInput();
     else if (scenario == "script") flashScript();
+    else if (scenario == "post-stop-output") postStopOutputBoundary();
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     else if (scenario == "thermal-emergency") thermalEmergency();
     else if (scenario == "m206-syntax") strictEepromSyntax();
