@@ -9,6 +9,7 @@ public:
     void run(GCode& command);
 
 private:
+    void runPrepared(GCode& command);
     bool active_ = false;
 };
 
