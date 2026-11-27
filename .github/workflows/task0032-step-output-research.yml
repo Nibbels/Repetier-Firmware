@@ -57,6 +57,11 @@ jobs:
           c++ -std=c++11 -O2 -Wall -Wextra -Werror research/task0032-step-output/z-physical-chord-replay.cpp -o "$RUNNER_TEMP/z-physical"
           "$RUNNER_TEMP/z-physical" | tee "$RUNNER_TEMP/step-output/z-physical.txt"
           python3 research/task0032-step-output/z-physical-path.py "$RUNNER_TEMP/step-output/z-physical-path.json"
+      - name: Foreground physical chord preparation and actual bed geometry
+        run: |
+          set -o pipefail
+          c++ -std=c++11 -O2 -Wall -Wextra -Werror -I Repetier research/task0032-step-output/z-chord-preparer-replay.cpp -o "$RUNNER_TEMP/z-preparer"
+          "$RUNNER_TEMP/z-preparer" | tee "$RUNNER_TEMP/step-output/z-preparer.txt"
       - name: Signed Z demand and logical retract classification
         run: |
           set -o pipefail
@@ -195,6 +200,9 @@ jobs:
       - name: Isolated active integer chord AVR timing
         run: |
           python3 research/task0032-step-output/z-feedforward-dda-bench.py --out "$RUNNER_TEMP/step-output/z-dda-avr" --compiler "$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin/avr-g++" --runner-source "$RUNNER_TEMP/simavr-trace.c"
+      - name: Isolated foreground geometry preparation and service-horizon cost
+        run: |
+          python3 research/task0032-step-output/z-preparer-avr-bench.py --out "$RUNNER_TEMP/step-output/z-preparer-avr" --compiler "$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin/avr-g++" --runner-source "$RUNNER_TEMP/simavr-trace.c"
       - name: Linked motor wake candidate with minimal Q23 and narrow queue masks
         if: steps.reuse.outputs.available != 'yes'
         shell: bash
