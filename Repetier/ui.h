@@ -308,6 +308,19 @@ public:
     void refreshPage();
     const char* cachedRow(uint8_t row) const;
     void executeAction(int action);
+    // Remote panel actions share the local key-dispatch exclusion. A wait
+    // inside either action can pump thermal/scan services and sample keys,
+    // but must not execute a second independent menu action.
+    void executeRemoteAction(int action) {
+        InterruptProtectedBlock lock;
+        if (flags & UI_FLAG_SLOW_ACTION_RUNNING)
+            return;
+        flags |= UI_FLAG_SLOW_ACTION_RUNNING;
+        lock.unprotect();
+        executeAction(action);
+        lock.protect();
+        flags &= ~UI_FLAG_SLOW_ACTION_RUNNING;
+    }
     void slowAction();
 
     void finishAction(int action);
