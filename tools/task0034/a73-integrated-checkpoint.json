@@ -139,5 +139,44 @@
     "No global IRQ response-time bound",
     "Fixed recovery layout verified by CI; padding varies by board and link, flash differences are not isolated logger cost",
     "No hardware test or flash"
-  ]
+  ],
+  "recoveryPadding": [
+    20394,
+    706,
+    698,
+    390
+  ],
+  "linkedFlashExcludingRecoveryPadding": [
+    231824,
+    238424,
+    238432,
+    234210
+  ],
+  "bootloaderBoundary": "0x3E000",
+  "recoveryEntry": "0x20000",
+  "recoveryEntryBytes": 30,
+  "nearParserEnd": [
+    "0xDA64",
+    "0xDF48",
+    "0xDF4E",
+    "0xDD02"
+  ],
+  "followup": {
+    "status": "software blocker discovered; fixes require new linked evidence",
+    "sourceFixes": [
+      "54d6737d608290ec299b756d750d03556ec824f7",
+      "72a3ecc8b1b520d2fde8cc09ce79a2bb7f2ca119"
+    ],
+    "tests": [
+      "df83c4f6830cde09b45365504d3e7780e49df254",
+      "101f6eb4b26f52b4065a40f1fb7e9642af425f64",
+      "bdeef9f254ff8101f5338e258c99f6d48f8c736f"
+    ],
+    "remaining": [
+      "Resolve feasible foreground cycles through periodic pump, UI action, scan dispatch, pause and flash scripts; include reentrant thermal and EEPROM paths",
+      "Resolve indirect jumps/calls, AVR library alias/assembly frames and outgoing callsite stack",
+      "Bound nested interrupt stack and maximum interrupt response on final linked image; preserve heater deadline and transport constraints",
+      "Recompute reserve on final default recovery-linked build; no SRAM allocation release until then"
+    ]
+  }
 }
