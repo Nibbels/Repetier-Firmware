@@ -221,6 +221,14 @@ int main() {
     code.P=65536L+EPR_RF_MOTOR_CURRENT; EEPROM::update(&code);
     code.P=-1; EEPROM::update(&code);
     assert(loads == before && std::memcmp(bytes,motorBefore,sizeof bytes)==0);
+    // Autotune-only coefficients are protected against raw host writes.
+    const int32_t firstGains[]={EPR_BED_PID_PGAIN,EEPROM_EXTRUDER_OFFSET+EPR_EXTRUDER_PID_PGAIN,
+        EEPROM_EXTRUDER_OFFSET+EEPROM_EXTRUDER_LENGTH+EPR_EXTRUDER_PID_PGAIN};
+    for(auto first:firstGains)for(int32_t pos=first-3;pos<first+12;++pos) {
+        code.T=2;code.P=pos;code.S=0;
+        EEPROM::update(&code);
+        assert(loads==before && std::memcmp(bytes,motorBefore,sizeof bytes)==0);
+    }
     // Adjacent preheat setting is still writable as a 16-bit value.
     code.T = 1; code.P = EPR_RF_PREHEAT_B_HOTEND; code.S = 215;
     expectWrite(code, {215, 0});

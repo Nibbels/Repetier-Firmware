@@ -163,11 +163,13 @@ int main(){
             ++count;
         }
         for(float value:{-1.f,0.f,.1f,1000.f,1001.f,std::numeric_limits<float>::infinity(),std::numeric_limits<float>::quiet_NaN()}){
-            reset();bytes[marker]=0xa9;GCode c;c.P=p;c.T=3;c.X=value;
-            if(value==0){EEPROM::update(&c);assert(!errors&&!writes&&!loads&&!invalidated);}
-            else if(value>0&&value<=1000){admitted(c,1u<<slot);assert(bytes[marker]==0);}
-            else denied(c);
-            ++count;
+            for(unsigned offset:{0u,4u,8u}){
+                reset();bytes[marker]=0xa9;GCode c;c.P=p+offset;c.T=3;c.X=value;
+                if(value==0){EEPROM::update(&c);assert(!errors&&!writes&&!loads&&!invalidated);}
+                else denied(c);
+                assert(bytes[marker]==0xa9);
+                ++count;
+            }
         }
         reset();bytes[marker]=0xa9;GCode c;c.P=sensor;c.S=3;ignore=marker;
         EEPROM::update(&c);assert(errors==1&&writes==1&&!checks&&!loads&&!bytes[sensor]&&invalidated==(1u<<slot));++count;

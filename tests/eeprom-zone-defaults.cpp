@@ -164,6 +164,7 @@ static void sessionReplay(FactoryDefaults& defaults) {
     };
     const int32_t dmaxPos=address(Field::F_E0_DRIVE_MAX);
     const int32_t gainPos=address(Field::F_E0_PID_PGAIN);
+    const int32_t capPos=address(Field::F_E0_PID_MAX);
     const int32_t bedPos=address(Field::F_NEW_BED_EMERGENCY_C);
     assert(session.hostEdit(dmaxPos,0,73,0,admit,hostPublish)==Result::Ok && admissions==1 && applies==1);
     writes=dev.programs;
@@ -186,15 +187,32 @@ static void sessionReplay(FactoryDefaults& defaults) {
     assert(session.hostEdit(dmaxPos,256,73,0,admit,hostPublish)==Result::Invalid);
     assert(session.hostEdit(dmaxPos+65536L,0,73,0,admit,hostPublish)==Result::Invalid);
     assert(session.hostEdit(gainPos,3,0,NAN,admit,hostPublish)==Result::Invalid);
+    // All fitted heater coefficients are report-only. Identical host
+    // echoes remain harmless and changed values never reach publication.
+    for(uint8_t slot=0;slot<=NUM_EXTRUDER;++slot) {
+        const uint8_t id=slot==NUM_EXTRUDER?BedPid:Hotend0+slot;
+        const Field first=slot==NUM_EXTRUDER?Field::F_BED_PID_PGAIN:shifted(Field::F_E0_PID_PGAIN,slot*SlotSize);
+        assert(session.read(id,readback,length(id),alerts)==Result::Ok);
+        BlockDecoder thermal(id,readback,length(id));
+        for(uint8_t k=0;k<3;++k) {
+            const Field field=shifted(first,k*4);
+            const float value=thermal.f32(field);
+            assert(session.hostEdit(address(field),3,0,value,admit,hostPublish)==Result::Ok);
+            assert(session.hostEdit(address(field),3,0,value==1?2:1,admit,hostPublish)==Result::ReadOnly);
+        }
+    }
     assert(dev.programs==writes && admissions==1 && applies==1);
+    assert(session.read(Hotend0,readback,length(Hotend0),alerts)==Result::Ok);
+    const uint8_t cap=BlockDecoder(Hotend0,readback,length(Hotend0)).u8(Field::F_E0_PID_MAX)==80?81:80;
     allow=false;
-    assert(session.hostEdit(gainPos,3,0,12.345f,admit,hostPublish)==Result::AdmissionRejected);
+    assert(session.hostEdit(capPos,0,cap,0,admit,hostPublish)==Result::AdmissionRejected);
     assert(dev.programs==writes && admissions==2 && applies==1);
     allow=true;
-    assert(session.hostEdit(gainPos,3,0,12.345f,admit,hostPublish)==Result::Ok && admissions==3 && applies==2);
+    assert(session.hostEdit(capPos,0,cap,0,admit,hostPublish)==Result::Ok && admissions==3 && applies==2);
     assert(session.read(Hotend0,readback,length(Hotend0),alerts)==Result::Ok);
     BlockDecoder finalThermal(Hotend0,readback,length(Hotend0));
-    assert(finalThermal.f32(Field::F_E0_PID_PGAIN)==12.345f && !finalThermal.u8(Field::F_PID_CALIBRATION_SLOT_0));
+    assert(finalThermal.f32(Field::F_E0_PID_PGAIN)==EXT0_HOTEND_PROFILE.pidPGain && !finalThermal.u8(Field::F_PID_CALIBRATION_SLOT_0));
+    assert(finalThermal.u8(Field::F_E0_PID_MAX)==cap);
     assert(finalThermal.u8(Field::F_E0_DRIVE_MAX)==73);
     // Physical busy fault cannot hang or be mistaken for successful readback.
     dev.stuck=true;const uint32_t started=dev.clock;writes=dev.programs;

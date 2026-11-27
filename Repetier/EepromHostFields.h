@@ -58,9 +58,9 @@
     RF_EPR_FIELD(3, EPR_ZSCAN_START_MM, Com::tEPRZScanStartLift, 3, true);
 
     RF_EPR_FIELD(0, EPR_RF_HEATED_BED_SENSOR_TYPE, Com::tEPRBedsensorType, 3, true);
-    RF_EPR_FIELD(3, EPR_BED_PID_PGAIN, Com::tEPRBedPGain, 3, true);
-    RF_EPR_FIELD(3, EPR_BED_PID_IGAIN, Com::tEPRBedIGain, 3, true);
-    RF_EPR_FIELD(3, EPR_BED_PID_DGAIN, Com::tEPRBedDGain, 3, true);
+    RF_EPR_FIELD(3, EPR_BED_PID_PGAIN, Com::tEPRBedPGain, 3, false);
+    RF_EPR_FIELD(3, EPR_BED_PID_IGAIN, Com::tEPRBedIGain, 3, false);
+    RF_EPR_FIELD(3, EPR_BED_PID_DGAIN, Com::tEPRBedDGain, 3, false);
     RF_EPR_FIELD(0, EPR_BED_PID_MAX, Com::tEPRBedPIDMaxValue, 3, true);
     RF_EPR_FIELD(0, EPR_BED_DRIVE_MIN, Com::tEPRBedPIDDriveMin, 3, true);
     RF_EPR_FIELD(0, EPR_BED_DRIVE_MAX, Com::tEPRBedPIDDriveMax, 3, true);
@@ -76,9 +76,9 @@
         RF_EPR_FIELD(3, o + EPR_EXTRUDER_ADVANCE_L, Com::tEPRAdvanceL, 3, true);
 
         RF_EPR_FIELD(0, o + EPR_EXTRUDER_SENSOR_TYPE, Com::tEPRsensorType, 3, true);
-        RF_EPR_FIELD(3, o + EPR_EXTRUDER_PID_PGAIN, Com::tEPRPGain, 4, true);
-        RF_EPR_FIELD(3, o + EPR_EXTRUDER_PID_IGAIN, Com::tEPRIGain, 4, true);
-        RF_EPR_FIELD(3, o + EPR_EXTRUDER_PID_DGAIN, Com::tEPRDGain, 4, true);
+        RF_EPR_FIELD(3, o + EPR_EXTRUDER_PID_PGAIN, Com::tEPRPGain, 4, false);
+        RF_EPR_FIELD(3, o + EPR_EXTRUDER_PID_IGAIN, Com::tEPRIGain, 4, false);
+        RF_EPR_FIELD(3, o + EPR_EXTRUDER_PID_DGAIN, Com::tEPRDGain, 4, false);
         RF_EPR_FIELD(0, o + EPR_EXTRUDER_PID_MAX, Com::tEPRPIDMaxValue, 3, true);
         RF_EPR_FIELD(0, o + EPR_EXTRUDER_DRIVE_MIN, Com::tEPRDriveMin, 3, true);
         RF_EPR_FIELD(0, o + EPR_EXTRUDER_DRIVE_MAX, Com::tEPRDriveMax, 3, true);

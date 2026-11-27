@@ -116,8 +116,6 @@ static bool validHostSensor(int32_t value) {
 }
 static bool validHostThermalValue(const GCode* com,uint16_t address) {
     if(address==EPR_RF_HEATED_BED_SENSOR_TYPE)return validHostSensor(com->S);
-    if(address==EPR_BED_PID_PGAIN||address==EPR_BED_PID_IGAIN)return com->X>0&&com->X<=1000;
-    if(address==EPR_BED_PID_DGAIN)return com->X>=0&&com->X<=100000;
     if(address==EPR_BED_PID_MAX)return com->S==0||com->S>=40;
     if(address==EPR_BED_DRIVE_MIN||address==EPR_BED_DRIVE_MAX)return com->S>=1;
     if(address==EPR_RF_PREHEAT_A_BED||address==EPR_RF_PREHEAT_B_BED)
@@ -127,9 +125,6 @@ static bool validHostThermalValue(const GCode* com,uint16_t address) {
     for(uint8_t slot=0;slot<NUM_EXTRUDER;++slot) {
         const uint16_t base=EEPROM_EXTRUDER_OFFSET+slot*EEPROM_EXTRUDER_LENGTH;
         if(address==base+EPR_EXTRUDER_SENSOR_TYPE)return validHostSensor(com->S);
-        if(address==base+EPR_EXTRUDER_PID_PGAIN||address==base+EPR_EXTRUDER_PID_IGAIN)
-            return com->X>0&&com->X<=1000;
-        if(address==base+EPR_EXTRUDER_PID_DGAIN)return com->X>=0&&com->X<=100000;
         if(address==base+EPR_EXTRUDER_PID_MAX)return com->S==0||com->S>=40;
         if(address==base+EPR_EXTRUDER_DRIVE_MIN||address==base+EPR_EXTRUDER_DRIVE_MAX)return com->S>=1;
     }
@@ -275,6 +270,19 @@ void EEPROM::update(GCode* com) {
     if(com->hasP() && com->P>=EPR_RF_MOTOR_CURRENT-width+1 && com->P<EPR_RF_MOTOR_CURRENT+5) {
         Com::printErrorFLN(PSTR("Motor current is menu-only"));
         return;
+    }
+    // P/I/D are owned by autotune, even in the raw comparison build.
+    if(com->hasP()) {
+        const int32_t end=com->P+width;
+        bool gainWrite=com->P<EPR_BED_PID_DGAIN+4 && end>EPR_BED_PID_PGAIN;
+        for(uint8_t tool=0;tool<2;++tool) {
+            const uint16_t base=EEPROM_EXTRUDER_OFFSET+tool*EEPROM_EXTRUDER_LENGTH;
+            gainWrite|=com->P<base+EPR_EXTRUDER_PID_DGAIN+4 && end>base+EPR_EXTRUDER_PID_PGAIN;
+        }
+        if(gainWrite) {
+            Com::printErrorFLN(PSTR("PID gains are autotune-only"));
+            return;
+        }
     }
 #endif
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT

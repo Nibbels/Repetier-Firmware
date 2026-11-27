@@ -68,9 +68,9 @@
     RF_ZONE_ITEM(3, address(Field::F_ZSCAN_START_MM), Com::tEPRZScanStartLift, 3, true)
 
     RF_ZONE_ITEM(0, address(Field::F_RF_HEATED_BED_SENSOR_TYPE), Com::tEPRBedsensorType, 3, true)
-    RF_ZONE_ITEM(3, address(Field::F_BED_PID_PGAIN), Com::tEPRBedPGain, 3, true)
-    RF_ZONE_ITEM(3, address(Field::F_BED_PID_IGAIN), Com::tEPRBedIGain, 3, true)
-    RF_ZONE_ITEM(3, address(Field::F_BED_PID_DGAIN), Com::tEPRBedDGain, 3, true)
+    RF_ZONE_ITEM(3, address(Field::F_BED_PID_PGAIN), Com::tEPRBedPGain, 3, false)
+    RF_ZONE_ITEM(3, address(Field::F_BED_PID_IGAIN), Com::tEPRBedIGain, 3, false)
+    RF_ZONE_ITEM(3, address(Field::F_BED_PID_DGAIN), Com::tEPRBedDGain, 3, false)
     RF_ZONE_ITEM(0, address(Field::F_BED_PID_MAX), Com::tEPRBedPIDMaxValue, 3, true)
     RF_ZONE_ITEM(0, address(Field::F_BED_DRIVE_MIN), Com::tEPRBedPIDDriveMin, 3, true)
     RF_ZONE_ITEM(0, address(Field::F_BED_DRIVE_MAX), Com::tEPRBedPIDDriveMax, 3, true)
@@ -84,9 +84,9 @@
     RF_ZONE_ITEM(3, address(Field::F_E0_MAX_START_FEEDRATE) + uint16_t(i)*SlotSize, Com::tEPReJerk, 3, true) \
     RF_ZONE_ITEM(3, address(Field::F_E0_ADVANCE_L) + uint16_t(i)*SlotSize, Com::tEPRAdvanceL, 3, true) \
     RF_ZONE_ITEM(0, address(Field::F_E0_SENSOR_TYPE) + uint16_t(i)*SlotSize, Com::tEPRsensorType, 3, true) \
-    RF_ZONE_ITEM(3, address(Field::F_E0_PID_PGAIN) + uint16_t(i)*SlotSize, Com::tEPRPGain, 4, true) \
-    RF_ZONE_ITEM(3, address(Field::F_E0_PID_IGAIN) + uint16_t(i)*SlotSize, Com::tEPRIGain, 4, true) \
-    RF_ZONE_ITEM(3, address(Field::F_E0_PID_DGAIN) + uint16_t(i)*SlotSize, Com::tEPRDGain, 4, true) \
+    RF_ZONE_ITEM(3, address(Field::F_E0_PID_PGAIN) + uint16_t(i)*SlotSize, Com::tEPRPGain, 4, false) \
+    RF_ZONE_ITEM(3, address(Field::F_E0_PID_IGAIN) + uint16_t(i)*SlotSize, Com::tEPRIGain, 4, false) \
+    RF_ZONE_ITEM(3, address(Field::F_E0_PID_DGAIN) + uint16_t(i)*SlotSize, Com::tEPRDGain, 4, false) \
     RF_ZONE_ITEM(0, address(Field::F_E0_PID_MAX) + uint16_t(i)*SlotSize, Com::tEPRPIDMaxValue, 3, true) \
     RF_ZONE_ITEM(0, address(Field::F_E0_DRIVE_MIN) + uint16_t(i)*SlotSize, Com::tEPRDriveMin, 3, true) \
     RF_ZONE_ITEM(0, address(Field::F_E0_DRIVE_MAX) + uint16_t(i)*SlotSize, Com::tEPRDriveMax, 3, true) \
