@@ -4,16 +4,21 @@
 const {geometry,evaluate,groupFor,defaults}=require("./demand-model.cjs");
 const CPU=16000000, EPS=1e-10;
 function run(rows,speed,policy,p,opts){
-  const {baud,credit=127,frameWindow=Infinity,slots=24,prefill=12,ackDelay=0.001}=opts;
+  const {baud,credit=127,frameWindow=Infinity,slots=24,prefill=12,ackDelay=0.001,ackPoint="publication",parseFraction=.5}=opts;
+  if(!["publication","admission"].includes(ackPoint)||!(parseFraction>=0&&parseFraction<=1))throw Error("bad admission options");
   if(!(baud>0&&credit>0&&slots>=prefill&&prefill>=1&&frameWindow>=1&&ackDelay>=0&&rows.length&&rows.every(r=>r.bytes<=credit)))throw Error("invalid queue model");
   const jobs=rows.map(r=>({...r,...evaluate(r,speed,groupFor(r,speed,policy,p),p),group:groupFor(r,speed,policy,p)}));
   let t=0,send=0,received=0,planned=0,done=0,used=0,outstanding=0,wire=null,active=null,planner=null,acks=[],txEnd=0;
   let start=null,starveStart=null,starveCount=0,starveSeconds=0,maxGap=0,maxQueued=0,maxCredit=0,maxRawBytes=0,raw=[],queue=[];
   let minCoverage=Infinity,coverageArea=0,queueArea=0,motionImpossible=0,plannerBusy=0,plannerBlocked=0,idleCpu=0,receivedBytes=0,acked=0;
+  let accepted=0,parsed=null,parser=null,parserBusy=0,acceptedWaitingSeconds=0,maxAcceptedNotPlanned=0;
   let motionCycles=0,admissionCycles=0,totalPath=0,steps=[0,0,0],eventCount=0;
   const deviceBaud=baud===115200?16000000/(8*17):baud;
   const coverage=()=>Math.max(0,active?active.end-t:0)+queue.reduce((s,j)=>s+j.duration,0);
   const occ=()=>queue.length+(active?1:0)+(planner?1:0);
+  function acknowledge(j){
+    txEnd=Math.max(txEnd,t+ackDelay)+j.ackBytes*10/deviceBaud;acks.push({end:txEnd,bytes:j.bytes});
+  }
   function dispatch(){
     if(!active&&queue.length&&(start!==null||queue.length>=prefill||planned===jobs.length)){
       if(start===null)start=t;
@@ -21,49 +26,67 @@ function run(rows,speed,policy,p,opts){
       const job=queue.shift();active={job,end:t+job.duration};
       if(job.motion/job.duration>CPU*(1-p.reserve)+EPS)motionImpossible++;
     }
-    if(!planner&&raw.length&&occ()<slots){
+    if(ackPoint==="admission"){
+      // Actual normal commandLoop reads one command, then executes its front;
+      // waitForXFreeLines pumps periodic actions, NOT readFromSerial. Model
+      // one live foreground command (not independent parser/plan servers).
+      if(!planner&&parsed&&occ()<slots){
+        planner={job:parsed,remaining:(parsed.fore-parsed.receive)*(1-parseFraction)};
+        parsed=null;
+      }
+      if(!planner&&!parsed&&!parser&&raw.length){
+        const job=raw.shift();
+        parser={job,remaining:job.receive+(job.fore-job.receive)*parseFraction+job.uart};
+      }
+    }else if(!planner&&raw.length&&occ()<slots){
       const job=raw.shift();planner={job,remaining:job.fore+job.uart};
     }
     if(!wire&&send<jobs.length&&outstanding<frameWindow&&used+jobs[send].bytes<=credit){
       const job=jobs[send++];used+=job.bytes;outstanding++;maxCredit=Math.max(maxCredit,used);
       wire={job,end:t+job.bytes*10/baud};
     }
+    maxAcceptedNotPlanned=Math.max(maxAcceptedNotPlanned,accepted-planned);
     maxQueued=Math.max(maxQueued,occ());
     maxRawBytes=Math.max(maxRawBytes,raw.reduce((s,j)=>s+j.bytes,0));
     if(start!==null&&planned<jobs.length)minCoverage=Math.min(minCoverage,coverage());
-    if(occ()>slots||used>credit||used<0)throw Error("capacity invariant");
+    if(occ()>slots||used>credit||used<0||accepted<planned||accepted-planned>1)throw Error("capacity invariant");
   }
   dispatch();
   while(done<jobs.length){
-    if(++eventCount>jobs.length*12+100)throw Error("event bound");
+    if(++eventCount>jobs.length*16+100)throw Error("event bound");
     const rate=Math.max(0,CPU*(1-p.reserve)-(active?active.job.motion/active.job.duration:0));
-    const next=Math.min(wire?wire.end:Infinity,active?active.end:Infinity,acks.length?acks[0].end:Infinity,planner&&rate>0?t+planner.remaining/rate:Infinity);
+    const next=Math.min(wire?wire.end:Infinity,active?active.end:Infinity,acks.length?acks[0].end:Infinity,planner&&rate>0?t+planner.remaining/rate:Infinity,parser&&rate>0?t+parser.remaining/rate:Infinity);
     if(!Number.isFinite(next)||next<t-EPS)throw Error("deadlock or clock reversal");
     const dt=Math.max(0,next-t);
     if(start!==null){coverageArea+=coverage()*dt-(active?dt*dt/2:0);queueArea+=(queue.length+(active?1:0))*dt;}
-    if(planner){planner.remaining=Math.max(0,planner.remaining-rate*dt);plannerBusy+=dt;}else{idleCpu+=rate*dt;if(raw.length&&occ()>=slots)plannerBlocked+=dt;}
+    if(parser){parser.remaining=Math.max(0,parser.remaining-rate*dt);parserBusy+=dt;}
+    else if(planner){planner.remaining=Math.max(0,planner.remaining-rate*dt);plannerBusy+=dt;}else{idleCpu+=rate*dt;if((raw.length||parsed)&&occ()>=slots)plannerBlocked+=dt;}
+    if(parsed)acceptedWaitingSeconds+=dt;
     t=next;
     // Simultaneous events: completion before new dispatch.
     if(active&&active.end<=t+EPS){
       const j=active.job;done++;totalPath+=j.length;motionCycles+=j.motion;j.steps.forEach((v,i)=>steps[i]+=v);active=null;
     }
     if(wire&&wire.end<=t+EPS){received++;receivedBytes+=wire.job.bytes;raw.push(wire.job);wire=null;}
+    if(parser&&parser.remaining<=0.01){
+      parsed=parser.job;parser=null;accepted++;acknowledge(parsed);
+    }
     if(planner&&planner.remaining<=0.01){
       const j=planner.job;planned++;admissionCycles+=j.fore+j.uart;queue.push(j);planner=null;
-      txEnd=Math.max(txEnd,t+ackDelay)+j.ackBytes*10/deviceBaud;acks.push({end:txEnd,bytes:j.bytes});
+      if(ackPoint==="publication"){accepted++;acknowledge(j);}
     }
     while(acks.length&&acks[0].end<=t+EPS){const a=acks.shift();used-=a.bytes;outstanding--;acked++;}
     dispatch();
     if(start!==null&&!active&&done<jobs.length&&starveStart===null)starveStart=t;
   }
-  if(done!==planned||done!==received||done!==send||occ()!==0||raw.length!==0||wire!==null)throw Error("accounting invariant");
+  if(done!==planned||done!==accepted||parser!==null||parsed!==null||done!==received||done!==send||occ()!==0||raw.length!==0||wire!==null)throw Error("accounting invariant");
   const printSeconds=t-start,nominalSeconds=jobs.reduce((s,j)=>s+j.duration,0);
   if(Math.abs(printSeconds-nominalSeconds-starveSeconds)>1e-7*Math.max(1,printSeconds))throw Error("time accounting");
   const finalAckSeconds=Math.max(t,txEnd);
-  return {segments:done,offeredFrames:send,receivedFrames:received,plannedFrames:planned,executedFrames:done,ackedAtMotionEnd:acked,finalAckSeconds,receivedBytes,steps,pathMm:totalPath,startSeconds:start,printSeconds,nominalSeconds,
+  return {segments:done,offeredFrames:send,receivedFrames:received,acceptedFrames:accepted,plannedFrames:planned,executedFrames:done,ackedAtMotionEnd:acked,finalAckSeconds,receivedBytes,steps,pathMm:totalPath,startSeconds:start,printSeconds,nominalSeconds,
     achievedMmPerSecond:totalPath/printSeconds,endToEndMmPerSecond:totalPath/t,starveCount,starveSeconds,maxGapMs:maxGap*1000,
     minCoverageBeforeLastPlanMs:Number.isFinite(minCoverage)?minCoverage*1000:null,meanCoverageMs:coverageArea/printSeconds*1000,meanQueued:queueArea/printSeconds,maxReservedSlots:maxQueued,maxCredit,maxRawBytes,
-    plannerBusySeconds:plannerBusy,plannerBlockedSeconds:plannerBlocked,unusedAdmissionCycles:idleCpu,motionCycles,admissionCycles,motionImpossible,validFluidMotion:motionImpossible===0,eventCount};
+    ackPoint,parserBusySeconds:parserBusy,acceptedWaitingSeconds,maxAcceptedNotPlanned,plannerBusySeconds:plannerBusy,plannerBlockedSeconds:plannerBlocked,unusedAdmissionCycles:idleCpu,motionCycles,admissionCycles,motionImpossible,validFluidMotion:motionImpossible===0,eventCount};
 }
 function scenario(spec,policy,params={},opts={}){
   const p={...defaults,...params};
@@ -87,7 +110,13 @@ function selfTest(){
   check(h.motionCycles===b.motionCycles,"wire starvation does not choose packing");
   const numbered=scenario(spec,"adaptive",{ackBytes:"numbered"});
   check(numbered.admissionCycles>b.admissionCycles&&JSON.stringify(numbered.steps)===JSON.stringify(b.steps),"numbered ACK accounted");
-  return "8 groups of checks passed";
+  const early=run(rows,10,"one",p,{baud:1000,credit:10,slots:2,prefill:1,ackDelay:0,ackPoint:"admission"});
+  check(early.acceptedFrames===4&&early.maxAcceptedNotPlanned<=1&&early.maxCredit<=10,"admission order and credit");
+  const earlyReal=scenario(spec,"adaptive",{ackBytes:"numbered"},{ackPoint:"admission"});
+  check(earlyReal.admissionCycles===numbered.admissionCycles&&JSON.stringify(earlyReal.steps)===JSON.stringify(numbered.steps),"cost and steps conserved");
+  const full=run(Array.from({length:20},()=>({...rows[0],length:10})),10,"one",p,{baud:250000,credit:127,slots:2,prefill:1,ackDelay:0,ackPoint:"admission"});
+  check(full.acceptedWaitingSeconds>0&&full.maxAcceptedNotPlanned===1&&full.maxReservedSlots===2,"accepted command waits at full queue");
+  return "11 groups of checks passed";
 }
 function matrix(){
   const out=[];
