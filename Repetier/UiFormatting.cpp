@@ -230,15 +230,6 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
                 addFloat(Printer::zJerkLimit(), 3, 2); // %aJ : Max. Z-jerk
             break;
         }
-        case 'd': {
-            if (c2 == 'o')
-                addStringP(Printer::debugEcho() ? ui_text_on : ui_text_off); // %do : Debug echo state
-            else if (c2 == 'i')
-                addStringP(Printer::debugInfo() ? ui_text_on : ui_text_off); // %di : Debug info state
-            else if (c2 == 'e')
-                addStringP(Printer::debugErrors() ? ui_text_on : ui_text_off); // %de : Debug error state
-            break;
-        }
         case 'D': {
             if (c2 == 'x')
                 addLong(scanStrideMm(X_AXIS), 3); // %Dx : scan step size x

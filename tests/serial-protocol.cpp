@@ -22,7 +22,6 @@ namespace {
 std::deque<uint8_t> incoming;
 std::string replies;
 millis_t clockMs = 0;
-bool echo = false;
 bool stopped = false;
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
 bool thermalLocked=false;
@@ -70,14 +69,11 @@ char readFlashByte(const char* position) { return *position; }
 }
 
 namespace Printer {
-static uint8_t debugLevel;
-#include "debug-mask.inc"
-bool debugErrors() { return (debugLevel & 4) != 0; }
+bool debugErrors() { return true; }
 bool legacySimulationRejected() { return legacyRejected; }
 void latchOutputInhibit(bool thermalFault) { assert(!thermalFault); legacyRejected = true; }
 void stopPrint() { ++stopRequests; }
 void setFeedrate(float) { ++dispatchedCommands; }
-bool debugEcho() { return echo; }
 struct {
     bool commandsBlocked() const { return stopped
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
@@ -137,14 +133,13 @@ void printErrorFLN(const char* text) { print(tError); printFLN(text); }
 // Real receiver, M111 handler and dispatch entry; downstream command effects
 // are represented by counters, not physical hardware.
 namespace GCodeCommands {
-void setDebugLevel(GCode*);
 void dispatchMotion(GCode* code) {
     ++dispatchedCommands;
     if (code->internalCommand) { ++scriptCommands; lastScriptCommand = *code; }
     if (code->hasE()) ++extrusionRequests;
 }
 void dispatchMachine(GCode* code) {
-    if (code->M == 111) { setDebugLevel(code); return; }
+    if (code->M == 111) return; // retired command, no state
     if (code->M == 105 || code->M == 114 || code->M == 115) { ++statusCommands; return; }
     ++dispatchedCommands;
     if (code->M == 104 || code->M == 109 || code->M == 140 || code->M == 190 || code->M == 303)
@@ -265,9 +260,8 @@ void displayText() {
     assert(display && display->text == std::string("Cooling down"));
     popM(117);
     readReply("ok 0\r\n");
-    echo = true;
     popM(115);
-    assert(replies == "Echo:M115 \r\n");
+    assert(replies.empty());
 }
 
 void idleAndPartialLine() {
@@ -296,7 +290,7 @@ void binaryFrames() {
     auto corrupted = packet;
     corrupted.back() ^= 1;
     feed(corrupted);
-    readReply("\r\nResend:2\r\nok\r\n");
+    readReply("Error:Wrong checksum\r\n\r\nResend:2\r\nok\r\n");
     feed(std::string(31, '\0') + packet);
     readReply("ok 2\r\n");
     assert(GCodeInput::peekCurrentCommand()->isV2());
@@ -445,13 +439,10 @@ void stopDrainsInput() {
 }
 
 void legacyStream(const std::string& scenario) {
-    // Positive control: normal commands reach their owner, normal masks work.
+    // Positive control: retired M111 S7 is harmless; ordinary commands still run.
     feed("M111 S7\nM104 S100\nM140 S40\nG1 E1\n");
     while (!incoming.empty()) Commands::commandLoop();
-    assert(!legacyRejected && Printer::debugMask() == 7 && heaterRequests == 2 && extrusionRequests == 1);
-    Printer::toggleDebugFlag(8); // retired bit cannot be set via the debug API
-    assert(Printer::debugMask() == 7);
-    Printer::setDebugMask(0);
+    assert(!legacyRejected && heaterRequests == 2 && extrusionRequests == 1);
     replies.clear();
     const unsigned normalDispatches = dispatchedCommands;
     if (scenario == "legacy-during-stop") stopped = true;
@@ -473,7 +464,7 @@ void legacyStream(const std::string& scenario) {
         feed(numbered("N1 M111 S" + std::to_string(legacyMask)));
     }
     Commands::commandLoop();
-    assert(legacyRejected && stopRequests == 1 && Printer::debugMask() == (legacyMask & ~8u));
+    assert(legacyRejected && stopRequests == 1);
     assert(replies.find(inch ? "G20 unsupported" : "M111 bit 8 unsupported") != std::string::npos);
     assert(replies.find("ok ") != std::string::npos);
     assert(!GCodeInput::peekCurrentCommand());
@@ -495,7 +486,7 @@ void legacyStream(const std::string& scenario) {
         assert(++loops < 100);
         Commands::commandLoop();
     }
-    assert(legacyRejected && Printer::debugMask() == 0 && stopRequests == 1);
+    assert(legacyRejected && stopRequests == 1);
     assert(dispatchedCommands == normalDispatches && heaterRequests == 2 && extrusionRequests == 1);
     assert(statusCommands == 3 && replies.find("Job rejected;") != std::string::npos);
     GCodeInput::executeFlashScript("G1 E1\nM104 S200\n");
@@ -539,7 +530,7 @@ void thermalEmergency() {
     feed("N1 M104 S200\n");
     readReply("ok 1\r\n");
     assert(GCodeInput::peekCurrentCommand());
-    thermalLocked=true;echo=true;
+    thermalLocked=true;
     Commands::commandLoop(); // old admitted command is retired without execution/echo
     assert(!GCodeInput::peekCurrentCommand()&&dispatchedCommands==0&&replies.empty());
     feed(numbered("N2 M105"));

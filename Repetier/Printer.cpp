@@ -52,7 +52,6 @@ uint8_t Printer::flag1 = 0;
 uint8_t Printer::flag2 = 0;
 uint8_t Printer::flag3 = 0;
 
-uint8_t Printer::debugLevel = 6; ///< Debug output: 1 echo, 2 info, 4 error; bit 8 retired.
 
 uint8_t Printer::menuMode_ = 0;
 

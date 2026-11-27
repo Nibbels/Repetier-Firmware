@@ -227,18 +227,6 @@ void UIDisplay::mainSwitchCase(int action) {
         Printer::homeAxis(false, false, true);
         break;
     }
-    case UI_ACTION_DEBUG_ECHO: {
-        Printer::toggleDebugFlag(1);
-        break;
-    }
-    case UI_ACTION_DEBUG_INFO: {
-        Printer::toggleDebugFlag(2);
-        break;
-    }
-    case UI_ACTION_DEBUG_ERROR: {
-        Printer::toggleDebugFlag(4);
-        break;
-    }
 
 #if !HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)
     case UI_ACTION_LIGHTS_ONOFF: {

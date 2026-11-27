@@ -17,10 +17,8 @@ def main():
     command_loop = command_loop[command_loop.index("void Commands::commandLoop()"):command_loop.index("} // commandLoop")+len("} // commandLoop")]
     system = (firmware / "GCodeSystem.cpp").read_text(encoding="utf-8")
     dispatch = (firmware / "GCodeCommands.cpp").read_text(encoding="utf-8")
-    printer = (firmware / "Printer.h").read_text(encoding="utf-8")
     legacy = system[system.index("bool rejectLegacySimulation("):system.index("void reportPosition()")]
     entry = dispatch[dispatch.index("void Commands::executeGCode("):]
-    debug = printer[printer.index("    static uint8_t debugMask()"):printer.index("    static char zDisplayMode()")]
     uart = (firmware / "UsbSerial.cpp").read_text(encoding="utf-8")
     communication = (firmware / "Communication.cpp").read_text(encoding="utf-8")
     configuration = (firmware / "Configuration.h").read_text(encoding="utf-8")
@@ -35,7 +33,6 @@ def main():
     with TemporaryDirectory(prefix="rfx-serial-replay-") as directory:
         build = Path(directory)
         (build / "legacy-dispatch.inc").write_text("namespace GCodeCommands {\n" + legacy + "}\n" + entry, encoding="utf-8")
-        (build / "debug-mask.inc").write_text(debug, encoding="utf-8")
         (build / "gcode-settings.inc").write_text(f"#define GCODE_BUFFER_SIZE {capacity}\n", encoding="utf-8")
         (build / "gcode-receiver.inc").write_text(
             (commands + "\n" + receiver + "\n" + command_loop).replace('#include "Repetier.h"\n', ""), encoding="utf-8",

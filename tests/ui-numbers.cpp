@@ -25,7 +25,7 @@ struct UIDisplay {
     uint8_t col = 0;
     char printCols[MAX_COLS + 1] = {};
     char statusMsg[MAX_COLS + 1] = {};
-    bool statusIsTemplate_ = false, locked = false;
+    bool statusIsTemplate_ = false;
     char confirmation_ = 0;
     const void* messageLine1 = nullptr;
     const void* messageLine2 = nullptr;
@@ -34,7 +34,7 @@ struct UIDisplay {
     void parse(char* text, bool ram);
     void renderField(char c1, char c2, bool ram, int& ivalue, float& fvalue);
     void setStatusP(PGM_P text, bool error = false);
-    void setStatus(char* text, bool error = false, bool force = false);
+    void setStatus(char* text, bool error = false);
     void addInt(int16_t value, uint8_t digits, char fillChar = ' ');
     void addLong(int32_t value, char digits);
     void addFloat(float number, char fixdigits, uint8_t digits);

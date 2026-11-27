@@ -487,14 +487,6 @@ void GCodeInput::popCurrentCommand() {
     GCode* command = commandQueue.front();
     if (!command)
         return;
-    if (Printer::debugEcho()
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-        && !Printer::printJob.emergencyLocked()
-#endif
-    ) {
-        Com::printF(Com::tEcho);
-        command->printCommand();
-    }
     commandQueue.retireFront();
 }
 

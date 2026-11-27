@@ -57,7 +57,6 @@ void readOptionalTemperature();
 
 // Configuration, diagnostics and panel access.
 bool rejectLegacySimulation(GCode* com);
-void setDebugLevel(GCode* com);
 void reportPosition();
 void reportFirmware();
 void setPanelMessage(GCode* com);

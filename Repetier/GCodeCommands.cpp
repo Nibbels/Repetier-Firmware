@@ -104,7 +104,6 @@ void dispatchMachine(GCode* com) {
     case 3911: return setDigitFlowParameters(com);
 
     // Configuration, panel and diagnostics.
-    case 111: return setDebugLevel(com);
     case 114: return reportPosition();
     case 115: return reportFirmware();
     case PanelMessage: return setPanelMessage(com);
@@ -129,10 +128,10 @@ void Commands::executeGCode(GCode* com) {
     if (GCodeCommands::rejectLegacySimulation(com))
         return;
     // An unsupported input mode is not a motion mode. Discard all work, including
-    // already buffered commands and internal scripts, except status/debug.
+    // already buffered commands and internal scripts, except status.
     if (Printer::legacySimulationRejected()
         && (com->hasG() || !com->hasM()
-            || (com->M != 105 && com->M != 111 && com->M != 114 && com->M != 115))) {
+            || (com->M != 105 && com->M != 114 && com->M != 115))) {
         Com::printErrorFLN(PSTR("Job rejected; stop host and restart printer."));
         return;
     }
@@ -141,7 +140,7 @@ void Commands::executeGCode(GCode* com) {
         // Retain diagnostics and explicit settings recovery; no ordinary
         // motion, heating, scan or script entry while settings are untrusted.
         if(com->hasG() || !com->hasM() ||
-           (com->M!=105 && com->M!=111 && com->M!=112 && com->M!=114 &&
+           (com->M!=105 && com->M!=112 && com->M!=114 &&
             com->M!=115 && com->M!=205 && com->M!=206 &&
             com->M!=502)) {
             Com::printErrorFLN(PSTR("EEPROM settings not acknowledged"));

@@ -31,14 +31,12 @@ void showInvalidSyntax(unsigned int currentMCode) {
 
 
 // Reject retired input modes at receive admission, even while a stop drains input.
-// Never let a subsequent debug mask re-arm machine outputs.
+// Retired modes remain rejected; no debug state or command is supported.
 bool rejectLegacySimulation(GCode* com) {
     const bool inchMode = com->hasG() && com->G == 20;
     const bool simulation = com->hasM() && com->M == 111 && com->hasS() && (static_cast<uint8_t>(com->S) & 8);
     if (!inchMode && !simulation)
         return false;
-    if (simulation)
-        Printer::setDebugMask(com->S);
     if (!Printer::legacySimulationRejected()) {
         Printer::latchOutputInhibit(false);
         Printer::stopPrint();
@@ -48,11 +46,6 @@ bool rejectLegacySimulation(GCode* com) {
     else
         Com::printErrorFLN(PSTR("M111 bit 8 unsupported; job rejected. Stop host and restart printer."));
     return true;
-}
-
-void setDebugLevel(GCode* com) {
-    if (com->hasS())
-        Printer::setDebugMask(com->S);
 }
 
 void reportPosition() {

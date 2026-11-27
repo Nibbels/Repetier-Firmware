@@ -96,7 +96,6 @@ class Printer {
     static float maxZJerk_;
     static uint8_t flag0, flag1, flag2, flag3;
     static char enabledStepper[3];
-    static uint8_t debugLevel;
     static float feedrate; // Last requested feedrate (mm/s, including multiplier).
     static int feedrateMultiply;
     static float menuExtrusionFactor;
@@ -149,9 +148,6 @@ public:
         feedrateMultiply = factor;
     }
     static void setFlowMultiplier(float factor) { menuExtrusionFactor = factor; }
-    static uint8_t debugMask() { return debugLevel; }
-    static void setDebugMask(uint8_t mask) { debugLevel = mask & ~8u; }
-    static void toggleDebugFlag(uint8_t bit) { debugLevel ^= bit & ~8u; }
     static char zDisplayMode() { return ZMode; }
     static void restoreZDisplayMode(char mode) { ZMode = mode; }
     static void toggleZDisplayMode() { ZMode = ZMode == 1 ? 2 : 1; }
@@ -217,17 +213,10 @@ public:
         return (activeMenuModes() & mode) == mode;
     } // isMenuMode
 
-    static INLINE bool debugEcho() {
-        return ((debugLevel & 1) != 0);
-    } // debugEcho
-
-    static INLINE bool debugInfo() {
-        return ((debugLevel & 2) != 0);
-    } // debugInfo
-
-    static INLINE bool debugErrors() {
-        return ((debugLevel & 4) != 0);
-    } // debugErrors
+    // Temporary constant predicates during source cleanup: mandatory
+    // reports and errors can no longer be disabled by the host.
+    static constexpr bool debugInfo() { return true; }
+    static constexpr bool debugErrors() { return true; }
 
     /** \brief Disable stepper motor for x direction. */
     static INLINE void disableXStepper() {
