@@ -43,6 +43,22 @@ jobs:
       - name: Region-aware geometric feedforward curvature and reversal model
         run: |
           python3 research/task0032-step-output/z-feedforward.py "$RUNNER_TEMP/step-output/z-feedforward-results.json"
+      - name: Active integer feedforward chord and lattice invariants
+        run: |
+          set -o pipefail
+          c++ -std=c++11 -O2 -Wall -Wextra -Werror research/task0032-step-output/z-feedforward-dda-replay.cpp -o "$RUNNER_TEMP/z-dda"
+          "$RUNNER_TEMP/z-dda" | tee "$RUNNER_TEMP/step-output/z-dda.txt"
+          python3 research/task0032-step-output/z-feedforward-lattice.py "$RUNNER_TEMP/step-output/z-lattice.json"
+      - name: Signed Z demand and logical retract classification
+        run: |
+          set -o pipefail
+          c++ -std=c++11 -O2 -Wall -Wextra -Werror research/task0032-step-output/z-net-demand-replay.cpp -o "$RUNNER_TEMP/z-net"
+          "$RUNNER_TEMP/z-net" | tee "$RUNNER_TEMP/step-output/z-net.txt"
+          c++ -std=c++11 -O2 -Wall -Wextra -Werror -I Repetier research/task0032-step-output/layer-retraction-replay.cpp -o "$RUNNER_TEMP/z-layer"
+          "$RUNNER_TEMP/z-layer" | tee "$RUNNER_TEMP/step-output/z-layer.txt"
+      - name: No intermediate settling rate-only continuous XYZ replay
+        run: |
+          python3 research/task0032-step-output/z-feedforward-stream.py "$RUNNER_TEMP/step-output/z-stream.json"
       - name: Shared Z correction clock characterization
         run: |
           python3 research/task0032-step-output/z-clock-research.py "$RUNNER_TEMP/step-output/z-clock-results.json"
@@ -165,6 +181,9 @@ jobs:
       - name: Quake and conservative integer inverse root AVR comparison
         run: |
           python3 research/task0032-step-output/inverse-root-research.py --out "$RUNNER_TEMP/step-output/inverse-root" --compiler "$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin/avr-g++" --runner-source "$RUNNER_TEMP/simavr-trace.c"
+      - name: Isolated active integer chord AVR timing
+        run: |
+          python3 research/task0032-step-output/z-feedforward-dda-bench.py --out "$RUNNER_TEMP/step-output/z-dda-avr" --compiler "$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin/avr-g++" --runner-source "$RUNNER_TEMP/simavr-trace.c"
       - name: Linked motor wake candidate with minimal Q23 and narrow queue masks
         if: steps.reuse.outputs.available != 'yes'
         shell: bash
@@ -187,18 +206,62 @@ jobs:
         if: steps.unified_reuse.outputs.available != 'yes'
         run: |
           python3 research/task0032-step-output/unified-z-linked-replay.py "$RUNNER_TEMP/step-output/q23/wake-jog-idle/candidate.zip" "$RUNNER_TEMP/step-output/z-unified/unified-z/candidate.zip" "$RUNNER_TEMP/step-output/z-unified-results.json"
+      - name: Reuse direct-period linked images when all generator inputs match
+        id: direct_reuse
+        shell: bash
+        run: |
+          set -euo pipefail
+          prior=9249b19d2520003a5b5de9c84480ff80cb890da7
+          git fetch --depth=1 origin "$prior"
+          if ! git diff --quiet "$prior" HEAD -- Repetier research/task0032-step-output/direct-z-source.py research/task0032-step-output/direct-z-ramp.h research/task0032-step-output/inverse-root-research.py research/task0032-step-output/unified-z-source.py research/task0032-step-output/z-correction-clock.h research/task0032-step-output/q23-linked.py research/task0032-step-output/motor-wake-source.py research/task0032-step-output/motor-wake.h research/task0032-step-output/ecmp-q23.h; then
+            echo "available=no" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/15212370331/zip" > "$RUNNER_TEMP/verified-direct.zip"; then
+            echo "available=no" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "7de2a72fd2b74a18b1309940a0e57022af0cf92d8ebe25db79e8de9ae3a54449  $RUNNER_TEMP/verified-direct.zip" | sha256sum -c -
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib,zipfile
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])
+          with zipfile.ZipFile(root/"verified-direct.zip") as z:
+              for variant in ("direct-z","direct-z-merge-study"):
+                  dest=root/"step-output/z-direct"/variant
+                  dest.mkdir(parents=True,exist_ok=True)
+                  archive=dest/"candidate.zip"
+                  archive.write_bytes(z.read("z-direct/"+variant+"/candidate.zip"))
+                  with zipfile.ZipFile(archive) as image:
+                      meta=json.loads(image.read("summary.json"))
+                      assert meta["variant"]==variant
+                      for b,digest in meta["elf"].items():
+                          assert hashlib.sha256(image.read(b+"/build/Repetier.ino.elf")).hexdigest()==digest
+          (root/"step-output/reused-direct-evidence.txt").write_text("run46022899803 artifact15212370331; source equality and ZIP/ELF hashes verified\n")
+          PY
+          echo "available=yes" >> "$GITHUB_OUTPUT"
       - name: Four actual firmware builds with direct-period Z ramp
+        if: steps.direct_reuse.outputs.available != 'yes'
         run: |
           python3 research/task0032-step-output/direct-z-source.py --out "$RUNNER_TEMP/step-output/z-direct" --tools "$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin"
       - name: Linked direct-period nominal and correction replay
         run: |
           python3 research/task0032-step-output/unified-z-linked-replay.py "$RUNNER_TEMP/step-output/q23/wake-jog-idle/candidate.zip" "$RUNNER_TEMP/step-output/z-direct/direct-z/candidate.zip" "$RUNNER_TEMP/step-output/z-direct-results.json"
       - name: Build linked correction gap study (diagnostic input only)
+        if: steps.direct_reuse.outputs.available != 'yes'
         run: |
           python3 research/task0032-step-output/direct-z-source.py --merge-study --out "$RUNNER_TEMP/step-output/z-direct" --tools "$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin"
       - name: Compare linked correction gap policies on representative boards
         run: |
           python3 research/task0032-step-output/z-merge-gap-replay.py "$RUNNER_TEMP/step-output/z-direct/direct-z-merge-study/candidate.zip" "$RUNNER_TEMP/step-output/z-merge-gap-results.json"
+      - name: Four actual firmware builds with explicit Z direction and coherent snapshot
+        run: |
+          python3 research/task0032-step-output/z-explicit-source.py --out "$RUNNER_TEMP/step-output/z-explicit" --tools "$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin"
+      - name: Explicit logical Z direction with physical GPIO and opposing requests
+        run: |
+          python3 research/task0032-step-output/z-explicit-linked-replay.py "$RUNNER_TEMP/step-output/z-direct/direct-z/candidate.zip" "$RUNNER_TEMP/step-output/z-explicit/explicit-z/candidate.zip" "$RUNNER_TEMP/step-output/z-explicit-direction.json"
+      - name: Linked explicit Z nominal and correction continuity
+        run: |
+          python3 research/task0032-step-output/unified-z-linked-replay.py "$RUNNER_TEMP/step-output/q23/wake-jog-idle/candidate.zip" "$RUNNER_TEMP/step-output/z-explicit/explicit-z/candidate.zip" "$RUNNER_TEMP/step-output/z-explicit-results.json"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
