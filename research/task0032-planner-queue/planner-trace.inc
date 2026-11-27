@@ -62,7 +62,7 @@ struct Trace {
         assert(std::abs(ledgerSeconds-ref.seconds)<=.0000501*(queue.count()+1)+std::abs(ref.seconds)*.000003+1e-7);
         if(!queue.count())assert(ls.full==0 && ls.unavailable==0);
         prefix(kind);
-        std::printf(",\\"ledger_s\\":%.9g,\\"ledger_full_units\\":%llu,\\"ledger_builds\\":%u,\\"ledger_replans\\":%u",ledgerSeconds,(unsigned long long)ls.full,durationBuilds,durationReplans);
+        std::printf(",\"ledger_s\":%.9g,\"ledger_full_units\":%llu,\"ledger_builds\":%u,\"ledger_replans\":%u",ledgerSeconds,(unsigned long long)ls.full,durationBuilds,durationReplans);
         std::printf(",\"read\":%u,\"write\":%u,\"count\":%u,\"active\":%u,\"reference_s\":%.9g,\"xyz_mm\":%.9g,\"filament_mm\":%.9g",
                     unsigned(queue.readIndex()),unsigned(queue.writeIndex()),unsigned(queue.count()),unsigned(queue.active()!=nullptr),ref.seconds,ref.xyzMm,ref.filamentMm);
         if (!std::strcmp(kind,"publish")) {
