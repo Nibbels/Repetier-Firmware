@@ -1,0 +1,30 @@
+name: Task0033 private research verification
+on:
+  pull_request:
+    branches: [ai-firmware-review]
+    paths:
+      - 'tools/task0033/**'
+      - '.github/workflows/task0033-research.yml'
+permissions:
+  contents: read
+jobs:
+  research:
+    if: github.event.pull_request.head.ref == 'task/Task0033-uart-robustness' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Record revision
+        run: git rev-parse HEAD
+      - name: Execute deterministic research models
+        shell: bash
+        run: |
+          set -euo pipefail
+          for script in uart-model pacing-model priority-model recovery-contract; do
+            node "tools/task0033/${script}.js" > "/tmp/${script}-results.json"
+            diff -u "tools/task0033/${script}-results.json" "/tmp/${script}-results.json"
+          done
+      - name: Characterize actual firmware loss behavior
+        run: python3 tools/task0033/loss-replay.py
