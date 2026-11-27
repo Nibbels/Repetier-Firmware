@@ -298,7 +298,12 @@ long StepExecutor::performDirectMove() {
     if (direct.task == DIRECT_PREPARED_STOPPABLE || direct.task == DIRECT_PREPARED) {
         direct.task = (direct.task == DIRECT_PREPARED_STOPPABLE ? DIRECT_RUNNING_STOPPABLE : DIRECT_RUNNING);
 
+        // Timer1 has masked its own compare before entering this path.
+        // A newly enabled driver waits on Arduino's interrupt-driven
+        // timebase, just as on queued-move startup. Never wait with I=0.
+        HAL::allowInterrupts();
         enableSteppers(direct);
+        HAL::forbidInterrupts();
         adjustDirections(direct);
         directionOwner = DirectionOwner::Direct;
 
