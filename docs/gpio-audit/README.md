@@ -2,6 +2,12 @@
 
 **A foreground LCD write can undo the Timer1 Z-enable edge on all four boards.** The Task0034 change protecting PH6 during RGB updates works at the inspected revision. Correcting the LCD and DRV chip-select writers does not require changing every fastio write or adding a port shadow. No production patch, hardware test, or release qualification is part of this evidence branch.
 
+## Current Task0034 follow-up
+
+At `f38747c490fbe3dfa7d934f27b67dddbfd53a840` the Task0034 owner has already qualified `EepromZones::Lighting` (line 276). The compiler blocker below is historical. Rebuilt the four standard (**c**) and four combined heater lease/reset watchdog/emergency/EEPROM profiles (**combined**) from this exact *unmodified* source. All eight linked, and all four combined images passed the repository recovery-image verifier after layout selection. The PK0 lost-update witness remains present in all eight. The PORTH set lock remains 8 clocks on the three RGB boards; see builds.tsv for per-image initialization timing and byte addresses. The canonical [Actions run](https://github.com/Nibbels/Repetier-Firmware/actions/runs/46029464464) is independently tracked. The other findings below use source positions on b. Pin assignments, fastio, lighting, step executor, LCD writes, fan PWM, and driver selection are unchanged in the b-to-c diff.
+
+[Pin assignments by profile](pinmap.tsv) list definitions resolved on c. Some connector macros remain defined even where a feature is disabled (for instance E1 on X44); use the site inventory to identify actual writers. ADC entries are channel numbers. The alarm uses the additional experimental definitions in the port table below.
+
 ## Scope and evidence
 
 * **a** = target `a0dbda3d43e30df96647ec63cbaf473378f1db0d`. **b** = Task0034 `6755ec83fa198a3b15f31ce55064565161dcdc00`. **lease** = b with RF_HEATER_LEASE_EXPERIMENT. Each built for RF1000, RF2000, RF2000v2 and the single-extruder RF2000 X44 cooler profile. Arduino CLI 1.2.2, core 1.8.6, avr-gcc 7.3.0-atmel3.6.1-arduino7, ATmega2560, 16 MHz, -Os/LTO. All twelve unmodified-source images linked locally.
