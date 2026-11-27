@@ -21,7 +21,8 @@ def replace(s,a,b):
     assert s.count(a)==1,(a,s.count(a))
     return s.replace(a,b)
 
-def modify(dst,padded):
+def modify(dst,tag):
+    padded=tag in ('guarded','narrow')
     shutil.copytree(FW,dst)
     changes={}
     h=(HERE/"ecmp-q23.h").read_text().replace("ExtrusionCompensationQ23","ExtrusionCompensation")
@@ -42,16 +43,30 @@ def modify(dst,padded):
         s=replace(s,"                        Extruder::unstep();\n                        Printer::extrusionCompensation.consumeExtraStep(forward);\n                        Extruder::step();",
                   "                        Extruder::unstep();\n                        Printer::extrusionCompensation.consumeExtraStep(forward);\n                        __builtin_avr_delay_cycles(31);\n                        Extruder::step();\n                        __builtin_avr_delay_cycles(31);")
         changes[p]=s
+    if tag=="narrow":
+        # Exploratory queue-only mask split. E output transaction and
+        # Z/tail masks unchanged. Queue's Timer1-private XY phase/position
+        # no longer globally masked. Direct (including PWM key release)
+        # remains bit-for-bit same source path as guarded.
+        p="StepExecutor.cpp";s=changes[p]
+        start=s.index("        if (move->isXMove()) {",s.index("long StepExecutor::performMove(PrintLine* move)"))
+        end=s.index("        if (move->isZMove()) {",start)
+        xy=s[start:end]
+        assert xy.count("                HAL::allowInterrupts();")==2
+        assert xy.count("                HAL::forbidInterrupts();")==2
+        xy=xy.replace("                HAL::allowInterrupts();","                if (!forQueue) HAL::allowInterrupts();")
+        xy=xy.replace("                HAL::forbidInterrupts();","                if (!forQueue) HAL::forbidInterrupts();")
+        s=s[:start]+"        if (forQueue) HAL::allowInterrupts();\n\n"+xy+"        if (forQueue) HAL::forbidInterrupts();\n\n"+s[end:]
+        changes[p]=s
     diff=[]
     for p,s in changes.items():
         diff.extend(difflib.unified_diff((FW/p).read_text().splitlines(True),s.splitlines(True),fromfile="a/Repetier/"+p,tofile="b/Repetier/"+p))
         (dst/p).write_text(s)
     return "".join(diff)
 
-def build(dst,out,padded,tools):
-    tag="guarded" if padded else "raw"
+def build(dst,out,tag,tools):
     root=out/tag;root.mkdir()
-    (root/"candidate.diff").write_text(modify(dst,padded))
+    (root/"candidate.diff").write_text(modify(dst,tag))
     archive=root/"candidate.zip"
     meta={"classification":"task_private_counterfactual_not_shipping","variant":tag,
           "source_sha256":{p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in dst.glob("*") if p.is_file()},
@@ -83,6 +98,24 @@ def normalize(s,q23):
     raw=bytes.fromhex(s.pop("ecmp_bytes"))
     s["ecmp_units"]=list(struct.unpack("<ii",raw)) if q23 else [round(x*Q) for x in struct.unpack("<ff",raw)]
     return s
+
+def edge_timing(edges):
+    # Only observed same-invocation constraints. Prior/next invocation and
+    # actual competing ISR timing are deliberately not inferred.
+    prev_rise={};prev_dir={};first_after_dir={};result=[]
+    for pin,state,t in edges:
+        if pin.startswith("DIR_"):
+            p=pin[4:]
+            if p in prev_rise:result.append((p,"dir_hold",t-prev_rise[p],4))
+            prev_dir[p]=t
+            first_after_dir[p]=True
+        elif state:
+            if pin in prev_rise:result.append((pin,"step_period",t-prev_rise[pin],64))
+            if first_after_dir.get(pin):
+                result.append((pin,"dir_setup",t-prev_dir[pin],4))
+                first_after_dir[pin]=False
+            prev_rise[pin]=t
+    return result
 
 def compare(archive,baseline,out,tag):
     mod=lt.load_interpreter()
@@ -120,6 +153,19 @@ def compare(archive,baseline,out,tag):
                                 summary[prefix+"short_pulses"]+=1
                                 if not prefix and len(summary["short_examples"])<8:
                                     summary["short_examples"].append([src["case"],src["fixture"],pin,edge,cycles])
+                    for src,prefix in ((a,"baseline_"),(c,"")):
+                        for pin,edge,cycles,minimum in edge_timing(src["step_dir_edges"]):
+                            key=pin+":"+edge
+                            d=summary[prefix+"width_min"]
+                            d[key]=min(d.get(key,cycles),cycles)
+                            if cycles<minimum:
+                                summary[prefix+"short_pulses"]+=1
+                                if not prefix and len(summary["short_examples"])<8:
+                                    summary["short_examples"].append([src["case"],src["fixture"],pin,edge,cycles])
+                    for src,prefix in ((a,"baseline_"),(c,"")):
+                        bymode=summary.setdefault(prefix+"max_mask_by_mode",{})
+                        mode=src["mode"]
+                        bymode[mode]=max(bymode.get(mode,0),src["max_masked_cycles"])
                     summary["max_baseline_mask"]=max(summary["max_baseline_mask"],a["max_masked_cycles"])
                     if c["max_masked_cycles"]>summary["max_mask"]:
                         summary["max_mask"]=c["max_masked_cycles"]
@@ -144,12 +190,12 @@ def main():
     p.add_argument("--out",type=pathlib.Path,required=True)
     p.add_argument("--tools",type=pathlib.Path)
     p.add_argument("--reuse",type=pathlib.Path,help="reuse exact prior raw/guarded candidate.zip archives")
+    p.add_argument("--variant",choices=("raw","guarded","narrow"),action="append")
     args=p.parse_args()
     args.out.mkdir(parents=True,exist_ok=True)
     all_results={}
-    for padded in (False,True):
-        tag="guarded" if padded else "raw"
-        if args.reuse:
+    for tag in args.variant or ("raw","guarded"):
+        if args.reuse and tag in ("raw","guarded"):
             archive=args.reuse/tag/"candidate.zip"
             with zipfile.ZipFile(archive) as z:
                 m=json.loads(z.read("summary.json"))
@@ -161,7 +207,7 @@ def main():
         else:
             assert args.tools is not None
             with tempfile.TemporaryDirectory(prefix="q23-") as tmp:
-                archive=build(pathlib.Path(tmp)/"Repetier",args.out,padded,args.tools)
+                archive=build(pathlib.Path(tmp)/"Repetier",args.out,tag,args.tools)
                 all_results[tag]=compare(archive,args.baseline,args.out,tag)
     # Raw variant is exploratory and may violate pulse timing. Guarded
     # candidate must preserve logical state and meet all sampled within-call
@@ -169,5 +215,5 @@ def main():
     for variant,rows in all_results.items():
         for board,s in rows.items():
             assert s["failed"]==0,(variant,board,s["mismatch_examples"])
-            if variant=="guarded":assert s["short_pulses"]==0,(board,s["short_examples"])
+            if variant in ("guarded","narrow"):assert s["short_pulses"]==0,(board,s["short_examples"])
 if __name__=="__main__":main()
