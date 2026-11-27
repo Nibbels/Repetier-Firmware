@@ -269,7 +269,7 @@
     <ClInclude Include="PrintPause.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="RgbLighting.h">
+    <ClInclude Include="Lighting.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="ScanSettings.h">
@@ -424,7 +424,7 @@
     <ClCompile Include="PrintPause.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="RgbLighting.cpp">
+    <ClCompile Include="Lighting.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="StepExecutor.cpp">

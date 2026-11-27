@@ -272,7 +272,7 @@ void EEPROM::update(GCode* com) {
         if(driveOnly(id,edits,count))return live.applyDriveLimits(id,data,n,edits,count);
         if(!live.applyBlock(id,data,n,alerts))return false;
         if(motionBlock(id))live.finishMotion();
-        if(id==Lighting) {
+        if(id==EepromZones::Lighting) {
             AccessoryOutputs::initializeBoardOutputs();
             AccessoryOutputs::initializeCaseLight();
         }

@@ -284,6 +284,7 @@ static struct {
 static void recalculateZCompensation() {++ordinaryServices;}
 static void loopFeatures() {++ordinaryServices;}
 static void handleScanWorkTasks(bool) {++ordinaryServices;}
+namespace Lighting { void serviceAlarm(uint32_t) {} }
 #include "scheduler.inc"
 
 static void service() {

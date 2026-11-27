@@ -207,7 +207,7 @@ int main() {
             assert(!occupied[start+i-Base]);occupied[start+i-Base]=true;++payload;
         }
     }
-    assert(payload==304 && sizeof(fields)/sizeof(fields[0])==125);
+    assert(payload==288 && sizeof(fields)/sizeof(fields[0])==109);
     // Independent inventory above defines the exact historical width map.
     // Motor current is one five-byte group in the layout, but individual
     // channels are the only writable patch units.

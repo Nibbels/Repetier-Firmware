@@ -200,7 +200,7 @@
     <ClInclude Include="PressureMeasurement.h" />
     <ClInclude Include="PrintJob.h" />
     <ClInclude Include="PrintPause.h" />
-    <ClInclude Include="RgbLighting.h" />
+    <ClInclude Include="Lighting.h" />
     <ClInclude Include="ScanSettings.h" />
     <ClInclude Include="StepExecutor.h" />
     <ClInclude Include="UsbSerial.h" />
@@ -254,7 +254,7 @@
     <ClCompile Include="MoveQueue.cpp" />
     <ClCompile Include="PrintJob.cpp" />
     <ClCompile Include="PrintPause.cpp" />
-    <ClCompile Include="RgbLighting.cpp" />
+    <ClCompile Include="Lighting.cpp" />
     <ClCompile Include="StepExecutor.cpp" />
     <ClCompile Include="UsbSerial.cpp" />
     <ClCompile Include="ZMotion.cpp" />
