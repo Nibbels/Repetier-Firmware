@@ -1,5 +1,6 @@
 #pragma once
 #include "z-feedforward-dda.h"
+#include "z-physical-chord.h"
 
 namespace ZFeedforwardResearch {
 // One active chord and one foreground-prepared successor. Single-core AVR
@@ -14,8 +15,9 @@ struct Tag {
         return move==b.move&&first==b.first&&context==b.context;
     }
 };
-class Handoff {
-    struct Slot {Chord chord;Tag tag;};
+template<class Interpolator>
+class BasicHandoff {
+    struct Slot {Interpolator chord;Tag tag;};
     Slot slots_[2]{};
     volatile uint8_t active_=0,ready_=0;
     bool valid_=false; // Timer1 only
@@ -69,7 +71,10 @@ public:
     // Physical correction and motor ledger are deliberately untouched.
     void invalidate(){valid_=false;}
 };
+using Handoff=BasicHandoff<Chord>;
+using PhysicalHandoff=BasicHandoff<PhysicalChord>;
 #ifdef __AVR__
+static_assert(sizeof(PhysicalHandoff)==53,"compact active/prepared records + flags");
 static_assert(sizeof(Tag)==10,"AVR tag size");
 static_assert(sizeof(Handoff)==73,"two active/prepared records + flags");
 #endif
