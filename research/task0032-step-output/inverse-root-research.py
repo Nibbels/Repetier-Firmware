@@ -126,6 +126,32 @@ inline uint32_t transitionPeriod(uint32_t A,uint32_t l,bool adjacent) {
     if(!l)return 2*upperPeriod(A);
     return upperPeriod(A*l+(A>>6)*29+((A&63)*29>>6));
 }
+struct DirectLimits {
+    uint32_t A, cap, fraction;
+    static DirectLimits prepare(uint32_t A,uint32_t cap) {
+        return {A,cap,(A>>6)*29+((A&63)*29>>6)};
+    }
+};
+struct DirectPulse {uint32_t level,interval;int8_t sign;bool restart;};
+class DirectRamp {
+    uint32_t level_=0;
+    int8_t direction_=0;
+public:
+    DirectPulse plan(int32_t error,const DirectLimits& lim) const {
+        if(!error||!lim.cap)return {0,0,0,false};
+        const uint32_t d=error<0?uint32_t(0)-uint32_t(error):uint32_t(error);
+        const int8_t sign=error>0?1:-1;
+        const bool restart=level_&&(direction_!=sign||d<level_||level_>lim.cap);
+        const uint32_t l=restart?0:level_;
+        if(d==1&&!l)return {0,2*upperPeriod(lim.A/2),sign,restart};
+        const uint32_t n=d<=l?l-1:(d-l>=2&&l<lim.cap?l+1:l);
+        const uint32_t low=l<n?l:n;
+        const uint32_t interval=l==n?upperPeriod(lim.A*l):
+            !low?2*upperPeriod(lim.A):upperPeriod(lim.A*low+lim.fraction);
+        return {n,interval,sign,restart};
+    }
+    void commit(const DirectPulse& p) {level_=p.level;direction_=p.sign;}
+};
 inline float quake(float x) {
     uint32_t bits; memcpy(&bits,&x,4);
     bits=0x5f3759dfUL-(bits>>1);
@@ -142,6 +168,15 @@ FIXTURE=r'''
 using namespace InverseRootResearch;
 class HAL { public: static uint16_t integerSqrt(int32_t); static int32_t CPUDivU2(unsigned int); };
 #include "actual-hal-math.inc"
+struct FastMath {
+    static uint16_t floorRoot(uint32_t x) {
+        if(x>INT32_MAX)return ZCorrectionResearch::root(x);
+        if(!x)return 0;
+        uint16_t r=HAL::integerSqrt(int32_t(x));
+        return uint32_t(r)*r>x?r-1:r;
+    }
+    static uint32_t period(uint16_t v) {return HAL::CPUDivU2(v);}
+};
 extern "C" { volatile uint8_t phase=0,fixture_id=0,queue_depth=0; }
 volatile uint32_t input,output,energy;
 volatile float floatInput,floatOutput;
@@ -173,6 +208,26 @@ int main(){
         uint32_t a=energy,l=input;
         mark(9);asm volatile("" : "+r"(a),"+r"(l) :: "memory");output=transitionPeriod(a,l,true);mark(137);
         require(output==transitionPeriod(energy,input,true));
+    }
+    for(uint8_t j=0;j<3;j++){
+        const uint32_t a=j==0?6400:j==1?128000:256000;
+        const auto lim=ZCorrectionResearch::Limits::prepare(a,11520);
+        const auto dl=DirectLimits::prepare(lim.twiceAcceleration,lim.maxLevel);
+        ZCorrectionResearch::FastRamp<FastMath> fast;
+        DirectRamp direct;
+        fixture_id=2+j;
+        for(uint8_t i=0;i<32;i++){
+            queue_depth=i;
+            const int32_t error=i<16?320:-(32-i);
+            input=uint32_t(error);
+            int32_t e=int32_t(input);
+            mark(10);asm volatile("" : "+r"(e) :: "memory");
+            auto fp=fast.plan(e,lim);output=fp.interval+fp.nextLevel;mark(138);
+            e=int32_t(input);mark(11);asm volatile("" : "+r"(e) :: "memory");
+            auto dp=direct.plan(e,dl);output=dp.interval+dp.level;mark(139);
+            require(fp.nextLevel==dp.level&&fp.sign==dp.sign&&fp.safetyRestart==dp.restart);
+            fast.commit(fp);direct.commit(dp);
+        }
     }
     mark(255);while(true){}
 }
@@ -224,8 +279,8 @@ def main():
             start,ff,ii,stage=pending
             assert (ff,ii,stage)==(f,i,mark-128)
             rows.append(dict(fixture=f,index=i,stage=stage,cycles=t-start));pending=None
-    assert done and pending is None and len(rows)==15*8+11
-    names=["HAL integer sqrt","lower table sqrt","sqrtf","Quake invsqrt","Quake period (float)","upper table period","float sqrt/div period","HAL floor root + reciprocal","direct adjacent ramp period"]
+    assert done and pending is None and len(rows)==15*8+11+3*32*2
+    names=["HAL integer sqrt","lower table sqrt","sqrtf","Quake invsqrt","Quake period (float)","upper table period","float sqrt/div period","HAL floor root + reciprocal","direct adjacent ramp period","cached HAL full ramp","direct table full ramp"]
     summary={}
     for stage,name in enumerate(names,1):
         times=[r["cycles"] for r in rows if r["stage"]==stage]
