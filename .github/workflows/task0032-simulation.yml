@@ -256,3 +256,57 @@ jobs:
           path: ${{ runner.temp }}/task0032-lcd-row
           retention-days: 7
           if-no-files-found: error
+
+
+  lcd-integrated-preflight:
+    if: github.head_ref == 'task/Task0032-lcd-integration'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Replay single-frame dirty transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-lcd-integrated"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          sha256sum tools/task0032/lcd-pending-frame.{h,cpp} tools/task0032/lcd-integration-preflight.py > "$out/source-sha256.txt"
+          c++ -std=c++11 -O2 -Wall -Wextra -Werror tools/task0032/lcd-pending-frame.cpp -o "$out/replay"
+          "$out/replay" | tee "$out/replay.log"
+          c++ -std=c++11 -O1 -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all tools/task0032/lcd-pending-frame.cpp -o "$out/ubsan"
+          "$out/ubsan" | tee "$out/ubsan.log"
+      - name: Apply exact-source candidate and check actual GPIO, UI and dispatch replays
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-lcd-integrated"
+          p0=6693513f2ecacabf47c5e08c80fc3a9bb8417eab
+          candidate="$RUNNER_TEMP/task0032-lcd-integrated-p0"
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$candidate" "$p0"
+          python3 tools/task0032/lcd-integration-preflight.py --source "$candidate" --out "$out" | tee "$out/candidate.json"
+          for test in lcd-gpio boot-eye ui-workflows task0034-panel-dispatch; do
+            python3 "$candidate/tests/$test.py" 2>&1 | tee "$out/$test.log"
+          done
+          git -C "$candidate" -c user.name="Task0032 isolated preflight" -c user.email="preflight@invalid.example" commit -m "Disposable integrated LCD counterfactual"
+          git -C "$candidate" rev-parse HEAD > "$out/local-candidate-sha.txt"
+      - uses: arduino/setup-arduino-cli@v2
+        with:
+          version: 1.2.2
+      - name: Run existing canonical four-board recovery harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-lcd-integrated"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          cd "$RUNNER_TEMP/task0032-lcd-integrated-p0"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" --p0-candidate | tee "$out/canonical-preflight.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-lcd-integrated-${{ github.sha }}
+          path: ${{ runner.temp }}/task0032-lcd-integrated
+          retention-days: 7
+          if-no-files-found: error
