@@ -267,6 +267,21 @@ void opposingCorrection() {
 }
 
 void correctionWaits() {
+    // Timer1 queue task: cancellation must never enter a delay with I=0.
+    reset(500);
+    zMotion.requestCorrection(26);
+    settleCorrection();
+    assert(motorPosition == 526);
+    {
+        InterruptProtectedBlock lock;
+        Printer::disableCMPnow();
+        assert(!interruptsEnabled && waitedMs == 0);
+        assert(!Printer::doHeatBedZCompensation && motorPosition == 526);
+    }
+    assert(interruptsEnabled);
+    settleCorrection();
+    assert(motorPosition == 500 && waitedMs == 0);
+
     reset(500);
     zMotion.requestCorrection(25);
     assert(!StepExecutor::needCmpWait() && Printer::needsCMPwait());
