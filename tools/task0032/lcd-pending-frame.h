@@ -41,6 +41,7 @@ public:
     enum class Result:uint8_t {Idle,Waiting,Address,Data};
 
     bool pending() const { return dirtyRows_!=0; }
+    bool needsService() const { return dirtyRows_!=0 || waiting_; }
 
     // Only after an exclusive synchronous operation has actually emitted
     // every logical cell (or cleared DDRAM). Even then wait after its last
@@ -84,7 +85,9 @@ public:
     // Sink writes exactly one raw LCD byte, then samples the clock.
     template<class Sink>
     Result service(const char (&frame)[4][Columns+1],bool emergency,Sink& sink) {
-        if(!pending()) return Result::Idle;
+        // Retire the last execution deadline even when no dirty cells
+        // remain. Otherwise a frame unchanged for >half a micros wrap
+        // could later be mistaken for a backwards clock jump.
         if(waiting_) {
             const uint32_t elapsed=uint32_t(sink.now()-completedAt_);
             // A small backwards clock jump is not permission to send.
@@ -92,7 +95,9 @@ public:
             // pending service cadence well below half a clock wrap.
             if(elapsed<minimumClockDeltaUs || elapsed>=0x80000000UL)
                 return Result::Waiting;
+            waiting_=false;
         }
+        if(!pending()) return Result::Idle;
         uint8_t row=0,col=0;
         for(;row<4;++row) {
             const uint8_t candidate=emergency && row>=2?uint8_t(5-row):row;
