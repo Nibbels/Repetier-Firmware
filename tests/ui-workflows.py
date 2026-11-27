@@ -86,7 +86,7 @@ def main():
         + ok
         + section(ui, "void UIDisplay::adjustMenuPos()", "} // adjustMenuPos") + "}\n"
         + section(ui, "void UIDisplay::navigateMenuItems(", "} // nextPreviousAction") + "}\n"
-        + section(ui, "void UIDisplay::refreshPage()", "} // refreshPage") + "}\n"
+        + section(ui, "void UIDisplay::refreshPage()", "} // refreshNormalPage") + "}\n"
         + section(act, "void UIDisplay::zOffsetPlusAction()", "void UIDisplay::pressPlay()")
         + "void UIDisplay::mainSwitchCase(int action) { switch (action) {\n"
         + section(act, "    case UI_ACTION_RF_HEAT_BED_UP:", "    case UI_ACTION_RF_EXTRUDER_OUTPUT:")
@@ -260,6 +260,7 @@ struct UIDisplay {
     static constexpr int LCD_CLEAR = 1;
     void lcdCommand(int) { assert(false && "unexpected boot clear during normal UI replay"); }
     void refreshPage();
+    void refreshNormalPage();
     void zOffsetPlusAction(); void zOffsetMinusAction();
     void mainSwitchCase(int); void changeSwitchCase(int,int8_t);
 } uid;

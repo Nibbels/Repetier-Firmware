@@ -272,6 +272,7 @@ namespace GCodeInput {
 static struct {
     millis_t lastButtonTime() { return 0; }
     void refreshPage() {++diagnosticRefreshes;}
+    void refreshEmergencyPage() {++diagnosticRefreshes;}
     void slowAction() {
         ++ordinaryServices;
         if (injection == Injection::Transient || injection == Injection::TransientHigh) {

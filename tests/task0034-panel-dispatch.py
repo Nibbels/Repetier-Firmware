@@ -57,6 +57,7 @@ struct UIDisplay {
     bool expectedIrq=true;
     void exitmenu() { menuLevel=0; }
     void refreshPage() { ++refreshes; }
+    void refreshEmergencyPage() { ++refreshes; }
     void slowAction();
     void executeAction(int action) {
         assert(flags & UI_FLAG_SLOW_ACTION_RUNNING);

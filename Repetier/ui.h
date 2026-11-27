@@ -307,6 +307,9 @@ public:
     // One flash message expansion per page; a nested RAM status cannot expand either.
     void parse(char* txt, bool ram, bool allowMessageExpansion = true);
     void refreshPage();
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    void refreshEmergencyPage(); // callers have established the terminal lock
+#endif
     const char* cachedRow(uint8_t row) const;
     void executeAction(int action);
     // Remote panel actions share the local key-dispatch exclusion. A wait
@@ -348,6 +351,7 @@ private:
     volatile millis_t lastButtonStart;
 
     // Private foreground rendering and edit/navigation helpers; no new state.
+    void refreshNormalPage();
     void renderField(char c1, char c2, bool ram, bool allowMessageExpansion, int& ivalue, float& fvalue);
     void renderTemperatureField(char c1, char c2, float& fvalue);
     void renderPositionField(char c1, char c2, float& fvalue);

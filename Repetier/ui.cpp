@@ -677,28 +677,44 @@ const UIMenu* const ui_pages[] PROGMEM = UI_PAGES;
 constexpr uint8_t panelPageCount = sizeof(ui_pages) / sizeof(ui_pages[0]);
 
 
-// Refresh current menu page
+// Refresh current menu page. Do not retain the normal renderer's frame
+// when the terminal thermal panel is the only permitted output.
 void UIDisplay::refreshPage() {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if(Printer::printJob.emergencyLocked()) {
+        refreshEmergencyPage();
+        return;
+    }
+#endif
+    refreshNormalPage();
+} // refreshPage
+
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+__attribute__((noinline)) void UIDisplay::refreshEmergencyPage() {
     if (!normalCharacters_) {
         lcdCommand(LCD_CLEAR);
         HAL::delayMilliseconds(2);
         loadNormalCharacters();
     }
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-    if(Printer::printJob.emergencyLocked()) {
-        const auto& ledger=ThermalEmergency::faultLedger();
-        const auto& fault=ThermalEmergency::primaryFault(ledger);
-        const bool valid=ledger.active()&&ThermalEmergency::liveTemperatureValid(fault.channel);
-        const float live=valid?tempController[fault.channel]->currentTemperatureC:0;
-        for(uint8_t row=0;row<UI_ROWS;++row) {
-            char line[UI_COLS+1];
-            ThermalEmergency::panelRow<UI_COLS,UI_ROWS>(line,row,ledger,valid,live);
-            // Existing LCD transport fills remaining columns with spaces.
-            printRow(row,line,nullptr,UI_COLS);
-        }
-        return;
+    const auto& ledger=ThermalEmergency::faultLedger();
+    const auto& fault=ThermalEmergency::primaryFault(ledger);
+    const bool valid=ledger.active()&&ThermalEmergency::liveTemperatureValid(fault.channel);
+    const float live=valid?tempController[fault.channel]->currentTemperatureC:0;
+    for(uint8_t row=0;row<UI_ROWS;++row) {
+        char line[UI_COLS+1];
+        ThermalEmergency::panelRow<UI_COLS,UI_ROWS>(line,row,ledger,valid,live);
+        // Existing LCD transport fills remaining columns with spaces.
+        printRow(row,line,nullptr,UI_COLS);
     }
+} // refreshEmergencyPage
 #endif
+
+__attribute__((noinline)) void UIDisplay::refreshNormalPage() {
+    if (!normalCharacters_) {
+        lcdCommand(LCD_CLEAR);
+        HAL::delayMilliseconds(2);
+        loadNormalCharacters();
+    }
     uint16_t r;
     char cache[UI_ROWS][MAX_COLS + 1];
     adjustMenuPos();
@@ -790,7 +806,7 @@ void UIDisplay::refreshPage() {
         const uint8_t offset = length > UI_COLS ? RMath::min(length - UI_COLS, scroll) : 0;
         printRow(row, &cache[row][offset], NULL, UI_COLS);
     }
-} // refreshPage
+} // refreshNormalPage
 
 void UIDisplay::showMessage(const void* line1, const void* line2, const void* line3, const void* line4) {
     messageLine1 = line1;
@@ -1135,7 +1151,7 @@ void UIDisplay::executeMenuCommand(int action) {
 
 void UIDisplay::slowAction() {
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-    if(Printer::printJob.emergencyLocked()){refreshPage();return;}
+    if(Printer::printJob.emergencyLocked()){refreshEmergencyPage();return;}
 #endif
     millis_t time = HAL::timeInMilliseconds();
     uint8_t refresh = 0;

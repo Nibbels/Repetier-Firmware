@@ -67,7 +67,7 @@ static void serviceThermalEmergency() {
     if(HAL::takeTemperatureTick()) {
         Extruder::manageTemperatures();
         Lighting::serviceAlarm(HAL::timeInMilliseconds());
-        uid.refreshPage();
+        uid.refreshEmergencyPage();
     }
 }
 #endif
@@ -109,7 +109,7 @@ void Commands::checkForPeriodicalActions(enum FirmwareState state) {
     if (HAL::takeTemperatureTick()) {
         Extruder::manageTemperatures();
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-        if(Printer::printJob.emergencyLocked()){uid.refreshPage();return;}
+        if(Printer::printJob.emergencyLocked()){uid.refreshEmergencyPage();return;}
 #endif
         if (state == WaitHeater)
             Commands::printTemperatures(); // Selfcontrolling timediff
