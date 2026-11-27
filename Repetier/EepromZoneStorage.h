@@ -43,17 +43,21 @@ template<class Backend> class Storage {
     }
     uint32_t get32(uint16_t pos) {
         uint32_t value = 0;
-        for (uint8_t i=0; i<4; ++i) value |= uint32_t(get(pos+i)) << (8*i);
+        // Preserve ascending physical reads and use fixed byte shifts.
+        value = get(pos);
+        value |= uint32_t(get(pos+1)) << 8;
+        value |= uint32_t(get(pos+2)) << 16;
+        value |= uint32_t(get(pos+3)) << 24;
         return value;
     }
     bool put16(uint16_t pos, uint16_t value) {
-        for (uint8_t i=0; i<2; ++i)
-            if (!put(pos+i, uint8_t(value >> (8*i)))) return false;
-        return true;
+        return put(pos,uint8_t(value)) && put(pos+1,uint8_t(value>>8));
     }
     bool put32(uint16_t pos, uint32_t value) {
-        for (uint8_t i=0; i<4; ++i)
-            if (!put(pos+i, uint8_t(value >> (8*i)))) return false;
+        for (uint8_t i=0; i<4; ++i) {
+            if (!put(pos+i,uint8_t(value))) return false;
+            value>>=8;
+        }
         return true;
     }
     uint8_t identity(uint8_t i) const {

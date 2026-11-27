@@ -45,21 +45,29 @@ class BlockDecoder {
     const uint8_t* data_;
     uint8_t id_, size_;
     bool ok_;
-    uint32_t read(Field field,uint8_t count) {
+    const uint8_t* checkedBytes(Field field,uint8_t count) {
         const uint16_t pos=address(field);
         if(!ok_ || blockOf(pos)!=id_ || pos<address(id_)+PayloadOffset
-           || pos+count>address(id_)+PayloadOffset+size_) {ok_=false;return 0;}
+           || pos+count>address(id_)+PayloadOffset+size_) {ok_=false;return nullptr;}
         const uint8_t offset=pos-address(id_)-PayloadOffset;
-        uint32_t value=0;
-        for(uint8_t i=0;i<count;++i) value|=uint32_t(data_[offset+i])<<(8*i);
-        return value;
+        return data_+offset;
     }
 public:
     BlockDecoder(uint8_t id,const uint8_t* data,uint8_t n)
         :data_(data),id_(id),size_(n),ok_(data && id && id<=Last && n==length(id)) {}
-    uint8_t u8(Field f) {return uint8_t(read(f,1));}
-    uint16_t u16(Field f) {return uint16_t(read(f,2));}
-    uint32_t u32(Field f) {return read(f,4);}
+    uint8_t u8(Field f) {
+        const uint8_t* p=checkedBytes(f,1);
+        return p?p[0]:0;
+    }
+    uint16_t u16(Field f) {
+        const uint8_t* p=checkedBytes(f,2);
+        return p?uint16_t(uint16_t(p[0]) | (uint16_t(p[1])<<8)):0;
+    }
+    uint32_t u32(Field f) {
+        const uint8_t* p=checkedBytes(f,4);
+        return p?(uint32_t(p[0]) | (uint32_t(p[1])<<8)
+                  | (uint32_t(p[2])<<16) | (uint32_t(p[3])<<24)):0;
+    }
     float f32(Field f) {
         const uint32_t bits=u32(f);float value;
         memcpy(&value,&bits,4);return value;

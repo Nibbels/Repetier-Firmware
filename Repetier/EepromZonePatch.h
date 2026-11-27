@@ -44,7 +44,11 @@ template<class Store> struct PatchProvider {
             const auto& p=edits[i];
             if(blockOf(p.pos)!=id)continue;
             const uint8_t offset=p.pos-address(id)-PayloadOffset;
-            for(uint8_t b=0;b<p.width;++b)data[offset+b]=uint8_t(p.bits>>(8*b));
+            uint32_t bits=p.bits;
+            for(uint8_t b=0;b<p.width;++b) {
+                data[offset+b]=uint8_t(bits);
+                bits>>=8;
+            }
         }
         return true;
     }

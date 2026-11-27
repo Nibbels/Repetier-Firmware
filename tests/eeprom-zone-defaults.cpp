@@ -237,27 +237,27 @@ static void factoryImageReplay() {
     assert(bytes==7296 && digest==expected);
     printf("Factory payload baseline: %u bytes match; PASS\n",bytes);
 }
-template<class T,class L,class H> static unsigned compareIntegerRange(int first,int last,L lo,H hi) {
+template<class T> static unsigned compareIntegerRange(int first,int last,T lo,T hi,bool (*range)(T,T,T)) {
     unsigned n=0;
     for(int i=first;i<=last;++i) {
         const T v=static_cast<T>(i);
-        assert(integerRange(v,lo,hi)==inRange(v,lo,hi));
+        assert(range(v,lo,hi)==inRange(v,lo,hi));
         ++n;
     }
     return n;
 }
 static void integerRangeReplay() {
     unsigned n=0;
-    n+=compareIntegerRange<uint16_t>(0,65535,MIN_STEP_PACKING_MIN_INTERVAL,MAX_STEP_PACKING_MIN_INTERVAL);
-    n+=compareIntegerRange<uint16_t>(0,65535,1,300);
-    n+=compareIntegerRange<int16_t>(-32768,32767,-995,995);
-    n+=compareIntegerRange<int8_t>(-128,127,-100,101);
+    n+=compareIntegerRange<uint16_t>(0,65535,MIN_STEP_PACKING_MIN_INTERVAL,MAX_STEP_PACKING_MIN_INTERVAL,rangeU16);
+    n+=compareIntegerRange<uint16_t>(0,65535,1,300,rangeU16);
+    n+=compareIntegerRange<int16_t>(-32768,32767,-995,995,rangeI16);
+    n+=compareIntegerRange<int8_t>(-128,127,-100,101,rangeI8);
     const uint8_t maxima[]=MOTOR_CURRENT_MAX;
-    for(auto m:maxima)n+=compareIntegerRange<uint8_t>(0,255,MOTOR_CURRENT_MIN,m);
-    n+=compareIntegerRange<uint8_t>(0,255,1,2);
-    n+=compareIntegerRange<uint8_t>(0,255,MOVE_MODE_SINGLE_STEPS,MOVE_MODE_SINGLE_MOVE);
-    n+=compareIntegerRange<uint8_t>(0,255,1,3);
-    n+=compareIntegerRange<uint8_t>(0,255,1,7);
+    for(auto m:maxima)n+=compareIntegerRange<uint8_t>(0,255,MOTOR_CURRENT_MIN,m,rangeU8);
+    n+=compareIntegerRange<uint8_t>(0,255,1,2,rangeU8);
+    n+=compareIntegerRange<uint8_t>(0,255,MOVE_MODE_SINGLE_STEPS,MOVE_MODE_SINGLE_MOVE,rangeU8);
+    n+=compareIntegerRange<uint8_t>(0,255,1,3,rangeU8);
+    n+=compareIntegerRange<uint8_t>(0,255,1,7,rangeU8);
     assert(n==199168);
     printf("Integral settings bounds: %u cases match historical float comparison; PASS\n",n);
 }

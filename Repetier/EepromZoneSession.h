@@ -121,8 +121,10 @@ public:
             return io.good()?Result::NeedsRecovery:Result::TransportFault;
         const uint8_t offset=edits[0].pos-address(id)-PayloadOffset;
         bool different=false;
+        uint32_t bits=edits[0].bits;
         for(uint8_t b=0;b<edits[0].width;++b) {
-            const uint8_t v=uint8_t(edits[0].bits>>(8*b));
+            const uint8_t v=uint8_t(bits);
+            bits>>=8;
             different|=data[offset+b]!=v;
             data[offset+b]=v;
         }
