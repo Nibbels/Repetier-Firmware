@@ -3,7 +3,7 @@
 // the entire image and inhibit dependent outputs before applyBlock.
 #ifndef RF_EEPROM_ZONE_LIVE_H
 #define RF_EEPROM_ZONE_LIVE_H
-#include "EepromZoneLayout.h"
+#include "EepromZonePatch.h"
 namespace EepromZones {
 class LiveSettings {
 public:
@@ -14,6 +14,10 @@ public:
     // BedSafety is staged separately and may only be published after a
     // successful complete session. Usage belongs to PrintUsage.
     bool applyBlock(uint8_t id,const uint8_t* data,uint8_t n,uint32_t alerts);
+    // Narrow post-commit publication for DMIN/DMAX only. No target,
+    // calibration identity, derivative history or sensor changes.
+    bool applyDriveLimits(uint8_t id,const uint8_t* data,uint8_t n,
+                          const Patch* edits,uint8_t count);
     void finishMotion();
     uint8_t bedCutoff() const {return bedCutoff_;}
 private:

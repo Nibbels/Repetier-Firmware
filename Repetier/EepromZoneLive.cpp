@@ -262,6 +262,38 @@ bool LiveSettings::applyBlock(uint8_t id,const uint8_t* data,uint8_t n,uint32_t 
     return d.good();
 }
 
+bool LiveSettings::applyDriveLimits(uint8_t id,const uint8_t* data,uint8_t n,
+                                    const Patch* edits,uint8_t count) {
+    if(!edits || !count || !validBlock(id,data,n)) return false;
+    TemperatureController* controller;
+    Field min,max;
+    if(id==BedPid) {
+        controller=&heatedBedController;
+        min=Field::F_BED_DRIVE_MIN;max=Field::F_BED_DRIVE_MAX;
+    } else if(id>=Hotend0 && id<Hotend0+NUM_EXTRUDER) {
+        const uint8_t tool=id-Hotend0, delta=tool*SlotSize;
+        controller=&extruder[tool].tempControl;
+        min=at(Field::F_E0_DRIVE_MIN,delta);max=at(Field::F_E0_DRIVE_MAX,delta);
+    } else return false;
+    bool setMin=false,setMax=false;
+    for(uint8_t a=0;a<count;++a) {
+        const auto& edit=edits[a];
+        if(blockOf(edit.pos)!=id) continue;
+        if(edit.width!=1) return false;
+        if(edit.pos==address(min)) setMin=true;
+        else if(edit.pos==address(max)) setMax=true;
+        else return false;
+    }
+    if(!setMin && !setMax) return false;
+    BlockDecoder d(id,data,n);
+    const uint8_t low=d.u8(min),high=d.u8(max);
+    if(!d.good()) return false;
+    if(setMin)controller->pidDriveMin=low;
+    if(setMax)controller->pidDriveMax=high;
+    controller->updateTempControlVars();
+    return true;
+}
+
 void LiveSettings::finishMotion() {
     // Caller has already inhibited motion, revoked heater permission and
     // performed complete load. Never invoke for a partial/failed load.

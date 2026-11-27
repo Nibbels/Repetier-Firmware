@@ -9,7 +9,7 @@
 #include "EepromZonePatch.h"
 
 namespace EepromZones {
-enum class Result : uint8_t { Ok, Busy, Invalid, TransportFault, NeedsRecovery };
+enum class Result : uint8_t { Ok, Busy, Invalid, TransportFault, NeedsRecovery, PublishRejected };
 
 // Provider fills complete blocks with immutable proposed values. Validation
 // wraps both normal live saves and factory reset/recovery.
@@ -58,6 +58,45 @@ public:
         PatchProvider<Store> proposed{store,edits,count};
         return saveChecked(io,store,mask,proposed);
     }
+    // Read one checked block without recovery, unrelated payload reads or
+    // write side effects. In particular early UART setup can fall back to
+    // the configured baud rather than trust a corrupt/foreign image.
+    Result read(uint8_t id,uint8_t* data,uint8_t n,uint32_t& alerts) {
+        SessionGuard guard(busy_);
+        if(!guard.entered()) return Result::Busy;
+        if(!id || id>Last || !data || n!=length(id)) return Result::Invalid;
+        IO io(device_);Store store(io,profile_);
+        const bool ok=store.readCommittedBlock(id,data,n,alerts);
+        if(!io.good()) return Result::TransportFault;
+        return ok && validBlock(id,data,n)?Result::Ok:Result::NeedsRecovery;
+    }
+
+    // Only after verified durable commit invoke the field-specific owner.
+    // The guard spans publication too. The caller must preflight live
+    // admission before entering and recheck terminal faults in publish.
+    // A publish rejection is not a rollback: caller must keep outputs
+    // inhibited if required and report the durable/live discrepancy.
+    template<class Consumer> Result patchAndPublish(const Patch* edits,uint8_t count,Consumer& publish) {
+        SessionGuard guard(busy_);
+        if(!guard.entered()) return Result::Busy;
+        const uint32_t mask=patchMask(edits,count);
+        if(!mask) return Result::Invalid;
+        IO io(device_);Store store(io,profile_);
+        PatchProvider<Store> proposed{store,edits,count};
+        const Result saved=saveChecked(io,store,mask,proposed);
+        if(saved!=Result::Ok) return saved;
+        uint8_t data[MaxPayload];
+        for(uint8_t id=1;id<=Last;++id) {
+            if(!(mask&blockBit(id))) continue;
+            uint32_t alerts=AllAlerts;
+            const uint8_t n=length(id);
+            if(!store.readCommittedBlock(id,data,n,alerts) || !validBlock(id,data,n) || !io.good())
+                return io.good()?Result::NeedsRecovery:Result::TransportFault;
+            if(!publish(id,data,n,alerts,edits,count)) return Result::PublishRejected;
+        }
+        return Result::Ok;
+    }
+
     template<class Defaults> Result restore(Defaults& defaults,Inspection& state,bool fullReset=false) {
         SessionGuard guard(busy_);
         if(!guard.entered()) return Result::Busy;

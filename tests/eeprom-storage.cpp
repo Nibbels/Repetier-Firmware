@@ -174,6 +174,19 @@ static void zoneOwnerRoundTrip(){
     c.pidDriveMin=10;c.pidDriveMax=20;c.invalidatePidCalibration();
     assert(live.applyBlock(Hotend0,out,length(Hotend0),0));
     assert(c.pidDriveMin==40 && c.pidDriveMax==40 && c.pidCalibrationValid() && c.pidPGain==12.5f && c.target==0);
+    // Simulate ordinary post-autotune DMAX fine tuning: update only the
+    // selected drive limit while a target is active. The other saved value
+    // must not overwrite an independent live value.
+    c.target=180;
+    c.pidDriveMin=27;
+    const Patch dmax=Patch::byte(Field::F_E0_DRIVE_MAX,75);
+    out[address(Field::F_E0_DRIVE_MAX)-address(Hotend0)-PayloadOffset]=75;
+    assert(live.applyDriveLimits(Hotend0,out,length(Hotend0),&dmax,1));
+    assert(c.pidDriveMax==75 && c.pidDriveMin==27 && c.target==180);
+    assert(c.pidCalibrationValid() && c.pidPGain==12.5f);
+    const Patch wrong=Patch::byte(Field::F_E0_SENSOR_TYPE,c.sensorType);
+    assert(!live.applyDriveLimits(Hotend0,out,length(Hotend0),&wrong,1));
+    assert(c.target==180 && c.pidCalibrationValid());
     // Stored/active SenseOffset remain distinct; no takeover/reset of the
     // live offset is introduced by this binding.
     Printer::senseOffsetControl.publishStoredLimits(3200,120);

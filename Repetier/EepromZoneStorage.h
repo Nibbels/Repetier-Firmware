@@ -176,6 +176,15 @@ public:
         return get16(base)==crc;
     }
 
+    // Single-block access for early baud selection and targeted edits.
+    // The global commit state and directory CRC must agree; verify actual
+    // requested payload and return pending alerts without clearing them.
+    bool readCommittedBlock(uint8_t id,uint8_t* data,uint8_t n,uint32_t& alerts) {
+        return headerValid() && state()==Header::Clean
+            && pair(Header::Alerts,AllAlerts,alerts)
+            && get32(Header::Master)==masterCrc() && readBlock(id,data,n);
+    }
+
     Inspection inspect() {
         Inspection result;
         if(!headerValid()) return result;

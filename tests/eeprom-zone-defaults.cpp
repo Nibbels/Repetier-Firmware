@@ -101,6 +101,34 @@ static void sessionReplay(FactoryDefaults& defaults) {
         return true;
     };
     assert(session.load(commissioned,state)==Result::Ok && !busy);
+    // Early UART selection is read-only and validates the complete system
+    // block and global commit state. An unrelated raw payload error is
+    // not silently blessed; full boot inspection still finds it.
+    uint8_t readback[MaxPayload];uint32_t alerts=AllAlerts;
+    writes=dev.programs;
+    assert(session.read(System,readback,length(System),alerts)==Result::Ok && !alerts);
+    BlockDecoder systemRead(System,readback,length(System));
+    assert(systemRead.u32(Field::F_BAUDRATE)==BAUDRATE && dev.programs==writes);
+    dev.bytes[address(System)+PayloadOffset]^=1;
+    assert(session.read(System,readback,length(System),alerts)==Result::NeedsRecovery);
+    dev.bytes[address(System)+PayloadOffset]^=1;
+    const Patch limits[]={Patch::byte(Field::F_E0_DRIVE_MIN,55),Patch::byte(Field::F_E0_DRIVE_MAX,66)};
+    unsigned publications=0;
+    auto publish=[&](uint8_t id,const uint8_t* data,uint8_t n,uint32_t pending,const Patch* p,uint8_t count){
+        assert(busy && id==Hotend0 && !pending && p==limits && count==2);
+        BlockDecoder decoder(id,data,n);
+        assert(decoder.u8(Field::F_E0_DRIVE_MIN)==55 && decoder.u8(Field::F_E0_DRIVE_MAX)==66);
+        assert(dev.ready());
+        ++publications;return true;
+    };
+    assert(session.patchAndPublish(limits,2,publish)==Result::Ok && publications==1);
+    writes=dev.programs;
+    assert(session.patchAndPublish(limits,2,publish)==Result::Ok && publications==2 && dev.programs==writes);
+    const Patch invalidLimit[]={Patch::byte(Field::F_E0_DRIVE_MIN,0)};
+    assert(session.patchAndPublish(invalidLimit,1,publish)==Result::Invalid && publications==2 && dev.programs==writes);
+    auto refuse=[](uint8_t,const uint8_t*,uint8_t,uint32_t,const Patch*,uint8_t){return false;};
+    assert(session.patchAndPublish(limits,2,refuse)==Result::PublishRejected);
+    assert(!busy);
     // Physical busy fault cannot hang or be mistaken for successful readback.
     dev.stuck=true;const uint32_t started=dev.clock;writes=dev.programs;
     assert(session.restore(defaults,state)==Result::TransportFault);
