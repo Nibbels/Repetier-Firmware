@@ -24,7 +24,8 @@ def main():
             encoding="utf-8",
         )
         matrix_sections = (
-            ("void clearWorking()", "uint8_t storedMaxIndex("),
+            ("void clearWorking()", "bool invalidateAllStored("),
+            ("bool reloadActive()", "uint8_t storedMaxIndex("),
             ("char prepareWorking()", "ZOffsetResult applyZOffset("),
         )
         (build / "bed-matrix-scan-firmware.inc").write_text(
