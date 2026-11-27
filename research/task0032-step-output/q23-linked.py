@@ -181,6 +181,15 @@ def compare(archive,baseline,out,tag):
                                 if not prefix and len(summary["short_examples"])<8:
                                     summary["short_examples"].append([src["case"],src["fixture"],pin,edge,cycles])
                     for src,prefix in ((a,"baseline_"),(c,"")):
+                        # I=1 alone is not an interrupt admission opportunity:
+                        # the instruction following SEI must finish first.
+                        # This remains a within-call gap, not ready-to-UDR proof.
+                        points=[0]+src["candidate_irq_opportunity_cycles"]+[src["exclusive_cycles"]]
+                        gap=max((v-u for u,v in zip(points,points[1:])),default=0)
+                        bymode=summary.setdefault(prefix+"max_no_irq_admission_gap_by_mode",{})
+                        mode=src["mode"]
+                        bymode[mode]=max(bymode.get(mode,0),gap)
+                    for src,prefix in ((a,"baseline_"),(c,"")):
                         bymode=summary.setdefault(prefix+"max_mask_by_mode",{})
                         mode=src["mode"]
                         bymode[mode]=max(bymode.get(mode,0),src["max_masked_cycles"])
