@@ -38,6 +38,9 @@ jobs:
         run: |
           c++ -std=c++11 -O2 -Wall -Wextra -Werror research/task0032-step-output/z-correction-clock-replay.cpp -o "$RUNNER_TEMP/z-clock-replay"
           "$RUNNER_TEMP/z-clock-replay" | tee "$RUNNER_TEMP/step-output/z-clock-replay.txt"
+      - name: Exhaustive normalized inverse root bounds
+        run: |
+          python3 research/task0032-step-output/inverse-root-research.py --out "$RUNNER_TEMP/step-output/inverse-root"
       - name: Replay immutable unified candidate early when sources are unchanged
         id: unified_reuse
         shell: bash
@@ -143,6 +146,9 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/contents/research/task0032-planner-queue/simavr-trace.c?ref=e1b9763" --jq .content | base64 -d > "$RUNNER_TEMP/simavr-trace.c"
           test "$(git hash-object "$RUNNER_TEMP/simavr-trace.c")" = c0dfeca055159db9b918c6a8420bc2d441bae079
           python3 research/task0032-step-output/z-clock-avr-bench.py --compiler "$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin/avr-g++" --runner-source "$RUNNER_TEMP/simavr-trace.c" --out "$RUNNER_TEMP/step-output/z-clock-avr"
+      - name: Quake and conservative integer inverse root AVR comparison
+        run: |
+          python3 research/task0032-step-output/inverse-root-research.py --out "$RUNNER_TEMP/step-output/inverse-root" --compiler "$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin/avr-g++" --runner-source "$RUNNER_TEMP/simavr-trace.c"
       - name: Linked motor wake candidate with minimal Q23 and narrow queue masks
         if: steps.reuse.outputs.available != 'yes'
         shell: bash
