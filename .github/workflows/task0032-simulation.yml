@@ -67,6 +67,9 @@ jobs:
           compiler="$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin/avr-g++"
           python3 tools/task0032/parser-avr-bench.py --compiler "$compiler" --runner-source "$out/simavr-trace.c" --out "$out/parser-avr"
           sha256sum tools/task0032/parser-avr-bench.py >> "$out/source-sha256.txt"
+          git show "$planner:research/task0032-planner-queue/REPORT.md" > "$out/planner-report.md"
+          node tools/task0032/measured-cost-sweep.cjs "$out/transport-contract-input.json" "$out/planner-report.md" "$out/parser-avr/parser-results.json" > "$out/measured-cost-sweep.json"
+          node -e 'const r=require(process.argv[1]); console.log(JSON.stringify({plannerCosts:r.plannerCosts,receiverCosts:r.receiverCosts,cases:r.rows.length,summary:Object.keys(r.plannerCosts).map(k=>{const a=r.rows.filter(x=>x.plannerCase===k&&x.frameWindow===32);return {case:k,n:a.length,localCpuFeasible:a.filter(x=>x.localCpuFeasible).length,zeroGaps:a.filter(x=>x.gaps===0).length}})},null,2))' "$out/measured-cost-sweep.json"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
