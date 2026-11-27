@@ -57,9 +57,15 @@ static void trajectory(XYZ a,XYZ b,int n){
         if(dn&&dc&&((dn>0)!=(dc>0)))cancelled+=std::min(std::abs(dn),std::abs(dc));
         pa+=net;assert(pa==physical(p));
         maxChord=std::max(maxChord,std::abs(c-chord(correction(a),correction(b),i,n)));
-        // A 16ms age at 100mm/s: ~244 XY steps. Model a sample age
-        // in path samples, not actual firmware ISR/publication latency.
-        const XYZ old=point(a,b,std::max(0,i-244),n);
+        // A 16ms age at 100mm/s: 1.6mm along an XY-only path.
+        // On this sampled path choose an equivalent age in path samples;
+        // for XYZ paths this is an XY-projection sensitivity, not actual
+        // firmware or acceleration timing. Pure Z uses 9mm/s.
+        const double xy=std::hypot(double(b.x-a.x),double(b.y-a.y))/152.38;
+        const double z=std::abs(double(b.z-a.z))/1280.0;
+        const double duration=std::max(xy/100.0,z/9.0);
+        const int age=duration>0?int(std::min(double(n),std::ceil(n*.016/duration))):0;
+        const XYZ old=point(a,b,std::max(0,i-age),n);
         maxLag=std::max(maxLag,std::abs(c-correction(old)));
         // Source currently reads X/Y/Z separately. Construct an allowed
         // mixed-time snapshot; not a claim this exact interleave occurs.
