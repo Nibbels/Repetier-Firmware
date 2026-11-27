@@ -91,6 +91,12 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           python3 research/task0032-step-output/jog-stop-interleave.py "$RUNNER_TEMP/step-output/q23/wake-jog-idle/candidate.zip" "$RUNNER_TEMP/step-output/jog-candidate.json" --require-safe
+      - name: Four actual firmware builds with shared nominal and Z deadlines
+        run: |
+          python3 research/task0032-step-output/unified-z-source.py --out "$RUNNER_TEMP/step-output/z-unified" --tools "$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin"
+      - name: Linked unified Z motion and nominal continuity replay
+        run: |
+          python3 research/task0032-step-output/unified-z-linked-replay.py "$RUNNER_TEMP/step-output/q23/wake-jog-idle/candidate.zip" "$RUNNER_TEMP/step-output/z-unified/unified-z/candidate.zip" "$RUNNER_TEMP/step-output/z-unified-results.json"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
