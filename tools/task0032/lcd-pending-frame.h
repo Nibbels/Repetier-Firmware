@@ -10,6 +10,7 @@ class LcdPendingFrame {
     static_assert(Columns==16 || Columns==20, "RFx000 panel width");
     static constexpr uint8_t bytesPerRow=(Columns+7)/8;
     uint8_t dirty_[4][bytesPerRow]{};
+    uint8_t dirtyRows_=0; // O(1) no-work check on every foreground visit
     uint32_t completedAt_=0;
     uint8_t nextAddress_=0xff;
     bool waiting_=false;
@@ -19,8 +20,12 @@ class LcdPendingFrame {
     }
     void clear(uint8_t row,uint8_t col) {
         dirty_[row][col/8]&=uint8_t(~(1u<<(col%8)));
+        for(uint8_t byte=0;byte<bytesPerRow;++byte)
+            if(dirty_[row][byte]) return;
+        dirtyRows_&=uint8_t(~(1u<<row));
     }
     bool find(uint8_t row,uint8_t& col) const {
+        if(!(dirtyRows_&(1u<<row))) return false;
         for(uint8_t byte=0;byte<bytesPerRow;++byte) {
             uint8_t bits=dirty_[row][byte];
             if(!bits) continue;
@@ -35,12 +40,7 @@ public:
     static constexpr uint32_t minimumClockDeltaUs=324;
     enum class Result:uint8_t {Idle,Waiting,Address,Data};
 
-    bool pending() const {
-        for(uint8_t row=0;row<4;++row)
-            for(uint8_t byte=0;byte<bytesPerRow;++byte)
-                if(dirty_[row][byte]) return true;
-        return false;
-    }
+    bool pending() const { return dirtyRows_!=0; }
 
     // Only after an exclusive synchronous operation has actually emitted
     // every logical cell (or cleared DDRAM). Even then wait after its last
@@ -49,6 +49,7 @@ public:
         for(uint8_t row=0;row<4;++row)
             for(uint8_t byte=0;byte<bytesPerRow;++byte)
                 dirty_[row][byte]=0;
+        dirtyRows_=0;
         nextAddress_=0xff;
         completedAt_=now;
         waiting_=true;
@@ -65,14 +66,17 @@ public:
     // boot slot zero remains the exclusive synchronous owner's business.
     void stage(uint8_t row,const char* text,char (&frame)[4][Columns+1]) {
         if(row>=4) return;
+        bool changed=false;
         for(uint8_t col=0;col<Columns;++col) {
             const char c=*text?*text++:' ';
             if(frame[row][col]!=c) {
                 frame[row][col]=c;
                 mark(row,col);
+                changed=true;
             }
         }
         frame[row][Columns]=0;
+        if(changed) dirtyRows_|=uint8_t(1u<<row);
     }
 
     // Emergency prioritizes title/reason/action before live temperature.
