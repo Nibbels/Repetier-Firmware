@@ -52,8 +52,14 @@ function groupFor(row,speed,policy,p){
   const t=Math.max(512,Math.floor(CPU*row.length/speed/row.n));
   if(policy==="one")return 1;
   if(policy==="3300"||policy==="5000")return Math.min(row.n,Math.ceil(Number(policy)/t));
-  if(policy!=="adaptive")throw Error("bad policy");
+  if(policy!=="adaptive"&&policy!=="adaptive-margin")throw Error("bad policy");
   const max=Math.min(row.n,Math.ceil(5000/512));
+  // Selection-only headroom; actual simulated service reserve remains unchanged.
+  if(policy==="adaptive-margin"){
+    const margin=p.selectionMargin??.05;
+    if(!(margin>=0&&p.reserve+margin<1))throw Error("bad selection margin");
+    for(let g=1;g<=max;g++)if(evaluate(row,speed,g,{...p,reserve:p.reserve+margin}).feasible)return g;
+  }
   for(let g=1;g<=max;g++)if(evaluate(row,speed,g,p).feasible)return g;
   // Research sentinel, not a production fallback: caller must report infeasibility.
   return max;
@@ -98,7 +104,9 @@ function selfTest(){
   check(evaluate({...row,bytes:40},1,2,defaults).receive===3499,"partial receiver anchor");
   const zig=geometry({...spec,shape:"zigzag",count:120,ratio:.8});
   check(zig.length===120&&zig.some(x=>x.d[1]>0)&&zig.some(x=>x.d[1]<0)&&zig.some(x=>x.steps[2]===x.n),"zigzag and mixed E primary");
-  return "10 groups of checks passed";
+  check(scenario(spec,"adaptive-margin",{selectionMargin:0}).motionCycles===rs[3].motionCycles,"zero selection margin equals adaptive");
+  for(const x of a)check(groupFor(x,spec.speed,"adaptive-margin",defaults)>=groupFor(x,spec.speed,"adaptive",defaults),"headroom never reduces group");
+  return "12 groups of checks passed";
 }
 function matrix(){
   const out=[];
