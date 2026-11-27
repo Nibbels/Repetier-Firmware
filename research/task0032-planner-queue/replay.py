@@ -52,6 +52,7 @@ def instrument(s):
                      "while (first != limit && !queue.slot(first).isEndSpeedFixed()) {\n        ++pc.fixedSearch; MoveQueue::previousIndex(first);\n    }")
     s = replace_once(s, "firstMove.block();\n    lock.unprotect();",
                      "firstMove.block();\n    pc.first = first; pc.limit = limit; pc.reserveTicks = reservedTicks;\n    lock.unprotect();")
+    s = replace_once(s, "move.markStepProfileReady();", "move.markStepProfileReady();\\n    if (researchProfileHook) researchProfileHook(move);")
     return s
 
 def junction_variant(s, variant):
@@ -69,7 +70,7 @@ def junction_variant(s, variant):
             "        lengthFactor = static_cast<float>(MAX_JERK_DISTANCE * MAX_JERK_DISTANCE) / (joinLength * joinLength);")
     raise ValueError(variant)
 
-def run_capacity(capacity, output, scenario, junction):
+def run_capacity(capacity, output, scenario, junction, pacing):
     spec = importlib.util.spec_from_file_location("shared_replay", ROOT / "tests/pause-sense-offset.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -94,12 +95,16 @@ def run_capacity(capacity, output, scenario, junction):
     unsigned extrusionBoundary=0, axisLimit=0, wideDivide=0, backRoots=0, forwardRoots=0;
     unsigned first=0, limit=0, reserveTicks=0;
 } pc;
+static void (*researchProfileHook)(PrintLine&) = nullptr;
 ''' + anchor)
         s = replace_once(s, "int main(int argc, char** argv) {", '#include "planner-trace.inc"\nint main(int argc, char** argv) {\n    if (argc == 2 && !std::strcmp(argv[1], "planner-research")) { plannerResearch(); return 0; }')
         generated = build / "planner-research.cpp"
         generated.write_text(s, encoding="utf-8")
         fragments = build / "pause-sense-offset-firmware.inc"
-        fragments.write_text(instrument(junction_variant(fragments.read_text(encoding="utf-8"),junction)), encoding="utf-8")
+        extracted = junction_variant(fragments.read_text(encoding="utf-8"), junction)
+        if pacing == "disabled":
+            extracted = replace_once(extracted, "    if (queuedEntries < MOVE_CACHE_LOW && ticks < LOW_TICKS_PER_MOVE)\\n        ticks += (LOW_TICKS_PER_MOVE - ticks) * 3 / (queuedEntries + 1);", "    (void)queuedEntries; // counterfactual only")
+        fragments.write_text(instrument(extracted), encoding="utf-8")
         cmd = [str(generated) if str(a) == str(source) else a for a in args]
         cmd[1:1] = ["-I", str(HERE)]
         real_run(cmd, **kwargs)
@@ -117,6 +122,7 @@ def main():
     parser.add_argument("--capacity", type=int, nargs="+", default=[24, 28, 32])
     parser.add_argument("--scenario", choices=["all", "smoke", "stress"], default="all")
     parser.add_argument("--junction",choices=["baseline","unweighted","mean-length"],default="baseline")
+    parser.add_argument("--pacing", choices=["baseline","disabled"], default="baseline")
     parser.add_argument("--output", type=Path, default=Path("planner-trace.jsonl"))
     args = parser.parse_args()
     if any(n < 10 or n > 64 for n in args.capacity):
@@ -124,7 +130,7 @@ def main():
     with args.output.open("w", encoding="utf-8") as output:
         for capacity in args.capacity:
             print(f"Actual-source replay: capacity={capacity}", file=sys.stderr)
-            run_capacity(capacity, output, args.scenario,args.junction)
+            run_capacity(capacity, output, args.scenario,args.junction,args.pacing)
 
 if __name__ == "__main__":
     main()
