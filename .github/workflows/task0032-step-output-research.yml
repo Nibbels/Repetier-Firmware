@@ -56,6 +56,9 @@ jobs:
           "$RUNNER_TEMP/z-net" | tee "$RUNNER_TEMP/step-output/z-net.txt"
           c++ -std=c++11 -O2 -Wall -Wextra -Werror -I Repetier research/task0032-step-output/layer-retraction-replay.cpp -o "$RUNNER_TEMP/z-layer"
           "$RUNNER_TEMP/z-layer" | tee "$RUNNER_TEMP/step-output/z-layer.txt"
+      - name: Combined physical Z geometry velocity and curvature envelope
+        run: |
+          python3 research/task0032-step-output/z-geometry-budget.py "$RUNNER_TEMP/step-output/z-geometry-budget.json"
       - name: No intermediate settling rate-only continuous XYZ replay
         run: |
           python3 research/task0032-step-output/z-feedforward-stream.py "$RUNNER_TEMP/step-output/z-stream.json"
