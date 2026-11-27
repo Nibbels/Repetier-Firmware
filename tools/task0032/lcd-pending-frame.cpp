@@ -2,6 +2,7 @@
 #include <cassert>
 #include <cstdio>
 #include <cstring>
+#include <initializer_list>
 
 struct Sink {
     char memory[128];
@@ -21,14 +22,13 @@ struct Sink {
 };
 
 template<uint8_t C>
-using Frame=char[4][C+1];
+using Frame=char[4][C];
 
 template<uint8_t C>
 void verify(const Frame<C>& frame,const Sink& sink) {
     for(uint8_t row=0;row<4;++row) {
         uint8_t base=(row&1?64:0)+(row>=2?C:0);
         assert(memcmp(frame[row],sink.memory+base,C)==0);
-        assert(frame[row][C]==0);
     }
 }
 
@@ -57,7 +57,7 @@ void drain(LcdPendingFrame<C>& f,Frame<C>& frame,Sink& sink,bool emergency=false
 template<uint8_t C>
 void exhaustive() {
     unsigned long long bytes=0;
-    for(uint32_t mask=0;mask<(uint32_t(1)<<C);++mask) {
+    for(uint8_t target=0;target<4;++target) for(uint32_t mask=0;mask<(uint32_t(1)<<C);++mask) {
         LcdPendingFrame<C> f;
         Frame<C> frame{};
         Sink sink;
@@ -71,14 +71,14 @@ void exhaustive() {
             row[col]=dirty?'B':' ';
             if(dirty) {++data;if(!col || !((mask>>(col-1))&1))++runs;}
         }
-        f.stage(0,row,frame);
-        f.stage(0,row,frame);
+        f.stage(target,row,frame);
+        f.stage(target,row,frame);
         drain<C>(f,frame,sink);
         assert(sink.data==data && sink.commands==runs);
         bytes+=sink.writes;
     }
     std::printf("width %u: %lu dirty masks, %llu emitted bytes\n",
-                unsigned(C),static_cast<unsigned long>(uint32_t(1)<<C),bytes);
+                unsigned(C),static_cast<unsigned long>(uint32_t(4)<<C),bytes);
 }
 
 template<uint8_t C>
@@ -155,7 +155,38 @@ void transitions() {
     std::printf("width %u: overwrite, revert, emergency ordering, wrap, clock regression, clear, long idle PASS\n",unsigned(C));
 }
 
+// Every pair of 4-bit high-column masks in both shared bitmap bytes.
+// Exercise the neighbour while a row is partially drained and restaged.
+void sharedNibbles() {
+    for(uint8_t pair=0;pair<2;++pair) {
+        for(unsigned masks=0;masks<256;++masks) {
+            for(bool emergency:{false,true}) {
+                LcdPendingFrame<20> f;
+                Frame<20> frame{};
+                Sink sink;
+                f.afterClear(frame,sink.now());
+                char a[21],b[21];
+                memset(a,' ',20);memset(b,' ',20);a[20]=b[20]=0;
+                unsigned count=0,runs=0;
+                for(uint8_t i=0;i<8;++i) {
+                    if(masks&(1u<<i)) {
+                        (i<4?a:b)[16+i%4]='X';
+                        ++count;
+                        if(i%4==0 || !(masks&(1u<<(i-1)))) ++runs;
+                    }
+                }
+                f.stage(pair*2,a,frame);
+                f.stage(pair*2+1,b,frame);
+                drain<20>(f,frame,sink,emergency);
+                assert(sink.data==count&&sink.commands==runs);
+            }
+        }
+    }
+    puts("1024 adjacent-row shared-nibble patterns PASS");
+}
+
 int main() {
     exhaustive<16>(); exhaustive<20>();
     transitions<16>(); transitions<20>();
+    sharedNibbles();
 }
