@@ -11,6 +11,7 @@
 #include "EepromZoneDefaults.h"
 #include "EepromZoneLive.h"
 #include "BedMatrix.h"
+#include "GCodeInput.h"
 
 using namespace EepromZones;
 long EEPROM::configuredBaudrate_ = BAUDRATE;
