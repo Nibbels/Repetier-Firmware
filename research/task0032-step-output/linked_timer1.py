@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Task0032-S isolated linked Timer1 paths; NOT a concurrent peripheral emulator."""
-import argparse, collections, hashlib, itertools, json, math, pathlib, sys, types, zipfile
+import argparse, bisect, collections, hashlib, itertools, json, math, pathlib, sys, types, zipfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CLOCK = 16_000_000
@@ -13,6 +13,9 @@ VECTORS = {"X":(100,0,0,0), "XY":(100,70,0,0), "XYE":(100,70,0,30),
 
 def blob(data):
     return hashlib.sha1(("blob %d\0" % len(data)).encode()+data).hexdigest()
+
+class ColdWaitEntry(Exception):
+    pass
 
 def load_interpreter():
     data = (ROOT/"tools/avr-motion-diagnostics/linked_motion.py").read_bytes()
@@ -41,10 +44,14 @@ def load_interpreter():
             # Isolated Timer0 starts at phase zero, /64 prescaler. No overflow ISR.
             self.timer0_phase=0
             self.timer0_reads=0
+            self.stop_at_micros=False
+            self.timer0_flag_cleared_at_wrap=0
         def boundary(self,pc):
             # instruction start, I bit, OCIE1A, stack usage, call depth.
             self.timeline.append((self.cy,pc,self.flag(7),bool(self.mem[0x6f]&2),
                                   0x21ff-self.sp,len(self.return_stack)))
+            if self.stop_at_micros and self.img.labels.get(pc)=="micros":
+                raise ColdWaitEntry()
         def read(self,addr):
             # Arduino micros() observes TCNT0 and TOV0. Advance time by actual
             # executed cycles, not a stubbed delay. Permit only one pending wrap;
@@ -54,7 +61,7 @@ def load_interpreter():
                 assert ticks<512, "Timer0 second wrap outside isolated model"
                 self.timer0_reads+=1
                 if addr==0x46: return ticks&255
-                return (super().read(addr)&~1)|int(ticks>=256)
+                return (super().read(addr)&~1)|int(ticks//256>self.timer0_flag_cleared_at_wrap)
             # Single Timer1 CTC compare service: TCNT counts from zero at release.
             # No peripheral flags, matches during ISR or nested interrupts.
             # Low-byte access latches high. Reject rollover as unsupported.
@@ -66,7 +73,13 @@ def load_interpreter():
                 return self.tcnt_latch>>8
             return super().read(addr)
         def write(self,addr,value):
-            assert addr not in (0x35,0x46), "Timer0 register write outside isolated model"
+            assert addr != 0x46, "TCNT0 write outside isolated model"
+            if addr==0x35:
+                # TIFR0 is write-one-to-clear. Advance arm clears OCF0A, not TOV0.
+                if value&1:self.timer0_flag_cleared_at_wrap=(self.timer0_phase+self.cy//64)//256
+                self.mem[addr]&=~value
+                self.timer_writes.append((self.cy,addr,value&255))
+                return
             super().write(addr,value)
             if addr in (0x88,0x89,0x6f):
                 self.timer_writes.append((self.cy,addr,value&255))
@@ -116,7 +129,17 @@ def execute(mod,img,kw,mode,case):
     assert img.new and img.sizes["PrintLine::queue"]==24*103+5
     assert img.sizes["PrintLine::direct"]==103
     c.mem[0x6f]=2
-    if mode=="activation":
+    if mode in ("activation","activation_cold"):
+        # Distinguish warm driver enable from actual cold hardware settling.
+        # Extruder::enabled is the final char in its AVR class (no tail padding).
+        enabled=mode=="activation"
+        assert img.sizes["Printer::enabledStepper"] in (3,4)
+        c.symput("Printer::enabledStepper",int.from_bytes(bytes([int(enabled)])*img.sizes["Printer::enabledStepper"],"little"),img.sizes["Printer::enabledStepper"])
+        tool_count=2 if img.board in ("RF2000","RF2000v2") else 1
+        size=img.sizes["extruder"]//tool_count
+        assert size*tool_count==img.sizes["extruder"]
+        c.put(img.addr("extruder")+size*(kw["tool"]+1)-1,int(enabled))
+        c.stop_at_micros=not enabled
         if kw["owner"]: c.put(img.addr("PrintLine::queue")+24*103,0,2)
         else: c.put(move+102,4) # DIRECT_PREPARED
     elif mode=="blocked":
@@ -148,7 +171,19 @@ def execute(mod,img,kw,mode,case):
         assert img.code[entry][1] in ("jmp","rjmp")
         c.cy=5 # interrupt hardware entry incl. three-byte return PC
         c.timer_live=True
-    val=c.run(entry)
+    try:
+        val=c.run(entry)
+    except ColdWaitEntry:
+        assert mode=="activation_cold"
+        mask=windows(c.timeline,c.cy)
+        return {"case":case,"mode":mode,"fixture":kw,"classification":"partial_cold_wait_entry",
+                "cycles_to_micros_entry":c.cy,"i_at_micros_entry":c.flag(7),
+                "max_masked_so_far_cycles":max((b-a for a,b in mask),default=0),
+                "masked_intervals_cycles":mask,"calls":c.calls,
+                "full_exclusive_cycles":None,"actual_delay_cycles":None,
+                "nominal_requested_delay_ms":25,"notes":"Stops before Arduino micros; no Timer0 overflow service simulation."}
+    assert mode!="activation_cold", "cold fixture did not enter micros; check enable layout"
+    if mode=="activation":assert not any(name=="micros" for name,t in c.calls), "warm fixture still waited"
     after=snapshot(c,move,errors,o)
     edges=c.edges
     counts=collections.Counter(pin for pin,state,t in edges if state and not pin.startswith("DIR"))
@@ -167,6 +202,20 @@ def execute(mod,img,kw,mode,case):
         last[pin]=(state,t)
     assert all(state==0 for pin,(state,t) in last.items() if not pin.startswith("DIR"))
     opportunity=irq_opportunities(c,mode!="inner")
+    # Attribute longest I-clear window to linked instructions, including library
+    # routines. The label is nearest preceding linked symbol, not source line.
+    a,b=max(mask,key=lambda x:x[1]-x[0],default=(0,0))
+    label_addrs=sorted(img.labels)
+    cost=collections.Counter(); instructions=[]
+    if a==0 and c.timeline[0][0]>0:cost["hardware_entry"]+=c.timeline[0][0]
+    for first,second in zip(c.timeline,c.timeline[1:]):
+        t,pc,i,ocie,sp,depth=first; end=second[0]
+        if t>=a and end<=b and end>t:
+            index=bisect.bisect_right(label_addrs,pc)-1
+            label=img.labels[label_addrs[index]] if index>=0 else "unknown"
+            size,op,args,comment=img.code[pc]
+            cost[label]+=end-t
+            if b-a>400:instructions.append([t,end,hex(pc),op,args,label,depth])
     # End timestamp is the point of return to interrupted context, not a
     # guarantee that a pending UART can enter immediately (RETI deferral).
     return {"case":case,"mode":mode,"fixture":kw,"classification":"isolated_linked_instruction_model",
@@ -174,6 +223,7 @@ def execute(mod,img,kw,mode,case):
             "stack_bytes_incl_synthetic_return":0x21ff-c.minsp,
             "masked_intervals_cycles":mask,"max_masked_cycles":max((b-a for a,b in mask),default=0),
             "candidate_irq_opportunity_cycles":opportunity,
+            "longest_mask_attribution_cycles":dict(cost),"longest_mask_instruction_trace":instructions,
             "step_dir_edges":edges,"edge_phase_widths":widths,"physical_rising_edges":dict(counts),
             "timer0_phase_at_start":c.timer0_phase,"timer0_reads":c.timer0_reads,
             "timer_writes":c.timer_writes,"ocr1a_final":c.get(0x88,2) if mode!="inner" else None,
@@ -201,6 +251,8 @@ def cases(board):
     for owner,name,mode in itertools.product((0,1),("X","XYE","E","Z"),("activation","stoppable","idle","wait","wait_chunk","blocked")):
         if mode=="blocked" and not owner: continue
         yield name+"-"+mode,mode,k(owner,VECTORS[name],9143,2)
+    for owner,name in itertools.product((0,1),("X","XYE","E","Z")):
+        yield name+"-cold-enable","activation_cold",k(owner,VECTORS[name],9143,2)
     for owner,name,remaining in itertools.product((0,1),("X","XYE","E","Z"),(1,2,4)):
         yield name+"-tail","active",k(owner,VECTORS[name],15238,4,remaining=remaining)
     # Configured defaults: XY 152.38 steps/mm, Z 1280, E 280 or 256.
@@ -260,22 +312,29 @@ def main():
         img=mod.Image(args.archive,board)
         img.step_pins.update({(0x31,1):"DIR_X",(0x31,7):"DIR_Y",(0x10b,1):"DIR_Z",(0x22,6):"DIR_E0",(0x28,3):"DIR_E1"})
         if board=="RF1000":img.step_pins.pop((0x28,3),None)
-        worst={};success=0;errors=collections.Counter();samples=[]
+        worst={};success=0;errors=collections.Counter();samples=[];cold=[];mask_by_case={};paired={}
         with (args.output/(board+".jsonl")).open("w") as f:
             for case,mode,kw in cases(board):
                 try:
                     row=execute(mod,img,kw,mode,case)
-                    success+=1
-                    m=worst.get(mode)
-                    if m is None or row["max_masked_cycles"]>m["max_masked_cycles"]:
-                        worst[mode]={k:row[k] for k in ("case","fixture","exclusive_cycles","max_masked_cycles","stack_bytes_incl_synthetic_return")}
+                    if row["classification"]=="partial_cold_wait_entry":
+                        cold.append({k:row[k] for k in ("case","fixture","cycles_to_micros_entry","i_at_micros_entry","max_masked_so_far_cycles")})
+                    else:
+                        success+=1
+                        m=worst.get(mode)
+                        if m is None or row["max_masked_cycles"]>m["max_masked_cycles"]:
+                            worst[mode]={k:row[k] for k in ("case","fixture","exclusive_cycles","max_masked_cycles","stack_bytes_incl_synthetic_return","longest_mask_attribution_cycles")}
+                        if case=="Eprimary-config-max":
+                            mask_by_case[str((kw["advance"],kw["negative"],kw["n"]))]={k:row[k] for k in ("exclusive_cycles","max_masked_cycles","longest_mask_attribution_cycles")}
+                        if kw["phase"]=="cruise" and kw["rate"]==9143 and kw["owner"]==1 and not any((kw["advance"],kw["ratio"],kw["zcor"],kw["negative"])) and kw["remaining"]==80 and mode in ("inner","active"):
+                            paired[str((mode,tuple(kw["delta"]),kw["n"]))]=row["exclusive_cycles"]
                 except Exception as e:
                     failures+=1
                     errors[repr(e)]+=1
                     if len(samples)<8:samples.append({"case":case,"mode":mode,"fixture":kw,"error":repr(e)})
                     row={"case":case,"mode":mode,"fixture":kw,"classification":"unsupported_or_failed","error":repr(e)}
                 f.write(json.dumps(row,separators=(",",":"))+"\n")
-        print(json.dumps({"board":board,"success":success,"worst_mask":worst,"failed":sum(errors.values()),"error_samples":samples,"top_errors":errors.most_common(5)}),flush=True)
+        print(json.dumps({"board":board,"success":success,"worst_mask":worst,"failed":sum(errors.values()),"error_samples":samples,"top_errors":errors.most_common(5),"cold_wait_entries":cold,"configured_E_primary_masks":mask_by_case,"paired_cruise_cycles":paired}),flush=True)
     print("unsupported_or_failed",failures,flush=True)
     return int(bool(failures))
 
