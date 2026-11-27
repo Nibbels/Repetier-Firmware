@@ -2,13 +2,16 @@
 """Capture RFx000 host replays and four linked AVR resource inventories."""
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
 import re
 import shlex
+import shutil
 import subprocess
 import sys
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 CORE = "1.8.6"
@@ -183,16 +186,51 @@ def build_target(out, cli, name, definitions, experiment=None, linker_script_fac
     return sizes
 
 
+# Candidate cutover path. The historical comparison remains the default
+# until the A73 release gates have been closed. This wrapper ensures that
+# the future default cannot bypass the recovery link or post-link audits.
+P0_DEFINITIONS = (
+    "RF_HEATER_LEASE_EXPERIMENT=1", "RF_HEATER_RESET_WDT_EXPERIMENT=1",
+    "RF_THERMAL_EMERGENCY_EXPERIMENT=1", "RF_EEPROM_ZONE_EXPERIMENT=1",
+)
+
+
+def build_p0_candidate(out, cli, name, definitions, experiment=None):
+    # Imported lazily to keep historical callers of build_target unchanged.
+    sys.dont_write_bytecode = True
+    def load(module, filename):
+        spec = importlib.util.spec_from_file_location(module, ROOT/"tools/task0034"/filename)
+        obj = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(obj)
+        return obj
+    recovery = load("rf_recovery", "recovery-link.py")
+    timing = load("rf_renew_bound", "renew-bound.py")
+    verified = load("rf_verified_build", "verified-build.py")
+    # Never publish sizing-probe HEX/ELF or a failed recovery link as
+    # a standard image. Keep the failed/probe maps and logs separately.
+    with tempfile.TemporaryDirectory(prefix="rfx000-p0-") as temp:
+        stats, directory = verified.build_verified(
+            sys.modules[__name__], recovery, timing, cli, Path(temp), name,
+            [*definitions, *P0_DEFINITIONS], True, out/"layout-evidence",
+            "combined", experiment, archive_final=False)
+        shutil.copytree(directory, out/name)
+    return stats
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output", type=Path, help="new evidence directory outside checkout")
     parser.add_argument("--cli", default="arduino-cli")
+    parser.add_argument("--p0-candidate", action="store_true",
+                        help="qualification-only combined recovery-linked build; not deployment")
     parser.add_argument("--experiment", choices=EXPERIMENTS,
                         help="opt-in compiler trial, not a release configuration")
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--host-only", action="store_true")
     modes.add_argument("--avr-only", action="store_true")
     args = parser.parse_args()
+    if args.p0_candidate and args.host_only:
+        parser.error("P0 candidate requires AVR builds")
     if args.experiment and args.host_only:
         parser.error("compiler experiments require AVR builds")
     out = args.output.resolve()
@@ -204,6 +242,8 @@ def main():
     report = {"sha": git("rev-parse", "HEAD"), "arduino_core_required": CORE,
               "fqbn": FQBN, "targets": {}, "failures": [],
               "host_requested": not args.avr_only, "avr_requested": not args.host_only}
+    if args.p0_candidate:
+        report["p0_candidate"] = True
     if args.experiment:
         report["compiler_experiment"] = args.experiment
     if not args.avr_only:
@@ -220,7 +260,8 @@ def main():
         else:
             for name, definitions in TARGETS.items():
                 try:
-                    report["targets"][name] = build_target(out, args.cli, name, definitions, args.experiment)
+                    builder = build_p0_candidate if args.p0_candidate else build_target
+                    report["targets"][name] = builder(out, args.cli, name, definitions, args.experiment)
                 except (OSError, ValueError, subprocess.CalledProcessError) as error:
                     report["failures"].append(f"{name}: {error}")
     if git("status", "--porcelain", "--untracked-files=all") or git("rev-parse", "HEAD") != report["sha"]:

@@ -18,10 +18,11 @@ def archive_failed(archive, directory, mode, label):
 
 
 def build_verified(baseline, recovery, timing, cli, mode_dir, board, definitions,
-                   use_recovery, archive=None, mode="combined"):
+                   use_recovery, archive=None, mode="combined", experiment=None,
+                   archive_final=True):
     board_dir=mode_dir/board
     try:
-        stats=baseline.build_target(mode_dir,cli,board,definitions,
+        stats=baseline.build_target(mode_dir,cli,board,definitions,experiment,
                                     linker_script_factory=recovery.make_script if use_recovery else None)
     except subprocess.CalledProcessError:
         log=board_dir/"compile.txt"
@@ -44,7 +45,7 @@ def build_verified(baseline, recovery, timing, cli, mode_dir, board, definitions
             probe_dir.mkdir(exist_ok=True)
             probe_board=probe_dir/board
             try:
-                probe_stats=baseline.build_target(probe_dir,cli,board,definitions,
+                probe_stats=baseline.build_target(probe_dir,cli,board,definitions,experiment,
                     linker_script_factory=lambda bin_dir,directory: recovery.make_script(bin_dir,directory,probe=True),
                     recovery_lto_partitions=partition_count)
             except subprocess.CalledProcessError:
@@ -72,7 +73,7 @@ def build_verified(baseline, recovery, timing, cli, mode_dir, board, definitions
         retry_dir.mkdir(exist_ok=True)
         board_dir=retry_dir/board
         try:
-            stats=baseline.build_target(retry_dir,cli,board,definitions,
+            stats=baseline.build_target(retry_dir,cli,board,definitions,experiment,
                 linker_script_factory=lambda bin_dir,directory: recovery.make_script(bin_dir,directory,
                     fill_named_text=retry["fill_named_text"],partitions=tuple(retry["partitions"])),
                 recovery_lto_partitions=partition_count)
@@ -81,7 +82,7 @@ def build_verified(baseline, recovery, timing, cli, mode_dir, board, definitions
             raise
         stats["recovery_layout_retry"]=retry
     print(mode,board,json.dumps(stats),flush=True)
-    if archive:
+    if archive and archive_final:
         dest=archive/mode/board
         dest.mkdir(parents=True)
         for pattern in ("*.elf","*.ino.hex","firmware.map"):
@@ -106,8 +107,9 @@ def build_verified(baseline, recovery, timing, cli, mode_dir, board, definitions
         if m:
             assert int(m[1] or m[2],16) not in vectors.values(),(board,line)
     if use_recovery:
-        recovery.verify_image(board_dir)
-        print("Linked renewal guard",board,json.dumps(timing.audit(dump)),flush=True)
+        stats["recovery_verification"]=recovery.verify_image(board_dir)
+        stats["renewal_bound"]=timing.audit(dump)
+        print("Linked renewal guard",board,json.dumps(stats["renewal_bound"]),flush=True)
         assert vectors[12] == vectors[2], (board,"WDT vector unexpectedly active")
         assert "heaterWatchdogEarlyInit" in dump, board
         start=dump.index("<heaterWatchdogEarlyInit>:")
@@ -120,6 +122,9 @@ def build_verified(baseline, recovery, timing, cli, mode_dir, board, definitions
         # linked inspection; this does not prove oscillator or boot behavior.
         print("WDT reset-only candidate startup linked",board)
     print("Linked vector aliases and direct-call audit passed",board)
-    if archive:
-        (dest/"verification.json").write_text(json.dumps({"status":"verified"})+"\n")
+    verification={"status":"verified","recovery":use_recovery}
+    (board_dir/"verification.json").write_text(json.dumps(verification)+"\n")
+    if archive and archive_final:
+        (dest/"stats.json").write_text(json.dumps(stats,indent=2)+"\n")
+        (dest/"verification.json").write_text(json.dumps(verification)+"\n")
     return stats, board_dir
