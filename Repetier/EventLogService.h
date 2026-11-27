@@ -78,7 +78,8 @@ public:
         if(!ring_.initialized()){ring_.scanStep(store);return;}
         if(query_==Query::Begin){
             if(ring_.pending()||!store.ready())return;
-            if(!notice(EVENT_SERVICE_TEXT("LOG BEGIN")))return;
+            if(!notice(logFailed_?EVENT_SERVICE_TEXT("LOG BEGIN (WRITE FAILED)"):
+                                 EVENT_SERVICE_TEXT("LOG BEGIN")))return;
             text_.reset();
             if(reader_.begin(ring_))query_=Query::Read;
             else query_=Query::Error;
