@@ -2,6 +2,7 @@
 """The optional serialEventRun guard must not suppress a reachable CALL 0."""
 from pathlib import Path
 import sys
+sys.dont_write_bytecode = True
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"tools/task0034"))
 from weak_serial_guard import prove_weak_main
 
