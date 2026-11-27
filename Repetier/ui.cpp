@@ -688,7 +688,7 @@ void UIDisplay::refreshPage() {
     if(Printer::printJob.emergencyLocked()) {
         const auto& ledger=ThermalEmergency::faultLedger();
         const auto& fault=ThermalEmergency::primaryFault(ledger);
-        const bool valid=ThermalEmergency::liveTemperatureValid(fault.channel);
+        const bool valid=ledger.active()&&ThermalEmergency::liveTemperatureValid(fault.channel);
         const float live=valid?tempController[fault.channel]->currentTemperatureC:0;
         for(uint8_t row=0;row<UI_ROWS;++row) {
             char line[UI_COLS+1];
