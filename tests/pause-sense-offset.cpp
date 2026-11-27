@@ -2325,9 +2325,18 @@ void filamentProgramDuringPause() {
     const float targetTemperature = Extruder::current->tempControl.targetTemperatureC;
     const int queued = PrintLine::linesCount;
 
-    // A pause can freeze the print queue while the load command waits.
-    duringPeriodicActions = [] { Printer::pause.request(PrintPause::Destination::InPlace); };
     GCode command;
+    // A live print is rejected before any wait or E-coordinate change.
+    assert(Printer::printJob.isPrinting());
+    runFilamentCommand(3913, &command);
+    assert(!std::strcmp(Com::lastLine, "Filament program requires idle print job and no scan"));
+    assert(Printer::moveTarget.machineMM(E_AXIS) == 42.5f);
+    assert(Printer::printJob.isPrinting() && PrintLine::linesCount == queued);
+
+    // Idle ownership with internal queued motion still requires a settled
+    // unpaused queue. A pause can occur during this actual motion wait.
+    Printer::printJob.finishPrintMotion();
+    duringPeriodicActions = [] { Printer::pause.request(PrintPause::Destination::InPlace); };
     runFilamentCommand(3913, &command);
     duringPeriodicActions = nullptr;
     assert(Printer::pause.isSettled() && PrintLine::linesCount == queued);
