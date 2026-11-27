@@ -140,7 +140,8 @@ void discardScans() {
     Calibration::discardZOffsetScan();
 }
 
-void handleScanWorkTasks(bool tickDue) {
+// Keep the guarded scan dispatch frame out of the reentrant periodic pump.
+__attribute__((noinline)) void handleScanWorkTasks(bool tickDue) {
     if (Calibration::scanSession.dispatching() || !isAnyScanRunning())
         return;
     if (Printer::blockAll || Printer::printJob.commandsBlocked()) {
@@ -231,7 +232,9 @@ void outputObject(bool showerrors) {
     Printer::idleStatus.schedule(HAL::timeInMilliseconds());
 } // outputObject
 
-void loopFeatures() // Wird so aufgerufen, dass es ein ~100ms Takt sein sollte.
+// The periodic pump can re-enter through feature/motion waits. Do not
+// reserve the feature dispatch frame in every invocation of that pump.
+__attribute__((noinline)) void loopFeatures() // Wird so aufgerufen, dass es ein ~100ms Takt sein sollte.
 {
     static char nEntered = 0;
     if (!nEntered) {
