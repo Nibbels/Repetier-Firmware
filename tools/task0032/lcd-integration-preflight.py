@@ -104,7 +104,7 @@ def source_changes(root):
         s=once(s,"    void refreshPage();","    void refreshPage();\n    void serviceDisplay();")
         s=once(s,"    char displayCache_[UI_ROWS][MAX_COLS + 1];",
                """    // Logical panel snapshot; pending bits belong to the transport.
-    char displayCache_[UI_ROWS][UI_COLS + 1];
+    char displayCache_[UI_ROWS][UI_COLS]; // fixed-width cells; not C strings
     LcdPendingFrame<UI_COLS> lcdTransport_;
     void resetDisplayAfterClear();
     void renderNormalPage();
@@ -114,10 +114,23 @@ def source_changes(root):
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     uint8_t emergencyFrameRevision_ = 0xff;
 #endif""")
+        # Three foreground-only flags. No shared ISR flags or GPIO state
+        # are packed into this byte. C++11 constructor supplies defaults.
+        s=once(s,"    bool normalCharacters_ = false;\n    bool statusIsTemplate_ = false;",
+               "    bool normalCharacters_:1;\n    bool statusIsTemplate_:1;\n    bool autoReturnMessage_:1;")
+        s=once(s,"    bool autoReturnMessage_ = false;\n","")
+        s=once(s,"    const char* cachedRow(uint8_t row) const;",
+               "    const char* cachedRow(uint8_t row) const; // exactly UI_COLS cells, no terminator")
         return s
     edit(fw/"ui.h",header)
 
     def ui(s):
+        s=once(s,"UIDisplay::UIDisplay() = default;",
+               "UIDisplay::UIDisplay() : normalCharacters_(false), statusIsTemplate_(false), autoReturnMessage_(false) {}")
+        # No terminator in the fixed-width frame. The only synchronous
+        # printRow caller is printRowP with full width (checked below).
+        s=once(s,"    displayCache_[r][col] = 0;\n","")
+        s=once(s,"        displayCache_[row][UI_COLS] = 0;\n","")
         # Keep every previously audited RMW/strobe instruction intact.
         s=once(s,"""void lcdWriteByte(uint8_t c, uint8_t rs) {
     HAL::delayMicroseconds(320); // The LCD R/W line is tied low.
@@ -241,12 +254,17 @@ void Commands::checkForPeriodicalActions""")
         return once(s,"    handleScanWorkTasks(scanTickDue);\n} // checkForPeriodicalActions",
                     "    handleScanWorkTasks(scanTickDue);\n    uid.serviceDisplay();\n} // checkForPeriodicalActions")
     edit(fw/"Commands.cpp",commands)
-    owners=[];readers=[]
+    owners=[];readers=[];row_users=[]
     for p in sorted(fw.rglob("*")):
         if p.is_file() and p.suffix in (".h",".cpp",".ino"):
             source=p.read_text()
             if "displayCache_" in source: owners.append(p.relative_to(fw).as_posix())
             if "cachedRow(" in source: readers.append(p.relative_to(fw).as_posix())
+            if "printRow(" in source: row_users.append(p.relative_to(fw).as_posix())
+    assert row_users==["ui.cpp","ui.h"],row_users
+    ui_source=(fw/"ui.cpp").read_text()
+    assert ui_source.count("printRow(")==2
+    assert "printRow(r, printCols, NULL, UI_COLS);" in ui_source
     assert owners==["ui.cpp","ui.h"],owners
     assert readers==["GCodeSystem.cpp","ui.cpp","ui.h"],readers
 
@@ -269,10 +287,11 @@ def test_changes(root):
         s=once(s,"millis_t timeInMilliseconds() { return now; }",
                "millis_t timeInMilliseconds() { return now; }\nuint32_t timeInMicroseconds() { return now*1000u; }")
         s=once(s,"    char displayCache_[4][UI_COLS+1]{};",
-               """    char displayCache_[4][UI_COLS+1]{};
+               """    char displayCache_[4][UI_COLS]{};
     LcdPendingFrame<UI_COLS> lcdTransport_;
     millis_t lastDisplayCompletedMs_=0;
     void resetDisplayAfterClear();""")
+        s=once(s,"        displayCache_[row][UI_COLS]=0;\n","")
         return once(s,'        (p / "firmware.inc").write_text(glyphs + normal + boot)',
                     '''        reset=source[source.index("void UIDisplay::resetDisplayAfterClear()"):source.index("void UIDisplay::printRow(")]
         (p / "firmware.inc").write_text(glyphs + normal + reset + boot)''')
@@ -286,7 +305,7 @@ def test_changes(root):
                "millis_t timeInMilliseconds() { return 5; }\nuint32_t lcdTime=0;\nuint32_t timeInMicroseconds() { return lcdTime; }")
         s=once(s,"bool visibilityRendering=false;","bool visibilityRendering=false;\nvoid lcdWriteByteNow(uint8_t,uint8_t);")
         s=once(s,"char printCols[MAX_COLS+1]={},displayCache_[UI_ROWS][MAX_COLS+1]={};",
-               """char printCols[MAX_COLS+1]={},displayCache_[UI_ROWS][UI_COLS+1]={};
+               """char printCols[MAX_COLS+1]={},displayCache_[UI_ROWS][UI_COLS]={};
     LcdPendingFrame<UI_COLS> lcdTransport_;
     unsigned lcdWrites=0;
     int lcdCol=0;
@@ -323,6 +342,7 @@ void lcdWriteByteNow(uint8_t value,uint8_t rs) {
     if(rs) uid.lcdPutChar(char(value)); else uid.lcdWriteByte(value,0);
 }
 #include "firmware.inc"''')
+        s=once(s,"std::string(uid.displayCache_[r])","std::string(uid.displayCache_[r],UI_COLS)")
         # Original observations are made after explicit transport drain,
         # not after rewriting the renderer to send synchronously in tests.
         s=once(s,"void rowIs(unsigned r, char marker, std::string text) {",
