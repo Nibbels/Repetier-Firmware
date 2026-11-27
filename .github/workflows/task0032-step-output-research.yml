@@ -49,6 +49,14 @@ jobs:
           c++ -std=c++11 -O2 -Wall -Wextra -Werror research/task0032-step-output/z-feedforward-dda-replay.cpp -o "$RUNNER_TEMP/z-dda"
           "$RUNNER_TEMP/z-dda" | tee "$RUNNER_TEMP/step-output/z-dda.txt"
           python3 research/task0032-step-output/z-feedforward-lattice.py "$RUNNER_TEMP/step-output/z-lattice.json"
+      - name: Compact physical Z chord and two-slot context publication
+        run: |
+          set -o pipefail
+          c++ -std=c++11 -O2 -Wall -Wextra -Werror research/task0032-step-output/z-chord-handoff-replay.cpp -o "$RUNNER_TEMP/z-handoff"
+          "$RUNNER_TEMP/z-handoff" | tee "$RUNNER_TEMP/step-output/z-handoff.txt"
+          c++ -std=c++11 -O2 -Wall -Wextra -Werror research/task0032-step-output/z-physical-chord-replay.cpp -o "$RUNNER_TEMP/z-physical"
+          "$RUNNER_TEMP/z-physical" | tee "$RUNNER_TEMP/step-output/z-physical.txt"
+          python3 research/task0032-step-output/z-physical-path.py "$RUNNER_TEMP/step-output/z-physical-path.json"
       - name: Signed Z demand and logical retract classification
         run: |
           set -o pipefail
@@ -256,15 +264,19 @@ jobs:
       - name: Compare linked correction gap policies on representative boards
         run: |
           python3 research/task0032-step-output/z-merge-gap-replay.py "$RUNNER_TEMP/step-output/z-direct/direct-z-merge-study/candidate.zip" "$RUNNER_TEMP/step-output/z-merge-gap-results.json"
-      - name: Four actual firmware builds with explicit Z direction and coherent snapshot
+      - name: Four actual firmware builds with explicit Z direction and packed IRQ boundary
         run: |
-          python3 research/task0032-step-output/z-explicit-source.py --out "$RUNNER_TEMP/step-output/z-explicit" --tools "$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin"
+          python3 research/task0032-step-output/z-explicit-source.py --boundary --out "$RUNNER_TEMP/step-output/z-explicit" --tools "$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin"
       - name: Explicit logical Z direction with physical GPIO and opposing requests
         run: |
-          python3 research/task0032-step-output/z-explicit-linked-replay.py "$RUNNER_TEMP/step-output/z-direct/direct-z/candidate.zip" "$RUNNER_TEMP/step-output/z-explicit/explicit-z/candidate.zip" "$RUNNER_TEMP/step-output/z-explicit-direction.json"
+          python3 research/task0032-step-output/z-explicit-linked-replay.py "$RUNNER_TEMP/step-output/z-direct/direct-z/candidate.zip" "$RUNNER_TEMP/step-output/z-explicit/explicit-z-boundary/candidate.zip" "$RUNNER_TEMP/step-output/z-explicit-direction.json"
+      - name: Verify direct packed Z and XY stop writer interleavings
+        run: |
+          python3 research/task0032-step-output/z-boundary-stop-replay.py "$RUNNER_TEMP/step-output/z-explicit/explicit-z-boundary/candidate.zip" "$RUNNER_TEMP/step-output/z-boundary-stop.json"
+          python3 research/task0032-step-output/jog-stop-interleave.py "$RUNNER_TEMP/step-output/z-explicit/explicit-z-boundary/candidate.zip" "$RUNNER_TEMP/step-output/z-boundary-xy-stop.json" --require-safe
       - name: Linked explicit Z nominal and correction continuity
         run: |
-          python3 research/task0032-step-output/unified-z-linked-replay.py "$RUNNER_TEMP/step-output/q23/wake-jog-idle/candidate.zip" "$RUNNER_TEMP/step-output/z-explicit/explicit-z/candidate.zip" "$RUNNER_TEMP/step-output/z-explicit-results.json"
+          python3 research/task0032-step-output/unified-z-linked-replay.py "$RUNNER_TEMP/step-output/q23/wake-jog-idle/candidate.zip" "$RUNNER_TEMP/step-output/z-explicit/explicit-z-boundary/candidate.zip" "$RUNNER_TEMP/step-output/z-explicit-results.json"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
