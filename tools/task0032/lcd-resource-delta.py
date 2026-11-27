@@ -28,7 +28,12 @@ def verified(directory,expected):
         uid=next(x["bytes"] for x in stats["largest_sram_symbols"] if x["name"]=="uid")
         assert stats["flash_bytes"]<=253952
         symbols={}
+        ram_symbols={}
         for line in (d/"symbols.txt").read_text().splitlines():
+            ram=re.fullmatch(r"([0-9a-f]+) ([0-9a-f]+) ([BbDd]) (.+)",line)
+            if ram:
+                name=re.sub(r"\.lto_priv\.\d+","",ram[4])
+                ram_symbols[name]=ram_symbols.get(name,0)+int(ram[2],16)
             m=re.fullmatch(r"([0-9a-f]+) ([0-9a-f]+) ([TtWw]) (.+)",line)
             if m and (m[4].startswith(("UIDisplay::refreshPage(","UIDisplay::renderNormalPage(",
                                       "UIDisplay::serviceDisplay(","UIDisplay::serviceDisplayPending(",
@@ -38,7 +43,9 @@ def verified(directory,expected):
                      "occupied_flash":stats["flash_bytes"]-padding,
                      "global_sram":stats["global_sram_bytes"],"uid":uid,
                      "sram_before_stack":stats["sram_remaining_before_stack_bytes"],
-                     "symbols":symbols,"elf_sha256":stats["elf_sha256"]}
+                     "sections":{k:stats["sections"].get(k,0) for k in (".data",".bss",".noinit")},
+                     "symbols":symbols,"ram_symbols":ram_symbols,
+                     "elf_sha256":stats["elf_sha256"]}
     return rows
 
 def main():
@@ -49,15 +56,25 @@ def main():
     candidate_sha=(a.out/"local-candidate-sha.txt").read_text().strip()
     candidate=verified(a.out/"candidate-evidence",candidate_sha)
     result={"baseline":P0,"candidate":candidate_sha,"boards":{}}
+    violations=[]
     for b in BOARDS:
         before,after=base[b],candidate[b]
         delta={k:after[k]-before[k] for k in ("flash","padding","occupied_flash","global_sram","uid","sram_before_stack")}
         # No allocation of new SRAM is authorized during P0.
-        assert delta["global_sram"]<=0,(b,delta)
-        result["boards"][b]={"before":before,"after":after,"delta":delta}
+        if delta["global_sram"]>0:
+            violations.append({"board":b,"global_sram_delta":delta["global_sram"]})
+        section_delta={k:after["sections"][k]-before["sections"][k] for k in before["sections"]}
+        ram_delta={k:after["ram_symbols"].get(k,0)-before["ram_symbols"].get(k,0)
+                   for k in sorted(before["ram_symbols"].keys()|after["ram_symbols"].keys())}
+        result["boards"][b]={"before":{k:v for k,v in before.items() if k!="ram_symbols"},
+                              "after":{k:v for k,v in after.items() if k!="ram_symbols"},
+                              "delta":delta,"section_delta":section_delta,
+                              "named_ram_delta":{k:v for k,v in ram_delta.items() if v}}
+    result["violations"]=violations
     result["qualification"]="linked resource comparison only; not a whole-program stack or service latency proof"
     text=json.dumps(result,indent=2)+"\n"
     (a.out/"resource-delta.json").write_text(text)
     print(text)
+    assert not violations,violations
 if __name__=="__main__":
     main()
