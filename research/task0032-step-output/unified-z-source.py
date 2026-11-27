@@ -53,6 +53,7 @@ struct CorrectionState {
         armed.sign=0;
     }
 };
+static_assert(sizeof(CorrectionState)==41, "AVR correction state fixture layout");
 CorrectionState zCorrection;
 
 uint32_t correctionClock(uint32_t epoch) {
@@ -244,10 +245,10 @@ ISR(TIMER1_COMPA_vect) {
     diff=[]
     for p in sorted(dst.glob("*")):
         if not p.is_file():continue
-        old=(q.FW/p.name).read_text() if (q.FW/p.name).is_file() else ""
-        new=p.read_text()
+        old=(q.FW/p.name).read_bytes() if (q.FW/p.name).is_file() else b""
+        new=p.read_bytes()
         if old!=new:
-            diff.extend(difflib.unified_diff(old.splitlines(True),new.splitlines(True),fromfile="a/Repetier/"+p.name,tofile="b/Repetier/"+p.name))
+            diff.extend(difflib.unified_diff(old.decode().splitlines(True),new.decode().splitlines(True),fromfile="a/Repetier/"+p.name,tofile="b/Repetier/"+p.name))
     return "".join(diff)
 
 def main():
