@@ -402,33 +402,25 @@ public:
         ::delay(delayMs);
     } // delayMilliseconds
 
+    // Internal EEPROM: avr-libc update variants compare individual bytes and
+    // skip unchanged cells. This also avoids whole-value float comparisons.
+    // These are foreground operations; EEPROM-ready waits must not occur
+    // in an interrupt-disabled section.
     static inline void eprSetByte(unsigned int pos, uint8_t value) {
-        uint8_t oldval = eprGetByte(pos);
-        if (oldval != value)
-            eeprom_write_byte((uint8_t*)(EEPROM_OFFSET + pos), value);
-
-    } // eprSetByte
+        eeprom_update_byte((uint8_t*)(EEPROM_OFFSET + pos), value);
+    }
 
     static inline void eprSetInt16(unsigned int pos, int16_t value) {
-        int16_t oldval = eprGetInt16(pos);
-        if (oldval != value)
-            eeprom_write_word((unsigned int*)(EEPROM_OFFSET + pos), value);
-
-    } // eprSetInt16
+        eeprom_update_word((uint16_t*)(EEPROM_OFFSET + pos), static_cast<uint16_t>(value));
+    }
 
     static inline void eprSetInt32(unsigned int pos, int32_t value) {
-        int32_t oldval = eprGetInt32(pos);
-        if (oldval != value)
-            eeprom_write_dword((uint32_t*)(EEPROM_OFFSET + pos), value);
-
-    } // eprSetInt32
+        eeprom_update_dword((uint32_t*)(EEPROM_OFFSET + pos), static_cast<uint32_t>(value));
+    }
 
     static inline void eprSetFloat(unsigned int pos, float value) {
-        float oldval = eprGetFloat(pos);
-        if (oldval != value)
-            eeprom_write_block(&value, (void*)(EEPROM_OFFSET + pos), 4);
-
-    } // eprSetFloat
+        eeprom_update_block(&value, (void*)(EEPROM_OFFSET + pos), sizeof(value));
+    }
 
     static inline uint8_t eprGetByte(unsigned int pos) {
         return eeprom_read_byte((uint8_t*)(EEPROM_OFFSET + pos));

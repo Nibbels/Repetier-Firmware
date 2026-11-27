@@ -211,6 +211,7 @@ public:
     static void setConfiguredBaudrate(long rate) { configuredBaudrate_ = rate; }
     static void storeDataIntoEEPROM(uint8_t corrupted = 0);
     static void storeManualZOffset();
+    static void storeMicrostepConfiguration(uint8_t changedMask);
     static void storePreheatProfiles();
     static void storePidCalibration(uint8_t heater);
     static void updateChecksum();

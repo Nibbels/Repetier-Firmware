@@ -673,6 +673,33 @@ void EEPROM::updateChecksum() {
     HAL::eprSetByte(EPR_INTEGRITY_BYTE, computeChecksum());
 } // updateChecksum
 
+void EEPROM::storeMicrostepConfiguration(uint8_t changedMask) {
+    // All driver and motion state is already published by the foreground
+    // caller. EEPROM-ready waits belong outside its interrupt guard.
+    const bool initialize = HAL::eprGetByte(EPR_RF_MICRO_STEPS_USED) != 0xAB;
+    if (!changedMask && !initialize)
+        return;
+
+    for (uint8_t axis = 0; axis < DRV8711_NUM_CHANNELS; ++axis) {
+        const bool changed = (changedMask & (1U << axis)) != 0;
+        if (initialize || changed)
+            HAL::eprSetByte(EPR_RF_MICRO_STEPS_X + axis, Drv8711::microstepMode(axis));
+        if (!changed)
+            continue;
+        if (axis < E_AXIS) {
+            HAL::eprSetFloat(EPR_XAXIS_STEPS_PER_MM + 4 * axis, Printer::stepsPerMm(axis));
+            if (axis == Z_AXIS)
+                HAL::eprSetInt16(EPR_RF_MOD_Z_STEP_SIZE, Printer::manualMotion.steps(Z_AXIS));
+        } else if (axis - E_AXIS < NUM_EXTRUDER) {
+            const uint8_t tool = axis - E_AXIS;
+            HAL::eprSetFloat(getExtruderOffset(tool) + EPR_EXTRUDER_STEPS_PER_MM, extruder[tool].stepsPerMM);
+        }
+    }
+    if (initialize)
+        HAL::eprSetByte(EPR_RF_MICRO_STEPS_USED, 0xAB);
+    updateChecksum();
+}
+
 void EEPROM::storeManualZOffset() {
     const int32_t manual = Printer::zOffset.manualMicrometers();
     if (HAL::eprGetInt32(EPR_RF_Z_OFFSET) != manual) {

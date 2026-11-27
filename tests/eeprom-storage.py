@@ -23,12 +23,27 @@ GOLDEN = {
 def main():
     source = (FW / "Eeprom.cpp").read_text(encoding="utf-8")
     preheat = (FW / "PreheatProfiles.cpp").read_text(encoding="utf-8")
+    hal = (FW / "HAL.h").read_text(encoding="utf-8")
+    ui = (FW / "UiSettings.cpp").read_text(encoding="utf-8")
     body = source[source.index("constexpr uint8_t eepromMagic"):source.index(r"/** \brief Writes all eeprom settings")]
     body += source[source.index("uint8_t EEPROM::computeChecksum()"):source.index("void EEPROM::writeExtruderPrefix")]
     body += preheat[preheat.index("namespace {"):]
     with tempfile.TemporaryDirectory(prefix="eeprom-storage-") as temp:
         work = pathlib.Path(temp)
         (work / "storage-source.inc").write_text(body, encoding="utf-8")
+        setters = hal[hal.index("    static inline void eprSetByte("):hal.index("    // Faster version of InterruptProtectedBlock.")]
+        (work / "hal-eeprom.inc").write_text(setters, encoding="utf-8")
+        micro = ui[ui.index("    case UI_ACTION_MICROSTEPS_XY:"):ui.index("\n    }\n}\n\nvoid UIDisplay::changeMotionSetting")]
+        (work / "microstep-ui.inc").write_text(micro, encoding="utf-8")
+        persist = source[source.index("void EEPROM::storeMicrostepConfiguration("):source.index("void EEPROM::storeManualZOffset(")]
+        (work / "microstep-persist.inc").write_text(persist, encoding="utf-8")
+        for tools in (1, 2):
+            exe = work / "write-paths"
+            subprocess.run(["c++", "-std=c++17", "-Wall", "-Wextra",
+                            "-Wno-int-to-pointer-cast", "-I", str(FW), "-I", str(work),
+                            f"-DNUM_EXTRUDER={tools}", str(ROOT / "tests" / "eeprom-write-paths.cpp"),
+                            "-o", str(exe)], check=True)
+            subprocess.run([str(exe)], check=True)
         for model, expected in GOLDEN.items():
             flags = ["-DMOTHERBOARD=DEVICE_TYPE_" + model.split("-")[0]]
             if model.endswith("-X44"):

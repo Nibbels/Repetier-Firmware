@@ -531,93 +531,61 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
     case UI_ACTION_MICROSTEPS_Z:
     case UI_ACTION_MICROSTEPS_E: {
         if (!Printer::printJob.isBusy() && !PrintLine::hasLines() && Printer::pause.allowsQueueAdvance()) {
-            Printer::disableAllSteppersNow(); // Stepper und Homing ausmachen.
-                                              // We cannot use the old coordinates anymore.
+            Printer::disableAllSteppersNow(); // Invalidate homing before changing physical resolution.
 
-            InterruptProtectedBlock noInts;
-            bool changed[5] = { false, false, false, false, false };
-            switch (action) {
-            case UI_ACTION_MICROSTEPS_XY: {
-                uint8_t mode = Drv8711::microstepMode(X_AXIS);
-                INCREMENT_MIN_MAX(mode, 1, 4, 6);
-                if (Drv8711::setPairedMicrostepMode(X_AXIS, mode))
-                    changed[0] = changed[1] = true;
-                break;
-            }
-            case UI_ACTION_MICROSTEPS_Z: {
-                const uint8_t previous = Drv8711::microstepMode(Z_AXIS);
-                uint8_t mode = previous;
-                INCREMENT_MIN_MAX(mode, 1, 4, 5);
-                if (previous != mode) {
-                    Drv8711::setMicrostepMode(Z_AXIS, mode);
-                    changed[2] = true;
-                }
-                break;
-            }
-            case UI_ACTION_MICROSTEPS_E: {
-                uint8_t mode = Drv8711::microstepMode(E_AXIS);
-                INCREMENT_MIN_MAX(mode, 1, 4, 7);
-                if (Drv8711::setPairedMicrostepMode(E_AXIS, mode))
-                    changed[3] = changed[4] = true;
-                break;
-            }
-            }
+            const uint8_t firstAxis = action == UI_ACTION_MICROSTEPS_XY ? X_AXIS
+                                    : action == UI_ACTION_MICROSTEPS_Z ? Z_AXIS : E_AXIS;
+            const uint8_t lastAxis = firstAxis == Z_AXIS ? Z_AXIS : firstAxis + 1;
+            const uint8_t maxMode = firstAxis == X_AXIS ? 6 : firstAxis == Z_AXIS ? 5 : 7;
+            uint8_t mode = Drv8711::microstepMode(firstAxis);
+            INCREMENT_MIN_MAX(mode, 1, 4, maxMode);
 
-            bool updateall = false;
-            if (HAL::eprGetByte(EPR_RF_MICRO_STEPS_USED) != 0xAB)
-                updateall = true;
-            float stepsmm_korrekturfactor = (increment > 0 ? 2.0f : 0.5f);
-            bool updatederived = false;
-            bool updateextruder = false;
+            uint8_t changedMask = 0;
+            {
+                InterruptProtectedBlock noInts;
+                bool updatederived = false;
+                bool updateextruder = false;
+                for (uint8_t axis = firstAxis; axis <= lastAxis; ++axis) {
+                    const uint8_t previous = Drv8711::microstepMode(axis);
+                    if (previous == mode)
+                        continue;
 
-            // Anpassen der eeprom-werte und anpassen der steps/mm sodass die geschwindigkeit weiterhin passt.
-            for (int i = 0; i < DRV8711_NUM_CHANNELS; i++) {
-                if ((!changed[i] && updateall) || changed[i]) { // Erstes oder veränderndes schreiben
-                    HAL::eprSetByte(EPR_RF_MICRO_STEPS_X + i, Drv8711::microstepMode(i));
-                }
-                if (changed[i]) { // Nur dann die axis-steps anpassen, wenn wirklich was geändert wurde.
-                    switch (i) {
-                    case X_AXIS:
-                    case Y_AXIS:
-                    case Z_AXIS: {
-                        Printer::setStepsPerMm(i, Printer::stepsPerMm(i) * stepsmm_korrekturfactor);
-                        Printer::pause.scaleParkSteps(i, stepsmm_korrekturfactor);
-                        if (i == Z_AXIS) {
-                            Printer::zMotion.rescaleMotorReference(stepsmm_korrekturfactor);
-                            Printer::layers.rescaleFadeBounds(stepsmm_korrekturfactor);
-                            Printer::manualMotion.rescaleSteps(Z_AXIS, stepsmm_korrekturfactor);
-                            HAL::eprSetInt16(EPR_RF_MOD_Z_STEP_SIZE, Printer::manualMotion.steps(Z_AXIS));
+                    // Rescale each actual driver change, including previously
+                    // mismatched pairs and a clamped/multi-step menu increment.
+                    const float factor = float(drv8711ModeValue_2_MicroSteps(mode))
+                                       / drv8711ModeValue_2_MicroSteps(previous);
+                    Drv8711::setMicrostepMode(axis, mode);
+                    changedMask |= 1U << axis;
+                    if (axis < E_AXIS) {
+                        Printer::setStepsPerMm(axis, Printer::stepsPerMm(axis) * factor);
+                        Printer::pause.scaleParkSteps(axis, factor);
+                        if (axis == Z_AXIS) {
+                            Printer::zMotion.rescaleMotorReference(factor);
+                            Printer::layers.rescaleFadeBounds(factor);
+                            Printer::manualMotion.rescaleSteps(Z_AXIS, factor);
                             invalidateBedMatrixForReload();
-                                                                             // Korrektur der aktiven kompensation/zoffset ist durch fehlendes homing unterbunden.
                         }
-                        updatederived = true; // Übernehmen der werte in offsets und infaxissteps, accel usw..
-                        HAL::eprSetFloat(EPR_XAXIS_STEPS_PER_MM + 4 * i, Printer::stepsPerMm(i));
-                        break;
-                    }
-                    case E_AXIS:
-                    case E_AXIS + 1: {
-                        //i-3 ist hier 0 oder 1
-                        uint8_t etr = i - 3; //3-3 =0 oder 4-1 =1
-                        extruder[etr].stepsPerMM *= stepsmm_korrekturfactor;
-                        HAL::eprSetFloat(EEPROM::getExtruderOffset(etr) + EPR_EXTRUDER_STEPS_PER_MM, extruder[etr].stepsPerMM);
-                        if (etr == Extruder::current->id)
-                            updateextruder = true; // Übernehmen der werte in offsets und infaxissteps, accel usw..
-                        break;
-                    }
+                        updatederived = true;
+                    } else if (axis - E_AXIS < NUM_EXTRUDER) {
+                        // Five physical driver channels exist even on a
+                        // single-extruder build. Never index the absent tool.
+                        const uint8_t tool = axis - E_AXIS;
+                        extruder[tool].stepsPerMM *= factor;
+                        if (tool == Extruder::current->id)
+                            updateextruder = true;
                     }
                 }
+                if (updatederived)
+                    Printer::updateDerivedParameter();
+                if (updateextruder)
+                    Extruder::applyCurrentSettings();
             }
-            // Übernehmen der werte in offsets und infaxissteps, accel usw..
-            if (updatederived)
-                Printer::updateDerivedParameter();
-            if (updateextruder)
-                Extruder::applyCurrentSettings();
-            if (updateall)
-                HAL::eprSetByte(EPR_RF_MICRO_STEPS_USED, 0xAB); // Erstes schreiben markiert eepromwerte als gültig
-            noInts.unprotect();
-            if (changed[Z_AXIS])
+            if (changedMask & (1U << Z_AXIS))
                 Printer::zOffset.refreshSteps(Printer::stepsPerMm(Z_AXIS));
-            EEPROM::updateChecksum();
+
+            // Persistence is deliberately outside the interrupt guard.
+            // No EEPROM read or write is needed for the atomic RAM update.
+            EEPROM::storeMicrostepConfiguration(changedMask);
         }
         break;
     }
