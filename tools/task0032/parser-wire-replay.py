@@ -26,13 +26,14 @@ void appendFloat(std::string& packet, float value) {
 }
 void wireMoves(const std::string& scenario) {
     const bool ascii = scenario == "wire-ascii";
-    const bool v2 = scenario == "wire-binary-v2";
+    const bool mixed = scenario == "wire-mixed";
     const unsigned start = 12345, count = 600;
     unsigned wireBytes = 0, ackBytes = 0, minBytes = 1000, maxBytes = 0;
     unsigned fragmented = 0;
     feed("N12344 M110\n");
     readReply("ok\r\n");
     for (unsigned i = 0; i < count; ++i) {
+        const bool v2 = scenario == "wire-binary-v2" || (mixed && i % 2 == 1);
         const unsigned n = start + i;
         char xText[24], yText[24], eText[24];
         std::snprintf(xText, sizeof(xText), "%.4f", 100.0 + .1 * (i + 1));
@@ -91,8 +92,29 @@ void wireMoves(const std::string& scenario) {
     readReply(""); // consume last CRLF's LF if present
     assert(incoming.empty() && !GCodeInput::peekCurrentCommand());
     assert(flushes == 0 && ackBytes == 10 * count);
+    if (mixed) assert(wireBytes == 300u * 19 + 300u * 22 + 4);
     std::printf("TASK0032_WIRE {\"scenario\":\"%s\",\"moves\":%u,\"rxBytes\":%u,\"ackBytes\":%u,\"minFrame\":%u,\"maxFrame\":%u,\"fragmented\":%u}\n",
                 scenario.c_str(), count, wireBytes, ackBytes, minBytes, maxBytes, fragmented);
+}
+void unsupportedExtensionBaseline() {
+    // Characterization only: a protocol-4 U parameter is not supported
+    // by this RF protocol-3 parser. It currently accepts the G1 and
+    // ignores the unsupported field, which must not become a new contract.
+    std::string frameBytes;
+    appendU16(frameBytes, 0x108d); // V2 + N,G,X,binary
+    appendU16(frameBytes, 0x0800); // U (protocol 4)
+    appendU16(frameBytes, 1);
+    appendU16(frameBytes, 1);
+    appendFloat(frameBytes, 10.0f);
+    appendFloat(frameBytes, 5.0f);
+    feed(withBinaryChecksum(frameBytes));
+    readReply("ok 1\r\n");
+    const auto* cmd = GCodeInput::peekCurrentCommand();
+    assert(cmd && cmd->hasG() && cmd->G == 1 && cmd->hasX() && cmd->X == 10.0f);
+    assert(cmd->params2 & 0x0800);
+    // Do not execute this packet, even in the stub.
+    GCodeInput::popCurrentCommand();
+    std::puts("TASK0032_UNSUPPORTED_EXTENSION baseline accepts unsupported U field; future positive rejection required");
 }
 '''
 
@@ -114,12 +136,13 @@ def main():
         text = replace_once(cpp.read_text(), "#include <cstdlib>", "#include <cstdlib>\n#include <cstring>")
         text = replace_once(text, "void numberedLines() {", SCENARIOS + "\nvoid numberedLines() {")
         text = replace_once(text, 'if (scenario == "numbered") numberedLines();',
-            'if (scenario == "wire-ascii" || scenario == "wire-binary-v1" || scenario == "wire-binary-v2") wireMoves(scenario);\n'
+            'if (scenario == "wire-ascii" || scenario == "wire-binary-v1" || scenario == "wire-binary-v2" || scenario == "wire-mixed") wireMoves(scenario);\n'
+            '    else if (scenario == "wire-unsupported") unsupportedExtensionBaseline();\n'
             '    else if (scenario == "numbered") numberedLines();')
         cpp.write_text(text)
         py = tests / "serial-protocol.py"
         py.write_text(replace_once(py.read_text(), 'for scenario in ("numbered",',
-            'for scenario in ("wire-ascii", "wire-binary-v1", "wire-binary-v2", "numbered",'))
+            'for scenario in ("wire-ascii", "wire-binary-v1", "wire-binary-v2", "wire-mixed", "wire-unsupported", "numbered",'))
         subprocess.run([sys.executable, str(py)], check=True)
 
 
