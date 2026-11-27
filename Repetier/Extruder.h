@@ -23,6 +23,10 @@
 #include "ThermalEmergency.h"
 #endif
 
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+#include "BedTemperatureLimit.h"
+#endif
+
 #define CELSIUS_EXTRA_BITS 3
 
 // Report latched sensor/heater faults; regulation is in TemperatureControl.cpp.
@@ -43,16 +47,25 @@ public:
     uint8_t sensorPin;          ///< Index into the ADC sample array.
     const uint16_t heaterCutoffC; ///< Immutable measured-temperature ceiling.
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-    // Separate immutable material ceiling, adjustable-limit default and
-    // provisional target margin. Persistence is deliberately not yet wired.
-    enum : uint16_t { BedAbsoluteCeilingC=150, BedDefaultCutoffC=120, BedTargetMarginC=10 };
+    enum : uint16_t { BedAbsoluteCeilingC=BedTemperatureLimit::AbsoluteC,
+                      BedDefaultCutoffC=BedTemperatureLimit::DefaultC,
+                      BedTargetMarginC=BedTemperatureLimit::MarginC };
     uint16_t effectiveCutoffC() const {
-        return pwmIndex==NUM_EXTRUDER && heaterCutoffC>BedDefaultCutoffC
-            ? uint16_t(BedDefaultCutoffC) : heaterCutoffC;
+        return pwmIndex==NUM_EXTRUDER && heaterCutoffC>bedLimit_.monitor()
+            ? uint16_t(bedLimit_.monitor()) : heaterCutoffC;
     }
     uint16_t maximumTargetC() const {
-        return pwmIndex==NUM_EXTRUDER ? effectiveCutoffC()-BedTargetMarginC : heaterCutoffC;
+        if(pwmIndex!=NUM_EXTRUDER) return heaterCutoffC;
+        if(!bedLimit_.commissioned()) return 0;
+        const uint16_t ceiling=effectiveCutoffC();
+        return ceiling>BedTargetMarginC ? ceiling-BedTargetMarginC : 0;
     }
+    // Foreground settings owner only. Zero revokes bed permission.
+    bool setBedEmergencyCutoff(uint8_t verifiedCutoff);
+    static uint8_t commissionedBedCutoff() {return bedLimit_.commissioned();}
+private:
+    static BedTemperatureLimit bedLimit_;
+public:
 #else
     uint16_t effectiveCutoffC() const { return heaterCutoffC; }
     uint16_t maximumTargetC() const { return heaterCutoffC; }

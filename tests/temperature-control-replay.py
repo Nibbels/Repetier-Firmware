@@ -32,6 +32,7 @@ HARNESS = r'''
 #include <algorithm>
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
 #include "ThermalEmergency.h"
+#include "BedTemperatureLimit.h"
 // Test transport for actual report calls; no blocking dependency.
 static bool diagnosticTxBlocked=false;
 static unsigned diagnosticLines=0;
@@ -333,6 +334,22 @@ int main(int argc, char** argv) {
         bed.targetTemperatureC=111;
         service();
         assert(!bed.targetTemperatureC&&!HAL::outputDuty(bed.pwmIndex));
+        assert(bed.setBedEmergencyCutoff(90));
+        assert(bed.effectiveCutoffC()==90 && bed.maximumTargetC()==80);
+        bed.setTargetTemperature(80);
+        assert(bed.targetTemperatureC==80);
+        HAL::setHeaterDuty(bed.pwmIndex,255);
+        assert(bed.setBedEmergencyCutoff(0));
+        assert(!bed.targetTemperatureC && !HAL::outputDuty(bed.pwmIndex));
+        assert(bed.effectiveCutoffC()==90 && bed.maximumTargetC()==0);
+        Extruder::setHeatedBedTemperature(100);
+        assert(!bed.targetTemperatureC);
+        assert(!bed.setBedEmergencyCutoff(151));
+        assert(bed.effectiveCutoffC()==90 && bed.maximumTargetC()==0);
+        assert(!c.setBedEmergencyCutoff(120)); // cannot publish via hotend
+        assert(bed.setBedEmergencyCutoff(150));
+        assert(bed.effectiveCutoffC()==150 && bed.maximumTargetC()==140);
+        assert(!bed.targetTemperatureC && !HAL::outputDuty(bed.pwmIndex));
     } else if (!std::strncmp(name,"absolute-",9)) {
         using namespace ThermalEmergency;
         const bool bedCase=std::strcmp(name,"absolute-hotend")!=0;

@@ -596,6 +596,18 @@ void TemperatureController::invalidatePidCalibration() {
     setTargetTemperature(0);
 }
 
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+BedTemperatureLimit TemperatureController::bedLimit_{BedTemperatureLimit::DefaultC};
+bool TemperatureController::setBedEmergencyCutoff(uint8_t verifiedCutoff) {
+    if(pwmIndex!=NUM_EXTRUDER) return false;
+    // Revoke any current target, lease and pending autotune before publishing
+    // a different cutoff or removing authorization. No stale rearming.
+    if(!BedTemperatureLimit::validSetting(verifiedCutoff) ||
+       verifiedCutoff!=bedLimit_.commissioned()) setTargetTemperature(0);
+    return bedLimit_.publish(verifiedCutoff);
+}
+#endif
+
 void TemperatureController::setTargetTemperature(float target) {
     if (!(target >= 0 && target <= maximumTargetC()) || Printer::heatingInhibited())
         target = 0;

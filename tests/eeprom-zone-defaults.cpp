@@ -21,7 +21,7 @@ int main(){
     Memory io;Storage<Memory> store(io,configuredProfile());
     assert(store.initialize(defaults));
     const auto state=store.inspect();
-    assert(state.headerValid && state.masterValid && state.clean && !state.invalid && state.alerts==bit(BedSafety));
+    assert(state.headerValid && state.masterValid && state.clean && !state.invalid && state.alerts==blockBit(BedSafety));
     for(uint8_t id=1;id<=Last;++id){
         const uint8_t n=length(id);
         uint8_t guard[MaxPayload+2];for(auto& b:guard)b=0xa7;
@@ -122,11 +122,11 @@ int main(){
             return true;
         }
     } invalidProvider{defaults};
-    assert(store.commit(bit(Feedrates),invalidProvider));
+    assert(store.commit(blockBit(Feedrates),invalidProvider));
     const auto structural=store.inspect();
     assert(!structural.invalid && structural.masterValid);
-    assert(semanticInvalid(store,structural)==bit(Feedrates));
-    assert(store.repair(bit(Feedrates),defaults));
+    assert(semanticInvalid(store,structural)==blockBit(Feedrates));
+    assert(store.repair(blockBit(Feedrates),defaults));
     assert(!semanticInvalid(store,store.inspect()));
     // Invalid block length and field/overlap are rejected, not a partial
     // provider silently completing an otherwise CRC-valid record.

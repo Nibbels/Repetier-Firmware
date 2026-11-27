@@ -22,7 +22,7 @@ struct Inspection {
     // dependent blocks, calibration and live motion/heater admission.
     bool eligible(uint8_t id) const {
         return id && id <= Last && headerValid && masterValid && clean
-            && alertsValid && !((invalid | uncertain | alerts) & bit(id));
+            && alertsValid && !((invalid | uncertain | alerts) & blockBit(id));
     }
 };
 
@@ -182,7 +182,7 @@ public:
         result.headerValid=true;
         result.invalid=0;
         for(uint8_t id=1;id<=Last;++id)
-            if(!readBlock(id,nullptr,length(id))) result.invalid |= bit(id);
+            if(!readBlock(id,nullptr,length(id))) result.invalid |= blockBit(id);
         result.masterValid=get32(Header::Master)==masterCrc();
         result.alertsValid=pair(Header::Alerts,AllAlerts,result.alerts);
         if(!result.alertsValid) result.alerts=AllAlerts;
@@ -202,9 +202,9 @@ public:
     // First install or explicitly authorized full reset. Never import legacy
     // bytes, never touch spare slots, never automatically commission a bed.
     // Provider signature: bool operator()(uint8_t id,uint8_t* data,uint8_t n).
-    template<class Provider> bool initialize(Provider& source, uint32_t alerts=bit(BedSafety)) {
+    template<class Provider> bool initialize(Provider& source, uint32_t alerts=blockBit(BedSafety)) {
         if(alerts & ~AllAlerts) return false;
-        alerts |= bit(BedSafety);
+        alerts |= blockBit(BedSafety);
         // Invalidating the first signature byte must precede every change.
         if(!put(Header::Magic,0)) return false;
         for(uint8_t i=1;i<8;++i)
@@ -235,16 +235,16 @@ public:
         uint8_t data[MaxPayload];
         uint32_t changed=0;
         for(uint8_t id=1;id<=Last;++id) {
-            if(!(mask & bit(id))) continue;
+            if(!(mask & blockBit(id))) continue;
             const uint8_t n=length(id);
             bool different=false;
             if(!source(id,data,n) || !compareBlock(id,data,n,different)) return false;
-            if(different) changed |= bit(id);
+            if(different) changed |= blockBit(id);
         }
         if(!changed) return true;
         if(!begin(changed)) return false;
         for(uint8_t id=1;id<=Last;++id) {
-            if(!(changed & bit(id))) continue;
+            if(!(changed & blockBit(id))) continue;
             const uint8_t n=length(id);
             if(!source(id,data,n) || !writeBlock(id,data,n)) return false;
         }
@@ -261,13 +261,13 @@ public:
         if(!before.headerValid || (mask & ~Active) || (required & ~mask)) return false;
         if(!mask && before.clean && before.masterValid && before.alertsValid) return true;
         const uint32_t alerts=before.alerts | mask
-            | ((!before.masterValid || !before.clean || !before.alertsValid) ? bit(Admin) : 0);
+            | ((!before.masterValid || !before.clean || !before.alertsValid) ? blockBit(Admin) : 0);
         if(!putPair(Header::Alerts,alerts)) return false;
         if(mask) {
             if(!beginRepair(mask,before.clean)) return false;
             uint8_t data[MaxPayload];
             for(uint8_t id=1;id<=Last;++id) {
-                if(!(mask & bit(id))) continue;
+                if(!(mask & blockBit(id))) continue;
                 const uint8_t n=length(id);
                 if(!defaults(id,data,n)) return false;
                 if(id==BedSafety) data[0]=0; // never restore higher limit

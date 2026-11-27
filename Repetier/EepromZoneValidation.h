@@ -220,9 +220,9 @@ template<class Store> uint32_t semanticInvalid(Store& store,const Inspection& st
     if(!state.headerValid) return mask;
     uint8_t data[MaxPayload];
     for(uint8_t id=1;id<=Last;++id) {
-        if((state.invalid|state.uncertain)&bit(id)) continue;
+        if((state.invalid|state.uncertain)&blockBit(id)) continue;
         const uint8_t n=length(id);
-        if(!store.readBlock(id,data,n) || !validBlock(id,data,n)) mask|=bit(id);
+        if(!store.readBlock(id,data,n) || !validBlock(id,data,n)) mask|=blockBit(id);
     }
     return mask;
 }

@@ -231,17 +231,17 @@ int main() {
     Memory blank;Store blankStore(blank,Profile);assert(!blankStore.inspect().headerValid);
     cuts(blank,[&](Store& s){return s.initialize(factory);},[&](Memory& m,bool done){
         Store s(m,Profile);const auto i=s.inspect();assert(cutoff(s)==0);
-        if(i.headerValid) {assert(i.clean && i.masterValid && !i.invalid && !i.uncertain && i.alerts==bit(BedSafety));}
+        if(i.headerValid) {assert(i.clean && i.masterValid && !i.invalid && !i.uncertain && i.alerts==blockBit(BedSafety));}
         if(done) assert(i.headerValid);
     });
     Memory good=blank;Store g(good,Profile);assert(g.initialize(factory));
-    assert(g.commit(bit(BedSafety),factory));assert(g.acknowledge(bit(BedSafety)));assert(cutoff(g)==120);
+    assert(g.commit(blockBit(BedSafety),factory));assert(g.acknowledge(blockBit(BedSafety)));assert(cutoff(g)==120);
     const auto initial=g.inspect();assert(initial.clean && initial.masterValid && !initial.alerts && !initial.invalid);
     // No-op: exact image and no physical programming.
-    good.resetCounts();assert(g.commit(bit(Geometry)|bit(BedSafety),factory));assert(!good.writes);
+    good.resetCounts();assert(g.commit(blockBit(Geometry)|blockBit(BedSafety),factory));assert(!good.writes);
     const unsigned noOpReads=good.reads;
     assert(noOpReads<300); // no 2048-byte scan
-    const uint32_t pairMask=bit(Geometry)|bit(Extruder0Motion)|bit(BedSafety);
+    const uint32_t pairMask=blockBit(Geometry)|blockBit(Extruder0Motion)|blockBit(BedSafety);
     cuts(good,[&](Store& s){return s.commit(pairMask,changed);},[&](Memory& m,bool done){
         Store s(m,Profile);const auto i=s.inspect();const uint8_t c=cutoff(s);
         assert(i.headerValid);
@@ -254,7 +254,7 @@ int main() {
         if(done) assert(c==90 && !i.invalid && !i.uncertain && i.clean);
         assert(sameBlock(s,Lighting,factory));
     });
-    Memory low=good;Store l(low,Profile);assert(l.commit(bit(BedSafety),changed));assert(cutoff(l)==90);
+    Memory low=good;Store l(low,Profile);assert(l.commit(blockBit(BedSafety),changed));assert(cutoff(l)==90);
     // A single flipped bit anywhere in the defined KiB never raises the
     // committed lower cutoff. Spare bytes/padding are intentionally ignored.
     for(uint16_t p=Base;p<End;++p) for(uint8_t b=0;b<8;++b) {
@@ -265,24 +265,24 @@ int main() {
     // the actual block CRCs before use.
     Memory local=low;local.bytes[address(Lighting)+PayloadOffset]^=1;
     Store ls(local,Profile);auto i=ls.inspect();
-    assert(i.masterValid && i.invalid==bit(Lighting) && i.eligible(BedSafety));
-    cuts(local,[&](Store& s){return s.repair(bit(Lighting),factory);},[&](Memory& m,bool done){
+    assert(i.masterValid && i.invalid==blockBit(Lighting) && i.eligible(BedSafety));
+    cuts(local,[&](Store& s){return s.repair(blockBit(Lighting),factory);},[&](Memory& m,bool done){
         Store s(m,Profile);const auto st=s.inspect();assert(cutoff(s)<=90);
-        if(done) assert(st.clean && st.masterValid && !st.invalid && (st.alerts&bit(Lighting)) && cutoff(s)==90);
+        if(done) assert(st.clean && st.masterValid && !st.invalid && (st.alerts&blockBit(Lighting)) && cutoff(s)==90);
     });
     Memory bad=low;bad.bytes[address(BedSafety)+PayloadOffset]^=1;Store bs(bad,Profile);
-    assert(!bs.commit(bit(BedSafety),factory));assert(cutoff(bs)==0);
-    cuts(bad,[&](Store& s){return s.repair(bit(BedSafety),factory);},[&](Memory& m,bool done){
+    assert(!bs.commit(blockBit(BedSafety),factory));assert(cutoff(bs)==0);
+    cuts(bad,[&](Store& s){return s.repair(blockBit(BedSafety),factory);},[&](Memory& m,bool done){
         Store s(m,Profile);assert(cutoff(s)==0);
-        if(done) {const auto st=s.inspect();assert(st.clean && st.masterValid && !st.invalid && (st.alerts&bit(BedSafety)));}
+        if(done) {const auto st=s.inspect();assert(st.clean && st.masterValid && !st.invalid && (st.alerts&blockBit(BedSafety)));}
     });
     Memory master=low;master.bytes[Header::Master]^=1;Store ms(master,Profile);
     i=ms.inspect();assert(!i.masterValid && !i.invalid && !i.uncertain);
-    assert(ms.repair(0,factory));assert(cutoff(ms)==90 && ms.inspect().alerts==bit(Admin));
-    assert(ms.acknowledge(bit(Admin)));assert(!ms.inspect().alerts);
+    assert(ms.repair(0,factory));assert(cutoff(ms)==90 && ms.inspect().alerts==blockBit(Admin));
+    assert(ms.acknowledge(blockBit(Admin)));assert(!ms.inspect().alerts);
     Memory multi=low;multi.bytes[address(Geometry)+3]^=1;multi.bytes[address(Jerk)+3]^=1;
-    Store mm(multi,Profile);assert(mm.inspect().invalid==(bit(Geometry)|bit(Jerk)));
-    assert(!mm.repair(bit(Geometry),factory));
+    Store mm(multi,Profile);assert(mm.inspect().invalid==(blockBit(Geometry)|blockBit(Jerk)));
+    assert(!mm.repair(blockBit(Geometry),factory));
     cuts(low,[&](Store& s){return s.initialize(factory);},[&](Memory& m,bool done){
         Store s(m,Profile);assert(cutoff(s)<=90);
         if(done) assert(cutoff(s)==0 && s.inspect().headerValid);
@@ -290,8 +290,8 @@ int main() {
     // Wrong board/profile cannot consume even structurally valid settings.
     Store wrong(low,Profile+1);assert(!wrong.inspect().headerValid && cutoff(wrong)==0);
     // Alert acknowledgment may be interrupted; no implicit authorization.
-    Memory pending=bad;Store ps(pending,Profile);assert(ps.repair(bit(BedSafety),factory));
-    cuts(pending,[&](Store& s){return s.acknowledge(bit(BedSafety));},[&](Memory& m,bool){
+    Memory pending=bad;Store ps(pending,Profile);assert(ps.repair(blockBit(BedSafety),factory));
+    cuts(pending,[&](Store& s){return s.acknowledge(blockBit(BedSafety));},[&](Memory& m,bool){
         Store s(m,Profile);assert(cutoff(s)==0);
     });
     // A previous explicit change may have completed all payload/CRC/master
@@ -320,7 +320,7 @@ int main() {
         assert(s.readBlock(BedSafety,&c,1) && c==0);
         const auto after=s.inspect();
         assert(after.clean && after.masterValid && !after.invalid && !after.uncertain);
-        assert(after.alerts&bit(BedSafety));
+        assert(after.alerts&blockBit(BedSafety));
         if(done) assert(st.clean && st.masterValid);
     });
     // Interrupted transaction with fully valid individual payload CRCs is
@@ -340,13 +340,13 @@ int main() {
     assert(recoveryPlan(ls.inspect()).kind==RecoveryKind::Repair);
     assert(recoveryPlan(ms.inspect()).kind==RecoveryKind::None);
     Inspection unresolved=initial;
-    unresolved.clean=false;unresolved.invalid=bit(Geometry)|bit(Jerk);
+    unresolved.clean=false;unresolved.invalid=blockBit(Geometry)|blockBit(Jerk);
     unresolved.uncertain=unresolved.invalid;
     assert(recoveryPlan(unresolved).kind==RecoveryKind::Repair);
     unresolved.uncertain=0;
     assert(recoveryPlan(unresolved).kind==RecoveryKind::Reset);
-    assert(recoveryPlan(initial,bit(Geometry)|bit(Jerk)).kind==RecoveryKind::Reset);
-    assert(recoveryPlan(initial,bit(Geometry)).mask==bit(Geometry));
+    assert(recoveryPlan(initial,blockBit(Geometry)|blockBit(Jerk)).kind==RecoveryKind::Reset);
+    assert(recoveryPlan(initial,blockBit(Geometry)).mask==blockBit(Geometry));
     cuts(multi,[&](Store& s){return recover(s,factory);},[&](Memory& m,bool done){
         Store s(m,Profile);assert(cutoff(s)<=90);
         if(done) {
@@ -358,7 +358,7 @@ int main() {
     });
     Memory reset=multi;Store rs(reset,Profile);assert(recover(rs,factory));
     assert(acknowledgeOrdinary(rs,AllAlerts));
-    assert(rs.inspect().alerts==bit(BedSafety) && cutoff(rs)==0);
+    assert(rs.inspect().alerts==blockBit(BedSafety) && cutoff(rs)==0);
     assert(!commissionBed(rs,39) && !commissionBed(rs,151));
     cuts(reset,[&](Store& s){return commissionBed(s,85);},[&](Memory& m,bool done){
         Store s(m,Profile);assert(cutoff(s)==0 || cutoff(s)==85);

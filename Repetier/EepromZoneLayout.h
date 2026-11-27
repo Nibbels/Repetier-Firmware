@@ -41,9 +41,9 @@ enum Block : uint8_t {
     Usage = 22,
     Last = Usage
 };
-constexpr uint32_t bit(uint8_t id) { return id < 32 ? (uint32_t(1) << id) : 0; }
-constexpr uint32_t Active = (bit(Last+1) - 1) & ~uint32_t(1);
-constexpr uint32_t AllAlerts = Active | bit(Admin);
+constexpr uint32_t blockBit(uint8_t id) { return id < 32 ? (uint32_t(1) << id) : 0; }
+constexpr uint32_t Active = (blockBit(Last+1) - 1) & ~uint32_t(1);
+constexpr uint32_t AllAlerts = Active | blockBit(Admin);
 constexpr uint16_t address(uint8_t id) { return Base + (uint16_t(id) << 5); }
 constexpr uint8_t blockOf(uint16_t pos) { return pos >= Base && pos < End ? uint8_t((pos-Base)>>5) : 255; }
 

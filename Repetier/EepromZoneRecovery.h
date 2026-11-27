@@ -36,7 +36,7 @@ bool recover(Store& store,Defaults& defaults,uint32_t semanticInvalid=0) {
 // bits. The caller must separately validate each other safety dependency.
 template<class Store> bool acknowledgeOrdinary(Store& store,uint32_t mask) {
     if(!mask || (mask & ~AllAlerts)) return false;
-    mask &= ~bit(BedSafety);
+    mask &= ~blockBit(BedSafety);
     return !mask || store.acknowledge(mask);
 }
 // Only the explicitly confirmed cutoff path may call this operation; it
@@ -55,10 +55,10 @@ template<class Store> bool commissionBed(Store& store,uint8_t cutoff) {
             data[0]=cutoff;return true;
         }
     } proposed{cutoff};
-    if(!store.commit(bit(BedSafety),proposed)) return false;
+    if(!store.commit(blockBit(BedSafety),proposed)) return false;
     uint8_t actual=0;
     if(!store.readBlock(BedSafety,&actual,1) || actual!=cutoff) return false;
-    if(before.alerts & bit(BedSafety)) return store.acknowledge(bit(BedSafety));
+    if(before.alerts & blockBit(BedSafety)) return store.acknowledge(blockBit(BedSafety));
     return true;
 }
 }

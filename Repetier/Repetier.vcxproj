@@ -134,6 +134,7 @@
     <ClInclude Include="EepromZoneHostFields.h" />
     <ClInclude Include="EepromZoneHostAccess.h" />
     <ClInclude Include="EepromZoneValidation.h" />
+    <ClInclude Include="BedTemperatureLimit.h" />
     <ClInclude Include="Extruder.h" />
     <ClInclude Include="fastio.h" />
     <ClInclude Include="gcode.h" />

@@ -108,9 +108,15 @@ int main() {
     edit(UI_ACTION_PREHEAT_B_BED,100);
     assert(HAL::eprGetInt16(EPR_RF_PREHEAT_B_BED)==110);
     heatedBedController.maximum=45;
-    assert(EEPROM::readPreheatProfiles());
-    assert(!HAL::eprGetInt16(EPR_RF_PREHEAT_A_BED)&&!HAL::eprGetInt16(EPR_RF_PREHEAT_B_BED));
+    assert(!EEPROM::readPreheatProfiles());
+    assert(HAL::eprGetInt16(EPR_RF_PREHEAT_A_BED)==UI_SET_MIN_HEATED_BED_TEMP);
+    assert(HAL::eprGetInt16(EPR_RF_PREHEAT_B_BED)==110);
+    const auto writes=EEPROM::checksumWrites;
     edit(UI_ACTION_PREHEAT_A_BED,1);
-    assert(!HAL::eprGetInt16(EPR_RF_PREHEAT_A_BED));
+    assert(HAL::eprGetInt16(EPR_RF_PREHEAT_A_BED)==UI_SET_MIN_HEATED_BED_TEMP);
+    assert(EEPROM::checksumWrites==writes);
+    heatedBedController.maximum=0;
+    assert(!EEPROM::readPreheatProfiles());
+    assert(HAL::eprGetInt16(EPR_RF_PREHEAT_B_BED)==110);
 #endif
 }
