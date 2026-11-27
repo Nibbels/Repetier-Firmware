@@ -45,6 +45,7 @@ def prepare(a,b):
     # smooth the historical discontinuity by interpolating across it.
     if min(a[2],b[2])<=0<=max(a[2],b[2]) and a[2]!=b[2]:
         asc=b[2]>a[2]
+        transitions=[]
         for threshold in (0,1):
             lo,hi=0,n+1
             while lo<hi:
@@ -52,8 +53,21 @@ def prepare(a,b):
                 z=point(a,b,m,n)[2]
                 if (z>=threshold if asc else z<threshold):hi=m
                 else:lo=m+1
+            transitions.append(lo)
             for j in (lo-1,lo):
                 if 0<=j<=n:idx.add(j)
+        # Discrete Bresenham may retain z==0 over a broad XY interval.
+        # Plan its own bed+13 polynomial, rather than approximating the
+        # unrelated continuous negative/positive-Z branch.
+        first,last=(transitions[0],transitions[1]-1) if asc else (transitions[1],transitions[0]-1)
+        first=max(0,first);last=min(n,last)
+        if first<last:
+            pa,pb=point(a,b,first,n),point(a,b,last,n)
+            assert pa[2]==pb[2]==0
+            for lo,hi,c,k,bound in g.plan(pa,pb):
+                for j in range(k+1):
+                    t=first+(lo+(hi-lo)*Q(j,k))*(last-first)
+                    idx.add(math.floor(t));idx.add(math.ceil(t))
     indices=sorted(idx)
     return n,[(i,j,target(point(a,b,i,n)),target(point(a,b,j,n))) for i,j in zip(indices,indices[1:])]
 
@@ -64,7 +78,7 @@ def main():
     paths=[(a,b) for a in pts for b in pts]
     paths.extend([((0,3048,200),(3048,3048,190)),((3048,3048,190),(0,3048,200)),
                   ((0,0,-1),(9142,9142,1)),((9142,9142,1),(0,0,-1))])
-    rows=[];samples=0;worst=0;worst_zero=0;opposite=0;maxnet=0
+    rows=[];samples=0;worst=0;worst_zero=0;worst_positive=0;opposite=0;maxnet=0
     for a,b in paths:
         n,chords=prepare(a,b)
         if not n:continue
@@ -76,6 +90,7 @@ def main():
                 c=round_chord(c0,c1,i-lo,hi-lo)
                 e=abs(c-target(p));err=max(err,e)
                 if p[2]<=0:worst_zero=max(worst_zero,e)
+                else:worst_positive=max(worst_positive,e)
                 dz=p[2]-prevz;net=dz+c-previous
                 if net and dz and (net>0)!=(dz>0):opposite+=1
                 maxnet=max(maxnet,abs(net))
@@ -85,7 +100,7 @@ def main():
         worst=max(worst,err)
         rows.append(dict(a=a,b=b,n=n,chords=len(chords),max_error=err))
     out=dict(schema=1,classification="offline integer Bresenham lattice and geometry; sampled error not universal bound",
-             paths=len(rows),samples=samples,max_error_steps=worst,max_error_zero_region=worst_zero,
+             paths=len(rows),samples=samples,max_error_steps=worst,max_error_zero_region=worst_zero,max_error_positive_region=worst_positive,
              max_net_steps_per_primary_sample=maxnet,opposite_net_samples=opposite,
              max_chords=max(x["chords"] for x in rows),rows=rows)
     pathlib.Path(sys.argv[1]).write_text(json.dumps(out,indent=2)+"\n")
