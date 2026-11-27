@@ -60,7 +60,7 @@ def main():
         section(matrix, "long getZMatrixDepth_CurrentXY(", "static void initCompensationMatrix(void) {"),
         pressure[pressure.index("static void serviceSenseOffset("):],
         section(rf, "void handleStartStandby(", "\nvoid outputObject("),
-        section(rf, "void outputObject(bool showerrors)", "\nvoid loopFeatures("),
+        section(rf, "void outputObject(bool showerrors)", "} // outputObject") + "}",
         pause.removeprefix('#include "Repetier.h"\n'),
         idle[idle.index("void IdleStatus::schedule("):],
         stop.removeprefix('#include "Repetier.h"\n#include "GCodeInput.h"\n'),
