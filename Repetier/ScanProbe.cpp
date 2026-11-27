@@ -243,23 +243,33 @@ ProbeProgress ScanProbe::retreat() {
 }
 
 void showAbortScanReason(const void* scanName, ScanAbort reason) {
-    // All scan failures use the same presentation path. Keep the specific
-    // reason and hints until persistent history is actually available.
+    // Explicit flash tables: GCC's automatic switch conversion placed two
+    // pointer tables (80 bytes) in AVR .data. Never spend SRAM on these
+    // immutable diagnostics. All near-flash pointers are audited in CI.
+#define RF_SCAN_TEXT(name, value, code, shortText, hint) \
+    static const char name##_short[] PROGMEM = shortText; \
+    static const char name##_hint[] PROGMEM = hint;
+    RF_SCAN_FAULTS(RF_SCAN_TEXT)
+#undef RF_SCAN_TEXT
+    static const char* const descriptions[][2] PROGMEM = {
+#define RF_SCAN_ROW(name, value, code, shortText, hint) \
+        {name##_short, sizeof(hint)>1?name##_hint:nullptr},
+        RF_SCAN_FAULTS(RF_SCAN_ROW)
+#undef RF_SCAN_ROW
+    };
+    constexpr uint8_t firstReason=uint8_t(ScanAbort::StartPressure);
+    constexpr uint8_t count=sizeof(descriptions)/sizeof(descriptions[0]);
+    static_assert(count==uint8_t(ScanAbort::HeaterTargetChanged)-firstReason+1,
+                  "scan reason catalogue must cover contiguous enum values");
     const void* first = PSTR(UI_TEXT_FAIL);
     const void* second = nullptr;
-    switch (reason) {
-    case ScanAbort::Canceled:
-        first = PSTR(UI_TEXT_SCAN_ABORTED);
-        break;
-#define RF_SCAN_PANEL(name, value, code, shortText, hint) \
-    case ScanAbort::name: \
-        first = PSTR(shortText); \
-        if (sizeof(hint) > 1) second = PSTR(hint); \
-        break;
-    RF_SCAN_FAULTS(RF_SCAN_PANEL)
-#undef RF_SCAN_PANEL
-    default:
-        break;
+    if(reason==ScanAbort::Canceled)first=PSTR(UI_TEXT_SCAN_ABORTED);
+    else {
+        const uint8_t index=uint8_t(uint8_t(reason)-firstReason);
+        if(index<count){
+            first=reinterpret_cast<const void*>(pgm_read_word(&descriptions[index][0]));
+            second=reinterpret_cast<const void*>(pgm_read_word(&descriptions[index][1]));
+        }
     }
     showError(scanName, first, second);
 }
