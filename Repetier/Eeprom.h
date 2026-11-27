@@ -205,6 +205,15 @@ class EEPROM {
 
 public:
     static void init();
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+    // Qualification-only schema switch. No legacy fallback in this build.
+    static bool settingsReady();
+    static bool recoveryPending();
+    static bool acknowledgeRecovery();
+    static bool commissionBedCutoff(uint8_t cutoff);
+    static bool lastOperationSucceeded();
+    static void reportRecovery();
+#endif
     static void initBaudrate();
     // Persisted next-boot setting, not a report of the live UART divisor.
     static long configuredBaudrate() { return configuredBaudrate_; }

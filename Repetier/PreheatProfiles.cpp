@@ -57,6 +57,7 @@ bool PreheatProfiles::adjust(Profile profile, Heater heater, int8_t increment) {
     return true;
 }
 
+#ifndef RF_EEPROM_ZONE_EXPERIMENT
 void EEPROM::writePreheatProfiles() {
     using Profile = PreheatProfiles::Profile;
     const auto a = Printer::preheatProfiles.get(Profile::A);
@@ -90,3 +91,5 @@ void EEPROM::storePreheatProfiles() {
     writePreheatProfiles();
     updateChecksum();
 }
+
+#endif // RF_EEPROM_ZONE_EXPERIMENT

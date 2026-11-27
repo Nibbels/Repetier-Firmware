@@ -18,6 +18,8 @@
 #include "Repetier.h"
 #include "StepExecutor.h"
 
+#ifndef RF_EEPROM_ZONE_EXPERIMENT
+
 // Persisted signature for the existing internal EEPROM layout.
 constexpr uint8_t eepromMagic = 44;
 long EEPROM::configuredBaudrate_ = BAUDRATE;
@@ -1447,3 +1449,5 @@ void EEPROM::writeByte(uint16_t pos, PGM_P text) {
     Com::print((int)HAL::eprGetByte(pos));
     finishReport(pos, text);
 } // writeByte
+
+#endif // RF_EEPROM_ZONE_EXPERIMENT legacy comparison

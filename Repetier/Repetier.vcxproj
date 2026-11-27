@@ -214,6 +214,7 @@
     <ClCompile Include="Eeprom.cpp" />
     <ClCompile Include="EepromZoneAvr.cpp" />
     <ClCompile Include="EepromZoneLive.cpp" />
+    <ClCompile Include="EepromZoneRuntime.cpp" />
     <ClCompile Include="TemperatureControl.cpp" />
     <ClCompile Include="TemperatureSensors.cpp" />
     <ClCompile Include="Extruder.cpp" />
