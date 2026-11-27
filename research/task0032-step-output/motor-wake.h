@@ -10,9 +10,12 @@ class MotorWake {
 public:
     using Mask = uint8_t;
     static constexpr Mask physical = 0x1f; // X,Y,Z,E0,E1; caller filters fitted.
-    // 1ms tick quantization: if assertion falls just before next tick, 26
-    // elapsed ticks still imply >=25 nominal ms. Keep historical physical wait.
-    static constexpr uint32_t settleTicks = 26;
+    // Arduino AVR millis uses 1024us Timer0 overflows with occasional +2ms
+    // increments (fractional correction). 26 reported ms can be only
+    // 24*1024us if wake falls just before the first overflow. 27 reported
+    // ms requires at least 26 overflows, hence >=25*1024us nominal elapsed.
+    // Keep historical physical wait, tolerate late service, no spin.
+    static constexpr uint32_t settleTicks = 27;
     Mask newChannels(Mask requested) const {
         return requested & physical & ~awake_;
     }
