@@ -699,7 +699,13 @@ public:
     static void enableSenseOffsetnow(void);
     static bool needsCMPwait(void);
     static void enableCMPnow(void);
-    static void disableCMPnow(bool wait = false);
+    // Queue tasks must never enter the foreground correction wait.
+    static inline void disableCMPnow() {
+        doHeatBedZCompensation = 0;
+        InterruptProtectedBlock lock;
+        zMotion.requestCorrection(0);
+    }
+    static void disableCMPnow(bool wait);
 
     static void stopPrint();
     static bool checkAbortKeys(void);
