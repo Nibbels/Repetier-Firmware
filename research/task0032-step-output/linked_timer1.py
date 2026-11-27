@@ -22,9 +22,9 @@ def load_interpreter():
         nonlocal source
         assert source.count(old) == 1, old
         source = source.replace(old,new)
-    # ATmega2560 AVRe, 22-bit PC: CALL 5, RCALL/ICALL/EICALL 4, RET/RETI 5.
-    change("self.cy+=4 if op=='call' else 3", "self.cy+=5 if op=='call' else 4")
-    change("self.cy+=4;self.pc=self.popreturn()", "self.cy+=5;self.pc=self.popreturn()")
+    # The archived interpreter already adds one base cycle per instruction:
+    # CALL 1+4=5, RCALL/ICALL/EICALL 1+3=4, RET/RETI 1+4=5.
+    # Preserve these 22-bit PC timings; tested by the synthetic CALL/RET fixture.
     # Capture instruction boundaries, including after final return. No elapsed
     # time injection here. Preserve original instruction semantics otherwise.
     change("pc=self.pc\n            if pc==", "pc=self.pc\n            self.boundary(pc)\n            if pc==")
@@ -78,7 +78,7 @@ def irq_opportunities(cpu,vector):
     out=[]
     prev_sei=False
     for t,pc,i,ocie,sp,depth in cpu.timeline:
-        if i and not prev_sei:
+        if i and not prev_sei and pc!=0x3fffe:
             out.append(t)
         prev_sei=cpu.img.code.get(pc,(0,"",(),None))[1]=="sei"
     return out
@@ -120,6 +120,12 @@ def execute(mod,img,kw,mode,case):
         c.symput("stepperWait",0x9abc,4)
     elif mode=="wait_chunk":
         c.symput("stepperWait",0x19abc,4)
+    if case=="ecmp-extra":
+        # Exact .75 on Q23 grid: force an extra positive pulse at ratio .25;
+        # negative path starts at zero and immediately crosses below zero.
+        import struct
+        if not kw["negative"]:
+            c.symput("Printer::extrusionCompensation",struct.unpack("<I",struct.pack("<f",.75))[0],4,4)
     before=snapshot(c,move,errors,o)
     if mode=="inner":
         # Enter function in the same I-clear state as the caller, but omit wrapper.
@@ -161,7 +167,7 @@ def execute(mod,img,kw,mode,case):
             "calls":c.calls,"before":before,"after":after,
             "instruction_counts":dict(c.hit)}
 
-def cases():
+def cases(board):
     # Component measurements at integer primary rates. Not a planner or actual
     # requested speed execution. Short segments need actual-source planner traces.
     def k(owner,delta,rate,n,phase="cruise",advance=False,ratio=0,zcor=0,tool=0,negative=False,remaining=80):
@@ -183,11 +189,27 @@ def cases():
         yield name+"-"+mode,mode,k(owner,VECTORS[name],9143,2)
     for owner,name,remaining in itertools.product((0,1),("X","XYE","E","Z"),(1,2,4)):
         yield name+"-tail","active",k(owner,VECTORS[name],15238,4,remaining=remaining)
-    # Axis-specific rate controls, configured XY rapid and homing, Z max.
-    # E calibration/max and physical homing sequence are deferred.
-    for owner,name,rate in ((1,"X",22857),(1,"XY",16162),(0,"X",12190),(0,"Z",11520),(1,"Z",11520)):
+    # Configured defaults: XY 152.38 steps/mm, Z 1280, E 280 or 256.
+    # Factory XY travel 150, homing XY 80, Z 9, E 25 mm/s.
+    # Each control is a synthetic prepared profile, not a homing sequence.
+    emax=6400 if board=="RF2000v2" else 7000
+    for owner,name,rate in ((1,"X",22857),(1,"XY",16162),(0,"X",12190),(0,"Z",11520),(1,"Z",11520),(0,"E",emax),(1,"E",emax)):
         for mode in ("active","stoppable"):
             yield name+"-axis-control",mode,k(owner,VECTORS[name],rate,math.ceil(3300/max(512,CLOCK//rate)))
+
+    # Exact floor/ceil quantization cases, straight X with optional base E.
+    # These are isolated at requested cruise rate, NOT achievable planner speeds.
+    for speed,length,extrude in itertools.product((20,60,100),(.5,.2,.1,.05,.025),(False,True)):
+        rate=round(speed*152.38)
+        for steps in sorted({math.floor(length*152.38),math.ceil(length*152.38)}):
+            delta=(steps,0,0,round(steps*.3) if extrude else 0)
+            for n in sorted({1,math.ceil(3300/max(512,CLOCK//rate))}):
+                kw=k(1,delta,rate,n,remaining=steps)
+                yield "segment-%s-%s-%s"%(speed,length,extrude),"active",kw
+                yield "segment-%s-%s-%s"%(speed,length,extrude),"activation",kw
+    for tool in range(2 if board in ("RF2000","RF2000v2") else 1):
+        for advance,negative,ratio in itertools.product((False,True),(False,True),(.25,1.0)):
+            yield "ecmp-extra","active",k(1,VECTORS["E"],emax,2,advance=advance,ratio=ratio,tool=tool,negative=negative)
 
 def main():
     parser=argparse.ArgumentParser()
@@ -218,9 +240,9 @@ def main():
         img=mod.Image(args.archive,board)
         img.step_pins.update({(0x31,1):"DIR_X",(0x31,7):"DIR_Y",(0x10b,1):"DIR_Z",(0x22,6):"DIR_E0",(0x28,3):"DIR_E1"})
         if board=="RF1000":img.step_pins.pop((0x28,3),None)
-        worst={};success=0
+        worst={};success=0;errors=collections.Counter();samples=[]
         with (args.output/(board+".jsonl")).open("w") as f:
-            for case,mode,kw in cases():
+            for case,mode,kw in cases(board):
                 try:
                     row=execute(mod,img,kw,mode,case)
                     success+=1
@@ -229,9 +251,11 @@ def main():
                         worst[mode]={k:row[k] for k in ("case","fixture","exclusive_cycles","max_masked_cycles","stack_bytes_incl_synthetic_return")}
                 except Exception as e:
                     failures+=1
+                    errors[repr(e)]+=1
+                    if len(samples)<8:samples.append({"case":case,"mode":mode,"fixture":kw,"error":repr(e)})
                     row={"case":case,"mode":mode,"fixture":kw,"classification":"unsupported_or_failed","error":repr(e)}
                 f.write(json.dumps(row,separators=(",",":"))+"\n")
-        print(json.dumps({"board":board,"success":success,"worst_mask":worst}),flush=True)
+        print(json.dumps({"board":board,"success":success,"worst_mask":worst,"failed":sum(errors.values()),"error_samples":samples,"top_errors":errors.most_common(5)}),flush=True)
     print("unsupported_or_failed",failures,flush=True)
     return int(bool(failures))
 
