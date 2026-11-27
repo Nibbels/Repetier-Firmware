@@ -1,0 +1,2515 @@
+{
+  "schema": 1,
+  "classification": "isolated linked instruction model, no concurrent IRQ or hardware qualification",
+  "tested_head": "e49d80ed9dfaabf5d85506cc8683aca212fb8c82",
+  "artifacts": [
+    {
+      "id": 45980484164,
+      "artifacts": [
+        {
+          "id": 15189646209,
+          "name": "task0032-step-output-6935d2a8ab6fd9d169fc371d9e6cefebc2cef2c8",
+          "digest": "sha256:89c767a4f6615feb53f0f064c0e1f6747ecade762f58dbf0dc845256b4cc328e",
+          "expired": false
+        }
+      ]
+    },
+    {
+      "id": 45980484165,
+      "artifacts": [
+        {
+          "id": 15189006923,
+          "name": "firmware-evidence-6935d2a8ab6fd9d169fc371d9e6cefebc2cef2c8",
+          "digest": "sha256:2f8994861eac32c10f3de28c31143073cffbd9cf57ba8a8cbd851f661013ff15",
+          "expired": false
+        }
+      ]
+    }
+  ],
+  "rows": {
+    "minimal": {
+      "RF1000": {
+        "matched": 1162,
+        "failed": 0,
+        "mismatch_examples": [],
+        "width_min": {
+          "X:high": 158,
+          "X:low": 83,
+          "X:step_period": 255,
+          "Y:high": 154,
+          "Y:low": 229,
+          "Y:step_period": 398,
+          "E0:high": 48,
+          "E0:low": 32,
+          "E0:step_period": 88,
+          "Z:high": 60,
+          "Z:low": 120,
+          "Z:step_period": 239,
+          "Z:dir_setup": 14
+        },
+        "baseline_width_min": {
+          "X:high": 158,
+          "X:low": 83,
+          "X:step_period": 255,
+          "Y:high": 154,
+          "Y:low": 229,
+          "Y:step_period": 398,
+          "E0:high": 48,
+          "E0:low": 102,
+          "E0:step_period": 156,
+          "Z:high": 60,
+          "Z:low": 120,
+          "Z:step_period": 239,
+          "Z:dir_setup": 6
+        },
+        "short_pulses": 0,
+        "baseline_short_pulses": 0,
+        "short_examples": [],
+        "max_mask": 533,
+        "max_baseline_mask": 848,
+        "worst_mask_examples": [
+          "Eprimary-comp",
+          {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 9143,
+            "n": 2,
+            "phase": "cruise",
+            "advance": true,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": true,
+            "remaining": 80
+          }
+        ],
+        "configured_E_primary": [
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 1,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              1373,
+              601
+            ],
+            "candidate": [
+              1178,
+              406
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 2,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              2015,
+              604
+            ],
+            "candidate": [
+              1625,
+              409
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 1,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              1552,
+              780
+            ],
+            "candidate": [
+              1239,
+              467
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 2,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              2199,
+              783
+            ],
+            "candidate": [
+              1687,
+              470
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 1,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              1555,
+              654
+            ],
+            "candidate": [
+              1360,
+              459
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 2,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              2208,
+              657
+            ],
+            "candidate": [
+              1818,
+              462
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 1,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              1746,
+              845
+            ],
+            "candidate": [
+              1431,
+              530
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 2,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              2404,
+              848
+            ],
+            "candidate": [
+              1890,
+              533
+            ]
+          }
+        ],
+        "baseline_max_mask_by_mode": {
+          "inner": 293,
+          "active": 848,
+          "activation": 521,
+          "stoppable": 233,
+          "idle": 312,
+          "wait": 139,
+          "wait_chunk": 131,
+          "blocked": 408
+        },
+        "max_mask_by_mode": {
+          "inner": 245,
+          "active": 533,
+          "activation": 521,
+          "stoppable": 233,
+          "idle": 312,
+          "wait": 139,
+          "wait_chunk": 131,
+          "blocked": 408
+        }
+      },
+      "RF2000": {
+        "matched": 1170,
+        "failed": 0,
+        "mismatch_examples": [],
+        "width_min": {
+          "X:high": 170,
+          "X:low": 80,
+          "X:step_period": 264,
+          "Y:high": 154,
+          "Y:low": 226,
+          "Y:step_period": 407,
+          "E0:high": 58,
+          "E0:low": 43,
+          "E0:step_period": 109,
+          "Z:high": 57,
+          "Z:low": 100,
+          "Z:step_period": 228,
+          "Z:dir_setup": 11,
+          "E1:high": 61,
+          "E1:low": 45,
+          "E1:step_period": 113
+        },
+        "baseline_width_min": {
+          "X:high": 170,
+          "X:low": 80,
+          "X:step_period": 264,
+          "Y:high": 154,
+          "Y:low": 226,
+          "Y:step_period": 407,
+          "E0:high": 58,
+          "E0:low": 110,
+          "E0:step_period": 174,
+          "Z:high": 57,
+          "Z:low": 100,
+          "Z:step_period": 228,
+          "Z:dir_setup": 3,
+          "E1:high": 61,
+          "E1:low": 116,
+          "E1:step_period": 201
+        },
+        "short_pulses": 0,
+        "baseline_short_pulses": 76,
+        "short_examples": [],
+        "max_mask": 584,
+        "max_baseline_mask": 843,
+        "worst_mask_examples": [
+          "XYE-activation",
+          {
+            "owner": 0,
+            "delta": [
+              100,
+              70,
+              0,
+              30
+            ],
+            "rate": 9143,
+            "n": 2,
+            "phase": "cruise",
+            "advance": false,
+            "ratio": 0,
+            "zcor": 0,
+            "tool": 0,
+            "negative": false,
+            "remaining": 80
+          }
+        ],
+        "configured_E_primary": [
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 1,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              1389,
+              617
+            ],
+            "candidate": [
+              1194,
+              422
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 2,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              2049,
+              620
+            ],
+            "candidate": [
+              1659,
+              425
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 1,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              1588,
+              816
+            ],
+            "candidate": [
+              1276,
+              504
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 2,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              2253,
+              819
+            ],
+            "candidate": [
+              1742,
+              507
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 1,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              1550,
+              649
+            ],
+            "candidate": [
+              1355,
+              454
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 2,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              2200,
+              652
+            ],
+            "candidate": [
+              1810,
+              457
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 1,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              1741,
+              840
+            ],
+            "candidate": [
+              1427,
+              526
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 2,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              2396,
+              843
+            ],
+            "candidate": [
+              1883,
+              529
+            ]
+          }
+        ],
+        "baseline_max_mask_by_mode": {
+          "inner": 311,
+          "active": 843,
+          "activation": 584,
+          "stoppable": 242,
+          "idle": 312,
+          "wait": 139,
+          "wait_chunk": 131,
+          "blocked": 408
+        },
+        "max_mask_by_mode": {
+          "inner": 263,
+          "active": 529,
+          "activation": 584,
+          "stoppable": 242,
+          "idle": 312,
+          "wait": 139,
+          "wait_chunk": 131,
+          "blocked": 408
+        }
+      },
+      "RF2000v2": {
+        "matched": 1170,
+        "failed": 0,
+        "mismatch_examples": [],
+        "width_min": {
+          "X:high": 170,
+          "X:low": 80,
+          "X:step_period": 264,
+          "Y:high": 154,
+          "Y:low": 226,
+          "Y:step_period": 407,
+          "E0:high": 58,
+          "E0:low": 43,
+          "E0:step_period": 109,
+          "Z:high": 57,
+          "Z:low": 100,
+          "Z:step_period": 228,
+          "Z:dir_setup": 11,
+          "E1:high": 61,
+          "E1:low": 45,
+          "E1:step_period": 113
+        },
+        "baseline_width_min": {
+          "X:high": 170,
+          "X:low": 80,
+          "X:step_period": 264,
+          "Y:high": 154,
+          "Y:low": 226,
+          "Y:step_period": 407,
+          "E0:high": 58,
+          "E0:low": 110,
+          "E0:step_period": 174,
+          "Z:high": 57,
+          "Z:low": 100,
+          "Z:step_period": 228,
+          "Z:dir_setup": 3,
+          "E1:high": 61,
+          "E1:low": 116,
+          "E1:step_period": 201
+        },
+        "short_pulses": 0,
+        "baseline_short_pulses": 76,
+        "short_examples": [],
+        "max_mask": 584,
+        "max_baseline_mask": 843,
+        "worst_mask_examples": [
+          "XYE-activation",
+          {
+            "owner": 0,
+            "delta": [
+              100,
+              70,
+              0,
+              30
+            ],
+            "rate": 9143,
+            "n": 2,
+            "phase": "cruise",
+            "advance": false,
+            "ratio": 0,
+            "zcor": 0,
+            "tool": 0,
+            "negative": false,
+            "remaining": 80
+          }
+        ],
+        "configured_E_primary": [
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 6400,
+              "n": 1,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              1389,
+              617
+            ],
+            "candidate": [
+              1194,
+              422
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 6400,
+              "n": 2,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              2049,
+              620
+            ],
+            "candidate": [
+              1659,
+              425
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 6400,
+              "n": 1,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              1588,
+              816
+            ],
+            "candidate": [
+              1276,
+              504
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 6400,
+              "n": 2,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              2253,
+              819
+            ],
+            "candidate": [
+              1742,
+              507
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 6400,
+              "n": 1,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              1550,
+              649
+            ],
+            "candidate": [
+              1355,
+              454
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 6400,
+              "n": 2,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              2200,
+              652
+            ],
+            "candidate": [
+              1810,
+              457
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 6400,
+              "n": 1,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              1741,
+              840
+            ],
+            "candidate": [
+              1427,
+              526
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 6400,
+              "n": 2,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              2396,
+              843
+            ],
+            "candidate": [
+              1883,
+              529
+            ]
+          }
+        ],
+        "baseline_max_mask_by_mode": {
+          "inner": 311,
+          "active": 843,
+          "activation": 584,
+          "stoppable": 242,
+          "idle": 312,
+          "wait": 139,
+          "wait_chunk": 131,
+          "blocked": 408
+        },
+        "max_mask_by_mode": {
+          "inner": 263,
+          "active": 529,
+          "activation": 584,
+          "stoppable": 242,
+          "idle": 312,
+          "wait": 139,
+          "wait_chunk": 131,
+          "blocked": 408
+        }
+      },
+      "RF2000-X44": {
+        "matched": 1162,
+        "failed": 0,
+        "mismatch_examples": [],
+        "width_min": {
+          "X:high": 158,
+          "X:low": 80,
+          "X:step_period": 252,
+          "Y:high": 154,
+          "Y:low": 226,
+          "Y:step_period": 395,
+          "E0:high": 48,
+          "E0:low": 32,
+          "E0:step_period": 88,
+          "Z:high": 57,
+          "Z:low": 100,
+          "Z:step_period": 216,
+          "Z:dir_setup": 11
+        },
+        "baseline_width_min": {
+          "X:high": 158,
+          "X:low": 80,
+          "X:step_period": 252,
+          "Y:high": 154,
+          "Y:low": 226,
+          "Y:step_period": 395,
+          "E0:high": 48,
+          "E0:low": 99,
+          "E0:step_period": 153,
+          "Z:high": 57,
+          "Z:low": 100,
+          "Z:step_period": 216,
+          "Z:dir_setup": 3
+        },
+        "short_pulses": 0,
+        "baseline_short_pulses": 76,
+        "short_examples": [],
+        "max_mask": 528,
+        "max_baseline_mask": 843,
+        "worst_mask_examples": [
+          "Eprimary-comp",
+          {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 9143,
+            "n": 2,
+            "phase": "cruise",
+            "advance": true,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": true,
+            "remaining": 80
+          }
+        ],
+        "configured_E_primary": [
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 1,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              1368,
+              596
+            ],
+            "candidate": [
+              1173,
+              401
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 2,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              2007,
+              599
+            ],
+            "candidate": [
+              1617,
+              404
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 1,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              1547,
+              775
+            ],
+            "candidate": [
+              1234,
+              462
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 2,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              2191,
+              778
+            ],
+            "candidate": [
+              1679,
+              465
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 1,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              1550,
+              649
+            ],
+            "candidate": [
+              1355,
+              454
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 2,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              2200,
+              652
+            ],
+            "candidate": [
+              1810,
+              457
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 1,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              1741,
+              840
+            ],
+            "candidate": [
+              1426,
+              525
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 2,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              2396,
+              843
+            ],
+            "candidate": [
+              1882,
+              528
+            ]
+          }
+        ],
+        "baseline_max_mask_by_mode": {
+          "inner": 290,
+          "active": 843,
+          "activation": 521,
+          "stoppable": 230,
+          "idle": 312,
+          "wait": 139,
+          "wait_chunk": 131,
+          "blocked": 408
+        },
+        "max_mask_by_mode": {
+          "inner": 242,
+          "active": 528,
+          "activation": 521,
+          "stoppable": 230,
+          "idle": 312,
+          "wait": 139,
+          "wait_chunk": 131,
+          "blocked": 408
+        }
+      }
+    },
+    "narrow": {
+      "RF1000": {
+        "matched": 1162,
+        "failed": 0,
+        "mismatch_examples": [],
+        "width_min": {
+          "X:high": 158,
+          "X:low": 83,
+          "X:step_period": 255,
+          "Y:high": 154,
+          "Y:low": 229,
+          "Y:step_period": 398,
+          "E0:high": 50,
+          "E0:low": 32,
+          "E0:step_period": 88,
+          "Z:high": 60,
+          "Z:low": 120,
+          "Z:step_period": 239,
+          "Z:dir_setup": 14
+        },
+        "baseline_width_min": {
+          "X:high": 158,
+          "X:low": 83,
+          "X:step_period": 255,
+          "Y:high": 154,
+          "Y:low": 229,
+          "Y:step_period": 398,
+          "E0:high": 48,
+          "E0:low": 102,
+          "E0:step_period": 156,
+          "Z:high": 60,
+          "Z:low": 120,
+          "Z:step_period": 239,
+          "Z:dir_setup": 6
+        },
+        "short_pulses": 0,
+        "baseline_short_pulses": 0,
+        "short_examples": [],
+        "max_mask": 521,
+        "max_baseline_mask": 848,
+        "worst_mask_examples": [
+          "XYE-activation",
+          {
+            "owner": 0,
+            "delta": [
+              100,
+              70,
+              0,
+              30
+            ],
+            "rate": 9143,
+            "n": 2,
+            "phase": "cruise",
+            "advance": false,
+            "ratio": 0,
+            "zcor": 0,
+            "tool": 0,
+            "negative": false,
+            "remaining": 80
+          }
+        ],
+        "configured_E_primary": [
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 1,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              1373,
+              601
+            ],
+            "candidate": [
+              1180,
+              265
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 2,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              2015,
+              604
+            ],
+            "candidate": [
+              1627,
+              268
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 1,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              1552,
+              780
+            ],
+            "candidate": [
+              1241,
+              277
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 2,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              2199,
+              783
+            ],
+            "candidate": [
+              1689,
+              280
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 1,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              1555,
+              654
+            ],
+            "candidate": [
+              1362,
+              264
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 2,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              2208,
+              657
+            ],
+            "candidate": [
+              1820,
+              267
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 1,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              1746,
+              845
+            ],
+            "candidate": [
+              1433,
+              276
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 2,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              2404,
+              848
+            ],
+            "candidate": [
+              1892,
+              279
+            ]
+          }
+        ],
+        "baseline_max_mask_by_mode": {
+          "inner": 293,
+          "active": 848,
+          "activation": 521,
+          "stoppable": 233,
+          "idle": 312,
+          "wait": 139,
+          "wait_chunk": 131,
+          "blocked": 408
+        },
+        "max_mask_by_mode": {
+          "inner": 233,
+          "active": 428,
+          "activation": 521,
+          "stoppable": 233,
+          "idle": 312,
+          "wait": 139,
+          "wait_chunk": 131,
+          "blocked": 408
+        }
+      },
+      "RF2000": {
+        "matched": 1170,
+        "failed": 0,
+        "mismatch_examples": [],
+        "width_min": {
+          "X:high": 170,
+          "X:low": 80,
+          "X:step_period": 264,
+          "Y:high": 154,
+          "Y:low": 226,
+          "Y:step_period": 407,
+          "E0:high": 60,
+          "E0:low": 43,
+          "E0:step_period": 109,
+          "Z:high": 57,
+          "Z:low": 100,
+          "Z:step_period": 228,
+          "Z:dir_setup": 11,
+          "E1:high": 63,
+          "E1:low": 45,
+          "E1:step_period": 113
+        },
+        "baseline_width_min": {
+          "X:high": 170,
+          "X:low": 80,
+          "X:step_period": 264,
+          "Y:high": 154,
+          "Y:low": 226,
+          "Y:step_period": 407,
+          "E0:high": 58,
+          "E0:low": 110,
+          "E0:step_period": 174,
+          "Z:high": 57,
+          "Z:low": 100,
+          "Z:step_period": 228,
+          "Z:dir_setup": 3,
+          "E1:high": 61,
+          "E1:low": 116,
+          "E1:step_period": 201
+        },
+        "short_pulses": 0,
+        "baseline_short_pulses": 76,
+        "short_examples": [],
+        "max_mask": 584,
+        "max_baseline_mask": 843,
+        "worst_mask_examples": [
+          "XYE-activation",
+          {
+            "owner": 0,
+            "delta": [
+              100,
+              70,
+              0,
+              30
+            ],
+            "rate": 9143,
+            "n": 2,
+            "phase": "cruise",
+            "advance": false,
+            "ratio": 0,
+            "zcor": 0,
+            "tool": 0,
+            "negative": false,
+            "remaining": 80
+          }
+        ],
+        "configured_E_primary": [
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 1,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              1389,
+              617
+            ],
+            "candidate": [
+              1196,
+              272
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 2,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              2049,
+              620
+            ],
+            "candidate": [
+              1661,
+              275
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 1,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              1588,
+              816
+            ],
+            "candidate": [
+              1278,
+              284
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 2,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              2253,
+              819
+            ],
+            "candidate": [
+              1744,
+              287
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 1,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              1550,
+              649
+            ],
+            "candidate": [
+              1357,
+              259
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 2,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              2200,
+              652
+            ],
+            "candidate": [
+              1812,
+              262
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 1,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              1741,
+              840
+            ],
+            "candidate": [
+              1429,
+              271
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 2,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              2396,
+              843
+            ],
+            "candidate": [
+              1885,
+              274
+            ]
+          }
+        ],
+        "baseline_max_mask_by_mode": {
+          "inner": 311,
+          "active": 843,
+          "activation": 584,
+          "stoppable": 242,
+          "idle": 312,
+          "wait": 139,
+          "wait_chunk": 131,
+          "blocked": 408
+        },
+        "max_mask_by_mode": {
+          "inner": 250,
+          "active": 423,
+          "activation": 584,
+          "stoppable": 242,
+          "idle": 312,
+          "wait": 139,
+          "wait_chunk": 131,
+          "blocked": 408
+        }
+      },
+      "RF2000v2": {
+        "matched": 1170,
+        "failed": 0,
+        "mismatch_examples": [],
+        "width_min": {
+          "X:high": 170,
+          "X:low": 80,
+          "X:step_period": 264,
+          "Y:high": 154,
+          "Y:low": 226,
+          "Y:step_period": 407,
+          "E0:high": 60,
+          "E0:low": 43,
+          "E0:step_period": 109,
+          "Z:high": 57,
+          "Z:low": 100,
+          "Z:step_period": 228,
+          "Z:dir_setup": 11,
+          "E1:high": 63,
+          "E1:low": 45,
+          "E1:step_period": 113
+        },
+        "baseline_width_min": {
+          "X:high": 170,
+          "X:low": 80,
+          "X:step_period": 264,
+          "Y:high": 154,
+          "Y:low": 226,
+          "Y:step_period": 407,
+          "E0:high": 58,
+          "E0:low": 110,
+          "E0:step_period": 174,
+          "Z:high": 57,
+          "Z:low": 100,
+          "Z:step_period": 228,
+          "Z:dir_setup": 3,
+          "E1:high": 61,
+          "E1:low": 116,
+          "E1:step_period": 201
+        },
+        "short_pulses": 0,
+        "baseline_short_pulses": 76,
+        "short_examples": [],
+        "max_mask": 584,
+        "max_baseline_mask": 843,
+        "worst_mask_examples": [
+          "XYE-activation",
+          {
+            "owner": 0,
+            "delta": [
+              100,
+              70,
+              0,
+              30
+            ],
+            "rate": 9143,
+            "n": 2,
+            "phase": "cruise",
+            "advance": false,
+            "ratio": 0,
+            "zcor": 0,
+            "tool": 0,
+            "negative": false,
+            "remaining": 80
+          }
+        ],
+        "configured_E_primary": [
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 6400,
+              "n": 1,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              1389,
+              617
+            ],
+            "candidate": [
+              1196,
+              272
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 6400,
+              "n": 2,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              2049,
+              620
+            ],
+            "candidate": [
+              1661,
+              275
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 6400,
+              "n": 1,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              1588,
+              816
+            ],
+            "candidate": [
+              1278,
+              284
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 6400,
+              "n": 2,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              2253,
+              819
+            ],
+            "candidate": [
+              1744,
+              287
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 6400,
+              "n": 1,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              1550,
+              649
+            ],
+            "candidate": [
+              1357,
+              259
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 6400,
+              "n": 2,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              2200,
+              652
+            ],
+            "candidate": [
+              1812,
+              262
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 6400,
+              "n": 1,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              1741,
+              840
+            ],
+            "candidate": [
+              1429,
+              271
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 6400,
+              "n": 2,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              2396,
+              843
+            ],
+            "candidate": [
+              1885,
+              274
+            ]
+          }
+        ],
+        "baseline_max_mask_by_mode": {
+          "inner": 311,
+          "active": 843,
+          "activation": 584,
+          "stoppable": 242,
+          "idle": 312,
+          "wait": 139,
+          "wait_chunk": 131,
+          "blocked": 408
+        },
+        "max_mask_by_mode": {
+          "inner": 250,
+          "active": 423,
+          "activation": 584,
+          "stoppable": 242,
+          "idle": 312,
+          "wait": 139,
+          "wait_chunk": 131,
+          "blocked": 408
+        }
+      },
+      "RF2000-X44": {
+        "matched": 1162,
+        "failed": 0,
+        "mismatch_examples": [],
+        "width_min": {
+          "X:high": 158,
+          "X:low": 80,
+          "X:step_period": 252,
+          "Y:high": 154,
+          "Y:low": 226,
+          "Y:step_period": 395,
+          "E0:high": 50,
+          "E0:low": 32,
+          "E0:step_period": 88,
+          "Z:high": 57,
+          "Z:low": 100,
+          "Z:step_period": 216,
+          "Z:dir_setup": 11
+        },
+        "baseline_width_min": {
+          "X:high": 158,
+          "X:low": 80,
+          "X:step_period": 252,
+          "Y:high": 154,
+          "Y:low": 226,
+          "Y:step_period": 395,
+          "E0:high": 48,
+          "E0:low": 99,
+          "E0:step_period": 153,
+          "Z:high": 57,
+          "Z:low": 100,
+          "Z:step_period": 216,
+          "Z:dir_setup": 3
+        },
+        "short_pulses": 0,
+        "baseline_short_pulses": 76,
+        "short_examples": [],
+        "max_mask": 521,
+        "max_baseline_mask": 843,
+        "worst_mask_examples": [
+          "XYE-activation",
+          {
+            "owner": 0,
+            "delta": [
+              100,
+              70,
+              0,
+              30
+            ],
+            "rate": 9143,
+            "n": 2,
+            "phase": "cruise",
+            "advance": false,
+            "ratio": 0,
+            "zcor": 0,
+            "tool": 0,
+            "negative": false,
+            "remaining": 80
+          }
+        ],
+        "configured_E_primary": [
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 1,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              1368,
+              596
+            ],
+            "candidate": [
+              1175,
+              260
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 2,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              2007,
+              599
+            ],
+            "candidate": [
+              1619,
+              263
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 1,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              1547,
+              775
+            ],
+            "candidate": [
+              1236,
+              272
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 2,
+              "phase": "cruise",
+              "advance": false,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              2191,
+              778
+            ],
+            "candidate": [
+              1681,
+              275
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 1,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              1550,
+              649
+            ],
+            "candidate": [
+              1357,
+              259
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 2,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": false,
+              "remaining": 80
+            },
+            "base": [
+              2200,
+              652
+            ],
+            "candidate": [
+              1812,
+              262
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 1,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              1741,
+              840
+            ],
+            "candidate": [
+              1428,
+              271
+            ]
+          },
+          {
+            "fixture": {
+              "owner": 1,
+              "delta": [
+                40,
+                25,
+                0,
+                100
+              ],
+              "rate": 7000,
+              "n": 2,
+              "phase": "cruise",
+              "advance": true,
+              "ratio": 0.25,
+              "zcor": 4,
+              "tool": 0,
+              "negative": true,
+              "remaining": 80
+            },
+            "base": [
+              2396,
+              843
+            ],
+            "candidate": [
+              1884,
+              274
+            ]
+          }
+        ],
+        "baseline_max_mask_by_mode": {
+          "inner": 290,
+          "active": 843,
+          "activation": 521,
+          "stoppable": 230,
+          "idle": 312,
+          "wait": 139,
+          "wait_chunk": 131,
+          "blocked": 408
+        },
+        "max_mask_by_mode": {
+          "inner": 230,
+          "active": 423,
+          "activation": 521,
+          "stoppable": 230,
+          "idle": 312,
+          "wait": 139,
+          "wait_chunk": 131,
+          "blocked": 408
+        }
+      }
+    }
+  }
+}
