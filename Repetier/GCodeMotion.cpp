@@ -279,8 +279,8 @@ void setStepperCurrent(GCode* com) {
         showInvalidSyntax(com->M);
         return;
     }
-    const uint8_t limits[] = MOTOR_CURRENT_MAX;
-    if (com->S > limits[com->P - 1]) {
+    static const uint8_t limits[] PROGMEM = MOTOR_CURRENT_MAX;
+    if (com->S > pgm_read_byte(&limits[static_cast<uint8_t>(com->P - 1)])) {
         showInvalidSyntax(com->M);
         return;
     }
