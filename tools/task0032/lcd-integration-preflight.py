@@ -38,6 +38,10 @@ void UIDisplay::resetDisplayAfterClear() {
 SERVICE = r'''
 void UIDisplay::serviceDisplay() {
     if(!normalCharacters_ || !lcdTransport_.pending()) return;
+    serviceDisplayPending();
+}
+
+void __attribute__((noinline)) UIDisplay::serviceDisplayPending() {
     bool emergency=false;
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     emergency=Printer::printJob.emergencyLocked();
@@ -104,6 +108,7 @@ def source_changes(root):
     LcdPendingFrame<UI_COLS> lcdTransport_;
     void resetDisplayAfterClear();
     void renderNormalPage();
+    void serviceDisplayPending();
     millis_t lastDisplayCompletedMs_ = 0;
     bool localKeyReady(int action,bool initial,millis_t buttonStart) const;
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
@@ -289,6 +294,7 @@ def test_changes(root):
     void resetDisplayAfterClear(){lcdTransport_.afterClear(displayCache_,HAL::timeInMicroseconds());lastDisplayCompletedMs_=HAL::timeInMilliseconds();}
     void renderNormalPage();
     void serviceDisplay();
+    void serviceDisplayPending();
     void drainDisplay(){
         for(unsigned n=0;lcdTransport_.pending();++n){
             assert(n<8*UI_COLS+1);
