@@ -65,13 +65,27 @@ def fixed_uart(root):
         s = replace_function(s, "void checkBaud(", "void receive()", candidate["CHECK"])
         return once(s, "    checkBaud(57600, false, 16);\n    checkBaud(300, false, 3332);\n    checkBaud(115200, true, 16);", "    checkFixedStartup();")
     edit(tests/"usb-serial.cpp", uart_test)
-    # Check every source consumer; legacy EEPROM address rejection remains
-    # untouched. Neither bootloader nor recovery settings are changed.
-    for p in fw.rglob("*"):
-        if p.is_file() and p.suffix in (".h", ".cpp", ".ino", ".c"):
-            s = p.read_text(encoding="utf-8")
-            assert not re.search(r"\b(?:firmwareSerialBaudrate|serialSetBaudrate)\b", s), p
-            assert not re.search(r"\bUsbSerial::begin\s*\(\s*[^)\s]", s), p
+    # The canonical AVR emergency-report probe embeds a C++ main in Python.
+    # Preserve its real sender, ledger assertions and both heater counts.
+    edit(tests/"thermal-emergency-avr-probe.py", lambda s: once(s,
+        "UsbSerial::begin(115200);", "UsbSerial::begin();"))
+
+
+def check_fixed_uart_consumers(root):
+    # Scan after all transformations: some host fixtures are adapted by
+    # fixed_queue(), and Python replays contain generated C++ call sites.
+    # Historical research and bootloader sources are deliberately not rewritten.
+    stale = re.compile(r"\b(?:firmwareSerialBaudrate|serialSetBaudrate)\b"
+                       r"|\bUsbSerial\s*::\s*begin\s*\(\s*[^)\s]")
+    failures = []
+    for folder in ("Repetier", "tests"):
+        for p in sorted((root/folder).rglob("*")):
+            if p.is_file() and p.suffix in (".h", ".hpp", ".cpp", ".ino", ".c", ".py", ".cc"):
+                for line_no, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
+                    if stale.search(line):
+                        failures.append(f"{p.relative_to(root)}:{line_no}: {line.strip()}")
+    assert not failures, "stale fixed-UART consumers:\n" + "\n".join(failures)
+    print("Fixed UART consumer scan: production and replay sources passed", flush=True)
 
 
 def fixed_queue(root):
@@ -191,6 +205,7 @@ def main():
         fixed_queue(root)
         parser_cleanup(root)
         sqrt_cleanup(root)
+        check_fixed_uart_consumers(root)
         files = []
         import difflib
         diff = []
