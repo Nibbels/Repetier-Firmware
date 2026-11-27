@@ -31,6 +31,9 @@ jobs:
           c++ -std=c++11 -O2 -Wall -Wextra -Werror -I Repetier research/task0032-step-output/candidate-replay.cpp -o "$RUNNER_TEMP/candidate-replay"
           "$RUNNER_TEMP/candidate-replay" | tee "$RUNNER_TEMP/step-output/candidate-replay.txt"
           git grep -n -E 'extrusionCompensation\.|ExtrusionCompensation::|enable[XYZ]Stepper\(|Extruder::enable\(|enabledStepper\[|stepHomeCheck\(|ScanMove' -- Repetier > "$RUNNER_TEMP/step-output/actual-callers.txt"
+      - name: Shared Z correction clock characterization
+        run: |
+          python3 research/task0032-step-output/z-clock-research.py "$RUNNER_TEMP/step-output/z-clock-results.json"
       - name: Fetch canonical evidence for this exact test merge
         shell: bash
         run: |
