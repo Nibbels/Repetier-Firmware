@@ -29,6 +29,7 @@ class Printer {
 public:
     static float maxFeedrate_[4],maxXYJerk_,maxZJerk_;
     static uint32_t maxPrintAccelerationStepsPerSquareSecond_[4],maxTravelAccelerationStepsPerSquareSecond_[4];
+    static float stepsPerMm(uint8_t axis){const float steps[4]={160,160,1280,280};return steps[axis];}
     static float axisMaxFeedrate(uint8_t axis){return maxFeedrate_[axis];}
     static float xyJerkLimit(){return maxXYJerk_;}
     static float zJerkLimit(){return maxZJerk_;}
@@ -77,7 +78,9 @@ def section(s,start,end):
 def define(s,name):
     return re.search(r"^#define\s+"+name+r"\s+[^\n]+",s,re.M)[0]
 def run(args):
-    p=subprocess.run([str(x) for x in args],check=True,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    p=subprocess.run([str(x) for x in args],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    if p.returncode:
+        print(p.stdout[-4000:]);print(p.stderr);p.check_returncode()
     return p.stdout
 def load(name):
     return (FW/name).read_text(encoding="utf-8")
