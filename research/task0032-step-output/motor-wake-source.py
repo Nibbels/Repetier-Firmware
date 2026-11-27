@@ -67,6 +67,7 @@ def apply(fw,here,changes,replace):
     # the explicit suspend and subsequent nonblocking wake retries.
     # Admission/reentrant panel interaction still needs integrated P0 replay.
     p="GCodeMotion.cpp"
+    changes[p]='#include "StepExecutor.h"\n'+get(p)
     edit(p,"void suspendAxes(GCode* com) {\n    millis_t wait = 10000L;",
            """void suspendAxes(GCode* com) {
     if (!Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Resume))
