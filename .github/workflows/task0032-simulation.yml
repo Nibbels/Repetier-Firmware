@@ -40,6 +40,9 @@ jobs:
           grep -q '^TASK0032_UNSUPPORTED_REJECT ' "$out/parser-unsupported-candidate.log"
           python3 tools/task0032/fixed-uart-init.py | tee "$out/fixed-uart-init.log"
           python3 tools/task0032/fixed-queue-capacity.py | tee "$out/fixed-queue-capacity.log"
+          git show "$transport:tools/task0033/loss-replay.py" > "$out/prior-loss-replay.py"
+          python3 tools/task0032/loss-gate-replay.py --prior-replay "$out/prior-loss-replay.py" | tee "$out/loss-gate-replay.log"
+          sha256sum tools/task0032/loss-gate-replay.py "$out/prior-loss-replay.py" >> "$out/source-sha256.txt"
           sha256sum tools/task0032/parser-wire-replay.py tools/task0032/fixed-uart-init.py tools/task0032/fixed-queue-capacity.py >> "$out/source-sha256.txt"
           for test in link-model demand-model queue-model speed-search queue-estimate governor-preview rx-blackout-model rx-service-window; do
             node "tools/task0032/$test.cjs" --self-test
