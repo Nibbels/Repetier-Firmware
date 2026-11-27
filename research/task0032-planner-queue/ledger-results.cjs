@@ -1,7 +1,7 @@
 // Compare actual-source HOST replays. Disabled pacing is a counterfactual,
 // not a proposed production speed policy; arrival schedule is modeled.
 "use strict";
-const fs=require("node:fs"),path=require("node:path"),readline=require("node:readline");
+const fs=require("node:fs"),path=require("node:path"),readline=require("node:readline"),zlib=require("node:zlib");
 const dir=process.argv[2];if(!dir)throw Error("usage: ledger-results.cjs artifact-directory");
 const load=name=>JSON.parse(fs.readFileSync(path.join(dir,name+"summary.json"),"utf8"));
 const key=c=>[c.workload,c.capacity,c.chord,c.requested,c.baud,c.group,c.cap_mode,c.advance].join("/");
@@ -23,7 +23,9 @@ function comparison(before,after){
     return out;
 }
 async function ledger(file) {
-    const lines=readline.createInterface({input:fs.createReadStream(path.join(dir,file)),crlfDelay:Infinity});
+    const p=path.join(dir,file);
+    const input=fs.existsSync(p)?fs.createReadStream(p):fs.createReadStream(p+".gz").pipe(zlib.createGunzip());
+    const lines=readline.createInterface({input,crlfDelay:Infinity});
     const result={snapshots:0,active:0,max_abs_error_ms:0,max_abs_active_error_ms:0,mean_abs_error_ms:0,admissions:0,rebuilds:0,replans:0,empty:0};
     for await(const l of lines){
         const r=JSON.parse(l);
