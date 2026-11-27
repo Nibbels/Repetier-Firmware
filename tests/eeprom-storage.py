@@ -53,6 +53,11 @@ def main():
             flags = ["-DMOTHERBOARD=DEVICE_TYPE_" + model.split("-")[0]]
             if model.endswith("-X44"):
                 flags += ["-DNUM_EXTRUDER=1", "-DEXT0_EXTRUDER_COOLER_PIN=X44_PIN"]
+            default_exe = work / "zone-defaults"
+            subprocess.run(["c++", "-std=c++11", "-O2", "-Wall", "-Wextra", "-Werror",
+                            "-I", str(FW), *flags, str(ROOT / "tests" / "eeprom-zone-defaults.cpp"),
+                            "-o", str(default_exe)], check=True)
+            subprocess.run([str(default_exe)], check=True)
             exe = work / "replay"
             subprocess.run(["c++", "-std=c++17", "-I", str(FW), "-I", str(work),
                             *flags, str(ROOT / "tests" / "eeprom-storage.cpp"),

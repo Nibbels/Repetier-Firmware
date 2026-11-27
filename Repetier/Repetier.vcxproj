@@ -128,6 +128,8 @@
     <ClInclude Include="EepromZoneLayout.h" />
     <ClInclude Include="EepromZoneIntegrity.h" />
     <ClInclude Include="EepromZoneStorage.h" />
+    <ClInclude Include="EepromZoneCodec.h" />
+    <ClInclude Include="EepromZoneDefaults.h" />
     <ClInclude Include="Extruder.h" />
     <ClInclude Include="fastio.h" />
     <ClInclude Include="gcode.h" />
