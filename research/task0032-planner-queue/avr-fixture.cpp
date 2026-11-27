@@ -4,6 +4,7 @@
 #include "MotionPlanner.h"
 #include <limits.h>
 #include "estimator-candidate.h"
+#include "duration-ledger.h"
 
 extern "C" {
 volatile uint8_t phase=0, fixture_id=0, queue_depth=0;
@@ -37,6 +38,38 @@ static float fullSeconds(const PrintLine& m,uint32_t total) {
     if(d) s+=2.0f*d/(RMath::min(float(p.vEnd),peak)+peak);
     return s;
 }
+#ifdef LEDGER_CANDIDATE
+static PlannerEstimateResearch::DurationLedger<MOVE_CACHE_SIZE> durationLedger;
+static uint32_t pendingDuration;
+void researchLedgerHook(PrintLine& m) {
+    auto& q=PrintLine::queue;
+    const uint8_t i=&m-&q.slot(0);
+    const uint32_t units=PlannerEstimateResearch::durationUnits(fullSeconds(m,m.delta[m.primaryAxis]));
+    if(i==q.writeIndex()) pendingDuration=units;
+    else {
+        InterruptProtectedBlock lock;
+        durationLedger.replace(i,units);
+    }
+}
+static float ledgerSeconds(MoveQueue& q) {
+    using L=PlannerEstimateResearch::DurationLedger<MOVE_CACHE_SIZE>;
+    L::Snapshot s;
+    const PrintLine* active;
+    int32_t left=0;
+    {
+        InterruptProtectedBlock lock;
+        s=durationLedger.snapshot(q.readIndex(),q.count()!=0);
+        active=q.active();
+        if(active) left=active->stepsRemaining;
+    }
+    // Same foreground-only stable-slot assumption as remainingMotion().
+    uint32_t tail=0;
+    if(active && left>0 && !(active->flags&(FLAG_QUEUE_TASK|FLAG_WARMUP)))
+        tail=PlannerEstimateResearch::durationUnits(MoveQueue::estimateSeconds(*active,active->delta[active->primaryAxis],left));
+    uint64_t value=0;
+    return L::remaining(s,active!=nullptr,tail,value)?float(value)*.0001f:-1.0f;
+}
+#endif
 enum class Estimate:uint8_t { ExactTimeOnly, Lower, PacedTicks, FastRoot };
 template<Estimate method>
 float estimate(const MoveQueue& q) {
@@ -104,6 +137,9 @@ int main() {
     for(uint8_t f=0;f<8;++f) {
         fixture_id=f;
         q.clear();
+#ifdef LEDGER_CANDIDATE
+        durationLedger.clear();
+#endif
         Printer::extrusionOutput.advanceEnabled_=f==6;
         extruder.advanceL=f==6?100.0f:float(runtime_seed);
         for(uint8_t a=0;a<4;++a) {
@@ -139,7 +175,17 @@ int main() {
             m.setSegmentGeometry(distances);
             mark(1);MotionPlanner::prepareMove(m,distances,requested,q);mark(129);
             mark(2);MotionPlanner::updateLookahead(q);mark(130);
+#ifdef LEDGER_CANDIDATE
+            mark(13);
+            {
+                InterruptProtectedBlock lock;
+                durationLedger.publish(q.writeIndex(),pendingDuration);
+                q.publish(true);
+            }
+            mark(141);
+#else
             q.publish(true);
+#endif
             if(n==0) {
                 auto* active=q.activateFront();
                 active->fixStartAndEndSpeed();
@@ -147,7 +193,23 @@ int main() {
             }
             queue_depth=q.count();
             measure(q);
+#ifdef LEDGER_CANDIDATE
+            mark(12);sink=ledgerSeconds(q);mark(140);
+#endif
         }
+#ifdef LEDGER_CANDIDATE
+        while(q.count()) {
+            queue_depth=q.count();
+            if(!q.active()) q.activateFront();
+            mark(14);
+            {
+                InterruptProtectedBlock lock;
+                durationLedger.retire(q.readIndex());
+                q.retireFront();
+            }
+            mark(142);
+        }
+#endif
     }
     mark(255);
     while(true){}
