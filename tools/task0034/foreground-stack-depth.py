@@ -12,6 +12,7 @@ import hashlib
 import json
 import re
 import zipfile
+from weak_serial_guard import prove_weak_main
 
 BOARDS=("RF1000","RF2000","RF2000v2","RF2000-X44")
 
@@ -71,6 +72,14 @@ def inventory(z,board,canonical=False):
     # startup boot-eye lambda or null. emergencyStop's indirect call is reset.
     boot=next(a for a,n in labels.items() if n.startswith("setupForPrinting()::{lambda()#1}::_FUN"))
     main=next(a for a,n in labels.items() if n=="main")
+    # Re-evaluate the weak Arduino serialEventRun guard in each image.
+    # An unexpected reachable CALL 0 is still an error, not a reset exception.
+    weak_guard_errors=[]
+    try:
+        weak_zero=prove_weak_main(ins,tables,main,target)
+    except (ValueError, KeyError) as exc:
+        weak_zero=set()
+        weak_guard_errors.append(str(exc))
     pending=[main,boot];seen=set();local={};errors=set()
     edges=collections.defaultdict(dict)
     while pending:
@@ -142,6 +151,8 @@ def inventory(z,board,canonical=False):
             else:t=None
             if t is not None:
                 if t==0:
+                    if root==main and pc in weak_zero:
+                        continue
                     if not name(root).startswith(("Commands::emergencyStop","HAL::resetHardware")):
                         errors.add((name(root),hex(pc),"unexpected reset call"))
                     continue
@@ -168,6 +179,8 @@ def inventory(z,board,canonical=False):
         local[root]=peak
     result={"board":board,"tables":len(tables),"functions":len(seen),"edges":len(edges),
             "errors":sorted(errors),"main":hex(main),
+            "provenUnreachableWeakCalls":[hex(pc) for pc in sorted(weak_zero)],
+            "weakGuardDiagnostics":weak_guard_errors,
             "frames":[{"address":hex(a),"name":name(a),"localPeakBytes":d} for a,d in sorted(local.items())],
             "calls":[{"caller":hex(a),"callee":hex(b),
                       "sites":[{"pc":hex(pc),"callerBytes":d} for pc,d in sorted(xs.items())]}
