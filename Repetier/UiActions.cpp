@@ -165,68 +165,25 @@ void UIDisplay::mainSwitchCase(int action) {
         Commands::emergencyStop();
         break;
     }
-    case UI_ACTION_HOME_ALL: {
-        if (PrintLine::hasLines()) {
-            // do not allow homing via the menu while we are printing
-            Com::printFLN(Com::tPrintingIsInProcessError);
-            showError((void*)ui_text_home, (void*)ui_text_operation_denied);
-            break;
-        }
-        if (!isHomingAllowed(NULL, 1)) {
-            break;
-        }
-        exitmenu();
-        Printer::homeAxis(true, true, true);
-        break;
-    }
-    case UI_ACTION_HOME_X: {
-        if (PrintLine::hasLines()) {
-            // do not allow homing via the menu while we are printing
-            if (Printer::debugErrors()) {
-                Com::printFLN(Com::tPrintingIsInProcessError);
-            }
-
-            showError((void*)ui_text_home, (void*)ui_text_operation_denied);
-            break;
-        }
-        if (!isHomingAllowed(NULL, 1)) {
-            break;
-        }
-        exitmenu();
-        Printer::homeAxis(true, false, false);
-        break;
-    }
-    case UI_ACTION_HOME_Y: {
-        if (PrintLine::hasLines()) {
-            // do not allow homing via the menu while we are printing
-            if (Printer::debugErrors()) {
-                Com::printFLN(Com::tPrintingIsInProcessError);
-            }
-
-            showError((void*)ui_text_home, (void*)ui_text_operation_denied);
-            break;
-        }
-        if (!isHomingAllowed(NULL, 1)) {
-            break;
-        }
-        exitmenu();
-        Printer::homeAxis(false, true, false);
-        break;
-    }
+    case UI_ACTION_HOME_ALL:
+    case UI_ACTION_HOME_X:
+    case UI_ACTION_HOME_Y:
     case UI_ACTION_HOME_Z: {
+        const bool all = action == UI_ACTION_HOME_ALL;
         if (PrintLine::hasLines()) {
-            // do not allow homing via the menu while we are printing
-            if (Printer::debugErrors()) {
+            // Preserve unconditional host notice for HOME_ALL and the
+            // existing debug-controlled notices for individual axes.
+            if (all || Printer::debugErrors())
                 Com::printFLN(Com::tPrintingIsInProcessError);
-            }
             showError((void*)ui_text_home, (void*)ui_text_operation_denied);
             break;
         }
-        if (!isHomingAllowed(NULL, 1)) {
+        if (!isHomingAllowed(NULL, 1))
             break;
-        }
         exitmenu();
-        Printer::homeAxis(false, false, true);
+        Printer::homeAxis(all || action == UI_ACTION_HOME_X,
+                          all || action == UI_ACTION_HOME_Y,
+                          all || action == UI_ACTION_HOME_Z);
         break;
     }
     case UI_ACTION_DEBUG_ECHO: {
