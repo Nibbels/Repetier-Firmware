@@ -30,6 +30,11 @@ def window(groups, name, mask):
         if (read[1:] == ("lds", f"{reg}, 0x0108") and
             modify[1:] == ("ori", f"{reg}, 0x{mask:02x}") and
             write[1:] == ("sts", f"0x0108, {reg}")):
+            if name.startswith("lcdWriteByte") and any(
+                    entry[1] in ("cli", "call", "rcall", "icall", "eicall")
+                    or (entry[1] == "out" and entry[2].startswith("0x3f,"))
+                    for entry in ops[:i]):
+                raise ValueError("interrupt context changed before LCD write; inspect control flow")
             return read[0], write[0], int(modify[2].split(",")[1], 16)
     raise ValueError(f"re-audit {name}: expected PORTK sequence missing")
 
