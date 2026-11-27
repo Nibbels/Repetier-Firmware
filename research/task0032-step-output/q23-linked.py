@@ -44,7 +44,7 @@ def modify(dst,tag):
         s=replace(s,"                        Extruder::unstep();\n                        Printer::extrusionCompensation.consumeExtraStep(forward);\n                        Extruder::step();",
                   "                        Extruder::unstep();\n                        Printer::extrusionCompensation.consumeExtraStep(forward);\n                        __builtin_avr_delay_cycles(31);\n                        Extruder::step();\n                        __builtin_avr_delay_cycles(31);")
         changes[p]=s
-    if tag in ("minimal","narrow","wake"):
+    if tag in ("minimal","narrow","wake","jog","wake-jog"):
         # Owner prefers simple fixed margin. Raw linked E-low minimum was
         # 30 cycles; add two cycles only at the ECMP extra-low transition.
         # Avoid adding 31 cycles to already sufficient HIGH phases.
@@ -56,7 +56,7 @@ def modify(dst,tag):
         p="ZMotion.cpp";s=(FW/p).read_text()
         changes[p]=replace(s,"    if (directionIsPositive() != positive)\n        setDirection(positive);\n    const int8_t direction",
                            "    if (directionIsPositive() != positive) {\n        setDirection(positive);\n        __builtin_avr_delay_cycles(2);\n    }\n    const int8_t direction")
-    if tag in ("narrow","wake"):
+    if tag in ("narrow","wake","jog","wake-jog"):
         # Exploratory queue-only mask split. E output transaction and
         # Z/tail masks unchanged. Queue's Timer1-private XY phase/position
         # no longer globally masked. Direct (including PWM key release)
@@ -71,10 +71,49 @@ def modify(dst,tag):
         xy=xy.replace("                HAL::forbidInterrupts();","                if (!forQueue) HAL::forbidInterrupts();")
         s=s[:start]+"        if (forQueue) HAL::allowInterrupts();\n\n"+xy+"        if (forQueue) HAL::forbidInterrupts();\n\n"+s[end:]
         changes[p]=s
-    if tag=="wake":
+    if tag in ("wake","wake-jog"):
         spec=importlib.util.spec_from_file_location("wake_source",HERE/"motor-wake-source.py")
         wake_source=importlib.util.module_from_spec(spec);spec.loader.exec_module(wake_source)
         wake_source.apply(FW,HERE,changes,replace)
+    if tag in ("jog","wake-jog"):
+        # PWM key release is a real nested writer of the direct remaining
+        # counter. On AVR a 32-bit read is not atomic. Keep only the reads
+        # masked, never the surrounding ramp math or direction setup.
+        p="StepExecutor.h"
+        changes[p]=replace(changes.get(p,(FW/p).read_text()),
+            "nextStepSpeed(PrintLine& move, StepClock& clock, uint8_t pulses, uint32_t interval);",
+            "nextStepSpeed(PrintLine& move, StepClock& clock, uint8_t pulses, uint32_t interval, int32_t remaining);")
+        p="StepExecutor.cpp";s=changes[p]
+        s=replace(s,"nextStepSpeed(PrintLine& move, StepClock& clock, uint8_t pulses, uint32_t interval) {",
+                    "nextStepSpeed(PrintLine& move, StepClock& clock, uint8_t pulses, uint32_t interval, int32_t remaining) {")
+        s=replace(s,"if (move.stepsRemaining > static_cast<int32_t>(stepProfile.decelSteps))",
+                    "if (remaining > static_cast<int32_t>(stepProfile.decelSteps))")
+        s=replace(s,"""    HAL::allowInterrupts();
+    fast8_t max_loops = stepsPerTimerCall;
+    if (move->stepsRemaining < max_loops)
+        max_loops = move->stepsRemaining;
+    HAL::forbidInterrupts();""",
+                    """    if (forQueue) HAL::allowInterrupts();
+    else HAL::forbidInterrupts();
+    fast8_t max_loops = stepsPerTimerCall;
+    const int32_t remainingBefore = move->stepsRemaining;
+    if (remainingBefore < max_loops)
+        max_loops = remainingBefore;
+    HAL::forbidInterrupts();""")
+        s=replace(s,"""    HAL::allowInterrupts(); // Allow interrupts for other types, timer1 is still disabled
+
+    const speed_t v = nextStepSpeed(*move, stepClocks[forQueue], max_loops, stepIntervalTicks);""",
+                    """    // Direct counter is shared with PWM fastAction. Running stop only
+    // shortens it to 32, so a coherent older snapshot can delay braking
+    // recognition until the next group but cannot falsely finish a move.
+    if (forQueue) HAL::allowInterrupts();
+    const int32_t remainingAfter = move->stepsRemaining;
+    if (!forQueue) HAL::allowInterrupts();
+
+    const speed_t v = nextStepSpeed(*move, stepClocks[forQueue], max_loops, stepIntervalTicks, remainingAfter);""")
+        s=replace(s,"if (move->stepsRemaining <= 0 || move->isNoMove())",
+                    "if (remainingAfter <= 0 || move->isNoMove())")
+        changes[p]=s
     diff=[]
     for p,s in changes.items():
         old=(FW/p).read_text() if (FW/p).is_file() else ""
@@ -139,7 +178,7 @@ def compare(archive,baseline,out,tag):
     mod=lt.load_interpreter()
     result={}
     for b in lt.BOARDS:
-        img=mod.Image(archive,b);img.q23=True;img.wake=tag=="wake"
+        img=mod.Image(archive,b);img.q23=True;img.wake=tag in ("wake","wake-jog")
         img.step_pins.update({(0x31,1):"DIR_X",(0x31,7):"DIR_Y",(0x10b,1):"DIR_Z",(0x22,6):"DIR_E0",(0x28,3):"DIR_E1"})
         if b=="RF1000":img.step_pins.pop((0x28,3),None)
         rows=[json.loads(l) for l in (baseline/(b+".jsonl")).read_text().splitlines()]
@@ -225,7 +264,7 @@ def main():
     p.add_argument("--out",type=pathlib.Path,required=True)
     p.add_argument("--tools",type=pathlib.Path)
     p.add_argument("--reuse",type=pathlib.Path,help="reuse exact prior raw/guarded candidate.zip archives")
-    p.add_argument("--variant",choices=("raw","guarded","minimal","narrow","wake"),action="append")
+    p.add_argument("--variant",choices=("raw","guarded","minimal","narrow","wake","jog","wake-jog"),action="append")
     args=p.parse_args()
     args.out.mkdir(parents=True,exist_ok=True)
     all_results={}
@@ -252,6 +291,6 @@ def main():
             assert s["failed"]==0,(variant,board,s["mismatch_examples"])
             # The historical guarded comparator did not fix inherited
             # Z direction setup. Retain the finding, not a shipping pass.
-            if variant in ("minimal","narrow","wake"):assert s["short_pulses"]==0,(board,s["short_examples"])
+            if variant in ("minimal","narrow","wake","jog","wake-jog"):assert s["short_pulses"]==0,(board,s["short_examples"])
             if variant=="guarded":assert s["short_pulses"]<=s["baseline_short_pulses"],(board,s["short_examples"])
 if __name__=="__main__":main()
