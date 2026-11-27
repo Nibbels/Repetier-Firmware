@@ -30,8 +30,9 @@ def check():
           12:(2,'breq','0x12'),14:(4,'call','0x0'),18:(2,'ret','')}
     assert prove_weak_main(word,{},2,target)=={14}
     for pc,insn in [(4,(2,'ldi','r29, 0x01')),(4,(2,'lds','r29, 0x01')),
-                    (10,(2,'sbiw','r28, 0x01')),(6,(4,'jmp','0xe'))]:
+                    (10,(2,'sbiw','r28, 0x01')),(6,(4,'jmp','0xe')),
+                    (6,(4,'ld','r24, Y+')),(6,(4,'st','-Y, r24'))]:
         bad=dict(word);bad[pc]=insn
         assert not prove_weak_main(bad,{},2,target)
 check()
-print("Task0034 weak callback guard: two valid and ten rejected CFGs PASS")
+print("Task0034 weak callback guard: two valid and twelve rejected CFGs PASS")

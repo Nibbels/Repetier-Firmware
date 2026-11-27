@@ -37,6 +37,10 @@ def zero_transfer(op,arg,mask,phase):
         if a:setbit(t[0],False)
     elif op not in ('cp','cpc','cpi','cpse','tst','sbrc','sbrs','sbic','sbis','st','std','sts','out','sbi','cbi','nop','push','ret','reti','jmp','rjmp','ijmp','eijmp','break','cli','sei','wdr','bset','bclr','clc','sec','clt','set','bst') and not op.startswith('br'):
         mask=0
+    # Y auto-increment/decrement changes the address pair even when a
+    # different destination register is loaded (or the operation is a store).
+    if op in ('ld','st') and any(x in ('Y+','-Y') for x in t):
+        mask &= ~24
     return mask,0
 
 def prove_weak_main(ins,tables,main,target):
