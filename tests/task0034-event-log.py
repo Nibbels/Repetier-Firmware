@@ -447,5 +447,5 @@ with tempfile.TemporaryDirectory() as d:
     exe=Path(d)/"event-log"
     p.write_text(source)
     subprocess.run(["c++","-std=c++11","-O2","-Wall","-Wextra","-Werror","-I",
-                    str(root/"Repetier"),"-I",str(root/"Repetier"),str(p),"-o",str(exe)],check=True)
+                    str(root/"Repetier"),str(p),"-o",str(exe)],check=True)
     subprocess.run([str(exe)],check=True)
