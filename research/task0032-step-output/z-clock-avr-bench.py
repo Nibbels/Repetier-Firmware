@@ -60,8 +60,9 @@ int main() {
             const auto fp=fast.plan(err,limits);
             sink=fp.interval+fp.nextLevel;
             mark(131);
-            require(fp.sign==plan.sign&&fp.nextLevel==plan.nextLevel&&fp.safetyRestart==plan.safetyRestart&&fp.interval>=plan.interval);
-            require(fp.boundarySpeed==root(limits.twiceAcceleration*fp.nextLevel));
+            if(!(fp.sign==plan.sign&&fp.nextLevel==plan.nextLevel&&fp.safetyRestart==plan.safetyRestart)){mark(240);require(false);}
+            if(fp.interval<plan.interval){mark(241);require(false);}
+            if(fp.boundarySpeed!=root(limits.twiceAcceleration*fp.nextLevel)){mark(242);require(false);}
             fast.commit(fp);ramp.commit(plan);
         }
         queue_depth=32;
@@ -92,7 +93,14 @@ def main():
     hal=(HERE.parents[1]/"Repetier/HAL.cpp").read_text()
     begin=hal.index("uint16_t HAL::integerSqrt(")
     end=hal.index("} // CPUDivU2",begin)+len("} // CPUDivU2")
-    (d/"actual-hal-math.inc").write_text(hal[begin:end])
+    math=hal[begin:end]
+    # The historic inline asm rotates/subtracts every byte of a in place
+    # but declared a input-only. Under LTO a caller may reuse corrupted
+    # registers for the floor correction. Test the minimal ABI fix.
+    old=': "=r"(b)\\n        : "r"(a)\\n        : "r18", "r19", "r27", "r26");'
+    new=': "=r"(b), "+r"(a)\\n        :\\n        : "r18", "r19", "r27", "r26", "cc");'
+    assert math.count(old)==1
+    (d/"actual-hal-math.inc").write_text(math.replace(old,new))
     elf=d/"z-clock.elf"
     flags=["-mmcu=atmega2560","-DF_CPU=16000000UL","-std=gnu++11","-Os","-flto","-ffunction-sections","-fdata-sections","-fno-exceptions","-Wl,--gc-sections"]
     run([cc,*flags,"-I"+str(HERE),src,"-Wl,-Map="+str(d/"z-clock.map"),"-o",elf])
@@ -104,11 +112,13 @@ def main():
     runner=d/"runner";run(["cc","-O2",a.runner_source,"-lsimavr","-lelf","-o",runner])
     trace=run([runner,elf,*[hex(syms[k]) for k in ("phase","fixture_id","queue_depth")]])
     (d/"markers.csv").write_text(trace)
+    (d/"disassembly.txt").write_text(run([cc.with_name("avr-objdump"),"-d","-C","-z",elf]))
+    (d/"size.txt").write_text(run([cc.with_name("avr-size"),"-A",elf]))
     records=[];pending=None;done=False
     for line in trace.splitlines():
         if not line.startswith("E,"):continue
         _,t,f,i,mark=line.split(",");t,f,i,mark=map(int,(t,f,i,mark))
-        if mark==254:raise ValueError((f,i))
+        if mark>=240 and mark!=255:raise ValueError((f,i,mark))
         if mark==255:done=True;break
         if mark<128:
             assert pending is None;pending=(t,f,i,mark)
