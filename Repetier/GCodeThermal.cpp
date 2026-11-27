@@ -301,14 +301,19 @@ void setMainsOutput(GCode* pCommand) {
 #endif
 
 static bool prepareFilamentProgram() {
+    if (!Printer::printJob.canBeginFilamentService() || isAnyScanRunning()) {
+        Com::printFLN(PSTR("Filament program requires idle print job and no scan"));
+        return false;
+    }
     if (!Extruder::current->tempControl.pidCalibrationValid()) {
         Com::printFLN(PSTR("Error: PID tune required before filament service"));
         return false;
     }
-    if (Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Cancel)) {
-        Printer::printJob.beginFilamentService();
+    // The periodic pump can change admission while waiting. The program
+    // must actually acquire ownership before touching the E coordinate.
+    if (Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Cancel) &&
+        !isAnyScanRunning() && Printer::printJob.beginFilamentService())
         return true;
-    }
     Com::printFLN(PSTR("Filament program requires settled, unpaused motion"));
     return false;
 }

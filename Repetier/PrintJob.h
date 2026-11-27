@@ -40,9 +40,12 @@ public:
             phase_ = Phase::Idle;
     }
 
-    void beginFilamentService() {
-        if (phase_ == Phase::Idle)
-            phase_ = Phase::FilamentService;
+    bool canBeginFilamentService() const { return phase_ == Phase::Idle; }
+    bool beginFilamentService() {
+        if (!canBeginFilamentService())
+            return false;
+        phase_ = Phase::FilamentService;
+        return true;
     }
     void finishFilamentService() {
         if (phase_ == Phase::FilamentService)

@@ -299,7 +299,7 @@ void UIDisplay::executeCommandAction(int action) {
     case UI_ACTION_MOUNT_FILAMENT_HARD:
     case UI_ACTION_UNMOUNT_FILAMENT_SOFT:
     case UI_ACTION_UNMOUNT_FILAMENT_HARD: {
-        if (GCodeInput::flashScriptActive())
+        if (GCodeInput::flashScriptActive() || !Printer::printJob.canBeginFilamentService() || isAnyScanRunning())
             break;
         Printer::idleStatus.cancel();
         while (Printer::checkAbortKeys()) {
@@ -308,6 +308,8 @@ void UIDisplay::executeCommandAction(int action) {
             if(Printer::printJob.emergencyLocked())return;
 #endif
         }
+        if (!Printer::printJob.canBeginFilamentService() || isAnyScanRunning())
+            break;
         bool unmount = (action == UI_ACTION_UNMOUNT_FILAMENT_SOFT || action == UI_ACTION_UNMOUNT_FILAMENT_HARD);
         exitmenu();
 
