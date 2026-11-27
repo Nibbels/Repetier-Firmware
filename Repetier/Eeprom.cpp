@@ -494,9 +494,6 @@ void EEPROM::restoreEEPROMSettingsFromConfiguration() {
     Printer::pressureProtection.setPauseLimits({EMERGENCY_PAUSE_DIGITS_MIN, EMERGENCY_PAUSE_DIGITS_MAX});
     Printer::pressureProtection.setStopLimits({EMERGENCY_STOP_DIGITS_MIN, EMERGENCY_STOP_DIGITS_MAX});
 
-#ifdef RGB_LIGHT_R_PIN
-    RgbLighting::restoreMode(RGB_MODE_AUTOMATIC);
-#endif // RGB_LIGHT_R_PIN
 
     static const unsigned short uMotorCurrentUse[] PROGMEM = MOTOR_CURRENT_NORMAL; //Standardwert
     for (uint8_t stp = 0; stp < 3 + NUM_EXTRUDER; stp++) {          //0..4 bei 5 steppern.
@@ -601,9 +598,6 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
 
     HAL::eprSetByte(EPR_RF_CASE_LIGHT_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::CaseLight));
 
-#ifdef RGB_LIGHT_R_PIN
-    HAL::eprSetByte(EPR_RF_RGB_LIGHT_MODE, RgbLighting::mode());
-#endif // RGB_LIGHT_R_PIN
 
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
     HAL::eprSetByte(EPR_RF_FET1_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::Fet1));
@@ -918,9 +912,6 @@ void EEPROM::readDataFromEEPROM() {
 
     AccessoryOutputs::stage(AccessoryOutputs::Output::CaseLight, HAL::eprGetByte(EPR_RF_CASE_LIGHT_MODE));
 
-#ifdef RGB_LIGHT_R_PIN
-    RgbLighting::restoreMode(HAL::eprGetByte(EPR_RF_RGB_LIGHT_MODE));
-#endif // RGB_LIGHT_R_PIN
 
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
     AccessoryOutputs::stage(AccessoryOutputs::Output::Fet1, HAL::eprGetByte(EPR_RF_FET1_MODE));
@@ -1220,21 +1211,6 @@ void saveLegacyFloat(uint16_t pos,float value) {
     HAL::eprSetFloat(pos,value);
     EEPROM::updateChecksum();
 }
-}
-void EEPROM::storeRgbMode(uint8_t mode) {saveLegacyByte(EPR_RF_RGB_LIGHT_MODE,mode);}
-void EEPROM::storeRgbColor(uint8_t profile,uint8_t channel,uint8_t level) {
-    if(channel>=3)return;
-    uint16_t pos;
-    // Canonical profile order matches the new zone codec.
-    switch(profile) {
-    case 0:pos=EPR_RF_RGB_PRINTING_R;break;
-    case 1:pos=EPR_RF_RGB_HEATING_R;break;
-    case 2:pos=EPR_RF_RGB_COOLING_R;break;
-    case 3:pos=EPR_RF_RGB_IDLE_R;break;
-    case 4:pos=EPR_RF_RGB_MANUAL_R;break;
-    default:return;
-    }
-    saveLegacyByte(pos+channel,level);
 }
 void EEPROM::storeFanDivisor(uint8_t divisor) {saveLegacyByte(EPR_RF_PART_FAN_SPEED,divisor);}
 void EEPROM::storeFanDuty(bool maximum,uint8_t duty) {saveLegacyByte(maximum?EPR_RF_PART_FAN_PWM_MAX:EPR_RF_PART_FAN_PWM_MIN,duty);}

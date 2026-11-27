@@ -73,25 +73,9 @@ have problems with other modules using the eeprom */
 #define EPR_RF_230V_OUTPUT_MODE 1002
 // 1016 is reserved for the former RF1000 endstop setting.
 #define EPR_RF_HOTEND_TYPE 1017 //depreached 30 07 2017 Nibbels : Die Funktion war nur für RF1000, nur Single, in der Falschen Klasse, wenn nötig, dann in Class Extruder einbauen. Hat beim RF2000 keiner vermisst: Ersatz ist EPR_EXTRUDER_SENSOR_TYPE
-#define EPR_RF_RGB_LIGHT_MODE 1019
 #define EPR_RF_FET1_MODE 1020
 #define EPR_RF_FET2_MODE 1021
 #define EPR_RF_FET3_MODE 1022
-#define EPR_RF_RGB_PRINTING_R 1023
-#define EPR_RF_RGB_PRINTING_G 1024
-#define EPR_RF_RGB_PRINTING_B 1025
-#define EPR_RF_RGB_HEATING_R 1026
-#define EPR_RF_RGB_HEATING_G 1027
-#define EPR_RF_RGB_HEATING_B 1028
-#define EPR_RF_RGB_COOLING_R 1029
-#define EPR_RF_RGB_COOLING_G 1030
-#define EPR_RF_RGB_COOLING_B 1031
-#define EPR_RF_RGB_IDLE_R 1032
-#define EPR_RF_RGB_IDLE_G 1033
-#define EPR_RF_RGB_IDLE_B 1034
-#define EPR_RF_RGB_MANUAL_R 1035
-#define EPR_RF_RGB_MANUAL_G 1036
-#define EPR_RF_RGB_MANUAL_B 1037
 #define EPR_RF_Z_OFFSET 1038
 #define EPR_RF_MOVE_MODE_X 1042
 #define EPR_RF_MOVE_MODE_Y 1043
@@ -240,8 +224,6 @@ public:
     static void storeDigitCompensation(bool enabled);
     static void storeSenseAutoStart(bool enabled);
     static void storeScanPoint(uint8_t x,uint8_t y,bool saveX,bool saveY);
-    static void storeRgbMode(uint8_t mode);
-    static void storeRgbColor(uint8_t profile,uint8_t channel,uint8_t level);
     static void storeFanDivisor(uint8_t divisor);
     static void storeFanDuty(bool maximum,uint8_t duty);
     static void storeToolOffsets(uint8_t tool,float x,float y,bool saveX,bool saveY);

@@ -6,7 +6,6 @@
 #include "EepromZoneCodec.h"
 #include "ManualMotion.h"
 #include "DisplayModes.h"
-#include "RgbLighting.h"
 #include <math.h>
 #include <stddef.h>
 
@@ -255,15 +254,7 @@ public:
 #else
             w.u8(Field::F_RF_FET1_MODE,0);w.u8(Field::F_RF_FET2_MODE,0);w.u8(Field::F_RF_FET3_MODE,0);
 #endif
-#ifdef RGB_LIGHT_R_PIN
-            w.u8(Field::F_RF_RGB_LIGHT_MODE,RGB_LIGHT_DEFAULT_MODE);
-            const uint8_t colors[]={RGB_PRINTING_R,RGB_PRINTING_G,RGB_PRINTING_B,
-                RGB_HEATING_R,RGB_HEATING_G,RGB_HEATING_B,RGB_COOLING_R,RGB_COOLING_G,
-                RGB_COOLING_B,RGB_IDLE_R,RGB_IDLE_G,RGB_IDLE_B,RGB_MANUAL_R,RGB_MANUAL_G,RGB_MANUAL_B};
-#else
-            w.u8(Field::F_RF_RGB_LIGHT_MODE,0);const uint8_t colors[15]={};
-#endif
-            w.bytes(Field::F_RF_RGB_PRINTING_R,colors,15);break;
+            break;
         }
 #define RF_FACTORY_PartFan(X) \
             X(uint8_t,F_RF_FAN_MODE,0) \

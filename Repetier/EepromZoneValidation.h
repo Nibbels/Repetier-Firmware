@@ -8,7 +8,6 @@
 #include "EepromZoneStorage.h"
 #include "ManualMotion.h"
 #include "DisplayModes.h"
-#include "RgbLighting.h"
 #include <math.h>
 #include <float.h>
 
@@ -204,11 +203,6 @@ inline bool validBlock(uint8_t id,const uint8_t* data,uint8_t n) {
             && d.u8(Field::F_RF_FET3_MODE)<=((FET3>=0 && CASE_FAN_PIN<0 && !HOTEND_COOLER_USES_PIN(FET3))?1:0);
 #else
         ok &= !d.u8(Field::F_RF_FET1_MODE) && !d.u8(Field::F_RF_FET2_MODE) && !d.u8(Field::F_RF_FET3_MODE);
-#endif
-#ifdef RGB_LIGHT_R_PIN
-        ok &= d.u8(Field::F_RF_RGB_LIGHT_MODE)<=RGB_MODE_MANUAL;
-#else
-        for(uint8_t a=4;a<n;++a) ok &= data[a]==0;
 #endif
         break;
     case PartFan: {

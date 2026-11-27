@@ -14,7 +14,7 @@ constexpr uint16_t End = 0x0C00; // exclusive
 constexpr uint8_t SlotSize = 32;
 constexpr uint8_t PayloadOffset = 3;
 constexpr uint8_t MaxPayload = 29;
-constexpr uint16_t Schema = 1;
+constexpr uint16_t Schema = 2; // pre-release: retired RGB payload
 enum Block : uint8_t {
     Admin = 0,
     Geometry = 1,
@@ -49,10 +49,10 @@ constexpr uint8_t blockOf(uint16_t pos) { return pos >= Base && pos < End ? uint
 
 inline uint8_t length(uint8_t id) {
 #ifdef __AVR__
-    static const uint8_t lengths[] PROGMEM = {0,29,24,8,26,5,29,29,20,20,19,1,8,4,7,12,6,7,6,20,4,12,8};
+    static const uint8_t lengths[] PROGMEM = {0,29,24,8,26,5,29,29,20,20,19,1,8,4,7,12,6,7,6,4,4,12,8};
     return id <= Last ? pgm_read_byte(lengths + id) : 0;
 #else
-    static const uint8_t lengths[] = {0,29,24,8,26,5,29,29,20,20,19,1,8,4,7,12,6,7,6,20,4,12,8};
+    static const uint8_t lengths[] = {0,29,24,8,26,5,29,29,20,20,19,1,8,4,7,12,6,7,6,4,4,12,8};
     return id <= Last ? lengths[id] : 0;
 #endif
 }
@@ -160,22 +160,7 @@ enum class Field : uint16_t {
     F_RF_FET1_MODE = 0x0A64,
     F_RF_FET2_MODE = 0x0A65,
     F_RF_FET3_MODE = 0x0A66,
-    F_RF_RGB_LIGHT_MODE = 0x0A67,
-    F_RF_RGB_PRINTING_R = 0x0A68,
-    F_RF_RGB_PRINTING_G = 0x0A69,
-    F_RF_RGB_PRINTING_B = 0x0A6A,
-    F_RF_RGB_HEATING_R = 0x0A6B,
-    F_RF_RGB_HEATING_G = 0x0A6C,
-    F_RF_RGB_HEATING_B = 0x0A6D,
-    F_RF_RGB_COOLING_R = 0x0A6E,
-    F_RF_RGB_COOLING_G = 0x0A6F,
-    F_RF_RGB_COOLING_B = 0x0A70,
-    F_RF_RGB_IDLE_R = 0x0A71,
-    F_RF_RGB_IDLE_G = 0x0A72,
-    F_RF_RGB_IDLE_B = 0x0A73,
-    F_RF_RGB_MANUAL_R = 0x0A74,
-    F_RF_RGB_MANUAL_G = 0x0A75,
-    F_RF_RGB_MANUAL_B = 0x0A76,
+    // 0x0A67..0x0A76: free former RGB payload. Remaining slots unchanged.
     F_RF_FAN_MODE = 0x0A83,
     F_RF_PART_FAN_SPEED = 0x0A84,
     F_RF_PART_FAN_PWM_MIN = 0x0A85,
@@ -312,22 +297,6 @@ inline uint8_t fieldWidth(uint16_t pos) {
         widthEntry(Field::F_RF_FET1_MODE,1),
         widthEntry(Field::F_RF_FET2_MODE,1),
         widthEntry(Field::F_RF_FET3_MODE,1),
-        widthEntry(Field::F_RF_RGB_LIGHT_MODE,1),
-        widthEntry(Field::F_RF_RGB_PRINTING_R,1),
-        widthEntry(Field::F_RF_RGB_PRINTING_G,1),
-        widthEntry(Field::F_RF_RGB_PRINTING_B,1),
-        widthEntry(Field::F_RF_RGB_HEATING_R,1),
-        widthEntry(Field::F_RF_RGB_HEATING_G,1),
-        widthEntry(Field::F_RF_RGB_HEATING_B,1),
-        widthEntry(Field::F_RF_RGB_COOLING_R,1),
-        widthEntry(Field::F_RF_RGB_COOLING_G,1),
-        widthEntry(Field::F_RF_RGB_COOLING_B,1),
-        widthEntry(Field::F_RF_RGB_IDLE_R,1),
-        widthEntry(Field::F_RF_RGB_IDLE_G,1),
-        widthEntry(Field::F_RF_RGB_IDLE_B,1),
-        widthEntry(Field::F_RF_RGB_MANUAL_R,1),
-        widthEntry(Field::F_RF_RGB_MANUAL_G,1),
-        widthEntry(Field::F_RF_RGB_MANUAL_B,1),
         widthEntry(Field::F_RF_FAN_MODE,1),
         widthEntry(Field::F_RF_PART_FAN_SPEED,1),
         widthEntry(Field::F_RF_PART_FAN_PWM_MIN,1),

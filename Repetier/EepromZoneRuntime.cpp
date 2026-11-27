@@ -357,10 +357,6 @@ void EEPROM::storeScanPoint(uint8_t x,uint8_t y,bool saveX,bool saveY) {
     if(saveY)p[n++]=Patch::byte(Field::F_RF_MOD_ZOS_SCAN_POINT_Y,y);
     if(n)persist(p,n);
 }
-void EEPROM::storeRgbMode(uint8_t mode){persist(Patch::byte(Field::F_RF_RGB_LIGHT_MODE,mode));}
-void EEPROM::storeRgbColor(uint8_t profile,uint8_t channel,uint8_t level) {
-    if(profile<5 && channel<3)persist(Patch::byte(at(Field::F_RF_RGB_PRINTING_R,3*profile+channel),level));
-}
 void EEPROM::storeFanDivisor(uint8_t divisor){persist(Patch::byte(Field::F_RF_PART_FAN_SPEED,divisor));}
 void EEPROM::storeFanDuty(bool maximum,uint8_t duty){persist(Patch::byte(maximum?Field::F_RF_PART_FAN_PWM_MAX:Field::F_RF_PART_FAN_PWM_MIN,duty));}
 void EEPROM::storeToolOffsets(uint8_t tool,float x,float y,bool saveX,bool saveY) {

@@ -103,9 +103,6 @@
 
     RF_EPR_FIELD(0, EPR_RF_CASE_LIGHT_MODE, Com::tEPRCaseLightsMode, 3, true);
 
-#ifdef RGB_LIGHT_R_PIN
-    RF_EPR_FIELD(0, EPR_RF_RGB_LIGHT_MODE, Com::tEPRRGBLightMode, 3, true);
-#endif // RGB_LIGHT_R_PIN
 
     RF_EPR_FIELD(2, EPR_BAUDRATE, Com::tEPRBaudrate, 3, true);
     RF_EPR_FIELD(2, EPR_MAX_INACTIVE_TIME, Com::tEPRMaxInactiveTime, 3, true);

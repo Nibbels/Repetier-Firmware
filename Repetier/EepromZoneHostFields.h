@@ -112,9 +112,6 @@
 
     RF_ZONE_ITEM(0, address(Field::F_RF_CASE_LIGHT_MODE), Com::tEPRCaseLightsMode, 3, true)
 
-#ifdef RGB_LIGHT_R_PIN
-    RF_ZONE_ITEM(0, address(Field::F_RF_RGB_LIGHT_MODE), Com::tEPRRGBLightMode, 3, true)
-#endif // RGB_LIGHT_R_PIN
 
     RF_ZONE_ITEM(2, address(Field::F_BAUDRATE), Com::tEPRBaudrate, 3, true)
     RF_ZONE_ITEM(2, address(Field::F_MAX_INACTIVE_TIME), Com::tEPRMaxInactiveTime, 3, true)

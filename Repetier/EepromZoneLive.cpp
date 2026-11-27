@@ -2,7 +2,6 @@
 #include "EepromZoneLive.h"
 #include "EepromZoneCodec.h"
 #include "EepromZoneValidation.h"
-#include "RgbLighting.h"
 #include "StepExecutor.h"
 
 namespace EepromZones {
@@ -129,13 +128,7 @@ bool LiveSettings::operator()(uint8_t id,uint8_t* data,uint8_t n) const {
 #else
         w.u8(Field::F_RF_FET1_MODE,0);w.u8(Field::F_RF_FET2_MODE,0);w.u8(Field::F_RF_FET3_MODE,0);
 #endif
-        uint8_t colors[15]={};
-#ifdef RGB_LIGHT_R_PIN
-        w.u8(Field::F_RF_RGB_LIGHT_MODE,RgbLighting::mode());RgbLighting::captureProfiles(colors);
-#else
-        w.u8(Field::F_RF_RGB_LIGHT_MODE,0);
-#endif
-        w.bytes(Field::F_RF_RGB_PRINTING_R,colors,15);break;
+        break;
     }
     case PartFan:
         w.u8(Field::F_RF_FAN_MODE,HAL::partFanMode());w.u8(Field::F_RF_PART_FAN_SPEED,HAL::partFanDivisor());
@@ -241,10 +234,6 @@ bool LiveSettings::applyBlock(uint8_t id,const uint8_t* data,uint8_t n,uint32_t 
         if(!HOTEND_COOLER_USES_PIN(FET1))AccessoryOutputs::stage(AccessoryOutputs::Output::Fet1,d.u8(Field::F_RF_FET1_MODE));
         if(!HOTEND_COOLER_USES_PIN(FET2))AccessoryOutputs::stage(AccessoryOutputs::Output::Fet2,d.u8(Field::F_RF_FET2_MODE));
         if(CASE_FAN_PIN<0 && !HOTEND_COOLER_USES_PIN(FET3))AccessoryOutputs::stage(AccessoryOutputs::Output::Fet3,d.u8(Field::F_RF_FET3_MODE));
-#endif
-#ifdef RGB_LIGHT_R_PIN
-        {uint8_t colors[15];for(uint8_t a=0;a<15;++a)colors[a]=d.u8(at(Field::F_RF_RGB_PRINTING_R,a));
-        RgbLighting::restoreProfiles(colors);RgbLighting::restoreMode(d.u8(Field::F_RF_RGB_LIGHT_MODE));}
 #endif
         break;
     case PartFan:
