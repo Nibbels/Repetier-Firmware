@@ -4,7 +4,7 @@
 "use strict";
 const {workload,frame}=require("./link-model.cjs");
 const CPU=16000000, anchors={X:1009,XY:1183,XYE:1441,denseXYE:1551,E:960};
-const defaults={xy:152.38,e:256,fixed:400,wrapper:100,planner:3000,rxByte:85,rxCall:99,reserve:0.20,ackBytes:4};
+const defaults={xy:152.38,e:256,fixed:400,wrapper:100,planner:3000,rxByte:85,rxCall:99,reserve:0.20,ackBytes:4,rxIsr:73,txIsr:74,txEmptyPerCommand:0};
 function pathWorkload(spec){
   if(!spec.shape||spec.shape==="circle")return workload(spec);
   if(!["straight","zigzag"].includes(spec.shape))throw Error("bad shape");
@@ -41,7 +41,9 @@ function evaluate(row,speed,group,p){
   const motion=row.n*stepCost+calls*(p.fixed+p.wrapper);
   const ackBytes=p.ackBytes==="numbered"?row.numberedAckBytes:p.ackBytes;
   if(!Number.isInteger(ackBytes)||ackBytes<0)throw Error("bad ACK byte count");
-  const uart=row.bytes*73+ackBytes*74;
+  // Historical defaults reproduce Task0030 screens. New studies supply the
+  // pinned Task0033 candidate or engineering budgets explicitly.
+  const uart=row.bytes*p.rxIsr+ackBytes*p.txIsr+p.txEmptyPerCommand;
   // Task0028: 20 B incomplete ASCII 1799 cycles; 40 B 3499.
   // Single fragment approximation; complete parse/plan is ADDITIONAL.
   const receive=row.bytes*p.rxByte+p.rxCall, fore=p.planner+receive;
@@ -110,7 +112,8 @@ function selfTest(){
   for(const x of a)check(groupFor(x,spec.speed,"adaptive-margin",defaults)>=groupFor(x,spec.speed,"adaptive",defaults),"headroom never reduces group");
   check(a.every((r,i)=>r.numberedAckBytes===5+String(i+1).length),"numbered ACK byte count");
   check(evaluate({...row,numberedAckBytes:10},1,2,{...p,ackBytes:"numbered"}).uart===740,"numbered ACK IRQ charge");
-  return "14 groups of checks passed";
+  check(evaluate({...row,bytes:40,numberedAckBytes:10},1,2,{...p,ackBytes:"numbered",rxIsr:80,txIsr:80,txEmptyPerCommand:64}).uart===4064,"contract budget charge");
+  return "15 groups of checks passed";
 }
 function matrix(){
   const out=[];
