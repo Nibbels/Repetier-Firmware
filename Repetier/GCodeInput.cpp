@@ -54,6 +54,7 @@ private:
 };
 
 CommandQueue commandQueue;
+bool flashScriptRunning = false; // foreground-only script owner
 
 constexpr uint8_t maxCommandSize = 96;
 constexpr uint8_t maxBinaryTextSize = 80; // V2 text length byte plus payload.
@@ -497,10 +498,20 @@ void GCodeInput::popCurrentCommand() {
     commandQueue.retireFront();
 }
 
+bool GCodeInput::flashScriptActive() {
+    return flashScriptRunning;
+}
+
 void GCodeInput::executeFlashScript(const char* cmd) {
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-    if(Printer::printJob.emergencyLocked())return;
-#endif
+    if (flashScriptRunning || Printer::printJob.commandsBlocked())
+        return;
+    flashScriptRunning = true;
+    runFlashScript(cmd);
+    flashScriptRunning = false;
+}
+
+// Keep the parser and command buffer frame out of refused nested entries.
+__attribute__((noinline)) void GCodeInput::runFlashScript(const char* cmd) {
     char buf[80];
     uint8_t buflen;
     char c = 0;
@@ -532,12 +543,11 @@ void GCodeInput::executeFlashScript(const char* cmd) {
         {
             Commands::executeGCode(&code);
             Commands::checkForPeriodicalActions(Processing);
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-            if(Printer::printJob.emergencyLocked())return;
-#endif
+            if (Printer::printJob.commandsBlocked())
+                return;
         }
     } while (c);
-} // executeFString
+} // runFlashScript
 
 // Receive one complete command from the USB serial port per call.
 void GCodeInput::readFromSerial() {

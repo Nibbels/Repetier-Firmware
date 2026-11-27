@@ -34,6 +34,7 @@ unsigned dispatchedCommands = 0, statusCommands = 0, stopRequests = 0;
 bool legacyRejected = false;
 unsigned heaterRequests = 0, extrusionRequests = 0;
 unsigned periodicVisits = 0, pendingOutputVisits = 0;
+bool injectNestedScript = false, stopDuringScript = false;
 struct EmergencyReached {};
 GCode lastScriptCommand{};
 }
@@ -98,7 +99,18 @@ namespace Commands {
 void commandLoop();
 void emergencyStop() { throw EmergencyReached{}; }
 void executeGCode(GCode* code);
-void checkForPeriodicalActions(FirmwareState) { ++periodicVisits; }
+void checkForPeriodicalActions(FirmwareState) {
+    ++periodicVisits;
+    if (injectNestedScript) {
+        injectNestedScript = false;
+        assert(GCodeInput::flashScriptActive());
+        GCodeInput::executeFlashScript("G1 X99\n");
+    }
+    if (stopDuringScript) {
+        stopDuringScript = false;
+        stopped = true;
+    }
+}
 }
 
 namespace RMath {
@@ -583,8 +595,18 @@ void postStopOutputBoundary() {
 }
 
 void flashScript() {
+    injectNestedScript = true;
     GCodeInput::executeFlashScript("; comment\nG91\nG1 X0.5 ; jog\n");
     assert(scriptCommands == 2 && lastScriptCommand.G == 1 && lastScriptCommand.X == 0.5f);
+    assert(!GCodeInput::flashScriptActive());
+    stopDuringScript = true;
+    GCodeInput::executeFlashScript("G1 X2\nG1 X3\n");
+    assert(scriptCommands == 3 && lastScriptCommand.X == 2 && !GCodeInput::flashScriptActive());
+    GCodeInput::executeFlashScript("G1 X4\n");
+    assert(scriptCommands == 3);
+    stopped = false;
+    GCodeInput::executeFlashScript("G1 X5\n");
+    assert(scriptCommands == 4 && lastScriptCommand.X == 5 && !GCodeInput::flashScriptActive());
     assert(replies.empty() && !GCodeInput::peekCurrentCommand());
     feed("N1 M105\n");
     readReply("ok 1\r\n");

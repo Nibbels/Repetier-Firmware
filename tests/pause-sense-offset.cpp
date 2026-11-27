@@ -602,6 +602,7 @@ struct GCodeInput {
         assert(Printer::printJob.commandsBlocked());
         ++incomingReads;
     }
+    static bool flashScriptActive() { return false; }
     static void executeFlashScript(const char* script) {
         assert(script == Com::tOutputObjectPrint && !PrintLine::hasLines());
         assert(!Printer::printJob.commandsBlocked());

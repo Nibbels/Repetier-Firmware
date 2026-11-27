@@ -299,6 +299,8 @@ void UIDisplay::executeCommandAction(int action) {
     case UI_ACTION_MOUNT_FILAMENT_HARD:
     case UI_ACTION_UNMOUNT_FILAMENT_SOFT:
     case UI_ACTION_UNMOUNT_FILAMENT_HARD: {
+        if (GCodeInput::flashScriptActive())
+            break;
         Printer::idleStatus.cancel();
         while (Printer::checkAbortKeys()) {
             Commands::checkForPeriodicalActions(); // Dont quit script by holding the ok longer than 1ms if no temp is involved. -> min einmal OK loslassen.

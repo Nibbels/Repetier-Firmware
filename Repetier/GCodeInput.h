@@ -29,8 +29,10 @@ public:
     static void popCurrentCommand();
     static void keepAlive(FirmwareState state);
     static void executeFlashScript(const char* cmd);
+    static bool flashScriptActive();
 
 private:
+    static void runFlashScript(const char* cmd);
     static bool parseAscii(GCode& command, char* line, bool fromSerial);
     static bool parseBinary(GCode& command, uint8_t* buffer, int8_t length);
     static uint8_t computeBinarySize(char* frame);
