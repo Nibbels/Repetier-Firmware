@@ -600,8 +600,6 @@ void Printer::setup() {
     AccessoryOutputs::initializeCaseLight();
 
     updateDerivedParameter();
-    Commands::checkFreeMemory();
-    Commands::writeLowestFreeRAM();
     HAL::setupTimer();
 
     Extruder::applyCurrentSettings();

@@ -143,7 +143,7 @@ static char loadCompensationMatrix(unsigned int uAddress, void (*progress)()) {
     if (!ExternalEeprom::readWord(I2C_ADDRESS_EXTERNAL_EEPROM, EEPROM_OFFSET_HEADER_FORMAT, uTemp))
         return -1;
     if (uTemp != EEPROM_FORMAT) {
-        if (Printer::debugErrors()) {
+        {
             Com::printF(PSTR("loadMatrix(): invalid header format: "), (int)uTemp);
             Com::printF(PSTR(" (expected: "), EEPROM_FORMAT);
             Com::printFLN(PSTR(")"));
@@ -156,7 +156,7 @@ static char loadCompensationMatrix(unsigned int uAddress, void (*progress)()) {
     if (!ExternalEeprom::readWord(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_SECTOR_FORMAT, uTemp))
         return -1;
     if (uTemp != EEPROM_FORMAT) {
-        if (Printer::debugErrors()) {
+        {
             Com::printF(PSTR("loadMatrix(): invalid sector format: "), (int)uTemp);
             Com::printF(PSTR(" (expected: "), EEPROM_FORMAT);
             Com::printFLN(PSTR(")"));
@@ -168,7 +168,7 @@ static char loadCompensationMatrix(unsigned int uAddress, void (*progress)()) {
     if (!ExternalEeprom::readWord(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_DIMENSION_X, uDimensionX))
         return -1;
     if (uDimensionX < 2 || uDimensionX >= COMPENSATION_MATRIX_MAX_X) {
-        if (Printer::debugErrors()) {
+        {
             Com::printF(PSTR("loadMatrix(): invalid x dimension: "), (int)uDimensionX);
             Com::printF(PSTR(" (max expected: "), COMPENSATION_MATRIX_MAX_X - 1);
             Com::printFLN(PSTR(")"));
@@ -180,7 +180,7 @@ static char loadCompensationMatrix(unsigned int uAddress, void (*progress)()) {
     if (!ExternalEeprom::readWord(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_DIMENSION_Y, uDimensionY))
         return -1;
     if (uDimensionY < 2 || uDimensionY >= COMPENSATION_MATRIX_MAX_Y) {
-        if (Printer::debugErrors()) {
+        {
             Com::printF(PSTR("loadMatrix(): invalid y dimension: "), (int)uDimensionY);
             Com::printF(PSTR(" (max expected: "), COMPENSATION_MATRIX_MAX_Y - 1);
             Com::printFLN(PSTR(")"));
@@ -290,7 +290,7 @@ bool switchActiveHeatBed(char newActiveHeatBed) {
 
 static void prepareZCompensationWithProgress(void (*progress)()) {
     if (COMPENSATION_MATRIX_SIZE > EEPROM_SECTOR_SIZE) {
-        if (Printer::debugErrors()) {
+        {
             Com::printFLN(PSTR("prepareZCompensation(): the size of the compensation matrix is too big"));
         }
 

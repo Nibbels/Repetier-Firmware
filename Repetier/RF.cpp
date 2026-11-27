@@ -288,7 +288,7 @@ unsigned char isMovingAllowed(const char* pszCommand, char outputLog) {
 
     if (isAnyScanRunning()) {
         // do not allow manual movements while the heat bed scan is in progress
-        if (Printer::debugErrors() && outputLog) {
+        if (outputLog) {
             Com::printF(pszCommand);
             Com::printFLN(PSTR(": command can not be used while scan is in progress"));
         }
@@ -307,7 +307,7 @@ unsigned char isHomingAllowed(GCode* com, char outputLog) {
 
     if (isAnyScanRunning()) {
         // do not allow homing while the heat bed scan is in progress
-        if (Printer::debugErrors() && outputLog) {
+        if (outputLog) {
             Com::printFLN(PSTR("G28: homing can not be performed while the heat bed scan is in progress"));
         }
         showError((void*)ui_text_home, (void*)ui_text_operation_denied);

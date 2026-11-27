@@ -255,8 +255,7 @@ void HeatBedScan::startOrCancel(HeatBedScanMode mode) {
     }
 
     if (Printer::printJob.isBusy()) {
-        if (Printer::debugErrors())
-            Com::printFLN(Com::tPrintingIsInProcessError);
+        Com::printFLN(Com::tPrintingIsInProcessError);
         showError((void*)ui_text_heat_bed_scan, (void*)ui_text_operation_denied);
         return;
     }

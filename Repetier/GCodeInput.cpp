@@ -448,7 +448,7 @@ void GCodeInput::checkAndPushCommand(GCode& command) {
                 Com::printFLN(Com::tOk);
             } else if (serialReceive.waitingForResend < 0) // after a resend, we have to skip the garbage in buffers, no message for this
             {
-                if (Printer::debugErrors()) {
+                {
                     Com::printF(Com::tExpectedLine, serialReceive.lastLineNumber + 1);
                     Com::printFLN(Com::tGot, serialReceive.currentLineNumber);
                 }
@@ -666,13 +666,10 @@ bool GCodeInput::parseBinary(GCode& command, uint8_t* buffer, int8_t length) {
     sum1 -= *p++;
     sum2 -= *p;
     if (sum1 | sum2) {
-        if (Printer::debugErrors()
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-            && !Printer::printJob.emergencyLocked()
+        if(!Printer::printJob.emergencyLocked())
 #endif
-        ) {
             Com::printErrorFLN(Com::tWrongChecksum);
-        }
         return false;
     }
 
@@ -1037,11 +1034,9 @@ bool GCodeInput::parseAscii(GCode& command, char* line, bool fromSerial) {
     if (command.hasFormatError() /*|| (params & 518) == 0*/) // Must contain G, M or T command and parameter need to have variables!
     {
         serialReceive.formatErrors++;
-        if (Printer::debugErrors()
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-            && !Printer::printJob.emergencyLocked()
+        if(!Printer::printJob.emergencyLocked())
 #endif
-        )
             Com::printErrorFLN(Com::tFormatError);
         if (serialReceive.formatErrors < 3)
             return false;

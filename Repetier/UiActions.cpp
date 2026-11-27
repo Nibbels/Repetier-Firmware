@@ -180,7 +180,7 @@ void UIDisplay::mainSwitchCase(int action) {
     case UI_ACTION_HOME_X: {
         if (PrintLine::hasLines()) {
             // do not allow homing via the menu while we are printing
-            if (Printer::debugErrors()) {
+            {
                 Com::printFLN(Com::tPrintingIsInProcessError);
             }
 
@@ -197,7 +197,7 @@ void UIDisplay::mainSwitchCase(int action) {
     case UI_ACTION_HOME_Y: {
         if (PrintLine::hasLines()) {
             // do not allow homing via the menu while we are printing
-            if (Printer::debugErrors()) {
+            {
                 Com::printFLN(Com::tPrintingIsInProcessError);
             }
 
@@ -214,7 +214,7 @@ void UIDisplay::mainSwitchCase(int action) {
     case UI_ACTION_HOME_Z: {
         if (PrintLine::hasLines()) {
             // do not allow homing via the menu while we are printing
-            if (Printer::debugErrors()) {
+            {
                 Com::printFLN(Com::tPrintingIsInProcessError);
             }
             showError((void*)ui_text_home, (void*)ui_text_operation_denied);

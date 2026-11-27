@@ -160,7 +160,7 @@ void Commands::executeGCode(GCode* com) {
     {
         Printer::setFeedrate(com->F);
     } else {
-        if (Printer::debugErrors()) {
+        {
             Com::printF(Com::tUnknownCommand);
             com->printCommand();
         }

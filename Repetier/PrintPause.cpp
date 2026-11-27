@@ -43,14 +43,12 @@ void PrintPause::queueRequest(Destination destination) {
 void PrintPause::pressPause() {
     if (allowsQueueAdvance()) {
         if (!PrintLine::hasLines()) {
-            if (Printer::debugErrors())
-                Com::printFLN(PSTR("pausePrint(): nothing is printed"));
+            Com::printFLN(PSTR("pausePrint(): nothing is printed"));
             showError((void*)ui_text_pause, (void*)ui_text_operation_denied);
             return;
         }
         if (!Printer::areAxisHomed()) {
-            if (Printer::debugErrors())
-                Com::printFLN(PSTR("pausePrint(): home position is unknown"));
+            Com::printFLN(PSTR("pausePrint(): home position is unknown"));
             showError((void*)ui_text_pause, (void*)ui_text_home_unknown);
             return;
         }

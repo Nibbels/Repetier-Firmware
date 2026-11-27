@@ -213,10 +213,6 @@ public:
         return (activeMenuModes() & mode) == mode;
     } // isMenuMode
 
-    // Temporary constant predicates during source cleanup: mandatory
-    // reports and errors can no longer be disabled by the host.
-    static constexpr bool debugInfo() { return true; }
-    static constexpr bool debugErrors() { return true; }
 
     /** \brief Disable stepper motor for x direction. */
     static INLINE void disableXStepper() {

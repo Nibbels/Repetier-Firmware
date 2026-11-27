@@ -23,7 +23,7 @@
 namespace GCodeCommands {
 
 void showInvalidSyntax(unsigned int currentMCode) {
-    if (Printer::debugErrors()) {
+    {
         Com::printF(PSTR("M"), (int)currentMCode);
         Com::printFLN(PSTR(": invalid syntax"));
     }

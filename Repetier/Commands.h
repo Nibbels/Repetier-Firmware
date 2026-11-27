@@ -39,10 +39,6 @@ public:
     static void changeFlowrateMultiply(float newExtrusionFactor);
     static void reportPrinterUsage();
     static void emergencyStop();
-    static void checkFreeMemory();
-    static void writeLowestFreeRAM();
-    static int lowestRAMValue;
-    static int lowestRAMValueSend;
 }; // Commands
 
 #endif // COMMANDS_H

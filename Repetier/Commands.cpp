@@ -20,8 +20,6 @@
 #include "Repetier.h"
 #include "GCodeInput.h"
 
-int Commands::lowestRAMValue = MAX_RAM;
-int Commands::lowestRAMValueSend = MAX_RAM;
 
 void Commands::commandLoop() {
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
@@ -292,20 +290,4 @@ void Commands::emergencyStop() {
     HAL::resetHardware(); //RF2000 / RF1000!
 } // emergencyStop
 
-void Commands::checkFreeMemory() {
-    int newfree = HAL::getFreeRam();
-    if (newfree < lowestRAMValue) {
-        lowestRAMValue = newfree;
-    }
-} // checkFreeMemory
 
-void Commands::writeLowestFreeRAM() {
-    if (lowestRAMValueSend > lowestRAMValue) {
-        lowestRAMValueSend = lowestRAMValue;
-
-        if (true) //Printer::debugInfo()
-        {
-            Com::printFLN(Com::tFreeRAM, lowestRAMValue);
-        }
-    }
-} // writeLowestFreeRAM
