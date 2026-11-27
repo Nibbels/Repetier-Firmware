@@ -135,6 +135,18 @@ public:
         return Progress::Advanced;
     }
     // A read cursor may call this when idle; never read partial records.
+    // Read one complete entry in a foreground visit. The caller must not
+    // release shared EEPROM ownership or yield during these bounded reads.
+    template<class Store> bool readEntry(Store& s,uint8_t slot,uint8_t (&bytes)[EntryBytes]) const {
+        if(active_||!initialized()||!s.ready())return false;
+        uint32_t seq;
+        if(!header(s,slot,seq))return false;
+        bytes[0]=Committed;bytes[1]=Version;
+        for(uint8_t i=0;i<4;++i)bytes[2+i]=byteOf(seq,i);
+        for(uint8_t i=6;i<EntryBytes;++i)bytes[i]=s.read(address(slot,i));
+        return true;
+    }
+
     // Caller controls bounded output and host backpressure. No full mirror.
     template<class Store> bool readByte(Store& s,uint8_t slot,uint8_t offset,uint8_t& value) const {
         if(active_||!initialized()||slot>=Slots||offset>=EntryBytes||!s.ready())return false;
