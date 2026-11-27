@@ -21,6 +21,7 @@
 #include "GCodeInput.h"
 #include "GCodeCommands.h"
 #include "UsbSerial.h"
+#include "DiagnosticHistory.h"
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
 #include "ThermalEmergencyReport.h"
 #endif
@@ -410,6 +411,12 @@ void GCodeInput::checkAndPushCommand(GCode& command) {
             // firmware capability reply in the terminal state.
             ThermalEmergency::requestDiagnosticReplay();
             emergencyOk(true);
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+        }else if(!command.hasG() && command.hasM() && command.M==DiagnosticHistory::ReadCommand) {
+            // Read-only history must not enter the machine command queue.
+            DiagnosticHistory::request();
+            emergencyOk(true);
+#endif
         }else {
             ThermalEmergency::ReportLine line;
             line.text(PSTR("Error: THERMAL EMERGENCY\r\nok "));
