@@ -264,7 +264,7 @@ def main():
     (d/"actual-hal-math.inc").write_text(hal[begin:end].replace(old,new))
     elf=d/"inverse-root.elf"
     flags=["-mmcu=atmega2560","-DF_CPU=16000000UL","-std=gnu++11","-Os","-flto","-ffunction-sections","-fdata-sections","-fno-exceptions","-Wl,--gc-sections"]
-    run([cc,*flags,"-I"+str(HERE),src,"-Wl,-Map="+str(d/"inverse-root.map"),"-o",elf])
+    run([cc,*flags,"-I"+str(HERE),"-I"+str(d),src,"-Wl,-Map="+str(d/"inverse-root.map"),"-o",elf])
     syms={}
     for line in run([cc.with_name("avr-nm"),"-S","-n",elf]).splitlines():
         m=re.match(r"^([0-9a-f]+)\s+[0-9a-f]+\s+\w\s+(phase|fixture_id|queue_depth)$",line)
