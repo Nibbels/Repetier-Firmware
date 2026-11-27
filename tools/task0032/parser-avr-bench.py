@@ -64,6 +64,27 @@ namespace Commands {
 }
 namespace RMath { inline uint8_t min(uint8_t a,uint8_t b) {return a<b?a:b;} }
 '''
+DECIMAL_CANDIDATE = """void Com::printNumber(uint32_t n) {
+    char buf[11];
+    char* str = &buf[10];
+    *str = '\\0';
+    // Consume only the necessary low digits using 32-bit division.
+    while (n > UINT16_MAX) {
+        const uint32_t q = n / 10;
+        *--str = '0' + (n - 10 * q);
+        n = q;
+    }
+    // Binary line numbers and most ordinary values fit in 16 bits.
+    uint16_t value = static_cast<uint16_t>(n);
+    do {
+        const uint16_t q = value / 10;
+        *--str = '0' + (value - 10 * q);
+        value = q;
+    } while (value);
+    print(str);
+} // printNumber
+"""
+
 FIXTURE = r'''
 #include <string.h>
 #define private public
@@ -152,6 +173,26 @@ int main() {
         mark(4); GCodeInput::readFromSerial(); mark(132);
         verify(s);
     }
+    // Generic 32-bit formatter correctness, including transitions across
+    // the 16-bit boundary and decimal digit boundaries.
+    static const uint32_t numbers[] = {
+        0UL, 9UL, 10UL, 99UL, 100UL, 9999UL, 10000UL,
+        65534UL, 65535UL, 65536UL, 99999UL, 100000UL,
+        999999999UL, 1000000000UL, 2147483648UL, 4294967295UL
+    };
+    fixture_id=3;
+    for(uint8_t i=0;i<sizeof(numbers)/sizeof(numbers[0]);++i) {
+        queue_depth=i;
+        char expected[11]; ultoa(numbers[i],expected,10);
+        mark(5); Com::printNumber(numbers[i]); mark(133);
+        auto& tx=UsbSerial::tx_;
+        uint8_t j=0;
+        while(tx.tail!=tx.head) {
+            require(expected[j] && tx.bytes[tx.tail]==expected[j++]);
+            tx.tail=tx.next(tx.tail);
+        }
+        require(!expected[j]);
+    }
     mark(255); while(true){}
 }
 '''
@@ -220,6 +261,7 @@ def main():
     p.add_argument("--compiler",required=True,type=Path)
     p.add_argument("--runner-source",required=True,type=Path)
     p.add_argument("--out",required=True,type=Path)
+    p.add_argument("--decimal",choices=["baseline","u16-tail"],default="baseline")
     args=p.parse_args()
     out=args.out.resolve();out.mkdir(parents=True,exist_ok=True)
     cc=args.compiler.resolve(); rows=sample_data()
@@ -231,6 +273,10 @@ def main():
         (d/"HAL.h").write_text(HAL);(d/"Repetier.h").write_text(REPETIER)
         com=(FW/"Communication.cpp").read_text()
         functions=com[com.index("void Com::printWarningF("):]
+        if args.decimal=="u16-tail":
+            begin=functions.index("void Com::printNumber(")
+            end=functions.index("} // printNumber",begin)+len("} // printNumber")
+            functions=functions[:begin]+DECIMAL_CANDIDATE+functions[end:]
         names=set(re.findall(r"\bCom::(t\w+)\b", "\n".join((d/n).read_text() for n in ("GCodeInput.cpp","gcode.cpp"))+functions))
         names.update(["tWarning","tInfo","tError","tNAN","tINF"])
         constants=[line for line in com.splitlines() if any(line.startswith("FSTRINGVALUE(Com::"+n+",") for n in names)]
@@ -264,15 +310,15 @@ def main():
                 assert (ff,ii,stage)==(f,i,mark-128)
                 records.append(dict(format=f,id=i,stage=stage,cycles=t-start))
                 pending=None
-        assert done and pending is None and len(records)==len(rows)*4
+        assert done and pending is None and len(records)==len(rows)*4+16
         (out/"parser.dis").write_text(run([cc.with_name("avr-objdump"),"-d","-z",elf]))
         results=dict(schema=1,qualification="isolated AVR simavr cycle samples incl markers; actual software rings, parser, decimal ACK enqueue; no concurrent interrupts or TX wait, stub clock/debug/legacy gate; not integrated WCET",
-                     compiler=run([cc,"--version"]).splitlines()[0],flags=FLAGS,
+                     decimal=args.decimal,compiler=run([cc,"--version"]).splitlines()[0],flags=FLAGS,
                      source_sha256={n:hashlib.sha256((FW/n).read_bytes()).hexdigest() for n in files+["Communication.cpp","Configuration.h"]},
                      elf_sha256=hashlib.sha256(elf.read_bytes()).hexdigest(),samples=rows,records=records)
         (out/"parser-results.json").write_text(json.dumps(results,indent=2)+"\n")
-        for fmt in range(3):
-            for stage in range(1,5):
+        for fmt in range(4):
+            for stage in (range(1,5) if fmt<3 else [5]):
                 x=sorted(r["cycles"] for r in records if r["format"]==fmt and r["stage"]==stage)
                 print("format",fmt,"stage",stage,"n",len(x),"min/median/max",x[0],x[len(x)//2],x[-1])
 
