@@ -10,6 +10,7 @@
 #include "DisplayModes.h"
 #include "RgbLighting.h"
 #include <math.h>
+#include <float.h>
 
 namespace EepromZones {
 inline bool inRange(float v,float lo,float hi) {return v>=lo && v<=hi;}
@@ -69,9 +70,16 @@ inline bool validBlock(uint8_t id,const uint8_t* data,uint8_t n) {
             // Guard numeric conversions and arithmetic; retain retrofit
             // travel flexibility for Y/Z pending mechanical qualification.
             const float maxAccel=a==2?ACCELERATION_MAX_Z:ACCELERATION_MAX_XY;
-            ok &= positive(steps,4294967040.0f/maxAccel)
+            // Check the actual products before conversion. ZMotion casts
+            // steps/mm and overtravel to uint16_t; X/Y default jog uses
+            // lroundf then uint16_t. Positive subnormal steps/mm can also
+            // overflow the reciprocal used by updateDerivedParameter().
+            const bool narrowSafe=a==2
+                ? steps<65536.0f && steps*Z_ENDSTOP_DRIVE_OVER<65536.0f
+                : steps*(a==0?DEFAULT_MANUAL_MM_X:DEFAULT_MANUAL_MM_Y)<65535.5f;
+            ok &= steps>=FLT_MIN && steps*maxAccel<=4294967040.0f
                 && positive(travel,a==0?245.0f:2147483520.0f)
-                && steps*travel<=2147483520.0f && mode<=8;
+                && steps*travel<=2147483520.0f && mode<=8 && narrowSafe;
         }
         break;
     }

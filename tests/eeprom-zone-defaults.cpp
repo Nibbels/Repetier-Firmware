@@ -237,11 +237,12 @@ static void factoryImageReplay() {
     assert(bytes==7296 && digest==expected);
     printf("Factory payload baseline: %u bytes match; PASS\n",bytes);
 }
-template<class T> static unsigned compareIntegerRange(int first,int last,T lo,T hi,bool (*range)(T,T,T)) {
+template<class T,class L,class H> static unsigned compareIntegerRange(int first,int last,L lo,H hi,bool (*range)(T,T,T)) {
+    assert(float(T(lo))==float(lo) && float(T(hi))==float(hi));
     unsigned n=0;
     for(int i=first;i<=last;++i) {
         const T v=static_cast<T>(i);
-        assert(range(v,lo,hi)==inRange(v,lo,hi));
+        assert(range(v,T(lo),T(hi))==inRange(v,lo,hi));
         ++n;
     }
     return n;
@@ -261,7 +262,48 @@ static void integerRangeReplay() {
     assert(n==199168);
     printf("Integral settings bounds: %u cases match historical float comparison; PASS\n",n);
 }
+// Independent address/width oracle: preserve the old codec's byte order,
+// full address domain and sticky invalid-read state, including padding.
+static void codecReplay() {
+    unsigned long reads=0;
+    for(uint8_t id=1;id<=Last;++id) {
+        uint8_t data[MaxPayload];
+        for(uint8_t i=0;i<MaxPayload;++i)data[i]=uint8_t(137U+53U*i+17U*id);
+        const uint8_t n=length(id);
+        const uint32_t first=address(id)+PayloadOffset;
+        for(uint32_t pos=0;pos<65536UL;++pos) {
+            for(uint8_t width:{1,2,4}) {
+                const bool valid=pos>=first && pos+width<=first+n;
+                uint32_t expected=0;
+                if(valid)for(uint8_t b=0;b<width;++b)expected|=uint32_t(data[pos-first+b])<<(8*b);
+                BlockDecoder decoder(id,data,n);
+                const Field f=static_cast<Field>(pos);
+                const uint32_t actual=width==1?decoder.u8(f):width==2?decoder.u16(f):decoder.u32(f);
+                assert(actual==expected && decoder.good()==valid);
+                if(!valid) {
+                    assert(decoder.u8(static_cast<Field>(first))==0);
+                    assert(!decoder.good());
+                }
+                ++reads;
+            }
+        }
+    }
+    assert(reads==4325376UL);
+    // Every 16-bit payload, with an independent byte pattern in the upper
+    // word, covers all signed/unsigned bit patterns and fixed shifts.
+    for(uint32_t value=0;value<65536UL;++value) {
+        uint8_t data[4]={uint8_t(value),uint8_t(value>>8),uint8_t(~value),uint8_t((~value)>>8)};
+        BlockDecoder decoder(ZOffset,data,4);
+        const auto f=Field::F_RF_Z_OFFSET;
+        assert(decoder.u8(f)==uint8_t(value));
+        assert(decoder.u16(f)==uint16_t(value));
+        assert(decoder.u32(f)==(value|((~value&0xFFFFUL)<<16)));
+        assert(decoder.good());
+    }
+    puts("EEPROM codec: 4325376 address/width checks and 65536 payload checks; PASS");
+}
 int main(){
+    codecReplay();
     factoryImageReplay();
     integerRangeReplay();
     FactoryDefaults defaults(1.0f,5,true,false);
@@ -333,6 +375,12 @@ int main(){
         assert(!validBlock(id,data,n));
     };
     rejected(Geometry,Field::F_XAXIS_STEPS_PER_MM,0,4);
+    rejected(Geometry,Field::F_XAXIS_STEPS_PER_MM,1,4); // subnormal binary32
+    const auto floatBits=[](float v){uint32_t bits;memcpy(&bits,&v,4);return bits;};
+    rejected(Geometry,Field::F_XAXIS_STEPS_PER_MM,floatBits(700000.0f),4);
+    rejected(Geometry,Field::F_YAXIS_STEPS_PER_MM,floatBits(700000.0f),4);
+    rejected(Geometry,Field::F_ZAXIS_STEPS_PER_MM,floatBits(65536.0f),4);
+    rejected(Geometry,Field::F_ZAXIS_STEPS_PER_MM,floatBits(65536.0f/Z_ENDSTOP_DRIVE_OVER+1.0f),4);
     rejected(Geometry,Field::F_YAXIS_STEPS_PER_MM,0x7FC00000UL,4);
     rejected(Geometry,Field::F_Z_LENGTH,0x7F800000UL,4);
     rejected(Geometry,Field::F_RF_MICRO_STEPS_X,9,1);
