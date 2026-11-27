@@ -30,3 +30,52 @@ void AvrDevice::service() {
     Printer::strainGauge.service(HAL::timeInMilliseconds());
 }
 }
+
+#if defined(RF_THERMAL_EMERGENCY_EXPERIMENT) && defined(RF_EEPROM_ZONE_EXPERIMENT)
+#include "DiagnosticHistory.h"
+#include "AvrEventStore.h"
+#include "EventLogService.h"
+#include "ThermalEmergencyReport.h"
+#include "UsbSerial.h"
+
+namespace DiagnosticHistory {
+namespace {
+constexpr uint16_t logBase=0x0E00;
+constexpr uint8_t logSlots=16;
+static_assert(logBase>=EepromZones::End, "diagnostic history overlaps settings");
+static_assert(uint32_t(logBase)+EventLog::Ring<logSlots>::Bytes==uint32_t(E2END)+1,
+              "diagnostic history must end at the physical EEPROM boundary");
+EepromZones::AvrDevice logOwner;
+EventLog::AvrStore<logBase,logSlots,EepromZones::AvrDevice> store(logOwner);
+UsbSerial sink;
+EventLog::Service<logSlots,NUM_TEMPERATURE_LOOPS,ThermalEmergency::ReportLine,
+                  ThermalEmergency::Cause,UsbSerial> history(sink);
+}
+
+void request() { history.requestHistory(); }
+
+void recordScan(ScanAbort reason,ScanKind kind) {
+    // RAM-only admission at the confirmed abort. If occupied or failed, the
+    // existing local diagnosis remains available; never delay scan retreat.
+    history.submitScan(reason,kind==ScanKind::HeatBed ? EventLog::ScanContext::HeatBed :
+                       EventLog::ScanContext::ZOffset,HAL::timeInMilliseconds());
+}
+
+void service() {
+    // Called only at the top-level command-loop boundary, AFTER the thermal
+    // and protocol services. Never from settings progress, ISR or a wait.
+    const auto& ledger=ThermalEmergency::faultLedger();
+    if(!ledger.active()) {
+        if(!history.historyPending()&&!history.scanPending())return;
+        if(Printer::printJob.isBusy() || Printer::pause.isPaused() ||
+           PrintLine::hasLines() || PrintLine::directMoveActive() ||
+           Printer::needsCMPwait() || isAnyScanRunning() ||
+           TemperatureController::autotuneActive())return;
+    }
+    if(!EepromZones::AvrDevice::logMayAccess())return;
+    // At most one byte launch or one bounded read/output step; EEPROM busy
+    // returns immediately. No WDT feed, no motion/heating permission change.
+    history.service(store,ledger);
+}
+}
+#endif
