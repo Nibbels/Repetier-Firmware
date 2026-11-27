@@ -74,11 +74,9 @@ jobs:
           fi
           echo "available=$reuse" >> "$GITHUB_OUTPUT"
       - uses: arduino/setup-arduino-cli@v2
-        if: steps.reuse.outputs.available != 'yes'
         with:
           version: 1.2.2
       - name: Install same pinned AVR core for counterfactual only
-        if: steps.reuse.outputs.available != 'yes'
         run: |
           arduino-cli core update-index
           arduino-cli core install arduino:avr@1.8.6
@@ -91,6 +89,9 @@ jobs:
           else
             python3 research/task0032-step-output/q23-linked.py --baseline "$RUNNER_TEMP/step-output" --out "$RUNNER_TEMP/step-output/q23" --tools "$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin"
           fi
+      - name: Queue-only interrupt mask split (guarded Q23)
+        run: |
+          python3 research/task0032-step-output/q23-linked.py --baseline "$RUNNER_TEMP/step-output" --out "$RUNNER_TEMP/step-output/q23" --variant narrow --tools "$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
