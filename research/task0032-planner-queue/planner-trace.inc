@@ -2,6 +2,7 @@
 // Actual planner, queue, and nextStepSpeed; release and batch clocks modeled.
 // No UART, foreground CPU, pause scheduling, or physical STEP pin simulation.
 #include "estimator-candidate.h"
+#include "duration-ledger.h"
 namespace PlannerResearch {
 using U64 = unsigned long long;
 struct Meta { float requested=0, cap=0; unsigned id=0; };
@@ -9,6 +10,22 @@ struct Work { double x=0,y=0,z=0,e=0; float requested=0, cap=0; };
 struct Trace {
     MoveQueue queue;
     Meta meta[MOVE_CACHE_SIZE];
+    PlannerEstimateResearch::DurationLedger<MOVE_CACHE_SIZE> ledger;
+    uint32_t pendingDuration=UINT32_MAX;
+    unsigned durationBuilds=0, durationReplans=0;
+    static Trace* owner;
+    static float seconds(const PrintLine& m, uint32_t left) {
+        const auto& p=m.stepProfile;
+        return PlannerEstimateResearch::time<false>(m.delta[m.primaryAxis],left,p.accelSteps,p.decelSteps,m.lookahead.accelerationPrim,p.vStart,p.vEnd,p.vMax);
+    }
+    static void rebuilt(PrintLine& m) {
+        auto& t=*owner;
+        const uint8_t index=&m-&t.queue.slot(0);
+        const uint32_t units=PlannerEstimateResearch::durationUnits(seconds(m,m.delta[m.primaryAxis]));
+        ++t.durationBuilds;
+        if(index==t.queue.writeIndex()) t.pendingDuration=units;
+        else {t.ledger.replace(index,units);++t.durationReplans;}
+    }
     const char* name;
     unsigned serial, group, capMode;
     bool advance;
@@ -22,7 +39,10 @@ struct Trace {
     int32_t previous[4]={};
     double xyz=0;
     Trace(const char* n, float c, float s, unsigned baud, unsigned g, unsigned cm, bool a)
-      : name(n), serial(baud), group(g), capMode(cm), advance(a), chord(c), speed(s) {}
+      : name(n), serial(baud), group(g), capMode(cm), advance(a), chord(c), speed(s) {
+        assert(!owner);owner=this;researchProfileHook=rebuilt;
+    }
+    ~Trace(){researchProfileHook=nullptr;owner=nullptr;}
     void prefix(const char* kind) const {
         std::printf("{\"event\":\"%s\",\"workload\":\"%s\",\"capacity\":%u,\"chord\":%.8g,\"requested\":%.8g,\"baud\":%u,\"group\":%u,\"cap_mode\":%u,\"advance\":%u,\"ticks\":%llu,\"admitted\":%u,\"retired\":%u",
                     kind,name,unsigned(MOVE_CACHE_SIZE),chord,speed,serial,group,capMode,unsigned(advance),now,admitted,retired);
@@ -30,7 +50,19 @@ struct Trace {
     void snapshot(const char* kind) {
         const auto ref=queue.remainingMotion();
         assert(interruptsEnabled && std::isfinite(ref.seconds));
+        const auto ls=ledger.snapshot(queue.readIndex(),queue.count()!=0);
+        const auto* active=queue.active();
+        const uint32_t tail=active && !(active->flags&(FLAG_QUEUE_TASK|FLAG_WARMUP)) ?
+            PlannerEstimateResearch::durationUnits(seconds(*active,active->stepsRemaining)):0;
+        uint64_t units=0;
+        assert(ledger.remaining(ls,active!=nullptr,tail,units));
+        const double ledgerSeconds=double(units)/10000;
+        // Exact analytic profile reference, not physical duration. Allow
+        // per-slot rounding plus binary32 reference arithmetic.
+        assert(std::abs(ledgerSeconds-ref.seconds)<=.0000501*(queue.count()+1)+std::abs(ref.seconds)*.000003+1e-7);
+        if(!queue.count())assert(ls.full==0 && ls.unavailable==0);
         prefix(kind);
+        std::printf(",\\"ledger_s\\":%.9g,\\"ledger_full_units\\":%llu,\\"ledger_builds\\":%u,\\"ledger_replans\\":%u",ledgerSeconds,(unsigned long long)ls.full,durationBuilds,durationReplans);
         std::printf(",\"read\":%u,\"write\":%u,\"count\":%u,\"active\":%u,\"reference_s\":%.9g,\"xyz_mm\":%.9g,\"filament_mm\":%.9g",
                     unsigned(queue.readIndex()),unsigned(queue.writeIndex()),unsigned(queue.count()),unsigned(queue.active()!=nullptr),ref.seconds,ref.xyzMm,ref.filamentMm);
         if (!std::strcmp(kind,"publish")) {
@@ -104,9 +136,12 @@ struct Trace {
         meta[index].requested=w.requested;
         meta[index].cap=w.cap;
         pc=PathCounts{};
+        pendingDuration=UINT32_MAX;
         MotionPlanner::prepareMove(m,distances,std::min(w.requested,w.cap),queue);
         MotionPlanner::updateLookahead(queue);
         assert(m.isStepProfileReady()&&!m.isBlocked());
+        assert(pendingDuration!=UINT32_MAX);
+        ledger.publish(index,pendingDuration);
         queue.publish(true);
         ++admitted;
         snapshot("publish");
@@ -126,6 +161,7 @@ struct Trace {
             assert(m.stepsRemaining==0);
             prefix("retire");
             std::printf(",\"id\":%u}\n",meta[queue.readIndex()].id);
+            ledger.retire(queue.readIndex());
             queue.retireFront();
             HAL::allowInterrupts();
             ++retired;
@@ -164,6 +200,7 @@ struct Trace {
         std::printf(",\"idle_ticks\":%llu,\"xyz_mm\":%.9g}\n",idle,xyz);
     }
 };
+Trace* Trace::owner=nullptr;
 
 void circle(float chord,float speed,unsigned baud,unsigned group,bool advance,unsigned prefill=12) {
     constexpr unsigned size=96;
@@ -232,12 +269,15 @@ void barriers() {
     t.snapshot("blocked_front_successor");
     t.queue.slot(1).unblock();
     t.queue.writeSlot()=PrintLine{};
+    t.ledger.publish(t.queue.writeIndex(),0);
     t.queue.publishTask(QueueTask::EnableZCompensation);
     t.snapshot("task_barrier");
     t.queue.writeSlot()=PrintLine{};
     t.queue.writeSlot().flags=FLAG_WARMUP;
+    t.ledger.publish(t.queue.writeIndex(),0);
     t.queue.publish(false);
     t.snapshot("warmup_barrier");
+    t.ledger.clear();
     t.queue.clear();
     t.snapshot("cleared");
 }
