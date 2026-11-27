@@ -31,9 +31,9 @@ int main() {
         for(uint8_t i=0;i<32;++i) {
             queue_depth=i;
             errorInput=i<16?320:-(32-i);
-            const int32_t err=errorInput;
-            asm volatile("" : "+r"(errDummy) :: "memory");
+            int32_t err=errorInput;
             mark(1);
+            asm volatile("" : "+r"(err) :: "memory");
             const auto plan=ramp.plan(err,limits);
             sink=plan.interval+plan.nextLevel;
             mark(129);
@@ -46,13 +46,13 @@ int main() {
         sink=stop.interval;mark(129);require(!stop.sign);
         Deadlines d{0xfffffff0UL,0x20UL,true};
         queue_depth=33;
-        const uint32_t now=0xffffffe0UL+uint32_t(errorInput);
-        mark(2);sink=d.nextDelay(now);mark(130);
+        uint32_t now=0xffffffe0UL+uint32_t(errorInput);
+        mark(2);asm volatile("" : "+r"(now) :: "memory");sink=d.nextDelay(now);mark(130);
         require(sink==16);
     }
     mark(255);while(true){}
 }
-'''.replace('const int32_t err=errorInput;\n            asm volatile("" : "+r"(errDummy) :: "memory");','int32_t err=errorInput;\n            asm volatile("" : "+r"(err) :: "memory");')
+'''
 def run(args):
     p=subprocess.run([str(x) for x in args],capture_output=True,text=True)
     if p.returncode:
