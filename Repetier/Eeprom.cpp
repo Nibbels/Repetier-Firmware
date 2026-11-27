@@ -266,8 +266,12 @@ void EEPROM::update(GCode* com) {
     // Calibration authorization is not a user-editable EEPROM setting.
     const int width = com->hasT() && com->T == 0 ? 1 : (com->hasT() && com->T == 1 ? 2 : 4);
 #ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
-    // The legacy comparison build lacks the exact typed whitelist. Block
-    // every overlapping host write, including a partial or wide raw write.
+    // The legacy comparison build lacks the exact typed whitelist.
+    // Reject narrowing aliases and every overlapping motor-current write.
+    if(com->hasP() && (com->P<0 || com->P>2048-width)) {
+        Com::printErrorFLN(PSTR("EEPROM address outside settings"));
+        return;
+    }
     if(com->hasP() && com->P>=EPR_RF_MOTOR_CURRENT-width+1 && com->P<EPR_RF_MOTOR_CURRENT+5) {
         Com::printErrorFLN(PSTR("Motor current is menu-only"));
         return;
