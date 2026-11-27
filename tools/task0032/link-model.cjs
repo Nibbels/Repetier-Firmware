@@ -57,15 +57,18 @@ function selfTest(){
   }
   check(w.lines.length===w.lengths.length&&w.lines.every(l=>l.endsWith("\n")),"line count");
   check(JSON.stringify(w)===JSON.stringify(workload({radius:1,chord:1,speed:60})),"determinism");
-  return "7 groups of checks passed";
+  const rates=matrix();
+  check(rates.length===11760 && new Set(rates.map(x=>x.link.hostBaud)).size===5,"baud matrix coverage");
+  return "8 groups of checks passed";
 }
 
+const baudRates=[115200,250000,500000,1000000,2000000];
 function matrix(){
   const out=[];
   for(const radius of [0.5,1.35,5,20])for(const chord of [0.05,0.1,0.2,0.3,0.6,1,5,10])if(chord<=2*radius)
     for(const speed of [30,40,60,80,100,120,150])for(const profile of ["compact","verbose"])
-      for(const window of [1,32,96])for(const ackDelayUs of [0,1000])
-        out.push({spec:{radius,chord,speed,profile},link:{hostBaud:115200,deviceBaud:16000000/(8*17),window,ackBytes:4,ackDelayUs}});
+      for(const hostBaud of baudRates)for(const window of [1,32,96])for(const ackDelayUs of [0,1000])
+        out.push({spec:{radius,chord,speed,profile},link:{hostBaud,deviceBaud:hostBaud===115200?16000000/(8*17):hostBaud,window,ackBytes:4,ackDelayUs}});
   return out;
 }
 
