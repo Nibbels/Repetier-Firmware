@@ -60,6 +60,21 @@ jobs:
           node "$work/compare-variants.cjs" "$out" > "$out/variant-comparison.json"
           cat "$out/variant-comparison.json"
           gzip "$out/stress.jsonl"
+      - name: Incremental ledger lifecycle and no-pacing counterfactual
+        shell: bash
+        run: |
+          set -euo pipefail
+          work=research/task0032-planner-queue
+          out="$RUNNER_TEMP/planner-research"
+          c++ -std=c++11 -Wall -Wextra -Werror -O2 "$work/duration-ledger-test.cpp" -o "$RUNNER_TEMP/duration-ledger-test"
+          "$RUNNER_TEMP/duration-ledger-test" | tee "$out/ledger-unit-test.txt"
+          python3 "$work/replay.py" --pacing disabled --capacity 24 28 32 --output "$out/no-pacing.jsonl"
+          node "$work/analyze.cjs" "$out/no-pacing.jsonl" "$out/queue-estimate.cjs" > "$out/no-pacing-summary.json"
+          python3 "$work/replay.py" --pacing disabled --scenario stress --capacity 24 28 32 --output "$out/no-pacing-stress.jsonl"
+          node "$work/analyze.cjs" "$out/no-pacing-stress.jsonl" "$out/queue-estimate.cjs" > "$out/no-pacing-stress-summary.json"
+          node "$work/ledger-results.cjs" "$out" > "$out/ledger-results.json"
+          node -e 'const s=require(process.argv[1]);console.log(JSON.stringify({ledger:s.ledger,normal:s.pacing.normal,stress:s.pacing.stress},null,2))' "$out/ledger-results.json"
+          gzip "$out/no-pacing.jsonl" "$out/no-pacing-stress.jsonl"
       - uses: arduino/setup-arduino-cli@v2
         with:
           version: 1.2.2
