@@ -14,6 +14,9 @@ class ByteService {
     uint8_t nextAddress_ = 0xff;
     bool waiting_ = false;
 public:
+    // Preserve >=320 us under the existing 4 us micros quantization.
+    // Requires a qualified monotonic timebase; no hardware claim here.
+    static constexpr uint32_t minimumClockDeltaUs = 324;
     // Called ONLY after exclusive operations have completed their own
     // required execution delay. Do not call to escape an ordinary wait.
     void afterExclusiveOperation() {
@@ -40,7 +43,7 @@ public:
         if(col==Columns) return Result::Idle;
         // The normal caller must space-pad and reject embedded NUL;
         // boot CGRAM slot zero is deliberately outside this interface.
-        if(waiting_ && uint32_t(now-completedAt_)<320) return Result::Waiting;
+        if(waiting_ && uint32_t(now-completedAt_)<minimumClockDeltaUs) return Result::Waiting;
         const uint8_t address=base+col;
         Result result;
         if(nextAddress_!=address) {
