@@ -89,22 +89,21 @@ template<uint8_t N> PanelFault panelFault(const Ledger<N>& ledger,uint32_t page)
     return {primary.channel,primary.cause,&primary};
 }
 
-// 16x2: heading is invariant; alternate cause and current/old-target on
-// the second line every two seconds, then advance to the next fault.
-// 16x4/20x4: cause + current/old-target simultaneously, next fault every 2s.
+// Supported RFx000 panels: 16x4/20x4. Cause and current/old-target
+// are displayed together; next fault every 2s.
 // Values labelled now/old in the code and in full serial report.
 template<uint8_t Cols,uint8_t Rows,uint8_t N>
 void panelRow(char (&out)[Cols+1],uint8_t row,const Ledger<N>& ledger,
-              const PanelFault& fault,bool temperatures,bool liveValid,float liveC){
-    static_assert((Cols==16&&(Rows==2||Rows==4))||(Cols==20&&Rows==4),"RF LCD dimensions");
+              const PanelFault& fault,bool liveValid,float liveC){
+    static_assert((Cols==16||Cols==20)&&Rows==4,"RF LCD dimensions");
     PanelLine<Cols> line(out);
     if(row==0){
         if(ledger.level()==Severity::FireWarning)line.text(RF_PANEL_TEXT("FIRE WARNING"));
         else if(ledger.first().cause==Cause::WatchdogReset)line.text(RF_PANEL_TEXT("WATCHDOG RESET"));
         else line.text(RF_PANEL_TEXT("THERMAL ERROR"));
-    }else if(row==1 && (Rows==4||!temperatures)){
+    }else if(row==1){
         line.template channel<N>(fault.channel);line.cause(fault.cause);
-    }else if((Rows==2&&row==1)||(Rows==4&&row==2)){
+    }else if(row==2){
         line.template channel<N>(fault.channel);
         if(fault.channel==N)line.text(RF_PANEL_TEXT("CHECK LOG"));
         else {
