@@ -6,6 +6,22 @@ FIXTURE=r'''
 #include <avr/interrupt.h>
 #include "z-correction-clock.h"
 using namespace ZCorrectionResearch;
+#include <avr/pgmspace.h>
+class HAL {
+public:
+    static uint16_t integerSqrt(int32_t);
+    static int32_t CPUDivU2(unsigned int);
+};
+#include "actual-hal-math.inc"
+struct FastMath {
+    static uint16_t floorRoot(uint32_t x) {
+        if(x>INT32_MAX)return root(x);
+        if(!x)return 0;
+        uint16_t r=HAL::integerSqrt(int32_t(x));
+        return uint32_t(r)*r>x?r-1:r;
+    }
+    static uint32_t period(uint16_t v) {return HAL::CPUDivU2(v);}
+};
 extern "C" { volatile uint8_t phase=0, fixture_id=0, queue_depth=0; }
 volatile int32_t errorInput;
 volatile uint32_t accelerationInput;
@@ -27,6 +43,7 @@ int main() {
         accelerationInput=accelerations[a];speedInput=speeds[v];
         const auto limits=Limits::prepare(accelerationInput,speedInput);
         Ramp ramp;
+        FastRamp<FastMath> fast;
         fixture_id=a*3+v;
         for(uint8_t i=0;i<32;++i) {
             queue_depth=i;
@@ -38,7 +55,14 @@ int main() {
             sink=plan.interval+plan.nextLevel;
             mark(129);
             require(plan.sign==(err>0?1:-1)&&plan.interval>0);
-            ramp.commit(plan);
+            mark(3);
+            asm volatile("" : "+r"(err) :: "memory");
+            const auto fp=fast.plan(err,limits);
+            sink=fp.interval+fp.nextLevel;
+            mark(131);
+            require(fp.sign==plan.sign&&fp.nextLevel==plan.nextLevel&&fp.safetyRestart==plan.safetyRestart&&fp.interval>=plan.interval);
+            require(fp.boundarySpeed==root(limits.twiceAcceleration*fp.nextLevel));
+            fast.commit(fp);ramp.commit(plan);
         }
         queue_depth=32;
         errorInput=0;
@@ -65,8 +89,12 @@ def main():
     p.add_argument("--out",type=pathlib.Path,required=True)
     a=p.parse_args();d=a.out.resolve();d.mkdir(parents=True,exist_ok=True)
     cc=a.compiler.resolve();src=d/"fixture.cpp";src.write_text(FIXTURE)
+    hal=(HERE.parents[1]/"Repetier/HAL.cpp").read_text()
+    begin=hal.index("uint16_t HAL::integerSqrt(")
+    end=hal.index("} // CPUDivU2",begin)+len("} // CPUDivU2")
+    (d/"actual-hal-math.inc").write_text(hal[begin:end])
     elf=d/"z-clock.elf"
-    flags=["-mmcu=atmega2560","-std=gnu++11","-Os","-flto","-ffunction-sections","-fdata-sections","-fno-exceptions","-Wl,--gc-sections"]
+    flags=["-mmcu=atmega2560","-DF_CPU=16000000UL","-std=gnu++11","-Os","-flto","-ffunction-sections","-fdata-sections","-fno-exceptions","-Wl,--gc-sections"]
     run([cc,*flags,"-I"+str(HERE),src,"-Wl,-Map="+str(d/"z-clock.map"),"-o",elf])
     syms={}
     for line in run([cc.with_name("avr-nm"),"-S","-n",elf]).splitlines():
@@ -88,11 +116,12 @@ def main():
             start,ff,ii,stage=pending
             assert (ff,ii,stage)==(f,i,mark-128)
             records.append(dict(fixture=f,index=i,stage=stage,cycles=t-start));pending=None
-    assert done and pending is None and len(records)==9*34
+    assert done and pending is None and len(records)==9*66
     (d/"disassembly.txt").write_text(run([cc.with_name("avr-objdump"),"-d","-C","-z",elf]))
     (d/"size.txt").write_text(run([cc.with_name("avr-size"),"-A",elf]))
     summary={}
     for label,sel in (("ramp",lambda r:r["stage"]==1 and r["index"]<32),
+                      ("fast",lambda r:r["stage"]==3),
                       ("settled",lambda r:r["stage"]==1 and r["index"]==32),
                       ("mux",lambda r:r["stage"]==2)):
         costs=[r["cycles"] for r in records if sel(r)]
