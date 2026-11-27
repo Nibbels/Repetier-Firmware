@@ -248,9 +248,19 @@ void PrintLine::limitToStopTail(bool refitRamp) {
         return;
     stepsRemaining = stopTailSteps;
     if (refitRamp) {
-        // A direct move has equal entry and exit speeds. Fitting the earlier
-        // symmetric ramp again gives the same result for a shorter move.
-        fitRampToRemainingSteps();
+        // Direct profiles normally have equal entry and exit speeds.
+        // For a symmetric, non-overflowing profile, the generic reduction
+        // a - ((2*a - 32) >> 1) is exactly 16 for a > 16.
+        // Retain the general behavior for unexpected/asymmetric profiles.
+        const uint32_t a = stepProfile.accelSteps;
+        if (a == stepProfile.decelSteps && a <= 0x3fffffffUL) {
+            if (a > uint32_t(stopTailSteps / 2)) {
+                stepProfile.accelSteps = stopTailSteps / 2;
+                stepProfile.decelSteps = stopTailSteps / 2;
+            }
+        } else {
+            fitRampToRemainingSteps();
+        }
     }
 }
 
