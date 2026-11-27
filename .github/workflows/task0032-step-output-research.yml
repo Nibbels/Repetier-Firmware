@@ -41,6 +41,10 @@ jobs:
       - name: Exhaustive normalized inverse root bounds
         run: |
           python3 research/task0032-step-output/inverse-root-research.py --out "$RUNNER_TEMP/step-output/inverse-root"
+      - name: Direct Z ramp and cached plateau invariants
+        run: |
+          c++ -std=c++11 -O2 -Wall -Wextra -Werror -I "$RUNNER_TEMP/step-output/inverse-root" research/task0032-step-output/direct-z-ramp-replay.cpp -o "$RUNNER_TEMP/direct-z-ramp-replay"
+          "$RUNNER_TEMP/direct-z-ramp-replay" | tee "$RUNNER_TEMP/step-output/direct-z-ramp-replay.txt"
       - name: Replay immutable unified candidate early when sources are unchanged
         id: unified_reuse
         shell: bash
@@ -171,6 +175,12 @@ jobs:
         if: steps.unified_reuse.outputs.available != 'yes'
         run: |
           python3 research/task0032-step-output/unified-z-linked-replay.py "$RUNNER_TEMP/step-output/q23/wake-jog-idle/candidate.zip" "$RUNNER_TEMP/step-output/z-unified/unified-z/candidate.zip" "$RUNNER_TEMP/step-output/z-unified-results.json"
+      - name: Four actual firmware builds with direct-period Z ramp
+        run: |
+          python3 research/task0032-step-output/direct-z-source.py --out "$RUNNER_TEMP/step-output/z-direct" --tools "$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin"
+      - name: Linked direct-period nominal and correction replay
+        run: |
+          python3 research/task0032-step-output/unified-z-linked-replay.py "$RUNNER_TEMP/step-output/q23/wake-jog-idle/candidate.zip" "$RUNNER_TEMP/step-output/z-direct/direct-z/candidate.zip" "$RUNNER_TEMP/step-output/z-direct-results.json"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
