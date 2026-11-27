@@ -72,6 +72,9 @@ jobs:
       - name: Combined physical Z geometry velocity and curvature envelope
         run: |
           python3 research/task0032-step-output/z-geometry-budget.py "$RUNNER_TEMP/step-output/z-geometry-budget.json"
+      - name: Continuous cell and fade junction smoothing oracle
+        run: |
+          python3 research/task0032-step-output/z-region-blend.py "$RUNNER_TEMP/step-output/z-region-blend.json"
       - name: No intermediate settling rate-only continuous XYZ replay
         run: |
           python3 research/task0032-step-output/z-feedforward-stream.py "$RUNNER_TEMP/step-output/z-stream.json"
