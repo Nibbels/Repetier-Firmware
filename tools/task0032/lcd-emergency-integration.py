@@ -86,6 +86,7 @@ struct UIDisplay {
     unsigned refreshes=0;
     void resetDisplayAfterClear();
     void serviceDisplay();
+    void serviceDisplayPending();
     void refreshPage();
     void loadNormalCharacters(){normalCharacters_=true;}
     void renderNormalPage(){
