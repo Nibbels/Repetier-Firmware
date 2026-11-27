@@ -119,10 +119,10 @@
     RF_ZONE_ITEM(2, address(Field::F_BAUDRATE), Com::tEPRBaudrate, 3, true)
     RF_ZONE_ITEM(2, address(Field::F_MAX_INACTIVE_TIME), Com::tEPRMaxInactiveTime, 3, true)
     RF_ZONE_ITEM(2, address(Field::F_STEPPER_INACTIVE_TIME), Com::tEPRStopAfterInactivty, 3, true)
-    RF_ZONE_ITEM(1, address(Field::F_RF_PREHEAT_A_BED), PSTR("Preheat A bed [C]"), 3, true)
-    RF_ZONE_ITEM(1, address(Field::F_RF_PREHEAT_A_HOTEND), PSTR("Preheat A hotend [C]"), 3, true)
-    RF_ZONE_ITEM(1, address(Field::F_RF_PREHEAT_B_BED), PSTR("Preheat B bed [C]"), 3, true)
-    RF_ZONE_ITEM(1, address(Field::F_RF_PREHEAT_B_HOTEND), PSTR("Preheat B hotend [C]"), 3, true)
+    RF_ZONE_ITEM(1, address(Field::F_RF_PREHEAT_A_BED), zonePreheatABed, 3, true)
+    RF_ZONE_ITEM(1, address(Field::F_RF_PREHEAT_A_HOTEND), zonePreheatAHotend, 3, true)
+    RF_ZONE_ITEM(1, address(Field::F_RF_PREHEAT_B_BED), zonePreheatBBed, 3, true)
+    RF_ZONE_ITEM(1, address(Field::F_RF_PREHEAT_B_HOTEND), zonePreheatBHotend, 3, true)
     // RF specific
 
     RF_ZONE_ITEM(3, address(Field::F_PRINTING_DISTANCE), Com::tEPRFilamentPrinted, 3, false)
@@ -130,7 +130,7 @@
 
 
     // The limit may be reported; raw M206 is not commissioning authority.
-    RF_ZONE_ITEM(0, address(Field::F_NEW_BED_EMERGENCY_C), PSTR("Bed emergency cutoff [C]"), 0, false)
+    RF_ZONE_ITEM(0, address(Field::F_NEW_BED_EMERGENCY_C), zoneBedCutoff, 0, false)
 
 #undef RF_ZONE_ITEM
 #ifdef RF_ZONE_DEFAULT_FIELD_END

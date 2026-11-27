@@ -130,6 +130,11 @@ bool driveOnly(uint8_t id,const Patch* edits,uint8_t count) {
 bool motionBlock(uint8_t id) {
     return id>=Geometry && id<=Extruder1Motion;
 }
+const char zonePreheatABed[] PROGMEM="Preheat A bed [C]";
+const char zonePreheatAHotend[] PROGMEM="Preheat A hotend [C]";
+const char zonePreheatBBed[] PROGMEM="Preheat B bed [C]";
+const char zonePreheatBHotend[] PROGMEM="Preheat B hotend [C]";
+const char zoneBedCutoff[] PROGMEM="Bed emergency cutoff [C]";
 struct Report {
     uint8_t data[MaxPayload];
     uint8_t cached=0;
@@ -229,10 +234,22 @@ void EEPROM::storeDataIntoEEPROM(uint8_t) {
     saveLive(LiveSettings::BulkMask & ~blockBit(Pressure));
 }
 void EEPROM::writeSettings() {
-    Report report;
-#define RF_ZONE_FIELD(type, start, label, digits, writable) report.field(type,start,label,digits)
+    // All report metadata is immutable and remains in near Flash.
+    struct ReportField {uint16_t key;PGM_P label;uint8_t digits;};
+    static const ReportField fields[] PROGMEM = {
+#define RF_ZONE_FIELD_END ,
+#define RF_ZONE_FIELD(type,start,label,digits,writable) {hostFieldKey(start,type),label,digits}
 #include "EepromZoneHostFields.h"
 #undef RF_ZONE_FIELD
+#undef RF_ZONE_FIELD_END
+    };
+    Report report;
+    for(const auto& field:fields) {
+        const uint16_t key=pgm_read_word(&field.key);
+        const auto label=reinterpret_cast<PGM_P>(pgm_read_word(&field.label));
+        report.field(uint8_t(key>>10),uint16_t(Base+(key&0x03FF)),label,pgm_read_byte(&field.digits));
+        if(!report.ok)break;
+    }
 }
 void EEPROM::update(GCode* com) {
     lastOk=false;
