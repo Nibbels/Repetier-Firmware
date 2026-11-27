@@ -221,6 +221,11 @@ int main() {
     code.P=65536L+EPR_RF_MOTOR_CURRENT; EEPROM::update(&code);
     code.P=-1; EEPROM::update(&code);
     assert(loads == before && std::memcmp(bytes,motorBefore,sizeof bytes)==0);
+    // The old UART preference is not a writable setting; reject every overlap.
+    for(int32_t pos=EPR_BAUDRATE-3;pos<EPR_BAUDRATE+4;++pos) {
+        code.T=2;code.P=pos;code.S=0;EEPROM::update(&code);
+        assert(loads==before && std::memcmp(bytes,motorBefore,sizeof bytes)==0);
+    }
     // Autotune-only coefficients are protected against raw host writes.
     const int32_t firstGains[]={EPR_BED_PID_PGAIN,EEPROM_EXTRUDER_OFFSET+EPR_EXTRUDER_PID_PGAIN,
         EEPROM_EXTRUDER_OFFSET+EEPROM_EXTRUDER_LENGTH+EPR_EXTRUDER_PID_PGAIN};

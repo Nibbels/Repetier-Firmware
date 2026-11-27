@@ -113,7 +113,6 @@
     RF_ZONE_ITEM(0, address(Field::F_RF_CASE_LIGHT_MODE), Com::tEPRCaseLightsMode, 3, true)
 
 
-    RF_ZONE_ITEM(2, address(Field::F_BAUDRATE), Com::tEPRBaudrate, 3, false)
     RF_ZONE_ITEM(2, address(Field::F_MAX_INACTIVE_TIME), Com::tEPRMaxInactiveTime, 3, true)
     RF_ZONE_ITEM(2, address(Field::F_STEPPER_INACTIVE_TIME), Com::tEPRStopAfterInactivty, 3, true)
     RF_ZONE_ITEM(1, address(Field::F_RF_PREHEAT_A_BED), zonePreheatABed, 3, true)

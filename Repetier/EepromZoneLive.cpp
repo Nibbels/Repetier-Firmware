@@ -134,7 +134,6 @@ bool LiveSettings::operator()(uint8_t id,uint8_t* data,uint8_t n) const {
         w.u8(Field::F_RF_FAN_MODE,HAL::partFanMode());w.u8(Field::F_RF_PART_FAN_SPEED,HAL::partFanDivisor());
         w.u8(Field::F_RF_PART_FAN_PWM_MIN,HAL::partFanMinDuty());w.u8(Field::F_RF_PART_FAN_PWM_MAX,HAL::partFanMaxDuty());break;
     case System:
-        w.u32(Field::F_BAUDRATE,firmwareSerialBaudrate);
         w.u32(Field::F_MAX_INACTIVE_TIME,Printer::inactivity.shutdownTimeout());
         w.u32(Field::F_STEPPER_INACTIVE_TIME,Printer::inactivity.stepperTimeout());break;
     default:return false;

@@ -109,7 +109,7 @@ static void sessionReplay(FactoryDefaults& defaults) {
     writes=dev.programs;
     assert(session.read(System,readback,length(System),alerts)==Result::Ok && !alerts);
     BlockDecoder systemRead(System,readback,length(System));
-    assert(systemRead.u32(Field::F_BAUDRATE)==BAUDRATE && dev.programs==writes);
+    assert(systemRead.u32(Field::F_MAX_INACTIVE_TIME)==uint32_t(MAX_INACTIVE_TIME)*1000 && dev.programs==writes);
     dev.bytes[address(System)+PayloadOffset]^=1;
     assert(session.read(System,readback,length(System),alerts)==Result::NeedsRecovery);
     dev.bytes[address(System)+PayloadOffset]^=1;
@@ -257,13 +257,13 @@ static void factoryImageReplay() {
                 }
     uint32_t expected=0;
     switch(configuredProfile()) {
-    case 0x0d10:expected=0x9871e8f9UL;break;
-    case 0x0e20:expected=0x4e467e41UL;break;
-    case 0x0f20:expected=0xf9d98831UL;break;
-    case 0x0e11:expected=0x2f98e2c1UL;break;
+    case 0x0d10:expected=0x945c97d1UL;break;
+    case 0x0e20:expected=0x53f36959UL;break;
+    case 0x0f20:expected=0xde96f249UL;break;
+    case 0x0e11:expected=0xa619d459UL;break;
     default:assert(false);
     }
-    assert(bytes==6912 && digest==expected);
+    assert(bytes==6816 && digest==expected);
     printf("Factory payload baseline: %u bytes match; PASS\n",bytes);
 }
 template<class T,class L,class H> static unsigned compareIntegerRange(int first,int last,L lo,H hi,bool (*range)(T,T,T)) {
@@ -378,7 +378,8 @@ int main(){
     assert(preheat.u16(Field::F_RF_PREHEAT_B_BED)==PREHEAT_B_BED_C);
     assert(store.readBlock(System,block,length(System)));
     BlockDecoder system(System,block,length(System));
-    assert(system.u32(Field::F_BAUDRATE)==BAUDRATE);
+    assert(length(System)==8 && system.u32(Field::F_MAX_INACTIVE_TIME)==uint32_t(MAX_INACTIVE_TIME)*1000);
+    for(uint16_t pos=0x0AAB;pos<=0x0AAE;++pos)assert(fieldWidth(pos)==0);
     assert(system.u32(Field::F_STEPPER_INACTIVE_TIME)==uint32_t(STEPPER_INACTIVE_TIME)*1000);
     assert(store.readBlock(Lighting,block,length(Lighting)));
     BlockDecoder light(Lighting,block,length(Lighting));
@@ -431,7 +432,7 @@ int main(){
     rejected(Panel,Field::F_RF_MOVE_MODE_Z,0,1);
     rejected(Lighting,Field::F_RF_CASE_LIGHT_MODE,2,1);
     rejected(PartFan,Field::F_RF_PART_FAN_PWM_MIN,254,1);
-    rejected(System,Field::F_BAUDRATE,0,4);
+    rejected(System,Field::F_MAX_INACTIVE_TIME,0x80000000UL,4);
     rejected(Usage,Field::F_PRINTING_DISTANCE,0x7FC00000UL,4);
     assert(validPreheat(100,true)); // a preference, not heater permission
     // Store can contain a CRC-correct but semantically invalid payload.

@@ -202,7 +202,7 @@ inline bool validBlock(uint8_t id,const uint8_t* data,uint8_t n) {
             && min && max<255 && int(max)-int(min)>=16;break;
     }
     case System:
-        ok=d.u32(Field::F_BAUDRATE)==firmwareSerialBaudrate && d.u32(Field::F_MAX_INACTIVE_TIME)<=0x7FFFFFFFUL
+        ok=d.u32(Field::F_MAX_INACTIVE_TIME)<=0x7FFFFFFFUL
             && d.u32(Field::F_STEPPER_INACTIVE_TIME)<=0x7FFFFFFFUL;break;
     case Usage:
         ok=d.u32(Field::F_PRINTING_TIME)<=0x7FFFFFFFUL && isfinite(d.f32(Field::F_PRINTING_DISTANCE))

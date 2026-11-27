@@ -192,7 +192,6 @@ int main() {
     {Field::F_RF_PART_FAN_SPEED, 1},
     {Field::F_RF_PART_FAN_PWM_MIN, 1},
     {Field::F_RF_PART_FAN_PWM_MAX, 1},
-    {Field::F_BAUDRATE, 4},
     {Field::F_MAX_INACTIVE_TIME, 4},
     {Field::F_STEPPER_INACTIVE_TIME, 4},
     {Field::F_PRINTING_TIME, 4},
@@ -207,7 +206,7 @@ int main() {
             assert(!occupied[start+i-Base]);occupied[start+i-Base]=true;++payload;
         }
     }
-    assert(payload==288 && sizeof(fields)/sizeof(fields[0])==109);
+    assert(payload==284 && sizeof(fields)/sizeof(fields[0])==108);
     // Independent inventory above defines the exact historical width map.
     // Motor current is one five-byte group in the layout, but individual
     // channels are the only writable patch units.
@@ -225,7 +224,7 @@ int main() {
         assert(actual==expected);
         widthDigest=(widthDigest^actual)*16777619UL;
     }
-    assert(widthDigest==0xd0ac0e89UL); // prior map minus exactly 16 retired RGB fields
+    assert(widthDigest==0x31686315UL); // prior map minus RGB and fixed UART payload
     puts("EEPROM internal field widths: all 65536 addresses match schema; PASS");
     uint16_t c16=0xffff;uint32_t c32=0xffffffff;
     for(char c:"123456789") if(c) {c16=crc16Byte(c16,c);c32=crc32Byte(c32,c);}

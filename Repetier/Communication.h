@@ -156,7 +156,6 @@ public:
     FSTRINGVAR(tEPR1)
     FSTRINGVAR(tEPR2)
     FSTRINGVAR(tEPR3)
-    FSTRINGVAR(tEPRBaudrate)
     FSTRINGVAR(tEPRFilamentPrinted)
     FSTRINGVAR(tEPRPrinterActive)
     FSTRINGVAR(tEPRMaxInactiveTime)

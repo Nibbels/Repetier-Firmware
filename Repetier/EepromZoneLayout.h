@@ -14,7 +14,7 @@ constexpr uint16_t End = 0x0C00; // exclusive
 constexpr uint8_t SlotSize = 32;
 constexpr uint8_t PayloadOffset = 3;
 constexpr uint8_t MaxPayload = 29;
-constexpr uint16_t Schema = 2; // pre-release: retired RGB payload
+constexpr uint16_t Schema = 3; // pre-release: fixed application UART
 enum Block : uint8_t {
     Admin = 0,
     Geometry = 1,
@@ -49,10 +49,10 @@ constexpr uint8_t blockOf(uint16_t pos) { return pos >= Base && pos < End ? uint
 
 inline uint8_t length(uint8_t id) {
 #ifdef __AVR__
-    static const uint8_t lengths[] PROGMEM = {0,29,24,8,26,5,29,29,20,20,19,1,8,4,7,12,6,7,6,4,4,12,8};
+    static const uint8_t lengths[] PROGMEM = {0,29,24,8,26,5,29,29,20,20,19,1,8,4,7,12,6,7,6,4,4,8,8};
     return id <= Last ? pgm_read_byte(lengths + id) : 0;
 #else
-    static const uint8_t lengths[] = {0,29,24,8,26,5,29,29,20,20,19,1,8,4,7,12,6,7,6,4,4,12,8};
+    static const uint8_t lengths[] = {0,29,24,8,26,5,29,29,20,20,19,1,8,4,7,12,6,7,6,4,4,8,8};
     return id <= Last ? lengths[id] : 0;
 #endif
 }
@@ -165,9 +165,9 @@ enum class Field : uint16_t {
     F_RF_PART_FAN_SPEED = 0x0A84,
     F_RF_PART_FAN_PWM_MIN = 0x0A85,
     F_RF_PART_FAN_PWM_MAX = 0x0A86,
-    F_BAUDRATE = 0x0AA3,
-    F_MAX_INACTIVE_TIME = 0x0AA7,
-    F_STEPPER_INACTIVE_TIME = 0x0AAB,
+    F_MAX_INACTIVE_TIME = 0x0AA3,
+    F_STEPPER_INACTIVE_TIME = 0x0AA7,
+    // 0x0AAB..0x0AAE: free former baud payload.
     F_PRINTING_TIME = 0x0AC3,
     F_PRINTING_DISTANCE = 0x0AC7,
 };
@@ -301,7 +301,6 @@ inline uint8_t fieldWidth(uint16_t pos) {
         widthEntry(Field::F_RF_PART_FAN_SPEED,1),
         widthEntry(Field::F_RF_PART_FAN_PWM_MIN,1),
         widthEntry(Field::F_RF_PART_FAN_PWM_MAX,1),
-        widthEntry(Field::F_BAUDRATE,4),
         widthEntry(Field::F_MAX_INACTIVE_TIME,4),
         widthEntry(Field::F_STEPPER_INACTIVE_TIME,4),
         widthEntry(Field::F_PRINTING_TIME,4),
