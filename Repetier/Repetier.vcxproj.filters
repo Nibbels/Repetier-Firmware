@@ -68,6 +68,9 @@
     <ClInclude Include="EepromZoneHostAccess.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="EepromZoneValidation.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="Extruder.h">
       <Filter>Header Files</Filter>
     </ClInclude>

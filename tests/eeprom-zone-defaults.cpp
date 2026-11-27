@@ -8,6 +8,7 @@
 #include "EepromZoneDefaults.h"
 #include "EepromZoneStorage.h"
 #include "EepromZoneHostAccess.h"
+#include "EepromZoneValidation.h"
 using namespace EepromZones;
 struct Memory {
     std::array<uint8_t,4096> bytes;
@@ -29,6 +30,7 @@ int main(){
         uint8_t actual[MaxPayload];
         assert(store.readBlock(id,actual,n));
         for(uint8_t i=0;i<n;++i) assert(actual[i]==guard[i+1]);
+        assert(validBlock(id,actual,n));
     }
     uint8_t block[MaxPayload];
     assert(store.readBlock(Geometry,block,length(Geometry)));
@@ -71,6 +73,61 @@ int main(){
         assert(configuredProfile()&1);assert(light.u8(Field::F_RF_FET2_MODE)==0);
     }
 #endif
+    // Even CRC-valid values are not automatically safe. Test the actual
+    // policy using complete board-specific payloads and an altered field.
+    const auto rejected=[&](uint8_t id,Field field,uint32_t bits,uint8_t width) {
+        uint8_t data[MaxPayload];
+        const uint8_t n=length(id);
+        assert(defaults(id,data,n) && validBlock(id,data,n));
+        const uint8_t offset=address(field)-address(id)-PayloadOffset;
+        assert(offset+width<=n);
+        for(uint8_t i=0;i<width;++i) data[offset+i]=uint8_t(bits>>(8*i));
+        assert(!validBlock(id,data,n));
+    };
+    rejected(Geometry,Field::F_XAXIS_STEPS_PER_MM,0,4);
+    rejected(Geometry,Field::F_YAXIS_STEPS_PER_MM,0x7FC00000UL,4);
+    rejected(Geometry,Field::F_Z_LENGTH,0x7F800000UL,4);
+    rejected(Geometry,Field::F_RF_MICRO_STEPS_X,9,1);
+    rejected(Feedrates,Field::F_X_HOMING_FEEDRATE_PRINT,0x447A0000UL,4);
+    rejected(Jerk,Field::F_MAX_ZJERK,0,4);
+    rejected(Acceleration,Field::F_RF_STEP_PACKING_MIN_INTERVAL,0,2);
+    rejected(MotorCurrent,Field::F_RF_MOTOR_CURRENT,255,1);
+    rejected(Extruder0Motion,Field::F_E0_STEPS_PER_MM,0xBF800000UL,4);
+    rejected(Extruder0Motion,Field::F_E0_ADVANCE_L,0x41200000UL,4);
+    rejected(Hotend0,Field::F_E0_SENSOR_TYPE,255,1);
+    rejected(Hotend0,Field::F_E0_PID_IGAIN,0,4);
+    rejected(Hotend0,Field::F_PID_CALIBRATION_SLOT_0,0xA9,1);
+    rejected(BedPid,Field::F_BED_PID_MAX,39,1);
+    rejected(BedSafety,Field::F_NEW_BED_EMERGENCY_C,151,1);
+    rejected(Preheat,Field::F_RF_PREHEAT_A_BED,141,2);
+    rejected(ZOffset,Field::F_RF_Z_OFFSET,10001,4);
+    rejected(SenseOffset,Field::F_RF_MOD_SENSEOFFSET_OFFSET_MAX,301,2);
+    rejected(Pressure,Field::F_RF_EMERGENCYZSTOPDIGITSMAX,0,2);
+    rejected(Pressure,Field::F_RF_EMERGENCYPAUSEDIGITSMIN,32767,4);
+    rejected(Scan,Field::F_RF_MOD_ZOS_SCAN_POINT_Y,255,1);
+    rejected(Wobble,Field::F_RF_MOD_WOBBLE_FIX_AMPX,1000,2);
+    rejected(Panel,Field::F_RF_MOVE_MODE_Z,0,1);
+    rejected(Lighting,Field::F_RF_CASE_LIGHT_MODE,2,1);
+    rejected(PartFan,Field::F_RF_PART_FAN_PWM_MIN,254,1);
+    rejected(System,Field::F_BAUDRATE,0,4);
+    rejected(Usage,Field::F_PRINTING_DISTANCE,0x7FC00000UL,4);
+    assert(validPreheat(100,true)); // a preference, not heater permission
+    // Store can contain a CRC-correct but semantically invalid payload.
+    // The higher-level policy must discover this before applying it.
+    struct InvalidProvider {
+        FactoryDefaults& defaults;
+        bool operator()(uint8_t id,uint8_t* data,uint8_t n) {
+            if(!defaults(id,data,n)) return false;
+            if(id==Feedrates) for(uint8_t a=0;a<4;++a) data[a]=0;
+            return true;
+        }
+    } invalidProvider{defaults};
+    assert(store.commit(bit(Feedrates),invalidProvider));
+    const auto structural=store.inspect();
+    assert(!structural.invalid && structural.masterValid);
+    assert(semanticInvalid(store,structural)==bit(Feedrates));
+    assert(store.repair(bit(Feedrates),defaults));
+    assert(!semanticInvalid(store,store.inspect()));
     // Invalid block length and field/overlap are rejected, not a partial
     // provider silently completing an otherwise CRC-valid record.
     assert(!defaults(Admin,block,1) && !defaults(Geometry,block,1));

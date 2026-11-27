@@ -381,3 +381,8 @@ Byte31 is used for the complement of the state byte at offset22; both must match
 ### Step-queue isolation
 
 SenseOffset saved limits have a four-byte foreground-published RAM snapshot. The queue activates that pair without reading EEPROM, including while a byte write is busy. M3909 P/S and UI changes share a foreground save helper. This is a prerequisite independent of switching the live layout; canonical host/AVR validation remains required.
+
+
+## A71b semantic validation
+
+CRC is a structural integrity check, not permission to apply arbitrary values. EepromZoneValidation.h validates complete proposed blocks against established board/menu/loader bounds (including relational fields); no silent in-place normalization. It distinguishes stored preheat preference (absolute bed maximum 140 C) from live target admission. Semantic errors are classified only on structurally valid, non-uncertain blocks. Geometry guards numeric range, not mechanical or timing qualification. The live integration must use this policy consistently for host/panel and bulk settings, reconcile inconsistent historical limits, and validate cross-block derived parameters before publishing. Four-board host replay extends actual default and CRC-correct-invalid tests.
