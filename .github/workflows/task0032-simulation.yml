@@ -66,6 +66,9 @@ jobs:
           test "$(git hash-object "$out/simavr-trace.c")" = c0dfeca055159db9b918c6a8420bc2d441bae079
           compiler="$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin/avr-g++"
           python3 tools/task0032/parser-avr-bench.py --compiler "$compiler" --runner-source "$out/simavr-trace.c" --out "$out/parser-avr"
+          python3 tools/task0032/parser-avr-bench.py --compiler "$compiler" --runner-source "$out/simavr-trace.c" --out "$out/parser-avr-u16" --decimal u16-tail
+          node -e 'const a=require(process.argv[1]),b=require(process.argv[2]); if(JSON.stringify(a.samples)!==JSON.stringify(b.samples)||a.records.length!==b.records.length)throw Error("unmatched fixtures"); const rows=a.records.map((r,i)=>{const s=b.records[i];if(r.format!==s.format||r.id!==s.id||r.stage!==s.stage)throw Error("unmatched record");return {...r,candidateCycles:s.cycles,saved:r.cycles-s.cycles}});console.log(JSON.stringify({schema:1,baselineElf:a.elf_sha256,candidateElf:b.elf_sha256,rows},null,2))' "$out/parser-avr/parser-results.json" "$out/parser-avr-u16/parser-results.json" > "$out/decimal-comparison.json"
+          node -e 'const r=require(process.argv[1]); console.log(JSON.stringify([1,2,5].map(stage=>{const a=r.rows.filter(x=>x.stage===stage);const s=a.map(x=>x.saved).sort((a,b)=>a-b);return {stage,n:a.length,minSaved:s[0],medianSaved:s[Math.floor(s.length/2)],maxSaved:s.at(-1)}}),null,2))' "$out/decimal-comparison.json"
           sha256sum tools/task0032/parser-avr-bench.py >> "$out/source-sha256.txt"
           git show "$planner:research/task0032-planner-queue/REPORT.md" > "$out/planner-report.md"
           node tools/task0032/measured-cost-sweep.cjs "$out/transport-contract-input.json" "$out/planner-report.md" "$out/parser-avr/parser-results.json" > "$out/measured-cost-sweep.json"
