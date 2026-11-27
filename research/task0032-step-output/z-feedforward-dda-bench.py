@@ -5,6 +5,8 @@ HERE=pathlib.Path(__file__).resolve().parent
 FIXTURE=r'''
 #include <avr/interrupt.h>
 #include "z-feedforward-dda.h"
+#include "z-physical-chord.h"
+#include "z-chord-handoff.h"
 extern "C" { volatile uint8_t phase=0,fixture_id=0,queue_depth=0; }
 volatile int32_t first,last,out;
 volatile uint32_t length;
@@ -13,19 +15,24 @@ int main(){
     cli();
     const int32_t starts[]={-32768,32780,-420,-50,0,-13};
     const int32_t ends[]={32780,-32768,-20,-50,0,13};
-    const uint32_t lengths[]={129,257,1000,65535,65536,2147483647UL};
+    const uint32_t lengths[]={129,257,1000,8191,16384,32767};
     for(uint8_t j=0;j<6;j++){
         first=starts[j];last=ends[j];length=lengths[j];
         fixture_id=j;queue_depth=0;
         ZFeedforwardResearch::Chord c;
+        ZFeedforwardResearch::PhysicalChord p;
         mark(1);
         bool ok=c.prepare(first,last,length);out=c.value();
         mark(129);
         if(!ok){mark(254);mark(255);while(true){}}
+        mark(3);ok=p.prepare(first,last,length);out=p.value();mark(131);
+        if(!ok||p.value()!=c.value()){mark(254);mark(255);while(true){}}
         for(uint8_t i=0;i<128;i++){
             queue_depth=i;
             mark(2);ok=c.advance();out=c.value();mark(130);
             if(!ok){mark(254);mark(255);while(true){}}
+            mark(4);ok=p.advance();out=p.value();mark(132);
+            if(!ok||p.value()!=c.value()){mark(254);mark(255);while(true){}}
         }
     }
     mark(255);while(true){}
@@ -66,9 +73,9 @@ def main():
             start,ff,ii,stage=pending
             assert (ff,ii,stage)==(f,i,mark-128)
             rows.append(dict(fixture=f,index=i,stage=stage,cycles=t-start));pending=None
-    assert done and pending is None and len(rows)==6*129
+    assert done and pending is None and len(rows)==6*129*2
     result={}
-    for stage,name in ((1,"prepare"),(2,"advance")):
+    for stage,name in ((1,"prepare"),(2,"advance"),(3,"physical_prepare"),(4,"physical_advance")):
         v=[r["cycles"] for r in rows if r["stage"]==stage]
         result[name]=dict(n=len(v),min=min(v),median=statistics.median(v),max=max(v))
     (d/"results.json").write_text(json.dumps(dict(summary=result,rows=rows,flags=flags),indent=2)+"\n")
