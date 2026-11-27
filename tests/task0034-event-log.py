@@ -7,6 +7,9 @@ import tempfile
 root=Path(__file__).resolve().parents[1]
 source=r"""
 #include "EventLog.h"
+#include "EventLogRead.h"
+#include "ThermalEventSource.h"
+#include <limits>
 #include <cassert>
 #include <cstdio>
 #include <cstring>
@@ -67,7 +70,110 @@ void inject(Store& s,uint8_t slot,uint32_t seq,const Payload& p){
     for(uint8_t i=0;i<4;++i)s.data[a+2+i]=byteOf(seq,i);
     for(uint8_t i=0;i<26;++i)s.data[a+6+i]=p.byte(i);
 }
+// Model uses the actual public record interface from the pinned Task0034
+// ledger; integrated replay must also instantiate with the production type.
+enum class Cause : uint8_t {
+    None, SensorInvalid, StaleSample, NoRise, ExcessiveRise, HoldFailure,
+    OverTemperature, HeatingWhileOff, LeaseExpired, WatchdogReset,
+    CalibrationMismatch, InterruptedHeating
+};
+struct Evidence {
+    uint32_t uptimeMs=0,windowMs=0;
+    float measuredC=0,targetC=0,deltaC=0,threshold=0;
+    uint16_t rawAdc=0;
+    uint8_t requestedDuty=0,admittedDuty=0,sensorType=0,powerLimit=0,profile=0;
+    uint16_t valid=0;
+    enum : uint16_t {
+        Measured=1,Target=2,Delta=4,Threshold=8,Raw=16,Requested=32,
+        Admitted=64,Profile=128,Uptime=256,Window=512,SensorType=1024,PowerLimit=2048
+    };
+};
+struct Record {Evidence evidence;Cause cause=Cause::None;uint8_t channel=0;};
+struct Ledger {
+    Record initial,escalation;
+    bool active()const{return initial.cause!=Cause::None;}
+    const Record& first()const{return initial;}
+    const Record& firstFire()const{return escalation;}
+};
+struct Sink {
+    bool blocked=false;
+    uint32_t sequences[Slots]{};
+    uint8_t reasons[Slots]{},channels[Slots]{},count=0;
+    bool tryEntry(const EntryView& v){
+        if(blocked)return false;
+        assert(count<Slots);
+        sequences[count]=v.sequence();reasons[count]=v.reason();
+        channels[count]=uint8_t(v.channel());++count;return true;
+    }
+};
+void readAll(R& ring,Store& store,Sink& sink) {
+    Reader<Slots> reader;assert(reader.begin(ring));
+    for(unsigned i=0;i<Slots+1;++i){
+        auto x=reader.step(ring,store,sink);
+        if(x==ReadProgress::Done)return;
+        assert(x==ReadProgress::Sent||x==ReadProgress::Skipped);
+    }
+    assert(false);
+}
+void captureTest(){
+    int16_t v=0;
+    assert(deciC(-3276.8f,v)&&v==-32768);
+    assert(deciC(3276.7f,v)&&v==32767);
+    assert(deciC(-12.35f,v)&&v==-124);
+    assert(!deciC(std::numeric_limits<float>::quiet_NaN(),v));
+    assert(!deciC(std::numeric_limits<float>::infinity(),v));
+    Ledger l;
+    l.initial.cause=Cause::SensorInvalid;l.initial.channel=0;
+    auto& e=l.initial.evidence;
+    e.targetC=240.3f;e.measuredC=std::numeric_limits<float>::quiet_NaN();
+    e.deltaC=5000.f;e.threshold=-20.f;e.admittedDuty=217;e.rawAdc=0;
+    e.uptimeMs=0x12345678;e.valid=Evidence::Target|Evidence::Measured|
+        Evidence::Delta|Evidence::Threshold|Evidence::Admitted|Evidence::Raw|Evidence::Uptime;
+    ThermalSource<Record,2> src(l.initial);
+    assert(src.byte(25)==eventId(Channel::E0,1));
+    assert(src.byte(23)==uint8_t(e.valid&~(Evidence::Measured|Evidence::Delta)));
+    assert(src.byte(24)==uint8_t(e.valid>>8));
+    Store store;R ring;ThermalCapture<2> capture;
+    // Escalate while first record is still being written.
+    for(unsigned i=0;i<Slots+3;++i){
+        capture.service(ring,store,l);
+        if(store.busy)store.complete();
+    }
+    assert(ring.pending());
+    l.escalation.cause=Cause::OverTemperature;l.escalation.channel=1;
+    l.escalation.evidence.measuredC=280.f;
+    l.escalation.evidence.valid=Evidence::Measured;
+    for(unsigned i=0;i<200;++i){
+        auto x=capture.service(ring,store,l);assert(x!=Progress::Failed);
+        if(store.busy)store.complete();
+    }
+    assert(ring.latestSequence()==2&&!ring.pending());
+    uint8_t bytes[EntryBytes];assert(ring.readEntry(store,0,bytes));
+    EntryView first{bytes};
+    assert(first.value(0)==0&&first.value(1)==2403&&first.value(2)==0&&first.value(3)==-200);
+    assert(first.uptime()==0x12345678&&first.raw()==0&&first.context(1)==217);
+    assert((first.valid()&Evidence::Raw)&&!(first.valid()&Evidence::Measured));
+    assert(ring.readEntry(store,1,bytes));
+    EntryView fire{bytes};
+    assert(fire.channel()==Channel::Bed&&fire.reason()==6&&fire.value(0)==2800);
+    Sink sink;readAll(ring,store,sink);
+    assert(sink.count==2&&sink.sequences[0]==2&&sink.sequences[1]==1);
+    // Initial fire is the same event, not a second duplicate append.
+    Ledger lf;lf.initial=l.escalation;lf.escalation=l.escalation;
+    Store sf;R rf;ThermalCapture<2> cf;
+    for(unsigned i=0;i<200;++i){
+        assert(cf.service(rf,sf,lf)!=Progress::Failed);
+        if(sf.busy)sf.complete();
+    }
+    assert(rf.latestSequence()==1);
+    // Stable physical channel identity, independent of fitted heater count.
+    Record rr;rr.cause=Cause::LeaseExpired;rr.channel=3;
+    assert((ThermalSource<Record,3>(rr).byte(25)==eventId(Channel::System,8)));
+    rr.channel=1;assert((ThermalSource<Record,3>(rr).byte(25)==eventId(Channel::E1,8)));
+    rr.channel=2;assert((ThermalSource<Record,3>(rr).byte(25)==eventId(Channel::Bed,8)));
+}
 int main(){
+    captureTest();
     static_assert(R::Bytes==128,"region size");
     assert(eventId(Channel::System,0)==0&&eventId(Channel::System,64)==0);
     assert(newer(0,0xffffffffu)&&!newer(0xffffffffu,0)&&!newer(5,5));
@@ -85,6 +191,11 @@ int main(){
         for(uint32_t k=n>Slots?n-Slots+1:1;k<=n;++k)
             verify(reboot,s,uint8_t((k-1)%Slots),k,record(k));
     }
+    Sink listed;readAll(r,s,listed);
+    assert(listed.count==Slots&&listed.sequences[0]==40&&listed.sequences[3]==37);
+    Reader<Slots> reader;Sink blocked;blocked.blocked=true;assert(reader.begin(r));
+    assert(reader.step(r,s,blocked)==ReadProgress::Busy&&blocked.count==0);
+    blocked.blocked=false;assert(reader.step(r,s,blocked)==ReadProgress::Sent&&blocked.sequences[0]==40);
     // Writer is not allowed to perform a read or launch while settings owns it.
     p=record(41);assert(r.begin(p));s.otherOwner=true;
     auto reads=s.reads,writes=s.launches;
@@ -141,10 +252,17 @@ int main(){
     inject(wrap,3,1,record(4));
     R wr;scan(wr,wrap);assert(wr.latestSequence()==1&&wr.latestSlot()==3);
     append(wr,wrap,record(5));verify(wr,wrap,0,2,record(5));
+    Sink wrapped;readAll(wr,wrap,wrapped);
+    assert(wrapped.count==Slots&&wrapped.sequences[0]==2&&wrapped.sequences[3]==0xffffffffu);
+    Reader<Slots> changed;assert(changed.begin(wr));
+    append(wr,wrap,record(6));
+    Sink unused;assert(changed.step(wr,wrap,unused)==ReadProgress::Changed);
+    // Restore the prior four entries for the corruption test.
+    inject(wrap,1,0xffffffffu,record(2));
     // Reject unsupported versions and empty reason codes; not a CRC.
     wrap.data[1]=99;wrap.data[3*EntryBytes+31]=0;
     R bad;scan(bad,wrap);assert(bad.latestSequence()==0&&bad.latestSlot()==2);
-    std::printf("Event log: 40 appends, %u torn-byte cuts, wrap, busy owner, ignored writes PASS\n",cuts);
+    std::printf("Event log: 40 appends, %u torn-byte cuts, wrap, busy owner, ignored writes, thermal evidence/escalation and read order PASS\n",cuts);
 }
 """
 with tempfile.TemporaryDirectory() as d:
