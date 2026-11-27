@@ -1733,6 +1733,30 @@ void primeParameters() {
     command.I = 9;
     command.Y = 500;
 
+    // Neither scan mode may enter the priming state/snapshot frame.
+    for (char* scan : {&g_nHeatBedScanStatus, &g_nZOSScanStatus}) {
+        *scan = 1;
+        Printer::startLine.run(command);
+        assert(!primeMoves && !Printer::startLine.active());
+        *scan = 0;
+    }
+    // A scan can start while an idle job is waiting for internal motion.
+    Printer::printJob.finishPrintMotion();
+    PrintLine::linesCount = 1;
+    duringPeriodicActions = [] { g_nZOSScanStatus = 1; };
+    Printer::startLine.run(command);
+    duringPeriodicActions = nullptr;
+    assert(!primeMoves && !Printer::startLine.active() && Printer::printJob.isIdle());
+    assert(!PrintLine::hasLines());
+    g_nZOSScanStatus = 0;
+
+    // An existing filament owner is not a printing phase.
+    assert(Printer::printJob.beginFilamentService());
+    Printer::startLine.run(command);
+    assert(!primeMoves && !Printer::startLine.active());
+    Printer::printJob.finishFilamentService();
+    Printer::printJob.admitPrintMotion();
+
     Printer::axesHomed = false;
     Printer::startLine.run(command);
     assert(!primeMoves);
