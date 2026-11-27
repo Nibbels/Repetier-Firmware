@@ -11,13 +11,22 @@
 
 namespace EepromZones {
 struct Inspection {
-    uint32_t invalid = Active;
-    uint32_t uncertain = Active;
-    uint32_t alerts = AllAlerts;
-    bool headerValid = false;
-    bool masterValid = false;
-    bool alertsValid = false;
-    bool clean = false;
+    uint32_t invalid;
+    uint32_t uncertain;
+    uint32_t alerts;
+    bool headerValid;
+    bool masterValid;
+    bool alertsValid;
+    bool clean;
+
+    // AVR LTO emitted duplicate anonymous 16-byte RAM initializer images
+    // for the fail-closed defaults in different partitions. Keep one
+    // constructor body rather than cloning the constant into every caller.
+#ifdef __AVR__
+    __attribute__((noinline,noclone))
+#endif
+    Inspection() : invalid(Active), uncertain(Active), alerts(AllAlerts),
+                   headerValid(false), masterValid(false), alertsValid(false), clean(false) {}
     // In addition to this storage gate, the caller MUST validate semantics,
     // dependent blocks, calibration and live motion/heater admission.
     bool eligible(uint8_t id) const {
