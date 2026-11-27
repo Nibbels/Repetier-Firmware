@@ -7,6 +7,7 @@ This is a preflight for a moving development baseline, not a P0 release gate.
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import runpy
@@ -121,6 +122,52 @@ def sqrt_cleanup(root):
     edit(p, change)
 
 
+def decimal_replay(root, out):
+    # The serial harness stubs Com output; explicitly test the real
+    # extracted formatter, not the stub. Compare to the host standard library.
+    source = (root/"Repetier/Communication.cpp").read_text()
+    i = source.index("void Com::printNumber(uint32_t n)")
+    j = source.index("\n\nvoid Com::printArrayFLN", i)
+    fixture = r'''
+#include <cassert>
+#include <cstdint>
+#include <cstdio>
+#include <string>
+struct Com {
+    static std::string output;
+    static void print(const char* p) { output += p; }
+    static void printNumber(uint32_t n);
+};
+std::string Com::output;
+'''
+    main = r'''
+void check(uint32_t value) {
+    Com::output.clear();
+    Com::printNumber(value);
+    assert(Com::output == std::to_string(value));
+}
+int main() {
+    for (uint32_t x=0; x<=65536; ++x) check(x);
+    uint32_t state=0x9e3779b9u;
+    for (unsigned i=0; i<65536; ++i) {
+        state=state*1664525u+1013904223u;
+        check(state);
+    }
+    for (uint64_t power=10; power<=1000000000; power*=10) {
+        check(power-1);check(power);check(power+1);
+    }
+    check(4294967295u);
+    std::puts("actual decimal formatter: 131101 values passed");
+}
+'''
+    with TemporaryDirectory(prefix="task0032-decimal-preflight-") as directory:
+        d=Path(directory)
+        (d/"replay.cpp").write_text(fixture+source[i:j]+"\n"+main)
+        run(os.environ.get("CXX","c++"), "-std=c++11","-O2","-Wall","-Wextra","-Werror",
+            d/"replay.cpp","-o",d/"replay")
+        run(d/"replay")
+
+
 def digest(p):
     return hashlib.sha256(p.read_bytes()).hexdigest()
 
@@ -159,6 +206,7 @@ def main():
         (out/"candidate.diff").write_text("".join(diff))
         (out/"sources.json").write_text(json.dumps({"schema":1,"p0":head,"changes":files,
             "qualification":"temporary source changes only; selected host replays, no linked four-board, heater or hardware qualification"},indent=2)+"\n")
+        decimal_replay(root, out)
         for test in ("serial-protocol.py","pause-sense-offset.py"):
             run(sys.executable,root/"tests"/test)
         print("P0 small cleanup preflight: serial including thermal mode, ring spans and motion/pause replays passed",flush=True)
