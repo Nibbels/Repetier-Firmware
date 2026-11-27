@@ -104,6 +104,16 @@ bool Extruder::selectExtruderById(uint8_t extruderId, bool waitThroughPause) {
     return true;
 }
 
+// Cold settings calculation, not part of the timer ISR. Bound the ratio
+// before conversion: an interval of zero divides by zero below, while a
+// ratio above 255 is not representable as uint8_t. The existing upper
+// limit is 15 ticks; negative/NaN input cannot define a valid rate.
+static uint8_t boundedExtruderStepInterval(float ratio) {
+    if (!(ratio >= 0.0f) || ratio >= 15.0f)
+        return 15;
+    return ratio < 1.0f ? 1 : uint8_t(ratio);
+}
+
 void Extruder::applyCurrentSettings() {
     Printer::applyToolMotionSettings(Extruder::current->stepsPerMM,
                                     Extruder::current->maxFeedrate, Extruder::current->maxAcceleration);
@@ -117,9 +127,8 @@ void Extruder::applyCurrentSettings() {
     Printer::manualMotion.setSteps(E_AXIS, (unsigned short)lroundf(Printer::stepsPerMm(E_AXIS) * DEFAULT_MANUAL_MM_E));
     Printer::pause.setParkSteps(E_AXIS, long(Printer::stepsPerMm(E_AXIS) * SCRIPT_RETRACT_MM));
 
-    uint8_t stepInterval = (uint8_t)floor(HAL::maxExtruderTimerFrequency() / (Extruder::current->maxFeedrate * Extruder::current->stepsPerMM));
-    if (stepInterval > 15)
-        stepInterval = 15;
+    const uint8_t stepInterval = boundedExtruderStepInterval(HAL::maxExtruderTimerFrequency() /
+        (Extruder::current->maxFeedrate * Extruder::current->stepsPerMM));
     Printer::extrusionOutput.setStepInterval(stepInterval);
     float fmax = HAL::maxExtruderTimerFrequency() / (float(stepInterval) * Printer::stepsPerMm(E_AXIS));
     // Limit feedrate to interrupt speed
