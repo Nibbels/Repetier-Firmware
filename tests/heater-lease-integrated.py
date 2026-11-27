@@ -162,7 +162,56 @@ static void grant(uint8_t c,uint8_t duty){
     HAL::setHeaterDuty(c,duty,&sample);
 }
 static void expireVector(){InterruptProtectedBlock lock;failHeaterLease();}
+// Exhaust the modular window and compare-flag states for each fixed channel.
+static bool fixedLive(unsigned c,uint16_t now) {
+    switch(c) {
+    case 0:return fixedLeaseLive<0>(now);
+    case 1:return fixedLeaseLive<1>(now);
+#if NUM_EXTRUDER > 1
+    case 2:return fixedLeaseLive<2>(now);
+#endif
+    default:assert(false);return false;
+    }
+}
+static void checkFixedChannelEquivalence() {
+    resetFixture(65530);
+    InterruptProtectedBlock lock;
+    for(uint8_t c=0;c<=NUM_EXTRUDER;++c) {
+        for(uint32_t left=0;left<65536;++left) {
+            writeLeaseDeadline(c,uint16_t(TCNT3+left));
+            for(uint8_t flag=0;flag<2;++flag) {
+                TIFR3.bits=flag?leaseMask(c):0;
+                const bool expected=left>heaterLeaseGuard && left<=heaterLeaseDuration && !flag;
+                assert(fixedLive(c,TCNT3)==expected);
+                assert(leaseLive(c,TCNT3)==expected);
+            }
+        }
+    }
+    const unsigned combinations=1u<<(NUM_EXTRUDER+1);
+    // Each subset of active, armed and expired channels, including no demand.
+    for(unsigned active=0;active<combinations;++active)
+        for(unsigned armed=0;armed<combinations;++armed)
+            for(unsigned expired=0;expired<combinations;++expired) {
+                heaterLeaseFailed=false;
+                TIMSK3=uint8_t(armed<<OCIE3A);
+                TIFR3.bits=uint8_t(expired<<OCF3A);
+                for(uint8_t c=0;c<=NUM_EXTRUDER;++c) {
+                    requestedDuty[c]=(active&(1u<<c))?255:0;
+                    writeLeaseDeadline(c,uint16_t(TCNT3+heaterLeaseDuration));
+                }
+                assert(heaterClockContinuity()==bool(active&armed&~expired));
+                const bool good=!(active&expired);
+                assert(checkHeaterLeases()==good);
+                assert(heaterLeaseFailed!=good);
+                if(!good) {
+                    assert(TIMSK3==0);
+                    for(uint8_t c=0;c<=NUM_EXTRUDER;++c)
+                        assert(requestedDuty[c]==0 && !pins[pin(c)]);
+                }
+            }
+}
 int main(){
+    checkFixedChannelEquivalence();
     unsigned long cases=0;
     for(uint32_t start=0;start<65536;++start)
         for(uint8_t c=0;c<=NUM_EXTRUDER;++c)
