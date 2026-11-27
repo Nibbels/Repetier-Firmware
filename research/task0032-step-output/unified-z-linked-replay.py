@@ -80,12 +80,17 @@ def zfield(c,offset,signed=True):return c.symget("Printer::zMotion",4,offset,sig
 def target(c,value):c.symput("Printer::zMotion",value,4,12)
 def z_pulses(row):return [e for e in row["edges"] if e[0]=="Z" and e[1]]
 
-def run_scenario(mod,img,kind,rate,scenario,start=0):
+def run_scenario(mod,img,kind,rate,scenario,start=0,merge_guard=None):
     c,move,errors,o=configure(mod,img,kind,rate,start=start)
+    if merge_guard is not None:
+        c.symput(unique(img,"correctionGapResearch"),merge_guard,2)
+    deadline=unique(img,"nominalDeadline")
+    release_late=[];nominal_calls=0;correction_only=0;merged=0
+    max_corr_only_cycles=0;max_merged_cycles=0
     epoch=start;start_motor=zfield(c,0);start_nominal=zfield(c,4)
     start_applied=zfield(c,16)
     events=[];rises=[];count=0;limit_applied=None;reversal_at=None
-    wanted=320 if scenario=="step" else 64
+    wanted=1600 if scenario=="plateau" else 320 if scenario=="step" else 64
     if scenario=="opposite":wanted=-20
     if scenario=="limit":c.symput("Printer::zMotion",start_motor+20,4,32)
     target(c,wanted)
@@ -93,6 +98,10 @@ def run_scenario(mod,img,kind,rate,scenario,start=0):
     reached_positive=False;switched=False
     while epoch-start<2*F:
         before=zfield(c,16);oldmotor=zfield(c,0)
+        lateness=(epoch-c.symget(deadline,4))&U32
+        nominal_due=lateness<0x80000000
+        if nominal_due:
+            release_late.append(lateness);nominal_calls+=1
         row=invoke(c,epoch)
         after=zfield(c,16);motor=zfield(c,0);nominal=zfield(c,4)
         pulses=z_pulses(row)
@@ -110,7 +119,14 @@ def run_scenario(mod,img,kind,rate,scenario,start=0):
             assert remaining<=before_remaining
             if remaining==before_remaining:assert not pulses
             if before!=after:assert after<before
-        if remaining!=before_remaining:count+=1
+        if remaining!=before_remaining:
+            assert nominal_due,(epoch,remaining,before_remaining)
+            count+=1
+        if kind!="z" and pulses:
+            if nominal_due:
+                merged+=1;max_merged_cycles=max(max_merged_cycles,row["cycles"])
+            else:
+                correction_only+=1;max_corr_only_cycles=max(max_corr_only_cycles,row["cycles"])
         before_remaining=remaining
         events.append({k:row[k] for k in ("cycles","max_mask","next_ticks","stack")})
         if scenario=="limit" and after==20 and limit_applied is None:
@@ -128,18 +144,27 @@ def run_scenario(mod,img,kind,rate,scenario,start=0):
         if scenario in ("unhome","scan","abort") and switched:
             if epoch>reversal_at:assert not pulses
             if epoch-reversal_at>F//10:break
-        elif scenario=="step" and after==wanted:
+        elif scenario in ("step","plateau") and after==wanted:
             if not reached_positive:
                 reached_positive=True;wanted=0;target(c,0)
             else:break
         elif scenario in ("reverse","limit") and switched and after==wanted:break
         elif scenario=="opposite" and after==wanted and 100000-remaining>=40:break
         epoch+=row["next_ticks"]
-    if scenario=="step":assert reached_positive and zfield(c,16)==0,(kind,rate,zfield(c,16))
+    if scenario in ("step","plateau"):assert reached_positive and zfield(c,16)==0,(kind,rate,zfield(c,16))
     elif scenario in ("reverse","limit"):assert switched and zfield(c,16)==-64
     elif scenario in ("unhome","scan","abort"):assert switched
     elif scenario=="opposite":assert zfield(c,16)==-20
-    return dict(kind=kind,rate=rate,scenario=scenario,calls=len(events),nominal_events=count,
+    # CPU load includes the last executed vector, whose start is the final
+    # epoch. No nested ISR or foreground time is counted here.
+    total=sum(e["cycles"] for e in events)
+    return dict(kind=kind,rate=rate,scenario=scenario,merge_guard=merge_guard,
+        calls=len(events),nominal_events=count,nominal_calls=nominal_calls,
+        correction_only=correction_only,merged_correction=merged,
+        max_corr_only_cycles=max_corr_only_cycles,max_merged_cycles=max_merged_cycles,
+        nominal_late_count=sum(x>0 for x in release_late),nominal_late_sum=sum(release_late),
+        nominal_late_max=max(release_late,default=0),
+        exclusive_cpu_fraction=total/(epoch-start+events[-1]["cycles"]),
         physical_correction_rises=len(rises),end_applied=zfield(c,16),elapsed_ticks=epoch-start,
         max_mask=max(e["max_mask"] for e in events),max_cycles=max(e["cycles"] for e in events),
         mean_cycles=round(statistics.mean(e["cycles"] for e in events),3),
@@ -181,7 +206,7 @@ def main():
         tests=[("idle",5333,"step"),("xy",152,"step"),("xy",9143,"step"),("e",14,"step"),
                ("xye",15238,"step"),("idle",5333,"reverse"),("idle",5333,"limit"),
                ("idle",5333,"unhome"),("idle",5333,"scan"),("idle",5333,"abort"),
-               ("z",11520,"opposite")]
+               ("idle",5333,"plateau"),("z",11520,"opposite")]
         rows=[run_scenario(mod,new,k,r,s,start=0xffff0000 if s=="reverse" else 0) for k,r,s in tests]
         with zipfile.ZipFile(a.candidate) as z:
             size=z.read(board+"/size.txt").decode()
