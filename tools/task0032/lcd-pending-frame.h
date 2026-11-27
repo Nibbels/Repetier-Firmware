@@ -84,12 +84,7 @@ public:
     // Sink writes exactly one raw LCD byte, then samples the clock.
     template<class Sink>
     Result service(const char (&frame)[4][Columns+1],bool emergency,Sink& sink) {
-        uint8_t row=0,col=0;
-        for(;row<4;++row) {
-            const uint8_t candidate=emergency && row>=2?uint8_t(5-row):row;
-            if(find(candidate,col)) {row=candidate;break;}
-        }
-        if(row==4) return Result::Idle;
+        if(!pending()) return Result::Idle;
         if(waiting_) {
             const uint32_t elapsed=uint32_t(sink.now()-completedAt_);
             // A small backwards clock jump is not permission to send.
@@ -98,6 +93,12 @@ public:
             if(elapsed<minimumClockDeltaUs || elapsed>=0x80000000UL)
                 return Result::Waiting;
         }
+        uint8_t row=0,col=0;
+        for(;row<4;++row) {
+            const uint8_t candidate=emergency && row>=2?uint8_t(5-row):row;
+            if(find(candidate,col)) {row=candidate;break;}
+        }
+        if(row==4) return Result::Idle;
         const uint8_t base=(row&1?0x40:0)+(row>=2?Columns:0);
         const uint8_t address=base+col;
         Result result;
