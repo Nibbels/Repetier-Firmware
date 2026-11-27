@@ -79,6 +79,7 @@ namespace Com {
 }
 #define PSTR(x) x
 #define UI_STATUS_UPD(x) do{}while(0)
+#define UI_STATUS(x) do{}while(0)
 void showInformation(const void*,const void*,const void*){}
 struct EEPROM {
     static bool settingsReady();
@@ -91,7 +92,7 @@ struct EEPROM {
     static bool storePressureLimits(bool,int32_t,int32_t,bool,bool);
 };
 namespace {
-bool busyMenu=false,loaded=false,lastOk=false;
+bool busyMenu=false,loaded=false,lastOk=false,settingsFaultLatched=false;
 volatile bool outputsAdmitted=false;
 uint32_t pending=AllAlerts;
 constexpr uint32_t OrdinaryAlerts=AllAlerts&~blockBit(BedSafety);
