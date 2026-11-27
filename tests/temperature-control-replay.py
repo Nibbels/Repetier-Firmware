@@ -615,6 +615,25 @@ int main(int argc, char** argv) {
             for (auto* t : tempController)
                 assert(t->targetTemperatureC == 0 && HAL::outputDuty(t->pwmIndex) == 0);
         }
+    } else if (!std::strcmp(name, "unconditional-clear")) {
+        c.tempIState = 17;
+        c.pidHistoryValid = true;
+        c.setDecoupleFull();
+        c.invalidatePidCalibration();
+        c.targetTemperatureC = 180;
+        HAL::setHeaterDuty(c.pwmIndex, 180);
+        autotuneIndex = c.pwmIndex;
+        autotuneAbortRequested = false;
+        delayAutotuneAdmission = true;
+        const auto before = now;
+        c.clearTargetTemperature();
+        assert(c.targetTemperatureC == 0 && HAL::outputDuty(c.pwmIndex) == 0);
+        assert(c.tempIState == 0 && !c.pidHistoryValid);
+        assert(!c.isDecoupleFull() && !c.isDecoupleHold());
+        assert(autotuneAbortRequested);
+        assert(delayAutotuneAdmission && now == before);
+        autotuneIndex = 255;
+        delayAutotuneAdmission = false;
     } else if (!std::strcmp(name, "legacy-output-inhibit")) {
         service();
         pwmSlice();
@@ -955,7 +974,7 @@ def main():
         ),
     }
     scenarios = (
-        "rail", "invalid-low", "invalid-high", "bed-invalid", "recovery", "disabled", "latched-fault-wait", "legacy-output-inhibit",
+        "unconditional-clear", "rail", "invalid-low", "invalid-high", "bed-invalid", "recovery", "disabled", "latched-fault-wait", "legacy-output-inhibit",
         "stale", "bed-stale", "unpublished", "autotune-entry-stale", "autotune-entry-admission-stale", "autotune-bed-entry-admission-stale", "autotune-stale", "autotune-bed-stale",
         "unsupported", "no-rise", "hold-drift", "pwm", "watchdog", "wait",
         "autotune-entry-unsupported", "autotune-entry-low", "autotune-entry-disabled",
