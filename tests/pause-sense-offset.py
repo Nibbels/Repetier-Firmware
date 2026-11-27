@@ -106,7 +106,7 @@ def main():
         section(hal, "namespace {\nconstexpr uint8_t advanceCompareGuard", "\n#if !defined CASE_LIGHT_PIN"),
         section(executor, "inline void StepExecutor::updateAdvanceSteps(", "\nvoid StepExecutor::stepSlowedZCompensation("),
         section(commands, "bool Commands::waitForMotion(", "\nvoid Commands::printCurrentPosition()"),
-        section(extruder, "bool Extruder::selectExtruderById(", "\nvoid Extruder::applyCurrentSettings("),
+        section(extruder, "bool Extruder::selectExtruderById(", "\nstatic uint8_t boundedExtruderStepInterval("),
         section(printer, "void Printer::applyAdvanceSettings(", "\nvoid Printer::updateWobbleFixOffsets("),
         section(motion_commands, "void testAdvanceSteps(", "void reportAdvancePeak("),
         section(motion_commands, "void configureAdvance(", "void finishMotion("),
