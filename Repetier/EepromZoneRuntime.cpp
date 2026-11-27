@@ -19,6 +19,7 @@ AvrDevice device;
 bool loaded=false;
 volatile bool outputsAdmitted=false;
 bool lastOk=false;
+bool settingsFaultLatched=false;
 uint32_t pending=AllAlerts;
 constexpr uint32_t OrdinaryAlerts=AllAlerts&~blockBit(BedSafety);
 using ZoneSession=Session<AvrDevice>;
@@ -46,15 +47,19 @@ void revokeOutputs() {
 }
 void failSettings(Result result) {
     lastOk=false;
-    revokeOutputs();
-    // Not a sensor fault: report a separate settings failure. Terminal for
-    // this boot after a live/durable discrepancy, so no stale admission.
+    if(settingsFaultLatched)return;
+    // Latch admission before any cleanup or diagnostic output. A failed
+    // statistics-page read must not recursively render the same page.
+    settingsFaultLatched=true;
     Printer::blockAll=1;
+    revokeOutputs();
+    // Not a sensor fault: separate settings failure, terminal this boot.
     Com::printErrorFLN(PSTR("EEPROM settings fault"));
     Com::printFLN(PSTR("EEPROM result: "),int(result));
-    UI_STATUS_UPD("EEPROM fault");
+    UI_STATUS("EEPROM fault"); // deferred render, never re-enter EEPROM here
 }
 bool accept(Result result) {
+    if(settingsFaultLatched){lastOk=false;return false;}
     if(result==Result::Ok){lastOk=true;return true;}
     failSettings(result);return false;
 }
@@ -119,6 +124,9 @@ bool loadFull(bool reset,bool startup) {
     return true;
 }
 bool readBlockChecked(uint8_t id,uint8_t* data,uint32_t& alerts) {
+    // At startup and after terminal failure there is no published settings
+    // snapshot. Repeated diagnostics must not access the failed transport.
+    if(!loaded || settingsFaultLatched)return false;
     auto s=session();
     return accept(s.read(id,data,length(id),alerts));
 }
@@ -281,7 +289,7 @@ void EEPROM::update(GCode* com) {
     };
     auto s=session();
     const auto result=s.hostEdit(com->P,com->T,com->hasS()?com->S:0,com->hasX()?com->X:0,admit,publish);
-    if(result==Result::Ok){lastOk=true;return;}
+    if(result==Result::Ok){lastOk=!settingsFaultLatched;return;}
     if(result==Result::Invalid || result==Result::ReadOnly || result==Result::AdmissionRejected || result==Result::Busy) {
         Com::printErrorFLN(PSTR("EEPROM edit rejected"));
         Com::printFLN(PSTR("EEPROM result: "),int(result));return;
