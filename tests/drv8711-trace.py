@@ -54,33 +54,29 @@ static Trace expected;
 void writePin(int p, int v) { expected.push_back({0,p,v}); }
 void output(int p) { expected.push_back({1,p,0}); }
 void delay(int us) { expected.push_back({2,us,0}); }
-void guard() { expected.push_back({3,0,0}); }
-void restore() { expected.push_back({4,0,0}); }
-void select(int p, int on) { guard(); writePin(p,on); restore(); }
-void enable(int p) { select(p,1); }
+void enable(int p) { writePin(p,0); output(p); writePin(p,1); }
 void enableAll() { for (int p=5;p>=1;--p) enable(p); }
-void disableAll() { for (int p=5;p>=1;--p) select(p,0); }
-void configureSelects() {
-    for (int p=5;p>=1;--p) { guard(); writePin(p,0); output(p); restore(); }
-}
+void disableAll() { for (int p=5;p>=1;--p) writePin(p,0); }
 void tx(unsigned word) {
+    expected.push_back({3,0,0});
     for (unsigned mask=0x8000; mask; mask>>=1) {
-        writePin(DRV_SDATI, !!(word&mask));
-        writePin(DRV_SCLK,1); writePin(DRV_SCLK,0);
+        writePin(DRV_SDATI, !!(word&mask)); delay(1);
+        writePin(DRV_SCLK,1); delay(5); writePin(DRV_SCLK,0);
     }
+    expected.push_back({4,0,0});
 }
 void adjust(int p, int mode) {
-    enable(p); tx(0x0e01 + 8*std::min(mode,8)); select(p,0);
+    enable(p); tx(0x0e01 + 8*std::min(mode,8)); writePin(p,0); delay(1);
 }
 void configureBus() {
     writePin(DRV_SCLK,0); output(DRV_SCLK);
     writePin(DRV_SDATI,0); output(DRV_SDATI);
 }
 void current(int p, int level) {
-    if (p<1 || p>5) return;
-    enable(p);
+    configureBus();
+    if (p>=1 && p<=5) enable(p);
     tx(0x1100+level);
-    select(p,0);
+    if (p>=1 && p<=5) writePin(p,0);
 }
 void check(const char* name) {
     if (actual != expected) {
@@ -105,9 +101,9 @@ int main() {
     for (unsigned d=0;d<256;++d) {
         const auto channel = static_cast<Channel>(d);
         setChipSelect<true>(channel); if (d>=1 && d<=5) enable(d); check("enable");
-        setChipSelect<false>(channel); if (d>=1 && d<=5) select(d,0); check("disable");
+        setChipSelect<false>(channel); if (d>=1 && d<=5) writePin(d,0); check("disable");
         if (d<1 || d>5) {
-            setMotorCurrent(d,127); current(d,127); check("invalid channel has no bus activity");
+            setMotorCurrent(d,127); current(d,127); check("current without chip select");
         }
     }
     setChipSelect<true, true>(Channel::E1); enableAll(); check("enable all");
@@ -143,7 +139,7 @@ int main() {
         }
     }
     drv8711Init();
-    writePin(DRV_RESET1,0); output(DRV_RESET1); configureBus(); configureSelects();
+    writePin(DRV_RESET1,0); output(DRV_RESET1); configureBus();
     for (int p=DRV_SDATO;p<=O1_STALL_PIN;++p) writePin(p,1);
     writePin(DRV_RESET1,1); delay(5000); writePin(DRV_RESET1,0); delay(5000);
     const int modes[]={5,5,4,6,6};
@@ -152,7 +148,7 @@ int main() {
         adjust(p,modes[p-1]);
     }
     const unsigned words[]={0x2020,0x4504,0x583c,0x60f0,0x7000};
-    for (unsigned w:words) { enableAll(); tx(w); disableAll(); }
+    for (unsigned w:words) { enableAll(); tx(w); disableAll(); if (w!=0x7000) delay(1); }
     for (int p=1;p<=5;++p) {
         assert(Drv8711::configuredCurrent(p-1)==10*p);
         if (p<=3+NUM_EXTRUDER) current(p,10*p);
