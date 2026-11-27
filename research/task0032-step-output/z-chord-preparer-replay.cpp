@@ -1,4 +1,5 @@
 #include "z-chord-preparer.h"
+#include "z-chord-preparer-fast.h"
 #include "z-chord-handoff.h"
 #include <cassert>
 #include <cstdio>
@@ -17,13 +18,14 @@ using namespace ZFeedforwardResearch;
 static constexpr int32_t F=256,H=8656;
 struct Reader {
     uint32_t probes=0,corrections=0;
-    Region region(Point p){
+    template<class Lookup>
+    Region regionFrom(Point p,Lookup lookup){
         ++probes;
         const Zone zone=p.z<0?Zone::Negative:p.z==0?Zone::Zero:p.z<=F?Zone::Full:p.z>=H?Zone::Flat:Zone::Fade;
         const int32_t zl=zone==Zone::Negative?INT32_MIN:zone==Zone::Zero?0:zone==Zone::Full?1:zone==Zone::Fade?F+1:H;
         const int32_t zh=zone==Zone::Negative?-1:zone==Zone::Zero?0:zone==Zone::Full?F:zone==Zone::Fade?H-1:INT32_MAX;
         if(zone==Zone::Negative||zone==Zone::Flat)return {zone,0,0,0,0,0,0,0,0,0,0,{INT32_MIN,INT32_MIN,zl},{INT32_MAX,INT32_MAX,zh}};
-        auto x=matrixSpan(X_AXIS,p.x),y=matrixSpan(Y_AXIS,p.y);
+        auto x=lookup(X_AXIS,p.x),y=lookup(Y_AXIS,p.y);
         const int32_t b00=g_ZCompensationMatrix[x.low][y.low],b10=g_ZCompensationMatrix[x.high][y.low],
             b01=g_ZCompensationMatrix[x.low][y.high],b11=g_ZCompensationMatrix[x.high][y.high];
         const uint32_t sx=std::max(distance(b00,b10),distance(b01,b11)),sy=std::max(distance(b00,b01),distance(b10,b11));
@@ -36,10 +38,52 @@ struct Reader {
         return {zone,x.low,x.high,y.low,y.high,uint32_t(x.width),uint32_t(y.width),
                 zone==Zone::Fade?uint32_t(H-F):0,sx,sy,distance(b00+b11,b01+b10),min,max};
     }
+    Region region(Point p){return regionFrom(p,[](uint8_t axis,int32_t pos){return matrixSpan(axis,pos);});}
     int32_t correction(Point p){
         ++corrections;
         const BedCompensation::Geometry g{p.z,F,H,0,F,0};
         return BedCompensation::calculate(g,[&]{return int32_t(getZMatrixDepth(p.x,p.y));}).zCorrectionSteps;
+    }
+};
+// Cache only the two active axis spans, not the complete scan matrix.
+// Context immutable during preparation; reconstruct/invalidate on any
+// matrix, calibration or reference change. Actual depth truncation retained.
+struct CachedReader:Reader {
+    struct Cache {
+        int32_t first=0,last=0,start=0,width=0;
+        uint8_t low=0,high=0;
+        bool valid=false;
+    };
+    Cache cache[2];
+    uint32_t misses=0,hits=0;
+    MatrixSpan span(uint8_t axis,int32_t pos){
+        auto& c=cache[axis];
+        if(!c.valid||pos<c.first||pos>c.last){
+            ++misses;
+            const auto s=matrixSpan(axis,pos);
+            c.low=s.low;c.high=s.high;c.width=s.width;
+            if(s.width){
+                c.start=pos-s.distance;c.first=c.start+1;c.last=c.start+c.width;
+            }else{
+                const int32_t coordinate=int32_t((axis==X_AXIS?g_ZCompensationMatrix[s.low][0]:g_ZCompensationMatrix[0][s.low])*Printer::stepsPerMm(axis));
+                c.start=coordinate;
+                if(pos<=coordinate){c.first=INT32_MIN;c.last=coordinate;}
+                else {c.first=coordinate+1;c.last=INT32_MAX;}
+            }
+            c.valid=true;
+        }else ++hits;
+        return {c.low,c.high,c.width?pos-c.start:0,c.width};
+    }
+    Region region(Point p){return regionFrom(p,[&](uint8_t axis,int32_t pos){return span(axis,pos);});}
+    int32_t correction(Point p){
+        ++corrections;
+        const BedCompensation::Geometry g{p.z,F,H,0,F,0};
+        return BedCompensation::calculate(g,[&]{
+            const auto x=span(X_AXIS,p.x),y=span(Y_AXIS,p.y);
+            const long front=x.depth(g_ZCompensationMatrix[x.low][y.low],g_ZCompensationMatrix[x.high][y.low]);
+            const long back=x.depth(g_ZCompensationMatrix[x.low][y.high],g_ZCompensationMatrix[x.high][y.high]);
+            return int32_t(y.depth(front,back));
+        }).zCorrectionSteps;
     }
 };
 static int32_t roundChord(int32_t a,int32_t b,uint32_t i,uint32_t n){
@@ -67,15 +111,18 @@ int main(){
     const Point pts[]={{0,0,F-1},{3048,3048,F},{6095,3048,F+1},{3048,6095,H-1},
         {6095,6095,H},{9142,9142,H+1},{0,9142,0},{9142,0,1},{3048,3048,-1},{3048,3048,H+500}};
     uint64_t samples=0,chords=0,probes=0;uint32_t shortChords=0,zero=0,maxChords=0,maxError=0,maxProbes=0;
-    unsigned paths=0;
+    unsigned paths=0;uint64_t fastProbes=0,fastMisses=0,fastHits=0,fastCorrections=0;
     auto trial=[&](Point a,Point b,uint32_t n){
         if(!n)return;
         Path path{a,b,n};Preparer prep;Reader r;assert(prep.start(path));
+        FastPreparer fast;CachedReader cached;assert(fast.start(path));
         int32_t previous=a.z+r.correction(a);Prepared c{};uint32_t i=0,pc=0;
         PhysicalHandoff h;
         while(i<n){
             const uint32_t prior=r.probes;
             assert(prep.next(r,c));assert(c.first==i&&c.length&&c.motorStart==previous);
+            Prepared d{};assert(fast.next(cached,d));
+            assert(c.first==d.first&&c.length==d.length&&c.motorStart==d.motorStart&&c.motorEnd==d.motorEnd&&c.zeroTransition==d.zeroTransition);
             const Tag tag{uint32_t(paths+1),i,1};
             assert(h.offer(tag,c.motorStart,c.motorEnd,c.length));
             assert(h.take(tag,previous)==PhysicalHandoff::Take::Accepted);
@@ -94,7 +141,8 @@ int main(){
             assert(!h.remaining()&&!h.advance());
             i+=c.length;++pc;++chords;
         }
-        assert(!prep.next(r,c));assert(previous==b.z+r.correction(b));
+        assert(!prep.next(r,c)&&!fast.next(cached,c));assert(previous==b.z+r.correction(b));
+        fastProbes+=cached.probes;fastMisses+=cached.misses;fastHits+=cached.hits;fastCorrections+=cached.corrections;
         probes+=r.probes;maxChords=std::max(maxChords,pc);++paths;
     };
     for(auto a:pts)for(auto b:pts)trial(a,b,std::max({distance(a.x,b.x),distance(a.y,b.y),distance(a.z,b.z)}));
@@ -104,5 +152,6 @@ int main(){
     trial({0,3048,200},{3048,3048,10},10000);
     printf("Z foreground preparer paths=%u samples=%llu chords=%llu max_chords=%u short_le4=%u zero_transitions=%u max_region_probes=%u total_region_probes=%llu max_error_steps=%u\n",
         paths,(unsigned long long)samples,(unsigned long long)chords,maxChords,shortChords,zero,maxProbes,(unsigned long long)probes,maxError);
+    printf("Z fast preparer exact paired chords=%llu fast_region_probes=%llu matrix_span_hits=%llu misses=%llu fast_correction_calls=%llu PASS\n",(unsigned long long)chords,(unsigned long long)fastProbes,(unsigned long long)fastHits,(unsigned long long)fastMisses,(unsigned long long)fastCorrections);
     assert(maxError<=4);
 }
