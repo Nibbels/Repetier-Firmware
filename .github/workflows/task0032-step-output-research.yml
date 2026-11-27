@@ -5,6 +5,8 @@ on:
     paths:
       - 'research/task0032-step-output/**'
       - '.github/workflows/task0032-step-output-research.yml'
+      - '!research/task0032-step-output/**/*.md'
+      - '!research/task0032-step-output/*.md'
 permissions:
   contents: read
   actions: read
