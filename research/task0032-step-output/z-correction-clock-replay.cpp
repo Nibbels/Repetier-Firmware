@@ -13,6 +13,17 @@ static void checkRoot(uint32_t x) {
     assert(uint64_t(r)*r<=x);
     assert(uint64_t(r+1)*(r+1)>x);
 }
+// Exact scalar form of current HAL::CPUDivU2 table contract. The AVR
+// fixture below separately compiles the actual linked source.
+struct FastMath {
+    static uint16_t floorRoot(uint32_t x) {return root(x);}
+    static uint32_t period(uint16_t d) {
+        if(d<512)return cpuHz/(d<10?10:d);
+        const uint32_t w=d<8192?32:4096;
+        const uint32_t base=d/w*w;
+        return cpuHz/base-((cpuHz/base-cpuHz/(base+w))*(d%w))/w;
+    }
+};
 static uint32_t rng=0x9e3779b9;
 static uint32_t random32() {
     rng^=rng<<13;rng^=rng>>17;rng^=rng<<5;return rng;
@@ -26,14 +37,15 @@ int main() {
     }
     for(unsigned i=0;i<100000;i++){checkRoot(random32());++roots;}
     checkRoot(UINT32_MAX);++roots;
-    uint64_t pulses=0;uint32_t profiles=0;
+    for(uint32_t d=10;d<=65535;d++)assert(uint64_t(FastMath::period(uint16_t(d))+1)*d>=cpuHz);
+    uint64_t pulses=0;uint32_t profiles=0;uint32_t worstExtra=0;
     const uint32_t as[]={1,6400,128000,256000,UINT32_MAX};
     const uint16_t vs[]={2,384,2000,11520,65535};
     for(auto a:as)for(auto v:vs) {
         const auto limits=Limits::prepare(a,v);
         assert(limits.maxLevel && limits.twiceAcceleration<=uint64_t(a)*2);
         for(int s:{-1,1})for(int d=1;d<=512;d++) {
-            Ramp r;uint64_t time=0;int remaining=d;
+            Ramp r;FastRamp<FastMath> fast;uint64_t time=0;int remaining=d;
             while(remaining) {
                 const auto oldLevel=r.level();
                 const auto p=r.plan(s*remaining,limits);
@@ -50,7 +62,11 @@ int main() {
                     assert(remaining==1);
                     assert(double(p.interval)+1e-8>=2.0*cpuHz/std::sqrt(limits.twiceAcceleration/2.0));
                 }
-                r.commit(p);--remaining;time+=p.interval;++pulses;
+                const auto fp=fast.plan(s*remaining,limits);
+                assert(fp.sign==p.sign&&fp.nextLevel==p.nextLevel&&fp.safetyRestart==p.safetyRestart);
+                assert(fp.interval>=p.interval);
+                worstExtra=std::max(worstExtra,fp.interval-p.interval);
+                fast.commit(fp);r.commit(p);--remaining;time+=p.interval;++pulses;
             }
             assert(r.level()==0&&time>0);++profiles;
         }
@@ -100,6 +116,7 @@ int main() {
         assert(!d.correctionDue(late)&&d.nextDelay(late)==0);
         ++deadlineCases;
     }
+    printf("Fast ramp matches level decisions and never shortens reference intervals; max extra ticks=%lu\n",(unsigned long)worstExtra);
     printf("Z correction ramp roots=%lu profiles=%lu pulses=%llu deadline_cases=%lu passed\n",
            (unsigned long)roots,(unsigned long)profiles,(unsigned long long)pulses,(unsigned long)deadlineCases);
 }
