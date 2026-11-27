@@ -89,7 +89,8 @@ struct UIDisplay {
     void serviceDisplayPending();
     void refreshPage();
     void loadNormalCharacters(){normalCharacters_=true;}
-    void renderNormalPage(){
+    void refreshEmergencyPage();
+    void refreshNormalPage(){
         ++refreshes;
         for(uint8_t r=0;r<4;++r)lcdTransport_.stage(r,"NORMAL OLD TEXT",displayCache_);
     }
@@ -184,7 +185,8 @@ def main():
     ui=(fw/"ui.cpp").read_text()
     commands=(fw/"Commands.cpp").read_text()
     extracted=(section(ui,"void UIDisplay::resetDisplayAfterClear()","void UIDisplay::printRow(")
-               +section(ui,"void UIDisplay::refreshPage()","void UIDisplay::showMessage("))
+               +section(ui,"void UIDisplay::refreshPage()","__attribute__((noinline)) void UIDisplay::refreshNormalPage()")
+               +section(ui,"void UIDisplay::serviceDisplay()","void UIDisplay::showMessage("))
     scheduler=section(commands,"static void serviceThermalEmergency()","bool Commands::waitForMotion(")
     # The extraction starts inside the outer feature #ifdef. Retain all
     # source preprocessor guards, including its closing endif.
