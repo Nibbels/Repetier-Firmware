@@ -301,7 +301,7 @@ void setMainsOutput(GCode* pCommand) {
 #endif
 
 static bool prepareFilamentProgram() {
-    if (!Printer::printJob.canBeginFilamentService() || isAnyScanRunning()) {
+    if (!Printer::printJob.isIdle() || isAnyScanRunning()) {
         Com::printFLN(PSTR("Filament program requires idle print job and no scan"));
         return false;
     }

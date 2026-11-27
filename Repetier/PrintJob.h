@@ -40,9 +40,9 @@ public:
             phase_ = Phase::Idle;
     }
 
-    bool canBeginFilamentService() const { return phase_ == Phase::Idle; }
+    bool isIdle() const { return phase_ == Phase::Idle; }
     bool beginFilamentService() {
-        if (!canBeginFilamentService())
+        if (!isIdle())
             return false;
         phase_ = Phase::FilamentService;
         return true;

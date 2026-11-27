@@ -96,7 +96,7 @@ void StartLine::run(GCode& command) {
     // M3912 is a motion-producing command, like G0/G1. Calibration
     // owns the machine while a scan is active, including its wait phases.
     if (active_ || isAnyScanRunning() ||
-        (!Printer::printJob.isPrinting() && !Printer::printJob.canBeginFilamentService())) {
+        (!Printer::printJob.isPrinting() && !Printer::printJob.isIdle())) {
         Com::printFLN(PSTR("M3912 requires print or idle job and no scan"));
         return;
     }
@@ -108,7 +108,7 @@ void StartLine::run(GCode& command) {
         return;
     // The wait pumps the panel and may admit a scan or change the job.
     if (active_ || isAnyScanRunning() ||
-        (!Printer::printJob.isPrinting() && !Printer::printJob.canBeginFilamentService()))
+        (!Printer::printJob.isPrinting() && !Printer::printJob.isIdle()))
         return;
     if (!Printer::areAxisHomed() || !Printer::doHeatBedZCompensation) {
         Com::printFLN(PSTR("M3912 error missing homing or zCMP"));
