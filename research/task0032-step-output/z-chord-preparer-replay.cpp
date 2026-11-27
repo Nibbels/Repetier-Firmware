@@ -1,4 +1,5 @@
 #include "z-chord-preparer.h"
+#include "z-chord-handoff.h"
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
@@ -71,19 +72,26 @@ int main(){
         if(!n)return;
         Path path{a,b,n};Preparer prep;Reader r;assert(prep.start(path));
         int32_t previous=a.z+r.correction(a);Prepared c{};uint32_t i=0,pc=0;
+        PhysicalHandoff h;
         while(i<n){
             const uint32_t prior=r.probes;
             assert(prep.next(r,c));assert(c.first==i&&c.length&&c.motorStart==previous);
+            const Tag tag{uint32_t(paths+1),i,1};
+            assert(h.offer(tag,c.motorStart,c.motorEnd,c.length));
+            assert(h.take(tag,previous)==PhysicalHandoff::Take::Accepted);
             maxProbes=std::max(maxProbes,r.probes-prior);
             shortChords+=c.length<=4;zero+=c.zeroTransition;
             for(uint32_t j=1;j<=c.length;++j){
                 const auto p=path.at(i+j);
-                const int32_t got=roundChord(c.motorStart,c.motorEnd,j,c.length);
+                assert(h.advance());
+                const int32_t got=h.value();
+                assert(got==roundChord(c.motorStart,c.motorEnd,j,c.length));
                 const int32_t want=p.z+r.correction(p);
                 maxError=std::max(maxError,distance(got,want));
                 if(j==c.length)assert(got==want);
                 previous=got;++samples;
             }
+            assert(!h.remaining()&&!h.advance());
             i+=c.length;++pc;++chords;
         }
         assert(!prep.next(r,c));assert(previous==b.z+r.correction(b));
