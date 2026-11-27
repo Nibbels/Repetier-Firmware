@@ -24,14 +24,8 @@ void PrintJob::service(uint32_t now) {
         return;
 
     case Phase::WaitingToOutput:
-        if (static_cast<int32_t>(now - phaseSince_) > 1000) {
-            {
-                InterruptProtectedBlock lock;
-                Printer::extrusionOutput.allow(ExtrusionOutput::Inhibit::PrintStop);
-                phase_ = Phase::Idle;
-            }
-            outputObject(false);
-        }
+        // Only the outer command loop may release the stop inhibit and
+        // start a new output script; older wait/plan frames must unwind.
         return;
 
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
@@ -43,4 +37,16 @@ void PrintJob::service(uint32_t now) {
     case Phase::FilamentService:
         return;
     }
+}
+
+void PrintJob::servicePendingOutput(uint32_t now) {
+    {
+        InterruptProtectedBlock lock;
+        if (phase_ != Phase::WaitingToOutput ||
+            static_cast<int32_t>(now - phaseSince_) <= 1000)
+            return;
+        Printer::extrusionOutput.allow(ExtrusionOutput::Inhibit::PrintStop);
+        phase_ = Phase::Idle;
+    }
+    outputObject(false);
 }

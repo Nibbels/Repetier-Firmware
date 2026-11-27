@@ -52,6 +52,11 @@ void Commands::commandLoop() {
 
         Commands::checkForPeriodicalActions(state); // Check heater and other stuff every n milliseconds
     }
+    // A canceled command may still have been on the stack during periodic
+    // service. Do not start stop-output until that frame and all old
+    // admitted commands have retired. A terminal thermal phase never outputs.
+    if (!GCodeInput::peekCurrentCommand())
+        Printer::printJob.servicePendingOutput(HAL::timeInMilliseconds());
 #if defined(RF_THERMAL_EMERGENCY_EXPERIMENT) && defined(RF_EEPROM_ZONE_EXPERIMENT)
     DiagnosticHistory::service();
 #endif

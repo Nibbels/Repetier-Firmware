@@ -59,6 +59,8 @@ public:
     }
 
     void service(uint32_t now);
+    // Outer Commands::commandLoop only, after old queued commands retire.
+    void servicePendingOutput(uint32_t now);
 
 private:
     enum class Phase : uint8_t { Idle, Printing, FilamentService, Draining, WaitingToOutput

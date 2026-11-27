@@ -53,6 +53,7 @@ int main(){
             j.admitPrintMotion();j.finishPrintMotion();
             j.beginFilamentService();j.finishFilamentService();
             j.service(start+n*1000);
+            j.servicePendingOutput(start+n*1000);
             assert(effects==0);
         }
         ++count;

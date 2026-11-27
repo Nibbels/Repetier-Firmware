@@ -1368,6 +1368,11 @@ void cancelAndCleanup() {
     assert(!objectOutputs);
     Printer::printJob.service(clockMs + 5003);
     Printer::printJob.service(clockMs + 6000);
+    assert(!objectOutputs && Printer::printJob.commandsBlocked());
+    Printer::printJob.servicePendingOutput(clockMs + 5002);
+    assert(!objectOutputs && Printer::printJob.commandsBlocked());
+    Printer::printJob.servicePendingOutput(clockMs + 5003);
+    Printer::printJob.servicePendingOutput(clockMs + 6000);
     assert(objectOutputs == 1 && !Printer::printJob.commandsBlocked());
 
     // A USB stop during a heater wait must also discard the pending return.
@@ -2226,6 +2231,8 @@ void advanceCancel() {
     output.inhibit(ExtrusionOutput::Inhibit::MotorsDisabled);
     Printer::printJob.service(clockMs + 2001);
     Printer::printJob.service(clockMs + 3002);
+    assert(!objectOutputs && Printer::printJob.commandsBlocked() && output.blocked());
+    Printer::printJob.servicePendingOutput(clockMs + 3002);
     assert(objectOutputs == 1 && !Printer::printJob.commandsBlocked() && output.blocked());
     output.allow(ExtrusionOutput::Inhibit::MotorsDisabled);
     assert(!output.blocked());
