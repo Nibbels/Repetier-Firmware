@@ -57,8 +57,11 @@ bool UIDisplay::localKeyReady(int action) const {
     // A physical key must never confirm/edit a selection not yet visible.
     // The logical remote panel report is current immediately; the existing
     // local-confirmation exclusion and emergency stop remain independent.
-    // Physical pause/continue, jog/offset and back actions are not delayed.
-    if(!menuLevel || Printer::blockAll || !lcdTransport_.pending()) return true;
+    // Dedicated pause/continue and jog/offset buttons are never delayed.
+    // Back is safe inside a menu, but on an info page it can change SenseOffset
+    // or toggle the case light, so it too requires the visible context.
+    if(Printer::blockAll || !lcdTransport_.pending()) return true;
+    if(action==UI_ACTION_BACK) return menuLevel!=0;
     return action!=UI_ACTION_OK && action!=UI_ACTION_RIGHT &&
            action!=UI_ACTION_NEXT && action!=UI_ACTION_PREVIOUS;
 }
@@ -228,17 +231,6 @@ def test_changes(root):
         lcdWriteByteNow(v,rs);checkSequence(want,0);""")
     edit(tests/"lcd-gpio.py",gpio)
 
-    def boot(s):
-        s=once(s,'#include "Constants.h"','#include "Constants.h"\n#include "LcdPendingFrame.h"')
-        s=once(s,"millis_t timeInMilliseconds() { return now; }",
-               "millis_t timeInMilliseconds() { return now; }\nuint32_t timeInMicroseconds() { return now*1000u; }")
-        s=once(s,"    char displayCache_[4][UI_COLS+1]{};",
-               """    char displayCache_[4][UI_COLS+1]{};
-    LcdPendingFrame<UI_COLS> lcdTransport_;
-    void resetDisplayAfterClear();""")
-        return once(s,'    (p / "firmware.inc").write_text(glyphs + normal + boot)',
-                    '''    reset=source[source.index("void UIDisplay::resetDisplayAfterClear()"):source.index("void UIDisplay::printRow(")]
-        (p / "firmware.inc").write_text(glyphs + normal + reset + boot)'''.replace("\n        (p /","\n        (p /"))
     # Match the exact indentation inside the with block.
     def boot_fixed(s):
         # Construct the extraction without changing preexisting fixture tests.
@@ -316,7 +308,7 @@ void lcdWriteByteNow(uint8_t value,uint8_t rs) {
         s=once(s,'slow = section(ui, "void UIDisplay::slowAction() {", "} // slowAction") + "}\\n"',
                'slow = section(ui, "bool UIDisplay::localKeyReady(", "} // slowAction") + "}\\n"')
         s=once(s,"constexpr uint8_t UI_FLAG_SLOW_ACTION_RUNNING = 4;",
-               """constexpr int UI_ACTION_OK=1001, UI_ACTION_RIGHT=1129, UI_ACTION_NEXT=1, UI_ACTION_PREVIOUS=2;
+               """constexpr int UI_ACTION_OK=1001, UI_ACTION_RIGHT=1129, UI_ACTION_NEXT=1, UI_ACTION_PREVIOUS=2, UI_ACTION_BACK=1000;
 constexpr uint8_t UI_FLAG_SLOW_ACTION_RUNNING = 4;""")
         s=once(s,"    void allowMovement() {}","    bool blockAll=false;\n    void allowMovement() {}")
         s=once(s,"    unsigned calls=0, refreshes=0;",
@@ -342,6 +334,12 @@ constexpr uint8_t UI_FLAG_SLOW_ACTION_RUNNING = 4;""")
         pending.lcdTransport_.dirty=true;
         assert(!pending.localKeyReady(1)&&!pending.localKeyReady(2)&&!pending.localKeyReady(1129));
         assert(pending.localKeyReady(1518)&&pending.localKeyReady(514)&&pending.localKeyReady(1000));
+        pending.menuLevel=0;
+        assert(!pending.localKeyReady(1129)&&!pending.localKeyReady(1000)&&!pending.localKeyReady(1001));
+        assert(pending.localKeyReady(1518)&&pending.localKeyReady(514));
+        Printer::blockAll=true;
+        assert(pending.localKeyReady(1001)); // existing reset path
+        Printer::blockAll=false;
         UIDisplay busy;""")
         return s
     edit(tests/"task0034-panel-dispatch.py",panel)
