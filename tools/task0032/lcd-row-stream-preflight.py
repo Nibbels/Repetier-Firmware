@@ -9,6 +9,8 @@ import argparse
 import difflib
 import hashlib
 import json
+import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -65,6 +67,11 @@ def transform(root):
     header = fw/"ui.h"
     header.write_text(once(header.read_text(), "char displayCache_[UI_ROWS][MAX_COLS + 1];",
                           "char displayCache_[UI_ROWS][UI_COLS + 1];"))
+    # The M3029 report retains its 4x29 wire format even with a narrower
+    # physical shadow. Never read past a visible row to synthesize padding.
+    system = fw/"GCodeSystem.cpp"
+    system.write_text(once(system.read_text(), "const char character = line[col];",
+                           "const char character = col < UI_COLS ? line[col] : 0;"))
     replay = tests/"ui-workflows.py"
     replay.write_text(once(replay.read_text(), "displayCache_[UI_ROWS][MAX_COLS+1]={};",
                           "displayCache_[UI_ROWS][UI_COLS+1]={};"))
@@ -75,6 +82,11 @@ def transform(root):
             if "displayCache_" in p.read_text():
                 owners.append(p.relative_to(fw).as_posix())
     assert owners == ["ui.cpp", "ui.h"], owners
+    readers = []
+    for p in sorted(fw.rglob("*")):
+        if p.is_file() and p.suffix in (".h", ".cpp", ".ino") and "cachedRow(" in p.read_text():
+            readers.append(p.relative_to(fw).as_posix())
+    assert readers == ["GCodeSystem.cpp", "ui.cpp", "ui.h"], readers
 
 
 SCROLL = r'''
@@ -138,6 +150,91 @@ def trace(root, out):
     return raw
 
 
+REPORT_FIXTURE = r'''
+#include <cassert>
+#include <cctype>
+#include <cstdint>
+#include <cstring>
+#include <cstdio>
+#include <string>
+using std::isprint;
+#define PSTR(x) x
+#define MAX_COLS 28
+#define UI_ROWS 4
+struct UI {
+    char rows[UI_ROWS][CACHE_WIDTH];
+    const char* cachedRow(uint8_t row) const { assert(row<UI_ROWS); return rows[row]; }
+} uid;
+struct GCode {
+    bool pretty;
+    bool hasL() const { return pretty; }
+};
+namespace Com {
+    std::string output;
+    void print(char c) { output+=c; }
+    void printF(const char* s) { output+=s; }
+    void printF(const char* s,unsigned n) { output+=s; output+=std::to_string(n); }
+    void println() { output+="\r\n"; }
+}
+'''
+
+REPORT_MAIN = r'''
+int main() {
+    // All byte values including the board-dependent selector and CGRAM
+    // characters. NUL at each visible position, nonzero garbage afterward.
+    // The full-row terminator and legacy 4x29 output width are invariant.
+    for(unsigned value=0;value<256;++value) {
+        for(unsigned end=0;end<=UI_COLS;++end) {
+            for(unsigned row=0;row<UI_ROWS;++row) {
+                memset(uid.rows[row],'X',CACHE_WIDTH);
+                for(unsigned col=0;col<UI_COLS;++col)
+                    uid.rows[row][col]=char((value+row+col)&255);
+                uid.rows[row][end]=0;
+                uid.rows[row][UI_COLS]=0;
+            }
+            for(bool pretty:{false,true}) {
+                GCode command{pretty};
+                Com::output.clear();
+                report(&command);
+                const std::string prefix="RequestMenu:4,29:";
+                assert(Com::output.compare(0,prefix.size(),prefix)==0);
+                assert(Com::output.size()==prefix.size()+4*29+2+(pretty?12:0));
+                std::fwrite(Com::output.data(),1,Com::output.size(),stdout);
+            }
+        }
+    }
+}
+'''
+
+
+def report_trace(root,out,candidate):
+    fw = root/"Repetier"
+    source = (fw/"GCodeSystem.cpp").read_text()
+    i = source.index('        Com::printF(PSTR("RequestMenu:"), UI_ROWS);')
+    j = source.index("\n    }\n}",i)
+    body = "void report(GCode* pCommand) {\n"+source[i:j]+"\n}\n"
+    language = (fw/"uilang.h").read_text()
+    selector = re.findall(r"^#define CHAR_SELECTOR (.+)$",language,re.M)
+    selected = re.findall(r"^#define CHAR_SELECTED (.+)$",language,re.M)
+    assert len(selector)==len(selected)==2
+    with tempfile.TemporaryDirectory(prefix="task0032-lcd-report-") as directory:
+        d=Path(directory)
+        with out.open("wb") as log:
+            for index,cols in enumerate((16,20)):
+                prefix = ("#define UI_COLS "+str(cols)+"\n#define CACHE_WIDTH "+
+                          str(cols+1 if candidate else 29)+"\n#define CHAR_SELECTOR "+selector[index]+
+                          "\n#define CHAR_SELECTED "+selected[index]+"\n")
+                cpp=d/"report.cpp";cpp.write_text(prefix+REPORT_FIXTURE+body+REPORT_MAIN)
+                exe=d/"report"
+                subprocess.run([os.environ.get("CXX","c++"),"-std=c++11","-O1","-Wall","-Wextra","-Werror",
+                                "-fsanitize=address,undefined","-fno-sanitize-recover=all","-fno-pie","-no-pie",
+                                cpp,"-o",exe],check=True)
+                subprocess.run([exe],stdout=log,check=True,env={**os.environ,"ASAN_OPTIONS":"detect_leaks=0"})
+    raw=out.read_bytes()
+    assert raw.count(b"RequestMenu:4,29:")==256*(17+21)*2
+    return raw
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--source",type=Path,required=True)
@@ -153,12 +250,15 @@ def main():
         for folder in ("Repetier","tests"):
             shutil.copytree(source/folder,root/folder)
         baseline = trace(root,out/"baseline-trace.txt")
+        baseline_report = report_trace(root,out/"baseline-report.bin",False)
         transform(root)
         candidate = trace(root,out/"candidate-trace.txt")
+        candidate_report = report_trace(root,out/"candidate-report.bin",True)
         assert baseline == candidate, "LCD address/data replay differs"
+        assert baseline_report == candidate_report, "M3029 report differs"
         changes = []
         diff = []
-        for relative in ("Repetier/ui.cpp","Repetier/ui.h","tests/ui-workflows.py"):
+        for relative in ("Repetier/ui.cpp","Repetier/ui.h","Repetier/GCodeSystem.cpp","tests/ui-workflows.py"):
             old,new = source/relative,root/relative
             old_bytes,new_bytes = old.read_bytes(),new.read_bytes()
             assert old_bytes != new_bytes
@@ -170,9 +270,11 @@ def main():
         report = {"p0":head,"changes":changes,"trace_sha256":hashlib.sha256(baseline).hexdigest(),
                   "address_commands":sum(l.startswith(b"A") for l in baseline.splitlines()),
                   "data_bytes":sum(l.startswith(b"D") for l in baseline.splitlines()),
+                  "m3029_trace_sha256":hashlib.sha256(baseline_report).hexdigest(),
+                  "m3029_reports":256*(17+21)*2,
                   "source_local_row_cache_removed_bytes":116,
                   "source_global_cache_reduction_bytes":[48,32,32,32],
-                  "qualification":"actual-source host UI replay, static snapshots and selected scroll cases; not asynchronous integration or dynamic snapshot timing proof"}
+                  "qualification":"actual-source host UI and M3029 replays, static snapshots and selected scroll cases; not asynchronous integration or dynamic snapshot timing proof"}
         (out/"row-stream-results.json").write_text(json.dumps(report,indent=2)+"\n")
         print(json.dumps(report,indent=2))
 
