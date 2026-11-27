@@ -28,7 +28,7 @@ def table_values(m,k):
     return root,period
 
 def validate():
-    cells=0;worst_p=(0,None);worst_r=(0,None);worst_r_large=(0,None)
+    cells=0;worst_p=(0,None);worst_r=(0,None);worst_r_large=(0,None);worst_p_z=(0,None)
     # Exhaust every representable (normalized high word, shift) bucket.
     # Function constant inside each bucket, true root/period monotone.
     # Endpoints therefore cover every positive uint32_t, not sampling.
@@ -42,6 +42,7 @@ def validate():
             assert r*r<=lo and p*p*lo>=F*F,(m,k,lo,r,p)
             err=p*math.sqrt(hi)/F-1
             if err>worst_p[0]:worst_p=(err,hi)
+            if lo>=256000 and hi<=132710400 and err>worst_p_z[0]:worst_p_z=(err,hi)
             err=1-r/math.sqrt(hi)
             if err>worst_r[0]:worst_r=(err,hi)
             if hi>=262144 and err>worst_r_large[0]:worst_r_large=(err,hi)
@@ -49,7 +50,7 @@ def validate():
     # Adjacent boundary speeds: sqrt(l(l+1)) >= l+13/32 for l>=1.
     # Thus average speed squared >= A*(l+29/64). Use this lower bound
     # to get a conservative period WITHOUT calculating either root.
-    profiles=0;max_over=(0,None);shorter_than_floor_ref=0
+    profiles=0;max_over=(0,None);max_default=(0,None);shorter_than_floor_ref=0
     for A in (2,4,12800,256000,512000,2_000_000,1_000_000_000,4294836224):
         for l in range(0,min(10000,4294836225//A-1)+1):
             n=l+1
@@ -61,10 +62,13 @@ def validate():
             shorter_than_floor_ref+=p<floorref
             e=p/exact-1
             if e>max_over[0]:max_over=(e,(A,l))
+            if A==256000 and l<518 and e>max_default[0]:max_default=(e,(A,l))
             profiles+=1
     return dict(bucket_count=cells,period_max_rel_excess=worst_p,
+                period_z_domain_max_rel_excess=worst_p_z,
                 root_max_rel_shortfall=worst_r,root_large_max_rel_shortfall=worst_r_large,
                 transition_checks=profiles,transition_max_rel_excess=max_over,
+                transition_default_max_rel_excess=max_default,
                 transitions_shorter_than_integer_floor_reference=shorter_than_floor_ref,
                 table_bytes=2*len(M))
 
@@ -157,7 +161,7 @@ int main(){
         f=floatInput;mark(5);asm volatile("" : "+r"(f) :: "memory");floatOutput=16000000.0f*quake(f);mark(133);
         x=input;mark(6);asm volatile("" : "+r"(x) :: "memory");output=upperPeriod(x);mark(134);
         require(uint64_t(output)*output*input>=UINT64_C(256000000000000));
-        x=input;mark(7);asm volatile("" : "+r"(x) :: "memory");floatOutput=16000000.0f/sqrtf(float(x));mark(135);
+        f=floatInput;mark(7);asm volatile("" : "+r"(f) :: "memory");floatOutput=16000000.0f/sqrtf(f);mark(135);
         x=input;mark(8);asm volatile("" : "+r"(x) :: "memory");
         uint16_t r=HAL::integerSqrt(int32_t(x));if(uint32_t(r)*r>x)--r;
         output=r<10?ZCorrectionResearch::ceilDiv(16000000UL,r):HAL::CPUDivU2(r)+1;mark(136);
