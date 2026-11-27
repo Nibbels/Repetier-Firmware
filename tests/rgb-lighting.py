@@ -16,7 +16,22 @@ unsigned writes[100]{};
 #define WRITE(pin,val) do {level[pin]=bool(val);++writes[pin];} while(0)
 #define SET_OUTPUT(pin) do {output[pin]=true;} while(0)
 #ifdef RGB_LIGHT_R_PIN
-enum { COM4A1=7, COM4B1=5, COM4C1=3, WGM41=1, WGM42=3, WGM43=4, CS41=1 };
+enum { COM4A1=7, COM4B1=5, COM4C1=3, WGM41=1, WGM42=3, WGM43=4, CS41=1, PH3=3, PH4=4, PH5=5, PH6=6 };
+bool irq=true;
+struct InterruptProtectedBlock {
+    bool old=irq;
+    InterruptProtectedBlock(){irq=false;}
+    ~InterruptProtectedBlock(){irq=old;}
+};
+// Require the real driver to access the shared port under exclusion.
+struct Port {
+    uint8_t bits;
+    operator uint8_t() const {assert(!irq);return bits;}
+    void operator=(uint8_t v){assert(!irq);bits=v;}
+    void operator&=(uint8_t v){*this=uint8_t(*this)&v;}
+    void operator|=(uint8_t v){*this=uint8_t(*this)|v;}
+};
+Port PORTH{0xC7},DDRH{0xC7};
 uint8_t TCCR4A=0xff,TCCR4B=0xff;
 uint16_t TCNT4,ICR4,OCR4A,OCR4B,OCR4C;
 #endif
@@ -34,14 +49,15 @@ static void check(Color c) {
 #endif
 #ifdef RGB_LIGHT_R_PIN
     const uint8_t channels[]={c.r,c.g,c.b};
-    const uint8_t pins[]={RGB_LIGHT_R_PIN,RGB_LIGHT_G_PIN,RGB_LIGHT_B_PIN};
+    const uint8_t pins[]={PH3,PH4,PH5};
     const uint8_t bits[]={COM4A1,COM4B1,COM4C1};
     const uint16_t compare[]={OCR4A,OCR4B,OCR4C};
     for(unsigned i=0;i<3;++i) {
-        assert(output[pins[i]] && level[pins[i]]==(channels[i]==255));
+        assert((DDRH.bits&(1<<pins[i])) && bool(PORTH.bits&(1<<pins[i]))==(channels[i]==255));
         assert(bool(TCCR4A&(1<<bits[i]))==bool(channels[i] && channels[i]!=255));
         assert(compare[i]==uint16_t(channels[i])*80);
     }
+    assert((PORTH.bits&0xC7)==0xC7 && (DDRH.bits&0xC7)==0xC7 && irq);
     assert((TCCR4A&3)==(1<<WGM41) && ICR4==20480);
     assert(TCCR4B==((1<<WGM42)|(1<<WGM43)|(1<<CS41)));
 #endif
@@ -58,8 +74,8 @@ int main() {
     for(uint32_t now:{0u,511u,512u,1023u,1024u,0xffffffffu,0u}) {
         serviceAlarm(now);
 #ifdef RGB_LIGHT_R_PIN
-        assert(level[RGB_LIGHT_R_PIN]==bool(now&512u));
-        assert(!level[RGB_LIGHT_G_PIN]&&!level[RGB_LIGHT_B_PIN]);
+        assert(bool(PORTH.bits&(1<<PH3))==bool(now&512u));
+        assert(!(PORTH.bits&((1<<PH4)|(1<<PH5))) && (PORTH.bits&0xC7)==0xC7);
 #elif !HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)
         assert(level[CASE_LIGHT_PIN]==bool(now&512u));
 #endif
