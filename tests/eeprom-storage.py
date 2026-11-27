@@ -31,6 +31,8 @@ def main():
     with tempfile.TemporaryDirectory(prefix="eeprom-storage-") as temp:
         work = pathlib.Path(temp)
         (work / "storage-source.inc").write_text(body, encoding="utf-8")
+        live = (FW / "EepromZoneLive.cpp").read_text(encoding="utf-8")
+        (work / "live-settings.inc").write_text(live.replace('#include "Repetier.h"\n', "", 1), encoding="utf-8")
         zone_exe = work / "zones"
         subprocess.run(["c++", "-std=c++11", "-O2", "-Wall", "-Wextra", "-Werror",
                         "-I", str(FW), str(ROOT / "tests" / "eeprom-zones.cpp"),
@@ -77,7 +79,7 @@ def main():
                 normalized.append(f"{name} {image.hex()}\n")
             digest = hashlib.sha256("".join(normalized).encode("ascii")).hexdigest()
             assert digest == expected, (model, expected, digest)
-            print(f"{model}: eight EEPROM snapshots match baseline ({digest})")
+            print(f"{model}: eight EEPROM snapshots match baseline ({digest}); new live settings roundtrip PASS")
 
 
 if __name__ == "__main__":
