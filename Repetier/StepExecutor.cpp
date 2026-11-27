@@ -195,14 +195,6 @@ long StepExecutor::performQueueMove() {
             return 1000;
         }
 
-        case QueueTask::UnlockDisplay: // M3117 unlock
-        {
-            // allow to overwrite the current string again
-            uid.unlock();
-            queue.retireFront();
-            return 1000;
-        }
-
         default: {
             // this is an unknown task - we should never end up here
             queue.retireFront();

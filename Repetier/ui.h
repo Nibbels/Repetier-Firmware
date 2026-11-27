@@ -324,12 +324,7 @@ public:
     void pushMenu(void* men, bool refresh);
     void adjustMenuPos();
     void setStatusP(PGM_P txt, bool error = false);
-    void setStatus(char* txt, bool error = false, bool force = false);
-
-
-    bool isLocked() const { return locked; }
-    void lock();
-    void unlock();
+    void setStatus(char* txt, bool error = false);
     void exitmenu();
 
 private:
@@ -337,7 +332,6 @@ private:
     volatile int jogButtonAction; // Key that started the current stoppable move.
     volatile int lastButtonAction;
     volatile millis_t lastButtonStart;
-    volatile char locked;
 
     // Private foreground rendering and edit/navigation helpers; no new state.
     void renderField(char c1, char c2, bool ram, int& ivalue, float& fvalue);

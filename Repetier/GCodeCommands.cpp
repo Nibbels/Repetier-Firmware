@@ -46,7 +46,6 @@ void dispatchMachine(GCode* com) {
     case 85: return configureInactivityShutdown(com);
     case 201: return setPrintAcceleration(com);
     case 202: return setTravelAcceleration(com);
-    case 207: return setJerkLimits(com);
     case 218: return setToolOffset(com);
     case 220: return setFeedrateMultiplier(com);
     case 221: return setFlowMultiplier(com);
@@ -56,7 +55,6 @@ void dispatchMachine(GCode* com) {
     case 3070: return requestPrintPause(com);
     case 3079: return outputObject();
     case 3105: return setPauseParkingOffsets(com);
-    case 3115: return setXYOrigin();
     case 3912:
         Printer::startLine.run(*com);
         return;
@@ -88,8 +86,6 @@ void dispatchMachine(GCode* com) {
     case 116: return waitForTemperatures();
     case 140: return setBedTemperature(com);
     case 190: return waitForBed(com);
-    case 204: return setPidGains(com);
-    case 303: return tunePid(com);
     case 355: return setCaseLight(com);
 #if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
     case 3120: return turnOnCaseFan();
@@ -156,7 +152,7 @@ void dispatchMachine(GCode* com) {
     case PanelMessage: return setPanelMessage(com);
     case 119: return reportEndstops();
     case 205:
-    case 503: return reportEeprom();
+        return reportEeprom();
     case 206: return setEepromValue(com);
     case 360: return reportConfiguration();
     case 500: return saveConfiguration();
@@ -164,7 +160,6 @@ void dispatchMachine(GCode* com) {
     case 502: return restoreConfigurationDefaults();
     case 3028: return testHomingRepeatability(com);
     case 3029: return accessPanel(com);
-    case PanelStatusOverride: return setPanelStatusOverride(com);
     }
 }
 

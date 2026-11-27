@@ -246,15 +246,6 @@
   - M3105 Z10 ; sets the z-offset in case of "Pause Printing" has been pressed to 10 [mm]
   - M3105 E20 ; sets the x-offset in case of "Pause Printing" has been pressed to 20 [mm]
 
-- M3115 - set the x/y origin to the current x/y position
-  - Examples:
-  - M3115 ; sets the x/y origin to the current x/y position
-
-- M3117 [message] - Set a status text which is not overwritten by M117
-  - Examples:
-  - M3117 My RF rocks ; displays the text "My RF rocks" in the 4. row of the display until it is overwritten through another M3117
-  - M3117 ; frees the 4. row of the display so that it can be used by M117 and other status messages again
-
 - M3120 - turn on the case fan
   - Examples:
   - M3120 ; turns the case fan on

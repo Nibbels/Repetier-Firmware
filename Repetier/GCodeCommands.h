@@ -8,8 +8,8 @@ class GCode;
 namespace GCodeCommands {
 
 // The receiver handles these M codes before queuing and decodes panel text.
-enum : uint16_t { ResetLineNumber = 110, EmergencyReset = 112, PanelMessage = 117, PanelStatusOverride = 3117 };
-constexpr bool takesPanelText(uint16_t code) { return code == PanelMessage || code == PanelStatusOverride; }
+enum : uint16_t { ResetLineNumber = 110, EmergencyReset = 112, PanelMessage = 117 };
+constexpr bool takesPanelText(uint16_t code) { return code == PanelMessage; }
 
 void showInvalidSyntax(unsigned int currentMCode);
 
@@ -26,7 +26,6 @@ void configureStepperShutdown(GCode* com);
 void configureInactivityShutdown(GCode* com);
 void setPrintAcceleration(GCode* com);
 void setTravelAcceleration(GCode* com);
-void setJerkLimits(GCode* com);
 void setToolOffset(GCode* com);
 void setFeedrateMultiplier(GCode* com);
 void setFlowMultiplier(GCode* com);
@@ -36,7 +35,6 @@ void setManualZOffset(GCode* pCommand);
 void testHomingRepeatability(GCode* pCommand);
 void requestPrintPause(GCode* pCommand);
 void setPauseParkingOffsets(GCode* pCommand);
-void setXYOrigin();
 void setEmergencyPauseDigits(GCode* pCommand);
 void setEmergencyStopDigits(GCode* pCommand);
 void setSenseOffsetParameters(GCode* pCommand);
@@ -51,8 +49,6 @@ void waitForHotend(GCode* com);
 void waitForTemperatures();
 void setBedTemperature(GCode* com);
 void waitForBed(GCode* com);
-void setPidGains(GCode* com);
-void tunePid(GCode* com);
 void setCaseLight(GCode* com);
 void turnOnCaseFan();
 void scheduleCaseFanOff(GCode* pCommand);
@@ -77,7 +73,6 @@ void loadConfiguration();
 void restoreConfigurationDefaults();
 void requestHeatBedScan(GCode* pCommand);
 void accessPanel(GCode* pCommand);
-void setPanelStatusOverride(GCode* pCommand);
 
 // Operations backed by calibration state in RF.cpp.
 namespace Calibration {

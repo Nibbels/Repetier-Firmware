@@ -141,27 +141,6 @@ void setTravelAcceleration(GCode* com) {
     Printer::updateDerivedParameter();
 }
 
-void setJerkLimits(GCode* com) {
-    // Die Minimalwerte für XYZ sind hier eigentlich egal. Denn sie werden durch die Acceleration innerhalb updateDerivedParameter() auf ein Minimum angehoben.
-    if (com->hasX()) {
-        Printer::setXYJerkLimit(constrain(com->X, 0.001f, 33.3f));
-        Com::printFLN(Com::tXYJerkColon, Printer::xyJerkLimit());
-        Printer::updateDerivedParameter();
-    }
-    if (com->hasZ()) {
-        Printer::setZJerkLimit(constrain(com->Z, 0.001f, 2.0f));
-        Com::printFLN(Com::tZJerkColon, Printer::zJerkLimit());
-        Printer::updateDerivedParameter();
-    }
-
-    // Das ist die E-Startgeschwindigkeit. Quasi dasselbe wie Jerk für den Extruder.
-    if (com->hasE()) {
-        Extruder::current->maxEJerk = constrain(com->E, 1.0f, Extruder::current->maxFeedrate);
-        Extruder::applyCurrentSettings();
-    }
-
-}
-
 void setToolOffset(GCode* com) {
     // New MCode with https://github.com/repetier/Repetier-Firmware/commit/e5db16080d0c98776ae82f543e2bc6ef643a63c7
     // I added this MCode for compatibility-Reasons with Repetier and Marlin.
@@ -320,11 +299,6 @@ void setPauseParkingOffsets(GCode* pCommand) {
             Com::printFLN(PSTR(" [mm]"));
         }
     }
-}
-
-void setXYOrigin() {
-    Printer::setOrigin(-Printer::moveTarget.machineMM(X_AXIS), -Printer::moveTarget.machineMM(Y_AXIS),
-                       Printer::moveTarget.workOffsetMM(Z_AXIS));
 }
 
 void setEmergencyPauseDigits(GCode* pCommand) {

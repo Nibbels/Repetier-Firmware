@@ -262,9 +262,7 @@ static const uint8_t LCDLineOffsets[] PROGMEM = UI_LINE_OFFSETS;
 static const char versionString[] PROGMEM = UI_VERSION_STRING;
 
 
-UIDisplay::UIDisplay() {
-    locked = 0;
-} // UIDisplay
+UIDisplay::UIDisplay() = default;
 
 void lcdWriteNibble(uint8_t value) {
     WRITE(UI_DISPLAY_D4_PIN, value & 1);
@@ -1188,17 +1186,6 @@ void UIDisplay::fastAction() {
         flags &= ~UI_FLAG_KEY_TEST_RUNNING;
     }
 } // fastAction
-
-void UIDisplay::lock() {
-    locked = 1;
-    return;
-
-} // lock
-
-void UIDisplay::unlock() {
-    locked = 0;
-    return;
-} // unlock
 
 void UIDisplay::exitmenu() {
     menuLevel = 0;

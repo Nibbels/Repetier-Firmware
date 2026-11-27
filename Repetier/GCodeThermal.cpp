@@ -192,50 +192,6 @@ void waitForBed(GCode* com) {
     Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 5000);
 }
 
-void setPidGains(GCode* com) {
-    TemperatureController* c = &Extruder::current->tempControl;
-    if (com->hasS()) {
-        if (com->S < 0 || com->S >= NUM_TEMPERATURE_LOOPS) {
-            Com::printErrorFLN(PSTR("M204: invalid heater"));
-            return;
-        }
-        c = tempController[com->S];
-    }
-    // Manual adjustment does not create a first-tune authorization.
-    const float p = com->hasX() ? com->X : c->pidPGain;
-    const float i = com->hasY() ? com->Y : c->pidIGain;
-    const float d = com->hasZ() ? com->Z : c->pidDGain;
-    if (!c->pidCalibrationValid() || !TemperatureController::validPidGains(p, i, d)) {
-        Com::printErrorFLN(PSTR("M204: tune required or invalid gains"));
-        return;
-    }
-    c->pidPGain = p;
-    c->pidIGain = i;
-    c->pidDGain = d;
-    c->tempIState = 0;
-    c->pidHistoryValid = false;
-    c->updateTempControlVars();
-}
-
-void tunePid(GCode* com) {
-    const int32_t controller = com->hasP() ? com->P : 0;
-    if (controller < 0 || controller >= NUM_TEMPERATURE_LOOPS) {
-        Com::printErrorFLN(PSTR("M303: invalid heater P"));
-        return;
-    }
-    const bool bed = controller == NUM_EXTRUDER;
-    const float rule = com->hasJ() ? com->J : (bed ? 3 : 1);
-    const float cycles = com->hasR() ? com->R : (bed ? 16 : 10);
-    if (!(rule >= 0 && rule <= 3) || rule != int(rule)
-        || !TemperatureController::autotuneProfileAllowed(controller, int(rule))
-        || !(cycles >= 5 && cycles <= 20) || cycles != int(cycles)) {
-        Com::printErrorFLN(PSTR("M303: hotend J0/J1; bed J2/J3; R5..20"));
-        return;
-    }
-    const float temp = com->hasS() ? com->S : (bed ? heatBedScanPlaBedC : heatBedScanPlaNozzleC);
-    tempController[controller]->autotunePID(temp, controller, int(cycles), com->hasX(), int(rule));
-}
-
 void setCaseLight(GCode* com) {
 #if HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)
     (void)com;

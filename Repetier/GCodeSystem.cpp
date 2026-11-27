@@ -259,25 +259,4 @@ void accessPanel(GCode* pCommand) {
     }
 }
 
-void setPanelStatusOverride(GCode* pCommand) {
-    if (pCommand->hasString()) {
-        if (!uid.isLocked()) {
-            // ensure that the current text won't be overwritten
-            uid.lock();
-            if (Printer::debugInfo()) {
-                Com::printFLN(PSTR("M3117: lock"));
-            }
-        }
-        uid.setStatus(pCommand->text, false, true);
-        uid.refreshPage();
-    } else {
-        if (uid.isLocked()) {
-            // allow to overwrite the current string again
-            // Put the unlock into queue to avoid racetime conditions with prior commands
-            queueTask(QueueTask::UnlockDisplay);
-            Com::printFLN(PSTR("M3117: queued unlock"));
-        }
-    }
-}
-
 } // namespace GCodeCommands

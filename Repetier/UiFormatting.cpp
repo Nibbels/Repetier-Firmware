@@ -1345,10 +1345,6 @@ void UIDisplay::renderCompensationField(char c1, char c2) {
 }
 
 void UIDisplay::setStatusP(PGM_P txt, bool error) {
-    if (locked) {
-        // we shall not update the display
-        return;
-    }
     if (!error && Printer::isUIErrorMessage()) {
         return;
     }
@@ -1367,11 +1363,7 @@ void UIDisplay::setStatusP(PGM_P txt, bool error) {
 
 } // setStatusP
 
-void UIDisplay::setStatus(char* txt, bool error, bool force) {
-    if (locked && !force) {
-        // we shall not update the display
-        return;
-    }
+void UIDisplay::setStatus(char* txt, bool error) {
     if (!error && Printer::isUIErrorMessage())
         return;
 

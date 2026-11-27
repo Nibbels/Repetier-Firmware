@@ -619,7 +619,7 @@ void TemperatureController::setTargetTemperature(float target) {
         target = 0;
     }
     if (target >= MAX_ROOM_TEMPERATURE && !pidCalibrationValid()) {
-        Com::printErrorFLN(PSTR("PID tune required; use menu or M303 with X"));
+        Com::printErrorFLN(PSTR("PID tune required; use menu"));
         UI_STATUS_UPD("PID tune needed");
         target = 0;
     }
