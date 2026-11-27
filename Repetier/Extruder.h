@@ -113,6 +113,7 @@ public:
             && (controller == NUM_EXTRUDER ? method == 2 || method == 3 : method == 0 || method == 1);
     }
 
+    void clearTargetTemperature();
     void setTargetTemperature(float target);
 #ifdef RF_HEATER_LEASE_EXPERIMENT
     bool updateCurrentTemperature(HAL::HeaterSample* sample = nullptr

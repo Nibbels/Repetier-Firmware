@@ -43,7 +43,7 @@ static bool validTemperatureSample(bool supported, float temperature) {
 
 static void stopAllHeaters() {
     for (uint8_t controller = 0; controller < NUM_TEMPERATURE_LOOPS; controller++)
-        tempController[controller]->setTargetTemperature(0);
+        tempController[controller]->clearTargetTemperature();
 }
 
 void Printer::latchOutputInhibit(bool thermalFault) {
@@ -264,7 +264,7 @@ static void reportRelayObservation(const ThermalRelayProfile::Summary* p, uint8_
 
 static void finishAutotune(TemperatureController& controller) {
     // Revoke the duty request and normal setpoint before reporting or storing results.
-    controller.setTargetTemperature(0);
+    controller.clearTargetTemperature();
     autotuneIndex = 255;
 #if defined(CASE_FAN_PIN) && (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
     CaseFan::updateFromHotendTargets();
@@ -401,7 +401,7 @@ void Extruder::manageTemperatures() {
         // No raw/internal target assignment may bypass the heater-specific
         // target ceiling, even if a future caller forgets the public setter.
         if(!(act->targetTemperatureC>=0&&act->targetTemperatureC<=act->maximumTargetC())) {
-            act->setTargetTemperature(0);
+            act->clearTargetTemperature();
             continue;
         }
 #endif
@@ -596,7 +596,7 @@ void TemperatureController::updateTempControlVars() {
 
 void TemperatureController::invalidatePidCalibration() {
     tunedSensorType = tunedPowerLimit = 0;
-    setTargetTemperature(0);
+    clearTargetTemperature();
 }
 
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
@@ -606,10 +606,22 @@ bool TemperatureController::setBedEmergencyCutoff(uint8_t verifiedCutoff) {
     // Revoke any current target, lease and pending autotune before publishing
     // a different cutoff or removing authorization. No stale rearming.
     if(!verifiedCutoff || !BedTemperatureLimit::validSetting(verifiedCutoff) ||
-       verifiedCutoff!=bedLimit_.commissioned()) setTargetTemperature(0);
+       verifiedCutoff!=bedLimit_.commissioned()) clearTargetTemperature();
     return bedLimit_.publish(verifiedCutoff);
 }
 #endif
+
+// Unconditional shutdown must not enter PID admission or display callbacks.
+void TemperatureController::clearTargetTemperature() {
+    tempIState = 0;
+    pidHistoryValid = false;
+    if (autotuneIndex < NUM_TEMPERATURE_LOOPS && tempController[autotuneIndex] == this)
+        autotuneAbortRequested = true;
+    HAL::setHeaterDuty(pwmIndex, 0);
+    targetTemperatureC = 0;
+    stopDecouple();
+    paused = 0;
+}
 
 void TemperatureController::setTargetTemperature(float target) {
     if (!(target >= 0 && target <= maximumTargetC()) || Printer::heatingInhibited())
@@ -623,13 +635,11 @@ void TemperatureController::setTargetTemperature(float target) {
         UI_STATUS_UPD("PID tune needed");
         target = 0;
     }
-    if (target <= 0) {
-        tempIState = 0;
-        pidHistoryValid = false;
+    if (target <= 0.0f) {
+        clearTargetTemperature();
+        return;
     }
-    if (target <= 0.0f && autotuneIndex < NUM_TEMPERATURE_LOOPS && tempController[autotuneIndex] == this)
-        autotuneAbortRequested = true;
-    if (target <= 0.0f || target < targetTemperatureC)
+    if (target < targetTemperatureC)
         HAL::setHeaterDuty(pwmIndex, 0);
     targetTemperatureC = target;
     stopDecouple();
@@ -670,7 +680,7 @@ __attribute__((noinline)) void TemperatureController::autotunePID(float temp, ui
         return;
     }
     if (controllerId >= NUM_TEMPERATURE_LOOPS || tempController[controllerId] != this) {
-        setTargetTemperature(0);
+        clearTargetTemperature();
         Com::printErrorFLN(PSTR("PID autotune: invalid heater"));
         return;
     }
@@ -682,7 +692,7 @@ __attribute__((noinline)) void TemperatureController::autotunePID(float temp, ui
         Com::printErrorFLN(PSTR("PID autotune: invalid profile for heater"));
         return;
     }
-    setTargetTemperature(0);
+    clearTargetTemperature();
     const bool bed = controllerId == NUM_EXTRUDER;
     const float hysteresis = 0.375f;
     const float cutoff = RMath::min(float(effectiveCutoffC()), temp + (bed ? 15.0f : 20.0f));
