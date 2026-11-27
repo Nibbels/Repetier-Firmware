@@ -16,6 +16,7 @@
 */
 
 #include "Repetier.h"
+#include "DiagnosticHistory.h"
 #include "BedMatrix.h"
 #include "ScanProbe.h"
 #include "GCodeInput.h"
@@ -357,6 +358,9 @@ void HeatBedScan::showStatus() {
 void HeatBedScan::abort() {
     phase_ = Phase::Aborting;
     const auto reason = Calibration::scanSession.takeAbort();
+#if defined(RF_THERMAL_EMERGENCY_EXPERIMENT) && defined(RF_EEPROM_ZONE_EXPERIMENT)
+    DiagnosticHistory::recordScan(reason,DiagnosticHistory::ScanKind::HeatBed);
+#endif
     Extruder::setHeatedBedTemperature(0);
     Extruder::setTemperatureForAllExtruders(0);
     Calibration::showAbortScanReason((void*)ui_text_heat_bed_scan, reason);
