@@ -663,7 +663,8 @@ void TemperatureController::waitForTargetTemperature(uint8_t plus_temp_tolerance
 // Fixed duty levels for every measured cycle. The asymmetric rectangular
 // relay fundamental accounts for unequal on/off times; span is peak-to-peak.
 // J0/J1 hotend dynamic/robust, J2/J3 bed dynamic/robust. No legacy scaling.
-void TemperatureController::autotunePID(float temp, uint8_t controllerId, int maxCycles, bool storeValues, int method) {
+// Keep the large autotune frame out of ordinary menu/G-code dispatch.
+__attribute__((noinline)) void TemperatureController::autotunePID(float temp, uint8_t controllerId, int maxCycles, bool storeValues, int method) {
     if (autotuneIndex != 255) {
         Com::printErrorFLN(PSTR("PID autotune already active"));
         return;

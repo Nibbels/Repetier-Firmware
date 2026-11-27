@@ -174,7 +174,9 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
 } // changeSwitchCase
 
 // Actual setting changes, separate from motion commands and dialog selection.
-void UIDisplay::changeSetting(int action, int8_t increment) {
+// A persistent setting edit must not reserve its transaction frame for
+// ordinary menu navigation or motion actions.
+__attribute__((noinline)) void UIDisplay::changeSetting(int action, int8_t increment) {
     switch (action) {
     case UI_ACTION_PREHEAT_A_BED:
     case UI_ACTION_PREHEAT_A_HOTEND:
