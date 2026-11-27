@@ -17,7 +17,8 @@ struct Fixture {
     void move(int32_t nextZ,bool xy,float e,bool relative=true){
         const bool movesZ=nextZ!=z;
         const float old=target.machineMM(E),rest=target.remainderMM(E);
-        target.setFromGCodeMM(E,e,relative);
+        // Printer treats absolute E separately; MoveTarget work offsets are XYZ only.
+        if(relative)target.addMM(E,e);else target.setMachineMM(E,e);
         float delta=(target.machineMM(E)-old)+(target.remainderMM(E)-rest);
         const bool beyond=debt.observe(delta);
         const int32_t steps=extrusion.planSteps({target.machineMM(E),target.remainderMM(E)},flow,280);
