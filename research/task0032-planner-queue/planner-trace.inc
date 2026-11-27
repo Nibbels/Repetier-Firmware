@@ -1,6 +1,7 @@
 // Included in the existing pause-sense-offset replay translation unit.
 // Actual planner, queue, and nextStepSpeed; release and batch clocks modeled.
 // No UART, foreground CPU, pause scheduling, or physical STEP pin simulation.
+#include "estimator-candidate.h"
 namespace PlannerResearch {
 using U64 = unsigned long long;
 struct Meta { float requested=0, cap=0; unsigned id=0; };
@@ -38,7 +39,7 @@ struct Trace {
         }
         std::printf(",\"slots\":[");
         uint8_t index=queue.readIndex();
-        double lower=0, contiguous=0, nominal=0, paced=0;
+        double lower=0, contiguous=0, nominal=0, paced=0, fast=0, fastContiguous=0;
         bool barrier=false;
         for(unsigned n=0;n<queue.count();++n,MoveQueue::nextIndex(index)) {
             PrintLine& m=queue.slot(index);
@@ -57,6 +58,9 @@ struct Trace {
                 const double fraction=total>0?double(left)/total:0;
                 const double floorS=left>0?double(left)/std::max(1.0,std::min(double(p.vMax),31250.0)):0;
                 lower+=floorS;
+                const float fastS=left>0&&total>0?PlannerEstimateResearch::time<true>(total,left,p.accelSteps,p.decelSteps,l.accelerationPrim,p.vStart,p.vEnd,p.vMax):0;
+                fast+=fastS;
+                if(!barrier)fastContiguous+=fastS;
                 if(!barrier) contiguous+=floorS;
                 if(meta[index].requested>0) nominal+=l.distance*fraction/meta[index].requested;
                 paced+=double(m.timeInTicks)*fraction/F_CPU;
@@ -66,18 +70,18 @@ struct Trace {
                     if(axis) std::printf(",");
                     std::printf("%ld",long(m.isNegativeMoveOfAxis(axis)?-m.delta[axis]:m.delta[axis]));
                 }
-                std::printf("]");
+                std::printf("],\"fast_s\":%.9g",fastS);
             }
             std::printf("}");
         }
-        std::printf("],\"nominal_s\":%.9g,\"paced_proxy_s\":%.9g,\"lower_s\":%.9g,\"contiguous_lower_s\":%.9g}\n",nominal,paced,lower,contiguous);
+        std::printf("],\"nominal_s\":%.9g,\"paced_proxy_s\":%.9g,\"lower_s\":%.9g,\"contiguous_lower_s\":%.9g,\"fast_s\":%.9g,\"fast_contiguous_s\":%.9g}\n",nominal,paced,lower,contiguous,fast,fastContiguous);
     }
     U64 arrival(unsigned i, unsigned prefill) const {
         if(i<prefill) return 0;
         const U64 k=i-prefill;
         const U64 wire=(U64(F_CPU)*40*10+serial-1)/serial;
         const U64 mean=serial==250000?F_CPU/500:wire;
-        return k/group*group*mean+(k%group+1)*wire+(group>1&&k>=48?F_CPU*8ULL/100:0);
+        return k/group*group*mean+(k%group+1)*wire+(group>1&&k>=48?F_CPU*8ULL/100:0)+(group==32&&k>=32?F_CPU*2ULL:0);
     }
     void admit(const Work& w) {
         assert(queue.count()<MOVE_CACHE_SIZE);
@@ -161,7 +165,7 @@ struct Trace {
     }
 };
 
-void circle(float chord,float speed,unsigned baud,unsigned group,bool advance) {
+void circle(float chord,float speed,unsigned baud,unsigned group,bool advance,unsigned prefill=12) {
     constexpr unsigned size=96;
     Work moves[size];
     constexpr double r=1.35;
@@ -173,7 +177,7 @@ void circle(float chord,float speed,unsigned baud,unsigned group,bool advance) {
         moves[i].requested=moves[i].cap=speed;
     }
     Trace t("circle",chord,speed,baud,group,0,advance);
-    t.run(moves,size,12);
+    t.run(moves,size,prefill);
 }
 void transition(float chord,float speed,unsigned mode,unsigned group,bool advance) {
     constexpr unsigned straight=6, curve=96, size=straight+curve+3;
@@ -244,7 +248,13 @@ void plannerResearch() {
     const char* env=std::getenv("PLANNER_SCENARIO");
     const bool smoke=env&&!std::strcmp(env,"smoke");
     if(smoke) circle(.1,60,250000,1,false);
-    else {
+    else if(env&&!std::strcmp(env,"stress")) {
+        for(float c:{.5f,.2f,.1f,.05f,.025f}) {
+            circle(c,100,250000,32,false,1);
+            circle(c,100,250000,32,true,1);
+        }
+        for(float c:{.1f,.05f,.025f})for(unsigned mode:{0U,1U,2U})transition(c,100,mode,32,false);
+    } else {
         for(float c:{.5f,.2f,.1f,.05f,.025f})
             for(float s:{20.f,60.f,100.f}) {
                 circle(c,s,115200,1,false);
