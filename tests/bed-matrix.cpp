@@ -23,7 +23,7 @@ char g_nActiveHeatBed = 1;
 constexpr unsigned int EEPROM_SECTOR_SIZE = 128;
 constexpr unsigned int sector = EEPROM_SECTOR_SIZE;
 constexpr unsigned int payload = sector + EEPROM_OFFSET_MATRIX_START;
-uint8_t eeprom[512]{};
+uint8_t eeprom[(EEPROM_MAX_HEAT_BED_SECTORS+1)*EEPROM_SECTOR_SIZE]{};
 unsigned address = 0;
 int readFailure = -1;
 int writeFailure = -1;
@@ -239,4 +239,30 @@ int main() {
     assert(loadActiveHeatBedFromExtEEPROM() && g_nActiveHeatBed == 1);
     writeProtected = false;
     assert(saveActiveHeatBedToExtEEPROM(2) && loadActiveHeatBedFromExtEEPROM() && g_nActiveHeatBed == 2);
+
+    // Every eligible old sector must be invalidated before settings
+    // acknowledgement, including inactive slots. Preserve unrelated words.
+    for(unsigned slot=1;slot<=EEPROM_MAX_HEAT_BED_SECTORS;++slot) {
+        storeWord(slot*EEPROM_SECTOR_SIZE,EEPROM_FORMAT);
+        storeWord(slot*EEPROM_SECTOR_SIZE+2,0x1234);
+    }
+    writeProtected=true;
+    assert(!invalidateStoredMatrixMarkers(nullptr));
+    writeProtected=false;
+    writeFailure=3*EEPROM_SECTOR_SIZE+1;
+    assert(!invalidateStoredMatrixMarkers(nullptr));
+    assert(ExternalEeprom::readWord(I2C_ADDRESS_EXTERNAL_EEPROM,EEPROM_SECTOR_SIZE)==0);
+    assert(ExternalEeprom::readWord(I2C_ADDRESS_EXTERNAL_EEPROM,4*EEPROM_SECTOR_SIZE)==EEPROM_FORMAT);
+    writeFailure=-1;
+    readFailure=5*EEPROM_SECTOR_SIZE;
+    assert(!invalidateStoredMatrixMarkers(nullptr));
+    readFailure=-1;
+    assert(invalidateStoredMatrixMarkers(nullptr));
+    const auto cleanWrites=writes;
+    assert(invalidateStoredMatrixMarkers(nullptr) && writes==cleanWrites);
+    for(unsigned slot=1;slot<=EEPROM_MAX_HEAT_BED_SECTORS;++slot) {
+        assert(ExternalEeprom::readWord(I2C_ADDRESS_EXTERNAL_EEPROM,slot*EEPROM_SECTOR_SIZE)==0);
+        assert(ExternalEeprom::readWord(I2C_ADDRESS_EXTERNAL_EEPROM,slot*EEPROM_SECTOR_SIZE+2)==0x1234);
+    }
+    assert(ExternalEeprom::readWord(I2C_ADDRESS_EXTERNAL_EEPROM,EEPROM_OFFSET_ACTIVE_HEAT_BED_Z_MATRIX)==2);
 }

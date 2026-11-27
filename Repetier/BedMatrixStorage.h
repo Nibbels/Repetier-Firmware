@@ -37,6 +37,23 @@ static bool writeMatrixSector(unsigned int address, bool clear) {
         && ExternalEeprom::readWord(eeprom, formatAddress, storedFormat) && storedFormat == format;
 }
 
+// Invalidate every eligible sector, not just the global header. A later
+// successful scan rewrites the global header and must not resurrect old
+// geometry. This only touches format words in the matrix EEPROM (0x50).
+static bool invalidateStoredMatrixMarkers(void (*progress)()) {
+    for(uint8_t slot=1;slot<=EEPROM_MAX_HEAT_BED_SECTORS;++slot) {
+        const unsigned int pos=EEPROM_SECTOR_SIZE*slot+EEPROM_OFFSET_SECTOR_FORMAT;
+        unsigned short marker;
+        if(!ExternalEeprom::readWord(I2C_ADDRESS_EXTERNAL_EEPROM,pos,marker))return false;
+        if(marker==EEPROM_FORMAT) {
+            if(!ExternalEeprom::writeWord(I2C_ADDRESS_EXTERNAL_EEPROM,pos,0) ||
+               !ExternalEeprom::readWord(I2C_ADDRESS_EXTERNAL_EEPROM,pos,marker) || marker!=0)return false;
+        }
+        if(progress)progress();
+    }
+    return true;
+}
+
 static bool saveWorkingMatrix(unsigned int address) {
     if (!address || g_ZCompensationMatrix[0][0] != EEPROM_FORMAT
         || g_uZMatrixMax[X_AXIS] < 2 || g_uZMatrixMax[X_AXIS] >= COMPENSATION_MATRIX_MAX_X

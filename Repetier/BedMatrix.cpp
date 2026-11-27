@@ -109,6 +109,11 @@ void restoreAtStartup(void (*progress)()) {
 }
 
 void clearWorking() { initCompensationMatrix(); }
+bool invalidateAllStored(void (*progress)()) {
+    Printer::disableCMPnow(true);
+    initCompensationMatrix();
+    return invalidateStoredMatrixMarkers(progress);
+}
 bool reloadActive() { return loadCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed)) == 0; }
 void beginScanGrid() { g_ZCompensationMatrix[0][0] = EEPROM_FORMAT; }
 void recordScanColumn(uint8_t x, short positionMm) { g_ZCompensationMatrix[x][0] = positionMm; }
