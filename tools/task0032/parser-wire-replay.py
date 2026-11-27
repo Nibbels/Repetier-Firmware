@@ -1,0 +1,178 @@
+#!/usr/bin/env python3
+"""Actual-source parser replay using existing host harness in a temporary tree.
+
+Constructed equivalent ASCII and binary G1 streams, not observed Host/Server
+traffic or AVR timing. Preserve shared harness and production files.
+"""
+from pathlib import Path
+from tempfile import TemporaryDirectory
+import shutil
+import subprocess
+import sys
+
+ROOT = Path(__file__).resolve().parents[2]
+
+SCENARIOS = r'''
+void appendU16(std::string& packet, uint16_t value) {
+    packet += static_cast<char>(value & 255);
+    packet += static_cast<char>(value >> 8);
+}
+void appendFloat(std::string& packet, float value) {
+    static_assert(sizeof(float) == 4, "binary wire uses float32");
+    uint32_t bits;
+    std::memcpy(&bits, &value, sizeof(bits));
+    for (unsigned shift = 0; shift < 32; shift += 8)
+        packet += static_cast<char>((bits >> shift) & 255);
+}
+void wireMoves(const std::string& scenario) {
+    const bool ascii = scenario == "wire-ascii";
+    const bool mixed = scenario == "wire-mixed";
+    const unsigned start = 12345, count = 600;
+    unsigned wireBytes = 0, ackBytes = 0, minBytes = 1000, maxBytes = 0;
+    unsigned fragmented = 0;
+    feed("N12344 M110\n");
+    readReply("ok\r\n");
+    for (unsigned i = 0; i < count; ++i) {
+        const bool v2 = scenario == "wire-binary-v2" || (mixed && i % 2 == 1);
+        const unsigned n = start + i;
+        char xText[24], yText[24], eText[24];
+        std::snprintf(xText, sizeof(xText), "%.4f", 100.0 + .1 * (i + 1));
+        std::snprintf(yText, sizeof(yText), "%.4f", 95.456);
+        std::snprintf(eText, sizeof(eText), "%.5f", .004 * (i + 1));
+        const float x = std::strtof(xText, nullptr), y = std::strtof(yText, nullptr);
+        const float e = std::strtof(eText, nullptr);
+        const bool hasF = i == 0;
+        std::string frameBytes;
+        if (ascii) {
+            frameBytes = numbered("N" + std::to_string(n) + " G1 X" + xText + " Y" + yText + " E" + eText + (hasF ? " F3600" : ""));
+            frameBytes.insert(frameBytes.size() - 1, 1, '\r');
+        } else {
+            const uint16_t flags = 0x00dd | (hasF ? 256 : 0) | (v2 ? 4096 : 0);
+            appendU16(frameBytes, flags);
+            if (v2) appendU16(frameBytes, 0);
+            appendU16(frameBytes, static_cast<uint16_t>(n));
+            frameBytes += '\1';
+            if (v2) frameBytes += '\0';
+            appendFloat(frameBytes, x);
+            appendFloat(frameBytes, y);
+            appendFloat(frameBytes, e);
+            if (hasF) appendFloat(frameBytes, 3600.0f);
+            frameBytes = withBinaryChecksum(frameBytes);
+            assert(frameBytes.size() == (v2 ? 22u : 19u) + (hasF ? 4u : 0u));
+        }
+        wireBytes += frameBytes.size();
+        minBytes = std::min(minBytes, static_cast<unsigned>(frameBytes.size()));
+        maxBytes = std::max(maxBytes, static_cast<unsigned>(frameBytes.size()));
+        if (i % 3 == 0) {
+            const auto half = frameBytes.size() / 2;
+            feed(frameBytes.substr(0, half));
+            readReply("");
+            assert(!GCodeInput::peekCurrentCommand() && dispatchedCommands == i);
+            feed(frameBytes.substr(half));
+            ++fragmented;
+        } else {
+            feed(frameBytes);
+        }
+        GCodeInput::readFromSerial();
+        assert(replies == "ok " + std::to_string(n) + "\r\n");
+        ackBytes += replies.size();
+        replies.clear();
+        GCode* cmd = GCodeInput::peekCurrentCommand();
+        assert(cmd && cmd->hasN() && cmd->N == n && cmd->hasG() && cmd->G == 1);
+        assert(cmd->hasX() && cmd->hasY() && cmd->hasE());
+        assert(cmd->X == x && cmd->Y == y && cmd->E == e);
+        assert(cmd->hasF() == hasF);
+        if (hasF) assert(cmd->F == 3600.0f);
+        // ACK already emitted before normal dispatch or retirement.
+        assert(dispatchedCommands == i);
+        Commands::executeGCode(cmd);
+        GCodeInput::popCurrentCommand();
+        assert(dispatchedCommands == i + 1);
+    }
+    readReply(""); // consume last CRLF's LF if present
+    assert(incoming.empty() && !GCodeInput::peekCurrentCommand());
+    assert(flushes == 0 && ackBytes == 10 * count);
+    if (mixed) assert(wireBytes == 300u * 19 + 300u * 22 + 4);
+    std::printf("TASK0032_WIRE {\"scenario\":\"%s\",\"moves\":%u,\"rxBytes\":%u,\"ackBytes\":%u,\"minFrame\":%u,\"maxFrame\":%u,\"fragmented\":%u}\n",
+                scenario.c_str(), count, wireBytes, ackBytes, minBytes, maxBytes, fragmented);
+}
+void unsupportedExtensionBaseline() {
+#if TASK0032_REJECT_UNSUPPORTED
+    // Each unsupported second-word flag must fail before command admission.
+    // These are correctly sized/checksummed packets, not random corrupt bytes.
+    for (unsigned bit=11; bit<=15; ++bit) {
+        std::string bytes;
+        appendU16(bytes,0x108d);
+        appendU16(bytes,static_cast<uint16_t>(1u<<bit));
+        appendU16(bytes,1);
+        appendU16(bytes,1);
+        appendFloat(bytes,10.0f);
+        appendFloat(bytes,5.0f);
+        feed(withBinaryChecksum(bytes));
+        readReply("\r\nResend:1\r\nok\r\n");
+        assert(!GCodeInput::peekCurrentCommand() && dispatchedCommands==0);
+    }
+    assert(flushes==5);
+    std::puts("TASK0032_UNSUPPORTED_REJECT five extension flags rejected, zero admission");
+#else
+    // Characterization only: a protocol-4 U parameter is not supported
+    // by this RF protocol-3 parser. It currently accepts the G1 and
+    // ignores the unsupported field, which must not become a new contract.
+    std::string frameBytes;
+    appendU16(frameBytes, 0x108d); // V2 + N,G,X,binary
+    appendU16(frameBytes, 0x0800); // U (protocol 4)
+    appendU16(frameBytes, 1);
+    appendU16(frameBytes, 1);
+    appendFloat(frameBytes, 10.0f);
+    appendFloat(frameBytes, 5.0f);
+    feed(withBinaryChecksum(frameBytes));
+    readReply("ok 1\r\n");
+    auto* cmd = GCodeInput::peekCurrentCommand();
+    assert(cmd && cmd->hasG() && cmd->G == 1 && cmd->hasX() && cmd->X == 10.0f);
+    assert(cmd->isV2()); // public API; params2 itself is private
+    // Do not execute this packet, even in the stub.
+    GCodeInput::popCurrentCommand();
+    std::puts("TASK0032_UNSUPPORTED_EXTENSION baseline accepts unsupported U field; future positive rejection required");
+#endif
+}
+'''
+
+def replace_once(text, old, new):
+    if text.count(old) != 1:
+        raise ValueError("source anchor changed: " + old)
+    return text.replace(old, new)
+
+
+def main():
+    candidate = sys.argv[1:] == ["--reject-unsupported"]
+    assert candidate or not sys.argv[1:], "usage: parser-wire-replay.py [--reject-unsupported]"
+    with TemporaryDirectory(prefix="task0032-wire-") as directory:
+        root = Path(directory)
+        if candidate:
+            shutil.copytree(ROOT / "Repetier", root / "Repetier")
+            parser = root / "Repetier/GCodeInput.cpp"
+            parser.write_text(replace_once(parser.read_text(),
+                "command.params2 = *(uint16_t*)p;\n        p += 2;",
+                "command.params2 = *(uint16_t*)p;\n        p += 2;\n        if (command.params2 & 0xF800u)\n            return false;"))
+        else:
+            (root / "Repetier").symlink_to(ROOT / "Repetier", target_is_directory=True)
+        tests = root / "tests"
+        tests.mkdir()
+        for name in ("serial-protocol.py", "serial-protocol.cpp", "usb-serial.cpp"):
+            shutil.copyfile(ROOT / "tests" / name, tests / name)
+        cpp = tests / "serial-protocol.cpp"
+        text = replace_once(cpp.read_text(), "#include <cstdlib>", "#include <cstdlib>\n#include <cstring>")
+        text = replace_once(text, "void numberedLines() {", SCENARIOS + "\nvoid numberedLines() {")
+        text = replace_once(text, 'if (scenario == "numbered") numberedLines();',
+            'if (scenario == "wire-ascii" || scenario == "wire-binary-v1" || scenario == "wire-binary-v2" || scenario == "wire-mixed") wireMoves(scenario);\n'
+            '    else if (scenario == "wire-unsupported") unsupportedExtensionBaseline();\n'
+            '    else if (scenario == "numbered") numberedLines();')
+        cpp.write_text(f"#define TASK0032_REJECT_UNSUPPORTED {int(candidate)}\n" + text)
+        py = tests / "serial-protocol.py"
+        py.write_text(replace_once(py.read_text(), 'for scenario in ("numbered",',
+            'for scenario in ("wire-ascii", "wire-binary-v1", "wire-binary-v2", "wire-mixed", "wire-unsupported", "numbered",'))
+        subprocess.run([sys.executable, str(py)], check=True)
+
+
+if __name__ == "__main__":
+    main()
