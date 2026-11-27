@@ -1,6 +1,6 @@
 {
-  "model": "task0033-recovery-contract-v1",
-  "assumptions": "Abstract transaction and state-machine tests only. No actual recovery parser, transport, host, CRC, interrupt cycle cost, hardware fault or proof of a valid binary synchronization boundary. External sync proof deliberately not implemented. ACK/RESEND intents are not literal wire replies; actual Repetier compatibility and safe stop integration are unresolved. Queue shown for validation order, not finite capacity or policy on abort. No guarantee against unflagged checksum collisions.",
+  "model": "task0033-recovery-contract-v2",
+  "assumptions": "Abstract transaction and state-machine tests only. No actual recovery parser, transport, host, CRC, interrupt cycle cost, hardware fault or proof of a valid binary synchronization boundary. External sync proof deliberately not implemented. ACK/RESEND intents are not literal wire replies; actual Repetier compatibility and safe stop integration are unresolved. Queue shown for validation order, not finite capacity or policy on abort. No guarantee against unflagged checksum collisions. Epoch is abstract; use a sticky latch plus carefully bounded atomic handshake in AVR, not a wrapping per-byte generation counter.",
   "traces": [
     {
       "kind": "FE",
@@ -455,6 +455,25 @@
       "counters": {
         "FE": 1,
         "DOR": 255,
+        "UPE": 0,
+        "RING": 0
+      }
+    },
+    {
+      "case": "loss_during_sync",
+      "last": 0,
+      "gate": "OPEN",
+      "pending": null,
+      "queue": [],
+      "out": [
+        {
+          "kind": "RESEND_INTENT",
+          "number": 1
+        }
+      ],
+      "counters": {
+        "FE": 1,
+        "DOR": 1,
         "UPE": 0,
         "RING": 0
       }
