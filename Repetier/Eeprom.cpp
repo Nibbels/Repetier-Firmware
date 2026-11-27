@@ -1114,7 +1114,7 @@ void EEPROM::storeSenseOffsetSettings(int16_t digits, int16_t micrometers, bool 
     publishSenseOffsetSettings();
 }
 
-void EEPROM::storePressureLimits(bool stop, int32_t minimum, int32_t maximum, bool saveMinimum, bool saveMaximum) {
+bool EEPROM::storePressureLimits(bool stop, int32_t minimum, int32_t maximum, bool saveMinimum, bool saveMaximum) {
     bool changed=false;
     if(stop) {
         if(saveMinimum && HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN)!=minimum) {
@@ -1136,6 +1136,7 @@ void EEPROM::storePressureLimits(bool stop, int32_t minimum, int32_t maximum, bo
         }
     }
     if(changed) updateChecksum();
+    return true; // legacy comparison only
 }
 
 void EEPROM::storeDriveLimit(uint8_t heater, bool maximum, uint8_t value) {

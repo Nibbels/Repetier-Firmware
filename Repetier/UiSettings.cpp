@@ -784,8 +784,8 @@ void UIDisplay::changePressureSetting(int action, int8_t increment) {
         long minimum = limits.minimum;
         INCREMENT_MIN_MAX(minimum, 200, EMERGENCY_PAUSE_DIGITS_MIN, limits.maximum);
         limits.minimum = minimum;
-        Printer::pressureProtection.setPauseLimits(limits);
-        EEPROM::storePressureLimits(false,minimum,0,true,false);
+        if(EEPROM::storePressureLimits(false,minimum,0,true,false))
+            Printer::pressureProtection.setPauseLimits(limits);
         break;
     }
     case UI_ACTION_EMERGENCY_PAUSE_MAX: {
@@ -793,23 +793,23 @@ void UIDisplay::changePressureSetting(int action, int8_t increment) {
         long maximum = limits.maximum;
         INCREMENT_MIN_MAX(maximum, 200, limits.minimum, EMERGENCY_PAUSE_DIGITS_MAX);
         limits.maximum = maximum;
-        Printer::pressureProtection.setPauseLimits(limits);
-        EEPROM::storePressureLimits(false,0,maximum,false,true);
+        if(EEPROM::storePressureLimits(false,0,maximum,false,true))
+            Printer::pressureProtection.setPauseLimits(limits);
         break;
     }
 
     case UI_ACTION_EMERGENCY_ZSTOP_MIN: {
         auto limits = Printer::pressureProtection.stopLimits();
         INCREMENT_MIN_MAX(limits.minimum, 200, EMERGENCY_STOP_DIGITS_MIN, limits.maximum);
-        Printer::pressureProtection.setStopLimits(limits);
-        EEPROM::storePressureLimits(true,limits.minimum,0,true,false);
+        if(EEPROM::storePressureLimits(true,limits.minimum,0,true,false))
+            Printer::pressureProtection.setStopLimits(limits);
         break;
     }
     case UI_ACTION_EMERGENCY_ZSTOP_MAX: {
         auto limits = Printer::pressureProtection.stopLimits();
         INCREMENT_MIN_MAX(limits.maximum, 200, limits.minimum, EMERGENCY_STOP_DIGITS_MAX);
-        Printer::pressureProtection.setStopLimits(limits);
-        EEPROM::storePressureLimits(true,0,limits.maximum,false,true);
+        if(EEPROM::storePressureLimits(true,0,limits.maximum,false,true))
+            Printer::pressureProtection.setStopLimits(limits);
         break;
     }
 

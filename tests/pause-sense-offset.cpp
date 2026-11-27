@@ -105,7 +105,7 @@ unsigned checksumCalls = 0;
 void updateChecksum() { ++checksumCalls; }
 void publishSenseOffsetSettings();
 void storeSenseOffsetSettings(int16_t, int16_t, bool, bool);
-void storePressureLimits(bool,int32_t,int32_t,bool,bool);
+bool storePressureLimits(bool,int32_t,int32_t,bool,bool);
 }
 
 bool interruptsEnabled = true;

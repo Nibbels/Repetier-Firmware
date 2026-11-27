@@ -204,7 +204,7 @@ public:
     static void storeUsageTotals(UsageTotals totals);
     // Persist selected pressure limits, preserving the unselected saved
     // value (not necessarily the temporary live stop band).
-    static void storePressureLimits(bool stop, int32_t minimum, int32_t maximum, bool saveMinimum, bool saveMaximum);
+    static bool storePressureLimits(bool stop, int32_t minimum, int32_t maximum, bool saveMinimum, bool saveMaximum);
     static void storeDriveLimit(uint8_t heater, bool maximum, uint8_t value);
     // Semantic persistence entrypoints. Callers never choose addresses.
     static void storeCaseLight(bool on);

@@ -298,16 +298,36 @@ void EEPROM::storeSenseOffsetSettings(int16_t digits,int16_t micrometers,bool sa
     const auto old=Printer::senseOffsetControl.storedLimits();
     Printer::senseOffsetControl.publishStoredLimits(saveDigits?digits:old.thresholdDigits,saveMaximum?micrometers:old.maxMicrometers);
 }
-void EEPROM::storePressureLimits(bool stop,int32_t min,int32_t max,bool saveMin,bool saveMax) {
+bool EEPROM::storePressureLimits(bool stop,int32_t min,int32_t max,bool saveMin,bool saveMax) {
+    lastOk=false;
+    if(!loaded || Printer::blockAll || Printer::printJob.emergencyLocked())return false;
+    if(!saveMin && !saveMax){lastOk=true;return true;}
+    // The other live pause endpoint can be a temporary M3075 override.
+    // Validate the proposed DURABLE pair before publishing a menu change.
+    uint8_t data[MaxPayload];uint32_t alerts=AllAlerts;
+    auto s=session();
+    if(!accept(s.read(Pressure,data,length(Pressure),alerts)))return false;
+    BlockDecoder d(Pressure,data,length(Pressure));
+    const int32_t lo=saveMin?min:(stop?int32_t(int16_t(d.u16(Field::F_RF_EMERGENCYZSTOPDIGITSMIN))):int32_t(d.u32(Field::F_RF_EMERGENCYPAUSEDIGITSMIN)));
+    const int32_t hi=saveMax?max:(stop?int32_t(int16_t(d.u16(Field::F_RF_EMERGENCYZSTOPDIGITSMAX))):int32_t(d.u32(Field::F_RF_EMERGENCYPAUSEDIGITSMAX)));
+    if(lo>hi || (stop?(lo<EMERGENCY_STOP_DIGITS_MIN || hi>EMERGENCY_STOP_DIGITS_MAX || !lo || !hi):
+                          (lo<EMERGENCY_PAUSE_DIGITS_MIN || hi>EMERGENCY_PAUSE_DIGITS_MAX))) {
+        lastOk=false;
+        Com::printErrorFLN(PSTR("EEPROM pressure band rejected"));
+        UI_STATUS_UPD("Invalid digit band");
+        return false;
+    }
     Patch p[2];uint8_t n=0;
     if(stop){
-        if(saveMin)p[n++]=Patch::word(Field::F_RF_EMERGENCYZSTOPDIGITSMIN,min);
-        if(saveMax)p[n++]=Patch::word(Field::F_RF_EMERGENCYZSTOPDIGITSMAX,max);
+        if(saveMin)p[n++]=Patch::word(Field::F_RF_EMERGENCYZSTOPDIGITSMIN,uint16_t(lo));
+        if(saveMax)p[n++]=Patch::word(Field::F_RF_EMERGENCYZSTOPDIGITSMAX,uint16_t(hi));
     }else{
-        if(saveMin)p[n++]=Patch::dword(Field::F_RF_EMERGENCYPAUSEDIGITSMIN,min);
-        if(saveMax)p[n++]=Patch::dword(Field::F_RF_EMERGENCYPAUSEDIGITSMAX,max);
+        if(saveMin)p[n++]=Patch::dword(Field::F_RF_EMERGENCYPAUSEDIGITSMIN,uint32_t(lo));
+        if(saveMax)p[n++]=Patch::dword(Field::F_RF_EMERGENCYPAUSEDIGITSMAX,uint32_t(hi));
     }
-    if(n)persist(p,n);
+    if(!accept(s.patch(p,n)))return false;
+    if(Printer::printJob.emergencyLocked()){lastOk=false;return false;}
+    return true;
 }
 void EEPROM::storeMicrostepConfiguration(uint8_t mask) {
     if(!mask)return;
