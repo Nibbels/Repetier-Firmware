@@ -165,6 +165,7 @@ FIXTURE=r'''
 #include <math.h>
 #include "inverse-root-generated.h"
 #include "z-correction-clock.h"
+#include "direct-z-ramp.h"
 using namespace InverseRootResearch;
 class HAL { public: static uint16_t integerSqrt(int32_t); static int32_t CPUDivU2(unsigned int); };
 #include "actual-hal-math.inc"
@@ -209,12 +210,15 @@ int main(){
         mark(9);asm volatile("" : "+r"(a),"+r"(l) :: "memory");output=transitionPeriod(a,l,true);mark(137);
         require(output==transitionPeriod(energy,input,true));
     }
-    for(uint8_t j=0;j<3;j++){
-        const uint32_t a=j==0?6400:j==1?128000:256000;
-        const auto lim=ZCorrectionResearch::Limits::prepare(a,11520);
+    for(uint8_t j=0;j<4;j++){
+        const uint32_t a=j==0?6400:j==2?256000:128000;
+        const uint16_t speed=j==3?384:11520;
+        const auto lim=ZCorrectionResearch::Limits::prepare(a,speed);
         const auto dl=DirectLimits::prepare(lim.twiceAcceleration,lim.maxLevel);
         ZCorrectionResearch::FastRamp<FastMath> fast;
         DirectRamp direct;
+        DirectZResearch::Ramp cached;
+        const auto cl=DirectZResearch::Limits::prepare(a,speed);
         fixture_id=2+j;
         for(uint8_t i=0;i<32;i++){
             queue_depth=i;
@@ -226,7 +230,10 @@ int main(){
             e=int32_t(input);mark(11);asm volatile("" : "+r"(e) :: "memory");
             auto dp=direct.plan(e,dl);output=dp.interval+dp.level;mark(139);
             require(fp.nextLevel==dp.level&&fp.sign==dp.sign&&fp.safetyRestart==dp.restart);
-            fast.commit(fp);direct.commit(dp);
+            e=int32_t(input);mark(12);asm volatile("" : "+r"(e) :: "memory");
+            auto cp=cached.plan(e,cl);output=cp.interval+cp.nextLevel;mark(140);
+            require(cp.nextLevel==dp.level&&cp.sign==dp.sign&&cp.safetyRestart==dp.restart&&cp.interval==dp.interval);
+            fast.commit(fp);direct.commit(dp);cached.commit(cp);
         }
     }
     mark(255);while(true){}
@@ -279,11 +286,14 @@ def main():
             start,ff,ii,stage=pending
             assert (ff,ii,stage)==(f,i,mark-128)
             rows.append(dict(fixture=f,index=i,stage=stage,cycles=t-start));pending=None
-    assert done and pending is None and len(rows)==15*8+11+3*32*2
-    names=["HAL integer sqrt","lower table sqrt","sqrtf","Quake invsqrt","Quake period (float)","upper table period","float sqrt/div period","HAL floor root + reciprocal","direct adjacent ramp period","cached HAL full ramp","direct table full ramp"]
+    assert done and pending is None and len(rows)==15*8+11+4*32*3
+    names=["HAL integer sqrt","lower table sqrt","sqrtf","Quake invsqrt","Quake period (float)","upper table period","float sqrt/div period","HAL floor root + reciprocal","direct adjacent ramp period","cached HAL full ramp","direct table full ramp","cached direct full ramp"]
     summary={}
     for stage,name in enumerate(names,1):
         times=[r["cycles"] for r in rows if r["stage"]==stage]
+        summary[name]=dict(n=len(times),min=min(times),median=statistics.median(times),max=max(times))
+    for stage,name in ((10,"HAL cap1 plateau"),(11,"direct uncached cap1 plateau"),(12,"direct cached cap1 plateau")):
+        times=[r["cycles"] for r in rows if r["stage"]==stage and r["fixture"]==5 and 2<=r["index"]<=14]
         summary[name]=dict(n=len(times),min=min(times),median=statistics.median(times),max=max(times))
     (d/"results.json").write_text(json.dumps(dict(bounds=result,summary=summary,rows=rows,flags=flags,elf_sha256=hashlib.sha256(elf.read_bytes()).hexdigest()),indent=2)+"\n")
     print("Inverse root AVR",json.dumps(summary),flush=True)
