@@ -29,7 +29,7 @@ RESET = r'''
 void UIDisplay::resetDisplayAfterClear() {
     lcdTransport_.afterClear(displayCache_,HAL::timeInMicroseconds());
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-    emergencyFrame_=false;
+    emergencyFrameRevision_=0xff;
 #endif
 }
 '''
@@ -41,8 +41,9 @@ void UIDisplay::serviceDisplay() {
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     emergency=Printer::printJob.emergencyLocked();
     // Until the real emergency renderer has supplied all four rows, do
-    // not send even one previously pending ordinary character.
-    if(emergency && !emergencyFrame_) return;
+    // not send even one previously pending ordinary character. A new fault
+    // revision also supersedes any partially transferred emergency view.
+    if(emergency && emergencyFrameRevision_!=ThermalEmergency::faultLedger().revision()) return;
 #endif
     struct Sink {
         uint32_t now() const { return HAL::timeInMicroseconds(); }
@@ -84,7 +85,7 @@ def source_changes(root):
     void renderNormalPage();
     bool localKeyReady(int action) const;
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-    bool emergencyFrame_ = false;
+    uint8_t emergencyFrameRevision_ = 0xff;
 #endif""")
         return s
     edit(fw/"ui.h",header)
@@ -172,10 +173,10 @@ void UIDisplay::loadStartupCharacters()""")
         }
         return;""","""            lcdTransport_.stage(row,line,displayCache_);
         }
-        emergencyFrame_=true;
+        emergencyFrameRevision_=ledger.revision();
         return;""")
         refresh+="""#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-    emergencyFrame_=false;
+    emergencyFrameRevision_=0xff;
 #endif
     renderNormalPage();
 } // refreshPage"""
