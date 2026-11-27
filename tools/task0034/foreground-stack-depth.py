@@ -24,9 +24,7 @@ def target(arg):
 def signed16(n):
     return n-65536 if n>=32768 else n
 
-def inventory(z,board,canonical=False):
-    p=board+"/" if canonical else "host/experimental-avr/emergency/"+board+"/"
-    s=z.read(p+"disassembly.txt").decode()
+def decode_linked(s,board):
     labels={int(m[1],16):m[2] for m in re.finditer(r"^([0-9a-f]+) <(.*)>:$",s,re.M)}
     ins,raw={},{}
     for line in s.splitlines():
@@ -65,6 +63,12 @@ def inventory(z,board,canonical=False):
         ts=[2*(raw[base+i*2]+256*raw[base+i*2+1]) for i in range(count)]
         assert all(t in ins for t in ts),(board,hex(j),"target")
         tables[j]=ts
+    return ins,tables,labels
+
+def inventory(z,board,canonical=False):
+    p=board+"/" if canonical else "host/experimental-avr/emergency/"+board+"/"
+    s=z.read(p+"disassembly.txt").decode()
+    ins,tables,labels=decode_linked(s,board)
     syms={int(m[1],16):m[3] for m in re.finditer(
         r"^([0-9a-f]+) ([0-9a-f]+) [tTwW] (.+)$",z.read(p+"symbols.txt").decode(),re.M)}
     def name(a):return labels.get(a,syms.get(a,hex(a)))
