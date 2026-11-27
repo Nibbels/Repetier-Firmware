@@ -43,7 +43,7 @@ def main():
         ], check=True)
         for scenario in (
             "standard", "pla", "abs", "retry", "cancel", "disconnected", "overload",
-            "overload-and-cancel", "stop-mid-grid", "invalid-grid", "save-failed",
+            "overload-and-cancel", "stop-mid-grid", "invalid-grid", "save-failed", "busy-admission",
         ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
 

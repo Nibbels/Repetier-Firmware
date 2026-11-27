@@ -52,7 +52,7 @@ def main():
         ], check=True)
         for scenario in (
             "normal", "retry", "missing-matrix", "level", "tiny-matrix", "cancel-during-home",
-            "stop-during-home", "disconnected", "overload",
+            "stop-during-home", "disconnected", "overload", "busy-admission",
         ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
 

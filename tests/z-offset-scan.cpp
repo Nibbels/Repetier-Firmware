@@ -72,7 +72,7 @@ uint32_t timeInMilliseconds() { return now; }
 namespace Printer {
 ScanStrainGauge strainGauge;
 bool blockAll = false;
-struct { bool commandsBlocked() const { return false; } } printJob;
+struct { bool busy=false, blocked=false; bool isBusy() const { return busy; } bool commandsBlocked() const { return blocked; } } printJob;
 struct { bool isPaused() const { return false; } } pause;
 struct { void cancel() {} void schedule(uint32_t) {} } idleStatus;
 struct { void recordActivity(uint32_t) {} } inactivity;
@@ -224,6 +224,22 @@ void Calibration::discardZOffsetScan() { zOffsetScan.discard(); }
 
 int main(int argc, char** argv) {
     assert(argc == 2);
+    if (!std::strcmp(argv[1], "busy-admission")) {
+        Printer::printJob.busy=true;
+        zOffsetScan.startOrCancel(false);
+        assert(!zOffsetScan.active() && !homedZ && !homedXY);
+        Printer::printJob.busy=false;
+        Printer::printJob.blocked=true;
+        zOffsetScan.startOrCancel(true);
+        assert(!zOffsetScan.active() && !homedZ && !homedXY);
+        Printer::printJob.blocked=false;
+        zOffsetScan.startOrCancel(false);
+        assert(zOffsetScan.active());
+        Printer::printJob.busy=true;
+        zOffsetScan.startOrCancel(false);
+        assert(Calibration::scanSession.aborting());
+        return 0;
+    }
     const bool level = !std::strcmp(argv[1], "level");
     const bool retry = !std::strcmp(argv[1], "retry");
     const bool missing = !std::strcmp(argv[1], "missing-matrix");

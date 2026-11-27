@@ -94,7 +94,7 @@ ScanStrainGauge strainGauge;
 float axisStepsPerMM[3] = {100, 100, 100}, homingFeedrate[3] = {60, 60, 5};
 float stepsPerMm(uint8_t axis) { return axisStepsPerMM[axis]; }
 float axisHomingFeedrate(uint8_t axis) { return homingFeedrate[axis]; }
-struct { bool isBusy() const { return false; } } printJob;
+struct { bool busy=false, blocked=false; bool isBusy() const { return busy; } bool commandsBlocked() const { return blocked; } } printJob;
 struct { void recordActivity(millis_t) {} } inactivity;
 struct { void cancel() {} void schedule(millis_t) {} } idleStatus;
 struct {
@@ -222,6 +222,22 @@ void Calibration::showAbortScanReason(const void* text, ScanAbort reason) { ::sh
 
 int main(int argc, char** argv) {
     assert(argc == 2);
+    if (!std::strcmp(argv[1], "busy-admission")) {
+        Printer::printJob.busy=true;
+        heatBedScan.startOrCancel(HeatBedScanMode::Standard);
+        assert(!heatBedScan.active() && !homedZ && !homedXY);
+        Printer::printJob.busy=false;
+        Printer::printJob.blocked=true;
+        heatBedScan.startOrCancel(HeatBedScanMode::Standard);
+        assert(!heatBedScan.active() && !homedZ && !homedXY);
+        Printer::printJob.blocked=false;
+        heatBedScan.startOrCancel(HeatBedScanMode::Standard);
+        assert(heatBedScan.active());
+        Printer::printJob.busy=true;
+        heatBedScan.startOrCancel(HeatBedScanMode::Standard);
+        assert(Calibration::scanSession.aborting()); // cancel remains allowed
+        return 0;
+    }
     HeatBedScanMode mode = HeatBedScanMode::Standard;
     if (!std::strcmp(argv[1], "pla"))
         mode = HeatBedScanMode::Pla;

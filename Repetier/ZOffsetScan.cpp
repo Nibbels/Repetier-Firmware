@@ -122,6 +122,12 @@ void ZOffsetScan::startOrCancel(bool levelMatrix) {
         return;
     }
 
+    // Like a mesh scan, Z-offset calibration must not begin inside a
+    // print, filament program or the pending post-stop output phase.
+    if (Printer::printJob.isBusy() || Printer::printJob.commandsBlocked()) {
+        Com::printFLN(PSTR("ZOS requires idle print job"));
+        return;
+    }
     Com::printFLN(PSTR("ZOS started"));
     Calibration::scanSession.reset();
     levelingPass_ = levelMatrix ? LevelingPass::Center : LevelingPass::None;
