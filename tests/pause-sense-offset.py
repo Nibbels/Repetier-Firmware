@@ -75,7 +75,7 @@ def main():
         section(printer, "void Printer::stopPrint()", "\n#define START_EXTRUDER_CONFIG"),
         section(homing, "void Printer::homeZAxis()", "\nvoid Printer::homeAxis("),
         section(printer, "void Printer::enableSenseOffsetnow(", "\nvoid Printer::enableCMPnow("),
-        section(eeprom_source, "void EEPROM::publishSenseOffsetSettings()", "\nEEPROM::UsageTotals EEPROM::usageTotals()"),
+        section(eeprom_source, "void EEPROM::publishSenseOffsetSettings()", "\nvoid EEPROM::storeDriveLimit("),
         section(rf, "bool isAnyScanRunning()", "\nvoid discardScans(").replace("Calibration::", ""),
         section(panel_motion, "void moveZAction(int8_t direction) {", "} // moveZAction") + "}",
         section(ui_actions, "void UIDisplay::pressPlay()", "\nvoid UIDisplay::mainSwitchCase("),

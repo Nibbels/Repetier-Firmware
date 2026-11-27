@@ -213,6 +213,10 @@ public:
     struct UsageTotals { int32_t seconds; float metres; };
     static UsageTotals usageTotals();
     static void storeUsageTotals(UsageTotals totals);
+    // Persist selected pressure limits, preserving the unselected saved
+    // value (not necessarily the temporary live stop band).
+    static void storePressureLimits(bool stop, int32_t minimum, int32_t maximum, bool saveMinimum, bool saveMaximum);
+    static void storeDriveLimit(uint8_t heater, bool maximum, uint8_t value);
     static void storeManualZOffset();
     static void storeSenseOffsetSettings(int16_t digits, int16_t micrometers, bool saveDigits, bool saveMaximum);
     static void storeMicrostepConfiguration(uint8_t changedMask);

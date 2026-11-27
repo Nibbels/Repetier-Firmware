@@ -1106,6 +1106,40 @@ void EEPROM::storeSenseOffsetSettings(int16_t digits, int16_t micrometers, bool 
     publishSenseOffsetSettings();
 }
 
+void EEPROM::storePressureLimits(bool stop, int32_t minimum, int32_t maximum, bool saveMinimum, bool saveMaximum) {
+    bool changed=false;
+    if(stop) {
+        if(saveMinimum && HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN)!=minimum) {
+            HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN,minimum);
+            changed=true;
+        }
+        if(saveMaximum && HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX)!=maximum) {
+            HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX,maximum);
+            changed=true;
+        }
+    } else {
+        if(saveMinimum && HAL::eprGetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMIN)!=minimum) {
+            HAL::eprSetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMIN,minimum);
+            changed=true;
+        }
+        if(saveMaximum && HAL::eprGetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMAX)!=maximum) {
+            HAL::eprSetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMAX,maximum);
+            changed=true;
+        }
+    }
+    if(changed) updateChecksum();
+}
+
+void EEPROM::storeDriveLimit(uint8_t heater, bool maximum, uint8_t value) {
+    if(heater>=NUM_TEMPERATURE_LOOPS) return;
+    const uint16_t pos=heater==NUM_EXTRUDER
+        ? (maximum?EPR_BED_DRIVE_MAX:EPR_BED_DRIVE_MIN)
+        : getExtruderOffset(heater)+(maximum?EPR_EXTRUDER_DRIVE_MAX:EPR_EXTRUDER_DRIVE_MIN);
+    if(HAL::eprGetByte(pos)==value) return;
+    HAL::eprSetByte(pos,value);
+    updateChecksum();
+}
+
 EEPROM::UsageTotals EEPROM::usageTotals() {
     return {HAL::eprGetInt32(EPR_PRINTING_TIME), HAL::eprGetFloat(EPR_PRINTING_DISTANCE)};
 }

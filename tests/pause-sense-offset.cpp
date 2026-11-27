@@ -96,6 +96,7 @@ int32_t eepromDWords[2048] = {};
 unsigned eepromReads = 0;
 int16_t eprGetInt16(unsigned address) { ++eepromReads; return eepromWords[address]; }
 void eprSetInt16(unsigned address, int16_t value) { eepromWords[address] = value; }
+int32_t eprGetInt32(unsigned address) { ++eepromReads; return eepromDWords[address]; }
 void eprSetInt32(unsigned address, int32_t value) { eepromDWords[address] = value; }
 }
 
@@ -104,6 +105,7 @@ unsigned checksumCalls = 0;
 void updateChecksum() { ++checksumCalls; }
 void publishSenseOffsetSettings();
 void storeSenseOffsetSettings(int16_t, int16_t, bool, bool);
+void storePressureLimits(bool,int32_t,int32_t,bool,bool);
 }
 
 bool interruptsEnabled = true;
@@ -777,6 +779,9 @@ void pressurePause() {
     configurePressure(3075, &command);
     assert(HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMIN] == EMERGENCY_PAUSE_DIGITS_MIN);
     assert(HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMAX] == EMERGENCY_PAUSE_DIGITS_MAX);
+    const unsigned saves=EEPROM::checksumCalls;
+    configurePressure(3075,&command);
+    assert(EEPROM::checksumCalls==saves);
     sample(EMERGENCY_PAUSE_DIGITS_MAX, EMERGENCY_PAUSE_CHECKS);
     assert(!Printer::pause.isPaused());
 
@@ -808,6 +813,13 @@ void pressureStop() {
     configurePressure(3076, &command);
     assert(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN) == -12000);
     assert(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX) == 11500);
+    const unsigned saves=EEPROM::checksumCalls;
+    configurePressure(3076,&command);
+    assert(EEPROM::checksumCalls==saves);
+    // A one-sided menu save does not capture an unrelated temporary limit.
+    EEPROM::storePressureLimits(true,-11900,0,true,false);
+    assert(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX)==11500 && EEPROM::checksumCalls==saves+1);
+    EEPROM::storePressureLimits(true,-12000,0,true,false);
 
     PrintLine::direct.task = DIRECT_RUNNING;
     PrintLine::direct.stepsRemaining = 1;

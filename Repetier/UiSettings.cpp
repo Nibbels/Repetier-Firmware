@@ -835,8 +835,7 @@ void UIDisplay::changePressureSetting(int action, int8_t increment) {
         INCREMENT_MIN_MAX(minimum, 200, EMERGENCY_PAUSE_DIGITS_MIN, limits.maximum);
         limits.minimum = minimum;
         Printer::pressureProtection.setPauseLimits(limits);
-        HAL::eprSetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMIN, minimum);
-        EEPROM::updateChecksum();
+        EEPROM::storePressureLimits(false,minimum,0,true,false);
         break;
     }
     case UI_ACTION_EMERGENCY_PAUSE_MAX: {
@@ -845,8 +844,7 @@ void UIDisplay::changePressureSetting(int action, int8_t increment) {
         INCREMENT_MIN_MAX(maximum, 200, limits.minimum, EMERGENCY_PAUSE_DIGITS_MAX);
         limits.maximum = maximum;
         Printer::pressureProtection.setPauseLimits(limits);
-        HAL::eprSetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMAX, maximum);
-        EEPROM::updateChecksum();
+        EEPROM::storePressureLimits(false,0,maximum,false,true);
         break;
     }
 
@@ -854,16 +852,14 @@ void UIDisplay::changePressureSetting(int action, int8_t increment) {
         auto limits = Printer::pressureProtection.stopLimits();
         INCREMENT_MIN_MAX(limits.minimum, 200, EMERGENCY_STOP_DIGITS_MIN, limits.maximum);
         Printer::pressureProtection.setStopLimits(limits);
-        HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN, limits.minimum);
-        EEPROM::updateChecksum();
+        EEPROM::storePressureLimits(true,limits.minimum,0,true,false);
         break;
     }
     case UI_ACTION_EMERGENCY_ZSTOP_MAX: {
         auto limits = Printer::pressureProtection.stopLimits();
         INCREMENT_MIN_MAX(limits.maximum, 200, limits.minimum, EMERGENCY_STOP_DIGITS_MAX);
         Printer::pressureProtection.setStopLimits(limits);
-        HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX, limits.maximum);
-        EEPROM::updateChecksum();
+        EEPROM::storePressureLimits(true,0,limits.maximum,false,true);
         break;
     }
 
@@ -893,17 +889,7 @@ void UIDisplay::changeHeaterSetting(int action, int8_t increment) {
                 INCREMENT_MIN_MAX(drive, 1, 1, 255);
                 tempController[heater]->pidDriveMin = drive;
                 tempController[heater]->updateTempControlVars();
-                if (NUM_EXTRUDER == heater) {
-                    // Das ist das Heizbett
-                    HAL::eprSetByte(EPR_BED_DRIVE_MIN, (uint8_t)drive);
-                    EEPROM::updateChecksum();
-                } else {
-                    //Extruder
-                    if (heater <= NUM_EXTRUDER - 1) { // Paranoid doublecheck
-                        HAL::eprSetByte(EEPROM::getExtruderOffset(heater) + EPR_EXTRUDER_DRIVE_MIN, (uint8_t)drive);
-                        EEPROM::updateChecksum();
-                    }
-                }
+                EEPROM::storeDriveLimit(heater,false,uint8_t(drive));
             }
         }
         break;
@@ -916,17 +902,7 @@ void UIDisplay::changeHeaterSetting(int action, int8_t increment) {
                 INCREMENT_MIN_MAX(drive, 1, 1, 255);
                 tempController[heater]->pidDriveMax = drive;
                 tempController[heater]->updateTempControlVars();
-                if (NUM_EXTRUDER == heater) {
-                    // Das ist das Heizbett
-                    HAL::eprSetByte(EPR_BED_DRIVE_MAX, (uint8_t)drive);
-                    EEPROM::updateChecksum();
-                } else {
-                    //Extruder
-                    if (heater <= NUM_EXTRUDER - 1) { // Paranoid doublecheck
-                        HAL::eprSetByte(EEPROM::getExtruderOffset(heater) + EPR_EXTRUDER_DRIVE_MAX, (uint8_t)drive);
-                        EEPROM::updateChecksum();
-                    }
-                }
+                EEPROM::storeDriveLimit(heater,true,uint8_t(drive));
             }
         }
         break;

@@ -444,9 +444,7 @@ void setEmergencyPauseDigits(GCode* pCommand) {
     const bool disable = nMin == 0 && nMax == 0;
     if (disable || nMin < nMax) {
         Printer::pressureProtection.setPauseLimits({int16_t(nMin), int16_t(nMax)});
-        HAL::eprSetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMIN, nMin);
-        HAL::eprSetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMAX, nMax);
-        EEPROM::updateChecksum();
+        EEPROM::storePressureLimits(false,nMin,nMax,true,true);
         if (Printer::debugInfo()) {
             if (disable) {
                 Com::printFLN(PSTR("M3075: emergency pause disabled"));
@@ -493,9 +491,7 @@ void setEmergencyStopDigits(GCode* pCommand) {
             Com::printF(PSTR(" [digits], new max: "), (int)nMax);
             Com::printFLN(PSTR(" [digits]"));
         }
-        HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX, nMax);
-        HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN, nMin);
-        EEPROM::updateChecksum();
+        EEPROM::storePressureLimits(true,nMin,nMax,true,true);
     } else {
         if (Printer::debugErrors()) {
             Com::printF(PSTR("M3076: min max ("), (int)nMin);
