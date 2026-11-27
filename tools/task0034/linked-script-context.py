@@ -21,7 +21,7 @@ EXPECTED={
     "tMountFilamentHard": ["M109","G21","G92","G1","G92","M104"],
     "tUnmountFilamentHard": ["M109","G21","G92","G1","G92","M104"],
 }
-LINE=re.compile(r"([GM]\d+)(?: +[A-Z][+-]?(?:\d+(?:\.\d*)?|\.\d+))*")
+LINE=re.compile(r"([GM]\d+)(?: +[XYZEFSP][+-]?(?:\d+(?:\.\d*)?|\.\d+))*")
 
 def flash_bytes(elf,address,size):
     assert elf[:6]==b"\x7fELF\x01\x01","not little-endian ELF32"
@@ -49,7 +49,7 @@ def inventory(z,board):
         assert a+n<=0x10000,(board,name,"near flash address")
         raw=flash_bytes(elf,a,n)
         assert raw.endswith(b"\0") and b"\0" not in raw[:-1],(board,name)
-        lines=raw[:-1].decode("ascii").splitlines()
+        lines=raw[:-1].decode("ascii").split("\n")
         commands=[]
         for line in lines:
             m=LINE.fullmatch(line)
