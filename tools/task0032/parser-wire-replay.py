@@ -97,6 +97,24 @@ void wireMoves(const std::string& scenario) {
                 scenario.c_str(), count, wireBytes, ackBytes, minBytes, maxBytes, fragmented);
 }
 void unsupportedExtensionBaseline() {
+#if TASK0032_REJECT_UNSUPPORTED
+    // Each unsupported second-word flag must fail before command admission.
+    // These are correctly sized/checksummed packets, not random corrupt bytes.
+    for (unsigned bit=11; bit<=15; ++bit) {
+        std::string bytes;
+        appendU16(bytes,0x108d);
+        appendU16(bytes,static_cast<uint16_t>(1u<<bit));
+        appendU16(bytes,1);
+        appendU16(bytes,1);
+        appendFloat(bytes,10.0f);
+        appendFloat(bytes,5.0f);
+        feed(withBinaryChecksum(bytes));
+        readReply("\r\nResend:1\r\nok\r\n");
+        assert(!GCodeInput::peekCurrentCommand() && dispatchedCommands==0);
+    }
+    assert(flushes==5);
+    std::puts("TASK0032_UNSUPPORTED_REJECT five extension flags rejected, zero admission");
+#else
     // Characterization only: a protocol-4 U parameter is not supported
     // by this RF protocol-3 parser. It currently accepts the G1 and
     // ignores the unsupported field, which must not become a new contract.
@@ -115,6 +133,7 @@ void unsupportedExtensionBaseline() {
     // Do not execute this packet, even in the stub.
     GCodeInput::popCurrentCommand();
     std::puts("TASK0032_UNSUPPORTED_EXTENSION baseline accepts unsupported U field; future positive rejection required");
+#endif
 }
 '''
 
@@ -125,9 +144,18 @@ def replace_once(text, old, new):
 
 
 def main():
+    candidate = sys.argv[1:] == ["--reject-unsupported"]
+    assert candidate or not sys.argv[1:], "usage: parser-wire-replay.py [--reject-unsupported]"
     with TemporaryDirectory(prefix="task0032-wire-") as directory:
         root = Path(directory)
-        (root / "Repetier").symlink_to(ROOT / "Repetier", target_is_directory=True)
+        if candidate:
+            shutil.copytree(ROOT / "Repetier", root / "Repetier")
+            parser = root / "Repetier/GCodeInput.cpp"
+            parser.write_text(replace_once(parser.read_text(),
+                "command.params2 = *(uint16_t*)p;\n        p += 2;",
+                "command.params2 = *(uint16_t*)p;\n        p += 2;\n        if (command.params2 & 0xF800u)\n            return false;"))
+        else:
+            (root / "Repetier").symlink_to(ROOT / "Repetier", target_is_directory=True)
         tests = root / "tests"
         tests.mkdir()
         for name in ("serial-protocol.py", "serial-protocol.cpp", "usb-serial.cpp"):
@@ -139,7 +167,7 @@ def main():
             'if (scenario == "wire-ascii" || scenario == "wire-binary-v1" || scenario == "wire-binary-v2" || scenario == "wire-mixed") wireMoves(scenario);\n'
             '    else if (scenario == "wire-unsupported") unsupportedExtensionBaseline();\n'
             '    else if (scenario == "numbered") numberedLines();')
-        cpp.write_text(text)
+        cpp.write_text(f"#define TASK0032_REJECT_UNSUPPORTED {int(candidate)}\n" + text)
         py = tests / "serial-protocol.py"
         py.write_text(replace_once(py.read_text(), 'for scenario in ("numbered",',
             'for scenario in ("wire-ascii", "wire-binary-v1", "wire-binary-v2", "wire-mixed", "wire-unsupported", "numbered",'))
