@@ -13,7 +13,9 @@ namespace EventLog {
 // read-only retrieval after restart and terminal thermal capture.
 // Caller retains authoritative safety state and runs thermal/protocol
 // work first. Store's owner gate controls all EEPROM access.
-// A single thermal capture producer owns the writer in this version.
+// A single writer arbitrates immutable thermal evidence and one compact
+// operation failure. Complete an already-started record before switching
+// sources; otherwise terminal thermal evidence gets priority.
 template<uint8_t Slots,uint8_t HeaterCount,class Line,class Cause,class Sink>
 class Service {
     Ring<Slots> ring_;
@@ -23,7 +25,22 @@ class Service {
     TextSink<Line,Cause,Sink> text_;
     enum class Query : uint8_t { Idle, Begin, Read, End, Changed, Error };
     Query query_=Query::Idle;
-    bool logFailed_=false;
+    CompactEvent compact_;
+    bool compactStarted_=false,logFailed_=false;
+
+    template<class Store> Progress serviceCompact(Store& store) {
+        if(!compact_.pending())return Progress::Idle;
+        if(!ring_.initialized())return ring_.scanStep(store);
+        if(!compactStarted_){
+            if(!ring_.begin(compact_))return Progress::Failed;
+            compactStarted_=true;
+        }
+        const auto p=ring_.step(store,compact_);
+        if(p==Progress::CommittedEntry||p==Progress::Failed){
+            compact_.clear();compactStarted_=false;
+        }
+        return p;
+    }
 
     bool notice(const char* msg) {
         Line line;line.text(msg);
@@ -35,15 +52,26 @@ public:
     void requestHistory(){if(query_==Query::Idle)query_=Query::Begin;}
     bool historyPending()const{return query_!=Query::Idle;}
     bool logFailed()const{return logFailed_;}
+    // Admission copies six logical bytes; never accesses EEPROM. If the
+    // single slot is occupied, caller retains existing live diagnosis.
+    bool submitScan(ScanAbort reason,ScanContext operation,uint32_t now){
+        return !logFailed_&&compact_.admitScan(reason,operation,now);
+    }
     const Ring<Slots>& ring()const{return ring_;}
 
     template<class Store,class Ledger> void service(Store& store,const Ledger& ledger) {
         // No EEPROM read/write or format at all during normal idle/printing
         // without an explicit request; terminal faults get priority.
-        if(ledger.active()&&!logFailed_){
-            const auto p=capture_.service(ring_,store,ledger);
-            if(p==Progress::Failed)logFailed_=true;
-            else if(p!=Progress::Idle)return;
+        if(!logFailed_){
+            Progress p=Progress::Idle;
+            if(compactStarted_)p=serviceCompact(store);
+            else {
+                if(ledger.active())p=capture_.service(ring_,store,ledger);
+                if(p==Progress::Idle)p=serviceCompact(store);
+            }
+            if(p==Progress::Failed){
+                logFailed_=true;compact_.clear();compactStarted_=false;
+            }else if(p!=Progress::Idle)return;
         }
         if(query_==Query::Idle)return;
         if(!ring_.initialized()){ring_.scanStep(store);return;}
