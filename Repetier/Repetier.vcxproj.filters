@@ -53,6 +53,9 @@
     <ClInclude Include="EepromZoneStorage.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="EepromZoneRecovery.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="EepromZoneCodec.h">
       <Filter>Header Files</Filter>
     </ClInclude>

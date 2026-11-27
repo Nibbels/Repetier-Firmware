@@ -202,7 +202,9 @@ public:
     // First install or explicitly authorized full reset. Never import legacy
     // bytes, never touch spare slots, never automatically commission a bed.
     // Provider signature: bool operator()(uint8_t id,uint8_t* data,uint8_t n).
-    template<class Provider> bool initialize(Provider& source) {
+    template<class Provider> bool initialize(Provider& source, uint32_t alerts=bit(BedSafety)) {
+        if(alerts & ~AllAlerts) return false;
+        alerts |= bit(BedSafety);
         // Invalidating the first signature byte must precede every change.
         if(!put(Header::Magic,0)) return false;
         for(uint8_t i=1;i<8;++i)
@@ -215,7 +217,7 @@ public:
             if(id==BedSafety) data[0]=0;
             if(!writeBlock(id,data,n)) return false;
         }
-        if(!putPair(Header::Intent,0) || !putPair(Header::Alerts,bit(BedSafety))
+        if(!putPair(Header::Intent,0) || !putPair(Header::Alerts,alerts)
            || !finish()) return false;
         // Publish the identity last, only after all data and metadata.
         return put(Header::Magic,identity(0));

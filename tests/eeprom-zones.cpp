@@ -1,7 +1,7 @@
 // Host replay executes the actual candidate storage engine, not a separate
 // mathematical implementation. The backend models a byte as the physical
 // write unit and can cut power before/after or during any byte programming.
-#include "EepromZoneStorage.h"
+#include "EepromZoneRecovery.h"
 #include <array>
 #include <cassert>
 #include <cstdio>
@@ -334,5 +334,35 @@ int main() {
         assert(us.repair(u.invalid|u.uncertain,factory));
         assert(cutoff(us)==0 || cutoff(us)==90);
     }
+    // Recovery policy: only independently confirmed invalid blocks trigger
+    // full reset. Master metadata alone or an interrupted write is repair.
+    assert(recoveryPlan(mm.inspect()).kind==RecoveryKind::Reset);
+    assert(recoveryPlan(ls.inspect()).kind==RecoveryKind::Repair);
+    assert(recoveryPlan(ms.inspect()).kind==RecoveryKind::None);
+    Inspection unresolved=initial;
+    unresolved.clean=false;unresolved.invalid=bit(Geometry)|bit(Jerk);
+    unresolved.uncertain=unresolved.invalid;
+    assert(recoveryPlan(unresolved).kind==RecoveryKind::Repair);
+    unresolved.uncertain=0;
+    assert(recoveryPlan(unresolved).kind==RecoveryKind::Reset);
+    assert(recoveryPlan(initial,bit(Geometry)|bit(Jerk)).kind==RecoveryKind::Reset);
+    assert(recoveryPlan(initial,bit(Geometry)).mask==bit(Geometry));
+    cuts(multi,[&](Store& s){return recover(s,factory);},[&](Memory& m,bool done){
+        Store s(m,Profile);assert(cutoff(s)<=90);
+        if(done) {
+            const auto st=s.inspect();
+            assert(st.headerValid && st.clean && st.masterValid && !st.invalid);
+            assert(st.alerts==AllAlerts && cutoff(s)==0);
+            assert(sameBlock(s,Geometry,factory) && sameBlock(s,Jerk,factory));
+        }
+    });
+    Memory reset=multi;Store rs(reset,Profile);assert(recover(rs,factory));
+    assert(acknowledgeOrdinary(rs,AllAlerts));
+    assert(rs.inspect().alerts==bit(BedSafety) && cutoff(rs)==0);
+    assert(!commissionBed(rs,39) && !commissionBed(rs,151));
+    cuts(reset,[&](Store& s){return commissionBed(s,85);},[&](Memory& m,bool done){
+        Store s(m,Profile);assert(cutoff(s)==0 || cutoff(s)==85);
+        if(done) assert(cutoff(s)==85 && !s.inspect().alerts);
+    });
     printf("EEPROM zones: %lu cut/torn-byte/bit-flip cases, 125 fields, %u no-op reads; PASS\n",cases,noOpReads);
 }
