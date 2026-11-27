@@ -1,0 +1,59 @@
+// Task0032: consume Task0033's pinned transport contract, not another transport model.
+"use strict";
+const {scenario:demand}=require("./demand-model.cjs");
+const {scenario:queue}=require("./queue-model.cjs");
+const provenance={
+  commit:"4cdb22106e66c02f86dffeb3f49a6a15506c2038",
+  path:"tools/task0033/transport-contract-results.json",
+  blob:"003d9cf4a256ef99b46441c3b017fa6bc29bae57"
+};
+function parameters(contract,mode){
+  const b=contract.budgets_cycles,c=contract.measured_isolated_candidate;
+  if(contract.schema!==1||contract.clock_hz!==16000000||contract.baud!==250000||
+     contract.status!=="owner_agreed_baud_and_proposed_engineering_budgets_not_qualified")
+    throw Error("unexpected transport contract");
+  if(!["budget","isolated"].includes(mode))throw Error("unknown mode");
+  return {rxIsr:mode==="budget"?b.rx_normal:c.rx_normal_cycles,
+    txIsr:mode==="budget"?b.tx_normal:c.tx_normal_cycles,
+    txEmptyPerCommand:mode==="budget"?b.tx_empty:c.tx_empty_cycles,
+    ackBytes:"numbered"};
+}
+function matrix(contract){
+  const lengths=[...new Set(contract.stress.map(r=>r.segment_mm))].sort((a,b)=>a-b);
+  const speeds=[...new Set(contract.stress.map(r=>r.requested_mm_s))].sort((a,b)=>a-b);
+  const rows=[];
+  for(const baud of [contract.reference_baud,contract.baud])
+    for(const shape of ["straight","circle"])for(const chord of lengths)for(const speed of speeds)
+      for(const policy of ["one","3300","adaptive"])for(const mode of ["budget","isolated"]){
+        const spec={shape,count:120,radius:1.35,chord,speed,baud,ratio:.04};
+        const params=parameters(contract,mode);
+        const d=demand(spec,policy,params),q=queue(spec,policy,params,{frameWindow:32});
+        const bytesPerSecond=speed*d.bytes/d.pathMm;
+        rows.push({spec,policy,mode,params,bytesPerSecond,
+          planningScenarioWithin:baud===contract.baud?bytesPerSecond<=contract.planning_rx_bytes_s:null,
+          wireFeasible:d.linkFeasible,localCpuFeasible:d.cpuFeasible,validFluidMotion:q.validFluidMotion,
+          starveCount:q.starveCount,meanCoverageMs:q.meanCoverageMs,achievedMmPerSecond:q.achievedMmPerSecond,
+          meanGroup:d.meanGroup,packedFraction:d.packedFraction});
+      }
+  return rows;
+}
+function selfTest(contract){
+  const b=parameters(contract,"budget"),i=parameters(contract,"isolated");
+  if(b.rxIsr!==80||b.txIsr!==80||b.txEmptyPerCommand!==64||
+     i.rxIsr!==77||i.txIsr!==71||i.txEmptyPerCommand!==61)throw Error("contract values");
+  const rows=matrix(contract);
+  if(rows.length!==360||rows.some(r=>r.spec.baud!==contract.baud&&r.planningScenarioWithin!==null))
+    throw Error("matrix coverage");
+  if(rows.some(r=>!Number.isFinite(r.achievedMmPerSecond)||r.spec.speed>100))throw Error("workload bounds");
+  return "3 groups of checks passed";
+}
+if(require.main===module){
+  const fs=require("node:fs"),crypto=require("node:crypto");
+  const input=fs.readFileSync(process.argv[2]);
+  const blob=crypto.createHash("sha1").update("blob "+input.length+"\0").update(input).digest("hex");
+  if(blob!==provenance.blob)throw Error("pinned Task0033 contract blob mismatch");
+  const contract=JSON.parse(input);
+  console.log(JSON.stringify({schema:1,provenance,transportStatus:contract.status,
+    caveats:"Existing fluid CPU and queue model only; historical motion/parser anchors and synthetic reserve, ACK after planner publication vs real parser admission, no real host/IRQ/safety/step timing. Numbered generated ASCII frames (LF), one illustrative empty TX IRQ per command. Planning allowance is a screen not a hard cap. Isolated costs are not qualified production costs. Travel is intentionally outside this extrusion matrix.",selfTest:selfTest(contract),rows:matrix(contract)},null,2));
+}
+module.exports={provenance,parameters,matrix,selfTest};
