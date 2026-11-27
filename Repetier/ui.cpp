@@ -674,7 +674,7 @@ void UIDisplay::refreshPage() {
         const float live=valid?tempController[fault.channel]->currentTemperatureC:0;
         for(uint8_t row=0;row<UI_ROWS;++row) {
             char line[UI_COLS+1];
-            ThermalEmergency::panelRow<UI_COLS,UI_ROWS>(line,row,ledger,fault,page&1,valid,live);
+            ThermalEmergency::panelRow<UI_COLS,UI_ROWS>(line,row,ledger,valid,live);
             // Existing LCD transport fills remaining columns with spaces.
             printRow(row,line,nullptr,UI_COLS);
         }
