@@ -24,7 +24,8 @@ def main():
             encoding="utf-8",
         )
         matrix_sections = (
-            ("void clearWorking()", "void beginScanGrid()"),
+            ("void clearWorking()", "bool invalidateAllStored("),
+            ("bool reloadActive()", "void beginScanGrid()"),
             ("uint8_t maxIndex(", "char prepareWorking()"),
             ("void report(char format)", "void applyThermalOffset("),
             ("ZOffsetResult applyZOffset(", "} // namespace BedMatrix"),
