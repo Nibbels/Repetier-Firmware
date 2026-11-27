@@ -154,7 +154,7 @@ static bool checkAbsoluteCutoff(uint8_t channel, TemperatureController& act,
     autotuneAbortRequested=true;
     if(first) {
         Printer::markTemperatureReadingsAvailable();
-        Printer::stopPrint();
+        Printer::stopForThermalFault();
     }
     return true;
 }
@@ -288,7 +288,7 @@ void Extruder::manageTemperatures() {
 #ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
         Com::printErrorFLN(PSTR("Heater authorization expired"));
 #endif
-        Printer::stopPrint();
+        Printer::stopForThermalFault();
         autotuneAbortRequested = true;
     }
 #endif
@@ -386,7 +386,7 @@ void Extruder::manageTemperatures() {
 #ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
                     reportTempsensorAndHeaterErrors();
 #endif
-                    Printer::stopPrint();
+                    Printer::stopForThermalFault();
 
 #ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
                     showError((void*)ui_text_temperature_manager, (void*)ui_text_sensor_error);
@@ -443,7 +443,7 @@ void Extruder::manageTemperatures() {
 
                             reportTempsensorAndHeaterErrors();
 #endif
-                            Printer::stopPrint();
+                            Printer::stopForThermalFault();
 
 #ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
                             showError((void*)ui_text_temperature_manager, (void*)ui_text_heater_error);
@@ -483,7 +483,7 @@ void Extruder::manageTemperatures() {
 
                             reportTempsensorAndHeaterErrors();
 #endif
-                            Printer::stopPrint();
+                            Printer::stopForThermalFault();
 
 #ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
                             showError((void*)ui_text_temperature_manager, (void*)ui_text_heater_error);
@@ -904,7 +904,7 @@ __attribute__((noinline)) void TemperatureController::autotunePID(float temp, ui
 #ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
                 Com::printErrorFLN(PSTR("PID autotune: no temperature rise"));
 #endif
-                Printer::stopPrint();
+                Printer::stopForThermalFault();
 #ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
                 showError((void*)ui_text_temperature_manager, (void*)ui_text_heater_error);
 #endif

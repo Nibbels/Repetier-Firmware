@@ -814,7 +814,7 @@ void HAL::startWatchdog() {
             cookie==heaterRecoveryCookie || (heaterWatchdogResetCause&_BV(WDRF))
             ? ThermalEmergency::Cause::WatchdogReset
             : ThermalEmergency::Cause::InterruptedHeating);
-        Printer::stopPrint();
+        Printer::stopForThermalFault();
 #else
         Printer::latchOutputInhibit(true);
 #endif

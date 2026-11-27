@@ -312,6 +312,7 @@ void setMenuMode(int mode, bool active) {
     menuPaused = active;
 }
 void stopPrint();
+void stopForThermalFault();
 void applyAdvanceSettings();
 void homeZAxis();
 void homeDigits();

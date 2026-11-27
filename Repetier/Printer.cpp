@@ -636,27 +636,38 @@ void Printer::disableCMPnow(bool wait) {
     }
 }
 
-void Printer::stopPrint() {
+// The thermal caller has already revoked heater duty and latched the
+// output inhibit. Keep terminal motion cleanup out of normal stop reporting.
+void Printer::stopForThermalFault() {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     InterruptProtectedBlock noInts;
+    if(!printJob.beginThermalEmergency())return;
+    // Heater revoke and SafetyLock precede this entry. Also handle
+    // idle/jog/scan and normal stop's delayed output phase.
+    blockAll=1;
+    lockMovement();
+    idleStatus.cancel();
+    extrusionOutput.inhibit(ExtrusionOutput::Inhibit::Emergency);
+    pause.cancel();
+    PrintLine::abortDirectMoveForEmergency();
+    PrintLine::discardQueuedMoves();
+    // Keep existing motor enable state: dropping Z holding torque may
+    // create a separate mechanical hazard. No new STEP admission.
+    noInts.unprotect();
+    discardScans();
+#else
+    stopPrint();
+#endif
+}
+
+void Printer::stopPrint() {
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     if(isAnyTempsensorDefect()) {
-        if(!printJob.beginThermalEmergency())return;
-        // Heater revoke and SafetyLock precede this entry. Also handle
-        // idle/jog/scan and normal stop's delayed output phase.
-        blockAll=1;
-        lockMovement();
-        idleStatus.cancel();
-        extrusionOutput.inhibit(ExtrusionOutput::Inhibit::Emergency);
-        pause.cancel();
-        PrintLine::abortDirectMoveForEmergency();
-        PrintLine::discardQueuedMoves();
-        // Keep existing motor enable state: dropping Z holding torque may
-        // create a separate mechanical hazard. No new STEP admission.
-        noInts.unprotect();
-        discardScans();
+        stopForThermalFault();
         return;
     }
 #endif
+    InterruptProtectedBlock noInts;
     if (!printJob.beginStop(HAL::timeInMilliseconds()))
         return;
     Printer::idleStatus.cancel();

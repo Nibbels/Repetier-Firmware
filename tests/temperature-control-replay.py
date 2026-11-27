@@ -156,7 +156,7 @@ namespace Printer {
     } printJob;
     static unsigned flag2, debugLevel;
     static void markTemperatureReadingsAvailable() { flag2 |= PRINTER_FLAG2_GOT_TEMPS; }
-    static void stopPrint() {
+    static void stopForThermalFault() {
         for (auto* t : tempController)
             assert(t->targetTemperatureC == 0 && HAL::outputDuty(t->pwmIndex) == 0);
         ++stops;

@@ -28,7 +28,7 @@ namespace Printer {
 bool isAnyTempsensorDefect(){return locked;}
 void latchOutputInhibit(bool thermal){assert(thermal&&!locked);locked=true;++latches;for(int i=0;i<3;++i){duties[i]=0;acts[i].targetTemperatureC=0;}}
 void markTemperatureReadingsAvailable(){++marks;}
-void stopPrint(){assert(locked);for(int i=0;i<3;++i)assert(!duties[i]&&!acts[i].targetTemperatureC);++stops;}
+void stopForThermalFault(){assert(locked);for(int i=0;i<3;++i)assert(!duties[i]&&!acts[i].targetTemperatureC);++stops;}
 }
 namespace ThermalEmergency {Ledger<3> ledger;}
 '''

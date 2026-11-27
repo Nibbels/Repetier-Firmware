@@ -708,6 +708,8 @@ public:
     static void disableCMPnow(bool wait);
 
     static void stopPrint();
+    // Thermal caller has latched output inhibition and removed heater duty.
+    static void stopForThermalFault();
     static bool checkAbortKeys(void);
     static bool checkPlayKey(void);
     static void showConfiguration();
