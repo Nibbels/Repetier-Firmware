@@ -264,19 +264,35 @@ static const char versionString[] PROGMEM = UI_VERSION_STRING;
 
 UIDisplay::UIDisplay() = default;
 
+// LCD GPIO shares PORTK with Z-enable and, on RF1000, PORTL with
+// Z-direction/step. Each extended-port RMW needs exclusion from Timer1.
+// Keep the 320 us delay, strobe pulse and all other writes outside the lock.
+// Pin arguments are compile-time constants: unshared paths remain direct.
+#define LCD_WRITE(pin, value) \
+    do { \
+        if ((pin) == UI_DISPLAY_RS_PIN || (pin) == UI_DISPLAY_D5_PIN || \
+            (pin) == UI_DISPLAY_ENABLE_PIN || (MOTHERBOARD == DEVICE_TYPE_RF1000 && \
+            ((pin) == UI_DISPLAY_D6_PIN || (pin) == UI_DISPLAY_D7_PIN))) { \
+            InterruptProtectedBlock lock; \
+            WRITE(pin, value); \
+        } else { \
+            WRITE(pin, value); \
+        } \
+    } while (0)
+
 void lcdWriteNibble(uint8_t value) {
-    WRITE(UI_DISPLAY_D4_PIN, value & 1);
-    WRITE(UI_DISPLAY_D5_PIN, value & 2);
-    WRITE(UI_DISPLAY_D6_PIN, value & 4);
-    WRITE(UI_DISPLAY_D7_PIN, value & 8);
-    WRITE(UI_DISPLAY_ENABLE_PIN, HIGH); // enable pulse must be >450ns
+    LCD_WRITE(UI_DISPLAY_D4_PIN, value & 1);
+    LCD_WRITE(UI_DISPLAY_D5_PIN, value & 2);
+    LCD_WRITE(UI_DISPLAY_D6_PIN, value & 4);
+    LCD_WRITE(UI_DISPLAY_D7_PIN, value & 8);
+    LCD_WRITE(UI_DISPLAY_ENABLE_PIN, HIGH); // enable pulse must be >450ns
     __asm__("nop\n\t"
             "nop\n\t"
             "nop\n\t"
             "nop\n\t"
             "nop\n\t"
             "nop\n\t");
-    WRITE(UI_DISPLAY_ENABLE_PIN, LOW);
+    LCD_WRITE(UI_DISPLAY_ENABLE_PIN, LOW);
     __asm__("nop\n\t"
             "nop\n\t"
             "nop\n\t"
@@ -289,19 +305,19 @@ void lcdWriteNibble(uint8_t value) {
 void lcdWriteByte(uint8_t c, uint8_t rs) {
     HAL::delayMicroseconds(320); // The LCD R/W line is tied low.
 
-    WRITE(UI_DISPLAY_RS_PIN, rs);
-    WRITE(UI_DISPLAY_D4_PIN, c & 0x10);
-    WRITE(UI_DISPLAY_D5_PIN, c & 0x20);
-    WRITE(UI_DISPLAY_D6_PIN, c & 0x40);
-    WRITE(UI_DISPLAY_D7_PIN, c & 0x80);
-    WRITE(UI_DISPLAY_ENABLE_PIN, HIGH); // enable pulse must be >450ns
+    LCD_WRITE(UI_DISPLAY_RS_PIN, rs);
+    LCD_WRITE(UI_DISPLAY_D4_PIN, c & 0x10);
+    LCD_WRITE(UI_DISPLAY_D5_PIN, c & 0x20);
+    LCD_WRITE(UI_DISPLAY_D6_PIN, c & 0x40);
+    LCD_WRITE(UI_DISPLAY_D7_PIN, c & 0x80);
+    LCD_WRITE(UI_DISPLAY_ENABLE_PIN, HIGH); // enable pulse must be >450ns
     __asm__("nop\n\t"
             "nop\n\t"
             "nop\n\t"
             "nop\n\t"
             "nop\n\t"
             "nop\n\t");
-    WRITE(UI_DISPLAY_ENABLE_PIN, LOW);
+    LCD_WRITE(UI_DISPLAY_ENABLE_PIN, LOW);
     __asm__("nop\n\t"
             "nop\n\t"
             "nop\n\t"
@@ -309,18 +325,18 @@ void lcdWriteByte(uint8_t c, uint8_t rs) {
             "nop\n\t"
             "nop\n\t");
 
-    WRITE(UI_DISPLAY_D4_PIN, c & 0x01);
-    WRITE(UI_DISPLAY_D5_PIN, c & 0x02);
-    WRITE(UI_DISPLAY_D6_PIN, c & 0x04);
-    WRITE(UI_DISPLAY_D7_PIN, c & 0x08);
-    WRITE(UI_DISPLAY_ENABLE_PIN, HIGH); // enable pulse must be >450ns
+    LCD_WRITE(UI_DISPLAY_D4_PIN, c & 0x01);
+    LCD_WRITE(UI_DISPLAY_D5_PIN, c & 0x02);
+    LCD_WRITE(UI_DISPLAY_D6_PIN, c & 0x04);
+    LCD_WRITE(UI_DISPLAY_D7_PIN, c & 0x08);
+    LCD_WRITE(UI_DISPLAY_ENABLE_PIN, HIGH); // enable pulse must be >450ns
     __asm__("nop\n\t"
             "nop\n\t"
             "nop\n\t"
             "nop\n\t"
             "nop\n\t"
             "nop\n\t");
-    WRITE(UI_DISPLAY_ENABLE_PIN, LOW);
+    LCD_WRITE(UI_DISPLAY_ENABLE_PIN, LOW);
     __asm__("nop\n\t"
             "nop\n\t"
             "nop\n\t"
@@ -378,8 +394,8 @@ void UIDisplay::initializeLCD(bool normal) {
     SET_OUTPUT(UI_DISPLAY_ENABLE_PIN);
 
     // Select the LCD command register.
-    WRITE(UI_DISPLAY_RS_PIN, LOW);
-    WRITE(UI_DISPLAY_ENABLE_PIN, LOW);
+    LCD_WRITE(UI_DISPLAY_RS_PIN, LOW);
+    LCD_WRITE(UI_DISPLAY_ENABLE_PIN, LOW);
 
     // Put the LCD into 4 bit mode
     // this is according to the hitachi HD44780 datasheet
@@ -389,7 +405,7 @@ void UIDisplay::initializeLCD(bool normal) {
     // at this point we are in 8 bit mode but of course in this
     // interface 4 pins are dangling unconnected and the values
     // on them don't matter for these instructions.
-    WRITE(UI_DISPLAY_RS_PIN, LOW);
+    LCD_WRITE(UI_DISPLAY_RS_PIN, LOW);
     HAL::delayMicroseconds(10);
     lcdWriteNibble(0x03);
     HAL::delayMicroseconds(5000); // I have one LCD for which 4500 here was not long enough.
@@ -414,6 +430,8 @@ void UIDisplay::initializeLCD(bool normal) {
         loadNormalCharacters();
     }
 } // initializeLCD
+
+#undef LCD_WRITE
 
 // ----------- end direct LCD driver
 
