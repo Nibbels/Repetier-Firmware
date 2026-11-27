@@ -54,7 +54,22 @@ def instrument(s):
                      "firstMove.block();\n    pc.first = first; pc.limit = limit; pc.reserveTicks = reservedTicks;\n    lock.unprotect();")
     return s
 
-def run_capacity(capacity, output, scenario):
+def junction_variant(s, variant):
+    # Only the temporary extracted source is changed; all safety-related
+    # E/Z limits, acceleration, safeSpeed, queue flags and boundaries remain.
+    anchor = "    if (from.distance < MAX_JERK_DISTANCE)\n        lengthFactor = static_cast<float>(MAX_JERK_DISTANCE * MAX_JERK_DISTANCE) / (from.distance * from.distance);"
+    if variant == "baseline":
+        return s
+    if variant == "unweighted":
+        return replace_once(s, anchor, "    // Research counterfactual: remove length weighting.")
+    if variant == "mean-length":
+        return replace_once(s, anchor,
+            "    const float joinLength = (from.distance + to.distance) * 0.5f;\n"
+            "    if (joinLength < MAX_JERK_DISTANCE)\n"
+            "        lengthFactor = static_cast<float>(MAX_JERK_DISTANCE * MAX_JERK_DISTANCE) / (joinLength * joinLength);")
+    raise ValueError(variant)
+
+def run_capacity(capacity, output, scenario, junction):
     spec = importlib.util.spec_from_file_location("shared_replay", ROOT / "tests/pause-sense-offset.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -84,7 +99,7 @@ def run_capacity(capacity, output, scenario):
         generated = build / "planner-research.cpp"
         generated.write_text(s, encoding="utf-8")
         fragments = build / "pause-sense-offset-firmware.inc"
-        fragments.write_text(instrument(fragments.read_text(encoding="utf-8")), encoding="utf-8")
+        fragments.write_text(instrument(junction_variant(fragments.read_text(encoding="utf-8"),junction)), encoding="utf-8")
         cmd = [str(generated) if str(a) == str(source) else a for a in args]
         cmd[1:1] = ["-I", str(HERE)]
         real_run(cmd, **kwargs)
@@ -100,7 +115,8 @@ def run_capacity(capacity, output, scenario):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--capacity", type=int, nargs="+", default=[24, 28, 32])
-    parser.add_argument("--scenario", choices=["all", "smoke"], default="all")
+    parser.add_argument("--scenario", choices=["all", "smoke", "stress"], default="all")
+    parser.add_argument("--junction",choices=["baseline","unweighted","mean-length"],default="baseline")
     parser.add_argument("--output", type=Path, default=Path("planner-trace.jsonl"))
     args = parser.parse_args()
     if any(n < 10 or n > 64 for n in args.capacity):
@@ -108,7 +124,7 @@ def main():
     with args.output.open("w", encoding="utf-8") as output:
         for capacity in args.capacity:
             print(f"Actual-source replay: capacity={capacity}", file=sys.stderr)
-            run_capacity(capacity, output, args.scenario)
+            run_capacity(capacity, output, args.scenario,args.junction)
 
 if __name__ == "__main__":
     main()
