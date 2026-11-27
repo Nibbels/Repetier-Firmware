@@ -183,3 +183,30 @@ jobs:
           path: ${{ runner.temp }}/task0032-p0-preflight
           retention-days: 7
           if-no-files-found: error
+
+
+  lcd-service-replay:
+    if: github.head_ref == 'task/Task0032-service-audit'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Replay bounded LCD byte service and exhaustive dirty masks
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-lcd-service"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          sha256sum tools/task0032/lcd-byte-service.{h,cpp} > "$out/source-sha256.txt"
+          c++ -std=c++11 -O2 -Wall -Wextra -Werror tools/task0032/lcd-byte-service.cpp -o "$out/replay"
+          "$out/replay" | tee "$out/replay.log"
+          c++ -std=c++11 -O1 -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all tools/task0032/lcd-byte-service.cpp -o "$out/ubsan"
+          "$out/ubsan" | tee "$out/ubsan.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-lcd-service-${{ github.sha }}
+          path: ${{ runner.temp }}/task0032-lcd-service
+          retention-days: 7
+          if-no-files-found: error
