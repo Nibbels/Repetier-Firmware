@@ -157,7 +157,7 @@ FSTRINGVALUE(ui_text_hotend_v2, UI_TEXT_HOTEND_V2)
 FSTRINGVALUE(ui_text_z_compensation_active, UI_TEXT_Z_COMPENSATION_ACTIVE)
 
 
-void UIDisplay::parse(char* txt, bool ram) {
+void UIDisplay::parse(char* txt, bool ram, bool allowMessageExpansion) {
     int ivalue = 0;
     float fvalue = 0;
 
@@ -183,13 +183,13 @@ void UIDisplay::parse(char* txt, bool ram) {
                 printCols[col++] = c1;
             break;
         }
-        renderField(c1, c2, ram, ivalue, fvalue);
+        renderField(c1, c2, ram, allowMessageExpansion, ivalue, fvalue);
     }
     printCols[col] = 0;
 } // parse
 
 // Format a complete placeholder. Keep the legacy scratch values for the whole template.
-void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fvalue) {
+void UIDisplay::renderField(char c1, char c2, bool ram, bool allowMessageExpansion, int& ivalue, float& fvalue) {
     switch (c1) {
         case '%': {
             if (c2 == '%' && col < MAX_COLS)
@@ -388,32 +388,32 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
                     printCols[col++] = ' ';
                 else
                     printCols[col++] = CHAR_SELECTED;
-            } else if (!ram && c2 == '1') // %m1 : message line 1
+            } else if (!ram && allowMessageExpansion && c2 == '1') // %m1 : message line 1
             {
                 if (messageLine1 != 0) {
                     col = 0;                                   // Nibbels: kill first space because this is menutab
-                    parse((char PROGMEM*)messageLine1, false); //addStringP((char PROGMEM *)messageLine1);
+                    parse((char PROGMEM*)messageLine1, false, false); //addStringP((char PROGMEM *)messageLine1);
                 }
                 break;
-            } else if (!ram && c2 == '2') // %m2 : message line 2
+            } else if (!ram && allowMessageExpansion && c2 == '2') // %m2 : message line 2
             {
                 if (messageLine2 != 0) {
                     col = 0;                                   // Nibbels: kill first space because this is menutab
-                    parse((char PROGMEM*)messageLine2, false); //addStringP((char PROGMEM *)messageLine2);
+                    parse((char PROGMEM*)messageLine2, false, false); //addStringP((char PROGMEM *)messageLine2);
                 }
                 break;
-            } else if (!ram && c2 == '3') // %m3 : message line 3
+            } else if (!ram && allowMessageExpansion && c2 == '3') // %m3 : message line 3
             {
                 if (messageLine3 != 0) {
                     col = 0;                                   // Nibbels: kill first space because this is menutab
-                    parse((char PROGMEM*)messageLine3, false); //addStringP((char PROGMEM *)messageLine3);
+                    parse((char PROGMEM*)messageLine3, false, false); //addStringP((char PROGMEM *)messageLine3);
                 }
                 break;
-            } else if (!ram && c2 == '4') // %m4 : message line 4
+            } else if (!ram && allowMessageExpansion && c2 == '4') // %m4 : message line 4
             {
                 if (messageLine4 != 0) {
                     col = 0;                                   // Nibbels: kill first space because this is menutab
-                    parse((char PROGMEM*)messageLine4, false); //addStringP((char PROGMEM *)messageLine4);
+                    parse((char PROGMEM*)messageLine4, false, false); //addStringP((char PROGMEM *)messageLine4);
                 }
                 break;
             }
@@ -475,7 +475,7 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
             if (c2 == 's') {
                 if (!ram) {
                     if (statusIsTemplate_) {
-                        parse(statusMsg, true);
+                        parse(statusMsg, true, false);
                     } else {
                         for (const char* text = statusMsg; col < MAX_COLS && *text; ++text)
                             printCols[col++] = *text;

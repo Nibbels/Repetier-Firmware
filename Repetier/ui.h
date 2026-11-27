@@ -304,7 +304,8 @@ public:
     void initializeLCD(bool normal = true);
     void printRow(uint8_t r, char* txt, char* txt2, uint8_t changeAtCol); // Print row on display
     void printRowP(uint8_t r, PGM_P txt);
-    void parse(char* txt, bool ram); /// Parse output and write to printCols;
+    // One flash message expansion per page; a nested RAM status cannot expand either.
+    void parse(char* txt, bool ram, bool allowMessageExpansion = true);
     void refreshPage();
     const char* cachedRow(uint8_t row) const;
     void executeAction(int action);
@@ -347,7 +348,7 @@ private:
     volatile millis_t lastButtonStart;
 
     // Private foreground rendering and edit/navigation helpers; no new state.
-    void renderField(char c1, char c2, bool ram, int& ivalue, float& fvalue);
+    void renderField(char c1, char c2, bool ram, bool allowMessageExpansion, int& ivalue, float& fvalue);
     void renderTemperatureField(char c1, char c2, float& fvalue);
     void renderPositionField(char c1, char c2, float& fvalue);
     void renderExtruderField(char c1, char c2);
