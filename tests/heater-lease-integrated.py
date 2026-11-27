@@ -212,6 +212,22 @@ static void checkFixedChannelEquivalence() {
 }
 int main(){
     checkFixedChannelEquivalence();
+    // Independently of duty-byte consistency, a frame without positive
+    // lease authorization must never drive a rising heater edge.
+    for(unsigned mode=0;mode<2;++mode) {
+        resetFixture(0);
+        for(uint8_t c=0;c<=NUM_EXTRUDER;++c) {
+            requestedDuty[c]=255;
+            pwm_pos_set[c]=255;
+            writeLeaseDeadline(c,heaterLeaseDuration);
+        }
+        heaterLeaseReady=mode!=0;
+        heaterLeaseFailed=mode!=0;
+        startFrame(0);
+        for(uint8_t c=0;c<=NUM_EXTRUDER;++c)
+            assert(!pins[pin(c)]&&pwm_pos_set[c]==0);
+        assert(irq);
+    }
     unsigned long cases=0;
     for(uint32_t start=0;start<65536;++start)
         for(uint8_t c=0;c<=NUM_EXTRUDER;++c)

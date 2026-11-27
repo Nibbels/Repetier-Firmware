@@ -1327,7 +1327,9 @@ ISR(PWM_TIMER_VECTOR) {
         // no heater demand then; do not latch a boot-time false fault.
         if(watchdogActive && !watchdogProgressLive()) failHeaterLease();
 #endif
-        checkHeaterLeases(); // pending expiry wins before any rising edge
+        // A failed/unavailable lease check cannot enter the rising-edge
+        // block, even if a stale duty byte is unexpectedly nonzero.
+        if (checkHeaterLeases()) {
 #endif
 #if EXT0_HEATER_PIN > -1
         if ((pwm_pos_set[0] = (requestedDuty[0] & heaterPwmMask)) > 0)
@@ -1341,6 +1343,17 @@ ISR(PWM_TIMER_VECTOR) {
 
         if ((pwm_pos_set[NUM_EXTRUDER] = (requestedDuty[NUM_EXTRUDER] & heaterPwmMask)) > 0)
             WRITE(HEATED_BED_HEATER_PIN, HIGH);
+#ifdef RF_HEATER_LEASE_EXPERIMENT
+        } else {
+            // The ordinary count-zero falling-edge tests below drive all
+            // heaters LOW. Do not copy stale positive duty into this frame.
+            pwm_pos_set[0] = 0;
+#if NUM_EXTRUDER > 1
+            pwm_pos_set[1] = 0;
+#endif
+            pwm_pos_set[NUM_EXTRUDER] = 0;
+        }
+#endif
     }
 
     if (pwm_count_cooler == 0) {
