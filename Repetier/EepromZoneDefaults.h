@@ -34,27 +34,27 @@ class FactoryDefaults {
     }
     static void motion(BlockEncoder& w,uint8_t id,float steps,float feed,float jerk,
                        float accel,float advance,float x,float y) {
-        w.f32(tool(Field::E0_STEPS_PER_MM,id),steps);
-        w.f32(tool(Field::E0_MAX_FEEDRATE,id),feed);
-        w.f32(tool(Field::E0_MAX_START_FEEDRATE,id),jerk);
-        w.f32(tool(Field::E0_MAX_ACCELERATION,id),accel);
-        w.f32(tool(Field::E0_ADVANCE_L,id),advance);
-        w.f32(tool(Field::E0_X_OFFSET,id),x);
-        w.f32(tool(Field::E0_Y_OFFSET,id),y);
-        w.u8(tool(Field::RF_MICRO_STEPS_E0,id),mode(RF_MICRO_STEPS_E));
+        w.f32(tool(Field::F_E0_STEPS_PER_MM,id),steps);
+        w.f32(tool(Field::F_E0_MAX_FEEDRATE,id),feed);
+        w.f32(tool(Field::F_E0_MAX_START_FEEDRATE,id),jerk);
+        w.f32(tool(Field::F_E0_MAX_ACCELERATION,id),accel);
+        w.f32(tool(Field::F_E0_ADVANCE_L,id),advance);
+        w.f32(tool(Field::F_E0_X_OFFSET,id),x);
+        w.f32(tool(Field::F_E0_Y_OFFSET,id),y);
+        w.u8(tool(Field::F_RF_MICRO_STEPS_E0,id),mode(RF_MICRO_STEPS_E));
     }
     static void thermal(BlockEncoder& w,uint8_t id,float p,float i,float d,
                         uint8_t min,uint8_t max,uint8_t power,uint8_t sensor,uint8_t cooler) {
-        w.f32(tool(Field::E0_PID_PGAIN,id),p);
-        w.f32(tool(Field::E0_PID_IGAIN,id),i);
-        w.f32(tool(Field::E0_PID_DGAIN,id),d);
-        w.u8(tool(Field::E0_DRIVE_MIN,id),min);
-        w.u8(tool(Field::E0_DRIVE_MAX,id),max);
-        w.u8(tool(Field::E0_PID_MAX,id),power);
-        w.u8(tool(Field::E0_SENSOR_TYPE,id),sensor);
+        w.f32(tool(Field::F_E0_PID_PGAIN,id),p);
+        w.f32(tool(Field::F_E0_PID_IGAIN,id),i);
+        w.f32(tool(Field::F_E0_PID_DGAIN,id),d);
+        w.u8(tool(Field::F_E0_DRIVE_MIN,id),min);
+        w.u8(tool(Field::F_E0_DRIVE_MAX,id),max);
+        w.u8(tool(Field::F_E0_PID_MAX,id),power);
+        w.u8(tool(Field::F_E0_SENSOR_TYPE,id),sensor);
         const uint8_t identity[3]={};
-        w.bytes(tool(Field::PID_CALIBRATION_SLOT_0,id),identity,3);
-        w.u8(tool(Field::E0_COOLER_SPEED,id),cooler);
+        w.bytes(tool(Field::F_PID_CALIBRATION_SLOT_0,id),identity,3);
+        w.u8(tool(Field::F_E0_COOLER_SPEED,id),cooler);
     }
 public:
     FactoryDefaults(float scanLift,uint8_t scanIndex,bool gcodeCoordinates,bool configuredFeedrate)
@@ -65,39 +65,39 @@ public:
         BlockEncoder w(id,data,n);
         switch(id) {
         case Geometry:
-            w.f32(Field::XAXIS_STEPS_PER_MM,XAXIS_STEPS_PER_MM);
-            w.f32(Field::YAXIS_STEPS_PER_MM,YAXIS_STEPS_PER_MM);
-            w.f32(Field::ZAXIS_STEPS_PER_MM,ZAXIS_STEPS_PER_MM);
-            w.f32(Field::X_LENGTH,X_MAX_LENGTH_PRINT);
-            w.f32(Field::Y_LENGTH,Y_MAX_LENGTH);
-            w.f32(Field::Z_LENGTH,Z_MAX_LENGTH);
-            w.u8(Field::RF_MICRO_STEPS_X,mode(RF_MICRO_STEPS_XY));
-            w.u8(Field::RF_MICRO_STEPS_Y,mode(RF_MICRO_STEPS_XY));
-            w.u8(Field::RF_MICRO_STEPS_Z,mode(RF_MICRO_STEPS_Z));
-            w.u16(Field::RF_MOD_Z_STEP_SIZE,uint16_t(lroundf(ZAXIS_STEPS_PER_MM*DEFAULT_MANUAL_MM_Z)));
+            w.f32(Field::F_XAXIS_STEPS_PER_MM,XAXIS_STEPS_PER_MM);
+            w.f32(Field::F_YAXIS_STEPS_PER_MM,YAXIS_STEPS_PER_MM);
+            w.f32(Field::F_ZAXIS_STEPS_PER_MM,ZAXIS_STEPS_PER_MM);
+            w.f32(Field::F_X_LENGTH,X_MAX_LENGTH_PRINT);
+            w.f32(Field::F_Y_LENGTH,Y_MAX_LENGTH);
+            w.f32(Field::F_Z_LENGTH,Z_MAX_LENGTH);
+            w.u8(Field::F_RF_MICRO_STEPS_X,mode(RF_MICRO_STEPS_XY));
+            w.u8(Field::F_RF_MICRO_STEPS_Y,mode(RF_MICRO_STEPS_XY));
+            w.u8(Field::F_RF_MICRO_STEPS_Z,mode(RF_MICRO_STEPS_Z));
+            w.u16(Field::F_RF_MOD_Z_STEP_SIZE,uint16_t(lroundf(ZAXIS_STEPS_PER_MM*DEFAULT_MANUAL_MM_Z)));
             break;
         case Feedrates:
-            w.f32(Field::X_MAX_FEEDRATE,MAX_FEEDRATE_X);
-            w.f32(Field::Y_MAX_FEEDRATE,MAX_FEEDRATE_Y);
-            w.f32(Field::Z_MAX_FEEDRATE,MAX_FEEDRATE_Z);
-            w.f32(Field::X_HOMING_FEEDRATE_PRINT,HOMING_FEEDRATE_X_PRINT);
-            w.f32(Field::Y_HOMING_FEEDRATE_PRINT,HOMING_FEEDRATE_Y_PRINT);
-            w.f32(Field::Z_HOMING_FEEDRATE_PRINT,HOMING_FEEDRATE_Z_PRINT);
+            w.f32(Field::F_X_MAX_FEEDRATE,MAX_FEEDRATE_X);
+            w.f32(Field::F_Y_MAX_FEEDRATE,MAX_FEEDRATE_Y);
+            w.f32(Field::F_Z_MAX_FEEDRATE,MAX_FEEDRATE_Z);
+            w.f32(Field::F_X_HOMING_FEEDRATE_PRINT,HOMING_FEEDRATE_X_PRINT);
+            w.f32(Field::F_Y_HOMING_FEEDRATE_PRINT,HOMING_FEEDRATE_Y_PRINT);
+            w.f32(Field::F_Z_HOMING_FEEDRATE_PRINT,HOMING_FEEDRATE_Z_PRINT);
             break;
         case Jerk:
-            w.f32(Field::MAX_XYJERK,MAX_JERK);w.f32(Field::MAX_ZJERK,MAX_ZJERK);break;
+            w.f32(Field::F_MAX_XYJERK,MAX_JERK);w.f32(Field::F_MAX_ZJERK,MAX_ZJERK);break;
         case Acceleration:
-            w.f32(Field::X_MAX_ACCEL,MAX_ACCELERATION_UNITS_PER_SQ_SECOND_X);
-            w.f32(Field::Y_MAX_ACCEL,MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Y);
-            w.f32(Field::Z_MAX_ACCEL,MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Z);
-            w.f32(Field::X_MAX_TRAVEL_ACCEL,MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_X);
-            w.f32(Field::Y_MAX_TRAVEL_ACCEL,MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Y);
-            w.f32(Field::Z_MAX_TRAVEL_ACCEL,MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Z);
-            w.u16(Field::RF_STEP_PACKING_MIN_INTERVAL,STEP_PACKING_MIN_INTERVAL);
+            w.f32(Field::F_X_MAX_ACCEL,MAX_ACCELERATION_UNITS_PER_SQ_SECOND_X);
+            w.f32(Field::F_Y_MAX_ACCEL,MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Y);
+            w.f32(Field::F_Z_MAX_ACCEL,MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Z);
+            w.f32(Field::F_X_MAX_TRAVEL_ACCEL,MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_X);
+            w.f32(Field::F_Y_MAX_TRAVEL_ACCEL,MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Y);
+            w.f32(Field::F_Z_MAX_TRAVEL_ACCEL,MAX_TRAVEL_ACCELERATION_UNITS_PER_SQ_SECOND_Z);
+            w.u16(Field::F_RF_STEP_PACKING_MIN_INTERVAL,STEP_PACKING_MIN_INTERVAL);
             break;
         case MotorCurrent: {
             const uint8_t current[5]=MOTOR_CURRENT_NORMAL;
-            w.bytes(Field::RF_MOTOR_CURRENT,current,5);break;
+            w.bytes(Field::F_RF_MOTOR_CURRENT,current,5);break;
         }
         case Extruder0Motion:
             motion(w,0,EXT0_STEPS_PER_MM,EXT0_MAX_FEEDRATE,EXT0_MAX_START_FEEDRATE,
@@ -129,81 +129,81 @@ public:
 #endif
             break;
         case BedPid: {
-            w.f32(Field::BED_PID_PGAIN,HEATED_BED_PID_PGAIN);
-            w.f32(Field::BED_PID_IGAIN,HEATED_BED_PID_IGAIN);
-            w.f32(Field::BED_PID_DGAIN,HEATED_BED_PID_DGAIN);
-            w.u8(Field::BED_DRIVE_MIN,HEATED_BED_PID_INTEGRAL_DRIVE_MIN);
-            w.u8(Field::BED_DRIVE_MAX,HEATED_BED_PID_INTEGRAL_DRIVE_MAX);
-            w.u8(Field::BED_PID_MAX,HEATED_BED_PID_MAX);
-            w.u8(Field::RF_HEATED_BED_SENSOR_TYPE,HEATED_BED_SENSOR_TYPE);
-            const uint8_t identity[3]={};w.bytes(Field::PID_CALIBRATION_SLOT_2,identity,3);
+            w.f32(Field::F_BED_PID_PGAIN,HEATED_BED_PID_PGAIN);
+            w.f32(Field::F_BED_PID_IGAIN,HEATED_BED_PID_IGAIN);
+            w.f32(Field::F_BED_PID_DGAIN,HEATED_BED_PID_DGAIN);
+            w.u8(Field::F_BED_DRIVE_MIN,HEATED_BED_PID_INTEGRAL_DRIVE_MIN);
+            w.u8(Field::F_BED_DRIVE_MAX,HEATED_BED_PID_INTEGRAL_DRIVE_MAX);
+            w.u8(Field::F_BED_PID_MAX,HEATED_BED_PID_MAX);
+            w.u8(Field::F_RF_HEATED_BED_SENSOR_TYPE,HEATED_BED_SENSOR_TYPE);
+            const uint8_t identity[3]={};w.bytes(Field::F_PID_CALIBRATION_SLOT_2,identity,3);
             break;
         }
         case BedSafety:
             // UI may offer 120 C for explicit commissioning; no permission
             // to heat is stored on first install or automatic repair.
-            w.u8(Field::NEW_BED_EMERGENCY_C,0);break;
+            w.u8(Field::F_NEW_BED_EMERGENCY_C,0);break;
         case Preheat:
-            w.u16(Field::RF_PREHEAT_A_BED,PREHEAT_A_BED_C);
-            w.u16(Field::RF_PREHEAT_A_HOTEND,PREHEAT_A_HOTEND_C);
-            w.u16(Field::RF_PREHEAT_B_BED,PREHEAT_B_BED_C);
-            w.u16(Field::RF_PREHEAT_B_HOTEND,PREHEAT_B_HOTEND_C);break;
-        case ZOffset:w.u32(Field::RF_Z_OFFSET,0);break;
+            w.u16(Field::F_RF_PREHEAT_A_BED,PREHEAT_A_BED_C);
+            w.u16(Field::F_RF_PREHEAT_A_HOTEND,PREHEAT_A_HOTEND_C);
+            w.u16(Field::F_RF_PREHEAT_B_BED,PREHEAT_B_BED_C);
+            w.u16(Field::F_RF_PREHEAT_B_HOTEND,PREHEAT_B_HOTEND_C);break;
+        case ZOffset:w.u32(Field::F_RF_Z_OFFSET,0);break;
         case SenseOffset:
-            w.u16(Field::RF_MOD_SENSEOFFSET_OFFSET_MAX,SENSIBLE_PRESSURE_MAX_OFFSET);
-            w.u16(Field::RF_MOD_SENSEOFFSET_DIGITS,0); // no remembered user threshold
-            w.u8(Field::RF_MOD_SENSEOFFSET_AUTOSTART,0);
-            w.u8(Field::RF_ZERO_DIGIT_STATE,1);w.u8(Field::RF_DIGIT_CMP_STATE,1);break;
+            w.u16(Field::F_RF_MOD_SENSEOFFSET_OFFSET_MAX,SENSIBLE_PRESSURE_MAX_OFFSET);
+            w.u16(Field::F_RF_MOD_SENSEOFFSET_DIGITS,0); // no remembered user threshold
+            w.u8(Field::F_RF_MOD_SENSEOFFSET_AUTOSTART,0);
+            w.u8(Field::F_RF_ZERO_DIGIT_STATE,1);w.u8(Field::F_RF_DIGIT_CMP_STATE,1);break;
         case Pressure:
-            w.u32(Field::RF_EMERGENCYPAUSEDIGITSMIN,uint32_t(EMERGENCY_PAUSE_DIGITS_MIN));
-            w.u32(Field::RF_EMERGENCYPAUSEDIGITSMAX,EMERGENCY_PAUSE_DIGITS_MAX);
-            w.u16(Field::RF_EMERGENCYZSTOPDIGITSMIN,uint16_t(EMERGENCY_STOP_DIGITS_MIN));
-            w.u16(Field::RF_EMERGENCYZSTOPDIGITSMAX,EMERGENCY_STOP_DIGITS_MAX);break;
+            w.u32(Field::F_RF_EMERGENCYPAUSEDIGITSMIN,uint32_t(EMERGENCY_PAUSE_DIGITS_MIN));
+            w.u32(Field::F_RF_EMERGENCYPAUSEDIGITSMAX,EMERGENCY_PAUSE_DIGITS_MAX);
+            w.u16(Field::F_RF_EMERGENCYZSTOPDIGITSMIN,uint16_t(EMERGENCY_STOP_DIGITS_MIN));
+            w.u16(Field::F_RF_EMERGENCYZSTOPDIGITSMAX,EMERGENCY_STOP_DIGITS_MAX);break;
         case Scan:
-            w.u8(Field::RF_MOD_ZOS_SCAN_POINT_X,scanIndex_);
-            w.u8(Field::RF_MOD_ZOS_SCAN_POINT_Y,scanIndex_);
-            w.f32(Field::ZSCAN_START_MM,scanLift_);break;
+            w.u8(Field::F_RF_MOD_ZOS_SCAN_POINT_X,scanIndex_);
+            w.u8(Field::F_RF_MOD_ZOS_SCAN_POINT_Y,scanIndex_);
+            w.f32(Field::F_ZSCAN_START_MM,scanLift_);break;
         case Wobble:
-            w.u8(Field::RF_MOD_WOBBLE_FIX_PHASEXY,0);
-            w.u16(Field::RF_MOD_WOBBLE_FIX_AMPX,0);
-            w.u16(Field::RF_MOD_WOBBLE_FIX_AMPY1,0);
-            w.u16(Field::RF_MOD_WOBBLE_FIX_AMPY2,0);break;
+            w.u8(Field::F_RF_MOD_WOBBLE_FIX_PHASEXY,0);
+            w.u16(Field::F_RF_MOD_WOBBLE_FIX_AMPX,0);
+            w.u16(Field::F_RF_MOD_WOBBLE_FIX_AMPY1,0);
+            w.u16(Field::F_RF_MOD_WOBBLE_FIX_AMPY2,0);break;
         case Panel:
-            w.u8(Field::RF_MOVE_MODE_X,DEFAULT_MOVE_MODE_X);
-            w.u8(Field::RF_MOVE_MODE_Y,DEFAULT_MOVE_MODE_Y);
-            w.u8(Field::RF_MOVE_MODE_Z,DEFAULT_MOVE_MODE_Z);
-            w.u8(Field::RF_Z_MODE,DEFAULT_Z_SCALE_MODE);
-            w.u8(Field::RF_MOVE_MODE_XY_KOSYS,gcodeCoordinates_);
-            w.u8(Field::RF_MOVE_POSITION_FEEDRATE,configuredFeedrate_);break;
+            w.u8(Field::F_RF_MOVE_MODE_X,DEFAULT_MOVE_MODE_X);
+            w.u8(Field::F_RF_MOVE_MODE_Y,DEFAULT_MOVE_MODE_Y);
+            w.u8(Field::F_RF_MOVE_MODE_Z,DEFAULT_MOVE_MODE_Z);
+            w.u8(Field::F_RF_Z_MODE,DEFAULT_Z_SCALE_MODE);
+            w.u8(Field::F_RF_MOVE_MODE_XY_KOSYS,gcodeCoordinates_);
+            w.u8(Field::F_RF_MOVE_POSITION_FEEDRATE,configuredFeedrate_);break;
         case Lighting: {
-            w.u8(Field::RF_CASE_LIGHT_MODE,CASE_LIGHTS_DEFAULT_ON);
+            w.u8(Field::F_RF_CASE_LIGHT_MODE,CASE_LIGHTS_DEFAULT_ON);
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
-            w.u8(Field::RF_FET1_MODE,HOTEND_COOLER_USES_PIN(FET1)?0:FET1_DEFAULT_ON);
-            w.u8(Field::RF_FET2_MODE,HOTEND_COOLER_USES_PIN(FET2)?0:FET2_DEFAULT_ON);
-            w.u8(Field::RF_FET3_MODE,CASE_FAN_PIN>=0?0:FET3_DEFAULT_ON);
+            w.u8(Field::F_RF_FET1_MODE,HOTEND_COOLER_USES_PIN(FET1)?0:FET1_DEFAULT_ON);
+            w.u8(Field::F_RF_FET2_MODE,HOTEND_COOLER_USES_PIN(FET2)?0:FET2_DEFAULT_ON);
+            w.u8(Field::F_RF_FET3_MODE,CASE_FAN_PIN>=0?0:FET3_DEFAULT_ON);
 #else
-            w.u8(Field::RF_FET1_MODE,0);w.u8(Field::RF_FET2_MODE,0);w.u8(Field::RF_FET3_MODE,0);
+            w.u8(Field::F_RF_FET1_MODE,0);w.u8(Field::F_RF_FET2_MODE,0);w.u8(Field::F_RF_FET3_MODE,0);
 #endif
 #ifdef RGB_LIGHT_R_PIN
-            w.u8(Field::RF_RGB_LIGHT_MODE,RGB_LIGHT_DEFAULT_MODE);
+            w.u8(Field::F_RF_RGB_LIGHT_MODE,RGB_LIGHT_DEFAULT_MODE);
             const uint8_t colors[]={RGB_PRINTING_R,RGB_PRINTING_G,RGB_PRINTING_B,
                 RGB_HEATING_R,RGB_HEATING_G,RGB_HEATING_B,RGB_COOLING_R,RGB_COOLING_G,
                 RGB_COOLING_B,RGB_IDLE_R,RGB_IDLE_G,RGB_IDLE_B,RGB_MANUAL_R,RGB_MANUAL_G,RGB_MANUAL_B};
 #else
-            w.u8(Field::RF_RGB_LIGHT_MODE,0);const uint8_t colors[15]={};
+            w.u8(Field::F_RF_RGB_LIGHT_MODE,0);const uint8_t colors[15]={};
 #endif
-            w.bytes(Field::RF_RGB_PRINTING_R,colors,15);break;
+            w.bytes(Field::F_RF_RGB_PRINTING_R,colors,15);break;
         }
         case PartFan:
-            w.u8(Field::RF_FAN_MODE,0); // PWM
-            w.u8(Field::RF_PART_FAN_SPEED,PART_FAN_DEFAULT_PWM_SPEED_DIVISOR);
-            w.u8(Field::RF_PART_FAN_PWM_MIN,PART_FAN_PWM_MIN);
-            w.u8(Field::RF_PART_FAN_PWM_MAX,PART_FAN_PWM_MAX);break;
+            w.u8(Field::F_RF_FAN_MODE,0); // PWM
+            w.u8(Field::F_RF_PART_FAN_SPEED,PART_FAN_DEFAULT_PWM_SPEED_DIVISOR);
+            w.u8(Field::F_RF_PART_FAN_PWM_MIN,PART_FAN_PWM_MIN);
+            w.u8(Field::F_RF_PART_FAN_PWM_MAX,PART_FAN_PWM_MAX);break;
         case System:
-            w.u32(Field::BAUDRATE,BAUDRATE);
-            w.u32(Field::MAX_INACTIVE_TIME,uint32_t(MAX_INACTIVE_TIME)*1000);
-            w.u32(Field::STEPPER_INACTIVE_TIME,uint32_t(STEPPER_INACTIVE_TIME)*1000);break;
-        case Usage:w.u32(Field::PRINTING_TIME,0);w.f32(Field::PRINTING_DISTANCE,0);break;
+            w.u32(Field::F_BAUDRATE,BAUDRATE);
+            w.u32(Field::F_MAX_INACTIVE_TIME,uint32_t(MAX_INACTIVE_TIME)*1000);
+            w.u32(Field::F_STEPPER_INACTIVE_TIME,uint32_t(STEPPER_INACTIVE_TIME)*1000);break;
+        case Usage:w.u32(Field::F_PRINTING_TIME,0);w.f32(Field::F_PRINTING_DISTANCE,0);break;
         default:return false;
         }
         return w.complete();
