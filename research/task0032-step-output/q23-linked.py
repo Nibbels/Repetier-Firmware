@@ -22,7 +22,7 @@ def replace(s,a,b):
     return s.replace(a,b)
 
 def modify(dst,tag):
-    padded=tag in ('guarded','narrow')
+    padded=tag=='guarded'
     shutil.copytree(FW,dst)
     changes={}
     h=(HERE/"ecmp-q23.h").read_text().replace("ExtrusionCompensationQ23","ExtrusionCompensation")
@@ -43,11 +43,23 @@ def modify(dst,tag):
         s=replace(s,"                        Extruder::unstep();\n                        Printer::extrusionCompensation.consumeExtraStep(forward);\n                        Extruder::step();",
                   "                        Extruder::unstep();\n                        Printer::extrusionCompensation.consumeExtraStep(forward);\n                        __builtin_avr_delay_cycles(31);\n                        Extruder::step();\n                        __builtin_avr_delay_cycles(31);")
         changes[p]=s
+    if tag in ("minimal","narrow"):
+        # Owner prefers simple fixed margin. Raw linked E-low minimum was
+        # 30 cycles; add two cycles only at the ECMP extra-low transition.
+        # Avoid adding 31 cycles to already sufficient HIGH phases.
+        p="StepExecutor.cpp";s=(FW/p).read_text()
+        changes[p]=replace(s,"                        Printer::extrusionCompensation.consumeExtraStep(forward);\n                        Extruder::step();",
+                           "                        Printer::extrusionCompensation.consumeExtraStep(forward);\n                        __builtin_avr_delay_cycles(2);\n                        Extruder::step();")
+        # Inherited RF2000-family Z DIR->STEP minimum was three cycles.
+        # Add two cycles only when correction actually changes direction.
+        p="ZMotion.cpp";s=(FW/p).read_text()
+        changes[p]=replace(s,"    if (directionIsPositive() != positive)\n        setDirection(positive);\n    const int8_t direction",
+                           "    if (directionIsPositive() != positive) {\n        setDirection(positive);\n        __builtin_avr_delay_cycles(2);\n    }\n    const int8_t direction")
     if tag=="narrow":
         # Exploratory queue-only mask split. E output transaction and
         # Z/tail masks unchanged. Queue's Timer1-private XY phase/position
         # no longer globally masked. Direct (including PWM key release)
-        # remains bit-for-bit same source path as guarded.
+        # remains bit-for-bit same source path as minimal.
         p="StepExecutor.cpp";s=changes[p]
         start=s.index("        if (move->isXMove()) {",s.index("long StepExecutor::performMove(PrintLine* move)"))
         end=s.index("        if (move->isZMove()) {",start)
@@ -190,7 +202,7 @@ def main():
     p.add_argument("--out",type=pathlib.Path,required=True)
     p.add_argument("--tools",type=pathlib.Path)
     p.add_argument("--reuse",type=pathlib.Path,help="reuse exact prior raw/guarded candidate.zip archives")
-    p.add_argument("--variant",choices=("raw","guarded","narrow"),action="append")
+    p.add_argument("--variant",choices=("raw","guarded","minimal","narrow"),action="append")
     args=p.parse_args()
     args.out.mkdir(parents=True,exist_ok=True)
     all_results={}
@@ -215,5 +227,8 @@ def main():
     for variant,rows in all_results.items():
         for board,s in rows.items():
             assert s["failed"]==0,(variant,board,s["mismatch_examples"])
-            if variant in ("guarded","narrow"):assert s["short_pulses"]==0,(board,s["short_examples"])
+            # The historical guarded comparator did not fix inherited
+            # Z direction setup. Retain the finding, not a shipping pass.
+            if variant in ("minimal","narrow"):assert s["short_pulses"]==0,(board,s["short_examples"])
+            if variant=="guarded":assert s["short_pulses"]<=s["baseline_short_pulses"],(board,s["short_examples"])
 if __name__=="__main__":main()
