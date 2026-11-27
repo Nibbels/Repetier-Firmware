@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""A73 historical linked IRQ stack walk; deliberately pinned to artifact 15220305328.
+"""A73 linked IRQ stack walk; pinned to explicitly reviewed CI artifacts.
 
 All conditional branches are explored conservatively. AVR return addresses
 are three bytes. Follow actual instructions, not symbol-name call graphs
 (which confuse flash tables and library aliases with executable paths).
-The digitalWrite switch table is resolved through its 18 linker trampolines.
+The digitalWrite switch table is resolved through direct or trampoline targets.
 Unsupported SP writes, indirect transfers, recursive calls or incomplete paths
 fail this audit. This does not model elapsed cycles, foreground frames, IRQ
 preemption timing or prove register-value invariants. Requalify a new image.
@@ -14,7 +14,11 @@ import re
 import sys
 import zipfile
 
-PIN = "b65565e9af997dfa6ef886c7e76e48f43caa2455aa77e05e8461a37b988c8d09"
+PINS = {
+    "b65565e9af997dfa6ef886c7e76e48f43caa2455aa77e05e8461a37b988c8d09": 15220305328,
+    "c669fe33337522542e83190ccd6831baeec7bcc715f513dd9053589ae22b34a1": 15220648845,
+    "234dea9336e8dcdd9f65212723236381a781c17bfc243f70d6b9ad96ff18ff52": 15222066305,
+}
 BOARDS = ("RF1000", "RF2000", "RF2000v2", "RF2000-X44")
 VECTORS = (17, 21, 22, 23, 25, 26, 32)
 
@@ -49,7 +53,8 @@ def audit(z, board):
                "0x12" in ins[k][2] for k in range(j-24, j, 2))
     base = j + ins[j][0]
     targets = [2*(raw[base+i*2]+256*raw[base+i*2+1]) for i in range(18)]
-    assert all(ins[t][1] == "jmp" and start <= target(ins[t][2]) < start+0x200
+    assert all(start <= t < start+0x200 or
+               (ins[t][1] == "jmp" and start <= target(ins[t][2]) < start+0x200)
                for t in targets)
     table = labels["__tablejump2__"]
     endpoint = next(a for a in range(table, table+24, 2) if ins[a][1] == "eijmp")
@@ -130,7 +135,9 @@ def audit(z, board):
 
 if __name__ == "__main__":
     with open(sys.argv[1], "rb") as f:
-        assert hashlib.sha256(f.read()).hexdigest() == PIN
+        digest = hashlib.sha256(f.read()).hexdigest()
+        assert digest in PINS, "unreviewed artifact"
+        print("Pinned artifact", PINS[digest])
     with zipfile.ZipFile(sys.argv[1]) as z:
         for board in BOARDS:
             audit(z, board)
