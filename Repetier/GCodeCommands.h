@@ -23,10 +23,8 @@ void setLogicalPosition(GCode* com);
 void selectAbsoluteExtrusion();
 void selectRelativeExtrusion();
 void configureStepperShutdown(GCode* com);
-void configureInactivityShutdown(GCode* com);
 void setPrintAcceleration(GCode* com);
 void setTravelAcceleration(GCode* com);
-void setToolOffset(GCode* com);
 void setFeedrateMultiplier(GCode* com);
 void setFlowMultiplier(GCode* com);
 void configureAdvance(GCode* com);
@@ -36,7 +34,6 @@ void testHomingRepeatability(GCode* pCommand);
 void requestPrintPause(GCode* pCommand);
 void setPauseParkingOffsets(GCode* pCommand);
 void setEmergencyPauseDigits(GCode* pCommand);
-void setEmergencyStopDigits(GCode* pCommand);
 void setSenseOffsetParameters(GCode* pCommand);
 void setDigitFlowParameters(GCode* pCommand);
 
@@ -68,10 +65,7 @@ void reportEndstops();
 void reportEeprom();
 void setEepromValue(GCode* com);
 void reportConfiguration();
-void saveConfiguration();
-void loadConfiguration();
 void restoreConfigurationDefaults();
-void requestHeatBedScan(GCode* pCommand);
 void accessPanel(GCode* pCommand);
 
 // Operations backed by calibration state in RF.cpp.
@@ -79,27 +73,7 @@ namespace Calibration {
 void disableBedCompensation();
 void enableBedCompensation();
 void selectBedMatrix(GCode* pCommand);
-void clearBedMatrix(GCode* pCommand);
 void reportBedMatrix(GCode* pCommand);
-void setScanXStart(GCode* pCommand);
-void setScanYStart(GCode* pCommand);
-void setScanXStep(GCode* pCommand);
-void setScanYStep(GCode* pCommand);
-void setScanXEnd(GCode* pCommand);
-void setScanYEnd(GCode* pCommand);
-void setFastApproachStep(GCode* pCommand);
-void setSlowApproachStep(GCode* pCommand);
-void setFastRetreatStep(GCode* pCommand);
-void setSlowRetreatStep(GCode* pCommand);
-void setFastScanDelay(GCode* pCommand);
-void setSlowScanDelay(GCode* pCommand);
-void setScanIdleDelay(GCode* pCommand);
-void setContactPressureDelta(GCode* pCommand);
-void setRetryPressureDelta(GCode* pCommand);
-void setIdlePressureTolerance(GCode* pCommand);
-void setPressureReadCount(GCode* pCommand);
-void setPressureReadDelay(GCode* pCommand);
-void setPressureReadTolerance(GCode* pCommand);
 void configureZOffsetScan(GCode* pCommand);
 void adjustBedMatrix(GCode* pCommand);
 } // namespace Calibration

@@ -110,13 +110,6 @@ void configureStepperShutdown(GCode* com) {
     }
 }
 
-void configureInactivityShutdown(GCode* com) {
-    if (com->hasS())
-        Printer::inactivity.setShutdownTimeout((long)com->S * 1000);
-    else
-        Printer::inactivity.setShutdownTimeout(0);
-}
-
 void setPrintAcceleration(GCode* com) {
     if (com->hasX())
         Printer::setPrintAcceleration(X_AXIS, constrain(com->X, ACCELERATION_MIN_XY, ACCELERATION_MAX_XY));
@@ -139,38 +132,6 @@ void setTravelAcceleration(GCode* com) {
     if (com->hasE())
         Printer::setTravelAcceleration(E_AXIS, com->E);
     Printer::updateDerivedParameter();
-}
-
-void setToolOffset(GCode* com) {
-    // New MCode with https://github.com/repetier/Repetier-Firmware/commit/e5db16080d0c98776ae82f543e2bc6ef643a63c7
-    // I added this MCode for compatibility-Reasons with Repetier and Marlin.
-
-    int extId = 0;
-    if (com->hasT()) {
-        extId = com->T;
-    }
-    if (extId >= 0 && extId < NUM_EXTRUDER) {
-        if (!Commands::waitForMotion(Commands::MotionWait::QueueAndZ, Commands::PauseWait::Resume))
-            return;
-        int32_t dx = 0;
-        int32_t dy = 0;
-        if (com->hasX()) {
-            if (Printer::isAxisHomed(X_AXIS))
-                dx = (com->X - extruder[extId].offsetMM[X_AXIS]) * Printer::stepsPerMm(X_AXIS);
-            extruder[extId].offsetMM[X_AXIS] = com->X;
-        }
-        if (com->hasY()) {
-            if (Printer::isAxisHomed(Y_AXIS))
-                dy = (com->Y - extruder[extId].offsetMM[Y_AXIS]) * Printer::stepsPerMm(Y_AXIS);
-            extruder[extId].offsetMM[Y_AXIS] = com->Y;
-        }
-
-        Printer::offsetRelativeStepsCoordinates(-dx, -dy, 0, 0);
-
-        if (com->hasS() && com->S > 0) {
-            EEPROM::storeToolOffsets(extId,com->hasX()?com->X:0,com->hasY()?com->Y:0,com->hasX(),com->hasY());
-        }
-    }
 }
 
 void setFeedrateMultiplier(GCode* com) {
@@ -323,7 +284,6 @@ void setEmergencyPauseDigits(GCode* pCommand) {
     const bool disable = nMin == 0 && nMax == 0;
     if (disable || nMin < nMax) {
         Printer::pressureProtection.setPauseLimits({int16_t(nMin), int16_t(nMax)});
-        EEPROM::storePressureLimits(false,nMin,nMax,true,true);
         if (Printer::debugInfo()) {
             if (disable) {
                 Com::printFLN(PSTR("M3075: emergency pause disabled"));
@@ -337,44 +297,6 @@ void setEmergencyPauseDigits(GCode* pCommand) {
         if (Printer::debugErrors()) {
             Com::printF(PSTR("M3075: min max ("), (int)nMin);
             Com::printF(Com::tSlash, (int)nMin);
-            Com::printFLN(PSTR(") invalide"));
-        }
-    }
-}
-
-void setEmergencyStopDigits(GCode* pCommand) {
-    const auto limits = Printer::pressureProtection.stopLimits();
-    long nMin = limits.minimum;
-    long nMax = limits.maximum;
-
-    if (pCommand->hasS()) {
-        // test and take over the specified value - this is our new min value
-        nMin = pCommand->S;
-    }
-    if (pCommand->hasP()) {
-        // test and take over the specified value - this is our new max value
-        nMax = pCommand->P;
-    }
-
-    if (nMin == 0 && nMax == 0) {
-        Printer::pressureProtection.setStopLimits({0, 0});
-
-        if (Printer::debugInfo()) {
-            Com::printFLN(PSTR("M3076: temporary stop band [0, 0] digits"));
-        }
-    } else if (nMin < nMax && nMin >= -32768 && nMax <= 32767) {
-        Printer::pressureProtection.setStopLimits({int16_t(nMin), int16_t(nMax)});
-
-        if (Printer::debugInfo()) {
-            Com::printF(PSTR("M3076: new min: "), (int)nMin);
-            Com::printF(PSTR(" [digits], new max: "), (int)nMax);
-            Com::printFLN(PSTR(" [digits]"));
-        }
-        EEPROM::storePressureLimits(true,nMin,nMax,true,true);
-    } else {
-        if (Printer::debugErrors()) {
-            Com::printF(PSTR("M3076: min max ("), (int)nMin);
-            Com::printF(Com::tSlash, (int)nMax);
             Com::printFLN(PSTR(") invalide"));
         }
     }

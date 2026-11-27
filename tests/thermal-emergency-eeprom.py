@@ -17,7 +17,7 @@ checksum+=extract("Eeprom.cpp","uint8_t EEPROM::computeChecksum()","void EEPROM:
 loader=extract("Eeprom.cpp","void EEPROM::readDataFromEEPROM()","    bool change = readPreheatProfiles();")
 loader+="    bool change=needsUpdate; uint8_t version=storedVersion;\n"
 loader+=extract("Eeprom.cpp","    if (change)\n        EEPROM::updateChecksum();","} // readDataFromEEPROM")+"}\n"
-commands=extract("GCodeSystem.cpp","void saveConfiguration()","void requestHeatBedScan(")
+commands=extract("GCodeSystem.cpp","void restoreConfigurationDefaults()","void accessPanel(")
 prelude=r"""
 #include <cassert>
 #include <cstdint>
@@ -85,18 +85,11 @@ static void validChecksum(){
 int main(){
     unsigned faults=0;
     for(uint32_t clock:{0u,0xffffff00u}){
-        reset(0,clock);saveConfiguration();validChecksum();assert(outputs==1&&stores==1);
         const unsigned n=visits;
-        reset(0,clock);loadConfiguration();validChecksum();assert(outputs==1&&applies==4);
         reset(0,clock);restoreConfigurationDefaults();validChecksum();assert(outputs==2&&restores==1&&stores==1);
-        reset(0,clock,false,43);loadConfiguration();validChecksum();assert(outputs==2&&applies==4&&stores==1);
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         for(unsigned i=1;i<=n;++i){
-            reset(i,clock);saveConfiguration();validChecksum();assert(locked&&outputs==0);++faults;
-            reset(i,clock);loadConfiguration();validChecksum();assert(locked&&outputs==0&&applies==0);++faults;
             reset(i,clock);restoreConfigurationDefaults();validChecksum();assert(locked&&outputs==0&&restores==1&&stores==1);++faults;
-            reset(i,clock,false,43);loadConfiguration();validChecksum();assert(locked&&outputs==1&&applies==0&&stores==1);++faults;
-            reset(i,clock,true,43);loadConfiguration();validChecksum();assert(locked&&outputs==0&&applies==0&&stores==0);++faults;
         }
         reset(0,clock);locked=true;EEPROM::readDataFromEEPROM();assert(!reads&&!applies&&!stores&&!outputs);
 #endif

@@ -130,33 +130,6 @@ void reportConfiguration() {
     Printer::showConfiguration();
 }
 
-void saveConfiguration() {
-    EEPROM::storeDataIntoEEPROM(false);
-#ifdef RF_EEPROM_ZONE_EXPERIMENT
-    if(!EEPROM::lastOperationSucceeded())return;
-#endif
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-    if(Printer::printJob.emergencyLocked())return;
-#endif
-    Com::printInfoF(Com::tConfigStoredEEPROM);
-}
-
-void loadConfiguration() {
-    if (!Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Resume))
-        return;
-    EEPROM::readDataFromEEPROM();
-#ifdef RF_EEPROM_ZONE_EXPERIMENT
-    if(!EEPROM::lastOperationSucceeded())return;
-#endif
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-    if(Printer::printJob.emergencyLocked())return;
-#endif
-
-    if (Printer::debugInfo()) {
-        Com::printInfoF(Com::tConfigLoadedEEPROM);
-    }
-}
-
 void restoreConfigurationDefaults() {
     if (!Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Resume))
         return;
@@ -172,14 +145,6 @@ void restoreConfigurationDefaults() {
 
     UI_STATUS(UI_TEXT_RESTORE_DEFAULTS);
     showInformation(PSTR(UI_TEXT_CONFIGURATION), PSTR(UI_TEXT_RESTORE_DEFAULTS), PSTR(UI_TEXT_OK));
-}
-
-void requestHeatBedScan(GCode* pCommand) {
-    if (pCommand->hasS() && (pCommand->S == int(HeatBedScanMode::Pla) || pCommand->S == int(HeatBedScanMode::Abs))) {
-        startHeatBedScan(static_cast<HeatBedScanMode>(pCommand->S));
-        return;
-    }
-    startHeatBedScan(HeatBedScanMode::Standard);
 }
 
 void accessPanel(GCode* pCommand) {

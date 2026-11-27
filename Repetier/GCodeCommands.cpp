@@ -43,10 +43,8 @@ void dispatchMachine(GCode* com) {
     case 82: return selectAbsoluteExtrusion();
     case 83: return selectRelativeExtrusion();
     case 84: return configureStepperShutdown(com);
-    case 85: return configureInactivityShutdown(com);
     case 201: return setPrintAcceleration(com);
     case 202: return setTravelAcceleration(com);
-    case 218: return setToolOffset(com);
     case 220: return setFeedrateMultiplier(com);
     case 221: return setFlowMultiplier(com);
     case 233: return configureAdvance(com);
@@ -111,36 +109,13 @@ void dispatchMachine(GCode* com) {
     case 3000: return Calibration::disableBedCompensation();
     case 3001: return Calibration::enableBedCompensation();
     case 3009: return Calibration::selectBedMatrix(com);
-    case 3010: return requestHeatBedScan(com);
-    case 3011: return Calibration::clearBedMatrix(com);
-    case 3012: return restoreDefaultScanParameters();
     case 3013: return Calibration::reportBedMatrix(com);
-    case 3020: return Calibration::setScanXStart(com);
-    case 3021: return Calibration::setScanYStart(com);
-    case 3022: return Calibration::setScanXStep(com);
-    case 3023: return Calibration::setScanYStep(com);
-    case 3024: return Calibration::setScanXEnd(com);
-    case 3025: return Calibration::setScanYEnd(com);
-    case 3030: return Calibration::setFastApproachStep(com);
-    case 3031: return Calibration::setSlowApproachStep(com);
-    case 3032: return Calibration::setFastRetreatStep(com);
-    case 3033: return Calibration::setSlowRetreatStep(com);
-    case 3040: return Calibration::setFastScanDelay(com);
-    case 3041: return Calibration::setSlowScanDelay(com);
-    case 3042: return Calibration::setScanIdleDelay(com);
-    case 3050: return Calibration::setContactPressureDelta(com);
-    case 3051: return Calibration::setRetryPressureDelta(com);
-    case 3052: return Calibration::setIdlePressureTolerance(com);
-    case 3053: return Calibration::setPressureReadCount(com);
-    case 3054: return Calibration::setPressureReadDelay(com);
-    case 3055: return Calibration::setPressureReadTolerance(com);
     case 3900:
     case 3901: return Calibration::configureZOffsetScan(com);
     case 3902: return Calibration::adjustBedMatrix(com);
 
     // Strain gauge and pressure limits.
     case 3075: return setEmergencyPauseDigits(com);
-    case 3076: return setEmergencyStopDigits(com);
     case 3909: return setSenseOffsetParameters(com);
     case 3911: return setDigitFlowParameters(com);
 
@@ -154,8 +129,6 @@ void dispatchMachine(GCode* com) {
         return reportEeprom();
     case 206: return setEepromValue(com);
     case 360: return reportConfiguration();
-    case 500: return saveConfiguration();
-    case 501: return loadConfiguration();
     case 502: return restoreConfigurationDefaults();
     case 3028: return testHomingRepeatability(com);
     case 3029: return accessPanel(com);
@@ -185,7 +158,7 @@ void Commands::executeGCode(GCode* com) {
         // motion, heating, scan or script entry while settings are untrusted.
         if(com->hasG() || !com->hasM() ||
            (com->M!=105 && com->M!=111 && com->M!=112 && com->M!=114 &&
-            com->M!=115 && com->M!=205 && com->M!=206 && com->M!=501 &&
+            com->M!=115 && com->M!=205 && com->M!=206 &&
             com->M!=502 && com->M!=3915)) {
             Com::printErrorFLN(PSTR("EEPROM settings not acknowledged"));
             return;
