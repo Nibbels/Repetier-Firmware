@@ -14,6 +14,7 @@ import re
 import zipfile
 
 import networkx as nx
+from avr_constant import transfer, branch as known_branch
 
 BOARDS = ("RF1000", "RF2000", "RF2000v2", "RF2000-X44")
 VECTORS = (17, 21, 22, 23, 25, 26, 32)
@@ -42,7 +43,7 @@ def cost(op):
     return 1
 
 
-def inventory(z, board):
+def inventory(z, board, constant_pwm=False):
     p = board + "/"
     assert json.loads(z.read(p + "verification.json"))["status"] == "verified"
     dump = z.read(p + "disassembly.txt").decode()
@@ -95,7 +96,8 @@ def inventory(z, board):
     results = {}
     for v in VECTORS:
         # (PC, call returns, stacked SREG bits, register SREG bits, I)
-        root = (labels["__vector_"+str(v)], (), (None,)*3, (), 0)
+        track = constant_pwm and v == 22
+        root = (labels["__vector_"+str(v)], (), (None,)*3, (), (), (), (None,)*3, 0)
         g = nx.DiGraph()
         todo, seen = [root], set()
         maxd = 0
@@ -105,7 +107,7 @@ def inventory(z, board):
             if state in seen:
                 continue
             seen.add(state)
-            pc, ret, stack, regtuple, I = state
+            pc, ret, stack, regtuple, values, flags, vstack, I = state
             assert 3 <= len(stack) <= 512 and len(seen) < 500000, (v, pc, len(seen))
             maxd = max(maxd, len(stack))
             w, op, arg = ins[pc]
@@ -161,6 +163,10 @@ def inventory(z, board):
             assert not (op == "sts" and re.match(r"0x00(?:5[dDeEfF]),", a))
             if op == "sts" and a.lower().startswith("0x006f,"):
                 timsk.add(pc)
+            taken = None
+            if track:
+                taken = known_branch(op,a,values,flags)
+                values,flags,vstack = transfer(op,a,values,flags,vstack)
             if op in ("icall", "eicall", "ijmp", "eijmp"):
                 assert pc == endpoint and op == "eijmp"
                 nexts = [(t, ret, stack) for t in targets]
@@ -183,13 +189,19 @@ def inventory(z, board):
             else:
                 nexts = [(n, ret, stack)]
                 if op.startswith("br") and op != "break":
-                    nexts.append((target(arg), ret, stack))
+                    if taken is not False: nexts.append((target(arg), ret, stack))
+                    if taken is True: nexts=nexts[1:]
                 if op in SKIP:
-                    nexts.append((n+ins[n][0], ret, stack))
+                    if taken is not False: nexts.append((n+ins[n][0], ret, stack))
+                    if taken is True: nexts=nexts[1:]
             if next_i and not I:
                 opened.add(pc)
             rt = tuple(sorted(regs.items()))
-            nexts = [(q, ret2, stk, rt, next_i) for q, ret2, stk in nexts]
+            # PC pushes/call returns add/remove unknown return bytes.
+            # Ordinary pushes/pops of tracked data were handled by transfer.
+            nexts = [(q, ret2, stk, rt, values, flags,
+                      vstack+(None,)*(len(stk)-len(vstack)) if len(stk)>=len(vstack) else vstack[:len(stk)],
+                      next_i) for q, ret2, stk in nexts]
             g.add_node(state)
             g.add_edges_from((state, q) for q in nexts)
             todo.extend(nexts)
@@ -242,7 +254,7 @@ def inventory(z, board):
                 longest[x] = cost(ins[x[0]][1]) + extra.get(x,0) + max((longest[p] for p in bounded_mask.predecessors(x)), default=0)
             acyclic_cycles = max(longest.values(), default=0)
         results[v] = {"states":len(seen), "stackBytesIncludingPc":maxd,
-                      "interruptOpenSites":len(opened), "maskedDelayReturnChains":[[name(a) for a in t] for t in sorted(delay_entries)],
+                      "constantTracking":track, "interruptOpenSites":len(opened), "maskedDelayReturnChains":[[name(a) for a in t] for t in sorted(delay_entries)],
                       "maskedCycles":cycles, "unresolvedMaskedCycles":len(unresolved), "acyclicMaskedBodyCycles":acyclic_cycles}
     return results
 
@@ -252,13 +264,15 @@ if __name__ == "__main__":
     parser.add_argument("archive")
     parser.add_argument("sha256")
     parser.add_argument("--reject-masked-delay", action="store_true")
+    parser.add_argument("--constant-pwm", action="store_true",
+                        help="also propagate byte/flag constants in non-nesting PWM vector 22")
     args = parser.parse_args()
     with open(args.archive,"rb") as f:
         assert hashlib.sha256(f.read()).hexdigest() == args.sha256
     with zipfile.ZipFile(args.archive) as z:
         summary = json.loads(z.read("summary.json"))
         assert not summary["failures"]
-        result = {board: inventory(z,board) for board in BOARDS}
+        result = {board: inventory(z,board,args.constant_pwm) for board in BOARDS}
     print(json.dumps({"testedMerge":summary["sha"],"sha256":args.sha256,"boards":result},indent=2))
     if args.reject_masked_delay and any(v["maskedDelayReturnChains"] for b in result.values() for v in b.values()):
         raise SystemExit(1)
