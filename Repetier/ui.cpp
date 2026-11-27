@@ -915,7 +915,7 @@ void UIDisplay::okAction() {
         return;
     }
     if (entType == 3) {
-        executeAction(action);
+        executeMenuCommand(action);
         return;
     }
     menuEsc();
@@ -1120,6 +1120,18 @@ void UIDisplay::executeAction(int action) {
 
     autoReturnTime_ = HAL::timeInMilliseconds() + menuAutoReturnDelayMs;
 } // executeAction
+
+void UIDisplay::executeMenuCommand(int action) {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if (Printer::printJob.emergencyLocked()) return;
+#endif
+    // Direct entries are compile-time checked in uimenu.h: no navigation,
+    // top-menu jump or restart key. A fault after selection denies the command.
+    if (Printer::blockAll) return;
+    executeCommandAction(action);
+    refreshPage();
+    autoReturnTime_ = HAL::timeInMilliseconds() + menuAutoReturnDelayMs;
+}
 
 void UIDisplay::slowAction() {
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT

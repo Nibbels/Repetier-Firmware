@@ -56,7 +56,8 @@
 
 #define UI_MENU_CHANGEACTION(name, row, action) UI_STRING(name##_txt, row) \
                                                 UIMenuEntry name PROGMEM = { name##_txt, 4, action, 0, 0 };
-#define UI_MENU_ACTIONCOMMAND(name, row, action) UI_STRING(name##_txt, row) \
+#define UI_MENU_ACTIONCOMMAND(name, row, action) static_assert((action) != UI_ACTION_OK && (action) != UI_ACTION_BACK && (action) != UI_ACTION_NEXT && (action) != UI_ACTION_PREVIOUS && (action) != UI_ACTION_RIGHT && (action) != UI_ACTION_RF_CONTINUE && !((action) & UI_ACTION_TOPMENU), "Direct menu entry must not dispatch navigation or restart"); \
+                                                 UI_STRING(name##_txt, row) \
                                                  UIMenuEntry name PROGMEM = { name##_txt, 3, action, 0, 0 };
 #define UI_MENU_ACTIONSELECTOR(name, row, entries) UI_STRING(name##_txt, row) \
                                                    UIMenuEntry name PROGMEM = { name##_txt, 2, (unsigned int)&entries, 0, 0 };
@@ -64,7 +65,8 @@
                                             UIMenuEntry name PROGMEM = { name##_txt, 2, (unsigned int)&entries, 0, 0 };
 #define UI_MENU_CHANGEACTION_FILTER(name, row, action, filter, nofilter) UI_STRING(name##_txt, row) \
                                                                          UIMenuEntry name PROGMEM = { name##_txt, 4, action, filter, nofilter };
-#define UI_MENU_ACTIONCOMMAND_FILTER(name, row, action, filter, nofilter) UI_STRING(name##_txt, row) \
+#define UI_MENU_ACTIONCOMMAND_FILTER(name, row, action, filter, nofilter) static_assert((action) != UI_ACTION_OK && (action) != UI_ACTION_BACK && (action) != UI_ACTION_NEXT && (action) != UI_ACTION_PREVIOUS && (action) != UI_ACTION_RIGHT && (action) != UI_ACTION_RF_CONTINUE && !((action) & UI_ACTION_TOPMENU), "Direct menu entry must not dispatch navigation or restart"); \
+                                                                          UI_STRING(name##_txt, row) \
                                                                           UIMenuEntry name PROGMEM = { name##_txt, 3, action, filter, nofilter };
 #define UI_MENU_ACTIONSELECTOR_FILTER(name, row, entries, filter, nofilter) UI_STRING(name##_txt, row) \
                                                                             UIMenuEntry name PROGMEM = { name##_txt, 2, (unsigned int)&entries, filter, nofilter };

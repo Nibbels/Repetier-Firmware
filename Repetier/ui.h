@@ -354,6 +354,8 @@ private:
     void renderExtruderField(char c1, char c2);
     void renderCalibrationField(char c1, char c2);
     void renderCompensationField(char c1, char c2);
+    void executeCommandAction(int action);
+    void executeMenuCommand(int action);
     void changeSetting(int action, int8_t increment);
     void changeMotionSetting(int action, int8_t increment);
     void changeExtruderSetting(int action, int8_t increment);

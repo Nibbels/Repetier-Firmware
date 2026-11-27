@@ -250,7 +250,8 @@ struct UIDisplay {
     void printRow(uint8_t,char*,char*,uint8_t);
     void adjustMenuPos();
     int executed=0, finished=0;
-    void executeAction(int action) { executed=action; }
+    void executeAction(int action) { assert(false && "direct menu must not enter key dispatch"); (void)action; }
+    void executeMenuCommand(int action) { executed=action; }
     void finishAction(int action) { finished=action; }
     void pushMenu(void*,bool);
     void menuEsc(); void okAction();

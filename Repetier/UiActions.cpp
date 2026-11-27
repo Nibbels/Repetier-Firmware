@@ -87,15 +87,6 @@ void UIDisplay::pressPlay() {
 
 void UIDisplay::mainSwitchCase(int action) {
     switch (action) {
-#ifdef RF_EEPROM_ZONE_EXPERIMENT
-    case UI_ACTION_EEPROM_RECOVERY:
-        if(EEPROM::recoveryPending())EEPROM::reportRecovery();
-        else UI_STATUS_UPD("EEPROM OK");
-        break;
-#endif
-        /*
-        * HARDWARE BUTTONS
-        */
     case UI_ACTION_OK: {
         okAction();
         confirmation_ = 0;
@@ -117,6 +108,22 @@ void UIDisplay::mainSwitchCase(int action) {
         nextPreviousAction(-1);
         break;
     }
+    default:
+        executeCommandAction(action);
+        break;
+    }
+}
+
+// Direct menu commands never dispatch a navigation key. Keep the
+// OK -> menu command path structurally separate from OK dispatch.
+void UIDisplay::executeCommandAction(int action) {
+    switch (action) {
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+    case UI_ACTION_EEPROM_RECOVERY:
+        if(EEPROM::recoveryPending())EEPROM::reportRecovery();
+        else UI_STATUS_UPD("EEPROM OK");
+        break;
+#endif
     case UI_ACTION_RF_HEAT_BED_UP: {
         // show that we are active
         Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
@@ -478,4 +485,4 @@ void UIDisplay::mainSwitchCase(int action) {
     }
     }
 
-} //mainSwitchCase
+} // executeCommandAction
