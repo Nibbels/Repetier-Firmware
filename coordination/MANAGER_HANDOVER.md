@@ -1,131 +1,24 @@
 # RFx000 Manager 01 → Manager 02 handover
 
-## P0 current priority — Task0034 heater fail-off (2026-11-25)
+## Read first — current manager startup
 
-Owner explicitly prioritizes preventing persistent heating on crash over all throughput work, based on repeated historical experience. [Task0034](tasks/Task0034.md) owns expiring thermal authorization, bounded heater pulses including 100% duty, immediate revoke, actual thermal-progress watchdog and event-driven heater scheduling research. Independent hardware compare-clear where routed; PE2 bed requires separate fail-off path. No stale rearm, no fault energy catch-up. Hold Task0032/#101 and Task0033 production, resume against updated baseline; #91 remains held. No printer flash or physical qualification. Manager/worker starts Task0034 now.
-
-## Previous priority — Task0032 quality-first print core (2026-11-25)
-
-Owner explicitly reopens print-core optimization with [Task0032](tasks/Task0032.md): preserve configured microsteps, minimize pulse bunching/packing subject to sufficient CPU capacity and hard service/safety deadlines. Measure full Timer1 cost by motion class and actual foreground demand, including planner/lookahead, UART, temperature/ADC, DMS/Z/ECMP, Advance and watchdog. Compare justified fixed/internal thresholds versus workload-class selection and bounded adaptation. No premature packing, no automatic microstep reduction, no removal of the 512-tick base floor or guard without evidence. Owner reports historical stuck heater PWM during crashes; verify no same-ISR reentry, bounded nested service, actual thermal completion and independent fail-off. Eliminate DblFq adjustment only after justified policy, preserve legacy EEPROM/protocol compatibility. Phase A ready; no new production code or thresholds selected. Claim exclusive Task0032 branch; coordinate #91 UI scope. Task0030 baseline retained; no hardware flash or Astra Max review, manual triggers only.
-
-### New chat handover — simulation and G-code throughput
-
-The owner's final direction is simulation first: defer real printer tests to the distant future, not a blocker for software research. The primary question is sustainable G-code throughput (offered / received / accepted / planned / executed), especially tiny circle chords: segment density times path velocity predicts command load. Distinguish UART bottleneck, planner/foreground CPU and actual step-executor demand; queue time coverage and hard maintenance deadlines matter. More packing cannot overcome saturated UART or per-step overload. Compare minimal feasible packing by motion class and predicted segment demand, with conservative bounds and safe fallback. No final reserve, threshold or production policy has been selected.
-
-Task0032 is IN_PROGRESS on task/Task0032-quality-packing, draft PR #101. Read its new "Owner continuation" section for S0–S4 simulation milestones, workload matrix, telemetry and acceptance rules. Start with historical evidence reproduction and a deterministic script-based harness. The exact Task0030 restricted interpreter and suite are now committed in [tools/avr-motion-diagnostics](../tools/avr-motion-diagnostics/README.md), with original ZIP and source hashes checked. The tool is isolated linked-instruction diagnostics only, not a full concurrent AVR emulator; qualify a simulator or conservative combined model before drawing full-system conclusions. Keep all timing scripts and analysis reproducible, not just chat notes. Actions evidence expires after seven days; preserve the archive or regenerate pinned historical images and verify hashes.
-
-For large sweeps the owner offers T14 and ALUBUTYL as optional external compute nodes. Assistant owns versioned job generation, execution orchestration where tools permit, validation and analysis. Check availability/access first; no assumed RFx000 runner and no interference with other projects. If manual execution is necessary, hand over exact commands/job bundle and read returned structured artifacts, not raw technical questions to the owner. No background automation.
-
-### UART follow-up — Task0033 (owner, 2026-11-25)
-
-[Task0033](tasks/Task0033.md) records the explicit 500000 baud target, board/host/EEPROM evidence, RC sensitivity, fixed AVR interrupt priorities, bounded RX latency and loss-aware FE/DOR/UPE/ring-full handling, plus a broader USB serial audit. Read-only preparation can overlap #101; serialize firmware changes with Task0032 and reuse its combined simulation. Keep 115200 and 250000 controls/fallbacks, no unverified default migration, no hardware experiments. The owner's hypothesis that old ISR timing limited baud is to be tested, not assumed. #91 remains held.
-
-## Current continuation — ATmega2560 optimization, 2026-11-25
-
-**Native optimization Tasks0022–0030 complete and merged.** Task0030 [PR #100](https://github.com/Nibbels/Repetier-Firmware/pull/100) merge ca21f0374f4a8a035d432deec706a87254e5f123. [Final CI 45673748654](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45673748654), [artifact 15050792432](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45673748654/artifacts/15050792432), [full benchmark](tasks/Task0030.md). All 33 host replays and four builds passed; final deployable files identical to Task0029; unchanged bootloader/EEPROM, 3200 paired isolated linked-motion fixtures matched, 262144 actual linked table values matched. RF2000v2 globals 6595->6103 B, reserve 1597->2089 B, Flash 190046->217034 B. Keep 31-cycle Advance HIGH, existing speed/pacing/packing/baud limits, pinned -Os/LTO.
-
-- Native wave software gate complete; owner acceptance and physical gates open. No actual printer speed, full-system WCET, concurrent interrupt deadline, physical STEP/DIR, stack high-water or hardware safety assertion. Worst sampled isolated executor demand 97.4% at 16k steps/s, greater than 100% at 24k/31.25k; dense/burst limits remain. Detailed physical acceptance plan in Task0030. Local restricted AVR interpreter/results delivered separately in owner chat ZIP with recorded SHA; artifact comparison tool is in repository.
-- Native wave closed at owner-approved software checkpoint; LCD #91 still held. See new Task0032 direction above. No device flash, Astra Max review or automation.
-
-## Current owner decision on review timing (2026-11-25)
-
-The owner wants to discuss individual modules and direct engineering questions across the firmware first. Earlier references to an Astra Max review describe a possible later step. Completing the chip or LCD tasks does not trigger planning or starting that review. Wait for the owner to reopen the topic explicitly. Continue current worker assignments on their own terms.
-
-## ATmega2560 native optimization dispatch (2026-11-25)
-
-Owner requests the next optimization block and sequential direct manager/worker execution with task records kept current. Task0021 is already owned by the PID/autotune worker ([PR #90](https://github.com/Nibbels/Repetier-Firmware/pull/90)); do not duplicate or interfere. New native tasks are [0022–0030](TASKS.md#atmega2560-native-optimization). Begin Task0022 read-only baseline preparation immediately; freeze exact integrated baseline after #90 and any other existing production worker merges. Only one native task at a time. Self-merge each tested PR before starting its successor. The previous cleanup baseline is [96f2c8b](https://github.com/Nibbels/Repetier-Firmware/commit/96f2c8b95f021ec3291c15207fbf61063e2f986e) with [CI evidence](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45522064800/artifacts/14981100689). Preserve it as a comparison checkpoint. No physical flash or test authorization. Reject changes without measurable benefit or with safety/behavior regressions.
-
-## Final cleanup after Tasks 0019 and 0020
-
-The source-directory cleanup moves the AVR diagnosis note to [docs/overflow_decompile.txt](../docs/overflow_decompile.txt), preserving its commands and links. See [final cleanup audit](audits/final-cleanup.md) for dispositions, build compatibility and evidence.
-
-Review the following repository-root files during final cleanup. Record current consumers and a keep, move, update or retire recommendation for each. Check working links in both READMEs, licensing, and compatibility with supported build and flash workflows before proposing changes.
-
-- Formatting, ignore rules and worker instructions: `.clang-format`, `.gitignore`, `AGENTS.md`.
-- Documentation and language links: `Doxyfile`, `README.de_DE.md`, `README.md`, `de.png`, `us.png`.
-- Build and flashing: `Repetier.sln` (review together with the Visual Micro manifests), `flash_arduino.sh`.
-- History, license and protocol reference: `changelog.txt`, `gpl.txt`, `repetier communication protocol.txt`.
-
-Date: 2026-11-24 (Europe/Berlin). User wants a long-lived manager chat in ChatGPT Work (Astra selected by user); worker chats currently use GPT-6.2 High outside Work. Repository [Nibbels/Repetier-Firmware](https://github.com/Nibbels/Repetier-Firmware), integration branch **ai-firmware-review**, never community_development. Read [AGENTS.md](../AGENTS.md), [TASKS.md](TASKS.md), individual task files and live branches/PRs first. Repository is the authoritative durable state, not chat memory.
-
-## Comment cleanup dispatch
-
-[Task0020](tasks/Task0020.md) may prepare a comment-only PR on its own branch now. Final integration follows Task0019; the manager reviews the resulting SHA.
-
-## Current dispatch
-
-Finish the active Task0016 audit PR #86 first. Then run [Task0019](tasks/Task0019.md) as the sole production worker, refresh the final audit evidence and firmware images and review that resulting SHA at maximum effort. Read-only inventory for 0019 may start while #86 is open.
-
-## Earlier final audit dispatch
-
-Tasks 0001–0015 and 0017 are merged. [PR #84](https://github.com/Nibbels/Repetier-Firmware/pull/84) merged at 08caec4d with [green host and four-variant AVR verification](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45509948156). Task0016 is ready for the exclusive worker audit. After worker integration the manager reviews the resulting SHA at maximum effort. Hardware testing awaits owner software acceptance.
-
-## Wave 3 dispatch (2026-11-24)
-
-Tasks 0001–0008 are merged. Wave 2 software checkpoint: [214baf4](https://github.com/Nibbels/Repetier-Firmware/commit/214baf4b504be71c0fce8661207930bd01d459f6), [four firmware images and evidence](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45449055408/artifacts/14946438316). The owner defers all live printer testing until the planned refactoring and final software audit are complete. Keep the checkpoint for comparison. Workers continue with CI and record physical unknowns for Task0016.
-
-Preparation PRs [#75](https://github.com/Nibbels/Repetier-Firmware/pull/75) and [#76](https://github.com/Nibbels/Repetier-Firmware/pull/76) merged with passing checks; neither claims production changes. Release the scoped 0009 UI architecture work in parallel with 0010–0012. Reuse its merged workflow replays. After the structural waves, the manager reviews the complete integrated candidate at maximum reasoning effort, addresses material findings, rechecks the resulting SHA and presents it for owner acceptance before any live test. Highest priority: continue 0010 in its existing worker chat, starting with explicit zero heater demand on invalid readings, fault and autotune exit paths; test the bed-controller path and keep HAL freshness/physical latency separate. 0012 scan settings and 0011 RGB are independent wave-3 assignments. Stop after verifying behavior if no worthwhile change is identified. Keep 0013–0016 queued.
-
-## Historical wave 2 progress
-
-Task0005 merged in [#73](https://github.com/Nibbels/Repetier-Firmware/pull/73). Task0007 merged in [#74](https://github.com/Nibbels/Repetier-Firmware/pull/74) with a [green four-variant check](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45440129585). Task0006 is the sole outstanding wave-2 merge. Refresh its candidate against the integrated EEPROM and sensor changes and capture the resulting printer-test candidate. Tasks 0009 and 0010 may prepare scoped host replays using the now-merged EEPROM and sensor contracts. Task0006's [candidate check passed](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45430403246); its worker owns final synchronization and merge of [#72](https://github.com/Nibbels/Repetier-Firmware/pull/72). Task0009 may prepare a task-private host replay or audit of both LCD widths, preheat presets and the manual Z handoff using the merged EEPROM contract. Production UI changes await the wave-2 printer-test checkpoint. Carry the M3902 Z0 interrupted-save finding into that checkpoint: distinguish unsaved RAM edits from durable active-slot saves and decide the intended recovery behavior before designing a cross-EEPROM change.
-
-Task0008 completed in a normal Sol High chat with hosted verification and worker self-merge ([PR #71](https://github.com/Nibbels/Repetier-Firmware/pull/71), [green check](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45425850940)). The receiver retains its architecture. Invalid binary text frames use the resend path. All four variants add 6 bytes of Flash and zero bytes of global SRAM. Physical throughput and a USB print remain open. Continue wave 2 with 0005 EEPROM, 0006 BedMatrix and 0007 temperature sensors.
-
-## Current status after wave 1 (2026-11-24)
-
-All four workers self-merged [#65](https://github.com/Nibbels/Repetier-Firmware/pull/65), [#66](https://github.com/Nibbels/Repetier-Firmware/pull/66), [#67](https://github.com/Nibbels/Repetier-Firmware/pull/67) and [#68](https://github.com/Nibbels/Repetier-Firmware/pull/68). Wave 2 is ready: 0005 EEPROM, 0006 BedMatrix, 0007 temperature sensors and 0008 G-code input may proceed in parallel within their existing scopes. Use the hosted [firmware PR check](TASKS.md#firmware-pr-checks) for standard PR verification. Direct Work builds serve local diagnosis. Task0003 measured 51.7 seconds for 15 host replays and four AVR builds with packages present. T14 is an optional fallback pending comparable measurements. The combined firmware saves 148–154 Flash bytes with unchanged global SRAM. Physical timing and stack measurements remain open. Task0013 owns the 14 missing Visual Micro source entries identified by Task0004. Earlier snapshots below are historical.
-
-## Delivery priority
-
-The user's 30% example illustrates the cost/time tradeoff. Choose infrastructure by total cost to a verified result, including worker waiting, repeated setup and operator effort. Use the hosted PR checks throughout the remaining waves. Task0016 identifies the final reproducible candidate and consolidates the device checks for the owner. Apply the [stopping criteria](TASKS.md#delivery-and-stopping-point) before opening another refactoring wave.
+Read [AGENTS.md](../AGENTS.md), [TASKS.md](TASKS.md) and the affected task records. Refresh the actual ai-firmware-review HEAD, active PRs/branches, write scopes and workflow results; all snapshots below are dated evidence, not live status. **Use the existing GitHub Actions pipeline for AVR builds, host tests and measurement artifacts. Missing local tools are not blockers.** Never reopen the pre-CI infrastructure investigation merely because a chat has no local compiler. See [CI contract](TASKS.md#firmware-pr-checks). Do not duplicate active workers or override P0, owner restrictions or serialized integration. The [historical manager record](MANAGER_HISTORY.md) contains the original dispatches, including superseded start prompts and early infrastructure decisions; consult it only when relevant.
 
 ## Mandate
 
 Coordinate firmware modernization, maintain task boundaries and wave scheduling, audit correctness and test evidence, unblock workers pragmatically, and refine tasks as evidence arrives. Workers implement, test, synchronize and merge their own PRs; manager does not routinely take over or approve them. User wants minimal merge conflicts and autonomous work. Maintain concise durable handovers (3–5 lines plus links in chat; detailed evidence in task files), update this manager handover when important decisions or blockers change. Manager may implement a task directly only when intentionally assigned or when a small coordination repair is needed; do not duplicate active work. Do not claim background work or tests not run.
 
-## Baseline and plan
+## Delivery priority
 
-Audit baseline [3a27bd8](https://github.com/Nibbels/Repetier-Firmware/commit/3a27bd83dfc4711fa2694d18b311b67426f91936). Original 37 source/header/INO files, 2,186,047 bytes; review 109 files, 1,109,597 bytes (-49.2% source, not Flash). All surviving original C++/headers changed, but normalized line overlap is high in DRV8711 (100%), Communication (99%), TemperatureControl (92%), UI and EEPROM. SdFat, FatStructs, SDCard and u8glib removed (~492 kB source). Obsolete Arduino-CMake and IDE metadata remain; actual linked Arduino dependencies must be measured. Audit and plan commits [82eaa31](https://github.com/Nibbels/Repetier-Firmware/commit/82eaa311b11c7111143bb98fe5a07369205925c7), [1fe264b](https://github.com/Nibbels/Repetier-Firmware/commit/1fe264b804cc67aa5bf197d0106d84f2d7cf8796).
+The user's 30% example illustrates the cost/time tradeoff. Choose infrastructure by total cost to a verified result, including worker waiting, repeated setup and operator effort. Use the hosted PR checks throughout the remaining waves. Task0016 identifies the final reproducible candidate and consolidates the device checks for the owner. Apply the [stopping criteria](TASKS.md#delivery-and-stopping-point) before opening another refactoring wave.
 
-- Wave 1: Task0001 driver internals, 0002 Communication, 0003 reproducible build/resource baseline, 0004 read-only legacy inventory.
-- Wave 2: 0005 EEPROM, 0006 BedMatrix, 0007 sensors, 0008 G-Code input.
-- Wave 3: 0009 UI, 0010 thermal control, 0011 RGB, 0012 ScanSettings.
-- Exclusive waves: 0013 HAL/Arduino/fastio/build, 0014 global ownership & motor params, 0015 shared headers/config, 0016 final audit.
-- Freeze shared APIs and high-conflict files until assigned wave. Shared replay/build manifest edits need serialized final integration (see TASKS.md). No cross-scope opportunistic edits; no behavior changes mixed into refactors. Do not treat source similarity as proof of dead code. Preserve EEPROM layout, host protocol, safety, retrofit connectors, timing, Z/DMS/ECMP, operator Z DOWN→UP transfer. Four AVR variants (RF1000, RF2000, RF2000v2, RF2000 X44) and relevant replays; hardware-only tests explicitly open.
+## P0 current priority — Task0034 heater fail-off (2026-11-25)
 
-## Live snapshot before handover
+Owner explicitly prioritizes preventing persistent heating on crash over all throughput work, based on repeated historical experience. [Task0034](tasks/Task0034.md) owns expiring thermal authorization, bounded heater pulses including 100% duty, immediate revoke, actual thermal-progress watchdog and event-driven heater scheduling research. Independent hardware compare-clear where routed; PE2 bed requires separate fail-off path. No stale rearm, no fault energy catch-up. Hold Task0032/#101 and Task0033 production, resume against updated baseline; #91 remains held. No printer flash or physical qualification. Manager/worker starts Task0034 now.
 
-Target was 1fe264b when inspected. Four worker chats were started by user. **This snapshot is not a live status; refresh on entry.**
-- Task0001: [draft PR #65](https://github.com/Nibbels/Repetier-Firmware/pull/65), branch task/Task0001-drv8711. Host regression trace prepared; no production edit; blocked by incorrect scope and missing AVR toolchain.
-- Task0002: [draft PR #66](https://github.com/Nibbels/Repetier-Firmware/pull/66), branch task/Task0002-communication. Host golden replay prepared (fixture, not actual checkout); INT32_MIN signed overflow identified. No production edit. Same two blockers.
-- Task0003: branch task/Task0003-build-baseline observed at 1fe264b; build baseline not yet verified.
-- Task0004: branch task/Task0004-legacy-audit observed at bcf2e22; task marked IN_PROGRESS, no open PR observed at snapshot.
+## Current owner decision on review timing (2026-11-25)
 
-**Coordination repair:** initial task-generation template swapped prerequisites and write scope in all 16 files. This handover commit repairs all 16 on the integration branch (no firmware changes). For already active worker branches, synchronize latest target, resolve only task-file field conflicts in favor of corrected scope/prerequisites while retaining worker status and evidence; do not replace the worker's report. Workers may need an explicit resume prompt. No production worker PR has been merged as of inspection.
-
-## Immediate manager priorities
-
-1. Verify repaired scope and active PRs, communicate correction/resume to existing workers (via user prompts or PR comments as appropriate); do not create duplicate branches. Review Task0003/0004 results.
-2. Solve the real toolchain blocker once for all workers: their normal-chat containers reported host g++ but no avr-gcc/avr-g++, arduino-cli or PlatformIO and no network clone; target had no GitHub Actions workflow. Work may offer a different environment but verify access, exact checkout, toolchain and runner before assuming it. Investigate reproducible build and GitHub Actions or user-provided runner, respecting task ownership. Let Task0003 own the solution; if CI manifest required, explicitly reserve its ownership for this task. Do not lower build gates or invent test results. If environment remains blocked, report precisely and request only necessary user action.
-3. Verify exact-checkout host replays and four variant builds, compare Flash/SRAM and relevant timing. Draft PRs remain unmerged until gates pass. Use actual merge evidence (not a static status field alone).
-4. Release the next wave only after predecessor tasks are merged and verified, or explicitly revise the wave barrier with rationale and dependency checks. Use audit findings to refine future tasks.
-5. Keep manager status and handover durable in coordination; preserve worker-owned files. No firmware modification in this handover.
-
-## Start prompt
-
-Take over as RFx000 Manager 02. Read AGENTS.md, coordination/TASKS.md and coordination/MANAGER_HANDOVER.md on ai-firmware-review in Nibbels/Repetier-Firmware. Refresh actual GitHub state and active worker branches/PRs. Resolve coordination and test-infrastructure blockers, maintain the task waves, ensure workers self-merge, and keep durable manager notes. Do not duplicate active worker work. Start with the scope correction and AVR build blocker.
-
-## Infrastructure clarification from user (2026-11-24)
-
-The user already operates a T14 VM with MCP/plugin and execution harness for Gamemation, and has previously used self-hosted GitHub Actions on the local laptop. Prefer evaluating reuse of that existing infrastructure over designing a new VM. Verify runner scope/registration and labels for Nibbels/Repetier-Firmware, AVR toolchain availability, actual checkout and isolation from Gamemation jobs. Do not assume the existing Gamemation-specific MCP grants RFx000 workspace access. A separately registered RFx000 runner on the same VM is an option if needed; avoid disrupting existing runners or game workloads. Task0003 tooling is available in draft PR #67; Task0004 source inventory is in draft PR #68. All four draft PRs were unmerged at latest inspection. User prefers considering the infrastructure change when current credits run out; no VM changes or runner installation have been performed by this manager. Consider task-appropriate acceptance gates for non-firmware audit/documentation changes, rather than demanding unrelated firmware builds; keep build gates for production changes and baseline measurement.
-
-## Manager 02 decision, 2026-11-24
-
-The user moved Tasks 0001–0004 to GPT-6.2 Sol Max in Work. Continue their existing branches and PRs. Tasks 0005–0016 now specify host preparation and target evidence individually. See [staging rules](TASKS.md#staging-work-around-the-avr-toolchain). The manager cloned target 9dab8d0 and ran tests/serial-protocol.py successfully (seven scenarios plus USART0).
-
-T14 feasibility: the Gamemation status endpoint reported GM-CI-T14, Windows x64 and one runner process. Firmware registration and an installed toolchain are unverified. First try a clean checkout at the candidate SHA and Task0003's proposed pinned Arduino AVR Boards 1.8.6 with Arduino CLI and Python. Its draft script accepts --avr-only and resolves Windows .exe tools. Run the host suite in Work on the same SHA. Time a full four-variant run and retain the artifacts before deciding on permanent CI. A later repository-scoped runner with its own account, work directory and rfx000-avr label could serialize trusted firmware builds independently of game jobs. Keep untrusted fork code off the game VM. No installation or runner changes were requested in this review.
-
+The owner wants to discuss individual modules and direct engineering questions across the firmware first. Earlier references to an Astra Max review describe a possible later step. Completing the chip or LCD tasks does not trigger planning or starting that review. Wait for the owner to reopen the topic explicitly. Continue current worker assignments on their own terms.
 
 ## Manager continuation — four parallel chats and cross-workstream acceptance (2026-11-27)
 
@@ -167,3 +60,26 @@ App boundary 253952. RF2000/v2 balanced 8-partition fallback succeeded, X44 defa
 Cross-worker ACK contract now grounded: #102 pinned GCodeInput.cpp line 466 ordinary accepted command Com::printFLN(Com::tOkSpace, serialReceive.currentLineNumber); Communication.cpp tOkSpace = "ok ". Thus normal response "ok 0\r\n" is six bytes, grows with decimal line-number digit count (5+digits, e.g. 10 bytes for 5-digit N); other paths plain ok CRLF or skip/resend/diagnostics. Don't assume fixed 4/6 for general stream. Use actual trace ACK byte counts and line-number range including numbered/un-numbered and binary; include extra traffic separately and actual host byte credit. Feed consistent evidence to #101/#103; no host behavior verified here.
 
 No production modifications, no worker branch edit, no release of P0 or #91 hold. Continue A70 in existing #102 only, keep #101/#103 research and independent A73 audit in their own scopes.
+## Previous priority — Task0032 quality-first print core (2026-11-25)
+
+Owner explicitly reopens print-core optimization with [Task0032](tasks/Task0032.md): preserve configured microsteps, minimize pulse bunching/packing subject to sufficient CPU capacity and hard service/safety deadlines. Measure full Timer1 cost by motion class and actual foreground demand, including planner/lookahead, UART, temperature/ADC, DMS/Z/ECMP, Advance and watchdog. Compare justified fixed/internal thresholds versus workload-class selection and bounded adaptation. No premature packing, no automatic microstep reduction, no removal of the 512-tick base floor or guard without evidence. Owner reports historical stuck heater PWM during crashes; verify no same-ISR reentry, bounded nested service, actual thermal completion and independent fail-off. Eliminate DblFq adjustment only after justified policy, preserve legacy EEPROM/protocol compatibility. Phase A ready; no new production code or thresholds selected. Claim exclusive Task0032 branch; coordinate #91 UI scope. Task0030 baseline retained; no hardware flash or Astra Max review, manual triggers only.
+
+### New chat handover — simulation and G-code throughput
+
+The owner's final direction is simulation first: defer real printer tests to the distant future, not a blocker for software research. The primary question is sustainable G-code throughput (offered / received / accepted / planned / executed), especially tiny circle chords: segment density times path velocity predicts command load. Distinguish UART bottleneck, planner/foreground CPU and actual step-executor demand; queue time coverage and hard maintenance deadlines matter. More packing cannot overcome saturated UART or per-step overload. Compare minimal feasible packing by motion class and predicted segment demand, with conservative bounds and safe fallback. No final reserve, threshold or production policy has been selected.
+
+Task0032 is IN_PROGRESS on task/Task0032-quality-packing, draft PR #101. Read its new "Owner continuation" section for S0–S4 simulation milestones, workload matrix, telemetry and acceptance rules. Start with historical evidence reproduction and a deterministic script-based harness. The exact Task0030 restricted interpreter and suite are now committed in [tools/avr-motion-diagnostics](../tools/avr-motion-diagnostics/README.md), with original ZIP and source hashes checked. The tool is isolated linked-instruction diagnostics only, not a full concurrent AVR emulator; qualify a simulator or conservative combined model before drawing full-system conclusions. Keep all timing scripts and analysis reproducible, not just chat notes. Actions evidence expires after seven days; preserve the archive or regenerate pinned historical images and verify hashes.
+
+For large sweeps the owner offers T14 and ALUBUTYL as optional external compute nodes. Assistant owns versioned job generation, execution orchestration where tools permit, validation and analysis. Check availability/access first; no assumed RFx000 runner and no interference with other projects. If manual execution is necessary, hand over exact commands/job bundle and read returned structured artifacts, not raw technical questions to the owner. No background automation.
+
+### UART follow-up — Task0033 (owner, 2026-11-25)
+
+[Task0033](tasks/Task0033.md) records the explicit 500000 baud target, board/host/EEPROM evidence, RC sensitivity, fixed AVR interrupt priorities, bounded RX latency and loss-aware FE/DOR/UPE/ring-full handling, plus a broader USB serial audit. Read-only preparation can overlap #101; serialize firmware changes with Task0032 and reuse its combined simulation. Keep 115200 and 250000 controls/fallbacks, no unverified default migration, no hardware experiments. The owner's hypothesis that old ISR timing limited baud is to be tested, not assumed. #91 remains held.
+
+## Current continuation — ATmega2560 optimization, 2026-11-25
+
+**Native optimization Tasks0022–0030 complete and merged.** Task0030 [PR #100](https://github.com/Nibbels/Repetier-Firmware/pull/100) merge ca21f0374f4a8a035d432deec706a87254e5f123. [Final CI 45673748654](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45673748654), [artifact 15050792432](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45673748654/artifacts/15050792432), [full benchmark](tasks/Task0030.md). All 33 host replays and four builds passed; final deployable files identical to Task0029; unchanged bootloader/EEPROM, 3200 paired isolated linked-motion fixtures matched, 262144 actual linked table values matched. RF2000v2 globals 6595->6103 B, reserve 1597->2089 B, Flash 190046->217034 B. Keep 31-cycle Advance HIGH, existing speed/pacing/packing/baud limits, pinned -Os/LTO.
+
+- Native wave software gate complete; owner acceptance and physical gates open. No actual printer speed, full-system WCET, concurrent interrupt deadline, physical STEP/DIR, stack high-water or hardware safety assertion. Worst sampled isolated executor demand 97.4% at 16k steps/s, greater than 100% at 24k/31.25k; dense/burst limits remain. Detailed physical acceptance plan in Task0030. Local restricted AVR interpreter/results delivered separately in owner chat ZIP with recorded SHA; artifact comparison tool is in repository.
+- Native wave closed at owner-approved software checkpoint; LCD #91 still held. See new Task0032 direction above. No device flash, Astra Max review or automation.
+
