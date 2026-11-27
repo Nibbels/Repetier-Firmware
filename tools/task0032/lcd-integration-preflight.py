@@ -37,7 +37,7 @@ void UIDisplay::resetDisplayAfterClear() {
 
 SERVICE = r'''
 void UIDisplay::serviceDisplay() {
-    if(!normalCharacters_ || !lcdTransport_.pending()) return;
+    if(!normalCharacters_ || !lcdTransport_.needsService()) return;
     serviceDisplayPending();
 }
 
