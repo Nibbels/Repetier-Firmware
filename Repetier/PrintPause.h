@@ -75,6 +75,7 @@ private:
         return phase == Phase::Retracting || phase == Phase::Returning || phase == Phase::ManualExtrusion;
     }
 
+    void dispatchPendingMotion();
     void waitUntilSettled();
     bool acceptsPauseRequest() const;
     void retract(Destination destination);
@@ -90,6 +91,7 @@ private:
     volatile Phase phase_ = Phase::Running;
     volatile bool pauseSinceSenseSample_ = false;
     bool parked_ = false;
+    bool servicingMotion_ = false; // foreground owner; cancel does not release
     uint32_t standbyAt_ = 0;
     int32_t parkSteps_[4] = {};
     int32_t returnPosition_[3] = {};

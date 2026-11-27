@@ -122,9 +122,17 @@ void PrintPause::cancel() {
 }
 
 void PrintPause::serviceMotion() {
-    if (PrintLine::directMoveActive() || Printer::blockAll)
+    // A canceled phase can return to Running while a transition still
+    // owns a foreground wait frame. Do not start a second transition
+    // until the first has unwound; periodic thermal service still runs.
+    if (servicingMotion_ || PrintLine::directMoveActive() || Printer::blockAll)
         return;
+    servicingMotion_ = true;
+    dispatchPendingMotion();
+    servicingMotion_ = false;
+}
 
+__attribute__((noinline)) void PrintPause::dispatchPendingMotion() {
     switch (phase_) {
     case Phase::RetractRequested:
         retract(Destination::InPlace);
