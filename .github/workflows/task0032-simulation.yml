@@ -27,6 +27,11 @@ jobs:
           git rev-parse HEAD > "$out/checkout-sha.txt"
           node --version > "$out/node-version.txt"
           sha256sum tools/task0032/*.cjs > "$out/source-sha256.txt"
+          # Reuse the immutable Task0033 handoff; do not copy/fork its model.
+          transport=4cdb22106e66c02f86dffeb3f49a6a15506c2038
+          git fetch --no-tags --depth=1 origin "$transport"
+          git show "$transport:tools/task0033/transport-contract-results.json" > "$out/transport-contract-input.json"
+          node tools/task0032/transport-handoff.cjs "$out/transport-contract-input.json" > "$out/transport-handoff.json"
           for test in link-model demand-model queue-model speed-search queue-estimate governor-preview rx-blackout-model rx-service-window; do
             node "tools/task0032/$test.cjs" --self-test
           done
