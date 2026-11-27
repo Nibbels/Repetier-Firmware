@@ -1,0 +1,463 @@
+{
+  "model": "task0033-recovery-contract-v1",
+  "assumptions": "Abstract transaction and state-machine tests only. No actual recovery parser, transport, host, CRC, interrupt cycle cost, hardware fault or proof of a valid binary synchronization boundary. External sync proof deliberately not implemented. ACK/RESEND intents are not literal wire replies; actual Repetier compatibility and safe stop integration are unresolved. Queue shown for validation order, not finite capacity or policy on abort. No guarantee against unflagged checksum collisions.",
+  "traces": [
+    {
+      "kind": "FE",
+      "injection": "before_parse",
+      "last": 2,
+      "gate": "OPEN",
+      "pending": null,
+      "queue": [
+        "valid",
+        "replay"
+      ],
+      "out": [
+        {
+          "kind": "ADMISSION_ACK_INTENT",
+          "id": "valid",
+          "number": 1
+        },
+        {
+          "kind": "RESEND_INTENT",
+          "number": 2
+        },
+        {
+          "kind": "ADMISSION_ACK_INTENT",
+          "id": "replay",
+          "number": 2
+        }
+      ],
+      "counters": {
+        "FE": 1,
+        "DOR": 0,
+        "UPE": 0,
+        "RING": 0
+      }
+    },
+    {
+      "kind": "FE",
+      "injection": "between_parse_commit",
+      "last": 2,
+      "gate": "OPEN",
+      "pending": null,
+      "queue": [
+        "valid",
+        "replay"
+      ],
+      "out": [
+        {
+          "kind": "ADMISSION_ACK_INTENT",
+          "id": "valid",
+          "number": 1
+        },
+        {
+          "kind": "RESEND_INTENT",
+          "number": 2
+        },
+        {
+          "kind": "ADMISSION_ACK_INTENT",
+          "id": "replay",
+          "number": 2
+        }
+      ],
+      "counters": {
+        "FE": 1,
+        "DOR": 0,
+        "UPE": 0,
+        "RING": 0
+      }
+    },
+    {
+      "kind": "FE",
+      "injection": "after_commit",
+      "last": 3,
+      "gate": "OPEN",
+      "pending": null,
+      "queue": [
+        "valid",
+        "candidate",
+        "replay"
+      ],
+      "out": [
+        {
+          "kind": "ADMISSION_ACK_INTENT",
+          "id": "valid",
+          "number": 1
+        },
+        {
+          "kind": "ADMISSION_ACK_INTENT",
+          "id": "candidate",
+          "number": 2
+        },
+        {
+          "kind": "RESEND_INTENT",
+          "number": 3
+        },
+        {
+          "kind": "ADMISSION_ACK_INTENT",
+          "id": "replay",
+          "number": 3
+        }
+      ],
+      "counters": {
+        "FE": 1,
+        "DOR": 0,
+        "UPE": 0,
+        "RING": 0
+      }
+    },
+    {
+      "kind": "DOR",
+      "injection": "before_parse",
+      "last": 2,
+      "gate": "OPEN",
+      "pending": null,
+      "queue": [
+        "valid",
+        "replay"
+      ],
+      "out": [
+        {
+          "kind": "ADMISSION_ACK_INTENT",
+          "id": "valid",
+          "number": 1
+        },
+        {
+          "kind": "RESEND_INTENT",
+          "number": 2
+        },
+        {
+          "kind": "ADMISSION_ACK_INTENT",
+          "id": "replay",
+          "number": 2
+        }
+      ],
+      "counters": {
+        "FE": 0,
+        "DOR": 1,
+        "UPE": 0,
+        "RING": 0
+      }
+    },
+    {
+      "kind": "DOR",
+      "injection": "between_parse_commit",
+      "last": 2,
+      "gate": "OPEN",
+      "pending": null,
+      "queue": [
+        "valid",
+        "replay"
+      ],
+      "out": [
+        {
+          "kind": "ADMISSION_ACK_INTENT",
+          "id": "valid",
+          "number": 1
+        },
+        {
+          "kind": "RESEND_INTENT",
+          "number": 2
+        },
+        {
+          "kind": "ADMISSION_ACK_INTENT",
+          "id": "replay",
+          "number": 2
+        }
+      ],
+      "counters": {
+        "FE": 0,
+        "DOR": 1,
+        "UPE": 0,
+        "RING": 0
+      }
+    },
+    {
+      "kind": "DOR",
+      "injection": "after_commit",
+      "last": 3,
+      "gate": "OPEN",
+      "pending": null,
+      "queue": [
+        "valid",
+        "candidate",
+        "replay"
+      ],
+      "out": [
+        {
+          "kind": "ADMISSION_ACK_INTENT",
+          "id": "valid",
+          "number": 1
+        },
+        {
+          "kind": "ADMISSION_ACK_INTENT",
+          "id": "candidate",
+          "number": 2
+        },
+        {
+          "kind": "RESEND_INTENT",
+          "number": 3
+        },
+        {
+          "kind": "ADMISSION_ACK_INTENT",
+          "id": "replay",
+          "number": 3
+        }
+      ],
+      "counters": {
+        "FE": 0,
+        "DOR": 1,
+        "UPE": 0,
+        "RING": 0
+      }
+    },
+    {
+      "kind": "UPE",
+      "injection": "before_parse",
+      "last": 2,
+      "gate": "OPEN",
+      "pending": null,
+      "queue": [
+        "valid",
+        "replay"
+      ],
+      "out": [
+        {
+          "kind": "ADMISSION_ACK_INTENT",
+          "id": "valid",
+          "number": 1
+        },
+        {
+          "kind": "RESEND_INTENT",
+          "number": 2
+        },
+        {
+          "kind": "ADMISSION_ACK_INTENT",
+          "id": "replay",
+          "number": 2
+        }
+      ],
+      "counters": {
+        "FE": 0,
+        "DOR": 0,
+        "UPE": 1,
+        "RING": 0
+      }
+    },
+    {
+      "kind": "UPE",
+      "injection": "between_parse_commit",
+      "last": 2,
+      "gate": "OPEN",
+      "pending": null,
+      "queue": [
+        "valid",
+        "replay"
+      ],
+      "out": [
+        {
+          "kind": "ADMISSION_ACK_INTENT",
+          "id": "valid",
+          "number": 1
+        },
+        {
+          "kind": "RESEND_INTENT",
+          "number": 2
+        },
+        {
+          "kind": "ADMISSION_ACK_INTENT",
+          "id": "replay",
+          "number": 2
+        }
+      ],
+      "counters": {
+        "FE": 0,
+        "DOR": 0,
+        "UPE": 1,
+        "RING": 0
+      }
+    },
+    {
+      "kind": "UPE",
+      "injection": "after_commit",
+      "last": 3,
+      "gate": "OPEN",
+      "pending": null,
+      "queue": [
+        "valid",
+        "candidate",
+        "replay"
+      ],
+      "out": [
+        {
+          "kind": "ADMISSION_ACK_INTENT",
+          "id": "valid",
+          "number": 1
+        },
+        {
+          "kind": "ADMISSION_ACK_INTENT",
+          "id": "candidate",
+          "number": 2
+        },
+        {
+          "kind": "RESEND_INTENT",
+          "number": 3
+        },
+        {
+          "kind": "ADMISSION_ACK_INTENT",
+          "id": "replay",
+          "number": 3
+        }
+      ],
+      "counters": {
+        "FE": 0,
+        "DOR": 0,
+        "UPE": 1,
+        "RING": 0
+      }
+    },
+    {
+      "kind": "RING",
+      "injection": "before_parse",
+      "last": 2,
+      "gate": "OPEN",
+      "pending": null,
+      "queue": [
+        "valid",
+        "replay"
+      ],
+      "out": [
+        {
+          "kind": "ADMISSION_ACK_INTENT",
+          "id": "valid",
+          "number": 1
+        },
+        {
+          "kind": "RESEND_INTENT",
+          "number": 2
+        },
+        {
+          "kind": "ADMISSION_ACK_INTENT",
+          "id": "replay",
+          "number": 2
+        }
+      ],
+      "counters": {
+        "FE": 0,
+        "DOR": 0,
+        "UPE": 0,
+        "RING": 1
+      }
+    },
+    {
+      "kind": "RING",
+      "injection": "between_parse_commit",
+      "last": 2,
+      "gate": "OPEN",
+      "pending": null,
+      "queue": [
+        "valid",
+        "replay"
+      ],
+      "out": [
+        {
+          "kind": "ADMISSION_ACK_INTENT",
+          "id": "valid",
+          "number": 1
+        },
+        {
+          "kind": "RESEND_INTENT",
+          "number": 2
+        },
+        {
+          "kind": "ADMISSION_ACK_INTENT",
+          "id": "replay",
+          "number": 2
+        }
+      ],
+      "counters": {
+        "FE": 0,
+        "DOR": 0,
+        "UPE": 0,
+        "RING": 1
+      }
+    },
+    {
+      "kind": "RING",
+      "injection": "after_commit",
+      "last": 3,
+      "gate": "OPEN",
+      "pending": null,
+      "queue": [
+        "valid",
+        "candidate",
+        "replay"
+      ],
+      "out": [
+        {
+          "kind": "ADMISSION_ACK_INTENT",
+          "id": "valid",
+          "number": 1
+        },
+        {
+          "kind": "ADMISSION_ACK_INTENT",
+          "id": "candidate",
+          "number": 2
+        },
+        {
+          "kind": "RESEND_INTENT",
+          "number": 3
+        },
+        {
+          "kind": "ADMISSION_ACK_INTENT",
+          "id": "replay",
+          "number": 3
+        }
+      ],
+      "counters": {
+        "FE": 0,
+        "DOR": 0,
+        "UPE": 0,
+        "RING": 1
+      }
+    },
+    {
+      "case": "unnumbered",
+      "last": 0,
+      "gate": "ABORT",
+      "pending": null,
+      "queue": [],
+      "out": [
+        {
+          "kind": "STOP_REQUIRED"
+        }
+      ],
+      "counters": {
+        "FE": 0,
+        "DOR": 0,
+        "UPE": 0,
+        "RING": 1
+      }
+    },
+    {
+      "case": "repeated_loss",
+      "last": 0,
+      "gate": "WAIT_SYNC",
+      "pending": null,
+      "queue": [],
+      "out": [
+        {
+          "kind": "RESEND_INTENT",
+          "number": 1
+        }
+      ],
+      "counters": {
+        "FE": 1,
+        "DOR": 255,
+        "UPE": 0,
+        "RING": 0
+      }
+    }
+  ]
+}
