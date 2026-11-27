@@ -80,6 +80,7 @@ void lcdWriteByteNow(uint8_t v,uint8_t rs){
 struct UIDisplay {
     bool normalCharacters_=true;
     uint8_t emergencyFrameRevision_=0xff;
+    millis_t lastDisplayCompletedMs_=0;
     char displayCache_[4][UI_COLS+1]{};
     LcdPendingFrame<UI_COLS> lcdTransport_;
     unsigned refreshes=0;
