@@ -201,16 +201,49 @@ def inventory(z, board):
         for c in scc:
             pcs = sorted({x[0] for x in c})
             cycles.append({"states":len(c), "first":name(pcs[0]), "last":name(pcs[-1])})
-        # Cyclic graph: deliberately no number until loop bounds are proved.
+        # Recognize the fully witnessed constant-count pulse delay:
+        # LDI r,N; DEC r; BRNE DEC. All external entries must be from
+        # that LDI, and DEC/BRNE must be the sole cycle and sole exit.
+        bounded_mask = mask.copy()
+        extra = {}
+        unresolved = []
+        for c in scc:
+            if len(c) != 2:
+                unresolved.append(c)
+                continue
+            dec, branch = sorted(c, key=lambda x:x[0])
+            dw, dop, da = ins[dec[0]]
+            bw, bop, ba = ins[branch[0]]
+            parents = set(mask.predecessors(dec)) - c
+            if not (dop == "dec" and bop == "brne" and
+                    branch[0] == dec[0]+dw and target(ba)==dec[0] and
+                    set(mask.successors(dec)) == {branch} and
+                    set(mask.predecessors(branch)) == {dec} and
+                    len(set(mask.successors(branch))-c)==1 and
+                    parents and set(g.predecessors(dec)) == set(mask.predecessors(dec))):
+                unresolved.append(c)
+                continue
+            counts = []
+            for parent in parents:
+                pw, pop, pa = ins[parent[0]]
+                m = re.fullmatch(r"(r\d+), 0x([0-9a-fA-F]+)", pa.split(";")[0].strip())
+                if pop != "ldi" or parent[0]+pw != dec[0] or not m or m[1]!=da.strip():
+                    break
+                counts.append(int(m[2],16) or 256)
+            if len(counts)!=len(parents):
+                unresolved.append(c)
+                continue
+            bounded_mask.remove_edge(branch,dec)
+            extra[dec]=(max(counts)-1)*(cost(dop)+cost(bop))
         acyclic_cycles = None
-        if not scc:
+        if not unresolved:
             longest = {}
-            for x in nx.topological_sort(mask):
-                longest[x] = cost(ins[x[0]][1]) + max((longest[p] for p in mask.predecessors(x)), default=0)
+            for x in nx.topological_sort(bounded_mask):
+                longest[x] = cost(ins[x[0]][1]) + extra.get(x,0) + max((longest[p] for p in bounded_mask.predecessors(x)), default=0)
             acyclic_cycles = max(longest.values(), default=0)
         results[v] = {"states":len(seen), "stackBytesIncludingPc":maxd,
                       "interruptOpenSites":len(opened), "maskedDelayReturnChains":[[name(a) for a in t] for t in sorted(delay_entries)],
-                      "maskedCycles":cycles, "acyclicMaskedBodyCycles":acyclic_cycles}
+                      "maskedCycles":cycles, "unresolvedMaskedCycles":len(unresolved), "acyclicMaskedBodyCycles":acyclic_cycles}
     return results
 
 
