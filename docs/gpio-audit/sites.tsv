@@ -1,0 +1,499 @@
+file	line	registers	expansion	profiles
+Arduino.h	134	dynamic/API	void pinMode(uint8_t pin, uint8_t mode);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Arduino.h	135	dynamic/API	void digitalWrite(uint8_t pin, uint8_t val);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Arduino.h	136	dynamic/API	int digitalRead(uint8_t pin);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+CaseFan.cpp	33	PORTF	do { if (0x1) {PORTF |= (1 << 4); } else {PORTF &= ~(1 << 4); }; } while (0);	a-RF2000,a-RF2000v2,a-X44,b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+CaseFan.cpp	38	DDRF	do {DDRF |= (1 << 4); } while (0);	a-RF2000,a-RF2000v2,a-X44,b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+CaseFan.cpp	39	PORTF	do { if (0x0) {PORTF |= (1 << 4); } else {PORTF &= ~(1 << 4); }; } while (0);	a-RF2000,a-RF2000v2,a-X44,b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+CaseFan.cpp	54	PORTF	do { if (0x0) {PORTF |= (1 << 4); } else {PORTF &= ~(1 << 4); }; } while (0);	a-RF2000,a-RF2000v2,a-X44,b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+CaseFan.cpp	82	PORTF	do { if (0x0) {PORTF |= (1 << 4); } else {PORTF &= ~(1 << 4); }; } while (0);	a-RF2000,a-RF2000v2,a-X44
+CaseFan.cpp	90	PORTF	do { if (0x0) {PORTF |= (1 << 4); } else {PORTF &= ~(1 << 4); }; } while (0);	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+Drv8711.cpp	55	PORTD	do { if (0x0) {PORTD |= (1 << 5); } else {PORTD &= ~(1 << 5); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Drv8711.cpp	56	DDRD	do {DDRD |= (1 << 5); } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Drv8711.cpp	57	PORTD	do { if (0x0) {PORTD |= (1 << 6); } else {PORTD &= ~(1 << 6); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Drv8711.cpp	58	DDRD	do {DDRD |= (1 << 6); } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Drv8711.cpp	76	DDRJ,PORTJ	do { do { if (0x0) {PORTJ |= (1 << 7); } else {PORTJ &= ~(1 << 7); }; } while (0); if (Select) { do {DDRJ |= (1 << 7); } while (0); do { if (0x1) {PORTJ |= (1 << 7); } else {PORTJ &= ~(1 << 7); }; } while (0); } } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Drv8711.cpp	81	DDRL,PORTL	do { do { if (0x0) {PORTL |= (1 << 6); } else {PORTL &= ~(1 << 6); }; } while (0); if (Select) { do {DDRL |= (1 << 6); } while (0); do { if (0x1) {PORTL |= (1 << 6); } else {PORTL &= ~(1 << 6); }; } while (0); } } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Drv8711.cpp	86	DDRL,PORTL	do { do { if (0x0) {PORTL |= (1 << 4); } else {PORTL &= ~(1 << 4); }; } while (0); if (Select) { do {DDRL |= (1 << 4); } while (0); do { if (0x1) {PORTL |= (1 << 4); } else {PORTL &= ~(1 << 4); }; } while (0); } } while (0);	a-RF1000,b-RF1000,lease-RF1000,q-RF1000
+Drv8711.cpp	86	DDRB,PORTB	do { do { if (0x0) {PORTB |= (1 << 6); } else {PORTB &= ~(1 << 6); }; } while (0); if (Select) { do {DDRB |= (1 << 6); } while (0); do { if (0x1) {PORTB |= (1 << 6); } else {PORTB &= ~(1 << 6); }; } while (0); } } while (0);	a-RF2000,a-RF2000v2,a-X44,b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+Drv8711.cpp	91	DDRL,PORTL	do { do { if (0x0) {PORTL |= (1 << 2); } else {PORTL &= ~(1 << 2); }; } while (0); if (Select) { do {DDRL |= (1 << 2); } while (0); do { if (0x1) {PORTL |= (1 << 2); } else {PORTL &= ~(1 << 2); }; } while (0); } } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Drv8711.cpp	96	DDRL,PORTL	do { do { if (0x0) {PORTL |= (1 << 0); } else {PORTL &= ~(1 << 0); }; } while (0); if (Select) { do {DDRL |= (1 << 0); } while (0); do { if (0x1) {PORTL |= (1 << 0); } else {PORTL &= ~(1 << 0); }; } while (0); } } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Drv8711.cpp	105	PORTD	do { if (command & (0x01 << i)) {PORTD |= (1 << 6); } else {PORTD &= ~(1 << 6); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Drv8711.cpp	107	PORTD	do { if (1) {PORTD |= (1 << 5); } else {PORTD &= ~(1 << 5); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Drv8711.cpp	109	PORTD	do { if (0) {PORTD |= (1 << 5); } else {PORTD &= ~(1 << 5); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Drv8711.cpp	199	PORTE	do { if (0x0) {PORTE |= (1 << 7); } else {PORTE &= ~(1 << 7); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Drv8711.cpp	200	DDRE	do {DDRE |= (1 << 7); } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Drv8711.cpp	204	PORTD	do { if (0x1) {PORTD |= (1 << 4); } else {PORTD &= ~(1 << 4); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Drv8711.cpp	205	PORTE	do { if (0x1) {PORTE |= (1 << 6); } else {PORTE &= ~(1 << 6); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Drv8711.cpp	206	PORTG	do { if (0x1) {PORTG |= (1 << 0); } else {PORTG &= ~(1 << 0); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Drv8711.cpp	207	PORTG	do { if (0x1) {PORTG |= (1 << 1); } else {PORTG &= ~(1 << 1); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Drv8711.cpp	208	PORTG	do { if (0x1) {PORTG |= (1 << 2); } else {PORTG &= ~(1 << 2); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Drv8711.cpp	209	PORTG	do { if (0x1) {PORTG |= (1 << 3); } else {PORTG &= ~(1 << 3); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Drv8711.cpp	210	PORTG	do { if (0x1) {PORTG |= (1 << 4); } else {PORTG &= ~(1 << 4); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Drv8711.cpp	213	PORTE	do { if (0x1) {PORTE |= (1 << 7); } else {PORTE &= ~(1 << 7); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Drv8711.cpp	215	PORTE	do { if (0x0) {PORTE |= (1 << 7); } else {PORTE &= ~(1 << 7); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Eeprom.cpp	845	PINB,PING,PINH	bool kill_eeprom_by_back_ok_play = (((bool)(PING & (1 << 5))) == 0 && ((bool)(PINB & (1 << 5))) == 0 && ((bool)(PINH & (1 << 7))) == 0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Eeprom.cpp	1283	PINB,PING,PINH	bool kill_eeprom_by_back_ok_play = (((bool)(PING & (1 << 5))) == 0 && ((bool)(PINB & (1 << 5))) == 0 && ((bool)(PINH & (1 << 7))) == 0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44
+EepromZoneRuntime.cpp	221	PINB,PING,PINH	const bool reset=((bool)(PING & (1 << 5)))==0 && ((bool)(PINB & (1 << 5)))==0 && ((bool)(PINH & (1 << 7)))==0;	q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Extruder.cpp	47	DDRA	do {DDRA |= (1 << 6); } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Extruder.cpp	48	DDRA	do {DDRA |= (1 << 4); } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Extruder.cpp	52	DDRC	do {DDRC |= (1 << 3); } while (0);	a-RF2000,a-RF2000v2
+Extruder.cpp	52	DDRA	do {DDRA |= (1 << 6); } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Extruder.cpp	53	DDRC	do {DDRC |= (1 << 1); } while (0);	a-RF2000,a-RF2000v2
+Extruder.cpp	53	DDRA	do {DDRA |= (1 << 4); } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Extruder.cpp	57	DDRC	do {DDRC |= (1 << 3); } while (0);	b-RF2000,b-RF2000v2,lease-RF2000,lease-RF2000v2,q-RF2000,q-RF2000v2
+Extruder.cpp	58	DDRC	do {DDRC |= (1 << 1); } while (0);	b-RF2000,b-RF2000v2,lease-RF2000,lease-RF2000v2,q-RF2000,q-RF2000v2
+Extruder.cpp	59	dynamic/API	HAL::pinMode(act->enablePin, 0x1);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Extruder.cpp	61	dynamic/API	HAL::digitalWrite(act->enablePin, 0x1);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Extruder.cpp	64	dynamic/API	HAL::pinMode(act->enablePin, 0x1);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Extruder.cpp	66	dynamic/API	HAL::digitalWrite(act->enablePin, 0x1);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Extruder.cpp	218	dynamic/API	HAL::digitalWrite(tool.enablePin, !tool.enableOn);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Extruder.cpp	229	dynamic/API	HAL::digitalWrite(tool.enablePin, !tool.enableOn);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Extruder.h	200	PORTA	do { if (0x1) {PORTA |= (1 << 4); } else {PORTA &= ~(1 << 4); }; } while (0);	a-RF1000,a-X44
+Extruder.h	204	PORTA	do { if (0x1) {PORTA |= (1 << 4); } else {PORTA &= ~(1 << 4); }; } while (0);	a-RF2000,a-RF2000v2
+Extruder.h	211	PORTC	do { if (0x1) {PORTC |= (1 << 1); } else {PORTC &= ~(1 << 1); }; } while (0);	a-RF2000,a-RF2000v2
+Extruder.h	224	PORTA	do { if (0x0) {PORTA |= (1 << 4); } else {PORTA &= ~(1 << 4); }; } while (0);	a-RF1000,a-X44
+Extruder.h	228	PORTA	do { if (0x0) {PORTA |= (1 << 4); } else {PORTA &= ~(1 << 4); }; } while (0);	a-RF2000,a-RF2000v2
+Extruder.h	235	PORTC	do { if (0x0) {PORTC |= (1 << 1); } else {PORTC &= ~(1 << 1); }; } while (0);	a-RF2000,a-RF2000v2
+Extruder.h	247	PORTA	PORTA	a-RF1000,a-X44
+Extruder.h	247	PORTA	do { if (0x1) {PORTA |= (1 << 4); } else {PORTA &= ~(1 << 4); }; } while (0);	b-RF1000,b-X44,lease-RF1000,lease-X44,q-RF1000,q-X44
+Extruder.h	251	PORTA	PORTA	a-RF2000,a-RF2000v2
+Extruder.h	251	PORTA	do { if (0x1) {PORTA |= (1 << 4); } else {PORTA &= ~(1 << 4); }; } while (0);	b-RF2000,b-RF2000v2,lease-RF2000,lease-RF2000v2,q-RF2000,q-RF2000v2
+Extruder.h	255	PORTC	PORTC	a-RF2000,a-RF2000v2
+Extruder.h	258	PORTC	do { if (0x1) {PORTC |= (1 << 1); } else {PORTC &= ~(1 << 1); }; } while (0);	b-RF2000,b-RF2000v2,lease-RF2000,lease-RF2000v2,q-RF2000,q-RF2000v2
+Extruder.h	270	PORTA	do { if (!false) {PORTA |= (1 << 6); } else {PORTA &= ~(1 << 6); }; } while (0);	a-RF1000,a-X44
+Extruder.h	271	PORTA	do { if (0x0) {PORTA |= (1 << 4); } else {PORTA &= ~(1 << 4); }; } while (0);	b-RF1000,b-X44,lease-RF1000,lease-X44,q-RF1000,q-X44
+Extruder.h	275	PORTA	do { if (false) {PORTA |= (1 << 6); } else {PORTA &= ~(1 << 6); }; } while (0);	a-RF1000,a-X44
+Extruder.h	275	PORTA	do { if (0x0) {PORTA |= (1 << 4); } else {PORTA &= ~(1 << 4); }; } while (0);	b-RF2000,b-RF2000v2,lease-RF2000,lease-RF2000v2,q-RF2000,q-RF2000v2
+Extruder.h	282	PORTC	do { if (0x0) {PORTC |= (1 << 1); } else {PORTC &= ~(1 << 1); }; } while (0);	b-RF2000,b-RF2000v2,lease-RF2000,lease-RF2000v2,q-RF2000,q-RF2000v2
+Extruder.h	283	PORTA	do { if (!false) {PORTA |= (1 << 6); } else {PORTA &= ~(1 << 6); }; } while (0);	a-RF2000,a-RF2000v2
+Extruder.h	285	PORTA	do { if (false) {PORTA |= (1 << 6); } else {PORTA &= ~(1 << 6); }; } while (0);	a-RF2000,a-RF2000v2
+Extruder.h	293	PORTC	do { if (!true) {PORTC |= (1 << 3); } else {PORTC &= ~(1 << 3); }; } while (0);	a-RF2000,a-RF2000v2
+Extruder.h	294	PORTA	PORTA	b-RF1000,b-X44,lease-RF1000,lease-X44,q-RF1000,q-X44
+Extruder.h	295	PORTC	do { if (true) {PORTC |= (1 << 3); } else {PORTC &= ~(1 << 3); }; } while (0);	a-RF2000,a-RF2000v2
+Extruder.h	298	PORTA	PORTA	b-RF2000,b-RF2000v2,lease-RF2000,lease-RF2000v2,q-RF2000,q-RF2000v2
+Extruder.h	302	PORTC	PORTC	b-RF2000,b-RF2000v2,lease-RF2000,lease-RF2000v2,q-RF2000,q-RF2000v2
+Extruder.h	307	PORTA	do { if (true) {PORTA |= (1 << 2); } else {PORTA &= ~(1 << 2); }; } while (0);	a-RF1000,a-X44
+Extruder.h	311	dynamic/API	HAL::digitalWrite(Extruder::current->enablePin, Extruder::current->enableOn);	a-RF2000,a-RF2000v2
+Extruder.h	317	PORTA	do { if (!false) {PORTA |= (1 << 6); } else {PORTA &= ~(1 << 6); }; } while (0);	b-RF1000,b-X44,lease-RF1000,lease-X44,q-RF1000,q-X44
+Extruder.h	322	PORTA	do { if (false) {PORTA |= (1 << 6); } else {PORTA &= ~(1 << 6); }; } while (0);	b-RF1000,b-X44,lease-RF1000,lease-X44,q-RF1000,q-X44
+Extruder.h	330	PORTA	do { if (!false) {PORTA |= (1 << 6); } else {PORTA &= ~(1 << 6); }; } while (0);	b-RF2000,b-RF2000v2,lease-RF2000,lease-RF2000v2,q-RF2000,q-RF2000v2
+Extruder.h	332	PORTA	do { if (false) {PORTA |= (1 << 6); } else {PORTA &= ~(1 << 6); }; } while (0);	b-RF2000,b-RF2000v2,lease-RF2000,lease-RF2000v2,q-RF2000,q-RF2000v2
+Extruder.h	340	PORTC	do { if (!true) {PORTC |= (1 << 3); } else {PORTC &= ~(1 << 3); }; } while (0);	b-RF2000,b-RF2000v2,lease-RF2000,lease-RF2000v2,q-RF2000,q-RF2000v2
+Extruder.h	342	PORTC	do { if (true) {PORTC |= (1 << 3); } else {PORTC &= ~(1 << 3); }; } while (0);	b-RF2000,b-RF2000v2,lease-RF2000,lease-RF2000v2,q-RF2000,q-RF2000v2
+Extruder.h	354	PORTA	do { if (true) {PORTA |= (1 << 2); } else {PORTA &= ~(1 << 2); }; } while (0);	b-RF1000,b-X44,lease-RF1000,lease-X44,q-RF1000,q-X44
+Extruder.h	358	dynamic/API	HAL::digitalWrite(Extruder::current->enablePin, Extruder::current->enableOn);	b-RF2000,b-RF2000v2,lease-RF2000,lease-RF2000v2,q-RF2000,q-RF2000v2
+HAL.cpp	95	PINC,PORTC	do { if (((bool)(PINC & (1 << 0))) ? 0 : 1) {PORTC |= (1 << 0); } else {PORTC &= ~(1 << 0); }; } while (0);	a-RF1000
+HAL.cpp	95	PINA,PORTA	do { if (((bool)(PINA & (1 << 7))) ? 0 : 1) {PORTA |= (1 << 7); } else {PORTA &= ~(1 << 7); }; } while (0);	a-RF2000,a-RF2000v2,a-X44
+HAL.cpp	312	PINC,PORTC	do { if (((bool)(PINC & (1 << 0))) ? 0 : 1) {PORTC |= (1 << 0); } else {PORTC &= ~(1 << 0); }; } while (0);	b-RF1000,lease-RF1000,q-RF1000
+HAL.cpp	312	PINA,PORTA	do { if (((bool)(PINA & (1 << 7))) ? 0 : 1) {PORTA |= (1 << 7); } else {PORTA &= ~(1 << 7); }; } while (0);	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+HAL.cpp	349	DDRH	do {DDRH |= (1 << 3); } while (0);	a-RF2000,a-RF2000v2,a-X44
+HAL.cpp	350	DDRH	do {DDRH |= (1 << 4); } while (0);	a-RF2000,a-RF2000v2,a-X44
+HAL.cpp	351	DDRH	do {DDRH |= (1 << 5); } while (0);	a-RF2000,a-RF2000v2,a-X44
+HAL.cpp	500	DDRC	do {DDRC |= (1 << 0); } while (0);	a-RF1000
+HAL.cpp	500	DDRA	do {DDRA |= (1 << 7); } while (0);	a-RF2000,a-RF2000v2,a-X44
+HAL.cpp	510	PORTC	do { if (0x0) {PORTC |= (1 << 0); } else {PORTC &= ~(1 << 0); }; } while (0);	a-RF1000
+HAL.cpp	510	PORTA	do { if (0x0) {PORTA |= (1 << 7); } else {PORTA &= ~(1 << 7); }; } while (0);	a-RF2000,a-RF2000v2,a-X44
+HAL.cpp	511	DDRC	do {DDRC &= ~(1 << 0); } while (0);	a-RF1000
+HAL.cpp	511	DDRA	do {DDRA &= ~(1 << 7); } while (0);	a-RF2000,a-RF2000v2,a-X44
+HAL.cpp	741	PORTB	do { if (0x1) {PORTB |= (1 << 4); } else {PORTB &= ~(1 << 4); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+HAL.cpp	746	PORTH	do { if (0x1) {PORTH |= (1 << 6); } else {PORTH &= ~(1 << 6); }; } while (0);	a-RF2000,a-RF2000v2
+HAL.cpp	750	PORTH	do { if (0x1) {PORTH |= (1 << 5); } else {PORTH &= ~(1 << 5); }; } while (0);	a-RF1000
+HAL.cpp	750	PORTE	do { if (0x1) {PORTE |= (1 << 2); } else {PORTE &= ~(1 << 2); }; } while (0);	a-RF2000,a-RF2000v2,a-X44
+HAL.cpp	756	PORTC	do { if (1) {PORTC |= (1 << 5); } else {PORTC &= ~(1 << 5); }; } while (0);	a-X44
+HAL.cpp	774	PORTB	do { if (0x0) {PORTB |= (1 << 4); } else {PORTB &= ~(1 << 4); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+HAL.cpp	777	PORTC	do { if (0) {PORTC |= (1 << 5); } else {PORTC &= ~(1 << 5); }; } while (0);	a-X44
+HAL.cpp	783	PORTH	do { if (0x0) {PORTH |= (1 << 6); } else {PORTH &= ~(1 << 6); }; } while (0);	a-RF2000,a-RF2000v2
+HAL.cpp	791	PORTH	do { if (0x0) {PORTH |= (1 << 5); } else {PORTH &= ~(1 << 5); }; } while (0);	a-RF1000
+HAL.cpp	791	PORTE	do { if (0x0) {PORTE |= (1 << 2); } else {PORTE &= ~(1 << 2); }; } while (0);	a-RF2000,a-RF2000v2,a-X44
+HAL.cpp	807	PORTA	{ uint8_t carry; carry = pwm_pos_set[1 + 2] + (false ? 255 - (fanKickstart ? 255 : requestedDuty[1 + 2]) : (fanKickstart ? 255 : requestedDuty[1 + 2])); do { if ((carry < pwm_pos_set[1 + 2])) {PORTA |= (1 << 5); } else {PORTA &= ~(1 << 5); }; } while (0); pwm_pos_set[1 + 2] = carry; };	a-RF1000,a-X44
+HAL.cpp	807	PORTA	{ uint8_t carry; carry = pwm_pos_set[2 + 2] + (false ? 255 - (fanKickstart ? 255 : requestedDuty[2 + 2]) : (fanKickstart ? 255 : requestedDuty[2 + 2])); do { if ((carry < pwm_pos_set[2 + 2])) {PORTA |= (1 << 5); } else {PORTA &= ~(1 << 5); }; } while (0); pwm_pos_set[2 + 2] = carry; };	a-RF2000,a-RF2000v2
+HAL.cpp	820	PORTA	do { if (1) {PORTA |= (1 << 5); } else {PORTA &= ~(1 << 5); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+HAL.cpp	825	PORTA	do { if (0) {PORTA |= (1 << 5); } else {PORTA &= ~(1 << 5); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+HAL.cpp	831	PORTC	do { if (0x0) {PORTC |= (1 << 0); } else {PORTC &= ~(1 << 0); }; } while (0);	q-RF1000
+HAL.cpp	831	PORTA	do { if (0x0) {PORTA |= (1 << 7); } else {PORTA &= ~(1 << 7); }; } while (0);	q-RF2000,q-X44,q-RF2000v2
+HAL.cpp	832	DDRC	do {DDRC |= (1 << 0); } while (0);	q-RF1000
+HAL.cpp	832	DDRA	do {DDRA |= (1 << 7); } while (0);	q-RF2000,q-X44,q-RF2000v2
+HAL.cpp	839	DDRC	do {DDRC |= (1 << 0); } while (0);	b-RF1000,lease-RF1000
+HAL.cpp	839	DDRA	do {DDRA |= (1 << 7); } while (0);	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44
+HAL.cpp	860	PORTC	do { if (0x0) {PORTC |= (1 << 0); } else {PORTC &= ~(1 << 0); }; } while (0);	b-RF1000,lease-RF1000,q-RF1000
+HAL.cpp	860	PORTA	do { if (0x0) {PORTA |= (1 << 7); } else {PORTA &= ~(1 << 7); }; } while (0);	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+HAL.cpp	861	DDRC	do {DDRC &= ~(1 << 0); } while (0);	b-RF1000,lease-RF1000,q-RF1000
+HAL.cpp	861	DDRA	do {DDRA &= ~(1 << 7); } while (0);	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+HAL.cpp	1068	PORTB	do { if (0x0) {PORTB |= (1 << 4); } else {PORTB &= ~(1 << 4); }; } while (0);	lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+HAL.cpp	1071	PORTH	do { if (0x0) {PORTH |= (1 << 6); } else {PORTH &= ~(1 << 6); }; } while (0);	lease-RF2000,lease-RF2000v2,q-RF2000,q-RF2000v2
+HAL.cpp	1073	PORTH	do { if (0x0) {PORTH |= (1 << 5); } else {PORTH &= ~(1 << 5); }; } while (0);	lease-RF1000,q-RF1000
+HAL.cpp	1073	PORTE	do { if (0x0) {PORTE |= (1 << 2); } else {PORTE &= ~(1 << 2); }; } while (0);	lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+HAL.cpp	1127	PINB	|| ((bool)(PINB & (1 << 4)))	q-RF1000,q-RF2000,q-X44,q-RF2000v2
+HAL.cpp	1129	PINH	|| ((bool)(PINH & (1 << 6)))	q-RF2000,q-RF2000v2
+HAL.cpp	1131	PINH	|| ((bool)(PINH & (1 << 5))))return;	q-RF1000
+HAL.cpp	1131	PINE	|| ((bool)(PINE & (1 << 2))))return;	q-RF2000,q-X44,q-RF2000v2
+HAL.cpp	1223	PORTB	case 0: do { if (0x0) {PORTB |= (1 << 4); } else {PORTB &= ~(1 << 4); }; } while (0); break;	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+HAL.cpp	1226	PORTH	case 1: do { if (0x0) {PORTH |= (1 << 6); } else {PORTH &= ~(1 << 6); }; } while (0); break;	b-RF2000,b-RF2000v2,lease-RF2000,lease-RF2000v2,q-RF2000,q-RF2000v2
+HAL.cpp	1228	PORTH	case 1: do { if (0x0) {PORTH |= (1 << 5); } else {PORTH &= ~(1 << 5); }; } while (0); break;	b-RF1000,lease-RF1000,q-RF1000
+HAL.cpp	1228	PORTE	case 2: do { if (0x0) {PORTE |= (1 << 2); } else {PORTE &= ~(1 << 2); }; } while (0); break;	b-RF2000,b-RF2000v2,lease-RF2000,lease-RF2000v2,q-RF2000,q-RF2000v2
+HAL.cpp	1228	PORTE	case 1: do { if (0x0) {PORTE |= (1 << 2); } else {PORTE &= ~(1 << 2); }; } while (0); break;	b-X44,lease-X44,q-X44
+HAL.cpp	1315	PORTB	do { if (0x1) {PORTB |= (1 << 4); } else {PORTB &= ~(1 << 4); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+HAL.cpp	1320	PORTH	do { if (0x1) {PORTH |= (1 << 6); } else {PORTH &= ~(1 << 6); }; } while (0);	b-RF2000,b-RF2000v2,lease-RF2000,lease-RF2000v2,q-RF2000,q-RF2000v2
+HAL.cpp	1324	PORTH	do { if (0x1) {PORTH |= (1 << 5); } else {PORTH &= ~(1 << 5); }; } while (0);	b-RF1000,lease-RF1000,q-RF1000
+HAL.cpp	1324	PORTE	do { if (0x1) {PORTE |= (1 << 2); } else {PORTE &= ~(1 << 2); }; } while (0);	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+HAL.cpp	1330	PORTC	do { if (1) {PORTC |= (1 << 5); } else {PORTC &= ~(1 << 5); }; } while (0);	b-X44,lease-X44,q-X44
+HAL.cpp	1348	PORTB	do { if (0x0) {PORTB |= (1 << 4); } else {PORTB &= ~(1 << 4); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+HAL.cpp	1351	PORTC	do { if (0) {PORTC |= (1 << 5); } else {PORTC &= ~(1 << 5); }; } while (0);	b-X44,lease-X44,q-X44
+HAL.cpp	1357	PORTH	do { if (0x0) {PORTH |= (1 << 6); } else {PORTH &= ~(1 << 6); }; } while (0);	b-RF2000,b-RF2000v2,lease-RF2000,lease-RF2000v2,q-RF2000,q-RF2000v2
+HAL.cpp	1365	PORTH	do { if (0x0) {PORTH |= (1 << 5); } else {PORTH &= ~(1 << 5); }; } while (0);	b-RF1000,lease-RF1000,q-RF1000
+HAL.cpp	1365	PORTE	do { if (0x0) {PORTE |= (1 << 2); } else {PORTE &= ~(1 << 2); }; } while (0);	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+HAL.cpp	1381	PORTA	{ uint8_t carry; carry = pwm_pos_set[1 + 2] + (false ? 255 - (fanKickstart ? 255 : requestedDuty[1 + 2]) : (fanKickstart ? 255 : requestedDuty[1 + 2])); do { if ((carry < pwm_pos_set[1 + 2])) {PORTA |= (1 << 5); } else {PORTA &= ~(1 << 5); }; } while (0); pwm_pos_set[1 + 2] = carry; };	b-RF1000,b-X44,lease-RF1000,lease-X44,q-RF1000,q-X44
+HAL.cpp	1381	PORTA	{ uint8_t carry; carry = pwm_pos_set[2 + 2] + (false ? 255 - (fanKickstart ? 255 : requestedDuty[2 + 2]) : (fanKickstart ? 255 : requestedDuty[2 + 2])); do { if ((carry < pwm_pos_set[2 + 2])) {PORTA |= (1 << 5); } else {PORTA &= ~(1 << 5); }; } while (0); pwm_pos_set[2 + 2] = carry; };	b-RF2000,b-RF2000v2,lease-RF2000,lease-RF2000v2,q-RF2000,q-RF2000v2
+HAL.cpp	1394	PORTA	do { if (1) {PORTA |= (1 << 5); } else {PORTA &= ~(1 << 5); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+HAL.cpp	1399	PORTA	do { if (0) {PORTA |= (1 << 5); } else {PORTA &= ~(1 << 5); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+HAL.h	355	dynamic/API	static inline void digitalWrite(uint8_t pin, uint8_t value) {	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+HAL.h	356	dynamic/API	::digitalWrite(pin, value);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+HAL.h	360	dynamic/API	static inline uint8_t digitalRead(uint8_t pin) {	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+HAL.h	361	dynamic/API	return ::digitalRead(pin);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+HAL.h	365	dynamic/API	static inline void pinMode(uint8_t pin, uint8_t mode) {	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+HAL.h	366	dynamic/API	::pinMode(pin, mode);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Lighting.cpp	26	PORTH	PORTH &= uint8_t(~pinMask);	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+Lighting.cpp	27	DDRH	DDRH |= pinMask;	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+Lighting.cpp	47	PORTH	PORTH=(PORTH & uint8_t(~pinMask))|pins;	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+Lighting.cpp	62	DDRA,PORTA	if(hasWhite) { do { if (0x0) {PORTA |= (1 << 3); } else {PORTA &= ~(1 << 3); }; } while (0); do {DDRA |= (1 << 3); } while (0); }	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Lighting.cpp	70	PORTA	if(hasWhite)do { if (hasRgb ? (color.r && color.r==color.g && color.g==color.b) : (color.r || color.g || color.b)) {PORTA |= (1 << 3); } else {PORTA &= ~(1 << 3); }; } while (0)	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.cpp	430	DDRF	do {DDRF |= (1 << 0); } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.cpp	431	DDRF	do {DDRF |= (1 << 6); } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.cpp	432	DDRL	do {DDRL |= (1 << 3); } while (0);	a-RF1000
+Printer.cpp	432	DDRF	do {DDRF |= (1 << 3); } while (0);	a-RF2000,a-RF2000v2,a-X44
+Printer.cpp	436	DDRF	do {DDRF |= (1 << 1); } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.cpp	437	PORTA	do { if (0x0) {PORTA |= (1 << 1); } else {PORTA &= ~(1 << 1); }; } while (0);	q-RF1000
+Printer.cpp	437	PORTE	do { if (0x0) {PORTE |= (1 << 3); } else {PORTE &= ~(1 << 3); }; } while (0);	q-RF2000,q-X44,q-RF2000v2
+Printer.cpp	438	DDRA	do {DDRA |= (1 << 1); } while (0);	q-RF1000
+Printer.cpp	438	DDRE	do {DDRE |= (1 << 3); } while (0);	q-RF2000,q-X44,q-RF2000v2
+Printer.cpp	440	DDRF	do {DDRF |= (1 << 7); } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.cpp	442	DDRF	do {DDRF |= (1 << 0); } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.cpp	443	DDRF	do {DDRF |= (1 << 6); } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.cpp	444	DDRL	do {DDRL |= (1 << 1); } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.cpp	444	DDRL	do {DDRL |= (1 << 3); } while (0);	b-RF1000,lease-RF1000,q-RF1000
+Printer.cpp	444	DDRF	do {DDRF |= (1 << 3); } while (0);	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+Printer.cpp	448	DDRF	do {DDRF |= (1 << 1); } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.cpp	449	DDRD	do {DDRD |= (1 << 7); } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.cpp	451	PORTD	do { if (0x1) {PORTD |= (1 << 7); } else {PORTD &= ~(1 << 7); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.cpp	452	DDRF	do {DDRF |= (1 << 7); } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.cpp	456	DDRF	do {DDRF |= (1 << 2); } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.cpp	456	DDRL	do {DDRL |= (1 << 1); } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.cpp	458	PORTF	do { if (0x1) {PORTF |= (1 << 2); } else {PORTF &= ~(1 << 2); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.cpp	461	DDRD	do {DDRD |= (1 << 7); } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.cpp	463	DDRK	do {DDRK |= (1 << 0); } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.cpp	463	PORTD	do { if (0x1) {PORTD |= (1 << 7); } else {PORTD &= ~(1 << 7); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.cpp	465	PORTK	do { if (0x1) {PORTK |= (1 << 0); } else {PORTK &= ~(1 << 0); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.cpp	468	DDRF	do {DDRF |= (1 << 2); } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.cpp	470	PORTF	do { if (0x1) {PORTF |= (1 << 2); } else {PORTF &= ~(1 << 2); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.cpp	471	DDRE	do {DDRE &= ~(1 << 5); } while (0);	a-RF1000
+Printer.cpp	471	DDRC	do {DDRC &= ~(1 << 2); } while (0);	a-RF2000,a-RF2000v2,a-X44
+Printer.cpp	473	PORTE	do { if (0x1) {PORTE |= (1 << 5); } else {PORTE &= ~(1 << 5); }; } while (0);	a-RF1000
+Printer.cpp	473	PORTC	do { if (0x1) {PORTC |= (1 << 2); } else {PORTC &= ~(1 << 2); }; } while (0);	a-RF2000,a-RF2000v2,a-X44
+Printer.cpp	475	DDRK	do {DDRK |= (1 << 0); } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.cpp	477	PORTK	do { if (0x1) {PORTK |= (1 << 0); } else {PORTK &= ~(1 << 0); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.cpp	479	DDRE	do {DDRE &= ~(1 << 4); } while (0);	a-RF1000
+Printer.cpp	479	DDRC	do {DDRC &= ~(1 << 0); } while (0);	a-RF2000,a-RF2000v2,a-X44
+Printer.cpp	481	PORTE	do { if (0x1) {PORTE |= (1 << 4); } else {PORTE &= ~(1 << 4); }; } while (0);	a-RF1000
+Printer.cpp	481	PORTC	do { if (0x1) {PORTC |= (1 << 0); } else {PORTC &= ~(1 << 0); }; } while (0);	a-RF2000,a-RF2000v2,a-X44
+Printer.cpp	483	DDRE	do {DDRE &= ~(1 << 5); } while (0);	b-RF1000,lease-RF1000,q-RF1000
+Printer.cpp	483	DDRC	do {DDRC &= ~(1 << 2); } while (0);	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+Printer.cpp	485	PORTE	do { if (0x1) {PORTE |= (1 << 5); } else {PORTE &= ~(1 << 5); }; } while (0);	b-RF1000,lease-RF1000,q-RF1000
+Printer.cpp	485	PORTC	do { if (0x1) {PORTC |= (1 << 2); } else {PORTC &= ~(1 << 2); }; } while (0);	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+Printer.cpp	487	DDRC	do {DDRC &= ~(1 << 6); } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.cpp	489	PORTC	do { if (0x1) {PORTC |= (1 << 6); } else {PORTC &= ~(1 << 6); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.cpp	491	DDRE	do {DDRE &= ~(1 << 4); } while (0);	b-RF1000,lease-RF1000,q-RF1000
+Printer.cpp	491	DDRC	do {DDRC &= ~(1 << 0); } while (0);	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+Printer.cpp	493	PORTE	do { if (0x1) {PORTE |= (1 << 4); } else {PORTE &= ~(1 << 4); }; } while (0);	b-RF1000,lease-RF1000,q-RF1000
+Printer.cpp	493	PORTC	do { if (0x1) {PORTC |= (1 << 0); } else {PORTC &= ~(1 << 0); }; } while (0);	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+Printer.cpp	496	DDRH	do {DDRH &= ~(1 << 1); } while (0);	a-RF2000,a-RF2000v2,a-X44
+Printer.cpp	498	PORTH	do { if (0x1) {PORTH |= (1 << 1); } else {PORTH &= ~(1 << 1); }; } while (0);	a-RF2000,a-RF2000v2,a-X44
+Printer.cpp	499	DDRC	do {DDRC &= ~(1 << 6); } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.cpp	501	PORTC	do { if (0x1) {PORTC |= (1 << 6); } else {PORTC &= ~(1 << 6); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.cpp	504	DDRA	do {DDRA |= (1 << 5); } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.cpp	505	PORTA	do { if (0x0) {PORTA |= (1 << 5); } else {PORTA &= ~(1 << 5); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.cpp	508	DDRH	do {DDRH &= ~(1 << 1); } while (0);	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+Printer.cpp	510	PORTH	do { if (0x1) {PORTH |= (1 << 1); } else {PORTH &= ~(1 << 1); }; } while (0);	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+Printer.cpp	513	DDRB	do {DDRB |= (1 << 4); } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.cpp	514	PORTB	do { if (0x0) {PORTB |= (1 << 4); } else {PORTB &= ~(1 << 4); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.cpp	516	DDRA	do {DDRA |= (1 << 5); } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.cpp	517	PORTA	do { if (0x0) {PORTA |= (1 << 5); } else {PORTA &= ~(1 << 5); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.cpp	518	DDRH	do {DDRH |= (1 << 6); } while (0);	a-RF2000,a-RF2000v2
+Printer.cpp	519	PORTH	do { if (0x0) {PORTH |= (1 << 6); } else {PORTH &= ~(1 << 6); }; } while (0);	a-RF2000,a-RF2000v2
+Printer.cpp	523	DDRC	do {DDRC |= (1 << 5); } while (0);	a-X44
+Printer.cpp	524	PORTC	do { if (0x0) {PORTC |= (1 << 5); } else {PORTC &= ~(1 << 5); }; } while (0);	a-X44
+Printer.cpp	525	DDRB	do {DDRB |= (1 << 4); } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.cpp	526	PORTB	do { if (0x0) {PORTB |= (1 << 4); } else {PORTB &= ~(1 << 4); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.cpp	530	DDRH	do {DDRH |= (1 << 6); } while (0);	b-RF2000,b-RF2000v2,lease-RF2000,lease-RF2000v2,q-RF2000,q-RF2000v2
+Printer.cpp	531	PORTH	do { if (0x0) {PORTH |= (1 << 6); } else {PORTH &= ~(1 << 6); }; } while (0);	b-RF2000,b-RF2000v2,lease-RF2000,lease-RF2000v2,q-RF2000,q-RF2000v2
+Printer.cpp	535	DDRC	do {DDRC |= (1 << 5); } while (0);	b-X44,lease-X44,q-X44
+Printer.cpp	536	PORTC	do { if (0x0) {PORTC |= (1 << 5); } else {PORTC &= ~(1 << 5); }; } while (0);	b-X44,lease-X44,q-X44
+Printer.cpp	572	DDRH	do {DDRH |= (1 << 5); } while (0);	a-RF1000
+Printer.cpp	572	DDRE	do {DDRE |= (1 << 2); } while (0);	a-RF2000,a-RF2000v2,a-X44
+Printer.cpp	573	PORTH	do { if (0x0) {PORTH |= (1 << 5); } else {PORTH &= ~(1 << 5); }; } while (0);	a-RF1000
+Printer.cpp	573	PORTE	do { if (0x0) {PORTE |= (1 << 2); } else {PORTE &= ~(1 << 2); }; } while (0);	a-RF2000,a-RF2000v2,a-X44
+Printer.cpp	581	DDRH	do {DDRH |= (1 << 5); } while (0);	b-RF1000,lease-RF1000,q-RF1000
+Printer.cpp	581	DDRE	do {DDRE |= (1 << 2); } while (0);	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+Printer.cpp	582	PORTH	do { if (0x0) {PORTH |= (1 << 5); } else {PORTH &= ~(1 << 5); }; } while (0);	b-RF1000,lease-RF1000,q-RF1000
+Printer.cpp	582	PORTE	do { if (0x0) {PORTE |= (1 << 2); } else {PORTE &= ~(1 << 2); }; } while (0);	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+Printer.h	220	PORTD	do { if (!1) {PORTD |= (1 << 7); } else {PORTD &= ~(1 << 7); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.h	222	PORTD	do { if (!1) {PORTD |= (1 << 7); } else {PORTD &= ~(1 << 7); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.h	243	PORTF	do { if (!1) {PORTF |= (1 << 2); } else {PORTF &= ~(1 << 2); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.h	245	PORTF	do { if (!1) {PORTF |= (1 << 2); } else {PORTF &= ~(1 << 2); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.h	274	PORTK	do { if (!1) {PORTK |= (1 << 0); } else {PORTK &= ~(1 << 0); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.h	276	PORTK	do { if (!1) {PORTK |= (1 << 0); } else {PORTK &= ~(1 << 0); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.h	297	PORTD	do { if (1) {PORTD |= (1 << 7); } else {PORTD &= ~(1 << 7); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.h	299	PORTD	do { if (1) {PORTD |= (1 << 7); } else {PORTD &= ~(1 << 7); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.h	310	PORTF	do { if (1) {PORTF |= (1 << 2); } else {PORTF &= ~(1 << 2); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.h	312	PORTF	do { if (1) {PORTF |= (1 << 2); } else {PORTF &= ~(1 << 2); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.h	323	PORTK	do { if (1) {PORTK |= (1 << 0); } else {PORTK &= ~(1 << 0); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.h	325	PORTK	do { if (1) {PORTK |= (1 << 0); } else {PORTK &= ~(1 << 0); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.h	335	PORTF	do { if (!true) {PORTF |= (1 << 1); } else {PORTF &= ~(1 << 1); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.h	337	PORTF	do { if (!true) {PORTF |= (1 << 1); } else {PORTF &= ~(1 << 1); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.h	338	PORTF	do { if (true) {PORTF |= (1 << 1); } else {PORTF &= ~(1 << 1); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.h	340	PORTF	do { if (true) {PORTF |= (1 << 1); } else {PORTF &= ~(1 << 1); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.h	345	PORTF	do { if (!false) {PORTF |= (1 << 7); } else {PORTF &= ~(1 << 7); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.h	347	PORTF	do { if (!false) {PORTF |= (1 << 7); } else {PORTF &= ~(1 << 7); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.h	348	PORTF	do { if (false) {PORTF |= (1 << 7); } else {PORTF &= ~(1 << 7); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.h	350	PORTF	do { if (false) {PORTF |= (1 << 7); } else {PORTF &= ~(1 << 7); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.h	353	PORTF	do { if (0x1) {PORTF |= (1 << 0); } else {PORTF &= ~(1 << 0); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.h	355	PORTF	do { if (0x1) {PORTF |= (1 << 0); } else {PORTF &= ~(1 << 0); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.h	358	PORTF	do { if (0x1) {PORTF |= (1 << 6); } else {PORTF &= ~(1 << 6); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.h	360	PORTF	do { if (0x1) {PORTF |= (1 << 6); } else {PORTF &= ~(1 << 6); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.h	363	PORTF	do { if (0x0) {PORTF |= (1 << 6); } else {PORTF &= ~(1 << 6); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.h	365	PORTF	do { if (0x0) {PORTF |= (1 << 6); } else {PORTF &= ~(1 << 6); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.h	367	PORTF	do { if (0x0) {PORTF |= (1 << 0); } else {PORTF &= ~(1 << 0); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.h	369	PORTF	do { if (0x0) {PORTF |= (1 << 0); } else {PORTF &= ~(1 << 0); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.h	377	PINF	return ((((bool)(PINF & (1 << 7))) != 0) ^ false);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.h	379	PINF	return ((((bool)(PINF & (1 << 7))) != 0) ^ false);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.h	381	PINF	return ((((bool)(PINF & (1 << 1))) != 0) ^ true);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Printer.h	383	PINF	return ((((bool)(PINF & (1 << 1))) != 0) ^ true);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+Printer.h	483	PINE	return ((bool)(PINE & (1 << 5))) == 0x0;	b-RF1000,lease-RF1000,q-RF1000
+Printer.h	483	PINC	return ((bool)(PINC & (1 << 2))) == 0x0;	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+Printer.h	487	PINE	return ((bool)(PINE & (1 << 4))) == 0x0;	b-RF1000,lease-RF1000,q-RF1000
+Printer.h	487	PINC	return ((bool)(PINC & (1 << 0))) == 0x0;	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+Printer.h	489	PINE	return ((bool)(PINE & (1 << 5))) == 0x0;	a-RF1000
+Printer.h	489	PINC	return ((bool)(PINC & (1 << 2))) == 0x0;	a-RF2000,a-RF2000v2,a-X44
+Printer.h	493	PINE	return ((bool)(PINE & (1 << 4))) == 0x0;	a-RF1000
+Printer.h	493	PINC	return ((bool)(PINC & (1 << 0))) == 0x0;	a-RF2000,a-RF2000v2,a-X44
+RF.cpp	48	PORTA	case Output::CaseLight: do { if (state(output)) {PORTA |= (1 << 3); } else {PORTA &= ~(1 << 3); }; } while (0); break;	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+RF.cpp	50	PORTE	case Output::Mains: do { if (state(output)) {PORTE |= (1 << 5); } else {PORTE &= ~(1 << 5); }; } while (0); break;	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+RF.cpp	51	PORTE	case Output::Mains: do { if (state(output)) {PORTE |= (1 << 5); } else {PORTE &= ~(1 << 5); }; } while (0); break;	a-RF2000,a-RF2000v2,a-X44
+RF.cpp	52	PORTC	case Output::Fet1: do { if (state(output)) {PORTC |= (1 << 4); } else {PORTC &= ~(1 << 4); }; } while (0); break;	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+RF.cpp	53	PORTC	case Output::Fet1: do { if (state(output)) {PORTC |= (1 << 4); } else {PORTC &= ~(1 << 4); }; } while (0); break;	a-RF2000,a-RF2000v2,a-X44
+RF.cpp	55	PORTC	case Output::Fet2: do { if (state(output)) {PORTC |= (1 << 5); } else {PORTC &= ~(1 << 5); }; } while (0); break;	b-RF2000,b-RF2000v2,lease-RF2000,lease-RF2000v2,q-RF2000,q-RF2000v2
+RF.cpp	56	PORTC	case Output::Fet2: do { if (state(output)) {PORTC |= (1 << 5); } else {PORTC &= ~(1 << 5); }; } while (0); break;	a-RF2000,a-RF2000v2
+RF.cpp	59	PORTF	case Output::Fet3: do { if (state(output)) {PORTF |= (1 << 4); } else {PORTF &= ~(1 << 4); }; } while (0); break;	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+RF.cpp	60	PORTF	case Output::Fet3: do { if (state(output)) {PORTF |= (1 << 4); } else {PORTF &= ~(1 << 4); }; } while (0); break;	a-RF2000,a-RF2000v2,a-X44
+RF.cpp	78	DDRE	do {DDRE |= (1 << 5); } while (0);	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+RF.cpp	79	DDRE	do {DDRE |= (1 << 5); } while (0);	a-RF2000,a-RF2000v2,a-X44
+RF.cpp	81	DDRC	do {DDRC |= (1 << 4); } while (0);	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+RF.cpp	82	DDRC	do {DDRC |= (1 << 4); } while (0);	a-RF2000,a-RF2000v2,a-X44
+RF.cpp	85	DDRC	do {DDRC |= (1 << 5); } while (0);	b-RF2000,b-RF2000v2,lease-RF2000,lease-RF2000v2,q-RF2000,q-RF2000v2
+RF.cpp	86	DDRC	do {DDRC |= (1 << 5); } while (0);	a-RF2000,a-RF2000v2
+RF.cpp	98	DDRA	do {DDRA |= (1 << 3); } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+TemperatureControl.cpp	235	PORTB	do { if (on) {PORTB |= (1 << 7); } else {PORTB &= ~(1 << 7); }; } while (0);	a-RF1000
+TemperatureControl.cpp	548	PORTB	do { if (on) {PORTB |= (1 << 7); } else {PORTB &= ~(1 << 7); }; } while (0);	b-RF1000,lease-RF1000,q-RF1000
+TemperatureControl.cpp	563	PORTA	do { if ((HAL::timeInMilliseconds()%1000)<250 ? 0x1 : 0x0) {PORTA |= (1 << 1); } else {PORTA &= ~(1 << 1); }; } while (0);	q-RF1000
+TemperatureControl.cpp	563	PORTE	do { if ((HAL::timeInMilliseconds()%1000)<250 ? 0x1 : 0x0) {PORTE |= (1 << 3); } else {PORTE &= ~(1 << 3); }; } while (0);	q-RF2000,q-X44,q-RF2000v2
+Tone.cpp	255	dynamic/API	pinMode(_pin, 0x1);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+Tone.cpp	494	dynamic/API	digitalWrite(_pin, 0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+TwiTransfer.cpp	14	dynamic/API	pinMode(SDA, 0x2);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+TwiTransfer.cpp	15	dynamic/API	pinMode(SCL, 0x2);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ZMotion.h	64	PINC	static __attribute__((always_inline)) bool minSwitchHit() { return ((bool)(PINC & (1 << 6))) == 0x0; }	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ZMotion.h	75	PINL	static __attribute__((always_inline)) bool directionIsPositive() { return (((bool)(PINL & (1 << 1))) != 0) ^ false; }	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ZMotion.h	77	PORTL	do { if (positive != false) {PORTL |= (1 << 1); } else {PORTL &= ~(1 << 1); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ZMotion.h	79	PORTL	static __attribute__((always_inline)) void finishPulse() { do { if (0x0) {PORTL |= (1 << 3); } else {PORTL &= ~(1 << 3); }; } while (0); }	a-RF1000,b-RF1000,lease-RF1000,q-RF1000
+ZMotion.h	79	PORTF	static __attribute__((always_inline)) void finishPulse() { do { if (0x0) {PORTF |= (1 << 3); } else {PORTF &= ~(1 << 3); }; } while (0); }	a-RF2000,a-RF2000v2,a-X44,b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+ZMotion.h	113	PINH	return ((bool)(PINH & (1 << 1))) == 0x0;	a-RF2000,a-RF2000v2,a-X44,b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+ZMotion.h	128	PORTL	do { if (0x1) {PORTL |= (1 << 3); } else {PORTL &= ~(1 << 3); }; } while (0);	a-RF1000,b-RF1000,lease-RF1000,q-RF1000
+ZMotion.h	128	PORTF	do { if (0x1) {PORTF |= (1 << 3); } else {PORTF &= ~(1 << 3); }; } while (0);	a-RF2000,a-RF2000v2,a-X44,b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	116	DDRA	(uint16_t) &DDRA,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	117	DDRB	(uint16_t) &DDRB,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	118	DDRC	(uint16_t) &DDRC,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	119	DDRD	(uint16_t) &DDRD,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	120	DDRE	(uint16_t) &DDRE,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	121	DDRF	(uint16_t) &DDRF,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	122	DDRG	(uint16_t) &DDRG,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	123	DDRH	(uint16_t) &DDRH,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	125	DDRJ	(uint16_t) &DDRJ,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	126	DDRK	(uint16_t) &DDRK,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	127	DDRL	(uint16_t) &DDRL,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	132	PORTA	(uint16_t) &PORTA,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	133	PORTB	(uint16_t) &PORTB,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	134	PORTC	(uint16_t) &PORTC,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	135	PORTD	(uint16_t) &PORTD,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	136	PORTE	(uint16_t) &PORTE,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	137	PORTF	(uint16_t) &PORTF,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	138	PORTG	(uint16_t) &PORTG,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	139	PORTH	(uint16_t) &PORTH,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	141	PORTJ	(uint16_t) &PORTJ,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	142	PORTK	(uint16_t) &PORTK,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	143	PORTL	(uint16_t) &PORTL,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	148	PINA	(uint16_t) &PINA,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	149	PINB	(uint16_t) &PINB,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	150	PINC	(uint16_t) &PINC,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	151	PIND	(uint16_t) &PIND,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	152	PINE	(uint16_t) &PINE,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	153	PINF	(uint16_t) &PINF,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	154	PING	(uint16_t) &PING,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	155	PINH	(uint16_t) &PINH,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	157	PINJ	(uint16_t) &PINJ,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	158	PINK	(uint16_t) &PINK,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+pins_arduino.h	159	PINL	(uint16_t) &PINL,	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	267	PORTF	do { if (value & 1) {PORTF |= (1 << 5); } else {PORTF &= ~(1 << 5); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	268	PORTK	do { if (value & 2) {PORTK |= (1 << 2); } else {PORTK &= ~(1 << 2); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	268	PORTF	do { if (value & 1) {PORTF |= (1 << 5); } else {PORTF &= ~(1 << 5); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	269	PORTL	do { if (value & 4) {PORTL |= (1 << 5); } else {PORTL &= ~(1 << 5); }; } while (0);	a-RF1000
+ui.cpp	269	PORTA	do { if (value & 4) {PORTA |= (1 << 1); } else {PORTA &= ~(1 << 1); }; } while (0);	a-RF2000,a-RF2000v2,a-X44
+ui.cpp	269	PORTK	do { if (value & 2) {PORTK |= (1 << 2); } else {PORTK &= ~(1 << 2); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	270	PORTK	do { if (value & 8) {PORTK |= (1 << 4); } else {PORTK &= ~(1 << 4); }; } while (0);	a-RF1000
+ui.cpp	270	PORTJ	do { if (value & 8) {PORTJ |= (1 << 3); } else {PORTJ &= ~(1 << 3); }; } while (0);	a-RF2000,a-RF2000v2,a-X44
+ui.cpp	270	PORTL	do { if (value & 4) {PORTL |= (1 << 5); } else {PORTL &= ~(1 << 5); }; } while (0);	b-RF1000,lease-RF1000,q-RF1000
+ui.cpp	270	PORTA	do { if (value & 4) {PORTA |= (1 << 1); } else {PORTA &= ~(1 << 1); }; } while (0);	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	271	PORTK	do { if (0x1) {PORTK |= (1 << 3); } else {PORTK &= ~(1 << 3); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	271	PORTK	do { if (value & 8) {PORTK |= (1 << 4); } else {PORTK &= ~(1 << 4); }; } while (0);	b-RF1000,lease-RF1000,q-RF1000
+ui.cpp	271	PORTJ	do { if (value & 8) {PORTJ |= (1 << 3); } else {PORTJ &= ~(1 << 3); }; } while (0);	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	272	PORTK	do { if (0x1) {PORTK |= (1 << 3); } else {PORTK &= ~(1 << 3); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	278	PORTK	do { if (0x0) {PORTK |= (1 << 3); } else {PORTK &= ~(1 << 3); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	279	PORTK	do { if (0x0) {PORTK |= (1 << 3); } else {PORTK &= ~(1 << 3); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	291	PORTK	do { if (rs) {PORTK |= (1 << 1); } else {PORTK &= ~(1 << 1); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	292	PORTF	do { if (c & 0x10) {PORTF |= (1 << 5); } else {PORTF &= ~(1 << 5); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	292	PORTK	do { if (rs) {PORTK |= (1 << 1); } else {PORTK &= ~(1 << 1); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	293	PORTK	do { if (c & 0x20) {PORTK |= (1 << 2); } else {PORTK &= ~(1 << 2); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	293	PORTF	do { if (c & 0x10) {PORTF |= (1 << 5); } else {PORTF &= ~(1 << 5); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	294	PORTL	do { if (c & 0x40) {PORTL |= (1 << 5); } else {PORTL &= ~(1 << 5); }; } while (0);	a-RF1000
+ui.cpp	294	PORTA	do { if (c & 0x40) {PORTA |= (1 << 1); } else {PORTA &= ~(1 << 1); }; } while (0);	a-RF2000,a-RF2000v2,a-X44
+ui.cpp	294	PORTK	do { if (c & 0x20) {PORTK |= (1 << 2); } else {PORTK &= ~(1 << 2); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	295	PORTK	do { if (c & 0x80) {PORTK |= (1 << 4); } else {PORTK &= ~(1 << 4); }; } while (0);	a-RF1000
+ui.cpp	295	PORTJ	do { if (c & 0x80) {PORTJ |= (1 << 3); } else {PORTJ &= ~(1 << 3); }; } while (0);	a-RF2000,a-RF2000v2,a-X44
+ui.cpp	295	PORTL	do { if (c & 0x40) {PORTL |= (1 << 5); } else {PORTL &= ~(1 << 5); }; } while (0);	b-RF1000,lease-RF1000,q-RF1000
+ui.cpp	295	PORTA	do { if (c & 0x40) {PORTA |= (1 << 1); } else {PORTA &= ~(1 << 1); }; } while (0);	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	296	PORTK	do { if (0x1) {PORTK |= (1 << 3); } else {PORTK &= ~(1 << 3); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	296	PORTK	do { if (c & 0x80) {PORTK |= (1 << 4); } else {PORTK &= ~(1 << 4); }; } while (0);	b-RF1000,lease-RF1000,q-RF1000
+ui.cpp	296	PORTJ	do { if (c & 0x80) {PORTJ |= (1 << 3); } else {PORTJ &= ~(1 << 3); }; } while (0);	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	297	PORTK	do { if (0x1) {PORTK |= (1 << 3); } else {PORTK &= ~(1 << 3); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	303	PORTK	do { if (0x0) {PORTK |= (1 << 3); } else {PORTK &= ~(1 << 3); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	304	PORTK	do { if (0x0) {PORTK |= (1 << 3); } else {PORTK &= ~(1 << 3); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	311	PORTF	do { if (c & 0x01) {PORTF |= (1 << 5); } else {PORTF &= ~(1 << 5); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	312	PORTK	do { if (c & 0x02) {PORTK |= (1 << 2); } else {PORTK &= ~(1 << 2); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	312	PORTF	do { if (c & 0x01) {PORTF |= (1 << 5); } else {PORTF &= ~(1 << 5); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	313	PORTL	do { if (c & 0x04) {PORTL |= (1 << 5); } else {PORTL &= ~(1 << 5); }; } while (0);	a-RF1000
+ui.cpp	313	PORTA	do { if (c & 0x04) {PORTA |= (1 << 1); } else {PORTA &= ~(1 << 1); }; } while (0);	a-RF2000,a-RF2000v2,a-X44
+ui.cpp	313	PORTK	do { if (c & 0x02) {PORTK |= (1 << 2); } else {PORTK &= ~(1 << 2); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	314	PORTK	do { if (c & 0x08) {PORTK |= (1 << 4); } else {PORTK &= ~(1 << 4); }; } while (0);	a-RF1000
+ui.cpp	314	PORTJ	do { if (c & 0x08) {PORTJ |= (1 << 3); } else {PORTJ &= ~(1 << 3); }; } while (0);	a-RF2000,a-RF2000v2,a-X44
+ui.cpp	314	PORTL	do { if (c & 0x04) {PORTL |= (1 << 5); } else {PORTL &= ~(1 << 5); }; } while (0);	b-RF1000,lease-RF1000,q-RF1000
+ui.cpp	314	PORTA	do { if (c & 0x04) {PORTA |= (1 << 1); } else {PORTA &= ~(1 << 1); }; } while (0);	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	315	PORTK	do { if (0x1) {PORTK |= (1 << 3); } else {PORTK &= ~(1 << 3); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	315	PORTK	do { if (c & 0x08) {PORTK |= (1 << 4); } else {PORTK &= ~(1 << 4); }; } while (0);	b-RF1000,lease-RF1000,q-RF1000
+ui.cpp	315	PORTJ	do { if (c & 0x08) {PORTJ |= (1 << 3); } else {PORTJ &= ~(1 << 3); }; } while (0);	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	316	PORTK	do { if (0x1) {PORTK |= (1 << 3); } else {PORTK &= ~(1 << 3); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	322	PORTK	do { if (0x0) {PORTK |= (1 << 3); } else {PORTK &= ~(1 << 3); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	323	PORTK	do { if (0x0) {PORTK |= (1 << 3); } else {PORTK &= ~(1 << 3); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	356	DDRF	do {DDRF &= ~(1 << 5); } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	357	DDRK	do {DDRK &= ~(1 << 2); } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	357	DDRF	do {DDRF &= ~(1 << 5); } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	358	DDRL	do {DDRL &= ~(1 << 5); } while (0);	a-RF1000
+ui.cpp	358	DDRA	do {DDRA &= ~(1 << 1); } while (0);	a-RF2000,a-RF2000v2,a-X44
+ui.cpp	358	DDRK	do {DDRK &= ~(1 << 2); } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	359	DDRK	do {DDRK &= ~(1 << 4); } while (0);	a-RF1000
+ui.cpp	359	DDRJ	do {DDRJ &= ~(1 << 3); } while (0);	a-RF2000,a-RF2000v2,a-X44
+ui.cpp	359	DDRL	do {DDRL &= ~(1 << 5); } while (0);	b-RF1000,lease-RF1000,q-RF1000
+ui.cpp	359	DDRA	do {DDRA &= ~(1 << 1); } while (0);	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	360	DDRK	do {DDRK &= ~(1 << 1); } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	360	DDRK	do {DDRK &= ~(1 << 4); } while (0);	b-RF1000,lease-RF1000,q-RF1000
+ui.cpp	360	DDRJ	do {DDRJ &= ~(1 << 3); } while (0);	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	361	DDRK	do {DDRK &= ~(1 << 1); } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	363	DDRK	do {DDRK &= ~(1 << 3); } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	364	DDRK	do {DDRK &= ~(1 << 3); } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	370	DDRF	do {DDRF |= (1 << 5); } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	371	DDRK	do {DDRK |= (1 << 2); } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	371	DDRF	do {DDRF |= (1 << 5); } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	372	DDRL	do {DDRL |= (1 << 5); } while (0);	a-RF1000
+ui.cpp	372	DDRA	do {DDRA |= (1 << 1); } while (0);	a-RF2000,a-RF2000v2,a-X44
+ui.cpp	372	DDRK	do {DDRK |= (1 << 2); } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	373	DDRK	do {DDRK |= (1 << 4); } while (0);	a-RF1000
+ui.cpp	373	DDRJ	do {DDRJ |= (1 << 3); } while (0);	a-RF2000,a-RF2000v2,a-X44
+ui.cpp	373	DDRL	do {DDRL |= (1 << 5); } while (0);	b-RF1000,lease-RF1000,q-RF1000
+ui.cpp	373	DDRA	do {DDRA |= (1 << 1); } while (0);	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	374	DDRK	do {DDRK |= (1 << 1); } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	374	DDRK	do {DDRK |= (1 << 4); } while (0);	b-RF1000,lease-RF1000,q-RF1000
+ui.cpp	374	DDRJ	do {DDRJ |= (1 << 3); } while (0);	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	375	DDRK	do {DDRK |= (1 << 1); } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	377	DDRK	do {DDRK |= (1 << 3); } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	378	DDRK	do {DDRK |= (1 << 3); } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	380	PORTK	do { if (0x0) {PORTK |= (1 << 1); } else {PORTK &= ~(1 << 1); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	381	PORTK	do { if (0x0) {PORTK |= (1 << 3); } else {PORTK &= ~(1 << 3); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	381	PORTK	do { if (0x0) {PORTK |= (1 << 1); } else {PORTK &= ~(1 << 1); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	382	PORTK	do { if (0x0) {PORTK |= (1 << 3); } else {PORTK &= ~(1 << 3); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	391	PORTK	do { if (0x0) {PORTK |= (1 << 1); } else {PORTK &= ~(1 << 1); }; } while (0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	392	PORTK	do { if (0x0) {PORTK |= (1 << 1); } else {PORTK &= ~(1 << 1); }; } while (0);	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	465	DDRG,PORTG	do {DDRG &= ~(1 << 5); } while (0); do { if (0x1) {PORTG |= (1 << 5); } else {PORTG &= ~(1 << 5); }; } while (0);;	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	466	DDRE,PORTE	do {DDRE &= ~(1 << 3); } while (0); do { if (0x1) {PORTE |= (1 << 3); } else {PORTE &= ~(1 << 3); }; } while (0);;	a-RF1000
+ui.cpp	466	DDRB,PORTB	do {DDRB &= ~(1 << 7); } while (0); do { if (0x1) {PORTB |= (1 << 7); } else {PORTB &= ~(1 << 7); }; } while (0);;	a-RF2000,a-RF2000v2,a-X44
+ui.cpp	466	DDRG,PORTG	do {DDRG &= ~(1 << 5); } while (0); do { if (0x1) {PORTG |= (1 << 5); } else {PORTG &= ~(1 << 5); }; } while (0);;	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	467	DDRH,PORTH	do {DDRH &= ~(1 << 3); } while (0); do { if (0x1) {PORTH |= (1 << 3); } else {PORTH &= ~(1 << 3); }; } while (0);;	a-RF1000
+ui.cpp	467	DDRH,PORTH	do {DDRH &= ~(1 << 0); } while (0); do { if (0x1) {PORTH |= (1 << 0); } else {PORTH &= ~(1 << 0); }; } while (0);;	a-RF2000,a-RF2000v2,a-X44
+ui.cpp	467	DDRE,PORTE	do {DDRE &= ~(1 << 3); } while (0); do { if (0x1) {PORTE |= (1 << 3); } else {PORTE &= ~(1 << 3); }; } while (0);;	b-RF1000,lease-RF1000,q-RF1000
+ui.cpp	467	DDRB,PORTB	do {DDRB &= ~(1 << 7); } while (0); do { if (0x1) {PORTB |= (1 << 7); } else {PORTB &= ~(1 << 7); }; } while (0);;	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	468	DDRB,PORTB	do {DDRB &= ~(1 << 5); } while (0); do { if (0x1) {PORTB |= (1 << 5); } else {PORTB &= ~(1 << 5); }; } while (0);;	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	468	DDRH,PORTH	do {DDRH &= ~(1 << 3); } while (0); do { if (0x1) {PORTH |= (1 << 3); } else {PORTH &= ~(1 << 3); }; } while (0);;	b-RF1000,lease-RF1000,q-RF1000
+ui.cpp	468	DDRH,PORTH	do {DDRH &= ~(1 << 0); } while (0); do { if (0x1) {PORTH |= (1 << 0); } else {PORTH &= ~(1 << 0); }; } while (0);;	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	469	DDRL,PORTL	do {DDRL &= ~(1 << 7); } while (0); do { if (0x1) {PORTL |= (1 << 7); } else {PORTL &= ~(1 << 7); }; } while (0);;	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	469	DDRB,PORTB	do {DDRB &= ~(1 << 5); } while (0); do { if (0x1) {PORTB |= (1 << 5); } else {PORTB &= ~(1 << 5); }; } while (0);;	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	470	DDRL,PORTL	do {DDRL &= ~(1 << 7); } while (0); do { if (0x1) {PORTL |= (1 << 7); } else {PORTL &= ~(1 << 7); }; } while (0);;	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	471	DDRJ,PORTJ	do {DDRJ &= ~(1 << 2); } while (0); do { if (0x1) {PORTJ |= (1 << 2); } else {PORTJ &= ~(1 << 2); }; } while (0);;	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	472	DDRJ,PORTJ	do {DDRJ &= ~(1 << 4); } while (0); do { if (0x1) {PORTJ |= (1 << 4); } else {PORTJ &= ~(1 << 4); }; } while (0);;	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	472	DDRJ,PORTJ	do {DDRJ &= ~(1 << 2); } while (0); do { if (0x1) {PORTJ |= (1 << 2); } else {PORTJ &= ~(1 << 2); }; } while (0);;	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	473	DDRJ,PORTJ	do {DDRJ &= ~(1 << 5); } while (0); do { if (0x1) {PORTJ |= (1 << 5); } else {PORTJ &= ~(1 << 5); }; } while (0);;	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	473	DDRJ,PORTJ	do {DDRJ &= ~(1 << 4); } while (0); do { if (0x1) {PORTJ |= (1 << 4); } else {PORTJ &= ~(1 << 4); }; } while (0);;	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	474	DDRJ,PORTJ	do {DDRJ &= ~(1 << 6); } while (0); do { if (0x1) {PORTJ |= (1 << 6); } else {PORTJ &= ~(1 << 6); }; } while (0);;	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	474	DDRJ,PORTJ	do {DDRJ &= ~(1 << 5); } while (0); do { if (0x1) {PORTJ |= (1 << 5); } else {PORTJ &= ~(1 << 5); }; } while (0);;	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	475	DDRH,PORTH	do {DDRH &= ~(1 << 7); } while (0); do { if (0x1) {PORTH |= (1 << 7); } else {PORTH &= ~(1 << 7); }; } while (0);;	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	475	DDRJ,PORTJ	do {DDRJ &= ~(1 << 6); } while (0); do { if (0x1) {PORTJ |= (1 << 6); } else {PORTJ &= ~(1 << 6); }; } while (0);;	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	476	DDRH,PORTH	do {DDRH &= ~(1 << 2); } while (0); do { if (0x1) {PORTH |= (1 << 2); } else {PORTH &= ~(1 << 2); }; } while (0);;	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	476	DDRH,PORTH	do {DDRH &= ~(1 << 7); } while (0); do { if (0x1) {PORTH |= (1 << 7); } else {PORTH &= ~(1 << 7); }; } while (0);;	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	477	DDRH,PORTH	do {DDRH &= ~(1 << 2); } while (0); do { if (0x1) {PORTH |= (1 << 2); } else {PORTH &= ~(1 << 2); }; } while (0);;	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	480	PING	if (((bool)(PING & (1 << 5))) == 0) action = 1001;;	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	481	PINE	if (((bool)(PINE & (1 << 3))) == 0) action = 1;;	a-RF1000
+ui.cpp	481	PINB	if (((bool)(PINB & (1 << 7))) == 0) action = 1;;	a-RF2000,a-RF2000v2,a-X44
+ui.cpp	481	PING	if (((bool)(PING & (1 << 5))) == 0) action = 1001;;	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	482	PINL	if (((bool)(PINL & (1 << 7))) == 0) action = 2;;	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	482	PINE	if (((bool)(PINE & (1 << 3))) == 0) action = 1;;	b-RF1000,lease-RF1000,q-RF1000
+ui.cpp	482	PINB	if (((bool)(PINB & (1 << 7))) == 0) action = 1;;	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	483	PINB	if (((bool)(PINB & (1 << 5))) == 0) action = 1000;;	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	483	PINL	if (((bool)(PINL & (1 << 7))) == 0) action = 2;;	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	484	PINH	if (((bool)(PINH & (1 << 3))) == 0) action = 1129;;	a-RF1000
+ui.cpp	484	PINH	if (((bool)(PINH & (1 << 0))) == 0) action = 1129;;	a-RF2000,a-RF2000v2,a-X44
+ui.cpp	484	PINB	if (((bool)(PINB & (1 << 5))) == 0) action = 1000;;	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	485	PINH	if (((bool)(PINH & (1 << 3))) == 0) action = 1129;;	b-RF1000,lease-RF1000,q-RF1000
+ui.cpp	485	PINH	if (((bool)(PINH & (1 << 0))) == 0) action = 1129;;	b-RF2000,b-RF2000v2,b-X44,lease-RF2000,lease-RF2000v2,lease-X44,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	486	PINJ	if (((bool)(PINJ & (1 << 2))) == 0) action = 514;;	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	487	PINJ	if (((bool)(PINJ & (1 << 4))) == 0) action = 515;;	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	487	PINJ	if (((bool)(PINJ & (1 << 2))) == 0) action = 514;;	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	488	PINJ	if (((bool)(PINJ & (1 << 5))) == 0) action = 517;;	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	488	PINJ	if (((bool)(PINJ & (1 << 4))) == 0) action = 515;;	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	489	PINJ	if (((bool)(PINJ & (1 << 6))) == 0) action = 516;;	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	489	PINJ	if (((bool)(PINJ & (1 << 5))) == 0) action = 517;;	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	490	PINH	if (((bool)(PINH & (1 << 7))) == 0) action = 1519;;	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	490	PINJ	if (((bool)(PINJ & (1 << 6))) == 0) action = 516;;	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	491	PINH	if (((bool)(PINH & (1 << 2))) == 0) action = 1518;;	a-RF1000,a-RF2000,a-RF2000v2,a-X44
+ui.cpp	491	PINH	if (((bool)(PINH & (1 << 7))) == 0) action = 1519;;	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+ui.cpp	492	PINH	if (((bool)(PINH & (1 << 2))) == 0) action = 1518;;	b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+wiring_analog.c	103	dynamic/API	pinMode(pin, 0x1);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+wiring_analog.c	106	dynamic/API	digitalWrite(pin, 0x0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+wiring_analog.c	110	dynamic/API	digitalWrite(pin, 0x1);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+wiring_analog.c	279	dynamic/API	digitalWrite(pin, 0x0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+wiring_analog.c	281	dynamic/API	digitalWrite(pin, 0x1);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+wiring_digital.c	29	dynamic/API	void pinMode(uint8_t pin, uint8_t mode)	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+wiring_digital.c	138	dynamic/API	void digitalWrite(uint8_t pin, uint8_t val)	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+wiring_digital.c	165	dynamic/API	int digitalRead(uint8_t pin)	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+wiring_shift.c	30	dynamic/API	digitalWrite(clockPin, 0x1);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+wiring_shift.c	32	dynamic/API	value |= digitalRead(dataPin) << i;	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+wiring_shift.c	34	dynamic/API	value |= digitalRead(dataPin) << (7 - i);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+wiring_shift.c	35	dynamic/API	digitalWrite(clockPin, 0x0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+wiring_shift.c	46	dynamic/API	digitalWrite(dataPin, val & 1);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+wiring_shift.c	49	dynamic/API	digitalWrite(dataPin, (val & 128) != 0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+wiring_shift.c	53	dynamic/API	digitalWrite(clockPin, 0x1);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
+wiring_shift.c	54	dynamic/API	digitalWrite(clockPin, 0x0);	a-RF1000,a-RF2000,a-RF2000v2,a-X44,b-RF1000,b-RF2000,b-RF2000v2,b-X44,lease-RF1000,lease-RF2000,lease-RF2000v2,lease-X44,q-RF1000,q-RF2000,q-X44,q-RF2000v2
