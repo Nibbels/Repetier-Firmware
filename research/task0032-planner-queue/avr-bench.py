@@ -91,7 +91,7 @@ def stage_instrument(s):
         assert n==1,name
     return s
 
-def create_fixture(d,capacity,instrument):
+def create_fixture(d,capacity,instrument,ledger=False):
     for name in ("motion.h","MoveQueue.h","MotionPlanner.h","QueueTask.h","StepExecutor.h","RMath.h","ExtrusionOutput.h","IdleStatus.h","MoveQueue.cpp"):
         shutil.copyfile(FW/name,d/name)
     hal=load("HAL.h")
@@ -103,15 +103,20 @@ def create_fixture(d,capacity,instrument):
     header+=section(hal,"    static inline unsigned long U16SquaredToU32(","\n    static inline speed_t ComputeV(")+"\n};\n"
     header+='\n#define private public\n#include "RMath.h"\n#include "Printer.h"\n#include "motion.h"\n#include "MoveQueue.h"\n#undef private\n'
     header+=TRACE
+    if ledger: header+="\\nvoid researchLedgerHook(PrintLine&);\\n"
     (d/"Repetier.h").write_text(header)
     (d/"Printer.h").write_text(PRINTER)
     planner=load("MotionPlanner.cpp")
+    if ledger:
+        assert planner.count("move.markStepProfileReady();")==1
+        planner=planner.replace("move.markStepProfileReady();","move.markStepProfileReady();\\n    researchLedgerHook(move);")
     (d/"MotionPlanner.cpp").write_text(stage_instrument(planner) if instrument else planner)
     motion=load("motion.cpp")
     geometry='#include "Repetier.h"\n'+section(motion,"void PrintLine::setAxisSteps(","\n/** \\brief Put a move")+section(motion,"void PrintLine::fitRampToRemainingSteps()","\n/** \\brief Check if move is new.")
     (d/"geometry.cpp").write_text(geometry)
     shutil.copyfile(HERE/"avr-fixture.cpp",d/"avr-fixture.cpp")
     shutil.copyfile(HERE/"estimator-candidate.h",d/"estimator-candidate.h")
+    shutil.copyfile(HERE/"duration-ledger.h",d/"duration-ledger.h")
 def parse_trace(raw):
     masks=[];start_mask=None;stack=[];rows=[]
     for line in raw.splitlines():
@@ -138,7 +143,7 @@ def parse_trace(raw):
         r["max_sampled_mask_cycles"]=max([0]+[max(0,min(b,y)-max(a,x)) for x,y in masks if x<b and y>a])
     return rows
 def stats(rows):
-    names={1:"prepareMove",2:"updateLookahead",3:"limitJunction",4:"planDeceleration",5:"planAcceleration",6:"prepareStepProfile",7:"remainingMotion",8:"exactTimeOnly",9:"lower",10:"pacedTicks",11:"fastRoot"}
+    names={1:"prepareMove",2:"updateLookahead",3:"limitJunction",4:"planDeceleration",5:"planAcceleration",6:"prepareStepProfile",7:"remainingMotion",8:"exactTimeOnly",9:"lower",10:"pacedTicks",11:"fastRoot",12:"ledgerRemaining",13:"ledgerPublish",14:"ledgerRetire"}
     out={}
     for s in sorted({r["stage"] for r in rows}):
         rr=[r for r in rows if r["stage"]==s]
@@ -168,10 +173,11 @@ def main():
         # libsimavr and libelf are installed by the task-private hosted workflow.
         run(["cc","-O2",HERE/"simavr-trace.c","-lsimavr","-lelf","-o",runner])
         for cap in args.capacity:
-            for name,instrument,only in [("outer",False,0),("substage",True,0)]+([("diag-only",False,7),("time-only",False,8),("lower-only",False,9),("paced-only",False,10),("fast-root-only",False,11)] if cap==24 else []):
-                d=t/f"{cap}-{name}";d.mkdir();create_fixture(d,cap,instrument)
+            for name,instrument,only in [("outer",False,0),("substage",True,0)]+([("diag-only",False,7),("time-only",False,8),("lower-only",False,9),("paced-only",False,10),("fast-root-only",False,11),("ledger",False,0)] if cap==24 else []):
+                d=t/f"{cap}-{name}";d.mkdir();create_fixture(d,cap,instrument,name=="ledger")
                 elf=out/f"{cap}-{name}.elf"
                 cmd=[cc,*FLAGS,f"-DESTIMATOR_ONLY={only}",f"-I{d}",d/"MotionPlanner.cpp",d/"MoveQueue.cpp",d/"geometry.cpp",d/"avr-fixture.cpp","-Wl,--gc-sections","-Wl,-Map="+str(out/f"{cap}-{name}.map"),"-o",elf]
+                if name=="ledger":cmd.insert(1,"-DLEDGER_CANDIDATE")
                 # Preserve actual stderr on failure for reproducible CI diagnostics.
                 subprocess.run([str(x) for x in cmd],check=True)
                 symbols=run([nm,"-S","-n",elf])
