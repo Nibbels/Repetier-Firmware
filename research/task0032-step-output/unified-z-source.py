@@ -24,15 +24,26 @@ def modify(dst,tag):
     // no correction deadline (nominal/housekeeping still scheduled).
     static void configureCorrection(uint32_t acceleration, uint16_t speed);
     static bool reservesZ();
+    static bool correctionRequested();
     static uint32_t serviceCorrection(uint32_t epoch, bool nominalOwnsZ);""")
     edit("StepExecutor.cpp",'#include "StepExecutor.h"','#include "StepExecutor.h"\n#include "ZCorrectionResearch.h"')
     section("StepExecutor.cpp","void StepExecutor::stepSlowedZCompensation()", "/**\n  Processes the moves from the queue",r'''
 namespace {
 using namespace ZCorrectionResearch;
+// Reuse the already linked RFx000 math, no new reciprocal table.
+struct CorrectionMath {
+    static uint16_t floorRoot(uint32_t x) {
+        if (x>INT32_MAX) return root(x);
+        if (!x) return 0;
+        const uint16_t r=HAL::integerSqrt(int32_t(x));
+        return uint32_t(r)*r>x?r-1:r;
+    }
+    static uint32_t period(uint16_t speed) { return HAL::CPUDivU2(speed); }
+};
 struct CorrectionState {
-    Ramp ramp;
+    FastRamp<CorrectionMath> ramp;
     Limits limits{};
-    Pulse armed{};
+    FastPulse armed{};
     int32_t armedError=0;
     uint32_t anchor=0;
     uint32_t due=0;
@@ -57,6 +68,10 @@ void StepExecutor::configureCorrection(uint32_t acceleration, uint16_t speed) {
     InterruptProtectedBlock lock;
     zCorrection.cancel();
     zCorrection.limits=limits;
+}
+
+bool StepExecutor::correctionRequested() {
+    return zCorrection.armed.sign || Printer::zMotion.correctionError()!=0;
 }
 
 bool StepExecutor::reservesZ() {
@@ -191,7 +206,7 @@ ISR(TIMER1_COMPA_vect) {
     using namespace ZCorrectionResearch;
     HAL::allowInterrupts();
 
-    const bool hadZ=Printer::zMotion.correctionError()!=0 && StepExecutor::reservesZ();
+    const bool hadZ=StepExecutor::correctionRequested() && StepExecutor::reservesZ();
     if (reached(now,nominalDeadline)) {
         HAL::forbidInterrupts();
         uint32_t delay=3000;
@@ -206,7 +221,8 @@ ISR(TIMER1_COMPA_vect) {
 
     HAL::allowInterrupts();
     uint32_t next=nominalDeadline-now;
-    const uint32_t z=StepExecutor::serviceCorrection(now,hadZ || StepExecutor::reservesZ());
+    const uint32_t z=StepExecutor::correctionRequested()
+        ? StepExecutor::serviceCorrection(now,hadZ || StepExecutor::reservesZ()) : UINT32_MAX;
     // If an extra compare would be immediately followed by nominal motion,
     // share the nominal release instead. This is a conservative initial
     // scheduler spacing hypothesis, not a CPU governor or a new speed cap.
