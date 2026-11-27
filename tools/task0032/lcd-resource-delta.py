@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 import re
 
-P0="894477ef757ff431f6814590f0983fc04459e0ff"
+P0="9072d65121bc2086522ea6b837ca3804ec80faa5"
 BOARDS=("RF1000","RF2000","RF2000v2","RF2000-X44")
 
 def sha(path):
