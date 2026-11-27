@@ -15,3 +15,11 @@ q-RF1000	1158277745a8a02d4dc38de7d09dd38e57c0cfa9713c0c39b5d0688b3a028bef	LCD 21
 q-RF2000	c9df6b6e783b9400d0bcfe278bbf40d7d257df79947d1de2aa16a7a43a6cd25a	LCD 20f82..20f88, Z-EN 2419c..241a2: 256/512 schedules lose PK0	init 25b7a 16 cycles CLI through OUT / set 35102 8 cycles CLI through OUT
 q-X44	151ab74106c18b63ef48384fb598302cf50a6a9d726f8b2fa9ed4b55f5c2ffa1	LCD 20f90..20f96, Z-EN 24184..2418a: 256/512 schedules lose PK0	set 18176 8 cycles CLI through OUT / init 258a0 16 cycles CLI through OUT
 q-RF2000v2	2d9343774012f3f8897a19d381d7d151c114ded9fb3229c12b48d1872dddbd32	LCD 20f82..20f88, Z-EN 2419c..241a2: 256/512 schedules lose PK0	init 25b7a 16 cycles CLI through OUT / set 35102 8 cycles CLI through OUT
+c-RF1000	539b0a23ab92ad74f8d44a31adbcfc41ed3e65f99460e21e25e54b4483c9f767	LCD 24526..2452c, Z-EN 258b2..258b8: 256/512 schedules lose PK0	-
+c-RF2000	4a2b02e839dbbb08dcbbe8cd3db84af8285df8acdd201b87f6bf4ba962557ea8	LCD 25a04..25a0a, Z-EN 26d82..26d88: 256/512 schedules lose PK0	set 27ad4 8 cycles CLI through OUT / init 2efdc 12 cycles CLI through OUT
+c-RF2000v2	23bfa5e95ae1e68b71e4cc9dd32ec3606359c1ca3fdf50a6303e846bfa00275f	LCD 25a04..25a0a, Z-EN 26d82..26d88: 256/512 schedules lose PK0	set 27ad4 8 cycles CLI through OUT / init 2efde 12 cycles CLI through OUT
+c-X44	942f3815e51c1882c023f3b5785cd3ddb4aa939a39fcb04888b3e045470c3c5d	LCD 24c72..24c78, Z-EN 25fd2..25fd8: 256/512 schedules lose PK0	set 26cc8 8 cycles CLI through OUT / init 2de36 12 cycles CLI through OUT
+combined-RF1000	d4c782f84327fab1f3163850ada9cf57d1b3c5db0c33279d716cb6eefcd53c11	LCD 20dfc..20e02, Z-EN 23c76..23c7c: 256/512 schedules lose PK0	-
+combined-RF2000	9dac05fd964174c408e24b69bcb2cf585c1f6460fc6ef8311c4bd0d119f12ea6	LCD 20f0c..20f12, Z-EN 24126..2412c: 256/512 schedules lose PK0	init 25b04 16 cycles CLI through OUT / set 35194 8 cycles CLI through OUT
+combined-X44	eff3b8efb6bceae2eaa55d1f1429e457dd13de9501f879c29268e01a20e7e4c8	LCD 20f1a..20f20, Z-EN 2410e..24114: 256/512 schedules lose PK0	set 181fa 8 cycles CLI through OUT / init 2582a 16 cycles CLI through OUT
+combined-RF2000v2	82ba78faa53be0172ccf74eba7dd374dd9e36e9534b1488cde48f2ca65f80f84	LCD 20f0c..20f12, Z-EN 24126..2412c: 256/512 schedules lose PK0	init 25b04 16 cycles CLI through OUT / set 35194 8 cycles CLI through OUT
