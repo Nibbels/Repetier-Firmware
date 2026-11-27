@@ -16,13 +16,13 @@ def unique(img,part):
     assert len(names)==1,(part,names)
     return names[0]
 
-def configure(mod,img,kind,rate,negative=False,correction=0,unified=True,start=0):
+def configure(mod,img,kind,rate,negative=False,correction=0,unified=True,start=0,owner=1):
     # Long synthetic prepared paths, avoiding completion except in explicit
     # idle tests. No planner reachability claim for these profiles.
     n=math.ceil(3300/max(512,F//rate))
     delta={"xy":(100000,70000,0,0),"xye":(100000,70000,0,30000),
            "e":(0,0,0,100000),"z":(0,0,100000,0),"idle":(100000,0,0,0)}[kind]
-    c,pc,move,errors,o=mod.setup(img,owner=1,delta=delta,rate=rate,n=n,
+    c,pc,move,errors,o=mod.setup(img,owner=owner,delta=delta,rate=rate,n=n,
         phase="cruise",advance=False,ratio=0,zcor=correction,negative=negative,remaining=100000)
     assert img.sizes["Printer::zMotion"]==42
     c.symput("Printer::extrusionCompensation",0,8)
