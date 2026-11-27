@@ -121,6 +121,17 @@ void gateBorrowedText() {
     GCodeInput::popCurrentCommand();
     requireQuarantine(_BV(FE0));
 }
+void gateFletcher() {
+    // Reproduce #103's flagged Fletcher collision. Preserve the ordinary
+    // checksum limitation while rejecting a byte known bad by the UART.
+    auto packet=binary({0x82,0x04,104,0,0,0,0});
+    packet[3]=static_cast<char>(255);
+    for(size_t i=0;i<packet.size();++i)
+        uartByte(static_cast<uint8_t>(packet[i]),i==3?_BV(FE0):0);
+    uartByte(0,_BV(DOR0)); uartByte(0,_BV(UPE0));
+    uartDrain();
+    requireQuarantine(_BV(FE0)|_BV(DOR0)|_BV(UPE0));
+}
 void gateUnflaggedCollision() {
     auto packet=numbered("N1 G1 X111");
     packet.erase(packet.find("111"),2);
@@ -136,13 +147,17 @@ def once(s, old, new):
     return s.replace(old,new)
 
 
-def patch(fw):
+def patch(fw, combined=False):
     header=fw/"UsbSerial.h"
     header.write_text(once(header.read_text(),"    static bool available();",
         "    static uint8_t lossFlags() { return lossFlags_; }\n    static bool available();")
         .replace("    static Ring<receiveBufferSize> rx_;","    static volatile uint8_t lossFlags_;\n    static Ring<receiveBufferSize> rx_;"))
     uart=fw/"UsbSerial.cpp"
-    uart.write_text(once(once(uart.read_text(),BASE_RX,GATED_RX),
+    gate=GATED_RX
+    if combined:
+        gate=once(gate,"    if (error) {\n        lossFlags_ |= error;\n        return;\n    }\n    if (lossFlags_) return;",
+            "    const uint8_t loss = lossFlags_ | error;\n    if (loss) {\n        lossFlags_ = loss;\n        return;\n    }")
+    uart.write_text(once(once(uart.read_text(),BASE_RX,gate),
         "void UsbSerial::begin(unsigned long baud) {",
         "volatile uint8_t UsbSerial::lossFlags_ = 0;\n\nvoid UsbSerial::begin(unsigned long baud) {"))
     parser=fw/"GCodeInput.cpp"
@@ -166,6 +181,7 @@ def patch(fw):
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument("--prior-replay",required=True,type=Path)
+    p.add_argument("--combined",action="store_true")
     args=p.parse_args()
     prior=runpy.run_path(str(args.prior_replay))
     # Reuse actual-ring injection helpers from the immutable Task0033 replay.
@@ -173,7 +189,7 @@ def main():
     with TemporaryDirectory(prefix="task0032-rx-gate-") as directory:
         root=Path(directory);fw=root/"Repetier";tests=root/"tests"
         shutil.copytree(ROOT/"Repetier",fw);tests.mkdir()
-        patch(fw)
+        patch(fw,args.combined)
         for name in ("serial-protocol.py","serial-protocol.cpp","usb-serial.cpp"):
             shutil.copyfile(ROOT/"tests"/name,tests/name)
         cpp=tests/"serial-protocol.cpp";s=cpp.read_text()
@@ -191,12 +207,12 @@ def main():
             'if (scenario=="gate-ring" || scenario=="gate-fe" || scenario=="gate-dor" || scenario=="gate-upe") gatedLoss(scenario);\n'
             '    else if (scenario=="gate-before" || scenario=="gate-after" || scenario=="gate-m110" || scenario=="gate-m112") gateBoundary(scenario);\n'
             '    else if (scenario=="gate-text") gateBorrowedText();\n'
-            '    else if (scenario=="gate-collision") gateUnflaggedCollision();\n'
+            '    else if (scenario=="gate-fletcher") gateFletcher();\n    else if (scenario=="gate-collision") gateUnflaggedCollision();\n'
             '    else if (scenario == "numbered") numberedLines();')
         cpp.write_text(s)
         py=tests/"serial-protocol.py"
         py.write_text(once(py.read_text(),'for scenario in ("numbered",',
-            'for scenario in ("gate-ring","gate-fe","gate-dor","gate-upe","gate-before","gate-after","gate-m110","gate-m112","gate-text","gate-collision","numbered",'))
+            'for scenario in ("gate-ring","gate-fe","gate-dor","gate-upe","gate-before","gate-after","gate-m110","gate-m112","gate-text","gate-fletcher","gate-collision","numbered",'))
         # Ordinary ring test intentionally overflowed and expected continued
         # operation; that expectation is superseded ONLY for the candidate.
         uart=tests/"usb-serial.cpp";s=uart.read_text()
@@ -204,7 +220,7 @@ def main():
         s=once(s,"byte <= UsbSerial::receiveCapacity","byte < UsbSerial::receiveCapacity")
         uart.write_text(s)
         subprocess.run([sys.executable,str(py)],check=True)
-        print("Sticky RX quarantine: ten actual-source loss/boundary fixtures passed (including documented unflagged collision)")
+        print(("Combined" if args.combined else "Sticky")+" RX quarantine: eleven actual-source loss/boundary fixtures passed (including documented unflagged collision)")
 
 
 if __name__=="__main__":
