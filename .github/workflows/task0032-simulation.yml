@@ -271,7 +271,7 @@ jobs:
           out="$RUNNER_TEMP/task0032-lcd-integrated"
           mkdir -p "$out"
           git rev-parse HEAD > "$out/checkout-sha.txt"
-          sha256sum tools/task0032/lcd-pending-frame.{h,cpp} tools/task0032/lcd-{integration-preflight,emergency-integration}.py > "$out/source-sha256.txt"
+          sha256sum tools/task0032/lcd-pending-frame.{h,cpp} tools/task0032/lcd-{integration-preflight,emergency-integration,resource-delta}.py > "$out/source-sha256.txt"
           c++ -std=c++11 -O2 -Wall -Wextra -Werror tools/task0032/lcd-pending-frame.cpp -o "$out/replay"
           "$out/replay" | tee "$out/replay.log"
           c++ -std=c++11 -O1 -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all tools/task0032/lcd-pending-frame.cpp -o "$out/ubsan"
@@ -304,6 +304,15 @@ jobs:
           arduino-cli core install arduino:avr@1.8.6
           cd "$RUNNER_TEMP/task0032-lcd-integrated-p0"
           python3 tools/task0003-baseline.py "$out/candidate-evidence" --p0-candidate | tee "$out/canonical-preflight.log"
+      - name: Compare exact pinned P0 baseline without changing the canonical build
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-lcd-integrated"
+          base="$RUNNER_TEMP/task0032-lcd-integrated-baseline"
+          git worktree add --detach "$base" 6693513f2ecacabf47c5e08c80fc3a9bb8417eab
+          (cd "$base" && python3 tools/task0003-baseline.py "$out/baseline-evidence" --avr-only --p0-candidate) | tee "$out/baseline.log"
+          python3 tools/task0032/lcd-resource-delta.py "$out"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
