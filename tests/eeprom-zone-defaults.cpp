@@ -459,6 +459,10 @@ int main(){
     assert(hostAccess(65536L+address(Field::F_NEW_BED_EMERGENCY_C),0)==HostAccess::Unknown);
     assert(hostAccess(address(Field::F_NEW_BED_EMERGENCY_C),0)==HostAccess::ReadOnly);
     assert(hostAccess(address(Field::F_PRINTING_TIME),2)==HostAccess::ReadOnly);
+    for(uint8_t axis=0;axis<5;++axis) {
+        const auto access=hostAccess(address(Field::F_RF_MOTOR_CURRENT)+axis,0);
+        assert(access==(axis<3+NUM_EXTRUDER?HostAccess::ReadOnly:HostAccess::Unknown));
+    }
     assert(hostAccess(address(Field::F_PID_CALIBRATION_SLOT_0),0)==HostAccess::Unknown);
 #if NUM_EXTRUDER == 1
     assert(hostAccess(address(Field::F_E1_STEPS_PER_MM),3)==HostAccess::Unknown);

@@ -45,18 +45,15 @@ void dispatchMachine(GCode* com) {
     case 83: return selectRelativeExtrusion();
     case 84: return configureStepperShutdown(com);
     case 85: return configureInactivityShutdown(com);
-    case 99: return suspendAxes(com);
     case 201: return setPrintAcceleration(com);
     case 202: return setTravelAcceleration(com);
     case 207: return setJerkLimits(com);
     case 218: return setToolOffset(com);
     case 220: return setFeedrateMultiplier(com);
     case 221: return setFlowMultiplier(com);
-    case 223: return testAdvanceSteps(com);
     case 232: return reportAdvancePeak();
     case 233: return configureAdvance(com);
     case 400: return finishMotion();
-    case 908: return setStepperCurrent(com);
     case 3006: return setManualZOffset(com);
     case 3070: return requestPrintPause(com);
     case 3079: return outputObject();
@@ -93,7 +90,6 @@ void dispatchMachine(GCode* com) {
     case 116: return waitForTemperatures();
     case 140: return setBedTemperature(com);
     case 190: return waitForBed(com);
-    case 203: return; // Legacy temperature monitor selection.
     case 204: return setPidGains(com);
     case 303: return tunePid(com);
     case 355: return setCaseLight(com);
@@ -168,11 +164,8 @@ void dispatchMachine(GCode* com) {
     case 500: return saveConfiguration();
     case 501: return loadConfiguration();
     case 502: return restoreConfigurationDefaults();
-    case 3005: return configureRfDebug(com);
     case 3028: return testHomingRepeatability(com);
     case 3029: return accessPanel(com);
-    case 3060: return reportDeviceVersion();
-    case 3090: return testWatchdog(com);
     case PanelStatusOverride: return setPanelStatusOverride(com);
     case 3200: return runRfDiagnostic(com);
     }

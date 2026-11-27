@@ -172,10 +172,6 @@ static bool validHostNonthermalValue(const GCode* c,uint16_t p) {
         return v>=EMERGENCY_STOP_DIGITS_MIN&&v<=EMERGENCY_STOP_DIGITS_MAX&&v!=0&&v<=HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX);
     if(p==EPR_RF_EMERGENCYZSTOPDIGITSMAX)
         return v>=EMERGENCY_STOP_DIGITS_MIN&&v<=EMERGENCY_STOP_DIGITS_MAX&&v!=0&&v>=HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN);
-    if(p>=EPR_RF_MOTOR_CURRENT&&p<EPR_RF_MOTOR_CURRENT+NUM_EXTRUDER+3) {
-        static const unsigned short maximum[] PROGMEM=MOTOR_CURRENT_MAX;
-        return v>=MOTOR_CURRENT_MIN&&v<=pgm_read_word(&maximum[p-EPR_RF_MOTOR_CURRENT]);
-    }
     if(p==EPR_RF_FAN_MODE||p==EPR_RF_CASE_LIGHT_MODE||p==EPR_RF_FET1_MODE||p==EPR_RF_FET2_MODE||p==EPR_RF_FET3_MODE)return v<=1;
     if(p==EPR_RF_PART_FAN_SPEED)return v>=1&&v<=PART_FAN_MODE_MAX;
     if(p==EPR_RF_PART_FAN_PWM_MIN)return v>=1&&v+16<=HAL::eprGetByte(EPR_RF_PART_FAN_PWM_MAX);
@@ -269,6 +265,14 @@ void EEPROM::update(GCode* com) {
 #endif
     // Calibration authorization is not a user-editable EEPROM setting.
     const int width = com->hasT() && com->T == 0 ? 1 : (com->hasT() && com->T == 1 ? 2 : 4);
+#ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
+    // The legacy comparison build lacks the exact typed whitelist. Block
+    // every overlapping host write, including a partial or wide raw write.
+    if(com->hasP() && com->P>=EPR_RF_MOTOR_CURRENT-width+1 && com->P<EPR_RF_MOTOR_CURRENT+5) {
+        Com::printErrorFLN(PSTR("Motor current is menu-only"));
+        return;
+    }
+#endif
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     // M206 P is int32_t but HAL takes a 16-bit unsigned AVR address.
     // Reject the whole span before narrowing; upper-bank research records

@@ -556,11 +556,6 @@ public:
     static bool takeTemperatureTick();
     static bool temperatureTickPending();
 
-    inline static void testWatchdog() {
-        while (1) {
-        }
-    } // testWatchdog
-
     inline static float maxExtruderTimerFrequency() {
         return (float)F_CPU / TIMER0_PRESCALE;
 

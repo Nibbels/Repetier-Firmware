@@ -125,35 +125,6 @@ void configureInactivityShutdown(GCode* com) {
         Printer::inactivity.setShutdownTimeout(0);
 }
 
-// Temporarily releasing an axis can lose its position. Review this command
-// alongside homing and compensation when auditing supported G-code.
-void suspendAxes(GCode* com) {
-    millis_t wait = 10000L;
-    if (com->hasS())
-        wait = 1000 * com->S;
-    if (com->hasX())
-        Printer::disableXStepper();
-    if (com->hasY())
-        Printer::disableYStepper();
-    if (com->hasZ())
-        Printer::disableZStepper();
-    wait += HAL::timeInMilliseconds();
-
-    while (wait - HAL::timeInMilliseconds() < 100000L) {
-        Commands::checkForPeriodicalActions(Paused); // Check heater and other stuff every n milliseconds
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-        // Do not change motor enable state after the terminal stop.
-        if(Printer::printJob.emergencyLocked())return;
-#endif
-    }
-    if (com->hasX())
-        Printer::enableXStepper();
-    if (com->hasY())
-        Printer::enableYStepper();
-    if (com->hasZ())
-        Printer::enableZStepper();
-}
-
 void setPrintAcceleration(GCode* com) {
     if (com->hasX())
         Printer::setPrintAcceleration(X_AXIS, constrain(com->X, ACCELERATION_MIN_XY, ACCELERATION_MAX_XY));
@@ -243,14 +214,6 @@ void setFlowMultiplier(GCode* com) {
     }
 }
 
-void testAdvanceSteps(GCode* com) {
-    if (com->hasS() && Printer::extrusionOutput.advanceEnabled() && !Printer::pause.isPaused()
-        && !Printer::extrusionOutput.blocked()) {
-        InterruptProtectedBlock lock;
-        Printer::extrusionOutput.addSteps(com->S);
-    }
-}
-
 void reportAdvancePeak() {
     const auto peak = MotionPlanner::takeAdvancePeak();
     if (Printer::debugInfo()) {
@@ -270,44 +233,6 @@ void configureAdvance(GCode* com) {
 
 void finishMotion() {
     Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Resume);
-}
-
-void setStepperCurrent(GCode* com) {
-    if (com->hasS()) {
-        uint8_t current = com->S;
-        if (current > 150) {
-            return;
-        }
-        if (current < MOTOR_CURRENT_MIN) {
-            return;
-        }
-
-        uint8_t steppernr = 255; //fails
-        if (com->hasP()) {
-            steppernr = (uint8_t)com->P;
-        }
-        if (com->hasX()) {
-            steppernr = 0;
-        }
-        if (com->hasY()) {
-            steppernr = 1;
-        }
-        if (com->hasZ()) {
-            steppernr = 2;
-        }
-        if (com->hasE() && com->E == 0) { //E0
-            steppernr = 4;
-        }
-        if (com->hasE() && com->E == 1) { //E1
-            steppernr = 5;
-        }
-
-        if (steppernr > 3 + NUM_EXTRUDER) {
-            return; // Axis number too high for setup
-        }
-
-        setMotorCurrent(steppernr, current);
-    }
 }
 
 void setManualZOffset(GCode* pCommand) {

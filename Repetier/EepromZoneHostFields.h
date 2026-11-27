@@ -29,12 +29,12 @@
     RF_ZONE_ITEM(3, address(Field::F_MAX_XYJERK), Com::tEPRMaxXYJerk, 3, true)
     RF_ZONE_ITEM(3, address(Field::F_MAX_ZJERK), Com::tEPRMaxZJerk, 3, true)
 
-    RF_ZONE_ITEM(0, address(Field::F_RF_MOTOR_CURRENT) + X_AXIS, Com::tEPRPrinter_STEPPER_X, 3, true)
-    RF_ZONE_ITEM(0, address(Field::F_RF_MOTOR_CURRENT) + Y_AXIS, Com::tEPRPrinter_STEPPER_Y, 3, true)
-    RF_ZONE_ITEM(0, address(Field::F_RF_MOTOR_CURRENT) + Z_AXIS, Com::tEPRPrinter_STEPPER_Z, 3, true)
-    RF_ZONE_ITEM(0, address(Field::F_RF_MOTOR_CURRENT) + E_AXIS + 0, Com::tEPRPrinter_STEPPER_E0, 3, true)
+    RF_ZONE_ITEM(0, address(Field::F_RF_MOTOR_CURRENT) + X_AXIS, Com::tEPRPrinter_STEPPER_X, 3, false)
+    RF_ZONE_ITEM(0, address(Field::F_RF_MOTOR_CURRENT) + Y_AXIS, Com::tEPRPrinter_STEPPER_Y, 3, false)
+    RF_ZONE_ITEM(0, address(Field::F_RF_MOTOR_CURRENT) + Z_AXIS, Com::tEPRPrinter_STEPPER_Z, 3, false)
+    RF_ZONE_ITEM(0, address(Field::F_RF_MOTOR_CURRENT) + E_AXIS + 0, Com::tEPRPrinter_STEPPER_E0, 3, false)
 #if NUM_EXTRUDER > 1
-    RF_ZONE_ITEM(0, address(Field::F_RF_MOTOR_CURRENT) + E_AXIS + 1, Com::tEPRPrinter_STEPPER_E1, 3, true)
+    RF_ZONE_ITEM(0, address(Field::F_RF_MOTOR_CURRENT) + E_AXIS + 1, Com::tEPRPrinter_STEPPER_E1, 3, false)
 #endif //NUM_EXTRUDER > 1
 
     RF_ZONE_ITEM(3, address(Field::F_XAXIS_STEPS_PER_MM), Com::tEPRXStepsPerMM, 4, true)

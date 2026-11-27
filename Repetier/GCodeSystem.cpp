@@ -168,22 +168,6 @@ void restoreConfigurationDefaults() {
     showInformation(PSTR(UI_TEXT_CONFIGURATION), PSTR(UI_TEXT_RESTORE_DEFAULTS), PSTR(UI_TEXT_OK));
 }
 
-void configureRfDebug(GCode* pCommand) {
-    long nTemp;
-    if (pCommand->hasS()) {
-        // test and take over the specified value
-        nTemp = pCommand->S;
-        if (nTemp < 0)
-            nTemp = 0;
-
-        if (Printer::debugInfo()) {
-            Com::printFLN(PSTR("M3005: new debug level: "), (char)nTemp);
-        }
-    } else {
-        showInvalidSyntax(pCommand->M);
-    }
-}
-
 void requestHeatBedScan(GCode* pCommand) {
     if (pCommand->hasS() && (pCommand->S == int(HeatBedScanMode::Pla) || pCommand->S == int(HeatBedScanMode::Abs))) {
         startHeatBedScan(static_cast<HeatBedScanMode>(pCommand->S));
@@ -266,36 +250,6 @@ void accessPanel(GCode* pCommand) {
             }
         }
         Com::println();
-    }
-}
-
-void reportDeviceVersion() {
-    Com::printFLN(PSTR("Device Type: " UI_PRINTER_NAME));
-    Com::printFLN(PSTR("Firmware Version: " UI_VERSION_STRING));
-}
-
-void testWatchdog(GCode* pCommand) {
-    if (pCommand->hasS()) {
-        if (pCommand->S == 666) {
-            if (HAL::watchdogEnabled()) {
-                HAL::stopWatchdog();
-                Com::printFLN(PSTR("M3090: WARNING the watchdog is disabled now"));
-            } else {
-                HAL::startWatchdog();
-                Com::printFLN(PSTR("M3090: the watchdog has been activated"));
-            }
-        }
-    } else if (pCommand->hasP()) {
-        HAL::delayMilliseconds(10000);
-    } else if (pCommand->hasT()) {
-        for (int iii = 0; iii < 1000; iii++)
-            HAL::delayMicroseconds(10000);
-    } else {
-        if (Printer::debugInfo()) {
-            Com::printFLN(PSTR("M3090: the watchdog is going to reset the firmware"));
-        }
-        HAL::delayMilliseconds(100);
-        HAL::testWatchdog();
     }
 }
 

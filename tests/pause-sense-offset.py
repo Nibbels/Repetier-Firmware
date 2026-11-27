@@ -108,10 +108,13 @@ def main():
         section(commands, "bool Commands::waitForMotion(", "\nvoid Commands::printCurrentPosition()"),
         section(extruder, "bool Extruder::selectExtruderById(", "\nstatic uint8_t boundedExtruderStepInterval("),
         section(printer, "void Printer::applyAdvanceSettings(", "\nvoid Printer::updateWobbleFixOffsets("),
-        section(motion_commands, "void testAdvanceSteps(", "void reportAdvancePeak("),
         section(motion_commands, "void configureAdvance(", "void finishMotion("),
+        # Synthetic test input only; no public G-code can inject raw E steps.
+        "void injectAdvanceTestSteps(GCode* com) {"
+        " if (com->hasS() && Printer::extrusionOutput.advanceEnabled() && !Printer::pause.isPaused()"
+        " && !Printer::extrusionOutput.blocked()) { InterruptProtectedBlock lock; Printer::extrusionOutput.addSteps(com->S); } }",
         "void runAdvanceCommand(int command, GCode* com) {"
-        " if (command == 223) testAdvanceSteps(com); else configureAdvance(com); }",
+        " if (command == 233) configureAdvance(com); }",
         "void rescalePlannedAxis(uint8_t axis) {\nusing namespace Printer;\n"
         + section(printer, "        const float mmPerStep = 1.0f / axisStepsPerMM_[axis];", "\n\n        /** Acceleration")
         + "\n}",

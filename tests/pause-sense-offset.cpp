@@ -854,7 +854,7 @@ void pressureStop() {
     StepExecutor::updateAdvanceSteps(extrusion, 4);
     GCode testStep;
     testStep.S = 5;
-    runAdvanceCommand(223, &testStep);
+    injectAdvanceTestSteps(&testStep);
     assert(output.pendingSteps() == 0 && Extruder::stepPulses == 0);
 
     sample(11500, EMERGENCY_STOP_CHECKS);
@@ -930,7 +930,7 @@ void outputSafetyLock() {
         StepExecutor::updateAdvanceSteps(extrusion, 4);
         GCode testStep;
         testStep.S = 5;
-        runAdvanceCommand(223, &testStep);
+        injectAdvanceTestSteps(&testStep);
         assert(output.pendingSteps() == 0 && !fireAdvanceCompare());
         assert(Extruder::stepPulses == oldPulses);
     }
@@ -2120,7 +2120,7 @@ void advanceModeChange() {
 
     GCode testStep;
     testStep.S = 20;
-    runAdvanceCommand(223, &testStep);
+    injectAdvanceTestSteps(&testStep);
     assert(advance.pendingSteps() == 0);
 
     PrintLine::linesCount = 2;
@@ -2137,7 +2137,7 @@ void advanceModeChange() {
     assert(advance.pendingSteps() == 0);
 
     testStep.S = 2;
-    runAdvanceCommand(223, &testStep);
+    injectAdvanceTestSteps(&testStep);
     advance.setLeadSteps(1);
     const auto tick = [] { fireAdvanceCompare(); };
     for (int i = 0; i < 4; ++i)
@@ -2155,7 +2155,7 @@ void advanceModeChange() {
     assert(!advance.advanceEnabled() && Extruder::current->advanceL == 0);
     assert(Extruder::current->deliveredSteps == 2 && advance.pendingSteps() == 0);
 
-    runAdvanceCommand(223, &testStep);
+    injectAdvanceTestSteps(&testStep);
     setting.Y = 30;
     runAdvanceCommand(233, &setting);
     assert(advance.advanceEnabled() && advance.pendingSteps() == 0);
@@ -2215,7 +2215,7 @@ void advanceCancel() {
     StepExecutor::updateAdvanceSteps(move, 4);
     GCode testStep;
     testStep.S = 5;
-    runAdvanceCommand(223, &testStep);
+    injectAdvanceTestSteps(&testStep);
     {
         InterruptProtectedBlock lock;
         output.onIdleTick();
