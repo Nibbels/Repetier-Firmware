@@ -56,9 +56,43 @@ def apply(fw,here,changes,replace):
            """        motorWake.beforeDisable(0x18);
         const int16_t discarded = Printer::extrusionOutput.inhibit(ExtrusionOutput::Inhibit::MotorsDisabled);""")
     p="StepExecutor.h"
+    edit(p,"    static long performDirectMove();",
+           """    static long performDirectMove();
+    // Foreground M99 and Timer1 share the same bounded GPIO transaction.
+    static bool ensureMotorsReady(uint8_t requested);""")
     edit(p,"    static void enableSteppers(PrintLine& move);",
-           """    static bool ensureMotorsReady(uint8_t requested);
-    static bool enableSteppers(PrintLine& move);""")
+           "    static bool enableSteppers(PrintLine& move);")
+    # M99 is the only other enable caller in the actual source inventory.
+    # Drain before releasing axes; keep foreground services alive during
+    # the explicit suspend and subsequent nonblocking wake retries.
+    # Admission/reentrant panel interaction still needs integrated P0 replay.
+    p="GCodeMotion.cpp"
+    edit(p,"void suspendAxes(GCode* com) {\n    millis_t wait = 10000L;",
+           """void suspendAxes(GCode* com) {
+    if (!Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Resume))
+        return;
+    if (Printer::blockAll || Printer::printJob.commandsBlocked())
+        return;
+    millis_t wait = 10000L;""")
+    edit(p,"""    while (wait - HAL::timeInMilliseconds() < 100000L) {
+        Commands::checkForPeriodicalActions(Paused); // Check heater and other stuff every n milliseconds
+    }
+    if (com->hasX())
+        Printer::enableXStepper();
+    if (com->hasY())
+        Printer::enableYStepper();
+    if (com->hasZ())
+        Printer::enableZStepper();""",
+           """    while (wait - HAL::timeInMilliseconds() < 100000L) {
+        Commands::checkForPeriodicalActions(Paused);
+        if (Printer::blockAll || Printer::printJob.commandsBlocked())
+            return;
+    }
+    const uint8_t requested=(com->hasX()?1:0) | (com->hasY()?2:0) | (com->hasZ()?4:0);
+    while (!Printer::blockAll && !Printer::printJob.commandsBlocked()
+           && !StepExecutor::ensureMotorsReady(requested)) {
+        Commands::checkForPeriodicalActions(Paused);
+    }""")
     p="StepExecutor.cpp";s=get(p)
     start=s.index("inline void StepExecutor::enableSteppers(PrintLine& move)")
     end=s.index("inline void StepExecutor::adjustDirections",start)
