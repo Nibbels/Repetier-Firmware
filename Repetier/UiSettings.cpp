@@ -391,14 +391,6 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
         break;
     }
 
-#ifdef RGB_LIGHT_R_PIN
-    case UI_ACTION_RGB_LIGHT_MODE: {
-        char mode = RgbLighting::mode();
-        INCREMENT_MIN_MAX(mode, 1, 0, 3);
-        RgbLighting::selectMode(mode);
-        break;
-    }
-#endif // RGB_LIGHT_R_PIN
 
     case UI_ACTION_EXTR_STEPS_E0:
     case UI_ACTION_EXTR_STEPS_E1:

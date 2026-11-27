@@ -930,11 +930,8 @@ void UIDisplay::backAction() {
         senseOffsetDownAction();
     } else
     {
-#ifdef RGB_LIGHT_R_PIN
-        if (menuLevel == 0) {
-            RgbLighting::requestWhiteToggle();
-        }
-#endif // RGB_LIGHT_R_PIN
+        if(menuLevel==0 && Lighting::available())
+            AccessoryOutputs::toggle(AccessoryOutputs::Output::CaseLight);
         menuEsc();
         activeAction = 0;
         confirmation_ = 0;

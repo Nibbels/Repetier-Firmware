@@ -375,7 +375,6 @@ Overridden if EEPROM activated. */
 #define UI_SET_MIN_EXTRUDER_TEMP            70
 #define UI_SET_MAX_EXTRUDER_TEMP            270
 #define UI_SET_EXTRUDER_FEEDRATE            1.5f                                                 // [mm/sec]
-#define COOLDOWN_THRESHOLD                  40                                                  // [°C]
 
 #define SPEED_MIN_MILLIS                    300
 #define SPEED_MAX_MILLIS                    50

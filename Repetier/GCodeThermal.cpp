@@ -193,24 +193,17 @@ void waitForBed(GCode* com) {
 }
 
 void setCaseLight(GCode* com) {
-#if HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)
-    (void)com;
-    Com::printErrorFLN(PSTR("M355: X19 is assigned to a hotend cooler"));
-#else
-    // Idee und Teilcode und Vorarbeit von WESSIX
-    // Code schaltet X19, das ist nicht zwingend das Licht!
-    if (com->hasS()) {
-        if (com->S == 1 || com->S == 0) {
-            AccessoryOutputs::stage(AccessoryOutputs::Output::CaseLight, com->S);
-        } else {
-            Com::printFLN(PSTR("M355 Error S=0||1"));
-        }
-    } else {
-        AccessoryOutputs::stage(AccessoryOutputs::Output::CaseLight, !AccessoryOutputs::state(AccessoryOutputs::Output::CaseLight));
+    if(!Lighting::available()) {
+        Com::printErrorFLN(PSTR("M355: no light output available"));
+        return;
     }
-    AccessoryOutputs::apply(AccessoryOutputs::Output::CaseLight);
-    Com::printFLN(PSTR("M355: X19 set to "), AccessoryOutputs::state(AccessoryOutputs::Output::CaseLight));
-#endif
+    if(com->hasS() && com->S!=0 && com->S!=1) {
+        showInvalidSyntax(com->M);
+        return;
+    }
+    const bool on=com->hasS()?com->S!=0:!AccessoryOutputs::state(AccessoryOutputs::Output::CaseLight);
+    AccessoryOutputs::set(AccessoryOutputs::Output::CaseLight,on);
+    Com::printFLN(PSTR("M355: light "),int(on));
 }
 
 #if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1

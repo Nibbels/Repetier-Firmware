@@ -77,14 +77,6 @@ void dispatchMachine(GCode* com) {
     case 3300: return setAccessoryFet(com);
     case 3301: return setMainsOutput(com);
 #endif
-#ifdef RGB_LIGHT_R_PIN
-    case 3303: return RgbLighting::setHeatingLight(com);
-    case 3304: return RgbLighting::setPrintingLight(com);
-    case 3305: return RgbLighting::setCoolingLight(com);
-    case 3306: return RgbLighting::setIdleLight(com);
-    case 3307: return RgbLighting::setManualLight(com);
-    case 3308: return RgbLighting::setRgbLightMode(com);
-#endif
 #ifdef X35_ADC_CHANNEL
     case 3941: return readOptionalTemperature();
 #endif

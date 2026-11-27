@@ -59,6 +59,7 @@ static void serviceThermalEmergency() {
     HAL::takeFeatureTick();
     if(HAL::takeTemperatureTick()) {
         Extruder::manageTemperatures();
+        Lighting::serviceAlarm(HAL::timeInMilliseconds());
         uid.refreshPage();
     }
 }

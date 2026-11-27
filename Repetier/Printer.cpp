@@ -565,9 +565,6 @@ void Printer::setup() {
     Printer::setAxisLengthMm(Y_AXIS, Y_MAX_LENGTH);
     Printer::setAxisLengthMm(Z_AXIS, Z_MAX_LENGTH);
 
-#ifdef RGB_LIGHT_R_PIN
-    RgbLighting::reset();
-#endif // RGB_LIGHT_R_PIN
 
     uid.initialize();
 
@@ -604,9 +601,6 @@ void Printer::setup() {
 
     Extruder::applyCurrentSettings();
 
-#ifdef RGB_LIGHT_R_PIN
-    RgbLighting::initialize();
-#endif // RGB_LIGHT_R_PIN
 
     lockMovement();
 

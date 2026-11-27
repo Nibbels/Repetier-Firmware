@@ -556,26 +556,6 @@ void HAL::setupTimer() {
     OCR1A = 65500;                     // start off with a slow frequency.
     TIMSK1 |= (1 << OCIE1A);           // Enable interrupt
 
-#ifdef RGB_LIGHT_R_PIN
-    // Configure Timer 4 for RGB-PWM
-    TCCR4A = 0; // clear Register
-    TCCR4B = 0;
-
-    ICR4 = 20480; // set frequency to 100Hz = 10ms
-
-    TCCR4A |= (1 << WGM41);                              // Fast PWM
-    TCCR4B |= (1 << WGM42) | (1 << WGM43) | (1 << CS41); // Prescaler = 8
-
-    SET_OUTPUT(RGB_LIGHT_R_PIN); // PH3 - Pin 15 ( OC4A )
-    SET_OUTPUT(RGB_LIGHT_G_PIN); // PH4 - Pin 16 ( OC4B )
-    SET_OUTPUT(RGB_LIGHT_B_PIN); // PH5 - Pin 17 ( OC4C )
-
-    TCCR4A |= (1 << COM4A1) | (1 << COM4B1) | (1 << COM4C1); // enable fast PWM
-
-    OCR4A = 0; // default R = 0 at startup
-    OCR4B = 0; // default G = 0 at startup
-    OCR4C = 0; // default B = 0 at startup
-#endif // RGB_LIGHT_R_PIN
 } // setupTimer
 
 void HAL::showStartReason() {
@@ -1437,17 +1417,11 @@ ISR(PWM_TIMER_VECTOR) {
         featureTick = true; // Volle 100ms Zeit -> Ping 50ms
     }
 
-#ifdef RGB_LIGHT_R_PIN
-    bool rgb_10ms_change_should_be_now = false;
-#endif // RGB_LIGHT_R_PIN
 
     static char counter10Periodical = 0; // Approximate a 10ms timer :: blocks pingwatchdog s commandloop if not working
     if (++counter10Periodical >= 39) {
         counter10Periodical = 0;
         scanTick = true;
-#ifdef RGB_LIGHT_R_PIN
-        rgb_10ms_change_should_be_now = true;
-#endif // RGB_LIGHT_R_PIN
 
         // Hier her versetzt, um 10ms einstell-auflösung zu erhalten. Darum /10 statt bisher /100 beim Init in setFanSpeed().
         // Fan anfangs auf high zum anlaufen, aber das muss beendet werden:
@@ -1460,10 +1434,6 @@ ISR(PWM_TIMER_VECTOR) {
     if (pwm_count_heater & 4)
         uid.fastAction();
 
-#ifdef RGB_LIGHT_R_PIN
-    if (rgb_10ms_change_should_be_now)
-        RgbLighting::advanceFade();
-#endif // RGB_LIGHT_R_PIN
 } // ISR(PWM_TIMER_VECTOR)
 
 namespace {

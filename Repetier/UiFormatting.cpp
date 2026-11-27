@@ -373,29 +373,6 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
             else if (c2 == 'o')
                 addStringP(AccessoryOutputs::state(AccessoryOutputs::Output::CaseLight) ? ui_text_on : ui_text_off); // %lo : Lights on/off
 
-#ifdef RGB_LIGHT_R_PIN
-            else if (c2 == 'i') // %li : Light: White/Color
-            {
-                if (RgbLighting::forcedWhite()) {
-                    addStringP(ui_text_white);
-                } else {
-                    switch (RgbLighting::mode()) {
-                    case RGB_MODE_OFF:
-                        addStringP(ui_text_off);
-                        break;
-                    case RGB_MODE_WHITE:
-                        addStringP(ui_text_white);
-                        break;
-                    case RGB_MODE_AUTOMATIC:
-                        addStringP(ui_text_color);
-                        break;
-                    case RGB_MODE_MANUAL:
-                        addStringP(ui_text_manual);
-                        break;
-                    }
-                }
-            }
-#endif // RGB_LIGHT_R_PIN
 
             break;
         }

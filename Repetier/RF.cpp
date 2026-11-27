@@ -45,9 +45,7 @@ void stage(Output output, char value) {
 
 void apply(Output output) {
     switch (output) {
-#if !HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)
-    case Output::CaseLight: WRITE(CASE_LIGHT_PIN, state(output)); break;
-#endif
+    case Output::CaseLight: Lighting::set(state(output) ? Lighting::White : Lighting::Black); break;
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
     case Output::Mains: WRITE(OUTPUT_230V_PIN, state(output)); break;
 #if FET1 > -1 && !HOTEND_COOLER_USES_PIN(FET1)
@@ -95,10 +93,8 @@ void initializeBoardOutputs() {
 }
 
 void initializeCaseLight() {
-#if !HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)
-    SET_OUTPUT(CASE_LIGHT_PIN);
+    Lighting::initialize();
     apply(Output::CaseLight);
-#endif
 }
 } // namespace AccessoryOutputs
 
@@ -249,9 +245,6 @@ void loopFeatures() // Wird so aufgerufen, dass es ein ~100ms Takt sein sollte.
 
         Printer::pause.serviceStandby(uTime);
 
-#ifdef RGB_LIGHT_R_PIN
-        RgbLighting::updateStatus();
-#endif // RGB_LIGHT_R_PIN
 
         nEntered--;
     }

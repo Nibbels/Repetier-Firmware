@@ -234,15 +234,13 @@ void UIDisplay::mainSwitchCase(int action) {
         break;
     }
 
-#if !HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)
     case UI_ACTION_LIGHTS_ONOFF: {
+        if(!Lighting::available())break;
         AccessoryOutputs::toggle(AccessoryOutputs::Output::CaseLight);
 
         EEPROM::storeCaseLight(AccessoryOutputs::state(AccessoryOutputs::Output::CaseLight));
-
         break;
     }
-#endif
 
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
     case UI_ACTION_230V_OUTPUT: {

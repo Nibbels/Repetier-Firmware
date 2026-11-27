@@ -25,7 +25,7 @@
 #include "QueueTask.h"
 
 #include "CalibrationScan.h"
-#include "RgbLighting.h"
+#include "Lighting.h"
 
 // ##########################################################################################
 // ##   RF specific UI Actions
