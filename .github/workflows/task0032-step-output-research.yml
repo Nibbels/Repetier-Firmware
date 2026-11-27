@@ -40,6 +40,9 @@ jobs:
           set -o pipefail
           c++ -std=c++11 -O2 -Wall -Wextra -Werror -I Repetier research/task0032-step-output/z-geometry-replay.cpp -o "$RUNNER_TEMP/z-geometry-replay"
           "$RUNNER_TEMP/z-geometry-replay" | tee "$RUNNER_TEMP/step-output/z-geometry-replay.txt"
+      - name: Region-aware geometric feedforward curvature and reversal model
+        run: |
+          python3 research/task0032-step-output/z-feedforward.py "$RUNNER_TEMP/step-output/z-feedforward-results.json"
       - name: Shared Z correction clock characterization
         run: |
           python3 research/task0032-step-output/z-clock-research.py "$RUNNER_TEMP/step-output/z-clock-results.json"
