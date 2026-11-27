@@ -428,7 +428,7 @@ void HeatBedScan::prepareProbeTemperature() {
         const int requested=mode_==HeatBedScanMode::Pla?heatBedScanPlaBedC:heatBedScanAbsBedC;
         if(heatedBedController.targetTemperatureC!=requested) {
             Com::printErrorFLN(PSTR("Heated scan bed target not admitted"));
-            Calibration::scanSession.requestAbort(ScanAbort::Canceled);
+            Calibration::scanSession.requestAbort(ScanAbort::HeaterTargetRejected);
             return;
         }
     }
@@ -443,7 +443,7 @@ void HeatBedScan::waitForBedTemperature() {
         const int requested=mode_==HeatBedScanMode::Pla?heatBedScanPlaBedC:heatBedScanAbsBedC;
         if(heatedBedController.targetTemperatureC!=requested) {
             Com::printErrorFLN(PSTR("Heated scan bed target changed"));
-            Calibration::scanSession.requestAbort(ScanAbort::Canceled);
+            Calibration::scanSession.requestAbort(ScanAbort::HeaterTargetChanged);
             return;
         }
     }
