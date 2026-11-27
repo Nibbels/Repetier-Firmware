@@ -128,6 +128,10 @@ void transitions() {
     sink.ready();
     memset(sink.memory,' ',sizeof(sink.memory));
     sink.address=0xff;
+    // The exclusive driver has completed its own clear delay. No pending
+    // byte timing belongs to the normal service after this handoff.
+    sink.t+=2000;
+    sink.wrote=false;
     s.afterExclusiveOperation();
     for(unsigned row=0;row<4;++row) {
         ByteService::invalidate(shadow[row]);
