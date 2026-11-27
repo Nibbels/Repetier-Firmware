@@ -178,5 +178,63 @@
       "Bound nested interrupt stack and maximum interrupt response on final linked image; preserve heater deadline and transport constraints",
       "Recompute reserve on final default recovery-linked build; no SRAM allocation release until then"
     ]
+  },
+  "latestVerified": {
+    "head": "28bdf1c75e7dbc9ff43719942e4c4aabf4327859",
+    "testedMerge": "e931fe23a6394fe4c7ac7aa2994807a93f5293e6",
+    "run": 46045010307,
+    "artifact": 15222066305,
+    "archiveSha256": "234dea9336e8dcdd9f65212723236381a781c17bfc243f70d6b9ad96ff18ff52",
+    "linkedFlash": [
+      232754,
+      239516,
+      239516,
+      234984
+    ],
+    "linkedSram": [
+      6186,
+      6244,
+      6362,
+      6255
+    ],
+    "flashRemaining": [
+      21198,
+      14436,
+      14436,
+      18968
+    ],
+    "sramBeforeStack": [
+      2006,
+      1948,
+      1830,
+      1937
+    ],
+    "conditionalNestedIrqStack": 104,
+    "sramAfterIrqBeforeForegroundAndReserve": [
+      1902,
+      1844,
+      1726,
+      1833
+    ],
+    "foregroundBound": null,
+    "additionalReserve": null,
+    "releasedIncrementalSram": 0,
+    "usageSnapshotBytes": 8,
+    "irqInstructionWalker": "ebde27ab34d51fd86859da1fbf4d4bc463b2ff04",
+    "foregroundDiagnostic": "35e9647d9f876ff660f2d60742f833aae483e54a",
+    "foregroundCfgNodes": [
+      427,
+      434,
+      434,
+      434
+    ],
+    "foregroundCfgEdges": [
+      1742,
+      1781,
+      1781,
+      1769
+    ],
+    "foregroundRemainingPumpSccNodes": 40,
+    "status": "green combined candidate; A73 release blocked by foreground bound and global IRQ response; default cutover not yet performed"
   }
 }
