@@ -42,6 +42,7 @@ jobs:
           python3 tools/task0032/fixed-queue-capacity.py | tee "$out/fixed-queue-capacity.log"
           git show "$transport:tools/task0033/loss-replay.py" > "$out/prior-loss-replay.py"
           python3 tools/task0032/loss-gate-replay.py --prior-replay "$out/prior-loss-replay.py" | tee "$out/loss-gate-replay.log"
+          python3 tools/task0032/loss-gate-replay.py --prior-replay "$out/prior-loss-replay.py" --combined | tee "$out/loss-gate-combined-replay.log"
           sha256sum tools/task0032/loss-gate-replay.py "$out/prior-loss-replay.py" >> "$out/source-sha256.txt"
           p0=2195b822c89795359cd73052b0c43ff2830a4d56
           git fetch --no-tags --depth=1 origin "$p0"
