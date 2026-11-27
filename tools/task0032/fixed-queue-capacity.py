@@ -32,7 +32,7 @@ def once(text, old, new):
 def apply(fw):
     # Fail on a new consumer instead of blindly changing preprocessor semantics.
     allowed = {"Configuration.h", "MoveQueue.h", "MotionPlanner.cpp",
-               "motion.cpp", "Printer.cpp"}
+               "motion.cpp", "Printer.cpp", "PrintPause.cpp"}
     found = {p.name for p in fw.rglob("*")
              if p.is_file() and p.suffix in (".h", ".cpp", ".ino", ".c")
              and TOKEN.search(p.read_text(encoding="utf-8"))}
@@ -57,6 +57,9 @@ def apply(fw):
     edit(fw / "Printer.cpp", lambda s: once(s,
         'Com::config(PSTR("PrintlineCache:"), MOVE_CACHE_SIZE);',
         'Com::config(PSTR("PrintlineCache:"), MoveQueue::capacity);'))
+    edit(fw / "PrintPause.cpp", lambda s: once(s,
+        "PrintLine::queuedMoveCount() >= MOVE_CACHE_SIZE",
+        "PrintLine::queuedMoveCount() >= MoveQueue::capacity"))
     for p in fw.rglob("*"):
         if p.is_file() and p.suffix in (".h", ".cpp", ".ino", ".c"):
             assert not TOKEN.search(p.read_text(encoding="utf-8")), p
@@ -72,8 +75,9 @@ def fixture(s):
     # Its one early assertion needs a fixture literal, checked against actual
     # capacity below. All later tests use the real typed capacity.
     assert len(TOKEN.findall(before)) == 1
-    before = once(before, "linesCount < MOVE_CACHE_SIZE", "linesCount < 24")
-    return before + anchor + '\nstatic_assert(MoveQueue::capacity == 24, "production queue capacity");' + TOKEN.sub("MoveQueue::capacity", after)
+    before = once(before, "class MoveQueue;", "constexpr uint8_t fixtureQueueCapacity = 24;\nclass MoveQueue;")
+    before = once(before, "linesCount < MOVE_CACHE_SIZE", "linesCount < fixtureQueueCapacity")
+    return before + anchor + '\nstatic_assert(MoveQueue::capacity == fixtureQueueCapacity, "production queue capacity");' + TOKEN.sub("MoveQueue::capacity", after)
 
 
 def main():
@@ -85,6 +89,11 @@ def main():
             shutil.copyfile(ROOT / "tests" / name, root / "tests" / name)
         apply(root / "Repetier")
         edit(root / "tests/pause-sense-offset.cpp", fixture)
+        # PrintPause is extracted before the MoveQueue definition. Use the
+        # fixture capacity in that fragment, checked against the real class.
+        edit(root / "tests/pause-sense-offset.py", lambda s: once(s,
+            'pause.removeprefix(\'#include "Repetier.h"\\n\'),',
+            'pause.removeprefix(\'#include "Repetier.h"\\n\').replace("MoveQueue::capacity", "fixtureQueueCapacity"),'))
         subprocess.run([sys.executable, str(root / "tests/pause-sense-offset.py")], check=True)
         print("Fixed 24-slot queue candidate: existing actual-source motion/pause replays passed")
 
