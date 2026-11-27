@@ -113,5 +113,6 @@ int main() {
         w.service(27);assert(w.readyFor(m));
         w.beforeDisable(m);assert(!w.readyFor(m));
     }
+    w.reset();w.afterAsserted(1,100);w.service(UINT32_C(0x80000100));assert(w.readyFor(1));
     puts("MotorWake pure lifecycle tests passed; not hardware or concurrency qualification");
 }
