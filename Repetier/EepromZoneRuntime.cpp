@@ -178,7 +178,7 @@ void EEPROM::reportRecovery() {
         showInformation(recoveryDialogTag(),PSTR("Verify defaults"),PSTR("OK to confirm"));
     }
     if(pending&blockBit(BedSafety)) {
-        Com::printFLN(PSTR("Bed cutoff not commissioned; M3915 P2 S<40..150>"));
+        Com::printFLN(PSTR("Bed cutoff unset; Configuration > Bed cutoff"));
         if(!(pending&OrdinaryAlerts))UI_STATUS_UPD("Bed cutoff unset");
     }
 }

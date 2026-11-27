@@ -85,8 +85,8 @@ static void validChecksum(){
 int main(){
     unsigned faults=0;
     for(uint32_t clock:{0u,0xffffff00u}){
-        const unsigned n=visits;
         reset(0,clock);restoreConfigurationDefaults();validChecksum();assert(outputs==2&&restores==1&&stores==1);
+        const unsigned n=visits;
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         for(unsigned i=1;i<=n;++i){
             reset(i,clock);restoreConfigurationDefaults();validChecksum();assert(locked&&outputs==0&&restores==1&&stores==1);++faults;

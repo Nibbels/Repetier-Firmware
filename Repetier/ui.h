@@ -137,6 +137,7 @@
 
 #define UI_ACTION_CHOOSE_PID_ROBUST 1674
 #define UI_ACTION_CHOOSE_PID_DYNAMIC 1675
+#define UI_ACTION_BED_CUTOFF 1676
 
 #define UI_ACTION_CHOOSE_DMIN 1678
 #define UI_ACTION_CHOOSE_DMAX 1679
@@ -362,6 +363,9 @@ private:
     millis_t autoReturnTime_ = 0;
     bool autoReturnMessage_ = false;
     char confirmation_ = 0;
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+    uint8_t bedCutoffCandidate_ = 0;
+#endif
 };
 
 extern UIDisplay uid;

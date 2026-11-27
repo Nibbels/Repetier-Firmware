@@ -199,6 +199,9 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
             break;
         }
         case 'V': {
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+            if(c2=='c') {addInt(bedCutoffCandidate_,0);break;}
+#endif
             using Profile = PreheatProfiles::Profile;
             const bool profileA = c2 == 'b' || c2 == 'e';
             if (profileA || c2 == 'B' || c2 == 'E') {

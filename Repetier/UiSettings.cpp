@@ -66,6 +66,16 @@ void UIDisplay::finishAction(int action) {
         break;
     }
 
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+    case UI_ACTION_BED_CUTOFF:
+        if(!EEPROM::commissionBedCutoff(bedCutoffCandidate_)) {
+            Com::printErrorFLN(PSTR("Bed cutoff rejected; idle cold targets required"));
+            UI_STATUS_UPD("Cutoff rejected");
+        } else {
+            UI_STATUS_UPD("Cutoff saved");
+        }
+        break;
+#endif
     case UI_ACTION_CHOOSE_PID_ROBUST:
     case UI_ACTION_CHOOSE_PID_DYNAMIC: {
         if (confirmation_ != 1) {
@@ -138,6 +148,13 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         Commands::printCurrentPosition();
         break;
     }
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+    case UI_ACTION_BED_CUTOFF: {
+        const int candidate=int(bedCutoffCandidate_)+increment;
+        bedCutoffCandidate_=constrain(candidate,int(BedTemperatureLimit::MinimumC),int(BedTemperatureLimit::AbsoluteC));
+        break;
+    }
+#endif
     case UI_ACTION_RF_RESET_ACK:
     case UI_ACTION_STOP_ACK:
     case UI_ACTION_RESTORE_DEFAULTS:

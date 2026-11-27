@@ -805,6 +805,12 @@ void UIDisplay::pushMenu(void* men, bool refresh) {
         return;
     }
     menuLevel++;
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+    if(men==&ui_menu_bed_cutoff_edit) {
+        bedCutoffCandidate_=TemperatureController::commissionedBedCutoff();
+        if(!bedCutoffCandidate_)bedCutoffCandidate_=BedTemperatureLimit::DefaultC;
+    }
+#endif
     menu[menuLevel] = men;
     menuTop[menuLevel] = menuPos[menuLevel] = 0;
 

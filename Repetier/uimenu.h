@@ -746,9 +746,17 @@ UI_MENU_SUBMENU(ui_menu_z_calibration, UI_TEXT_ZCALIB,         ui_menu_z)
 UI_MENU_ACTION4(ui_menu_restore_defaults_ack,UI_ACTION_RESTORE_DEFAULTS, UI_TEXT_RESTORE_DEFAULTS, UI_TEXT_CONFIGURATION "?", UI_ACTION_TEXT_YES, UI_ACTION_TEXT_NO)
 UI_MENU_ACTIONSELECTOR_FILTER(ui_menu_restore_defaults,UI_TEXT_RESTORE_DEFAULTS,ui_menu_restore_defaults_ack, 0, MENU_MODE_PRINTING | MENU_MODE_PAUSED)
 
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+// Edit a staged value only; OK commits, BACK discards.
+UI_MENU_ACTION2(ui_menu_bed_cutoff_edit, UI_ACTION_BED_CUTOFF, "Bed cutoff: %VcC", "OK: save / BACK")
+UI_MENU_ACTIONSELECTOR_FILTER(ui_menu_bed_cutoff, "Bed cutoff", ui_menu_bed_cutoff_edit, 0, MENU_MODE_PRINTING | MENU_MODE_PAUSED)
+#define UI_MENU_BED_CUTOFF , &ui_menu_bed_cutoff
+#else
+#define UI_MENU_BED_CUTOFF
+#endif
 #define UI_MENU_CONFIGURATION {&ui_menu_conf_general, &ui_menu_z_calibration, &ui_menu_conf_dms, \
     &ui_menu_conf_wobble, UI_MENU_CONFIGURATION_FAN_COND &ui_menu_conf_pid, &ui_menu_conf_preheat, &ui_menu_conf_motor, \
-    &ui_menu_conf_accel, &ui_menu_conf_feed, &ui_menu_restore_defaults}
+    &ui_menu_conf_accel, &ui_menu_conf_feed, &ui_menu_restore_defaults UI_MENU_BED_CUTOFF}
 UI_MENU(ui_menu_configuration,UI_MENU_CONFIGURATION)
 /** \brief Main menu */
 UI_MENU_SUBMENU(ui_menu_main1, UI_TEXT_QUICK_SETTINGS,  ui_menu_quick)
