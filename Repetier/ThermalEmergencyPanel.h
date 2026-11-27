@@ -63,55 +63,35 @@ public:
         }
     }
 };
-struct PanelFault {
-    uint8_t channel;
-    Cause cause;
-    const Record* snapshot;
-};
-
-template<uint8_t N> PanelFault panelFault(const Ledger<N>& ledger,uint32_t page){
-    const Record& primary=ledger.level()==Severity::FireWarning?ledger.firstFire():ledger.first();
-    if(!ledger.active())return {N,Cause::None,nullptr};
-    uint8_t count=0;
-    for(uint8_t ch=0;ch<=N;++ch)
-        for(uint8_t k=1;k<uint8_t(Cause::Count);++k)
-            if(ledger.reasons(ch)&causeBit(Cause(k)))++count;
-    uint8_t index=uint8_t(page%count);
-    if(!index)return {primary.channel,primary.cause,&primary};
-    for(uint8_t ch=0;ch<=N;++ch)for(uint8_t k=1;k<uint8_t(Cause::Count);++k){
-        const Cause cause=Cause(k);
-        if(!(ledger.reasons(ch)&causeBit(cause))||(ch==primary.channel&&cause==primary.cause))continue;
-        if(--index==0){
-            const auto& first=ledger.first();
-            return {ch,cause,first.channel==ch&&first.cause==cause?&first:nullptr};
-        }
-    }
-    return {primary.channel,primary.cause,&primary};
+// Primary live failure stays visible even when EEPROM or USB is unavailable.
+// Full affected-reason history remains available via the serial report.
+// No page timer, count, division or cycling through the ledger masks.
+template<uint8_t N> const Record& primaryFault(const Ledger<N>& ledger){
+    return ledger.level()==Severity::FireWarning?ledger.firstFire():ledger.first();
 }
 
-// 16x2: heading is invariant; alternate cause and current/old-target on
-// the second line every two seconds, then advance to the next fault.
-// 16x4/20x4: cause + current/old-target simultaneously, next fault every 2s.
-// Values labelled now/old in the code and in full serial report.
+// Supported RFx000 panels: 16x4/20x4. Live cause and temperature are not
+// dependent on the persistence service or the diagnostic log contents.
 template<uint8_t Cols,uint8_t Rows,uint8_t N>
 void panelRow(char (&out)[Cols+1],uint8_t row,const Ledger<N>& ledger,
-              const PanelFault& fault,bool temperatures,bool liveValid,float liveC){
-    static_assert((Cols==16&&(Rows==2||Rows==4))||(Cols==20&&Rows==4),"RF LCD dimensions");
+              bool liveValid,float liveC){
+    static_assert((Cols==16||Cols==20)&&Rows==4,"RF LCD dimensions");
     PanelLine<Cols> line(out);
+    const auto& fault=primaryFault(ledger);
+    const uint8_t channel=ledger.active()?fault.channel:N;
     if(row==0){
         if(ledger.level()==Severity::FireWarning)line.text(RF_PANEL_TEXT("FIRE WARNING"));
         else if(ledger.first().cause==Cause::WatchdogReset)line.text(RF_PANEL_TEXT("WATCHDOG RESET"));
         else line.text(RF_PANEL_TEXT("THERMAL ERROR"));
-    }else if(row==1 && (Rows==4||!temperatures)){
-        line.template channel<N>(fault.channel);line.cause(fault.cause);
-    }else if((Rows==2&&row==1)||(Rows==4&&row==2)){
-        line.template channel<N>(fault.channel);
-        if(fault.channel==N)line.text(RF_PANEL_TEXT("CHECK LOG"));
+    }else if(row==1){
+        line.template channel<N>(channel);line.cause(fault.cause);
+    }else if(row==2){
+        line.template channel<N>(channel);
+        if(channel==N)line.text(RF_PANEL_TEXT("CHECK LOG"));
         else {
             line.temperature(liveValid,liveC);
             line.character('/');
-            const Record* s=fault.snapshot;
-            line.temperature(s&&(s->evidence.valid&Evidence::Target),s?s->evidence.targetC:0);
+            line.temperature(ledger.active()&&(fault.evidence.valid&Evidence::Target),fault.evidence.targetC);
             line.text(RF_PANEL_TEXT(" C"));
         }
     }else if(row==3){
