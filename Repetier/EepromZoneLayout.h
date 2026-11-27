@@ -192,140 +192,170 @@ constexpr uint16_t address(Field f) { return static_cast<uint16_t>(f); }
 // Exact internal field boundaries. Array-valued groups are not arbitrary
 // byte ranges: motor current allows a single channel or the full group;
 // PID identity is written as a single three-byte value by its owner.
+// Store exact immutable field starts and widths in Flash, rather than a
+// compiler-generated dense switch table in SRAM. Each entry packs a
+// ten-bit settings-bank offset and the width (1..4). This cold-path lookup
+// performs at most seven table reads for the current inventory.
+constexpr uint16_t widthEntry(Field field,uint8_t width) {
+    return uint16_t((address(field)-Base) | (uint16_t(width)<<10));
+}
+constexpr uint16_t widthEntryOffset(uint16_t entry) {return entry & 0x03FF;}
+constexpr bool widthEntriesSorted(const uint16_t* entries,uint8_t n) {
+    return n<2 || (widthEntryOffset(entries[0])<widthEntryOffset(entries[1])
+        && widthEntriesSorted(entries+1,uint8_t(n-1)));
+}
 inline uint8_t fieldWidth(uint16_t pos) {
     if(pos>=address(Field::F_RF_MOTOR_CURRENT) && pos<address(Field::F_RF_MOTOR_CURRENT)+5)
         return 1;
-    switch(static_cast<Field>(pos)) {
-    case Field::F_RF_MICRO_STEPS_X:
-    case Field::F_RF_MICRO_STEPS_Y:
-    case Field::F_RF_MICRO_STEPS_Z:
-    case Field::F_RF_MICRO_STEPS_E0:
-    case Field::F_RF_MICRO_STEPS_E1:
-    case Field::F_E0_DRIVE_MIN:
-    case Field::F_E0_DRIVE_MAX:
-    case Field::F_E0_PID_MAX:
-    case Field::F_E0_SENSOR_TYPE:
-    case Field::F_E0_COOLER_SPEED:
-    case Field::F_E1_DRIVE_MIN:
-    case Field::F_E1_DRIVE_MAX:
-    case Field::F_E1_PID_MAX:
-    case Field::F_E1_SENSOR_TYPE:
-    case Field::F_E1_COOLER_SPEED:
-    case Field::F_BED_DRIVE_MIN:
-    case Field::F_BED_DRIVE_MAX:
-    case Field::F_BED_PID_MAX:
-    case Field::F_RF_HEATED_BED_SENSOR_TYPE:
-    case Field::F_NEW_BED_EMERGENCY_C:
-    case Field::F_RF_MOD_SENSEOFFSET_AUTOSTART:
-    case Field::F_RF_ZERO_DIGIT_STATE:
-    case Field::F_RF_DIGIT_CMP_STATE:
-    case Field::F_RF_MOD_ZOS_SCAN_POINT_X:
-    case Field::F_RF_MOD_ZOS_SCAN_POINT_Y:
-    case Field::F_RF_MOD_WOBBLE_FIX_PHASEXY:
-    case Field::F_RF_MOVE_MODE_X:
-    case Field::F_RF_MOVE_MODE_Y:
-    case Field::F_RF_MOVE_MODE_Z:
-    case Field::F_RF_Z_MODE:
-    case Field::F_RF_MOVE_MODE_XY_KOSYS:
-    case Field::F_RF_MOVE_POSITION_FEEDRATE:
-    case Field::F_RF_CASE_LIGHT_MODE:
-    case Field::F_RF_FET1_MODE:
-    case Field::F_RF_FET2_MODE:
-    case Field::F_RF_FET3_MODE:
-    case Field::F_RF_RGB_LIGHT_MODE:
-    case Field::F_RF_RGB_PRINTING_R:
-    case Field::F_RF_RGB_PRINTING_G:
-    case Field::F_RF_RGB_PRINTING_B:
-    case Field::F_RF_RGB_HEATING_R:
-    case Field::F_RF_RGB_HEATING_G:
-    case Field::F_RF_RGB_HEATING_B:
-    case Field::F_RF_RGB_COOLING_R:
-    case Field::F_RF_RGB_COOLING_G:
-    case Field::F_RF_RGB_COOLING_B:
-    case Field::F_RF_RGB_IDLE_R:
-    case Field::F_RF_RGB_IDLE_G:
-    case Field::F_RF_RGB_IDLE_B:
-    case Field::F_RF_RGB_MANUAL_R:
-    case Field::F_RF_RGB_MANUAL_G:
-    case Field::F_RF_RGB_MANUAL_B:
-    case Field::F_RF_FAN_MODE:
-    case Field::F_RF_PART_FAN_SPEED:
-    case Field::F_RF_PART_FAN_PWM_MIN:
-    case Field::F_RF_PART_FAN_PWM_MAX:
-        return 1;
-    case Field::F_RF_MOD_Z_STEP_SIZE:
-    case Field::F_RF_STEP_PACKING_MIN_INTERVAL:
-    case Field::F_RF_PREHEAT_A_BED:
-    case Field::F_RF_PREHEAT_A_HOTEND:
-    case Field::F_RF_PREHEAT_B_BED:
-    case Field::F_RF_PREHEAT_B_HOTEND:
-    case Field::F_RF_MOD_SENSEOFFSET_OFFSET_MAX:
-    case Field::F_RF_MOD_SENSEOFFSET_DIGITS:
-    case Field::F_RF_EMERGENCYZSTOPDIGITSMIN:
-    case Field::F_RF_EMERGENCYZSTOPDIGITSMAX:
-    case Field::F_RF_MOD_WOBBLE_FIX_AMPX:
-    case Field::F_RF_MOD_WOBBLE_FIX_AMPY1:
-    case Field::F_RF_MOD_WOBBLE_FIX_AMPY2:
-        return 2;
-    case Field::F_PID_CALIBRATION_SLOT_0:
-    case Field::F_PID_CALIBRATION_SLOT_1:
-    case Field::F_PID_CALIBRATION_SLOT_2:
-        return 3;
-    case Field::F_XAXIS_STEPS_PER_MM:
-    case Field::F_YAXIS_STEPS_PER_MM:
-    case Field::F_ZAXIS_STEPS_PER_MM:
-    case Field::F_X_LENGTH:
-    case Field::F_Y_LENGTH:
-    case Field::F_Z_LENGTH:
-    case Field::F_X_MAX_FEEDRATE:
-    case Field::F_Y_MAX_FEEDRATE:
-    case Field::F_Z_MAX_FEEDRATE:
-    case Field::F_X_HOMING_FEEDRATE_PRINT:
-    case Field::F_Y_HOMING_FEEDRATE_PRINT:
-    case Field::F_Z_HOMING_FEEDRATE_PRINT:
-    case Field::F_MAX_XYJERK:
-    case Field::F_MAX_ZJERK:
-    case Field::F_X_MAX_ACCEL:
-    case Field::F_Y_MAX_ACCEL:
-    case Field::F_Z_MAX_ACCEL:
-    case Field::F_X_MAX_TRAVEL_ACCEL:
-    case Field::F_Y_MAX_TRAVEL_ACCEL:
-    case Field::F_Z_MAX_TRAVEL_ACCEL:
-    case Field::F_E0_STEPS_PER_MM:
-    case Field::F_E0_MAX_FEEDRATE:
-    case Field::F_E0_MAX_START_FEEDRATE:
-    case Field::F_E0_MAX_ACCELERATION:
-    case Field::F_E0_ADVANCE_L:
-    case Field::F_E0_X_OFFSET:
-    case Field::F_E0_Y_OFFSET:
-    case Field::F_E1_STEPS_PER_MM:
-    case Field::F_E1_MAX_FEEDRATE:
-    case Field::F_E1_MAX_START_FEEDRATE:
-    case Field::F_E1_MAX_ACCELERATION:
-    case Field::F_E1_ADVANCE_L:
-    case Field::F_E1_X_OFFSET:
-    case Field::F_E1_Y_OFFSET:
-    case Field::F_E0_PID_PGAIN:
-    case Field::F_E0_PID_IGAIN:
-    case Field::F_E0_PID_DGAIN:
-    case Field::F_E1_PID_PGAIN:
-    case Field::F_E1_PID_IGAIN:
-    case Field::F_E1_PID_DGAIN:
-    case Field::F_BED_PID_PGAIN:
-    case Field::F_BED_PID_IGAIN:
-    case Field::F_BED_PID_DGAIN:
-    case Field::F_RF_Z_OFFSET:
-    case Field::F_RF_EMERGENCYPAUSEDIGITSMIN:
-    case Field::F_RF_EMERGENCYPAUSEDIGITSMAX:
-    case Field::F_ZSCAN_START_MM:
-    case Field::F_BAUDRATE:
-    case Field::F_MAX_INACTIVE_TIME:
-    case Field::F_STEPPER_INACTIVE_TIME:
-    case Field::F_PRINTING_TIME:
-    case Field::F_PRINTING_DISTANCE:
-        return 4;
-    default:return 0;
+    if(pos<Base || pos>=End)return 0;
+    static constexpr uint16_t entries[]
+#ifdef __AVR__
+        PROGMEM
+#endif
+        = {
+        widthEntry(Field::F_XAXIS_STEPS_PER_MM,4),
+        widthEntry(Field::F_YAXIS_STEPS_PER_MM,4),
+        widthEntry(Field::F_ZAXIS_STEPS_PER_MM,4),
+        widthEntry(Field::F_X_LENGTH,4),
+        widthEntry(Field::F_Y_LENGTH,4),
+        widthEntry(Field::F_Z_LENGTH,4),
+        widthEntry(Field::F_RF_MICRO_STEPS_X,1),
+        widthEntry(Field::F_RF_MICRO_STEPS_Y,1),
+        widthEntry(Field::F_RF_MICRO_STEPS_Z,1),
+        widthEntry(Field::F_RF_MOD_Z_STEP_SIZE,2),
+        widthEntry(Field::F_X_MAX_FEEDRATE,4),
+        widthEntry(Field::F_Y_MAX_FEEDRATE,4),
+        widthEntry(Field::F_Z_MAX_FEEDRATE,4),
+        widthEntry(Field::F_X_HOMING_FEEDRATE_PRINT,4),
+        widthEntry(Field::F_Y_HOMING_FEEDRATE_PRINT,4),
+        widthEntry(Field::F_Z_HOMING_FEEDRATE_PRINT,4),
+        widthEntry(Field::F_MAX_XYJERK,4),
+        widthEntry(Field::F_MAX_ZJERK,4),
+        widthEntry(Field::F_X_MAX_ACCEL,4),
+        widthEntry(Field::F_Y_MAX_ACCEL,4),
+        widthEntry(Field::F_Z_MAX_ACCEL,4),
+        widthEntry(Field::F_X_MAX_TRAVEL_ACCEL,4),
+        widthEntry(Field::F_Y_MAX_TRAVEL_ACCEL,4),
+        widthEntry(Field::F_Z_MAX_TRAVEL_ACCEL,4),
+        widthEntry(Field::F_RF_STEP_PACKING_MIN_INTERVAL,2),
+        widthEntry(Field::F_E0_STEPS_PER_MM,4),
+        widthEntry(Field::F_E0_MAX_FEEDRATE,4),
+        widthEntry(Field::F_E0_MAX_START_FEEDRATE,4),
+        widthEntry(Field::F_E0_MAX_ACCELERATION,4),
+        widthEntry(Field::F_E0_ADVANCE_L,4),
+        widthEntry(Field::F_E0_X_OFFSET,4),
+        widthEntry(Field::F_E0_Y_OFFSET,4),
+        widthEntry(Field::F_RF_MICRO_STEPS_E0,1),
+        widthEntry(Field::F_E1_STEPS_PER_MM,4),
+        widthEntry(Field::F_E1_MAX_FEEDRATE,4),
+        widthEntry(Field::F_E1_MAX_START_FEEDRATE,4),
+        widthEntry(Field::F_E1_MAX_ACCELERATION,4),
+        widthEntry(Field::F_E1_ADVANCE_L,4),
+        widthEntry(Field::F_E1_X_OFFSET,4),
+        widthEntry(Field::F_E1_Y_OFFSET,4),
+        widthEntry(Field::F_RF_MICRO_STEPS_E1,1),
+        widthEntry(Field::F_E0_PID_PGAIN,4),
+        widthEntry(Field::F_E0_PID_IGAIN,4),
+        widthEntry(Field::F_E0_PID_DGAIN,4),
+        widthEntry(Field::F_E0_DRIVE_MIN,1),
+        widthEntry(Field::F_E0_DRIVE_MAX,1),
+        widthEntry(Field::F_E0_PID_MAX,1),
+        widthEntry(Field::F_E0_SENSOR_TYPE,1),
+        widthEntry(Field::F_PID_CALIBRATION_SLOT_0,3),
+        widthEntry(Field::F_E0_COOLER_SPEED,1),
+        widthEntry(Field::F_E1_PID_PGAIN,4),
+        widthEntry(Field::F_E1_PID_IGAIN,4),
+        widthEntry(Field::F_E1_PID_DGAIN,4),
+        widthEntry(Field::F_E1_DRIVE_MIN,1),
+        widthEntry(Field::F_E1_DRIVE_MAX,1),
+        widthEntry(Field::F_E1_PID_MAX,1),
+        widthEntry(Field::F_E1_SENSOR_TYPE,1),
+        widthEntry(Field::F_PID_CALIBRATION_SLOT_1,3),
+        widthEntry(Field::F_E1_COOLER_SPEED,1),
+        widthEntry(Field::F_BED_PID_PGAIN,4),
+        widthEntry(Field::F_BED_PID_IGAIN,4),
+        widthEntry(Field::F_BED_PID_DGAIN,4),
+        widthEntry(Field::F_BED_DRIVE_MIN,1),
+        widthEntry(Field::F_BED_DRIVE_MAX,1),
+        widthEntry(Field::F_BED_PID_MAX,1),
+        widthEntry(Field::F_RF_HEATED_BED_SENSOR_TYPE,1),
+        widthEntry(Field::F_PID_CALIBRATION_SLOT_2,3),
+        widthEntry(Field::F_NEW_BED_EMERGENCY_C,1),
+        widthEntry(Field::F_RF_PREHEAT_A_BED,2),
+        widthEntry(Field::F_RF_PREHEAT_A_HOTEND,2),
+        widthEntry(Field::F_RF_PREHEAT_B_BED,2),
+        widthEntry(Field::F_RF_PREHEAT_B_HOTEND,2),
+        widthEntry(Field::F_RF_Z_OFFSET,4),
+        widthEntry(Field::F_RF_MOD_SENSEOFFSET_OFFSET_MAX,2),
+        widthEntry(Field::F_RF_MOD_SENSEOFFSET_DIGITS,2),
+        widthEntry(Field::F_RF_MOD_SENSEOFFSET_AUTOSTART,1),
+        widthEntry(Field::F_RF_ZERO_DIGIT_STATE,1),
+        widthEntry(Field::F_RF_DIGIT_CMP_STATE,1),
+        widthEntry(Field::F_RF_EMERGENCYPAUSEDIGITSMIN,4),
+        widthEntry(Field::F_RF_EMERGENCYPAUSEDIGITSMAX,4),
+        widthEntry(Field::F_RF_EMERGENCYZSTOPDIGITSMIN,2),
+        widthEntry(Field::F_RF_EMERGENCYZSTOPDIGITSMAX,2),
+        widthEntry(Field::F_RF_MOD_ZOS_SCAN_POINT_X,1),
+        widthEntry(Field::F_RF_MOD_ZOS_SCAN_POINT_Y,1),
+        widthEntry(Field::F_ZSCAN_START_MM,4),
+        widthEntry(Field::F_RF_MOD_WOBBLE_FIX_PHASEXY,1),
+        widthEntry(Field::F_RF_MOD_WOBBLE_FIX_AMPX,2),
+        widthEntry(Field::F_RF_MOD_WOBBLE_FIX_AMPY1,2),
+        widthEntry(Field::F_RF_MOD_WOBBLE_FIX_AMPY2,2),
+        widthEntry(Field::F_RF_MOVE_MODE_X,1),
+        widthEntry(Field::F_RF_MOVE_MODE_Y,1),
+        widthEntry(Field::F_RF_MOVE_MODE_Z,1),
+        widthEntry(Field::F_RF_Z_MODE,1),
+        widthEntry(Field::F_RF_MOVE_MODE_XY_KOSYS,1),
+        widthEntry(Field::F_RF_MOVE_POSITION_FEEDRATE,1),
+        widthEntry(Field::F_RF_CASE_LIGHT_MODE,1),
+        widthEntry(Field::F_RF_FET1_MODE,1),
+        widthEntry(Field::F_RF_FET2_MODE,1),
+        widthEntry(Field::F_RF_FET3_MODE,1),
+        widthEntry(Field::F_RF_RGB_LIGHT_MODE,1),
+        widthEntry(Field::F_RF_RGB_PRINTING_R,1),
+        widthEntry(Field::F_RF_RGB_PRINTING_G,1),
+        widthEntry(Field::F_RF_RGB_PRINTING_B,1),
+        widthEntry(Field::F_RF_RGB_HEATING_R,1),
+        widthEntry(Field::F_RF_RGB_HEATING_G,1),
+        widthEntry(Field::F_RF_RGB_HEATING_B,1),
+        widthEntry(Field::F_RF_RGB_COOLING_R,1),
+        widthEntry(Field::F_RF_RGB_COOLING_G,1),
+        widthEntry(Field::F_RF_RGB_COOLING_B,1),
+        widthEntry(Field::F_RF_RGB_IDLE_R,1),
+        widthEntry(Field::F_RF_RGB_IDLE_G,1),
+        widthEntry(Field::F_RF_RGB_IDLE_B,1),
+        widthEntry(Field::F_RF_RGB_MANUAL_R,1),
+        widthEntry(Field::F_RF_RGB_MANUAL_G,1),
+        widthEntry(Field::F_RF_RGB_MANUAL_B,1),
+        widthEntry(Field::F_RF_FAN_MODE,1),
+        widthEntry(Field::F_RF_PART_FAN_SPEED,1),
+        widthEntry(Field::F_RF_PART_FAN_PWM_MIN,1),
+        widthEntry(Field::F_RF_PART_FAN_PWM_MAX,1),
+        widthEntry(Field::F_BAUDRATE,4),
+        widthEntry(Field::F_MAX_INACTIVE_TIME,4),
+        widthEntry(Field::F_STEPPER_INACTIVE_TIME,4),
+        widthEntry(Field::F_PRINTING_TIME,4),
+        widthEntry(Field::F_PRINTING_DISTANCE,4),
+    };
+    constexpr unsigned count=sizeof(entries)/sizeof(entries[0]);
+    static_assert(count<=127,"field width search budget");
+    static_assert(widthEntriesSorted(entries,uint8_t(count)),"field starts must be sorted and unique");
+    const uint16_t offset=pos-Base;
+    uint8_t first=0,last=uint8_t(count);
+    while(first<last) {
+        const uint8_t mid=first+(last-first)/2;
+#ifdef __AVR__
+        const uint16_t entry=pgm_read_word(entries+mid);
+#else
+        const uint16_t entry=entries[mid];
+#endif
+        const uint16_t candidate=widthEntryOffset(entry);
+        if(offset==candidate)return uint8_t(entry>>10);
+        if(offset<candidate)last=mid;
+        else first=mid+1;
     }
+    return 0;
 }
 
 namespace Header {
