@@ -25,6 +25,7 @@ def modify(dst,tag):
     static void configureCorrection(uint32_t acceleration, uint16_t speed);
     static bool reservesZ();
     static bool correctionRequested();
+    static bool correctionConfigured();
     static uint32_t serviceCorrection(uint32_t epoch, bool nominalOwnsZ);""")
     edit("StepExecutor.cpp",'#include "StepExecutor.h"','#include "StepExecutor.h"\n#include "ZCorrectionResearch.h"')
     section("StepExecutor.cpp","void StepExecutor::stepSlowedZCompensation()", "/**\n  Processes the moves from the queue",r'''
@@ -70,6 +71,8 @@ void StepExecutor::configureCorrection(uint32_t acceleration, uint16_t speed) {
     zCorrection.cancel();
     zCorrection.limits=limits;
 }
+
+bool StepExecutor::correctionConfigured() {return zCorrection.limits.maxLevel!=0;}
 
 bool StepExecutor::correctionRequested() {
     return zCorrection.armed.sign || Printer::zMotion.correctionError()!=0;
@@ -161,7 +164,8 @@ uint32_t StepExecutor::serviceCorrection(uint32_t epoch, bool nominalOwnsZ) {
     edit("Printer.h","Printer::disableCMPnow(true); //true == wait for move while HOMING","Printer::disableCMPnow(); // reference invalidation never moves Z")
     section("Printer.cpp","bool Printer::needsCMPwait(void)", "void Printer::", """bool Printer::correctionInProgress(void) {
     InterruptProtectedBlock lock;
-    return !blockAll && zMotion.isHomed() && !zMotion.scanInProgress() && zMotion.correctionCanMove();
+    return !blockAll && zMotion.isHomed() && !zMotion.scanInProgress()
+        && StepExecutor::correctionConfigured() && zMotion.correctionCanMove();
 }
 
 """)
@@ -182,8 +186,9 @@ uint32_t StepExecutor::serviceCorrection(uint32_t epoch, bool nominalOwnsZ) {
          """    const float zRate=axisMaxFeedrate(Z_AXIS)*stepsPerMm(Z_AXIS);
     const uint16_t correctionRate=zRate>0
         ? uint16_t(RMath::min(zRate,float(F_CPU/StepExecutor::minimumStepIntervalTicks))) : 0;
-    StepExecutor::configureCorrection(RMath::min(maxPrintAccelerationStepsPerSquareSecond_[Z_AXIS],
-        maxTravelAccelerationStepsPerSquareSecond_[Z_AXIS]),correctionRate);
+    const uint32_t printA=maxPrintAccelerationStepsPerSquareSecond_[Z_AXIS];
+    const uint32_t travelA=maxTravelAccelerationStepsPerSquareSecond_[Z_AXIS];
+    StepExecutor::configureCorrection(printA<travelA?printA:travelA,correctionRate);
 
     // 07 11 2017 https://github.com/repetier/Repetier-Firmware/commit/""")
     # StepExecutor.h may not be included by Repetier.h on every source file.
@@ -236,6 +241,12 @@ ISR(TIMER1_COMPA_vect) {
 
 ''')
     edit("HAL.cpp",'#include "StepExecutor.h"','#include "StepExecutor.h"\n#include "ZCorrectionResearch.h"')
+    edit("HAL.cpp", ''': "=r"(b)
+        : "r"(a)
+        : "r18", "r19", "r27", "r26");''',
+        ''': "=r"(b), "+r"(a)
+        :
+        : "r18", "r19", "r27", "r26", "cc");''')
     # Fail closed on missed active legacy callers, excluding comments.
     for p in dst.glob("*"):
         if p.suffix not in (".h",".cpp"):continue
