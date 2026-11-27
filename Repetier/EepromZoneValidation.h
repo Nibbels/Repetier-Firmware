@@ -13,6 +13,12 @@
 
 namespace EepromZones {
 inline bool inRange(float v,float lo,float hi) {return v>=lo && v<=hi;}
+// All callers below have integral values and bounds within int32_t.
+// AVR float is binary32 and represents their entire 8/16-bit domain
+// exactly; use integer compares instead of software float conversion.
+template<class V,class L,class H> inline bool integerRange(V v,L lo,H hi) {
+    return int32_t(v)>=int32_t(lo) && int32_t(v)<=int32_t(hi);
+}
 inline bool positive(float v,float hi) {return v>0 && v<=hi;}
 inline Field shifted(Field f,uint8_t bytes) {return static_cast<Field>(address(f)+bytes);}
 inline bool sensorSupported(uint8_t v) {
@@ -82,7 +88,7 @@ inline bool validBlock(uint8_t id,const uint8_t* data,uint8_t n) {
         ok=inRange(d.f32(Field::F_MAX_XYJERK),1,33.3f) && inRange(d.f32(Field::F_MAX_ZJERK),.05f,2);
         break;
     case Acceleration:
-        ok=inRange(d.u16(Field::F_RF_STEP_PACKING_MIN_INTERVAL),MIN_STEP_PACKING_MIN_INTERVAL,MAX_STEP_PACKING_MIN_INTERVAL);
+        ok=integerRange(d.u16(Field::F_RF_STEP_PACKING_MIN_INTERVAL),MIN_STEP_PACKING_MIN_INTERVAL,MAX_STEP_PACKING_MIN_INTERVAL);
         for(uint8_t a=0;a<6;++a)
             ok &= inRange(d.f32(shifted(Field::F_X_MAX_ACCEL,4*a)),a%3==2?ACCELERATION_MIN_Z:ACCELERATION_MIN_XY,
                 a%3==2?ACCELERATION_MAX_Z:ACCELERATION_MAX_XY);
@@ -91,7 +97,7 @@ inline bool validBlock(uint8_t id,const uint8_t* data,uint8_t n) {
         const uint8_t maxima[]=MOTOR_CURRENT_MAX;
         ok=true;
         for(uint8_t a=0;a<5;++a)
-            ok &= inRange(d.u8(shifted(Field::F_RF_MOTOR_CURRENT,a)),MOTOR_CURRENT_MIN,maxima[a]);
+            ok &= integerRange(d.u8(shifted(Field::F_RF_MOTOR_CURRENT,a)),MOTOR_CURRENT_MIN,maxima[a]);
         break;
     }
     case Extruder0Motion: case Extruder1Motion: {
@@ -144,11 +150,11 @@ inline bool validBlock(uint8_t id,const uint8_t* data,uint8_t n) {
         ok=v>=-10000 && v<=10000;break;
     }
     case SenseOffset:
-        ok=inRange(d.u16(Field::F_RF_MOD_SENSEOFFSET_OFFSET_MAX),1,300)
+        ok=integerRange(d.u16(Field::F_RF_MOD_SENSEOFFSET_OFFSET_MAX),1,300)
             && d.u16(Field::F_RF_MOD_SENSEOFFSET_DIGITS)<=EMERGENCY_PAUSE_DIGITS_MAX
             && d.u8(Field::F_RF_MOD_SENSEOFFSET_AUTOSTART)<=1
-            && inRange(d.u8(Field::F_RF_ZERO_DIGIT_STATE),1,2)
-            && inRange(d.u8(Field::F_RF_DIGIT_CMP_STATE),1,2);
+            && integerRange(d.u8(Field::F_RF_ZERO_DIGIT_STATE),1,2)
+            && integerRange(d.u8(Field::F_RF_DIGIT_CMP_STATE),1,2);
         break;
     case Pressure: {
         const int32_t pmin=int32_t(d.u32(Field::F_RF_EMERGENCYPAUSEDIGITSMIN));
@@ -170,16 +176,16 @@ inline bool validBlock(uint8_t id,const uint8_t* data,uint8_t n) {
         break;
     }
     case Wobble:
-        ok=inRange(int8_t(d.u8(Field::F_RF_MOD_WOBBLE_FIX_PHASEXY)),-100,101)
-            && inRange(int16_t(d.u16(Field::F_RF_MOD_WOBBLE_FIX_AMPX)),-995,995)
-            && inRange(int16_t(d.u16(Field::F_RF_MOD_WOBBLE_FIX_AMPY1)),-995,995)
-            && inRange(int16_t(d.u16(Field::F_RF_MOD_WOBBLE_FIX_AMPY2)),-995,995);
+        ok=integerRange(int8_t(d.u8(Field::F_RF_MOD_WOBBLE_FIX_PHASEXY)),-100,101)
+            && integerRange(int16_t(d.u16(Field::F_RF_MOD_WOBBLE_FIX_AMPX)),-995,995)
+            && integerRange(int16_t(d.u16(Field::F_RF_MOD_WOBBLE_FIX_AMPY1)),-995,995)
+            && integerRange(int16_t(d.u16(Field::F_RF_MOD_WOBBLE_FIX_AMPY2)),-995,995);
         break;
     case Panel:
-        ok=inRange(d.u8(Field::F_RF_MOVE_MODE_X),MOVE_MODE_SINGLE_STEPS,MOVE_MODE_SINGLE_MOVE)
-            && inRange(d.u8(Field::F_RF_MOVE_MODE_Y),MOVE_MODE_SINGLE_STEPS,MOVE_MODE_SINGLE_MOVE)
-            && inRange(d.u8(Field::F_RF_MOVE_MODE_Z),MOVE_MODE_SINGLE_STEPS,MOVE_MODE_SINGLE_MOVE)
-            && inRange(d.u8(Field::F_RF_Z_MODE),1,3)
+        ok=integerRange(d.u8(Field::F_RF_MOVE_MODE_X),MOVE_MODE_SINGLE_STEPS,MOVE_MODE_SINGLE_MOVE)
+            && integerRange(d.u8(Field::F_RF_MOVE_MODE_Y),MOVE_MODE_SINGLE_STEPS,MOVE_MODE_SINGLE_MOVE)
+            && integerRange(d.u8(Field::F_RF_MOVE_MODE_Z),MOVE_MODE_SINGLE_STEPS,MOVE_MODE_SINGLE_MOVE)
+            && integerRange(d.u8(Field::F_RF_Z_MODE),1,3)
             && d.u8(Field::F_RF_MOVE_MODE_XY_KOSYS)<=1 && d.u8(Field::F_RF_MOVE_POSITION_FEEDRATE)<=1;
         break;
     case Lighting:
@@ -199,7 +205,7 @@ inline bool validBlock(uint8_t id,const uint8_t* data,uint8_t n) {
         break;
     case PartFan: {
         const uint8_t min=d.u8(Field::F_RF_PART_FAN_PWM_MIN),max=d.u8(Field::F_RF_PART_FAN_PWM_MAX);
-        ok=d.u8(Field::F_RF_FAN_MODE)<=1 && inRange(d.u8(Field::F_RF_PART_FAN_SPEED),1,7)
+        ok=d.u8(Field::F_RF_FAN_MODE)<=1 && integerRange(d.u8(Field::F_RF_PART_FAN_SPEED),1,7)
             && min && max<255 && int(max)-int(min)>=16;break;
     }
     case System:
