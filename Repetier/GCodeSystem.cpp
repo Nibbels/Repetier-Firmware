@@ -159,7 +159,7 @@ void accessPanel(GCode* pCommand) {
             }
 #endif
             Com::printFLN(PSTR("RequestMenu:Press:"), pCommand->P);
-            uid.executeAction(pCommand->P);
+            uid.executeRemoteAction(pCommand->P);
         } break;
         }
     } else {
