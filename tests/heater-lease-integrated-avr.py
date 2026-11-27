@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Build four lease, four reset-WDT and four emergency candidates, retain linked evidence in host log.
-Never flash these experimental images. Standard builds remain unchanged.
+"""Build historical comparison candidates and retain linked evidence.
+The canonical combined-image builder now owns the emergency mode in full CI.
+Never flash experimental or qualification images.
 """
 import importlib.util
 import os
@@ -44,6 +45,9 @@ with tempfile.TemporaryDirectory() as temp:
     out=Path(temp)
     for mode,extra in (("lease",[]),("reset-wdt",["RF_HEATER_RESET_WDT_EXPERIMENT=1"]),
                        ("emergency",["RF_HEATER_RESET_WDT_EXPERIMENT=1","RF_THERMAL_EMERGENCY_EXPERIMENT=1","RF_EEPROM_ZONE_EXPERIMENT=1"])):
+        if mode=="emergency" and os.environ.get("RF_P0_CANONICAL_BUILD")=="1":
+            print("Combined images are verified by the canonical build below",flush=True)
+            continue
         mode_dir=out/mode
         mode_dir.mkdir()
         for board,defs in baseline.TARGETS.items():

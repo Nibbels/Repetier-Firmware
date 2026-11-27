@@ -12,7 +12,8 @@ def archive_failed(archive, directory, mode, label):
     if archive:
         failed=archive/mode/label
         failed.mkdir(parents=True,exist_ok=True)
-        for name in ("compile.txt","properties.txt","properties-with-linker.txt","avr6-recovery.x","build/firmware.map"):
+        for name in ("compile.txt","properties.txt","properties-with-linker.txt","avr6-recovery.x","build/firmware.map",
+                     "disassembly.txt","symbols.txt","sections.txt","verification.json"):
             if (directory/name).is_file():
                 shutil.copy2(directory/name,failed/Path(name).name)
 
@@ -95,32 +96,37 @@ def build_verified(baseline, recovery, timing, cli, mode_dir, board, definitions
                 shutil.copy2(board_dir/name,dest/name)
         (dest/"stats.json").write_text(json.dumps(stats,indent=2)+"\n")
         (dest/"verification.json").write_text(json.dumps({"status":"linked-unverified"})+"\n")
-    dump=(board_dir/"disassembly.txt").read_text()
-    symbols=(board_dir/"symbols.txt").read_text()
-    vectors={int(m[2]):int(m[1],16) for m in re.finditer(
-        r"^([0-9a-f]+)\s+(?:[0-9a-f]+\s+)?[TtWw]\s+__vector_(\d+)$",symbols,re.M)}
-    assert vectors[32]==vectors[33],board
-    if board in ("RF2000","RF2000v2"):
-        assert vectors[32]==vectors[34],board
-    for line in dump.splitlines():
-        m=re.search(r"\bcall\s+0x([0-9a-f]+)\b|\brcall\s+[^;]+;\s*0x([0-9a-f]+)\b",line)
-        if m:
-            assert int(m[1] or m[2],16) not in vectors.values(),(board,line)
-    if use_recovery:
-        stats["recovery_verification"]=recovery.verify_image(board_dir)
-        stats["renewal_bound"]=timing.audit(dump)
-        print("Linked renewal guard",board,json.dumps(stats["renewal_bound"]),flush=True)
-        assert vectors[12] == vectors[2], (board,"WDT vector unexpectedly active")
-        assert "heaterWatchdogEarlyInit" in dump, board
-        start=dump.index("<heaterWatchdogEarlyInit>:")
-        end=re.search(r"^[0-9a-f]+ <[^\n]+>:",dump[start+1:],re.M)
-        assert end,board
-        early=dump[start:start+1+end.start()]
-        assert re.search(r"\bwdr\b",early),early
-        assert not re.search(r"\bret[i]?\b",early),early
-        # Timed reset configuration and feed locations are retained for
-        # linked inspection; this does not prove oscillator or boot behavior.
-        print("WDT reset-only candidate startup linked",board)
+    (board_dir/"verification.json").write_text(json.dumps({"status":"linked-unverified"})+"\n")
+    try:
+        dump=(board_dir/"disassembly.txt").read_text()
+        symbols=(board_dir/"symbols.txt").read_text()
+        vectors={int(m[2]):int(m[1],16) for m in re.finditer(
+            r"^([0-9a-f]+)\s+(?:[0-9a-f]+\s+)?[TtWw]\s+__vector_(\d+)$",symbols,re.M)}
+        assert vectors[32]==vectors[33],board
+        if board in ("RF2000","RF2000v2"):
+            assert vectors[32]==vectors[34],board
+        for line in dump.splitlines():
+            m=re.search(r"\bcall\s+0x([0-9a-f]+)\b|\brcall\s+[^;]+;\s*0x([0-9a-f]+)\b",line)
+            if m:
+                assert int(m[1] or m[2],16) not in vectors.values(),(board,line)
+        if use_recovery:
+            stats["recovery_verification"]=recovery.verify_image(board_dir)
+            stats["renewal_bound"]=timing.audit(dump)
+            print("Linked renewal guard",board,json.dumps(stats["renewal_bound"]),flush=True)
+            assert vectors[12] == vectors[2], (board,"WDT vector unexpectedly active")
+            assert "heaterWatchdogEarlyInit" in dump, board
+            start=dump.index("<heaterWatchdogEarlyInit>:")
+            end=re.search(r"^[0-9a-f]+ <[^\n]+>:",dump[start+1:],re.M)
+            assert end,board
+            early=dump[start:start+1+end.start()]
+            assert re.search(r"\bwdr\b",early),early
+            assert not re.search(r"\bret[i]?\b",early),early
+            # Timed reset configuration and feed locations are retained for
+            # linked inspection; this does not prove oscillator or boot behavior.
+            print("WDT reset-only candidate startup linked",board)
+    except (OSError, ValueError, AssertionError, subprocess.CalledProcessError):
+        archive_failed(archive, board_dir, mode, board+"-verification-failed")
+        raise
     print("Linked vector aliases and direct-call audit passed",board)
     verification={"status":"verified","recovery":use_recovery}
     (board_dir/"verification.json").write_text(json.dumps(verification)+"\n")
