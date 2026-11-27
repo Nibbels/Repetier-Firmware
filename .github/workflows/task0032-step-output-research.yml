@@ -38,6 +38,38 @@ jobs:
         run: |
           c++ -std=c++11 -O2 -Wall -Wextra -Werror research/task0032-step-output/z-correction-clock-replay.cpp -o "$RUNNER_TEMP/z-clock-replay"
           "$RUNNER_TEMP/z-clock-replay" | tee "$RUNNER_TEMP/step-output/z-clock-replay.txt"
+      - name: Replay immutable unified candidate early when sources are unchanged
+        id: unified_reuse
+        shell: bash
+        run: |
+          set -euo pipefail
+          prior=7fd4c07ac63f665f061dc120796270e004e3a8ff
+          git fetch --depth=1 origin "$prior"
+          if ! git diff --quiet "$prior" HEAD -- Repetier research/task0032-step-output/unified-z-source.py research/task0032-step-output/z-correction-clock.h research/task0032-step-output/q23-linked.py research/task0032-step-output/motor-wake-source.py research/task0032-step-output/motor-wake.h research/task0032-step-output/ecmp-q23.h; then
+            echo "available=no" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/15191429677/zip" > "$RUNNER_TEMP/verified-unified.zip"; then
+            echo "available=no" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "a60a16b52f7c0faa385c0cb0ebf7c2664bf9e47c3ac5e7ca89f26aabb744ef00  $RUNNER_TEMP/verified-unified.zip" | sha256sum -c -
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib,zipfile
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])
+          with zipfile.ZipFile(root/"verified-unified.zip") as z:
+              for variant in ("q23/wake-jog-idle","z-unified/unified-z"):
+                  dest=root/"step-output"/variant
+                  dest.mkdir(parents=True,exist_ok=True)
+                  (dest/"candidate.zip").write_bytes(z.read(variant+"/candidate.zip"))
+                  with zipfile.ZipFile(dest/"candidate.zip") as candidate:
+                      m=json.loads(candidate.read("summary.json"))
+                      for board,digest in m["elf"].items():
+                          assert hashlib.sha256(candidate.read(board+"/build/Repetier.ino.elf")).hexdigest()==digest
+          (root/"step-output/reused-unified-evidence.txt").write_text("run45987116132 artifact15191429677; source equality and ZIP/ELF hashes verified\n")
+          PY
+          python3 research/task0032-step-output/unified-z-linked-replay.py "$RUNNER_TEMP/step-output/q23/wake-jog-idle/candidate.zip" "$RUNNER_TEMP/step-output/z-unified/unified-z/candidate.zip" "$RUNNER_TEMP/step-output/z-unified-results.json"
+          echo "available=yes" >> "$GITHUB_OUTPUT"
       - name: Fetch canonical evidence for this exact test merge
         shell: bash
         run: |
@@ -126,9 +158,11 @@ jobs:
         run: |
           python3 research/task0032-step-output/jog-stop-interleave.py "$RUNNER_TEMP/step-output/q23/wake-jog-idle/candidate.zip" "$RUNNER_TEMP/step-output/jog-candidate.json" --require-safe
       - name: Four actual firmware builds with shared nominal and Z deadlines
+        if: steps.unified_reuse.outputs.available != 'yes'
         run: |
           python3 research/task0032-step-output/unified-z-source.py --out "$RUNNER_TEMP/step-output/z-unified" --tools "$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin"
       - name: Linked unified Z motion and nominal continuity replay
+        if: steps.unified_reuse.outputs.available != 'yes'
         run: |
           python3 research/task0032-step-output/unified-z-linked-replay.py "$RUNNER_TEMP/step-output/q23/wake-jog-idle/candidate.zip" "$RUNNER_TEMP/step-output/z-unified/unified-z/candidate.zip" "$RUNNER_TEMP/step-output/z-unified-results.json"
       - uses: actions/upload-artifact@v4
