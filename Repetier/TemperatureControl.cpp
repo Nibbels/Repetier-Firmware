@@ -602,7 +602,7 @@ bool TemperatureController::setBedEmergencyCutoff(uint8_t verifiedCutoff) {
     if(pwmIndex!=NUM_EXTRUDER) return false;
     // Revoke any current target, lease and pending autotune before publishing
     // a different cutoff or removing authorization. No stale rearming.
-    if(!BedTemperatureLimit::validSetting(verifiedCutoff) ||
+    if(!verifiedCutoff || !BedTemperatureLimit::validSetting(verifiedCutoff) ||
        verifiedCutoff!=bedLimit_.commissioned()) setTargetTemperature(0);
     return bedLimit_.publish(verifiedCutoff);
 }

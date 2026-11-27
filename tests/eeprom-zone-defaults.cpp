@@ -66,6 +66,33 @@ static void sessionReplay(FactoryDefaults& defaults) {
     assert(session.save(blockBit(Panel),edit)==Result::Invalid && dev.programs==writes);
     edit.mode=MOVE_MODE_1_MM;
     assert(session.save(blockBit(Panel),edit)==Result::Ok && dev.programs>writes);
+    // A field edit starts from the committed payload, not from defaults or
+    // unrelated live settings. Keep the previously saved X move mode.
+    const Patch patches[]={Patch::byte(Field::F_RF_MOVE_MODE_Z,MOVE_MODE_1_MM),
+                           Patch::word(Field::F_RF_MOD_SENSEOFFSET_OFFSET_MAX,120)};
+    assert(session.patch(patches,2)==Result::Ok);
+    auto patched=[&](uint8_t id,const uint8_t* data,uint8_t n,uint32_t){
+        BlockDecoder d(id,data,n);
+        if(id==Panel) {
+            assert(d.u8(Field::F_RF_MOVE_MODE_X)==MOVE_MODE_1_MM);
+            assert(d.u8(Field::F_RF_MOVE_MODE_Z)==MOVE_MODE_1_MM);
+        }
+        if(id==SenseOffset) assert(d.u16(Field::F_RF_MOD_SENSEOFFSET_OFFSET_MAX)==120);
+        return true;
+    };
+    assert(session.load(patched,state)==Result::Ok);
+    writes=dev.programs;
+    assert(session.patch(patches,2)==Result::Ok && dev.programs==writes);
+    const Patch wrong[]={Patch::word(Field::F_RF_MOVE_MODE_Z,1)};
+    const Patch duplicate[]={patches[0],patches[0]};
+    const Patch bed[]={Patch::byte(Field::F_NEW_BED_EMERGENCY_C,120)};
+    const Patch bad[]={Patch::byte(Field::F_RF_MOVE_MODE_Z,0)};
+    assert(session.patch(wrong,1)==Result::Invalid);
+    assert(session.patch(duplicate,2)==Result::Invalid);
+    assert(session.patch(bed,1)==Result::Invalid);
+    assert(session.patch(bad,1)==Result::Invalid);
+    assert(session.save(blockBit(BedSafety),defaults)==Result::Invalid);
+    assert(dev.programs==writes);
     assert(session.acknowledge(AllAlerts)==Result::Ok);
     assert(session.commission(90)==Result::Ok);
     auto commissioned=[&](uint8_t id,const uint8_t* data,uint8_t n,uint32_t alerts){

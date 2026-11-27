@@ -15,8 +15,9 @@ template<class Device> class ReadyByteIO {
         }
         if(device_.ready()) return true;
         const uint32_t start=device_.now();
+        uint16_t spins=0;
         do {
-            if(uint32_t(device_.now()-start)>=20 || !device_.foreground()) {
+            if(++spins==0 || uint32_t(device_.now()-start)>=20 || !device_.foreground()) {
                 good_=false;return false;
             }
             device_.service();

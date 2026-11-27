@@ -6,6 +6,7 @@
 #include "EepromZoneByteIO.h"
 #include "EepromZoneRecovery.h"
 #include "EepromZoneValidation.h"
+#include "EepromZonePatch.h"
 
 namespace EepromZones {
 enum class Result : uint8_t { Ok, Busy, Invalid, TransportFault, NeedsRecovery };
@@ -29,23 +30,34 @@ public:
     Session(Device& device,bool& busy,uint16_t profile)
         :busy_(busy),profile_(profile),device_(device) {}
 
-    template<class Provider> Result save(uint32_t mask,Provider& provider) {
-        SessionGuard guard(busy_);
-        if(!guard.entered()) return Result::Busy;
-        IO io(device_);Store store(io,profile_);
+private:
+    template<class Provider> Result saveChecked(IO& io,Store& store,uint32_t mask,Provider& provider) {
         CheckedProvider<Provider> checked{provider};
-        if(!mask || (mask & ~Active)) return Result::Invalid;
-        // Preflight semantic validation for all proposed blocks before
-        // committing. Do not write anything on rejected settings.
+        if(!mask || (mask & ~Active) || (mask & blockBit(BedSafety))) return Result::Invalid;
         uint8_t data[MaxPayload];
         for(uint8_t id=1;id<=Last;++id)
             if((mask&blockBit(id)) && !checked(id,data,length(id)))
-                return Result::Invalid;
+                return io.good()?Result::Invalid:Result::TransportFault;
         const bool ok=store.commit(mask,checked);
         if(!io.good()) return Result::TransportFault;
         return ok?Result::Ok:Result::NeedsRecovery;
     }
-
+public:
+    template<class Provider> Result save(uint32_t mask,Provider& provider) {
+        SessionGuard guard(busy_);
+        if(!guard.entered()) return Result::Busy;
+        IO io(device_);Store store(io,profile_);
+        return saveChecked(io,store,mask,provider);
+    }
+    Result patch(const Patch* edits,uint8_t count) {
+        SessionGuard guard(busy_);
+        if(!guard.entered()) return Result::Busy;
+        const uint32_t mask=patchMask(edits,count);
+        if(!mask) return Result::Invalid;
+        IO io(device_);Store store(io,profile_);
+        PatchProvider<Store> proposed{store,edits,count};
+        return saveChecked(io,store,mask,proposed);
+    }
     template<class Defaults> Result restore(Defaults& defaults,Inspection& state,bool fullReset=false) {
         SessionGuard guard(busy_);
         if(!guard.entered()) return Result::Busy;

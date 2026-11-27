@@ -137,6 +137,7 @@
     <ClInclude Include="EepromZoneByteIO.h" />
     <ClInclude Include="EepromZoneAvr.h" />
     <ClInclude Include="EepromZoneSession.h" />
+    <ClInclude Include="EepromZonePatch.h" />
     <ClInclude Include="BedTemperatureLimit.h" />
     <ClInclude Include="Extruder.h" />
     <ClInclude Include="fastio.h" />

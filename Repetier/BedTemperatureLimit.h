@@ -15,7 +15,7 @@ public:
     // of the new schema the settings owner explicitly publishes 0 first.
     constexpr explicit BedTemperatureLimit(uint8_t initial=0)
         : commissioned_(validSetting(initial)?initial:0),
-          monitor_(initial && validSetting(initial)?initial:DefaultC) {}
+          monitor_(initial && validSetting(initial)?initial:uint8_t(DefaultC)) {}
     uint8_t commissioned() const {return commissioned_;}
     uint8_t monitor() const {return monitor_;}
     uint8_t maximumTarget() const {return commissioned_?commissioned_-MarginC:0;}

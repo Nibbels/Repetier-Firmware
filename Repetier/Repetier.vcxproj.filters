@@ -80,6 +80,9 @@
     <ClInclude Include="EepromZoneSession.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="EepromZonePatch.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="BedTemperatureLimit.h">
       <Filter>Header Files</Filter>
     </ClInclude>
