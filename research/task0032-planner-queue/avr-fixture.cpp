@@ -3,6 +3,7 @@
 #include "Repetier.h"
 #include "MotionPlanner.h"
 #include <limits.h>
+#include "estimator-candidate.h"
 
 extern "C" {
 volatile uint8_t phase=0, fixture_id=0, queue_depth=0;
@@ -36,7 +37,7 @@ static float fullSeconds(const PrintLine& m,uint32_t total) {
     if(d) s+=2.0f*d/(RMath::min(float(p.vEnd),peak)+peak);
     return s;
 }
-enum class Estimate:uint8_t { ExactTimeOnly, Lower, PacedTicks };
+enum class Estimate:uint8_t { ExactTimeOnly, Lower, PacedTicks, FastRoot };
 template<Estimate method>
 float estimate(const MoveQueue& q) {
     uint8_t index,entries;
@@ -56,7 +57,10 @@ float estimate(const MoveQueue& q) {
         if(left<=0||total<=0)continue;
         if(method==Estimate::ExactTimeOnly)
             result+=left==total?fullSeconds(m,total):MoveQueue::estimateSeconds(m,total,left);
-        else if(method==Estimate::Lower)
+        else if(method==Estimate::FastRoot) {
+            const auto& p=m.stepProfile;
+            result+=PlannerEstimateResearch::time<true>(total,left,p.accelSteps,p.decelSteps,m.lookahead.accelerationPrim,p.vStart,p.vEnd,p.vMax);
+        } else if(method==Estimate::Lower)
             result+=float(left)/RMath::max(1.0f,RMath::min(float(m.stepProfile.vMax),31250.0f));
         else {
             if(m.timeInTicks<=0)continue; // invalid tick fields are excluded; candidate must expose invalid in production
@@ -79,6 +83,9 @@ static void measure(const MoveQueue& q) {
     }
     if(ESTIMATOR_ONLY==0||ESTIMATOR_ONLY==9){
         mark(9);sink=estimate<Estimate::Lower>(q);mark(137);
+    }
+    if(ESTIMATOR_ONLY==0||ESTIMATOR_ONLY==11){
+        mark(11);sink=estimate<Estimate::FastRoot>(q);mark(139);
     }
     if(ESTIMATOR_ONLY==0||ESTIMATOR_ONLY==10){
         mark(10);sink=estimate<Estimate::PacedTicks>(q);mark(138);
