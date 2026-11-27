@@ -10,7 +10,7 @@ ir=load("inverse_root","inverse-root-research.py")
 q=u.q
 
 def modify(dst,tag):
-    assert tag=="direct-z"
+    assert tag in ("direct-z","direct-z-merge-study")
     u.modify(dst,"unified-z")
     (dst/"inverse-root-generated.h").write_text(ir.header())
     (dst/"z-correction-clock.h").write_text((HERE/"z-correction-clock.h").read_text())
@@ -27,6 +27,14 @@ def modify(dst,tag):
     s=q.replace(s,'sizeof(CorrectionState)==41','sizeof(CorrectionState)==43')
     s=q.replace(s,'ZCorrectionResearch::Limits::prepare(acceleration,speed)','DirectZResearch::Limits::prepare(acceleration,speed)')
     p.write_text(s)
+    if tag=="direct-z-merge-study":
+        # The threshold is mutable ONLY to sweep one identical linked
+        # image. It is not a proposed operator setting or production policy.
+        p=dst/"HAL.cpp";s=p.read_text()
+        s=q.replace(s,"static uint32_t nominalDeadline=0;",
+            "static uint32_t nominalDeadline=0;\nstatic volatile uint16_t correctionGapResearch=512;")
+        s=q.replace(s,"next-z>=StepExecutor::minimumStepIntervalTicks","next-z>=correctionGapResearch")
+        p.write_text(s)
     diff=[]
     for p in sorted(dst.glob("*")):
         if not p.is_file():continue
@@ -40,10 +48,11 @@ def main():
     p=argparse.ArgumentParser()
     p.add_argument("--out",type=pathlib.Path,required=True)
     p.add_argument("--tools",type=pathlib.Path,required=True)
+    p.add_argument("--merge-study",action="store_true")
     a=p.parse_args();a.out.mkdir(parents=True,exist_ok=True)
     q.modify=modify
     with tempfile.TemporaryDirectory(prefix="direct-z-") as tmp:
-        archive=q.build(pathlib.Path(tmp)/"Repetier",a.out,"direct-z",a.tools)
+        archive=q.build(pathlib.Path(tmp)/"Repetier",a.out,"direct-z-merge-study" if a.merge_study else "direct-z",a.tools)
     # LPM near table access must be proven in the actual link, not inferred
     # from total image size (the ATmega2560 has more than 64 KiB flash).
     with zipfile.ZipFile(archive) as z:
