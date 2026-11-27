@@ -85,7 +85,8 @@ def main():
         + "void UIDisplay::changeSetting(int action, int8_t increment) { switch(action) {\n"
         + section(settings, "    case UI_ACTION_PREHEAT_A_BED:", "    case UI_ACTION_FANSPEED:")
         + "default: assert(false); } }\n"
-        + section(epr, "void EEPROM::updateChecksum()", "void EEPROM::readDataFromEEPROM()")
+        + section(epr, "void EEPROM::updateChecksum()", "void EEPROM::storeMicrostepConfiguration(")
+        + section(epr, "void EEPROM::storeManualZOffset()", "void EEPROM::readDataFromEEPROM()")
         + section(epr, "uint8_t EEPROM::computeChecksum()", "} // computeChecksum") + "}\n"
         + read("PreheatProfiles.cpp")[read("PreheatProfiles.cpp").index("namespace {"):]
     )
