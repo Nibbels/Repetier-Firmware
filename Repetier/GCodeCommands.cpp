@@ -19,6 +19,7 @@
 
 #include "Repetier.h"
 #include "GCodeCommands.h"
+#include "DiagnosticHistory.h"
 
 namespace GCodeCommands {
 namespace {
@@ -104,6 +105,9 @@ void dispatchMachine(GCode* com) {
         return reportEeprom();
     case 206: return setEepromValue(com);
     case 360: return reportConfiguration();
+#if defined(RF_THERMAL_EMERGENCY_EXPERIMENT) && defined(RF_EEPROM_ZONE_EXPERIMENT)
+    case DiagnosticHistory::ReadCommand: return DiagnosticHistory::request();
+#endif
     case 502: return restoreConfigurationDefaults();
     case 3028: return testHomingRepeatability(com);
     case 3029: return accessPanel(com);
@@ -134,7 +138,11 @@ void Commands::executeGCode(GCode* com) {
         if(com->hasG() || !com->hasM() ||
            (com->M!=105 && com->M!=112 && com->M!=114 &&
             com->M!=115 && com->M!=205 && com->M!=206 &&
-            com->M!=502)) {
+            com->M!=502
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+            && com->M!=DiagnosticHistory::ReadCommand
+#endif
+            )) {
             Com::printErrorFLN(PSTR("EEPROM settings not acknowledged"));
             return;
         }
