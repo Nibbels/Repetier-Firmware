@@ -1,5 +1,6 @@
 #pragma once
 #include "EventLogRead.h"
+#include "CompactEvent.h"
 #ifdef __AVR__
 #include <avr/pgmspace.h>
 #define EVENT_LOG_TEXT(s) PSTR(s)
@@ -47,8 +48,39 @@ template<class Line> void optionalTemp(Line& line,const EntryView& v,uint16_t bi
     line.number(magnitude/10);line.character('.');
     line.character(char('0'+magnitude%10));
 }
-inline uint8_t rows(const EntryView& v){return v.reason()<=11?6:1;}
+inline bool scanEntry(const EntryView& v){
+    return v.channel()==Channel::System&&isScanReason(v.reason());
+}
+template<class Line> void scanReasonText(Line& line,uint8_t reason){
+    switch(reason){
+#define RF_SCAN_LOG(name, value, code, shortText, hint) \
+    case code: \
+        line.text(EVENT_LOG_TEXT(shortText)); \
+        if(sizeof(hint)>1){line.character(' ');line.text(EVENT_LOG_TEXT(hint));} \
+        break;
+    RF_SCAN_FAULTS(RF_SCAN_LOG)
+#undef RF_SCAN_LOG
+    default:line.unknown();break;
+    }
+}
+template<class Line> void scanLine(Line& line,const EntryView& v,uint8_t row){
+    switch(row){
+    case 0:
+        line.text(EVENT_LOG_TEXT("LOG #"));line.number(v.sequence());
+        if(v.context(0)==uint8_t(ScanContext::HeatBed))
+            line.text(EVENT_LOG_TEXT(" HBS"));
+        else if(v.context(0)==uint8_t(ScanContext::ZOffset))
+            line.text(EVENT_LOG_TEXT(" ZOS"));
+        else line.text(EVENT_LOG_TEXT(" SCAN"));
+        line.text(EVENT_LOG_TEXT(" CODE:"));line.number(v.reason());break;
+    case 1:scanReasonText(line,v.reason());break;
+    case 2:
+        line.text(EVENT_LOG_TEXT("uptime_ms:"));optionalNumber(line,v,256,v.uptime());break;
+    }
+}
+inline uint8_t rows(const EntryView& v){return scanEntry(v)?3:v.reason()<=11?6:1;}
 template<class Line,class Cause> void entryLine(Line& line,const EntryView& v,uint8_t row) {
+    if(scanEntry(v)){scanLine(line,v,row);return;}
     switch(row){
     case 0:
         line.text(EVENT_LOG_TEXT("LOG #"));line.number(v.sequence());
