@@ -20,6 +20,8 @@ source=r"""
 #include <cstring>
 #include <cstdio>
 #define PSTR(x) (x)
+#define PROGMEM
+#define pgm_read_word(p) (*(p))
 #define UI_TEXT_FAIL "Fail"
 #define UI_TEXT_SCAN_ABORTED "Scan aborted"
 static unsigned messages;
