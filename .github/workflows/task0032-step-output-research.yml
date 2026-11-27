@@ -181,6 +181,12 @@ jobs:
       - name: Linked direct-period nominal and correction replay
         run: |
           python3 research/task0032-step-output/unified-z-linked-replay.py "$RUNNER_TEMP/step-output/q23/wake-jog-idle/candidate.zip" "$RUNNER_TEMP/step-output/z-direct/direct-z/candidate.zip" "$RUNNER_TEMP/step-output/z-direct-results.json"
+      - name: Build linked correction gap study (diagnostic input only)
+        run: |
+          python3 research/task0032-step-output/direct-z-source.py --merge-study --out "$RUNNER_TEMP/step-output/z-direct" --tools "$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin"
+      - name: Compare linked correction gap policies on representative boards
+        run: |
+          python3 research/task0032-step-output/z-merge-gap-replay.py "$RUNNER_TEMP/step-output/z-direct/direct-z-merge-study/candidate.zip" "$RUNNER_TEMP/step-output/z-merge-gap-results.json"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
