@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <array>
 #include <cstdint>
+#include <initializer_list>
 #define __AVR_ATmega2560__ 1
 #include "BoardConfiguration.h"
 #include "EepromZoneDefaults.h"
@@ -202,7 +203,67 @@ static void sessionReplay(FactoryDefaults& defaults) {
     assert(out.read(0)==0xff && !out.good()); // never access legacy region
     printf("EEPROM ready wait / checked session: %u services, recursion blocked; PASS\\n",dev.services);
 }
+// Byte-exact baseline captured from the pre-compaction factory provider,
+// including all constant blocks and varying runtime-provided defaults.
+// Update the pinned profile digest only for an intentional settings change.
+static void factoryImageReplay() {
+    uint32_t digest=2166136261UL;
+    unsigned bytes=0;
+    for(float lift:{1.0f,0.3f,6.0f})
+        for(unsigned idx:{0u,5u})
+            for(bool xy:{false,true})
+                for(bool fr:{false,true}) {
+                    FactoryDefaults defaults(lift,idx,xy,fr);
+                    for(uint8_t id=1;id<=Last;++id) {
+                        uint8_t guard[MaxPayload+2];
+                        for(auto& b:guard)b=0xa7;
+                        const uint8_t n=length(id);
+                        assert(defaults(id,guard+1,n));
+                        assert(guard[0]==0xa7 && guard[n+1]==0xa7);
+                        for(uint8_t i=1;i<=n;++i) {
+                            digest=(digest^guard[i])*16777619UL;
+                            ++bytes;
+                        }
+                    }
+                }
+    uint32_t expected=0;
+    switch(configuredProfile()) {
+    case 0x0d10:expected=0xd4905079UL;break;
+    case 0x0e20:expected=0x941b89c9UL;break;
+    case 0x0f20:expected=0x6e0c6269UL;break;
+    case 0x0e11:expected=0xa3e79259UL;break;
+    default:assert(false);
+    }
+    assert(bytes==7296 && digest==expected);
+    printf("Factory payload baseline: %u bytes match; PASS\n",bytes);
+}
+template<class T,class L,class H> static unsigned compareIntegerRange(int first,int last,L lo,H hi) {
+    unsigned n=0;
+    for(int i=first;i<=last;++i) {
+        const T v=static_cast<T>(i);
+        assert(integerRange(v,lo,hi)==inRange(v,lo,hi));
+        ++n;
+    }
+    return n;
+}
+static void integerRangeReplay() {
+    unsigned n=0;
+    n+=compareIntegerRange<uint16_t>(0,65535,MIN_STEP_PACKING_MIN_INTERVAL,MAX_STEP_PACKING_MIN_INTERVAL);
+    n+=compareIntegerRange<uint16_t>(0,65535,1,300);
+    n+=compareIntegerRange<int16_t>(-32768,32767,-995,995);
+    n+=compareIntegerRange<int8_t>(-128,127,-100,101);
+    const uint8_t maxima[]=MOTOR_CURRENT_MAX;
+    for(auto m:maxima)n+=compareIntegerRange<uint8_t>(0,255,MOTOR_CURRENT_MIN,m);
+    n+=compareIntegerRange<uint8_t>(0,255,1,2);
+    n+=compareIntegerRange<uint8_t>(0,255,MOVE_MODE_SINGLE_STEPS,MOVE_MODE_SINGLE_MOVE);
+    n+=compareIntegerRange<uint8_t>(0,255,1,3);
+    n+=compareIntegerRange<uint8_t>(0,255,1,7);
+    assert(n==199168);
+    printf("Integral settings bounds: %u cases match historical float comparison; PASS\n",n);
+}
 int main(){
+    factoryImageReplay();
+    integerRangeReplay();
     FactoryDefaults defaults(1.0f,5,true,false);
     sessionReplay(defaults);
     Memory io;Storage<Memory> store(io,configuredProfile());
