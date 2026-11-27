@@ -1,0 +1,1534 @@
+{
+  "schema": 1,
+  "classification": "isolated linked instructions, clock observations and PWM writer-effect injection; not concurrent IRQ or hardware qualification",
+  "tested_head": "adb3b726f57596d21184bd9a75e8ce608fc0fcd1",
+  "tested_merge": "09711e5cbe3f1e2e2bf824bf1c65e95d48d1ddc7",
+  "canonical": {
+    "run": 45983312444,
+    "artifact": 15189779695,
+    "sha256": "1df73e3e313023eff05f78f7d37a5733e2e8f9f170bbaf29c7aa048e10779c42"
+  },
+  "research": {
+    "run": 45983312445,
+    "artifact": 15191025172,
+    "sha256": "d05caa64c93a4a5132c33b8fd055d1b64d6bc316b3f477ada31b0bf7b234c2c3"
+  },
+  "rows": {
+    "RF1000": {
+      "matched": 1162,
+      "failed": 0,
+      "mismatch_examples": [],
+      "width_min": {
+        "X:high": 160,
+        "X:low": 83,
+        "X:step_period": 257,
+        "Y:high": 156,
+        "Y:low": 229,
+        "Y:step_period": 400,
+        "E0:high": 50,
+        "E0:low": 31,
+        "E0:step_period": 85,
+        "Z:high": 63,
+        "Z:low": 120,
+        "Z:step_period": 239,
+        "Z:dir_setup": 14
+      },
+      "baseline_width_min": {
+        "X:high": 158,
+        "X:low": 83,
+        "X:step_period": 255,
+        "Y:high": 154,
+        "Y:low": 229,
+        "Y:step_period": 398,
+        "E0:high": 48,
+        "E0:low": 102,
+        "E0:step_period": 156,
+        "Z:high": 60,
+        "Z:low": 120,
+        "Z:step_period": 239,
+        "Z:dir_setup": 6
+      },
+      "short_pulses": 0,
+      "baseline_short_pulses": 0,
+      "short_examples": [],
+      "max_mask": 449,
+      "max_baseline_mask": 848,
+      "worst_mask_examples": [
+        "Eprimary-comp",
+        {
+          "owner": 0,
+          "delta": [
+            40,
+            25,
+            0,
+            100
+          ],
+          "rate": 9143,
+          "n": 1,
+          "phase": "cruise",
+          "advance": true,
+          "ratio": 0,
+          "zcor": 4,
+          "tool": 0,
+          "negative": true,
+          "remaining": 80
+        }
+      ],
+      "configured_E_primary": [
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 7000,
+            "n": 1,
+            "phase": "cruise",
+            "advance": false,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": false,
+            "remaining": 80
+          },
+          "base": [
+            1373,
+            601
+          ],
+          "candidate": [
+            1181,
+            281
+          ]
+        },
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 7000,
+            "n": 2,
+            "phase": "cruise",
+            "advance": false,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": false,
+            "remaining": 80
+          },
+          "base": [
+            2015,
+            604
+          ],
+          "candidate": [
+            1626,
+            284
+          ]
+        },
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 7000,
+            "n": 1,
+            "phase": "cruise",
+            "advance": false,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": true,
+            "remaining": 80
+          },
+          "base": [
+            1552,
+            780
+          ],
+          "candidate": [
+            1241,
+            293
+          ]
+        },
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 7000,
+            "n": 2,
+            "phase": "cruise",
+            "advance": false,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": true,
+            "remaining": 80
+          },
+          "base": [
+            2199,
+            783
+          ],
+          "candidate": [
+            1687,
+            296
+          ]
+        },
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 7000,
+            "n": 1,
+            "phase": "cruise",
+            "advance": true,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": false,
+            "remaining": 80
+          },
+          "base": [
+            1555,
+            654
+          ],
+          "candidate": [
+            1363,
+            280
+          ]
+        },
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 7000,
+            "n": 2,
+            "phase": "cruise",
+            "advance": true,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": false,
+            "remaining": 80
+          },
+          "base": [
+            2208,
+            657
+          ],
+          "candidate": [
+            1819,
+            283
+          ]
+        },
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 7000,
+            "n": 1,
+            "phase": "cruise",
+            "advance": true,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": true,
+            "remaining": 80
+          },
+          "base": [
+            1746,
+            845
+          ],
+          "candidate": [
+            1433,
+            292
+          ]
+        },
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 7000,
+            "n": 2,
+            "phase": "cruise",
+            "advance": true,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": true,
+            "remaining": 80
+          },
+          "base": [
+            2404,
+            848
+          ],
+          "candidate": [
+            1890,
+            295
+          ]
+        }
+      ],
+      "baseline_max_no_irq_admission_gap_by_mode": {
+        "inner": 296,
+        "active": 851,
+        "activation": 521,
+        "stoppable": 236,
+        "idle": 312,
+        "wait": 139,
+        "wait_chunk": 131,
+        "blocked": 408
+      },
+      "max_no_irq_admission_gap_by_mode": {
+        "inner": 246,
+        "active": 452,
+        "activation": 242,
+        "stoppable": 263,
+        "idle": 101,
+        "wait": 139,
+        "wait_chunk": 131,
+        "blocked": 194
+      },
+      "baseline_max_mask_by_mode": {
+        "inner": 293,
+        "active": 848,
+        "activation": 521,
+        "stoppable": 233,
+        "idle": 312,
+        "wait": 139,
+        "wait_chunk": 131,
+        "blocked": 408
+      },
+      "max_mask_by_mode": {
+        "inner": 243,
+        "active": 449,
+        "activation": 241,
+        "stoppable": 261,
+        "idle": 97,
+        "wait": 139,
+        "wait_chunk": 131,
+        "blocked": 193
+      },
+      "linked_static_sram_bytes": 5941,
+      "linked_flash_text_data_bytes": 213204
+    },
+    "RF2000": {
+      "matched": 1170,
+      "failed": 0,
+      "mismatch_examples": [],
+      "width_min": {
+        "X:high": 172,
+        "X:low": 80,
+        "X:step_period": 266,
+        "Y:high": 156,
+        "Y:low": 226,
+        "Y:step_period": 409,
+        "E0:high": 60,
+        "E0:low": 42,
+        "E0:step_period": 107,
+        "Z:high": 60,
+        "Z:low": 100,
+        "Z:step_period": 228,
+        "Z:dir_setup": 11,
+        "E1:high": 63,
+        "E1:low": 44,
+        "E1:step_period": 111
+      },
+      "baseline_width_min": {
+        "X:high": 170,
+        "X:low": 80,
+        "X:step_period": 264,
+        "Y:high": 154,
+        "Y:low": 226,
+        "Y:step_period": 407,
+        "E0:high": 58,
+        "E0:low": 110,
+        "E0:step_period": 174,
+        "Z:high": 57,
+        "Z:low": 100,
+        "Z:step_period": 228,
+        "Z:dir_setup": 3,
+        "E1:high": 61,
+        "E1:low": 116,
+        "E1:step_period": 201
+      },
+      "short_pulses": 0,
+      "baseline_short_pulses": 76,
+      "short_examples": [],
+      "max_mask": 444,
+      "max_baseline_mask": 843,
+      "worst_mask_examples": [
+        "Eprimary-comp",
+        {
+          "owner": 0,
+          "delta": [
+            40,
+            25,
+            0,
+            100
+          ],
+          "rate": 9143,
+          "n": 1,
+          "phase": "cruise",
+          "advance": true,
+          "ratio": 0,
+          "zcor": 4,
+          "tool": 0,
+          "negative": true,
+          "remaining": 80
+        }
+      ],
+      "configured_E_primary": [
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 7000,
+            "n": 1,
+            "phase": "cruise",
+            "advance": false,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": false,
+            "remaining": 80
+          },
+          "base": [
+            1389,
+            617
+          ],
+          "candidate": [
+            1198,
+            288
+          ]
+        },
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 7000,
+            "n": 2,
+            "phase": "cruise",
+            "advance": false,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": false,
+            "remaining": 80
+          },
+          "base": [
+            2049,
+            620
+          ],
+          "candidate": [
+            1662,
+            291
+          ]
+        },
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 7000,
+            "n": 1,
+            "phase": "cruise",
+            "advance": false,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": true,
+            "remaining": 80
+          },
+          "base": [
+            1588,
+            816
+          ],
+          "candidate": [
+            1279,
+            300
+          ]
+        },
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 7000,
+            "n": 2,
+            "phase": "cruise",
+            "advance": false,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": true,
+            "remaining": 80
+          },
+          "base": [
+            2253,
+            819
+          ],
+          "candidate": [
+            1744,
+            303
+          ]
+        },
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 7000,
+            "n": 1,
+            "phase": "cruise",
+            "advance": true,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": false,
+            "remaining": 80
+          },
+          "base": [
+            1550,
+            649
+          ],
+          "candidate": [
+            1359,
+            275
+          ]
+        },
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 7000,
+            "n": 2,
+            "phase": "cruise",
+            "advance": true,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": false,
+            "remaining": 80
+          },
+          "base": [
+            2200,
+            652
+          ],
+          "candidate": [
+            1813,
+            278
+          ]
+        },
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 7000,
+            "n": 1,
+            "phase": "cruise",
+            "advance": true,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": true,
+            "remaining": 80
+          },
+          "base": [
+            1741,
+            840
+          ],
+          "candidate": [
+            1430,
+            287
+          ]
+        },
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 7000,
+            "n": 2,
+            "phase": "cruise",
+            "advance": true,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": true,
+            "remaining": 80
+          },
+          "base": [
+            2396,
+            843
+          ],
+          "candidate": [
+            1885,
+            290
+          ]
+        }
+      ],
+      "baseline_max_no_irq_admission_gap_by_mode": {
+        "inner": 314,
+        "active": 846,
+        "activation": 584,
+        "stoppable": 245,
+        "idle": 312,
+        "wait": 139,
+        "wait_chunk": 131,
+        "blocked": 408
+      },
+      "max_no_irq_admission_gap_by_mode": {
+        "inner": 264,
+        "active": 447,
+        "activation": 242,
+        "stoppable": 263,
+        "idle": 101,
+        "wait": 139,
+        "wait_chunk": 131,
+        "blocked": 194
+      },
+      "baseline_max_mask_by_mode": {
+        "inner": 311,
+        "active": 843,
+        "activation": 584,
+        "stoppable": 242,
+        "idle": 312,
+        "wait": 139,
+        "wait_chunk": 131,
+        "blocked": 408
+      },
+      "max_mask_by_mode": {
+        "inner": 261,
+        "active": 444,
+        "activation": 241,
+        "stoppable": 261,
+        "idle": 97,
+        "wait": 139,
+        "wait_chunk": 131,
+        "blocked": 193
+      },
+      "linked_static_sram_bytes": 5991,
+      "linked_flash_text_data_bytes": 217382
+    },
+    "RF2000v2": {
+      "matched": 1170,
+      "failed": 0,
+      "mismatch_examples": [],
+      "width_min": {
+        "X:high": 172,
+        "X:low": 80,
+        "X:step_period": 266,
+        "Y:high": 156,
+        "Y:low": 226,
+        "Y:step_period": 409,
+        "E0:high": 60,
+        "E0:low": 42,
+        "E0:step_period": 107,
+        "Z:high": 60,
+        "Z:low": 100,
+        "Z:step_period": 228,
+        "Z:dir_setup": 11,
+        "E1:high": 63,
+        "E1:low": 44,
+        "E1:step_period": 111
+      },
+      "baseline_width_min": {
+        "X:high": 170,
+        "X:low": 80,
+        "X:step_period": 264,
+        "Y:high": 154,
+        "Y:low": 226,
+        "Y:step_period": 407,
+        "E0:high": 58,
+        "E0:low": 110,
+        "E0:step_period": 174,
+        "Z:high": 57,
+        "Z:low": 100,
+        "Z:step_period": 228,
+        "Z:dir_setup": 3,
+        "E1:high": 61,
+        "E1:low": 116,
+        "E1:step_period": 201
+      },
+      "short_pulses": 0,
+      "baseline_short_pulses": 76,
+      "short_examples": [],
+      "max_mask": 444,
+      "max_baseline_mask": 843,
+      "worst_mask_examples": [
+        "Eprimary-comp",
+        {
+          "owner": 0,
+          "delta": [
+            40,
+            25,
+            0,
+            100
+          ],
+          "rate": 9143,
+          "n": 1,
+          "phase": "cruise",
+          "advance": true,
+          "ratio": 0,
+          "zcor": 4,
+          "tool": 0,
+          "negative": true,
+          "remaining": 80
+        }
+      ],
+      "configured_E_primary": [
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 6400,
+            "n": 1,
+            "phase": "cruise",
+            "advance": false,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": false,
+            "remaining": 80
+          },
+          "base": [
+            1389,
+            617
+          ],
+          "candidate": [
+            1198,
+            288
+          ]
+        },
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 6400,
+            "n": 2,
+            "phase": "cruise",
+            "advance": false,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": false,
+            "remaining": 80
+          },
+          "base": [
+            2049,
+            620
+          ],
+          "candidate": [
+            1662,
+            291
+          ]
+        },
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 6400,
+            "n": 1,
+            "phase": "cruise",
+            "advance": false,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": true,
+            "remaining": 80
+          },
+          "base": [
+            1588,
+            816
+          ],
+          "candidate": [
+            1279,
+            300
+          ]
+        },
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 6400,
+            "n": 2,
+            "phase": "cruise",
+            "advance": false,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": true,
+            "remaining": 80
+          },
+          "base": [
+            2253,
+            819
+          ],
+          "candidate": [
+            1744,
+            303
+          ]
+        },
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 6400,
+            "n": 1,
+            "phase": "cruise",
+            "advance": true,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": false,
+            "remaining": 80
+          },
+          "base": [
+            1550,
+            649
+          ],
+          "candidate": [
+            1359,
+            275
+          ]
+        },
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 6400,
+            "n": 2,
+            "phase": "cruise",
+            "advance": true,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": false,
+            "remaining": 80
+          },
+          "base": [
+            2200,
+            652
+          ],
+          "candidate": [
+            1813,
+            278
+          ]
+        },
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 6400,
+            "n": 1,
+            "phase": "cruise",
+            "advance": true,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": true,
+            "remaining": 80
+          },
+          "base": [
+            1741,
+            840
+          ],
+          "candidate": [
+            1430,
+            287
+          ]
+        },
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 6400,
+            "n": 2,
+            "phase": "cruise",
+            "advance": true,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": true,
+            "remaining": 80
+          },
+          "base": [
+            2396,
+            843
+          ],
+          "candidate": [
+            1885,
+            290
+          ]
+        }
+      ],
+      "baseline_max_no_irq_admission_gap_by_mode": {
+        "inner": 314,
+        "active": 846,
+        "activation": 584,
+        "stoppable": 245,
+        "idle": 312,
+        "wait": 139,
+        "wait_chunk": 131,
+        "blocked": 408
+      },
+      "max_no_irq_admission_gap_by_mode": {
+        "inner": 264,
+        "active": 447,
+        "activation": 242,
+        "stoppable": 263,
+        "idle": 101,
+        "wait": 139,
+        "wait_chunk": 131,
+        "blocked": 194
+      },
+      "baseline_max_mask_by_mode": {
+        "inner": 311,
+        "active": 843,
+        "activation": 584,
+        "stoppable": 242,
+        "idle": 312,
+        "wait": 139,
+        "wait_chunk": 131,
+        "blocked": 408
+      },
+      "max_mask_by_mode": {
+        "inner": 261,
+        "active": 444,
+        "activation": 241,
+        "stoppable": 261,
+        "idle": 97,
+        "wait": 139,
+        "wait_chunk": 131,
+        "blocked": 193
+      },
+      "linked_static_sram_bytes": 6109,
+      "linked_flash_text_data_bytes": 217386
+    },
+    "RF2000-X44": {
+      "matched": 1162,
+      "failed": 0,
+      "mismatch_examples": [],
+      "width_min": {
+        "X:high": 160,
+        "X:low": 80,
+        "X:step_period": 254,
+        "Y:high": 156,
+        "Y:low": 226,
+        "Y:step_period": 397,
+        "E0:high": 50,
+        "E0:low": 31,
+        "E0:step_period": 85,
+        "Z:high": 60,
+        "Z:low": 100,
+        "Z:step_period": 216,
+        "Z:dir_setup": 11
+      },
+      "baseline_width_min": {
+        "X:high": 158,
+        "X:low": 80,
+        "X:step_period": 252,
+        "Y:high": 154,
+        "Y:low": 226,
+        "Y:step_period": 395,
+        "E0:high": 48,
+        "E0:low": 99,
+        "E0:step_period": 153,
+        "Z:high": 57,
+        "Z:low": 100,
+        "Z:step_period": 216,
+        "Z:dir_setup": 3
+      },
+      "short_pulses": 0,
+      "baseline_short_pulses": 76,
+      "short_examples": [],
+      "max_mask": 444,
+      "max_baseline_mask": 843,
+      "worst_mask_examples": [
+        "Eprimary-comp",
+        {
+          "owner": 0,
+          "delta": [
+            40,
+            25,
+            0,
+            100
+          ],
+          "rate": 9143,
+          "n": 1,
+          "phase": "cruise",
+          "advance": true,
+          "ratio": 0,
+          "zcor": 4,
+          "tool": 0,
+          "negative": true,
+          "remaining": 80
+        }
+      ],
+      "configured_E_primary": [
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 7000,
+            "n": 1,
+            "phase": "cruise",
+            "advance": false,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": false,
+            "remaining": 80
+          },
+          "base": [
+            1368,
+            596
+          ],
+          "candidate": [
+            1176,
+            276
+          ]
+        },
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 7000,
+            "n": 2,
+            "phase": "cruise",
+            "advance": false,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": false,
+            "remaining": 80
+          },
+          "base": [
+            2007,
+            599
+          ],
+          "candidate": [
+            1618,
+            279
+          ]
+        },
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 7000,
+            "n": 1,
+            "phase": "cruise",
+            "advance": false,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": true,
+            "remaining": 80
+          },
+          "base": [
+            1547,
+            775
+          ],
+          "candidate": [
+            1236,
+            288
+          ]
+        },
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 7000,
+            "n": 2,
+            "phase": "cruise",
+            "advance": false,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": true,
+            "remaining": 80
+          },
+          "base": [
+            2191,
+            778
+          ],
+          "candidate": [
+            1679,
+            291
+          ]
+        },
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 7000,
+            "n": 1,
+            "phase": "cruise",
+            "advance": true,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": false,
+            "remaining": 80
+          },
+          "base": [
+            1550,
+            649
+          ],
+          "candidate": [
+            1358,
+            275
+          ]
+        },
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 7000,
+            "n": 2,
+            "phase": "cruise",
+            "advance": true,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": false,
+            "remaining": 80
+          },
+          "base": [
+            2200,
+            652
+          ],
+          "candidate": [
+            1811,
+            278
+          ]
+        },
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 7000,
+            "n": 1,
+            "phase": "cruise",
+            "advance": true,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": true,
+            "remaining": 80
+          },
+          "base": [
+            1741,
+            840
+          ],
+          "candidate": [
+            1428,
+            287
+          ]
+        },
+        {
+          "fixture": {
+            "owner": 1,
+            "delta": [
+              40,
+              25,
+              0,
+              100
+            ],
+            "rate": 7000,
+            "n": 2,
+            "phase": "cruise",
+            "advance": true,
+            "ratio": 0.25,
+            "zcor": 4,
+            "tool": 0,
+            "negative": true,
+            "remaining": 80
+          },
+          "base": [
+            2396,
+            843
+          ],
+          "candidate": [
+            1882,
+            290
+          ]
+        }
+      ],
+      "baseline_max_no_irq_admission_gap_by_mode": {
+        "inner": 293,
+        "active": 846,
+        "activation": 521,
+        "stoppable": 233,
+        "idle": 312,
+        "wait": 139,
+        "wait_chunk": 131,
+        "blocked": 408
+      },
+      "max_no_irq_admission_gap_by_mode": {
+        "inner": 243,
+        "active": 447,
+        "activation": 242,
+        "stoppable": 263,
+        "idle": 101,
+        "wait": 139,
+        "wait_chunk": 131,
+        "blocked": 194
+      },
+      "baseline_max_mask_by_mode": {
+        "inner": 290,
+        "active": 843,
+        "activation": 521,
+        "stoppable": 230,
+        "idle": 312,
+        "wait": 139,
+        "wait_chunk": 131,
+        "blocked": 408
+      },
+      "max_mask_by_mode": {
+        "inner": 240,
+        "active": 444,
+        "activation": 241,
+        "stoppable": 261,
+        "idle": 97,
+        "wait": 139,
+        "wait_chunk": 131,
+        "blocked": 193
+      },
+      "linked_static_sram_bytes": 6025,
+      "linked_flash_text_data_bytes": 212578
+    }
+  },
+  "wake": {
+    "RF1000": {
+      "cases": 20,
+      "ticks": 116,
+      "max_mask": 412,
+      "max_cycles": 1798,
+      "max_cold_first_mask": 412,
+      "max_cold_first_cycles": 626
+    },
+    "RF2000": {
+      "cases": 34,
+      "ticks": 200,
+      "max_mask": 435,
+      "max_cycles": 1772,
+      "max_cold_first_mask": 435,
+      "max_cold_first_cycles": 649
+    },
+    "RF2000v2": {
+      "cases": 34,
+      "ticks": 200,
+      "max_mask": 435,
+      "max_cycles": 1772,
+      "max_cold_first_mask": 435,
+      "max_cold_first_cycles": 649
+    },
+    "RF2000-X44": {
+      "cases": 20,
+      "ticks": 116,
+      "max_mask": 412,
+      "max_cycles": 1772,
+      "max_cold_first_mask": 412,
+      "max_cold_first_cycles": 626
+    }
+  },
+  "jog": {
+    "baseline": {
+      "RF1000": {
+        "tested": 88,
+        "violations": 12,
+        "examples": [
+          {
+            "initial": 256,
+            "n": 2,
+            "violation": true,
+            "remaining": 32,
+            "task": 7,
+            "x_rises": 0,
+            "injected": {
+              "cycle": 146,
+              "pc": "0x2a3f8",
+              "old": 256
+            }
+          },
+          {
+            "initial": 258,
+            "n": 2,
+            "violation": true,
+            "remaining": 0,
+            "task": 0,
+            "x_rises": 2,
+            "injected": {
+              "cycle": 1034,
+              "pc": "0x2abba",
+              "old": 256
+            }
+          }
+        ]
+      },
+      "RF2000": {
+        "tested": 88,
+        "violations": 12,
+        "examples": [
+          {
+            "initial": 256,
+            "n": 2,
+            "violation": true,
+            "remaining": 32,
+            "task": 7,
+            "x_rises": 0,
+            "injected": {
+              "cycle": 146,
+              "pc": "0x2abd6",
+              "old": 256
+            }
+          },
+          {
+            "initial": 258,
+            "n": 2,
+            "violation": true,
+            "remaining": 0,
+            "task": 0,
+            "x_rises": 2,
+            "injected": {
+              "cycle": 1052,
+              "pc": "0x2b398",
+              "old": 256
+            }
+          }
+        ]
+      },
+      "RF2000v2": {
+        "tested": 88,
+        "violations": 12,
+        "examples": [
+          {
+            "initial": 256,
+            "n": 2,
+            "violation": true,
+            "remaining": 32,
+            "task": 7,
+            "x_rises": 0,
+            "injected": {
+              "cycle": 146,
+              "pc": "0x2abda",
+              "old": 256
+            }
+          },
+          {
+            "initial": 258,
+            "n": 2,
+            "violation": true,
+            "remaining": 0,
+            "task": 0,
+            "x_rises": 2,
+            "injected": {
+              "cycle": 1052,
+              "pc": "0x2b39c",
+              "old": 256
+            }
+          }
+        ]
+      },
+      "RF2000-X44": {
+        "tested": 88,
+        "violations": 12,
+        "examples": [
+          {
+            "initial": 256,
+            "n": 2,
+            "violation": true,
+            "remaining": 32,
+            "task": 7,
+            "x_rises": 0,
+            "injected": {
+              "cycle": 146,
+              "pc": "0x29f04",
+              "old": 256
+            }
+          },
+          {
+            "initial": 258,
+            "n": 2,
+            "violation": true,
+            "remaining": 0,
+            "task": 0,
+            "x_rises": 2,
+            "injected": {
+              "cycle": 1028,
+              "pc": "0x2a694",
+              "old": 256
+            }
+          }
+        ]
+      }
+    },
+    "candidate": {
+      "RF1000": {
+        "tested": 16,
+        "violations": 0,
+        "examples": []
+      },
+      "RF2000": {
+        "tested": 16,
+        "violations": 0,
+        "examples": []
+      },
+      "RF2000v2": {
+        "tested": 16,
+        "violations": 0,
+        "examples": []
+      },
+      "RF2000-X44": {
+        "tested": 16,
+        "violations": 0,
+        "examples": []
+      }
+    }
+  }
+}
