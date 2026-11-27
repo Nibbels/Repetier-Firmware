@@ -140,6 +140,16 @@ void discardScans() {
     Calibration::discardZOffsetScan();
 }
 
+static __attribute__((noinline)) void dispatchScanWork(bool tickDue) {
+    const bool measurementReady = !Calibration::scanSession.aborting() && Calibration::scanPressure.service(HAL::timeInMilliseconds());
+    if (tickDue || measurementReady) {
+        if (heatBedScanRunning())
+            Calibration::tickHeatBedScan();
+        else
+            Calibration::tickZOffsetScan();
+    }
+}
+
 // Keep the guarded scan dispatch frame out of the reentrant periodic pump.
 __attribute__((noinline)) void handleScanWorkTasks(bool tickDue) {
     if (Calibration::scanSession.dispatching() || !isAnyScanRunning())
@@ -152,13 +162,7 @@ __attribute__((noinline)) void handleScanWorkTasks(bool tickDue) {
         return;
 
     Calibration::scanSession.beginDispatch();
-    const bool measurementReady = !Calibration::scanSession.aborting() && Calibration::scanPressure.service(HAL::timeInMilliseconds());
-    if (tickDue || measurementReady) {
-        if (heatBedScanRunning())
-            Calibration::tickHeatBedScan();
-        else
-            Calibration::tickZOffsetScan();
-    }
+    dispatchScanWork(tickDue);
     if (Calibration::scanSession.finishDispatch() || Printer::blockAll || Printer::printJob.commandsBlocked())
         discardScans();
 }
@@ -232,6 +236,16 @@ void outputObject(bool showerrors) {
     Printer::idleStatus.schedule(HAL::timeInMilliseconds());
 } // outputObject
 
+static __attribute__((noinline)) void servicePrintFeatures() {
+    millis_t uTime = HAL::timeInMilliseconds();
+    Printer::printJob.service(uTime);
+
+    handleStartStandby(uTime);
+    handleStrainGaugeFeatures(uTime);
+
+    Printer::pause.serviceStandby(uTime);
+}
+
 // The periodic pump can re-enter through feature/motion waits. Do not
 // reserve the feature dispatch frame in every invocation of that pump.
 __attribute__((noinline)) void loopFeatures() // Wird so aufgerufen, dass es ein ~100ms Takt sein sollte.
@@ -240,15 +254,7 @@ __attribute__((noinline)) void loopFeatures() // Wird so aufgerufen, dass es ein
     if (!nEntered) {
         nEntered++;
 
-        millis_t uTime = HAL::timeInMilliseconds();
-        Printer::printJob.service(uTime);
-
-        handleStartStandby(uTime);
-        handleStrainGaugeFeatures(uTime);
-
-        Printer::pause.serviceStandby(uTime);
-
-
+        servicePrintFeatures();
         nEntered--;
     }
 
