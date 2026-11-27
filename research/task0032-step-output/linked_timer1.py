@@ -38,11 +38,23 @@ def load_interpreter():
             self.timer_writes=[]
             self.timer_live=False
             self.tcnt_latch=0
+            # Isolated Timer0 starts at phase zero, /64 prescaler. No overflow ISR.
+            self.timer0_phase=0
+            self.timer0_reads=0
         def boundary(self,pc):
             # instruction start, I bit, OCIE1A, stack usage, call depth.
             self.timeline.append((self.cy,pc,self.flag(7),bool(self.mem[0x6f]&2),
                                   0x21ff-self.sp,len(self.return_stack)))
         def read(self,addr):
+            # Arduino micros() observes TCNT0 and TOV0. Advance time by actual
+            # executed cycles, not a stubbed delay. Permit only one pending wrap;
+            # a second wrap requires an overflow-service model, not fake time.
+            if addr in (0x46,0x35):
+                ticks=self.timer0_phase+self.cy//64
+                assert ticks<512, "Timer0 second wrap outside isolated model"
+                self.timer0_reads+=1
+                if addr==0x46: return ticks&255
+                return (super().read(addr)&~1)|int(ticks>=256)
             # Single Timer1 CTC compare service: TCNT counts from zero at release.
             # No peripheral flags, matches during ISR or nested interrupts.
             # Low-byte access latches high. Reject rollover as unsupported.
@@ -54,6 +66,7 @@ def load_interpreter():
                 return self.tcnt_latch>>8
             return super().read(addr)
         def write(self,addr,value):
+            assert addr not in (0x35,0x46), "Timer0 register write outside isolated model"
             super().write(addr,value)
             if addr in (0x88,0x89,0x6f):
                 self.timer_writes.append((self.cy,addr,value&255))
@@ -162,6 +175,7 @@ def execute(mod,img,kw,mode,case):
             "masked_intervals_cycles":mask,"max_masked_cycles":max((b-a for a,b in mask),default=0),
             "candidate_irq_opportunity_cycles":opportunity,
             "step_dir_edges":edges,"edge_phase_widths":widths,"physical_rising_edges":dict(counts),
+            "timer0_phase_at_start":c.timer0_phase,"timer0_reads":c.timer0_reads,
             "timer_writes":c.timer_writes,"ocr1a_final":c.get(0x88,2) if mode!="inner" else None,
             "return_interval":val if mode=="inner" else None,
             "calls":c.calls,"before":before,"after":after,
@@ -193,6 +207,8 @@ def cases(board):
     # Factory XY travel 150, homing XY 80, Z 9, E 25 mm/s.
     # Each control is a synthetic prepared profile, not a homing sequence.
     emax=6400 if board=="RF2000v2" else 7000
+    for adv,neg,n in itertools.product((False,True),(False,True),(1,2)):
+        yield "Eprimary-config-max","active",k(1,VECTORS["Eprimary"],emax,n,advance=adv,ratio=.25,zcor=4,negative=neg)
     for owner,name,rate in ((1,"X",22857),(1,"XY",16162),(0,"X",12190),(0,"Z",11520),(1,"Z",11520),(0,"E",emax),(1,"E",emax)):
         for mode in ("active","stoppable"):
             yield name+"-axis-control",mode,k(owner,VECTORS[name],rate,math.ceil(3300/max(512,CLOCK//rate)))
@@ -228,6 +244,10 @@ def main():
     # Synthetic instruction timing sanity check on the instrumented interpreter.
     fake=types.SimpleNamespace(initial=bytearray(0x2200),code={0:(4,"call",("0x8",),""),4:(2,"ret",(),""),8:(2,"ret",(),"")},labels={},step_pins={})
     cpu=mod.CPU(fake);cpu.run(0);assert cpu.cy==15 and cpu.sp==0x21ff and 0x21ff-cpu.minsp==6
+    cpu=mod.CPU(fake)
+    for cycles,count,overflow in ((0,0,0),(63,0,0),(64,1,0),(16383,255,0),(16384,0,1),(16448,1,1)):
+        cpu.cy=cycles
+        assert cpu.read(0x46)==count and cpu.read(0x35)&1==overflow
     with zipfile.ZipFile(args.archive) as z:
         provenance=json.loads(z.read("summary.json"))
         sha={n:hashlib.sha256(z.read(n)).hexdigest() for n in z.namelist() if n.endswith(".elf")}
