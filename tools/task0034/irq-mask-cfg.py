@@ -43,7 +43,7 @@ def cost(op):
     return 1
 
 
-def inventory(z, board, constant_pwm=False, timer3_wrap=False):
+def inventory(z, board, constant_pwm=False, timer3_wrap=False, pwm_owned_memory=False):
     p = board + "/"
     assert json.loads(z.read(p + "verification.json"))["status"] == "verified"
     if timer3_wrap:
@@ -53,6 +53,24 @@ def inventory(z, board, constant_pwm=False, timer3_wrap=False):
         hal = z.read(p + "build/sketch/HAL.cpp").decode()
         assert "TCCR3A=0;" in hal and "TCCR3B=_BV(CS32);" in hal
         assert "TCNT3=0;" in hal
+    tracked = set()
+    if pwm_owned_memory:
+        # Diagnostic refinement only. These four private scalar objects
+        # have no address escape in the reviewed HAL. The model assumes
+        # valid C++ object accesses (no out-of-bounds/stack corruption);
+        # it is NOT a machine-level indirect-store alias proof.
+        names = ("pwm_count_heater", "heaterLeaseFailed", "heaterLeaseReady", "watchdogActive")
+        for name in names:
+            assert not re.search(r"(?<!&)&\s*"+name+r"\b", hal), (board,name,"address escape")
+            for filename in z.namelist():
+                if filename.startswith(p+"build/sketch/") and filename.endswith((".h",".cpp",".ino")) and not filename.endswith("/HAL.cpp"):
+                    assert not re.search(r"\b"+name+r"\b",z.read(filename).decode()), (board,filename,name)
+            rows = [int(m[1],16)-0x800000 for m in re.finditer(
+                r"^([0-9a-f]+) 00000001 [bBdD] (.*)$",z.read(p+"symbols.txt").decode(),re.M)
+                if name in m[2]]
+            assert len(rows)==1 and rows[0]>=0x200,(board,name,rows)
+            tracked.add(rows[0])
+        assert len(tracked)==4
     dump = z.read(p + "disassembly.txt").decode()
     labels = {m[2]: int(m[1], 16) for m in re.finditer(r"^([0-9a-f]+) <(.*)>:$", dump, re.M)}
     ins, raw = {}, {}
@@ -105,7 +123,8 @@ def inventory(z, board, constant_pwm=False, timer3_wrap=False):
         # (PC, call returns, stacked SREG bits, register SREG bits, I)
         track = constant_pwm and v == 22
         wrap_track = track and timer3_wrap
-        root = (labels["__vector_"+str(v)], (), (None,)*3, (), (), (), (None,)*3, -1, 1, 0)
+        memory_track = wrap_track and pwm_owned_memory
+        root = (labels["__vector_"+str(v)], (), (None,)*3, (), (), (), (None,)*3, -1, 1, (), None, 0)
         g = nx.DiGraph()
         todo, seen = [root], set()
         maxd = 0
@@ -115,7 +134,7 @@ def inventory(z, board, constant_pwm=False, timer3_wrap=False):
             if state in seen:
                 continue
             seen.add(state)
-            pc, ret, stack, regtuple, values, flags, vstack, tov, remaining, I = state
+            pc, ret, stack, regtuple, values, flags, vstack, tov, remaining, memory, provenance, I = state
             assert 3 <= len(stack) <= 512 and len(seen) < 500000, (v, pc, len(seen))
             maxd = max(maxd, len(stack))
             w, op, arg = ins[pc]
@@ -172,9 +191,25 @@ def inventory(z, board, constant_pwm=False, timer3_wrap=False):
             if op == "sts" and a.lower().startswith("0x006f,"):
                 timsk.add(pc)
             taken = None
+            previous_values = dict(values)
+            memory = dict(memory)
+            old_provenance = provenance
+            provenance = None
             if track:
                 taken = known_branch(op,a,values,flags)
                 values,flags,vstack = transfer(op,a,values,flags,vstack)
+            if memory_track and op=="lds" and int(toks[1],0) in tracked:
+                address=int(toks[1],0)
+                reg=int(toks[0][1:])
+                provenance=(reg,address)
+                if address in memory:
+                    known=dict(values);known[reg]=memory[address]
+                    values=tuple(sorted(known.items()))
+            if memory_track and op=="sts" and int(toks[0],0) in tracked:
+                address=int(toks[0],0)
+                value=previous_values.get(int(toks[1][1:]))
+                if value is None:memory.pop(address,None)
+                else:memory[address]=value
             if op in ("icall", "eicall", "ijmp", "eijmp"):
                 assert pc == endpoint and op == "eijmp"
                 nexts = [(t, ret, stack) for t in targets]
@@ -226,9 +261,22 @@ def inventory(z, board, constant_pwm=False, timer3_wrap=False):
                         if written & 1:
                             tov = 0
                 transitions = [(q,ret2,stk,tov,remaining) for q,ret2,stk in nexts]
-            nexts = [(q, ret2, stk, rt, values, flags,
-                      vstack+(None,)*(len(stk)-len(vstack)) if len(stk)>=len(vstack) else vstack[:len(stk)],
-                      b,left,next_i) for q,ret2,stk,b,left in transitions]
+            nexts = []
+            for q,ret2,stk,b,left in transitions:
+                mem=dict(memory);known=dict(values)
+                # Refine only the witnessed immediate LDS -> CPSE equality.
+                # The non-equal edge remains unconstrained. Direct unknown
+                # stores invalidate facts; other valid object accesses do not alias.
+                if memory_track and op=="cpse" and old_provenance is not None and q!=n:
+                    operands=[int(x[1:]) for x in toks]
+                    reg,address=old_provenance
+                    if reg in operands:
+                        other=operands[1] if operands[0]==reg else operands[0]
+                        if other in previous_values:
+                            known[reg]=mem[address]=previous_values[other]
+                nexts.append((q,ret2,stk,rt,tuple(sorted(known.items())),flags,
+                              vstack+(None,)*(len(stk)-len(vstack)) if len(stk)>=len(vstack) else vstack[:len(stk)],
+                              b,left,tuple(sorted(mem.items())),provenance,next_i))
             g.add_node(state)
             g.add_edges_from((state, q) for q in nexts)
             todo.extend(nexts)
@@ -281,7 +329,7 @@ def inventory(z, board, constant_pwm=False, timer3_wrap=False):
                 longest[x] = cost(ins[x[0]][1]) + extra.get(x,0) + max((longest[p] for p in bounded_mask.predecessors(x)), default=0)
             acyclic_cycles = max(longest.values(), default=0)
         results[v] = {"states":len(seen), "stackBytesIncludingPc":maxd,
-                      "constantTracking":track, "timer3WrapTracking":wrap_track, "interruptOpenSites":len(opened), "maskedDelayReturnChains":[[name(a) for a in t] for t in sorted(delay_entries)],
+                      "constantTracking":track, "timer3WrapTracking":wrap_track, "pwmOwnedMemoryDiagnostic":memory_track, "interruptOpenSites":len(opened), "maskedDelayReturnChains":[[name(a) for a in t] for t in sorted(delay_entries)],
                       "maskedCycles":cycles, "unresolvedMaskedCycles":len(unresolved), "acyclicMaskedBodyCycles":acyclic_cycles}
     return results
 
@@ -294,8 +342,10 @@ if __name__ == "__main__":
     parser.add_argument("--constant-pwm", action="store_true",
                         help="also propagate byte/flag constants in non-nesting PWM vector 22")
     parser.add_argument("--timer3-wrap", action="store_true", help="refine PWM using reviewed Timer3 ownership and one possible new wrap")
+    parser.add_argument("--pwm-owned-memory", action="store_true", help="diagnostic private-scalar correlations; requires reviewed source ownership")
     args = parser.parse_args()
     assert not args.timer3_wrap or args.constant_pwm
+    assert not args.pwm_owned_memory or args.timer3_wrap
     with open(args.archive,"rb") as f:
         assert hashlib.sha256(f.read()).hexdigest() == args.sha256
     with zipfile.ZipFile(args.archive) as z:
@@ -309,6 +359,11 @@ if __name__ == "__main__":
                 refined = inventory(z,board,True,True)
                 refined[22]["unrestrictedBodyCycles"] = upper
                 result[board][22] = refined[22]
+                if args.pwm_owned_memory:
+                    owned=inventory(z,board,True,True,True)[22]
+                    owned["unrestrictedBodyCycles"]=upper
+                    owned["withoutOwnedMemoryBodyCycles"]=refined[22]["acyclicMaskedBodyCycles"]
+                    result[board][22]=owned
     print(json.dumps({"testedMerge":summary["sha"],"sha256":args.sha256,"boards":result},indent=2))
     if args.reject_masked_delay and any(v["maskedDelayReturnChains"] for b in result.values() for v in b.values()):
         raise SystemExit(1)
