@@ -35,8 +35,9 @@ jobs:
           node tools/task0032/baud-validation.cjs > "$out/baud-validation.json"
           python3 tools/task0032/parser-wire-replay.py | tee "$out/parser-wire-replay.log"
           grep '^TASK0032_WIRE ' "$out/parser-wire-replay.log" | sed 's/^TASK0032_WIRE //' > "$out/parser-wire-results.jsonl"
-          test "$(wc -l < "$out/parser-wire-results.jsonl")" -eq 3
-          sha256sum tools/task0032/parser-wire-replay.py >> "$out/source-sha256.txt"
+          test "$(wc -l < "$out/parser-wire-results.jsonl")" -eq 4
+          python3 tools/task0032/fixed-uart-init.py | tee "$out/fixed-uart-init.log"
+          sha256sum tools/task0032/parser-wire-replay.py tools/task0032/fixed-uart-init.py >> "$out/source-sha256.txt"
           for test in link-model demand-model queue-model speed-search queue-estimate governor-preview rx-blackout-model rx-service-window; do
             node "tools/task0032/$test.cjs" --self-test
           done
