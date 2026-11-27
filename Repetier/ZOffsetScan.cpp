@@ -16,6 +16,7 @@
 */
 
 #include "Repetier.h"
+#include "DiagnosticHistory.h"
 #include "BedMatrix.h"
 #include "ScanProbe.h"
 #include "ZScrewAdjustment.h"
@@ -415,6 +416,9 @@ void ZOffsetScan::reportScrewAdjustment() {
 void ZOffsetScan::abort(bool reloadMatrix) {
     phase_ = Phase::Aborting;
     const auto reason = Calibration::scanSession.takeAbort();
+#if defined(RF_THERMAL_EMERGENCY_EXPERIMENT) && defined(RF_EEPROM_ZONE_EXPERIMENT)
+    DiagnosticHistory::recordScan(reason,DiagnosticHistory::ScanKind::ZOffset);
+#endif
     Calibration::showAbortScanReason(PSTR(UI_TEXT_DO_MHIER_BED_SCAN), reason);
 
     if (reloadMatrix) {
