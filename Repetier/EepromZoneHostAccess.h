@@ -7,14 +7,37 @@
 #include <math.h>
 namespace EepromZones {
 enum class HostAccess : uint8_t { Unknown, ReadOnly, Writable };
+// Ten address bits, two wire-type bits, and a separate write-permission
+// bit. Only exact address/type pairs from the public inventory are accepted.
+constexpr uint16_t hostFieldKey(uint16_t pos,uint8_t wire) {
+    return uint16_t((pos-Base) | (uint16_t(wire)<<10));
+}
 inline HostAccess hostAccess(int32_t pos,uint8_t wire) {
     // Check the signed value before any narrowing.
     if(pos<address(1)+PayloadOffset || pos>=End || wire>3)
         return HostAccess::Unknown;
-#define RF_ZONE_FIELD(type, start, label, digits, writable) \
-    if(pos==(start) && wire==(type)) return (writable)?HostAccess::Writable:HostAccess::ReadOnly;
+    static constexpr uint16_t fields[]
+#ifdef __AVR__
+        PROGMEM
+#endif
+        = {
+#define RF_ZONE_FIELD_END ,
+#define RF_ZONE_FIELD(type,start,label,digits,writable) \
+        uint16_t(hostFieldKey(start,type) | ((writable)?0x1000:0))
 #include "EepromZoneHostFields.h"
 #undef RF_ZONE_FIELD
+#undef RF_ZONE_FIELD_END
+    };
+    const uint16_t key=hostFieldKey(uint16_t(pos),wire);
+    for(const auto& field:fields) {
+#ifdef __AVR__
+        const uint16_t entry=pgm_read_word(&field);
+#else
+        const uint16_t entry=field;
+#endif
+        if((entry&0x0FFF)==key)
+            return (entry&0x1000)?HostAccess::Writable:HostAccess::ReadOnly;
+    }
     return HostAccess::Unknown;
 }
 // Canonical wire decoding after syntax validation in GCodeInput. The
