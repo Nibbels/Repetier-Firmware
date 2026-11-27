@@ -179,14 +179,6 @@ void reportBedMatrix(GCode* pCommand) {
     }
 }
 
-void eraseMatrixEeprom() {
-    if (isAnyScanRunning()) {
-        Com::printFLN(PSTR("clearExtEEPROM(): scan in progress"));
-        return;
-    }
-    clearExternalEEPROM();
-}
-
 void adjustBedMatrix(GCode* pCommand) {
     if (isAnyScanRunning()) {
         Com::printFLN(PSTR("M3902: scan in progress"));

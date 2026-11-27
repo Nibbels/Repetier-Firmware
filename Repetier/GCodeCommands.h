@@ -100,7 +100,6 @@ void setIdlePressureTolerance(GCode* pCommand);
 void setPressureReadCount(GCode* pCommand);
 void setPressureReadDelay(GCode* pCommand);
 void setPressureReadTolerance(GCode* pCommand);
-void eraseMatrixEeprom();
 void configureZOffsetScan(GCode* pCommand);
 void adjustBedMatrix(GCode* pCommand);
 } // namespace Calibration

@@ -235,10 +235,6 @@
   - Examples:
   - M3090 ; tests the watchdog (and resets the firmware)
 
-- M3091 - erase the external EEPROM
-  - Examples:
-  - M3091 ; erases the external EEPROM
-
 - M3105 [X] [Y] [Z] [E] - configure the offset in x, y, z and e direction which shall be applied in case the "Pause Printing" button has been pressed ( units are [mm] )
   - Examples:
   - M3105 X10 ; sets the x-offset in case of "Pause Printing" has been pressed to 10 [mm]

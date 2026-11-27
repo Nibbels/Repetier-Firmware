@@ -134,7 +134,6 @@ void dispatchMachine(GCode* com) {
     case 3053: return Calibration::setPressureReadCount(com);
     case 3054: return Calibration::setPressureReadDelay(com);
     case 3055: return Calibration::setPressureReadTolerance(com);
-    case 3091: return Calibration::eraseMatrixEeprom();
     case 3900:
     case 3901: return Calibration::configureZOffsetScan(com);
     case 3902: return Calibration::adjustBedMatrix(com);

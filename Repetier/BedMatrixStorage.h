@@ -271,39 +271,6 @@ static bool clearCompensationMatrix(unsigned int address) {
     return true;
 }
 
-static void clearExternalEEPROM(void) {
-    unsigned short i;
-    unsigned short uMax = 32768;
-    unsigned short uTemp;
-    unsigned short uLast = 0;
-
-    if (Printer::debugInfo()) {
-        Com::printFLN(PSTR("clearExtEEPROM(): erasing chip memory ..."));
-    }
-
-    // the external EEPROM is able to store 262.144 kBit (= 32.768 kByte)
-    for (i = 0; i < uMax; i++) {
-        if (!ExternalEeprom::writeByte(I2C_ADDRESS_EXTERNAL_EEPROM, i, 0)) {
-            Com::printFLN(PSTR("clearExtEEPROM(): EEPROM write failed"));
-            return;
-        }
-        Commands::checkForPeriodicalActions(Processing);
-
-        if (Printer::debugInfo()) {
-            uTemp = i / 100;
-            if (uTemp != uLast) {
-                Com::printF(PSTR("clearExtEEPROM(): "), (int)i);
-                Com::printFLN(PSTR(" / "), (long)uMax);
-                uLast = uTemp;
-            }
-        }
-    }
-
-    if (Printer::debugInfo()) {
-        Com::printFLN(PSTR("clearExtEEPROM(): erasing complete"));
-    }
-} // clearExternalEEPROM
-
 bool switchActiveHeatBed(char newActiveHeatBed) {
     if (isAnyScanRunning()) {
         Com::printFLN(PSTR("selectMatrix(): scan in progress"));
