@@ -507,6 +507,9 @@ void setEmergencyStopDigits(GCode* pCommand) {
 
 void setSenseOffsetParameters(GCode* pCommand) {
     auto& controller = Printer::senseOffsetControl;
+    const auto stored = controller.storedLimits();
+    int16_t digits = stored.thresholdDigits, maximum = stored.maxMicrometers;
+    bool saveDigits = false, saveMaximum = false;
     bool error = false;
     // Statusänderung P10000 ([digits])
     if (pCommand->hasP()) {
@@ -515,12 +518,10 @@ void setSenseOffsetParameters(GCode* pCommand) {
         if (pCommand->P >= 0 && pCommand->P < EMERGENCY_PAUSE_DIGITS_MAX) {
             if (pCommand->P) {
                 Com::printFLN(PSTR("M3909: SensiblePressure Pmax="), pCommand->P);
-                short oldval = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS);
-                if (oldval != pCommand->P) {
+                digits = int16_t(pCommand->P);
+                saveDigits = true;
+                if (stored.thresholdDigits != digits)
                     Com::printFLN(PSTR("M3909: P change"));
-                    HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS, pCommand->P);
-                    EEPROM::updateChecksum(); // Deshalb die prüfung
-                }
             } else {
                 controller.setThresholdDigits(0);
                 error = true;
@@ -537,12 +538,10 @@ void setSenseOffsetParameters(GCode* pCommand) {
             const int16_t maxMicrometers = pCommand->S;
             controller.setMaxMicrometers(maxMicrometers);
             Com::printFLN(PSTR("M3909: SensiblePressure max. [S]Offset changed to "), maxMicrometers);
-            short oldval = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX);
-            if (oldval != maxMicrometers) {
+            maximum = maxMicrometers;
+            saveMaximum = true;
+            if (stored.maxMicrometers != maximum)
                 Com::printFLN(PSTR("M3909: S change"));
-                HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX, maxMicrometers);
-                EEPROM::updateChecksum(); // Deshalb die prüfung
-            }
         } else {
             Com::printFLN(PSTR("M3909: ERROR::>0.3mm=S300 - This function is ment to compensate minimal amounts of too close distance."));
             Com::printFLN(PSTR("M3909: INFO::If you have to auto-compensate your offset to high, clean your nozzle, rise your temp, lower your speed."));
@@ -550,6 +549,12 @@ void setSenseOffsetParameters(GCode* pCommand) {
             error = true;
         }
     }
+
+    if (saveDigits || saveMaximum)
+        EEPROM::storeSenseOffsetSettings(digits, maximum, saveDigits, saveMaximum);
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if (Printer::printJob.emergencyLocked()) return;
+#endif
 
     // Statusausgabe per M3909
     const auto limits = controller.limits();

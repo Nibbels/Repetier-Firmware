@@ -1050,11 +1050,11 @@ void UIDisplay::renderCalibrationField(char c1, char c2) {
             }
             if (c2 == 'm') // %sm : State of the sensible pressure in eeprom
             {
-                addInt(HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS), 5);
+                addInt(Printer::senseOffsetControl.storedLimits().thresholdDigits, 5);
             }
             if (c2 == 'o') // %so : State of the sensible pressure maxoffset in eeprom
             {
-                addInt(HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX), 5);
+                addInt(Printer::senseOffsetControl.storedLimits().maxMicrometers, 5);
             }
             if (c2 == 'a') // %sa : State of the sensible pressure autostarter
             {

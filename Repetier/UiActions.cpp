@@ -28,10 +28,8 @@ constexpr int16_t modMenuSenseMax = modMenuSenseLimit < 32767 ? int16_t(modMenuS
 void adjustModMenuSenseOffset(int16_t digits) {
     Printer::senseOffsetControl.setThresholdDigits(digits);
     // The Mod Menu remembers ordinary adjustments from 500 digits upwards.
-    if (digits >= 500 && HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS) != digits) {
-        HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS, digits);
-        EEPROM::updateChecksum();
-    }
+    if (digits >= 500)
+        EEPROM::storeSenseOffsetSettings(digits, 0, true, false);
 }
 }
 

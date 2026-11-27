@@ -635,6 +635,7 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     // Save version and build checksum
     HAL::eprSetByte(EPR_VERSION, EEPROM_PROTOCOL_VERSION);
     EEPROM::updateChecksum();
+    publishSenseOffsetSettings();
 
 } // storeDataIntoEEPROM
 
@@ -955,8 +956,8 @@ void EEPROM::readDataFromEEPROM() {
         storedScanIndex(HAL::eprGetByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y), heatBedScanYStartMm == 0 ? 1 : 2, COMPENSATION_MATRIX_MAX_Y - 1),
     });
 
-    // Do not read EPR_RF_MOD_SENSEOFFSET_DIGITS here
     const int16_t savedSenseLimit = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX);
+    Printer::senseOffsetControl.publishStoredLimits(HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS), savedSenseLimit);
     Printer::senseOffsetControl.setMaxMicrometers(savedSenseLimit == 0 ? SENSIBLE_PRESSURE_MAX_OFFSET : constrain(savedSenseLimit, 1, 300));
     Printer::senseOffsetControl.setAutoStart(HAL::eprGetByte(EPR_RF_MOD_SENSEOFFSET_AUTOSTART));
 
@@ -1083,6 +1084,27 @@ void EEPROM::readDataFromEEPROM() {
     Extruder::initHeatedBed();
 
 } // readDataFromEEPROM
+
+void EEPROM::publishSenseOffsetSettings() {
+    const int16_t digits = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS);
+    const int16_t maximum = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX);
+    Printer::senseOffsetControl.publishStoredLimits(digits, maximum);
+}
+
+void EEPROM::storeSenseOffsetSettings(int16_t digits, int16_t micrometers, bool saveDigits, bool saveMaximum) {
+    bool changed = false;
+    if (saveDigits && HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS) != digits) {
+        HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS, digits);
+        changed = true;
+    }
+    if (saveMaximum && HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX) != micrometers) {
+        HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX, micrometers);
+        changed = true;
+    }
+    if (changed)
+        updateChecksum();
+    publishSenseOffsetSettings();
+}
 
 void EEPROM::initBaudrate() {
     if (HAL::eprGetByte(EPR_MAGIC_BYTE) == eepromMagic) {

@@ -868,17 +868,15 @@ void UIDisplay::changePressureSetting(int action, int8_t increment) {
     }
 
     case UI_ACTION_SENSEOFFSET_DIGITS: {
-        short oldval = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS);
+        short oldval = Printer::senseOffsetControl.storedLimits().thresholdDigits;
         INCREMENT_MIN_MAX(oldval, 100, 500, EMERGENCY_PAUSE_DIGITS_MAX);
-        HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS, oldval);
-        EEPROM::updateChecksum();
+        EEPROM::storeSenseOffsetSettings(oldval, 0, true, false);
         break;
     }
     case UI_ACTION_SENSEOFFSET_MAX: {
-        short oldval = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX);
+        short oldval = Printer::senseOffsetControl.storedLimits().maxMicrometers;
         INCREMENT_MIN_MAX(oldval, 10, 10, 300);
-        HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX, oldval);
-        EEPROM::updateChecksum();
+        EEPROM::storeSenseOffsetSettings(0, oldval, false, true);
         break;
     }
 

@@ -617,9 +617,7 @@ void Printer::setup() {
 } // setup()
 
 void Printer::enableSenseOffsetnow(void) {
-    const int16_t storedDigits = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS);
-    const int16_t storedLimit = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX);
-    senseOffsetControl.activateStoredLimits(storedDigits, storedLimit);
+    senseOffsetControl.activateStoredLimits();
 }
 
 void Printer::enableCMPnow(void) {

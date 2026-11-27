@@ -211,6 +211,7 @@ public:
     static void setConfiguredBaudrate(long rate) { configuredBaudrate_ = rate; }
     static void storeDataIntoEEPROM(uint8_t corrupted = 0);
     static void storeManualZOffset();
+    static void storeSenseOffsetSettings(int16_t digits, int16_t micrometers, bool saveDigits, bool saveMaximum);
     static void storeMicrostepConfiguration(uint8_t changedMask);
     static void storePreheatProfiles();
     static void storePidCalibration(uint8_t heater);
@@ -223,6 +224,7 @@ public:
     static int getExtruderOffset(uint8_t extruder = 0);
 
 private:
+    static void publishSenseOffsetSettings();
     static bool readPreheatProfiles();
     static void writePreheatProfiles();
     static void restoreEEPROMExtruderSettingsFromConfiguration(uint8_t extruderId);

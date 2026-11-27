@@ -93,13 +93,17 @@ uint32_t U16SquaredToU32(uint16_t value) { return uint32_t(value) * value; }
 void delayMilliseconds(unsigned delay) { clockMs += delay; }
 int16_t eepromWords[2048] = {};
 int32_t eepromDWords[2048] = {};
-int16_t eprGetInt16(unsigned address) { return eepromWords[address]; }
+unsigned eepromReads = 0;
+int16_t eprGetInt16(unsigned address) { ++eepromReads; return eepromWords[address]; }
 void eprSetInt16(unsigned address, int16_t value) { eepromWords[address] = value; }
 void eprSetInt32(unsigned address, int32_t value) { eepromDWords[address] = value; }
 }
 
 namespace EEPROM {
-void updateChecksum() {}
+unsigned checksumCalls = 0;
+void updateChecksum() { ++checksumCalls; }
+void publishSenseOffsetSettings();
+void storeSenseOffsetSettings(int16_t, int16_t, bool, bool);
 }
 
 bool interruptsEnabled = true;
@@ -1138,22 +1142,30 @@ void senseOffsetSettings() {
     GCode command;
     command.P = 3200;
     command.S = 55;
+    const unsigned beforeChecksum = EEPROM::checksumCalls;
     configureSenseOffset(&command);
+    assert(EEPROM::checksumCalls == beforeChecksum + 1);
     assert(queuedSenseOffsetEnables == 1 && controller.limits().thresholdDigits == senseThreshold);
     assert(controller.limits().maxMicrometers == 55);
     assert(HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS) == 3200);
     assert(HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX) == 55);
+    const unsigned beforeQueue = HAL::eepromReads;
     Printer::enableSenseOffsetnow();
+    assert(HAL::eepromReads == beforeQueue);
     assert(controller.limits().thresholdDigits == 3200);
 
     // The queue accepts only stored thresholds strictly inside its bounds.
     HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS, EMERGENCY_PAUSE_DIGITS_MAX);
     HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX, 300);
+    EEPROM::publishSenseOffsetSettings();
+    const unsigned beforeInvalidQueue = HAL::eepromReads;
     Printer::enableSenseOffsetnow();
+    assert(HAL::eepromReads == beforeInvalidQueue);
     const auto limits = controller.limits();
     assert(limits.thresholdDigits == 3200 && limits.maxMicrometers == 55);
     HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS, 3200);
     HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX, 55);
+    EEPROM::publishSenseOffsetSettings();
 
     command.explicitP = true;
     command.P = 0;
@@ -1188,10 +1200,13 @@ void senseOffsetLimitInterrupt() {
     // Activate a tighter cap from the step queue just before the increment write.
     HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS, 4500);
     HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX, 21);
+    EEPROM::publishSenseOffsetSettings();
+    const unsigned beforeInterrupt = HAL::eepromReads;
     onInterrupt = Printer::enableSenseOffsetnow;
     interruptBeforeLock = 5;
     sample(printingForce);
     assert(!interruptBeforeLock && Printer::senseOffsetControl.limits().maxMicrometers == 21);
+    assert(HAL::eepromReads == beforeInterrupt);
     assert(Printer::zOffset.senseMicrometers() == initialClearance);
     sample(printingForce, 5);
     assert(Printer::zOffset.senseMicrometers() == 21);
