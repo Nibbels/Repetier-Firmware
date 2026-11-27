@@ -26,6 +26,61 @@ UI_PREFIXES = ("UIDisplay::refreshPage(", "UIDisplay::printRow(", "UIDisplay::pa
                "UIDisplay::executeAction(", "lcdWriteByte(", "lcdWriteNibble(")
 
 
+def gpio_cycle_bounds(disassembly, start, size):
+    """Explore the acyclic byte body after the exact inlined wait.
+
+    All branch/skip choices are included; excludes preemption and caller CALL.
+    Fail closed on new instructions, unresolved jumps or cycles. No pin changes.
+    """
+    instructions = {}
+    for line in disassembly.splitlines():
+        m = re.match(r"^\s*([0-9a-f]+):\s+((?:[0-9a-f]{2}\s+)+)([a-z]+)\s*(.*)$", line)
+        if m and start <= int(m[1], 16) < start + size:
+            instructions[int(m[1], 16)] = (len(bytes.fromhex(m[2])), m[3], m[4])
+    fixed = {"in": 1, "out": 1, "cli": 1, "and": 1, "ori": 1, "andi": 1,
+             "lds": 2, "sts": 2, "sbi": 2, "cbi": 2, "nop": 1}
+    active, memo = set(), {}
+
+    def target(arg):
+        m = re.search(r";\s*0x([0-9a-f]+)\b", arg)
+        assert m, arg
+        return int(m[1], 16)
+
+    def walk(pc):
+        if pc in memo:
+            return memo[pc]
+        assert pc not in active and pc in instructions and pc >= start + 8, hex(pc)
+        active.add(pc)
+        n, op, arg = instructions[pc]
+        next_pc = pc + n
+        if op == "ret":
+            value = (5, 5, 1)  # three-byte return PC on ATmega2560
+        else:
+            if op in fixed:
+                edges = [(next_pc, fixed[op])]
+            elif op == "rjmp":
+                edges = [(target(arg), 2)]
+            elif op in ("brne", "breq"):
+                edges = [(next_pc, 1), (target(arg), 2)]
+            elif op in ("sbrs", "sbrc"):
+                skip = instructions[next_pc][0]
+                assert skip in (2, 4), (pc, skip)
+                edges = [(next_pc, 1), (next_pc + skip, 1 + skip // 2)]
+            else:
+                raise AssertionError((hex(pc), op, arg))
+            paths = [(walk(dest), cost) for dest, cost in edges]
+            value = (min(a[0] + cost for a, cost in paths),
+                     max(a[1] + cost for a, cost in paths),
+                     sum(a[2] for a, cost in paths))
+        active.remove(pc)
+        memo[pc] = value
+        return value
+
+    low, high, paths = walk(start + 8)
+    return {"min_cycles_including_ret": low, "max_cycles_including_ret": high,
+            "structural_paths": paths, "reachable_instructions": len(memo)}
+
+
 def inventory(z, board, stats):
     def read(name):
         return z.read(board + "/" + name).decode()
@@ -88,6 +143,7 @@ def inventory(z, board, stats):
             "lcd": {"columns": cols, "rows": 4, "inline_delay_cycles_per_byte": cycles,
                     "full_row_refresh_bytes": full_bytes, "full_refresh_delay_cycles": full_bytes * cycles,
                     "full_refresh_delay_us_nominal": full_bytes * cycles / 16,
+                    "gpio_body": gpio_cycle_bounds(disassembly, start, symbols["lcdWriteByte(unsigned char, unsigned char)"]["body_bytes"]),
                     "excludes_gpio_rendering_and_preemption": True},
             "direct_transfer_sightings": {n: dict(sorted(c.items())) for n, c in transfers.items() if c}}
 
