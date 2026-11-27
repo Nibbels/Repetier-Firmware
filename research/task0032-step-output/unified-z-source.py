@@ -181,6 +181,10 @@ uint32_t StepExecutor::serviceCorrection(uint32_t epoch, bool nominalOwnsZ) {
         p.write_text(s.replace("Printer::needsCMPwait()","Printer::correctionInProgress()"))
     edit("RF.cpp","Printer::disableCMPnow(true);","Printer::disableCMPnow();")
     edit("HeatBedScan.cpp","Printer::disableCMPnow(false);","Printer::disableCMPnow();")
+    # Disable correction publication before replacing the working matrix. The
+    # old applied physical offset remains tracked and can unwind independently.
+    # Matrix-selection admission and re-enable before settle need lifecycle replay.
+    edit("BedMatrixStorage.h","Printer::disableCMPnow(true);","Printer::disableCMPnow();")
     # Derived values only in foreground, reuse current motion configuration.
     edit("Printer.cpp","""    // 07 11 2017 https://github.com/repetier/Repetier-Firmware/commit/""",
          """    const float zRate=axisMaxFeedrate(Z_AXIS)*stepsPerMm(Z_AXIS);
