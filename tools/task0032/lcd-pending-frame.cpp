@@ -185,8 +185,81 @@ void sharedNibbles() {
     puts("1024 adjacent-row shared-nibble patterns PASS");
 }
 
+// Deterministic interleaved frame changes and variable service cadence.
+// This proves state consistency on the sampled transitions, not a CPU
+// scheduling or hardware timing guarantee.
+static uint32_t randomState=0x9e3779b9u;
+static uint32_t randomWord() {
+    randomState^=randomState<<13;
+    randomState^=randomState>>17;
+    randomState^=randomState<<5;
+    return randomState;
+}
+
+template<uint8_t C>
+void interleaved() {
+    using R=typename LcdPendingFrame<C>::Result;
+    LcdPendingFrame<C> f;
+    Frame<C> frame{};
+    Sink sink;
+    sink.t=sink.last=0xffff0000u;
+    f.afterClear(frame,sink.now());
+    unsigned stages=0, visits=0, sends=0, waits=0, drains=0;
+    const uint8_t bases[]={0,64,C,uint8_t(64+C)};
+    for(unsigned n=0;n<200000;++n) {
+        const auto choice=randomWord();
+        if((choice&7)<3) {
+            uint8_t row=uint8_t((choice>>3)&3);
+            char text[C+1];
+            const unsigned length=randomWord()%(C+1);
+            for(unsigned col=0;col<length;++col)
+                text[col]=char(1+randomWord()%255);
+            text[length]=0;
+            f.stage(row,text,frame);
+            ++stages;
+        } else {
+            // Variable intervals, all clock quantization phases, wrap
+            // and repeated too-early visits. No asynchronous GPIO owner.
+            sink.t+=randomWord()%1001;
+            const bool emergency=choice&8;
+            const unsigned count=sink.writes;
+            const auto priorAddress=sink.address;
+            const auto r=f.service(frame,emergency,sink);
+            ++visits;
+            if(r==R::Data || r==R::Address) {
+                assert(sink.writes==count+1);
+                ++sends;
+                const uint8_t target=r==R::Address?sink.address:priorAddress;
+                int row=-1;
+                for(uint8_t k=0;k<4;++k)
+                    if(target>=bases[k]&&target<bases[k]+C) row=k;
+                assert(row>=0);
+                if(r==R::Data)
+                    assert(sink.memory[target]==frame[row][target-bases[row]]);
+                const uint8_t priority[]={0,1,uint8_t(emergency?3:2),uint8_t(emergency?2:3)};
+                for(uint8_t k:priority) {
+                    if(k==row) break;
+                    // A dirty logical difference in a higher-priority
+                    // row cannot be bypassed by a lower-priority byte.
+                    assert(memcmp(frame[k],sink.memory+bases[k],C)==0);
+                }
+            } else {
+                assert(sink.writes==count);
+                if(r==R::Waiting) ++waits;
+            }
+        }
+        if(!f.pending()) verify<C>(frame,sink);
+        if(n%509==0) {drain<C>(f,frame,sink,choice&8);++drains;}
+    }
+    drain<C>(f,frame,sink);
+    assert(stages>60000&&visits>100000&&sends>10000&&waits>10000);
+    std::printf("width %u: 200000 interleaved transitions, %u stage, %u visits, %u sends, %u waits, %u drains PASS\n",
+                unsigned(C),stages,visits,sends,waits,drains);
+}
+
 int main() {
     exhaustive<16>(); exhaustive<20>();
     transitions<16>(); transitions<20>();
     sharedNibbles();
+    interleaved<16>(); interleaved<20>();
 }
