@@ -8,7 +8,7 @@ Read AGENTS, TASKS, manager handover, current Task0032 allocation, motion-timing
 - HISTORICAL: docs/motion-timing.md / Task0030 linked images; not refreshed after P0.
 - ANALYTIC: physical/transport equations and proposed estimator bounds.
 - HOST: actual extracted firmware functions with existing replay shims; simulated release times, not AVR cycles.
-- AVR: only linked CI disassembly/emulation/instrumentation, with exact source and variant. None yet collected here.
+- AVR: only linked CI disassembly/emulation/instrumentation, with exact source and variant. Isolated linked fixture measurements in iteration 3 below; no integrated worst-case timing.
 - UNKNOWN: concurrent execution, actual host traffic, hardware/physical pressure, final SRAM headroom.
 
 ## Initial source audit
@@ -48,7 +48,7 @@ Blocked fixture: remainingMotion 102.326 ms vs all-motion lower 24.992 ms vs con
 Replay uses actual MotionPlanner, MoveQueue and StepExecutor::nextStepSpeed via existing source extraction, task-private counters and modeled arrivals/legacy batch scheduling. RF2000 host fixture 160/160/1280/280 steps/mm, 200/200/9/25 axis feedrate, 100000 steps/s² acceleration fixture, not all four configured calibrations. Prefill bypasses real warmup/serial transport. Modeled one-extruder fixture; no parser, CPU admission time, electrical STEP, compensation, Advance timer or thermal ISR simulation. Standard host suite covers existing pause/direct/Advance fixtures separately. Modeled group16 arrival includes 80ms extra gap. External cap modes are experiments, not governor.
 Reproduce: python3 research/task0032-planner-queue/replay.py --capacity 24 28 32 --output trace.jsonl; git show dee72ebd8b60a003664cc9a91b054a98124f62db:tools/task0032/queue-estimate.cjs > /tmp/queue-estimate.cjs; node research/task0032-planner-queue/analyze.cjs trace.jsonl /tmp/queue-estimate.cjs > summary.json. CI artifacts contain both compressed trace files and summary. Preserve result summaries in branch due seven-day artifact retention.
 
-## Iteration 2 (HOST verified; AVR pending at this checkpoint)
+## Iteration 2 (HOST verified; initial AVR compile failure subsequently resolved)
 Host step of [run 45947129570](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45947129570) succeeded on merge c7fcaf950faac5619fa812d790e1bcf97383bc60; full job failed only in isolated AVR compile (missing Printer::stepsPerMm accessor in research shim; corrected in 7f69d012). [Artifact 15174849048](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45947129570/artifacts/15174849048), SHA256 a8c3135975b0eaf286eeda6e0865d95338d411f5f0d12c5d23a7f2f94cff177e, contains decision-input.json with transition traces. Committed compact machine-readable host-results.json (source: CI log), not an unverified local simulation.
 
 For 24/28/32 slots respectively, each 66 ordinary workload cases (additional barrier case per capacity), 6231 admissions, 196 no-window plans; 4.540 profile rebuilds and 3.540 back visits/admission. Maximum back/forward visits 19/19, reserve visits 12, fixed search 20. Wraps 252/189/189. No circle idle time, same mean modeled speed range 4.745..61.596 mm/s, same aggregate per-case planning visits. This matrix is not a discriminating capacity test: current pacing/angle and fixed exits dominate; no conclusion that more slots never help. Retain 24 as reference pending A73. Entry/exit mismatch 132/capacity, 120 outside E-only/Advance boundary classification; these are investigation leads, not proof of unsafe motor discontinuity; compare frozen joins, minimum speeds, and actual execution boundary separately. Zero acceleration-distance inequality violations in sampled activation profiles, not a proof of all per-axis or instantaneous constraints.
@@ -61,3 +61,34 @@ For 24 slots, 0.05mm circle requested 100mm/s: both 115200 and 250000 steady arr
 - Existing asymmetric length factor is especially suspect at long→short→long and unequal chords. A symmetric geometry candidate is appropriate for later replay, not accepted here. Preserve independent Z/E velocity-change checks and separate E-only/Advance joins. Their speed-vector differences are currently calculated from each segment's own full speed, not normalized to the actual junction speed. Reducing the full-speed limit can therefore alter a junction even with unchanged geometry.
 - Forward/backward reachability uses squared speeds and distance; compare squared values before sqrt when possible, but preserve minSpeed floors, fixed flags, profile invalidation, and conservative exit behavior. A change to fixed-join rules changes which older movements are mutable; not just a math optimization. Need variant replay before any production simplification.
 - Remove redundant calculations first (time-only estimator and proven exact arithmetic transformations); no removal of user diagnostic M3200 P14, acceleration checks, pause/direct barriers or Advance transitions on present evidence.
+
+## Iteration 3 — verified isolated AVR cycle and resource measurements
+[Private CI run 45947245819](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45947245819) success, head 7f69d012a859fd9be48ec25730dd795af44c7817, merge 9a668174d9b781335bc8d5f9e73759fc8370e4d6, [artifact 15174504635](https://github.com/Nibbels/Repetier-Firmware/actions/runs/45947245819/artifacts/15174504635), SHA256 f4f580dc2e4753de7ce26ab16df889521440de627cd0b110ae2a40fa5b87c9ee. Compact avr-results.json persisted in branch. The first compile failure was fixed only in the research fixture. Standard first-iteration all-board check remains independently verified. Later standard run 45947245817 cancelled by newer push; not a test failure.
+
+Actual copied planner/queue/geometry/HAL arithmetic compiled with pinned Arduino avr-gcc 7.3.0 -Os -flto, simulated by libsimavr 1.6 ATmega2560 at 16MHz. Eight explicit shape/acceleration/Advance fixtures at every queue depth; includes wide acceleration ratio fixture, mixed extrusion, tiny segments, rapid travel, and partial active front. Two separate binaries: outer markers (unmodified planner bodies), substage markers (RAII markers inserted). Measure marker-to-marker cycles, no external interrupt scheduling, ISR, peripherals or hardware. Markers and fixture/LTO affect generated machine code; no integrated WCET. Full source hashes, ELF, disassembly, map, marker traces and per-depth distribution in artifact. No local AVR toolchain used.
+
+24-slot isolated measurements (cycles, median/max; substage rows from separately instrumented binary, not additive to updateLookahead):
+| Function | Median | Sample maximum |
+|---|---:|---:|
+| prepareMove | 10606 | 12572 |
+| limitJunction | 3007 | 4621 |
+| planDeceleration | 1078 | 7553 |
+| planAcceleration | 1328 | 8614 |
+| prepareStepProfile | 2287 | 2345 |
+| updateLookahead (outer inclusive) | 8628 | 39017 |
+| remainingMotion | 37229 | 112647 |
+| exactTimeOnly (optimized full slots) | 29984 | 95326 |
+| lower | 11467 | 22968 |
+| pacedTicks (saturating) | 3282 | 4829 |
+
+At 500 admissions/s (20k RX B/s / assumed 40B), 32000 cycles per command for all tasks; sum of separate planner medians 19234 = 60.1% of available cycles. This is illustrative, NOT measured combined load; maxima and medians are not paired and fixture workload differs from transport trace. Nevertheless a single updateLookahead sample already exceeds the entire 32k average budget. Avoid a full estimator scan on each admission; 112647 cycles ~7.04ms, time-only 95326 ~5.96ms, lower 22968 ~1.44ms, paced 4829 ~0.30ms observed maxima. Exact time-only removes geometry and redundant roots but still costly, and isolated Flash footprint larger in this compilation: diag-only 12060 B, time-only 12900 B (+840), lower-only 11130 (-930), paced-only 11208 (-852); these are whole isolated images including planner and shared library code/LTO, not incremental production Flash claims. All four variants same 2582 B fixture globals incl 2477 B queue, no extra per-slot storage. No candidate cache execution measurement yet; 4-byte float per slot would add 96/112/128 B, exact full cache recomputation cost must be counted per invalidation/rebuild, not just reads. Active proportional cache is not suitable for near-empty reserve.
+
+| Capacity | Queue SRAM (actual isolated) | updateLookahead maximum cycles | max sampled I-disabled cycles |
+|---|---:|---:|---:|
+|24|2477|39017|375|
+|28|2889|48581|427|
+|32|3301|58238|479|
+At 16MHz these mask spans are 23.44/26.69/29.94us. 250k 8N1 byte interval 40us (640 cycles); this does not certify receiver deadlines, especially with pending interrupts, RX status and ISR interactions. Hand off these samples to UART owner, do not assert safe baud from isolated mask times. Queue growth +412/+824 B measured exactly; not safe stack reserve. All-board baseline Flash/global SRAM from standard verified run (RF1000/RF2000/RF2000v2/X44): 212736/5935, 217030/5985, 217034/6103, 212108/6019 B; post-P0 unknown.
+
+## Current decision input for parent 0032 (not a governor)
+Provide nominal motion work at admission, planned duration on a bounded cadence or validated cache, immediately executable contiguous reserve with barrier/validity flag, and mutable lookahead boundary plus distance/entry speed/available acceleration. Do not equate any two of these. Planning cost should expose number of replanned slots and bounded mask window; admission counts alone do not characterize CPU demand. Keep existing diagnostic callable on demand while evaluating a cheap foreground signal; pacedTicks is cheap but underestimates planned time by ~45% mean, cannot be sole safety/control input. Exact-time-only no-storage variant is useful reference, not yet optimal periodic implementation. Preserve high-speed isolated travel. Use early externally supplied caps only where actual mutable geometry permits, not per-command clamp from wire rate. Current evidence gives no justification for increasing 24 slots or removing historical junction/Advance safeguards wholesale. Follow-up needed: improve exact/ramp-cache tradeoff, discriminate arrival-limited cases (less prefill and longer stalls), replay alternative junction math and classify entry/exit mismatch, actual integrated CPU budget after P0 and A73. No production modification or autonomous merge.
