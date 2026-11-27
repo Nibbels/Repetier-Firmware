@@ -281,7 +281,7 @@ jobs:
         run: |
           set -euo pipefail
           out="$RUNNER_TEMP/task0032-lcd-integrated"
-          p0=6693513f2ecacabf47c5e08c80fc3a9bb8417eab
+          p0=894477ef757ff431f6814590f0983fc04459e0ff
           candidate="$RUNNER_TEMP/task0032-lcd-integrated-p0"
           git fetch --no-tags --depth=1 origin "$p0"
           git worktree add --detach "$candidate" "$p0"
@@ -310,7 +310,7 @@ jobs:
           set -euo pipefail
           out="$RUNNER_TEMP/task0032-lcd-integrated"
           base="$RUNNER_TEMP/task0032-lcd-integrated-baseline"
-          git worktree add --detach "$base" 6693513f2ecacabf47c5e08c80fc3a9bb8417eab
+          git worktree add --detach "$base" 894477ef757ff431f6814590f0983fc04459e0ff
           (cd "$base" && python3 tools/task0003-baseline.py "$out/baseline-evidence" --avr-only --p0-candidate) | tee "$out/baseline.log"
           python3 tools/task0032/lcd-resource-delta.py "$out"
       - uses: actions/upload-artifact@v4
