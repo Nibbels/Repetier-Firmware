@@ -9,6 +9,7 @@ source=r"""
 #include "EventLog.h"
 #include "EventLogRead.h"
 #include "EventLogText.h"
+#include "EventLogService.h"
 #include <string>
 #include "ThermalEventSource.h"
 #include <limits>
@@ -174,6 +175,33 @@ void textTest(R& ring,Store& store) {
     Line line;entryLine<Line,Cause>(line,v,0);assert(rows(v)==1&&line.finish());
     assert(line.buffer.find("REASON:63")!=std::string::npos);
 }
+void serviceTest(){
+    using S=Service<Slots,2,Line,Cause,Serial>;
+    Store store;Serial serial;S service(serial);Ledger ledger;
+    for(unsigned i=0;i<100;++i)service.service(store,ledger);
+    assert(store.launches==0&&store.reads==0&&serial.lines==0);
+    service.requestHistory();service.requestHistory();
+    for(unsigned i=0;i<100&&service.historyPending();++i)
+        service.service(store,ledger);
+    assert(!service.historyPending()&&serial.all=="LOG BEGIN\r\nLOG END\r\n");
+    ledger.initial.cause=Cause::WatchdogReset;ledger.initial.channel=2;
+    ledger.initial.evidence.valid=0;
+    for(unsigned i=0;i<200;++i){
+        service.service(store,ledger);
+        if(store.busy)store.complete();
+    }
+    assert(!service.logFailed()&&service.ring().latestSequence()==1);
+    // Cold boot: history retrieved with no active fault. Logging cannot
+    // manufacture a live fault or trigger heating decisions.
+    Serial after;S restarted(after);Ledger normal;
+    restarted.requestHistory();
+    for(unsigned i=0;i<100&&restarted.historyPending();++i)
+        restarted.service(store,normal);
+    assert(!restarted.historyPending()&&!normal.active());
+    assert(after.all.find("LOG #1 SYSTEM")!=std::string::npos);
+    assert(after.all.find("measured_C:unknown target_C:unknown")!=std::string::npos);
+    assert(after.all.find("LOG END")!=std::string::npos);
+}
 void captureTest(){
     int16_t v=0;
     assert(deciC(-3276.8f,v)&&v==-32768);
@@ -234,6 +262,7 @@ void captureTest(){
 }
 int main(){
     captureTest();
+    serviceTest();
     static_assert(R::Bytes==128,"region size");
     assert(eventId(Channel::System,0)==0&&eventId(Channel::System,64)==0);
     assert(newer(0,0xffffffffu)&&!newer(0xffffffffu,0)&&!newer(5,5));
