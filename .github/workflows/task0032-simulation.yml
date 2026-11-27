@@ -128,7 +128,7 @@ jobs:
   p0-small-cleanup-preflight:
     if: github.event_name == 'workflow_dispatch' || github.head_ref == 'task/Task0032-integration-preflight'
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - name: Replay small deltas against exact P0 snapshot
@@ -159,6 +159,23 @@ jobs:
           test "$(git hash-object "$runner")" = c0dfeca055159db9b918c6a8420bc2d441bae079
           compiler="$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin/avr-g++"
           python3 tools/task0032/integer-sqrt-preflight.py --source "$RUNNER_TEMP/task0032-p0" --compiler "$compiler" --runner-source "$runner" --out "$out/sqrt"
+      - name: Run existing canonical harness on disposable combined candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-p0-preflight"
+          candidate="$RUNNER_TEMP/task0032-p0"
+          git -C "$candidate" apply --check "$out/candidate.diff"
+          git -C "$candidate" apply "$out/candidate.diff"
+          git -C "$candidate" diff --check
+          git -C "$candidate" add Repetier tests
+          git -C "$candidate" -c user.name="Task0032 isolated preflight" -c user.email="preflight@invalid.example" commit -m "Disposable small cleanup counterfactual"
+          git -C "$candidate" rev-parse HEAD > "$out/local-candidate-sha.txt"
+          # Local commit is deliberately never pushed. Reuse the canonical
+          # harness from the pinned P0 snapshot, including its combined-image
+          # verification. No change to the actual standard workflow.
+          cd "$candidate"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" | tee "$out/canonical-preflight.log"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
