@@ -137,6 +137,7 @@
     <ClInclude Include="EepromZoneByteIO.h" />
     <ClInclude Include="EepromZoneAvr.h" />
     <ClInclude Include="EepromZoneSession.h" />
+    <ClInclude Include="EepromZoneLive.h" />
     <ClInclude Include="EepromZonePatch.h" />
     <ClInclude Include="BedTemperatureLimit.h" />
     <ClInclude Include="Extruder.h" />
@@ -212,6 +213,7 @@
     <ClCompile Include="Communication.cpp" />
     <ClCompile Include="Eeprom.cpp" />
     <ClCompile Include="EepromZoneAvr.cpp" />
+    <ClCompile Include="EepromZoneLive.cpp" />
     <ClCompile Include="TemperatureControl.cpp" />
     <ClCompile Include="TemperatureSensors.cpp" />
     <ClCompile Include="Extruder.cpp" />

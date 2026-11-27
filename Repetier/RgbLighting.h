@@ -23,6 +23,8 @@ char mode();
 bool forcedWhite();
 void requestWhiteToggle();
 void restoreMode(char mode);
+void captureProfiles(uint8_t* data);
+void restoreProfiles(const uint8_t* data);
 void selectMode(char mode);
 void reset();
 void initialize();

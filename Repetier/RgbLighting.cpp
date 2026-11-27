@@ -71,6 +71,41 @@ char mode() { return selectedMode; }
 bool forcedWhite() { return forceWhite; }
 void requestWhiteToggle() { whiteToggleRequested = true; }
 
+// Persisted profile order is printing, heating, cooling, idle, manual.
+void captureProfiles(uint8_t* data) {
+    data[0]=g_uRGBPrintingR;
+    data[1]=g_uRGBPrintingG;
+    data[2]=g_uRGBPrintingB;
+    data[3]=g_uRGBHeatingR;
+    data[4]=g_uRGBHeatingG;
+    data[5]=g_uRGBHeatingB;
+    data[6]=g_uRGBCoolingR;
+    data[7]=g_uRGBCoolingG;
+    data[8]=g_uRGBCoolingB;
+    data[9]=g_uRGBIdleR;
+    data[10]=g_uRGBIdleG;
+    data[11]=g_uRGBIdleB;
+    data[12]=g_uRGBManualR;
+    data[13]=g_uRGBManualG;
+    data[14]=g_uRGBManualB;
+}
+void restoreProfiles(const uint8_t* data) {
+    g_uRGBPrintingR=data[0];
+    g_uRGBPrintingG=data[1];
+    g_uRGBPrintingB=data[2];
+    g_uRGBHeatingR=data[3];
+    g_uRGBHeatingG=data[4];
+    g_uRGBHeatingB=data[5];
+    g_uRGBCoolingR=data[6];
+    g_uRGBCoolingG=data[7];
+    g_uRGBCoolingB=data[8];
+    g_uRGBIdleR=data[9];
+    g_uRGBIdleG=data[10];
+    g_uRGBIdleB=data[11];
+    g_uRGBManualR=data[12];
+    g_uRGBManualG=data[13];
+    g_uRGBManualB=data[14];
+}
 void restoreMode(char mode) {
     selectedMode = mode;
     if (mode == RGB_MODE_AUTOMATIC) {
