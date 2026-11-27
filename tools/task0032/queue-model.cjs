@@ -50,7 +50,7 @@ function run(rows,speed,policy,p,opts){
     if(wire&&wire.end<=t+EPS){received++;receivedBytes+=wire.job.bytes;raw.push(wire.job);wire=null;}
     if(planner&&planner.remaining<=0.01){
       const j=planner.job;planned++;admissionCycles+=j.fore+j.uart;queue.push(j);planner=null;
-      txEnd=Math.max(txEnd,t+ackDelay)+p.ackBytes*10/deviceBaud;acks.push({end:txEnd,bytes:j.bytes});
+      txEnd=Math.max(txEnd,t+ackDelay)+j.ackBytes*10/deviceBaud;acks.push({end:txEnd,bytes:j.bytes});
     }
     while(acks.length&&acks[0].end<=t+EPS){const a=acks.shift();used-=a.bytes;outstanding--;acked++;}
     dispatch();
@@ -85,7 +85,9 @@ function selfTest(){
   check(JSON.stringify(a)===JSON.stringify(scenario(spec,"one")),"deterministic");
   const h=scenario({...spec,baud:115200},"adaptive");
   check(h.motionCycles===b.motionCycles,"wire starvation does not choose packing");
-  return "7 groups of checks passed";
+  const numbered=scenario(spec,"adaptive",{ackBytes:"numbered"});
+  check(numbered.admissionCycles>b.admissionCycles&&JSON.stringify(numbered.steps)===JSON.stringify(b.steps),"numbered ACK accounted");
+  return "8 groups of checks passed";
 }
 function matrix(){
   const out=[];
