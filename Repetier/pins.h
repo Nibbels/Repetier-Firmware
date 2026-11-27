@@ -512,6 +512,55 @@
 #define HOTEND_COOLER_USES_PIN(pin) \
     (EXT0_EXTRUDER_COOLER_PIN == (pin) || (NUM_EXTRUDER > 1 && EXT1_EXTRUDER_COOLER_PIN == (pin)))
 
+// Optional PWM fans must not acquire pins already owned by another active
+// peripheral. Test digital pin identities, not port numbers or ADC channels.
+// Keep the documented hotend-cooler handoffs on X19/X42/X44; the board fan
+// has no equivalent accessory handoff.
+#define FAN_CONFLICTS_FIXED_PIN(pin) ( \
+    (pin) == X_STEP_PIN || (pin) == X_DIR_PIN || (pin) == X_ENABLE_PIN || (pin) == X_MIN_PIN || \
+    (pin) == Y_STEP_PIN || (pin) == Y_DIR_PIN || (pin) == Y_ENABLE_PIN || (pin) == Y_MIN_PIN || \
+    (pin) == Z_STEP_PIN || (pin) == Z_DIR_PIN || (pin) == Z_ENABLE_PIN || (pin) == Z_MIN_PIN || \
+    (pin) == E0_STEP_PIN || (pin) == E0_DIR_PIN || (pin) == E0_ENABLE_PIN || \
+    (NUM_EXTRUDER > 1 && ((pin) == E1_STEP_PIN || (pin) == E1_DIR_PIN || (pin) == E1_ENABLE_PIN)) || \
+    (pin) == X_SCS_PIN || (pin) == Y_SCS_PIN || (pin) == Z_SCS_PIN || (pin) == O0_SCS_PIN || (pin) == O1_SCS_PIN || \
+    (pin) == X_STALL_PIN || (pin) == Y_STALL_PIN || (pin) == Z_STALL_PIN || (pin) == O0_STALL_PIN || (pin) == O1_STALL_PIN || \
+    (pin) == DRV_FAULT || (pin) == DRV_RESET1 || (pin) == DRV_SCLK || (pin) == DRV_SDATO || (pin) == DRV_SDATI || \
+    (pin) == UI_DISPLAY_RS_PIN || (pin) == UI_DISPLAY_ENABLE_PIN || \
+    (pin) == UI_DISPLAY_D4_PIN || (pin) == UI_DISPLAY_D5_PIN || (pin) == UI_DISPLAY_D6_PIN || (pin) == UI_DISPLAY_D7_PIN || \
+    (pin) == ENABLE_KEY_E1 || (pin) == ENABLE_KEY_E2 || (pin) == ENABLE_KEY_E3 || \
+    (pin) == ENABLE_KEY_E4 || (pin) == ENABLE_KEY_E5 || (pin) == ENABLE_KEY_E6 || \
+    (pin) == ENABLE_KEY_1 || (pin) == ENABLE_KEY_2 || (pin) == ENABLE_KEY_3 || (pin) == ENABLE_KEY_4 || (pin) == ENABLE_KEY_5 || \
+    (pin) == WATCHDOG_PIN || (pin) == LED_PIN || (pin) == OUTPUT_230V_PIN || \
+    (pin) == 0 || (pin) == 1 || (pin) == 20 || (pin) == 21 || /* USART0, TWI */ \
+    (pin) == 67 || (pin) == 68 || (pin) == 69 /* PK5..7, temperature ADC inputs */ )
+#if defined(Z_MAX_PIN)
+#define FAN_CONFLICTS_BOARD_PIN(pin) ((pin) == Z_MAX_PIN || (pin) == 66 || \
+    (pin) == RGB_LIGHT_R_PIN || (pin) == RGB_LIGHT_G_PIN || (pin) == RGB_LIGHT_B_PIN)
+#else
+#define FAN_CONFLICTS_BOARD_PIN(pin) false
+#endif
+#ifdef THERMAL_ALARM_PIN
+#define FAN_CONFLICTS_ALARM_PIN(pin) ((pin) == THERMAL_ALARM_PIN)
+#else
+#define FAN_CONFLICTS_ALARM_PIN(pin) false
+#endif
+#define FAN_CONFLICTS_RESERVED_PIN(pin) ((pin) >= 0 && (FAN_CONFLICTS_FIXED_PIN(pin) || \
+    FAN_CONFLICTS_BOARD_PIN(pin) || FAN_CONFLICTS_ALARM_PIN(pin)))
+#if FAN_CONFLICTS_RESERVED_PIN(EXT0_EXTRUDER_COOLER_PIN) || \
+    (NUM_EXTRUDER > 1 && FAN_CONFLICTS_RESERVED_PIN(EXT1_EXTRUDER_COOLER_PIN))
+#error A hotend cooler cannot share a dedicated GPIO with another peripheral.
+#endif
+#if FAN_CONFLICTS_RESERVED_PIN(FAN_BOARD_PIN) || (FAN_BOARD_PIN >= 0 && ( \
+    FAN_BOARD_PIN == FAN_PIN || FAN_BOARD_PIN == HEATER_0_PIN || FAN_BOARD_PIN == HEATER_2_PIN || \
+    (NUM_EXTRUDER > 1 && FAN_BOARD_PIN == HEATER_1_PIN) || FAN_BOARD_PIN == CASE_LIGHT_PIN || \
+    FAN_BOARD_PIN == FET1 || FAN_BOARD_PIN == FET2 || FAN_BOARD_PIN == FET3))
+#error The stepper board fan cannot share a dedicated GPIO with another peripheral.
+#endif
+#undef FAN_CONFLICTS_RESERVED_PIN
+#undef FAN_CONFLICTS_ALARM_PIN
+#undef FAN_CONFLICTS_BOARD_PIN
+#undef FAN_CONFLICTS_FIXED_PIN
+
 #if HOTEND_COOLER_USES_PIN(FAN_PIN) || HOTEND_COOLER_USES_PIN(HEATER_0_PIN) || HOTEND_COOLER_USES_PIN(HEATER_2_PIN) \
     || (NUM_EXTRUDER > 1 && HOTEND_COOLER_USES_PIN(HEATER_1_PIN))
 #error A hotend cooler must use an output separate from the part fan and active heaters.
