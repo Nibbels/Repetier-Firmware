@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 import subprocess
 
-P0 = "894477ef757ff431f6814590f0983fc04459e0ff"
+P0 = "9072d65121bc2086522ea6b837ca3804ec80faa5"
 HERE = Path(__file__).resolve().parent
 
 
@@ -107,7 +107,6 @@ def source_changes(root):
     char displayCache_[UI_ROWS][UI_COLS]; // fixed-width cells; not C strings
     LcdPendingFrame<UI_COLS> lcdTransport_;
     void resetDisplayAfterClear();
-    void renderNormalPage();
     void serviceDisplayPending();
     millis_t lastDisplayCompletedMs_ = 0;
     bool localKeyReady(int action,bool initial,millis_t buttonStart) const;
@@ -169,12 +168,15 @@ void UIDisplay::loadStartupCharacters()""")
     }
     lastSwitch = lastRefresh""")
         s=once(s,"// ----------- end direct LCD driver","// ----------- end direct LCD driver\n"+RESET)
-        # Pure normal renderer: one row scratch, stage logical output only.
-        i=s.index("void UIDisplay::refreshPage()")
-        j=s.index("} // refreshPage",i)+len("} // refreshPage")
-        old=s[i:j]
-        k=old.index("    uint16_t r;")
-        normal=old[k:]
+        # Reuse P0's separate emergency and normal renderer entry points.
+        # Neither path keeps a full four-row local cache.
+        i=s.index("__attribute__((noinline)) void UIDisplay::refreshNormalPage()")
+        j=s.index("} // refreshNormalPage",i)+len("} // refreshNormalPage")
+        normal=s[i:j]
+        normal=once(normal,"        loadNormalCharacters();\n    }",
+                           "        loadNormalCharacters();\n        resetDisplayAfterClear();\n    }")
+        normal=once(normal,"    uint16_t r;",
+                           "#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT\n    emergencyFrameRevision_=0xff;\n#endif\n    uint16_t r;")
         normal=once(normal,"""    char cache[UI_ROWS][MAX_COLS + 1];
     adjustMenuPos();
 
@@ -201,28 +203,24 @@ void UIDisplay::loadStartupCharacters()""")
         const uint8_t offset = length > UI_COLS ? RMath::min(length - UI_COLS, scroll) : 0;
         printRow(row, &cache[row][offset], NULL, UI_COLS);
     }
-} // refreshPage""","""    while (r < UI_ROWS)
+} // refreshNormalPage""","""    while (r < UI_ROWS)
         stageCurrentRow(r++);
-} // renderNormalPage""")
-        refresh=old[:k]
-        refresh=once(refresh,"""        loadNormalCharacters();
-    }""","""        loadNormalCharacters();
-        resetDisplayAfterClear();
-    }""")
-        refresh=once(refresh,"""            // Existing LCD transport fills remaining columns with spaces.
-            printRow(row,line,nullptr,UI_COLS);
-        }
-        return;""","""            lcdTransport_.stage(row,line,displayCache_);
-        }
-        emergencyFrameRevision_=ledger.revision();
-        return;""")
-        refresh+="""#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-    emergencyFrameRevision_=0xff;
-#endif
-    renderNormalPage();
-} // refreshPage"""
-        s=s[:i]+"void UIDisplay::renderNormalPage() {\n"+normal+"\n\n"+refresh+s[j:]
-        s=once(s,"} // refreshPage\n\nvoid UIDisplay::showMessage","} // refreshPage\n"+SERVICE+"\nvoid UIDisplay::showMessage")
+} // refreshNormalPage""")
+        s=s[:i]+normal+s[j:]
+        i=s.index("__attribute__((noinline)) void UIDisplay::refreshEmergencyPage()")
+        j=s.index("} // refreshEmergencyPage",i)+len("} // refreshEmergencyPage")
+        emergency=s[i:j]
+        emergency=once(emergency,"        loadNormalCharacters();\n    }",
+                                 "        loadNormalCharacters();\n        resetDisplayAfterClear();\n    }")
+        emergency=once(emergency,"""        // Existing LCD transport fills remaining columns with spaces.
+        printRow(row,line,nullptr,UI_COLS);
+    }
+} // refreshEmergencyPage""","""        lcdTransport_.stage(row,line,displayCache_);
+    }
+    emergencyFrameRevision_=ledger.revision();
+} // refreshEmergencyPage""")
+        s=s[:i]+emergency+s[j:]
+        s=once(s,"} // refreshNormalPage\n\nvoid UIDisplay::showMessage","} // refreshNormalPage\n"+SERVICE+"\nvoid UIDisplay::showMessage")
         s=once(s,"void UIDisplay::slowAction() {",LOCAL_KEY+"\nvoid UIDisplay::slowAction() {")
         s=once(s,"const millis_t buttonAge = HAL::timeInMilliseconds() - lastButtonStart;",
                "const millis_t buttonStart = lastButtonStart;\n        const millis_t buttonAge = HAL::timeInMilliseconds() - buttonStart;")
@@ -241,20 +239,20 @@ void UIDisplay::loadStartupCharacters()""")
     # Poll after the high-priority service, never in an ISR. Include the
     # already latched emergency and the thermal pass that first latches it.
     def commands(s):
-        s=once(s,"""        uid.refreshPage();
+        s=once(s,"""        uid.refreshEmergencyPage();
     }
 }
 #endif
 
-void Commands::checkForPeriodicalActions""","""        uid.refreshPage();
+void Commands::checkForPeriodicalActions""","""        uid.refreshEmergencyPage();
     }
     uid.serviceDisplay();
 }
 #endif
 
 void Commands::checkForPeriodicalActions""")
-        s=once(s,"if(Printer::printJob.emergencyLocked()){uid.refreshPage();return;}",
-               "if(Printer::printJob.emergencyLocked()){uid.refreshPage();uid.serviceDisplay();return;}")
+        s=once(s,"if(Printer::printJob.emergencyLocked()){uid.refreshEmergencyPage();return;}",
+               "if(Printer::printJob.emergencyLocked()){uid.refreshEmergencyPage();uid.serviceDisplay();return;}")
         return once(s,"    handleScanWorkTasks(scanTickDue);\n} // checkForPeriodicalActions",
                     "    handleScanWorkTasks(scanTickDue);\n    uid.serviceDisplay();\n} // checkForPeriodicalActions")
     edit(fw/"Commands.cpp",commands)
@@ -302,8 +300,8 @@ def test_changes(root):
     edit(tests/"boot-eye.py",boot_fixed)
 
     def workflow(s):
-        s=once(s,'section(ui, "void UIDisplay::refreshPage()", "} // refreshPage") + "}\\n"',
-               'section(ui, "void UIDisplay::renderNormalPage()", "void UIDisplay::showMessage(")')
+        s=once(s,'section(ui, "void UIDisplay::refreshPage()", "} // refreshNormalPage") + "}\\n"',
+               'section(ui, "void UIDisplay::refreshPage()", "void UIDisplay::showMessage(")')
         s=once(s,'#include "PreheatProfiles.h"','#include "PreheatProfiles.h"\n#include "LcdPendingFrame.h"')
         s=once(s,"millis_t timeInMilliseconds() { return 5; }",
                "millis_t timeInMilliseconds() { return 5; }\nuint32_t lcdTime=0;\nuint32_t timeInMicroseconds() { return lcdTime; }")
@@ -315,7 +313,6 @@ def test_changes(root):
     int lcdCol=0;
     millis_t lastDisplayCompletedMs_=0;
     void resetDisplayAfterClear(){lcdTransport_.afterClear(displayCache_,HAL::timeInMicroseconds());lastDisplayCompletedMs_=HAL::timeInMilliseconds();}
-    void renderNormalPage();
     void serviceDisplay();
     void serviceDisplayPending();
     void drainDisplay(){
