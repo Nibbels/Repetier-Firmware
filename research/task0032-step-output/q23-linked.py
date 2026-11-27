@@ -6,6 +6,7 @@ No concurrent ISR dispatch, multi-call timing or physical qualification.
 """
 import argparse, collections, difflib, hashlib, json, pathlib, shutil, struct, subprocess, tempfile, zipfile
 import linked_timer1 as lt
+import importlib.util
 
 HERE=pathlib.Path(__file__).resolve().parent
 FW=lt.ROOT/"Repetier"
@@ -43,7 +44,7 @@ def modify(dst,tag):
         s=replace(s,"                        Extruder::unstep();\n                        Printer::extrusionCompensation.consumeExtraStep(forward);\n                        Extruder::step();",
                   "                        Extruder::unstep();\n                        Printer::extrusionCompensation.consumeExtraStep(forward);\n                        __builtin_avr_delay_cycles(31);\n                        Extruder::step();\n                        __builtin_avr_delay_cycles(31);")
         changes[p]=s
-    if tag in ("minimal","narrow"):
+    if tag in ("minimal","narrow","wake"):
         # Owner prefers simple fixed margin. Raw linked E-low minimum was
         # 30 cycles; add two cycles only at the ECMP extra-low transition.
         # Avoid adding 31 cycles to already sufficient HIGH phases.
@@ -55,7 +56,7 @@ def modify(dst,tag):
         p="ZMotion.cpp";s=(FW/p).read_text()
         changes[p]=replace(s,"    if (directionIsPositive() != positive)\n        setDirection(positive);\n    const int8_t direction",
                            "    if (directionIsPositive() != positive) {\n        setDirection(positive);\n        __builtin_avr_delay_cycles(2);\n    }\n    const int8_t direction")
-    if tag=="narrow":
+    if tag in ("narrow","wake"):
         # Exploratory queue-only mask split. E output transaction and
         # Z/tail masks unchanged. Queue's Timer1-private XY phase/position
         # no longer globally masked. Direct (including PWM key release)
@@ -70,9 +71,14 @@ def modify(dst,tag):
         xy=xy.replace("                HAL::forbidInterrupts();","                if (!forQueue) HAL::forbidInterrupts();")
         s=s[:start]+"        if (forQueue) HAL::allowInterrupts();\n\n"+xy+"        if (forQueue) HAL::forbidInterrupts();\n\n"+s[end:]
         changes[p]=s
+    if tag=="wake":
+        spec=importlib.util.spec_from_file_location("wake_source",HERE/"motor-wake-source.py")
+        wake_source=importlib.util.module_from_spec(spec);spec.loader.exec_module(wake_source)
+        wake_source.apply(FW,HERE,changes,replace)
     diff=[]
     for p,s in changes.items():
-        diff.extend(difflib.unified_diff((FW/p).read_text().splitlines(True),s.splitlines(True),fromfile="a/Repetier/"+p,tofile="b/Repetier/"+p))
+        old=(FW/p).read_text() if (FW/p).is_file() else ""
+        diff.extend(difflib.unified_diff(old.splitlines(True),s.splitlines(True),fromfile="a/Repetier/"+p,tofile="b/Repetier/"+p))
         (dst/p).write_text(s)
     return "".join(diff)
 
@@ -133,7 +139,7 @@ def compare(archive,baseline,out,tag):
     mod=lt.load_interpreter()
     result={}
     for b in lt.BOARDS:
-        img=mod.Image(archive,b);img.q23=True
+        img=mod.Image(archive,b);img.q23=True;img.wake=tag=="wake"
         img.step_pins.update({(0x31,1):"DIR_X",(0x31,7):"DIR_Y",(0x10b,1):"DIR_Z",(0x22,6):"DIR_E0",(0x28,3):"DIR_E1"})
         if b=="RF1000":img.step_pins.pop((0x28,3),None)
         rows=[json.loads(l) for l in (baseline/(b+".jsonl")).read_text().splitlines()]
@@ -191,6 +197,14 @@ def compare(archive,baseline,out,tag):
                 except Exception as e:
                     summary["failed"]+=1
                     if len(summary["mismatch_examples"])<8:summary["mismatch_examples"].append([a["case"],a["mode"],a["fixture"],repr(e)])
+        with zipfile.ZipFile(archive) as z:
+            sections={}
+            for line in z.read(b+"/size.txt").decode().splitlines():
+                parts=line.split()
+                if len(parts)==3 and parts[0].startswith("."):
+                    sections[parts[0]]=int(parts[1])
+            summary["linked_static_sram_bytes"]=sum(sections.get(p,0) for p in (".data",".bss",".noinit"))
+            summary["linked_flash_text_data_bytes"]=sum(sections.get(p,0) for p in (".text",".data"))
         result[b]=summary
         print(tag,b,json.dumps(summary,separators=(",",":")),flush=True)
     (out/tag/"comparison.json").write_text(json.dumps(result,indent=2)+"\n")
@@ -202,7 +216,7 @@ def main():
     p.add_argument("--out",type=pathlib.Path,required=True)
     p.add_argument("--tools",type=pathlib.Path)
     p.add_argument("--reuse",type=pathlib.Path,help="reuse exact prior raw/guarded candidate.zip archives")
-    p.add_argument("--variant",choices=("raw","guarded","minimal","narrow"),action="append")
+    p.add_argument("--variant",choices=("raw","guarded","minimal","narrow","wake"),action="append")
     args=p.parse_args()
     args.out.mkdir(parents=True,exist_ok=True)
     all_results={}
@@ -229,6 +243,6 @@ def main():
             assert s["failed"]==0,(variant,board,s["mismatch_examples"])
             # The historical guarded comparator did not fix inherited
             # Z direction setup. Retain the finding, not a shipping pass.
-            if variant in ("minimal","narrow"):assert s["short_pulses"]==0,(board,s["short_examples"])
+            if variant in ("minimal","narrow","wake"):assert s["short_pulses"]==0,(board,s["short_examples"])
             if variant=="guarded":assert s["short_pulses"]<=s["baseline_short_pulses"],(board,s["short_examples"])
 if __name__=="__main__":main()
