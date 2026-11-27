@@ -622,11 +622,7 @@ bool Printer::needsCMPwait(void) {
 }
 
 void Printer::disableCMPnow(bool wait) {
-    doHeatBedZCompensation = 0;
-    {
-        InterruptProtectedBlock noInts;
-        zMotion.requestCorrection(0);
-    }
+    disableCMPnow();
 
     while (wait) {
         {
