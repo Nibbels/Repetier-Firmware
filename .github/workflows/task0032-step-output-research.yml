@@ -58,10 +58,43 @@ jobs:
       - name: Fetch immutable Task0033 handoff
         run: |
           gh api "repos/$GITHUB_REPOSITORY/contents/tools/task0033/transport-contract-results.json?ref=4cdb22106e66c02f86dffeb3f49a6a15506c2038" --jq .content | base64 -d > "$RUNNER_TEMP/transport.json"
+      - name: Reuse green unchanged independent candidate
+        id: reuse
+        shell: bash
+        run: |
+          set -euo pipefail
+          prior=19357bfc85ac6ad70f932a22e482abe423fe2819
+          git fetch --depth=1 origin "$prior"
+          if ! git diff --quiet "$prior" HEAD -- Repetier tools/avr-motion-diagnostics research/task0032-step-output/q23-linked.py research/task0032-step-output/linked_timer1.py research/task0032-step-output/ecmp-q23.h research/task0032-step-output/motor-wake.h research/task0032-step-output/motor-wake-source.py research/task0032-step-output/candidate-replay.cpp research/task0032-step-output/wake-linked-replay.py research/task0032-step-output/jog-stop-interleave.py; then
+            echo "available=no" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/15191456760/zip" > "$RUNNER_TEMP/verified-prior.zip"; then
+            echo "available=no" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "df47b5a32c8915593e8bddff1bc40b56ead07593a8e626b9f8de27cc21c7c945  $RUNNER_TEMP/verified-prior.zip" | sha256sum -c -
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib,zipfile
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])
+          dest=root/"step-output/q23/wake-jog-idle"
+          dest.mkdir(parents=True,exist_ok=True)
+          with zipfile.ZipFile(root/"verified-prior.zip") as z:
+              (dest/"candidate.zip").write_bytes(z.read("q23/wake-jog-idle/candidate.zip"))
+          with zipfile.ZipFile(dest/"candidate.zip") as z:
+              m=json.loads(z.read("summary.json"))
+              assert m["variant"]=="wake-jog-idle"
+              for b,digest in m["elf"].items():
+                  assert hashlib.sha256(z.read(b+"/build/Repetier.ino.elf")).hexdigest()==digest
+          (root/"step-output/reused-independent-evidence.txt").write_text("run45984973835 artifact15191456760; source equality and ZIP/ELF hashes verified\n")
+          PY
+          echo "available=yes" >> "$GITHUB_OUTPUT"
       - name: Trace four linked AVR images
+        if: steps.reuse.outputs.available != 'yes'
         run: |
           python3 research/task0032-step-output/linked_timer1.py "$RUNNER_TEMP/firmware-evidence.zip" "$RUNNER_TEMP/transport.json" "$RUNNER_TEMP/step-output"
       - name: Replay baseline jog stop writer interleavings
+        if: steps.reuse.outputs.available != 'yes'
         run: |
           python3 research/task0032-step-output/jog-stop-interleave.py "$RUNNER_TEMP/firmware-evidence.zip" "$RUNNER_TEMP/step-output/jog-baseline.json"
       - uses: arduino/setup-arduino-cli@v2
@@ -79,16 +112,17 @@ jobs:
           test "$(git hash-object "$RUNNER_TEMP/simavr-trace.c")" = c0dfeca055159db9b918c6a8420bc2d441bae079
           python3 research/task0032-step-output/z-clock-avr-bench.py --compiler "$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin/avr-g++" --runner-source "$RUNNER_TEMP/simavr-trace.c" --out "$RUNNER_TEMP/step-output/z-clock-avr"
       - name: Linked motor wake candidate with minimal Q23 and narrow queue masks
+        if: steps.reuse.outputs.available != 'yes'
         shell: bash
         run: |
           set -euo pipefail
           python3 research/task0032-step-output/q23-linked.py --baseline "$RUNNER_TEMP/step-output" --out "$RUNNER_TEMP/step-output/q23" --variant wake-jog-idle --tools "$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin"
       - name: Replay actual cold and warm activation across successive Timer1 calls
-        if: ${{ !cancelled() }}
+        if: success() && steps.reuse.outputs.available != 'yes'
         run: |
           python3 research/task0032-step-output/wake-linked-replay.py "$RUNNER_TEMP/step-output/q23/wake-jog-idle/candidate.zip" "$RUNNER_TEMP/step-output/wake-replay.json"
       - name: Require coherent jog stop interleavings in candidate
-        if: ${{ !cancelled() }}
+        if: success() && steps.reuse.outputs.available != 'yes'
         run: |
           python3 research/task0032-step-output/jog-stop-interleave.py "$RUNNER_TEMP/step-output/q23/wake-jog-idle/candidate.zip" "$RUNNER_TEMP/step-output/jog-candidate.json" --require-safe
       - name: Four actual firmware builds with shared nominal and Z deadlines
