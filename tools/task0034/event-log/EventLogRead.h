@@ -33,11 +33,12 @@ enum class ReadProgress : uint8_t { Idle, Busy, Skipped, Sent, Done, Changed };
 template<uint8_t Slots> class Reader {
     uint32_t newest_=0;
     uint8_t slot_=0,remaining_=0;
-    bool running_=false;
+    bool running_=false,failedAtStart_=false;
 public:
     bool begin(const Ring<Slots>& ring) {
         if(!ring.initialized()||ring.pending())return false;
         newest_=ring.latestSequence();slot_=ring.latestSlot();
+        failedAtStart_=ring.failed();
         remaining_=ring.hasEntries()?Slots:0;
         running_=true;return true;
     }
@@ -45,7 +46,7 @@ public:
     ReadProgress step(const Ring<Slots>& ring,Store& store,Sink& sink) {
         if(!running_)return ReadProgress::Idle;
         if(ring.pending()||!store.ready())return ReadProgress::Busy;
-        if(newest_!=ring.latestSequence()){
+        if(newest_!=ring.latestSequence()||failedAtStart_!=ring.failed()){
             running_=false;return ReadProgress::Changed;
         }
         if(!remaining_){running_=false;return ReadProgress::Done;}
