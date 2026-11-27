@@ -113,6 +113,10 @@ def named_text_retry(map_text, compile_log):
             "projected_used":used-named}
 
 
+class NoProbeLayout(ValueError):
+    """A complete sizing map has no feasible whole-block layout."""
+
+
 def select_probe_layout(map_text, used):
     """Choose whole input blocks from a successful no-hole sizing link.
     All ordinary final image audits still run; never assume LTO stability.
@@ -152,7 +156,7 @@ def select_probe_layout(map_text, used):
                 if gap>=256 and used+gap+256<=BOOT_START:
                     options.append((gap,fill,chosen))
     if not options:
-        raise ValueError("No whole-partition layout with 256-byte margins")
+        raise NoProbeLayout("No whole-partition layout with 256-byte margins")
     gap,fill,chosen=min(options)
     return {"partitions":list(chosen),"fill_named_text":fill,"padding":gap,
             "projected_used":used+gap,"probe_used":used,"parser_end":start,

@@ -103,13 +103,21 @@ def experimental_properties(props, experiment):
     return result
 
 
-def build_target(out, cli, name, definitions, experiment=None, linker_script_factory=None):
+def build_target(out, cli, name, definitions, experiment=None, linker_script_factory=None,
+                 recovery_lto_partitions=None):
     directory = out / name
     directory.mkdir()
     build = directory / "build"
     map_file = build / "firmware.map"
     flags = "-DMOTHERBOARD=" + definitions[0] + "".join(" -D" + d for d in definitions[1:])
     map_flags = f'-Xlinker -Map -Xlinker "{map_file.as_posix()}" -Wl,--cref'
+    if recovery_lto_partitions is not None:
+        if linker_script_factory is None or recovery_lto_partitions not in (8, 16):
+            raise ValueError("LTO partition override restricted to recovery layout experiments")
+        # WPA runs during the final link. The probe and the candidate must
+        # use identical LTO flags; ordinary builds retain the pinned recipe.
+        map_flags += (f" -flto-partition=balanced --param=lto-partitions={recovery_lto_partitions}"
+                      " --param=lto-min-partition=100")
     command = [cli, "compile", "--fqbn", FQBN, "--build-path", build,
                "--build-property", "compiler.cpp.extra_flags=" + flags,
                "--build-property", "compiler.c.elf.extra_flags=" + map_flags, ROOT / "Repetier"]

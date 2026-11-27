@@ -31,7 +31,20 @@ archive=os.environ.get("RF_EXPERIMENT_EVIDENCE_DIR")
 if archive:
     archive=Path(archive)
     archive.mkdir(parents=True,exist_ok=False)
-    (archive/"README.txt").write_text("RESEARCH ONLY. Never flash these experimental candidates.\n")
+    (archive/"README.txt").write_text("RESEARCH ONLY. Never flash these experimental candidates.\n"
+        "Only board directories with verification.json status verified passed all linked checks.\n"
+        "Failed links and layout probes are diagnostics, not accepted images.\n")
+
+
+def archive_failed(directory, mode, label):
+    if archive:
+        failed=archive/mode/label
+        failed.mkdir(parents=True,exist_ok=True)
+        for name in ("compile.txt","properties.txt","properties-with-linker.txt","avr6-recovery.x","build/firmware.map"):
+            if (directory/name).is_file():
+                shutil.copy2(directory/name,failed/Path(name).name)
+
+
 with tempfile.TemporaryDirectory() as temp:
     out=Path(temp)
     for mode,extra in (("lease",[]),("reset-wdt",["RF_HEATER_RESET_WDT_EXPERIMENT=1"]),
@@ -49,38 +62,57 @@ with tempfile.TemporaryDirectory() as temp:
                 map_file=board_dir/"build/firmware.map"
                 log_text=log.read_text(errors="replace") if log.exists() else ""
                 print(log_text[-24000:],flush=True)
-                if archive:
-                    failed=archive/mode/(board+"-failed")
-                    failed.mkdir(parents=True,exist_ok=True)
-                    for name in ("compile.txt","properties.txt","properties-with-linker.txt","avr6-recovery.x","build/firmware.map"):
-                        if (board_dir/name).is_file():
-                            shutil.copy2(board_dir/name,failed/Path(name).name)
+                archive_failed(board_dir,mode,board+"-failed")
                 if not extra or not ("cannot move location counter backwards" in log_text or
                                      "text section exceeds available space in board" in log_text):
                     raise
                 # A backwards-counter failure often leaves an incomplete map.
                 # Link a disposable sizing probe with no fixed recovery hole.
                 # Only its map and statistics are evidence, never its image.
-                probe_dir=mode_dir/"layout-probe"
-                probe_dir.mkdir(exist_ok=True)
-                probe_stats=baseline.build_target(probe_dir,cli,board,definitions,
-                    linker_script_factory=lambda bin_dir,directory: recovery.make_script(bin_dir,directory,probe=True))
-                probe_board=probe_dir/board
-                probe_map=probe_board/"build/firmware.map"
-                if archive:
-                    dest=archive/mode/(board+"-layout-probe")
-                    dest.mkdir()
-                    shutil.copy2(probe_map,dest/"firmware.map")
-                    shutil.copy2(probe_board/"avr6-recovery.x",dest/"avr6-recovery.x")
-                    (dest/"stats.json").write_text(json.dumps(probe_stats,indent=2)+"\n")
-                retry=recovery.select_probe_layout(probe_map.read_text(),probe_stats["flash_bytes"])
+                # If the ordinary partition inventory cannot fit, use a
+                # finer balanced WPA partitioning. This is a bounded search
+                # over linker configurations, not a bypass of linked audits.
+                for partition_count in (None,8,16):
+                    label="layout-probe"+("-lto"+str(partition_count) if partition_count else "")
+                    probe_dir=mode_dir/label
+                    probe_dir.mkdir(exist_ok=True)
+                    probe_board=probe_dir/board
+                    try:
+                        probe_stats=baseline.build_target(probe_dir,cli,board,definitions,
+                            linker_script_factory=lambda bin_dir,directory: recovery.make_script(bin_dir,directory,probe=True),
+                            recovery_lto_partitions=partition_count)
+                    except subprocess.CalledProcessError:
+                        archive_failed(probe_board,mode,board+"-"+label+"-failed")
+                        raise
+                    probe_map=probe_board/"build/firmware.map"
+                    if archive:
+                        dest=archive/mode/(board+"-"+label)
+                        dest.mkdir()
+                        for name in ("firmware.map","avr6-recovery.x","properties-with-linker.txt","compile.txt"):
+                            source=probe_map if name=="firmware.map" else probe_board/name
+                            shutil.copy2(source,dest/name)
+                        (dest/"stats.json").write_text(json.dumps(probe_stats,indent=2)+"\n")
+                    try:
+                        retry=recovery.select_probe_layout(probe_map.read_text(),probe_stats["flash_bytes"])
+                    except recovery.NoProbeLayout:
+                        print("Recovery sizing probe has no feasible whole-block layout",board,label,flush=True)
+                        if partition_count==16:
+                            raise
+                        continue
+                    retry["lto_partitions_requested"]=partition_count
+                    break
                 print("Recovery whole-partition retry",board,json.dumps(retry),flush=True)
                 retry_dir=mode_dir/"layout-retry"
                 retry_dir.mkdir(exist_ok=True)
                 board_dir=retry_dir/board
-                stats=baseline.build_target(retry_dir,cli,board,definitions,
-                    linker_script_factory=lambda bin_dir,directory: recovery.make_script(bin_dir,directory,
-                        fill_named_text=retry["fill_named_text"],partitions=tuple(retry["partitions"])))
+                try:
+                    stats=baseline.build_target(retry_dir,cli,board,definitions,
+                        linker_script_factory=lambda bin_dir,directory: recovery.make_script(bin_dir,directory,
+                            fill_named_text=retry["fill_named_text"],partitions=tuple(retry["partitions"])),
+                        recovery_lto_partitions=partition_count)
+                except subprocess.CalledProcessError:
+                    archive_failed(board_dir,mode,board+"-layout-retry-failed")
+                    raise
                 stats["recovery_layout_retry"]=retry
             print(mode,board,json.dumps(stats),flush=True)
             if archive:
@@ -95,6 +127,7 @@ with tempfile.TemporaryDirectory() as temp:
                     if (board_dir/name).exists():
                         shutil.copy2(board_dir/name,dest/name)
                 (dest/"stats.json").write_text(json.dumps(stats,indent=2)+"\n")
+                (dest/"verification.json").write_text(json.dumps({"status":"linked-unverified"})+"\n")
             dump=(board_dir/"disassembly.txt").read_text()
             symbols=(board_dir/"symbols.txt").read_text()
             vectors={int(m[2]):int(m[1],16) for m in re.finditer(
@@ -121,6 +154,8 @@ with tempfile.TemporaryDirectory() as temp:
                 # linked inspection; this does not prove oscillator or boot behavior.
                 print("WDT reset-only candidate startup linked",board)
             print("Linked vector aliases and direct-call audit passed",board)
+            if archive:
+                (dest/"verification.json").write_text(json.dumps({"status":"verified"})+"\n")
             # Store actual linked ISR disassembly including context, not just sizes.
             print("BEGIN "+mode+" "+board+" DISASSEMBLY")
             print(dump)

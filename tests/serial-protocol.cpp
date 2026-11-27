@@ -522,7 +522,8 @@ void strictEepromSyntax() {
         "M206 T0 P107 S80*0 T1","M206 T3 P108 S1","M206 T0 P107 X1",
         "M206 P107 S80","M206 T0 P107","M206 T3 P108 Xnan"})
         assert(!validEepromAscii(invalid));
-    feed("M206 T0 P107 S80\n");readReply("ok\r\n");popM(206);
+    // Ordinary unnumbered commands use the existing numbered-style ACK (current N=0).
+    feed("M206 T0 P107 S80\n");readReply("ok 0\r\n");popM(206);
     feed("M206 T256 P107 S80\n");
     for(unsigned i=0;i<8;++i)GCodeInput::readFromSerial();
     assert(!GCodeInput::peekCurrentCommand());
