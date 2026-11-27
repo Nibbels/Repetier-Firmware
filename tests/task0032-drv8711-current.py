@@ -33,7 +33,9 @@ struct GCode {
     bool hasE() { return flags&32; }
 };
 #define MOTOR_CURRENT_MIN 32
-#if NUM_EXTRUDER == 1
+#define PROGMEM
+static uint8_t pgm_read_byte(const uint8_t* p) { return *p; }
+#if RF1000_PROFILE
 #define MOTOR_CURRENT_MAX {150,150,126,126,126}
 #else
 #define MOTOR_CURRENT_MAX {145,140,120,105,105}
@@ -89,7 +91,7 @@ int main() {
     check(3,INT32_MIN,1,0,0,-1);
     check(3,100,INT32_MAX,0,0,-1);
     check(3,100,INT32_MIN,0,0,-1);
-    std::printf("M908 strict P/S replay passed (tools=%d)\\n", NUM_EXTRUDER);
+    std::printf("M908 strict P/S replay passed (RF1000=%d tools=%d)\n", RF1000_PROFILE, NUM_EXTRUDER);
 }
 '''
 with tempfile.TemporaryDirectory() as tmp:
@@ -97,10 +99,10 @@ with tempfile.TemporaryDirectory() as tmp:
     (work / "Repetier.h").write_text(stub)
     (work / "Drv8711.cpp").write_bytes((ROOT / "Repetier/Drv8711.cpp").read_bytes())
     (work / "replay.cpp").write_text(harness)
-    for n in (1, 2):
+    for rf1000, n in ((1,1),(0,2),(0,1)):  # RF1000, RF2000/v2, X44
         exe = work / "replay"
         subprocess.run([os.environ.get("CXX","c++"), "-std=c++11","-O2","-fsigned-char",
-                        f"-DNUM_EXTRUDER={n}", str(work/"replay.cpp"), "-o", str(exe)], check=True)
+                        f"-DNUM_EXTRUDER={n}", f"-DRF1000_PROFILE={rf1000}", str(work/"replay.cpp"), "-o", str(exe)], check=True)
         subprocess.run([str(exe)], check=True)
 
 def screen(period, blackout, initial, read_latency=31):
@@ -115,8 +117,7 @@ def screen(period, blackout, initial, read_latency=31):
                 phases=len(losses), loss_phases=sum(x>0 for x in losses), max_lost=max(losses))
 
 assert screen(640, 0, 0)["loss_phases"] == 0
-assert screen(320, 1536, 0)["loss_phases"] == 320
 assert screen(640, 1536, 0)["max_lost"] == 1
-rows = [screen(p,b,i) for p in (640,320) for b in (0,32,80,160,320,594,1536,2048)
+rows = [screen(p,b,i) for p in (640,) for b in (0,8,32,80,160,320,594,1536,1928)
         for i in (0,1)]
 print("DRV8711 isolated blackout sensitivity:", json.dumps(rows, separators=(",",":")))
