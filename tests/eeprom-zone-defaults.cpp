@@ -7,6 +7,7 @@
 #include "BoardConfiguration.h"
 #include "EepromZoneDefaults.h"
 #include "EepromZoneStorage.h"
+#include "EepromZoneHostAccess.h"
 using namespace EepromZones;
 struct Memory {
     std::array<uint8_t,4096> bytes;
@@ -78,5 +79,41 @@ int main(){
     BlockEncoder overlap(BedSafety,block,1);
     overlap.u8(Field::F_NEW_BED_EMERGENCY_C,0);assert(overlap.complete());
     overlap.u8(Field::F_NEW_BED_EMERGENCY_C,0);assert(!overlap.complete());
+    // M205/M206 use one inventory, including actual fitted-tool and
+    // output ownership restrictions. No metadata, padding, old address,
+    // alternate wire type or interior byte is accepted.
+    uint8_t typeAt[4096]={};
+    uint8_t accessAt[4096]={};
+    unsigned fields=0;
+#define RF_ZONE_FIELD(type,start,label,digits,writable) do { \
+        const uint16_t pos=(start);const uint8_t id=blockOf(pos); \
+        const uint8_t width=(type)==0?1:(type)==1?2:4; \
+        assert(id && id<=Last && pos>=address(id)+PayloadOffset); \
+        assert(pos+width<=address(id)+PayloadOffset+length(id)); \
+        assert(!typeAt[pos]);typeAt[pos]=(type)+1; \
+        accessAt[pos]=uint8_t((writable)?HostAccess::Writable:HostAccess::ReadOnly); \
+        ++fields; \
+    } while(false)
+#include "EepromZoneHostFields.h"
+#undef RF_ZONE_FIELD
+    for(int32_t pos=0;pos<4096;++pos)
+        for(uint8_t wire=0;wire<5;++wire) {
+            const auto expected=typeAt[pos]==wire+1
+                ? static_cast<HostAccess>(accessAt[pos]):HostAccess::Unknown;
+            assert(hostAccess(pos,wire)==expected);
+        }
+    assert(hostAccess(-1,0)==HostAccess::Unknown);
+    assert(hostAccess(65536L+address(Field::F_NEW_BED_EMERGENCY_C),0)==HostAccess::Unknown);
+    assert(hostAccess(address(Field::F_NEW_BED_EMERGENCY_C),0)==HostAccess::ReadOnly);
+    assert(hostAccess(address(Field::F_PRINTING_TIME),2)==HostAccess::ReadOnly);
+    assert(hostAccess(address(Field::F_PID_CALIBRATION_SLOT_0),0)==HostAccess::Unknown);
+#if NUM_EXTRUDER == 1
+    assert(hostAccess(address(Field::F_E1_STEPS_PER_MM),3)==HostAccess::Unknown);
+#endif
+#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
+    if(HOTEND_COOLER_USES_PIN(FET2))
+        assert(hostAccess(address(Field::F_RF_FET2_MODE),0)==HostAccess::ReadOnly);
+#endif
+    printf("New EEPROM host whitelist: %u fields, 20480 address/type cases; PASS\\n",fields);
     printf("EEPROM zone factory profile %04x: all 22 blocks initialized; PASS\n",unsigned(configuredProfile()));
 }

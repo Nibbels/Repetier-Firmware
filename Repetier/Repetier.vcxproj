@@ -131,6 +131,8 @@
     <ClInclude Include="EepromZoneRecovery.h" />
     <ClInclude Include="EepromZoneCodec.h" />
     <ClInclude Include="EepromZoneDefaults.h" />
+    <ClInclude Include="EepromZoneHostFields.h" />
+    <ClInclude Include="EepromZoneHostAccess.h" />
     <ClInclude Include="Extruder.h" />
     <ClInclude Include="fastio.h" />
     <ClInclude Include="gcode.h" />
