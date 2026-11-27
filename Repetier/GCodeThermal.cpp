@@ -305,8 +305,7 @@ void setAccessoryFet(GCode* pCommand) {
                     AccessoryOutputs::set(AccessoryOutputs::Output::Fet1, 1);
                     Com::printFLN(PSTR("24V X42 FET1-output = on"));
                 }
-                HAL::eprSetByte(EPR_RF_FET1_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::Fet1));
-                EEPROM::updateChecksum();
+                EEPROM::storeFet(1,AccessoryOutputs::state(AccessoryOutputs::Output::Fet1));
             }
             break;
         }
@@ -321,8 +320,7 @@ void setAccessoryFet(GCode* pCommand) {
                     AccessoryOutputs::set(AccessoryOutputs::Output::Fet2, 1);
                     Com::printFLN(PSTR("24V X44 FET2-output = on"));
                 }
-                HAL::eprSetByte(EPR_RF_FET2_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::Fet2));
-                EEPROM::updateChecksum();
+                EEPROM::storeFet(2,AccessoryOutputs::state(AccessoryOutputs::Output::Fet2));
             }
             break;
         }
@@ -337,8 +335,7 @@ void setAccessoryFet(GCode* pCommand) {
                     AccessoryOutputs::set(AccessoryOutputs::Output::Fet3, 1);
                     Com::printFLN(PSTR("24V X45/BoardFan FET3-output = on"));
                 }
-                HAL::eprSetByte(EPR_RF_FET3_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::Fet3));
-                EEPROM::updateChecksum();
+                EEPROM::storeFet(3,AccessoryOutputs::state(AccessoryOutputs::Output::Fet3));
             }
             break;
         }

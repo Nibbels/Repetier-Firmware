@@ -500,11 +500,6 @@ void configureZOffsetScan(GCode* pCommand) {
 
                 settings.point.x = nTempUC;
 
-                unsigned char oldval = HAL::eprGetByte(EPR_RF_MOD_ZOS_SCAN_POINT_X);
-                if (oldval != settings.point.x) {
-                    HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_X, settings.point.x);
-                    EEPROM::updateChecksum(); // Deshalb die prüfung
-                }
 
                 if (Printer::debugInfo()) {
                     Com::printF(PSTR("M3900/M3901: CHANGED X ZOS Testposition: "), nTempUC);
@@ -532,11 +527,6 @@ void configureZOffsetScan(GCode* pCommand) {
 
                 settings.point.y = nTempUC;
 
-                unsigned char oldval = HAL::eprGetByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y);
-                if (oldval != settings.point.y) {
-                    HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y, settings.point.y);
-                    EEPROM::updateChecksum(); // Deshalb die prüfung
-                }
 
                 if (Printer::debugInfo()) {
                     Com::printF(PSTR("M3900/M3901: CHANGED Y ZOS Testposition: "), nTempUC);
@@ -571,6 +561,8 @@ void configureZOffsetScan(GCode* pCommand) {
                 }
             }
 
+            if(pCommand->hasX() || pCommand->hasY())
+                EEPROM::storeScanPoint(settings.point.x,settings.point.y,pCommand->hasX(),pCommand->hasY());
             if (pCommand->hasX() || pCommand->hasY() || pCommand->hasS() || pCommand->hasP())
                 zOffsetScan.configure(settings);
 

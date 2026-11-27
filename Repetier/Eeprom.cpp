@@ -1140,6 +1140,51 @@ void EEPROM::storeDriveLimit(uint8_t heater, bool maximum, uint8_t value) {
     updateChecksum();
 }
 
+namespace {
+void saveLegacyByte(uint16_t pos,uint8_t value) {
+    if(HAL::eprGetByte(pos)==value)return;
+    HAL::eprSetByte(pos,value);
+    EEPROM::updateChecksum();
+}
+}
+void EEPROM::storeCaseLight(bool on) {saveLegacyByte(EPR_RF_CASE_LIGHT_MODE,on);}
+void EEPROM::storeFet(uint8_t channel,bool on) {
+    switch(channel) {
+    case 1:saveLegacyByte(EPR_RF_FET1_MODE,on);break;
+    case 2:saveLegacyByte(EPR_RF_FET2_MODE,on);break;
+    case 3:saveLegacyByte(EPR_RF_FET3_MODE,on);break;
+    }
+}
+void EEPROM::storeJogMode(uint8_t axis,uint8_t mode) {
+    switch(axis) {
+    case X_AXIS:saveLegacyByte(EPR_RF_MOVE_MODE_X,mode);break;
+    case Y_AXIS:saveLegacyByte(EPR_RF_MOVE_MODE_Y,mode);break;
+    case Z_AXIS:saveLegacyByte(EPR_RF_MOVE_MODE_Z,mode);break;
+    }
+}
+void EEPROM::storeZJogSteps(uint16_t steps) {
+    if(uint16_t(HAL::eprGetInt16(EPR_RF_MOD_Z_STEP_SIZE))==steps)return;
+    HAL::eprSetInt16(EPR_RF_MOD_Z_STEP_SIZE,steps);
+    updateChecksum();
+}
+void EEPROM::storeJogCoordinates(bool gcode) {saveLegacyByte(EPR_RF_MOVE_MODE_XY_KOSYS,gcode);}
+void EEPROM::storeJogFeedrate(bool configured) {saveLegacyByte(EPR_RF_MOVE_POSITION_FEEDRATE,configured);}
+void EEPROM::storeZDisplayMode(uint8_t mode) {saveLegacyByte(EPR_RF_Z_MODE,mode);}
+void EEPROM::storeFanMode(uint8_t mode) {saveLegacyByte(EPR_RF_FAN_MODE,mode);}
+void EEPROM::storeDigitZeroing(bool enabled) {saveLegacyByte(EPR_RF_ZERO_DIGIT_STATE,enabled?1:2);}
+void EEPROM::storeDigitCompensation(bool enabled) {saveLegacyByte(EPR_RF_DIGIT_CMP_STATE,enabled?1:2);}
+void EEPROM::storeSenseAutoStart(bool enabled) {saveLegacyByte(EPR_RF_MOD_SENSEOFFSET_AUTOSTART,enabled);}
+void EEPROM::storeScanPoint(uint8_t x,uint8_t y,bool saveX,bool saveY) {
+    bool changed=false;
+    if(saveX && HAL::eprGetByte(EPR_RF_MOD_ZOS_SCAN_POINT_X)!=x) {
+        HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_X,x);changed=true;
+    }
+    if(saveY && HAL::eprGetByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y)!=y) {
+        HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y,y);changed=true;
+    }
+    if(changed)updateChecksum();
+}
+
 EEPROM::UsageTotals EEPROM::usageTotals() {
     return {HAL::eprGetInt32(EPR_PRINTING_TIME), HAL::eprGetFloat(EPR_PRINTING_DISTANCE)};
 }

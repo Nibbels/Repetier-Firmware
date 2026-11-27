@@ -244,8 +244,7 @@ void UIDisplay::mainSwitchCase(int action) {
     case UI_ACTION_LIGHTS_ONOFF: {
         AccessoryOutputs::toggle(AccessoryOutputs::Output::CaseLight);
 
-        HAL::eprSetByte(EPR_RF_CASE_LIGHT_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::CaseLight));
-        EEPROM::updateChecksum();
+        EEPROM::storeCaseLight(AccessoryOutputs::state(AccessoryOutputs::Output::CaseLight));
 
         break;
     }
@@ -256,8 +255,6 @@ void UIDisplay::mainSwitchCase(int action) {
         AccessoryOutputs::toggle(AccessoryOutputs::Output::Mains);
 
         // after a power-on, the 230 V plug always shall be turned off - thus, we do not store this setting to the EEPROM
-        // HAL::eprSetByte( EPR_RF_230V_OUTPUT_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::Mains) );
-        // EEPROM::updateChecksum();
 
         break;
     }
@@ -266,8 +263,7 @@ void UIDisplay::mainSwitchCase(int action) {
     case UI_ACTION_FET1_OUTPUT: {
         AccessoryOutputs::toggle(AccessoryOutputs::Output::Fet1);
 
-        HAL::eprSetByte(EPR_RF_FET1_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::Fet1));
-        EEPROM::updateChecksum();
+        EEPROM::storeFet(1,AccessoryOutputs::state(AccessoryOutputs::Output::Fet1));
         break;
     }
 #endif // FET1 accessory output
@@ -275,8 +271,7 @@ void UIDisplay::mainSwitchCase(int action) {
     case UI_ACTION_FET2_OUTPUT: {
         AccessoryOutputs::toggle(AccessoryOutputs::Output::Fet2);
 
-        HAL::eprSetByte(EPR_RF_FET2_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::Fet2));
-        EEPROM::updateChecksum();
+        EEPROM::storeFet(2,AccessoryOutputs::state(AccessoryOutputs::Output::Fet2));
         break;
     }
 #endif // FET2 accessory output
@@ -290,24 +285,21 @@ void UIDisplay::mainSwitchCase(int action) {
     case UI_ACTION_CONFIG_SINGLE_STEPS_KOSYS: {
         Printer::manualMotion.setCoordinateSystem(!Printer::manualMotion.coordinateSystem());
 
-        HAL::eprSetByte(EPR_RF_MOVE_MODE_XY_KOSYS, Printer::manualMotion.coordinateSystem());
-        EEPROM::updateChecksum();
+        EEPROM::storeJogCoordinates(Printer::manualMotion.coordinateSystem());
         break;
     }
 
     case UI_ACTION_CONFIG_POSITION_FEEDRATE: {
         Printer::manualMotion.setFeedrateSource(!Printer::manualMotion.feedrateSource());
 
-        HAL::eprSetByte(EPR_RF_MOVE_POSITION_FEEDRATE, Printer::manualMotion.feedrateSource());
-        EEPROM::updateChecksum();
+        EEPROM::storeJogFeedrate(Printer::manualMotion.feedrateSource());
         break;
     }
 
     case UI_ACTION_ZMODE: {
         Printer::toggleZDisplayMode();
 
-        HAL::eprSetByte(EPR_RF_Z_MODE, Printer::zDisplayMode());
-        EEPROM::updateChecksum();
+        EEPROM::storeZDisplayMode(Printer::zDisplayMode());
         break;
     }
 
@@ -439,8 +431,7 @@ void UIDisplay::mainSwitchCase(int action) {
     }
     case UI_ACTION_FAN_MODE: {
         Commands::adjustFanMode((HAL::partFanMode() ? PART_FAN_MODE_PWM : PART_FAN_MODE_PDM)); //0 = pwm, 1 = pdm
-        HAL::eprSetByte(EPR_RF_FAN_MODE, HAL::partFanMode());
-        EEPROM::updateChecksum();
+        EEPROM::storeFanMode(HAL::partFanMode());
         break;
     }
 
@@ -472,22 +463,19 @@ void UIDisplay::mainSwitchCase(int action) {
     case UI_ACTION_DIGIT_HOMING: {
         const bool enabled = !Printer::strainGauge.zeroingEnabled();
         Printer::strainGauge.setZeroingEnabled(enabled);
-        HAL::eprSetByte(EPR_RF_ZERO_DIGIT_STATE, enabled ? 1 : 2);
-        EEPROM::updateChecksum();
+        EEPROM::storeDigitZeroing(enabled);
         break;
     }
     case UI_ACTION_DIGIT_COMPENSATION: {
         const bool enabled = !Printer::digitCompensation.digitZEnabled();
         Printer::digitCompensation.setDigitZEnabled(enabled);
-        HAL::eprSetByte(EPR_RF_DIGIT_CMP_STATE, enabled ? 1 : 2);
-        EEPROM::updateChecksum();
+        EEPROM::storeDigitCompensation(enabled);
         break;
     }
     case UI_ACTION_SENSEOFFSET_AUTOSTART: {
         const bool enabled = !Printer::senseOffsetControl.autoStart();
         Printer::senseOffsetControl.setAutoStart(enabled);
-        HAL::eprSetByte(EPR_RF_MOD_SENSEOFFSET_AUTOSTART, enabled);
-        EEPROM::updateChecksum();
+        EEPROM::storeSenseAutoStart(enabled);
         break;
     }
     case UI_ACTION_RF_DO_MHIER_BED_SCAN: {

@@ -883,25 +883,20 @@ void UIDisplay::rightAction() {
     }
 
     uint8_t axis;
-    int address;
     const auto* currentMenu = menu[menuLevel];
     if (currentMenu == &ui_menu_xpos) {
         axis = X_AXIS;
-        address = EPR_RF_MOVE_MODE_X;
     } else if (currentMenu == &ui_menu_ypos) {
         axis = Y_AXIS;
-        address = EPR_RF_MOVE_MODE_Y;
     } else if (currentMenu == &ui_menu_zpos) {
         axis = Z_AXIS;
-        address = EPR_RF_MOVE_MODE_Z;
     } else {
         return;
     }
 
     Printer::manualMotion.cycleMode(axis);
     refreshPage();
-    HAL::eprSetByte(address, Printer::manualMotion.mode(axis));
-    EEPROM::updateChecksum();
+    EEPROM::storeJogMode(axis,Printer::manualMotion.mode(axis));
 }
 
 void UIDisplay::backAction() {

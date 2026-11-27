@@ -217,6 +217,19 @@ public:
     // value (not necessarily the temporary live stop band).
     static void storePressureLimits(bool stop, int32_t minimum, int32_t maximum, bool saveMinimum, bool saveMaximum);
     static void storeDriveLimit(uint8_t heater, bool maximum, uint8_t value);
+    // Semantic persistence entrypoints. Callers never choose addresses.
+    static void storeCaseLight(bool on);
+    static void storeFet(uint8_t channel,bool on);
+    static void storeJogMode(uint8_t axis,uint8_t mode);
+    static void storeZJogSteps(uint16_t steps);
+    static void storeJogCoordinates(bool gcode);
+    static void storeJogFeedrate(bool configured);
+    static void storeZDisplayMode(uint8_t mode);
+    static void storeFanMode(uint8_t mode);
+    static void storeDigitZeroing(bool enabled);
+    static void storeDigitCompensation(bool enabled);
+    static void storeSenseAutoStart(bool enabled);
+    static void storeScanPoint(uint8_t x,uint8_t y,bool saveX,bool saveY);
     static void storeManualZOffset();
     static void storeSenseOffsetSettings(int16_t digits, int16_t micrometers, bool saveDigits, bool saveMaximum);
     static void storeMicrostepConfiguration(uint8_t changedMask);
