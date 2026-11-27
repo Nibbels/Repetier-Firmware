@@ -17,7 +17,7 @@ checksum+=extract("Eeprom.cpp","uint8_t EEPROM::computeChecksum()","void EEPROM:
 loader=extract("Eeprom.cpp","void EEPROM::readDataFromEEPROM()","    bool change = readPreheatProfiles();")
 loader+="    bool change=needsUpdate; uint8_t version=storedVersion;\n"
 loader+=extract("Eeprom.cpp","    if (change)\n        EEPROM::updateChecksum();","} // readDataFromEEPROM")+"}\n"
-commands=extract("GCodeSystem.cpp","void saveConfiguration()","void configureRfDebug(")
+commands=extract("GCodeSystem.cpp","void saveConfiguration()","void requestHeatBedScan(")
 prelude=r"""
 #include <cassert>
 #include <cstdint>

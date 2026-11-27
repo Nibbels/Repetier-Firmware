@@ -10,8 +10,7 @@ def extract(file,start,end):
     a=s.index(start)
     return s[a:s.index(end,a)]
 
-motion=extract("GCodeMotion.cpp","void dwell(","void selectInches(")
-motion+=extract("GCodeMotion.cpp","void suspendAxes(","void setPrintAcceleration(")
+motion=extract("GCodeMotion.cpp","void dwell(","void homeAxes(")
 bed=extract("HeatBedScan.cpp","void HeatBedScan::abort()","void HeatBedScan::discard()")
 offset=extract("ZOffsetScan.cpp","void ZOffsetScan::abort(bool reloadMatrix) {","} // namespace")
 keys=extract("UiActions.cpp","        while (Printer::checkAbortKeys()) {","        bool unmount =")
@@ -122,12 +121,9 @@ int main(){
     ZOffsetScan z;
     for(uint32_t clock:{0u,0xfffff000u}){
         reset(0,false,clock);dwell(&c);assert(visits==11);
-        reset(0,false,clock);suspendAxes(&c);assert(visits==11&&disabled==3&&enabled==3);
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         for(unsigned n=1;n<=11;++n){
             reset(n,false,clock);dwell(&c);assert(locked&&visits==n);
-            reset(n,false,clock);suspendAxes(&c);
-            assert(locked&&visits==n&&disabled==3&&enabled==0);
         }
 #endif
     }
@@ -146,9 +142,9 @@ int main(){
     }
     reset(1,true);h.abort();assert(locked&&!disabled&&!finished&&!scheduled);
     reset(1,true);z.abort(false);assert(locked&&!disabled&&!discards&&!scheduled);
-    std::puts("Emergency unwind: 53 injected faults, no later motor enable/disable, script admission or normal scan cleanup");
+    std::puts("Emergency unwind: 31 injected faults, no later motor enable/disable, script admission or normal scan cleanup");
 #endif
-    std::puts("Healthy dwell, suspension, held button and scan abort paths passed");
+    std::puts("Healthy dwell, held button and scan abort paths passed");
 }
 """
 with tempfile.TemporaryDirectory() as d:

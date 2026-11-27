@@ -46,7 +46,6 @@ using std::isfinite;
 #define MOTOR_CURRENT_MAX {126,126,126,126,126}
 #define PART_FAN_MODE_MAX 7
 #define PROGMEM
-static unsigned short pgm_read_word(const unsigned short* p){return *p;}
 #include <cstring>
 #include <initializer_list>
 using PGM_P=const char*;

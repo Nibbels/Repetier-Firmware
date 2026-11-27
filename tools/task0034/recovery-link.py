@@ -267,7 +267,12 @@ def verify_watchdog_instructions(dump, cookie_address, padding):
         return [ins[1].hex() for ins in instructions[index:index+n]]
     early = next(i for i,ins in feeds if ins[4]=="heaterWatchdogEarlyInit")
     assert following(early,4)==["a895","88e1","80936000","10926000"]
-    enable = next(i for i,ins in feeds if re.fullmatch(r"HAL::startWatchdog\(\)(?: \[clone \.part\.\d+\])?",ins[4]))
+    # Removing the debug watchdog command lets LTO inline the only
+    # startup enable into main. Still require exactly one enable site,
+    # its actual timed register sequence and all three total WDR sites.
+    enables = [i for i,ins in feeds if ins[4]=="main" or re.fullmatch(r"HAL::startWatchdog\(\)(?: \[clone \.part\.\d+\])?",ins[4])]
+    assert len(enables)==1, feeds
+    enable = enables[0]
     assert following(enable,4)==["a895","80936000","0fbe","90936000"]
     # Actual register values immediately before the enable sequence.
     # r25=0x0e (WDE | WDP2 | WDP1), r24=0x18 (WDCE | WDE).
