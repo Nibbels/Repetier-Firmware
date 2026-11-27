@@ -52,7 +52,7 @@ def instrument(s):
                      "while (first != limit && !queue.slot(first).isEndSpeedFixed()) {\n        ++pc.fixedSearch; MoveQueue::previousIndex(first);\n    }")
     s = replace_once(s, "firstMove.block();\n    lock.unprotect();",
                      "firstMove.block();\n    pc.first = first; pc.limit = limit; pc.reserveTicks = reservedTicks;\n    lock.unprotect();")
-    s = replace_once(s, "move.markStepProfileReady();", "move.markStepProfileReady();\\n    if (researchProfileHook) researchProfileHook(move);")
+    s = replace_once(s, "move.markStepProfileReady();", "move.markStepProfileReady();\n    if (researchProfileHook) researchProfileHook(move);")
     return s
 
 def junction_variant(s, variant):
@@ -103,7 +103,7 @@ static void (*researchProfileHook)(PrintLine&) = nullptr;
         fragments = build / "pause-sense-offset-firmware.inc"
         extracted = junction_variant(fragments.read_text(encoding="utf-8"), junction)
         if pacing == "disabled":
-            extracted = replace_once(extracted, "    if (queuedEntries < MOVE_CACHE_LOW && ticks < LOW_TICKS_PER_MOVE)\\n        ticks += (LOW_TICKS_PER_MOVE - ticks) * 3 / (queuedEntries + 1);", "    (void)queuedEntries; // counterfactual only")
+            extracted = replace_once(extracted, "    if (queuedEntries < MOVE_CACHE_LOW && ticks < LOW_TICKS_PER_MOVE)\n        ticks += (LOW_TICKS_PER_MOVE - ticks) * 3 / (queuedEntries + 1);", "    (void)queuedEntries; // counterfactual only")
         fragments.write_text(instrument(extracted), encoding="utf-8")
         cmd = [str(generated) if str(a) == str(source) else a for a in args]
         cmd[1:1] = ["-I", str(HERE)]
