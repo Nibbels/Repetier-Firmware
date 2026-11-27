@@ -180,8 +180,7 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
         } else {
             Commands::adjustFanFrequency((HAL::partFanDivisor() == 1 ? PART_FAN_MODE_MAX : HAL::partFanDivisor() - 1));
         }
-        HAL::eprSetByte(EPR_RF_PART_FAN_SPEED, HAL::partFanDivisor());
-        EEPROM::updateChecksum();
+        EEPROM::storeFanDivisor(HAL::partFanDivisor());
         break;
     }
     case UI_ACTION_FAN_PART_FAN_PWM_MIN: {
@@ -193,8 +192,7 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
         // Recalculate active pwm value out of HAL::partFanSpeed() for easy tune-in.
         //(Tune-In: set fan to 1% and rise minimum until it starts.)
         Commands::setFanSpeed(HAL::partFanSpeed(), true);
-        HAL::eprSetByte(EPR_RF_PART_FAN_PWM_MIN, HAL::partFanMinDuty());
-        EEPROM::updateChecksum();
+        EEPROM::storeFanDuty(false,HAL::partFanMinDuty());
         break;
     }
     case UI_ACTION_FAN_PART_FAN_PWM_MAX: {
@@ -206,8 +204,7 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
         // Recalculate active pwm value out of HAL::partFanSpeed() for easy tune-in.
         //(Tune-In: set fan to 100% and decrease maximum until fan slows down slightly.)
         Commands::setFanSpeed(HAL::partFanSpeed(), true);
-        HAL::eprSetByte(EPR_RF_PART_FAN_PWM_MAX, HAL::partFanMaxDuty());
-        EEPROM::updateChecksum();
+        EEPROM::storeFanDuty(true,HAL::partFanMaxDuty());
         break;
     }
     case UI_ACTION_ZOFFSET: {
@@ -274,8 +271,7 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
             Printer::offsetRelativeStepsCoordinates(-dx, 0, 0, 0);
         }
 
-        HAL::eprSetFloat(EEPROM::getExtruderOffset(1) + EPR_EXTRUDER_X_OFFSET, extruder[1].offsetMM[X_AXIS]);
-        EEPROM::updateChecksum();
+        EEPROM::storeToolOffsets(1,extruder[1].offsetMM[X_AXIS],0,true,false);
         break;
     }
     case UI_ACTION_EXTRUDER_OFFSET_Y: {
@@ -288,8 +284,7 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
             Printer::offsetRelativeStepsCoordinates(0, -dy, 0, 0);
         }
 
-        HAL::eprSetFloat(EEPROM::getExtruderOffset(1) + EPR_EXTRUDER_Y_OFFSET, extruder[1].offsetMM[Y_AXIS]);
-        EEPROM::updateChecksum();
+        EEPROM::storeToolOffsets(1,0,extruder[1].offsetMM[Y_AXIS],false,true);
         break;
     }
 #endif // NUM_EXTRUDER>1
@@ -311,8 +306,7 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
         duration -= duration % 1000;
         INCREMENT_MAX(duration, 60000UL, 10080000UL);
         Printer::inactivity.setStepperTimeout(duration);
-        HAL::eprSetInt32(EPR_STEPPER_INACTIVE_TIME, duration);
-        EEPROM::updateChecksum();
+        EEPROM::storeInactivity(true,duration);
         break;
     }
     case UI_ACTION_MAX_INACTIVE: {
@@ -320,8 +314,7 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
         duration -= duration % 1000;
         INCREMENT_MAX(duration, 60000UL, 10080000UL);
         Printer::inactivity.setShutdownTimeout(duration);
-        HAL::eprSetInt32(EPR_MAX_INACTIVE_TIME, duration);
-        EEPROM::updateChecksum();
+        EEPROM::storeInactivity(false,duration);
         break;
     }
     case UI_ACTION_PRINT_ACCEL_X:
@@ -368,8 +361,7 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
             p--;
         EEPROM::setConfiguredBaudrate(pgm_read_dword(&(baudrates[p])));
 
-        HAL::eprSetInt32(EPR_BAUDRATE, EEPROM::configuredBaudrate());
-        EEPROM::updateChecksum();
+        EEPROM::storeBaudrate();
         break;
     }
 
@@ -412,8 +404,7 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
         float liftMm = scanStartLiftMm();
         INCREMENT_MIN_MAX(liftMm, 0.1f, 0.3f, 6.0f);
         setScanStartLiftMm(liftMm);
-        HAL::eprSetFloat(EPR_ZSCAN_START_MM, scanStartLiftMm()); // mm zlift vor den scans.
-        EEPROM::updateChecksum();
+        EEPROM::storeScanLift(scanStartLiftMm());
         break;
     }
 
@@ -436,32 +427,28 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
             phase = 100;
         }
         Printer::wobbleCorrection.setPhase(phase);
-        HAL::eprSetByte(EPR_RF_MOD_WOBBLE_FIX_PHASEXY, phase);
-        EEPROM::updateChecksum();
+        EEPROM::storeWobblePhase(phase);
         break;
     }
     case UI_ACTION_WOBBLE_FIX_AMPX: {
         auto amplitude = Printer::wobbleCorrection.profile().xMicrometers;
         INCREMENT_MIN_MAX(amplitude, 5, -995, 995);
         Printer::wobbleCorrection.setXAmplitude(amplitude);
-        HAL::eprSetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPX, amplitude);
-        EEPROM::updateChecksum();
+        EEPROM::storeWobbleAmplitude(0,amplitude);
         break;
     }
     case UI_ACTION_WOBBLE_FIX_AMPY1: {
         auto amplitude = Printer::wobbleCorrection.profile().yAtXMinMicrometers;
         INCREMENT_MIN_MAX(amplitude, 5, -995, 995);
         Printer::wobbleCorrection.setYMinAmplitude(amplitude);
-        HAL::eprSetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPY1, amplitude);
-        EEPROM::updateChecksum();
+        EEPROM::storeWobbleAmplitude(1,amplitude);
         break;
     }
     case UI_ACTION_WOBBLE_FIX_AMPY2: {
         auto amplitude = Printer::wobbleCorrection.profile().yAtXMaxMicrometers;
         INCREMENT_MIN_MAX(amplitude, 5, -995, 995);
         Printer::wobbleCorrection.setYMaxAmplitude(amplitude);
-        HAL::eprSetInt16(EPR_RF_MOD_WOBBLE_FIX_AMPY2, amplitude);
-        EEPROM::updateChecksum();
+        EEPROM::storeWobbleAmplitude(2,amplitude);
         break;
     }
 
@@ -485,8 +472,7 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
             static const short uMotorCurrentMax[] PROGMEM = MOTOR_CURRENT_MAX;
             INCREMENT_MIN_MAX(drive, 1, MOTOR_CURRENT_MIN + 1, static_cast<short>(pgm_read_word(&uMotorCurrentMax[steppernr]))); // Von 40 bis maximal das was in der config steht.
             Drv8711::stageCurrent(steppernr, drive);
-            HAL::eprSetByte(EPR_RF_MOTOR_CURRENT + steppernr, (uint8_t)drive);
-            EEPROM::updateChecksum();
+            EEPROM::storeMotorCurrent(steppernr,uint8_t(drive));
             Drv8711::applyConfiguredCurrent(steppernr);
             Com::printF(PSTR("Stepper"), steppernr + 1);
             Com::printFLN(PSTR(" = "), drive);
@@ -523,8 +509,7 @@ void UIDisplay::changeSetting(int action, int8_t increment) {
         uint16_t interval = StepExecutor::packingInterval();
         INCREMENT_MIN_MAX(interval, -100, MIN_STEP_PACKING_MIN_INTERVAL, MAX_STEP_PACKING_MIN_INTERVAL);
         StepExecutor::setPackingInterval(interval);
-        HAL::eprSetInt16(EPR_RF_STEP_PACKING_MIN_INTERVAL, StepExecutor::packingInterval());
-        EEPROM::updateChecksum();
+        EEPROM::storePackingInterval(StepExecutor::packingInterval());
         break;
     }
     case UI_ACTION_MICROSTEPS_XY:
@@ -600,8 +585,7 @@ void UIDisplay::changeMotionSetting(int action, int8_t increment) {
         Printer::setPrintAcceleration(X_AXIS, value);
         Printer::updateDerivedParameter();
 
-        HAL::eprSetFloat(EPR_X_MAX_ACCEL, Printer::printAcceleration(X_AXIS));
-        EEPROM::updateChecksum();
+        EEPROM::storeAxisAcceleration(X_AXIS,false,Printer::printAcceleration(X_AXIS));
         break;
     }
     case UI_ACTION_PRINT_ACCEL_Y: {
@@ -610,8 +594,7 @@ void UIDisplay::changeMotionSetting(int action, int8_t increment) {
         Printer::setPrintAcceleration(Y_AXIS, value);
         Printer::updateDerivedParameter();
 
-        HAL::eprSetFloat(EPR_Y_MAX_ACCEL, Printer::printAcceleration(Y_AXIS));
-        EEPROM::updateChecksum();
+        EEPROM::storeAxisAcceleration(Y_AXIS,false,Printer::printAcceleration(Y_AXIS));
         break;
     }
     case UI_ACTION_PRINT_ACCEL_Z: {
@@ -620,8 +603,7 @@ void UIDisplay::changeMotionSetting(int action, int8_t increment) {
         Printer::setPrintAcceleration(Z_AXIS, value);
         Printer::updateDerivedParameter();
 
-        HAL::eprSetFloat(EPR_Z_MAX_ACCEL, Printer::printAcceleration(Z_AXIS));
-        EEPROM::updateChecksum();
+        EEPROM::storeAxisAcceleration(Z_AXIS,false,Printer::printAcceleration(Z_AXIS));
         break;
     }
     case UI_ACTION_MOVE_ACCEL_X: {
@@ -630,8 +612,7 @@ void UIDisplay::changeMotionSetting(int action, int8_t increment) {
         Printer::setTravelAcceleration(X_AXIS, value);
         Printer::updateDerivedParameter();
 
-        HAL::eprSetFloat(EPR_X_MAX_TRAVEL_ACCEL, Printer::travelAcceleration(X_AXIS));
-        EEPROM::updateChecksum();
+        EEPROM::storeAxisAcceleration(X_AXIS,true,Printer::travelAcceleration(X_AXIS));
         break;
     }
     case UI_ACTION_MOVE_ACCEL_Y: {
@@ -640,8 +621,7 @@ void UIDisplay::changeMotionSetting(int action, int8_t increment) {
         Printer::setTravelAcceleration(Y_AXIS, value);
         Printer::updateDerivedParameter();
 
-        HAL::eprSetFloat(EPR_Y_MAX_TRAVEL_ACCEL, Printer::travelAcceleration(Y_AXIS));
-        EEPROM::updateChecksum();
+        EEPROM::storeAxisAcceleration(Y_AXIS,true,Printer::travelAcceleration(Y_AXIS));
         break;
     }
     case UI_ACTION_MOVE_ACCEL_Z: {
@@ -650,8 +630,7 @@ void UIDisplay::changeMotionSetting(int action, int8_t increment) {
         Printer::setTravelAcceleration(Z_AXIS, value);
         Printer::updateDerivedParameter();
 
-        HAL::eprSetFloat(EPR_Z_MAX_TRAVEL_ACCEL, Printer::travelAcceleration(Z_AXIS));
-        EEPROM::updateChecksum();
+        EEPROM::storeAxisAcceleration(Z_AXIS,true,Printer::travelAcceleration(Z_AXIS));
         break;
     }
     case UI_ACTION_MAX_JERK: {
@@ -659,8 +638,7 @@ void UIDisplay::changeMotionSetting(int action, int8_t increment) {
         INCREMENT_MIN_MAX(value, 0.1f, 1.0f, 33.3f);
         Printer::setXYJerkLimit(value); //RFx000: Limit 33.3 sind willkürlich grob faktor 3 von normalwert.
 
-        HAL::eprSetFloat(EPR_MAX_XYJERK, Printer::xyJerkLimit());
-        EEPROM::updateChecksum();
+        EEPROM::storeAxisJerk(false,Printer::xyJerkLimit());
         break;
     }
     case UI_ACTION_MAX_ZJERK: {
@@ -668,8 +646,7 @@ void UIDisplay::changeMotionSetting(int action, int8_t increment) {
         INCREMENT_MIN_MAX(value, 0.05f, 0.05f, 2.0f);
         Printer::setZJerkLimit(value); //RFx000: Limit 2 sind Max XY-Jerk / Stepratenverhältnis XY->Z von ~16.8 gibt etwas unter 2.
 
-        HAL::eprSetFloat(EPR_MAX_ZJERK, Printer::zJerkLimit());
-        EEPROM::updateChecksum();
+        EEPROM::storeAxisJerk(true,Printer::zJerkLimit());
         break;
     }
     case UI_ACTION_HOMING_FEEDRATE_X: {
@@ -677,8 +654,7 @@ void UIDisplay::changeMotionSetting(int action, int8_t increment) {
         INCREMENT_MIN_MAX(value, 5, 5, MAX_FEEDRATE_X);
         Printer::setAxisHomingFeedrate(X_AXIS, value);
 
-        HAL::eprSetFloat(EPR_X_HOMING_FEEDRATE_PRINT, Printer::axisHomingFeedrate(X_AXIS));
-        EEPROM::updateChecksum();
+        EEPROM::storeAxisFeedrate(X_AXIS,true,Printer::axisHomingFeedrate(X_AXIS));
         break;
     }
     case UI_ACTION_HOMING_FEEDRATE_Y: {
@@ -686,8 +662,7 @@ void UIDisplay::changeMotionSetting(int action, int8_t increment) {
         INCREMENT_MIN_MAX(value, 5, 5, MAX_FEEDRATE_Y);
         Printer::setAxisHomingFeedrate(Y_AXIS, value);
 
-        HAL::eprSetFloat(EPR_Y_HOMING_FEEDRATE_PRINT, Printer::axisHomingFeedrate(Y_AXIS));
-        EEPROM::updateChecksum();
+        EEPROM::storeAxisFeedrate(Y_AXIS,true,Printer::axisHomingFeedrate(Y_AXIS));
         break;
     }
     case UI_ACTION_HOMING_FEEDRATE_Z: {
@@ -695,8 +670,7 @@ void UIDisplay::changeMotionSetting(int action, int8_t increment) {
         INCREMENT_MIN_MAX(value, 1, 1, MAX_FEEDRATE_Z);
         Printer::setAxisHomingFeedrate(Z_AXIS, value);
 
-        HAL::eprSetFloat(EPR_Z_HOMING_FEEDRATE_PRINT, Printer::axisHomingFeedrate(Z_AXIS));
-        EEPROM::updateChecksum();
+        EEPROM::storeAxisFeedrate(Z_AXIS,true,Printer::axisHomingFeedrate(Z_AXIS));
         break;
     }
     case UI_ACTION_MAX_FEEDRATE_X: {
@@ -704,8 +678,7 @@ void UIDisplay::changeMotionSetting(int action, int8_t increment) {
         INCREMENT_MIN_MAX(value, 5, 1, MAX_FEEDRATE_X);
         Printer::setAxisMaxFeedrate(X_AXIS, value);
 
-        HAL::eprSetFloat(EPR_X_MAX_FEEDRATE, Printer::axisMaxFeedrate(X_AXIS));
-        EEPROM::updateChecksum();
+        EEPROM::storeAxisFeedrate(X_AXIS,false,Printer::axisMaxFeedrate(X_AXIS));
         break;
     }
     case UI_ACTION_MAX_FEEDRATE_Y: {
@@ -713,8 +686,7 @@ void UIDisplay::changeMotionSetting(int action, int8_t increment) {
         INCREMENT_MIN_MAX(value, 5, 1, MAX_FEEDRATE_Y);
         Printer::setAxisMaxFeedrate(Y_AXIS, value);
 
-        HAL::eprSetFloat(EPR_Y_MAX_FEEDRATE, Printer::axisMaxFeedrate(Y_AXIS));
-        EEPROM::updateChecksum();
+        EEPROM::storeAxisFeedrate(Y_AXIS,false,Printer::axisMaxFeedrate(Y_AXIS));
         break;
     }
     case UI_ACTION_MAX_FEEDRATE_Z: {
@@ -722,8 +694,7 @@ void UIDisplay::changeMotionSetting(int action, int8_t increment) {
         INCREMENT_MIN_MAX(value, 1, 1, MAX_FEEDRATE_Z);
         Printer::setAxisMaxFeedrate(Z_AXIS, value);
 
-        HAL::eprSetFloat(EPR_Z_MAX_FEEDRATE, Printer::axisMaxFeedrate(Z_AXIS));
-        EEPROM::updateChecksum();
+        EEPROM::storeAxisFeedrate(Z_AXIS,false,Printer::axisMaxFeedrate(Z_AXIS));
         break;
     }
     }
@@ -743,8 +714,7 @@ void UIDisplay::changeExtruderSetting(int action, int8_t increment) {
             if (eNr == Extruder::current->id)
                 Extruder::applyCurrentSettings();
 
-            HAL::eprSetFloat(EEPROM::getExtruderOffset(eNr) + EPR_EXTRUDER_STEPS_PER_MM, extruder[eNr].stepsPerMM);
-            EEPROM::updateChecksum();
+            EEPROM::storeToolMotion(eNr,EEPROM::ToolMotionSetting::Steps,extruder[eNr].stepsPerMM);
         }
         break;
     }
@@ -771,8 +741,7 @@ void UIDisplay::changeExtruderSetting(int action, int8_t increment) {
         }
         Printer::applyAdvanceSettings();
 
-        HAL::eprSetFloat(EEPROM::getExtruderOffset(eNr) + EPR_EXTRUDER_ADVANCE_L, extruder[eNr].advanceL);
-        EEPROM::updateChecksum();
+        EEPROM::storeToolMotion(eNr,EEPROM::ToolMotionSetting::Advance,extruder[eNr].advanceL);
         break;
     }
 
@@ -787,8 +756,7 @@ void UIDisplay::changeExtruderSetting(int action, int8_t increment) {
         if (eNr == Extruder::current->id)
             Extruder::applyCurrentSettings();
 
-        HAL::eprSetFloat(EEPROM::getExtruderOffset(eNr) + EPR_EXTRUDER_MAX_ACCELERATION, extruder[eNr].maxAcceleration);
-        EEPROM::updateChecksum();
+        EEPROM::storeToolMotion(eNr,EEPROM::ToolMotionSetting::Acceleration,extruder[eNr].maxAcceleration);
         break;
     }
 
@@ -803,8 +771,7 @@ void UIDisplay::changeExtruderSetting(int action, int8_t increment) {
         if (eNr == Extruder::current->id)
             Extruder::applyCurrentSettings();
 
-        HAL::eprSetFloat(EEPROM::getExtruderOffset(eNr) + EPR_EXTRUDER_MAX_FEEDRATE, extruder[eNr].maxFeedrate);
-        EEPROM::updateChecksum();
+        EEPROM::storeToolMotion(eNr,EEPROM::ToolMotionSetting::Feedrate,extruder[eNr].maxFeedrate);
         break;
     }
 
@@ -819,8 +786,7 @@ void UIDisplay::changeExtruderSetting(int action, int8_t increment) {
         if (eNr == Extruder::current->id)
             Extruder::applyCurrentSettings();
 
-        HAL::eprSetFloat(EEPROM::getExtruderOffset(eNr) + EPR_EXTRUDER_MAX_START_FEEDRATE, extruder[eNr].maxEJerk);
-        EEPROM::updateChecksum();
+        EEPROM::storeToolMotion(eNr,EEPROM::ToolMotionSetting::Jerk,extruder[eNr].maxEJerk);
         break;
     }
 

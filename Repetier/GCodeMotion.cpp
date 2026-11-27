@@ -226,11 +226,7 @@ void setToolOffset(GCode* com) {
         Printer::offsetRelativeStepsCoordinates(-dx, -dy, 0, 0);
 
         if (com->hasS() && com->S > 0) {
-            if (com->hasX())
-                HAL::eprSetFloat(EEPROM::getExtruderOffset(extId) + EPR_EXTRUDER_X_OFFSET, com->X);
-            if (com->hasY())
-                HAL::eprSetFloat(EEPROM::getExtruderOffset(extId) + EPR_EXTRUDER_Y_OFFSET, com->Y);
-            EEPROM::updateChecksum();
+            EEPROM::storeToolOffsets(extId,com->X,com->Y,com->hasX(),com->hasY());
         }
     }
 }

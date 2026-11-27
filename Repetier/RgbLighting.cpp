@@ -132,8 +132,7 @@ void selectMode(char mode) {
     case RGB_MODE_WHITE: setTargetColors(255, 255, 255); break;
     case RGB_MODE_MANUAL: setTargetColors(g_uRGBManualR, g_uRGBManualG, g_uRGBManualB); break;
     }
-    HAL::eprSetByte(EPR_RF_RGB_LIGHT_MODE, selectedMode);
-    EEPROM::updateChecksum();
+    EEPROM::storeRgbMode(selectedMode);
 }
 
 void initialize() {
@@ -187,13 +186,9 @@ void advanceFade() {
     }
 }
 
-struct RgbComponent {
-    uint8_t& level;
-    unsigned int address;
-};
-
 struct RgbProfile {
-    RgbComponent components[3];
+    uint8_t* components[3];
+    uint8_t index;
     PGM_P messagePrefix;
     bool active;
 };
@@ -211,55 +206,44 @@ void setRgbComponent(GCode& command, const RgbProfile& profile) {
         return;
     }
 
-    const auto& component = profile.components[channel];
-    component.level = command.S;
-    HAL::eprSetByte(component.address, component.level);
-    EEPROM::updateChecksum();
+    auto& component = *profile.components[channel];
+    component = command.S;
+    EEPROM::storeRgbColor(profile.index,channel,component);
     if (profile.active && !forceWhite)
-        setTargetColors(profile.components[0].level, profile.components[1].level, profile.components[2].level);
+        setTargetColors(*profile.components[0],*profile.components[1],*profile.components[2]);
     Com::printF(profile.messagePrefix);
     Com::print(channelName);
-    Com::printFLN(PSTR(" = "), component.level);
+    Com::printFLN(PSTR(" = "), component);
 }
 
 // RGB lighting.
 void setHeatingLight(GCode* pCommand) {
     const bool active = selectedMode == RGB_MODE_AUTOMATIC && lightStatus == RGB_STATUS_HEATING;
-    setRgbComponent(*pCommand, {{{g_uRGBHeatingR, EPR_RF_RGB_HEATING_R},
-                                 {g_uRGBHeatingG, EPR_RF_RGB_HEATING_G},
-                                 {g_uRGBHeatingB, EPR_RF_RGB_HEATING_B}},
+    setRgbComponent(*pCommand, {{&g_uRGBHeatingR,&g_uRGBHeatingG,&g_uRGBHeatingB},1,
                                 PSTR("RGB_HEATING_"), active});
 }
 
 void setPrintingLight(GCode* pCommand) {
     const bool active = selectedMode == RGB_MODE_AUTOMATIC && lightStatus == RGB_STATUS_PRINTING;
-    setRgbComponent(*pCommand, {{{g_uRGBPrintingR, EPR_RF_RGB_PRINTING_R},
-                                 {g_uRGBPrintingG, EPR_RF_RGB_PRINTING_G},
-                                 {g_uRGBPrintingB, EPR_RF_RGB_PRINTING_B}},
+    setRgbComponent(*pCommand, {{&g_uRGBPrintingR,&g_uRGBPrintingG,&g_uRGBPrintingB},0,
                                 PSTR("RGB_PRINTING_"), active});
 }
 
 void setCoolingLight(GCode* pCommand) {
     const bool active = selectedMode == RGB_MODE_AUTOMATIC && lightStatus == RGB_STATUS_COOLING;
-    setRgbComponent(*pCommand, {{{g_uRGBCoolingR, EPR_RF_RGB_COOLING_R},
-                                 {g_uRGBCoolingG, EPR_RF_RGB_COOLING_G},
-                                 {g_uRGBCoolingB, EPR_RF_RGB_COOLING_B}},
+    setRgbComponent(*pCommand, {{&g_uRGBCoolingR,&g_uRGBCoolingG,&g_uRGBCoolingB},2,
                                 PSTR("RGB_COOLING_"), active});
 }
 
 void setIdleLight(GCode* pCommand) {
     const bool active = selectedMode == RGB_MODE_AUTOMATIC && lightStatus == RGB_STATUS_IDLE;
-    setRgbComponent(*pCommand, {{{g_uRGBIdleR, EPR_RF_RGB_IDLE_R},
-                                 {g_uRGBIdleG, EPR_RF_RGB_IDLE_G},
-                                 {g_uRGBIdleB, EPR_RF_RGB_IDLE_B}},
+    setRgbComponent(*pCommand, {{&g_uRGBIdleR,&g_uRGBIdleG,&g_uRGBIdleB},3,
                                 PSTR("RGB_IDLE_"), active});
 }
 
 void setManualLight(GCode* pCommand) {
     const bool active = selectedMode == RGB_MODE_MANUAL;
-    setRgbComponent(*pCommand, {{{g_uRGBManualR, EPR_RF_RGB_MANUAL_R},
-                                 {g_uRGBManualG, EPR_RF_RGB_MANUAL_G},
-                                 {g_uRGBManualB, EPR_RF_RGB_MANUAL_B}},
+    setRgbComponent(*pCommand, {{&g_uRGBManualR,&g_uRGBManualG,&g_uRGBManualB},4,
                                 PSTR("RGB_MANUAL_"), active});
 }
 

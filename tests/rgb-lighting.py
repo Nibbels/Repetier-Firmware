@@ -38,9 +38,14 @@ static unsigned writes, checksums, address, value;
 struct InterruptProtectedBlock { InterruptProtectedBlock() {} ~InterruptProtectedBlock() {} };
 struct HAL {
     static uint32_t timeInMilliseconds() { return clockMs; }
+    static uint8_t eprGetByte(unsigned a) { return uint8_t(a==address?value:0xff); }
     static void eprSetByte(unsigned a, unsigned v) { ++writes; address=a; value=v; }
 };
-struct EEPROM { static void updateChecksum() { ++checksums; } };
+struct EEPROM {
+    static void updateChecksum() { ++checksums; }
+    static void storeRgbMode(uint8_t v);
+    static void storeRgbColor(uint8_t profile,uint8_t channel,uint8_t v);
+};
 struct Com {
     static void printF(PGM_P) {}
     static void print(char) {}
@@ -61,6 +66,8 @@ static Temperature heatedBedController;
 test = r'''
 #include "RgbLighting.cpp"
 #ifdef ENABLE_RGB
+// Exercise the real semantic-to-storage binding, not a second mapping.
+#include "rgb-storage.inc"
 using namespace RgbLighting;
 static void expect(int r, int g, int b) {
     assert((TCCR4A & 2) != 0);
@@ -169,6 +176,10 @@ with tempfile.TemporaryDirectory(prefix="rgb-replay-") as tmp:
     (path / "Repetier.h").write_text(stub + "\n" + "\n".join(defs) + "\n")
     (path / "RgbLighting.cpp").write_bytes((src / "RgbLighting.cpp").read_bytes())
     (path / "main.cpp").write_text(test)
+    owner=(src / "Eeprom.cpp").read_text(encoding="utf-8")
+    byte=owner[owner.index("namespace {\nvoid saveLegacyByte"):owner.index("void EEPROM::storeCaseLight")]
+    rgb=owner[owner.index("void EEPROM::storeRgbMode("):owner.index("void EEPROM::storeFanDivisor(")]
+    (path / "rgb-storage.inc").write_text(byte+rgb,encoding="utf-8")
     for variant, count, enabled in (("RF1000", 1, False), ("RF2000", 2, True),
                                     ("RF2000v2", 2, True), ("RF2000-X44", 1, True)):
         args = [os.environ.get("CXX", "g++"), "-std=c++11", "-O2",

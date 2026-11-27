@@ -1185,6 +1185,86 @@ void EEPROM::storeScanPoint(uint8_t x,uint8_t y,bool saveX,bool saveY) {
     if(changed)updateChecksum();
 }
 
+namespace {
+void saveLegacyWord(uint16_t pos,uint16_t value) {
+    if(uint16_t(HAL::eprGetInt16(pos))==value)return;
+    HAL::eprSetInt16(pos,value);
+    EEPROM::updateChecksum();
+}
+void saveLegacyLong(uint16_t pos,uint32_t value) {
+    if(uint32_t(HAL::eprGetInt32(pos))==value)return;
+    HAL::eprSetInt32(pos,value);
+    EEPROM::updateChecksum();
+}
+void saveLegacyFloat(uint16_t pos,float value) {
+    const float old=HAL::eprGetFloat(pos);
+    if(memcmp(&old,&value,sizeof(value))==0)return;
+    HAL::eprSetFloat(pos,value);
+    EEPROM::updateChecksum();
+}
+}
+void EEPROM::storeRgbMode(uint8_t mode) {saveLegacyByte(EPR_RF_RGB_LIGHT_MODE,mode);}
+void EEPROM::storeRgbColor(uint8_t profile,uint8_t channel,uint8_t level) {
+    if(channel>=3)return;
+    uint16_t pos;
+    // Canonical profile order matches the new zone codec.
+    switch(profile) {
+    case 0:pos=EPR_RF_RGB_PRINTING_R;break;
+    case 1:pos=EPR_RF_RGB_HEATING_R;break;
+    case 2:pos=EPR_RF_RGB_COOLING_R;break;
+    case 3:pos=EPR_RF_RGB_IDLE_R;break;
+    case 4:pos=EPR_RF_RGB_MANUAL_R;break;
+    default:return;
+    }
+    saveLegacyByte(pos+channel,level);
+}
+void EEPROM::storeFanDivisor(uint8_t divisor) {saveLegacyByte(EPR_RF_PART_FAN_SPEED,divisor);}
+void EEPROM::storeFanDuty(bool maximum,uint8_t duty) {saveLegacyByte(maximum?EPR_RF_PART_FAN_PWM_MAX:EPR_RF_PART_FAN_PWM_MIN,duty);}
+void EEPROM::storeToolOffsets(uint8_t tool,float x,float y,bool saveX,bool saveY) {
+    if(tool>=NUM_EXTRUDER)return;
+    const uint16_t pos=getExtruderOffset(tool);
+    bool changed=false;
+    const float oldX=HAL::eprGetFloat(pos+EPR_EXTRUDER_X_OFFSET),oldY=HAL::eprGetFloat(pos+EPR_EXTRUDER_Y_OFFSET);
+    if(saveX && memcmp(&oldX,&x,sizeof(x))!=0) {HAL::eprSetFloat(pos+EPR_EXTRUDER_X_OFFSET,x);changed=true;}
+    if(saveY && memcmp(&oldY,&y,sizeof(y))!=0) {HAL::eprSetFloat(pos+EPR_EXTRUDER_Y_OFFSET,y);changed=true;}
+    if(changed)updateChecksum();
+}
+void EEPROM::storeInactivity(bool stepper,uint32_t duration) {saveLegacyLong(stepper?EPR_STEPPER_INACTIVE_TIME:EPR_MAX_INACTIVE_TIME,duration);}
+void EEPROM::storeBaudrate() {saveLegacyLong(EPR_BAUDRATE,configuredBaudrate_);}
+void EEPROM::storeScanLift(float lift) {saveLegacyFloat(EPR_ZSCAN_START_MM,lift);}
+void EEPROM::storeWobblePhase(int8_t phase) {saveLegacyByte(EPR_RF_MOD_WOBBLE_FIX_PHASEXY,uint8_t(phase));}
+void EEPROM::storeWobbleAmplitude(uint8_t component,int16_t amplitude) {
+    switch(component) {
+    case 0:saveLegacyWord(EPR_RF_MOD_WOBBLE_FIX_AMPX,amplitude);break;
+    case 1:saveLegacyWord(EPR_RF_MOD_WOBBLE_FIX_AMPY1,amplitude);break;
+    case 2:saveLegacyWord(EPR_RF_MOD_WOBBLE_FIX_AMPY2,amplitude);break;
+    }
+}
+void EEPROM::storeMotorCurrent(uint8_t axis,uint8_t current) {
+    if(axis<DRV8711_NUM_CHANNELS)saveLegacyByte(EPR_RF_MOTOR_CURRENT+axis,current);
+}
+void EEPROM::storePackingInterval(uint16_t interval) {saveLegacyWord(EPR_RF_STEP_PACKING_MIN_INTERVAL,interval);}
+void EEPROM::storeAxisAcceleration(uint8_t axis,bool travel,float acceleration) {
+    if(axis<3)saveLegacyFloat((travel?EPR_X_MAX_TRAVEL_ACCEL:EPR_X_MAX_ACCEL)+4*axis,acceleration);
+}
+void EEPROM::storeAxisJerk(bool z,float jerk) {saveLegacyFloat(z?EPR_MAX_ZJERK:EPR_MAX_XYJERK,jerk);}
+void EEPROM::storeAxisFeedrate(uint8_t axis,bool homing,float feedrate) {
+    if(axis<3)saveLegacyFloat((homing?EPR_X_HOMING_FEEDRATE_PRINT:EPR_X_MAX_FEEDRATE)+4*axis,feedrate);
+}
+void EEPROM::storeToolMotion(uint8_t tool,ToolMotionSetting setting,float value) {
+    if(tool>=NUM_EXTRUDER)return;
+    uint16_t relative;
+    switch(setting) {
+    case ToolMotionSetting::Steps:relative=EPR_EXTRUDER_STEPS_PER_MM;break;
+    case ToolMotionSetting::Advance:relative=EPR_EXTRUDER_ADVANCE_L;break;
+    case ToolMotionSetting::Acceleration:relative=EPR_EXTRUDER_MAX_ACCELERATION;break;
+    case ToolMotionSetting::Feedrate:relative=EPR_EXTRUDER_MAX_FEEDRATE;break;
+    case ToolMotionSetting::Jerk:relative=EPR_EXTRUDER_MAX_START_FEEDRATE;break;
+    default:return;
+    }
+    saveLegacyFloat(getExtruderOffset(tool)+relative,value);
+}
+
 EEPROM::UsageTotals EEPROM::usageTotals() {
     return {HAL::eprGetInt32(EPR_PRINTING_TIME), HAL::eprGetFloat(EPR_PRINTING_DISTANCE)};
 }
