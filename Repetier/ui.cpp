@@ -829,6 +829,13 @@ void UIDisplay::menuEsc() {
         menuLevel--;
 }
 
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+bool UIDisplay::requiresLocalSafetyConfirmation() const {
+    return menuLevel && (menu[menuLevel]==&ui_menu_bed_cutoff_edit ||
+        (menu[menuLevel]==&ui_menu_message && messageLine2==EEPROM::recoveryDialogTag()));
+}
+#endif
+
 void UIDisplay::okAction() {
 #ifdef RF_EEPROM_ZONE_EXPERIMENT
     if(menuLevel && menu[menuLevel]==&ui_menu_message &&
@@ -861,6 +868,11 @@ void UIDisplay::okAction() {
     {
         action = pgm_read_word(&(men->id));
         finishAction(action);
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+        // Reset may have opened a new recovery dialog. Do not pop it
+        // as if it were the old confirmation menu.
+        if(action==UI_ACTION_RESTORE_DEFAULTS && EEPROM::recoveryPending())return;
+#endif
         menuEsc();
         return;
     }

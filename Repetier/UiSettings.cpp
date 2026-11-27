@@ -54,6 +54,11 @@ void UIDisplay::finishAction(int action) {
         EEPROM::restoreEEPROMSettingsFromConfiguration();
 #ifdef RF_EEPROM_ZONE_EXPERIMENT
         if(!EEPROM::lastOperationSucceeded())return;
+        if(EEPROM::recoveryPending()) {
+            exitmenu();
+            EEPROM::reportRecovery();
+            return;
+        }
 #else
         EEPROM::storeDataIntoEEPROM(false);
 #endif

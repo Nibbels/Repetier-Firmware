@@ -225,7 +225,7 @@ void numberedLines() {
     readReply("skip 41\r\nok\r\n");
     assert(!GCodeInput::peekCurrentCommand());
     feed(numbered("N43 M105"));
-    readReply("\r\nResend:42\r\nok\r\n");
+    readReply("Error:expected line 42 got 43\r\n\r\nResend:42\r\nok\r\n");
     assert(flushes == 1);
     feed(numbered("N42 M105"));
     readReply("ok 42\r\n");

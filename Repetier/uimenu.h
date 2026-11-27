@@ -750,7 +750,8 @@ UI_MENU_ACTIONSELECTOR_FILTER(ui_menu_restore_defaults,UI_TEXT_RESTORE_DEFAULTS,
 // Edit a staged value only; OK commits, BACK discards.
 UI_MENU_ACTION2(ui_menu_bed_cutoff_edit, UI_ACTION_BED_CUTOFF, "Bed cutoff: %VcC", "OK: save / BACK")
 UI_MENU_ACTIONSELECTOR_FILTER(ui_menu_bed_cutoff, "Bed cutoff", ui_menu_bed_cutoff_edit, 0, MENU_MODE_PRINTING | MENU_MODE_PAUSED)
-#define UI_MENU_BED_CUTOFF , &ui_menu_bed_cutoff
+UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_eeprom_recovery, "EEPROM check", UI_ACTION_EEPROM_RECOVERY, 0, MENU_MODE_PRINTING | MENU_MODE_PAUSED)
+#define UI_MENU_BED_CUTOFF , &ui_menu_bed_cutoff, &ui_menu_eeprom_recovery
 #else
 #define UI_MENU_BED_CUTOFF
 #endif

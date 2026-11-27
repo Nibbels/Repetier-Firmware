@@ -135,6 +135,7 @@
 #define UI_ACTION_CHOOSE_PID_ROBUST 1674
 #define UI_ACTION_CHOOSE_PID_DYNAMIC 1675
 #define UI_ACTION_BED_CUTOFF 1676
+#define UI_ACTION_EEPROM_RECOVERY 1677
 
 #define UI_ACTION_CHOOSE_DMIN 1678
 #define UI_ACTION_CHOOSE_DMAX 1679
@@ -324,6 +325,9 @@ public:
     void setStatusP(PGM_P txt, bool error = false);
     void setStatus(char* txt, bool error = false);
     void exitmenu();
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+    bool requiresLocalSafetyConfirmation() const;
+#endif
 
 private:
     int lastAction;

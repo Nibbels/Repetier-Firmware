@@ -87,6 +87,12 @@ void UIDisplay::pressPlay() {
 
 void UIDisplay::mainSwitchCase(int action) {
     switch (action) {
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+    case UI_ACTION_EEPROM_RECOVERY:
+        if(EEPROM::recoveryPending())EEPROM::reportRecovery();
+        else UI_STATUS_UPD("EEPROM OK");
+        break;
+#endif
         /*
         * HARDWARE BUTTONS
         */

@@ -122,7 +122,7 @@ void restoreConfigurationDefaults() {
         return;
     EEPROM::restoreEEPROMSettingsFromConfiguration();
 #ifdef RF_EEPROM_ZONE_EXPERIMENT
-    if(!EEPROM::lastOperationSucceeded())return;
+    if(!EEPROM::lastOperationSucceeded() || EEPROM::recoveryPending())return;
 #else
     EEPROM::storeDataIntoEEPROM(false);
 #endif
@@ -150,6 +150,14 @@ void accessPanel(GCode* pCommand) {
         case UI_ACTION_RF_CONTINUE:         // 1519
         case UI_ACTION_RF_PAUSE:            // 1518
         {
+#ifdef RF_EEPROM_ZONE_EXPERIMENT
+            // M3029 remains ordinary remote panel navigation, but cannot
+            // commit recovery or heater commissioning without local OK.
+            if(pCommand->P==UI_ACTION_OK && uid.requiresLocalSafetyConfirmation()) {
+                Com::printErrorFLN(PSTR("Local OK required"));
+                return;
+            }
+#endif
             Com::printFLN(PSTR("RequestMenu:Press:"), pCommand->P);
             uid.executeAction(pCommand->P);
         } break;
