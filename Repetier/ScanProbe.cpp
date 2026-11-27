@@ -243,91 +243,25 @@ ProbeProgress ScanProbe::retreat() {
 }
 
 void showAbortScanReason(const void* scanName, ScanAbort reason) {
+    // All scan failures use the same presentation path. Keep the specific
+    // reason and hints until persistent history is actually available.
+    const void* first = PSTR(UI_TEXT_FAIL);
+    const void* second = nullptr;
     switch (reason) {
-        // Geplantes Canceling
-    case ScanAbort::Canceled: {
-        showError(scanName, PSTR(UI_TEXT_SCAN_ABORTED));
+    case ScanAbort::Canceled:
+        first = PSTR(UI_TEXT_SCAN_ABORTED);
         break;
-    }
-
-    // Kabelbruch, Extruder verspannt, Stecker wackelig, Ingress,...
-    case ScanAbort::StartPressure: {
-        showError(scanName, PSTR("Bad start force"));
+#define RF_SCAN_PANEL(name, value, code, shortText, hint) \
+    case ScanAbort::name: \
+        first = PSTR(shortText); \
+        if (sizeof(hint) > 1) second = PSTR(hint); \
         break;
-    }
-    case ScanAbort::IdlePressure: {
-        showError(scanName, PSTR("Bad idle force"));
-        break;
-    }
-    case ScanAbort::DmsOverload:
-        showError(scanName, PSTR("DMS overload"));
-        break;
-    case ScanAbort::DmsUnavailable:
-        showError(scanName, PSTR("DMS read failed"));
-        break;
-    case ScanAbort::AveragePressure: {
-        showError(scanName, PSTR("Bad force signal"));
-        break;
-    }
-
-    // Hinweise auf Bugs
-    case ScanAbort::AboveStart: {
-        showError(scanName, PSTR("Bug SOS"));
-        break;
-    }
-    case ScanAbort::MatrixDimensions: {
-        showError(scanName, PSTR("Bug MDO"));
-        break;
-    }
-
-    // Löcher im Druckbett, Druckbett verdreckt, Mechanik problem, DDP schlecht geklebt
-    case ScanAbort::UnevenBed: {
-        showError(scanName, PSTR("Uneven bed, dirt"), PSTR("hole, bad ground"));
-        break;
-    }
-    case ScanAbort::StepDeltaOutOfRange: {
-        // Fehler trat auf, als ich die Düse beim HBS ein Blatt Papier mitschleppen hab lassen.
-        // Marius1 hatte den Fehler durch ein sehr schräg eingebautes Bett.
-        showError(scanName, PSTR("Leftovers, snot"), PSTR("incrustation"));
-        break;
-    }
-
-    // Z-Schraube falsch eingestellt?
-    // _MAX_COMPENSATION und _ENDSTOP_PROTECTION deuten im Printermodus auf dasselbe hin, sind aber 2 unterschiedliche Stellen.
-    case ScanAbort::MinEndstop: {
-        showError(scanName, PSTR("Min Endstop"));
-        break;
-    }
-    case ScanAbort::MaxEndstop: {
-        showError(scanName, PSTR("Max Endstop"));
-        break;
-    }
-    case ScanAbort::MaxCompensation: {
-        showError(scanName, PSTR("Reached limit"), PSTR("max compensation"));
-        break;
-    }
-    case ScanAbort::EndstopProtection: {
-        showError(scanName, PSTR("Reached endstop"), PSTR("protection limit"));
-        break;
-    }
-
-    case ScanAbort::MissingMatrix: {
-        showError(scanName, PSTR("Missing or"), PSTR(UI_TEXT_INVALID_MATRIX));
-        break;
-    }
-    case ScanAbort::MatrixOverflow: {
-        showError(scanName, PSTR("Correction would"), PSTR("overflow matrix"));
-        break;
-    }
-    case ScanAbort::MatrixHeight: {
-        // Matrix hat einen Punkt über Z-Start. Das ist gefährlich hoch, weil die Nozzle theoretisch beim Fahren auf position kollidiert haben könnte.
-        // Eine rein positive Matrix melden wir nicht, das ist egal, sofern die Starthöhe immer höher ist. Dafür gibts im Anschluss des Scans die genaue Meldung zur Schraubeneinstellung.
-        showError(scanName, PSTR("Badly wrong"), PSTR("Z-Screw/Z-Start"));
-        break;
-    }
+    RF_SCAN_FAULTS(RF_SCAN_PANEL)
+#undef RF_SCAN_PANEL
     default:
-        showError(scanName, PSTR(UI_TEXT_FAIL));
+        break;
     }
+    showError(scanName, first, second);
 }
 
 bool moveZ(int nSteps, bool emergencyRetreat) {
