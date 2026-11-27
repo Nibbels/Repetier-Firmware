@@ -55,6 +55,30 @@ function admissionSweep(contract){
   }
   return rows;
 }
+function wireFormatSweep(contract){
+  const rows=[];
+  const lengths=[...new Set(contract.stress.map(r=>r.segment_mm))].sort((a,b)=>a-b);
+  const speeds=[...new Set(contract.stress.map(r=>r.requested_mm_s))].sort((a,b)=>a-b);
+  const params=parameters(contract,"budget");
+  for(const shape of ["straight","circle"])for(const chord of lengths)for(const speed of speeds)
+    for(const frameWindow of [1,32])for(const packetFormat of ["ascii","binary-v1","binary-v2","mixed"]){
+      const spec={shape,count:120,radius:1.35,chord,speed,baud:contract.baud,ratio:.04,packetFormat};
+      const d=demand(spec,"adaptive",params);
+      const q=queue(spec,"adaptive",params,{frameWindow,ackPoint:"admission",parseFraction:.5});
+      const offeredRxBytesS=d.bytes/d.pathMm*speed;
+      rows.push({spec,frameWindow,offeredRxBytesS,wireBytes:d.bytes,
+        limits:{aboveIdealWireAtRequest:offeredRxBytesS>contract.wire_bytes_s,
+          abovePlanningScenario:offeredRxBytesS>contract.planning_rx_bytes_s,
+          nominalStepFloor:d.nominalPathSpeed<speed-1e-8,
+          localCpuBudgetExceeded:!d.cpuFeasible,
+          motionOnlyOverBudget:!q.validFluidMotion,
+          observedFluidStarvation:q.starveCount>0},
+        cycles:{motion:d.motionCycles,uart:d.uartCycles,receive:d.receiveCycles,additionalParsePlan:d.plannerCycles},
+        achieved:q.achievedMmPerSecond,gaps:q.starveCount,coverageMs:q.meanCoverageMs,meanGroup:d.meanGroup,
+        steps:q.steps});
+    }
+  return rows;
+}
 function selfTest(contract){
   const b=parameters(contract,"budget"),i=parameters(contract,"isolated");
   if(b.rxIsr!==80||b.txIsr!==80||b.txEmptyPerCommand!==64||
@@ -64,7 +88,15 @@ function selfTest(contract){
     throw Error("matrix coverage");
   if(rows.some(r=>!Number.isFinite(r.achievedMmPerSecond)||r.spec.speed>100))throw Error("workload bounds");
   if(admissionSweep(contract).length!==90)throw Error("admission matrix coverage");
-  return "4 groups of checks passed";
+  const wire=wireFormatSweep(contract);
+  if(wire.length!==240)throw Error("wire-format workload coverage");
+  for(let i=0;i<wire.length;i+=4){
+    const same=wire.slice(i,i+4);
+    if(same.some(r=>JSON.stringify(r.steps)!==JSON.stringify(same[0].steps))||
+       !(same[1].wireBytes<same[3].wireBytes&&same[3].wireBytes<same[2].wireBytes))
+      throw Error("wire format must not change motion steps");
+  }
+  return "5 groups of checks passed";
 }
 if(require.main===module){
   const fs=require("node:fs"),crypto=require("node:crypto");
@@ -73,6 +105,6 @@ if(require.main===module){
   if(blob!==provenance.blob)throw Error("pinned Task0033 contract blob mismatch");
   const contract=JSON.parse(input);
   console.log(JSON.stringify({schema:1,provenance,transportStatus:contract.status,
-    caveats:"Existing fluid CPU and queue model only; historical motion/parser anchors and synthetic reserve, ACK after planner publication vs real parser admission, no real host/IRQ/safety/step timing. Numbered generated ASCII frames (LF), one illustrative empty TX IRQ per command. Planning allowance is a screen not a hard cap. Isolated costs are not qualified production costs. Travel is intentionally outside this extrusion matrix. Separate admissionSweep uses one live foreground command, ACK after synthetic parser stage, sensitivity split of unmeasured complete-parse/planner cost. Actual TX blocking, partial frame consumption and IRQ chronology still absent.",selfTest:selfTest(contract),rows:matrix(contract),admissionSweep:admissionSweep(contract)},null,2));
+    caveats:"Existing fluid CPU and queue model only; historical motion/parser anchors and synthetic reserve, ACK after planner publication vs real parser admission, no real host/IRQ/safety/step timing. Numbered generated ASCII frames (LF), one illustrative empty TX IRQ per command. Planning allowance is a screen not a hard cap. Isolated costs are not qualified production costs. Travel is intentionally outside this extrusion matrix. Separate admissionSweep uses one live foreground command, ACK after synthetic parser stage, sensitivity split of unmeasured complete-parse/planner cost. Actual TX blocking, partial frame consumption and IRQ chronology still absent. wireFormatSweep uses actual-source validated format sizes but generated workload, historical ASCII partial receive cost applied to binary only as sensitivity, no measured binary parser cycle saving. Limit flags overlap, not definitive causal diagnosis or real CPU/IRQ proof.",selfTest:selfTest(contract),rows:matrix(contract),admissionSweep:admissionSweep(contract),wireFormatSweep:wireFormatSweep(contract)},null,2));
 }
-module.exports={provenance,parameters,matrix,admissionSweep,selfTest};
+module.exports={provenance,parameters,matrix,admissionSweep,wireFormatSweep,selfTest};
