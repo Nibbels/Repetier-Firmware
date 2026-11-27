@@ -98,3 +98,49 @@ with tempfile.TemporaryDirectory() as d:
         subprocess.run([os.environ.get("CXX","c++"),"-std=c++11","-O2","-Wall","-Wextra","-Werror","-I",str(fw),*flags,str(p),"-o",str(exe)],check=True)
         subprocess.run([str(exe)],check=True)
         print("Lighting GPIO/PWM, 256 intensities and alarm rollover PASS",flags)
+
+# Compile the actual board configuration for both permitted retrofits and
+# formerly accepted conflicting PWM writers. No runtime registry is involved.
+# Keep the expected diagnostic specific: an unrelated compiler error must not
+# make a negative configuration test pass.
+with tempfile.TemporaryDirectory() as d:
+    p=Path(d)/"pin-ownership.cpp"
+    p.write_text('#define __AVR_ATmega2560__ 1\n#include "BoardConfiguration.h"\n')
+    cxx=[os.environ.get("CXX","c++"),"-std=c++11","-I",str(fw),"-fsyntax-only",str(p)]
+    cooler_error="A hotend cooler cannot share a dedicated GPIO"
+    board_error="The stepper board fan cannot share a dedicated GPIO"
+    for model in ("RF1000","RF2000","RF2000v2"):
+        base=["-DMOTHERBOARD=DEVICE_TYPE_"+model]
+        cases=[
+            (["-DEXT0_EXTRUDER_COOLER_PIN=Z_ENABLE_PIN"],cooler_error),
+            (["-DEXT0_EXTRUDER_COOLER_PIN=62"],cooler_error),
+            (["-DFAN_BOARD_PIN=Z_DIR_PIN"],board_error),
+            (["-DFAN_BOARD_PIN=HEATER_0_PIN"],board_error),
+            (["-DFAN_BOARD_PIN=HEATER_2_PIN"],board_error),
+            (["-DFAN_BOARD_PIN=UI_DISPLAY_ENABLE_PIN"],board_error),
+            (["-DEXT0_EXTRUDER_COOLER_PIN=67"],cooler_error),
+            (["-DEXT0_EXTRUDER_COOLER_PIN=20"],cooler_error),
+            (["-DEXT0_EXTRUDER_COOLER_PIN=WATCHDOG_PIN"],cooler_error),
+            (["-DRF_THERMAL_EMERGENCY_EXPERIMENT","-DFAN_BOARD_PIN=THERMAL_ALARM_PIN"],board_error),
+            (["-DFAN_BOARD_PIN=CASE_LIGHT_PIN"],board_error),
+            (["-DFAN_BOARD_PIN=RESERVE_DIGITAL_PIN_PD3"],None),
+            (["-DEXT0_EXTRUDER_COOLER_PIN=X19_PIN"],None),
+        ]
+        if model!="RF1000":
+            cases += [
+                (["-DFAN_BOARD_PIN=9"],board_error),
+                (["-DEXT1_EXTRUDER_COOLER_PIN=Z_ENABLE_PIN"],cooler_error),
+                (["-DFAN_BOARD_PIN=X43_R_PIN"],board_error),
+                (["-DEXT0_EXTRUDER_COOLER_PIN=X43_G_PIN"],cooler_error),
+                (["-DFAN_BOARD_PIN=X45_PIN"],board_error),
+                (["-DFAN_BOARD_PIN=X44_PIN"],board_error),
+                (["-DEXT0_EXTRUDER_COOLER_PIN=X42_PIN"],None),
+                (["-DNUM_EXTRUDER=1","-DEXT0_EXTRUDER_COOLER_PIN=X44_PIN"],None),
+            ]
+        for flags,expected in cases:
+            result=subprocess.run(cxx+base+flags,capture_output=True,text=True)
+            if expected is None:
+                assert result.returncode==0,(model,flags,result.stderr)
+            else:
+                assert result.returncode!=0 and expected in result.stderr,(model,flags,result.stderr)
+        print("pin-ownership configuration checks PASS",model,len(cases))
