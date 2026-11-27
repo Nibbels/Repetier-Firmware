@@ -37,7 +37,7 @@ def inventory(z,board,canonical=False):
     # Same compiler table candidate inventory as foreground-cfg-inventory.
     # The CPI/range control-flow invariants still need review for release.
     tables={}
-    for j,(w,op,arg) in ins.items():
+    for j,(w,op,arg) in list(ins.items()):
         if op not in ("jmp","rjmp") or "<__tablejump2__>" not in arg:continue
         prev=[ins.get(j-k,(0,"","")) for k in (6,4,2)]
         m=[re.match(r"r(?:30|31|24), 0x([0-9A-Fa-f]+)",i[2]) for i in prev]
@@ -48,6 +48,19 @@ def inventory(z,board,canonical=False):
            for a in range(j-28,j-6,2) if a in ins and ins[a][1]=="cpi"]
         assert c and c[-1][1],(board,hex(j),"count")
         count=int(c[-1][1][1],16)
+        end=base+2*count
+        if end not in ins:
+            # Linear objdump may interpret the final table word as the
+            # first word of a four-byte instruction and consume the real
+            # first instruction of the following case. Recover only the
+            # witnessed two-byte LDI encoding; reject any other case.
+            assert end-2>=base and end-2 in ins and ins[end-2][0]==4
+            assert end+2 in ins, (board,hex(end),"missing table boundary")
+            word=raw[end]+256*raw[end+1]
+            assert word & 0xf000 == 0xe000, (board,hex(end),hex(word))
+            reg=16+((word>>4)&15)
+            imm=((word>>4)&0xf0)|(word&15)
+            ins[end]=(2,"ldi",f"r{reg}, 0x{imm:02X}")
         ts=[2*(raw[base+i*2]+256*raw[base+i*2+1]) for i in range(count)]
         assert all(t in ins for t in ts),(board,hex(j),"target")
         tables[j]=ts
