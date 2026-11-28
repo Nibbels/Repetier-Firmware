@@ -917,6 +917,9 @@ int main(int argc, char** argv) {
             bed.sensorType = 255;
             for (int i = 0; i < 10; ++i) service();
             assert(!Printer::isAnyTempsensorDefect());
+            // The preceding regular pass consumed the hotend ticket. A
+            // newly completed ADC batch is required before autotune admission.
+            publishAdc();
             injection = Injection::OtherFault;
         } else assert(false);
         const uint8_t id = !std::strcmp(name, "autotune-entry-controller") ? NUM_TEMPERATURE_LOOPS : t.pwmIndex;
