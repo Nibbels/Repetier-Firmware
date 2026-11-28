@@ -649,3 +649,54 @@ jobs:
           path: ${{ runner.temp }}/task0032-current-wake
           retention-days: 7
           if-no-files-found: error
+
+
+  current-drive-combined-preflight:
+    if: github.head_ref == 'task/Task0032-resend-preflight'
+    needs: [current-drive-core-preflight, current-drive-wake-preflight]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-current-core-${{ github.sha }}
+          path: ${{ runner.temp }}/core-input
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-current-wake-${{ github.sha }}
+          path: ${{ runner.temp }}/wake-input
+      - name: Compose on newer exact P0 Drive checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-current-combined"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          p0=bb4456ffec2c7c1caef5fae68721797352ab9695
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$RUNNER_TEMP/current-combined-p0" "$p0"
+          sha256sum tools/task0032/current-drive-combined.py > "$out/source-sha256.txt"
+          python3 tools/task0032/current-drive-combined.py --source "$RUNNER_TEMP/current-combined-p0" --core "$RUNNER_TEMP/core-input/candidate.diff" --wake "$RUNNER_TEMP/wake-input/wake.diff" --out "$out"
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Requalify combined actual source with all canonical replays and four AVR recovery images
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-current-combined"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          cd "$RUNNER_TEMP/current-combined-p0"
+          git add Repetier tests
+          git -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Disposable combined current Drive core and wake"
+          git rev-parse HEAD > "$out/local-candidate-sha.txt"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" --p0-candidate | tee "$out/canonical.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-current-combined-${{ github.sha }}
+          path: ${{ runner.temp }}/task0032-current-combined
+          retention-days: 7
+          if-no-files-found: error
