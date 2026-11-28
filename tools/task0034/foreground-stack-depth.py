@@ -69,7 +69,7 @@ def decode_linked(s,board):
         tables[j]=ts
     return ins,tables,labels
 
-def inventory(z,board,canonical=False):
+def inventory(z,board,canonical=False,trace=None):
     p=board+"/" if canonical else "host/experimental-avr/emergency/"+board+"/"
     s=z.read(p+"disassembly.txt").decode()
     ins,tables,labels=decode_linked(s,board)
@@ -104,11 +104,21 @@ def inventory(z,board,canonical=False):
         # depth includes three-byte return PC. Y is an affine offset from
         # entry SP, or unknown. ABI calls preserve Y; a compiler-generated
         # paired immediate adjustment is interpreted as a signed 16-bit delta.
-        todo=[(root,3,None,None)];visited=set();peak=3
+        entry=(root,3,None,None)
+        todo=[entry];visited=set();peak=3
+        local_edges = collections.defaultdict(set) if trace is not None else None
+        local_calls = {} if trace is not None else None
+        def add(next_state):
+            if local_edges is not None:
+                local_edges[state].add(next_state)
+            todo.append(next_state)
         while todo:
-            pc,d,y,pair=todo.pop()
-            if (pc,d,y,pair) in visited:continue
-            visited.add((pc,d,y,pair));peak=max(peak,d)
+            state=todo.pop()
+            pc,d,y,pair=state
+            if state in visited:continue
+            visited.add(state);peak=max(peak,d)
+            if local_edges is not None:
+                local_edges[state]  # terminal states also belong to the graph
             if len(visited)>200000 or not 0<=d<=2048:
                 errors.add((name(root),hex(pc),"depth/state limit",d));break
             if pc not in ins:errors.add((name(root),hex(pc),"missing"));continue
@@ -157,7 +167,8 @@ def inventory(z,board,canonical=False):
             if op in ("ld","st") and re.search(r"(?:^|, )(?:Y\+|-Y)(?:,|$)",a):
                 y=None;pair=None
             if pc in tables:
-                todo.extend((t,d,y,pair) for t in tables[pc]);continue
+                for t in tables[pc]:add((t,d,y,pair))
+                continue
             if op in ("icall","eicall","ijmp","eijmp"):
                 if name(root).startswith("Commands::emergencyStop()"):continue
                 if name(root).startswith("loadCompensationMatrix(") and op in ("icall","eicall"):
@@ -165,7 +176,7 @@ def inventory(z,board,canonical=False):
                 else:errors.add((name(root),hex(pc),"indirect",op));continue
             elif op in ("call","rcall"):
                 t=target(arg)
-                if op=="rcall" and t==n:todo.append((n,d+3,y,pair));continue
+                if op=="rcall" and t==n:add((n,d+3,y,pair));continue
             else:t=None
             if t is not None:
                 if t==0:
@@ -176,7 +187,9 @@ def inventory(z,board,canonical=False):
                     continue
                 pending.append(t)
                 edges[root,t][pc]=max(d,edges[root,t].get(pc,0))
-                todo.append((n,d,y,None));continue
+                if local_calls is not None:
+                    local_calls[state]=t
+                add((n,d,y,None));continue
             if op in ("jmp","rjmp"):
                 t=target(arg)
                 if t==0:
@@ -187,15 +200,17 @@ def inventory(z,board,canonical=False):
                     tail_transfers.add((root,pc,t))
                 # Tail jumps share the current frame (including aliases and
                 # library helper entry labels), not another return address.
-                todo.append((t,d,y,pair));continue
+                add((t,d,y,pair));continue
             if op in ("ret","reti","break"):
                 if d!=3 and op=="ret":errors.add((name(root),hex(pc),"return depth",d))
                 continue
-            if op.startswith("br"):todo.append((target(arg),d,y,pair))
+            if op.startswith("br"):add((target(arg),d,y,pair))
             if op in ("sbrc","sbrs","sbic","sbis","cpse"):
                 if n not in ins:errors.add((name(root),hex(pc),"skip missing"));continue
-                todo.append((n+ins[n][0],d,y,pair))
-            todo.append((n,d,y,pair))
+                add((n+ins[n][0],d,y,pair))
+            add((n,d,y,pair))
+        if trace is not None:
+            trace[root]={"entry":entry,"edges":local_edges,"calls":local_calls}
         local[root]=peak
     result={"board":board,"tables":len(tables),"functions":len(seen),"edges":len(edges),
             "errors":sorted(errors),"main":hex(main), "explicitSystemRegisterSites": sorted(system_sites),
