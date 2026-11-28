@@ -22,7 +22,11 @@ Owner no longer uses Visual Studio/Visual Micro and authorizes retiring the comp
 
 ## Owner clarification 2026-11-28 — retain WobbleFix, retire old tooling
 
-Keep WobbleFix: adjustable XY phase/amplitudes compensate periodic lateral bed motion from spindle eccentricity (5 mm Z per turn), reducing repeating surface artifacts. Preserve settings/UI/coordinate semantics; default zero is not removal justification. Owner authorizes Doxygen and the three completed research workflow definitions to be removed from active maintenance; #103/#105/#106 verified merged. Task0034 owns cleanup, retains historical research and all current tests; Task0032 supplemental CI and canonical firmware CI remain. Arduino IDE/CLI and CMake remain. No change to M3029 without separate owner decision.
+Keep WobbleFix: adjustable XY phase/amplitudes compensate periodic lateral bed motion from spindle eccentricity (5 mm Z per turn), reducing repeating surface artifacts. Preserve settings/UI/coordinate semantics; default zero is not removal justification. Owner authorizes Doxygen and the three completed research workflow definitions to be removed from active maintenance; #103/#105/#106 verified merged. Task0034 owns cleanup, retains historical research and all current tests; Task0032 supplemental CI and canonical firmware CI remain. Arduino IDE/CLI and CMake remain. M3029 is governed by the subsequent removal decision below.
+
+## Owner decision 2026-11-28 — remove M3029 now, optional clean-sheet reconsideration later
+
+Task0034 performs complete legacy remote-panel G-code removal in one dedicated commit, preserving all local panel/safety behavior. In a separate following commit create Task0037 with exact removal SHA, parent, subject and qualification links. Task0037 is reserved/deferred until Tasks0034, 0032 and 0036 complete and owner explicitly chooses reconsideration; a new harness interface must fit final architecture, not restore old code. Default remains absent. No new worker, no hardware activity. Task0032 must not resurrect remote-only paths. See AGENTS.md and TASKS.md for full constraints.
 
 ## Owner decision 2026-11-28 — mandatory global interrupt-mask closure
 
