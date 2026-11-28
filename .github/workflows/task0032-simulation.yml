@@ -439,6 +439,8 @@ jobs:
           sha256sum tools/task0032/{resend-policy.h,resend-ring-preflight.py,loss-gate-replay.py} > "$out/source-sha256.txt"
           sha256sum "$RUNNER_TEMP"/resend-p0/Repetier/UsbSerial.{h,cpp} "$RUNNER_TEMP/resend-p0/tests/usb-serial.cpp" >> "$out/source-sha256.txt"
           python3 tools/task0032/resend-ring-preflight.py --source "$RUNNER_TEMP/resend-p0" --out "$out" | tee "$out/replay.log"
+          sha256sum tools/task0032/resend-frame-preflight.py "$RUNNER_TEMP/resend-p0/Repetier/GCodeInput.cpp" >> "$out/source-sha256.txt"
+          python3 tools/task0032/resend-frame-preflight.py --source "$RUNNER_TEMP/resend-p0" | tee "$out/frame-replay.log"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
