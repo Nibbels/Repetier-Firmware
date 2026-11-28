@@ -111,17 +111,19 @@ template<class Line,class Cause> void entryLine(Line& line,const EntryView& v,ui
 // Reset row cursor when starting/restarting a Reader after Changed.
 template<class Line,class Cause,class Sink> class TextSink {
     Sink& sink_;
+    // Valid rows are 0..5. Keep terminal formatting failure in the cursor.
+    static constexpr uint8_t Failed=255;
     uint8_t row_=0;
-    bool failed_=false;
 public:
     explicit TextSink(Sink& sink):sink_(sink){}
-    void reset(){row_=0;failed_=false;}
-    bool failed()const{return failed_;}
+    Sink& sink() const { return sink_; }
+    void reset(){row_=0;}
+    bool failed()const{return row_==Failed;}
     bool tryEntry(const EntryView& v) {
-        if(failed_)return false;
+        if(failed())return false;
         Line line;
         entryLine<Line,Cause>(line,v,row_);
-        if(!line.finish()){failed_=true;return false;}
+        if(!line.finish()){row_=Failed;return false;}
         if(!sink_.tryWriteSpan(line.data(),line.size()))return false;
         if(++row_<rows(v))return false;
         row_=0;return true;

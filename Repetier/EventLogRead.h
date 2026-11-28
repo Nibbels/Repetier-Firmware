@@ -32,24 +32,26 @@ enum class ReadProgress : uint8_t { Idle, Busy, Skipped, Sent, Done, Changed };
 // instead use a field cursor with same snapshot/ownership contract.
 template<uint8_t Slots> class Reader {
     uint32_t newest_=0;
-    uint8_t slot_=0,remaining_=0;
-    bool running_=false,failedAtStart_=false;
+    // Remaining is always 0..Slots (Slots<=64); 255 means idle.
+    static constexpr uint8_t Idle=255;
+    uint8_t slot_=0,remaining_=Idle;
+    bool failedAtStart_=false;
 public:
     bool begin(const Ring<Slots>& ring) {
         if(!ring.initialized()||ring.pending())return false;
         newest_=ring.latestSequence();slot_=ring.latestSlot();
         failedAtStart_=ring.failed();
         remaining_=ring.hasEntries()?Slots:0;
-        running_=true;return true;
+        return true;
     }
     template<class Store,class Sink>
     ReadProgress step(const Ring<Slots>& ring,Store& store,Sink& sink) {
-        if(!running_)return ReadProgress::Idle;
+        if(remaining_==Idle)return ReadProgress::Idle;
         if(ring.pending()||!store.ready())return ReadProgress::Busy;
         if(newest_!=ring.latestSequence()||failedAtStart_!=ring.failed()){
-            running_=false;return ReadProgress::Changed;
+            remaining_=Idle;return ReadProgress::Changed;
         }
-        if(!remaining_){running_=false;return ReadProgress::Done;}
+        if(!remaining_){remaining_=Idle;return ReadProgress::Done;}
         uint8_t bytes[EntryBytes];
         ReadProgress result=ReadProgress::Skipped;
         if(ring.readEntry(store,slot_,bytes)){

@@ -21,7 +21,6 @@ class Service {
     Ring<Slots> ring_;
     ThermalCapture<HeaterCount> capture_;
     Reader<Slots> reader_;
-    Sink& sink_;
     TextSink<Line,Cause,Sink> text_;
     enum class Query : uint8_t { Idle, Begin, Read, End, Changed, Error };
     Query query_=Query::Idle;
@@ -44,10 +43,10 @@ class Service {
 
     bool notice(const char* msg) {
         Line line;line.text(msg);
-        return line.finish()&&sink_.tryWriteSpan(line.data(),line.size());
+        return line.finish()&&text_.sink().tryWriteSpan(line.data(),line.size());
     }
 public:
-    explicit Service(Sink& sink):sink_(sink),text_(sink){}
+    explicit Service(Sink& sink):text_(sink){}
     // Coalesce duplicate history requests; no command or heater admission.
     void requestHistory(){if(query_==Query::Idle)query_=Query::Begin;}
     bool historyPending()const{return query_!=Query::Idle;}
