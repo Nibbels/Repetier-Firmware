@@ -40,6 +40,9 @@ def main():
         move.applyRunningStopTail();
     }
     assert(move.stepsRemaining == 32 && move.stepProfile.accelSteps == initialRampSteps);""")
+    replace_once(t/"task0034-guarded-drive.cpp",
+        '#include "Constants.h"',
+        '#include "Constants.h"\n#include <algorithm>\nnamespace RMath { using std::min; }')
     replace_once(t/"task0034-guarded-drive.py",
         'motion[motion.index("GuardedMoveResult PrintLine::runScanMove("):motion.index("void PrintLine::prepareDirectMove(")],',
         'motion[motion.index("GuardedMoveResult PrintLine::runScanMove("):motion.index("void PrintLine::prepareDirectMove(")] + "\\n" +\n        motion[motion.index("void PrintLine::applyRunningStopTail("):motion.index("/** \\\\brief Check if move is new.")],')
