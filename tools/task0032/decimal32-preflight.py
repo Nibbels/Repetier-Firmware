@@ -143,6 +143,74 @@ int main() {
 }
 '''
 
+# Feed actual receiver fields, including legacy narrowing of G/M/T and
+# checksum bytes. Do not execute arbitrary machine commands in these tests.
+# M206 strict validation remains in the canonical suite.
+WIRE=r'''
+void integerWire() {
+    struct Sample {const char* token;int32_t expected;};
+    const Sample cases[]={
+        {"0",0},{"",0},{"+",0},{"-",0},{"  +42",42},{"\t-42",-42},
+        {"2147483647",INT32_MAX},{"2147483648",INT32_MAX},
+        {"4294967295",INT32_MAX},{"-2147483648",INT32_MIN},
+        {"-2147483649",INT32_MIN},{"00000000000000123",123},
+        {"999999999999999999999999999999",INT32_MAX},
+        {"-999999999999999999999999999999",INT32_MIN},
+        {"65536",65536},{"-65536",-65536},{"256",256},{"-256",-256},
+        {"12.5",12},{"0x12",0},{"- 42",0}
+    };
+    for(const auto& item:cases) {
+        const std::string token=item.token;
+        feed("N0 M110\n");readReply("ok\r\n");
+        feed(numbered("M105 S"+token+" P"+token+" T"+token));
+        readReply("ok 0\r\n");
+        auto* c=GCodeInput::peekCurrentCommand();
+        assert(c&&c->hasM()&&c->M==105&&c->hasS()&&c->S==item.expected&&
+               c->hasP()&&c->P==item.expected&&c->hasT()&&c->T==uint8_t(item.expected));
+        GCodeInput::popCurrentCommand();
+        // G values are narrowed to 16-bit. No downstream dispatch.
+        feed(numbered("G"+token));
+        readReply("ok 0\r\n");
+        c=GCodeInput::peekCurrentCommand();
+        assert(c&&c->hasG()&&c->G==uint16_t(item.expected));
+        GCodeInput::popCurrentCommand();
+        // N with M110 is parsed as full 32-bit and admitted as a line
+        // reset, not a queued machine command. Check following numbered ACK.
+        feed(numbered("N"+token+" M110"));
+        readReply("ok\r\n");
+        assert(!GCodeInput::peekCurrentCommand());
+        assert(serialReceive.lastLineNumber==uint32_t(item.expected));
+    }
+    // Ensure the next test starts from a known line after M110.
+    feed("N0 M110\n");readReply("ok\r\n");
+    // Accepted checksums keep the old uint8_t narrowing semantics.
+    std::string body="N1 M105";
+    uint8_t sum=0;for(unsigned char ch:body)sum^=ch;
+    feed(body+"*"+std::to_string(unsigned(sum)+256)+"\n");
+    readReply("ok 1\r\n");popM(105);
+    assert(incoming.empty()&&!GCodeInput::peekCurrentCommand());
+    puts("decimal32 wire: 63 actual field/reset cases plus checksum narrowing PASS");
+}
+'''
+
+def extend_wire(root):
+    cpp=root/"tests/serial-protocol.cpp"
+    s=cpp.read_text()
+    old="void numberedLines() {"
+    assert s.count(old)==1
+    s=s.replace(old,WIRE+"\n"+old)
+    old='if (scenario == "numbered") numberedLines();'
+    assert s.count(old)==1
+    cpp.write_text(s.replace(old,'if (scenario == "decimal32-wire") integerWire();\n    else '+old))
+    py=root/"tests/serial-protocol.py"
+    s=py.read_text()
+    old='for scenario in ("numbered",'
+    assert s.count(old)==1
+    s=s.replace(old,'for scenario in ("decimal32-wire", "numbered",')
+    old='for scenario in ("thermal-emergency",'
+    assert s.count(old)==1
+    py.write_text(s.replace(old,'for scenario in ("decimal32-wire", "thermal-emergency",'))
+
 def run(args,**kw):
     return subprocess.run([str(x) for x in args],check=True,text=True,**kw)
 
@@ -226,6 +294,7 @@ def main():
         for folder in ("Repetier","tests"):shutil.copytree(source/folder,root/folder)
         new=header+"\ninline long parseLongValue(char* s) { return parseDecimal32(s); }\n"
         (root/"Repetier/GCodeInput.cpp").write_text(receiver[:i]+new+receiver[j:])
+        extend_wire(root)
         run(["python3",root/"tests/serial-protocol.py"])
         result={"p0":P0,"receiver_sha256":hashlib.sha256(receiver.encode()).hexdigest(),
                 "candidate_sha256":hashlib.sha256(header.encode()).hexdigest(),
