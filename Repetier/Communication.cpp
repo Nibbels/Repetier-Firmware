@@ -247,7 +247,6 @@ FSTRINGVALUE(Com::tEPRPrinter_FAN_PART_FAN_PWM_MAX, "Partfan 99% level [16..254]
 
 FSTRINGVALUE(Com::tHeaterDecoupledWarning, "One heater seems decoupled from thermistor - disabling all for safety!")
 
-FSTRINGVALUE(Com::tOutputObjectPrint, OUTPUT_OBJECT_SCRIPT_PRINT)
 
 
 FSTRINGVALUE(Com::tCap, "Cap:")

@@ -243,7 +243,6 @@ public:
     FSTRINGVAR(tEPRPrinter_FAN_PART_FAN_PWM_MAX)
 
     FSTRINGVAR(tHeaterDecoupledWarning)
-    FSTRINGVAR(tOutputObjectPrint)
 
     FSTRINGVAR(tCap)
     FSTRINGVAR(tConfig)

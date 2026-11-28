@@ -571,6 +571,33 @@ __attribute__((noinline)) void GCodeInput::runHardFilament(bool unload) {
     finishInternalStep(false);             // M104 S0 (shared queue-settle path)
 }
 
+bool GCodeInput::executeOutputProgram() {
+    if (flashScriptRunning || !internalProgramAdmitted())
+        return false;
+    flashScriptRunning = true;
+    const bool finished = runOutputProgram();
+    flashScriptRunning = false;
+    return finished;
+}
+
+__attribute__((noinline)) bool GCodeInput::runOutputProgram() {
+    if (!finishInternalStep(true)) return false; // G21
+    Printer::setEPositionMM(0);
+    if (!finishInternalStep(true)) return false; // G92 E0
+    internalAxisMove(E_AXIS, -float(SCRIPT_RETRACT_MM), 0);
+    if (!finishInternalStep(true)) return false; // G1 E-1, retain F
+    GCodeCommands::dwellMilliseconds(100);
+    if (!finishInternalStep(true)) return false; // G4 P100
+    Printer::setEPositionMM(0);
+    if (!finishInternalStep(true)) return false; // G92 E0
+    GCodeCommands::selectAbsolutePositioningWithSource(true);
+    if (!finishInternalStep(true)) return false; // G90
+    internalAxisMove(Z_AXIS, 200, 540);
+    if (!finishInternalStep(true)) return false; // G1 Z200 F540
+    internalAxisMove(Y_AXIS, 245, 4800);
+    return finishInternalStep(true);            // G1 Y245 F4800
+}
+
 // Keep the parser and command buffer frame out of refused nested entries.
 __attribute__((noinline)) void GCodeInput::runFlashScript(const char* cmd) {
     char buf[80];

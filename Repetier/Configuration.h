@@ -243,8 +243,7 @@ Overridden if EEPROM activated. */
 // ##   configuration of the output object functionality
 // ##########################################################################################
 
-/** \brief The following script allows to configure the exact behavior of the automatic object output */
-#define OUTPUT_OBJECT_SCRIPT_PRINT          "G21\nG92 E0\nG1 E-" xstr(SCRIPT_RETRACT_MM) "\nG4 P100\nG92 E0\nG90\nG1 Z200 F540\nG1 Y245 F4800"
+// Automatic object output is a typed sequence in GCodeInput::runOutputProgram.
 
 // ##########################################################################################
 // ##   configuration of the pause functionality

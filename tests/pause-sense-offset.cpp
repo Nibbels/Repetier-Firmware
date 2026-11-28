@@ -171,7 +171,6 @@ const char ui_text_output_object[] = "";
 struct Com {
     static constexpr const char* tSlash = "/";
     static constexpr const char* tLinearLColon = "Linear L:";
-    static constexpr const char* tOutputObjectPrint = "output";
     static const char* lastLine;
     static void printFLN(const char* line) { lastLine = line; }
     static void printErrorFLN(const char* line) { lastLine = line; }
@@ -605,12 +604,13 @@ struct GCodeInput {
         ++incomingReads;
     }
     static bool flashScriptActive() { return false; }
-    static void executeFlashScript(const char* script) {
-        assert(script == Com::tOutputObjectPrint && !PrintLine::hasLines());
+    static bool executeOutputProgram() {
+        assert(!PrintLine::hasLines());
         assert(!Printer::printJob.commandsBlocked());
         ++objectOutputs;
         if (duringOutputScript)
             duringOutputScript();
+        return !Printer::printJob.commandsBlocked();
     }
 };
 

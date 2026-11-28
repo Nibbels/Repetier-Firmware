@@ -231,9 +231,9 @@ void outputObject(bool showerrors) {
     // disable the fan
     Commands::setFanSpeed((uint8_t)0);
 
-    {
-        GCodeInput::executeFlashScript(Com::tOutputObjectPrint);
-    }
+    // A canceled/refused output program must not reach motor shutdown.
+    if (!GCodeInput::executeOutputProgram())
+        return;
 
     if (!Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Cancel))
         return;

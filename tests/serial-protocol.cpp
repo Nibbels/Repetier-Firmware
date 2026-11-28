@@ -82,8 +82,13 @@ namespace Printer {
 struct { void recordActivity(millis_t){internalEvents.push_back(1);} } inactivity;
 void setEPositionMM(float e){assert(e==0);internalEvents.push_back(2);}
 bool queueInternalAxisMove(uint8_t axis,float value,float feedrate){
-    assert(axis==E_AXIS);
-    internalEvents.push_back(value<0?-90:90);
+    if(axis==E_AXIS)
+        internalEvents.push_back(int(value));
+    else {
+        assert(axis==Y_AXIS || axis==Z_AXIS);
+        internalEvents.push_back(1000+axis);
+        internalEvents.push_back(int(value));
+    }
     internalEvents.push_back(int(feedrate));
     return true;
 }
@@ -177,6 +182,8 @@ void printErrorFLN(const char* text) { print(tError); printFLN(text); }
 // Real receiver, M111 handler and dispatch entry; downstream command effects
 // are represented by counters, not physical hardware.
 namespace GCodeCommands {
+void dwellMilliseconds(uint32_t duration){assert(GCodeInput::flashScriptActive());internalEvents.push_back(int(duration));}
+void selectAbsolutePositioningWithSource(bool internal){assert(internal && GCodeInput::flashScriptActive());internalEvents.push_back(90);}
 void waitForHotendWithParameters(bool targetPresent,int32_t target,bool toolPresent,uint8_t tool){
     assert(targetPresent && !toolPresent && !tool && GCodeInput::flashScriptActive());
     internalEvents.push_back(target);
@@ -660,6 +667,30 @@ void flashScript() {
 
 } // namespace
 
+void outputProgram() {
+    const std::vector<int> expected={1,3,2,1,3,-SCRIPT_RETRACT_MM,0,1,3,100,1,3,2,1,3,90,1,3,
+                                     1000+Z_AXIS,200,540,1,3,1000+Y_AXIS,245,4800,1,3};
+    assert(GCodeInput::executeOutputProgram());
+    assert(internalEvents==expected && periodicVisits==8 && !GCodeInput::flashScriptActive());
+    assert(!dispatchedCommands);
+    unsigned boundary=0;
+    for(unsigned n=1;n<=8;++n){
+        while(expected[boundary++]!=3){}
+        internalEvents.clear();periodicVisits=0;stopAtPeriodicVisit=n;
+        assert(!GCodeInput::executeOutputProgram());
+        assert(stopped && periodicVisits==n && !GCodeInput::flashScriptActive());
+        assert(internalEvents==std::vector<int>(expected.begin(),expected.begin()+boundary));
+        stopped=false;stopAtPeriodicVisit=0;
+    }
+    internalEvents.clear();periodicVisits=0;
+    legacyRejected=true;assert(!GCodeInput::executeOutputProgram());legacyRejected=false;
+    settingsBlocked=true;assert(!GCodeInput::executeOutputProgram());settingsBlocked=false;
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    thermalLocked=true;assert(!GCodeInput::executeOutputProgram());thermalLocked=false;
+#endif
+    assert(internalEvents.empty() && !periodicVisits);
+}
+
 void hardFilament() {
     for(bool unload:{false,true}){
         internalEvents.clear();periodicVisits=0;
@@ -728,6 +759,7 @@ int main(int argc, char** argv) {
     else if (scenario == "script") flashScript();
     else if (scenario == "soft-filament") softFilament();
     else if (scenario == "hard-filament") hardFilament();
+    else if (scenario == "output-program") outputProgram();
     else if (scenario == "post-stop-output") postStopOutputBoundary();
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     else if (scenario == "thermal-emergency") thermalEmergency();
