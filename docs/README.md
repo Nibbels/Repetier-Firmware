@@ -6,6 +6,8 @@ Start with the [development roadmap](development-roadmap.md) for the active coor
 
 ## Build, licensing and diagnostics
 
+Doxygen API generation is retired; use the maintained Markdown notes and source. Completed private research CI definitions have been retired without removing their source-pinned evidence. The canonical firmware and active Task0032 simulation workflows remain.
+
 - [Final build and cleanup audit](../coordination/audits/final-cleanup.md)
 - [AVR disassembly and RAM inspection commands](overflow_decompile.txt)
 - [Historical Repetier communication protocol](../repetier%20communication%20protocol.txt) (not a complete current specification)

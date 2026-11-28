@@ -26,6 +26,8 @@ Supported models and retrofit variants remain RF1000, RF2000, RF2000v2 and RF200
 
 Visual Studio / Visual Micro is retired; the legacy solution, IDE manifests and manifest-completeness test are no longer maintained. The Arduino sketch and CMake sources remain available; the canonical qualified build remains the recovery-linked Arduino CLI pipeline above.
 
+Doxygen generation and the completed private research workflows for planner/queue, step output and UART are retired. Their historical results and source pins remain in Git. The canonical firmware checks and active Task0032 simulation workflow remain.
+
 ## Preheat profiles
 
 Set the bed and hotend temperatures for profiles A and B under **Configuration → Preheat profiles**. Each edit is saved in the controller EEPROM. Choose A or B in **Extruder**, where the label shows the bed temperature first. A target of 0 turns off that heater. Factory values are 60/180 °C for A and 100/210 °C for B.

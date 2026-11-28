@@ -26,6 +26,8 @@ Die unterstützten Modelle und Umbauvarianten bleiben RF1000, RF2000, RF2000v2 u
 
 Visual Studio / Visual Micro ist eingestellt; die alte Solution, IDE-Projektlisten und der zugehörige Vollständigkeitstest werden nicht mehr gepflegt. Arduino-Sketch und CMake bleiben erhalten; maßgeblich für die Qualifikation ist weiterhin der oben beschriebene Recovery-Build mit Arduino CLI.
 
+Doxygen-Generierung und die abgeschlossenen privaten Forschungs-Workflows zu Planner/Queue, Schrittausgabe und UART sind eingestellt. Historische Ergebnisse und Quellstand-Pins bleiben in Git erhalten. Die reguläre Firmware-CI und der aktive Task0032-Simulationsworkflow bleiben bestehen.
+
 ## Vorheizprofile
 
 Unter **Configuration → Preheat profiles** stellst du Bett- und Extrudertemperatur für Profil A und B ein. Der Drucker speichert jede Änderung im internen EEPROM. Unter **Extruder** startest du das Profil anhand der angezeigten Temperaturen. Das Bett steht zuerst. Mit 0 °C schaltest du die jeweilige Heizung aus. Die Werkseinstellungen sind 60/180 °C für A und 100/210 °C für B.

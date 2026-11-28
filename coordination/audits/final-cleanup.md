@@ -1,6 +1,6 @@
 # Final cleanup after Tasks 0019 and 0020
 
-**Current status (2026-11-28):** The owner has retired Visual Studio / Visual Micro. Task0034 removes the solution, both manifests and their manifest-only replay; the earlier retention decision below is historical. No firmware source or canonical AVR build dependency on these files was found. Arduino CLI, the sketch and CMake are retained.
+**Current status (2026-11-28):** The owner has retired Visual Studio / Visual Micro. Task0034 removes the solution, both manifests and their manifest-only replay; the earlier retention decision below is historical. No firmware source or canonical AVR build dependency on these files was found. Arduino CLI, the sketch and CMake are retained. The owner also retired Doxygen generation and the three completed private research workflow definitions (#103, #105, #106). The Doxygen and generated-output retention instructions below document the old decision only; no Doxygen run is required. Historical evidence and research inputs remain available.
 
 Baseline: [b189d9b0519b90a0a7ea9dfb47f9c3ed0a4bed38](https://github.com/Nibbels/Repetier-Firmware/commit/b189d9b0519b90a0a7ea9dfb47f9c3ed0a4bed38), Task0020 merged in #87, no open integration PR at claim. Scope: final cleanup per manager handover. No printer operation, no code or configuration changes in the sketch. The legacy build systems remain separate from the verified release build.
 
