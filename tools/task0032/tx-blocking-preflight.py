@@ -23,12 +23,15 @@ P0=ring["P0"]
 def candidate(header,source):
     header,source=ring["candidate_uart"](header,source)
     header,source=ring["packed_candidate"](header,source)
+    return bounded_writer(header,source)
+
+def bounded_writer(header,source):
     header=once(header,"    static void flush();",
         "    static void flush();\n    static bool blockingTxFailed(){return blockingTxFailed_;}")
-    header=once(header,"    static uint16_t txPublished_;",
-        "    static uint16_t txPublished_;\n    static bool blockingTxFailed_;")
-    source=once(source,"uint16_t UsbSerial::txPublished_ = 0;",
-        "uint16_t UsbSerial::txPublished_ = 0;\nbool UsbSerial::blockingTxFailed_ = false;")
+    header=once(header,"    static Ring<transmitBufferSize> tx_;",
+        "    static Ring<transmitBufferSize> tx_;\n    static bool blockingTxFailed_;")
+    source=once(source,"UsbSerial::Ring<UsbSerial::transmitBufferSize> UsbSerial::tx_;",
+        "UsbSerial::Ring<UsbSerial::transmitBufferSize> UsbSerial::tx_;\nbool UsbSerial::blockingTxFailed_ = false;")
     check="""        if(!(SREG & 0x80) || !--budget) {
             blockingTxFailed_=true;
             return;
@@ -100,7 +103,8 @@ int main(int argc,char** argv){
     const bool partial=mode.find("partial")!=std::string::npos;
     // Masked but immediately available is not a failure.
     SREG=0;UsbSerial::write(0x55);assert(!UsbSerial::blockingTxFailed()&&!visits);
-    assert(drain()==std::string(1,0x55));UsbSerial::flush();
+    SREG=0x80;assert(drain()==std::string(1,0x55));
+    SREG=0;UsbSerial::flush();
     SREG=masked?0x15:0x95;
     for(unsigned i=0;i<63;++i)assert(UsbSerial::tryWrite(uint8_t(i)));
     const uint16_t before=UsbSerial::transmitRetired();
