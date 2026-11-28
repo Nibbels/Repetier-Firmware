@@ -37,9 +37,7 @@ void dwellMilliseconds(uint32_t duration) {
 
     while ((uint32_t)(codenum - HAL::timeInMilliseconds()) < 2000000000) {
         Commands::checkForPeriodicalActions(Processing);
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         if(Printer::printJob.emergencyLocked())return;
-#endif
     }
 }
 
@@ -343,9 +341,7 @@ void setSenseOffsetParameters(GCode* pCommand) {
 
     if (saveDigits || saveMaximum)
         EEPROM::storeSenseOffsetSettings(digits, maximum, saveDigits, saveMaximum);
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     if (Printer::printJob.emergencyLocked()) return;
-#endif
 
     // Statusausgabe per M3909
     const auto limits = controller.limits();

@@ -319,7 +319,8 @@ void setMenuMode(int mode, bool active) {
     menuPaused = active;
 }
 void stopPrint();
-void stopForThermalFault();
+bool isAnyTempsensorDefect(){return false;} // terminal transition tested with actual source separately
+void stopForThermalFault(){assert(false);}
 void applyAdvanceSettings();
 void homeZAxis();
 void homeDigits();
@@ -706,6 +707,10 @@ void publishSenseOffsetSettings() {
 }
 }
 
+namespace ThermalEmergency {
+struct Ledger {bool active() const {return false;}};
+const Ledger& faultLedger(){static Ledger l;return l;}
+}
 #include "pause-sense-offset-firmware.inc"
 
 bool advanceTimerArmed() {

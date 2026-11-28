@@ -269,10 +269,8 @@ GuardedMoveResult PrintLine::runScanMove(int32_t steps, bool emergencyRetreat) {
     auto& z = Printer::zMotion;
     const bool referenceRequired = z.isHomed();
     const auto cancelled = [emergencyRetreat] {
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         if (Printer::printJob.emergencyLocked())
             return true;
-#endif
         return emergencyRetreat ? !Printer::blockAll :
             (Printer::blockAll || Printer::printJob.commandsBlocked() ||
              Calibration::scanSession.aborting() || !isAnyScanRunning());
@@ -377,9 +375,7 @@ void PrintLine::prepareDirectMove(const int32_t steps[4], bool stoppable, bool f
 
     InterruptProtectedBlock publish;
     if (Printer::blockAll
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         || Printer::printJob.emergencyLocked()
-#endif
     ) {
         abortDirectMoveForEmergency();
         for (uint8_t axis = X_AXIS; axis <= E_AXIS; ++axis)

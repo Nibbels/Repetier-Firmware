@@ -159,7 +159,7 @@ with tempfile.TemporaryDirectory() as d:
     exe=Path(d)/"unwind"
     p.write_text(prelude+"\n"+motion+"\n"+bed+"\n"+offset+
                  "\nvoid heldButtonWait(){\n do {\n"+keys+"\n++continued;\n } while(false);\n}\n"+main)
-    for flags in ([],["-DRF_THERMAL_EMERGENCY_EXPERIMENT=1"]):
+    for flags in (["-DRF_THERMAL_EMERGENCY_EXPERIMENT=1"],):
         subprocess.run(["c++","-std=c++11","-O2","-Wall","-Wextra","-Werror",
                         *flags,str(p),"-o",str(exe)],check=True)
         subprocess.run([str(exe)],check=True)

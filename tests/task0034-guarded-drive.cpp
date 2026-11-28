@@ -2,7 +2,6 @@
 #include <cstdint>
 #include <cstdlib>
 #include <math.h>
-#define RF_THERMAL_EMERGENCY_EXPERIMENT 1
 #include <initializer_list>
 #include "Constants.h"
 

@@ -14,7 +14,6 @@ harness=r'''
 #include <cassert>
 #include <cstdint>
 #include <initializer_list>
-#define RF_THERMAL_EMERGENCY_EXPERIMENT 1
 #include "PrintJob.h"
 
 static bool irq, entryI, heatersOff, motorsEnabled;

@@ -112,12 +112,10 @@ static void setupForPrinting() {
 } // setupForPrinting
 
 void initRF(void) {
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     // Recovery was recognized by startWatchdog() at the end of setup.
     // Do not run the normal matrix/boot-animation/idle initialization
     // after that terminal state. Diagnostic-only scheduler owns progress.
     if(Printer::printJob.emergencyLocked())return;
-#endif
     Printer::strainGauge.begin(HAL::timeInMilliseconds());
     EepromZones::AvrDevice::enableRuntimeServices();
 
@@ -404,12 +402,10 @@ void doEmergencyStop(StopReason reason) {
     Printer::stopPrint(); // And tell usb senders to stop
 
     Calibration::moveZ(int(Printer::stepsPerMm(Z_AXIS) * 5), true);
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     // Thermal emergency takes precedence even during the retreat. Its
     // holding-torque policy must not be overridden by this older frame.
     if (Printer::printJob.emergencyLocked())
         return;
-#endif
 
     // we are not going to perform any further operations until the restart of the firmware
     Printer::switchEverythingOff();

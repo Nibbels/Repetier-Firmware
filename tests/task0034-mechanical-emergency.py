@@ -19,7 +19,6 @@ harness=r'''
 #include <cassert>
 #include <cstdint>
 #include <initializer_list>
-#define RF_THERMAL_EMERGENCY_EXPERIMENT 1
 #define PSTR(x) x
 enum {X_AXIS,Y_AXIS,Z_AXIS,E_AXIS};
 enum class StopReason {ZMin,ZBlock};

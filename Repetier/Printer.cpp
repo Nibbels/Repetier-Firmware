@@ -364,9 +364,7 @@ bool Printer::queueRelativeMMCoordinates(float dx, float dy, float dz, float de,
  */
 void Printer::offsetRelativeStepsCoordinates(int32_t dx, int32_t dy, int32_t dz, int32_t de, DirectMoveMode configuration) {
     if(!EEPROM::settingsReady())return;
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     if(printJob.emergencyLocked())return;
-#endif
     if (Printer::blockAll || (dx == 0 && dy == 0 && dz == 0 && de == 0))
         return;
     if (configuration != DirectMoveMode::Configured && !pause.allowsManualMove())
@@ -376,9 +374,7 @@ void Printer::offsetRelativeStepsCoordinates(int32_t dx, int32_t dy, int32_t dz,
         Commands::checkForPeriodicalActions(Processing);
     }
 
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     if(printJob.emergencyLocked())return; // A wait above can latch the fault.
-#endif
     if (Printer::blockAll)
         return;
     const bool stoppable = configuration == DirectMoveMode::Button;
@@ -457,12 +453,10 @@ void Printer::setup() {
         }
     }
 
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     // Historical active-HIGH beeper polarity; only after board identity
     // check. Fitted sounder/driver/polarity still require qualification.
     WRITE(THERMAL_ALARM_PIN,LOW);
     SET_OUTPUT(THERMAL_ALARM_PIN);
-#endif
 
     // Initialize Step Pins
     SET_OUTPUT(X_STEP_PIN);
@@ -666,7 +660,6 @@ void Printer::disableCMPnow(bool wait) {
 // The thermal caller has already revoked heater duty and latched the
 // output inhibit. Keep terminal motion cleanup out of normal stop reporting.
 void Printer::stopForThermalFault() {
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     InterruptProtectedBlock noInts;
     if(!printJob.beginThermalEmergency())return;
     // Heater revoke and SafetyLock precede this entry. Also handle
@@ -682,18 +675,13 @@ void Printer::stopForThermalFault() {
     // create a separate mechanical hazard. No new STEP admission.
     noInts.unprotect();
     discardScans();
-#else
-    stopPrint();
-#endif
 }
 
 void Printer::stopPrint() {
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     if(isAnyTempsensorDefect()) {
         stopForThermalFault();
         return;
     }
-#endif
     InterruptProtectedBlock noInts;
     if (!printJob.beginStop(HAL::timeInMilliseconds()))
         return;
@@ -713,11 +701,9 @@ void Printer::stopPrint() {
 
     noInts.unprotect();
 
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     // Emergency cancellation/reporting has its own nonblocking cursor.
     // All existing stop-state cleanup above still runs.
     if(ThermalEmergency::faultLedger().active()) return;
-#endif
     Com::printFLN(PSTR("RequestStop:"));     // Repetier-Server
     Com::printFLN(PSTR("// action:cancel")); // OctoPrint
     Com::printFLN(PSTR("USB print stopped."));
