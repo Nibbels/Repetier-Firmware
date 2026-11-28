@@ -37,12 +37,7 @@ public:
     static void adjustFanMode(uint8_t output_mode = 0);
     static void changeFeedrateMultiply(int factorInPercent);
     static void changeFlowrateMultiply(float newExtrusionFactor);
-    static void reportPrinterUsage();
     static void emergencyStop();
-    static void checkFreeMemory();
-    static void writeLowestFreeRAM();
-    static int lowestRAMValue;
-    static int lowestRAMValueSend;
 }; // Commands
 
 #endif // COMMANDS_H

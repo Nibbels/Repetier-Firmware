@@ -243,122 +243,48 @@ ProbeProgress ScanProbe::retreat() {
 }
 
 void showAbortScanReason(const void* scanName, ScanAbort reason) {
-    switch (reason) {
-        // Geplantes Canceling
-    case ScanAbort::Canceled: {
-        showError(scanName, PSTR(UI_TEXT_SCAN_ABORTED));
-        break;
+    // Explicit flash tables: GCC's automatic switch conversion placed two
+    // pointer tables (80 bytes) in AVR .data. Never spend SRAM on these
+    // immutable diagnostics. All near-flash pointers are audited in CI.
+#define RF_SCAN_TEXT(name, value, code, shortText, hint) \
+    static const char name##_short[] PROGMEM = shortText; \
+    static const char name##_hint[] PROGMEM = hint;
+    RF_SCAN_FAULTS(RF_SCAN_TEXT)
+#undef RF_SCAN_TEXT
+    static const char* const descriptions[][2] PROGMEM = {
+#define RF_SCAN_ROW(name, value, code, shortText, hint) \
+        {name##_short, sizeof(hint)>1?name##_hint:nullptr},
+        RF_SCAN_FAULTS(RF_SCAN_ROW)
+#undef RF_SCAN_ROW
+    };
+    constexpr uint8_t firstReason=uint8_t(ScanAbort::StartPressure);
+    constexpr uint8_t count=sizeof(descriptions)/sizeof(descriptions[0]);
+    static_assert(count==uint8_t(ScanAbort::HeaterTargetChanged)-firstReason+1,
+                  "scan reason catalogue must cover contiguous enum values");
+    const void* first = PSTR(UI_TEXT_FAIL);
+    const void* second = nullptr;
+    if(reason==ScanAbort::Canceled)first=PSTR(UI_TEXT_SCAN_ABORTED);
+    else {
+        const uint8_t index=uint8_t(uint8_t(reason)-firstReason);
+        if(index<count){
+            first=reinterpret_cast<const void*>(pgm_read_word(&descriptions[index][0]));
+            second=reinterpret_cast<const void*>(pgm_read_word(&descriptions[index][1]));
+        }
     }
-
-    // Kabelbruch, Extruder verspannt, Stecker wackelig, Ingress,...
-    case ScanAbort::StartPressure: {
-        showError(scanName, PSTR("Bad start force"));
-        break;
-    }
-    case ScanAbort::IdlePressure: {
-        showError(scanName, PSTR("Bad idle force"));
-        break;
-    }
-    case ScanAbort::DmsOverload:
-        showError(scanName, PSTR("DMS overload"));
-        break;
-    case ScanAbort::DmsUnavailable:
-        showError(scanName, PSTR("DMS read failed"));
-        break;
-    case ScanAbort::AveragePressure: {
-        showError(scanName, PSTR("Bad force signal"));
-        break;
-    }
-
-    // Hinweise auf Bugs
-    case ScanAbort::AboveStart: {
-        showError(scanName, PSTR("Bug SOS"));
-        break;
-    }
-    case ScanAbort::MatrixDimensions: {
-        showError(scanName, PSTR("Bug MDO"));
-        break;
-    }
-
-    // Löcher im Druckbett, Druckbett verdreckt, Mechanik problem, DDP schlecht geklebt
-    case ScanAbort::UnevenBed: {
-        showError(scanName, PSTR("Uneven bed, dirt"), PSTR("hole, bad ground"));
-        break;
-    }
-    case ScanAbort::StepDeltaOutOfRange: {
-        // Fehler trat auf, als ich die Düse beim HBS ein Blatt Papier mitschleppen hab lassen.
-        // Marius1 hatte den Fehler durch ein sehr schräg eingebautes Bett.
-        showError(scanName, PSTR("Leftovers, snot"), PSTR("incrustation"));
-        break;
-    }
-
-    // Z-Schraube falsch eingestellt?
-    // _MAX_COMPENSATION und _ENDSTOP_PROTECTION deuten im Printermodus auf dasselbe hin, sind aber 2 unterschiedliche Stellen.
-    case ScanAbort::MinEndstop: {
-        showError(scanName, PSTR("Min Endstop"));
-        break;
-    }
-    case ScanAbort::MaxEndstop: {
-        showError(scanName, PSTR("Max Endstop"));
-        break;
-    }
-    case ScanAbort::MaxCompensation: {
-        showError(scanName, PSTR("Reached limit"), PSTR("max compensation"));
-        break;
-    }
-    case ScanAbort::EndstopProtection: {
-        showError(scanName, PSTR("Reached endstop"), PSTR("protection limit"));
-        break;
-    }
-
-    case ScanAbort::MissingMatrix: {
-        showError(scanName, PSTR("Missing or"), PSTR(UI_TEXT_INVALID_MATRIX));
-        break;
-    }
-    case ScanAbort::MatrixOverflow: {
-        showError(scanName, PSTR("Correction would"), PSTR("overflow matrix"));
-        break;
-    }
-    case ScanAbort::MatrixHeight: {
-        // Matrix hat einen Punkt über Z-Start. Das ist gefährlich hoch, weil die Nozzle theoretisch beim Fahren auf position kollidiert haben könnte.
-        // Eine rein positive Matrix melden wir nicht, das ist egal, sofern die Starthöhe immer höher ist. Dafür gibts im Anschluss des Scans die genaue Meldung zur Schraubeneinstellung.
-        showError(scanName, PSTR("Badly wrong"), PSTR("Z-Screw/Z-Start"));
-        break;
-    }
-    default:
-        showError(scanName, PSTR(UI_TEXT_FAIL));
-    }
+    showError(scanName, first, second);
 }
 
-bool moveZ(int nSteps, bool emergencyRetreat) {
-    const auto interrupted = [emergencyRetreat] {
-        return !emergencyRetreat && (scanSession.aborting() || Printer::blockAll || Printer::printJob.commandsBlocked());
-    };
-    if (interrupted())
-        return false;
-    while (Printer::needsCMPwait()) {
-        Commands::checkForPeriodicalActions(Processing);
-        if (interrupted())
-            return false;
+bool moveZ(int32_t nSteps, bool emergencyRetreat) {
+    const auto result = PrintLine::runScanMove(nSteps, emergencyRetreat);
+    if (result.status == GuardedMoveStatus::PositionReached)
+        return true;
+    if (result.status != GuardedMoveStatus::Cancelled) {
+        if (!emergencyRetreat)
+            scanSession.requestAbort(ScanAbort::MaxCompensation);
+        Com::printFLN(PSTR("Z-Endstop protection"));
+        UI_STATUS_UPD("Z-Endstop protection");
     }
-
-    // Retreat can make a pending correction reachable. Reserve Z for this scan move.
-    const uint16_t pulses = abs(static_cast<int32_t>(nSteps));
-    ZMotion::ScanMove scan(Printer::zMotion, nSteps < 0 ? -1 : 1);
-    for (uint16_t i = 0; i < pulses; ++i) {
-        if (interrupted())
-            return false;
-        if (!scan.step()) {
-            if (!emergencyRetreat)
-                scanSession.requestAbort(ScanAbort::MaxCompensation);
-            Com::printFLN(PSTR("Z-Endstop protection"));
-            UI_STATUS_UPD("Z-Endstop protection");
-            return false;
-        }
-        if ((i & 15) == 15)
-            Commands::checkForPeriodicalActions(Calibrating);
-    }
-    return !interrupted();
+    return false;
 } // moveZ
 
 } // namespace Calibration

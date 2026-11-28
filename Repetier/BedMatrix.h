@@ -7,6 +7,9 @@ namespace BedMatrix {
 
 void restoreAtStartup(void (*progress)() = nullptr);
 void clearWorking();
+// Caller owns idle motion and heater admission and must not acknowledge
+// the associated settings recovery until this durable invalidation succeeds.
+bool invalidateAllStored(void (*progress)() = nullptr);
 bool reloadActive();
 void beginScanGrid();
 void recordScanColumn(uint8_t x, short positionMm);

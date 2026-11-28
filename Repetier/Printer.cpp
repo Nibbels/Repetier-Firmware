@@ -52,7 +52,6 @@ uint8_t Printer::flag1 = 0;
 uint8_t Printer::flag2 = 0;
 uint8_t Printer::flag3 = 0;
 
-uint8_t Printer::debugLevel = 6; ///< Debug output: 1 echo, 2 info, 4 error; bit 8 retired.
 
 uint8_t Printer::menuMode_ = 0;
 
@@ -64,7 +63,6 @@ int Printer::feedrateMultiply = 100;          // Multiplier for feedrate in perc
 float Printer::menuExtrusionFactor = 1.0;     // Flow multiplier factor (1.0 = 100%)
 float Printer::maxXYJerk_;                                         // Maximum allowed jerk in mm/s
 float Printer::maxZJerk_;                                          // Maximum allowed jerk in z direction in mm/s
-PrintUsage Printer::printUsage;
 ZOffset Printer::zOffset;
 SenseOffsetControl Printer::senseOffsetControl{SENSIBLE_PRESSURE_MAX_OFFSET};
 ZMotion Printer::zMotion{ZAXIS_STEPS_PER_MM};
@@ -90,7 +88,7 @@ volatile char Printer::blockAll = 0;
 
 DirectPosition Printer::extruderDirect;
 
-char Printer::enabledStepper[3] = { 0, 0, 0 };
+volatile char Printer::enabledStepper[3] = { 0, 0, 0 };
 
 
 
@@ -242,46 +240,71 @@ void Printer::setFeedrate(float feedrate) {
     if (feedrate <= 0)
         return;
 
-    if (Printer::gcodeModes.inches())
-        Printer::feedrate = feedrate * (float)Printer::feedrateMultiply * 0.0042333f; // Factor is 25.4/60/100 = convertToMM(0.00016666666f)
+    Printer::feedrate = feedrate * (float)Printer::feedrateMultiply * 0.00016666666f;
+}
+
+// Host and typed internal moves share the same modal coordinate and
+// extrusion rules. Do not substitute machine-coordinate queueFloatCoordinates.
+static bool gcodeExtrusionCalibrated() {
+    if (!Extruder::allHeatersCalibrated()) {
+        Com::printFLN(PSTR("Error: PID tune required before printing"));
+        return false;
+    }
+    return true;
+}
+
+static bool applyGCodeExtrusion(float e) {
+    if (!isExtrusionAllowed(e))
+        return false;
+    if (Printer::gcodeModes.relativeE())
+        Printer::moveTarget.addMM(E_AXIS, e);
     else
-        Printer::feedrate = feedrate * (float)Printer::feedrateMultiply * 0.00016666666f;
+        Printer::moveTarget.setMachineMM(E_AXIS, e);
+    return true;
+}
+
+static bool publishGCodeMove(bool isXYZMove, bool isEMove, bool internal) {
+    if (!isXYZMove && !isEMove)
+        return false;
+    const bool published = PrintLine::prepareQueueMove(false, true, Printer::requestedFeedrate(), isXYZMove);
+    if (published && !internal)
+        Printer::printJob.admitPrintMotion();
+    return published;
 }
 
 // Convert G-code positions to millimetres in the planner's coordinate frame.
 bool Printer::queueGCodeCoordinates(GCode* com) {
-    if (com->hasE() && !Extruder::allHeatersCalibrated()) {
-        Com::printFLN(PSTR("Error: PID tune required before printing"));
+    if (com->hasE() && !gcodeExtrusionCalibrated())
         return false;
-    }
     const bool isXYZMove = !com->hasNoXYZ();
     if (com->hasX())
-        moveTarget.setFromGCodeMM(X_AXIS, convertToMM(com->X), gcodeModes.relativeXYZ());
+        moveTarget.setFromGCodeMM(X_AXIS, com->X, gcodeModes.relativeXYZ());
     if (com->hasY())
-        moveTarget.setFromGCodeMM(Y_AXIS, convertToMM(com->Y), gcodeModes.relativeXYZ());
+        moveTarget.setFromGCodeMM(Y_AXIS, com->Y, gcodeModes.relativeXYZ());
     if (com->hasZ())
-        moveTarget.setFromGCodeMM(Z_AXIS, convertToMM(com->Z), gcodeModes.relativeXYZ());
+        moveTarget.setFromGCodeMM(Z_AXIS, com->Z, gcodeModes.relativeXYZ());
 
-    float e = convertToMM(com->E);
-    bool isEMove = com->hasE() && isExtrusionAllowed(e);
-    if (isEMove) {
-        if (gcodeModes.relativeE())
-            moveTarget.addMM(E_AXIS, e);
-        else
-            moveTarget.setMachineMM(E_AXIS, e);
-    }
-
-    if (com->hasF()) {
+    const bool isEMove = com->hasE() && applyGCodeExtrusion(com->E);
+    if (com->hasF())
         Printer::setFeedrate(com->F);
-    }
-
-    if (!isXYZMove && !isEMove)
-        return false;
-    const bool published = PrintLine::prepareQueueMove(false, true, Printer::feedrate, isXYZMove);
-    if (published && !com->internalCommand)
-        printJob.admitPrintMotion();
-    return published;
+    return publishGCodeMove(isXYZMove, isEMove, com->internalCommand);
 } // queueGCodeCoordinates
+
+bool Printer::queueInternalAxisMove(uint8_t axis, float value, float feedrateMmMin) {
+    if (axis > E_AXIS)
+        return false;
+    const bool xyz = axis != E_AXIS;
+    if (!xyz && !gcodeExtrusionCalibrated())
+        return false;
+    bool e = false;
+    if (xyz)
+        moveTarget.setFromGCodeMM(axis, value, gcodeModes.relativeXYZ());
+    else
+        e = applyGCodeExtrusion(value);
+    // Zero means retain the modal feedrate, just like omitted F.
+    Printer::setFeedrate(feedrateMmMin);
+    return publishGCodeMove(xyz, e, true);
+}
 
 /** Move to machine coordinates, retaining the correction on omitted axes. */
 void Printer::queueFloatCoordinates(float x, float y, float z, float e, float feedrate) {
@@ -340,7 +363,9 @@ bool Printer::queueRelativeMMCoordinates(float dx, float dy, float dz, float de,
  * This is expecially usefull to transfer the extruder 0 to 1 and backwards.
  */
 void Printer::offsetRelativeStepsCoordinates(int32_t dx, int32_t dy, int32_t dz, int32_t de, DirectMoveMode configuration) {
-    if (dx == 0 && dy == 0 && dz == 0 && de == 0)
+    if(!EEPROM::settingsReady())return;
+    if(printJob.emergencyLocked())return;
+    if (Printer::blockAll || (dx == 0 && dy == 0 && dz == 0 && de == 0))
         return;
     if (configuration != DirectMoveMode::Configured && !pause.allowsManualMove())
         return;
@@ -349,6 +374,9 @@ void Printer::offsetRelativeStepsCoordinates(int32_t dx, int32_t dy, int32_t dz,
         Commands::checkForPeriodicalActions(Processing);
     }
 
+    if(printJob.emergencyLocked())return; // A wait above can latch the fault.
+    if (Printer::blockAll)
+        return;
     const bool stoppable = configuration == DirectMoveMode::Button;
     const bool feedrateSource = (stoppable || configuration == DirectMoveMode::ManualPosition)
         ? manualMotion.feedrateSource() : FEEDRATE_DIRECTCONFIG;
@@ -417,14 +445,18 @@ void Printer::setup() {
     TwiTransfer::beginBus();
 
     if (!hardwareTypeMatches()) {
-        EEPROM::initBaudrate();
-        HAL::serialSetBaudrate(EEPROM::configuredBaudrate());
+        HAL::serialSetBaudrate(firmwareSerialBaudrate);
         Com::printErrorFLN(PSTR(UI_TEXT_WRONG_FIRMWARE));
 
         // Halt before initializing hardware outputs for a different board.
         while (1) {
         }
     }
+
+    // Historical active-HIGH beeper polarity; only after board identity
+    // check. Fitted sounder/driver/polarity still require qualification.
+    WRITE(THERMAL_ALARM_PIN,LOW);
+    SET_OUTPUT(THERMAL_ALARM_PIN);
 
     // Initialize Step Pins
     SET_OUTPUT(X_STEP_PIN);
@@ -553,14 +585,10 @@ void Printer::setup() {
     Printer::setAxisLengthMm(Y_AXIS, Y_MAX_LENGTH);
     Printer::setAxisLengthMm(Z_AXIS, Z_MAX_LENGTH);
 
-#ifdef RGB_LIGHT_R_PIN
-    RgbLighting::reset();
-#endif // RGB_LIGHT_R_PIN
 
     uid.initialize();
 
-    EEPROM::initBaudrate();
-    HAL::serialSetBaudrate(EEPROM::configuredBaudrate());
+    HAL::serialSetBaudrate(firmwareSerialBaudrate);
 
     // sending of this information tells the Repetier-Host that the firmware has restarted - never delete or change this to-be-sent information
     Com::println();
@@ -588,15 +616,10 @@ void Printer::setup() {
     AccessoryOutputs::initializeCaseLight();
 
     updateDerivedParameter();
-    Commands::checkFreeMemory();
-    Commands::writeLowestFreeRAM();
     HAL::setupTimer();
 
     Extruder::applyCurrentSettings();
 
-#ifdef RGB_LIGHT_R_PIN
-    RgbLighting::initialize();
-#endif // RGB_LIGHT_R_PIN
 
     lockMovement();
 
@@ -604,9 +627,7 @@ void Printer::setup() {
 } // setup()
 
 void Printer::enableSenseOffsetnow(void) {
-    const int16_t storedDigits = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS);
-    const int16_t storedLimit = HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX);
-    senseOffsetControl.activateStoredLimits(storedDigits, storedLimit);
+    senseOffsetControl.activateStoredLimits();
 }
 
 void Printer::enableCMPnow(void) {
@@ -622,11 +643,7 @@ bool Printer::needsCMPwait(void) {
 }
 
 void Printer::disableCMPnow(bool wait) {
-    doHeatBedZCompensation = 0;
-    {
-        InterruptProtectedBlock noInts;
-        zMotion.requestCorrection(0);
-    }
+    disableCMPnow();
 
     while (wait) {
         {
@@ -640,7 +657,31 @@ void Printer::disableCMPnow(bool wait) {
     }
 }
 
+// The thermal caller has already revoked heater duty and latched the
+// output inhibit. Keep terminal motion cleanup out of normal stop reporting.
+void Printer::stopForThermalFault() {
+    InterruptProtectedBlock noInts;
+    if(!printJob.beginThermalEmergency())return;
+    // Heater revoke and SafetyLock precede this entry. Also handle
+    // idle/jog/scan and normal stop's delayed output phase.
+    blockAll=1;
+    lockMovement();
+    idleStatus.cancel();
+    extrusionOutput.inhibit(ExtrusionOutput::Inhibit::Emergency);
+    pause.cancel();
+    PrintLine::abortDirectMoveForEmergency();
+    PrintLine::discardQueuedMoves();
+    // Keep existing motor enable state: dropping Z holding torque may
+    // create a separate mechanical hazard. No new STEP admission.
+    noInts.unprotect();
+    discardScans();
+}
+
 void Printer::stopPrint() {
+    if(isAnyTempsensorDefect()) {
+        stopForThermalFault();
+        return;
+    }
     InterruptProtectedBlock noInts;
     if (!printJob.beginStop(HAL::timeInMilliseconds()))
         return;
@@ -660,6 +701,9 @@ void Printer::stopPrint() {
 
     noInts.unprotect();
 
+    // Emergency cancellation/reporting has its own nonblocking cursor.
+    // All existing stop-state cleanup above still runs.
+    if(ThermalEmergency::faultLedger().active()) return;
     Com::printFLN(PSTR("RequestStop:"));     // Repetier-Server
     Com::printFLN(PSTR("// action:cancel")); // OctoPrint
     Com::printFLN(PSTR("USB print stopped."));
@@ -673,7 +717,7 @@ void Printer::stopPrint() {
     Com::printF(Com::tExtrDot, i + 1); \
     Com::print(':');
 void Printer::showConfiguration() {
-    Com::config(PSTR("Baudrate:"), EEPROM::configuredBaudrate());
+    Com::config(PSTR("Baudrate:"), firmwareSerialBaudrate);
     Com::config(PSTR("InputBuffer:"), UsbSerial::receiveCapacity);
     Com::config(PSTR("NumExtruder:"), NUM_EXTRUDER);
     Com::config(PSTR("MixingExtruder:"), 0);

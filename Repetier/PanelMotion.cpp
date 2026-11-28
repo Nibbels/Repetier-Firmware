@@ -46,8 +46,7 @@ void configureMANUAL_STEPS_Z(int8_t increment) {
     // Nutze neuen Wert:
     Printer::manualMotion.setSteps(Z_AXIS, pgm_read_word(&stepsize_table[loop]));
 
-    HAL::eprSetInt16(EPR_RF_MOD_Z_STEP_SIZE, Printer::manualMotion.steps(Z_AXIS));
-    EEPROM::updateChecksum();
+    EEPROM::storeZJogSteps(Printer::manualMotion.steps(Z_AXIS));
 } // configureMANUAL_STEPS_Z()
 
 void moveXAction(int8_t direction) {

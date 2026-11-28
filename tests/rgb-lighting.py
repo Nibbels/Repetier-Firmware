@@ -1,180 +1,146 @@
 #!/usr/bin/env python3
-"""Replay the production RGB translation unit with AVR-width clock and Timer4 stubs."""
+"""Replay actual lighting GPIO/PWM ownership, all four board variants and X19 conflict."""
 from pathlib import Path
-import os
-import re
-import subprocess
-import tempfile
-
-root = Path(__file__).resolve().parents[1]
-src = root / "Repetier"
-# Use the actual profile, tolerance and EEPROM definitions; avoid compiling unrelated firmware.
-defs = []
-for name in ("RF2000.h", "Configuration.h", "Eeprom.h"):
-    for line in (src / name).read_text(encoding="utf-8", errors="replace").splitlines():
-        if re.match(r"#define\s+(?:RGB_(?:LIGHT_|HEATING_|PRINTING_|COOLING_|IDLE_|MANUAL_)\w+|EPR_RF_RGB_\w+|COOLDOWN_THRESHOLD|MAX_ROOM_TEMPERATURE)\s", line):
-            defs.append(line)
-stub = r'''
-#pragma once
-#include <stdint.h>
-#include <cmath>
+import os, subprocess, tempfile
+fw=Path(__file__).resolve().parents[1]/"Repetier"
+source=(fw/"Lighting.cpp").read_text().replace('#include "Repetier.h"','')
+stub=r'''
 #include <cassert>
-using std::fabs;
-using PGM_P = const char*;
-#define PSTR(s) s
-enum { RGB_MODE_OFF, RGB_MODE_WHITE, RGB_MODE_AUTOMATIC, RGB_MODE_MANUAL };
-enum { RGB_STATUS_NOT_AUTOMATIC, RGB_STATUS_AUTOMATIC, RGB_STATUS_HEATING,
-       RGB_STATUS_PRINTING, RGB_STATUS_COOLING, RGB_STATUS_IDLE, RGB_STATUS_COLOR_CHANGE };
-#ifdef ENABLE_RGB
-#define RGB_LIGHT_R_PIN 6
-#define RGB_LIGHT_G_PIN 7
-#define RGB_LIGHT_B_PIN 8
+#include <cstdint>
+#define __AVR_ATmega2560__ 1
+#include "BoardConfiguration.h"
+#include "Lighting.h"
+bool output[100]{}, level[100]{};
+unsigned writes[100]{};
+#define LOW false
+#define WRITE(pin,val) do {level[pin]=bool(val);++writes[pin];} while(0)
+#define SET_OUTPUT(pin) do {output[pin]=true;} while(0)
+#ifdef RGB_LIGHT_R_PIN
+enum { COM4A1=7, COM4B1=5, COM4C1=3, WGM41=1, WGM42=3, WGM43=4, CS41=1, PH3=3, PH4=4, PH5=5, PH6=6 };
+bool irq=true;
+struct InterruptProtectedBlock {
+    bool old=irq;
+    InterruptProtectedBlock(){irq=false;}
+    ~InterruptProtectedBlock(){irq=old;}
+};
+// Require the real driver to access the shared port under exclusion.
+struct Port {
+    uint8_t bits;
+    operator uint8_t() const {assert(!irq);return bits;}
+    void operator=(uint8_t v){assert(!irq);bits=v;}
+    void operator&=(uint8_t v){*this=uint8_t(*this)&v;}
+    void operator|=(uint8_t v){*this=uint8_t(*this)|v;}
+};
+Port PORTH{0xC7},DDRH{0xC7};
+uint8_t TCCR4A=0xff,TCCR4B=0xff;
+uint16_t TCNT4,ICR4,OCR4A,OCR4B,OCR4C;
 #endif
-enum { COM4A1=7, COM4B1=5, COM4C1=3 };
-static uint8_t TCCR4A = 2; // WGM41 must survive RGB writes
-static uint16_t OCR4A, OCR4B, OCR4C;
-static uint32_t clockMs;
-static unsigned writes, checksums, address, value;
-struct InterruptProtectedBlock { InterruptProtectedBlock() {} ~InterruptProtectedBlock() {} };
-struct HAL {
-    static uint32_t timeInMilliseconds() { return clockMs; }
-    static void eprSetByte(unsigned a, unsigned v) { ++writes; address=a; value=v; }
-};
-struct EEPROM { static void updateChecksum() { ++checksums; } };
-struct Com {
-    static void printF(PGM_P) {}
-    static void print(char) {}
-    static void printFLN(PGM_P) {}
-    static void printFLN(PGM_P, unsigned) {}
-};
-struct GCode {
-    int P, S; bool p=true, s=true;
-    GCode(int channel, int level): P(channel), S(level) {}
-    bool hasP() const { return p; }
-    bool hasS() const { return s; }
-};
-struct Temperature { float targetTemperatureC=0, currentTemperatureC=20; };
-struct Extruder { Temperature tempControl; };
-static Extruder extruder[NUM_EXTRUDER];
-static Temperature heatedBedController;
 '''
-test = r'''
-#include "RgbLighting.cpp"
-#ifdef ENABLE_RGB
-using namespace RgbLighting;
-static void expect(int r, int g, int b) {
-    assert((TCCR4A & 2) != 0);
-    assert(((TCCR4A >> COM4A1) & 1) == (r != 0));
-    assert(((TCCR4A >> COM4B1) & 1) == (g != 0));
-    assert(((TCCR4A >> COM4C1) & 1) == (b != 0));
-    if (r) assert(OCR4A == r*80);
-    if (g) assert(OCR4B == g*80);
-    if (b) assert(OCR4C == b*80);
-}
-static void settle(int r, int g, int b) {
-    for (int i=0; i<255; ++i) advanceFade();
-    expect(r,g,b);
-    advanceFade(); expect(r,g,b);
-}
-static void cool() {
-    for (auto& e: extruder) e.tempControl = Temperature();
-    heatedBedController = Temperature();
-}
-static void idleAt(uint32_t start) {
-    cool();
-    selectMode(RGB_MODE_AUTOMATIC);
-    clockMs=start;
-    updateStatus();
-    settle(RGB_IDLE_R,RGB_IDLE_G,RGB_IDLE_B);
-    clockMs=start+uint32_t(RGB_LIGHT_COLOR_CHANGE_DELAY*1000+999);
-    updateStatus();
-    settle(RGB_IDLE_R,RGB_IDLE_G,RGB_IDLE_B);
-    clockMs=start+uint32_t((RGB_LIGHT_COLOR_CHANGE_DELAY+1)*1000);
-    updateStatus(); settle(255,0,0);
-    updateStatus(); settle(255,255,0);
-    updateStatus(); settle(0,255,0);
-    updateStatus(); settle(0,255,255);
-    updateStatus(); settle(0,0,255);
-    updateStatus(); settle(255,0,255);
-    updateStatus(); settle(255,0,0);
+checks=r'''
+using namespace Lighting;
+static void check(Color c) {
+    set(c);
+#if HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)
+    assert(!writes[CASE_LIGHT_PIN] && !output[CASE_LIGHT_PIN]);
+#elif defined(RGB_LIGHT_R_PIN)
+    assert(level[CASE_LIGHT_PIN]==bool(c.r && c.r==c.g && c.g==c.b));
+#else
+    assert(level[CASE_LIGHT_PIN]==bool(c.r||c.g||c.b));
+#endif
+#ifdef RGB_LIGHT_R_PIN
+    const uint8_t channels[]={c.r,c.g,c.b};
+    const uint8_t pins[]={PH3,PH4,PH5};
+    const uint8_t bits[]={COM4A1,COM4B1,COM4C1};
+    const uint16_t compare[]={OCR4A,OCR4B,OCR4C};
+    for(unsigned i=0;i<3;++i) {
+        assert((DDRH.bits&(1<<pins[i])) && bool(PORTH.bits&(1<<pins[i]))==(channels[i]==255));
+        assert(bool(TCCR4A&(1<<bits[i]))==bool(channels[i] && channels[i]!=255));
+        assert(compare[i]==uint16_t(channels[i])*80);
+    }
+    assert((PORTH.bits&0xC7)==0xC7 && (DDRH.bits&0xC7)==0xC7 && irq);
+    assert((TCCR4A&3)==(1<<WGM41) && ICR4==20480);
+    assert(TCCR4B==((1<<WGM42)|(1<<WGM43)|(1<<CS41)));
+#endif
 }
 int main() {
-    reset(); initialize(); expect(0,0,0);
-    assert(mode()==RGB_LIGHT_DEFAULT_MODE);
-    advanceFade(); expect(1,1,1);
-    settle(255,255,255);
-    selectMode(RGB_MODE_OFF); assert(address==EPR_RF_RGB_LIGHT_MODE && value==RGB_MODE_OFF);
-    advanceFade(); expect(254,254,254); settle(0,0,0);
-    requestWhiteToggle(); updateStatus(); assert(forcedWhite()); settle(255,255,255);
-    requestWhiteToggle(); updateStatus(); assert(!forcedWhite()); settle(0,0,0);
-    selectMode(RGB_MODE_MANUAL); settle(RGB_MANUAL_R,RGB_MANUAL_G,RGB_MANUAL_B);
-    GCode edit(1, 42);
-    requestWhiteToggle(); updateStatus(); settle(255,255,255);
-    unsigned count=writes;
-    setManualLight(&edit); assert(writes==count+1 && address==EPR_RF_RGB_MANUAL_R && value==42);
-    assert(checksums==writes);
-    updateStatus(); settle(255,255,255);
-    requestWhiteToggle(); updateStatus(); settle(42,RGB_MANUAL_G,RGB_MANUAL_B);
-    GCode invalid(1,256); count=writes; setManualLight(&invalid); assert(writes==count);
-    invalid.S=-1; setManualLight(&invalid); assert(writes==count);
-    invalid.P=4; invalid.S=1; setManualLight(&invalid); assert(writes==count);
-    invalid.P=1; invalid.p=false; setManualLight(&invalid); assert(writes==count);
-    invalid.p=true; invalid.s=false; setManualLight(&invalid); assert(writes==count);
-    idleAt(100); idleAt(0xfffffff0u); idleAt(0);
-    // Temperature-driven status interrupts the color cycle.
-    extruder[0].tempControl.targetTemperatureC=200;
-    extruder[0].tempControl.currentTemperatureC=100;
-    updateStatus(); settle(RGB_HEATING_R,RGB_HEATING_G,RGB_HEATING_B);
-    requestWhiteToggle(); updateStatus(); settle(255,255,255);
-    GCode heating(2,37); setHeatingLight(&heating);
-    assert(address==EPR_RF_RGB_HEATING_G && value==37);
-    updateStatus(); settle(255,255,255);
-    requestWhiteToggle(); updateStatus(); settle(RGB_HEATING_R,37,RGB_HEATING_B);
-    extruder[0].tempControl.currentTemperatureC=200;
-    updateStatus(); settle(RGB_PRINTING_R,RGB_PRINTING_G,RGB_PRINTING_B);
-    heatedBedController.targetTemperatureC=60;
-    heatedBedController.currentTemperatureC=30;
-    updateStatus(); settle(RGB_HEATING_R,37,RGB_HEATING_B);
-    heatedBedController.currentTemperatureC=60;
-    updateStatus(); settle(RGB_PRINTING_R,RGB_PRINTING_G,RGB_PRINTING_B);
-    if (NUM_EXTRUDER>1) {
-        extruder[1].tempControl.targetTemperatureC=200;
-        extruder[1].tempControl.currentTemperatureC=100;
-        updateStatus(); settle(RGB_HEATING_R,37,RGB_HEATING_B);
-        extruder[1].tempControl.currentTemperatureC=200;
-        extruder[0].tempControl.currentTemperatureC=100;
-        // Inherited ordering: last active hotend wins. Do not silently change policy.
-        updateStatus(); settle(RGB_PRINTING_R,RGB_PRINTING_G,RGB_PRINTING_B);
-    }
-    for (auto& e: extruder) e.tempControl.targetTemperatureC=0;
-    heatedBedController.targetTemperatureC=0;
-    updateStatus(); settle(RGB_COOLING_R,RGB_COOLING_G,RGB_COOLING_B);
-    cool(); updateStatus(); settle(RGB_IDLE_R,RGB_IDLE_G,RGB_IDLE_B);
-    GCode modeCommand(RGB_MODE_OFF,0); modeCommand.s=false;
-    setRgbLightMode(&modeCommand); settle(0,0,0);
-    modeCommand.P=4; count=writes; setRgbLightMode(&modeCommand);
-    assert(mode()==RGB_MODE_OFF && writes==count);
-    restoreMode(RGB_MODE_MANUAL); initialize(); settle(42,RGB_MANUAL_G,RGB_MANUAL_B);
-    selectMode(RGB_MODE_WHITE); settle(255,255,255);
-    requestWhiteToggle(); updateStatus(); requestWhiteToggle(); updateStatus();
-    settle(255,255,255); assert(!forcedWhite());
-    assert(checksums==writes);
-}
+    initialize();
+#ifdef RGB_LIGHT_R_PIN
+    assert(available());
 #else
-int main() { assert(TCCR4A==2 && OCR4A==0 && OCR4B==0 && OCR4C==0); }
+    assert(available()==!HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN));
 #endif
+    check(Black);check(White);check(Red);
+    for(unsigned i=0;i<256;++i)check({uint8_t(i),uint8_t(255-i),uint8_t(i^0x55)});
+    for(uint32_t now:{0u,511u,512u,1023u,1024u,0xffffffffu,0u}) {
+        serviceAlarm(now);
+#ifdef RGB_LIGHT_R_PIN
+        assert(bool(PORTH.bits&(1<<PH3))==bool(now&512u));
+        assert(!(PORTH.bits&((1<<PH4)|(1<<PH5))) && (PORTH.bits&0xC7)==0xC7);
+#elif !HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)
+        assert(level[CASE_LIGHT_PIN]==bool(now&512u));
+#endif
+    }
+    initialize();check(Black);
+}
 '''
-with tempfile.TemporaryDirectory(prefix="rgb-replay-") as tmp:
-    path = Path(tmp)
-    (path / "Repetier.h").write_text(stub + "\n" + "\n".join(defs) + "\n")
-    (path / "RgbLighting.cpp").write_bytes((src / "RgbLighting.cpp").read_bytes())
-    (path / "main.cpp").write_text(test)
-    for variant, count, enabled in (("RF1000", 1, False), ("RF2000", 2, True),
-                                    ("RF2000v2", 2, True), ("RF2000-X44", 1, True)):
-        args = [os.environ.get("CXX", "g++"), "-std=c++11", "-O2",
-                "-DNUM_EXTRUDER=" + str(count)]
-        if enabled:
-            args += ["-DENABLE_RGB"]
-        subprocess.run(args + [str(path / "main.cpp"), "-o", str(path / "replay")], check=True)
-        subprocess.run([str(path / "replay")], check=True)
-        print(variant + ": RGB replay passed")
+variants=[
+["-DMOTHERBOARD=DEVICE_TYPE_RF1000"],
+["-DMOTHERBOARD=DEVICE_TYPE_RF2000"],
+["-DMOTHERBOARD=DEVICE_TYPE_RF2000v2"],
+["-DMOTHERBOARD=DEVICE_TYPE_RF2000","-DNUM_EXTRUDER=1","-DEXT0_EXTRUDER_COOLER_PIN=X44_PIN"],
+["-DMOTHERBOARD=DEVICE_TYPE_RF1000","-DEXT0_EXTRUDER_COOLER_PIN=X19_PIN"],
+["-DMOTHERBOARD=DEVICE_TYPE_RF2000","-DEXT0_EXTRUDER_COOLER_PIN=X19_PIN"],
+]
+with tempfile.TemporaryDirectory() as d:
+    p=Path(d)/"lighting.cpp";exe=Path(d)/"lighting"
+    p.write_text("#include <initializer_list>\n"+stub+source+checks)
+    for flags in variants:
+        subprocess.run([os.environ.get("CXX","c++"),"-std=c++11","-O2","-Wall","-Wextra","-Werror","-I",str(fw),*flags,str(p),"-o",str(exe)],check=True)
+        subprocess.run([str(exe)],check=True)
+        print("Lighting GPIO/PWM, 256 intensities and alarm rollover PASS",flags)
+
+# Compile the actual board configuration for both permitted retrofits and
+# formerly accepted conflicting PWM writers. No runtime registry is involved.
+# Keep the expected diagnostic specific: an unrelated compiler error must not
+# make a negative configuration test pass.
+with tempfile.TemporaryDirectory() as d:
+    p=Path(d)/"pin-ownership.cpp"
+    p.write_text('#define __AVR_ATmega2560__ 1\n#include "BoardConfiguration.h"\n')
+    cxx=[os.environ.get("CXX","c++"),"-std=c++11","-I",str(fw),"-fsyntax-only",str(p)]
+    cooler_error="A hotend cooler cannot share a dedicated GPIO"
+    board_error="The stepper board fan cannot share a dedicated GPIO"
+    for model in ("RF1000","RF2000","RF2000v2"):
+        base=["-DMOTHERBOARD=DEVICE_TYPE_"+model]
+        cases=[
+            (["-DEXT0_EXTRUDER_COOLER_PIN=Z_ENABLE_PIN"],cooler_error),
+            (["-DEXT0_EXTRUDER_COOLER_PIN=62"],cooler_error),
+            (["-DFAN_BOARD_PIN=Z_DIR_PIN"],board_error),
+            (["-DFAN_BOARD_PIN=HEATER_0_PIN"],board_error),
+            (["-DFAN_BOARD_PIN=HEATER_2_PIN"],board_error),
+            (["-DFAN_BOARD_PIN=UI_DISPLAY_ENABLE_PIN"],board_error),
+            (["-DEXT0_EXTRUDER_COOLER_PIN=67"],cooler_error),
+            (["-DEXT0_EXTRUDER_COOLER_PIN=20"],cooler_error),
+            (["-DEXT0_EXTRUDER_COOLER_PIN=WATCHDOG_PIN"],cooler_error),
+            (["-DRF_THERMAL_EMERGENCY_EXPERIMENT","-DFAN_BOARD_PIN=THERMAL_ALARM_PIN"],board_error),
+            (["-DFAN_BOARD_PIN=CASE_LIGHT_PIN"],board_error),
+            (["-DFAN_BOARD_PIN=RESERVE_DIGITAL_PIN_PD3"],None),
+            (["-DEXT0_EXTRUDER_COOLER_PIN=X19_PIN"],None),
+        ]
+        if model!="RF1000":
+            cases += [
+                (["-DFAN_BOARD_PIN=9"],board_error),
+                (["-DEXT1_EXTRUDER_COOLER_PIN=Z_ENABLE_PIN"],cooler_error),
+                (["-DFAN_BOARD_PIN=X43_R_PIN"],board_error),
+                (["-DEXT0_EXTRUDER_COOLER_PIN=X43_G_PIN"],cooler_error),
+                (["-DFAN_BOARD_PIN=X45_PIN"],board_error),
+                (["-DFAN_BOARD_PIN=X44_PIN"],board_error),
+                (["-DEXT0_EXTRUDER_COOLER_PIN=X42_PIN"],None),
+                (["-DNUM_EXTRUDER=1","-DEXT0_EXTRUDER_COOLER_PIN=X44_PIN"],None),
+            ]
+        for flags,expected in cases:
+            result=subprocess.run(cxx+base+flags,capture_output=True,text=True)
+            if expected is None:
+                assert result.returncode==0,(model,flags,result.stderr)
+            else:
+                assert result.returncode!=0 and expected in result.stderr,(model,flags,result.stderr)
+        print("pin-ownership configuration checks PASS",model,len(cases))

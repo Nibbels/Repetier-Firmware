@@ -14,13 +14,11 @@ def main():
     commands = (firmware / "gcode.cpp").read_text(encoding="utf-8")
     receiver = (firmware / "GCodeInput.cpp").read_text(encoding="utf-8")
     command_loop = (firmware / "Commands.cpp").read_text(encoding="utf-8")
-    command_loop = command_loop[command_loop.index("void Commands::commandLoop()"):command_loop.index("void Commands::checkForPeriodicalActions(")]
+    command_loop = command_loop[command_loop.index("void Commands::commandLoop()"):command_loop.index("} // commandLoop")+len("} // commandLoop")]
     system = (firmware / "GCodeSystem.cpp").read_text(encoding="utf-8")
     dispatch = (firmware / "GCodeCommands.cpp").read_text(encoding="utf-8")
-    printer = (firmware / "Printer.h").read_text(encoding="utf-8")
     legacy = system[system.index("bool rejectLegacySimulation("):system.index("void reportPosition()")]
     entry = dispatch[dispatch.index("void Commands::executeGCode("):]
-    debug = printer[printer.index("    static uint8_t debugMask()"):printer.index("    static char zDisplayMode()")]
     uart = (firmware / "UsbSerial.cpp").read_text(encoding="utf-8")
     communication = (firmware / "Communication.cpp").read_text(encoding="utf-8")
     configuration = (firmware / "Configuration.h").read_text(encoding="utf-8")
@@ -31,12 +29,14 @@ def main():
     }
     assert names == constants.keys()
     capacity = re.search(r"^#define GCODE_BUFFER_SIZE\s+(\d+)", configuration, re.M)[1]
+    pressure = re.search(r"^#define EMERGENCY_PAUSE_DIGITS_MAX\s+(\d+)", configuration, re.M)[1]
+    preheat = {p: re.search(r"^#define PREHEAT_"+p+r"_HOTEND_C\s+(\d+)", configuration, re.M)[1] for p in ("A","B")}
+    retract = re.search(r"^#define SCRIPT_RETRACT_MM\s+(\d+)", configuration, re.M)[1]
 
     with TemporaryDirectory(prefix="rfx-serial-replay-") as directory:
         build = Path(directory)
         (build / "legacy-dispatch.inc").write_text("namespace GCodeCommands {\n" + legacy + "}\n" + entry, encoding="utf-8")
-        (build / "debug-mask.inc").write_text(debug, encoding="utf-8")
-        (build / "gcode-settings.inc").write_text(f"#define GCODE_BUFFER_SIZE {capacity}\n", encoding="utf-8")
+        (build / "gcode-settings.inc").write_text(f"#define GCODE_BUFFER_SIZE {capacity}\n#define EMERGENCY_PAUSE_DIGITS_MAX {pressure}\n#define SCRIPT_RETRACT_MM {retract}\n" + "".join(f"#define PREHEAT_{p}_HOTEND_C {v}\n" for p,v in preheat.items()), encoding="utf-8")
         (build / "gcode-receiver.inc").write_text(
             (commands + "\n" + receiver + "\n" + command_loop).replace('#include "Repetier.h"\n', ""), encoding="utf-8",
         )
@@ -53,7 +53,9 @@ def main():
         ]
         replay = build / "serial-replay"
         subprocess.run(compiler + [str(tests / "serial-protocol.cpp"), "-o", str(replay)], check=True)
-        for scenario in ("numbered", "queue", "display", "idle", "binary", "overflow", "binary-text", "sustained", "bounded-receive", "emergency", "stopping", "script", "legacy-ascii", "legacy-binary", "legacy-during-stop"):
+        for scenario in ("numbered", "queue", "display", "idle", "binary", "overflow", "binary-text", "sustained", "bounded-receive", "emergency", "stopping", "internal-program-serial", "soft-filament", "hard-filament", "output-program", "post-stop-output", "legacy-ascii", "legacy-binary", "legacy-during-stop", "inch-ascii", "inch-binary"):
+            subprocess.run([str(replay), scenario], check=True, timeout=10)
+        for scenario in ("thermal-emergency", "m206-syntax"):
             subprocess.run([str(replay), scenario], check=True, timeout=10)
         uart_replay = build / "uart-replay"
         subprocess.run(compiler + [str(tests / "usb-serial.cpp"), "-o", str(uart_replay)], check=True)

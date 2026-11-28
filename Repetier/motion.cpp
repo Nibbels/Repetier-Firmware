@@ -18,6 +18,7 @@
 // PrintLine move preparation and queue/direct-move integration; lookahead and pulse execution belong to MotionPlanner and StepExecutor.
 
 #include "Repetier.h"
+#include "ScanProbe.h"
 #include "MotionPlanner.h"
 
 // ================ Sanity checks ================
@@ -157,8 +158,6 @@ bool PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
         }
 
         const float distanceMM = steps * Printer::mmPerStep(axis);
-        if (axis == E_AXIS)
-            Printer::printUsage.recordPlannedFilament(distanceMM);
         axisDistanceMM[axis] = fabs(distanceMM);
         p->setAxisSteps(axis, steps);
     }
@@ -189,8 +188,160 @@ bool PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
     return true;
 } // prepareQueueMove
 
-void PrintLine::prepareDirectMove(const int32_t steps[4], bool stoppable, bool feedrateSource) {
-    direct.flags = FLAG_ABORT_AT_ENDSTOPS;
+int32_t PrintLine::guardedAxisPosition(uint8_t axis) {
+    InterruptProtectedBlock lock;
+    if (axis == Z_AXIS)
+        return Printer::zMotion.motorSteps();
+    return axis < Z_AXIS ? Printer::xyMotion.motorSteps(axis) : 0;
+}
+
+GuardedMoveResult PrintLine::runGuardedMoveTo(uint8_t axis, int32_t targetSteps,
+                                             uint16_t stepsPerSecond, GuardedStop stop) {
+    UIDisplay::ScopedActionExclusion panelExclusion(uid);
+    if (axis > Z_AXIS || !stepsPerSecond ||
+        (stop != GuardedStop::Closed && stop != GuardedStop::Open && stop != GuardedStop::Distance))
+        return {GuardedMoveStatus::Denied, 0};
+
+    const int32_t origin = guardedAxisPosition(axis);
+    const auto admitted = [axis] {
+        return !Printer::blockAll && Printer::movementUnlocked() &&
+               Printer::printJob.isIdle() && !Printer::pause.blocksCalibration() &&
+               !hasLines() && !directMoveActive() && !isAnyScanRunning() &&
+               Printer::isAxisHomed(axis) && !Printer::doHeatBedZCompensation &&
+               Printer::zMotion.correctionCleared();
+    };
+    if (!admitted())
+        return {GuardedMoveStatus::Denied, origin};
+    // Reject invalid or excessive requests without signed arithmetic overflow.
+    const int64_t delta = int64_t(targetSteps) - origin;
+    const int32_t travel = Printer::softwareEndstopSteps(axis);
+    if (travel <= 0 || delta > INT32_MAX || delta <= INT32_MIN ||
+        delta > int64_t(travel) + travel/10 ||
+        delta < -(int64_t(travel) + travel/10) ||
+        (stop == GuardedStop::Closed && delta >= 0) ||
+        (stop == GuardedStop::Open && delta <= 0))
+        return {GuardedMoveStatus::Denied, origin};
+    if (!delta)
+        return {GuardedMoveStatus::PositionReached, origin};
+
+    const float mmPerStep = Printer::mmPerStep(axis);
+    const float feedrate = stepsPerSecond * mmPerStep;
+    const float axisLimit = Printer::axisMaxFeedrate(axis);
+    if (!(feedrate > 0) || !isfinite(feedrate) ||
+        !(axisLimit > 0) || !isfinite(axisLimit))
+        return {GuardedMoveStatus::Denied, origin};
+    // The existing planner stores duration in signed 32-bit timer ticks
+    // and speed in integer steps/s. Reject unrepresentable calibration
+    // requests before reserving the slot, rather than wrapping either.
+    const float distanceMM = static_cast<float>(delta > 0 ? delta : -delta) * mmPerStep;
+    const float requestedTicks = float(F_CPU) * distanceMM / feedrate;
+    const float limitedTicks = float(F_CPU) * distanceMM / axisLimit;
+    if (!(requestedTicks < 2147483648.0f && limitedTicks < 2147483648.0f &&
+          axisLimit >= mmPerStep))
+        return {GuardedMoveStatus::Denied, origin};
+    int32_t steps[4] = {};
+    steps[axis] = static_cast<int32_t>(delta);
+    Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
+    {
+        InterruptProtectedBlock lock;
+        if (!admitted() || guardedAxisPosition(axis) != origin)
+            return {GuardedMoveStatus::Denied, origin};
+        Printer::xyMotion.requestDirect(X_AXIS, steps[X_AXIS]);
+        Printer::xyMotion.requestDirect(Y_AXIS, steps[Y_AXIS]);
+        Printer::zMotion.requestDirectMove(steps[Z_AXIS]);
+        Printer::stopDirectAxis(E_AXIS);
+        reserveDirectMove(false);
+    }
+    prepareDirectMove(steps, false, FEEDRATE_DIRECTCONFIG, feedrate, stop);
+    while (directMoveActive())
+        Commands::checkForPeriodicalActions(Calibrating);
+    Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
+    const int32_t position = guardedAxisPosition(axis);
+    if (Printer::blockAll || Printer::printJob.commandsBlocked() || !Printer::isAxisHomed(axis))
+        return {GuardedMoveStatus::Cancelled, position};
+    if (stop == GuardedStop::Distance)
+        return {position == targetSteps ? GuardedMoveStatus::PositionReached : GuardedMoveStatus::Limit, position};
+    return {(direct.flags & FLAG_GUARDED_STOP_MASK) == static_cast<uint8_t>(GuardedStop::Distance)
+                ? GuardedMoveStatus::SwitchReached : GuardedMoveStatus::Limit, position};
+}
+
+GuardedMoveResult PrintLine::runScanMove(int32_t steps, bool emergencyRetreat) {
+    auto& z = Printer::zMotion;
+    const bool referenceRequired = z.isHomed();
+    const auto cancelled = [emergencyRetreat] {
+        if (Printer::printJob.emergencyLocked())
+            return true;
+        return emergencyRetreat ? !Printer::blockAll :
+            (Printer::blockAll || Printer::printJob.commandsBlocked() ||
+             Calibration::scanSession.aborting() || !isAnyScanRunning());
+    };
+    if (cancelled())
+        return {GuardedMoveStatus::Cancelled, z.scanSteps()};
+    // A clipped correction can become reachable during retreat. Freeze
+    // correction work during the scan-coordinate transaction.
+    while (!emergencyRetreat && Printer::needsCMPwait()) {
+        Commands::checkForPeriodicalActions(Processing);
+        if (cancelled())
+            return {GuardedMoveStatus::Cancelled, z.scanSteps()};
+    }
+
+    const float scale = Printer::stepsPerMm(Z_AXIS);
+    const float maxRate = scale * Printer::axisMaxFeedrate(Z_AXIS);
+    constexpr uint16_t nominalRate = 1000000UL / (XYZ_STEPPER_HIGH_DELAY + XYZ_STEPPER_LOW_DELAY);
+    const int32_t origin = z.scanSteps();
+    const int64_t target = int64_t(origin) + steps;
+    const int64_t travel = int64_t(z.maxSteps()) + z.minOvertravel();
+    if (!(scale > 0) || !isfinite(scale) || !(maxRate >= 1) || !isfinite(maxRate) ||
+        target < INT32_MIN || target > INT32_MAX || steps == INT32_MIN ||
+        travel <= 0 || steps > travel || steps < -travel ||
+        (emergencyRetreat && (steps <= 0 || float(steps) > 5.0f * scale)) ||
+        (steps < 0 && !z.isHomed()))
+        return {GuardedMoveStatus::Denied, origin};
+    const uint16_t rate = maxRate < nominalRate ? static_cast<uint16_t>(maxRate) : nominalRate;
+    const float feedrate = rate / scale;
+    asm volatile("" : : "m"(feedrate), "m"(rate));
+    {
+        InterruptProtectedBlock lock;
+        if (cancelled() || hasLines() || directMoveActive() || !Printer::zStepperEnabled() ||
+            (referenceRequired && !z.isHomed()) || z.scanSteps() != origin ||
+            (!emergencyRetreat && (!Calibration::scanSession.dispatching() ||
+                                  Printer::pause.blocksCalibration())))
+            return {GuardedMoveStatus::Denied, origin};
+        if (!steps)
+            return {GuardedMoveStatus::PositionReached, origin};
+        // Constant-rate single-axis profile; common executor clock,
+        // Bresenham, Z ledger and STEP termination. No separate delay.
+        z.setScanInProgress(true);
+        direct.flags = FLAG_ABORT_AT_ENDSTOPS | FLAG_GUARDED_STOP_MASK | FLAG_SCAN_PATH |
+                       (emergencyRetreat ? FLAG_MECHANICAL_RETREAT : 0) |
+                       (referenceRequired ? FLAG_SCAN_REFERENCE_REQUIRED : 0);
+        direct.joinFlags = 0;
+        direct.dir = 0;
+        direct.delta[X_AXIS] = direct.delta[Y_AXIS] = direct.delta[E_AXIS] = 0;
+        direct.setAxisSteps(Z_AXIS, steps);
+        direct.primaryAxis = Z_AXIS;
+        direct.stepsRemaining = direct.delta[Z_AXIS];
+        direct.stepProfile = {};
+        direct.stepProfile.vStart = direct.stepProfile.vEnd = direct.stepProfile.vMax = rate;
+        direct.fullSpeed = feedrate;
+        direct.task = DIRECT_PREPARED;
+    }
+    while (directMoveActive())
+        Commands::checkForPeriodicalActions(Calibrating);
+    z.setScanInProgress(false);
+    const int32_t actual = z.scanSteps();
+    if (cancelled())
+        return {GuardedMoveStatus::Cancelled, actual};
+    // A coordinate match is not a successful scan if the driver or an
+    // established reference was lost. Report failure even at the last pulse.
+    if (!Printer::zStepperEnabled() || (referenceRequired && !z.isHomed()))
+        return {GuardedMoveStatus::Limit, actual};
+    return {actual == target ? GuardedMoveStatus::PositionReached : GuardedMoveStatus::Limit, actual};
+}
+
+void PrintLine::prepareDirectMove(const int32_t steps[4], bool stoppable, bool feedrateSource,
+                                  float explicitFeedrate, GuardedStop guard) {
+    direct.flags = FLAG_ABORT_AT_ENDSTOPS | static_cast<uint8_t>(guard);
     direct.joinFlags = 0;
     direct.fixStartAndEndSpeed();
     direct.dir = 0;
@@ -217,10 +368,20 @@ void PrintLine::prepareDirectMove(const int32_t steps[4], bool stoppable, bool f
         }
     }
 
+    if (guard != GuardedStop::Normal)
+        feedrate = explicitFeedrate;
     MotionPlanner::prepareMove(direct, axisDistanceMM, feedrate, queue);
     MotionPlanner::prepareStepProfile(direct);
 
     InterruptProtectedBlock publish;
+    if (Printer::blockAll
+        || Printer::printJob.emergencyLocked()
+    ) {
+        abortDirectMoveForEmergency();
+        for (uint8_t axis = X_AXIS; axis <= E_AXIS; ++axis)
+            Printer::stopDirectAxis(axis);
+        return;
+    }
     if (direct.task == DIRECT_PREPARING_STOPPED)
         direct.limitToStopTail(true);
     direct.task = stoppable ? DIRECT_PREPARED_STOPPABLE : DIRECT_PREPARED;
@@ -242,9 +403,19 @@ void PrintLine::limitToStopTail(bool refitRamp) {
         return;
     stepsRemaining = stopTailSteps;
     if (refitRamp) {
-        // A direct move has equal entry and exit speeds. Fitting the earlier
-        // symmetric ramp again gives the same result for a shorter move.
-        fitRampToRemainingSteps();
+        // Direct profiles normally have equal entry and exit speeds.
+        // For a symmetric, non-overflowing profile, the generic reduction
+        // a - ((2*a - 32) >> 1) is exactly 16 for a > 16.
+        // Retain the general behavior for unexpected/asymmetric profiles.
+        const uint32_t a = stepProfile.accelSteps;
+        if (a == stepProfile.decelSteps && a <= 0x3fffffffUL) {
+            if (a > uint32_t(stopTailSteps / 2)) {
+                stepProfile.accelSteps = stopTailSteps / 2;
+                stepProfile.decelSteps = stopTailSteps / 2;
+            }
+        } else {
+            fitRampToRemainingSteps();
+        }
     }
 }
 

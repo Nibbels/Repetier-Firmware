@@ -16,6 +16,7 @@
 */
 
 #include "Repetier.h"
+#include "ScanProbe.h"
 #include "StepExecutor.h"
 
 static_assert(X_AXIS == 0 && Y_AXIS == 1 && Z_AXIS == 2 && E_AXIS == 3,
@@ -195,14 +196,6 @@ long StepExecutor::performQueueMove() {
             return 1000;
         }
 
-        case QueueTask::UnlockDisplay: // M3117 unlock
-        {
-            // allow to overwrite the current string again
-            uid.unlock();
-            queue.retireFront();
-            return 1000;
-        }
-
         default: {
             // this is an unknown task - we should never end up here
             queue.retireFront();
@@ -279,8 +272,13 @@ static bool canStepAtXYLimit(uint8_t axis, PrintLine* move, uint8_t forQueue) {
 template <uint8_t axis, uint8_t forQueue>
 static inline __attribute__((always_inline)) bool canStepXY(PrintLine* move) {
     static_assert(axis == X_AXIS || axis == Y_AXIS, "XY limit check requires X or Y");
-    if (Printer::isMaxEndstopHit(axis))
+    if (Printer::isMaxEndstopHit(axis)) {
+        // The software maximum may disagree with the physical minimum
+        // before homing. Never let it mask a contact in the travel direction.
+        if (move->isNegativeMoveOfAxis(axis) && Printer::isMinEndstopHit(axis))
+            return canStepAtXYLimit<-1>(axis, move, forQueue);
         return canStepAtXYLimit<1>(axis, move, forQueue);
+    }
     if (Printer::isMinEndstopHit(axis))
         return canStepAtXYLimit<-1>(axis, move, forQueue);
 
@@ -306,14 +304,38 @@ long StepExecutor::performDirectMove() {
     if (direct.task == DIRECT_PREPARED_STOPPABLE || direct.task == DIRECT_PREPARED) {
         direct.task = (direct.task == DIRECT_PREPARED_STOPPABLE ? DIRECT_RUNNING_STOPPABLE : DIRECT_RUNNING);
 
-        enableSteppers(direct);
-        adjustDirections(direct);
+        // Timer1 has masked its own compare before entering this path.
+        // A newly enabled driver waits on Arduino's interrupt-driven
+        // timebase, just as on queued-move startup. Never wait with I=0.
+        if (direct.flags & FLAG_SCAN_PATH) {
+            // Scan admission requires the Z driver to be already enabled.
+            // A mechanical retreat must not wake a disabled motor.
+            ZMotion::setDirection(direct.isZPositiveMove());
+        } else {
+            HAL::allowInterrupts();
+            enableSteppers(direct);
+            HAL::forbidInterrupts();
+            adjustDirections(direct);
+        }
         directionOwner = DirectionOwner::Direct;
 
         directPrimarySteps = direct.delta[direct.primaryAxis];
         stepErrors[FOR_DIRECT].start(directPrimarySteps);
         stepClocks[FOR_DIRECT].start(direct.stepProfile.vStart);
         nominalFeedrate_ = direct.fullSpeed;
+        if (direct.flags & FLAG_GUARDED_STOP_MASK) {
+            // Do not inherit the previous move's packing or step clock.
+            stepsPerTimerCall = 1;
+            const speed_t start = direct.stepProfile.vStart ? direct.stepProfile.vStart : 1;
+            // The interval lookup reads immutable Flash only. Timer1's own
+            // vector is already excluded; neither Advance nor thermal/UART
+            // IRQs read or write this interval. Let them run during lookup.
+            HAL::allowInterrupts();
+            const uint32_t interval = HAL::CPUDivU2(start);
+            asm volatile("" : : "g"(interval) : "memory");
+            HAL::forbidInterrupts();
+            stepIntervalTicks = interval < minimumStepIntervalTicks ? minimumStepIntervalTicks : interval;
+        }
 
         updateAdvanceSteps(direct, direct.stepProfile.vStart);
 
@@ -384,14 +406,51 @@ template<uint8_t forQueue>
 long StepExecutor::performMove(PrintLine* move) {
     static_assert(forQueue == FOR_QUEUE || forQueue == FOR_DIRECT, "Invalid execution owner");
     auto& errors = stepErrors[forQueue];
+    const auto guard = forQueue ? GuardedStop::Normal :
+        static_cast<GuardedStop>(move->flags & FLAG_GUARDED_STOP_MASK);
+    const bool guarded = guard != GuardedStop::Normal;
+    const bool scan = !forQueue && (move->flags & FLAG_SCAN_PATH);
+    const bool retreat = scan && (move->flags & FLAG_MECHANICAL_RETREAT);
+    if (guarded) {
+        // Timer1 is the only pulse owner. Check the requested home switch
+        // before each pulse, also on the tick following the final pulse.
+        // Never bypass the ordinary directional hardware/software limits.
+        const bool cancelled = scan
+            ? (!Printer::zStepperEnabled() ||
+               ((move->flags & FLAG_SCAN_REFERENCE_REQUIRED) && !Printer::zMotion.isHomed()) ||
+               (retreat ? (!Printer::blockAll || !PrintLine::mechanicalRetreatActive())
+                        : (Printer::blockAll || Printer::printJob.commandsBlocked() ||
+                           Calibration::scanSession.aborting())))
+            : (Printer::blockAll || Printer::printJob.commandsBlocked() ||
+               !Printer::isAxisHomed(move->primaryAxis));
+        if (cancelled) {
+            finishMove(*move, false);
+            return 1000;
+        }
+        if (guard != GuardedStop::Distance) {
+            // Exactly three volatile switch reads, in their original order.
+            // Avoid a masked counter loop in the guarded step path.
+            const bool first = Printer::isMinEndstopHit(move->primaryAxis);
+            const bool second = Printer::isMinEndstopHit(move->primaryAxis);
+            const bool third = Printer::isMinEndstopHit(move->primaryAxis);
+            const uint8_t closed = uint8_t(first) + uint8_t(second) + uint8_t(third);
+            if ((closed >= 2) == (guard == GuardedStop::Closed)) {
+                move->flags |= FLAG_GUARDED_STOP_MASK;
+                finishMove(*move, false);
+                return 1000;
+            }
+        }
+        if (move->stepsRemaining <= 0 || move->isNoMove()) {
+            finishMove(*move, false);
+            return 1000;
+        }
+    }
     HAL::allowInterrupts();
-    fast8_t max_loops = stepsPerTimerCall;
+    fast8_t max_loops = guarded ? 1 : stepsPerTimerCall;
     if (move->stepsRemaining < max_loops)
         max_loops = move->stepsRemaining;
-    HAL::forbidInterrupts();
-
     for (fast8_t loop = 0; loop < max_loops; loop++) {
-
+        HAL::forbidInterrupts();
 
         if (move->isEMove()) {
             HAL::allowInterrupts();
@@ -479,7 +538,8 @@ long StepExecutor::performMove(PrintLine* move) {
             if (errors.advance(Z_AXIS, move->delta[Z_AXIS])) {
                 const auto path = forQueue
                     ? (move->isAbortAtEndstops() ? ZMotion::Path::QueuedUntilEndstop : ZMotion::Path::Queued)
-                    : (move->task == DIRECT_RUNNING_STOPPABLE ? ZMotion::Path::StoppableDirect : ZMotion::Path::Direct);
+                    : (scan ? ZMotion::Path::Scan :
+                       (guarded || move->task == DIRECT_RUNNING_STOPPABLE ? ZMotion::Path::StoppableDirect : ZMotion::Path::Direct));
                 const bool continuing = Printer::zMotion.stepPath(path);
                 if (!continuing)
                     move->setMoveOfAxisFinished(Z_AXIS);
@@ -501,8 +561,15 @@ long StepExecutor::performMove(PrintLine* move) {
             Extruder::unstep();
 
         Printer::endXYZSteps();
-    }                       // for loop
-    HAL::allowInterrupts(); // Allow interrupts for other types, timer1 is still disabled
+
+        // All base STEP outputs and their position accounting are settled.
+        // Timer1's own compare stays masked, but other pending IRQs must
+        // get a service opportunity between packed pulses. AVR executes
+        // one instruction after SEI before admitting a pending interrupt;
+        // the explicit NOP makes that opportunity independent of LTO.
+        HAL::allowInterrupts();
+        asm volatile("nop" ::: "memory");
+    }
 
     const speed_t v = nextStepSpeed(*move, stepClocks[forQueue], max_loops, stepIntervalTicks);
     updateAdvanceSteps(*move, v);
@@ -530,7 +597,7 @@ long StepExecutor::performMove(PrintLine* move) {
                   "Packed interval must fit in uint16_t");
     stepsPerTimerCall = 1;
     const uint16_t packingInterval = packingInterval_;
-    if (interval < packingInterval) {
+    if (!guarded && interval < packingInterval) {
         const uint16_t oneInterval = static_cast<uint16_t>(interval);
         uint16_t packedInterval = oneInterval;
         uint8_t pulses = 1;
@@ -542,7 +609,12 @@ long StepExecutor::performMove(PrintLine* move) {
         stepsPerTimerCall = pulses;
     }
 
-    if (move->stepsRemaining <= 0 || move->isNoMove()) {
+    // A guarded switch or scan move gets one final settled validation at
+    // the next timer tick, even if its last allowed pulse used up the
+    // distance. Scan completion must still observe cancellation, driver
+    // disable and reference loss before publishing the idle slot.
+    if (move->isNoMove() || (move->stepsRemaining <= 0 &&
+        (!guarded || (!scan && guard == GuardedStop::Distance)))) {
         finishMove(*move, forQueue);
         interval >>= 1; // The two half-intervals allow time to set up the next move.
     }

@@ -2,7 +2,7 @@
 """Compile the actual ScanSettings implementation with host-only printer/G-code stubs.
 
 Factory travel/retreat fixtures are the four supported build configurations.
-The common margin/lift definitions and all setter bodies come from firmware.
+The common margin/lift definitions and the remaining scan configuration comes from firmware.
 """
 import os
 from pathlib import Path
@@ -44,11 +44,6 @@ namespace Calibration { const ScanSettings& probeSettings(); }
 '''
 
 CHECKS = r'''
-using namespace GCodeCommands::Calibration;
-static void set(void (*fn)(GCode*), int32_t value) {
-    GCode command(value);
-    fn(&command);
-}
 int main() {
     const ScanSettings& s = ::Calibration::probeSettings();
     assert(scanStartLiftMm() == 1.0f);
@@ -71,53 +66,6 @@ int main() {
     assert(s.idlePressureMin == -7500 && s.idlePressureMax == 7500);
     assert(s.pressureReadCount == 3 && s.pressureReadDelayMs == 15 && s.pressureTolerance == 15);
 
-    for (int32_t requested : {-1000, 10, 37, 100, 1000}) {
-        const long accepted = requested < 10 ? 10 : requested > 100 ? 100 : requested;
-        const long oldY = scanStrideMm(Y_AXIS);
-        set(setScanXStep, requested);
-        assert(scanStrideMm(X_AXIS) == accepted && s.x.strideSteps == long(xy * accepted));
-        assert(scanStrideMm(Y_AXIS) == oldY);
-        set(setScanYStep, requested);
-        assert(scanStrideMm(Y_AXIS) == accepted && s.y.strideSteps == long(xy * accepted));
-    }
-    GCode missing(20);
-    missing.present = false;
-    setScanXStep(&missing);
-    setScanYStep(&missing);
-    assert(invalid == 2 && scanStrideMm(X_AXIS) == 100 && scanStrideMm(Y_AXIS) == 100);
-
-    set(setScanXStart, -100); set(setScanYStart, 1000);
-    assert(s.x.startSteps == long(xy * 5) && s.y.startSteps == long(xy * (Y_LENGTH - 5)));
-    set(setScanXStart, 1000); set(setScanYStart, -100);
-    assert(s.x.startSteps == long(xy * (X_LENGTH - 5)) && s.y.startSteps == long(xy * 5));
-    set(setScanXEnd, -100); set(setScanYEnd, 1000);
-    assert(s.x.endMarginSteps == long(xy * 5) && s.y.endMarginSteps == long(xy * (Y_LENGTH - 5)));
-    assert(s.x.maxPositionSteps == long(xy * X_LENGTH - s.x.endMarginSteps));
-    assert(s.y.maxPositionSteps == long(xy * Y_LENGTH - s.y.endMarginSteps));
-    set(setScanXEnd, 1000); set(setScanYEnd, -100);
-    assert(s.x.endMarginSteps == long(xy * (X_LENGTH - 5)) && s.y.endMarginSteps == long(xy * 5));
-
-    set(setFastApproachStep, -100); set(setSlowApproachStep, 1000);
-    assert(s.fastApproachSteps == -1 && s.slowApproachSteps == -50);
-    set(setFastApproachStep, 1000); set(setSlowApproachStep, -100);
-    assert(s.fastApproachSteps == -50 && s.slowApproachSteps == -1);
-    set(setFastRetreatStep, -100); set(setSlowRetreatStep, 1000);
-    assert(s.fastRetreatSteps == 64 && s.slowRetreatSteps == 50);
-    set(setFastRetreatStep, 100000); set(setSlowRetreatStep, -100);
-    assert(s.fastRetreatSteps == 6400 && s.slowRetreatSteps == 1);
-    set(setFastScanDelay, -100); set(setSlowScanDelay, 10000); set(setScanIdleDelay, 100000);
-    assert(s.fastStepDelayMs == 1 && s.slowStepDelayMs == 1000 && s.idleDelayMs == 10000);
-    set(setFastScanDelay, 10000); set(setSlowScanDelay, -100); set(setScanIdleDelay, -100);
-    assert(s.fastStepDelayMs == 1000 && s.slowStepDelayMs == 1 && s.idleDelayMs == 1);
-    set(setContactPressureDelta, -100); set(setRetryPressureDelta, 10000); set(setIdlePressureTolerance, 10000);
-    assert(s.contactPressureDelta == 1 && s.retryPressureDelta == 1000 && s.idlePressureDelta == 1000);
-    set(setContactPressureDelta, 10000); set(setRetryPressureDelta, -100); set(setIdlePressureTolerance, -100);
-    assert(s.contactPressureDelta == 1000 && s.retryPressureDelta == 1 && s.idlePressureDelta == 1);
-    set(setPressureReadCount, 1000); set(setPressureReadDelay, -100); set(setPressureReadTolerance, 10000);
-    assert(s.pressureReadCount == 100 && s.pressureReadDelayMs == 1 && s.pressureTolerance == 1000);
-    set(setPressureReadCount, -100); set(setPressureReadDelay, 10000); set(setPressureReadTolerance, -100);
-    assert(s.pressureReadCount == 1 && s.pressureReadDelayMs == 1000 && s.pressureTolerance == 1);
-
     for (float lift : {0.3f, 6.0f}) {
         setScanStartLiftMm(lift);
         restoreDefaultScanParameters();
@@ -125,7 +73,7 @@ int main() {
         assert(scanStrideMm(X_AXIS) == 20 && scanStrideMm(Y_AXIS) == 20);
         assert(s.fastApproachSteps == -25 && s.contactPressureDelta == 10);
     }
-    std::puts("ScanSettings defaults, clamps, LCD stride and lift retention: PASS");
+    std::puts("ScanSettings defaults, LCD stride and lift retention: PASS");
 }
 '''
 

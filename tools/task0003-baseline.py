@@ -2,13 +2,16 @@
 """Capture RFx000 host replays and four linked AVR resource inventories."""
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
 import re
 import shlex
+import shutil
 import subprocess
 import sys
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 CORE = "1.8.6"
@@ -25,14 +28,14 @@ def git(*args):
     return subprocess.check_output(["git", *args], cwd=ROOT, text=True).strip()
 
 
-def run(directory, name, command):
+def run(directory, name, command, env=None):
     command = [str(arg) for arg in command]
     with (directory / "commands.txt").open("a", encoding="utf-8") as log:
         log.write(shlex.join(command) + "\n")
     path = directory / (name + ".txt")
     print(f"{name}: {shlex.join(command)}", flush=True)
     with path.open("w", encoding="utf-8") as output:
-        subprocess.run(command, cwd=ROOT, stdout=output, stderr=subprocess.STDOUT, check=True)
+        subprocess.run(command, cwd=ROOT, stdout=output, stderr=subprocess.STDOUT, check=True, env=env)
     return path.read_text(encoding="utf-8", errors="replace")
 
 
@@ -98,13 +101,21 @@ def experimental_properties(props, experiment):
     return result
 
 
-def build_target(out, cli, name, definitions, experiment=None):
+def build_target(out, cli, name, definitions, experiment=None, linker_script_factory=None,
+                 recovery_lto_partitions=None):
     directory = out / name
     directory.mkdir()
     build = directory / "build"
     map_file = build / "firmware.map"
     flags = "-DMOTHERBOARD=" + definitions[0] + "".join(" -D" + d for d in definitions[1:])
     map_flags = f'-Xlinker -Map -Xlinker "{map_file.as_posix()}" -Wl,--cref'
+    if recovery_lto_partitions is not None:
+        if linker_script_factory is None or recovery_lto_partitions not in (8, 16):
+            raise ValueError("LTO partition override restricted to recovery layout experiments")
+        # WPA runs during the final link. The probe and the candidate must
+        # use identical LTO flags; ordinary builds retain the pinned recipe.
+        map_flags += (f" -flto-partition=balanced --param=lto-partitions={recovery_lto_partitions}"
+                      " --param=lto-min-partition=100")
     command = [cli, "compile", "--fqbn", FQBN, "--build-path", build,
                "--build-property", "compiler.cpp.extra_flags=" + flags,
                "--build-property", "compiler.c.elf.extra_flags=" + map_flags, ROOT / "Repetier"]
@@ -122,6 +133,17 @@ def build_target(out, cli, name, definitions, experiment=None):
     if "compiler.path" not in props:
         raise ValueError("No expanded compiler.path in Arduino build properties")
     bin_dir = Path(props["compiler.path"])
+    if linker_script_factory is not None:
+        # Opt-in research only. Generate from the exact selected toolchain,
+        # never change the standard Arduino linker recipe silently.
+        script = linker_script_factory(bin_dir, directory)
+        map_flags += f' -Xlinker -T -Xlinker "{script.as_posix()}"'
+        index = next(i for i, arg in enumerate(command)
+                     if str(arg).startswith("compiler.c.elf.extra_flags="))
+        command[index] = "compiler.c.elf.extra_flags=" + map_flags
+        props = expanded_properties(run(directory, "properties-with-linker", [*command, "--show-properties=expanded"]))
+        if props.get("compiler.c.elf.extra_flags") != map_flags:
+            raise ValueError("Recovery linker flags not effective")
     for tool in ("avr-gcc", "avr-g++", "avr-size", "avr-nm", "avr-objdump"):
         executable = bin_dir / (tool + (".exe" if os.name == "nt" else ""))
         run(directory, tool + "-version", [executable, "--version"])
@@ -159,16 +181,45 @@ def build_target(out, cli, name, definitions, experiment=None):
     return sizes
 
 
+# The standard firmware capture always uses the recovery link and post-link
+# verification. This changes build selection, not deployment authorization.
+def build_p0_candidate(out, cli, name, definitions, experiment=None):
+    # Imported lazily to keep historical callers of build_target unchanged.
+    sys.dont_write_bytecode = True
+    def load(module, filename):
+        spec = importlib.util.spec_from_file_location(module, ROOT/"tools/task0034"/filename)
+        obj = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(obj)
+        return obj
+    recovery = load("rf_recovery", "recovery-link.py")
+    timing = load("rf_renew_bound", "renew-bound.py")
+    verified = load("rf_verified_build", "verified-build.py")
+    # Never publish sizing-probe HEX/ELF or a failed recovery link as
+    # a standard image. Keep the failed/probe maps and logs separately.
+    with tempfile.TemporaryDirectory(prefix="rfx000-p0-") as temp:
+        stats, directory = verified.build_verified(
+            sys.modules[__name__], recovery, timing, cli, Path(temp), name,
+            definitions, True, out/"layout-evidence",
+            "combined", experiment, archive_final=False)
+        shutil.copytree(directory, out/name)
+    return stats
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output", type=Path, help="new evidence directory outside checkout")
     parser.add_argument("--cli", default="arduino-cli")
+    # Compatibility alias for historical qualification commands. It no
+    # longer selects an alternative firmware configuration.
+    parser.add_argument("--p0-candidate", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--experiment", choices=EXPERIMENTS,
                         help="opt-in compiler trial, not a release configuration")
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--host-only", action="store_true")
     modes.add_argument("--avr-only", action="store_true")
     args = parser.parse_args()
+    if args.p0_candidate and args.host_only:
+        parser.error("P0 candidate requires AVR builds")
     if args.experiment and args.host_only:
         parser.error("compiler experiments require AVR builds")
     out = args.output.resolve()
@@ -180,6 +231,9 @@ def main():
     report = {"sha": git("rev-parse", "HEAD"), "arduino_core_required": CORE,
               "fqbn": FQBN, "targets": {}, "failures": [],
               "host_requested": not args.avr_only, "avr_requested": not args.host_only}
+    if not args.host_only:
+        report["p0_candidate"] = True  # compatibility with existing evidence readers
+        report["build_profile"] = "standard-recovery"
     if args.experiment:
         report["compiler_experiment"] = args.experiment
     if not args.avr_only:
@@ -196,8 +250,8 @@ def main():
         else:
             for name, definitions in TARGETS.items():
                 try:
-                    report["targets"][name] = build_target(out, args.cli, name, definitions, args.experiment)
-                except (OSError, ValueError, subprocess.CalledProcessError) as error:
+                    report["targets"][name] = build_p0_candidate(out, args.cli, name, definitions, args.experiment)
+                except (OSError, ValueError, AssertionError, subprocess.CalledProcessError) as error:
                     report["failures"].append(f"{name}: {error}")
     if git("status", "--porcelain", "--untracked-files=all") or git("rev-parse", "HEAD") != report["sha"]:
         report["failures"].append("Checkout changed during capture; evidence is not reproducible")

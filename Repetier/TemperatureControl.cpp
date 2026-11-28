@@ -19,11 +19,18 @@
 
 #include "CaseFan.h"
 #include "Repetier.h"
+#include "GCodeInput.h"
+#include "ThermalEmergencyReport.h"
+#include "ThermalRelayProfile.h"
+#include "UsbSerial.h"
 
 static uint8_t autotuneIndex = 255;
+bool TemperatureController::autotuneActive(){return autotuneIndex!=255;}
 static bool autotuneAbortRequested = false;
 static float autotuneTemperatureLimit;
 static uint8_t autotuneSensorType, autotunePowerLimit;
+static float autotuneTargetC;
+static uint8_t autotuneMethod;
 
 static bool validTemperatureSample(bool supported, float temperature) {
     return supported && temperature >= MIN_DEFECT_TEMPERATURE && temperature <= MAX_DEFECT_TEMPERATURE;
@@ -31,7 +38,7 @@ static bool validTemperatureSample(bool supported, float temperature) {
 
 static void stopAllHeaters() {
     for (uint8_t controller = 0; controller < NUM_TEMPERATURE_LOOPS; controller++)
-        tempController[controller]->setTargetTemperature(0);
+        tempController[controller]->clearTargetTemperature();
 }
 
 void Printer::latchOutputInhibit(bool thermalFault) {
@@ -39,8 +46,175 @@ void Printer::latchOutputInhibit(bool thermalFault) {
         InterruptProtectedBlock lock;
         flag0 |= thermalFault ? PRINTER_FLAG0_TEMPSENSOR_DEFECT : PRINTER_FLAG0_LEGACY_SIMULATION_REJECTED;
         extrusionOutput.inhibit(ExtrusionOutput::Inhibit::SafetyLock);
+        // Revoke every physical heater output before releasing the safety lock.
+        // Target and controller cleanup below may run with interrupts enabled.
+        for (uint8_t controller = 0; controller < NUM_TEMPERATURE_LOOPS; ++controller)
+            HAL::setHeaterDuty(tempController[controller]->pwmIndex, 0);
     }
     stopAllHeaters();
+}
+
+namespace ThermalEmergency {
+namespace {
+Ledger<NUM_TEMPERATURE_LOOPS> ledger;
+ReportCursor<NUM_TEMPERATURE_LOOPS> report;
+CancellationCursor cancellation;
+uint8_t liveValid=0;
+bool liveRequested=false,replayRequestedOnce=false;
+uint32_t lastLiveReport=0,lastReplayRequest=0;
+uint8_t liveChannel=0;
+// Preserve the start of a contiguous invalid-sample episode across the
+// existing debounce. No normal valid-sample copies or history allocation.
+// Raw ADC and freshness come from the SAME conversion; do not pretend
+// that a converted invalid value or software PWM is a valid measurement
+// of temperature or actual electrical power.
+struct InvalidEpisode {
+    uint32_t started;
+    float target;
+    uint16_t raw;
+    uint8_t admitted, sensor, limit;
+    Cause cause;
+    bool rawKnown, active;
+};
+InvalidEpisode invalid[NUM_TEMPERATURE_LOOPS]{};
+}
+const Ledger<NUM_TEMPERATURE_LOOPS>& faultLedger() { return ledger; }
+
+static Evidence capture(const TemperatureController& act, bool measured, millis_t now) {
+    Evidence e{};
+    e.uptimeMs=now;
+    e.targetC=act.targetTemperatureC;
+    e.admittedDuty=HAL::outputDuty(act.pwmIndex);
+    e.sensorType=act.sensorType;
+    e.powerLimit=act.pidMax;
+    e.valid=Evidence::Uptime|Evidence::Target|Evidence::Admitted|Evidence::SensorType|Evidence::PowerLimit;
+    if(measured) {e.measuredC=act.currentTemperatureC;e.valid|=Evidence::Measured;}
+    return e;
+}
+// Called only after the offending output was revoked. Duty is the
+// pre-revoke software value, sampled by the caller immediately before.
+static void observeInvalid(uint8_t channel, const TemperatureController& act, uint8_t priorDuty,
+                           const SensorObservation& observation) {
+    auto& p=invalid[channel];
+    if(!p.active) {
+        p.started=HAL::timeInMilliseconds();
+        p.target=act.targetTemperatureC;
+        p.admitted=priorDuty;
+        p.sensor=act.sensorType;
+        p.limit=act.pidMax;
+        p.raw=observation.raw;p.rawKnown=observation.rawKnown;p.cause=observation.invalidCause;
+        p.active=true;
+    }
+}
+static Evidence invalidEvidence(uint8_t channel) {
+    const auto& p=invalid[channel];
+    Evidence e{};
+    if(p.active) {
+        e.uptimeMs=p.started;e.targetC=p.target;e.admittedDuty=p.admitted;
+        e.sensorType=p.sensor;e.powerLimit=p.limit;
+        e.valid=Evidence::Uptime|Evidence::Target|Evidence::Admitted|Evidence::SensorType|Evidence::PowerLimit;
+        if(p.rawKnown) {e.rawAdc=p.raw;e.valid|=Evidence::Raw;}
+    }
+    return e;
+}
+// Snapshot is supplied by the caller. Revoke/latch before copying to
+// persistent-in-this-session diagnostic storage; no formatting here.
+static bool confirm(uint8_t channel, Cause cause, const Evidence& e) {
+    const bool first=!Printer::isAnyTempsensorDefect();
+    if(first) Printer::latchOutputInhibit(true);
+    ledger.record(channel,cause,e);
+    return first;
+}
+// The existing absolute measured cutoff is independent of learned
+// profiles and the RELATIVE autotune overshoot envelope. A fresh,
+// supported, plausible reading above the absolute limit is a terminal
+// thermal fault even with a zero setpoint. Invalid/rail/stale readings
+// retain their separate sensor-fault cause, not a fictional temperature.
+static bool checkAbsoluteCutoff(uint8_t channel, TemperatureController& act,
+                                bool sampleValid, const SensorObservation& observation) {
+    if(!sampleValid||!act.sensorType||!observation.rawKnown||
+       !(act.currentTemperatureC>act.effectiveCutoffC()))return false;
+    auto e=capture(act,true,HAL::timeInMilliseconds());
+    observation.apply(e);
+    e.threshold=float(act.effectiveCutoffC());
+    e.deltaC=act.currentTemperatureC-e.threshold;
+    e.valid|=Evidence::Threshold|Evidence::Delta;
+    if(channel==autotuneIndex) {
+        e.targetC=autotuneTargetC;
+        e.profile=autotuneMethod;
+        e.valid|=Evidence::Profile;
+    }
+    const bool first=confirm(channel,Cause::OverTemperature,e);
+    autotuneAbortRequested=true;
+    if(first) {
+        Printer::markTemperatureReadingsAvailable();
+        Printer::stopForThermalFault();
+    }
+    return true;
+}
+void latchSystemFault(Cause cause) {
+    confirm(Ledger<NUM_TEMPERATURE_LOOPS>::System,cause,Evidence{});
+}
+bool liveTemperatureValid(uint8_t channel) {
+    return channel<NUM_TEMPERATURE_LOOPS && (liveValid&(1u<<channel));
+}
+void requestLiveReport() {liveRequested=true;}
+void requestDiagnosticReplay() {
+    const uint32_t now=HAL::timeInMilliseconds();
+    if(!replayRequestedOnce || uint32_t(now-lastReplayRequest)>=5000) {
+        replayRequestedOnce=true;
+        lastReplayRequest=now;
+        report.requestReplay();
+    }
+}
+static void serviceReport() {
+    if(!ledger.active())return;
+    // At most one whole nonblocking span after the thermal pass. A live
+    // request cannot starve the retained diagnosis: cancellation first,
+    // then one report line, then a periodic/live reading when idle.
+    UsbSerial sink;
+    if(cancellation.service(true,sink)!=ReportProgress::Idle)return;
+    const auto progress=report.service(ledger,sink);
+    if(progress!=ReportProgress::Idle)return;
+    const uint32_t now=HAL::timeInMilliseconds();
+    if(!liveRequested&&uint32_t(now-lastLiveReport)<1000)return;
+    // Individual channel lines keep even a 3-heater report <=63 bytes and
+    // never claim an invalid measurement as 0 C. These diagnostic lines
+    // are not a replacement for measured electrical current.
+    ReportLine line;
+    Evidence e{};
+    // First a conventional Repetier temperature line for valid readings,
+    // then explicit per-channel evidence (including unknown readings).
+    if(liveChannel==0) {
+        const uint8_t selected=Extruder::current->tempControl.pwmIndex;
+        if(liveTemperatureValid(selected)) {
+            e.valid=Evidence::Measured;
+            line.text(PSTR("T:"));
+            line.optionalDecimal(e,Evidence::Measured,tempController[selected]->currentTemperatureC);
+            line.text(PSTR(" /0 @:0 "));
+        }
+        if(liveTemperatureValid(NUM_EXTRUDER)) {
+            e.valid=Evidence::Measured;
+            line.text(PSTR("B:"));
+            line.optionalDecimal(e,Evidence::Measured,tempController[NUM_EXTRUDER]->currentTemperatureC);
+            line.text(PSTR(" /0 B@:0"));
+        }
+        if(!line.size())line.text(PSTR("Thermal live: no valid T/B reading"));
+    }else {
+        const uint8_t channel=liveChannel-1;
+        line.text(PSTR("Thermal live "));
+        line.channel<NUM_TEMPERATURE_LOOPS>(channel);
+        line.text(PSTR(" C: "));
+        if(liveTemperatureValid(channel))e.valid=Evidence::Measured;
+        line.optionalDecimal(e,Evidence::Measured,tempController[channel]->currentTemperatureC);
+        line.text(PSTR(" commanded PWM:0"));
+    }
+    if(line.finish()&&sink.tryWriteSpan(line.data(),line.size())) {
+        if(++liveChannel>NUM_TEMPERATURE_LOOPS) {
+            liveChannel=0;liveRequested=false;lastLiveReport=now;
+        }else liveRequested=true;
+    }
+}
 }
 
 bool Extruder::allHeatersCalibrated() {
@@ -49,9 +223,39 @@ bool Extruder::allHeatersCalibrated() {
     return true;
 }
 
+// Ordinary post-tune diagnostics, only after the heaters have been revoked.
+// No per-sample serial output and no safety threshold derived from this data.
+static void reportRelayObservation(const ThermalRelayProfile::Summary* p, uint8_t sensor,
+                                   uint8_t cap, float target, uint8_t method) {
+    for(uint8_t c=0;c<NUM_TEMPERATURE_LOOPS;++c)
+        if(HAL::outputDuty(tempController[c]->pwmIndex)||tempController[c]->targetTemperatureC>0)return;
+    if(!p) {
+        Com::printFLN(PSTR("Thermal relay observation unavailable"));
+        return;
+    }
+    Com::printFLN(PSTR("Thermal relay observation (diagnostic only)"));
+    Com::printF(PSTR("Sensor: "),int(sensor));
+    Com::printF(PSTR(" PWM cap: "),int(cap));
+    Com::printF(PSTR(" J: "),int(method));
+    Com::printFLN(PSTR(" target C: "),target);
+    // Order: first heating 1s/5s, later heating 1s/5s, cooling 1s/5s.
+    Com::printF(PSTR("Observed C/s [first1,first5,later1,later5,cool1,cool5]:"));
+    for(uint8_t i=0;i<6;++i) {
+        Com::printF(PSTR(" "));
+        if(p->mask&(1u<<i))Com::printF(PSTR(""),p->rates[i]);
+        else Com::printF(PSTR("?"));
+    }
+    Com::println();
+    Com::printFLN(PSTR("Completed off phases: "),int(p->completed));
+    Com::printFLN(PSTR("Observed max off rebound C: "),p->rebound);
+    Com::printFLN(PSTR("Observed max time to peak ms: "),p->peakDelayMs);
+    Com::printF(PSTR("Observed off duration ms min: "),p->minOffMs);
+    Com::printFLN(PSTR(" max: "),p->maxOffMs);
+}
+
 static void finishAutotune(TemperatureController& controller) {
     // Revoke the duty request and normal setpoint before reporting or storing results.
-    controller.setTargetTemperature(0);
+    controller.clearTargetTemperature();
     autotuneIndex = 255;
 #if defined(CASE_FAN_PIN) && (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
     CaseFan::updateFromHotendTargets();
@@ -63,18 +267,39 @@ Is called every 100ms.
 */
 void Extruder::manageTemperatures() {
     static uint8_t extruderTempErrors = 0;
+    // Expiry ISR has already removed power. Defer the print/UI/serial work.
+    if (HAL::heaterLeaseFault() && !Printer::isAnyTempsensorDefect()) {
+        ThermalEmergency::latchSystemFault(ThermalEmergency::Cause::LeaseExpired);
+        Printer::markTemperatureReadingsAvailable();
+        Printer::stopForThermalFault();
+        autotuneAbortRequested = true;
+    }
 
     uint8_t errorDetected = 0;
 
     for (uint8_t controller = 0; controller < NUM_TEMPERATURE_LOOPS; controller++) {
         TemperatureController* act = tempController[controller];
+        ThermalEmergency::SensorObservation observation;
 
-        const bool sensorSupported = act->updateCurrentTemperature();
+        HAL::HeaterSample sample;
+        const uint8_t checkedType=act->sensorType, checkedLimit=act->pidMax;
+        const bool sensorSupported = act->updateCurrentTemperature(&sample
+            , &observation
+        );
         const bool sampleValid = validTemperatureSample(sensorSupported, act->currentTemperatureC);
+        if(sampleValid&&act->sensorType) ThermalEmergency::liveValid |= uint8_t(1u<<controller);
+        else ThermalEmergency::liveValid &= uint8_t(~(1u<<controller));
         if (!sampleValid || act->sensorType == 0) {
+            const uint8_t priorDuty=HAL::outputDuty(act->pwmIndex);
             HAL::setHeaterDuty(act->pwmIndex, 0);
+            if(!sampleValid) ThermalEmergency::observeInvalid(controller,*act,priorDuty,observation);
+            else ThermalEmergency::invalid[controller].active=false;
             act->pidHistoryValid = false;
             act->tempIState = 0;
+        }
+        else {
+            ThermalEmergency::invalid[controller].active=false;
+            if(ThermalEmergency::checkAbsoluteCutoff(controller,*act,true,observation))continue;
         }
         if (controller == autotuneIndex) {
             // Remember even a transient invalid sample observed by the periodic service.
@@ -111,20 +336,24 @@ void Extruder::manageTemperatures() {
             if (extruderTempErrors > 10) // Ignore short temporary failures
             {
                 act->setSensorDefect(true);
-                if (!Printer::isAnyTempsensorDefect()) {
-                    Printer::latchOutputInhibit(true);
+                if (ThermalEmergency::confirm(controller,ThermalEmergency::invalid[controller].cause,
+                                             ThermalEmergency::invalidEvidence(controller))) {
                     Printer::markTemperatureReadingsAvailable(); // We are not waiting for first temp measurements anymore.
 
-                    reportTempsensorAndHeaterErrors();
-                    Printer::stopPrint();
+                    Printer::stopForThermalFault();
 
-                    showError((void*)ui_text_temperature_manager, (void*)ui_text_sensor_error);
                 }
             }
         }
         if (!sampleValid || act->sensorType == 0 || Printer::heatingInhibited())
             continue; // Never feed an invalid or disabled sensor sample into PID.
 
+        // No raw/internal target assignment may bypass the heater-specific
+        // target ceiling, even if a future caller forgets the public setter.
+        if(!(act->targetTemperatureC>=0&&act->targetTemperatureC<=act->maximumTargetC())) {
+            act->clearTargetTemperature();
+            continue;
+        }
         if (act->targetTemperatureC >= MAX_ROOM_TEMPERATURE && !act->pidCalibrationValid()) {
             act->invalidatePidCalibration();
             continue;
@@ -142,18 +371,16 @@ void Extruder::manageTemperatures() {
 
                     if (extruderTempErrors > 10) { // Ignore short temporary failures
                         act->setSensorDecoupled(true);
-                        if (!Printer::isAnyTempsensorDefect()) {
-                            Printer::latchOutputInhibit(true);
+                        auto evidence=ThermalEmergency::capture(*act,true,time);
+                        observation.apply(evidence);
+                        evidence.windowMs=time-act->lastDecoupleTest;
+                        evidence.deltaC=act->currentTemperatureC-act->lastDecoupleTemp;
+                        evidence.threshold=DECOUPLING_TEST_MIN_TEMP_RISE;
+                        evidence.valid|=ThermalEmergency::Evidence::Window|ThermalEmergency::Evidence::Delta|ThermalEmergency::Evidence::Threshold;
+                        if (ThermalEmergency::confirm(controller,ThermalEmergency::Cause::NoRise,evidence)) {
 
-                            Com::printErrorFLN(Com::tHeaterDecoupledWarning);
-                            Com::printF(PSTR("Error:Temp. raised to slow. Rise = "), act->currentTemperatureC - act->lastDecoupleTemp);
-                            Com::printF(PSTR(" after "), (int32_t)(time - act->lastDecoupleTest));
-                            Com::printFLN(PSTR(" ms"));
+                            Printer::stopForThermalFault();
 
-                            reportTempsensorAndHeaterErrors();
-                            Printer::stopPrint();
-
-                            showError((void*)ui_text_temperature_manager, (void*)ui_text_heater_error);
                         }
                     }
                 } else {
@@ -168,18 +395,16 @@ void Extruder::manageTemperatures() {
 
                     if (extruderTempErrors > 10) { // Ignore short temporary failures
                         act->setSensorDecoupled(true);
-                        if (!Printer::isAnyTempsensorDefect()) {
-                            Printer::latchOutputInhibit(true);
+                        auto evidence=ThermalEmergency::capture(*act,true,time);
+                        observation.apply(evidence);
+                        evidence.windowMs=time-act->lastDecoupleTest;
+                        evidence.deltaC=act->currentTemperatureC-act->targetTemperatureC;
+                        evidence.threshold=DECOUPLING_TEST_MAX_HOLD_VARIANCE;
+                        evidence.valid|=ThermalEmergency::Evidence::Window|ThermalEmergency::Evidence::Delta|ThermalEmergency::Evidence::Threshold;
+                        if (ThermalEmergency::confirm(controller,ThermalEmergency::Cause::HoldFailure,evidence)) {
 
-                            Com::printErrorFLN(Com::tHeaterDecoupledWarning);
-                            Com::printF(PSTR("Error:Could not hold temperature "), act->lastDecoupleTemp);
-                            Com::printF(PSTR(" measured "), act->currentTemperatureC);
-                            Com::printFLN(Com::tC);
+                            Printer::stopForThermalFault();
 
-                            reportTempsensorAndHeaterErrors();
-                            Printer::stopPrint();
-
-                            showError((void*)ui_text_temperature_manager, (void*)ui_text_heater_error);
                         }
                     }
                 } else {
@@ -226,9 +451,10 @@ void Extruder::manageTemperatures() {
             else
                 act->startHoldDecoupleTest(time);
         }
-        if (act->currentTemperatureC > act->heaterCutoffC)
+        if (act->currentTemperatureC > act->effectiveCutoffC())
             output = 0;
-        HAL::setHeaterDuty(act->pwmIndex, output);
+        if(act->sensorType!=checkedType || act->pidMax!=checkedLimit) output=0;
+        HAL::setHeaterDuty(act->pwmIndex, output, &sample);
 
 #if LED_PIN > -1
         if (act == &Extruder::current->tempControl)
@@ -241,6 +467,31 @@ void Extruder::manageTemperatures() {
 
     if (!Printer::isAnyTempsensorDefect() && !errorDetected)
         Printer::markTemperatureReadingsAvailable();
+    if(Printer::isAnyTempsensorDefect()) {
+#if defined(THERMAL_ALARM_PIN) && THERMAL_ALARM_PIN >= 0
+        // Provisional slow active-HIGH alarm gate, not a qualified tone.
+        // No continuous DC request, blocking delay or extra timer. Passive
+        // transducers may need a different carrier; verify the fitted driver.
+        WRITE(THERMAL_ALARM_PIN, (HAL::timeInMilliseconds()%1000)<250 ? HIGH : LOW);
+#endif
+        // Do not use an invalid sensor's apparent cold value to stop
+        // heatsink cooling. Keep named cooler outputs on in this state.
+        for(uint8_t h=0;h<NUM_EXTRUDER;++h)extruder[h].coolerPWM=255;
+#if defined(CASE_FAN_PIN) && (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
+        CaseFan::turnOn();
+#endif
+        // Revoke again before the completed watchdog pass, independently
+        // of any controller/auto-tune branch above.
+        for(uint8_t h=0;h<NUM_TEMPERATURE_LOOPS;++h)
+            HAL::setHeaterDuty(tempController[h]->pwmIndex,0);
+    }
+    // A momentarily zero PID duty does not mean the heating session ended.
+    // Retain reset evidence across the whole target/autotune session.
+    bool heatDemand=autotuneIndex!=255;
+    for(uint8_t c=0;c<NUM_TEMPERATURE_LOOPS;++c)
+        heatDemand=heatDemand || tempController[c]->targetTemperatureC>=MAX_ROOM_TEMPERATURE;
+    HAL::completeThermalWatchdogPass(heatDemand);
+    ThermalEmergency::serviceReport();
 
 } // manageTemperatures
 
@@ -252,28 +503,48 @@ void TemperatureController::updateTempControlVars() {
 
 void TemperatureController::invalidatePidCalibration() {
     tunedSensorType = tunedPowerLimit = 0;
-    setTargetTemperature(0);
+    clearTargetTemperature();
+}
+
+BedTemperatureLimit TemperatureController::bedLimit_{BedTemperatureLimit::DefaultC};
+bool TemperatureController::setBedEmergencyCutoff(uint8_t verifiedCutoff) {
+    if(pwmIndex!=NUM_EXTRUDER) return false;
+    // Revoke any current target, lease and pending autotune before publishing
+    // a different cutoff or removing authorization. No stale rearming.
+    if(!verifiedCutoff || !BedTemperatureLimit::validSetting(verifiedCutoff) ||
+       verifiedCutoff!=bedLimit_.commissioned()) clearTargetTemperature();
+    return bedLimit_.publish(verifiedCutoff);
+}
+
+// Unconditional shutdown must not enter PID admission or display callbacks.
+void TemperatureController::clearTargetTemperature() {
+    tempIState = 0;
+    pidHistoryValid = false;
+    if (autotuneIndex < NUM_TEMPERATURE_LOOPS && tempController[autotuneIndex] == this)
+        autotuneAbortRequested = true;
+    HAL::setHeaterDuty(pwmIndex, 0);
+    targetTemperatureC = 0;
+    stopDecouple();
+    paused = 0;
 }
 
 void TemperatureController::setTargetTemperature(float target) {
-    if (!(target >= 0 && target <= heaterCutoffC) || Printer::heatingInhibited())
+    if (!(target >= 0 && target <= maximumTargetC()) || Printer::heatingInhibited())
         target = 0;
     if (target >= MAX_ROOM_TEMPERATURE && autotuneIndex != 255) {
         Com::printErrorFLN(PSTR("PID autotune active"));
         target = 0;
     }
     if (target >= MAX_ROOM_TEMPERATURE && !pidCalibrationValid()) {
-        Com::printErrorFLN(PSTR("PID tune required; use menu or M303 with X"));
+        Com::printErrorFLN(PSTR("PID tune required; use menu"));
         UI_STATUS_UPD("PID tune needed");
         target = 0;
     }
-    if (target <= 0) {
-        tempIState = 0;
-        pidHistoryValid = false;
+    if (target <= 0.0f) {
+        clearTargetTemperature();
+        return;
     }
-    if (target <= 0.0f && autotuneIndex < NUM_TEMPERATURE_LOOPS && tempController[autotuneIndex] == this)
-        autotuneAbortRequested = true;
-    if (target <= 0.0f || target < targetTemperatureC)
+    if (target < targetTemperatureC)
         HAL::setHeaterDuty(pwmIndex, 0);
     targetTemperatureC = target;
     stopDecouple();
@@ -307,17 +578,20 @@ void TemperatureController::waitForTargetTemperature(uint8_t plus_temp_tolerance
 // Fixed duty levels for every measured cycle. The asymmetric rectangular
 // relay fundamental accounts for unequal on/off times; span is peak-to-peak.
 // J0/J1 hotend dynamic/robust, J2/J3 bed dynamic/robust. No legacy scaling.
+// Keep the large autotune frame out of refused menu/G-code admission.
 void TemperatureController::autotunePID(float temp, uint8_t controllerId, int maxCycles, bool storeValues, int method) {
     if (autotuneIndex != 255) {
         Com::printErrorFLN(PSTR("PID autotune already active"));
         return;
     }
     if (controllerId >= NUM_TEMPERATURE_LOOPS || tempController[controllerId] != this) {
-        setTargetTemperature(0);
+        clearTargetTemperature();
         Com::printErrorFLN(PSTR("PID autotune: invalid heater"));
         return;
     }
-    if (Printer::printJob.isBusy() || PrintLine::hasLines() || PrintLine::directMoveActive() || isAnyScanRunning()) {
+    if (!Printer::printJob.isIdle() || Printer::pause.blocksCalibration() ||
+        PrintLine::hasLines() || PrintLine::directMoveActive() ||
+        isAnyScanRunning() || GCodeInput::flashScriptActive()) {
         Com::printErrorFLN(PSTR("PID autotune requires idle printer"));
         return;
     }
@@ -325,15 +599,24 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
         Com::printErrorFLN(PSTR("PID autotune: invalid profile for heater"));
         return;
     }
-    setTargetTemperature(0);
+    autotunePIDPrepared(temp, controllerId, maxCycles, storeValues, method);
+}
+
+__attribute__((noinline)) void TemperatureController::autotunePIDPrepared(float temp, uint8_t controllerId, int maxCycles, bool storeValues, int method) {
+    clearTargetTemperature();
     const bool bed = controllerId == NUM_EXTRUDER;
     const float hysteresis = 0.375f;
-    const float cutoff = RMath::min(float(heaterCutoffC), temp + (bed ? 15.0f : 20.0f));
-    const bool initialSampleValid = updateCurrentTemperature();
+    const float cutoff = RMath::min(float(effectiveCutoffC()), temp + (bed ? 15.0f : 20.0f));
+    ThermalEmergency::SensorObservation initialObservation;
+    const bool initialSampleValid = updateCurrentTemperature(
+        nullptr,
+        &initialObservation);
+    if(ThermalEmergency::checkAbsoluteCutoff(controllerId,*this,
+        validTemperatureSample(initialSampleValid,currentTemperatureC),initialObservation))return;
     if (Printer::heatingInhibited() || isSensorDefect() || isSensorDecoupled()
         || sensorType == 0 || pidMax < 40
         || !(temp > MAX_ROOM_TEMPERATURE + hysteresis && temp + hysteresis < cutoff)
-        || (bed && temp > HEATED_BED_MAX_TEMP)
+        || (bed && (temp > HEATED_BED_MAX_TEMP || temp > maximumTargetC()))
         || !validTemperatureSample(initialSampleValid, currentTemperatureC)
         || currentTemperatureC > cutoff) {
         Com::printErrorFLN(PSTR("PID autotune: heater, target, sensor or PWM limit invalid"));
@@ -349,8 +632,31 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
     autotuneTemperatureLimit = cutoff;
     autotuneSensorType = sensorType;
     autotunePowerLimit = pidMax;
+    autotuneTargetC=temp;
+    autotuneMethod=uint8_t(method);
     autotuneIndex = controllerId;
     stopDecouple();
+    // Admission diagnostics can take time. Do not use the earlier sample
+    // to authorize the first positive power request.
+    ThermalEmergency::SensorObservation firstObservation;
+    HAL::HeaterSample firstSample;
+    const bool firstSampleValid = updateCurrentTemperature(&firstSample
+        , &firstObservation
+    );
+    if(ThermalEmergency::checkAbsoluteCutoff(controllerId,*this,
+        validTemperatureSample(firstSampleValid,currentTemperatureC),firstObservation)) {
+        finishAutotune(*this);
+        return;
+    }
+    if (autotuneAbortRequested || Printer::heatingInhibited()
+        || sensorType != autotuneSensorType || pidMax != autotunePowerLimit
+        || isSensorDefect() || isSensorDecoupled()
+        || !validTemperatureSample(firstSampleValid, currentTemperatureC)
+        || currentTemperatureC > cutoff) {
+        finishAutotune(*this);
+        Com::printErrorFLN(PSTR("PID autotune: initial authorization lost"));
+        return;
+    }
     const millis_t started = HAL::timeInMilliseconds();
     millis_t phaseStart = started, cycleStart = started, riseStart = started, lastSample = started;
     float riseTemp = currentTemperatureC, low = currentTemperatureC, high = currentTemperatureC;
@@ -360,7 +666,17 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
     const unsigned limit = constrain(maxCycles, 5, 20);
     bool heating = currentTemperatureC < temp - hysteresis;
     bool completeCycle = heating;
-    HAL::setHeaterDuty(pwmIndex, heating ? autotunePowerLimit : 0);
+    HAL::setHeaterDuty(pwmIndex, heating ? autotunePowerLimit : 0, &firstSample);
+    firstSample.release();
+    if(heating && !HAL::outputDuty(pwmIndex)) {
+        finishAutotune(*this);
+        Com::printErrorFLN(PSTR("PID autotune: initial sample not authorized"));
+        return;
+    }
+    ThermalRelayProfile::Recorder relayObservation;
+    ThermalRelayProfile::PublicationTracker relayPublication(firstObservation.publishedAt);
+    relayObservation.begin(started,currentTemperatureC,autotunePowerLimit,HAL::outputDuty(pwmIndex));
+    if(!firstObservation.rawKnown)relayObservation.invalidate();
     if (!bed) {
 #if defined(CASE_FAN_PIN) && (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
         CaseFan::turnOn();
@@ -371,14 +687,28 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
 
     for (;;) {
         Commands::checkForPeriodicalActions(WaitHeater);
-        const bool supported = updateCurrentTemperature();
+        if(Printer::printJob.emergencyLocked()) {
+            finishAutotune(*this);
+            return;
+        }
+        ThermalEmergency::SensorObservation observation;
+        HAL::HeaterSample sample;
+        const bool supported = updateCurrentTemperature(&sample
+            , &observation
+        );
         const float measured = currentTemperatureC;
         const millis_t now = HAL::timeInMilliseconds();
+        if(ThermalEmergency::checkAbsoluteCutoff(controllerId,*this,
+            validTemperatureSample(supported,measured),observation)) {
+            finishAutotune(*this);
+            return;
+        }
         if (autotuneAbortRequested || Printer::heatingInhibited()
             || Printer::printJob.isBusy() || PrintLine::hasLines() || PrintLine::directMoveActive() || isAnyScanRunning()
             || sensorType != autotuneSensorType || pidMax != autotunePowerLimit
             || isSensorDefect() || isSensorDecoupled() || !validTemperatureSample(supported, measured)) {
             finishAutotune(*this);
+            if(ThermalEmergency::faultLedger().active())return;
             Com::printErrorFLN(PSTR("PID autotune aborted: sensor, settings, fault or cancellation"));
             showError((void*)ui_text_autodetect_pid, (void*)ui_text_temperature_wrong);
             break;
@@ -406,6 +736,9 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
         if (now - lastSample < 100)
             continue;
         lastSample = now;
+        if(!observation.rawKnown||!relayPublication.next(observation.publishedAt))
+            relayObservation.invalidate();
+        relayObservation.sample(now,measured,HAL::outputDuty(pwmIndex));
         low = RMath::min(low, measured);
         high = RMath::max(high, measured);
         if (heating && measured >= temp + hysteresis) {
@@ -415,17 +748,25 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
             phaseStart = now;
         } else if (heating && now - riseStart >= (bed ? 60000UL : 20000UL)) {
             if (measured - riseTemp < DECOUPLING_TEST_MIN_TEMP_RISE) {
+                auto evidence=ThermalEmergency::capture(*this,true,now);
+                observation.apply(evidence);
+                evidence.targetC=temp; // relay tune uses its own target, not normal setpoint
+                evidence.deltaC=measured-riseTemp;
+                evidence.windowMs=now-riseStart;
+                evidence.threshold=DECOUPLING_TEST_MIN_TEMP_RISE;
+                evidence.profile=uint8_t(method);
+                evidence.valid|=ThermalEmergency::Evidence::Delta|ThermalEmergency::Evidence::Window
+                    |ThermalEmergency::Evidence::Threshold|ThermalEmergency::Evidence::Profile;
                 finishAutotune(*this);
                 setSensorDecoupled(true);
-                Printer::latchOutputInhibit(true);
-                Com::printErrorFLN(PSTR("PID autotune: no temperature rise"));
-                Printer::stopPrint();
-                showError((void*)ui_text_temperature_manager, (void*)ui_text_heater_error);
+                ThermalEmergency::confirm(controllerId,ThermalEmergency::Cause::NoRise,evidence);
+                Printer::stopForThermalFault();
                 break;
             }
             riseStart = now;
             riseTemp = measured;
         } else if (!heating && measured <= temp - hysteresis) {
+            relayObservation.completeOff(now);
             if (completeCycle) {
                 ++cycles;
                 const millis_t period = now - cycleStart;
@@ -492,7 +833,10 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
                         pidHistoryValid = false;
                         updateTempControlVars();
                         EEPROM::storePidCalibration(controllerId);
+                        if(Printer::printJob.emergencyLocked())return;
                     }
+                    reportRelayObservation(relayObservation.completedProfile(),
+                                           autotuneSensorType,autotunePowerLimit,temp,uint8_t(method));
                     Com::printInfoFLN(Com::tAPIDFinished);
                     UI_STATUS_UPD(UI_TEXT_AUTODETECT_PID_DONE);
                     Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 30000);
@@ -508,9 +852,23 @@ void TemperatureController::autotunePID(float temp, uint8_t controllerId, int ma
             heating = true;
             phaseStart = cycleStart = riseStart = now;
             riseTemp = low = high = measured;
-            HAL::setHeaterDuty(pwmIndex, autotunePowerLimit);
         }
+        // Renew only after the full sampled autotune decision, including
+        // cutoff, cancellation, timing and rise checks. No ISR renewal.
+        if (heating) {
+            HAL::setHeaterDuty(pwmIndex, autotunePowerLimit, &sample);
+            if(!HAL::outputDuty(pwmIndex)) {
+                finishAutotune(*this);
+                Com::printErrorFLN(PSTR("PID autotune: sample not authorized"));
+                break;
+            }
+        }
+        relayObservation.afterDecision(now,measured,HAL::outputDuty(pwmIndex));
+        // Complete the second half of the watchdog handshake only after
+        // the entire sampled relay decision and its safety checks finished.
+        HAL::completeAutotuneWatchdogPass();
     }
+    if(Printer::printJob.emergencyLocked())return;
     Printer::idleStatus.schedule(HAL::timeInMilliseconds());
 } // autotunePID
 

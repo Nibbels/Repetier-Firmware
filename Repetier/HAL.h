@@ -402,33 +402,25 @@ public:
         ::delay(delayMs);
     } // delayMilliseconds
 
+    // Internal EEPROM: avr-libc update variants compare individual bytes and
+    // skip unchanged cells. This also avoids whole-value float comparisons.
+    // These are foreground operations; EEPROM-ready waits must not occur
+    // in an interrupt-disabled section.
     static inline void eprSetByte(unsigned int pos, uint8_t value) {
-        uint8_t oldval = eprGetByte(pos);
-        if (oldval != value)
-            eeprom_write_byte((uint8_t*)(EEPROM_OFFSET + pos), value);
-
-    } // eprSetByte
+        eeprom_update_byte((uint8_t*)(EEPROM_OFFSET + pos), value);
+    }
 
     static inline void eprSetInt16(unsigned int pos, int16_t value) {
-        int16_t oldval = eprGetInt16(pos);
-        if (oldval != value)
-            eeprom_write_word((unsigned int*)(EEPROM_OFFSET + pos), value);
-
-    } // eprSetInt16
+        eeprom_update_word((uint16_t*)(EEPROM_OFFSET + pos), static_cast<uint16_t>(value));
+    }
 
     static inline void eprSetInt32(unsigned int pos, int32_t value) {
-        int32_t oldval = eprGetInt32(pos);
-        if (oldval != value)
-            eeprom_write_dword((uint32_t*)(EEPROM_OFFSET + pos), value);
-
-    } // eprSetInt32
+        eeprom_update_dword((uint32_t*)(EEPROM_OFFSET + pos), static_cast<uint32_t>(value));
+    }
 
     static inline void eprSetFloat(unsigned int pos, float value) {
-        float oldval = eprGetFloat(pos);
-        if (oldval != value)
-            eeprom_write_block(&value, (void*)(EEPROM_OFFSET + pos), 4);
-
-    } // eprSetFloat
+        eeprom_update_block(&value, (void*)(EEPROM_OFFSET + pos), sizeof(value));
+    }
 
     static inline uint8_t eprGetByte(unsigned int pos) {
         return eeprom_read_byte((uint8_t*)(EEPROM_OFFSET + pos));
@@ -505,7 +497,26 @@ public:
 
     static void resetPwmOutputs();
     static uint8_t outputDuty(uint8_t channel);
-    static void setHeaterDuty(uint8_t channel, uint8_t duty);
+    // A foreground reservation for one exact ADC publication. Conversion
+    // runs outside the IRQ lock; grant checks the reservation under lock.
+    class HeaterSample {
+        uint8_t index_ = 255;
+        uint16_t stamp_ = 0;
+    public:
+        HeaterSample() = default;
+        ~HeaterSample();
+        HeaterSample(const HeaterSample&) = delete;
+        HeaterSample& operator=(const HeaterSample&) = delete;
+        bool read(uint8_t index, uint16_t& raw
+                  , uint32_t* publication = nullptr
+        );
+        void release();
+    private:
+        friend class HAL;
+        bool consume(uint8_t channel);
+    };
+    static void setHeaterDuty(uint8_t channel, uint8_t duty, HeaterSample* sample = nullptr);
+    static bool heaterLeaseFault();
     static void setBoardFan(bool enabled);
     static uint8_t partFanSpeed();
     static void setPartFanSpeed(uint8_t speed);
@@ -526,7 +537,8 @@ public:
     // Watchdog support
     static void startWatchdog();
     static void stopWatchdog();
-    static void tellWatchdogOk();
+    static void completeThermalWatchdogPass(bool heatDemand);
+    static void completeAutotuneWatchdogPass();
     static bool watchdogEnabled();
 
     static bool takeScanTick();
@@ -534,11 +546,6 @@ public:
     static bool takeFeatureTick();
     static bool takeTemperatureTick();
     static bool temperatureTickPending();
-
-    inline static void testWatchdog() {
-        while (1) {
-        }
-    } // testWatchdog
 
     inline static float maxExtruderTimerFrequency() {
         return (float)F_CPU / TIMER0_PRESCALE;
@@ -548,7 +555,9 @@ public:
     static void analogStart();
     static uint16_t temperatureAdcSample(uint8_t index); // Raw diagnostic snapshot.
     // Non-consuming snapshot; false before first publication or after expiry.
-    static bool temperatureAdcSample(uint8_t index, uint16_t& sample);
+    static bool temperatureAdcSample(uint8_t index, uint16_t& sample
+                                     , uint32_t* publication = nullptr
+    );
 };
 
 #define EXTRUDER_TIMER_VECTOR TIMER0_COMPA_vect

@@ -81,8 +81,13 @@ unsigned keepAlives = 0, homedXY = 0, homedZ = 0, pressureReads = 0, negativeMov
 ScanAbort aborted = ScanAbort::None;
 uint32_t lastMoveAt = 0, acceptedAt = 0;
 bool moved = false;
-int bedTarget = 0;
+int bedTarget = 0, bedCap = 140;
+bool rejectBedTarget=false;
+struct {int& targetTemperatureC;int maximumTargetC()const{return bedCap;}} heatedBedController{bedTarget};
 std::vector<int> nozzleTargets;
+
+bool injectPauseAtAdmission = false;
+struct InterruptProtectedBlock { InterruptProtectedBlock(); };
 
 namespace HAL {
 millis_t now = 0;
@@ -94,15 +99,14 @@ ScanStrainGauge strainGauge;
 float axisStepsPerMM[3] = {100, 100, 100}, homingFeedrate[3] = {60, 60, 5};
 float stepsPerMm(uint8_t axis) { return axisStepsPerMM[axis]; }
 float axisHomingFeedrate(uint8_t axis) { return homingFeedrate[axis]; }
-struct { bool isBusy() const { return false; } } printJob;
+struct { bool busy=false, blocked=false; bool isIdle() const { return !busy && !blocked; } bool isBusy() const { return busy; } bool commandsBlocked() const { return blocked; } bool emergencyLocked()const{return false;} } printJob;
+struct { bool paused=false, servicing=false; bool isPaused() const { return paused; } bool blocksCalibration() const { return paused || servicing; } } pause;
 struct { void recordActivity(millis_t) {} } inactivity;
 struct { void cancel() {} void schedule(millis_t) {} } idleStatus;
 struct {
     long position = 0;
     long scanSteps() const { return position; }
 } zMotion;
-bool debugErrors() { return false; }
-bool debugInfo() { return false; }
 void disableCMPnow(bool wait) { assert(!wait); }
 void homeAxis(bool x, bool y, bool z) {
     assert(x || y || z);
@@ -133,21 +137,32 @@ bool waitForMotion(MotionWait motion, PauseWait pause) {
     return true;
 }
 }
+InterruptProtectedBlock::InterruptProtectedBlock() {
+    // Simulate Timer1 publishing a pause just before the scan takes its
+    // admission lock, after the optimistic initial phase check.
+    if (injectPauseAtAdmission) {
+        injectPauseAtAdmission = false;
+        Printer::pause.paused = true;
+    }
+}
+
 namespace Extruder {
 bool calibrated = true;
 bool allHeatersCalibrated() { return calibrated; }
 bool selectExtruderById(unsigned int tool) { return tool == 0; }
-void setHeatedBedTemperature(int target) { bedTarget = target; }
+void setHeatedBedTemperature(int target) { bedTarget = target && rejectBedTarget ? 0 : target; }
 void setTemperatureForAllExtruders(int target) { nozzleTargets.push_back(target); }
 }
 namespace Com {
 const char* tPrintingIsInProcessError = "Busy";
-const char* tscanHeatBed = "Scan";
 template<typename... T> void printF(T...) {}
 template<typename... T> void printFLN(T...) {}
+template<typename... T> void printErrorFLN(T...) {}
 }
 enum { Calibrating };
 namespace GCodeInput {
+bool scriptActive=false;
+bool flashScriptActive(){return scriptActive;}
 void keepAlive(int state) { assert(state == Calibrating); ++keepAlives; }
 }
 namespace RMath { using std::min; using std::max; }
@@ -160,7 +175,6 @@ void initCompensationMatrix() {
     g_uZMatrixMax[X_AXIS] = g_uZMatrixMax[Y_AXIS] = 0;
     g_ZMatrixChangedInRam = false;
 }
-void outputScanParameters() {}
 void outputCompensationMatrix(char) {}
 char prepareCompensationMatrix() {
     matrixPrepared = !invalidGrid;
@@ -215,17 +229,77 @@ void addLong(char* text, long value, int) {
 }
 } // namespace
 
+namespace EEPROM { bool settingsReady(){return true;} }
 #include "scan-pressure-firmware.inc"
 #include "bed-matrix-scan-firmware.inc"
 
 const ScanSettings& Calibration::probeSettings() { return scanSettings; }
-bool Calibration::moveZ(int steps, bool) { return ::moveZ(steps); }
+bool Calibration::moveZ(int32_t steps, bool) { return ::moveZ(steps); }
 void Calibration::showAbortScanReason(const void* text, ScanAbort reason) { ::showAbortScanReason(text, reason); }
 
+#include "DiagnosticHistory.h"
+namespace DiagnosticHistory {
+void recordScan(ScanAbort,ScanKind){}
+}
 #include "heat-bed-scan-firmware.inc"
 
 int main(int argc, char** argv) {
     assert(argc == 2);
+    if (!std::strcmp(argv[1], "busy-admission")) {
+        Printer::printJob.busy=true;
+        heatBedScan.startOrCancel(HeatBedScanMode::Standard);
+        assert(!heatBedScan.active() && !homedZ && !homedXY);
+        Printer::printJob.busy=false;
+        Printer::printJob.blocked=true;
+        heatBedScan.startOrCancel(HeatBedScanMode::Standard);
+        assert(!heatBedScan.active() && !homedZ && !homedXY);
+        Printer::printJob.blocked=false;
+        Printer::pause.paused=true;
+        heatBedScan.startOrCancel(HeatBedScanMode::Standard);
+        assert(!heatBedScan.active() && !homedZ && !homedXY);
+        Printer::pause.paused=false;
+        Printer::pause.servicing=true;
+        heatBedScan.startOrCancel(HeatBedScanMode::Standard);
+        assert(!heatBedScan.active() && !homedZ && !homedXY);
+        Printer::pause.servicing=false;
+        GCodeInput::scriptActive=true;
+        heatBedScan.startOrCancel(HeatBedScanMode::Standard);
+        assert(!heatBedScan.active() && !homedZ && !homedXY);
+        GCodeInput::scriptActive=false;
+        injectPauseAtAdmission=true;
+        heatBedScan.startOrCancel(HeatBedScanMode::Standard);
+        assert(!injectPauseAtAdmission && Printer::pause.paused);
+        assert(!heatBedScan.active() && !homedZ && !homedXY);
+        Printer::pause.paused=false;
+        heatBedScan.startOrCancel(HeatBedScanMode::Standard);
+        assert(heatBedScan.active());
+        Printer::printJob.busy=true;
+        heatBedScan.startOrCancel(HeatBedScanMode::Standard);
+        assert(Calibration::scanSession.aborting()); // cancel remains allowed
+        return 0;
+    }
+    if (!std::strcmp(argv[1], "bed-cutoff")) {
+        bedCap=59;
+        heatBedScan.startOrCancel(HeatBedScanMode::Pla);
+        heatBedScan.startOrCancel(HeatBedScanMode::Abs);
+        assert(!heatBedScan.active() && !homedZ && !negativeMoves && !bedTarget);
+        return 0;
+    }
+    const bool targetRejected=!std::strcmp(argv[1],"bed-target-rejected");
+    const bool targetChanged=!std::strcmp(argv[1],"bed-target-changed");
+    if(targetRejected||targetChanged) {
+        rejectBedTarget=targetRejected;
+        heatBedScan.startOrCancel(HeatBedScanMode::Pla);
+        assert(heatBedScan.active());
+        heatBedScan.tick(); // initialize
+        heatBedScan.tick(); // prepare
+        if(targetChanged){assert(bedTarget==60);bedTarget=0;heatBedScan.tick();}
+        assert(Calibration::scanSession.aborting()&&!negativeMoves);
+        heatBedScan.tick();
+        assert(!heatBedScan.active()&&!negativeMoves&&!matrixSaved&&!bedTarget);
+        assert(aborted==(targetRejected?ScanAbort::HeaterTargetRejected:ScanAbort::HeaterTargetChanged));
+        return 0;
+    }
     HeatBedScanMode mode = HeatBedScanMode::Standard;
     if (!std::strcmp(argv[1], "pla"))
         mode = HeatBedScanMode::Pla;

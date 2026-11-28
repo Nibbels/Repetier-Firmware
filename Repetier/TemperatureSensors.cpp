@@ -216,7 +216,10 @@ float calibratedSensorTemperature(float sensorCelsius) {
 }
 }
 
-bool TemperatureController::updateCurrentTemperature() {
+bool TemperatureController::updateCurrentTemperature(HAL::HeaterSample* sample
+    , ThermalEmergency::SensorObservation* observation
+) {
+    if(observation) *observation=ThermalEmergency::SensorObservation{};
     const uint8_t type = sensorType;
     bool sampleFresh = true; // Type 0 is the existing non-measuring sentinel.
     uint16_t raw;
@@ -237,7 +240,9 @@ bool TemperatureController::updateCurrentTemperature() {
     case 13: // NTC 3950 100k thermistor - Conrad V3
     case 14: // Thermistor NTC 3950 100k Ohm
     {
-        sampleFresh = HAL::temperatureAdcSample(sensorPin, raw);
+        uint32_t* publication=observation?&observation->publishedAt:nullptr;
+        sampleFresh = sample ? sample->read(sensorPin,raw,publication) : HAL::temperatureAdcSample(sensorPin,raw,publication);
+        if(observation) observation->observe(sampleFresh,raw);
         // The ADC accumulates 32 conversions and publishes a 12-bit sum / 8.
         // Exact rails are saturation/open/short candidates, not heat authorization.
         sampleFresh = sampleFresh && raw > 0 && raw < 4092;
@@ -248,7 +253,9 @@ bool TemperatureController::updateCurrentTemperature() {
     case 60:  // HEATER_USES_AD8495 (Delivers 5mV/degC)
     case 100: // AD595
     {
-        sampleFresh = HAL::temperatureAdcSample(sensorPin, raw);
+        uint32_t* publication=observation?&observation->publishedAt:nullptr;
+        sampleFresh = sample ? sample->read(sensorPin,raw,publication) : HAL::temperatureAdcSample(sensorPin,raw,publication);
+        if(observation) observation->observe(sampleFresh,raw);
         // The ADC accumulates 32 conversions and publishes a 12-bit sum / 8.
         // Exact rails are saturation/open/short candidates, not heat authorization.
         sampleFresh = sampleFresh && raw > 0 && raw < 4092;

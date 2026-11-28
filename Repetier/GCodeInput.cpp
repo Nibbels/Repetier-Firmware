@@ -21,6 +21,8 @@
 #include "GCodeInput.h"
 #include "GCodeCommands.h"
 #include "UsbSerial.h"
+#include "DiagnosticHistory.h"
+#include "ThermalEmergencyReport.h"
 
 namespace {
 class CommandQueue {
@@ -50,6 +52,7 @@ private:
 };
 
 CommandQueue commandQueue;
+bool flashScriptRunning = false; // foreground-only script owner
 
 constexpr uint8_t maxCommandSize = 96;
 constexpr uint8_t maxBinaryTextSize = 80; // V2 text length byte plus payload.
@@ -74,6 +77,19 @@ struct ReceiveSession {
     uint8_t formatErrors = 0;
 } serialReceive;
 
+// Reuse the normal framing and checksum code, but all emergency replies
+// are short atomic spans. The receive service reserves an EMPTY TX ring
+// before reading, so the sole foreground producer cannot be blocked.
+static void emergencyReply(ThermalEmergency::ReportLine& line) {
+    if(line.finish())UsbSerial::tryWriteSpan(line.data(),line.size());
+}
+static void emergencyOk(bool numbered) {
+    ThermalEmergency::ReportLine line;
+    line.text(PSTR("ok"));
+    if(numbered){line.character(' ');line.number(serialReceive.currentLineNumber);}
+    emergencyReply(line);
+}
+
 inline float parseFloatValue(char* s) {
     char* endPtr;
     while (*s == 32)
@@ -91,6 +107,72 @@ inline long parseLongValue(char* s) {
     if (s == endPtr)
         l = 0; // treat empty string argument "p " as "p0"
     return l;
+}
+
+// M206 is a typed settings transaction, unlike ordinary permissive G-code.
+// Recheck its original ASCII spelling before narrowed T/M or empty numeric
+// tokens can alias a different setting. Binary T is already exactly one byte.
+static bool eepromDigit(char c){return c>='0'&&c<='9';}
+static void eepromSpace(const char*& p){while(*p==' '||*p=='\t')++p;}
+static bool eepromInteger(const char*& p,int32_t& result) {
+    eepromSpace(p);
+    const bool negative=*p=='-';
+    if(*p=='+'||*p=='-')++p;
+    if(!eepromDigit(*p))return false;
+    const uint32_t limit=negative?2147483648UL:2147483647UL;
+    uint32_t value=0;
+    do{
+        const uint8_t digit=uint8_t(*p++-'0');
+        if(value>(limit-digit)/10)return false;
+        value=value*10+digit;
+    }while(eepromDigit(*p));
+    result=negative?(value==2147483648UL?INT32_MIN:-int32_t(value)):int32_t(value);
+    return true;
+}
+static bool eepromFloatSpelling(const char*& p) {
+    eepromSpace(p);
+    if(*p=='+'||*p=='-')++p;
+    bool digit=false;
+    while(eepromDigit(*p)){digit=true;++p;}
+    if(*p=='.'){++p;while(eepromDigit(*p)){digit=true;++p;}}
+    if(!digit)return false;
+    if(*p=='e'||*p=='E'){
+        ++p;if(*p=='+'||*p=='-')++p;
+        if(!eepromDigit(*p))return false;
+        while(eepromDigit(*p))++p;
+    }
+    return true;
+}
+static bool validEepromAscii(const char* p) {
+    enum : uint8_t {M=1,P=2,T=4,S=8,X=16,N=32};
+    uint8_t seen=0,type=255;
+    for(;;){
+        eepromSpace(p);
+        if(!*p||*p=='('||*p=='%'||*p==';')break;
+        if(*p=='*'){
+            ++p;int32_t checksum=0;
+            if(!eepromInteger(p,checksum)||checksum<0||checksum>255)return false;
+            eepromSpace(p);
+            if(*p&&*p!='('&&*p!='%'&&*p!=';')return false;
+            break;
+        }
+        char key=*p++;
+        if(key>='a'&&key<='z')key=char(key-'a'+'A');
+        uint8_t bit=0;
+        if(key=='M')bit=M;else if(key=='P')bit=P;else if(key=='T')bit=T;
+        else if(key=='S')bit=S;else if(key=='X')bit=X;else if(key=='N')bit=N;
+        else return false;
+        if(seen&bit)return false;
+        if(bit==N&&(seen&M))return false;
+        seen|=bit;
+        if(bit==X){if(!eepromFloatSpelling(p))return false;continue;}
+        int32_t value;
+        if(!eepromInteger(p,value))return false;
+        if(bit==M&&value!=206)return false;
+        if(bit==P&&(value<2048||value>=3072))return false;
+        if(bit==T){if(value<0||value>3)return false;type=uint8_t(value);}
+    }
+    return (seen&(M|P|T))==(M|P|T)&&(seen&(S|X))==(type==3?X:S);
 }
 
 } // namespace
@@ -233,6 +315,7 @@ uint8_t GCodeInput::computeBinarySize(char* ptr) // unsigned int bitfield) {
 } // computeBinarySize
 
 void GCodeInput::keepAlive(enum FirmwareState state) {
+    if(Printer::printJob.emergencyLocked())return;
     millis_t now = HAL::timeInMilliseconds();
 
     if (state != NotBusy) {
@@ -256,6 +339,16 @@ void GCodeInput::keepAlive(enum FirmwareState state) {
 } // keepAlive
 
 void GCodeInput::requestResend() {
+    if(Printer::printJob.emergencyLocked()) {
+        frame.length=0;
+        serialReceive.waitingForResend=frame.binary?30:14;
+        ThermalEmergency::ReportLine line;
+        line.text(PSTR("\r\nResend:"));
+        line.number(serialReceive.lastLineNumber+1);
+        line.text(PSTR("\r\nok"));
+        emergencyReply(line);
+        return;
+    }
     HAL::serialFlush();
     frame.length = 0;
     if (frame.binary)
@@ -272,6 +365,50 @@ Check if result is plausible. If it is, an ok is send and the command is stored 
 If not, a resend and ok is send.
 */
 void GCodeInput::checkAndPushCommand(GCode& command) {
+    if(Printer::printJob.emergencyLocked()) {
+        // No machine command ever reaches the queue from this state, even
+        // M112/M999 or a script-like command. Preserve protocol sequencing.
+        if(command.hasM() && command.M==GCodeCommands::ResetLineNumber) {
+            serialReceive.lastLineNumber=serialReceive.currentLineNumber;
+            serialReceive.waitingForResend=-1;
+            emergencyOk(false);
+            return;
+        }
+        if(command.hasN() && uint16_t(serialReceive.lastLineNumber+1)!=uint16_t(serialReceive.currentLineNumber)) {
+            if(uint16_t(serialReceive.lastLineNumber-serialReceive.currentLineNumber)<40 ||
+               serialReceive.waitingForResend>=0) {
+                if(serialReceive.waitingForResend>=0)--serialReceive.waitingForResend;
+                ThermalEmergency::ReportLine line;
+                line.text(PSTR("skip "));
+                line.number(serialReceive.currentLineNumber);
+                line.text(PSTR("\r\nok"));
+                emergencyReply(line);
+            }else requestResend();
+            return;
+        }
+        if(command.hasN())serialReceive.lastLineNumber=serialReceive.currentLineNumber;
+        serialReceive.lastCommandWasBinary=frame.binary;
+        serialReceive.waitingForResend=-1;
+        if(!command.hasG() && command.hasM() && command.M==105) {
+            ThermalEmergency::requestLiveReport();
+            emergencyOk(true);
+        }else if(!command.hasG() && command.hasM() && command.M==115) {
+            // Request retained evidence on reconnect; not a normal
+            // firmware capability reply in the terminal state.
+            ThermalEmergency::requestDiagnosticReplay();
+            emergencyOk(true);
+        }else if(!command.hasG() && command.hasM() && command.M==DiagnosticHistory::ReadCommand) {
+            // Read-only history must not enter the machine command queue.
+            DiagnosticHistory::request();
+            emergencyOk(true);
+        }else {
+            ThermalEmergency::ReportLine line;
+            line.text(PSTR("Error: THERMAL EMERGENCY\r\nok "));
+            line.number(serialReceive.currentLineNumber);
+            emergencyReply(line);
+        }
+        return;
+    }
     if (command.hasM()) {
         if (command.M == GCodeCommands::ResetLineNumber)
         {
@@ -282,6 +419,11 @@ void GCodeInput::checkAndPushCommand(GCode& command) {
         }
         if (command.M == GCodeCommands::EmergencyReset)
         {
+            if(Printer::printJob.emergencyLocked()) {
+                // Already stopped; keep the original diagnostics instead of
+                // deliberately rebooting on a queued host cancellation.
+                return;
+            }
             Commands::emergencyStop();
         }
     }
@@ -294,7 +436,7 @@ void GCodeInput::checkAndPushCommand(GCode& command) {
                 Com::printFLN(Com::tOk);
             } else if (serialReceive.waitingForResend < 0) // after a resend, we have to skip the garbage in buffers, no message for this
             {
-                if (Printer::debugErrors()) {
+                {
                     Com::printF(Com::tExpectedLine, serialReceive.lastLineNumber + 1);
                     Com::printFLN(Com::tGot, serialReceive.currentLineNumber);
                 }
@@ -333,51 +475,110 @@ void GCodeInput::popCurrentCommand() {
     GCode* command = commandQueue.front();
     if (!command)
         return;
-    if (Printer::debugEcho()) {
-        Com::printF(Com::tEcho);
-        command->printCommand();
-    }
     commandQueue.retireFront();
 }
 
-void GCodeInput::executeFlashScript(const char* cmd) {
-    char buf[80];
-    uint8_t buflen;
-    char c = 0;
-    GCode code;
-    do {
-        // Wait for a free place in command buffer
-        // Scan next command from string
-        uint8_t comment = 0;
-        buflen = 0;
-        do {
-            c = HAL::readFlashByte(cmd++);
-            if (c == 0 || c == '\n')
-                break;
-            if (c == ';')
-                comment = 1;
-            if (comment)
-                continue;
-            buf[buflen++] = c;
-        } while (buflen < 79);
-        if (buflen == 0) // empty line ignore
-        {
-            if (!c)
-                return; // Special case \n0
-            continue;
-        }
-        buf[buflen] = 0;
-        // Send command into command buffer
-        if (parseAscii(code, buf, false) && (code.params & 518)) // Success
-        {
-            Commands::executeGCode(&code);
-            Commands::checkForPeriodicalActions(Processing);
-        }
-    } while (c);
-} // executeFString
+bool GCodeInput::flashScriptActive() {
+    return flashScriptRunning;
+}
+
+// The menu's former one-line M3913/M3914 scripts need neither a GCode
+// object nor the ASCII parser or general G/M dispatch. Keep the existing
+// foreground script ownership through the final periodic service.
+// heatingInhibited includes thermal/legacy rejection and EEPROM admission;
+// the common typed filament entry revalidates it after waiting for motion.
+__attribute__((noinline)) void GCodeInput::executeSoftFilament(bool unload) {
+    if (flashScriptRunning || Printer::printJob.commandsBlocked() || Printer::heatingInhibited())
+        return;
+    flashScriptRunning = true;
+    runSoftFilament(unload);
+    flashScriptRunning = false;
+}
+
+__attribute__((noinline)) void GCodeInput::runSoftFilament(bool unload) {
+    if (unload)
+        GCodeCommands::unloadFilamentWithParameters(EMERGENCY_PAUSE_DIGITS_MAX < 4500 ? EMERGENCY_PAUSE_DIGITS_MAX : 4500);
+    else
+        GCodeCommands::loadFilamentWithParameters(3500, 3);
+    Commands::checkForPeriodicalActions(Processing);
+}
+
+namespace {
+// Recheck between every original command, including after any wait
+// that pumps thermal service and receives new serial data.
+bool internalProgramAdmitted() {
+    return !Printer::printJob.commandsBlocked() && !Printer::heatingInhibited();
+}
+
+bool finishInternalStep(bool motionCommand) {
+    if (motionCommand)
+        Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
+    Commands::checkForPeriodicalActions(Processing);
+    return internalProgramAdmitted();
+}
+
+void internalAxisMove(uint8_t axis, float value, float feedrateMmMin) {
+    if (isMovingAllowed(PSTR("G0/1")))
+        Printer::queueInternalAxisMove(axis, value, feedrateMmMin);
+}
+} // namespace
+
+__attribute__((noinline)) void GCodeInput::executeHardFilament(bool unload) {
+    if (flashScriptRunning || !internalProgramAdmitted())
+        return;
+    flashScriptRunning = true;
+    runHardFilament(unload);
+    flashScriptRunning = false;
+}
+
+// Same operations and service boundaries as the former hard scripts.
+__attribute__((noinline)) void GCodeInput::runHardFilament(bool unload) {
+    GCodeCommands::waitForHotendWithParameters(true,
+        unload ? PREHEAT_A_HOTEND_C : PREHEAT_B_HOTEND_C, false, 0);
+    if (!finishInternalStep(false)) return; // M109
+    if (!finishInternalStep(true)) return;  // G21: mm is the only supported unit
+    Printer::setEPositionMM(0);
+    if (!finishInternalStep(true)) return;  // G92 E0
+    internalAxisMove(E_AXIS, unload ? -90.0f : 90.0f, unload ? 500.0f : 100.0f);
+    if (!finishInternalStep(true)) return;  // G1
+    Printer::setEPositionMM(0);
+    if (!finishInternalStep(true)) return;  // G92 E0
+    GCodeCommands::setHotendTemperatureWithParameters(true, 0, false, false, 0);
+    finishInternalStep(false);             // M104 S0 (shared queue-settle path)
+}
+
+__attribute__((noinline)) bool GCodeInput::executeOutputProgram() {
+    if (flashScriptRunning || !internalProgramAdmitted())
+        return false;
+    flashScriptRunning = true;
+    const bool finished = runOutputProgram();
+    flashScriptRunning = false;
+    return finished;
+}
+
+__attribute__((noinline)) bool GCodeInput::runOutputProgram() {
+    if (!finishInternalStep(true)) return false; // G21
+    Printer::setEPositionMM(0);
+    if (!finishInternalStep(true)) return false; // G92 E0
+    internalAxisMove(E_AXIS, -float(SCRIPT_RETRACT_MM), 0);
+    if (!finishInternalStep(true)) return false; // G1 E-1, retain F
+    GCodeCommands::dwellMilliseconds(100);
+    if (!finishInternalStep(true)) return false; // G4 P100
+    Printer::setEPositionMM(0);
+    if (!finishInternalStep(true)) return false; // G92 E0
+    GCodeCommands::selectAbsolutePositioningWithSource(true);
+    if (!finishInternalStep(true)) return false; // G90
+    internalAxisMove(Z_AXIS, 200, 540);
+    if (!finishInternalStep(true)) return false; // G1 Z200 F540
+    internalAxisMove(Y_AXIS, 245, 4800);
+    return finishInternalStep(true);            // G1 Y245 F4800
+}
 
 // Receive one complete command from the USB serial port per call.
 void GCodeInput::readFromSerial() {
+    // A reply fits in 63 bytes. No other foreground sender can run
+    // during this bounded visit; RX/TX ISRs do not publish TX head.
+    if(Printer::printJob.emergencyLocked() && UsbSerial::transmitFree()!=63)return;
     if (commandQueue.full() || (frame.borrowedText && !commandQueue.empty())) {
         keepAlive(Processing);
         return;
@@ -390,8 +591,16 @@ void GCodeInput::readFromSerial() {
         if ((serialReceive.waitingForResend >= 0 || frame.length > 0) && idleTime > 200) {
             requestResend();
             serialReceive.timeOfLastDataPacket = now;
+            if(Printer::printJob.emergencyLocked())return;
         } else if (commandQueue.empty() && idleTime > 1000) {
             // Unblock the host if an acknowledgement was lost.
+            if(Printer::printJob.emergencyLocked()) {
+                ThermalEmergency::ReportLine line;
+                line.text(PSTR("wait"));
+                emergencyReply(line);
+                serialReceive.timeOfLastDataPacket=now;
+                return;
+            }
             Com::printFLN(Com::tWait);
             serialReceive.timeOfLastDataPacket = now;
         }
@@ -446,7 +655,7 @@ void GCodeInput::readFromSerial() {
                     continue;
                 }
                 GCode& command = commandQueue.writeSlot();
-                if (parseAscii(command, (char*)frame.bytes, true))
+                if (parseAscii(command, (char*)frame.bytes))
                     checkAndPushCommand(command);
                 else
                     requestResend();
@@ -459,8 +668,10 @@ void GCodeInput::readFromSerial() {
                 --frame.length;
         }
 
-        if (frame.length == maxCommandSize)
+        if (frame.length == maxCommandSize) {
             requestResend();
+            if(Printer::printJob.emergencyLocked())return;
+        }
     } while (--budget && frame.length < maxCommandSize && HAL::serialByteAvailable());
 } // readFromSerial
 
@@ -489,9 +700,8 @@ bool GCodeInput::parseBinary(GCode& command, uint8_t* buffer, int8_t length) {
     sum1 -= *p++;
     sum2 -= *p;
     if (sum1 | sum2) {
-        if (Printer::debugErrors()) {
+        if(!Printer::printJob.emergencyLocked())
             Com::printErrorFLN(Com::tWrongChecksum);
-        }
         return false;
     }
 
@@ -635,11 +845,18 @@ bool GCodeInput::parseBinary(GCode& command, uint8_t* buffer, int8_t length) {
 /**
   Converts a ASCII GCode line into a GCode structure.
 */
-bool GCodeInput::parseAscii(GCode& command, char* line, bool fromSerial) {
+#if defined(__AVR__)
+// GCC7's inline switch table contains 16-bit WORD destinations used
+// with EIND=0. Keep the entire parser below byte 0x20000 in the recovery
+// linker. The linked audit must prove all table destinations.
+__attribute__((noinline, section(".text.rf_near_parser")))
+#endif
+bool GCodeInput::parseAscii(GCode& command, char* line) {
+    const char* originalLine=line;
     char* pos = line;
     command.params = 0;
     command.params2 = 0;
-    command.internalCommand = !fromSerial;
+    command.internalCommand = false;
     bool hasChecksum = false;
     char c;
     while ((c = *(pos++))) {
@@ -814,8 +1031,10 @@ bool GCodeInput::parseAscii(GCode& command, char* line, bool fromSerial) {
             while (line != (pos - 1))
                 checksum ^= *line++;
             if (checksum != checksum_given) {
-                Com::printErrorFLN(Com::tWrongChecksum);
-                reportCorruptCommand(command);
+                if(!Printer::printJob.emergencyLocked()) {
+                    Com::printErrorFLN(Com::tWrongChecksum);
+                    reportCorruptCommand(command);
+                }
                 return false; // mismatch
             }
             hasChecksum = true;
@@ -825,14 +1044,19 @@ bool GCodeInput::parseAscii(GCode& command, char* line, bool fromSerial) {
             break;
         } // end switch
     }     // end while
-    if (serialReceive.lastCommandWasBinary && !hasChecksum && fromSerial && !frame.borrowedText) {
+    if(command.hasM()&&command.M==206&&!validEepromAscii(originalLine)) {
+        if(!Printer::printJob.emergencyLocked())Com::printErrorFLN(PSTR("Invalid M206 syntax"));
+        return false;
+    }
+    if (serialReceive.lastCommandWasBinary && !hasChecksum && !frame.borrowedText) {
+        if(!Printer::printJob.emergencyLocked())
         Com::printErrorFLN(PSTR("Checksum required when switching back to ASCII protocol."));
         return false;
     }
     if (command.hasFormatError() /*|| (params & 518) == 0*/) // Must contain G, M or T command and parameter need to have variables!
     {
         serialReceive.formatErrors++;
-        if (Printer::debugErrors())
+        if(!Printer::printJob.emergencyLocked())
             Com::printErrorFLN(Com::tFormatError);
         if (serialReceive.formatErrors < 3)
             return false;

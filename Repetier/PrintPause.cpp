@@ -9,7 +9,7 @@ constexpr float standbyDropC = 100.0f;
 PrintPause Printer::pause;
 
 bool PrintPause::acceptsPauseRequest() const {
-    return allowsQueueAdvance() && !Printer::printJob.commandsBlocked() && !Printer::blockAll;
+    return allowsQueueAdvance() && !Printer::printJob.commandsBlocked() && !Printer::blockAll && !isAnyScanRunning();
 }
 
 void PrintPause::request(Destination destination) {
@@ -41,16 +41,17 @@ void PrintPause::queueRequest(Destination destination) {
 }
 
 void PrintPause::pressPause() {
+    // Calibration owns its own stop/abort state; a print pause cannot freeze it.
+    if (isAnyScanRunning())
+        return;
     if (allowsQueueAdvance()) {
         if (!PrintLine::hasLines()) {
-            if (Printer::debugErrors())
-                Com::printFLN(PSTR("pausePrint(): nothing is printed"));
+            Com::printFLN(PSTR("pausePrint(): nothing is printed"));
             showError((void*)ui_text_pause, (void*)ui_text_operation_denied);
             return;
         }
         if (!Printer::areAxisHomed()) {
-            if (Printer::debugErrors())
-                Com::printFLN(PSTR("pausePrint(): home position is unknown"));
+            Com::printFLN(PSTR("pausePrint(): home position is unknown"));
             showError((void*)ui_text_pause, (void*)ui_text_home_unknown);
             return;
         }
@@ -124,9 +125,18 @@ void PrintPause::cancel() {
 }
 
 void PrintPause::serviceMotion() {
-    if (PrintLine::directMoveActive() || Printer::blockAll)
+    // A canceled phase can return to Running while a transition still
+    // owns a foreground wait frame. Do not start a second transition
+    // until the first has unwound; periodic thermal service still runs.
+    if (servicingMotion_ || !isPaused() || isAnyScanRunning() ||
+        PrintLine::directMoveActive() || Printer::blockAll)
         return;
+    servicingMotion_ = true;
+    dispatchPendingMotion();
+    servicingMotion_ = false;
+}
 
+__attribute__((noinline)) void PrintPause::dispatchPendingMotion() {
     switch (phase_) {
     case Phase::RetractRequested:
         retract(Destination::InPlace);

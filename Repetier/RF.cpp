@@ -18,6 +18,7 @@
 // RF board integration and accessory outputs; scan, pressure, matrix and lighting services live in their own modules.
 
 #include "Repetier.h"
+#include "EepromZoneAvr.h"
 #include "BedMatrix.h"
 #include "CaseFan.h"
 #include "ExternalEeprom.h"
@@ -44,9 +45,7 @@ void stage(Output output, char value) {
 
 void apply(Output output) {
     switch (output) {
-#if !HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)
-    case Output::CaseLight: WRITE(CASE_LIGHT_PIN, state(output)); break;
-#endif
+    case Output::CaseLight: Lighting::set(state(output) ? Lighting::White : Lighting::Black); break;
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
     case Output::Mains: WRITE(OUTPUT_230V_PIN, state(output)); break;
 #if FET1 > -1 && !HOTEND_COOLER_USES_PIN(FET1)
@@ -94,29 +93,16 @@ void initializeBoardOutputs() {
 }
 
 void initializeCaseLight() {
-#if !HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)
-    SET_OUTPUT(CASE_LIGHT_PIN);
+    Lighting::initialize();
     apply(Output::CaseLight);
-#endif
 }
 } // namespace AccessoryOutputs
 
 static void setupForPrinting() {
-    // read the settings from the EEPROM
-    Printer::setAxisHomingFeedrate(X_AXIS, HAL::eprGetFloat(EPR_X_HOMING_FEEDRATE_PRINT));
-    Printer::setAxisHomingFeedrate(Y_AXIS, HAL::eprGetFloat(EPR_Y_HOMING_FEEDRATE_PRINT));
-    Printer::setAxisHomingFeedrate(Z_AXIS, HAL::eprGetFloat(EPR_Z_HOMING_FEEDRATE_PRINT));
-
-    Printer::setAxisLengthMm(X_AXIS, HAL::eprGetFloat(EPR_X_LENGTH));
-    if (Printer::axisLengthMm(X_AXIS) <= 0 || Printer::axisLengthMm(X_AXIS) > 245.0f) {
-        Printer::setAxisLengthMm(X_AXIS, X_MAX_LENGTH_PRINT);
-        HAL::eprSetFloat(EPR_X_LENGTH, Printer::axisLengthMm(X_AXIS));
-        EEPROM::updateChecksum();
-    }
-
     uid.beginBootEye();
     BedMatrix::restoreAtStartup([]() { uid.serviceBootEye(); });
     uid.finishBootEye();
+    EEPROM::reportRecovery();
 
     Printer::pause.restoreDefaultParking();
 
@@ -126,7 +112,12 @@ static void setupForPrinting() {
 } // setupForPrinting
 
 void initRF(void) {
+    // Recovery was recognized by startWatchdog() at the end of setup.
+    // Do not run the normal matrix/boot-animation/idle initialization
+    // after that terminal state. Diagnostic-only scheduler owns progress.
+    if(Printer::printJob.emergencyLocked())return;
     Printer::strainGauge.begin(HAL::timeInMilliseconds());
+    EepromZones::AvrDevice::enableRuntimeServices();
 
     Printer::disableCMPnow(true);
     setupForPrinting();
@@ -145,17 +136,7 @@ void discardScans() {
     Calibration::discardZOffsetScan();
 }
 
-void handleScanWorkTasks(bool tickDue) {
-    if (Calibration::scanSession.dispatching() || !isAnyScanRunning())
-        return;
-    if (Printer::blockAll || Printer::printJob.commandsBlocked()) {
-        discardScans();
-        return;
-    }
-    if (Printer::pause.isPaused())
-        return;
-
-    Calibration::scanSession.beginDispatch();
+static __attribute__((noinline)) void dispatchScanWork(bool tickDue) {
     const bool measurementReady = !Calibration::scanSession.aborting() && Calibration::scanPressure.service(HAL::timeInMilliseconds());
     if (tickDue || measurementReady) {
         if (heatBedScanRunning())
@@ -163,6 +144,21 @@ void handleScanWorkTasks(bool tickDue) {
         else
             Calibration::tickZOffsetScan();
     }
+}
+
+// Keep the guarded scan dispatch frame out of the reentrant periodic pump.
+__attribute__((noinline)) void handleScanWorkTasks(bool tickDue) {
+    if (Calibration::scanSession.dispatching() || !isAnyScanRunning())
+        return;
+    if (Printer::blockAll || Printer::printJob.commandsBlocked()) {
+        discardScans();
+        return;
+    }
+    if (!Printer::printJob.isIdle() || Printer::pause.blocksCalibration() || GCodeInput::flashScriptActive())
+        return;
+
+    Calibration::scanSession.beginDispatch();
+    dispatchScanWork(tickDue);
     if (Calibration::scanSession.finishDispatch() || Printer::blockAll || Printer::printJob.commandsBlocked())
         discardScans();
 }
@@ -187,7 +183,7 @@ void handleStartStandby(millis_t uTime) {
      */
     // A preceding service may have recorded activity after the initial clock sample.
     const millis_t inactivityTime = HAL::timeInMilliseconds();
-    if (PrintLine::hasLines() || Printer::printJob.isBusy() || Printer::pause.isPaused()) {
+    if (PrintLine::hasLines() || PrintLine::directMoveActive() || Printer::printJob.isBusy() || Printer::pause.isPaused()) {
         Printer::inactivity.recordActivity(inactivityTime);
     } else {
         if (Printer::inactivity.shutdownTimeoutExpired(inactivityTime)) {
@@ -204,7 +200,15 @@ void handleStartStandby(millis_t uTime) {
 }
 
 void outputObject(bool showerrors) {
-    if (PrintLine::hasLines() || !Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Cancel)) {
+    const auto admitted = [] {
+        return !GCodeInput::flashScriptActive() && !isAnyScanRunning() &&
+               (Printer::printJob.isIdle() || Printer::printJob.isPrinting());
+    };
+    // A wait can pump the panel. Never enter an output script after a
+    // calibration or filament operation has acquired the machine.
+    if (!admitted() || PrintLine::hasLines() ||
+        !Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Cancel) ||
+        !admitted()) {
         if (showerrors)
             showError((void*)ui_text_output_object, (void*)ui_text_operation_denied);
         return;
@@ -223,9 +227,9 @@ void outputObject(bool showerrors) {
     // disable the fan
     Commands::setFanSpeed((uint8_t)0);
 
-    {
-        GCodeInput::executeFlashScript(Com::tOutputObjectPrint);
-    }
+    // A canceled/refused output program must not reach motor shutdown.
+    if (!GCodeInput::executeOutputProgram())
+        return;
 
     if (!Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Cancel))
         return;
@@ -236,24 +240,25 @@ void outputObject(bool showerrors) {
     Printer::idleStatus.schedule(HAL::timeInMilliseconds());
 } // outputObject
 
-void loopFeatures() // Wird so aufgerufen, dass es ein ~100ms Takt sein sollte.
+static __attribute__((noinline)) void servicePrintFeatures() {
+    millis_t uTime = HAL::timeInMilliseconds();
+    Printer::printJob.service(uTime);
+
+    handleStartStandby(uTime);
+    handleStrainGaugeFeatures(uTime);
+
+    Printer::pause.serviceStandby(uTime);
+}
+
+// The periodic pump can re-enter through feature/motion waits. Do not
+// reserve the feature dispatch frame in every invocation of that pump.
+__attribute__((noinline)) void loopFeatures() // Wird so aufgerufen, dass es ein ~100ms Takt sein sollte.
 {
     static char nEntered = 0;
     if (!nEntered) {
         nEntered++;
 
-        millis_t uTime = HAL::timeInMilliseconds();
-        Printer::printJob.service(uTime);
-
-        handleStartStandby(uTime);
-        handleStrainGaugeFeatures(uTime);
-
-        Printer::pause.serviceStandby(uTime);
-
-#ifdef RGB_LIGHT_R_PIN
-        RgbLighting::updateStatus();
-#endif // RGB_LIGHT_R_PIN
-
+        servicePrintFeatures();
         nEntered--;
     }
 
@@ -289,7 +294,7 @@ unsigned char isMovingAllowed(const char* pszCommand, char outputLog) {
 
     if (isAnyScanRunning()) {
         // do not allow manual movements while the heat bed scan is in progress
-        if (Printer::debugErrors() && outputLog) {
+        if (outputLog) {
             Com::printF(pszCommand);
             Com::printFLN(PSTR(": command can not be used while scan is in progress"));
         }
@@ -302,10 +307,11 @@ unsigned char isMovingAllowed(const char* pszCommand, char outputLog) {
 } // isMovingAllowed
 
 unsigned char isHomingAllowed(GCode* com, char outputLog) {
+    if(!EEPROM::settingsReady())return 0;
 
     if (isAnyScanRunning()) {
         // do not allow homing while the heat bed scan is in progress
-        if (Printer::debugErrors() && outputLog) {
+        if (outputLog) {
             Com::printFLN(PSTR("G28: homing can not be performed while the heat bed scan is in progress"));
         }
         showError((void*)ui_text_home, (void*)ui_text_operation_denied);
@@ -371,8 +377,17 @@ bool hardwareTypeMatches() {
 void doEmergencyStop(StopReason reason) {
     {
         InterruptProtectedBlock lock;
+        if (Printer::blockAll)
+            return;
         Printer::blockAll = 1;
+        Printer::lockMovement();
         Printer::extrusionOutput.inhibit(ExtrusionOutput::Inhibit::Emergency);
+        Printer::pause.cancel();
+        Printer::idleStatus.cancel();
+        PrintLine::abortDirectMoveForEmergency();
+        PrintLine::discardQueuedMoves();
+        for (uint8_t axis = X_AXIS; axis <= E_AXIS; ++axis)
+            Printer::stopDirectAxis(axis);
     }
 
     showError((void*)ui_text_emergency_stop);
@@ -387,6 +402,10 @@ void doEmergencyStop(StopReason reason) {
     Printer::stopPrint(); // And tell usb senders to stop
 
     Calibration::moveZ(int(Printer::stepsPerMm(Z_AXIS) * 5), true);
+    // Thermal emergency takes precedence even during the retreat. Its
+    // holding-torque policy must not be overridden by this older frame.
+    if (Printer::printJob.emergencyLocked())
+        return;
 
     // we are not going to perform any further operations until the restart of the firmware
     Printer::switchEverythingOff();

@@ -6,9 +6,6 @@ namespace GCodeCommands {
 namespace Calibration {
 
 void disableBedCompensation() {
-    if (Printer::debugInfo()) {
-        Com::printFLN(PSTR("M3000: disabling z compensation"));
-    }
     queueTask(QueueTask::DisableZCompensation);
 }
 
@@ -52,7 +49,7 @@ void selectBedMatrix(GCode* pCommand) {
     long nTemp;
     if (Printer::doHeatBedZCompensation) {
         // do not allow to change the current heat bed z-compensation matrix while the z-compensation is active
-        if (Printer::debugErrors()) {
+        {
             Com::printFLN(PSTR("M3009: heat bed z matrix can not be changed while z-compensation is active"));
         }
 
@@ -64,7 +61,7 @@ void selectBedMatrix(GCode* pCommand) {
         nTemp = pCommand->S;
 
         if (nTemp < 1 || nTemp > EEPROM_MAX_HEAT_BED_SECTORS) {
-            if (Printer::debugErrors()) {
+            {
                 Com::printF(PSTR("M3009: invalid heat bed z matrix ("), nTemp);
                 Com::printFLN(PSTR(")"));
             }
@@ -77,46 +74,7 @@ void selectBedMatrix(GCode* pCommand) {
         }
     }
 
-    if (Printer::debugInfo()) {
-        Com::printFLN(PSTR("M3009: currently active heat bed z matrix: "), g_nActiveHeatBed);
-    }
-}
-
-void clearBedMatrix(GCode* pCommand) {
-    long nTemp;
-    if (isAnyScanRunning()) {
-        Com::printFLN(PSTR("M3011: scan in progress"));
-        return;
-    }
-    if (Printer::doHeatBedZCompensation) {
-        if (Printer::debugErrors()) {
-            Com::printFLN(PSTR("M3011: the heat bed z matrix can not be cleared while the z-compensation is active"));
-        }
-
-        showError((void*)ui_text_z_compensation, (void*)ui_text_operation_denied);
-        return;
-    }
-    if (pCommand->hasS()) {
-        nTemp = pCommand->S;
-    } else {
-        // we clear the current z-compensation matrix in case no other z-compensation matrix is specified
-        nTemp = g_nActiveHeatBed;
-    }
-
-    if (nTemp < 1 || nTemp > EEPROM_MAX_HEAT_BED_SECTORS) {
-        if (Printer::debugErrors()) {
-            Com::printF(PSTR("M3011: invalid heat bed z matrix ("), nTemp);
-            Com::printFLN(PSTR(")"));
-        }
-        return;
-    }
-
-    if (saveActiveHeatBedToExtEEPROM((char)nTemp)) {
-        // switch to the specified z-compensation matrix
-        g_nActiveHeatBed = (char)nTemp;
-        if (clearCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed)))
-            Com::printFLN(PSTR("M3011: cleared heat bed z matrix: "), nTemp);
-    }
+    Com::printFLN(PSTR("M3009: currently active heat bed z matrix: "), g_nActiveHeatBed);
 }
 
 void reportBedMatrix(GCode* pCommand) {
@@ -138,7 +96,7 @@ void reportBedMatrix(GCode* pCommand) {
     }
 
     if (nTemp < 1 || nTemp > EEPROM_MAX_HEAT_BED_SECTORS) {
-        if (Printer::debugErrors()) {
+        {
             Com::printF(PSTR("M3013: invalid heat bed z matrix ("), nTemp);
             Com::printFLN(PSTR(")"));
         }
@@ -159,12 +117,10 @@ void reportBedMatrix(GCode* pCommand) {
     }
 
     if (g_ZCompensationMatrix[0][0] == EEPROM_FORMAT) {
-        if (Printer::debugInfo()) {
-            Com::printFLN(PSTR("M3013: current heat bed z-compensation matrix: "));
-        }
+        Com::printFLN(PSTR("M3013: current heat bed z-compensation matrix: "));
         outputCompensationMatrix(format);
     } else {
-        if (Printer::debugErrors()) {
+        {
             Com::printF(PSTR("M3013: the heat bed z-compensation matrix is not valid ( "), g_ZCompensationMatrix[0][0]);
             Com::printF(PSTR(" / "), EEPROM_FORMAT);
             Com::printFLN(PSTR(" )"));
@@ -177,14 +133,6 @@ void reportBedMatrix(GCode* pCommand) {
         // restore z-compensation matrix, in case we switched them
         switchActiveHeatBed(nOldHeatBed);
     }
-}
-
-void eraseMatrixEeprom() {
-    if (isAnyScanRunning()) {
-        Com::printFLN(PSTR("clearExtEEPROM(): scan in progress"));
-        return;
-    }
-    clearExternalEEPROM();
 }
 
 void adjustBedMatrix(GCode* pCommand) {

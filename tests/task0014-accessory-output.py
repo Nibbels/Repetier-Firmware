@@ -32,6 +32,22 @@ using Event = std::pair<int,int>;
 std::vector<Event> actual;
 #define WRITE(pin,val) actual.emplace_back(pin, !!(val))
 #define SET_OUTPUT(pin) actual.emplace_back(pin, 2)
+#include "Lighting.h"
+// The physical light register implementation has a separate replay.
+namespace Lighting {
+void initialize() { 
+#if !HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)
+    WRITE(CASE_LIGHT_PIN,0); SET_OUTPUT(CASE_LIGHT_PIN);
+#endif
+}
+void set(Color c) {
+#if !HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)
+    WRITE(CASE_LIGHT_PIN,c.r||c.g||c.b);
+#else
+    (void)c;
+#endif
+}
+}
 """
 body = r"""
 using namespace AccessoryOutputs;
@@ -66,6 +82,7 @@ int main() {
 #endif
     initializeCaseLight();
 #if !HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)
+    expected.emplace_back(CASE_LIGHT_PIN,0);
     expected.emplace_back(CASE_LIGHT_PIN,2);
     expected.emplace_back(CASE_LIGHT_PIN,1);
 #endif

@@ -6,6 +6,7 @@
 #include <deque>
 #include <initializer_list>
 #include <string>
+#include <vector>
 
 using millis_t = uint32_t;
 using fast8_t = int8_t;
@@ -14,23 +15,47 @@ using PGM_P = const char*;
 #define PSTR(text) text
 #include "gcode-settings.inc"
 #include "GCodeInput.h"
+#include "UsbSerial.h"
+#include "DiagnosticHistory.h"
 
 namespace {
 std::deque<uint8_t> incoming;
 std::string replies;
 millis_t clockMs = 0;
-bool echo = false;
 bool stopped = false;
+bool thermalLocked=false;
+uint8_t txFree=63;
+unsigned liveRequests=0,replayRequests=0,historyRequests=0;
 unsigned flushes = 0;
-unsigned scriptCommands = 0;
 unsigned dispatchedCommands = 0, statusCommands = 0, stopRequests = 0;
-bool legacyRejected = false;
+bool legacyRejected = false, settingsBlocked = false;
+unsigned softLoads = 0, softUnloads = 0;
+std::vector<int> internalEvents;
+unsigned stopAtPeriodicVisit=0;
+bool rejectInternalMotion=false;
+int16_t softPressure = 0;
+uint8_t softSpeed = 0;
 unsigned heaterRequests = 0, extrusionRequests = 0;
-unsigned periodicVisits = 0;
+unsigned periodicVisits = 0, pendingOutputVisits = 0;
+bool injectNestedScript = false, stopDuringScript = false;
 struct EmergencyReached {};
-GCode lastScriptCommand{};
 }
 
+uint8_t UsbSerial::transmitFree(){return txFree;}
+bool UsbSerial::tryWriteSpan(const char* bytes,uint8_t count) {
+    assert(count<=txFree);
+    replies.append(bytes,count);
+    txFree-=count;
+    return true;
+}
+namespace ThermalEmergency {
+void requestLiveReport(){++liveRequests;}
+void requestDiagnosticReplay(){++replayRequests;}
+}
+namespace DiagnosticHistory {
+void request(){++historyRequests;}
+void service(){}
+}
 namespace HAL {
 millis_t timeInMilliseconds() { return clockMs; }
 bool serialByteAvailable() { return !incoming.empty(); }
@@ -39,21 +64,46 @@ uint8_t serialReadByte() {
     incoming.pop_front();
     return byte;
 }
-void serialFlush() { ++flushes; }
-char readFlashByte(const char* position) { return *position; }
+void serialFlush() {
+    assert(!thermalLocked);
+    ++flushes;
+}
 }
 
+enum { X_AXIS, Y_AXIS, Z_AXIS, E_AXIS };
+static bool isMovingAllowed(const char*) { return !rejectInternalMotion; }
 namespace Printer {
-static uint8_t debugLevel;
-#include "debug-mask.inc"
-bool debugErrors() { return (debugLevel & 4) != 0; }
+struct { void recordActivity(millis_t){internalEvents.push_back(1);} } inactivity;
+void setEPositionMM(float e){assert(e==0);internalEvents.push_back(2);}
+bool queueInternalAxisMove(uint8_t axis,float value,float feedrate){
+    if(axis==E_AXIS)
+        internalEvents.push_back(int(value));
+    else {
+        assert(axis==Y_AXIS || axis==Z_AXIS);
+        internalEvents.push_back(1000+axis);
+        internalEvents.push_back(int(value));
+    }
+    internalEvents.push_back(int(feedrate));
+    return true;
+}
+bool debugErrors() { return true; }
 bool legacySimulationRejected() { return legacyRejected; }
+bool heatingInhibited() { return settingsBlocked || legacyRejected
+    || thermalLocked
+    ; }
 void latchOutputInhibit(bool thermalFault) { assert(!thermalFault); legacyRejected = true; }
 void stopPrint() { ++stopRequests; }
 void setFeedrate(float) { ++dispatchedCommands; }
-bool debugEcho() { return echo; }
 struct {
-    bool commandsBlocked() const { return stopped; }
+    void servicePendingOutput(millis_t) {
+        assert(!GCodeInput::peekCurrentCommand());
+        assert(!thermalLocked);
+        ++pendingOutputVisits;
+    }
+    bool commandsBlocked() const { return stopped
+        ||thermalLocked
+        ; }
+    bool emergencyLocked() const {return thermalLocked;}
 } printJob;
 struct { bool isPaused() const { return false; } } pause;
 }
@@ -62,7 +112,22 @@ namespace Commands {
 void commandLoop();
 void emergencyStop() { throw EmergencyReached{}; }
 void executeGCode(GCode* code);
-void checkForPeriodicalActions(FirmwareState) { ++periodicVisits; }
+void checkForPeriodicalActions(FirmwareState) {
+    ++periodicVisits;
+    if (GCodeInput::flashScriptActive()) internalEvents.push_back(3);
+    if (stopAtPeriodicVisit && periodicVisits==stopAtPeriodicVisit) stopped=true;
+    if (injectNestedScript) {
+        injectNestedScript = false;
+        GCodeInput::executeSoftFilament(false);
+        assert(GCodeInput::flashScriptActive());
+        assert(!GCodeInput::executeOutputProgram());
+        GCodeInput::executeHardFilament(false);
+    }
+    if (stopDuringScript) {
+        stopDuringScript = false;
+        stopped = true;
+    }
+}
 }
 
 namespace RMath {
@@ -71,8 +136,14 @@ int min(int a, int b) { return std::min(a, b); }
 
 namespace Com {
 #include "gcode-replies.inc"
-void print(char value) { replies += value; }
-void print(const char* text) { replies += text; }
+void print(char value) {
+    assert(!thermalLocked);
+    replies += value;
+}
+void print(const char* text) {
+    assert(!thermalLocked);
+    replies += text;
+}
 void print(char* text) { print(static_cast<const char*>(text)); }
 template <class Number>
 void print(Number value) { replies += std::to_string(value); }
@@ -94,14 +165,35 @@ void printErrorFLN(const char* text) { print(tError); printFLN(text); }
 // Real receiver, M111 handler and dispatch entry; downstream command effects
 // are represented by counters, not physical hardware.
 namespace GCodeCommands {
-void setDebugLevel(GCode*);
+void dwellMilliseconds(uint32_t duration){assert(GCodeInput::flashScriptActive());internalEvents.push_back(int(duration));}
+void selectAbsolutePositioningWithSource(bool internal){assert(internal && GCodeInput::flashScriptActive());internalEvents.push_back(90);}
+void waitForHotendWithParameters(bool targetPresent,int32_t target,bool toolPresent,uint8_t tool){
+    assert(targetPresent && !toolPresent && !tool && GCodeInput::flashScriptActive());
+    internalEvents.push_back(target);
+    GCodeInput::executeHardFilament(true); // refuse nested program
+}
+void setHotendTemperatureWithParameters(bool targetPresent,int32_t target,bool waitRequested,bool toolPresent,uint8_t tool){
+    assert(targetPresent && !target && !waitRequested && !toolPresent && !tool);
+    assert(GCodeInput::flashScriptActive());
+    internalEvents.push_back(0);
+}
+void loadFilamentWithParameters(int16_t p, uint8_t f) {
+    assert(GCodeInput::flashScriptActive());
+    ++softLoads; softPressure=p; softSpeed=f;
+    GCodeInput::executeSoftFilament(true); // refuse nested typed entry
+}
+void unloadFilamentWithParameters(int16_t p) {
+    assert(GCodeInput::flashScriptActive());
+    ++softUnloads; softPressure=p;
+    assert(!GCodeInput::executeOutputProgram()); // refuse cross-program entry
+}
 void dispatchMotion(GCode* code) {
     ++dispatchedCommands;
-    if (code->internalCommand) { ++scriptCommands; lastScriptCommand = *code; }
+    assert(!code->internalCommand);
     if (code->hasE()) ++extrusionRequests;
 }
 void dispatchMachine(GCode* code) {
-    if (code->M == 111) { setDebugLevel(code); return; }
+    if (code->M == 111) return; // retired command, no state
     if (code->M == 105 || code->M == 114 || code->M == 115) { ++statusCommands; return; }
     ++dispatchedCommands;
     if (code->M == 104 || code->M == 109 || code->M == 140 || code->M == 190 || code->M == 303)
@@ -111,6 +203,7 @@ void dispatchMachine(GCode* code) {
 }
 }
 namespace Extruder { void selectExtruderById(uint8_t, bool) { ++dispatchedCommands; } }
+namespace EEPROM { bool settingsReady(){return !settingsBlocked;} }
 #include "legacy-dispatch.inc"
 #include "gcode-receiver.inc"
 
@@ -157,6 +250,7 @@ void readReply(const std::string& expected) {
         std::fprintf(stderr, "Expected [%s], received [%s]\n", expected.c_str(), replies.c_str());
     assert(replies == expected);
     replies.clear();
+    txFree=63;
 }
 
 void popM(unsigned number) {
@@ -184,7 +278,7 @@ void numberedLines() {
     readReply("skip 41\r\nok\r\n");
     assert(!GCodeInput::peekCurrentCommand());
     feed(numbered("N43 M105"));
-    readReply("\r\nResend:42\r\nok\r\n");
+    readReply("Error:expected line 42 got 43\r\n\r\nResend:42\r\nok\r\n");
     assert(flushes == 1);
     feed(numbered("N42 M105"));
     readReply("ok 42\r\n");
@@ -219,9 +313,8 @@ void displayText() {
     assert(display && display->text == std::string("Cooling down"));
     popM(117);
     readReply("ok 0\r\n");
-    echo = true;
     popM(115);
-    assert(replies == "Echo:M115 \r\n");
+    assert(replies.empty());
 }
 
 void idleAndPartialLine() {
@@ -250,7 +343,7 @@ void binaryFrames() {
     auto corrupted = packet;
     corrupted.back() ^= 1;
     feed(corrupted);
-    readReply("\r\nResend:2\r\nok\r\n");
+    readReply("Error:Wrong checksum\r\n\r\nResend:2\r\nok\r\n");
     feed(std::string(31, '\0') + packet);
     readReply("ok 2\r\n");
     assert(GCodeInput::peekCurrentCommand()->isV2());
@@ -338,7 +431,7 @@ void boundedReceive() {
     auto bad = packet;
     bad.back() ^= 1;
     feed(bad);
-    readReply("\r\nResend:1\r\nok\r\n");
+    readReply("Error:Wrong checksum\r\n\r\nResend:1\r\nok\r\n");
     feed(std::string(300, 'x') + std::string(31, '\0') + packet);
     for (unsigned i = 0; i < 2; ++i) {
         const auto before = incoming.size();
@@ -388,7 +481,7 @@ void stopDrainsInput() {
     assert(GCodeInput::peekCurrentCommand());
     stopped = true;
     Commands::commandLoop();
-    assert(!GCodeInput::peekCurrentCommand() && scriptCommands == 0);
+    assert(!GCodeInput::peekCurrentCommand());
     feed("N2 M105\n");
     readReply("ok 2\r\n");
     assert(!GCodeInput::peekCurrentCommand());
@@ -399,18 +492,21 @@ void stopDrainsInput() {
 }
 
 void legacyStream(const std::string& scenario) {
-    // Positive control: normal commands reach their owner, normal masks work.
+    // Positive control: retired M111 S7 is harmless; ordinary commands still run.
     feed("M111 S7\nM104 S100\nM140 S40\nG1 E1\n");
     while (!incoming.empty()) Commands::commandLoop();
-    assert(!legacyRejected && Printer::debugMask() == 7 && heaterRequests == 2 && extrusionRequests == 1);
-    Printer::toggleDebugFlag(8); // retired bit cannot be set via the debug API
-    assert(Printer::debugMask() == 7);
-    Printer::setDebugMask(0);
+    assert(!legacyRejected && heaterRequests == 2 && extrusionRequests == 1);
     replies.clear();
     const unsigned normalDispatches = dispatchedCommands;
     if (scenario == "legacy-during-stop") stopped = true;
-    const unsigned legacyMask = scenario == "legacy-ascii" ? 8 : 15;
-    if (scenario == "legacy-binary") {
+    const bool inch = scenario == "inch-ascii" || scenario == "inch-binary";
+    const unsigned legacyMask = inch ? 0 : scenario == "legacy-ascii" ? 8 : 15;
+    if (scenario == "inch-ascii") {
+        feed(numbered("N1 G20"));
+    } else if (scenario == "inch-binary") {
+        // Binary V1 G20 (G field, one byte).
+        feed(binary({0x84, 0x00, 20}));
+    } else if (scenario == "legacy-binary") {
         // Binary V1 M111 S15 (M and 32-bit S).
         feed(binary({0x82, 0x04, 111, 15, 0, 0, 0}));
     } else {
@@ -421,8 +517,8 @@ void legacyStream(const std::string& scenario) {
         feed(numbered("N1 M111 S" + std::to_string(legacyMask)));
     }
     Commands::commandLoop();
-    assert(legacyRejected && stopRequests == 1 && Printer::debugMask() == (legacyMask & ~8u));
-    assert(replies.find("M111 bit 8 unsupported") != std::string::npos);
+    assert(legacyRejected && stopRequests == 1);
+    assert(replies.find(inch ? "G20 unsupported" : "M111 bit 8 unsupported") != std::string::npos);
     assert(replies.find("ok ") != std::string::npos);
     assert(!GCodeInput::peekCurrentCommand());
     stopped = false; // stop cleanup finished; legacy rejection must survive it
@@ -443,19 +539,105 @@ void legacyStream(const std::string& scenario) {
         assert(++loops < 100);
         Commands::commandLoop();
     }
-    assert(legacyRejected && Printer::debugMask() == 0 && stopRequests == 1);
+    assert(legacyRejected && stopRequests == 1);
     assert(dispatchedCommands == normalDispatches && heaterRequests == 2 && extrusionRequests == 1);
     assert(statusCommands == 3 && replies.find("Job rejected;") != std::string::npos);
-    GCodeInput::executeFlashScript("G1 E1\nM104 S200\n");
+    GCodeInput::executeHardFilament(false);
+    assert(!GCodeInput::executeOutputProgram() && internalEvents.empty());
     assert(dispatchedCommands == normalDispatches && heaterRequests == 2 && extrusionRequests == 1);
     feed("M111 S8\n");
     Commands::commandLoop();
     assert(legacyRejected && stopRequests == 1);
 }
 
-void flashScript() {
-    GCodeInput::executeFlashScript("; comment\nG91\nG1 X0.5 ; jog\n");
-    assert(scriptCommands == 2 && lastScriptCommand.G == 1 && lastScriptCommand.X == 0.5f);
+void strictEepromSyntax() {
+    // Exhaust both signed alias neighborhoods before the 8-bit/16-bit conversion.
+    for(int32_t type=-65536;type<=65536;++type){
+        const std::string line="M206 T"+std::to_string(type)+" P2307 "+(type==3?"X1":"S80");
+        assert(validEepromAscii(line.c_str())==(type>=0&&type<=3));
+    }
+    for(int32_t pos=-65536;pos<=65536;++pos){
+        const std::string line="M206 T0 P"+std::to_string(pos)+" S80";
+        assert(validEepromAscii(line.c_str())==(pos>=2048&&pos<3072));
+    }
+    for(const char* valid:{"M206 T0 P2307 S80","m206p2307t0s80","N1 M206 T3 P2308 X1.25*12",
+                          "M206 T3 P2308 X-1.25e+2","M206 T2 P2723 S2147483647",
+                          "M206 T2 P2723 S-2147483648","T0 M206 P2307 S+80",
+                          "M206 T0 P2307 S80 ; comment"})assert(validEepromAscii(valid));
+    for(const char* invalid:{"M206 T0 P107 S80","M206 T0 P3072 S80","M206 T256 P2307 S80","M206 T-256 P2307 S80","M206 T P2307 S80",
+        "M206 T0 P S80","M206 T0 P2307 S","M206 T0 P2307 S1.5","M206 T0 P2307 S2147483648",
+        "M206 T0 P2307 S-2147483649","M65742 T0 P2307 S80","M206 T0 P67843 S80",
+        "M206 T3 P2308 X","M206 T3 P2308 X1e","M206 T3 P2308 X1.2.3",
+        "M206 T0 T0 P2307 S80","M206 T0 P2307 P2308 S80","M206 T0 P2307 S80 X1",
+        "M206 T0 P2307 S80*0 T1","M206 T3 P2308 S1","M206 T0 P2307 X1",
+        "M206 P2307 S80","M206 T0 P2307","M206 T3 P2308 Xnan"})
+        assert(!validEepromAscii(invalid));
+    // Ordinary unnumbered commands use the existing numbered-style ACK (current N=0).
+    feed("M206 T0 P2307 S80\n");readReply("ok 0\r\n");popM(206);
+    feed("M206 T256 P2307 S80\n");
+    for(unsigned i=0;i<8;++i)GCodeInput::readFromSerial();
+    assert(!GCodeInput::peekCurrentCommand());
+    assert(replies.find("Invalid M206 syntax")!=std::string::npos);
+}
+void thermalEmergency() {
+    feed("N1 M104 S200\n");
+    readReply("ok 1\r\n");
+    assert(GCodeInput::peekCurrentCommand());
+    thermalLocked=true;
+    Commands::commandLoop(); // old admitted command is retired without execution/echo
+    assert(!GCodeInput::peekCurrentCommand()&&dispatchedCommands==0&&replies.empty());
+    feed(numbered("N2 M105"));
+    txFree=0;
+    for(unsigned n=0;n<1000;++n)Commands::commandLoop();
+    assert(!incoming.empty()&&replies.empty()&&liveRequests==0&&periodicVisits==1001);
+    txFree=63;
+    readReply("ok 2\r\n");
+    assert(liveRequests==1&&!GCodeInput::peekCurrentCommand());
+    feed(numbered("N2 M105"));readReply("skip 2\r\nok\r\n");
+    assert(liveRequests==1);
+    feed(numbered("N4 M105"));readReply("\r\nResend:3\r\nok\r\n");
+    feed("N3 M105*0\n");readReply("\r\nResend:3\r\nok\r\n");
+    feed(numbered("N3 M112"));readReply("Error: THERMAL EMERGENCY\r\nok 3\r\n");
+    feed(numbered("N4 M999"));readReply("Error: THERMAL EMERGENCY\r\nok 4\r\n");
+    feed(numbered("N5 M115"));readReply("ok 5\r\n");
+    assert(replayRequests==1);
+    feed(binary({0x83,0x00,0x06,0x00,105}));readReply("ok 6\r\n");
+    assert(liveRequests==2);
+    feed(binary({0x85,0x00,0x07,0x00,1}));readReply("Error: THERMAL EMERGENCY\r\nok 7\r\n");
+    feed(numbered("N8 M110"));readReply("ok\r\n");
+    feed(numbered("N9 M3950"));readReply("ok 9\r\n");
+    assert(historyRequests==1);
+    GCodeInput::executeHardFilament(false);
+    assert(!GCodeInput::executeOutputProgram() && internalEvents.empty());
+    assert(!GCodeInput::peekCurrentCommand()&&dispatchedCommands==0&&heaterRequests==0&&flushes==0);
+}
+
+void postStopOutputBoundary() {
+    feed("G1 X1\nG1 X2\n");
+    GCodeInput::readFromSerial();
+    GCodeInput::readFromSerial();
+    assert(GCodeInput::peekCurrentCommand());
+    stopped = true;
+    Commands::commandLoop();
+    assert(GCodeInput::peekCurrentCommand() && !pendingOutputVisits);
+    Commands::commandLoop();
+    assert(!GCodeInput::peekCurrentCommand() && pendingOutputVisits == 1);
+    assert(!dispatchedCommands);
+    thermalLocked = true;
+    Commands::commandLoop();
+    assert(pendingOutputVisits == 1);
+}
+
+void internalProgramSerialBoundary() {
+    injectNestedScript = true;
+    GCodeInput::executeHardFilament(false);
+    assert(periodicVisits==6 && !dispatchedCommands && !GCodeInput::flashScriptActive());
+    stopDuringScript = true;
+    assert(!GCodeInput::executeOutputProgram());
+    assert(stopped && periodicVisits==7 && !GCodeInput::flashScriptActive());
+    assert(!GCodeInput::executeOutputProgram() && periodicVisits==7);
+    stopped = false;
+    assert(GCodeInput::executeOutputProgram() && periodicVisits==15);
     assert(replies.empty() && !GCodeInput::peekCurrentCommand());
     feed("N1 M105\n");
     readReply("ok 1\r\n");
@@ -463,6 +645,75 @@ void flashScript() {
 }
 
 } // namespace
+
+void outputProgram() {
+    const std::vector<int> expected={1,3,2,1,3,-SCRIPT_RETRACT_MM,0,1,3,100,1,3,2,1,3,90,1,3,
+                                     1000+Z_AXIS,200,540,1,3,1000+Y_AXIS,245,4800,1,3};
+    assert(GCodeInput::executeOutputProgram());
+    assert(internalEvents==expected && periodicVisits==8 && !GCodeInput::flashScriptActive());
+    assert(!dispatchedCommands);
+    unsigned boundary=0;
+    for(unsigned n=1;n<=8;++n){
+        while(expected[boundary++]!=3){}
+        internalEvents.clear();periodicVisits=0;stopAtPeriodicVisit=n;
+        assert(!GCodeInput::executeOutputProgram());
+        assert(stopped && periodicVisits==n && !GCodeInput::flashScriptActive());
+        assert(internalEvents==std::vector<int>(expected.begin(),expected.begin()+boundary));
+        stopped=false;stopAtPeriodicVisit=0;
+    }
+    internalEvents.clear();periodicVisits=0;
+    legacyRejected=true;assert(!GCodeInput::executeOutputProgram());legacyRejected=false;
+    settingsBlocked=true;assert(!GCodeInput::executeOutputProgram());settingsBlocked=false;
+    thermalLocked=true;assert(!GCodeInput::executeOutputProgram());thermalLocked=false;
+    assert(internalEvents.empty() && !periodicVisits);
+}
+
+void hardFilament() {
+    for(bool unload:{false,true}){
+        internalEvents.clear();periodicVisits=0;
+        GCodeInput::executeHardFilament(unload);
+        const std::vector<int> expected={unload?PREHEAT_A_HOTEND_C:PREHEAT_B_HOTEND_C,3,
+            1,3,2,1,3,unload?-90:90,unload?500:100,1,3,2,1,3,0,3};
+        assert(internalEvents==expected && periodicVisits==6 && !GCodeInput::flashScriptActive());
+        assert(!dispatchedCommands);
+        // Stop immediately after each original command: no later effects.
+        unsigned boundary=0;
+        for(unsigned n=1;n<=6;++n){
+            while(expected[boundary++]!=3){}
+            internalEvents.clear();periodicVisits=0;stopAtPeriodicVisit=n;
+            GCodeInput::executeHardFilament(unload);
+            assert(stopped && periodicVisits==n && !GCodeInput::flashScriptActive());
+            assert(internalEvents==std::vector<int>(expected.begin(),expected.begin()+boundary));
+            stopped=false;stopAtPeriodicVisit=0;
+        }
+    }
+    internalEvents.clear();periodicVisits=0;
+    legacyRejected=true;GCodeInput::executeHardFilament(false);legacyRejected=false;
+    settingsBlocked=true;GCodeInput::executeHardFilament(true);settingsBlocked=false;
+    thermalLocked=true;GCodeInput::executeHardFilament(false);thermalLocked=false;
+    assert(internalEvents.empty() && !periodicVisits);
+}
+
+void softFilament() {
+    injectNestedScript = true;
+    GCodeInput::executeSoftFilament(false);
+    assert(softLoads==1 && softUnloads==0 && softPressure==3500 && softSpeed==3);
+    assert(periodicVisits==1 && dispatchedCommands==0 && !GCodeInput::flashScriptActive());
+    GCodeInput::executeSoftFilament(true);
+    assert(softLoads==1 && softUnloads==1 && softPressure==std::min(4500, EMERGENCY_PAUSE_DIGITS_MAX));
+    assert(periodicVisits==2 && dispatchedCommands==0 && !GCodeInput::flashScriptActive());
+    stopped=true; GCodeInput::executeSoftFilament(false); stopped=false;
+    legacyRejected=true; GCodeInput::executeSoftFilament(true); legacyRejected=false;
+    settingsBlocked=true; GCodeInput::executeSoftFilament(false); settingsBlocked=false;
+    thermalLocked=true; GCodeInput::executeSoftFilament(true); thermalLocked=false;
+    assert(softLoads==1 && softUnloads==1 && periodicVisits==2);
+    stopDuringScript=true;
+    GCodeInput::executeSoftFilament(false);
+    assert(stopped && softLoads==2 && periodicVisits==3 && !GCodeInput::flashScriptActive());
+    stopped=false;
+    GCodeInput::executeSoftFilament(true);
+    assert(softUnloads==2 && periodicVisits==4 && dispatchedCommands==0);
+}
 
 int main(int argc, char** argv) {
     assert(argc == 2);
@@ -478,8 +729,15 @@ int main(int argc, char** argv) {
     else if (scenario == "bounded-receive") boundedReceive();
     else if (scenario == "emergency") emergencyAdmission();
     else if (scenario == "stopping") stopDrainsInput();
-    else if (scenario == "script") flashScript();
-    else if (scenario == "legacy-ascii" || scenario == "legacy-binary" || scenario == "legacy-during-stop") legacyStream(scenario);
+    else if (scenario == "internal-program-serial") internalProgramSerialBoundary();
+    else if (scenario == "soft-filament") softFilament();
+    else if (scenario == "hard-filament") hardFilament();
+    else if (scenario == "output-program") outputProgram();
+    else if (scenario == "post-stop-output") postStopOutputBoundary();
+    else if (scenario == "thermal-emergency") thermalEmergency();
+    else if (scenario == "m206-syntax") strictEepromSyntax();
+    else if (scenario == "legacy-ascii" || scenario == "legacy-binary" || scenario == "legacy-during-stop" ||
+             scenario == "inch-ascii" || scenario == "inch-binary") legacyStream(scenario);
     else return 1;
     std::printf("Serial protocol replay passed (%s)\n", argv[1]);
 }

@@ -33,7 +33,7 @@ def main():
     printer = (firmware / "Printer.cpp").read_text(encoding="utf-8")
     homing = (firmware / "Homing.cpp").read_text(encoding="utf-8")
     printer_header = (firmware / "Printer.h").read_text(encoding="utf-8")
-    eeprom = (firmware / "Eeprom.h").read_text(encoding="utf-8")
+    eeprom_source = (firmware / "EepromZoneRuntime.cpp").read_text(encoding="utf-8")
     pause = (firmware / "PrintPause.cpp").read_text(encoding="utf-8")
     idle = (firmware / "IdleStatus.cpp").read_text(encoding="utf-8")
     stop = (firmware / "PrintJob.cpp").read_text(encoding="utf-8")
@@ -45,9 +45,7 @@ def main():
     thermal_commands = (firmware / "GCodeThermal.cpp").read_text(encoding="utf-8")
     extruder = (firmware / "Extruder.cpp").read_text(encoding="utf-8")
     fragments = [
-        section(eeprom, "#define EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX", "#define EPR_RF_HEATED_BED_SENSOR_TYPE"),
         section(rf_header, "#define UI_ACTION_RF_HEAT_BED_UP", "#define UI_ACTION_RF_PAUSE"),
-        section(ui_header, "#define UI_FLAG_KEY_TEST_RUNNING", "\n"),
         section(motion, "    static bool hasStoppableDirectMove()", "\n\n")
         .replace("    static bool hasStoppableDirectMove()", "bool PrintLine::hasStoppableDirectMove()", 1),
         dms[dms.index("int16_t StrainGauge::correctedDigits("):],
@@ -59,7 +57,7 @@ def main():
         section(matrix, "long getZMatrixDepth_CurrentXY(", "static void initCompensationMatrix(void) {"),
         pressure[pressure.index("static void serviceSenseOffset("):],
         section(rf, "void handleStartStandby(", "\nvoid outputObject("),
-        section(rf, "void outputObject(bool showerrors)", "\nvoid loopFeatures("),
+        section(rf, "void outputObject(bool showerrors)", "} // outputObject") + "}",
         pause.removeprefix('#include "Repetier.h"\n'),
         idle[idle.index("void IdleStatus::schedule("):],
         stop.removeprefix('#include "Repetier.h"\n#include "GCodeInput.h"\n'),
@@ -72,8 +70,9 @@ def main():
         section(printer, "void Printer::updateWobbleFixOffsets(", "\ninline bool isExtrusionAllowed("),
         section(printer, "void Printer::setFeedrate(", "\n/** Move to machine coordinates"),
         section(printer, "void Printer::stopPrint()", "\n#define START_EXTRUDER_CONFIG"),
-        section(homing, "void Printer::homeZAxis()", "\nvoid Printer::homeAxis("),
+        section(homing, "void Printer::homeZAxis()", "\n__attribute__((noinline)) void Printer::homeAxis("),
         section(printer, "void Printer::enableSenseOffsetnow(", "\nvoid Printer::enableCMPnow("),
+        section(eeprom_source, "void EEPROM::storeSenseOffsetSettings(", "\nvoid EEPROM::storeMicrostepConfiguration("),
         section(rf, "bool isAnyScanRunning()", "\nvoid discardScans(").replace("Calibration::", ""),
         section(panel_motion, "void moveZAction(int8_t direction) {", "} // moveZAction") + "}",
         section(ui_actions, "void UIDisplay::pressPlay()", "\nvoid UIDisplay::mainSwitchCase("),
@@ -104,12 +103,15 @@ def main():
         section(hal, "namespace {\nconstexpr uint8_t advanceCompareGuard", "\n#if !defined CASE_LIGHT_PIN"),
         section(executor, "inline void StepExecutor::updateAdvanceSteps(", "\nvoid StepExecutor::stepSlowedZCompensation("),
         section(commands, "bool Commands::waitForMotion(", "\nvoid Commands::printCurrentPosition()"),
-        section(extruder, "bool Extruder::selectExtruderById(", "\nvoid Extruder::applyCurrentSettings("),
+        section(extruder, "bool Extruder::selectExtruderById(", "\nstatic uint8_t boundedExtruderStepInterval("),
         section(printer, "void Printer::applyAdvanceSettings(", "\nvoid Printer::updateWobbleFixOffsets("),
-        section(motion_commands, "void testAdvanceSteps(", "void reportAdvancePeak("),
         section(motion_commands, "void configureAdvance(", "void finishMotion("),
+        # Synthetic test input only; no public G-code can inject raw E steps.
+        "void injectAdvanceTestSteps(GCode* com) {"
+        " if (com->hasS() && Printer::extrusionOutput.advanceEnabled() && !Printer::pause.isPaused()"
+        " && !Printer::extrusionOutput.blocked()) { InterruptProtectedBlock lock; Printer::extrusionOutput.addSteps(com->S); } }",
         "void runAdvanceCommand(int command, GCode* com) {"
-        " if (command == 223) testAdvanceSteps(com); else configureAdvance(com); }",
+        " if (command == 233) configureAdvance(com); }",
         "void rescalePlannedAxis(uint8_t axis) {\nusing namespace Printer;\n"
         + section(printer, "        const float mmPerStep = 1.0f / axisStepsPerMM_[axis];", "\n\n        /** Acceleration")
         + "\n}",
@@ -123,7 +125,7 @@ def main():
         "void configureSenseOffset(GCode* command) { setSenseOffsetParameters(command); }",
         section(motion_commands, "void setEmergencyPauseDigits(", "\nvoid setSenseOffsetParameters("),
         "void configurePressure(int code, GCode* command) {"
-        " if (code == 3075) setEmergencyPauseDigits(command); else setEmergencyStopDigits(command); }",
+        " assert(code == 3075); setEmergencyPauseDigits(command); }",
         section(thermal_commands, "static bool prepareFilamentProgram(", "\n#ifdef X35_ADC_CHANNEL"),
         "void runFilamentCommand(int code, GCode* command) {"
         " if (code == 3913) loadFilament(command); else unloadFilament(command); }",
@@ -177,7 +179,7 @@ def main():
             "extrusion-planning",
             "gcode-target", "output-safety-lock", "wobble-target", "cartesian-planning", "segment-geometry", "move-queue", "move-reserve",
             "idle-status", "print-job", "ecmp-stepping",
-            "advance-timer", "advance-mode", "advance-cancel", "motion-wait", "pressure-advance-pause", "advance-output", "advance-peak",
+            "advance-timer", "advance-mode", "advance-cancel", "motion-wait", "pressure-advance-pause", "advance-output", "advance-profile",
             "step-clock", "lookahead", "acceleration-limits", "short-move-pacing", "direct-ramp", "xy-limits",
         ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)

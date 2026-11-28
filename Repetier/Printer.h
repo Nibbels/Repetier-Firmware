@@ -41,7 +41,6 @@
 #include "DigitCompensation.h"
 #include "PressureProtection.h"
 #include "PreheatProfiles.h"
-#include "PrintUsage.h"
 #include "StrainGauge.h"
 #include "StartLine.h"
 #include "ExtrusionPlanner.h"
@@ -77,6 +76,7 @@
 #define FEEDRATE_GCODE true
 #define FEEDRATE_DIRECTCONFIG false
 
+namespace EepromZones {bool machineSettingsReady();}
 class Printer {
     static uint8_t menuMode_;
     static float axisStepsPerMM_[4];
@@ -92,8 +92,7 @@ class Printer {
     static float maxXYJerk_;
     static float maxZJerk_;
     static uint8_t flag0, flag1, flag2, flag3;
-    static char enabledStepper[3];
-    static uint8_t debugLevel;
+    static volatile char enabledStepper[3];
     static float feedrate; // Last requested feedrate (mm/s, including multiplier).
     static int feedrateMultiply;
     static float menuExtrusionFactor;
@@ -146,16 +145,12 @@ public:
         feedrateMultiply = factor;
     }
     static void setFlowMultiplier(float factor) { menuExtrusionFactor = factor; }
-    static uint8_t debugMask() { return debugLevel; }
-    static void setDebugMask(uint8_t mask) { debugLevel = mask & ~8u; }
-    static void toggleDebugFlag(uint8_t bit) { debugLevel ^= bit & ~8u; }
     static char zDisplayMode() { return ZMode; }
     static void restoreZDisplayMode(char mode) { ZMode = mode; }
     static void toggleZDisplayMode() { ZMode = ZMode == 1 ? 2 : 1; }
     static void markTemperatureReadingsAvailable() { flag2 |= PRINTER_FLAG2_GOT_TEMPS; }
     static bool temperatureReadingsAvailable() { return flag2 & PRINTER_FLAG2_GOT_TEMPS; }
 
-    static PrintUsage printUsage;
     static ZOffset zOffset;
     static SenseOffsetControl senseOffsetControl;
     static ZMotion zMotion;
@@ -183,8 +178,14 @@ public:
 
 
 
-    static bool movementUnlocked() { return movementUnlocked_; }
-    static void allowMovement() { movementUnlocked_ = true; }
+    static bool movementUnlocked() {
+        if(!EepromZones::machineSettingsReady())return false;
+        return movementUnlocked_;
+    }
+    static void allowMovement() {
+        if(!EepromZones::machineSettingsReady())return;
+        movementUnlocked_=true;
+    }
     static void lockMovement() { movementUnlocked_ = false; }
 
 
@@ -204,17 +205,6 @@ public:
         return (activeMenuModes() & mode) == mode;
     } // isMenuMode
 
-    static INLINE bool debugEcho() {
-        return ((debugLevel & 1) != 0);
-    } // debugEcho
-
-    static INLINE bool debugInfo() {
-        return ((debugLevel & 2) != 0);
-    } // debugInfo
-
-    static INLINE bool debugErrors() {
-        return ((debugLevel & 4) != 0);
-    } // debugErrors
 
     /** \brief Disable stepper motor for x direction. */
     static INLINE void disableXStepper() {
@@ -319,6 +309,8 @@ public:
     }  // enableYStepper
 
     /** \brief Enable stepper motor for z direction. */
+    static bool zStepperEnabled() { return enabledStepper[Z_AXIS] != 0; }
+
     static INLINE void enableZStepper() {
         unmarkAllSteppersDisabled();
 #if (Z_ENABLE_PIN > -1)
@@ -351,12 +343,12 @@ public:
         }
     } // setYDirection
 
-    static INLINE void startXStep(int8_t dir = (Printer::getXDirectionIsPos() ? 1 : -1)) {
+    static INLINE void startXStep(int8_t dir) {
         WRITE(X_STEP_PIN, HIGH);
         Printer::xyMotion.recordMotorStep(X_AXIS, dir);
     } // startXStep
 
-    static INLINE void startYStep(int8_t dir = (Printer::getYDirectionIsPos() ? 1 : -1)) {
+    static INLINE void startYStep(int8_t dir) {
         WRITE(Y_STEP_PIN, HIGH);
         Printer::xyMotion.recordMotorStep(Y_AXIS, dir);
     } // startYStep
@@ -424,8 +416,6 @@ public:
 
     static int8_t anyHomeDir(uint8_t axis);
     static bool anyEndstop(uint8_t axis);
-    static void changeAxisDirection(uint8_t axis, int8_t direction);
-    static void stepAxisStep(uint8_t axis, uint8_t slower = 1);
     static int8_t checkHome(int8_t axis); // M3028 homing repeatability test.
 
     static INLINE bool areAxisHomed() //X_AXIS && Y_AXIS && Z_AXIS
@@ -480,10 +470,6 @@ public:
     static INLINE void toggleAnimation() {
         setAnimation(!isAnimation());
     } // toggleAnimation
-
-    static INLINE float convertToMM(float x) {
-        return (gcodeModes.inches() ? x * 25.4 : x);
-    } // convertToMM
 
     static INLINE bool isXMinEndstopHit() {
         return READ(X_MIN_PIN) == LOW;
@@ -568,7 +554,10 @@ public:
     static void latchOutputInhibit(bool thermalFault);
     static bool isAnyTempsensorDefect() { return flag0 & PRINTER_FLAG0_TEMPSENSOR_DEFECT; }
     static bool legacySimulationRejected() { return flag0 & PRINTER_FLAG0_LEGACY_SIMULATION_REJECTED; }
-    static bool heatingInhibited() { return flag0 & (PRINTER_FLAG0_TEMPSENSOR_DEFECT | PRINTER_FLAG0_LEGACY_SIMULATION_REJECTED); }
+    static bool heatingInhibited() {
+        if(!EepromZones::machineSettingsReady())return true;
+        return flag0 & (PRINTER_FLAG0_TEMPSENSOR_DEFECT | PRINTER_FLAG0_LEGACY_SIMULATION_REJECTED);
+    }
 
     static INLINE bool isManualMoveMode() {
         return (flag0 & PRINTER_FLAG0_MANUAL_MOVE_MODE);
@@ -670,6 +659,8 @@ public:
     static void setup();
     static void setFeedrate(float feedrate);
     static bool queueGCodeCoordinates(GCode* com);
+    // Single-axis internal G1, with modal coordinates and F in mm/min.
+    static bool queueInternalAxisMove(uint8_t axis, float value, float feedrateMmMin = 0);
     static void queueFloatCoordinates(float x, float y, float z, float e, float feedrate);
     static bool queueRelativeStepsCoordinates(long x, long y, long z, long e, float feedrate, bool waitEnd, bool abortAtEndstops = false);
     static bool queueRelativeMMCoordinates(float x, float y, float z, float e, float feedrate, bool waitEnd, bool abortAtEndstops = false);
@@ -700,9 +691,17 @@ public:
     static void enableSenseOffsetnow(void);
     static bool needsCMPwait(void);
     static void enableCMPnow(void);
-    static void disableCMPnow(bool wait = false);
+    // Queue tasks must never enter the foreground correction wait.
+    static inline void disableCMPnow() {
+        doHeatBedZCompensation = 0;
+        InterruptProtectedBlock lock;
+        zMotion.requestCorrection(0);
+    }
+    static void disableCMPnow(bool wait);
 
     static void stopPrint();
+    // Thermal caller has latched output inhibition and removed heater duty.
+    static void stopForThermalFault();
     static bool checkAbortKeys(void);
     static bool checkPlayKey(void);
     static void showConfiguration();
