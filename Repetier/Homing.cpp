@@ -296,9 +296,7 @@ void Printer::homeDigits() {
 
 __attribute__((noinline)) void Printer::homeAxis(bool xaxis, bool yaxis, bool zaxis) // home non-delta printer
 {
-#ifdef RF_EEPROM_ZONE_EXPERIMENT
     if(!EEPROM::settingsReady())return;
-#endif
     // Host and scan homing have the same menu exclusion as panel homing.
     // Periodic thermal service and raw key sampling remain available.
     UIDisplay::ScopedActionExclusion panelExclusion(uid);

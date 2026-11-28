@@ -433,7 +433,7 @@ void ZOffsetScan::reportScrewAdjustment() {
 void ZOffsetScan::abort(bool reloadMatrix) {
     phase_ = Phase::Aborting;
     const auto reason = Calibration::scanSession.takeAbort();
-#if defined(RF_THERMAL_EMERGENCY_EXPERIMENT) && defined(RF_EEPROM_ZONE_EXPERIMENT)
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     DiagnosticHistory::recordScan(reason,DiagnosticHistory::ScanKind::ZOffset);
 #endif
     Calibration::showAbortScanReason(PSTR(UI_TEXT_DO_MHIER_BED_SCAN), reason);
@@ -491,9 +491,7 @@ namespace GCodeCommands {
 namespace Calibration {
 
 void configureZOffsetScan(GCode* pCommand) {
-#ifdef RF_EEPROM_ZONE_EXPERIMENT
     if(!EEPROM::settingsReady())return;
-#endif
     if (heatBedScanRunning()) {
         Com::printFLN(PSTR("M3900/M3901: bed scan in progress"));
         return;

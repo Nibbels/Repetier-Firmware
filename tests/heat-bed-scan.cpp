@@ -226,6 +226,7 @@ void addLong(char* text, long value, int) {
 }
 } // namespace
 
+namespace EEPROM { bool settingsReady(){return true;} }
 #include "scan-pressure-firmware.inc"
 #include "bed-matrix-scan-firmware.inc"
 

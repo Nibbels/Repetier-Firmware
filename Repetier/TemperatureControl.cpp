@@ -27,9 +27,7 @@
 #endif
 
 static uint8_t autotuneIndex = 255;
-#ifdef RF_EEPROM_ZONE_EXPERIMENT
 bool TemperatureController::autotuneActive(){return autotuneIndex!=255;}
-#endif
 static bool autotuneAbortRequested = false;
 static float autotuneTemperatureLimit;
 static uint8_t autotuneSensorType, autotunePowerLimit;

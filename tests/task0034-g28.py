@@ -202,5 +202,5 @@ with tempfile.TemporaryDirectory() as d:
     p.write_text(prelude+"\n"+axes+"\n"+g28+"\n"+main)
     for count in (1,2):
         subprocess.run(["c++","-std=c++11","-O2","-Wall","-Wextra","-Werror",
-                        "-DRF_EEPROM_ZONE_EXPERIMENT=1",f"-DNUM_EXTRUDER={count}",str(p),"-o",str(exe)],check=True)
+                        f"-DNUM_EXTRUDER={count}",str(p),"-o",str(exe)],check=True)
         subprocess.run([str(exe)],check=True)

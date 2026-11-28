@@ -363,7 +363,7 @@ void HeatBedScan::showStatus() {
 void HeatBedScan::abort() {
     phase_ = Phase::Aborting;
     const auto reason = Calibration::scanSession.takeAbort();
-#if defined(RF_THERMAL_EMERGENCY_EXPERIMENT) && defined(RF_EEPROM_ZONE_EXPERIMENT)
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     DiagnosticHistory::recordScan(reason,DiagnosticHistory::ScanKind::HeatBed);
 #endif
     Extruder::setHeatedBedTemperature(0);
@@ -961,9 +961,7 @@ bool heatBedScanRunning() {
 }
 
 void startHeatBedScan(HeatBedScanMode mode) {
-#ifdef RF_EEPROM_ZONE_EXPERIMENT
     if(!EEPROM::settingsReady())return;
-#endif
     if (!Calibration::zOffsetScanRunning())
         heatBedScan.startOrCancel(mode);
 }

@@ -135,9 +135,7 @@ public:
 private:
     void autotunePIDPrepared(float temp, uint8_t controllerId, int maxCycles, bool storeResult, int method);
 public:
-#ifdef RF_EEPROM_ZONE_EXPERIMENT
     static bool autotuneActive();
-#endif
 
     // Code für den Decouple-Test der Heizkreisläufe:
     inline bool isDecoupleFull() {

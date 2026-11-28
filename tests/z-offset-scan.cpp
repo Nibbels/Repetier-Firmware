@@ -214,6 +214,7 @@ void calculate() {
 }
 } // namespace
 
+namespace EEPROM { bool settingsReady(){return true;} }
 #include "scan-pressure-firmware.inc"
 #include "bed-matrix-scan-firmware.inc"
 
