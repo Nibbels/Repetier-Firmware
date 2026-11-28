@@ -145,6 +145,12 @@ bool GCodeInput::transportFailed() {
 
 void GCodeInput::serviceTransportTx() {
     if(transportFailed() || Printer::printJob.emergencyLocked())return;
+    // The periodic scheduler calls this at several admission boundaries.
+    // Avoid a timebase snapshot (and its IRQ mask) on the empty idle path.
+    if(!pendingAck.pending && UsbSerial::transmitFree()==63){
+        txDeadline.poll(0,false,0);
+        return;
+    }
     const uint32_t now=HAL::timeInMilliseconds();
     pendingAck.service();
     if(ackDeadline.expired(pendingAck.pending,now) ||
@@ -160,7 +166,7 @@ void GCodeInput::readFromSerial() {
     }
     serviceTransportTx();
     if(transportFailed())return;
-    if(!UsbSerial::resyncPending())
+    if(recovery.phase()==ReplayPhase::Sending && !UsbSerial::resyncPending())
         recovery.observeHandoff(HAL::timeInMilliseconds(),receiveReady());
     if(!pendingAck.pending &&
        (recovery.phase()==ReplayPhase::Healthy || recovery.phase()==ReplayPhase::Waiting))
@@ -168,9 +174,11 @@ void GCodeInput::readFromSerial() {
     if(transportFailed() || Printer::printJob.emergencyLocked())return;
     serviceTransportTx();
     if(transportFailed())return;
-    recovery.service(HAL::timeInMilliseconds(),receiveReady(),!pendingAck.pending,
-        requestReplay,true);
-    serviceTransportTx();
+    if(recovery.phase()!=ReplayPhase::Healthy){
+        recovery.service(HAL::timeInMilliseconds(),receiveReady(),!pendingAck.pending,
+            requestReplay,true);
+        serviceTransportTx();
+    }
 }
 '''
 
