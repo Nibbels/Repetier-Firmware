@@ -170,3 +170,98 @@ P0 for ASCII and binary V1/V2, ping-pong and streaming with in-flight tails:
   Validate concurrent loss/ACK publication and terminal stop with final
   P0 API, all four canonical builds/recovery verifications, SRAM/stack and
   actual linked IRQ/service timing. No hardware experiments or flash.
+
+
+## S1u implementation evidence and limits (2026-11-28)
+
+PR #117 supplements the original protocol review with reproducible tests of
+pinned upstream host methods and real source-derived P0 UART/receiver code.
+The host-method replay executes selected Python AST functions (no application
+imports, GUI, serial device or live host) with isolated stubs. The historical
+C# Repetier-Host remains source-inspected. The four exact source blobs and
+commit pins are in tools/task0032/resend-host-contract.py and its archived
+host-contract.json. Do not equate method tests with full installed host
+qualification.
+
+- Historical Repetier-Host numbers both manual injection and print-job
+  paths; both store history. It searches 40 entries by low 16-bit N,
+  chooses sync from negotiated binaryVersion, sends 32 zero bytes in binary
+  mode, and swallows the next control ok. Streaming credit is cleared before
+  its receivedCount() call; that value is NOT a bound on bridge/OS bytes
+  still in flight. At 250000 baud the historical integer sleeps are 5 ms
+  for 127-byte ASCII credit and 1 ms after the 32-byte binary zero burst.
+  No current proprietary Host/Server behavior is inferred from this.
+- Actual Printrun send/priority/replay/listener methods produce an
+  unnumbered priority command not in sentlines. The listener releases clear
+  on Resend, and separately on the following plain ok (observed before its
+  thread-exit clear assignment); thus a host-scheduling race can advance
+  priority traffic before the real replay ACK. Keep the firmware control ok
+  for Repetier/Cura interoperability; do not treat it as command admission.
+- Actual Cura send and next-file-line methods emit compact numbered XOR
+  frames without a space after the line number and unnumbered manual
+  commands. Its resend processing rewinds file position, not manual history.
+  Actual OctoPrint checksum/serialization methods demonstrate numbered
+  print/manual commands in enabled mode, unnumbered mode when checksums
+  are disabled, and unnumbered unknown commands even under always when
+  send_checksum_with_unknown_commands is false.
+- Fundamental mixed-history ambiguity: the same last verified numbered
+  frame, UART overrun indication and next numbered replay can arise with
+  or without a completely missing unnumbered command. Neither a valid
+  replay nor the previous N proves the unnumbered history. The executable
+  counterexample also constructs a valid checksummed M117 text frame
+  whose truncated suffix is byte-identical to a different valid numbered
+  frame. Do not claim strong framing integrity from XOR, Fletcher or a
+  zero run alone. No automatic replay identity for unnumbered work.
+  Known unreplayable/ambiguous loss is terminal; ordinary unnumbered
+  traffic is not removed. Known numbered-history host assumptions and
+  actual negotiated synchronization mode still require evidence. Do not
+  add a new wire protocol or silent universal numbered-only assumption.
+
+Candidate causal RX fence: atomically discard old unread ring bytes, clear
+old loss state and arm marker in previously free TX ring space *before*
+publication of the complete Resend/control-ok span. Quarantine RX until the
+last byte of the Resend line (through its CRLF, before control ok) is handed
+to UDR by ordinary non-nested TX ISR. This excludes packets which could not
+have been responses to this request. Do NOT delay reopen until a later
+foreground poll or after the control ok; a real reply may already arrive.
+Fresh post-handoff error latches again. This is a causal lower bound, NOT
+proof of physical transmission, USB/OS drainage, external frame boundary or
+host receipt. Post-handoff stale suffixes remain possible; retain strict
+envelope/sequence checks and qualify actual host handshake. Separate vs
+packed high-bit gate both pass the same actual-source replays. Prefer packed
+plus cached TX cursor after linked cost comparison, subject to final P0
+non-nesting and service timing evidence.
+
+Independent TX watchdog candidates: age of unpublished ACK starts at
+admission, unaffected by legitimate RX queue/borrowed-text backpressure.
+Track software ring retirement using foreground-produced uint16 byte count
+minus sampled ring occupancy; no ISR increment. All producer paths must
+account bytes once; single foreground writer required. At 250k 8N1 a full
+counter period takes >2.62 s; bounded sampling below that interval is
+required. Progress may occur while head/tail and occupancy repeat; do not
+infer no progress from occupancy alone. The 2 s test watchdog detects
+unpublished and published-but-undrained spans, not physical TXC, bridge
+or host receipt. Trial response clock still starts at span publication;
+measure bounded publication-to-handoff lag and charge only actual
+receiver-ready response time in final integration. A physical TX problem,
+unsafe service gap or host absence needs independent terminal handling.
+
+Terminal integration audit on P0 962e9b6b5152e2c3972896f5a93981bdaed61422:
+PrintJob::commandsBlocked/emergencyLocked, Printer::stopForThermalFault,
+Printer::latchOutputInhibit(bool), Timer1 COMPA guard, Commands outer loop
+and periodic pump, GCodeInput/GCodeCommands and panel dispatch require
+consistent distinction between terminal transport and real thermal cause.
+Do not pass either boolean value to latchOutputInhibit for a transport
+fault: those values explicitly encode sensor or legacy-simulation faults.
+Candidate architecture: distinct terminal job phase plus common terminal
+actuator inhibit/cleanup, general terminal admission guard separate from
+thermal-specific ledger/report/UI selection. A subsequent real thermal
+fault must still promote/report its genuine thermal cause. Immediately
+revoke heater duty/permission before unmasking, clear targets, stop STEP/E
+and discard pending motion/pause/scan, preserve motor holding torque.
+Keep real thermal/cooling/watchdog service and bounded nonblocking
+diagnostic response alive. Reject reconnect/reset-line/queued cleanup
+motion and ordinary panel recovery paths. Existing thermal-specific
+service/renderer must not display a fabricated thermal ledger. Verify all
+call sites and actual final P0 APIs after release. No P0 source changes,
+no hardware/flash, no release authorization.
