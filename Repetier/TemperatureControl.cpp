@@ -267,7 +267,6 @@ Is called every 100ms.
 */
 void Extruder::manageTemperatures() {
     static uint8_t extruderTempErrors = 0;
-#ifdef RF_HEATER_LEASE_EXPERIMENT
     // Expiry ISR has already removed power. Defer the print/UI/serial work.
     if (HAL::heaterLeaseFault() && !Printer::isAnyTempsensorDefect()) {
         ThermalEmergency::latchSystemFault(ThermalEmergency::Cause::LeaseExpired);
@@ -275,7 +274,6 @@ void Extruder::manageTemperatures() {
         Printer::stopForThermalFault();
         autotuneAbortRequested = true;
     }
-#endif
 
     uint8_t errorDetected = 0;
 
@@ -283,17 +281,11 @@ void Extruder::manageTemperatures() {
         TemperatureController* act = tempController[controller];
         ThermalEmergency::SensorObservation observation;
 
-#ifdef RF_HEATER_LEASE_EXPERIMENT
         HAL::HeaterSample sample;
         const uint8_t checkedType=act->sensorType, checkedLimit=act->pidMax;
         const bool sensorSupported = act->updateCurrentTemperature(&sample
             , &observation
         );
-#else
-        const bool sensorSupported = act->updateCurrentTemperature(
-            &observation
-        );
-#endif
         const bool sampleValid = validTemperatureSample(sensorSupported, act->currentTemperatureC);
         if(sampleValid&&act->sensorType) ThermalEmergency::liveValid |= uint8_t(1u<<controller);
         else ThermalEmergency::liveValid &= uint8_t(~(1u<<controller));
@@ -461,12 +453,8 @@ void Extruder::manageTemperatures() {
         }
         if (act->currentTemperatureC > act->effectiveCutoffC())
             output = 0;
-#ifdef RF_HEATER_LEASE_EXPERIMENT
         if(act->sensorType!=checkedType || act->pidMax!=checkedLimit) output=0;
         HAL::setHeaterDuty(act->pwmIndex, output, &sample);
-#else
-        HAL::setHeaterDuty(act->pwmIndex, output);
-#endif
 
 #if LED_PIN > -1
         if (act == &Extruder::current->tempControl)
@@ -497,14 +485,12 @@ void Extruder::manageTemperatures() {
         for(uint8_t h=0;h<NUM_TEMPERATURE_LOOPS;++h)
             HAL::setHeaterDuty(tempController[h]->pwmIndex,0);
     }
-#ifdef RF_HEATER_RESET_WDT_EXPERIMENT
     // A momentarily zero PID duty does not mean the heating session ended.
     // Retain reset evidence across the whole target/autotune session.
     bool heatDemand=autotuneIndex!=255;
     for(uint8_t c=0;c<NUM_TEMPERATURE_LOOPS;++c)
         heatDemand=heatDemand || tempController[c]->targetTemperatureC>=MAX_ROOM_TEMPERATURE;
     HAL::completeThermalWatchdogPass(heatDemand);
-#endif
     ThermalEmergency::serviceReport();
 
 } // manageTemperatures
@@ -623,9 +609,7 @@ __attribute__((noinline)) void TemperatureController::autotunePIDPrepared(float 
     const float cutoff = RMath::min(float(effectiveCutoffC()), temp + (bed ? 15.0f : 20.0f));
     ThermalEmergency::SensorObservation initialObservation;
     const bool initialSampleValid = updateCurrentTemperature(
-#ifdef RF_HEATER_LEASE_EXPERIMENT
         nullptr,
-#endif
         &initialObservation);
     if(ThermalEmergency::checkAbsoluteCutoff(controllerId,*this,
         validTemperatureSample(initialSampleValid,currentTemperatureC),initialObservation))return;
@@ -655,16 +639,10 @@ __attribute__((noinline)) void TemperatureController::autotunePIDPrepared(float 
     // Admission diagnostics can take time. Do not use the earlier sample
     // to authorize the first positive power request.
     ThermalEmergency::SensorObservation firstObservation;
-#ifdef RF_HEATER_LEASE_EXPERIMENT
     HAL::HeaterSample firstSample;
     const bool firstSampleValid = updateCurrentTemperature(&firstSample
         , &firstObservation
     );
-#else
-    const bool firstSampleValid = updateCurrentTemperature(
-        &firstObservation
-    );
-#endif
     if(ThermalEmergency::checkAbsoluteCutoff(controllerId,*this,
         validTemperatureSample(firstSampleValid,currentTemperatureC),firstObservation)) {
         finishAutotune(*this);
@@ -688,7 +666,6 @@ __attribute__((noinline)) void TemperatureController::autotunePIDPrepared(float 
     const unsigned limit = constrain(maxCycles, 5, 20);
     bool heating = currentTemperatureC < temp - hysteresis;
     bool completeCycle = heating;
-#ifdef RF_HEATER_LEASE_EXPERIMENT
     HAL::setHeaterDuty(pwmIndex, heating ? autotunePowerLimit : 0, &firstSample);
     firstSample.release();
     if(heating && !HAL::outputDuty(pwmIndex)) {
@@ -696,9 +673,6 @@ __attribute__((noinline)) void TemperatureController::autotunePIDPrepared(float 
         Com::printErrorFLN(PSTR("PID autotune: initial sample not authorized"));
         return;
     }
-#else
-    HAL::setHeaterDuty(pwmIndex, heating ? autotunePowerLimit : 0);
-#endif
     ThermalRelayProfile::Recorder relayObservation;
     ThermalRelayProfile::PublicationTracker relayPublication(firstObservation.publishedAt);
     relayObservation.begin(started,currentTemperatureC,autotunePowerLimit,HAL::outputDuty(pwmIndex));
@@ -718,16 +692,10 @@ __attribute__((noinline)) void TemperatureController::autotunePIDPrepared(float 
             return;
         }
         ThermalEmergency::SensorObservation observation;
-#ifdef RF_HEATER_LEASE_EXPERIMENT
         HAL::HeaterSample sample;
         const bool supported = updateCurrentTemperature(&sample
             , &observation
         );
-#else
-        const bool supported = updateCurrentTemperature(
-            &observation
-        );
-#endif
         const float measured = currentTemperatureC;
         const millis_t now = HAL::timeInMilliseconds();
         if(ThermalEmergency::checkAbsoluteCutoff(controllerId,*this,
@@ -888,23 +856,17 @@ __attribute__((noinline)) void TemperatureController::autotunePIDPrepared(float 
         // Renew only after the full sampled autotune decision, including
         // cutoff, cancellation, timing and rise checks. No ISR renewal.
         if (heating) {
-#ifdef RF_HEATER_LEASE_EXPERIMENT
             HAL::setHeaterDuty(pwmIndex, autotunePowerLimit, &sample);
             if(!HAL::outputDuty(pwmIndex)) {
                 finishAutotune(*this);
                 Com::printErrorFLN(PSTR("PID autotune: sample not authorized"));
                 break;
             }
-#else
-            HAL::setHeaterDuty(pwmIndex, autotunePowerLimit);
-#endif
         }
         relayObservation.afterDecision(now,measured,HAL::outputDuty(pwmIndex));
-#ifdef RF_HEATER_RESET_WDT_EXPERIMENT
         // Complete the second half of the watchdog handshake only after
         // the entire sampled relay decision and its safety checks finished.
         HAL::completeAutotuneWatchdogPass();
-#endif
     }
     if(Printer::printJob.emergencyLocked())return;
     Printer::idleStatus.schedule(HAL::timeInMilliseconds());
