@@ -20,13 +20,13 @@ def landmark(body, pattern):
     return matches[0]
 
 
-def generate(archive, archive_hash, merge):
+def generate(archive, archive_hash, merge, allow_failed_replays=False):
     if digest(archive.read_bytes()) != archive_hash:
         raise ValueError("archive digest mismatch")
     boards = {}
     with zipfile.ZipFile(archive) as z:
         summary = json.loads(z.read("summary.json"))
-        if summary["sha"] != merge or summary["failures"] or set(summary["targets"]) != set(BOARDS):
+        if summary["sha"] != merge or (summary["failures"] and not allow_failed_replays) or set(summary["targets"]) != set(BOARDS):
             raise ValueError("unexpected merge, failed suite or incomplete board set")
         for board in BOARDS:
             target = summary["targets"][board]
@@ -48,7 +48,38 @@ def generate(archive, archive_hash, merge):
             poll = landmark(listing, r"while \(next == tx_\.tail\) \{\s*\n\s*([0-9a-f]+):[^\n]*\blds\b[^\n]*<UsbSerial::tx_\+0x41>")
             boards[board] = {"hashes":files,"staticFree":target["sram_remaining_before_stack_bytes"],
                              "microstepDerivedCall":derive,"txTailPoll":poll}
-    return {"merge":merge, "archiveSha256":archive_hash, "boards":boards}
+    return {"archiveFailures":summary["failures"], "merge":merge, "archiveSha256":archive_hash, "boards":boards}
+
+
+def linked_analysis(archive, report, reviewed_owners):
+    import runpy
+    from lease_gpio_latency import gpio_latency
+    directory = Path(__file__).resolve().parent
+    context = runpy.run_path(str(directory / "contextual-stack-diagnostic.py"))
+    irq = runpy.run_path(str(directory / "irq-mask-cfg.py"))
+    startup = runpy.run_path(str(directory / "startup-stack.py"))
+    switches = runpy.run_path(str(directory / "switch-table-guards.py"))
+    fg = context["fg"]
+    with zipfile.ZipFile(archive) as z:
+        for board, row in report["boards"].items():
+            base = board + "/"
+            listing = z.read(base + "disassembly.txt").decode()
+            symbols = z.read(base + "symbols.txt").decode()
+            image = startup["elf_text"](z.read(base + "build/Repetier.ino.elf"))
+            row["crt"] = startup["verify"](board, image, listing, symbols, fg)
+            instructions, tables, labels = fg.decode_linked(listing, board)
+            row["leaseGpio"] = gpio_latency(board, instructions, labels, fg.target)
+            validated = switches["prove_tables"](instructions, tables, labels, fg.target)
+            row["verifiedSwitchTables"] = len(validated["tables"])
+            row["foreground"] = context["inventory"](z, board, False, reviewed_owners)
+            row["interrupts"] = irq["inventory"](z, board, True)
+            timer = row["interrupts"][17]
+            envelope = timer["stackBytesIncludingPc"] + max(
+                item["stackBytesIncludingPc"] for v,item in row["interrupts"].items() if v != 17)
+            row["conditionalInterruptBytes"] = envelope
+            row["conditionalFreeBytes"] = row["staticFree"] - envelope - row["foreground"]["diagnosticBytes"]
+    report["reviewedOwners"] = reviewed_owners
+    report["releaseProof"] = False
 
 
 if __name__ == "__main__":
@@ -56,5 +87,13 @@ if __name__ == "__main__":
     p.add_argument("archive", type=Path)
     p.add_argument("archive_sha256")
     p.add_argument("tested_merge")
+    p.add_argument("--allow-failed-replays", action="store_true", help="identify verified images for diagnosis and retain every archive failure")
+    p.add_argument("--linked", action="store_true", help="run startup, switch, foreground and ISR analyses")
+    p.add_argument("--reviewed-owners", action="store_true", help="apply source-pinned foreground ownership exclusions")
     args = p.parse_args()
-    print(json.dumps(generate(args.archive, args.archive_sha256, args.tested_merge), indent=2))
+    if args.reviewed_owners and not args.linked:
+        p.error("--reviewed-owners requires --linked")
+    report = generate(args.archive, args.archive_sha256, args.tested_merge, args.allow_failed_replays)
+    if args.linked:
+        linked_analysis(args.archive, report, args.reviewed_owners)
+    print(json.dumps(report, indent=2))
