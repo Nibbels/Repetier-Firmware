@@ -9,7 +9,7 @@ src=(root/"Repetier/Homing.cpp").read_text()
 start=src.index("int8_t Printer::checkHome(")
 end=src.index("} // checkHome",start)+len("} // checkHome")
 header=(root/"Repetier/ui.h").read_text()
-scope=header[header.index("    class ScopedActionExclusion {"):header.index("    // Remote panel actions")]
+scope=header[header.index("    class ScopedActionExclusion {"):header.index("    void slowAction();",header.index("    class ScopedActionExclusion {"))]
 motion=(root/"Repetier/motion.h").read_text()
 types=motion[motion.index("enum class GuardedStop"):motion.index("#define FOR_DIRECT")]
 assert all(t not in src for t in ("stepAxisStep(", "stepHomeCheck(", "startXStep(", "startYStep("))
