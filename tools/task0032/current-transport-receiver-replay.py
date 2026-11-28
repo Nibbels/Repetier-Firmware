@@ -192,7 +192,7 @@ namespace HAL {''')
             # no additional ACK is sent; already queued work is canceled.
             scenarios=once(scenarios,r'assert(replies=="ok 1\r\n");replies.clear();',
                 'assert(replies.empty() && txDrain().empty());')
-            scenarios=once(scenarios,'assert(replies=="ok 0\r\n");replies.clear();',
+            scenarios=once(scenarios,r'assert(replies=="ok 0\r\n");replies.clear();',
                 r'assert(replies.empty() && txDrain()=="ok 0\r\n");')
             scenarios=once(scenarios,'assert(commandQueue.full());replies.clear();',
                 r'assert(commandQueue.full() && txDrain()=="ok 1\r\nok 2\r\n");replies.clear();')
@@ -210,7 +210,9 @@ namespace HAL {''')
     else goto legacy;
     std::printf("Stage1 receiver: %s PASS\\n",argv[1]);return 0;
 legacy:''')
-        if stage2:s=once(s,'    else goto legacy;',stage2['DISPATCH']+'\n    else goto legacy;')
+        if stage2:
+            s=once(s,'    else goto legacy;',stage2['DISPATCH']+'\n    else goto legacy;')
+            s=once(s,'Stage1 receiver: %s PASS','Stage2 receiver: %s PASS')
         p.write_text(s)
         p=tests/"serial-protocol.py";s=p.read_text()
         s=once(s,'command_loop.index("void Commands::commandLoop()")',
