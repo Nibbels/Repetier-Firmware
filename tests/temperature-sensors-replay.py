@@ -56,6 +56,9 @@ struct TemperatureController {
     float currentTemperatureC;
     bool updateCurrentTemperature(HAL::HeaterSample* = nullptr, ThermalEmergency::SensorObservation* = nullptr);
 };
+#ifdef X35_ADC_CHANNEL
+constexpr uint8_t ChamberAdcIndex = 2;
+#endif
 #include "conversion.inc"
 static void emit(uint32_t v, unsigned bytes) {
     for (unsigned i = 0; i < bytes; ++i) std::putchar((v >> (8*i)) & 255);
@@ -97,6 +100,22 @@ int main() {
             emit(analog || type == 0, 1); emit(outsideRange, 1);
         }
     }
+#ifdef X35_ADC_CHANNEL
+    // X35 remains diagnostic-only, including stale and saturated ADC values.
+    // Compare every ADC code against the original controller reading path.
+    for (unsigned f=0; f<2; ++f) {
+        fresh = f != 0;
+        for (unsigned raw=0; raw<4096; ++raw) {
+            sample=raw; reads=ticketReads=0;
+            TemperatureController reference{RESERVE_ANALOG_SENSOR_TYPE, ChamberAdcIndex, -123, -999.f};
+            reference.updateCurrentTemperature();
+            const float expected=reference.currentTemperatureC;
+            const float actual=readOptionalSensorTemperature();
+            assert(std::memcmp(&actual,&expected,sizeof(float))==0);
+            assert(reads==2 && ticketReads==0);
+        }
+    }
+#endif
     // Stale ADC samples may be converted for diagnostics but never authorize heat.
     fresh = false;
     sample = 102;
@@ -136,6 +155,9 @@ def main():
             defines["ANALOG_REDUCE_BITS"] = macro((fw / "HAL.h").read_text(), "ANALOG_REDUCE_BITS")
             defines["CELSIUS_EXTRA_BITS"] = macro((fw / "Extruder.h").read_text(), "CELSIUS_EXTRA_BITS")
             assert defines["ANALOG_REDUCE_BITS"] == "0" and defines["CELSIUS_EXTRA_BITS"] == "3"
+            if board == "RF2000":
+                defines["X35_ADC_CHANNEL"] = "12"
+                defines["RESERVE_ANALOG_SENSOR_TYPE"] = macro(profile,"RESERVE_ANALOG_SENSOR_TYPE")
             exe = work / "replay"
             subprocess.run([os.environ.get("CXX", "c++"), "-std=c++11", "-O2", "-ffp-contract=off",
                             "-Wall", "-Wextra", "-Werror",

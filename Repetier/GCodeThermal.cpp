@@ -494,9 +494,8 @@ void unloadFilament(GCode* pCommand) {
 #ifdef X35_ADC_CHANNEL
 void readOptionalTemperature() {
     //Com::printFLN( PSTR( "M3941 TempReader starting ..." ) );
-    TemperatureController* act = &optTempController;
-    act->updateCurrentTemperature();
-    Com::printFLN(PSTR("Opt Temp: "), act->currentTemperatureC, 2);
+    const float chamberTemperature = readOptionalSensorTemperature();
+    Com::printFLN(PSTR("Opt Temp: "), chamberTemperature, 2);
     //Com::printFLN( PSTR( "M3941 Ended!" ) );
 }
 #endif

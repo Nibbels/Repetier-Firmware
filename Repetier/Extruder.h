@@ -366,7 +366,8 @@ public:
 extern TemperatureController heatedBedController;
 
 #ifdef X35_ADC_CHANNEL
-extern TemperatureController optTempController;
+// Read-only X35 diagnostic; never grants heater authorization.
+float readOptionalSensorTemperature();
 #endif // X35_ADC_CHANNEL
 
 #define TEMP_INT_TO_FLOAT(temp) ((float)(temp) / (float)(1 << CELSIUS_EXTRA_BITS))

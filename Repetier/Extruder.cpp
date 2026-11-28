@@ -319,34 +319,6 @@ TemperatureController heatedBedController = {
     0 //uint8_t paused
 };
 
-#ifdef X35_ADC_CHANNEL
-/** \brief This is an optional Temperature Sensor. //Nibbels
-There is no Controller involved! It is not hooked into tempController
-Do not try to do anything other than updateCurrentTemperature and reading the Temps.
-TODO: Making a totally clean class, without the logic to controll something.
-*/
-TemperatureController optTempController = {
-    0, RESERVE_ANALOG_SENSOR_TYPE, ChamberAdcIndex, 0, 0, 0, 0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0, 0,
-    0,
-    0,
-    0,
-    0 /*0 = no decouple test*/,
-    0 //uint8_t paused
-};
-#endif // X35_ADC_CHANNEL
-
 TemperatureController* tempController[NUM_TEMPERATURE_LOOPS] = {
     &extruder[0].tempControl
 

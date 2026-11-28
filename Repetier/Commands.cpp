@@ -209,10 +209,9 @@ void Commands::printTemperatures(bool showRaw) {
 
 #ifdef X35_ADC_CHANNEL
         // Act as heated chamber ambient temperature for Repetier-Server 0.86.2+ ---> Letter C
-        TemperatureController* act = &optTempController;
-        act->updateCurrentTemperature();
+        const float chamberTemperature = readOptionalSensorTemperature();
         Com::printF(Com::tSpaceChamber);
-        Com::printF(Com::tColon, act->currentTemperatureC, 1); //temp
+        Com::printF(Com::tColon, chamberTemperature, 1); //temp
         Com::printF(Com::tSpaceSlash, 0, 0);                   // ziel-temp
         Com::printF(Com::tSpaceCAtColon, 0);                   // leistung
 #endif // X35_ADC_CHANNEL

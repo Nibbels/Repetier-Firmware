@@ -216,11 +216,17 @@ float calibratedSensorTemperature(float sensorCelsius) {
 }
 }
 
-bool TemperatureController::updateCurrentTemperature(HAL::HeaterSample* sample
-    , ThermalEmergency::SensorObservation* observation
-) {
+namespace {
+// One conversion implementation for the heater controller and read-only
+// chamber sensor. The latter never owns a heater, PID or target state.
+template<class Sensor>
+bool updateSensorReading(Sensor& sensor, HAL::HeaterSample* sample,
+                         ThermalEmergency::SensorObservation* observation) {
     if(observation) *observation=ThermalEmergency::SensorObservation{};
-    const uint8_t type = sensorType;
+    const uint8_t type = sensor.sensorType;
+    const uint8_t sensorPin = sensor.sensorPin;
+    int16_t& currentTemperature = sensor.currentTemperature;
+    float& currentTemperatureC = sensor.currentTemperatureC;
     bool sampleFresh = true; // Type 0 is the existing non-measuring sentinel.
     uint16_t raw;
     // Get one coherent raw sample and its freshness status.
@@ -333,4 +339,27 @@ bool TemperatureController::updateCurrentTemperature(HAL::HeaterSample* sample
     }
     }
     return sampleFresh;
-} // updateCurrentTemperature
+} // updateSensorReading
+
+#ifdef X35_ADC_CHANNEL
+struct OptionalSensorReading {
+    static constexpr uint8_t sensorType = RESERVE_ANALOG_SENSOR_TYPE;
+    static constexpr uint8_t sensorPin = ChamberAdcIndex;
+    int16_t currentTemperature;
+    float currentTemperatureC;
+};
+#endif
+}
+
+bool TemperatureController::updateCurrentTemperature(HAL::HeaterSample* sample,
+    ThermalEmergency::SensorObservation* observation) {
+    return updateSensorReading(*this, sample, observation);
+}
+
+#ifdef X35_ADC_CHANNEL
+float readOptionalSensorTemperature() {
+    OptionalSensorReading reading{};
+    updateSensorReading(reading, nullptr, nullptr);
+    return reading.currentTemperatureC;
+}
+#endif
