@@ -118,17 +118,28 @@ void Printer::homeXAxis() {
             return;
         }
 
-        Printer::xyMotion.setMotorSteps(X_AXIS, (nHomeDir == -1) ? 0 : maxSoftEndstopSteps_[X_AXIS]);
+        const int32_t homeSteps = nHomeDir < 0 ? 0 : maxSoftEndstopSteps_[X_AXIS];
+        {
+            InterruptProtectedBlock lock;
+            if (blockAll || printJob.commandsBlocked() || !enabledStepper[X_AXIS] || !Printer::isXMinEndstopHit())
+                return;
+            xyMotion.setMotorSteps(X_AXIS, homeSteps);
+            setXAxisSteps(homeSteps);
+        }
 
 #if NUM_EXTRUDER > 1
         if (offX) {
             // Wir halten z.B. von Links soviel Abstand wie der größte Extruder-Offset. Wir fahren aber nur so weit, dass das aktuelle Hotend dort steht.
-            Printer::offsetRelativeStepsCoordinates(-1 * nHomeDir * (offX * axisMMPerSteps_[X_AXIS] - Extruder::current->offsetMM[X_AXIS]) * Printer::stepsPerMm(X_AXIS), 0, 0, 0);
+            const int32_t delta = -1 * nHomeDir * (offX * axisMMPerSteps_[X_AXIS] - Extruder::current->offsetMM[X_AXIS]) * Printer::stepsPerMm(X_AXIS);
+            Printer::offsetRelativeStepsCoordinates(delta, 0, 0, 0);
+            if (PrintLine::guardedAxisPosition(X_AXIS) != homeSteps + delta)
+                return;
         }
 #endif // NUM_EXTRUDER>1
 
-        // Set axis value here.
-        Printer::setXAxisSteps((nHomeDir == -1) ? 0 : maxSoftEndstopSteps_[X_AXIS]);
+        // A stopped tool-offset move must not publish a homed axis.
+        if (blockAll || printJob.commandsBlocked() || !enabledStepper[X_AXIS])
+            return;
 
         // show that we are active
         Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
@@ -164,16 +175,27 @@ void Printer::homeYAxis() {
             return;
         }
 
-        Printer::xyMotion.setMotorSteps(Y_AXIS, (nHomeDir == -1) ? 0 : maxSoftEndstopSteps_[Y_AXIS]);
+        const int32_t homeSteps = nHomeDir < 0 ? 0 : maxSoftEndstopSteps_[Y_AXIS];
+        {
+            InterruptProtectedBlock lock;
+            if (blockAll || printJob.commandsBlocked() || !enabledStepper[Y_AXIS] || !Printer::isYMinEndstopHit())
+                return;
+            xyMotion.setMotorSteps(Y_AXIS, homeSteps);
+            setYAxisSteps(homeSteps);
+        }
 #if NUM_EXTRUDER > 1
         if (offY) {
             // Wir halten z.B. von Links soviel Abstand wie der größte Extruder-Offset. Wir fahren aber nur so weit, dass das aktuelle Hotend dort steht.
-            Printer::offsetRelativeStepsCoordinates(0, -1 * nHomeDir * (offY * axisMMPerSteps_[Y_AXIS] - Extruder::current->offsetMM[Y_AXIS]) * Printer::stepsPerMm(Y_AXIS), 0, 0);
+            const int32_t delta = -1 * nHomeDir * (offY * axisMMPerSteps_[Y_AXIS] - Extruder::current->offsetMM[Y_AXIS]) * Printer::stepsPerMm(Y_AXIS);
+            Printer::offsetRelativeStepsCoordinates(0, delta, 0, 0);
+            if (PrintLine::guardedAxisPosition(Y_AXIS) != homeSteps + delta)
+                return;
         }
 #endif // NUM_EXTRUDER>1
 
-        // Set axis value here.
-        Printer::setYAxisSteps((nHomeDir == -1) ? 0 : maxSoftEndstopSteps_[Y_AXIS]);
+        // A stopped tool-offset move must not publish a homed axis.
+        if (blockAll || printJob.commandsBlocked() || !enabledStepper[Y_AXIS])
+            return;
 
         // show that we are active
         Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
@@ -211,10 +233,10 @@ void Printer::homeZAxis() {
         if (!Printer::queueRelativeStepsCoordinates(0, 0, (zMotion.maxSteps() + 2 * int32_t(zMotion.minOvertravel())) * nHomeDir, 0, homingFeedrate_[Z_AXIS], true, true) || !Printer::isZMinEndstopHit())
             return;
 
-        //2. in jedem Fall Freifahren vom Schalterkontakt:
-        //ENDSTOP_Z_BACK_MOVE größer als 32768 ist eigentlich nicht möglich, nicht sinnvoll und würde, da das überfahren bei 32microsteps von der z-matrix >-12,7mm abhängig ist verboten sein.
-        // Darum ist uint16_t in jedem fall ohne overflow.
-        for (uint16_t step = 0; step < uint16_t(axisStepsPerMM_[Z_AXIS] * ENDSTOP_Z_BACK_MOVE); step += uint16_t(0.1f * axisStepsPerMM_[Z_AXIS])) {
+        // Count bounded release attempts in millimetres, not a truncated
+        // uint16_t step increment (which could become zero or wrap).
+        const uint16_t releaseAttempts = static_cast<uint16_t>(ceilf(ENDSTOP_Z_BACK_MOVE / 0.1f));
+        for (uint16_t attempt = 0; attempt < releaseAttempts; ++attempt) {
             // Faktor *2 und *5 : doppelt/5x so schnell beim Zurücksetzen als nachher beim langsamst hinfahren. Sonst dauert das ewig.
             if (Printer::isZMinEndstopHit()) {
                 // Schalter noch gedrückt, wir müssen weiter aus dem schalter rausfahren, aber keinesfalls mehr als ENDSTOP_Z_BACK_MOVE
