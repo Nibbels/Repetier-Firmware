@@ -14,7 +14,10 @@ struct GCode;
 #define DRV8711_NUM_CHANNELS 5
 enum { X_AXIS, Y_AXIS, Z_AXIS, E_AXIS };
 enum { UI_ACTION_MICROSTEPS_XY, UI_ACTION_MICROSTEPS_Z, UI_ACTION_MICROSTEPS_E };
-static bool masked = false;
+static bool masked = false, driveDisabled = false, panelExcluded = false;
+static bool queued = false, direct = false, scanning = false, script = false, drainOk = true;
+static unsigned drains = 0, reports = 0;
+static void reportJerk() { assert(!masked && driveDisabled && panelExcluded); ++reports; }
 static std::array<uint8_t, 4096> image{};
 static unsigned writes = 0, reads = 0, checksums = 0;
 static size_t address(const void* ptr) { return reinterpret_cast<uintptr_t>(ptr); }
@@ -51,36 +54,52 @@ struct InterruptProtectedBlock {
 namespace Drv8711 {
     uint8_t modes[5];
     uint8_t microstepMode(uint8_t i) { assert(i<5); return modes[i]; }
-    void setMicrostepMode(uint8_t i,uint8_t v) { assert(masked && i<5); modes[i]=v; }
+    void setMicrostepMode(uint8_t i,uint8_t v) { assert(!masked && driveDisabled && panelExcluded && i<5); modes[i]=v; }
 }
 static unsigned short drv8711ModeValue_2_MicroSteps(uint8_t m) { return 1U << std::min<int>(m,8); }
-struct Extruder { uint8_t id; float stepsPerMM; static Extruder* current; static void applyCurrentSettings() { assert(masked); } };
+struct Extruder { uint8_t id; float stepsPerMM; static Extruder* current; static void applyCurrentSettings() { reportJerk(); } };
 std::array<Extruder, NUM_EXTRUDER> extruder{};
 Extruder* Extruder::current=&extruder.at(0);
 namespace Printer {
-    struct Job { bool busy=false; bool isBusy(){return busy;} } printJob;
-    struct Pause { bool allowed=true; bool allowsQueueAdvance(){return allowed;} void scaleParkSteps(int,float){assert(masked);} } pause;
-    struct Z { void rescaleMotorReference(float){assert(masked);} } zMotion;
-    struct Layers { void rescaleFadeBounds(float){assert(masked);} } layers;
-    struct Manual { uint16_t z=100; void rescaleSteps(int axis,float f){assert(masked && axis==Z_AXIS); z=uint16_t(z*f);} uint16_t steps(int axis){assert(axis==Z_AXIS);return z;} } manualMotion;
+    struct Job { bool busy=false; bool isIdle(){return !busy;} } printJob;
+    bool blockAll = false;
+    struct Pause { bool allowed=true; bool blocksCalibration(){return !allowed;} void scaleParkSteps(int,float){assert(!masked && driveDisabled);} } pause;
+    struct Z { void rescaleMotorReference(float){assert(!masked && driveDisabled);} } zMotion;
+    struct Layers { void rescaleFadeBounds(float){assert(!masked && driveDisabled);} } layers;
+    struct Manual { uint16_t z=100; void rescaleSteps(int axis,float f){assert(!masked && driveDisabled && axis==Z_AXIS); z=uint16_t(z*f);} uint16_t steps(int axis){assert(axis==Z_AXIS);return z;} } manualMotion;
     struct Offset { void refreshSteps(float){assert(!masked);} } zOffset;
     float steps[3];
     float stepsPerMm(int i){assert(i<3);return steps[i];}
-    void setStepsPerMm(int i,float v){assert(masked && i<3);steps[i]=v;}
-    void disableAllSteppersNow(){}
-    void updateDerivedParameter(){assert(masked);}
+    void setStepsPerMm(int i,float v){assert(!masked && driveDisabled && i<3);steps[i]=v;}
+    void disableAllSteppersNow(){ assert(!masked && panelExcluded && !queued && !direct && !scanning); driveDisabled=true; }
+    void updateDerivedParameter(){reportJerk();}
 }
-struct PrintLine { static bool hasLines(){return false;} };
-static void invalidateBedMatrixForReload(){assert(masked);}
+struct PrintLine { static bool hasLines(){return queued;} static bool directMoveActive(){return direct;} };
+static bool isAnyScanRunning(){return scanning;}
+namespace GCodeInput { bool flashScriptActive(){return script;} }
+namespace Commands {
+enum class MotionWait { AllOutputs };
+enum class PauseWait { Cancel };
+bool waitForMotion(MotionWait,PauseWait){assert(!masked && panelExcluded); ++drains; return drainOk;}
+}
+static void invalidateBedMatrixForReload(){assert(!masked && driveDisabled);}
 #define INCREMENT_MIN_MAX(a, steps, lo, hi) a = std::min<int>(hi,std::max<int>(lo,(a + increment * steps)))
 int EEPROM::getExtruderOffset(uint8_t i) { assert(i<NUM_EXTRUDER); return EEPROM_EXTRUDER_OFFSET + i*EEPROM_EXTRUDER_LENGTH; }
 void EEPROM::updateChecksum() { assert(!masked); ++checksums; }
 #include "microstep-persist.inc"
-static void edit(int action, int8_t increment) {
-    switch (action) {
+struct UIDisplay {
+    struct ScopedActionExclusion {
+        explicit ScopedActionExclusion(UIDisplay&){assert(!panelExcluded);panelExcluded=true;}
+        ~ScopedActionExclusion(){panelExcluded=false;}
+    };
+    void edit(int action, int8_t increment) {
+        switch (action) {
 #include "microstep-ui.inc"
+        }
     }
-}
+};
+static UIDisplay display;
+static void edit(int action, int8_t increment){display.edit(action,increment);}
 static void setup() {
     image.fill(0xff); writes=reads=checksums=0;
     for (auto& m:Drv8711::modes) m=5;
@@ -88,6 +107,8 @@ static void setup() {
     for (uint8_t i=0;i<NUM_EXTRUDER;++i) extruder.at(i)={i,100.0f};
     Printer::manualMotion.z=100;
     Printer::printJob.busy=false; Printer::pause.allowed=true;
+    Printer::blockAll=false; driveDisabled=panelExcluded=queued=direct=scanning=script=false;
+    drainOk=true; drains=reports=0;
 }
 int main() {
     setup();
@@ -129,5 +150,15 @@ int main() {
     assert(writes==0 && checksums==before);
     Printer::printJob.busy=false; Printer::pause.allowed=false; edit(UI_ACTION_MICROSTEPS_E,-1);
     assert(writes==0 && checksums==before);
+    // Exercise every denied owner, and an unsuccessful drain. Neither
+    // driver programming nor a blocking report may run in those cases.
+    for (bool* denied : {&queued,&direct,&scanning,&script,&Printer::blockAll}) {
+        setup(); *denied=true; edit(UI_ACTION_MICROSTEPS_XY,1);
+        assert(!masked && !panelExcluded && !driveDisabled && !drains && !reports && !writes && !checksums);
+    }
+    setup();drainOk=false;edit(UI_ACTION_MICROSTEPS_XY,1);
+    assert(drains==1 && !driveDisabled && !reports && !writes && !panelExcluded);
+    setup();edit(UI_ACTION_MICROSTEPS_XY,1);edit(UI_ACTION_MICROSTEPS_E,1);
+    assert(reports==2 && drains==2 && !masked && !panelExcluded);
     printf("EEPROM byte updates / microstep IRQ boundary, %d tool(s): PASS\n",NUM_EXTRUDER);
 }
