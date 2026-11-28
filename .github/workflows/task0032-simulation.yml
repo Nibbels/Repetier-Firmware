@@ -372,3 +372,49 @@ jobs:
           path: ${{ runner.temp }}/task0032-decimal32
           retention-days: 7
           if-no-files-found: error
+
+
+  combined-core-preflight:
+    if: github.head_ref == 'task/Task0032-combined-core-preflight'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compose qualified small changes against current exact P0 snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-combined-core"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          sha256sum tools/task0032/{combined-core-preflight,small-cleanup-preflight,decimal32-preflight,fixed-uart-init,fixed-queue-capacity,parser-avr-bench,parser-wire-replay}.py tools/task0032/decimal32-candidate.h > "$out/source-sha256.txt"
+          p0=188eeeb0c9a272d93a7230247b794748318ece86
+          git fetch --no-tags --depth=1 origin "$p0" 9072d65121bc2086522ea6b837ca3804ec80faa5 9345d9f52f9428be0f920e6777c1e50286c42d71
+          git worktree add --detach "$RUNNER_TEMP/combined-core-p0" "$p0"
+          python3 tools/task0032/combined-core-preflight.py --source "$RUNNER_TEMP/combined-core-p0" --out "$out" | tee "$out/replay.log"
+      - uses: arduino/setup-arduino-cli@v2
+        with:
+          version: 1.2.2
+      - name: Canonical recovery builds for disposable combined candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-combined-core"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          cd "$RUNNER_TEMP/combined-core-p0"
+          git apply --check "$out/candidate.diff"
+          git apply "$out/candidate.diff"
+          git diff --check
+          git -c user.name=Task0032 -c user.email=task0032@localhost commit -am "Disposable combined print core candidate"
+          git rev-parse HEAD > "$out/local-candidate-sha.txt"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" --p0-candidate | tee "$out/canonical.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-combined-core-${{ github.sha }}
+          path: ${{ runner.temp }}/task0032-combined-core
+          retention-days: 7
+          if-no-files-found: error
