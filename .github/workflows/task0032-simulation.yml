@@ -1364,7 +1364,7 @@ jobs:
   current-direct-energy-fast-measure:
     # Reuse the exact four linked recovery binaries from #232. Only the
     # instruction model changed; no need to rebuild the candidate.
-    if: github.head_ref == 'task/Task0032-resend-preflight'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -1397,5 +1397,84 @@ jobs:
         with:
           name: task0032-fast-energy-measure-${{ github.sha }}
           path: ${{ runner.temp }}/fast-energy-measure
+          retention-days: 7
+          if-no-files-found: error
+
+  current-energy-z-compose:
+    # First combined source/AVR candidate after the exact #232/#234 gate.
+    # This composes physical edge ownership, NOT final shared Z scheduling.
+    if: github.head_ref == 'task/Task0032-resend-preflight'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-fast-energy-0413e175148eb592a9b99b752017a1001fd4ea9f
+          run-id: 46169622834
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/energy-z-input
+      - name: Compose actual Z owner on exact qualified energy tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          input="$RUNNER_TEMP/energy-z-input"
+          source="$RUNNER_TEMP/energy-z-source"
+          out="$RUNNER_TEMP/energy-z"
+          p0=c31b4d391cc4d2b9cca9ab3f8e236bed805716d9
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          sha256sum tools/task0032/current-z-owner.py tools/task0032/current-direct-energy-replay.py > "$out/tool-sha256.txt"
+          echo "35300bd30f4cfd517b74399f112e9a7fb76bf854bea121f27bfb5e6832e71773  $input/fast-energy.diff" | sha256sum -c
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$source" "$p0"
+          git -C "$source" apply --index "$input/fast-energy.diff"
+          test "$(git -C "$source" write-tree)" = c8c6cd0df52986cc21c07241f37109b4758995c7
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Reconstruct qualified optimized direct energy"
+          python3 tools/task0032/current-z-owner.py --source "$source/Repetier" --out "$out/candidate" | tee "$out/z-owner.log"
+          for name in ZMotion.h ZMotion.cpp StepExecutor.cpp BedMatrix.cpp; do cp "$out/candidate/$name" "$source/Repetier/$name"; done
+          python3 - "$source/tests/z-motion.cpp" <<'PY'
+          from pathlib import Path
+          import sys
+          p=Path(sys.argv[1]);s=p.read_text()
+          old="    ZMotion::setDirection(direction > 0);\n    const bool continuing = zMotion.stepPath(path);"
+          new="    const bool continuing = zMotion.stepPath(path, direction);"
+          assert s.count(old)==1
+          p.write_text(s.replace(old,new))
+          PY
+          python3 tools/task0032/current-direct-energy-replay.py --source "$source/Repetier" --candidate "$source/Repetier" --out "$out/replay" | tee "$out/replay.log"
+          git -C "$source" add Repetier tests/z-motion.cpp
+          git -C "$source" diff --cached --check
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Combined direct energy and Z physical edge owner"
+          git -C "$source" rev-parse HEAD > "$out/local-candidate-sha.txt"
+          git -C "$source" rev-parse 'HEAD^{tree}' > "$out/local-candidate-tree.txt"
+          git -C "$source" diff --binary "$p0" HEAD > "$out/energy-z.diff"
+          (cd "$out"; sha256sum energy-z.diff > energy-z.diff.sha256)
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Canonical host and four AVR recovery links
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/energy-z"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          cd "$RUNNER_TEMP/energy-z-source"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" | tee "$out/canonical.log"
+      - name: Measure composed linked energy ramp and UART
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/energy-z"
+          python3 tools/task0032/current-direct-energy-linked.py --optimized --extended --evidence "$out/candidate-evidence" --out "$out/linked-energy.json" | tee "$out/linked-energy.log"
+          python3 tools/task0032/current-transport-linked.py --evidence "$out/candidate-evidence" --out "$out/linked-transport.json" | tee "$out/linked-transport.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-energy-z-compose-${{ github.sha }}
+          path: ${{ runner.temp }}/energy-z
           retention-days: 7
           if-no-files-found: error
