@@ -16,12 +16,13 @@ def main():
     p.add_argument("--evidence",type=Path,required=True)
     p.add_argument("--out",type=Path,required=True)
     p.add_argument("--extended",action="store_true",help="Include ramp phases, reverse motion and compensation; isolated admitted packs, not a planner trace")
+    p.add_argument("--z-admission",action="store_true",help="Require physical Z floor and allow a whole-slot truncated admitted pack")
     a=p.parse_args()
     spec=importlib.util.spec_from_file_location("energy",Path(__file__).with_name("current-direct-energy-linked.py"))
     el=importlib.util.module_from_spec(spec);spec.loader.exec_module(el)
     el.FAST_PROFILE=el.COMPACT=True
     mod=el.sl.lt.load_interpreter()
-    result={"scope":__doc__,"extended":a.extended,"boards":{}}
+    result={"scope":__doc__,"extended":a.extended,"z_admission":a.z_admission,"boards":{}}
     with tempfile.TemporaryDirectory() as d:
         archive=Path(d)/"firmware.zip"
         result["candidate_sha"],meta=el.sl.evidence(a.evidence,archive)
@@ -58,14 +59,18 @@ def main():
                     c.mem[0x6f]=2;c.cy=5;c.timer_live=True;c.sreg=0
                     c.run(17*4)
                     assert c.sp==0x21ff and not c.return_stack
-                    assert c.get(addr+98+o,4,signed=True)==100-n,(board,name,rate,n)
+                    done=100-c.get(addr+98+o,4,signed=True)
+                    if a.z_admission and delta[2]:
+                        assert 1<=done<=n,(board,name,rate,n,done)
+                    else:
+                        assert done==n,(board,name,rate,n,done)
                     counts={};min_high={};min_low={};min_gap={};short_gap={}
                     nominal_expected=[]
                     for axis in range(4):
                         initial=delta[primary]//2 if axis<3 else 0
-                        expected=max(0,(n*delta[axis]-initial+delta[primary]-1)//delta[primary])
+                        expected=max(0,(done*delta[axis]-initial+delta[primary]-1)//delta[primary])
                         nominal_expected.append(expected)
-                        assert c.get(errors+4*axis,4,signed=True)==initial-n*delta[axis]+expected*delta[primary], (board,name,phase,n,axis)
+                        assert c.get(errors+4*axis,4,signed=True)==initial-done*delta[axis]+expected*delta[primary], (board,name,phase,n,axis)
                     sign=-1 if negative else 1
                     zmotor=c.symget("Printer::zMotion",4,0,signed=True)-1000
                     znominal=c.symget("Printer::zMotion",4,4,signed=True)-1000
@@ -79,7 +84,7 @@ def main():
                         count=len(edges)//2
                         counts[pin]=count
                         initial=delta[primary]//2 if axis<3 else 0
-                        expected=max(0,(n*delta[axis]-initial+delta[primary]-1)//delta[primary])
+                        expected=max(0,(done*delta[axis]-initial+delta[primary]-1)//delta[primary])
                         if axis==2 and zcor:
                             expected=abs(zmotor)
                         if axis==3:
@@ -91,6 +96,8 @@ def main():
                             min_low[pin]=min(edges[i+2][1]-edges[i+1][1] for i in range(0,len(edges)-2,2))
                             gaps=[edges[i+2][1]-edges[i][1] for i in range(0,len(edges)-2,2)]
                             min_gap[pin]=min(gaps)
+                            if a.z_admission and axis==2:
+                                assert min(gaps)>=512,(board,name,phase,n,done,gaps)
                             # Primary-only comparison; secondary axes have
                             # their own Bresenham pattern, not this period.
                             if axis==primary:short_gap[pin]=sum(g*rate<16000000 for g in gaps)
@@ -99,7 +106,7 @@ def main():
                         lead=c.symget("Printer::extrusionOutput",2,2,signed=True)
                         assert pending-lead==sign*(nominal_expected[3]+extra),(board,name,phase,n,pending,lead)
                     windows=el.sl.lt.windows(c.timeline,c.cy)
-                    rows.append(dict(move=name,delta=delta,rate=rate,pack=n,advance=advance,
+                    rows.append(dict(move=name,delta=delta,rate=rate,pack=n,completed=done,advance=advance,
                         phase=phase,negative=negative,ecmp_ratio=ratio,zcor_target=zcor,
                         nominal_expected=nominal_expected,z_motor_delta=zmotor,z_nominal_delta=znominal,
                         z_applied_delta=zapplied,advance_pending=c.symget("Printer::extrusionOutput",2,0,signed=True),
@@ -109,10 +116,11 @@ def main():
                         next_top=c.get(0x88,2),next_pack=c.symget("StepExecutor::stepsPerTimerCall"),
                         counts=counts,min_high=min_high,min_low=min_low,min_gap=min_gap,
                         primary_short_gaps=short_gap,
-                        exclusive_fraction_at_requested_rate=c.cy*rate/(16000000*n),
-                        exclusive_slack_at_requested_rate=(16000000*n)//rate-c.cy))
+                        exclusive_fraction_at_requested_rate=c.cy*rate/(16000000*done),
+                        exclusive_slack_at_requested_rate=(16000000*done)//rate-c.cy))
             result["boards"][board]=rows
             print(board,len(rows),"actual queue packs; one-slot max cycles",max(x["cycles"] for x in rows if x["pack"]==1),
+                "truncated packs",sum(x["completed"]<x["pack"] for x in rows),
                 "short primary gaps",sum(sum(x["primary_short_gaps"].values()) for x in rows),
                 "electrical low violations",sum(sum(v<31 for v in x["min_low"].values()) for x in rows),flush=True)
             a.out.write_text(json.dumps(result,indent=2)+"\n")
