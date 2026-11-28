@@ -117,14 +117,16 @@ void dispatchMachine(GCode* com) {
 } // namespace
 } // namespace GCodeCommands
 
-void Commands::executeGCode(GCode* com) {
+// Keep host dispatch out of the permanently active Arduino main frame.
+// Typed internal programs no longer reenter this dispatch path.
+__attribute__((noinline)) void Commands::executeGCode(GCode* com) {
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-    if(Printer::printJob.emergencyLocked())return; // includes internal scripts
+    if(Printer::printJob.emergencyLocked())return;
 #endif
     if (GCodeCommands::rejectLegacySimulation(com))
         return;
     // An unsupported input mode is not a motion mode. Discard all work, including
-    // already buffered commands and internal scripts, except status.
+    // already buffered commands, except status.
     if (Printer::legacySimulationRejected()
         && (com->hasG() || !com->hasM()
             || (com->M != 105 && com->M != 114 && com->M != 115))) {
