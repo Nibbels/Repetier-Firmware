@@ -151,6 +151,50 @@ void streamRecovery(bool binaryMode,unsigned failures) {
     assert(!GCodeInput::peekCurrentCommand() && serialReceive.lastLineNumber==3);
     std::printf("Composed history replay %s failures=%u passed\n",binaryMode?"binary":"ASCII",failures);
 }
+
+std::string sweepPacket(unsigned n,unsigned kind) {
+    if(kind==1)return binary({0x85,0,uint8_t(n),uint8_t(n>>8),1});
+    if(kind==2)return binary({0x85,0x10,0,0,uint8_t(n),uint8_t(n>>8),1,0});
+    char line[32];std::snprintf(line,sizeof(line),"N%05u G1 X1",n);
+    uint8_t sum=0;for(const char* p=line;*p;++p)sum^=uint8_t(*p);
+    char check[8];std::snprintf(check,sizeof(check),"*%03u\n",unsigned(sum));
+    return std::string(line)+check;
+}
+void streamSweep(bool binaryMode) {
+    startStream(binaryMode);
+    unsigned n=2,cases=0;uint32_t now=10;
+    auto recover=[&](const std::string& packet){
+        streamVisit(now);
+        assert(drainTx()=="\r\nResend:"+std::to_string(n)+"\r\nok\r\n");
+        assert(!GCodeInput::peekCurrentCommand());
+        if(binaryMode)uartFeed(std::string(32,'\0'));
+        uartFeed(packet);
+        for(unsigned j=0;j<4;++j)streamVisit(now+1+j);
+        assert(drainTx()=="ok "+std::to_string(n)+"\r\n");
+        expectCommand(n);
+        assert(researchRecovery.phase()==ResendPolicy::Phase::Healthy && !researchStops);
+        ++n;++cases;now+=10;
+    };
+    for(unsigned kind=binaryMode?1:0;kind<=(binaryMode?2u:0u);++kind) {
+        const auto size=sweepPacket(n,kind).size();
+        for(uint8_t flag:{uint8_t(_BV(FE0)),uint8_t(_BV(DOR0)),uint8_t(_BV(UPE0))}) {
+            for(unsigned pos=0;pos<size;++pos) {
+                const auto packet=sweepPacket(n,kind);
+                assert(packet.size()==size);
+                corruptStream(packet,pos,flag);
+                uartFeed(sweepPacket(n+1,kind)); // tainted streaming tail
+                recover(packet);
+            }
+        }
+    }
+    // A real ring-full event, not an injected hardware error flag.
+    uartFeed(std::string(128,'q'));
+    assert(UsbSerial::lossFlags()==1);
+    recover(sweepPacket(n,binaryMode?1:0));
+    std::printf("Composed per-byte fault sweep %s: %u recovered episodes including RX-full\n",
+                binaryMode?"binary V1/V2":"ASCII",cases);
+}
+
 void streamAckOrder() {
     researchStreamActive=true;
     for(unsigned i=0;i<63;++i)assert(UsbSerial::tryWrite(uint8_t(i)));
@@ -267,6 +311,8 @@ def main():
             '    else if (scenario == "stream-b0") streamRecovery(true,0);\n'
             '    else if (scenario == "stream-b1") streamRecovery(true,1);\n'
             '    else if (scenario == "stream-b2") streamRecovery(true,2);\n'
+            '    else if (scenario == "stream-sweep-a") streamSweep(false);\n'
+            '    else if (scenario == "stream-sweep-b") streamSweep(true);\n'
             '    else if (scenario == "stream-ack") streamAckOrder();\n'
             '    else if (scenario == "stream-text") streamBorrowed();\n'
             '    else if (scenario == "stream-fatal") streamFatal(true);\n'
@@ -277,7 +323,7 @@ def main():
         # replay's mock TX. Keep that independent two-mode suite in the
         # frame preflight; run all ordinary serial cases plus stream here.
         path=tests/"serial-protocol.py";s=path.read_text()
-        names='"stream-a0","stream-a1","stream-a2","stream-b0","stream-b1","stream-b2","stream-ack","stream-text","stream-fatal","stream-ambiguous",'
+        names='"stream-a0","stream-a1","stream-a2","stream-b0","stream-b1","stream-b2","stream-sweep-a","stream-sweep-b","stream-ack","stream-text","stream-fatal","stream-ambiguous",'
         s=once(s,'for scenario in ("numbered",','for scenario in ('+names+'"numbered",')
         start=s.index('        subprocess.run(compiler + ["-DRF_THERMAL_EMERGENCY_EXPERIMENT')
         end=s.index('        uart_replay =',start)
