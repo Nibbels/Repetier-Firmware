@@ -337,6 +337,25 @@ def adapt_canonical(source):
     s=once(s,"        bool emergencyLocked() const { return isAnyTempsensorDefect(); }",
         "        bool emergencyLocked() const { return isAnyTempsensorDefect(); }\n"
         "        bool transportEmergency() const { return false; } // thermal-only fixture")
+    # The actual heating-inhibit helper now consults printJob. Define
+    # the fixture owner first, forward-declaring only its sensor query.
+    s=once(s,'    #include "printer-safety.inc"\n'
+        '    void clearHeaterTargets();\n    void revokeHeaterOutputsLocked();',
+        '    static bool isAnyTempsensorDefect();')
+    s=once(s,'    } printJob;\n    static unsigned flag2, debugLevel;',
+        '    } printJob;\n    #include "printer-safety.inc"\n'
+        '    void clearHeaterTargets();\n    void revokeHeaterOutputsLocked();\n'
+        '    static void stopForTransportFault(){ assert(false); }\n'
+        '    static unsigned flag2, debugLevel;')
+    # Compile the actual new transport-service helper alongside the
+    # actual scheduler. Only the transport input is healthy/stubbed in
+    # this temperature-only harness; real fault injection is separate.
+    s=once(s,'namespace GCodeInput {\n    bool scriptActive = false;',
+        'namespace GCodeInput {\n    void serviceTransportTx() {}\n'
+        '    bool transportFailed() { return false; }\n    bool scriptActive = false;')
+    s=once(s,'"scheduler.inc": section(commands, "#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT\\nstatic void serviceThermalEmergency()",',
+        '"scheduler.inc": section(commands, "#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT\\nstatic bool serviceTransportFailure()", "void Commands::commandLoop()")\n'
+        '            + section(commands, "#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT\\nstatic void serviceThermalEmergency()",')
     p.write_text(s)
     p=source/"tests/task0034-terminal-stop.py";s=p.read_text()
     # Extract the common motion cleanup and both actual terminal owners.
