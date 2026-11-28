@@ -329,7 +329,7 @@ jobs:
   integer-parser-preflight:
     if: github.head_ref == 'task/Task0032-integer-parser-preflight'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: arduino/setup-arduino-cli@v2
@@ -354,6 +354,17 @@ jobs:
           runner=research/task0032-planner-queue/simavr-trace.c
           test "$(git hash-object "$runner")" = c0dfeca055159db9b918c6a8420bc2d441bae079
           python3 tools/task0032/decimal32-preflight.py --source "$RUNNER_TEMP/decimal32-p0" --out "$out" --compiler "$compiler" --runner-source "$runner" | tee "$out/replay.log"
+      - name: Build exact disposable integer parser candidate with canonical recovery harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-decimal32"
+          cd "$RUNNER_TEMP/decimal32-p0"
+          git apply --check "$out/candidate.diff"
+          git apply "$out/candidate.diff"
+          git -c user.name=Task0032 -c user.email=task0032@localhost commit -am "Disposable decimal parser candidate"
+          git rev-parse HEAD > "$out/local-candidate-sha.txt"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" --p0-candidate | tee "$out/canonical.log"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
