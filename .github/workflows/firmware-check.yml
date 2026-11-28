@@ -26,7 +26,7 @@ jobs:
           arduino-cli core update-index
           arduino-cli core install arduino:avr@1.8.6
       - name: Verify merge candidate
-        run: python3 tools/task0003-baseline.py --p0-candidate "$RUNNER_TEMP/firmware-evidence"
+        run: python3 tools/task0003-baseline.py "$RUNNER_TEMP/firmware-evidence"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

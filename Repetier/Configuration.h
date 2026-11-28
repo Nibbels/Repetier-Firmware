@@ -19,6 +19,25 @@
 #ifndef CONFIGURATION_H
 #define CONFIGURATION_H
 
+// All actual firmware builds use the combined P0 implementation.
+// Only the explicit, non-deployable historical AVR comparison runner
+// may select the old paths until their regression tests are retired.
+// A plain Arduino link has no recovery guard symbol and must fail closed.
+#if defined(__AVR__) && !defined(RF_INTERNAL_COMPARISON_BUILD)
+#ifndef RF_HEATER_LEASE_EXPERIMENT
+#define RF_HEATER_LEASE_EXPERIMENT 1
+#endif
+#ifndef RF_HEATER_RESET_WDT_EXPERIMENT
+#define RF_HEATER_RESET_WDT_EXPERIMENT 1
+#endif
+#ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
+#define RF_THERMAL_EMERGENCY_EXPERIMENT 1
+#endif
+#ifndef RF_EEPROM_ZONE_EXPERIMENT
+#define RF_EEPROM_ZONE_EXPERIMENT 1
+#endif
+#endif
+
 #include <stdint.h>
 #include "Constants.h"
 #include "DisplayModes.h"

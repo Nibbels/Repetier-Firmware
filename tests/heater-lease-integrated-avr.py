@@ -51,7 +51,7 @@ with tempfile.TemporaryDirectory() as temp:
         mode_dir=out/mode
         mode_dir.mkdir()
         for board,defs in baseline.TARGETS.items():
-            definitions=[*defs,"RF_HEATER_LEASE_EXPERIMENT=1",*extra]
+            definitions=[*defs,"RF_INTERNAL_COMPARISON_BUILD=1","RF_HEATER_LEASE_EXPERIMENT=1",*extra]
             stats,board_dir=verified.build_verified(baseline,recovery,timing,cli,mode_dir,board,
                 definitions,bool(extra),archive,mode)
             dump=(board_dir/"disassembly.txt").read_text()

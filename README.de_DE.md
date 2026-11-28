@@ -16,31 +16,13 @@ BENUTZUNG AUF EIGENE GEFAHR.
 Link zur offiziellen Version der Firmware:
 https://github.com/RF1000/Repetier-Firmware (siehe Branch developement. Oder auch auf den Produktseiten auf www.conrad.de)  
 
-## Installationsanleitung
+## Build und Qualifikationsstand
 
-- Diesen Branch (`ai-firmware-review`) herunterladen und entpacken. Dies ist ein Software-Review-Kandidat; die gesammelten Druckertests stehen noch aus.  
-- Installiere die Arduino.cc IDE 1.8.12 oder neuer, wenn es nicht bereits installiert ist.  
-- Man bearbeitet und speichert `Repetier/Configuration.h` passend zum Druckermodell mit einem Texteditor. Man muss die zwei **//** vor dem Druckermodell entfernen, welches man aktivieren will:  
-`#define MOTHERBOARD                         DEVICE_TYPE_RF1000` or  
-`#define MOTHERBOARD                         DEVICE_TYPE_RF2000` or  
-`#define MOTHERBOARD                         DEVICE_TYPE_RF2000v2`  
-- Dieser Stand ist für den 3D-Druck ausgelegt. Der [letzte Stand mit Fräscode](https://github.com/Nibbels/Repetier-Firmware/tree/7e2e08b7f6da7677007dfddd06f8fc5adeb7d709) liegt im Repository-Verlauf.
-- Für Umbauten stehen die Einstellungen in `Configuration.h` sowie in `RF1000.h` oder im gemeinsamen `RF2000.h` für RF2000 und RF2000v2. Die [Anschlussübersicht](docs/board-connectors.md) enthält das Beispiel für einen Hotend-Lüfter an X44.
-- Der Drucker wird mit dem USB-Kabel angeschlossen und angeschaltet.
-- Die Datei /Repetier/Repetier.ino doppelklicken. 
-- Innerhalb der türkisfarbenen Arduino-IDE muss man im Menü **Werkzeuge->** die Voreinstellungen für die RFx000-Boards prüfen oder einstellen:  
-Board: `Arduino Mega 2560 or Mega ADK`,  
-Prozessor: `ATMega 2560 (Mega 2560)`,  
-Port: Der Port des Druckers, wie `COM3`, wenn er korrekt verbunden ist.
-- **Prüfen** and **Hochladen** der Firmware zum Drucker.
+Dieser Review-Stand ist **nicht zum Flashen freigegeben**. Der Standard-Build verwendet die Recovery-Linkerbelegung und das neue interne EEPROM-Schema. Ein gewöhnlicher Arduino-IDE-Link ohne Recovery-Skript ist kein unterstützter Firmware-Build.
 
-## Vorbereitete Hex-Files / automatisches Build-System
+Die [GitHub Actions Firmware-Prüfungen](https://github.com/Nibbels/Repetier-Firmware/actions/workflows/firmware-check.yml) verwenden Arduino CLI 1.2.2 und AVR Boards 1.8.6. Das Skript `tools/task0003-baseline.py` baut und prüft standardmäßig alle vier Varianten in einem neuen Evidenzverzeichnis außerhalb des unveränderten Checkouts. Nur erfolgreich verlinkte und verifizierte Standard-Artefakte gehören zum Qualifikationsnachweis. Vergleichs-Builds, Layout-Proben und fehlgeschlagene Links sind keine Firmware-Kandidaten. Die Artefakte sind sieben Tage verfügbar. Der globale Stack-/Interrupt-Nachweis und die abschließende Hardwarefreigabe sind davon getrennt.
 
-Für diesen Review-Branch erzeugen die [GitHub Actions Firmware-Prüfungen](https://github.com/Nibbels/Repetier-Firmware/actions/workflows/firmware-check.yml) vier Varianten mit Arduino CLI 1.2.2 und AVR Boards 1.8.6. Die Artefakte sind sieben Tage verfügbar. Der [Build- und Cleanup-Audit](coordination/audits/final-cleanup.md) erläutert den geprüften Buildweg und die älteren Alternativen. Historische Community-Builds wurden unter https://jenkins.beta-centauri.de/view/Repetier/ veröffentlicht; sie gehören nicht zu diesem Review-Branch.
-Siehe auch http://www.rf1000.de/viewtopic.php?f=7&t=2057
-Unter Linux kann man diese Firmwares mit 
-```avrdude -patmega2560 -cwiring -P/dev/ttyUSB0 -b115200 -D -Uflash:w:Repetier.hex:i``` 
-in die Drucker einspielen.
+Die unterstützten Modelle und Umbauvarianten bleiben RF1000, RF2000, RF2000v2 und RF2000-X44. Siehe die [Anschlussübersicht](docs/board-connectors.md) und den [Build-Audit](coordination/audits/final-cleanup.md). Der [letzte Stand mit Fräscode](https://github.com/Nibbels/Repetier-Firmware/tree/7e2e08b7f6da7677007dfddd06f8fc5adeb7d709) liegt im Repository-Verlauf.
 
 ## Vorheizprofile
 

@@ -16,30 +16,13 @@ USE AT YOUR OWN RISK.
 For the official version, have a look at the upstream repository:
 https://github.com/RF1000/Repetier-Firmware (see branch development. Or else look on the products pages on www.conrad.de.)
 
-## HowTo Install
+## Build and qualification status
 
-- Download this branch (`ai-firmware-review`) and unzip all the files. This is a software-review candidate; consolidated printer testing is still pending.  
-- Install Arduino.cc IDE 1.8.12 and later if it is not installed on your computer already.  
-- Edit and save `Repetier/Configuration.h` according to your printer model. You have to remove the two **//** in front of the printers name you wish to activate:  
-`#define MOTHERBOARD                         DEVICE_TYPE_RF1000` or  
-`#define MOTHERBOARD                         DEVICE_TYPE_RF2000` or  
-`#define MOTHERBOARD                         DEVICE_TYPE_RF2000v2`  
-- This revision is for 3D printing. The [last revision containing the milling code](https://github.com/Nibbels/Repetier-Firmware/tree/7e2e08b7f6da7677007dfddd06f8fc5adeb7d709) is available in the repository history.
-- For retrofits edit `Configuration.h` and the model settings in `RF1000.h` or in the shared `RF2000.h` for RF2000 and RF2000v2. See the [board connectors and X44 cooler example](docs/board-connectors.md).
-- Connect your Printer with a USB-cable and switch it on.
-- Go to and doubleclick /Repetier/Repetier.ino
-- Within the cyan colored Arduino-IDE you have to choose some preconfiguration settings for your RFx000 Board at the menu **Tools->**:  
-Board: `Arduino Mega 2560 or Mega ADK`,  
-Processor: `ATMega 2560 (Mega 2560)`,  
-Port: Your printers Port like `COM3`, if successfully connected.
-- **Check** and **Upload** the Firmware to your Printer.
+This review version is **not authorized for flashing**. The standard build uses the recovery linker layout and new internal EEPROM schema. An ordinary Arduino IDE link without the recovery script is not a supported firmware build.
 
-## compiled Hex-Files / automatic build system
+The [GitHub Actions firmware checks](https://github.com/Nibbels/Repetier-Firmware/actions/workflows/firmware-check.yml) use Arduino CLI 1.2.2 and AVR Boards 1.8.6. The `tools/task0003-baseline.py` script builds and verifies all four variants by default in a new evidence directory outside the clean checkout. Only successfully linked and verified standard artifacts belong to qualification evidence. Comparison builds, layout probes and failed links are not firmware candidates. Artifacts expire after seven days. The global stack/interrupt proof and final hardware authorization remain separate requirements.
 
-For this review branch, the [GitHub Actions firmware checks](https://github.com/Nibbels/Repetier-Firmware/actions/workflows/firmware-check.yml) produce four variants with the pinned Arduino CLI 1.2.2 and AVR Boards 1.8.6. Artifacts expire after seven days. See the [build and cleanup audit](coordination/audits/final-cleanup.md) for the supported build path and the status of legacy alternatives. Historical community builds were published at https://jenkins.beta-centauri.de/view/Repetier/ ; they are not builds of this review branch.
-Find more information and discussion here: http://www.rf1000.de/viewtopic.php?f=7&t=2057
-Using linux you can flash the .hex-files to your printer with this command:
-```avrdude -patmega2560 -cwiring -P/dev/ttyUSB0 -b115200 -D -Uflash:w:Repetier.hex:i``` 
+Supported models and retrofit variants remain RF1000, RF2000, RF2000v2 and RF2000-X44. See the [board connector documentation](docs/board-connectors.md) and [build audit](coordination/audits/final-cleanup.md). The [last revision containing milling code](https://github.com/Nibbels/Repetier-Firmware/tree/7e2e08b7f6da7677007dfddd06f8fc5adeb7d709) remains in repository history.
 
 ## Preheat profiles
 

@@ -188,9 +188,8 @@ def build_target(out, cli, name, definitions, experiment=None, linker_script_fac
     return sizes
 
 
-# Candidate cutover path. The historical comparison remains the default
-# until the A73 release gates have been closed. This wrapper ensures that
-# the future default cannot bypass the recovery link or post-link audits.
+# The standard firmware capture always uses the recovery link and post-link
+# verification. This changes build selection, not deployment authorization.
 P0_DEFINITIONS = (
     "RF_HEATER_LEASE_EXPERIMENT=1", "RF_HEATER_RESET_WDT_EXPERIMENT=1",
     "RF_THERMAL_EMERGENCY_EXPERIMENT=1", "RF_EEPROM_ZONE_EXPERIMENT=1",
@@ -213,7 +212,7 @@ def build_p0_candidate(out, cli, name, definitions, experiment=None):
     with tempfile.TemporaryDirectory(prefix="rfx000-p0-") as temp:
         stats, directory = verified.build_verified(
             sys.modules[__name__], recovery, timing, cli, Path(temp), name,
-            [*definitions, *P0_DEFINITIONS], True, out/"layout-evidence",
+            definitions, True, out/"layout-evidence",
             "combined", experiment, archive_final=False)
         shutil.copytree(directory, out/name)
     return stats
@@ -223,8 +222,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output", type=Path, help="new evidence directory outside checkout")
     parser.add_argument("--cli", default="arduino-cli")
-    parser.add_argument("--p0-candidate", action="store_true",
-                        help="qualification-only combined recovery-linked build; not deployment")
+    # Compatibility alias for historical qualification commands. It no
+    # longer selects an alternative firmware configuration.
+    parser.add_argument("--p0-candidate", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--experiment", choices=EXPERIMENTS,
                         help="opt-in compiler trial, not a release configuration")
     modes = parser.add_mutually_exclusive_group()
@@ -244,12 +244,13 @@ def main():
     report = {"sha": git("rev-parse", "HEAD"), "arduino_core_required": CORE,
               "fqbn": FQBN, "targets": {}, "failures": [],
               "host_requested": not args.avr_only, "avr_requested": not args.host_only}
-    if args.p0_candidate:
-        report["p0_candidate"] = True
+    if not args.host_only:
+        report["p0_candidate"] = True  # compatibility with existing evidence readers
+        report["build_profile"] = "standard-recovery"
     if args.experiment:
         report["compiler_experiment"] = args.experiment
     if not args.avr_only:
-        report["failures"] += host_tests(out, canonical_p0=args.p0_candidate and not args.host_only)
+        report["failures"] += host_tests(out, canonical_p0=not args.host_only)
     if not args.host_only:
         try:
             run(out, "arduino-cli-version", [args.cli, "version"])
@@ -262,8 +263,7 @@ def main():
         else:
             for name, definitions in TARGETS.items():
                 try:
-                    builder = build_p0_candidate if args.p0_candidate else build_target
-                    report["targets"][name] = builder(out, args.cli, name, definitions, args.experiment)
+                    report["targets"][name] = build_p0_candidate(out, args.cli, name, definitions, args.experiment)
                 except (OSError, ValueError, AssertionError, subprocess.CalledProcessError) as error:
                     report["failures"].append(f"{name}: {error}")
     if git("status", "--porcelain", "--untracked-files=all") or git("rev-parse", "HEAD") != report["sha"]:
