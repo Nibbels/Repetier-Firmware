@@ -141,6 +141,8 @@ REVIEWED_SOURCE_SHA256 = {
     "0aafaa6b60c832c816f6bf3ede3c5d09729015167aa9a11f500522a74c9d2813",
     # #1200: exact 145 sketch inputs, all four boards.
     "af700c2fe7f7e82b1f76117e1c6125f5c30790a75d6d6f2d1a1c25ffce6f0c02",
+    # #1212: only HAL.cpp changed; added non-foreground expiry checks.
+    "ad96668dc2f1aba1d19a4f1cb99c128613eff92a802518f5e1d05a1daf7904b6",
 }
 
 def diagnostic(frame, phase=False, reviewed_owners=False):

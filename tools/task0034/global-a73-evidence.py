@@ -72,7 +72,7 @@ def linked_analysis(archive, report, reviewed_owners):
             image = startup["elf_text"](z.read(base + "build/Repetier.ino.elf"))
             row["crt"] = startup["verify"](board, image, listing, symbols, fg)
             instructions, tables, labels = fg.decode_linked(listing, board)
-            row["leaseGpio"] = gpio_latency(board, instructions, labels, fg.target)
+            row["leaseGpio"] = gpio_latency(board, instructions, labels, fg.target, require_priority_fallback=True)
             validated = switches["prove_tables"](instructions, tables, labels, fg.target)
             row["verifiedSwitchTables"] = len(validated["tables"])
             row["foreground"] = context["inventory"](z, board, False, reviewed_owners)

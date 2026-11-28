@@ -1,5 +1,8 @@
 """Count the linked, straight-line lease expiry prefix on the canonical images."""
-def gpio_latency(board, ins, labels, branch_target):
+import re
+
+
+def gpio_latency(board, ins, labels, branch_target, require_priority_fallback=False):
     address = {name:pc for pc,name in labels.items()}
     vector = address["__vector_32"]
     leaf = address["(anonymous namespace)::failHeaterLease()"]
@@ -19,6 +22,7 @@ def gpio_latency(board, ins, labels, branch_target):
         raise ValueError((board,"unreviewed expiry entry"))
     cycles += 5
     pc = leaf
+    leaf_entry_cycles = cycles
 
     def require(op, operand, count):
         nonlocal pc,cycles
@@ -47,4 +51,66 @@ def gpio_latency(board, ins, labels, branch_target):
     if board != "RF1000":
         require("cbi","0x0e, 2",2)
         pins["PE2"] = cycles
-    return {"cyclesFromFirstHandlerInstruction":pins, "clockHz":16000000}
+    report = {"cyclesFromFirstHandlerInstruction":pins, "clockHz":16000000}
+    if require_priority_fallback:
+        leaf_pins = {pin:count-leaf_entry_cycles for pin,count in pins.items()}
+        report["priorityFallback"] = {
+            str(v): priority_fallback(board, v, ins, address, branch_target, leaf, leaf_pins)
+            for v in (17,22)
+        }
+    return report
+
+
+def priority_fallback(board, vector, ins, address, branch_target, leaf, leaf_pins):
+    """Prove the two higher-priority checks actually precede any other body work."""
+    pc = address["__vector_"+str(vector)]
+    _,op,arg = ins[4*vector]
+    assert op=="jmp" and branch_target(arg)==pc, (board,vector,"vector slot")
+    prologue_cycles=0
+    while True:
+        width,op,arg=ins[pc]
+        a=arg.split(";")[0].strip()
+        if op=="in" and a.endswith(", 0x18"):  # TIFR3
+            break
+        if op=="push" and re.fullmatch(r"r\d+",a):
+            prologue_cycles+=2
+        elif op=="in" and re.fullmatch(r"r\d+, 0x3[bfde]",a):
+            prologue_cycles+=1  # SREG, RAMPZ or SP
+        elif op=="eor" and a=="r1, r1":
+            prologue_cycles+=1
+        else:
+            raise ValueError((board,vector,hex(pc),"unreviewed prefix",op,a))
+        pc+=width
+    flag_site=pc
+    flag_reg=a.split(", ")[0]
+    pc+=width
+    width,op,arg=ins[pc]
+    a=arg.split(";")[0].strip()
+    assert op=="lds" and a.endswith(", 0x0071"), (board,vector,"TIMSK3",a)
+    mask_reg=a.split(", ")[0]
+    assert flag_reg!=mask_reg
+    pc+=width
+
+    def require(expected, operands):
+        nonlocal pc
+        width,op,arg=ins[pc]
+        assert op==expected and arg.split(";")[0].strip()==operands, (board,vector,hex(pc),op,arg)
+        pc+=width
+
+    require("and",flag_reg+", "+mask_reg)
+    mask=0x0e if board in ("RF2000","RF2000v2") else 0x06
+    require("andi",flag_reg+", 0x"+format(mask,"02X"))
+    width,op,arg=ins[pc]
+    assert op=="breq", (board,vector,"zero-mask branch",arg)
+    skip=branch_target(arg)
+    pc+=width
+    width,op,arg=ins[pc]
+    assert op=="call" and branch_target(arg)==leaf and pc+width==skip, (board,vector,"leaf call",arg)
+    # First instruction of handler to end of the flag read; no vector
+    # admission or in-flight instruction included. Normal path 1+2+1+1+2.
+    # Fault path 1+2+1+1+1+5 before the shared exact GPIO leaf.
+    return {"flagReadSite":hex(flag_site),
+            "cyclesToFlagRead":prologue_cycles+1,
+            "normalCheckCycles":7,
+            "cyclesFromFirstHandlerInstruction":{pin:prologue_cycles+11+c for pin,c in leaf_pins.items()}}
+
