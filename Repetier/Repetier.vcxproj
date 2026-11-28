@@ -124,7 +124,6 @@
     <ClInclude Include="DisplayModes.h" />
     <ClInclude Include="QueueTask.h" />
     <ClInclude Include="Eeprom.h" />
-    <ClInclude Include="EepromHostFields.h" />
     <ClInclude Include="EepromZoneLayout.h" />
     <ClInclude Include="EepromZoneIntegrity.h" />
     <ClInclude Include="EepromZoneStorage.h" />
@@ -218,7 +217,6 @@
   <ItemGroup>
     <ClCompile Include="Commands.cpp" />
     <ClCompile Include="Communication.cpp" />
-    <ClCompile Include="Eeprom.cpp" />
     <ClCompile Include="EepromZoneAvr.cpp" />
     <ClCompile Include="EepromZoneLive.cpp" />
     <ClCompile Include="EepromZoneRuntime.cpp" />

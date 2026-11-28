@@ -30,7 +30,7 @@ def main():
     defs = "\n".join(read(n) for n in
         ("Configuration.h", "HAL.h", "RF.h", "ui.h", "uilang.h"))
     macros = "\n".join(re.findall(
-        r"^#define (?:PREHEAT_\w+|EPR_RF_PREHEAT_\w+|EPR_RF_Z_OFFSET|EPR_RF_MOD_SENSEOFFSET_DIGITS|EPR_INTEGRITY_BYTE|EEPROM_OFFSET|PERIODICAL_ACTIONS_CALL_INTERVAL|RF_MICRO_STEPS_Z|Z_OFFSET_(?:BUTTON|MENU)_STEPS|UI_ACTION_PREHEAT_\w+|UI_ACTION_RF_HEAT_BED_(?:UP|DOWN)|UI_SET_(?:MIN|MAX)_\w+_TEMP|UI_ACTION_ZOFFSET|UI_ACTION_(?:XPOSITION|YPOSITION|ZPOSITION|EPOSITION|RF_RESET_ACK|STOP_ACK|RESTORE_DEFAULTS|CHOOSE_PID_ROBUST|CHOOSE_PID_DYNAMIC)|UI_MENU_TYPE_(?:SUBMENU|MODIFICATION_MENU)|XYZ_POSITION_BUTTON_DIRECTION|UI_SET_EXTRUDER_FEEDRATE|SPEED_(?:MIN_MILLIS|MAX_MILLIS|MAGNIFICATION)|MAX_COLS|UI_TEXT_PREHEAT_\w+)\s+[^\n]+",
+        r"^#define (?:PREHEAT_\w+|EEPROM_OFFSET|PERIODICAL_ACTIONS_CALL_INTERVAL|RF_MICRO_STEPS_Z|Z_OFFSET_(?:BUTTON|MENU)_STEPS|UI_ACTION_PREHEAT_\w+|UI_ACTION_RF_HEAT_BED_(?:UP|DOWN)|UI_SET_(?:MIN|MAX)_\w+_TEMP|UI_ACTION_ZOFFSET|UI_ACTION_(?:XPOSITION|YPOSITION|ZPOSITION|EPOSITION|RF_RESET_ACK|STOP_ACK|RESTORE_DEFAULTS|CHOOSE_PID_ROBUST|CHOOSE_PID_DYNAMIC)|UI_MENU_TYPE_(?:SUBMENU|MODIFICATION_MENU)|XYZ_POSITION_BUTTON_DIRECTION|UI_SET_EXTRUDER_FEEDRATE|SPEED_(?:MIN_MILLIS|MAX_MILLIS|MAGNIFICATION)|MAX_COLS|UI_TEXT_PREHEAT_\w+)\s+[^\n]+",
         defs, re.M))
     # The full menu table needs all action IDs (the original focused replay
     # extracted only the IDs it invoked). Preserve the actual masks and labels.
@@ -99,7 +99,7 @@ def main():
         + "default: assert(false); } }\n"
         + section(epr, "void EEPROM::storePreheatProfiles()", "void EEPROM::storeSenseOffsetSettings(")
         + "\n#define RF_THERMAL_EMERGENCY_EXPERIMENT 1\n"
-        + section(read("PreheatProfiles.cpp"), "namespace {", "#ifndef RF_EEPROM_ZONE_EXPERIMENT")
+        + read("PreheatProfiles.cpp")[read("PreheatProfiles.cpp").index("namespace {"):]
         + "\n#undef RF_THERMAL_EMERGENCY_EXPERIMENT\n"
     )
     # Compile the complete real tree, not synthetic copies of the filtered lists.

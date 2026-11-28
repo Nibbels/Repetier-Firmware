@@ -14,7 +14,7 @@ def main():
     ui = (FW / "UiSettings.cpp").read_text(encoding="utf-8")
     with tempfile.TemporaryDirectory(prefix="eeprom-storage-") as temp:
         work = pathlib.Path(temp)
-        owner = preheat[preheat.index("namespace {"):preheat.index("#ifndef RF_EEPROM_ZONE_EXPERIMENT")]
+        owner = preheat[preheat.index("namespace {"):]
         (work / "preheat-owner.inc").write_text(owner, encoding="utf-8")
         live = (FW / "EepromZoneLive.cpp").read_text(encoding="utf-8")
         (work / "live-settings.inc").write_text(live.replace('#include "Repetier.h"\n', "", 1).replace('#include "StepExecutor.h"\n', "", 1), encoding="utf-8")

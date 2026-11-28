@@ -1,10 +1,7 @@
 #include "Printer.h"
 #include "PreheatProfiles.h"
-#include "Eeprom.h"
 
 namespace {
-constexpr int32_t preheatProfileTag = 0x50524831L;
-
 int16_t bedProfileMaximum() {
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     const int16_t cap=heatedBedController.maximumTargetC();
@@ -56,40 +53,3 @@ bool PreheatProfiles::adjust(Profile profile, Heater heater, int8_t increment) {
     current = next;
     return true;
 }
-
-#ifndef RF_EEPROM_ZONE_EXPERIMENT
-void EEPROM::writePreheatProfiles() {
-    using Profile = PreheatProfiles::Profile;
-    const auto a = Printer::preheatProfiles.get(Profile::A);
-    const auto b = Printer::preheatProfiles.get(Profile::B);
-    HAL::eprSetInt16(EPR_RF_PREHEAT_A_BED, a.bed);
-    HAL::eprSetInt16(EPR_RF_PREHEAT_A_HOTEND, a.hotend);
-    HAL::eprSetInt16(EPR_RF_PREHEAT_B_BED, b.bed);
-    HAL::eprSetInt16(EPR_RF_PREHEAT_B_HOTEND, b.hotend);
-    HAL::eprSetInt32(EPR_RF_PREHEAT_PROFILE_TAG, preheatProfileTag);
-}
-
-bool EEPROM::readPreheatProfiles() {
-    using Profile = PreheatProfiles::Profile;
-    bool changed;
-    if (HAL::eprGetInt32(EPR_RF_PREHEAT_PROFILE_TAG) == preheatProfileTag) {
-        const bool a = Printer::preheatProfiles.readStored(Profile::A, {
-            HAL::eprGetInt16(EPR_RF_PREHEAT_A_BED), HAL::eprGetInt16(EPR_RF_PREHEAT_A_HOTEND)});
-        const bool b = Printer::preheatProfiles.readStored(Profile::B, {
-            HAL::eprGetInt16(EPR_RF_PREHEAT_B_BED), HAL::eprGetInt16(EPR_RF_PREHEAT_B_HOTEND)});
-        changed = a || b;
-    } else {
-        Printer::preheatProfiles.restoreDefaults();
-        changed = true;
-    }
-    if (changed)
-        writePreheatProfiles();
-    return changed;
-}
-
-void EEPROM::storePreheatProfiles() {
-    writePreheatProfiles();
-    updateChecksum();
-}
-
-#endif // RF_EEPROM_ZONE_EXPERIMENT

@@ -41,9 +41,6 @@
     <ClInclude Include="Eeprom.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="EepromHostFields.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="EepromZoneLayout.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -314,9 +311,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Communication.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Eeprom.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="EepromZoneAvr.cpp">

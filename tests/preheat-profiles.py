@@ -20,16 +20,16 @@ def main():
     formatting = (firmware / "UiFormatting.cpp").read_text(encoding="utf-8")
     menu = (firmware / "uimenu.h").read_text(encoding="utf-8")
     definitions = "\n".join((firmware / name).read_text(encoding="utf-8")
-                            for name in ("Configuration.h", "Eeprom.h", "ui.h", "uilang.h"))
+                            for name in ("Configuration.h", "ui.h", "uilang.h"))
     with TemporaryDirectory(prefix="rfx-preheat-") as directory:
         build = Path(directory)
         (build / "preheat-settings.inc").write_text("\n".join(re.findall(
-            r"^#define (?:PREHEAT_\w+|EPR_RF_PREHEAT_\w+|UI_\w+_PREHEAT_\w+|UI_SET_(?:MIN|MAX)_\w+_TEMP)\s+[^\n]+",
+            r"^#define (?:PREHEAT_\w+|UI_\w+_PREHEAT_\w+|UI_SET_(?:MIN|MAX)_\w+_TEMP)\s+[^\n]+",
             definitions, re.M)), encoding="utf-8")
         owner = (firmware / "PreheatProfiles.cpp").read_text(encoding="utf-8")
         runtime = (firmware / "EepromZoneRuntime.cpp").read_text(encoding="utf-8")
         (build / "preheat-firmware.inc").write_text(
-            section(owner, "namespace {", "#ifndef RF_EEPROM_ZONE_EXPERIMENT")
+            owner[owner.index("namespace {"):]
             + section(runtime, "void EEPROM::storePreheatProfiles()", "void EEPROM::storeManualZOffset()"),
             encoding="utf-8")
         (build / "preheat-panel.inc").write_text(
