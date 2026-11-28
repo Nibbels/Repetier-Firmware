@@ -9,6 +9,11 @@ hal=(root/"Repetier/HAL.cpp").read_text()
 start=hal.index("// Non-release candidate: /256")
 end=hal.index("\n} // namespace",start)
 state=hal[start:end]
+# Prove the fallback is the first executable action in both actual ISR bodies.
+for vector in ("TIMER1_COMPA_vect", "PWM_TIMER_VECTOR"):
+    body=hal.split("ISR("+vector+") {",1)[1]
+    lines=[line.strip() for line in body.splitlines() if line.strip() and not line.strip().startswith("//")]
+    assert lines[0]=="expirePendingHeaterLease();", vector
 start=hal.index('constexpr uint8_t thermalPassComplete=0x80;')
 feed=hal[start:hal.index('\nISR(TIMER3_COMPA_vect)',start)]
 start=hal.index("// Distinguish pre-start boot")
@@ -149,6 +154,39 @@ static void grant(uint8_t c,uint8_t duty){
     HAL::setHeaterDuty(c,duty,&sample);
 }
 static void expireVector(){InterruptProtectedBlock lock;failHeaterLease();}
+static void checkPriorityIndependentExpiry() {
+    // The actual leaf called at the head of Timer1 and PWM. Exhaust all
+    // register combinations, including inactive stale flags, overflow
+    // and unused compare C on single-tool hardware.
+    constexpr unsigned supported = (_BV(OCIE3A)|_BV(OCIE3B)
+#if NUM_EXTRUDER > 1
+                                   |_BV(OCIE3C)
+#endif
+                                   );
+    for (unsigned flags=0;flags<256;++flags) for(unsigned mask=0;mask<256;++mask) {
+        resetFixture(0);
+        InterruptProtectedBlock lock;
+        TIMSK3=uint8_t(mask); TIFR3.bits=uint8_t(flags);
+        heaterGrantProgress=0xff;
+        for (uint8_t c=0;c<=NUM_EXTRUDER;++c) {
+            requestedDuty[c]=255; pins[pin(c)]=true;
+        }
+        expirePendingHeaterLease();
+        const bool expired=(flags&mask&supported)!=0;
+        assert(heaterLeaseFailed==expired);
+        assert(TIFR3.bits==flags); // no W1C, even on failure
+        assert(TIMSK3==(expired?0:mask));
+        assert(heaterGrantProgress==(expired?0:0xff));
+        for (uint8_t c=0;c<=NUM_EXTRUDER;++c) {
+            assert(requestedDuty[c]==(expired?0:255));
+            assert(pins[pin(c)]!=expired);
+        }
+        // A second visit with the original sticky flag cannot rearm.
+        expirePendingHeaterLease();
+        assert(heaterLeaseFailed==expired);
+    }
+    std::puts("priority-independent expiry: 65536 flag/mask combinations PASS");
+}
 // Exhaust the modular window and compare-flag states for each fixed channel.
 static bool fixedLive(unsigned c,uint16_t now) {
     switch(c) {
@@ -286,6 +324,7 @@ int main(){
     checkZeroRevocation();
     checkPreWatchdogReset();
     checkSampleWrapEquivalence();
+    checkPriorityIndependentExpiry();
     checkFixedChannelEquivalence();
     // Independently of duty-byte consistency, a frame without positive
     // lease authorization must never drive a rising heater edge.

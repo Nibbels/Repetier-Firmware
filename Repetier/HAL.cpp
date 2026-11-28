@@ -85,6 +85,7 @@ void heaterWatchdogEarlyInit() {
 
 namespace {
 void beginHeaterLease();
+inline __attribute__((always_inline)) void expirePendingHeaterLease();
 const uint8_t temperatureAdcChannels[TemperatureAdcCount] PROGMEM = {
     EXT0_TEMPSENSOR_PIN,
 #if NUM_EXTRUDER > 1
@@ -842,6 +843,9 @@ volatile long __attribute__((used)) stepperWait = 0;
 /** \brief Timer interrupt routine to drive the stepper motors.
 */
 ISR(TIMER1_COMPA_vect) {
+    // Higher-priority motion may be repeatedly admitted before Timer3.
+    // Observe the same sticky hardware expiry before any motion work.
+    expirePendingHeaterLease();
     // A terminal thermal stop is not a normal queue drain. No new STEP
     // output or queued control task, even if an old caller republishes work.
     if(Printer::printJob.emergencyLocked()) {
@@ -986,6 +990,21 @@ void failHeaterLease() {
     for(uint8_t c=0;c<=NUM_EXTRUDER;++c) requestedDuty[c]=0;
     TIMSK3=0;
 }
+
+// IRQs masked. An inactive channel can have a stale compare flag, so
+// intersect the hardware flag with the *enabled* lease vector bits.
+// Never acknowledge a pending flag or touch a deadline here; the same
+// terminal all-off leaf handles both this path and the Timer3 vectors.
+inline __attribute__((always_inline)) void expirePendingHeaterLease() {
+    constexpr uint8_t compareMask = _BV(OCIE3A) | _BV(OCIE3B)
+#if NUM_EXTRUDER > 1
+        | _BV(OCIE3C)
+#endif
+        ;
+    if (TIFR3 & TIMSK3 & compareMask)
+        failHeaterLease();
+}
+
 inline __attribute__((always_inline)) bool leaseWindowLive(uint16_t deadline,uint8_t mask,uint16_t now) {
     const uint16_t left=uint16_t(deadline-now);
     return left>heaterLeaseGuard && left<=heaterLeaseDuration && !(TIFR3 & mask);
@@ -1186,6 +1205,9 @@ void HAL::setPartFanSpeed(uint8_t speed) {
 This timer is called 3906 times per second. It is used to update pwm values for heater and some other frequent jobs.
 */
 ISR(PWM_TIMER_VECTOR) {
+    // Even if PWM wins priority over Timer3, never wait for the next
+    // frame boundary to act on an already-expired armed lease.
+    expirePendingHeaterLease();
     static uint8_t pwm_count_heater = 0;
     static uint8_t pwm_count_cooler = 0;
     static uint8_t pwm_count_part_fan = 0;
