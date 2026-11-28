@@ -274,3 +274,83 @@ def inventory(z,board,fg,irq):
     ins,_,labels=fg.decode_linked(z.read(board+"/disassembly.txt").decode(),board)
     contexts=discover(ins,trace,int(frame["main"],16),irq["WRITES"],irq["NO_WRITE"])
     return analyze(ins,labels,contexts,irq["cost"])
+
+
+def self_test(irq):
+    # Synthetic linked CFGs use the same local graph contract as the
+    # foreground walker. All calls are actual callsite boundaries, not
+    # arbitrary function-name reachability.
+    def fixture(spec):
+        ins,trace,labels={},{},{}
+        for root,steps in spec.items():
+            labels[root]="fixture"+hex(root)
+            edges,calls={},{}
+            states=[(root+2*i,d,y,None) for i,(_,_,d,y,_,_) in enumerate(steps)]
+            for state,(op,arg,_,_,next_indices,call) in zip(states,steps):
+                ins[state[0]]=(2,op,arg)
+                edges[state]={states[i] for i in next_indices}
+                if call is not None:
+                    calls[state]=call
+            trace[root]={"entry":states[0],"edges":edges,"calls":calls}
+        contexts=discover(ins,trace,min(spec),irq["WRITES"],irq["NO_WRITE"])
+        return contexts,analyze(ins,labels,contexts,irq["cost"])
+
+    # main enables I, saves it, masks, calls a helper that saves the
+    # already-masked I through PUSH/POP, restores the outer saved I, then
+    # repeats SEI. The helper is included in a continuous blackout.
+    ctx,r=fixture({
+      0x100:[
+        ("sei","",3,None,[1],None),
+        ("nop","",3,None,[2],None),
+        ("in","r16, 0x3f",3,None,[3],None),
+        ("cli","",3,None,[4],None),
+        ("call","0x200",3,None,[5],0x200),
+        ("out","0x3f, r16",3,None,[6],None),
+        ("sei","",3,None,[7],None),
+        ("nop","",3,None,[8],None),
+        ("ret","",3,None,[],None),
+      ],
+      0x200:[
+        ("in","r18, 0x3f",3,None,[1],None),
+        ("push","r18",3,None,[2],None),
+        ("cli","",4,None,[3],None),
+        ("ldi","r18, 0x80",4,None,[4],None),
+        ("pop","r18",4,None,[5],None),
+        ("out","0x3f, r18",3,None,[6],None),
+        ("ret","",3,None,[],None),
+      ]})
+    assert ctx[(0x200,0)]["returns"]=={0}
+    assert ctx[(0x100,0)]["returns"]=={1}
+    assert r["unresolvedContexts"]==0 and r["closedMaskedCallees"]==1
+    assert r["largestClosedLocalCycles"]==21, r
+    # In the main trace, successive enabling writes both delay admission.
+    assert any(st[0][0]==0x100+2*7 and st[1:]==(1,True)
+               for st in ctx[(0x100,0)]["graph"])
+
+    # A direct Y-frame spill can restore I even after its register was
+    # overwritten. An unknown restore must explore *both* possibilities.
+    ctx,r=fixture({0x100:[
+        ("sei","",6,-6,[1],None),
+        ("in","r18, 0x3f",6,-6,[2],None),
+        ("std","Y+1, r18",6,-6,[3],None),
+        ("cli","",6,-6,[4],None),
+        ("ldi","r18, 0x00",6,-6,[5],None),
+        ("ldd","r19, Y+1",6,-6,[6],None),
+        ("out","0x3f, r19",6,-6,[7],None),
+        ("out","0x3f, r20",6,-6,[8],None),
+        ("ret","",6,-6,[],None),
+    ]})
+    assert ctx[(0x100,0)]["returns"]=={0,1}
+    assert ctx[(0x100,0)]["unknown"]=={0x100+2*7}
+    assert r["unresolvedContexts"]==1
+
+    # A local polling loop after CLI is never called a finite path.
+    _,r=fixture({0x100:[
+        ("cli","",3,None,[1],None),
+        ("nop","",3,None,[1,2],None),
+        ("ret","",3,None,[],None),
+    ]})
+    assert r["unresolvedContexts"]==1
+    assert r["rows"][0]["maskedLocalCycles"]
+    import sys
+    print("Foreground mask CFG: saved SREG, nested call, frame spill, delayed enable and unresolved loop fixtures PASS", file=sys.stderr)

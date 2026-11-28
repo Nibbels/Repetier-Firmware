@@ -61,6 +61,8 @@ def linked_analysis(archive, report, reviewed_owners):
     irq = runpy.run_path(str(directory / "irq-mask-cfg.py"))
     startup = runpy.run_path(str(directory / "startup-stack.py"))
     switches = runpy.run_path(str(directory / "switch-table-guards.py"))
+    foreground_masks = runpy.run_path(str(directory / "foreground-irq-masks.py"))
+    foreground_masks["self_test"](irq)
     fg = context["fg"]
     with zipfile.ZipFile(archive) as z:
         for board, row in report["boards"].items():
@@ -82,6 +84,7 @@ def linked_analysis(archive, report, reviewed_owners):
             else:
                 row["reviewedForeground"] = None  # Requires new source review; never silently prune.
             row["interrupts"] = irq["inventory"](z, board, True)
+            row["foregroundMask"] = foreground_masks["inventory"](z, board, fg, irq)
             timer = row["interrupts"][17]
             envelope = timer["stackBytesIncludingPc"] + max(
                 item["stackBytesIncludingPc"] for v,item in row["interrupts"].items() if v != 17)
