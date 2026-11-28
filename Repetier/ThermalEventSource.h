@@ -5,6 +5,22 @@ namespace EventLog {
 // Stable wire reason IDs, independent of production enum order. 1..11
 // reserved for thermal events; other families need an explicit assignment.
 template<class Cause> uint8_t thermalReason(Cause c) {
+    // Use an arithmetic identity only if every named wire assignment agrees.
+    // Retain the explicit switch for other enum layouts; unknowns stay zero.
+    constexpr bool identity =
+        Cause::SensorInvalid == static_cast<Cause>(1) &&
+        Cause::StaleSample == static_cast<Cause>(2) &&
+        Cause::NoRise == static_cast<Cause>(3) &&
+        Cause::ExcessiveRise == static_cast<Cause>(4) &&
+        Cause::HoldFailure == static_cast<Cause>(5) &&
+        Cause::OverTemperature == static_cast<Cause>(6) &&
+        Cause::HeatingWhileOff == static_cast<Cause>(7) &&
+        Cause::LeaseExpired == static_cast<Cause>(8) &&
+        Cause::WatchdogReset == static_cast<Cause>(9) &&
+        Cause::CalibrationMismatch == static_cast<Cause>(10) &&
+        Cause::InterruptedHeating == static_cast<Cause>(11);
+    if(identity)
+        return c>=Cause::SensorInvalid && c<=Cause::InterruptedHeating ? uint8_t(c) : 0;
     switch(c) {
     case Cause::SensorInvalid:return 1;
     case Cause::StaleSample:return 2;
