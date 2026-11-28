@@ -49,7 +49,7 @@ def section_sizes(text):
             "sram_remaining_before_stack_bytes": 8192 - sram}
 
 
-def host_tests(out, canonical_p0=False):
+def host_tests(out):
     host = out / "host"
     host.mkdir()
     cxx = os.environ.get("CXX", "c++")
@@ -62,14 +62,7 @@ def host_tests(out, canonical_p0=False):
                  (stem, [exe])]
     for name, command in [("compiler-version", [cxx, "--version"]), *jobs]:
         try:
-            env = None
-            if name == "heater-lease-integrated-avr":
-                # Retain actual experimental ELF/HEX/maps, not merely
-                # disassembly and summaries in this host test's stdout.
-                env = dict(os.environ, RF_EXPERIMENT_EVIDENCE_DIR=str(host / "experimental-avr"))
-                if canonical_p0:
-                    env["RF_P0_CANONICAL_BUILD"] = "1"
-            run(host, name, command, env=env)
+            run(host, name, command)
         except (OSError, subprocess.CalledProcessError) as error:
             failures.append(f"host/{name}: {error}")
     return failures
@@ -250,7 +243,7 @@ def main():
     if args.experiment:
         report["compiler_experiment"] = args.experiment
     if not args.avr_only:
-        report["failures"] += host_tests(out, canonical_p0=not args.host_only)
+        report["failures"] += host_tests(out)
     if not args.host_only:
         try:
             run(out, "arduino-cli-version", [args.cli, "version"])

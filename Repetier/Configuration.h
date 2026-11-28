@@ -20,10 +20,10 @@
 #define CONFIGURATION_H
 
 // All actual firmware builds use the combined P0 implementation.
-// Only the explicit, non-deployable historical AVR comparison runner
-// may select the old paths until their regression tests are retired.
+// The historical comparison builds are retired; source extraction tests
+// still use explicit feature defines until their migration is complete.
 // A plain Arduino link has no recovery guard symbol and must fail closed.
-#if defined(__AVR__) && !defined(RF_INTERNAL_COMPARISON_BUILD)
+#if defined(__AVR__)
 #ifndef RF_HEATER_LEASE_EXPERIMENT
 #define RF_HEATER_LEASE_EXPERIMENT 1
 #endif
