@@ -19,6 +19,7 @@
 
 #include "CaseFan.h"
 #include "Repetier.h"
+#include "GCodeInput.h"
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
 #include "ThermalEmergencyReport.h"
 #include "ThermalRelayProfile.h"
@@ -673,8 +674,8 @@ void TemperatureController::waitForTargetTemperature(uint8_t plus_temp_tolerance
 // Fixed duty levels for every measured cycle. The asymmetric rectangular
 // relay fundamental accounts for unequal on/off times; span is peak-to-peak.
 // J0/J1 hotend dynamic/robust, J2/J3 bed dynamic/robust. No legacy scaling.
-// Keep the large autotune frame out of ordinary menu/G-code dispatch.
-__attribute__((noinline)) void TemperatureController::autotunePID(float temp, uint8_t controllerId, int maxCycles, bool storeValues, int method) {
+// Keep the large autotune frame out of refused menu/G-code admission.
+void TemperatureController::autotunePID(float temp, uint8_t controllerId, int maxCycles, bool storeValues, int method) {
     if (autotuneIndex != 255) {
         Com::printErrorFLN(PSTR("PID autotune already active"));
         return;
@@ -684,7 +685,9 @@ __attribute__((noinline)) void TemperatureController::autotunePID(float temp, ui
         Com::printErrorFLN(PSTR("PID autotune: invalid heater"));
         return;
     }
-    if (Printer::printJob.isBusy() || PrintLine::hasLines() || PrintLine::directMoveActive() || isAnyScanRunning()) {
+    if (!Printer::printJob.isIdle() || Printer::pause.blocksCalibration() ||
+        PrintLine::hasLines() || PrintLine::directMoveActive() ||
+        isAnyScanRunning() || GCodeInput::flashScriptActive()) {
         Com::printErrorFLN(PSTR("PID autotune requires idle printer"));
         return;
     }
@@ -692,6 +695,10 @@ __attribute__((noinline)) void TemperatureController::autotunePID(float temp, ui
         Com::printErrorFLN(PSTR("PID autotune: invalid profile for heater"));
         return;
     }
+    autotunePIDPrepared(temp, controllerId, maxCycles, storeValues, method);
+}
+
+__attribute__((noinline)) void TemperatureController::autotunePIDPrepared(float temp, uint8_t controllerId, int maxCycles, bool storeValues, int method) {
     clearTargetTemperature();
     const bool bed = controllerId == NUM_EXTRUDER;
     const float hysteresis = 0.375f;

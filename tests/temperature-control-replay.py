@@ -150,6 +150,7 @@ namespace Printer {
     static struct {
         bool busy = false;
         bool isBusy() const { return busy; }
+        bool isIdle() const { return !busy; }
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         bool emergencyLocked() const { return isAnyTempsensorDefect(); }
 #endif
@@ -163,11 +164,12 @@ namespace Printer {
     }
     static bool debugInfo() { return false; }
     struct { void cancel() {} void schedule(millis_t) {} } idleStatus;
-    struct { bool isReheating() { return true; } } pause;
+    struct { bool owned = false; bool isReheating() { return true; } bool blocksCalibration() const { return owned; } } pause;
     struct { void service(millis_t) {} } strainGauge;
 }
 namespace PrintLine { bool hasLines() { return false; } bool directMoveActive() { return false; } }
-static bool isAnyScanRunning() { return false; }
+static bool scanActive = false;
+static bool isAnyScanRunning() { return scanActive; }
 static unsigned relayReports,relayUnavailable;
 namespace Com {
     #include "com.inc"
@@ -218,6 +220,8 @@ enum class Injection { None, Reach, LateUnsupported, LateLow, Transient, High, T
 static Injection injection;
 static bool postTemperature = true;
 namespace GCodeInput {
+    bool scriptActive = false;
+    bool flashScriptActive() { return scriptActive; }
     void keepAlive(FirmwareState) {
         ++visits;
         if (tuned) observedPeakDuty = std::max(observedPeakDuty, unsigned(HAL::outputDuty(tuned->pwmIndex)));
@@ -841,6 +845,9 @@ int main(int argc, char** argv) {
         else if (std::strstr(name, "-unstable")) { injection = Injection::Unstable; stride = 1000; store = true; }
         else if (std::strstr(name, "-entry-profile")) {}
         else if (std::strstr(name, "-entry-busy")) Printer::printJob.busy = true;
+        else if (std::strstr(name, "-entry-pause")) Printer::pause.owned = true;
+        else if (std::strstr(name, "-entry-scan")) scanActive = true;
+        else if (std::strstr(name, "-entry-script")) GCodeInput::scriptActive = true;
         else if (std::strstr(name, "-success")) {
             injection = Injection::ProfileCycles;
             stride = 1000;
@@ -862,7 +869,7 @@ int main(int argc, char** argv) {
         }
         const bool lowMax = t.pidMax < 40;
         const bool wrongProfile = !TemperatureController::autotuneProfileAllowed(t.pwmIndex, method);
-        const bool busy = Printer::printJob.busy;
+        const bool busy = Printer::printJob.busy || Printer::pause.owned || scanActive || GCodeInput::scriptActive;
         const bool expectSuccess = std::strstr(name, "-success") && !lowMax && !wrongProfile;
         float high = 0, low = 0;
         if (expectSuccess) {
@@ -958,7 +965,7 @@ def main():
         "adc-state.inc": section(hal, "volatile uint16_t temperatureAdcValues", "inline __attribute__((always_inline)) void serviceTemperatureAdc"),
         "controller.inc": section(header, "#define TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_FULL", "}; // TemperatureController") + "};",
         "conversion.inc": conversion.split(include, 1)[1],
-        "control.inc": control.split(include, 1)[1].replace('#include "UsbSerial.h"', ''),
+        "control.inc": control.split(include, 1)[1].replace('#include "UsbSerial.h"', '').replace('#include "GCodeInput.h"', ''),
         "bed-setter.inc": section(extruder, "void Extruder::setHeatedBedTemperature(", "float Extruder::getHeatedBedTemperature("),
         "scheduler.inc": section(commands, "#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT\nstatic void serviceThermalEmergency()", "bool Commands::waitForMotion("),
         "com.inc": "\n".join("constexpr int " + n + " = 0;" for n in sorted(set(re.findall(r"Com::(t[A-Z]\w*)", control)))),
@@ -988,6 +995,9 @@ def main():
         "autotune-power-change", "autotune-bed-power-change",
         "autotune-no-rise", "autotune-bed-no-rise", "autotune-unstable", "autotune-bed-unstable",
         "autotune-entry-busy", "autotune-bed-entry-busy",
+        "autotune-entry-pause", "autotune-bed-entry-pause",
+        "autotune-entry-scan", "autotune-bed-entry-scan",
+        "autotune-entry-script", "autotune-bed-entry-script",
         *(f"autotune-success-store-limit{n}" for n in (0, 10, 39, 40, 41, 255)),
         *(f"autotune-bed-success-store-limit{n}" for n in (0, 10, 39, 40, 41, 255)),
         *(f"autotune-success-store-j{j}" for j in range(6)),

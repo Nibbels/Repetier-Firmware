@@ -132,6 +132,9 @@ public:
     void updateTempControlVars();
     void waitForTargetTemperature(uint8_t plus_temp_tolerance = 0, bool resumingPause = false);
     void autotunePID(float temp, uint8_t controllerId, int maxCycles, bool storeResult, int method);
+private:
+    void autotunePIDPrepared(float temp, uint8_t controllerId, int maxCycles, bool storeResult, int method);
+public:
 #ifdef RF_EEPROM_ZONE_EXPERIMENT
     static bool autotuneActive();
 #endif
