@@ -1,0 +1,1942 @@
+{
+  "archiveFailures": [
+    "host/task0034-guarded-drive: Command '['/usr/bin/python3', '/home/runner/work/Repetier-Firmware/Repetier-Firmware/tests/task0034-guarded-drive.py']' returned non-zero exit status 1."
+  ],
+  "merge": "94867e8726863a9ca1f8319a27fe6d3ac361d436",
+  "archiveSha256": "15de75940ecf842041b227dd6c32ed6dc23b39d11144ed4f725f21ca6604a54b",
+  "boards": {
+    "RF1000": {
+      "hashes": {
+        "build/Repetier.ino.elf": "473c76b901c5cad1135d3bf581e02c5e81941acaf09ed9007e360909234829d7",
+        "build/firmware.map": "49cd978a23478eb2752ba3c721042c1d6c5db522afbd504f6541a5ca1cd46bef",
+        "build/Repetier.ino.eep": "788e5ffc44ae4ee912fe01f495951f96b0accd5705e184dcaea197d8b64856a6",
+        "build/Repetier.ino.hex": "f1b4fc01b95f11b5224a09963713a8133b0dc67d4c4939d248ceeafd72f3411f",
+        "build/Repetier.ino.with_bootloader.bin": "69a98c508d3b0e87848accbada9d4dc3f38f59cfd7050a7cd2c6f208a4c21213",
+        "build/Repetier.ino.with_bootloader.hex": "5f3e8bd3c070a01fcc1f09be33ab5eec91015163a177c2021bebd6ea79a2cf30",
+        "disassembly.txt": "159638511da5089c33bc35384f4b78ed296f7795c6fe049baf25be20a13ccbed"
+      },
+      "staticFree": 2036,
+      "microstepDerivedCall": "22596",
+      "txTailPoll": "12934",
+      "crt": {
+        "constructorTable": [
+          "0xd22a",
+          "0xd22c"
+        ],
+        "constructorEntry": "0xecd6",
+        "constructor": "0xecd6",
+        "constructorInstructions": 62,
+        "preMainStackBytes": 3,
+        "interruptsEnabledBeforeMain": false,
+        "mainReturnPcAlreadyCounted": true
+      },
+      "leaseGpio": {
+        "cyclesFromFirstHandlerInstruction": {
+          "PB4": 47,
+          "PH5": 54
+        },
+        "clockHz": 16000000
+      },
+      "verifiedSwitchTables": 16,
+      "foreground": {
+        "diagnosticBytes": 1669,
+        "phaseHypothesesApplied": false,
+        "contextStates": 33145,
+        "prunedContextEdges": {
+          "LCD parse depth": 400,
+          "dispatchScanWork(": 20,
+          "servicePrintFeatures(": 40,
+          "PrintPause::dispatchPendingMotion(": 40,
+          "UIDisplay::executeAction(": 120,
+          "internal program owner": 24,
+          "homing excludes scan dispatch": 16,
+          "panel-owned autotune entered with no scan": 16,
+          "admitted startline owns non-idle job": 32
+        },
+        "guardCallers": {
+          "dispatchScanWork(": [
+            "handleScanWorkTasks(bool)"
+          ],
+          "internal program owner": [
+            "GCodeInput::executeHardFilament(bool)",
+            "GCodeInput::executeOutputProgram()",
+            "GCodeInput::executeSoftFilament(bool)"
+          ],
+          "servicePrintFeatures(": [
+            "loopFeatures()"
+          ],
+          "PrintPause::dispatchPendingMotion(": [
+            "loopFeatures()"
+          ],
+          "UIDisplay::executeAction(": [
+            "GCodeCommands::(anonymous namespace)::dispatchMachine(GCode*)",
+            "UIDisplay::slowAction() [clone .part.14] [clone .constprop.154]"
+          ]
+        },
+        "programWorkerCallers": {
+          "GCodeInput::runSoftFilament(": [
+            "GCodeInput::executeSoftFilament(bool)"
+          ],
+          "GCodeInput::runHardFilament(": [
+            "GCodeInput::executeHardFilament(bool)"
+          ],
+          "GCodeInput::runOutputProgram(": [
+            "GCodeInput::executeOutputProgram()"
+          ]
+        },
+        "witness": [
+          {
+            "function": "main",
+            "bytes": 3,
+            "site": "0xe79e"
+          },
+          {
+            "function": "Commands::executeGCode(GCode*)",
+            "bytes": 134,
+            "site": "0x2fe1c"
+          },
+          {
+            "function": "GCodeCommands::unloadFilamentPrepared(int)",
+            "bytes": 41,
+            "site": "0x2e16e"
+          },
+          {
+            "function": "Printer::queueFloatCoordinates(float, float, float, float, float)",
+            "bytes": 25,
+            "site": "0x168e6"
+          },
+          {
+            "function": "PrintLine::prepareQueueMove(unsigned char, unsigned char, float, bool)",
+            "bytes": 83,
+            "site": "0x11206"
+          },
+          {
+            "function": "PrintLine::waitForXFreeLines(unsigned char) [clone .constprop.98]",
+            "bytes": 3,
+            "site": "0x22c66"
+          },
+          {
+            "function": "Commands::checkForPeriodicalActions(FirmwareState)",
+            "bytes": 4,
+            "site": "0x198d8"
+          },
+          {
+            "function": "dispatchScanWork(bool)",
+            "bytes": 94,
+            "site": "0x17ae0"
+          },
+          {
+            "function": "Printer::queueRelativeStepsCoordinates(long, long, long, long, float, bool, bool) [clone .constprop.102]",
+            "bytes": 34,
+            "site": "0x22c08"
+          },
+          {
+            "function": "Printer::queueRelativeMMCoordinates(float, float, float, float, float, bool, bool)",
+            "bytes": 25,
+            "site": "0x16726"
+          },
+          {
+            "function": "PrintLine::prepareQueueMove(unsigned char, unsigned char, float, bool)",
+            "bytes": 83,
+            "site": "0x11206"
+          },
+          {
+            "function": "PrintLine::waitForXFreeLines(unsigned char) [clone .constprop.98]",
+            "bytes": 3,
+            "site": "0x22c66"
+          },
+          {
+            "function": "Commands::checkForPeriodicalActions(FirmwareState)",
+            "bytes": 10,
+            "site": "0x3a3e2"
+          },
+          {
+            "function": "loopFeatures()",
+            "bytes": 3,
+            "site": "0x1a1d8"
+          },
+          {
+            "function": "servicePrintFeatures()",
+            "bytes": 23,
+            "site": "0x1a150"
+          },
+          {
+            "function": "Calibration::moveZ(long, bool)",
+            "bytes": 67,
+            "site": "0x15ed2"
+          },
+          {
+            "function": "Commands::checkForPeriodicalActions(FirmwareState)",
+            "bytes": 10,
+            "site": "0x3a3e2"
+          },
+          {
+            "function": "loopFeatures()",
+            "bytes": 3,
+            "site": "0x1a214"
+          },
+          {
+            "function": "PrintPause::dispatchPendingMotion() [clone .constprop.141]",
+            "bytes": 14,
+            "site": "0x2835e"
+          },
+          {
+            "function": "PrintPause::moveWhile(PrintPause::Phase, long, long, long, long) [clone .constprop.145]",
+            "bytes": 20,
+            "site": "0x226a8"
+          },
+          {
+            "function": "Printer::offsetRelativeStepsCoordinates(long, long, long, long, DirectMoveMode)",
+            "bytes": 42,
+            "site": "0x164ae"
+          },
+          {
+            "function": "Commands::checkForPeriodicalActions(FirmwareState)",
+            "bytes": 10,
+            "site": "0x3a3a8"
+          },
+          {
+            "function": "UIDisplay::slowAction() [clone .part.14] [clone .constprop.154]",
+            "bytes": 18,
+            "site": "0x297b0"
+          },
+          {
+            "function": "UIDisplay::executeAction(int) [clone .constprop.155]",
+            "bytes": 43,
+            "site": "0x29452"
+          },
+          {
+            "function": "UIDisplay::finishAction(int) [clone .constprop.174]",
+            "bytes": 103,
+            "site": "0x29032"
+          },
+          {
+            "function": "TemperatureController::autotunePIDPrepared(float, unsigned char, int, bool, int) [clone .constprop.177]",
+            "bytes": 281,
+            "site": "0x26336"
+          },
+          {
+            "function": "EEPROM::storePidCalibration(unsigned char) [clone .part.44]",
+            "bytes": 4,
+            "site": "0x2ecba"
+          },
+          {
+            "function": "(anonymous namespace)::saveLive(unsigned long) [clone .lto_priv.504]",
+            "bytes": 101,
+            "site": "0x389b0"
+          },
+          {
+            "function": "(anonymous namespace)::accept(EepromZones::Result) [clone .lto_priv.501]",
+            "bytes": 4,
+            "site": "0x38608"
+          },
+          {
+            "function": "(anonymous namespace)::failSettings(EepromZones::Result) [clone .lto_priv.502]",
+            "bytes": 4,
+            "site": "0x385be"
+          },
+          {
+            "function": "(anonymous namespace)::revokeOutputs() [clone .lto_priv.585]",
+            "bytes": 3,
+            "site": "0x33866"
+          },
+          {
+            "function": "TemperatureController::setTargetTemperature(float)",
+            "bytes": 9,
+            "site": "0x130da"
+          },
+          {
+            "function": "UIDisplay::refreshPage() [clone .constprop.407]",
+            "bytes": 137,
+            "site": "0x1d060"
+          },
+          {
+            "function": "UIDisplay::parse(char*, bool, bool) [clone .constprop.412]",
+            "bytes": 59,
+            "site": "0x1b9fc"
+          },
+          {
+            "function": "UIDisplay::parse(char*, bool, bool) [clone .constprop.412]",
+            "bytes": 59,
+            "site": "0x1b9fc"
+          },
+          {
+            "function": "UIDisplay::parse(char*, bool, bool) [clone .constprop.412]",
+            "bytes": 59,
+            "site": "0x1b3f8"
+          },
+          {
+            "function": "UIDisplay::addFloat(float, char, unsigned char) [clone .constprop.434]",
+            "bytes": 15,
+            "site": "0x1a99a"
+          },
+          {
+            "function": "UIDisplay::addLong(long, char) [clone .constprop.435]",
+            "bytes": 33,
+            "site": "0x1a826"
+          },
+          {
+            "function": "__udivmodsi4",
+            "bytes": 3,
+            "site": null
+          }
+        ]
+      },
+      "interrupts": {
+        "17": {
+          "states": 9875,
+          "stackBytesIncludingPc": 59,
+          "constantTracking": false,
+          "timer3WrapTracking": false,
+          "pwmOwnedMemoryDiagnostic": false,
+          "interruptOpenSites": 20,
+          "maskedDelayReturnChains": [],
+          "maskedCycles": [
+            {
+              "states": 443,
+              "first": "StepExecutor::stepSlowedZCompensation()+0x0",
+              "last": "ZMotion::correctionLimited(bool) const [clone .constprop.448]+0x88"
+            },
+            {
+              "states": 491,
+              "first": "StepExecutor::stepSlowedZCompensation()+0x0",
+              "last": "long StepExecutor::performMove<(unsigned char)0>(PrintLine*) [clone .constprop.17]+0xb22"
+            },
+            {
+              "states": 13,
+              "first": "__addsf3x+0x38",
+              "last": "__addsf3x+0x50"
+            },
+            {
+              "states": 7,
+              "first": "__addsf3x+0x52",
+              "last": "__addsf3x+0x5e"
+            },
+            {
+              "states": 7,
+              "first": "__addsf3x+0x52",
+              "last": "__addsf3x+0x5e"
+            },
+            {
+              "states": 13,
+              "first": "__addsf3x+0x38",
+              "last": "__addsf3x+0x50"
+            },
+            {
+              "states": 8,
+              "first": "__addsf3x+0x6e",
+              "last": "__addsf3x+0x7c"
+            },
+            {
+              "states": 8,
+              "first": "__addsf3x+0x6e",
+              "last": "__addsf3x+0x7c"
+            },
+            {
+              "states": 13,
+              "first": "__addsf3x+0x38",
+              "last": "__addsf3x+0x50"
+            },
+            {
+              "states": 13,
+              "first": "__addsf3x+0x38",
+              "last": "__addsf3x+0x50"
+            },
+            {
+              "states": 8,
+              "first": "__addsf3x+0x6e",
+              "last": "__addsf3x+0x7c"
+            },
+            {
+              "states": 8,
+              "first": "__addsf3x+0x6e",
+              "last": "__addsf3x+0x7c"
+            },
+            {
+              "states": 7,
+              "first": "__addsf3x+0x52",
+              "last": "__addsf3x+0x5e"
+            },
+            {
+              "states": 26,
+              "first": "long StepExecutor::performMove<(unsigned char)0>(PrintLine*) [clone .constprop.17]+0x78",
+              "last": "long StepExecutor::performMove<(unsigned char)0>(PrintLine*) [clone .constprop.17]+0x120"
+            },
+            {
+              "states": 4,
+              "first": "HAL::CPUDivU2(unsigned int)+0x4a",
+              "last": "HAL::CPUDivU2(unsigned int)+0x50"
+            },
+            {
+              "states": 7,
+              "first": "__addsf3x+0x52",
+              "last": "__addsf3x+0x5e"
+            },
+            {
+              "states": 4,
+              "first": "HAL::CPUDivU2(unsigned int)+0x4a",
+              "last": "HAL::CPUDivU2(unsigned int)+0x50"
+            }
+          ],
+          "unresolvedMaskedCycles": 17,
+          "acyclicMaskedBodyCycles": null,
+          "selfMask": {
+            "statePairs": 9904,
+            "writes": {
+              "0x2c2ca": [
+                false,
+                true
+              ],
+              "0x2c376": [
+                false
+              ]
+            }
+          }
+        },
+        "21": {
+          "states": 116,
+          "stackBytesIncludingPc": 14,
+          "constantTracking": false,
+          "timer3WrapTracking": false,
+          "pwmOwnedMemoryDiagnostic": false,
+          "interruptOpenSites": 0,
+          "maskedDelayReturnChains": [],
+          "maskedCycles": [
+            {
+              "states": 2,
+              "first": "__vector_21+0x50",
+              "last": "__vector_21+0x52"
+            }
+          ],
+          "unresolvedMaskedCycles": 0,
+          "acyclicMaskedBodyCycles": 138
+        },
+        "22": {
+          "states": 3411,
+          "stackBytesIncludingPc": 45,
+          "constantTracking": true,
+          "timer3WrapTracking": false,
+          "pwmOwnedMemoryDiagnostic": false,
+          "interruptOpenSites": 0,
+          "maskedDelayReturnChains": [],
+          "maskedCycles": [],
+          "unresolvedMaskedCycles": 0,
+          "acyclicMaskedBodyCycles": 1679
+        },
+        "23": {
+          "states": 56,
+          "stackBytesIncludingPc": 12,
+          "constantTracking": false,
+          "timer3WrapTracking": false,
+          "pwmOwnedMemoryDiagnostic": false,
+          "interruptOpenSites": 0,
+          "maskedDelayReturnChains": [],
+          "maskedCycles": [],
+          "unresolvedMaskedCycles": 0,
+          "acyclicMaskedBodyCycles": 97
+        },
+        "25": {
+          "states": 37,
+          "stackBytesIncludingPc": 12,
+          "constantTracking": false,
+          "timer3WrapTracking": false,
+          "pwmOwnedMemoryDiagnostic": false,
+          "interruptOpenSites": 0,
+          "maskedDelayReturnChains": [],
+          "maskedCycles": [],
+          "unresolvedMaskedCycles": 0,
+          "acyclicMaskedBodyCycles": 66
+        },
+        "26": {
+          "states": 40,
+          "stackBytesIncludingPc": 11,
+          "constantTracking": false,
+          "timer3WrapTracking": false,
+          "pwmOwnedMemoryDiagnostic": false,
+          "interruptOpenSites": 0,
+          "maskedDelayReturnChains": [],
+          "maskedCycles": [],
+          "unresolvedMaskedCycles": 0,
+          "acyclicMaskedBodyCycles": 68
+        },
+        "32": {
+          "states": 54,
+          "stackBytesIncludingPc": 22,
+          "constantTracking": false,
+          "timer3WrapTracking": false,
+          "pwmOwnedMemoryDiagnostic": false,
+          "interruptOpenSites": 0,
+          "maskedDelayReturnChains": [],
+          "maskedCycles": [],
+          "unresolvedMaskedCycles": 0,
+          "acyclicMaskedBodyCycles": 106
+        }
+      },
+      "conditionalInterruptBytes": 104,
+      "conditionalFreeBytes": 263,
+      "registerSitesByVector": {
+        "17": 71,
+        "21": 5,
+        "22": 12,
+        "23": 3,
+        "25": 3,
+        "26": 3,
+        "32": 4
+      }
+    },
+    "RF2000": {
+      "hashes": {
+        "build/Repetier.ino.elf": "f9cc72f9e0e5653b24933f5165a0ce3e019a12785442236a1c36ef655fe4e0fb",
+        "build/firmware.map": "b38ad6fe3cbdc020ed6c64f7bab0ba2b7b9674f0debf613bc88e3685448064c0",
+        "build/Repetier.ino.eep": "788e5ffc44ae4ee912fe01f495951f96b0accd5705e184dcaea197d8b64856a6",
+        "build/Repetier.ino.hex": "f9981c1f44b37b06333b329d7b8e03031dcd8dc949446b7f65c98585abcd3ef8",
+        "build/Repetier.ino.with_bootloader.bin": "b57e5c871c965b9a7a77a50d419f36fe24a29e56a0cce86660fef4e2b890ca8f",
+        "build/Repetier.ino.with_bootloader.hex": "6c54cc6598dc8ed4e02cd238b9f95d748d9ef04b325691d30f5cb927a9e8afbc",
+        "disassembly.txt": "26b68740a74db70cdf48a30e3268eb1db7c9f28f8a333addd203aad5ed891453"
+      },
+      "staticFree": 1978,
+      "microstepDerivedCall": "12a74",
+      "txTailPoll": "22b2e",
+      "crt": {
+        "constructorTable": [
+          "0xd70e",
+          "0xd710"
+        ],
+        "constructorEntry": "0xef62",
+        "constructor": "0xef62",
+        "constructorInstructions": 62,
+        "preMainStackBytes": 3,
+        "interruptsEnabledBeforeMain": false,
+        "mainReturnPcAlreadyCounted": true
+      },
+      "leaseGpio": {
+        "cyclesFromFirstHandlerInstruction": {
+          "PB4": 47,
+          "PH6": 54,
+          "PE2": 56
+        },
+        "clockHz": 16000000
+      },
+      "verifiedSwitchTables": 16,
+      "foreground": {
+        "diagnosticBytes": 1666,
+        "phaseHypothesesApplied": false,
+        "contextStates": 33569,
+        "prunedContextEdges": {
+          "LCD parse depth": 400,
+          "UIDisplay::executeAction(": 120,
+          "dispatchScanWork(": 20,
+          "PrintPause::dispatchPendingMotion(": 40,
+          "servicePrintFeatures(": 40,
+          "homing excludes scan dispatch": 16,
+          "panel-owned autotune entered with no scan": 16,
+          "internal program owner": 24,
+          "admitted startline owns non-idle job": 32
+        },
+        "guardCallers": {
+          "dispatchScanWork(": [
+            "handleScanWorkTasks(bool)"
+          ],
+          "internal program owner": [
+            "GCodeInput::executeHardFilament(bool)",
+            "GCodeInput::executeOutputProgram()",
+            "GCodeInput::executeSoftFilament(bool)"
+          ],
+          "UIDisplay::executeAction(": [
+            "GCodeCommands::(anonymous namespace)::dispatchMachine(GCode*)",
+            "UIDisplay::slowAction() [clone .part.14] [clone .constprop.152]"
+          ],
+          "PrintPause::dispatchPendingMotion(": [
+            "loopFeatures()"
+          ],
+          "servicePrintFeatures(": [
+            "loopFeatures()"
+          ]
+        },
+        "programWorkerCallers": {
+          "GCodeInput::runSoftFilament(": [
+            "GCodeInput::executeSoftFilament(bool)"
+          ],
+          "GCodeInput::runHardFilament(": [
+            "GCodeInput::executeHardFilament(bool)"
+          ],
+          "GCodeInput::runOutputProgram(": [
+            "GCodeInput::executeOutputProgram()"
+          ]
+        },
+        "witness": [
+          {
+            "function": "main",
+            "bytes": 3,
+            "site": "0xeebe"
+          },
+          {
+            "function": "Commands::executeGCode(GCode*)",
+            "bytes": 137,
+            "site": "0x312ac"
+          },
+          {
+            "function": "GCodeCommands::unloadFilamentPrepared(int)",
+            "bytes": 41,
+            "site": "0x2fcae"
+          },
+          {
+            "function": "Printer::queueFloatCoordinates(float, float, float, float, float)",
+            "bytes": 25,
+            "site": "0x26fba"
+          },
+          {
+            "function": "PrintLine::prepareQueueMove(unsigned char, unsigned char, float, bool)",
+            "bytes": 83,
+            "site": "0x21400"
+          },
+          {
+            "function": "PrintLine::waitForXFreeLines(unsigned char) [clone .constprop.97]",
+            "bytes": 3,
+            "site": "0x13166"
+          },
+          {
+            "function": "Commands::checkForPeriodicalActions(FirmwareState)",
+            "bytes": 4,
+            "site": "0x2a0c8"
+          },
+          {
+            "function": "dispatchScanWork(bool)",
+            "bytes": 94,
+            "site": "0x28292"
+          },
+          {
+            "function": "Printer::queueRelativeStepsCoordinates(long, long, long, long, float, bool, bool) [clone .constprop.101]",
+            "bytes": 34,
+            "site": "0x13108"
+          },
+          {
+            "function": "Printer::queueRelativeMMCoordinates(float, float, float, float, float, bool, bool)",
+            "bytes": 25,
+            "site": "0x26dfa"
+          },
+          {
+            "function": "PrintLine::prepareQueueMove(unsigned char, unsigned char, float, bool)",
+            "bytes": 83,
+            "site": "0x21400"
+          },
+          {
+            "function": "PrintLine::waitForXFreeLines(unsigned char) [clone .constprop.97]",
+            "bytes": 3,
+            "site": "0x13166"
+          },
+          {
+            "function": "Commands::checkForPeriodicalActions(FirmwareState)",
+            "bytes": 10,
+            "site": "0x1fb7e"
+          },
+          {
+            "function": "loopFeatures()",
+            "bytes": 3,
+            "site": "0x2aa6a"
+          },
+          {
+            "function": "PrintPause::dispatchPendingMotion() [clone .constprop.139]",
+            "bytes": 14,
+            "site": "0x1644a"
+          },
+          {
+            "function": "PrintPause::moveWhile(PrintPause::Phase, long, long, long, long) [clone .constprop.143]",
+            "bytes": 20,
+            "site": "0x12bb6"
+          },
+          {
+            "function": "Printer::offsetRelativeStepsCoordinates(long, long, long, long, DirectMoveMode)",
+            "bytes": 42,
+            "site": "0x26b82"
+          },
+          {
+            "function": "Commands::checkForPeriodicalActions(FirmwareState)",
+            "bytes": 10,
+            "site": "0x1fb7e"
+          },
+          {
+            "function": "loopFeatures()",
+            "bytes": 3,
+            "site": "0x2aa2e"
+          },
+          {
+            "function": "servicePrintFeatures()",
+            "bytes": 23,
+            "site": "0x2a99a"
+          },
+          {
+            "function": "Calibration::moveZ(long, bool)",
+            "bytes": 67,
+            "site": "0x265a6"
+          },
+          {
+            "function": "Commands::checkForPeriodicalActions(FirmwareState)",
+            "bytes": 10,
+            "site": "0x1fb44"
+          },
+          {
+            "function": "UIDisplay::slowAction() [clone .part.14] [clone .constprop.152]",
+            "bytes": 18,
+            "site": "0x17890"
+          },
+          {
+            "function": "UIDisplay::executeAction(int) [clone .constprop.153]",
+            "bytes": 43,
+            "site": "0x1753e"
+          },
+          {
+            "function": "UIDisplay::finishAction(int) [clone .constprop.172]",
+            "bytes": 103,
+            "site": "0x1711e"
+          },
+          {
+            "function": "TemperatureController::autotunePIDPrepared(float, unsigned char, int, bool, int) [clone .constprop.175]",
+            "bytes": 281,
+            "site": "0x3b4e4"
+          },
+          {
+            "function": "EEPROM::storePidCalibration(unsigned char) [clone .part.44]",
+            "bytes": 4,
+            "site": "0x309ae"
+          },
+          {
+            "function": "(anonymous namespace)::saveLive(unsigned long) [clone .lto_priv.494]",
+            "bytes": 101,
+            "site": "0x1d60e"
+          },
+          {
+            "function": "(anonymous namespace)::accept(EepromZones::Result) [clone .lto_priv.491]",
+            "bytes": 4,
+            "site": "0x1d266"
+          },
+          {
+            "function": "(anonymous namespace)::failSettings(EepromZones::Result) [clone .lto_priv.492]",
+            "bytes": 4,
+            "site": "0x1d21c"
+          },
+          {
+            "function": "(anonymous namespace)::revokeOutputs() [clone .lto_priv.573]",
+            "bytes": 3,
+            "site": "0x184d0"
+          },
+          {
+            "function": "TemperatureController::setTargetTemperature(float)",
+            "bytes": 9,
+            "site": "0x23682"
+          },
+          {
+            "function": "UIDisplay::refreshPage() [clone .constprop.398]",
+            "bytes": 137,
+            "site": "0x37028"
+          },
+          {
+            "function": "UIDisplay::parse(char*, bool, bool) [clone .constprop.403]",
+            "bytes": 57,
+            "site": "0x358e2"
+          },
+          {
+            "function": "UIDisplay::parse(char*, bool, bool) [clone .constprop.403]",
+            "bytes": 57,
+            "site": "0x358e2"
+          },
+          {
+            "function": "UIDisplay::parse(char*, bool, bool) [clone .constprop.403]",
+            "bytes": 57,
+            "site": "0x35102"
+          },
+          {
+            "function": "UIDisplay::addFloat(float, char, unsigned char) [clone .constprop.424]",
+            "bytes": 15,
+            "site": "0x3483c"
+          },
+          {
+            "function": "UIDisplay::addLong(long, char) [clone .constprop.425]",
+            "bytes": 33,
+            "site": "0x346c8"
+          },
+          {
+            "function": "__udivmodsi4",
+            "bytes": 3,
+            "site": null
+          }
+        ]
+      },
+      "interrupts": {
+        "17": {
+          "states": 10161,
+          "stackBytesIncludingPc": 59,
+          "constantTracking": false,
+          "timer3WrapTracking": false,
+          "pwmOwnedMemoryDiagnostic": false,
+          "interruptOpenSites": 21,
+          "maskedDelayReturnChains": [],
+          "maskedCycles": [
+            {
+              "states": 490,
+              "first": "long StepExecutor::performMove<(unsigned char)0>(PrintLine*) [clone .constprop.17]+0x132",
+              "last": "ZMotion::correctionLimited(bool) const [clone .constprop.438]+0x8e"
+            },
+            {
+              "states": 453,
+              "first": "StepExecutor::stepSlowedZCompensation()+0x0",
+              "last": "ZMotion::correctionLimited(bool) const [clone .constprop.438]+0x8e"
+            },
+            {
+              "states": 7,
+              "first": "__addsf3x+0x52",
+              "last": "__addsf3x+0x5e"
+            },
+            {
+              "states": 7,
+              "first": "__addsf3x+0x52",
+              "last": "__addsf3x+0x5e"
+            },
+            {
+              "states": 8,
+              "first": "__addsf3x+0x6e",
+              "last": "__addsf3x+0x7c"
+            },
+            {
+              "states": 13,
+              "first": "__addsf3x+0x38",
+              "last": "__addsf3x+0x50"
+            },
+            {
+              "states": 4,
+              "first": "HAL::CPUDivU2(unsigned int)+0x4a",
+              "last": "HAL::CPUDivU2(unsigned int)+0x50"
+            },
+            {
+              "states": 13,
+              "first": "__addsf3x+0x38",
+              "last": "__addsf3x+0x50"
+            },
+            {
+              "states": 25,
+              "first": "long StepExecutor::performMove<(unsigned char)0>(PrintLine*) [clone .constprop.17]+0x94",
+              "last": "long StepExecutor::performMove<(unsigned char)0>(PrintLine*) [clone .constprop.17]+0xb3c"
+            },
+            {
+              "states": 8,
+              "first": "__addsf3x+0x6e",
+              "last": "__addsf3x+0x7c"
+            },
+            {
+              "states": 7,
+              "first": "__addsf3x+0x52",
+              "last": "__addsf3x+0x5e"
+            },
+            {
+              "states": 8,
+              "first": "__addsf3x+0x6e",
+              "last": "__addsf3x+0x7c"
+            },
+            {
+              "states": 13,
+              "first": "__addsf3x+0x38",
+              "last": "__addsf3x+0x50"
+            },
+            {
+              "states": 8,
+              "first": "__addsf3x+0x6e",
+              "last": "__addsf3x+0x7c"
+            },
+            {
+              "states": 13,
+              "first": "__addsf3x+0x38",
+              "last": "__addsf3x+0x50"
+            },
+            {
+              "states": 4,
+              "first": "HAL::CPUDivU2(unsigned int)+0x4a",
+              "last": "HAL::CPUDivU2(unsigned int)+0x50"
+            },
+            {
+              "states": 7,
+              "first": "__addsf3x+0x52",
+              "last": "__addsf3x+0x5e"
+            }
+          ],
+          "unresolvedMaskedCycles": 17,
+          "acyclicMaskedBodyCycles": null,
+          "selfMask": {
+            "statePairs": 10190,
+            "writes": {
+              "0x2ddae": [
+                false,
+                true
+              ],
+              "0x2de5a": [
+                false
+              ]
+            }
+          }
+        },
+        "21": {
+          "states": 140,
+          "stackBytesIncludingPc": 16,
+          "constantTracking": false,
+          "timer3WrapTracking": false,
+          "pwmOwnedMemoryDiagnostic": false,
+          "interruptOpenSites": 0,
+          "maskedDelayReturnChains": [],
+          "maskedCycles": [
+            {
+              "states": 2,
+              "first": "__vector_21+0xca",
+              "last": "__vector_21+0xcc"
+            },
+            {
+              "states": 2,
+              "first": "__vector_21+0x70",
+              "last": "__vector_21+0x72"
+            }
+          ],
+          "unresolvedMaskedCycles": 0,
+          "acyclicMaskedBodyCycles": 160
+        },
+        "22": {
+          "states": 4071,
+          "stackBytesIncludingPc": 45,
+          "constantTracking": true,
+          "timer3WrapTracking": false,
+          "pwmOwnedMemoryDiagnostic": false,
+          "interruptOpenSites": 0,
+          "maskedDelayReturnChains": [],
+          "maskedCycles": [],
+          "unresolvedMaskedCycles": 0,
+          "acyclicMaskedBodyCycles": 1956
+        },
+        "23": {
+          "states": 56,
+          "stackBytesIncludingPc": 12,
+          "constantTracking": false,
+          "timer3WrapTracking": false,
+          "pwmOwnedMemoryDiagnostic": false,
+          "interruptOpenSites": 0,
+          "maskedDelayReturnChains": [],
+          "maskedCycles": [],
+          "unresolvedMaskedCycles": 0,
+          "acyclicMaskedBodyCycles": 97
+        },
+        "25": {
+          "states": 37,
+          "stackBytesIncludingPc": 12,
+          "constantTracking": false,
+          "timer3WrapTracking": false,
+          "pwmOwnedMemoryDiagnostic": false,
+          "interruptOpenSites": 0,
+          "maskedDelayReturnChains": [],
+          "maskedCycles": [],
+          "unresolvedMaskedCycles": 0,
+          "acyclicMaskedBodyCycles": 66
+        },
+        "26": {
+          "states": 40,
+          "stackBytesIncludingPc": 11,
+          "constantTracking": false,
+          "timer3WrapTracking": false,
+          "pwmOwnedMemoryDiagnostic": false,
+          "interruptOpenSites": 0,
+          "maskedDelayReturnChains": [],
+          "maskedCycles": [],
+          "unresolvedMaskedCycles": 0,
+          "acyclicMaskedBodyCycles": 68
+        },
+        "32": {
+          "states": 56,
+          "stackBytesIncludingPc": 22,
+          "constantTracking": false,
+          "timer3WrapTracking": false,
+          "pwmOwnedMemoryDiagnostic": false,
+          "interruptOpenSites": 0,
+          "maskedDelayReturnChains": [],
+          "maskedCycles": [],
+          "unresolvedMaskedCycles": 0,
+          "acyclicMaskedBodyCycles": 110
+        }
+      },
+      "conditionalInterruptBytes": 104,
+      "conditionalFreeBytes": 208,
+      "registerSitesByVector": {
+        "17": 74,
+        "21": 5,
+        "22": 13,
+        "23": 3,
+        "25": 3,
+        "26": 3,
+        "32": 4
+      }
+    },
+    "RF2000v2": {
+      "hashes": {
+        "build/Repetier.ino.elf": "2950d5eb9760f16b18d73a0f720ffed224cbcba91316365dfd112e99e327704d",
+        "build/firmware.map": "b3e37a51a26a8e1ee32b320eb9b69fb022eddddd11a1a6be931b220a037cfc79",
+        "build/Repetier.ino.eep": "788e5ffc44ae4ee912fe01f495951f96b0accd5705e184dcaea197d8b64856a6",
+        "build/Repetier.ino.hex": "9067990e1853a032709926ee36bb0b8e79de1acd702f90423572b27f684c1e5d",
+        "build/Repetier.ino.with_bootloader.bin": "536928b18785d348666086e78a371314219483919d3aa16b14266d3a0e3e169b",
+        "build/Repetier.ino.with_bootloader.hex": "3ccad379160c4e558e2d5e17630e49df12b852f1930ef261b857e16082dfcbe8",
+        "disassembly.txt": "d53f159e7e499ba8e7500213d60cd86575e5678fe90b62c204d4210deb0ccb72"
+      },
+      "staticFree": 1860,
+      "microstepDerivedCall": "12a7a",
+      "txTailPoll": "22b2e",
+      "crt": {
+        "constructorTable": [
+          "0xd714",
+          "0xd716"
+        ],
+        "constructorEntry": "0xef68",
+        "constructor": "0xef68",
+        "constructorInstructions": 62,
+        "preMainStackBytes": 3,
+        "interruptsEnabledBeforeMain": false,
+        "mainReturnPcAlreadyCounted": true
+      },
+      "leaseGpio": {
+        "cyclesFromFirstHandlerInstruction": {
+          "PB4": 47,
+          "PH6": 54,
+          "PE2": 56
+        },
+        "clockHz": 16000000
+      },
+      "verifiedSwitchTables": 16,
+      "foreground": {
+        "diagnosticBytes": 1666,
+        "phaseHypothesesApplied": false,
+        "contextStates": 33569,
+        "prunedContextEdges": {
+          "LCD parse depth": 400,
+          "UIDisplay::executeAction(": 120,
+          "dispatchScanWork(": 20,
+          "PrintPause::dispatchPendingMotion(": 40,
+          "servicePrintFeatures(": 40,
+          "homing excludes scan dispatch": 16,
+          "panel-owned autotune entered with no scan": 16,
+          "internal program owner": 24,
+          "admitted startline owns non-idle job": 32
+        },
+        "guardCallers": {
+          "dispatchScanWork(": [
+            "handleScanWorkTasks(bool)"
+          ],
+          "internal program owner": [
+            "GCodeInput::executeHardFilament(bool)",
+            "GCodeInput::executeOutputProgram()",
+            "GCodeInput::executeSoftFilament(bool)"
+          ],
+          "UIDisplay::executeAction(": [
+            "GCodeCommands::(anonymous namespace)::dispatchMachine(GCode*)",
+            "UIDisplay::slowAction() [clone .part.14] [clone .constprop.152]"
+          ],
+          "PrintPause::dispatchPendingMotion(": [
+            "loopFeatures()"
+          ],
+          "servicePrintFeatures(": [
+            "loopFeatures()"
+          ]
+        },
+        "programWorkerCallers": {
+          "GCodeInput::runSoftFilament(": [
+            "GCodeInput::executeSoftFilament(bool)"
+          ],
+          "GCodeInput::runHardFilament(": [
+            "GCodeInput::executeHardFilament(bool)"
+          ],
+          "GCodeInput::runOutputProgram(": [
+            "GCodeInput::executeOutputProgram()"
+          ]
+        },
+        "witness": [
+          {
+            "function": "main",
+            "bytes": 3,
+            "site": "0xeec4"
+          },
+          {
+            "function": "Commands::executeGCode(GCode*)",
+            "bytes": 137,
+            "site": "0x312ae"
+          },
+          {
+            "function": "GCodeCommands::unloadFilamentPrepared(int)",
+            "bytes": 41,
+            "site": "0x2fcb0"
+          },
+          {
+            "function": "Printer::queueFloatCoordinates(float, float, float, float, float)",
+            "bytes": 25,
+            "site": "0x26fba"
+          },
+          {
+            "function": "PrintLine::prepareQueueMove(unsigned char, unsigned char, float, bool)",
+            "bytes": 83,
+            "site": "0x21400"
+          },
+          {
+            "function": "PrintLine::waitForXFreeLines(unsigned char) [clone .constprop.97]",
+            "bytes": 3,
+            "site": "0x1316c"
+          },
+          {
+            "function": "Commands::checkForPeriodicalActions(FirmwareState)",
+            "bytes": 4,
+            "site": "0x2a0c8"
+          },
+          {
+            "function": "dispatchScanWork(bool)",
+            "bytes": 94,
+            "site": "0x28292"
+          },
+          {
+            "function": "Printer::queueRelativeStepsCoordinates(long, long, long, long, float, bool, bool) [clone .constprop.101]",
+            "bytes": 34,
+            "site": "0x1310e"
+          },
+          {
+            "function": "Printer::queueRelativeMMCoordinates(float, float, float, float, float, bool, bool)",
+            "bytes": 25,
+            "site": "0x26dfa"
+          },
+          {
+            "function": "PrintLine::prepareQueueMove(unsigned char, unsigned char, float, bool)",
+            "bytes": 83,
+            "site": "0x21400"
+          },
+          {
+            "function": "PrintLine::waitForXFreeLines(unsigned char) [clone .constprop.97]",
+            "bytes": 3,
+            "site": "0x1316c"
+          },
+          {
+            "function": "Commands::checkForPeriodicalActions(FirmwareState)",
+            "bytes": 10,
+            "site": "0x1fb84"
+          },
+          {
+            "function": "loopFeatures()",
+            "bytes": 3,
+            "site": "0x2aa6a"
+          },
+          {
+            "function": "PrintPause::dispatchPendingMotion() [clone .constprop.139]",
+            "bytes": 14,
+            "site": "0x16450"
+          },
+          {
+            "function": "PrintPause::moveWhile(PrintPause::Phase, long, long, long, long) [clone .constprop.143]",
+            "bytes": 20,
+            "site": "0x12bbc"
+          },
+          {
+            "function": "Printer::offsetRelativeStepsCoordinates(long, long, long, long, DirectMoveMode)",
+            "bytes": 42,
+            "site": "0x26b82"
+          },
+          {
+            "function": "Commands::checkForPeriodicalActions(FirmwareState)",
+            "bytes": 10,
+            "site": "0x1fb84"
+          },
+          {
+            "function": "loopFeatures()",
+            "bytes": 3,
+            "site": "0x2aa2e"
+          },
+          {
+            "function": "servicePrintFeatures()",
+            "bytes": 23,
+            "site": "0x2a99a"
+          },
+          {
+            "function": "Calibration::moveZ(long, bool)",
+            "bytes": 67,
+            "site": "0x265a6"
+          },
+          {
+            "function": "Commands::checkForPeriodicalActions(FirmwareState)",
+            "bytes": 10,
+            "site": "0x1fb4a"
+          },
+          {
+            "function": "UIDisplay::slowAction() [clone .part.14] [clone .constprop.152]",
+            "bytes": 18,
+            "site": "0x17896"
+          },
+          {
+            "function": "UIDisplay::executeAction(int) [clone .constprop.153]",
+            "bytes": 43,
+            "site": "0x17544"
+          },
+          {
+            "function": "UIDisplay::finishAction(int) [clone .constprop.172]",
+            "bytes": 103,
+            "site": "0x17124"
+          },
+          {
+            "function": "TemperatureController::autotunePIDPrepared(float, unsigned char, int, bool, int) [clone .constprop.175]",
+            "bytes": 281,
+            "site": "0x3b4e6"
+          },
+          {
+            "function": "EEPROM::storePidCalibration(unsigned char) [clone .part.44]",
+            "bytes": 4,
+            "site": "0x309b0"
+          },
+          {
+            "function": "(anonymous namespace)::saveLive(unsigned long) [clone .lto_priv.494]",
+            "bytes": 101,
+            "site": "0x1d614"
+          },
+          {
+            "function": "(anonymous namespace)::accept(EepromZones::Result) [clone .lto_priv.491]",
+            "bytes": 4,
+            "site": "0x1d26c"
+          },
+          {
+            "function": "(anonymous namespace)::failSettings(EepromZones::Result) [clone .lto_priv.492]",
+            "bytes": 4,
+            "site": "0x1d222"
+          },
+          {
+            "function": "(anonymous namespace)::revokeOutputs() [clone .lto_priv.573]",
+            "bytes": 3,
+            "site": "0x184d6"
+          },
+          {
+            "function": "TemperatureController::setTargetTemperature(float)",
+            "bytes": 9,
+            "site": "0x23682"
+          },
+          {
+            "function": "UIDisplay::refreshPage() [clone .constprop.398]",
+            "bytes": 137,
+            "site": "0x3702a"
+          },
+          {
+            "function": "UIDisplay::parse(char*, bool, bool) [clone .constprop.403]",
+            "bytes": 57,
+            "site": "0x358e4"
+          },
+          {
+            "function": "UIDisplay::parse(char*, bool, bool) [clone .constprop.403]",
+            "bytes": 57,
+            "site": "0x358e4"
+          },
+          {
+            "function": "UIDisplay::parse(char*, bool, bool) [clone .constprop.403]",
+            "bytes": 57,
+            "site": "0x35104"
+          },
+          {
+            "function": "UIDisplay::addFloat(float, char, unsigned char) [clone .constprop.424]",
+            "bytes": 15,
+            "site": "0x3483e"
+          },
+          {
+            "function": "UIDisplay::addLong(long, char) [clone .constprop.425]",
+            "bytes": 33,
+            "site": "0x346ca"
+          },
+          {
+            "function": "__udivmodsi4",
+            "bytes": 3,
+            "site": null
+          }
+        ]
+      },
+      "interrupts": {
+        "17": {
+          "states": 10161,
+          "stackBytesIncludingPc": 59,
+          "constantTracking": false,
+          "timer3WrapTracking": false,
+          "pwmOwnedMemoryDiagnostic": false,
+          "interruptOpenSites": 21,
+          "maskedDelayReturnChains": [],
+          "maskedCycles": [
+            {
+              "states": 453,
+              "first": "StepExecutor::stepSlowedZCompensation()+0x0",
+              "last": "ZMotion::correctionLimited(bool) const [clone .constprop.438]+0x8e"
+            },
+            {
+              "states": 490,
+              "first": "long StepExecutor::performMove<(unsigned char)0>(PrintLine*) [clone .constprop.17]+0x132",
+              "last": "ZMotion::correctionLimited(bool) const [clone .constprop.438]+0x8e"
+            },
+            {
+              "states": 8,
+              "first": "__addsf3x+0x6e",
+              "last": "__addsf3x+0x7c"
+            },
+            {
+              "states": 13,
+              "first": "__addsf3x+0x38",
+              "last": "__addsf3x+0x50"
+            },
+            {
+              "states": 7,
+              "first": "__addsf3x+0x52",
+              "last": "__addsf3x+0x5e"
+            },
+            {
+              "states": 8,
+              "first": "__addsf3x+0x6e",
+              "last": "__addsf3x+0x7c"
+            },
+            {
+              "states": 8,
+              "first": "__addsf3x+0x6e",
+              "last": "__addsf3x+0x7c"
+            },
+            {
+              "states": 7,
+              "first": "__addsf3x+0x52",
+              "last": "__addsf3x+0x5e"
+            },
+            {
+              "states": 13,
+              "first": "__addsf3x+0x38",
+              "last": "__addsf3x+0x50"
+            },
+            {
+              "states": 7,
+              "first": "__addsf3x+0x52",
+              "last": "__addsf3x+0x5e"
+            },
+            {
+              "states": 7,
+              "first": "__addsf3x+0x52",
+              "last": "__addsf3x+0x5e"
+            },
+            {
+              "states": 25,
+              "first": "long StepExecutor::performMove<(unsigned char)0>(PrintLine*) [clone .constprop.17]+0x94",
+              "last": "long StepExecutor::performMove<(unsigned char)0>(PrintLine*) [clone .constprop.17]+0xb3c"
+            },
+            {
+              "states": 8,
+              "first": "__addsf3x+0x6e",
+              "last": "__addsf3x+0x7c"
+            },
+            {
+              "states": 13,
+              "first": "__addsf3x+0x38",
+              "last": "__addsf3x+0x50"
+            },
+            {
+              "states": 13,
+              "first": "__addsf3x+0x38",
+              "last": "__addsf3x+0x50"
+            },
+            {
+              "states": 4,
+              "first": "HAL::CPUDivU2(unsigned int)+0x4a",
+              "last": "HAL::CPUDivU2(unsigned int)+0x50"
+            },
+            {
+              "states": 4,
+              "first": "HAL::CPUDivU2(unsigned int)+0x4a",
+              "last": "HAL::CPUDivU2(unsigned int)+0x50"
+            }
+          ],
+          "unresolvedMaskedCycles": 17,
+          "acyclicMaskedBodyCycles": null,
+          "selfMask": {
+            "statePairs": 10190,
+            "writes": {
+              "0x2ddb0": [
+                false,
+                true
+              ],
+              "0x2de5c": [
+                false
+              ]
+            }
+          }
+        },
+        "21": {
+          "states": 140,
+          "stackBytesIncludingPc": 16,
+          "constantTracking": false,
+          "timer3WrapTracking": false,
+          "pwmOwnedMemoryDiagnostic": false,
+          "interruptOpenSites": 0,
+          "maskedDelayReturnChains": [],
+          "maskedCycles": [
+            {
+              "states": 2,
+              "first": "__vector_21+0x70",
+              "last": "__vector_21+0x72"
+            },
+            {
+              "states": 2,
+              "first": "__vector_21+0xca",
+              "last": "__vector_21+0xcc"
+            }
+          ],
+          "unresolvedMaskedCycles": 0,
+          "acyclicMaskedBodyCycles": 160
+        },
+        "22": {
+          "states": 4071,
+          "stackBytesIncludingPc": 45,
+          "constantTracking": true,
+          "timer3WrapTracking": false,
+          "pwmOwnedMemoryDiagnostic": false,
+          "interruptOpenSites": 0,
+          "maskedDelayReturnChains": [],
+          "maskedCycles": [],
+          "unresolvedMaskedCycles": 0,
+          "acyclicMaskedBodyCycles": 1956
+        },
+        "23": {
+          "states": 56,
+          "stackBytesIncludingPc": 12,
+          "constantTracking": false,
+          "timer3WrapTracking": false,
+          "pwmOwnedMemoryDiagnostic": false,
+          "interruptOpenSites": 0,
+          "maskedDelayReturnChains": [],
+          "maskedCycles": [],
+          "unresolvedMaskedCycles": 0,
+          "acyclicMaskedBodyCycles": 97
+        },
+        "25": {
+          "states": 37,
+          "stackBytesIncludingPc": 12,
+          "constantTracking": false,
+          "timer3WrapTracking": false,
+          "pwmOwnedMemoryDiagnostic": false,
+          "interruptOpenSites": 0,
+          "maskedDelayReturnChains": [],
+          "maskedCycles": [],
+          "unresolvedMaskedCycles": 0,
+          "acyclicMaskedBodyCycles": 66
+        },
+        "26": {
+          "states": 40,
+          "stackBytesIncludingPc": 11,
+          "constantTracking": false,
+          "timer3WrapTracking": false,
+          "pwmOwnedMemoryDiagnostic": false,
+          "interruptOpenSites": 0,
+          "maskedDelayReturnChains": [],
+          "maskedCycles": [],
+          "unresolvedMaskedCycles": 0,
+          "acyclicMaskedBodyCycles": 68
+        },
+        "32": {
+          "states": 56,
+          "stackBytesIncludingPc": 22,
+          "constantTracking": false,
+          "timer3WrapTracking": false,
+          "pwmOwnedMemoryDiagnostic": false,
+          "interruptOpenSites": 0,
+          "maskedDelayReturnChains": [],
+          "maskedCycles": [],
+          "unresolvedMaskedCycles": 0,
+          "acyclicMaskedBodyCycles": 110
+        }
+      },
+      "conditionalInterruptBytes": 104,
+      "conditionalFreeBytes": 90,
+      "registerSitesByVector": {
+        "17": 74,
+        "21": 5,
+        "22": 13,
+        "23": 3,
+        "25": 3,
+        "26": 3,
+        "32": 4
+      }
+    },
+    "RF2000-X44": {
+      "hashes": {
+        "build/Repetier.ino.elf": "7699ec7d22e20420b7e594e3522bbe8961d5ec999c131c3898bedfbaec5f8c47",
+        "build/firmware.map": "e4a4ce2bc73e318f4b1036ae4ed13f95ecc31b30cd56461c17c89f635d44f508",
+        "build/Repetier.ino.eep": "788e5ffc44ae4ee912fe01f495951f96b0accd5705e184dcaea197d8b64856a6",
+        "build/Repetier.ino.hex": "f8ba8f1dbbd49784916511b72a11a43d4e5638ac6b984f059600baeda478113e",
+        "build/Repetier.ino.with_bootloader.bin": "276526f08f6b6b60a387a3395c3e874c584b5328cde7077858901220bb8c34bb",
+        "build/Repetier.ino.with_bootloader.hex": "c91ae4988f44e8f82ec90e193a639d86ff58cb7f587af20f20af0ad63b07e0df",
+        "disassembly.txt": "dd96924b2d906eaa7cbdd0756e1d29deb0c8a26507bbb85e684216a60774906d"
+      },
+      "staticFree": 1967,
+      "microstepDerivedCall": "1aff4",
+      "txTailPoll": "107fa",
+      "crt": {
+        "constructorTable": [
+          "0xd4c8",
+          "0xd4ca"
+        ],
+        "constructorEntry": "0x24e",
+        "constructor": "0x39740",
+        "constructorInstructions": 62,
+        "preMainStackBytes": 3,
+        "interruptsEnabledBeforeMain": false,
+        "mainReturnPcAlreadyCounted": true
+      },
+      "leaseGpio": {
+        "cyclesFromFirstHandlerInstruction": {
+          "PB4": 47,
+          "PE2": 49
+        },
+        "clockHz": 16000000
+      },
+      "verifiedSwitchTables": 16,
+      "foreground": {
+        "diagnosticBytes": 1672,
+        "phaseHypothesesApplied": false,
+        "contextStates": 33463,
+        "prunedContextEdges": {
+          "LCD parse depth": 400,
+          "dispatchScanWork(": 20,
+          "servicePrintFeatures(": 40,
+          "PrintPause::dispatchPendingMotion(": 40,
+          "UIDisplay::executeAction(": 120,
+          "internal program owner": 24,
+          "homing excludes scan dispatch": 16,
+          "panel-owned autotune entered with no scan": 16,
+          "admitted startline owns non-idle job": 32
+        },
+        "guardCallers": {
+          "servicePrintFeatures(": [
+            "loopFeatures()"
+          ],
+          "PrintPause::dispatchPendingMotion(": [
+            "loopFeatures()"
+          ],
+          "UIDisplay::executeAction(": [
+            "GCodeCommands::(anonymous namespace)::dispatchMachine(GCode*)",
+            "UIDisplay::slowAction() [clone .part.14] [clone .constprop.153]"
+          ],
+          "internal program owner": [
+            "GCodeInput::executeHardFilament(bool)",
+            "GCodeInput::executeOutputProgram()",
+            "GCodeInput::executeSoftFilament(bool)"
+          ],
+          "dispatchScanWork(": [
+            "handleScanWorkTasks(bool)"
+          ]
+        },
+        "programWorkerCallers": {
+          "GCodeInput::runOutputProgram(": [
+            "GCodeInput::executeOutputProgram()"
+          ],
+          "GCodeInput::runSoftFilament(": [
+            "GCodeInput::executeSoftFilament(bool)"
+          ],
+          "GCodeInput::runHardFilament(": [
+            "GCodeInput::executeHardFilament(bool)"
+          ]
+        },
+        "witness": [
+          {
+            "function": "main",
+            "bytes": 3,
+            "site": "0x3969c"
+          },
+          {
+            "function": "Commands::executeGCode(GCode*)",
+            "bytes": 137,
+            "site": "0x25d6c"
+          },
+          {
+            "function": "GCodeCommands::unloadFilamentPrepared(int)",
+            "bytes": 41,
+            "site": "0x24930"
+          },
+          {
+            "function": "Printer::queueFloatCoordinates(float, float, float, float, float)",
+            "bytes": 25,
+            "site": "0x14b64"
+          },
+          {
+            "function": "PrintLine::prepareQueueMove(unsigned char, unsigned char, float, bool)",
+            "bytes": 83,
+            "site": "0xf0cc"
+          },
+          {
+            "function": "PrintLine::waitForXFreeLines(unsigned char) [clone .constprop.97]",
+            "bytes": 3,
+            "site": "0x1b6ea"
+          },
+          {
+            "function": "Commands::checkForPeriodicalActions(FirmwareState)",
+            "bytes": 4,
+            "site": "0x17b94"
+          },
+          {
+            "function": "dispatchScanWork(bool)",
+            "bytes": 94,
+            "site": "0x15d5e"
+          },
+          {
+            "function": "Printer::queueRelativeStepsCoordinates(long, long, long, long, float, bool, bool) [clone .constprop.101]",
+            "bytes": 34,
+            "site": "0x1b68c"
+          },
+          {
+            "function": "Printer::queueRelativeMMCoordinates(float, float, float, float, float, bool, bool)",
+            "bytes": 25,
+            "site": "0x149a4"
+          },
+          {
+            "function": "PrintLine::prepareQueueMove(unsigned char, unsigned char, float, bool)",
+            "bytes": 83,
+            "site": "0xf0cc"
+          },
+          {
+            "function": "PrintLine::waitForXFreeLines(unsigned char) [clone .constprop.97]",
+            "bytes": 3,
+            "site": "0x1b6ea"
+          },
+          {
+            "function": "Commands::checkForPeriodicalActions(FirmwareState)",
+            "bytes": 10,
+            "site": "0x31132"
+          },
+          {
+            "function": "loopFeatures()",
+            "bytes": 3,
+            "site": "0x184e2"
+          },
+          {
+            "function": "servicePrintFeatures()",
+            "bytes": 23,
+            "site": "0x1845a"
+          },
+          {
+            "function": "Calibration::moveZ(long, bool)",
+            "bytes": 67,
+            "site": "0x14150"
+          },
+          {
+            "function": "Commands::checkForPeriodicalActions(FirmwareState)",
+            "bytes": 10,
+            "site": "0x31132"
+          },
+          {
+            "function": "loopFeatures()",
+            "bytes": 3,
+            "site": "0x1851e"
+          },
+          {
+            "function": "PrintPause::dispatchPendingMotion() [clone .constprop.140]",
+            "bytes": 14,
+            "site": "0x1e88a"
+          },
+          {
+            "function": "PrintPause::moveWhile(PrintPause::Phase, long, long, long, long) [clone .constprop.144]",
+            "bytes": 20,
+            "site": "0x1b12c"
+          },
+          {
+            "function": "Printer::offsetRelativeStepsCoordinates(long, long, long, long, DirectMoveMode)",
+            "bytes": 42,
+            "site": "0x1472c"
+          },
+          {
+            "function": "Commands::checkForPeriodicalActions(FirmwareState)",
+            "bytes": 10,
+            "site": "0x310f8"
+          },
+          {
+            "function": "UIDisplay::slowAction() [clone .part.14] [clone .constprop.153]",
+            "bytes": 18,
+            "site": "0x1fcd0"
+          },
+          {
+            "function": "UIDisplay::executeAction(int) [clone .constprop.154]",
+            "bytes": 43,
+            "site": "0x1f97e"
+          },
+          {
+            "function": "UIDisplay::finishAction(int) [clone .constprop.173]",
+            "bytes": 103,
+            "site": "0x1f55e"
+          },
+          {
+            "function": "TemperatureController::autotunePIDPrepared(float, unsigned char, int, bool, int) [clone .constprop.176]",
+            "bytes": 281,
+            "site": "0x37fb2"
+          },
+          {
+            "function": "EEPROM::storePidCalibration(unsigned char) [clone .part.44]",
+            "bytes": 4,
+            "site": "0x2547c"
+          },
+          {
+            "function": "(anonymous namespace)::saveLive(unsigned long) [clone .lto_priv.495]",
+            "bytes": 101,
+            "site": "0x2ecf6"
+          },
+          {
+            "function": "(anonymous namespace)::accept(EepromZones::Result) [clone .lto_priv.492]",
+            "bytes": 4,
+            "site": "0x2e94e"
+          },
+          {
+            "function": "(anonymous namespace)::failSettings(EepromZones::Result) [clone .lto_priv.493]",
+            "bytes": 4,
+            "site": "0x2e904"
+          },
+          {
+            "function": "(anonymous namespace)::revokeOutputs() [clone .lto_priv.576]",
+            "bytes": 3,
+            "site": "0x29ba8"
+          },
+          {
+            "function": "TemperatureController::setTargetTemperature(float)",
+            "bytes": 9,
+            "site": "0x1134a"
+          },
+          {
+            "function": "UIDisplay::refreshPage() [clone .constprop.399]",
+            "bytes": 137,
+            "site": "0x33b40"
+          },
+          {
+            "function": "UIDisplay::parse(char*, bool, bool) [clone .constprop.404]",
+            "bytes": 59,
+            "site": "0x32474"
+          },
+          {
+            "function": "UIDisplay::parse(char*, bool, bool) [clone .constprop.404]",
+            "bytes": 59,
+            "site": "0x32474"
+          },
+          {
+            "function": "UIDisplay::parse(char*, bool, bool) [clone .constprop.404]",
+            "bytes": 59,
+            "site": "0x31e70"
+          },
+          {
+            "function": "UIDisplay::addFloat(float, char, unsigned char) [clone .constprop.425]",
+            "bytes": 15,
+            "site": "0x3140c"
+          },
+          {
+            "function": "UIDisplay::addLong(long, char) [clone .constprop.426]",
+            "bytes": 33,
+            "site": "0x31298"
+          },
+          {
+            "function": "__udivmodsi4",
+            "bytes": 3,
+            "site": null
+          }
+        ]
+      },
+      "interrupts": {
+        "17": {
+          "states": 9830,
+          "stackBytesIncludingPc": 59,
+          "constantTracking": false,
+          "timer3WrapTracking": false,
+          "pwmOwnedMemoryDiagnostic": false,
+          "interruptOpenSites": 20,
+          "maskedDelayReturnChains": [],
+          "maskedCycles": [
+            {
+              "states": 441,
+              "first": "StepExecutor::stepSlowedZCompensation()+0x0",
+              "last": "ZMotion::correctionLimited(bool) const [clone .constprop.439]+0x8e"
+            },
+            {
+              "states": 8,
+              "first": "__addsf3x+0x6e",
+              "last": "__addsf3x+0x7c"
+            },
+            {
+              "states": 478,
+              "first": "StepExecutor::stepSlowedZCompensation()+0x0",
+              "last": "ZMotion::correctionLimited(bool) const [clone .constprop.439]+0x8e"
+            },
+            {
+              "states": 8,
+              "first": "__addsf3x+0x6e",
+              "last": "__addsf3x+0x7c"
+            },
+            {
+              "states": 7,
+              "first": "__addsf3x+0x52",
+              "last": "__addsf3x+0x5e"
+            },
+            {
+              "states": 13,
+              "first": "__addsf3x+0x38",
+              "last": "__addsf3x+0x50"
+            },
+            {
+              "states": 13,
+              "first": "__addsf3x+0x38",
+              "last": "__addsf3x+0x50"
+            },
+            {
+              "states": 24,
+              "first": "long StepExecutor::performMove<(unsigned char)0>(PrintLine*) [clone .constprop.17]+0x78",
+              "last": "long StepExecutor::performMove<(unsigned char)0>(PrintLine*) [clone .constprop.17]+0x11c"
+            },
+            {
+              "states": 13,
+              "first": "__addsf3x+0x38",
+              "last": "__addsf3x+0x50"
+            },
+            {
+              "states": 7,
+              "first": "__addsf3x+0x52",
+              "last": "__addsf3x+0x5e"
+            },
+            {
+              "states": 4,
+              "first": "HAL::CPUDivU2(unsigned int)+0x4a",
+              "last": "HAL::CPUDivU2(unsigned int)+0x50"
+            },
+            {
+              "states": 13,
+              "first": "__addsf3x+0x38",
+              "last": "__addsf3x+0x50"
+            },
+            {
+              "states": 7,
+              "first": "__addsf3x+0x52",
+              "last": "__addsf3x+0x5e"
+            },
+            {
+              "states": 4,
+              "first": "HAL::CPUDivU2(unsigned int)+0x4a",
+              "last": "HAL::CPUDivU2(unsigned int)+0x50"
+            },
+            {
+              "states": 7,
+              "first": "__addsf3x+0x52",
+              "last": "__addsf3x+0x5e"
+            },
+            {
+              "states": 8,
+              "first": "__addsf3x+0x6e",
+              "last": "__addsf3x+0x7c"
+            },
+            {
+              "states": 8,
+              "first": "__addsf3x+0x6e",
+              "last": "__addsf3x+0x7c"
+            }
+          ],
+          "unresolvedMaskedCycles": 17,
+          "acyclicMaskedBodyCycles": null,
+          "selfMask": {
+            "statePairs": 9859,
+            "writes": {
+              "0x22a8c": [
+                false,
+                true
+              ],
+              "0x22b38": [
+                false
+              ]
+            }
+          }
+        },
+        "21": {
+          "states": 116,
+          "stackBytesIncludingPc": 14,
+          "constantTracking": false,
+          "timer3WrapTracking": false,
+          "pwmOwnedMemoryDiagnostic": false,
+          "interruptOpenSites": 0,
+          "maskedDelayReturnChains": [],
+          "maskedCycles": [
+            {
+              "states": 2,
+              "first": "__vector_21+0x50",
+              "last": "__vector_21+0x52"
+            }
+          ],
+          "unresolvedMaskedCycles": 0,
+          "acyclicMaskedBodyCycles": 138
+        },
+        "22": {
+          "states": 3726,
+          "stackBytesIncludingPc": 45,
+          "constantTracking": true,
+          "timer3WrapTracking": false,
+          "pwmOwnedMemoryDiagnostic": false,
+          "interruptOpenSites": 0,
+          "maskedDelayReturnChains": [],
+          "maskedCycles": [],
+          "unresolvedMaskedCycles": 0,
+          "acyclicMaskedBodyCycles": 1774
+        },
+        "23": {
+          "states": 56,
+          "stackBytesIncludingPc": 12,
+          "constantTracking": false,
+          "timer3WrapTracking": false,
+          "pwmOwnedMemoryDiagnostic": false,
+          "interruptOpenSites": 0,
+          "maskedDelayReturnChains": [],
+          "maskedCycles": [],
+          "unresolvedMaskedCycles": 0,
+          "acyclicMaskedBodyCycles": 97
+        },
+        "25": {
+          "states": 37,
+          "stackBytesIncludingPc": 12,
+          "constantTracking": false,
+          "timer3WrapTracking": false,
+          "pwmOwnedMemoryDiagnostic": false,
+          "interruptOpenSites": 0,
+          "maskedDelayReturnChains": [],
+          "maskedCycles": [],
+          "unresolvedMaskedCycles": 0,
+          "acyclicMaskedBodyCycles": 66
+        },
+        "26": {
+          "states": 40,
+          "stackBytesIncludingPc": 11,
+          "constantTracking": false,
+          "timer3WrapTracking": false,
+          "pwmOwnedMemoryDiagnostic": false,
+          "interruptOpenSites": 0,
+          "maskedDelayReturnChains": [],
+          "maskedCycles": [],
+          "unresolvedMaskedCycles": 0,
+          "acyclicMaskedBodyCycles": 68
+        },
+        "32": {
+          "states": 50,
+          "stackBytesIncludingPc": 22,
+          "constantTracking": false,
+          "timer3WrapTracking": false,
+          "pwmOwnedMemoryDiagnostic": false,
+          "interruptOpenSites": 0,
+          "maskedDelayReturnChains": [],
+          "maskedCycles": [],
+          "unresolvedMaskedCycles": 0,
+          "acyclicMaskedBodyCycles": 101
+        }
+      },
+      "conditionalInterruptBytes": 104,
+      "conditionalFreeBytes": 191,
+      "registerSitesByVector": {
+        "17": 71,
+        "21": 5,
+        "22": 12,
+        "23": 3,
+        "25": 3,
+        "26": 3,
+        "32": 4
+      }
+    }
+  },
+  "reviewedOwners": true,
+  "releaseProof": false,
+  "head": "bb4456ffec2c7c1caef5fae68721797352ab9695",
+  "run": 46150218850,
+  "artifact": 15265542310
+}
