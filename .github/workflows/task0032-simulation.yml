@@ -8,6 +8,11 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+# Superseded commits must not consume the whole runner pool. This group
+# belongs only to the Task0032 supplemental workflow, not canonical/P0 CI.
+concurrency:
+  group: task0032-simulation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   simulation:
     if: github.event_name == 'workflow_dispatch' || github.head_ref == 'task/Task0032-quality-packing'
@@ -814,3 +819,48 @@ jobs:
           path: ${{ runner.temp }}/task0032-current-resend
           retention-days: 7
           if-no-files-found: error
+
+
+  current-resend-fast:
+    # Diagnostic only: replay newest UART/receiver source on an already
+    # qualified immutable combined patch. Full same-run builds remain gates.
+    if: github.head_ref == 'task/Task0032-resend-preflight'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-current-combined-4e62ea72e6eebf6c264a0aca1c3276f8490a38bf
+          run-id: 46154086451
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/fast-combined
+      - name: Replay latest staged transport without repeating Drive links
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-resend-fast"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          input="$RUNNER_TEMP/fast-combined"
+          test "$(cat "$input/local-candidate-sha.txt")" = 2c24695bb8a6756fcffbb18fc690f2c07f2e40d5
+          echo "c6ea108693ca3a418bfa97d42642f3cade211494726cda8e5e413721f493c023  $input/combined.diff" | sha256sum -c
+          p0=c31b4d391cc4d2b9cca9ab3f8e236bed805716d9
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$RUNNER_TEMP/fast-terminal-p0" "$p0"
+          git worktree add --detach "$RUNNER_TEMP/fast-resend-p0" "$p0"
+          sha256sum tools/task0032/current-*.py tools/task0032/resend-policy.h > "$out/source-sha256.txt"
+          python3 tools/task0032/current-transport-preflight.py --source "$RUNNER_TEMP/fast-terminal-p0" --combined "$input/combined.diff" --out "$out/stage1" | tee "$out/stage1.log"
+          python3 tools/task0032/current-resend-preflight.py --source "$RUNNER_TEMP/fast-resend-p0" --combined "$input/combined.diff" --stage1 "$out/stage1" --out "$out/stage2"
+          python3 tools/task0032/current-resend-receiver-replay.py --source "$RUNNER_TEMP/fast-resend-p0" --out "$out/stage2/receiver" | tee "$out/stage2.log"
+          python3 tools/task0032/current-resend-canonical-replay.py --source "$RUNNER_TEMP/fast-resend-p0" --fixture "$out/stage2/receiver" --out "$out/canonical-serial" | tee "$out/canonical-serial.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-resend-fast-${{ github.sha }}
+          path: ${{ runner.temp }}/task0032-resend-fast
+          retention-days: 7
+          if-no-files-found: warn
