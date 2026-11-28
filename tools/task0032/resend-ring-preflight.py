@@ -88,7 +88,7 @@ static void rearmCases() {
                 assert(UsbSerial::lossFlags()==_BV(UPE0) && !UsbSerial::available());
                 assert(UsbSerial::rearmForResync()==_BV(UPE0) && SREG==sreg);
                 // Return to same cursor. A ring advances by count+2.
-                for (unsigned i=count+2;i<128;++i) {
+                for (unsigned i=(count+2)%128;i<128 && (count+2)%128!=0;++i) {
                     rx(0);assert(UsbSerial::read()==0);
                 }
                 ++cases;
