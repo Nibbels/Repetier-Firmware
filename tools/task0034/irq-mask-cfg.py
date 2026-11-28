@@ -289,56 +289,71 @@ def inventory(z, board, constant_pwm=False, timer3_wrap=False, pwm_owned_memory=
             g.add_edges_from((state, q) for q in nexts)
             todo.extend(nexts)
         assert v == 17 or (not opened and not timsk), (board, v)
-        mask = g.subgraph(x for x in g if not x[-1])
-        scc = [c for c in nx.strongly_connected_components(mask)
-               if len(c)>1 or any(mask.has_edge(x,x) for x in c)]
-        cycles = []
-        for c in scc:
-            pcs = sorted({x[0] for x in c})
-            cycles.append({"states":len(c), "first":name(pcs[0]), "last":name(pcs[-1])})
-        # Recognize the fully witnessed constant-count pulse delay:
-        # LDI r,N; DEC r; BRNE DEC. All external entries must be from
-        # that LDI, and DEC/BRNE must be the sole cycle and sole exit.
-        bounded_mask = mask.copy()
-        extra = {}
-        unresolved = []
-        for c in scc:
-            if len(c) != 2:
-                unresolved.append(c)
-                continue
-            dec, branch = sorted(c, key=lambda x:x[0])
-            dw, dop, da = ins[dec[0]]
-            bw, bop, ba = ins[branch[0]]
-            parents = set(mask.predecessors(dec)) - c
-            if not (dop == "dec" and bop == "brne" and
-                    branch[0] == dec[0]+dw and target(ba)==dec[0] and
-                    set(mask.successors(dec)) == {branch} and
-                    set(mask.predecessors(branch)) == {dec} and
-                    len(set(mask.successors(branch))-c)==1 and
-                    parents and set(g.predecessors(dec)) == set(mask.predecessors(dec))):
-                unresolved.append(c)
-                continue
-            counts = []
-            for parent in parents:
-                pw, pop, pa = ins[parent[0]]
-                m = re.fullmatch(r"(r\d+), 0x([0-9a-fA-F]+)", pa.split(";")[0].strip())
-                if pop != "ldi" or parent[0]+pw != dec[0] or not m or m[1]!=da.strip():
-                    break
-                counts.append(int(m[2],16) or 256)
-            if len(counts)!=len(parents):
-                unresolved.append(c)
-                continue
-            bounded_mask.remove_edge(branch,dec)
-            extra[dec]=(max(counts)-1)*(cost(dop)+cost(bop))
-        acyclic_cycles = None
-        if not unresolved:
-            longest = {}
-            for x in nx.topological_sort(bounded_mask):
-                longest[x] = cost(ins[x[0]][1]) + extra.get(x,0) + max((longest[p] for p in bounded_mask.predecessors(x)), default=0)
-            acyclic_cycles = max(longest.values(), default=0)
+        def masked_bound(mask):
+            scc = [c for c in nx.strongly_connected_components(mask)
+                   if len(c)>1 or any(mask.has_edge(x,x) for x in c)]
+            cycles = []
+            for c in scc:
+                pcs = sorted({x[0] for x in c})
+                cycles.append({"states":len(c), "first":name(pcs[0]), "last":name(pcs[-1])})
+            # Recognize the fully witnessed constant-count pulse delay:
+            # LDI r,N; DEC r; BRNE DEC. All external entries must be from
+            # that LDI, and DEC/BRNE must be the sole cycle and sole exit.
+            bounded_mask = mask.copy()
+            extra = {}
+            unresolved = []
+            for c in scc:
+                if len(c) != 2:
+                    unresolved.append(c)
+                    continue
+                dec, branch = sorted(c, key=lambda x:x[0])
+                dw, dop, da = ins[dec[0]]
+                bw, bop, ba = ins[branch[0]]
+                parents = set(mask.predecessors(dec)) - c
+                if not (dop == "dec" and bop == "brne" and
+                        branch[0] == dec[0]+dw and target(ba)==dec[0] and
+                        set(mask.successors(dec)) == {branch} and
+                        set(mask.predecessors(branch)) == {dec} and
+                        len(set(mask.successors(branch))-c)==1 and
+                        parents and set(g.predecessors(dec)) == set(mask.predecessors(dec))):
+                    unresolved.append(c)
+                    continue
+                counts = []
+                for parent in parents:
+                    pw, pop, pa = ins[parent[0]]
+                    m = re.fullmatch(r"(r\d+), 0x([0-9a-fA-F]+)", pa.split(";")[0].strip())
+                    if pop != "ldi" or parent[0]+pw != dec[0] or not m or m[1]!=da.strip():
+                        break
+                    counts.append(int(m[2],16) or 256)
+                if len(counts)!=len(parents):
+                    unresolved.append(c)
+                    continue
+                bounded_mask.remove_edge(branch,dec)
+                extra[dec]=(max(counts)-1)*(cost(dop)+cost(bop))
+            acyclic_cycles = None
+            if not unresolved:
+                longest = {}
+                for x in nx.topological_sort(bounded_mask):
+                    longest[x] = cost(ins[x[0]][1]) + extra.get(x,0) + max((longest[p] for p in bounded_mask.predecessors(x)), default=0)
+                acyclic_cycles = max(longest.values(), default=0)
+            return cycles, len(unresolved), acyclic_cycles
+
+        cycles, unresolved_count, acyclic_cycles = masked_bound(
+            g.subgraph(x for x in g if not x[-1]))
+        # AVR SEI cannot admit a pending interrupt before the following
+        # instruction has executed. Conservatively apply the same delay
+        # to a saved-SREG restore. Include all such successor states, even
+        # if a different incoming path would already permit admission.
+        # This catches SEI; CLI as a continuous blackout instead of two
+        # independent short intervals.
+        opening = {y for x, y in g.edges if not x[-1] and y[-1]}
+        admission_cycles, admission_unresolved, admission_bound = masked_bound(
+            g.subgraph(x for x in g if not x[-1] or x in opening))
         results[v] = {"states":len(seen), "explicitSystemRegisterSites": sorted(system_sites), "stackBytesIncludingPc":maxd,
                       "constantTracking":track, "timer3WrapTracking":wrap_track, "pwmOwnedMemoryDiagnostic":memory_track, "interruptOpenSites":len(opened), "maskedDelayReturnChains":[[name(a) for a in t] for t in sorted(delay_entries)],
-                      "maskedCycles":cycles, "unresolvedMaskedCycles":len(unresolved), "acyclicMaskedBodyCycles":acyclic_cycles}
+                      "maskedCycles":cycles, "unresolvedMaskedCycles":unresolved_count, "acyclicMaskedBodyCycles":acyclic_cycles,
+                      "admissionMaskedCycles":admission_cycles, "unresolvedAdmissionMaskedCycles":admission_unresolved,
+                      "acyclicAdmissionMaskedBodyCycles":admission_bound}
         if v == 17:
             results[v]["selfMask"] = timer1_exclusion(g, root, ins)
     return results
