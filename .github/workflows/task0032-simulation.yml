@@ -1103,9 +1103,8 @@ jobs:
 
 
   current-direct-energy:
-    # Sequential successor to exact qualified #225. Never rebuild #223/#225
-    # merely to rediscover their already verified results.
-    if: github.head_ref == 'task/Task0032-resend-preflight'
+    # Reproduction of the qualified #228 host/link reference.
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -1210,3 +1209,80 @@ jobs:
           path: ${{ runner.temp }}/task0032-direct-energy
           retention-days: 7
           if-no-files-found: error
+
+
+  current-direct-energy-measure:
+    if: github.head_ref == 'task/Task0032-resend-preflight'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-direct-energy-aa0dbcfbe82843cbd40c355938a402359dabd796
+          run-id: 46166854550
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/energy-qualified
+      - name: Verify qualified reference and measure linked pulse timing
+        run: |
+          set -euo pipefail
+          input="$RUNNER_TEMP/energy-qualified"
+          out="$RUNNER_TEMP/energy-measure"
+          mkdir -p "$out"
+          echo "a7934da32ac107d2c1966c677abbf87b536c594d33893baac95ef0f63f6f108f  $input/energy.diff" | sha256sum -c
+          test "$(cat "$input/local-candidate-tree.txt")" = 659ce1fa2bbee26dcb6f0ffb03405383127deb4c
+          test "$(cat "$input/local-candidate-sha.txt")" = fb643e0dadd2ead20619ead2d22daec51a4bada9
+          python3 tools/task0032/current-direct-energy-linked.py --evidence "$input/candidate-evidence" --out "$out/linked-energy.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-direct-energy-measure-${{ github.sha }}
+          path: ${{ runner.temp }}/energy-measure
+          retention-days: 7
+
+  current-z-owner-reference:
+    # Independent host prerequisite only, not a composed motion release.
+    if: github.head_ref == 'task/Task0032-resend-preflight'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-direct-energy-aa0dbcfbe82843cbd40c355938a402359dabd796
+          run-id: 46166854550
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/z-owner-qualified
+      - name: Replay explicit logical Z direction and physical edge ownership
+        run: |
+          set -euo pipefail
+          input="$RUNNER_TEMP/z-owner-qualified"
+          out="$RUNNER_TEMP/z-owner-reference"
+          mkdir -p "$out"
+          python3 - "$input" "$RUNNER_TEMP/z-owner-source" <<'PY'
+          import hashlib,json,pathlib,re,sys
+          p=pathlib.Path(sys.argv[1]);out=pathlib.Path(sys.argv[2]);out.mkdir()
+          summary=json.loads((p/'candidate-evidence/summary.json').read_text())
+          assert not summary['failures'] and summary['sha']=='fb643e0dadd2ead20619ead2d22daec51a4bada9'
+          assert summary['build_profile']=='standard-recovery'
+          sketch=p/'candidate-evidence/RF1000/build/sketch'
+          for path in sketch.iterdir():
+              if path.suffix not in ('.h','.cpp') or not path.is_file():continue
+              data=re.sub(rb'^#line 1 "[^\n]+"\n',b'',path.read_bytes(),count=1)
+              (out/path.name).write_bytes(data)
+          for name,digest in json.loads((p/'candidate/provenance.json').read_text())['candidate_sha256'].items():
+              assert hashlib.sha256((out/name).read_bytes()).hexdigest()==digest,name
+          PY
+          python3 tools/task0032/current-z-owner.py --source "$RUNNER_TEMP/z-owner-source" --out "$out"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-z-owner-reference-${{ github.sha }}
+          path: ${{ runner.temp }}/z-owner-reference
+          retention-days: 7
