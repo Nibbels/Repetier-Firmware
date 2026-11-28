@@ -407,6 +407,7 @@ long StepExecutor::performMove(PrintLine* move) {
         // Never bypass the ordinary directional hardware/software limits.
         const bool cancelled = scan
             ? (!Printer::zStepperEnabled() ||
+               ((move->flags & FLAG_SCAN_REFERENCE_REQUIRED) && !Printer::zMotion.isHomed()) ||
                (retreat ? (!Printer::blockAll || !PrintLine::mechanicalRetreatActive())
                         : (Printer::blockAll || Printer::printJob.commandsBlocked() ||
                            Calibration::scanSession.aborting())))

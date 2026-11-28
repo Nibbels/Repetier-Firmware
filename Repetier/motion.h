@@ -36,6 +36,7 @@
 // Direct-slot-only aliases. Publish phase last; queued semantics unchanged.
 #define FLAG_SCAN_PATH FLAG_QUEUE_TASK
 #define FLAG_MECHANICAL_RETREAT FLAG_BLOCKED
+#define FLAG_SCAN_REFERENCE_REQUIRED FLAG_NOMINAL
 
 #define FLAG_JOIN_STEP_PROFILE_READY 1  // The foreground has prepared the step ramp.
 #define FLAG_JOIN_END_FIXED 2            // The right speed is fixed. Don't check this block or any block to the left.

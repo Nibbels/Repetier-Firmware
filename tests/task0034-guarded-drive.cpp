@@ -306,6 +306,10 @@ void scanReplay() {
         result=PrintLine::runScanMove(-80);
         assert(result.status==S::Limit && pulses==unsigned(cut));
         assert(!z.scanInProgress() && !PrintLine::directMoveActive());
+        scanReady(100);scanReferenceAt=cut;
+        result=PrintLine::runScanMove(80);
+        assert(result.status==S::Limit && pulses==unsigned(cut));
+        assert(!z.scanInProgress() && !PrintLine::directMoveActive());
     }
     for (int cut=0;cut<80;++cut) {
         scanReady(100);scanCancelAt=cut;

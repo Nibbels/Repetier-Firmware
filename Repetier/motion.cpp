@@ -269,6 +269,7 @@ GuardedMoveResult PrintLine::runGuardedMoveTo(uint8_t axis, int32_t targetSteps,
 
 GuardedMoveResult PrintLine::runScanMove(int32_t steps, bool emergencyRetreat) {
     auto& z = Printer::zMotion;
+    const bool referenceRequired = z.isHomed();
     const auto cancelled = [emergencyRetreat] {
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         if (Printer::printJob.emergencyLocked())
@@ -291,7 +292,6 @@ GuardedMoveResult PrintLine::runScanMove(int32_t steps, bool emergencyRetreat) {
     const float scale = Printer::stepsPerMm(Z_AXIS);
     const float maxRate = scale * Printer::axisMaxFeedrate(Z_AXIS);
     constexpr uint16_t nominalRate = 1000000UL / (XYZ_STEPPER_HIGH_DELAY + XYZ_STEPPER_LOW_DELAY);
-    const bool referenceRequired = z.isHomed();
     const int32_t origin = z.scanSteps();
     const int64_t target = int64_t(origin) + steps;
     const int64_t travel = int64_t(z.maxSteps()) + z.minOvertravel();
@@ -317,7 +317,8 @@ GuardedMoveResult PrintLine::runScanMove(int32_t steps, bool emergencyRetreat) {
         // Bresenham, Z ledger and STEP termination. No separate delay.
         z.setScanInProgress(true);
         direct.flags = FLAG_ABORT_AT_ENDSTOPS | FLAG_GUARDED_STOP_MASK | FLAG_SCAN_PATH |
-                       (emergencyRetreat ? FLAG_MECHANICAL_RETREAT : 0);
+                       (emergencyRetreat ? FLAG_MECHANICAL_RETREAT : 0) |
+                       (referenceRequired ? FLAG_SCAN_REFERENCE_REQUIRED : 0);
         direct.joinFlags = 0;
         direct.dir = 0;
         direct.delta[X_AXIS] = direct.delta[Y_AXIS] = direct.delta[E_AXIS] = 0;
