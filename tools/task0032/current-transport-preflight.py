@@ -33,6 +33,34 @@ def candidate(fw):
     h,s=ring["packed_candidate"](h,s)
     s=once(s,"void UsbSerial::begin(unsigned long baud) {","void UsbSerial::begin() {")
     h,s=writer["bounded_writer"](h,s)
+    # Reopening an ambiguous physical loss is not a permitted operation.
+    # Retain only the request-prefix fence, and never let it erase errors
+    # arriving before, during or after its short atomic publication.
+    h=once(h,"    static uint8_t rearmForResync();\n","")
+    start=s.index("uint8_t UsbSerial::rearmForResync() {")
+    end=s.index("\n}",start)+2
+    s=s[:start]+s[end:]
+    s=once(s,"    cli();\n    rx_.tail=rx_.head;",
+        """    cli();
+    if(lossFlags_ || blockingTxFailed_) {
+        asm volatile("" ::: "memory");
+        SREG=previous;
+        asm volatile("" ::: "memory");
+        return false;
+    }
+    rx_.tail=rx_.head;""")
+    s=once(s,"""    const uint8_t state=lossFlags_;
+    if(state&0x80)return;
+    const uint8_t loss=state | (status & (_BV(FE0) | _BV(DOR0) | _BV(UPE0)));
+    if(loss) { lossFlags_=loss; return; }""",
+        """    const uint8_t state=lossFlags_;
+    const uint8_t loss=state | (status & (_BV(FE0) | _BV(DOR0) | _BV(UPE0)));
+    if(loss) {
+        if(loss!=state)lossFlags_=loss;
+        return;
+    }""")
+    s=once(s,"if((lossFlags_&0x80) && next==resyncTxMarker_)lossFlags_=0;",
+        "if((lossFlags_&0x80) && next==resyncTxMarker_)lossFlags_ &= 0x7f;")
     h=once(h,"    static bool blockingTxFailed(){return blockingTxFailed_;}",
         "    static bool blockingTxFailed(){return blockingTxFailed_;}\n"
         "    static bool transportFailed(){return blockingTxFailed() || lossFlags();}")
@@ -91,13 +119,40 @@ def replay_uart(out,files):
         assert(UsbSerial::transportFailed());
         return 0;
     }
+    if(mode=="marker-good" || mode=="marker-loss") {
+        const char request[]="\r\nResend:2\r\nok\r\n";
+        const uint8_t count=sizeof(request)-1;
+        const uint8_t prefix=count-4;
+        UCSR0A=0;UDR0='x';USART0_RX_vect();
+        assert(UsbSerial::tryWriteResendSpan(request,count,prefix));
+        assert(UsbSerial::resyncPending() && !UsbSerial::available());
+        UDR0='y';USART0_RX_vect();assert(!UsbSerial::available());
+        if(mode=="marker-loss"){
+            UCSR0A=_BV(DOR0);UDR0='z';USART0_RX_vect();
+            assert(UsbSerial::transportFailed());
+        }
+        for(unsigned n=0;n<prefix;++n){
+            USART0_UDRE_vect();assert(UDR0==uint8_t(request[n]));
+        }
+        assert(!UsbSerial::resyncPending());
+        UCSR0A=0;UDR0='r';USART0_RX_vect();
+        if(mode=="marker-loss"){
+            assert(UsbSerial::lossFlags()==_BV(DOR0));
+            assert(!UsbSerial::available());
+            const uint8_t old=SREG;
+            assert(!UsbSerial::tryWriteResendSpan(request,count,prefix));
+            assert(SREG==old && UsbSerial::lossFlags()==_BV(DOR0));
+        }else assert(UsbSerial::read()=='r' && !UsbSerial::transportFailed());
+        assert(drain()=="ok\r\n");
+        return 0;
+    }
     const bool flush=mode.find("flush")!=std::string::npos;''')
     (out/"uart-replay.cpp").write_text(test)
     for flags in (["-O2"],["-O1","-fsanitize=undefined","-fno-sanitize-recover=all"]):
         exe=out/"uart-replay"
         subprocess.run(["c++","-std=c++11","-Wall","-Wextra","-Werror",*flags,
             "-I",str(HERE),str(out/"uart-replay.cpp"),"-o",str(exe)],check=True)
-        for mode in ("hardware-loss","write-good","flush-good","write-masked","flush-masked","write-stall","flush-stall","flush-partial"):
+        for mode in ("hardware-loss","marker-good","marker-loss","write-good","flush-good","write-masked","flush-masked","write-stall","flush-stall","flush-partial"):
             subprocess.run([str(exe),mode],check=True,timeout=10)
         exe.unlink()
 
