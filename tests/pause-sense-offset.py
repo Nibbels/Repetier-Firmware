@@ -72,7 +72,7 @@ def main():
         section(printer, "void Printer::updateWobbleFixOffsets(", "\ninline bool isExtrusionAllowed("),
         section(printer, "void Printer::setFeedrate(", "\n/** Move to machine coordinates"),
         section(printer, "void Printer::stopPrint()", "\n#define START_EXTRUDER_CONFIG"),
-        section(homing, "void Printer::homeZAxis()", "\nvoid Printer::homeAxis("),
+        section(homing, "void Printer::homeZAxis()", "\n__attribute__((noinline)) void Printer::homeAxis("),
         section(printer, "void Printer::enableSenseOffsetnow(", "\nvoid Printer::enableCMPnow("),
         section(eeprom_source, "void EEPROM::publishSenseOffsetSettings()", "\nvoid EEPROM::storeDriveLimit("),
         section(rf, "bool isAnyScanRunning()", "\nvoid discardScans(").replace("Calibration::", ""),
