@@ -12,7 +12,7 @@ import hashlib
 import json
 import subprocess
 
-P0 = "e495fd7cb3e3071e984d7c5c69f2d0e94d04ceb1"
+P0 = "c31b4d391cc4d2b9cca9ab3f8e236bed805716d9"
 
 def git(source, *args):
     return subprocess.check_output(["git", "-C", str(source), *args], text=True).strip()
@@ -31,12 +31,31 @@ def adapt_homing(source):
         old=f"enabledStepper[{axis}_AXIS]"
         assert s.count(old)==2,(axis,s.count(old))
         s=s.replace(old,f"motorWake.readyFor({mask})")
+    assert "!zStepperEnabled() || !Printer::isZMinEndstopHit()" in s
+    assert "static bool zStepperEnabled() { return motorWake.readyFor(4); }" in (source/"Repetier/Printer.h").read_text()
     t.write_text(s)
     for p in (source/"Repetier").glob("*"):
         if p.suffix in (".h",".cpp",".ino"):
             assert "enabledStepper" not in p.read_text(),p
 
 def adapt_tests(source):
+    # P0 now includes G28 actual-source orchestration/failure replays.
+    # Preserve all reference and cancellation assertions and use the real
+    # readiness state instead of the obsolete enabledStepper mock.
+    t=source/"tests/task0034-g28.py"
+    edit(t,'#include <initializer_list>','#include <initializer_list>\\n#include "MotorWake.h"\\nMotorWake motorWake;')
+    edit(t,"bool blockAll, enabledStepper[3], movementLocked;",
+        "bool blockAll, movementLocked;")
+    edit(t,"bool zStepperEnabled(){return enabledStepper[Z_AXIS];}",
+        "bool zStepperEnabled(){return motorWake.readyFor(4);}")
+    edit(t,"if(f==DriverLost)enabledStepper[axis]=false;",
+        "if(f==DriverLost)motorWake.beforeDisable(uint8_t(1U<<axis));")
+    edit(t,"    for(int a=0;a<3;++a){",
+        "    motorWake.reset();\\n    motorWake.afterAsserted(7,0);\\n    motorWake.service(27);\\n    assert(motorWake.readyFor(7));\\n    for(int a=0;a<3;++a){")
+    edit(t,"Printer::enabledStepper[a]=true;motor[a]=nominal[a]=100;",
+        "motor[a]=nominal[a]=100;")
+    edit(t,'"-DRF_EEPROM_ZONE_EXPERIMENT=1",f"-DNUM_EXTRUDER={count}",str(p),',
+        '"-DRF_EEPROM_ZONE_EXPERIMENT=1",f"-DNUM_EXTRUDER={count}","-I",str(root/"Repetier"),str(p),')
     # DRV reset trace: run the real readiness reset, preserve GPIO trace.
     t=source/"tests/drv8711-trace.py"
     edit(t,"static Trace actual;",'''static Trace actual;
