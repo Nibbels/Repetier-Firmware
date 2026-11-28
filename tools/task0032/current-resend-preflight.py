@@ -143,6 +143,16 @@ bool GCodeInput::transportFailed() {
         (Printer::printJob.emergencyLocked() && recovery.phase()!=ReplayPhase::Healthy);
 }
 
+bool GCodeInput::dispatchDeferred() {
+    // Recovery can only start after receiveReady() admitted a parse visit,
+    // and no new slot is published until the verified expected frame
+    // returns the phase to Healthy. Existing queued work need not start a
+    // blocking command while the host is resending. The already planned
+    // motion and thermal/periodic service continue independently.
+    const auto phase=recovery.phase();
+    return pendingAck.pending || (phase!=ReplayPhase::Healthy && phase!=ReplayPhase::Fatal);
+}
+
 void GCodeInput::serviceTransportTx() {
     if(transportFailed() || Printer::printJob.emergencyLocked())return;
     // The periodic scheduler calls this at several admission boundaries.
@@ -188,7 +198,7 @@ def candidate(fw):
     c=(fw/"Commands.cpp").read_text()
     h=once(h,'#include "gcode.h"','#include "gcode.h"\nstruct ResendEnvelope;')
     h=once(h,"    static void readFromSerial();",
-        "    static void readFromSerial();\n    static bool transportFailed();\n    static void serviceTransportTx();")
+        "    static void readFromSerial();\n    static bool transportFailed();\n    static bool dispatchDeferred();\n    static void serviceTransportTx();")
     h=once(h,"    static void requestResend();","    static void requestResend(bool replayable=false);\n    static void readFrame();\n    static void processFrame(GCode& command);")
     h=once(h,"    static void checkAndPushCommand(GCode& command);",
         "    static void checkAndPushCommand(GCode& command,const ResendEnvelope& evidence);")
@@ -256,6 +266,9 @@ def candidate(fw):
     serialReceive.lastCommandWasBinary=frame.binary;
 '''+part[j2:]
     s=s[:i]+part+s[j:]
+    s=once(s,"void GCodeInput::keepAlive(enum FirmwareState state) {",
+        "void GCodeInput::keepAlive(enum FirmwareState state) {\n"
+        "    if(pendingAck.pending || recovery.phase()!=ReplayPhase::Healthy)return;")
     s=once(s,"void GCodeInput::readFromSerial() {","void GCodeInput::readFrame() {")
     s=once(s,"    if (!HAL::serialByteAvailable()) {",
         "    if (!HAL::serialByteAvailable() && recovery.phase()==ReplayPhase::Healthy) {")
@@ -286,6 +299,15 @@ def candidate(fw):
     # Periodic service observes TX deadlines without recursive input parsing.
     c=once(c,"    if(!Printer::printJob.emergencyLocked() && UsbSerial::transportFailed())",
         "    GCodeInput::serviceTransportTx();\n    if(!Printer::printJob.emergencyLocked() && GCodeInput::transportFailed())")
+    c=once(c,"    GCode* code = GCodeInput::peekCurrentCommand();",
+        """    // Do not start a foreground command that may run for seconds or
+    // minutes before returning to the serial receive pump. A canceled or
+    // terminal queue must still retire without executing.
+    if(!Printer::printJob.commandsBlocked() && GCodeInput::dispatchDeferred()) {
+        Commands::checkForPeriodicalActions(Processing);
+        return;
+    }
+    GCode* code = GCodeInput::peekCurrentCommand();""")
     return {"GCodeInput.cpp":s,"GCodeInput.h":h,"Commands.cpp":c,
         "ResendPolicy.h":(HERE/"resend-policy.h").read_text(),
         "ResendEnvelope.h":wire["HEADER"].lstrip()}
