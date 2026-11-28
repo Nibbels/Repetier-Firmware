@@ -95,7 +95,7 @@ class Printer {
     static float maxXYJerk_;
     static float maxZJerk_;
     static uint8_t flag0, flag1, flag2, flag3;
-    static char enabledStepper[3];
+    static volatile char enabledStepper[3];
     static float feedrate; // Last requested feedrate (mm/s, including multiplier).
     static int feedrateMultiply;
     static float menuExtrusionFactor;

@@ -16,6 +16,7 @@
 */
 
 #include "Repetier.h"
+#include "ScanProbe.h"
 #include "StepExecutor.h"
 
 static_assert(X_AXIS == 0 && Y_AXIS == 1 && Z_AXIS == 2 && E_AXIS == 3,

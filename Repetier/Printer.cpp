@@ -89,7 +89,7 @@ volatile char Printer::blockAll = 0;
 
 DirectPosition Printer::extruderDirect;
 
-char Printer::enabledStepper[3] = { 0, 0, 0 };
+volatile char Printer::enabledStepper[3] = { 0, 0, 0 };
 
 
 

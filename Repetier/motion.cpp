@@ -18,6 +18,7 @@
 // PrintLine move preparation and queue/direct-move integration; lookahead and pulse execution belong to MotionPlanner and StepExecutor.
 
 #include "Repetier.h"
+#include "ScanProbe.h"
 #include "MotionPlanner.h"
 
 // ================ Sanity checks ================
@@ -303,6 +304,7 @@ GuardedMoveResult PrintLine::runScanMove(int32_t steps, bool emergencyRetreat) {
         return {GuardedMoveStatus::PositionReached, origin};
     const uint16_t rate = maxRate < nominalRate ? static_cast<uint16_t>(maxRate) : nominalRate;
     const float feedrate = rate / scale;
+    asm volatile("" : : "m"(feedrate), "m"(rate));
     {
         InterruptProtectedBlock lock;
         if (cancelled() || hasLines() || directMoveActive() || !Printer::zStepperEnabled() ||
