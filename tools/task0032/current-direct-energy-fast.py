@@ -114,7 +114,7 @@ def candidate(fw):
     profile=once(profile,'    bool valid;','    bool valid;\n    uint32_t plateauTicks;')
     profile=once(profile,'return {ceiling,floor,0,0,false};','return {ceiling,floor,0,0,false,0};')
     profile=once(profile,'return {ceiling,floor,drop,diff/drop+uint32_t(diff%drop!=0),true};',
-        'return {ceiling,floor,drop,diff/drop+uint32_t(diff%drop!=0),true,\n        (16000000UL+maximum-1)/maximum};')
+        'return {ceiling,floor,drop,diff/drop+uint32_t(diff%drop!=0),true,\n        uint32_t((16000000UL+maximum-1)/maximum)};')
     e=(fw/'StepExecutor.cpp').read_text()
     i=e.index('uint32_t StepExecutor::armDirectStep(')
     j=e.index('// Keep the ramp update',i)

@@ -17,6 +17,8 @@ HERE=Path(__file__).resolve().parent
 spec=importlib.util.spec_from_file_location("stop_linked",HERE/"current-stop-tail-linked.py")
 sl=importlib.util.module_from_spec(spec);spec.loader.exec_module(sl)
 
+FAST_PROFILE=False
+
 def checked_layout(elf):
     # The old validator returns its own mutable member dictionary. Never
     # rename a key through that alias (it poisoned the next board in #229).
@@ -57,6 +59,8 @@ def checked_layout(elf):
         assert m or v.isdecimal(),v
         return int(m[1] if m else v)
     expected={"ceiling":0,"exitEnergy":4,"drop":8,"horizon":12,"valid":16}
+    if FAST_PROFILE:expected["plateauTicks"]=17
+    limit_size=21 if FAST_PROFILE else 17
     matches=0
     for n in nodes.values():
         if n["tag"]!="DW_TAG_structure_type" or name(n)!="PrintLine" or "byte_size" not in n["attrs"]:continue
@@ -74,13 +78,13 @@ def checked_layout(elf):
         lookahead=target(alternatives["lookahead"])
         limits=target(alternatives["directProfile"])
         assert name(lookahead)=="LookaheadData" and size(lookahead)==48
-        assert name(limits)=="Limits" and size(limits)==17
+        assert name(limits)=="Limits" and size(limits)==limit_size
         actual={name(c):location(c) for c in limits["children"]
                 if c["tag"]=="DW_TAG_member" and "data_member_location" in c["attrs"]}
         assert actual==expected,actual
         matches+=1
     assert matches,("no linked PrintLine energy union",str(elf))
-    layout["PreparedDirectProfile::Limits"]={"size":17,"members":expected,"verified_references":matches}
+    layout["PreparedDirectProfile::Limits"]={"size":limit_size,"members":expected,"verified_references":matches}
     layout["PrintLine"]["members"]["anonymous_union"]=layout["PrintLine"]["members"].pop(None)
     assert sl.LAYOUT["PrintLine"][1]["lookahead"]==28
     return layout
@@ -103,32 +107,57 @@ def measure(mod,img,delta,rate,start,acceleration,stop_after,negative=False):
     for offset,value in ((28,ceiling),(32,floor),(36,drop),
         (40,(ceiling-floor+drop-1)//drop)):c.put(addr+offset,value,4)
     c.put(addr+44,1)
+    if FAST_PROFILE:c.put(addr+45,(16000000+rate-1)//rate,4)
     c.put(addr+88,rate,2);c.put(addr+90,start,2);c.put(addr+92,start,2)
     total={a:0 for a in "XYZ"};epoch=0;last_edge=None;previous_energy=floor
     armed_energy=floor;short_gaps=late_calls=0;worst_short=0
     max_cycles=max_mask=peak_energy=tail=0;request_energy=None;request_pulses=None
     shortest=None;max_overshoot=0;calls=0
+    peak_stack=0;mask_witness=None;costs={};high_min={};low_min={};falls={}
+    cruise_samples=0;cruise_elapsed=0;cruise_cost=0
+    assert stop_after is None or stop_after<remaining
     while c.get(addr+102):
         assert calls<remaining*5+100,(img.board,calls,remaining,c.get(addr+102))
         if stop_after is not None and request_pulses is None and total[primary]>=stop_after and c.get(addr+102) in (6,7):
             request_energy=c.symget("StepExecutor::stepClocks",4,0)
             request_pulses=total[primary]
             c.put(addr+102,c.get(addr+102)+2)
+        old_phase=c.get(addr+102);old_energy=armed_energy
         c.timeline=[];c.edges=[];c.calls=[];c.timer_writes=[]
         c.cy=5;c.timer_live=True;c.sreg=0;c.mem[0x6f]=2
         c.timer0_phase=0;c.timer0_reads=0;c.timer0_flag_cleared_at_wrap=0
         c.run(17*4);calls+=1
         assert c.sp==0x21ff and not c.return_stack
         mask=sl.lt.windows(c.timeline,c.cy)
-        max_mask=max(max_mask,max((b-a for a,b in mask),default=0))
+        longest=max(mask,key=lambda x:x[1]-x[0],default=(0,0))
+        if longest[1]-longest[0]>max_mask:
+            max_mask=longest[1]-longest[0]
+            boundaries=[(t,hex(pc),img.labels.get(pc,""),depth) for t,pc,i,ocie,sp,depth in c.timeline
+                        if longest[0]<=t<=longest[1]]
+            mask_witness={"call":calls,"phase":old_phase,"range":longest,
+                          "start":boundaries[:3],"end":boundaries[-3:],"calls":c.calls}
+        peak_stack=max(peak_stack,0x21ff-c.minsp)
         max_cycles=max(max_cycles,c.cy)
         period=c.get(0x88,2)+1
-        if c.cy>=period:late_calls+=1
+        if c.cy>=period:
+            late_calls+=1
+            assert not c.get(addr+102),("late active compare outside isolated timebase",img.board,c.cy,period)
         # The next event's actual edge phase can differ from this one.
         for axis in "XYZ":
             states=[s for p,s,t in c.edges if p==axis]
             assert states==[1,0]*(len(states)//2)
             total[axis]+=sum(states)
+            rise=None
+            for p,state,t in c.edges:
+                if p!=axis:continue
+                t+=epoch
+                if state:
+                    if axis in falls:low_min[axis]=min(low_min.get(axis,1<<32),t-falls[axis])
+                    rise=t
+                else:
+                    assert rise is not None
+                    high_min[axis]=min(high_min.get(axis,1<<32),t-rise)
+                    falls[axis]=t
         times=[epoch+t for p,s,t in c.edges if p==primary and s]
         assert len(times)<=1
         if times:
@@ -157,6 +186,13 @@ def measure(mod,img,delta,rate,start,acceleration,stop_after,negative=False):
                 nominal=c.symget("Printer::zMotion",4,4,signed=True)
             assert motor==1000+sign*total[axis] and direct==sign*total[axis] and nominal==1000
         assert c.symget("StepExecutor::stepClocks",4,4)==total[primary]
+        kind=("startup" if old_phase==5 else "retire" if not c.get(addr+102)
+              else "wait" if not times else "cruise" if old_energy==armed_energy==ceiling
+              else "accel" if armed_energy>old_energy else "brake" if armed_energy<old_energy else "flat")
+        data=costs.setdefault(kind,{"calls":0,"cycles_max":0,"cycles_sum":0})
+        data["calls"]+=1;data["cycles_max"]=max(data["cycles_max"],c.cy);data["cycles_sum"]+=c.cy
+        if kind=="cruise":
+            cruise_samples+=1;cruise_elapsed+=period;cruise_cost+=c.cy
         epoch+=period
     if request_pulses is None:assert total[primary]==remaining
     else:
@@ -166,13 +202,20 @@ def measure(mod,img,delta,rate,start,acceleration,stop_after,negative=False):
     return dict(delta=delta,rate=rate,start=start,acceleration=acceleration,stop_after=stop_after,
         negative=negative,calls=calls,pulses=total,tail=tail,max_cycles=max_cycles,max_mask=max_mask,
         short_gaps=short_gaps,worst_short_ticks=worst_short,shortest_gap_ticks=shortest,
-        max_excess_ticks=max_overshoot,late_calls=late_calls,peak_energy=peak_energy)
+        max_excess_ticks=max_overshoot,late_calls=late_calls,peak_energy=peak_energy,
+        stack_bytes=peak_stack,mask_witness=mask_witness,costs=costs,high_min=high_min,low_min=low_min,
+        cruise_samples=cruise_samples,cruise_elapsed=cruise_elapsed,cruise_cost=cruise_cost,
+        elapsed_ticks=epoch,request_energy=request_energy)
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument("--evidence",type=Path,required=True)
     p.add_argument("--out",type=Path,required=True)
+    p.add_argument("--optimized",action="store_true")
+    p.add_argument("--extended",action="store_true")
     a=p.parse_args()
+    global FAST_PROFILE
+    FAST_PROFILE=a.optimized
     mod=sl.lt.load_interpreter()
     result={"scope":__doc__,"boards":{}}
     with tempfile.TemporaryDirectory() as d:
@@ -185,11 +228,22 @@ def main():
                 ((0,0,600,0),11520,1000,128000),((128,63,29,0),10000,3000,228570)):
                 for cut in (None,max(delta)//2):
                     rows.append(measure(mod,img,delta,rate,start,accel,cut))
+            if a.extended:
+                # A stop at cruise, NOT a short triangle already braking.
+                for delta,rate,start,accel in (((2400,0,0,0),15238,990,228570),
+                    ((0,0,2400,0),11520,192,128000),((1600,970,344,0),15238,990,228570)):
+                    row=measure(mod,img,delta,rate,start,accel,800)
+                    assert row["request_energy"]==rate*rate and row["tail"]<max(delta)-800,row
+                    rows.append(row)
+                rows.append(measure(mod,img,(600,0,0,0),15238,990,228570,50,negative=True))
             result["boards"][board]={"metadata":meta[board],"paths":rows}
             print(board,"calls",sum(r["calls"] for r in rows),
                 "max_cycles",max(r["max_cycles"] for r in rows),
                 "max_mask",max(r["max_mask"] for r in rows),
                 "short_gaps",sum(r["short_gaps"] for r in rows),flush=True)
             a.out.write_text(json.dumps(result,indent=2)+"\n")
+        if a.optimized:
+            # Measured minimum is required, not just recorded.
+            assert all(not row["short_gaps"] for b in result["boards"].values() for row in b["paths"]), "short physical primary gap"
 
 if __name__=="__main__":main()
