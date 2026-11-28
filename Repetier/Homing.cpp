@@ -78,6 +78,8 @@ void Printer::stepAxisStep(uint8_t axis, uint8_t slower) {
 
 int8_t Printer::checkHome(int8_t axis) //X_AXIS 0, Y_AXIS 1, Z_AXIS 2
 {
+    // Direct diagnostic steps must not admit another panel operation.
+    UIDisplay::ScopedActionExclusion panelExclusion(uid);
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     if(printJob.emergencyLocked())return -1;
     // The test emits STEP directly in foreground, outside Timer1.
@@ -435,6 +437,9 @@ void Printer::homeAxis(bool xaxis, bool yaxis, bool zaxis) // home non-delta pri
 #ifdef RF_EEPROM_ZONE_EXPERIMENT
     if(!EEPROM::settingsReady())return;
 #endif
+    // Host and scan homing have the same menu exclusion as panel homing.
+    // Periodic thermal service and raw key sampling remain available.
+    UIDisplay::ScopedActionExclusion panelExclusion(uid);
     Printer::idleStatus.cancel();
 
     // Bei beliebiger user interaktion oder Homing soll G1 etc. erlaubt werden. Dann ist der Drucker nicht abgestürzt, sondern bedient worden.

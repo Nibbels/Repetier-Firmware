@@ -13,6 +13,7 @@ def section(source, first, last):
     start = source.index(first)
     return source[start:source.index(last, start + len(first))]
 
+scope = section(header, "    class ScopedActionExclusion {", "    // Remote panel actions")
 remote = section(header, "    void executeRemoteAction(int action) {", "    void slowAction();")
 slow = section(ui, "void UIDisplay::slowAction() {", "} // slowAction") + "}\n"
 assert "uid.executeRemoteAction(pCommand->P);" in system
@@ -72,7 +73,7 @@ struct UIDisplay {
         flags |= OTHER_TEST_FLAG;
         assert(irq==expectedIrq);
     }
-''' + remote + r'''
+''' + scope + remote + r'''
 };
 ''' + slow + r'''
 int main() {
@@ -90,6 +91,25 @@ int main() {
         assert(local.calls==1 && local.lastDispatched==1001);
         assert(local.flags==(0x80|OTHER_TEST_FLAG));
         assert(local.lastAction==1001 && irq==enabled);
+        // A host/scan homing scope excludes both local and remote
+        // dispatch and restores only the bit that it acquired.
+        for (unsigned f=0; f<256; ++f) {
+            UIDisplay u;
+            u.flags=uint8_t(f);
+            {
+                UIDisplay::ScopedActionExclusion outer(u);
+                assert(u.flags==(f|UI_FLAG_SLOW_ACTION_RUNNING));
+                u.executeRemoteAction(42);
+                u.slowAction();
+                assert(u.calls==0 && irq==enabled);
+                {
+                    UIDisplay::ScopedActionExclusion inner(u);
+                    u.flags^=OTHER_TEST_FLAG;
+                }
+                assert(u.flags==((f^OTHER_TEST_FLAG)|UI_FLAG_SLOW_ACTION_RUNNING));
+            }
+            assert(u.flags==(f^OTHER_TEST_FLAG) && irq==enabled);
+        }
         UIDisplay busy;
         busy.flags|=UI_FLAG_SLOW_ACTION_RUNNING;
         busy.executeRemoteAction(42);

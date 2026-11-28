@@ -8,6 +8,8 @@ root=Path(__file__).resolve().parents[1]
 src=(root/"Repetier/Homing.cpp").read_text()
 start=src.index("int8_t Printer::checkHome(")
 end=src.index("} // checkHome",start)+len("} // checkHome")
+header=(root/"Repetier/ui.h").read_text()
+scope=header[header.index("    class ScopedActionExclusion {"):header.index("    // Remote panel actions")]
 prelude=r"""
 #include <cassert>
 #include <cstdint>
@@ -20,12 +22,19 @@ enum {X_AXIS,Y_AXIS,Z_AXIS,Calibrating};
 static int position,direction,stepsPerMillimeter,initial;
 static unsigned pulses,visits,injectAt,gapUs,maxGapUs;
 static bool pressed,locked;
+constexpr uint8_t UI_FLAG_SLOW_ACTION_RUNNING=4;
+struct UIDisplay {
+    volatile uint8_t flags=0x80;
+"""+scope+r"""
+};
+static UIDisplay uid;
 namespace Com {
 template<class... Args> void printFLN(Args...){assert(!locked);}
 }
 namespace Commands {
 void checkForPeriodicalActions(int state){
     assert(state==Calibrating);
+    assert(uid.flags & UI_FLAG_SLOW_ACTION_RUNNING);
     maxGapUs=std::max(maxGapUs,gapUs);
     gapUs=0;
     if(++visits==injectAt)locked=true;
@@ -60,6 +69,7 @@ static void reset(int scale,unsigned injection){
     pulses=visits=gapUs=maxGapUs=0;
     injectAt=injection;
     pressed=locked=false;
+    uid.flags=0x80;
 }
 int main(){
     unsigned cases=0;
@@ -67,6 +77,7 @@ int main(){
         for(int scale:{128,1000}){
             reset(scale,0);
             assert(Printer::checkHome(axis)==1);
+            assert(uid.flags==0x80);
             // Existing M3028 counts the press/release edges separately.
             // Preserve its normal pulse count in both configurations.
             assert(pulses==unsigned(2*initial+2*24-1));
@@ -76,11 +87,11 @@ int main(){
             for(unsigned n=1;n<=normalVisits;++n){
                 reset(scale,n);
                 assert(Printer::checkHome(axis)==-1);
-                assert(locked&&visits==n);
+                assert(locked&&visits==n && uid.flags==0x80);
                 ++cases;
             }
             reset(scale,0);locked=true;
-            assert(Printer::checkHome(axis)==-1&&pulses==0&&visits==0);
+            assert(Printer::checkHome(axis)==-1&&pulses==0&&visits==0 && uid.flags==0x80);
             ++cases;
 #endif
         }

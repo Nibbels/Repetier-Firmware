@@ -311,6 +311,24 @@ public:
 #endif
     const char* cachedRow(uint8_t row) const;
     void executeAction(int action);
+    // Foreground-only ownership; keep the outer panel owner set across
+    // nested homing and diagnostic waits. Fast key sampling and display
+    // refresh do not use this flag. No interrupt mask is held by the scope.
+    class ScopedActionExclusion {
+    public:
+        explicit ScopedActionExclusion(UIDisplay& display)
+            : display_(display), owns_(!(display.flags & UI_FLAG_SLOW_ACTION_RUNNING)) {
+            if (owns_) display_.flags |= UI_FLAG_SLOW_ACTION_RUNNING;
+        }
+        ~ScopedActionExclusion() {
+            if (owns_) display_.flags &= ~UI_FLAG_SLOW_ACTION_RUNNING;
+        }
+        ScopedActionExclusion(const ScopedActionExclusion&) = delete;
+        ScopedActionExclusion& operator=(const ScopedActionExclusion&) = delete;
+    private:
+        UIDisplay& display_;
+        const bool owns_;
+    };
     // Remote panel actions share the local key-dispatch exclusion. A wait
     // inside either action can pump thermal/scan services and sample keys,
     // but must not execute a second independent menu action.
