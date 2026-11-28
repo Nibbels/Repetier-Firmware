@@ -105,9 +105,7 @@ void dispatchMachine(GCode* com) {
         return reportEeprom();
     case 206: return setEepromValue(com);
     case 360: return reportConfiguration();
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     case DiagnosticHistory::ReadCommand: return DiagnosticHistory::request();
-#endif
     case 502: return restoreConfigurationDefaults();
     case 3028: return testHomingRepeatability(com);
     case 3029: return accessPanel(com);
@@ -120,9 +118,7 @@ void dispatchMachine(GCode* com) {
 // Keep host dispatch out of the permanently active Arduino main frame.
 // Typed internal programs no longer reenter this dispatch path.
 __attribute__((noinline)) void Commands::executeGCode(GCode* com) {
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     if(Printer::printJob.emergencyLocked())return;
-#endif
     if (GCodeCommands::rejectLegacySimulation(com))
         return;
     // An unsupported input mode is not a motion mode. Discard all work, including
@@ -140,9 +136,7 @@ __attribute__((noinline)) void Commands::executeGCode(GCode* com) {
            (com->M!=105 && com->M!=112 && com->M!=114 &&
             com->M!=115 && com->M!=205 && com->M!=206 &&
             com->M!=502
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
             && com->M!=DiagnosticHistory::ReadCommand
-#endif
             )) {
             Com::printErrorFLN(PSTR("EEPROM settings not acknowledged"));
             return;

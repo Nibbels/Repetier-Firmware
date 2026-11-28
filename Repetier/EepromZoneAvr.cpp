@@ -31,7 +31,6 @@ void AvrDevice::service() {
 }
 }
 
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
 #include "DiagnosticHistory.h"
 #include "AvrEventStore.h"
 #include "EventLogService.h"
@@ -78,4 +77,3 @@ void service() {
     history.service(store,ledger);
 }
 }
-#endif

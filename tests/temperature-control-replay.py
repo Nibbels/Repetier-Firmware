@@ -969,7 +969,7 @@ def main():
         "conversion.inc": conversion.split(include, 1)[1],
         "control.inc": control.split(include, 1)[1].replace('#include "UsbSerial.h"', '').replace('#include "GCodeInput.h"', ''),
         "bed-setter.inc": section(extruder, "void Extruder::setHeatedBedTemperature(", "float Extruder::getHeatedBedTemperature("),
-        "scheduler.inc": section(commands, "#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT\nstatic void serviceThermalEmergency()", "bool Commands::waitForMotion("),
+        "scheduler.inc": section(commands, "static void serviceThermalEmergency()", "bool Commands::waitForMotion("),
         "com.inc": "\n".join("constexpr int " + n + " = 0;" for n in sorted(set(re.findall(r"Com::(t[A-Z]\w*)", control)))),
         "hal.inc": (
             "namespace {\n" + section(hal, "#ifndef RF_HEATER_RESET_WDT_EXPERIMENT\nvolatile unsigned long watchdogHeartbeat", "HAL::HAL()")
@@ -1023,7 +1023,7 @@ def main():
             defines["ANALOG_REDUCE_BITS"] = macro((FW / "HAL.h").read_text(), "ANALOG_REDUCE_BITS")
             defines["CELSIUS_EXTRA_BITS"] = macro(header, "CELSIUS_EXTRA_BITS")
             defines["NUM_EXTRUDER"] = str(tools)
-            for emergency in (False, True):
+            for emergency in (True,):
                 exe = work / "replay"
                 extra = ["-DRF_THERMAL_EMERGENCY_EXPERIMENT=1"] if emergency else []
                 subprocess.run([os.environ.get("CXX", "c++"), "-std=c++11", "-O2", *extra,

@@ -9,7 +9,7 @@ import tempfile
 root=Path(__file__).resolve().parents[1]
 fw=root/"Repetier"
 source=(fw/"EepromZoneAvr.cpp").read_text()
-binding=source[source.index("namespace DiagnosticHistory {"):source.rindex("#endif")]
+binding=source[source.index("namespace DiagnosticHistory {"):]
 commands=(fw/"Commands.cpp").read_text()
 assert commands.count("DiagnosticHistory::service();")==2
 assert commands.index("DiagnosticHistory::service();")<commands.index("} // commandLoop")
@@ -25,7 +25,6 @@ stub=r'''
 #include <cstdint>
 #include <cstdio>
 #include <string>
-#define RF_THERMAL_EMERGENCY_EXPERIMENT
 #define E2END 4095
 #include "DiagnosticHistory.h"
 #include "EepromZoneLayout.h"

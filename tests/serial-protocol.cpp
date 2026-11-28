@@ -15,21 +15,17 @@ using PGM_P = const char*;
 #define PSTR(text) text
 #include "gcode-settings.inc"
 #include "GCodeInput.h"
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
 #include "UsbSerial.h"
 #include "DiagnosticHistory.h"
-#endif
 
 namespace {
 std::deque<uint8_t> incoming;
 std::string replies;
 millis_t clockMs = 0;
 bool stopped = false;
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
 bool thermalLocked=false;
 uint8_t txFree=63;
 unsigned liveRequests=0,replayRequests=0,historyRequests=0;
-#endif
 unsigned flushes = 0;
 unsigned dispatchedCommands = 0, statusCommands = 0, stopRequests = 0;
 bool legacyRejected = false, settingsBlocked = false;
@@ -45,7 +41,6 @@ bool injectNestedScript = false, stopDuringScript = false;
 struct EmergencyReached {};
 }
 
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
 uint8_t UsbSerial::transmitFree(){return txFree;}
 bool UsbSerial::tryWriteSpan(const char* bytes,uint8_t count) {
     assert(count<=txFree);
@@ -61,7 +56,6 @@ namespace DiagnosticHistory {
 void request(){++historyRequests;}
 void service(){}
 }
-#endif
 namespace HAL {
 millis_t timeInMilliseconds() { return clockMs; }
 bool serialByteAvailable() { return !incoming.empty(); }
@@ -71,9 +65,7 @@ uint8_t serialReadByte() {
     return byte;
 }
 void serialFlush() {
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     assert(!thermalLocked);
-#endif
     ++flushes;
 }
 }
@@ -97,9 +89,7 @@ bool queueInternalAxisMove(uint8_t axis,float value,float feedrate){
 bool debugErrors() { return true; }
 bool legacySimulationRejected() { return legacyRejected; }
 bool heatingInhibited() { return settingsBlocked || legacyRejected
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     || thermalLocked
-#endif
     ; }
 void latchOutputInhibit(bool thermalFault) { assert(!thermalFault); legacyRejected = true; }
 void stopPrint() { ++stopRequests; }
@@ -107,19 +97,13 @@ void setFeedrate(float) { ++dispatchedCommands; }
 struct {
     void servicePendingOutput(millis_t) {
         assert(!GCodeInput::peekCurrentCommand());
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         assert(!thermalLocked);
-#endif
         ++pendingOutputVisits;
     }
     bool commandsBlocked() const { return stopped
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         ||thermalLocked
-#endif
         ; }
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     bool emergencyLocked() const {return thermalLocked;}
-#endif
 } printJob;
 struct { bool isPaused() const { return false; } } pause;
 }
@@ -153,15 +137,11 @@ int min(int a, int b) { return std::min(a, b); }
 namespace Com {
 #include "gcode-replies.inc"
 void print(char value) {
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     assert(!thermalLocked);
-#endif
     replies += value;
 }
 void print(const char* text) {
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     assert(!thermalLocked);
-#endif
     replies += text;
 }
 void print(char* text) { print(static_cast<const char*>(text)); }
@@ -270,9 +250,7 @@ void readReply(const std::string& expected) {
         std::fprintf(stderr, "Expected [%s], received [%s]\n", expected.c_str(), replies.c_str());
     assert(replies == expected);
     replies.clear();
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     txFree=63;
-#endif
 }
 
 void popM(unsigned number) {
@@ -572,7 +550,6 @@ void legacyStream(const std::string& scenario) {
     assert(legacyRejected && stopRequests == 1);
 }
 
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
 void strictEepromSyntax() {
     // Exhaust both signed alias neighborhoods before the 8-bit/16-bit conversion.
     for(int32_t type=-65536;type<=65536;++type){
@@ -634,7 +611,6 @@ void thermalEmergency() {
     assert(!GCodeInput::executeOutputProgram() && internalEvents.empty());
     assert(!GCodeInput::peekCurrentCommand()&&dispatchedCommands==0&&heaterRequests==0&&flushes==0);
 }
-#endif
 
 void postStopOutputBoundary() {
     feed("G1 X1\nG1 X2\n");
@@ -647,11 +623,9 @@ void postStopOutputBoundary() {
     Commands::commandLoop();
     assert(!GCodeInput::peekCurrentCommand() && pendingOutputVisits == 1);
     assert(!dispatchedCommands);
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     thermalLocked = true;
     Commands::commandLoop();
     assert(pendingOutputVisits == 1);
-#endif
 }
 
 void internalProgramSerialBoundary() {
@@ -690,9 +664,7 @@ void outputProgram() {
     internalEvents.clear();periodicVisits=0;
     legacyRejected=true;assert(!GCodeInput::executeOutputProgram());legacyRejected=false;
     settingsBlocked=true;assert(!GCodeInput::executeOutputProgram());settingsBlocked=false;
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     thermalLocked=true;assert(!GCodeInput::executeOutputProgram());thermalLocked=false;
-#endif
     assert(internalEvents.empty() && !periodicVisits);
 }
 
@@ -718,9 +690,7 @@ void hardFilament() {
     internalEvents.clear();periodicVisits=0;
     legacyRejected=true;GCodeInput::executeHardFilament(false);legacyRejected=false;
     settingsBlocked=true;GCodeInput::executeHardFilament(true);settingsBlocked=false;
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     thermalLocked=true;GCodeInput::executeHardFilament(false);thermalLocked=false;
-#endif
     assert(internalEvents.empty() && !periodicVisits);
 }
 
@@ -735,9 +705,7 @@ void softFilament() {
     stopped=true; GCodeInput::executeSoftFilament(false); stopped=false;
     legacyRejected=true; GCodeInput::executeSoftFilament(true); legacyRejected=false;
     settingsBlocked=true; GCodeInput::executeSoftFilament(false); settingsBlocked=false;
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     thermalLocked=true; GCodeInput::executeSoftFilament(true); thermalLocked=false;
-#endif
     assert(softLoads==1 && softUnloads==1 && periodicVisits==2);
     stopDuringScript=true;
     GCodeInput::executeSoftFilament(false);
@@ -766,10 +734,8 @@ int main(int argc, char** argv) {
     else if (scenario == "hard-filament") hardFilament();
     else if (scenario == "output-program") outputProgram();
     else if (scenario == "post-stop-output") postStopOutputBoundary();
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     else if (scenario == "thermal-emergency") thermalEmergency();
     else if (scenario == "m206-syntax") strictEepromSyntax();
-#endif
     else if (scenario == "legacy-ascii" || scenario == "legacy-binary" || scenario == "legacy-during-stop" ||
              scenario == "inch-ascii" || scenario == "inch-binary") legacyStream(scenario);
     else return 1;
