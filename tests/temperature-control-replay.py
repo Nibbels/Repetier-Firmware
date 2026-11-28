@@ -210,6 +210,7 @@ struct Commands {
 static void reportTempsensorAndHeaterErrors();
 #include "conversion.inc"
 #include "hal.inc"
+namespace GCodeInput { bool flashScriptActive(); }
 #include "control.inc"
 #include "bed-setter.inc"
 static unsigned visits;

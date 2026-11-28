@@ -19,7 +19,8 @@ harness = r"""
 using millis_t = uint32_t;
 std::vector<int> events;
 bool scanRunning = true, bed = true, stop = false, paused = false;
-bool ready = false, nested = false, cancelDuring = false;
+bool ready = false, nested = false, cancelDuring = false, busy = false, scriptActive = false, pauseOwner = false;
+namespace GCodeInput { bool flashScriptActive(){return scriptActive;} }
 void handleScanWorkTasks(bool);
 void loopFeatures();
 namespace HAL { millis_t timeInMilliseconds() { return 123; } }
@@ -43,6 +44,7 @@ namespace Printer {
 bool blockAll = false;
 struct Job {
     bool commandsBlocked() { return stop; }
+    bool isIdle() { return !stop && !busy; }
     void service(millis_t t) {
         assert(t == 123);
         events.push_back(5);
@@ -51,6 +53,7 @@ struct Job {
 } printJob;
 struct Pause {
     bool isPaused() { return paused; }
+    bool blocksCalibration() { return paused || pauseOwner; }
     void serviceStandby(millis_t t) { assert(t == 123); events.push_back(8); }
     void serviceMotion() { events.push_back(9); }
 } pause;
@@ -75,7 +78,11 @@ int main() {
     assert((events == std::vector<int>{1}));
     events.clear(); paused = true;
     handleScanWorkTasks(true); assert(events.empty());
-    paused = false; stop = true;
+    paused = false;
+    busy = true; handleScanWorkTasks(true); assert(events.empty()); busy = false;
+    pauseOwner = true; handleScanWorkTasks(true); assert(events.empty()); pauseOwner = false;
+    scriptActive = true; handleScanWorkTasks(true); assert(events.empty()); scriptActive = false;
+    stop = true;
     handleScanWorkTasks(true); assert((events == std::vector<int>{4}));
     events.clear(); stop = false; scanRunning = false;
     handleScanWorkTasks(true); assert(events.empty());
