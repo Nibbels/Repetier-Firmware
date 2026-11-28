@@ -87,7 +87,8 @@ void streamVisit(uint32_t now) {
 }
 std::string streamPacket(unsigned n) {
     return researchBinarySession
-        ? binary({0x85,0,uint8_t(n),uint8_t(n>>8),1})
+        ? (n==2 ? binary({0x85,0x10,0,0,uint8_t(n),uint8_t(n>>8),1,0})
+                 : binary({0x85,0,uint8_t(n),uint8_t(n>>8),1}))
         : numbered("N"+std::to_string(n)+" G1 X"+std::to_string(n));
 }
 void corruptStream(const std::string& packet,unsigned pos,uint8_t flag) {
@@ -208,7 +209,8 @@ def patch_receiver(s):
                           (False,"                if (parseAscii(command, (char*)frame.bytes, true))")]:
         branch=frames["recovery_branch"](binary)
         branch=once(branch,"                        researchRecovery.committedExpected();",
-            "                        if(!researchStreamActive || researchAck.pending) researchRecovery.committedExpected();")
+            "                        if(!researchStreamActive || researchAck.pending) researchRecovery.committedExpected();\n"
+            "                        else { serialReceive.currentLineNumber=oldLine; serialReceive.formatErrors=oldErrors; frame.borrowedText=false; }")
         s=once(s,anchor,branch+anchor)
     s=once(s,"void GCodeInput::requestResend() {","void GCodeInput::requestResend() {\n"
         "    if(researchStreamActive){researchFault();frame.length=frame.expectedLength=0;\n"
