@@ -118,7 +118,7 @@ def run_board(mod,img,phases,inject):
     addr=img.addr("PrintLine::direct")
     class Probe(Base):
         def __init__(self,img):
-            super().__init__(img);self.target=None;self.injected=None
+            super().__init__(img);self.target=None;self.injected=None;self.remaining_reads=[]
         def boundary(self,pc):
             super().boundary(pc)
             if self.target==self.cy:
@@ -130,9 +130,14 @@ def run_board(mod,img,phases,inject):
                 assert self.get(addr+98,4,signed=True)==old
                 self.injected={"cycle":self.cy,"pc":hex(pc),"remaining":old,
                     "primary_rises":sum(p==self.primary and s for p,s,t in self.edges)}
+        def read(self,address):
+            value=super().read(address)
+            if addr+98<=address<addr+102:
+                self.remaining_reads.append((self.cy,address-addr-98))
+            return value
     mod.CPU=Probe
     def one(c):
-        c.timeline=[];c.edges=[];c.calls=[];c.timer_writes=[]
+        c.timeline=[];c.edges=[];c.calls=[];c.timer_writes=[];c.remaining_reads=[]
         c.cy=5;c.timer_live=True;c.sreg=0;c.mem[0x6f]=2
         c.timer0_phase=0;c.timer0_reads=0;c.timer0_flag_cleared_at_wrap=0
         c.run(17*4)
@@ -149,7 +154,7 @@ def run_board(mod,img,phases,inject):
             states=[s for p,s,t in c.edges if p==axis]
             assert states==[1,0]*(len(states)//2)
         return {"cycles":c.cy,"max_mask":max((b-a for a,b in mask),default=0),
-            "mask_intervals":mask,"eligible":eligible,"rises":rises,
+            "mask_intervals":mask,"eligible":eligible,"remaining_reads":c.remaining_reads,"rises":rises,
             "remaining":c.get(addr+98,4,signed=True),"task":c.get(addr+102),
             "stack_bytes":0x21ff-c.minsp,"ocr1a":c.get(0x88,2)}
     def setup(delta,n,negative,stoppable,remaining,rate):
@@ -230,14 +235,23 @@ def run_board(mod,img,phases,inject):
                 # first/middle/last boundaries; all cases verify the
                 # first call's actual counter/ledger and pulse ordering.
                 chosen={times[0],times[len(times)//2],times[-1]}
+                targets=set(chosen)
+                for a,b in zip(baseline["remaining_reads"],baseline["remaining_reads"][1:]):
+                    if a[1]+1==b[1]:
+                        targets.update(t for t in times if a[0]<t<=b[0])
+                # All eligible boundaries for three representative linked
+                # paths; targeted multibyte and entry/exit elsewhere.
+                if n==1 and not negative and stoppable and delta in (
+                    (600,0,0,0),(0,0,600,0),(600,371,129,0)):
+                    targets.update(times)
                 max_mask=baseline["max_mask"];max_cycles=baseline["cycles"];max_tail=0
-                for target in times:
+                for target in sorted(targets):
                     first,after=trial(delta,n,negative,stoppable,initial,rate,
                         target,drain=target in chosen)
                     max_mask=max(max_mask,after["max_mask"])
                     max_cycles=max(max_cycles,after["max_cycles"])
                     if target in chosen:max_tail=max(max_tail,after["post_request_primary"])
-                row.update(injections=len(times),drained=len(chosen),
+                row.update(injections=len(targets),drained=len(chosen),
                     max_observed_mask=max_mask,max_observed_cycles=max_cycles,max_tail=max_tail)
             results.append(row)
     finally:mod.CPU=Base

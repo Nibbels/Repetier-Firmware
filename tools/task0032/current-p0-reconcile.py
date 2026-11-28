@@ -173,11 +173,15 @@ def main():
         path.write_bytes(data)
     assert digest((source/"Repetier/WobbleCorrection.h").read_bytes())==before_wobble
     subprocess.run(["git","-C",str(source),"diff","--check"],check=True)
+
+    result["new_files"]=[name for name in pending if subprocess.run(
+        ["git","-C",str(source),"ls-files","--error-unmatch",name],capture_output=True).returncode!=0]
+    if result["new_files"]:
+        subprocess.run(["git","-C",str(source),"add","-N","--",*result["new_files"]],check=True)
+    subprocess.run(["git","-C",str(source),"diff","--check"],check=True)
     patch=subprocess.check_output(["git","-C",str(source),"diff","--binary"])
     (out/"firmware.diff").write_bytes(patch)
     result["firmware_diff_sha256"]=digest(patch)
-    result["new_files"]=[name for name in pending if not subprocess.run(
-        ["git","-C",str(source),"ls-files","--error-unmatch",name],capture_output=True).returncode==0]
     (out/"reconcile.json").write_text(json.dumps(result,indent=2)+"\n")
     print("P0 reconciliation:",len(pending),"firmware files;",len(result["tests"]),
           "test paths require explicit migration; no production authorization",flush=True)

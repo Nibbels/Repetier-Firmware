@@ -6,12 +6,17 @@ on:
       - 'tools/task0032/**'
       - '.github/workflows/task0032-simulation.yml'
   workflow_dispatch:
+    inputs:
+      historical:
+        description: Reproduce the completed old-pin UART chain
+        type: boolean
+        default: false
 permissions:
   contents: read
 # Superseded commits must not consume the whole runner pool. This group
 # belongs only to the Task0032 supplemental workflow, not canonical/P0 CI.
 concurrency:
-  group: task0032-simulation-${{ github.event.pull_request.number || github.ref }}-stop-tail
+  group: task0032-simulation-${{ github.event.pull_request.number || github.ref }}-forward
   cancel-in-progress: true
 jobs:
   simulation:
@@ -426,7 +431,7 @@ jobs:
 
 
   resend-ring-preflight:
-    if: github.head_ref == 'task/Task0032-resend-preflight'
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -464,7 +469,7 @@ jobs:
 
 
   resend-isr-preflight:
-    if: github.head_ref == 'task/Task0032-resend-preflight'
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -497,7 +502,7 @@ jobs:
 
 
   transport-terminal-preflight:
-    if: github.head_ref == 'task/Task0032-resend-preflight'
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -528,7 +533,7 @@ jobs:
 
 
   transport-terminal-link:
-    if: github.head_ref == 'task/Task0032-resend-preflight'
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -566,7 +571,7 @@ jobs:
 
 
   current-drive-core-preflight:
-    if: github.head_ref == 'task/Task0032-resend-preflight'
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -612,7 +617,7 @@ jobs:
 
 
   current-drive-wake-preflight:
-    if: github.head_ref == 'task/Task0032-resend-preflight'
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -657,7 +662,7 @@ jobs:
 
 
   current-drive-combined-preflight:
-    if: github.head_ref == 'task/Task0032-resend-preflight'
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
     needs: [current-drive-core-preflight, current-drive-wake-preflight]
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -708,7 +713,7 @@ jobs:
 
 
   current-transport-stage1:
-    if: github.head_ref == 'task/Task0032-resend-preflight'
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
     needs: [current-drive-combined-preflight]
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -755,7 +760,7 @@ jobs:
 
 
   current-resend-envelope:
-    if: github.head_ref == 'task/Task0032-resend-preflight'
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -763,7 +768,7 @@ jobs:
       - run: python3 tools/task0032/current-resend-envelope.py
 
   current-resend-stage2:
-    if: github.head_ref == 'task/Task0032-resend-preflight'
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
     needs: [current-transport-stage1, current-resend-envelope]
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -827,7 +832,7 @@ jobs:
   current-resend-fast:
     # Diagnostic only: replay newest UART/receiver source on an already
     # qualified immutable combined patch. Full same-run builds remain gates.
-    if: github.head_ref == 'task/Task0032-resend-preflight'
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
     runs-on: ubuntu-latest
     timeout-minutes: 8
     permissions:
@@ -876,7 +881,7 @@ jobs:
   current-stop-tail-link:
     # Not a production edit or global timing proof. Do not compose until the
     # exact predecessor has passed its full canonical and UART linked gates.
-    if: github.head_ref == 'task/Task0032-resend-preflight'
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
     needs: [current-resend-stage2]
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -943,5 +948,155 @@ jobs:
         with:
           name: task0032-current-stop-tail-${{ github.sha }}
           path: ${{ runner.temp }}/task0032-current-stop-tail
+          retention-days: 7
+          if-no-files-found: error
+
+  current-stop-tail-qualified:
+    # Not a production edit or global timing proof. Do not compose until the
+    # exact predecessor has passed its full canonical and UART linked gates.
+    if: github.head_ref == 'task/Task0032-resend-preflight'
+    permissions:
+      contents: read
+      actions: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-current-resend-29b9eb79434c5cfbf245e947373c9b5d38c2be48
+          run-id: 46162946647
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/stop-tail-input
+      - name: Reconstruct exact qualified stage2 tree and replay stop-tail candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-current-stop-tail"
+          input="$RUNNER_TEMP/stop-tail-input"
+          p0=c31b4d391cc4d2b9cca9ab3f8e236bed805716d9
+          source="$RUNNER_TEMP/current-stop-tail-p0"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          sha256sum tools/task0032/current-stop-tail-{preflight.py,replay.cpp} > "$out/source-sha256.txt"
+          echo "9ac924cb9b991e3e060f4fef63976cfcb98f7b557aadbce17cf2b0c373d0cbd2  $input/stage2.diff" | sha256sum -c
+          test "$(cat "$input/local-candidate-tree.txt")" = 80fb7ae8c6d1bb381408f31b9016316a722b0ff1
+          python3 - "$input" <<'PY'
+          import json, pathlib, sys
+          p=pathlib.Path(sys.argv[1])
+          sha=(p/'local-candidate-sha.txt').read_text().strip()
+          summary=json.loads((p/'candidate-evidence/summary.json').read_text())
+          timing=json.loads((p/'linked-transport.json').read_text())
+          assert not summary['failures'] and summary['sha']==timing['candidate_sha']==sha
+          assert summary['build_profile']=='standard-recovery'
+          assert set(summary['targets'])=={'RF1000','RF2000','RF2000v2','RF2000-X44'}
+          PY
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$source" "$p0"
+          git -C "$source" apply --index "$input/stage2.diff"
+          test "$(git -C "$source" write-tree)" = "$(cat "$input/local-candidate-tree.txt")"
+          cp "$input"/local-candidate-{sha,tree}.txt "$out/"
+          cp "$input/stage2.diff.sha256" "$out/"
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Reconstructed exact qualified stage2 source tree"
+          python3 tools/task0032/current-stop-tail-preflight.py --source "$source/Repetier" --out "$out/candidate" | tee "$out/replay.log"
+          for name in motion.h motion.cpp StepExecutor.cpp; do cp "$out/candidate/$name" "$source/Repetier/$name"; done
+          python3 tools/task0032/current-stop-tail-fixtures.py --source "$source"
+          git -C "$source" diff --check
+          python3 "$source/tests/pause-sense-offset.py"
+          python3 "$source/tests/task0032-drv8711-pause.py"
+          python3 "$source/tests/task0034-guarded-drive.py"
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -am "Disposable single-writer direct stop tail"
+          git -C "$source" rev-parse HEAD > "$out/stop-tail-candidate-sha.txt"
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Canonical host and four AVR recovery links with stop-tail ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-current-stop-tail"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          cd "$RUNNER_TEMP/current-stop-tail-p0"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" | tee "$out/canonical.log"
+      - name: Recheck linked UART on composed candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-current-stop-tail"
+          python3 tools/task0032/current-transport-linked.py --evidence "$out/candidate-evidence" --out "$out/linked-transport.json" | tee "$out/linked-transport.log"
+      - name: Measure linked Timer1 stop publication and completed pulse ledgers
+        run: |
+          python3 tools/task0032/current-stop-tail-linked.py --prior-evidence "$RUNNER_TEMP/stop-tail-input/candidate-evidence" --evidence "$RUNNER_TEMP/task0032-current-stop-tail/candidate-evidence" --out "$RUNNER_TEMP/task0032-current-stop-tail/linked-stop-tail.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-current-stop-tail-${{ github.sha }}
+          path: ${{ runner.temp }}/task0032-current-stop-tail
+          retention-days: 7
+          if-no-files-found: error
+
+  current-brake-reference:
+    if: github.head_ref == 'task/Task0032-resend-preflight'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          set -euo pipefail
+          for name in current-stop-brake-replay current-prepared-direct-replay; do
+            c++ -std=c++11 -O2 -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all "tools/task0032/$name.cpp" -o "$RUNNER_TEMP/$name"
+            "$RUNNER_TEMP/$name"
+          done
+
+  current-p0-forward-reconcile:
+    if: github.head_ref == 'task/Task0032-resend-preflight'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-current-resend-29b9eb79434c5cfbf245e947373c9b5d38c2be48
+          run-id: 46162946647
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/forward-input
+      - name: Forward reconcile qualified UART against owner removal checkpoint
+        run: |
+          set -euo pipefail
+          input="$RUNNER_TEMP/forward-input"
+          old=c31b4d391cc4d2b9cca9ab3f8e236bed805716d9
+          p0=b1e668c949e12ac2be22c218d98ba9db6a396f9b
+          tree=80fb7ae8c6d1bb381408f31b9016316a722b0ff1
+          out="$RUNNER_TEMP/forward-evidence"
+          mkdir -p "$out"
+          echo "9ac924cb9b991e3e060f4fef63976cfcb98f7b557aadbce17cf2b0c373d0cbd2  $input/stage2.diff" | sha256sum -c
+          git fetch --no-tags --depth=1 origin "$old" "$p0"
+          git worktree add --detach "$RUNNER_TEMP/forward-old" "$old"
+          git worktree add --detach "$RUNNER_TEMP/forward-p0" "$p0"
+          git -C "$RUNNER_TEMP/forward-old" apply --index "$input/stage2.diff"
+          test "$(git -C "$RUNNER_TEMP/forward-old" write-tree)" = "$tree"
+          git -C "$RUNNER_TEMP/forward-old" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Reconstruct qualified old-pin UART"
+          python3 tools/task0032/current-p0-reconcile.py --source "$RUNNER_TEMP/forward-p0" --old-candidate "$RUNNER_TEMP/forward-old" --old-tree "$tree" --p0 "$p0" --out "$out"
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Diagnostic four recovery links (not host or P0 gate)
+        run: |
+          set -euo pipefail
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          cd "$RUNNER_TEMP/forward-p0"
+          git add Repetier
+          git -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Diagnostic forward UART composition"
+          python3 tools/task0003-baseline.py "$RUNNER_TEMP/forward-evidence/avr" --avr-only
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-forward-reconcile-${{ github.sha }}
+          path: ${{ runner.temp }}/forward-evidence
           retention-days: 7
           if-no-files-found: error
