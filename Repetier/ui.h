@@ -359,6 +359,7 @@ private:
     void executeCommandAction(int action);
     void executeMenuCommand(int action);
     void changeSetting(int action, int8_t increment);
+    void changeMicrostepSetting(int action, int8_t increment);
     void changeMotionSetting(int action, int8_t increment);
     void changeExtruderSetting(int action, int8_t increment);
     void changePressureSetting(int action, int8_t increment);

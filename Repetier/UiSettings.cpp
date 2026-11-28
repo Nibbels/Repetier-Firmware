@@ -349,8 +349,7 @@ __attribute__((noinline)) void UIDisplay::changeSetting(int action, int8_t incre
     case UI_ACTION_MAX_FEEDRATE_X:
     case UI_ACTION_MAX_FEEDRATE_Y:
     case UI_ACTION_MAX_FEEDRATE_Z:
-        changeMotionSetting(action, increment);
-        break;
+        return changeMotionSetting(action, increment);
 
     case UI_ACTION_EXTR_STEPS_E0:
     case UI_ACTION_EXTR_STEPS_E1:
@@ -362,8 +361,7 @@ __attribute__((noinline)) void UIDisplay::changeSetting(int action, int8_t incre
     case UI_ACTION_EXTR_MAX_FEEDRATE_E1:
     case UI_ACTION_EXTR_START_FEEDRATE_E0:
     case UI_ACTION_EXTR_START_FEEDRATE_E1:
-        changeExtruderSetting(action, increment);
-        break;
+        return changeExtruderSetting(action, increment);
 
     case UI_ACTION_RF_SET_Z_MATRIX_HEAT_BED: {
         if (Printer::doHeatBedZCompensation) {
@@ -392,8 +390,7 @@ __attribute__((noinline)) void UIDisplay::changeSetting(int action, int8_t incre
     case UI_ACTION_EMERGENCY_ZSTOP_MAX:
     case UI_ACTION_SENSEOFFSET_DIGITS:
     case UI_ACTION_SENSEOFFSET_MAX:
-        changePressureSetting(action, increment);
-        break;
+        return changePressureSetting(action, increment);
 
     case UI_ACTION_WOBBLE_FIX_PHASEXY: {
         auto phase = Printer::wobbleCorrection.profile().phase;
@@ -434,8 +431,7 @@ __attribute__((noinline)) void UIDisplay::changeSetting(int action, int8_t incre
     case UI_ACTION_CHOOSE_DMAX:
     case UI_ACTION_CHOOSE_PIDMAX:
     case UI_ACTION_CHOOSE_SENSOR:
-        changeHeaterSetting(action, increment);
-        break;
+        return changeHeaterSetting(action, increment);
 
     case UI_ACTION_CHOOSE_MOTOR_X:
     case UI_ACTION_CHOOSE_MOTOR_Y:
@@ -492,88 +488,91 @@ __attribute__((noinline)) void UIDisplay::changeSetting(int action, int8_t incre
     }
     case UI_ACTION_MICROSTEPS_XY:
     case UI_ACTION_MICROSTEPS_Z:
-    case UI_ACTION_MICROSTEPS_E: {
-        // This is a foreground configuration transaction, not an ISR
-        // transaction. No queued/direct/scan owner may survive a change
-        // of physical resolution. Block reentrant panel actions while the
-        // drain pumps periodic services.
-        ScopedActionExclusion exclusion(*this);
-        const auto idle = [] {
-            return Printer::printJob.isIdle() && !Printer::blockAll &&
-                   !PrintLine::hasLines() && !PrintLine::directMoveActive() &&
-                   !Printer::pause.blocksCalibration() && !isAnyScanRunning() &&
-                   !GCodeInput::flashScriptActive();
-        };
-        if (idle() &&
-            Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Cancel) &&
-            idle()) {
-            Printer::disableAllSteppersNow(); // Lock movement, clear CMP, inhibit E and invalidate homing.
-            if (!idle())
-                break;
-            // With the drive disabled and no admitted work, the foreground
-            // owns calibration exclusively. Timer1 has no motion consuming
-            // these settings; Advance is inhibited. Keep IRQs available for
-            // the DRV transfer, arithmetic and potentially blocking reports.
-
-            const uint8_t firstAxis = action == UI_ACTION_MICROSTEPS_XY ? X_AXIS
-                                    : action == UI_ACTION_MICROSTEPS_Z ? Z_AXIS : E_AXIS;
-            const uint8_t lastAxis = firstAxis == Z_AXIS ? Z_AXIS : firstAxis + 1;
-            const uint8_t maxMode = firstAxis == X_AXIS ? 6 : firstAxis == Z_AXIS ? 5 : 7;
-            uint8_t mode = Drv8711::microstepMode(firstAxis);
-            INCREMENT_MIN_MAX(mode, 1, 4, maxMode);
-
-            uint8_t changedMask = 0;
-            {
-                bool updatederived = false;
-                bool updateextruder = false;
-                for (uint8_t axis = firstAxis; axis <= lastAxis; ++axis) {
-                    const uint8_t previous = Drv8711::microstepMode(axis);
-                    if (previous == mode)
-                        continue;
-
-                    // Rescale each actual driver change, including previously
-                    // mismatched pairs and a clamped/multi-step menu increment.
-                    const float factor = float(drv8711ModeValue_2_MicroSteps(mode))
-                                       / drv8711ModeValue_2_MicroSteps(previous);
-                    Drv8711::setMicrostepMode(axis, mode);
-                    changedMask |= 1U << axis;
-                    if (axis < E_AXIS) {
-                        Printer::setStepsPerMm(axis, Printer::stepsPerMm(axis) * factor);
-                        Printer::pause.scaleParkSteps(axis, factor);
-                        if (axis == Z_AXIS) {
-                            Printer::zMotion.rescaleMotorReference(factor);
-                            Printer::layers.rescaleFadeBounds(factor);
-                            Printer::manualMotion.rescaleSteps(Z_AXIS, factor);
-                            invalidateBedMatrixForReload();
-                        }
-                        updatederived = true;
-                    } else if (axis - E_AXIS < NUM_EXTRUDER) {
-                        // Five physical driver channels exist even on a
-                        // single-extruder build. Never index the absent tool.
-                        const uint8_t tool = axis - E_AXIS;
-                        extruder[tool].stepsPerMM *= factor;
-                        if (tool == Extruder::current->id)
-                            updateextruder = true;
-                    }
-                }
-                if (updatederived)
-                    Printer::updateDerivedParameter();
-                if (updateextruder)
-                    Extruder::applyCurrentSettings();
-            }
-            if (changedMask & (1U << Z_AXIS))
-                Printer::zOffset.refreshSteps(Printer::stepsPerMm(Z_AXIS));
-
-            // Persistence and diagnostic output remain outside IRQ masks.
-            // A subsequent foreground motion may observe only the completed configuration.
-            EEPROM::storeMicrostepConfiguration(changedMask);
-        }
-        break;
-    }
+    case UI_ACTION_MICROSTEPS_E:
+        return changeMicrostepSetting(action, increment);
     }
 }
 
-void UIDisplay::changeMotionSetting(int action, int8_t increment) {
+// Keep the resolution transaction's large local lifetime out of ordinary menu edits.
+__attribute__((noinline)) void UIDisplay::changeMicrostepSetting(int action, int8_t increment) {
+    // This is a foreground configuration transaction, not an ISR
+    // transaction. No queued/direct/scan owner may survive a change
+    // of physical resolution. Block reentrant panel actions while the
+    // drain pumps periodic services.
+    ScopedActionExclusion exclusion(*this);
+    const auto idle = [] {
+        return Printer::printJob.isIdle() && !Printer::blockAll &&
+               !PrintLine::hasLines() && !PrintLine::directMoveActive() &&
+               !Printer::pause.blocksCalibration() && !isAnyScanRunning() &&
+               !GCodeInput::flashScriptActive();
+    };
+    if (idle() &&
+        Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Cancel) &&
+        idle()) {
+        Printer::disableAllSteppersNow(); // Lock movement, clear CMP, inhibit E and invalidate homing.
+        if (!idle())
+            return;
+        // With the drive disabled and no admitted work, the foreground
+        // owns calibration exclusively. Timer1 has no motion consuming
+        // these settings; Advance is inhibited. Keep IRQs available for
+        // the DRV transfer, arithmetic and potentially blocking reports.
+
+        const uint8_t firstAxis = action == UI_ACTION_MICROSTEPS_XY ? X_AXIS
+                                : action == UI_ACTION_MICROSTEPS_Z ? Z_AXIS : E_AXIS;
+        const uint8_t lastAxis = firstAxis == Z_AXIS ? Z_AXIS : firstAxis + 1;
+        const uint8_t maxMode = firstAxis == X_AXIS ? 6 : firstAxis == Z_AXIS ? 5 : 7;
+        uint8_t mode = Drv8711::microstepMode(firstAxis);
+        INCREMENT_MIN_MAX(mode, 1, 4, maxMode);
+
+        uint8_t changedMask = 0;
+        {
+            bool updatederived = false;
+            bool updateextruder = false;
+            for (uint8_t axis = firstAxis; axis <= lastAxis; ++axis) {
+                const uint8_t previous = Drv8711::microstepMode(axis);
+                if (previous == mode)
+                    continue;
+
+                // Rescale each actual driver change, including previously
+                // mismatched pairs and a clamped/multi-step menu increment.
+                const float factor = float(drv8711ModeValue_2_MicroSteps(mode))
+                                   / drv8711ModeValue_2_MicroSteps(previous);
+                Drv8711::setMicrostepMode(axis, mode);
+                changedMask |= 1U << axis;
+                if (axis < E_AXIS) {
+                    Printer::setStepsPerMm(axis, Printer::stepsPerMm(axis) * factor);
+                    Printer::pause.scaleParkSteps(axis, factor);
+                    if (axis == Z_AXIS) {
+                        Printer::zMotion.rescaleMotorReference(factor);
+                        Printer::layers.rescaleFadeBounds(factor);
+                        Printer::manualMotion.rescaleSteps(Z_AXIS, factor);
+                        invalidateBedMatrixForReload();
+                    }
+                    updatederived = true;
+                } else if (axis - E_AXIS < NUM_EXTRUDER) {
+                    // Five physical driver channels exist even on a
+                    // single-extruder build. Never index the absent tool.
+                    const uint8_t tool = axis - E_AXIS;
+                    extruder[tool].stepsPerMM *= factor;
+                    if (tool == Extruder::current->id)
+                        updateextruder = true;
+                }
+            }
+            if (updatederived)
+                Printer::updateDerivedParameter();
+            if (updateextruder)
+                Extruder::applyCurrentSettings();
+        }
+        if (changedMask & (1U << Z_AXIS))
+            Printer::zOffset.refreshSteps(Printer::stepsPerMm(Z_AXIS));
+
+        // Persistence and diagnostic output remain outside IRQ masks.
+        // A subsequent foreground motion may observe only the completed configuration.
+        EEPROM::storeMicrostepConfiguration(changedMask);
+    }
+}
+
+__attribute__((noinline)) void UIDisplay::changeMotionSetting(int action, int8_t increment) {
     switch (action) {
     case UI_ACTION_PRINT_ACCEL_X: {
         float value = Printer::printAcceleration(X_AXIS);
@@ -696,7 +695,7 @@ void UIDisplay::changeMotionSetting(int action, int8_t increment) {
     }
 }
 
-void UIDisplay::changeExtruderSetting(int action, int8_t increment) {
+__attribute__((noinline)) void UIDisplay::changeExtruderSetting(int action, int8_t increment) {
     switch (action) {
     case UI_ACTION_EXTR_STEPS_E0:
     case UI_ACTION_EXTR_STEPS_E1: {
@@ -789,7 +788,7 @@ void UIDisplay::changeExtruderSetting(int action, int8_t increment) {
     }
 }
 
-void UIDisplay::changePressureSetting(int action, int8_t increment) {
+__attribute__((noinline)) void UIDisplay::changePressureSetting(int action, int8_t increment) {
     switch (action) {
     case UI_ACTION_EMERGENCY_PAUSE_MIN: {
         auto limits = Printer::pressureProtection.pauseLimits();
@@ -841,7 +840,7 @@ void UIDisplay::changePressureSetting(int action, int8_t increment) {
     }
 }
 
-void UIDisplay::changeHeaterSetting(int action, int8_t increment) {
+__attribute__((noinline)) void UIDisplay::changeHeaterSetting(int action, int8_t increment) {
     if(TemperatureController::autotuneActive())return;
     switch (action) {
     case UI_ACTION_CHOOSE_DMIN: {
