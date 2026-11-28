@@ -711,6 +711,34 @@ namespace ThermalEmergency {
 struct Ledger {bool active() const {return false;}};
 const Ledger& faultLedger(){static Ledger l;return l;}
 }
+// Heater GPIO and Timer3 register model for the actual Advance expiry
+// check. No heater time advances during the ordinary motion replays.
+#ifndef EXT0_HEATER_PIN
+#define EXT0_HEATER_PIN 100
+#endif
+#ifndef EXT1_HEATER_PIN
+#define EXT1_HEATER_PIN 101
+#endif
+#ifndef HEATED_BED_HEATER_PIN
+#define HEATED_BED_HEATER_PIN 102
+#endif
+constexpr uint8_t OCIE3A=1, OCIE3B=2, OCIE3C=3;
+static uint8_t TIFR3=0, TIMSK3=0;
+static bool heaterLeaseFailed=false;
+static uint8_t heaterGrantProgress=0;
+static volatile uint8_t requestedDuty[NUM_EXTRUDER+1]={};
+static bool leaseReplayPins[NUM_EXTRUDER+1]={};
+static void leaseReplayWrite(int pin, bool level) {
+    assert(!interruptsEnabled && !level);
+    if(pin==EXT0_HEATER_PIN) leaseReplayPins[0]=level;
+#if NUM_EXTRUDER > 1
+    else if(pin==EXT1_HEATER_PIN) leaseReplayPins[1]=level;
+#endif
+    else {
+        assert(pin==HEATED_BED_HEATER_PIN);
+        leaseReplayPins[NUM_EXTRUDER]=level;
+    }
+}
 #include "pause-sense-offset-firmware.inc"
 
 bool advanceTimerArmed() {
@@ -2094,6 +2122,31 @@ void ecmpStepping() {
     }
 }
 
+void advanceHeaterExpiry() {
+    auto& advance=Printer::extrusionOutput;
+    InterruptProtectedBlock lock;
+    advance.setStepInterval(12);
+    advance.setAdvanceEnabled(true);
+    advance.addSteps(2);
+    for(uint8_t c=0;c<=NUM_EXTRUDER;++c) {
+        requestedDuty[c]=255;
+        leaseReplayPins[c]=true;
+    }
+    heaterGrantProgress=0xff;
+    TIFR3=_BV(OCIE3A);
+    TIMSK3=0; // stale flag on an inactive channel must not latch
+    assert(fireAdvanceCompare());
+    assert(!heaterLeaseFailed && heaterGrantProgress==0xff);
+    for(uint8_t c=0;c<=NUM_EXTRUDER;++c)
+        assert(requestedDuty[c]==255 && leaseReplayPins[c]);
+    TIMSK3=_BV(OCIE3A);
+    assert(fireAdvanceCompare());
+    assert(heaterLeaseFailed && TIMSK3==0 && heaterGrantProgress==0);
+    assert(TIFR3==_BV(OCIE3A) && !interruptsEnabled);
+    for(uint8_t c=0;c<=NUM_EXTRUDER;++c)
+        assert(!requestedDuty[c] && !leaseReplayPins[c]);
+}
+
 void advanceTimer() {
     auto& advance = Printer::extrusionOutput;
     const unsigned basePulses = Extruder::stepPulses;
@@ -3222,6 +3275,8 @@ int main(int argc, char** argv) {
         advanceProfileReport();
     else if (!std::strcmp(argv[1], "ecmp-stepping"))
         ecmpStepping();
+    else if (!std::strcmp(argv[1], "advance-heater-expiry"))
+        advanceHeaterExpiry();
     else if (!std::strcmp(argv[1], "advance-timer"))
         advanceTimer();
     else if (!std::strcmp(argv[1], "advance-mode"))

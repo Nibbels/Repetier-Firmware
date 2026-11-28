@@ -100,6 +100,12 @@ def main():
         .replace("void PrintLine::stopDirectMove() {", "void PrintLine::applyDirectStop() {", 1),
         planner.split('#include "MotionPlanner.h"\n', 1)[1],
         section(move_planner, "uint8_t PrintLine::insertWaitMovesIfNeeded(", "\nbool PrintLine::waitForXFreeLines("),
+        # Compile the actual cold heater-expiry branch used by Advance,
+        # with the fixture's register and heater GPIO bindings.
+        "#define WRITE(pin, level) leaseReplayWrite(pin, level)\n"
+        + section(hal, "inline __attribute__((always_inline)) void cutExpiredHeaterLease()", "\n// Share the identical failure body.")
+        + section(hal, "inline __attribute__((always_inline)) bool pendingHeaterExpiry()", "\ninline __attribute__((always_inline)) void expirePendingHeaterLease()")
+        + "\n#undef WRITE\n",
         section(hal, "namespace {\nconstexpr uint8_t advanceCompareGuard", "\n#if !defined CASE_LIGHT_PIN"),
         section(executor, "inline void StepExecutor::updateAdvanceSteps(", "\nvoid StepExecutor::stepSlowedZCompensation("),
         section(commands, "bool Commands::waitForMotion(", "\nvoid Commands::printCurrentPosition()"),
@@ -179,12 +185,12 @@ def main():
             "extrusion-planning",
             "gcode-target", "output-safety-lock", "wobble-target", "cartesian-planning", "segment-geometry", "move-queue", "move-reserve",
             "idle-status", "print-job", "ecmp-stepping",
-            "advance-timer", "advance-mode", "advance-cancel", "motion-wait", "pressure-advance-pause", "advance-output", "advance-profile",
+            "advance-heater-expiry", "advance-timer", "advance-mode", "advance-cancel", "motion-wait", "pressure-advance-pause", "advance-output", "advance-profile",
             "step-clock", "lookahead", "acceleration-limits", "short-move-pacing", "direct-ramp", "xy-limits",
         ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
         subprocess.run([*compile_replay, "-DNUM_EXTRUDER=2", "-o", str(executable)], check=True)
-        for scenario in ("advance-tool", "pressure-stop", "pressure-frozen-z"):
+        for scenario in ("advance-tool", "advance-heater-expiry", "pressure-stop", "pressure-frozen-z"):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
 
 
