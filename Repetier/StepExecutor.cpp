@@ -428,9 +428,12 @@ long StepExecutor::performMove(PrintLine* move) {
             return 1000;
         }
         if (guard != GuardedStop::Distance) {
-            uint8_t closed = 0;
-            for (uint8_t sample = 0; sample < 3; ++sample)
-                closed += Printer::isMinEndstopHit(move->primaryAxis);
+            // Exactly three volatile switch reads, in their original order.
+            // Avoid a masked counter loop in the guarded step path.
+            const bool first = Printer::isMinEndstopHit(move->primaryAxis);
+            const bool second = Printer::isMinEndstopHit(move->primaryAxis);
+            const bool third = Printer::isMinEndstopHit(move->primaryAxis);
+            const uint8_t closed = uint8_t(first) + uint8_t(second) + uint8_t(third);
             if ((closed >= 2) == (guard == GuardedStop::Closed)) {
                 move->flags |= FLAG_GUARDED_STOP_MASK;
                 finishMove(*move, false);
