@@ -33,6 +33,16 @@ def candidate(fw):
     h,s=ring["packed_candidate"](h,s)
     s=once(s,"void UsbSerial::begin(unsigned long baud) {","void UsbSerial::begin() {")
     h,s=writer["bounded_writer"](h,s)
+    # A full write needs only one slot (one wire character in the
+    # uninterrupted case), not an entire 63-byte drain. Trial bound:
+    # 4096 polls, ~2.82 ms active CPU at the measured 11 cycles/poll.
+    # This is deliberately not a claim about wall time or final IRQ
+    # feasibility. Keep the historical full-drain budget for stage1's
+    # legacy flush only; stage2 has no production flush caller.
+    s=once(s,"""    if(next==tx_.tail) {
+        uint16_t budget=UINT16_MAX;""",
+        """    if(next==tx_.tail) {
+        uint16_t budget=4096;""")
     # Foreground and USART ISR use SPSC rings. Volatile cursors alone
     # do not order nonvolatile payload memory across compiler scheduling.
     # No cli: payload ownership changes only at the one-byte cursor.
@@ -115,6 +125,12 @@ def replay_uart(out,files):
     fixture=src.replace(check,check+"\n        researchWaitStep();")
     (out/"usb-serial-firmware.inc").write_text(re.sub(r"^#include <avr/\w+\.h>\n","",fixture,flags=re.M))
     test=writer["TEST"]
+    test=once(test,"if(good)progressEvery=flush?1000:65534;",
+        "if(good)progressEvery=flush?1000:4095;")
+    test=once(test,"assert(visits==(flush?63000u:65534u));",
+        "assert(visits==(flush?63000u:4095u));")
+    test=once(test,"assert(visits==(masked?0u:65534u));",
+        "assert(visits==(masked?0u:flush?65534u:4095u));")
     test=once(test,"UPE0=2 };","UPE0=2, UCSZ01=2, UCSZ00=1 };")
     test=once(test,"UCSR0A,UCSR0B,UBRR0H","UCSR0A,UCSR0B,UCSR0C,UBRR0H")
     test=once(test,"UsbSerial::begin(250000);","UsbSerial::begin();")
