@@ -511,6 +511,8 @@ jobs:
           python3 tools/task0032/transport-terminal-preflight.py --source "$RUNNER_TEMP/transport-terminal-p0" --out "$out" | tee "$out/replay.log"
           sha256sum tools/task0032/transport-terminal-dispatch.py >> "$out/source-sha256.txt"
           python3 tools/task0032/transport-terminal-dispatch.py --source "$RUNNER_TEMP/transport-terminal-p0" --out "$out/dispatch" | tee "$out/dispatch.log"
+          sha256sum tools/task0032/{transport-terminal-trigger,tx-blocking-preflight}.py >> "$out/source-sha256.txt"
+          python3 tools/task0032/transport-terminal-trigger.py --source "$RUNNER_TEMP/transport-terminal-p0" --out "$out/trigger" | tee "$out/trigger.log"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -539,12 +541,12 @@ jobs:
           p0=962e9b6b5152e2c3972896f5a93981bdaed61422
           git fetch --no-tags --depth=1 origin "$p0"
           git worktree add --detach "$RUNNER_TEMP/terminal-link-p0" "$p0"
-          sha256sum tools/task0032/transport-terminal-{preflight,dispatch,link}.py > "$out/source-sha256.txt"
+          sha256sum tools/task0032/transport-terminal-{preflight,dispatch,trigger,link}.py tools/task0032/tx-blocking-preflight.py > "$out/source-sha256.txt"
           arduino-cli core update-index
           arduino-cli core install arduino:avr@1.8.6
           sudo apt-get update -q
           sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
-          python3 tools/task0032/transport-terminal-link.py --source "$RUNNER_TEMP/terminal-link-p0" --out "$out" | tee "$out/inventory.log"
+          python3 tools/task0032/transport-terminal-link.py --source "$RUNNER_TEMP/terminal-link-p0" --out "$out" --with-tx-trigger | tee "$out/inventory.log"
           cd "$RUNNER_TEMP/terminal-link-p0"
           git -c user.name=Task0032 -c user.email=task0032@localhost commit -am "Disposable terminal-only candidate"
           git rev-parse HEAD > "$out/local-candidate-sha.txt"
