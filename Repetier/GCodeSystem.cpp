@@ -117,9 +117,7 @@ void restoreConfigurationDefaults() {
         return;
     EEPROM::restoreEEPROMSettingsFromConfiguration();
     if(!EEPROM::lastOperationSucceeded() || EEPROM::recoveryPending())return;
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     if(Printer::printJob.emergencyLocked())return;
-#endif
 
     UI_STATUS(UI_TEXT_RESTORE_DEFAULTS);
     showInformation(PSTR(UI_TEXT_CONFIGURATION), PSTR(UI_TEXT_RESTORE_DEFAULTS), PSTR(UI_TEXT_OK));

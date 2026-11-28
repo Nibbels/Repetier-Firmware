@@ -302,9 +302,7 @@ void UIDisplay::executeCommandAction(int action) {
         Printer::idleStatus.cancel();
         while (Printer::checkAbortKeys()) {
             Commands::checkForPeriodicalActions(); // Dont quit script by holding the ok longer than 1ms if no temp is involved. -> min einmal OK loslassen.
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
             if(Printer::printJob.emergencyLocked())return;
-#endif
         }
         if (!Printer::printJob.isIdle() || isAnyScanRunning())
             break;

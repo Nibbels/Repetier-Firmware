@@ -20,9 +20,7 @@
 #include "Repetier.h"
 #include "UiMenus.h"
 #include "uimenu.h"
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
 #include "ThermalEmergencyPanel.h"
-#endif
 
 constexpr millis_t menuAutoReturnDelayMs = 120000;
 
@@ -680,16 +678,13 @@ constexpr uint8_t panelPageCount = sizeof(ui_pages) / sizeof(ui_pages[0]);
 // Refresh current menu page. Do not retain the normal renderer's frame
 // when the terminal thermal panel is the only permitted output.
 void UIDisplay::refreshPage() {
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     if(Printer::printJob.emergencyLocked()) {
         refreshEmergencyPage();
         return;
     }
-#endif
     refreshNormalPage();
 } // refreshPage
 
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
 __attribute__((noinline)) void UIDisplay::refreshEmergencyPage() {
     if (!normalCharacters_) {
         lcdCommand(LCD_CLEAR);
@@ -707,7 +702,6 @@ __attribute__((noinline)) void UIDisplay::refreshEmergencyPage() {
         printRow(row,line,nullptr,UI_COLS);
     }
 } // refreshEmergencyPage
-#endif
 
 __attribute__((noinline)) void UIDisplay::refreshNormalPage() {
     if (!normalCharacters_) {
@@ -1103,9 +1097,7 @@ void UIDisplay::nextPreviousAction(int8_t next) {
 // Actions are events from user input. Depending on the current state, each
 // action can behave differently. Other actions do always the same like home, disable extruder etc.
 void UIDisplay::executeAction(int action) {
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     if(Printer::printJob.emergencyLocked())return;
-#endif
     if (Printer::blockAll) {
         if (action == UI_ACTION_OK || action == UI_ACTION_RF_CONTINUE) {
             Com::printFLN(PSTR("Restart after Emergency-Stop"));
@@ -1130,9 +1122,7 @@ void UIDisplay::executeAction(int action) {
 } // executeAction
 
 void UIDisplay::executeMenuCommand(int action) {
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     if (Printer::printJob.emergencyLocked()) return;
-#endif
     // Direct entries are compile-time checked in uimenu.h: no navigation,
     // top-menu jump or restart key. A fault after selection denies the command.
     if (Printer::blockAll) return;
@@ -1142,9 +1132,7 @@ void UIDisplay::executeMenuCommand(int action) {
 }
 
 void UIDisplay::slowAction() {
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     if(Printer::printJob.emergencyLocked()){refreshEmergencyPage();return;}
-#endif
     millis_t time = HAL::timeInMilliseconds();
     uint8_t refresh = 0;
 

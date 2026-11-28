@@ -58,9 +58,7 @@ void UIDisplay::finishAction(int action) {
             return;
         }
 
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         if(Printer::printJob.emergencyLocked())return;
-#endif
 
         exitmenu();
         UI_STATUS(UI_TEXT_RESTORE_DEFAULTS);

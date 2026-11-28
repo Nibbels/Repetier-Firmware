@@ -126,11 +126,9 @@ int main(){
     ZOffsetScan z;
     for(uint32_t clock:{0u,0xfffff000u}){
         reset(0,false,clock);dwell(&c);assert(visits==11);
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         for(unsigned n=1;n<=11;++n){
             reset(n,false,clock);dwell(&c);assert(locked&&visits==n);
         }
-#endif
     }
     reset(0);heldButtonWait();assert(visits==3&&continued==1);
     reset(0);h.abort();assert(moveCalls==1&&homeCalls==1&&disabled==1&&finished==1&&reloads==1&&scheduled==1);
@@ -139,7 +137,6 @@ int main(){
     reset(0,true);z.abort(false);assert(moveCalls==1&&homeCalls==0&&disabled==1&&discards==1);
     reset(0);retreatFails=true;z.abort(true);assert(moveCalls==1&&!queueCalls&&!homeCalls&&disabled==1&&discards==1);
     reset(0);retreatFails=true;h.abort();assert(moveCalls==1&&!homeCalls&&disabled==1&&finished==1);
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     for(unsigned n=1;n<=3;++n){
         reset(n);heldButtonWait();assert(locked&&visits==n&&continued==0);
     }
@@ -150,7 +147,6 @@ int main(){
     reset(1,true);h.abort();assert(locked&&!disabled&&!finished&&!scheduled);
     reset(1,true);z.abort(false);assert(locked&&!disabled&&!discards&&!scheduled);
     std::puts("Emergency unwind: 31 injected faults, no later motor enable/disable, script admission or normal scan cleanup");
-#endif
     std::puts("Healthy dwell, held button and scan abort paths passed");
 }
 """
@@ -159,7 +155,7 @@ with tempfile.TemporaryDirectory() as d:
     exe=Path(d)/"unwind"
     p.write_text(prelude+"\n"+motion+"\n"+bed+"\n"+offset+
                  "\nvoid heldButtonWait(){\n do {\n"+keys+"\n++continued;\n } while(false);\n}\n"+main)
-    for flags in (["-DRF_THERMAL_EMERGENCY_EXPERIMENT=1"],):
+    for flags in ([],):
         subprocess.run(["c++","-std=c++11","-O2","-Wall","-Wextra","-Werror",
                         *flags,str(p),"-o",str(exe)],check=True)
         subprocess.run([str(exe)],check=True)

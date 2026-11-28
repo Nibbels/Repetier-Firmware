@@ -86,7 +86,8 @@ def main():
         + ok
         + section(ui, "void UIDisplay::adjustMenuPos()", "} // adjustMenuPos") + "}\n"
         + section(ui, "void UIDisplay::navigateMenuItems(", "} // nextPreviousAction") + "}\n"
-        + section(ui, "void UIDisplay::refreshPage()", "} // refreshNormalPage") + "}\n"
+        + section(ui, "void UIDisplay::refreshPage()", "} // refreshPage") + "}\n"
+        + section(ui, "__attribute__((noinline)) void UIDisplay::refreshNormalPage()", "} // refreshNormalPage") + "}\n"
         + section(act, "void UIDisplay::zOffsetPlusAction()", "void UIDisplay::pressPlay()")
         + "void UIDisplay::mainSwitchCase(int action) { switch (action) {\n"
         + section(act, "    case UI_ACTION_RF_HEAT_BED_UP:", "    case UI_ACTION_RF_EXTRUDER_OUTPUT:")
@@ -189,6 +190,7 @@ namespace Commands { void checkForPeriodicalActions(int) {} void printCurrentPos
 template<class T, class L, class H> T constrain(T v, L low, H high) { return v < low ? low : v > high ? high : v; }
 namespace Printer {
 PreheatProfiles preheatProfiles;
+struct {bool emergencyLocked()const{return false;}} printJob;
 ZOffset zOffset;
 float stepsPerMm(int axis) { assert(axis == Z_AXIS); return scale; }
 uint8_t activeModes=0;
@@ -297,6 +299,7 @@ struct UIDisplay {
     void lcdCommand(int) { assert(false && "unexpected boot clear during normal UI replay"); }
     void refreshPage();
     void refreshNormalPage();
+    void refreshEmergencyPage(){assert(false);} // emergency formatting tested separately
     void zOffsetPlusAction(); void zOffsetMinusAction();
     void mainSwitchCase(int); void changeSwitchCase(int,int8_t);
 } uid;

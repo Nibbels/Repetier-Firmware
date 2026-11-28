@@ -115,13 +115,11 @@ int main() {
         busy.executeRemoteAction(42);
         assert(busy.calls==0 && busy.flags==(0x80|UI_FLAG_SLOW_ACTION_RUNNING));
         assert(irq==enabled);
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         Printer::printJob.locked=true;
         busy.slowAction();
         assert(busy.refreshes==1 && busy.calls==0);
         assert(busy.flags==(0x80|UI_FLAG_SLOW_ACTION_RUNNING));
         Printer::printJob.locked=false;
-#endif
     }
 }
 '''
@@ -129,8 +127,8 @@ with tempfile.TemporaryDirectory() as tmp:
     cpp=Path(tmp)/"test.cpp"
     exe=Path(tmp)/"test"
     cpp.write_text(source)
-    for defs in ([], ["-DRF_THERMAL_EMERGENCY_EXPERIMENT"]):
+    for defs in ([],):
         subprocess.run(["g++", "-std=c++11", "-Wall", "-Wextra", "-Werror", *defs,
                         str(cpp), "-o", str(exe)], check=True)
         subprocess.run([str(exe)], check=True)
-print("Task0034 local/remote panel dispatch exclusion: PASS (both IRQ entry states and thermal modes)")
+print("Task0034 local/remote panel dispatch exclusion: PASS (both IRQ entry states and terminal admission)")

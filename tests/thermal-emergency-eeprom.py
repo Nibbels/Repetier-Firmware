@@ -24,7 +24,6 @@ pre=r'''
 #include <cstdio>
 #include <initializer_list>
 #define PSTR(x) x
-#define RF_THERMAL_EMERGENCY_EXPERIMENT 1
 #define UI_TEXT_CONFIGURATION "configuration"
 #define UI_TEXT_RESTORE_DEFAULTS "defaults"
 #define UI_TEXT_OK "ok"

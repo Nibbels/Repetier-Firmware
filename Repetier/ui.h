@@ -306,9 +306,7 @@ public:
     // One flash message expansion per page; a nested RAM status cannot expand either.
     void parse(char* txt, bool ram, bool allowMessageExpansion = true);
     void refreshPage();
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     void refreshEmergencyPage(); // callers have established the terminal lock
-#endif
     const char* cachedRow(uint8_t row) const;
     void executeAction(int action);
     // Foreground-only ownership; keep the outer panel owner set across
