@@ -17,6 +17,9 @@ from weak_serial_guard import prove_weak_main
 
 BOARDS=("RF1000","RF2000","RF2000v2","RF2000-X44")
 
+from system_register_sites import register_site
+
+
 def target(arg):
     m=re.search(r";\s*0x([0-9a-f]+)\s*<",arg) or re.match(r"0x([0-9a-f]+)",arg)
     if not m: raise ValueError(arg)
@@ -90,6 +93,7 @@ def inventory(z,board,canonical=False):
     except (ValueError, KeyError) as exc:
         weak_zero=set()
         weak_guard_errors.append(str(exc))
+    system_sites = set()
     pending=[main,boot];seen=set();local={};errors=set()
     edges=collections.defaultdict(dict)
     tail_transfers=set()
@@ -109,6 +113,9 @@ def inventory(z,board,canonical=False):
                 errors.add((name(root),hex(pc),"depth/state limit",d));break
             if pc not in ins:errors.add((name(root),hex(pc),"missing"));continue
             w,op,arg=ins[pc];n=pc+w;a=arg.split(";")[0].strip();toks=a.split(", ")
+            site = register_site(pc, op, arg)
+            if site:
+                system_sites.add(site)
             if op.startswith("."):errors.add((name(root),hex(pc),"data"));continue
             if op=="push":d+=1
             if op=="pop":
@@ -191,7 +198,7 @@ def inventory(z,board,canonical=False):
             todo.append((n,d,y,pair))
         local[root]=peak
     result={"board":board,"tables":len(tables),"functions":len(seen),"edges":len(edges),
-            "errors":sorted(errors),"main":hex(main),
+            "errors":sorted(errors),"main":hex(main), "explicitSystemRegisterSites": sorted(system_sites),
             "provenUnreachableWeakCalls":[hex(pc) for pc in sorted(weak_zero)],
             "weakGuardDiagnostics":weak_guard_errors,
             "frames":[{"address":hex(a),"name":name(a),"localPeakBytes":d} for a,d in sorted(local.items())],
