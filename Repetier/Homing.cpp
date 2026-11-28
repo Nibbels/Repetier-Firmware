@@ -95,6 +95,7 @@ void Printer::homeXAxis() {
 
     if (nHomeDir) {
         UI_STATUS_UPD(UI_TEXT_HOME_X);
+        setHomed(false, -1, -1);
         Printer::resetDirectAxis(X_AXIS);
 
         int32_t offX = 0;
@@ -107,10 +108,11 @@ void Printer::homeXAxis() {
 #endif // NUM_EXTRUDER>1
 
 
-        if (!Printer::queueRelativeStepsCoordinates(long(2 * abs(maxSoftEndstopSteps_[X_AXIS] + 2 * offX) * nHomeDir), 0, 0, 0, homingFeedrate_[X_AXIS], false, true))
+        if (!Printer::queueRelativeStepsCoordinates(long(2 * abs(maxSoftEndstopSteps_[X_AXIS] + 2 * offX) * nHomeDir), 0, 0, 0, homingFeedrate_[X_AXIS], true, true) || !Printer::isXMinEndstopHit())
             return;
-        Printer::queueRelativeMMCoordinates(-1 * ENDSTOP_X_BACK_MOVE * nHomeDir, 0, 0, 0, homingFeedrate_[X_AXIS] / ENDSTOP_X_RETEST_REDUCTION_FACTOR, false);
-        if (!Printer::queueRelativeMMCoordinates(2 * ENDSTOP_X_BACK_MOVE * nHomeDir, 0, 0, 0, homingFeedrate_[X_AXIS] / ENDSTOP_X_RETEST_REDUCTION_FACTOR, true, true)) {
+        if (!Printer::queueRelativeMMCoordinates(-1 * ENDSTOP_X_BACK_MOVE * nHomeDir, 0, 0, 0, homingFeedrate_[X_AXIS] / ENDSTOP_X_RETEST_REDUCTION_FACTOR, true, true) || Printer::isXMinEndstopHit())
+            return;
+        if (!Printer::queueRelativeMMCoordinates(2 * ENDSTOP_X_BACK_MOVE * nHomeDir, 0, 0, 0, homingFeedrate_[X_AXIS] / ENDSTOP_X_RETEST_REDUCTION_FACTOR, true, true) || !Printer::isXMinEndstopHit()) {
             setHomed(false, -1, -1);
             return;
         }
@@ -139,6 +141,7 @@ void Printer::homeYAxis() {
 
     if (nHomeDir) {
         UI_STATUS_UPD(UI_TEXT_HOME_Y);
+        setHomed(-1, false, -1);
         Printer::resetDirectAxis(Y_AXIS);
 
         int32_t offY = 0;
@@ -151,10 +154,11 @@ void Printer::homeYAxis() {
 #endif // NUM_EXTRUDER>1
 
 
-        if (!Printer::queueRelativeStepsCoordinates(0, long(2 * abs(maxSoftEndstopSteps_[Y_AXIS] + 2 * offY) * nHomeDir), 0, 0, homingFeedrate_[Y_AXIS], false, true))
+        if (!Printer::queueRelativeStepsCoordinates(0, long(2 * abs(maxSoftEndstopSteps_[Y_AXIS] + 2 * offY) * nHomeDir), 0, 0, homingFeedrate_[Y_AXIS], true, true) || !Printer::isYMinEndstopHit())
             return;
-        Printer::queueRelativeMMCoordinates(0, -1 * ENDSTOP_Y_BACK_MOVE * nHomeDir, 0, 0, homingFeedrate_[Y_AXIS] / ENDSTOP_Y_RETEST_REDUCTION_FACTOR, false);
-        if (!Printer::queueRelativeMMCoordinates(0, 2 * ENDSTOP_Y_BACK_MOVE * nHomeDir, 0, 0, homingFeedrate_[Y_AXIS] / ENDSTOP_Y_RETEST_REDUCTION_FACTOR, true, true)) {
+        if (!Printer::queueRelativeMMCoordinates(0, -1 * ENDSTOP_Y_BACK_MOVE * nHomeDir, 0, 0, homingFeedrate_[Y_AXIS] / ENDSTOP_Y_RETEST_REDUCTION_FACTOR, true, true) || Printer::isYMinEndstopHit())
+            return;
+        if (!Printer::queueRelativeMMCoordinates(0, 2 * ENDSTOP_Y_BACK_MOVE * nHomeDir, 0, 0, homingFeedrate_[Y_AXIS] / ENDSTOP_Y_RETEST_REDUCTION_FACTOR, true, true) || !Printer::isYMinEndstopHit()) {
             setHomed(-1, false, -1);
             return;
         }
@@ -203,7 +207,7 @@ void Printer::homeZAxis() {
 
         //1. Schnelles Fahren bis zum Schalterkontakt:
         // Ist der Schalter gedrückt, wird sofort geskipped.
-        if (!Printer::queueRelativeStepsCoordinates(0, 0, (zMotion.maxSteps() + 2 * int32_t(zMotion.minOvertravel())) * nHomeDir, 0, homingFeedrate_[Z_AXIS], true, true))
+        if (!Printer::queueRelativeStepsCoordinates(0, 0, (zMotion.maxSteps() + 2 * int32_t(zMotion.minOvertravel())) * nHomeDir, 0, homingFeedrate_[Z_AXIS], true, true) || !Printer::isZMinEndstopHit())
             return;
 
         //2. in jedem Fall Freifahren vom Schalterkontakt:
@@ -224,8 +228,12 @@ void Printer::homeZAxis() {
             }
         }
 
+        // A release must have actually opened the switch before retesting.
+        if (Printer::isZMinEndstopHit())
+            return;
+
         //3. langsames Fahren bis zum Schalterkontakt:
-        if (!Printer::queueRelativeMMCoordinates(0, 0, (0.1f + ENDSTOP_Z_BACK_MOVE) * nHomeDir, 0, float(homingFeedrate_[Z_AXIS] / ENDSTOP_Z_RETEST_REDUCTION_FACTOR), true, true))
+        if (!Printer::queueRelativeMMCoordinates(0, 0, (0.1f + ENDSTOP_Z_BACK_MOVE) * nHomeDir, 0, float(homingFeedrate_[Z_AXIS] / ENDSTOP_Z_RETEST_REDUCTION_FACTOR), true, true) || !Printer::isZMinEndstopHit())
             return;
 
 
@@ -274,19 +282,33 @@ __attribute__((noinline)) void Printer::homeAxis(bool xaxis, bool yaxis, bool za
     // Bei beliebiger user interaktion oder Homing soll G1 etc. erlaubt werden. Dann ist der Drucker nicht abgestürzt, sondern bedient worden.
     allowMovement();
 
-    // Clear a positive bed matrix before homing Z when Y was omitted.
-    if (!yaxis && zaxis && !Printer::isZHomeSafe())
+    // Stop the sequence at the first unverified reference. In particular,
+    // do not approach Z when the preceding clearance-related Y home failed.
+    const bool requireY = !yaxis && zaxis && !Printer::isZHomeSafe();
+    bool ok = true;
+    if (requireY) {
         homeYAxis();
-
-    if (xaxis)
+        ok = isAxisHomed(Y_AXIS);
+    }
+    if (ok && xaxis) {
         homeXAxis();
-    if (yaxis)
+        ok = isAxisHomed(X_AXIS);
+    }
+    if (ok && yaxis) {
         homeYAxis();
-    if (zaxis)
+        ok = isAxisHomed(Y_AXIS);
+    }
+    if (ok && zaxis) {
         homeZAxis();
+        ok = isAxisHomed(Z_AXIS);
+    }
 
-    if (xaxis && yaxis && zaxis)
+    if (!ok) {
+        lockMovement();
+        Com::printFLN(PSTR("Error: Homing switch sequence failed"));
+    } else if (xaxis && yaxis && zaxis) {
         Printer::homeDigits();
+    }
 
     Printer::idleStatus.schedule(HAL::timeInMilliseconds());
     Commands::printCurrentPosition();
