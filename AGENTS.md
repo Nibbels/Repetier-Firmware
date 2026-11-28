@@ -10,6 +10,8 @@
 
 **Git workflow:** `ai-firmware-review` is the isolated working branch; keep `community_development` unchanged until specifically instructed. The DRV8711 BLANK invalid read command was removed without changing actual default electrical timings in [commit 8f00ed8](https://github.com/Nibbels/Repetier-Firmware/commit/8f00ed8df6a0e825dee368c1233ffc4934349faa).
 
+**Owner-facing command safety (owner, 2026-11-28; mandatory for all workers and managers).** Only present an executable/copyable shell, Git, PowerShell, G-code or other command to the owner when the owner should execute it now and all prerequisites have been verified against the live state. Explicitly say what to execute now. Never put deferred, conditional, illustrative, unsafe or not-yet-authorized commands into a runnable/copyable code block or command field, even when accompanied by a warning. Describe future actions and their prerequisites in ordinary prose instead, without printing the command. If showing a deferred command is genuinely necessary, show it only as visibly commented-out plain prose outside any code block or copyable command field; comment every executable line using the appropriate comment syntax. Recheck destructive actions (especially branch deletion) immediately before recommending them; do not combine eligible and ineligible targets. Prefer performing authorized actions through available repository tools and reporting the result. A future cleanup plan is not an instruction to execute it now.
+
 For future chats: read this file and the mechanism docs, verify against code and changelog, distinguish verified behavior from hypotheses, then propose isolated changes and tests rather than guessing.
 
 ## 2. Current priorities and invariant safety rules
