@@ -301,6 +301,7 @@ bool isMaxEndstopHit(uint8_t axis) { return xyMaxHit[axis]; }
 void stopDirectAxis(uint8_t axis) { stoppedDirectAxis = axis; }
 bool isZMaxEndstopHit() { return zMotion.maxEndstopHit(); }
 bool isZMinEndstopHit() { return ZMotion::minSwitchHit(); }
+bool zStepperEnabled() { return true; }
 bool needsCMPwait() { return false; }
 void disableAllSteppersNow() {
     assert(extrusionOutput.pendingSteps() == 0);

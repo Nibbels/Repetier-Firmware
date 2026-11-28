@@ -264,12 +264,14 @@ void Printer::homeZAxis() {
         const int32_t homeSteps = nHomeDir < 0 ? 0 : zMotion.maxSteps();
         {
             InterruptProtectedBlock noInts;
+            if (blockAll || printJob.commandsBlocked() || !zStepperEnabled() || !Printer::isZMinEndstopHit())
+                return;
             zMotion.setMotorReference(homeSteps);
             setZAxisSteps(homeSteps);
+            // Publish the homed bit in the same verified reference transaction.
+            zMotion.setHomed(true);
         }
 
-        //6. Korrektur der Flags
-        setHomed(-1, -1, true);
         // show that we are active
         Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
         UI_STATUS_UPD("");
