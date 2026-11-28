@@ -14,6 +14,7 @@ import re
 import zipfile
 
 import networkx as nx
+from timer1_exclusion import timer1_exclusion
 from avr_constant import transfer, branch as known_branch
 
 BOARDS = ("RF1000", "RF2000", "RF2000v2", "RF2000-X44")
@@ -331,6 +332,8 @@ def inventory(z, board, constant_pwm=False, timer3_wrap=False, pwm_owned_memory=
         results[v] = {"states":len(seen), "stackBytesIncludingPc":maxd,
                       "constantTracking":track, "timer3WrapTracking":wrap_track, "pwmOwnedMemoryDiagnostic":memory_track, "interruptOpenSites":len(opened), "maskedDelayReturnChains":[[name(a) for a in t] for t in sorted(delay_entries)],
                       "maskedCycles":cycles, "unresolvedMaskedCycles":len(unresolved), "acyclicMaskedBodyCycles":acyclic_cycles}
+        if v == 17:
+            results[v]["selfMask"] = timer1_exclusion(g, root, ins)
     return results
 
 
