@@ -187,6 +187,16 @@ void setManualZOffset(GCode* pCommand) {
 }
 
 void testHomingRepeatability(GCode* pCommand) {
+    // M3028 emits foreground STEP pulses, not queued motion. Do not
+    // compete with a scan, queued/direct moves or a pending Z correction.
+    if (!isHomingAllowed(pCommand))
+        return;
+    if (Printer::blockAll || !Printer::printJob.isIdle() || Printer::pause.blocksCalibration() ||
+        PrintLine::hasLines() || PrintLine::directMoveActive() ||
+        Printer::doHeatBedZCompensation || !Printer::zMotion.correctionCleared()) {
+        Com::printErrorFLN(PSTR("M3028 requires idle motion and cleared Z compensation"));
+        return;
+    }
     if (pCommand->hasX()) {
         Printer::checkHome(X_AXIS);
     }

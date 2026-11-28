@@ -60,6 +60,12 @@ public:
     // The caller publishes this under the same lock as the extrusion correction.
     void requestCorrection(int32_t steps) { correctionTarget_ = steps; }
     int32_t correctionTarget() const { return correctionTarget_; }
+    // Direct foreground diagnostics require no deferred correction, even
+    // one currently clipped by a travel limit (it could become movable).
+    bool correctionCleared() const {
+        InterruptProtectedBlock lock;
+        return correctionTarget_ == 0 && appliedCorrection_ == 0;
+    }
 
     static INLINE bool minSwitchHit() { return READ(Z_MIN_PIN) == LOW; }
     bool maxEndstopHit() const {
