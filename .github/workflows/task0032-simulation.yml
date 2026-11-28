@@ -673,7 +673,7 @@ jobs:
           out="$RUNNER_TEMP/task0032-current-combined"
           mkdir -p "$out"
           git rev-parse HEAD > "$out/checkout-sha.txt"
-          p0=bb4456ffec2c7c1caef5fae68721797352ab9695
+          p0=2eeeb010ece4f4421fb860f0c506d81939f06f05
           git fetch --no-tags --depth=1 origin "$p0"
           git worktree add --detach "$RUNNER_TEMP/current-combined-p0" "$p0"
           sha256sum tools/task0032/current-drive-combined.py > "$out/source-sha256.txt"
