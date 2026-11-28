@@ -56,13 +56,13 @@ def gpio_latency(board, ins, labels, branch_target, require_priority_fallback=Fa
         leaf_pins = {pin:count-leaf_entry_cycles for pin,count in pins.items()}
         report["priorityFallback"] = {
             str(v): priority_fallback(board, v, ins, address, branch_target, leaf, leaf_pins)
-            for v in (17,22)
+            for v in (17,21,22)
         }
     return report
 
 
 def priority_fallback(board, vector, ins, address, branch_target, leaf, leaf_pins):
-    """Prove the two higher-priority checks actually precede any other body work."""
+    """Prove all motion/PWM expiry checks precede any other body work."""
     pc = address["__vector_"+str(vector)]
     _,op,arg = ins[4*vector]
     assert op=="jmp" and branch_target(arg)==pc, (board,vector,"vector slot")
@@ -104,13 +104,49 @@ def priority_fallback(board, vector, ins, address, branch_target, leaf, leaf_pin
     assert op=="breq", (board,vector,"zero-mask branch",arg)
     skip=branch_target(arg)
     pc+=width
-    width,op,arg=ins[pc]
-    assert op=="call" and branch_target(arg)==leaf and pc+width==skip, (board,vector,"leaf call",arg)
-    # First instruction of handler to end of the flag read; no vector
-    # admission or in-flight instruction included. Normal path 1+2+1+1+2.
-    # Fault path 1+2+1+1+1+5 before the shared exact GPIO leaf.
+    # The small Advance ISR inlines the cold branch to avoid saving all
+    # call-clobbered registers. Verify the same exact pin and state stores.
+    if vector == 21:
+        cycles = prologue_cycles + 6
+        require("ldi","r24, 0x01")
+        cycles+=1
+        for symbol, register in (("heaterLeaseFailed","r24"),("heaterGrantProgress","r1")):
+            width,op,arg=ins[pc]
+            assert op=="sts" and symbol in arg and arg.split(";")[0].strip().endswith(", "+register), (board,vector,hex(pc),symbol)
+            pc+=width
+            cycles+=2
+        require("cbi","0x05, 4")
+        cycles+=2
+        pins={"PB4":cycles}
+        if board!="RF2000-X44":
+            require("lds","r24, 0x0102")
+            require("andi","r24, 0xDF" if board=="RF1000" else "r24, 0xBF")
+            require("sts","0x0102, r24")
+            cycles+=5
+            pins["PH5" if board=="RF1000" else "PH6"]=cycles
+        if board!="RF1000":
+            require("cbi","0x0e, 2")
+            cycles+=2
+            pins["PE2"]=cycles
+        count=3 if mask==0x0e else 2
+        base=None
+        for i in range(count):
+            width,op,arg=ins[pc]
+            operand=arg.split(";")[0].strip().split(", ")
+            assert op=="sts" and "requestedDuty" in arg and operand[1]=="r1", (board,vector,hex(pc),arg)
+            adr=int(operand[0],0)
+            if base is None:base=adr
+            assert adr==base+i
+            pc+=width
+        require("sts","0x0071, r1")
+        assert pc==skip, (board,vector,"unexpected inline expiry suffix")
+    else:
+        width,op,arg=ins[pc]
+        assert op=="call" and branch_target(arg)==leaf and pc+width==skip, (board,vector,"leaf call",arg)
+        pins={pin:prologue_cycles+11+c for pin,c in leaf_pins.items()}
+    # No vector admission or in-flight instruction included.
     return {"flagReadSite":hex(flag_site),
             "cyclesToFlagRead":prologue_cycles+1,
             "normalCheckCycles":7,
-            "cyclesFromFirstHandlerInstruction":{pin:prologue_cycles+11+c for pin,c in leaf_pins.items()}}
+            "cyclesFromFirstHandlerInstruction":pins}
 
