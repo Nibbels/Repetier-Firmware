@@ -167,6 +167,37 @@ void replayMarkerLoss() {
     assert(transportStops==1 && !GCodeInput::peekCurrentCommand());
     promotedQuarantine();
 }
+void replayDispatchHold(bool ackOnly) {
+    if(ackOnly) {
+        for(unsigned n=0;n<63;++n)assert(UsbSerial::tryWrite(uint8_t(n)));
+        rxFeed(checkedPacket(1,false));
+        Commands::commandLoop();
+        assert(pendingAck.pending && GCodeInput::dispatchDeferred());
+        assert(GCodeInput::peekCurrentCommand() && !dispatchedCommands);
+        assert(txDrain().size()==63);
+        Commands::commandLoop();
+        assert(txDrain()=="ok 1\r\n" && dispatchedCommands==1);
+        assert(!GCodeInput::peekCurrentCommand() && !GCodeInput::dispatchDeferred());
+    }else{
+        rxFeed(checkedPacket(1,false));GCodeInput::readFromSerial();
+        assert(txDrain()=="ok 1\r\n" && GCodeInput::peekCurrentCommand());
+        rxFeed(damagedPacket(2,false));clockMs=1;
+        Commands::commandLoop();
+        assert(recovery.phase()==ReplayPhase::Sending && GCodeInput::dispatchDeferred());
+        assert(!dispatchedCommands && GCodeInput::peekCurrentCommand()->N==1);
+        assert(txDrain()==resend2);
+        // No new blocking machine command may start while the policy is
+        // waiting for an identifiable verified expected frame.
+        for(unsigned n=0;n<8;++n)Commands::commandLoop();
+        assert(recovery.phase()==ReplayPhase::Waiting && !dispatchedCommands);
+        rxFeed(checkedPacket(2,false));Commands::commandLoop();
+        assert(txDrain()=="ok 2\r\n" && dispatchedCommands==1);
+        assert(GCodeInput::peekCurrentCommand()->N==2);
+        Commands::commandLoop();
+        assert(dispatchedCommands==2 && !GCodeInput::peekCurrentCommand());
+    }
+    assert(!transportStops && replies.empty());
+}
 void replayThermal() {
     startResend();thermalLocked=true;
     rxFeed(numbered("N2 M105")+numbered("N3 M115"));
@@ -178,7 +209,7 @@ void replayThermal() {
 
 MODES=("replay-ascii","replay-gap","replay-binary","replay-retries","replay-exhausted",
        "replay-unidentified","replay-alias","replay-partial","replay-ack","replay-ack-stall",
-       "replay-marker-loss","replay-thermal")
+       "replay-marker-loss","replay-thermal","replay-dispatch-hold","replay-ack-hold")
 
 DISPATCH=r'''    else if(scenario=="replay-ascii"||scenario=="replay-gap")replayAscii(scenario=="replay-gap");
     else if(scenario=="replay-binary")replayBinary();
@@ -186,7 +217,8 @@ DISPATCH=r'''    else if(scenario=="replay-ascii"||scenario=="replay-gap")replay
     else if(scenario=="replay-unidentified"||scenario=="replay-alias"||scenario=="replay-partial")replayUnidentified(scenario);
     else if(scenario=="replay-ack"||scenario=="replay-ack-stall")replayAck(scenario=="replay-ack-stall");
     else if(scenario=="replay-marker-loss")replayMarkerLoss();
-    else if(scenario=="replay-thermal")replayThermal();'''
+    else if(scenario=="replay-thermal")replayThermal();
+    else if(scenario=="replay-dispatch-hold"||scenario=="replay-ack-hold")replayDispatchHold(scenario=="replay-ack-hold");'''
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
