@@ -60,7 +60,7 @@ def main():
         section(rf, "void outputObject(bool showerrors)", "} // outputObject") + "}",
         pause.removeprefix('#include "Repetier.h"\n'),
         idle[idle.index("void IdleStatus::schedule("):],
-        stop.removeprefix('#include "Repetier.h"\n#include "GCodeInput.h"\n'),
+        "#define RF_THERMAL_EMERGENCY_EXPERIMENT 1\n" + stop.removeprefix('#include "Repetier.h"\n#include "GCodeInput.h"\n') + "\n#undef RF_THERMAL_EMERGENCY_EXPERIMENT\n",
         "namespace Printer {\n"
         + section(printer_header, "    static INLINE void setEPositionMM(", "\n    static INLINE void stopDirectAxis(")
         .replace("static INLINE void ", "void ")

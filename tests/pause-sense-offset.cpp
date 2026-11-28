@@ -31,7 +31,9 @@ uint8_t EXTRUDER_TIMSK = otherTimer0Interrupts;
 #include "PrintLayers.h"
 #include "BedCompensation.h"
 #include "PrintPause.h"
+#define RF_THERMAL_EMERGENCY_EXPERIMENT 1
 #include "PrintJob.h"
+#undef RF_THERMAL_EMERGENCY_EXPERIMENT
 #include "MotionPlanner.h"
 
 // The replay compiles the live firmware routines. These shims supply DMS bytes,
