@@ -92,7 +92,8 @@ uint32_t StepExecutor::armDirectStep(PrintLine& move) {
         uint16_t denom=uint16_t(clock.peak+nextRoot);
         if(!denom) {
             // Same rest-to-rest triangular one-step case as the reference.
-            denom=root(RMath::min(limits.ceiling,limits.drop/2));
+            const uint32_t halfDrop=limits.drop/2;
+            denom=root(limits.ceiling<halfDrop?limits.ceiling:halfDrop);
             if(!denom)return {before,0,clock.peak,0};
         }
         const uint32_t ticks=before==limits.ceiling && end==before
