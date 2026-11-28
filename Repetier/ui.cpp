@@ -445,14 +445,10 @@ void UIDisplay::printRow(uint8_t r, char* txt, char* txt2, uint8_t changeAtCol) 
     while ((c = *txt) != 0x00 && col < changeAtCol) {
         txt++;
         lcdPutChar(c);
-        // Cache whatever you write to the display!
-        displayCache_[r][col] = c;
         col++;
     }
     while (col < changeAtCol) {
         lcdPutChar(' ');
-        // Cache whatever you write to the display!
-        displayCache_[r][col] = ' ';
         col++;
     }
 
@@ -460,18 +456,13 @@ void UIDisplay::printRow(uint8_t r, char* txt, char* txt2, uint8_t changeAtCol) 
         while ((c = *txt2) != 0x00 && col < UI_COLS) {
             txt2++;
             lcdPutChar(c);
-            // Cache whatever you write to the display!
-            displayCache_[r][col] = c;
             col++;
         }
         while (col < UI_COLS) {
             lcdPutChar(' ');
-            // Cache whatever you write to the display!
-            displayCache_[r][col] = ' ';
             col++;
         }
     }
-    displayCache_[r][col] = 0;
 } // printRow
 
 void UIDisplay::ui_init_keys() {
@@ -529,8 +520,6 @@ void UIDisplay::initialize() {
     initializeLCD(false);
     loadStartupCharacters();
 
-    for (uint8_t y = 0; y < UI_ROWS; y++)
-        displayCache_[y][0] = 0;
     printRowP(0, PSTR(BIGC0));
     printRowP(1, PSTR(BIGC1));
     printRowP(UI_ROWS - 2, PSTR(BIGC2));
@@ -557,32 +546,38 @@ static const uint8_t bootEyeGlyphs[8][8] PROGMEM = {
 };
 static const int8_t bootEyePositions[] PROGMEM = { 0, 1, 2, 2, 1, 0, -1, -2, -2, -1 };
 
-void UIDisplay::drawBootEye(uint16_t elapsed) {
-    const uint8_t left = UI_COLS / 2 - 5;
-    const uint8_t right = left + 9;
+// The animation is a deterministic function of its phase. Reconstruct the
+// previously displayed cell from the last successful foreground refresh;
+// no shadow image is needed. The first draw follows LCD_CLEAR.
+static char bootEyeCell(uint8_t row, uint8_t x, uint8_t pupil, bool blink) {
+    constexpr uint8_t left = UI_COLS / 2 - 5;
+    constexpr uint8_t right = left + 9;
+    if (row == 0 || row == 3) {
+        if (x == left) return row == 0 ? 1 : 3;
+        if (x == right) return row == 0 ? 2 : 4;
+        if (x > left && x < right) return '-';
+    } else if (x == left || x == right) {
+        return '|';
+    } else if (x == pupil || x == pupil + 1) {
+        if (blink) return row == 1 ? '-' : ' ';
+        return 5 + (row - 1) * 2 + (x - pupil);
+    }
+    return ' ';
+}
+
+void UIDisplay::drawBootEye(uint16_t elapsed, uint16_t previous, bool first) {
     const uint8_t pupil = UI_COLS / 2 - 1
         + static_cast<int8_t>(pgm_read_byte(&bootEyePositions[(elapsed / 50) % 10]));
+    const uint8_t oldPupil = UI_COLS / 2 - 1
+        + static_cast<int8_t>(pgm_read_byte(&bootEyePositions[(previous / 50) % 10]));
     const bool blink = elapsed >= 2800 && elapsed < 3000;
+    const bool oldBlink = previous >= 2800 && previous < 3000;
     for (uint8_t row = 0; row < UI_ROWS; ++row) {
         bool cursorSet = false;
         for (uint8_t x = 0; x < UI_COLS; ++x) {
-            char desired = ' ';
-            if (row == 0 || row == 3) {
-                if (x == left)
-                    desired = row == 0 ? 1 : 3;
-                else if (x == right)
-                    desired = row == 0 ? 2 : 4;
-                else if (x > left && x < right)
-                    desired = '-';
-            } else if (x == left || x == right) {
-                desired = '|';
-            } else if (x == pupil || x == pupil + 1) {
-                if (blink)
-                    desired = row == 1 ? '-' : ' ';
-                else
-                    desired = 5 + (row - 1) * 2 + (x - pupil);
-            }
-            if (displayCache_[row][x] == desired) {
+            const char desired = bootEyeCell(row, x, pupil, blink);
+            const char old = first ? ' ' : bootEyeCell(row, x, oldPupil, oldBlink);
+            if (old == desired) {
                 cursorSet = false;
                 continue;
             }
@@ -591,9 +586,7 @@ void UIDisplay::drawBootEye(uint16_t elapsed) {
                 cursorSet = true;
             }
             lcdPutChar(desired == 8 ? 0 : desired);
-            displayCache_[row][x] = desired;
         }
-        displayCache_[row][UI_COLS] = 0;
     }
 }
 
@@ -605,12 +598,9 @@ void UIDisplay::beginBootEye() {
     HAL::delayMilliseconds(2); // existing LCD clear execution time
     for (uint8_t i = 0; i < 8; ++i)
         createChar((i + 1) & 7, bootEyeGlyphs[i]);
-    for (uint8_t row = 0; row < UI_ROWS; ++row)
-        for (uint8_t x = 0; x < UI_COLS; ++x)
-            displayCache_[row][x] = ' ';
     // These clocks are owned by the boot screen until normal rendering resumes.
     lastSwitch = lastRefresh = HAL::timeInMilliseconds();
-    drawBootEye(0);
+    drawBootEye(0, 0, true);
 }
 
 void UIDisplay::serviceBootEye() {
@@ -625,7 +615,7 @@ void UIDisplay::serviceBootEye() {
     }
     if (elapsed / 50 == (lastRefresh - lastSwitch) / 50)
         return;
-    drawBootEye(static_cast<uint16_t>(elapsed));
+    drawBootEye(static_cast<uint16_t>(elapsed), static_cast<uint16_t>(lastRefresh - lastSwitch), false);
     lastRefresh = now;
 }
 
@@ -708,9 +698,14 @@ __attribute__((noinline)) void UIDisplay::refreshNormalPage() {
     uint16_t r;
     adjustMenuPos();
 
-    // Render the complete frame into the existing foreground-only cache.
-    // printRow subsequently compacts a scrolled row leftwards in place;
-    // its source starts at or after its destination, and it reads before writing.
+    // Format and transmit one row at a time. The foreground owns both
+    // printCols and the LCD transport; neither invokes the periodic pump.
+    const uint8_t scroll = shift > 0 ? shift : 0;
+    const auto writeRow = [&](uint8_t row) {
+        const uint8_t length = strlen(printCols);
+        const uint8_t offset = length > UI_COLS ? RMath::min(length - UI_COLS, scroll) : 0;
+        printRow(row, &printCols[offset], nullptr, UI_COLS);
+    };
     if (menuLevel == 0) {
         UIMenu* men = (UIMenu*)pgm_read_word(&(ui_pages[menuPos[0]]));
         uint16_t nr = pgm_read_word(&(men->numEntries));
@@ -719,7 +714,7 @@ __attribute__((noinline)) void UIDisplay::refreshNormalPage() {
             UIMenuEntry* ent = (UIMenuEntry*)pgm_read_word(&(entries[r]));
             col = 0;
             parse((char*)pgm_read_word(&(ent->text)), false);
-            strcpy(displayCache_[r], printCols);
+            writeRow(r);
         }
     } else {
         UIMenu* men = (UIMenu*)menu[menuLevel];
@@ -778,7 +773,7 @@ __attribute__((noinline)) void UIDisplay::refreshNormalPage() {
                 }
             }
 
-            strcpy(displayCache_[r], printCols);
+            writeRow(r);
             r++;
         }
     }
@@ -786,14 +781,7 @@ __attribute__((noinline)) void UIDisplay::refreshNormalPage() {
 
     printCols[0] = 0;
     while (r < UI_ROWS)
-        strcpy(displayCache_[r++], printCols);
-
-    const uint8_t scroll = shift > 0 ? shift : 0;
-    for (uint8_t row = 0; row < UI_ROWS; ++row) {
-        const uint8_t length = strlen(displayCache_[row]);
-        const uint8_t offset = length > UI_COLS ? RMath::min(length - UI_COLS, scroll) : 0;
-        printRow(row, &displayCache_[row][offset], NULL, UI_COLS);
-    }
+        writeRow(r++);
 } // refreshNormalPage
 
 void UIDisplay::showMessage(const void* line1, const void* line2, const void* line3, const void* line4) {
