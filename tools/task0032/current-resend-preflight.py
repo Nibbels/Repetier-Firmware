@@ -312,6 +312,90 @@ def candidate(fw):
         "ResendPolicy.h":(HERE/"resend-policy.h").read_text(),
         "ResendEnvelope.h":wire["HEADER"].lstrip()}
 
+def adapt_canonical(source):
+    """Adapt only the affected actual-source fixtures and IDE declarations.
+
+    Do not restore legacy heater-comparison selectors: the canonical P0
+    owner removed that probe in 0914b879. Its historical evidence survives
+    in the old commits. The standard recovery builder still verifies
+    the integrated lease/watchdog paths on each of the four boards.
+    """
+    fw=source/"Repetier"
+    for filename in ("Repetier.vcxproj","Repetier.vcxproj.filters"):
+        p=fw/filename;s=p.read_text()
+        if filename.endswith(".filters"):
+            anchor='    <ClInclude Include="PrintJob.h">\n      <Filter>Header Files</Filter>\n    </ClInclude>'
+            new=anchor+"".join('\n    <ClInclude Include="'+name+'">\n      <Filter>Header Files</Filter>\n    </ClInclude>'
+                for name in ("ResendPolicy.h","ResendEnvelope.h"))
+        else:
+            anchor='    <ClInclude Include="PrintJob.h" />'
+            new=anchor+"\n    <ClInclude Include=\"ResendPolicy.h\" />\n    <ClInclude Include=\"ResendEnvelope.h\" />"
+        p.write_text(once(s,anchor,new))
+    p=source/"tests/temperature-control-replay.py";s=p.read_text()
+    s=once(s,'    #include "printer-safety.inc"','    #include "printer-safety.inc"\n'
+        '    void clearHeaterTargets();\n    void revokeHeaterOutputsLocked();')
+    p.write_text(s)
+    p=source/"tests/task0034-terminal-stop.py";s=p.read_text()
+    # Extract the common motion cleanup and both actual terminal owners.
+    # Preserve the original thermal cases; add separate transport and
+    # promotion controls, without duplicating implementation in stubs.
+    s=once(s,'src.index("void Printer::stopForThermalFault()")',
+        'src.index("void Printer::stopTerminalMotionLocked()")')
+    s=once(s,'body=src[','body="#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT\\n"+src[')
+    s=once(s,'static bool irq, entryI, heatersOff, motorsEnabled;',
+        'static bool irq, entryI, heatersOff, motorsEnabled, targetsCleared;\n'
+        'static unsigned revokes, clears;')
+    s=once(s,'    void stopForThermalFault();',
+        '''    void stopTerminalMotionLocked();
+    void stopForThermalFault();
+    void stopForTransportFault();
+    void revokeHeaterOutputsLocked(){
+        assert(!irq && printJob.transportEmergency() && !heatersOff && sequence==0);
+        heatersOff=true;++revokes;
+    }
+    void clearHeaterTargets(){
+        assert(irq==entryI && heatersOff && printJob.transportEmergency() && sequence==6);
+        targetsCleared=true;++clears;
+    }''')
+    s=once(s,'    sequence=7;', '    if(Printer::printJob.transportEmergency())assert(targetsCleared);\n    sequence=7;')
+    s=once(s,'        Printer::stopForThermalFault();\n        assert(sequence==7 && irq==enabled && motorsEnabled);\n    }\n}',
+        '''        Printer::stopForThermalFault();
+        assert(sequence==7 && irq==enabled && motorsEnabled);
+        assert(Printer::printJob.thermalEmergency());
+        Printer::stopForTransportFault();
+        assert(sequence==7 && irq==enabled && !Printer::printJob.transportEmergency());
+
+        Printer::printJob=PrintJob{};
+        if(phase==1||phase==3)Printer::printJob.admitPrintMotion();
+        if(phase==2)Printer::printJob.beginFilamentService();
+        if(phase==3)assert(Printer::printJob.beginStop(1));
+        Printer::blockAll=Printer::movementLocked=false;
+        irq=entryI=enabled;heatersOff=targetsCleared=false;motorsEnabled=true;
+        sequence=revokes=clears=0;
+        Printer::stopForTransportFault();
+        assert(sequence==7 && irq==enabled && motorsEnabled && heatersOff && targetsCleared);
+        assert(revokes==1 && clears==1);
+        assert(Printer::blockAll && Printer::movementLocked);
+        assert(Printer::printJob.emergencyLocked() && Printer::printJob.commandsBlocked());
+        assert(Printer::printJob.transportEmergency());
+        Printer::stopForTransportFault();
+        assert(sequence==7 && revokes==1 && clears==1 && irq==enabled);
+        Printer::stopForThermalFault();
+        assert(Printer::printJob.thermalEmergency() && !Printer::printJob.transportEmergency());
+        assert(sequence==7 && revokes==1 && clears==1 && irq==enabled && motorsEnabled);
+    }
+}''')
+    s=once(s,'sequence=0;\n        Printer::stopForThermalFault();',
+        'sequence=revokes=clears=0;\n        Printer::stopForThermalFault();')
+    s=once(s,'Task0034 terminal motion stop: four phases, both entry I states, repeat call PASS',
+        'Task0034 common terminal motion stop: four phases, both I states, transport, thermal and promotion PASS')
+    p.write_text(s)
+    # P0 already retired the obsolete nonstandard builds; don't re-enable
+    # them to make this disposable standard-recovery candidate compile.
+    old=source/"tests/heater-lease-integrated-avr.py"
+    assert "Build historical comparison candidates" in old.read_text()
+    old.unlink()
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source",type=Path,required=True)
@@ -342,6 +426,7 @@ def main():
     for name,data in files.items():
         (fw/name).write_text(data)
         (out/name).write_text(data)
+    adapt_canonical(source)
     subprocess.run(["git","-C",str(source),"diff","--check"],check=True)
     (out/"provenance.json").write_text(json.dumps({
         "p0":drive["P0"],"combined_sha256":manifest["combined_sha256"],
