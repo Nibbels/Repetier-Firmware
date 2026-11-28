@@ -19,7 +19,7 @@ constexpr uint16_t XYZ_STEPPER_HIGH_DELAY = 100, XYZ_STEPPER_LOW_DELAY = 100;
 #endif
 
 bool interruptsEnabled = true, high[3] = {}, positive[3] = {};
-bool closed[3] = {};
+bool closed[3] = {}, forceMin[3] = {};
 int32_t physical[3] = {};
 unsigned pulses = 0;
 bool scanRunning = false, queueOccupied = false, driverEnabled = true;
@@ -35,6 +35,7 @@ public:
 };
 
 bool minContact(uint8_t axis) {
+    if (forceMin[axis]) return true;
     if (physical[axis] <= 0) closed[axis] = true;
     if (physical[axis] >= 24) closed[axis] = false;
     return closed[axis];
@@ -198,6 +199,7 @@ void reset(uint8_t a, int32_t origin) {
     for (uint8_t i=0; i<3; ++i) {
         physical[i] = i == a ? origin : 100;
         closed[i] = physical[i] <= 0;
+        forceMin[i] = false;
         high[i] = false;
     }
     for (uint8_t i=0; i<2; ++i) {
@@ -356,6 +358,10 @@ int main() {
         assert(run(axis,10,GuardedStop::Open)==0 && matched());
         reset(axis,999);
         assert(run(axis,10,GuardedStop::Distance)==1 && motor(axis)==1000);
+        // Conflicting maximum and minimum: neither direction may pulse.
+        reset(axis,1000);forceMin[axis]=true;
+        assert(run(axis,-10,GuardedStop::Distance)==0 && motor(axis)==1000);
+        assert(run(axis,10,GuardedStop::Distance)==0 && motor(axis)==1000);
         for (int reason=0; reason<3; ++reason)
             for (int cut=0; cut<=80; ++cut) {
                 reset(axis,80);

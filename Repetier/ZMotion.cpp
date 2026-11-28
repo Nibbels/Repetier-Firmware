@@ -87,8 +87,13 @@ ZMotion::Step ZMotion::recoverQueuedOvertravel() {
 
 ZMotion::Step ZMotion::checkQueuedStep(int8_t direction, bool abortAtEndstop) {
     if (atUpperEndstop()) {
-        if (direction < 0)
+        if (direction < 0) {
+            if (minSwitchHit()) {
+                queuedOvertravel_ = 0;
+                return Step::Stop;
+            }
             return recoverQueuedOvertravel();
+        }
         if (abortAtEndstop) {
             queuedOvertravel_ = 0;
             return Step::Stop;
@@ -111,8 +116,11 @@ ZMotion::Step ZMotion::checkQueuedStep(int8_t direction, bool abortAtEndstop) {
 
 ZMotion::Step ZMotion::checkDirectStep(int8_t direction, bool stopAtMinSwitch) {
     if (atUpperEndstop()) {
-        if (direction < 0)
+        if (direction < 0) {
+            if (minSwitchHit())
+                return Step::Stop;
             return Step::Pulse;
+        }
         direct_.stop();
         return Step::Stop;
     }

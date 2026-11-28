@@ -272,8 +272,13 @@ static bool canStepAtXYLimit(uint8_t axis, PrintLine* move, uint8_t forQueue) {
 template <uint8_t axis, uint8_t forQueue>
 static inline __attribute__((always_inline)) bool canStepXY(PrintLine* move) {
     static_assert(axis == X_AXIS || axis == Y_AXIS, "XY limit check requires X or Y");
-    if (Printer::isMaxEndstopHit(axis))
+    if (Printer::isMaxEndstopHit(axis)) {
+        // The software maximum may disagree with the physical minimum
+        // before homing. Never let it mask a contact in the travel direction.
+        if (move->isNegativeMoveOfAxis(axis) && Printer::isMinEndstopHit(axis))
+            return canStepAtXYLimit<-1>(axis, move, forQueue);
         return canStepAtXYLimit<1>(axis, move, forQueue);
+    }
     if (Printer::isMinEndstopHit(axis))
         return canStepAtXYLimit<-1>(axis, move, forQueue);
 
