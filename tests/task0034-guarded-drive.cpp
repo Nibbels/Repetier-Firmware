@@ -8,7 +8,6 @@
 using flag8_t = uint8_t;
 using fast8_t = uint8_t;
 using speed_t = uint16_t;
-enum { X_AXIS, Y_AXIS, Z_AXIS, E_AXIS };
 enum { Z_MIN_PIN, Z_MAX_PIN, Z_DIR_PIN, Z_STEP_PIN };
 constexpr bool INVERT_Z_DIR = false, LOW = false, HIGH = true;
 constexpr float Z_ENDSTOP_DRIVE_OVER = 0.25f;
