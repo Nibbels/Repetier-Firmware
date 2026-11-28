@@ -42,6 +42,8 @@ pre=r'''
 #include "BoardConfiguration.h"
 #include "EepromZoneDefaults.h"
 #include "EepromZoneSession.h"
+#undef str
+#undef xstr
 using namespace EepromZones;
 #define PROGMEM
 #define PSTR(x) x
@@ -176,19 +178,21 @@ int main(){
     EEPROM::update(&c);assert(lastOk&&driveApplies==1&&applies==0&&revocations==0);
     auto writes=dev.programs;
     EEPROM::update(&c);assert(lastOk&&driveApplies==1&&dev.programs==writes);
-    c.P=address(Field::F_E0_PID_MAX);c.S=80;
+    // Pick a different value even if a future factory profile changes.
+    uint8_t data[MaxPayload];uint32_t alerts=AllAlerts;
+    assert(session().read(Hotend0,data,length(Hotend0),alerts)==Result::Ok);
+    c.P=address(Field::F_E0_PID_MAX);
+    c.S=BlockDecoder(Hotend0,data,length(Hotend0)).u8(Field::F_E0_PID_MAX)==80?81:80;
     rejected(c);
     idleAllowed=cold=true;
     // Test actual M206 wrapper's sensor/cap calibration revocation path.
-    uint8_t data[MaxPayload];uint32_t alerts=AllAlerts;
-    assert(session().read(Hotend0,data,length(Hotend0),alerts)==Result::Ok);
-    c.S=BlockDecoder(Hotend0,data,length(Hotend0)).u8(Field::F_E0_PID_MAX)==80?81:80;
     EEPROM::update(&c);assert(lastOk&&applies==1&&revocations==1);
     c.S=82;terminal=true;rejected(c);terminal=false;
     autotune=true;rejected(c);autotune=false;
     c.T=3;c.P=address(Field::F_E0_PID_PGAIN);
     c.X=std::numeric_limits<float>::quiet_NaN();rejected(c);
-    c.X=1.5f;rejected(c);
+    assert(session().read(Hotend0,data,length(Hotend0),alerts)==Result::Ok);
+    c.X=BlockDecoder(Hotend0,data,length(Hotend0)).f32(Field::F_E0_PID_PGAIN)==1.5f?2.f:1.5f;rejected(c);
     c.T=0;c.P=address(Field::F_RF_MOTOR_CURRENT);c.S=1;rejected(c);
     c.P=address(Field::F_NEW_BED_EMERGENCY_C);c.S=100;rejected(c);
     c.P=address(Field::F_E0_PID_MAX);c.S=83;c.s=false;rejected(c);
