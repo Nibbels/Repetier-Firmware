@@ -447,6 +447,8 @@ jobs:
           python3 tools/task0032/resend-stream-preflight.py --source "$RUNNER_TEMP/resend-p0" --packed-gate | tee "$out/packed-stream.log"
           sha256sum tools/task0032/resend-host-contract.py >> "$out/source-sha256.txt"
           python3 tools/task0032/resend-host-contract.py --out "$out/host-contract" | tee "$out/host-contract.log"
+          sha256sum tools/task0032/tx-blocking-preflight.py >> "$out/source-sha256.txt"
+          python3 tools/task0032/tx-blocking-preflight.py --source "$RUNNER_TEMP/resend-p0" --out "$out/blocking-tx" | tee "$out/blocking-tx.log"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
