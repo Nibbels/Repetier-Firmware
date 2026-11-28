@@ -158,7 +158,7 @@ __attribute__((noinline)) void handleScanWorkTasks(bool tickDue) {
         discardScans();
         return;
     }
-    if (!Printer::printJob.isIdle() || Printer::pause.blocksCalibration())
+    if (!Printer::printJob.isIdle() || Printer::pause.blocksCalibration() || GCodeInput::flashScriptActive())
         return;
 
     Calibration::scanSession.beginDispatch();
@@ -204,7 +204,15 @@ void handleStartStandby(millis_t uTime) {
 }
 
 void outputObject(bool showerrors) {
-    if (GCodeInput::flashScriptActive() || PrintLine::hasLines() || !Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Cancel)) {
+    const auto admitted = [] {
+        return !GCodeInput::flashScriptActive() && !isAnyScanRunning() &&
+               (Printer::printJob.isIdle() || Printer::printJob.isPrinting());
+    };
+    // A wait can pump the panel. Never enter an output script after a
+    // calibration or filament operation has acquired the machine.
+    if (!admitted() || PrintLine::hasLines() ||
+        !Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Cancel) ||
+        !admitted()) {
         if (showerrors)
             showError((void*)ui_text_output_object, (void*)ui_text_operation_denied);
         return;

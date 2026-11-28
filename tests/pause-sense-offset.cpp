@@ -2389,6 +2389,20 @@ void filamentProgramDuringPause() {
 }
 
 void finishAdvanceBeforeAndAfterOutput() {
+    PrintLine::linesCount=0;
+    for (char* scan : {&g_nHeatBedScanStatus, &g_nZOSScanStatus}) {
+        *scan=1;
+        outputObject(false);
+        assert(!objectOutputs && !motorShutdowns);
+        *scan=0;
+    }
+    Printer::printJob.finishPrintMotion();
+    assert(Printer::printJob.beginFilamentService());
+    outputObject(false);
+    assert(!objectOutputs && !motorShutdowns);
+    Printer::printJob.finishFilamentService();
+    Printer::printJob.admitPrintMotion();
+
     auto& output = Printer::extrusionOutput;
     output.setAdvanceEnabled(true);
     output.setStepInterval(15);

@@ -124,6 +124,8 @@ InterruptProtectedBlock::InterruptProtectedBlock() {
 
 constexpr int Calibrating = 1;
 namespace GCodeInput {
+bool scriptActive=false;
+bool flashScriptActive(){return scriptActive;}
 void keepAlive(int state) {
     assert(state == Calibrating);
     ++serviced;
@@ -253,6 +255,10 @@ int main(int argc, char** argv) {
         zOffsetScan.startOrCancel(false);
         assert(!zOffsetScan.active() && !homedZ && !homedXY);
         Printer::pause.servicing=false;
+        GCodeInput::scriptActive=true;
+        zOffsetScan.startOrCancel(false);
+        assert(!zOffsetScan.active() && !homedZ && !homedXY);
+        GCodeInput::scriptActive=false;
         injectPauseAtAdmission=true;
         zOffsetScan.startOrCancel(false);
         assert(!injectPauseAtAdmission && Printer::pause.paused);

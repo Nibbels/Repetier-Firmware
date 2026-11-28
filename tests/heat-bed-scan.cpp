@@ -158,6 +158,8 @@ template<typename... T> void printFLN(T...) {}
 }
 enum { Calibrating };
 namespace GCodeInput {
+bool scriptActive=false;
+bool flashScriptActive(){return scriptActive;}
 void keepAlive(int state) { assert(state == Calibrating); ++keepAlives; }
 }
 namespace RMath { using std::min; using std::max; }
@@ -252,6 +254,10 @@ int main(int argc, char** argv) {
         heatBedScan.startOrCancel(HeatBedScanMode::Standard);
         assert(!heatBedScan.active() && !homedZ && !homedXY);
         Printer::pause.servicing=false;
+        GCodeInput::scriptActive=true;
+        heatBedScan.startOrCancel(HeatBedScanMode::Standard);
+        assert(!heatBedScan.active() && !homedZ && !homedXY);
+        GCodeInput::scriptActive=false;
         injectPauseAtAdmission=true;
         heatBedScan.startOrCancel(HeatBedScanMode::Standard);
         assert(!injectPauseAtAdmission && Printer::pause.paused);
