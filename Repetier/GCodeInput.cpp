@@ -502,14 +502,6 @@ bool GCodeInput::flashScriptActive() {
     return flashScriptRunning;
 }
 
-void GCodeInput::executeFlashScript(const char* cmd) {
-    if (flashScriptRunning || Printer::printJob.commandsBlocked())
-        return;
-    flashScriptRunning = true;
-    runFlashScript(cmd);
-    flashScriptRunning = false;
-}
-
 // The menu's former one-line M3913/M3914 scripts need neither a GCode
 // object nor the ASCII parser or general G/M dispatch. Keep the existing
 // foreground script ownership through the final periodic service.
@@ -598,45 +590,6 @@ __attribute__((noinline)) bool GCodeInput::runOutputProgram() {
     return finishInternalStep(true);            // G1 Y245 F4800
 }
 
-// Keep the parser and command buffer frame out of refused nested entries.
-__attribute__((noinline)) void GCodeInput::runFlashScript(const char* cmd) {
-    char buf[80];
-    uint8_t buflen;
-    char c = 0;
-    GCode code;
-    do {
-        // Wait for a free place in command buffer
-        // Scan next command from string
-        uint8_t comment = 0;
-        buflen = 0;
-        do {
-            c = HAL::readFlashByte(cmd++);
-            if (c == 0 || c == '\n')
-                break;
-            if (c == ';')
-                comment = 1;
-            if (comment)
-                continue;
-            buf[buflen++] = c;
-        } while (buflen < 79);
-        if (buflen == 0) // empty line ignore
-        {
-            if (!c)
-                return; // Special case \n0
-            continue;
-        }
-        buf[buflen] = 0;
-        // Send command into command buffer
-        if (parseAscii(code, buf, false) && (code.params & 518)) // Success
-        {
-            Commands::executeGCode(&code);
-            Commands::checkForPeriodicalActions(Processing);
-            if (Printer::printJob.commandsBlocked())
-                return;
-        }
-    } while (c);
-} // runFlashScript
-
 // Receive one complete command from the USB serial port per call.
 void GCodeInput::readFromSerial() {
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
@@ -724,7 +677,7 @@ void GCodeInput::readFromSerial() {
                     continue;
                 }
                 GCode& command = commandQueue.writeSlot();
-                if (parseAscii(command, (char*)frame.bytes, true))
+                if (parseAscii(command, (char*)frame.bytes))
                     checkAndPushCommand(command);
                 else
                     requestResend();
@@ -924,14 +877,14 @@ bool GCodeInput::parseBinary(GCode& command, uint8_t* buffer, int8_t length) {
 // linker experiment. The linked audit must prove all table destinations.
 __attribute__((noinline, section(".text.rf_near_parser")))
 #endif
-bool GCodeInput::parseAscii(GCode& command, char* line, bool fromSerial) {
+bool GCodeInput::parseAscii(GCode& command, char* line) {
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     const char* originalLine=line;
 #endif
     char* pos = line;
     command.params = 0;
     command.params2 = 0;
-    command.internalCommand = !fromSerial;
+    command.internalCommand = false;
     bool hasChecksum = false;
     char c;
     while ((c = *(pos++))) {
@@ -1129,7 +1082,7 @@ bool GCodeInput::parseAscii(GCode& command, char* line, bool fromSerial) {
         return false;
     }
 #endif
-    if (serialReceive.lastCommandWasBinary && !hasChecksum && fromSerial && !frame.borrowedText) {
+    if (serialReceive.lastCommandWasBinary && !hasChecksum && !frame.borrowedText) {
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         if(!Printer::printJob.emergencyLocked())
 #endif

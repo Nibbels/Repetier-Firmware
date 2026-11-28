@@ -30,7 +30,6 @@ uint8_t txFree=63;
 unsigned liveRequests=0,replayRequests=0;
 #endif
 unsigned flushes = 0;
-unsigned scriptCommands = 0;
 unsigned dispatchedCommands = 0, statusCommands = 0, stopRequests = 0;
 bool legacyRejected = false, settingsBlocked = false;
 unsigned softLoads = 0, softUnloads = 0;
@@ -43,7 +42,6 @@ unsigned heaterRequests = 0, extrusionRequests = 0;
 unsigned periodicVisits = 0, pendingOutputVisits = 0;
 bool injectNestedScript = false, stopDuringScript = false;
 struct EmergencyReached {};
-GCode lastScriptCommand{};
 }
 
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
@@ -73,7 +71,6 @@ void serialFlush() {
 #endif
     ++flushes;
 }
-char readFlashByte(const char* position) { return *position; }
 }
 
 enum { X_AXIS, Y_AXIS, Z_AXIS, E_AXIS };
@@ -134,7 +131,8 @@ void checkForPeriodicalActions(FirmwareState) {
         injectNestedScript = false;
         GCodeInput::executeSoftFilament(false);
         assert(GCodeInput::flashScriptActive());
-        GCodeInput::executeFlashScript("G1 X99\n");
+        assert(!GCodeInput::executeOutputProgram());
+        GCodeInput::executeHardFilament(false);
     }
     if (stopDuringScript) {
         stopDuringScript = false;
@@ -202,11 +200,11 @@ void loadFilamentWithParameters(int16_t p, uint8_t f) {
 void unloadFilamentWithParameters(int16_t p) {
     assert(GCodeInput::flashScriptActive());
     ++softUnloads; softPressure=p;
-    GCodeInput::executeFlashScript("G1 X77"); // refuse nested text entry
+    assert(!GCodeInput::executeOutputProgram()); // refuse cross-program entry
 }
 void dispatchMotion(GCode* code) {
     ++dispatchedCommands;
-    if (code->internalCommand) { ++scriptCommands; lastScriptCommand = *code; }
+    assert(!code->internalCommand);
     if (code->hasE()) ++extrusionRequests;
 }
 void dispatchMachine(GCode* code) {
@@ -499,7 +497,7 @@ void stopDrainsInput() {
     assert(GCodeInput::peekCurrentCommand());
     stopped = true;
     Commands::commandLoop();
-    assert(!GCodeInput::peekCurrentCommand() && scriptCommands == 0);
+    assert(!GCodeInput::peekCurrentCommand());
     feed("N2 M105\n");
     readReply("ok 2\r\n");
     assert(!GCodeInput::peekCurrentCommand());
@@ -560,7 +558,8 @@ void legacyStream(const std::string& scenario) {
     assert(legacyRejected && stopRequests == 1);
     assert(dispatchedCommands == normalDispatches && heaterRequests == 2 && extrusionRequests == 1);
     assert(statusCommands == 3 && replies.find("Job rejected;") != std::string::npos);
-    GCodeInput::executeFlashScript("G1 E1\nM104 S200\n");
+    GCodeInput::executeHardFilament(false);
+    assert(!GCodeInput::executeOutputProgram() && internalEvents.empty());
     assert(dispatchedCommands == normalDispatches && heaterRequests == 2 && extrusionRequests == 1);
     feed("M111 S8\n");
     Commands::commandLoop();
@@ -623,7 +622,8 @@ void thermalEmergency() {
     assert(liveRequests==2);
     feed(binary({0x85,0x00,0x07,0x00,1}));readReply("Error: THERMAL EMERGENCY\r\nok 7\r\n");
     feed(numbered("N8 M110"));readReply("ok\r\n");
-    GCodeInput::executeFlashScript("G1 X1\nM104 S200\n");
+    GCodeInput::executeHardFilament(false);
+    assert(!GCodeInput::executeOutputProgram() && internalEvents.empty());
     assert(!GCodeInput::peekCurrentCommand()&&dispatchedCommands==0&&heaterRequests==0&&flushes==0);
 }
 #endif
@@ -646,19 +646,16 @@ void postStopOutputBoundary() {
 #endif
 }
 
-void flashScript() {
+void internalProgramSerialBoundary() {
     injectNestedScript = true;
-    GCodeInput::executeFlashScript("; comment\nG91\nG1 X0.5 ; jog\n");
-    assert(scriptCommands == 2 && lastScriptCommand.G == 1 && lastScriptCommand.X == 0.5f);
-    assert(!GCodeInput::flashScriptActive());
+    GCodeInput::executeHardFilament(false);
+    assert(periodicVisits==6 && !dispatchedCommands && !GCodeInput::flashScriptActive());
     stopDuringScript = true;
-    GCodeInput::executeFlashScript("G1 X2\nG1 X3\n");
-    assert(scriptCommands == 3 && lastScriptCommand.X == 2 && !GCodeInput::flashScriptActive());
-    GCodeInput::executeFlashScript("G1 X4\n");
-    assert(scriptCommands == 3);
+    assert(!GCodeInput::executeOutputProgram());
+    assert(stopped && periodicVisits==7 && !GCodeInput::flashScriptActive());
+    assert(!GCodeInput::executeOutputProgram() && periodicVisits==7);
     stopped = false;
-    GCodeInput::executeFlashScript("G1 X5\n");
-    assert(scriptCommands == 4 && lastScriptCommand.X == 5 && !GCodeInput::flashScriptActive());
+    assert(GCodeInput::executeOutputProgram() && periodicVisits==15);
     assert(replies.empty() && !GCodeInput::peekCurrentCommand());
     feed("N1 M105\n");
     readReply("ok 1\r\n");
@@ -756,7 +753,7 @@ int main(int argc, char** argv) {
     else if (scenario == "bounded-receive") boundedReceive();
     else if (scenario == "emergency") emergencyAdmission();
     else if (scenario == "stopping") stopDrainsInput();
-    else if (scenario == "script") flashScript();
+    else if (scenario == "internal-program-serial") internalProgramSerialBoundary();
     else if (scenario == "soft-filament") softFilament();
     else if (scenario == "hard-filament") hardFilament();
     else if (scenario == "output-program") outputProgram();
