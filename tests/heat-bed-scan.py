@@ -24,7 +24,8 @@ def main():
             encoding="utf-8",
         )
         matrix_sections = (
-            ("void clearWorking()", "uint8_t storedMaxIndex("),
+            ("void clearWorking()", "bool invalidateAllStored("),
+            ("bool reloadActive()", "uint8_t storedMaxIndex("),
             ("char prepareWorking()", "ZOffsetResult applyZOffset("),
         )
         (build / "bed-matrix-scan-firmware.inc").write_text(
@@ -42,7 +43,8 @@ def main():
         ], check=True)
         for scenario in (
             "standard", "pla", "abs", "retry", "cancel", "disconnected", "overload",
-            "overload-and-cancel", "stop-mid-grid", "invalid-grid", "save-failed",
+            "overload-and-cancel", "stop-mid-grid", "invalid-grid", "save-failed", "busy-admission",
+            "bed-cutoff", "bed-target-rejected", "bed-target-changed",
         ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
 

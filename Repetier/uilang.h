@@ -246,13 +246,6 @@
 #define UI_TEXT_SENSOR_8 " 104-GT2"    //8
 #define UI_TEXT_SENSOR_13 " 3950-100k" //13 V3 Hotend
 
-// Printtime output gets aggregated like <Days_5gisgits>UI_TEXT_PRINTTIME_DAYS<Hours>UI_TEXT_PRINTTIME_HOURS<Minutes>UI_TEXT_PRINTTIME_MINUTES
-// ___88 days 12:45
-#define UI_TEXT_PRINTTIME_DAYS " days "
-#define UI_TEXT_PRINTTIME_HOURS ":"
-#define UI_TEXT_PRINTTIME_MINUTES ""
-#define UI_TEXT_PRINT_TIME "Printing time"
-#define UI_TEXT_PRINT_FILAMENT "Filament printed"
 
 #define UI_TEXT_STOP_PRINT "Stop Print"
 #define UI_TEXT_STOP_PRINT_ACK "Stop Print now?"
@@ -307,11 +300,9 @@
     #define UI_TEXT_STRAIN_GAUGE "P: %s1 L: %Fs%%%"
     #define UI_TEXT_STRAIN_GAUGE_SPEED "P: %s1     V: %om%%%"
     #define UI_TEXT_MIN_REACHED_UNHOMED "Min reached unhomed"
-    #define UI_TEXT_RGB_LIGHT_MODE "RGB Light: %li"
     #define UI_TEXT_230V_OUTPUT "230V Output: %ou"
     #define UI_TEXT_FET1_OUTPUT "X42 Mosfet1: %ol"
     #define UI_TEXT_FET2_OUTPUT "X44 Mosfet2: %on"
-    #define UI_TEXT_BAUDRATE "Baudrate: %oc"
     #define UI_TEXT_ACTION_FANSPEED "Fan Speed:%Fs%%%"
     #define UI_TEXT_FAN_25 "Fan to     25%%%"
     #define UI_TEXT_FAN_50 "Fan to     50%%%"
@@ -362,8 +353,6 @@
     #define UI_TEXT_STRAIN_GAUGE "P:%s1 L:%Fs%%%"
     #define UI_TEXT_STRAIN_GAUGE_SPEED "P: %s1  V:%om%%%"
     #define UI_TEXT_MIN_REACHED_UNHOMED "Min reached uho."
-    #define UI_TEXT_RGB_LIGHT_MODE "RGB Light: %li"
-    #define UI_TEXT_BAUDRATE "Baudrate:%oc"
     #define UI_TEXT_ACTION_FANSPEED "FanSpeed:%Fs%%%"
     #define UI_TEXT_FAN_25 "Fan to 25%%%"
     #define UI_TEXT_FAN_50 "Fan to 50%%%"

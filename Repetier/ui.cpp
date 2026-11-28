@@ -20,6 +20,7 @@
 #include "Repetier.h"
 #include "UiMenus.h"
 #include "uimenu.h"
+#include "ThermalEmergencyPanel.h"
 
 constexpr millis_t menuAutoReturnDelayMs = 120000;
 
@@ -41,10 +42,6 @@ bool UIMenuEntry::showEntry() const {
 } // showEntry
 
 UIDisplay uid;
-
-const char* UIDisplay::cachedRow(uint8_t row) const {
-    return displayCache_[row];
-}
 
 // Menu up sign - code 1
 // ..*.. 4
@@ -259,23 +256,37 @@ static const uint8_t LCDLineOffsets[] PROGMEM = UI_LINE_OFFSETS;
 static const char versionString[] PROGMEM = UI_VERSION_STRING;
 
 
-UIDisplay::UIDisplay() {
-    locked = 0;
-} // UIDisplay
+UIDisplay::UIDisplay() = default;
+
+// LCD GPIO shares PORTK with Z-enable and, on RF1000, PORTL with
+// Z-direction/step. Each extended-port RMW needs exclusion from Timer1.
+// Keep the 320 us delay, strobe pulse and all other writes outside the lock.
+// Pin arguments are compile-time constants: unshared paths remain direct.
+#define LCD_WRITE(pin, value) \
+    do { \
+        if ((pin) == UI_DISPLAY_RS_PIN || (pin) == UI_DISPLAY_D5_PIN || \
+            (pin) == UI_DISPLAY_ENABLE_PIN || (MOTHERBOARD == DEVICE_TYPE_RF1000 && \
+            ((pin) == UI_DISPLAY_D6_PIN || (pin) == UI_DISPLAY_D7_PIN))) { \
+            InterruptProtectedBlock lock; \
+            WRITE(pin, value); \
+        } else { \
+            WRITE(pin, value); \
+        } \
+    } while (0)
 
 void lcdWriteNibble(uint8_t value) {
-    WRITE(UI_DISPLAY_D4_PIN, value & 1);
-    WRITE(UI_DISPLAY_D5_PIN, value & 2);
-    WRITE(UI_DISPLAY_D6_PIN, value & 4);
-    WRITE(UI_DISPLAY_D7_PIN, value & 8);
-    WRITE(UI_DISPLAY_ENABLE_PIN, HIGH); // enable pulse must be >450ns
+    LCD_WRITE(UI_DISPLAY_D4_PIN, value & 1);
+    LCD_WRITE(UI_DISPLAY_D5_PIN, value & 2);
+    LCD_WRITE(UI_DISPLAY_D6_PIN, value & 4);
+    LCD_WRITE(UI_DISPLAY_D7_PIN, value & 8);
+    LCD_WRITE(UI_DISPLAY_ENABLE_PIN, HIGH); // enable pulse must be >450ns
     __asm__("nop\n\t"
             "nop\n\t"
             "nop\n\t"
             "nop\n\t"
             "nop\n\t"
             "nop\n\t");
-    WRITE(UI_DISPLAY_ENABLE_PIN, LOW);
+    LCD_WRITE(UI_DISPLAY_ENABLE_PIN, LOW);
     __asm__("nop\n\t"
             "nop\n\t"
             "nop\n\t"
@@ -288,19 +299,19 @@ void lcdWriteNibble(uint8_t value) {
 void lcdWriteByte(uint8_t c, uint8_t rs) {
     HAL::delayMicroseconds(320); // The LCD R/W line is tied low.
 
-    WRITE(UI_DISPLAY_RS_PIN, rs);
-    WRITE(UI_DISPLAY_D4_PIN, c & 0x10);
-    WRITE(UI_DISPLAY_D5_PIN, c & 0x20);
-    WRITE(UI_DISPLAY_D6_PIN, c & 0x40);
-    WRITE(UI_DISPLAY_D7_PIN, c & 0x80);
-    WRITE(UI_DISPLAY_ENABLE_PIN, HIGH); // enable pulse must be >450ns
+    LCD_WRITE(UI_DISPLAY_RS_PIN, rs);
+    LCD_WRITE(UI_DISPLAY_D4_PIN, c & 0x10);
+    LCD_WRITE(UI_DISPLAY_D5_PIN, c & 0x20);
+    LCD_WRITE(UI_DISPLAY_D6_PIN, c & 0x40);
+    LCD_WRITE(UI_DISPLAY_D7_PIN, c & 0x80);
+    LCD_WRITE(UI_DISPLAY_ENABLE_PIN, HIGH); // enable pulse must be >450ns
     __asm__("nop\n\t"
             "nop\n\t"
             "nop\n\t"
             "nop\n\t"
             "nop\n\t"
             "nop\n\t");
-    WRITE(UI_DISPLAY_ENABLE_PIN, LOW);
+    LCD_WRITE(UI_DISPLAY_ENABLE_PIN, LOW);
     __asm__("nop\n\t"
             "nop\n\t"
             "nop\n\t"
@@ -308,18 +319,18 @@ void lcdWriteByte(uint8_t c, uint8_t rs) {
             "nop\n\t"
             "nop\n\t");
 
-    WRITE(UI_DISPLAY_D4_PIN, c & 0x01);
-    WRITE(UI_DISPLAY_D5_PIN, c & 0x02);
-    WRITE(UI_DISPLAY_D6_PIN, c & 0x04);
-    WRITE(UI_DISPLAY_D7_PIN, c & 0x08);
-    WRITE(UI_DISPLAY_ENABLE_PIN, HIGH); // enable pulse must be >450ns
+    LCD_WRITE(UI_DISPLAY_D4_PIN, c & 0x01);
+    LCD_WRITE(UI_DISPLAY_D5_PIN, c & 0x02);
+    LCD_WRITE(UI_DISPLAY_D6_PIN, c & 0x04);
+    LCD_WRITE(UI_DISPLAY_D7_PIN, c & 0x08);
+    LCD_WRITE(UI_DISPLAY_ENABLE_PIN, HIGH); // enable pulse must be >450ns
     __asm__("nop\n\t"
             "nop\n\t"
             "nop\n\t"
             "nop\n\t"
             "nop\n\t"
             "nop\n\t");
-    WRITE(UI_DISPLAY_ENABLE_PIN, LOW);
+    LCD_WRITE(UI_DISPLAY_ENABLE_PIN, LOW);
     __asm__("nop\n\t"
             "nop\n\t"
             "nop\n\t"
@@ -377,8 +388,8 @@ void UIDisplay::initializeLCD(bool normal) {
     SET_OUTPUT(UI_DISPLAY_ENABLE_PIN);
 
     // Select the LCD command register.
-    WRITE(UI_DISPLAY_RS_PIN, LOW);
-    WRITE(UI_DISPLAY_ENABLE_PIN, LOW);
+    LCD_WRITE(UI_DISPLAY_RS_PIN, LOW);
+    LCD_WRITE(UI_DISPLAY_ENABLE_PIN, LOW);
 
     // Put the LCD into 4 bit mode
     // this is according to the hitachi HD44780 datasheet
@@ -388,7 +399,7 @@ void UIDisplay::initializeLCD(bool normal) {
     // at this point we are in 8 bit mode but of course in this
     // interface 4 pins are dangling unconnected and the values
     // on them don't matter for these instructions.
-    WRITE(UI_DISPLAY_RS_PIN, LOW);
+    LCD_WRITE(UI_DISPLAY_RS_PIN, LOW);
     HAL::delayMicroseconds(10);
     lcdWriteNibble(0x03);
     HAL::delayMicroseconds(5000); // I have one LCD for which 4500 here was not long enough.
@@ -414,6 +425,8 @@ void UIDisplay::initializeLCD(bool normal) {
     }
 } // initializeLCD
 
+#undef LCD_WRITE
+
 // ----------- end direct LCD driver
 
 void UIDisplay::printRow(uint8_t r, char* txt, char* txt2, uint8_t changeAtCol) {
@@ -432,14 +445,10 @@ void UIDisplay::printRow(uint8_t r, char* txt, char* txt2, uint8_t changeAtCol) 
     while ((c = *txt) != 0x00 && col < changeAtCol) {
         txt++;
         lcdPutChar(c);
-        // Cache whatever you write to the display!
-        displayCache_[r][col] = c;
         col++;
     }
     while (col < changeAtCol) {
         lcdPutChar(' ');
-        // Cache whatever you write to the display!
-        displayCache_[r][col] = ' ';
         col++;
     }
 
@@ -447,18 +456,13 @@ void UIDisplay::printRow(uint8_t r, char* txt, char* txt2, uint8_t changeAtCol) 
         while ((c = *txt2) != 0x00 && col < UI_COLS) {
             txt2++;
             lcdPutChar(c);
-            // Cache whatever you write to the display!
-            displayCache_[r][col] = c;
             col++;
         }
         while (col < UI_COLS) {
             lcdPutChar(' ');
-            // Cache whatever you write to the display!
-            displayCache_[r][col] = ' ';
             col++;
         }
     }
-    displayCache_[r][col] = 0;
 } // printRow
 
 void UIDisplay::ui_init_keys() {
@@ -516,8 +520,6 @@ void UIDisplay::initialize() {
     initializeLCD(false);
     loadStartupCharacters();
 
-    for (uint8_t y = 0; y < UI_ROWS; y++)
-        displayCache_[y][0] = 0;
     printRowP(0, PSTR(BIGC0));
     printRowP(1, PSTR(BIGC1));
     printRowP(UI_ROWS - 2, PSTR(BIGC2));
@@ -544,32 +546,38 @@ static const uint8_t bootEyeGlyphs[8][8] PROGMEM = {
 };
 static const int8_t bootEyePositions[] PROGMEM = { 0, 1, 2, 2, 1, 0, -1, -2, -2, -1 };
 
-void UIDisplay::drawBootEye(uint16_t elapsed) {
-    const uint8_t left = UI_COLS / 2 - 5;
-    const uint8_t right = left + 9;
+// The animation is a deterministic function of its phase. Reconstruct the
+// previously displayed cell from the last successful foreground refresh;
+// no shadow image is needed. The first draw follows LCD_CLEAR.
+static char bootEyeCell(uint8_t row, uint8_t x, uint8_t pupil, bool blink) {
+    constexpr uint8_t left = UI_COLS / 2 - 5;
+    constexpr uint8_t right = left + 9;
+    if (row == 0 || row == 3) {
+        if (x == left) return row == 0 ? 1 : 3;
+        if (x == right) return row == 0 ? 2 : 4;
+        if (x > left && x < right) return '-';
+    } else if (x == left || x == right) {
+        return '|';
+    } else if (x == pupil || x == pupil + 1) {
+        if (blink) return row == 1 ? '-' : ' ';
+        return 5 + (row - 1) * 2 + (x - pupil);
+    }
+    return ' ';
+}
+
+void UIDisplay::drawBootEye(uint16_t elapsed, uint16_t previous, bool first) {
     const uint8_t pupil = UI_COLS / 2 - 1
         + static_cast<int8_t>(pgm_read_byte(&bootEyePositions[(elapsed / 50) % 10]));
+    const uint8_t oldPupil = UI_COLS / 2 - 1
+        + static_cast<int8_t>(pgm_read_byte(&bootEyePositions[(previous / 50) % 10]));
     const bool blink = elapsed >= 2800 && elapsed < 3000;
+    const bool oldBlink = previous >= 2800 && previous < 3000;
     for (uint8_t row = 0; row < UI_ROWS; ++row) {
         bool cursorSet = false;
         for (uint8_t x = 0; x < UI_COLS; ++x) {
-            char desired = ' ';
-            if (row == 0 || row == 3) {
-                if (x == left)
-                    desired = row == 0 ? 1 : 3;
-                else if (x == right)
-                    desired = row == 0 ? 2 : 4;
-                else if (x > left && x < right)
-                    desired = '-';
-            } else if (x == left || x == right) {
-                desired = '|';
-            } else if (x == pupil || x == pupil + 1) {
-                if (blink)
-                    desired = row == 1 ? '-' : ' ';
-                else
-                    desired = 5 + (row - 1) * 2 + (x - pupil);
-            }
-            if (displayCache_[row][x] == desired) {
+            const char desired = bootEyeCell(row, x, pupil, blink);
+            const char old = first ? ' ' : bootEyeCell(row, x, oldPupil, oldBlink);
+            if (old == desired) {
                 cursorSet = false;
                 continue;
             }
@@ -578,9 +586,7 @@ void UIDisplay::drawBootEye(uint16_t elapsed) {
                 cursorSet = true;
             }
             lcdPutChar(desired == 8 ? 0 : desired);
-            displayCache_[row][x] = desired;
         }
-        displayCache_[row][UI_COLS] = 0;
     }
 }
 
@@ -592,12 +598,9 @@ void UIDisplay::beginBootEye() {
     HAL::delayMilliseconds(2); // existing LCD clear execution time
     for (uint8_t i = 0; i < 8; ++i)
         createChar((i + 1) & 7, bootEyeGlyphs[i]);
-    for (uint8_t row = 0; row < UI_ROWS; ++row)
-        for (uint8_t x = 0; x < UI_COLS; ++x)
-            displayCache_[row][x] = ' ';
     // These clocks are owned by the boot screen until normal rendering resumes.
     lastSwitch = lastRefresh = HAL::timeInMilliseconds();
-    drawBootEye(0);
+    drawBootEye(0, 0, true);
 }
 
 void UIDisplay::serviceBootEye() {
@@ -612,7 +615,7 @@ void UIDisplay::serviceBootEye() {
     }
     if (elapsed / 50 == (lastRefresh - lastSwitch) / 50)
         return;
-    drawBootEye(static_cast<uint16_t>(elapsed));
+    drawBootEye(static_cast<uint16_t>(elapsed), static_cast<uint16_t>(lastRefresh - lastSwitch), false);
     lastRefresh = now;
 }
 
@@ -658,18 +661,51 @@ const UIMenu* const ui_pages[] PROGMEM = UI_PAGES;
 constexpr uint8_t panelPageCount = sizeof(ui_pages) / sizeof(ui_pages[0]);
 
 
-// Refresh current menu page
+// Refresh current menu page. Do not retain the normal renderer's frame
+// when the terminal thermal panel is the only permitted output.
 void UIDisplay::refreshPage() {
+    if(Printer::printJob.emergencyLocked()) {
+        refreshEmergencyPage();
+        return;
+    }
+    refreshNormalPage();
+} // refreshPage
+
+__attribute__((noinline)) void UIDisplay::refreshEmergencyPage() {
+    if (!normalCharacters_) {
+        lcdCommand(LCD_CLEAR);
+        HAL::delayMilliseconds(2);
+        loadNormalCharacters();
+    }
+    const auto& ledger=ThermalEmergency::faultLedger();
+    const auto& fault=ThermalEmergency::primaryFault(ledger);
+    const bool valid=ledger.active()&&ThermalEmergency::liveTemperatureValid(fault.channel);
+    const float live=valid?tempController[fault.channel]->currentTemperatureC:0;
+    for(uint8_t row=0;row<UI_ROWS;++row) {
+        char line[UI_COLS+1];
+        ThermalEmergency::panelRow<UI_COLS,UI_ROWS>(line,row,ledger,valid,live);
+        // Existing LCD transport fills remaining columns with spaces.
+        printRow(row,line,nullptr,UI_COLS);
+    }
+} // refreshEmergencyPage
+
+__attribute__((noinline)) void UIDisplay::refreshNormalPage() {
     if (!normalCharacters_) {
         lcdCommand(LCD_CLEAR);
         HAL::delayMilliseconds(2);
         loadNormalCharacters();
     }
     uint16_t r;
-    char cache[UI_ROWS][MAX_COLS + 1];
     adjustMenuPos();
 
-    // Copy result into cache
+    // Format and transmit one row at a time. The foreground owns both
+    // printCols and the LCD transport; neither invokes the periodic pump.
+    const uint8_t scroll = shift > 0 ? shift : 0;
+    const auto writeRow = [&](uint8_t row) {
+        const uint8_t length = strlen(printCols);
+        const uint8_t offset = length > UI_COLS ? RMath::min(length - UI_COLS, scroll) : 0;
+        printRow(row, &printCols[offset], nullptr, UI_COLS);
+    };
     if (menuLevel == 0) {
         UIMenu* men = (UIMenu*)pgm_read_word(&(ui_pages[menuPos[0]]));
         uint16_t nr = pgm_read_word(&(men->numEntries));
@@ -678,7 +714,7 @@ void UIDisplay::refreshPage() {
             UIMenuEntry* ent = (UIMenuEntry*)pgm_read_word(&(entries[r]));
             col = 0;
             parse((char*)pgm_read_word(&(ent->text)), false);
-            strcpy(cache[r], printCols);
+            writeRow(r);
         }
     } else {
         UIMenu* men = (UIMenu*)menu[menuLevel];
@@ -737,7 +773,7 @@ void UIDisplay::refreshPage() {
                 }
             }
 
-            strcpy(cache[r], printCols);
+            writeRow(r);
             r++;
         }
     }
@@ -745,18 +781,8 @@ void UIDisplay::refreshPage() {
 
     printCols[0] = 0;
     while (r < UI_ROWS)
-        strcpy(cache[r++], printCols);
-
-    for (uint8_t row = 0; row < UI_ROWS; ++row)
-        strcpy(displayCache_[row], cache[row]);
-
-    const uint8_t scroll = shift > 0 ? shift : 0;
-    for (uint8_t row = 0; row < UI_ROWS; ++row) {
-        const uint8_t length = strlen(cache[row]);
-        const uint8_t offset = length > UI_COLS ? RMath::min(length - UI_COLS, scroll) : 0;
-        printRow(row, &cache[row][offset], NULL, UI_COLS);
-    }
-} // refreshPage
+        writeRow(r++);
+} // refreshNormalPage
 
 void UIDisplay::showMessage(const void* line1, const void* line2, const void* line3, const void* line4) {
     messageLine1 = line1;
@@ -781,6 +807,10 @@ void UIDisplay::pushMenu(void* men, bool refresh) {
         return;
     }
     menuLevel++;
+    if(men==&ui_menu_bed_cutoff_edit) {
+        bedCutoffCandidate_=TemperatureController::commissionedBedCutoff();
+        if(!bedCutoffCandidate_)bedCutoffCandidate_=BedTemperatureLimit::DefaultC;
+    }
     menu[menuLevel] = men;
     menuTop[menuLevel] = menuPos[menuLevel] = 0;
 
@@ -800,6 +830,11 @@ void UIDisplay::menuEsc() {
 }
 
 void UIDisplay::okAction() {
+    if(menuLevel && menu[menuLevel]==&ui_menu_message &&
+       messageLine2==EEPROM::recoveryDialogTag() && EEPROM::recoveryPending()) {
+        if(EEPROM::acknowledgeRecovery())menuEsc();
+        return;
+    }
     if (Printer::isUIErrorMessage()) {
         Printer::setUIErrorMessage(false);
         return;
@@ -813,10 +848,22 @@ void UIDisplay::okAction() {
         return;
     }
 
+    // Consume the key if a mode change invalidated the displayed selection.
+    // Never execute or edit a replacement entry with the same keypress.
+    const uint8_t previousLevel = menuLevel;
+    const uint8_t previousPosition = menuPos[menuLevel];
+    adjustMenuPos();
+    if (menuLevel != previousLevel || menuPos[menuLevel] != previousPosition)
+        return;
+
     UIMenu* men = (UIMenu*)menu[menuLevel];
     uint8_t mtype = pgm_read_byte(&(men->menuType));
     UIMenuEntry** entries = (UIMenuEntry**)pgm_read_word(&(men->entries));
     UIMenuEntry* ent = (UIMenuEntry*)pgm_read_word(&(entries[menuPos[menuLevel]]));
+    if (mtype == UI_MENU_TYPE_SUBMENU && !ent->showEntry()) {
+        adjustMenuPos();
+        return;
+    }
     unsigned char entType = pgm_read_byte(&(ent->menuType)); // 0 = Info, 1 = Headline, 2 = submenu ref, 3 = direct action command, 4 = modify action
     int action = pgm_read_word(&(ent->action));
 
@@ -824,6 +871,9 @@ void UIDisplay::okAction() {
     {
         action = pgm_read_word(&(men->id));
         finishAction(action);
+        // Reset may have opened a new recovery dialog. Do not pop it
+        // as if it were the old confirmation menu.
+        if(action==UI_ACTION_RESTORE_DEFAULTS && EEPROM::recoveryPending())return;
         menuEsc();
         return;
     }
@@ -844,7 +894,7 @@ void UIDisplay::okAction() {
         return;
     }
     if (entType == 3) {
-        executeAction(action);
+        executeMenuCommand(action);
         return;
     }
     menuEsc();
@@ -857,25 +907,20 @@ void UIDisplay::rightAction() {
     }
 
     uint8_t axis;
-    int address;
     const auto* currentMenu = menu[menuLevel];
     if (currentMenu == &ui_menu_xpos) {
         axis = X_AXIS;
-        address = EPR_RF_MOVE_MODE_X;
     } else if (currentMenu == &ui_menu_ypos) {
         axis = Y_AXIS;
-        address = EPR_RF_MOVE_MODE_Y;
     } else if (currentMenu == &ui_menu_zpos) {
         axis = Z_AXIS;
-        address = EPR_RF_MOVE_MODE_Z;
     } else {
         return;
     }
 
     Printer::manualMotion.cycleMode(axis);
     refreshPage();
-    HAL::eprSetByte(address, Printer::manualMotion.mode(axis));
-    EEPROM::updateChecksum();
+    EEPROM::storeJogMode(axis,Printer::manualMotion.mode(axis));
 }
 
 void UIDisplay::backAction() {
@@ -886,11 +931,8 @@ void UIDisplay::backAction() {
         senseOffsetDownAction();
     } else
     {
-#ifdef RGB_LIGHT_R_PIN
-        if (menuLevel == 0) {
-            RgbLighting::requestWhiteToggle();
-        }
-#endif // RGB_LIGHT_R_PIN
+        if(menuLevel==0 && Lighting::available())
+            AccessoryOutputs::toggle(AccessoryOutputs::Output::CaseLight);
         menuEsc();
         activeAction = 0;
         confirmation_ = 0;
@@ -898,50 +940,59 @@ void UIDisplay::backAction() {
 } // backAction
 
 void UIDisplay::adjustMenuPos() {
-    if (menuLevel == 0)
-        return;
-    UIMenu* men = (UIMenu*)menu[menuLevel];
-    UIMenuEntry** entries = (UIMenuEntry**)pgm_read_word(&(men->entries));
-    uint8_t mtype = HAL::readFlashByte((const prog_char*)&(men->menuType));
-    if (mtype != UI_MENU_TYPE_SUBMENU)
-        return;
+    while (menuLevel > 0) {
+        UIMenu* men = (UIMenu*)menu[menuLevel];
+        if (HAL::readFlashByte((const prog_char*)&(men->menuType)) != UI_MENU_TYPE_SUBMENU)
+            return;
 
-    while (menuPos[menuLevel] > 0) {
-        if (((UIMenuEntry*)pgm_read_word(&(entries[menuPos[menuLevel]])))->showEntry())
-            break;
+        UIMenuEntry** entries = (UIMenuEntry**)pgm_read_word(&(men->entries));
+        const uint8_t count = (uint8_t)pgm_read_word(&(men->numEntries));
+        uint8_t& position = menuPos[menuLevel];
+        const uint8_t previous = position;
+        if (count && position >= count)
+            position = count - 1;
 
-        menuPos[menuLevel]--;
-    }
-    while (1) {
-        if (((UIMenuEntry*)pgm_read_word(&(entries[menuPos[menuLevel]])))->showEntry())
-            break;
+        // Prefer the preceding visible entry; otherwise search forward.
+        while (position > 0 && position < count &&
+               !((UIMenuEntry*)pgm_read_word(&(entries[position])))->showEntry())
+            --position;
+        while (position < count &&
+               !((UIMenuEntry*)pgm_read_word(&(entries[position])))->showEntry())
+            ++position;
 
-        menuPos[menuLevel]++;
-    }
-    uint8_t skipped = 0;
-    bool modified;
+        if (position != previous || position >= count) {
+            activeAction = 0;
+            confirmation_ = 0;
+            shift = -2;
+        }
+        if (position >= count) {
+            // Load/unload menus can become entirely hidden when printing starts.
+            // Return to the parent and validate its selection before rendering.
+            position = menuTop[menuLevel] = 0;
+            menuEsc();
+            continue;
+        }
 
-    if (menuTop[menuLevel] > menuPos[menuLevel])
-        menuTop[menuLevel] = menuPos[menuLevel];
-    do {
-        skipped = 0;
-        modified = false;
-        for (uint8_t r = menuTop[menuLevel]; r < menuPos[menuLevel]; r++) {
+        uint8_t& top = menuTop[menuLevel];
+        if (top > position)
+            top = position;
+        uint8_t skipped = 0;
+        for (uint8_t r = top; r < position; ++r) {
             UIMenuEntry* ent = (UIMenuEntry*)pgm_read_word(&(entries[r]));
             if (!ent->showEntry())
-                skipped++;
+                ++skipped;
         }
-        if (menuTop[menuLevel] + skipped + UI_ROWS - 1 < menuPos[menuLevel]) {
-            menuTop[menuLevel] = menuPos[menuLevel] + 1 - UI_ROWS;
-            modified = true;
-        }
-
-    } while (modified);
+        if (top + skipped + UI_ROWS - 1 < position)
+            top = position + 1 - UI_ROWS;
+        return;
+    }
 } // adjustMenuPos
 
 // Browse visible menu entries in either direction, retaining the original selection
 // if a full pass finds no visible alternative.
 void UIDisplay::navigateMenuItems(UIMenuEntry** entries, uint8_t count, int8_t next) {
+    if (!count)
+        return;
     uint8_t& position = menuPos[menuLevel];
     const uint8_t previous = position;
     do {
@@ -990,15 +1041,18 @@ void UIDisplay::nextPreviousAction(int8_t next) {
         return;
     }
 
+    // Consume the key if a mode change invalidated the displayed selection.
+    // Never execute or edit a replacement entry with the same keypress.
+    const uint8_t previousLevel = menuLevel;
+    const uint8_t previousPosition = menuPos[menuLevel];
+    adjustMenuPos();
+    if (menuLevel != previousLevel || menuPos[menuLevel] != previousPosition)
+        return;
+
     UIMenu* men = (UIMenu*)menu[menuLevel];
     uint8_t nr = (uint8_t)pgm_read_word(&(men->numEntries));
     uint8_t mtype = HAL::readFlashByte((const prog_char*)&(men->menuType));
     UIMenuEntry** entries = (UIMenuEntry**)pgm_read_word(&(men->entries));
-    UIMenuEntry* ent = (UIMenuEntry*)pgm_read_word(&(entries[menuPos[menuLevel]]));
-    uint8_t entType = HAL::readFlashByte((const prog_char*)&(ent->menuType)); // 0 = Info, 1 = Headline, 2 = submenu ref, 3 = direct action command
-    (void)entType;                                                            // Ignore unused error Nibbels
-    int action = pgm_read_word(&(ent->action));
-
     if (mtype == UI_MENU_TYPE_SUBMENU && activeAction == 0) {
         navigateMenuItems(entries, nr, next);
         shift = -2; // reset shift position
@@ -1006,11 +1060,12 @@ void UIDisplay::nextPreviousAction(int8_t next) {
         return;
     }
 
-    if (mtype == UI_MENU_TYPE_MODIFICATION_MENU)
-        action = pgm_read_word(&(men->id));
-    else
-        action = activeAction;
-
+    if (mtype == UI_MENU_TYPE_SUBMENU &&
+        !((UIMenuEntry*)pgm_read_word(&(entries[menuPos[menuLevel]])))->showEntry()) {
+        adjustMenuPos();
+        return;
+    }
+    const int action = mtype == UI_MENU_TYPE_MODIFICATION_MENU ? pgm_read_word(&(men->id)) : activeAction;
     changeSwitchCase(action, -next);
 
     autoReturnTime_ = HAL::timeInMilliseconds() + menuAutoReturnDelayMs;
@@ -1019,6 +1074,7 @@ void UIDisplay::nextPreviousAction(int8_t next) {
 // Actions are events from user input. Depending on the current state, each
 // action can behave differently. Other actions do always the same like home, disable extruder etc.
 void UIDisplay::executeAction(int action) {
+    if(Printer::printJob.emergencyLocked())return;
     if (Printer::blockAll) {
         if (action == UI_ACTION_OK || action == UI_ACTION_RF_CONTINUE) {
             Com::printFLN(PSTR("Restart after Emergency-Stop"));
@@ -1042,7 +1098,18 @@ void UIDisplay::executeAction(int action) {
     autoReturnTime_ = HAL::timeInMilliseconds() + menuAutoReturnDelayMs;
 } // executeAction
 
+void UIDisplay::executeMenuCommand(int action) {
+    if (Printer::printJob.emergencyLocked()) return;
+    // Direct entries are compile-time checked in uimenu.h: no navigation,
+    // top-menu jump or restart key. A fault after selection denies the command.
+    if (Printer::blockAll) return;
+    executeCommandAction(action);
+    refreshPage();
+    autoReturnTime_ = HAL::timeInMilliseconds() + menuAutoReturnDelayMs;
+}
+
 void UIDisplay::slowAction() {
+    if(Printer::printJob.emergencyLocked()){refreshEmergencyPage();return;}
     millis_t time = HAL::timeInMilliseconds();
     uint8_t refresh = 0;
 
@@ -1131,40 +1198,24 @@ int UIDisplay::activeButton() const {
 }
 
 void UIDisplay::fastAction() {
-    // Check keys
+    // The PWM ISR is the sole production caller and does not nest itself.
+    // Keep an interrupt lock for the key snapshot and direct-stop operation,
+    // but do not modify the foreground-only menu dispatch flag.
     InterruptProtectedBlock noInts;
+    int16_t nextAction = 0;
+    ui_check_keys(nextAction);
 
-    if ((flags & UI_FLAG_KEY_TEST_RUNNING) == 0) {
-        flags |= UI_FLAG_KEY_TEST_RUNNING;
+    if (lastButtonAction != nextAction) {
+        lastButtonStart = HAL::timeInMilliseconds();
+        lastButtonAction = nextAction;
+    }
 
-        int16_t nextAction = 0;
-        ui_check_keys(nextAction);
-
-        if (lastButtonAction != nextAction) {
-            lastButtonStart = HAL::timeInMilliseconds();
-            lastButtonAction = nextAction;
-        }
-
-        const bool jogKeyStillPressed = nextAction && nextAction == jogButtonAction;
-        if (PrintLine::hasStoppableDirectMove() && !jogKeyStillPressed) {
-            // Releasing the jog key or selecting another key ends the jog.
-            PrintLine::stopDirectMove();
-        }
-
-        flags &= ~UI_FLAG_KEY_TEST_RUNNING;
+    const bool jogKeyStillPressed = nextAction && nextAction == jogButtonAction;
+    if (PrintLine::hasStoppableDirectMove() && !jogKeyStillPressed) {
+        // Releasing the jog key or selecting another key ends the jog.
+        PrintLine::stopDirectMove();
     }
 } // fastAction
-
-void UIDisplay::lock() {
-    locked = 1;
-    return;
-
-} // lock
-
-void UIDisplay::unlock() {
-    locked = 0;
-    return;
-} // unlock
 
 void UIDisplay::exitmenu() {
     menuLevel = 0;

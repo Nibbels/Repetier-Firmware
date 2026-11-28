@@ -19,7 +19,7 @@ def main():
         (source, "static void initCompensationMatrix(void) {", '#include "BedMatrixGrid.h"'),
         (interpolation, "namespace {\nstruct MatrixSpan", "#endif"),
         (grid, "static char prepareCompensationMatrix(void) {", "#endif"),
-        (storage, "static bool writeMatrixSector(", "static void clearExternalEEPROM("),
+        (storage, "static bool writeMatrixSector(", "bool switchActiveHeatBed("),
         (diagnostics, "void fixKeramikLochInMatrix(", "#endif"),
     )
     with TemporaryDirectory(prefix="rfx-bed-matrix-") as directory:

@@ -28,10 +28,8 @@ constexpr int16_t modMenuSenseMax = modMenuSenseLimit < 32767 ? int16_t(modMenuS
 void adjustModMenuSenseOffset(int16_t digits) {
     Printer::senseOffsetControl.setThresholdDigits(digits);
     // The Mod Menu remembers ordinary adjustments from 500 digits upwards.
-    if (digits >= 500 && HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS) != digits) {
-        HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS, digits);
-        EEPROM::updateChecksum();
-    }
+    if (digits >= 500)
+        EEPROM::storeSenseOffsetSettings(digits, 0, true, false);
 }
 }
 
@@ -89,9 +87,6 @@ void UIDisplay::pressPlay() {
 
 void UIDisplay::mainSwitchCase(int action) {
     switch (action) {
-        /*
-        * HARDWARE BUTTONS
-        */
     case UI_ACTION_OK: {
         okAction();
         confirmation_ = 0;
@@ -113,6 +108,20 @@ void UIDisplay::mainSwitchCase(int action) {
         nextPreviousAction(-1);
         break;
     }
+    default:
+        executeCommandAction(action);
+        break;
+    }
+}
+
+// Direct menu commands never dispatch a navigation key. Keep the
+// OK -> menu command path structurally separate from OK dispatch.
+void UIDisplay::executeCommandAction(int action) {
+    switch (action) {
+    case UI_ACTION_EEPROM_RECOVERY:
+        if(EEPROM::recoveryPending())EEPROM::reportRecovery();
+        else UI_STATUS_UPD("EEPROM OK");
+        break;
     case UI_ACTION_RF_HEAT_BED_UP: {
         // show that we are active
         Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
@@ -165,101 +174,38 @@ void UIDisplay::mainSwitchCase(int action) {
         Commands::emergencyStop();
         break;
     }
-    case UI_ACTION_HOME_ALL: {
+    case UI_ACTION_HOME_ALL:
+    case UI_ACTION_HOME_X:
+    case UI_ACTION_HOME_Y:
+    case UI_ACTION_HOME_Z: {
+        const bool all = action == UI_ACTION_HOME_ALL;
         if (PrintLine::hasLines()) {
-            // do not allow homing via the menu while we are printing
             Com::printFLN(Com::tPrintingIsInProcessError);
             showError((void*)ui_text_home, (void*)ui_text_operation_denied);
             break;
         }
-        if (!isHomingAllowed(NULL, 1)) {
+        if (!isHomingAllowed(NULL, 1))
             break;
-        }
         exitmenu();
-        Printer::homeAxis(true, true, true);
-        break;
-    }
-    case UI_ACTION_HOME_X: {
-        if (PrintLine::hasLines()) {
-            // do not allow homing via the menu while we are printing
-            if (Printer::debugErrors()) {
-                Com::printFLN(Com::tPrintingIsInProcessError);
-            }
-
-            showError((void*)ui_text_home, (void*)ui_text_operation_denied);
-            break;
-        }
-        if (!isHomingAllowed(NULL, 1)) {
-            break;
-        }
-        exitmenu();
-        Printer::homeAxis(true, false, false);
-        break;
-    }
-    case UI_ACTION_HOME_Y: {
-        if (PrintLine::hasLines()) {
-            // do not allow homing via the menu while we are printing
-            if (Printer::debugErrors()) {
-                Com::printFLN(Com::tPrintingIsInProcessError);
-            }
-
-            showError((void*)ui_text_home, (void*)ui_text_operation_denied);
-            break;
-        }
-        if (!isHomingAllowed(NULL, 1)) {
-            break;
-        }
-        exitmenu();
-        Printer::homeAxis(false, true, false);
-        break;
-    }
-    case UI_ACTION_HOME_Z: {
-        if (PrintLine::hasLines()) {
-            // do not allow homing via the menu while we are printing
-            if (Printer::debugErrors()) {
-                Com::printFLN(Com::tPrintingIsInProcessError);
-            }
-            showError((void*)ui_text_home, (void*)ui_text_operation_denied);
-            break;
-        }
-        if (!isHomingAllowed(NULL, 1)) {
-            break;
-        }
-        exitmenu();
-        Printer::homeAxis(false, false, true);
-        break;
-    }
-    case UI_ACTION_DEBUG_ECHO: {
-        Printer::toggleDebugFlag(1);
-        break;
-    }
-    case UI_ACTION_DEBUG_INFO: {
-        Printer::toggleDebugFlag(2);
-        break;
-    }
-    case UI_ACTION_DEBUG_ERROR: {
-        Printer::toggleDebugFlag(4);
+        Printer::homeAxis(all || action == UI_ACTION_HOME_X,
+                          all || action == UI_ACTION_HOME_Y,
+                          all || action == UI_ACTION_HOME_Z);
         break;
     }
 
-#if !HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)
     case UI_ACTION_LIGHTS_ONOFF: {
+        if(!Lighting::available())break;
         AccessoryOutputs::toggle(AccessoryOutputs::Output::CaseLight);
 
-        HAL::eprSetByte(EPR_RF_CASE_LIGHT_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::CaseLight));
-        EEPROM::updateChecksum();
-
+        EEPROM::storeCaseLight(AccessoryOutputs::state(AccessoryOutputs::Output::CaseLight));
         break;
     }
-#endif
 
 #if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
     case UI_ACTION_230V_OUTPUT: {
         AccessoryOutputs::toggle(AccessoryOutputs::Output::Mains);
 
         // after a power-on, the 230 V plug always shall be turned off - thus, we do not store this setting to the EEPROM
-        // HAL::eprSetByte( EPR_RF_230V_OUTPUT_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::Mains) );
-        // EEPROM::updateChecksum();
 
         break;
     }
@@ -268,8 +214,7 @@ void UIDisplay::mainSwitchCase(int action) {
     case UI_ACTION_FET1_OUTPUT: {
         AccessoryOutputs::toggle(AccessoryOutputs::Output::Fet1);
 
-        HAL::eprSetByte(EPR_RF_FET1_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::Fet1));
-        EEPROM::updateChecksum();
+        EEPROM::storeFet(1,AccessoryOutputs::state(AccessoryOutputs::Output::Fet1));
         break;
     }
 #endif // FET1 accessory output
@@ -277,8 +222,7 @@ void UIDisplay::mainSwitchCase(int action) {
     case UI_ACTION_FET2_OUTPUT: {
         AccessoryOutputs::toggle(AccessoryOutputs::Output::Fet2);
 
-        HAL::eprSetByte(EPR_RF_FET2_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::Fet2));
-        EEPROM::updateChecksum();
+        EEPROM::storeFet(2,AccessoryOutputs::state(AccessoryOutputs::Output::Fet2));
         break;
     }
 #endif // FET2 accessory output
@@ -292,24 +236,21 @@ void UIDisplay::mainSwitchCase(int action) {
     case UI_ACTION_CONFIG_SINGLE_STEPS_KOSYS: {
         Printer::manualMotion.setCoordinateSystem(!Printer::manualMotion.coordinateSystem());
 
-        HAL::eprSetByte(EPR_RF_MOVE_MODE_XY_KOSYS, Printer::manualMotion.coordinateSystem());
-        EEPROM::updateChecksum();
+        EEPROM::storeJogCoordinates(Printer::manualMotion.coordinateSystem());
         break;
     }
 
     case UI_ACTION_CONFIG_POSITION_FEEDRATE: {
         Printer::manualMotion.setFeedrateSource(!Printer::manualMotion.feedrateSource());
 
-        HAL::eprSetByte(EPR_RF_MOVE_POSITION_FEEDRATE, Printer::manualMotion.feedrateSource());
-        EEPROM::updateChecksum();
+        EEPROM::storeJogFeedrate(Printer::manualMotion.feedrateSource());
         break;
     }
 
     case UI_ACTION_ZMODE: {
         Printer::toggleZDisplayMode();
 
-        HAL::eprSetByte(EPR_RF_Z_MODE, Printer::zDisplayMode());
-        EEPROM::updateChecksum();
+        EEPROM::storeZDisplayMode(Printer::zDisplayMode());
         break;
     }
 
@@ -356,18 +297,24 @@ void UIDisplay::mainSwitchCase(int action) {
     case UI_ACTION_MOUNT_FILAMENT_HARD:
     case UI_ACTION_UNMOUNT_FILAMENT_SOFT:
     case UI_ACTION_UNMOUNT_FILAMENT_HARD: {
+        if (GCodeInput::flashScriptActive() || !Printer::printJob.isIdle() || isAnyScanRunning())
+            break;
         Printer::idleStatus.cancel();
-        while (Printer::checkAbortKeys())
+        while (Printer::checkAbortKeys()) {
             Commands::checkForPeriodicalActions(); // Dont quit script by holding the ok longer than 1ms if no temp is involved. -> min einmal OK loslassen.
+            if(Printer::printJob.emergencyLocked())return;
+        }
+        if (!Printer::printJob.isIdle() || isAnyScanRunning())
+            break;
         bool unmount = (action == UI_ACTION_UNMOUNT_FILAMENT_SOFT || action == UI_ACTION_UNMOUNT_FILAMENT_HARD);
         exitmenu();
 
         if (unmount) {
             UI_STATUS_UPD(UI_TEXT_UNMOUNT_FILAMENT);
             if (action == UI_ACTION_UNMOUNT_FILAMENT_SOFT) {
-                GCodeInput::executeFlashScript(Com::tUnmountFilamentSoft);
+                GCodeInput::executeSoftFilament(true);
             } else {
-                GCodeInput::executeFlashScript(Com::tUnmountFilamentHard);
+                GCodeInput::executeHardFilament(true);
             }
         } else {
             UI_STATUS_UPD(UI_TEXT_MOUNT_FILAMENT);
@@ -376,13 +323,13 @@ void UIDisplay::mainSwitchCase(int action) {
                 if (Extruder::current->tempControl.targetTemperatureC < UI_SET_EXTRUDER_TEMP_MOUNT) {
                     Extruder::setTemperatureForExtruder(UI_SET_EXTRUDER_TEMP_MOUNT, Extruder::current->id);
                     Extruder::current->tempControl.waitForTargetTemperature();
-                    GCodeInput::executeFlashScript(Com::tMountFilamentSoft);
+                    GCodeInput::executeSoftFilament(false);
                     Extruder::setTemperatureForExtruder(0, Extruder::current->id);
                 } else {
-                    GCodeInput::executeFlashScript(Com::tMountFilamentSoft);
+                    GCodeInput::executeSoftFilament(false);
                 }
             } else {
-                GCodeInput::executeFlashScript(Com::tMountFilamentHard);
+                GCodeInput::executeHardFilament(false);
             }
         }
         Printer::idleStatus.schedule(HAL::timeInMilliseconds());
@@ -437,8 +384,7 @@ void UIDisplay::mainSwitchCase(int action) {
     }
     case UI_ACTION_FAN_MODE: {
         Commands::adjustFanMode((HAL::partFanMode() ? PART_FAN_MODE_PWM : PART_FAN_MODE_PDM)); //0 = pwm, 1 = pdm
-        HAL::eprSetByte(EPR_RF_FAN_MODE, HAL::partFanMode());
-        EEPROM::updateChecksum();
+        EEPROM::storeFanMode(HAL::partFanMode());
         break;
     }
 
@@ -470,22 +416,19 @@ void UIDisplay::mainSwitchCase(int action) {
     case UI_ACTION_DIGIT_HOMING: {
         const bool enabled = !Printer::strainGauge.zeroingEnabled();
         Printer::strainGauge.setZeroingEnabled(enabled);
-        HAL::eprSetByte(EPR_RF_ZERO_DIGIT_STATE, enabled ? 1 : 2);
-        EEPROM::updateChecksum();
+        EEPROM::storeDigitZeroing(enabled);
         break;
     }
     case UI_ACTION_DIGIT_COMPENSATION: {
         const bool enabled = !Printer::digitCompensation.digitZEnabled();
         Printer::digitCompensation.setDigitZEnabled(enabled);
-        HAL::eprSetByte(EPR_RF_DIGIT_CMP_STATE, enabled ? 1 : 2);
-        EEPROM::updateChecksum();
+        EEPROM::storeDigitCompensation(enabled);
         break;
     }
     case UI_ACTION_SENSEOFFSET_AUTOSTART: {
         const bool enabled = !Printer::senseOffsetControl.autoStart();
         Printer::senseOffsetControl.setAutoStart(enabled);
-        HAL::eprSetByte(EPR_RF_MOD_SENSEOFFSET_AUTOSTART, enabled);
-        EEPROM::updateChecksum();
+        EEPROM::storeSenseAutoStart(enabled);
         break;
     }
     case UI_ACTION_RF_DO_MHIER_BED_SCAN: {
@@ -509,9 +452,6 @@ void UIDisplay::mainSwitchCase(int action) {
             if (!saveActiveBedMatrix()) {
                 showError(ui_text_manual, PSTR("Matrix save failed"));
                 break;
-            }
-            if (Printer::debugInfo()) {
-                Com::printFLN(PSTR("Manual Input: the heat bed compensation matrix has been saved"));
             }
             showInformation((void*)ui_text_manual, (void*)ui_text_saving_success);
         } else {
@@ -545,4 +485,4 @@ void UIDisplay::mainSwitchCase(int action) {
     }
     }
 
-} //mainSwitchCase
+} // executeCommandAction

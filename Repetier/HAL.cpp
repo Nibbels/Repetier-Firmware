@@ -18,7 +18,74 @@
 #include "Repetier.h"
 #include "StepExecutor.h"
 
+// Non-release candidate. AVR CRT .init2 has initialized SP and r1.
+// Capture reset cause before disabling a watchdog inherited from reset.
+// The actual installed bootloader runs before this code and is unqualified.
+#ifndef __AVR_ATmega2560__
+#error Early watchdog reset sequence is specific to ATmega2560.
+#endif
+static_assert(WDRF==3 && WDCE==4 && WDE==3, "watchdog bit mapping");
+extern "C" {
+volatile uint8_t heaterWatchdogResetCause __attribute__((section(".noinit"), used, externally_visible));
+// Best-effort retained evidence: a bootloader may erase MCUSR or use SRAM.
+// A valid cookie from the recovery entry is written AFTER the bootloader.
+// The live-session cookie must never be treated as the only safety barrier.
+volatile uint32_t heaterResetCookie __attribute__((section(".noinit"), used, externally_visible));
+constexpr uint32_t heaterLiveCookie=0xd39a6c51UL;
+constexpr uint32_t heaterRecoveryCookie=0xd39a6c52UL;
+
+// DO NOT remove or move this apparently unused function. Some Mega2560
+// STK500v2 binaries (Arduino 1.0.5 through AVR core 1.8.6, blob 68d2e18b)
+// set EIND=1 in CRT startup and use EICALL with Z=0 on a watchdog reset.
+// The resulting WORD PC 0x10000 is FLASH BYTE ADDRESS 0x20000. Without a
+// reserved entry the bootloader can execute arbitrary application code
+// after disabling the watchdog. A direct JMP ignores EIND.
+// The generated linker script must KEEP this section exactly at 0x20000,
+// and the ELF/HEX verification must confirm every byte. No bootloader write.
+// See coordination/tasks/Task0034.md A15/A16 and ArduinoCore-avr issue #183.
+// This cannot rescue a bootloader stuck before entering application flash.
+void heaterWatchdogRecoveryEntry() __attribute__((naked, used, externally_visible, section(".rf_watchdog_recovery")));
+void heaterWatchdogRecoveryEntry() {
+    asm volatile(
+        "cli\n\t"
+        // Mark this particular entry even if the bootloader cleared MCUSR.
+        // Do not use stack, C++ objects, or initialize unknown board pins.
+        "ldi r24,0x52\n\t"
+        "sts heaterResetCookie,r24\n\t"
+        "ldi r24,0x6c\n\t"
+        "sts heaterResetCookie+1,r24\n\t"
+        "ldi r24,0x9a\n\t"
+        "sts heaterResetCookie+2,r24\n\t"
+        "ldi r24,0xd3\n\t"
+        "sts heaterResetCookie+3,r24\n\t"
+        "jmp 0\n\t");
+    // No RET: CRT at byte zero resets SP and EIND and initializes RAM.
+}
+void heaterWatchdogEarlyInit() __attribute__((naked, used, externally_visible, section(".init3")));
+void heaterWatchdogEarlyInit() {
+    // Basic assembly only in a naked function. ATmega2560 MCUSR I/O=0x34,
+    // WDTCSR data address=0x60; r1 is zero after CRT .init2.
+    asm volatile(
+        "cli\n\t"
+        "in r24,0x34\n\t"
+        "sts heaterWatchdogResetCause,r24\n\t"
+        "andi r24,0xf7\n\t"
+        "out 0x34,r24\n\t"
+        "wdr\n\t"
+        "ldi r24,0x18\n\t"
+        "sts 0x60,r24\n\t"
+        "sts 0x60,r1\n\t"
+        // Mandatory link guard: a naked startup symbol is always retained.
+        // The special linker script defines this symbol only when the
+        // recovery entry is asserted at the exact flash byte address.
+        "ldi r24,lo8(__rf_watchdog_recovery_link_guard)\n\t");
+    // Fall through to .init4, never RET.
+}
+}
+
 namespace {
+void beginHeaterLease();
+inline __attribute__((always_inline)) void expirePendingHeaterLease();
 const uint8_t temperatureAdcChannels[TemperatureAdcCount] PROGMEM = {
     EXT0_TEMPSENSOR_PIN,
 #if NUM_EXTRUDER > 1
@@ -39,6 +106,99 @@ volatile uint16_t temperatureAdcValues[TemperatureAdcCount] = { 0 };
 constexpr uint32_t temperatureAdcMaxAgeMs = 100;
 volatile uint32_t temperatureAdcPublishedAt[TemperatureAdcCount] = { 0 };
 volatile bool temperatureAdcReady[TemperatureAdcCount] = { false };
+// Timer3 is independent of Arduino millis and owns TOV3 exclusively here.
+enum : uint8_t {
+    SampleValid=1, SampleFresh=2, SampleBusy=4, SampleReserved=8, SampleMatch=16,
+    SamplePrevious=32, ReservationPrevious=64
+};
+bool heaterClockContinuity();
+volatile uint8_t heaterSampleState[TemperatureAdcCount] = {};
+volatile uint16_t heaterSampleStamp[TemperatureAdcCount] = {};
+volatile uint16_t heaterBatchStart=0;
+volatile bool heaterBatchValid=false;
+volatile bool heaterBatchPrevious=false;
+volatile bool heaterLeaseReady=false;
+constexpr uint16_t heaterSampleMaxAge=6250; // experimental 100ms from batch start
+// Exactly the prior per-sample wrap transition, specialized for the
+// fixed ADC channel count. Select continuity once, not for each channel.
+template<bool Continuous>
+inline __attribute__((always_inline)) uint8_t sampleStateAfterWrap(uint8_t s) {
+    if(!Continuous) return s & SampleBusy;
+    if(s&SamplePrevious)
+        s &= uint8_t(~(SampleValid|SampleFresh|SampleMatch|SamplePrevious));
+    else if(s&SampleValid)
+        s |= SamplePrevious;
+    if(s&ReservationPrevious)
+        s &= uint8_t(~(SampleReserved|SampleMatch|ReservationPrevious));
+    else if(s&SampleReserved)
+        s |= ReservationPrevious;
+    return s;
+}
+template<bool Continuous, uint8_t Count>
+struct HeaterSampleWrap {
+    static inline __attribute__((always_inline)) void apply() {
+        HeaterSampleWrap<Continuous,Count-1>::apply();
+        heaterSampleState[Count-1]=sampleStateAfterWrap<Continuous>(heaterSampleState[Count-1]);
+    }
+};
+template<bool Continuous>
+struct HeaterSampleWrap<Continuous,0> {
+    static inline __attribute__((always_inline)) void apply() {}
+};
+// A live active compare proves less than one wrap since its last grant,
+// which followed a synchronized sample consume. Never clear an active
+// compare flag at renewal. This requires a bounded consume-to-arm path.
+void synchronizeHeaterSamples() {
+    if (!(TIFR3 & _BV(TOV3))) return;
+    const bool continuous=heaterClockContinuity();
+    if(continuous) HeaterSampleWrap<true,TemperatureAdcCount>::apply();
+    else HeaterSampleWrap<false,TemperatureAdcCount>::apply();
+    if(!continuous || heaterBatchPrevious) heaterBatchValid=false;
+    heaterBatchPrevious=heaterBatchValid;
+    TIFR3=_BV(TOV3); // never clear compare expiry flags here
+}
+bool heaterClockSnapshot(uint16_t& now) {
+    // Counter can cross BOTTOM during the register read. Retry once only.
+    for(uint8_t attempt=0;attempt<2;++attempt) {
+        synchronizeHeaterSamples();
+        now=TCNT3;
+        if(!(TIFR3&_BV(TOV3))) return true;
+    }
+    synchronizeHeaterSamples();
+    return false;
+}
+bool heaterAgeLive(uint16_t now,uint16_t stamp,bool previous) {
+    return (previous ? now<stamp : now>=stamp)
+        && uint16_t(now-stamp)<=heaterSampleMaxAge;
+}
+bool heaterSampleLive(uint8_t c) {
+    uint16_t now;
+    if(!heaterClockSnapshot(now) || !(heaterSampleState[c]&SampleValid)) return false;
+    if(!heaterAgeLive(now,heaterSampleStamp[c],heaterSampleState[c]&SamplePrevious)) {
+        heaterSampleState[c] &= SampleBusy|SampleReserved|ReservationPrevious;
+        return false;
+    }
+    return true;
+}
+void publishHeaterSample(uint8_t index, uint16_t raw) {
+    uint16_t now;
+    const bool clockValid=heaterClockSnapshot(now);
+    // Preserve the exact old reservation, not its relation to the latest
+    // publication. An observed ADC rail invalidates it immediately.
+    heaterSampleState[index] &= SampleBusy|SampleReserved|ReservationPrevious;
+    if(raw==0 || raw>=4092) heaterSampleState[index] &= SampleBusy;
+    if(clockValid && heaterLeaseReady && heaterBatchValid &&
+       heaterAgeLive(now,heaterBatchStart,heaterBatchPrevious)) {
+        heaterSampleStamp[index]=heaterBatchStart;
+        heaterSampleState[index] |= SampleValid|SampleFresh|
+            (heaterBatchPrevious?SamplePrevious:0);
+    }
+    // Use the coherent snapshot, before the next conversion begins.
+    // Any later wrap is processed before the next use of these records.
+    heaterBatchStart=now;
+    heaterBatchValid=clockValid && heaterLeaseReady;
+    heaterBatchPrevious=false;
+}
 
 inline __attribute__((always_inline)) void serviceTemperatureAdc() {
     // ADSC alone can also be clear when the ADC has been disabled.
@@ -51,6 +211,7 @@ inline __attribute__((always_inline)) void serviceTemperatureAdc() {
     const uint8_t count = temperatureAdcCount + 1;
     if (count >= 32) {
         const uint8_t index = temperatureAdcPosition;
+        publishHeaterSample(index, sum >> 3);
         // Scale 32 ten-bit samples to the sensor tables' 12-bit range.
         temperatureAdcValues[index] = sum >> 3;
         temperatureAdcPublishedAt[index] = HAL::timeInMilliseconds();
@@ -74,8 +235,51 @@ inline __attribute__((always_inline)) void serviceTemperatureAdc() {
     ADCSRA |= _BV(ADIF) | _BV(ADSC);
 }
 
-volatile unsigned long watchdogHeartbeat = 0;
 volatile bool watchdogActive = false;
+
+// Distinguish pre-start boot from a runtime stop. Once armed, the external
+// supervisor must stay driven until a real reset, even on repeated stops.
+// Likewise never restart an expired progress clock via startWatchdog().
+bool watchdogStarted=false;
+
+// Timer5 is borrowed by this experiment as an interrupt-free progress clock.
+// It runs in normal mode with every OC pin disconnected (OC5A is a STEP pin
+// on RF1000!). No Timer5 IRQ and no hardware waveform output are enabled.
+// Compare A is a sticky expiry witness, NOT an ISR. A foreground thermal
+// pass may extend a still-live permission, never clear an expired one.
+// This avoids millis/coalesced-overflow ABA and allows the external reset
+// supervisor to be fed only while a real thermal pass is recent.
+// Timer5 event-driven heater PWM work must coordinate this allocation.
+constexpr uint16_t watchdogProgressDuration=12500; // 200ms at /256, 16MHz
+constexpr uint16_t watchdogProgressGuard=4;
+static_assert(F_CPU==16000000UL,"watchdog progress clock assumes 16MHz");
+bool watchdogProgressLive() {
+    const uint16_t left=uint16_t(OCR5A-TCNT5);
+    return left>watchdogProgressGuard && left<=watchdogProgressDuration
+        && !(TIFR5&_BV(OCF5A));
+}
+void beginWatchdogProgress() {
+    TIMSK5=0;
+    TCCR5B=0;
+    TCCR5A=0;
+    TCCR5C=0;
+    TCNT5=0;
+    OCR5A=watchdogProgressDuration;
+    // Only initial arming after boot may acknowledge this sticky flag.
+    TIFR5=_BV(OCF5A);
+    TCCR5B=_BV(CS52);
+}
+bool renewWatchdogProgress() {
+    if(!watchdogProgressLive()) return false;
+    const uint16_t now=TCNT5;
+    // Recheck the previous deadline using the same coherent clock before
+    // replacing OCR5A. Never clear a pending old compare on renewal.
+    const uint16_t left=uint16_t(OCR5A-now);
+    if(left<=watchdogProgressGuard || left>watchdogProgressDuration
+        || (TIFR5&_BV(OCF5A))) return false;
+    OCR5A=uint16_t(now+watchdogProgressDuration);
+    return watchdogProgressLive();
+}
 
 // Separate bytes allow each ISR to post an event without a shared bit update.
 volatile bool scanTick = false;
@@ -91,7 +295,13 @@ bool takeTick(volatile bool& pending) {
 }
 
 inline void pingWatchdog() {
-    if (watchdogActive && HAL::timeInMilliseconds() - watchdogHeartbeat < WATCHDOG_MAIN_LOOP_TIMEOUT)
+    // TPS3820 needs FALLING edges (nominal 200ms timeout, 112..300ms
+    // in current TI timing table). Alternating 16ms pulses give a falling
+    // edge every ~32ms while thermal progress is authorized. When the
+    // permission expires leave WDI driven and static, never float it.
+    // External reset is intended to precede the 1s nominal internal WDT;
+    // actual oscillator, board routing and reset/power bias are unqualified.
+    if (watchdogActive && watchdogProgressLive())
         WRITE(WATCHDOG_PIN, READ(WATCHDOG_PIN) ? 0 : 1);
 }
 } // namespace
@@ -322,7 +532,11 @@ int32_t HAL::CPUDivU2(unsigned int divisor) {
 } // CPUDivU2
 
 void HAL::setupTimer() {
+    beginHeaterLease();
     EXTRUDER_TCCR = 0;                       // Normal mode on the shared timer.
+    // Timer0 supplies both PWM and Advance. Establish its clock explicitly;
+    // do not inherit CS02 or WGM02 from an earlier boot stage.
+    TCCR0B = _BV(CS01) | _BV(CS00);          // Normal mode, clk/64.
     EXTRUDER_TIMSK &= ~_BV(EXTRUDER_OCIE);   // Arm Compare A when Advance has work.
 
     PWM_TCCR = 0; // Setup PWM interrupt
@@ -336,33 +550,12 @@ void HAL::setupTimer() {
     OCR1A = 65500;                     // start off with a slow frequency.
     TIMSK1 |= (1 << OCIE1A);           // Enable interrupt
 
-#ifdef RGB_LIGHT_R_PIN
-    // Configure Timer 4 for RGB-PWM
-    TCCR4A = 0; // clear Register
-    TCCR4B = 0;
-
-    ICR4 = 20480; // set frequency to 100Hz = 10ms
-
-    TCCR4A |= (1 << WGM41);                              // Fast PWM
-    TCCR4B |= (1 << WGM42) | (1 << WGM43) | (1 << CS41); // Prescaler = 8
-
-    SET_OUTPUT(RGB_LIGHT_R_PIN); // PH3 - Pin 15 ( OC4A )
-    SET_OUTPUT(RGB_LIGHT_G_PIN); // PH4 - Pin 16 ( OC4B )
-    SET_OUTPUT(RGB_LIGHT_B_PIN); // PH5 - Pin 17 ( OC4C )
-
-    TCCR4A |= (1 << COM4A1) | (1 << COM4B1) | (1 << COM4C1); // enable fast PWM
-
-    OCR4A = 0; // default R = 0 at startup
-    OCR4B = 0; // default G = 0 at startup
-    OCR4C = 0; // default B = 0 at startup
-#endif // RGB_LIGHT_R_PIN
 } // setupTimer
 
 void HAL::showStartReason() {
     // Check startup - does nothing if bootloader sets MCUSR to 0
-    uint8_t mcu = MCUSR;
-
-    if (MCUSR != 0) //Printer::debugInfo()
+    uint8_t mcu = heaterWatchdogResetCause;
+    if (mcu != 0)
     {
         if (mcu & 1)
             Com::printInfoFLN(Com::tPowerUp);
@@ -399,7 +592,22 @@ int HAL::getFreeRam() {
 void (*resetFunc)(void) = 0; // declare reset function @ address 0
 
 void HAL::resetHardware() {
+    // This legacy jump to address zero is not a peripheral hardware reset.
+    // Remove heater power before restarting, even if the PWM ISR was pending.
+    forbidInterrupts();
+    for (uint8_t channel = 0; channel <= NUM_EXTRUDER; ++channel)
+        setHeaterDuty(channel, 0);
+    PWM_TIMSK &= ~_BV(PWM_OCIE);
+    TIMSK3 = 0;
+    TCCR3B = 0;
+    // Prefer an actual peripheral reset after emergency shutdown. Do not
+    // jump into CRT with live timers; no WDI pulses or WDR here. External
+    // supervisor should win, internal WDT is independent backup. During
+    // pre-watchdog boot retain the legacy safe-output fallback.
+    if(watchdogStarted) for(;;) {}
     resetFunc();
+    // A restart must not return to an interrupted print.
+    for (;;) {}
 } // resetHardware
 
 uint16_t HAL::temperatureAdcSample(uint8_t index) {
@@ -408,7 +616,9 @@ uint16_t HAL::temperatureAdcSample(uint8_t index) {
     return temperatureAdcValues[index];
 }
 
-bool HAL::temperatureAdcSample(uint8_t index, uint16_t& sample) {
+bool HAL::temperatureAdcSample(uint8_t index, uint16_t& sample
+                              , uint32_t* publication
+) {
     if (index >= TemperatureAdcCount) {
         sample = 0;
         return false;
@@ -424,8 +634,10 @@ bool HAL::temperatureAdcSample(uint8_t index, uint16_t& sample) {
     }
     // Read the clock after the snapshot so a just-published timestamp is not
     // in the future. Unsigned subtraction works across ordinary millis wrap.
-    if (static_cast<uint32_t>(timeInMilliseconds() - publishedAt) <= temperatureAdcMaxAgeMs)
+    if (static_cast<uint32_t>(timeInMilliseconds() - publishedAt) <= temperatureAdcMaxAgeMs) {
+        if(publication)*publication=publishedAt;
         return true;
+    }
     {
         // Expired data must not become valid again on a later clock wrap.
         // Do not invalidate a newer batch published since the snapshot.
@@ -434,6 +646,48 @@ bool HAL::temperatureAdcSample(uint8_t index, uint16_t& sample) {
             temperatureAdcReady[index] = false;
     }
     return false;
+}
+
+HAL::HeaterSample::~HeaterSample() { release(); }
+void HAL::HeaterSample::release() {
+    InterruptProtectedBlock lock;
+    if(index_!=255) {
+        heaterSampleState[index_] &= SampleValid|SampleFresh|SamplePrevious;
+        index_=255;
+    }
+}
+bool HAL::HeaterSample::read(uint8_t index,uint16_t& raw
+                            , uint32_t* publication
+) {
+    InterruptProtectedBlock lock;
+    raw=0;
+    if(index_!=255 || index>=TemperatureAdcCount || !heaterLeaseReady) return false;
+    // Preserve diagnostic validity independently from grant eligibility.
+    // In particular a conservative wrap invalidation must not impersonate
+    // a broken sensor during a healthy autotune. No valid ticket, no renewal.
+    if(!HAL::temperatureAdcSample(index,raw
+                                  ,publication
+    )) return false;
+    if(raw>0 && raw<4092 && heaterSampleLive(index) &&
+       (heaterSampleState[index] & (SampleFresh|SampleBusy))==SampleFresh) {
+        heaterSampleState[index] |= SampleBusy|SampleReserved|SampleMatch;
+        if(heaterSampleState[index]&SamplePrevious) heaterSampleState[index] |= ReservationPrevious;
+        stamp_=heaterSampleStamp[index];
+        index_=index;
+    }
+    return true;
+}
+bool HAL::HeaterSample::consume(uint8_t channel) {
+    // Caller holds the IRQ lock through grant publication.
+    if(index_!=channel || index_==255) return false;
+    uint16_t now;
+    if(!heaterClockSnapshot(now) || !(heaterSampleState[index_]&SampleReserved)) return false;
+    const bool young=heaterAgeLive(now,stamp_,heaterSampleState[index_]&ReservationPrevious);
+    // Consume only the reserved batch. A newer batch retains its eligibility.
+    if(heaterSampleState[index_]&SampleMatch)
+        heaterSampleState[index_] &= uint8_t(~SampleFresh);
+    heaterSampleState[index_] &= uint8_t(~(SampleReserved|SampleMatch|ReservationPrevious));
+    return young;
 }
 
 void HAL::analogStart() {
@@ -446,7 +700,10 @@ void HAL::analogStart() {
         temperatureAdcValues[i] = 0;
         temperatureAdcPublishedAt[i] = 0;
         temperatureAdcReady[i] = false;
+        heaterSampleState[i]=0;
     }
+    heaterBatchValid=false;
+    heaterBatchPrevious=false;
     ADCSRA = _BV(ADEN) | _BV(ADSC) | _BV(ADIF) | ANALOG_PRESCALER;
     while (ADCSRA & _BV(ADSC)) { } // wait for conversion
     /* ADCW must be read once, otherwise the next result is wrong. */
@@ -468,54 +725,65 @@ void HAL::analogStart() {
 
 //initialize watchdog
 void HAL::WDT_Init(void) {
-    // Just to be safe since we can not clear WDE if WDRF is set
-    MCUSR &= ~(1 << WDRF);
-    // Disable interrupts
-    cli();
-    // Reset watchdog
-    wdt_reset();
-    // Set up WDT interrupt
-    WDTCSR = (1 << WDCE) | (1 << WDE);
-    // timeout in XXX millisecond, disable reset mode. Must be done in one operation --> S66  http://www.atmel.com/Images/Atmel-2549-8-bit-AVR-Microcontroller-ATmega640-1280-1281-2560-2561_datasheet.pdf
-    //WDTCSR = 1<<WDP0; //32ms
-    WDTCSR = 0; //16ms
-    // Enable global interrupts
-    sei();
-
-    // enable watchdog interrupt only mode
-    WDTCSR |= _BV(WDIE);
+    // avr-libc emits the timed WDTCSR unlock sequence. Reset-only, not WDIE.
+    // 1s nominal independent fallback, deliberately slower than the external
+    // TPS3820 path (progress permission ~200ms + supervisor ~200ms nominal).
+    // This is a research setting, not a guaranteed ordering or hard bound.
+    wdt_enable(WDTO_1S);
 }
 
-// Watchdog timeout ISR
-ISR(WDT_vect) {
-    pingWatchdog();
-    WDTCSR |= (1 << WDIE); // Nibbels: nächstes mal kein Reset durch internen Watchdog, sondern wieder dieser interrupt.
-    compensationTick = true; // Tell commandloop that 16ms have passed
-}
 
 // Watchdog support
 void HAL::startWatchdog() {
+    if(watchdogStarted) return;
     Com::printFLN(Com::tStartWatchdog);
     // external watchdog
+    // A known recovery entry or interrupted heating session is not normal
+    // continuation. At this point board identification and safe GPIO setup
+    // have completed; no command has been admitted yet. MCUSR alone is
+    // insufficient: the known Arduino bootloaders erase it.
+    const uint32_t cookie=heaterResetCookie;
+    const bool resetDuringHeat=cookie==heaterLiveCookie
+        && !(heaterWatchdogResetCause&_BV(PORF));
+    if(cookie==heaterRecoveryCookie || resetDuringHeat
+        || (heaterWatchdogResetCause&_BV(WDRF))) {
+        // The live cookie alone cannot distinguish a watchdog from another
+        // reset. Only WDRF or the known watchdog recovery entry is evidence.
+        ThermalEmergency::latchSystemFault(
+            cookie==heaterRecoveryCookie || (heaterWatchdogResetCause&_BV(WDRF))
+            ? ThermalEmergency::Cause::WatchdogReset
+            : ThermalEmergency::Cause::InterruptedHeating);
+        Printer::stopForThermalFault();
+        Printer::markTemperatureReadingsAvailable();
+    }
+    // One-shot retained marker. An unrecognized power cycle may latch once
+    // if SRAM survives and MCUSR is lost; the next restart can clear it.
+    // No stale target or duty is restored on any boot.
+    heaterResetCookie=0;
+    InterruptProtectedBlock lock;
+    WRITE(WATCHDOG_PIN,LOW);
     SET_OUTPUT(WATCHDOG_PIN);
-    tellWatchdogOk();
-    watchdogActive = true;
-    pingWatchdog();      // Nibbels: Hier macht der mehr sinn!
-    HAL::WDT_Init();     // Nibbels: use watchdogtimer to test var and trigger
+    beginWatchdogProgress();
+    watchdogStarted=true;
+    watchdogActive=true;
+    pingWatchdog();
+    HAL::WDT_Init();
 } // startWatchdog
 
 void HAL::stopWatchdog() {
+    // Only pre-start boot may float WDI. A runtime stop must not disable
+    // the external supervisor or feed the internal one.
+    if(watchdogStarted) {
+        InterruptProtectedBlock lock;
+        watchdogActive=false;
+        for(uint8_t c=0;c<=NUM_EXTRUDER;++c) setHeaterDuty(c,0);
+        return;
+    }
     watchdogActive = false;
                               // external watchdog
     WRITE(WATCHDOG_PIN, LOW); // Nibbels: In case you stop the watchdog it has to be set floating. thatwhy disable internal pullup as this will make the state like OUTPUT-high. This is not really needed as this function does not do anything when starting the arduino. rightnow at start it sets a pin to input which is already input.
     SET_INPUT(WATCHDOG_PIN);
 } // stopWatchdog
-
-void HAL::tellWatchdogOk() {
-    const auto now = HAL::timeInMilliseconds();
-    InterruptProtectedBlock lock;
-    watchdogHeartbeat = now;
-}
 
 // ================== Interrupt handling ======================
 /** \brief Sets the timer 1 compare value to delay ticks.
@@ -578,6 +846,22 @@ volatile long __attribute__((used)) stepperWait = 0;
 /** \brief Timer interrupt routine to drive the stepper motors.
 */
 ISR(TIMER1_COMPA_vect) {
+    // Higher-priority motion may be repeatedly admitted before Timer3.
+    // Observe the same sticky hardware expiry before any motion work.
+    expirePendingHeaterLease();
+    // A terminal thermal stop is not a normal queue drain. No new STEP
+    // output or queued control task, even if an old caller republishes work.
+    if(Printer::printJob.emergencyLocked()) {
+        cbi(TIMSK1,OCIE1A);
+        return;
+    }
+    // Mechanical block is also a motion fence. No stale queued, direct,
+    // compensation or control task may run while the foreground unwinds.
+    if (Printer::blockAll && !PrintLine::mechanicalRetreatActive()) {
+        stepperWait = 0;
+        OCR1A = 3000;
+        return;
+    }
     uint8_t doExit;
     __asm volatile(
         "lds r23,stepperWait+2 \n\t"
@@ -667,7 +951,177 @@ volatile uint8_t fanMode = PART_FAN_MODE_PWM;
 volatile uint8_t fanDivisor = PART_FAN_DEFAULT_PWM_SPEED_DIVISOR;
 uint8_t fanMaxDuty = PART_FAN_PWM_MAX;
 uint8_t fanMinDuty = PART_FAN_PWM_MIN;
+// Non-release candidate: /256, 16us/tick, nominal 200ms lease.
+// Deadline and guard require full-system timing qualification.
+constexpr uint16_t heaterLeaseDuration = 12500;
+constexpr uint16_t heaterLeaseGuard = 4;
+volatile bool heaterLeaseFailed = false;
+volatile uint8_t heaterGrantProgress = 0;
+static_assert(F_CPU == 16000000UL && NUM_EXTRUDER <= 2, "lease clock assumptions");
+static_assert(OCIE3A == OCF3A && OCIE3B == OCF3B && OCIE3C == OCF3C
+              && OCIE3B == OCIE3A+1 && OCIE3C == OCIE3A+2, "compare bit mapping");
+// Callers validate the channel. Keep the compare-bit selection acyclic on AVR.
+inline uint8_t leaseMask(uint8_t channel) {
+    if(channel==0) return _BV(OCIE3A);
+    if(channel==1) return _BV(OCIE3B);
+#if NUM_EXTRUDER > 1
+    if(channel==2) return _BV(OCIE3C);
+#endif
+    return 0;
+}
+inline uint16_t leaseDeadline(uint8_t channel) {
+    switch (channel) { case 0: return OCR3A; case 1: return OCR3B; default: return OCR3C; }
+}
+inline void writeLeaseDeadline(uint8_t channel, uint16_t deadline) {
+    switch (channel) { case 0: OCR3A=deadline; break; case 1: OCR3B=deadline; break; default: OCR3C=deadline; break; }
+}
+void beginHeaterLease() {
+    InterruptProtectedBlock lock;
+    TIMSK3=0;
+    TCCR3B=0;
+    TCCR3A=0;
+    TCCR3C=0;
+    TCNT3=0;
+    OCR3A=OCR3B=OCR3C=0;
+    TIFR3=_BV(OCF3A)|_BV(OCF3B)|_BV(OCF3C)|_BV(TOV3);
+    TCCR3B=_BV(CS32);
+    heaterLeaseReady=true;
+}
+// IRQs masked by caller. No serial, no float, no motion calls.
+inline __attribute__((always_inline)) void cutExpiredHeaterLease() {
+    heaterLeaseFailed=true;
+    heaterGrantProgress=0;
+#if EXT0_HEATER_PIN > -1
+    WRITE(EXT0_HEATER_PIN, LOW);
+#endif
+#if defined(EXT1_HEATER_PIN) && EXT1_HEATER_PIN > -1 && NUM_EXTRUDER > 1
+    WRITE(EXT1_HEATER_PIN, LOW);
+#endif
+    WRITE(HEATED_BED_HEATER_PIN, LOW);
+    requestedDuty[0]=0;
+    requestedDuty[1]=0;
+#if NUM_EXTRUDER > 1
+    requestedDuty[2]=0;
+#endif
+    TIMSK3=0;
+}
+
+// Share the identical failure body. Timer3 and larger handlers keep the
+// out-of-line leaf; the small Advance ISR can inline the cold branch
+// without saving every call-clobbered register on its normal path.
+__attribute__((noinline)) void failHeaterLease() { cutExpiredHeaterLease(); }
+
+// IRQs masked. An inactive channel can have a stale compare flag, so
+// intersect the hardware flag with the *enabled* lease vector bits.
+// Never acknowledge a pending flag or touch a deadline here; the same
+// terminal all-off leaf handles both this path and the Timer3 vectors.
+inline __attribute__((always_inline)) bool pendingHeaterExpiry() {
+    constexpr uint8_t compareMask = _BV(OCIE3A) | _BV(OCIE3B)
+#if NUM_EXTRUDER > 1
+        | _BV(OCIE3C)
+#endif
+        ;
+    return (TIFR3 & TIMSK3 & compareMask) != 0;
+}
+inline __attribute__((always_inline)) void expirePendingHeaterLease() {
+    if (pendingHeaterExpiry()) failHeaterLease();
+}
+
+inline __attribute__((always_inline)) bool leaseWindowLive(uint16_t deadline,uint8_t mask,uint16_t now) {
+    const uint16_t left=uint16_t(deadline-now);
+    return left>heaterLeaseGuard && left<=heaterLeaseDuration && !(TIFR3 & mask);
+}
+bool leaseLive(uint8_t c,uint16_t now) {
+    return leaseWindowLive(leaseDeadline(c),leaseMask(c),now);
+}
+// Fixed channels in the frame and clock-continuity checks avoid the variable
+// register selection and bit shifts in the generic grant/renewal path.
+template<uint8_t c>
+inline __attribute__((always_inline)) bool fixedLeaseLive(uint16_t now) {
+    static_assert(c<=NUM_EXTRUDER,"heater channel");
+    return leaseWindowLive(leaseDeadline(c),leaseMask(c),now);
+}
+template<uint8_t c>
+inline __attribute__((always_inline)) bool continuityChannel(uint16_t now) {
+    return requestedDuty[c] && (TIMSK3&leaseMask(c)) && fixedLeaseLive<c>(now);
+}
+template<uint8_t c>
+inline __attribute__((always_inline)) bool validActiveChannel(uint16_t now) {
+    return !requestedDuty[c] || fixedLeaseLive<c>(now);
+}
+bool heaterClockContinuity() {
+    if(!heaterLeaseReady || heaterLeaseFailed) return false;
+    const uint16_t now=TCNT3;
+    return continuityChannel<0>(now) || continuityChannel<1>(now)
+#if NUM_EXTRUDER > 1
+        || continuityChannel<2>(now)
+#endif
+        ;
+}
+bool checkHeaterLeases() {
+    if (!heaterLeaseReady || heaterLeaseFailed) return false;
+    const uint16_t now=TCNT3;
+    if(validActiveChannel<0>(now) && validActiveChannel<1>(now)
+#if NUM_EXTRUDER > 1
+        && validActiveChannel<2>(now)
+#endif
+        ) return true;
+    failHeaterLease();
+    return false;
+}
 } // namespace
+
+bool HAL::heaterLeaseFault() { return heaterLeaseFailed; }
+// The regular thermal pass and autotune may complete in either order.
+// Bit 7 is consumed once with the per-channel grant bits. Autotune cannot
+// keep the watchdog alive on its own if the regular service is stalled.
+constexpr uint8_t thermalPassComplete=0x80;
+static void tryThermalWatchdogFeed(bool heatDemand,bool regularPass) {
+    InterruptProtectedBlock lock;
+    if(!watchdogActive || !heaterLeaseReady) return;
+    checkHeaterLeases(); // expired demands are removed before considering feed
+    if(regularPass) heaterGrantProgress |= thermalPassComplete;
+    if(!(heaterGrantProgress&thermalPassComplete)) return;
+    const uint8_t powered=(requestedDuty[0] ? _BV(0) : 0)
+                         | (requestedDuty[1] ? _BV(1) : 0)
+#if NUM_EXTRUDER > 1
+                         | (requestedDuty[2] ? _BV(2) : 0)
+#endif
+                         ;
+    if((heaterGrantProgress & powered)!=powered) return;
+    const bool anyPower=powered!=0;
+    if(Printer::isAnyTempsensorDefect()) {
+        // Retain diagnostics only while the real completed thermal pass
+        // demonstrates all software heater outputs off. Read GPIO, not
+        // current: a failed-closed MOSFET/triac is outside this proof.
+        if(!regularPass || anyPower || TIMSK3 || READ(EXT0_HEATER_PIN)
+#if NUM_EXTRUDER > 1
+            || READ(EXT1_HEATER_PIN)
+#endif
+            || READ(HEATED_BED_HEATER_PIN))return;
+    }
+    // Do not resurrect a missed hardware progress deadline, even if a
+    // delayed foreground pass now looks healthy. Both watchdogs must expire.
+    if(!renewWatchdogProgress()) return;
+    // Feed only after a complete foreground thermal pass and fresh grants
+    // for all currently powered channels since the previous feed.
+    // A latched all-off fault may retain diagnostics if progress is timely.
+    heaterGrantProgress=0;
+    if(heatDemand || anyPower) heaterResetCookie=heaterLiveCookie;
+    else if(!heaterLeaseFailed && !Printer::heatingInhibited()) heaterResetCookie=0;
+    wdt_reset();
+}
+void HAL::completeThermalWatchdogPass(bool heatDemand) {
+    tryThermalWatchdogFeed(heatDemand,true);
+}
+void HAL::completeAutotuneWatchdogPass() {
+    tryThermalWatchdogFeed(true,false);
+}
+ISR(TIMER3_COMPA_vect) { failHeaterLease(); }
+ISR(TIMER3_COMPB_vect, ISR_ALIASOF(TIMER3_COMPA_vect));
+#if NUM_EXTRUDER > 1
+ISR(TIMER3_COMPC_vect, ISR_ALIASOF(TIMER3_COMPA_vect));
+#endif
 
 void HAL::resetPwmOutputs() {
     for (auto& duty : requestedDuty)
@@ -675,7 +1129,58 @@ void HAL::resetPwmOutputs() {
 }
 
 uint8_t HAL::outputDuty(uint8_t channel) { return requestedDuty[channel]; }
-void HAL::setHeaterDuty(uint8_t channel, uint8_t duty) { requestedDuty[channel] = duty; }
+void HAL::setHeaterDuty(uint8_t channel, uint8_t duty
+    , HeaterSample* sample
+) {
+    if (channel > NUM_EXTRUDER)
+        return;
+    const uint8_t compareBit=leaseMask(channel);
+    const uint8_t grantBit=compareBit >> OCIE3A;
+    InterruptProtectedBlock lock;
+    const bool allowed=checkHeaterLeases();
+    if (duty) {
+        // No positive grant after the progress clock has expired, even if
+        // an old heater deadline still happens to be live.
+        if(!watchdogActive || !watchdogProgressLive()) { failHeaterLease(); return; }
+        if (!allowed || Printer::heatingInhibited()) return;
+        // No new grant from a diagnostic read, expired or consumed reservation.
+        // Existing power can only survive until its previous deadline.
+        if(!sample || !sample->consume(channel)) return;
+        const bool active=requestedDuty[channel]!=0;
+        const uint16_t now=TCNT3;
+        if(active && !leaseLive(channel,now)) { failHeaterLease(); return; }
+        writeLeaseDeadline(channel,uint16_t(now+heaterLeaseDuration));
+        // W1C only while previously inactive.
+        if(!active) TIFR3=compareBit;
+        if(!leaseLive(channel,TCNT3)) { failHeaterLease(); return; }
+        // Retain interruption evidence before publishing any positive duty.
+        // This is diagnostic redundancy, not the sole reset protection.
+        heaterResetCookie=heaterLiveCookie;
+        heaterGrantProgress |= grantBit;
+        requestedDuty[channel]=duty;
+        TIMSK3 |= compareBit;
+        return;
+    }
+    // A pending decision made before this revoke cannot rearm the heater.
+    if(heaterSampleState[channel]&SampleMatch)
+        heaterSampleState[channel] &= uint8_t(~SampleFresh);
+    heaterSampleState[channel] &= uint8_t(~(SampleReserved|SampleMatch|ReservationPrevious));
+    TIMSK3 &= uint8_t(~compareBit);
+    heaterGrantProgress &= uint8_t(~grantBit);
+
+    // Revoke the requested duty and the active output together. The PWM
+    // handler can only raise a heater at frame start, from requestedDuty.
+    requestedDuty[channel] = 0;
+    switch (channel) {
+#if EXT0_HEATER_PIN > -1
+        case 0: WRITE(EXT0_HEATER_PIN, LOW); break;
+#endif
+#if defined(EXT1_HEATER_PIN) && EXT1_HEATER_PIN > -1 && NUM_EXTRUDER > 1
+        case 1: WRITE(EXT1_HEATER_PIN, LOW); break;
+#endif
+        case NUM_EXTRUDER: WRITE(HEATED_BED_HEATER_PIN, LOW); break;
+    }
+}
 void HAL::setBoardFan(bool enabled) { requestedDuty[boardFanChannel] = enabled ? 255 : 0; }
 uint8_t HAL::partFanSpeed() { return requestedFanSpeed; }
 uint8_t HAL::partFanDivisor() { return fanDivisor; }
@@ -689,7 +1194,8 @@ void HAL::setPartFanDutyRange(uint8_t minimum, uint8_t maximum) {
 }
 
 void HAL::setPartFanDivisor(uint8_t divisor) {
-    InterruptProtectedBlock lock;
+    // Single foreground writer, ISR byte reader: no read/modify/write.
+    // Normalize before the one atomic volatile uint8_t publication.
     if (!divisor)
         divisor = 1;
     fanDivisor = divisor <= PART_FAN_MODE_MAX ? divisor : PART_FAN_DEFAULT_PWM_SPEED_DIVISOR;
@@ -725,6 +1231,9 @@ void HAL::setPartFanSpeed(uint8_t speed) {
 This timer is called 3906 times per second. It is used to update pwm values for heater and some other frequent jobs.
 */
 ISR(PWM_TIMER_VECTOR) {
+    // Even if PWM wins priority over Timer3, never wait for the next
+    // frame boundary to act on an already-expired armed lease.
+    expirePendingHeaterLease();
     static uint8_t pwm_count_heater = 0;
     static uint8_t pwm_count_cooler = 0;
     static uint8_t pwm_count_part_fan = 0;
@@ -735,7 +1244,25 @@ ISR(PWM_TIMER_VECTOR) {
 #endif
     PWM_OCR += 64;
 
+    // Move the legacy nominal 16ms compensation/WDI event away from WDT.
+    // Alternate 62/63 serviced compares: 125 * 256us = 32ms.
+    // Coalescence/overload can delay this event; WDT reset is independent.
+    static uint8_t compensationCountdown=62;
+    static bool longCompensationPeriod=false;
+    if(--compensationCountdown==0) {
+        longCompensationPeriod=!longCompensationPeriod;
+        compensationCountdown=longCompensationPeriod?63:62;
+        compensationTick=true;
+        pingWatchdog();
+    }
+
     if (pwm_count_heater == 0) {
+        // PWM timer starts before startWatchdog() during setup. There is
+        // no heater demand then; do not latch a boot-time false fault.
+        if(watchdogActive && !watchdogProgressLive()) failHeaterLease();
+        // A failed/unavailable lease check cannot enter the rising-edge
+        // block, even if a stale duty byte is unexpectedly nonzero.
+        if (checkHeaterLeases()) {
 #if EXT0_HEATER_PIN > -1
         if ((pwm_pos_set[0] = (requestedDuty[0] & heaterPwmMask)) > 0)
             WRITE(EXT0_HEATER_PIN, HIGH);
@@ -748,6 +1275,15 @@ ISR(PWM_TIMER_VECTOR) {
 
         if ((pwm_pos_set[NUM_EXTRUDER] = (requestedDuty[NUM_EXTRUDER] & heaterPwmMask)) > 0)
             WRITE(HEATED_BED_HEATER_PIN, HIGH);
+        } else {
+            // The ordinary count-zero falling-edge tests below drive all
+            // heaters LOW. Do not copy stale positive duty into this frame.
+            pwm_pos_set[0] = 0;
+#if NUM_EXTRUDER > 1
+            pwm_pos_set[1] = 0;
+#endif
+            pwm_pos_set[NUM_EXTRUDER] = 0;
+        }
     }
 
     if (pwm_count_cooler == 0) {
@@ -843,17 +1379,11 @@ ISR(PWM_TIMER_VECTOR) {
         featureTick = true; // Volle 100ms Zeit -> Ping 50ms
     }
 
-#ifdef RGB_LIGHT_R_PIN
-    bool rgb_10ms_change_should_be_now = false;
-#endif // RGB_LIGHT_R_PIN
 
     static char counter10Periodical = 0; // Approximate a 10ms timer :: blocks pingwatchdog s commandloop if not working
     if (++counter10Periodical >= 39) {
         counter10Periodical = 0;
         scanTick = true;
-#ifdef RGB_LIGHT_R_PIN
-        rgb_10ms_change_should_be_now = true;
-#endif // RGB_LIGHT_R_PIN
 
         // Hier her versetzt, um 10ms einstell-auflösung zu erhalten. Darum /10 statt bisher /100 beim Init in setFanSpeed().
         // Fan anfangs auf high zum anlaufen, aber das muss beendet werden:
@@ -866,10 +1396,6 @@ ISR(PWM_TIMER_VECTOR) {
     if (pwm_count_heater & 4)
         uid.fastAction();
 
-#ifdef RGB_LIGHT_R_PIN
-    if (rgb_10ms_change_should_be_now)
-        RgbLighting::advanceFade();
-#endif // RGB_LIGHT_R_PIN
 } // ISR(PWM_TIMER_VECTOR)
 
 namespace {
@@ -933,6 +1459,9 @@ void ExtrusionOutput::serviceTimerCompare() {
 
 // Inline the direction path so the interrupt only saves the registers it uses.
 ISR(EXTRUDER_TIMER_VECTOR, __attribute__((flatten))) {
+    // Advance outranks PWM and Timer3. Do not rely on either gaining
+    // admission during a stream of advance compares and resumed masks.
+    if (pendingHeaterExpiry()) cutExpiredHeaterLease();
     Printer::extrusionOutput.serviceTimerCompare();
 }
 

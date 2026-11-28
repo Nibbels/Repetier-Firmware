@@ -87,8 +87,13 @@ ZMotion::Step ZMotion::recoverQueuedOvertravel() {
 
 ZMotion::Step ZMotion::checkQueuedStep(int8_t direction, bool abortAtEndstop) {
     if (atUpperEndstop()) {
-        if (direction < 0)
+        if (direction < 0) {
+            if (minSwitchHit()) {
+                queuedOvertravel_ = 0;
+                return Step::Stop;
+            }
             return recoverQueuedOvertravel();
+        }
         if (abortAtEndstop) {
             queuedOvertravel_ = 0;
             return Step::Stop;
@@ -111,8 +116,11 @@ ZMotion::Step ZMotion::checkQueuedStep(int8_t direction, bool abortAtEndstop) {
 
 ZMotion::Step ZMotion::checkDirectStep(int8_t direction, bool stopAtMinSwitch) {
     if (atUpperEndstop()) {
-        if (direction < 0)
+        if (direction < 0) {
+            if (minSwitchHit())
+                return Step::Stop;
             return Step::Pulse;
+        }
         direct_.stop();
         return Step::Stop;
     }
@@ -129,6 +137,17 @@ __attribute__((always_inline))
 #endif
 bool ZMotion::stepPath(Path path) {
     const int8_t direction = directionIsPositive() ? 1 : -1;
+    if (path == Path::Scan) {
+        // Scan travel uses the same physical pulse/position owner, but
+        // must never balance compensation or consume direct/nominal debt.
+        if (direction > 0 ? atUpperEndstop() : (!isHomed() || atMinOvertravel()))
+            return false;
+        HAL::allowInterrupts();
+        startPulse(direction);
+        HAL::forbidInterrupts();
+        scanSteps_ += direction;
+        return true;
+    }
     const bool queued = path == Path::Queued || path == Path::QueuedUntilEndstop;
     Step result = Step::Suppressed;
     if (!balanceOpposingCorrection(direction)) {
@@ -151,25 +170,3 @@ bool ZMotion::stepPath(Path path) {
     return result != Step::Stop;
 }
 
-int8_t ZMotion::timedPulse(uint8_t delayMultiplier) {
-    HAL::delayMicroseconds(XYZ_STEPPER_HIGH_DELAY * delayMultiplier);
-    const int8_t direction = directionIsPositive() ? 1 : -1;
-    startPulse(direction);
-    HAL::delayMicroseconds(XYZ_STEPPER_LOW_DELAY * delayMultiplier);
-    finishPulse();
-    return direction;
-}
-
-bool ZMotion::ScanMove::step() {
-    const bool positive = direction_ > 0;
-    if (!positive && motion_.isHomed() && motion_.atMinOvertravel())
-        return false;
-    if (directionIsPositive() != positive)
-        setDirection(positive);
-    motion_.scanSteps_ += motion_.timedPulse(1);
-    return true;
-}
-
-void ZMotion::stepHomeCheck(uint8_t delayMultiplier) {
-    timedPulse(delayMultiplier);
-}

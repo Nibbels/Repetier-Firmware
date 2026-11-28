@@ -56,7 +56,8 @@
 
 #define UI_MENU_CHANGEACTION(name, row, action) UI_STRING(name##_txt, row) \
                                                 UIMenuEntry name PROGMEM = { name##_txt, 4, action, 0, 0 };
-#define UI_MENU_ACTIONCOMMAND(name, row, action) UI_STRING(name##_txt, row) \
+#define UI_MENU_ACTIONCOMMAND(name, row, action) static_assert((action) != UI_ACTION_OK && (action) != UI_ACTION_BACK && (action) != UI_ACTION_NEXT && (action) != UI_ACTION_PREVIOUS && (action) != UI_ACTION_RIGHT && (action) != UI_ACTION_RF_CONTINUE && !((action) & UI_ACTION_TOPMENU), "Direct menu entry must not dispatch navigation or restart"); \
+                                                 UI_STRING(name##_txt, row) \
                                                  UIMenuEntry name PROGMEM = { name##_txt, 3, action, 0, 0 };
 #define UI_MENU_ACTIONSELECTOR(name, row, entries) UI_STRING(name##_txt, row) \
                                                    UIMenuEntry name PROGMEM = { name##_txt, 2, (unsigned int)&entries, 0, 0 };
@@ -64,7 +65,8 @@
                                             UIMenuEntry name PROGMEM = { name##_txt, 2, (unsigned int)&entries, 0, 0 };
 #define UI_MENU_CHANGEACTION_FILTER(name, row, action, filter, nofilter) UI_STRING(name##_txt, row) \
                                                                          UIMenuEntry name PROGMEM = { name##_txt, 4, action, filter, nofilter };
-#define UI_MENU_ACTIONCOMMAND_FILTER(name, row, action, filter, nofilter) UI_STRING(name##_txt, row) \
+#define UI_MENU_ACTIONCOMMAND_FILTER(name, row, action, filter, nofilter) static_assert((action) != UI_ACTION_OK && (action) != UI_ACTION_BACK && (action) != UI_ACTION_NEXT && (action) != UI_ACTION_PREVIOUS && (action) != UI_ACTION_RIGHT && (action) != UI_ACTION_RF_CONTINUE && !((action) & UI_ACTION_TOPMENU), "Direct menu entry must not dispatch navigation or restart"); \
+                                                                          UI_STRING(name##_txt, row) \
                                                                           UIMenuEntry name PROGMEM = { name##_txt, 3, action, filter, nofilter };
 #define UI_MENU_ACTIONSELECTOR_FILTER(name, row, entries, filter, nofilter) UI_STRING(name##_txt, row) \
                                                                             UIMenuEntry name PROGMEM = { name##_txt, 2, (unsigned int)&entries, filter, nofilter };
@@ -99,7 +101,6 @@ List of placeholder:
 %ov : active Speed
 %op : Is double or quadstepping?
 %of : flow multiplier
-%oc : Connection baudrate
 %o0..9 : Output level extruder 0..9 is % including %sign
 %oC : Output level current extruder
 %ob : Output level heated bed
@@ -223,7 +224,6 @@ List of placeholder:
 %pH : Z stop and extrusion inhibit maximum [DMS digits]
 %HB : active heat bed z matrix
 %HO : active heat bed min z offset in um
-%Z5-Z8: Page4 printing time
 
 %wx : current wobblefix offset in x [um] (Bauchtanz)
 %wy : current wobblefix offset in y [um] (Bauchtanz)
@@ -280,10 +280,6 @@ more then one information page.
         UI_PAGE4(ui_page3,UI_TEXT_PAGE_EXTRUDER1,"",UI_TEXT_PAGE_BED,"%os")
     #endif // NUM_EXTRUDER>1
 
-        UI_PAGE4(ui_page4,"%Z5","%Z6","%Z7","%Z8")
-
-        #define UI_PRINTTIME_PAGES ,&ui_page4
-
     #if UI_COLS<=16
         UI_PAGE4(ui_page_mod,UI_TEXT_STRAIN_GAUGE_SPEED,
                         "zO:%z0um zM: %HB",
@@ -327,7 +323,7 @@ more then one information page.
 
     /* Merge pages together. Use the following pattern:
     #define UI_PAGES {&name1,&name2,&name3} */
-    #define UI_PAGES {&ui_page1 UI_MOD_PAGES, &ui_page2, &ui_page3 UI_PRINTTIME_PAGES UI_MOD2_PAGES, &ui_page_mod_wobble}
+    #define UI_PAGES {&ui_page1 UI_MOD_PAGES, &ui_page2, &ui_page3 UI_MOD2_PAGES, &ui_page_mod_wobble}
 
     // How many pages do you want to have. Minimum is 1.
 
@@ -488,12 +484,8 @@ UI_MENU_ACTIONCOMMAND(ui_menu_toggle_230V_output, UI_TEXT_230V_OUTPUT, UI_ACTION
 #define OUTPUT_230V_ENTRY
 #endif // MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 
-#if !HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)
 UI_MENU_ACTIONCOMMAND(ui_menu_light_mode, UI_TEXT_LIGHTS_ONOFF, UI_ACTION_LIGHTS_ONOFF)
 #define OUTPUT_X19_ENTRY , &ui_menu_light_mode
-#else
-#define OUTPUT_X19_ENTRY
-#endif
 
 #if FET1 > -1 && !HOTEND_COOLER_USES_PIN(FET1)
 UI_MENU_ACTIONCOMMAND(ui_menu_toggle_FET1_output, UI_TEXT_FET1_OUTPUT, UI_ACTION_FET1_OUTPUT)
@@ -588,16 +580,9 @@ UI_MENU(ui_menu_feedrate, UI_MENU_FEEDRATE)
 
 UI_MENU_ACTION2(ui_menu_stepper2,UI_ACTION_STEPPER_INACTIVE, UI_TEXT_STEPPER_OFF2_a, UI_TEXT_STEPPER_OFF2_b)
 UI_MENU_ACTION2(ui_menu_maxinactive2,UI_ACTION_MAX_INACTIVE, UI_TEXT_ALL_OFF2_a, UI_TEXT_ALL_OFF2_b)
-UI_MENU_CHANGEACTION(ui_menu_general_baud,UI_TEXT_BAUDRATE,UI_ACTION_BAUDRATE)
 UI_MENU_ACTIONSELECTOR(ui_menu_general_stepper_inactive,UI_TEXT_STEPPER_OFF,ui_menu_stepper2)
 UI_MENU_ACTIONSELECTOR(ui_menu_general_max_inactive,UI_TEXT_ALL_OFF,ui_menu_maxinactive2)
 
-#ifdef RGB_LIGHT_R_PIN
-UI_MENU_CHANGEACTION(ui_menu_toggle_rgb_light,UI_TEXT_RGB_LIGHT_MODE,UI_ACTION_RGB_LIGHT_MODE)
-#define RGB_LIGHT_ENTRY ,&ui_menu_toggle_rgb_light
-#else
-#define RGB_LIGHT_ENTRY
-#endif // RGB_LIGHT_R_PIN
 
 #if NUM_EXTRUDER>1
 UI_MENU_ACTION2(ui_menu_extruder_offsetx2,UI_ACTION_EXTRUDER_OFFSET_X, UI_TEXT_EXTRUDER_OFFSET_X2, "")
@@ -724,7 +709,7 @@ UI_MENU_CHANGEACTION_FILTER(ui_menu_microsteps_e,  UI_TEXT_MICRO_STEPS_E , UI_AC
 UI_MENU(ui_menu_motor,UI_MENU_MOTOR_COND)
 //############################################################### MOTOR MENU
 
-#define UI_MENU_GENERAL {&ui_menu_general_baud,&ui_menu_general_stepper_inactive,&ui_menu_general_max_inactive RGB_LIGHT_ENTRY EXTRUDER_OFFSET_TYPE_ENTRY_XY}
+#define UI_MENU_GENERAL {&ui_menu_general_stepper_inactive,&ui_menu_general_max_inactive EXTRUDER_OFFSET_TYPE_ENTRY_XY}
 UI_MENU(ui_menu_general,UI_MENU_GENERAL)
 /** \brief Configuration menu */
 UI_MENU_CHANGEACTION(ui_menu_preheat_a_bed, "A Bed %Vb C", UI_ACTION_PREHEAT_A_BED)
@@ -746,9 +731,14 @@ UI_MENU_SUBMENU(ui_menu_z_calibration, UI_TEXT_ZCALIB,         ui_menu_z)
 UI_MENU_ACTION4(ui_menu_restore_defaults_ack,UI_ACTION_RESTORE_DEFAULTS, UI_TEXT_RESTORE_DEFAULTS, UI_TEXT_CONFIGURATION "?", UI_ACTION_TEXT_YES, UI_ACTION_TEXT_NO)
 UI_MENU_ACTIONSELECTOR_FILTER(ui_menu_restore_defaults,UI_TEXT_RESTORE_DEFAULTS,ui_menu_restore_defaults_ack, 0, MENU_MODE_PRINTING | MENU_MODE_PAUSED)
 
+// Edit a staged value only; OK commits, BACK discards.
+UI_MENU_ACTION2(ui_menu_bed_cutoff_edit, UI_ACTION_BED_CUTOFF, "Bed cutoff: %VcC", "OK: save / BACK")
+UI_MENU_ACTIONSELECTOR_FILTER(ui_menu_bed_cutoff, "Bed cutoff", ui_menu_bed_cutoff_edit, 0, MENU_MODE_PRINTING | MENU_MODE_PAUSED)
+UI_MENU_ACTIONCOMMAND_FILTER(ui_menu_eeprom_recovery, "EEPROM check", UI_ACTION_EEPROM_RECOVERY, 0, MENU_MODE_PRINTING | MENU_MODE_PAUSED)
+#define UI_MENU_BED_CUTOFF , &ui_menu_bed_cutoff, &ui_menu_eeprom_recovery
 #define UI_MENU_CONFIGURATION {&ui_menu_conf_general, &ui_menu_z_calibration, &ui_menu_conf_dms, \
     &ui_menu_conf_wobble, UI_MENU_CONFIGURATION_FAN_COND &ui_menu_conf_pid, &ui_menu_conf_preheat, &ui_menu_conf_motor, \
-    &ui_menu_conf_accel, &ui_menu_conf_feed, &ui_menu_restore_defaults}
+    &ui_menu_conf_accel, &ui_menu_conf_feed, &ui_menu_restore_defaults UI_MENU_BED_CUTOFF}
 UI_MENU(ui_menu_configuration,UI_MENU_CONFIGURATION)
 /** \brief Main menu */
 UI_MENU_SUBMENU(ui_menu_main1, UI_TEXT_QUICK_SETTINGS,  ui_menu_quick)

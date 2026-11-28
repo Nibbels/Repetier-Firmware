@@ -11,7 +11,6 @@ enum class QueueTask : uint8_t {
     Pause = 4,
     PauseAndPark = 5,
     EnableSenseOffset = 100,
-    UnlockDisplay = 101,
 };
 static_assert(sizeof(QueueTask) == 1, "Queue command must fit the shared move byte");
 

@@ -19,6 +19,9 @@
 #define EXTRUDER_H
 
 #include "HAL.h"
+#include "ThermalEmergency.h"
+
+#include "BedTemperatureLimit.h"
 
 #define CELSIUS_EXTRA_BITS 3
 
@@ -38,7 +41,26 @@ public:
     uint8_t pwmIndex;           ///< pwm index for output control. 0-2 = Extruder, 3 = Fan, 4 = Heated Bed
     uint8_t sensorType;         ///< Type of temperature sensor.
     uint8_t sensorPin;          ///< Index into the ADC sample array.
-    const uint16_t heaterCutoffC; ///< Switch the heater off above this temperature.
+    const uint16_t heaterCutoffC; ///< Immutable measured-temperature ceiling.
+    enum : uint16_t { BedAbsoluteCeilingC=BedTemperatureLimit::AbsoluteC,
+                      BedDefaultCutoffC=BedTemperatureLimit::DefaultC,
+                      BedTargetMarginC=BedTemperatureLimit::MarginC };
+    uint16_t effectiveCutoffC() const {
+        return pwmIndex==NUM_EXTRUDER && heaterCutoffC>bedLimit_.monitor()
+            ? uint16_t(bedLimit_.monitor()) : heaterCutoffC;
+    }
+    uint16_t maximumTargetC() const {
+        if(pwmIndex!=NUM_EXTRUDER) return heaterCutoffC;
+        if(!bedLimit_.commissioned()) return 0;
+        const uint16_t ceiling=effectiveCutoffC();
+        return ceiling>BedTargetMarginC ? ceiling-BedTargetMarginC : 0;
+    }
+    // Foreground settings owner only. Zero revokes bed permission.
+    bool setBedEmergencyCutoff(uint8_t verifiedCutoff);
+    static uint8_t commissionedBedCutoff() {return bedLimit_.commissioned();}
+private:
+    static BedTemperatureLimit bedLimit_;
+public:
     int16_t currentTemperature; ///< Currenttemperature value read from sensor.
     float currentTemperatureC;  ///< Current temperature in degC.
     float targetTemperatureC;   ///< Target temperature in degC.
@@ -82,11 +104,19 @@ public:
             && (controller == NUM_EXTRUDER ? method == 2 || method == 3 : method == 0 || method == 1);
     }
 
+    void clearTargetTemperature();
     void setTargetTemperature(float target);
-    bool updateCurrentTemperature(); ///< False for an unsupported sensor type or stale/unpublished ADC sample.
+    bool updateCurrentTemperature(HAL::HeaterSample* sample = nullptr
+        , ThermalEmergency::SensorObservation* observation = nullptr
+    );
+    // ///< False for an unsupported sensor type or stale/unpublished ADC sample.
     void updateTempControlVars();
     void waitForTargetTemperature(uint8_t plus_temp_tolerance = 0, bool resumingPause = false);
     void autotunePID(float temp, uint8_t controllerId, int maxCycles, bool storeResult, int method);
+private:
+    void autotunePIDPrepared(float temp, uint8_t controllerId, int maxCycles, bool storeResult, int method);
+public:
+    static bool autotuneActive();
 
     // Code für den Decouple-Test der Heizkreisläufe:
     inline bool isDecoupleFull() {
@@ -343,5 +373,13 @@ extern TemperatureController optTempController;
 #define TEMP_FLOAT_TO_INT(temp) ((int)((temp) * (1 << CELSIUS_EXTRA_BITS)))
 
 extern TemperatureController* tempController[NUM_TEMPERATURE_LOOPS];
+namespace ThermalEmergency {
+    const Ledger<NUM_TEMPERATURE_LOOPS>& faultLedger();
+    // Foreground only, after safe GPIO initialization.
+    void latchSystemFault(Cause cause);
+    bool liveTemperatureValid(uint8_t channel);
+    void requestLiveReport();
+    void requestDiagnosticReplay();
+}
 
 #endif // EXTRUDER_H

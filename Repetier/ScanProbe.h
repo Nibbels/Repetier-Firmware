@@ -13,7 +13,7 @@ constexpr int heatBedScanRetries = 5;
 const ScanSettings& probeSettings();
 extern ScanSession scanSession;
 
-bool moveZ(int steps, bool emergencyRetreat = false);
+bool moveZ(int32_t steps, bool emergencyRetreat = false);
 void showAbortScanReason(const void* scanName, ScanAbort reason);
 
 bool zOffsetScanRunning();

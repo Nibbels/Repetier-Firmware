@@ -91,15 +91,28 @@ speed_t ComputeV(uint32_t ticks, uint32_t acceleration) {
 }
 uint32_t U16SquaredToU32(uint16_t value) { return uint32_t(value) * value; }
 void delayMilliseconds(unsigned delay) { clockMs += delay; }
-int16_t eepromWords[2048] = {};
-int32_t eepromDWords[2048] = {};
-int16_t eprGetInt16(unsigned address) { return eepromWords[address]; }
+int16_t eepromWords[4096] = {};
+int32_t eepromDWords[4096] = {};
+unsigned eepromReads = 0;
+int16_t eprGetInt16(unsigned address) { ++eepromReads; return eepromWords[address]; }
 void eprSetInt16(unsigned address, int16_t value) { eepromWords[address] = value; }
+int32_t eprGetInt32(unsigned address) { ++eepromReads; return eepromDWords[address]; }
 void eprSetInt32(unsigned address, int32_t value) { eepromDWords[address] = value; }
 }
 
+#include "EepromZonePatch.h"
+constexpr uint16_t EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX = EepromZones::address(EepromZones::Field::F_RF_MOD_SENSEOFFSET_OFFSET_MAX);
+constexpr uint16_t EPR_RF_MOD_SENSEOFFSET_DIGITS = EepromZones::address(EepromZones::Field::F_RF_MOD_SENSEOFFSET_DIGITS);
+constexpr uint16_t EPR_RF_EMERGENCYPAUSEDIGITSMIN = EepromZones::address(EepromZones::Field::F_RF_EMERGENCYPAUSEDIGITSMIN);
+constexpr uint16_t EPR_RF_EMERGENCYPAUSEDIGITSMAX = EepromZones::address(EepromZones::Field::F_RF_EMERGENCYPAUSEDIGITSMAX);
+constexpr uint16_t EPR_RF_EMERGENCYZSTOPDIGITSMIN = EepromZones::address(EepromZones::Field::F_RF_EMERGENCYZSTOPDIGITSMIN);
+constexpr uint16_t EPR_RF_EMERGENCYZSTOPDIGITSMAX = EepromZones::address(EepromZones::Field::F_RF_EMERGENCYZSTOPDIGITSMAX);
+
 namespace EEPROM {
-void updateChecksum() {}
+unsigned persistenceCommits = 0;
+void publishSenseOffsetSettings();
+void storeSenseOffsetSettings(int16_t, int16_t, bool, bool);
+bool storePressureLimits(bool,int32_t,int32_t,bool,bool);
 }
 
 bool interruptsEnabled = true;
@@ -165,9 +178,9 @@ const char ui_text_output_object[] = "";
 struct Com {
     static constexpr const char* tSlash = "/";
     static constexpr const char* tLinearLColon = "Linear L:";
-    static constexpr const char* tOutputObjectPrint = "output";
     static const char* lastLine;
     static void printFLN(const char* line) { lastLine = line; }
+    static void printErrorFLN(const char* line) { lastLine = line; }
     template<class... Args> static void printF(Args...) {}
     template<class... Args> static void printFLN(Args...) {}
     static void println() {}
@@ -288,7 +301,6 @@ bool infoLogging = false;
 bool debugInfo() { return infoLogging; }
 bool outputSafetyLatched = false;
 bool heatingInhibited() { return outputSafetyLatched; }
-float convertToMM(float value) { return gcodeModes.inches() ? value * 25.4 : value; }
 bool areAxisHomed() { return axesHomed; }
 bool isAxisHomed(int) { return true; }
 bool isMinEndstopHit(uint8_t axis) { return xyMinHit[axis]; }
@@ -296,6 +308,7 @@ bool isMaxEndstopHit(uint8_t axis) { return xyMaxHit[axis]; }
 void stopDirectAxis(uint8_t axis) { stoppedDirectAxis = axis; }
 bool isZMaxEndstopHit() { return zMotion.maxEndstopHit(); }
 bool isZMinEndstopHit() { return ZMotion::minSwitchHit(); }
+bool zStepperEnabled() { return true; }
 bool needsCMPwait() { return false; }
 void disableAllSteppersNow() {
     assert(extrusionOutput.pendingSteps() == 0);
@@ -306,6 +319,8 @@ void setMenuMode(int mode, bool active) {
     menuPaused = active;
 }
 void stopPrint();
+bool isAnyTempsensorDefect(){return false;} // terminal transition tested with actual source separately
+void stopForThermalFault(){assert(false);}
 void applyAdvanceSettings();
 void homeZAxis();
 void homeDigits();
@@ -337,6 +352,7 @@ void setZAxisSteps(long steps) { zMotion.setNominalSteps(steps); }
 void setEPositionMM(float value, float remainder = 0.0f);
 void setFeedrate(float value);
 bool queueGCodeCoordinates(GCode*);
+bool queueInternalAxisMove(uint8_t axis, float value, float feedrateMmMin = 0);
 void updateWobbleFixOffsets();
 int32_t prepareDestinationSteps(uint8_t axis);
 float getDirectMM(uint8_t axis) { return directCurrentSteps[axis] * axisMMPerSteps_[axis]; }
@@ -499,6 +515,7 @@ struct PrintLine {
         updatesWobble = wobble;
         return publishesMove;
     }
+    static void abortDirectMoveForEmergency() { direct.stepsRemaining=0; direct.task=DIRECT_IDLE; }
     static void applyDirectStop();
     static void stopDirectMove() { ++stopRequests; applyDirectStop(); }
     static void discardQueuedMoves() { linesCount = 0; queuedTask = QueueTask::None; }
@@ -527,7 +544,7 @@ void Printer::queueFloatCoordinates(float x, float y, float z, float e, float sp
     if (e != IGNORE_COORDINATE) {
         setEPositionMM(e);
         extrusionPlanner.restoreStepRemainder(0.375f);
-        extrusionCompensation.restoreRemainder(0.25f);
+        extrusionCompensation.restoreRemainderUnits(ExtrusionCompensation::prepareRatio(0.25f));
     }
 }
 int PrintLine::linesCount = 3;
@@ -596,12 +613,14 @@ struct GCodeInput {
         assert(Printer::printJob.commandsBlocked());
         ++incomingReads;
     }
-    static void executeFlashScript(const char* script) {
-        assert(script == Com::tOutputObjectPrint && !PrintLine::hasLines());
+    static bool flashScriptActive() { return false; }
+    static bool executeOutputProgram() {
+        assert(!PrintLine::hasLines());
         assert(!Printer::printJob.commandsBlocked());
         ++objectOutputs;
         if (duringOutputScript)
             duringOutputScript();
+        return !Printer::printJob.commandsBlocked();
     }
 };
 
@@ -635,6 +654,87 @@ struct Timer0Flags {
 #define ISR(vector, ...) void vector()
 #define EXTRUDER_TIMER_VECTOR advanceCompareInterrupt
 
+// Model only the durable transport boundary. Production settings publication,
+// band validation and typed patch construction are replayed below.
+namespace EEPROM {
+using namespace EepromZones;
+bool loaded = true;
+bool lastOk = false;
+bool allowCommit = true;
+enum class Result { Ok, Failed };
+bool accept(Result result) { return lastOk = result == Result::Ok; }
+bool persist(const Patch* edits, uint8_t count) {
+    assert(interruptsEnabled);
+    assert(patchMask(edits, count));
+    if (!allowCommit) return false;
+    bool changed = false;
+    for (uint8_t i = 0; i < count; ++i) {
+        const auto& p = edits[i];
+        if (p.width == 2) {
+            changed |= HAL::eepromWords[p.pos] != int16_t(p.bits);
+            HAL::eepromWords[p.pos] = int16_t(p.bits);
+        } else {
+            assert(p.width == 4);
+            changed |= HAL::eepromDWords[p.pos] != int32_t(p.bits);
+            HAL::eepromDWords[p.pos] = int32_t(p.bits);
+        }
+    }
+    if (changed) ++persistenceCommits;
+    return true;
+}
+struct Session {
+    Result read(uint8_t id, uint8_t* data, uint8_t n, uint32_t& alerts) {
+        assert(interruptsEnabled && id == Pressure);
+        BlockEncoder enc(id, data, n);
+        enc.u32(Field::F_RF_EMERGENCYPAUSEDIGITSMIN, HAL::eprGetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMIN));
+        enc.u32(Field::F_RF_EMERGENCYPAUSEDIGITSMAX, HAL::eprGetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMAX));
+        enc.u16(Field::F_RF_EMERGENCYZSTOPDIGITSMIN, HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN));
+        enc.u16(Field::F_RF_EMERGENCYZSTOPDIGITSMAX, HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX));
+        assert(enc.complete());
+        alerts = 0;
+        return Result::Ok;
+    }
+    Result patch(const Patch* edits, uint8_t count) {
+        return persist(edits, count) ? Result::Ok : Result::Failed;
+    }
+};
+Session session() { return {}; }
+void publishSenseOffsetSettings() {
+    // Fixture for reload; actual LiveSettings decoder covered by EEPROM replay.
+    Printer::senseOffsetControl.publishStoredLimits(
+        HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS),
+        HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX));
+}
+}
+
+namespace ThermalEmergency {
+struct Ledger {bool active() const {return false;}};
+const Ledger& faultLedger(){static Ledger l;return l;}
+}
+// Heater GPIO and Timer3 register model for the actual Advance expiry
+// check. No heater time advances during the ordinary motion replays.
+// RF2000.h aliases EXT0/EXT1/BED to HEATER_0/1/2; the host
+// fixture deliberately does not include the AVR pin-register header.
+#define HEATER_0_PIN 100
+#define HEATER_1_PIN 101
+#define HEATER_2_PIN 102
+constexpr uint8_t OCIE3A=1, OCIE3B=2, OCIE3C=3;
+static uint8_t TIFR3=0, TIMSK3=0;
+static bool heaterLeaseFailed=false;
+static uint8_t heaterGrantProgress=0;
+static volatile uint8_t requestedDuty[NUM_EXTRUDER+1]={};
+static bool leaseReplayPins[NUM_EXTRUDER+1]={};
+static void leaseReplayWrite(int pin, bool level) {
+    assert(!interruptsEnabled && !level);
+    if(pin==EXT0_HEATER_PIN) leaseReplayPins[0]=level;
+#if NUM_EXTRUDER > 1
+    else if(pin==EXT1_HEATER_PIN) leaseReplayPins[1]=level;
+#endif
+    else {
+        assert(pin==HEATED_BED_HEATER_PIN);
+        leaseReplayPins[NUM_EXTRUDER]=level;
+    }
+}
 #include "pause-sense-offset-firmware.inc"
 
 bool advanceTimerArmed() {
@@ -770,16 +870,25 @@ void pressurePause() {
     GCode command;
     command.S = -99999;
     command.P = 99999;
+    HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMIN] = -6000;
+    HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMAX] = 6000;
+    const unsigned saves=EEPROM::persistenceCommits;
     configurePressure(3075, &command);
-    assert(HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMIN] == EMERGENCY_PAUSE_DIGITS_MIN);
-    assert(HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMAX] == EMERGENCY_PAUSE_DIGITS_MAX);
+    assert(Printer::pressureProtection.pauseLimits().minimum==EMERGENCY_PAUSE_DIGITS_MIN);
+    assert(Printer::pressureProtection.pauseLimits().maximum==EMERGENCY_PAUSE_DIGITS_MAX);
+    assert(HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMIN] == -6000);
+    assert(HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMAX] == 6000);
+    assert(EEPROM::persistenceCommits==saves);
+    configurePressure(3075,&command);
+    assert(EEPROM::persistenceCommits==saves);
     sample(EMERGENCY_PAUSE_DIGITS_MAX, EMERGENCY_PAUSE_CHECKS);
     assert(!Printer::pause.isPaused());
 
     command.explicitS = command.explicitP = true;
     command.S = command.P = 0;
     configurePressure(3075, &command);
-    assert(!HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMIN] && !HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMAX]);
+    assert(HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMIN]==-6000 && HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMAX]==6000);
+    assert(EEPROM::persistenceCommits==saves);
     sample(EMERGENCY_PAUSE_DIGITS_MAX + 1, EMERGENCY_PAUSE_CHECKS);
     assert(!Printer::pause.isPaused());
 
@@ -798,12 +907,19 @@ void pressurePause() {
 }
 
 void pressureStop() {
-    GCode command;
-    command.S = -12000;
-    command.P = 11500;
-    configurePressure(3076, &command);
+    // M3076 is gone. Exercise the same pressure owner and persistent
+    // menu settings, not a removed serial interface.
+    Printer::pressureProtection.setStopLimits({-12000,11500});
+    EEPROM::storePressureLimits(true,-12000,11500,true,true);
     assert(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN) == -12000);
     assert(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX) == 11500);
+    const unsigned saves=EEPROM::persistenceCommits;
+    EEPROM::storePressureLimits(true,-12000,11500,true,true);
+    assert(EEPROM::persistenceCommits==saves);
+    // A one-sided menu save does not capture an unrelated temporary limit.
+    EEPROM::storePressureLimits(true,-11900,0,true,false);
+    assert(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX)==11500 && EEPROM::persistenceCommits==saves+1);
+    EEPROM::storePressureLimits(true,-12000,0,true,false);
 
     PrintLine::direct.task = DIRECT_RUNNING;
     PrintLine::direct.stepsRemaining = 1;
@@ -838,7 +954,7 @@ void pressureStop() {
     StepExecutor::updateAdvanceSteps(extrusion, 4);
     GCode testStep;
     testStep.S = 5;
-    runAdvanceCommand(223, &testStep);
+    injectAdvanceTestSteps(&testStep);
     assert(output.pendingSteps() == 0 && Extruder::stepPulses == 0);
 
     sample(11500, EMERGENCY_STOP_CHECKS);
@@ -859,12 +975,7 @@ void pressureStop() {
 
     PrintLine::direct.task = DIRECT_IDLE;
     PrintLine::direct.stepsRemaining = 0;
-    command.explicitS = command.explicitP = true;
-    command.S = command.P = 0;
-    Printer::infoLogging = true;
-    configurePressure(3076, &command);
-    Printer::infoLogging = false;
-    assert(Com::lastLine && !std::strcmp(Com::lastLine, "M3076: temporary stop band [0, 0] digits"));
+    Printer::pressureProtection.setStopLimits({0,0});
     assert(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN) == -12000);
     assert(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX) == 11500);
     sample(0, EMERGENCY_STOP_CHECKS);
@@ -914,7 +1025,7 @@ void outputSafetyLock() {
         StepExecutor::updateAdvanceSteps(extrusion, 4);
         GCode testStep;
         testStep.S = 5;
-        runAdvanceCommand(223, &testStep);
+        injectAdvanceTestSteps(&testStep);
         assert(output.pendingSteps() == 0 && !fireAdvanceCompare());
         assert(Extruder::stepPulses == oldPulses);
     }
@@ -1135,25 +1246,40 @@ void senseOffsetWindow() {
 
 void senseOffsetSettings() {
     const auto& controller = Printer::senseOffsetControl;
+    // A failed durable transaction must not publish the proposed pair.
+    const auto old = controller.storedLimits();
+    EEPROM::allowCommit = false;
+    EEPROM::storeSenseOffsetSettings(3200, 55, true, true);
+    assert(controller.storedLimits().thresholdDigits == old.thresholdDigits);
+    assert(controller.storedLimits().maxMicrometers == old.maxMicrometers);
+    EEPROM::allowCommit = true;
     GCode command;
     command.P = 3200;
     command.S = 55;
+    const unsigned beforeCommit = EEPROM::persistenceCommits;
     configureSenseOffset(&command);
+    assert(EEPROM::persistenceCommits == beforeCommit + 1);
     assert(queuedSenseOffsetEnables == 1 && controller.limits().thresholdDigits == senseThreshold);
     assert(controller.limits().maxMicrometers == 55);
     assert(HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS) == 3200);
     assert(HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX) == 55);
+    const unsigned beforeQueue = HAL::eepromReads;
     Printer::enableSenseOffsetnow();
+    assert(HAL::eepromReads == beforeQueue);
     assert(controller.limits().thresholdDigits == 3200);
 
     // The queue accepts only stored thresholds strictly inside its bounds.
     HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS, EMERGENCY_PAUSE_DIGITS_MAX);
     HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX, 300);
+    EEPROM::publishSenseOffsetSettings();
+    const unsigned beforeInvalidQueue = HAL::eepromReads;
     Printer::enableSenseOffsetnow();
+    assert(HAL::eepromReads == beforeInvalidQueue);
     const auto limits = controller.limits();
     assert(limits.thresholdDigits == 3200 && limits.maxMicrometers == 55);
     HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS, 3200);
     HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX, 55);
+    EEPROM::publishSenseOffsetSettings();
 
     command.explicitP = true;
     command.P = 0;
@@ -1188,10 +1314,13 @@ void senseOffsetLimitInterrupt() {
     // Activate a tighter cap from the step queue just before the increment write.
     HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS, 4500);
     HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX, 21);
+    EEPROM::publishSenseOffsetSettings();
+    const unsigned beforeInterrupt = HAL::eepromReads;
     onInterrupt = Printer::enableSenseOffsetnow;
     interruptBeforeLock = 5;
     sample(printingForce);
     assert(!interruptBeforeLock && Printer::senseOffsetControl.limits().maxMicrometers == 21);
+    assert(HAL::eepromReads == beforeInterrupt);
     assert(Printer::zOffset.senseMicrometers() == initialClearance);
     sample(printingForce, 5);
     assert(Printer::zOffset.senseMicrometers() == 21);
@@ -1340,6 +1469,11 @@ void cancelAndCleanup() {
     assert(!objectOutputs);
     Printer::printJob.service(clockMs + 5003);
     Printer::printJob.service(clockMs + 6000);
+    assert(!objectOutputs && Printer::printJob.commandsBlocked());
+    Printer::printJob.servicePendingOutput(clockMs + 5002);
+    assert(!objectOutputs && Printer::printJob.commandsBlocked());
+    Printer::printJob.servicePendingOutput(clockMs + 5003);
+    Printer::printJob.servicePendingOutput(clockMs + 6000);
     assert(objectOutputs == 1 && !Printer::printJob.commandsBlocked());
 
     // A USB stop during a heater wait must also discard the pending return.
@@ -1356,6 +1490,16 @@ void cancelAndCleanup() {
 }
 
 void queuedPause() {
+    const auto initialLines = PrintLine::linesCount;
+    for (char* scan : {&g_nHeatBedScanStatus, &g_nZOSScanStatus}) {
+        *scan = 1;
+        Printer::pause.request(PrintPause::Destination::InPlace);
+        Printer::pause.queueRequest(PrintPause::Destination::Park);
+        Printer::pause.pressPause();
+        assert(!Printer::pause.isPaused() && PrintLine::linesCount == initialLines);
+        assert(PrintLine::queuedTask == QueueTask::None);
+        *scan = 0;
+    }
     Printer::pause.queueRequest(PrintPause::Destination::Park);
     assert(Printer::pause.isSettled() && !PrintLine::hasLines());
     Printer::pause.queueRequest(PrintPause::Destination::InPlace);
@@ -1395,15 +1539,15 @@ void homeBetweenPrints() {
     const long manualZ = Printer::zOffset.manualMicrometers();
     planMove(oldLayer + 64, true);
     planMove(oldLayer + 128, true, false, false);
-    Printer::extrusionCompensation.publishRatio(0.5f);
-    Printer::extrusionCompensation.restoreRemainder(0.75f);
+    Printer::extrusionCompensation.publishRatio(ExtrusionCompensation::prepareRatio(0.5f));
+    Printer::extrusionCompensation.restoreRemainderUnits(ExtrusionCompensation::prepareRatio(0.75f));
 
     Printer::homeZAxis();
     assert(!Printer::doHeatBedZCompensation && Printer::zMotion.isHomed());
     assert(!Printer::zMotion.nominalSteps() && !Printer::zMotion.motorSteps());
     assert(Printer::zOffset.manualMicrometers() == manualZ && Printer::zOffset.senseMicrometers() == 0);
     assert(Printer::zMotion.correctionTarget() == 0);
-    assert(Printer::extrusionCompensation.ratio() == 0.0f && Printer::extrusionCompensation.remainder() == 0.0f);
+    assert(Printer::extrusionCompensation.ratio() == 0.0f && Printer::extrusionCompensation.remainderUnits() == ExtrusionCompensation::prepareRatio(0.0f));
     assert(Printer::senseOffsetControl.limits().thresholdDigits == 0 && !Printer::senseOffsetControl.inLearningRange());
     assert(layers.fadeStartSteps() == defaultMin && layers.fadeEndSteps() == 12800);
     planMove(0, false, true, false); // An E-only move must not confirm the pre-home candidate.
@@ -1491,8 +1635,8 @@ void compensationBoundaries() {
     const long fadeStart = layers.fadeStartSteps();
     const long fadeEnd = layers.fadeEndSteps();
 
-    const float previousRatio = ExtrusionCompensation::prepareRatio(0.048f);
-    Printer::extrusionCompensation.publishRatio(previousRatio);
+    Printer::extrusionCompensation.publishRatio(ExtrusionCompensation::prepareRatio(0.048f));
+    const float previousRatio = Printer::extrusionCompensation.ratio();
     locksUntilCompensationPublish = 2; // One read of nominal Z, then publication.
     expectCompensation(-1, 263 + offset, 0.0f, 0);
     assert(!locksUntilCompensationPublish && extrusionBeforePublish == previousRatio);
@@ -1647,7 +1791,7 @@ void primeFlowCleanup(unsigned skipAt, unsigned abortAt) {
     planMove(512, true);
     Printer::setEPositionMM(10.0f, 0.00001f);
     Printer::extrusionPlanner.restoreStepRemainder(0.125f);
-    Printer::extrusionCompensation.restoreRemainder(0.75f);
+    Printer::extrusionCompensation.restoreRemainderUnits(ExtrusionCompensation::prepareRatio(0.75f));
     Printer::gcodeModes.setRelativeEOverride(true);
     Printer::feedrateMultiply = 85;
     Printer::menuExtrusionFactor = 0.93f;
@@ -1684,7 +1828,7 @@ void primeFlowCleanup(unsigned skipAt, unsigned abortAt) {
         assert(Printer::printJob.commandsBlocked() && Printer::moveTarget.machineMM(E_AXIS) == 0.0f);
     } else {
         assert(Printer::moveTarget.machineMM(E_AXIS) == 10.0f && Printer::moveTarget.remainderMM(E_AXIS) == 0.00001f);
-        assert(Printer::extrusionPlanner.stepRemainder() == 0.125f && Printer::extrusionCompensation.remainder() == 0.75f);
+        assert(Printer::extrusionPlanner.stepRemainder() == 0.125f && Printer::extrusionCompensation.remainderUnits() == ExtrusionCompensation::prepareRatio(0.75f));
     }
 }
 
@@ -1697,6 +1841,30 @@ void primeParameters() {
     command.F = 100;
     command.I = 9;
     command.Y = 500;
+
+    // Neither scan mode may enter the priming state/snapshot frame.
+    for (char* scan : {&g_nHeatBedScanStatus, &g_nZOSScanStatus}) {
+        *scan = 1;
+        Printer::startLine.run(command);
+        assert(!primeMoves && !Printer::startLine.active());
+        *scan = 0;
+    }
+    // A scan can start while an idle job is waiting for internal motion.
+    Printer::printJob.finishPrintMotion();
+    PrintLine::linesCount = 1;
+    duringPeriodicActions = [] { g_nZOSScanStatus = 1; };
+    Printer::startLine.run(command);
+    duringPeriodicActions = nullptr;
+    assert(!primeMoves && !Printer::startLine.active() && Printer::printJob.isIdle());
+    assert(!PrintLine::hasLines());
+    g_nZOSScanStatus = 0;
+
+    // An existing filament owner is not a printing phase.
+    assert(Printer::printJob.beginFilamentService());
+    Printer::startLine.run(command);
+    assert(!primeMoves && !Printer::startLine.active());
+    Printer::printJob.finishFilamentService();
+    Printer::printJob.admitPrintMotion();
 
     Printer::axesHomed = false;
     Printer::startLine.run(command);
@@ -1823,14 +1991,12 @@ void gcodeTarget() {
 
     Printer::gcodeModes.setRelativeXYZ(false);
     Printer::gcodeModes.setRelativeEOverride(true);
-    Printer::gcodeModes.setInches(true);
-    command.X = 0.5f;
+    command.X = 12.7f;
     command.Y = command.E = command.F = 0;
     assert(Printer::queueGCodeCoordinates(&command));
     assert(std::abs(Printer::moveTarget.machineMM(X_AXIS) - 1.7f) < 0.00001f);
     assert(Printer::moveTarget.machineMM(Y_AXIS) == 40.25f);
 
-    Printer::gcodeModes.setInches(false);
     command.X = 0;
     command.E = -0.5f;
     assert(Printer::queueGCodeCoordinates(&command));
@@ -1838,6 +2004,20 @@ void gcodeTarget() {
     command.E = 0;
     assert(!Printer::queueGCodeCoordinates(&command));
     assert(PrintLine::plannedMoves == 4);
+
+    Printer::printJob.finishPrintMotion();
+    const float priorFeedrate = Printer::feedrate;
+    assert(Printer::queueInternalAxisMove(E_AXIS, -0.5f));
+    assert(Printer::moveTarget.machineMM(E_AXIS) == 2.0f && !PrintLine::updatesWobble);
+    assert(Printer::feedrate == priorFeedrate && !Printer::printJob.isPrinting());
+    assert(Printer::queueInternalAxisMove(Y_AXIS, 37, 4800));
+    assert(Printer::moveTarget.machineMM(Y_AXIS) == 40 && PrintLine::updatesWobble);
+    assert(std::abs(Printer::feedrate - 80) < 0.0001f && !Printer::printJob.isPrinting());
+    Extruder::current->tempControl.calibrationValid = false;
+    assert(!Printer::queueInternalAxisMove(E_AXIS, 1, 100));
+    assert(Printer::moveTarget.machineMM(E_AXIS) == 2.0f);
+    assert(std::abs(Printer::feedrate - 80) < 0.0001f);
+    assert(!Printer::queueInternalAxisMove(E_AXIS + 1, 1, 100));
 }
 
 void wobbleTarget() {
@@ -1895,22 +2075,22 @@ void ecmpStepping() {
     PrintLine move;
     move.moveE = move.positiveE = true;
     move.delta[E_AXIS] = 1;
-    Printer::extrusionCompensation.publishRatio(0.25f);
+    Printer::extrusionCompensation.publishRatio(ExtrusionCompensation::prepareRatio(0.25f));
 
     for (unsigned i = 0; i < 3; ++i)
         executeExtrusionStep(&move, true);
-    assert(Extruder::stepPulses == 3 && Printer::extrusionCompensation.remainder() == 0.75f);
+    assert(Extruder::stepPulses == 3 && Printer::extrusionCompensation.remainderUnits() == ExtrusionCompensation::prepareRatio(0.75f));
     executeExtrusionStep(&move, false);
-    assert(Extruder::stepPulses == 4 && Printer::extrusionCompensation.remainder() == 0.75f);
+    assert(Extruder::stepPulses == 4 && Printer::extrusionCompensation.remainderUnits() == ExtrusionCompensation::prepareRatio(0.75f));
     executeExtrusionStep(&move, true);
     assert(Extruder::stepPulses == 6 && Extruder::trailingEdges == 1);
-    assert(Printer::extrusionCompensation.remainder() == 0.0f);
+    assert(Printer::extrusionCompensation.remainderUnits() == ExtrusionCompensation::prepareRatio(0.0f));
 
     auto replayReversal = [&](bool advance, float ratio, float remainder, unsigned count, int expectedSteps) {
         Printer::extrusionOutput.setAdvanceEnabled(advance);
         Printer::extrusionOutput.clearSteps();
         Printer::extrusionCompensation.publishRatio(ExtrusionCompensation::prepareRatio(ratio));
-        Printer::extrusionCompensation.restoreRemainder(remainder);
+        Printer::extrusionCompensation.restoreRemainderUnits(ExtrusionCompensation::prepareRatio(remainder));
         const unsigned before = Extruder::stepPulses;
 
         move.positiveE = false;
@@ -1925,7 +2105,7 @@ void ecmpStepping() {
         const int returned = advance ? Printer::extrusionOutput.pendingSteps() + retracted
                                       : int(Extruder::stepPulses - afterRetract);
         assert(retracted == expectedSteps && returned == retracted);
-        assert(Printer::extrusionCompensation.remainder() == remainder);
+        assert(Printer::extrusionCompensation.remainderUnits() == ExtrusionCompensation::prepareRatio(remainder));
         assert(Printer::extrusionOutput.pendingSteps() == 0);
         if (advance)
             assert(Extruder::stepPulses == before);
@@ -1936,6 +2116,31 @@ void ecmpStepping() {
         replayReversal(advance, 0.25f, 0.125f, 1, 2); // Crossing the whole-step boundary.
         replayReversal(advance, 0.048f, 0.0f, 100, 105); // Non-binary ECMP rate.
     }
+}
+
+void advanceHeaterExpiry() {
+    auto& advance=Printer::extrusionOutput;
+    InterruptProtectedBlock lock;
+    advance.setStepInterval(12);
+    advance.setAdvanceEnabled(true);
+    advance.addSteps(2);
+    for(uint8_t c=0;c<=NUM_EXTRUDER;++c) {
+        requestedDuty[c]=255;
+        leaseReplayPins[c]=true;
+    }
+    heaterGrantProgress=0xff;
+    TIFR3=_BV(OCIE3A);
+    TIMSK3=0; // stale flag on an inactive channel must not latch
+    assert(fireAdvanceCompare());
+    assert(!heaterLeaseFailed && heaterGrantProgress==0xff);
+    for(uint8_t c=0;c<=NUM_EXTRUDER;++c)
+        assert(requestedDuty[c]==255 && leaseReplayPins[c]);
+    TIMSK3=_BV(OCIE3A);
+    assert(fireAdvanceCompare());
+    assert(heaterLeaseFailed && TIMSK3==0 && heaterGrantProgress==0);
+    assert(TIFR3==_BV(OCIE3A) && !interruptsEnabled);
+    for(uint8_t c=0;c<=NUM_EXTRUDER;++c)
+        assert(!requestedDuty[c] && !leaseReplayPins[c]);
 }
 
 void advanceTimer() {
@@ -2093,7 +2298,7 @@ void advanceModeChange() {
 
     GCode testStep;
     testStep.S = 20;
-    runAdvanceCommand(223, &testStep);
+    injectAdvanceTestSteps(&testStep);
     assert(advance.pendingSteps() == 0);
 
     PrintLine::linesCount = 2;
@@ -2110,7 +2315,7 @@ void advanceModeChange() {
     assert(advance.pendingSteps() == 0);
 
     testStep.S = 2;
-    runAdvanceCommand(223, &testStep);
+    injectAdvanceTestSteps(&testStep);
     advance.setLeadSteps(1);
     const auto tick = [] { fireAdvanceCompare(); };
     for (int i = 0; i < 4; ++i)
@@ -2128,7 +2333,7 @@ void advanceModeChange() {
     assert(!advance.advanceEnabled() && Extruder::current->advanceL == 0);
     assert(Extruder::current->deliveredSteps == 2 && advance.pendingSteps() == 0);
 
-    runAdvanceCommand(223, &testStep);
+    injectAdvanceTestSteps(&testStep);
     setting.Y = 30;
     runAdvanceCommand(233, &setting);
     assert(advance.advanceEnabled() && advance.pendingSteps() == 0);
@@ -2188,7 +2393,7 @@ void advanceCancel() {
     StepExecutor::updateAdvanceSteps(move, 4);
     GCode testStep;
     testStep.S = 5;
-    runAdvanceCommand(223, &testStep);
+    injectAdvanceTestSteps(&testStep);
     {
         InterruptProtectedBlock lock;
         output.onIdleTick();
@@ -2200,6 +2405,8 @@ void advanceCancel() {
     output.inhibit(ExtrusionOutput::Inhibit::MotorsDisabled);
     Printer::printJob.service(clockMs + 2001);
     Printer::printJob.service(clockMs + 3002);
+    assert(!objectOutputs && Printer::printJob.commandsBlocked() && output.blocked());
+    Printer::printJob.servicePendingOutput(clockMs + 3002);
     assert(objectOutputs == 1 && !Printer::printJob.commandsBlocked() && output.blocked());
     output.allow(ExtrusionOutput::Inhibit::MotorsDisabled);
     assert(!output.blocked());
@@ -2224,7 +2431,7 @@ void manualExtrusionDuringPause(bool advance) {
 
     Printer::setEPositionMM(42.5f, 0.000125f);
     Printer::extrusionPlanner.restoreStepRemainder(0.25f);
-    Printer::extrusionCompensation.restoreRemainder(0.375f);
+    Printer::extrusionCompensation.restoreRemainderUnits(ExtrusionCompensation::prepareRatio(0.375f));
     auto untouchedPlanner = Printer::extrusionPlanner;
     const auto motor = [&] {
         return advance ? long(Extruder::current->deliveredSteps) : Printer::directCurrentSteps[E_AXIS];
@@ -2253,7 +2460,7 @@ void manualExtrusionDuringPause(bool advance) {
     assert(Printer::moveTarget.machineMM(E_AXIS) == 42.5f);
     assert(Printer::moveTarget.remainderMM(E_AXIS) == 0.000125f);
     assert(Printer::extrusionPlanner.stepRemainder() == 0.25f);
-    assert(Printer::extrusionCompensation.remainder() == 0.375f);
+    assert(Printer::extrusionCompensation.remainderUnits() == ExtrusionCompensation::prepareRatio(0.375f));
 
     // A completely blocked attempt leaves the automatic retract to recover.
     Printer::pause.request(PrintPause::Destination::InPlace);
@@ -2290,9 +2497,18 @@ void filamentProgramDuringPause() {
     const float targetTemperature = Extruder::current->tempControl.targetTemperatureC;
     const int queued = PrintLine::linesCount;
 
-    // A pause can freeze the print queue while the load command waits.
-    duringPeriodicActions = [] { Printer::pause.request(PrintPause::Destination::InPlace); };
     GCode command;
+    // A live print is rejected before any wait or E-coordinate change.
+    assert(Printer::printJob.isPrinting());
+    runFilamentCommand(3913, &command);
+    assert(!std::strcmp(Com::lastLine, "Filament program requires idle print job and no scan"));
+    assert(Printer::moveTarget.machineMM(E_AXIS) == 42.5f);
+    assert(Printer::printJob.isPrinting() && PrintLine::linesCount == queued);
+
+    // Idle ownership with internal queued motion still requires a settled
+    // unpaused queue. A pause can occur during this actual motion wait.
+    Printer::printJob.finishPrintMotion();
+    duringPeriodicActions = [] { Printer::pause.request(PrintPause::Destination::InPlace); };
     runFilamentCommand(3913, &command);
     duringPeriodicActions = nullptr;
     assert(Printer::pause.isSettled() && PrintLine::linesCount == queued);
@@ -2311,6 +2527,20 @@ void filamentProgramDuringPause() {
 }
 
 void finishAdvanceBeforeAndAfterOutput() {
+    PrintLine::linesCount=0;
+    for (char* scan : {&g_nHeatBedScanStatus, &g_nZOSScanStatus}) {
+        *scan=1;
+        outputObject(false);
+        assert(!objectOutputs && !motorShutdowns);
+        *scan=0;
+    }
+    Printer::printJob.finishPrintMotion();
+    assert(Printer::printJob.beginFilamentService());
+    outputObject(false);
+    assert(!objectOutputs && !motorShutdowns);
+    Printer::printJob.finishFilamentService();
+    Printer::printJob.admitPrintMotion();
+
     auto& output = Printer::extrusionOutput;
     output.setAdvanceEnabled(true);
     output.setStepInterval(15);
@@ -2564,7 +2794,7 @@ void idleStatusTransitions() {
     assert(status.poll(2000, delay) == Transition::Waiting && interruptsEnabled);
 }
 
-void advancePeakReport() {
+void advanceProfileReport() {
     PrintLine move;
     move.setAxisSteps(X_AXIS, 16000);
     move.setAxisSteps(E_AXIS, 5600);
@@ -2573,10 +2803,10 @@ void advancePeakReport() {
     Extruder::current->advanceL = 100.0f;
     MotionPlanner::prepareMove(move, axisDistances, 25, PrintLine::queue);
 
-    const auto peak = MotionPlanner::takeAdvancePeak();
-    assert(peak.steps == 140 && peak.extrusionSpeed == 5.0f);
-    const auto cleared = MotionPlanner::takeAdvancePeak();
-    assert(cleared.steps == 0 && cleared.extrusionSpeed == 0.0f);
+    // Verify the actual planned pressure advance, not removed telemetry.
+    assert(move.stepProfile.vMax > 0);
+    const uint32_t expected = uint32_t(65536.0f * 140.0f / move.stepProfile.vMax);
+    assert(move.stepProfile.advanceL == expected);
 }
 
 void lookaheadMoves() {
@@ -2690,7 +2920,7 @@ void shortMovePacing() {
     constexpr unsigned prefill = 12, segmentCount = 300;
     constexpr uint32_t sendPeriod = F_CPU / 200;
     // Forty bytes per line with 8N1 framing at the configured UART rate.
-    constexpr uint32_t wireTicks = (uint64_t(F_CPU) * 40 * 10 + BAUDRATE - 1) / BAUDRATE;
+    constexpr uint32_t wireTicks = (uint64_t(F_CPU) * 40 * 10 + firmwareSerialBaudrate - 1) / firmwareSerialBaudrate;
     constexpr float radius = 1.35f, feedrate = 100.0f;
     for (const float chord : {0.2f, 0.6f}) {
         const double angle = 2 * std::asin(chord / (2 * radius));
@@ -3037,10 +3267,12 @@ int main(int argc, char** argv) {
         idleStatusTransitions();
     else if (!std::strcmp(argv[1], "print-job"))
         printJob();
-    else if (!std::strcmp(argv[1], "advance-peak"))
-        advancePeakReport();
+    else if (!std::strcmp(argv[1], "advance-profile"))
+        advanceProfileReport();
     else if (!std::strcmp(argv[1], "ecmp-stepping"))
         ecmpStepping();
+    else if (!std::strcmp(argv[1], "advance-heater-expiry"))
+        advanceHeaterExpiry();
     else if (!std::strcmp(argv[1], "advance-timer"))
         advanceTimer();
     else if (!std::strcmp(argv[1], "advance-mode"))

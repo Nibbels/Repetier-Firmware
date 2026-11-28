@@ -14,9 +14,19 @@ public:
 
     bool commandsBlocked() const {
         const Phase phase = phase_;
-        return phase == Phase::Draining || phase == Phase::WaitingToOutput;
+        return phase == Phase::Draining || phase == Phase::WaitingToOutput
+            || phase == Phase::ThermalEmergency
+            ;
     }
 
+    bool emergencyLocked() const { return phase_ == Phase::ThermalEmergency; }
+    // Caller holds the interrupt lock. Terminal for this boot, even if the
+    // old job was idle or already waiting for its automatic output move.
+    bool beginThermalEmergency() {
+        if(emergencyLocked()) return false;
+        phase_=Phase::ThermalEmergency;
+        return true;
+    }
     void admitPrintMotion() {
         if (phase_ == Phase::Idle)
             phase_ = Phase::Printing;
@@ -26,9 +36,12 @@ public:
             phase_ = Phase::Idle;
     }
 
-    void beginFilamentService() {
-        if (phase_ == Phase::Idle)
-            phase_ = Phase::FilamentService;
+    bool isIdle() const { return phase_ == Phase::Idle; }
+    bool beginFilamentService() {
+        if (!isIdle())
+            return false;
+        phase_ = Phase::FilamentService;
+        return true;
     }
     void finishFilamentService() {
         if (phase_ == Phase::FilamentService)
@@ -45,9 +58,13 @@ public:
     }
 
     void service(uint32_t now);
+    // Outer Commands::commandLoop only, after old queued commands retire.
+    void servicePendingOutput(uint32_t now);
 
 private:
-    enum class Phase : uint8_t { Idle, Printing, FilamentService, Draining, WaitingToOutput };
+    enum class Phase : uint8_t { Idle, Printing, FilamentService, Draining, WaitingToOutput
+        , ThermalEmergency
+    };
 
     volatile Phase phase_ = Phase::Idle;
     uint32_t phaseSince_ = 0;

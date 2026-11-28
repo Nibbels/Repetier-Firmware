@@ -64,6 +64,9 @@ bool matrixAvailable = true;
 void (*onHome)() = nullptr;
 std::vector<std::pair<float, float>> probePoints;
 
+bool injectPauseAtAdmission = false;
+struct InterruptProtectedBlock { InterruptProtectedBlock(); };
+
 namespace HAL {
 uint32_t now = 0;
 uint32_t timeInMilliseconds() { return now; }
@@ -72,8 +75,8 @@ uint32_t timeInMilliseconds() { return now; }
 namespace Printer {
 ScanStrainGauge strainGauge;
 bool blockAll = false;
-struct { bool commandsBlocked() const { return false; } } printJob;
-struct { bool isPaused() const { return false; } } pause;
+struct { bool busy=false, blocked=false; bool isIdle() const { return !busy && !blocked; } bool isBusy() const { return busy; } bool commandsBlocked() const { return blocked; } bool emergencyLocked()const{return false;} } printJob;
+struct { bool paused=false, servicing=false; bool isPaused() const { return paused; } bool blocksCalibration() const { return paused || servicing; } } pause;
 struct { void cancel() {} void schedule(uint32_t) {} } idleStatus;
 struct { void recordActivity(uint32_t) {} } inactivity;
 struct {
@@ -100,18 +103,26 @@ void homeAxis(bool x, bool y, bool z) {
     }
 }
 bool queueRelativeMMCoordinates(float x, float y, float z, float e, float, bool wait, bool endstop) {
-    assert(wait && endstop && !e);
-    if (z)
-        assert(!x && !y && z == 5);
-    else
-        probePoints.emplace_back(x, y);
+    assert(wait && endstop && !e && !z);
+    probePoints.emplace_back(x, y);
     return true;
 }
 void disableAllSteppersNow() { ++shutdowns; }
 }
 
+InterruptProtectedBlock::InterruptProtectedBlock() {
+    // Simulate Timer1 publishing a pause just before the scan takes its
+    // admission lock, after the optimistic initial phase check.
+    if (injectPauseAtAdmission) {
+        injectPauseAtAdmission = false;
+        Printer::pause.paused = true;
+    }
+}
+
 constexpr int Calibrating = 1;
 namespace GCodeInput {
+bool scriptActive=false;
+bool flashScriptActive(){return scriptActive;}
 void keepAlive(int state) {
     assert(state == Calibrating);
     ++serviced;
@@ -200,17 +211,22 @@ void calculate() {
 }
 } // namespace
 
+namespace EEPROM { bool settingsReady(){return true;} }
 #include "scan-pressure-firmware.inc"
 #include "bed-matrix-scan-firmware.inc"
 
 const ScanSettings& Calibration::probeSettings() { return scanSettings; }
-bool Calibration::moveZ(int steps, bool) { return ::moveZ(steps); }
+bool Calibration::moveZ(int32_t steps, bool) { return ::moveZ(steps); }
 void Calibration::showAbortScanReason(const void* text, ScanAbort reason) {
     ::showAbortScanReason(static_cast<const char*>(text), reason);
 }
 
 bool isAnyScanRunning();
 
+#include "DiagnosticHistory.h"
+namespace DiagnosticHistory {
+void recordScan(ScanAbort,ScanKind){}
+}
 #include "z-offset-scan-firmware.inc"
 
 bool heatBedScanRunning() { return false; }
@@ -224,6 +240,39 @@ void Calibration::discardZOffsetScan() { zOffsetScan.discard(); }
 
 int main(int argc, char** argv) {
     assert(argc == 2);
+    if (!std::strcmp(argv[1], "busy-admission")) {
+        Printer::printJob.busy=true;
+        zOffsetScan.startOrCancel(false);
+        assert(!zOffsetScan.active() && !homedZ && !homedXY);
+        Printer::printJob.busy=false;
+        Printer::printJob.blocked=true;
+        zOffsetScan.startOrCancel(true);
+        assert(!zOffsetScan.active() && !homedZ && !homedXY);
+        Printer::printJob.blocked=false;
+        Printer::pause.paused=true;
+        zOffsetScan.startOrCancel(false);
+        assert(!zOffsetScan.active() && !homedZ && !homedXY);
+        Printer::pause.paused=false;
+        Printer::pause.servicing=true;
+        zOffsetScan.startOrCancel(false);
+        assert(!zOffsetScan.active() && !homedZ && !homedXY);
+        Printer::pause.servicing=false;
+        GCodeInput::scriptActive=true;
+        zOffsetScan.startOrCancel(false);
+        assert(!zOffsetScan.active() && !homedZ && !homedXY);
+        GCodeInput::scriptActive=false;
+        injectPauseAtAdmission=true;
+        zOffsetScan.startOrCancel(false);
+        assert(!injectPauseAtAdmission && Printer::pause.paused);
+        assert(!zOffsetScan.active() && !homedZ && !homedXY);
+        Printer::pause.paused=false;
+        zOffsetScan.startOrCancel(false);
+        assert(zOffsetScan.active());
+        Printer::printJob.busy=true;
+        zOffsetScan.startOrCancel(false);
+        assert(Calibration::scanSession.aborting());
+        return 0;
+    }
     const bool level = !std::strcmp(argv[1], "level");
     const bool retry = !std::strcmp(argv[1], "retry");
     const bool missing = !std::strcmp(argv[1], "missing-matrix");

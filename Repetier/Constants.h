@@ -21,6 +21,9 @@
 #define REPETIER_VERSION "1.45.03"
 #define UI_VERSION_STRING "V " REPETIER_VERSION
 
+// Fixed USB application protocol rate; not a bootloader setting.
+constexpr unsigned long firmwareSerialBaudrate = 250000UL;
+
 // ##########################################################################################
 // ##    basic definitions
 // ##########################################################################################

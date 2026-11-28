@@ -16,6 +16,7 @@
 */
 
 #include "Repetier.h"
+#include "DiagnosticHistory.h"
 #include "BedMatrix.h"
 #include "ScanProbe.h"
 #include "ZScrewAdjustment.h"
@@ -121,10 +122,21 @@ void ZOffsetScan::startOrCancel(bool levelMatrix) {
         return;
     }
 
+    // Like a mesh scan, Z-offset calibration must not begin inside a
+    // print, filament program or the pending post-stop output phase.
+    if (!Printer::printJob.isIdle() || Printer::pause.blocksCalibration() || GCodeInput::flashScriptActive()) {
+        Com::printFLN(PSTR("ZOS requires idle print job"));
+        return;
+    }
+    {
+        InterruptProtectedBlock lock;
+        if (!Printer::printJob.isIdle() || Printer::pause.blocksCalibration())
+            return;
+        Calibration::scanSession.reset();
+        levelingPass_ = levelMatrix ? LevelingPass::Center : LevelingPass::None;
+        phase_ = Phase::Initialize;
+    }
     Com::printFLN(PSTR("ZOS started"));
-    Calibration::scanSession.reset();
-    levelingPass_ = levelMatrix ? LevelingPass::Center : LevelingPass::None;
-    phase_ = Phase::Initialize;
 }
 
 void ZOffsetScan::tick() {
@@ -225,6 +237,8 @@ void ZOffsetScan::homeForProbe() {
 
     // start at the home position
     Printer::homeAxis(true, true, true); //home z resets ZCMP
+    if (Calibration::scanSession.aborting())
+        return;
     phase_ = Phase::LiftForProbe;
 }
 
@@ -386,6 +400,8 @@ void ZOffsetScan::continueLeveling() {
     if (!Calibration::moveZ(Printer::stepsPerMm(Z_AXIS)))
         return;
     Printer::homeAxis(true, true, false);
+    if (Calibration::scanSession.aborting())
+        return;
     if (!Calibration::moveZ(-Printer::zMotion.scanSteps()))
         return;
     BedMatrix::report(1);
@@ -395,6 +411,8 @@ void ZOffsetScan::retreatForFinish() {
     if (!Calibration::moveZ(Printer::stepsPerMm(Z_AXIS)))
         return;
     Printer::homeAxis(false, true, false);
+    if (Calibration::scanSession.aborting())
+        return;
     if (!Calibration::moveZ(-Printer::zMotion.scanSteps()))
         return;
     phase_ = Phase::ReportScrewAdjustment;    // No AUTO_MATRIX_LEVELING
@@ -415,6 +433,7 @@ void ZOffsetScan::reportScrewAdjustment() {
 void ZOffsetScan::abort(bool reloadMatrix) {
     phase_ = Phase::Aborting;
     const auto reason = Calibration::scanSession.takeAbort();
+    DiagnosticHistory::recordScan(reason,DiagnosticHistory::ScanKind::ZOffset);
     Calibration::showAbortScanReason(PSTR(UI_TEXT_DO_MHIER_BED_SCAN), reason);
 
     if (reloadMatrix) {
@@ -426,13 +445,16 @@ void ZOffsetScan::abort(bool reloadMatrix) {
     // the search has been aborted
     Com::printFLN(PSTR("ZOS aborted"));
 
-    if (ScanSession::retreatOnly(reason)) {
-        Calibration::moveZ(int(Printer::stepsPerMm(Z_AXIS) * 5));
-    } else if (Printer::queueRelativeMMCoordinates(0, 0, 5, 0, Printer::axisHomingFeedrate(Z_AXIS), true, true)) {
+    // The scan's physical ledger owns the clearance lift, including abort.
+    // Never rehome unless the bounded common-drive retreat actually completed.
+    const bool retreated = Calibration::moveZ(int(Printer::stepsPerMm(Z_AXIS) * 5));
+    if (retreated && !ScanSession::retreatOnly(reason))
         Printer::homeAxis(true, true, true);
-    }
 
     // turn off all steppers and extruders
+    // A nested wait may have latched the terminal stop. Deferred discard
+    // belongs to the scan dispatcher, not the normal mechanical abort.
+    if(Printer::printJob.emergencyLocked())return;
     Printer::disableAllSteppersNow();
 
     discard();
@@ -465,6 +487,7 @@ namespace GCodeCommands {
 namespace Calibration {
 
 void configureZOffsetScan(GCode* pCommand) {
+    if(!EEPROM::settingsReady())return;
     if (heatBedScanRunning()) {
         Com::printFLN(PSTR("M3900/M3901: bed scan in progress"));
         return;
@@ -495,21 +518,7 @@ void configureZOffsetScan(GCode* pCommand) {
 
                 settings.point.x = nTempUC;
 
-                unsigned char oldval = HAL::eprGetByte(EPR_RF_MOD_ZOS_SCAN_POINT_X);
-                if (oldval != settings.point.x) {
-                    HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_X, settings.point.x);
-                    EEPROM::updateChecksum(); // Deshalb die prüfung
-                }
 
-                if (Printer::debugInfo()) {
-                    Com::printF(PSTR("M3900/M3901: CHANGED X ZOS Testposition: "), nTempUC);
-                    if (heatBedScanXStartMm == 0) {
-                        Com::printF(PSTR(" [Z-Matrix index] X={1.."), BedMatrix::maxIndex(X_AXIS) - 1);
-                    } else {
-                        Com::printF(PSTR(" [Z-Matrix index] X={2.."), BedMatrix::maxIndex(X_AXIS) - 1);
-                    }
-                    Com::printFLN(PSTR("}"));
-                }
             }
 
             if (pCommand->hasY()) {
@@ -527,21 +536,7 @@ void configureZOffsetScan(GCode* pCommand) {
 
                 settings.point.y = nTempUC;
 
-                unsigned char oldval = HAL::eprGetByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y);
-                if (oldval != settings.point.y) {
-                    HAL::eprSetByte(EPR_RF_MOD_ZOS_SCAN_POINT_Y, settings.point.y);
-                    EEPROM::updateChecksum(); // Deshalb die prüfung
-                }
 
-                if (Printer::debugInfo()) {
-                    Com::printF(PSTR("M3900/M3901: CHANGED Y ZOS Testposition: "), nTempUC);
-                    if (heatBedScanYStartMm == 0) {
-                        Com::printF(PSTR(" [Z-Matrix index] Y={1.."), BedMatrix::maxIndex(Y_AXIS) - 1);
-                    } else {
-                        Com::printF(PSTR(" [Z-Matrix index] Y={2.."), BedMatrix::maxIndex(Y_AXIS) - 1);
-                    }
-                    Com::printFLN(PSTR("}"));
-                }
             }
 
             if (pCommand->hasS()) {
@@ -566,6 +561,8 @@ void configureZOffsetScan(GCode* pCommand) {
                 }
             }
 
+            if(pCommand->hasX() || pCommand->hasY())
+                EEPROM::storeScanPoint(settings.point.x,settings.point.y,pCommand->hasX(),pCommand->hasY());
             if (pCommand->hasX() || pCommand->hasY() || pCommand->hasS() || pCommand->hasP())
                 zOffsetScan.configure(settings);
 

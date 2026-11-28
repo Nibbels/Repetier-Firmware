@@ -36,13 +36,24 @@ public:
         maxMicrometers_ = micrometers;
     }
 
-    // M3001/M3909 can load valid saved limits from the step timer's queue.
-    void activateStoredLimits(int16_t digits, int16_t micrometers) {
+    // Publish a coherent saved pair in foreground; queue activation never reads EEPROM.
+    void publishStoredLimits(int16_t digits, int16_t micrometers) {
         InterruptProtectedBlock lock;
-        if (digits > 0 && digits < EMERGENCY_PAUSE_DIGITS_MAX)
-            thresholdDigits_ = digits;
-        if (micrometers > 0 && micrometers < 300)
-            maxMicrometers_ = micrometers;
+        storedDigits_ = digits;
+        storedMicrometers_ = micrometers;
+    }
+
+    Limits storedLimits() const {
+        InterruptProtectedBlock lock;
+        return {storedDigits_, storedMicrometers_};
+    }
+
+    void activateStoredLimits() {
+        InterruptProtectedBlock lock;
+        if (storedDigits_ > 0 && storedDigits_ < EMERGENCY_PAUSE_DIGITS_MAX)
+            thresholdDigits_ = storedDigits_;
+        if (storedMicrometers_ > 0 && storedMicrometers_ < 300)
+            maxMicrometers_ = storedMicrometers_;
     }
 
     bool disable() {
@@ -119,6 +130,8 @@ public:
 private:
     volatile int16_t thresholdDigits_ = 0;
     volatile int16_t maxMicrometers_;
+    volatile int16_t storedDigits_ = 0;
+    volatile int16_t storedMicrometers_ = 0;
     bool autoStart_ = false;
     bool inLearningRange_ = false;
     uint32_t lastSampleAt_ = 0;

@@ -16,6 +16,7 @@
 */
 
 #include "Repetier.h"
+#include "DiagnosticHistory.h"
 #include "BedMatrix.h"
 #include "ScanProbe.h"
 #include "GCodeInput.h"
@@ -235,7 +236,6 @@ private:
     Phase retryPhase_ = Phase::Idle;
     HeatBedScanMode mode_ = HeatBedScanMode::Standard;
     millis_t lastCheckMs_ = 0;
-    millis_t startedAtMs_ = 0;
     long xSteps_ = 0;
     long ySteps_ = 0;
     long yStrideSteps_ = 0;
@@ -251,15 +251,12 @@ void HeatBedScan::startOrCancel(HeatBedScanMode mode) {
     if (phase_ == Phase::Aborting)
         return;
     if (active()) {
-        if (Printer::debugInfo())
-            Com::printFLN(PSTR("HBS: cancelled"));
         Calibration::scanSession.requestAbort(ScanAbort::Canceled);
         return;
     }
 
-    if (Printer::printJob.isBusy()) {
-        if (Printer::debugErrors())
-            Com::printFLN(Com::tPrintingIsInProcessError);
+    if (!Printer::printJob.isIdle() || Printer::pause.blocksCalibration() || GCodeInput::flashScriptActive()) {
+        Com::printFLN(Com::tPrintingIsInProcessError);
         showError((void*)ui_text_heat_bed_scan, (void*)ui_text_operation_denied);
         return;
     }
@@ -268,6 +265,18 @@ void HeatBedScan::startOrCancel(HeatBedScanMode mode) {
         Com::printFLN(PSTR("Error: PID tune required before heated scan"));
         return;
     }
+    if(mode!=HeatBedScanMode::Standard) {
+        const int requested=mode==HeatBedScanMode::Pla?heatBedScanPlaBedC:heatBedScanAbsBedC;
+        if(requested>heatedBedController.maximumTargetC()) {
+            Com::printErrorFLN(PSTR("Bed safety limit too low for heated scan"));
+            return;
+        }
+    }
+    // Pause requests may be published by Timer1. Check and publish the
+    // mutually exclusive scan phase with interrupts masked.
+    InterruptProtectedBlock lock;
+    if (!Printer::printJob.isIdle() || Printer::pause.blocksCalibration())
+        return;
     Calibration::scanSession.reset();
     mode_ = mode;
     phase_ = Phase::Initialize;
@@ -352,6 +361,7 @@ void HeatBedScan::showStatus() {
 void HeatBedScan::abort() {
     phase_ = Phase::Aborting;
     const auto reason = Calibration::scanSession.takeAbort();
+    DiagnosticHistory::recordScan(reason,DiagnosticHistory::ScanKind::HeatBed);
     Extruder::setHeatedBedTemperature(0);
     Extruder::setTemperatureForAllExtruders(0);
     Calibration::showAbortScanReason((void*)ui_text_heat_bed_scan, reason);
@@ -359,12 +369,11 @@ void HeatBedScan::abort() {
     const bool retreated = Calibration::moveZ(int(Printer::stepsPerMm(Z_AXIS) * 5));
     if (retreated && !ScanSession::retreatOnly(reason))
         Printer::homeAxis(true, true, true);
+    // A nested move/homing wait can latch the terminal stop. Let the
+    // outer scan dispatcher perform the deferred discard without releasing torque.
+    if(Printer::printJob.emergencyLocked())return;
     Printer::disableAllSteppersNow();
 
-    if (Printer::debugInfo()) {
-        Com::printF(Com::tscanHeatBed);
-        Com::printFLN(PSTR("aborted"));
-    }
 
     Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 30000);
     if (!BedMatrix::reloadActive())
@@ -390,19 +399,12 @@ void HeatBedScan::finish() {
 
 void HeatBedScan::initialize() {
     Printer::idleStatus.cancel();
-    startedAtMs_ = HAL::timeInMilliseconds();
 
-    if (Printer::debugInfo()) {
-        Com::printF(Com::tscanHeatBed);
-        Com::printFLN(PSTR("scan started"));
-    }
 
     // Suspend compensation before replacing its working matrix.
     Printer::disableCMPnow(false);
     BedMatrix::clearWorking();
 
-    // output the currently used scan parameters
-    outputScanParameters();
 
     phase_ = Phase::PrepareProbeTemperature;
 }
@@ -420,11 +422,27 @@ void HeatBedScan::prepareProbeTemperature() {
         Extruder::setTemperatureForAllExtruders(heatBedScanProbeNozzleC);
     }
 
+    if(mode_!=HeatBedScanMode::Standard) {
+        const int requested=mode_==HeatBedScanMode::Pla?heatBedScanPlaBedC:heatBedScanAbsBedC;
+        if(heatedBedController.targetTemperatureC!=requested) {
+            Com::printErrorFLN(PSTR("Heated scan bed target not admitted"));
+            Calibration::scanSession.requestAbort(ScanAbort::HeaterTargetRejected);
+            return;
+        }
+    }
     phase_ = Phase::WaitForBedTemperature;
     lastCheckMs_ = HAL::timeInMilliseconds();
 }
 
 void HeatBedScan::waitForBedTemperature() {
+    if(mode_!=HeatBedScanMode::Standard) {
+        const int requested=mode_==HeatBedScanMode::Pla?heatBedScanPlaBedC:heatBedScanAbsBedC;
+        if(heatedBedController.targetTemperatureC!=requested) {
+            Com::printErrorFLN(PSTR("Heated scan bed target changed"));
+            Calibration::scanSession.requestAbort(ScanAbort::HeaterTargetChanged);
+            return;
+        }
+    }
     if ((HAL::timeInMilliseconds() - lastCheckMs_) < heatBedScanDelayMs) {
         // do not check too often
         return;
@@ -453,12 +471,6 @@ void HeatBedScan::waitForProbeTemperature() {
     phase_ = Phase::WarmupAndHome;
     lastCheckMs_ = HAL::timeInMilliseconds();
 
-    if (mode_ != HeatBedScanMode::Standard) {
-        if (Printer::debugInfo()) {
-            Com::printF(Com::tscanHeatBed);
-            Com::printFLN(PSTR("warmup delay [s] = "), preciseBedScanWarmupSeconds);
-        }
-    }
 }
 
 void HeatBedScan::warmupAndHome() {
@@ -479,6 +491,8 @@ void HeatBedScan::warmupAndHome() {
 
     // start at the home position
     Printer::homeAxis(true, true, true);
+    if (Calibration::scanSession.aborting())
+        return;
     if (!Commands::waitForMotion(Commands::MotionWait::QueueAndZ, Commands::PauseWait::Resume))
         return;
 
@@ -581,6 +595,8 @@ void HeatBedScan::retryHomeY() {
     if (!Calibration::moveZ(long(Printer::stepsPerMm(Z_AXIS) * Calibration::probeSettings().startLiftMm)))
         return;
     Printer::homeAxis(false, true, false);                             //Home Y
+    if (Calibration::scanSession.aborting())
+        return;
 
     Calibration::scanSession.consumeRetry();
     phase_ = Phase::RetryHomeZ;
@@ -590,6 +606,8 @@ void HeatBedScan::retryHomeY() {
 void HeatBedScan::retryHomeZ() {
     // home the z-axis in order to find the starting point again
     Printer::homeAxis(false, false, true);                             // Neben Bett: Home Z
+    if (Calibration::scanSession.aborting())
+        return;
     if (!Calibration::moveZ(long(Printer::stepsPerMm(Z_AXIS) * Calibration::probeSettings().startLiftMm)))
         return;
     Calibration::scanProbe.forgetPreviousPoint();
@@ -691,6 +709,8 @@ void HeatBedScan::homeAfterMesh() {
 
     // move back to the home position
     Printer::homeAxis(true, true, true);
+    if (Calibration::scanSession.aborting())
+        return;
 
     if (mode_ == HeatBedScanMode::Standard) {
         // disable all heaters
@@ -702,29 +722,13 @@ void HeatBedScan::homeAfterMesh() {
 }
 
 void HeatBedScan::reportRawMatrix() {
-    if (Printer::debugInfo()) {
-        // output the determined compensation
-        Com::printF(Com::tscanHeatBed);
-        Com::printFLN(PSTR("raw heat bed z matrix: "));
-        BedMatrix::updateExtents();
-        BedMatrix::report();
-    }
+    BedMatrix::updateExtents();
 
     phase_ = Phase::YieldBeforeMatrixPreparation;
 }
 
 void HeatBedScan::prepareMatrix() {
-    if (Printer::debugInfo()) {
-        // output the pure scan time
-        Com::printF(Com::tscanHeatBed);
-        Com::printF(PSTR("total scan time: "), long((HAL::timeInMilliseconds() - startedAtMs_) / 1000));
-        Com::printFLN(PSTR(" [s]"));
-    }
 
-    if (Printer::debugInfo()) {
-        Com::printF(Com::tscanHeatBed);
-        Com::printFLN(PSTR("g_uZMatrixMax[Y_AXIS].1 = "), (int)BedMatrix::maxIndex(Y_AXIS));
-    }
 
     // prepare the heat bed compensation matrix for fast usage during the actual printing
     if (BedMatrix::prepareWorking()) {
@@ -732,15 +736,6 @@ void HeatBedScan::prepareMatrix() {
         return;
     }
 
-    if (Printer::debugInfo()) {
-        Com::printF(Com::tscanHeatBed);
-        Com::printFLN(PSTR("g_uZMatrixMax[Y_AXIS].2 = "), (int)BedMatrix::maxIndex(Y_AXIS));
-
-        // output the converted heat bed compensation matrix
-        Com::printF(Com::tscanHeatBed);
-        Com::printFLN(PSTR("converted heat bed z matrix: "));
-        BedMatrix::report();
-    }
 
     phase_ = Phase::CheckFinalPressure;
     lastCheckMs_ = HAL::timeInMilliseconds();
@@ -762,12 +757,6 @@ void HeatBedScan::checkFinalPressure() {
         return;
     }
 
-    if (Printer::debugInfo()) {
-        Com::printF(Com::tscanHeatBed);
-        Com::printFLN(PSTR("idle pressure at start: "), baselineDigits_);
-        Com::printF(Com::tscanHeatBed);
-        Com::printFLN(PSTR("idle pressure at stop: "), pressure);
-    }
 
     if (mode_ != HeatBedScanMode::Standard) {
         // we have to determine the z-offset which is caused by different extruder temperatures
@@ -832,10 +821,6 @@ void HeatBedScan::waitForCalibrationTemperature() {
     lastCheckMs_ = HAL::timeInMilliseconds();
 
 
-    if (Printer::debugInfo()) {
-        Com::printF(Com::tscanHeatBed);
-        Com::printFLN(PSTR("calibration delay [s] =  "), (uint32_t)preciseBedScanCalibrationSeconds);
-    }
 }
 
 void HeatBedScan::stabilizeCalibrationTemperature() {
@@ -864,6 +849,8 @@ void HeatBedScan::thermalRetryHomeY() {
     if (!Calibration::moveZ(long(Printer::stepsPerMm(Z_AXIS) * Calibration::probeSettings().startLiftMm)))
         return;
     Printer::homeAxis(false, true, false);                             //Home Y
+    if (Calibration::scanSession.aborting())
+        return;
 
     Calibration::scanSession.consumeRetry();
     phase_ = Phase::ThermalRetryHomeZ;
@@ -873,6 +860,8 @@ void HeatBedScan::thermalRetryHomeY() {
 void HeatBedScan::thermalRetryHomeZ() {
     // home the z-axis in order to find the starting point again
     Printer::homeAxis(false, false, true);                             // Neben Bett: Home Z
+    if (Calibration::scanSession.aborting())
+        return;
     if (!Calibration::moveZ(long(Printer::stepsPerMm(Z_AXIS) * Calibration::probeSettings().startLiftMm)))
         return;
     Calibration::scanProbe.forgetPreviousPoint();
@@ -913,12 +902,6 @@ void HeatBedScan::applyThermalOffset() {
     // adjust the current z-position to the compensation matrix in order to consider the different length of the extruder at higher temperatures
     BedMatrix::applyThermalOffset((short)Calibration::scanProbe.measuredZ());
 
-    if (Printer::debugInfo()) {
-        // output the converted heat bed compensation matrix
-        Com::printF(Com::tscanHeatBed);
-        Com::printFLN(PSTR("adjusted heat bed z matrix: "));
-        BedMatrix::report();
-    }
 
     phase_ = Phase::HomeAfterThermalProbe;
 }
@@ -930,6 +913,8 @@ void HeatBedScan::homeAfterThermalProbe() {
 
     // move back to the home position
     Printer::homeAxis(true, true, true);
+    if (Calibration::scanSession.aborting())
+        return;
     phase_ = Phase::SwitchOffAfterScan;
 }
 
@@ -953,15 +938,7 @@ void HeatBedScan::saveMatrix() {
         finish();
         return;
     }
-    if (Printer::debugInfo()) {
-        Com::printF(Com::tscanHeatBed);
-        Com::printFLN(PSTR("the heat bed z matrix has been saved"));
-    }
 
-    if (Printer::debugInfo()) {
-        Com::printF(Com::tscanHeatBed);
-        Com::printFLN(PSTR("the scan has been completed"));
-    }
     showInformation(PSTR(UI_TEXT_HEAT_BED_SCAN_DONE), (void*)ui_text_saving_success, PSTR(UI_TEXT_OK)); // Tell user the scan was a success
 
     finish();
@@ -974,6 +951,7 @@ bool heatBedScanRunning() {
 }
 
 void startHeatBedScan(HeatBedScanMode mode) {
+    if(!EEPROM::settingsReady())return;
     if (!Calibration::zOffsetScanRunning())
         heatBedScan.startOrCancel(mode);
 }

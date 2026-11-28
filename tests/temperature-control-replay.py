@@ -3,7 +3,11 @@
 
 GAP marks unresolved sensor validity behavior, not a safety requirement.
 Software duty requests and simulated pin transitions are distinct; this is
-not physical sensor/relay or AVR timing certification.
+not physical sensor/relay or AVR timing certification. The controller clock
+is deliberately accelerated in long PID scenarios; the modeled Timer3/5
+register clocks advance separately per publication. Exact modular deadline,
+wrap, expiry and reset tests remain in heater-lease-integrated.py. This replay
+uses the actual ticket/grant, PWM and watchdog handshake implementations.
 """
 import os
 from pathlib import Path
@@ -30,6 +34,20 @@ HARNESS = r'''
 #include <cstdio>
 #include <cstring>
 #include <algorithm>
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+#include "ThermalEmergency.h"
+#include "BedTemperatureLimit.h"
+// Test transport for actual report calls; no blocking dependency.
+static bool diagnosticTxBlocked=false;
+static unsigned diagnosticLines=0;
+struct UsbSerial {
+    static bool tryWriteSpan(const char*,uint8_t count) {
+        assert(count<=63);
+        if(diagnosticTxBlocked)return false;
+        ++diagnosticLines;return true;
+    }
+};
+#endif
 using millis_t = uint32_t;
 #define PROGMEM
 #define TEMP_INT_TO_FLOAT(t) ((float)(t) / (float)(1 << CELSIUS_EXTRA_BITS))
@@ -47,18 +65,51 @@ using millis_t = uint32_t;
 #define NUM_TEMPERATURE_LOOPS (NUM_EXTRUDER + 1)
 #define PRINTER_FLAG2_GOT_TEMPS 1
 #define PSTR(s) s
-#define UI_STATUS_UPD(x) do {} while (0)
+#define UI_STATUS_UPD(x) do { if (::delayAutotuneAdmission) { ::now += 101; ::delayAutotuneAdmission = false; } } while (0)
+static bool delayAutotuneAdmission;
 static uint8_t pins[8];
 #define WRITE(pin,value) (pins[pin] = (value))
 #define READ(pin) (pins[pin])
 static uint16_t PWM_OCR;
 static millis_t now;
+#define F_CPU 16000000UL
+#define _BV(n) (1U << (n))
+#define OCIE3A 1
+#define OCIE3B 2
+#define OCIE3C 3
+#define OCF3A 1
+#define OCF3B 2
+#define OCF3C 3
+#define TOV3 0
+#define CS32 2
+#define CS52 2
+#define OCF5A 1
+static uint8_t TIMSK3,TCCR3A,TCCR3B,TCCR3C;
+static uint16_t TCNT3,OCR3A,OCR3B,OCR3C;
+static uint8_t TIMSK5,TCCR5A,TCCR5B,TCCR5C;
+static uint16_t TCNT5,OCR5A;
+struct W1C {
+    uint8_t bits=0;
+    operator uint8_t() const {return bits;}
+    void operator=(uint8_t mask){bits &= uint8_t(~mask);}
+} TIFR3,TIFR5;
+static uint32_t heaterResetCookie;
+constexpr uint32_t heaterLiveCookie=0xd39a6c51UL;
+static unsigned watchdogFeeds;
+static millis_t lastWatchdogFeed;
+#define wdt_reset() do { ++watchdogFeeds; lastWatchdogFeed=now; } while(0)
 constexpr uint8_t TemperatureAdcCount = NUM_TEMPERATURE_LOOPS;
 #include "adc-state.inc"
 static int stalledChannel = -1;
 static void publishAdc() {
+    // Abstract ADC publication events, not elapsed hardware time.
+    // The logical controller clock can jump seconds in identification tests.
+    if(++TCNT3==0) TIFR3.bits|=_BV(TOV3);
+    ++TCNT5;
     for (uint8_t i = 0; i < TemperatureAdcCount; ++i) {
         if (i != stalledChannel) {
+            heaterBatchStart=TCNT3;heaterBatchValid=true;heaterBatchPrevious=false;
+            publishHeaterSample(i,temperatureAdcValues[i]);
             temperatureAdcPublishedAt[i] = now;
             temperatureAdcReady[i] = true;
         }
@@ -72,10 +123,16 @@ static const int16_t* pgm_read_word(const int16_t* const* p) { return *p; }
 struct HAL {
     static millis_t timeInMilliseconds() { return now; }
     static uint16_t temperatureAdcSample(uint8_t);
-    static bool temperatureAdcSample(uint8_t, uint16_t&);
-    static void setHeaterDuty(uint8_t, uint8_t);
+    static bool temperatureAdcSample(uint8_t, uint16_t&
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+                                     ,uint32_t* publication=nullptr
+#endif
+    );
+    #include "ticket-decl.inc"
+    static bool heaterLeaseFault();
+    static void completeThermalWatchdogPass(bool);
+    static void completeAutotuneWatchdogPass();
     static uint8_t outputDuty(uint8_t);
-    static void tellWatchdogOk();
     static bool takeScanTick();
     static bool takeCompensationTick();
     static bool takeFeatureTick();
@@ -99,7 +156,11 @@ static Extruder extruder[] = {
 #endif
 };
 Extruder* Extruder::current = &extruder[0];
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+static TemperatureController bed{NUM_EXTRUDER, 13, NUM_EXTRUDER, TemperatureController::BedAbsoluteCeilingC};
+#else
 static TemperatureController bed{NUM_EXTRUDER, 13, NUM_EXTRUDER, BED_MEASURED_CUTOFF};
+#endif
 static TemperatureController& heatedBedController = bed;
 static TemperatureController* tempController[NUM_TEMPERATURE_LOOPS] = {
     &extruder[0].tempControl,
@@ -111,7 +172,6 @@ static TemperatureController* tempController[NUM_TEMPERATURE_LOOPS] = {
 #define INLINE inline
 #define EXTRUDER_TIMSK advanceTimerMask
 #define EXTRUDER_OCIE 1
-#define _BV(n) (1U << (n))
 static uint8_t advanceTimerMask;
 #include "ExtrusionOutput.h"
 void ExtrusionOutput::startTimer(int16_t pending, uint8_t mask) {
@@ -119,26 +179,36 @@ void ExtrusionOutput::startTimer(int16_t pending, uint8_t mask) {
 }
 void ExtrusionOutput::stopTimer() { advanceTimerMask = 0; }
 
+namespace EepromZones { bool machineSettingsReady(){return true;} }
 namespace Printer {
     static uint8_t flag0;
     static ExtrusionOutput extrusionOutput;
     #include "printer-safety.inc"
     static unsigned stops;
-    static struct { bool busy = false; bool isBusy() const { return busy; } } printJob;
+    static struct {
+        bool busy = false;
+        bool isBusy() const { return busy; }
+        bool isIdle() const { return !busy; }
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        bool emergencyLocked() const { return isAnyTempsensorDefect(); }
+#endif
+    } printJob;
     static unsigned flag2, debugLevel;
     static void markTemperatureReadingsAvailable() { flag2 |= PRINTER_FLAG2_GOT_TEMPS; }
-    static void stopPrint() {
+    static void stopForThermalFault() {
         for (auto* t : tempController)
             assert(t->targetTemperatureC == 0 && HAL::outputDuty(t->pwmIndex) == 0);
         ++stops;
     }
     static bool debugInfo() { return false; }
     struct { void cancel() {} void schedule(millis_t) {} } idleStatus;
-    struct { bool isReheating() { return true; } } pause;
+    struct { bool owned = false; bool isReheating() { return true; } bool blocksCalibration() const { return owned; } } pause;
     struct { void service(millis_t) {} } strainGauge;
 }
 namespace PrintLine { bool hasLines() { return false; } bool directMoveActive() { return false; } }
-static bool isAnyScanRunning() { return false; }
+static bool scanActive = false;
+static bool isAnyScanRunning() { return scanActive; }
+static unsigned relayReports,relayUnavailable;
 namespace Com {
     #include "com.inc"
     constexpr int tTargetBedColon = 0;
@@ -146,6 +216,13 @@ namespace Com {
     template<class... T> void printInfoFLN(T...) {}
     template<class... T> void printF(T...) {}
     template<class... T> void printFLN(T...) {}
+    void printFLN(const char* msg) {
+        if(!std::strcmp(msg,"Thermal relay observation (diagnostic only)")) {
+            for(auto* c:tempController)assert(c->targetTemperatureC==0&&HAL::outputDuty(c->pwmIndex)==0);
+            ++relayReports;
+        }
+        if(!std::strcmp(msg,"Thermal relay observation unavailable"))++relayUnavailable;
+    }
     void println() {}
 }
 static unsigned stores;
@@ -171,22 +248,35 @@ struct Commands {
 static void reportTempsensorAndHeaterErrors();
 #include "conversion.inc"
 #include "hal.inc"
+// Explicit fixture injection of an already active lease, for fault tests
+// that start with an invalid/stale sample. Never use a ticketless positive
+// HAL setter to arrange the fixture; production cannot do this.
+static void seedDuty(uint8_t channel,uint8_t duty) {
+    assert(channel<=NUM_EXTRUDER && duty);
+    writeLeaseDeadline(channel,uint16_t(TCNT3+heaterLeaseDuration));
+    TIFR3=leaseMask(channel);
+    requestedDuty[channel]=duty;
+    TIMSK3|=leaseMask(channel);
+}
+namespace GCodeInput { bool flashScriptActive(); }
 #include "control.inc"
 #include "bed-setter.inc"
 static unsigned visits;
+static unsigned diagnosticRefreshes, ordinaryServices;
 static unsigned observedPeakDuty;
 static millis_t stride = 10;
 enum class Injection { None, Reach, LateUnsupported, LateLow, Transient, High, TransientHigh, Cutoff, Cycles, ProfileCycles, Unstable, PowerChange, OtherFault, Cancel, Reentrant, Stale };
 static Injection injection;
 static bool postTemperature = true;
 namespace GCodeInput {
+    bool scriptActive = false;
+    bool flashScriptActive() { return scriptActive; }
     void keepAlive(FirmwareState) {
         ++visits;
         if (tuned) observedPeakDuty = std::max(observedPeakDuty, unsigned(HAL::outputDuty(tuned->pwmIndex)));
         assert(visits < 100000);
         now += stride;
         if (injection == Injection::Stale) stalledChannel = tuned->sensorPin;
-        publishAdc();
         scanTick = true;
         if (postTemperature) temperatureTick = true;
         if (injection == Injection::Reach && visits == 3) {
@@ -200,7 +290,11 @@ namespace GCodeInput {
             temperatureAdcValues[tuned->sensorPin] = 4092;
         }
         if (injection == Injection::High || injection == Injection::TransientHigh)
-            temperatureAdcValues[tuned->sensorPin] = 820; // ~190-200 C
+            temperatureAdcValues[tuned->sensorPin] =
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+                tuned==&bed?476:
+#endif
+                820; // relative overshoot; bed fixture ~108..116 C below absolute 120 C
         if (injection == Injection::Cutoff)
             temperatureAdcValues[tuned->sensorPin] = 1195; // valid converted range, above 280 C cutoff
         if (injection == Injection::Cancel) {
@@ -224,12 +318,15 @@ namespace GCodeInput {
         if (injection == Injection::PowerChange) tuned->pidMax = 10;
         if (injection == Injection::OtherFault)
             assert(tuned != &bed); // bed already has 10 consecutive invalid samples
-
+        publishAdc();
     }
 }
 static struct {
     millis_t lastButtonTime() { return 0; }
+    void refreshPage() {++diagnosticRefreshes;}
+    void refreshEmergencyPage() {++diagnosticRefreshes;}
     void slowAction() {
+        ++ordinaryServices;
         if (injection == Injection::Transient || injection == Injection::TransientHigh) {
             assert(HAL::outputDuty(tuned->pwmIndex) == 0);
             tuned->sensorType = 60; // valid again before autotune's next read
@@ -237,9 +334,10 @@ static struct {
         }
     }
 } uid;
-static void recalculateZCompensation() {}
-static void loopFeatures() {}
-static void handleScanWorkTasks(bool) {}
+static void recalculateZCompensation() {++ordinaryServices;}
+static void loopFeatures() {++ordinaryServices;}
+static void handleScanWorkTasks(bool) {++ordinaryServices;}
+namespace Lighting { void serviceAlarm(uint32_t) {} }
 #include "scheduler.inc"
 
 static void service() {
@@ -261,6 +359,9 @@ static void allOff() {
 int main(int argc, char** argv) {
     assert(argc == 2);
     const char* name = argv[1];
+    beginHeaterLease();
+    beginWatchdogProgress();
+    watchdogActive=true;
     auto& c = extruder[0].tempControl;
     for (auto* t : tempController) {
         t->sensorType = 60;
@@ -278,6 +379,162 @@ int main(int argc, char** argv) {
         t->decoupleTestPeriod = EXT0_DECOUPLE_TEST_PERIOD;
     }
     publishAdc();
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    if (!std::strcmp(name,"bed-limit")) {
+        assert(bed.heaterCutoffC==150&&bed.effectiveCutoffC()==120&&bed.maximumTargetC()==110);
+        bed.setTargetTemperature(110);
+        assert(bed.targetTemperatureC==110);
+        bed.setTargetTemperature(111);
+        assert(!bed.targetTemperatureC&&!HAL::outputDuty(bed.pwmIndex));
+        Extruder::setHeatedBedTemperature(180);
+        assert(bed.targetTemperatureC==110);
+        bed.targetTemperatureC=111;
+        service();
+        assert(!bed.targetTemperatureC&&!HAL::outputDuty(bed.pwmIndex));
+        assert(bed.setBedEmergencyCutoff(90));
+        assert(bed.effectiveCutoffC()==90 && bed.maximumTargetC()==80);
+        bed.setTargetTemperature(80);
+        assert(bed.targetTemperatureC==80);
+        seedDuty(bed.pwmIndex, 255);
+        assert(bed.setBedEmergencyCutoff(0));
+        assert(!bed.targetTemperatureC && !HAL::outputDuty(bed.pwmIndex));
+        assert(bed.effectiveCutoffC()==90 && bed.maximumTargetC()==0);
+        Extruder::setHeatedBedTemperature(100);
+        assert(!bed.targetTemperatureC);
+        assert(!bed.setBedEmergencyCutoff(151));
+        assert(bed.effectiveCutoffC()==90 && bed.maximumTargetC()==0);
+        assert(!c.setBedEmergencyCutoff(120)); // cannot publish via hotend
+        assert(bed.setBedEmergencyCutoff(150));
+        assert(bed.effectiveCutoffC()==150 && bed.maximumTargetC()==140);
+        assert(!bed.targetTemperatureC && !HAL::outputDuty(bed.pwmIndex));
+    } else if (!std::strncmp(name,"absolute-",9)) {
+        using namespace ThermalEmergency;
+        const bool bedCase=std::strcmp(name,"absolute-hotend")!=0;
+        auto& act=bedCase?bed:c;
+        const bool escalate=!std::strcmp(name,"absolute-escalation");
+        const bool idle=!std::strcmp(name,"absolute-idle");
+        SensorObservation valid;valid.observe(true,1195);
+        // Existing strict boundary, not a new numerical threshold.
+        act.currentTemperatureC=act.effectiveCutoffC();
+        assert(!checkAbsoluteCutoff(act.pwmIndex,act,true,valid));
+        service();
+        if(idle)for(auto* h:tempController)h->setTargetTemperature(0);
+        if(escalate) {
+            c.sensorType=255;
+            for(unsigned i=0;i<11;++i)service();
+            assert(faultLedger().first().cause==Cause::SensorInvalid);
+        }
+        const float oldTarget=act.targetTemperatureC;
+        const uint8_t oldDuty=HAL::outputDuty(act.pwmIndex);
+        temperatureAdcValues[act.sensorPin]=1195;
+        service();
+        allOff();
+        assert(faultLedger().level()==Severity::FireWarning);
+        const auto& fire=faultLedger().firstFire();
+        assert(fire.cause==Cause::OverTemperature&&fire.channel==act.pwmIndex);
+        assert(fire.evidence.measuredC>act.effectiveCutoffC()&&fire.evidence.measuredC<=MAX_DEFECT_TEMPERATURE);
+        assert(fire.evidence.threshold==act.effectiveCutoffC()&&fire.evidence.deltaC>0);
+        assert(fire.evidence.rawAdc==1195&&(fire.evidence.valid&Evidence::Raw));
+        assert(fire.evidence.targetC==oldTarget&&fire.evidence.admittedDuty==oldDuty);
+        if(escalate)assert(faultLedger().first().cause==Cause::SensorInvalid);
+        else assert(faultLedger().first().cause==Cause::OverTemperature);
+        temperatureAdcValues[act.sensorPin]=102;
+        act.setTargetTemperature(100);
+        service();
+        allOff();
+    } else if (!std::strcmp(name, "emergency-invalid-episode")) {
+        using namespace ThermalEmergency;
+        service();
+        assert(HAL::outputDuty(0)==255);
+        c.sensorType=14;temperatureAdcValues[0]=4092;
+        service();
+        assert(HAL::outputDuty(0)==0&&!faultLedger().active());
+        // A recovered episode must not be reported as a later confirmed
+        // fault. The second episode has distinct type/target/time/duty.
+        c.sensorType=60;temperatureAdcValues[0]=102;
+        service();
+        assert(HAL::outputDuty(0)==255&&!faultLedger().active());
+        c.setTargetTemperature(140);
+        c.sensorType=14;temperatureAdcValues[0]=0;
+        const auto started=now+100;
+        service();
+        assert(HAL::outputDuty(0)==0&&!faultLedger().active());
+        c.setTargetTemperature(120);
+        diagnosticTxBlocked=true;
+        for(unsigned i=0;i<11&&!Printer::heatingInhibited();++i)service();
+        assert(diagnosticLines==0);
+        for(unsigned i=0;i<10;++i)service(); // blocked TX cannot stall thermal pass
+        assert(diagnosticLines==0);
+        diagnosticTxBlocked=false;
+        for(unsigned i=0;i<100;++i)service();
+        assert(diagnosticLines>2);
+        allOff();
+        const auto& first=faultLedger().first();
+        assert(first.cause==Cause::SensorInvalid&&first.channel==0);
+        const auto& e=first.evidence;
+        assert(e.uptimeMs==started&&e.targetC==140&&e.admittedDuty==255);
+        assert(e.rawAdc==0&&(e.valid&Evidence::Raw));
+        assert(!(e.valid&Evidence::Measured)&&!(e.valid&Evidence::Requested));
+        assert(e.sensorType==14&&e.powerLimit==255);
+        // Additional sensor fault after global latch: original evidence
+        // survives, affected heater mask grows, no new stop/heat.
+        bed.sensorType=255;
+        for(unsigned i=0;i<15;++i)service();
+        assert(faultLedger().reasons(NUM_EXTRUDER)&causeBit(Cause::SensorInvalid));
+        assert(faultLedger().first().evidence.uptimeMs==started);
+        assert(faultLedger().first().evidence.targetC==140);
+        assert(faultLedger().level()==Severity::ThermalError);
+        for(unsigned h=0;h<NUM_EXTRUDER;++h)assert(extruder[h].coolerPWM==255);
+        allOff();
+    } else if (!std::strcmp(name, "emergency-stale-episode")) {
+        using namespace ThermalEmergency;
+        service();
+        assert(HAL::outputDuty(0)==255);
+        stalledChannel=0;
+        // First stale batch is diagnosed before clearing its duty.
+        now+=101;
+        const auto started=now+100;
+        for(unsigned i=0;i<11;++i)service();
+        allOff();
+        const auto& r=faultLedger().first();
+        assert(r.cause==Cause::StaleSample&&r.channel==0);
+        assert(r.evidence.uptimeMs==started&&r.evidence.admittedDuty==255);
+        assert(!(r.evidence.valid&(Evidence::Raw|Evidence::Measured)));
+    } else if (!std::strcmp(name, "emergency-scheduler")) {
+        using namespace ThermalEmergency;
+        latchSystemFault(Cause::WatchdogReset);
+        const auto initialVisits=visits,initialOrdinary=ordinaryServices,initialRefresh=diagnosticRefreshes;
+        diagnosticTxBlocked=true;
+        for(unsigned n=0;n<100;++n) {
+            now+=100;publishAdc();
+            scanTick=compensationTick=featureTick=temperatureTick=true;
+            Commands::checkForPeriodicalActions(WaitHeater);
+            assert(!scanTick&&!compensationTick&&!featureTick&&!temperatureTick);
+            assert(visits==initialVisits&&ordinaryServices==initialOrdinary);
+            assert(diagnosticRefreshes==initialRefresh+n+1);
+            for(auto* h:tempController)assert(HAL::outputDuty(h->pwmIndex)==0);
+            for(unsigned h=0;h<NUM_EXTRUDER;++h)assert(extruder[h].coolerPWM==255);
+        }
+        assert(diagnosticLines==0);
+        diagnosticTxBlocked=false;
+        for(unsigned n=0;n<100;++n) {
+            now+=100;publishAdc();temperatureTick=true;
+            Commands::checkForPeriodicalActions(NotBusy);
+        }
+        assert(diagnosticLines>2&&ordinaryServices==initialOrdinary);
+    } else if (!std::strcmp(name, "emergency-recovery")) {
+        using namespace ThermalEmergency;
+        latchSystemFault(Cause::InterruptedHeating);
+        assert(Printer::heatingInhibited()&&faultLedger().active());
+        assert(faultLedger().first().cause==Cause::InterruptedHeating);
+        assert(faultLedger().first().channel==NUM_TEMPERATURE_LOOPS);
+        assert(faultLedger().first().evidence.valid==0);
+        latchSystemFault(Cause::WatchdogReset);
+        assert(faultLedger().first().cause==Cause::InterruptedHeating);
+        assert(faultLedger().level()==Severity::ThermalError);
+        for(auto* t:tempController)assert(t->targetTemperatureC==0&&HAL::outputDuty(t->pwmIndex)==0);
+    } else
+#endif
     if (!std::strcmp(name, "pid-components")) {
         for (auto* t : tempController) t->setTargetTemperature(0);
         temperatureAdcValues[c.sensorPin] = 330;
@@ -354,7 +611,7 @@ int main(int argc, char** argv) {
     } else if (!std::strcmp(name, "unpublished")) {
         temperatureAdcReady[c.sensorPin] = false;
         stalledChannel = c.sensorPin;
-        HAL::setHeaterDuty(c.pwmIndex, 255);
+        seedDuty(c.pwmIndex, 255);
         service();
         assert(HAL::outputDuty(c.pwmIndex) == 0 && HAL::outputDuty(bed.pwmIndex) == 255);
         assert(!Printer::isAnyTempsensorDefect() && !c.pidHistoryValid);
@@ -371,7 +628,7 @@ int main(int argc, char** argv) {
         c.sensorType = 14;
         temperatureAdcValues[0] = 4092;
         for (int i = 0; i < 10; ++i) {
-            HAL::setHeaterDuty(0, 255);
+            seedDuty(0, 255);
             service();
             assert(c.currentTemperatureC < MIN_DEFECT_TEMPERATURE);
             assert(!Printer::isAnyTempsensorDefect() && HAL::outputDuty(0) == 0);
@@ -401,7 +658,7 @@ int main(int argc, char** argv) {
         for (int i = 0; i < 10; ++i) service();
         assert(!Printer::isAnyTempsensorDefect());
         c.waitForTargetTemperature();
-        assert(visits == 1 && watchdogHeartbeat == now);
+        assert(visits == 1 && watchdogFeeds && lastWatchdogFeed == now);
         allOff();
         for (auto mask : {0, 7, 255}) {
             Printer::debugLevel = mask;
@@ -414,10 +671,32 @@ int main(int argc, char** argv) {
             for (auto* t : tempController)
                 assert(t->targetTemperatureC == 0 && HAL::outputDuty(t->pwmIndex) == 0);
         }
+    } else if (!std::strcmp(name, "unconditional-clear")) {
+        c.tempIState = 17;
+        c.pidHistoryValid = true;
+        c.setDecoupleFull();
+        c.invalidatePidCalibration();
+        c.targetTemperatureC = 180;
+        seedDuty(c.pwmIndex, 180);
+        autotuneIndex = c.pwmIndex;
+        autotuneAbortRequested = false;
+        delayAutotuneAdmission = true;
+        const auto before = now;
+        c.clearTargetTemperature();
+        assert(c.targetTemperatureC == 0 && HAL::outputDuty(c.pwmIndex) == 0);
+        assert(c.tempIState == 0 && !c.pidHistoryValid);
+        assert(!c.isDecoupleFull() && !c.isDecoupleHold());
+        assert(autotuneAbortRequested);
+        assert(delayAutotuneAdmission && now == before);
+        autotuneIndex = 255;
+        delayAutotuneAdmission = false;
     } else if (!std::strcmp(name, "legacy-output-inhibit")) {
         service();
+        pwmSlice();
+        for (auto* t : tempController) assert(pins[t->pwmIndex] == HIGH);
         Printer::extrusionOutput.addSteps(20);
         Printer::latchOutputInhibit(false);
+        for (auto* t : tempController) assert(pins[t->pwmIndex] == LOW);
         assert(!Printer::isAnyTempsensorDefect() && Printer::legacySimulationRejected());
         assert(Printer::extrusionOutput.blocked() && Printer::extrusionOutput.pendingSteps() == 0 && advanceTimerMask == 0);
         for (auto* t : tempController) {
@@ -436,21 +715,21 @@ int main(int argc, char** argv) {
     } else if (!std::strcmp(name, "disabled")) {
         c.sensorType = 0;
         bed.sensorType = 0;
-        HAL::setHeaterDuty(0, 255);
-        HAL::setHeaterDuty(bed.pwmIndex, 255);
+        seedDuty(0, 255);
+        seedDuty(bed.pwmIndex, 255);
         service();
         assert(!Printer::isAnyTempsensorDefect() && HAL::outputDuty(0) == 0 && HAL::outputDuty(bed.pwmIndex) == 0);
     } else if (!std::strcmp(name, "invalid-high")) {
         c.sensorType = 60;
         temperatureAdcValues[0] = 4092;
-        HAL::setHeaterDuty(0, 255);
+        seedDuty(0, 255);
         service();
         assert(c.currentTemperatureC > MAX_DEFECT_TEMPERATURE);
         assert(!Printer::isAnyTempsensorDefect() && HAL::outputDuty(0) == 0 && !c.pidHistoryValid);
     } else if (!std::strcmp(name, "bed-invalid")) {
         bed.sensorType = 14;
         temperatureAdcValues[bed.sensorPin] = 4092;
-        HAL::setHeaterDuty(bed.pwmIndex, 255);
+        seedDuty(bed.pwmIndex, 255);
         service();
         assert(HAL::outputDuty(bed.pwmIndex) == 0 && HAL::outputDuty(0) == 255 && !Printer::isAnyTempsensorDefect());
     } else if (!std::strcmp(name, "dual-invalid")) {
@@ -458,7 +737,7 @@ int main(int argc, char** argv) {
         auto& second = extruder[1].tempControl;
         second.sensorType = 14;
         temperatureAdcValues[second.sensorPin] = 4092;
-        HAL::setHeaterDuty(second.pwmIndex, 255);
+        seedDuty(second.pwmIndex, 255);
         service();
         assert(HAL::outputDuty(second.pwmIndex) == 0 && HAL::outputDuty(0) == 255
             && HAL::outputDuty(bed.pwmIndex) == 255 && !Printer::isAnyTempsensorDefect());
@@ -479,9 +758,18 @@ int main(int argc, char** argv) {
         service();
         assert(c.isSensorDecoupled());
         allOff();
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        {
+            using namespace ThermalEmergency;
+            const auto& first=faultLedger().first();
+            assert(first.cause==Cause::HoldFailure&&first.channel==0);
+            assert(first.evidence.targetC==100&&first.evidence.threshold==DECOUPLING_TEST_MAX_HOLD_VARIANCE);
+            assert(first.evidence.deltaC<-DECOUPLING_TEST_MAX_HOLD_VARIANCE);
+        }
+#endif
     } else if (!std::strcmp(name, "unsupported")) {
         c.sensorType = 255;
-        HAL::setHeaterDuty(0, 255);
+        seedDuty(0, 255);
         for (int i = 0; i < 10; ++i) {
             service();
             assert(HAL::outputDuty(0) == 0 && !Printer::isAnyTempsensorDefect());
@@ -501,34 +789,53 @@ int main(int argc, char** argv) {
         service();
         assert(c.isSensorDecoupled());
         allOff();
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        {
+            using namespace ThermalEmergency;
+            const auto& first=faultLedger().first();
+            assert(first.cause==Cause::NoRise&&first.channel==0);
+            assert(first.evidence.targetC==100&&first.evidence.admittedDuty==255);
+            assert(first.evidence.deltaC==0&&first.evidence.threshold==DECOUPLING_TEST_MIN_TEMP_RISE);
+            assert(first.evidence.rawAdc==102&&(first.evidence.valid&Evidence::Raw));
+            assert(first.evidence.windowMs>EXT0_DECOUPLE_TEST_PERIOD);
+        }
+#endif
     } else if (!std::strcmp(name, "pwm")) {
-        for (auto* t : tempController) HAL::setHeaterDuty(t->pwmIndex, 255);
+        for (auto* t : tempController) seedDuty(t->pwmIndex, 255);
         pwmSlice();
         for (auto* t : tempController) {
             assert(pins[t->pwmIndex] == HIGH);
             t->setTargetTemperature(0);
             assert(HAL::outputDuty(t->pwmIndex) == 0);
         }
-        // Request zero is not a synchronous pin clear; frame must advance.
-        for (int i = 0; i < 127; ++i) {
-            pwmSlice();
-            for (auto* t : tempController) assert(pins[t->pwmIndex] == HIGH);
-        }
-        pwmSlice();
+        // Revocation is synchronous, even with the previous full-duty frame latched.
         for (auto* t : tempController) assert(pins[t->pwmIndex] == LOW);
+        for (int i = 0; i < 128; ++i) {
+            pwmSlice();
+            for (auto* t : tempController) assert(pins[t->pwmIndex] == LOW);
+        }
     } else if (!std::strcmp(name, "watchdog")) {
         watchdogActive = true;
         now = 100;
         Commands::checkForPeriodicalActions(NotBusy);
-        assert(watchdogHeartbeat == 0);
+        assert(watchdogFeeds == 0);
         scanTick = true;
         Commands::checkForPeriodicalActions(NotBusy);
-        assert(watchdogHeartbeat == now && !temperatureTick);
+        assert(watchdogFeeds == 0 && !temperatureTick);
+        HAL::completeAutotuneWatchdogPass();
+        assert(watchdogFeeds == 0);
+        publishAdc();
+        temperatureTick=true;
+        Commands::checkForPeriodicalActions(NotBusy);
+        assert(watchdogFeeds == 1 && lastWatchdogFeed == now);
         pingWatchdog();
         assert(pins[WATCHDOG_PIN] == 1);
-        now += WATCHDOG_MAIN_LOOP_TIMEOUT;
+        TCNT5=OCR5A;
+        TIFR5.bits|=_BV(OCF5A);
         pingWatchdog();
         assert(pins[WATCHDOG_PIN] == 1);
+        HAL::completeThermalWatchdogPass(true);
+        assert(watchdogFeeds == 1);
     } else if (!std::strcmp(name, "wait")) {
         c.sensorType = 13;
         temperatureAdcValues[0] = 4092;
@@ -536,7 +843,7 @@ int main(int argc, char** argv) {
         c.setTargetTemperature(25);
         injection = Injection::Reach;
         c.waitForTargetTemperature();
-        assert(visits == 3 && watchdogHeartbeat == now);
+        assert(visits == 3 && watchdogFeeds && lastWatchdogFeed == now);
         assert(std::fabs(c.currentTemperatureC - 25) <= TEMP_TOLERANCE && HAL::outputDuty(0) == 0);
     } else if (!std::strncmp(name, "autotune-", 9)) {
         const bool useBed = std::strstr(name, "-bed-") != nullptr;
@@ -544,10 +851,13 @@ int main(int argc, char** argv) {
         auto& t = *tuned;
         for (auto* other : tempController) other->setTargetTemperature(0);
         t.setTargetTemperature(100); // must not restart normal heating after autotune
-        HAL::setHeaterDuty(t.pwmIndex, 255);
+        seedDuty(t.pwmIndex, 255);
         t.sensorType = 60;
         temperatureAdcValues[t.sensorPin] = 330;
         float target = 100;
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        if(!std::strcmp(name,"autotune-bed-high"))target=90;
+#endif
         bool store = false;
         const float oldP = t.pidPGain, oldI = t.pidIGain, oldD = t.pidDGain;
         const bool entry = std::strstr(name, "entry") != nullptr;
@@ -556,11 +866,13 @@ int main(int argc, char** argv) {
             t.sensorType = 14;
             temperatureAdcValues[t.sensorPin] = 4092;
         } else if (!std::strcmp(name, "autotune-entry-stale")) now += 101;
+        else if (std::strstr(name, "-entry-admission-stale")) delayAutotuneAdmission = true;
         else if (!std::strcmp(name, "autotune-entry-disabled")) t.sensorType = 0;
         else if (!std::strcmp(name, "autotune-entry-latched")) Printer::latchOutputInhibit(true);
         else if (!std::strcmp(name, "autotune-entry-decoupled")) t.setSensorDecoupled(true);
         else if (!std::strcmp(name, "autotune-entry-legacy-rejected")) Printer::latchOutputInhibit(false);
         else if (!std::strcmp(name, "autotune-entry-high")) temperatureAdcValues[t.sensorPin] = 820;
+        else if (!std::strcmp(name, "autotune-entry-absolute")) temperatureAdcValues[t.sensorPin] = 1195;
         else if (!std::strcmp(name, "autotune-entry-target")) target = 500;
         else if (!std::strcmp(name, "autotune-bed-entry-target")) target = HEATED_BED_MAX_TEMP + 1;
         else if (!std::strcmp(name, "autotune-entry-controller")) {}
@@ -581,10 +893,10 @@ int main(int argc, char** argv) {
         else if (!std::strcmp(name, "autotune-high") || !std::strcmp(name, "autotune-bed-high")) {
             injection = Injection::High;
             postTemperature = false;
-        } else if (!std::strcmp(name, "autotune-cutoff")) {
+        } else if (!std::strcmp(name, "autotune-cutoff") || !std::strcmp(name, "autotune-cutoff-periodic")) {
             target = 270;
             injection = Injection::Cutoff;
-            postTemperature = false;
+            postTemperature = std::strcmp(name,"autotune-cutoff-periodic")==0;
         } else if (std::strstr(name, "-power-change")) injection = Injection::PowerChange;
         else if (std::strstr(name, "-timeout")) {
             temperatureAdcValues[t.sensorPin] = 445; // cooling phase, no crossing
@@ -593,6 +905,9 @@ int main(int argc, char** argv) {
         else if (std::strstr(name, "-unstable")) { injection = Injection::Unstable; stride = 1000; store = true; }
         else if (std::strstr(name, "-entry-profile")) {}
         else if (std::strstr(name, "-entry-busy")) Printer::printJob.busy = true;
+        else if (std::strstr(name, "-entry-pause")) Printer::pause.owned = true;
+        else if (std::strstr(name, "-entry-scan")) scanActive = true;
+        else if (std::strstr(name, "-entry-script")) GCodeInput::scriptActive = true;
         else if (std::strstr(name, "-success")) {
             injection = Injection::ProfileCycles;
             stride = 1000;
@@ -601,6 +916,9 @@ int main(int argc, char** argv) {
             bed.sensorType = 255;
             for (int i = 0; i < 10; ++i) service();
             assert(!Printer::isAnyTempsensorDefect());
+            // The preceding regular pass consumed the hotend ticket. A
+            // newly completed ADC batch is required before autotune admission.
+            publishAdc();
             injection = Injection::OtherFault;
         } else assert(false);
         const uint8_t id = !std::strcmp(name, "autotune-entry-controller") ? NUM_TEMPERATURE_LOOPS : t.pwmIndex;
@@ -614,7 +932,7 @@ int main(int argc, char** argv) {
         }
         const bool lowMax = t.pidMax < 40;
         const bool wrongProfile = !TemperatureController::autotuneProfileAllowed(t.pwmIndex, method);
-        const bool busy = Printer::printJob.busy;
+        const bool busy = Printer::printJob.busy || Printer::pause.owned || scanActive || GCodeInput::scriptActive;
         const bool expectSuccess = std::strstr(name, "-success") && !lowMax && !wrongProfile;
         float high = 0, low = 0;
         if (expectSuccess) {
@@ -628,10 +946,18 @@ int main(int argc, char** argv) {
             t.invalidatePidCalibration();
         }
         if (wrongProfile || busy) t.setTargetTemperature(0);
+        const unsigned feedsBefore=watchdogFeeds;
         t.autotunePID(target, id, 5, store, method);
         assert(autotuneIndex == 255 && HAL::outputDuty(t.pwmIndex) == 0 && t.targetTemperatureC == 0);
         if (entry || lowMax || wrongProfile || busy) assert(visits == 0);
-        else assert(visits > 0 && watchdogHeartbeat == now);
+        else assert(visits > 0);
+        if(!postTemperature) assert(watchdogFeeds==feedsBefore);
+        if(expectSuccess) assert(watchdogFeeds>feedsBefore);
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        assert(relayReports==unsigned(expectSuccess)&&relayUnavailable==0);
+#else
+        assert(relayReports==0&&relayUnavailable==0);
+#endif
         if (expectSuccess) {
             assert(visits == 19 && !Printer::isAnyTempsensorDefect());
             assert(stores == unsigned(store));
@@ -654,8 +980,30 @@ int main(int argc, char** argv) {
         } else assert(stores == 0);
         if (lowMax || wrongProfile) assert(observedPeakDuty == 0 && stores == 0);
         if (!expectSuccess || !store) assert(t.pidPGain == oldP && t.pidIGain == oldI && t.pidDGain == oldD);
-        if (std::strstr(name, "-no-rise")) { assert(t.isSensorDecoupled()); allOff(); }
+        if (std::strstr(name, "-no-rise")) {
+            assert(t.isSensorDecoupled()); allOff();
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+            using namespace ThermalEmergency;
+            const auto& first=faultLedger().first();
+            assert(first.cause==Cause::NoRise&&first.channel==t.pwmIndex);
+            assert(first.evidence.targetC==target&&first.evidence.admittedDuty>0);
+            assert(first.evidence.valid&Evidence::Profile);
+            assert(first.evidence.windowMs>=uint32_t(t.pwmIndex==NUM_EXTRUDER?60000:20000));
+#endif
+        }
         if (injection == Injection::OtherFault) allOff();
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        if(injection==Injection::Cutoff||!std::strcmp(name,"autotune-entry-absolute")) {
+            using namespace ThermalEmergency;
+            allOff();
+            const auto& e=faultLedger().firstFire().evidence;
+            assert(faultLedger().firstFire().cause==Cause::OverTemperature&&e.threshold==t.effectiveCutoffC());
+            if(injection==Injection::Cutoff)assert(e.targetC==target&&e.profile==method&&(e.valid&Evidence::Profile)&&e.admittedDuty>0);
+            else assert(e.targetC==0&&e.admittedDuty==0);
+        }
+        if(injection==Injection::High||injection==Injection::TransientHigh)
+            assert(ThermalEmergency::faultLedger().level()!=ThermalEmergency::Severity::FireWarning);
+#endif
         // One subsequent normal service must not re-enable the old target.
         service();
         assert(HAL::outputDuty(t.pwmIndex) == 0);
@@ -681,18 +1029,20 @@ def main():
         "printer-safety.inc": "\n".join(re.findall(r"^#define PRINTER_FLAG0_(?:LEGACY_SIMULATION_REJECTED|TEMPSENSOR_DEFECT)[^\n]+", printer, re.M))
             + "\n" + section(printer, "    static void latchOutputInhibit(", "\n    static INLINE bool isManualMoveMode()"),
         "adc-state.inc": section(hal, "volatile uint16_t temperatureAdcValues", "inline __attribute__((always_inline)) void serviceTemperatureAdc"),
+        "ticket-decl.inc": section((FW / "HAL.h").read_text(), "    class HeaterSample {", "    static bool heaterLeaseFault();"),
         "controller.inc": section(header, "#define TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_FULL", "}; // TemperatureController") + "};",
         "conversion.inc": conversion.split(include, 1)[1],
-        "control.inc": control.split(include, 1)[1],
+        "control.inc": control.split(include, 1)[1].replace('#include "UsbSerial.h"', '').replace('#include "GCodeInput.h"', ''),
         "bed-setter.inc": section(extruder, "void Extruder::setHeatedBedTemperature(", "float Extruder::getHeatedBedTemperature("),
-        "scheduler.inc": section(commands, "void Commands::checkForPeriodicalActions(", "bool Commands::waitForMotion("),
+        "scheduler.inc": section(commands, "static void serviceThermalEmergency()", "bool Commands::waitForMotion("),
         "com.inc": "\n".join("constexpr int " + n + " = 0;" for n in sorted(set(re.findall(r"Com::(t[A-Z]\w*)", control)))),
         "hal.inc": (
-            "namespace {\n" + section(hal, "volatile unsigned long watchdogHeartbeat", "HAL::HAL()")
+            "namespace {\n" + section(hal, "volatile bool watchdogActive = false;", "HAL::HAL()")
             + section(hal, "uint16_t HAL::temperatureAdcSample(", "void HAL::analogStart(")
-            + section(hal, "void HAL::tellWatchdogOk()", "\n}") + "\n}\n"
             + section(hal, "constexpr uint8_t heaterPwmStep", "constexpr uint8_t partFanPwmStep")
             + "static volatile uint8_t requestedDuty[NUM_EXTRUDER + 3];\n"
+            + section(hal, "// Non-release candidate: /256", "\n} // namespace")
+            + section(hal, "bool HAL::heaterLeaseFault()", "ISR(TIMER3_COMPA_vect)")
             + section(hal, "uint8_t HAL::outputDuty(", "void HAL::setBoardFan(")
             + "void pwmSlice() {\n"
             + section(hal, "    static uint8_t pwm_count_heater", "    pwm_count_cooler += coolerPwmStep;")
@@ -700,8 +1050,8 @@ def main():
         ),
     }
     scenarios = (
-        "rail", "invalid-low", "invalid-high", "bed-invalid", "recovery", "disabled", "latched-fault-wait", "legacy-output-inhibit",
-        "stale", "bed-stale", "unpublished", "autotune-entry-stale", "autotune-stale", "autotune-bed-stale",
+        "unconditional-clear", "rail", "invalid-low", "invalid-high", "bed-invalid", "recovery", "disabled", "latched-fault-wait", "legacy-output-inhibit",
+        "stale", "bed-stale", "unpublished", "autotune-entry-stale", "autotune-entry-admission-stale", "autotune-bed-entry-admission-stale", "autotune-stale", "autotune-bed-stale",
         "unsupported", "no-rise", "hold-drift", "pwm", "watchdog", "wait",
         "autotune-entry-unsupported", "autotune-entry-low", "autotune-entry-disabled",
         "autotune-entry-latched", "autotune-entry-decoupled", "autotune-entry-legacy-rejected", "autotune-entry-high",
@@ -713,6 +1063,9 @@ def main():
         "autotune-power-change", "autotune-bed-power-change",
         "autotune-no-rise", "autotune-bed-no-rise", "autotune-unstable", "autotune-bed-unstable",
         "autotune-entry-busy", "autotune-bed-entry-busy",
+        "autotune-entry-pause", "autotune-bed-entry-pause",
+        "autotune-entry-scan", "autotune-bed-entry-scan",
+        "autotune-entry-script", "autotune-bed-entry-script",
         *(f"autotune-success-store-limit{n}" for n in (0, 10, 39, 40, 41, 255)),
         *(f"autotune-bed-success-store-limit{n}" for n in (0, 10, 39, 40, 41, 255)),
         *(f"autotune-success-store-j{j}" for j in range(6)),
@@ -727,23 +1080,28 @@ def main():
             profile = (FW / (board + ".h")).read_text()
             defines = {n: macro(profile, n) for n in (
                 "SENSOR_TEMPERATURE_OFFSETS_C", "MIN_DEFECT_TEMPERATURE", "MAX_DEFECT_TEMPERATURE", "HEATED_BED_MAX_TEMP")}
-            defines["BED_MEASURED_CUTOFF"] = re.search(r"constexpr uint16_t bedHeaterCutoffC = (\d+);", (FW / "Extruder.cpp").read_text())[1]
             defines.update({n: macro(config, n) for n in (
                 "EXTRUDER_FAN_COOL_TEMP", "DECOUPLING_TEST_MAX_HOLD_VARIANCE",
                 "DECOUPLING_TEST_MIN_TEMP_RISE", "EXT0_DECOUPLE_TEST_PERIOD",
-                "MAX_ROOM_TEMPERATURE", "WATCHDOG_MAIN_LOOP_TIMEOUT",
+                "MAX_ROOM_TEMPERATURE",
                 "TEMP_TOLERANCE")})
             defines["ANALOG_REDUCE_BITS"] = macro((FW / "HAL.h").read_text(), "ANALOG_REDUCE_BITS")
             defines["CELSIUS_EXTRA_BITS"] = macro(header, "CELSIUS_EXTRA_BITS")
             defines["NUM_EXTRUDER"] = str(tools)
-            exe = work / "replay"
-            subprocess.run([os.environ.get("CXX", "c++"), "-std=c++11", "-O2",
-                            *[f"-D{k}={v}" for k, v in defines.items()],
-                            "-I", str(FW), str(work / "replay.cpp"), "-o", str(exe)], check=True)
-            selected = scenarios + (("dual-invalid",) if tools > 1 else ())
-            for scenario in selected:
-                subprocess.run([str(exe), scenario], check=True, timeout=10)
-            print(f"{board} / {tools} hotend(s): {len(selected)} cases passed", flush=True)
+            for emergency in (True,):
+                exe = work / "replay"
+                extra = ["-DRF_THERMAL_EMERGENCY_EXPERIMENT=1"] if emergency else []
+                subprocess.run([os.environ.get("CXX", "c++"), "-std=c++11", "-O2", *extra,
+                                *[f"-D{k}={v}" for k, v in defines.items()],
+                                "-I", str(FW), str(work / "replay.cpp"), "-o", str(exe)], check=True)
+                selected = scenarios + (("dual-invalid",) if tools > 1 else ())
+                if emergency:
+                    selected += ("emergency-invalid-episode", "emergency-stale-episode", "emergency-recovery", "emergency-scheduler",
+                                 "absolute-hotend", "absolute-bed", "absolute-idle", "absolute-escalation", "bed-limit",
+                                 "autotune-entry-absolute", "autotune-cutoff-periodic")
+                for scenario in selected:
+                    subprocess.run([str(exe), scenario], check=True, timeout=10)
+                print(f"{board} / {tools} hotend(s) / emergency={emergency}: {len(selected)} cases passed", flush=True)
 
 
 if __name__ == "__main__":

@@ -23,7 +23,7 @@
 
 namespace GCodeCommands {
 
-void setHotendTemperature(GCode* com) {
+void setHotendTemperatureWithParameters(bool hasTarget, int32_t target, bool waitRequested, bool hasTool, uint8_t tool) {
     if (Printer::isAnyTempsensorDefect()) {
         reportTempsensorAndHeaterErrors();
         return;
@@ -31,16 +31,18 @@ void setHotendTemperature(GCode* com) {
     Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
 
     // TODO man müsste das in den Movecache legen!
-    const bool heaterOff = com->hasS() && com->S == 0;
-    if ((com->hasP() || heaterOff) && !Commands::waitForMotion(Commands::MotionWait::QueueAndZ, Commands::PauseWait::Resume) && !heaterOff)
+    const bool heaterOff = hasTarget && target == 0;
+    if ((waitRequested || heaterOff) && !Commands::waitForMotion(Commands::MotionWait::QueueAndZ, Commands::PauseWait::Resume) && !heaterOff)
         return;
 
-    if (com->hasS()) {
-        if (com->hasT())
-            Extruder::setTemperatureForExtruder(com->S, com->T);
-        else
-            Extruder::setTemperatureForExtruder(com->S, Extruder::current->id);
-    }
+    if (hasTarget)
+        Extruder::setTemperatureForExtruder(target, hasTool ? tool : Extruder::current->id);
+}
+
+void setHotendTemperature(GCode* com) {
+    const bool hasTarget = com->hasS(), hasTool = com->hasT();
+    setHotendTemperatureWithParameters(hasTarget, hasTarget ? com->S : 0, com->hasP(),
+                                       hasTool, hasTool ? com->T : 0);
 }
 
 void reportTemperature(GCode* com) {
@@ -55,7 +57,7 @@ void stopPartFan() {
     Commands::setFanSpeed(0);
 }
 
-void waitForHotend(GCode* com) {
+void waitForHotendWithParameters(bool hasTarget, int32_t target, bool hasTool, uint8_t tool) {
     Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
     if (Printer::isAnyTempsensorDefect()) {
         reportTempsensorAndHeaterErrors();
@@ -67,11 +69,11 @@ void waitForHotend(GCode* com) {
         return;
 
     Extruder* actExtruder = Extruder::current;
-    if (com->hasT() && com->T < NUM_EXTRUDER)
-        actExtruder = &extruder[com->T];
-    if (com->hasS()) {
-        Extruder::setTemperatureForExtruder(com->S, actExtruder->id);
-        if (com->S > 0 && actExtruder->tempControl.targetTemperatureC == 0) {
+    if (hasTool && tool < NUM_EXTRUDER)
+        actExtruder = &extruder[tool];
+    if (hasTarget) {
+        Extruder::setTemperatureForExtruder(target, actExtruder->id);
+        if (target > 0 && actExtruder->tempControl.targetTemperatureC == 0) {
             Printer::idleStatus.schedule(HAL::timeInMilliseconds());
             return;
         }
@@ -121,6 +123,11 @@ void waitForHotend(GCode* com) {
 
 
     Printer::idleStatus.schedule(HAL::timeInMilliseconds());
+}
+
+void waitForHotend(GCode* com) {
+    const bool hasTarget = com->hasS(), hasTool = com->hasT();
+    waitForHotendWithParameters(hasTarget, hasTarget ? com->S : 0, hasTool, hasTool ? com->T : 0);
 }
 
 void waitForTemperatures() {
@@ -192,76 +199,23 @@ void waitForBed(GCode* com) {
     Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 5000);
 }
 
-void setPidGains(GCode* com) {
-    TemperatureController* c = &Extruder::current->tempControl;
-    if (com->hasS()) {
-        if (com->S < 0 || com->S >= NUM_TEMPERATURE_LOOPS) {
-            Com::printErrorFLN(PSTR("M204: invalid heater"));
-            return;
-        }
-        c = tempController[com->S];
-    }
-    // Manual adjustment does not create a first-tune authorization.
-    const float p = com->hasX() ? com->X : c->pidPGain;
-    const float i = com->hasY() ? com->Y : c->pidIGain;
-    const float d = com->hasZ() ? com->Z : c->pidDGain;
-    if (!c->pidCalibrationValid() || !TemperatureController::validPidGains(p, i, d)) {
-        Com::printErrorFLN(PSTR("M204: tune required or invalid gains"));
-        return;
-    }
-    c->pidPGain = p;
-    c->pidIGain = i;
-    c->pidDGain = d;
-    c->tempIState = 0;
-    c->pidHistoryValid = false;
-    c->updateTempControlVars();
-}
-
-void tunePid(GCode* com) {
-    const int32_t controller = com->hasP() ? com->P : 0;
-    if (controller < 0 || controller >= NUM_TEMPERATURE_LOOPS) {
-        Com::printErrorFLN(PSTR("M303: invalid heater P"));
-        return;
-    }
-    const bool bed = controller == NUM_EXTRUDER;
-    const float rule = com->hasJ() ? com->J : (bed ? 3 : 1);
-    const float cycles = com->hasR() ? com->R : (bed ? 16 : 10);
-    if (!(rule >= 0 && rule <= 3) || rule != int(rule)
-        || !TemperatureController::autotuneProfileAllowed(controller, int(rule))
-        || !(cycles >= 5 && cycles <= 20) || cycles != int(cycles)) {
-        Com::printErrorFLN(PSTR("M303: hotend J0/J1; bed J2/J3; R5..20"));
-        return;
-    }
-    const float temp = com->hasS() ? com->S : (bed ? heatBedScanPlaBedC : heatBedScanPlaNozzleC);
-    tempController[controller]->autotunePID(temp, controller, int(cycles), com->hasX(), int(rule));
-}
-
 void setCaseLight(GCode* com) {
-#if HOTEND_COOLER_USES_PIN(CASE_LIGHT_PIN)
-    (void)com;
-    Com::printErrorFLN(PSTR("M355: X19 is assigned to a hotend cooler"));
-#else
-    // Idee und Teilcode und Vorarbeit von WESSIX
-    // Code schaltet X19, das ist nicht zwingend das Licht!
-    if (com->hasS()) {
-        if (com->S == 1 || com->S == 0) {
-            AccessoryOutputs::stage(AccessoryOutputs::Output::CaseLight, com->S);
-        } else {
-            Com::printFLN(PSTR("M355 Error S=0||1"));
-        }
-    } else {
-        AccessoryOutputs::stage(AccessoryOutputs::Output::CaseLight, !AccessoryOutputs::state(AccessoryOutputs::Output::CaseLight));
+    if(!Lighting::available()) {
+        Com::printErrorFLN(PSTR("M355: no light output available"));
+        return;
     }
-    AccessoryOutputs::apply(AccessoryOutputs::Output::CaseLight);
-    Com::printFLN(PSTR("M355: X19 set to "), AccessoryOutputs::state(AccessoryOutputs::Output::CaseLight));
-#endif
+    if(com->hasS() && com->S!=0 && com->S!=1) {
+        showInvalidSyntax(com->M);
+        return;
+    }
+    const bool on=com->hasS()?com->S!=0:!AccessoryOutputs::state(AccessoryOutputs::Output::CaseLight);
+    AccessoryOutputs::set(AccessoryOutputs::Output::CaseLight,on);
+    Com::printFLN(PSTR("M355: light "),int(on));
 }
 
 #if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
 void turnOnCaseFan() {
     CaseFan::turnOn();
-    if (Printer::debugInfo())
-        Com::printFLN(PSTR("M3120: fan on"));
 }
 
 void scheduleCaseFanOff(GCode* pCommand) {
@@ -274,15 +228,7 @@ void scheduleCaseFanOff(GCode* pCommand) {
         CaseFan::setOffDelay(static_cast<uint32_t>(seconds) * 1000UL);
     }
 
-    const bool delayed = CaseFan::requestOff(pCommand->hasP());
-    if (Printer::debugInfo()) {
-        if (delayed) {
-            Com::printF(PSTR("M3121: fan off in "), CaseFan::offDelay() / 1000UL);
-            Com::printFLN(PSTR(" [s]"));
-        } else {
-            Com::printFLN(PSTR("M3121: fan off"));
-        }
-    }
+    CaseFan::requestOff(pCommand->hasP());
 }
 #endif
 
@@ -305,8 +251,7 @@ void setAccessoryFet(GCode* pCommand) {
                     AccessoryOutputs::set(AccessoryOutputs::Output::Fet1, 1);
                     Com::printFLN(PSTR("24V X42 FET1-output = on"));
                 }
-                HAL::eprSetByte(EPR_RF_FET1_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::Fet1));
-                EEPROM::updateChecksum();
+                EEPROM::storeFet(1,AccessoryOutputs::state(AccessoryOutputs::Output::Fet1));
             }
             break;
         }
@@ -321,8 +266,7 @@ void setAccessoryFet(GCode* pCommand) {
                     AccessoryOutputs::set(AccessoryOutputs::Output::Fet2, 1);
                     Com::printFLN(PSTR("24V X44 FET2-output = on"));
                 }
-                HAL::eprSetByte(EPR_RF_FET2_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::Fet2));
-                EEPROM::updateChecksum();
+                EEPROM::storeFet(2,AccessoryOutputs::state(AccessoryOutputs::Output::Fet2));
             }
             break;
         }
@@ -337,8 +281,7 @@ void setAccessoryFet(GCode* pCommand) {
                     AccessoryOutputs::set(AccessoryOutputs::Output::Fet3, 1);
                     Com::printFLN(PSTR("24V X45/BoardFan FET3-output = on"));
                 }
-                HAL::eprSetByte(EPR_RF_FET3_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::Fet3));
-                EEPROM::updateChecksum();
+                EEPROM::storeFet(3,AccessoryOutputs::state(AccessoryOutputs::Output::Fet3));
             }
             break;
         }
@@ -365,21 +308,36 @@ void setMainsOutput(GCode* pCommand) {
 #endif
 
 static bool prepareFilamentProgram() {
+    if (!Printer::printJob.isIdle() || isAnyScanRunning()) {
+        Com::printFLN(PSTR("Filament program requires idle print job and no scan"));
+        return false;
+    }
+    if (Printer::heatingInhibited()) {
+        Com::printFLN(PSTR("Filament program requires available heaters"));
+        return false;
+    }
     if (!Extruder::current->tempControl.pidCalibrationValid()) {
         Com::printFLN(PSTR("Error: PID tune required before filament service"));
         return false;
     }
-    if (Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Cancel)) {
-        Printer::printJob.beginFilamentService();
-        return true;
+    // The periodic pump can change admission while waiting. The program
+    // must actually acquire ownership before touching the E coordinate.
+    if (Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Cancel) &&
+        !isAnyScanRunning() && !Printer::heatingInhibited() && Extruder::current->tempControl.pidCalibrationValid()) {
+        // Calibration, settings and sensor-fault publication above are
+        // foreground-owned. Keep floating PID validation outside CLI;
+        // only the ISR-visible pause/job admission needs the short lock.
+        InterruptProtectedBlock lock;
+        if (!Printer::pause.isPaused() && Printer::printJob.beginFilamentService())
+            return true;
     }
     Com::printFLN(PSTR("Filament program requires settled, unpaused motion"));
     return false;
 }
 
-void loadFilament(GCode* pCommand) {
-    if (!prepareFilamentProgram())
-        return;
+// Name the admitted frames explicitly instead of depending on LTO
+// partial inlining of the two public command wrappers.
+static __attribute__((noinline)) void loadFilamentPrepared(int16_t maxP, uint8_t eFeedrate) {
     Com::printFLN(PSTR("Load Filament"));
     Printer::idleStatus.cancel();
 
@@ -388,16 +346,8 @@ void loadFilament(GCode* pCommand) {
         Printer::homeDigits();
 
     uint8_t Extrusion = 65; //max, wenn kein wiederstand. (ca. hotendlänge)
-    uint8_t eFeedrate = 1;
-    if (pCommand->hasF())
-        eFeedrate = constrain(abs(static_cast<uint8_t>(pCommand->F)), 1, 50);
-    short maxP = 2000; // To overwrite .. safety.
-    if (pCommand->hasP())
-        maxP = constrain(abs(static_cast<short>(pCommand->P)), 0, 20000);
     const bool savedRelativeE = Printer::gcodeModes.relativeEOverride();
     Printer::gcodeModes.setRelativeEOverride(false); //M82:
-    const bool savedInches = Printer::gcodeModes.inches();
-    Printer::gcodeModes.setInches(0); // To save possible G21 .. weiß net ob das so wichtig wäre ^^.
 
     Printer::setEPositionMM(0); // G92 E0
 
@@ -424,23 +374,28 @@ void loadFilament(GCode* pCommand) {
     Printer::setEPositionMM(0); // G92 E0
 
     Printer::gcodeModes.setRelativeEOverride(savedRelativeE);
-    Printer::gcodeModes.setInches(savedInches);
     Printer::printJob.finishFilamentService();
     Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 5000);
 }
 
-void unloadFilament(GCode* pCommand) {
-    if (!prepareFilamentProgram())
-        return;
+void loadFilamentWithParameters(int16_t maxP, uint8_t eFeedrate) {
+    if (prepareFilamentProgram())
+        loadFilamentPrepared(maxP, eFeedrate);
+}
+
+void loadFilament(GCode* pCommand) {
+    const uint8_t eFeedrate = pCommand->hasF() ? constrain(abs(static_cast<uint8_t>(pCommand->F)), 1, 50) : 1;
+    const int16_t maxP = pCommand->hasP() ? constrain(abs(static_cast<short>(pCommand->P)), 0, 20000) : 2000;
+    loadFilamentWithParameters(maxP, eFeedrate);
+}
+
+static __attribute__((noinline)) void unloadFilamentPrepared(int16_t maxForce) {
     Com::printFLN(PSTR("Unload Filament"));
     Printer::idleStatus.cancel();
 
     //init
     uint8_t outputLength = 100; //9cm max Output, wenn kein übertriebener wiederstand. Unser Hotend ist nicht ganz so lang.
     float eFeedrate = 0.3f;     /*mm/s*/
-    short maxForce = 4000;      //3500+ might work well! You should stay underneath the force causing step loss.
-    if (pCommand->hasP())
-        maxForce = constrain(abs(static_cast<short>(pCommand->P)), 0, EMERGENCY_PAUSE_DIGITS_MAX);
     float t = float(UI_SET_EXTRUDER_MIN_TEMP_UNMOUNT);
 
     // Preheat / precool
@@ -450,8 +405,6 @@ void unloadFilament(GCode* pCommand) {
     // Set stuff
     const bool savedRelativeE = Printer::gcodeModes.relativeEOverride();
     Printer::gcodeModes.setRelativeEOverride(false); //M82:
-    const bool savedInches = Printer::gcodeModes.inches();
-    Printer::gcodeModes.setInches(0); // To save possible G21 .. weiß net ob das so wichtig wäre ^^.
     Printer::setEPositionMM(0); // G92 E0
 
         // Normalize dms sensor values to 0 if allowed in options and not already done
@@ -524,9 +477,18 @@ void unloadFilament(GCode* pCommand) {
     Printer::setEPositionMM(0); // G92 E0
 
     Printer::gcodeModes.setRelativeEOverride(savedRelativeE);
-    Printer::gcodeModes.setInches(savedInches);
     Printer::printJob.finishFilamentService();
     Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 5000);
+}
+
+void unloadFilamentWithParameters(int16_t maxForce) {
+    if (prepareFilamentProgram())
+        unloadFilamentPrepared(maxForce);
+}
+
+void unloadFilament(GCode* pCommand) {
+    const int16_t maxForce = pCommand->hasP() ? constrain(abs(static_cast<short>(pCommand->P)), 0, EMERGENCY_PAUSE_DIGITS_MAX) : 4000;
+    unloadFilamentWithParameters(maxForce);
 }
 
 #ifdef X35_ADC_CHANNEL

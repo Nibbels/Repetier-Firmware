@@ -94,7 +94,12 @@ struct Commands {
 };
 struct Com { static void printFLN(const char*) {} };
 
-static bool moveZ(int nSteps, bool emergencyRetreat = false);
+enum class GuardedMoveStatus : uint8_t { Denied, Cancelled, Limit, SwitchReached, PositionReached };
+struct GuardedMoveResult { GuardedMoveStatus status; int32_t positionSteps; };
+struct PrintLine {
+    static GuardedMoveResult runScanMove(int32_t nSteps, bool emergencyRetreat);
+};
+static bool moveZ(int32_t nSteps, bool emergencyRetreat = false);
 
 #include "z-motion-firmware.inc"
 
@@ -142,6 +147,37 @@ bool step(Path path, int8_t direction) {
     return continuing;
 }
 
+}
+// Model scheduling here; actual Timer1 executor is replayed separately.
+GuardedMoveResult PrintLine::runScanMove(int32_t nSteps, bool emergencyRetreat) {
+    using namespace Printer;
+    const auto interrupted = [emergencyRetreat] {
+        return !emergencyRetreat && (scanSession.aborting() || blockAll || printJob.commandsBlocked());
+    };
+    if (interrupted())
+        return {GuardedMoveStatus::Cancelled,zMotion.scanSteps()};
+    while (needsCMPwait()) {
+        Commands::checkForPeriodicalActions(Processing);
+        if (interrupted()) return {GuardedMoveStatus::Cancelled,zMotion.scanSteps()};
+    }
+    zMotion.setScanInProgress(true);
+    GuardedMoveStatus status=GuardedMoveStatus::PositionReached;
+    for (int32_t i=0;i<abs(nSteps);++i) {
+        if (interrupted()) {status=GuardedMoveStatus::Cancelled;break;}
+        if (!step(Path::Scan,nSteps<0?-1:1)) {status=GuardedMoveStatus::Limit;break;}
+        if (tickDuringScan) {
+            InterruptProtectedBlock lock;
+            const int before=pulseCount;
+            StepExecutor::stepSlowedZCompensation();
+            assert(!StepExecutor::needCmpWait() && pulseCount==before);
+        }
+        if ((i&15)==15) Commands::checkForPeriodicalActions(Calibrating);
+    }
+    zMotion.setScanInProgress(false);
+    if(interrupted()) status=GuardedMoveStatus::Cancelled;
+    return {status,zMotion.scanSteps()};
+}
+namespace {
 void driveDirect(int32_t distance, Path path = Path::Direct) {
     zMotion.requestDirectMove(distance);
     const int8_t direction = distance > 0 ? 1 : -1;
@@ -267,6 +303,21 @@ void opposingCorrection() {
 }
 
 void correctionWaits() {
+    // Timer1 queue task: cancellation must never enter a delay with I=0.
+    reset(500);
+    zMotion.requestCorrection(26);
+    settleCorrection();
+    assert(motorPosition == 526);
+    {
+        InterruptProtectedBlock lock;
+        Printer::disableCMPnow();
+        assert(!interruptsEnabled && waitedMs == 0);
+        assert(!Printer::doHeatBedZCompensation && motorPosition == 526);
+    }
+    assert(interruptsEnabled);
+    settleCorrection();
+    assert(motorPosition == 500 && waitedMs == 0);
+
     reset(500);
     zMotion.requestCorrection(25);
     assert(!StepExecutor::needCmpWait() && Printer::needsCMPwait());
@@ -324,11 +375,31 @@ void scanTravel() {
     assert(moveZ(4, true));
     assert(pulseCount == 4 && motorPosition == 104);
 
-    reset(10);
-    ZMotion::setDirection(false);
-    zMotion.stepHomeCheck(20);
-    assert(motorPosition == 9 && zMotion.motorSteps() == 9);
-    assert(zMotion.nominalSteps() == 10 && zMotion.scanSteps() == 0);
+    reset(999);
+    assert(!moveZ(4));
+    assert(motorPosition == 1000 && pulseCount == 1 && scanSession.aborting());
+
+    reset(100, false);
+    assert(!moveZ(-4) && pulseCount == 0 && scanSession.aborting());
+
+    // The central Timer1 scan path preserves nominal and jog positions,
+    // honors the same limits and does not balance a pending correction.
+    reset(-24);
+    zMotion.requestCorrection(4);
+    assert(step(Path::Scan, -1) && motorPosition == -25);
+    assert(!step(Path::Scan, -1));
+    assert(zMotion.scanSteps() == -1 && zMotion.nominalSteps() == -24);
+    assert(zMotion.directPosition().steps() == 0 && zMotion.correctionTarget() == 4);
+    assert(step(Path::Scan, 1) && motorPosition == -24 && zMotion.scanSteps() == 0);
+    reset(999);
+    assert(step(Path::Scan, 1) && !step(Path::Scan, 1));
+    assert(zMotion.scanSteps() == 1 && motorPosition == 1000);
+    reset(100, false);
+    assert(!step(Path::Scan, -1) && step(Path::Scan, 1));
+    assert(zMotion.scanSteps() == 1 && motorPosition == 101);
+
+    // M3028 no longer emits foreground pulses; its replacement is
+    // covered by thermal-emergency-home.py and guarded-drive replay.
 }
 }
 

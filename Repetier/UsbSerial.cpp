@@ -91,6 +91,43 @@ void UsbSerial::write(uint8_t byte) {
     UCSR0B |= _BV(UDRIE0);
 }
 
+// Task0034: emergency reporting must not stall when the TX ring is full.
+// Keep legacy write/flush semantics unchanged for ordinary protocol traffic.
+bool UsbSerial::tryWrite(uint8_t byte) {
+    const uint8_t next = tx_.next(tx_.head);
+    if (next == tx_.tail)
+        return false;
+    tx_.bytes[tx_.head] = byte;
+    // Publish payload before the ISR can observe the new head, including LTO.
+    asm volatile("" ::: "memory");
+    tx_.head = next;
+    UCSR0B |= _BV(UDRIE0);
+    return true;
+}
+
+uint8_t UsbSerial::transmitFree() {
+    return uint8_t(tx_.tail-tx_.head-1)&(transmitBufferSize-1);
+}
+
+bool UsbSerial::tryWriteSpan(const char* bytes, uint8_t count) {
+    // Only the foreground publishes head; ISR consumption can increase
+    // free space after this snapshot but cannot invalidate our reservation.
+    if (!count) return true;
+    if (!bytes || count >= transmitBufferSize) return false;
+    uint8_t head = tx_.head;
+    const uint8_t free = uint8_t(tx_.tail - head - 1) & (transmitBufferSize - 1);
+    if (count > free) return false;
+    do {
+        tx_.bytes[head] = uint8_t(*bytes++);
+        head = tx_.next(head);
+    } while (--count);
+    // Publish exactly once so the ISR never observes an incomplete span.
+    asm volatile("" ::: "memory");
+    tx_.head = head;
+    UCSR0B |= _BV(UDRIE0);
+    return true;
+}
+
 void UsbSerial::flush() {
     while (tx_.head != tx_.tail) {
         // Wait for the interrupt to hand the queued bytes to the UART.
