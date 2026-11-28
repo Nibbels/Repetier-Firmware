@@ -64,7 +64,8 @@ bool matrixAvailable = true;
 void (*onHome)() = nullptr;
 std::vector<std::pair<float, float>> probePoints;
 
-struct InterruptProtectedBlock { InterruptProtectedBlock() {} };
+bool injectPauseAtAdmission = false;
+struct InterruptProtectedBlock { InterruptProtectedBlock(); };
 
 namespace HAL {
 uint32_t now = 0;
@@ -110,6 +111,15 @@ bool queueRelativeMMCoordinates(float x, float y, float z, float e, float, bool 
     return true;
 }
 void disableAllSteppersNow() { ++shutdowns; }
+}
+
+InterruptProtectedBlock::InterruptProtectedBlock() {
+    // Simulate Timer1 publishing a pause just before the scan takes its
+    // admission lock, after the optimistic initial phase check.
+    if (injectPauseAtAdmission) {
+        injectPauseAtAdmission = false;
+        Printer::pause.paused = true;
+    }
 }
 
 constexpr int Calibrating = 1;
@@ -237,6 +247,11 @@ int main(int argc, char** argv) {
         Printer::printJob.blocked=false;
         Printer::pause.paused=true;
         zOffsetScan.startOrCancel(false);
+        assert(!zOffsetScan.active() && !homedZ && !homedXY);
+        Printer::pause.paused=false;
+        injectPauseAtAdmission=true;
+        zOffsetScan.startOrCancel(false);
+        assert(!injectPauseAtAdmission && Printer::pause.paused);
         assert(!zOffsetScan.active() && !homedZ && !homedXY);
         Printer::pause.paused=false;
         zOffsetScan.startOrCancel(false);

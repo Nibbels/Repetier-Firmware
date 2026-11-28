@@ -84,7 +84,8 @@ bool moved = false;
 int bedTarget = 0;
 std::vector<int> nozzleTargets;
 
-struct InterruptProtectedBlock { InterruptProtectedBlock() {} };
+bool injectPauseAtAdmission = false;
+struct InterruptProtectedBlock { InterruptProtectedBlock(); };
 
 namespace HAL {
 millis_t now = 0;
@@ -134,6 +135,15 @@ bool waitForMotion(MotionWait motion, PauseWait pause) {
     return true;
 }
 }
+InterruptProtectedBlock::InterruptProtectedBlock() {
+    // Simulate Timer1 publishing a pause just before the scan takes its
+    // admission lock, after the optimistic initial phase check.
+    if (injectPauseAtAdmission) {
+        injectPauseAtAdmission = false;
+        Printer::pause.paused = true;
+    }
+}
+
 namespace Extruder {
 bool calibrated = true;
 bool allHeatersCalibrated() { return calibrated; }
@@ -236,6 +246,11 @@ int main(int argc, char** argv) {
         Printer::printJob.blocked=false;
         Printer::pause.paused=true;
         heatBedScan.startOrCancel(HeatBedScanMode::Standard);
+        assert(!heatBedScan.active() && !homedZ && !homedXY);
+        Printer::pause.paused=false;
+        injectPauseAtAdmission=true;
+        heatBedScan.startOrCancel(HeatBedScanMode::Standard);
+        assert(!injectPauseAtAdmission && Printer::pause.paused);
         assert(!heatBedScan.active() && !homedZ && !homedXY);
         Printer::pause.paused=false;
         heatBedScan.startOrCancel(HeatBedScanMode::Standard);
