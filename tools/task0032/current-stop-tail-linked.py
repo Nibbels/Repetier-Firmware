@@ -206,7 +206,10 @@ def run_board(mod,img,phases,inject):
             assert c.get(addr+102)==0 and c.get(addr+98,4,signed=True)==0
             assert total[c.primary]-before<=33,(total,before)
         else:
-            assert first["remaining"]<=32 or target>first["eligible"][-2]
+            # A request after the last complete transaction is consumed
+            # before the next group. No counter mutation may be torn.
+            assert first["remaining"]<=32 or (first["remaining"]==remaining-total[c.primary]
+                and before==total[c.primary])
         return first,{"max_mask":peak,"max_cycles":cycles,"post_request_primary":total[c.primary]-before}
     results=[]
     try:
