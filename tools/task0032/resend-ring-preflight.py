@@ -128,6 +128,53 @@ static void exactWire() {
 }
 
 
+
+static void requestFence() {
+    unsigned cases=0;
+    for(unsigned phase=0;phase<64;++phase) {
+        for(unsigned used=0;used<64;++used) {
+            for(uint32_t line:{1UL,65536UL,4294967295UL}) {
+                const std::string wire="\r\nResend:"+std::to_string(line)+"\r\nok\r\n";
+                const unsigned prefix=wire.size()-4; // through Resend CRLF
+                fillTx(used);
+                rx(0x44); // old unread input
+                const bool sent=UsbSerial::tryWriteResendSpan(wire.data(),uint8_t(wire.size()),uint8_t(prefix));
+                assert(sent==(used+wire.size()<=63));
+                if(sent) {
+                    assert(!UsbSerial::available());
+                    // Every stale byte before the request line reaches UDR
+                    // is quarantined, even when old ACKs precede the request.
+                    for(unsigned i=0;i<used+prefix;++i) {
+                        rx(0x55);rx(0x56,_BV(FE0)|_BV(DOR0));
+                        assert(!UsbSerial::available() && !UsbSerial::lossFlags());
+                        USART0_UDRE_vect();
+                        assert(UDR0==(i<used?uint8_t(i):uint8_t(wire[i-used])));
+                    }
+                    // Historical Host/Printrun may answer Resend before the
+                    // trailing control ok is sent. Retain the early response.
+                    rx(0x12);rx(0x34);
+                    assert(UsbSerial::read()==0x12 && UsbSerial::read()==0x34);
+                    rx(0x99,_BV(UPE0));
+                    assert(UsbSerial::lossFlags()==_BV(UPE0));
+                    assert(UsbSerial::rearmForResync()==_BV(UPE0));
+                    assert(drain()=="ok\r\n");
+                } else {
+                    assert(UsbSerial::read()==0x44);
+                    assert(drain().size()==used);
+                }
+                // Restore ring cursor for next fixture.
+                for(unsigned i=(used+(sent?wire.size():0))%64;i%64!=0;++i) {
+                    assert(UsbSerial::tryWrite(0));USART0_UDRE_vect();
+                }
+                USART0_UDRE_vect();++cases;
+            }
+        }
+        assert(UsbSerial::tryWrite(0));drain();
+    }
+    assert(cases==12288);
+    std::printf("Request prefix RX fence: %u cursor/occupancy/sequence cases\n",cases);
+}
+
 static void retirementProgress() {
     // All producer paths feed a foreground-only counter. The snapshot
     // measures retirement into UDR, not transmission/receipt on the wire.
@@ -276,6 +323,34 @@ def candidate_uart(header, source):
     source=source.replace("    tx_.head = next;","    tx_.head = next;\n    ++txPublished_;")
     source=once(source,"    tx_.head = head;",
         "    txPublished_ += uint8_t(head-tx_.head)&(transmitBufferSize-1);\n    tx_.head = head;")
+    # Optional causal lower-bound fence: do not admit RX bytes that arrived
+    # before even the request line was handed to UDR. Arm before publishing
+    # the span; its marker is in the formerly free part of the ring.
+    header=once(header,"    static uint16_t transmitRetired();",
+        "    static uint16_t transmitRetired();\n"
+        "    static bool tryWriteResendSpan(const char*,uint8_t,uint8_t);")
+    header=once(header,"    static uint16_t txPublished_;",
+        "    static uint16_t txPublished_;\n    static volatile bool resyncGate_;\n"
+        "    static volatile uint8_t resyncTxMarker_;")
+    source=once(source,"uint16_t UsbSerial::txPublished_ = 0;",
+        "uint16_t UsbSerial::txPublished_ = 0;\n"
+        "volatile bool UsbSerial::resyncGate_ = false;\n"
+        "volatile uint8_t UsbSerial::resyncTxMarker_ = 0;\n"
+        "bool UsbSerial::tryWriteResendSpan(const char* bytes,uint8_t count,uint8_t prefix) {\n"
+        "    if(!bytes || !prefix || prefix>count || count>transmitFree())return false;\n"
+        "    const uint8_t previous=SREG;\n    cli();\n"
+        "    rx_.tail=rx_.head;\n    lossFlags_=0;\n"
+        "    resyncTxMarker_=uint8_t(tx_.head+prefix)&(transmitBufferSize-1);\n"
+        "    resyncGate_=true;\n    asm volatile(\"\" ::: \"memory\");\n"
+        "    SREG=previous;\n    asm volatile(\"\" ::: \"memory\");\n"
+        "    // ISR consumption can only increase space; sole foreground producer.\n"
+        "    return tryWriteSpan(bytes,count);\n}\n")
+    source=once(source,"    lossFlags_ = 0;\n    asm volatile",
+        "    lossFlags_ = 0;\n    resyncGate_ = false;\n    asm volatile")
+    source=once(source,"    const uint8_t byte = UDR0;\n    const uint8_t error",
+        "    const uint8_t byte = UDR0;\n    if(resyncGate_)return;\n    const uint8_t error")
+    source=once(source,"    UDR0 = byte;\n}",
+        "    UDR0 = byte;\n    if(resyncGate_ && tx_.tail==resyncTxMarker_)resyncGate_=false;\n}")
     return header,source
 
 def main():
@@ -294,7 +369,7 @@ def main():
     # Legacy test intentionally overflows silently; the dedicated rearm
     # cases now test that this overflow closes the new gate.
     test=once(test,"byte <= UsbSerial::receiveCapacity","byte < UsbSerial::receiveCapacity")
-    test=once(test,"    nonblockingSpan();","    nonblockingSpan();\n    rearmCases();\n    exactWire();\n    retirementProgress();\n    retries();")
+    test=once(test,"    nonblockingSpan();","    nonblockingSpan();\n    rearmCases();\n    exactWire();\n    requestFence();\n    retirementProgress();\n    retries();")
     # Original wrap test left status from the baud test, which is 0 for
     # errors; our additional injections explicitly set status each time.
     (args.out/"UsbSerial.h").write_text(header)
