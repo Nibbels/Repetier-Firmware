@@ -1,0 +1,71 @@
+# RFx000 firmware module reference
+
+Read [AGENTS.md](../AGENTS.md) first. This file contains the module-specific instructions relocated from AGENTS.md without removing any technical requirement. Read the relevant sections before editing or testing those modules; for cross-module work read all affected sections. Paths in code spans are repository-root-relative.
+
+## First-layer, coordinate frames and extrusion
+
+**Verified coordinate semantics.** `Printer::layers` owns the pending and confirmed model layers and both fade boundaries in nominal planned Z steps. The foreground compares them with the nominal position executing in `ZMotion`. The M3912 patch restores the incoming logical E coordinate. [Coordinate frames and extrusion timeline](../docs/first-layer-control/coordinate-frames-and-extrusion.md) · [M3912 patch](https://github.com/Nibbels/Repetier-Firmware/commit/5f848c9a5cd0347c6d45fd9d3f13afd7344cb775)
+
+**Extrusion planning.** `Printer::extrusionPlanner` owns the last queued logical E and fractional base step. Use `Printer::setEPositionMM()` to synchronize the current and queued E reference while retaining the fractional step. [Extrusion planner](../Repetier/ExtrusionPlanner.h)
+
+**Geometric extrusion compensation.** `Printer::extrusionCompensation` owns the ECMP ratio and fractional extra step. The foreground prepares the ratio and publishes it alongside the Z correction target under interrupt protection. The timer accounts for the E direction and normalizes the remainder between pulses when advance is off. [ECMP](../Repetier/ExtrusionCompensation.h)
+
+**Move targets.** `Printer::moveTarget` owns the retained machine-space millimetres, their fractional carry and the work offset. The planner asks for these values before rounding to steps. [Coordinate targets](../Repetier/MoveTarget.h)
+
+**Motion command settings.** `Printer::gcodeModes` owns units and relative coordinate modes. `Printer::manualMotion` owns the panel's jog modes, feedrate source and step increments. Keep the established EEPROM layout for panel settings. [G-code modes](../Repetier/GCodeModes.h) · [Manual motion](../Repetier/ManualMotion.h)
+
+**M3912 uses an isolated pressure-braked priming phase.** `Printer::startLine` owns the phase, generates its moves and restores the temporary state after draining the queue. High DMS force progressively constrains XY speed and reduces E flow, like the audible change when a chainsaw enters wood. Manual start code enables SenseOffset with `M3909` after priming. [State ledger and test plan](../docs/first-layer-control/m3912-state-boundary.md)
+
+**Design essentials.** DMS measures strain-gauge force. Excess force may indicate inadequate nozzle clearance, a clog or material, temperature or speed differences. SenseOffset (`M3909`) adds bounded positive clearance on the first layer. Bed-profile compensation follows the scanned bed, then fades its XY variation across later layers with geometric E-material compensation (ECMP). `M3912` primes at nominal Z=0.35 mm and suspends layer learning and SenseOffset for the duration of the line. The learned `fadeStartSteps()` boundary controls both the start of profile fade and eligibility for SenseOffset.
+
+**Bed compensation.** `BedCompensation` calculates the bed-profile correction and ECMP ratio from executing nominal Z, planned layer bounds and a matrix reader. `recalculateZCompensation()` adds the effective offset and active Digit-Z, then publishes the Z target and ECMP ratio together under interrupt protection. [Calculation and test cases](../docs/first-layer-control/z-compensation-and-ecmp.md)
+
+**Digit compensation.** `Printer::digitCompensation` owns the DMS filter, the Digit-Z switch, the Digit Flow profile and its live factors. Keep sampling and regulation in the foreground. Timer1 reads the atomically published `intervalScale()` for queued XY moves. M220 and M221 still control the user speed and flow overrides. Run `python3 tests/pause-sense-offset.py` for the DMS sample and M3912 replays. [DMS controls](../docs/development-roadmap.md#job-boundaries-and-dms)
+
+**Strain gauge.** `Printer::strainGauge` owns single-shot ADS1100 acquisition, the last eight raw samples and the Digit Homing reference. The foreground advances hardware TWI without waiting. Consumers copy the latest sample, and probe increments require a conversion started after Z settled. [DMS acquisition and scan timing](../docs/z-offset/scans-and-persistence.md#shared-dms-acquisition) · [ADC and bus replay](../tests/twi-transfer.py)
+
+**SenseOffset.** `Printer::senseOffsetControl` owns the active limits, AutoStart and the pressure learning window. `ZOffset` owns the applied clearance. The foreground proposes an increment from one snapshot of the limits and checks that snapshot and the print phase when applying it. The step queue can activate stored limits during the calculation. [SenseOffset settings and replay](../docs/first-layer-control/sense-offset.md)
+
+**DMS pressure protection.** `Printer::pressureProtection` owns the limits and sampling windows. The foreground requests pause and stop actions and publishes the E inhibit with the output owner. [Pressure checks](../docs/development-roadmap.md#job-boundaries-and-dms)
+
+**Print start.** The standard USB start sequence runs `G28` before enabling bed compensation. Z homing restores the fade bounds and clears layer tracking, ECMP and live SenseOffset with its sample history. `M3079` runs the output move and disables the motors and bed compensation at the end of a print. [USB print start](../docs/first-layer-control/README.md#usb-print-start) · [Test scenarios](../docs/first-layer-control/test-scenarios.md)
+
+## Motion planning, execution and travel
+
+**Motion planning.** `MotionPlanner` prepares the step profile and owns the junction calculations. The planner updates queue slots in place and releases them with complete profiles. For a direct move, `Printer::offsetRelativeStepsCoordinates()` reserves the slot under interrupt protection, then the foreground plans and publishes the move. Replay early jog release and queue wrap with `python3 tests/pause-sense-offset.py`. [Planner and executor boundary](../docs/motion-timing.md#planner-and-executor-boundary)
+
+**Motion buffer.** `MoveQueue` owns the 24 prepared slots. Foreground diagnostics can ask for the remaining XYZ and E paths and estimated running time. Keep the estimator outside the step interrupt. Review new pacing policies separately against the queue replay and the configured acceleration limits. [Buffer diagnostics](../docs/motion-timing.md#querying-buffered-motion)
+
+**Axis calibration.** `Printer` owns steps/mm, travel, feedrate, acceleration and jerk. Callers set raw values and publish derived values through `updateDerivedParameter()`. Tool selection applies its E calibration together. [Calibration and travel limits](../Repetier/Printer.cpp)
+
+**Step execution.** `StepExecutor` owns both step clocks, cached primary-axis counts, pulse packing, direction and the feedrate snapshot for the panel. Timer1 selects the move and the executor runs its prepared profile. Keep hardware operations in the executor and check the AVR pulse traces when changing a hot path. [Executor](../Repetier/StepExecutor.cpp)
+
+**Z motion.** `Printer::zMotion` owns the execution counters and travel rules. Use its operations for queued, direct, scan and compensation steps. A clipped nominal step or a step balanced by compensation can advance the path without an emitted pulse. Run `python3 tests/z-motion.py` when editing these paths. [Execution model](../docs/development-roadmap.md#z-step-execution)
+
+**XY travel limits.** `Printer::xyMotion` owns executed nominal steps, motor position, direct displacement and skipped queue steps. Queued motion pays back skipped steps on the way back, including when the switch has opened. A direct retreat preserves the queued position. [XY limits and replay](../docs/maintenance-tasks.md#xy-travel-limits)
+
+**Extrusion output.** `Printer::extrusionOutput` owns the Advance timer mode, pending E balance, pressure lead and motor inhibits. Settle the old motion before changing tool or Advance settings. Check the shared inhibit before admitting new E or lead work. A pressure trip or abort clears the old balance under interrupt protection. Run `python3 tests/pause-sense-offset.py` for the handoff cases. [STEP ownership](../docs/motion-timing.md#step-and-direction-ownership)
+
+**Pause and stop.** `Printer::pause` owns the pause phase and return position. Manual E uses direct steps and preserves the print's logical E and fractional carry. Once a manual jog moves filament, Play keeps that prepared position. `Printer::printJob` owns print and filament-service admission, the menu's busy state and timed abort cleanup. Run `python3 tests/pause-sense-offset.py` when changing these transitions. [Pause and stop transitions](../docs/development-roadmap.md#pause-and-stop-transitions)
+
+**Idle and shutdown.** `Printer::idleStatus` owns the pending Ready transition shared by the foreground and Timer1. `Printer::inactivity` owns the last activity time and the two persisted `M84` and `M85` thresholds. Use elapsed clock arithmetic through rollover and take the inactivity sample after preceding foreground services. [Lifecycle tests](../tests/pause-sense-offset.py) · [Timeout replay](../tests/machine-inactivity.cpp)
+
+## HAL, calibration and persistence
+
+**HAL events and ADC.** HAL owns pending periodic ticks, the watchdog heartbeat and the temperature ADC buffers. Foreground code consumes ticks through HAL and fetches a complete ADC sample through `temperatureAdcSample()`.
+
+**PWM and RGB.** HAL owns heater and fan duty requests and part fan settings. The PWM interrupt applies them on its existing frames. `RgbLighting` owns RGB profiles, mode, automatic status and fades. The panel and G-code share mode selection. [PWM](../Repetier/HAL.cpp) · [RGB](../Repetier/RgbLighting.cpp)
+
+**Calibration scans.** The bed mesh, hot-nozzle calibration and Z-offset scans use a shared point probe and a foreground pressure sampling service. `ScanSession` owns aborts and retries. `ScanProbe` owns the pressure bands and the preceding Z position. Keep contact, overload and hardware travel rules independent. Use the [scan handover](../docs/z-offset/scans-and-persistence.md) for the guarded-motion design and the [mesh replay](../tests/heat-bed-scan.py) and [Z-offset replay](../tests/z-offset-scan.py) for motion, retry, cancel and sensor faults.
+
+**Scan parameters.** `ScanSettings.cpp` owns the active probe and grid settings. The panel reads the scan stride and changes the starting lift through the scan interface. [Scan settings](../Repetier/ScanSettings.h)
+
+**Bed matrix.** `BedMatrix.cpp` owns the working mesh, extents, active sector and pending save. Use the matrix queries from the planner and panel. Mutations go through the slot, reload and save operations. Run `python3 tests/bed-matrix.py` for persistence and grid boundary replays. [Matrix storage](../docs/z-offset/scans-and-persistence.md)
+
+## Panel, print accounting and serial input
+
+**Panel.** The LCD transport, key sampling and navigation are in `ui.cpp`. `UiFormatting.cpp` renders live values, `UiSettings.cpp` handles edits and `UiActions.cpp` executes commands. The menu tables in `uimenu.h` are instantiated once in the LCD translation unit.
+
+**Print usage.** `Printer::printUsage` counts time with a hotend target and planned filament. The final hotend cooldown posts the accumulated usage to the existing internal EEPROM fields. The panel and serial reports read the same totals.
+
+**Print input.** `UsbSerial` owns USART0 and the byte rings. `GCodeInput` owns the receiver state and two parsed command slots. All three models buffer 24 planned moves. Run `python3 tests/serial-protocol.py` when changing transport, admission or framing. [Serial compatibility](../docs/development-roadmap.md#serial-printing-compatibility) · [SD support removal](../docs/maintenance-tasks.md#sd-support-removal)

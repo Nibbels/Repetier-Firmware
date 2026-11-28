@@ -1,0 +1,573 @@
+{
+  "model": "task0033-uart-v1",
+  "baseline": "3676b93a28a7cb4dfad070f25676a60567b4a501",
+  "historical_cost_cycles": {
+    "rx_success": 73,
+    "udr_read": 31,
+    "tx_nonempty": 74,
+    "archive_sha256": "1ffbe5f295d08ff4c8306900080dbcda873fd839f1f9663cdd589cdadf05d151"
+  },
+  "limits": "Synthetic cycle model; costs historical Task0032, not freshly linked. Blackouts are injected nonpreemptible CPU unavailability intervals, not ISR WCET; a window starting in an active UART ISR cannot preempt it. No nested ISR, instruction exact phase, hardware sampling, parser, TX empty or timer coalescing model. TX stress synthetic pending bytes, no TX loss metric.",
+  "rates": [
+    {
+      "baud": 115200,
+      "normal": {
+        "ubrr": 8,
+        "actual": 111111.1111,
+        "error_pct": -3.5494
+      },
+      "u2x": {
+        "ubrr": 16,
+        "actual": 117647.0588,
+        "error_pct": 2.1242
+      },
+      "frame_cycles": 1388.8889,
+      "frame_us": 86.8056,
+      "rx_pct": 5.256,
+      "tx_pct": 5.328,
+      "full_duplex_pct": 10.584,
+      "ring_empty_to_full_us": 11024.3056
+    },
+    {
+      "baud": 250000,
+      "normal": {
+        "ubrr": 3,
+        "actual": 250000,
+        "error_pct": 0
+      },
+      "u2x": {
+        "ubrr": 7,
+        "actual": 250000,
+        "error_pct": 0
+      },
+      "frame_cycles": 640,
+      "frame_us": 40,
+      "rx_pct": 11.4063,
+      "tx_pct": 11.5625,
+      "full_duplex_pct": 22.9688,
+      "ring_empty_to_full_us": 5080
+    },
+    {
+      "baud": 500000,
+      "normal": {
+        "ubrr": 1,
+        "actual": 500000,
+        "error_pct": 0
+      },
+      "u2x": {
+        "ubrr": 3,
+        "actual": 500000,
+        "error_pct": 0
+      },
+      "frame_cycles": 320,
+      "frame_us": 20,
+      "rx_pct": 22.8125,
+      "tx_pct": 23.125,
+      "full_duplex_pct": 45.9375,
+      "ring_empty_to_full_us": 2540
+    },
+    {
+      "baud": 1000000,
+      "normal": {
+        "ubrr": 0,
+        "actual": 1000000,
+        "error_pct": 0
+      },
+      "u2x": {
+        "ubrr": 1,
+        "actual": 1000000,
+        "error_pct": 0
+      },
+      "frame_cycles": 160,
+      "frame_us": 10,
+      "rx_pct": 45.625,
+      "tx_pct": 46.25,
+      "full_duplex_pct": 91.875,
+      "ring_empty_to_full_us": 1270
+    },
+    {
+      "baud": 2000000,
+      "normal": {
+        "ubrr": 0,
+        "actual": 1000000,
+        "error_pct": -50
+      },
+      "u2x": {
+        "ubrr": 0,
+        "actual": 2000000,
+        "error_pct": 0
+      },
+      "frame_cycles": 80,
+      "frame_us": 5,
+      "rx_pct": 91.25,
+      "tx_pct": 92.5,
+      "full_duplex_pct": 183.75,
+      "ring_empty_to_full_us": 635
+    }
+  ],
+  "sweep": [
+    {
+      "baud": 115200,
+      "blackout_cycles": 160,
+      "phases": 1389,
+      "loss_phases": 0,
+      "worst_hw_loss": 0,
+      "worst_read_cycles": 191
+    },
+    {
+      "baud": 115200,
+      "blackout_cycles": 320,
+      "phases": 1389,
+      "loss_phases": 0,
+      "worst_hw_loss": 0,
+      "worst_read_cycles": 351
+    },
+    {
+      "baud": 115200,
+      "blackout_cycles": 480,
+      "phases": 1389,
+      "loss_phases": 0,
+      "worst_hw_loss": 0,
+      "worst_read_cycles": 511
+    },
+    {
+      "baud": 115200,
+      "blackout_cycles": 594,
+      "phases": 1389,
+      "loss_phases": 0,
+      "worst_hw_loss": 0,
+      "worst_read_cycles": 625
+    },
+    {
+      "baud": 115200,
+      "blackout_cycles": 640,
+      "phases": 1389,
+      "loss_phases": 0,
+      "worst_hw_loss": 0,
+      "worst_read_cycles": 671
+    },
+    {
+      "baud": 115200,
+      "blackout_cycles": 800,
+      "phases": 1389,
+      "loss_phases": 0,
+      "worst_hw_loss": 0,
+      "worst_read_cycles": 831
+    },
+    {
+      "baud": 115200,
+      "blackout_cycles": 960,
+      "phases": 1389,
+      "loss_phases": 0,
+      "worst_hw_loss": 0,
+      "worst_read_cycles": 991
+    },
+    {
+      "baud": 115200,
+      "blackout_cycles": 1280,
+      "phases": 1389,
+      "loss_phases": 0,
+      "worst_hw_loss": 0,
+      "worst_read_cycles": 1311
+    },
+    {
+      "baud": 250000,
+      "blackout_cycles": 160,
+      "phases": 640,
+      "loss_phases": 0,
+      "worst_hw_loss": 0,
+      "worst_read_cycles": 191
+    },
+    {
+      "baud": 250000,
+      "blackout_cycles": 320,
+      "phases": 640,
+      "loss_phases": 0,
+      "worst_hw_loss": 0,
+      "worst_read_cycles": 351
+    },
+    {
+      "baud": 250000,
+      "blackout_cycles": 480,
+      "phases": 640,
+      "loss_phases": 0,
+      "worst_hw_loss": 0,
+      "worst_read_cycles": 511
+    },
+    {
+      "baud": 250000,
+      "blackout_cycles": 594,
+      "phases": 640,
+      "loss_phases": 0,
+      "worst_hw_loss": 0,
+      "worst_read_cycles": 625
+    },
+    {
+      "baud": 250000,
+      "blackout_cycles": 640,
+      "phases": 640,
+      "loss_phases": 0,
+      "worst_hw_loss": 0,
+      "worst_read_cycles": 671
+    },
+    {
+      "baud": 250000,
+      "blackout_cycles": 800,
+      "phases": 640,
+      "loss_phases": 0,
+      "worst_hw_loss": 0,
+      "worst_read_cycles": 831
+    },
+    {
+      "baud": 250000,
+      "blackout_cycles": 960,
+      "phases": 640,
+      "loss_phases": 0,
+      "worst_hw_loss": 0,
+      "worst_read_cycles": 991
+    },
+    {
+      "baud": 250000,
+      "blackout_cycles": 1280,
+      "phases": 640,
+      "loss_phases": 32,
+      "worst_hw_loss": 1,
+      "worst_read_cycles": 1311
+    },
+    {
+      "baud": 500000,
+      "blackout_cycles": 160,
+      "phases": 320,
+      "loss_phases": 0,
+      "worst_hw_loss": 0,
+      "worst_read_cycles": 191
+    },
+    {
+      "baud": 500000,
+      "blackout_cycles": 320,
+      "phases": 320,
+      "loss_phases": 0,
+      "worst_hw_loss": 0,
+      "worst_read_cycles": 351
+    },
+    {
+      "baud": 500000,
+      "blackout_cycles": 480,
+      "phases": 320,
+      "loss_phases": 0,
+      "worst_hw_loss": 0,
+      "worst_read_cycles": 511
+    },
+    {
+      "baud": 500000,
+      "blackout_cycles": 594,
+      "phases": 320,
+      "loss_phases": 0,
+      "worst_hw_loss": 0,
+      "worst_read_cycles": 625
+    },
+    {
+      "baud": 500000,
+      "blackout_cycles": 640,
+      "phases": 320,
+      "loss_phases": 32,
+      "worst_hw_loss": 1,
+      "worst_read_cycles": 671
+    },
+    {
+      "baud": 500000,
+      "blackout_cycles": 800,
+      "phases": 320,
+      "loss_phases": 192,
+      "worst_hw_loss": 1,
+      "worst_read_cycles": 831
+    },
+    {
+      "baud": 500000,
+      "blackout_cycles": 960,
+      "phases": 320,
+      "loss_phases": 320,
+      "worst_hw_loss": 2,
+      "worst_read_cycles": 991
+    },
+    {
+      "baud": 500000,
+      "blackout_cycles": 1280,
+      "phases": 320,
+      "loss_phases": 320,
+      "worst_hw_loss": 3,
+      "worst_read_cycles": 1311
+    },
+    {
+      "baud": 1000000,
+      "blackout_cycles": 160,
+      "phases": 160,
+      "loss_phases": 0,
+      "worst_hw_loss": 0,
+      "worst_read_cycles": 191
+    },
+    {
+      "baud": 1000000,
+      "blackout_cycles": 320,
+      "phases": 160,
+      "loss_phases": 32,
+      "worst_hw_loss": 1,
+      "worst_read_cycles": 351
+    },
+    {
+      "baud": 1000000,
+      "blackout_cycles": 480,
+      "phases": 160,
+      "loss_phases": 160,
+      "worst_hw_loss": 2,
+      "worst_read_cycles": 511
+    },
+    {
+      "baud": 1000000,
+      "blackout_cycles": 594,
+      "phases": 160,
+      "loss_phases": 160,
+      "worst_hw_loss": 2,
+      "worst_read_cycles": 625
+    },
+    {
+      "baud": 1000000,
+      "blackout_cycles": 640,
+      "phases": 160,
+      "loss_phases": 160,
+      "worst_hw_loss": 3,
+      "worst_read_cycles": 671
+    },
+    {
+      "baud": 1000000,
+      "blackout_cycles": 800,
+      "phases": 160,
+      "loss_phases": 160,
+      "worst_hw_loss": 4,
+      "worst_read_cycles": 831
+    },
+    {
+      "baud": 1000000,
+      "blackout_cycles": 960,
+      "phases": 160,
+      "loss_phases": 160,
+      "worst_hw_loss": 5,
+      "worst_read_cycles": 991
+    },
+    {
+      "baud": 1000000,
+      "blackout_cycles": 1280,
+      "phases": 160,
+      "loss_phases": 160,
+      "worst_hw_loss": 7,
+      "worst_read_cycles": 1311
+    },
+    {
+      "baud": 2000000,
+      "blackout_cycles": 160,
+      "phases": 80,
+      "loss_phases": 80,
+      "worst_hw_loss": 2,
+      "worst_read_cycles": 248
+    },
+    {
+      "baud": 2000000,
+      "blackout_cycles": 320,
+      "phases": 80,
+      "loss_phases": 80,
+      "worst_hw_loss": 4,
+      "worst_read_cycles": 408
+    },
+    {
+      "baud": 2000000,
+      "blackout_cycles": 480,
+      "phases": 80,
+      "loss_phases": 80,
+      "worst_hw_loss": 6,
+      "worst_read_cycles": 568
+    },
+    {
+      "baud": 2000000,
+      "blackout_cycles": 594,
+      "phases": 80,
+      "loss_phases": 80,
+      "worst_hw_loss": 7,
+      "worst_read_cycles": 682
+    },
+    {
+      "baud": 2000000,
+      "blackout_cycles": 640,
+      "phases": 80,
+      "loss_phases": 80,
+      "worst_hw_loss": 8,
+      "worst_read_cycles": 728
+    },
+    {
+      "baud": 2000000,
+      "blackout_cycles": 800,
+      "phases": 80,
+      "loss_phases": 80,
+      "worst_hw_loss": 10,
+      "worst_read_cycles": 888
+    },
+    {
+      "baud": 2000000,
+      "blackout_cycles": 960,
+      "phases": 80,
+      "loss_phases": 80,
+      "worst_hw_loss": 12,
+      "worst_read_cycles": 1048
+    },
+    {
+      "baud": 2000000,
+      "blackout_cycles": 1280,
+      "phases": 80,
+      "loss_phases": 80,
+      "worst_hw_loss": 15,
+      "worst_read_cycles": 1368
+    }
+  ],
+  "fixed": [
+    {
+      "commands_per_s": 100,
+      "rx_bytes_per_command": 19,
+      "tx_bytes_per_command": 6,
+      "rx_Bps": 1900,
+      "tx_Bps": 600,
+      "uart_cpu_pct": 1.1444,
+      "feasible_rates": [
+        115200,
+        250000,
+        500000,
+        1000000,
+        2000000
+      ]
+    },
+    {
+      "commands_per_s": 100,
+      "rx_bytes_per_command": 40,
+      "tx_bytes_per_command": 6,
+      "rx_Bps": 4000,
+      "tx_Bps": 600,
+      "uart_cpu_pct": 2.1025,
+      "feasible_rates": [
+        115200,
+        250000,
+        500000,
+        1000000,
+        2000000
+      ]
+    },
+    {
+      "commands_per_s": 250,
+      "rx_bytes_per_command": 19,
+      "tx_bytes_per_command": 6,
+      "rx_Bps": 4750,
+      "tx_Bps": 1500,
+      "uart_cpu_pct": 2.8609,
+      "feasible_rates": [
+        115200,
+        250000,
+        500000,
+        1000000,
+        2000000
+      ]
+    },
+    {
+      "commands_per_s": 250,
+      "rx_bytes_per_command": 40,
+      "tx_bytes_per_command": 6,
+      "rx_Bps": 10000,
+      "tx_Bps": 1500,
+      "uart_cpu_pct": 5.2563,
+      "feasible_rates": [
+        115200,
+        250000,
+        500000,
+        1000000,
+        2000000
+      ]
+    },
+    {
+      "commands_per_s": 500,
+      "rx_bytes_per_command": 19,
+      "tx_bytes_per_command": 6,
+      "rx_Bps": 9500,
+      "tx_Bps": 3000,
+      "uart_cpu_pct": 5.7219,
+      "feasible_rates": [
+        115200,
+        250000,
+        500000,
+        1000000,
+        2000000
+      ]
+    },
+    {
+      "commands_per_s": 500,
+      "rx_bytes_per_command": 40,
+      "tx_bytes_per_command": 6,
+      "rx_Bps": 20000,
+      "tx_Bps": 3000,
+      "uart_cpu_pct": 10.5125,
+      "feasible_rates": [
+        250000,
+        500000,
+        1000000,
+        2000000
+      ]
+    },
+    {
+      "commands_per_s": 1000,
+      "rx_bytes_per_command": 19,
+      "tx_bytes_per_command": 6,
+      "rx_Bps": 19000,
+      "tx_Bps": 6000,
+      "uart_cpu_pct": 11.4438,
+      "feasible_rates": [
+        250000,
+        500000,
+        1000000,
+        2000000
+      ]
+    },
+    {
+      "commands_per_s": 1000,
+      "rx_bytes_per_command": 40,
+      "tx_bytes_per_command": 6,
+      "rx_Bps": 40000,
+      "tx_Bps": 6000,
+      "uart_cpu_pct": 21.025,
+      "feasible_rates": [
+        500000,
+        1000000,
+        2000000
+      ]
+    },
+    {
+      "commands_per_s": 1500,
+      "rx_bytes_per_command": 19,
+      "tx_bytes_per_command": 6,
+      "rx_Bps": 28500,
+      "tx_Bps": 9000,
+      "uart_cpu_pct": 17.1656,
+      "feasible_rates": [
+        500000,
+        1000000,
+        2000000
+      ]
+    },
+    {
+      "commands_per_s": 1500,
+      "rx_bytes_per_command": 40,
+      "tx_bytes_per_command": 6,
+      "rx_Bps": 60000,
+      "tx_Bps": 9000,
+      "uart_cpu_pct": 31.5375,
+      "feasible_rates": [
+        1000000,
+        2000000
+      ]
+    }
+  ]
+}
