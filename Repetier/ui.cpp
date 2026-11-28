@@ -706,10 +706,11 @@ __attribute__((noinline)) void UIDisplay::refreshNormalPage() {
         loadNormalCharacters();
     }
     uint16_t r;
-    char cache[UI_ROWS][MAX_COLS + 1];
     adjustMenuPos();
 
-    // Copy result into cache
+    // Render the complete frame into the existing foreground-only cache.
+    // printRow subsequently compacts a scrolled row leftwards in place;
+    // its source starts at or after its destination, and it reads before writing.
     if (menuLevel == 0) {
         UIMenu* men = (UIMenu*)pgm_read_word(&(ui_pages[menuPos[0]]));
         uint16_t nr = pgm_read_word(&(men->numEntries));
@@ -718,7 +719,7 @@ __attribute__((noinline)) void UIDisplay::refreshNormalPage() {
             UIMenuEntry* ent = (UIMenuEntry*)pgm_read_word(&(entries[r]));
             col = 0;
             parse((char*)pgm_read_word(&(ent->text)), false);
-            strcpy(cache[r], printCols);
+            strcpy(displayCache_[r], printCols);
         }
     } else {
         UIMenu* men = (UIMenu*)menu[menuLevel];
@@ -777,7 +778,7 @@ __attribute__((noinline)) void UIDisplay::refreshNormalPage() {
                 }
             }
 
-            strcpy(cache[r], printCols);
+            strcpy(displayCache_[r], printCols);
             r++;
         }
     }
@@ -785,16 +786,13 @@ __attribute__((noinline)) void UIDisplay::refreshNormalPage() {
 
     printCols[0] = 0;
     while (r < UI_ROWS)
-        strcpy(cache[r++], printCols);
-
-    for (uint8_t row = 0; row < UI_ROWS; ++row)
-        strcpy(displayCache_[row], cache[row]);
+        strcpy(displayCache_[r++], printCols);
 
     const uint8_t scroll = shift > 0 ? shift : 0;
     for (uint8_t row = 0; row < UI_ROWS; ++row) {
-        const uint8_t length = strlen(cache[row]);
+        const uint8_t length = strlen(displayCache_[row]);
         const uint8_t offset = length > UI_COLS ? RMath::min(length - UI_COLS, scroll) : 0;
-        printRow(row, &cache[row][offset], NULL, UI_COLS);
+        printRow(row, &displayCache_[row][offset], NULL, UI_COLS);
     }
 } // refreshNormalPage
 
