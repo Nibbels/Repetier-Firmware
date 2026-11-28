@@ -25,16 +25,16 @@ struct UIDisplay {
     uint8_t col = 0;
     char printCols[MAX_COLS + 1] = {};
     char statusMsg[MAX_COLS + 1] = {};
-    bool statusIsTemplate_ = false, locked = false;
+    bool statusIsTemplate_ = false;
     char confirmation_ = 0;
     const void* messageLine1 = nullptr;
     const void* messageLine2 = nullptr;
     const void* messageLine3 = nullptr;
     const void* messageLine4 = nullptr;
-    void parse(char* text, bool ram);
-    void renderField(char c1, char c2, bool ram, int& ivalue, float& fvalue);
+    void parse(char* text, bool ram, bool allowMessageExpansion = true);
+    void renderField(char c1, char c2, bool ram, bool allowMessageExpansion, int& ivalue, float& fvalue);
     void setStatusP(PGM_P text, bool error = false);
-    void setStatus(char* text, bool error = false, bool force = false);
+    void setStatus(char* text, bool error = false);
     void addInt(int16_t value, uint8_t digits, char fillChar = ' ');
     void addLong(int32_t value, char digits);
     void addFloat(float number, char fixdigits, uint8_t digits);
@@ -74,6 +74,20 @@ void testStatusText() {
     display.col = 0;
     display.parse(messagePage, false);
     assert(std::string(display.printCols) == "State Home X *");
+
+    // Even malformed firmware templates cannot recursively expand a message.
+    display.messageLine1 = "Self %m1 end";
+    display.col = 0;
+    display.parse(messagePage, false);
+    assert(std::string(display.printCols) == "Self  end");
+    display.messageLine1 = "Cross %m2 %os";
+    display.messageLine2 = "%m1";
+    display.setStatusP("Home X %hx");
+    display.col = 0;
+    display.parse(messagePage, false);
+    assert(std::string(display.printCols) == "Cross  Home X *");
+    display.setStatusP("%os%m1");
+    assert(statusLine(display).empty());
 
     char partial[] = "%";
     display.col = 0;

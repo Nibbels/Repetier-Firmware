@@ -37,6 +37,23 @@ static bool writeMatrixSector(unsigned int address, bool clear) {
         && ExternalEeprom::readWord(eeprom, formatAddress, storedFormat) && storedFormat == format;
 }
 
+// Invalidate every eligible sector, not just the global header. A later
+// successful scan rewrites the global header and must not resurrect old
+// geometry. This only touches format words in the matrix EEPROM (0x50).
+static bool invalidateStoredMatrixMarkers(void (*progress)()) {
+    for(uint8_t slot=1;slot<=EEPROM_MAX_HEAT_BED_SECTORS;++slot) {
+        const unsigned int pos=EEPROM_SECTOR_SIZE*slot+EEPROM_OFFSET_SECTOR_FORMAT;
+        unsigned short marker;
+        if(!ExternalEeprom::readWord(I2C_ADDRESS_EXTERNAL_EEPROM,pos,marker))return false;
+        if(marker==EEPROM_FORMAT) {
+            if(!ExternalEeprom::writeWord(I2C_ADDRESS_EXTERNAL_EEPROM,pos,0) ||
+               !ExternalEeprom::readWord(I2C_ADDRESS_EXTERNAL_EEPROM,pos,marker) || marker!=0)return false;
+        }
+        if(progress)progress();
+    }
+    return true;
+}
+
 static bool saveWorkingMatrix(unsigned int address) {
     if (!address || g_ZCompensationMatrix[0][0] != EEPROM_FORMAT
         || g_uZMatrixMax[X_AXIS] < 2 || g_uZMatrixMax[X_AXIS] >= COMPENSATION_MATRIX_MAX_X
@@ -126,7 +143,7 @@ static char loadCompensationMatrix(unsigned int uAddress, void (*progress)()) {
     if (!ExternalEeprom::readWord(I2C_ADDRESS_EXTERNAL_EEPROM, EEPROM_OFFSET_HEADER_FORMAT, uTemp))
         return -1;
     if (uTemp != EEPROM_FORMAT) {
-        if (Printer::debugErrors()) {
+        {
             Com::printF(PSTR("loadMatrix(): invalid header format: "), (int)uTemp);
             Com::printF(PSTR(" (expected: "), EEPROM_FORMAT);
             Com::printFLN(PSTR(")"));
@@ -139,7 +156,7 @@ static char loadCompensationMatrix(unsigned int uAddress, void (*progress)()) {
     if (!ExternalEeprom::readWord(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_SECTOR_FORMAT, uTemp))
         return -1;
     if (uTemp != EEPROM_FORMAT) {
-        if (Printer::debugErrors()) {
+        {
             Com::printF(PSTR("loadMatrix(): invalid sector format: "), (int)uTemp);
             Com::printF(PSTR(" (expected: "), EEPROM_FORMAT);
             Com::printFLN(PSTR(")"));
@@ -151,7 +168,7 @@ static char loadCompensationMatrix(unsigned int uAddress, void (*progress)()) {
     if (!ExternalEeprom::readWord(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_DIMENSION_X, uDimensionX))
         return -1;
     if (uDimensionX < 2 || uDimensionX >= COMPENSATION_MATRIX_MAX_X) {
-        if (Printer::debugErrors()) {
+        {
             Com::printF(PSTR("loadMatrix(): invalid x dimension: "), (int)uDimensionX);
             Com::printF(PSTR(" (max expected: "), COMPENSATION_MATRIX_MAX_X - 1);
             Com::printFLN(PSTR(")"));
@@ -163,7 +180,7 @@ static char loadCompensationMatrix(unsigned int uAddress, void (*progress)()) {
     if (!ExternalEeprom::readWord(I2C_ADDRESS_EXTERNAL_EEPROM, uAddress + EEPROM_OFFSET_DIMENSION_Y, uDimensionY))
         return -1;
     if (uDimensionY < 2 || uDimensionY >= COMPENSATION_MATRIX_MAX_Y) {
-        if (Printer::debugErrors()) {
+        {
             Com::printF(PSTR("loadMatrix(): invalid y dimension: "), (int)uDimensionY);
             Com::printF(PSTR(" (max expected: "), COMPENSATION_MATRIX_MAX_Y - 1);
             Com::printFLN(PSTR(")"));
@@ -249,43 +266,8 @@ static bool clearCompensationMatrix(unsigned int address) {
         Com::printFLN(PSTR("clearMatrix(): EEPROM write failed"));
         return false;
     }
-    if (Printer::debugInfo())
-        Com::printFLN(PSTR("clearMatrix(): matrix cleared"));
     return true;
 }
-
-static void clearExternalEEPROM(void) {
-    unsigned short i;
-    unsigned short uMax = 32768;
-    unsigned short uTemp;
-    unsigned short uLast = 0;
-
-    if (Printer::debugInfo()) {
-        Com::printFLN(PSTR("clearExtEEPROM(): erasing chip memory ..."));
-    }
-
-    // the external EEPROM is able to store 262.144 kBit (= 32.768 kByte)
-    for (i = 0; i < uMax; i++) {
-        if (!ExternalEeprom::writeByte(I2C_ADDRESS_EXTERNAL_EEPROM, i, 0)) {
-            Com::printFLN(PSTR("clearExtEEPROM(): EEPROM write failed"));
-            return;
-        }
-        Commands::checkForPeriodicalActions(Processing);
-
-        if (Printer::debugInfo()) {
-            uTemp = i / 100;
-            if (uTemp != uLast) {
-                Com::printF(PSTR("clearExtEEPROM(): "), (int)i);
-                Com::printFLN(PSTR(" / "), (long)uMax);
-                uLast = uTemp;
-            }
-        }
-    }
-
-    if (Printer::debugInfo()) {
-        Com::printFLN(PSTR("clearExtEEPROM(): erasing complete"));
-    }
-} // clearExternalEEPROM
 
 bool switchActiveHeatBed(char newActiveHeatBed) {
     if (isAnyScanRunning()) {
@@ -308,7 +290,7 @@ bool switchActiveHeatBed(char newActiveHeatBed) {
 
 static void prepareZCompensationWithProgress(void (*progress)()) {
     if (COMPENSATION_MATRIX_SIZE > EEPROM_SECTOR_SIZE) {
-        if (Printer::debugErrors()) {
+        {
             Com::printFLN(PSTR("prepareZCompensation(): the size of the compensation matrix is too big"));
         }
 

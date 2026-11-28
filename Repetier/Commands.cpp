@@ -19,11 +19,19 @@
 
 #include "Repetier.h"
 #include "GCodeInput.h"
+#include "DiagnosticHistory.h"
 
-int Commands::lowestRAMValue = MAX_RAM;
-int Commands::lowestRAMValueSend = MAX_RAM;
 
 void Commands::commandLoop() {
+    if(Printer::printJob.emergencyLocked()) {
+        // Give retained fault output and the actual thermal pass priority
+        // over even a continuous stream of incoming rejected commands.
+        checkForPeriodicalActions(NotBusy);
+        GCodeInput::readFromSerial();
+        GCodeInput::popCurrentCommand(); // old admitted work, never execute
+        DiagnosticHistory::service();
+        return;
+    }
     GCodeInput::readFromSerial();
 
     GCode* code = GCodeInput::peekCurrentCommand();
@@ -40,23 +48,39 @@ void Commands::commandLoop() {
 
         Commands::checkForPeriodicalActions(state); // Check heater and other stuff every n milliseconds
     }
+    // A canceled command may still have been on the stack during periodic
+    // service. Do not start stop-output until that frame and all old
+    // admitted commands have retired. A terminal thermal phase never outputs.
+    if (!GCodeInput::peekCurrentCommand())
+        Printer::printJob.servicePendingOutput(HAL::timeInMilliseconds());
+    DiagnosticHistory::service();
 } // commandLoop
 
+static void serviceThermalEmergency() {
+    // No motion, DMS, idle shutdown, pause or normal UI dispatch. Drain
+    // old scheduling flags; a real fresh temperature tick owns progress.
+    HAL::takeScanTick();
+    HAL::takeCompensationTick();
+    HAL::takeFeatureTick();
+    if(HAL::takeTemperatureTick()) {
+        Extruder::manageTemperatures();
+        Lighting::serviceAlarm(HAL::timeInMilliseconds());
+        uid.refreshEmergencyPage();
+    }
+}
+
 void Commands::checkForPeriodicalActions(enum FirmwareState state) {
-    /*
-     * The execute variables are set by PWM-Timer. This timer ticks with about 3910 Hz and the ms clocks are made with software counter dividors.
-     * Except this 16ms execute variable which is set by internal watchdog timer.
-     */
+    if(Printer::printJob.emergencyLocked()) {
+        serviceThermalEmergency();
+        return;
+    }
+    // Timer0 COMPB publishes the periodic flags. Only completed thermal
+    // control/autotune decisions can renew the watchdog progress permission.
     if (state != NotBusy) {
         GCodeInput::keepAlive(state);
     }
 
     const bool scanTickDue = HAL::takeScanTick();
-    if (scanTickDue) {
-        // Dieses freigabesignal sollte aus dem PWM-Timer kommen, denn dann ist klar, dass auch der noch läuft.
-        // Dann laufen für den Watchdogreset der Timer und checkForPeriodicalActions().
-        HAL::tellWatchdogOk();
-    }
 
     if (HAL::takeCompensationTick()) {
         if (!HAL::temperatureTickPending()) {
@@ -64,15 +88,18 @@ void Commands::checkForPeriodicalActions(enum FirmwareState state) {
             if (HAL::timeInMilliseconds() - lastButtonAt < 20000)
                 uid.slowAction();
         }
+        if(Printer::printJob.emergencyLocked()){serviceThermalEmergency();return;}
         recalculateZCompensation();
     }
 
     if (HAL::takeTemperatureTick()) {
         Extruder::manageTemperatures();
+        if(Printer::printJob.emergencyLocked()){uid.refreshEmergencyPage();return;}
         if (state == WaitHeater)
             Commands::printTemperatures(); // Selfcontrolling timediff
         uid.slowAction();
     }
+    if(Printer::printJob.emergencyLocked()){serviceThermalEmergency();return;}
 
     Printer::strainGauge.service(HAL::timeInMilliseconds());
 
@@ -138,10 +165,10 @@ void Commands::printCurrentPosition() {
     y += Printer::moveTarget.workOffsetMM(Y_AXIS);
     z += Printer::moveTarget.workOffsetMM(Z_AXIS);
 
-    Com::printF(Com::tXColon, x * (Printer::gcodeModes.inches() ? 0.03937 : 1), 2);
-    Com::printF(Com::tSpaceYColon, y * (Printer::gcodeModes.inches() ? 0.03937 : 1), 2);
-    Com::printF(Com::tSpaceZColon, z * (Printer::gcodeModes.inches() ? 0.03937 : 1), 2);
-    Com::printFLN(Com::tSpaceEColon, Printer::moveTarget.machineMM(E_AXIS) * (Printer::gcodeModes.inches() ? 0.03937 : 1), 2);
+    Com::printF(Com::tXColon, x, 2);
+    Com::printF(Com::tSpaceYColon, y, 2);
+    Com::printF(Com::tSpaceZColon, z, 2);
+    Com::printFLN(Com::tSpaceEColon, Printer::moveTarget.machineMM(E_AXIS), 2);
 } // printCurrentPosition
 
 void Commands::printTemperatures(bool showRaw) {
@@ -182,10 +209,9 @@ void Commands::printTemperatures(bool showRaw) {
 
 #ifdef X35_ADC_CHANNEL
         // Act as heated chamber ambient temperature for Repetier-Server 0.86.2+ ---> Letter C
-        TemperatureController* act = &optTempController;
-        act->updateCurrentTemperature();
+        const float chamberTemperature = readOptionalSensorTemperature();
         Com::printF(Com::tSpaceChamber);
-        Com::printF(Com::tColon, act->currentTemperatureC, 1); //temp
+        Com::printF(Com::tColon, chamberTemperature, 1); //temp
         Com::printF(Com::tSpaceSlash, 0, 0);                   // ziel-temp
         Com::printF(Com::tSpaceCAtColon, 0);                   // leistung
 #endif // X35_ADC_CHANNEL
@@ -231,41 +257,9 @@ void Commands::adjustFanMode(uint8_t output_mode) {
     Printer::setMenuMode(MENU_MODE_FAN_MODE_PDM, HAL::partFanMode() == PART_FAN_MODE_PDM);
 }
 
-void Commands::reportPrinterUsage() {
-    if (!Printer::debugInfo())
-        return;
-    Com::printF(Com::tPrintedFilament, Printer::printUsage.filamentMetres(), 2);
-    Com::printF(Com::tSpacem);
-
-    int32_t seconds = Printer::printUsage.heatedSeconds();
-    const int32_t days = seconds / 86400;
-    seconds -= days * 86400;
-    const int32_t hours = seconds / 3600;
-    seconds -= hours * 3600;
-    Com::printF(Com::tPrintingTime, days);
-    Com::printF(Com::tSpaceDaysSpace, hours);
-    Com::printF(Com::tSpaceHoursSpace, seconds / 60);
-    Com::printFLN(Com::tSpaceMin);
-}
-
 void Commands::emergencyStop() {
+    if(Printer::printJob.emergencyLocked())return;
     HAL::resetHardware(); //RF2000 / RF1000!
 } // emergencyStop
 
-void Commands::checkFreeMemory() {
-    int newfree = HAL::getFreeRam();
-    if (newfree < lowestRAMValue) {
-        lowestRAMValue = newfree;
-    }
-} // checkFreeMemory
 
-void Commands::writeLowestFreeRAM() {
-    if (lowestRAMValueSend > lowestRAMValue) {
-        lowestRAMValueSend = lowestRAMValue;
-
-        if (true) //Printer::debugInfo()
-        {
-            Com::printFLN(Com::tFreeRAM, lowestRAMValue);
-        }
-    }
-} // writeLowestFreeRAM

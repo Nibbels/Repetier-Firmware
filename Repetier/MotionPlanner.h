@@ -25,18 +25,11 @@ class PrintLine;
 
 class MotionPlanner {
 public:
-    struct AdvancePeak {
-        int steps;
-        float extrusionSpeed;
-    };
-
-    static AdvancePeak takeAdvancePeak();
     static void prepareMove(PrintLine& move, const float axisDistanceMM[4], float feedrate, const MoveQueue& queue);
     static void prepareStepProfile(PrintLine& move);
     static void updateLookahead(MoveQueue& queue);
 
 private:
-    static AdvancePeak advancePeak_;
     static float safeSpeed(PrintLine& move, int8_t drivingAxis);
     static void limitJunction(PrintLine& previous, const PrintLine& next);
     static void planDeceleration(MoveQueue& queue, uint8_t start, uint8_t first);

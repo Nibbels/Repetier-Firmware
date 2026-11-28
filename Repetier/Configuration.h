@@ -19,6 +19,9 @@
 #ifndef CONFIGURATION_H
 #define CONFIGURATION_H
 
+// The recovery-linked heater lease and reset watchdog are mandatory.
+// A plain Arduino link without the recovery guard symbol fails closed.
+
 #include <stdint.h>
 #include "Constants.h"
 #include "DisplayModes.h"
@@ -243,8 +246,7 @@ Overridden if EEPROM activated. */
 // ##   configuration of the output object functionality
 // ##########################################################################################
 
-/** \brief The following script allows to configure the exact behavior of the automatic object output */
-#define OUTPUT_OBJECT_SCRIPT_PRINT          "G21\nG92 E0\nG1 E-" xstr(SCRIPT_RETRACT_MM) "\nG4 P100\nG92 E0\nG90\nG1 Z200 F540\nG1 Y245 F4800"
+// Automatic object output is a typed sequence in GCodeInput::runOutputProgram.
 
 // ##########################################################################################
 // ##   configuration of the pause functionality
@@ -375,7 +377,6 @@ Overridden if EEPROM activated. */
 #define UI_SET_MIN_EXTRUDER_TEMP            70
 #define UI_SET_MAX_EXTRUDER_TEMP            270
 #define UI_SET_EXTRUDER_FEEDRATE            1.5f                                                 // [mm/sec]
-#define COOLDOWN_THRESHOLD                  40                                                  // [°C]
 
 #define SPEED_MIN_MILLIS                    300
 #define SPEED_MAX_MILLIS                    50
@@ -414,7 +415,7 @@ Bytes 8 through 27 are reserved. The matrix starts at byte 28.
 #define EEPROM_OFFSET_HEADER_FORMAT                 0                                           // [bytes]
 #define EEPROM_OFFSET_ACTIVE_HEAT_BED_Z_MATRIX      4                                           // [bytes]
 
-#define EEPROM_FORMAT                               7
+#define EEPROM_FORMAT                               8
 
 
 // ##########################################################################################
@@ -457,7 +458,6 @@ we use blocks of 2 kByte size for the structure of our EEPROM
  * http://pdf1.alldatasheet.com/datasheet-pdf/view/29215/TI/TPS3820-50DBVT.html
  * t_d in datasheet is delay time: how long reset is triggered after timeout: 15...25...37ms for TPS3820.
  */
-#define WATCHDOG_MAIN_LOOP_TIMEOUT          20000UL                                             // [ms] -> uhrzeit intern scheint nicht immer zu stimmen!
 
 /** \brief Longer-lasting operations shall call our periodical actions at least each defined time interval */
 #define PERIODICAL_ACTIONS_CALL_INTERVAL    10                                                  // [ms]
@@ -482,9 +482,6 @@ we use blocks of 2 kByte size for the structure of our EEPROM
  * Faster start is better here, because reaching pause position might take a while - for a bit less oozing
  */
 #define ADD_CONTINUE_AFTER_PAUSE_TEMP_TOLERANCE         2                                      // [°C]
-
-/** \brief Communication speed. Overridden if EEPROM activated. */
-#define BAUDRATE                            115200
 
 /**
  * \brief Cache size for incoming commands.

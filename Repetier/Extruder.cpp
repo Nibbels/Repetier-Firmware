@@ -23,8 +23,9 @@
 #include "Eeprom.h"
 #include "CaseFan.h"
 
-// Preserve the heated bed's existing measured-temperature cutoff. Its setpoint has its own limit.
-constexpr uint16_t bedHeaterCutoffC = 275;
+// Absolute ceiling is independent of the sensor conversion range.
+// The separately commissioned bed limit can only lower this ceiling.
+constexpr uint16_t bedHeaterCutoffC = TemperatureController::BedAbsoluteCeilingC;
 
 void Extruder::initHeatedBed() {
     heatedBedController.updateTempControlVars();
@@ -99,6 +100,16 @@ bool Extruder::selectExtruderById(uint8_t extruderId, bool waitThroughPause) {
     return true;
 }
 
+// Cold settings calculation, not part of the timer ISR. Bound the ratio
+// before conversion: an interval of zero divides by zero below, while a
+// ratio above 255 is not representable as uint8_t. The existing upper
+// limit is 15 ticks; negative/NaN input cannot define a valid rate.
+static uint8_t boundedExtruderStepInterval(float ratio) {
+    if (!(ratio >= 0.0f) || ratio >= 15.0f)
+        return 15;
+    return ratio < 1.0f ? 1 : uint8_t(ratio);
+}
+
 void Extruder::applyCurrentSettings() {
     Printer::applyToolMotionSettings(Extruder::current->stepsPerMM,
                                     Extruder::current->maxFeedrate, Extruder::current->maxAcceleration);
@@ -112,9 +123,8 @@ void Extruder::applyCurrentSettings() {
     Printer::manualMotion.setSteps(E_AXIS, (unsigned short)lroundf(Printer::stepsPerMm(E_AXIS) * DEFAULT_MANUAL_MM_E));
     Printer::pause.setParkSteps(E_AXIS, long(Printer::stepsPerMm(E_AXIS) * SCRIPT_RETRACT_MM));
 
-    uint8_t stepInterval = (uint8_t)floor(HAL::maxExtruderTimerFrequency() / (Extruder::current->maxFeedrate * Extruder::current->stepsPerMM));
-    if (stepInterval > 15)
-        stepInterval = 15;
+    const uint8_t stepInterval = boundedExtruderStepInterval(HAL::maxExtruderTimerFrequency() /
+        (Extruder::current->maxFeedrate * Extruder::current->stepsPerMM));
     Printer::extrusionOutput.setStepInterval(stepInterval);
     float fmax = HAL::maxExtruderTimerFrequency() / (float(stepInterval) * Printer::stepsPerMm(E_AXIS));
     // Limit feedrate to interrupt speed
@@ -138,8 +148,6 @@ void Extruder::setTemperatureForExtruder(float temperatureInCelsius, uint8_t ext
         return;
     }
 
-    const bool wasHeating = hasActiveHotendTarget();
-
     TemperatureController* tc = tempController[extr];
     if (temperatureInCelsius > tc->heaterCutoffC)
         temperatureInCelsius = tc->heaterCutoffC;
@@ -156,23 +164,13 @@ void Extruder::setTemperatureForExtruder(float temperatureInCelsius, uint8_t ext
     if (temperatureInCelsius >= EXTRUDER_FAN_COOL_TEMP)
         extruder[extr].coolerPWM = extruder[extr].coolerSpeed;
 
-    if (Printer::debugInfo()) {
-        Com::printF(Com::tTargetExtr, extr, 0);
-        Com::printFLN(Com::tColon, temperatureInCelsius, 0);
-    }
+    Com::printF(Com::tTargetExtr, extr, 0);
+    Com::printFLN(Com::tColon, temperatureInCelsius, 0);
 
 #if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
     CaseFan::updateFromHotendTargets();
 #endif // (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
 
-    const bool heating = hasActiveHotendTarget();
-    if (heating != wasHeating) {
-        const auto now = HAL::timeInMilliseconds();
-        if (heating)
-            Printer::printUsage.beginHeating(now);
-        else
-            Printer::printUsage.finishHeating(now);
-    }
 } // setTemperatureForExtruder
 
 void Extruder::setTemperatureForAllExtruders(float temperatureInCelsius) {
@@ -181,8 +179,9 @@ void Extruder::setTemperatureForAllExtruders(float temperatureInCelsius) {
 }
 
 void Extruder::setHeatedBedTemperature(float temperatureInCelsius) {
-    if (temperatureInCelsius > HEATED_BED_MAX_TEMP)
-        temperatureInCelsius = HEATED_BED_MAX_TEMP;
+    const float limit = RMath::min(float(HEATED_BED_MAX_TEMP), float(heatedBedController.maximumTargetC()));
+    if (temperatureInCelsius > limit)
+        temperatureInCelsius = limit;
     if (temperatureInCelsius < 0)
         temperatureInCelsius = 0;
     if (Printer::heatingInhibited() || heatedBedController.isSensorDefect() || heatedBedController.isSensorDecoupled())
@@ -198,9 +197,7 @@ void Extruder::setHeatedBedTemperature(float temperatureInCelsius) {
 
     heatedBedController.setTargetTemperature(temperatureInCelsius);
 
-    if (Printer::debugInfo()) {
-        Com::printFLN(Com::tTargetBedColon, heatedBedController.targetTemperatureC, 0);
-    }
+    Com::printFLN(Com::tTargetBedColon, heatedBedController.targetTemperatureC, 0);
 } // setHeatedBedTemperature
 
 float Extruder::getHeatedBedTemperature() {
@@ -321,34 +318,6 @@ TemperatureController heatedBedController = {
     BED_DECOUPLE_TEST_PERIOD,
     0 //uint8_t paused
 };
-
-#ifdef X35_ADC_CHANNEL
-/** \brief This is an optional Temperature Sensor. //Nibbels
-There is no Controller involved! It is not hooked into tempController
-Do not try to do anything other than updateCurrentTemperature and reading the Temps.
-TODO: Making a totally clean class, without the logic to controll something.
-*/
-TemperatureController optTempController = {
-    0, RESERVE_ANALOG_SENSOR_TYPE, ChamberAdcIndex, 0, 0, 0, 0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0, 0,
-    0,
-    0,
-    0,
-    0 /*0 = no decouple test*/,
-    0 //uint8_t paused
-};
-#endif // X35_ADC_CHANNEL
 
 TemperatureController* tempController[NUM_TEMPERATURE_LOOPS] = {
     &extruder[0].tempControl

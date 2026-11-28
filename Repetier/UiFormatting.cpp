@@ -139,8 +139,6 @@ FSTRINGVALUE(ui_text_on, UI_TEXT_ON)
 FSTRINGVALUE(ui_text_off, UI_TEXT_OFF)
 FSTRINGVALUE(ui_text_0, UI_TEXT_0)
 FSTRINGVALUE(ui_text_1, UI_TEXT_1)
-FSTRINGVALUE(ui_text_white, UI_TEXT_WHITE)
-FSTRINGVALUE(ui_text_color, UI_TEXT_COLOR)
 FSTRINGVALUE(ui_text_na, UI_TEXT_NA)
 FSTRINGVALUE(ui_yes, UI_TEXT_YES)
 FSTRINGVALUE(ui_no, UI_TEXT_NO)
@@ -159,7 +157,7 @@ FSTRINGVALUE(ui_text_hotend_v2, UI_TEXT_HOTEND_V2)
 FSTRINGVALUE(ui_text_z_compensation_active, UI_TEXT_Z_COMPENSATION_ACTIVE)
 
 
-void UIDisplay::parse(char* txt, bool ram) {
+void UIDisplay::parse(char* txt, bool ram, bool allowMessageExpansion) {
     int ivalue = 0;
     float fvalue = 0;
 
@@ -185,13 +183,13 @@ void UIDisplay::parse(char* txt, bool ram) {
                 printCols[col++] = c1;
             break;
         }
-        renderField(c1, c2, ram, ivalue, fvalue);
+        renderField(c1, c2, ram, allowMessageExpansion, ivalue, fvalue);
     }
     printCols[col] = 0;
 } // parse
 
 // Format a complete placeholder. Keep the legacy scratch values for the whole template.
-void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fvalue) {
+void UIDisplay::renderField(char c1, char c2, bool ram, bool allowMessageExpansion, int& ivalue, float& fvalue) {
     switch (c1) {
         case '%': {
             if (c2 == '%' && col < MAX_COLS)
@@ -199,6 +197,7 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
             break;
         }
         case 'V': {
+            if(c2=='c') {addInt(bedCutoffCandidate_,0);break;}
             using Profile = PreheatProfiles::Profile;
             const bool profileA = c2 == 'b' || c2 == 'e';
             if (profileA || c2 == 'B' || c2 == 'E') {
@@ -225,15 +224,6 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
                 addFloat(Printer::xyJerkLimit(), 3, 1); // %aj : Max. jerk
             else if (c2 == 'J')
                 addFloat(Printer::zJerkLimit(), 3, 2); // %aJ : Max. Z-jerk
-            break;
-        }
-        case 'd': {
-            if (c2 == 'o')
-                addStringP(Printer::debugEcho() ? ui_text_on : ui_text_off); // %do : Debug echo state
-            else if (c2 == 'i')
-                addStringP(Printer::debugInfo() ? ui_text_on : ui_text_off); // %di : Debug info state
-            else if (c2 == 'e')
-                addStringP(Printer::debugErrors() ? ui_text_on : ui_text_off); // %de : Debug error state
             break;
         }
         case 'D': {
@@ -379,29 +369,6 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
             else if (c2 == 'o')
                 addStringP(AccessoryOutputs::state(AccessoryOutputs::Output::CaseLight) ? ui_text_on : ui_text_off); // %lo : Lights on/off
 
-#ifdef RGB_LIGHT_R_PIN
-            else if (c2 == 'i') // %li : Light: White/Color
-            {
-                if (RgbLighting::forcedWhite()) {
-                    addStringP(ui_text_white);
-                } else {
-                    switch (RgbLighting::mode()) {
-                    case RGB_MODE_OFF:
-                        addStringP(ui_text_off);
-                        break;
-                    case RGB_MODE_WHITE:
-                        addStringP(ui_text_white);
-                        break;
-                    case RGB_MODE_AUTOMATIC:
-                        addStringP(ui_text_color);
-                        break;
-                    case RGB_MODE_MANUAL:
-                        addStringP(ui_text_manual);
-                        break;
-                    }
-                }
-            }
-#endif // RGB_LIGHT_R_PIN
 
             break;
         }
@@ -419,32 +386,32 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
                     printCols[col++] = ' ';
                 else
                     printCols[col++] = CHAR_SELECTED;
-            } else if (!ram && c2 == '1') // %m1 : message line 1
+            } else if (!ram && allowMessageExpansion && c2 == '1') // %m1 : message line 1
             {
                 if (messageLine1 != 0) {
                     col = 0;                                   // Nibbels: kill first space because this is menutab
-                    parse((char PROGMEM*)messageLine1, false); //addStringP((char PROGMEM *)messageLine1);
+                    parse((char PROGMEM*)messageLine1, false, false); //addStringP((char PROGMEM *)messageLine1);
                 }
                 break;
-            } else if (!ram && c2 == '2') // %m2 : message line 2
+            } else if (!ram && allowMessageExpansion && c2 == '2') // %m2 : message line 2
             {
                 if (messageLine2 != 0) {
                     col = 0;                                   // Nibbels: kill first space because this is menutab
-                    parse((char PROGMEM*)messageLine2, false); //addStringP((char PROGMEM *)messageLine2);
+                    parse((char PROGMEM*)messageLine2, false, false); //addStringP((char PROGMEM *)messageLine2);
                 }
                 break;
-            } else if (!ram && c2 == '3') // %m3 : message line 3
+            } else if (!ram && allowMessageExpansion && c2 == '3') // %m3 : message line 3
             {
                 if (messageLine3 != 0) {
                     col = 0;                                   // Nibbels: kill first space because this is menutab
-                    parse((char PROGMEM*)messageLine3, false); //addStringP((char PROGMEM *)messageLine3);
+                    parse((char PROGMEM*)messageLine3, false, false); //addStringP((char PROGMEM *)messageLine3);
                 }
                 break;
-            } else if (!ram && c2 == '4') // %m4 : message line 4
+            } else if (!ram && allowMessageExpansion && c2 == '4') // %m4 : message line 4
             {
                 if (messageLine4 != 0) {
                     col = 0;                                   // Nibbels: kill first space because this is menutab
-                    parse((char PROGMEM*)messageLine4, false); //addStringP((char PROGMEM *)messageLine4);
+                    parse((char PROGMEM*)messageLine4, false, false); //addStringP((char PROGMEM *)messageLine4);
                 }
                 break;
             }
@@ -506,17 +473,12 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
             if (c2 == 's') {
                 if (!ram) {
                     if (statusIsTemplate_) {
-                        parse(statusMsg, true);
+                        parse(statusMsg, true, false);
                     } else {
                         for (const char* text = statusMsg; col < MAX_COLS && *text; ++text)
                             printCols[col++] = *text;
                     }
                 }
-                break;
-            }
-            if (c2 == 'c') // %oc : Connection baudrate
-            {
-                addLong(EEPROM::configuredBaudrate(), 6);
                 break;
             }
             if (c2 == 'f') // %of : flow multiplier
@@ -628,35 +590,6 @@ void UIDisplay::renderField(char c1, char c2, bool ram, int& ivalue, float& fval
             renderCompensationField(c1, c2);
             break;
 
-        case 'Z': // %Z5-Z8: Printing statistics
-        {
-            if (c2 == '5') // Shows text printing time
-            {
-                addStringP(PSTR(UI_TEXT_PRINT_TIME));
-            } else if (c2 == '6') // Shows printing time
-            {
-                long seconds = Printer::printUsage.heatedSeconds();
-                long tmp = seconds / 86400;
-                seconds -= tmp * 86400;
-                addInt(tmp, 5);
-                addStringP(PSTR(UI_TEXT_PRINTTIME_DAYS));
-                tmp = seconds / 3600;
-                addInt(tmp, 2);
-                addStringP(PSTR(UI_TEXT_PRINTTIME_HOURS));
-                seconds -= tmp * 3600;
-                tmp = seconds / 60;
-                addInt(tmp, 2, '0');
-                addStringP(PSTR(UI_TEXT_PRINTTIME_MINUTES));
-            } else if (c2 == '7') // Shows text printed filament
-            {
-                addStringP(PSTR(UI_TEXT_PRINT_FILAMENT));
-            } else if (c2 == '8') // Shows printed filament
-            {
-                addFloat(Printer::printUsage.filamentMetres(), 6, 1);
-                addStringP(PSTR(" m"));
-            }
-            break;
-        }
     }
 }
 
@@ -1050,11 +983,11 @@ void UIDisplay::renderCalibrationField(char c1, char c2) {
             }
             if (c2 == 'm') // %sm : State of the sensible pressure in eeprom
             {
-                addInt(HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS), 5);
+                addInt(Printer::senseOffsetControl.storedLimits().thresholdDigits, 5);
             }
             if (c2 == 'o') // %so : State of the sensible pressure maxoffset in eeprom
             {
-                addInt(HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX), 5);
+                addInt(Printer::senseOffsetControl.storedLimits().maxMicrometers, 5);
             }
             if (c2 == 'a') // %sa : State of the sensible pressure autostarter
             {
@@ -1345,10 +1278,6 @@ void UIDisplay::renderCompensationField(char c1, char c2) {
 }
 
 void UIDisplay::setStatusP(PGM_P txt, bool error) {
-    if (locked) {
-        // we shall not update the display
-        return;
-    }
     if (!error && Printer::isUIErrorMessage()) {
         return;
     }
@@ -1367,11 +1296,7 @@ void UIDisplay::setStatusP(PGM_P txt, bool error) {
 
 } // setStatusP
 
-void UIDisplay::setStatus(char* txt, bool error, bool force) {
-    if (locked && !force) {
-        // we shall not update the display
-        return;
-    }
+void UIDisplay::setStatus(char* txt, bool error) {
     if (!error && Printer::isUIErrorMessage())
         return;
 

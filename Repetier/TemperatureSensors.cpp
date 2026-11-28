@@ -183,8 +183,8 @@ const uint8_t temptables_num[15] PROGMEM = {
 };
 
 namespace {
-constexpr uint8_t temperatureCalibrationPoints[] = { 60, 80, 100, 120, 140, 160 };
-constexpr int8_t temperatureCalibrationOffsets[] = SENSOR_TEMPERATURE_OFFSETS_C;
+constexpr uint8_t temperatureCalibrationPoints[] PROGMEM = { 60, 80, 100, 120, 140, 160 };
+constexpr int8_t temperatureCalibrationOffsets[] PROGMEM = SENSOR_TEMPERATURE_OFFSETS_C;
 constexpr uint8_t temperatureCalibrationCount = sizeof(temperatureCalibrationPoints);
 static_assert(temperatureCalibrationCount == sizeof(temperatureCalibrationOffsets), "Each temperature point needs one offset");
 
@@ -202,8 +202,8 @@ float calibratedSensorTemperature(float sensorCelsius) {
     uint8_t low = 0;
     int8_t lowOffset = 0;
     for (uint8_t point = 0; point < temperatureCalibrationCount; ++point) {
-        const uint8_t high = temperatureCalibrationPoints[point];
-        const int8_t highOffset = temperatureCalibrationOffsets[point];
+        const uint8_t high = pgm_read_byte(&temperatureCalibrationPoints[point]);
+        const int8_t highOffset = static_cast<int8_t>(pgm_read_byte(reinterpret_cast<const uint8_t*>(&temperatureCalibrationOffsets[point])));
         if (sensorCelsius < high) {
             const float slope = (highOffset - lowOffset) / float(high - low);
             const float offset = slope * (sensorCelsius - low) + lowOffset;
@@ -216,8 +216,17 @@ float calibratedSensorTemperature(float sensorCelsius) {
 }
 }
 
-bool TemperatureController::updateCurrentTemperature() {
-    const uint8_t type = sensorType;
+namespace {
+// One conversion implementation for the heater controller and read-only
+// chamber sensor. The latter never owns a heater, PID or target state.
+template<class Sensor>
+bool updateSensorReading(Sensor& sensor, HAL::HeaterSample* sample,
+                         ThermalEmergency::SensorObservation* observation) {
+    if(observation) *observation=ThermalEmergency::SensorObservation{};
+    const uint8_t type = sensor.sensorType;
+    const uint8_t sensorPin = sensor.sensorPin;
+    int16_t& currentTemperature = sensor.currentTemperature;
+    float& currentTemperatureC = sensor.currentTemperatureC;
     bool sampleFresh = true; // Type 0 is the existing non-measuring sentinel.
     uint16_t raw;
     // Get one coherent raw sample and its freshness status.
@@ -237,7 +246,9 @@ bool TemperatureController::updateCurrentTemperature() {
     case 13: // NTC 3950 100k thermistor - Conrad V3
     case 14: // Thermistor NTC 3950 100k Ohm
     {
-        sampleFresh = HAL::temperatureAdcSample(sensorPin, raw);
+        uint32_t* publication=observation?&observation->publishedAt:nullptr;
+        sampleFresh = sample ? sample->read(sensorPin,raw,publication) : HAL::temperatureAdcSample(sensorPin,raw,publication);
+        if(observation) observation->observe(sampleFresh,raw);
         // The ADC accumulates 32 conversions and publishes a 12-bit sum / 8.
         // Exact rails are saturation/open/short candidates, not heat authorization.
         sampleFresh = sampleFresh && raw > 0 && raw < 4092;
@@ -248,7 +259,9 @@ bool TemperatureController::updateCurrentTemperature() {
     case 60:  // HEATER_USES_AD8495 (Delivers 5mV/degC)
     case 100: // AD595
     {
-        sampleFresh = HAL::temperatureAdcSample(sensorPin, raw);
+        uint32_t* publication=observation?&observation->publishedAt:nullptr;
+        sampleFresh = sample ? sample->read(sensorPin,raw,publication) : HAL::temperatureAdcSample(sensorPin,raw,publication);
+        if(observation) observation->observe(sampleFresh,raw);
         // The ADC accumulates 32 conversions and publishes a 12-bit sum / 8.
         // Exact rails are saturation/open/short candidates, not heat authorization.
         sampleFresh = sampleFresh && raw > 0 && raw < 4092;
@@ -326,4 +339,27 @@ bool TemperatureController::updateCurrentTemperature() {
     }
     }
     return sampleFresh;
-} // updateCurrentTemperature
+} // updateSensorReading
+
+#ifdef X35_ADC_CHANNEL
+struct OptionalSensorReading {
+    static constexpr uint8_t sensorType = RESERVE_ANALOG_SENSOR_TYPE;
+    static constexpr uint8_t sensorPin = ChamberAdcIndex;
+    int16_t currentTemperature;
+    float currentTemperatureC;
+};
+#endif
+}
+
+bool TemperatureController::updateCurrentTemperature(HAL::HeaterSample* sample,
+    ThermalEmergency::SensorObservation* observation) {
+    return updateSensorReading(*this, sample, observation);
+}
+
+#ifdef X35_ADC_CHANNEL
+float readOptionalSensorTemperature() {
+    OptionalSensorReading reading{};
+    updateSensorReading(reading, nullptr, nullptr);
+    return reading.currentTemperatureC;
+}
+#endif

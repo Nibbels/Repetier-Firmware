@@ -8,7 +8,7 @@ static char prepareCompensationMatrix(void) {
 
     // perform some safety checks first
     if (g_ZCompensationMatrix[0][0] != EEPROM_FORMAT) {
-        if (Printer::debugErrors()) {
+        {
             Com::printF(PSTR("zCMP: invalid version: "), g_ZCompensationMatrix[0][0]);
             Com::printF(PSTR(" (expected: "), EEPROM_FORMAT);
             Com::printFLN(PSTR(")"));
@@ -17,7 +17,7 @@ static char prepareCompensationMatrix(void) {
     }
 
     if (g_uZMatrixMax[X_AXIS] >= COMPENSATION_MATRIX_MAX_X || g_uZMatrixMax[X_AXIS] < 2) {
-        if (Printer::debugErrors()) {
+        {
             Com::printF(PSTR("zCMP: invalid x dimension: "), g_uZMatrixMax[X_AXIS]);
             Com::printF(PSTR(" (max expected: "), COMPENSATION_MATRIX_MAX_X - 1);
             Com::printFLN(PSTR(")"));
@@ -26,7 +26,7 @@ static char prepareCompensationMatrix(void) {
     }
 
     if (g_uZMatrixMax[Y_AXIS] >= COMPENSATION_MATRIX_MAX_Y || g_uZMatrixMax[Y_AXIS] < 2) {
-        if (Printer::debugErrors()) {
+        {
             Com::printF(PSTR("zCMP: invalid y dimension: "), g_uZMatrixMax[Y_AXIS]);
             Com::printF(PSTR(" (max expected: "), COMPENSATION_MATRIX_MAX_Y - 1);
             Com::printFLN(PSTR(")"));
@@ -47,11 +47,6 @@ static char prepareCompensationMatrix(void) {
 
     if (padLeft) {
         // we have to fill x[1] with the values of x[2]
-        /*      if( Printer::debugInfo() )
-        {
-            Com::printFLN( PSTR( "prepareCompensationMatrix(): x[2] > 0" ) );
-        }
-*/
         g_ZCompensationMatrix[1][0] = 0;
         for (y = 1; y <= g_uZMatrixMax[Y_AXIS]; y++) {
             g_ZCompensationMatrix[1][y] = g_ZCompensationMatrix[2][y];

@@ -7,7 +7,7 @@
 // calculations supply movement and correction requests in integer motor steps.
 class ZMotion {
 public:
-    enum class Path : uint8_t { Queued, QueuedUntilEndstop, Direct, StoppableDirect };
+    enum class Path : uint8_t { Queued, QueuedUntilEndstop, Direct, StoppableDirect, Scan };
 
     constexpr explicit ZMotion(float stepsPerMm)
         : minOvertravel_(uint16_t(stepsPerMm * Z_ENDSTOP_DRIVE_OVER)),
@@ -30,7 +30,10 @@ public:
         lock.unprotect();
         return motor - nominal;
     }
-    int32_t scanSteps() const { return scanSteps_; }
+    int32_t scanSteps() const {
+        InterruptProtectedBlock lock;
+        return scanSteps_;
+    }
     INLINE bool hasQueuedOvertravel() const { return queuedOvertravel_ != 0; }
     bool isHomed() const { return homed_; }
     int32_t maxSteps() const { return maxSteps_; }
@@ -60,6 +63,12 @@ public:
     // The caller publishes this under the same lock as the extrusion correction.
     void requestCorrection(int32_t steps) { correctionTarget_ = steps; }
     int32_t correctionTarget() const { return correctionTarget_; }
+    // Direct foreground diagnostics require no deferred correction, even
+    // one currently clipped by a travel limit (it could become movable).
+    bool correctionCleared() const {
+        InterruptProtectedBlock lock;
+        return correctionTarget_ == 0 && appliedCorrection_ == 0;
+    }
 
     static INLINE bool minSwitchHit() { return READ(Z_MIN_PIN) == LOW; }
     bool maxEndstopHit() const {
@@ -87,23 +96,7 @@ public:
 
     bool scanInProgress() const { return scanInProgress_; }
 
-    class ScanMove {
-    public:
-        ScanMove(ZMotion& motion, int8_t direction) : motion_(motion), direction_(direction) {
-            motion_.scanInProgress_ = true;
-        }
-        ~ScanMove() { motion_.scanInProgress_ = false; }
-        ScanMove(const ScanMove&) = delete;
-        ScanMove& operator=(const ScanMove&) = delete;
-
-        bool step();
-
-    private:
-        ZMotion& motion_;
-        const int8_t direction_;
-    };
-
-    void stepHomeCheck(uint8_t delayMultiplier);
+    void setScanInProgress(bool active) { scanInProgress_ = active; }
 
 private:
     enum class Step : uint8_t { Pulse, Suppressed, Stop };
@@ -128,7 +121,6 @@ private:
         WRITE(Z_STEP_PIN, HIGH);
         motorSteps_ += direction;
     }
-    int8_t timedPulse(uint8_t delayMultiplier);
 
     volatile int32_t motorSteps_ = 0;
     volatile int32_t nominalSteps_ = 0;
@@ -136,7 +128,7 @@ private:
     volatile int32_t correctionTarget_ = 0;
     volatile int32_t appliedCorrection_ = 0;
     DirectPosition direct_;
-    int32_t scanSteps_ = 0;
+    volatile int32_t scanSteps_ = 0;
     volatile int32_t maxSteps_ = 0;
     volatile uint16_t minOvertravel_;
     volatile uint16_t queueWaitSteps_;

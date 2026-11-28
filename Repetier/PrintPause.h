@@ -10,6 +10,8 @@ public:
     // The step timer reads one byte to decide whether the print queue may run.
     bool allowsQueueAdvance() const { return phase_ == Phase::Running; }
     bool isPaused() const { return !allowsQueueAdvance(); }
+    // Foreground only: cancel can clear the phase before the owner unwinds.
+    bool blocksCalibration() const { return isPaused() || servicingMotion_; }
     bool isSettled() const {
         const Phase phase = phase_;
         return phase == Phase::Paused || phase == Phase::Standby;
@@ -75,6 +77,7 @@ private:
         return phase == Phase::Retracting || phase == Phase::Returning || phase == Phase::ManualExtrusion;
     }
 
+    void dispatchPendingMotion();
     void waitUntilSettled();
     bool acceptsPauseRequest() const;
     void retract(Destination destination);
@@ -90,6 +93,7 @@ private:
     volatile Phase phase_ = Phase::Running;
     volatile bool pauseSinceSenseSample_ = false;
     bool parked_ = false;
+    bool servicingMotion_ = false; // foreground owner; cancel does not release
     uint32_t standbyAt_ = 0;
     int32_t parkSteps_[4] = {};
     int32_t returnPosition_[3] = {};

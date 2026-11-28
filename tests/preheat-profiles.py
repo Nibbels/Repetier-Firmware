@@ -1,4 +1,4 @@
-"""Replay profile migration, menu edits, display labels and heater requests."""
+"""Replay standard profile owner, menu edits, labels and heater requests."""
 
 import os
 from pathlib import Path
@@ -20,14 +20,17 @@ def main():
     formatting = (firmware / "UiFormatting.cpp").read_text(encoding="utf-8")
     menu = (firmware / "uimenu.h").read_text(encoding="utf-8")
     definitions = "\n".join((firmware / name).read_text(encoding="utf-8")
-                            for name in ("Configuration.h", "Eeprom.h", "ui.h", "uilang.h"))
+                            for name in ("Configuration.h", "ui.h", "uilang.h"))
     with TemporaryDirectory(prefix="rfx-preheat-") as directory:
         build = Path(directory)
         (build / "preheat-settings.inc").write_text("\n".join(re.findall(
-            r"^#define (?:PREHEAT_\w+|EPR_RF_PREHEAT_\w+|UI_\w+_PREHEAT_\w+|UI_SET_(?:MIN|MAX)_\w+_TEMP)\s+[^\n]+",
+            r"^#define (?:PREHEAT_\w+|UI_\w+_PREHEAT_\w+|UI_SET_(?:MIN|MAX)_\w+_TEMP)\s+[^\n]+",
             definitions, re.M)), encoding="utf-8")
+        owner = (firmware / "PreheatProfiles.cpp").read_text(encoding="utf-8")
+        runtime = (firmware / "EepromZoneRuntime.cpp").read_text(encoding="utf-8")
         (build / "preheat-firmware.inc").write_text(
-            "namespace {" + (firmware / "PreheatProfiles.cpp").read_text(encoding="utf-8").split("namespace {", 1)[1],
+            owner[owner.index("namespace {"):]
+            + section(runtime, "void EEPROM::storePreheatProfiles()", "void EEPROM::storeManualZOffset()"),
             encoding="utf-8")
         (build / "preheat-panel.inc").write_text(
             "void edit(int action, int8_t increment) { switch (action) {\n"
@@ -39,7 +42,7 @@ def main():
             + "} }\n#define UI_MENU_ACTIONCOMMAND(name, text, action) constexpr char name[] = text;\n"
             + section(menu, '#if UI_COLS <= 16\nUI_MENU_ACTIONCOMMAND(ui_menu_quick_preheat_a', "UI_MENU_ACTIONCOMMAND(ui_menu_quick_cooldown"),
             encoding="utf-8")
-        for columns in (16, 20):
+        for columns in (16,20):
             executable = build / "preheat"
             subprocess.run([
                 os.environ.get("CXX", "c++"), "-std=c++11", "-O2", "-Wall", "-Wextra", "-Werror",

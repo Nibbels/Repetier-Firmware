@@ -61,7 +61,6 @@
 #define UI_ACTION_MOVE_ACCEL_Z 1037
 #define UI_ACTION_MAX_JERK 1038
 #define UI_ACTION_MAX_ZJERK 1039
-#define UI_ACTION_BAUDRATE 1040
 #define UI_ACTION_HOMING_FEEDRATE_X 1041
 #define UI_ACTION_HOMING_FEEDRATE_Y 1042
 #define UI_ACTION_HOMING_FEEDRATE_Z 1043
@@ -75,9 +74,6 @@
 #define UI_ACTION_FAN_FULL 1054
 #define UI_ACTION_FEEDRATE_MULTIPLY 1055
 #define UI_ACTION_STEPPER_INACTIVE 1056
-#define UI_ACTION_DEBUG_ECHO 1074
-#define UI_ACTION_DEBUG_INFO 1075
-#define UI_ACTION_DEBUG_ERROR 1076
 #define UI_ACTION_PREHEAT_A 1079
 #define UI_ACTION_COOLDOWN 1080
 #define UI_ACTION_HEATED_BED_OFF 1081
@@ -107,7 +103,6 @@
 #define UI_ACTION_MAX_INACTIVE 1114
 
 #define UI_ACTION_230V_OUTPUT 1122
-#define UI_ACTION_RGB_LIGHT_MODE 1123
 #define UI_ACTION_EXTRUDER_OFFSET_X 1124
 #define UI_ACTION_EXTRUDER_OFFSET_Y 1125
 #define UI_ACTION_RESTORE_DEFAULTS 1126
@@ -137,6 +132,8 @@
 
 #define UI_ACTION_CHOOSE_PID_ROBUST 1674
 #define UI_ACTION_CHOOSE_PID_DYNAMIC 1675
+#define UI_ACTION_BED_CUTOFF 1676
+#define UI_ACTION_EEPROM_RECOVERY 1677
 
 #define UI_ACTION_CHOOSE_DMIN 1678
 #define UI_ACTION_CHOOSE_DMAX 1679
@@ -257,13 +254,12 @@ typedef struct UIMenuData
 #define MAX_COLS 28 // Anzahl Speicherplätze für Bytes in Display-Zeile, wenn mehr als Display, dann Scrolling. Kann gleich oder größer Displayzeilenlänge sein.
 
 #define UI_FLAG_SLOW_ACTION_RUNNING 4
-#define UI_FLAG_KEY_TEST_RUNNING 8
 
 #define MAX_MENU_LEVELS 6
 
 class UIDisplay {
 public:
-    volatile uint8_t flags;
+    volatile uint8_t flags; // foreground menu dispatch only
     uint8_t col;                      // current col for buffer prefill
     uint8_t menuLevel;                // current menu level, 0 = info, 1 = group, 2 = groupdata select, 3 = value change
     uint8_t menuPos[MAX_MENU_LEVELS]; // Positions in menu
@@ -307,10 +303,29 @@ public:
     void initializeLCD(bool normal = true);
     void printRow(uint8_t r, char* txt, char* txt2, uint8_t changeAtCol); // Print row on display
     void printRowP(uint8_t r, PGM_P txt);
-    void parse(char* txt, bool ram); /// Parse output and write to printCols;
+    // One flash message expansion per page; a nested RAM status cannot expand either.
+    void parse(char* txt, bool ram, bool allowMessageExpansion = true);
     void refreshPage();
-    const char* cachedRow(uint8_t row) const;
+    void refreshEmergencyPage(); // callers have established the terminal lock
     void executeAction(int action);
+    // Foreground-only ownership; keep the outer panel owner set across
+    // nested homing and diagnostic waits. Fast key sampling and display
+    // refresh do not use this flag. No interrupt mask is held by the scope.
+    class ScopedActionExclusion {
+    public:
+        explicit ScopedActionExclusion(UIDisplay& display)
+            : display_(display), owns_(!(display.flags & UI_FLAG_SLOW_ACTION_RUNNING)) {
+            if (owns_) display_.flags |= UI_FLAG_SLOW_ACTION_RUNNING;
+        }
+        ~ScopedActionExclusion() {
+            if (owns_) display_.flags &= ~UI_FLAG_SLOW_ACTION_RUNNING;
+        }
+        ScopedActionExclusion(const ScopedActionExclusion&) = delete;
+        ScopedActionExclusion& operator=(const ScopedActionExclusion&) = delete;
+    private:
+        UIDisplay& display_;
+        const bool owns_;
+    };
     void slowAction();
 
     void finishAction(int action);
@@ -324,12 +339,7 @@ public:
     void pushMenu(void* men, bool refresh);
     void adjustMenuPos();
     void setStatusP(PGM_P txt, bool error = false);
-    void setStatus(char* txt, bool error = false, bool force = false);
-
-
-    bool isLocked() const { return locked; }
-    void lock();
-    void unlock();
+    void setStatus(char* txt, bool error = false);
     void exitmenu();
 
 private:
@@ -337,16 +347,19 @@ private:
     volatile int jogButtonAction; // Key that started the current stoppable move.
     volatile int lastButtonAction;
     volatile millis_t lastButtonStart;
-    volatile char locked;
 
     // Private foreground rendering and edit/navigation helpers; no new state.
-    void renderField(char c1, char c2, bool ram, int& ivalue, float& fvalue);
+    void refreshNormalPage();
+    void renderField(char c1, char c2, bool ram, bool allowMessageExpansion, int& ivalue, float& fvalue);
     void renderTemperatureField(char c1, char c2, float& fvalue);
     void renderPositionField(char c1, char c2, float& fvalue);
     void renderExtruderField(char c1, char c2);
     void renderCalibrationField(char c1, char c2);
     void renderCompensationField(char c1, char c2);
+    void executeCommandAction(int action);
+    void executeMenuCommand(int action);
     void changeSetting(int action, int8_t increment);
+    void changeMicrostepSetting(int action, int8_t increment);
     void changeMotionSetting(int action, int8_t increment);
     void changeExtruderSetting(int action, int8_t increment);
     void changePressureSetting(int action, int8_t increment);
@@ -368,6 +381,7 @@ private:
     millis_t autoReturnTime_ = 0;
     bool autoReturnMessage_ = false;
     char confirmation_ = 0;
+    uint8_t bedCutoffCandidate_ = 0;
 };
 
 extern UIDisplay uid;

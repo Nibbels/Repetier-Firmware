@@ -77,7 +77,7 @@ void recalculateZCompensation(void) {
             result.zCorrectionSteps += BedCompensation::digitZSteps(Printer::digitCompensation.filteredDigits(), Printer::stepsPerMm(Z_AXIS));
     }
 
-    const float ratio = ExtrusionCompensation::prepareRatio(result.extraExtrusionPerStep);
+    const auto ratio = ExtrusionCompensation::prepareRatio(result.extraExtrusionPerStep);
     // Finish quantization before disabling step interrupts.
     asm volatile("" : : "g"(ratio));
     InterruptProtectedBlock lock;
@@ -109,6 +109,11 @@ void restoreAtStartup(void (*progress)()) {
 }
 
 void clearWorking() { initCompensationMatrix(); }
+bool invalidateAllStored(void (*progress)()) {
+    Printer::disableCMPnow(true);
+    initCompensationMatrix();
+    return invalidateStoredMatrixMarkers(progress);
+}
 bool reloadActive() { return loadCompensationMatrix((unsigned int)(EEPROM_SECTOR_SIZE * g_nActiveHeatBed)) == 0; }
 void beginScanGrid() { g_ZCompensationMatrix[0][0] = EEPROM_FORMAT; }
 void recordScanColumn(uint8_t x, short positionMm) { g_ZCompensationMatrix[x][0] = positionMm; }

@@ -1,4 +1,4 @@
-// Host-only EEPROM replay. Real persistence methods; model settings/hardware adapters.
+// Host-only zoned EEPROM owner replay, with actual LiveSettings and preheat methods.
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
@@ -22,7 +22,6 @@
 #define __AVR_ATmega2560__ 1
 #include "pins.h"
 #include "ManualMotion.h"
-#include "RgbLighting.h"
 #include "MachineInactivity.h"
 #include "PreheatProfiles.h"
 #include "ZOffset.h"
@@ -80,8 +79,12 @@ struct Controller {
             && pidMax >= 40 && pidPGain > 0 && pidPGain <= 1000 && pidIGain > 0 && pidIGain <= 1000 && pidDGain >= 0 && pidDGain <= 100000;
     }
     void invalidatePidCalibration(){tunedSensorType=tunedPowerLimit=0;}
+    float target=0;
+    void setTargetTemperature(float v){target=v;}
     void updateTempControlVars(){}
+    int16_t maximumTargetC()const{return 140;}
 } heatedBedController;
+using TemperatureController=Controller;
 struct Extruder {float stepsPerMM=0,maxFeedrate=0,maxEJerk=0,maxAcceleration=0,offsetMM[2]{},advanceL=0; uint8_t coolerSpeed=0; Controller tempControl; static Extruder* current; static void applyCurrentSettings(){} static void initHeatedBed(){} } extruder[2]; Extruder* Extruder::current=extruder;
 #define NUM_TEMPERATURE_LOOPS (NUM_EXTRUDER+1)
 Controller* tempController[NUM_TEMPERATURE_LOOPS] = {&extruder[0].tempControl,
@@ -90,7 +93,6 @@ Controller* tempController[NUM_TEMPERATURE_LOOPS] = {&extruder[0].tempControl,
 #endif
     &heatedBedController};
 struct Point {uint8_t x,y;}; Point point{}; float lift=defaultHeatBedScanLiftMm; void restoreZOffsetScanPoint(Point p){point=p;} Point zOffsetScanPoint(){return point;} float scanStartLiftMm(){return lift;} void setScanStartLiftMm(float v){lift=v;}
-namespace RgbLighting {char m=0;void restoreMode(char v){m=v;}char mode(){return m;}}
 uint8_t drv8711Axis_2_InitMicrosteps(int){return 16;} uint8_t drv8711MicroSteps_2_ModeValue(int){return 4;}
 namespace Drv8711 {
     uint8_t modes[5]{}, currents[5]{};
@@ -102,7 +104,7 @@ namespace Drv8711 {
 }
 namespace Printer {
     PreheatProfiles preheatProfiles; MachineInactivity inactivity(0,0); ManualMotion manualMotion(0,0,0,0); ZOffset zOffset; WobbleCorrection wobbleCorrection; PressureProtection pressureProtection;
-    struct Sense {struct Limits{int16_t maxMicrometers;};Limits l{};bool a=false; void setMaxMicrometers(int16_t v){l.maxMicrometers=v;} Limits limits(){return l;} bool autoStart(){return a;} void setAutoStart(bool v){a=v;}} senseOffsetControl;
+    struct Sense {struct Limits{int16_t maxMicrometers;};Limits l{};bool a=false; void setMaxMicrometers(int16_t v){l.maxMicrometers=v;} int16_t savedDigits=0,savedMaximum=0; void publishStoredLimits(int16_t d,int16_t m){savedDigits=d;savedMaximum=m;} struct Stored{int16_t thresholdDigits,maxMicrometers;}; Stored storedLimits() const{return {savedDigits,savedMaximum};} Limits limits(){return l;} bool autoStart(){return a;} void setAutoStart(bool v){a=v;}} senseOffsetControl;
     struct Gauge {bool v=true;bool zeroingEnabled(){return v;}void setZeroingEnabled(bool x){v=x;}} strainGauge;
     struct Digit {struct Flow{int16_t minDigits,maxDigits;};Flow p{};bool v=true;Flow flowProfile(){return p;}void setFlowProfile(Flow x){p=x;}bool digitZEnabled(){return v;}void setDigitZEnabled(bool x){v=x;}} digitCompensation;
     struct Pause {void restoreDefaultParking(){}} pause; struct Layers{void resetFadeBounds(float){}} layers;
@@ -126,58 +128,80 @@ namespace AccessoryOutputs {
     char state(Output o){return states[static_cast<uint8_t>(o)];}
     void stage(Output o,char v){states[static_cast<uint8_t>(o)]=v;}
 }
-#include "storage-source.inc"
-static void checksum(){unsigned c=0;for(size_t i=0;i<image.size();++i)if(i!=EPR_INTEGRITY_BYTE)c+=image[i];assert(uint8_t(c)==image[EPR_INTEGRITY_BYTE]);}
-static void snapshot(const char* name){checksum();printf("%s ",name);for(auto b:image)printf("%02x",b);puts("");}
-int main(){
-    image.fill(0xff); EEPROM::init(); assert(image[EPR_MAGIC_BYTE]==44 && image[EPR_VERSION]==EEPROM_PROTOCOL_VERSION); snapshot("factory");
-    const auto factory=image; assert(image[EPR_CHECK_NUM_EXTRUDERS]==NUM_EXTRUDER);
-    // Existing settings, counters and legacy/reserved cells survive normal load/store.
-    HAL::eprSetInt32(EPR_PRINTING_TIME,123456); HAL::eprSetFloat(EPR_PRINTING_DISTANCE,42.25f); HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS,1234); image[1000]=0x9a; image[EPR_RF_230V_OUTPUT_MODE]=1;
-    for(int i=0;i<NUM_EXTRUDER;++i){int p=EEPROM::getExtruderOffset(i);HAL::eprSetFloat(p+EPR_EXTRUDER_STEPS_PER_MM,100.25f+i);HAL::eprSetFloat(p+EPR_EXTRUDER_X_OFFSET,1.25f+i);}
-    HAL::eprSetInt32(EPR_RF_Z_OFFSET,-123); EEPROM::updateChecksum(); EEPROM::init(); EEPROM::storeDataIntoEEPROM();
-    assert(Printer::zOffset.manualMicrometers()==-123 && image[1000]==0x9a && image[EPR_RF_230V_OUTPUT_MODE]==1 && HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS)==1234 && HAL::eprGetInt32(EPR_PRINTING_TIME)==123456);
-    for(int i=0;i<NUM_EXTRUDER;++i){assert(extruder[i].stepsPerMM==100.25f+i && extruder[i].offsetMM[0]==1.25f+i);} snapshot("roundtrip");
-    // Valid checksum but invalid values: repair paths and retained RAM defaults.
-    HAL::eprSetFloat(EPR_X_MAX_FEEDRATE,99999); HAL::eprSetFloat(EPR_X_LENGTH,-1); HAL::eprSetFloat(EPR_Z_MAX_ACCEL,-1); HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN,0); HAL::eprSetFloat(EPR_ZSCAN_START_MM,99); image[EPR_RF_PART_FAN_PWM_MIN]=255; image[EPR_RF_PART_FAN_PWM_MAX]=0;
-    for(int i=0;i<NUM_EXTRUDER;++i){int p=EEPROM::getExtruderOffset(i);HAL::eprSetFloat(p+EPR_EXTRUDER_STEPS_PER_MM,6000);HAL::eprSetFloat(p+EPR_EXTRUDER_MAX_FEEDRATE,-1);HAL::eprSetByte(p+EPR_EXTRUDER_DRIVE_MAX,40);HAL::eprSetByte(p+EPR_EXTRUDER_DRIVE_MIN,40);}
-    EEPROM::updateChecksum(); EEPROM::init(); assert(HAL::eprGetFloat(EPR_X_MAX_FEEDRATE)==MAX_FEEDRATE_X && HAL::eprGetFloat(EPR_X_LENGTH)==X_MAX_LENGTH_PRINT && HAL::eprGetFloat(EPR_Z_MAX_ACCEL)==MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Z); snapshot("repaired");
-    image=factory; image[EPR_VERSION]=1; HAL::eprSetInt32(EPR_RF_PREHEAT_PROFILE_TAG,0); image[1000]=0x9a; EEPROM::updateChecksum(); EEPROM::init(); assert(image[EPR_VERSION]==EEPROM_PROTOCOL_VERSION && image[1000]==0x9a && HAL::eprGetInt32(EPR_RF_PREHEAT_PROFILE_TAG)==0x50524831L); snapshot("v1-migration");
-    image=factory; image[EPR_CHECK_NUM_EXTRUDERS]=NUM_EXTRUDER==1?2:1; HAL::eprSetFloat(EPR_X_LENGTH,100); image[EEPROM::getExtruderOffset(1)+99]=0xa5; EEPROM::updateChecksum(); EEPROM::init(); assert(image[EPR_CHECK_NUM_EXTRUDERS]==NUM_EXTRUDER && HAL::eprGetFloat(EPR_X_LENGTH)==X_MAX_LENGTH_PRINT && image[EEPROM::getExtruderOffset(1)+99]==0xa5); snapshot("tool-migration");
-    image=factory; image[1000]^=1; EEPROM::init(); assert(image[1000]==0); snapshot("bad-checksum");
-    image=factory; image[EPR_MAGIC_BYTE]=0; EEPROM::updateChecksum(); EEPROM::init(); assert(image[EPR_MAGIC_BYTE]==44); snapshot("bad-magic");
-    image=factory; image[1000]=0xa5; EEPROM::updateChecksum(); keys=true; EEPROM::init(); assert(image[1000]==0); snapshot("key-reset");
-    keys=false;
-    // Upgrade a version-8 image containing apparently valid gains: no heater authorized.
-    image=factory; image[EPR_VERSION]=8;
-    for (int i=0;i<9;++i) image[EPR_RF_PID_CALIBRATION+i]=0xA9;
-    image[1000]=0x5a; EEPROM::updateChecksum(); EEPROM::init();
-    assert(image[1000]==0x5a && image[EPR_VERSION]==9);
-    for (auto* c:tempController) assert(!c->pidCalibrationValid());
-    // Successful tune of a single physical heater persists only its thermal fields.
-    for (uint8_t i=0;i<NUM_TEMPERATURE_LOOPS;++i) {
-        auto& c=*tempController[i];
-        c.pidPGain=12.5f; c.pidIGain=.5f; c.pidDGain=22.0f;
-        c.pidDriveMax=c.pidMax; c.pidDriveMin=20;
-        c.tunedSensorType=c.sensorType; c.tunedPowerLimit=c.pidMax;
-        EEPROM::storePidCalibration(i); checksum();
-        assert(c.pidCalibrationValid());
-        assert(image[EPR_RF_PID_CALIBRATION+3*(i==NUM_EXTRUDER?2:i)]==0xA9);
-        for (uint8_t j=i+1;j<NUM_TEMPERATURE_LOOPS;++j) assert(!tempController[j]->pidCalibrationValid());
+#include "preheat-owner.inc"
+#include "EepromZoneDefaults.h"
+#include "live-settings.inc"
+// The new binding must neither read nor write the unowned lower bank.
+static void zoneOwnerRoundTrip(){
+    using namespace EepromZones;
+    FactoryDefaults defaults(defaultHeatBedScanLiftMm,defaultZOffsetScanIndex,KOSYS_GCODE,FEEDRATE_DIRECTCONFIG);
+    LiveSettings live;
+    const auto untouched=image;
+    uint8_t before[Last+1][MaxPayload]={};
+    for(uint8_t id=1;id<=Last;++id){
+        const uint8_t n=length(id);
+        assert(defaults(id,before[id],n));
+        assert(validBlock(id,before[id],n));
+        assert(live.applyBlock(id,before[id],n,AllAlerts));
     }
-    const auto calibrated=image;
-    for (auto* c:tempController) c->invalidatePidCalibration();
-    EEPROM::init();
-    for (auto* c:tempController) assert(c->pidCalibrationValid() && c->pidPGain==12.5f);
-    // A sensor or PWM change revokes exactly that heater, including after reboot.
-    HAL::eprSetByte(EPR_BED_PID_MAX, 100); EEPROM::updateChecksum(); EEPROM::init();
-    assert(!heatedBedController.pidCalibrationValid() && extruder[0].tempControl.pidCalibrationValid());
-    HAL::eprSetByte(EPR_BED_PID_MAX, calibrated[EPR_BED_PID_MAX]); EEPROM::updateChecksum(); EEPROM::init();
-    assert(!heatedBedController.pidCalibrationValid());
-    // Non-finite raw EEPROM gain cannot authorize a heater.
-    HAL::eprSetFloat(EEPROM::getExtruderOffset(0)+EPR_EXTRUDER_PID_PGAIN, NAN);
-    EEPROM::updateChecksum(); EEPROM::init(); assert(!extruder[0].tempControl.pidCalibrationValid());
-    EEPROM::restoreEEPROMSettingsFromConfiguration(); EEPROM::storeDataIntoEEPROM(); EEPROM::init();
-    for (auto* c:tempController) assert(!c->pidCalibrationValid());
-
+    live.finishMotion();
+    assert(live.bedCutoff()==0);
+    for(uint8_t id=1;id<=Last;++id){
+        if(!(LiveSettings::BulkMask&blockBit(id)))continue;
+        uint8_t out[MaxPayload]={};
+        const uint8_t n=length(id);
+        assert(live(id,out,n));
+        assert(validBlock(id,out,n));
+        if(memcmp(before[id],out,n)!=0){
+            fprintf(stderr,"new settings roundtrip mismatch block %u\n",unsigned(id));
+            abort();
+        }
+    }
+    // Preserve a deliberately tuned drive pair including the historic
+    // 40/40 combination. Calibration identity and coefficients are exact.
+    auto& c=extruder[0].tempControl;
+    c.pidDriveMin=c.pidDriveMax=40;
+    c.pidPGain=12.5f;c.pidIGain=.5f;c.pidDGain=22.f;
+    c.tunedSensorType=c.sensorType;c.tunedPowerLimit=c.pidMax;
+    c.target=180;
+    uint8_t out[MaxPayload];
+    assert(live(Hotend0,out,length(Hotend0)));
+    c.pidDriveMin=10;c.pidDriveMax=20;c.invalidatePidCalibration();
+    assert(live.applyBlock(Hotend0,out,length(Hotend0),0));
+    assert(c.pidDriveMin==40 && c.pidDriveMax==40 && c.pidCalibrationValid() && c.pidPGain==12.5f && c.target==0);
+    // Simulate ordinary post-autotune DMAX fine tuning: update only the
+    // selected drive limit while a target is active. The other saved value
+    // must not overwrite an independent live value.
+    c.target=180;
+    c.pidDriveMin=27;
+    const Patch dmax=Patch::byte(Field::F_E0_DRIVE_MAX,75);
+    out[address(Field::F_E0_DRIVE_MAX)-address(Hotend0)-PayloadOffset]=75;
+    assert(live.applyDriveLimits(Hotend0,out,length(Hotend0),&dmax,1));
+    assert(c.pidDriveMax==75 && c.pidDriveMin==27 && c.target==180);
+    assert(c.pidCalibrationValid() && c.pidPGain==12.5f);
+    const Patch wrong=Patch::byte(Field::F_E0_SENSOR_TYPE,c.sensorType);
+    assert(!live.applyDriveLimits(Hotend0,out,length(Hotend0),&wrong,1));
+    assert(c.target==180 && c.pidCalibrationValid());
+    // Stored/active SenseOffset remain distinct; no takeover/reset of the
+    // live offset is introduced by this binding.
+    Printer::senseOffsetControl.publishStoredLimits(3200,120);
+    assert(live(SenseOffset,out,length(SenseOffset)));
+    Printer::senseOffsetControl.publishStoredLimits(0,25);
+    assert(live.applyBlock(SenseOffset,out,length(SenseOffset),0));
+    assert(Printer::senseOffsetControl.savedDigits==3200 && Printer::senseOffsetControl.savedMaximum==120);
+    const uint8_t cutoff=90;
+    assert(live.applyBlock(BedSafety,&cutoff,1,blockBit(BedSafety)) && live.bedCutoff()==0);
+    assert(live.applyBlock(BedSafety,&cutoff,1,0) && live.bedCutoff()==90);
+    assert(!live(BedSafety,out,1) && !live(22,out,length(22)));
+    // No malformed block may alter an owner.
+    before[Geometry][0]=0; before[Geometry][1]=0;before[Geometry][2]=0;before[Geometry][3]=0;
+    const float steps=Printer::stepsPerMm(X_AXIS);
+    assert(!live.applyBlock(Geometry,before[Geometry],length(Geometry),0));
+    assert(Printer::stepsPerMm(X_AXIS)==steps);
+    assert(image==untouched);
+}
+int main(){
+    for(size_t p=0;p<image.size();++p) image[p]=uint8_t(p*13U+7U);
+    zoneOwnerRoundTrip();
+    puts("New EEPROM live settings owner roundtrip PASS");
 }

@@ -88,16 +88,27 @@ struct ExtrusionState {
     float position;
     float positionRemainder;
     float stepRemainder;
-    float ecmpRemainder;
+    ExtrusionCompensation::Units ecmpRemainder;
 };
 }
 
 void StartLine::run(GCode& command) {
+    // M3912 is a motion-producing command, like G0/G1. Calibration
+    // owns the machine while a scan is active, including its wait phases.
+    if (active_ || isAnyScanRunning() ||
+        (!Printer::printJob.isPrinting() && !Printer::printJob.isIdle())) {
+        Com::printFLN(PSTR("M3912 requires print or idle job and no scan"));
+        return;
+    }
     if (!Extruder::allHeatersCalibrated()) {
         Com::printFLN(PSTR("Error: PID tune required before printing"));
         return;
     }
     if (!Commands::waitForMotion(Commands::MotionWait::QueueAndZ, Commands::PauseWait::Resume))
+        return;
+    // The wait pumps the panel and may admit a scan or change the job.
+    if (active_ || isAnyScanRunning() ||
+        (!Printer::printJob.isPrinting() && !Printer::printJob.isIdle()))
         return;
     if (!Printer::areAxisHomed() || !Printer::doHeatBedZCompensation) {
         Com::printFLN(PSTR("M3912 error missing homing or zCMP"));
@@ -105,6 +116,11 @@ void StartLine::run(GCode& command) {
     }
 
     Printer::printJob.admitPrintMotion();
+    runPrepared(command);
+}
+
+// Only the admitted print phase reaches the priming state/snapshot frame.
+__attribute__((noinline)) void StartLine::runPrepared(GCode& command) {
     Com::printFLN(PSTR("Auto-Startmade"));
     const auto savedFlow = Printer::digitCompensation.flowProfile();
     const bool savedRelativeE = Printer::gcodeModes.relativeEOverride();
@@ -112,7 +128,7 @@ void StartLine::run(GCode& command) {
     {
         InterruptProtectedBlock lock;
         savedE = {Printer::moveTarget.machineMM(E_AXIS), Printer::moveTarget.remainderMM(E_AXIS),
-                  Printer::extrusionPlanner.stepRemainder(), Printer::extrusionCompensation.remainder()};
+                  Printer::extrusionPlanner.stepRemainder(), Printer::extrusionCompensation.remainderUnits()};
         Printer::layers.resetTracking();
         active_ = true;
     }
@@ -131,7 +147,7 @@ void StartLine::run(GCode& command) {
         if (settled) {
             Printer::setEPositionMM(savedE.position, savedE.positionRemainder);
             Printer::extrusionPlanner.restoreStepRemainder(savedE.stepRemainder);
-            Printer::extrusionCompensation.restoreRemainder(savedE.ecmpRemainder);
+            Printer::extrusionCompensation.restoreRemainderUnits(savedE.ecmpRemainder);
         }
         Printer::layers.resetTracking();
         active_ = false;

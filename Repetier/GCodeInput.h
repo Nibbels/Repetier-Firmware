@@ -28,10 +28,16 @@ public:
     static GCode* peekCurrentCommand();
     static void popCurrentCommand();
     static void keepAlive(FirmwareState state);
-    static void executeFlashScript(const char* cmd);
+    static void executeSoftFilament(bool unload);
+    static void executeHardFilament(bool unload);
+    static bool executeOutputProgram();
+    static bool flashScriptActive();
 
 private:
-    static bool parseAscii(GCode& command, char* line, bool fromSerial);
+    static void runSoftFilament(bool unload);
+    static void runHardFilament(bool unload);
+    static bool runOutputProgram();
+    static bool parseAscii(GCode& command, char* line);
     static bool parseBinary(GCode& command, uint8_t* buffer, int8_t length);
     static uint8_t computeBinarySize(char* frame);
     static void requestResend();

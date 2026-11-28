@@ -22,7 +22,7 @@ def main():
         + parse_prefix
         + section("        case 'h':", "        case 'l':")
         + section("        case 'm':", "        case 'M':")
-        + section("        case 'o':", "            if (c2 == 'c')")
+        + section("        case 'o':", "            if (c2 == 'f') // %of")
         + finish_parse
         + ui[ui.index("void UIDisplay::setStatusP("):]
     )

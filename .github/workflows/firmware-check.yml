@@ -27,6 +27,17 @@ jobs:
           arduino-cli core install arduino:avr@1.8.6
       - name: Verify merge candidate
         run: python3 tools/task0003-baseline.py "$RUNNER_TEMP/firmware-evidence"
+      - name: Install linked-audit dependency
+        run: |
+          python3 -m venv "$RUNNER_TEMP/a73-venv"
+          "$RUNNER_TEMP/a73-venv/bin/python" -m pip install networkx==3.4.2
+      - name: A73 linked diagnostic (not release proof)
+        run: |
+          export PYTHONDONTWRITEBYTECODE=1
+          "$RUNNER_TEMP/a73-venv/bin/python" tools/task0034/test-timer1-exclusion.py
+          python3 -c 'import shutil, os; shutil.make_archive(os.environ["RUNNER_TEMP"] + "/a73-input", "zip", os.environ["RUNNER_TEMP"] + "/firmware-evidence")'
+          digest=$(sha256sum "$RUNNER_TEMP/a73-input.zip" | cut -d' ' -f1)
+          "$RUNNER_TEMP/a73-venv/bin/python" tools/task0034/global-a73-evidence.py "$RUNNER_TEMP/a73-input.zip" "$digest" "${{ github.sha }}" --linked > "$RUNNER_TEMP/firmware-evidence/a73-linked.json"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

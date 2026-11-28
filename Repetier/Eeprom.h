@@ -18,214 +18,61 @@
 #ifndef EEPROM_H
 #define EEPROM_H
 
-// Keep the existing addresses when retiring settings. Legacy cells remain reserved.
-#define EEPROM_PROTOCOL_VERSION 9
-
-/** Where to start with our datablock in memory. Can be moved if you
-have problems with other modules using the eeprom */
-
-#define EPR_MAGIC_BYTE 0
-#define EPR_ACCELERATION_TYPE 1
-#define EPR_XAXIS_STEPS_PER_MM 3
-#define EPR_YAXIS_STEPS_PER_MM 7
-#define EPR_ZAXIS_STEPS_PER_MM 11
-#define EPR_X_MAX_FEEDRATE 15
-#define EPR_Y_MAX_FEEDRATE 19
-#define EPR_Z_MAX_FEEDRATE 23
-#define EPR_X_HOMING_FEEDRATE_PRINT 27
-#define EPR_Y_HOMING_FEEDRATE_PRINT 31
-#define EPR_Z_HOMING_FEEDRATE_PRINT 35
-#define EPR_MAX_XYJERK 39
-#define EPR_MAX_ZJERK 47
-#define EPR_X_MAX_ACCEL 51
-#define EPR_Y_MAX_ACCEL 55
-#define EPR_Z_MAX_ACCEL 59
-#define EPR_X_MAX_TRAVEL_ACCEL 63
-#define EPR_Y_MAX_TRAVEL_ACCEL 67
-#define EPR_Z_MAX_TRAVEL_ACCEL 71
-#define EPR_BAUDRATE 75
-#define EPR_MAX_INACTIVE_TIME 79
-#define EPR_STEPPER_INACTIVE_TIME 83
-#define EPR_EXTRUDER_SPEED 95
-#define EPR_INTEGRITY_BYTE 104 // Byte sum modulo 256 over the settings area, excluding this cell.
-#define EPR_VERSION 105        // Version id for updates in EEPROM storage
-//#define EPR_BED_HEAT_MANAGER            106
-#define EPR_BED_DRIVE_MAX 107
-#define EPR_BED_PID_PGAIN 108
-#define EPR_BED_PID_IGAIN 112
-#define EPR_BED_PID_DGAIN 116
-#define EPR_BED_PID_MAX 120
-#define EPR_BED_DRIVE_MIN 124
-#define EPR_PRINTING_TIME 125       // Time in seconds printing
-#define EPR_PRINTING_DISTANCE 129   // Filament length printed
-#define EPR_CHECK_NUM_EXTRUDERS 141 // Remember last num_extruders
-//142 143 144 free
-#define EPR_X_LENGTH 145
-#define EPR_Y_LENGTH 149
-#define EPR_Z_LENGTH 153
-#define EPR_BACKLASH_X 157
-#define EPR_BACKLASH_Y 161
-#define EPR_BACKLASH_Z 165
-// 169-176 are reserved for the former service counters.
-
-// 1000 is reserved for the former beeper setting.
-#define EPR_RF_CASE_LIGHT_MODE 1001
-#define EPR_RF_230V_OUTPUT_MODE 1002
-// 1016 is reserved for the former RF1000 endstop setting.
-#define EPR_RF_HOTEND_TYPE 1017 //depreached 30 07 2017 Nibbels : Die Funktion war nur für RF1000, nur Single, in der Falschen Klasse, wenn nötig, dann in Class Extruder einbauen. Hat beim RF2000 keiner vermisst: Ersatz ist EPR_EXTRUDER_SENSOR_TYPE
-#define EPR_RF_RGB_LIGHT_MODE 1019
-#define EPR_RF_FET1_MODE 1020
-#define EPR_RF_FET2_MODE 1021
-#define EPR_RF_FET3_MODE 1022
-#define EPR_RF_RGB_PRINTING_R 1023
-#define EPR_RF_RGB_PRINTING_G 1024
-#define EPR_RF_RGB_PRINTING_B 1025
-#define EPR_RF_RGB_HEATING_R 1026
-#define EPR_RF_RGB_HEATING_G 1027
-#define EPR_RF_RGB_HEATING_B 1028
-#define EPR_RF_RGB_COOLING_R 1029
-#define EPR_RF_RGB_COOLING_G 1030
-#define EPR_RF_RGB_COOLING_B 1031
-#define EPR_RF_RGB_IDLE_R 1032
-#define EPR_RF_RGB_IDLE_G 1033
-#define EPR_RF_RGB_IDLE_B 1034
-#define EPR_RF_RGB_MANUAL_R 1035
-#define EPR_RF_RGB_MANUAL_G 1036
-#define EPR_RF_RGB_MANUAL_B 1037
-#define EPR_RF_Z_OFFSET 1038
-#define EPR_RF_MOVE_MODE_X 1042
-#define EPR_RF_MOVE_MODE_Y 1043
-#define EPR_RF_MOVE_MODE_Z 1044
-#define EPR_RF_Z_MODE 1045
-#define EPR_RF_MOVE_MODE_XY_KOSYS 1046
-#define EPR_RF_MOVE_POSITION_FEEDRATE 1047 // Das ist byte, 1048 wäre frei.
-
-// Vorsicht bei mehrbytigen Variablen, dann freilassen.
-
-#define EPR_RF_MOD_Z_STEP_SIZE 1900 //+1901 Manual Z jog increment in steps [uint16_t]
-//+1902+1903 waren mal verwendet, long -> short, nun frei.
-#define EPR_RF_MOD_ZOS_SCAN_POINT_X 1904 // Z-offset scan point X [uint8_t]
-#define EPR_RF_MOD_ZOS_SCAN_POINT_Y 1905 // Z-offset scan point Y [uint8_t]
-
-#define EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX 1906 // Maximum SenseOffset in micrometers [int16_t]
-#define EPR_RF_MOD_SENSEOFFSET_DIGITS 1908     // Saved SenseOffset threshold in DMS digits [int16_t]
-
-#define EPR_RF_EMERGENCYPAUSEDIGITSMIN 1910 // Emergency pause minimum [int32_t]
-#define EPR_RF_EMERGENCYPAUSEDIGITSMAX 1914 // Emergency pause maximum [int32_t]
-
-#define EPR_RF_EMERGENCYZSTOPDIGITSMIN 1918 // Z stop and extrusion inhibit minimum [int16_t]
-#define EPR_RF_EMERGENCYZSTOPDIGITSMAX 1920 // Z stop and extrusion inhibit maximum [int16_t]
-
-#define EPR_RF_HEATED_BED_SENSOR_TYPE 1922 //[1byte]
-
-#define EPR_RF_MOTOR_CURRENT 1923 //1924+1925+1926+1927 [5byte für 5 Motorstrombytes]
-
-//#define EPR_RF_FREQ_DBL                   1928 //1929 2byte für uint16 -> frequenz double grenze -> ALT, das ist jetzt StepPackingMinInterval EPR_RF_STEP_PACKING_MIN_INTERVAL!
-#define EPR_RF_FAN_MODE 1930 //[1byte]
-
-// 1934-1936 are reserved for the former filament caliper settings.
-#define EPR_RF_ZERO_DIGIT_STATE 1937  //[1byte]
-#define EPR_RF_DIGIT_CMP_STATE 1938   //[1byte]
-
-
-#define EPR_RF_MICRO_STEPS_X 1943    //[1byte]
-#define EPR_RF_MICRO_STEPS_Y 1944    //[1byte]
-#define EPR_RF_MICRO_STEPS_Z 1945    //[1byte]
-#define EPR_RF_MICRO_STEPS_E0 1946   //[1byte]
-#define EPR_RF_MICRO_STEPS_E1 1947   //[1byte]
-#define EPR_RF_MICRO_STEPS_USED 1948 //[1byte]
-
-#define EPR_ZSCAN_START_MM 1949 //[+1950+1951+1952 4byte float]
-
-#define EPR_RF_MOD_SENSEOFFSET_AUTOSTART 1953 //[1byte]
-
-#define EPR_RF_MOD_WOBBLE_FIX_PHASEXY 1954 //[1byte]
-#define EPR_RF_MOD_WOBBLE_FIX_AMPX 1955    //[+1956 2byte short]
-#define EPR_RF_MOD_WOBBLE_FIX_AMPY1 1957   //[+1958 2byte short]
-#define EPR_RF_MOD_WOBBLE_FIX_AMPY2 1959   //[+1960 2byte short]
-
-#define EPR_RF_PART_FAN_PWM_MIN 1961 //[1byte]
-#define EPR_RF_PART_FAN_PWM_MAX 1962 //[1byte]
-#define EPR_RF_PART_FAN_SPEED 1963   //[1byte]
-
-#define EPR_RF_STEP_PACKING_MIN_INTERVAL 1964 //1965 2byte für uint16 -> StepPackingMinInterval
-
-#define EPR_RF_PREHEAT_PROFILE_TAG 1966 // 4 bytes
-#define EPR_RF_PREHEAT_A_BED 1970       // int16_t, Celsius
-#define EPR_RF_PREHEAT_A_HOTEND 1972
-#define EPR_RF_PREHEAT_B_BED 1974
-#define EPR_RF_PREHEAT_B_HOTEND 1976
-
-// Three fixed physical heater slots (E0, E1, bed), 3 bytes each: tag, sensor, PWM.
-#define EPR_RF_PID_CALIBRATION 1978
-
-// Nibbels: Computechecksum geht bis 2047
-
-#define EEPROM_EXTRUDER_OFFSET 200
-
-// bytes per extruder needed, leave some space for future development
-#define EEPROM_EXTRUDER_LENGTH 100
-
-// Extruder positions relative to extruder start
-#define EPR_EXTRUDER_STEPS_PER_MM 0
-#define EPR_EXTRUDER_MAX_FEEDRATE 4
-
-// Feedrate from halted extruder in mm/s
-#define EPR_EXTRUDER_MAX_START_FEEDRATE 8
-
-// Acceleration in mm/s^2
-#define EPR_EXTRUDER_MAX_ACCELERATION 12
-// Old #define EPR_EXTRUDER_HEAT_MANAGER       16
-#define EPR_EXTRUDER_DRIVE_MAX 17
-#define EPR_EXTRUDER_PID_PGAIN 18
-#define EPR_EXTRUDER_PID_IGAIN 22
-#define EPR_EXTRUDER_PID_DGAIN 26
-#define EPR_EXTRUDER_PID_MAX 30
-#define EPR_EXTRUDER_X_OFFSET 31
-#define EPR_EXTRUDER_Y_OFFSET 35
-// Old #define EPR_EXTRUDER_WATCH_PERIOD       39
-#define EPR_EXTRUDER_ADVANCE_K 41
-#define EPR_EXTRUDER_DRIVE_MIN 45
-#define EPR_EXTRUDER_ADVANCE_L 46
-// Offsets 50–53 are reserved for the former M109 heat-up retract settings.
-#define EPR_EXTRUDER_COOLER_SPEED 54 //byte
-#define EPR_EXTRUDER_SENSOR_TYPE 94  //uint8_t
-// Offsets 95–98 in each extruder block are reserved for the former TipDown setting.
+// Semantic internal EEPROM owner. Physical addresses and field widths
+// reside exclusively in EepromZoneLayout.h; the lower bank is unowned.
+#include <stdint.h>
+struct GCode;
 
 class EEPROM {
-    static long configuredBaudrate_;
-    static uint8_t computeChecksum();
-    static void writeExtruderPrefix(uint16_t pos);
-    static void beginReport(uint16_t pos, PGM_P type);
-    static void finishReport(uint16_t pos, PGM_P text);
-    static void writeFloat(uint16_t pos, PGM_P text, uint8_t digits = 3);
-    static void writeLong(uint16_t pos, PGM_P text);
-    static void writeInt(uint16_t pos, PGM_P text);
-    static void writeByte(uint16_t pos, PGM_P text);
-
 public:
     static void init();
-    static void initBaudrate();
-    // Persisted next-boot setting, not a report of the live UART divisor.
-    static long configuredBaudrate() { return configuredBaudrate_; }
-    static void setConfiguredBaudrate(long rate) { configuredBaudrate_ = rate; }
-    static void storeDataIntoEEPROM(uint8_t corrupted = 0);
+    // Settings recovery and local heater commissioning.
+    static bool settingsReady();
+    static bool recoveryPending();
+    static bool acknowledgeRecovery();
+    static bool commissionBedCutoff(uint8_t cutoff);
+    static bool lastOperationSucceeded();
+    static void reportRecovery();
+    static const void* recoveryDialogTag();
+    // Persist selected pressure limits, preserving the unselected saved
+    // value (not necessarily the temporary live stop band).
+    static bool storePressureLimits(bool stop, int32_t minimum, int32_t maximum, bool saveMinimum, bool saveMaximum);
+    static void storeDriveLimit(uint8_t heater, bool maximum, uint8_t value);
+    // Semantic persistence entrypoints. Callers never choose addresses.
+    static void storeCaseLight(bool on);
+    static void storeFet(uint8_t channel,bool on);
+    static void storeJogMode(uint8_t axis,uint8_t mode);
+    static void storeZJogSteps(uint16_t steps);
+    static void storeJogCoordinates(bool gcode);
+    static void storeJogFeedrate(bool configured);
+    static void storeZDisplayMode(uint8_t mode);
+    static void storeFanMode(uint8_t mode);
+    static void storeDigitZeroing(bool enabled);
+    static void storeDigitCompensation(bool enabled);
+    static void storeSenseAutoStart(bool enabled);
+    static void storeScanPoint(uint8_t x,uint8_t y,bool saveX,bool saveY);
+    static void storeFanDivisor(uint8_t divisor);
+    static void storeFanDuty(bool maximum,uint8_t duty);
+    static void storeToolOffsets(uint8_t tool,float x,float y,bool saveX,bool saveY);
+    static void storeInactivity(bool stepper,uint32_t duration);
+    static void storeScanLift(float lift);
+    static void storeWobblePhase(int8_t phase);
+    static void storeWobbleAmplitude(uint8_t component,int16_t amplitude);
+    static void storeMotorCurrent(uint8_t axis,uint8_t current);
+    static void storePackingInterval(uint16_t interval);
+    static void storeAxisAcceleration(uint8_t axis,bool travel,float acceleration);
+    static void storeAxisJerk(bool z,float jerk);
+    static void storeAxisFeedrate(uint8_t axis,bool homing,float feedrate);
+    enum class ToolMotionSetting : uint8_t { Steps, Advance, Acceleration, Feedrate, Jerk };
+    static void storeToolMotion(uint8_t tool,ToolMotionSetting setting,float value);
     static void storeManualZOffset();
+    static void storeSenseOffsetSettings(int16_t digits, int16_t micrometers, bool saveDigits, bool saveMaximum);
+    static void storeMicrostepConfiguration(uint8_t changedMask);
     static void storePreheatProfiles();
     static void storePidCalibration(uint8_t heater);
-    static void updateChecksum();
-    static void readDataFromEEPROM();
     static void restoreEEPROMSettingsFromConfiguration();
-    static void clearEEPROM();
     static void writeSettings();
     static void update(GCode* com);
-    static int getExtruderOffset(uint8_t extruder = 0);
-
-private:
-    static bool readPreheatProfiles();
-    static void writePreheatProfiles();
-    static void restoreEEPROMExtruderSettingsFromConfiguration(uint8_t extruderId);
-    static void storeExtruderDataIntoEEPROM(uint8_t extruderId);
 }; // EEPROM
 
 #endif // EEPROM_H
