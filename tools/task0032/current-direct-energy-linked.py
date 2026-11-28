@@ -18,6 +18,7 @@ spec=importlib.util.spec_from_file_location("stop_linked",HERE/"current-stop-tai
 sl=importlib.util.module_from_spec(spec);spec.loader.exec_module(sl)
 
 FAST_PROFILE=False
+COMPACT=False
 
 def checked_layout(elf):
     # The old validator returns its own mutable member dictionary. Never
@@ -31,6 +32,10 @@ def checked_layout(elf):
         fields=sl.LAYOUT["PrintLine"][1]
         assert fields.pop("lookahead")==28
         fields[None]=28
+        if COMPACT:
+            for k in ("stepProfile","stepsRemaining","task"):
+                fields[k]-=4
+            sl.LAYOUT["PrintLine"]=(99,fields)
         layout=copy.deepcopy(original_layout(elf))
     finally:
         sl.LAYOUT=saved
@@ -66,18 +71,21 @@ def checked_layout(elf):
         if n["tag"]!="DW_TAG_structure_type" or name(n)!="PrintLine" or "byte_size" not in n["attrs"]:continue
         members=[c for c in n["children"] if c["tag"]=="DW_TAG_member" and "data_member_location" in c["attrs"]]
         if not members:continue
-        assert size(n)==103
+        assert size(n)==(99 if COMPACT else 103)
         anonymous=[c for c in members if not name(c)]
         assert len(anonymous)==1 and location(anonymous[0])==28
         union=target(anonymous[0])
-        assert union["tag"]=="DW_TAG_union_type" and size(union)==48
+        assert union["tag"]=="DW_TAG_union_type" and size(union)==(44 if COMPACT else 48)
         alternatives={name(c):c for c in union["children"] if c["tag"]=="DW_TAG_member"}
         assert set(alternatives)=={"lookahead","directProfile"}
         for c in alternatives.values():
             assert "data_member_location" not in c["attrs"] or location(c)==0
         lookahead=target(alternatives["lookahead"])
         limits=target(alternatives["directProfile"])
-        assert name(lookahead)=="LookaheadData" and size(lookahead)==48
+        assert name(lookahead)=="LookaheadData" and size(lookahead)==(44 if COMPACT else 48)
+        if COMPACT:
+            la={name(c):location(c) for c in lookahead["children"] if c["tag"]=="DW_TAG_member" and "data_member_location" in c["attrs"]}
+            assert la=={k:4*i for i,k in enumerate(("speedX","speedY","speedZ","speedE","accelerationDistance2","maxJunctionSpeed","startSpeed","endSpeed","minSpeed","distance","accelerationPrim"))},la
         assert name(limits)=="Limits" and size(limits)==limit_size
         actual={name(c):location(c) for c in limits["children"]
                 if c["tag"]=="DW_TAG_member" and "data_member_location" in c["attrs"]}
@@ -96,10 +104,10 @@ def measure(mod,img,delta,rate,start,acceleration,stop_after,negative=False):
     remaining=max(delta);primary="XYZ"[delta.index(remaining)]
     c,pc,addr,errors,o=mod.setup(img,owner=0,delta=delta,rate=rate,n=5,
         phase="cruise",advance=False,ratio=0,zcor=0,negative=negative,remaining=remaining)
-    assert img.sizes["PrintLine::direct"]==103 and img.sizes["PrintLine::queue"]==2477
-    assert o==0 and img.sizes["StepExecutor::stepClocks"]==20
+    assert img.sizes["PrintLine::direct"]==(99 if COMPACT else 103) and img.sizes["PrintLine::queue"]==(2381 if COMPACT else 2477)
+    assert o==(-4 if COMPACT else 0) and img.sizes["StepExecutor::stepClocks"]==20
     sign=-1 if negative else 1
-    c.put(addr+102,5)
+    c.put(addr+102+o,5)
     c.symput("motorWake",7,1,4);c.symput("motorWake",7,1,5)
     for a in range(2):c.symput("Printer::xyMotion",delta[a]*sign,4,20+a*8)
     c.symput("Printer::zMotion",delta[2]*sign,4,24)
@@ -108,7 +116,7 @@ def measure(mod,img,delta,rate,start,acceleration,stop_after,negative=False):
         (40,(ceiling-floor+drop-1)//drop)):c.put(addr+offset,value,4)
     c.put(addr+44,1)
     if FAST_PROFILE:c.put(addr+45,(16000000+rate-1)//rate,4)
-    c.put(addr+88,rate,2);c.put(addr+90,start,2);c.put(addr+92,start,2)
+    c.put(addr+88+o,rate,2);c.put(addr+90+o,start,2);c.put(addr+92+o,start,2)
     total={a:0 for a in "XYZ"};epoch=0;last_edge=None;previous_energy=floor
     armed_energy=floor;short_gaps=late_calls=0;worst_short=0
     max_cycles=max_mask=peak_energy=tail=0;request_energy=None;request_pulses=None
@@ -116,13 +124,13 @@ def measure(mod,img,delta,rate,start,acceleration,stop_after,negative=False):
     peak_stack=0;mask_witness=None;costs={};high_min={};low_min={};falls={}
     cruise_samples=0;cruise_elapsed=0;cruise_cost=0
     assert stop_after is None or stop_after<remaining
-    while c.get(addr+102):
-        assert calls<remaining*5+100,(img.board,calls,remaining,c.get(addr+102))
-        if stop_after is not None and request_pulses is None and total[primary]>=stop_after and c.get(addr+102) in (6,7):
+    while c.get(addr+102+o):
+        assert calls<remaining*5+100,(img.board,calls,remaining,c.get(addr+102+o))
+        if stop_after is not None and request_pulses is None and total[primary]>=stop_after and c.get(addr+102+o) in (6,7):
             request_energy=c.symget("StepExecutor::stepClocks",4,0)
             request_pulses=total[primary]
-            c.put(addr+102,c.get(addr+102)+2)
-        old_phase=c.get(addr+102);old_energy=armed_energy
+            c.put(addr+102+o,c.get(addr+102+o)+2)
+        old_phase=c.get(addr+102+o);old_energy=armed_energy
         c.timeline=[];c.edges=[];c.calls=[];c.timer_writes=[]
         c.cy=5;c.timer_live=True;c.sreg=0;c.mem[0x6f]=2
         c.timer0_phase=0;c.timer0_reads=0;c.timer0_flag_cleared_at_wrap=0
@@ -141,7 +149,7 @@ def measure(mod,img,delta,rate,start,acceleration,stop_after,negative=False):
         period=c.get(0x88,2)+1
         if c.cy>=period:
             late_calls+=1
-            assert not c.get(addr+102),("late active compare outside isolated timebase",img.board,c.cy,period)
+            assert not c.get(addr+102+o),("late active compare outside isolated timebase",img.board,c.cy,period)
         # The next event's actual edge phase can differ from this one.
         for axis in "XYZ":
             states=[s for p,s,t in c.edges if p==axis]
@@ -169,7 +177,7 @@ def measure(mod,img,delta,rate,start,acceleration,stop_after,negative=False):
                     short_gaps+=1;worst_short=max(worst_short,ideal-gap)
                 max_overshoot=max(max_overshoot,gap-ideal)
             last_edge=times[0];previous_energy=armed_energy
-        if c.get(addr+102):
+        if c.get(addr+102+o):
             armed_energy=c.symget("StepExecutor::stepClocks",4,0)
             root=c.symget("StepExecutor::stepClocks",2,8)
             assert root==math.isqrt(armed_energy)
@@ -186,7 +194,7 @@ def measure(mod,img,delta,rate,start,acceleration,stop_after,negative=False):
                 nominal=c.symget("Printer::zMotion",4,4,signed=True)
             assert motor==1000+sign*total[axis] and direct==sign*total[axis] and nominal==1000
         assert c.symget("StepExecutor::stepClocks",4,4)==total[primary]
-        kind=("startup" if old_phase==5 else "retire" if not c.get(addr+102)
+        kind=("startup" if old_phase==5 else "retire" if not c.get(addr+102+o)
               else "wait" if not times else "cruise" if old_energy==armed_energy==ceiling
               else "accel" if armed_energy>old_energy else "brake" if armed_energy<old_energy else "flat")
         data=costs.setdefault(kind,{"calls":0,"cycles_max":0,"cycles_sum":0})
@@ -198,7 +206,7 @@ def measure(mod,img,delta,rate,start,acceleration,stop_after,negative=False):
     else:
         tail=total[primary]-request_pulses
         assert tail<=1+(request_energy-floor+drop-1)//drop
-    assert c.get(addr+98,4,signed=True)==0
+    assert c.get(addr+98+o,4,signed=True)==0
     return dict(delta=delta,rate=rate,start=start,acceleration=acceleration,stop_after=stop_after,
         negative=negative,calls=calls,pulses=total,tail=tail,max_cycles=max_cycles,max_mask=max_mask,
         short_gaps=short_gaps,worst_short_ticks=worst_short,shortest_gap_ticks=shortest,
@@ -231,8 +239,10 @@ def main():
     p.add_argument("--optimized",action="store_true")
     p.add_argument("--extended",action="store_true")
     p.add_argument("--phase-anchor",action="store_true")
+    p.add_argument("--compact",action="store_true")
     a=p.parse_args()
-    global FAST_PROFILE
+    global FAST_PROFILE,COMPACT
+    COMPACT=a.compact
     FAST_PROFILE=a.optimized
     mod=sl.lt.load_interpreter()
     result={"scope":__doc__,"boards":{}}

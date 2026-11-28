@@ -38,6 +38,11 @@ def load_interpreter():
     change("self.pushreturn(self.pc);self.cy+=4 if op=='call' else 3",
            "self.pushreturn(self.pc);self.cy+=4 if op=='call' else 3\n"
            "                    if op=='rcall' and int(a[0][1:])==0:self.return_stack.pop()")
+    # Accept only explicitly supported PrintLine layouts; caller independently
+    # verifies DWARF field offsets before running the compact fixture.
+    change("size=103 if new else 119", "size=img.sizes['PrintLine::direct'] if new else 119")
+    change("o=0 if new else 16", "o=size-103 if new else 16")
+    change("move+24+o,struct.pack", "move+24+(0 if new else 16),struct.pack") if "move+24+o,struct.pack" in source else change("move+24+o,struct.unpack", "move+24+(0 if new else 16),struct.unpack")
     module = types.ModuleType("step_output_archived")
     exec(compile(source,"linked_motion.instrumented.py","exec"),module.__dict__)
     parent=module.CPU
