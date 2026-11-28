@@ -7,6 +7,7 @@ Inputs are a CI artifact, its SHA256 and board; use --canonical for the
 new root-level combined-image layout. No AVR toolchain needed.
 """
 import argparse
+import bisect
 import collections
 import hashlib
 import json
@@ -72,6 +73,11 @@ def inventory(z,board,canonical=False):
     syms={int(m[1],16):m[3] for m in re.finditer(
         r"^([0-9a-f]+) ([0-9a-f]+) [tTwW] (.+)$",z.read(p+"symbols.txt").decode(),re.M)}
     def name(a):return labels.get(a,syms.get(a,hex(a)))
+    label_addrs=sorted(labels)
+    def physical_name(pc):
+        i=bisect.bisect_right(label_addrs,pc)-1
+        assert i>=0,(board,hex(pc),"missing physical label")
+        return labels[label_addrs[i]]
     # Source inventory: loadCompensationMatrix's optional callback is the
     # startup boot-eye lambda or null. emergencyStop's indirect call is reset.
     boot=next(a for a,n in labels.items() if n.startswith("setupForPrinting()::{lambda()#1}::_FUN"))
@@ -86,6 +92,7 @@ def inventory(z,board,canonical=False):
         weak_guard_errors.append(str(exc))
     pending=[main,boot];seen=set();local={};errors=set()
     edges=collections.defaultdict(dict)
+    tail_transfers=set()
     while pending:
         root=pending.pop()
         if root in seen:continue
@@ -169,6 +176,8 @@ def inventory(z,board,canonical=False):
                     if not name(root).startswith(("Commands::emergencyStop","HAL::resetHardware")):
                         errors.add((name(root),hex(pc),"unexpected reset jump"))
                     continue
+                if t in labels and physical_name(pc)!=labels[t]:
+                    tail_transfers.add((root,pc,t))
                 # Tail jumps share the current frame (including aliases and
                 # library helper entry labels), not another return address.
                 todo.append((t,d,y,pair));continue
@@ -186,8 +195,11 @@ def inventory(z,board,canonical=False):
             "provenUnreachableWeakCalls":[hex(pc) for pc in sorted(weak_zero)],
             "weakGuardDiagnostics":weak_guard_errors,
             "frames":[{"address":hex(a),"name":name(a),"localPeakBytes":d} for a,d in sorted(local.items())],
+            "tailTransfers":[{"root":hex(a),"pc":hex(pc),"target":hex(t),
+                               "physicalCaller":physical_name(pc),"physicalTarget":labels[t]}
+                              for a,pc,t in sorted(tail_transfers)],
             "calls":[{"caller":hex(a),"callee":hex(b),
-                      "sites":[{"pc":hex(pc),"callerBytes":d} for pc,d in sorted(xs.items())]}
+                      "sites":[{"pc":hex(pc),"callerBytes":d,"physicalCaller":physical_name(pc)} for pc,d in sorted(xs.items())]}
                      for (a,b),xs in sorted(edges.items())],
             "limitations":["candidate jump-table range checks, callback/reset source assumptions",
                            "ABI and compiler atomic SP-write sequences assumed",
