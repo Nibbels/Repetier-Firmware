@@ -604,3 +604,48 @@ jobs:
           path: ${{ runner.temp }}/task0032-current-core
           retention-days: 7
           if-no-files-found: error
+
+
+  current-drive-wake-preflight:
+    if: github.head_ref == 'task/Task0032-resend-preflight'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Replay exact guarded Drive startup with nonblocking motor readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-current-wake"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          p0=95415cff552517a40a844cc1935f588baf9a5069
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$RUNNER_TEMP/current-wake-p0" "$p0"
+          sha256sum tools/task0032/current-drive-wake*.py research/task0032-step-output/motor-wake.h > "$out/source-sha256.txt"
+          python3 tools/task0032/current-drive-wake-replay.py --source "$RUNNER_TEMP/current-wake-p0" --out "$out" | tee "$out/replay.log"
+          python3 tools/task0032/current-drive-wake.py --source "$RUNNER_TEMP/current-wake-p0" --out "$out"
+      - uses: arduino/setup-arduino-cli@v2
+        with:
+          version: 1.2.2
+      - name: Link current wake candidate with existing canonical recovery builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-current-wake"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          cd "$RUNNER_TEMP/current-wake-p0"
+          git add Repetier
+          git -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Disposable nonblocking Drive motor wake"
+          git rev-parse HEAD > "$out/local-candidate-sha.txt"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" --p0-candidate --avr-only | tee "$out/canonical.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-current-wake-${{ github.sha }}
+          path: ${{ runner.temp }}/task0032-current-wake
+          retention-days: 7
+          if-no-files-found: error
