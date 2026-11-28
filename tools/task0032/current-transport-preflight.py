@@ -205,6 +205,61 @@ def replay_uart(out,files):
             subprocess.run([str(exe),mode],check=True,timeout=10)
         exe.unlink()
 
+def replay_report(source,out,files):
+    # Reuse the archived real report/panel/terminal thermal pump harness,
+    # but compile the current generated bodies and actual PrintJob owner.
+    # This fixture does not exercise normal dispatch; replay_scheduler
+    # already tests the current outer transition at injected boundaries.
+    dispatch=trigger["dispatch"]
+    region=trigger["region"]
+    t=region(files["TemperatureControl.cpp"],"static void serviceReport()","\n}\n}\n#endif")+"\n}"
+    panel=region(files["ui.cpp"],"void UIDisplay::refreshPage()","__attribute__((noinline)) void UIDisplay::refreshNormalPage()")
+    c=(source/"Commands.cpp").read_text()
+    pump=region(c,"static void serviceThermalEmergency()","\n#endif")
+    outer=region(c,"void Commands::commandLoop() {","\n    GCodeInput::readFromSerial();")
+    outer=outer[outer.index("\n")+1:]
+    prelude=dispatch["PRELUDE"].replace("REPORT",t).replace("PANEL",panel).replace("PUMP",pump).replace("OUTER",outer)
+    tests=dispatch["SCENARIOS"]
+    tests=once(tests,"assert(wire.size()==3 && wire[2]==\"!! COMMUNICATION LOST\\r\\n\");",
+        """assert(wire.size()==5 && wire[2]=="fatal: COMMUNICATION LOST\\r\\n"
+            && wire[3]=="!! COMMUNICATION LOST\\r\\n"
+            && wire[4]=="Error: COMMUNICATION LOST\\r\\n");""")
+    # Backpressure after each partial notification must not consume
+    # cursor state or starve actual thermal reports.
+    tests=once(tests,"    if(mode==\"promote-early\")promote=true;",
+        """    if(mode=="promote-early")promote=true;
+    if(mode=="promote-middle"){
+        for(unsigned n=0;n<3;++n){freeBytes=63;tick=true;Commands::commandLoop();}
+        assert(wire.size()==3 && wire[2]=="fatal: COMMUNICATION LOST\\r\\n");
+        promote=true;
+    }""")
+    tests=once(tests,"        freeBytes=63;tick=true;clockMs+=100;auto old=wire.size();",
+        """        freeBytes=0;tick=true;clockMs+=100;auto blocked=wire.size();
+        Commands::commandLoop();assert(wire.size()==blocked);
+        freeBytes=63;tick=true;clockMs+=100;auto old=wire.size();""")
+    tests=once(tests,'    if(mode!="promote-early"){','    if(mode!="promote-early" && mode!="promote-middle"){')
+    tests=once(tests,"        assert(requests==1 && cancels==1 && thermal==1);",
+        """        assert(requests==1 && cancels==1 && thermal==1);
+        unsigned fatal=0,legacy=0,error=0;
+        for(const auto& w:wire){
+            fatal+=w=="fatal: COMMUNICATION LOST\\r\\n";
+            legacy+=w=="!! COMMUNICATION LOST\\r\\n";
+            error+=w=="Error: COMMUNICATION LOST\\r\\n";
+        }
+        assert(fatal==(mode=="promote-early"?0u:1u));
+        assert(legacy==(mode=="promote-late"?1u:0u) && error==legacy);""")
+    cpp=out/"transport-report.cpp";cpp.write_text(prelude+tests)
+    exe=out/"transport-report"
+    for width in (16,20):
+        for heaters in (2,3):
+            subprocess.run(["c++","-std=c++11","-O1","-Wall","-Wextra","-Werror",
+                "-fsanitize=undefined","-fno-sanitize-recover=all",
+                f"-DWIDTH={width}",f"-DHEATERS={heaters}","-I",str(out),"-I",str(source),
+                str(cpp),"-o",str(exe)],check=True)
+            for mode in ("transport-only","promote-early","promote-middle","promote-late"):
+                subprocess.run([str(exe),mode],check=True,timeout=10)
+    exe.unlink()
+
 def replay_scheduler(out,files):
     prelude=once(trigger["PRELUDE"],"static bool blockingTxFailed(){return txFailed;}",
         "static bool transportFailed(){return txFailed;}")
@@ -244,6 +299,7 @@ def main():
     for name,s in files.items():(out/name).write_text(s)
     replay_uart(out,files)
     replay_scheduler(out,files)
+    replay_report(fw,out,files)
     for name,s in files.items():(fw/name).write_text(s)
     receiver=runpy.run_path(str(HERE/"current-transport-receiver-replay.py"))
     receiver["run"](source,out/"receiver")
