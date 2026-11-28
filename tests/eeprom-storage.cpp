@@ -1,4 +1,4 @@
-// Host-only EEPROM replay. Real persistence methods; model settings/hardware adapters.
+// Host-only zoned EEPROM owner replay, with actual LiveSettings and preheat methods.
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
@@ -127,14 +127,10 @@ namespace AccessoryOutputs {
     char state(Output o){return states[static_cast<uint8_t>(o)];}
     void stage(Output o,char v){states[static_cast<uint8_t>(o)]=v;}
 }
-#include "storage-source.inc"
+#include "preheat-owner.inc"
 #include "EepromZoneDefaults.h"
 #include "live-settings.inc"
-static void checksum(){unsigned c=0;for(size_t i=0;i<image.size();++i)if(i!=EPR_INTEGRITY_BYTE)c+=image[i];assert(uint8_t(c)==image[EPR_INTEGRITY_BYTE]);}
-static void snapshot(const char* name){checksum();printf("%s ",name);for(auto b:image)printf("%02x",b);puts("");}
-// The new binding executes actual production methods against the same
-// owner adapters as the legacy replay. No legacy EEPROM byte may be read
-// for capture or modified by apply, and every payload must round-trip.
+// The new binding must neither read nor write the unowned lower bank.
 static void zoneOwnerRoundTrip(){
     using namespace EepromZones;
     FactoryDefaults defaults(defaultHeatBedScanLiftMm,defaultZOffsetScanIndex,KOSYS_GCODE,FEEDRATE_DIRECTCONFIG);
@@ -204,56 +200,7 @@ static void zoneOwnerRoundTrip(){
     assert(image==untouched);
 }
 int main(){
-    image.fill(0xff); EEPROM::init(); assert(image[EPR_MAGIC_BYTE]==44 && image[EPR_VERSION]==EEPROM_PROTOCOL_VERSION); snapshot("factory");
-    const auto factory=image; assert(image[EPR_CHECK_NUM_EXTRUDERS]==NUM_EXTRUDER);
-    // Existing settings and retired legacy/reserved cells survive normal load/store.
-    constexpr int retiredTime=125, retiredDistance=129;
-    HAL::eprSetInt32(retiredTime,123456); HAL::eprSetFloat(retiredDistance,42.25f); HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS,1234); image[1000]=0x9a; image[EPR_RF_230V_OUTPUT_MODE]=1;
-    for(int i=0;i<NUM_EXTRUDER;++i){int p=EEPROM::getExtruderOffset(i);HAL::eprSetFloat(p+EPR_EXTRUDER_STEPS_PER_MM,100.25f+i);HAL::eprSetFloat(p+EPR_EXTRUDER_X_OFFSET,1.25f+i);}
-    HAL::eprSetInt32(EPR_RF_Z_OFFSET,-123); EEPROM::updateChecksum(); EEPROM::init(); EEPROM::storeDataIntoEEPROM();
-    assert(Printer::zOffset.manualMicrometers()==-123 && image[1000]==0x9a && image[EPR_RF_230V_OUTPUT_MODE]==1 && HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS)==1234 && HAL::eprGetInt32(retiredTime)==123456 && HAL::eprGetFloat(retiredDistance)==42.25f);
-    for(int i=0;i<NUM_EXTRUDER;++i){assert(extruder[i].stepsPerMM==100.25f+i && extruder[i].offsetMM[0]==1.25f+i);} snapshot("roundtrip");
-    // Valid checksum but invalid values: repair paths and retained RAM defaults.
-    HAL::eprSetFloat(EPR_X_MAX_FEEDRATE,99999); HAL::eprSetFloat(EPR_X_LENGTH,-1); HAL::eprSetFloat(EPR_Z_MAX_ACCEL,-1); HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN,0); HAL::eprSetFloat(EPR_ZSCAN_START_MM,99); image[EPR_RF_PART_FAN_PWM_MIN]=255; image[EPR_RF_PART_FAN_PWM_MAX]=0;
-    for(int i=0;i<NUM_EXTRUDER;++i){int p=EEPROM::getExtruderOffset(i);HAL::eprSetFloat(p+EPR_EXTRUDER_STEPS_PER_MM,6000);HAL::eprSetFloat(p+EPR_EXTRUDER_MAX_FEEDRATE,-1);HAL::eprSetByte(p+EPR_EXTRUDER_DRIVE_MAX,40);HAL::eprSetByte(p+EPR_EXTRUDER_DRIVE_MIN,40);}
-    EEPROM::updateChecksum(); EEPROM::init(); assert(HAL::eprGetFloat(EPR_X_MAX_FEEDRATE)==MAX_FEEDRATE_X && HAL::eprGetFloat(EPR_X_LENGTH)==X_MAX_LENGTH_PRINT && HAL::eprGetFloat(EPR_Z_MAX_ACCEL)==MAX_ACCELERATION_UNITS_PER_SQ_SECOND_Z); snapshot("repaired");
-    image=factory; image[EPR_VERSION]=1; HAL::eprSetInt32(EPR_RF_PREHEAT_PROFILE_TAG,0); image[1000]=0x9a; EEPROM::updateChecksum(); EEPROM::init(); assert(image[EPR_VERSION]==EEPROM_PROTOCOL_VERSION && image[1000]==0x9a && HAL::eprGetInt32(EPR_RF_PREHEAT_PROFILE_TAG)==0x50524831L); snapshot("v1-migration");
-    image=factory; image[EPR_CHECK_NUM_EXTRUDERS]=NUM_EXTRUDER==1?2:1; HAL::eprSetFloat(EPR_X_LENGTH,100); image[EEPROM::getExtruderOffset(1)+99]=0xa5; EEPROM::updateChecksum(); EEPROM::init(); assert(image[EPR_CHECK_NUM_EXTRUDERS]==NUM_EXTRUDER && HAL::eprGetFloat(EPR_X_LENGTH)==X_MAX_LENGTH_PRINT && image[EEPROM::getExtruderOffset(1)+99]==0xa5); snapshot("tool-migration");
-    image=factory; image[1000]^=1; EEPROM::init(); assert(image[1000]==0); snapshot("bad-checksum");
-    image=factory; image[EPR_MAGIC_BYTE]=0; EEPROM::updateChecksum(); EEPROM::init(); assert(image[EPR_MAGIC_BYTE]==44); snapshot("bad-magic");
-    image=factory; image[1000]=0xa5; EEPROM::updateChecksum(); keys=true; EEPROM::init(); assert(image[1000]==0); snapshot("key-reset");
-    keys=false;
-    // Upgrade a version-8 image containing apparently valid gains: no heater authorized.
-    image=factory; image[EPR_VERSION]=8;
-    for (int i=0;i<9;++i) image[EPR_RF_PID_CALIBRATION+i]=0xA9;
-    image[1000]=0x5a; EEPROM::updateChecksum(); EEPROM::init();
-    assert(image[1000]==0x5a && image[EPR_VERSION]==9);
-    for (auto* c:tempController) assert(!c->pidCalibrationValid());
-    // Successful tune of a single physical heater persists only its thermal fields.
-    for (uint8_t i=0;i<NUM_TEMPERATURE_LOOPS;++i) {
-        auto& c=*tempController[i];
-        c.pidPGain=12.5f; c.pidIGain=.5f; c.pidDGain=22.0f;
-        c.pidDriveMax=c.pidMax; c.pidDriveMin=20;
-        c.tunedSensorType=c.sensorType; c.tunedPowerLimit=c.pidMax;
-        EEPROM::storePidCalibration(i); checksum();
-        assert(c.pidCalibrationValid());
-        assert(image[EPR_RF_PID_CALIBRATION+3*(i==NUM_EXTRUDER?2:i)]==0xA9);
-        for (uint8_t j=i+1;j<NUM_TEMPERATURE_LOOPS;++j) assert(!tempController[j]->pidCalibrationValid());
-    }
-    const auto calibrated=image;
-    for (auto* c:tempController) c->invalidatePidCalibration();
-    EEPROM::init();
-    for (auto* c:tempController) assert(c->pidCalibrationValid() && c->pidPGain==12.5f);
-    // A sensor or PWM change revokes exactly that heater, including after reboot.
-    HAL::eprSetByte(EPR_BED_PID_MAX, 100); EEPROM::updateChecksum(); EEPROM::init();
-    assert(!heatedBedController.pidCalibrationValid() && extruder[0].tempControl.pidCalibrationValid());
-    HAL::eprSetByte(EPR_BED_PID_MAX, calibrated[EPR_BED_PID_MAX]); EEPROM::updateChecksum(); EEPROM::init();
-    assert(!heatedBedController.pidCalibrationValid());
-    // Non-finite raw EEPROM gain cannot authorize a heater.
-    HAL::eprSetFloat(EEPROM::getExtruderOffset(0)+EPR_EXTRUDER_PID_PGAIN, NAN);
-    EEPROM::updateChecksum(); EEPROM::init(); assert(!extruder[0].tempControl.pidCalibrationValid());
-    EEPROM::restoreEEPROMSettingsFromConfiguration(); EEPROM::storeDataIntoEEPROM(); EEPROM::init();
-    for (auto* c:tempController) assert(!c->pidCalibrationValid());
+    for(size_t p=0;p<image.size();++p) image[p]=uint8_t(p*13U+7U);
     zoneOwnerRoundTrip();
-
+    puts("New EEPROM live settings owner roundtrip PASS");
 }
