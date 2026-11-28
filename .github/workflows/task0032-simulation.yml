@@ -441,6 +441,8 @@ jobs:
           python3 tools/task0032/resend-ring-preflight.py --source "$RUNNER_TEMP/resend-p0" --out "$out" | tee "$out/replay.log"
           sha256sum tools/task0032/resend-frame-preflight.py "$RUNNER_TEMP/resend-p0/Repetier/GCodeInput.cpp" >> "$out/source-sha256.txt"
           python3 tools/task0032/resend-frame-preflight.py --source "$RUNNER_TEMP/resend-p0" | tee "$out/frame-replay.log"
+          sha256sum tools/task0032/{resend-stream-preflight,tx-ack-replay}.py tools/task0033/loss-replay.py >> "$out/source-sha256.txt"
+          python3 tools/task0032/resend-stream-preflight.py --source "$RUNNER_TEMP/resend-p0" | tee "$out/stream-replay.log"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
