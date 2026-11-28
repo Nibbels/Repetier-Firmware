@@ -105,17 +105,27 @@ def printrun(src):
     assert list(p.sentlines)==[2]
     p.greetings=[];p._logError=lambda line:None
     def listen(line):
+        # Capture state at the next read, BEFORE _listen's unconditional
+        # clear=True during shutdown. Otherwise the fixture could falsely
+        # attribute the thread-exit effect to the control ok.
         data=iter([line,None])
-        p._readline=lambda:next(data)
+        observed=[]
+        def read():
+            value=next(data)
+            if value is None:observed.append((p.clear,p.resendfrom))
+            return value
+        p._readline=read
         p._listen_can_continue=lambda:True
         p._listen()
+        assert len(observed)==1
+        return observed[0]
     # Actual listener does NOT consume the control ok as a special token.
     # Model its arrival after the retransmission was sent, before actual ACK.
-    listen("Resend:2")
+    assert listen("Resend:2")== (True,2)
     assert p.resendfrom==2 and p.clear
     p._sendnext()
     assert p.printer.wire[-1]==numbered(2,"G1 X2") and not p.clear
-    listen("ok")
+    assert listen("ok")== (True,3)
     assert p.clear
     p.priqueue.put("M105")
     p._sendnext()
