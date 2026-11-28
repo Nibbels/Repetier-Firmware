@@ -29,6 +29,7 @@ public:
     static void popCurrentCommand();
     static void keepAlive(FirmwareState state);
     static void executeFlashScript(const char* cmd);
+    static void executeSoftFilament(bool unload);
     static bool flashScriptActive();
 
 private:

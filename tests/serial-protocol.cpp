@@ -72,6 +72,11 @@ char readFlashByte(const char* position) { return *position; }
 namespace Printer {
 bool debugErrors() { return true; }
 bool legacySimulationRejected() { return legacyRejected; }
+bool heatingInhibited() { return legacyRejected
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    || thermalLocked
+#endif
+    ; }
 void latchOutputInhibit(bool thermalFault) { assert(!thermalFault); legacyRejected = true; }
 void stopPrint() { ++stopRequests; }
 void setFeedrate(float) { ++dispatchedCommands; }
@@ -152,6 +157,8 @@ void printErrorFLN(const char* text) { print(tError); printFLN(text); }
 // Real receiver, M111 handler and dispatch entry; downstream command effects
 // are represented by counters, not physical hardware.
 namespace GCodeCommands {
+void loadFilamentWithParameters(int16_t, uint8_t) {}
+void unloadFilamentWithParameters(int16_t) {}
 void dispatchMotion(GCode* code) {
     ++dispatchedCommands;
     if (code->internalCommand) { ++scriptCommands; lastScriptCommand = *code; }

@@ -510,6 +510,23 @@ void GCodeInput::executeFlashScript(const char* cmd) {
     flashScriptRunning = false;
 }
 
+// The menu's former one-line M3913/M3914 scripts need neither a GCode
+// object nor the ASCII parser or general G/M dispatch. Keep the existing
+// foreground script ownership through the final periodic service.
+// heatingInhibited includes thermal/legacy rejection and EEPROM admission;
+// the common typed filament entry revalidates it after waiting for motion.
+void GCodeInput::executeSoftFilament(bool unload) {
+    if (flashScriptRunning || Printer::printJob.commandsBlocked() || Printer::heatingInhibited())
+        return;
+    flashScriptRunning = true;
+    if (unload)
+        GCodeCommands::unloadFilamentWithParameters(constrain(4500, 0, EMERGENCY_PAUSE_DIGITS_MAX));
+    else
+        GCodeCommands::loadFilamentWithParameters(3500, 3);
+    Commands::checkForPeriodicalActions(Processing);
+    flashScriptRunning = false;
+}
+
 // Keep the parser and command buffer frame out of refused nested entries.
 __attribute__((noinline)) void GCodeInput::runFlashScript(const char* cmd) {
     char buf[80];

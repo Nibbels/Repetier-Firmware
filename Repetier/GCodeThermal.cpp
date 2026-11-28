@@ -330,7 +330,7 @@ static bool prepareFilamentProgram() {
 
 // Name the admitted frames explicitly instead of depending on LTO
 // partial inlining of the two public command wrappers.
-static __attribute__((noinline)) void loadFilamentPrepared(GCode* pCommand) {
+static __attribute__((noinline)) void loadFilamentPrepared(int16_t maxP, uint8_t eFeedrate) {
     Com::printFLN(PSTR("Load Filament"));
     Printer::idleStatus.cancel();
 
@@ -339,12 +339,6 @@ static __attribute__((noinline)) void loadFilamentPrepared(GCode* pCommand) {
         Printer::homeDigits();
 
     uint8_t Extrusion = 65; //max, wenn kein wiederstand. (ca. hotendlänge)
-    uint8_t eFeedrate = 1;
-    if (pCommand->hasF())
-        eFeedrate = constrain(abs(static_cast<uint8_t>(pCommand->F)), 1, 50);
-    short maxP = 2000; // To overwrite .. safety.
-    if (pCommand->hasP())
-        maxP = constrain(abs(static_cast<short>(pCommand->P)), 0, 20000);
     const bool savedRelativeE = Printer::gcodeModes.relativeEOverride();
     Printer::gcodeModes.setRelativeEOverride(false); //M82:
 
@@ -377,21 +371,24 @@ static __attribute__((noinline)) void loadFilamentPrepared(GCode* pCommand) {
     Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 5000);
 }
 
-void loadFilament(GCode* pCommand) {
+void loadFilamentWithParameters(int16_t maxP, uint8_t eFeedrate) {
     if (prepareFilamentProgram())
-        loadFilamentPrepared(pCommand);
+        loadFilamentPrepared(maxP, eFeedrate);
 }
 
-static __attribute__((noinline)) void unloadFilamentPrepared(GCode* pCommand) {
+void loadFilament(GCode* pCommand) {
+    const uint8_t eFeedrate = pCommand->hasF() ? constrain(abs(static_cast<uint8_t>(pCommand->F)), 1, 50) : 1;
+    const int16_t maxP = pCommand->hasP() ? constrain(abs(static_cast<short>(pCommand->P)), 0, 20000) : 2000;
+    loadFilamentWithParameters(maxP, eFeedrate);
+}
+
+static __attribute__((noinline)) void unloadFilamentPrepared(int16_t maxForce) {
     Com::printFLN(PSTR("Unload Filament"));
     Printer::idleStatus.cancel();
 
     //init
     uint8_t outputLength = 100; //9cm max Output, wenn kein übertriebener wiederstand. Unser Hotend ist nicht ganz so lang.
     float eFeedrate = 0.3f;     /*mm/s*/
-    short maxForce = 4000;      //3500+ might work well! You should stay underneath the force causing step loss.
-    if (pCommand->hasP())
-        maxForce = constrain(abs(static_cast<short>(pCommand->P)), 0, EMERGENCY_PAUSE_DIGITS_MAX);
     float t = float(UI_SET_EXTRUDER_MIN_TEMP_UNMOUNT);
 
     // Preheat / precool
@@ -477,9 +474,14 @@ static __attribute__((noinline)) void unloadFilamentPrepared(GCode* pCommand) {
     Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 5000);
 }
 
-void unloadFilament(GCode* pCommand) {
+void unloadFilamentWithParameters(int16_t maxForce) {
     if (prepareFilamentProgram())
-        unloadFilamentPrepared(pCommand);
+        unloadFilamentPrepared(maxForce);
+}
+
+void unloadFilament(GCode* pCommand) {
+    const int16_t maxForce = pCommand->hasP() ? constrain(abs(static_cast<short>(pCommand->P)), 0, EMERGENCY_PAUSE_DIGITS_MAX) : 4000;
+    unloadFilamentWithParameters(maxForce);
 }
 
 #ifdef X35_ADC_CHANNEL

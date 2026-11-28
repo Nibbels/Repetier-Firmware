@@ -316,7 +316,7 @@ void UIDisplay::executeCommandAction(int action) {
         if (unmount) {
             UI_STATUS_UPD(UI_TEXT_UNMOUNT_FILAMENT);
             if (action == UI_ACTION_UNMOUNT_FILAMENT_SOFT) {
-                GCodeInput::executeFlashScript(Com::tUnmountFilamentSoft);
+                GCodeInput::executeSoftFilament(true);
             } else {
                 GCodeInput::executeFlashScript(Com::tUnmountFilamentHard);
             }
@@ -327,10 +327,10 @@ void UIDisplay::executeCommandAction(int action) {
                 if (Extruder::current->tempControl.targetTemperatureC < UI_SET_EXTRUDER_TEMP_MOUNT) {
                     Extruder::setTemperatureForExtruder(UI_SET_EXTRUDER_TEMP_MOUNT, Extruder::current->id);
                     Extruder::current->tempControl.waitForTargetTemperature();
-                    GCodeInput::executeFlashScript(Com::tMountFilamentSoft);
+                    GCodeInput::executeSoftFilament(false);
                     Extruder::setTemperatureForExtruder(0, Extruder::current->id);
                 } else {
-                    GCodeInput::executeFlashScript(Com::tMountFilamentSoft);
+                    GCodeInput::executeSoftFilament(false);
                 }
             } else {
                 GCodeInput::executeFlashScript(Com::tMountFilamentHard);

@@ -249,9 +249,7 @@ FSTRINGVALUE(Com::tHeaterDecoupledWarning, "One heater seems decoupled from ther
 
 FSTRINGVALUE(Com::tOutputObjectPrint, OUTPUT_OBJECT_SCRIPT_PRINT)
 
-FSTRINGVALUE(Com::tUnmountFilamentSoft, UNMOUNT_FILAMENT_SCRIPT_SOFT)
 FSTRINGVALUE(Com::tUnmountFilamentHard, UNMOUNT_FILAMENT_SCRIPT_HARD)
-FSTRINGVALUE(Com::tMountFilamentSoft, MOUNT_FILAMENT_SCRIPT_SOFT)
 FSTRINGVALUE(Com::tMountFilamentHard, MOUNT_FILAMENT_SCRIPT_HARD)
 
 FSTRINGVALUE(Com::tCap, "Cap:")

@@ -53,6 +53,10 @@ void setAccessoryFet(GCode* pCommand);
 void setMainsOutput(GCode* pCommand);
 void loadFilament(GCode* pCommand);
 void unloadFilament(GCode* pCommand);
+// Normalized DMS digits and mm/s; both host wrappers and panel use these.
+// Shared prepareFilamentProgram retains all admission and heater checks.
+void loadFilamentWithParameters(int16_t maxPressureDigits, uint8_t feedrateMmS);
+void unloadFilamentWithParameters(int16_t maxPressureDigits);
 void readOptionalTemperature();
 
 // Configuration, diagnostics and panel access.
