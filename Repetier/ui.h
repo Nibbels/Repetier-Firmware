@@ -357,9 +357,7 @@ public:
     void setStatusP(PGM_P txt, bool error = false);
     void setStatus(char* txt, bool error = false);
     void exitmenu();
-#ifdef RF_EEPROM_ZONE_EXPERIMENT
     bool requiresLocalSafetyConfirmation() const;
-#endif
 
 private:
     int lastAction;
@@ -399,9 +397,7 @@ private:
     millis_t autoReturnTime_ = 0;
     bool autoReturnMessage_ = false;
     char confirmation_ = 0;
-#ifdef RF_EEPROM_ZONE_EXPERIMENT
     uint8_t bedCutoffCandidate_ = 0;
-#endif
 };
 
 extern UIDisplay uid;

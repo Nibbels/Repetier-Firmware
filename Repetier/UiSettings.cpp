@@ -67,7 +67,6 @@ void UIDisplay::finishAction(int action) {
         break;
     }
 
-#ifdef RF_EEPROM_ZONE_EXPERIMENT
     case UI_ACTION_BED_CUTOFF:
         if(!EEPROM::commissionBedCutoff(bedCutoffCandidate_)) {
             Com::printErrorFLN(PSTR("Bed cutoff rejected; idle cold targets required"));
@@ -76,7 +75,6 @@ void UIDisplay::finishAction(int action) {
             UI_STATUS_UPD("Cutoff saved");
         }
         break;
-#endif
     case UI_ACTION_CHOOSE_PID_ROBUST:
     case UI_ACTION_CHOOSE_PID_DYNAMIC: {
         if (confirmation_ != 1) {
@@ -149,13 +147,11 @@ void UIDisplay::changeSwitchCase(int action, int8_t increment) {
         Commands::printCurrentPosition();
         break;
     }
-#ifdef RF_EEPROM_ZONE_EXPERIMENT
     case UI_ACTION_BED_CUTOFF: {
         const int candidate=int(bedCutoffCandidate_)+increment;
         bedCutoffCandidate_=constrain(candidate,int(BedTemperatureLimit::MinimumC),int(BedTemperatureLimit::AbsoluteC));
         break;
     }
-#endif
     case UI_ACTION_RF_RESET_ACK:
     case UI_ACTION_STOP_ACK:
     case UI_ACTION_RESTORE_DEFAULTS:
@@ -848,9 +844,7 @@ void UIDisplay::changePressureSetting(int action, int8_t increment) {
 }
 
 void UIDisplay::changeHeaterSetting(int action, int8_t increment) {
-#ifdef RF_EEPROM_ZONE_EXPERIMENT
     if(TemperatureController::autotuneActive())return;
-#endif
     switch (action) {
     case UI_ACTION_CHOOSE_DMIN: {
         if (menuLevel == 4) {                        // Identifikation des temperaturzyklus anhand der position im menü. Das ist nicht 100% sauber, aber funktioniert.

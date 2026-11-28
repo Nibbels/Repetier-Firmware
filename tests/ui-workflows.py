@@ -149,6 +149,8 @@ using millis_t = uint32_t;
 #include "defs.inc"
 #include "PreheatProfiles.h"
 #include "ZOffset.h"
+#include "BedTemperatureLimit.h"
+struct TemperatureController { static uint8_t commissionedBedCutoff(){return 0;} };
 #define PROGMEM
 #define PSTR(x) x
 using prog_char = char;
@@ -211,6 +213,9 @@ void setHeatedBedTemperature(int v) { bed=v; }
 }
 namespace EEPROM {
 void storePreheatProfiles(); void storeManualZOffset();
+const char* recoveryDialogTag(){return "EEPROM recovery";}
+bool recoveryPending(){return false;}
+bool acknowledgeRecovery(){assert(false);return false;}
 }
 using EepromZones::Patch;
 using EepromZones::Field;
@@ -258,6 +263,9 @@ struct UIDisplay {
     millis_t lastSwitch=0,lastNextPrev=0,autoReturnTime_=0;
     float lastNextAccumul=0;
     char confirmation_=0;
+    uint8_t bedCutoffCandidate_=0;
+    const char* messageLine2=nullptr;
+    bool requiresLocalSafetyConfirmation() const;
     const UIMenu* menu[6]={};
     char printCols[MAX_COLS+1]={},displayCache_[UI_ROWS][MAX_COLS+1]={};
     std::string lcd[UI_ROWS];

@@ -43,6 +43,7 @@ void setHeatedBedTemperature(int value) { bed = value; }
 
 std::string status, label;
 #define UI_STATUS_UPD(text) status = text
+uint8_t bedCutoffCandidate_=0;
 void addInt(int value, uint8_t) { label += std::to_string(value); }
 
 #include "preheat-panel.inc"

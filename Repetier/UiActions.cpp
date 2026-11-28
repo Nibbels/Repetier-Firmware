@@ -118,12 +118,10 @@ void UIDisplay::mainSwitchCase(int action) {
 // OK -> menu command path structurally separate from OK dispatch.
 void UIDisplay::executeCommandAction(int action) {
     switch (action) {
-#ifdef RF_EEPROM_ZONE_EXPERIMENT
     case UI_ACTION_EEPROM_RECOVERY:
         if(EEPROM::recoveryPending())EEPROM::reportRecovery();
         else UI_STATUS_UPD("EEPROM OK");
         break;
-#endif
     case UI_ACTION_RF_HEAT_BED_UP: {
         // show that we are active
         Printer::inactivity.recordActivity(HAL::timeInMilliseconds());

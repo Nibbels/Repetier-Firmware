@@ -142,6 +142,7 @@ void ExtrusionOutput::startTimer(int16_t pending, uint8_t mask) {
 }
 void ExtrusionOutput::stopTimer() { advanceTimerMask = 0; }
 
+namespace EepromZones { bool machineSettingsReady(){return true;} }
 namespace Printer {
     static uint8_t flag0;
     static ExtrusionOutput extrusionOutput;
