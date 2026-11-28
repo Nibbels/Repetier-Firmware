@@ -24,6 +24,9 @@ NO_WRITE = set("cp cpc cpi cpse tst sbrc sbrs sbic sbis st std sts out sbi cbi n
 SKIP = ("sbrc", "sbrs", "sbic", "sbis", "cpse")
 
 
+from system_register_sites import register_site
+
+
 def target(arg):
     m = re.search(r";\s*0x([0-9a-f]+)\s*<", arg) or re.match(r"0x([0-9a-f]+)", arg)
     if not m:
@@ -128,6 +131,7 @@ def inventory(z, board, constant_pwm=False, timer3_wrap=False, pwm_owned_memory=
         root = (labels["__vector_"+str(v)], (), (None,)*3, (), (), (), (None,)*3, -1, 1, (), None, 0)
         g = nx.DiGraph()
         todo, seen = [root], set()
+        system_sites = set()
         maxd = 0
         opened, delay_entries, timsk = set(), set(), set()
         while todo:
@@ -143,6 +147,9 @@ def inventory(z, board, constant_pwm=False, timer3_wrap=False, pwm_owned_memory=
             n = pc+w
             a = arg.split(";")[0].strip()
             toks = a.split(", ")
+            site = register_site(pc, op, arg)
+            if site:
+                system_sites.add(site)
             regs = dict(regtuple)
             next_i = I
             if pc == delay and not I:
@@ -329,7 +336,7 @@ def inventory(z, board, constant_pwm=False, timer3_wrap=False, pwm_owned_memory=
             for x in nx.topological_sort(bounded_mask):
                 longest[x] = cost(ins[x[0]][1]) + extra.get(x,0) + max((longest[p] for p in bounded_mask.predecessors(x)), default=0)
             acyclic_cycles = max(longest.values(), default=0)
-        results[v] = {"states":len(seen), "stackBytesIncludingPc":maxd,
+        results[v] = {"states":len(seen), "explicitSystemRegisterSites": sorted(system_sites), "stackBytesIncludingPc":maxd,
                       "constantTracking":track, "timer3WrapTracking":wrap_track, "pwmOwnedMemoryDiagnostic":memory_track, "interruptOpenSites":len(opened), "maskedDelayReturnChains":[[name(a) for a in t] for t in sorted(delay_entries)],
                       "maskedCycles":cycles, "unresolvedMaskedCycles":len(unresolved), "acyclicMaskedBodyCycles":acyclic_cycles}
         if v == 17:
