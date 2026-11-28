@@ -183,8 +183,8 @@ const uint8_t temptables_num[15] PROGMEM = {
 };
 
 namespace {
-constexpr uint8_t temperatureCalibrationPoints[] = { 60, 80, 100, 120, 140, 160 };
-constexpr int8_t temperatureCalibrationOffsets[] = SENSOR_TEMPERATURE_OFFSETS_C;
+constexpr uint8_t temperatureCalibrationPoints[] PROGMEM = { 60, 80, 100, 120, 140, 160 };
+constexpr int8_t temperatureCalibrationOffsets[] PROGMEM = SENSOR_TEMPERATURE_OFFSETS_C;
 constexpr uint8_t temperatureCalibrationCount = sizeof(temperatureCalibrationPoints);
 static_assert(temperatureCalibrationCount == sizeof(temperatureCalibrationOffsets), "Each temperature point needs one offset");
 
@@ -202,8 +202,8 @@ float calibratedSensorTemperature(float sensorCelsius) {
     uint8_t low = 0;
     int8_t lowOffset = 0;
     for (uint8_t point = 0; point < temperatureCalibrationCount; ++point) {
-        const uint8_t high = temperatureCalibrationPoints[point];
-        const int8_t highOffset = temperatureCalibrationOffsets[point];
+        const uint8_t high = pgm_read_byte(&temperatureCalibrationPoints[point]);
+        const int8_t highOffset = static_cast<int8_t>(pgm_read_byte(reinterpret_cast<const uint8_t*>(&temperatureCalibrationOffsets[point])));
         if (sensorCelsius < high) {
             const float slope = (highOffset - lowOffset) / float(high - low);
             const float offset = slope * (sensorCelsius - low) + lowOffset;
