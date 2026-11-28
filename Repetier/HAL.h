@@ -509,9 +509,7 @@ public:
         HeaterSample(const HeaterSample&) = delete;
         HeaterSample& operator=(const HeaterSample&) = delete;
         bool read(uint8_t index, uint16_t& raw
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
                   , uint32_t* publication = nullptr
-#endif
         );
         void release();
     private:
@@ -565,9 +563,7 @@ public:
     static uint16_t temperatureAdcSample(uint8_t index); // Raw diagnostic snapshot.
     // Non-consuming snapshot; false before first publication or after expiry.
     static bool temperatureAdcSample(uint8_t index, uint16_t& sample
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
                                      , uint32_t* publication = nullptr
-#endif
     );
 };
 

@@ -58,5 +58,5 @@ int main(){unsigned snapshots=0,tracks=0;
 '''
 with tempfile.TemporaryDirectory() as d:
     p=Path(d)/'snapshot.cpp';exe=Path(d)/'snapshot';p.write_text(pre+s[a:b]+main)
-    subprocess.run(['c++','-std=c++11','-O2','-Wall','-Wextra','-Werror','-DRF_THERMAL_EMERGENCY_EXPERIMENT=1','-I',str(fw),str(p),'-o',str(exe)],check=True)
+    subprocess.run(['c++','-std=c++11','-O2','-Wall','-Wextra','-Werror','-I',str(fw),str(p),'-o',str(exe)],check=True)
     subprocess.run([str(exe)],check=True)

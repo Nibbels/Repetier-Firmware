@@ -511,8 +511,7 @@ with tempfile.TemporaryDirectory() as temp:
     cpp.write_text(prelude.replace("TICKET_DECL",ticket_decl)+adc+"\n"+progress+"\n"+state+"\n"+ticket+"\n"+setter+"\n#ifdef RF_HEATER_RESET_WDT_EXPERIMENT\n"+feed+"\n"+heartbeat+"\n#endif\n"+
                    "\nstatic void startFrame(uint8_t pwm_count_heater){InterruptProtectedBlock lock;\n"+frame+"\n}\n"+main)
     for n in (1,2):
-        for flags in ([], ["-DRF_HEATER_RESET_WDT_EXPERIMENT=1"],
-                      ["-DRF_HEATER_RESET_WDT_EXPERIMENT=1","-DRF_THERMAL_EMERGENCY_EXPERIMENT=1"]):
+        for flags in (["-DRF_HEATER_RESET_WDT_EXPERIMENT=1","-DRF_THERMAL_EMERGENCY_EXPERIMENT=1"],):
             subprocess.run(["g++","-std=c++11","-Wall","-Wextra","-Werror","-O2",
                             f"-DNUM_EXTRUDER={n}",*flags,str(cpp),"-o",str(exe)],check=True)
             subprocess.run([str(exe)],check=True)

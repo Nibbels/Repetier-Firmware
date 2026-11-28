@@ -645,9 +645,7 @@ uint16_t HAL::temperatureAdcSample(uint8_t index) {
 }
 
 bool HAL::temperatureAdcSample(uint8_t index, uint16_t& sample
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
                               , uint32_t* publication
-#endif
 ) {
     if (index >= TemperatureAdcCount) {
         sample = 0;
@@ -665,9 +663,7 @@ bool HAL::temperatureAdcSample(uint8_t index, uint16_t& sample
     // Read the clock after the snapshot so a just-published timestamp is not
     // in the future. Unsigned subtraction works across ordinary millis wrap.
     if (static_cast<uint32_t>(timeInMilliseconds() - publishedAt) <= temperatureAdcMaxAgeMs) {
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         if(publication)*publication=publishedAt;
-#endif
         return true;
     }
     {
@@ -690,9 +686,7 @@ void HAL::HeaterSample::release() {
     }
 }
 bool HAL::HeaterSample::read(uint8_t index,uint16_t& raw
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
                             , uint32_t* publication
-#endif
 ) {
     InterruptProtectedBlock lock;
     raw=0;
@@ -701,9 +695,7 @@ bool HAL::HeaterSample::read(uint8_t index,uint16_t& raw
     // In particular a conservative wrap invalidation must not impersonate
     // a broken sensor during a healthy autotune. No valid ticket, no renewal.
     if(!HAL::temperatureAdcSample(index,raw
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
                                   ,publication
-#endif
     )) return false;
     if(raw>0 && raw<4092 && heaterSampleLive(index) &&
        (heaterSampleState[index] & (SampleFresh|SampleBusy))==SampleFresh) {
@@ -819,7 +811,6 @@ void HAL::startWatchdog() {
         && !(heaterWatchdogResetCause&_BV(PORF));
     if(cookie==heaterRecoveryCookie || resetDuringHeat
         || (heaterWatchdogResetCause&_BV(WDRF))) {
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         // The live cookie alone cannot distinguish a watchdog from another
         // reset. Only WDRF or the known watchdog recovery entry is evidence.
         ThermalEmergency::latchSystemFault(
@@ -827,13 +818,7 @@ void HAL::startWatchdog() {
             ? ThermalEmergency::Cause::WatchdogReset
             : ThermalEmergency::Cause::InterruptedHeating);
         Printer::stopForThermalFault();
-#else
-        Printer::latchOutputInhibit(true);
-#endif
         Printer::markTemperatureReadingsAvailable();
-#ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
-        Com::printErrorFLN(PSTR("Watchdog/recovery: heating inhibited until restart"));
-#endif
     }
     // One-shot retained marker. An unrecognized power cycle may latch once
     // if SRAM survives and MCUSR is lost; the next restart can clear it.
@@ -942,14 +927,12 @@ volatile long __attribute__((used)) stepperWait = 0;
 /** \brief Timer interrupt routine to drive the stepper motors.
 */
 ISR(TIMER1_COMPA_vect) {
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     // A terminal thermal stop is not a normal queue drain. No new STEP
     // output or queued control task, even if an old caller republishes work.
     if(Printer::printJob.emergencyLocked()) {
         cbi(TIMSK1,OCIE1A);
         return;
     }
-#endif
     // Mechanical block is also a motion fence. No stale queued, direct,
     // compensation or control task may run while the foreground unwinds.
     if (Printer::blockAll && !PrintLine::mechanicalRetreatActive()) {
@@ -1157,7 +1140,6 @@ static void tryThermalWatchdogFeed(bool heatDemand,bool regularPass) {
         anyPower=true;
         if(!(heaterGrantProgress & _BV(c))) return;
     }
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     if(Printer::isAnyTempsensorDefect()) {
         // Retain diagnostics only while the real completed thermal pass
         // demonstrates all software heater outputs off. Read GPIO, not
@@ -1168,7 +1150,6 @@ static void tryThermalWatchdogFeed(bool heatDemand,bool regularPass) {
 #endif
             || READ(HEATED_BED_HEATER_PIN))return;
     }
-#endif
     // Do not resurrect a missed hardware progress deadline, even if a
     // delayed foreground pass now looks healthy. Both watchdogs must expire.
     if(!renewWatchdogProgress()) return;

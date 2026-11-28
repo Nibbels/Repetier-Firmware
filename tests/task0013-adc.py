@@ -73,7 +73,7 @@ struct AdcControl {
 struct HAL {
     static uint32_t timeInMilliseconds() { return now; }
     static uint16_t temperatureAdcSample(uint8_t);
-    static bool temperatureAdcSample(uint8_t, uint16_t&);
+    static bool temperatureAdcSample(uint8_t, uint16_t&, uint32_t* publication=nullptr);
     static void analogStart();
 };
 #include "adc.inc"
