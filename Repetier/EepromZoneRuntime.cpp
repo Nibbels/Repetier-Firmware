@@ -1,8 +1,5 @@
 // Sole internal EEPROM settings owner. The upper-bank schema is mandatory.
 #include "Repetier.h"
-#ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
-#error The new schema requires thermal emergency admission
-#endif
 #include "EepromZoneAvr.h"
 #include "EepromZoneSession.h"
 #include "EepromZoneDefaults.h"

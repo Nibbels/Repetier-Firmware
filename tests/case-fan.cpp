@@ -36,6 +36,10 @@ struct GCode {
 unsigned invalid = 0;
 void showInvalidSyntax(int m) { assert(m == 3121); ++invalid; }
 
+namespace ThermalEmergency {
+static struct { bool fault=false; bool active()const{return fault;} } ledger;
+const decltype(ledger)& faultLedger(){return ledger;}
+}
 #include "case-fan-firmware.inc"
 
 int main() {
@@ -83,4 +87,10 @@ int main() {
     tools[0].targetTemperatureC = 0;
     CaseFan::updateFromHotendTargets();
     assert(!fanOn);
+    ThermalEmergency::ledger.fault=true;
+    CaseFan::updateFromHotendTargets();
+    assert(fanOn);
+    HAL::now+=100000;
+    CaseFan::service();
+    assert(fanOn);
 }

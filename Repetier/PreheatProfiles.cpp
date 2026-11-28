@@ -3,12 +3,8 @@
 
 namespace {
 int16_t bedProfileMaximum() {
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     const int16_t cap=heatedBedController.maximumTargetC();
     return cap<UI_SET_MAX_HEATED_BED_TEMP?cap:UI_SET_MAX_HEATED_BED_TEMP;
-#else
-    return UI_SET_MAX_HEATED_BED_TEMP;
-#endif
 }
 bool validTemperature(int16_t temperature, int16_t minimum, int16_t maximum) {
     return temperature == 0 || (temperature >= minimum && temperature <= maximum);
@@ -18,12 +14,8 @@ bool validTemperature(int16_t temperature, int16_t minimum, int16_t maximum) {
 bool PreheatProfiles::readStored(Profile profile, Temperatures temperatures) {
     const auto factory = defaults(profile);
     auto& target = profiles_[static_cast<uint8_t>(profile)];
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     // A lower/disabled live bed limit must not erase a stored preference.
     const int16_t bedMax=UI_SET_MAX_HEATED_BED_TEMP<140?UI_SET_MAX_HEATED_BED_TEMP:140;
-#else
-    const int16_t bedMax=bedProfileMaximum();
-#endif
     const int16_t safeDefault=validTemperature(factory.bed,UI_SET_MIN_HEATED_BED_TEMP,bedMax)?factory.bed:0;
     target.bed = validTemperature(temperatures.bed, UI_SET_MIN_HEATED_BED_TEMP, bedMax)
         ? temperatures.bed : safeDefault;

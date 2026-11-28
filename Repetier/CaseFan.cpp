@@ -60,14 +60,12 @@ void setOffDelay(uint32_t delayMs) { offDelayMs = delayMs; }
 uint32_t offDelay() { return offDelayMs; }
 
 void updateFromHotendTargets() {
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     // An in-flight autotune may unwind after the emergency pass. Its
     // zeroed targets must not schedule an immediate case-fan shutdown.
     if(ThermalEmergency::faultLedger().active()) {
         turnOn();
         return;
     }
-#endif
     if (automaticOnInhibited) {
         offPending = false;
         offDelayMs = 0;
