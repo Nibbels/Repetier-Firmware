@@ -1947,3 +1947,74 @@ jobs:
           path: ${{ runner.temp }}/compare-phase-clock
           retention-days: 7
           if-no-files-found: error
+
+  current-z-compare-admission:
+    if: github.head_ref == 'task/Task0032-resend-preflight'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-z-plateau-combined-b9967118620356f4f8e9648b60225fc9a2692462
+          run-id: 46173302272
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/z-compare-input
+      - name: Prepare physical Z compare-phase admission candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          input="$RUNNER_TEMP/z-compare-input"
+          source="$RUNNER_TEMP/z-compare-source"
+          out="$RUNNER_TEMP/z-compare-admission"
+          p0=c31b4d391cc4d2b9cca9ab3f8e236bed805716d9
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          sha256sum tools/task0032/{compare-phase-clock.h,compare-phase-clock-replay.cpp,current-z-compare-admission.py,current-z-compare-linked.py,current-queue-pack-linked.py,current-direct-energy-linked.py} research/task0032-step-output/linked_timer1.py > "$out/tool-sha256.txt"
+          test "$(cat "$input/local-candidate-sha.txt")" = f738d095554351e5f257db48dcf10c2eac4199ac
+          echo "ce1a650a49f9e8db7a8bc58edbacb4866623900bc2aa403a51f202fe075977c3  $input/z-plateau-combined.diff" | sha256sum -c
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$source" "$p0"
+          git -C "$source" apply --index "$input/z-plateau-combined.diff"
+          test "$(git -C "$source" write-tree)" = 7c1f398bb77c156f91cfd688c04e434cd3aa2ad0
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Reconstruct qualified combined Z candidate"
+          python3 tools/task0032/current-z-compare-admission.py --root "$source" | tee "$out/prepare.log"
+          python3 tools/task0032/current-direct-energy-replay.py --source "$source/Repetier" --candidate "$source/Repetier" --out "$out/replay" | tee "$out/replay.log"
+          git -C "$source" add Repetier
+          git -C "$source" diff --cached --check
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Shared physical Z compare-phase timing floor"
+          git -C "$source" rev-parse HEAD > "$out/local-candidate-sha.txt"
+          git -C "$source" rev-parse 'HEAD^{tree}' > "$out/local-candidate-tree.txt"
+          git -C "$source" diff --binary "$p0" HEAD > "$out/z-compare-admission.diff"
+          (cd "$out"; sha256sum z-compare-admission.diff > z-compare-admission.diff.sha256)
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Canonical host and four AVR recovery links
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/z-compare-admission"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          cd "$RUNNER_TEMP/z-compare-source"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" | tee "$out/canonical.log"
+      - name: Verify actual Z spacing, direct ramp and UART on all linked images
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/z-compare-admission"
+          python3 tools/task0032/current-direct-energy-linked.py --optimized --extended --phase-anchor --compact --z-dir-owner --evidence "$out/candidate-evidence" --out "$out/linked-energy.json" | tee "$out/linked-energy.log"
+          python3 tools/task0032/current-transport-linked.py --evidence "$out/candidate-evidence" --out "$out/linked-transport.json" | tee "$out/linked-transport.log"
+          python3 tools/task0032/current-queue-pack-linked.py --extended --z-admission --evidence "$out/candidate-evidence" --out "$out/linked-queue-packs.json" | tee "$out/linked-queue-packs.log"
+          python3 tools/task0032/current-z-compare-linked.py --evidence "$out/candidate-evidence" --out "$out/linked-z-chain.json" | tee "$out/linked-z-chain.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-z-compare-admission-${{ github.sha }}
+          path: ${{ runner.temp }}/z-compare-admission
+          retention-days: 7
+          if-no-files-found: error
