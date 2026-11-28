@@ -15,6 +15,8 @@ def digest(data):
 
 def landmark(body, pattern):
     matches = re.findall(pattern, body, re.MULTILINE)
+    if not matches:
+        return None  # Changed or absent landmark requires manual review.
     if len(matches) != 1:
         raise ValueError(f"linked landmark needs review: {pattern} ({len(matches)} matches)")
     return matches[0]
