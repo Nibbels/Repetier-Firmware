@@ -135,7 +135,7 @@ MODES=("stage-ring","stage-fe","stage-dor","stage-upe","stage-before",
        "stage-after","stage-m110","stage-m112","stage-text","stage-full",
        "stage-tx","stage-thermal-first")
 
-def run(source,out):
+def run(source,out,stage2=None):
     with tempfile.TemporaryDirectory(prefix="task0032-terminal-receiver-") as d:
         root=Path(d);fw=root/"Repetier";tests=root/"tests"
         shutil.copytree(source/"Repetier",fw)
@@ -144,9 +144,13 @@ def run(source,out):
             shutil.copyfile(source/"tests"/name,tests/name)
         # Add test hooks only, not a second implementation of admission.
         p=fw/"GCodeInput.cpp";s=p.read_text()
-        s=once(s,"void GCodeInput::checkAndPushCommand(GCode& command) {",
-            "void GCodeInput::checkAndPushCommand(GCode& command) {\n    researchBeforeCommit();")
+        signature=("void GCodeInput::checkAndPushCommand(GCode& command,const ResendEnvelope& evidence) {"
+            if stage2 else "void GCodeInput::checkAndPushCommand(GCode& command) {")
+        s=once(s,signature,signature+"\n    researchBeforeCommit();")
         s=once(s,"        commandQueue.publish();","        commandQueue.publish();\n        researchAfterCommit();")
+        if stage2:
+            s=once(s,"    if(admitted)commandQueue.publish();",
+                "    if(admitted){commandQueue.publish();researchAfterCommit();}")
         p.write_text(s)
         p=tests/"serial-protocol.cpp";s=p.read_text()
         s=once(s,"bool thermalLocked=false;","bool thermalLocked=false,transportLocked=false;\nunsigned transportStops=0;")
@@ -180,7 +184,21 @@ namespace HAL {''')
             "    bool thermalEmergency() const {return thermalLocked;}")
         s=once(s,"        assert(!thermalLocked);\n#endif\n        ++pendingOutputVisits;",
             "        if(thermalLocked||transportLocked)return;\n#endif\n        ++pendingOutputVisits;")
-        s=once(s,"void numberedLines() {",SCENARIOS+"\nvoid numberedLines() {")
+        scenarios=SCENARIOS
+        modes=MODES
+        if stage2:
+            # Stage2 publishes ordinary ACK via the real UART span. If
+            # terminal loss occurs after commit but before ACK publication,
+            # no additional ACK is sent; already queued work is canceled.
+            scenarios=once(scenarios,r'assert(replies=="ok 1\r\n");replies.clear();',
+                'assert(replies.empty() && txDrain().empty());')
+            scenarios=once(scenarios,'assert(replies=="ok 0\r\n");replies.clear();',
+                r'assert(replies.empty() && txDrain()=="ok 0\r\n");')
+            scenarios=once(scenarios,'assert(commandQueue.full());replies.clear();',
+                r'assert(commandQueue.full() && txDrain()=="ok 1\r\nok 2\r\n");replies.clear();')
+            scenarios+="\n"+stage2["SCENARIOS"]
+            modes+=stage2["MODES"]
+        s=once(s,"void numberedLines() {",scenarios+"\nvoid numberedLines() {")
         s=once(s,'    const std::string scenario = argv[1];',
             '''    const std::string scenario = argv[1];
     UsbSerial::begin();
@@ -192,6 +210,7 @@ namespace HAL {''')
     else goto legacy;
     std::printf("Stage1 receiver: %s PASS\\n",argv[1]);return 0;
 legacy:''')
+        if stage2:s=once(s,'    else goto legacy;',stage2['DISPATCH']+'\n    else goto legacy;')
         p.write_text(s)
         p=tests/"serial-protocol.py";s=p.read_text()
         s=once(s,'command_loop.index("void Commands::commandLoop()")',
@@ -202,7 +221,7 @@ legacy:''')
         end=s.index('\n\nif __name__',start)
         s=s[:start]+'''        replay = build / "serial-replay"
         subprocess.run(compiler + ["-DRF_THERMAL_EMERGENCY_EXPERIMENT=1",str(tests / "serial-protocol.cpp"), "-o", str(replay)], check=True)
-        for scenario in '''+repr(MODES)+''':
+        for scenario in '''+repr(modes)+''':
             subprocess.run([str(replay), scenario], check=True, timeout=10)
 '''+s[end:]
         p.write_text(s)
