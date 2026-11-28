@@ -27,6 +27,13 @@ STREAM_HELPERS=r'''
 bool researchReplayable=true; // supplied by the emulator, not inferred
 bool researchBinarySession=false;
 uint8_t researchZeros=0;
+// Keep the formatter and exact legacy wire bytes unchanged; this adapter
+// fences RX until the Resend line (not the control ok) reaches UDR.
+struct ResyncTxSerial {
+    static bool tryWriteSpan(const char* bytes,uint8_t count) {
+        return UsbSerial::tryWriteResendSpan(bytes,count,uint8_t(count-4));
+    }
+};
 static void researchFault() {
     researchBoundary=false;
     researchRecovery.fault(serialReceive.lastLineNumber+1,
@@ -75,13 +82,12 @@ void streamVisit(uint32_t now) {
         // Reserve conservatively for the whole maximum-length span before
         // discarding RX. No other foreground TX producer in this visit.
         if(UsbSerial::transmitFree()<25)return false;
-        UsbSerial::rearmForResync();
         frame.length=frame.expectedLength=0;
         frame.comment=frame.borrowedText=false;
         serialReceive.waitingForResend=-1;
         researchZeros=0;
         researchBoundary=!researchBinarySession;
-        assert(publishResend<UsbSerial>(expected));
+        assert(publishResend<ResyncTxSerial>(expected));
         return true;
     });
     // Arm on the same visit as a newly published ACK/Resend. At most
@@ -240,6 +246,31 @@ void streamAckStall(bool borrowed, bool lost) {
     assert(researchStops==1 && drainTx().empty());
 }
 
+
+void streamRequestFence(bool binaryMode) {
+    startStream(binaryMode);
+    const auto packet=streamPacket(2);
+    corruptStream(packet,0,_BV(FE0));streamVisit(1);
+    // Byte-perfect expected replay BEFORE request is handed to UDR is
+    // necessarily stale/unrelated. Even a binary sync run cannot trust it.
+    if(binaryMode)uartFeed(std::string(32,'\0'));
+    uartFeed(packet);streamVisit(2);
+    assert(!GCodeInput::peekCurrentCommand() &&
+           researchRecovery.phase()==ResendPolicy::Phase::Waiting);
+    std::string prefix;
+    for(unsigned i=0;i<resend2.size()-4;++i) {
+        USART0_UDRE_vect();prefix+=char(UDR0);
+    }
+    assert(prefix==resend2.substr(0,resend2.size()-4));
+    // Earliest possible response, before trailing control ok was retired.
+    if(binaryMode)uartFeed(std::string(32,'\0'));
+    uartFeed(packet);
+    for(unsigned i=0;i<4;++i)streamVisit(3+i);
+    assert(researchRecovery.phase()==ResendPolicy::Phase::Healthy);
+    assert(drainTx()=="ok\r\nok 2\r\n");expectCommand(2);
+    assert(!researchStops);
+}
+
 void streamPublishedStall(bool resend) {
     researchStreamActive=true;
     const uint32_t start=0xffffff00;
@@ -387,6 +418,8 @@ def main():
             '    else if (scenario == "stream-ack-stall") streamAckStall(false,false);\n'
             '    else if (scenario == "stream-ack-text-stall") streamAckStall(true,false);\n'
             '    else if (scenario == "stream-ack-loss-stall") streamAckStall(true,true);\n'
+            '    else if (scenario == "stream-request-fence-a") streamRequestFence(false);\n'
+            '    else if (scenario == "stream-request-fence-b") streamRequestFence(true);\n'
             '    else if (scenario == "stream-published-ack-stall") streamPublishedStall(false);\n'
             '    else if (scenario == "stream-published-resend-stall") streamPublishedStall(true);\n'
             '    else if (scenario == "stream-ack-resume") streamAckResume();\n'
@@ -399,7 +432,7 @@ def main():
         # replay's mock TX. Keep that independent two-mode suite in the
         # frame preflight; run all ordinary serial cases plus stream here.
         path=tests/"serial-protocol.py";s=path.read_text()
-        names='"stream-a0","stream-a1","stream-a2","stream-b0","stream-b1","stream-b2","stream-sweep-a","stream-sweep-b","stream-ack","stream-ack-stall","stream-ack-text-stall","stream-ack-loss-stall","stream-ack-resume","stream-published-ack-stall","stream-published-resend-stall","stream-text","stream-fatal","stream-ambiguous",'
+        names='"stream-a0","stream-a1","stream-a2","stream-b0","stream-b1","stream-b2","stream-sweep-a","stream-sweep-b","stream-ack","stream-ack-stall","stream-ack-text-stall","stream-ack-loss-stall","stream-ack-resume","stream-request-fence-a","stream-request-fence-b","stream-published-ack-stall","stream-published-resend-stall","stream-text","stream-fatal","stream-ambiguous",'
         s=once(s,'for scenario in ("numbered",','for scenario in ('+names+'"numbered",')
         start=s.index('        subprocess.run(compiler + ["-DRF_THERMAL_EMERGENCY_EXPERIMENT')
         end=s.index('        uart_replay =',start)
