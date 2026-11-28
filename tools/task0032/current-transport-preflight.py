@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+"""Stage 1: sticky hardware loss + bounded TX + existing terminal transition.
+
+Consume the exact qualified combined Drive/core patch in a disposable tree.
+This is NOT the bounded resend receiver: legacy retry behaviour is still
+present, and loss of an unidentified byte is deliberately terminal. No
+hardware test, production merge, or latency qualification is implied.
+"""
+from pathlib import Path
+import argparse
+import hashlib
+import json
+import re
+import runpy
+import subprocess
+
+HERE=Path(__file__).resolve().parent
+drive=runpy.run_path(str(HERE/"current-drive-combined.py"))
+trigger=runpy.run_path(str(HERE/"transport-terminal-trigger.py"))
+ring=runpy.run_path(str(HERE/"resend-ring-preflight.py"))
+writer=runpy.run_path(str(HERE/"tx-blocking-preflight.py"))
+once=ring["once"]
+
+def candidate(fw):
+    # Reuse actual-source terminal transition and foreground service seams.
+    files=trigger["candidate"](fw)
+    h=(fw/"UsbSerial.h").read_text()
+    s=(fw/"UsbSerial.cpp").read_text()
+    # The historical ring generator anchors at the old variable-rate init.
+    # Adapt ONLY the signature while generating the additions.
+    s=once(s,"void UsbSerial::begin() {","void UsbSerial::begin(unsigned long baud) {")
+    h,s=ring["candidate_uart"](h,s)
+    h,s=ring["packed_candidate"](h,s)
+    s=once(s,"void UsbSerial::begin(unsigned long baud) {","void UsbSerial::begin() {")
+    h,s=writer["bounded_writer"](h,s)
+    h=once(h,"    static bool blockingTxFailed(){return blockingTxFailed_;}",
+        "    static bool blockingTxFailed(){return blockingTxFailed_;}\n"
+        "    static bool transportFailed(){return blockingTxFailed() || lossFlags();}")
+    # Fixed init is cold start only. Account for all three state variables
+    # before re-enabling USART IRQs, together with the existing ring reset.
+    s=once(s,"    tx_.head = tx_.tail = 0;",
+        "    tx_.head = tx_.tail = 0;\n"
+        "    txPublished_ = 0;\n    lossFlags_ = 0;\n"
+        "    blockingTxFailed_ = false;")
+    files["UsbSerial.h"],files["UsbSerial.cpp"]=h,s
+
+    # No RX gate reopening is called by this stage. In particular a thermal
+    # promotion must not turn a quarantined stream into diagnostic input.
+    g=files["GCodeInput.cpp"]
+    old="(UsbSerial::blockingTxFailed() && !Printer::printJob.thermalEmergency())"
+    assert g.count(old)==4
+    g=g.replace(old,"(UsbSerial::transportFailed())")
+    # Keep syntax of the standalone conditional and the three combined ones.
+    g=once(g,"if(UsbSerial::transportFailed())return;","if(UsbSerial::transportFailed())return;")
+    g=once(g,"Printer::printJob.emergencyLocked() || UsbSerial::blockingTxFailed()",
+        "Printer::printJob.emergencyLocked() || UsbSerial::transportFailed()")
+    g=once(g,"    HAL::serialFlush();\n    frame.length = 0;",
+        "    HAL::serialFlush();\n#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT\n"
+        "    if(UsbSerial::transportFailed())return;\n#endif\n    frame.length = 0;")
+    g=once(g,"        frame.bytes[frame.length++] = HAL::serialReadByte();",
+        "#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT\n"
+        "        if(UsbSerial::transportFailed())return;\n#endif\n"
+        "        frame.bytes[frame.length++] = HAL::serialReadByte();")
+    files["GCodeInput.cpp"]=g
+    files["Commands.cpp"]=once(files["Commands.cpp"],
+        "!Printer::printJob.emergencyLocked() && UsbSerial::blockingTxFailed()",
+        "!Printer::printJob.emergencyLocked() && UsbSerial::transportFailed()")
+    return files
+
+def replay_uart(out,files):
+    src=files["UsbSerial.cpp"]
+    check="            blockingTxFailed_=true;\n            return;\n        }"
+    assert src.count(check)==2
+    # Host test only: emulate UDRE progress at a polling boundary.
+    fixture=src.replace(check,check+"\n        researchWaitStep();")
+    (out/"usb-serial-firmware.inc").write_text(re.sub(r"^#include <avr/\w+\.h>\n","",fixture,flags=re.M))
+    test=writer["TEST"]
+    test=once(test,"UPE0=2 };","UPE0=2, UCSZ01=2, UCSZ00=1 };")
+    test=once(test,"UCSR0A,UCSR0B,UBRR0H","UCSR0A,UCSR0B,UCSR0C,UBRR0H")
+    test=once(test,"UsbSerial::begin(250000);","UsbSerial::begin();")
+    # Extra actual ISR checks on the fixed-init composed source.
+    test=once(test,'    const bool flush=mode.find("flush")!=std::string::npos;',
+        r'''    if(mode=="hardware-loss") {
+        UCSR0A=0;UDR0='a';USART0_RX_vect();
+        UCSR0A=_BV(FE0);UDR0='b';USART0_RX_vect();
+        assert(UsbSerial::transportFailed() && UsbSerial::lossFlags()==_BV(FE0));
+        UCSR0A=0;UDR0='c';USART0_RX_vect();
+        UCSR0A=_BV(DOR0);UDR0='d';USART0_RX_vect();
+        assert(UsbSerial::lossFlags()==(_BV(FE0)|_BV(DOR0)));
+        assert(UsbSerial::read()=='a' && UsbSerial::read()==-1);
+        assert(UsbSerial::transportFailed());
+        return 0;
+    }
+    const bool flush=mode.find("flush")!=std::string::npos;''')
+    (out/"uart-replay.cpp").write_text(test)
+    for flags in (["-O2"],["-O1","-fsanitize=undefined","-fno-sanitize-recover=all"]):
+        exe=out/"uart-replay"
+        subprocess.run(["c++","-std=c++11","-Wall","-Wextra","-Werror",*flags,
+            "-I",str(HERE),str(out/"uart-replay.cpp"),"-o",str(exe)],check=True)
+        for mode in ("hardware-loss","write-good","flush-good","write-masked","flush-masked","write-stall","flush-stall","flush-partial"):
+            subprocess.run([str(exe),mode],check=True,timeout=10)
+        exe.unlink()
+
+def replay_scheduler(out,files):
+    prelude=once(trigger["PRELUDE"],"static bool blockingTxFailed(){return txFailed;}",
+        "static bool transportFailed(){return txFailed;}")
+    # Scheduler mock still injects an abstract transport-failure bit; actual
+    # RX and TX sources of this bit are exercised separately above.
+    code=trigger["region"](files["Commands.cpp"],
+        "#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT\nstatic bool serviceTransportFailure()",
+        "bool Commands::waitForMotion")
+    (out/"scheduler.cpp").write_text(prelude+code+trigger["SCENARIOS"])
+    exe=out/"scheduler"
+    subprocess.run(["c++","-std=c++11","-O1","-Wall","-Wextra","-Werror",
+        "-fsanitize=undefined","-fno-sanitize-recover=all",str(out/"scheduler.cpp"),"-o",str(exe)],check=True)
+    for mode in ("before-read","read","execute","keepalive","comp-ui","comp","temperature","print-temperature","temp-ui","dms","features","scan"):
+        subprocess.run([str(exe),mode],check=True,timeout=10)
+    exe.unlink()
+
+def main():
+    p=argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--source",type=Path,required=True)
+    p.add_argument("--combined",type=Path,required=True)
+    p.add_argument("--out",type=Path,required=True)
+    a=p.parse_args()
+    source=a.source.resolve();out=a.out.resolve();combined=a.combined.resolve()
+    assert drive["git"](source,"rev-parse","HEAD")==drive["P0"]
+    assert subprocess.run(["git","-C",str(source),"symbolic-ref","-q","HEAD"],
+        capture_output=True).returncode==1
+    assert not drive["git"](source,"status","--porcelain")
+    assert out!=source and source not in out.parents
+    out.mkdir(parents=True,exist_ok=True)
+    subprocess.run(["git","-C",str(source),"apply","--check",str(combined)],check=True)
+    subprocess.run(["git","-C",str(source),"apply",str(combined)],check=True)
+    fw=source/"Repetier"
+    files=candidate(fw)
+    for name,s in files.items():(out/name).write_text(s)
+    replay_uart(out,files)
+    replay_scheduler(out,files)
+    for name,s in files.items():(fw/name).write_text(s)
+    subprocess.run(["git","-C",str(source),"diff","--check"],check=True)
+    (out/"provenance.json").write_text(json.dumps({
+        "p0":drive["P0"],
+        "combined_sha256":hashlib.sha256(combined.read_bytes()).hexdigest(),
+        "candidate_sha256":{n:hashlib.sha256(s.encode()).hexdigest() for n,s in sorted(files.items())},
+        "scope":"Stage 1 only: actual-source UART and scheduler seam; bounded resend and final receiver replay outstanding"
+    },indent=2)+"\n")
+
+if __name__=="__main__":
+    main()
