@@ -14,7 +14,7 @@ from tempfile import TemporaryDirectory
 root = Path(__file__).resolve().parents[1]
 source = (root / "Repetier" / "StepExecutor.cpp").read_text()
 start = source.index("    // Packing keeps the legacy threshold")
-end = source.index("    if (move->stepsRemaining <= 0", start)
+end = source.index("    // A switch move gets one final settled switch sample", start)
 block = source[start:end]
 for board in ("RF1000.h", "RF2000.h"):
     config = (root / "Repetier" / board).read_text()
@@ -27,7 +27,7 @@ harness = r"""
 #include <cassert>
 #define MAX_STEP_PACKING_MIN_INTERVAL 5000
 
-static uint32_t pack(uint32_t interval, uint16_t packingInterval_, uint8_t& stepsPerTimerCall) {
+static uint32_t pack(uint32_t interval, uint16_t packingInterval_, uint8_t& stepsPerTimerCall, bool guarded = false) {
 """ + block + r"""
     return interval;
 }
@@ -40,11 +40,15 @@ int main() {
             uint32_t n = single >= threshold ? 1 : (threshold + single - 1) / single;
             assert(n <= 127 && pulses == n && result == single * n);
             ++count;
+            assert(pack(single, threshold, pulses, true) == single && pulses == 1);
+            ++count;
         }
         for (uint32_t single : {65535u, 65536u, 1600000u, 0x3fffffu, UINT32_MAX}) {
             uint8_t pulses = 0;
             uint32_t result = pack(single, threshold, pulses);
             assert(pulses == 1 && result == single);
+            ++count;
+            assert(pack(single, threshold, pulses, true) == single && pulses == 1);
             ++count;
         }
     }
