@@ -218,7 +218,7 @@ void calculate() {
 #include "bed-matrix-scan-firmware.inc"
 
 const ScanSettings& Calibration::probeSettings() { return scanSettings; }
-bool Calibration::moveZ(int steps, bool) { return ::moveZ(steps); }
+bool Calibration::moveZ(int32_t steps, bool) { return ::moveZ(steps); }
 void Calibration::showAbortScanReason(const void* text, ScanAbort reason) {
     ::showAbortScanReason(static_cast<const char*>(text), reason);
 }

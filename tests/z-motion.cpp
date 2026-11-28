@@ -94,7 +94,12 @@ struct Commands {
 };
 struct Com { static void printFLN(const char*) {} };
 
-static bool moveZ(int nSteps, bool emergencyRetreat = false);
+enum class GuardedMoveStatus : uint8_t { Denied, Cancelled, Limit, SwitchReached, PositionReached };
+struct GuardedMoveResult { GuardedMoveStatus status; int32_t positionSteps; };
+struct PrintLine {
+    static GuardedMoveResult runScanMove(int32_t nSteps, bool emergencyRetreat);
+};
+static bool moveZ(int32_t nSteps, bool emergencyRetreat = false);
 
 #include "z-motion-firmware.inc"
 
@@ -142,6 +147,37 @@ bool step(Path path, int8_t direction) {
     return continuing;
 }
 
+}
+// Model scheduling here; actual Timer1 executor is replayed separately.
+GuardedMoveResult PrintLine::runScanMove(int32_t nSteps, bool emergencyRetreat) {
+    using namespace Printer;
+    const auto interrupted = [emergencyRetreat] {
+        return !emergencyRetreat && (scanSession.aborting() || blockAll || printJob.commandsBlocked());
+    };
+    if (interrupted())
+        return {GuardedMoveStatus::Cancelled,zMotion.scanSteps()};
+    while (needsCMPwait()) {
+        Commands::checkForPeriodicalActions(Processing);
+        if (interrupted()) return {GuardedMoveStatus::Cancelled,zMotion.scanSteps()};
+    }
+    zMotion.setScanInProgress(true);
+    GuardedMoveStatus status=GuardedMoveStatus::PositionReached;
+    for (int32_t i=0;i<abs(nSteps);++i) {
+        if (interrupted()) {status=GuardedMoveStatus::Cancelled;break;}
+        if (!step(Path::Scan,nSteps<0?-1:1)) {status=GuardedMoveStatus::Limit;break;}
+        if (tickDuringScan) {
+            InterruptProtectedBlock lock;
+            const int before=pulseCount;
+            StepExecutor::stepSlowedZCompensation();
+            assert(!StepExecutor::needCmpWait() && pulseCount==before);
+        }
+        if ((i&15)==15) Commands::checkForPeriodicalActions(Calibrating);
+    }
+    zMotion.setScanInProgress(false);
+    if(interrupted()) status=GuardedMoveStatus::Cancelled;
+    return {status,zMotion.scanSteps()};
+}
+namespace {
 void driveDirect(int32_t distance, Path path = Path::Direct) {
     zMotion.requestDirectMove(distance);
     const int8_t direction = distance > 0 ? 1 : -1;

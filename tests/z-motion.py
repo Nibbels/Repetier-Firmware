@@ -26,7 +26,7 @@ def main():
         section(executor, "void StepExecutor::stepSlowedZCompensation()", "\n/**\n  Processes the moves"),
         "namespace Printer {\n" + no_wait + "\n}",
         section(printer, "bool Printer::needsCMPwait(", "\n// The thermal caller has already revoked heater duty"),
-        section(probe, "bool moveZ(int nSteps, bool emergencyRetreat) {", "\n} // namespace Calibration"),
+        section(probe, "bool moveZ(int32_t nSteps, bool emergencyRetreat) {", "\n} // namespace Calibration"),
     ]
     with TemporaryDirectory(prefix="rfx-z-motion-") as directory:
         build = Path(directory)

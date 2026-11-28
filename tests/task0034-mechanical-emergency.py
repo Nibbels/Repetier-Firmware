@@ -13,8 +13,8 @@ src=(root/"Repetier/RF.cpp").read_text()
 body=src[src.index("void doEmergencyStop("):src.index("} // doEmergencyStop")+1]
 hal=(root/"Repetier/HAL.cpp").read_text()
 vector=hal[hal.index("ISR(TIMER1_COMPA_vect)"):hal.index("} // ISR(TIMER1_COMPA_vect)")]
-assert vector.index("if (Printer::blockAll)") < vector.index("uint8_t doExit;")
-assert vector.index("if(Printer::printJob.emergencyLocked())") < vector.index("if (Printer::blockAll)")
+assert vector.index("if (Printer::blockAll && !PrintLine::mechanicalRetreatActive())") < vector.index("uint8_t doExit;")
+assert vector.index("if(Printer::printJob.emergencyLocked())") < vector.index("if (Printer::blockAll && !PrintLine::mechanicalRetreatActive())")
 harness=r'''
 #include <cassert>
 #include <cstdint>
@@ -54,7 +54,7 @@ struct PrintLine {
 void showError(void*){assert(Printer::blockAll && !queued && !direct && !targets);}
 namespace Com {void printF(const char*){}void printFLN(const char*){}}
 namespace Calibration {
-bool moveZ(int steps,bool emergency){
+bool moveZ(int32_t steps,bool emergency){
     assert(emergency && steps==500 && Printer::blockAll && !queued && !direct && !paused && !idle && !unlocked && inhibited && !targets);
     if(thermal)return false;
     ++retreats;

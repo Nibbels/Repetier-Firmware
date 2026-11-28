@@ -67,6 +67,8 @@ uint16_t ComputeV(uint32_t, uint32_t) { return 0; }
 
 #include "XYMotion.h"
 #include "ZMotion.h"
+#include "CalibrationScan.h"
+namespace Calibration { ScanSession scanSession; }
 #define private public
 #include "motion.h"
 #include "StepExecutor.h"
@@ -106,6 +108,7 @@ struct {
 struct { void recordDirectExtrusion(int8_t) { assert(false); } } pause;
 struct { uint16_t intervalScale() { return 0; } } digitCompensation;
 bool isAxisHomed(uint8_t) { return homed; }
+bool zStepperEnabled() { return true; }
 bool isMinEndstopHit(uint8_t axis) { return minContact(axis); }
 bool isMaxEndstopHit(uint8_t axis) { return physical[axis] >= upper; }
 bool getXDirectionIsPos() { return positive[X_AXIS]; }

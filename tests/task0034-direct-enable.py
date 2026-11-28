@@ -16,7 +16,8 @@ source=r'''
 #include <initializer_list>
 #include <cstdint>
 using speed_t = uint16_t;
-constexpr uint8_t FLAG_GUARDED_STOP_MASK=96;
+constexpr uint8_t FLAG_GUARDED_STOP_MASK=96, FLAG_SCAN_PATH=8;
+struct ZMotion {static void setDirection(bool){assert(false);}};
 constexpr int DIRECT_PREPARING=1,DIRECT_PREPARED=2,DIRECT_PREPARED_STOPPABLE=3,
               DIRECT_RUNNING=4,DIRECT_RUNNING_STOPPABLE=5,FOR_DIRECT=0;
 static bool irq=false, timer1Masked=true;
@@ -30,6 +31,7 @@ struct PrintLine {
     static PrintLine direct;
     int task=0, primaryAxis=0, delta[1]={88}, stepsRemaining=120;
     uint8_t flags=0;
+    bool isZPositiveMove() const { return false; }
     struct { int vStart=42; } stepProfile;
     float fullSpeed=60;
     static bool directMovePreparing(int phase) { return phase==DIRECT_PREPARING; }
