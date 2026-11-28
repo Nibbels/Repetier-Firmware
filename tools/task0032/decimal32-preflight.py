@@ -214,8 +214,8 @@ def main():
         assert done and pending is None
         rows=[{"id":i,"baseline":records[i,1],"candidate":records[i,2],
                "saved":records[i,1]-records[i,2]} for i in range(len(records)//2)]
-        assert len(rows)==60,len(rows)
-        print("AVR libc:",60+1280+8192+8192,"value comparisons PASS")
+        assert len(rows)==61,len(rows)
+        print("AVR libc:",61+1280+8192+8192,"value comparisons PASS")
         print("paired samples saved cycles min/median/max:",
               min(r["saved"] for r in rows),sorted(r["saved"] for r in rows)[len(rows)//2],
               max(r["saved"] for r in rows))
@@ -230,7 +230,7 @@ def main():
         result={"p0":P0,"receiver_sha256":hashlib.sha256(receiver.encode()).hexdigest(),
                 "candidate_sha256":hashlib.sha256(header.encode()).hexdigest(),
                 "avr_elf_sha256":hashlib.sha256(elf.read_bytes()).hexdigest(),
-                "host":host_log.strip(),"avr_value_checks":60+1280+8192+8192,
+                "host":host_log.strip(),"avr_value_checks":61+1280+8192+8192,
                 "errno_users":errno_users,"rows":rows,
                 "qualification":"actual AVR-libc return value comparison; isolated timing; canonical serial host regression; no integrated linked resource/IRQ proof"}
         (out/"decimal32-results.json").write_text(json.dumps(result,indent=2)+"\n")
