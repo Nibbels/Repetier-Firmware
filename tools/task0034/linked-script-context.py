@@ -16,8 +16,6 @@ import zipfile
 BOARDS=("RF1000","RF2000","RF2000v2","RF2000-X44")
 EXPECTED={
     "tOutputObjectPrint": ["G21","G92","G1","G4","G92","G90","G1","G1"],
-    "tMountFilamentSoft": ["M3913"],
-    "tUnmountFilamentSoft": ["M3914"],
     "tMountFilamentHard": ["M109","G21","G92","G1","G92","M104"],
     "tUnmountFilamentHard": ["M109","G21","G92","G1","G92","M104"],
 }
@@ -80,9 +78,15 @@ def inventory(z,board):
                 errors.append([path,"unreviewed script callsite",rest[:80]])
                 continue
             callers.append([path.rsplit("/",1)[1],c[1]])
-    wanted=[["RF.cpp","tOutputObjectPrint"],["UiActions.cpp","tUnmountFilamentSoft"],
-            ["UiActions.cpp","tUnmountFilamentHard"],["UiActions.cpp","tMountFilamentSoft"],
-            ["UiActions.cpp","tMountFilamentSoft"],["UiActions.cpp","tMountFilamentHard"]]
+    wanted=[["RF.cpp","tOutputObjectPrint"],["UiActions.cpp","tUnmountFilamentHard"],
+            ["UiActions.cpp","tMountFilamentHard"]]
+    # The former two one-line soft programs are typed operations, not
+    # reachable text dispatcher contexts.
+    for name in ("tMountFilamentSoft","tUnmountFilamentSoft"):
+        assert not re.search(r"\bCom::"+name+r"\b",symbols),(board,name)
+    ui=z.read(p+"build/sketch/UiActions.cpp").decode()
+    assert ui.count("GCodeInput::executeSoftFilament(false);")==2
+    assert ui.count("GCodeInput::executeSoftFilament(true);")==1
     if sorted(callers)!=sorted(wanted):
         errors.append(["unreviewed source callsite inventory",callers])
     return {"scripts":scripts,"sourceCallsites":callers,"errors":errors}

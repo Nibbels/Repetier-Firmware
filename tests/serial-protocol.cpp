@@ -31,7 +31,10 @@ unsigned liveRequests=0,replayRequests=0;
 unsigned flushes = 0;
 unsigned scriptCommands = 0;
 unsigned dispatchedCommands = 0, statusCommands = 0, stopRequests = 0;
-bool legacyRejected = false;
+bool legacyRejected = false, settingsBlocked = false;
+unsigned softLoads = 0, softUnloads = 0;
+int16_t softPressure = 0;
+uint8_t softSpeed = 0;
 unsigned heaterRequests = 0, extrusionRequests = 0;
 unsigned periodicVisits = 0, pendingOutputVisits = 0;
 bool injectNestedScript = false, stopDuringScript = false;
@@ -72,7 +75,7 @@ char readFlashByte(const char* position) { return *position; }
 namespace Printer {
 bool debugErrors() { return true; }
 bool legacySimulationRejected() { return legacyRejected; }
-bool heatingInhibited() { return legacyRejected
+bool heatingInhibited() { return settingsBlocked || legacyRejected
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     || thermalLocked
 #endif
@@ -108,6 +111,7 @@ void checkForPeriodicalActions(FirmwareState) {
     ++periodicVisits;
     if (injectNestedScript) {
         injectNestedScript = false;
+        GCodeInput::executeSoftFilament(false);
         assert(GCodeInput::flashScriptActive());
         GCodeInput::executeFlashScript("G1 X99\n");
     }
@@ -157,8 +161,16 @@ void printErrorFLN(const char* text) { print(tError); printFLN(text); }
 // Real receiver, M111 handler and dispatch entry; downstream command effects
 // are represented by counters, not physical hardware.
 namespace GCodeCommands {
-void loadFilamentWithParameters(int16_t, uint8_t) {}
-void unloadFilamentWithParameters(int16_t) {}
+void loadFilamentWithParameters(int16_t p, uint8_t f) {
+    assert(GCodeInput::flashScriptActive());
+    ++softLoads; softPressure=p; softSpeed=f;
+    GCodeInput::executeSoftFilament(true); // refuse nested typed entry
+}
+void unloadFilamentWithParameters(int16_t p) {
+    assert(GCodeInput::flashScriptActive());
+    ++softUnloads; softPressure=p;
+    GCodeInput::executeFlashScript("G1 X77"); // refuse nested text entry
+}
 void dispatchMotion(GCode* code) {
     ++dispatchedCommands;
     if (code->internalCommand) { ++scriptCommands; lastScriptCommand = *code; }
@@ -622,6 +634,29 @@ void flashScript() {
 
 } // namespace
 
+void softFilament() {
+    injectNestedScript = true;
+    GCodeInput::executeSoftFilament(false);
+    assert(softLoads==1 && softUnloads==0 && softPressure==3500 && softSpeed==3);
+    assert(periodicVisits==1 && dispatchedCommands==0 && !GCodeInput::flashScriptActive());
+    GCodeInput::executeSoftFilament(true);
+    assert(softLoads==1 && softUnloads==1 && softPressure==std::min(4500, EMERGENCY_PAUSE_DIGITS_MAX));
+    assert(periodicVisits==2 && dispatchedCommands==0 && !GCodeInput::flashScriptActive());
+    stopped=true; GCodeInput::executeSoftFilament(false); stopped=false;
+    legacyRejected=true; GCodeInput::executeSoftFilament(true); legacyRejected=false;
+    settingsBlocked=true; GCodeInput::executeSoftFilament(false); settingsBlocked=false;
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    thermalLocked=true; GCodeInput::executeSoftFilament(true); thermalLocked=false;
+#endif
+    assert(softLoads==1 && softUnloads==1 && periodicVisits==2);
+    stopDuringScript=true;
+    GCodeInput::executeSoftFilament(false);
+    assert(stopped && softLoads==2 && periodicVisits==3 && !GCodeInput::flashScriptActive());
+    stopped=false;
+    GCodeInput::executeSoftFilament(true);
+    assert(softUnloads==2 && periodicVisits==4 && dispatchedCommands==0);
+}
+
 int main(int argc, char** argv) {
     assert(argc == 2);
     const std::string scenario = argv[1];
@@ -637,6 +672,7 @@ int main(int argc, char** argv) {
     else if (scenario == "emergency") emergencyAdmission();
     else if (scenario == "stopping") stopDrainsInput();
     else if (scenario == "script") flashScript();
+    else if (scenario == "soft-filament") softFilament();
     else if (scenario == "post-stop-output") postStopOutputBoundary();
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     else if (scenario == "thermal-emergency") thermalEmergency();

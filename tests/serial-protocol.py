@@ -29,11 +29,12 @@ def main():
     }
     assert names == constants.keys()
     capacity = re.search(r"^#define GCODE_BUFFER_SIZE\s+(\d+)", configuration, re.M)[1]
+    pressure = re.search(r"^#define EMERGENCY_PAUSE_DIGITS_MAX\s+(\d+)", configuration, re.M)[1]
 
     with TemporaryDirectory(prefix="rfx-serial-replay-") as directory:
         build = Path(directory)
         (build / "legacy-dispatch.inc").write_text("namespace GCodeCommands {\n" + legacy + "}\n" + entry, encoding="utf-8")
-        (build / "gcode-settings.inc").write_text(f"#define GCODE_BUFFER_SIZE {capacity}\n", encoding="utf-8")
+        (build / "gcode-settings.inc").write_text(f"#define GCODE_BUFFER_SIZE {capacity}\n#define EMERGENCY_PAUSE_DIGITS_MAX {pressure}\n", encoding="utf-8")
         (build / "gcode-receiver.inc").write_text(
             (commands + "\n" + receiver + "\n" + command_loop).replace('#include "Repetier.h"\n', ""), encoding="utf-8",
         )
@@ -50,10 +51,10 @@ def main():
         ]
         replay = build / "serial-replay"
         subprocess.run(compiler + [str(tests / "serial-protocol.cpp"), "-o", str(replay)], check=True)
-        for scenario in ("numbered", "queue", "display", "idle", "binary", "overflow", "binary-text", "sustained", "bounded-receive", "emergency", "stopping", "script", "post-stop-output", "legacy-ascii", "legacy-binary", "legacy-during-stop", "inch-ascii", "inch-binary"):
+        for scenario in ("numbered", "queue", "display", "idle", "binary", "overflow", "binary-text", "sustained", "bounded-receive", "emergency", "stopping", "script", "soft-filament", "post-stop-output", "legacy-ascii", "legacy-binary", "legacy-during-stop", "inch-ascii", "inch-binary"):
             subprocess.run([str(replay), scenario], check=True, timeout=10)
         subprocess.run(compiler + ["-DRF_THERMAL_EMERGENCY_EXPERIMENT=1",str(tests / "serial-protocol.cpp"), "-o", str(replay)], check=True)
-        for scenario in ("thermal-emergency", "numbered", "binary", "emergency", "m206-syntax", "post-stop-output"):
+        for scenario in ("thermal-emergency", "numbered", "binary", "emergency", "m206-syntax", "soft-filament", "post-stop-output"):
             subprocess.run([str(replay), scenario], check=True, timeout=10)
         uart_replay = build / "uart-replay"
         subprocess.run(compiler + [str(tests / "usb-serial.cpp"), "-o", str(uart_replay)], check=True)

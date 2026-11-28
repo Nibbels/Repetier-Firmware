@@ -520,7 +520,7 @@ void GCodeInput::executeSoftFilament(bool unload) {
         return;
     flashScriptRunning = true;
     if (unload)
-        GCodeCommands::unloadFilamentWithParameters(constrain(4500, 0, EMERGENCY_PAUSE_DIGITS_MAX));
+        GCodeCommands::unloadFilamentWithParameters(EMERGENCY_PAUSE_DIGITS_MAX < 4500 ? EMERGENCY_PAUSE_DIGITS_MAX : 4500);
     else
         GCodeCommands::loadFilamentWithParameters(3500, 3);
     Commands::checkForPeriodicalActions(Processing);

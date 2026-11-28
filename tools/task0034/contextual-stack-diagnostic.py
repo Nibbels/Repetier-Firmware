@@ -40,8 +40,8 @@ GUARDS = (
 # source lifetime/linked caller proofs are complete.
 PHASE_GUARDS = (
     ("StartLine::runPrepared(", ("StartLine::run(", "Commands::executeGCode(")),
-    ("GCodeCommands::loadFilamentPrepared(", ("GCodeCommands::loadFilament(", "Commands::executeGCode(")),
-    ("GCodeCommands::unloadFilamentPrepared(", ("GCodeCommands::unloadFilament(", "Commands::executeGCode(")),
+    ("GCodeCommands::loadFilamentPrepared(", ("GCodeCommands::loadFilament(", "GCodeCommands::loadFilamentWithParameters(", "GCodeInput::executeSoftFilament(", "Commands::executeGCode(")),
+    ("GCodeCommands::unloadFilamentPrepared(", ("GCodeCommands::unloadFilament(", "GCodeCommands::unloadFilamentWithParameters(", "GCodeInput::executeSoftFilament(", "Commands::executeGCode(")),
     ("TemperatureController::autotunePIDPrepared(", ("TemperatureController::autotunePID(", "UIDisplay::finishAction(")),
 )
 # Guard indices: panel, scan, features, pause, script, startline,
@@ -72,8 +72,8 @@ PHASE_ANCHORS = {
                       "Printer::printJob.admitPrintMotion();", "runPrepared(command);"),
     "GCodeThermal.cpp": ("!Printer::printJob.isIdle() || isAnyScanRunning()",
                         "!Printer::pause.isPaused() && Printer::printJob.beginFilamentService()",
-                        "if (prepareFilamentProgram())", "loadFilamentPrepared(pCommand);",
-                        "unloadFilamentPrepared(pCommand);", "Printer::printJob.finishFilamentService();"),
+                        "if (prepareFilamentProgram())", "loadFilamentPrepared(maxP, eFeedrate);",
+                        "unloadFilamentPrepared(maxForce);", "Printer::printJob.finishFilamentService();"),
     "UiActions.cpp": ("GCodeInput::flashScriptActive() || !Printer::printJob.isIdle() || isAnyScanRunning()",),
     "TemperatureControl.cpp": ("!Printer::printJob.isIdle() || Printer::pause.blocksCalibration()",
                                "isAnyScanRunning() || GCodeInput::flashScriptActive()",

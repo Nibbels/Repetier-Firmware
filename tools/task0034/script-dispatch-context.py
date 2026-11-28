@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A73: narrow foreground callsites for the five linked flash scripts.
+"""A73: narrow foreground callsites for the three remaining linked flash scripts.
 
 Verify actual script strings/callers first. Follow the linked G/M switch
 selection with concrete command numbers, then conservatively traverse all
