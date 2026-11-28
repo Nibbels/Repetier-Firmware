@@ -274,39 +274,17 @@ void showAbortScanReason(const void* scanName, ScanAbort reason) {
     showError(scanName, first, second);
 }
 
-bool moveZ(int nSteps, bool emergencyRetreat) {
-    const auto interrupted = [emergencyRetreat] {
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-        // A thermal stop also prohibits the special mechanical retreat.
-        if(Printer::printJob.emergencyLocked())return true;
-#endif
-        return !emergencyRetreat && (scanSession.aborting() || Printer::blockAll || Printer::printJob.commandsBlocked());
-    };
-    if (interrupted())
-        return false;
-    while (Printer::needsCMPwait()) {
-        Commands::checkForPeriodicalActions(Processing);
-        if (interrupted())
-            return false;
+bool moveZ(int32_t nSteps, bool emergencyRetreat) {
+    const auto result = PrintLine::runScanMove(nSteps, emergencyRetreat);
+    if (result.status == GuardedMoveStatus::PositionReached)
+        return true;
+    if (result.status != GuardedMoveStatus::Cancelled) {
+        if (!emergencyRetreat)
+            scanSession.requestAbort(ScanAbort::MaxCompensation);
+        Com::printFLN(PSTR("Z-Endstop protection"));
+        UI_STATUS_UPD("Z-Endstop protection");
     }
-
-    // Retreat can make a pending correction reachable. Reserve Z for this scan move.
-    const uint16_t pulses = abs(static_cast<int32_t>(nSteps));
-    ZMotion::ScanMove scan(Printer::zMotion, nSteps < 0 ? -1 : 1);
-    for (uint16_t i = 0; i < pulses; ++i) {
-        if (interrupted())
-            return false;
-        if (!scan.step()) {
-            if (!emergencyRetreat)
-                scanSession.requestAbort(ScanAbort::MaxCompensation);
-            Com::printFLN(PSTR("Z-Endstop protection"));
-            UI_STATUS_UPD("Z-Endstop protection");
-            return false;
-        }
-        if ((i & 15) == 15)
-            Commands::checkForPeriodicalActions(Calibrating);
-    }
-    return !interrupted();
+    return false;
 } // moveZ
 
 } // namespace Calibration

@@ -96,21 +96,7 @@ public:
 
     bool scanInProgress() const { return scanInProgress_; }
 
-    class ScanMove {
-    public:
-        ScanMove(ZMotion& motion, int8_t direction) : motion_(motion), direction_(direction) {
-            motion_.scanInProgress_ = true;
-        }
-        ~ScanMove() { motion_.scanInProgress_ = false; }
-        ScanMove(const ScanMove&) = delete;
-        ScanMove& operator=(const ScanMove&) = delete;
-
-        bool step();
-
-    private:
-        ZMotion& motion_;
-        const int8_t direction_;
-    };
+    void setScanInProgress(bool active) { scanInProgress_ = active; }
 
 private:
     enum class Step : uint8_t { Pulse, Suppressed, Stop };
@@ -135,7 +121,6 @@ private:
         WRITE(Z_STEP_PIN, HIGH);
         motorSteps_ += direction;
     }
-    int8_t timedPulse(uint8_t delayMultiplier);
 
     volatile int32_t motorSteps_ = 0;
     volatile int32_t nominalSteps_ = 0;

@@ -266,6 +266,74 @@ GuardedMoveResult PrintLine::runGuardedMoveTo(uint8_t axis, int32_t targetSteps,
                 ? GuardedMoveStatus::SwitchReached : GuardedMoveStatus::Limit, position};
 }
 
+GuardedMoveResult PrintLine::runScanMove(int32_t steps, bool emergencyRetreat) {
+    auto& z = Printer::zMotion;
+    const auto cancelled = [emergencyRetreat] {
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+        if (Printer::printJob.emergencyLocked())
+            return true;
+#endif
+        return emergencyRetreat ? !Printer::blockAll :
+            (Printer::blockAll || Printer::printJob.commandsBlocked() ||
+             Calibration::scanSession.aborting() || !isAnyScanRunning());
+    };
+    if (cancelled())
+        return {GuardedMoveStatus::Cancelled, z.scanSteps()};
+    // A clipped correction can become reachable during retreat. Freeze
+    // correction work during the scan-coordinate transaction.
+    while (!emergencyRetreat && Printer::needsCMPwait()) {
+        Commands::checkForPeriodicalActions(Processing);
+        if (cancelled())
+            return {GuardedMoveStatus::Cancelled, z.scanSteps()};
+    }
+
+    const float scale = Printer::stepsPerMm(Z_AXIS);
+    const float maxRate = scale * Printer::axisMaxFeedrate(Z_AXIS);
+    constexpr uint16_t nominalRate = 1000000UL / (XYZ_STEPPER_HIGH_DELAY + XYZ_STEPPER_LOW_DELAY);
+    const int32_t origin = z.scanSteps();
+    const int64_t target = int64_t(origin) + steps;
+    const int64_t travel = int64_t(z.maxSteps()) + z.minOvertravel();
+    if (!(scale > 0) || !isfinite(scale) || !(maxRate >= 1) || !isfinite(maxRate) ||
+        target < INT32_MIN || target > INT32_MAX || steps == INT32_MIN ||
+        travel <= 0 || steps > travel || steps < -travel ||
+        (emergencyRetreat && (steps <= 0 || float(steps) > 5.0f * scale)) ||
+        (steps < 0 && !z.isHomed()))
+        return {GuardedMoveStatus::Denied, origin};
+    if (!steps)
+        return {GuardedMoveStatus::PositionReached, origin};
+    const uint16_t rate = maxRate < nominalRate ? static_cast<uint16_t>(maxRate) : nominalRate;
+    const float feedrate = rate / scale;
+    {
+        InterruptProtectedBlock lock;
+        if (cancelled() || hasLines() || directMoveActive() || !Printer::zStepperEnabled() ||
+            (!emergencyRetreat && (!Calibration::scanSession.dispatching() ||
+                                  Printer::pause.blocksCalibration())))
+            return {GuardedMoveStatus::Denied, origin};
+        // Constant-rate single-axis profile; common executor clock,
+        // Bresenham, Z ledger and STEP termination. No separate delay.
+        z.setScanInProgress(true);
+        direct.flags = FLAG_ABORT_AT_ENDSTOPS | FLAG_GUARDED_STOP_MASK | FLAG_SCAN_PATH |
+                       (emergencyRetreat ? FLAG_MECHANICAL_RETREAT : 0);
+        direct.joinFlags = 0;
+        direct.dir = 0;
+        direct.delta[X_AXIS] = direct.delta[Y_AXIS] = direct.delta[E_AXIS] = 0;
+        direct.setAxisSteps(Z_AXIS, steps);
+        direct.primaryAxis = Z_AXIS;
+        direct.stepsRemaining = direct.delta[Z_AXIS];
+        direct.stepProfile = {};
+        direct.stepProfile.vStart = direct.stepProfile.vEnd = direct.stepProfile.vMax = rate;
+        direct.fullSpeed = feedrate;
+        direct.task = DIRECT_PREPARED;
+    }
+    while (directMoveActive())
+        Commands::checkForPeriodicalActions(Calibrating);
+    z.setScanInProgress(false);
+    const int32_t actual = z.scanSteps();
+    if (cancelled())
+        return {GuardedMoveStatus::Cancelled, actual};
+    return {actual == target ? GuardedMoveStatus::PositionReached : GuardedMoveStatus::Limit, actual};
+}
+
 void PrintLine::prepareDirectMove(const int32_t steps[4], bool stoppable, bool feedrateSource,
                                   float explicitFeedrate, GuardedStop guard) {
     direct.flags = FLAG_ABORT_AT_ENDSTOPS | static_cast<uint8_t>(guard);

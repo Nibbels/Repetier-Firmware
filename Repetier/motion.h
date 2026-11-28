@@ -33,6 +33,9 @@
 // switch request whose condition was reached; the foreground knows which.
 #define FLAG_GUARDED_STOP_MASK 96
 #define FLAG_BLOCKED 128
+// Direct-slot-only aliases. Publish phase last; queued semantics unchanged.
+#define FLAG_SCAN_PATH FLAG_QUEUE_TASK
+#define FLAG_MECHANICAL_RETREAT FLAG_BLOCKED
 
 #define FLAG_JOIN_STEP_PROFILE_READY 1  // The foreground has prepared the step ramp.
 #define FLAG_JOIN_END_FIXED 2            // The right speed is fixed. Don't check this block or any block to the left.
@@ -137,6 +140,13 @@ private:
 
 public:
     static bool directMoveActive() { return direct.task != DIRECT_IDLE; }
+    static bool mechanicalRetreatActive() {
+        const char phase = direct.task;
+        return (phase == DIRECT_PREPARED || phase == DIRECT_RUNNING) &&
+               (direct.flags & (FLAG_SCAN_PATH | FLAG_MECHANICAL_RETREAT)) ==
+                   (FLAG_SCAN_PATH | FLAG_MECHANICAL_RETREAT) &&
+               direct.isZPositiveMove() && !direct.isXOrYMove() && !direct.isEMove();
+    }
     static bool hasStoppableDirectMove() {
         const char task = direct.task;
         return task == DIRECT_PREPARING_STOPPABLE || task == DIRECT_PREPARED_STOPPABLE || task == DIRECT_RUNNING_STOPPABLE;
@@ -334,6 +344,8 @@ public:
     static int32_t guardedAxisPosition(uint8_t axis);
     static GuardedMoveResult runGuardedMoveTo(uint8_t axis, int32_t targetSteps,
                                               uint16_t stepsPerSecond, GuardedStop stop);
+    // Bounded scan increment, using the common direct slot and timer.
+    static GuardedMoveResult runScanMove(int32_t steps, bool emergencyRetreat = false);
     static void stopDirectMove();
     // Caller holds IRQ lock and has blocked normal motion admission.
     // No deceleration tail or target restoration after a terminal fault.

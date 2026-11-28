@@ -317,6 +317,8 @@ public:
     }  // enableYStepper
 
     /** \brief Enable stepper motor for z direction. */
+    static bool zStepperEnabled() { return enabledStepper[Z_AXIS] != 0; }
+
     static INLINE void enableZStepper() {
         unmarkAllSteppersDisabled();
 #if (Z_ENABLE_PIN > -1)

@@ -952,7 +952,7 @@ ISR(TIMER1_COMPA_vect) {
 #endif
     // Mechanical block is also a motion fence. No stale queued, direct,
     // compensation or control task may run while the foreground unwinds.
-    if (Printer::blockAll) {
+    if (Printer::blockAll && !PrintLine::mechanicalRetreatActive()) {
         stepperWait = 0;
         OCR1A = 3000;
         return;

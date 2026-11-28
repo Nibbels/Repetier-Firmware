@@ -162,24 +162,3 @@ bool ZMotion::stepPath(Path path) {
     return result != Step::Stop;
 }
 
-int8_t ZMotion::timedPulse(uint8_t delayMultiplier) {
-    HAL::delayMicroseconds(XYZ_STEPPER_HIGH_DELAY * delayMultiplier);
-    const int8_t direction = directionIsPositive() ? 1 : -1;
-    startPulse(direction);
-    HAL::delayMicroseconds(XYZ_STEPPER_LOW_DELAY * delayMultiplier);
-    finishPulse();
-    return direction;
-}
-
-bool ZMotion::ScanMove::step() {
-    const bool positive = direction_ > 0;
-    // Scan contact may cross the homed Z-min marker within its allowed
-    // overtravel; never approach blindly when the reference is unknown.
-    if (positive ? motion_.atUpperEndstop() : (!motion_.isHomed() || motion_.atMinOvertravel()))
-        return false;
-    if (directionIsPositive() != positive)
-        setDirection(positive);
-    motion_.scanSteps_ += motion_.timedPulse(1);
-    return true;
-}
-

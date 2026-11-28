@@ -301,10 +301,16 @@ long StepExecutor::performDirectMove() {
         // Timer1 has masked its own compare before entering this path.
         // A newly enabled driver waits on Arduino's interrupt-driven
         // timebase, just as on queued-move startup. Never wait with I=0.
-        HAL::allowInterrupts();
-        enableSteppers(direct);
-        HAL::forbidInterrupts();
-        adjustDirections(direct);
+        if (direct.flags & FLAG_SCAN_PATH) {
+            // Scan admission requires the Z driver to be already enabled.
+            // A mechanical retreat must not wake a disabled motor.
+            ZMotion::setDirection(direct.isZPositiveMove());
+        } else {
+            HAL::allowInterrupts();
+            enableSteppers(direct);
+            HAL::forbidInterrupts();
+            adjustDirections(direct);
+        }
         directionOwner = DirectionOwner::Direct;
 
         directPrimarySteps = direct.delta[direct.primaryAxis];
@@ -392,12 +398,20 @@ long StepExecutor::performMove(PrintLine* move) {
     const auto guard = forQueue ? GuardedStop::Normal :
         static_cast<GuardedStop>(move->flags & FLAG_GUARDED_STOP_MASK);
     const bool guarded = guard != GuardedStop::Normal;
+    const bool scan = !forQueue && (move->flags & FLAG_SCAN_PATH);
+    const bool retreat = scan && (move->flags & FLAG_MECHANICAL_RETREAT);
     if (guarded) {
         // Timer1 is the only pulse owner. Check the requested home switch
         // before each pulse, also on the tick following the final pulse.
         // Never bypass the ordinary directional hardware/software limits.
-        if (Printer::blockAll || Printer::printJob.commandsBlocked() ||
-            !Printer::isAxisHomed(move->primaryAxis)) {
+        const bool cancelled = scan
+            ? (!Printer::zStepperEnabled() ||
+               (retreat ? (!Printer::blockAll || !PrintLine::mechanicalRetreatActive())
+                        : (Printer::blockAll || Printer::printJob.commandsBlocked() ||
+                           Calibration::scanSession.aborting())))
+            : (Printer::blockAll || Printer::printJob.commandsBlocked() ||
+               !Printer::isAxisHomed(move->primaryAxis));
+        if (cancelled) {
             finishMove(*move, false);
             return 1000;
         }
@@ -511,7 +525,8 @@ long StepExecutor::performMove(PrintLine* move) {
             if (errors.advance(Z_AXIS, move->delta[Z_AXIS])) {
                 const auto path = forQueue
                     ? (move->isAbortAtEndstops() ? ZMotion::Path::QueuedUntilEndstop : ZMotion::Path::Queued)
-                    : (guarded || move->task == DIRECT_RUNNING_STOPPABLE ? ZMotion::Path::StoppableDirect : ZMotion::Path::Direct);
+                    : (scan ? ZMotion::Path::Scan :
+                       (guarded || move->task == DIRECT_RUNNING_STOPPABLE ? ZMotion::Path::StoppableDirect : ZMotion::Path::Direct));
                 const bool continuing = Printer::zMotion.stepPath(path);
                 if (!continuing)
                     move->setMoveOfAxisFinished(Z_AXIS);

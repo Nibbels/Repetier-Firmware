@@ -125,7 +125,8 @@ public:
     }
 
 private:
-    ScanAbort abort_ = ScanAbort::None;
+    // Foreground publishes a single-byte stop condition for Timer1.
+    volatile ScanAbort abort_ = ScanAbort::None;
     uint8_t retriesRemaining_ = 0;
     bool retryRequested_ = false;
     bool dispatching_ = false;
