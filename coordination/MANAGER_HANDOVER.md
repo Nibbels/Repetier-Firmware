@@ -20,6 +20,10 @@ Owner explicitly prioritizes preventing persistent heating on crash over all thr
 
 Owner no longer uses Visual Studio/Visual Micro and authorizes retiring the complete legacy IDE integration. Task0034 performs the dedicated removal and qualification; Task0032 must not reintroduce or maintain obsolete manifests. The canonical Arduino CLI build and all real firmware/safety replays remain mandatory; unrelated legacy CMake support is not part of this decision. Historical test/build evidence remains in Git. See AGENTS.md and TASKS.md for scope.
 
+## Owner clarification 2026-11-28 — retain WobbleFix, retire old tooling
+
+Keep WobbleFix: adjustable XY phase/amplitudes compensate periodic lateral bed motion from spindle eccentricity (5 mm Z per turn), reducing repeating surface artifacts. Preserve settings/UI/coordinate semantics; default zero is not removal justification. Owner authorizes Doxygen and the three completed research workflow definitions to be removed from active maintenance; #103/#105/#106 verified merged. Task0034 owns cleanup, retains historical research and all current tests; Task0032 supplemental CI and canonical firmware CI remain. Arduino IDE/CLI and CMake remain. No change to M3029 without separate owner decision.
+
 ## Owner decision 2026-11-28 — mandatory global interrupt-mask closure
 
 [Task0036](tasks/Task0036.md) is scheduled after the qualified integration of Task0034 and Task0032, before final software release. AGENTS.md now requires elimination of unnecessary masks, short justified atomic publication, no blocking masked work, and finite measured/proven linked worst-case durations. Existing P0/print-core gates remain binding; do not defer current safety defects. Reuse independent A73 PR #118 and existing tooling, re-run on the final four binaries. No additional parallel production worker or branch now.
