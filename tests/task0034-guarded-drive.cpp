@@ -23,7 +23,7 @@ bool closed[3] = {};
 int32_t physical[3] = {};
 unsigned pulses = 0;
 bool scanRunning = false, queueOccupied = false, driverEnabled = true;
-int scanCancelAt = -1, scanThermalAt = -1;
+int scanCancelAt = -1, scanThermalAt = -1, scanDriverAt = -1, scanReferenceAt = -1;
 unsigned scanTicks = 0;
 constexpr int32_t upper = 1000;
 class InterruptProtectedBlock {
@@ -168,6 +168,10 @@ void Commands::checkForPeriodicalActions(int state) {
         PrintLine::abortDirectMoveForEmergency();
         return;
     }
+    if (scanDriverAt>=0 && pulses==static_cast<unsigned>(scanDriverAt))
+        driverEnabled=false;
+    if (scanReferenceAt>=0 && pulses==static_cast<unsigned>(scanReferenceAt))
+        Printer::zMotion.setHomed(false);
     const unsigned before=pulses;
     {
         InterruptProtectedBlock lock;
@@ -214,7 +218,7 @@ void reset(uint8_t a, int32_t origin) {
     Printer::homed = true;
     Printer::printJob.thermal=false;
     scanRunning=queueOccupied=false;driverEnabled=true;
-    scanCancelAt=scanThermalAt=-1;scanTicks=0;
+    scanCancelAt=scanThermalAt=scanDriverAt=scanReferenceAt=-1;scanTicks=0;
     Calibration::scanSession.reset();
     z.setScanInProgress(false);
     pulses = 0;
@@ -285,8 +289,24 @@ void scanReplay() {
     assert(PrintLine::runScanMove(-5).status==S::Denied && !pulses);
     scanReady(100);queueOccupied=true;
     assert(PrintLine::runScanMove(5).status==S::Denied && !pulses);
+    assert(PrintLine::runScanMove(0).status==S::Denied && !pulses);
     scanReady(100);driverEnabled=false;
     assert(PrintLine::runScanMove(5).status==S::Denied && !pulses);
+    assert(PrintLine::runScanMove(0).status==S::Denied && !pulses);
+    scanReady(100);
+    assert(PrintLine::runScanMove(0).status==S::PositionReached && !pulses);
+    // Losing the enabled driver or known reference cannot qualify even
+    // when the final requested physical pulse has already been emitted.
+    for (int cut=0;cut<=80;++cut) {
+        scanReady(100);scanDriverAt=cut;
+        result=PrintLine::runScanMove(-80);
+        assert(result.status==S::Limit && pulses==unsigned(cut));
+        assert(!z.scanInProgress() && !PrintLine::directMoveActive());
+        scanReady(100);scanReferenceAt=cut;
+        result=PrintLine::runScanMove(-80);
+        assert(result.status==S::Limit && pulses==unsigned(cut));
+        assert(!z.scanInProgress() && !PrintLine::directMoveActive());
+    }
     for (int cut=0;cut<80;++cut) {
         scanReady(100);scanCancelAt=cut;
         result=PrintLine::runScanMove(-80);
