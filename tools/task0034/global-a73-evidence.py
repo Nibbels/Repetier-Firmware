@@ -74,12 +74,21 @@ def linked_analysis(archive, report, reviewed_owners):
             validated = switches["prove_tables"](instructions, tables, labels, fg.target)
             row["verifiedSwitchTables"] = len(validated["tables"])
             row["foreground"] = context["inventory"](z, board, False, reviewed_owners)
+            fingerprint = context["owner_fingerprint"](z, base)
+            row["sourceOwnershipFingerprint"] = fingerprint
+            if fingerprint in context["REVIEWED_SOURCE_SHA256"]:
+                row["reviewedForeground"] = (row["foreground"] if reviewed_owners else
+                                             context["diagnostic"](fg.inventory(z, board, True), False, True))
+            else:
+                row["reviewedForeground"] = None  # Requires new source review; never silently prune.
             row["interrupts"] = irq["inventory"](z, board, True)
             timer = row["interrupts"][17]
             envelope = timer["stackBytesIncludingPc"] + max(
                 item["stackBytesIncludingPc"] for v,item in row["interrupts"].items() if v != 17)
             row["conditionalInterruptBytes"] = envelope
             row["conditionalFreeBytes"] = row["staticFree"] - envelope - row["foreground"]["diagnosticBytes"]
+            row["reviewedConditionalFreeBytes"] = (None if row["reviewedForeground"] is None else
+                row["staticFree"] - envelope - row["reviewedForeground"]["diagnosticBytes"])
     report["reviewedOwners"] = reviewed_owners
     report["releaseProof"] = False
 

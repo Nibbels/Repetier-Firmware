@@ -72,6 +72,32 @@ bad=deepcopy(frame);bad["calls"][0]["sites"][0]["physicalCaller"]=d.HOST_MACHINE
 reject(bad,"unreviewed host dispatch owner")
 print("Task0034 phase diagnostic: 4608 directional masks + 9 callsite/tail fixtures PASS")
 
+# The two reviewed lifetime rules require exact prepared-worker callers,
+# even when the broad experimental phase model is disabled.
+life=deepcopy(frame)
+for i,(prefix,allowed) in enumerate(d.REVIEWED_ENTRY_CALLERS.items()):
+    address="life"+str(i)
+    life["frames"].append({"address":address,"name":prefix+")","localPeakBytes":6})
+    caller=allowed[0]+")"
+    life["calls"].append({"caller":"main","callee":address,
+        "sites":[{"pc":address,"callerBytes":8,"physicalCaller":caller}]})
+assert d.diagnostic(life,reviewed_owners=True)["diagnosticBytes"]==14
+bad=deepcopy(life)
+bad["calls"][-1]["sites"][0]["physicalCaller"]="unreviewed()"
+try:
+    d.diagnostic(bad,reviewed_owners=True)
+except AssertionError as exc:
+    assert "unreviewed lifetime caller" in str(exc)
+else:
+    raise AssertionError("unreviewed lifetime entry accepted")
+bad=deepcopy(life)
+bad["tailTransfers"].append({"physicalTarget":"StartLine::runPrepared(GCode&)"})
+try:
+    d.diagnostic(bad,reviewed_owners=True)
+except AssertionError as exc:
+    assert "unreviewed lifetime tail entry" in str(exc)
+else:
+    raise AssertionError("unreviewed lifetime tail accepted")
 # Exercise the exact conditional linked table checker without AVR tools.
 sg_spec=importlib.util.spec_from_file_location('switch_guards',path.with_name('switch-table-guards.py'))
 sg=importlib.util.module_from_spec(sg_spec);sg_spec.loader.exec_module(sg)

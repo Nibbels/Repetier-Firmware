@@ -127,6 +127,22 @@ ANCHORS = {
                "unsigned char isHomingAllowed(", "if (isAnyScanRunning())"),
 }
 
+# Narrow lifetime rules are enabled only for a separately reviewed source
+# snapshot, and require the actual linked prepared-worker entry sites.
+# This is intentionally not the broad PHASE_BLOCKED hypothesis.
+REVIEWED_ENTRY_CALLERS = {
+    "StartLine::runPrepared(": ("StartLine::run(", HOST_MACHINE),
+    "GCodeCommands::loadFilamentPrepared(": ("GCodeCommands::loadFilamentWithParameters(", "GCodeInput::runSoftFilament(", HOST_MACHINE),
+    "GCodeCommands::unloadFilamentPrepared(": ("GCodeCommands::unloadFilamentWithParameters(", "GCodeInput::runSoftFilament(", HOST_MACHINE),
+    "TemperatureController::autotunePIDPrepared(": ("UIDisplay::finishAction(", "TemperatureController::autotunePID("),
+}
+REVIEWED_SOURCE_SHA256 = {
+    "6f43d86c1074e1dacbc7d6ee4a7a7167ae0ca87a1dd410adfab7f84b18c51bc7",
+    "0aafaa6b60c832c816f6bf3ede3c5d09729015167aa9a11f500522a74c9d2813",
+    # #1200: exact 145 sketch inputs, all four boards.
+    "af700c2fe7f7e82b1f76117e1c6125f5c30790a75d6d6f2d1a1c25ffce6f0c02",
+}
+
 def diagnostic(frame, phase=False, reviewed_owners=False):
     autotune_panel_mask = 1 << 10
     priming_mask = 1 << 11
@@ -136,12 +152,15 @@ def diagnostic(frame, phase=False, reviewed_owners=False):
     edges = defaultdict(list)
     guard_callers = defaultdict(set)
     worker_callers = defaultdict(set)
+    reviewed_callers = defaultdict(set)
     # A tail transfer shares the stack frame but may otherwise hide an
     # admission boundary. Refuse cross-function jumps into any guarded
     # worker or LCD recursion frame rather than silently dropping a guard.
     for jump in frame["tailTransfers"]:
         target = jump["physicalTarget"]
         assert not any(target.startswith(prefix) for prefix, _ in guards_spec), ("unreviewed tail guard entry", jump)
+        if reviewed_owners:
+            assert not target.startswith(tuple(REVIEWED_ENTRY_CALLERS)), ("unreviewed lifetime tail entry", jump)
         assert not target.startswith("UIDisplay::parse("), ("unreviewed tail LCD entry", jump)
         assert not homing_owner(target), ("unreviewed tail homing entry", jump)
         if target.startswith(HOST_MACHINE):
@@ -159,6 +178,11 @@ def diagnostic(frame, phase=False, reviewed_owners=False):
             if homing_owner(names[b]):
                 key = next(k for k in HOMING_CALLERS if names[b].startswith(k))
                 assert caller.startswith(HOMING_CALLERS[key]), ("unreviewed homing caller", caller, names[b])
+            if reviewed_owners:
+                for prefix, allowed in REVIEWED_ENTRY_CALLERS.items():
+                    if names[b].startswith(prefix):
+                        assert caller.startswith(allowed), ("unreviewed lifetime caller", caller, names[b])
+                        reviewed_callers[prefix].add(caller)
             for i, (prefix, allowed) in enumerate(guards_spec):
                 if names[b].startswith(prefix):
                     assert caller.startswith(allowed), ("unreviewed guard caller", names[a], caller, names[b], site["pc"])
@@ -170,6 +194,8 @@ def diagnostic(frame, phase=False, reviewed_owners=False):
             edges[a].append((b, site["pc"], site["callerBytes"]))
     assert all(guard_callers[i] for i in range(len(guards_spec))), "missing reviewed linked guard"
     assert set(worker_callers) == set(PROGRAM_WORKERS), "missing internal worker"
+    if reviewed_owners:
+        assert set(reviewed_callers) == set(REVIEWED_ENTRY_CALLERS), "missing reviewed lifetime entry"
     active, path = set(), []
     pruned = defaultdict(int)
 
@@ -237,16 +263,21 @@ def diagnostic(frame, phase=False, reviewed_owners=False):
             "prunedContextEdges": dict(pruned),
             "guardCallers": {("internal program owner" if i == 4 else guards_spec[i][0]): sorted(v) for i, v in guard_callers.items()},
             "programWorkerCallers": {k: sorted(v) for k,v in worker_callers.items()},
+            "reviewedLifetimeCallers": {k: sorted(v) for k,v in reviewed_callers.items()},
             "witness": [{"function": names[a], "bytes": depth, "site": site}
                         for a, depth, site in witness]}
 
-def validate_owner_snapshot(z, prefix):
+def owner_fingerprint(z, prefix):
     source = prefix + "build/sketch/"
     fingerprint = hashlib.sha256()
     for path in sorted(z.namelist()):
         if path.startswith(source) and path.endswith((".cpp", ".c", ".ino", ".h", ".hpp", ".S")):
             fingerprint.update(path[len(source):].encode() + b"\0" + hashlib.sha256(z.read(path)).digest())
-    if fingerprint.hexdigest() not in ['6f43d86c1074e1dacbc7d6ee4a7a7167ae0ca87a1dd410adfab7f84b18c51bc7', '0aafaa6b60c832c816f6bf3ede3c5d09729015167aa9a11f500522a74c9d2813']:
+    return fingerprint.hexdigest()
+
+
+def validate_owner_snapshot(z, prefix):
+    if owner_fingerprint(z, prefix) not in REVIEWED_SOURCE_SHA256:
         raise ValueError("source ownership changed; review before applying lifetime exclusions")
 
 
