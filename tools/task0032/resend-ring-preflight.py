@@ -127,6 +127,52 @@ static void exactWire() {
     std::printf("Resend span: %u cursor/occupancy/sequence cases\n",cases);
 }
 
+
+static void retirementProgress() {
+    // All producer paths feed a foreground-only counter. The snapshot
+    // measures retirement into UDR, not transmission/receipt on the wire.
+    auto sample=[](){return UsbSerial::transmitRetired();};
+    auto start=sample();
+    UsbSerial::write(0x10);assert(sample()==start);
+    USART0_UDRE_vect();assert(sample()==uint16_t(start+1));
+    USART0_UDRE_vect();start=sample();
+    const char span[]="abcdef";
+    assert(UsbSerial::tryWriteSpan(span,6));assert(sample()==start);
+    for(unsigned i=1;i<=6;++i) {
+        USART0_UDRE_vect();
+        assert(sample()==uint16_t(start+i));
+    }
+    USART0_UDRE_vect();start=sample();
+    fillTx(63);
+    assert(!UsbSerial::tryWrite(0) && !UsbSerial::tryWriteSpan(span,6));
+    assert(sample()==start);
+    // Keep occupancy constant across each sample. Ring head/tail wrap
+    // every 64 retirements; a modulo-64 cursor alone would alias.
+    TxRetirementDeadline deadline;
+    uint32_t now=0xfffffff0;
+    assert(!deadline.poll(sample(),true,now));
+    for(unsigned round=1;round<=1100;++round) {
+        for(unsigned i=0;i<64;++i) {
+            USART0_UDRE_vect();
+            assert(UsbSerial::tryWrite(uint8_t(i)));
+        }
+        now+=1999;
+        assert(UsbSerial::transmitFree()==0);
+        assert(sample()==uint16_t(start+round*64u));
+        assert(!deadline.poll(sample(),true,now));
+    }
+    // More than 65536 retirements overall; no false stall at counter wrap.
+    assert(!deadline.poll(sample(),true,now+1999));
+    assert(deadline.poll(sample(),true,now+2000));
+    // Recovery/empty resets a local diagnostic watch. Terminal phase is
+    // separately sticky and must never be cleared by progress.
+    USART0_UDRE_vect();
+    assert(!deadline.poll(sample(),true,now+2001));
+    assert(drain().size()==62);
+    assert(!deadline.poll(sample(),false,now+90000));
+    std::puts("TX retirement: all producer paths, constant occupancy, ring/counter/time wraps and stall passed");
+}
+
 static void retries() {
     const auto tick=[](ResendPolicy& p,uint32_t now,bool ready=true,bool ack=true){
         p.service(now,ready,ack,publish);
@@ -212,6 +258,24 @@ def candidate_uart(header, source):
     source=once(source,"void UsbSerial::begin(unsigned long baud) {",
         "volatile uint8_t UsbSerial::lossFlags_ = 0;\n"+REARM+
         "\nvoid UsbSerial::begin(unsigned long baud) {")
+    # Foreground single producer, ISR single consumer. Account for all
+    # successful publication paths; rejected spans must not count.
+    header=once(header,"    static uint8_t rearmForResync();",
+        "    static uint16_t transmitRetired();\n    static uint8_t rearmForResync();")
+    header=once(header,"    static volatile uint8_t lossFlags_;",
+        "    static uint16_t txPublished_;\n    static volatile uint8_t lossFlags_;")
+    source=once(source,"volatile uint8_t UsbSerial::lossFlags_ = 0;",
+        "volatile uint8_t UsbSerial::lossFlags_ = 0;\nuint16_t UsbSerial::txPublished_ = 0;\n"
+        "uint16_t UsbSerial::transmitRetired() {\n"
+        "    // Head/producer count are foreground-only; sample ISR tail once.\n"
+        "    const uint8_t used = uint8_t(tx_.head-tx_.tail)&(transmitBufferSize-1);\n"
+        "    return uint16_t(txPublished_-used);\n}\n")
+    # Inspect exact original paths: both byte writers publish next; span
+    # publishes a cursor computed by its copy loop. No ISR edit.
+    assert source.count("    tx_.head = next;")==2
+    source=source.replace("    tx_.head = next;","    tx_.head = next;\n    ++txPublished_;")
+    source=once(source,"    tx_.head = head;",
+        "    txPublished_ += uint8_t(head-tx_.head)&(transmitBufferSize-1);\n    tx_.head = head;")
     return header,source
 
 def main():
@@ -230,7 +294,7 @@ def main():
     # Legacy test intentionally overflows silently; the dedicated rearm
     # cases now test that this overflow closes the new gate.
     test=once(test,"byte <= UsbSerial::receiveCapacity","byte < UsbSerial::receiveCapacity")
-    test=once(test,"    nonblockingSpan();","    nonblockingSpan();\n    rearmCases();\n    exactWire();\n    retries();")
+    test=once(test,"    nonblockingSpan();","    nonblockingSpan();\n    rearmCases();\n    exactWire();\n    retirementProgress();\n    retries();")
     # Original wrap test left status from the baud test, which is 0 for
     # errors; our additional injections explicitly set status each time.
     (args.out/"UsbSerial.h").write_text(header)
