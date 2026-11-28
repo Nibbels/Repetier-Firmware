@@ -19,18 +19,8 @@
 #ifndef CONFIGURATION_H
 #define CONFIGURATION_H
 
-// All actual firmware builds use the combined P0 implementation.
-// The historical comparison builds are retired; source extraction tests
-// still use explicit feature defines until their migration is complete.
-// A plain Arduino link has no recovery guard symbol and must fail closed.
-#if defined(__AVR__)
-#ifndef RF_HEATER_LEASE_EXPERIMENT
-#define RF_HEATER_LEASE_EXPERIMENT 1
-#endif
-#ifndef RF_HEATER_RESET_WDT_EXPERIMENT
-#define RF_HEATER_RESET_WDT_EXPERIMENT 1
-#endif
-#endif
+// The recovery-linked heater lease and reset watchdog are mandatory.
+// A plain Arduino link without the recovery guard symbol fails closed.
 
 #include <stdint.h>
 #include "Constants.h"

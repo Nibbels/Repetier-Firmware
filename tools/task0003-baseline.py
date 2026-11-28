@@ -183,12 +183,6 @@ def build_target(out, cli, name, definitions, experiment=None, linker_script_fac
 
 # The standard firmware capture always uses the recovery link and post-link
 # verification. This changes build selection, not deployment authorization.
-P0_DEFINITIONS = (
-    "RF_HEATER_LEASE_EXPERIMENT=1", "RF_HEATER_RESET_WDT_EXPERIMENT=1",
-    "RF_THERMAL_EMERGENCY_EXPERIMENT=1",
-)
-
-
 def build_p0_candidate(out, cli, name, definitions, experiment=None):
     # Imported lazily to keep historical callers of build_target unchanged.
     sys.dont_write_bytecode = True
