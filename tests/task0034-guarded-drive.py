@@ -12,11 +12,14 @@ tests = Path(__file__).resolve().parent
 firmware = tests.parent / "Repetier"
 executor = (firmware / "StepExecutor.cpp").read_text()
 z = (firmware / "ZMotion.cpp").read_text()
+motion = (firmware / "motion.cpp").read_text()
 with TemporaryDirectory(prefix="rfx-guarded-") as directory:
     build = Path(directory)
     (build / "guarded-firmware.inc").write_text(
         z.removeprefix('#include "Repetier.h"\n') + "\n" +
-        executor[executor.index("template <int8_t limitDirection>"):],
+        executor[executor.index("template <int8_t limitDirection>"):] + "\n" +
+        motion[motion.index("void PrintLine::setAxisSteps("):motion.index("void PrintLine::setSegmentGeometry(")] + "\n" +
+        motion[motion.index("GuardedMoveResult PrintLine::runScanMove("):motion.index("void PrintLine::prepareDirectMove(")],
         encoding="utf-8")
     for model in ("RF1000", "RF2000", "RF2000v2"):
         executable = build / model
