@@ -596,10 +596,12 @@ long StepExecutor::performMove(PrintLine* move) {
         stepsPerTimerCall = pulses;
     }
 
-    // A switch move gets one final settled switch sample at the next
-    // timer tick, even if its last allowed pulse used up the distance.
+    // A guarded switch or scan move gets one final settled validation at
+    // the next timer tick, even if its last allowed pulse used up the
+    // distance. Scan completion must still observe cancellation, driver
+    // disable and reference loss before publishing the idle slot.
     if (move->isNoMove() || (move->stepsRemaining <= 0 &&
-        (!guarded || guard == GuardedStop::Distance))) {
+        (!guarded || (!scan && guard == GuardedStop::Distance)))) {
         finishMove(*move, forQueue);
         interval >>= 1; // The two half-intervals allow time to set up the next move.
     }
