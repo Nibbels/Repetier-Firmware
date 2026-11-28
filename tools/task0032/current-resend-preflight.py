@@ -334,6 +334,9 @@ def adapt_canonical(source):
     p=source/"tests/temperature-control-replay.py";s=p.read_text()
     s=once(s,'    #include "printer-safety.inc"','    #include "printer-safety.inc"\n'
         '    void clearHeaterTargets();\n    void revokeHeaterOutputsLocked();')
+    s=once(s,"        bool emergencyLocked() const { return isAnyTempsensorDefect(); }",
+        "        bool emergencyLocked() const { return isAnyTempsensorDefect(); }\n"
+        "        bool transportEmergency() const { return false; } // thermal-only fixture")
     p.write_text(s)
     p=source/"tests/task0034-terminal-stop.py";s=p.read_text()
     # Extract the common motion cleanup and both actual terminal owners.
