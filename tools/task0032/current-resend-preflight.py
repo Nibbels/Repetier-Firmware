@@ -116,8 +116,11 @@ void GCodeInput::processFrame(GCode& command) {
         parseAscii(command,(char*)frame.bytes);
     evidence.binaryParsed(parsed);
     if(parsed) {
-        if(!Printer::printJob.emergencyLocked() && !frame.binary &&
-           command.hasN() && hasChecksumMarker && evidence.mode==ReplayMode::None)
+        if(!Printer::printJob.emergencyLocked() &&
+           ((evidence.verified && (!command.hasN() ||
+             serialReceive.currentLineNumber!=evidence.line)) ||
+            (!frame.binary && command.hasN() && hasChecksumMarker &&
+             evidence.mode==ReplayMode::None)))
             requestResend(false);
         else checkAndPushCommand(command,evidence);
     }else if(!waiting) {
@@ -134,7 +137,10 @@ void GCodeInput::processFrame(GCode& command) {
 }
 
 bool GCodeInput::transportFailed() {
-    return UsbSerial::transportFailed() || recovery.phase()==ReplayPhase::Fatal;
+    // A thermal fault during an unfinished replay cannot turn stale
+    // input into the otherwise permitted read-only thermal diagnostics.
+    return UsbSerial::transportFailed() || recovery.phase()==ReplayPhase::Fatal ||
+        (Printer::printJob.emergencyLocked() && recovery.phase()!=ReplayPhase::Healthy);
 }
 
 void GCodeInput::serviceTransportTx() {
@@ -228,6 +234,7 @@ def candidate(fw):
     if(transportFailed())return;
     if(command.hasN())serialReceive.lastLineNumber=serialReceive.currentLineNumber;
     if(admitted)commandQueue.publish();
+    else frame.borrowedText=false;
     // Healthy blocked/rejected commands retain the previous host-draining
     // semantics but cannot establish a trusted checked stream.
     checkedStream=admitted && command.hasN() && evidence.verified &&
