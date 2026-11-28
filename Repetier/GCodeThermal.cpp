@@ -318,9 +318,9 @@ static bool prepareFilamentProgram() {
     return false;
 }
 
-void loadFilament(GCode* pCommand) {
-    if (!prepareFilamentProgram())
-        return;
+// Name the admitted frames explicitly instead of depending on LTO
+// partial inlining of the two public command wrappers.
+static __attribute__((noinline)) void loadFilamentPrepared(GCode* pCommand) {
     Com::printFLN(PSTR("Load Filament"));
     Printer::idleStatus.cancel();
 
@@ -367,9 +367,12 @@ void loadFilament(GCode* pCommand) {
     Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 5000);
 }
 
-void unloadFilament(GCode* pCommand) {
-    if (!prepareFilamentProgram())
-        return;
+void loadFilament(GCode* pCommand) {
+    if (prepareFilamentProgram())
+        loadFilamentPrepared(pCommand);
+}
+
+static __attribute__((noinline)) void unloadFilamentPrepared(GCode* pCommand) {
     Com::printFLN(PSTR("Unload Filament"));
     Printer::idleStatus.cancel();
 
@@ -462,6 +465,11 @@ void unloadFilament(GCode* pCommand) {
     Printer::gcodeModes.setRelativeEOverride(savedRelativeE);
     Printer::printJob.finishFilamentService();
     Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 5000);
+}
+
+void unloadFilament(GCode* pCommand) {
+    if (prepareFilamentProgram())
+        unloadFilamentPrepared(pCommand);
 }
 
 #ifdef X35_ADC_CHANNEL

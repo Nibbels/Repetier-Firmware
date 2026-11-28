@@ -6,7 +6,7 @@ import tempfile
 
 root=Path(__file__).resolve().parents[1]
 src=(root/"Repetier/GCodeThermal.cpp").read_text()
-body=src[src.index("static bool prepareFilamentProgram()"):src.index("void loadFilament(")]
+body=src[src.index("static bool prepareFilamentProgram()"):src.index("// Name the admitted frames explicitly")]
 harness=r'''
 #include <cassert>
 #include <cstdint>
