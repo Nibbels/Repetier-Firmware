@@ -97,11 +97,7 @@ struct UIDisplay {
         explicit ScopedActionExclusion(UIDisplay&){assert(!panelExcluded);panelExcluded=true;}
         ~ScopedActionExclusion(){panelExcluded=false;}
     };
-    void edit(int action, int8_t increment) {
-        switch (action) {
 #include "microstep-ui.inc"
-        }
-    }
 };
 static UIDisplay display;
 static void edit(int action, int8_t increment){display.edit(action,increment);}

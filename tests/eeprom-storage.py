@@ -34,7 +34,11 @@ def main():
         subprocess.run([str(zone_exe)], check=True)
         setters = hal[hal.index("    static inline void eprSetByte("):hal.index("    // Faster version of InterruptProtectedBlock.")]
         (work / "hal-eeprom.inc").write_text(setters, encoding="utf-8")
-        micro = ui[ui.index("    case UI_ACTION_MICROSTEPS_XY:"):ui.index("\n    }\n}\n\nvoid UIDisplay::changeMotionSetting")]
+        # Replay the production helper itself after splitting its stack lifetime
+        # from the common settings dispatcher. Keep the fixture's class context.
+        start = ui.index("void UIDisplay::changeMicrostepSetting(")
+        end = ui.index("\n__attribute__((noinline)) void UIDisplay::changeMotionSetting", start)
+        micro = ui[start:end].replace("UIDisplay::changeMicrostepSetting", "edit", 1)
         (work / "microstep-ui.inc").write_text(micro, encoding="utf-8")
         persist = section("void EEPROM::storeMicrostepConfiguration(", "void EEPROM::storeCaseLight(")
         (work / "microstep-persist.inc").write_text(persist, encoding="utf-8")
