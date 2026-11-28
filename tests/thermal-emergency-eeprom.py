@@ -29,7 +29,7 @@ pre=r'''
 #define UI_TEXT_CONFIGURATION "configuration"
 #define UI_TEXT_RESTORE_DEFAULTS "defaults"
 #define UI_TEXT_OK "ok"
-static bool terminal=false,block=false,ready=false,resetWithAlerts=true;
+static bool terminal=false,block=false,resetWithAlerts=true;
 static unsigned injection=0,steps=0,applied=0,motionFinished=0,diagnostics=0,normal=0,cleared=0,initOutputs=0,restoreCalls=0,loadCalls=0,matrixInvalidations=0;
 static void faultPoint(){if(++steps==injection)terminal=true;}
 static void normalOutput(){assert(!terminal);++normal;}
@@ -80,7 +80,7 @@ void initializeCaseLight(){assert(!terminal&&!outputsAdmitted);++initOutputs;}
 struct LiveSettings{
     bool applyBlock(uint8_t,const uint8_t*,uint8_t,uint32_t){assert(!terminal&&!outputsAdmitted);++applied;return true;}
     void finishMotion(){assert(!terminal&&!outputsAdmitted);++motionFinished;faultPoint();}
-    uint8_t bedCutoff(){return 100;}
+    uint8_t bedCutoff(){return resetWithAlerts?0:100;}
 };
 struct Session{
     Result restore(FactoryDefaults&,Inspection& s,bool reset){
