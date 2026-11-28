@@ -31,7 +31,8 @@ struct ExtrusionOutput {
     enum class Inhibit {PrintStop};
     void allow(Inhibit){++effects;}
 };
-struct Printer {static ExtrusionOutput extrusionOutput;};
+struct Printer {static ExtrusionOutput extrusionOutput; static bool blockAll;};
+bool Printer::blockAll=false;
 ExtrusionOutput Printer::extrusionOutput;
 static void outputObject(bool){++effects;}
 """
@@ -58,6 +59,16 @@ int main(){
         }
         ++count;
     }
+    // A mechanical stop must not release the print-stop inhibit or start
+    // outputObject, even when the previous job is already waiting.
+    PrintJob mechanical;
+    mechanical.admitPrintMotion();
+    assert(mechanical.beginStop(0));
+    mechanical.service(2001);
+    Printer::blockAll=true;
+    effects=0;
+    mechanical.servicePendingOutput(5000);
+    assert(effects==0 && mechanical.commandsBlocked());
     std::printf("Thermal job terminal: %u initial phase/time cases, 1000 attempted transitions; no output, no side effects\n",count);
 }
 """

@@ -162,7 +162,9 @@ int8_t ZMotion::timedPulse(uint8_t delayMultiplier) {
 
 bool ZMotion::ScanMove::step() {
     const bool positive = direction_ > 0;
-    if (!positive && motion_.isHomed() && motion_.atMinOvertravel())
+    // Scan contact may cross the homed Z-min marker within its allowed
+    // overtravel; never approach blindly when the reference is unknown.
+    if (positive ? motion_.atUpperEndstop() : (!motion_.isHomed() || motion_.atMinOvertravel()))
         return false;
     if (directionIsPositive() != positive)
         setDirection(positive);

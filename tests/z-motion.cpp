@@ -339,6 +339,13 @@ void scanTravel() {
     assert(moveZ(4, true));
     assert(pulseCount == 4 && motorPosition == 104);
 
+    reset(999);
+    assert(!moveZ(4));
+    assert(motorPosition == 1000 && pulseCount == 1 && scanSession.aborting());
+
+    reset(100, false);
+    assert(!moveZ(-4) && pulseCount == 0 && scanSession.aborting());
+
     // M3028 no longer emits foreground pulses; its replacement is
     // covered by thermal-emergency-home.py and guarded-drive replay.
 }

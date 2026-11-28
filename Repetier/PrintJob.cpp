@@ -42,7 +42,7 @@ void PrintJob::service(uint32_t now) {
 void PrintJob::servicePendingOutput(uint32_t now) {
     {
         InterruptProtectedBlock lock;
-        if (phase_ != Phase::WaitingToOutput ||
+        if (Printer::blockAll || phase_ != Phase::WaitingToOutput ||
             static_cast<int32_t>(now - phaseSince_) <= 1000)
             return;
         Printer::extrusionOutput.allow(ExtrusionOutput::Inhibit::PrintStop);
