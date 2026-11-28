@@ -14,6 +14,8 @@ for vector in ("TIMER1_COMPA_vect", "PWM_TIMER_VECTOR"):
     body=hal.split("ISR("+vector+") {",1)[1]
     lines=[line.strip() for line in body.splitlines() if line.strip() and not line.strip().startswith("//")]
     assert lines[0]=="expirePendingHeaterLease();", vector
+advance=hal.split("ISR(EXTRUDER_TIMER_VECTOR, __attribute__((flatten))) {",1)[1]
+assert next(line.strip() for line in advance.splitlines() if line.strip() and not line.strip().startswith("//"))=="if (pendingHeaterExpiry()) cutExpiredHeaterLease();"
 start=hal.index('constexpr uint8_t thermalPassComplete=0x80;')
 feed=hal[start:hal.index('\nISR(TIMER3_COMPA_vect)',start)]
 start=hal.index("// Distinguish pre-start boot")
@@ -163,6 +165,7 @@ static void checkPriorityIndependentExpiry() {
                                    |_BV(OCIE3C)
 #endif
                                    );
+    for (bool inlinePath:{false,true})
     for (unsigned flags=0;flags<256;++flags) for(unsigned mask=0;mask<256;++mask) {
         resetFixture(0);
         InterruptProtectedBlock lock;
@@ -171,7 +174,8 @@ static void checkPriorityIndependentExpiry() {
         for (uint8_t c=0;c<=NUM_EXTRUDER;++c) {
             requestedDuty[c]=255; pins[pin(c)]=true;
         }
-        expirePendingHeaterLease();
+        if (inlinePath) { if (pendingHeaterExpiry()) cutExpiredHeaterLease(); }
+        else expirePendingHeaterLease();
         const bool expired=(flags&mask&supported)!=0;
         assert(heaterLeaseFailed==expired);
         assert(TIFR3.bits==flags); // no W1C, even on failure
@@ -185,7 +189,7 @@ static void checkPriorityIndependentExpiry() {
         expirePendingHeaterLease();
         assert(heaterLeaseFailed==expired);
     }
-    std::puts("priority-independent expiry: 65536 flag/mask combinations PASS");
+    std::puts("priority-independent expiry: 131072 inline/shared-leaf flag/mask cases PASS");
 }
 // Exhaust the modular window and compare-flag states for each fixed channel.
 static bool fixedLive(unsigned c,uint16_t now) {

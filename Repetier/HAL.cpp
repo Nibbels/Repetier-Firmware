@@ -977,7 +977,7 @@ void beginHeaterLease() {
     heaterLeaseReady=true;
 }
 // IRQs masked by caller. No serial, no float, no motion calls.
-void failHeaterLease() {
+inline __attribute__((always_inline)) void cutExpiredHeaterLease() {
     heaterLeaseFailed=true;
     heaterGrantProgress=0;
 #if EXT0_HEATER_PIN > -1
@@ -987,22 +987,33 @@ void failHeaterLease() {
     WRITE(EXT1_HEATER_PIN, LOW);
 #endif
     WRITE(HEATED_BED_HEATER_PIN, LOW);
-    for(uint8_t c=0;c<=NUM_EXTRUDER;++c) requestedDuty[c]=0;
+    requestedDuty[0]=0;
+    requestedDuty[1]=0;
+#if NUM_EXTRUDER > 1
+    requestedDuty[2]=0;
+#endif
     TIMSK3=0;
 }
+
+// Share the identical failure body. Timer3 and larger handlers keep the
+// out-of-line leaf; the small Advance ISR can inline the cold branch
+// without saving every call-clobbered register on its normal path.
+__attribute__((noinline)) void failHeaterLease() { cutExpiredHeaterLease(); }
 
 // IRQs masked. An inactive channel can have a stale compare flag, so
 // intersect the hardware flag with the *enabled* lease vector bits.
 // Never acknowledge a pending flag or touch a deadline here; the same
 // terminal all-off leaf handles both this path and the Timer3 vectors.
-inline __attribute__((always_inline)) void expirePendingHeaterLease() {
+inline __attribute__((always_inline)) bool pendingHeaterExpiry() {
     constexpr uint8_t compareMask = _BV(OCIE3A) | _BV(OCIE3B)
 #if NUM_EXTRUDER > 1
         | _BV(OCIE3C)
 #endif
         ;
-    if (TIFR3 & TIMSK3 & compareMask)
-        failHeaterLease();
+    return (TIFR3 & TIMSK3 & compareMask) != 0;
+}
+inline __attribute__((always_inline)) void expirePendingHeaterLease() {
+    if (pendingHeaterExpiry()) failHeaterLease();
 }
 
 inline __attribute__((always_inline)) bool leaseWindowLive(uint16_t deadline,uint8_t mask,uint16_t now) {
@@ -1433,6 +1444,9 @@ void ExtrusionOutput::serviceTimerCompare() {
 
 // Inline the direction path so the interrupt only saves the registers it uses.
 ISR(EXTRUDER_TIMER_VECTOR, __attribute__((flatten))) {
+    // Advance outranks PWM and Timer3. Do not rely on either gaining
+    // admission during a stream of advance compares and resumed masks.
+    if (pendingHeaterExpiry()) cutExpiredHeaterLease();
     Printer::extrusionOutput.serviceTimerCompare();
 }
 
