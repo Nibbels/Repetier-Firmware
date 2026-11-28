@@ -72,6 +72,7 @@ struct Extruder {
 Extruder tools[2]={{0},{1}};
 Extruder* Extruder::current=&tools[0];
 struct ZMotion {static void setDirection(bool){assert(!irq && Printer::zStepperEnabled());++directions;}};
+struct Queue;
 struct PrintLine {
     static PrintLine direct;
     static struct Queue queue;
@@ -173,7 +174,7 @@ int main(){
         }
         now=origin+MotorWake::settleTicks;
         const long interval=StepExecutor::performDirectMove();
-        assert(interval==(guard?(16000000UL/42)/2:5000));
+        assert(interval==(guard?long((16000000UL/42)/2):5000L));
         assert(d.task==(phase==DIRECT_PREPARED?DIRECT_RUNNING:DIRECT_RUNNING_STOPPABLE));
         assert(d.stepsRemaining==(phase==DIRECT_PREPARED?120:32));
         assert(!pulses && directions==1 && advances==1 && motorWake.readyFor(7));
@@ -211,7 +212,7 @@ int main(){
         reset(0);assert(!StepExecutor::ensureMotorsReady(4));now=27;
         assert(StepExecutor::ensureMotorsReady(4));Printer::blockAll=blocked;
         auto& d=PrintLine::direct;d.task=DIRECT_PREPARED;d.mask=4;d.flags=FLAG_SCAN_PATH|96;
-        assert(StepExecutor::performDirectMove()==(16000000UL/42)/2 && directions==1);
+        assert(StepExecutor::performDirectMove()==long((16000000UL/42)/2) && directions==1);
         assert(StepExecutor::performDirectMove()==123 && pulses==1 && asserts[2]==1);
         ++count;
     }
