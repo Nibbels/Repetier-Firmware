@@ -433,9 +433,7 @@ void ZOffsetScan::reportScrewAdjustment() {
 void ZOffsetScan::abort(bool reloadMatrix) {
     phase_ = Phase::Aborting;
     const auto reason = Calibration::scanSession.takeAbort();
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     DiagnosticHistory::recordScan(reason,DiagnosticHistory::ScanKind::ZOffset);
-#endif
     Calibration::showAbortScanReason(PSTR(UI_TEXT_DO_MHIER_BED_SCAN), reason);
 
     if (reloadMatrix) {
@@ -454,11 +452,9 @@ void ZOffsetScan::abort(bool reloadMatrix) {
         Printer::homeAxis(true, true, true);
 
     // turn off all steppers and extruders
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     // A nested wait may have latched the terminal stop. Deferred discard
     // belongs to the scan dispatcher, not the normal mechanical abort.
     if(Printer::printJob.emergencyLocked())return;
-#endif
     Printer::disableAllSteppersNow();
 
     discard();

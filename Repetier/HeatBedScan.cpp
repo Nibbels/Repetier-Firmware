@@ -265,7 +265,6 @@ void HeatBedScan::startOrCancel(HeatBedScanMode mode) {
         Com::printFLN(PSTR("Error: PID tune required before heated scan"));
         return;
     }
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     if(mode!=HeatBedScanMode::Standard) {
         const int requested=mode==HeatBedScanMode::Pla?heatBedScanPlaBedC:heatBedScanAbsBedC;
         if(requested>heatedBedController.maximumTargetC()) {
@@ -273,7 +272,6 @@ void HeatBedScan::startOrCancel(HeatBedScanMode mode) {
             return;
         }
     }
-#endif
     // Pause requests may be published by Timer1. Check and publish the
     // mutually exclusive scan phase with interrupts masked.
     InterruptProtectedBlock lock;
@@ -363,9 +361,7 @@ void HeatBedScan::showStatus() {
 void HeatBedScan::abort() {
     phase_ = Phase::Aborting;
     const auto reason = Calibration::scanSession.takeAbort();
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     DiagnosticHistory::recordScan(reason,DiagnosticHistory::ScanKind::HeatBed);
-#endif
     Extruder::setHeatedBedTemperature(0);
     Extruder::setTemperatureForAllExtruders(0);
     Calibration::showAbortScanReason((void*)ui_text_heat_bed_scan, reason);
@@ -373,11 +369,9 @@ void HeatBedScan::abort() {
     const bool retreated = Calibration::moveZ(int(Printer::stepsPerMm(Z_AXIS) * 5));
     if (retreated && !ScanSession::retreatOnly(reason))
         Printer::homeAxis(true, true, true);
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     // A nested move/homing wait can latch the terminal stop. Let the
     // outer scan dispatcher perform the deferred discard without releasing torque.
     if(Printer::printJob.emergencyLocked())return;
-#endif
     Printer::disableAllSteppersNow();
 
 
@@ -428,7 +422,6 @@ void HeatBedScan::prepareProbeTemperature() {
         Extruder::setTemperatureForAllExtruders(heatBedScanProbeNozzleC);
     }
 
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     if(mode_!=HeatBedScanMode::Standard) {
         const int requested=mode_==HeatBedScanMode::Pla?heatBedScanPlaBedC:heatBedScanAbsBedC;
         if(heatedBedController.targetTemperatureC!=requested) {
@@ -437,13 +430,11 @@ void HeatBedScan::prepareProbeTemperature() {
             return;
         }
     }
-#endif
     phase_ = Phase::WaitForBedTemperature;
     lastCheckMs_ = HAL::timeInMilliseconds();
 }
 
 void HeatBedScan::waitForBedTemperature() {
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     if(mode_!=HeatBedScanMode::Standard) {
         const int requested=mode_==HeatBedScanMode::Pla?heatBedScanPlaBedC:heatBedScanAbsBedC;
         if(heatedBedController.targetTemperatureC!=requested) {
@@ -452,7 +443,6 @@ void HeatBedScan::waitForBedTemperature() {
             return;
         }
     }
-#endif
     if ((HAL::timeInMilliseconds() - lastCheckMs_) < heatBedScanDelayMs) {
         // do not check too often
         return;

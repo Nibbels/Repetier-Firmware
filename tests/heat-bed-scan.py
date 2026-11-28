@@ -44,6 +44,7 @@ def main():
         for scenario in (
             "standard", "pla", "abs", "retry", "cancel", "disconnected", "overload",
             "overload-and-cancel", "stop-mid-grid", "invalid-grid", "save-failed", "busy-admission",
+            "bed-cutoff", "bed-target-rejected", "bed-target-changed",
         ):
             subprocess.run([str(executable), scenario], check=True, timeout=10)
 
