@@ -366,13 +366,12 @@ private:
     void changeHeaterSetting(int action, int8_t increment);
     void navigateMenuItems(UIMenuEntry** entries, uint8_t count, int8_t next);
 
-    void drawBootEye(uint16_t elapsed);
+    void drawBootEye(uint16_t elapsed, uint16_t previous, bool first);
     void loadStartupCharacters();
     void loadNormalCharacters();
 
     bool normalCharacters_ = false;
     bool statusIsTemplate_ = false;
-    char displayCache_[UI_ROWS][MAX_COLS + 1];
     char statusMsg[MAX_COLS + 1];
     const void* messageLine1;
     const void* messageLine2;

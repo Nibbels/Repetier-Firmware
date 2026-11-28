@@ -56,9 +56,8 @@ public:
     bool normalCharacters_=false;
     uint8_t menuLevel=0;
     millis_t lastSwitch=0,lastRefresh=0;
-    char displayCache_[4][UI_COLS+1]{};
     void beginBootEye(); void serviceBootEye(); void finishBootEye();
-    void drawBootEye(uint16_t);
+    void drawBootEye(uint16_t,uint16_t,bool);
     void createChar(uint8_t,const uint8_t*);
     void loadNormalCharacters();
     void refreshPage() { ++refreshes; assert(normalCharacters_); }
@@ -66,9 +65,8 @@ public:
         lcdCommand(128 + LCDLineOffsets[row]);
         for (unsigned i=0;i<UI_COLS;++i) {
             char ch = *s ? *s++ : ' ';
-            lcdPutChar(ch); displayCache_[row][i]=ch;
+            lcdPutChar(ch);
         }
-        displayCache_[row][UI_COLS]=0;
     }
 };
 #include "firmware.inc"

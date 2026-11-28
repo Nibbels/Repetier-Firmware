@@ -266,7 +266,7 @@ struct UIDisplay {
     uint8_t bedCutoffCandidate_=0;
     const char* messageLine2=nullptr;
     const UIMenu* menu[6]={};
-    char printCols[MAX_COLS+1]={},displayCache_[UI_ROWS][MAX_COLS+1]={};
+    char printCols[MAX_COLS+1]={};
     std::string lcd[UI_ROWS];
     int row=-1, jog=0, jogCalls=0;
     void lcdWriteByte(int v,int mode) {
@@ -312,7 +312,6 @@ void rowIs(unsigned r, char marker, std::string text) {
     assert(expected.size()<=UI_COLS);
     expected.resize(UI_COLS,' ');
     assert(uid.lcd[r]==expected);
-    assert(std::string(uid.displayCache_[r])==expected);
 }
 void show(UIMenu* menu, int selected, int editing=0) {
     uid.menuLevel=1; uid.menu[1]=menu; uid.menuPos[1]=selected;
@@ -567,10 +566,9 @@ void visibility() {
     }
     Printer::activeModes=0; visibilityRendering=false;
 }
-// The normal renderer reuses the already allocated frame cache. Verify
-// overlapping source/destination for every text length and scroll offset,
+// Verify direct row transmission for every text length and scroll offset,
 // including empty and maximum length strings and both physical LCD widths.
-static void inPlaceRows() {
+static void directRows() {
     UIDisplay u;
     unsigned cases=0;
     for(unsigned row=0; row<UI_ROWS; ++row) {
@@ -579,19 +577,19 @@ static void inPlaceRows() {
             for(unsigned i=0;i<n;++i) source+=char('A'+i%26);
             for(unsigned scroll=0;scroll<=MAX_COLS;++scroll) {
                 const unsigned offset=n>UI_COLS?std::min(n-UI_COLS,scroll):0;
-                strcpy(u.displayCache_[row],source.c_str());
+                strcpy(u.printCols,source.c_str());
                 std::string expected=source.substr(offset,UI_COLS);
                 expected.resize(UI_COLS,' ');
-                u.printRow(row,&u.displayCache_[row][offset],nullptr,UI_COLS);
+                u.printRow(row,&u.printCols[offset],nullptr,UI_COLS);
                 assert(u.lcd[row]==expected);
-                assert(std::string(u.displayCache_[row])==expected);
+                assert(std::string(u.printCols)==source);
                 ++cases;
             }
         }
     }
     assert(cases==UI_ROWS*(MAX_COLS+1)*(MAX_COLS+1));
 }
-int main() { preheat(); offset(); navigation(); visibility(); inPlaceRows(); }
+int main() { preheat(); offset(); navigation(); visibility(); directRows(); }
 '''
 
 
