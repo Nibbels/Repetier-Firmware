@@ -265,7 +265,6 @@ struct UIDisplay {
     char confirmation_=0;
     uint8_t bedCutoffCandidate_=0;
     const char* messageLine2=nullptr;
-    bool requiresLocalSafetyConfirmation() const;
     const UIMenu* menu[6]={};
     char printCols[MAX_COLS+1]={},displayCache_[UI_ROWS][MAX_COLS+1]={};
     std::string lcd[UI_ROWS];

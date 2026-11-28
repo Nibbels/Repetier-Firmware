@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise the actual local/remote panel dispatch exclusion, no AVR hardware."""
+"""Exercise the actual local panel dispatch exclusion, no AVR hardware."""
 from pathlib import Path
 import subprocess
 import tempfile
@@ -13,11 +13,10 @@ def section(source, first, last):
     start = source.index(first)
     return source[start:source.index(last, start + len(first))]
 
-scope = section(header, "    class ScopedActionExclusion {", "    // Remote panel actions")
-remote = section(header, "    void executeRemoteAction(int action) {", "    void slowAction();")
+scope = section(header, "    class ScopedActionExclusion {", "    void slowAction();")
 slow = section(ui, "void UIDisplay::slowAction() {", "} // slowAction") + "}\n"
-assert "uid.executeRemoteAction(pCommand->P);" in system
-assert "uid.executeAction(pCommand->P);" not in system
+assert "accessPanel" not in system
+assert "executeRemoteAction" not in header
 
 source = r'''
 #include <cassert>
@@ -66,32 +65,25 @@ struct UIDisplay {
         ++calls;
         lastDispatched=action;
         assert(calls==1);
-        executeRemoteAction(777);
         slowAction();
         assert(flags & UI_FLAG_SLOW_ACTION_RUNNING);
         assert(calls==1);
         flags |= OTHER_TEST_FLAG;
         assert(irq==expectedIrq);
     }
-''' + scope + remote + r'''
+''' + scope + r'''
 };
 ''' + slow + r'''
 int main() {
     for (bool enabled : {false,true}) {
         irq=enabled;
-        UIDisplay remote;
-        remote.expectedIrq=enabled;
-        remote.executeRemoteAction(42);
-        assert(remote.calls==1 && remote.lastDispatched==42);
-        assert(remote.flags==(0x80|OTHER_TEST_FLAG));
-        assert(remote.lastAction==0 && irq==enabled);
         UIDisplay local;
         local.expectedIrq=enabled;
         local.slowAction();
         assert(local.calls==1 && local.lastDispatched==1001);
         assert(local.flags==(0x80|OTHER_TEST_FLAG));
         assert(local.lastAction==1001 && irq==enabled);
-        // A host/scan homing scope excludes both local and remote
+        // A host/scan homing scope excludes local
         // dispatch and restores only the bit that it acquired.
         for (unsigned f=0; f<256; ++f) {
             UIDisplay u;
@@ -99,7 +91,6 @@ int main() {
             {
                 UIDisplay::ScopedActionExclusion outer(u);
                 assert(u.flags==(f|UI_FLAG_SLOW_ACTION_RUNNING));
-                u.executeRemoteAction(42);
                 u.slowAction();
                 assert(u.calls==0 && irq==enabled);
                 {
@@ -112,7 +103,7 @@ int main() {
         }
         UIDisplay busy;
         busy.flags|=UI_FLAG_SLOW_ACTION_RUNNING;
-        busy.executeRemoteAction(42);
+        busy.slowAction();
         assert(busy.calls==0 && busy.flags==(0x80|UI_FLAG_SLOW_ACTION_RUNNING));
         assert(irq==enabled);
         Printer::printJob.locked=true;
@@ -131,4 +122,4 @@ with tempfile.TemporaryDirectory() as tmp:
         subprocess.run(["g++", "-std=c++11", "-Wall", "-Wextra", "-Werror", *defs,
                         str(cpp), "-o", str(exe)], check=True)
         subprocess.run([str(exe)], check=True)
-print("Task0034 local/remote panel dispatch exclusion: PASS (both IRQ entry states and terminal admission)")
+print("Task0034 local panel dispatch exclusion: PASS (both IRQ entry states and terminal admission)")

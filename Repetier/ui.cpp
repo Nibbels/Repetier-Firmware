@@ -43,10 +43,6 @@ bool UIMenuEntry::showEntry() const {
 
 UIDisplay uid;
 
-const char* UIDisplay::cachedRow(uint8_t row) const {
-    return displayCache_[row];
-}
-
 // Menu up sign - code 1
 // ..*.. 4
 // .***. 14
@@ -845,11 +841,6 @@ void UIDisplay::menuEsc() {
     }
     if (menuLevel > 0)
         menuLevel--;
-}
-
-bool UIDisplay::requiresLocalSafetyConfirmation() const {
-    return menuLevel && (menu[menuLevel]==&ui_menu_bed_cutoff_edit ||
-        (menu[menuLevel]==&ui_menu_message && messageLine2==EEPROM::recoveryDialogTag()));
 }
 
 void UIDisplay::okAction() {

@@ -17,7 +17,7 @@ actual=extract("EepromZoneRuntime.cpp","bool idle() {","bool persist(const Patch
 actual+=extract("EepromZoneRuntime.cpp","bool loadFull(","bool readBlockChecked(")
 actual+=extract("EepromZoneRuntime.cpp","bool EEPROM::settingsReady()","void EEPROM::reportRecovery()")
 actual+=extract("EepromZoneRuntime.cpp","void EEPROM::restoreEEPROMSettingsFromConfiguration()","void EEPROM::writeSettings()")
-actual+=extract("GCodeSystem.cpp","void restoreConfigurationDefaults()","void accessPanel(")
+actual+=extract("GCodeSystem.cpp","void restoreConfigurationDefaults()","} // namespace GCodeCommands")
 pre=r'''
 #include <cassert>
 #include <cstdint>

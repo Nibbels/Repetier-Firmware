@@ -307,7 +307,6 @@ public:
     void parse(char* txt, bool ram, bool allowMessageExpansion = true);
     void refreshPage();
     void refreshEmergencyPage(); // callers have established the terminal lock
-    const char* cachedRow(uint8_t row) const;
     void executeAction(int action);
     // Foreground-only ownership; keep the outer panel owner set across
     // nested homing and diagnostic waits. Fast key sampling and display
@@ -327,19 +326,6 @@ public:
         UIDisplay& display_;
         const bool owns_;
     };
-    // Remote panel actions share the local key-dispatch exclusion. A wait
-    // inside either action can pump thermal/scan services and sample keys,
-    // but must not execute a second independent menu action.
-    void executeRemoteAction(int action) {
-        InterruptProtectedBlock lock;
-        if (flags & UI_FLAG_SLOW_ACTION_RUNNING)
-            return;
-        flags |= UI_FLAG_SLOW_ACTION_RUNNING;
-        lock.unprotect();
-        executeAction(action);
-        lock.protect();
-        flags &= ~UI_FLAG_SLOW_ACTION_RUNNING;
-    }
     void slowAction();
 
     void finishAction(int action);
@@ -355,7 +341,6 @@ public:
     void setStatusP(PGM_P txt, bool error = false);
     void setStatus(char* txt, bool error = false);
     void exitmenu();
-    bool requiresLocalSafetyConfirmation() const;
 
 private:
     int lastAction;

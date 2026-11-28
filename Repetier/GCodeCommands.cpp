@@ -108,7 +108,6 @@ void dispatchMachine(GCode* com) {
     case DiagnosticHistory::ReadCommand: return DiagnosticHistory::request();
     case 502: return restoreConfigurationDefaults();
     case 3028: return testHomingRepeatability(com);
-    case 3029: return accessPanel(com);
     }
 }
 

@@ -73,7 +73,6 @@ void reportEeprom();
 void setEepromValue(GCode* com);
 void reportConfiguration();
 void restoreConfigurationDefaults();
-void accessPanel(GCode* pCommand);
 
 // Operations backed by calibration state in RF.cpp.
 namespace Calibration {
