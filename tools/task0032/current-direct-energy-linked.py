@@ -18,28 +18,71 @@ spec=importlib.util.spec_from_file_location("stop_linked",HERE/"current-stop-tai
 sl=importlib.util.module_from_spec(spec);spec.loader.exec_module(sl)
 
 def checked_layout(elf):
-    # GCC describes the anonymous union with an unnamed member at offset 28.
-    fields=sl.LAYOUT["PrintLine"][1]
-    fields.pop("lookahead",None);fields[None]=28
-    layout=original_layout(elf)
-    text=subprocess.check_output(["readelf","--debug-dump=info",str(elf)],text=True)
-    types=re.split(r"(?m)^\s*<\d+><[0-9a-f]+>: Abbrev Number: \d+ \(DW_TAG_structure_type\)",text)
+    # The old validator returns its own mutable member dictionary. Never
+    # rename a key through that alias (it poisoned the next board in #229).
+    # Independently validate the anonymous union's referenced DIE and both
+    # alternatives; do not accept an unrelated type named Limits.
+    import copy
+    saved=sl.LAYOUT
+    try:
+        sl.LAYOUT=copy.deepcopy(saved)
+        fields=sl.LAYOUT["PrintLine"][1]
+        assert fields.pop("lookahead")==28
+        fields[None]=28
+        layout=copy.deepcopy(original_layout(elf))
+    finally:
+        sl.LAYOUT=saved
+    raw=subprocess.check_output(["readelf","--debug-dump=info",str(elf)],text=True)
+    pattern=re.compile(r"^\s*<(\d+)><([0-9a-f]+)>: Abbrev Number: \d+(?: \((DW_TAG_\w+)\))?",re.M)
+    blocks=list(pattern.finditer(raw))
+    nodes={};stack=[]
+    for i,b in enumerate(blocks):
+        depth=int(b[1]);stack=stack[:depth]
+        if b[3] is None:continue
+        body=raw[b.end():blocks[i+1].start() if i+1<len(blocks) else len(raw)]
+        attrs=dict(re.findall(r"DW_AT_(\w+)\s*:\s*([^\n]+)",body))
+        node={"tag":b[3],"attrs":attrs,"children":[]}
+        offset=int(b[2],16);nodes[offset]=node
+        if stack:stack[-1]["children"].append(node)
+        stack.append(node)
+    def name(n):
+        return n["attrs"].get("name","").rsplit(": ",1)[-1]
+    def target(n):
+        return nodes[int(re.fullmatch(r"<0x([0-9a-f]+)>",n["attrs"]["type"])[1],16)]
+    def size(n):
+        return int(n["attrs"]["byte_size"],0)
+    def location(n):
+        v=n["attrs"]["data_member_location"]
+        m=re.search(r"DW_OP_plus_uconst: (\d+)",v)
+        assert m or v.isdecimal(),v
+        return int(m[1] if m else v)
     expected={"ceiling":0,"exitEnergy":4,"drop":8,"horizon":12,"valid":16}
     matches=0
-    for part in types[1:]:
-        head=part.split("DW_TAG_member",1)[0]
-        if not re.search(r"DW_AT_name\s*:.*\bLimits\s*$",head,re.M):continue
-        if not re.search(r"DW_AT_byte_size\s*:\s*17\s*$",head,re.M):continue
-        members={}
-        for m in re.finditer(r"DW_TAG_member\)(.*?)(?=^\s*<\d+><[0-9a-f]+>: Abbrev Number:|\Z)",part,re.M|re.S):
-            name=re.search(r"DW_AT_name\s*:\s*([^\n]+)",m[1])
-            off=re.search(r"DW_OP_plus_uconst: (\d+)",m[1])
-            if name and off:members[name[1].strip().rsplit(": ",1)[-1]]=int(off[1])
-        if all(members.get(k)==v for k,v in expected.items()):matches+=1
-    assert matches,("no linked energy limit layout",str(elf))
-    layout["PreparedDirectProfile::Limits"]={"size":17,"members":expected}
-    layout["PrintLine"]["members"]["anonymous_union"]=28
-    layout["PrintLine"]["members"].pop(None,None)
+    for n in nodes.values():
+        if n["tag"]!="DW_TAG_structure_type" or name(n)!="PrintLine" or "byte_size" not in n["attrs"]:continue
+        members=[c for c in n["children"] if c["tag"]=="DW_TAG_member" and "data_member_location" in c["attrs"]]
+        if not members:continue
+        assert size(n)==103
+        anonymous=[c for c in members if not name(c)]
+        assert len(anonymous)==1 and location(anonymous[0])==28
+        union=target(anonymous[0])
+        assert union["tag"]=="DW_TAG_union_type" and size(union)==48
+        alternatives={name(c):c for c in union["children"] if c["tag"]=="DW_TAG_member"}
+        assert set(alternatives)=={"lookahead","directProfile"}
+        for c in alternatives.values():
+            assert "data_member_location" not in c["attrs"] or location(c)==0
+        lookahead=target(alternatives["lookahead"])
+        limits=target(alternatives["directProfile"])
+        assert name(lookahead)=="LookaheadData" and size(lookahead)==48
+        assert name(limits)=="Limits" and size(limits)==17
+        actual={name(c):location(c) for c in limits["children"]
+                if c["tag"]=="DW_TAG_member" and "data_member_location" in c["attrs"]}
+        assert actual==expected,actual
+        matches+=1
+    assert matches,("no linked PrintLine energy union",str(elf))
+    layout["PreparedDirectProfile::Limits"]={"size":17,"members":expected,"verified_references":matches}
+    layout["PrintLine"]["members"]["anonymous_union"]=layout["PrintLine"]["members"].pop(None)
+    assert sl.LAYOUT["PrintLine"][1]["lookahead"]==28
     return layout
 
 original_layout=sl.dwarf_layout
