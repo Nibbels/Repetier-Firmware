@@ -22,6 +22,17 @@
 #include "GCodeInput.h"
 
 
+// The EEPROM commissioning transaction owns a substantial local frame.
+// Keep it off unrelated confirmation/autotune paths, including with LTO.
+__attribute__((noinline)) void UIDisplay::finishBedCutoff() {
+    if(!EEPROM::commissionBedCutoff(bedCutoffCandidate_)) {
+        Com::printErrorFLN(PSTR("Bed cutoff rejected; idle cold targets required"));
+        UI_STATUS_UPD("Cutoff rejected");
+    } else {
+        UI_STATUS_UPD("Cutoff saved");
+    }
+}
+
 void UIDisplay::finishAction(int action) {
     switch (action) {
     case UI_ACTION_RF_RESET_ACK: {
@@ -66,12 +77,7 @@ void UIDisplay::finishAction(int action) {
     }
 
     case UI_ACTION_BED_CUTOFF:
-        if(!EEPROM::commissionBedCutoff(bedCutoffCandidate_)) {
-            Com::printErrorFLN(PSTR("Bed cutoff rejected; idle cold targets required"));
-            UI_STATUS_UPD("Cutoff rejected");
-        } else {
-            UI_STATUS_UPD("Cutoff saved");
-        }
+        finishBedCutoff();
         break;
     case UI_ACTION_CHOOSE_PID_ROBUST:
     case UI_ACTION_CHOOSE_PID_DYNAMIC: {

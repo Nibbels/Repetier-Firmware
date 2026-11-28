@@ -356,6 +356,7 @@ private:
     void renderCompensationField(char c1, char c2);
     void executeCommandAction(int action);
     void executeMenuCommand(int action);
+    void finishBedCutoff();
     void changeSetting(int action, int8_t increment);
     void changeMicrostepSetting(int action, int8_t increment);
     void changeMotionSetting(int action, int8_t increment);
