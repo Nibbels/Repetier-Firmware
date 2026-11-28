@@ -8,7 +8,7 @@
 // quarantine and the terminal actuator transition remain outside this class.
 class ResendPolicy {
 public:
-    enum class Phase : uint8_t { Healthy, Pending, Waiting, Fatal };
+    enum class Phase : uint8_t { Healthy, Pending, Sending, Waiting, Fatal };
     enum class Cause : uint8_t { None, Unreplayable, TxStall, Exhausted };
     static constexpr uint8_t maxRequests = 3;
     static constexpr uint32_t responseMs = 2000;
@@ -38,9 +38,19 @@ public:
     // Time accrues according to the last observed readiness. Call on
     // readiness transitions and at bounded service intervals. Parse a
     // buffered verified candidate before testing its response deadline.
+    // deferredHandoff: the TX marker is still pending when publish succeeds.
+    // The historical immediate-publish fixture uses the default false;
+    // a real UART must select true and observe the marker before parsing.
     template<class Publish>
-    void service(uint32_t now, bool ready, bool ackOrdered, Publish publish) {
+    void service(uint32_t now, bool ready, bool ackOrdered, Publish publish,
+                 bool deferredHandoff=false) {
         if (phase_ == Phase::Healthy || phase_ == Phase::Fatal) return;
+        if (phase_ == Phase::Sending) {
+            // Absolute publication-to-handoff deadline independent of
+            // receiver readiness or trickling TX progress.
+            if (uint32_t(now-last_) >= txStallMs) fatal(Cause::TxStall);
+            return;
+        }
         const uint32_t delta = now - last_;
         last_ = now;
         if (wasReady_) {
@@ -64,8 +74,19 @@ public:
         }
         if (!ready || !ackOrdered || !publish(expected_)) return;
         ++requests_;
-        phase_ = Phase::Waiting;
+        phase_ = deferredHandoff ? Phase::Sending : Phase::Waiting;
         elapsed_ = 0;
+    }
+
+    // Poll in foreground before parsing a possibly already buffered reply.
+    // The marker is an ISR UDR handoff lower bound, not a TXC/host receipt.
+    // Start the response window at observation (at most one bounded visit
+    // later than actual handoff); do not charge publication delay to host.
+    void observeHandoff(uint32_t now, bool ready) {
+        if (phase_ != Phase::Sending) return;
+        phase_ = Phase::Waiting;
+        restartClock(now);
+        wasReady_ = ready;
     }
 
     // TX intent is independently bounded even when receive storage is
