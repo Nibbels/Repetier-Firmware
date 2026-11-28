@@ -2,7 +2,9 @@
 """Task0013: actual HAL ADC acquisition and freshness, with modeled registers.
 
 ADIF is write-one-to-clear. This is a host logic replay, not an electrical,
-interrupt-latency or AVR cycle simulator.
+interrupt-latency or AVR cycle simulator. Exercise actual ADC publication
+and diagnostic freshness with the standard heater reservation enabled;
+independent lease/expiry/consume cases are covered by heater-lease-integrated.
 """
 import os
 from pathlib import Path
@@ -43,9 +45,18 @@ static uint8_t ADMUX, muxB;
 static uint32_t now;
 static bool lockActive;
 struct InterruptProtectedBlock {
-    InterruptProtectedBlock() { assert(!lockActive); lockActive = true; }
-    ~InterruptProtectedBlock() { lockActive = false; }
+    bool saved=lockActive;
+    InterruptProtectedBlock() { lockActive = true; }
+    ~InterruptProtectedBlock() { lockActive = saved; }
 };
+// No active heater in this acquisition-only replay.
+#define TOV3 0
+static uint16_t TCNT3;
+struct W1C {
+    uint8_t bits=0;
+    operator uint8_t() const {return bits;}
+    void operator=(uint8_t mask){bits &= uint8_t(~mask);}
+} TIFR3;
 static uint8_t pgm_read_byte(const uint8_t* p) { return *p; }
 struct AdcControl {
     uint8_t value = 0;
@@ -66,6 +77,7 @@ struct AdcControl {
     AdcControl& operator|=(uint8_t v) { return *this = value | v; }
     void complete(uint16_t sample) {
         assert((value & (_BV(ADEN) | _BV(ADSC))) == (_BV(ADEN) | _BV(ADSC)));
+        if(++TCNT3==0) TIFR3.bits|=_BV(TOV3);
         ADCW = sample;
         value = (value & ~_BV(ADSC)) | _BV(ADIF);
     }
@@ -75,8 +87,10 @@ struct HAL {
     static uint16_t temperatureAdcSample(uint8_t);
     static bool temperatureAdcSample(uint8_t, uint16_t&, uint32_t* publication=nullptr);
     static void analogStart();
+    #include "ticket.inc"
 };
 #include "adc.inc"
+namespace { bool heaterClockContinuity() { return false; } }
 
 static uint16_t read(uint8_t index, bool expected) {
     uint16_t value = 12345;
@@ -88,6 +102,7 @@ static uint16_t read(uint8_t index, bool expected) {
 static void start() {
     ADCSRA.completeDummy = true;
     HAL::analogStart();
+    heaterLeaseReady=true;
     assert(temperatureAdcPosition == 0 && temperatureAdcCount == 0 && temperatureAdcSum == 0);
     assert((ADCSRA.value & (_BV(ADEN) | _BV(ADSC) | _BV(ADIF))) == (_BV(ADEN) | _BV(ADSC)));
     for (uint8_t i=0; i<TemperatureAdcCount; ++i) assert(read(i, false) == 0);
@@ -163,6 +178,27 @@ int main() {
     serviceTemperatureAdc();
     assert(read(1, true) == 800);
     start();
+    now=200;
+    batch(0,100);
+    // Initial batch has no preceding Timer3 start evidence.
+    assert(!(heaterSampleState[0]&SampleFresh));
+    now=201;
+    batch(1,101);
+    assert(heaterSampleState[1]&SampleFresh);
+    {
+        HAL::HeaterSample ticket;
+        uint16_t raw=0;uint32_t publication=0;
+        assert(ticket.read(1,raw,&publication)&&raw==404&&publication==now);
+        assert(!lockActive&&(heaterSampleState[1]&SampleReserved));
+        // Diagnostic reads must not consume the reservation.
+        assert(read(1,true)==404&&(heaterSampleState[1]&SampleReserved));
+        // The next actual rail publication removes a pending reservation.
+        while(temperatureAdcPosition!=1) batch(temperatureAdcPosition,100);
+        batch(1,1023);
+        assert(!(heaterSampleState[1]&SampleReserved));
+        assert(read(1,true)==4092);
+    }
+    assert(!(heaterSampleState[1]&SampleBusy)&&!lockActive);
     std::printf("PASS ADC %u channels: startup, event flags, batches, mux, expiry and wrap\n", TemperatureAdcCount);
 }
 '''
@@ -171,17 +207,18 @@ int main() {
 def main():
     source = (FW / "HAL.cpp").read_text()
     adc = ("namespace {\n"
-           + section(source, "const uint8_t temperatureAdcChannels", "#ifndef RF_HEATER_RESET_WDT_EXPERIMENT\nvolatile unsigned long watchdogHeartbeat")
+           + section(source, "const uint8_t temperatureAdcChannels", "volatile bool watchdogActive = false;").split("#ifndef RF_HEATER_RESET_WDT_EXPERIMENT")[0]
            + "}\n"
            + section(source, "uint16_t HAL::temperatureAdcSample(", "//initialize watchdog"))
     with TemporaryDirectory(prefix="rfx-hal-adc-") as tmp:
         work = Path(tmp)
         (work / "adc.inc").write_text(adc)
+        (work / "ticket.inc").write_text(section((FW / "HAL.h").read_text(), "    class HeaterSample {", "    static bool heaterLeaseFault();"))
         (work / "replay.cpp").write_text(HARNESS)
         for extruders, chamber in ((1, 0), (2, 1), (1, 1)):
             exe = work / "replay"
             subprocess.run([os.environ.get("CXX", "c++"), "-std=c++11", "-O2",
-                            f"-DNUM_EXTRUDER={extruders}", f"-DCHAMBER={chamber}",
+                            f"-DNUM_EXTRUDER={extruders}", f"-DCHAMBER={chamber}", "-DRF_HEATER_LEASE_EXPERIMENT=1",
                             str(work / "replay.cpp"), "-o", str(exe)], check=True)
             subprocess.run([str(exe)], check=True, timeout=10)
 
