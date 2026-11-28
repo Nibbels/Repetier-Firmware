@@ -1615,7 +1615,7 @@ jobs:
           if-no-files-found: error
 
   current-z-direction-barriers:
-    if: github.head_ref == 'task/Task0032-resend-preflight'
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -1682,7 +1682,7 @@ jobs:
           if-no-files-found: error
 
   current-prepared-plateau:
-    if: github.head_ref == 'task/Task0032-resend-preflight'
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -1749,7 +1749,7 @@ jobs:
           if-no-files-found: error
 
   current-compact-planner-cost:
-    if: github.head_ref == 'task/Task0032-resend-preflight'
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -1784,5 +1784,106 @@ jobs:
         with:
           name: task0032-compact-planner-cost-${{ github.sha }}
           path: ${{ runner.temp }}/compact-planner-cost
+          retention-days: 7
+          if-no-files-found: error
+
+  current-z-plateau-combined:
+    if: github.head_ref == 'task/Task0032-resend-preflight'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-z-direction-barriers-6a907123aefeab0f71405f5321a3fba9ff111379
+          run-id: 46172742678
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/z-plateau-combined-input
+      - name: Bypass general direct ramp on prepared plateau
+        shell: bash
+        run: |
+          set -euo pipefail
+          input="$RUNNER_TEMP/z-plateau-combined-input"
+          source="$RUNNER_TEMP/z-plateau-combined-source"
+          out="$RUNNER_TEMP/z-plateau-combined"
+          p0=c31b4d391cc4d2b9cca9ab3f8e236bed805716d9
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          sha256sum tools/task0032/current-prepared-plateau.py tools/task0032/current-direct-energy-linked.py research/task0032-step-output/linked_timer1.py > "$out/tool-sha256.txt"
+          echo "713caf637aa216ba70017244f4671e913086f98f4f42793f431d73665544d7ab  $input/z-direction-barriers.diff" | sha256sum -c
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$source" "$p0"
+          git -C "$source" apply --index "$input/z-direction-barriers.diff"
+          test "$(git -C "$source" write-tree)" = f4908b13d7a5af5ab0164cca292dfa6df703aff8
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Reconstruct qualified Z direction candidate"
+          python3 tools/task0032/current-prepared-plateau.py --root "$source" | tee "$out/compact.log"
+          python3 tools/task0032/current-direct-energy-replay.py --source "$source/Repetier" --candidate "$source/Repetier" --out "$out/replay" | tee "$out/replay.log"
+          git -C "$source" add Repetier
+          git -C "$source" diff --cached --check
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Bypass general direct ramp on prepared plateau"
+          git -C "$source" rev-parse HEAD > "$out/local-candidate-sha.txt"
+          git -C "$source" rev-parse 'HEAD^{tree}' > "$out/local-candidate-tree.txt"
+          git -C "$source" diff --binary "$p0" HEAD > "$out/z-plateau-combined.diff"
+          (cd "$out"; sha256sum z-plateau-combined.diff > z-plateau-combined.diff.sha256)
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Canonical host and four AVR recovery links
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/z-plateau-combined"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          cd "$RUNNER_TEMP/z-plateau-combined-source"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" | tee "$out/canonical.log"
+      - name: Measure compact ABI, actual spacing and UART
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/z-plateau-combined"
+          python3 tools/task0032/current-direct-energy-linked.py --optimized --extended --phase-anchor --compact --z-dir-owner --evidence "$out/candidate-evidence" --out "$out/linked-energy.json" | tee "$out/linked-energy.log"
+          python3 tools/task0032/current-transport-linked.py --evidence "$out/candidate-evidence" --out "$out/linked-transport.json" | tee "$out/linked-transport.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-z-plateau-combined-${{ github.sha }}
+          path: ${{ runner.temp }}/z-plateau-combined
+          retention-days: 7
+          if-no-files-found: error
+
+  current-queue-pack-cost:
+    if: github.head_ref == 'task/Task0032-resend-preflight'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-compact-printline-4b1bc9848033ee5fd9fb82368736c0b3dcf5adfe
+          run-id: 46172073412
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/queue-pack-input
+      - name: Actual linked queue pack costs and electrical edge spacing
+        shell: bash
+        run: |
+          set -euo pipefail
+          input="$RUNNER_TEMP/queue-pack-input"
+          out="$RUNNER_TEMP/queue-pack-cost"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          sha256sum tools/task0032/current-queue-pack-linked.py tools/task0032/current-direct-energy-linked.py research/task0032-step-output/linked_timer1.py > "$out/tool-sha256.txt"
+          test "$(cat "$input/local-candidate-sha.txt")" = f0870fb62d598c2508f482b544bad63cb7cd470f
+          python3 tools/task0032/current-queue-pack-linked.py --evidence "$input/candidate-evidence" --out "$out/linked-queue-packs.json" | tee "$out/linked-queue-packs.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-queue-pack-cost-${{ github.sha }}
+          path: ${{ runner.temp }}/queue-pack-cost
           retention-days: 7
           if-no-files-found: error
