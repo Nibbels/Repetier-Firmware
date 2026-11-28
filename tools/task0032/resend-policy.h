@@ -68,6 +68,12 @@ public:
         elapsed_ = 0;
     }
 
+    // TX intent is independently bounded even when receive storage is
+    // blocked, or when no RX fault has occurred yet. Preserve first cause.
+    void failTx() {
+        if (phase_ != Phase::Fatal) fatal(Cause::TxStall);
+    }
+
     // Invoke ONLY after actual admission of the requested frame under the
     // existing final loss fence. Caller must prove exact sequence, checksum,
     // supported shape, replayable stream, fresh sync and no special bypass.
@@ -97,6 +103,21 @@ private:
     Cause cause_ = Cause::None;
     uint8_t requests_ = 0;
     bool wasReady_ = false;
+};
+
+// Bound an unpublished ACK independently of the resend/receiver-ready
+// clock. A later fault or a full command queue must not reset its age.
+// This is an intent publication deadline, NOT a TX-wire-progress proof.
+// The caller must stage at the actual admission instant, attempt publication
+// before polling, and keep the first terminal cause. No new buffer.
+class AckPublicationDeadline {
+public:
+    void staged(uint32_t now) { since_ = now; }
+    bool expired(bool pending, uint32_t now) const {
+        return pending && uint32_t(now - since_) >= ResendPolicy::txStallMs;
+    }
+private:
+    uint32_t since_ = 0;
 };
 
 // Exact legacy wire reply (including the leading CRLF and control ok).
