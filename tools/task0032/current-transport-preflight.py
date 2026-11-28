@@ -24,6 +24,27 @@ once=ring["once"]
 def candidate(fw):
     # Reuse actual-source terminal transition and foreground service seams.
     files=trigger["candidate"](fw)
+    # Shared cancellation cursor remains the single owner. Follow it with
+    # bounded complete fatal/legacy responses, without a fake command ACK.
+    # A real thermal promotion immediately takes the thermal report path.
+    t=files["TemperatureControl.cpp"]
+    t=once(t,"""        static bool sent=false;
+        if(!sent) {
+            ReportLine line;
+            line.text(PSTR("!! COMMUNICATION LOST"));
+            if(line.finish()&&sink.tryWriteSpan(line.data(),line.size()))sent=true;
+        }""",
+        """        static uint8_t cursor=0;
+        if(cursor<3) {
+            ReportLine line;
+            switch(cursor) {
+            case 0: line.text(PSTR("fatal: COMMUNICATION LOST"));break;
+            case 1: line.text(PSTR("!! COMMUNICATION LOST"));break;
+            case 2: line.text(PSTR("Error: COMMUNICATION LOST"));break;
+            }
+            if(line.finish()&&sink.tryWriteSpan(line.data(),line.size()))++cursor;
+        }""")
+    files["TemperatureControl.cpp"]=t
     h=(fw/"UsbSerial.h").read_text()
     s=(fw/"UsbSerial.cpp").read_text()
     # The historical ring generator anchors at the old variable-rate init.
