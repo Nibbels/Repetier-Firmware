@@ -26,9 +26,9 @@ def main():
         return (fw / name).read_text(encoding="utf-8")
     header, menu, ui = read("ui.h"), read("uimenu.h"), read("ui.cpp")
     fmt, act, settings, epr = (read(n) for n in
-        ("UiFormatting.cpp", "UiActions.cpp", "UiSettings.cpp", "Eeprom.cpp"))
+        ("UiFormatting.cpp", "UiActions.cpp", "UiSettings.cpp", "EepromZoneRuntime.cpp"))
     defs = "\n".join(read(n) for n in
-        ("Configuration.h", "Eeprom.h", "HAL.h", "RF.h", "ui.h", "uilang.h"))
+        ("Configuration.h", "HAL.h", "RF.h", "ui.h", "uilang.h"))
     macros = "\n".join(re.findall(
         r"^#define (?:PREHEAT_\w+|EPR_RF_PREHEAT_\w+|EPR_RF_Z_OFFSET|EPR_RF_MOD_SENSEOFFSET_DIGITS|EPR_INTEGRITY_BYTE|EEPROM_OFFSET|PERIODICAL_ACTIONS_CALL_INTERVAL|RF_MICRO_STEPS_Z|Z_OFFSET_(?:BUTTON|MENU)_STEPS|UI_ACTION_PREHEAT_\w+|UI_ACTION_RF_HEAT_BED_(?:UP|DOWN)|UI_SET_(?:MIN|MAX)_\w+_TEMP|UI_ACTION_ZOFFSET|UI_ACTION_(?:XPOSITION|YPOSITION|ZPOSITION|EPOSITION|RF_RESET_ACK|STOP_ACK|RESTORE_DEFAULTS|CHOOSE_PID_ROBUST|CHOOSE_PID_DYNAMIC)|UI_MENU_TYPE_(?:SUBMENU|MODIFICATION_MENU)|XYZ_POSITION_BUTTON_DIRECTION|UI_SET_EXTRUDER_FEEDRATE|SPEED_(?:MIN_MILLIS|MAX_MILLIS|MAGNIFICATION)|MAX_COLS|UI_TEXT_PREHEAT_\w+)\s+[^\n]+",
         defs, re.M))
@@ -67,7 +67,7 @@ def main():
     assert "#define UI_MOD_PAGES , &ui_page_mod" in menu
     for key, action in (("E1", "UP"), ("E2", "DOWN")):
         assert f"UI_KEYS_BUTTON_LOW(ENABLE_KEY_{key}, UI_ACTION_RF_HEAT_BED_{action})" in ui
-    assert "Printer::zOffset.setManualMicrometers(HAL::eprGetInt32(EPR_RF_Z_OFFSET), Printer::stepsPerMm(Z_AXIS));" in epr
+    assert "case ZOffset:Printer::zOffset.setManualMicrometers(int32_t(d.u32(Field::F_RF_Z_OFFSET)),Printer::stepsPerMm(Z_AXIS));" in read("EepromZoneLive.cpp")
 
     parser = (section(fmt, "void UIDisplay::parse(", "// Format a complete placeholder")
               + section(fmt, "void UIDisplay::renderField(", "        case 'a':"))
@@ -97,10 +97,10 @@ def main():
         + "void UIDisplay::changeSetting(int action, int8_t increment) { switch(action) {\n"
         + section(settings, "    case UI_ACTION_PREHEAT_A_BED:", "    case UI_ACTION_FANSPEED:")
         + "default: assert(false); } }\n"
-        + section(epr, "void EEPROM::updateChecksum()", "void EEPROM::storeMicrostepConfiguration(")
-        + section(epr, "void EEPROM::storeManualZOffset()", "void EEPROM::readDataFromEEPROM()")
-        + section(epr, "uint8_t EEPROM::computeChecksum()", "} // computeChecksum") + "}\n"
-        + read("PreheatProfiles.cpp")[read("PreheatProfiles.cpp").index("namespace {"):]
+        + section(epr, "void EEPROM::storePreheatProfiles()", "void EEPROM::storeSenseOffsetSettings(")
+        + "\n#define RF_THERMAL_EMERGENCY_EXPERIMENT 1\n"
+        + section(read("PreheatProfiles.cpp"), "namespace {", "#ifndef RF_EEPROM_ZONE_EXPERIMENT")
+        + "\n#undef RF_THERMAL_EMERGENCY_EXPERIMENT\n"
     )
     # Compile the complete real tree, not synthetic copies of the filtered lists.
     menu_defs = menu.replace("(unsigned int)&entries", "(uintptr_t)&entries")
@@ -156,16 +156,17 @@ constexpr int Z_AXIS = 2;
 constexpr float scale = 80.0f * RF_MICRO_STEPS_Z;
 static_assert(UI_COLS == EXPECTED_COLS && UI_ROWS == 4, "panel geometry");
 static_assert(Z_OFFSET_BUTTON_STEPS == 5, "transfer increment");
-static_assert(EPR_RF_Z_OFFSET == 1038 && EPR_INTEGRITY_BYTE == 104 &&
-              EPR_RF_MOD_SENSEOFFSET_DIGITS == 1908 && EEPROM_OFFSET == 0, "offset ABI");
-static_assert(EPR_RF_PREHEAT_PROFILE_TAG == 1966 && EPR_RF_PREHEAT_A_BED == 1970 &&
-              EPR_RF_PREHEAT_A_HOTEND == 1972 && EPR_RF_PREHEAT_B_BED == 1974 &&
-              EPR_RF_PREHEAT_B_HOTEND == 1976, "profile ABI");
+#include "EepromZonePatch.h"
+constexpr unsigned offsetPos=EepromZones::address(EepromZones::Field::F_RF_Z_OFFSET);
+constexpr unsigned sensePos=EepromZones::address(EepromZones::Field::F_RF_MOD_SENSEOFFSET_DIGITS);
+constexpr unsigned preheatPos=EepromZones::address(EepromZones::Field::F_RF_PREHEAT_A_BED);
+constexpr int bedMax=140;
+struct BedFixture {int maximumTargetC()const{return bedMax;}} heatedBedController;
 template<class T> T pgm_read_word(const T* p) { return *p; }
 template<class T> uint8_t pgm_read_byte(const T* p) { return uint8_t(*p); }
 namespace RMath { template<class A, class B> int min(A a, B b) { return std::min(int(a), int(b)); } }
 namespace HAL {
-std::array<uint8_t,2048> eeprom;
+std::array<uint8_t,4096> eeprom;
 std::vector<unsigned> writes;
 uint8_t readFlashByte(const char* p) { return uint8_t(*p); }
 millis_t timeInMilliseconds() { return 5; }
@@ -209,8 +210,35 @@ void setTemperatureForAllExtruders(int v) { hotend=v; }
 void setHeatedBedTemperature(int v) { bed=v; }
 }
 namespace EEPROM {
-void writePreheatProfiles(); bool readPreheatProfiles(); void storePreheatProfiles();
-uint8_t computeChecksum(); void updateChecksum(); void storeManualZOffset();
+void storePreheatProfiles(); void storeManualZOffset();
+}
+using EepromZones::Patch;
+using EepromZones::Field;
+// Stub only the durable transport; actual UI/runtime owners are extracted.
+// Checked storage, metadata and power cuts are separately exercised.
+static bool persist(Patch p) {
+    assert(EepromZones::patchMask(&p,1));
+    if(p.width==2) {
+        if(HAL::eprGetInt16(p.pos)!=int16_t(p.bits))HAL::eprSetInt16(p.pos,int16_t(p.bits));
+    } else {
+        assert(p.width==4);
+        if(HAL::eprGetInt32(p.pos)!=int32_t(p.bits))HAL::eprSetInt32(p.pos,int32_t(p.bits));
+    }
+    return true;
+}
+static bool saveLive(uint32_t mask) {
+    assert(mask==EepromZones::blockBit(EepromZones::Preheat));
+    const auto a=Printer::preheatProfiles.get(PreheatProfiles::Profile::A);
+    const auto b=Printer::preheatProfiles.get(PreheatProfiles::Profile::B);
+    return persist(Patch::word(Field::F_RF_PREHEAT_A_BED,a.bed))
+        && persist(Patch::word(Field::F_RF_PREHEAT_A_HOTEND,a.hotend))
+        && persist(Patch::word(Field::F_RF_PREHEAT_B_BED,b.bed))
+        && persist(Patch::word(Field::F_RF_PREHEAT_B_HOTEND,b.hotend));
+}
+static bool reloadProfiles() {
+    const bool a=Printer::preheatProfiles.readStored(PreheatProfiles::Profile::A,{HAL::eprGetInt16(preheatPos),HAL::eprGetInt16(preheatPos+2)});
+    const bool b=Printer::preheatProfiles.readStored(PreheatProfiles::Profile::B,{HAL::eprGetInt16(preheatPos+4),HAL::eprGetInt16(preheatPos+6)});
+    return a||b;
 }
 std::string status;
 #define UI_STATUS_UPD(x) status=x
@@ -265,15 +293,9 @@ struct UIDisplay {
     void mainSwitchCase(int); void changeSwitchCase(int,int8_t);
 } uid;
 #include "firmware.inc"
-void checkChecksum() {
-    unsigned total=0;
-    for(unsigned i=0;i<HAL::eeprom.size();i++) if(i!=104) total+=HAL::eeprom[i];
-    assert(HAL::eeprom[104]==uint8_t(total));
-}
-void unchangedExcept(const std::array<uint8_t,2048>& before,unsigned start,unsigned end) {
+void unchangedExcept(const std::array<uint8_t,4096>& before,unsigned start,unsigned end) {
     for(unsigned i=0;i<before.size();i++)
-        if(i!=104 && (i<start || i>=end)) assert(before[i]==HAL::eeprom[i]);
-    checkChecksum();
+        if(i<start || i>=end) assert(before[i]==HAL::eeprom[i]);
 }
 void rowIs(unsigned r, char marker, std::string text) {
     std::string expected=marker+text;
@@ -289,14 +311,14 @@ void show(UIMenu* menu, int selected, int editing=0) {
 void preheat() {
     using P=PreheatProfiles::Profile;
     HAL::eeprom.fill(0xff);
-    HAL::eprSetInt16(1908,700); HAL::eprSetInt32(1038,0); EEPROM::updateChecksum();
+    HAL::eprSetInt16(sensePos,700); HAL::eprSetInt32(offsetPos,0);
     const auto before=HAL::eeprom;
-    assert(EEPROM::readPreheatProfiles()); EEPROM::updateChecksum();
-    unchangedExcept(before,1966,1978);
-    assert(HAL::eprGetInt32(1966)==0x50524831);
-    assert(HAL::eprGetInt16(1970)==60 && HAL::eprGetInt16(1972)==180);
-    assert(HAL::eprGetInt16(1974)==100 && HAL::eprGetInt16(1976)==210);
-    const int addresses[]={1970,1972,1974,1976};
+    Printer::preheatProfiles.restoreDefaults();
+    EEPROM::storePreheatProfiles();
+    unchangedExcept(before,preheatPos,preheatPos+8);
+    assert(HAL::eprGetInt16(preheatPos)==60 && HAL::eprGetInt16(preheatPos+2)==180);
+    assert(HAL::eprGetInt16(preheatPos+4)==100 && HAL::eprGetInt16(preheatPos+6)==210);
+    const unsigned addresses[]={preheatPos,preheatPos+2,preheatPos+4,preheatPos+6};
     const int changed[]={65,195,115,230};
     const int increments[]={5,15,15,20};
     for(int i=0;i<4;i++) {
@@ -307,10 +329,10 @@ void preheat() {
         uid.changeSwitchCase(entry->action,increments[i]);
         assert(HAL::eprGetInt16(addresses[i])==changed[i]);
         unchangedExcept(old,addresses[i],addresses[i]+2);
-        assert(HAL::writes.size()==6 && HAL::writes.back()==104);
+        assert(HAL::writes.size()==1 && HAL::writes.back()==addresses[i]);
     }
     Printer::preheatProfiles.restoreDefaults();
-    HAL::writes.clear(); assert(!EEPROM::readPreheatProfiles() && HAL::writes.empty());
+    HAL::writes.clear(); assert(!reloadProfiles() && HAL::writes.empty());
     show(&ui_menu_preheat,0);
     rowIs(0,char(CHAR_SELECTOR),"A Bed 65 C");
     rowIs(1,' ',"A Ext 195 C"); rowIs(2,' ',"B Bed 115 C"); rowIs(3,' ',"B Ext 230 C");
@@ -329,7 +351,7 @@ void preheat() {
     for(int i=0;i<4;i++) {
         int action=ui_menu_preheat.entries[i]->action;
         bool bed=i%2==0;
-        int max=bed?UI_SET_MAX_HEATED_BED_TEMP:UI_SET_MAX_EXTRUDER_TEMP;
+        int max=bed?bedMax:UI_SET_MAX_EXTRUDER_TEMP;
         int min=bed?UI_SET_MIN_HEATED_BED_TEMP:UI_SET_MIN_EXTRUDER_TEMP;
         uid.changeSwitchCase(action,127); assert(HAL::eprGetInt16(addresses[i])==max);
         HAL::writes.clear(); uid.changeSwitchCase(action,1); uid.changeSwitchCase(action,0); assert(HAL::writes.empty());
@@ -341,13 +363,12 @@ void preheat() {
         assert(HAL::eprGetInt16(addresses[i])==std::min(max,min+127));
         uid.changeSwitchCase(action,127); assert(HAL::eprGetInt16(addresses[i])==max);
     }
-    show(&ui_menu_preheat,2); rowIs(0,' ',"A Bed 160 C"); rowIs(1,' ',"A Ext 270 C");
-    rowIs(2,char(CHAR_SELECTOR),"B Bed 160 C"); rowIs(3,' ',"B Ext 270 C");
-    show(&quick_window,1); rowIs(0,' ',UI_COLS==16?"A B160 E270":"A Bed 160 Ext 270");
-    rowIs(1,char(CHAR_SELECTOR),UI_COLS==16?"B B160 E270":"B Bed 160 Ext 270");
-    checkChecksum();
+    show(&ui_menu_preheat,2); rowIs(0,' ',"A Bed 140 C"); rowIs(1,' ',"A Ext 270 C");
+    rowIs(2,char(CHAR_SELECTOR),"B Bed 140 C"); rowIs(3,' ',"B Ext 270 C");
+    show(&quick_window,1); rowIs(0,' ',UI_COLS==16?"A B140 E270":"A Bed 140 Ext 270");
+    rowIs(1,char(CHAR_SELECTOR),UI_COLS==16?"B B140 E270":"B Bed 140 Ext 270");
     // All four values survived the panel changes independently, including boundaries.
-    assert(Printer::preheatProfiles.get(P::A).hotend==270 && Printer::preheatProfiles.get(P::B).bed==160);
+    assert(Printer::preheatProfiles.get(P::A).hotend==270 && Printer::preheatProfiles.get(P::B).bed==140);
 }
 void offset() {
     auto& z=Printer::zOffset;
@@ -364,8 +385,8 @@ void offset() {
         HAL::writes.clear(); press(UI_ACTION_RF_HEAT_BED_DOWN);
         assert(z.manualMicrometers()==5*i && z.senseMicrometers()==205-5*i);
         assert(z.effectiveSteps()==int32_t(205*scale/1000.0f));
-        assert(HAL::eprGetInt32(1038)==5*i && (HAL::writes==std::vector<unsigned>{1038,104}));
-        unchangedExcept(before,1038,1042);
+        assert(HAL::eprGetInt32(offsetPos)==5*i && (HAL::writes==std::vector<unsigned>{offsetPos}));
+        unchangedExcept(before,offsetPos,offsetPos+4);
         HAL::writes.clear(); press(UI_ACTION_RF_HEAT_BED_UP);
         assert(z.manualMicrometers()==5*i && z.senseMicrometers()==200-5*i);
         assert(z.effectiveSteps()==total && HAL::writes.empty());
@@ -374,13 +395,13 @@ void offset() {
     // Simulated reboot/reload: only the manual part is durable.
     set(25,100); press(UI_ACTION_RF_HEAT_BED_DOWN); press(UI_ACTION_RF_HEAT_BED_UP);
     assert(z.manualMicrometers()==30 && z.senseMicrometers()==95);
-    z.clearSenseOffset(scale); z.setManualMicrometers(HAL::eprGetInt32(1038),scale);
+    z.clearSenseOffset(scale); z.setManualMicrometers(HAL::eprGetInt32(offsetPos),scale);
     assert(z.manualMicrometers()==30 && z.senseMicrometers()==0);
     // Insufficient dynamic offset: the remaining portion of UP reduces manual.
     set(20,2); auto initial=z.effectiveSteps();
     press(UI_ACTION_RF_HEAT_BED_DOWN); HAL::writes.clear(); press(UI_ACTION_RF_HEAT_BED_UP);
     assert(z.manualMicrometers()==22 && z.senseMicrometers()==0 && z.effectiveSteps()==initial);
-    assert(HAL::eprGetInt32(1038)==22 && (HAL::writes==std::vector<unsigned>{1038,104}));
+    assert(HAL::eprGetInt32(offsetPos)==22 && (HAL::writes==std::vector<unsigned>{offsetPos}));
     // Zero snapping and upper clamp are intentionally not an exact transfer.
     set(-2,20); press(UI_ACTION_RF_HEAT_BED_DOWN); assert(z.manualMicrometers()==0);
     press(UI_ACTION_RF_HEAT_BED_UP); assert(z.manualMicrometers()==0 && z.senseMicrometers()==15);
@@ -399,7 +420,7 @@ void offset() {
     press(UI_ACTION_RF_HEAT_BED_UP); assert(uid.jog==-1);
     assert(uid.jogCalls==6 && HAL::writes.empty() && HAL::eeprom==saved);
     assert(z.manualMicrometers()==50 && z.senseMicrometers()==25);
-    assert(HAL::eprGetInt16(1908)==700); checkChecksum();
+    assert(HAL::eprGetInt16(sensePos)==700);
 }
 void navigation() {
     // Real navigation path: wrap, hidden-entry skip, edit routing, page wrap.
@@ -416,11 +437,11 @@ void navigation() {
     Printer::activeModes=1; uid.nextPreviousAction(1); assert(uid.menuPos[1]==1);
     Printer::activeModes=0; uid.menuPos[1]=0;
     uid.activeAction=UI_ACTION_PREHEAT_A_BED;
-    const int old=HAL::eprGetInt16(1970);
-    uid.nextPreviousAction(1); assert(uid.menuPos[1]==0 && HAL::eprGetInt16(1970)==old-1);
+    const int old=HAL::eprGetInt16(preheatPos);
+    uid.nextPreviousAction(1); assert(uid.menuPos[1]==0 && HAL::eprGetInt16(preheatPos)==old-1);
     assert(uid.autoReturnTime_==5+menuAutoReturnDelayMs);
     Printer::uiError=true; uid.nextPreviousAction(1);
-    assert(!Printer::uiError && HAL::eprGetInt16(1970)==old-1);
+    assert(!Printer::uiError && HAL::eprGetInt16(preheatPos)==old-1);
     uid.activeAction=0; uid.menuLevel=0; uid.menuPos[0]=0;
     uid.nextPreviousAction(-1); assert(uid.menuPos[0]==panelPageCount-1);
     uid.nextPreviousAction(1); assert(uid.menuPos[0]==0);
