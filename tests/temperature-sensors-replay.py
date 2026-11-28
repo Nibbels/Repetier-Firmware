@@ -3,7 +3,8 @@
 
 Frozen transcript hashes from target 1b0dcee6c12fd6264caf29f75673960130483be2.
 Every uint8 sensor ID and every 12-bit sample is tested for both board
-calibrations. This tests conversion and the range predicate, not heater shutdown.
+calibrations, using both the diagnostic and standard ticket read paths.
+This tests conversion and the range predicate, not lease grant or shutdown.
 """
 import argparse
 import hashlib
@@ -33,18 +34,27 @@ static_assert(sizeof(short) == 2 && sizeof(float) == 4, "host widths");
 static uint8_t pgm_read_byte(const uint8_t* p) { return *p; }
 static int16_t pgm_read_word(const int16_t* p) { return *p; }
 static const int16_t* pgm_read_word(const int16_t* const* p) { return *p; }
-static unsigned reads;
+static unsigned reads, ticketReads;
 static uint16_t sample;
+static bool fresh = true;
 struct HAL {
     static bool temperatureAdcSample(uint8_t index, uint16_t& value, uint32_t* publishedAt=nullptr) {
-        assert(index == 2); ++reads; value = sample; if(publishedAt)*publishedAt=123; return true;
+        assert(index == 2); ++reads; value = sample;
+        if(fresh && publishedAt)*publishedAt=123;
+        return fresh;
     }
+    struct HeaterSample {
+        bool read(uint8_t index, uint16_t& value, uint32_t* publishedAt) {
+            ++ticketReads;
+            return HAL::temperatureAdcSample(index, value, publishedAt);
+        }
+    };
 };
 struct TemperatureController {
     uint8_t sensorType, sensorPin;
     int16_t currentTemperature;
     float currentTemperatureC;
-    bool updateCurrentTemperature(ThermalEmergency::SensorObservation* = nullptr);
+    bool updateCurrentTemperature(HAL::HeaterSample* = nullptr, ThermalEmergency::SensorObservation* = nullptr);
 };
 #include "conversion.inc"
 static void emit(uint32_t v, unsigned bytes) {
@@ -55,14 +65,25 @@ int main() {
         const bool ntc = (type >= 1 && type <= 4) || (type >= 8 && type <= 14);
         const bool analog = ntc || type == 53 || type == 60 || type == 100;
         for (unsigned raw = 0; raw < 4096; ++raw) {
-            sample = raw; reads = 0;
+            sample = raw; reads = ticketReads = 0;
             TemperatureController c{uint8_t(type), 2, -123, -999.0f};
             ThermalEmergency::SensorObservation observation;
-            const bool supported = c.updateCurrentTemperature(&observation);
+            const bool supported = c.updateCurrentTemperature(nullptr, &observation);
             assert(observation.rawKnown==analog);
             if(analog)assert(observation.publishedAt==123 && observation.raw==raw);
             assert(supported == ((analog && raw > 0 && raw < 4092) || type == 0));
-            assert(reads == unsigned(analog));
+            assert(reads == unsigned(analog) && ticketReads == 0);
+            TemperatureController measured{uint8_t(type), 2, -123, -999.0f};
+            HAL::HeaterSample ticket;
+            ThermalEmergency::SensorObservation measuredObservation;
+            assert(measured.updateCurrentTemperature(&ticket, &measuredObservation) == supported);
+            assert(reads == 2 * unsigned(analog) && ticketReads == unsigned(analog));
+            assert(measured.currentTemperature == c.currentTemperature);
+            assert(measured.currentTemperatureC == c.currentTemperatureC);
+            assert(measuredObservation.rawKnown == observation.rawKnown);
+            assert(measuredObservation.raw == observation.raw);
+            assert(measuredObservation.publishedAt == observation.publishedAt);
+            assert(measuredObservation.invalidCause == observation.invalidCause);
             assert(c.currentTemperature == (analog ? int(raw) : type == 0 ? 25 : 4095));
             assert(std::isfinite(c.currentTemperatureC));
             if (!analog && type != 0) assert(c.currentTemperatureC == MAX_DEFECT_TEMPERATURE + 1.0f);
@@ -75,6 +96,18 @@ int main() {
             // Rail authorization is separately asserted above.
             emit(analog || type == 0, 1); emit(outsideRange, 1);
         }
+    }
+    // Stale ADC samples may be converted for diagnostics but never authorize heat.
+    fresh = false;
+    sample = 102;
+    for (unsigned route=0; route<2; ++route) {
+        TemperatureController c{60, 2, -123, -999.0f};
+        HAL::HeaterSample ticket;
+        ThermalEmergency::SensorObservation observation;
+        reads=ticketReads=0;
+        assert(!c.updateCurrentTemperature(route ? &ticket : nullptr, &observation));
+        assert(reads==1 && ticketReads==route);
+        assert(!observation.rawKnown && observation.invalidCause==ThermalEmergency::Cause::StaleSample);
     }
 }
 '''
@@ -105,12 +138,13 @@ def main():
             assert defines["ANALOG_REDUCE_BITS"] == "0" and defines["CELSIUS_EXTRA_BITS"] == "3"
             exe = work / "replay"
             subprocess.run([os.environ.get("CXX", "c++"), "-std=c++11", "-O2", "-ffp-contract=off",
-                            "-Wall", "-Wextra", "-Werror", *[f"-D{k}={v}" for k,v in defines.items()],
+                            "-Wall", "-Wextra", "-Werror", "-DRF_HEATER_LEASE_EXPERIMENT=1",
+                            *[f"-D{k}={v}" for k,v in defines.items()],
                             "-I", str(fw), str(work / "replay.cpp"), "-o", str(exe)], check=True)
             output = subprocess.check_output([str(exe)], timeout=20)
             assert len(output) == 256 * 4096 * 8
             digest = hashlib.sha256(output).hexdigest()
-            print(f"{board}: 1048576 conversions, SHA256 {digest}", flush=True)
+            print(f"{board}: 1048576 conversions per read path plus stale checks, SHA256 {digest}", flush=True)
             if not args.capture:
                 assert digest == expected, (board, expected, digest)
 
