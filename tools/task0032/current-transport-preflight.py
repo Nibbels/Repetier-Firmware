@@ -141,12 +141,14 @@ def main():
     replay_uart(out,files)
     replay_scheduler(out,files)
     for name,s in files.items():(fw/name).write_text(s)
+    receiver=runpy.run_path(str(HERE/"current-transport-receiver-replay.py"))
+    receiver["run"](source,out/"receiver")
     subprocess.run(["git","-C",str(source),"diff","--check"],check=True)
     (out/"provenance.json").write_text(json.dumps({
         "p0":drive["P0"],
         "combined_sha256":hashlib.sha256(combined.read_bytes()).hexdigest(),
         "candidate_sha256":{n:hashlib.sha256(s.encode()).hexdigest() for n,s in sorted(files.items())},
-        "scope":"Stage 1 only: actual-source UART and scheduler seam; bounded resend and final receiver replay outstanding"
+        "scope":"Stage 1 only: actual-source UART, outer receiver and scheduler seams; bounded resend and full canonical replay outstanding"
     },indent=2)+"\n")
 
 if __name__=="__main__":
