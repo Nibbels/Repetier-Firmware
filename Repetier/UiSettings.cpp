@@ -501,8 +501,27 @@ __attribute__((noinline)) void UIDisplay::changeSetting(int action, int8_t incre
     case UI_ACTION_MICROSTEPS_XY:
     case UI_ACTION_MICROSTEPS_Z:
     case UI_ACTION_MICROSTEPS_E: {
-        if (!Printer::printJob.isBusy() && !PrintLine::hasLines() && Printer::pause.allowsQueueAdvance()) {
-            Printer::disableAllSteppersNow(); // Invalidate homing before changing physical resolution.
+        // This is a foreground configuration transaction, not an ISR
+        // transaction. No queued/direct/scan owner may survive a change
+        // of physical resolution. Block reentrant panel actions while the
+        // drain pumps periodic services.
+        ScopedActionExclusion exclusion(*this);
+        const auto idle = [] {
+            return Printer::printJob.isIdle() && !Printer::blockAll &&
+                   !PrintLine::hasLines() && !PrintLine::directMoveActive() &&
+                   !Printer::pause.blocksCalibration() && !isAnyScanRunning() &&
+                   !GCodeInput::flashScriptActive();
+        };
+        if (idle() &&
+            Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Cancel) &&
+            idle()) {
+            Printer::disableAllSteppersNow(); // Lock movement, clear CMP, inhibit E and invalidate homing.
+            if (!idle())
+                break;
+            // With the drive disabled and no admitted work, the foreground
+            // owns calibration exclusively. Timer1 has no motion consuming
+            // these settings; Advance is inhibited. Keep IRQs available for
+            // the DRV transfer, arithmetic and potentially blocking reports.
 
             const uint8_t firstAxis = action == UI_ACTION_MICROSTEPS_XY ? X_AXIS
                                     : action == UI_ACTION_MICROSTEPS_Z ? Z_AXIS : E_AXIS;
@@ -513,7 +532,6 @@ __attribute__((noinline)) void UIDisplay::changeSetting(int action, int8_t incre
 
             uint8_t changedMask = 0;
             {
-                InterruptProtectedBlock noInts;
                 bool updatederived = false;
                 bool updateextruder = false;
                 for (uint8_t axis = firstAxis; axis <= lastAxis; ++axis) {
@@ -554,8 +572,8 @@ __attribute__((noinline)) void UIDisplay::changeSetting(int action, int8_t incre
             if (changedMask & (1U << Z_AXIS))
                 Printer::zOffset.refreshSteps(Printer::stepsPerMm(Z_AXIS));
 
-            // Persistence is deliberately outside the interrupt guard.
-            // No EEPROM read or write is needed for the atomic RAM update.
+            // Persistence and diagnostic output remain outside IRQ masks.
+            // A subsequent foreground motion may observe only the completed configuration.
             EEPROM::storeMicrostepConfiguration(changedMask);
         }
         break;
