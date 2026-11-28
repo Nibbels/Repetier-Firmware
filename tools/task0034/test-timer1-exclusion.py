@@ -37,5 +37,21 @@ class Timer1GateTest(unittest.TestCase):
             self.check(False, ("mov","r24, r1"))
 
 
+class AdmissionBoundaryTest(unittest.TestCase):
+    def test_consecutive_enables_do_not_create_service_window(self):
+        import runpy
+        from pathlib import Path
+        fn = runpy.run_path(str(Path(__file__).with_name("irq-mask-cfg.py")))["admission_blocked_states"]
+        states = [(0,0), (1,1), (2,1), (3,1), (4,0), (5,1), (6,1), (7,1)]
+        graph = nx.DiGraph()
+        graph.add_edges_from(zip(states,states[1:]))
+        instructions = [
+            (2,"sei",""), (2,"sei",""), (2,"nop",""),
+            (2,"cli",""), (2,"out","0x3f, r18 ; 63"),
+            (2,"nop",""), (2,"nop",""), (2,"reti",""),
+        ]
+        self.assertEqual(fn(graph,instructions), {states[i] for i in (0,1,2,4,5)})
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -47,6 +47,24 @@ def cost(op):
     return 1
 
 
+def admission_blocked_states(graph, instructions):
+    """Conservative instruction-boundary blackout, including delayed admission.
+
+    Include the successor of EVERY SEI or SREG write enabling I, not
+    merely transitions from I=0: consecutive SEI instructions must not
+    create an artificial service opportunity. A saved SREG write is
+    treated at least as conservatively as SEI. RETI's resumed instruction
+    is outside this vector graph and must be charged by its caller.
+    """
+    delayed = set()
+    for x, y in graph.edges:
+        _, op, arg = instructions[x[0]]
+        if y[-1] and (op == "sei" or
+                      (op == "out" and arg.split(";")[0].strip().startswith("0x3f,"))):
+            delayed.add(y)
+    return {x for x in graph if not x[-1]} | delayed
+
+
 def inventory(z, board, constant_pwm=False, timer3_wrap=False, pwm_owned_memory=False):
     p = board + "/"
     assert json.loads(z.read(p + "verification.json"))["status"] == "verified"
@@ -331,14 +349,34 @@ def inventory(z, board, constant_pwm=False, timer3_wrap=False, pwm_owned_memory=
                 bounded_mask.remove_edge(branch,dec)
                 extra[dec]=(max(counts)-1)*(cost(dop)+cost(bop))
             acyclic_cycles = None
+            boundaries = None
             if not unresolved:
                 longest = {}
+                entry = {}
                 for x in nx.topological_sort(bounded_mask):
-                    longest[x] = cost(ins[x[0]][1]) + extra.get(x,0) + max((longest[p] for p in bounded_mask.predecessors(x)), default=0)
+                    charge = cost(ins[x[0]][1]) + extra.get(x,0)
+                    parents = list(bounded_mask.predecessors(x))
+                    longest[x] = charge + max((longest[p] for p in parents), default=0)
+                    incoming = [entry[p] for p in parents if p in entry]
+                    if x == root:
+                        incoming.append(0)
+                    if incoming:
+                        entry[x] = charge + max(incoming)
                 acyclic_cycles = max(longest.values(), default=0)
-            return cycles, len(unresolved), acyclic_cycles
+                exits = [x for x in longest if ins[x[0]][1] == "reti" and not g.out_degree(x)]
+                opens = [x for x in entry if any(y not in mask for y in g.successors(x))]
+                def maximum(values):
+                    return max(values, default=None)
+                boundaries = {
+                    "entryToFirstAdmissionCycles": maximum(entry[x] for x in opens),
+                    "entryToReturnWithoutAdmissionCycles": maximum(entry[x] for x in exits if x in entry),
+                    "lastMaskedSuffixToReturnCycles": maximum(longest[x] for x in exits),
+                    "includesVectorEntry": False,
+                    "includesResumedInstructionAfterReti": False,
+                }
+            return cycles, len(unresolved), acyclic_cycles, boundaries
 
-        cycles, unresolved_count, acyclic_cycles = masked_bound(
+        cycles, unresolved_count, acyclic_cycles, _ = masked_bound(
             g.subgraph(x for x in g if not x[-1]))
         # AVR SEI cannot admit a pending interrupt before the following
         # instruction has executed. Conservatively apply the same delay
@@ -346,14 +384,14 @@ def inventory(z, board, constant_pwm=False, timer3_wrap=False, pwm_owned_memory=
         # if a different incoming path would already permit admission.
         # This catches SEI; CLI as a continuous blackout instead of two
         # independent short intervals.
-        opening = {y for x, y in g.edges if not x[-1] and y[-1]}
-        admission_cycles, admission_unresolved, admission_bound = masked_bound(
-            g.subgraph(x for x in g if not x[-1] or x in opening))
+        admission_cycles, admission_unresolved, admission_bound, admission_boundaries = masked_bound(
+            g.subgraph(admission_blocked_states(g, ins)))
         results[v] = {"states":len(seen), "explicitSystemRegisterSites": sorted(system_sites), "stackBytesIncludingPc":maxd,
                       "constantTracking":track, "timer3WrapTracking":wrap_track, "pwmOwnedMemoryDiagnostic":memory_track, "interruptOpenSites":len(opened), "maskedDelayReturnChains":[[name(a) for a in t] for t in sorted(delay_entries)],
                       "maskedCycles":cycles, "unresolvedMaskedCycles":unresolved_count, "acyclicMaskedBodyCycles":acyclic_cycles,
                       "admissionMaskedCycles":admission_cycles, "unresolvedAdmissionMaskedCycles":admission_unresolved,
-                      "acyclicAdmissionMaskedBodyCycles":admission_bound}
+                      "acyclicAdmissionMaskedBodyCycles":admission_bound,
+                      "admissionBoundaries":admission_boundaries}
         if v == 17:
             results[v]["selfMask"] = timer1_exclusion(g, root, ins)
     return results
