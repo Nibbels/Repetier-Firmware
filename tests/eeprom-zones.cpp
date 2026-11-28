@@ -18,6 +18,9 @@ struct Memory {
     Memory() {
         for(unsigned i=0;i<bytes.size();++i) bytes[i]=uint8_t(i*37U+19U);
         for(uint16_t p=Base;p<End;++p) bytes[p]=0xff;
+        // A retired slot may contain arbitrary old data. Power cuts and
+        // initialization must preserve every byte, not normalize it.
+        for(uint16_t p=0x0AC0;p<0x0AE0;++p) bytes[p]=uint8_t(p*13U+7U);
     }
     uint8_t read(uint16_t pos) {
         assert(pos>=Base && pos<End && blockOf(pos)<=Last);
@@ -194,8 +197,6 @@ int main() {
     {Field::F_RF_PART_FAN_PWM_MAX, 1},
     {Field::F_MAX_INACTIVE_TIME, 4},
     {Field::F_STEPPER_INACTIVE_TIME, 4},
-    {Field::F_PRINTING_TIME, 4},
-    {Field::F_PRINTING_DISTANCE, 4},
     };
     bool occupied[1024]={};unsigned payload=0;
     for(const auto& f:fields) {
@@ -206,7 +207,7 @@ int main() {
             assert(!occupied[start+i-Base]);occupied[start+i-Base]=true;++payload;
         }
     }
-    assert(payload==284 && sizeof(fields)/sizeof(fields[0])==108);
+    assert(payload==276 && sizeof(fields)/sizeof(fields[0])==106);
     // Independent inventory above defines the exact historical width map.
     // Motor current is one five-byte group in the layout, but individual
     // channels are the only writable patch units.
@@ -224,7 +225,7 @@ int main() {
         assert(actual==expected);
         widthDigest=(widthDigest^actual)*16777619UL;
     }
-    assert(widthDigest==0x31686315UL); // prior map minus RGB and fixed UART payload
+    assert(widthDigest==0xF40BE3D5UL); // prior map minus lifetime counter payload
     puts("EEPROM internal field widths: all 65536 addresses match schema; PASS");
     uint16_t c16=0xffff;uint32_t c32=0xffffffff;
     for(char c:"123456789") if(c) {c16=crc16Byte(c16,c);c32=crc32Byte(c32,c);}

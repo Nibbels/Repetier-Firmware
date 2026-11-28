@@ -246,13 +246,6 @@
 #define UI_TEXT_SENSOR_8 " 104-GT2"    //8
 #define UI_TEXT_SENSOR_13 " 3950-100k" //13 V3 Hotend
 
-// Printtime output gets aggregated like <Days_5gisgits>UI_TEXT_PRINTTIME_DAYS<Hours>UI_TEXT_PRINTTIME_HOURS<Minutes>UI_TEXT_PRINTTIME_MINUTES
-// ___88 days 12:45
-#define UI_TEXT_PRINTTIME_DAYS " days "
-#define UI_TEXT_PRINTTIME_HOURS ":"
-#define UI_TEXT_PRINTTIME_MINUTES ""
-#define UI_TEXT_PRINT_TIME "Printing time"
-#define UI_TEXT_PRINT_FILAMENT "Filament printed"
 
 #define UI_TEXT_STOP_PRINT "Stop Print"
 #define UI_TEXT_STOP_PRINT_ACK "Stop Print now?"

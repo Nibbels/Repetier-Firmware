@@ -121,8 +121,6 @@
     RF_ZONE_ITEM(1, address(Field::F_RF_PREHEAT_B_HOTEND), zonePreheatBHotend, 3, true)
     // RF specific
 
-    RF_ZONE_ITEM(3, address(Field::F_PRINTING_DISTANCE), Com::tEPRFilamentPrinted, 3, false)
-    RF_ZONE_ITEM(2, address(Field::F_PRINTING_TIME), Com::tEPRPrinterActive, 3, false)
 
 
     // The limit may be reported; raw M206 is not commissioning authority.

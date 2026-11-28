@@ -204,9 +204,6 @@ inline bool validBlock(uint8_t id,const uint8_t* data,uint8_t n) {
     case System:
         ok=d.u32(Field::F_MAX_INACTIVE_TIME)<=0x7FFFFFFFUL
             && d.u32(Field::F_STEPPER_INACTIVE_TIME)<=0x7FFFFFFFUL;break;
-    case Usage:
-        ok=d.u32(Field::F_PRINTING_TIME)<=0x7FFFFFFFUL && isfinite(d.f32(Field::F_PRINTING_DISTANCE))
-            && d.f32(Field::F_PRINTING_DISTANCE)>=0;break;
     default:return false;
     }
     return ok && d.good();

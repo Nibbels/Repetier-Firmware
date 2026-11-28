@@ -281,21 +281,6 @@ void Commands::adjustFanMode(uint8_t output_mode) {
     Printer::setMenuMode(MENU_MODE_FAN_MODE_PDM, HAL::partFanMode() == PART_FAN_MODE_PDM);
 }
 
-void Commands::reportPrinterUsage() {
-    Com::printF(Com::tPrintedFilament, Printer::printUsage.filamentMetres(), 2);
-    Com::printF(Com::tSpacem);
-
-    int32_t seconds = Printer::printUsage.heatedSeconds();
-    const int32_t days = seconds / 86400;
-    seconds -= days * 86400;
-    const int32_t hours = seconds / 3600;
-    seconds -= hours * 3600;
-    Com::printF(Com::tPrintingTime, days);
-    Com::printF(Com::tSpaceDaysSpace, hours);
-    Com::printF(Com::tSpaceHoursSpace, seconds / 60);
-    Com::printFLN(Com::tSpaceMin);
-}
-
 void Commands::emergencyStop() {
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     if(Printer::printJob.emergencyLocked())return;

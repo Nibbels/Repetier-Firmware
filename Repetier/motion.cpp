@@ -158,8 +158,6 @@ bool PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
         }
 
         const float distanceMM = steps * Printer::mmPerStep(axis);
-        if (axis == E_AXIS)
-            Printer::printUsage.recordPlannedFilament(distanceMM);
         axisDistanceMM[axis] = fabs(distanceMM);
         p->setAxisSteps(axis, steps);
     }

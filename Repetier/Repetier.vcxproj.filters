@@ -140,9 +140,6 @@
     <ClInclude Include="CaseFan.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="PrintUsage.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Printer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -356,9 +353,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="CaseFan.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="PrintUsage.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Printer.cpp">

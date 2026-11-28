@@ -226,6 +226,11 @@ int main() {
         code.T=2;code.P=pos;code.S=0;EEPROM::update(&code);
         assert(loads==before && std::memcmp(bytes,motorBefore,sizeof bytes)==0);
     }
+    // Retired historical counter range must not be writable.
+    for(int32_t pos=122;pos<133;++pos) {
+        code.T=2;code.P=pos;code.S=0;EEPROM::update(&code);
+        assert(loads==before && std::memcmp(bytes,motorBefore,sizeof bytes)==0);
+    }
     // Autotune-only coefficients are protected against raw host writes.
     const int32_t firstGains[]={EPR_BED_PID_PGAIN,EEPROM_EXTRUDER_OFFSET+EPR_EXTRUDER_PID_PGAIN,
         EEPROM_EXTRUDER_OFFSET+EEPROM_EXTRUDER_LENGTH+EPR_EXTRUDER_PID_PGAIN};

@@ -7,12 +7,11 @@
 namespace EepromZones {
 class LiveSettings {
 public:
-    // Capture only fields owned by mutable live state. Usage and BedSafety
-    // are intentionally not part of M500; they have separate transactions.
-    static constexpr uint32_t BulkMask=Active & ~(blockBit(Usage)|blockBit(BedSafety));
+    // BedSafety is intentionally not part of M500; separate commissioning.
+    static constexpr uint32_t BulkMask=Active & ~blockBit(BedSafety);
     bool operator()(uint8_t id,uint8_t* data,uint8_t n) const;
     // BedSafety is staged separately and may only be published after a
-    // successful complete session. Usage belongs to PrintUsage.
+    // successful complete session.
     bool applyBlock(uint8_t id,const uint8_t* data,uint8_t n,uint32_t alerts);
     // Narrow post-commit publication for DMIN/DMAX only. No target,
     // calibration identity, derivative history or sensor changes.

@@ -592,35 +592,6 @@ void UIDisplay::renderField(char c1, char c2, bool ram, bool allowMessageExpansi
             renderCompensationField(c1, c2);
             break;
 
-        case 'Z': // %Z5-Z8: Printing statistics
-        {
-            if (c2 == '5') // Shows text printing time
-            {
-                addStringP(PSTR(UI_TEXT_PRINT_TIME));
-            } else if (c2 == '6') // Shows printing time
-            {
-                long seconds = Printer::printUsage.heatedSeconds();
-                long tmp = seconds / 86400;
-                seconds -= tmp * 86400;
-                addInt(tmp, 5);
-                addStringP(PSTR(UI_TEXT_PRINTTIME_DAYS));
-                tmp = seconds / 3600;
-                addInt(tmp, 2);
-                addStringP(PSTR(UI_TEXT_PRINTTIME_HOURS));
-                seconds -= tmp * 3600;
-                tmp = seconds / 60;
-                addInt(tmp, 2, '0');
-                addStringP(PSTR(UI_TEXT_PRINTTIME_MINUTES));
-            } else if (c2 == '7') // Shows text printed filament
-            {
-                addStringP(PSTR(UI_TEXT_PRINT_FILAMENT));
-            } else if (c2 == '8') // Shows printed filament
-            {
-                addFloat(Printer::printUsage.filamentMetres(), 6, 1);
-                addStringP(PSTR(" m"));
-            }
-            break;
-        }
     }
 }
 

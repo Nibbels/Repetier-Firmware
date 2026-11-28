@@ -14,7 +14,7 @@ constexpr uint16_t End = 0x0C00; // exclusive
 constexpr uint8_t SlotSize = 32;
 constexpr uint8_t PayloadOffset = 3;
 constexpr uint8_t MaxPayload = 29;
-constexpr uint16_t Schema = 3; // pre-release: fixed application UART
+constexpr uint16_t Schema = 4; // pre-release: retire lifetime usage; slot 22 stays unowned
 enum Block : uint8_t {
     Admin = 0,
     Geometry = 1,
@@ -38,8 +38,7 @@ enum Block : uint8_t {
     Lighting = 19,
     PartFan = 20,
     System = 21,
-    Usage = 22,
-    Last = Usage
+    Last = System
 };
 constexpr uint32_t blockBit(uint8_t id) { return id < 32 ? (uint32_t(1) << id) : 0; }
 constexpr uint32_t Active = (blockBit(Last+1) - 1) & ~uint32_t(1);
@@ -49,10 +48,10 @@ constexpr uint8_t blockOf(uint16_t pos) { return pos >= Base && pos < End ? uint
 
 inline uint8_t length(uint8_t id) {
 #ifdef __AVR__
-    static const uint8_t lengths[] PROGMEM = {0,29,24,8,26,5,29,29,20,20,19,1,8,4,7,12,6,7,6,4,4,8,8};
+    static const uint8_t lengths[] PROGMEM = {0,29,24,8,26,5,29,29,20,20,19,1,8,4,7,12,6,7,6,4,4,8};
     return id <= Last ? pgm_read_byte(lengths + id) : 0;
 #else
-    static const uint8_t lengths[] = {0,29,24,8,26,5,29,29,20,20,19,1,8,4,7,12,6,7,6,4,4,8,8};
+    static const uint8_t lengths[] = {0,29,24,8,26,5,29,29,20,20,19,1,8,4,7,12,6,7,6,4,4,8};
     return id <= Last ? lengths[id] : 0;
 #endif
 }
@@ -168,8 +167,7 @@ enum class Field : uint16_t {
     F_MAX_INACTIVE_TIME = 0x0AA3,
     F_STEPPER_INACTIVE_TIME = 0x0AA7,
     // 0x0AAB..0x0AAE: free former baud payload.
-    F_PRINTING_TIME = 0x0AC3,
-    F_PRINTING_DISTANCE = 0x0AC7,
+    // 0x0AC0..0x0ADF: retired slot 22; do not write or reuse.
 };
 constexpr uint16_t address(Field f) { return static_cast<uint16_t>(f); }
 
@@ -303,8 +301,6 @@ inline uint8_t fieldWidth(uint16_t pos) {
         widthEntry(Field::F_RF_PART_FAN_PWM_MAX,1),
         widthEntry(Field::F_MAX_INACTIVE_TIME,4),
         widthEntry(Field::F_STEPPER_INACTIVE_TIME,4),
-        widthEntry(Field::F_PRINTING_TIME,4),
-        widthEntry(Field::F_PRINTING_DISTANCE,4),
     };
     constexpr unsigned count=sizeof(entries)/sizeof(entries[0]);
     static_assert(count<=127,"field width search budget");

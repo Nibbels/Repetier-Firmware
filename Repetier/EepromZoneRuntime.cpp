@@ -17,9 +17,6 @@ using namespace EepromZones;
 namespace {
 AvrDevice device;
 bool loaded=false;
-// Published only after a validated settings load or successful durable usage write.
-// LCD/serial accounting reads never enter the EEPROM service or its callbacks.
-EEPROM::UsageTotals committedUsage{0,0};
 volatile bool outputsAdmitted=false;
 bool lastOk=false;
 bool settingsFaultLatched=false;
@@ -85,14 +82,6 @@ bool invalidateMatrices() {
     }
     return true;
 }
-bool stageUsageBlock(uint8_t id,const uint8_t* data,uint8_t n) {
-    if(id!=Usage || !validBlock(id,data,n))return false;
-    BlockDecoder d(id,data,n);
-    const EEPROM::UsageTotals totals{int32_t(d.u32(Field::F_PRINTING_TIME)),d.f32(Field::F_PRINTING_DISTANCE)};
-    if(!d.good())return false;
-    committedUsage=totals; // loaded remains false until the entire session succeeds
-    return true;
-}
 bool loadFull(bool reset,bool startup) {
     lastOk=false;
     if(!startup && (!idle() || !heatersOff())) {
@@ -113,7 +102,6 @@ bool loadFull(bool reset,bool startup) {
     LiveSettings live;
     auto consumer=[&](uint8_t id,const uint8_t* data,uint8_t n,uint32_t alerts){
         if(Printer::printJob.emergencyLocked())return false;
-        if(id==Usage)return stageUsageBlock(id,data,n);
         return live.applyBlock(id,data,n,alerts);
     };
     if(!accept(s.load(consumer,state)))return false;
@@ -251,7 +239,7 @@ void EEPROM::storeDataIntoEEPROM(uint8_t) {
         Com::printErrorFLN(PSTR("EEPROM bulk save requires idle cold targets"));
         return;
     }
-    // Pressure and usage have independent immediate save owners. Do not
+    // Pressure has an independent immediate save owner. Do not
     // turn the temporary [0,0] stop band into a persistent preference.
     saveLive(LiveSettings::BulkMask & ~blockBit(Pressure));
 }
@@ -429,13 +417,5 @@ void EEPROM::storeToolMotion(uint8_t tool,ToolMotionSetting setting,float v) {
     default:return;
     }
     persist(Patch::real(at(f,tool*SlotSize),v));
-}
-EEPROM::UsageTotals EEPROM::usageTotals() {
-    // Foreground-only snapshot, no EEPROM reads and no nested service.
-    return loaded && !settingsFaultLatched ? committedUsage : UsageTotals{0,0};
-}
-void EEPROM::storeUsageTotals(UsageTotals totals) {
-    const Patch p[]={Patch::dword(Field::F_PRINTING_TIME,totals.seconds),Patch::real(Field::F_PRINTING_DISTANCE,totals.metres)};
-    if(persist(p,2))committedUsage=totals;
 }
 #endif // RF_EEPROM_ZONE_EXPERIMENT

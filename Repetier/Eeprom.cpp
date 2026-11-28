@@ -275,6 +275,11 @@ void EEPROM::update(GCode* com) {
         Com::printErrorFLN(PSTR("Firmware serial baudrate is fixed"));
         return;
     }
+    // Retired historical counter cells are no longer public settings.
+    if(com->hasP() && com->P<133 && com->P+width>125) {
+        Com::printErrorFLN(PSTR("Retired EEPROM fields"));
+        return;
+    }
     // P/I/D are owned by autotune, even in the raw comparison build.
     if(com->hasP()) {
         const int32_t end=com->P+width;
@@ -536,7 +541,7 @@ void EEPROM::clearEEPROM() {
 
 } // clearEEPROM
 
-void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
+void EEPROM::storeDataIntoEEPROM(uint8_t /*corrupted*/) {
     HAL::eprSetByte(EPR_MAGIC_BYTE, eepromMagic);
     HAL::eprSetByte(EPR_CHECK_NUM_EXTRUDERS, NUM_EXTRUDER);
     // Frozen legacy comparison image only. Never used to configure UART.
@@ -595,11 +600,6 @@ void EEPROM::storeDataIntoEEPROM(uint8_t corrupted) {
     HAL::eprSetByte(EPR_RF_PART_FAN_SPEED, HAL::partFanDivisor());
     HAL::eprSetByte(EPR_RF_PART_FAN_PWM_MIN, HAL::partFanMinDuty());
     HAL::eprSetByte(EPR_RF_PART_FAN_PWM_MAX, HAL::partFanMaxDuty());
-
-    if (corrupted) {
-        HAL::eprSetInt32(EPR_PRINTING_TIME, 0);
-        HAL::eprSetFloat(EPR_PRINTING_DISTANCE, 0);
-    }
 
     HAL::eprSetByte(EPR_RF_CASE_LIGHT_MODE, AccessoryOutputs::state(AccessoryOutputs::Output::CaseLight));
 
@@ -1263,18 +1263,6 @@ void EEPROM::storeToolMotion(uint8_t tool,ToolMotionSetting setting,float value)
     saveLegacyFloat(getExtruderOffset(tool)+relative,value);
 }
 
-EEPROM::UsageTotals EEPROM::usageTotals() {
-    return {HAL::eprGetInt32(EPR_PRINTING_TIME), HAL::eprGetFloat(EPR_PRINTING_DISTANCE)};
-}
-
-void EEPROM::storeUsageTotals(UsageTotals totals) {
-    const auto old=usageTotals();
-    if(old.seconds==totals.seconds && old.metres==totals.metres) return;
-    HAL::eprSetInt32(EPR_PRINTING_TIME,totals.seconds);
-    HAL::eprSetFloat(EPR_PRINTING_DISTANCE,totals.metres);
-    updateChecksum();
-}
-
 void EEPROM::init() {
     bool kill_eeprom_because_corrupted = (computeChecksum() != HAL::eprGetByte(EPR_INTEGRITY_BYTE));
     bool kill_eeprom_wrong_version_update = (eepromMagic != HAL::eprGetByte(EPR_MAGIC_BYTE));
@@ -1286,7 +1274,7 @@ void EEPROM::init() {
     if (kill_eeprom_wrong_version_update || kill_eeprom_because_corrupted || kill_eeprom_by_back_ok_play) {
         EEPROM::clearEEPROM();
         EEPROM::restoreEEPROMSettingsFromConfiguration();
-        EEPROM::storeDataIntoEEPROM(kill_eeprom_because_corrupted); // Wenn corrupted dann auch die betriebszähler löschen.
+        EEPROM::storeDataIntoEEPROM(kill_eeprom_because_corrupted);
 
         Com::printF(PSTR("EEPROM reset "));
 

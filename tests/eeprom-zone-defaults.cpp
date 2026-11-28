@@ -541,7 +541,6 @@ int main(){
     rejected(Lighting,Field::F_RF_CASE_LIGHT_MODE,2,1);
     rejected(PartFan,Field::F_RF_PART_FAN_PWM_MIN,254,1);
     rejected(System,Field::F_MAX_INACTIVE_TIME,0x80000000UL,4);
-    rejected(Usage,Field::F_PRINTING_DISTANCE,0x7FC00000UL,4);
     assert(validPreheat(100,true)); // a preference, not heater permission
     // Store can contain a CRC-correct but semantically invalid payload.
     // The higher-level policy must discover this before applying it.
@@ -563,7 +562,7 @@ int main(){
     // provider silently completing an otherwise CRC-valid record.
     assert(!defaults(Admin,block,1) && !defaults(Geometry,block,1));
     BlockEncoder invalid(Geometry,block,length(Geometry));
-    invalid.u32(Field::F_PRINTING_TIME,0);assert(!invalid.complete());
+    invalid.u32(static_cast<Field>(0x0AC3),0);assert(!invalid.complete());
     BlockEncoder overlap(BedSafety,block,1);
     overlap.u8(Field::F_NEW_BED_EMERGENCY_C,0);assert(overlap.complete());
     overlap.u8(Field::F_NEW_BED_EMERGENCY_C,0);assert(!overlap.complete());
@@ -593,7 +592,13 @@ int main(){
     assert(hostAccess(-1,0)==HostAccess::Unknown);
     assert(hostAccess(65536L+address(Field::F_NEW_BED_EMERGENCY_C),0)==HostAccess::Unknown);
     assert(hostAccess(address(Field::F_NEW_BED_EMERGENCY_C),0)==HostAccess::ReadOnly);
-    assert(hostAccess(address(Field::F_PRINTING_TIME),2)==HostAccess::ReadOnly);
+    // Removed slot stays outside the host and internal field inventories.
+    for (uint16_t pos=0x0AC0;pos<0x0AE0;++pos) {
+        assert(!fieldWidth(pos));
+        for (uint8_t wire=0;wire<5;++wire)
+            assert(hostAccess(pos,wire)==HostAccess::Unknown);
+    }
+    assert(length(22)==0 && !(Active&blockBit(22)));
     for(uint8_t axis=0;axis<5;++axis) {
         const auto access=hostAccess(address(Field::F_RF_MOTOR_CURRENT)+axis,0);
         assert(access==(axis<3+NUM_EXTRUDER?HostAccess::ReadOnly:HostAccess::Unknown));
@@ -607,5 +612,5 @@ int main(){
         assert(hostAccess(address(Field::F_RF_FET2_MODE),0)==HostAccess::ReadOnly);
 #endif
     printf("New EEPROM host whitelist: %u fields, 20480 address/type cases; PASS\\n",fields);
-    printf("EEPROM zone factory profile %04x: all 22 blocks initialized; PASS\n",unsigned(configuredProfile()));
+    printf("EEPROM zone factory profile %04x: all 21 blocks initialized; PASS\n",unsigned(configuredProfile()));
 }

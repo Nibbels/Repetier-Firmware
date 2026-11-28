@@ -268,11 +268,6 @@ public:
             X(uint32_t,F_STEPPER_INACTIVE_TIME,uint32_t(STEPPER_INACTIVE_TIME)*1000)
         RF_FACTORY_RECORD(System,RF_FACTORY_System)
 #undef RF_FACTORY_System
-#define RF_FACTORY_Usage(X) \
-            X(uint32_t,F_PRINTING_TIME,0) \
-            X(float,F_PRINTING_DISTANCE,0)
-        RF_FACTORY_RECORD(Usage,RF_FACTORY_Usage)
-#undef RF_FACTORY_Usage
         default:return false;
         }
         return w.complete();

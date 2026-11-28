@@ -112,6 +112,4 @@
     RF_EPR_FIELD(1, EPR_RF_PREHEAT_B_HOTEND, PSTR("Preheat B hotend [C]"), 3, true);
     // RF specific
 
-    RF_EPR_FIELD(3, EPR_PRINTING_DISTANCE, Com::tEPRFilamentPrinted, 3, false);
-    RF_EPR_FIELD(2, EPR_PRINTING_TIME, Com::tEPRPrinterActive, 3, false);
 

@@ -195,7 +195,7 @@ static void zoneOwnerRoundTrip(){
     const uint8_t cutoff=90;
     assert(live.applyBlock(BedSafety,&cutoff,1,blockBit(BedSafety)) && live.bedCutoff()==0);
     assert(live.applyBlock(BedSafety,&cutoff,1,0) && live.bedCutoff()==90);
-    assert(!live(BedSafety,out,1) && !live(Usage,out,length(Usage)));
+    assert(!live(BedSafety,out,1) && !live(22,out,length(22)));
     // No malformed block may alter an owner.
     before[Geometry][0]=0; before[Geometry][1]=0;before[Geometry][2]=0;before[Geometry][3]=0;
     const float steps=Printer::stepsPerMm(X_AXIS);
@@ -206,11 +206,12 @@ static void zoneOwnerRoundTrip(){
 int main(){
     image.fill(0xff); EEPROM::init(); assert(image[EPR_MAGIC_BYTE]==44 && image[EPR_VERSION]==EEPROM_PROTOCOL_VERSION); snapshot("factory");
     const auto factory=image; assert(image[EPR_CHECK_NUM_EXTRUDERS]==NUM_EXTRUDER);
-    // Existing settings, counters and legacy/reserved cells survive normal load/store.
-    HAL::eprSetInt32(EPR_PRINTING_TIME,123456); HAL::eprSetFloat(EPR_PRINTING_DISTANCE,42.25f); HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS,1234); image[1000]=0x9a; image[EPR_RF_230V_OUTPUT_MODE]=1;
+    // Existing settings and retired legacy/reserved cells survive normal load/store.
+    constexpr int retiredTime=125, retiredDistance=129;
+    HAL::eprSetInt32(retiredTime,123456); HAL::eprSetFloat(retiredDistance,42.25f); HAL::eprSetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS,1234); image[1000]=0x9a; image[EPR_RF_230V_OUTPUT_MODE]=1;
     for(int i=0;i<NUM_EXTRUDER;++i){int p=EEPROM::getExtruderOffset(i);HAL::eprSetFloat(p+EPR_EXTRUDER_STEPS_PER_MM,100.25f+i);HAL::eprSetFloat(p+EPR_EXTRUDER_X_OFFSET,1.25f+i);}
     HAL::eprSetInt32(EPR_RF_Z_OFFSET,-123); EEPROM::updateChecksum(); EEPROM::init(); EEPROM::storeDataIntoEEPROM();
-    assert(Printer::zOffset.manualMicrometers()==-123 && image[1000]==0x9a && image[EPR_RF_230V_OUTPUT_MODE]==1 && HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS)==1234 && HAL::eprGetInt32(EPR_PRINTING_TIME)==123456);
+    assert(Printer::zOffset.manualMicrometers()==-123 && image[1000]==0x9a && image[EPR_RF_230V_OUTPUT_MODE]==1 && HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS)==1234 && HAL::eprGetInt32(retiredTime)==123456 && HAL::eprGetFloat(retiredDistance)==42.25f);
     for(int i=0;i<NUM_EXTRUDER;++i){assert(extruder[i].stepsPerMM==100.25f+i && extruder[i].offsetMM[0]==1.25f+i);} snapshot("roundtrip");
     // Valid checksum but invalid values: repair paths and retained RAM defaults.
     HAL::eprSetFloat(EPR_X_MAX_FEEDRATE,99999); HAL::eprSetFloat(EPR_X_LENGTH,-1); HAL::eprSetFloat(EPR_Z_MAX_ACCEL,-1); HAL::eprSetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN,0); HAL::eprSetFloat(EPR_ZSCAN_START_MM,99); image[EPR_RF_PART_FAN_PWM_MIN]=255; image[EPR_RF_PART_FAN_PWM_MAX]=0;

@@ -224,7 +224,6 @@ List of placeholder:
 %pH : Z stop and extrusion inhibit maximum [DMS digits]
 %HB : active heat bed z matrix
 %HO : active heat bed min z offset in um
-%Z5-Z8: Page4 printing time
 
 %wx : current wobblefix offset in x [um] (Bauchtanz)
 %wy : current wobblefix offset in y [um] (Bauchtanz)
@@ -281,10 +280,6 @@ more then one information page.
         UI_PAGE4(ui_page3,UI_TEXT_PAGE_EXTRUDER1,"",UI_TEXT_PAGE_BED,"%os")
     #endif // NUM_EXTRUDER>1
 
-        UI_PAGE4(ui_page4,"%Z5","%Z6","%Z7","%Z8")
-
-        #define UI_PRINTTIME_PAGES ,&ui_page4
-
     #if UI_COLS<=16
         UI_PAGE4(ui_page_mod,UI_TEXT_STRAIN_GAUGE_SPEED,
                         "zO:%z0um zM: %HB",
@@ -328,7 +323,7 @@ more then one information page.
 
     /* Merge pages together. Use the following pattern:
     #define UI_PAGES {&name1,&name2,&name3} */
-    #define UI_PAGES {&ui_page1 UI_MOD_PAGES, &ui_page2, &ui_page3 UI_PRINTTIME_PAGES UI_MOD2_PAGES, &ui_page_mod_wobble}
+    #define UI_PAGES {&ui_page1 UI_MOD_PAGES, &ui_page2, &ui_page3 UI_MOD2_PAGES, &ui_page_mod_wobble}
 
     // How many pages do you want to have. Minimum is 1.
 

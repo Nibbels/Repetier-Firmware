@@ -60,7 +60,6 @@ void reportFirmware() {
     //#endif
 
     //		Com::cap(PSTR("EMERGENCY_PARSER:0"));
-    Commands::reportPrinterUsage();
 }
 
 void setPanelMessage(GCode* com) {

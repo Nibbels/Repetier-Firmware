@@ -37,7 +37,6 @@ public:
     static void adjustFanMode(uint8_t output_mode = 0);
     static void changeFeedrateMultiply(int factorInPercent);
     static void changeFlowrateMultiply(float newExtrusionFactor);
-    static void reportPrinterUsage();
     static void emergencyStop();
 }; // Commands
 

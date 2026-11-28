@@ -241,9 +241,6 @@ bool LiveSettings::applyBlock(uint8_t id,const uint8_t* data,uint8_t n,uint32_t 
     case System:
         Printer::inactivity.setShutdownTimeout(d.u32(Field::F_MAX_INACTIVE_TIME));
         Printer::inactivity.setStepperTimeout(d.u32(Field::F_STEPPER_INACTIVE_TIME));break;
-    case Usage:
-        // Accounting is intentionally handled by its own owner at cutover.
-        break;
     default:return false;
     }
     return d.good();

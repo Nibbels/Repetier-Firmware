@@ -41,7 +41,6 @@
 #include "DigitCompensation.h"
 #include "PressureProtection.h"
 #include "PreheatProfiles.h"
-#include "PrintUsage.h"
 #include "StrainGauge.h"
 #include "StartLine.h"
 #include "ExtrusionPlanner.h"
@@ -154,7 +153,6 @@ public:
     static void markTemperatureReadingsAvailable() { flag2 |= PRINTER_FLAG2_GOT_TEMPS; }
     static bool temperatureReadingsAvailable() { return flag2 & PRINTER_FLAG2_GOT_TEMPS; }
 
-    static PrintUsage printUsage;
     static ZOffset zOffset;
     static SenseOffsetControl senseOffsetControl;
     static ZMotion zMotion;

@@ -152,8 +152,6 @@ void Extruder::setTemperatureForExtruder(float temperatureInCelsius, uint8_t ext
         return;
     }
 
-    const bool wasHeating = hasActiveHotendTarget();
-
     TemperatureController* tc = tempController[extr];
     if (temperatureInCelsius > tc->heaterCutoffC)
         temperatureInCelsius = tc->heaterCutoffC;
@@ -177,14 +175,6 @@ void Extruder::setTemperatureForExtruder(float temperatureInCelsius, uint8_t ext
     CaseFan::updateFromHotendTargets();
 #endif // (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
 
-    const bool heating = hasActiveHotendTarget();
-    if (heating != wasHeating) {
-        const auto now = HAL::timeInMilliseconds();
-        if (heating)
-            Printer::printUsage.beginHeating(now);
-        else
-            Printer::printUsage.finishHeating(now);
-    }
 } // setTemperatureForExtruder
 
 void Extruder::setTemperatureForAllExtruders(float temperatureInCelsius) {

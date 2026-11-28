@@ -157,7 +157,6 @@
     <ClInclude Include="PreheatProfiles.h" />
     <ClInclude Include="ZScrewAdjustment.h" />
     <ClInclude Include="CaseFan.h" />
-    <ClInclude Include="PrintUsage.h" />
     <ClInclude Include="Printer.h" />
     <ClInclude Include="BedCompensation.h" />
     <ClInclude Include="DigitCompensation.h" />
@@ -232,7 +231,6 @@
     <ClCompile Include="Homing.cpp" />
     <ClCompile Include="ZScrewAdjustment.cpp" />
     <ClCompile Include="CaseFan.cpp" />
-    <ClCompile Include="PrintUsage.cpp" />
     <ClCompile Include="Printer.cpp" />
     <ClCompile Include="PreheatProfiles.cpp" />
     <ClCompile Include="RF.cpp" />
