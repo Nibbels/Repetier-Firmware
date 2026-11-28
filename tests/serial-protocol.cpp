@@ -17,6 +17,7 @@ using PGM_P = const char*;
 #include "GCodeInput.h"
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
 #include "UsbSerial.h"
+#include "DiagnosticHistory.h"
 #endif
 
 namespace {
@@ -57,7 +58,6 @@ void requestLiveReport(){++liveRequests;}
 void requestDiagnosticReplay(){++replayRequests;}
 }
 namespace DiagnosticHistory {
-constexpr uint16_t ReadCommand=3950;
 void request(){++historyRequests;}
 void service(){}
 }
