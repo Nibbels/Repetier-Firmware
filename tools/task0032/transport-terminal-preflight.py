@@ -68,10 +68,10 @@ public:
     # Keep common heater helper available for the legacy caller too.
     ph=once(ph,"    static void revokeHeaterOutputsLocked();\n    static void clearHeaterTargets();\npublic:\n#endif",
         "public:\n#endif\nprivate:\n    static void revokeHeaterOutputsLocked();\n    static void clearHeaterTargets();\npublic:")
-    t=once(t,"static void stopAllHeaters() {","void Printer::clearHeaterTargets() {")
-    # No other stopAllHeaters callers may accidentally disappear.
-    assert t.count("stopAllHeaters();")==1
-    t=once(t,"    stopAllHeaters();","    clearHeaterTargets();")
+    # Keep the original internal helper and its autotune caller intact.
+    assert t.count("stopAllHeaters();")==2
+    t=once(t,"void Printer::latchOutputInhibit(bool thermalFault) {",
+        "void Printer::clearHeaterTargets() { stopAllHeaters(); }\n\nvoid Printer::latchOutputInhibit(bool thermalFault) {")
     t=once(t,"void Printer::latchOutputInhibit(bool thermalFault) {",
         "void Printer::revokeHeaterOutputsLocked() {\n"+revoke+"\n}\n\nvoid Printer::latchOutputInhibit(bool thermalFault) {")
     p=(source/"Printer.cpp").read_text()
@@ -266,7 +266,7 @@ def main():
     for name,s in files.items():(args.out/name).write_text(s)
     heat=region(files["Printer.h"],"    static void latchOutputInhibit(bool thermalFault);","    static INLINE bool isManualMoveMode")
     body=region(files["Printer.cpp"],"#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT\nvoid Printer::stopTerminalMotionLocked()","void Printer::stopPrint()")
-    temp=region(files["TemperatureControl.cpp"],"void Printer::clearHeaterTargets()","#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT\nnamespace ThermalEmergency")
+    temp=region(files["TemperatureControl.cpp"],"static void stopAllHeaters()","#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT\nnamespace ThermalEmergency")
     job=files["PrintJob.cpp"][files["PrintJob.cpp"].index("PrintJob Printer::printJob;"):]
     test=PRELUDE.replace("HEATING_INHIBIT",heat)+temp+body+job+SCENARIOS
     (args.out/"terminal-replay.cpp").write_text(test)
