@@ -130,7 +130,9 @@ ANCHORS = {
                "unsigned char isHomingAllowed(", "if (isAnyScanRunning())"),
 }
 
-def diagnostic(frame, phase=False):
+def diagnostic(frame, phase=False, reviewed_owners=False):
+    autotune_panel_mask = 1 << 10
+    priming_mask = 1 << 11
     guards_spec = GUARDS + (PHASE_GUARDS if phase else ())
     names = {f["address"]: f["name"] for f in frame["frames"]}
     local = {f["address"]: f["localPeakBytes"] for f in frame["frames"]}
@@ -181,6 +183,16 @@ def diagnostic(frame, phase=False):
         # Both homing entries retain the panel dispatch bit. External
         # homing refuses a running scan; scan-internal homing already
         # owns the scan dispatcher, so neither admits a new scan worker.
+        if guards & priming_mask and bn.startswith(("dispatchScanWork(", "StartLine::runPrepared(", "TemperatureController::autotunePIDPrepared(", "GCodeCommands::loadFilamentPrepared(", "GCodeCommands::unloadFilamentPrepared(")):
+            pruned["admitted startline owns non-idle job"] += 1
+            return None
+        if reviewed_owners and bn.startswith("StartLine::runPrepared("):
+            next_guards |= priming_mask
+        if reviewed_owners and bn.startswith("TemperatureController::autotunePIDPrepared(") and guards & 1:
+            next_guards |= autotune_panel_mask
+        if guards & autotune_panel_mask and bn.startswith("dispatchScanWork("):
+            pruned["panel-owned autotune entered with no scan"] += 1
+            return None
         if homing_owner(bn):
             next_guards |= 1 | HOMING_MASK
         if guards & HOMING_MASK and bn.startswith("dispatchScanWork("):
@@ -231,7 +243,17 @@ def diagnostic(frame, phase=False):
             "witness": [{"function": names[a], "bytes": depth, "site": site}
                         for a, depth, site in witness]}
 
-def inventory(z, board, phase=False):
+def validate_owner_snapshot(z, prefix):
+    source = prefix + "build/sketch/"
+    fingerprint = hashlib.sha256()
+    for path in sorted(z.namelist()):
+        if path.startswith(source) and path.endswith((".cpp", ".c", ".ino", ".h", ".hpp", ".S")):
+            fingerprint.update(path[len(source):].encode() + b"\0" + hashlib.sha256(z.read(path)).digest())
+    if fingerprint.hexdigest() not in ['6f43d86c1074e1dacbc7d6ee4a7a7167ae0ca87a1dd410adfab7f84b18c51bc7']:
+        raise ValueError("source ownership changed; review before applying lifetime exclusions")
+
+
+def inventory(z, board, phase=False, reviewed_owners=False):
     p = board + "/"
     assert json.loads(z.read(p + "verification.json"))["status"] == "verified"
     for filename, anchors in (list(ANCHORS.items()) + (list(PHASE_ANCHORS.items()) if phase else [])):
@@ -249,7 +271,9 @@ def inventory(z, board, phase=False):
     frame = fg.inventory(z, board, True)
     assert not frame["errors"], frame["errors"]
     assert sum(homing_owner(f["name"]) for f in frame["frames"]) == 2, "missing or cloned homing ownership boundary"
-    return diagnostic(frame, phase)
+    if reviewed_owners:
+        validate_owner_snapshot(z, p)
+    return diagnostic(frame, phase, reviewed_owners)
 
 
 if __name__ == "__main__":
@@ -257,15 +281,17 @@ if __name__ == "__main__":
     parser.add_argument("archive")
     parser.add_argument("sha256")
     parser.add_argument("--phase-diagnostic", action="store_true", help="apply reviewed-but-not-yet-proven operation lifetime hypotheses")
+    parser.add_argument("--reviewed-owners", action="store_true",
+                        help="use the reviewed startline and panel-owned autotune lifetimes")
     args = parser.parse_args()
     with open(args.archive, "rb") as f:
         assert hashlib.sha256(f.read()).hexdigest() == args.sha256
     with zipfile.ZipFile(args.archive) as z:
         summary = json.loads(z.read("summary.json"))
         assert not summary["failures"]
-        boards = {b: inventory(z, b, args.phase_diagnostic) for b in fg.BOARDS}
+        boards = {b: inventory(z, b, args.phase_diagnostic, args.reviewed_owners) for b in fg.BOARDS}
     print(json.dumps({"testedMerge": summary["sha"], "sha256": args.sha256,
-                      "releaseProof": False, "boards": boards,
+                      "reviewedOwners": args.reviewed_owners, "releaseProof": False, "boards": boards,
                       "limitations": ["source guard assumptions require review, not proved by string anchors",
                                       "candidate tables and ABI/weak callback assumptions",
                                       "unresolved phase/admission correlations; opt-in phase hypothesis is not a release proof",
