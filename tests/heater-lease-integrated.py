@@ -264,6 +264,26 @@ static void checkSampleWrapEquivalence() {
             assert(heaterSampleState[c]==oldWrapState(before[c],continuous));
     }
 }
+static void checkFeedMaskEquivalence() {
+    const unsigned combinations=1u<<(NUM_EXTRUDER+1);
+    for(unsigned active=0;active<combinations;++active)
+        for(unsigned grants=0;grants<combinations;++grants)
+            for(bool priorPass:{false,true})
+                for(bool regularPass:{false,true}) {
+                    resetFixture(0);
+                    for(uint8_t c=0;c<=NUM_EXTRUDER;++c) {
+                        if(active&_BV(c)) grant(c,255);
+                        assert(leaseMask(c)==(_BV(OCIE3A)<<c));
+                    }
+                    heaterGrantProgress=grants|(priorPass?thermalPassComplete:0);
+                    const unsigned before=watchdogFeeds;
+                    tryThermalWatchdogFeed(false,regularPass);
+                    const bool expected=(priorPass||regularPass)&&((grants&active)==active);
+                    assert(watchdogFeeds==before+unsigned(expected));
+                    assert(irq);
+                }
+    std::puts("fixed heater grant mask: all demand/grant/pass combinations PASS");
+}
 static void checkZeroRevocation(){
     unsigned long cases=0;
     for(uint8_t c=0;c<=NUM_EXTRUDER;++c)
@@ -325,6 +345,7 @@ static void checkPreWatchdogReset(){
     std::puts("pre-watchdog reset: two saved-I cases, PWM and Timer3 disabled");
 }
 int main(){
+    checkFeedMaskEquivalence();
     checkZeroRevocation();
     checkPreWatchdogReset();
     checkSampleWrapEquivalence();

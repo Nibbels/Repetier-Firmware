@@ -957,7 +957,15 @@ volatile uint8_t heaterGrantProgress = 0;
 static_assert(F_CPU == 16000000UL && NUM_EXTRUDER <= 2, "lease clock assumptions");
 static_assert(OCIE3A == OCF3A && OCIE3B == OCF3B && OCIE3C == OCF3C
               && OCIE3B == OCIE3A+1 && OCIE3C == OCIE3A+2, "compare bit mapping");
-inline uint8_t leaseMask(uint8_t channel) { return uint8_t(_BV(OCIE3A) << channel); }
+// Callers validate the channel. Keep the compare-bit selection acyclic on AVR.
+inline uint8_t leaseMask(uint8_t channel) {
+    if(channel==0) return _BV(OCIE3A);
+    if(channel==1) return _BV(OCIE3B);
+#if NUM_EXTRUDER > 1
+    if(channel==2) return _BV(OCIE3C);
+#endif
+    return 0;
+}
 inline uint16_t leaseDeadline(uint8_t channel) {
     switch (channel) { case 0: return OCR3A; case 1: return OCR3B; default: return OCR3C; }
 }
@@ -1071,12 +1079,14 @@ static void tryThermalWatchdogFeed(bool heatDemand,bool regularPass) {
     checkHeaterLeases(); // expired demands are removed before considering feed
     if(regularPass) heaterGrantProgress |= thermalPassComplete;
     if(!(heaterGrantProgress&thermalPassComplete)) return;
-    bool anyPower=false;
-    for(uint8_t c=0;c<=NUM_EXTRUDER;++c) {
-        if(!requestedDuty[c]) continue;
-        anyPower=true;
-        if(!(heaterGrantProgress & _BV(c))) return;
-    }
+    const uint8_t powered=(requestedDuty[0] ? _BV(0) : 0)
+                         | (requestedDuty[1] ? _BV(1) : 0)
+#if NUM_EXTRUDER > 1
+                         | (requestedDuty[2] ? _BV(2) : 0)
+#endif
+                         ;
+    if((heaterGrantProgress & powered)!=powered) return;
+    const bool anyPower=powered!=0;
     if(Printer::isAnyTempsensorDefect()) {
         // Retain diagnostics only while the real completed thermal pass
         // demonstrates all software heater outputs off. Read GPIO, not
@@ -1121,6 +1131,8 @@ void HAL::setHeaterDuty(uint8_t channel, uint8_t duty
 ) {
     if (channel > NUM_EXTRUDER)
         return;
+    const uint8_t compareBit=leaseMask(channel);
+    const uint8_t grantBit=compareBit >> OCIE3A;
     InterruptProtectedBlock lock;
     const bool allowed=checkHeaterLeases();
     if (duty) {
@@ -1136,22 +1148,22 @@ void HAL::setHeaterDuty(uint8_t channel, uint8_t duty
         if(active && !leaseLive(channel,now)) { failHeaterLease(); return; }
         writeLeaseDeadline(channel,uint16_t(now+heaterLeaseDuration));
         // W1C only while previously inactive.
-        if(!active) TIFR3=leaseMask(channel);
+        if(!active) TIFR3=compareBit;
         if(!leaseLive(channel,TCNT3)) { failHeaterLease(); return; }
         // Retain interruption evidence before publishing any positive duty.
         // This is diagnostic redundancy, not the sole reset protection.
         heaterResetCookie=heaterLiveCookie;
-        heaterGrantProgress |= _BV(channel);
+        heaterGrantProgress |= grantBit;
         requestedDuty[channel]=duty;
-        TIMSK3 |= leaseMask(channel);
+        TIMSK3 |= compareBit;
         return;
     }
     // A pending decision made before this revoke cannot rearm the heater.
     if(heaterSampleState[channel]&SampleMatch)
         heaterSampleState[channel] &= uint8_t(~SampleFresh);
     heaterSampleState[channel] &= uint8_t(~(SampleReserved|SampleMatch|ReservationPrevious));
-    TIMSK3 &= uint8_t(~leaseMask(channel));
-    heaterGrantProgress &= uint8_t(~_BV(channel));
+    TIMSK3 &= uint8_t(~compareBit);
+    heaterGrantProgress &= uint8_t(~grantBit);
 
     // Revoke the requested duty and the active output together. The PWM
     // handler can only raise a heater at frame start, from requestedDuty.
