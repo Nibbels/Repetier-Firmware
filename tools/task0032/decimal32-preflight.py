@@ -157,15 +157,17 @@ void integerWire() {
         {"2147483647",INT32_MAX},{"2147483648",INT32_MAX},
         {"4294967295",INT32_MAX},{"-2147483648",INT32_MIN},
         {"-2147483649",INT32_MIN},{"00000000000000123",123},
-        {"999999999999999999999999999999",INT32_MAX},
-        {"-999999999999999999999999999999",INT32_MIN},
+        {"99999999999999999999",INT32_MAX},
+        {"-99999999999999999999",INT32_MIN},
         {"65536",65536},{"-65536",-65536},{"256",256},{"-256",-256},
         {"12.5",12},{"0x12",0},{"- 42",0}
     };
     for(const auto& item:cases) {
         const std::string token=item.token;
         feed("N0 M110\n");readReply("ok\r\n");
-        feed(numbered("M105 S"+token+" P"+token+" T"+token));
+        const auto packet=numbered("M105 S"+token+" P"+token+" T"+token);
+        assert(packet.size()<=96);
+        feed(packet);
         readReply("ok 0\r\n");
         auto* c=GCodeInput::peekCurrentCommand();
         assert(c&&c->hasM()&&c->M==105&&c->hasS()&&c->S==item.expected&&
@@ -176,6 +178,11 @@ void integerWire() {
         readReply("ok 0\r\n");
         c=GCodeInput::peekCurrentCommand();
         assert(c&&c->hasG()&&c->G==uint16_t(item.expected));
+        GCodeInput::popCurrentCommand();
+        feed(numbered("M"+token));
+        readReply("ok 0\r\n");
+        c=GCodeInput::peekCurrentCommand();
+        assert(c&&c->hasM()&&c->M==uint16_t(item.expected));
         GCodeInput::popCurrentCommand();
         // N with M110 is parsed as full 32-bit and admitted as a line
         // reset, not a queued machine command. Check following numbered ACK.
@@ -192,7 +199,7 @@ void integerWire() {
     feed(body+"*"+std::to_string(unsigned(sum)+256)+"\n");
     readReply("ok 1\r\n");popM(105);
     assert(incoming.empty()&&!GCodeInput::peekCurrentCommand());
-    puts("decimal32 wire: 63 actual field/reset cases plus checksum narrowing PASS");
+    puts("decimal32 wire: 84 actual field/reset cases plus checksum narrowing PASS");
 }
 '''
 
