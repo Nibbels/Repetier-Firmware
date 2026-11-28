@@ -24,6 +24,7 @@ HARNESS = r'''
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include "ThermalEmergency.h"
 #define PROGMEM
 #define TEMP_INT_TO_FLOAT(t) ((float)(t) / (float)(1 << CELSIUS_EXTRA_BITS))
 // AVR reads 16-bit words from flash, and the flash table pointers are 16-bit.
@@ -35,15 +36,15 @@ static const int16_t* pgm_read_word(const int16_t* const* p) { return *p; }
 static unsigned reads;
 static uint16_t sample;
 struct HAL {
-    static bool temperatureAdcSample(uint8_t index, uint16_t& value) {
-        assert(index == 2); ++reads; value = sample; return true;
+    static bool temperatureAdcSample(uint8_t index, uint16_t& value, uint32_t* publishedAt=nullptr) {
+        assert(index == 2); ++reads; value = sample; if(publishedAt)*publishedAt=123; return true;
     }
 };
 struct TemperatureController {
     uint8_t sensorType, sensorPin;
     int16_t currentTemperature;
     float currentTemperatureC;
-    bool updateCurrentTemperature();
+    bool updateCurrentTemperature(ThermalEmergency::SensorObservation* = nullptr);
 };
 #include "conversion.inc"
 static void emit(uint32_t v, unsigned bytes) {
@@ -56,7 +57,10 @@ int main() {
         for (unsigned raw = 0; raw < 4096; ++raw) {
             sample = raw; reads = 0;
             TemperatureController c{uint8_t(type), 2, -123, -999.0f};
-            const bool supported = c.updateCurrentTemperature();
+            ThermalEmergency::SensorObservation observation;
+            const bool supported = c.updateCurrentTemperature(&observation);
+            assert(observation.rawKnown==analog);
+            if(analog)assert(observation.publishedAt==123 && observation.raw==raw);
             assert(supported == ((analog && raw > 0 && raw < 4092) || type == 0));
             assert(reads == unsigned(analog));
             assert(c.currentTemperature == (analog ? int(raw) : type == 0 ? 25 : 4095));
@@ -102,7 +106,7 @@ def main():
             exe = work / "replay"
             subprocess.run([os.environ.get("CXX", "c++"), "-std=c++11", "-O2", "-ffp-contract=off",
                             "-Wall", "-Wextra", "-Werror", *[f"-D{k}={v}" for k,v in defines.items()],
-                            str(work / "replay.cpp"), "-o", str(exe)], check=True)
+                            "-I", str(fw), str(work / "replay.cpp"), "-o", str(exe)], check=True)
             output = subprocess.check_output([str(exe)], timeout=20)
             assert len(output) == 256 * 4096 * 8
             digest = hashlib.sha256(output).hexdigest()

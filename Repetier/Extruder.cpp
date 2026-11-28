@@ -23,13 +23,9 @@
 #include "Eeprom.h"
 #include "CaseFan.h"
 
-// The experimental ceiling is independent of the sensor conversion range.
-// Until the EEPROM transaction is qualified, use its conservative default.
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+// Absolute ceiling is independent of the sensor conversion range.
+// The separately commissioned bed limit can only lower this ceiling.
 constexpr uint16_t bedHeaterCutoffC = TemperatureController::BedAbsoluteCeilingC;
-#else
-constexpr uint16_t bedHeaterCutoffC = 275;
-#endif
 
 void Extruder::initHeatedBed() {
     heatedBedController.updateTempControlVars();

@@ -1014,7 +1014,6 @@ def main():
             profile = (FW / (board + ".h")).read_text()
             defines = {n: macro(profile, n) for n in (
                 "SENSOR_TEMPERATURE_OFFSETS_C", "MIN_DEFECT_TEMPERATURE", "MAX_DEFECT_TEMPERATURE", "HEATED_BED_MAX_TEMP")}
-            defines["BED_MEASURED_CUTOFF"] = re.search(r"constexpr uint16_t bedHeaterCutoffC = (\d+);", (FW / "Extruder.cpp").read_text())[1]
             defines.update({n: macro(config, n) for n in (
                 "EXTRUDER_FAN_COOL_TEMP", "DECOUPLING_TEST_MAX_HOLD_VARIANCE",
                 "DECOUPLING_TEST_MIN_TEMP_RISE", "EXT0_DECOUPLE_TEST_PERIOD",

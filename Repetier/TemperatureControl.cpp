@@ -20,21 +20,17 @@
 #include "CaseFan.h"
 #include "Repetier.h"
 #include "GCodeInput.h"
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
 #include "ThermalEmergencyReport.h"
 #include "ThermalRelayProfile.h"
 #include "UsbSerial.h"
-#endif
 
 static uint8_t autotuneIndex = 255;
 bool TemperatureController::autotuneActive(){return autotuneIndex!=255;}
 static bool autotuneAbortRequested = false;
 static float autotuneTemperatureLimit;
 static uint8_t autotuneSensorType, autotunePowerLimit;
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
 static float autotuneTargetC;
 static uint8_t autotuneMethod;
-#endif
 
 static bool validTemperatureSample(bool supported, float temperature) {
     return supported && temperature >= MIN_DEFECT_TEMPERATURE && temperature <= MAX_DEFECT_TEMPERATURE;
@@ -58,7 +54,6 @@ void Printer::latchOutputInhibit(bool thermalFault) {
     stopAllHeaters();
 }
 
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
 namespace ThermalEmergency {
 namespace {
 Ledger<NUM_TEMPERATURE_LOOPS> ledger;
@@ -221,7 +216,6 @@ static void serviceReport() {
     }
 }
 }
-#endif
 
 bool Extruder::allHeatersCalibrated() {
     for (uint8_t h = 0; h < NUM_TEMPERATURE_LOOPS; ++h)
@@ -229,7 +223,6 @@ bool Extruder::allHeatersCalibrated() {
     return true;
 }
 
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
 // Ordinary post-tune diagnostics, only after the heaters have been revoked.
 // No per-sample serial output and no safety threshold derived from this data.
 static void reportRelayObservation(const ThermalRelayProfile::Summary* p, uint8_t sensor,
@@ -259,7 +252,6 @@ static void reportRelayObservation(const ThermalRelayProfile::Summary* p, uint8_
     Com::printF(PSTR("Observed off duration ms min: "),p->minOffMs);
     Com::printFLN(PSTR(" max: "),p->maxOffMs);
 }
-#endif
 
 static void finishAutotune(TemperatureController& controller) {
     // Revoke the duty request and normal setpoint before reporting or storing results.
@@ -278,15 +270,8 @@ void Extruder::manageTemperatures() {
 #ifdef RF_HEATER_LEASE_EXPERIMENT
     // Expiry ISR has already removed power. Defer the print/UI/serial work.
     if (HAL::heaterLeaseFault() && !Printer::isAnyTempsensorDefect()) {
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         ThermalEmergency::latchSystemFault(ThermalEmergency::Cause::LeaseExpired);
-#else
-        Printer::latchOutputInhibit(true);
-#endif
         Printer::markTemperatureReadingsAvailable();
-#ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
-        Com::printErrorFLN(PSTR("Heater authorization expired"));
-#endif
         Printer::stopForThermalFault();
         autotuneAbortRequested = true;
     }
@@ -296,48 +281,34 @@ void Extruder::manageTemperatures() {
 
     for (uint8_t controller = 0; controller < NUM_TEMPERATURE_LOOPS; controller++) {
         TemperatureController* act = tempController[controller];
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         ThermalEmergency::SensorObservation observation;
-#endif
 
 #ifdef RF_HEATER_LEASE_EXPERIMENT
         HAL::HeaterSample sample;
         const uint8_t checkedType=act->sensorType, checkedLimit=act->pidMax;
         const bool sensorSupported = act->updateCurrentTemperature(&sample
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
             , &observation
-#endif
         );
 #else
         const bool sensorSupported = act->updateCurrentTemperature(
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
             &observation
-#endif
         );
 #endif
         const bool sampleValid = validTemperatureSample(sensorSupported, act->currentTemperatureC);
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         if(sampleValid&&act->sensorType) ThermalEmergency::liveValid |= uint8_t(1u<<controller);
         else ThermalEmergency::liveValid &= uint8_t(~(1u<<controller));
-#endif
         if (!sampleValid || act->sensorType == 0) {
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
             const uint8_t priorDuty=HAL::outputDuty(act->pwmIndex);
-#endif
             HAL::setHeaterDuty(act->pwmIndex, 0);
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
             if(!sampleValid) ThermalEmergency::observeInvalid(controller,*act,priorDuty,observation);
             else ThermalEmergency::invalid[controller].active=false;
-#endif
             act->pidHistoryValid = false;
             act->tempIState = 0;
         }
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         else {
             ThermalEmergency::invalid[controller].active=false;
             if(ThermalEmergency::checkAbsoluteCutoff(controller,*act,true,observation))continue;
         }
-#endif
         if (controller == autotuneIndex) {
             // Remember even a transient invalid sample observed by the periodic service.
             if (!sampleValid || act->sensorType == 0 || act->currentTemperatureC > autotuneTemperatureLimit
@@ -373,37 +344,24 @@ void Extruder::manageTemperatures() {
             if (extruderTempErrors > 10) // Ignore short temporary failures
             {
                 act->setSensorDefect(true);
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
                 if (ThermalEmergency::confirm(controller,ThermalEmergency::invalid[controller].cause,
                                              ThermalEmergency::invalidEvidence(controller))) {
-#else
-                if (!Printer::isAnyTempsensorDefect()) {
-                    Printer::latchOutputInhibit(true);
-#endif
                     Printer::markTemperatureReadingsAvailable(); // We are not waiting for first temp measurements anymore.
 
-#ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
-                    reportTempsensorAndHeaterErrors();
-#endif
                     Printer::stopForThermalFault();
 
-#ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
-                    showError((void*)ui_text_temperature_manager, (void*)ui_text_sensor_error);
-#endif
                 }
             }
         }
         if (!sampleValid || act->sensorType == 0 || Printer::heatingInhibited())
             continue; // Never feed an invalid or disabled sensor sample into PID.
 
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         // No raw/internal target assignment may bypass the heater-specific
         // target ceiling, even if a future caller forgets the public setter.
         if(!(act->targetTemperatureC>=0&&act->targetTemperatureC<=act->maximumTargetC())) {
             act->clearTargetTemperature();
             continue;
         }
-#endif
         if (act->targetTemperatureC >= MAX_ROOM_TEMPERATURE && !act->pidCalibrationValid()) {
             act->invalidatePidCalibration();
             continue;
@@ -421,7 +379,6 @@ void Extruder::manageTemperatures() {
 
                     if (extruderTempErrors > 10) { // Ignore short temporary failures
                         act->setSensorDecoupled(true);
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
                         auto evidence=ThermalEmergency::capture(*act,true,time);
                         observation.apply(evidence);
                         evidence.windowMs=time-act->lastDecoupleTest;
@@ -429,24 +386,9 @@ void Extruder::manageTemperatures() {
                         evidence.threshold=DECOUPLING_TEST_MIN_TEMP_RISE;
                         evidence.valid|=ThermalEmergency::Evidence::Window|ThermalEmergency::Evidence::Delta|ThermalEmergency::Evidence::Threshold;
                         if (ThermalEmergency::confirm(controller,ThermalEmergency::Cause::NoRise,evidence)) {
-#else
-                        if (!Printer::isAnyTempsensorDefect()) {
-                            Printer::latchOutputInhibit(true);
-#endif
 
-#ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
-                            Com::printErrorFLN(Com::tHeaterDecoupledWarning);
-                            Com::printF(PSTR("Error:Temp. raised to slow. Rise = "), act->currentTemperatureC - act->lastDecoupleTemp);
-                            Com::printF(PSTR(" after "), (int32_t)(time - act->lastDecoupleTest));
-                            Com::printFLN(PSTR(" ms"));
-
-                            reportTempsensorAndHeaterErrors();
-#endif
                             Printer::stopForThermalFault();
 
-#ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
-                            showError((void*)ui_text_temperature_manager, (void*)ui_text_heater_error);
-#endif
                         }
                     }
                 } else {
@@ -461,7 +403,6 @@ void Extruder::manageTemperatures() {
 
                     if (extruderTempErrors > 10) { // Ignore short temporary failures
                         act->setSensorDecoupled(true);
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
                         auto evidence=ThermalEmergency::capture(*act,true,time);
                         observation.apply(evidence);
                         evidence.windowMs=time-act->lastDecoupleTest;
@@ -469,24 +410,9 @@ void Extruder::manageTemperatures() {
                         evidence.threshold=DECOUPLING_TEST_MAX_HOLD_VARIANCE;
                         evidence.valid|=ThermalEmergency::Evidence::Window|ThermalEmergency::Evidence::Delta|ThermalEmergency::Evidence::Threshold;
                         if (ThermalEmergency::confirm(controller,ThermalEmergency::Cause::HoldFailure,evidence)) {
-#else
-                        if (!Printer::isAnyTempsensorDefect()) {
-                            Printer::latchOutputInhibit(true);
-#endif
 
-#ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
-                            Com::printErrorFLN(Com::tHeaterDecoupledWarning);
-                            Com::printF(PSTR("Error:Could not hold temperature "), act->lastDecoupleTemp);
-                            Com::printF(PSTR(" measured "), act->currentTemperatureC);
-                            Com::printFLN(Com::tC);
-
-                            reportTempsensorAndHeaterErrors();
-#endif
                             Printer::stopForThermalFault();
 
-#ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
-                            showError((void*)ui_text_temperature_manager, (void*)ui_text_heater_error);
-#endif
                         }
                     }
                 } else {
@@ -553,7 +479,6 @@ void Extruder::manageTemperatures() {
 
     if (!Printer::isAnyTempsensorDefect() && !errorDetected)
         Printer::markTemperatureReadingsAvailable();
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     if(Printer::isAnyTempsensorDefect()) {
 #if defined(THERMAL_ALARM_PIN) && THERMAL_ALARM_PIN >= 0
         // Provisional slow active-HIGH alarm gate, not a qualified tone.
@@ -572,7 +497,6 @@ void Extruder::manageTemperatures() {
         for(uint8_t h=0;h<NUM_TEMPERATURE_LOOPS;++h)
             HAL::setHeaterDuty(tempController[h]->pwmIndex,0);
     }
-#endif
 #ifdef RF_HEATER_RESET_WDT_EXPERIMENT
     // A momentarily zero PID duty does not mean the heating session ended.
     // Retain reset evidence across the whole target/autotune session.
@@ -581,9 +505,7 @@ void Extruder::manageTemperatures() {
         heatDemand=heatDemand || tempController[c]->targetTemperatureC>=MAX_ROOM_TEMPERATURE;
     HAL::completeThermalWatchdogPass(heatDemand);
 #endif
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     ThermalEmergency::serviceReport();
-#endif
 
 } // manageTemperatures
 
@@ -598,7 +520,6 @@ void TemperatureController::invalidatePidCalibration() {
     clearTargetTemperature();
 }
 
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
 BedTemperatureLimit TemperatureController::bedLimit_{BedTemperatureLimit::DefaultC};
 bool TemperatureController::setBedEmergencyCutoff(uint8_t verifiedCutoff) {
     if(pwmIndex!=NUM_EXTRUDER) return false;
@@ -608,7 +529,6 @@ bool TemperatureController::setBedEmergencyCutoff(uint8_t verifiedCutoff) {
        verifiedCutoff!=bedLimit_.commissioned()) clearTargetTemperature();
     return bedLimit_.publish(verifiedCutoff);
 }
-#endif
 
 // Unconditional shutdown must not enter PID admission or display callbacks.
 void TemperatureController::clearTargetTemperature() {
@@ -701,7 +621,6 @@ __attribute__((noinline)) void TemperatureController::autotunePIDPrepared(float 
     const bool bed = controllerId == NUM_EXTRUDER;
     const float hysteresis = 0.375f;
     const float cutoff = RMath::min(float(effectiveCutoffC()), temp + (bed ? 15.0f : 20.0f));
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     ThermalEmergency::SensorObservation initialObservation;
     const bool initialSampleValid = updateCurrentTemperature(
 #ifdef RF_HEATER_LEASE_EXPERIMENT
@@ -710,9 +629,6 @@ __attribute__((noinline)) void TemperatureController::autotunePIDPrepared(float 
         &initialObservation);
     if(ThermalEmergency::checkAbsoluteCutoff(controllerId,*this,
         validTemperatureSample(initialSampleValid,currentTemperatureC),initialObservation))return;
-#else
-    const bool initialSampleValid = updateCurrentTemperature();
-#endif
     if (Printer::heatingInhibited() || isSensorDefect() || isSensorDecoupled()
         || sensorType == 0 || pidMax < 40
         || !(temp > MAX_ROOM_TEMPERATURE + hysteresis && temp + hysteresis < cutoff)
@@ -732,38 +648,28 @@ __attribute__((noinline)) void TemperatureController::autotunePIDPrepared(float 
     autotuneTemperatureLimit = cutoff;
     autotuneSensorType = sensorType;
     autotunePowerLimit = pidMax;
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     autotuneTargetC=temp;
     autotuneMethod=uint8_t(method);
-#endif
     autotuneIndex = controllerId;
     stopDecouple();
     // Admission diagnostics can take time. Do not use the earlier sample
     // to authorize the first positive power request.
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     ThermalEmergency::SensorObservation firstObservation;
-#endif
 #ifdef RF_HEATER_LEASE_EXPERIMENT
     HAL::HeaterSample firstSample;
     const bool firstSampleValid = updateCurrentTemperature(&firstSample
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         , &firstObservation
-#endif
     );
 #else
     const bool firstSampleValid = updateCurrentTemperature(
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         &firstObservation
-#endif
     );
 #endif
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     if(ThermalEmergency::checkAbsoluteCutoff(controllerId,*this,
         validTemperatureSample(firstSampleValid,currentTemperatureC),firstObservation)) {
         finishAutotune(*this);
         return;
     }
-#endif
     if (autotuneAbortRequested || Printer::heatingInhibited()
         || sensorType != autotuneSensorType || pidMax != autotunePowerLimit
         || isSensorDefect() || isSensorDecoupled()
@@ -793,12 +699,10 @@ __attribute__((noinline)) void TemperatureController::autotunePIDPrepared(float 
 #else
     HAL::setHeaterDuty(pwmIndex, heating ? autotunePowerLimit : 0);
 #endif
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     ThermalRelayProfile::Recorder relayObservation;
     ThermalRelayProfile::PublicationTracker relayPublication(firstObservation.publishedAt);
     relayObservation.begin(started,currentTemperatureC,autotunePowerLimit,HAL::outputDuty(pwmIndex));
     if(!firstObservation.rawKnown)relayObservation.invalidate();
-#endif
     if (!bed) {
 #if defined(CASE_FAN_PIN) && (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && CASE_FAN_PIN > -1
         CaseFan::turnOn();
@@ -809,44 +713,34 @@ __attribute__((noinline)) void TemperatureController::autotunePIDPrepared(float 
 
     for (;;) {
         Commands::checkForPeriodicalActions(WaitHeater);
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         if(Printer::printJob.emergencyLocked()) {
             finishAutotune(*this);
             return;
         }
         ThermalEmergency::SensorObservation observation;
-#endif
 #ifdef RF_HEATER_LEASE_EXPERIMENT
         HAL::HeaterSample sample;
         const bool supported = updateCurrentTemperature(&sample
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
             , &observation
-#endif
         );
 #else
         const bool supported = updateCurrentTemperature(
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
             &observation
-#endif
         );
 #endif
         const float measured = currentTemperatureC;
         const millis_t now = HAL::timeInMilliseconds();
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         if(ThermalEmergency::checkAbsoluteCutoff(controllerId,*this,
             validTemperatureSample(supported,measured),observation)) {
             finishAutotune(*this);
             return;
         }
-#endif
         if (autotuneAbortRequested || Printer::heatingInhibited()
             || Printer::printJob.isBusy() || PrintLine::hasLines() || PrintLine::directMoveActive() || isAnyScanRunning()
             || sensorType != autotuneSensorType || pidMax != autotunePowerLimit
             || isSensorDefect() || isSensorDecoupled() || !validTemperatureSample(supported, measured)) {
             finishAutotune(*this);
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
             if(ThermalEmergency::faultLedger().active())return;
-#endif
             Com::printErrorFLN(PSTR("PID autotune aborted: sensor, settings, fault or cancellation"));
             showError((void*)ui_text_autodetect_pid, (void*)ui_text_temperature_wrong);
             break;
@@ -874,11 +768,9 @@ __attribute__((noinline)) void TemperatureController::autotunePIDPrepared(float 
         if (now - lastSample < 100)
             continue;
         lastSample = now;
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         if(!observation.rawKnown||!relayPublication.next(observation.publishedAt))
             relayObservation.invalidate();
         relayObservation.sample(now,measured,HAL::outputDuty(pwmIndex));
-#endif
         low = RMath::min(low, measured);
         high = RMath::max(high, measured);
         if (heating && measured >= temp + hysteresis) {
@@ -888,7 +780,6 @@ __attribute__((noinline)) void TemperatureController::autotunePIDPrepared(float 
             phaseStart = now;
         } else if (heating && now - riseStart >= (bed ? 60000UL : 20000UL)) {
             if (measured - riseTemp < DECOUPLING_TEST_MIN_TEMP_RISE) {
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
                 auto evidence=ThermalEmergency::capture(*this,true,now);
                 observation.apply(evidence);
                 evidence.targetC=temp; // relay tune uses its own target, not normal setpoint
@@ -898,29 +789,16 @@ __attribute__((noinline)) void TemperatureController::autotunePIDPrepared(float 
                 evidence.profile=uint8_t(method);
                 evidence.valid|=ThermalEmergency::Evidence::Delta|ThermalEmergency::Evidence::Window
                     |ThermalEmergency::Evidence::Threshold|ThermalEmergency::Evidence::Profile;
-#endif
                 finishAutotune(*this);
                 setSensorDecoupled(true);
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
                 ThermalEmergency::confirm(controllerId,ThermalEmergency::Cause::NoRise,evidence);
-#else
-                Printer::latchOutputInhibit(true);
-#endif
-#ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
-                Com::printErrorFLN(PSTR("PID autotune: no temperature rise"));
-#endif
                 Printer::stopForThermalFault();
-#ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
-                showError((void*)ui_text_temperature_manager, (void*)ui_text_heater_error);
-#endif
                 break;
             }
             riseStart = now;
             riseTemp = measured;
         } else if (!heating && measured <= temp - hysteresis) {
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
             relayObservation.completeOff(now);
-#endif
             if (completeCycle) {
                 ++cycles;
                 const millis_t period = now - cycleStart;
@@ -987,14 +865,10 @@ __attribute__((noinline)) void TemperatureController::autotunePIDPrepared(float 
                         pidHistoryValid = false;
                         updateTempControlVars();
                         EEPROM::storePidCalibration(controllerId);
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
                         if(Printer::printJob.emergencyLocked())return;
-#endif
                     }
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
                     reportRelayObservation(relayObservation.completedProfile(),
                                            autotuneSensorType,autotunePowerLimit,temp,uint8_t(method));
-#endif
                     Com::printInfoFLN(Com::tAPIDFinished);
                     UI_STATUS_UPD(UI_TEXT_AUTODETECT_PID_DONE);
                     Printer::idleStatus.schedule(HAL::timeInMilliseconds() + 30000);
@@ -1025,18 +899,14 @@ __attribute__((noinline)) void TemperatureController::autotunePIDPrepared(float 
             HAL::setHeaterDuty(pwmIndex, autotunePowerLimit);
 #endif
         }
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         relayObservation.afterDecision(now,measured,HAL::outputDuty(pwmIndex));
-#endif
 #ifdef RF_HEATER_RESET_WDT_EXPERIMENT
         // Complete the second half of the watchdog handshake only after
         // the entire sampled relay decision and its safety checks finished.
         HAL::completeAutotuneWatchdogPass();
 #endif
     }
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     if(Printer::printJob.emergencyLocked())return;
-#endif
     Printer::idleStatus.schedule(HAL::timeInMilliseconds());
 } // autotunePID
 

@@ -19,13 +19,9 @@
 #define EXTRUDER_H
 
 #include "HAL.h"
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
 #include "ThermalEmergency.h"
-#endif
 
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
 #include "BedTemperatureLimit.h"
-#endif
 
 #define CELSIUS_EXTRA_BITS 3
 
@@ -46,7 +42,6 @@ public:
     uint8_t sensorType;         ///< Type of temperature sensor.
     uint8_t sensorPin;          ///< Index into the ADC sample array.
     const uint16_t heaterCutoffC; ///< Immutable measured-temperature ceiling.
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     enum : uint16_t { BedAbsoluteCeilingC=BedTemperatureLimit::AbsoluteC,
                       BedDefaultCutoffC=BedTemperatureLimit::DefaultC,
                       BedTargetMarginC=BedTemperatureLimit::MarginC };
@@ -66,10 +61,6 @@ public:
 private:
     static BedTemperatureLimit bedLimit_;
 public:
-#else
-    uint16_t effectiveCutoffC() const { return heaterCutoffC; }
-    uint16_t maximumTargetC() const { return heaterCutoffC; }
-#endif
     int16_t currentTemperature; ///< Currenttemperature value read from sensor.
     float currentTemperatureC;  ///< Current temperature in degC.
     float targetTemperatureC;   ///< Target temperature in degC.
@@ -117,15 +108,11 @@ public:
     void setTargetTemperature(float target);
 #ifdef RF_HEATER_LEASE_EXPERIMENT
     bool updateCurrentTemperature(HAL::HeaterSample* sample = nullptr
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         , ThermalEmergency::SensorObservation* observation = nullptr
-#endif
     );
 #else
     bool updateCurrentTemperature(
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         ThermalEmergency::SensorObservation* observation = nullptr
-#endif
     );
 #endif
     // ///< False for an unsupported sensor type or stale/unpublished ADC sample.
@@ -392,7 +379,6 @@ extern TemperatureController optTempController;
 #define TEMP_FLOAT_TO_INT(temp) ((int)((temp) * (1 << CELSIUS_EXTRA_BITS)))
 
 extern TemperatureController* tempController[NUM_TEMPERATURE_LOOPS];
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
 namespace ThermalEmergency {
     const Ledger<NUM_TEMPERATURE_LOOPS>& faultLedger();
     // Foreground only, after safe GPIO initialization.
@@ -401,6 +387,5 @@ namespace ThermalEmergency {
     void requestLiveReport();
     void requestDiagnosticReplay();
 }
-#endif
 
 #endif // EXTRUDER_H
