@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Replay the actual opt-in HAL lease path with abstract AVR register semantics."""
+"""Replay the actual standard HAL lease path with abstract AVR register semantics."""
 from pathlib import Path
 import subprocess
 import tempfile
@@ -24,6 +24,7 @@ start=header.index("    class HeaterSample {")
 ticket_decl=header[start:header.index("    static bool heaterLeaseFault();",start)]
 start=hal.index("void HAL::setHeaterDuty(")
 setter=hal[start:hal.index("\nvoid HAL::setBoardFan",start)]
+reset=hal[hal.index("void HAL::resetHardware()"):hal.index("} // resetHardware")+1]
 start=hal.index("    if (pwm_count_heater == 0) {",hal.index("ISR(PWM_TIMER_VECTOR)"))
 frame=hal[start:hal.index("    if (pwm_count_cooler == 0)",start)]
 prelude=r"""
@@ -48,6 +49,8 @@ prelude=r"""
 #define TOV3 0
 #define CS32 2
 static bool irq=true,pins[4];
+static uint8_t PWM_TIMSK;
+#define PWM_OCIE 2
 #define WATCHDOG_PIN 3
 static uint8_t TIMSK3,TCCR3A,TCCR3B,TCCR3C;
 static uint16_t TCNT3,OCR3A,OCR3B,OCR3C;
@@ -81,6 +84,8 @@ struct HAL {
         raw=temperatureAdcValues[c];return true;
     }
     TICKET_DECL
+    static void forbidInterrupts(){irq=false;}
+    static void resetHardware();
 #ifdef RF_HEATER_RESET_WDT_EXPERIMENT
     static void completeThermalWatchdogPass(bool heatDemand=false);
     static void completeAutotuneWatchdogPass();
@@ -235,7 +240,69 @@ static void checkSampleWrapEquivalence() {
             assert(heaterSampleState[c]==oldWrapState(before[c],continuous));
     }
 }
+static void checkZeroRevocation(){
+    unsigned long cases=0;
+    for(uint8_t c=0;c<=NUM_EXTRUDER;++c)
+        for(unsigned duty=0;duty<256;++duty)
+            for(unsigned phase=0;phase<256;phase+=2)
+                for(bool enabled:{false,true}){
+                    resetFixture(0);
+                    for(uint8_t other=0;other<=NUM_EXTRUDER;++other)
+                        grant(other,other==c?uint8_t(duty):254);
+                    // Force the stale latched pin and duty independently of
+                    // the requested PWM value. Zero must clear it immediately.
+                    pins[pin(c)]=true;pwm_pos_set[c]=uint8_t(duty&254);
+                    for(uint8_t other=0;other<=NUM_EXTRUDER;++other)
+                        if(other!=c)pins[pin(other)]=true;
+                    irq=enabled;
+                    HAL::setHeaterDuty(c,0);
+                    assert(irq==enabled&&!requestedDuty[c]&&!pins[pin(c)]&&!(TIMSK3&leaseMask(c)));
+                    for(uint8_t other=0;other<=NUM_EXTRUDER;++other)
+                        if(other!=c)assert(pins[pin(other)]&&requestedDuty[other]==254);
+                    startFrame(uint8_t(phase));startFrame(0);
+                    assert(!pins[pin(c)]);
+                    HAL::setHeaterDuty(c,128);
+                    assert(!requestedDuty[c]&&!pins[pin(c)]); // no unbound grant
+                    grant(c,128);
+                    assert(requestedDuty[c]==128&&!pins[pin(c)]&&irq==enabled);
+                    startFrame(0);assert(pins[pin(c)]);
+                    ++cases;
+                }
+    resetFixture(0);
+    for(unsigned channel=NUM_EXTRUDER+1;channel<256;++channel){
+        HAL::setHeaterDuty(uint8_t(channel),0);
+        HAL::setHeaterDuty(uint8_t(channel),255);
+        assert(TIMSK3==0&&!heaterLeaseFailed);
+    }
+    std::printf("zero revoke: %lu duty/phase/IRQ cases; invalid channels rejected\\n",cases);
+}
+struct Restart {};
+static void restart(){
+    assert(!irq&&!(PWM_TIMSK&_BV(PWM_OCIE))&&TIMSK3==0&&TCCR3B==0);
+    for(uint8_t c=0;c<=NUM_EXTRUDER;++c)
+        assert(!requestedDuty[c]&&!pins[pin(c)]);
+    throw Restart{};
+}
+static void (*resetFunc)()=restart;
+RESET_SOURCE
+static void checkPreWatchdogReset(){
+    for(bool enabled:{false,true}){
+        resetFixture(0);
+        // Model the pre-watchdog fallback only. An armed runtime never
+        // jumps to zero; its intentionally non-returning wait is audited
+        // at the linked instruction and recovery-boot level.
+        for(uint8_t c=0;c<=NUM_EXTRUDER;++c){grant(c,255);pins[pin(c)]=true;}
+        watchdogStarted=false;watchdogActive=false;irq=enabled;PWM_TIMSK=255;
+        try{HAL::resetHardware();assert(false);}catch(const Restart&){}
+        assert(!irq&&PWM_TIMSK==uint8_t(255&~_BV(PWM_OCIE)));
+        startFrame(0);
+        for(uint8_t c=0;c<=NUM_EXTRUDER;++c)assert(!pins[pin(c)]);
+    }
+    std::puts("pre-watchdog reset: two saved-I cases, PWM and Timer3 disabled");
+}
 int main(){
+    checkZeroRevocation();
+    checkPreWatchdogReset();
     checkSampleWrapEquivalence();
     checkFixedChannelEquivalence();
     // Independently of duty-byte consistency, a frame without positive
@@ -509,7 +576,7 @@ int main(){
 with tempfile.TemporaryDirectory() as temp:
     cpp=Path(temp)/"lease.cpp";exe=Path(temp)/"lease"
     cpp.write_text(prelude.replace("TICKET_DECL",ticket_decl)+adc+"\n"+progress+"\n"+state+"\n"+ticket+"\n"+setter+"\n#ifdef RF_HEATER_RESET_WDT_EXPERIMENT\n"+feed+"\n"+heartbeat+"\n#endif\n"+
-                   "\nstatic void startFrame(uint8_t pwm_count_heater){InterruptProtectedBlock lock;\n"+frame+"\n}\n"+main)
+                   "\nstatic void startFrame(uint8_t pwm_count_heater){InterruptProtectedBlock lock;\n"+frame+"\n}\n"+main.replace("RESET_SOURCE",reset))
     for n in (1,2):
         for flags in (["-DRF_HEATER_RESET_WDT_EXPERIMENT=1","-DRF_THERMAL_EMERGENCY_EXPERIMENT=1"],):
             subprocess.run(["g++","-std=c++11","-Wall","-Wextra","-Werror","-O2",
