@@ -103,11 +103,8 @@ void homeAxis(bool x, bool y, bool z) {
     }
 }
 bool queueRelativeMMCoordinates(float x, float y, float z, float e, float, bool wait, bool endstop) {
-    assert(wait && endstop && !e);
-    if (z)
-        assert(!x && !y && z == 5);
-    else
-        probePoints.emplace_back(x, y);
+    assert(wait && endstop && !e && !z);
+    probePoints.emplace_back(x, y);
     return true;
 }
 void disableAllSteppersNow() { ++shutdowns; }

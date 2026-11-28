@@ -23,7 +23,7 @@ prelude=r"""
 #define UI_TEXT_DO_MHIER_BED_SCAN "ZOS"
 using millis_t=uint32_t;
 enum {Processing,Paused,X_AXIS,Y_AXIS,Z_AXIS};
-static bool locked,retreatOnlyFlag;
+static bool locked,retreatOnlyFlag,retreatFails;
 static uint32_t now;
 static unsigned visits,injectAt,disabled,enabled,discards,finished,reloads,scheduled,continued;
 static unsigned moveCalls,homeCalls,queueCalls;
@@ -76,13 +76,17 @@ struct ScanSession{
     int takeAbort(){return 1;}
     static bool retreatOnly(int){return retreatOnlyFlag;}
 };
+namespace DiagnosticHistory {
+enum class ScanKind {HeatBed,ZOffset};
+void recordScan(int,ScanKind){assert(!locked);}
+}
 namespace Calibration{
 ScanSession scanSession;
 template<class T> void showAbortScanReason(T,int){assert(!locked);}
-bool moveZ(int){
-    assert(!locked);++moveCalls;
+bool moveZ(int steps){
+    assert(!locked&&steps==640);++moveCalls;
     Commands::checkForPeriodicalActions();
-    return !locked;
+    return !locked&&!retreatFails;
 }
 }
 namespace BedMatrix{
@@ -111,7 +115,7 @@ struct GCode{
 """
 main=r"""
 static void reset(unsigned injection,bool retreat=false,uint32_t clock=0){
-    locked=false;retreatOnlyFlag=retreat;now=clock;
+    locked=false;retreatFails=false;retreatOnlyFlag=retreat;now=clock;
     injectAt=injection;
     visits=disabled=enabled=discards=finished=reloads=scheduled=continued=0;
     moveCalls=homeCalls=queueCalls=0;
@@ -131,8 +135,10 @@ int main(){
     reset(0);heldButtonWait();assert(visits==3&&continued==1);
     reset(0);h.abort();assert(moveCalls==1&&homeCalls==1&&disabled==1&&finished==1&&reloads==1&&scheduled==1);
     reset(0,true);h.abort();assert(moveCalls==1&&homeCalls==0&&disabled==1&&finished==1);
-    reset(0);z.abort(true);assert(queueCalls==1&&homeCalls==1&&disabled==1&&discards==1&&reloads==1&&scheduled==1);
+    reset(0);z.abort(true);assert(moveCalls==1&&!queueCalls&&homeCalls==1&&disabled==1&&discards==1&&reloads==1&&scheduled==1);
     reset(0,true);z.abort(false);assert(moveCalls==1&&homeCalls==0&&disabled==1&&discards==1);
+    reset(0);retreatFails=true;z.abort(true);assert(moveCalls==1&&!queueCalls&&!homeCalls&&disabled==1&&discards==1);
+    reset(0);retreatFails=true;h.abort();assert(moveCalls==1&&!homeCalls&&disabled==1&&finished==1);
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     for(unsigned n=1;n<=3;++n){
         reset(n);heldButtonWait();assert(locked&&visits==n&&continued==0);

@@ -447,11 +447,11 @@ void ZOffsetScan::abort(bool reloadMatrix) {
     // the search has been aborted
     Com::printFLN(PSTR("ZOS aborted"));
 
-    if (ScanSession::retreatOnly(reason)) {
-        Calibration::moveZ(int(Printer::stepsPerMm(Z_AXIS) * 5));
-    } else if (Printer::queueRelativeMMCoordinates(0, 0, 5, 0, Printer::axisHomingFeedrate(Z_AXIS), true, true)) {
+    // The scan's physical ledger owns the clearance lift, including abort.
+    // Never rehome unless the bounded common-drive retreat actually completed.
+    const bool retreated = Calibration::moveZ(int(Printer::stepsPerMm(Z_AXIS) * 5));
+    if (retreated && !ScanSession::retreatOnly(reason))
         Printer::homeAxis(true, true, true);
-    }
 
     // turn off all steppers and extruders
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
