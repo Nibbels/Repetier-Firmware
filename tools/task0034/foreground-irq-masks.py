@@ -131,23 +131,39 @@ def discover(ins, trace, main, writes, no_write, state_limit=300000):
         ctx = pending.pop()
         root, entry_i = ctx
         cfg = trace[root]
-        start = (cfg["entry"], entry_i, False, ((1,0),), ())
-        todo, seen = [start], set()
+        start = (cfg["entry"], entry_i, False)
+        todo, queued = collections.deque([start]), {start}
+        facts = {start: ({1:0}, {})}
         graph = nx.DiGraph()
         calls, unknown = {}, set()
         exits = set()
+
+        def propagate(state, successor, regs, slots):
+            graph.add_edge(state, successor)
+            old = facts.get(successor)
+            if old is not None:
+                # Meet equal known bits; disagreement is unknown. Keeping
+                # only one fact map per stack/I/delay state prevents an
+                # exponential product of unrelated LDI register values.
+                regs={r:b for r,b in old[0].items() if regs.get(r)==b}
+                slots={k:b for k,b in old[1].items() if slots.get(k)==b}
+                if old==(regs,slots):
+                    return
+            facts[successor]=(regs,slots)
+            if successor not in queued:
+                todo.append(successor)
+                queued.add(successor)
+
         while todo:
-            state = todo.pop()
-            if state in seen:
-                continue
-            seen.add(state)
-            if len(seen) > state_limit:
+            state = todo.popleft()
+            queued.remove(state)
+            if len(facts) > state_limit:
                 raise ValueError((hex(root),entry_i,"foreground I-state limit"))
             graph.add_node(state)
-            base,I,delayed,regs,slots=state
+            base,I,delayed=state
             pc=base[0]
             _,op,_=ins[pc]
-            ni,enable,unresolved,regs,slots=step_bits(base,ins,I,regs,slots,writes,no_write)
+            ni,enable,unresolved,regs,slots=step_bits(base,ins,I,*facts[state],writes,no_write)
             if unresolved:
                 unknown.add(pc)
             if op=="ret":
@@ -168,12 +184,10 @@ def discover(ins, trace, main, writes, no_write, state_limit=300000):
                 regs[1]=0
                 enable=False
             for successor in cfg["edges"][base]:
-                next_slots=tuple(sorted((k,b) for k,b in slots.items() if 3<=k<successor[1]))
-                rt=tuple(sorted(regs.items()))
+                next_slots={k:b for k,b in slots.items() if 3<=k<successor[1]}
                 for i in ni:
-                    ns=(successor,i,bool(enable and i),rt,next_slots)
-                    graph.add_edge(state,ns)
-                    todo.append(ns)
+                    ns=(successor,i,bool(enable and i))
+                    propagate(state,ns,regs,next_slots)
         contexts[ctx]={"graph":graph,"calls":calls,"unknown":unknown,"entry":start,"returns":exits}
         # Least fixed point over possible returning I states. All edges
         # through a call are enabled only by a witnessed abstract return.
