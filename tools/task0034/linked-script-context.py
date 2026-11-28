@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""A73: inventory actual flash-script command contexts in pinned AVR images.
+"""Historical A73: inventory flash-script contexts in pre-typed AVR images.
+
+Not applicable to the current fully typed internal programs. To analyze the
+current firmware, use contextual-stack-diagnostic.py. This tool is retained
+for pinned historical archives with the three remaining text programs.
 
 The checked grammar is deliberately narrower than the general G-code parser:
 one literal G/M command and numeric arguments per line. A new/custom script

@@ -507,16 +507,20 @@ bool GCodeInput::flashScriptActive() {
 // foreground script ownership through the final periodic service.
 // heatingInhibited includes thermal/legacy rejection and EEPROM admission;
 // the common typed filament entry revalidates it after waiting for motion.
-void GCodeInput::executeSoftFilament(bool unload) {
+__attribute__((noinline)) void GCodeInput::executeSoftFilament(bool unload) {
     if (flashScriptRunning || Printer::printJob.commandsBlocked() || Printer::heatingInhibited())
         return;
     flashScriptRunning = true;
+    runSoftFilament(unload);
+    flashScriptRunning = false;
+}
+
+__attribute__((noinline)) void GCodeInput::runSoftFilament(bool unload) {
     if (unload)
         GCodeCommands::unloadFilamentWithParameters(EMERGENCY_PAUSE_DIGITS_MAX < 4500 ? EMERGENCY_PAUSE_DIGITS_MAX : 4500);
     else
         GCodeCommands::loadFilamentWithParameters(3500, 3);
     Commands::checkForPeriodicalActions(Processing);
-    flashScriptRunning = false;
 }
 
 namespace {
@@ -539,7 +543,7 @@ void internalAxisMove(uint8_t axis, float value, float feedrateMmMin) {
 }
 } // namespace
 
-void GCodeInput::executeHardFilament(bool unload) {
+__attribute__((noinline)) void GCodeInput::executeHardFilament(bool unload) {
     if (flashScriptRunning || !internalProgramAdmitted())
         return;
     flashScriptRunning = true;
@@ -563,7 +567,7 @@ __attribute__((noinline)) void GCodeInput::runHardFilament(bool unload) {
     finishInternalStep(false);             // M104 S0 (shared queue-settle path)
 }
 
-bool GCodeInput::executeOutputProgram() {
+__attribute__((noinline)) bool GCodeInput::executeOutputProgram() {
     if (flashScriptRunning || !internalProgramAdmitted())
         return false;
     flashScriptRunning = true;

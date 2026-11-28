@@ -34,6 +34,7 @@ public:
     static bool flashScriptActive();
 
 private:
+    static void runSoftFilament(bool unload);
     static void runHardFilament(bool unload);
     static bool runOutputProgram();
     static bool parseAscii(GCode& command, char* line);

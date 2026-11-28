@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""A73: narrow foreground callsites for the three remaining linked flash scripts.
+"""Historical A73: narrow foreground callsites for three text scripts.
+
+Not applicable after typed hard filament and object-output conversion.
+Use contextual-stack-diagnostic.py for current builds.
 
 Verify actual script strings/callers first. Follow the linked G/M switch
 selection with concrete command numbers, then conservatively traverse all

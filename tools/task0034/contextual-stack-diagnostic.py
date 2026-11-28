@@ -25,23 +25,27 @@ def load(name, filename):
     spec.loader.exec_module(module)
     return module
 
-dispatch = load("script_dispatch", "script-dispatch-context.py")
-fg = dispatch.fg
+fg = load("foreground_depth", "foreground-stack-depth.py")
+PROGRAM_WORKERS = {
+    "GCodeInput::runSoftFilament(": ("GCodeInput::executeSoftFilament(",),
+    "GCodeInput::runHardFilament(": ("GCodeInput::executeHardFilament(",),
+    "GCodeInput::runOutputProgram(": ("GCodeInput::executeOutputProgram(",),
+}
 
 GUARDS = (
     ("UIDisplay::executeAction(", ("UIDisplay::slowAction(", "Commands::executeGCode(")),
     ("dispatchScanWork(", ("Commands::checkForPeriodicalActions(", "handleScanWorkTasks(")),
     ("servicePrintFeatures(", ("loopFeatures(",)),
     ("PrintPause::dispatchPendingMotion(", ("loopFeatures(", "PrintPause::serviceMotion(")),
-    ("GCodeInput::runFlashScript(", ("GCodeInput::executeFlashScript(",)),
+    (tuple(PROGRAM_WORKERS), tuple(a for v in PROGRAM_WORKERS.values() for a in v)),
 )
 # The added guards correspond to explicitly named, admitted workers.
 # Phase exclusions remain an opt-in diagnostic hypothesis until the
 # source lifetime/linked caller proofs are complete.
 PHASE_GUARDS = (
     ("StartLine::runPrepared(", ("StartLine::run(", "Commands::executeGCode(")),
-    ("GCodeCommands::loadFilamentPrepared(", ("GCodeCommands::loadFilament(", "GCodeCommands::loadFilamentWithParameters(", "GCodeInput::executeSoftFilament(", "Commands::executeGCode(")),
-    ("GCodeCommands::unloadFilamentPrepared(", ("GCodeCommands::unloadFilament(", "GCodeCommands::unloadFilamentWithParameters(", "GCodeInput::executeSoftFilament(", "Commands::executeGCode(")),
+    ("GCodeCommands::loadFilamentPrepared(", ("GCodeCommands::loadFilament(", "GCodeCommands::loadFilamentWithParameters(", "GCodeInput::runSoftFilament(", "Commands::executeGCode(")),
+    ("GCodeCommands::unloadFilamentPrepared(", ("GCodeCommands::unloadFilament(", "GCodeCommands::unloadFilamentWithParameters(", "GCodeInput::runSoftFilament(", "Commands::executeGCode(")),
     ("TemperatureController::autotunePIDPrepared(", ("TemperatureController::autotunePID(", "UIDisplay::finishAction(")),
 )
 # Guard indices: panel, scan, features, pause, script, startline,
@@ -90,40 +94,48 @@ ANCHORS = {
                "if (!nEntered)", "nEntered++;", "servicePrintFeatures();", "nEntered--;"),
     "PrintPause.cpp": ("if (servicingMotion_", "servicingMotion_ = true;",
                        "dispatchPendingMotion();", "servicingMotion_ = false;"),
-    "GCodeInput.cpp": ("if (flashScriptRunning || Printer::printJob.commandsBlocked())",
-                       "flashScriptRunning = true;", "runFlashScript(cmd);", "flashScriptRunning = false;"),
+    "GCodeInput.cpp": ("if (flashScriptRunning || Printer::printJob.commandsBlocked() || Printer::heatingInhibited())",
+                       "if (flashScriptRunning || !internalProgramAdmitted())",
+                       "flashScriptRunning = true;", "runSoftFilament(unload);",
+                       "runHardFilament(unload);", "runOutputProgram();", "flashScriptRunning = false;"),
     "UiFormatting.cpp": ("!ram && allowMessageExpansion", "parse(statusMsg, true, false);"),
 }
 
-def diagnostic(frame, script_sites, phase=False):
+def diagnostic(frame, phase=False):
     guards_spec = GUARDS + (PHASE_GUARDS if phase else ())
     names = {f["address"]: f["name"] for f in frame["frames"]}
     local = {f["address"]: f["localPeakBytes"] for f in frame["frames"]}
     edges = defaultdict(list)
     guard_callers = defaultdict(set)
+    worker_callers = defaultdict(set)
     for edge in frame["calls"]:
         a, b = edge["caller"], edge["callee"]
         for i, (prefix, allowed) in enumerate(guards_spec):
             if names[b].startswith(prefix):
                 assert names[a].startswith(allowed), ("unreviewed guard caller", names[a], names[b])
+                if i == 4:
+                    worker = next(k for k in PROGRAM_WORKERS if names[b].startswith(k))
+                    assert names[a].startswith(PROGRAM_WORKERS[worker]), (worker, names[a])
+                    worker_callers[worker].add(names[a])
                 guard_callers[i].add(names[a])
         for site in edge["sites"]:
             edges[a].append((b, site["pc"], site["callerBytes"]))
     assert all(guard_callers[i] for i in range(len(guards_spec))), "missing reviewed linked guard"
+    assert set(worker_callers) == set(PROGRAM_WORKERS), "missing internal worker"
     active, path = set(), []
     pruned = defaultdict(int)
 
     def transition(state, b, site):
-        a, guards, parse, script = state
-        an, bn = names[a], names[b]
-        next_guards, next_parse, next_script = guards, parse, script
+        a, guards, parse = state
+        bn = names[b]
+        next_guards, next_parse = guards, parse
         for i, (prefix, _) in enumerate(guards_spec):
             if bn.startswith(prefix):
                 if guards & (1 << i):
-                    pruned[prefix] += 1
+                    pruned["internal program owner" if i == 4 else prefix] += 1
                     return None
                 if phase and not phase_compatible(guards, i):
-                    pruned["phase hypothesis: " + prefix] += 1
+                    pruned["phase hypothesis: " + ("internal program owner" if i == 4 else prefix)] += 1
                     return None
                 next_guards |= 1 << i
         # Page -> one flash message -> one RAM status; no further expansion.
@@ -132,25 +144,7 @@ def diagnostic(frame, script_sites, phase=False):
                 pruned["LCD parse depth"] += 1
                 return None
             next_parse += 1
-        if bn.startswith("GCodeInput::executeFlashScript("):
-            if guards & (1 << 4):
-                # Include the rejected wrapper's own frame. Its worker is
-                # excluded by the guard, not by deleting the wrapper call.
-                next_script = ""
-            elif an.startswith("outputObject("):
-                next_script = "out"
-            elif an.startswith("UIDisplay::executeCommandAction("):
-                next_script = "filament"
-            else:
-                raise ValueError(("unreviewed script caller", an))
-        if an.startswith("Commands::executeGCode("):
-            if script and site not in script_sites[script]:
-                pruned["linked script command selection"] += 1
-                return None
-            next_script = ""
-        if bn.startswith("Commands::executeGCode(") and not an.startswith("GCodeInput::runFlashScript("):
-            next_script = ""
-        return b, next_guards, next_parse, next_script
+        return b, next_guards, next_parse
 
     @lru_cache(None)
     def visit(state):
@@ -171,11 +165,12 @@ def diagnostic(frame, script_sites, phase=False):
         active.remove(state)
         return best
 
-    peak, witness = visit((frame["main"], 0, 0, ""))
+    peak, witness = visit((frame["main"], 0, 0))
     return {"diagnosticBytes": peak, "phaseHypothesesApplied": phase,
             "contextStates": visit.cache_info().currsize,
             "prunedContextEdges": dict(pruned),
-            "guardCallers": {guards_spec[i][0]: sorted(v) for i, v in guard_callers.items()},
+            "guardCallers": {("internal program owner" if i == 4 else guards_spec[i][0]): sorted(v) for i, v in guard_callers.items()},
+            "programWorkerCallers": {k: sorted(v) for k,v in worker_callers.items()},
             "witness": [{"function": names[a], "bytes": depth, "site": site}
                         for a, depth, site in witness]}
 
@@ -186,14 +181,16 @@ def inventory(z, board, phase=False):
         source = z.read(p + "build/sketch/" + filename).decode()
         for anchor in anchors:
             assert anchor in source, (board, filename, "review guard", anchor)
-    sc = dispatch.inventory(z, board)
+    symbols = z.read(p + "symbols.txt").decode()
+    for retired in ("runFlashScript", "executeFlashScript", "tMountFilamentSoft",
+                    "tUnmountFilamentSoft", "tMountFilamentHard", "tUnmountFilamentHard", "tOutputObjectPrint"):
+        assert retired not in symbols, (board, "retired internal text symbol", retired)
+    source = z.read(p + "build/sketch/GCodeInput.cpp").decode()
+    assert "runFlashScript(" not in source and "executeFlashScript(" not in source
     frame = fg.inventory(z, board, True)
     assert not frame["errors"], frame["errors"]
-    sites = sc["scriptCallSites"]
-    assert set(sites) == set(dispatch.scripts.EXPECTED)
-    groups = {"out": set(sites["tOutputObjectPrint"]),
-              "filament": {pc for key, values in sites.items() if key != "tOutputObjectPrint" for pc in values}}
-    return diagnostic(frame, groups, phase)
+    return diagnostic(frame, phase)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
