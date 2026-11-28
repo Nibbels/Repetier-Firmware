@@ -138,7 +138,7 @@ def main():
             assert defines["ANALOG_REDUCE_BITS"] == "0" and defines["CELSIUS_EXTRA_BITS"] == "3"
             exe = work / "replay"
             subprocess.run([os.environ.get("CXX", "c++"), "-std=c++11", "-O2", "-ffp-contract=off",
-                            "-Wall", "-Wextra", "-Werror", "-DRF_HEATER_LEASE_EXPERIMENT=1",
+                            "-Wall", "-Wextra", "-Werror",
                             *[f"-D{k}={v}" for k,v in defines.items()],
                             "-I", str(fw), str(work / "replay.cpp"), "-o", str(exe)], check=True)
             output = subprocess.check_output([str(exe)], timeout=20)

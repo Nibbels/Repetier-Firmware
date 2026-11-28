@@ -207,7 +207,7 @@ int main() {
 def main():
     source = (FW / "HAL.cpp").read_text()
     adc = ("namespace {\n"
-           + section(source, "const uint8_t temperatureAdcChannels", "volatile bool watchdogActive = false;").split("#ifndef RF_HEATER_RESET_WDT_EXPERIMENT")[0]
+           + section(source, "const uint8_t temperatureAdcChannels", "volatile bool watchdogActive = false;")
            + "}\n"
            + section(source, "uint16_t HAL::temperatureAdcSample(", "//initialize watchdog"))
     with TemporaryDirectory(prefix="rfx-hal-adc-") as tmp:
@@ -218,7 +218,7 @@ def main():
         for extruders, chamber in ((1, 0), (2, 1), (1, 1)):
             exe = work / "replay"
             subprocess.run([os.environ.get("CXX", "c++"), "-std=c++11", "-O2",
-                            f"-DNUM_EXTRUDER={extruders}", f"-DCHAMBER={chamber}", "-DRF_HEATER_LEASE_EXPERIMENT=1",
+                            f"-DNUM_EXTRUDER={extruders}", f"-DCHAMBER={chamber}",
                             str(work / "replay.cpp"), "-o", str(exe)], check=True)
             subprocess.run([str(exe)], check=True, timeout=10)
 

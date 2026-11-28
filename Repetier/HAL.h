@@ -497,7 +497,6 @@ public:
 
     static void resetPwmOutputs();
     static uint8_t outputDuty(uint8_t channel);
-#ifdef RF_HEATER_LEASE_EXPERIMENT
     // A foreground reservation for one exact ADC publication. Conversion
     // runs outside the IRQ lock; grant checks the reservation under lock.
     class HeaterSample {
@@ -518,9 +517,6 @@ public:
     };
     static void setHeaterDuty(uint8_t channel, uint8_t duty, HeaterSample* sample = nullptr);
     static bool heaterLeaseFault();
-#else
-    static void setHeaterDuty(uint8_t channel, uint8_t duty);
-#endif
     static void setBoardFan(bool enabled);
     static uint8_t partFanSpeed();
     static void setPartFanSpeed(uint8_t speed);
@@ -542,10 +538,8 @@ public:
     static void startWatchdog();
     static void stopWatchdog();
     static void tellWatchdogOk();
-#ifdef RF_HEATER_RESET_WDT_EXPERIMENT
     static void completeThermalWatchdogPass(bool heatDemand);
     static void completeAutotuneWatchdogPass();
-#endif
     static bool watchdogEnabled();
 
     static bool takeScanTick();

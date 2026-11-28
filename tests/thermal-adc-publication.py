@@ -6,7 +6,7 @@ import tempfile
 fw=Path(__file__).resolve().parents[1]/"Repetier"
 s=(fw/"HAL.cpp").read_text()
 a=s.index("bool HAL::temperatureAdcSample(")
-b=s.index("#ifdef RF_HEATER_LEASE_EXPERIMENT\nHAL::HeaterSample::~HeaterSample",a)
+b=s.index("HAL::HeaterSample::~HeaterSample",a)
 pre=r'''
 #include "ThermalRelayProfile.h"
 #include <cassert>

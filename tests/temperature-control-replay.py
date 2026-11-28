@@ -1043,7 +1043,7 @@ def main():
             + section(hal, "void HAL::tellWatchdogOk()", "\n}") + "\n}\n"
             + section(hal, "constexpr uint8_t heaterPwmStep", "constexpr uint8_t partFanPwmStep")
             + "static volatile uint8_t requestedDuty[NUM_EXTRUDER + 3];\n"
-            + section(hal, "// Non-release candidate: /256", "#endif\n} // namespace")
+            + section(hal, "// Non-release candidate: /256", "\n} // namespace")
             + section(hal, "bool HAL::heaterLeaseFault()", "ISR(TIMER3_COMPA_vect)")
             + section(hal, "uint8_t HAL::outputDuty(", "void HAL::setBoardFan(")
             + "void pwmSlice() {\n"
@@ -1092,8 +1092,7 @@ def main():
             defines["NUM_EXTRUDER"] = str(tools)
             for emergency in (True,):
                 exe = work / "replay"
-                extra = ["-DRF_THERMAL_EMERGENCY_EXPERIMENT=1", "-DRF_HEATER_LEASE_EXPERIMENT=1",
-                         "-DRF_HEATER_RESET_WDT_EXPERIMENT=1"] if emergency else []
+                extra = ["-DRF_THERMAL_EMERGENCY_EXPERIMENT=1"] if emergency else []
                 subprocess.run([os.environ.get("CXX", "c++"), "-std=c++11", "-O2", *extra,
                                 *[f"-D{k}={v}" for k, v in defines.items()],
                                 "-I", str(FW), str(work / "replay.cpp"), "-o", str(exe)], check=True)

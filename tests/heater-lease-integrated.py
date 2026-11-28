@@ -6,18 +6,18 @@ import tempfile
 
 root=Path(__file__).resolve().parents[1]
 hal=(root/"Repetier/HAL.cpp").read_text()
-start=hal.index("#ifdef RF_HEATER_LEASE_EXPERIMENT\n// Non-release candidate")
-end=hal.index("#endif\n} // namespace",start)+len("#endif")
+start=hal.index("// Non-release candidate: /256")
+end=hal.index("\n} // namespace",start)
 state=hal[start:end]
 start=hal.index('constexpr uint8_t thermalPassComplete=0x80;')
-feed=hal[start:hal.index('\n#endif\nISR(TIMER3_COMPA_vect)',start)]
-start=hal.index("#ifdef RF_HEATER_RESET_WDT_EXPERIMENT\n// Distinguish pre-start boot")
-progress=hal[start:hal.index("\n#endif",start)+len("\n#endif")]
+feed=hal[start:hal.index('\nISR(TIMER3_COMPA_vect)',start)]
+start=hal.index("// Distinguish pre-start boot")
+progress=hal[start:hal.index("// Separate bytes allow each ISR",start)]
 start=hal.index('void HAL::stopWatchdog()')
 heartbeat=hal[start:hal.index('\n// ================== Interrupt handling',start)]
-start=hal.index("#ifdef RF_HEATER_LEASE_EXPERIMENT\n// Timer3 is independent")
-adc=hal[start:hal.index("\n#endif",start)+len("\n#endif")]
-start=hal.index("#ifdef RF_HEATER_LEASE_EXPERIMENT\nHAL::HeaterSample::~HeaterSample")
+start=hal.index("// Timer3 is independent")
+adc=hal[start:hal.index("inline __attribute__((always_inline)) void serviceTemperatureAdc()",start)]
+start=hal.index("HAL::HeaterSample::~HeaterSample")
 ticket=hal[start:hal.index("\nvoid HAL::analogStart(",start)]
 header=(root/"Repetier/HAL.h").read_text()
 start=header.index("    class HeaterSample {")
@@ -32,7 +32,6 @@ prelude=r"""
 #include <cstdint>
 #include <cstdio>
 #include <initializer_list>
-#define RF_HEATER_LEASE_EXPERIMENT 1
 #define F_CPU 16000000UL
 #define EXT0_HEATER_PIN 0
 #define EXT1_HEATER_PIN 1
@@ -74,28 +73,21 @@ static uint16_t temperatureAdcValues[TemperatureAdcCount]={};
 struct HAL {
     // Diagnostic validity is modeled independently of grant freshness.
     static bool temperatureAdcSample(uint8_t c,uint16_t& raw
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
                                      ,uint32_t* publication=nullptr
-#endif
     ) {
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         if(publication)*publication=0; // fixture models grant identity separately
-#endif
         raw=temperatureAdcValues[c];return true;
     }
     TICKET_DECL
     static void forbidInterrupts(){irq=false;}
     static void resetHardware();
-#ifdef RF_HEATER_RESET_WDT_EXPERIMENT
     static void completeThermalWatchdogPass(bool heatDemand=false);
     static void completeAutotuneWatchdogPass();
     static void tellWatchdogOk();
     static void stopWatchdog();
     static uint32_t timeInMilliseconds(){return simulatedMs;}
     static uint32_t simulatedMs;
-#endif
 };
-#ifdef RF_HEATER_RESET_WDT_EXPERIMENT
 uint32_t HAL::simulatedMs=0;
 static bool watchdogActive=true;
 static bool watchdogPinOutput=true;
@@ -109,14 +101,11 @@ static W1C TIFR5;
 static uint32_t heaterResetCookie;
 constexpr uint32_t heaterLiveCookie=0xd39a6c51UL;
 #define wdt_reset() do {assert(!irq);++watchdogFeeds;} while(0)
-#endif
 namespace Printer {
 static bool blocked=false;
 bool heatingInhibited(){return blocked;}
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
 static bool defect=false;
 bool isAnyTempsensorDefect(){return defect;}
-#endif
 }
 """
 main=r"""
@@ -125,18 +114,14 @@ static void resetFixture(uint16_t start){
     for(auto& d:requestedDuty)d=0;
     for(auto& p:pins)p=false;
     heaterLeaseReady=false;heaterLeaseFailed=false;
-#ifdef RF_HEATER_RESET_WDT_EXPERIMENT
     heaterGrantProgress=0;watchdogActive=true;watchdogStarted=true;
     watchdogPinOutput=true;watchdogFeeds=0;heaterResetCookie=0;
     beginWatchdogProgress();
     HAL::simulatedMs=0;
-#endif
     heaterBatchValid=false;heaterBatchPrevious=false;
     for(auto& s:heaterSampleState)s=0;
     Printer::blocked=false;irq=true;
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     Printer::defect=false;
-#endif
     beginHeaterLease();TCNT3=start;
 }
 static void advance(uint32_t ticks){
@@ -145,7 +130,6 @@ static void advance(uint32_t ticks){
     if(ticks>=65536u-TCNT3)TIFR3.bits|=_BV(TOV3);
     TCNT3=uint16_t(TCNT3+ticks);
 }
-#ifdef RF_HEATER_RESET_WDT_EXPERIMENT
 // Keep the Timer5 clock frozen during isolated Timer3/ADC replay cases.
 // Advance both hardware clocks explicitly in the staged-watchdog cases.
 static void advanceProgress(uint32_t ticks){
@@ -153,7 +137,6 @@ static void advanceProgress(uint32_t ticks){
     TCNT5=uint16_t(TCNT5+ticks);
     advance(ticks);
 }
-#endif
 static void publish(uint8_t c,uint16_t raw=1234){
     InterruptProtectedBlock lock;
     synchronizeHeaterSamples();
@@ -463,7 +446,6 @@ int main(){
     publishHeaterSample(0,1234);
     {HAL::HeaterSample a;uint16_t raw;assert(a.read(0,raw));HAL::setHeaterDuty(0,255,&a);
      assert(!requestedDuty[0]);}
-#ifdef RF_HEATER_RESET_WDT_EXPERIMENT
     resetFixture(0);
     HAL::completeThermalWatchdogPass();assert(watchdogFeeds==1);
     HAL::simulatedMs=100;
@@ -548,7 +530,6 @@ int main(){
     resetFixture(0);watchdogStarted=false;watchdogActive=false;irq=false;
     HAL::stopWatchdog();assert(!watchdogPinOutput&&!pins[WATCHDOG_PIN]);
     irq=true;
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     // A terminal fault can retain diagnostics only on a regular pass
     // with no requested heat, no live lease and every output LOW.
     resetFixture(0);grant(0,255);startFrame(0);
@@ -567,18 +548,15 @@ int main(){
     HAL::completeAutotuneWatchdogPass();assert(watchdogFeeds==0);
     HAL::completeThermalWatchdogPass();assert(watchdogFeeds==1);
     std::puts("emergency watchdog all-off proof passed");
-#endif
     std::puts("thermal watchdog progress checks passed; 524288 sticky Timer5 deadline cases");
-#endif
     std::printf("heaters=%u actual HAL grant/expiry cases=%lu; exact sample checks passed\n",NUM_EXTRUDER+1,cases);
 }
 """
 with tempfile.TemporaryDirectory() as temp:
     cpp=Path(temp)/"lease.cpp";exe=Path(temp)/"lease"
-    cpp.write_text(prelude.replace("TICKET_DECL",ticket_decl)+adc+"\n"+progress+"\n"+state+"\n"+ticket+"\n"+setter+"\n#ifdef RF_HEATER_RESET_WDT_EXPERIMENT\n"+feed+"\n"+heartbeat+"\n#endif\n"+
+    cpp.write_text(prelude.replace("TICKET_DECL",ticket_decl)+adc+"\n"+progress+"\n"+state+"\n"+ticket+"\n"+setter+"\n"+feed+"\n"+heartbeat+"\n"+
                    "\nstatic void startFrame(uint8_t pwm_count_heater){InterruptProtectedBlock lock;\n"+frame+"\n}\n"+main.replace("RESET_SOURCE",reset))
     for n in (1,2):
-        for flags in (["-DRF_HEATER_RESET_WDT_EXPERIMENT=1","-DRF_THERMAL_EMERGENCY_EXPERIMENT=1"],):
-            subprocess.run(["g++","-std=c++11","-Wall","-Wextra","-Werror","-O2",
-                            f"-DNUM_EXTRUDER={n}",*flags,str(cpp),"-o",str(exe)],check=True)
-            subprocess.run([str(exe)],check=True)
+        subprocess.run(["g++","-std=c++11","-Wall","-Wextra","-Werror","-O2",
+                        f"-DNUM_EXTRUDER={n}",str(cpp),"-o",str(exe)],check=True)
+        subprocess.run([str(exe)],check=True)
