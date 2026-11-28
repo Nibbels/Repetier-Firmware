@@ -954,7 +954,7 @@ jobs:
   current-stop-tail-qualified:
     # Not a production edit or global timing proof. Do not compose until the
     # exact predecessor has passed its full canonical and UART linked gates.
-    if: github.head_ref == 'task/Task0032-resend-preflight'
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
     permissions:
       contents: read
       actions: read
@@ -1098,5 +1098,111 @@ jobs:
         with:
           name: task0032-forward-reconcile-${{ github.sha }}
           path: ${{ runner.temp }}/forward-evidence
+          retention-days: 7
+          if-no-files-found: error
+
+
+  current-direct-energy:
+    # Sequential successor to exact qualified #225. Never rebuild #223/#225
+    # merely to rediscover their already verified results.
+    if: github.head_ref == 'task/Task0032-resend-preflight'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-current-resend-29b9eb79434c5cfbf245e947373c9b5d38c2be48
+          run-id: 46162946647
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/energy-uart-input
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-current-stop-tail-916fda446f1abdcd9de7b92fa32e79b941427145
+          run-id: 46164958583
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/energy-stop-input
+      - name: Reconstruct exact qualified stop-tail and prepare energy reference
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-direct-energy"
+          uart="$RUNNER_TEMP/energy-uart-input"
+          stop="$RUNNER_TEMP/energy-stop-input"
+          source="$RUNNER_TEMP/direct-energy-p0"
+          p0=c31b4d391cc4d2b9cca9ab3f8e236bed805716d9
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          sha256sum tools/task0032/current-direct-energy* tools/task0032/{PreparedDirectProfile,StopTailEnergy}.h > "$out/source-sha256.txt"
+          echo "9ac924cb9b991e3e060f4fef63976cfcb98f7b557aadbce17cf2b0c373d0cbd2  $uart/stage2.diff" | sha256sum -c
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$source" "$p0"
+          git -C "$source" apply --index "$uart/stage2.diff"
+          test "$(git -C "$source" write-tree)" = 80fb7ae8c6d1bb381408f31b9016316a722b0ff1
+          python3 - "$source/Repetier" "$stop" <<'PY'
+          import hashlib,json,pathlib,sys,re
+          fw=pathlib.Path(sys.argv[1]);p=pathlib.Path(sys.argv[2])
+          s=json.loads((p/'candidate-evidence/summary.json').read_text())
+          assert not s['failures'] and s['sha']=='d36107ed6f69fdcf814f4c505affd4458b092e07'
+          assert s['build_profile']=='standard-recovery'
+          linked=json.loads((p/'linked-stop-tail.json').read_text())
+          assert linked['candidate_sha']==s['sha']
+          assert set(linked['boards'])==set(s['targets'])
+          manifest=json.loads((p/'candidate/provenance.json').read_text())
+          for name,digest in manifest['input_sha256'].items():
+              assert hashlib.sha256((fw/name).read_bytes()).hexdigest()==digest,name
+          for name,digest in manifest['candidate_sha256'].items():
+              data=(p/'candidate'/name).read_bytes()
+              assert hashlib.sha256(data).hexdigest()==digest,name
+              (fw/name).write_bytes(data)
+          sketch=p/'candidate-evidence/RF1000/build/sketch'
+          for path in fw.iterdir():
+              if path.suffix not in ('.h','.cpp') or not path.is_file():continue
+              data=re.sub(rb'^#line 1 "[^\n]+"\n',b'',(sketch/path.name).read_bytes(),count=1)
+              assert data==path.read_bytes(),path.name
+          PY
+          python3 tools/task0032/current-stop-tail-fixtures.py --source "$source"
+          git -C "$source" add Repetier tests
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Reconstructed exact qualified stop-tail source"
+          git -C "$source" rev-parse 'HEAD^{tree}' > "$out/prior-tree.txt"
+          python3 tools/task0032/current-direct-energy.py --source "$source/Repetier" --out "$out/candidate"
+          python3 tools/task0032/current-direct-energy-replay.py --source "$source/Repetier" --candidate "$out/candidate" --out "$out/replay" | tee "$out/replay.log"
+          for name in motion.h motion.cpp StepExecutor.h StepExecutor.cpp PreparedDirectProfile.h StopTailEnergy.h; do cp "$out/candidate/$name" "$source/Repetier/$name"; done
+          python3 tools/task0032/current-direct-energy-fixtures.py --source "$source"
+          python3 "$source/tests/pause-sense-offset.py"
+          python3 "$source/tests/task0032-drv8711-pause.py"
+          python3 "$source/tests/task0034-guarded-drive.py"
+          git -C "$source" add Repetier tests
+          git -C "$source" diff --cached --check
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Disposable direct energy reference"
+          git -C "$source" rev-parse HEAD > "$out/local-candidate-sha.txt"
+          git -C "$source" rev-parse 'HEAD^{tree}' > "$out/local-candidate-tree.txt"
+          git -C "$source" diff --binary "$p0" HEAD > "$out/energy.diff"
+          (cd "$out"; sha256sum energy.diff > energy.diff.sha256)
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Canonical host and four AVR recovery links
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-direct-energy"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          cd "$RUNNER_TEMP/direct-energy-p0"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" | tee "$out/canonical.log"
+      - name: Recheck linked transport after composition
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-direct-energy"
+          python3 tools/task0032/current-transport-linked.py --evidence "$out/candidate-evidence" --out "$out/linked-transport.json" | tee "$out/linked-transport.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-direct-energy-${{ github.sha }}
+          path: ${{ runner.temp }}/task0032-direct-energy
           retention-days: 7
           if-no-files-found: error
