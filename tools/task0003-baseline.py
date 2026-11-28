@@ -185,7 +185,7 @@ def build_target(out, cli, name, definitions, experiment=None, linker_script_fac
 # verification. This changes build selection, not deployment authorization.
 P0_DEFINITIONS = (
     "RF_HEATER_LEASE_EXPERIMENT=1", "RF_HEATER_RESET_WDT_EXPERIMENT=1",
-    "RF_THERMAL_EMERGENCY_EXPERIMENT=1", "RF_EEPROM_ZONE_EXPERIMENT=1",
+    "RF_THERMAL_EMERGENCY_EXPERIMENT=1",
 )
 
 

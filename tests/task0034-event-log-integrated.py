@@ -26,7 +26,6 @@ stub=r'''
 #include <cstdio>
 #include <string>
 #define RF_THERMAL_EMERGENCY_EXPERIMENT
-#define RF_EEPROM_ZONE_EXPERIMENT
 #define E2END 4095
 #include "DiagnosticHistory.h"
 #include "EepromZoneLayout.h"
