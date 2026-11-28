@@ -69,6 +69,25 @@ def decode_linked(s,board):
         tables[j]=ts
     return ins,tables,labels
 
+def terminal_reset_site(ins, pc, owner):
+    # The existing pre-watchdog resetFunc call belongs to the physical
+    # emergency-stop body even if a panel confirmation tail-jumps into it.
+    # Require the witnessed exact two zero loads and terminal self-loop;
+    # do not excuse another indirect transfer merely by its frame root.
+    if owner != "Commands::emergencyStop()":
+        return False
+    seq = [ins.get(pc + offset, (0, "", "")) for offset in (-4, -2, 0, 2)]
+    if [(w, op) for w, op, _ in seq] != [(2,"ldi"),(2,"ldi"),(2,"eicall"),(2,"rjmp")]:
+        return False
+    args = [arg.split(";")[0].strip() for _, _, arg in seq]
+    if args[:3] != ["r31, 0x00", "r30, 0x00", ""]:
+        return False
+    try:
+        return target(seq[-1][2]) == pc + 2
+    except ValueError:
+        return False
+
+
 def inventory(z,board,canonical=False):
     p=board+"/" if canonical else "host/experimental-avr/emergency/"+board+"/"
     s=z.read(p+"disassembly.txt").decode()
@@ -159,7 +178,7 @@ def inventory(z,board,canonical=False):
             if pc in tables:
                 todo.extend((t,d,y,pair) for t in tables[pc]);continue
             if op in ("icall","eicall","ijmp","eijmp"):
-                if name(root).startswith("Commands::emergencyStop()"):continue
+                if terminal_reset_site(ins,pc,physical_name(pc)):continue
                 if name(root).startswith("loadCompensationMatrix(") and op in ("icall","eicall"):
                     t=boot
                 else:errors.add((name(root),hex(pc),"indirect",op));continue
