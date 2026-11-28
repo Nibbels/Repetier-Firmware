@@ -84,6 +84,8 @@ bool moved = false;
 int bedTarget = 0;
 std::vector<int> nozzleTargets;
 
+struct InterruptProtectedBlock { InterruptProtectedBlock() {} };
+
 namespace HAL {
 millis_t now = 0;
 millis_t timeInMilliseconds() { return now; }
@@ -94,7 +96,8 @@ ScanStrainGauge strainGauge;
 float axisStepsPerMM[3] = {100, 100, 100}, homingFeedrate[3] = {60, 60, 5};
 float stepsPerMm(uint8_t axis) { return axisStepsPerMM[axis]; }
 float axisHomingFeedrate(uint8_t axis) { return homingFeedrate[axis]; }
-struct { bool busy=false, blocked=false; bool isBusy() const { return busy; } bool commandsBlocked() const { return blocked; } } printJob;
+struct { bool busy=false, blocked=false; bool isIdle() const { return !busy && !blocked; } bool isBusy() const { return busy; } bool commandsBlocked() const { return blocked; } } printJob;
+struct { bool paused=false; bool isPaused() const { return paused; } } pause;
 struct { void recordActivity(millis_t) {} } inactivity;
 struct { void cancel() {} void schedule(millis_t) {} } idleStatus;
 struct {
@@ -231,6 +234,10 @@ int main(int argc, char** argv) {
         heatBedScan.startOrCancel(HeatBedScanMode::Standard);
         assert(!heatBedScan.active() && !homedZ && !homedXY);
         Printer::printJob.blocked=false;
+        Printer::pause.paused=true;
+        heatBedScan.startOrCancel(HeatBedScanMode::Standard);
+        assert(!heatBedScan.active() && !homedZ && !homedXY);
+        Printer::pause.paused=false;
         heatBedScan.startOrCancel(HeatBedScanMode::Standard);
         assert(heatBedScan.active());
         Printer::printJob.busy=true;

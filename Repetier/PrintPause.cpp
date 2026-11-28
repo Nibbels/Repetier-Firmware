@@ -9,7 +9,7 @@ constexpr float standbyDropC = 100.0f;
 PrintPause Printer::pause;
 
 bool PrintPause::acceptsPauseRequest() const {
-    return allowsQueueAdvance() && !Printer::printJob.commandsBlocked() && !Printer::blockAll;
+    return allowsQueueAdvance() && !Printer::printJob.commandsBlocked() && !Printer::blockAll && !isAnyScanRunning();
 }
 
 void PrintPause::request(Destination destination) {
@@ -41,6 +41,9 @@ void PrintPause::queueRequest(Destination destination) {
 }
 
 void PrintPause::pressPause() {
+    // Calibration owns its own stop/abort state; a print pause cannot freeze it.
+    if (isAnyScanRunning())
+        return;
     if (allowsQueueAdvance()) {
         if (!PrintLine::hasLines()) {
             Com::printFLN(PSTR("pausePrint(): nothing is printed"));

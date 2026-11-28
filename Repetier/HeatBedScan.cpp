@@ -255,7 +255,7 @@ void HeatBedScan::startOrCancel(HeatBedScanMode mode) {
         return;
     }
 
-    if (Printer::printJob.isBusy() || Printer::printJob.commandsBlocked()) {
+    if (!Printer::printJob.isIdle() || Printer::pause.isPaused()) {
         Com::printFLN(Com::tPrintingIsInProcessError);
         showError((void*)ui_text_heat_bed_scan, (void*)ui_text_operation_denied);
         return;
@@ -274,6 +274,11 @@ void HeatBedScan::startOrCancel(HeatBedScanMode mode) {
         }
     }
 #endif
+    // Pause requests may be published by Timer1. Check and publish the
+    // mutually exclusive scan phase with interrupts masked.
+    InterruptProtectedBlock lock;
+    if (!Printer::printJob.isIdle() || Printer::pause.isPaused())
+        return;
     Calibration::scanSession.reset();
     mode_ = mode;
     phase_ = Phase::Initialize;

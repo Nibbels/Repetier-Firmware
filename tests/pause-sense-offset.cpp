@@ -1391,6 +1391,16 @@ void cancelAndCleanup() {
 }
 
 void queuedPause() {
+    const auto initialLines = PrintLine::linesCount;
+    for (char* scan : {&g_nHeatBedScanStatus, &g_nZOSScanStatus}) {
+        *scan = 1;
+        Printer::pause.request(PrintPause::Destination::InPlace);
+        Printer::pause.queueRequest(PrintPause::Destination::Park);
+        Printer::pause.pressPause();
+        assert(!Printer::pause.isPaused() && PrintLine::linesCount == initialLines);
+        assert(PrintLine::queuedTask == QueueTask::None);
+        *scan = 0;
+    }
     Printer::pause.queueRequest(PrintPause::Destination::Park);
     assert(Printer::pause.isSettled() && !PrintLine::hasLines());
     Printer::pause.queueRequest(PrintPause::Destination::InPlace);

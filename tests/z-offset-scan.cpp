@@ -64,6 +64,8 @@ bool matrixAvailable = true;
 void (*onHome)() = nullptr;
 std::vector<std::pair<float, float>> probePoints;
 
+struct InterruptProtectedBlock { InterruptProtectedBlock() {} };
+
 namespace HAL {
 uint32_t now = 0;
 uint32_t timeInMilliseconds() { return now; }
@@ -72,8 +74,8 @@ uint32_t timeInMilliseconds() { return now; }
 namespace Printer {
 ScanStrainGauge strainGauge;
 bool blockAll = false;
-struct { bool busy=false, blocked=false; bool isBusy() const { return busy; } bool commandsBlocked() const { return blocked; } } printJob;
-struct { bool isPaused() const { return false; } } pause;
+struct { bool busy=false, blocked=false; bool isIdle() const { return !busy && !blocked; } bool isBusy() const { return busy; } bool commandsBlocked() const { return blocked; } } printJob;
+struct { bool paused=false; bool isPaused() const { return paused; } } pause;
 struct { void cancel() {} void schedule(uint32_t) {} } idleStatus;
 struct { void recordActivity(uint32_t) {} } inactivity;
 struct {
@@ -233,6 +235,10 @@ int main(int argc, char** argv) {
         zOffsetScan.startOrCancel(true);
         assert(!zOffsetScan.active() && !homedZ && !homedXY);
         Printer::printJob.blocked=false;
+        Printer::pause.paused=true;
+        zOffsetScan.startOrCancel(false);
+        assert(!zOffsetScan.active() && !homedZ && !homedXY);
+        Printer::pause.paused=false;
         zOffsetScan.startOrCancel(false);
         assert(zOffsetScan.active());
         Printer::printJob.busy=true;
