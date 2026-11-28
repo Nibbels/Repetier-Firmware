@@ -43,7 +43,7 @@ The 2018 changelog describes this as spreading bed-profile correction out so it 
 
 Following an uneven first-layer surface then gradually printing flat upper layers alters the *physical layer thickness* at a given XY location. To maintain material deposition, the firmware computes an extra extrusion ratio from the interpolated matrix, `g_min`, `g_max` and the accepted current and previous layer heights. First and last layers crossing a fade boundary have special interpolation.
 
-The foreground rounds the ratio to a multiple of 2⁻²³ and limits it to one extra pulse per base step. The timer adds the published ratio for each forward queued E step and subtracts it for each reverse step. Crossing a whole-step boundary emits or queues an extra step in that direction and leaves a remainder in `[0, 1)`. Equal opposite base moves at the same ratio therefore restore the original remainder and cancel all extra steps exactly. [ECMP accumulator](../../Repetier/ExtrusionCompensation.h)
+The foreground rounds the ratio to integer units of 2⁻²³ and limits it to one extra pulse per base step. The timer uses signed 32-bit integer arithmetic on that same grid, adding the published units for each forward queued E step and subtracting them for each reverse step. This avoids binary32 helper calls under the step-output mask; the LCD alone converts the ratio back to float. Crossing a whole-step boundary emits or queues an extra step in that direction and leaves a remainder in `[0, 1)`. Equal opposite base moves at the same ratio therefore restore the original remainder and cancel all extra steps exactly. [ECMP accumulator](../../Repetier/ExtrusionCompensation.h)
 
 Digit Flow Compensation reacts to DMS force and also affects material deposition.
 

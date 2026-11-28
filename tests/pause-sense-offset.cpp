@@ -544,7 +544,7 @@ void Printer::queueFloatCoordinates(float x, float y, float z, float e, float sp
     if (e != IGNORE_COORDINATE) {
         setEPositionMM(e);
         extrusionPlanner.restoreStepRemainder(0.375f);
-        extrusionCompensation.restoreRemainder(0.25f);
+        extrusionCompensation.restoreRemainderUnits(ExtrusionCompensation::prepareRatio(0.25f));
     }
 }
 int PrintLine::linesCount = 3;
@@ -1515,15 +1515,15 @@ void homeBetweenPrints() {
     const long manualZ = Printer::zOffset.manualMicrometers();
     planMove(oldLayer + 64, true);
     planMove(oldLayer + 128, true, false, false);
-    Printer::extrusionCompensation.publishRatio(0.5f);
-    Printer::extrusionCompensation.restoreRemainder(0.75f);
+    Printer::extrusionCompensation.publishRatio(ExtrusionCompensation::prepareRatio(0.5f));
+    Printer::extrusionCompensation.restoreRemainderUnits(ExtrusionCompensation::prepareRatio(0.75f));
 
     Printer::homeZAxis();
     assert(!Printer::doHeatBedZCompensation && Printer::zMotion.isHomed());
     assert(!Printer::zMotion.nominalSteps() && !Printer::zMotion.motorSteps());
     assert(Printer::zOffset.manualMicrometers() == manualZ && Printer::zOffset.senseMicrometers() == 0);
     assert(Printer::zMotion.correctionTarget() == 0);
-    assert(Printer::extrusionCompensation.ratio() == 0.0f && Printer::extrusionCompensation.remainder() == 0.0f);
+    assert(Printer::extrusionCompensation.ratio() == 0.0f && Printer::extrusionCompensation.remainderUnits() == ExtrusionCompensation::prepareRatio(0.0f));
     assert(Printer::senseOffsetControl.limits().thresholdDigits == 0 && !Printer::senseOffsetControl.inLearningRange());
     assert(layers.fadeStartSteps() == defaultMin && layers.fadeEndSteps() == 12800);
     planMove(0, false, true, false); // An E-only move must not confirm the pre-home candidate.
@@ -1611,8 +1611,8 @@ void compensationBoundaries() {
     const long fadeStart = layers.fadeStartSteps();
     const long fadeEnd = layers.fadeEndSteps();
 
-    const float previousRatio = ExtrusionCompensation::prepareRatio(0.048f);
-    Printer::extrusionCompensation.publishRatio(previousRatio);
+    Printer::extrusionCompensation.publishRatio(ExtrusionCompensation::prepareRatio(0.048f));
+    const float previousRatio = Printer::extrusionCompensation.ratio();
     locksUntilCompensationPublish = 2; // One read of nominal Z, then publication.
     expectCompensation(-1, 263 + offset, 0.0f, 0);
     assert(!locksUntilCompensationPublish && extrusionBeforePublish == previousRatio);
@@ -1767,7 +1767,7 @@ void primeFlowCleanup(unsigned skipAt, unsigned abortAt) {
     planMove(512, true);
     Printer::setEPositionMM(10.0f, 0.00001f);
     Printer::extrusionPlanner.restoreStepRemainder(0.125f);
-    Printer::extrusionCompensation.restoreRemainder(0.75f);
+    Printer::extrusionCompensation.restoreRemainderUnits(ExtrusionCompensation::prepareRatio(0.75f));
     Printer::gcodeModes.setRelativeEOverride(true);
     Printer::feedrateMultiply = 85;
     Printer::menuExtrusionFactor = 0.93f;
@@ -1804,7 +1804,7 @@ void primeFlowCleanup(unsigned skipAt, unsigned abortAt) {
         assert(Printer::printJob.commandsBlocked() && Printer::moveTarget.machineMM(E_AXIS) == 0.0f);
     } else {
         assert(Printer::moveTarget.machineMM(E_AXIS) == 10.0f && Printer::moveTarget.remainderMM(E_AXIS) == 0.00001f);
-        assert(Printer::extrusionPlanner.stepRemainder() == 0.125f && Printer::extrusionCompensation.remainder() == 0.75f);
+        assert(Printer::extrusionPlanner.stepRemainder() == 0.125f && Printer::extrusionCompensation.remainderUnits() == ExtrusionCompensation::prepareRatio(0.75f));
     }
 }
 
@@ -2051,22 +2051,22 @@ void ecmpStepping() {
     PrintLine move;
     move.moveE = move.positiveE = true;
     move.delta[E_AXIS] = 1;
-    Printer::extrusionCompensation.publishRatio(0.25f);
+    Printer::extrusionCompensation.publishRatio(ExtrusionCompensation::prepareRatio(0.25f));
 
     for (unsigned i = 0; i < 3; ++i)
         executeExtrusionStep(&move, true);
-    assert(Extruder::stepPulses == 3 && Printer::extrusionCompensation.remainder() == 0.75f);
+    assert(Extruder::stepPulses == 3 && Printer::extrusionCompensation.remainderUnits() == ExtrusionCompensation::prepareRatio(0.75f));
     executeExtrusionStep(&move, false);
-    assert(Extruder::stepPulses == 4 && Printer::extrusionCompensation.remainder() == 0.75f);
+    assert(Extruder::stepPulses == 4 && Printer::extrusionCompensation.remainderUnits() == ExtrusionCompensation::prepareRatio(0.75f));
     executeExtrusionStep(&move, true);
     assert(Extruder::stepPulses == 6 && Extruder::trailingEdges == 1);
-    assert(Printer::extrusionCompensation.remainder() == 0.0f);
+    assert(Printer::extrusionCompensation.remainderUnits() == ExtrusionCompensation::prepareRatio(0.0f));
 
     auto replayReversal = [&](bool advance, float ratio, float remainder, unsigned count, int expectedSteps) {
         Printer::extrusionOutput.setAdvanceEnabled(advance);
         Printer::extrusionOutput.clearSteps();
         Printer::extrusionCompensation.publishRatio(ExtrusionCompensation::prepareRatio(ratio));
-        Printer::extrusionCompensation.restoreRemainder(remainder);
+        Printer::extrusionCompensation.restoreRemainderUnits(ExtrusionCompensation::prepareRatio(remainder));
         const unsigned before = Extruder::stepPulses;
 
         move.positiveE = false;
@@ -2081,7 +2081,7 @@ void ecmpStepping() {
         const int returned = advance ? Printer::extrusionOutput.pendingSteps() + retracted
                                       : int(Extruder::stepPulses - afterRetract);
         assert(retracted == expectedSteps && returned == retracted);
-        assert(Printer::extrusionCompensation.remainder() == remainder);
+        assert(Printer::extrusionCompensation.remainderUnits() == ExtrusionCompensation::prepareRatio(remainder));
         assert(Printer::extrusionOutput.pendingSteps() == 0);
         if (advance)
             assert(Extruder::stepPulses == before);
@@ -2382,7 +2382,7 @@ void manualExtrusionDuringPause(bool advance) {
 
     Printer::setEPositionMM(42.5f, 0.000125f);
     Printer::extrusionPlanner.restoreStepRemainder(0.25f);
-    Printer::extrusionCompensation.restoreRemainder(0.375f);
+    Printer::extrusionCompensation.restoreRemainderUnits(ExtrusionCompensation::prepareRatio(0.375f));
     auto untouchedPlanner = Printer::extrusionPlanner;
     const auto motor = [&] {
         return advance ? long(Extruder::current->deliveredSteps) : Printer::directCurrentSteps[E_AXIS];
@@ -2411,7 +2411,7 @@ void manualExtrusionDuringPause(bool advance) {
     assert(Printer::moveTarget.machineMM(E_AXIS) == 42.5f);
     assert(Printer::moveTarget.remainderMM(E_AXIS) == 0.000125f);
     assert(Printer::extrusionPlanner.stepRemainder() == 0.25f);
-    assert(Printer::extrusionCompensation.remainder() == 0.375f);
+    assert(Printer::extrusionCompensation.remainderUnits() == ExtrusionCompensation::prepareRatio(0.375f));
 
     // A completely blocked attempt leaves the automatic retract to recover.
     Printer::pause.request(PrintPause::Destination::InPlace);

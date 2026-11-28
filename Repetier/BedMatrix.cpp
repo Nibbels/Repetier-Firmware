@@ -77,7 +77,7 @@ void recalculateZCompensation(void) {
             result.zCorrectionSteps += BedCompensation::digitZSteps(Printer::digitCompensation.filteredDigits(), Printer::stepsPerMm(Z_AXIS));
     }
 
-    const float ratio = ExtrusionCompensation::prepareRatio(result.extraExtrusionPerStep);
+    const auto ratio = ExtrusionCompensation::prepareRatio(result.extraExtrusionPerStep);
     // Finish quantization before disabling step interrupts.
     asm volatile("" : : "g"(ratio));
     InterruptProtectedBlock lock;

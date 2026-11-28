@@ -88,7 +88,7 @@ struct ExtrusionState {
     float position;
     float positionRemainder;
     float stepRemainder;
-    float ecmpRemainder;
+    ExtrusionCompensation::Units ecmpRemainder;
 };
 }
 
@@ -128,7 +128,7 @@ __attribute__((noinline)) void StartLine::runPrepared(GCode& command) {
     {
         InterruptProtectedBlock lock;
         savedE = {Printer::moveTarget.machineMM(E_AXIS), Printer::moveTarget.remainderMM(E_AXIS),
-                  Printer::extrusionPlanner.stepRemainder(), Printer::extrusionCompensation.remainder()};
+                  Printer::extrusionPlanner.stepRemainder(), Printer::extrusionCompensation.remainderUnits()};
         Printer::layers.resetTracking();
         active_ = true;
     }
@@ -147,7 +147,7 @@ __attribute__((noinline)) void StartLine::runPrepared(GCode& command) {
         if (settled) {
             Printer::setEPositionMM(savedE.position, savedE.positionRemainder);
             Printer::extrusionPlanner.restoreStepRemainder(savedE.stepRemainder);
-            Printer::extrusionCompensation.restoreRemainder(savedE.ecmpRemainder);
+            Printer::extrusionCompensation.restoreRemainderUnits(savedE.ecmpRemainder);
         }
         Printer::layers.resetTracking();
         active_ = false;
