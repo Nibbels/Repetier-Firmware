@@ -24,7 +24,7 @@ source = r'''
 #include <initializer_list>
 using millis_t = uint32_t;
 constexpr uint8_t UI_FLAG_SLOW_ACTION_RUNNING = 4;
-constexpr uint8_t UI_FLAG_KEY_TEST_RUNNING = 8;
+constexpr uint8_t OTHER_TEST_FLAG = 8;
 constexpr unsigned UI_KEY_BOUNCETIME = 20;
 constexpr unsigned UI_KEY_FIRST_REPEAT = 200;
 constexpr unsigned UI_KEY_REDUCE_REPEAT = 20;
@@ -69,7 +69,7 @@ struct UIDisplay {
         slowAction();
         assert(flags & UI_FLAG_SLOW_ACTION_RUNNING);
         assert(calls==1);
-        flags |= UI_FLAG_KEY_TEST_RUNNING;
+        flags |= OTHER_TEST_FLAG;
         assert(irq==expectedIrq);
     }
 ''' + remote + r'''
@@ -82,13 +82,13 @@ int main() {
         remote.expectedIrq=enabled;
         remote.executeRemoteAction(42);
         assert(remote.calls==1 && remote.lastDispatched==42);
-        assert(remote.flags==(0x80|UI_FLAG_KEY_TEST_RUNNING));
+        assert(remote.flags==(0x80|OTHER_TEST_FLAG));
         assert(remote.lastAction==0 && irq==enabled);
         UIDisplay local;
         local.expectedIrq=enabled;
         local.slowAction();
         assert(local.calls==1 && local.lastDispatched==1001);
-        assert(local.flags==(0x80|UI_FLAG_KEY_TEST_RUNNING));
+        assert(local.flags==(0x80|OTHER_TEST_FLAG));
         assert(local.lastAction==1001 && irq==enabled);
         UIDisplay busy;
         busy.flags|=UI_FLAG_SLOW_ACTION_RUNNING;

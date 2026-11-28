@@ -254,13 +254,12 @@ typedef struct UIMenuData
 #define MAX_COLS 28 // Anzahl Speicherplätze für Bytes in Display-Zeile, wenn mehr als Display, dann Scrolling. Kann gleich oder größer Displayzeilenlänge sein.
 
 #define UI_FLAG_SLOW_ACTION_RUNNING 4
-#define UI_FLAG_KEY_TEST_RUNNING 8
 
 #define MAX_MENU_LEVELS 6
 
 class UIDisplay {
 public:
-    volatile uint8_t flags;
+    volatile uint8_t flags; // foreground menu dispatch only
     uint8_t col;                      // current col for buffer prefill
     uint8_t menuLevel;                // current menu level, 0 = info, 1 = group, 2 = groupdata select, 3 = value change
     uint8_t menuPos[MAX_MENU_LEVELS]; // Positions in menu

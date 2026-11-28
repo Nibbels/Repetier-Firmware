@@ -1241,27 +1241,22 @@ int UIDisplay::activeButton() const {
 }
 
 void UIDisplay::fastAction() {
-    // Check keys
+    // The PWM ISR is the sole production caller and does not nest itself.
+    // Keep an interrupt lock for the key snapshot and direct-stop operation,
+    // but do not modify the foreground-only menu dispatch flag.
     InterruptProtectedBlock noInts;
+    int16_t nextAction = 0;
+    ui_check_keys(nextAction);
 
-    if ((flags & UI_FLAG_KEY_TEST_RUNNING) == 0) {
-        flags |= UI_FLAG_KEY_TEST_RUNNING;
+    if (lastButtonAction != nextAction) {
+        lastButtonStart = HAL::timeInMilliseconds();
+        lastButtonAction = nextAction;
+    }
 
-        int16_t nextAction = 0;
-        ui_check_keys(nextAction);
-
-        if (lastButtonAction != nextAction) {
-            lastButtonStart = HAL::timeInMilliseconds();
-            lastButtonAction = nextAction;
-        }
-
-        const bool jogKeyStillPressed = nextAction && nextAction == jogButtonAction;
-        if (PrintLine::hasStoppableDirectMove() && !jogKeyStillPressed) {
-            // Releasing the jog key or selecting another key ends the jog.
-            PrintLine::stopDirectMove();
-        }
-
-        flags &= ~UI_FLAG_KEY_TEST_RUNNING;
+    const bool jogKeyStillPressed = nextAction && nextAction == jogButtonAction;
+    if (PrintLine::hasStoppableDirectMove() && !jogKeyStillPressed) {
+        // Releasing the jog key or selecting another key ends the jog.
+        PrintLine::stopDirectMove();
     }
 } // fastAction
 
