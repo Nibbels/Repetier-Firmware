@@ -10,7 +10,7 @@ def extract(file,start,end):
     a=s.index(start)
     return s[a:s.index(end,a)]
 
-motion=extract("GCodeMotion.cpp","void dwell(","void homeAxes(")
+motion=extract("GCodeMotion.cpp","void dwellMilliseconds(","void homeAxes(")
 bed=extract("HeatBedScan.cpp","void HeatBedScan::abort()","void HeatBedScan::discard()")
 offset=extract("ZOffsetScan.cpp","void ZOffsetScan::abort(bool reloadMatrix) {","} // namespace")
 keys=extract("UiActions.cpp","        while (Printer::checkAbortKeys()) {","        bool unmount =")

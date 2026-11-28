@@ -30,15 +30,10 @@ void queueLinearMove(GCode* com) {
 
 }
 
-void dwell(GCode* com) {
+void dwellMilliseconds(uint32_t duration) {
     if (!Commands::waitForMotion(Commands::MotionWait::QueueAndZ, Commands::PauseWait::Resume))
         return;
-    uint32_t codenum = 0;
-    if (com->hasP())
-        codenum = com->P; // milliseconds to wait
-    if (com->hasS())
-        codenum = com->S * 1000;          // seconds to wait
-    codenum += HAL::timeInMilliseconds(); // keep track of when we started waiting
+    const uint32_t codenum = duration + HAL::timeInMilliseconds();
 
     while ((uint32_t)(codenum - HAL::timeInMilliseconds()) < 2000000000) {
         Commands::checkForPeriodicalActions(Processing);
@@ -46,6 +41,15 @@ void dwell(GCode* com) {
         if(Printer::printJob.emergencyLocked())return;
 #endif
     }
+}
+
+void dwell(GCode* com) {
+    uint32_t duration = 0;
+    if (com->hasP())
+        duration = com->P;
+    if (com->hasS())
+        duration = uint32_t(com->S) * 1000UL;
+    dwellMilliseconds(duration);
 }
 
 void homeAxes(GCode* com) {
@@ -60,10 +64,14 @@ void homeAxes(GCode* com) {
         Printer::homeAxis(home_all_axis || com->hasX(), home_all_axis || com->hasY(), home_all_axis || com->hasZ());
 }
 
-void selectAbsolutePositioning(GCode* com) {
+void selectAbsolutePositioningWithSource(bool internal) {
     Printer::gcodeModes.setRelativeXYZ(false);
-    if (com->internalCommand)
+    if (internal)
         Com::printInfoFLN(PSTR("Absolute positioning"));
+}
+
+void selectAbsolutePositioning(GCode* com) {
+    selectAbsolutePositioningWithSource(com->internalCommand);
 }
 
 void selectRelativePositioning(GCode* com) {

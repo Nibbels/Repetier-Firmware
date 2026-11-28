@@ -16,8 +16,10 @@ void showInvalidSyntax(unsigned int currentMCode);
 // Motion, extrusion and pressure.
 void queueLinearMove(GCode* com);
 void dwell(GCode* com);
+void dwellMilliseconds(uint32_t duration);
 void homeAxes(GCode* com);
 void selectAbsolutePositioning(GCode* com);
+void selectAbsolutePositioningWithSource(bool internal);
 void selectRelativePositioning(GCode* com);
 void setLogicalPosition(GCode* com);
 void selectAbsoluteExtrusion();
@@ -39,10 +41,12 @@ void setDigitFlowParameters(GCode* pCommand);
 
 // Thermal control and board outputs.
 void setHotendTemperature(GCode* com);
+void setHotendTemperatureWithParameters(bool hasTarget, int32_t target, bool waitRequested, bool hasTool, uint8_t tool);
 void reportTemperature(GCode* com);
 void startPartFan(GCode* com);
 void stopPartFan();
 void waitForHotend(GCode* com);
+void waitForHotendWithParameters(bool hasTarget, int32_t target, bool hasTool, uint8_t tool);
 void waitForTemperatures();
 void setBedTemperature(GCode* com);
 void waitForBed(GCode* com);

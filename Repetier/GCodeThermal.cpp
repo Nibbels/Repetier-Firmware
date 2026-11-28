@@ -23,7 +23,7 @@
 
 namespace GCodeCommands {
 
-void setHotendTemperature(GCode* com) {
+void setHotendTemperatureWithParameters(bool hasTarget, int32_t target, bool waitRequested, bool hasTool, uint8_t tool) {
     if (Printer::isAnyTempsensorDefect()) {
         reportTempsensorAndHeaterErrors();
         return;
@@ -31,16 +31,18 @@ void setHotendTemperature(GCode* com) {
     Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
 
     // TODO man müsste das in den Movecache legen!
-    const bool heaterOff = com->hasS() && com->S == 0;
-    if ((com->hasP() || heaterOff) && !Commands::waitForMotion(Commands::MotionWait::QueueAndZ, Commands::PauseWait::Resume) && !heaterOff)
+    const bool heaterOff = hasTarget && target == 0;
+    if ((waitRequested || heaterOff) && !Commands::waitForMotion(Commands::MotionWait::QueueAndZ, Commands::PauseWait::Resume) && !heaterOff)
         return;
 
-    if (com->hasS()) {
-        if (com->hasT())
-            Extruder::setTemperatureForExtruder(com->S, com->T);
-        else
-            Extruder::setTemperatureForExtruder(com->S, Extruder::current->id);
-    }
+    if (hasTarget)
+        Extruder::setTemperatureForExtruder(target, hasTool ? tool : Extruder::current->id);
+}
+
+void setHotendTemperature(GCode* com) {
+    const bool hasTarget = com->hasS(), hasTool = com->hasT();
+    setHotendTemperatureWithParameters(hasTarget, hasTarget ? com->S : 0, com->hasP(),
+                                       hasTool, hasTool ? com->T : 0);
 }
 
 void reportTemperature(GCode* com) {
@@ -55,7 +57,7 @@ void stopPartFan() {
     Commands::setFanSpeed(0);
 }
 
-void waitForHotend(GCode* com) {
+void waitForHotendWithParameters(bool hasTarget, int32_t target, bool hasTool, uint8_t tool) {
     Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
     if (Printer::isAnyTempsensorDefect()) {
         reportTempsensorAndHeaterErrors();
@@ -67,11 +69,11 @@ void waitForHotend(GCode* com) {
         return;
 
     Extruder* actExtruder = Extruder::current;
-    if (com->hasT() && com->T < NUM_EXTRUDER)
-        actExtruder = &extruder[com->T];
-    if (com->hasS()) {
-        Extruder::setTemperatureForExtruder(com->S, actExtruder->id);
-        if (com->S > 0 && actExtruder->tempControl.targetTemperatureC == 0) {
+    if (hasTool && tool < NUM_EXTRUDER)
+        actExtruder = &extruder[tool];
+    if (hasTarget) {
+        Extruder::setTemperatureForExtruder(target, actExtruder->id);
+        if (target > 0 && actExtruder->tempControl.targetTemperatureC == 0) {
             Printer::idleStatus.schedule(HAL::timeInMilliseconds());
             return;
         }
@@ -121,6 +123,11 @@ void waitForHotend(GCode* com) {
 
 
     Printer::idleStatus.schedule(HAL::timeInMilliseconds());
+}
+
+void waitForHotend(GCode* com) {
+    const bool hasTarget = com->hasS(), hasTool = com->hasT();
+    waitForHotendWithParameters(hasTarget, hasTarget ? com->S : 0, hasTool, hasTool ? com->T : 0);
 }
 
 void waitForTemperatures() {
