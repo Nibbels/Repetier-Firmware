@@ -713,15 +713,11 @@ const Ledger& faultLedger(){static Ledger l;return l;}
 }
 // Heater GPIO and Timer3 register model for the actual Advance expiry
 // check. No heater time advances during the ordinary motion replays.
-#ifndef EXT0_HEATER_PIN
-#define EXT0_HEATER_PIN 100
-#endif
-#ifndef EXT1_HEATER_PIN
-#define EXT1_HEATER_PIN 101
-#endif
-#ifndef HEATED_BED_HEATER_PIN
-#define HEATED_BED_HEATER_PIN 102
-#endif
+// RF2000.h aliases EXT0/EXT1/BED to HEATER_0/1/2; the host
+// fixture deliberately does not include the AVR pin-register header.
+#define HEATER_0_PIN 100
+#define HEATER_1_PIN 101
+#define HEATER_2_PIN 102
 constexpr uint8_t OCIE3A=1, OCIE3B=2, OCIE3C=3;
 static uint8_t TIFR3=0, TIMSK3=0;
 static bool heaterLeaseFailed=false;
