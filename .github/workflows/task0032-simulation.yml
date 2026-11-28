@@ -1037,7 +1037,7 @@ jobs:
           if-no-files-found: error
 
   current-brake-reference:
-    if: github.head_ref == 'task/Task0032-resend-preflight'
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -1212,7 +1212,7 @@ jobs:
 
 
   current-direct-energy-measure:
-    if: github.head_ref == 'task/Task0032-resend-preflight'
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -1245,7 +1245,7 @@ jobs:
 
   current-z-owner-reference:
     # Independent host prerequisite only, not a composed motion release.
-    if: github.head_ref == 'task/Task0032-resend-preflight'
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -1286,3 +1286,77 @@ jobs:
           name: task0032-z-owner-reference-${{ github.sha }}
           path: ${{ runner.temp }}/z-owner-reference
           retention-days: 7
+
+
+  current-direct-energy-fast:
+    # Exact #228 source tree, no repeated UART/stop-tail qualification chain.
+    if: github.head_ref == 'task/Task0032-resend-preflight'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-direct-energy-aa0dbcfbe82843cbd40c355938a402359dabd796
+          run-id: 46166854550
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/fast-energy-input
+      - name: Reconstruct exact energy tree, optimize and replay
+        shell: bash
+        run: |
+          set -euo pipefail
+          input="$RUNNER_TEMP/fast-energy-input"
+          source="$RUNNER_TEMP/fast-energy-p0"
+          out="$RUNNER_TEMP/fast-energy"
+          p0=c31b4d391cc4d2b9cca9ab3f8e236bed805716d9
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          sha256sum tools/task0032/current-direct-energy-fast.py tools/task0032/current-direct-energy-linked.py > "$out/tool-sha256.txt"
+          echo "a7934da32ac107d2c1966c677abbf87b536c594d33893baac95ef0f63f6f108f  $input/energy.diff" | sha256sum -c
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$source" "$p0"
+          git -C "$source" apply --index "$input/energy.diff"
+          test "$(git -C "$source" write-tree)" = 659ce1fa2bbee26dcb6f0ffb03405383127deb4c
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Reconstruct qualified direct energy reference"
+          python3 tools/task0032/current-direct-energy-fast.py --source "$source/Repetier" --out "$out/candidate" | tee "$out/math.log"
+          python3 tools/task0032/current-direct-energy-replay.py --source "$source/Repetier" --candidate "$out/candidate" --out "$out/replay" | tee "$out/replay.log"
+          for name in PreparedDirectProfile.h StepExecutor.cpp; do cp "$out/candidate/$name" "$source/Repetier/$name"; done
+          git -C "$source" add Repetier
+          git -C "$source" diff --cached --check
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Exact bounded direct ramp math and physical completion anchor"
+          git -C "$source" rev-parse HEAD > "$out/local-candidate-sha.txt"
+          git -C "$source" rev-parse 'HEAD^{tree}' > "$out/local-candidate-tree.txt"
+          git -C "$source" diff --binary "$p0" HEAD > "$out/fast-energy.diff"
+          (cd "$out"; sha256sum fast-energy.diff > fast-energy.diff.sha256)
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Canonical host and four AVR recovery links
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/fast-energy"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          cd "$RUNNER_TEMP/fast-energy-p0"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" | tee "$out/canonical.log"
+      - name: Measure exact linked energy ramp, cruise cancellation and electrical edges
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/fast-energy"
+          python3 tools/task0032/current-direct-energy-linked.py --optimized --extended --evidence "$out/candidate-evidence" --out "$out/linked-energy.json" | tee "$out/linked-energy.log"
+      - name: Recheck linked transport after composition
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/fast-energy"
+          python3 tools/task0032/current-transport-linked.py --evidence "$out/candidate-evidence" --out "$out/linked-transport.json" | tee "$out/linked-transport.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-fast-energy-${{ github.sha }}
+          path: ${{ runner.temp }}/fast-energy
+          retention-days: 7
+          if-no-files-found: error
