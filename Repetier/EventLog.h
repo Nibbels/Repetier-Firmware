@@ -50,7 +50,7 @@ enum class Progress : uint8_t { Idle, Busy, Advanced, CommittedEntry, Failed };
 template<uint8_t Slots> class Ring {
     static_assert(Slots>=2 && Slots<=64,"bounded EEPROM diagnostic ring");
     uint32_t latest_=0;
-    uint8_t latestSlot_=0,scan_=0,next_=0,offset_=0;
+    uint8_t latestSlot_=0,scan_=0,offset_=0;
     bool found_=false,active_=false,waiting_=false,failed_=false;
 
     static constexpr uint16_t address(uint8_t slot,uint8_t offset) {
@@ -70,11 +70,14 @@ template<uint8_t Slots> class Ring {
         return source.byte(offset_-6);
     }
     uint8_t physicalOffset() const { return offset_==EntryBytes?0:offset_; }
+    // The last committed slot cannot change while an append is active.
+    // Derive the next slot rather than retaining a second cursor.
+    uint8_t nextSlot() const { return found_?uint8_t((latestSlot_+1)%Slots):0; }
     Progress advance() {
         waiting_=false;
         if(offset_++!=EntryBytes)return Progress::Advanced;
         ++latest_;
-        latestSlot_=next_;
+        latestSlot_=nextSlot();
         found_=true;
         active_=false;
         return Progress::CommittedEntry;
@@ -110,7 +113,6 @@ public:
     }
     template<class Source> bool begin(const Source& source) {
         if(!initialized()||active_||failed_||!validId(source.byte(25)))return false;
-        next_=found_?uint8_t((latestSlot_+1)%Slots):0;
         offset_=0;active_=true;waiting_=false;
         return true;
     }
@@ -118,7 +120,7 @@ public:
         if(failed_)return Progress::Failed;
         if(!active_)return Progress::Idle;
         if(!s.ready())return Progress::Busy;
-        const uint16_t addr=address(next_,physicalOffset());
+        const uint16_t addr=address(nextSlot(),physicalOffset());
         const uint8_t value=expected(source);
         if(waiting_) {
             if(s.read(addr)!=value) {
