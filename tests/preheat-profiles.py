@@ -1,4 +1,4 @@
-"""Replay profile migration, menu edits, display labels and heater requests."""
+"""Replay standard profile owner, menu edits, labels and heater requests."""
 
 import os
 from pathlib import Path
@@ -26,8 +26,11 @@ def main():
         (build / "preheat-settings.inc").write_text("\n".join(re.findall(
             r"^#define (?:PREHEAT_\w+|EPR_RF_PREHEAT_\w+|UI_\w+_PREHEAT_\w+|UI_SET_(?:MIN|MAX)_\w+_TEMP)\s+[^\n]+",
             definitions, re.M)), encoding="utf-8")
+        owner = (firmware / "PreheatProfiles.cpp").read_text(encoding="utf-8")
+        runtime = (firmware / "EepromZoneRuntime.cpp").read_text(encoding="utf-8")
         (build / "preheat-firmware.inc").write_text(
-            "namespace {" + (firmware / "PreheatProfiles.cpp").read_text(encoding="utf-8").split("namespace {", 1)[1],
+            section(owner, "namespace {", "#ifndef RF_EEPROM_ZONE_EXPERIMENT")
+            + section(runtime, "void EEPROM::storePreheatProfiles()", "void EEPROM::storeManualZOffset()"),
             encoding="utf-8")
         (build / "preheat-panel.inc").write_text(
             "void edit(int action, int8_t increment) { switch (action) {\n"
@@ -39,9 +42,9 @@ def main():
             + "} }\n#define UI_MENU_ACTIONCOMMAND(name, text, action) constexpr char name[] = text;\n"
             + section(menu, '#if UI_COLS <= 16\nUI_MENU_ACTIONCOMMAND(ui_menu_quick_preheat_a', "UI_MENU_ACTIONCOMMAND(ui_menu_quick_cooldown"),
             encoding="utf-8")
-        for columns, emergency in ((16,False),(20,False),(16,True),(20,True)):
+        for columns in (16,20):
             executable = build / "preheat"
-            extra=["-DRF_THERMAL_EMERGENCY_EXPERIMENT=1"] if emergency else []
+            extra=["-DRF_THERMAL_EMERGENCY_EXPERIMENT=1"]
             subprocess.run([
                 os.environ.get("CXX", "c++"), "-std=c++11", "-O2", "-Wall", "-Wextra", "-Werror",
                 *extra, "-I", str(build), "-I", str(firmware), f"-DUI_COLS={columns}", str(tests / "preheat-profiles.cpp"),
