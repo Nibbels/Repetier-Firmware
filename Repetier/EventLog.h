@@ -50,8 +50,12 @@ enum class Progress : uint8_t { Idle, Busy, Advanced, CommittedEntry, Failed };
 template<uint8_t Slots> class Ring {
     static_assert(Slots>=2 && Slots<=64,"bounded EEPROM diagnostic ring");
     uint32_t latest_=0;
-    uint8_t latestSlot_=0,scan_=0,offset_=0;
-    bool found_=false,active_=false,waiting_=false,failed_=false;
+    // Slots is an impossible physical slot and represents an empty log.
+    uint8_t latestSlot_=Slots;
+    // Scan and append are disjoint lifetimes; reuse the same bounded cursor.
+    uint8_t offset_=0;
+    enum class WriteState : uint8_t { Scanning, Idle, Ready, Waiting, Failed };
+    WriteState writeState_=WriteState::Scanning;
 
     static constexpr uint16_t address(uint8_t slot,uint8_t offset) {
         return uint16_t(slot)*EntryBytes+offset;
@@ -72,24 +76,23 @@ template<uint8_t Slots> class Ring {
     uint8_t physicalOffset() const { return offset_==EntryBytes?0:offset_; }
     // The last committed slot cannot change while an append is active.
     // Derive the next slot rather than retaining a second cursor.
-    uint8_t nextSlot() const { return found_?uint8_t((latestSlot_+1)%Slots):0; }
+    uint8_t nextSlot() const { return hasEntries()?uint8_t((latestSlot_+1)%Slots):0; }
     Progress advance() {
-        waiting_=false;
+        writeState_=WriteState::Ready;
         if(offset_++!=EntryBytes)return Progress::Advanced;
         ++latest_;
         latestSlot_=nextSlot();
-        found_=true;
-        active_=false;
+        writeState_=WriteState::Idle;
         return Progress::CommittedEntry;
     }
 public:
     static constexpr uint16_t Bytes=uint16_t(Slots)*EntryBytes;
-    bool initialized() const {return scan_==Slots;}
-    bool pending() const {return active_;}
-    bool failed() const {return failed_;}
-    bool hasEntries() const {return found_;}
+    bool initialized() const {return writeState_!=WriteState::Scanning;}
+    bool pending() const {return writeState_==WriteState::Ready || writeState_==WriteState::Waiting;}
+    bool failed() const {return writeState_==WriteState::Failed;}
+    bool hasEntries() const {return latestSlot_<Slots;}
     uint32_t latestSequence() const {return latest_;}
-    uint8_t latestSlot() const {return latestSlot_;}
+    uint8_t latestSlot() const {return hasEntries()?latestSlot_:0;}
 
     // One bounded slot-header inspection per foreground visit. Ignore
     // unknown versions/invalid IDs. Corruption may still look plausible:
@@ -105,26 +108,26 @@ public:
         if(initialized())return Progress::Idle;
         if(!s.ready())return Progress::Busy;
         uint32_t seq=0;
-        if(header(s,scan_,seq)&&(!found_||newer(seq,latest_))) {
-            found_=true;latest_=seq;latestSlot_=scan_;
+        if(header(s,offset_,seq)&&(!hasEntries()||newer(seq,latest_))) {
+            latest_=seq;latestSlot_=offset_;
         }
-        ++scan_;
+        if(++offset_==Slots)writeState_=WriteState::Idle;
         return Progress::Advanced;
     }
     template<class Source> bool begin(const Source& source) {
-        if(!initialized()||active_||failed_||!validId(source.byte(25)))return false;
-        offset_=0;active_=true;waiting_=false;
+        if(!initialized()||writeState_!=WriteState::Idle||!validId(source.byte(25)))return false;
+        offset_=0;writeState_=WriteState::Ready;
         return true;
     }
     template<class Store,class Source> Progress step(Store& s,const Source& source) {
-        if(failed_)return Progress::Failed;
-        if(!active_)return Progress::Idle;
+        if(failed())return Progress::Failed;
+        if(!pending())return Progress::Idle;
         if(!s.ready())return Progress::Busy;
         const uint16_t addr=address(nextSlot(),physicalOffset());
         const uint8_t value=expected(source);
-        if(waiting_) {
+        if(writeState_==WriteState::Waiting) {
             if(s.read(addr)!=value) {
-                failed_=true;active_=false;waiting_=false;
+                writeState_=WriteState::Failed;
                 return Progress::Failed;
             }
             return advance();
@@ -133,14 +136,14 @@ public:
         // Old committed record is invalidated before any body write.
         if(s.read(addr)==value)return advance();
         if(!s.startWrite(addr,value))return Progress::Busy;
-        waiting_=true;
+        writeState_=WriteState::Waiting;
         return Progress::Advanced;
     }
     // A read cursor may call this when idle; never read partial records.
     // Read one complete entry in a foreground visit. The caller must not
     // release shared EEPROM ownership or yield during these bounded reads.
     template<class Store> bool readEntry(Store& s,uint8_t slot,uint8_t (&bytes)[EntryBytes]) const {
-        if(active_||!initialized()||!s.ready())return false;
+        if(pending()||!initialized()||!s.ready())return false;
         uint32_t seq;
         if(!header(s,slot,seq))return false;
         bytes[0]=Committed;bytes[1]=Version;
@@ -151,7 +154,7 @@ public:
 
     // Caller controls bounded output and host backpressure. No full mirror.
     template<class Store> bool readByte(Store& s,uint8_t slot,uint8_t offset,uint8_t& value) const {
-        if(active_||!initialized()||slot>=Slots||offset>=EntryBytes||!s.ready())return false;
+        if(pending()||!initialized()||slot>=Slots||offset>=EntryBytes||!s.ready())return false;
         uint32_t seq;
         if(!header(s,slot,seq))return false;
         value=s.read(address(slot,offset));
