@@ -14,7 +14,7 @@ from tempfile import TemporaryDirectory
 root = Path(__file__).resolve().parents[1]
 source = (root / "Repetier" / "StepExecutor.cpp").read_text()
 start = source.index("    // Packing keeps the legacy threshold")
-end = source.index("    // A switch move gets one final settled switch sample", start)
+end = source.index("    // A guarded switch or scan move gets one final settled validation", start)
 block = source[start:end]
 for board in ("RF1000.h", "RF2000.h"):
     config = (root / "Repetier" / board).read_text()

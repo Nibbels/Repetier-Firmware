@@ -19,6 +19,7 @@
 
 #include "Repetier.h"
 #include "StepExecutor.h"
+#include "GCodeInput.h"
 
 
 void UIDisplay::finishAction(int action) {
