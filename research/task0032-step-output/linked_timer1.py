@@ -31,6 +31,13 @@ def load_interpreter():
     # Capture instruction boundaries, including after final return. No elapsed
     # time injection here. Preserve original instruction semantics otherwise.
     change("pc=self.pc\n            if pc==", "pc=self.pc\n            self.boundary(pc)\n            if pc==")
+    # GCC AVR reserves three frame bytes with RCALL .+0: the CPU pushes
+    # the next word PC, then continues there. The function epilogue may
+    # discard these bytes by adjusting SP rather than RET. Preserve the
+    # real push and cycle cost, but do not register a logical call frame.
+    change("self.pushreturn(self.pc);self.cy+=4 if op=='call' else 3",
+           "self.pushreturn(self.pc);self.cy+=4 if op=='call' else 3\n"
+           "                    if op=='rcall' and int(a[0][1:])==0:self.return_stack.pop()")
     module = types.ModuleType("step_output_archived")
     exec(compile(source,"linked_motion.instrumented.py","exec"),module.__dict__)
     parent=module.CPU
