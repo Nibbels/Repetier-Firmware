@@ -52,7 +52,7 @@ Read [AGENTS.md](../AGENTS.md) first. This file contains the module-specific ins
 
 ## HAL, calibration and persistence
 
-**HAL events and ADC.** HAL owns pending periodic ticks, the watchdog heartbeat and the temperature ADC buffers. Foreground code consumes ticks through HAL and fetches a complete ADC sample through `temperatureAdcSample()`.
+**HAL events and ADC.** HAL owns pending periodic ticks and coherent temperature ADC publications. Foreground diagnostics use `temperatureAdcSample()`; positive heater grants require a one-use `HAL::HeaterSample` reservation. Timer3 owns heater leases, Timer5 owns expiring thermal-progress permission, and the reset-only watchdog is fed only on the completed regular/autotune handshake. [Safety requirements and candidate](heater-safety.md)
 
 **PWM and RGB.** HAL owns heater and fan duty requests and part fan settings. The PWM interrupt applies them on its existing frames. `RgbLighting` owns RGB profiles, mode, automatic status and fades. The panel and G-code share mode selection. [PWM](../Repetier/HAL.cpp) · [RGB](../Repetier/RgbLighting.cpp)
 
@@ -66,6 +66,6 @@ Read [AGENTS.md](../AGENTS.md) first. This file contains the module-specific ins
 
 **Panel.** The LCD transport, key sampling and navigation are in `ui.cpp`. `UiFormatting.cpp` renders live values, `UiSettings.cpp` handles edits and `UiActions.cpp` executes commands. The menu tables in `uimenu.h` are instantiated once in the LCD translation unit.
 
-**Print usage.** `Printer::printUsage` counts time with a hotend target and planned filament. The final hotend cooldown posts the accumulated usage to the existing internal EEPROM fields. The panel and serial reports read the same totals.
+**Print usage.** Legacy print-time/filament counters were retired in Task0034; the exact removal provenance is recorded in [Task0035](../coordination/tasks/Task0035.md).
 
 **Print input.** `UsbSerial` owns USART0 and the byte rings. `GCodeInput` owns the receiver state and two parsed command slots. All three models buffer 24 planned moves. Run `python3 tests/serial-protocol.py` when changing transport, admission or framing. [Serial compatibility](../docs/development-roadmap.md#serial-printing-compatibility) · [SD support removal](../docs/maintenance-tasks.md#sd-support-removal)
