@@ -16,6 +16,10 @@ The user's 30% example illustrates the cost/time tradeoff. Choose infrastructure
 
 Owner explicitly prioritizes preventing persistent heating on crash over all throughput work, based on repeated historical experience. [Task0034](tasks/Task0034.md) owns expiring thermal authorization, bounded heater pulses including 100% duty, immediate revoke, actual thermal-progress watchdog and event-driven heater scheduling research. Independent hardware compare-clear where routed; PE2 bed requires separate fail-off path. No stale rearm, no fault energy catch-up. Hold Task0032/#101 and Task0033 production, resume against updated baseline; #91 remains held. No printer flash or physical qualification. Manager/worker starts Task0034 now.
 
+## Owner decision 2026-11-28 — retire legacy Visual Micro
+
+Owner no longer uses Visual Studio/Visual Micro and authorizes retiring the complete legacy IDE integration. Task0034 performs the dedicated removal and qualification; Task0032 must not reintroduce or maintain obsolete manifests. The canonical Arduino CLI build and all real firmware/safety replays remain mandatory; unrelated legacy CMake support is not part of this decision. Historical test/build evidence remains in Git. See AGENTS.md and TASKS.md for scope.
+
 ## Owner decision 2026-11-28 — mandatory global interrupt-mask closure
 
 [Task0036](tasks/Task0036.md) is scheduled after the qualified integration of Task0034 and Task0032, before final software release. AGENTS.md now requires elimination of unnecessary masks, short justified atomic publication, no blocking masked work, and finite measured/proven linked worst-case durations. Existing P0/print-core gates remain binding; do not defer current safety defects. Reuse independent A73 PR #118 and existing tooling, re-run on the final four binaries. No additional parallel production worker or branch now.
