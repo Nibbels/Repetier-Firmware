@@ -15,7 +15,7 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "Repetier.h"
+#include "Communication.h"
 
 #ifndef FIRMWARE_URL
 #define FIRMWARE_URL "https://github.com/RF1000community/Repetier-Firmware"
@@ -42,7 +42,6 @@ FSTRINGVALUE(Com::tOkSpace, "ok ")
 FSTRINGVALUE(Com::tWrongChecksum, "Wrong checksum")
 FSTRINGVALUE(Com::tFormatError, "Format error")
 FSTRINGVALUE(Com::tMissingChecksum, "Missing checksum")
-FSTRINGVALUE(Com::tDonePrinting, "Done printing file")
 FSTRINGVALUE(Com::tX, " X")
 FSTRINGVALUE(Com::tY, " Y")
 FSTRINGVALUE(Com::tZ, " Z")
@@ -61,7 +60,6 @@ FSTRINGVALUE(Com::tB, " B")
 FSTRINGVALUE(Com::tK, " K")
 FSTRINGVALUE(Com::tL, " L")
 FSTRINGVALUE(Com::tO, " O")
-FSTRINGVALUE(Com::tSDReadError, "SD read error")
 FSTRINGVALUE(Com::tExpectedLine, "Error:expected line ")
 FSTRINGVALUE(Com::tGot, " got ")
 FSTRINGVALUE(Com::tSkip, "skip ")
@@ -96,20 +94,14 @@ FSTRINGVALUE(Com::tSlash, "/")
 FSTRINGVALUE(Com::tSpaceSlash, " /")
 FSTRINGVALUE(Com::tSpeedMultiply, "SpeedMultiply:")
 FSTRINGVALUE(Com::tFlowMultiply, "FlowMultiply:")
-#if FEATURE_READ_CALIPER
-FSTRINGVALUE(Com::tEPRZCallStandard, "Messschieber: Filamentdicke in Slicer [um]")
-FSTRINGVALUE(Com::tEPRZCallAdjust, "Messschieber: Korrektur [um]")
-#endif //FEATURE_READ_CALIPER
 FSTRINGVALUE(Com::tPrintingIsInProcessError, "Error: printing is in progress")
 FSTRINGVALUE(Com::tFanspeed, "Fanspeed:")
 FSTRINGVALUE(Com::tPrintedFilament, "Printed filament:")
 FSTRINGVALUE(Com::tPrintingTime, "Printing time:")
-FSTRINGVALUE(Com::tMillingTime, "Milling time:")
 FSTRINGVALUE(Com::tSpacem, "m ")
 FSTRINGVALUE(Com::tSpaceDaysSpace, " days ")
 FSTRINGVALUE(Com::tSpaceHoursSpace, " hours ")
 FSTRINGVALUE(Com::tSpaceMin, " min")
-FSTRINGVALUE(Com::tInvalidArc, "Invalid arc")
 FSTRINGVALUE(Com::tComma, ",")
 FSTRINGVALUE(Com::tSpace, " ")
 FSTRINGVALUE(Com::tYColon, "Y:")
@@ -137,53 +129,30 @@ FSTRINGVALUE(Com::tEEPROMUpdated, "EEPROM updated")
 FSTRINGVALUE(Com::tLinearLColon, "linear L:")
 FSTRINGVALUE(Com::tQuadraticKColon, " quadratic K:")
 FSTRINGVALUE(Com::tscanHeatBed, "scanHeatBed(): ")
-FSTRINGVALUE(Com::tscanWorkPart, "scanWorkPart(): ")
 FSTRINGVALUE(Com::tAutoMatrixLeveling, "Auto-Matrix-Leveling @X:")
-#if FEATURE_SERVICE_INTERVAL
-FSTRINGVALUE(Com::tPrintedFilamentService, "Printed filament since last Service:")
-FSTRINGVALUE(Com::tPrintingTimeService, "Printing time since last Service:")
-FSTRINGVALUE(Com::tMillingTimeService, "Milling time since last Service:")
-#endif // FEATURE_SERVICE_INTERVAL
 
-#ifdef PRINT_GENERIC_TEMP_TABLE
-FSTRINGVALUE(Com::tGenTemp, "GenTemp:")
-#endif // PRINT_GENERIC_TEMP_TABLE
 
 FSTRINGVALUE(Com::tTargetExtr, "TargetExtr")
 FSTRINGVALUE(Com::tTargetBedColon, "TargetBed:")
 FSTRINGVALUE(Com::tPIDAutotuneStart, "PID Autotune start")
-FSTRINGVALUE(Com::tAPIDBias, " bias: ")
-FSTRINGVALUE(Com::tAPIDD, " d: ")
-FSTRINGVALUE(Com::tAPIDMin, " min: ")
-FSTRINGVALUE(Com::tAPIDMax, " max: ")
 FSTRINGVALUE(Com::tAPIDKu, " Ku: ")
 FSTRINGVALUE(Com::tAPIDTu, " Tu: ")
-FSTRINGVALUE(Com::tAPIDClassic, " Classic Ziegler-Nichols PID")
-FSTRINGVALUE(Com::tAPIDPessen, " Pessen Integral Rule PID")
-FSTRINGVALUE(Com::tAPIDSome, " Some-Overshoot PID")
-FSTRINGVALUE(Com::tAPIDNone, " No-Overshoot PID")
-FSTRINGVALUE(Com::tAPIDTyreusLyben, " Tyreus-Lyben PID")
 FSTRINGVALUE(Com::tAPIDKp, " Kp: ")
 FSTRINGVALUE(Com::tAPIDKi, " Ki: ")
 FSTRINGVALUE(Com::tAPIDKd, " Kd: ")
-FSTRINGVALUE(Com::tAPIDFailedHigh, "PID Autotune failed! Temperature to high")
+FSTRINGVALUE(Com::tAPIDFailedHigh, "PID autotune failed: temperature too high")
 FSTRINGVALUE(Com::tAPIDFailedTimeout, "PID Autotune failed! timeout")
-FSTRINGVALUE(Com::tAPIDFinished, "PID Autotune finished ! Place the Kp, Ki and Kd constants in the Configuration.h or EEPROM")
+FSTRINGVALUE(Com::tAPIDFinished, "PID autotune finished; use X to save and authorize heating")
 FSTRINGVALUE(Com::tMTEMPColon, "MTEMP:")
 FSTRINGVALUE(Com::tHeatedBed, "heated bed")
 FSTRINGVALUE(Com::tExtruderSpace, "extruder ")
 FSTRINGVALUE(Com::tTempSensorDefect, ": temp sensor defect")
 FSTRINGVALUE(Com::tTempHeaterDefect, ": heater decoupled")
 FSTRINGVALUE(Com::tTempSensorWorking, ": working")
-FSTRINGVALUE(Com::tDryModeUntilRestart, "Printer set into dry run mode until restart!")
+FSTRINGVALUE(Com::tThermalFaultUntilRestart, "Thermal fault: heaters and extrusion inhibited until restart!")
 
-#ifdef WAITING_IDENTIFIER
-FSTRINGVALUE(Com::tWait, WAITING_IDENTIFIER)
-#endif // WAITING_IDENTIFIER
+FSTRINGVALUE(Com::tWait, "wait")
 
-#if EEPROM_MODE == 0
-FSTRINGVALUE(Com::tNoEEPROMSupport, "No EEPROM support compiled.\r\n")
-#else
 FSTRINGVALUE(Com::tConfigStoredEEPROM, "Configuration stored to EEPROM.")
 FSTRINGVALUE(Com::tConfigLoadedEEPROM, "Configuration loaded from EEPROM.")
 FSTRINGVALUE(Com::tEPRConfigResetDefaults, "Configuration reset to defaults.")
@@ -195,15 +164,10 @@ FSTRINGVALUE(Com::tEPR2, "EPR:2 ")
 FSTRINGVALUE(Com::tEPR3, "EPR:3 ")
 FSTRINGVALUE(Com::tEPRBaudrate, "Baudrate")
 FSTRINGVALUE(Com::tEPRFilamentPrinted, "Filament printed [m]")
-FSTRINGVALUE(Com::tEPRFilamentPrintedService, "Filament printed since last Service [m]")
 FSTRINGVALUE(Com::tEPRPrinterActive, "Printer active [s]")
-FSTRINGVALUE(Com::tEPRPrinterActiveService, "Printer active since last Service [s]")
-FSTRINGVALUE(Com::tEPRMillerActive, "Miller active [s]")
-FSTRINGVALUE(Com::tEPRMillerActiveService, "Miller active since last Service [s]")
 FSTRINGVALUE(Com::tEPRMaxInactiveTime, "Max. inactive time [ms 0=off]")
 FSTRINGVALUE(Com::tEPRStopAfterInactivty, "Stop stepper after inactivity [ms 0=off]")
 FSTRINGVALUE(Com::tEPRXMaxLength, "X max print length [mm]")
-FSTRINGVALUE(Com::tEPRXMaxLengthMilling, "X max milling length [mm]")
 FSTRINGVALUE(Com::tEPRYMaxLength, "Y max length [mm]")
 FSTRINGVALUE(Com::tEPRZMaxLength, "Z max length [mm]")
 FSTRINGVALUE(Com::tEPRXBacklash, "X backlash [mm]")
@@ -226,9 +190,6 @@ FSTRINGVALUE(Com::tEPRZAcceleration, "Z-axis acceleration [mm/s^2]")
 FSTRINGVALUE(Com::tEPRXTravelAcceleration, "X-axis travel acceleration [mm/s^2]")
 FSTRINGVALUE(Com::tEPRYTravelAcceleration, "Y-axis travel acceleration [mm/s^2]")
 FSTRINGVALUE(Com::tEPRZTravelAcceleration, "Z-axis travel acceleration [mm/s^2]")
-#if FEATURE_MILLING_MODE
-FSTRINGVALUE(Com::tEPRZMillingAcceleration, "All axis milling acceleration [mm/s^2]")
-#endif //FEATURE_MILLING_MODE
 FSTRINGVALUE(Com::tEPRZOffset, "Z-Offset [um]")
 FSTRINGVALUE(Com::tEPRZMode, "Z Scale")
 FSTRINGVALUE(Com::tEPRBedPIDDriveMax, "Bed PID I-drive max")
@@ -251,47 +212,28 @@ FSTRINGVALUE(Com::tEPRBedsensorType, "Bed Temp. sensor type [3=orig. 4=alternati
 FSTRINGVALUE(Com::tEPRsensorType, "Temp. sensor type [3=V2 8=E3D 13=V3]")
 FSTRINGVALUE(Com::tEPRXOffset, "X-offset [mm]")
 FSTRINGVALUE(Com::tEPRYOffset, "Y-offset [mm]")
-FSTRINGVALUE(Com::tEPRZOffsetmm, "Z-offset [mm]")
-FSTRINGVALUE(Com::tEPRRetractionWhenHeating, "Temp. for retraction when heating [C]")
-FSTRINGVALUE(Com::tEPRDistanceRetractHeating, "Distance to retract when heating [mm]")
 FSTRINGVALUE(Com::tEPRExtruderCoolerSpeed, "Extruder cooler speed [0-255]")
 FSTRINGVALUE(Com::tEPRAdvanceK, "Advance K [0=off]")
 FSTRINGVALUE(Com::tEPRAdvanceL, "Advance L [0=off]")
-FSTRINGVALUE(Com::tEPRBeeperMode, "Beeper [0=off 1=on]")
-FSTRINGVALUE(Com::tEPROperatingMode, "operating mode [1=print 2=mill]")
-FSTRINGVALUE(Com::tEPRZEndstopType, "Z endstop type [1=single 2=circuit]")
-FSTRINGVALUE(Com::tEPRMillerType, "Miller type [tracks]")
 FSTRINGVALUE(Com::tEPRRGBLightMode, "RGB Light mode [0..3 off/ws/aut/man]")
 FSTRINGVALUE(Com::tEPRFET1Mode, "24V-Port X42 default [0=off 1=on]")
 FSTRINGVALUE(Com::tEPRFET2Mode, "24V-Port X44 default [0=off 1=on]")
 FSTRINGVALUE(Com::tEPRFET3Mode, "24V-Port X45/board fan default [0=off 1=on]")
 FSTRINGVALUE(Com::tEPRCaseLightsMode, "24V-Port X19/case light default [0=off 1=on]")
 
-#if FEATURE_ZERO_DIGITS
 FSTRINGVALUE(Com::tEPRZERO_DIGIT_STATE, "Digit homing [1=on 2=off]")
-#endif // FEATURE_ZERO_DIGITS
 FSTRINGVALUE(Com::tEPRPrinterZ_STEP_SIZE, "Z-Button stepsize [Steps]")
 FSTRINGVALUE(Com::tEPRPrinterMOD_ZOS_SCAN_POINT_X, "X pos Z-Offset-Scan [col]")
 FSTRINGVALUE(Com::tEPRPrinterMOD_ZOS_SCAN_POINT_Y, "Y pos Z-Offset-Scan [row]")
-#if FEATURE_WORK_PART_Z_COMPENSATION || FEATURE_HEAT_BED_Z_COMPENSATION
 FSTRINGVALUE(Com::tEPRZScanStartLift, "Z-Scan start elevation [mm]")
-#endif // FEATURE_WORK_PART_Z_COMPENSATION || FEATURE_HEAT_BED_Z_COMPENSATION
-#if FEATURE_SENSIBLE_PRESSURE
 FSTRINGVALUE(Com::tEPRPrinterMOD_SENSEOFFSET_OFFSET_MAX, "SenseOffset peak offset [um]")
 FSTRINGVALUE(Com::tEPRPrinterEPR_RF_MOD_SENSEOFFSET_DIGITS, "SenseOffset cap [Digits]")
-#endif //FEATURE_SENSIBLE_PRESSURE
-#if FEATURE_EMERGENCY_PAUSE
 FSTRINGVALUE(Com::tEPRPrinterEPR_RF_EmergencyPauseDigitsMin, "Emergency-Pause min [Digits 0=off]")
 FSTRINGVALUE(Com::tEPRPrinterEPR_RF_EmergencyPauseDigitsMax, "Emergency-Pause max [Digits 0=off]")
-#endif //FEATURE_EMERGENCY_PAUSE
 
-#if FEATURE_EMERGENCY_STOP_Z_AND_E
 FSTRINGVALUE(Com::tEPRPrinterEPR_RF_EmergencyStopAllMin, "Z-Emergency-Stop min [Digits]")
 FSTRINGVALUE(Com::tEPRPrinterEPR_RF_EmergencyStopAllMax, "Z-Emergency-Stop max [Digits]")
-#endif //FEATURE_EMERGENCY_STOP_Z_AND_E
-#if FEATURE_DIGIT_Z_COMPENSATION
 FSTRINGVALUE(Com::tEPRZDIGIT_CMP_STATE, "Digit compensation [1=ON 2=OFF]")
-#endif // FEATURE_DIGIT_Z_COMPENSATION
 
 FSTRINGVALUE(Com::tEPRPrinter_STEPPER_X, "X Stepper current [2A=126]")
 FSTRINGVALUE(Com::tEPRPrinter_STEPPER_Y, "Y Stepper current [2A=126]")
@@ -302,57 +244,25 @@ FSTRINGVALUE(Com::tEPRPrinter_STEPPER_E1, "E1 Stepper current [2A/126]")
 #endif //NUM_EXTRUDER > 1
 FSTRINGVALUE(Com::tEPRInterruptSpacingInterval, "Interrupt spacing [CPU Ticks]")
 
-#if FAN_PIN > -1 && FEATURE_FAN_CONTROL
 FSTRINGVALUE(Com::tEPRPrinter_FAN_MODE, "Fan modulation [0=PWM 1=PDM]")
 FSTRINGVALUE(Com::tEPRPrinter_FAN_SPEED, "Fan PWM divisor [15.3Hz/x]")
 FSTRINGVALUE(Com::tEPRPrinter_FAN_PART_FAN_PWM_MIN, "Partfan 1% level [1..239]")
 FSTRINGVALUE(Com::tEPRPrinter_FAN_PART_FAN_PWM_MAX, "Partfan 99% level [16..254]")
-#endif // FAN_PIN>-1 && FEATURE_FAN_CONTROL
-
-#endif // EEPROM_MODE
-
-#if SDSUPPORT
-FSTRINGVALUE(Com::tSDRemoved, UI_TEXT_SD_REMOVED)
-FSTRINGVALUE(Com::tSDInserted, UI_TEXT_SD_INSERTED)
-FSTRINGVALUE(Com::tSDInitFail, "SD init fail")
-FSTRINGVALUE(Com::tErrorWritingToFile, "error writing to file")
-FSTRINGVALUE(Com::tBeginFileList, "Begin file list")
-FSTRINGVALUE(Com::tEndFileList, "End file list")
-FSTRINGVALUE(Com::tFileOpened, "File opened:")
-FSTRINGVALUE(Com::tSpaceSizeColon, " Size:")
-FSTRINGVALUE(Com::tFileSelected, "File selected")
-FSTRINGVALUE(Com::tFileOpenFailed, "file.open failed")
-FSTRINGVALUE(Com::tSDPrintingByte, "SD printing byte ")
-FSTRINGVALUE(Com::tNotSDPrinting, "Not SD printing")
-FSTRINGVALUE(Com::tOpenFailedFile, "open failed, File: ")
-FSTRINGVALUE(Com::tWritingToFile, "Writing to file: ")
-FSTRINGVALUE(Com::tDoneSavingFile, "Done saving file.")
-FSTRINGVALUE(Com::tFileDeleted, "File deleted")
-FSTRINGVALUE(Com::tDeletionFailed, "Deletion failed")
-FSTRINGVALUE(Com::tDirectoryCreated, "Directory created")
-FSTRINGVALUE(Com::tCreationFailed, "Creation failed")
-FSTRINGVALUE(Com::tSDErrorCode, "SD errorCode:")
-#endif // SDSUPPORT
 
 FSTRINGVALUE(Com::tHeaterDecoupledWarning, "One heater seems decoupled from thermistor - disabling all for safety!")
 
 FSTRINGVALUE(Com::tOutputObjectPrint, OUTPUT_OBJECT_SCRIPT_PRINT)
-FSTRINGVALUE(Com::tOutputObjectMill, OUTPUT_OBJECT_SCRIPT_MILL)
 
 FSTRINGVALUE(Com::tUnmountFilamentSoft, UNMOUNT_FILAMENT_SCRIPT_SOFT)
 FSTRINGVALUE(Com::tUnmountFilamentHard, UNMOUNT_FILAMENT_SCRIPT_HARD)
 FSTRINGVALUE(Com::tMountFilamentSoft, MOUNT_FILAMENT_SCRIPT_SOFT)
 FSTRINGVALUE(Com::tMountFilamentHard, MOUNT_FILAMENT_SCRIPT_HARD)
 
-#if FEATURE_FIND_Z_ORIGIN
-FSTRINGVALUE(Com::tFindZOrigin, FIND_Z_ORIGIN_SCRIPT)
-#endif // FEATURE_FIND_Z_ORIGIN
 FSTRINGVALUE(Com::tCap, "Cap:")
 FSTRINGVALUE(Com::tConfig, "Config:")
 
     ; // needed because the development tool does not recognize the ; within FSTRINGVALUE definition right.
 
-bool Com::writeToAll = true; // transmit start messages to all devices!
 
 void Com::cap(FSTRINGPARAM(text)) {
     printF(tCap);
@@ -368,9 +278,7 @@ void Com::config(FSTRINGPARAM(text), int value) {
 }
 void Com::config(FSTRINGPARAM(text), const char* msg) {
     printF(tConfig);
-    printF(text);
-    print(msg);
-    println();
+    printFLN(text, msg);
 }
 void Com::config(FSTRINGPARAM(text), int32_t value) {
     printF(tConfig);
@@ -420,15 +328,14 @@ void Com::printFLN(FSTRINGPARAM(text)) {
 } // printFLN
 
 void Com::printFLN(FSTRINGPARAM(text), const char* msg) {
-    printF(text);
-    print(msg);
+    printF(text, msg);
     println();
 } // printFLN
 
 void Com::printF(FSTRINGPARAM(ptr)) {
     char c;
     while ((c = HAL::readFlashByte(ptr++)) != 0)
-        GCodeSource::writeToAll(c);
+        HAL::serialWriteByte(c);
 } // printF
 
 void Com::printF(FSTRINGPARAM(text), const char* msg) {
@@ -437,8 +344,7 @@ void Com::printF(FSTRINGPARAM(text), const char* msg) {
 } // printF
 
 void Com::printF(FSTRINGPARAM(text), int value) {
-    printF(text);
-    print(value);
+    printF(text, static_cast<int32_t>(value));
 } // printF
 
 void Com::printF(FSTRINGPARAM(text), int32_t value) {
@@ -452,26 +358,22 @@ void Com::printF(FSTRINGPARAM(text), uint32_t value) {
 } // printF
 
 void Com::printFLN(FSTRINGPARAM(text), int value) {
-    printF(text);
-    print(value);
+    printF(text, value);
     println();
 } // printFLN
 
 void Com::printFLN(FSTRINGPARAM(text), int32_t value) {
-    printF(text);
-    print(value);
+    printF(text, value);
     println();
 } // printFLN
 
 void Com::printFLN(FSTRINGPARAM(text), uint32_t value) {
-    printF(text);
-    printNumber(value);
+    printF(text, value);
     println();
 } // printFLN
 
 void Com::printFLN(FSTRINGPARAM(text), float value, uint8_t digits, bool komma_as_dot) {
-    printF(text);
-    printFloat(value, digits, komma_as_dot);
+    printF(text, value, digits, komma_as_dot);
     println();
 } // printFLN
 
@@ -488,16 +390,17 @@ void Com::printSharpLine() {
 
 void Com::print(const char* text) {
     while (*text) {
-        GCodeSource::writeToAll(*text++);
+        HAL::serialWriteByte(*text++);
     }
 } // print
 
 void Com::print(int32_t value) {
+    uint32_t magnitude = static_cast<uint32_t>(value);
     if (value < 0) {
-        GCodeSource::writeToAll('-');
-        value = -value;
+        print('-');
+        magnitude = 0U - magnitude;
     }
-    printNumber(value);
+    printNumber(magnitude);
 } // print
 
 void Com::printNumber(uint32_t n) {
@@ -560,10 +463,8 @@ void Com::printFloat(float number, uint8_t digits, bool komma_as_dot) {
     printNumber(int_part);
 
     // Print the decimal point, but only if there are digits beyond
-    if (digits > 0 && komma_as_dot)
-        print(',');
-    if (digits > 0 && !komma_as_dot)
-        print('.');
+    if (digits > 0)
+        print(komma_as_dot ? ',' : '.');
 
     // Extract digits from the remainder one at a time
     while (digits-- > 0) {

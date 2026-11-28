@@ -1,0 +1,35 @@
+name: RFx000 firmware
+on:
+  pull_request:
+    branches: [ai-firmware-review]
+    paths-ignore:
+      - 'coordination/**'
+      - 'docs/**'
+      - '**/*.md'
+permissions:
+  contents: read
+concurrency:
+  group: rfx000-firmware-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    name: Host replays and four AVR builds
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-arduino-cli@v2
+        with:
+          version: 1.2.2
+      - name: Install Arduino AVR Boards
+        run: |
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+      - name: Verify merge candidate
+        run: python3 tools/task0003-baseline.py "$RUNNER_TEMP/firmware-evidence"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: firmware-evidence-${{ github.sha }}
+          path: ${{ runner.temp }}/firmware-evidence
+          retention-days: 7

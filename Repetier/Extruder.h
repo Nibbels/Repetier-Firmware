@@ -18,48 +18,45 @@
 #ifndef EXTRUDER_H
 #define EXTRUDER_H
 
+#include "HAL.h"
+
 #define CELSIUS_EXTRA_BITS 3
 
-// Updates the temperature of all extruders and heated bed if it's time.
-// Toggels the heater power if necessary.
-extern void reportTempsensorAndHeaterErrors(); ///< Report defect sensors
-extern uint8_t manageMonitor;
+// Report latched sensor/heater faults; regulation is in TemperatureControl.cpp.
+extern void reportTempsensorAndHeaterErrors();
 
-#define TEMPERATURE_CONTROLLER_FLAG_ALARM 1
 #define TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_FULL 2  ///< Full heating enabled
 #define TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_HOLD 4  ///< Holding target temperature
 #define TEMPERATURE_CONTROLLER_FLAG_SENSDEFECT 8     ///< Indicating sensor defect
 #define TEMPERATURE_CONTROLLER_FLAG_SENSDECOUPLED 16 ///< Indicating sensor decoupling
-/** TemperatureController manages one heater-temperature sensore loop. You can have up to
-4 loops allowing pid for up to 3 extruder and the heated bed.
+/** TemperatureController represents one heater/sensor loop.
+The supported RF builds use one or two hotends plus the heated bed.
 
 */
 class TemperatureController {
 public:
     uint8_t pwmIndex;           ///< pwm index for output control. 0-2 = Extruder, 3 = Fan, 4 = Heated Bed
     uint8_t sensorType;         ///< Type of temperature sensor.
-    uint8_t sensorPin;          ///< Pin to read extruder temperature.
+    uint8_t sensorPin;          ///< Index into the ADC sample array.
+    const uint16_t heaterCutoffC; ///< Switch the heater off above this temperature.
     int16_t currentTemperature; ///< Currenttemperature value read from sensor.
     float currentTemperatureC;  ///< Current temperature in degC.
     float targetTemperatureC;   ///< Target temperature in degC.
 
-#if FEATURE_HEAT_BED_TEMP_COMPENSATION
-    float offsetC; ///< offset in degC.
-#endif             // FEATURE_HEAT_BED_TEMP_COMPENSATION
-
     uint32_t lastTemperatureUpdate; ///< Time in millis of the last temperature update.
 
-    float tempIState;    ///< Temp. var. for PID computation.
+    float tempIState;    ///< Integral contribution in PWM counts, not accumulated error.
     uint8_t pidDriveMax; ///< Used for windup in PID calculation.
     uint8_t pidDriveMin; ///< Used for windup in PID calculation.
-    float pidPGain;      ///< Pgain (proportional gain) for PID temperature control [0,01 Units].
-    float pidIGain;      ///< Igain (integral) for PID temperature control [0,01 Units].
-    float pidDGain;      ///< Dgain (damping) for PID temperature control [0,01 Units].
+    float pidPGain;      ///< Pgain (proportional gain) for parallel PID (PWM counts, Celsius, seconds).
+    float pidIGain;      ///< Igain (integral) for parallel PID (PWM counts, Celsius, seconds).
+    float pidDGain;      ///< Dgain (damping) for parallel PID (PWM counts, Celsius, seconds).
     uint8_t pidMax;      ///< Maximum PWM value, the heater should be set.
     float tempIStateLimitMax;
     float tempIStateLimitMin;
-    uint8_t tempPointer;
-    float tempArray[16];
+    bool pidHistoryValid;
+    float previousTemperature;
+    float filteredSlope;
 
     uint8_t flags;
 
@@ -68,53 +65,59 @@ public:
     millis_t decoupleTestPeriod; ///< Time between setting and testing decoupling.
 
     uint8_t paused;
+    // A saved tune is tied to the actual sensor and power limit.
+    uint8_t tunedSensorType;
+    uint8_t tunedPowerLimit;
 
-    void setTargetTemperature(float target, float offset);
-    void updateCurrentTemperature();
+    static bool validPidGains(float p, float i, float d) {
+        return p > 0 && p <= 1000 && i > 0 && i <= 1000 && d >= 0 && d <= 100000;
+    }
+    bool pidCalibrationValid() const {
+        return sensorType != 0 && tunedSensorType == sensorType && tunedPowerLimit == pidMax
+            && pidMax >= 40 && validPidGains(pidPGain, pidIGain, pidDGain);
+    }
+    void invalidatePidCalibration();
+    static bool autotuneProfileAllowed(uint8_t controller, int method) {
+        return controller <= NUM_EXTRUDER
+            && (controller == NUM_EXTRUDER ? method == 2 || method == 3 : method == 0 || method == 1);
+    }
+
+    void setTargetTemperature(float target);
+    bool updateCurrentTemperature(); ///< False for an unsupported sensor type or stale/unpublished ADC sample.
     void updateTempControlVars();
-    void waitForTargetTemperature(uint8_t plus_temp_tolerance = 0);
+    void waitForTargetTemperature(uint8_t plus_temp_tolerance = 0, bool resumingPause = false);
     void autotunePID(float temp, uint8_t controllerId, int maxCycles, bool storeResult, int method);
 
-    inline bool isAlarm() {
-        return flags & TEMPERATURE_CONTROLLER_FLAG_ALARM;
-    }
-    inline void setAlarm(bool on) {
-        if (on)
-            flags |= TEMPERATURE_CONTROLLER_FLAG_ALARM;
-        else
-            flags &= ~TEMPERATURE_CONTROLLER_FLAG_ALARM;
-    }
-
-    //Code für den Decouple-Test der Heizkreisläufe:
+    // Code für den Decouple-Test der Heizkreisläufe:
     inline bool isDecoupleFull() {
         return flags & TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_FULL;
     }
     inline void setDecoupleFull() {
-        flags &= ~(TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_HOLD); //hold aus
-        flags |= TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_FULL;    //full an
+        flags &= ~(TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_HOLD); // Hold aus
+        flags |= TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_FULL;    // Full an
     }
     inline bool isDecoupleHold() {
         return flags & TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_HOLD;
     }
     inline void setDecoupleHold() {
-        flags &= ~(TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_FULL); //full aus
-        flags |= TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_HOLD;    //hold an
+        flags &= ~(TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_FULL); // Full aus
+        flags |= TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_HOLD;    // Hold an
     }
     inline void stopDecouple() {
         flags &= ~(TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_FULL | TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_HOLD);
     }
 
-    //Phase 1: wir stehen auf einer Stufe und merken uns die Zeit und die Temperatur. Das wird später mit der neuen Temperatur verglichen und dann muss die Temperatur gestiegen sein.
+    // Phase 1: wir stehen auf einer Stufe und merken uns die Zeit und die Temperatur. Das wird später mit der neuen Temperatur verglichen und dann muss die Temperatur gestiegen sein.
     inline void startFullDecoupleTest(millis_t& t) {
         if (isDecoupleFull())
             return;
         lastDecoupleTest = t;
         lastDecoupleTemp = currentTemperatureC;
-        //switch active test method to "temperature has to rise":
+        // Switch active test method to "temperature has to rise":
         setDecoupleFull();
     }
 
-    //Phase 2: Wir sind voll aufgeheizt und prüfen ob die Temperatur ohne Änderung der Zieltemperatur abdriftet.
+    // Phase 2: Wir sind voll aufgeheizt und prüfen ob die Temperatur ohne Änderung der Zieltemperatur abdriftet.
     //         Schlägt an, wenn die Heizkartusche kaputt geht oder rausrutscht. Oder auch wenn der Sensorwert willkürlich wandert.
     //         Ist der Sensor ausserhalb der bekannten MIN-MAX Limits wird das auch erkannt.
     //
@@ -123,17 +126,17 @@ public:
     //         Solange der PID-Regler den Drift kompensieren kann und das System glaubt, die Temperaturen sind im Rahmen von MIN-MAX könnte der Heizblock heißer sein als gewollt!
     //         Allerdings sollte der Thermistor > 300°C schnell das Zeitliche segnen völligen Mist anzeigen und dann greifen die Checks wieder.
     inline void startHoldDecoupleTest(millis_t& t) {
-        //nur starten, wenn es nicht schon läuft.
+        // Nur starten, wenn es nicht schon läuft.
         if (isDecoupleHold())
             return;
-        //nicht starten, wenn die temperatur "noch" ausserhalb der decoupling varianz liegt. kann z.b. sein, dass die pid-control-range 30 grad ist und das hier 20.
+        // Nicht starten, wenn die temperatur "noch" ausserhalb der decoupling varianz liegt. kann z.b. sein, dass die pid-control-range 30 grad ist und das hier 20.
         if (fabs(currentTemperatureC - targetTemperatureC) + 1 > DECOUPLING_TEST_MAX_HOLD_VARIANCE)
             return;
-        //beim ersten start setzt man den timer auf "jetzt". Es dauert also bis zum ersten check nicht 1 sekunde sondern so wie die config eingestellt ist.
-        //erst danach macht der code jede sekunde den "Wackelcheck".
+        // Beim ersten start setzt man den timer auf "jetzt". Es dauert also bis zum ersten check nicht 1 sekunde sondern so wie die config eingestellt ist.
+        // Erst danach macht der code jede sekunde den "Wackelcheck".
         lastDecoupleTest = t;
         lastDecoupleTemp = targetTemperatureC;
-        //switch active test method to "temperature has to stay where it was":
+        // Switch active test method to "temperature has to stay where it was":
         setDecoupleHold();
     }
 
@@ -166,40 +169,28 @@ extern Extruder extruder[];
 This structure contains all definitions for an extruder and all
 current state variables, like current temperature, feeder position etc.
 */
-class Extruder // Size: 12*1 Byte+12*4 Byte+4*2Byte = 68 Byte
+class Extruder
 {
 public:
     static Extruder* current;
 
-#if FEATURE_DITTO_PRINTING
-    static uint8_t dittoMode;
-#endif // FEATURE_DITTO_PRINTING
-
     uint8_t id;
-    float offsetMM[3];
+    float offsetMM[2]; ///< X/Y tool offsets in mm.
     float stepsPerMM; ///< Steps per mm.
     int8_t enablePin; ///< Pin to enable extruder stepper motor.
     uint8_t enableOn;
     float maxFeedrate;              ///< Maximum feedrate in mm/s.
     float maxAcceleration;          ///< Maximum acceleration in mm/s^2.
     float maxEJerk;                 ///< Maximum start feedrate in mm/s.
-    int16_t waitRetractTemperature; ///< Temperature to retract the filament when waiting for heatup
-    int16_t waitRetractUnits;       ///< Units to retract the filament when waiting for heatup
     volatile int8_t stepperDirection;
 
-#if USE_ADVANCE
     float advanceL;
-#endif // USE_ADVANCE
 
     TemperatureController tempControl;
-    const char* PROGMEM selectCommands;
-    const char* PROGMEM deselectCommands;
     uint8_t coolerSpeed; ///< Speed to use when enabled
     uint8_t coolerPWM;   ///< current PWM setting
 
-#if STEPPER_ON_DELAY
     char enabled;
-#endif // STEPPER_ON_DELAY
 
     /** \brief Sends the high-signal to the stepper for next extruder step.
     Call this function only, if interrupts are disabled.
@@ -210,15 +201,8 @@ public:
 #else
         switch (Extruder::current->id) {
         case 0: {
-#if NUM_EXTRUDER > 0
             WRITE(EXT0_STEP_PIN, HIGH);
 
-#if FEATURE_DITTO_PRINTING
-            if (Extruder::dittoMode) {
-                WRITE(EXT1_STEP_PIN, HIGH);
-            }
-#endif // FEATURE_DITTO_PRINTING
-#endif // NUM_EXTRUDER>0
             break;
         }
 
@@ -241,15 +225,8 @@ public:
 #else
         switch (Extruder::current->id) {
         case 0: {
-#if NUM_EXTRUDER > 0
             WRITE(EXT0_STEP_PIN, LOW);
 
-#if FEATURE_DITTO_PRINTING
-            if (Extruder::dittoMode) {
-                WRITE(EXT1_STEP_PIN, LOW);
-            }
-#endif // FEATURE_DITTO_PRINTING
-#endif // NUM_EXTRUDER>0
             break;
         }
 
@@ -263,6 +240,27 @@ public:
 #endif // NUM_EXTRUDER==1
 
     } // unstep
+
+    // Select the tool before either edge of the timed Pressure Advance pulse.
+    static INLINE void timedStep(volatile int16_t& pending, int16_t remaining) {
+#if NUM_EXTRUDER == 1
+        STEP_WITH_COUNT(EXT0_STEP_PIN, pending, remaining);
+#else
+        switch (Extruder::current->id) {
+        case 0:
+            STEP_WITH_COUNT(EXT0_STEP_PIN, pending, remaining);
+            break;
+#ifdef EXT1_STEP_PIN
+        case 1:
+            STEP_WITH_COUNT(EXT1_STEP_PIN, pending, remaining);
+            break;
+#endif
+        default:
+            pending = remaining;
+            break;
+        }
+#endif
+    }
 
     /** \brief Activates the extruder stepper and sets the direction. */
     static inline void setDirection(uint8_t dir) {
@@ -280,24 +278,14 @@ public:
         }
 #else
         switch (Extruder::current->id) {
-#if NUM_EXTRUDER > 0
         case 0: {
             if (dir)
                 WRITE(EXT0_DIR_PIN, !EXT0_INVERSE);
             else
                 WRITE(EXT0_DIR_PIN, EXT0_INVERSE);
 
-#if FEATURE_DITTO_PRINTING
-            if (Extruder::dittoMode) {
-                if (dir)
-                    WRITE(EXT1_DIR_PIN, !EXT1_INVERSE);
-                else
-                    WRITE(EXT1_DIR_PIN, EXT1_INVERSE);
-            }
-#endif // FEATURE_DITTO_PRINTING
             break;
         }
-#endif // NUM_EXTRUDER>0
 
 #if defined(EXT1_DIR_PIN) && NUM_EXTRUDER > 1
         case 1: {
@@ -322,48 +310,38 @@ public:
         if (Extruder::current->enablePin > -1)
             HAL::digitalWrite(Extruder::current->enablePin, Extruder::current->enableOn);
 
-#if FEATURE_DITTO_PRINTING
-        if (Extruder::dittoMode) {
-            if (extruder[1].enablePin > -1)
-                HAL::digitalWrite(extruder[1].enablePin, extruder[1].enableOn);
-        }
-#endif // FEATURE_DITTO_PRINTING
 #endif // NUM_EXTRUDER==1
 
-#if STEPPER_ON_DELAY
         if (!Extruder::current->enabled) {
             Extruder::current->enabled = 1;
-            HAL::delayMilliseconds(STEPPER_ON_DELAY);
+            HAL::delayMilliseconds(stepperEnableDelayMs);
         }
-#endif // STEPPER_ON_DELAY
 
     } // enable
+    static bool allHeatersCalibrated();
     static void manageTemperatures();
+    static bool hasActiveHotendTarget();
     static void disableAllExtruders();
-    static void selectExtruderById(uint8_t extruderId);
+    static bool selectExtruderById(uint8_t extruderId, bool waitThroughPause = false);
+    static void applyCurrentSettings();
     static void initExtruder();
     static void initHeatedBed();
-    static void setHeatedBedTemperature(float temperatureInCelsius, bool beep = false);
+    static void setHeatedBedTemperature(float temperatureInCelsius);
     static float getHeatedBedTemperature();
-    static void setTemperatureForExtruder(float temperatureInCelsius, uint8_t extr, bool beep = false);
-    static void setTemperatureForAllExtruders(float temperatureInCelsius, bool beep);
+    static void setTemperatureForExtruder(float temperatureInCelsius, uint8_t extr);
+    static void setTemperatureForAllExtruders(float temperatureInCelsius);
 }; // Extruder
 
-#if HAVE_HEATED_BED
-#define NUM_TEMPERATURE_LOOPS NUM_EXTRUDER + 1
+#define NUM_TEMPERATURE_LOOPS (NUM_EXTRUDER + 1)
 extern TemperatureController heatedBedController;
-#else
-#define NUM_TEMPERATURE_LOOPS NUM_EXTRUDER
-#endif // HAVE_HEATED_BED
 
-#if RESERVE_ANALOG_INPUTS
+#ifdef X35_ADC_CHANNEL
 extern TemperatureController optTempController;
-#endif // RESERVE_ANALOG_INPUTS
+#endif // X35_ADC_CHANNEL
 
 #define TEMP_INT_TO_FLOAT(temp) ((float)(temp) / (float)(1 << CELSIUS_EXTRA_BITS))
 #define TEMP_FLOAT_TO_INT(temp) ((int)((temp) * (1 << CELSIUS_EXTRA_BITS)))
 
 extern TemperatureController* tempController[NUM_TEMPERATURE_LOOPS];
-extern uint8_t autotuneIndex;
 
 #endif // EXTRUDER_H

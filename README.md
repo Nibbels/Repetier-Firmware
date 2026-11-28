@@ -4,11 +4,13 @@
 # Inofficial modification of the RF firmware for RF1000 and RF2000 / RF2000v2 devices
 Based on Repetier-Firmware - the fast and user friendly firmware.
 
+This branch streams print jobs over USB.
+
 ## Disclaimer
 
 THIS VERSION IS AN UNOFFICIAL MODIFICATION OF mhiers UNOFFICIAL MODIFICATION OF THE ORIGINAL FIRMWARE. 
 It is neither endorsed nor supported by the developers of the RF1000 firmware.  
-There is no SD-Card support included.  
+
 USE AT YOUR OWN RISK.
 
 For the official version, have a look at the upstream repository:
@@ -16,14 +18,14 @@ https://github.com/RF1000/Repetier-Firmware (see branch development. Or else loo
 
 ## HowTo Install
 
-- Download the Firmware `Branch: community_development` and unzip all the files.  
+- Download this branch (`ai-firmware-review`) and unzip all the files. This is a software-review candidate; consolidated printer testing is still pending.  
 - Install Arduino.cc IDE 1.8.12 and later if it is not installed on your computer already.  
-- Edit and save Configuration.h Line 46 to 48 according to your printers model. You have to remove the two **//** in front of the printers name you wish to activate:  
+- Edit and save `Repetier/Configuration.h` according to your printer model. You have to remove the two **//** in front of the printers name you wish to activate:  
 `#define MOTHERBOARD                         DEVICE_TYPE_RF1000` or  
 `#define MOTHERBOARD                         DEVICE_TYPE_RF2000` or  
 `#define MOTHERBOARD                         DEVICE_TYPE_RF2000v2`  
-- If you do not need the milling mode, you can remove it from the firmware. To do this, set the FEATURE_MILLING_MODE to 0 in RF1000.h / RF2000.h / RF2000v2.h.
-- Optional: Edit and save the Configuration.h and RF1000.h or RF2000.h to your needs in case you use special specialized hardware.
+- This revision is for 3D printing. The [last revision containing the milling code](https://github.com/Nibbels/Repetier-Firmware/tree/7e2e08b7f6da7677007dfddd06f8fc5adeb7d709) is available in the repository history.
+- For retrofits edit `Configuration.h` and the model settings in `RF1000.h` or in the shared `RF2000.h` for RF2000 and RF2000v2. See the [board connectors and X44 cooler example](docs/board-connectors.md).
 - Connect your Printer with a USB-cable and switch it on.
 - Go to and doubleclick /Repetier/Repetier.ino
 - Within the cyan colored Arduino-IDE you have to choose some preconfiguration settings for your RFx000 Board at the menu **Tools->**:  
@@ -34,10 +36,14 @@ Port: Your printers Port like `COM3`, if successfully connected.
 
 ## compiled Hex-Files / automatic build system
 
-You want to get precompiled firmware images with stock settings? Visit this website https://jenkins.beta-centauri.de/view/Repetier/ . You will find two versions, one is "stable" the other one is marked as "development".
+For this review branch, the [GitHub Actions firmware checks](https://github.com/Nibbels/Repetier-Firmware/actions/workflows/firmware-check.yml) produce four variants with the pinned Arduino CLI 1.2.2 and AVR Boards 1.8.6. Artifacts expire after seven days. See the [build and cleanup audit](coordination/audits/final-cleanup.md) for the supported build path and the status of legacy alternatives. Historical community builds were published at https://jenkins.beta-centauri.de/view/Repetier/ ; they are not builds of this review branch.
 Find more information and discussion here: http://www.rf1000.de/viewtopic.php?f=7&t=2057
 Using linux you can flash the .hex-files to your printer with this command:
 ```avrdude -patmega2560 -cwiring -P/dev/ttyUSB0 -b115200 -D -Uflash:w:Repetier.hex:i``` 
+
+## Preheat profiles
+
+Set the bed and hotend temperatures for profiles A and B under **Configuration → Preheat profiles**. Each edit is saved in the controller EEPROM. Choose A or B in **Extruder**, where the label shows the bed temperature first. A target of 0 turns off that heater. Factory values are 60/180 °C for A and 100/210 °C for B.
 
 ## If you upgrade to this Version from 1.37r or earlier or from the official Firmware until 1.39 please execute a fresh M303 PID-Autotune on all heaters!  
 - RF2000/RF1000 Extruder left: Menu -> Configuration -> Temperatures -> Extruder 0 -> PID Pessen-Rule  
@@ -64,6 +70,10 @@ http://www.rf1000.de/viewtopic.php?f=7&t=1504&start=60#p16397 (added feature)
 http://www.rf1000.de/viewtopic.php?f=7&t=1610 (rf1000s developement version thread to 1.35)  
 http://www.rf1000.de/viewtopic.php?f=7&t=1665 (rf1000s developement version thread to 1.37)  
 https://github.com/Nibbels/Repetier-Firmware/commits/heat_bed_z_offset_scan-%26-heat_bed_decrease (all the commits)
+
+## Engineering and maintainer documentation
+
+Read the [first-layer control documentation](docs/first-layer-control/README.md) for how SenseOffset, M3912 adaptive priming, scanned-bed fade-out, automatic layer detection and E-material compensation interact. Future development chats can start with [AGENTS.md](AGENTS.md) and the [documentation index](docs/README.md).
 
 ## Main Features of this Mod:
 * mhier Z-Offset-Scan
@@ -96,7 +106,6 @@ M3902 Sn            - to save the active Matrix to position n = {1..9}
 M3902 Z0 S1         - to shift the zOffset to your zMatrix and save the Matrix at position 1. This is an example to show that the options of M3902 can be combined.  
 M3911 S6000 P9000 E-30 - to limit extrusion when getting high digits because of overextrusion (Example: -10% per 1000 digits starting from 6000 digits)  
 M3911 S6000 P9000 F-30 - to limit speed when getting high digits (Example: -10% per 1000 digits starting from 6000 digits) M3911 is adjustable at runtime within menus Configuration -> DMS Features -> Digit Flow CMP (No EEPROM-support!)  
-M3939 Fn St1 Pt2 Ex Iy Rm   - to messure a curve of your Filaments velocity over digits -> viscosity.  
 
 M3920 Sb - to go into or switch back from SilentMode (This will lower your steppers current to an alternative profile)  
 Removed all compiler warnings and errors within the original Firmware.  
@@ -151,35 +160,11 @@ Feature called "Nibbels/Wessix SenseOffset". This is a digit limiter which decre
  When the z-compensation gets deactivated the senseoffset-function is deactivated as well.  
  Use "M3909 P0" for manual shutdown of the feature, but normally this is not necessary.  
  You cannot activate the Feature if zCompensation is not active already.  
+
+ For a manually scripted start line, turn off SenseOffset AutoStart and place `M3909 P…` after the last priming move. [Manual start-line ordering](docs/first-layer-control/automatic-start-line.md#manual-start-lines)
  
  While Printing you can adjust or activate this feature with the "Left"- and "Right"-Button, while being in the "Mod-Menu" which is page 2 on the printers display.  
 
-## SensibleViscosity  
-* M3939 Fn St1 Pt2   Ex Iy Rm  
-S = Starting Temperature for the Test in [°C]  
-P = Final Temperature for the Test in [°C]  
-F = max. test digits = 10000 or {1...12000} [digits]  
-E = max. test extrusion velocity = 5 or {0.05...maxStartFeedrate} [mm/s]  
-optional:  
-I = test velocity increment = 0.1 or {0.02...0.4} [mm/s]  
-R = max. digit change needed to consider having a filled nozzle. = 800 [digits] 
-
-Feature called "SensibleViscosity"  
- The printer will automaticly extrude into the thin air and messure the resulting force. 
- After every messurement the velocity of extrusion is increased.  
- You will get a CSV-Output within your Console-Window (Repetierserver/Repetierhost/Octoprint/...) which you can easily copy and paste to some text file. Excel can then read the Data and you can put it into some Chart with 2 Clicks.
- You might ask why you need this feature, but in case you know your Filament quite well you can compare these resulting chars to really see how your filament extrusion behaves under different circumstances or when your nozzle is or gets clogged.
- For longer heated/boiled (my) ABS: http://www.rf1000.de/viewtopic.php?f=62&t=1549&p=16617#p16617  
- ![ ](https://downfight.de/picproxy.php?url=http://image.prntscr.com/image/3508699873f7431489d1df9344110e7f.png "Boiled ABS")  
- For the general viscosity of (my) ABS: http://www.rf1000.de/viewtopic.php?f=23&t=1620&p=16613#p16605  
- ![ ](https://downfight.de/picproxy.php?url=http://image.prntscr.com/image/610de7720945474590668b20c05d7652.png "Temperature ABS")  
- That is a clogged nozzle with the same ABS:
- ![ ](https://downfight.de/picproxy.php?url=http://image.prntscr.com/image/c00ac11b3a384994b37ce8bc3cf03bd9.png "Clogged Nozzle ABS")  
- That is red PLA:
- ![ ](https://downfight.de/picproxy.php?url=http://image.prntscr.com/image/2a3253c930794afc81e4fa4d4b2a4261.png "Clogged Nozzle ABS")  
-
- Have fun finally seeing your Filaments behaviour over time, temp, nozzles ;)  
- 
 ## Configurable emergency zStop and emergency pause digits within menu and EEPROM  
 Menü -> Configuration -> General  
 
@@ -194,13 +179,7 @@ Menü -> Configuration -> Stepper :: DblFq = 6500 or {5000...12000}
 
 ## Configurable temperature settings within menu and EEPROM  
 PID-Autotune, other controlparameters and the sensortype is adjustable within the menu.  
-Menü -> Configuration -> Temperatures -> Extruder0/Extruder1/Heizbett -> Sensortype: {1=Pico/Reprap, 3=EPCOS G550, 8=104-GT2, 14=3950-100k}  
-In case you need other sensor types see RF1000.h / RF2000.h and edit it within EEPROM.
-
-## Dualhead Tip-Down Support (beta)
-* M3919 [S]mikrometer - Testfunction for Dip-Down-Hotend @ T1: T1 can now be springloaded and the bed will be adjusted "down" whenever T1 is selected. This is alike Ultimaker 3 does it with the right hotend.   
-Example: M3919 T1 Z-0.6 tells the Printer that the right hotend will reach 0.6mm more down than the left hotend. Test it :)
-* EEPROM Support for offset
+Under **Configuration → Temperatures**, the sensor menu offers types `1`, `3`, `8` and `13` for the extruders and `3` and `4` for the bed. The complete list also covers the types available through build settings and EEPROM. [Temperature sensor IDs](docs/board-connectors.md#temperature-sensor-ids)
 
 ## Feature Digit-Z-Kompensation (beta)
 If you apply force to the DMS sensors the bed is adjusted (if Z-Compensation is active). This corrects the error which bending of the sensors apply to your layers. The physical change of the beds level is approximately +0,01mm for +1000 applied force (digits).
@@ -208,8 +187,8 @@ If you apply force to the DMS sensors the bed is adjusted (if Z-Compensation is 
 ## RF2000: Additional Temperature Sensor for heated chamger  
 This optional 3rd temperature C is automatically sent out with the other Temperatures and Digits.  
 Example: ``` 22:09:24.271: T:21.7 /0 @:0 B:20.6 /0 B@:0 T0:21.7 /0 @0:0 T1:23.2 /0 @1:0 C:21.5 /0 C@:0 F:-173 /0 @:0 ```  
-See RESERVE_ANALOG_SENSOR_TYPE in RF2000.h for configuration options.  
-See RESERVE_ANALOG_INPUTS to find the involved code within the firmware.  
+`RESERVE_ANALOG_SENSOR_TYPE` in `RF2000.h` selects the conversion for the `X35_ADC_CHANNEL` input. [Temperature sensor IDs](docs/board-connectors.md#temperature-sensor-ids)
+
 You will need to install and additional cable and a temperature sensor at X35 on your printers Board. Then you can wire your sensor to some place needed.  
 This sensor might keep track of your boards temperature or the air-temperature within your enclosure.  
 

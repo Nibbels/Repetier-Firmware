@@ -18,26 +18,34 @@
 #ifndef PINS_H
 #define PINS_H
 
-#define CURRENT_CONTROL_DRV8711 4
-#define BEEPER_PIN_RF1000 23
-#define BEEPER_PIN_RF2000 5
+#if !defined(__AVR_ATmega2560__)
+#error Select Arduino Mega with ATmega2560 for the RFx000 boards.
+#endif
+
+/** \brief Defines the I2C address for the strain gauge */
+#define I2C_ADDRESS_STRAIN_GAUGE            0x49
+
+/** \brief Defines the I2C address for the external EEPROM which stores the z-compensation matrix */
+#define I2C_ADDRESS_EXTERNAL_EEPROM         0x50
+
+/** \brief Defines the I2C address for the external EEPROM which stores type information */
+#define I2C_ADDRESS_TYPE_EEPROM             0x51
+
+// Physical connector signals shared by the RF boards. Digital numbers are
+// those used by fastio. Temperature inputs use ADC channels.
+#define X4_PIN 10            // PB4 / HZ1 / hotend 0 heater
+#define X8_PIN 9             // PH6 / HZ2 / hotend 1 heater
+#define X19_PIN 25           // PA3 / OUT1 / switched accessory output
+#define X24_PIN 27           // PA5 / OUT2 / part fan
+#define X5_ADC_CHANNEL 13    // PK5 / TH1
+#define X6_ADC_CHANNEL 14    // PK6 / TH2
+#define X9_ADC_CHANNEL 15    // PK7 / TH3
 
 // ##########################################################################################
 // ##   RF1000 pin assignment
 // ##########################################################################################
 #if MOTHERBOARD == DEVICE_TYPE_RF1000
 #define KNOWN_BOARD 1
-
-#if !defined(__AVR_ATmega1280__) && !defined(__AVR_ATmega2560__)
-#error Oops!  Make sure you have 'Arduino Mega' selected from the 'Tools -> Boards' menu.
-#endif
-
-// Definition for current control
-#define STEPPER_CURRENT_CONTROL CURRENT_CONTROL_DRV8711
-
-// On board beeper, so define values already here
-#define BEEPER_PIN 23
-#define SDCARDDETECT -1
 
 // digital pin mappings
 #define ORIG_X_STEP_PIN 54
@@ -48,8 +56,6 @@
 // PIND.7, 50, ENA_DRV1
 #define ORIG_X_MIN_PIN 3
 // PINE.5,  7, ES1
-#define ORIG_X_MAX_PIN -1
-// not installed
 
 #define ORIG_Y_STEP_PIN 60
 // PINF.6, 91, STP_DRV2
@@ -59,8 +65,6 @@
 // PINF.2, 95, ENA_DRV2
 #define ORIG_Y_MIN_PIN 2
 // PINE.4,  6, ES2
-#define ORIG_Y_MAX_PIN -1
-// not installed
 
 #define ORIG_Z_STEP_PIN 46
 // PINL.3, 38, STP_DRV3
@@ -69,10 +73,7 @@
 #define ORIG_Z_ENABLE_PIN 62
 // PINK.0, 89, ENA_DRV3
 
-// the RF1000 with miller functionality can provide min and max endstops at the same pin
 #define ORIG_Z_MIN_PIN 31
-// PINC.6, 59, ES3
-#define ORIG_Z_MAX_PIN 31
 // PINC.6, 59, ES3
 
 #define ORIG_E0_STEP_PIN 26
@@ -95,60 +96,39 @@
 #define ORIG_E1_ENABLE_PIN -1
 #endif // NUM_EXTRUDER == 2
 
-#define SDSS 53
-// PINB.0, 19, SS
 #define LED_PIN 13
 // PINB.7, 26, LED13
 
-#if PROTOTYPE_PCB == 1 // 1 = first PCB's / 0 = Final
-#define ORIG_FAN_PIN 25
-// PINA.3, 75, OUT1
-#else
-#define ORIG_FAN_PIN 27
+#define ORIG_FAN_PIN X24_PIN
 // PINA.5, 73, OUT2
-#endif
 
 #define WATCHDOG_PIN 37
 // PINC.0
 
-#define HEATER_0_PIN 10
+#define HEATER_0_PIN X4_PIN
 // PINB.4, 23, HZ1  left X4
 
 #if NUM_EXTRUDER == 2
-#define HEATER_1_PIN 9
+#define HEATER_1_PIN X8_PIN
 // PINH.6, 18, HZ2  right X8
 #else
 #define HEATER_1_PIN -1
 #endif // NUM_EXTRUDER == 2
 
-#define HEATER_2_PIN 8
-// PINH.5, 17, HZ3
+#define X10_PIN 8            // PH5 / HZ3 / optional output sharing the bed heater signal
+#define X20_PIN X24_PIN      // Optional OUT2 terminal, shares the part fan signal
+#define HEATER_2_PIN X10_PIN
 
 // analog pin mappings
-#define TEMP_0_PIN 13
+#define TEMP_0_PIN X5_ADC_CHANNEL
 // PINK.5, 84, TH1  X5
-#define TEMP_1_PIN 14
+#define TEMP_1_PIN X6_ADC_CHANNEL
 // PINK.6, 83, TH2  X6
-#define TEMP_2_PIN 15
+#define TEMP_2_PIN X9_ADC_CHANNEL
 // PINK.7, 82, TH3
 
 #define E0_PINS ORIG_E0_STEP_PIN, ORIG_E0_DIR_PIN, ORIG_E0_ENABLE_PIN,
 #define E1_PINS ORIG_E1_STEP_PIN, ORIG_E1_DIR_PIN, ORIG_E1_ENABLE_PIN,
-
-// The extruder cooler is a fan to cool the extruder when it is heating. If you turn the etxruder on, the fan goes on.
-// Used to cool the E3D-v6 hotend as example. This is not the part fan.
-#define EXT0_EXTRUDER_COOLER_PIN -1
-#define EXT1_EXTRUDER_COOLER_PIN -1
-
-// these pins are defined in the SD library if building with SD support
-#define SCK_PIN 52
-// PINB.1, 20, SCK
-#define MISO_PIN 50
-// PINB.3, 22, MISO
-#define MOSI_PIN 51
-// PINB.2, 21, MOSI
-#define MAX6675_SS 53
-// PINB.0, 19, SS
 
 // motor driver pin mappings
 #define X_SCS_PIN 49
@@ -211,16 +191,8 @@
 #define ENABLE_KEY_5 42
 // PINL.7, 42, TAST5
 
-// servo pin mapping
-#define SERVO0_PIN 35
-// PINC.2, 55, PC2
-#define SERVO1_PIN 33
-// PINC.4, 57, PC4
-#define SERVO2_PIN 32
-// PINC.5, 58, PC5
-
 // case light pin mapping
-#define CASE_LIGHT_PIN 25
+#define CASE_LIGHT_PIN X19_PIN
 // PINA.3, 75, OUT1
 
 // case fan pin mapping
@@ -230,7 +202,6 @@
 // display pin mapping
 #define UI_DISPLAY_RS_PIN 63
 // PINK.1, 88, D_RS
-#define UI_DISPLAY_RW_PIN -1
 #define UI_DISPLAY_ENABLE_PIN 65
 // PINK.3, 86, D_E
 #define UI_DISPLAY_D0_PIN -1
@@ -252,9 +223,9 @@
 #define FET3 -1
 
 //http://www.rf1000.de/viewtopic.php?f=24&t=1119 :
-//RF1000 X25.12 und RF2000 X33.3 //Serial3 RX3
+// X25.12 on RF1000 / X33.3 on the RF2000 family (RX3)
 #define RESERVE_DIGITAL_PIN_PJ0 15
-//RF1000 X25.13 und RF2000 X33.4 //Serial3 TX3
+// X25.13 on RF1000 / X33.4 on the RF2000 family (TX3)
 #define RESERVE_DIGITAL_PIN_PJ1 14
 
 //X25.4
@@ -266,7 +237,7 @@
 
 //X25.7
 #define RESERVE_DIGITAL_PIN_PD2 19
-//RF1000 X25.8 und RF2000 X34.2 "EXT_IRQ"/INT3 -> FEATURE_USER_INT3
+// RF1000 X25.8 "EXT_IRQ"/INT3
 #define RESERVE_DIGITAL_PIN_PD3 18
 
 //X25.10
@@ -281,23 +252,10 @@
 #endif // MOTHERBOARD == DEVICE_TYPE_RF1000
 
 // ##########################################################################################
-// ##   RF2000 pin assignment
+// ##   RF2000 and RF2000v2 pin assignment
 // ##########################################################################################
-#if MOTHERBOARD == DEVICE_TYPE_RF2000
+#if MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2
 #define KNOWN_BOARD 1
-
-#if !defined(__AVR_ATmega1280__) && !defined(__AVR_ATmega2560__)
-#error Oops!  Make sure you have 'Arduino Mega' selected from the 'Tools -> Boards' menu.
-#endif
-
-// Definition for current control
-#define STEPPER_CURRENT_CONTROL CURRENT_CONTROL_DRV8711
-
-// On board beeper, so define values already here
-#define BEEPER_PIN 5
-// PINE.3,  5, BUZ1
-#define SDCARDDETECT 19
-// PIND.2, 45, CARD
 
 // digital pin mappings
 #define ORIG_X_STEP_PIN 54
@@ -308,8 +266,6 @@
 // PIND.7, 50, ENA_DRV1
 #define ORIG_X_MIN_PIN 35
 // PINC.2, 55, ES1
-#define ORIG_X_MAX_PIN -1
-// not installed
 
 #define ORIG_Y_STEP_PIN 60
 // PINF.6, 91, STP_DRV2
@@ -319,8 +275,6 @@
 // PINF.2, 95, ENA_DRV2
 #define ORIG_Y_MIN_PIN 37
 // PINC.0, 53, ES2
-#define ORIG_Y_MAX_PIN -1
-// not installed
 
 #define ORIG_Z_STEP_PIN 57
 // PINF.3, 94, STP_DRV3
@@ -329,10 +283,10 @@
 #define ORIG_Z_ENABLE_PIN 62
 // PINK.0, 89, ENA_DRV3
 
-// the RF2000 with miller functionality can provide min and max endstops
+// Z-min and Z-max have separate inputs.
 #define ORIG_Z_MIN_PIN 31
 // PINC.6, 59, ES3
-#define ORIG_Z_MAX_PIN 16
+#define Z_MAX_PIN 16
 // PINH.1, 13, ES4
 
 #define ORIG_E0_STEP_PIN 26
@@ -349,50 +303,33 @@
 #define ORIG_E1_ENABLE_PIN 30
 // PINC.7, 60, ENA_DRV5
 
-#define SDSS 53
-// PINB.0, 19, SS
 #define LED_PIN -1
 
-#define ORIG_FAN_PIN 27
+#define ORIG_FAN_PIN X24_PIN
 // PINA.5, 73, OUT2
 
 #define WATCHDOG_PIN 29
 // PINA.7, 71, WDI
 
-#define HEATER_0_PIN 10
+#define HEATER_0_PIN X4_PIN
 // PINB.4, 23, HZ1
-#define HEATER_1_PIN 9
+#define HEATER_1_PIN X8_PIN
 // PINH.6, 18, HZ2
-#define HEATER_2_PIN 91
-// PINE.2,  4, HZ3
+#define X10_PIN 91           // PE2 / HZ3, also drives the bed heater circuit
+#define HEATER_2_PIN X10_PIN
 
 // analog pin mappings
-#define TEMP_0_PIN 13
+#define TEMP_0_PIN X5_ADC_CHANNEL
 // PINK.5, 84, TH1
-#define TEMP_1_PIN 14
+#define TEMP_1_PIN X6_ADC_CHANNEL
 // PINK.6, 83, TH2
-#define TEMP_2_PIN 15
+#define TEMP_2_PIN X9_ADC_CHANNEL
 // PINK.7, 82, TH3
-#define TEMP_3_PIN 12
-// PINK.4, 85, TH4
+#define X35_ADC_CHANNEL 12   // PK4 / TH4 / optional chamber temperature input
+#define TEMP_3_PIN X35_ADC_CHANNEL
 
 #define E0_PINS ORIG_E0_STEP_PIN, ORIG_E0_DIR_PIN, ORIG_E0_ENABLE_PIN,
 #define E1_PINS ORIG_E1_STEP_PIN, ORIG_E1_DIR_PIN, ORIG_E1_ENABLE_PIN,
-
-// The extruder cooler is a fan to cool the extruder when it is heating. If you turn the etxruder on, the fan goes on.
-// Used to cool the E3D-v6 hotend as example. This is not the part fan.
-#define EXT0_EXTRUDER_COOLER_PIN -1
-#define EXT1_EXTRUDER_COOLER_PIN -1
-
-// these pins are defined in the SD library if building with SD support
-#define SCK_PIN 52
-// PINB.1, 20, SCK
-#define MISO_PIN 50
-// PINB.3, 22, MISO
-#define MOSI_PIN 51
-// PINB.2, 21, MOSI
-#define MAX6675_SS 53
-// PINB.0, 19, SS
 
 // motor driver pin mappings
 #define X_SCS_PIN 49
@@ -455,46 +392,36 @@
 #define ENABLE_KEY_5 42
 // PINL.7, 42, TAST5
 
-// servo pin mapping
-#define SERVO1_PIN 46
-// PINL.3, 38, SERVO_1
-#define SERVO2_PIN 45
-// PINL.4, 39, SERVO_2
-#define SERVO3_PIN 44
-// PINL.5, 40, SERVO_3
-
 // 230V output pin mapping
 #define OUTPUT_230V_PIN 3
 // PINE.5,  7, P230
 
-// 3x 24V FET output pin mapping
-#define FET1 33
-// PINC.4, 57, OUT3 X42
-#define FET2 32
-// PINC.5, 58, OUT4 X44
-#define FET3 58
-// PINF.4, 93, OUT5 X45
+// RF2000 family switched accessory outputs.
+#define X42_PIN 33           // PC4 / OUT3
+#define X44_PIN 32           // PC5 / OUT4
+#define X45_PIN 58           // PF4 / OUT5
+#define FET1 X42_PIN
+#define FET2 X44_PIN
+#define FET3 X45_PIN
 
-// RGB lights pin mapping
-#define RGB_LIGHT_R_PIN 6
-// PINH.3, 15, L_RT
-#define RGB_LIGHT_G_PIN 7
-// PINH.4, 16, L_GN
-#define RGB_LIGHT_B_PIN 8
-// PINH.5, 17, L_BL
+// X43 RGB channels.
+#define X43_R_PIN 6          // PH3 / L_RT
+#define X43_G_PIN 7          // PH4 / L_GN
+#define X43_B_PIN 8          // PH5 / L_BL
+#define RGB_LIGHT_R_PIN X43_R_PIN
+#define RGB_LIGHT_G_PIN X43_G_PIN
+#define RGB_LIGHT_B_PIN X43_B_PIN
 
 // case light pin mapping
-#define CASE_LIGHT_PIN 25
+#define CASE_LIGHT_PIN X19_PIN
 // PINA.3, 75, OUT1
 
 // case fan pin mapping
-#define CASE_FAN_PIN 58
-// PINF.4, 93, OUT5 X45
+#define CASE_FAN_PIN X45_PIN
 
 // display pin mapping
 #define UI_DISPLAY_RS_PIN 63
 // PINK.1, 88, D_RS
-#define UI_DISPLAY_RW_PIN -1
 #define UI_DISPLAY_ENABLE_PIN 65
 // PINK.3, 86, D_E
 #define UI_DISPLAY_D0_PIN -1
@@ -514,267 +441,17 @@
 // PINJ.0, 63, PJ0
 #define DEBUG_TEST_J0_PIN 15
 
-//RF spare pins:
-//RF1000 X25.12 und RF2000 X33.3 //Serial3 RX3
+// RF spare pins:
+// X25.12 on RF1000 / X33.3 on the RF2000 family (RX3)
 #define RESERVE_DIGITAL_PIN_PJ0 15
-//RF1000 X25.13 und RF2000 X33.4 //Serial3 TX3
+// X25.13 on RF1000 / X33.4 on the RF2000 family (TX3)
 #define RESERVE_DIGITAL_PIN_PJ1 14
-//RF2000 X33.5 used for FEATURE_READ_CALIPER data input as example.
+// RF2000 X33.5
 #define RESERVE_DIGITAL_PIN_PE4 2
-//RF1000 X25.8 und RF2000 X34.2 "EXT_IRQ"/INT3 -> FEATURE_USER_INT3/FEATURE_READ_CALIPER
+// RF2000 X34.2 "EXT_IRQ"/INT3
 #define RESERVE_DIGITAL_PIN_PD3 18
-/* X34.3=SCL und X34.4=SDA ist I²C siehe wire.h. (X34.1=5V und X34.5/X34.6=VSS) An diesem Bus sind auch die DMS und EEPROMs für Geräteidentifikation (EEPROM 2) und das EEPROM für die Z-Matrix (EEPROM 1) angeschlossen. */
-#endif // MOTHERBOARD == DEVICE_TYPE_RF2000
-
-// ##########################################################################################
-// ##	RF2000v2 pin assignment
-// ##########################################################################################
-#if MOTHERBOARD == DEVICE_TYPE_RF2000v2
-#define KNOWN_BOARD 1
-
-#if !defined(__AVR_ATmega1280__) && !defined(__AVR_ATmega2560__)
-#error Oops!  Make sure you have 'Arduino Mega' selected from the 'Tools -> Boards' menu.
-#endif
-
-// Definition for current control
-#define STEPPER_CURRENT_CONTROL CURRENT_CONTROL_DRV8711
-
-// On board beeper, so define values already here
-// PINE.3,  5, BUZ1
-#define BEEPER_PIN 5
-// PIND.2, 45, CARD
-#define SDCARDDETECT 19
-
-// digital pin mappings
-// PINF.0, 97, STP_DRV1
-#define ORIG_X_STEP_PIN 54
-// PINF.1, 96, DIR_DRV1
-#define ORIG_X_DIR_PIN 55
-// PIND.7, 50, ENA_DRV1
-#define ORIG_X_ENABLE_PIN 38
-// PINC.2, 55, ES1
-#define ORIG_X_MIN_PIN 35
-// not installed
-#define ORIG_X_MAX_PIN -1
-
-// PINF.6, 91, STP_DRV2
-#define ORIG_Y_STEP_PIN 60
-// PINF.7, 90, DIR_DRV2
-#define ORIG_Y_DIR_PIN 61
-// PINF.2, 95, ENA_DRV2
-#define ORIG_Y_ENABLE_PIN 56
-// PINC.0, 53, ES2
-#define ORIG_Y_MIN_PIN 37
-// not installed
-#define ORIG_Y_MAX_PIN -1
-
-// PINF.3, 94, STP_DRV3
-#define ORIG_Z_STEP_PIN 57
-// PINL.1, 36, DIR_DRV3
-#define ORIG_Z_DIR_PIN 48
-// PINK.0, 89, ENA_DRV3
-#define ORIG_Z_ENABLE_PIN 62
-
-// the RF2000 with miller functionality can provide min and max endstops
-// PINC.6, 59, ES3
-#define ORIG_Z_MIN_PIN 31
-// PINH.1, 13, ES4
-#define ORIG_Z_MAX_PIN 16
-
-// PINA.4, 74, STP_DRV4
-#define ORIG_E0_STEP_PIN 26
-// PINA.6, 72, DIR_DRV4
-#define ORIG_E0_DIR_PIN 28
-// PINA.2, 76, ENA_DRV4
-#define ORIG_E0_ENABLE_PIN 24
-
-// PINC.1, 54, STP_DRV5
-#define ORIG_E1_STEP_PIN 36
-// PINC.3, 56, DIR_DRV5
-#define ORIG_E1_DIR_PIN 34
-// PINC.7, 60, ENA_DRV5
-#define ORIG_E1_ENABLE_PIN 30
-
-// PINB.0, 19, SS
-#define SDSS 53
-#define LED_PIN -1
-
-// PINA.5, 73, OUT2
-#define ORIG_FAN_PIN 27
-
-// PINA.7, 71, WDI
-#define WATCHDOG_PIN 29
-
-// PINB.4, 23, HZ1
-#define HEATER_0_PIN 10
-// PINH.6, 18, HZ2
-#define HEATER_1_PIN 9
-// PINE.2,  4, HZ3
-#define HEATER_2_PIN 91
-
-// analog pin mappings
-// PINK.5, 84, TH1
-#define TEMP_0_PIN 13
-// PINK.6, 83, TH2
-#define TEMP_1_PIN 14
-// PINK.7, 82, TH3
-#define TEMP_2_PIN 15
-// PINK.4, 85, TH4
-#define TEMP_3_PIN 12
-
-#define E0_PINS ORIG_E0_STEP_PIN, ORIG_E0_DIR_PIN, ORIG_E0_ENABLE_PIN,
-#define E1_PINS ORIG_E1_STEP_PIN, ORIG_E1_DIR_PIN, ORIG_E1_ENABLE_PIN,
-
-// The extruder cooler is a fan to cool the extruder when it is heating. If you turn the etxruder on, the fan goes on.
-// Used to cool the E3D-v6 hotend as example. This is not the part fan.
-#define EXT0_EXTRUDER_COOLER_PIN -1
-#define EXT1_EXTRUDER_COOLER_PIN -1
-
-// these pins are defined in the SD library if building with SD support
-// PINB.1, 20, SCK
-#define SCK_PIN 52
-// PINB.3, 22, MISO
-#define MISO_PIN 50
-// PINB.2, 21, MOSI
-#define MOSI_PIN 51
-// PINB.0, 19, SS
-#define MAX6675_SS 53
-
-// motor driver pin mappings
-// PINL.0, 35, SCS_1
-#define X_SCS_PIN 49
-// PING.0, 51, STALLn_1
-#define X_STALL_PIN 41
-
-// PINL.2, 37, SCS_2
-#define Y_SCS_PIN 47
-// PING.1, 52, STALLn_2
-#define Y_STALL_PIN 40
-
-// PINB.6, 25, SCS_3
-#define Z_SCS_PIN 12
-// PING.2, 70, STALLn_3
-#define Z_STALL_PIN 39
-
-// PINL.6, 41, SCS_4
-#define O0_SCS_PIN 43
-// PING.3, 28, STALLn_4
-#define O0_STALL_PIN 95
-
-// PINJ.7, 79, SCS_5
-#define O1_SCS_PIN 84
-// PING.4, 29, STALLn_5
-#define O1_STALL_PIN 96
-
-// PINE.6,  8, FAULTn
-#define DRV_FAULT 97
-// PINE.7,  9, RESET_DRV
-#define DRV_RESET1 90
-// PIND.5, 48, SCLK
-#define DRV_SCLK 93
-// PIND.4, 47, SDATO
-#define DRV_SDATO 92
-// PIND.6, 49, SDATI
-#define DRV_SDATI 94
-
-// key pin mappings
-// PINJ.2, 65, TAST_E1
-#define ENABLE_KEY_E1 80
-// PINJ.4, 67, TAST_E2
-#define ENABLE_KEY_E2 81
-// PINJ.5, 68, TAST_E3
-#define ENABLE_KEY_E3 82
-// PINJ.6, 69, TAST_E4
-#define ENABLE_KEY_E4 83
-// PINH.7, 27, TAST_E5
-#define ENABLE_KEY_E5 85
-// PINH.2, 14, TAST_E6
-#define ENABLE_KEY_E6 86
-// PING.5,  1, TAST1
-#define ENABLE_KEY_1 4
-// PINB.7, 26, TAST2
-#define ENABLE_KEY_2 13
-// PINH.0, 12, TAST3
-#define ENABLE_KEY_3 17
-// PINB.5, 24, TAST4
-#define ENABLE_KEY_4 11
-// PINL.7, 42, TAST5
-#define ENABLE_KEY_5 42
-
-// servo pin mapping
-// PINL.3, 38, SERVO_1
-#define SERVO1_PIN 46
-// PINL.4, 39, SERVO_2
-#define SERVO2_PIN 45
-// PINL.5, 40, SERVO_3
-#define SERVO3_PIN 44
-
-// 230V output pin mapping
-// PINE.5,  7, P230
-#define OUTPUT_230V_PIN 3
-
-// 3x 24V FET output pin mapping
-// PINC.4, 57, OUT3 X42
-#define FET1 33
-// PINC.5, 58, OUT4 X44
-#define FET2 32
-// PINF.4, 93, OUT5 X45
-#define FET3 58
-
-// RGB lights pin mapping
-// PINH.3, 15, L_RT
-#define RGB_LIGHT_R_PIN 6
-// PINH.4, 16, L_GN
-#define RGB_LIGHT_G_PIN 7
-// PINH.5, 17, L_BL
-#define RGB_LIGHT_B_PIN 8
-
-// case light pin mapping
-// PINA.3, 75, OUT1
-#define CASE_LIGHT_PIN 25
-
-// case fan pin mapping
-// PINF.4, 93, OUT5 X45
-#define CASE_FAN_PIN 58
-
-// display pin mapping
-// PINK.1, 88, D_RS
-#define UI_DISPLAY_RS_PIN 63
-#define UI_DISPLAY_RW_PIN -1
-// PINK.3, 86, D_E
-#define UI_DISPLAY_ENABLE_PIN 65
-#define UI_DISPLAY_D0_PIN -1
-#define UI_DISPLAY_D1_PIN -1
-#define UI_DISPLAY_D2_PIN -1
-#define UI_DISPLAY_D3_PIN -1
-// PINF.5, 92, D_D4
-#define UI_DISPLAY_D4_PIN 59
-// PINK.2, 87, D_D5
-#define UI_DISPLAY_D5_PIN 64
-// PINA.1, 77, D_D6
-#define UI_DISPLAY_D6_PIN 23
-// PINJ.3, 66, D_D7
-#define UI_DISPLAY_D7_PIN 98
-
-// debug pin mapping
-// PINJ.0, 63, PJ0
-#define DEBUG_TEST_J0_PIN 15
-
-//RF spare pins:
-//RF1000 X25.12 und RF2000 X33.3 //Serial3 RX3
-#define RESERVE_DIGITAL_PIN_PJ0 15
-//RF1000 X25.13 und RF2000 X33.4 //Serial3 TX3
-#define RESERVE_DIGITAL_PIN_PJ1 14
-//RF2000 X33.5 used for FEATURE_READ_CALIPER data input as example.
-#define RESERVE_DIGITAL_PIN_PE4 2
-//RF1000 X25.8 und RF2000 X34.2 "EXT_IRQ"/INT3 -> FEATURE_USER_INT3/FEATURE_READ_CALIPER
-#define RESERVE_DIGITAL_PIN_PD3 18
-/* X34.3=SCL und X34.4=SDA ist I²C siehe wire.h. (X34.1=5V und X34.5/X34.6=VSS) An diesem Bus sind auch die DMS und EEPROMs für Geräteidentifikation (EEPROM 2) und das EEPROM für die Z-Matrix (EEPROM 1) angeschlossen. */
-#endif // MOTHERBOARD == DEVICE_TYPE_RF2000v2
-
-#ifndef SDSSORIG
-#define SDSSORIG -1
-#endif
+/* X34.3=SCL und X34.4=SDA ist I²C siehe TwiTransfer.cpp. (X34.1=5V und X34.5/X34.6=VSS) An diesem Bus sind auch die DMS und EEPROMs für Geräteidentifikation (EEPROM 2) und das EEPROM für die Z-Matrix (EEPROM 1) angeschlossen. */
+#endif // RF2000 / RF2000v2
 
 #ifndef FAN_BOARD_PIN
 #define FAN_BOARD_PIN -1
@@ -785,33 +462,24 @@
 #define E1_PINS
 #endif
 
-#if NUM_EXTRUDER <= 2
 #undef E2_PINS
 #define E2_PINS
-#endif
-
-#ifndef HEATER_PINS_INVERTED
-#define HEATER_PINS_INVERTED 0
-#endif
 
 // Original pin assignmats to be used in configuration tool
 #define X_STEP_PIN ORIG_X_STEP_PIN
 #define X_DIR_PIN ORIG_X_DIR_PIN
 #define X_ENABLE_PIN ORIG_X_ENABLE_PIN
 #define X_MIN_PIN ORIG_X_MIN_PIN
-#define X_MAX_PIN ORIG_X_MAX_PIN
 
 #define Y_STEP_PIN ORIG_Y_STEP_PIN
 #define Y_DIR_PIN ORIG_Y_DIR_PIN
 #define Y_ENABLE_PIN ORIG_Y_ENABLE_PIN
 #define Y_MIN_PIN ORIG_Y_MIN_PIN
-#define Y_MAX_PIN ORIG_Y_MAX_PIN
 
 #define Z_STEP_PIN ORIG_Z_STEP_PIN
 #define Z_DIR_PIN ORIG_Z_DIR_PIN
 #define Z_ENABLE_PIN ORIG_Z_ENABLE_PIN
 #define Z_MIN_PIN ORIG_Z_MIN_PIN
-#define Z_MAX_PIN ORIG_Z_MAX_PIN
 
 #define E0_STEP_PIN ORIG_E0_STEP_PIN
 #define E0_DIR_PIN ORIG_E0_DIR_PIN
@@ -826,7 +494,28 @@
 #define E2_ENABLE_PIN ORIG_E2_ENABLE_PIN
 
 #define FAN_PIN ORIG_FAN_PIN
-#define FAN2_PIN ORIG_FAN2_PIN
+
+// Optional automatic heatsink fans, including E3D V6 and Volcano retrofits.
+// A configured cooler owns its pin and takes precedence over accessory commands.
+#ifndef EXT0_EXTRUDER_COOLER_PIN
+#define EXT0_EXTRUDER_COOLER_PIN -1
+#endif
+#ifndef EXT1_EXTRUDER_COOLER_PIN
+#define EXT1_EXTRUDER_COOLER_PIN -1
+#endif
+#define HOTEND_COOLER_USES_PIN(pin) \
+    (EXT0_EXTRUDER_COOLER_PIN == (pin) || (NUM_EXTRUDER > 1 && EXT1_EXTRUDER_COOLER_PIN == (pin)))
+
+#if HOTEND_COOLER_USES_PIN(FAN_PIN) || HOTEND_COOLER_USES_PIN(HEATER_0_PIN) || HOTEND_COOLER_USES_PIN(HEATER_2_PIN) \
+    || (NUM_EXTRUDER > 1 && HOTEND_COOLER_USES_PIN(HEATER_1_PIN))
+#error A hotend cooler must use an output separate from the part fan and active heaters.
+#endif
+#if (MOTHERBOARD == DEVICE_TYPE_RF2000 || MOTHERBOARD == DEVICE_TYPE_RF2000v2) && HOTEND_COOLER_USES_PIN(CASE_FAN_PIN)
+#error X45 is assigned to the RF2000 case fan. Use a different output for the hotend cooler.
+#endif
+#if FAN_BOARD_PIN > -1 && HOTEND_COOLER_USES_PIN(FAN_BOARD_PIN)
+#error The hotend cooler and the stepper board fan need separate outputs.
+#endif
 
 #endif
 // PINS_H

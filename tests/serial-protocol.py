@@ -1,0 +1,64 @@
+#!/usr/bin/env python3
+"""Replay the firmware's serial receiver with a byte stream and a test clock."""
+
+from pathlib import Path
+from tempfile import TemporaryDirectory
+import os
+import re
+import subprocess
+
+
+def main():
+    tests = Path(__file__).resolve().parent
+    firmware = tests.parent / "Repetier"
+    commands = (firmware / "gcode.cpp").read_text(encoding="utf-8")
+    receiver = (firmware / "GCodeInput.cpp").read_text(encoding="utf-8")
+    command_loop = (firmware / "Commands.cpp").read_text(encoding="utf-8")
+    command_loop = command_loop[command_loop.index("void Commands::commandLoop()"):command_loop.index("void Commands::checkForPeriodicalActions(")]
+    system = (firmware / "GCodeSystem.cpp").read_text(encoding="utf-8")
+    dispatch = (firmware / "GCodeCommands.cpp").read_text(encoding="utf-8")
+    printer = (firmware / "Printer.h").read_text(encoding="utf-8")
+    legacy = system[system.index("bool rejectLegacySimulation("):system.index("void reportPosition()")]
+    entry = dispatch[dispatch.index("void Commands::executeGCode("):]
+    debug = printer[printer.index("    static uint8_t debugMask()"):printer.index("    static char zDisplayMode()")]
+    uart = (firmware / "UsbSerial.cpp").read_text(encoding="utf-8")
+    communication = (firmware / "Communication.cpp").read_text(encoding="utf-8")
+    configuration = (firmware / "Configuration.h").read_text(encoding="utf-8")
+    names = set(re.findall(r"\bCom::(t\w+)\b", commands + receiver + entry)) | {"tError"}
+    constants = {
+        name: value for name, value in re.findall(r'^FSTRINGVALUE\(Com::(t\w+), ("[^"]*")\)', communication, re.M)
+        if name in names
+    }
+    assert names == constants.keys()
+    capacity = re.search(r"^#define GCODE_BUFFER_SIZE\s+(\d+)", configuration, re.M)[1]
+
+    with TemporaryDirectory(prefix="rfx-serial-replay-") as directory:
+        build = Path(directory)
+        (build / "legacy-dispatch.inc").write_text("namespace GCodeCommands {\n" + legacy + "}\n" + entry, encoding="utf-8")
+        (build / "debug-mask.inc").write_text(debug, encoding="utf-8")
+        (build / "gcode-settings.inc").write_text(f"#define GCODE_BUFFER_SIZE {capacity}\n", encoding="utf-8")
+        (build / "gcode-receiver.inc").write_text(
+            (commands + "\n" + receiver + "\n" + command_loop).replace('#include "Repetier.h"\n', ""), encoding="utf-8",
+        )
+        (build / "usb-serial-firmware.inc").write_text(
+            re.sub(r"^#include <avr/\w+\.h>\n", "", uart, flags=re.M), encoding="utf-8",
+        )
+        (build / "gcode-replies.inc").write_text(
+            "".join(f"const char {name}[] = {value};\n" for name, value in sorted(constants.items())),
+            encoding="utf-8",
+        )
+        compiler = [
+            os.environ.get("CXX", "c++"), "-std=c++11", "-O2", "-Wall", "-Wextra", "-Werror",
+            "-fno-strict-aliasing", "-I", str(firmware), "-I", str(build),
+        ]
+        replay = build / "serial-replay"
+        subprocess.run(compiler + [str(tests / "serial-protocol.cpp"), "-o", str(replay)], check=True)
+        for scenario in ("numbered", "queue", "display", "idle", "binary", "overflow", "binary-text", "sustained", "bounded-receive", "emergency", "stopping", "script", "legacy-ascii", "legacy-binary", "legacy-during-stop"):
+            subprocess.run([str(replay), scenario], check=True, timeout=10)
+        uart_replay = build / "uart-replay"
+        subprocess.run(compiler + [str(tests / "usb-serial.cpp"), "-o", str(uart_replay)], check=True)
+        subprocess.run([str(uart_replay)], check=True, timeout=10)
+
+
+if __name__ == "__main__":
+    main()

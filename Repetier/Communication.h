@@ -18,7 +18,7 @@
 #ifndef COMMUNICATION_H
 #define COMMUNICATION_H
 
-extern const char* const axisNames[] PROGMEM;
+#include "HAL.h"
 
 class Com {
 public:
@@ -39,7 +39,6 @@ public:
     FSTRINGVAR(tWrongChecksum)
     FSTRINGVAR(tFormatError)
     FSTRINGVAR(tMissingChecksum)
-    FSTRINGVAR(tDonePrinting)
     FSTRINGVAR(tX)
     FSTRINGVAR(tY)
     FSTRINGVAR(tZ)
@@ -58,7 +57,6 @@ public:
     FSTRINGVAR(tK)
     FSTRINGVAR(tL)
     FSTRINGVAR(tO)
-    FSTRINGVAR(tSDReadError)
     FSTRINGVAR(tExpectedLine)
     FSTRINGVAR(tGot)
     FSTRINGVAR(tSkip)
@@ -94,12 +92,10 @@ public:
     FSTRINGVAR(tFanspeed)
     FSTRINGVAR(tPrintedFilament)
     FSTRINGVAR(tPrintingTime)
-    FSTRINGVAR(tMillingTime)
     FSTRINGVAR(tSpacem)
     FSTRINGVAR(tSpaceDaysSpace)
     FSTRINGVAR(tSpaceHoursSpace)
     FSTRINGVAR(tSpaceMin)
-    FSTRINGVAR(tInvalidArc)
     FSTRINGVAR(tComma)
     FSTRINGVAR(tSpace)
     FSTRINGVAR(tYColon)
@@ -129,33 +125,14 @@ public:
     FSTRINGVAR(tQuadraticKColon)
     FSTRINGVAR(tEEPROMUpdated)
     FSTRINGVAR(tscanHeatBed)
-    FSTRINGVAR(tscanWorkPart)
     FSTRINGVAR(tAutoMatrixLeveling)
 
-#if FEATURE_SERVICE_INTERVAL
-    FSTRINGVAR(tPrintedFilamentService)
-    FSTRINGVAR(tPrintingTimeService)
-    FSTRINGVAR(tMillingTimeService)
-#endif // FEATURE_SERVICE_INTERVAL
-
-#ifdef PRINT_GENERIC_TEMP_TABLE
-    FSTRINGVAR(tGenTemp)
-#endif // PRINT_GENERIC_TEMP_TABLE
 
     FSTRINGVAR(tTargetExtr)
     FSTRINGVAR(tTargetBedColon)
     FSTRINGVAR(tPIDAutotuneStart)
-    FSTRINGVAR(tAPIDBias)
-    FSTRINGVAR(tAPIDD)
-    FSTRINGVAR(tAPIDMin)
-    FSTRINGVAR(tAPIDMax)
     FSTRINGVAR(tAPIDKu)
     FSTRINGVAR(tAPIDTu)
-    FSTRINGVAR(tAPIDClassic)
-    FSTRINGVAR(tAPIDPessen)
-    FSTRINGVAR(tAPIDSome)
-    FSTRINGVAR(tAPIDNone)
-    FSTRINGVAR(tAPIDTyreusLyben)
     FSTRINGVAR(tAPIDKp)
     FSTRINGVAR(tAPIDKi)
     FSTRINGVAR(tAPIDKd)
@@ -168,15 +145,10 @@ public:
     FSTRINGVAR(tTempSensorDefect)
     FSTRINGVAR(tTempHeaterDefect)
     FSTRINGVAR(tTempSensorWorking)
-    FSTRINGVAR(tDryModeUntilRestart)
+    FSTRINGVAR(tThermalFaultUntilRestart)
 
-#ifdef WAITING_IDENTIFIER
     FSTRINGVAR(tWait)
-#endif // WAITING_IDENTIFIER
 
-#if EEPROM_MODE == 0
-    FSTRINGVAR(tNoEEPROMSupport)
-#else
     FSTRINGVAR(tConfigStoredEEPROM)
     FSTRINGVAR(tConfigLoadedEEPROM)
     FSTRINGVAR(tEPRConfigResetDefaults)
@@ -188,16 +160,11 @@ public:
     FSTRINGVAR(tEPR3)
     FSTRINGVAR(tEPRBaudrate)
     FSTRINGVAR(tEPRFilamentPrinted)
-    FSTRINGVAR(tEPRFilamentPrintedService)
     FSTRINGVAR(tEPRPrinterActive)
-    FSTRINGVAR(tEPRPrinterActiveService)
-    FSTRINGVAR(tEPRMillerActive)
-    FSTRINGVAR(tEPRMillerActiveService)
     FSTRINGVAR(tEPRMaxInactiveTime)
     FSTRINGVAR(tEPRStopAfterInactivty)
     FSTRINGVAR(tEPRMaxXYJerk)
     FSTRINGVAR(tEPRXMaxLength)
-    FSTRINGVAR(tEPRXMaxLengthMilling)
     FSTRINGVAR(tEPRYMaxLength)
     FSTRINGVAR(tEPRZMaxLength)
     FSTRINGVAR(tEPRXBacklash)
@@ -205,22 +172,9 @@ public:
     FSTRINGVAR(tEPRZBacklash)
     FSTRINGVAR(tEPRZAcceleration)
     FSTRINGVAR(tEPRZTravelAcceleration)
-#if FEATURE_WORK_PART_Z_COMPENSATION || FEATURE_HEAT_BED_Z_COMPENSATION
     FSTRINGVAR(tEPRZScanStartLift)
-#endif // FEATURE_WORK_PART_Z_COMPENSATION || FEATURE_HEAT_BED_Z_COMPENSATION
-#if FEATURE_MILLING_MODE
-    FSTRINGVAR(tEPRZMillingAcceleration)
-#endif //FEATURE_MILLING_MODE
-#if FEATURE_READ_CALIPER
-    FSTRINGVAR(tEPRZCallStandard)
-    FSTRINGVAR(tEPRZCallAdjust)
-#endif //FEATURE_READ_CALIPER
-#if FEATURE_ZERO_DIGITS
     FSTRINGVAR(tEPRZERO_DIGIT_STATE)
-#endif // FEATURE_ZERO_DIGITS
-#if FEATURE_DIGIT_Z_COMPENSATION
     FSTRINGVAR(tEPRZDIGIT_CMP_STATE)
-#endif // FEATURE_DIGIT_Z_COMPENSATION
     FSTRINGVAR(tEPRZStepsPerMM)
     FSTRINGVAR(tEPRZMaxFeedrate)
     FSTRINGVAR(tEPRZHomingFeedrate)
@@ -256,42 +210,27 @@ public:
     FSTRINGVAR(tEPRXOffset)
     FSTRINGVAR(tEPRYOffset)
     FSTRINGVAR(tEPRZOffset)
-    FSTRINGVAR(tEPRZOffsetmm)
     FSTRINGVAR(tEPRZMode)
-    FSTRINGVAR(tEPRRetractionWhenHeating)
-    FSTRINGVAR(tEPRDistanceRetractHeating)
     FSTRINGVAR(tEPRExtruderCoolerSpeed)
     FSTRINGVAR(tEPRAdvanceK)
     FSTRINGVAR(tEPRAdvanceL)
-    FSTRINGVAR(tEPRBeeperMode)
     FSTRINGVAR(tEPRCaseLightsMode)
-    FSTRINGVAR(tEPROperatingMode)
-    FSTRINGVAR(tEPRZEndstopType)
-    FSTRINGVAR(tEPRMillerType)
     FSTRINGVAR(tEPRRGBLightMode)
     FSTRINGVAR(tEPRFET1Mode)
     FSTRINGVAR(tEPRFET2Mode)
     FSTRINGVAR(tEPRFET3Mode)
 
     FSTRINGVAR(tEPRPrinterZ_STEP_SIZE)
-#if FEATURE_HEAT_BED_Z_COMPENSATION
     FSTRINGVAR(tEPRPrinterMOD_ZOS_SCAN_POINT_X)
     FSTRINGVAR(tEPRPrinterMOD_ZOS_SCAN_POINT_Y)
-#endif //FEATURE_HEAT_BED_Z_COMPENSATION
-#if FEATURE_SENSIBLE_PRESSURE
     FSTRINGVAR(tEPRPrinterMOD_SENSEOFFSET_OFFSET_MAX)
     FSTRINGVAR(tEPRPrinterEPR_RF_MOD_SENSEOFFSET_DIGITS)
-#endif //FEATURE_SENSIBLE_PRESSURE
 
-#if FEATURE_EMERGENCY_PAUSE
     FSTRINGVAR(tEPRPrinterEPR_RF_EmergencyPauseDigitsMin)
     FSTRINGVAR(tEPRPrinterEPR_RF_EmergencyPauseDigitsMax)
-#endif //FEATURE_EMERGENCY_PAUSE
 
-#if FEATURE_EMERGENCY_STOP_Z_AND_E
     FSTRINGVAR(tEPRPrinterEPR_RF_EmergencyStopAllMin)
     FSTRINGVAR(tEPRPrinterEPR_RF_EmergencyStopAllMax)
-#endif //FEATURE_EMERGENCY_STOP_Z_AND_E
 
     FSTRINGVAR(tEPRPrinter_STEPPER_X)
     FSTRINGVAR(tEPRPrinter_STEPPER_Y)
@@ -302,49 +241,18 @@ public:
 #endif //NUM_EXTRUDER > 1
     FSTRINGVAR(tEPRInterruptSpacingInterval)
 
-#if FAN_PIN > -1 && FEATURE_FAN_CONTROL
     FSTRINGVAR(tEPRPrinter_FAN_MODE)
     FSTRINGVAR(tEPRPrinter_FAN_SPEED)
     FSTRINGVAR(tEPRPrinter_FAN_PART_FAN_PWM_MIN)
     FSTRINGVAR(tEPRPrinter_FAN_PART_FAN_PWM_MAX)
-#endif // FAN_PIN>-1 && FEATURE_FAN_CONTROL
-
-#endif // EEPROM_MODE==0
-
-#if SDSUPPORT
-    FSTRINGVAR(tSDRemoved)
-    FSTRINGVAR(tSDInserted)
-    FSTRINGVAR(tSDInitFail)
-    FSTRINGVAR(tErrorWritingToFile)
-    FSTRINGVAR(tBeginFileList)
-    FSTRINGVAR(tEndFileList)
-    FSTRINGVAR(tFileOpened)
-    FSTRINGVAR(tSpaceSizeColon)
-    FSTRINGVAR(tFileSelected)
-    FSTRINGVAR(tFileOpenFailed)
-    FSTRINGVAR(tSDPrintingByte)
-    FSTRINGVAR(tNotSDPrinting)
-    FSTRINGVAR(tOpenFailedFile)
-    FSTRINGVAR(tWritingToFile)
-    FSTRINGVAR(tDoneSavingFile)
-    FSTRINGVAR(tFileDeleted)
-    FSTRINGVAR(tDeletionFailed)
-    FSTRINGVAR(tDirectoryCreated)
-    FSTRINGVAR(tCreationFailed)
-    FSTRINGVAR(tSDErrorCode)
-#endif // SDSUPPORT
 
     FSTRINGVAR(tHeaterDecoupledWarning)
     FSTRINGVAR(tOutputObjectPrint)
-    FSTRINGVAR(tOutputObjectMill)
     FSTRINGVAR(tUnmountFilamentSoft)
     FSTRINGVAR(tUnmountFilamentHard)
     FSTRINGVAR(tMountFilamentSoft)
     FSTRINGVAR(tMountFilamentHard)
 
-#if FEATURE_FIND_Z_ORIGIN
-    FSTRINGVAR(tFindZOrigin)
-#endif // FEATURE_FIND_Z_ORIGIN
     FSTRINGVAR(tCap)
     FSTRINGVAR(tConfig)
 
@@ -382,14 +290,13 @@ public:
     static inline void print(int value) { print((int32_t)value); }
     static void print(const char* text);
     static inline void print(char c) {
-        GCodeSource::writeToAll(c);
+        HAL::serialWriteByte(c);
     }
     static void printFloat(float number, uint8_t digits, bool komma_as_dot = false);
     static inline void println() {
-        GCodeSource::writeToAll('\r');
-        GCodeSource::writeToAll('\n');
+        HAL::serialWriteByte('\r');
+        HAL::serialWriteByte('\n');
     }
-    static bool writeToAll;
 }; // Com
 
 #endif // COMMUNICATION_H

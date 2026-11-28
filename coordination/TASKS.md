@@ -1,0 +1,150 @@
+# RFx000 parallel refactoring tasks
+
+Baseline audit: 2026-11-24, `3a27bd83dfc4711fa2694d18b311b67426f91936` on `ai-firmware-review`; original comparison: `community_development` (read-only).
+This index and the per-task files are the durable coordination state, following the Gamemation Manager/Worker pattern with **worker self-merge**. All tasks initially OPEN; only wave 1 READY. A later wave is ready when every prior wave task is merged and verified; derive status from its task file and GitHub history, not edits to this index.
+
+
+## CURRENT owner direction — targeted SRAM assistance for P0 (2026-11-28)
+
+Owner confirms two additional isolated candidate chats have started and Task0034 has been informed; Task0034 concentrates on P0 safety and final integration. This is a narrow exception to earlier no-new-research-worker wording and historical two-worker snapshots, NOT a change to exclusive production ownership.
+
+- LCD SRAM candidate: reuse Task0032's historical synchronous row-stream/fixed-width cache evidence, accounting for removal of M3029 and the existing P0 cache/stack reuse. Scope LCD rendering/cache and directly necessary tests only; preserve local input, emergency/commissioning, 5um transfer and both four-row geometries. No independent production merge.
+- Static SRAM-to-Flash candidate: inspect actual linked .data/.bss symbols, immutable data, compiler tables, duplicate initialization and provably bounded types. Exclude LCD, motion/Drive/queue, UART and bed matrix; avoid changes to active P0 safety paths without explicit coordination. No feature removal.
+- Both prepare small independent patches on short-lived candidate branches from a pinned qualified P0 checkpoint, with four-board linked SRAM/stack/Flash and relevant regression/timing evidence. No direct writes to #102 or #117, no merge into ai-firmware-review; Task0034 alone accepts and integrates suitable patches sequentially against its current head, reruns affected and global gates, records actual combined reserve. Coordinate any shared test/build changes through P0; no duplicate implementation or speculative SRAM allocation. Preserve 24 motion slots, UART buffers, matrix geometry/resolution, WobbleFix and safety behavior. RF2000v2 development target 300–500 B justified residual reserve, not a safety threshold. Task0032 continues print-core preflight independently; Task0036 remains mandatory after both qualified merges. No hardware activity.
+- Latest reference at coordination: P0 CI #1193 run 46168277008, head 3333d5a6c700e9367b1f9bcd86d65c04d5c25761, all four builds green, reported conditional RF2000v2 remainder 99 B; global release proof remains open. Actual candidate branch/PR identifiers to be recorded once available. Task0034 should not wait for exploratory results before continuing P0 work.
+
+## CURRENT owner direction — common development baseline (2026-11-27)
+
+Owner explicitly requests consolidation of completed research and elimination of long-lived divergent task/research branches. This current section supersedes earlier separate Task0033 ownership, 500 kbaud and open-ended research branch recommendations below. Keep community_development and historical RF1000-Dual-DGLASS-Mod untouched. All new integrated work targets ai-firmware-review; no release or hardware flash authorized.
+
+- Three active workstreams: Task0034 P0 owns the outstanding production/safety/settings integration, including #104 logger and LCD consolidation, then #91; Task0032-S completes pure step-output research (#105); central Task0032 owns print-core production and integration after P0. No new standalone research worker or long-lived branch. P0 remains the exclusive production owner until its software gate; do not blindly merge conflicting or red builds merely to remove branches.
+- Completed research belongs in ai-firmware-review, preserving full history and immutable evidence. #103 UART and #106 planner already merged, #108 GPIO audit, #109 A73 resource report and #101 central print-core research now also merged. #101 closure is archival only; Task0032 remains open. See [Task0032](tasks/Task0032.md), [GPIO audit](../docs/gpio-audit/README.md), [A73 report](../research/task0034-a73/REPORT.md). Final A73 stack/resource release and hardware verification are still open. Historical scripts may require their recorded source SHA; archive test fixtures are not new production acceptance tests.
+- Shipping application UART fixed 250000 baud 8N1, no configurable baud; queue capacity fixed 24 for all four boards. Older 115200/500000 and other queue sizes are historical experiments only. Task0033 implementation responsibility transferred to Task0032. Task0034 has removed M908 at owner direction; do not resurrect it from #107. #107 transport-only changes must be integrated in the exclusive P0 branch because that worker requires the port-safe/interruptible DRV transport before release; preserve its independent research archive and original commits. See #102 comment 7223971763 and #107 handover.
+- Use current target HEAD before each integration, short-lived narrowly scoped PRs, green applicable gates and exact tested SHAs. Synchronize active workers with the latest shared evidence without clobbering work. Once a side branch is merged or its unique contents are explicitly accounted for, verify ancestry or documented equivalent disposition and retire it. #105 worker merges pure research when completed and green; #104/#91 and LCD branch remain held until their owner accounts for every useful change and verifies integration. Never treat a completed research merge as production completion. Historical links and commits must survive deletion.
+
+**Owner direction 2026-11-28 — interrupt-mask minimization:** [Task0036](tasks/Task0036.md) is mandatory whole-firmware closure after Task0034 and Task0032 have merged and qualified, before final software release. Apply the AGENTS.md interrupt-mask policy now in each active worker's scope. P0 and Task0032 retain responsibility for their existing gates and immediate defects; no deferral or competing production edits. Reuse #118 A73 tooling and evidence on the final linked binaries.
+
+**Owner direction 2026-11-28 — retire Visual Micro:** Task0034 owns a dedicated cleanup commit removing `Repetier.sln`, `Repetier/Repetier.vcxproj`, `Repetier/Repetier.vcxproj.filters`, `tests/task0013-visual-micro.py`, their active CI/test registrations, IDE-only dependencies/references and current support documentation. Preserve historical Task0013 results, canonical Arduino CLI, all four recovery builds and functional/safety tests. Check actual dependencies and retain unrelated CMake/other build paths. Task0032 must not maintain/reintroduce obsolete manifests; reconcile disposable candidate generators/tests on the retired baseline, retaining exact historical pins for archival evidence. No new worker/branch; Task0034 retains exclusive production ownership, validates cleanup with normal CI and records evidence. Previous Visual Micro preservation requirement is superseded.
+
+**Owner direction 2026-11-28 — retire Doxygen and finished research workflows; retain WobbleFix:** Task0034 owns a small separate cleanup commit removing `Doxyfile` and obsolete active Doxygen build instructions, plus `.github/workflows/task0032-planner-queue-research.yml` (merged #106), `task0032-step-output-research.yml` (merged #105) and `task0033-research.yml` (merged #103) from active workflow discovery. All three PRs are verified closed/merged. Before removal check current workflow consumers, preserve exact historical commits/scripts/results and migrate any still-required verification to maintained tests; no deletion of evidence or weakening of safety gates. Keep `firmware-check.yml` and active `task0032-simulation.yml` (until Task0032 completes and its remaining regression requirements are accounted for). Preserve Arduino IDE/CLI and CMake. Preserve WobbleFix functionality, phase/amplitude settings and operator workflow: it compensates lateral periodic bed displacement from an eccentric spindle journal, 5 mm Z period per revolution. Zero factory amplitudes mean opt-in, not obsolete. M3029 retirement is governed by the subsequent owner decision below. Task0032 reconciles its candidate tooling without reviving retired workflows; no competing production branch.
+
+**Owner direction 2026-11-28 — remove M3029 entirely, reconsider later:** Supersedes the previous hold on M3029 retirement. Task0034 owns one dedicated atomic removal commit, suggested subject `Remove legacy M3029 remote panel interface`. Remove command dispatch, accessPanel declaration/implementation, remote-only execution/accessor helpers, output protocol, remote-only state/checks and active support references/tests where exclusively dependent on M3029. Audit actual consumers first: preserve physical key sampling/debounce/repeat/release, local panel dispatch exclusion, shared display rendering/cache where genuinely needed, all local safety confirmations, EEPROM recovery and heater commissioning, 5um SenseOffset transfer, motion/thermal guards, M117 and unrelated serial diagnostics. Do not retain a disabled fallback or replacement. Historical research and tests remain accessible at pinned revisions. Verify M3029 is no longer dispatched or able to act; test normal unsupported-command handling and all applicable local/safety/serial regressions and four recovery images. Record measured linked resource and stack/timing deltas where relevant, without claiming release from green CI alone.
+
+After the removal commit, Task0034 must create a **separate documentation commit** containing `coordination/tasks/Task0037.md` (reserved number; deferred optional). Record the full actual removal SHA, parent SHA, exact subject, immutable links, removed surface, rationale and exact qualification run/merge/artifact/checksum (pending honestly if not yet available; update after CI). Preserve the earlier implementation by linking the parent, not by copying dead code into production. Task0037 starts only after Tasks0034/0032/0036 and an explicit later owner decision; evaluate a new remote panel/hardware harness interface against final architecture, shared typed input ownership, actual 16x4/20x4 frame reporting, explicit action results vs receive ACK, bounded nonblocking reporting, physical-only safety confirmations, deterministic jog cancellation and tests. Keeping the feature absent is a valid result. No hardware operation or automatic reintroduction. Task0032 must reconcile its disposable candidates and test anchors with the removal and never restore old M3029 during integration. No new concurrent production worker.
+
+## Firmware PR checks
+
+**Mandatory: GitHub Actions is the primary build/test/measurement environment.** No local checkout, AVR toolchain, Arduino CLI, compiler or container network access is required. A missing local tool is never a build blocker. Use the existing pipeline first; use task-private supplementary CI only for otherwise unsupported tests. Query the actual PR head, inspect runs, job logs and artifacts; an empty search, queued/pending run or obsolete cancelled run is not evidence that CI is unavailable. Recheck the latest revision and continue independent work while CI runs. Only report an infrastructure blocker after verifying an actual CI/access problem, and report hardware acceptance separately.
+
+Open or update your PR against `ai-firmware-review`. GitHub Actions runs **RFx000 firmware / Host replays and four AVR builds** for changes outside documentation and coordination. Each PR has an independent job. Use the check on your latest PR revision for the standard host suite and AVR evidence. The checkout is GitHub's test merge commit; record the PR head, tested SHA from summary.json and run link in the task record. Download the firmware-evidence artifact for the four ELF/HEX files, maps, resource totals and logs (available for seven days). Keep important deltas in the task record. Compare against the appropriate target baseline and run any task-specific tests or timing checks. If the target advances, follow the synchronization rule below; a documentation-only update may reuse evidence for identical build and test inputs.
+
+For optional local diagnosis, if available, run the affected replay or use `python3 tools/task0003-baseline.py --avr-only ../new-evidence-dir` from a clean checkout with the pinned tools. A green hosted run covers the same standard build; workers need no local AVR installation to use CI. On failure inspect the first failing step and logs, then fix the task and update the same PR.
+
+## Worker contract (read before work)
+
+1. Read AGENTS.md, this index, own task and relevant mechanism docs. Verify actual current target HEAD and open PRs/branches. Target is `ai-firmware-review`, NEVER community_development. Check predecessor merge evidence. One worker per Task ID; claim with unique branch `task/TaskNNNN-short-name` from latest target. Check for an existing branch/PR for same task, resume rather than duplicate. Record status and ownership in own task file on branch; other task files and index are read-only.
+2. Exclusive write scope is a hard boundary. Other files may be read and tested. New files must belong to your module and have distinct names. During waves 1–3, keep cross-module APIs, EEPROM layout, UI/protocol semantics and hardware timing stable. Do not change RF.h, Printer.h/.cpp, Configuration.h, Repetier.h, pins.h, HAL.h/.cpp, AGENTS.md, docs/maintenance-tasks.md or shared roadmap unless explicitly in scope. Do not perform repo-wide formatting. If an unavoidable cross-scope change is needed, document it in own task and defer to designated later task; don't silently expand ownership.
+3. **Shared integration exception:** Existing supported build manifests and source-extraction replay `tests/pause-sense-offset.py` / `.cpp` are shared write surfaces, not parallel development files. Workers may prepare their required deltas locally and create task-private tests. Integrate those shared-file deltas only in a short serialized merge window, based on latest target; never overwrite another worker's additions. If an existing shared replay fails because a function moved, adapt source extraction, don't weaken assertions. CMake auto-discovers .cpp files. Visual Micro is retired at owner direction; its pending deletion belongs exclusively to Task0034. Do not merge an incomplete/broken supported build. If no reliable merge-window coordination is available, split into internal header-only changes or defer shared edits to the exclusive later wave; do not bypass tests.
+4. All workers self-merge via their own PR: synchronize/rebase or merge latest target, inspect full diff and ownership, run the relevant tests. For changes affecting firmware or its build, build all four AVR variants (RF1000, RF2000, RF2000v2, RF2000 X44 retrofit), compare Flash/global SRAM and timing for hot paths. If target moves after checks, refresh and rerun affected checks before merge; verify PR expected HEAD SHA and latest target, use normal GitHub merge (no force push to integration branch). A shared-file merge window means only one such integration PR is in final synchronization/testing/merge at a time; claim via task PR comment with explicit release, check other open PRs before claiming. If contention/ambiguous claims, wait for other worker or defer shared edit; no manual manager approval needed for green in-scope merges. Do not make other workers resolve your conflicts. If GitHub CI is genuinely unavailable or an actual required CI failure cannot be resolved, record BLOCKED with evidence; missing local toolchain is not a blocker. If hardware is unavailable or tests are not authorized, record hardware verification open; never invent results.
+5. Own task file is updated in PR with scope/diff, tests, exact tested HEAD, baseline and resource deltas, unresolved items and intended merge status. After merge verify target contains task change and PR is merged; add merge SHA/evidence to own task file only in a small follow-up if needed. Keep handover 3–5 lines with PR/commit link. No deleting other worker branches or changing unrelated files. Manager schedules waves and resolves genuine scope collisions; does not have to merge every PR.
+6. Existing docs and behavior constraints apply: preserve EEPROM/protocol, retrofit connector definitions, heater safety, Z/DMS/ECMP/Advance and special panel offset transfer. Separate pure refactors from behavior changes; hardware-only verification stays open. No new feature removal without explicit proof/authorization. Do not claim zero conflicts; disjoint ownership prevents most textual conflicts, latest-target validation catches semantic conflicts.
+
+## Current simulation-first print-core priority
+
+**P0 [Task0034](tasks/Task0034.md) supersedes the print-core work in production priority.** Owner explicitly requests expiring heater authorization and bounded power-off; 0032/0033 research retained, production held until 0034 software gate and baseline refresh. Task0032 is the existing research assignment after the merged native wave. See its full owner continuation for the G-code throughput and adaptive packing objective, simulation stages and optional T14/ALUBUTYL compute strategy. Physical printer testing is deferred indefinitely pending separate owner approval; software research and reproducible benchmark milestones may proceed without a printer. Do not merge unproven timing policy or imply hardware qualification. #91 remains held; coordinate before touching its UI scope.
+
+Task0033 is the owner-requested UART workstream targeting 500000 baud with exact nominal clock division, loss-aware reception and bounded IRQ latency. Read-only preparation may overlap Task0032; manager serializes production changes and refreshes Task0032 evidence after transport integration. See [Task0033](tasks/Task0033.md). No unqualified default change or hardware test.
+
+## Delivery and stopping point
+
+Modernize the whole maintained firmware. Use the Task0004 inventory plus all files added since to account for every production module at final review. Clear state ownership, understandable control flow and removal of proven duplication are concrete benefits. Record a reason when an existing implementation already meets the standard. File moves, line churn and source-size reduction alone do not demonstrate completion.
+
+For each task, identify the concrete benefit and the smallest change that delivers it. Close the task once its agreed scope and applicable checks are satisfied. An audit can recommend keeping the implementation when further restructuring has no demonstrated benefit. Record optional improvements as follow-ups. Use integrated wave commits as reproducible software checkpoints. Continue the planned refactoring through Task0016 with host replays, four AVR builds and task-specific evidence. Record each hardware-only question once for the consolidated final printer session; intermediate device runs are not wave prerequisites. Schedule further refactoring according to its contribution to a usable firmware release. Record any deferred scope and review downstream dependencies before rescheduling it.
+
+## Waves
+
+| Wave | Parallel tasks | Shared-file policy |
+|---|---|---|
+| 1 | 0001, 0002, 0003, 0004 | Isolated driver/communication internals; tooling and audit only |
+| 2 | 0005, 0006, 0007, 0008 | Frozen external APIs; persistence vs matrix vs sensors vs parser |
+| 3 | 0009, 0010, 0011, 0012 | One UI owner; thermal/RGB/scan contracts frozen |
+| 4 | 0013 | Exclusive hardware/build changes |
+| 5 | 0014 | Exclusive global ownership/API migration |
+| 6 | 0015 | Exclusive common headers/configuration |
+| 6b | 0017 | Exclusive operator dry-run retirement and legacy host handling |
+| 7 | 0016 | Integration audit and baseline for 0019 |
+| 8 | 0019 | Exclusive constants cleanup |
+| 9 | 0020 | Comment cleanup prepared separately; integrate after 0019 and refresh final candidate |
+
+| 10 | 0021 | Existing PID/autotune worker PR #90; finish and verify first |
+| 11 | 0022 | Exclusive ATmega2560: CPU, SRAM, Stack und Timing-Baseline |
+| 12 | 0023 | Exclusive ATmega2560: Compiler- und Linker-Optimierung |
+| 13 | 0024 | Exclusive ATmega2560: SRAM und Motion-Queue-Komprimierung |
+| 14 | 0025 | Exclusive ATmega2560: AVR-Arithmetik und Festkomma |
+| 15 | 0026 | Exclusive ATmega2560: ISR- und GPIO-Optimierung |
+| 16 | 0027 | Exclusive ATmega2560: Hardwaretimer und Step Packing |
+| 17 | 0028 | Exclusive ATmega2560: Foreground-Scheduler und G-Code-Durchsatz |
+| 18 | 0029 | Exclusive ATmega2560: Verbleibende Arduino-Abhängigkeiten |
+| 19 | 0030 | Exclusive ATmega2560: Gesamtbenchmark und Regression |
+| P0 | 0034 | Exclusive heater fail-off and interrupt optimization; before 0032/0033 production |
+| 20 | 0032 | Exclusive print core: quality-first packing and real-time maintenance budget |
+| 20a | 0033 | UART 500 kbaud and loss-aware transport; read-only prep in parallel, serialized production window with 0032 |
+| 21 | 0036 | Mandatory final global IRQ-mask minimization, after 0034 and 0032; exclusive production ownership |
+
+## ATmega2560 native optimization
+
+Owner authorized sequential autonomous implementation on 2026-11-25. Task0021 is already reserved for PID/autotune (#90); native tasks are 0022–0030. Preserve the final-cleanup checkpoint and allow Task0021 and any already claimed production work to finish before the first production optimization. Read-only baseline preparation may start now. Exactly one native task active at a time; use separate task branches/PRs, self-merge only after latest-target gates, then update own task record and start the next. No forced performance change: measured no-change is a valid result. Preserve all board variants, X44, EEPROM/protocol, watchdog/thermal protection, Z/DMS/ECMP/Advance and operator workflow; maintain Arduino sketch entry. Physical checks deferred to consolidated owner-approved device session. Report actual measured wins and rejected experiments, not target percentages.
+
+## Staging work around the AVR toolchain
+
+Read-only preparation can start in a later wave once an owner takes the task. Work on a task-private report or host replay can merge independently after reproduction on the exact checkout and diff review. This applies only when the diff has no effect on firmware, its configuration, or supported build inputs. Keep the original task open if binary evidence or implementation is outstanding. Record the evidence SHA, remaining checks and PR links in the task file. A partial PR does not release a successor wave.
+
+Source audits (including Task0004) may close on a reproducible full source scan, manual checks and clearly marked unknowns. Leave per-variant reachability, linked usage and byte savings to Task0003 or the named downstream owner where evidence is missing. A fixture-only inventory is insufficient. Task0003 may land host-tested tooling first. Its baseline is complete only with real output for all four variants.
+
+Production edits still start in their assigned wave. A worker can implement and optionally run host tests locally; use the existing GitHub Actions PR pipeline for required host and AVR verification, including draft PRs. A shared build host is an optional additional execution environment, not a prerequisite. Supply the tested candidate SHA and compare against its target using identical core, compiler and flags. Attach or link four build logs, ELF/map/size results and the task-specific timing evidence where applicable. Record open physical checks separately. Workers verify the current target and self-merge as above. Host and AVR jobs can run on different machines against the same source. Existing wave ordering governs production integration.
+
+## Task index
+
+| Task | Wave | Title | Initial status |
+|---|---|---|---|
+| [Task0001](tasks/Task0001.md) | 1 | DRV8711 intern | READY |
+| [Task0002](tasks/Task0002.md) | 1 | Communication und Zahlenformatierung | READY |
+| [Task0003](tasks/Task0003.md) | 1 | Build- und Ressourcenbaseline | READY |
+| [Task0004](tasks/Task0004.md) | 1 | Vollständiger Altcode-Audit | READY |
+| [Task0005](tasks/Task0005.md) | 2 | EEPROM-Architektur | WAITING |
+| [Task0006](tasks/Task0006.md) | 2 | BedMatrix | WAITING |
+| [Task0007](tasks/Task0007.md) | 2 | Temperatursensoren | WAITING |
+| [Task0008](tasks/Task0008.md) | 2 | G-Code-Eingang | WAITING |
+| [Task0009](tasks/Task0009.md) | 3 | UI und Menüsystem | WAITING |
+| [Task0010](tasks/Task0010.md) | 3 | Temperaturregelung | WAITING |
+| [Task0011](tasks/Task0011.md) | 3 | RGB-Beleuchtung | WAITING |
+| [Task0012](tasks/Task0012.md) | 3 | ScanSettings | WAITING |
+| [Task0013](tasks/Task0013.md) | 4 | HAL, Arduino Core, fastio und Buildsystem | WAITING |
+| [Task0014](tasks/Task0014.md) | 5 | Modulübergreifende Zustandsverwaltung | WAITING |
+| [Task0015](tasks/Task0015.md) | 6 | Header, Konfiguration und Abhängigkeiten | WAITING |
+| [Task0017](tasks/Task0017.md) | 6b | Operator-Dry-Run entfernen und thermische Fehlersperre erhalten | WAITING |
+| [Task0016](tasks/Task0016.md) | 7 | Abschlussaudit und Integration | WAITING |
+| [Task0019](tasks/Task0019.md) | 8 | Constants.h: ownership, typed interfaces and final evidence | WAITING |
+| [Task0020](tasks/Task0020.md) | 9 | Kommentarstil und leere Trennlinien | READY for preparation |
+
+| [Task0021 (PR #90)](https://github.com/Nibbels/Repetier-Firmware/pull/90) | 10 | PID und Autotune (existing PR #90) | IN_PROGRESS on worker branch |
+| [Task0022](tasks/Task0022.md) | 11 | CPU, SRAM, Stack und Timing-Baseline | WAITING |
+| [Task0023](tasks/Task0023.md) | 12 | Compiler- und Linker-Optimierung | WAITING |
+| [Task0024](tasks/Task0024.md) | 13 | SRAM und Motion-Queue-Komprimierung | WAITING |
+| [Task0025](tasks/Task0025.md) | 14 | AVR-Arithmetik und Festkomma | WAITING |
+| [Task0026](tasks/Task0026.md) | 15 | ISR- und GPIO-Optimierung | WAITING |
+| [Task0027](tasks/Task0027.md) | 16 | Hardwaretimer und Step Packing | WAITING |
+| [Task0028](tasks/Task0028.md) | 17 | Foreground-Scheduler und G-Code-Durchsatz | WAITING |
+| [Task0029](tasks/Task0029.md) | 18 | Verbleibende Arduino-Abhängigkeiten | WAITING |
+| [Task0030](tasks/Task0030.md) | 19 | Gesamtbenchmark und Regression | WAITING |
+| [Task0034](tasks/Task0034.md) | P0 | Expiring heater authorization and bounded power-off | READY / highest priority |
+| [Task0032](tasks/Task0032.md) | 20 | Quality-first automatic step packing and maintenance budget | READY |
+| [Task0033](tasks/Task0033.md) | 20a | 500 kbaud UART and loss-aware serial input | READY for research; production serialized |
+| [Task0036](tasks/Task0036.md) | 21 | Global interrupt-mask minimization and bounded real-time response | WAITING; mandatory after 0034 and 0032 |
+| Task0037 (reserved; file to be created after removal) | Deferred | Optional clean-sheet remote panel / hardware-harness interface review | WAITING; explicit owner activation after 0036 |
+
+## Audit coverage
+
+Prior audit points 1–2: byte/size history and already removed SdFat/FatStructs/SDCard/u8glib (Task0004/0016 verify, not reimplement). Point 3: normalized source overlap (0004). Point 4: driver, EEPROM, UI, Communication, HAL, thermal, matrix (0001/2/5/6/7/9/10/13/14). Point 5: library audit (0003/13). Point 6: obsolete build tooling (0003/13). Point 7: remaining modules, global state and includes (0008/11/12/14/15). Point 8: this wave schedule. Point 9 and additional audit steps: 0003/0004/0016. Existing hardware measurements and behavioral optimization roadmap are not silently marked complete.
+
+Baseline C++/header/INO: 37 files / 2,186,047 bytes original; 109 files / 1,109,597 bytes review. All original surviving source files changed at blob level. Selected normalized code-line overlap: DRV8711 100%, Communication 99%, TemperatureControl 92%, ui.cpp 81%, TemperatureSensors and UiFormatting 75%, UiSettings 67%, EEPROM 66%, HAL 65%, BedMatrix 62%, ScanSettings 51%, Printer 48%, RGB 34%, ZOffsetScan 25%, HeatBedScan 20%. Heuristic, not proof of identical behavior.

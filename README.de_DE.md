@@ -5,10 +5,12 @@
 
 Basierend auf der Repetier-Firmware - die schnelle und benutzerfreundliche Firmware  
 
+Dieser Branch empfängt Druckaufträge über USB.
+
 ## Warnhinweis
 Diese Firmware-Modifikation stellt eine Weiterentwicklung/Ergänzung von mhier's inoffizieller Firmware-Modifikation der original Conrad-Firmware dar. Sie wird vom Hersteller der RF1000 und RF2000 Geräte nicht unterstützt.  
 Für etwaige Schäden, die an Ihrem Gerät entstehen könnten, kann keine Verantwortung übernommen werden.  
-Diese Firmware unterstützt den Druck von SD-Karte nicht.  
+
 BENUTZUNG AUF EIGENE GEFAHR. 
 
 Link zur offiziellen Version der Firmware:
@@ -16,14 +18,14 @@ https://github.com/RF1000/Repetier-Firmware (siehe Branch developement. Oder auc
 
 ## Installationsanleitung
 
-- Das Firmwarepaket `Branch: community_development` herunterladen und entpacken.  
+- Diesen Branch (`ai-firmware-review`) herunterladen und entpacken. Dies ist ein Software-Review-Kandidat; die gesammelten Druckertests stehen noch aus.  
 - Installiere die Arduino.cc IDE 1.8.12 oder neuer, wenn es nicht bereits installiert ist.  
-- Man bearbeitet und speichert die Configuration.h bei Zeile 46 bis 48, je nachdem welchen Drucker man besitzt mit einem Texteditor. Man muss die zwei **//** vor dem Druckermodell entfernen, welches man aktivieren will:  
+- Man bearbeitet und speichert `Repetier/Configuration.h` passend zum Druckermodell mit einem Texteditor. Man muss die zwei **//** vor dem Druckermodell entfernen, welches man aktivieren will:  
 `#define MOTHERBOARD                         DEVICE_TYPE_RF1000` or  
 `#define MOTHERBOARD                         DEVICE_TYPE_RF2000` or  
 `#define MOTHERBOARD                         DEVICE_TYPE_RF2000v2`  
-- Wer den Fräsmodus nicht benötigt, kann ihn aus der Firmware entfernen. Dazu stellt man in der RF1000.h/RF2000.h/RF2000v2.h das FEATURE_MILLING_MODE auf 0.
-- Optional: Man bearbeitet und speichert Configuration.h und RF1000.h oder RF2000.h, wie man es für seinen speziellen Drucker braucht.
+- Dieser Stand ist für den 3D-Druck ausgelegt. Der [letzte Stand mit Fräscode](https://github.com/Nibbels/Repetier-Firmware/tree/7e2e08b7f6da7677007dfddd06f8fc5adeb7d709) liegt im Repository-Verlauf.
+- Für Umbauten stehen die Einstellungen in `Configuration.h` sowie in `RF1000.h` oder im gemeinsamen `RF2000.h` für RF2000 und RF2000v2. Die [Anschlussübersicht](docs/board-connectors.md) enthält das Beispiel für einen Hotend-Lüfter an X44.
 - Der Drucker wird mit dem USB-Kabel angeschlossen und angeschaltet.
 - Die Datei /Repetier/Repetier.ino doppelklicken. 
 - Innerhalb der türkisfarbenen Arduino-IDE muss man im Menü **Werkzeuge->** die Voreinstellungen für die RFx000-Boards prüfen oder einstellen:  
@@ -34,11 +36,15 @@ Port: Der Port des Druckers, wie `COM3`, wenn er korrekt verbunden ist.
 
 ## Vorbereitete Hex-Files / automatisches Build-System
 
-Wer mit den Standard-Konfigurationen zufrieden ist, kann auf der Seite https://jenkins.beta-centauri.de/view/Repetier/ fertig compilierte Hex-Files dieser Firmware herunterladen. Dort sind zwei Versionen zu finden, eine "stable" und eine "development".
+Für diesen Review-Branch erzeugen die [GitHub Actions Firmware-Prüfungen](https://github.com/Nibbels/Repetier-Firmware/actions/workflows/firmware-check.yml) vier Varianten mit Arduino CLI 1.2.2 und AVR Boards 1.8.6. Die Artefakte sind sieben Tage verfügbar. Der [Build- und Cleanup-Audit](coordination/audits/final-cleanup.md) erläutert den geprüften Buildweg und die älteren Alternativen. Historische Community-Builds wurden unter https://jenkins.beta-centauri.de/view/Repetier/ veröffentlicht; sie gehören nicht zu diesem Review-Branch.
 Siehe auch http://www.rf1000.de/viewtopic.php?f=7&t=2057
 Unter Linux kann man diese Firmwares mit 
 ```avrdude -patmega2560 -cwiring -P/dev/ttyUSB0 -b115200 -D -Uflash:w:Repetier.hex:i``` 
 in die Drucker einspielen.
+
+## Vorheizprofile
+
+Unter **Configuration → Preheat profiles** stellst du Bett- und Extrudertemperatur für Profil A und B ein. Der Drucker speichert jede Änderung im internen EEPROM. Unter **Extruder** startest du das Profil anhand der angezeigten Temperaturen. Das Bett steht zuerst. Mit 0 °C schaltest du die jeweilige Heizung aus. Die Werkseinstellungen sind 60/180 °C für A und 100/210 °C für B.
 
 ## Wenn du von einer älteren Version als 1.37r.Mod oder der offiziellen Firmware bis 1.39 updatest, führe bitte einen neuen M303 PID-Autotune bei allen Heizelementen aus!  
 - RF2000/RF1000 Extruder links: Menü -> Configuration -> Temperatures -> Extruder 0 -> PID Pessen-Rule  
@@ -96,7 +102,6 @@ _von Nibbels_:
 **M3902 Sn** - Speichere die aktuell im RAM liegende zMatrix unter der Postion n = {1..9}  
 **M3911 S6000 P9000 E-30 - Bei hohen Kraftwerten wegen Überextrusion wird die Filamentförderung zurückgefahren (-10% pro 1000 digits, beginnend bei 6000 digits)  
 **M3911 S6000 P9000 F-30 - Bei hohen Kraftwerten wird die Druckgeschwindigkeit eingeschränkt (Example: -10% Geschwindigkeit pro 1000 digits, beginnend bei 6000 digits) M3911 ist im Menü unter Configuration -> DMS Features -> Digit Flow CMP zur Laufzeit einstellbar (Kein EEPROM-Support!)  
-**M3939 Fn St1 Pt2 Ex Iy Rm** - um ein Diagramm über die Filamentextrusionsgeschwindigkeit und die korrelierende Digit Zahl aufzuzeichnen -> ermöglicht Rückschlüsse zur Viskosität des Filaments. Siehe unten.
 **M3920 Sb** - Flüstermodus ein oder ausschalten. (Diese Funktion vermindert den Strom der Steppermotoren auf ein in der Firmware definiertes alternatives Strom-Profil MOTOR\_CURRENT\_SILENT = [110/110/90/90/90] ).  
 Es wurden **alle Compilerwarnungen und Compilerfehler eliminiert**.  
 Weitere (passende) **Verbesserungen/Bugfixes/Commits der Entwickler der originalen RepetierFirmware** wurden auch in diesen Mod übernommen, obwohl die original RF2000/RF1000 Firmware diese nicht übernommen hatte.  
@@ -161,30 +166,9 @@ Wird aus irgendeinem Grund die Z-Kompensation ausgeschaltet wird SenseOffset ebe
 Abschließend, sobald das Druckobjekt ausgegeben wird, wird M3909 inaktiv und vollständig deaktiviert.
 Ohne Z-Kompensation kann SenseOffset nicht aktiviert werden, es wird sofort deaktiviert.
 
+Bei einer manuell programmierten Startmade SenseOffset-AutoStart ausschalten und `M3909 P…` nach der letzten Bewegung der Startmade einfügen. [Reihenfolge im Startcode](docs/first-layer-control/automatic-start-line.md#manual-start-lines)
+
 Während des Drucks kann man während des ersten Layers diese Funktion aktivieren oder das Limit ändern, indem man die "links"- und "rechts"-Navigationstasten an Bedienfeld des Druckers nutzt, solange man sich im "Mod-Menü" des Druckers befindet. (Seite 2 auf dem Display des Druckers. Seite 2 kann über die Pfeil nach unten Taste vom Hauptbildschirm aus aufgerufen werden).  
-
-## Filament Viskositätsmessung = SensibleViscosity  
-* M3939 Fn St1 Pt2 Ex Iy Rm  
-**S** = Starttemperatur für den Test in °C  
-**P** = Enddemperatur für den Test in °C  
-**F** = maximaler Wert für die Digits = 10000 oder {1...12000} [digits]  
-**E** = maximale Extrusionsgeschwindigkeit = 5 oder {0,05 .... max.StartFeedrate} [mm/s]  
-optional:  
-**I** = Extrusionsgeschwindigkeitssteigerungsrate = 0.1 oder {0.02.....0.4} [mm/s]  
-**R** = maximaler Digitunterschied welche angenommen wird um eine "gefüllte" Düse anzunehmen = 800 [digits]  
-
-Der Drucker wird automatisch in die Luft extrudieren und die dabei entstehende Kraft messen. Nach jeder Messung wird die Geschwindigkeit der Extrusion erhöht.  
-Man bekommt eine CSV-formatierte Ausgabe im Konsolenfenster des Slicers oder Printservers angezeigt, welche sich dann kopieren und anschließend in eine Textdatei (\*.CSV) einfügen lässt. Diese kann dann z.B. in MS Exel importiert und in einen Graphen umgewandelt werden. 
-Der Sinn dieses Features ist, dass man Filamente und ihre Viskosität zu gegebener Temperatur erfassen vergleichen kann. Kennt man sein Filament aus bisherigen Diagrammen gut, kann man durch einen solchen Test z.B. auch den Verstopfungsgrad der Düse nachvollziehen.
-
-(Mein) länger angebratenes ABS: http://www.rf1000.de/viewtopic.php?f=62&t=1549&p=16617#p16617  
- ![ ](https://downfight.de/picproxy.php?url=http://image.prntscr.com/image/3508699873f7431489d1df9344110e7f.png "Angebratenes ABS")  
-(Mein) ABS: http://www.rf1000.de/viewtopic.php?f=23&t=1620&p=16613#p16605  
- ![ ](https://downfight.de/picproxy.php?url=http://image.prntscr.com/image/610de7720945474590668b20c05d7652.png "ABS")  
- Das ist dasselbe ABS bei mehr und mehr verstopfter Düse:
- ![ ](https://downfight.de/picproxy.php?url=http://image.prntscr.com/image/c00ac11b3a384994b37ce8bc3cf03bd9.png "Clogged Nozzle ABS")  
- Das ist rotes PLA:
- ![ ](https://downfight.de/picproxy.php?url=http://image.prntscr.com/image/2a3253c930794afc81e4fa4d4b2a4261.png "PLA red")  
 
 ## Konfigurierbarer Z-Notaus- und Notpause-Digits in Menü und EEPROM  
 Menü -> Configuration -> General  
@@ -201,13 +185,7 @@ Menü -> Configuration -> Stepper :: DblFq = 6500 oder {5000...12000}
 
 ## Konfigurierbare Temperatureinstellungen im Menü und EEPROM  
 Der PID-Autotune, die weiteren Regelparameter und der Sensortyp sind im Menü einstellbar.  
-Menü -> Configuration -> Temperatures -> Extruder0/Extruder1/Heizbett -> Sensortype: {1=Pico/Reprap, 3=EPCOS G550, 8=104-GT2, 14=3950-100k}  
-Sollte man andere Sensortypen benötigen kann man sie in der RF1000.h / RF2000.h nachschlagen und im EEPROM direkt editieren.  
-
-## Dual-Hotend TipDown Support (beta)
-* M3919 [S]mikrometer - Testfunktion für ein Herunterlass-Hotend beim rechten Hotend T1: Das rechte Hotend kann gefedert eingebaut werden. Wird das Hotend ausgewählt, wird das bett automatisch heruntergefahren, sodass es niedriger hängt wie das linke hotend, aber nicht mit dem Bett kollidiert. Der Ultimaker 3 macht das so beim rechten Hotend.
-Beispiel: M3919 T1 Z-0.6 sagt dem Drucker, dass das Rechte Hotend 0,6mm weiter herunterreichen kann, wie das linke.
-* EEPROM Support für Offset.
+Unter **Configuration → Temperatures** bietet das Menü die Sensortypen `1`, `3`, `8` und `13` für die Extruder sowie `3` und `4` für das Heizbett. Die vollständige Tabelle enthält auch die Typen für die Build-Konfiguration und das EEPROM. [Temperatursensoren und IDs](docs/board-connectors.md#temperature-sensor-ids)
 
 ## Feature Digit-Z-Kompensation (beta)
 Wenn auf die DMS gedrückt wird, wird das Bett in seiner Höhe korrigiert, wenn die Z-Kompensation arbeitet. Damit wird die Durchbiegung der DMS-Sensoren unter Last korrigiert. Die Änderungen bewegen sich in etwa im Bereich von +0,01mm wenn +1000 Digits Kraft auf die Sensoren aufgebracht werden.
@@ -215,8 +193,8 @@ Wenn auf die DMS gedrückt wird, wird das Bett in seiner Höhe korrigiert, wenn 
 ## RF2000: Zusätzlicher Temperatursensor für den Heizraum  
 Diese Option aktiviert einen weiteren Temperatursensor C, dessen Messwerte automatisch mit der Statusabfrage ausgegeben werden.
 Beispiel: ``` 22:09:24.271: T:21.7 /0 @:0 B:20.6 /0 B@:0 T0:21.7 /0 @0:0 T1:23.2 /0 @1:0 C:21.5 /0 C@:0 F:-173 /0 @:0 ```  
-Weitere Konfigurationsoptionen (Einstellunge der Umrechungstabelle) findet man durch die Suche nach RESERVE_ANALOG_SENSOR_TYPE in der RF2000.h.
-Sucht man in der Firmware nach RESERVE_ANALOG_INPUTS sieht man weiteren nützlichen Code, welcher zum Sensor gehört.
+`RESERVE_ANALOG_SENSOR_TYPE` in `RF2000.h` wählt die Umrechnung für den Eingang `X35_ADC_CHANNEL`. [Temperatursensoren und IDs](docs/board-connectors.md#temperature-sensor-ids)
+
 Man muss, um den Temperatursensor zu nutzen, ein zusätzliches Kabel mit einem Temperatursensor am Port X35 an der Druckerplatine des RF2000-Druckers anschliessen. Anschließend kann der optionale Sensor an einem beliebigen Punkt im Drucker positioniert werden.
 Es könnte z.B. die Temperatur in der Nähe der Hauptplatine, die Hitzeentwicklung an einem Steppermotor oder die Temperatur im Druckraum gemessen werden.
 

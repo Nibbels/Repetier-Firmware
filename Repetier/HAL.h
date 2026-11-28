@@ -19,18 +19,23 @@
 #define HAL_H
 
 /**
-  This is the main Hardware Abstraction Layer (HAL).
-  To make the firmware work with different processors and toolchains,
-  all hardware related code should be packed into the hal files.
+  ATmega2560 hardware access, timers, ADC publication and PWM requests.
+  BoardConfiguration.h selects RF model and pins; UsbSerial and TwiTransfer
+  own the respective peripheral transports. Other MCUs are not supported.
 */
 
+#include "BoardConfiguration.h"
 #include <avr/pgmspace.h>
 #include <avr/io.h>
+#include "UsbSerial.h"
 #define prog_char char
 
 #define INLINE __attribute__((always_inline))
 
 #define PACK
+
+// Give an enabled stepper driver time to settle before the first step.
+constexpr unsigned int stepperEnableDelayMs = 25;
 
 #define FSTRINGVALUE(var, value) const char var[] PROGMEM = value;
 #define FSTRINGVAR(var) static const char var[] PROGMEM;
@@ -45,26 +50,20 @@ All known arduino boards use 64. This value is needed for the extruder timing. *
 
 #define ANALOG_PRESCALER _BV(ADPS0) | _BV(ADPS1) | _BV(ADPS2)
 
-#ifndef EXTERNALSERIAL
 #undef HardwareSerial_h
 #define HardwareSerial_h // Don't use standard serial console
-#endif
 
 #include <inttypes.h>
-#include "Stream.h"
-#include "Print.h"
 
 #include "Arduino.h"
 #include "fastio.h"
 
-// FEATURE_WATCHDOG
-extern unsigned char g_bPingWatchdog;
-extern unsigned long g_uLastCommandLoop;
+#define _STEP_WITH_COUNT(IO, pending, remaining) \
+    HAL::stepWithCount(_SFR_IO_ADDR(DIO ## IO ## _WPORT), DIO ## IO ## _PIN, pending, remaining)
+#define STEP_WITH_COUNT(IO, pending, remaining) _STEP_WITH_COUNT(IO, pending, remaining)
 
-#ifdef MOTHERBOARD
 #ifndef WATCHDOG_PIN
 #error Watchdog pin not defined. We really need some Watchdog pin with a working watchdogtimer!
-#endif
 #endif
 
 //7 means down till 2.1hz is possible:
@@ -72,10 +71,19 @@ extern unsigned long g_uLastCommandLoop;
 
 #define PART_FAN_MODE_PWM 0
 #define PART_FAN_MODE_PDM 1
-extern uint8_t part_fan_frequency_modulation;
-extern uint8_t part_fan_pwm_speed;
-extern uint8_t part_fan_pwm_max; //this is calculated as 99%
-extern uint8_t part_fan_pwm_min; //this is calculated as 1%
+
+// Indices follow the temperature ADC channel order in HAL.cpp.
+enum TemperatureAdcIndex : uint8_t {
+    Hotend0AdcIndex,
+#if NUM_EXTRUDER > 1
+    Hotend1AdcIndex,
+#endif
+    BedAdcIndex,
+#ifdef X35_ADC_CHANNEL
+    ChamberAdcIndex,
+#endif
+    TemperatureAdcCount
+};
 
 class InterruptProtectedBlock {
 private:
@@ -111,12 +119,6 @@ public:
 #define bit_clear(x, y) x &= ~(1 << y)
 #define bit_set(x, y) x |= (1 << y)
 
-/** defines the data direction (reading from I2C device) in i2cStart(),i2cRepStart() */
-#define I2C_READ 1
-
-/** defines the data direction (writing to I2C device) in i2cStart(),i2cRepStart() */
-#define I2C_WRITE 0
-
 #define LIMIT_INTERVAL ((F_CPU / 40000) + 1)
 
 #ifndef cbi
@@ -135,25 +137,6 @@ typedef uint8_t ufast8_t;
 
 #define FAST_INTEGER_SQRT
 
-#if FEATURE_USER_INT3
-extern volatile unsigned long g_uCOUNT_INT3; //dummy variable for dummy function!
-
-void USER_INTERRUPT3_HOOK(); //dummy function!
-#endif                       //FEATURE_USER_INT3
-
-#if FEATURE_READ_CALIPER
-extern volatile long caliper_um; //last valid readout
-
-//auswertevariablen:
-extern uint16_t caliper_filament_standard;
-extern uint32_t caliper_collect_um;
-extern uint32_t caliper_collect_count;
-extern int8_t caliper_collect_adjust;
-
-void FEATURE_READ_CALIPER_HOOK(); //read in calipers 48bit protocol bitwise!
-#endif                            //FEATURE_READ_CALIPER
-
-#ifndef EXTERNALSERIAL
 // Implement serial communication for one stream only!
 /*
   HardwareSerial.h - Hardware serial library for Wiring
@@ -177,85 +160,6 @@ void FEATURE_READ_CALIPER_HOOK(); //read in calipers 48bit protocol bitwise!
 
   Modified to use only 1 queue with fixed length by Repetier
 */
-
-#define SERIAL_BUFFER_SIZE 128
-#define SERIAL_BUFFER_MASK 127
-
-#undef SERIAL_TX_BUFFER_SIZE
-#undef SERIAL_TX_BUFFER_MASK
-#ifdef BIG_OUTPUT_BUFFER
-#define SERIAL_TX_BUFFER_SIZE 128
-#define SERIAL_TX_BUFFER_MASK 127
-#else
-#define SERIAL_TX_BUFFER_SIZE 64
-#define SERIAL_TX_BUFFER_MASK 63
-#endif
-
-struct ring_buffer_rx {
-    unsigned char buffer[SERIAL_BUFFER_SIZE];
-    volatile uint8_t head;
-    volatile uint8_t tail;
-};
-
-struct ring_buffer_tx {
-    unsigned char buffer[SERIAL_TX_BUFFER_SIZE];
-    volatile uint8_t head;
-    volatile uint8_t tail;
-};
-
-class RFHardwareSerial : public Stream {
-public:
-    ring_buffer_rx* _rx_buffer;
-    ring_buffer_tx* _tx_buffer;
-    volatile uint8_t* _ubrrh;
-    volatile uint8_t* _ubrrl;
-    volatile uint8_t* _ucsra;
-    volatile uint8_t* _ucsrb;
-    volatile uint8_t* _udr;
-    uint8_t _rxen;
-    uint8_t _txen;
-    uint8_t _rxcie;
-    uint8_t _udrie;
-    uint8_t _u2x;
-
-public:
-    RFHardwareSerial(ring_buffer_rx* rx_buffer, ring_buffer_tx* tx_buffer,
-                     volatile uint8_t* ubrrh, volatile uint8_t* ubrrl,
-                     volatile uint8_t* ucsra, volatile uint8_t* ucsrb,
-                     volatile uint8_t* udr,
-                     uint8_t rxen, uint8_t txen, uint8_t rxcie, uint8_t udrie, uint8_t u2x);
-    void begin(unsigned long);
-    void end();
-    virtual int available(void);
-    virtual int peek(void);
-    virtual int read(void);
-    virtual void flush(void);
-    virtual size_t write(uint8_t);
-    using Print::write; // pull in write(str) and write(buf, size) from Print
-    operator bool();
-    int outputUnused(void); // Used for output in interrupts
-};
-
-extern RFHardwareSerial RFSerial;
-#define RFSERIAL RFSerial
-#define WAIT_OUT_EMPTY \
-    while (tx_buffer.head != tx_buffer.tail) { }
-#else // EXTERNALSERIAL
-#define RFSERIAL Serial
-#if defined(BLUETOOTH_SERIAL) && BLUETOOTH_SERIAL > 0
-#if BLUETOOTH_SERIAL == 1
-#define RFSERIAL2 Serial1
-#elif BLUETOOTH_SERIAL == 2
-#define RFSERIAL2 Serial2
-#elif BLUETOOTH_SERIAL == 3
-#define RFSERIAL2 Serial3
-#elif BLUETOOTH_SERIAL == 4
-#define RFSERIAL2 Serial4
-#elif BLUETOOTH_SERIAL == 5
-#define RFSERIAL2 Serial5
-#endif
-#endif
-#endif // EXTERNALSERIAL
 
 #define OUT_P_I(p, i) Com::printF(PSTR(p), (int)(i))
 #define OUT_P_I_LN(p, i) Com::printFLN(PSTR(p), (int)(i))
@@ -465,7 +369,31 @@ public:
 
     static int32_t CPUDivU2(unsigned int divisor);
 
-    static inline void delayMicroseconds(unsigned int delayUs) //see https://www.arduino.cc/en/Reference/AttachInterrupt for interrupt-warning.
+    static INLINE void stepWithCount(uint8_t port, uint8_t bit, volatile int16_t& pending, int16_t remaining) {
+        // Book the step while STEP is high. The stores take four cycles and CBI takes two.
+        // DRV8711 requires STEP high >= 1.9 us. Round UP to whole CPU cycles
+        // (31 at 16 MHz = 1.9375 us). Shorter pulses are hardware experiments only.
+        constexpr unsigned long highCycles = (19UL * F_CPU + 9999999UL) / 10000000UL;
+        constexpr unsigned long waitCycles = highCycles - 6;
+        uint8_t counter;
+        asm volatile(
+            "sbi %[port], %[bit]\n\t"
+            "std %a[pending]+1, %B[remaining]\n\t"
+            "st %a[pending], %A[remaining]\n\t"
+            "ldi %[counter], %[loops]\n"
+            "1: dec %[counter]\n\t"
+            "brne 1b\n\t"
+            ".rept %[tail]\n\t"
+            "nop\n\t"
+            ".endr\n\t"
+            "cbi %[port], %[bit]"
+            : [counter] "=&d"(counter)
+            : [port] "I"(port), [bit] "I"(bit), [pending] "b"(&pending),
+              [remaining] "r"(remaining), [loops] "M"(waitCycles / 3), [tail] "n"(waitCycles % 3)
+            : "cc", "memory");
+    }
+
+    static inline void delayMicroseconds(unsigned int delayUs) // See https://www.arduino.cc/en/Reference/AttachInterrupt for interrupt-warning.
     {
         ::delayMicroseconds(delayUs);
     } // delayMicroseconds
@@ -473,16 +401,6 @@ public:
     static inline void delayMilliseconds(unsigned int delayMs) {
         ::delay(delayMs);
     } // delayMilliseconds
-
-    static inline void tone(uint8_t pin, int duration) {
-        ::tone(pin, duration);
-
-    } // tone
-
-    static inline void noTone(uint8_t pin) {
-        ::noTone(pin);
-
-    } // noTone
 
     static inline void eprSetByte(unsigned int pos, uint8_t value) {
         uint8_t oldval = eprGetByte(pos);
@@ -559,197 +477,78 @@ public:
     } // readFlashByte
 
     static inline void serialSetBaudrate(long baud) {
-        RFSERIAL.begin(baud);
+        UsbSerial::begin(baud);
 
     } // serialSetBaudrate
 
     static inline bool serialByteAvailable() {
-        return RFSERIAL.available() > 0;
+        return UsbSerial::available();
 
     } // serialByteAvailable
 
     static inline uint8_t serialReadByte() {
-        return RFSERIAL.read();
+        return UsbSerial::read();
 
     } // serialReadByte
 
     static inline void serialWriteByte(char b) {
-        RFSERIAL.write(b);
+        UsbSerial::write(b);
 
     } // serialWriteByte
 
     static inline void serialFlush() {
-        RFSERIAL.flush();
+        UsbSerial::flush();
 
     } // serialFlush
 
     static void setupTimer();
+
+    static void resetPwmOutputs();
+    static uint8_t outputDuty(uint8_t channel);
+    static void setHeaterDuty(uint8_t channel, uint8_t duty);
+    static void setBoardFan(bool enabled);
+    static uint8_t partFanSpeed();
+    static void setPartFanSpeed(uint8_t speed);
+    static uint8_t partFanDivisor();
+    static void setPartFanDivisor(uint8_t divisor);
+    static uint8_t partFanMode();
+    static void setPartFanMode(uint8_t mode);
+    static uint8_t partFanMinDuty();
+    static uint8_t partFanMaxDuty();
+    static void setPartFanDutyRange(uint8_t minimum, uint8_t maximum);
     static void showStartReason();
     static int getFreeRam();
     static void resetHardware();
 
-    // SPI related functions
-    static void spiBegin() {
-#if SDSS >= 0
-        SET_INPUT(MISO_PIN);
-        SET_OUTPUT(MOSI_PIN);
-        SET_OUTPUT(SCK_PIN);
-        // SS must be in output mode even it is not chip select
-        SET_OUTPUT(SDSS);
-
-#if SDSSORIG > -1
-        SET_OUTPUT(SDSSORIG);
-#endif // SDSSORIG >- 1
-
-        // set SS high - may be chip select for another SPI device
-#if SET_SPI_SS_HIGH
-        WRITE(SDSS, HIGH);
-#endif // SET_SPI_SS_HIGH
-#endif // SDSS>=0
-
-    } // spiBegin
-
-    static inline void spiInit(uint8_t spiRate) //TODO ?? : see https://github.com/repetier/Repetier-Firmware/commit/5c139806139d738419e666147c28b51971e1bab5 ??
-    {
-        //spiRate = spiRate > 12 ? 6 : spiRate/2;
-        uint8_t r = 0;
-        for (uint8_t b = 2; spiRate > b && r < 6; b <<= 1, r++)
-            ;
-
-        SET_OUTPUT(SS);
-        WRITE(SS, HIGH);
-        SET_OUTPUT(SCK);
-        SET_OUTPUT(MOSI_PIN);
-        SET_INPUT(MISO_PIN);
-
-#ifdef PRR
-        PRR &= ~(1 << PRSPI);
-#elif defined PRR0
-        PRR0 &= ~(1 << PRSPI);
-#endif // PRR
-
-        // See avr processor documentation
-        //SPCR = (1 << SPE) | (1 << MSTR) | (spiRate >> 1);
-        //SPSR = spiRate & 1 || spiRate == 6 ? 0 : 1 << SPI2X;
-
-        SPCR = (1 << SPE) | (1 << MSTR) | (r >> 1);
-        SPSR = (r & 1 || r == 6 ? 0 : 1) << SPI2X;
-    } // spiInit
-
-    static inline uint8_t spiReceive(uint8_t send = 0xff) {
-        SPDR = send;
-        while (!(SPSR & (1 << SPIF)))
-            ;
-        return SPDR;
-    } // spiReceive
-
-    static inline void spiReadBlock(uint8_t* buf, size_t nbyte) {
-        if (nbyte-- == 0)
-            return;
-        SPDR = 0XFF;
-        for (size_t i = 0; i < nbyte; i++) {
-            while (!(SPSR & (1 << SPIF)))
-                ;
-            buf[i] = SPDR;
-            SPDR = 0XFF;
-        }
-        while (!(SPSR & (1 << SPIF)))
-            ;
-        buf[nbyte] = SPDR;
-
-    } // spiReadBlock
-
-    static inline void spiSend(uint8_t b) {
-        SPDR = b;
-        while (!(SPSR & (1 << SPIF)))
-            ;
-
-    } // spiSend
-
-    static inline void spiSend(const uint8_t* buf, size_t n) {
-        if (n == 0)
-            return;
-        SPDR = buf[0];
-        if (n > 1) {
-            uint8_t b = buf[1];
-            size_t i = 2;
-            while (1) {
-                while (!(SPSR & (1 << SPIF)))
-                    ;
-                SPDR = b;
-                if (i == n)
-                    break;
-                b = buf[i++];
-            }
-        }
-        while (!(SPSR & (1 << SPIF)))
-            ;
-
-    } // spiSend
-
-    static inline __attribute__((always_inline)) void spiSendBlock(uint8_t token, const uint8_t* buf) {
-        SPDR = token;
-        for (uint16_t i = 0; i < 512; i += 2) {
-            while (!(SPSR & (1 << SPIF)))
-                ;
-            SPDR = buf[i];
-            while (!(SPSR & (1 << SPIF)))
-                ;
-            SPDR = buf[i + 1];
-        }
-        while (!(SPSR & (1 << SPIF)))
-            ;
-
-    } // spiSendBlock
-
-    // I2C Support
-    static void i2cInit(unsigned long clockSpeedHz);
-    static unsigned char i2cStart(unsigned char address);
-    static void i2cStartWait(unsigned char address);
-    static void i2cStop(void);
-    static void i2cWrite(unsigned char data);
-    static unsigned char i2cReadAck(void);
-    static unsigned char i2cReadNak(void);
-
-    //Nibbels: Use watchdog to trigger external watchdog with constant time function according to command loop.
+    // Nibbels: Use watchdog to trigger external watchdog with constant time function according to command loop.
     static void WDT_Init(void);
 
-    // Watchdog support FEATURE_WATCHDOG
+    // Watchdog support
     static void startWatchdog();
     static void stopWatchdog();
     static void tellWatchdogOk();
-    inline static void pingWatchdog() {
-        if (!g_bPingWatchdog) {
-            // do not trigger the watchdog in case it is not enabled
-            return;
-        }
-        // external watchdog
-        if ((HAL::timeInMilliseconds() - g_uLastCommandLoop) < WATCHDOG_MAIN_LOOP_TIMEOUT) {
-            // ping the watchdog only in case the mainloop is still being called
-            WRITE(WATCHDOG_PIN, READ(WATCHDOG_PIN) ? 0 : 1);
-        }
-    } // pingWatchdog
+    static bool watchdogEnabled();
+
+    static bool takeScanTick();
+    static bool takeCompensationTick();
+    static bool takeFeatureTick();
+    static bool takeTemperatureTick();
+    static bool temperatureTickPending();
 
     inline static void testWatchdog() {
         while (1) {
         }
     } // testWatchdog
-      // END FEATURE_WATCHDOG
 
     inline static float maxExtruderTimerFrequency() {
         return (float)F_CPU / TIMER0_PRESCALE;
 
     } // maxExtruderTimerFrequency
 
-#if FEATURE_SERVO && MOTHERBOARD == DEVICE_TYPE_RF1000
-    static unsigned int servoTimings[4];
-    static void servoMicroseconds(uint8_t servo, int ms);
-#endif // FEATURE_SERVO && MOTHERBOARD == DEVICE_TYPE_RF1000
-
     static void analogStart();
-#if USE_ADVANCE
-    static void resetExtruderDirection();
-#endif // USE_ADVANCE
+    static uint16_t temperatureAdcSample(uint8_t index); // Raw diagnostic snapshot.
+    // Non-consuming snapshot; false before first publication or after expiry.
+    static bool temperatureAdcSample(uint8_t index, uint16_t& sample);
 };
 
 #define EXTRUDER_TIMER_VECTOR TIMER0_COMPA_vect

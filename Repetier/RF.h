@@ -15,14 +15,23 @@
     along with Repetier-Firmware.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// RF-specific integration declarations, panel action IDs and accessory interfaces; not the owner of all RF services.
+
 #ifndef RF_H
 #define RF_H
+
+#include "HAL.h"
+#include "gcode.h"
+#include "QueueTask.h"
+
+#include "CalibrationScan.h"
+#include "RgbLighting.h"
 
 // ##########################################################################################
 // ##   RF specific UI Actions
 // ##########################################################################################
 
-//Diese Events sind alle in ProcessButton() in den case`s verlinkt. Der rest nicht, siehe ui.h und executeAction()
+// Action IDs are consumed by the panel dispatcher (UiActions.cpp) and menu definitions; see ui.h.
 
 #define UI_ACTION_RF_MIN_REPEATABLE 500
 
@@ -31,7 +40,6 @@
 #define UI_ACTION_RF_EXTRUDER_OUTPUT 516
 #define UI_ACTION_RF_EXTRUDER_RETRACT 517
 #define UI_ACTION_RF_SET_Z_MATRIX_HEAT_BED 518
-#define UI_ACTION_RF_SET_Z_MATRIX_WORK_PART 519
 #define UI_ACTION_RF_SET_SCAN_DELTA_X 520
 #define UI_ACTION_RF_SET_SCAN_DELTA_Y 521
 #define UI_ACTION_RF_SCAN_START_HEIGHT 530
@@ -46,26 +54,21 @@
 #define UI_ACTION_RF_SCAN_HEAT_BED 1520
 #define UI_ACTION_RF_SCAN_HEAT_BED_PLA 1521
 #define UI_ACTION_RF_SCAN_HEAT_BED_ABS 1522
-#define UI_ACTION_RF_PARK 1523
 #define UI_ACTION_RF_RESET 1524
 #define UI_ACTION_RF_RESET_ACK 1525
 #define UI_ACTION_RF_OUTPUT_OBJECT 1526
-#define UI_ACTION_RF_FIND_Z_ORIGIN 1527
-#define UI_ACTION_RF_SCAN_WORK_PART 1528
 #define UI_ACTION_RF_SET_SCAN_XY_START 1529
 #define UI_ACTION_RF_SET_SCAN_XY_END 1530
-//FEATURE_ALIGN_EXTRUDERS
-#define UI_ACTION_RF_ALIGN_EXTRUDERS 1531
 
 #define UI_ACTION_RF_MAX_SINGLE 1600
 
 /*
 // ##########################################################################################
-// ##   RF specific M codes
+// ##   Historical command notes. Active dispatch is in GCodeCommands.cpp.
 // ##########################################################################################
 
 // ##########################################################################################
-// ##   the following M codes are for the heat bed scan in operating mode "print"
+// ##   the following M codes are for the heat-bed scan
 // ##########################################################################################
 
 - M3000 - turn the z-compensation off
@@ -151,57 +154,55 @@
   - Examples:
   - M3005 S1 ; sets the debug level to 1
 
-- M3030 [S] - configure the fast step size for moving of the heat bed up during the heat bed/work part scan
+- M3030 [S] - configure the fast step size for moving of the heat bed up during the heat-bed scan
   - Examples:
   - M3030 S64 ; the fast upwards movements use 64 [steps] between two checks about whether a contact is detected
 
-- M3031 [S] - configure the slow step size for moving of the heat bed up during the heat bed/work part scan
+- M3031 [S] - configure the slow step size for moving of the heat bed up during the heat-bed scan
   - Examples:
   - M3031 S16 ; the slow upwards movements use 16 [steps] between two checks about whether a contact is detected
 
-- M3032 [S] - configure the fast step size for moving of the heat bed down during the heat bed/work part scan
+- M3032 [S] - configure the fast step size for moving of the heat bed down during the heat-bed scan
   - Examples:
   - M3032 S640 ; the fast downwards movements use 640 [steps] between two checks about whether the extruder/tool is free again
 
-- M3033 [S] - configure the slow step size for moving of the heat bed down during the heat bed/work part scan
+- M3033 [S] - configure the slow step size for moving of the heat bed down during the heat-bed scan
   - Examples:
   - M3033 S32 ; the slow downwards movements use 32 [steps] between two checks about whether the extruder/tool is free again
 
-- M3040 [S] - configure the delay ( in ms ) between two fast movements during the heat bed/work part scan
+- M3040 [S] - configure the delay ( in ms ) between two fast movements during the heat-bed scan
   - Examples:
-  - M3040 S5 ; during the heat bed/work part scan, the firmware waits 5 [ms] between two fast movements
+  - M3040 S5 ; during the heat-bed scan, the firmware waits 5 [ms] between two fast movements
 
-- M3041 [S] - configure the delay ( in ms ) between two slow movements during the heat bed/work part scan
+- M3041 [S] - configure the delay ( in ms ) between two slow movements during the heat-bed scan
   - Examples:
-  - M3041 S100 ; during the heat bed/work part scan, the firmware waits 100 [ms] between two slow movements
+  - M3041 S100 ; during the heat-bed scan, the firmware waits 100 [ms] between two slow movements
 
 - M3042 [S] - configure the delay ( in ms ) between reaching of a new x/y position and the test of the idle pressure
   - Examples:
-  - M3042 S250 ; during the heat bed/work part scan, the firmware waits 250 [ms] between reaching of a new x/y position and the test of the idle pressure
+  - M3042 S250 ; during the heat-bed scan, the firmware waits 250 [ms] between reaching of a new x/y position and the test of the idle pressure
 
 - M3050 [S] - configure the contact pressure delta ( units are [digits] )
   - Examples:
-  - M3050 S10 ; during the heat bed/work part scan, a pressure difference of 10 [digits] is detected as contact
+  - M3050 S10 ; during the heat-bed scan, a pressure difference of 10 [digits] is detected as contact
 
 - M3051 [S] - configure the retry pressure delta ( units are [digits] )
   - Examples:
-  - M3051 S5 ; during the heat bed/work part scan, a pressure difference of 5 [digits] must be reached in order to switch from the slow downwards movement to the slow upwards movement
+  - M3051 S5 ; during the heat-bed scan, a pressure difference of 5 [digits] must be reached in order to switch from the slow downwards movement to the slow upwards movement
 
 - M3052 [S] - configure the idle pressure tolerance ( units are [digits] )
   - Examples:
-  - M3052 S5 ; during the heat bed/work part scan, the idle pressure must not drift more than 5 [digits]
+  - M3052 S5 ; during the heat-bed scan, the idle pressure must not drift more than 5 [digits]
 
-- M3053 [S] - configure the number of A/D converter reads per pressure measurement
-  - Examples:
-  - M3053 S15 ; during the heat bed/work part scan, each presure value shall be build up as average of 15 measurements
+- M3053 [S] - set the number of fresh DMS conversions in a stability measurement
+  - M3053 S3 ; average three conversions for the idle reference and stability checks
 
-- M3054 [S] - configure the delay between two A/D converter reads ( units are [ms] )
-  - Examples:
-  - M3054 S15 ; during the heat bed/work part scan, it shall be waited 15 [ms] between every two measurements of the pressure
+- M3054 [S] - set the minimum spacing in ms between the starts of conversions in a stability measurement
+  - M3054 S15 ; allow successive conversions at the normal DMS rate
 
 - M3055 [S] - configure the pressure tolerance per pressure measurement ( units are [digits] )
   - Examples:
-  - M3055 S15 ; during the heat bed/work part scan, the difference between the minimal measured pressure and the maximal measured pressure at one measurement point must not exceed 15 [digits]
+  - M3055 S15 ; require a spread below 15 digits in a stability measurement
 
 - M3060 - output the device type and firmware version
   - Examples:
@@ -230,10 +231,6 @@
   - Examples:
   - M3079 ; outputs the printed object
 
-- M3080 - park the printer
-  - Examples:
-  - M3080 ; parks the printer
-
 - M3090 - test the watchdog ( this command resets the firmware )
   - Examples:
   - M3090 ; tests the watchdog (and resets the firmware)
@@ -241,13 +238,6 @@
 - M3091 - erase the external EEPROM
   - Examples:
   - M3091 ; erases the external EEPROM
-
-- M3103 [X] [Y] [Z] - configure the x, y and z position which shall set when the printer is parked ( units are [mm] )
-  - Examples:
-  - M3103 X10 ; sets the x-position when the printer is parked to 10 [mm]
-  - M3103 Y10 ; sets the y-position when the printer is parked to 10 [mm]
-  - M3103 Z10 ; sets the z-position when the printer is parked to 10 [mm]
-  - M3103 X10 Y10 Z10 ; sets the x-/y-/z-position when the printer is parked to 10/10/10 [mm]
 
 - M3105 [X] [Y] [Z] [E] - configure the offset in x, y, z and e direction which shall be applied in case the "Pause Printing" button has been pressed ( units are [mm] )
   - Examples:
@@ -272,78 +262,6 @@
 - M3121 - turn off the case fan
   - Examples:
   - M3121 ; turns the case fan off
-
-
-// ##########################################################################################
-// ##   the following M codes are for the work part scan in operating mode "mill"
-// ##########################################################################################
-
-- M3130 - start/stop the search of the z-origin
-  - Examples:
-  - M3130 ; starts the search of the z-origin or aborts the currently performed search of the z-origin
-
-- M3140 - turn the z-compensation off
-  - Examples:
-  - M3140 ; turns the z-compensation off
-
-- M3141 - turn the z-compensation on
-  - Examples:
-  - M3141 ; turns the z-compensation on
-
-- M3146 [S] [Z] - configure the static z-offset ( S - units are [um], Z - units are [mm] )
-  - Examples:
-  - M3146 S-100 ; sets the static z-offset to -100 [um] (= -0.1 [mm])
-  - M3146 Z-0.1 ; sets the static z-offset to -0.1 [mm]
-
-- M3149 [S] - get/choose the active work part z-compensation matrix
-  - Examples:
-  - M3149 ; outputs a log entry which informs about the currently active work part z-compensation matrix
-  - M3149 S3 ; loads the work part z-compensation matrix no. 3 and applies it as currently active work part z-compensation matrix
-
-- M3150 [S] - start/abort the work part scan
-  - Examples:
-  - M3130 ; starts the work part scan without homning of the z-axis or aborts the currently performed work part scan
-  - M3130 S1 ; starts the work part scan with homing of the z-axis
-
-- M3151 [S] - clear the specified z-compensation matrix from the EEPROM
-  - Examples:
-  - M3151 ; removes the currently active work part z-compensation matrix from the EEPROM
-  - M3151 S3 ; removes the work part z-compensation matrix no. 3 from the EEPROM
-
-- M3152 - restore the default scan parameters
-  - Examples:
-  - M3152 ; restores the default scan parameters to the values which are defined within RF1000.h/RF2000.h
-
-- M3153 [S] [P] - output the current work part z-compensation matrix
-  - Examples:
-  - M3153 ; outputs the currently active work part z-compensation matrix, the unit of the output z offset is [steps]
-  - M3153 P1 ; outputs the currently active work part z-compensation matrix, the unit of the output z offset is [mm]
-  - M3153 S3 ; outputs the work part z-compensation matrix no. 3, the unit of the output z offset is [steps]
-  - M3153 S3 P1 ; outputs the work part z-compensation matrix no. 3, the unit of the output z offset is [mm]
-
-- M3160 [S] - configure the x start position for the work part scan ( units are [mm] )
-  - Examples:
-  - M3160 S15 ; the next work part scan starts at an x-position 15 [mm] from the left border
-
-- M3161 [S] - configure the y start position for the work part scan ( units are [mm] )
-  - Examples:
-  - M3161 S30 ; the next work part scan starts at a y-position 30 [mm] from the front border
-
-- M3162 [S] - configure the x step size for the work part scan ( units are [mm] )
-  - Examples:
-  - M3162 S20 ; the next work part scan performs one measurement each 20 [mm] in x-direction
-
-- M3163 [S] - configure the y step size for the work part scan ( units are [mm] )
-  - Examples:
-  - M3163 S20 ; the next work part scan performs one measurement each 20 [mm] in y-direction
-
-- M3164 [S] - configure the x end position for the work part scan ( units are [mm] )
-  - Examples:
-  - M3164 S10 ; the next work part scan ends at an x-position 10 [mm] from the right border
-
-- M3165 [S] - configure the y end position for the work part scan ( units are [mm] )
-  - Examples:
-  - M3165 S10 ; the next work part scan ends at a y-position 10 [mm] from the back border
 
 
 // ##########################################################################################
@@ -412,95 +330,30 @@
   - M3308 P2 ; sets the RGB light mode to "Auto"
   - M3308 P3 ; sets the RGB light mode to "Manual"
 
-- M3309 - start/abort to align the two extruders
-  - Examples:
-  - M3309 ; moves the heat bed up until it touches the first extruder and beeps afterwards in order to indicate that the extruders can be aligned manually
-
 */
 
 // ##########################################################################################
 // ##   X/Y/Z movements
 // ##########################################################################################
-/*
-The following variables are used for movements in x/y/z direction:
-
-- Printer::destinationMM[x/y/z]
-  - unit is [mm]
-  - this is the precise target coordinate which might not be fully reachable by full steps
-  - add set and subtract positions here.
-
-- Printer::destinationMMLast[x/y/z]
-  - unit is [mm]
-  - this coordinate keeps track of the real coordinates which where commanded by using full output steps.
-  - Printer::destinationMMLast - Printer::destinationMM is the step rounding error of the current axis.
-  - change this variable only if you want to define a new error delta free axis scale. -> Printer::destinationMM = Printer::destinationMMLast = blubb.
-
-- Printer::currentSteps[x/y/z]
-  - unit is [steps]
-  - holds the position which has been reached through the movements from the queue
-  - the value of currentSteps represents the current position of the printer in x, y and z direction
-
-- Printer::directDestinationSteps[x/y/z]
-  - unit is [steps]
-  - holds the position which shall be reached through direct movements, e.g. from the manual buttons or from the direct pause/continue functionality
-
-- Printer::directCurrentSteps[x/y/z]
-  - unit is [steps]
-  - holds the position which has been reached through direct movements, e.g. from the manual buttons or from the direct pause/continue functionality
-
-- Printer::originOffsetMM[x/y/z]
-  - unit is [mm]
-  - holds the offset to the real origin of each axis
-
-- Printer::staticCompensationZ
-  - unit is [steps]
-  - in case the z-compensation is used for a milling operation and the z-origin for the current milling operation has been determined at a different x/y position than the z-origin for the work part scan,
-    this variable holds the z-difference between these two x/y points
-  - the z-difference is calculated on base of the stored z compensation matrix
-
-- Printer::compensatedPositionTargetStepsZ
-  - unit is [steps]
-  - holds the position which shall be reached through the z-compensation
-
-- Printer::compensatedPositionCurrentStepsZ
-  - unit is [steps]
-  - holds the position which has been reached through the z-compensation
-
-- the current x/y position of the printer in [steps] is:
-  - Printer::currentSteps[x/y] + directCurrentSteps[x/y]
-  - from Endstop: Printer::currentXSteps or Printer::currentYSteps
-
-- the current z position of the printer in [steps] is:
-  - Printer::currentSteps[z] + directCurrentSteps[z] + compensatedPositionCurrentStepsZ
-  - Printer::currentZSteps as the resulting position from endstop
-  - see also:
-    - Printer::currentZPositionMM()
-
-*/
+// The planner retains the G-code target in MoveTarget and the rounded
+// endpoint in CartesianPlanner. The executor advances nominal steps in XYMotion and
+// zMotion.nominalSteps(). Each direct position tracks its own displacement.
+// ZMotion also accounts for scan travel, applied correction and actual pulses.
 
 #define DRV8711_NUM_CHANNELS 5
 
 extern const char ui_text_error[] PROGMEM;
 extern const char ui_text_warning[] PROGMEM;
-extern const char ui_text_information[] PROGMEM;
 extern const char ui_text_set_origin[] PROGMEM;
+extern const char ui_text_information[] PROGMEM;
 extern const char ui_text_heat_bed_scan[] PROGMEM;
-extern const char ui_text_work_part_scan[] PROGMEM;
-extern const char ui_text_find_z_origin[] PROGMEM;
 extern const char ui_text_output_object[] PROGMEM;
-extern const char ui_text_park_heat_bed[] PROGMEM;
 extern const char ui_text_pause[] PROGMEM;
 extern const char ui_text_home[] PROGMEM;
 extern const char ui_text_z_compensation[] PROGMEM;
-extern const char ui_text_change_mode[] PROGMEM;
-extern const char ui_text_change_z_type[] PROGMEM;
-extern const char ui_text_change_miller_type[] PROGMEM;
 extern const char ui_text_x_axis[] PROGMEM;
 extern const char ui_text_y_axis[] PROGMEM;
 extern const char ui_text_z_axis[] PROGMEM;
-#if FEATURE_ALIGN_EXTRUDERS
-extern const char ui_text_align_extruders[] PROGMEM;
-#endif // FEATURE_ALIGN_EXTRUDERS
 extern const char ui_text_extruder[] PROGMEM;
 extern const char ui_text_autodetect_pid[] PROGMEM;
 extern const char ui_text_temperature_manager[] PROGMEM;
@@ -516,341 +369,122 @@ extern const char ui_text_temperature_wrong[] PROGMEM;
 extern const char ui_text_timeout[] PROGMEM;
 extern const char ui_text_sensor_error[] PROGMEM;
 extern const char ui_text_heater_error[] PROGMEM;
+extern const char ui_text_manual[] PROGMEM;
 extern const char ui_text_saving_success[] PROGMEM;
 
-// Geplantes Canceling
-#define SCAN_ABORT_REASON_CANCELED 1
-#define SCAN_ABORT_REASON_PRINTER_LONELY 2
+// Factory scan margins in mm. X depends on the installed tool count.
+constexpr int heatBedScanXStartMm = NUM_EXTRUDER == 2 ? 0 : 15;
+constexpr int heatBedScanXEndMm = NUM_EXTRUDER == 2 ? 0 : 5;
+constexpr int heatBedScanYStartMm = 30;
+constexpr int heatBedScanYEndMm = 5;
+constexpr int heatBedScanMinStepMm = 10;
+constexpr float defaultHeatBedScanLiftMm = 1.0f;
+constexpr uint8_t defaultZOffsetScanIndex = 5; // One-based matrix index, for both X and Y.
+constexpr int heatBedScanPlaBedC = 60;
+constexpr int heatBedScanPlaNozzleC = 210;
 
-// Kabelbruch, Extruder verspannt, Stecker wackelig, Ingress,...
-#define SCAN_ABORT_REASON_START_PRESSURE 3
-#define SCAN_ABORT_REASON_IDLE_PRESSURE 4
-#define SCAN_ABORT_REASON_AVERAGE_PRESSURE 5
-
-// Hinweise auf Bugs
-#define SCAN_ABORT_REASON_SCAN_OVER_START 6
-#define SCAN_ABORT_REASON_SCAN_STEP_DELTA_OUT_OF_RANGE 7
-#define SCAN_ABORT_REASON_MATRIX_DIMENSION 8
-
-// Löcher im Druckbett, Druckbett verdreckt, Mechanik problem, DDP schlecht geklebt
-#define SCAN_ABORT_REASON_SCAN_TOO_UNEVEN 9
-
-// Z-Schraube falsch, Origin-/Workpart-Scan gegen nichts, ??
-// _MAX_COMPENSATION und _ENDSTOP_PROTECTION deuten im Printermodus auf dasselbe hin, sind aber 2 unterschiedliche Stellen.
-#define SCAN_ABORT_REASON_MIN_ENDSTOP 10
-#define SCAN_ABORT_REASON_MAX_ENDSTOP 11
-#define SCAN_ABORT_REASON_REACHED_MAX_COMPENSATION 12
-#define SCAN_ABORT_REASON_REACHED_ENDSTOP_PROTECTION 13
-
-// Ungültige oder nicht vorhandene Z-Matrix
-#define SCAN_ABORT_REASON_MISSING_MATRIX 14
-// Softwaretechnisch ungültiges Ergebnis. Scan über 12+mm tief??
-#define SCAN_ABORT_REASON_OVERFLOWING_MATRIX 15
-// Anscheinend crashgefährliches Hardware-Software-Setting
-#define SCAN_ABORT_REASON_BAD_HEIGHT_MATRIX 16
-
-#if FEATURE_HEAT_BED_Z_COMPENSATION
+constexpr int32_t maxManualZOffsetMicrometers = 10000;
 
 // determine the maximal needed size for the heat bed compensation
-// in case also FEATURE_WORK_PART_Z_COMPENSATION is enabled, only the defined dimensions for the heat bed scan count (so it must be ensured that the dimensions of the heat bed compensation matrix are at least of the size of the work part compensation matrix)
-#define COMPENSATION_MATRIX_MAX_X long((X_MAX_LENGTH_PRINT - HEAT_BED_SCAN_X_START_MM - HEAT_BED_SCAN_X_END_MM) / HEAT_BED_SCAN_X_STEP_SIZE_MIN_MM + 4)
-#define COMPENSATION_MATRIX_MAX_Y long((Y_MAX_LENGTH - HEAT_BED_SCAN_Y_START_MM - HEAT_BED_SCAN_Y_END_MM) / HEAT_BED_SCAN_Y_STEP_SIZE_MIN_MM + 4)
+#define COMPENSATION_MATRIX_MAX_X long((X_MAX_LENGTH_PRINT - heatBedScanXStartMm - heatBedScanXEndMm) / heatBedScanMinStepMm + 4)
+#define COMPENSATION_MATRIX_MAX_Y long((Y_MAX_LENGTH - heatBedScanYStartMm - heatBedScanYEndMm) / heatBedScanMinStepMm + 4)
 #define COMPENSATION_MATRIX_SIZE long(COMPENSATION_MATRIX_MAX_X * COMPENSATION_MATRIX_MAX_Y * 2 + EEPROM_OFFSET_MATRIX_START) // [bytes]
 
-#elif FEATURE_WORK_PART_Z_COMPENSATION
 
-// determine the maximal needed size for the work part compensation
-#define COMPENSATION_MATRIX_MAX_X long((X_MAX_LENGTH_MILL - WORK_PART_SCAN_X_START_MM - WORK_PART_SCAN_X_END_MM) / WORK_PART_SCAN_X_STEP_SIZE_MIN_MM + 4)
-#define COMPENSATION_MATRIX_MAX_Y long((Y_MAX_LENGTH - WORK_PART_SCAN_Y_START_MM - WORK_PART_SCAN_Y_END_MM) / WORK_PART_SCAN_Y_STEP_SIZE_MIN_MM + 4)
-#define COMPENSATION_MATRIX_SIZE long(COMPENSATION_MATRIX_MAX_X * COMPENSATION_MATRIX_MAX_Y * 2 + EEPROM_OFFSET_MATRIX_START) // [bytes]
-
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION && FEATURE_WORK_PART_Z_COMPENSATION
-
-extern millis_t g_uStartOfIdle;
-
-#if FEATURE_HEAT_BED_Z_COMPENSATION
-extern long g_offsetZCompensationSteps; // this is the minimal distance between the heat bed and the extruder at the moment when the z-min endstop is hit
-extern short g_ZCompensationMax;
-extern long g_minZCompensationSteps;
-extern long g_maxZCompensationSteps;
-extern long g_diffZCompensationSteps;
-extern volatile unsigned char g_nHeatBedScanStatus;
-extern char g_nActiveHeatBed;
-//ZOS:
-extern volatile unsigned char g_nZOSScanStatus;
-extern unsigned char g_ZOSTestPoint[2];
-extern float g_ZOSlearningRate;
-extern float g_ZOSlearningGradient;
-extern long g_min_nZScanZPosition;
-extern unsigned char g_ZOS_Auto_Matrix_Leveling_State;
-//Matrix speichern über Menü: Sinnmarker
-extern volatile unsigned char g_ZMatrixChangedInRam;
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
-
-#if FEATURE_WORK_PART_Z_COMPENSATION
-extern volatile unsigned char g_nWorkPartScanStatus;
-extern char g_nWorkPartScanMode; // 0 = do not home z-axis, 1 = home z-axis
-extern char g_nActiveWorkPart;
-#endif // FEATURE_WORK_PART_Z_COMPENSATION
-
-#if FEATURE_WORK_PART_Z_COMPENSATION || FEATURE_HEAT_BED_Z_COMPENSATION
-extern float g_scanStartZLiftMM;
-#endif //FEATURE_WORK_PART_Z_COMPENSATION || FEATURE_HEAT_BED_Z_COMPENSATION
-
-#if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
-extern char g_abortZScan;
-extern short g_ZCompensationMatrix[COMPENSATION_MATRIX_MAX_X][COMPENSATION_MATRIX_MAX_Y];
-extern unsigned char g_uZMatrixMax[2];
-extern long g_nZScanZPosition;
-
-extern char g_nHeatBedScanMode; // 0 = oldScan, 1 = PLA, 2 = ABS
-
-extern long g_nScanXStepSizeMM;
-extern long g_nScanXStepSizeSteps;
-extern long g_nScanYStepSizeMM;
-extern long g_nScanYStepSizeSteps;
-
-extern unsigned short g_nScanContactPressureDelta;
-extern unsigned short g_nScanRetryPressureDelta;
-#endif // #if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
-
-extern long g_staticZSteps;
-extern char g_debugLevel;
-extern char g_debugLog;
-extern millis_t g_uStopTime;
-extern volatile millis_t g_uBlockCommands;
-
-// other configurable parameters
-extern unsigned short g_nManualSteps[4];
-extern volatile long g_nPauseSteps[4];
-extern volatile long g_nContinueSteps[4];
-extern volatile char g_pauseStatus;
-extern volatile char g_pauseMode;
-extern volatile millis_t g_uPauseTime;
-extern volatile char g_pauseBeepDone;
-
-#if FEATURE_EMERGENCY_PAUSE
-extern long g_nEmergencyPauseDigitsMin; //short reicht eigentlich
-extern long g_nEmergencyPauseDigitsMax; //short reicht eigentlich
-#endif                                  // FEATURE_EMERGENCY_PAUSE
-
-#if FEATURE_EMERGENCY_STOP_Z_AND_E
-extern short g_nEmergencyStopZAndEMin;
-extern short g_nEmergencyStopZAndEMax;
-extern bool g_nEmergencyESkip;
-#endif //FEATURE_EMERGENCY_STOP_Z_AND_E
-
-#if FEATURE_SENSIBLE_PRESSURE
-/* brief: This is for correcting too close Z at first layer, see FEATURE_SENSIBLE_PRESSURE // Idee Wessix, coded by Nibbels  */
-extern long nSensiblePressureSum;
-extern char nSensiblePressureChecks;
-extern short g_nSensiblePressureDigits;
-extern short g_nSensiblePressureOffsetMax;
-extern short g_nSensiblePressureOffset;
-extern char g_nSensiblePressure1stMarke; //sagt, ob regelung aktiv oder inaktiv, wegen Z-Limits
-#endif                                   // FEATURE_SENSIBLE_PRESSURE
-
-extern short g_nLastDigits;
-#if FEATURE_DIGIT_Z_COMPENSATION
-extern float g_nDigitZCompensationDigits;
-extern bool g_nDigitZCompensationDigits_active;
-#if FEATURE_DIGIT_FLOW_COMPENSATION
-extern int8_t g_nDigitFlowCompensation_intense;
-extern int8_t g_nDigitFlowCompensation_speed_intense;
-extern short g_nDigitFlowCompensation_Fmin;
-extern short g_nDigitFlowCompensation_Fmax;
-#endif // FEATURE_DIGIT_FLOW_COMPENSATION
-#endif // FEATURE_DIGIT_Z_COMPENSATION
-
-#if FEATURE_FIND_Z_ORIGIN
-extern volatile unsigned char g_nFindZOriginStatus;
-extern long g_nZOriginPosition[3];
-#endif // FEATURE_FIND_Z_ORIGIN
-
-#if FEATURE_ALIGN_EXTRUDERS
-extern volatile unsigned char g_nAlignExtrudersStatus;
-#endif // FEATURE_ALIGN_EXTRUDERS
-
-#if FEATURE_RGB_LIGHT_EFFECTS
-extern unsigned char g_uRGBHeatingR;
-extern unsigned char g_uRGBHeatingG;
-extern unsigned char g_uRGBHeatingB;
-extern unsigned char g_uRGBPrintingR;
-extern unsigned char g_uRGBPrintingG;
-extern unsigned char g_uRGBPrintingB;
-extern unsigned char g_uRGBCoolingR;
-extern unsigned char g_uRGBCoolingG;
-extern unsigned char g_uRGBCoolingB;
-extern unsigned char g_uRGBIdleR;
-extern unsigned char g_uRGBIdleG;
-extern unsigned char g_uRGBIdleB;
-extern unsigned char g_uRGBManualR;
-extern unsigned char g_uRGBManualG;
-extern unsigned char g_uRGBManualB;
-extern volatile unsigned char g_uRGBCurrentR;
-extern volatile unsigned char g_uRGBCurrentG;
-extern volatile unsigned char g_uRGBCurrentB;
-extern unsigned char g_uRGBTargetR;
-extern unsigned char g_uRGBTargetG;
-extern unsigned char g_uRGBTargetB;
-#endif // FEATURE_RGB_LIGHT_EFFECTS
+float scanStartLiftMm();
+void setScanStartLiftMm(float liftMm);
+long scanStrideMm(uint8_t axis);
 
 extern void initRF(void);
-extern void initStrainGauge(void);
-extern short readStrainGauge(unsigned char uAddress);
 
-extern void showAbortScanReason(const void* scanName, char abortScanIdentifier);
-
-#if FEATURE_HEAT_BED_Z_COMPENSATION
-extern void startHeatBedScan(void);
-extern void scanHeatBed(void);
+extern void startHeatBedScan(HeatBedScanMode mode);
+extern bool heatBedScanRunning();
+extern bool isAnyScanRunning();
+extern void discardScans();
+extern void handleScanWorkTasks(bool tickDue);
 extern void startZOScan(bool automatrixleveling = false);
-extern void searchZOScan(void);
+ZOffsetScanPoint zOffsetScanPoint();
+void restoreZOffsetScanPoint(ZOffsetScanPoint point);
 
-//Z-Schrauben Helper
-extern float g_ZSchraubenSollDrehungenWarm_U;
-extern float g_ZSchraubenSollKorrekturWarm_mm;
-extern char g_ZSchraubeOk;
-
-extern void calculateZScrewCorrection(void);
-
-//Menüumschalter für Z-Step-Höhe
+// Menüumschalter für Z-Step-Höhe
 extern void configureMANUAL_STEPS_Z(int8_t increment);
 
-extern void abortSearchHeatBedZOffset(bool reloadMatrix);
-extern short testExtruderTemperature(void);
-extern short testHeatBedTemperature(void);
-extern long getZMatrixDepth(long x, long y);
 extern long getZMatrixDepth_CurrentXY(void);
-extern void recalculateHeatBedZCompensation(void);
 
-extern void switchActiveHeatBed(char newActiveHeatBed);
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION
+extern bool switchActiveHeatBed(char newActiveHeatBed);
+uint8_t activeBedMatrixSlot();
+bool bedMatrixAvailable();
+bool bedMatrixHasUnsavedChanges();
+long bedMatrixHighestZSteps();
+short bedMatrixLowestZSteps();
+void invalidateBedMatrixForReload();
+bool saveActiveBedMatrix();
 
-#if FEATURE_ALIGN_EXTRUDERS
-extern void startAlignExtruders(void);
-extern void alignExtruders(void);
-#endif // FEATURE_ALIGN_EXTRUDERS
-
-#if FEATURE_WORK_PART_Z_COMPENSATION
-extern void startWorkPartScan(char nMode);
-extern void scanWorkPart(void);
-extern void doWorkPartZCompensation(void);
-extern long getWorkPartOffset(void);
-#endif // FEATURE_WORK_PART_Z_COMPENSATION
-
-#if FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
-extern short readIdlePressure(short* pnIdlePressure);
-extern short testIdlePressure(void);
 extern short readAveragePressure(short* pnAveragePressure);
 
-extern void moveZMinusUpFast();
-extern void moveZPlusDownSlow(uint8_t acuteness = 1);
-extern void moveZMinusUpSlow(short* pnContactPressure, uint8_t acuteness = 1);
-extern short moveZPlusDownFast();
-extern void moveZ(int nSteps);
 extern void restoreDefaultScanParameters(void);
 extern void outputScanParameters(void);
-extern void outputCompensationMatrix(char format = 0);
-extern void initCompensationMatrix(void);
-extern void determineCompensationOffsetZ(void);
-extern void adjustCompensationMatrix(short nZ);
-extern void saveCompensationMatrix(unsigned int uAddress);
-extern void clearCompensationMatrix(unsigned int uAddress);
-
-extern char prepareCompensationMatrix(void);
-extern char loadCompensationMatrix(unsigned int uAddress);
-
-#endif // FEATURE_HEAT_BED_Z_COMPENSATION || FEATURE_WORK_PART_Z_COMPENSATION
-
-extern void clearExternalEEPROM(void);
-extern void writeByte24C256(int addressI2C, unsigned int addressEEPROM, unsigned char data);
-extern void writeWord24C256(int addressI2C, unsigned int addressEEPROM, unsigned short data);
-
-extern unsigned char readByte24C256(int addressI2C, unsigned int addressEEPROM);
-extern unsigned short readWord24C256(int addressI2C, unsigned int addressEEPROM);
 
 extern void recalculateZCompensation(void);
 extern void loopFeatures(void);
+void updateDigitCompensation(int16_t digits);
+void handleStrainGaugeFeatures(millis_t now);
 extern void outputObject(bool showerrors = true);
 
-#if FEATURE_PARK
-extern void parkPrinter(void);
-#endif // FEATURE_PARK
+namespace AccessoryOutputs {
+enum class Output : uint8_t { CaseLight, Mains, Fet1, Fet2, Fet3 };
+// Keep EEPROM staging distinct from GPIO application; raw char values preserve the ABI.
+char state(Output output);
+void stage(Output output, char value);
+void apply(Output output);
+void set(Output output, char value);
+void toggle(Output output);
+void initializeBoardOutputs();
+void initializeCaseLight();
+} // namespace AccessoryOutputs
 
-extern void pausePrint(void);
-extern void killPausePrint(void);
-extern void continuePrint(void);
 extern void setExtruderCurrent(uint8_t nr, uint8_t current);
-extern void processSpecialGCode(GCode* pCommand);
-extern void queueTask(char task);
-extern void processButton(int nAction);
+extern void queueTask(QueueTask task);
 extern void moveXAction(int8_t increment);
 extern void moveYAction(int8_t increment);
 extern void moveZAction(int8_t increment);
 
-#if STEPPER_CURRENT_CONTROL == CURRENT_CONTROL_DRV8711
+// Temporary register writes do not change the configured current shadow.
 extern void setMotorCurrent(unsigned char driver, uint8_t level);
+
+namespace Drv8711 {
+// Zero-based axis indices (X, Y, Z, E0, E1); foreground only.
+// Staging does not program the register. Persistence may occur before apply.
+uint8_t configuredCurrent(uint8_t axis);
+void stageCurrent(uint8_t axis, uint8_t level);
+void applyConfiguredCurrent(uint8_t axis);
+uint8_t microstepMode(uint8_t axis);
+void setMicrostepMode(uint8_t axis, uint8_t mode);
+// firstAxis is X_AXIS or E_AXIS; returns the original paired change decision.
+bool setPairedMicrostepMode(uint8_t firstAxis, uint8_t mode);
+}
 
 // adjust/set Microsteps()
 extern unsigned short drv8711Axis_2_InitMicrosteps(uint8_t axis);
 extern unsigned short drv8711ModeValue_2_MicroSteps(uint8_t modeValue);
 extern uint8_t drv8711MicroSteps_2_ModeValue(unsigned short microsteps);
-extern void drv8711adjustMicroSteps(unsigned char driver);
 
 extern void drv8711Init(void);
-#if FEATURE_READ_STEPPER_STATUS
-extern unsigned short readMotorStatus(unsigned char driver);
-#endif //FEATURE_READ_STEPPER_STATUS
-#endif // CURRENT_CONTROL_DRV8711
 
 extern void cleanupEPositions(void);
-extern void setZOrigin(void);
 
-#if FEATURE_FIND_Z_ORIGIN
-extern void startFindZOrigin(void);
-extern void findZOrigin(void);
-#endif // FEATURE_FIND_Z_ORIGIN
 
-extern void switchOperatingMode(char newOperatingMode);
-
-#if FEATURE_MILLING_MODE
-extern void switchActiveWorkPart(char newActiveWorkPart);
-extern void setScanXYStart(void);
-extern void setScanXYEnd(void);
-#endif // FEATURE_MILLING_MODE
-
-#if FEATURE_RGB_LIGHT_EFFECTS
-extern void setRGBTargetColors(uint8_t R, uint8_t G, uint8_t B);
-extern void setRGBLEDs(uint8_t R, uint8_t G, uint8_t B);
-extern void updateRGBLightStatus(void);
-#endif // FEATURE_RGB_LIGHT_EFFECTS
-
-extern void setupForPrinting(void);
-extern void setupForMilling(void);
 extern void prepareZCompensation(void);
-extern unsigned char isSupportedGCommand(unsigned int currentGCode, char neededMode, char outputLog = 1);
-extern unsigned char isSupportedMCommand(unsigned int currentMCode, char neededMode, char outputLog = 1);
 extern unsigned char isMovingAllowed(const char* pszCommand, char outputLog = 1);
 extern unsigned char isHomingAllowed(GCode* com, char outputLog = 1);
-extern void showInvalidSyntax(unsigned int currentMCode);
-extern void addUInt32(char* pszString, uint32_t uNumber);
-extern void addFloat(char* pszString, float fNumber, uint8_t uDigits);
 
-#if FEATURE_HEAT_BED_TEMP_COMPENSATION
-extern float getHeatBedTemperatureOffset(float temperatureInCelsius);
-#endif // FEATURE_HEAT_BED_TEMP_COMPENSATION
-
-#if FEATURE_TYPE_EEPROM
-extern void determineHardwareType(void);
-extern void notifyAboutWrongHardwareType(unsigned char guessedHardwareType);
-#endif // FEATURE_TYPE_EEPROM
+bool hardwareTypeMatches();
 extern void showIdle(void);
 extern void showError(const void* line2, const void* line3 = NULL, const void* line4 = NULL);
 extern void showWarning(const void* line2, const void* line3 = NULL, const void* line4 = NULL);
 extern void showInformation(const void* line2, const void* line3 = NULL, const void* line4 = NULL);
 extern void showMyPage(const void* line1, const void* line2 = NULL, const void* line3 = NULL, const void* line4 = NULL);
 
-void doEmergencyStop(char reason);
-void addLong(char* string, long value, char digits);
+enum class StopReason : char { ZMin = 1, ZBlock = 2 };
+void doEmergencyStop(StopReason reason);
 #endif // RF_H

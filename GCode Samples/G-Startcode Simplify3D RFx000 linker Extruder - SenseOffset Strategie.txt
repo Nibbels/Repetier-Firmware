@@ -25,11 +25,11 @@ G28 ; home all axes
 ; Activate Z-Compensation
 ;--------------------------------------
 M3001 ; activate Z-Compensation 
-M3909 P3333; activate SensiblePressure -> Digitlimit bei 3333 für Filament das normalerweise ca. bei 2800 digits druckt. Nachdehnungskompensation.
 
 ; Altes Filament und Luft in Duese ausstossen
 ;--------------------------------------
 M3912 I2
+M3909 P3333 ; SenseOffset nach der Startmade aktivieren. Digitlimit 3333 für Filament mit ca. 2800 Digits beim Druck.
 
 ;--------------------------------------
 ; Start Code T0-only header end

@@ -1,6 +1,6 @@
 /*
     This file is part of the Repetier-Firmware for RF devices from Conrad Electronic SE.
-    To-be-compiled with Arduino V 1.8.12 or compatible.
+    Verified build: Arduino CLI 1.2.2, Arduino AVR Boards 1.8.6, ATmega2560.
 
     Repetier-Firmware is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -17,13 +17,14 @@
 */
 
 /**
-\mainpage Repetier-Firmware for Arduino based RepRaps
+\mainpage RFx000 community-derived Repetier-Firmware
 <CENTER>Copyright &copy; 2011-2017 by repetier and Conrad Electronic SE</CENTER>
 
 \section Intro Introduction
 
  This is not the official Firmware from Conrad Electronic SE.
- What you have here is a modded version and documentation can be found within the follwing locations:
+ This review branch is derived from the community firmware. Current architecture and build evidence
+ are in docs/ and coordination/ in Nibbels/Repetier-Firmware. Historical community documentation:
   - http://www.rf1000.de/wiki/index.php/Kategorie:CommunityMod_Firmware 
   - http://rf1000.de 
   - https://github.com/RF1000community/Repetier-Firmware
@@ -37,8 +38,6 @@ Implemented Codes
 */
 
 #include "Repetier.h"
-#include <SPI.h>
-#include <Wire.h>
 
 void setup() {
     Printer::setup();

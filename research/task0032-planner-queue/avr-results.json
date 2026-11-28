@@ -1,0 +1,444 @@
+{
+  "schema": 1,
+  "qualification": "Isolated actual-source AVR simavr instruction cycles; marker overhead included; no concurrent ISR or integrated WCET. Source shim explicit RF2000 calibration; compiler arduino avr-gcc 7.3.0 -Os -flto.",
+  "run": 45947245819,
+  "job": 140334653667,
+  "merge": "9a668174d9b781335bc8d5f9e73759fc8370e4d6",
+  "head": "7f69d012a859fd9be48ec25730dd795af44c7817",
+  "artifact": 15174504635,
+  "sha256": "f4f580dc2e4753de7ce26ab16df889521440de627cd0b110ae2a40fa5b87c9ee",
+  "variants": {
+    "24-outer": {
+      "text_bytes": 13720,
+      "data_bytes": 76,
+      "bss_bytes": 2506,
+      "flash_bytes": 13796,
+      "global_sram_bytes": 2582,
+      "queue_bytes": 2477,
+      "stages": {
+        "prepareMove": {
+          "n": 192,
+          "min": 7906,
+          "median": 10606,
+          "max": 12572,
+          "max_sampled_mask_cycles": 0
+        },
+        "updateLookahead": {
+          "n": 192,
+          "min": 1120,
+          "median": 8628,
+          "max": 39017,
+          "max_sampled_mask_cycles": 375
+        },
+        "remainingMotion": {
+          "n": 192,
+          "min": 1622,
+          "median": 37229,
+          "max": 112647,
+          "max_sampled_mask_cycles": 29
+        },
+        "exactTimeOnly": {
+          "n": 192,
+          "min": 1774,
+          "median": 29984,
+          "max": 95326,
+          "max_sampled_mask_cycles": 42
+        },
+        "lower": {
+          "n": 192,
+          "min": 922,
+          "median": 11467,
+          "max": 22968,
+          "max_sampled_mask_cycles": 36
+        },
+        "pacedTicks": {
+          "n": 192,
+          "min": 1668,
+          "median": 3282,
+          "max": 4829,
+          "max_sampled_mask_cycles": 36
+        }
+      }
+    },
+    "24-substage": {
+      "text_bytes": 13818,
+      "data_bytes": 76,
+      "bss_bytes": 2506,
+      "flash_bytes": 13894,
+      "global_sram_bytes": 2582,
+      "queue_bytes": 2477,
+      "stages": {
+        "prepareMove": {
+          "n": 192,
+          "min": 7906,
+          "median": 10606,
+          "max": 12576,
+          "max_sampled_mask_cycles": 0
+        },
+        "updateLookahead": {
+          "n": 192,
+          "min": 1124,
+          "median": 8697,
+          "max": 39122,
+          "max_sampled_mask_cycles": 375
+        },
+        "limitJunction": {
+          "n": 147,
+          "min": 2305,
+          "median": 3007,
+          "max": 4621,
+          "max_sampled_mask_cycles": 0
+        },
+        "planDeceleration": {
+          "n": 147,
+          "min": 325,
+          "median": 1078,
+          "max": 7553,
+          "max_sampled_mask_cycles": 0
+        },
+        "planAcceleration": {
+          "n": 147,
+          "min": 647,
+          "median": 1328,
+          "max": 8614,
+          "max_sampled_mask_cycles": 0
+        },
+        "prepareStepProfile": {
+          "n": 426,
+          "min": 879,
+          "median": 2287,
+          "max": 2345,
+          "max_sampled_mask_cycles": 0
+        },
+        "remainingMotion": {
+          "n": 192,
+          "min": 1622,
+          "median": 37229,
+          "max": 112647,
+          "max_sampled_mask_cycles": 29
+        },
+        "exactTimeOnly": {
+          "n": 192,
+          "min": 1774,
+          "median": 29984,
+          "max": 95326,
+          "max_sampled_mask_cycles": 42
+        },
+        "lower": {
+          "n": 192,
+          "min": 922,
+          "median": 11467,
+          "max": 22968,
+          "max_sampled_mask_cycles": 36
+        },
+        "pacedTicks": {
+          "n": 192,
+          "min": 1668,
+          "median": 3282,
+          "max": 4829,
+          "max_sampled_mask_cycles": 36
+        }
+      }
+    },
+    "24-diag-only": {
+      "text_bytes": 11984,
+      "data_bytes": 76,
+      "bss_bytes": 2506,
+      "flash_bytes": 12060,
+      "global_sram_bytes": 2582,
+      "queue_bytes": 2477,
+      "stages": {}
+    },
+    "24-time-only": {
+      "text_bytes": 12824,
+      "data_bytes": 76,
+      "bss_bytes": 2506,
+      "flash_bytes": 12900,
+      "global_sram_bytes": 2582,
+      "queue_bytes": 2477,
+      "stages": {}
+    },
+    "24-lower-only": {
+      "text_bytes": 11054,
+      "data_bytes": 76,
+      "bss_bytes": 2506,
+      "flash_bytes": 11130,
+      "global_sram_bytes": 2582,
+      "queue_bytes": 2477,
+      "stages": {}
+    },
+    "24-paced-only": {
+      "text_bytes": 11132,
+      "data_bytes": 76,
+      "bss_bytes": 2506,
+      "flash_bytes": 11208,
+      "global_sram_bytes": 2582,
+      "queue_bytes": 2477,
+      "stages": {}
+    },
+    "28-outer": {
+      "text_bytes": 13720,
+      "data_bytes": 76,
+      "bss_bytes": 2918,
+      "flash_bytes": 13796,
+      "global_sram_bytes": 2994,
+      "queue_bytes": 2889,
+      "stages": {
+        "prepareMove": {
+          "n": 224,
+          "min": 7906,
+          "median": 10606,
+          "max": 12572,
+          "max_sampled_mask_cycles": 0
+        },
+        "updateLookahead": {
+          "n": 224,
+          "min": 1120,
+          "median": 8802,
+          "max": 48581,
+          "max_sampled_mask_cycles": 427
+        },
+        "remainingMotion": {
+          "n": 224,
+          "min": 1622,
+          "median": 42757,
+          "max": 131522,
+          "max_sampled_mask_cycles": 29
+        },
+        "exactTimeOnly": {
+          "n": 224,
+          "min": 1774,
+          "median": 34002,
+          "max": 111157,
+          "max_sampled_mask_cycles": 42
+        },
+        "lower": {
+          "n": 224,
+          "min": 922,
+          "median": 13419,
+          "max": 26808,
+          "max_sampled_mask_cycles": 36
+        },
+        "pacedTicks": {
+          "n": 224,
+          "min": 1668,
+          "median": 3545,
+          "max": 5355,
+          "max_sampled_mask_cycles": 36
+        }
+      }
+    },
+    "28-substage": {
+      "text_bytes": 13818,
+      "data_bytes": 76,
+      "bss_bytes": 2918,
+      "flash_bytes": 13894,
+      "global_sram_bytes": 2994,
+      "queue_bytes": 2889,
+      "stages": {
+        "prepareMove": {
+          "n": 224,
+          "min": 7906,
+          "median": 10606,
+          "max": 12576,
+          "max_sampled_mask_cycles": 0
+        },
+        "updateLookahead": {
+          "n": 224,
+          "min": 1124,
+          "median": 8871,
+          "max": 48698,
+          "max_sampled_mask_cycles": 427
+        },
+        "limitJunction": {
+          "n": 175,
+          "min": 2305,
+          "median": 3007,
+          "max": 4621,
+          "max_sampled_mask_cycles": 0
+        },
+        "planDeceleration": {
+          "n": 175,
+          "min": 325,
+          "median": 1078,
+          "max": 9759,
+          "max_sampled_mask_cycles": 0
+        },
+        "planAcceleration": {
+          "n": 175,
+          "min": 647,
+          "median": 1354,
+          "max": 11129,
+          "max_sampled_mask_cycles": 0
+        },
+        "prepareStepProfile": {
+          "n": 532,
+          "min": 879,
+          "median": 2287,
+          "max": 2345,
+          "max_sampled_mask_cycles": 0
+        },
+        "remainingMotion": {
+          "n": 224,
+          "min": 1622,
+          "median": 42757,
+          "max": 131522,
+          "max_sampled_mask_cycles": 29
+        },
+        "exactTimeOnly": {
+          "n": 224,
+          "min": 1774,
+          "median": 34002,
+          "max": 111157,
+          "max_sampled_mask_cycles": 42
+        },
+        "lower": {
+          "n": 224,
+          "min": 922,
+          "median": 13419,
+          "max": 26808,
+          "max_sampled_mask_cycles": 36
+        },
+        "pacedTicks": {
+          "n": 224,
+          "min": 1668,
+          "median": 3545,
+          "max": 5355,
+          "max_sampled_mask_cycles": 36
+        }
+      }
+    },
+    "32-outer": {
+      "text_bytes": 13720,
+      "data_bytes": 76,
+      "bss_bytes": 3330,
+      "flash_bytes": 13796,
+      "global_sram_bytes": 3406,
+      "queue_bytes": 3301,
+      "stages": {
+        "prepareMove": {
+          "n": 256,
+          "min": 7906,
+          "median": 10606,
+          "max": 12572,
+          "max_sampled_mask_cycles": 0
+        },
+        "updateLookahead": {
+          "n": 256,
+          "min": 1120,
+          "median": 8802,
+          "max": 58238,
+          "max_sampled_mask_cycles": 479
+        },
+        "remainingMotion": {
+          "n": 256,
+          "min": 1622,
+          "median": 48432,
+          "max": 150470,
+          "max_sampled_mask_cycles": 29
+        },
+        "exactTimeOnly": {
+          "n": 256,
+          "min": 1774,
+          "median": 37792,
+          "max": 127067,
+          "max_sampled_mask_cycles": 42
+        },
+        "lower": {
+          "n": 256,
+          "min": 922,
+          "median": 15337,
+          "max": 30601,
+          "max_sampled_mask_cycles": 36
+        },
+        "pacedTicks": {
+          "n": 256,
+          "min": 1668,
+          "median": 3805,
+          "max": 5872,
+          "max_sampled_mask_cycles": 36
+        }
+      }
+    },
+    "32-substage": {
+      "text_bytes": 13818,
+      "data_bytes": 76,
+      "bss_bytes": 3330,
+      "flash_bytes": 13894,
+      "global_sram_bytes": 3406,
+      "queue_bytes": 3301,
+      "stages": {
+        "prepareMove": {
+          "n": 256,
+          "min": 7906,
+          "median": 10606,
+          "max": 12576,
+          "max_sampled_mask_cycles": 0
+        },
+        "updateLookahead": {
+          "n": 256,
+          "min": 1124,
+          "median": 8871,
+          "max": 58367,
+          "max_sampled_mask_cycles": 479
+        },
+        "limitJunction": {
+          "n": 203,
+          "min": 2305,
+          "median": 3004,
+          "max": 4621,
+          "max_sampled_mask_cycles": 0
+        },
+        "planDeceleration": {
+          "n": 203,
+          "min": 325,
+          "median": 1123,
+          "max": 11952,
+          "max_sampled_mask_cycles": 0
+        },
+        "planAcceleration": {
+          "n": 203,
+          "min": 647,
+          "median": 1354,
+          "max": 13604,
+          "max_sampled_mask_cycles": 0
+        },
+        "prepareStepProfile": {
+          "n": 644,
+          "min": 879,
+          "median": 2287,
+          "max": 2345,
+          "max_sampled_mask_cycles": 0
+        },
+        "remainingMotion": {
+          "n": 256,
+          "min": 1622,
+          "median": 48432,
+          "max": 150470,
+          "max_sampled_mask_cycles": 29
+        },
+        "exactTimeOnly": {
+          "n": 256,
+          "min": 1774,
+          "median": 37792,
+          "max": 127067,
+          "max_sampled_mask_cycles": 42
+        },
+        "lower": {
+          "n": 256,
+          "min": 922,
+          "median": 15337,
+          "max": 30601,
+          "max_sampled_mask_cycles": 36
+        },
+        "pacedTicks": {
+          "n": 256,
+          "min": 1668,
+          "median": 3805,
+          "max": 5872,
+          "max_sampled_mask_cycles": 36
+        }
+      }
+    }
+  }
+}
