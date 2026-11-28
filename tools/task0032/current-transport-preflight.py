@@ -233,8 +233,8 @@ def replay_report(source,out,files):
         assert(wire.size()==3 && wire[2]=="fatal: COMMUNICATION LOST\\r\\n");
         promote=true;
     }""")
-    tests=once(tests,"        freeBytes=63;tick=true;clockMs+=100;auto old=wire.size();",
-        """        freeBytes=0;tick=true;clockMs+=100;auto blocked=wire.size();
+    tests=once(tests,"    for(unsigned n=0;n<5;++n){\n        freeBytes=63;tick=true;clockMs+=100;auto old=wire.size();",
+        """    for(unsigned n=0;n<5;++n){\n        freeBytes=0;tick=true;clockMs+=100;auto blocked=wire.size();
         Commands::commandLoop();assert(wire.size()==blocked);
         freeBytes=63;tick=true;clockMs+=100;auto old=wire.size();""")
     tests=once(tests,'    if(mode!="promote-early"){','    if(mode!="promote-early" && mode!="promote-middle"){')
