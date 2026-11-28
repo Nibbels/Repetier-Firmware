@@ -12,15 +12,18 @@ bool validTemperature(int16_t temperature, int16_t minimum, int16_t maximum) {
 }
 
 bool PreheatProfiles::readStored(Profile profile, Temperatures temperatures) {
-    const auto factory = defaults(profile);
+    // Scalar defaults avoid materializing both immutable profile aggregates in SRAM.
+    const bool profileA = profile == Profile::A;
+    const int16_t factoryBed = profileA ? PREHEAT_A_BED_C : PREHEAT_B_BED_C;
+    const int16_t factoryHotend = profileA ? PREHEAT_A_HOTEND_C : PREHEAT_B_HOTEND_C;
     auto& target = profiles_[static_cast<uint8_t>(profile)];
     // A lower/disabled live bed limit must not erase a stored preference.
     const int16_t bedMax=UI_SET_MAX_HEATED_BED_TEMP<140?UI_SET_MAX_HEATED_BED_TEMP:140;
-    const int16_t safeDefault=validTemperature(factory.bed,UI_SET_MIN_HEATED_BED_TEMP,bedMax)?factory.bed:0;
+    const int16_t safeDefault=validTemperature(factoryBed,UI_SET_MIN_HEATED_BED_TEMP,bedMax)?factoryBed:0;
     target.bed = validTemperature(temperatures.bed, UI_SET_MIN_HEATED_BED_TEMP, bedMax)
         ? temperatures.bed : safeDefault;
     target.hotend = validTemperature(temperatures.hotend, UI_SET_MIN_EXTRUDER_TEMP, UI_SET_MAX_EXTRUDER_TEMP)
-        ? temperatures.hotend : factory.hotend;
+        ? temperatures.hotend : factoryHotend;
     return target.bed != temperatures.bed || target.hotend != temperatures.hotend;
 }
 
