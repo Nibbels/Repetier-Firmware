@@ -244,12 +244,39 @@ void Printer::setFeedrate(float feedrate) {
     Printer::feedrate = feedrate * (float)Printer::feedrateMultiply * 0.00016666666f;
 }
 
-// Convert G-code positions to millimetres in the planner's coordinate frame.
-bool Printer::queueGCodeCoordinates(GCode* com) {
-    if (com->hasE() && !Extruder::allHeatersCalibrated()) {
+// Host and typed internal moves share the same modal coordinate and
+// extrusion rules. Do not substitute machine-coordinate queueFloatCoordinates.
+static bool gcodeExtrusionCalibrated() {
+    if (!Extruder::allHeatersCalibrated()) {
         Com::printFLN(PSTR("Error: PID tune required before printing"));
         return false;
     }
+    return true;
+}
+
+static bool applyGCodeExtrusion(float e) {
+    if (!isExtrusionAllowed(e))
+        return false;
+    if (Printer::gcodeModes.relativeE())
+        Printer::moveTarget.addMM(E_AXIS, e);
+    else
+        Printer::moveTarget.setMachineMM(E_AXIS, e);
+    return true;
+}
+
+static bool publishGCodeMove(bool isXYZMove, bool isEMove, bool internal) {
+    if (!isXYZMove && !isEMove)
+        return false;
+    const bool published = PrintLine::prepareQueueMove(false, true, Printer::feedrate, isXYZMove);
+    if (published && !internal)
+        Printer::printJob.admitPrintMotion();
+    return published;
+}
+
+// Convert G-code positions to millimetres in the planner's coordinate frame.
+bool Printer::queueGCodeCoordinates(GCode* com) {
+    if (com->hasE() && !gcodeExtrusionCalibrated())
+        return false;
     const bool isXYZMove = !com->hasNoXYZ();
     if (com->hasX())
         moveTarget.setFromGCodeMM(X_AXIS, com->X, gcodeModes.relativeXYZ());
@@ -258,26 +285,27 @@ bool Printer::queueGCodeCoordinates(GCode* com) {
     if (com->hasZ())
         moveTarget.setFromGCodeMM(Z_AXIS, com->Z, gcodeModes.relativeXYZ());
 
-    float e = com->E;
-    bool isEMove = com->hasE() && isExtrusionAllowed(e);
-    if (isEMove) {
-        if (gcodeModes.relativeE())
-            moveTarget.addMM(E_AXIS, e);
-        else
-            moveTarget.setMachineMM(E_AXIS, e);
-    }
-
-    if (com->hasF()) {
+    const bool isEMove = com->hasE() && applyGCodeExtrusion(com->E);
+    if (com->hasF())
         Printer::setFeedrate(com->F);
-    }
-
-    if (!isXYZMove && !isEMove)
-        return false;
-    const bool published = PrintLine::prepareQueueMove(false, true, Printer::feedrate, isXYZMove);
-    if (published && !com->internalCommand)
-        printJob.admitPrintMotion();
-    return published;
+    return publishGCodeMove(isXYZMove, isEMove, com->internalCommand);
 } // queueGCodeCoordinates
+
+bool Printer::queueInternalAxisMove(uint8_t axis, float value, float feedrateMmMin) {
+    if (axis > E_AXIS)
+        return false;
+    const bool xyz = axis != E_AXIS;
+    if (!xyz && !gcodeExtrusionCalibrated())
+        return false;
+    bool e = false;
+    if (xyz)
+        moveTarget.setFromGCodeMM(axis, value, gcodeModes.relativeXYZ());
+    else
+        e = applyGCodeExtrusion(value);
+    // Zero means retain the modal feedrate, just like omitted F.
+    Printer::setFeedrate(feedrateMmMin);
+    return publishGCodeMove(xyz, e, true);
+}
 
 /** Move to machine coordinates, retaining the correction on omitted axes. */
 void Printer::queueFloatCoordinates(float x, float y, float z, float e, float feedrate) {

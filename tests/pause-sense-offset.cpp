@@ -344,6 +344,7 @@ void setZAxisSteps(long steps) { zMotion.setNominalSteps(steps); }
 void setEPositionMM(float value, float remainder = 0.0f);
 void setFeedrate(float value);
 bool queueGCodeCoordinates(GCode*);
+bool queueInternalAxisMove(uint8_t axis, float value, float feedrateMmMin = 0);
 void updateWobbleFixOffsets();
 int32_t prepareDestinationSteps(uint8_t axis);
 float getDirectMM(uint8_t axis) { return directCurrentSteps[axis] * axisMMPerSteps_[axis]; }
@@ -1905,6 +1906,20 @@ void gcodeTarget() {
     command.E = 0;
     assert(!Printer::queueGCodeCoordinates(&command));
     assert(PrintLine::plannedMoves == 4);
+
+    Printer::printJob.finishPrintMotion();
+    const float priorFeedrate = Printer::feedrate;
+    assert(Printer::queueInternalAxisMove(E_AXIS, -0.5f));
+    assert(Printer::moveTarget.machineMM(E_AXIS) == 2.0f && !PrintLine::updatesWobble);
+    assert(Printer::feedrate == priorFeedrate && !Printer::printJob.isPrinting());
+    assert(Printer::queueInternalAxisMove(Y_AXIS, 37, 4800));
+    assert(Printer::moveTarget.machineMM(Y_AXIS) == 40 && PrintLine::updatesWobble);
+    assert(std::abs(Printer::feedrate - 80) < 0.0001f && !Printer::printJob.isPrinting());
+    Extruder::current->tempControl.calibrationValid = false;
+    assert(!Printer::queueInternalAxisMove(E_AXIS, 1, 100));
+    assert(Printer::moveTarget.machineMM(E_AXIS) == 2.0f);
+    assert(std::abs(Printer::feedrate - 80) < 0.0001f);
+    assert(!Printer::queueInternalAxisMove(E_AXIS + 1, 1, 100));
 }
 
 void wobbleTarget() {

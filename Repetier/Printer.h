@@ -669,6 +669,8 @@ public:
     static void setup();
     static void setFeedrate(float feedrate);
     static bool queueGCodeCoordinates(GCode* com);
+    // Single-axis internal G1, with modal coordinates and F in mm/min.
+    static bool queueInternalAxisMove(uint8_t axis, float value, float feedrateMmMin = 0);
     static void queueFloatCoordinates(float x, float y, float z, float e, float feedrate);
     static bool queueRelativeStepsCoordinates(long x, long y, long z, long e, float feedrate, bool waitEnd, bool abortAtEndstops = false);
     static bool queueRelativeMMCoordinates(float x, float y, float z, float e, float feedrate, bool waitEnd, bool abortAtEndstops = false);
