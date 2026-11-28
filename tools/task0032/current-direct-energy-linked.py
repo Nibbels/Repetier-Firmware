@@ -19,6 +19,7 @@ sl=importlib.util.module_from_spec(spec);spec.loader.exec_module(sl)
 
 FAST_PROFILE=False
 COMPACT=False
+Z_DIR_OWNER=False
 
 def checked_layout(elf):
     # The old validator returns its own mutable member dictionary. Never
@@ -108,6 +109,8 @@ def measure(mod,img,delta,rate,start,acceleration,stop_after,negative=False):
     assert o==(-4 if COMPACT else 0) and img.sizes["StepExecutor::stepClocks"]==20
     sign=-1 if negative else 1
     c.put(addr+102+o,5)
+    if Z_DIR_OWNER and delta[2]:
+        c.mem[0x10b]^=2 # force the initial electrical direction opposite to the command
     c.symput("motorWake",7,1,4);c.symput("motorWake",7,1,5)
     for a in range(2):c.symput("Printer::xyMotion",delta[a]*sign,4,20+a*8)
     c.symput("Printer::zMotion",delta[2]*sign,4,24)
@@ -123,6 +126,7 @@ def measure(mod,img,delta,rate,start,acceleration,stop_after,negative=False):
     shortest=None;max_overshoot=0;calls=0
     peak_stack=0;mask_witness=None;costs={};high_min={};low_min={};falls={}
     cruise_samples=0;cruise_elapsed=0;cruise_cost=0
+    dir_state=bool(c.mem[0x10b]&2);last_dir=None;last_z=None;dir_min=None;dir_edges=0
     assert stop_after is None or stop_after<remaining
     while c.get(addr+102+o):
         assert calls<remaining*5+100,(img.board,calls,remaining,c.get(addr+102+o))
@@ -166,6 +170,19 @@ def measure(mod,img,delta,rate,start,acceleration,stop_after,negative=False):
                     assert rise is not None
                     high_min[axis]=min(high_min.get(axis,1<<32),t-rise)
                     falls[axis]=t
+        if Z_DIR_OWNER:
+            for pin,state,t in c.edges:
+                t+=epoch
+                if pin=="DIR_Z":
+                    assert last_z is None or t-last_z>=4,("Z DIR hold",img.board)
+                    last_dir=t;dir_state=bool(state);dir_edges+=1
+                elif pin=="Z" and state:
+                    assert dir_state==(sign>0),("wrong physical Z direction",img.board,sign)
+                    if last_dir is not None:
+                        gap=t-last_dir
+                        assert gap>=4,("Z DIR setup",img.board,gap)
+                        dir_min=gap if dir_min is None else min(dir_min,gap)
+                    last_z=t
         times=[epoch+t for p,s,t in c.edges if p==primary and s]
         assert len(times)<=1
         if times:
@@ -207,13 +224,15 @@ def measure(mod,img,delta,rate,start,acceleration,stop_after,negative=False):
         tail=total[primary]-request_pulses
         assert tail<=1+(request_energy-floor+drop-1)//drop
     assert c.get(addr+98+o,4,signed=True)==0
+    if Z_DIR_OWNER and total["Z"]:
+        assert dir_edges==1 and dir_min is not None
     return dict(delta=delta,rate=rate,start=start,acceleration=acceleration,stop_after=stop_after,
         negative=negative,calls=calls,pulses=total,tail=tail,max_cycles=max_cycles,max_mask=max_mask,
         short_gaps=short_gaps,worst_short_ticks=worst_short,shortest_gap_ticks=shortest,
         max_excess_ticks=max_overshoot,late_calls=late_calls,peak_energy=peak_energy,
         stack_bytes=peak_stack,mask_witness=mask_witness,costs=costs,high_min=high_min,low_min=low_min,
         cruise_samples=cruise_samples,cruise_elapsed=cruise_elapsed,cruise_cost=cruise_cost,
-        elapsed_ticks=epoch,request_energy=request_energy)
+        elapsed_ticks=epoch,request_energy=request_energy,dir_setup_min=dir_min,dir_edges=dir_edges)
 
 def vector_prefix(evidence, board):
     # This is a lower bound, not a sampled shortest pulse path. The
@@ -240,9 +259,11 @@ def main():
     p.add_argument("--extended",action="store_true")
     p.add_argument("--phase-anchor",action="store_true")
     p.add_argument("--compact",action="store_true")
+    p.add_argument("--z-dir-owner",action="store_true")
     a=p.parse_args()
-    global FAST_PROFILE,COMPACT
+    global FAST_PROFILE,COMPACT,Z_DIR_OWNER
     COMPACT=a.compact
+    Z_DIR_OWNER=a.z_dir_owner
     FAST_PROFILE=a.optimized
     mod=sl.lt.load_interpreter()
     result={"scope":__doc__,"boards":{}}
@@ -251,6 +272,7 @@ def main():
         result["candidate_sha"],meta=sl.evidence(a.evidence,archive)
         for board in sl.lt.BOARDS:
             img=mod.Image(archive,board)
+            if Z_DIR_OWNER:img.step_pins[(0x10b,1)]="DIR_Z"
             rows=[]
             for delta,rate,start,accel in (((600,0,0,0),15238,3000,228570),
                 ((0,0,600,0),11520,1000,128000),((128,63,29,0),10000,3000,228570)):
@@ -264,6 +286,9 @@ def main():
                     assert row["request_energy"]==rate*rate and row["tail"]<max(delta)-800,row
                     rows.append(row)
                 rows.append(measure(mod,img,(600,0,0,0),15238,990,228570,50,negative=True))
+            if Z_DIR_OWNER:
+                rows.append(measure(mod,img,(0,0,600,0),11520,192,128000,50,negative=True))
+                rows.append(measure(mod,img,(600,364,128,0),15238,990,228570,50,negative=True))
             if a.phase_anchor:meta[board]["unconditional_vector_prefix_cycles"]=vector_prefix(a.evidence,board)
             result["boards"][board]={"metadata":meta[board],"paths":rows}
             print(board,"calls",sum(r["calls"] for r in rows),
