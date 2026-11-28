@@ -91,8 +91,8 @@ speed_t ComputeV(uint32_t ticks, uint32_t acceleration) {
 }
 uint32_t U16SquaredToU32(uint16_t value) { return uint32_t(value) * value; }
 void delayMilliseconds(unsigned delay) { clockMs += delay; }
-int16_t eepromWords[2048] = {};
-int32_t eepromDWords[2048] = {};
+int16_t eepromWords[4096] = {};
+int32_t eepromDWords[4096] = {};
 unsigned eepromReads = 0;
 int16_t eprGetInt16(unsigned address) { ++eepromReads; return eepromWords[address]; }
 void eprSetInt16(unsigned address, int16_t value) { eepromWords[address] = value; }
@@ -100,9 +100,16 @@ int32_t eprGetInt32(unsigned address) { ++eepromReads; return eepromDWords[addre
 void eprSetInt32(unsigned address, int32_t value) { eepromDWords[address] = value; }
 }
 
+#include "EepromZonePatch.h"
+constexpr uint16_t EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX = EepromZones::address(EepromZones::Field::F_RF_MOD_SENSEOFFSET_OFFSET_MAX);
+constexpr uint16_t EPR_RF_MOD_SENSEOFFSET_DIGITS = EepromZones::address(EepromZones::Field::F_RF_MOD_SENSEOFFSET_DIGITS);
+constexpr uint16_t EPR_RF_EMERGENCYPAUSEDIGITSMIN = EepromZones::address(EepromZones::Field::F_RF_EMERGENCYPAUSEDIGITSMIN);
+constexpr uint16_t EPR_RF_EMERGENCYPAUSEDIGITSMAX = EepromZones::address(EepromZones::Field::F_RF_EMERGENCYPAUSEDIGITSMAX);
+constexpr uint16_t EPR_RF_EMERGENCYZSTOPDIGITSMIN = EepromZones::address(EepromZones::Field::F_RF_EMERGENCYZSTOPDIGITSMIN);
+constexpr uint16_t EPR_RF_EMERGENCYZSTOPDIGITSMAX = EepromZones::address(EepromZones::Field::F_RF_EMERGENCYZSTOPDIGITSMAX);
+
 namespace EEPROM {
-unsigned checksumCalls = 0;
-void updateChecksum() { ++checksumCalls; }
+unsigned persistenceCommits = 0;
 void publishSenseOffsetSettings();
 void storeSenseOffsetSettings(int16_t, int16_t, bool, bool);
 bool storePressureLimits(bool,int32_t,int32_t,bool,bool);
@@ -646,6 +653,59 @@ struct Timer0Flags {
 #define ISR(vector, ...) void vector()
 #define EXTRUDER_TIMER_VECTOR advanceCompareInterrupt
 
+// Model only the durable transport boundary. Production settings publication,
+// band validation and typed patch construction are replayed below.
+namespace EEPROM {
+using namespace EepromZones;
+bool loaded = true;
+bool lastOk = false;
+bool allowCommit = true;
+enum class Result { Ok, Failed };
+bool accept(Result result) { return lastOk = result == Result::Ok; }
+bool persist(const Patch* edits, uint8_t count) {
+    assert(interruptsEnabled);
+    assert(patchMask(edits, count));
+    if (!allowCommit) return false;
+    bool changed = false;
+    for (uint8_t i = 0; i < count; ++i) {
+        const auto& p = edits[i];
+        if (p.width == 2) {
+            changed |= HAL::eepromWords[p.pos] != int16_t(p.bits);
+            HAL::eepromWords[p.pos] = int16_t(p.bits);
+        } else {
+            assert(p.width == 4);
+            changed |= HAL::eepromDWords[p.pos] != int32_t(p.bits);
+            HAL::eepromDWords[p.pos] = int32_t(p.bits);
+        }
+    }
+    if (changed) ++persistenceCommits;
+    return true;
+}
+struct Session {
+    Result read(uint8_t id, uint8_t* data, uint8_t n, uint32_t& alerts) {
+        assert(interruptsEnabled && id == Pressure);
+        BlockEncoder enc(id, data, n);
+        enc.u32(Field::F_RF_EMERGENCYPAUSEDIGITSMIN, HAL::eprGetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMIN));
+        enc.u32(Field::F_RF_EMERGENCYPAUSEDIGITSMAX, HAL::eprGetInt32(EPR_RF_EMERGENCYPAUSEDIGITSMAX));
+        enc.u16(Field::F_RF_EMERGENCYZSTOPDIGITSMIN, HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN));
+        enc.u16(Field::F_RF_EMERGENCYZSTOPDIGITSMAX, HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX));
+        assert(enc.complete());
+        alerts = 0;
+        return Result::Ok;
+    }
+    Result patch(const Patch* edits, uint8_t count) {
+        return persist(edits, count) ? Result::Ok : Result::Failed;
+    }
+};
+Session session() { return {}; }
+void publishSenseOffsetSettings() {
+    // Fixture for reload; actual LiveSettings decoder covered by EEPROM replay.
+    Printer::senseOffsetControl.publishStoredLimits(
+        HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS),
+        HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_OFFSET_MAX));
+}
+}
+
 #include "pause-sense-offset-firmware.inc"
 
 bool advanceTimerArmed() {
@@ -783,15 +843,15 @@ void pressurePause() {
     command.P = 99999;
     HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMIN] = -6000;
     HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMAX] = 6000;
-    const unsigned saves=EEPROM::checksumCalls;
+    const unsigned saves=EEPROM::persistenceCommits;
     configurePressure(3075, &command);
     assert(Printer::pressureProtection.pauseLimits().minimum==EMERGENCY_PAUSE_DIGITS_MIN);
     assert(Printer::pressureProtection.pauseLimits().maximum==EMERGENCY_PAUSE_DIGITS_MAX);
     assert(HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMIN] == -6000);
     assert(HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMAX] == 6000);
-    assert(EEPROM::checksumCalls==saves);
+    assert(EEPROM::persistenceCommits==saves);
     configurePressure(3075,&command);
-    assert(EEPROM::checksumCalls==saves);
+    assert(EEPROM::persistenceCommits==saves);
     sample(EMERGENCY_PAUSE_DIGITS_MAX, EMERGENCY_PAUSE_CHECKS);
     assert(!Printer::pause.isPaused());
 
@@ -799,7 +859,7 @@ void pressurePause() {
     command.S = command.P = 0;
     configurePressure(3075, &command);
     assert(HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMIN]==-6000 && HAL::eepromDWords[EPR_RF_EMERGENCYPAUSEDIGITSMAX]==6000);
-    assert(EEPROM::checksumCalls==saves);
+    assert(EEPROM::persistenceCommits==saves);
     sample(EMERGENCY_PAUSE_DIGITS_MAX + 1, EMERGENCY_PAUSE_CHECKS);
     assert(!Printer::pause.isPaused());
 
@@ -824,12 +884,12 @@ void pressureStop() {
     EEPROM::storePressureLimits(true,-12000,11500,true,true);
     assert(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMIN) == -12000);
     assert(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX) == 11500);
-    const unsigned saves=EEPROM::checksumCalls;
+    const unsigned saves=EEPROM::persistenceCommits;
     EEPROM::storePressureLimits(true,-12000,11500,true,true);
-    assert(EEPROM::checksumCalls==saves);
+    assert(EEPROM::persistenceCommits==saves);
     // A one-sided menu save does not capture an unrelated temporary limit.
     EEPROM::storePressureLimits(true,-11900,0,true,false);
-    assert(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX)==11500 && EEPROM::checksumCalls==saves+1);
+    assert(HAL::eprGetInt16(EPR_RF_EMERGENCYZSTOPDIGITSMAX)==11500 && EEPROM::persistenceCommits==saves+1);
     EEPROM::storePressureLimits(true,-12000,0,true,false);
 
     PrintLine::direct.task = DIRECT_RUNNING;
@@ -1157,12 +1217,19 @@ void senseOffsetWindow() {
 
 void senseOffsetSettings() {
     const auto& controller = Printer::senseOffsetControl;
+    // A failed durable transaction must not publish the proposed pair.
+    const auto old = controller.storedLimits();
+    EEPROM::allowCommit = false;
+    EEPROM::storeSenseOffsetSettings(3200, 55, true, true);
+    assert(controller.storedLimits().thresholdDigits == old.thresholdDigits);
+    assert(controller.storedLimits().maxMicrometers == old.maxMicrometers);
+    EEPROM::allowCommit = true;
     GCode command;
     command.P = 3200;
     command.S = 55;
-    const unsigned beforeChecksum = EEPROM::checksumCalls;
+    const unsigned beforeCommit = EEPROM::persistenceCommits;
     configureSenseOffset(&command);
-    assert(EEPROM::checksumCalls == beforeChecksum + 1);
+    assert(EEPROM::persistenceCommits == beforeCommit + 1);
     assert(queuedSenseOffsetEnables == 1 && controller.limits().thresholdDigits == senseThreshold);
     assert(controller.limits().maxMicrometers == 55);
     assert(HAL::eprGetInt16(EPR_RF_MOD_SENSEOFFSET_DIGITS) == 3200);
