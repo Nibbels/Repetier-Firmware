@@ -318,7 +318,7 @@ void UIDisplay::executeCommandAction(int action) {
             if (action == UI_ACTION_UNMOUNT_FILAMENT_SOFT) {
                 GCodeInput::executeSoftFilament(true);
             } else {
-                GCodeInput::executeFlashScript(Com::tUnmountFilamentHard);
+                GCodeInput::executeHardFilament(true);
             }
         } else {
             UI_STATUS_UPD(UI_TEXT_MOUNT_FILAMENT);
@@ -333,7 +333,7 @@ void UIDisplay::executeCommandAction(int action) {
                     GCodeInput::executeSoftFilament(false);
                 }
             } else {
-                GCodeInput::executeFlashScript(Com::tMountFilamentHard);
+                GCodeInput::executeHardFilament(false);
             }
         }
         Printer::idleStatus.schedule(HAL::timeInMilliseconds());

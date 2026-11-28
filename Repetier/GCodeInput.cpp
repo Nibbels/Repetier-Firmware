@@ -527,6 +527,50 @@ void GCodeInput::executeSoftFilament(bool unload) {
     flashScriptRunning = false;
 }
 
+namespace {
+// Recheck between every original command, including after any wait
+// that pumps thermal service and receives new serial data.
+bool internalProgramAdmitted() {
+    return !Printer::printJob.commandsBlocked() && !Printer::heatingInhibited();
+}
+
+bool finishInternalStep(bool motionCommand) {
+    if (motionCommand)
+        Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
+    Commands::checkForPeriodicalActions(Processing);
+    return internalProgramAdmitted();
+}
+
+void internalAxisMove(uint8_t axis, float value, float feedrateMmMin) {
+    if (isMovingAllowed(PSTR("G0/1")))
+        Printer::queueInternalAxisMove(axis, value, feedrateMmMin);
+}
+} // namespace
+
+void GCodeInput::executeHardFilament(bool unload) {
+    if (flashScriptRunning || !internalProgramAdmitted())
+        return;
+    flashScriptRunning = true;
+    runHardFilament(unload);
+    flashScriptRunning = false;
+}
+
+// Same operations and service boundaries as the former hard scripts.
+__attribute__((noinline)) void GCodeInput::runHardFilament(bool unload) {
+    GCodeCommands::waitForHotendWithParameters(true,
+        unload ? PREHEAT_A_HOTEND_C : PREHEAT_B_HOTEND_C, false, 0);
+    if (!finishInternalStep(false)) return; // M109
+    if (!finishInternalStep(true)) return;  // G21: mm is the only supported unit
+    Printer::setEPositionMM(0);
+    if (!finishInternalStep(true)) return;  // G92 E0
+    internalAxisMove(E_AXIS, unload ? -90.0f : 90.0f, unload ? 500.0f : 100.0f);
+    if (!finishInternalStep(true)) return;  // G1
+    Printer::setEPositionMM(0);
+    if (!finishInternalStep(true)) return;  // G92 E0
+    GCodeCommands::setHotendTemperatureWithParameters(true, 0, false, false, 0);
+    finishInternalStep(false);             // M104 S0 (shared queue-settle path)
+}
+
 // Keep the parser and command buffer frame out of refused nested entries.
 __attribute__((noinline)) void GCodeInput::runFlashScript(const char* cmd) {
     char buf[80];

@@ -6,6 +6,7 @@
 #include <deque>
 #include <initializer_list>
 #include <string>
+#include <vector>
 
 using millis_t = uint32_t;
 using fast8_t = int8_t;
@@ -33,6 +34,9 @@ unsigned scriptCommands = 0;
 unsigned dispatchedCommands = 0, statusCommands = 0, stopRequests = 0;
 bool legacyRejected = false, settingsBlocked = false;
 unsigned softLoads = 0, softUnloads = 0;
+std::vector<int> internalEvents;
+unsigned stopAtPeriodicVisit=0;
+bool rejectInternalMotion=false;
 int16_t softPressure = 0;
 uint8_t softSpeed = 0;
 unsigned heaterRequests = 0, extrusionRequests = 0;
@@ -72,7 +76,17 @@ void serialFlush() {
 char readFlashByte(const char* position) { return *position; }
 }
 
+enum { X_AXIS, Y_AXIS, Z_AXIS, E_AXIS };
+static bool isMovingAllowed(const char*) { return !rejectInternalMotion; }
 namespace Printer {
+struct { void recordActivity(millis_t){internalEvents.push_back(1);} } inactivity;
+void setEPositionMM(float e){assert(e==0);internalEvents.push_back(2);}
+bool queueInternalAxisMove(uint8_t axis,float value,float feedrate){
+    assert(axis==E_AXIS);
+    internalEvents.push_back(value<0?-90:90);
+    internalEvents.push_back(int(feedrate));
+    return true;
+}
 bool debugErrors() { return true; }
 bool legacySimulationRejected() { return legacyRejected; }
 bool heatingInhibited() { return settingsBlocked || legacyRejected
@@ -109,6 +123,8 @@ void emergencyStop() { throw EmergencyReached{}; }
 void executeGCode(GCode* code);
 void checkForPeriodicalActions(FirmwareState) {
     ++periodicVisits;
+    if (GCodeInput::flashScriptActive()) internalEvents.push_back(3);
+    if (stopAtPeriodicVisit && periodicVisits==stopAtPeriodicVisit) stopped=true;
     if (injectNestedScript) {
         injectNestedScript = false;
         GCodeInput::executeSoftFilament(false);
@@ -161,6 +177,16 @@ void printErrorFLN(const char* text) { print(tError); printFLN(text); }
 // Real receiver, M111 handler and dispatch entry; downstream command effects
 // are represented by counters, not physical hardware.
 namespace GCodeCommands {
+void waitForHotendWithParameters(bool targetPresent,int32_t target,bool toolPresent,uint8_t tool){
+    assert(targetPresent && !toolPresent && !tool && GCodeInput::flashScriptActive());
+    internalEvents.push_back(target);
+    GCodeInput::executeHardFilament(true); // refuse nested program
+}
+void setHotendTemperatureWithParameters(bool targetPresent,int32_t target,bool waitRequested,bool toolPresent,uint8_t tool){
+    assert(targetPresent && !target && !waitRequested && !toolPresent && !tool);
+    assert(GCodeInput::flashScriptActive());
+    internalEvents.push_back(0);
+}
 void loadFilamentWithParameters(int16_t p, uint8_t f) {
     assert(GCodeInput::flashScriptActive());
     ++softLoads; softPressure=p; softSpeed=f;
@@ -634,6 +660,34 @@ void flashScript() {
 
 } // namespace
 
+void hardFilament() {
+    for(bool unload:{false,true}){
+        internalEvents.clear();periodicVisits=0;
+        GCodeInput::executeHardFilament(unload);
+        const std::vector<int> expected={unload?PREHEAT_A_HOTEND_C:PREHEAT_B_HOTEND_C,3,
+            1,3,2,1,3,unload?-90:90,unload?500:100,1,3,2,1,3,0,3};
+        assert(internalEvents==expected && periodicVisits==6 && !GCodeInput::flashScriptActive());
+        assert(!dispatchedCommands);
+        // Stop immediately after each original command: no later effects.
+        unsigned boundary=0;
+        for(unsigned n=1;n<=6;++n){
+            while(expected[boundary++]!=3){}
+            internalEvents.clear();periodicVisits=0;stopAtPeriodicVisit=n;
+            GCodeInput::executeHardFilament(unload);
+            assert(stopped && periodicVisits==n && !GCodeInput::flashScriptActive());
+            assert(internalEvents==std::vector<int>(expected.begin(),expected.begin()+boundary));
+            stopped=false;stopAtPeriodicVisit=0;
+        }
+    }
+    internalEvents.clear();periodicVisits=0;
+    legacyRejected=true;GCodeInput::executeHardFilament(false);legacyRejected=false;
+    settingsBlocked=true;GCodeInput::executeHardFilament(true);settingsBlocked=false;
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    thermalLocked=true;GCodeInput::executeHardFilament(false);thermalLocked=false;
+#endif
+    assert(internalEvents.empty() && !periodicVisits);
+}
+
 void softFilament() {
     injectNestedScript = true;
     GCodeInput::executeSoftFilament(false);
@@ -673,6 +727,7 @@ int main(int argc, char** argv) {
     else if (scenario == "stopping") stopDrainsInput();
     else if (scenario == "script") flashScript();
     else if (scenario == "soft-filament") softFilament();
+    else if (scenario == "hard-filament") hardFilament();
     else if (scenario == "post-stop-output") postStopOutputBoundary();
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     else if (scenario == "thermal-emergency") thermalEmergency();

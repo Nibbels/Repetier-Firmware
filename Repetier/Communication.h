@@ -244,8 +244,6 @@ public:
 
     FSTRINGVAR(tHeaterDecoupledWarning)
     FSTRINGVAR(tOutputObjectPrint)
-    FSTRINGVAR(tUnmountFilamentHard)
-    FSTRINGVAR(tMountFilamentHard)
 
     FSTRINGVAR(tCap)
     FSTRINGVAR(tConfig)

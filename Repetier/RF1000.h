@@ -279,10 +279,8 @@ during homing operation. The homing speed is divided by the value. 1 = same spee
 // ##########################################################################################
 
 /** \brief Automatic filament change, unmounting of the filament - ensure that G1 does not attempt to extrude more than EXTRUDE_MAXLENGTH */
-#define UNMOUNT_FILAMENT_SCRIPT_HARD "M109 S" xstr(PREHEAT_A_HOTEND_C) "\nG21\nG92 E0\nG1 E-90 F500\nG92 E0\nM104 S0"
 
 /** \brief Automatic filament mount, mounting of the filament with heating. Stop @ XXXX digits */
-#define MOUNT_FILAMENT_SCRIPT_HARD "M109 S" xstr(PREHEAT_B_HOTEND_C) "\nG21\nG92 E0\nG1 E90 F100\nG92 E0\nM104 S0"
 
 // ##########################################################################################
 // ##   Part Fan configuration

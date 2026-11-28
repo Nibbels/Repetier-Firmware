@@ -30,10 +30,12 @@ public:
     static void keepAlive(FirmwareState state);
     static void executeFlashScript(const char* cmd);
     static void executeSoftFilament(bool unload);
+    static void executeHardFilament(bool unload);
     static bool flashScriptActive();
 
 private:
     static void runFlashScript(const char* cmd);
+    static void runHardFilament(bool unload);
     static bool parseAscii(GCode& command, char* line, bool fromSerial);
     static bool parseBinary(GCode& command, uint8_t* buffer, int8_t length);
     static uint8_t computeBinarySize(char* frame);
