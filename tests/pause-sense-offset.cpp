@@ -506,6 +506,7 @@ struct PrintLine {
         updatesWobble = wobble;
         return publishesMove;
     }
+    static void abortDirectMoveForEmergency() { direct.stepsRemaining=0; direct.task=DIRECT_IDLE; }
     static void applyDirectStop();
     static void stopDirectMove() { ++stopRequests; applyDirectStop(); }
     static void discardQueuedMoves() { linesCount = 0; queuedTask = QueueTask::None; }

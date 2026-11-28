@@ -335,14 +335,12 @@ public:
     static GuardedMoveResult runGuardedMoveTo(uint8_t axis, int32_t targetSteps,
                                               uint16_t stepsPerSecond, GuardedStop stop);
     static void stopDirectMove();
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-    // Caller holds IRQ lock and has permanently blocked motion admission.
-    // No deceleration tail or target restoration after a thermal fault.
+    // Caller holds IRQ lock and has blocked normal motion admission.
+    // No deceleration tail or target restoration after a terminal fault.
     static void abortDirectMoveForEmergency() {
         direct.stepsRemaining=0;
         direct.task=DIRECT_IDLE;
     }
-#endif
 
     static void queueTask(QueueTask task);
 

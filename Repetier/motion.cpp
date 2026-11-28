@@ -301,12 +301,16 @@ void PrintLine::prepareDirectMove(const int32_t steps[4], bool stoppable, bool f
     MotionPlanner::prepareStepProfile(direct);
 
     InterruptProtectedBlock publish;
+    if (Printer::blockAll
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-    if(Printer::printJob.emergencyLocked()) {
+        || Printer::printJob.emergencyLocked()
+#endif
+    ) {
         abortDirectMoveForEmergency();
+        for (uint8_t axis = X_AXIS; axis <= E_AXIS; ++axis)
+            Printer::stopDirectAxis(axis);
         return;
     }
-#endif
     if (direct.task == DIRECT_PREPARING_STOPPED)
         direct.limitToStopTail(true);
     direct.task = stoppable ? DIRECT_PREPARED_STOPPABLE : DIRECT_PREPARED;

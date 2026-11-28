@@ -370,7 +370,7 @@ void Printer::offsetRelativeStepsCoordinates(int32_t dx, int32_t dy, int32_t dz,
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     if(printJob.emergencyLocked())return;
 #endif
-    if (dx == 0 && dy == 0 && dz == 0 && de == 0)
+    if (Printer::blockAll || (dx == 0 && dy == 0 && dz == 0 && de == 0))
         return;
     if (configuration != DirectMoveMode::Configured && !pause.allowsManualMove())
         return;
@@ -382,6 +382,8 @@ void Printer::offsetRelativeStepsCoordinates(int32_t dx, int32_t dy, int32_t dz,
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     if(printJob.emergencyLocked())return; // A wait above can latch the fault.
 #endif
+    if (Printer::blockAll)
+        return;
     const bool stoppable = configuration == DirectMoveMode::Button;
     const bool feedrateSource = (stoppable || configuration == DirectMoveMode::ManualPosition)
         ? manualMotion.feedrateSource() : FEEDRATE_DIRECTCONFIG;

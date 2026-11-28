@@ -383,8 +383,17 @@ bool hardwareTypeMatches() {
 void doEmergencyStop(StopReason reason) {
     {
         InterruptProtectedBlock lock;
+        if (Printer::blockAll)
+            return;
         Printer::blockAll = 1;
+        Printer::lockMovement();
         Printer::extrusionOutput.inhibit(ExtrusionOutput::Inhibit::Emergency);
+        Printer::pause.cancel();
+        Printer::idleStatus.cancel();
+        PrintLine::abortDirectMoveForEmergency();
+        PrintLine::discardQueuedMoves();
+        for (uint8_t axis = X_AXIS; axis <= E_AXIS; ++axis)
+            Printer::stopDirectAxis(axis);
     }
 
     showError((void*)ui_text_emergency_stop);
@@ -399,6 +408,12 @@ void doEmergencyStop(StopReason reason) {
     Printer::stopPrint(); // And tell usb senders to stop
 
     Calibration::moveZ(int(Printer::stepsPerMm(Z_AXIS) * 5), true);
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
+    // Thermal emergency takes precedence even during the retreat. Its
+    // holding-torque policy must not be overridden by this older frame.
+    if (Printer::printJob.emergencyLocked())
+        return;
+#endif
 
     // we are not going to perform any further operations until the restart of the firmware
     Printer::switchEverythingOff();
