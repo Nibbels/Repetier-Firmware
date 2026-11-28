@@ -47,7 +47,7 @@ def homing_owner(name):
     return re.fullmatch(r"Printer::(?:homeAxis\(bool, bool, bool\)|checkHome\(signed char\))(?: \[clone [^\]]+\])*", name) is not None
 
 GUARDS = (
-    ("UIDisplay::executeAction(", ("UIDisplay::slowAction(", "Commands::executeGCode(", HOST_MACHINE)),
+    ("UIDisplay::executeAction(", ("UIDisplay::slowAction(",)),
     ("dispatchScanWork(", ("Commands::checkForPeriodicalActions(", "handleScanWorkTasks(")),
     ("servicePrintFeatures(", ("loopFeatures(",)),
     ("PrintPause::dispatchPendingMotion(", ("loopFeatures(", "PrintPause::serviceMotion(")),
@@ -100,12 +100,9 @@ PHASE_ANCHORS = {
 ANCHORS = {
     "ui.cpp": ("if ((flags & UI_FLAG_SLOW_ACTION_RUNNING) == 0)", "flags |= UI_FLAG_SLOW_ACTION_RUNNING;",
                "flags &= ~UI_FLAG_SLOW_ACTION_RUNNING;"),
-    "ui.h": ("void executeRemoteAction(int action)", "if (flags & UI_FLAG_SLOW_ACTION_RUNNING)",
-             "flags |= UI_FLAG_SLOW_ACTION_RUNNING;", "flags &= ~UI_FLAG_SLOW_ACTION_RUNNING;",
-             "class ScopedActionExclusion", "owns_(!(display.flags & UI_FLAG_SLOW_ACTION_RUNNING))",
+    "ui.h": ("class ScopedActionExclusion", "owns_(!(display.flags & UI_FLAG_SLOW_ACTION_RUNNING))",
              "if (owns_) display_.flags |= UI_FLAG_SLOW_ACTION_RUNNING;",
              "if (owns_) display_.flags &= ~UI_FLAG_SLOW_ACTION_RUNNING;"),
-    "GCodeSystem.cpp": ("uid.executeRemoteAction(pCommand->P);",),
     "PrintPause.cpp": ("if (servicingMotion_", "servicingMotion_ = true;",
                        "dispatchPendingMotion();", "servicingMotion_ = false;"),
     "GCodeInput.cpp": ("if (flashScriptRunning || Printer::printJob.commandsBlocked() || Printer::heatingInhibited())",
@@ -260,6 +257,11 @@ def inventory(z, board, phase=False, reviewed_owners=False):
         source = z.read(p + "build/sketch/" + filename).decode()
         for anchor in anchors:
             assert anchor in source, (board, filename, "review guard", anchor)
+    # The remote panel entry was retired in a4294bda. Fail closed if it
+    # reappears; the only reviewed executeAction caller is local slowAction.
+    for filename in ("ui.h", "ui.cpp", "GCodeSystem.cpp", "GCodeCommands.cpp", "GCodeCommands.h"):
+        source = z.read(p + "build/sketch/" + filename).decode()
+        assert not re.search(r"\b(?:executeRemoteAction|accessPanel|cachedRow|requiresLocalSafetyConfirmation)\b|\bcase\s+3029\s*:", source), (board, filename, "retired panel entry")
     symbols = z.read(p + "symbols.txt").decode()
     for retired in ("runFlashScript", "executeFlashScript", "tMountFilamentSoft",
                     "tUnmountFilamentSoft", "tMountFilamentHard", "tUnmountFilamentHard", "tOutputObjectPrint"):
