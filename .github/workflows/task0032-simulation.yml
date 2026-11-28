@@ -14,8 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
         with:
           node-version: '22.23.0'
       - name: Run task-private self-tests and reproduce evidence
@@ -61,7 +61,7 @@ jobs:
           for test in queue-estimate governor-preview rx-blackout-model rx-service-window; do
             node "tools/task0032/$test.cjs" > "$out/$test.json"
           done
-      - uses: arduino/setup-arduino-cli@v2
+      - uses: arduino/setup-arduino-cli@v2.1.0
         with:
           version: 1.2.2
       - name: Measure isolated actual AVR parser and ACK cycles
@@ -89,7 +89,7 @@ jobs:
           git show "$planner:research/task0032-planner-queue/REPORT.md" > "$out/planner-report.md"
           node tools/task0032/measured-cost-sweep.cjs "$out/transport-contract-input.json" "$out/planner-report.md" "$out/parser-avr/parser-results.json" > "$out/measured-cost-sweep.json"
           node -e 'const r=require(process.argv[1]); console.log(JSON.stringify({plannerCosts:r.plannerCosts,receiverCosts:r.receiverCosts,cases:r.rows.length,summary:Object.keys(r.plannerCosts).map(k=>{const a=r.rows.filter(x=>x.plannerCase===k&&x.frameWindow===32);return {case:k,n:a.length,localCpuFeasible:a.filter(x=>x.localCpuFeasible).length,zeroGaps:a.filter(x=>x.gaps===0).length}})},null,2))' "$out/measured-cost-sweep.json"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: task0032-simulation-${{ github.sha }}
@@ -101,8 +101,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
         with:
           node-version: '22.23.0'
       - name: Validate immutable archived cost evidence and shared model
@@ -118,7 +118,7 @@ jobs:
           node tools/task0032/linked-cost-sweep.cjs > "$out/linked-cost-sweep.json"
           node -e 'const r=require(process.argv[1]); console.log(JSON.stringify({cases:r.rows.length,summary:r.summary},null,2))' "$out/linked-cost-sweep.json"
           sha256sum tools/task0032/*.cjs > "$out/source-sha256.txt"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: task0032-linked-costs-${{ github.sha }}
           path: ${{ runner.temp }}/task0032-linked-costs
@@ -130,7 +130,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - name: Replay small deltas against exact P0 snapshot
         shell: bash
         run: |
@@ -143,7 +143,7 @@ jobs:
           git rev-parse HEAD > "$out/checkout-sha.txt"
           sha256sum tools/task0032/{small-cleanup-preflight,integer-sqrt-preflight,fixed-uart-init,fixed-queue-capacity,parser-avr-bench,parser-wire-replay}.py > "$out/source-sha256.txt"
           python3 tools/task0032/small-cleanup-preflight.py --source "$RUNNER_TEMP/task0032-p0" --out "$out" | tee "$out/preflight.log"
-      - uses: arduino/setup-arduino-cli@v2
+      - uses: arduino/setup-arduino-cli@v2.1.0
         with:
           version: 1.2.2
       - name: Check corrected integer sqrt with actual AVR assembly
@@ -176,7 +176,7 @@ jobs:
           # verification. No change to the actual standard workflow.
           cd "$candidate"
           python3 tools/task0003-baseline.py "$out/candidate-evidence" | tee "$out/canonical-preflight.log"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: task0032-p0-preflight-${{ github.sha }}
@@ -190,7 +190,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - name: Replay bounded LCD byte service and exhaustive dirty masks
         shell: bash
         run: |
@@ -203,7 +203,7 @@ jobs:
           "$out/replay" | tee "$out/replay.log"
           c++ -std=c++11 -O1 -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all tools/task0032/lcd-byte-service.cpp -o "$out/ubsan"
           "$out/ubsan" | tee "$out/ubsan.log"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: task0032-lcd-service-${{ github.sha }}
@@ -217,7 +217,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - name: Compare exact UI byte traces on pinned P0 source
         shell: bash
         run: |
@@ -230,7 +230,7 @@ jobs:
           git rev-parse HEAD > "$out/checkout-sha.txt"
           sha256sum tools/task0032/lcd-row-stream-preflight.py > "$out/source-sha256.txt"
           python3 tools/task0032/lcd-row-stream-preflight.py --source "$RUNNER_TEMP/task0032-lcd-p0" --out "$out"
-      - uses: arduino/setup-arduino-cli@v2
+      - uses: arduino/setup-arduino-cli@v2.1.0
         with:
           version: 1.2.2
       - name: Verify the independent row-stream candidate with the pinned P0 canonical harness
@@ -249,7 +249,7 @@ jobs:
           git -C "$candidate" rev-parse HEAD > "$out/local-candidate-sha.txt"
           cd "$candidate"
           python3 tools/task0003-baseline.py "$out/candidate-evidence" --p0-candidate | tee "$out/canonical-preflight.log"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: task0032-lcd-row-${{ github.sha }}
@@ -263,7 +263,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - name: Replay single-frame dirty transport
         shell: bash
         run: |
@@ -296,7 +296,7 @@ jobs:
           python3 tools/task0032/lcd-emergency-integration.py --source "$candidate" 2>&1 | tee "$out/emergency-integration.log"
           git -C "$candidate" -c user.name="Task0032 isolated preflight" -c user.email="preflight@invalid.example" commit -m "Disposable integrated LCD counterfactual"
           git -C "$candidate" rev-parse HEAD > "$out/local-candidate-sha.txt"
-      - uses: arduino/setup-arduino-cli@v2
+      - uses: arduino/setup-arduino-cli@v2.1.0
         with:
           version: 1.2.2
       - name: Run existing canonical four-board recovery harness
@@ -317,7 +317,7 @@ jobs:
           git worktree add --detach "$base" 9072d65121bc2086522ea6b837ca3804ec80faa5
           (cd "$base" && python3 tools/task0003-baseline.py "$out/baseline-evidence" --avr-only --p0-candidate) | tee "$out/baseline.log"
           python3 tools/task0032/lcd-resource-delta.py "$out"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: task0032-lcd-integrated-${{ github.sha }}
@@ -331,8 +331,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: arduino/setup-arduino-cli@v2
+      - uses: actions/checkout@v7.0.1
+      - uses: arduino/setup-arduino-cli@v2.1.0
         with:
           version: 1.2.2
       - name: Compare exact AVR-libc integer semantics and serial replays
@@ -365,7 +365,7 @@ jobs:
           git -c user.name=Task0032 -c user.email=task0032@localhost commit -am "Disposable decimal parser candidate"
           git rev-parse HEAD > "$out/local-candidate-sha.txt"
           python3 tools/task0003-baseline.py "$out/candidate-evidence" --p0-candidate | tee "$out/canonical.log"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: task0032-decimal32-${{ github.sha }}
@@ -379,7 +379,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - name: Compose qualified small changes against current exact P0 snapshot
         shell: bash
         run: |
@@ -392,7 +392,7 @@ jobs:
           git fetch --no-tags --depth=1 origin "$p0" 9072d65121bc2086522ea6b837ca3804ec80faa5 9345d9f52f9428be0f920e6777c1e50286c42d71
           git worktree add --detach "$RUNNER_TEMP/combined-core-p0" "$p0"
           python3 tools/task0032/combined-core-preflight.py --source "$RUNNER_TEMP/combined-core-p0" --out "$out" | tee "$out/replay.log"
-      - uses: arduino/setup-arduino-cli@v2
+      - uses: arduino/setup-arduino-cli@v2.1.0
         with:
           version: 1.2.2
       - name: Canonical recovery builds for disposable combined candidate
@@ -411,7 +411,7 @@ jobs:
           git -c user.name=Task0032 -c user.email=task0032@localhost commit -am "Disposable combined print core candidate"
           git rev-parse HEAD > "$out/local-candidate-sha.txt"
           python3 tools/task0003-baseline.py "$out/candidate-evidence" --p0-candidate | tee "$out/canonical.log"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: task0032-combined-core-${{ github.sha }}

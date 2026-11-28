@@ -17,8 +17,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: arduino/setup-arduino-cli@v2
+      - uses: actions/checkout@v7.0.1
+      - uses: arduino/setup-arduino-cli@v2.1.0
         with:
           version: 1.2.2
       - name: Install Arduino AVR Boards
@@ -38,7 +38,7 @@ jobs:
           python3 -c 'import shutil, os; shutil.make_archive(os.environ["RUNNER_TEMP"] + "/a73-input", "zip", os.environ["RUNNER_TEMP"] + "/firmware-evidence")'
           digest=$(sha256sum "$RUNNER_TEMP/a73-input.zip" | cut -d' ' -f1)
           "$RUNNER_TEMP/a73-venv/bin/python" tools/task0034/global-a73-evidence.py "$RUNNER_TEMP/a73-input.zip" "$digest" "${{ github.sha }}" --linked > "$RUNNER_TEMP/firmware-evidence/a73-linked.json"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: firmware-evidence-${{ github.sha }}
