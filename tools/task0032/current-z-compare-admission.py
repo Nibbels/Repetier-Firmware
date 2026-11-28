@@ -89,6 +89,10 @@ ComparePhaseClock ZMotion::physicalClock_;
 #endif''')
 
     hal = src / "HAL.cpp"
+    # setTimer's assembly writes OCR1A and stepperWait. Make the subsequent
+    # sticky-flag observation ordered with those MMIO writes.
+    replace_once(hal, '        : "r18");                                                                           // Clobber',
+                 '        : "r18", "cc", "memory");                                                           // Clobber')
     replace_once(hal, '} // setTimer', '''    ZMotion::observeTopWrite();
 } // setTimer''')
     replace_once(hal, '''    // Mechanical block is also a motion fence.''', '''    // Account before every possible OCR1A rewrite. The terminal thermal
