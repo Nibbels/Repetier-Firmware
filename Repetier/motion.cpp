@@ -291,6 +291,7 @@ GuardedMoveResult PrintLine::runScanMove(int32_t steps, bool emergencyRetreat) {
     const float scale = Printer::stepsPerMm(Z_AXIS);
     const float maxRate = scale * Printer::axisMaxFeedrate(Z_AXIS);
     constexpr uint16_t nominalRate = 1000000UL / (XYZ_STEPPER_HIGH_DELAY + XYZ_STEPPER_LOW_DELAY);
+    const bool referenceRequired = z.isHomed();
     const int32_t origin = z.scanSteps();
     const int64_t target = int64_t(origin) + steps;
     const int64_t travel = int64_t(z.maxSteps()) + z.minOvertravel();
@@ -300,17 +301,18 @@ GuardedMoveResult PrintLine::runScanMove(int32_t steps, bool emergencyRetreat) {
         (emergencyRetreat && (steps <= 0 || float(steps) > 5.0f * scale)) ||
         (steps < 0 && !z.isHomed()))
         return {GuardedMoveStatus::Denied, origin};
-    if (!steps)
-        return {GuardedMoveStatus::PositionReached, origin};
     const uint16_t rate = maxRate < nominalRate ? static_cast<uint16_t>(maxRate) : nominalRate;
     const float feedrate = rate / scale;
     asm volatile("" : : "m"(feedrate), "m"(rate));
     {
         InterruptProtectedBlock lock;
         if (cancelled() || hasLines() || directMoveActive() || !Printer::zStepperEnabled() ||
+            (referenceRequired && !z.isHomed()) || z.scanSteps() != origin ||
             (!emergencyRetreat && (!Calibration::scanSession.dispatching() ||
                                   Printer::pause.blocksCalibration())))
             return {GuardedMoveStatus::Denied, origin};
+        if (!steps)
+            return {GuardedMoveStatus::PositionReached, origin};
         // Constant-rate single-axis profile; common executor clock,
         // Bresenham, Z ledger and STEP termination. No separate delay.
         z.setScanInProgress(true);
@@ -333,6 +335,10 @@ GuardedMoveResult PrintLine::runScanMove(int32_t steps, bool emergencyRetreat) {
     const int32_t actual = z.scanSteps();
     if (cancelled())
         return {GuardedMoveStatus::Cancelled, actual};
+    // A coordinate match is not a successful scan if the driver or an
+    // established reference was lost. Report failure even at the last pulse.
+    if (!Printer::zStepperEnabled() || (referenceRequired && !z.isHomed()))
+        return {GuardedMoveStatus::Limit, actual};
     return {actual == target ? GuardedMoveStatus::PositionReached : GuardedMoveStatus::Limit, actual};
 }
 
