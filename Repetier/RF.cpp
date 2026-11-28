@@ -187,7 +187,7 @@ void handleStartStandby(millis_t uTime) {
      */
     // A preceding service may have recorded activity after the initial clock sample.
     const millis_t inactivityTime = HAL::timeInMilliseconds();
-    if (PrintLine::hasLines() || Printer::printJob.isBusy() || Printer::pause.isPaused()) {
+    if (PrintLine::hasLines() || PrintLine::directMoveActive() || Printer::printJob.isBusy() || Printer::pause.isPaused()) {
         Printer::inactivity.recordActivity(inactivityTime);
     } else {
         if (Printer::inactivity.shutdownTimeoutExpired(inactivityTime)) {

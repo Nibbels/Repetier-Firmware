@@ -189,8 +189,73 @@ bool PrintLine::prepareQueueMove(uint8_t abortAtEndstops, uint8_t pathOptimize, 
     return true;
 } // prepareQueueMove
 
-void PrintLine::prepareDirectMove(const int32_t steps[4], bool stoppable, bool feedrateSource) {
-    direct.flags = FLAG_ABORT_AT_ENDSTOPS;
+int32_t PrintLine::guardedAxisPosition(uint8_t axis) {
+    InterruptProtectedBlock lock;
+    if (axis == Z_AXIS)
+        return Printer::zMotion.motorSteps();
+    return axis < Z_AXIS ? Printer::xyMotion.motorSteps(axis) : 0;
+}
+
+GuardedMoveResult PrintLine::runGuardedMoveTo(uint8_t axis, int32_t targetSteps,
+                                             uint16_t stepsPerSecond, GuardedStop stop) {
+    UIDisplay::ScopedActionExclusion panelExclusion(uid);
+    if (axis > Z_AXIS || !stepsPerSecond ||
+        (stop != GuardedStop::Closed && stop != GuardedStop::Open && stop != GuardedStop::Distance))
+        return {GuardedMoveStatus::Denied, 0};
+
+    const int32_t origin = guardedAxisPosition(axis);
+    const auto admitted = [axis] {
+        return !Printer::blockAll && Printer::movementUnlocked() &&
+               Printer::printJob.isIdle() && !Printer::pause.blocksCalibration() &&
+               !hasLines() && !directMoveActive() && !isAnyScanRunning() &&
+               Printer::isAxisHomed(axis) && !Printer::doHeatBedZCompensation &&
+               Printer::zMotion.correctionCleared();
+    };
+    if (!admitted())
+        return {GuardedMoveStatus::Denied, origin};
+    // Reject invalid or excessive requests without signed arithmetic overflow.
+    const int64_t delta = int64_t(targetSteps) - origin;
+    const int32_t travel = Printer::softwareEndstopSteps(axis);
+    if (travel <= 0 || delta > int64_t(travel) + travel/10 ||
+        delta < -(int64_t(travel) + travel/10) ||
+        (stop == GuardedStop::Closed && delta >= 0) ||
+        (stop == GuardedStop::Open && delta <= 0))
+        return {GuardedMoveStatus::Denied, origin};
+    if (!delta)
+        return {GuardedMoveStatus::PositionReached, origin};
+
+    const float feedrate = stepsPerSecond * Printer::mmPerStep(axis);
+    if (!(feedrate > 0) || !isfinite(feedrate))
+        return {GuardedMoveStatus::Denied, origin};
+    int32_t steps[4] = {};
+    steps[axis] = static_cast<int32_t>(delta);
+    Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
+    {
+        InterruptProtectedBlock lock;
+        if (!admitted() || guardedAxisPosition(axis) != origin)
+            return {GuardedMoveStatus::Denied, origin};
+        Printer::xyMotion.requestDirect(X_AXIS, steps[X_AXIS]);
+        Printer::xyMotion.requestDirect(Y_AXIS, steps[Y_AXIS]);
+        Printer::zMotion.requestDirectMove(steps[Z_AXIS]);
+        Printer::stopDirectAxis(E_AXIS);
+        reserveDirectMove(false);
+    }
+    prepareDirectMove(steps, false, FEEDRATE_DIRECTCONFIG, feedrate, stop);
+    while (directMoveActive())
+        Commands::checkForPeriodicalActions(Calibrating);
+    Printer::inactivity.recordActivity(HAL::timeInMilliseconds());
+    const int32_t position = guardedAxisPosition(axis);
+    if (Printer::blockAll || Printer::printJob.commandsBlocked() || !Printer::isAxisHomed(axis))
+        return {GuardedMoveStatus::Cancelled, position};
+    if (stop == GuardedStop::Distance)
+        return {position == targetSteps ? GuardedMoveStatus::PositionReached : GuardedMoveStatus::Limit, position};
+    return {(direct.flags & FLAG_GUARDED_STOP_MASK) == static_cast<uint8_t>(GuardedStop::Distance)
+                ? GuardedMoveStatus::SwitchReached : GuardedMoveStatus::Limit, position};
+}
+
+void PrintLine::prepareDirectMove(const int32_t steps[4], bool stoppable, bool feedrateSource,
+                                  float explicitFeedrate, GuardedStop guard) {
+    direct.flags = FLAG_ABORT_AT_ENDSTOPS | static_cast<uint8_t>(guard);
     direct.joinFlags = 0;
     direct.fixStartAndEndSpeed();
     direct.dir = 0;
@@ -217,6 +282,8 @@ void PrintLine::prepareDirectMove(const int32_t steps[4], bool stoppable, bool f
         }
     }
 
+    if (guard != GuardedStop::Normal)
+        feedrate = explicitFeedrate;
     MotionPlanner::prepareMove(direct, axisDistanceMM, feedrate, queue);
     MotionPlanner::prepareStepProfile(direct);
 

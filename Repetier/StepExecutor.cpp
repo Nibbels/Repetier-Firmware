@@ -311,6 +311,12 @@ long StepExecutor::performDirectMove() {
         stepErrors[FOR_DIRECT].start(directPrimarySteps);
         stepClocks[FOR_DIRECT].start(direct.stepProfile.vStart);
         nominalFeedrate_ = direct.fullSpeed;
+        if (direct.flags & FLAG_GUARDED_STOP_MASK) {
+            // Do not inherit the previous move's packing or step clock.
+            stepsPerTimerCall = 1;
+            const speed_t start = direct.stepProfile.vStart ? direct.stepProfile.vStart : 1;
+            stepIntervalTicks = RMath::max(uint32_t(minimumStepIntervalTicks), HAL::CPUDivU2(start));
+        }
 
         updateAdvanceSteps(direct, direct.stepProfile.vStart);
 
@@ -381,8 +387,35 @@ template<uint8_t forQueue>
 long StepExecutor::performMove(PrintLine* move) {
     static_assert(forQueue == FOR_QUEUE || forQueue == FOR_DIRECT, "Invalid execution owner");
     auto& errors = stepErrors[forQueue];
+    const auto guard = forQueue ? GuardedStop::Normal :
+        static_cast<GuardedStop>(move->flags & FLAG_GUARDED_STOP_MASK);
+    const bool guarded = guard != GuardedStop::Normal;
+    if (guarded) {
+        // Timer1 is the only pulse owner. Check the requested home switch
+        // before each pulse, also on the tick following the final pulse.
+        // Never bypass the ordinary directional hardware/software limits.
+        if (Printer::blockAll || Printer::printJob.commandsBlocked() ||
+            !Printer::isAxisHomed(move->primaryAxis)) {
+            finishMove(*move, false);
+            return 1000;
+        }
+        if (guard != GuardedStop::Distance) {
+            uint8_t closed = 0;
+            for (uint8_t sample = 0; sample < 3; ++sample)
+                closed += Printer::isMinEndstopHit(move->primaryAxis);
+            if ((closed >= 2) == (guard == GuardedStop::Closed)) {
+                move->flags |= FLAG_GUARDED_STOP_MASK;
+                finishMove(*move, false);
+                return 1000;
+            }
+        }
+        if (move->stepsRemaining <= 0 || move->isNoMove()) {
+            finishMove(*move, false);
+            return 1000;
+        }
+    }
     HAL::allowInterrupts();
-    fast8_t max_loops = stepsPerTimerCall;
+    fast8_t max_loops = guarded ? 1 : stepsPerTimerCall;
     if (move->stepsRemaining < max_loops)
         max_loops = move->stepsRemaining;
     HAL::forbidInterrupts();
@@ -476,7 +509,7 @@ long StepExecutor::performMove(PrintLine* move) {
             if (errors.advance(Z_AXIS, move->delta[Z_AXIS])) {
                 const auto path = forQueue
                     ? (move->isAbortAtEndstops() ? ZMotion::Path::QueuedUntilEndstop : ZMotion::Path::Queued)
-                    : (move->task == DIRECT_RUNNING_STOPPABLE ? ZMotion::Path::StoppableDirect : ZMotion::Path::Direct);
+                    : (guarded || move->task == DIRECT_RUNNING_STOPPABLE ? ZMotion::Path::StoppableDirect : ZMotion::Path::Direct);
                 const bool continuing = Printer::zMotion.stepPath(path);
                 if (!continuing)
                     move->setMoveOfAxisFinished(Z_AXIS);
@@ -527,7 +560,7 @@ long StepExecutor::performMove(PrintLine* move) {
                   "Packed interval must fit in uint16_t");
     stepsPerTimerCall = 1;
     const uint16_t packingInterval = packingInterval_;
-    if (interval < packingInterval) {
+    if (!guarded && interval < packingInterval) {
         const uint16_t oneInterval = static_cast<uint16_t>(interval);
         uint16_t packedInterval = oneInterval;
         uint8_t pulses = 1;
@@ -539,7 +572,10 @@ long StepExecutor::performMove(PrintLine* move) {
         stepsPerTimerCall = pulses;
     }
 
-    if (move->stepsRemaining <= 0 || move->isNoMove()) {
+    // A switch move gets one final settled switch sample at the next
+    // timer tick, even if its last allowed pulse used up the distance.
+    if (move->isNoMove() || (move->stepsRemaining <= 0 &&
+        (!guarded || guard == GuardedStop::Distance))) {
         finishMove(*move, forQueue);
         interval >>= 1; // The two half-intervals allow time to set up the next move.
     }

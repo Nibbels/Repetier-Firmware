@@ -29,6 +29,9 @@
 #define FLAG_DECELERATING 4
 #define FLAG_QUEUE_TASK 8
 #define FLAG_ABORT_AT_ENDSTOPS 16
+// Direct-slot-only stop mode. Both bits denote a distance request or a
+// switch request whose condition was reached; the foreground knows which.
+#define FLAG_GUARDED_STOP_MASK 96
 #define FLAG_BLOCKED 128
 
 #define FLAG_JOIN_STEP_PROFILE_READY 1  // The foreground has prepared the step ramp.
@@ -44,6 +47,13 @@ enum DirectMovePhase : char {
     DIRECT_PREPARED_STOPPABLE,
     DIRECT_RUNNING,
     DIRECT_RUNNING_STOPPABLE,
+};
+
+enum class GuardedStop : uint8_t { Normal = 0, Closed = 32, Open = 64, Distance = 96 };
+enum class GuardedMoveStatus : uint8_t { Denied, Cancelled, Limit, SwitchReached, PositionReached };
+struct GuardedMoveResult {
+    GuardedMoveStatus status;
+    int32_t positionSteps;
 };
 
 #define FOR_DIRECT 0
@@ -317,7 +327,13 @@ public:
     static void reserveDirectMove(bool stoppable) {
         direct.task = stoppable ? DIRECT_PREPARING_STOPPABLE : DIRECT_PREPARING;
     }
-    static void prepareDirectMove(const int32_t steps[4], bool stoppable, bool feedrateSource);
+    static void prepareDirectMove(const int32_t steps[4], bool stoppable, bool feedrateSource,
+                                  float explicitFeedrate = 0, GuardedStop guard = GuardedStop::Normal);
+    // Exclusive idle calibration request: absolute motor position, not
+    // G-code coordinates. Executor owns every emitted pulse and its ledger.
+    static int32_t guardedAxisPosition(uint8_t axis);
+    static GuardedMoveResult runGuardedMoveTo(uint8_t axis, int32_t targetSteps,
+                                              uint16_t stepsPerSecond, GuardedStop stop);
     static void stopDirectMove();
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     // Caller holds IRQ lock and has permanently blocked motion admission.
