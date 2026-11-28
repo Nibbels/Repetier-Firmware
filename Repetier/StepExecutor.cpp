@@ -327,9 +327,14 @@ long StepExecutor::performDirectMove() {
             // Do not inherit the previous move's packing or step clock.
             stepsPerTimerCall = 1;
             const speed_t start = direct.stepProfile.vStart ? direct.stepProfile.vStart : 1;
-            stepIntervalTicks = HAL::CPUDivU2(start);
-            if (stepIntervalTicks < minimumStepIntervalTicks)
-                stepIntervalTicks = minimumStepIntervalTicks;
+            // The interval lookup reads immutable Flash only. Timer1's own
+            // vector is already excluded; neither Advance nor thermal/UART
+            // IRQs read or write this interval. Let them run during lookup.
+            HAL::allowInterrupts();
+            const uint32_t interval = HAL::CPUDivU2(start);
+            asm volatile("" : : "g"(interval) : "memory");
+            HAL::forbidInterrupts();
+            stepIntervalTicks = interval < minimumStepIntervalTicks ? minimumStepIntervalTicks : interval;
         }
 
         updateAdvanceSteps(direct, direct.stepProfile.vStart);

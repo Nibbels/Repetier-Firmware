@@ -66,7 +66,7 @@ void allowInterrupts() { interruptsEnabled = true; }
 void forbidInterrupts() { interruptsEnabled = false; }
 void delayMicroseconds(int) { assert(false); }
 uint32_t timeInMilliseconds() { return 0; }
-uint32_t CPUDivU2(uint16_t v) { assert(v); return 16000000UL / v; }
+uint32_t CPUDivU2(uint16_t v) { assert(v && interruptsEnabled); return 16000000UL / v; }
 uint16_t ComputeV(uint32_t, uint32_t) { return 0; }
 }
 
