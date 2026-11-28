@@ -1279,7 +1279,8 @@ void HAL::setPartFanDutyRange(uint8_t minimum, uint8_t maximum) {
 }
 
 void HAL::setPartFanDivisor(uint8_t divisor) {
-    InterruptProtectedBlock lock;
+    // Single foreground writer, ISR byte reader: no read/modify/write.
+    // Normalize before the one atomic volatile uint8_t publication.
     if (!divisor)
         divisor = 1;
     fanDivisor = divisor <= PART_FAN_MODE_MAX ? divisor : PART_FAN_DEFAULT_PWM_SPEED_DIVISOR;
