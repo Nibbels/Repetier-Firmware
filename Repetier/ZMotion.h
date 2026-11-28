@@ -7,7 +7,7 @@
 // calculations supply movement and correction requests in integer motor steps.
 class ZMotion {
 public:
-    enum class Path : uint8_t { Queued, QueuedUntilEndstop, Direct, StoppableDirect };
+    enum class Path : uint8_t { Queued, QueuedUntilEndstop, Direct, StoppableDirect, Scan };
 
     constexpr explicit ZMotion(float stepsPerMm)
         : minOvertravel_(uint16_t(stepsPerMm * Z_ENDSTOP_DRIVE_OVER)),
@@ -30,7 +30,10 @@ public:
         lock.unprotect();
         return motor - nominal;
     }
-    int32_t scanSteps() const { return scanSteps_; }
+    int32_t scanSteps() const {
+        InterruptProtectedBlock lock;
+        return scanSteps_;
+    }
     INLINE bool hasQueuedOvertravel() const { return queuedOvertravel_ != 0; }
     bool isHomed() const { return homed_; }
     int32_t maxSteps() const { return maxSteps_; }
@@ -140,7 +143,7 @@ private:
     volatile int32_t correctionTarget_ = 0;
     volatile int32_t appliedCorrection_ = 0;
     DirectPosition direct_;
-    int32_t scanSteps_ = 0;
+    volatile int32_t scanSteps_ = 0;
     volatile int32_t maxSteps_ = 0;
     volatile uint16_t minOvertravel_;
     volatile uint16_t queueWaitSteps_;

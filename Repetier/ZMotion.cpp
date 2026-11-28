@@ -129,6 +129,17 @@ __attribute__((always_inline))
 #endif
 bool ZMotion::stepPath(Path path) {
     const int8_t direction = directionIsPositive() ? 1 : -1;
+    if (path == Path::Scan) {
+        // Scan travel uses the same physical pulse/position owner, but
+        // must never balance compensation or consume direct/nominal debt.
+        if (direction > 0 ? atUpperEndstop() : (!isHomed() || atMinOvertravel()))
+            return false;
+        HAL::allowInterrupts();
+        startPulse(direction);
+        HAL::forbidInterrupts();
+        scanSteps_ += direction;
+        return true;
+    }
     const bool queued = path == Path::Queued || path == Path::QueuedUntilEndstop;
     Step result = Step::Suppressed;
     if (!balanceOpposingCorrection(direction)) {

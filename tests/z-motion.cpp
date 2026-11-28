@@ -346,6 +346,22 @@ void scanTravel() {
     reset(100, false);
     assert(!moveZ(-4) && pulseCount == 0 && scanSession.aborting());
 
+    // The central Timer1 scan path preserves nominal and jog positions,
+    // honors the same limits and does not balance a pending correction.
+    reset(-24);
+    zMotion.requestCorrection(4);
+    assert(step(Path::Scan, -1) && motorPosition == -25);
+    assert(!step(Path::Scan, -1));
+    assert(zMotion.scanSteps() == -1 && zMotion.nominalSteps() == -24);
+    assert(zMotion.directPosition().steps() == 0 && zMotion.correctionTarget() == 4);
+    assert(step(Path::Scan, 1) && motorPosition == -24 && zMotion.scanSteps() == 0);
+    reset(999);
+    assert(step(Path::Scan, 1) && !step(Path::Scan, 1));
+    assert(zMotion.scanSteps() == 1 && motorPosition == 1000);
+    reset(100, false);
+    assert(!step(Path::Scan, -1) && step(Path::Scan, 1));
+    assert(zMotion.scanSteps() == 1 && motorPosition == 101);
+
     // M3028 no longer emits foreground pulses; its replacement is
     // covered by thermal-emergency-home.py and guarded-drive replay.
 }
