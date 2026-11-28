@@ -11,7 +11,7 @@ permissions:
 # Superseded commits must not consume the whole runner pool. This group
 # belongs only to the Task0032 supplemental workflow, not canonical/P0 CI.
 concurrency:
-  group: task0032-simulation-${{ github.event.pull_request.number || github.ref }}
+  group: task0032-simulation-${{ github.event.pull_request.number || github.ref }}-stop-tail
   cancel-in-progress: true
 jobs:
   simulation:
@@ -805,6 +805,9 @@ jobs:
           git add Repetier tests
           git -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Disposable combined Drive and bounded resend receiver"
           git rev-parse HEAD > "$out/local-candidate-sha.txt"
+          git rev-parse 'HEAD^{tree}' > "$out/local-candidate-tree.txt"
+          git diff --binary c31b4d391cc4d2b9cca9ab3f8e236bed805716d9 HEAD > "$out/stage2.diff"
+          (cd "$out"; sha256sum stage2.diff > stage2.diff.sha256)
           python3 tools/task0003-baseline.py "$out/candidate-evidence" | tee "$out/canonical.log"
       - name: Analyze linked UART paths and bounded poll cost
         shell: bash
@@ -857,6 +860,8 @@ jobs:
           python3 tools/task0032/current-resend-preflight.py --source "$RUNNER_TEMP/fast-resend-p0" --combined "$input/combined.diff" --stage1 "$out/stage1" --out "$out/stage2"
           python3 tools/task0032/current-resend-receiver-replay.py --source "$RUNNER_TEMP/fast-resend-p0" --out "$out/stage2/receiver" | tee "$out/stage2.log"
           python3 tools/task0032/current-resend-canonical-replay.py --source "$RUNNER_TEMP/fast-resend-p0" --fixture "$out/stage2/receiver" --out "$out/canonical-serial" | tee "$out/canonical-serial.log"
+          sha256sum tools/task0032/current-stop-tail-replay.cpp >> "$out/source-sha256.txt"
+          python3 tools/task0032/current-stop-tail-preflight.py --source "$RUNNER_TEMP/fast-resend-p0/Repetier" --out "$out/stop-tail" | tee "$out/stop-tail.log"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -864,3 +869,77 @@ jobs:
           path: ${{ runner.temp }}/task0032-resend-fast
           retention-days: 7
           if-no-files-found: warn
+
+
+  current-stop-tail-link:
+    # Not a production edit or global timing proof. Do not compose until the
+    # exact predecessor has passed its full canonical and UART linked gates.
+    if: github.head_ref == 'task/Task0032-resend-preflight'
+    needs: [current-resend-stage2]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-current-resend-${{ github.sha }}
+          path: ${{ runner.temp }}/stop-tail-input
+      - name: Reconstruct exact qualified stage2 tree and replay stop-tail candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-current-stop-tail"
+          input="$RUNNER_TEMP/stop-tail-input"
+          p0=c31b4d391cc4d2b9cca9ab3f8e236bed805716d9
+          source="$RUNNER_TEMP/current-stop-tail-p0"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          sha256sum tools/task0032/current-stop-tail-{preflight.py,replay.cpp} > "$out/source-sha256.txt"
+          (cd "$input"; sha256sum -c stage2.diff.sha256)
+          python3 - "$input" <<'PY'
+          import json, pathlib, sys
+          p=pathlib.Path(sys.argv[1])
+          sha=(p/'local-candidate-sha.txt').read_text().strip()
+          summary=json.loads((p/'candidate-evidence/summary.json').read_text())
+          timing=json.loads((p/'linked-transport.json').read_text())
+          assert not summary['failures'] and summary['sha']==timing['candidate_sha']==sha
+          assert summary['build_profile']=='standard-recovery'
+          assert set(summary['targets'])=={'RF1000','RF2000','RF2000v2','RF2000-X44'}
+          PY
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$source" "$p0"
+          git -C "$source" apply --index "$input/stage2.diff"
+          test "$(git -C "$source" write-tree)" = "$(cat "$input/local-candidate-tree.txt")"
+          cp "$input"/local-candidate-{sha,tree}.txt "$out/"
+          cp "$input/stage2.diff.sha256" "$out/"
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Reconstructed exact qualified stage2 source tree"
+          python3 tools/task0032/current-stop-tail-preflight.py --source "$source/Repetier" --out "$out/candidate" | tee "$out/replay.log"
+          for name in motion.h motion.cpp StepExecutor.cpp; do cp "$out/candidate/$name" "$source/Repetier/$name"; done
+          git -C "$source" diff --check
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -am "Disposable single-writer direct stop tail"
+          git -C "$source" rev-parse HEAD > "$out/stop-tail-candidate-sha.txt"
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Canonical host and four AVR recovery links with stop-tail ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-current-stop-tail"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          cd "$RUNNER_TEMP/current-stop-tail-p0"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" | tee "$out/canonical.log"
+      - name: Recheck linked UART on composed candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-current-stop-tail"
+          python3 tools/task0032/current-transport-linked.py --evidence "$out/candidate-evidence" --out "$out/linked-transport.json" | tee "$out/linked-transport.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-current-stop-tail-${{ github.sha }}
+          path: ${{ runner.temp }}/task0032-current-stop-tail
+          retention-days: 7
+          if-no-files-found: error
