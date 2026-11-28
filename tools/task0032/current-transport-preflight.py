@@ -50,8 +50,8 @@ def candidate(fw):
     old="(UsbSerial::blockingTxFailed() && !Printer::printJob.thermalEmergency())"
     assert g.count(old)==4
     g=g.replace(old,"(UsbSerial::transportFailed())")
-    # Keep syntax of the standalone conditional and the three combined ones.
-    g=once(g,"if(UsbSerial::transportFailed())return;","if(UsbSerial::transportFailed())return;")
+    # Retain exact standalone and combined receiver guards.
+    assert g.count("if(UsbSerial::transportFailed())return;")==1
     g=once(g,"Printer::printJob.emergencyLocked() || UsbSerial::blockingTxFailed()",
         "Printer::printJob.emergencyLocked() || UsbSerial::transportFailed()")
     g=once(g,"    HAL::serialFlush();\n    frame.length = 0;",
@@ -130,6 +130,9 @@ def main():
     assert not drive["git"](source,"status","--porcelain")
     assert out!=source and source not in out.parents
     out.mkdir(parents=True,exist_ok=True)
+    manifest=json.loads(combined.with_name("combined.json").read_text())
+    assert manifest["p0"]==drive["P0"]
+    assert manifest["combined_sha256"]==hashlib.sha256(combined.read_bytes()).hexdigest()
     subprocess.run(["git","-C",str(source),"apply","--check",str(combined)],check=True)
     subprocess.run(["git","-C",str(source),"apply",str(combined)],check=True)
     fw=source/"Repetier"
