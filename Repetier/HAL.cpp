@@ -534,6 +534,9 @@ int32_t HAL::CPUDivU2(unsigned int divisor) {
 void HAL::setupTimer() {
     beginHeaterLease();
     EXTRUDER_TCCR = 0;                       // Normal mode on the shared timer.
+    // Timer0 supplies both PWM and Advance. Establish its clock explicitly;
+    // do not inherit CS02 or WGM02 from an earlier boot stage.
+    TCCR0B = _BV(CS01) | _BV(CS00);          // Normal mode, clk/64.
     EXTRUDER_TIMSK &= ~_BV(EXTRUDER_OCIE);   // Arm Compare A when Advance has work.
 
     PWM_TCCR = 0; // Setup PWM interrupt
