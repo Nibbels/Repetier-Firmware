@@ -1889,7 +1889,7 @@ jobs:
           if-no-files-found: error
 
   current-combined-queue-pack-cost:
-    if: github.head_ref == 'task/Task0032-resend-preflight'
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -1921,5 +1921,29 @@ jobs:
         with:
           name: task0032-combined-queue-pack-cost-${{ github.sha }}
           path: ${{ runner.temp }}/combined-queue-pack-cost
+          retention-days: 7
+          if-no-files-found: error
+
+  current-compare-phase-clock:
+    if: github.head_ref == 'task/Task0032-resend-preflight' || (github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Replay CTC phase accounting against independent elapsed time
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/compare-phase-clock"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          sha256sum tools/task0032/compare-phase-clock{.h,-replay.cpp} > "$out/tool-sha256.txt"
+          g++ -std=c++11 -O2 -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all tools/task0032/compare-phase-clock-replay.cpp -o "$out/replay"
+          "$out/replay" | tee "$out/replay.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-compare-phase-clock-${{ github.sha }}
+          path: ${{ runner.temp }}/compare-phase-clock
           retention-days: 7
           if-no-files-found: error
