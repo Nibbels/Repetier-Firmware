@@ -14,8 +14,13 @@ harness=r'''
 #define PSTR(x) x
 #include "PrintJob.h"
 
-namespace Printer { PrintJob printJob; }
-static bool scan=false, calibrated=true, settled=true;
+static bool scan=false, calibrated=true, settled=true, inhibited=false, paused=false;
+struct InterruptProtectedBlock { InterruptProtectedBlock() {} };
+namespace Printer {
+    PrintJob printJob;
+    bool heatingInhibited(){return inhibited;}
+    struct { bool isPaused(){return paused;} } pause;
+}
 static unsigned waits=0;
 static void (*duringWait)()=nullptr;
 static bool isAnyScanRunning(){return scan;}
@@ -38,7 +43,7 @@ namespace Commands {
 ''' + body + r'''
 static void reset(){
     Printer::printJob=PrintJob{};
-    scan=false;calibrated=settled=true;waits=0;duringWait=nullptr;
+    scan=inhibited=paused=false;calibrated=settled=true;waits=0;duringWait=nullptr;
 }
 int main(){
     using namespace Printer;
@@ -57,6 +62,14 @@ int main(){
     reset();calibrated=false;
     assert(!prepareFilamentProgram() && waits==0);
     reset();settled=false;
+    assert(!prepareFilamentProgram() && waits==1 && printJob.isIdle());
+    reset();inhibited=true;
+    assert(!prepareFilamentProgram() && waits==0 && printJob.isIdle());
+    reset();duringWait=[] {inhibited=true;};
+    assert(!prepareFilamentProgram() && waits==1 && printJob.isIdle());
+    reset();duringWait=[] {calibrated=false;};
+    assert(!prepareFilamentProgram() && waits==1 && printJob.isIdle());
+    reset();duringWait=[] {paused=true;};
     assert(!prepareFilamentProgram() && waits==1 && printJob.isIdle());
     reset();duringWait=[] {scan=true;};
     assert(!prepareFilamentProgram() && waits==1 && printJob.isIdle());

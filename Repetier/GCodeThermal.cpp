@@ -305,15 +305,22 @@ static bool prepareFilamentProgram() {
         Com::printFLN(PSTR("Filament program requires idle print job and no scan"));
         return false;
     }
+    if (Printer::heatingInhibited()) {
+        Com::printFLN(PSTR("Filament program requires available heaters"));
+        return false;
+    }
     if (!Extruder::current->tempControl.pidCalibrationValid()) {
         Com::printFLN(PSTR("Error: PID tune required before filament service"));
         return false;
     }
     // The periodic pump can change admission while waiting. The program
     // must actually acquire ownership before touching the E coordinate.
-    if (Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Cancel) &&
-        !isAnyScanRunning() && Printer::printJob.beginFilamentService())
-        return true;
+    if (Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Cancel)) {
+        InterruptProtectedBlock lock;
+        if (!isAnyScanRunning() && !Printer::pause.isPaused() && !Printer::heatingInhibited() &&
+            Extruder::current->tempControl.pidCalibrationValid() && Printer::printJob.beginFilamentService())
+            return true;
+    }
     Com::printFLN(PSTR("Filament program requires settled, unpaused motion"));
     return false;
 }
