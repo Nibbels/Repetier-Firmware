@@ -458,7 +458,6 @@ we use blocks of 2 kByte size for the structure of our EEPROM
  * http://pdf1.alldatasheet.com/datasheet-pdf/view/29215/TI/TPS3820-50DBVT.html
  * t_d in datasheet is delay time: how long reset is triggered after timeout: 15...25...37ms for TPS3820.
  */
-#define WATCHDOG_MAIN_LOOP_TIMEOUT          20000UL                                             // [ms] -> uhrzeit intern scheint nicht immer zu stimmen!
 
 /** \brief Longer-lasting operations shall call our periodical actions at least each defined time interval */
 #define PERIODICAL_ACTIONS_CALL_INTERVAL    10                                                  // [ms]

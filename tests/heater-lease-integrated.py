@@ -83,7 +83,6 @@ struct HAL {
     static void resetHardware();
     static void completeThermalWatchdogPass(bool heatDemand=false);
     static void completeAutotuneWatchdogPass();
-    static void tellWatchdogOk();
     static void stopWatchdog();
     static uint32_t timeInMilliseconds(){return simulatedMs;}
     static uint32_t simulatedMs;
@@ -449,7 +448,7 @@ int main(){
     resetFixture(0);
     HAL::completeThermalWatchdogPass();assert(watchdogFeeds==1);
     HAL::simulatedMs=100;
-    HAL::tellWatchdogOk();assert(watchdogFeeds==1&&OCR5A==watchdogProgressDuration);
+    assert(watchdogFeeds==1&&OCR5A==watchdogProgressDuration); // elapsed logical time alone cannot feed
     grant(0,255);startFrame(0);
     HAL::completeThermalWatchdogPass();assert(watchdogFeeds==2&&heaterResetCookie==heaterLiveCookie);
     HAL::completeThermalWatchdogPass();assert(watchdogFeeds==2);

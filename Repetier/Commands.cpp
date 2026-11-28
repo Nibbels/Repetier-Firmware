@@ -74,20 +74,13 @@ void Commands::checkForPeriodicalActions(enum FirmwareState state) {
         serviceThermalEmergency();
         return;
     }
-    /*
-     * The execute variables are set by PWM-Timer. This timer ticks with about 3910 Hz and the ms clocks are made with software counter dividors.
-     * Except this 16ms execute variable which is set by internal watchdog timer.
-     */
+    // Timer0 COMPB publishes the periodic flags. Only completed thermal
+    // control/autotune decisions can renew the watchdog progress permission.
     if (state != NotBusy) {
         GCodeInput::keepAlive(state);
     }
 
     const bool scanTickDue = HAL::takeScanTick();
-    if (scanTickDue) {
-        // Dieses freigabesignal sollte aus dem PWM-Timer kommen, denn dann ist klar, dass auch der noch läuft.
-        // Dann laufen für den Watchdogreset der Timer und checkForPeriodicalActions().
-        HAL::tellWatchdogOk();
-    }
 
     if (HAL::takeCompensationTick()) {
         if (!HAL::temperatureTickPending()) {

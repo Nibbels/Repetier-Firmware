@@ -537,7 +537,6 @@ public:
     // Watchdog support
     static void startWatchdog();
     static void stopWatchdog();
-    static void tellWatchdogOk();
     static void completeThermalWatchdogPass(bool heatDemand);
     static void completeAutotuneWatchdogPass();
     static bool watchdogEnabled();

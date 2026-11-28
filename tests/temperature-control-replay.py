@@ -133,7 +133,6 @@ struct HAL {
     static void completeThermalWatchdogPass(bool);
     static void completeAutotuneWatchdogPass();
     static uint8_t outputDuty(uint8_t);
-    static void tellWatchdogOk();
     static bool takeScanTick();
     static bool takeCompensationTick();
     static bool takeFeatureTick();
@@ -1040,7 +1039,6 @@ def main():
         "hal.inc": (
             "namespace {\n" + section(hal, "volatile bool watchdogActive = false;", "HAL::HAL()")
             + section(hal, "uint16_t HAL::temperatureAdcSample(", "void HAL::analogStart(")
-            + section(hal, "void HAL::tellWatchdogOk()", "\n}") + "\n}\n"
             + section(hal, "constexpr uint8_t heaterPwmStep", "constexpr uint8_t partFanPwmStep")
             + "static volatile uint8_t requestedDuty[NUM_EXTRUDER + 3];\n"
             + section(hal, "// Non-release candidate: /256", "\n} // namespace")
@@ -1085,7 +1083,7 @@ def main():
             defines.update({n: macro(config, n) for n in (
                 "EXTRUDER_FAN_COOL_TEMP", "DECOUPLING_TEST_MAX_HOLD_VARIANCE",
                 "DECOUPLING_TEST_MIN_TEMP_RISE", "EXT0_DECOUPLE_TEST_PERIOD",
-                "MAX_ROOM_TEMPERATURE", "WATCHDOG_MAIN_LOOP_TIMEOUT",
+                "MAX_ROOM_TEMPERATURE",
                 "TEMP_TOLERANCE")})
             defines["ANALOG_REDUCE_BITS"] = macro((FW / "HAL.h").read_text(), "ANALOG_REDUCE_BITS")
             defines["CELSIUS_EXTRA_BITS"] = macro(header, "CELSIUS_EXTRA_BITS")

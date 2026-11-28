@@ -781,9 +781,6 @@ void HAL::stopWatchdog() {
     SET_INPUT(WATCHDOG_PIN);
 } // stopWatchdog
 
-void HAL::tellWatchdogOk() {
-}
-
 // ================== Interrupt handling ======================
 /** \brief Sets the timer 1 compare value to delay ticks.
 This function sets the OCR1A compare counter to get the next interrupt

@@ -18,7 +18,7 @@ void AvrDevice::updateReady(uint16_t pos,uint8_t value) {HAL::eprSetByte(pos,val
 void AvrDevice::service() {
     // Startup and watchdog enable are different states.
     if(!runtimeServicesReady) return;
-    if(HAL::takeScanTick()) HAL::tellWatchdogOk();
+    HAL::takeScanTick(); // No scan dispatch during a settings session.
     if(HAL::takeTemperatureTick()) Extruder::manageTemperatures();
     if(Printer::heatingInhibited() || Printer::blockAll) return;
     // Maintain existing Z correction and nonblocking DMS acquisition. No
