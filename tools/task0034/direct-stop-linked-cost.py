@@ -41,7 +41,7 @@ def inventory(z,board):
     s=z.read(p+"disassembly.txt").decode()
     labels={m[2]:int(m[1],16) for m in re.finditer(r"^([0-9a-f]+) <(.*)>:$",s,re.M)}
     ins={int(m[1],16):(len(bytes.fromhex(m[2])),m[3],m[4]) for m in
-         re.finditer(r"^\s*([0-9a-f]+):\t((?:[0-9a-f]{2} )+)\s*\t([.a-z][a-z0-9.]*)\s*(.*?)$",s,re.M)}
+         filter(None,(re.match(r"^\s*([0-9a-f]+):\t((?:[0-9a-f]{2} )+)\s*\t([.a-z][a-z0-9.]*)\s*(.*?)$",line) for line in s.splitlines()))}
     roots=[v for k,v in labels.items() if k.startswith("PrintLine::limitToStopTail(bool)")]
     general={v for k,v in labels.items() if k.startswith("PrintLine::fitRampToRemainingSteps()")}
     assert len(roots)==len(general)==1,(board,roots,general)
