@@ -44,7 +44,7 @@ void checkForPeriodicalActions(int=Processing){
 }
 }
 namespace Printer {
-struct Job{bool emergencyLocked()const{return locked;}}printJob;
+struct Job{bool emergencyLocked()const{return locked;} bool isIdle()const{return !locked;}}printJob;
 struct Idle{void schedule(uint32_t){assert(!locked);++scheduled;}}idleStatus;
 bool debugInfo(){return true;}
 bool checkAbortKeys(){return visits<3;}
@@ -67,6 +67,7 @@ bool queueRelativeMMCoordinates(int,int,int,int,float,bool,bool){
     return !locked;
 }
 }
+static bool isAnyScanRunning(){return false;}
 namespace Extruder{
 void setHeatedBedTemperature(int){}
 void setTemperatureForAllExtruders(int){}
@@ -151,7 +152,7 @@ with tempfile.TemporaryDirectory() as d:
     p=Path(d)/"unwind.cpp"
     exe=Path(d)/"unwind"
     p.write_text(prelude+"\n"+motion+"\n"+bed+"\n"+offset+
-                 "\nvoid heldButtonWait(){\n"+keys+"\n++continued;\n}\n"+main)
+                 "\nvoid heldButtonWait(){\n do {\n"+keys+"\n++continued;\n } while(false);\n}\n"+main)
     for flags in ([],["-DRF_THERMAL_EMERGENCY_EXPERIMENT=1"]):
         subprocess.run(["c++","-std=c++11","-O2","-Wall","-Wextra","-Werror",
                         *flags,str(p),"-o",str(exe)],check=True)
