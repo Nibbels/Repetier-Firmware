@@ -102,14 +102,10 @@ void reportEeprom() {
 }
 
 void setEepromValue(GCode* com) {
-#ifdef RF_EEPROM_ZONE_EXPERIMENT
     // The checked field-specific owner decides admission, including live
     // DMIN/DMAX. Do not drain a print before validating the request.
     EEPROM::update(com);
-#else
-    if (Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Resume))
-        EEPROM::update(com);
-#endif
+
 }
 
 void reportConfiguration() {
@@ -120,11 +116,7 @@ void restoreConfigurationDefaults() {
     if (!Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Resume))
         return;
     EEPROM::restoreEEPROMSettingsFromConfiguration();
-#ifdef RF_EEPROM_ZONE_EXPERIMENT
     if(!EEPROM::lastOperationSucceeded() || EEPROM::recoveryPending())return;
-#else
-    EEPROM::storeDataIntoEEPROM(false);
-#endif
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     if(Printer::printJob.emergencyLocked())return;
 #endif
@@ -149,14 +141,12 @@ void accessPanel(GCode* pCommand) {
         case UI_ACTION_RF_CONTINUE:         // 1519
         case UI_ACTION_RF_PAUSE:            // 1518
         {
-#ifdef RF_EEPROM_ZONE_EXPERIMENT
             // M3029 remains ordinary remote panel navigation, but cannot
             // commit recovery or heater commissioning without local OK.
             if(pCommand->P==UI_ACTION_OK && uid.requiresLocalSafetyConfirmation()) {
                 Com::printErrorFLN(PSTR("Local OK required"));
                 return;
             }
-#endif
             Com::printFLN(PSTR("RequestMenu:Press:"), pCommand->P);
             uid.executeRemoteAction(pCommand->P);
         } break;

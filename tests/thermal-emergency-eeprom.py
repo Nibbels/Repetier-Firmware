@@ -16,7 +16,7 @@ def extract(file,a,b):
 actual=extract("EepromZoneRuntime.cpp","bool idle() {","bool persist(const Patch*")
 actual+=extract("EepromZoneRuntime.cpp","bool loadFull(","bool readBlockChecked(")
 actual+=extract("EepromZoneRuntime.cpp","bool EEPROM::settingsReady()","void EEPROM::reportRecovery()")
-actual+=extract("EepromZoneRuntime.cpp","void EEPROM::readDataFromEEPROM()","void EEPROM::storeDataIntoEEPROM(")
+actual+=extract("EepromZoneRuntime.cpp","void EEPROM::restoreEEPROMSettingsFromConfiguration()","void EEPROM::writeSettings()")
 actual+=extract("GCodeSystem.cpp","void restoreConfigurationDefaults()","void accessPanel(")
 pre=r'''
 #include <cassert>
@@ -24,7 +24,6 @@ pre=r'''
 #include <cstdio>
 #include <initializer_list>
 #define PSTR(x) x
-#define RF_EEPROM_ZONE_EXPERIMENT 1
 #define RF_THERMAL_EMERGENCY_EXPERIMENT 1
 #define UI_TEXT_CONFIGURATION "configuration"
 #define UI_TEXT_RESTORE_DEFAULTS "defaults"
@@ -103,7 +102,7 @@ Session session(){return {};}
 bool invalidateMatrices(){++matrixInvalidations;faultPoint();return true;}
 struct EEPROM{
     static bool settingsReady();static bool recoveryPending();static bool lastOperationSucceeded();
-    static const void* recoveryDialogTag();static void readDataFromEEPROM();static void restoreEEPROMSettingsFromConfiguration();
+    static const void* recoveryDialogTag();static void restoreEEPROMSettingsFromConfiguration();
     static void reportRecovery(){assert(!terminal);++diagnostics;}
 };
 namespace Commands {
@@ -141,7 +140,7 @@ int main(){
         assert(heatedBedController.cutoff==0);
     }
     reset(0,false);terminal=true;restoreConfigurationDefaults();assert(!restoreCalls&&!normal);
-    reset(0,false);terminal=true;EEPROM::readDataFromEEPROM();assert(!restoreCalls&&!normal&&!lastOk);
+    reset(0,false);terminal=true;EEPROM::restoreEEPROMSettingsFromConfiguration();assert(!restoreCalls&&!normal&&!lastOk);
     printf("Standard EEPROM configuration unwind: %u fault injection points, recovery and success paths PASS\n",noAlerts+withAlerts);
 }
 '''

@@ -1,8 +1,5 @@
-// Actual upper-bank settings entrypoints for the combined qualification
-// build. The legacy comparison implementation is not linked in this build.
-// Remove the temporary build selector and old comparison code at cutover.
+// Sole internal EEPROM settings owner. The upper-bank schema is mandatory.
 #include "Repetier.h"
-#ifdef RF_EEPROM_ZONE_EXPERIMENT
 #ifndef RF_THERMAL_EMERGENCY_EXPERIMENT
 #error The new schema requires thermal emergency admission
 #endif
@@ -231,18 +228,7 @@ void EEPROM::init() {
     const bool reset=READ(ENABLE_KEY_1)==0 && READ(ENABLE_KEY_4)==0 && READ(ENABLE_KEY_E5)==0;
     loadFull(reset,true);
 }
-void EEPROM::readDataFromEEPROM(){loadFull(false,false);}
 void EEPROM::restoreEEPROMSettingsFromConfiguration(){loadFull(true,false);}
-void EEPROM::storeDataIntoEEPROM(uint8_t) {
-    lastOk=false;
-    if(!settingsReady() || !idle() || !heatersOff()){
-        Com::printErrorFLN(PSTR("EEPROM bulk save requires idle cold targets"));
-        return;
-    }
-    // Pressure has an independent immediate save owner. Do not
-    // turn the temporary [0,0] stop band into a persistent preference.
-    saveLive(LiveSettings::BulkMask & ~blockBit(Pressure));
-}
 void EEPROM::writeSettings() {
     // All report metadata is immutable and remains in near Flash.
     struct ReportField {uint16_t key;PGM_P label;uint8_t digits;};
@@ -418,4 +404,3 @@ void EEPROM::storeToolMotion(uint8_t tool,ToolMotionSetting setting,float v) {
     }
     persist(Patch::real(at(f,tool*SlotSize),v));
 }
-#endif // RF_EEPROM_ZONE_EXPERIMENT

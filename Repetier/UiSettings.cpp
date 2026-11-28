@@ -51,16 +51,13 @@ void UIDisplay::finishAction(int action) {
             break;
         }
         EEPROM::restoreEEPROMSettingsFromConfiguration();
-#ifdef RF_EEPROM_ZONE_EXPERIMENT
         if(!EEPROM::lastOperationSucceeded())return;
         if(EEPROM::recoveryPending()) {
             exitmenu();
             EEPROM::reportRecovery();
             return;
         }
-#else
-        EEPROM::storeDataIntoEEPROM(false);
-#endif
+
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         if(Printer::printJob.emergencyLocked())return;
 #endif

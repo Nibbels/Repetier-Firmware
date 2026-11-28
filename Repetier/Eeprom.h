@@ -26,8 +26,7 @@ struct GCode;
 class EEPROM {
 public:
     static void init();
-#ifdef RF_EEPROM_ZONE_EXPERIMENT
-    // Qualification-only schema switch. No legacy fallback in this build.
+    // Settings recovery and local heater commissioning.
     static bool settingsReady();
     static bool recoveryPending();
     static bool acknowledgeRecovery();
@@ -35,8 +34,6 @@ public:
     static bool lastOperationSucceeded();
     static void reportRecovery();
     static const void* recoveryDialogTag();
-#endif
-    static void storeDataIntoEEPROM(uint8_t corrupted = 0);
     // Persist selected pressure limits, preserving the unselected saved
     // value (not necessarily the temporary live stop band).
     static bool storePressureLimits(bool stop, int32_t minimum, int32_t maximum, bool saveMinimum, bool saveMaximum);
@@ -73,7 +70,6 @@ public:
     static void storeMicrostepConfiguration(uint8_t changedMask);
     static void storePreheatProfiles();
     static void storePidCalibration(uint8_t heater);
-    static void readDataFromEEPROM();
     static void restoreEEPROMSettingsFromConfiguration();
     static void writeSettings();
     static void update(GCode* com);
