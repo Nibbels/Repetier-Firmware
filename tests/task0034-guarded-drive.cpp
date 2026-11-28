@@ -140,8 +140,15 @@ Extruder extruder;
 Extruder* Extruder::current = &extruder;
 bool isAnyScanRunning() { return scanRunning; }
 bool hasQueuedOvertravel() { return Printer::xyMotion.hasQueuedOvertravel() || Printer::zMotion.hasQueuedOvertravel(); }
-void StepExecutor::enableSteppers(PrintLine&) { assert(!scanRunning && !Printer::blockAll); }
+// Match the production blockAll early return: the isolated executor
+// replay deliberately exercises its defensive cancellation even when
+// Timer1's outer mechanical fence would suppress the dispatch entirely.
+void StepExecutor::enableSteppers(PrintLine&) {
+    assert(!scanRunning);
+    if (Printer::blockAll) return;
+}
 void StepExecutor::adjustDirections(PrintLine& m) {
+    if (Printer::blockAll) return;
     for (uint8_t axis = X_AXIS; axis <= Z_AXIS; ++axis)
         if (m.isMoveOfAxis(axis)) positive[axis] = m.isPositiveMoveOfAxis(axis);
 }
