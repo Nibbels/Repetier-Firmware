@@ -201,16 +201,8 @@ static void retries() {
 }
 '''
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source", type=Path, required=True)
-    parser.add_argument("--out", type=Path, required=True)
-    args = parser.parse_args()
-    args.out.mkdir(parents=True,exist_ok=True)
-    assert subprocess.check_output(["git","-C",str(args.source),"rev-parse","HEAD"],text=True).strip()==P0
+def candidate_uart(header, source):
     gate=runpy.run_path(str(ROOT/"tools/task0032/loss-gate-replay.py"))
-    header=(args.source/"Repetier/UsbSerial.h").read_text()
-    source=(args.source/"Repetier/UsbSerial.cpp").read_text()
     header=once(header,"    static bool available();",
         "    static uint8_t lossFlags() { return lossFlags_; }\n"
         "    static uint8_t rearmForResync();\n    static bool available();")
@@ -220,6 +212,17 @@ def main():
     source=once(source,"void UsbSerial::begin(unsigned long baud) {",
         "volatile uint8_t UsbSerial::lossFlags_ = 0;\n"+REARM+
         "\nvoid UsbSerial::begin(unsigned long baud) {")
+    return header,source
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--source", type=Path, required=True)
+    parser.add_argument("--out", type=Path, required=True)
+    args = parser.parse_args()
+    args.out.mkdir(parents=True,exist_ok=True)
+    assert subprocess.check_output(["git","-C",str(args.source),"rev-parse","HEAD"],text=True).strip()==P0
+    header,source=candidate_uart((args.source/"Repetier/UsbSerial.h").read_text(),
+                                 (args.source/"Repetier/UsbSerial.cpp").read_text())
     test=(args.source/"tests/usb-serial.cpp").read_text()
     test=once(test,"enum { U2X0 = 1,","enum { FE0=4, DOR0=3, UPE0=2, U2X0 = 1,")
     test=once(test,'#include "usb-serial-firmware.inc"',
