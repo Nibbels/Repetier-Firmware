@@ -1788,7 +1788,7 @@ jobs:
           if-no-files-found: error
 
   current-z-plateau-combined:
-    if: github.head_ref == 'task/Task0032-resend-preflight'
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -1855,7 +1855,7 @@ jobs:
           if-no-files-found: error
 
   current-queue-pack-cost:
-    if: github.head_ref == 'task/Task0032-resend-preflight'
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -1885,5 +1885,41 @@ jobs:
         with:
           name: task0032-queue-pack-cost-${{ github.sha }}
           path: ${{ runner.temp }}/queue-pack-cost
+          retention-days: 7
+          if-no-files-found: error
+
+  current-combined-queue-pack-cost:
+    if: github.head_ref == 'task/Task0032-resend-preflight'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-z-plateau-combined-b9967118620356f4f8e9648b60225fc9a2692462
+          run-id: 46173302272
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/combined-queue-pack-input
+      - name: Actual linked queue pack costs and electrical edge spacing
+        shell: bash
+        run: |
+          set -euo pipefail
+          input="$RUNNER_TEMP/combined-queue-pack-input"
+          out="$RUNNER_TEMP/combined-queue-pack-cost"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          sha256sum tools/task0032/current-queue-pack-linked.py tools/task0032/current-direct-energy-linked.py research/task0032-step-output/linked_timer1.py > "$out/tool-sha256.txt"
+          test "$(cat "$input/local-candidate-sha.txt")" = f738d095554351e5f257db48dcf10c2eac4199ac
+          test "$(cat "$input/local-candidate-tree.txt")" = 7c1f398bb77c156f91cfd688c04e434cd3aa2ad0
+          echo "ce1a650a49f9e8db7a8bc58edbacb4866623900bc2aa403a51f202fe075977c3  $input/z-plateau-combined.diff" | sha256sum -c
+          python3 tools/task0032/current-queue-pack-linked.py --extended --evidence "$input/candidate-evidence" --out "$out/linked-queue-packs.json" | tee "$out/linked-queue-packs.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-combined-queue-pack-cost-${{ github.sha }}
+          path: ${{ runner.temp }}/combined-queue-pack-cost
           retention-days: 7
           if-no-files-found: error
