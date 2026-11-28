@@ -507,6 +507,8 @@ jobs:
           git worktree add --detach "$RUNNER_TEMP/transport-terminal-p0" "$p0"
           sha256sum tools/task0032/transport-terminal-preflight.py > "$out/source-sha256.txt"
           python3 tools/task0032/transport-terminal-preflight.py --source "$RUNNER_TEMP/transport-terminal-p0" --out "$out" | tee "$out/replay.log"
+          sha256sum tools/task0032/transport-terminal-dispatch.py >> "$out/source-sha256.txt"
+          python3 tools/task0032/transport-terminal-dispatch.py --source "$RUNNER_TEMP/transport-terminal-p0" --out "$out/dispatch" | tee "$out/dispatch.log"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
