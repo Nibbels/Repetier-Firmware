@@ -13,6 +13,8 @@ Owner explicitly requests consolidation of completed research and elimination of
 - Shipping application UART fixed 250000 baud 8N1, no configurable baud; queue capacity fixed 24 for all four boards. Older 115200/500000 and other queue sizes are historical experiments only. Task0033 implementation responsibility transferred to Task0032. Task0034 has removed M908 at owner direction; do not resurrect it from #107. #107 transport-only changes must be integrated in the exclusive P0 branch because that worker requires the port-safe/interruptible DRV transport before release; preserve its independent research archive and original commits. See #102 comment 7223971763 and #107 handover.
 - Use current target HEAD before each integration, short-lived narrowly scoped PRs, green applicable gates and exact tested SHAs. Synchronize active workers with the latest shared evidence without clobbering work. Once a side branch is merged or its unique contents are explicitly accounted for, verify ancestry or documented equivalent disposition and retire it. #105 worker merges pure research when completed and green; #104/#91 and LCD branch remain held until their owner accounts for every useful change and verifies integration. Never treat a completed research merge as production completion. Historical links and commits must survive deletion.
 
+**Owner direction 2026-11-28 — interrupt-mask minimization:** [Task0036](tasks/Task0036.md) is mandatory whole-firmware closure after Task0034 and Task0032 have merged and qualified, before final software release. Apply the AGENTS.md interrupt-mask policy now in each active worker's scope. P0 and Task0032 retain responsibility for their existing gates and immediate defects; no deferral or competing production edits. Reuse #118 A73 tooling and evidence on the final linked binaries.
+
 ## Firmware PR checks
 
 **Mandatory: GitHub Actions is the primary build/test/measurement environment.** No local checkout, AVR toolchain, Arduino CLI, compiler or container network access is required. A missing local tool is never a build blocker. Use the existing pipeline first; use task-private supplementary CI only for otherwise unsupported tests. Query the actual PR head, inspect runs, job logs and artifacts; an empty search, queued/pending run or obsolete cancelled run is not evidence that CI is unavailable. Recheck the latest revision and continue independent work while CI runs. Only report an infrastructure blocker after verifying an actual CI/access problem, and report hardware acceptance separately.
@@ -70,6 +72,7 @@ For each task, identify the concrete benefit and the smallest change that delive
 | P0 | 0034 | Exclusive heater fail-off and interrupt optimization; before 0032/0033 production |
 | 20 | 0032 | Exclusive print core: quality-first packing and real-time maintenance budget |
 | 20a | 0033 | UART 500 kbaud and loss-aware transport; read-only prep in parallel, serialized production window with 0032 |
+| 21 | 0036 | Mandatory final global IRQ-mask minimization, after 0034 and 0032; exclusive production ownership |
 
 ## ATmega2560 native optimization
 
@@ -120,6 +123,7 @@ Production edits still start in their assigned wave. A worker can implement and 
 | [Task0034](tasks/Task0034.md) | P0 | Expiring heater authorization and bounded power-off | READY / highest priority |
 | [Task0032](tasks/Task0032.md) | 20 | Quality-first automatic step packing and maintenance budget | READY |
 | [Task0033](tasks/Task0033.md) | 20a | 500 kbaud UART and loss-aware serial input | READY for research; production serialized |
+| [Task0036](tasks/Task0036.md) | 21 | Global interrupt-mask minimization and bounded real-time response | WAITING; mandatory after 0034 and 0032 |
 
 ## Audit coverage
 
