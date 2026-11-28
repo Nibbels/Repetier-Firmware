@@ -56,3 +56,8 @@ for target,reason in [("dispatchScanWork(bool)","unreviewed tail guard entry"),
     bad=deepcopy(frame);bad["tailTransfers"].append({"physicalTarget":target})
     reject(bad,reason)
 print("Task0034 phase diagnostic: 4608 directional masks + 5 callsite/tail fixtures PASS")
+
+# Exercise the exact conditional linked table checker without AVR tools.
+sg_spec=importlib.util.spec_from_file_location('switch_guards',path.with_name('switch-table-guards.py'))
+sg=importlib.util.module_from_spec(sg_spec);sg_spec.loader.exec_module(sg)
+sg.self_test()
