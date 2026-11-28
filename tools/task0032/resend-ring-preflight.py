@@ -328,6 +328,7 @@ def candidate_uart(header, source):
     # the span; its marker is in the formerly free part of the ring.
     header=once(header,"    static uint16_t transmitRetired();",
         "    static uint16_t transmitRetired();\n"
+        "    static bool resyncPending() { return resyncGate_; }\n"
         "    static bool tryWriteResendSpan(const char*,uint8_t,uint8_t);")
     header=once(header,"    static uint16_t txPublished_;",
         "    static uint16_t txPublished_;\n    static volatile bool resyncGate_;\n"
@@ -360,6 +361,7 @@ def packed_candidate(header, source):
     # Both USART vectors are ordinary non-nested ISRs; foreground changes
     # remain SREG-protected. No new read-modify-write across nested ISRs.
     header=once(header,"return lossFlags_;","return lossFlags_ & 0x7f;")
+    header=once(header,"return resyncGate_;","return (lossFlags_ & 0x80)!=0;")
     header=once(header,"    static volatile bool resyncGate_;\n","")
     source=once(source,"volatile bool UsbSerial::resyncGate_ = false;\n","")
     source=once(source,"    lossFlags_=0;\n    resyncTxMarker_=","    resyncTxMarker_=")
