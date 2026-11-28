@@ -9,7 +9,7 @@ sys.path.insert(0,str(path.parent))
 spec=importlib.util.spec_from_file_location("diagnostic",path)
 d=importlib.util.module_from_spec(spec);spec.loader.exec_module(d)
 assert len(d.GUARDS+d.PHASE_GUARDS)==9
-blocked={(1,3),(1,4),(1,5),(1,6),(1,7),(3,1),(4,1),(4,6),(4,7),
+blocked={(1,3),(1,4),(1,5),(1,6),(1,7),(1,8),(3,1),(4,1),(4,6),(4,7),
          (5,1),(5,6),(5,7),(6,1),(6,5),(6,6),(6,7),(7,1),(7,5),(7,6),(7,7),
          (8,1),(8,3),(8,4),(8,5),(8,6),(8,7)}
 for entering in range(9):
@@ -18,7 +18,7 @@ for entering in range(9):
         assert d.phase_compatible(mask,entering)==expected
 assert d.phase_compatible(1<<4,6) # soft script -> admitted load
 assert not d.phase_compatible(1<<6,4)
-assert d.phase_compatible(1<<8,1) # do not assume converse autotune lifetime
+assert not d.phase_compatible(1<<8,1) # sole autotune entry owns panel, no scan at admission
 # Distinguish the frame that owns the stack bytes from the actual
 # instruction owner after a tail transfer. Never grant a new guard
 # by accepting the frame name or skipping an unmodeled tail entry.
@@ -55,7 +55,22 @@ for target,reason in [("dispatchScanWork(bool)","unreviewed tail guard entry"),
                       ("UIDisplay::parse(char*, bool, bool)","unreviewed tail LCD entry")]:
     bad=deepcopy(frame);bad["tailTransfers"].append({"physicalTarget":target})
     reject(bad,reason)
-print("Task0034 phase diagnostic: 4608 directional masks + 5 callsite/tail fixtures PASS")
+home=deepcopy(frame)
+home["frames"].append({"address":"home","name":"Printer::homeAxis(bool, bool, bool)","localPeakBytes":30})
+home["calls"].append({"caller":"main","callee":"home","sites":[{"pc":"home","callerBytes":8,"physicalCaller":"Commands::executeGCode(GCode*)"}]})
+for address in ("0","1"):
+    home["calls"].append({"caller":"home","callee":address,"sites":[{"pc":"nested"+address,"callerBytes":25,"physicalCaller":cases[int(address)][1]}]})
+r=d.diagnostic(home)
+assert r["diagnosticBytes"]==38
+assert r["prunedContextEdges"]["UIDisplay::executeAction("]==1
+assert r["prunedContextEdges"]["homing excludes scan dispatch"]==1
+bad=deepcopy(home);bad["calls"][-3]["sites"][0]["physicalCaller"]="unreviewed()"
+reject(bad,"unreviewed homing caller")
+bad=deepcopy(home);bad["tailTransfers"].append({"physicalTarget":"Printer::homeAxis(bool, bool, bool)"})
+reject(bad,"unreviewed tail homing entry")
+bad=deepcopy(frame);bad["calls"][0]["sites"][0]["physicalCaller"]=d.HOST_MACHINE+"GCode*)"
+reject(bad,"unreviewed host dispatch owner")
+print("Task0034 phase diagnostic: 4608 directional masks + 9 callsite/tail fixtures PASS")
 
 # Exercise the exact conditional linked table checker without AVR tools.
 sg_spec=importlib.util.spec_from_file_location('switch_guards',path.with_name('switch-table-guards.py'))

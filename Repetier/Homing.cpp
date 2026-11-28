@@ -76,7 +76,7 @@ void Printer::stepAxisStep(uint8_t axis, uint8_t slower) {
         endYStep();
 }
 
-int8_t Printer::checkHome(int8_t axis) //X_AXIS 0, Y_AXIS 1, Z_AXIS 2
+__attribute__((noinline)) int8_t Printer::checkHome(int8_t axis) //X_AXIS 0, Y_AXIS 1, Z_AXIS 2
 {
     // Direct diagnostic steps must not admit another panel operation.
     UIDisplay::ScopedActionExclusion panelExclusion(uid);
@@ -432,7 +432,7 @@ void Printer::homeDigits() {
     }
 }
 
-void Printer::homeAxis(bool xaxis, bool yaxis, bool zaxis) // home non-delta printer
+__attribute__((noinline)) void Printer::homeAxis(bool xaxis, bool yaxis, bool zaxis) // home non-delta printer
 {
 #ifdef RF_EEPROM_ZONE_EXPERIMENT
     if(!EEPROM::settingsReady())return;

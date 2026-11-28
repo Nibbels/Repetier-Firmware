@@ -14,6 +14,7 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import re
 import sys
 import zipfile
 
@@ -32,8 +33,21 @@ PROGRAM_WORKERS = {
     "GCodeInput::runOutputProgram(": ("GCodeInput::executeOutputProgram(",),
 }
 
+HOST_MACHINE = "GCodeCommands::(anonymous namespace)::dispatchMachine("
+HOMING_MASK = 1 << 9
+HOMING_CALLERS = {
+    "Printer::homeAxis(": ("Commands::executeGCode(", "GCodeCommands::homeAxes(",
+        "UIDisplay::executeCommandAction(", "dispatchScanWork(",
+        "(anonymous namespace)::ZOffsetScan::abort(", "(anonymous namespace)::HeatBedScan::"),
+    "Printer::checkHome(": ("Commands::executeGCode(", HOST_MACHINE,
+        "GCodeCommands::testHomingRepeatability("),
+}
+
+def homing_owner(name):
+    return re.fullmatch(r"Printer::(?:homeAxis\(bool, bool, bool\)|checkHome\(signed char\))(?: \[clone [^\]]+\])*", name) is not None
+
 GUARDS = (
-    ("UIDisplay::executeAction(", ("UIDisplay::slowAction(", "Commands::executeGCode(")),
+    ("UIDisplay::executeAction(", ("UIDisplay::slowAction(", "Commands::executeGCode(", HOST_MACHINE)),
     ("dispatchScanWork(", ("Commands::checkForPeriodicalActions(", "handleScanWorkTasks(")),
     ("servicePrintFeatures(", ("loopFeatures(",)),
     ("PrintPause::dispatchPendingMotion(", ("loopFeatures(", "PrintPause::serviceMotion(")),
@@ -43,16 +57,16 @@ GUARDS = (
 # Phase exclusions remain an opt-in diagnostic hypothesis until the
 # source lifetime/linked caller proofs are complete.
 PHASE_GUARDS = (
-    ("StartLine::runPrepared(", ("StartLine::run(", "Commands::executeGCode(")),
-    ("GCodeCommands::loadFilamentPrepared(", ("GCodeCommands::loadFilament(", "GCodeCommands::loadFilamentWithParameters(", "GCodeInput::runSoftFilament(", "Commands::executeGCode(")),
-    ("GCodeCommands::unloadFilamentPrepared(", ("GCodeCommands::unloadFilament(", "GCodeCommands::unloadFilamentWithParameters(", "GCodeInput::runSoftFilament(", "Commands::executeGCode(")),
+    ("StartLine::runPrepared(", ("StartLine::run(", "Commands::executeGCode(", HOST_MACHINE)),
+    ("GCodeCommands::loadFilamentPrepared(", ("GCodeCommands::loadFilament(", "GCodeCommands::loadFilamentWithParameters(", "GCodeInput::runSoftFilament(", "Commands::executeGCode(", HOST_MACHINE)),
+    ("GCodeCommands::unloadFilamentPrepared(", ("GCodeCommands::unloadFilament(", "GCodeCommands::unloadFilamentWithParameters(", "GCodeInput::runSoftFilament(", "Commands::executeGCode(", HOST_MACHINE)),
     ("TemperatureController::autotunePIDPrepared(", ("TemperatureController::autotunePID(", "UIDisplay::finishAction(")),
 )
 # Guard indices: panel, scan, features, pause, script, startline,
 # load, unload, autotune. Direction matters: a soft script may enter
 # its filament worker, but a filament worker may not start a new script.
 PHASE_BLOCKED = {
-    1: (3, 4, 5, 6, 7),
+    1: (3, 4, 5, 6, 7, 8),  # autotune enters with no scan, owns panel until return
     3: (1,),
     4: (1, 6, 7),
     5: (1, 6, 7),
@@ -87,11 +101,11 @@ ANCHORS = {
     "ui.cpp": ("if ((flags & UI_FLAG_SLOW_ACTION_RUNNING) == 0)", "flags |= UI_FLAG_SLOW_ACTION_RUNNING;",
                "flags &= ~UI_FLAG_SLOW_ACTION_RUNNING;"),
     "ui.h": ("void executeRemoteAction(int action)", "if (flags & UI_FLAG_SLOW_ACTION_RUNNING)",
-             "flags |= UI_FLAG_SLOW_ACTION_RUNNING;", "flags &= ~UI_FLAG_SLOW_ACTION_RUNNING;"),
+             "flags |= UI_FLAG_SLOW_ACTION_RUNNING;", "flags &= ~UI_FLAG_SLOW_ACTION_RUNNING;",
+             "class ScopedActionExclusion", "owns_(!(display.flags & UI_FLAG_SLOW_ACTION_RUNNING))",
+             "if (owns_) display_.flags |= UI_FLAG_SLOW_ACTION_RUNNING;",
+             "if (owns_) display_.flags &= ~UI_FLAG_SLOW_ACTION_RUNNING;"),
     "GCodeSystem.cpp": ("uid.executeRemoteAction(pCommand->P);",),
-    "RF.cpp": ("Calibration::scanSession.dispatching()", "Calibration::scanSession.beginDispatch();",
-               "dispatchScanWork(tickDue);", "Calibration::scanSession.finishDispatch()",
-               "if (!nEntered)", "nEntered++;", "servicePrintFeatures();", "nEntered--;"),
     "PrintPause.cpp": ("if (servicingMotion_", "servicingMotion_ = true;",
                        "dispatchPendingMotion();", "servicingMotion_ = false;"),
     "GCodeInput.cpp": ("if (flashScriptRunning || Printer::printJob.commandsBlocked() || Printer::heatingInhibited())",
@@ -99,6 +113,21 @@ ANCHORS = {
                        "flashScriptRunning = true;", "runSoftFilament(unload);",
                        "runHardFilament(unload);", "runOutputProgram();", "flashScriptRunning = false;"),
     "UiFormatting.cpp": ("!ram && allowMessageExpansion", "parse(statusMsg, true, false);"),
+    "Homing.cpp": ("__attribute__((noinline)) int8_t Printer::checkHome(",
+                   "__attribute__((noinline)) void Printer::homeAxis(",
+                   "UIDisplay::ScopedActionExclusion panelExclusion(uid);"),
+    "GCodeMotion.cpp": ("void homeAxes(GCode* com)", "if (!isHomingAllowed(com))",
+                        "void testHomingRepeatability(GCode* pCommand)",
+                        "if (!isHomingAllowed(pCommand))",
+                        "Printer::doHeatBedZCompensation || !Printer::zMotion.correctionCleared()"),
+    "GCodeCommands.cpp": ("__attribute__((noinline)) void Commands::executeGCode(",
+                          "GCodeCommands::dispatchMachine(com);", "case 3028: return testHomingRepeatability(com);"),
+    "ZMotion.h": ("return correctionTarget_ == 0 && appliedCorrection_ == 0;",),
+    "UiActions.cpp": ("if (!isHomingAllowed(NULL, 1))",),
+    "RF.cpp": ("Calibration::scanSession.dispatching()", "Calibration::scanSession.beginDispatch();",
+               "dispatchScanWork(tickDue);", "Calibration::scanSession.finishDispatch()",
+               "if (!nEntered)", "nEntered++;", "servicePrintFeatures();", "nEntered--;",
+               "unsigned char isHomingAllowed(", "if (isAnyScanRunning())"),
 }
 
 def diagnostic(frame, phase=False):
@@ -115,12 +144,22 @@ def diagnostic(frame, phase=False):
         target = jump["physicalTarget"]
         assert not any(target.startswith(prefix) for prefix, _ in guards_spec), ("unreviewed tail guard entry", jump)
         assert not target.startswith("UIDisplay::parse("), ("unreviewed tail LCD entry", jump)
+        assert not homing_owner(target), ("unreviewed tail homing entry", jump)
+        if target.startswith(HOST_MACHINE):
+            assert jump["physicalCaller"].startswith("Commands::executeGCode("), ("unreviewed host dispatch tail", jump)
     for edge in frame["calls"]:
         a, b = edge["caller"], edge["callee"]
         for site in edge["sites"]:
             # Stack bytes belong to the root frame; admission is reviewed
             # against the actual instruction's containing linked symbol.
             caller = site["physicalCaller"]
+            if names[b].startswith(HOST_MACHINE):
+                assert caller.startswith("Commands::executeGCode("), ("unreviewed host dispatch entry", caller)
+            if caller.startswith(HOST_MACHINE):
+                assert names[a].startswith(("Commands::executeGCode(", HOST_MACHINE)), ("unreviewed host dispatch owner", names[a], caller)
+            if homing_owner(names[b]):
+                key = next(k for k in HOMING_CALLERS if names[b].startswith(k))
+                assert caller.startswith(HOMING_CALLERS[key]), ("unreviewed homing caller", caller, names[b])
             for i, (prefix, allowed) in enumerate(guards_spec):
                 if names[b].startswith(prefix):
                     assert caller.startswith(allowed), ("unreviewed guard caller", names[a], caller, names[b], site["pc"])
@@ -139,6 +178,14 @@ def diagnostic(frame, phase=False):
         a, guards, parse = state
         bn = names[b]
         next_guards, next_parse = guards, parse
+        # Both homing entries retain the panel dispatch bit. External
+        # homing refuses a running scan; scan-internal homing already
+        # owns the scan dispatcher, so neither admits a new scan worker.
+        if homing_owner(bn):
+            next_guards |= 1 | HOMING_MASK
+        if guards & HOMING_MASK and bn.startswith("dispatchScanWork("):
+            pruned["homing excludes scan dispatch"] += 1
+            return None
         for i, (prefix, _) in enumerate(guards_spec):
             if bn.startswith(prefix):
                 if guards & (1 << i):
@@ -197,8 +244,11 @@ def inventory(z, board, phase=False):
         assert retired not in symbols, (board, "retired internal text symbol", retired)
     source = z.read(p + "build/sketch/GCodeInput.cpp").decode()
     assert "runFlashScript(" not in source and "executeFlashScript(" not in source
+    homing = z.read(p + "build/sketch/Homing.cpp").decode()
+    assert homing.count("UIDisplay::ScopedActionExclusion panelExclusion(uid);") == 2
     frame = fg.inventory(z, board, True)
     assert not frame["errors"], frame["errors"]
+    assert sum(homing_owner(f["name"]) for f in frame["frames"]) == 2, "missing or cloned homing ownership boundary"
     return diagnostic(frame, phase)
 
 
