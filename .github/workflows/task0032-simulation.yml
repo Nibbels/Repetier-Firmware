@@ -6,8 +6,18 @@ on:
       - 'tools/task0032/**'
       - '.github/workflows/task0032-simulation.yml'
   workflow_dispatch:
+    inputs:
+      historical:
+        description: Reproduce the completed old-pin UART chain
+        type: boolean
+        default: false
 permissions:
   contents: read
+# Superseded commits must not consume the whole runner pool. This group
+# belongs only to the Task0032 supplemental workflow, not canonical/P0 CI.
+concurrency:
+  group: task0032-simulation-${{ github.event.pull_request.number || github.ref }}-forward
+  cancel-in-progress: true
 jobs:
   simulation:
     if: github.event_name == 'workflow_dispatch' || github.head_ref == 'task/Task0032-quality-packing'
@@ -416,5 +426,1595 @@ jobs:
         with:
           name: task0032-combined-core-${{ github.sha }}
           path: ${{ runner.temp }}/task0032-combined-core
+          retention-days: 7
+          if-no-files-found: error
+
+
+  resend-ring-preflight:
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Replay actual P0 USART with bounded resend candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-resend"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          p0=4ca16f6e09f8c4d7a8691de34281bee95605c578
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$RUNNER_TEMP/resend-p0" "$p0"
+          sha256sum tools/task0032/{resend-policy.h,resend-ring-preflight.py,loss-gate-replay.py} > "$out/source-sha256.txt"
+          sha256sum "$RUNNER_TEMP"/resend-p0/Repetier/UsbSerial.{h,cpp} "$RUNNER_TEMP/resend-p0/tests/usb-serial.cpp" >> "$out/source-sha256.txt"
+          python3 tools/task0032/resend-ring-preflight.py --source "$RUNNER_TEMP/resend-p0" --out "$out" | tee "$out/replay.log"
+          sha256sum tools/task0032/resend-frame-preflight.py "$RUNNER_TEMP/resend-p0/Repetier/GCodeInput.cpp" >> "$out/source-sha256.txt"
+          python3 tools/task0032/resend-frame-preflight.py --source "$RUNNER_TEMP/resend-p0" | tee "$out/frame-replay.log"
+          sha256sum tools/task0032/{resend-stream-preflight,tx-ack-replay}.py tools/task0033/loss-replay.py >> "$out/source-sha256.txt"
+          python3 tools/task0032/resend-stream-preflight.py --source "$RUNNER_TEMP/resend-p0" | tee "$out/stream-replay.log"
+          python3 tools/task0032/resend-ring-preflight.py --source "$RUNNER_TEMP/resend-p0" --out "$out/packed" --packed-gate | tee "$out/packed-ring.log"
+          python3 tools/task0032/resend-stream-preflight.py --source "$RUNNER_TEMP/resend-p0" --packed-gate | tee "$out/packed-stream.log"
+          sha256sum tools/task0032/resend-host-contract.py >> "$out/source-sha256.txt"
+          python3 tools/task0032/resend-host-contract.py --out "$out/host-contract" | tee "$out/host-contract.log"
+          sha256sum tools/task0032/tx-blocking-preflight.py >> "$out/source-sha256.txt"
+          python3 tools/task0032/tx-blocking-preflight.py --source "$RUNNER_TEMP/resend-p0" --out "$out/blocking-tx" | tee "$out/blocking-tx.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-resend-ring-${{ github.sha }}
+          path: ${{ runner.temp }}/task0032-resend
+          retention-days: 7
+          if-no-files-found: error
+
+
+  resend-isr-preflight:
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-arduino-cli@v2
+        with:
+          version: 1.2.2
+      - name: Compare isolated exact-source ISR path costs
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-resend-isr"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          p0=4ca16f6e09f8c4d7a8691de34281bee95605c578
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$RUNNER_TEMP/resend-isr-p0" "$p0"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          compiler="$HOME/.arduino15/packages/arduino/tools/avr-gcc/7.3.0-atmel3.6.1-arduino7/bin/avr-g++"
+          sha256sum tools/task0032/{resend-isr-preflight,resend-ring-preflight,loss-gate-replay}.py tools/task0033/isr-candidates.py > "$out/source-sha256.txt"
+          python3 tools/task0032/resend-isr-preflight.py --source "$RUNNER_TEMP/resend-isr-p0" --compiler "$compiler" --out "$out" | tee "$out/replay.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-resend-isr-${{ github.sha }}
+          path: ${{ runner.temp }}/task0032-resend-isr
+          retention-days: 7
+          if-no-files-found: error
+
+
+  transport-terminal-preflight:
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Replay pinned P0 terminal transition and shared cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-transport-terminal"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          p0=962e9b6b5152e2c3972896f5a93981bdaed61422
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$RUNNER_TEMP/transport-terminal-p0" "$p0"
+          sha256sum tools/task0032/transport-terminal-preflight.py > "$out/source-sha256.txt"
+          python3 tools/task0032/transport-terminal-preflight.py --source "$RUNNER_TEMP/transport-terminal-p0" --out "$out" | tee "$out/replay.log"
+          sha256sum tools/task0032/transport-terminal-dispatch.py >> "$out/source-sha256.txt"
+          python3 tools/task0032/transport-terminal-dispatch.py --source "$RUNNER_TEMP/transport-terminal-p0" --out "$out/dispatch" | tee "$out/dispatch.log"
+          sha256sum tools/task0032/{transport-terminal-trigger,tx-blocking-preflight}.py >> "$out/source-sha256.txt"
+          python3 tools/task0032/transport-terminal-trigger.py --source "$RUNNER_TEMP/transport-terminal-p0" --out "$out/trigger" | tee "$out/trigger.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-transport-terminal-${{ github.sha }}
+          path: ${{ runner.temp }}/task0032-transport-terminal
+          retention-days: 7
+          if-no-files-found: error
+
+
+  transport-terminal-link:
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-arduino-cli@v2
+        with:
+          version: 1.2.2
+      - name: Materialize and link disposable terminal-only candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-terminal-link"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          p0=962e9b6b5152e2c3972896f5a93981bdaed61422
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$RUNNER_TEMP/terminal-link-p0" "$p0"
+          sha256sum tools/task0032/transport-terminal-{preflight,dispatch,trigger,link}.py tools/task0032/tx-blocking-preflight.py > "$out/source-sha256.txt"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          python3 tools/task0032/transport-terminal-link.py --source "$RUNNER_TEMP/terminal-link-p0" --out "$out" --with-tx-trigger | tee "$out/inventory.log"
+          cd "$RUNNER_TEMP/terminal-link-p0"
+          git -c user.name=Task0032 -c user.email=task0032@localhost commit -am "Disposable terminal-only candidate"
+          git rev-parse HEAD > "$out/local-candidate-sha.txt"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" --p0-candidate --avr-only | tee "$out/canonical.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-terminal-link-${{ github.sha }}
+          path: ${{ runner.temp }}/task0032-terminal-link
+          retention-days: 7
+          if-no-files-found: error
+
+
+  current-drive-core-preflight:
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply exact archived small-core transformations without replacing P0 Drive
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-current-core"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          p0=95415cff552517a40a844cc1935f588baf9a5069
+          git fetch --no-tags --depth=1 origin "$p0" 9072d65121bc2086522ea6b837ca3804ec80faa5 9345d9f52f9428be0f920e6777c1e50286c42d71
+          git worktree add --detach "$RUNNER_TEMP/current-core-p0" "$p0"
+          sha256sum tools/task0032/{current-core-preflight,combined-core-preflight,small-cleanup-preflight,fixed-uart-init,fixed-queue-capacity,decimal32-preflight,parser-avr-bench,parser-wire-replay}.py tools/task0032/decimal32-candidate.h > "$out/source-sha256.txt"
+          python3 tools/task0032/current-core-preflight.py --source "$RUNNER_TEMP/current-core-p0" --out "$out" | tee "$out/replay.log"
+      - uses: arduino/setup-arduino-cli@v2
+        with:
+          version: 1.2.2
+      - name: Run existing canonical full host and four-board recovery checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-current-core"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          cd "$RUNNER_TEMP/current-core-p0"
+          git apply --check "$out/candidate.diff"
+          git apply "$out/candidate.diff"
+          git diff --check
+          git -c user.name=Task0032 -c user.email=task0032@localhost commit -am "Disposable small core on central Drive candidate"
+          git rev-parse HEAD > "$out/local-candidate-sha.txt"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" --p0-candidate | tee "$out/canonical.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-current-core-${{ github.sha }}
+          path: ${{ runner.temp }}/task0032-current-core
+          retention-days: 7
+          if-no-files-found: error
+
+
+  current-drive-wake-preflight:
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Replay exact guarded Drive startup with nonblocking motor readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-current-wake"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          p0=95415cff552517a40a844cc1935f588baf9a5069
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$RUNNER_TEMP/current-wake-p0" "$p0"
+          sha256sum tools/task0032/current-drive-wake*.py research/task0032-step-output/motor-wake.h > "$out/source-sha256.txt"
+          python3 tools/task0032/current-drive-wake-replay.py --source "$RUNNER_TEMP/current-wake-p0" --out "$out" | tee "$out/replay.log"
+          python3 tools/task0032/current-drive-wake.py --source "$RUNNER_TEMP/current-wake-p0" --out "$out"
+      - uses: arduino/setup-arduino-cli@v2
+        with:
+          version: 1.2.2
+      - name: Link current wake candidate with existing canonical recovery builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-current-wake"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          cd "$RUNNER_TEMP/current-wake-p0"
+          git add Repetier
+          git -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Disposable nonblocking Drive motor wake"
+          git rev-parse HEAD > "$out/local-candidate-sha.txt"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" --p0-candidate --avr-only | tee "$out/canonical.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-current-wake-${{ github.sha }}
+          path: ${{ runner.temp }}/task0032-current-wake
+          retention-days: 7
+          if-no-files-found: error
+
+
+  current-drive-combined-preflight:
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
+    needs: [current-drive-core-preflight, current-drive-wake-preflight]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-current-core-${{ github.sha }}
+          path: ${{ runner.temp }}/core-input
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-current-wake-${{ github.sha }}
+          path: ${{ runner.temp }}/wake-input
+      - name: Compose on newer exact P0 Drive checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-current-combined"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          p0=c31b4d391cc4d2b9cca9ab3f8e236bed805716d9
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$RUNNER_TEMP/current-combined-p0" "$p0"
+          sha256sum tools/task0032/current-drive-combined.py > "$out/source-sha256.txt"
+          python3 tools/task0032/current-drive-combined.py --source "$RUNNER_TEMP/current-combined-p0" --core "$RUNNER_TEMP/core-input/candidate.diff" --wake "$RUNNER_TEMP/wake-input/wake.diff" --out "$out"
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Requalify combined actual source with all canonical replays and four AVR recovery images
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-current-combined"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          cd "$RUNNER_TEMP/current-combined-p0"
+          git add Repetier tests
+          git -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Disposable combined current Drive core and wake"
+          git rev-parse HEAD > "$out/local-candidate-sha.txt"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" | tee "$out/canonical.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-current-combined-${{ github.sha }}
+          path: ${{ runner.temp }}/task0032-current-combined
+          retention-days: 7
+          if-no-files-found: error
+
+
+  current-transport-stage1:
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
+    needs: [current-drive-combined-preflight]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-current-combined-${{ github.sha }}
+          path: ${{ runner.temp }}/combined-input
+      - name: Materialize terminal transport stage on qualified composition
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-current-transport"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          p0=c31b4d391cc4d2b9cca9ab3f8e236bed805716d9
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$RUNNER_TEMP/current-transport-p0" "$p0"
+          sha256sum tools/task0032/{current-transport-preflight,current-transport-receiver-replay,current-drive-combined,transport-terminal-preflight,transport-terminal-dispatch,transport-terminal-trigger,resend-ring-preflight,loss-gate-replay,tx-blocking-preflight}.py tools/task0032/resend-policy.h tools/task0033/loss-replay.py > "$out/source-sha256.txt"
+          python3 tools/task0032/current-transport-preflight.py --source "$RUNNER_TEMP/current-transport-p0" --combined "$RUNNER_TEMP/combined-input/combined.diff" --out "$out" | tee "$out/replay.log"
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Four recovery links of stage 1 only
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-current-transport"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          cd "$RUNNER_TEMP/current-transport-p0"
+          git add Repetier tests
+          git -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Disposable combined Drive and terminal transport stage 1"
+          git rev-parse HEAD > "$out/local-candidate-sha.txt"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" --avr-only | tee "$out/canonical.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-current-transport-${{ github.sha }}
+          path: ${{ runner.temp }}/task0032-current-transport
+          retention-days: 7
+          if-no-files-found: error
+
+
+  current-resend-envelope:
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tools/task0032/current-resend-envelope.py
+
+  current-resend-stage2:
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
+    needs: [current-transport-stage1, current-resend-envelope]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-current-combined-${{ github.sha }}
+          path: ${{ runner.temp }}/combined-input
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-current-transport-${{ github.sha }}
+          path: ${{ runner.temp }}/terminal-input
+      - name: Materialize exact qualified inputs and replay bounded receiver
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-current-resend"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          p0=c31b4d391cc4d2b9cca9ab3f8e236bed805716d9
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$RUNNER_TEMP/current-resend-p0" "$p0"
+          sha256sum tools/task0032/{current-resend-preflight,current-resend-envelope,current-resend-receiver-replay,current-resend-canonical-replay,current-transport-linked,current-transport-receiver-replay,resend-ring-preflight,tx-ack-replay}.py tools/task0032/resend-policy.h tools/task0033/loss-replay.py > "$out/source-sha256.txt"
+          python3 tools/task0032/current-resend-preflight.py --source "$RUNNER_TEMP/current-resend-p0" --combined "$RUNNER_TEMP/combined-input/combined.diff" --stage1 "$RUNNER_TEMP/terminal-input" --out "$out"
+          python3 tools/task0032/current-resend-receiver-replay.py --source "$RUNNER_TEMP/current-resend-p0" --out "$out/receiver" | tee "$out/replay.log"
+          python3 tools/task0032/current-resend-canonical-replay.py --source "$RUNNER_TEMP/current-resend-p0" --fixture "$out/receiver" --out "$out/canonical-serial" --install-fixtures | tee "$out/canonical-serial.log"
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Run full canonical host and four recovery image checks with bounded receiver
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-current-resend"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          cd "$RUNNER_TEMP/current-resend-p0"
+          git add Repetier tests
+          git -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Disposable combined Drive and bounded resend receiver"
+          git rev-parse HEAD > "$out/local-candidate-sha.txt"
+          git rev-parse 'HEAD^{tree}' > "$out/local-candidate-tree.txt"
+          git diff --binary c31b4d391cc4d2b9cca9ab3f8e236bed805716d9 HEAD > "$out/stage2.diff"
+          (cd "$out"; sha256sum stage2.diff > stage2.diff.sha256)
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" | tee "$out/canonical.log"
+      - name: Analyze linked UART paths and bounded poll cost
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-current-resend"
+          python3 tools/task0032/current-transport-linked.py --evidence "$out/candidate-evidence" --out "$out/linked-transport.json" | tee "$out/linked-transport.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-current-resend-${{ github.sha }}
+          path: ${{ runner.temp }}/task0032-current-resend
+          retention-days: 7
+          if-no-files-found: error
+
+
+  current-resend-fast:
+    # Diagnostic only: replay newest UART/receiver source on an already
+    # qualified immutable combined patch. Full same-run builds remain gates.
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-current-combined-4e62ea72e6eebf6c264a0aca1c3276f8490a38bf
+          run-id: 46154086451
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/fast-combined
+      - name: Replay latest staged transport without repeating Drive links
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-resend-fast"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          input="$RUNNER_TEMP/fast-combined"
+          test "$(cat "$input/local-candidate-sha.txt")" = 2c24695bb8a6756fcffbb18fc690f2c07f2e40d5
+          echo "c6ea108693ca3a418bfa97d42642f3cade211494726cda8e5e413721f493c023  $input/combined.diff" | sha256sum -c
+          p0=c31b4d391cc4d2b9cca9ab3f8e236bed805716d9
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$RUNNER_TEMP/fast-terminal-p0" "$p0"
+          git worktree add --detach "$RUNNER_TEMP/fast-resend-p0" "$p0"
+          sha256sum tools/task0032/current-*.py tools/task0032/resend-policy.h > "$out/source-sha256.txt"
+          python3 tools/task0032/current-transport-preflight.py --source "$RUNNER_TEMP/fast-terminal-p0" --combined "$input/combined.diff" --out "$out/stage1" | tee "$out/stage1.log"
+          python3 tools/task0032/current-resend-preflight.py --source "$RUNNER_TEMP/fast-resend-p0" --combined "$input/combined.diff" --stage1 "$out/stage1" --out "$out/stage2"
+          python3 tools/task0032/current-resend-receiver-replay.py --source "$RUNNER_TEMP/fast-resend-p0" --out "$out/stage2/receiver" | tee "$out/stage2.log"
+          python3 tools/task0032/current-resend-canonical-replay.py --source "$RUNNER_TEMP/fast-resend-p0" --fixture "$out/stage2/receiver" --out "$out/canonical-serial" | tee "$out/canonical-serial.log"
+          python3 "$RUNNER_TEMP/fast-resend-p0/tests/temperature-control-replay.py" > "$out/temperature-control-replay.log" 2>&1 || { tail -100 "$out/temperature-control-replay.log"; exit 1; }
+          tail -8 "$out/temperature-control-replay.log"
+          sha256sum tools/task0032/current-stop-tail-replay.cpp >> "$out/source-sha256.txt"
+          python3 tools/task0032/current-stop-tail-preflight.py --source "$RUNNER_TEMP/fast-resend-p0/Repetier" --out "$out/stop-tail" | tee "$out/stop-tail.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-resend-fast-${{ github.sha }}
+          path: ${{ runner.temp }}/task0032-resend-fast
+          retention-days: 7
+          if-no-files-found: warn
+
+
+  current-stop-tail-link:
+    # Not a production edit or global timing proof. Do not compose until the
+    # exact predecessor has passed its full canonical and UART linked gates.
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
+    needs: [current-resend-stage2]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-current-resend-${{ github.sha }}
+          path: ${{ runner.temp }}/stop-tail-input
+      - name: Reconstruct exact qualified stage2 tree and replay stop-tail candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-current-stop-tail"
+          input="$RUNNER_TEMP/stop-tail-input"
+          p0=c31b4d391cc4d2b9cca9ab3f8e236bed805716d9
+          source="$RUNNER_TEMP/current-stop-tail-p0"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          sha256sum tools/task0032/current-stop-tail-{preflight.py,replay.cpp} > "$out/source-sha256.txt"
+          (cd "$input"; sha256sum -c stage2.diff.sha256)
+          python3 - "$input" <<'PY'
+          import json, pathlib, sys
+          p=pathlib.Path(sys.argv[1])
+          sha=(p/'local-candidate-sha.txt').read_text().strip()
+          summary=json.loads((p/'candidate-evidence/summary.json').read_text())
+          timing=json.loads((p/'linked-transport.json').read_text())
+          assert not summary['failures'] and summary['sha']==timing['candidate_sha']==sha
+          assert summary['build_profile']=='standard-recovery'
+          assert set(summary['targets'])=={'RF1000','RF2000','RF2000v2','RF2000-X44'}
+          PY
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$source" "$p0"
+          git -C "$source" apply --index "$input/stage2.diff"
+          test "$(git -C "$source" write-tree)" = "$(cat "$input/local-candidate-tree.txt")"
+          cp "$input"/local-candidate-{sha,tree}.txt "$out/"
+          cp "$input/stage2.diff.sha256" "$out/"
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Reconstructed exact qualified stage2 source tree"
+          python3 tools/task0032/current-stop-tail-preflight.py --source "$source/Repetier" --out "$out/candidate" | tee "$out/replay.log"
+          for name in motion.h motion.cpp StepExecutor.cpp; do cp "$out/candidate/$name" "$source/Repetier/$name"; done
+          git -C "$source" diff --check
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -am "Disposable single-writer direct stop tail"
+          git -C "$source" rev-parse HEAD > "$out/stop-tail-candidate-sha.txt"
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Canonical host and four AVR recovery links with stop-tail ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-current-stop-tail"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          cd "$RUNNER_TEMP/current-stop-tail-p0"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" | tee "$out/canonical.log"
+      - name: Recheck linked UART on composed candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-current-stop-tail"
+          python3 tools/task0032/current-transport-linked.py --evidence "$out/candidate-evidence" --out "$out/linked-transport.json" | tee "$out/linked-transport.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-current-stop-tail-${{ github.sha }}
+          path: ${{ runner.temp }}/task0032-current-stop-tail
+          retention-days: 7
+          if-no-files-found: error
+
+  current-stop-tail-qualified:
+    # Not a production edit or global timing proof. Do not compose until the
+    # exact predecessor has passed its full canonical and UART linked gates.
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
+    permissions:
+      contents: read
+      actions: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-current-resend-29b9eb79434c5cfbf245e947373c9b5d38c2be48
+          run-id: 46162946647
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/stop-tail-input
+      - name: Reconstruct exact qualified stage2 tree and replay stop-tail candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-current-stop-tail"
+          input="$RUNNER_TEMP/stop-tail-input"
+          p0=c31b4d391cc4d2b9cca9ab3f8e236bed805716d9
+          source="$RUNNER_TEMP/current-stop-tail-p0"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          sha256sum tools/task0032/current-stop-tail-{preflight.py,replay.cpp} > "$out/source-sha256.txt"
+          echo "9ac924cb9b991e3e060f4fef63976cfcb98f7b557aadbce17cf2b0c373d0cbd2  $input/stage2.diff" | sha256sum -c
+          test "$(cat "$input/local-candidate-tree.txt")" = 80fb7ae8c6d1bb381408f31b9016316a722b0ff1
+          python3 - "$input" <<'PY'
+          import json, pathlib, sys
+          p=pathlib.Path(sys.argv[1])
+          sha=(p/'local-candidate-sha.txt').read_text().strip()
+          summary=json.loads((p/'candidate-evidence/summary.json').read_text())
+          timing=json.loads((p/'linked-transport.json').read_text())
+          assert not summary['failures'] and summary['sha']==timing['candidate_sha']==sha
+          assert summary['build_profile']=='standard-recovery'
+          assert set(summary['targets'])=={'RF1000','RF2000','RF2000v2','RF2000-X44'}
+          PY
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$source" "$p0"
+          git -C "$source" apply --index "$input/stage2.diff"
+          test "$(git -C "$source" write-tree)" = "$(cat "$input/local-candidate-tree.txt")"
+          cp "$input"/local-candidate-{sha,tree}.txt "$out/"
+          cp "$input/stage2.diff.sha256" "$out/"
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Reconstructed exact qualified stage2 source tree"
+          python3 tools/task0032/current-stop-tail-preflight.py --source "$source/Repetier" --out "$out/candidate" | tee "$out/replay.log"
+          for name in motion.h motion.cpp StepExecutor.cpp; do cp "$out/candidate/$name" "$source/Repetier/$name"; done
+          python3 tools/task0032/current-stop-tail-fixtures.py --source "$source"
+          git -C "$source" diff --check
+          python3 "$source/tests/pause-sense-offset.py"
+          python3 "$source/tests/task0032-drv8711-pause.py"
+          python3 "$source/tests/task0034-guarded-drive.py"
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -am "Disposable single-writer direct stop tail"
+          git -C "$source" rev-parse HEAD > "$out/stop-tail-candidate-sha.txt"
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Canonical host and four AVR recovery links with stop-tail ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-current-stop-tail"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          cd "$RUNNER_TEMP/current-stop-tail-p0"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" | tee "$out/canonical.log"
+      - name: Recheck linked UART on composed candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-current-stop-tail"
+          python3 tools/task0032/current-transport-linked.py --evidence "$out/candidate-evidence" --out "$out/linked-transport.json" | tee "$out/linked-transport.log"
+      - name: Measure linked Timer1 stop publication and completed pulse ledgers
+        run: |
+          python3 tools/task0032/current-stop-tail-linked.py --prior-evidence "$RUNNER_TEMP/stop-tail-input/candidate-evidence" --evidence "$RUNNER_TEMP/task0032-current-stop-tail/candidate-evidence" --out "$RUNNER_TEMP/task0032-current-stop-tail/linked-stop-tail.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-current-stop-tail-${{ github.sha }}
+          path: ${{ runner.temp }}/task0032-current-stop-tail
+          retention-days: 7
+          if-no-files-found: error
+
+  current-brake-reference:
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          set -euo pipefail
+          for name in current-stop-brake-replay current-prepared-direct-replay; do
+            c++ -std=c++11 -O2 -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all "tools/task0032/$name.cpp" -o "$RUNNER_TEMP/$name"
+            "$RUNNER_TEMP/$name"
+          done
+
+  current-p0-forward-reconcile:
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-current-resend-29b9eb79434c5cfbf245e947373c9b5d38c2be48
+          run-id: 46162946647
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/forward-input
+      - name: Forward reconcile qualified UART against owner removal checkpoint
+        run: |
+          set -euo pipefail
+          input="$RUNNER_TEMP/forward-input"
+          old=c31b4d391cc4d2b9cca9ab3f8e236bed805716d9
+          p0=b1e668c949e12ac2be22c218d98ba9db6a396f9b
+          tree=80fb7ae8c6d1bb381408f31b9016316a722b0ff1
+          out="$RUNNER_TEMP/forward-evidence"
+          mkdir -p "$out"
+          echo "9ac924cb9b991e3e060f4fef63976cfcb98f7b557aadbce17cf2b0c373d0cbd2  $input/stage2.diff" | sha256sum -c
+          git fetch --no-tags --depth=1 origin "$old" "$p0"
+          git worktree add --detach "$RUNNER_TEMP/forward-old" "$old"
+          git worktree add --detach "$RUNNER_TEMP/forward-p0" "$p0"
+          git -C "$RUNNER_TEMP/forward-old" apply --index "$input/stage2.diff"
+          test "$(git -C "$RUNNER_TEMP/forward-old" write-tree)" = "$tree"
+          git -C "$RUNNER_TEMP/forward-old" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Reconstruct qualified old-pin UART"
+          python3 tools/task0032/current-p0-reconcile.py --source "$RUNNER_TEMP/forward-p0" --old-candidate "$RUNNER_TEMP/forward-old" --old-tree "$tree" --p0 "$p0" --out "$out"
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Diagnostic four recovery links (not host or P0 gate)
+        run: |
+          set -euo pipefail
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          cd "$RUNNER_TEMP/forward-p0"
+          git add Repetier
+          git -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Diagnostic forward UART composition"
+          python3 tools/task0003-baseline.py "$RUNNER_TEMP/forward-evidence/avr" --avr-only
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-forward-reconcile-${{ github.sha }}
+          path: ${{ runner.temp }}/forward-evidence
+          retention-days: 7
+          if-no-files-found: error
+
+
+  current-direct-energy:
+    # Reproduction of the qualified #228 host/link reference.
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-current-resend-29b9eb79434c5cfbf245e947373c9b5d38c2be48
+          run-id: 46162946647
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/energy-uart-input
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-current-stop-tail-916fda446f1abdcd9de7b92fa32e79b941427145
+          run-id: 46164958583
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/energy-stop-input
+      - name: Reconstruct exact qualified stop-tail and prepare energy reference
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-direct-energy"
+          uart="$RUNNER_TEMP/energy-uart-input"
+          stop="$RUNNER_TEMP/energy-stop-input"
+          source="$RUNNER_TEMP/direct-energy-p0"
+          p0=c31b4d391cc4d2b9cca9ab3f8e236bed805716d9
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          sha256sum tools/task0032/current-direct-energy* tools/task0032/{PreparedDirectProfile,StopTailEnergy}.h > "$out/source-sha256.txt"
+          echo "9ac924cb9b991e3e060f4fef63976cfcb98f7b557aadbce17cf2b0c373d0cbd2  $uart/stage2.diff" | sha256sum -c
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$source" "$p0"
+          git -C "$source" apply --index "$uart/stage2.diff"
+          test "$(git -C "$source" write-tree)" = 80fb7ae8c6d1bb381408f31b9016316a722b0ff1
+          python3 - "$source/Repetier" "$stop" <<'PY'
+          import hashlib,json,pathlib,sys,re
+          fw=pathlib.Path(sys.argv[1]);p=pathlib.Path(sys.argv[2])
+          s=json.loads((p/'candidate-evidence/summary.json').read_text())
+          assert not s['failures'] and s['sha']=='d36107ed6f69fdcf814f4c505affd4458b092e07'
+          assert s['build_profile']=='standard-recovery'
+          linked=json.loads((p/'linked-stop-tail.json').read_text())
+          assert linked['candidate_sha']==s['sha']
+          assert set(linked['boards'])==set(s['targets'])
+          manifest=json.loads((p/'candidate/provenance.json').read_text())
+          for name,digest in manifest['input_sha256'].items():
+              assert hashlib.sha256((fw/name).read_bytes()).hexdigest()==digest,name
+          for name,digest in manifest['candidate_sha256'].items():
+              data=(p/'candidate'/name).read_bytes()
+              assert hashlib.sha256(data).hexdigest()==digest,name
+              (fw/name).write_bytes(data)
+          sketch=p/'candidate-evidence/RF1000/build/sketch'
+          for path in fw.iterdir():
+              if path.suffix not in ('.h','.cpp') or not path.is_file():continue
+              data=re.sub(rb'^#line 1 "[^\n]+"\n',b'',(sketch/path.name).read_bytes(),count=1)
+              assert data==path.read_bytes(),path.name
+          PY
+          python3 tools/task0032/current-stop-tail-fixtures.py --source "$source"
+          git -C "$source" add Repetier tests
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Reconstructed exact qualified stop-tail source"
+          git -C "$source" rev-parse 'HEAD^{tree}' > "$out/prior-tree.txt"
+          python3 tools/task0032/current-direct-energy.py --source "$source/Repetier" --out "$out/candidate"
+          python3 tools/task0032/current-direct-energy-replay.py --source "$source/Repetier" --candidate "$out/candidate" --out "$out/replay" | tee "$out/replay.log"
+          for name in motion.h motion.cpp StepExecutor.h StepExecutor.cpp PreparedDirectProfile.h StopTailEnergy.h; do cp "$out/candidate/$name" "$source/Repetier/$name"; done
+          python3 tools/task0032/current-direct-energy-fixtures.py --source "$source"
+          python3 "$source/tests/pause-sense-offset.py"
+          python3 "$source/tests/task0032-drv8711-pause.py"
+          python3 "$source/tests/task0034-guarded-drive.py"
+          git -C "$source" add Repetier tests
+          git -C "$source" diff --cached --check
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Disposable direct energy reference"
+          git -C "$source" rev-parse HEAD > "$out/local-candidate-sha.txt"
+          git -C "$source" rev-parse 'HEAD^{tree}' > "$out/local-candidate-tree.txt"
+          git -C "$source" diff --binary "$p0" HEAD > "$out/energy.diff"
+          (cd "$out"; sha256sum energy.diff > energy.diff.sha256)
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Canonical host and four AVR recovery links
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-direct-energy"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          cd "$RUNNER_TEMP/direct-energy-p0"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" | tee "$out/canonical.log"
+      - name: Observe actual linked energy ramp and STEP spacing
+        run: |
+          out="$RUNNER_TEMP/task0032-direct-energy"
+          python3 tools/task0032/current-direct-energy-linked.py --evidence "$out/candidate-evidence" --out "$out/linked-energy.json"
+      - name: Recheck linked transport after composition
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-direct-energy"
+          python3 tools/task0032/current-transport-linked.py --evidence "$out/candidate-evidence" --out "$out/linked-transport.json" | tee "$out/linked-transport.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-direct-energy-${{ github.sha }}
+          path: ${{ runner.temp }}/task0032-direct-energy
+          retention-days: 7
+          if-no-files-found: error
+
+
+  current-direct-energy-measure:
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-direct-energy-aa0dbcfbe82843cbd40c355938a402359dabd796
+          run-id: 46166854550
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/energy-qualified
+      - name: Verify qualified reference and measure linked pulse timing
+        run: |
+          set -euo pipefail
+          input="$RUNNER_TEMP/energy-qualified"
+          out="$RUNNER_TEMP/energy-measure"
+          mkdir -p "$out"
+          echo "a7934da32ac107d2c1966c677abbf87b536c594d33893baac95ef0f63f6f108f  $input/energy.diff" | sha256sum -c
+          test "$(cat "$input/local-candidate-tree.txt")" = 659ce1fa2bbee26dcb6f0ffb03405383127deb4c
+          test "$(cat "$input/local-candidate-sha.txt")" = fb643e0dadd2ead20619ead2d22daec51a4bada9
+          python3 tools/task0032/current-direct-energy-linked.py --evidence "$input/candidate-evidence" --out "$out/linked-energy.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-direct-energy-measure-${{ github.sha }}
+          path: ${{ runner.temp }}/energy-measure
+          retention-days: 7
+
+  current-z-owner-reference:
+    # Independent host prerequisite only, not a composed motion release.
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-direct-energy-aa0dbcfbe82843cbd40c355938a402359dabd796
+          run-id: 46166854550
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/z-owner-qualified
+      - name: Replay explicit logical Z direction and physical edge ownership
+        run: |
+          set -euo pipefail
+          input="$RUNNER_TEMP/z-owner-qualified"
+          out="$RUNNER_TEMP/z-owner-reference"
+          mkdir -p "$out"
+          python3 - "$input" "$RUNNER_TEMP/z-owner-source" <<'PY'
+          import hashlib,json,pathlib,re,sys
+          p=pathlib.Path(sys.argv[1]);out=pathlib.Path(sys.argv[2]);out.mkdir()
+          summary=json.loads((p/'candidate-evidence/summary.json').read_text())
+          assert not summary['failures'] and summary['sha']=='fb643e0dadd2ead20619ead2d22daec51a4bada9'
+          assert summary['build_profile']=='standard-recovery'
+          sketch=p/'candidate-evidence/RF1000/build/sketch'
+          for path in sketch.iterdir():
+              if path.suffix not in ('.h','.cpp') or not path.is_file():continue
+              data=re.sub(rb'^#line 1 "[^\n]+"\n',b'',path.read_bytes(),count=1)
+              (out/path.name).write_bytes(data)
+          for name,digest in json.loads((p/'candidate/provenance.json').read_text())['candidate_sha256'].items():
+              assert hashlib.sha256((out/name).read_bytes()).hexdigest()==digest,name
+          PY
+          python3 tools/task0032/current-z-owner.py --source "$RUNNER_TEMP/z-owner-source" --out "$out"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-z-owner-reference-${{ github.sha }}
+          path: ${{ runner.temp }}/z-owner-reference
+          retention-days: 7
+
+
+  current-direct-energy-fast:
+    # Exact #228 source tree, no repeated UART/stop-tail qualification chain.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-direct-energy-aa0dbcfbe82843cbd40c355938a402359dabd796
+          run-id: 46166854550
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/fast-energy-input
+      - name: Reconstruct exact energy tree, optimize and replay
+        shell: bash
+        run: |
+          set -euo pipefail
+          input="$RUNNER_TEMP/fast-energy-input"
+          source="$RUNNER_TEMP/fast-energy-p0"
+          out="$RUNNER_TEMP/fast-energy"
+          p0=c31b4d391cc4d2b9cca9ab3f8e236bed805716d9
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          sha256sum tools/task0032/current-direct-energy-fast.py tools/task0032/current-direct-energy-linked.py > "$out/tool-sha256.txt"
+          echo "a7934da32ac107d2c1966c677abbf87b536c594d33893baac95ef0f63f6f108f  $input/energy.diff" | sha256sum -c
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$source" "$p0"
+          git -C "$source" apply --index "$input/energy.diff"
+          test "$(git -C "$source" write-tree)" = 659ce1fa2bbee26dcb6f0ffb03405383127deb4c
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Reconstruct qualified direct energy reference"
+          python3 tools/task0032/current-direct-energy-fast.py --source "$source/Repetier" --out "$out/candidate" | tee "$out/math.log"
+          python3 tools/task0032/current-direct-energy-replay.py --source "$source/Repetier" --candidate "$out/candidate" --out "$out/replay" | tee "$out/replay.log"
+          for name in PreparedDirectProfile.h StepExecutor.cpp; do cp "$out/candidate/$name" "$source/Repetier/$name"; done
+          git -C "$source" add Repetier
+          git -C "$source" diff --cached --check
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Exact bounded direct ramp math and physical completion anchor"
+          git -C "$source" rev-parse HEAD > "$out/local-candidate-sha.txt"
+          git -C "$source" rev-parse 'HEAD^{tree}' > "$out/local-candidate-tree.txt"
+          git -C "$source" diff --binary "$p0" HEAD > "$out/fast-energy.diff"
+          (cd "$out"; sha256sum fast-energy.diff > fast-energy.diff.sha256)
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Canonical host and four AVR recovery links
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/fast-energy"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          cd "$RUNNER_TEMP/fast-energy-p0"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" | tee "$out/canonical.log"
+      - name: Measure exact linked energy ramp, cruise cancellation and electrical edges
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/fast-energy"
+          python3 tools/task0032/current-direct-energy-linked.py --optimized --extended --evidence "$out/candidate-evidence" --out "$out/linked-energy.json" | tee "$out/linked-energy.log"
+      - name: Recheck linked transport after composition
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/fast-energy"
+          python3 tools/task0032/current-transport-linked.py --evidence "$out/candidate-evidence" --out "$out/linked-transport.json" | tee "$out/linked-transport.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-fast-energy-${{ github.sha }}
+          path: ${{ runner.temp }}/fast-energy
+          retention-days: 7
+          if-no-files-found: error
+
+  current-direct-energy-fast-measure:
+    # Reuse the exact four linked recovery binaries from #232. Only the
+    # instruction model changed; no need to rebuild the candidate.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-fast-energy-0413e175148eb592a9b99b752017a1001fd4ea9f
+          run-id: 46169622834
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/fast-energy-input
+      - name: Verify and measure exact #232 binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          input="$RUNNER_TEMP/fast-energy-input"
+          out="$RUNNER_TEMP/fast-energy-measure"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          sha256sum research/task0032-step-output/linked_timer1.py tools/task0032/current-direct-energy-linked.py tools/task0032/current-transport-linked.py > "$out/tool-sha256.txt"
+          echo "35300bd30f4cfd517b74399f112e9a7fb76bf854bea121f27bfb5e6832e71773  $input/fast-energy.diff" | sha256sum -c
+          test "$(cat "$input/local-candidate-sha.txt")" = 47716e034417375da42bdfd564731a5db6a61777
+          test "$(cat "$input/local-candidate-tree.txt")" = c8c6cd0df52986cc21c07241f37109b4758995c7
+          python3 tools/task0032/current-direct-energy-linked.py --optimized --extended --evidence "$input/candidate-evidence" --out "$out/linked-energy.json" | tee "$out/linked-energy.log"
+          python3 tools/task0032/current-transport-linked.py --evidence "$input/candidate-evidence" --out "$out/linked-transport.json" | tee "$out/linked-transport.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-fast-energy-measure-${{ github.sha }}
+          path: ${{ runner.temp }}/fast-energy-measure
+          retention-days: 7
+          if-no-files-found: error
+
+  current-energy-z-compose:
+    # Reproduction of the qualified #235 combined edge owner.
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-fast-energy-0413e175148eb592a9b99b752017a1001fd4ea9f
+          run-id: 46169622834
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/energy-z-input
+      - name: Compose actual Z owner on exact qualified energy tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          input="$RUNNER_TEMP/energy-z-input"
+          source="$RUNNER_TEMP/energy-z-source"
+          out="$RUNNER_TEMP/energy-z"
+          p0=c31b4d391cc4d2b9cca9ab3f8e236bed805716d9
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          sha256sum tools/task0032/current-z-owner.py tools/task0032/current-direct-energy-replay.py > "$out/tool-sha256.txt"
+          echo "35300bd30f4cfd517b74399f112e9a7fb76bf854bea121f27bfb5e6832e71773  $input/fast-energy.diff" | sha256sum -c
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$source" "$p0"
+          git -C "$source" apply --index "$input/fast-energy.diff"
+          test "$(git -C "$source" write-tree)" = c8c6cd0df52986cc21c07241f37109b4758995c7
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Reconstruct qualified optimized direct energy"
+          python3 tools/task0032/current-z-owner.py --source "$source/Repetier" --out "$out/candidate" | tee "$out/z-owner.log"
+          for name in ZMotion.h ZMotion.cpp StepExecutor.cpp BedMatrix.cpp; do cp "$out/candidate/$name" "$source/Repetier/$name"; done
+          python3 - "$source/tests/z-motion.cpp" <<'PY'
+          from pathlib import Path
+          import sys
+          p=Path(sys.argv[1]);s=p.read_text()
+          old="    ZMotion::setDirection(direction > 0);\n    const bool continuing = zMotion.stepPath(path);"
+          new="    const bool continuing = zMotion.stepPath(path, direction);"
+          assert s.count(old)==1
+          p.write_text(s.replace(old,new))
+          PY
+          python3 tools/task0032/current-direct-energy-replay.py --source "$source/Repetier" --candidate "$source/Repetier" --out "$out/replay" | tee "$out/replay.log"
+          git -C "$source" add Repetier tests/z-motion.cpp
+          git -C "$source" diff --cached --check
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Combined direct energy and Z physical edge owner"
+          git -C "$source" rev-parse HEAD > "$out/local-candidate-sha.txt"
+          git -C "$source" rev-parse 'HEAD^{tree}' > "$out/local-candidate-tree.txt"
+          git -C "$source" diff --binary "$p0" HEAD > "$out/energy-z.diff"
+          (cd "$out"; sha256sum energy-z.diff > energy-z.diff.sha256)
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Canonical host and four AVR recovery links
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/energy-z"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          cd "$RUNNER_TEMP/energy-z-source"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" | tee "$out/canonical.log"
+      - name: Measure composed linked energy ramp and UART
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/energy-z"
+          python3 tools/task0032/current-direct-energy-linked.py --optimized --extended --evidence "$out/candidate-evidence" --out "$out/linked-energy.json" | tee "$out/linked-energy.log"
+          python3 tools/task0032/current-transport-linked.py --evidence "$out/candidate-evidence" --out "$out/linked-transport.json" | tee "$out/linked-transport.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-energy-z-compose-${{ github.sha }}
+          path: ${{ runner.temp }}/energy-z
+          retention-days: 7
+          if-no-files-found: error
+
+
+  current-primary-edge-anchor:
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-energy-z-compose-d131b30c416bc3a1fcd4bf6d355c09845fc23191
+          run-id: 46170438722
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/primary-anchor-input
+      - name: Reconstruct exact #235 tree and prepare phase-aware direct timing
+        shell: bash
+        run: |
+          set -euo pipefail
+          input="$RUNNER_TEMP/primary-anchor-input"
+          source="$RUNNER_TEMP/primary-anchor-source"
+          out="$RUNNER_TEMP/primary-anchor"
+          p0=c31b4d391cc4d2b9cca9ab3f8e236bed805716d9
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          sha256sum tools/task0032/current-primary-edge-anchor.py tools/task0032/current-direct-energy-linked.py > "$out/tool-sha256.txt"
+          echo "d4ebf8c864e8618fe4536dc6870f0e98a3d09e2efaf366fba530b55337372000  $input/energy-z.diff" | sha256sum -c
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$source" "$p0"
+          git -C "$source" apply --index "$input/energy-z.diff"
+          test "$(git -C "$source" write-tree)" = a7f8996d06d307b1657b4bcfa7147a022d0062f0
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Reconstruct qualified energy Z owner"
+          python3 tools/task0032/current-primary-edge-anchor.py --source "$source/Repetier" --out "$out/candidate"
+          cp "$out/candidate/StepExecutor.cpp" "$source/Repetier/StepExecutor.cpp"
+          python3 tools/task0032/current-direct-energy-replay.py --source "$source/Repetier" --candidate "$source/Repetier" --out "$out/replay" | tee "$out/replay.log"
+          git -C "$source" add Repetier
+          git -C "$source" diff --cached --check
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Primary edge phase-aware direct compare"
+          git -C "$source" rev-parse HEAD > "$out/local-candidate-sha.txt"
+          git -C "$source" rev-parse 'HEAD^{tree}' > "$out/local-candidate-tree.txt"
+          git -C "$source" diff --binary "$p0" HEAD > "$out/primary-anchor.diff"
+          (cd "$out"; sha256sum primary-anchor.diff > primary-anchor.diff.sha256)
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Canonical host and four AVR recovery links
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/primary-anchor"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          cd "$RUNNER_TEMP/primary-anchor-source"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" | tee "$out/canonical.log"
+      - name: Measure actual edge spacing and prove unconditional vector prefix
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/primary-anchor"
+          python3 tools/task0032/current-direct-energy-linked.py --optimized --extended --phase-anchor --evidence "$out/candidate-evidence" --out "$out/linked-energy.json" | tee "$out/linked-energy.log"
+          python3 tools/task0032/current-transport-linked.py --evidence "$out/candidate-evidence" --out "$out/linked-transport.json" | tee "$out/linked-transport.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-primary-anchor-${{ github.sha }}
+          path: ${{ runner.temp }}/primary-anchor
+          retention-days: 7
+          if-no-files-found: error
+
+  current-compact-printline:
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-primary-anchor-7db57d62080558961320e161958d07b29b5f4c66
+          run-id: 46171578435
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/compact-printline-input
+      - name: Reconstruct exact #237 and compact PrintLine
+        shell: bash
+        run: |
+          set -euo pipefail
+          input="$RUNNER_TEMP/compact-printline-input"
+          source="$RUNNER_TEMP/compact-printline-source"
+          out="$RUNNER_TEMP/compact-printline"
+          p0=c31b4d391cc4d2b9cca9ab3f8e236bed805716d9
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          sha256sum tools/task0032/current-compact-printline.py tools/task0032/current-direct-energy-linked.py research/task0032-step-output/linked_timer1.py > "$out/tool-sha256.txt"
+          echo "f79459e3aa084b4cfc6669929163c84e41310aae8392ebdd4ec75a4daced056a  $input/primary-anchor.diff" | sha256sum -c
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$source" "$p0"
+          git -C "$source" apply --index "$input/primary-anchor.diff"
+          test "$(git -C "$source" write-tree)" = 92e668055439abeece801a97aced44934cc5815e
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Reconstruct qualified primary-edge anchor"
+          python3 tools/task0032/current-compact-printline.py --root "$source" | tee "$out/compact.log"
+          python3 tools/task0032/current-direct-energy-replay.py --source "$source/Repetier" --candidate "$source/Repetier" --out "$out/replay" | tee "$out/replay.log"
+          git -C "$source" add Repetier tests/pause-sense-offset.cpp
+          git -C "$source" diff --cached --check
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Remove redundant reciprocal from PrintLine"
+          git -C "$source" rev-parse HEAD > "$out/local-candidate-sha.txt"
+          git -C "$source" rev-parse 'HEAD^{tree}' > "$out/local-candidate-tree.txt"
+          git -C "$source" diff --binary "$p0" HEAD > "$out/compact-printline.diff"
+          (cd "$out"; sha256sum compact-printline.diff > compact-printline.diff.sha256)
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Canonical host and four AVR recovery links
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/compact-printline"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          cd "$RUNNER_TEMP/compact-printline-source"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" | tee "$out/canonical.log"
+      - name: Measure compact ABI, actual spacing and UART
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/compact-printline"
+          python3 tools/task0032/current-direct-energy-linked.py --optimized --extended --phase-anchor --compact --evidence "$out/candidate-evidence" --out "$out/linked-energy.json" | tee "$out/linked-energy.log"
+          python3 tools/task0032/current-transport-linked.py --evidence "$out/candidate-evidence" --out "$out/linked-transport.json" | tee "$out/linked-transport.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-compact-printline-${{ github.sha }}
+          path: ${{ runner.temp }}/compact-printline
+          retention-days: 7
+          if-no-files-found: error
+
+  current-z-direction-barriers:
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-compact-printline-4b1bc9848033ee5fd9fb82368736c0b3dcf5adfe
+          run-id: 46172073412
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/z-direction-barriers-input
+      - name: Z correction barriers independent of electrical DIR
+        shell: bash
+        run: |
+          set -euo pipefail
+          input="$RUNNER_TEMP/z-direction-barriers-input"
+          source="$RUNNER_TEMP/z-direction-barriers-source"
+          out="$RUNNER_TEMP/z-direction-barriers"
+          p0=c31b4d391cc4d2b9cca9ab3f8e236bed805716d9
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          sha256sum tools/task0032/current-z-direction-barriers.py tools/task0032/current-direct-energy-linked.py research/task0032-step-output/linked_timer1.py > "$out/tool-sha256.txt"
+          echo "47652eea870438e9f36f615775214d533515c32d568f9b15d3644051366ba836  $input/compact-printline.diff" | sha256sum -c
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$source" "$p0"
+          git -C "$source" apply --index "$input/compact-printline.diff"
+          test "$(git -C "$source" write-tree)" = 8975c27a42ce87d6ad222a37a1aa128733941c49
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Reconstruct qualified compact PrintLine"
+          python3 tools/task0032/current-z-direction-barriers.py --root "$source" | tee "$out/compact.log"
+          python3 tools/task0032/current-direct-energy-replay.py --source "$source/Repetier" --candidate "$source/Repetier" --out "$out/replay" | tee "$out/replay.log"
+          git -C "$source" add Repetier tests/z-motion.cpp
+          git -C "$source" diff --cached --check
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Z correction barriers independent of electrical DIR"
+          git -C "$source" rev-parse HEAD > "$out/local-candidate-sha.txt"
+          git -C "$source" rev-parse 'HEAD^{tree}' > "$out/local-candidate-tree.txt"
+          git -C "$source" diff --binary "$p0" HEAD > "$out/z-direction-barriers.diff"
+          (cd "$out"; sha256sum z-direction-barriers.diff > z-direction-barriers.diff.sha256)
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Canonical host and four AVR recovery links
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/z-direction-barriers"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          cd "$RUNNER_TEMP/z-direction-barriers-source"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" | tee "$out/canonical.log"
+      - name: Measure compact ABI, actual spacing and UART
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/z-direction-barriers"
+          python3 tools/task0032/current-direct-energy-linked.py --optimized --extended --phase-anchor --compact --z-dir-owner --evidence "$out/candidate-evidence" --out "$out/linked-energy.json" | tee "$out/linked-energy.log"
+          python3 tools/task0032/current-transport-linked.py --evidence "$out/candidate-evidence" --out "$out/linked-transport.json" | tee "$out/linked-transport.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-z-direction-barriers-${{ github.sha }}
+          path: ${{ runner.temp }}/z-direction-barriers
+          retention-days: 7
+          if-no-files-found: error
+
+  current-prepared-plateau:
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-compact-printline-4b1bc9848033ee5fd9fb82368736c0b3dcf5adfe
+          run-id: 46172073412
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/prepared-plateau-input
+      - name: Bypass general direct ramp on prepared plateau
+        shell: bash
+        run: |
+          set -euo pipefail
+          input="$RUNNER_TEMP/prepared-plateau-input"
+          source="$RUNNER_TEMP/prepared-plateau-source"
+          out="$RUNNER_TEMP/prepared-plateau"
+          p0=c31b4d391cc4d2b9cca9ab3f8e236bed805716d9
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          sha256sum tools/task0032/current-prepared-plateau.py tools/task0032/current-direct-energy-linked.py research/task0032-step-output/linked_timer1.py > "$out/tool-sha256.txt"
+          echo "47652eea870438e9f36f615775214d533515c32d568f9b15d3644051366ba836  $input/compact-printline.diff" | sha256sum -c
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$source" "$p0"
+          git -C "$source" apply --index "$input/compact-printline.diff"
+          test "$(git -C "$source" write-tree)" = 8975c27a42ce87d6ad222a37a1aa128733941c49
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Reconstruct qualified compact PrintLine"
+          python3 tools/task0032/current-prepared-plateau.py --root "$source" | tee "$out/compact.log"
+          python3 tools/task0032/current-direct-energy-replay.py --source "$source/Repetier" --candidate "$source/Repetier" --out "$out/replay" | tee "$out/replay.log"
+          git -C "$source" add Repetier
+          git -C "$source" diff --cached --check
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Bypass general direct ramp on prepared plateau"
+          git -C "$source" rev-parse HEAD > "$out/local-candidate-sha.txt"
+          git -C "$source" rev-parse 'HEAD^{tree}' > "$out/local-candidate-tree.txt"
+          git -C "$source" diff --binary "$p0" HEAD > "$out/prepared-plateau.diff"
+          (cd "$out"; sha256sum prepared-plateau.diff > prepared-plateau.diff.sha256)
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Canonical host and four AVR recovery links
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/prepared-plateau"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          cd "$RUNNER_TEMP/prepared-plateau-source"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" | tee "$out/canonical.log"
+      - name: Measure compact ABI, actual spacing and UART
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/prepared-plateau"
+          python3 tools/task0032/current-direct-energy-linked.py --optimized --extended --phase-anchor --compact --evidence "$out/candidate-evidence" --out "$out/linked-energy.json" | tee "$out/linked-energy.log"
+          python3 tools/task0032/current-transport-linked.py --evidence "$out/candidate-evidence" --out "$out/linked-transport.json" | tee "$out/linked-transport.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-prepared-plateau-${{ github.sha }}
+          path: ${{ runner.temp }}/prepared-plateau
+          retention-days: 7
+          if-no-files-found: error
+
+  current-compact-planner-cost:
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-primary-anchor-7db57d62080558961320e161958d07b29b5f4c66
+          run-id: 46171578435
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/planner-before
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-compact-printline-4b1bc9848033ee5fd9fb82368736c0b3dcf5adfe
+          run-id: 46172073412
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/planner-after
+      - name: Paired actual linked profile preparation and bitwise result check
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/compact-planner-cost"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          test "$(cat "$RUNNER_TEMP/planner-before/local-candidate-sha.txt")" = 629f21dc00dc40aa8ddb06c69fe91b24c3e08e4e
+          test "$(cat "$RUNNER_TEMP/planner-after/local-candidate-sha.txt")" = f0870fb62d598c2508f482b544bad63cb7cd470f
+          python3 tools/task0032/current-compact-planner-linked.py --baseline "$RUNNER_TEMP/planner-before/candidate-evidence" --compact "$RUNNER_TEMP/planner-after/candidate-evidence" --out "$out/linked-planner.json" | tee "$out/linked-planner.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-compact-planner-cost-${{ github.sha }}
+          path: ${{ runner.temp }}/compact-planner-cost
+          retention-days: 7
+          if-no-files-found: error
+
+  current-z-plateau-combined:
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-z-direction-barriers-6a907123aefeab0f71405f5321a3fba9ff111379
+          run-id: 46172742678
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/z-plateau-combined-input
+      - name: Bypass general direct ramp on prepared plateau
+        shell: bash
+        run: |
+          set -euo pipefail
+          input="$RUNNER_TEMP/z-plateau-combined-input"
+          source="$RUNNER_TEMP/z-plateau-combined-source"
+          out="$RUNNER_TEMP/z-plateau-combined"
+          p0=c31b4d391cc4d2b9cca9ab3f8e236bed805716d9
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          sha256sum tools/task0032/current-prepared-plateau.py tools/task0032/current-direct-energy-linked.py research/task0032-step-output/linked_timer1.py > "$out/tool-sha256.txt"
+          echo "713caf637aa216ba70017244f4671e913086f98f4f42793f431d73665544d7ab  $input/z-direction-barriers.diff" | sha256sum -c
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$source" "$p0"
+          git -C "$source" apply --index "$input/z-direction-barriers.diff"
+          test "$(git -C "$source" write-tree)" = f4908b13d7a5af5ab0164cca292dfa6df703aff8
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Reconstruct qualified Z direction candidate"
+          python3 tools/task0032/current-prepared-plateau.py --root "$source" | tee "$out/compact.log"
+          python3 tools/task0032/current-direct-energy-replay.py --source "$source/Repetier" --candidate "$source/Repetier" --out "$out/replay" | tee "$out/replay.log"
+          git -C "$source" add Repetier
+          git -C "$source" diff --cached --check
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Bypass general direct ramp on prepared plateau"
+          git -C "$source" rev-parse HEAD > "$out/local-candidate-sha.txt"
+          git -C "$source" rev-parse 'HEAD^{tree}' > "$out/local-candidate-tree.txt"
+          git -C "$source" diff --binary "$p0" HEAD > "$out/z-plateau-combined.diff"
+          (cd "$out"; sha256sum z-plateau-combined.diff > z-plateau-combined.diff.sha256)
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Canonical host and four AVR recovery links
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/z-plateau-combined"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          cd "$RUNNER_TEMP/z-plateau-combined-source"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" | tee "$out/canonical.log"
+      - name: Measure compact ABI, actual spacing and UART
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/z-plateau-combined"
+          python3 tools/task0032/current-direct-energy-linked.py --optimized --extended --phase-anchor --compact --z-dir-owner --evidence "$out/candidate-evidence" --out "$out/linked-energy.json" | tee "$out/linked-energy.log"
+          python3 tools/task0032/current-transport-linked.py --evidence "$out/candidate-evidence" --out "$out/linked-transport.json" | tee "$out/linked-transport.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-z-plateau-combined-${{ github.sha }}
+          path: ${{ runner.temp }}/z-plateau-combined
+          retention-days: 7
+          if-no-files-found: error
+
+  current-queue-pack-cost:
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-compact-printline-4b1bc9848033ee5fd9fb82368736c0b3dcf5adfe
+          run-id: 46172073412
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/queue-pack-input
+      - name: Actual linked queue pack costs and electrical edge spacing
+        shell: bash
+        run: |
+          set -euo pipefail
+          input="$RUNNER_TEMP/queue-pack-input"
+          out="$RUNNER_TEMP/queue-pack-cost"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          sha256sum tools/task0032/current-queue-pack-linked.py tools/task0032/current-direct-energy-linked.py research/task0032-step-output/linked_timer1.py > "$out/tool-sha256.txt"
+          test "$(cat "$input/local-candidate-sha.txt")" = f0870fb62d598c2508f482b544bad63cb7cd470f
+          python3 tools/task0032/current-queue-pack-linked.py --evidence "$input/candidate-evidence" --out "$out/linked-queue-packs.json" | tee "$out/linked-queue-packs.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-queue-pack-cost-${{ github.sha }}
+          path: ${{ runner.temp }}/queue-pack-cost
+          retention-days: 7
+          if-no-files-found: error
+
+  current-combined-queue-pack-cost:
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-z-plateau-combined-b9967118620356f4f8e9648b60225fc9a2692462
+          run-id: 46173302272
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/combined-queue-pack-input
+      - name: Actual linked queue pack costs and electrical edge spacing
+        shell: bash
+        run: |
+          set -euo pipefail
+          input="$RUNNER_TEMP/combined-queue-pack-input"
+          out="$RUNNER_TEMP/combined-queue-pack-cost"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          sha256sum tools/task0032/current-queue-pack-linked.py tools/task0032/current-direct-energy-linked.py research/task0032-step-output/linked_timer1.py > "$out/tool-sha256.txt"
+          test "$(cat "$input/local-candidate-sha.txt")" = f738d095554351e5f257db48dcf10c2eac4199ac
+          test "$(cat "$input/local-candidate-tree.txt")" = 7c1f398bb77c156f91cfd688c04e434cd3aa2ad0
+          echo "ce1a650a49f9e8db7a8bc58edbacb4866623900bc2aa403a51f202fe075977c3  $input/z-plateau-combined.diff" | sha256sum -c
+          python3 tools/task0032/current-queue-pack-linked.py --extended --evidence "$input/candidate-evidence" --out "$out/linked-queue-packs.json" | tee "$out/linked-queue-packs.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-combined-queue-pack-cost-${{ github.sha }}
+          path: ${{ runner.temp }}/combined-queue-pack-cost
+          retention-days: 7
+          if-no-files-found: error
+
+  current-compare-phase-clock:
+    if: github.head_ref == 'task/Task0032-resend-preflight' || (github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Replay CTC phase accounting against independent elapsed time
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/compare-phase-clock"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          sha256sum tools/task0032/compare-phase-clock{.h,-replay.cpp} > "$out/tool-sha256.txt"
+          g++ -std=c++11 -O2 -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=all tools/task0032/compare-phase-clock-replay.cpp -o "$out/replay"
+          "$out/replay" | tee "$out/replay.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-compare-phase-clock-${{ github.sha }}
+          path: ${{ runner.temp }}/compare-phase-clock
+          retention-days: 7
+          if-no-files-found: error
+
+  current-z-compare-admission:
+    if: github.head_ref == 'task/Task0032-resend-preflight'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-z-plateau-combined-b9967118620356f4f8e9648b60225fc9a2692462
+          run-id: 46173302272
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/z-compare-input
+      - name: Prepare physical Z compare-phase admission candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          input="$RUNNER_TEMP/z-compare-input"
+          source="$RUNNER_TEMP/z-compare-source"
+          out="$RUNNER_TEMP/z-compare-admission"
+          p0=c31b4d391cc4d2b9cca9ab3f8e236bed805716d9
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          sha256sum tools/task0032/{compare-phase-clock.h,compare-phase-clock-replay.cpp,current-z-compare-admission.py,current-z-compare-linked.py,current-queue-pack-linked.py,current-direct-energy-linked.py} research/task0032-step-output/linked_timer1.py > "$out/tool-sha256.txt"
+          test "$(cat "$input/local-candidate-sha.txt")" = f738d095554351e5f257db48dcf10c2eac4199ac
+          echo "ce1a650a49f9e8db7a8bc58edbacb4866623900bc2aa403a51f202fe075977c3  $input/z-plateau-combined.diff" | sha256sum -c
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$source" "$p0"
+          git -C "$source" apply --index "$input/z-plateau-combined.diff"
+          test "$(git -C "$source" write-tree)" = 7c1f398bb77c156f91cfd688c04e434cd3aa2ad0
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Reconstruct qualified combined Z candidate"
+          python3 tools/task0032/current-z-compare-admission.py --root "$source" | tee "$out/prepare.log"
+          python3 tools/task0032/current-direct-energy-replay.py --source "$source/Repetier" --candidate "$source/Repetier" --out "$out/replay" | tee "$out/replay.log"
+          git -C "$source" add Repetier
+          git -C "$source" diff --cached --check
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Shared physical Z compare-phase timing floor"
+          git -C "$source" rev-parse HEAD > "$out/local-candidate-sha.txt"
+          git -C "$source" rev-parse 'HEAD^{tree}' > "$out/local-candidate-tree.txt"
+          git -C "$source" diff --binary "$p0" HEAD > "$out/z-compare-admission.diff"
+          (cd "$out"; sha256sum z-compare-admission.diff > z-compare-admission.diff.sha256)
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Canonical host and four AVR recovery links
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/z-compare-admission"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          cd "$RUNNER_TEMP/z-compare-source"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" | tee "$out/canonical.log"
+      - name: Verify actual Z spacing, direct ramp and UART on all linked images
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/z-compare-admission"
+          python3 tools/task0032/current-direct-energy-linked.py --optimized --extended --phase-anchor --compact --z-dir-owner --evidence "$out/candidate-evidence" --out "$out/linked-energy.json" | tee "$out/linked-energy.log"
+          python3 tools/task0032/current-transport-linked.py --evidence "$out/candidate-evidence" --out "$out/linked-transport.json" | tee "$out/linked-transport.log"
+          python3 tools/task0032/current-queue-pack-linked.py --extended --z-admission --evidence "$out/candidate-evidence" --out "$out/linked-queue-packs.json" | tee "$out/linked-queue-packs.log"
+          python3 tools/task0032/current-z-compare-linked.py --evidence "$out/candidate-evidence" --out "$out/linked-z-chain.json" | tee "$out/linked-z-chain.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-z-compare-admission-${{ github.sha }}
+          path: ${{ runner.temp }}/z-compare-admission
           retention-days: 7
           if-no-files-found: error
