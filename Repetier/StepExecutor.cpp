@@ -446,10 +446,8 @@ long StepExecutor::performMove(PrintLine* move) {
     fast8_t max_loops = guarded ? 1 : stepsPerTimerCall;
     if (move->stepsRemaining < max_loops)
         max_loops = move->stepsRemaining;
-    HAL::forbidInterrupts();
-
     for (fast8_t loop = 0; loop < max_loops; loop++) {
-
+        HAL::forbidInterrupts();
 
         if (move->isEMove()) {
             HAL::allowInterrupts();
@@ -560,8 +558,15 @@ long StepExecutor::performMove(PrintLine* move) {
             Extruder::unstep();
 
         Printer::endXYZSteps();
-    }                       // for loop
-    HAL::allowInterrupts(); // Allow interrupts for other types, timer1 is still disabled
+
+        // All base STEP outputs and their position accounting are settled.
+        // Timer1's own compare stays masked, but other pending IRQs must
+        // get a service opportunity between packed pulses. AVR executes
+        // one instruction after SEI before admitting a pending interrupt;
+        // the explicit NOP makes that opportunity independent of LTO.
+        HAL::allowInterrupts();
+        asm volatile("nop" ::: "memory");
+    }
 
     const speed_t v = nextStepSpeed(*move, stepClocks[forQueue], max_loops, stepIntervalTicks);
     updateAdvanceSteps(*move, v);

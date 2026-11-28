@@ -21,6 +21,8 @@ bool interruptsEnabled = true, high[3] = {}, positive[3] = {};
 bool closed[3] = {}, forceMin[3] = {};
 int32_t physical[3] = {};
 unsigned pulses = 0;
+unsigned completedPulseSlots=0, openPulseBoundaries=0;
+bool pulseBoundaryPending=false;
 bool scanRunning = false, queueOccupied = false, driverEnabled = true;
 int scanCancelAt = -1, scanThermalAt = -1, scanDriverAt = -1, scanReferenceAt = -1;
 unsigned scanTicks = 0;
@@ -62,8 +64,15 @@ void WRITE(int pin, bool value) {
     }
 }
 namespace HAL {
-void allowInterrupts() { interruptsEnabled = true; }
-void forbidInterrupts() { interruptsEnabled = false; }
+void allowInterrupts() {
+    if(pulseBoundaryPending) {
+        assert(!high[0]&&!high[1]&&!high[2]);
+        pulseBoundaryPending=false;
+        ++openPulseBoundaries;
+    }
+    interruptsEnabled = true;
+}
+void forbidInterrupts() { assert(!pulseBoundaryPending); interruptsEnabled = false; }
 void delayMicroseconds(int) { assert(false); }
 uint32_t timeInMilliseconds() { return 0; }
 uint32_t CPUDivU2(uint16_t v) { assert(v && interruptsEnabled); return 16000000UL / v; }
@@ -124,7 +133,13 @@ bool getXDirectionIsPos() { return positive[X_AXIS]; }
 bool getYDirectionIsPos() { return positive[Y_AXIS]; }
 void startXStep(int8_t d) { pulse(X_AXIS); xyMotion.recordMotorStep(X_AXIS,d); }
 void startYStep(int8_t d) { pulse(Y_AXIS); xyMotion.recordMotorStep(Y_AXIS,d); }
-void endXYZSteps() { for (auto& h : high) h = false; }
+void endXYZSteps() {
+    assert(!pulseBoundaryPending);
+    for (auto& h : high) h = false;
+    assert(!interruptsEnabled);
+    pulseBoundaryPending=true;
+    ++completedPulseSlots;
+}
 void stopDirectAxis(uint8_t axis) {
     if (axis < Z_AXIS) xyMotion.stopDirect(axis);
     else if (axis == Z_AXIS) zMotion.stopDirectMove();
@@ -222,7 +237,8 @@ void reset(uint8_t a, int32_t origin) {
     scanCancelAt=scanThermalAt=scanDriverAt=scanReferenceAt=-1;scanTicks=0;
     Calibration::scanSession.reset();
     z.setScanInProgress(false);
-    pulses = 0;
+    pulses = completedPulseSlots = openPulseBoundaries = 0;
+    pulseBoundaryPending=false;
 }
 unsigned run(uint8_t axis, int32_t distance, GuardedStop guard, int cancelAt=-1, int reason=0) {
     auto& m = PrintLine::direct;
@@ -240,6 +256,7 @@ unsigned run(uint8_t axis, int32_t distance, GuardedStop guard, int cancelAt=-1,
     else Printer::xyMotion.requestDirect(axis,distance);
 
     const unsigned before = pulses;
+    const bool guarded=guard!=GuardedStop::Normal;
     const int32_t origin = motor(axis), oldLedger = ledger(axis).steps(), oldNominal = nominal(axis);
     StepExecutor::stepsPerTimerCall = 4;
     for (unsigned tick=0; PrintLine::directMoveActive(); ++tick) {
@@ -250,13 +267,15 @@ unsigned run(uint8_t axis, int32_t distance, GuardedStop guard, int cancelAt=-1,
             if (reason == 2) Printer::homed = false;
         }
         const unsigned previous = pulses;
+        const unsigned group=StepExecutor::stepsPerInterrupt();
         { InterruptProtectedBlock lock; StepExecutor::performDirectMove(); }
-        assert(pulses-previous <= 1);
+        assert(pulses-previous <= (guarded?1:group));
+        assert(!pulseBoundaryPending && completedPulseSlots==openPulseBoundaries);
         assert(!high[0] && !high[1] && !high[2]);
         assert(motor(axis) == physical[axis]);
         assert(nominal(axis) == oldNominal);
         assert(ledger(axis).steps() - oldLedger == motor(axis) - origin);
-        assert(StepExecutor::stepsPerInterrupt() == 1);
+        if(guarded)assert(StepExecutor::stepsPerInterrupt() == 1);
     }
     assert(ledger(axis).steps() == ledger(axis).target());
     return pulses-before;
@@ -341,6 +360,11 @@ void scanReplay() {
 }
 int main() {
     scanReplay();
+    // Normal direct movement retains the legacy packing count; each
+    // completed pulse slot opens the non-Timer1 IRQ boundary.
+    reset(Z_AXIS,100);
+    assert(run(Z_AXIS,20,GuardedStop::Normal)==20);
+    assert(completedPulseSlots==20&&openPulseBoundaries==20);
     for (uint8_t axis=0; axis<=Z_AXIS; ++axis) {
         reset(axis,80);
         assert(run(axis,-80,GuardedStop::Closed)==80 && matched() && motor(axis)==0);
