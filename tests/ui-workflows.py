@@ -214,6 +214,8 @@ void storePreheatProfiles(); void storeManualZOffset();
 }
 using EepromZones::Patch;
 using EepromZones::Field;
+using EepromZones::Preheat;
+using EepromZones::blockBit;
 // Stub only the durable transport; actual UI/runtime owners are extracted.
 // Checked storage, metadata and power cuts are separately exercised.
 static bool persist(Patch p) {
