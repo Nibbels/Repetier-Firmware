@@ -373,7 +373,8 @@ private:
     bool normalCharacters_ = false;
     bool statusIsTemplate_ = false;
     char displayCache_[UI_ROWS][MAX_COLS + 1];
-    char statusMsg[MAX_COLS + 1];
+    // Both status setters clip at the physical width; only printCols scrolls.
+    char statusMsg[UI_COLS + 1];
     const void* messageLine1;
     const void* messageLine2;
     const void* messageLine3;
