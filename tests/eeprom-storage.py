@@ -51,7 +51,7 @@ def main():
         (work / "hal-eeprom.inc").write_text(setters, encoding="utf-8")
         micro = ui[ui.index("    case UI_ACTION_MICROSTEPS_XY:"):ui.index("\n    }\n}\n\nvoid UIDisplay::changeMotionSetting")]
         (work / "microstep-ui.inc").write_text(micro, encoding="utf-8")
-        persist = source[source.index("void EEPROM::storeMicrostepConfiguration("):source.index("void EEPROM::storeManualZOffset(")]
+        persist = section("void EEPROM::storeMicrostepConfiguration(", "void EEPROM::storeCaseLight(")
         (work / "microstep-persist.inc").write_text(persist, encoding="utf-8")
         for tools in (1, 2):
             exe = work / "write-paths"

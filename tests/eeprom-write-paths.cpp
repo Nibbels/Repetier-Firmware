@@ -19,7 +19,8 @@ static bool queued = false, direct = false, scanning = false, script = false, dr
 static unsigned drains = 0, reports = 0;
 static void reportJerk() { assert(!masked && driveDisabled && panelExcluded); ++reports; }
 static std::array<uint8_t, 4096> image{};
-static unsigned writes = 0, reads = 0, checksums = 0;
+static unsigned writes = 0, reads = 0, saves = 0, matrixInvalidations = 0;
+static uint32_t savedMask = 0;
 static size_t address(const void* ptr) { return reinterpret_cast<uintptr_t>(ptr); }
 static void get(void* dest, const void* src, size_t n) {
     assert(!masked && address(src)+n <= image.size());
@@ -84,8 +85,12 @@ bool waitForMotion(MotionWait,PauseWait){assert(!masked && panelExcluded); ++dra
 }
 static void invalidateBedMatrixForReload(){assert(!masked && driveDisabled);}
 #define INCREMENT_MIN_MAX(a, steps, lo, hi) a = std::min<int>(hi,std::max<int>(lo,(a + increment * steps)))
-int EEPROM::getExtruderOffset(uint8_t i) { assert(i<NUM_EXTRUDER); return EEPROM_EXTRUDER_OFFSET + i*EEPROM_EXTRUDER_LENGTH; }
-void EEPROM::updateChecksum() { assert(!masked); ++checksums; }
+#include "EepromZoneLayout.h"
+using namespace EepromZones;
+// Exercise actual runtime's selection of durable blocks. LiveSettings
+// payload encoding and checked storage are covered separately on all boards.
+static bool invalidateMatrices(){assert(!masked && driveDisabled && panelExcluded);++matrixInvalidations;return true;}
+static bool saveLive(uint32_t mask){assert(!masked && driveDisabled && panelExcluded);++saves;savedMask=mask;return true;}
 #include "microstep-persist.inc"
 struct UIDisplay {
     struct ScopedActionExclusion {
@@ -101,7 +106,7 @@ struct UIDisplay {
 static UIDisplay display;
 static void edit(int action, int8_t increment){display.edit(action,increment);}
 static void setup() {
-    image.fill(0xff); writes=reads=checksums=0;
+    image.fill(0xff); writes=reads=saves=matrixInvalidations=0; savedMask=0;
     for (auto& m:Drv8711::modes) m=5;
     for (auto& s:Printer::steps) s=100;
     for (uint8_t i=0;i<NUM_EXTRUDER;++i) extruder.at(i)={i,100.0f};
@@ -122,12 +127,9 @@ int main() {
     HAL::eprSetFloat(520,2.0f); assert(writes==2);
     setup();
     edit(UI_ACTION_MICROSTEPS_XY,1);
-    assert(!masked && checksums==1 && Drv8711::modes[0]==6 && Drv8711::modes[1]==6);
+    assert(!masked && saves==1 && matrixInvalidations==1 && savedMask==blockBit(Geometry) && Drv8711::modes[0]==6 && Drv8711::modes[1]==6);
     assert(Printer::steps[0]==200 && Printer::steps[1]==200);
-    assert(HAL::eprGetFloat(EPR_XAXIS_STEPS_PER_MM)==200);
-    assert(HAL::eprGetFloat(EPR_YAXIS_STEPS_PER_MM)==200);
-    assert(HAL::eprGetByte(EPR_RF_MICRO_STEPS_USED)==0xAB);
-    writes=0; edit(UI_ACTION_MICROSTEPS_XY,1); assert(writes==0 && checksums==1);
+    edit(UI_ACTION_MICROSTEPS_XY,1); assert(saves==1 && matrixInvalidations==1);
     // Mismatched pair: secondary already at target, primary still changes.
     Drv8711::modes[0]=4; Drv8711::modes[1]=5; Printer::steps[0]=100; Printer::steps[1]=200;
     edit(UI_ACTION_MICROSTEPS_XY,1);
@@ -136,29 +138,30 @@ int main() {
     // Z coupled steps, jog increment, matrix invalidation and IRQ-enabled save.
     edit(UI_ACTION_MICROSTEPS_Z,-1);
     assert(Printer::steps[2]==50 && Printer::manualMotion.z==50);
-    assert(HAL::eprGetFloat(EPR_ZAXIS_STEPS_PER_MM)==50 && HAL::eprGetInt16(EPR_RF_MOD_Z_STEP_SIZE)==50);
+    assert(saves==3 && matrixInvalidations==3 && savedMask==blockBit(Geometry));
     // E1 is a physical driver on one-tool configurations, not an Extruder object.
     edit(UI_ACTION_MICROSTEPS_E,2);
     assert(Drv8711::modes[3]==7 && Drv8711::modes[4]==7);
     for(uint8_t i=0;i<NUM_EXTRUDER;++i) {
         assert(extruder.at(i).stepsPerMM==400);
-        assert(HAL::eprGetFloat(EEPROM::getExtruderOffset(i)+EPR_EXTRUDER_STEPS_PER_MM)==400);
     }
-    if(NUM_EXTRUDER==1) assert(HAL::eprGetInt32(EEPROM_EXTRUDER_OFFSET+EEPROM_EXTRUDER_LENGTH)==-1);
-    unsigned before=checksums; writes=0;
+    // Even an absent E1 tool has a physical DRV channel and persistent mode.
+    assert(saves==4 && matrixInvalidations==3 && savedMask==(blockBit(Extruder0Motion)|blockBit(Extruder1Motion)));
+    unsigned before=saves; writes=0;
     Printer::printJob.busy=true; edit(UI_ACTION_MICROSTEPS_E,-1);
-    assert(writes==0 && checksums==before);
+    assert(writes==0 && saves==before);
     Printer::printJob.busy=false; Printer::pause.allowed=false; edit(UI_ACTION_MICROSTEPS_E,-1);
-    assert(writes==0 && checksums==before);
+    assert(writes==0 && saves==before);
     // Exercise every denied owner, and an unsuccessful drain. Neither
     // driver programming nor a blocking report may run in those cases.
     for (bool* denied : {&queued,&direct,&scanning,&script,&Printer::blockAll}) {
         setup(); *denied=true; edit(UI_ACTION_MICROSTEPS_XY,1);
-        assert(!masked && !panelExcluded && !driveDisabled && !drains && !reports && !writes && !checksums);
+        assert(!masked && !panelExcluded && !driveDisabled && !drains && !reports && !writes && !saves);
     }
     setup();drainOk=false;edit(UI_ACTION_MICROSTEPS_XY,1);
     assert(drains==1 && !driveDisabled && !reports && !writes && !panelExcluded);
     setup();edit(UI_ACTION_MICROSTEPS_XY,1);edit(UI_ACTION_MICROSTEPS_E,1);
     assert(reports==2 && drains==2 && !masked && !panelExcluded);
-    printf("EEPROM byte updates / microstep IRQ boundary, %d tool(s): PASS\n",NUM_EXTRUDER);
+    assert(saves==2 && matrixInvalidations==1 && savedMask==(blockBit(Extruder0Motion)|blockBit(Extruder1Motion)));
+    printf("EEPROM byte updates / new-schema microstep IRQ boundary, %d tool(s): PASS\n",NUM_EXTRUDER);
 }
