@@ -782,11 +782,12 @@ jobs:
           p0=c31b4d391cc4d2b9cca9ab3f8e236bed805716d9
           git fetch --no-tags --depth=1 origin "$p0"
           git worktree add --detach "$RUNNER_TEMP/current-resend-p0" "$p0"
-          sha256sum tools/task0032/{current-resend-preflight,current-resend-envelope,current-resend-receiver-replay,current-transport-receiver-replay,resend-ring-preflight,tx-ack-replay}.py tools/task0032/resend-policy.h tools/task0033/loss-replay.py > "$out/source-sha256.txt"
+          sha256sum tools/task0032/{current-resend-preflight,current-resend-envelope,current-resend-receiver-replay,current-resend-canonical-replay,current-transport-linked,current-transport-receiver-replay,resend-ring-preflight,tx-ack-replay}.py tools/task0032/resend-policy.h tools/task0033/loss-replay.py > "$out/source-sha256.txt"
           python3 tools/task0032/current-resend-preflight.py --source "$RUNNER_TEMP/current-resend-p0" --combined "$RUNNER_TEMP/combined-input/combined.diff" --stage1 "$RUNNER_TEMP/terminal-input" --out "$out"
           python3 tools/task0032/current-resend-receiver-replay.py --source "$RUNNER_TEMP/current-resend-p0" --out "$out/receiver" | tee "$out/replay.log"
+          python3 tools/task0032/current-resend-canonical-replay.py --source "$RUNNER_TEMP/current-resend-p0" --fixture "$out/receiver" --out "$out/canonical-serial" --install-fixtures | tee "$out/canonical-serial.log"
       - uses: arduino/setup-arduino-cli@v2
-      - name: Link four recovery images with bounded receiver
+      - name: Run full canonical host and four recovery image checks with bounded receiver
         shell: bash
         run: |
           set -euo pipefail
@@ -799,7 +800,13 @@ jobs:
           git add Repetier tests
           git -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Disposable combined Drive and bounded resend receiver"
           git rev-parse HEAD > "$out/local-candidate-sha.txt"
-          python3 tools/task0003-baseline.py "$out/candidate-evidence" --avr-only | tee "$out/canonical.log"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" | tee "$out/canonical.log"
+      - name: Analyze linked UART paths and bounded poll cost
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-current-resend"
+          python3 tools/task0032/current-transport-linked.py --evidence "$out/candidate-evidence" --out "$out/linked-transport.json" | tee "$out/linked-transport.log"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
