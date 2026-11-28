@@ -109,8 +109,6 @@ public:
         const int8_t direction_;
     };
 
-    void stepHomeCheck(uint8_t delayMultiplier);
-
 private:
     enum class Step : uint8_t { Pulse, Suppressed, Stop };
 

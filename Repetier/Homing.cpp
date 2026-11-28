@@ -42,223 +42,52 @@ bool Printer::anyEndstop(uint8_t axis) {
     return (bool)(endstop > 1); // endstop muss sauber gedrückt sein.
 }
 
-void Printer::changeAxisDirection(uint8_t axis, int8_t direction) {
-    switch (axis) {
-    case X_AXIS: {
-        Printer::setXDirection((direction > 0 ? true : false));
-        break;
-    }
-    case Y_AXIS: {
-        Printer::setYDirection((direction > 0 ? true : false));
-        break;
-    }
-    case Z_AXIS: {
-        ZMotion::setDirection(direction > 0);
-        break;
-    }
-    }
-}
-
-void Printer::stepAxisStep(uint8_t axis, uint8_t slower) {
-    if (axis == Z_AXIS) {
-        zMotion.stepHomeCheck(slower);
-        return;
-    }
-    HAL::delayMicroseconds(XYZ_STEPPER_HIGH_DELAY * slower);
-    if (axis == X_AXIS)
-        startXStep();
-    else if (axis == Y_AXIS)
-        startYStep();
-    HAL::delayMicroseconds(XYZ_STEPPER_LOW_DELAY * slower);
-    if (axis == X_AXIS)
-        endXStep();
-    else if (axis == Y_AXIS)
-        endYStep();
-}
-
-__attribute__((noinline)) int8_t Printer::checkHome(int8_t axis) //X_AXIS 0, Y_AXIS 1, Z_AXIS 2
-{
-    // Direct diagnostic steps must not admit another panel operation.
+__attribute__((noinline)) int8_t Printer::checkHome(int8_t axis) {
     UIDisplay::ScopedActionExclusion panelExclusion(uid);
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-    if(printJob.emergencyLocked())return -1;
-    // The test emits STEP directly in foreground, outside Timer1.
-    // Every service visit can latch an irreversible thermal stop.
-    const auto serviceCheckHome=[] {
-        Commands::checkForPeriodicalActions(Calibrating);
-        return !Printer::printJob.emergencyLocked();
-    };
-#endif
-    // Do not allow Z jet because we have to check compensation behaviour
+    if (axis < X_AXIS || axis > Z_AXIS || Printer::blockAll ||
+        Printer::printJob.commandsBlocked() || !Printer::isAxisHomed(axis) ||
+        Printer::anyEndstop(axis))
+        return -1;
+
+    // Preserve the historical nominal 5 kstep/s and 250 step/s requests,
+    // but let the common planner enforce the configured speed and ramp.
+    constexpr uint16_t fastRate = 1000000UL / (XYZ_STEPPER_HIGH_DELAY + XYZ_STEPPER_LOW_DELAY);
+    constexpr uint16_t slowRate = fastRate / 20;
+    static_assert(slowRate > 0, "Invalid homing test speed");
+    const int32_t origin = PrintLine::guardedAxisPosition(axis);
+    const int32_t travel = Printer::softwareEndstopSteps(axis);
+    const float stepsPerMillimeter = Printer::stepsPerMm(axis);
+    // Keep every absolute target representable, including on legacy
+    // configurations, before converting the one-millimetre search cap.
+    if (travel <= 0 || travel > INT32_MAX/4 || origin < -travel || origin > travel ||
+        !(stepsPerMillimeter >= 1 && stepsPerMillimeter <= travel))
+        return -1;
+    const int32_t oneMM = static_cast<int32_t>(stepsPerMillimeter);
+
     Com::printFLN(PSTR("checkHome: start axis"), axis);
-    //if(axis == Z_AXIS) return -1; //noch verboten, weil solange das läuft der emergency-Stop nicht funktioniert. funktion wird evtl. wie HBS oder ZOS geteilt.
+    Com::printFLN(PSTR("Current position steps="), origin);
+    const auto first = PrintLine::runGuardedMoveTo(axis, origin - travel - travel/10,
+                                                    fastRate, GuardedStop::Closed);
+    if (first.status != GuardedMoveStatus::SwitchReached)
+        return -1;
+    Com::printFLN(PSTR("Return steps="), first.positionSteps - origin);
 
-    if (axis > Z_AXIS)
+    const auto release = PrintLine::runGuardedMoveTo(axis, first.positionSteps + oneMM,
+                                                      slowRate, GuardedStop::Open);
+    if (release.status != GuardedMoveStatus::SwitchReached)
         return -1;
 
-    // Do not allow checkHome without Home
-    if (!Printer::isAxisHomed(axis))
-        return -1;
-    Com::printFLN(PSTR("ishomed!"));
-
-    // Do not allow checkHome when some endstop is already reached
-    if (Printer::anyEndstop(axis))
-        return -1; // Knopf gedrückt = kein sinnvoller rückfahrweg bzw. nicht vertrauenswürdige coordinaten.
-
-    // Get the right homeDirection for moving -> 0 is none.
-    char nHomeDir = Printer::anyHomeDir(axis);
-    Com::printFLN(PSTR("nHomeDir="), nHomeDir);
-    if (!nHomeDir)
+    const auto retest = PrintLine::runGuardedMoveTo(axis, release.positionSteps - oneMM,
+                                                     slowRate, GuardedStop::Closed);
+    if (retest.status != GuardedMoveStatus::SwitchReached)
         return -1;
 
-    // Set stepper direction as homing direction
-    Printer::changeAxisDirection(axis, nHomeDir);
-
-    // Previous motion state:
-    long oldCurrentSteps;
-    if (axis == Z_AXIS)
-        oldCurrentSteps = zMotion.motorSteps();
-    else if (axis == Y_AXIS)
-        oldCurrentSteps = Printer::xyMotion.motorSteps(Y_AXIS);
-    else
-        oldCurrentSteps = Printer::xyMotion.motorSteps(X_AXIS);
-    // Write previous motion state to log
-    Com::printFLN(PSTR("Current position steps="), oldCurrentSteps);
-
-    // Drive axis towards endstop:
-    long returnSteps = 0;
-    bool finish = false;
-    int mmLoops = Printer::stepsPerMm(axis); // Fahre in mm-Blöcken.
-
-    while (1) {
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-        if(!serviceCheckHome())return -1;
-#else
-        Commands::checkForPeriodicalActions(Calibrating);
-#endif
-
-        for (int i = 0; i < mmLoops; i++) {
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-            // 16 fast pulses: nominal 3.2ms edge delays, plus overhead.
-            if(i && !(i & 15) && !serviceCheckHome())return -1;
-#endif
-            Printer::stepAxisStep(axis);
-            if (Printer::anyEndstop(axis)) {
-                finish = true;
-            } else {
-                returnSteps += nHomeDir;
-            }
-            // Verbot unendlich weiterzufahren, wenn endstop kaputt
-            if (abs(returnSteps) > abs(softwareEndstopSteps(axis)) * 110 / 100)
-                finish = true;
-
-            if (finish)
-                break;
-        }
-        if (finish)
-            break;
-    }
-
-    // Steps to log
-    Com::printFLN(PSTR("Return steps="), returnSteps);
-
-    Com::printFLN(PSTR("Recheck endstop:"));
-    // Check ob endstop da (oder defekt oder nicht erreicht: return)
-    if (!Printer::anyEndstop(axis))
-        return -1;
-
-    // Change stepper direction to drive against homing direction
-    Printer::changeAxisDirection(axis, -1 * nHomeDir);
-    // Ein paar steps zurück, bis schalter wieder losgelassen wurde:
-    finish = false; // Neue Abbruchbedingung
-    for (int i = 0; i < mmLoops; i++) {
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-        // At 20x slower, eight pulses already consume nominally 32ms.
-        if(!(i & 7) && !serviceCheckHome())return -1;
-#endif
-        Printer::stepAxisStep(axis, 20 /*20x langsamer*/);
-        // End if button is not pressed anymore.
-        if (!Printer::anyEndstop(axis)) {
-            finish = true;
-        } else {
-            returnSteps += -1 * nHomeDir;
-        }
-        if (finish)
-            break;
-    }
-
-    // Check ob endstop nach 1mm immernoch gedrückt:
-    if (Printer::anyEndstop(axis))
-        return -1;
-
-    // Merke schalter-aus-punkt für hysteresemessung:
-    long hysterese = returnSteps;
-
-    // Neu und langsamer in den Schalter fahren:
-    // Change stepper direction to drive against homing direction
-    Printer::changeAxisDirection(axis, nHomeDir);
-    finish = false; // Neue Abbruchbedingung
-    for (int i = 0; i < mmLoops; i++) {
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-        // At 20x slower, eight pulses already consume nominally 32ms.
-        if(!(i & 7) && !serviceCheckHome())return -1;
-#endif
-        Printer::stepAxisStep(axis, 20 /*20x langsamer*/);
-        // End if button is not pressed anymore.
-        if (Printer::anyEndstop(axis)) {
-            finish = true;
-        } else {
-            returnSteps += nHomeDir;
-        }
-        if (finish)
-            break;
-    }
-    // Check ob endstop nach 1mm immernoch nicht gedrückt:
-    if (!Printer::anyEndstop(axis))
-        return -1;
-
-    hysterese -= returnSteps;
-    Com::printFLN(PSTR("aus-ein-hysterese="), hysterese);
-
-    // Check ob steps verloren gehen:
-    long delta;
-    if (axis == Z_AXIS)
-        delta = zMotion.motorSteps();
-    else if (axis == Y_AXIS)
-        delta = Printer::xyMotion.motorSteps(Y_AXIS);
-    else
-        delta = Printer::xyMotion.motorSteps(X_AXIS);
-
-    Com::printFLN(PSTR("Steps delta="), delta);
-
-    // Fahre zurück an Startpunkt:
-    Printer::changeAxisDirection(axis, -1 * nHomeDir);
-
-    returnSteps = abs(returnSteps);
-    while (returnSteps > 0) {
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-        if(!serviceCheckHome())return -1;
-#else
-        Commands::checkForPeriodicalActions(Calibrating);
-#endif
-
-        if (returnSteps >= mmLoops) {
-            returnSteps -= mmLoops;
-        } else {
-            mmLoops = returnSteps;
-            returnSteps = 0;
-        }
-
-        for (int i = 0; i < mmLoops; i++) {
-#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
-            // 16 fast pulses: nominal 3.2ms edge delays, plus overhead.
-            if(i && !(i & 15) && !serviceCheckHome())return -1;
-#endif
-            Printer::stepAxisStep(axis);
-        }
-    }
-
-    return 1;
+    // Measurements from the actual executor's motor ledger, not inferred
+    // from requested distances. The return move uses the captured origin.
+    Com::printFLN(PSTR("aus-ein-hysterese="), release.positionSteps - retest.positionSteps);
+    Com::printFLN(PSTR("Steps delta="), retest.positionSteps - first.positionSteps);
+    const auto returned = PrintLine::runGuardedMoveTo(axis, origin, fastRate, GuardedStop::Distance);
+    return returned.status == GuardedMoveStatus::PositionReached ? 1 : -1;
 } // checkHome
 
 void Printer::homeXAxis() {

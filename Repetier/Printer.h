@@ -349,12 +349,12 @@ public:
         }
     } // setYDirection
 
-    static INLINE void startXStep(int8_t dir = (Printer::getXDirectionIsPos() ? 1 : -1)) {
+    static INLINE void startXStep(int8_t dir) {
         WRITE(X_STEP_PIN, HIGH);
         Printer::xyMotion.recordMotorStep(X_AXIS, dir);
     } // startXStep
 
-    static INLINE void startYStep(int8_t dir = (Printer::getYDirectionIsPos() ? 1 : -1)) {
+    static INLINE void startYStep(int8_t dir) {
         WRITE(Y_STEP_PIN, HIGH);
         Printer::xyMotion.recordMotorStep(Y_AXIS, dir);
     } // startYStep
@@ -422,8 +422,6 @@ public:
 
     static int8_t anyHomeDir(uint8_t axis);
     static bool anyEndstop(uint8_t axis);
-    static void changeAxisDirection(uint8_t axis, int8_t direction);
-    static void stepAxisStep(uint8_t axis, uint8_t slower = 1);
     static int8_t checkHome(int8_t axis); // M3028 homing repeatability test.
 
     static INLINE bool areAxisHomed() //X_AXIS && Y_AXIS && Z_AXIS

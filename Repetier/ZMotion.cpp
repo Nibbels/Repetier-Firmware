@@ -170,6 +170,3 @@ bool ZMotion::ScanMove::step() {
     return true;
 }
 
-void ZMotion::stepHomeCheck(uint8_t delayMultiplier) {
-    timedPulse(delayMultiplier);
-}

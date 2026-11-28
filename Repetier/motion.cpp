@@ -216,7 +216,8 @@ GuardedMoveResult PrintLine::runGuardedMoveTo(uint8_t axis, int32_t targetSteps,
     // Reject invalid or excessive requests without signed arithmetic overflow.
     const int64_t delta = int64_t(targetSteps) - origin;
     const int32_t travel = Printer::softwareEndstopSteps(axis);
-    if (travel <= 0 || delta > int64_t(travel) + travel/10 ||
+    if (travel <= 0 || delta > INT32_MAX || delta <= INT32_MIN ||
+        delta > int64_t(travel) + travel/10 ||
         delta < -(int64_t(travel) + travel/10) ||
         (stop == GuardedStop::Closed && delta >= 0) ||
         (stop == GuardedStop::Open && delta <= 0))

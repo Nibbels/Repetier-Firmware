@@ -315,7 +315,9 @@ long StepExecutor::performDirectMove() {
             // Do not inherit the previous move's packing or step clock.
             stepsPerTimerCall = 1;
             const speed_t start = direct.stepProfile.vStart ? direct.stepProfile.vStart : 1;
-            stepIntervalTicks = RMath::max(uint32_t(minimumStepIntervalTicks), HAL::CPUDivU2(start));
+            stepIntervalTicks = HAL::CPUDivU2(start);
+            if (stepIntervalTicks < minimumStepIntervalTicks)
+                stepIntervalTicks = minimumStepIntervalTicks;
         }
 
         updateAdvanceSteps(direct, direct.stepProfile.vStart);

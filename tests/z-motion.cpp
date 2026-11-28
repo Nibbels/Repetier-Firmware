@@ -339,11 +339,8 @@ void scanTravel() {
     assert(moveZ(4, true));
     assert(pulseCount == 4 && motorPosition == 104);
 
-    reset(10);
-    ZMotion::setDirection(false);
-    zMotion.stepHomeCheck(20);
-    assert(motorPosition == 9 && zMotion.motorSteps() == 9);
-    assert(zMotion.nominalSteps() == 10 && zMotion.scanSteps() == 0);
+    // M3028 no longer emits foreground pulses; its replacement is
+    // covered by thermal-emergency-home.py and guarded-drive replay.
 }
 }
 
