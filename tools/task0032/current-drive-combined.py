@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Compose independently qualified core and wake patches on a newer P0 pin.
 
-Reject context drift instead of silently overriding P0 code. Adapt the two
-old blocking-wake fixtures to the new contract, retaining the actual-source
+Reject context drift instead of silently overriding P0 code. Adapt the
+old blocking-wake and current homing fixtures to the new contract, retaining the actual-source
 pulse/guard and startup assertions. Other canonical replays remain unchanged.
 Only disposable detached checkout; never update a production branch.
 """
@@ -43,7 +43,7 @@ def adapt_tests(source):
     # Preserve all reference and cancellation assertions and use the real
     # readiness state instead of the obsolete enabledStepper mock.
     t=source/"tests/task0034-g28.py"
-    edit(t,'#include <initializer_list>','#include <initializer_list>\\n#include "MotorWake.h"\\nMotorWake motorWake;')
+    edit(t,'#include <initializer_list>','#include <initializer_list>\n#include "MotorWake.h"\nMotorWake motorWake;')
     edit(t,"bool blockAll, enabledStepper[3], movementLocked;",
         "bool blockAll, movementLocked;")
     edit(t,"bool zStepperEnabled(){return enabledStepper[Z_AXIS];}",
@@ -51,7 +51,7 @@ def adapt_tests(source):
     edit(t,"if(f==DriverLost)enabledStepper[axis]=false;",
         "if(f==DriverLost)motorWake.beforeDisable(uint8_t(1U<<axis));")
     edit(t,"    for(int a=0;a<3;++a){",
-        "    motorWake.reset();\\n    motorWake.afterAsserted(7,0);\\n    motorWake.service(27);\\n    assert(motorWake.readyFor(7));\\n    for(int a=0;a<3;++a){")
+        "    motorWake.reset();\n    motorWake.afterAsserted(7,0);\n    motorWake.service(27);\n    assert(motorWake.readyFor(7));\n    for(int a=0;a<3;++a){")
     edit(t,"Printer::enabledStepper[a]=true;motor[a]=nominal[a]=100;",
         "motor[a]=nominal[a]=100;")
     edit(t,'"-DRF_EEPROM_ZONE_EXPERIMENT=1",f"-DNUM_EXTRUDER={count}",str(p),',
