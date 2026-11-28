@@ -6,6 +6,7 @@ Cycle measurements isolate the numeric token, not full parser throughput.
 Temporary firmware tree for existing serial regression; no production edits.
 """
 import argparse
+import difflib
 import hashlib
 import json
 import os
@@ -316,11 +317,19 @@ def main():
         (root/"Repetier/GCodeInput.cpp").write_text(receiver[:i]+new+receiver[j:])
         extend_wire(root)
         run(["python3",root/"tests/serial-protocol.py"])
+        files=("Repetier/GCodeInput.cpp","tests/serial-protocol.cpp","tests/serial-protocol.py")
+        patch=[]
+        for name in files:
+            before=(source/name).read_text().splitlines(True)
+            after=(root/name).read_text().splitlines(True)
+            patch.extend(difflib.unified_diff(before,after,fromfile="a/"+name,tofile="b/"+name))
+        (out/"candidate.diff").write_text("".join(patch))
         result={"p0":P0,"receiver_sha256":hashlib.sha256(receiver.encode()).hexdigest(),
                 "candidate_sha256":hashlib.sha256(header.encode()).hexdigest(),
                 "avr_elf_sha256":hashlib.sha256(elf.read_bytes()).hexdigest(),
                 "host":host_log.strip(),"avr_value_checks":61+1280+8192+2048,
                 "errno_users":errno_users,"rows":rows,
+                "candidate_patch_sha256":hashlib.sha256((out/"candidate.diff").read_bytes()).hexdigest(),
                 "qualification":"actual AVR-libc return value comparison; isolated timing; canonical serial host regression; no integrated linked resource/IRQ proof"}
         (out/"decimal32-results.json").write_text(json.dumps(result,indent=2)+"\n")
 
