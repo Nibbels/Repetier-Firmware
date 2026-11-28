@@ -12,6 +12,9 @@ import subprocess
 RECOVERY = 0x20000
 BOOT_START = 0x3e000
 ENTRY_SIZE = 30
+# Serial-only parser after typed internal programs; GCC7 may specialize the
+# sole call site. Match the entire function name, never its local data.
+PARSER_FUNCTION = r"GCodeInput::parseAscii\(GCode&, char\*\)(?: \[clone \.constprop\.\d+\])?"
 
 
 def make_script(bin_dir, directory, fill_named_text=False, partitions=(0,), probe=False):
@@ -214,7 +217,7 @@ def proven_parser_tables(instructions):
     helper=[ins[1].hex() for ins in instructions if ins[4]=="__tablejump2__"]
     tables=[]
     for i,ins in enumerate(instructions):
-        if ins[4]!="GCodeInput::parseAscii(GCode&, char*, bool)" or ins[2]!="jmp" or "<__tablejump2__>" not in ins[3]: continue
+        if not re.fullmatch(PARSER_FUNCTION, ins[4]) or ins[2]!="jmp" or "<__tablejump2__>" not in ins[3]: continue
         seq=instructions[i-11:i+1]
         if len(seq)!=12 or any(x[4]!=ins[4] for x in seq):continue
         w=[word(x) for x in seq]
@@ -268,9 +271,9 @@ def verify_watchdog_instructions(dump, cookie_address, padding):
     early = next(i for i,ins in feeds if ins[4]=="heaterWatchdogEarlyInit")
     assert following(early,4)==["a895","88e1","80936000","10926000"]
     # Removing the debug watchdog command lets LTO inline the only
-    # startup enable into main. Still require exactly one enable site,
+    # startup enable into main or Printer::setup(). Still require exactly one enable site,
     # its actual timed register sequence and all three total WDR sites.
-    enables = [i for i,ins in feeds if ins[4]=="main" or re.fullmatch(r"HAL::startWatchdog\(\)(?: \[clone \.part\.\d+\])?",ins[4])]
+    enables = [i for i,ins in feeds if ins[4] in ("main", "Printer::setup()") or re.fullmatch(r"HAL::startWatchdog\(\)(?: \[clone \.part\.\d+\])?",ins[4])]
     assert len(enables)==1, feeds
     enable = enables[0]
     assert following(enable,4)==["a895","80936000","0fbe","90936000"]
@@ -307,9 +310,9 @@ def verify_image(directory):
     assert symbol("__vectors") == 0
     assert symbol("heaterWatchdogRecoveryEntry") == RECOVERY
     assert symbol("__rf_watchdog_recovery_link_guard") == RECOVERY
-    parser = re.search(r"^([0-9a-f]+) ([0-9a-f]+) [tT] GCodeInput::parseAscii\(GCode&, char\*, bool\)$", symbols, re.M)
-    assert parser, "Missing exact linked parser function"
-    parser_start, parser_size = (int(x,16) for x in parser.groups())
+    parsers = re.findall(r"^([0-9a-f]+) ([0-9a-f]+) [tT] ("+PARSER_FUNCTION+r")$", symbols, re.M)
+    assert len(parsers) == 1, ("Missing or ambiguous exact linked parser function", parsers)
+    parser_start, parser_size = (int(x,16) for x in parsers[0][:2])
     assert symbol("__rf_near_parser_start") <= parser_start < parser_start+parser_size <= symbol("__rf_near_parser_end") <= RECOVERY
     padding = RECOVERY-symbol("__rf_watchdog_padding_start")
     assert 0 <= padding < RECOVERY
