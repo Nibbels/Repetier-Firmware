@@ -25,7 +25,7 @@ enum {X_AXIS,Y_AXIS,Z_AXIS,E_AXIS,FOR_DIRECT=0,FOR_QUEUE=1};
 enum {DIRECT_IDLE,DIRECT_PREPARING,DIRECT_PREPARED,DIRECT_PREPARED_STOPPABLE,DIRECT_RUNNING,DIRECT_RUNNING_STOPPABLE};
 constexpr uint8_t FLAG_SCAN_PATH=8,FLAG_GUARDED_STOP_MASK=96;
 enum class QueueTask {None,Pause,PauseAndPark,EnableZCompensation,DisableZCompensation,EnableSenseOffset};
-static bool irq=false,terminal=false;
+static bool irq=false,terminal=false,commandsBlocked=false,homed=true;
 static uint32_t now;
 static unsigned asserts[5],directions,advances,pulses,finishes,allows,releases,retired;
 static uint8_t physical;
@@ -50,7 +50,8 @@ struct ExtrusionOutput {
 struct PrintPause { enum class Destination {InPlace,Park}; };
 struct Printer {
     static bool blockAll;
-    struct Job {bool emergencyLocked()const{return terminal;}};static Job printJob;
+    struct Job {bool emergencyLocked()const{return terminal;} bool commandsBlocked()const{return ::commandsBlocked||terminal;}};static Job printJob;
+    static bool isAxisHomed(uint8_t){return homed;}
     struct Pause {void request(PrintPause::Destination){assert(false);}};static Pause pause;
     static ExtrusionOutput extrusionOutput;
     static void unmarkAllSteppersDisabled(){assert(!irq && !blockAll && !terminal);}
@@ -146,7 +147,7 @@ uint8_t StepExecutor::stepsPerTimerCall=4;
 
 CASES=r'''
 static void reset(uint32_t t){
-    now=t;irq=false;terminal=Printer::blockAll=false;physical=0;
+    now=t;irq=false;terminal=Printer::blockAll=commandsBlocked=false;homed=true;physical=0;
     for(auto& n:asserts)n=0;
     directions=advances=pulses=finishes=allows=releases=retired=0;
     motorWake.reset();Extruder::current=&tools[0];
@@ -180,6 +181,21 @@ int main(){
         assert(!pulses && directions==1 && advances==1 && motorWake.readyFor(7));
         if(guard)assert(StepExecutor::stepsPerTimerCall==1);
         assert(StepExecutor::performDirectMove()==123 && pulses==1);
+        ++count;
+    }
+    // A canceled guarded request must not start a fresh motor, including
+    // when an already-asserted driver is still settling.
+    for(bool pending:{false,true})for(unsigned cause=0;cause<4;++cause){
+        reset(0);auto& d=PrintLine::direct;d.task=DIRECT_PREPARED;d.flags=32;
+        if(pending)assert(StepExecutor::performDirectMove()==2000);
+        if(cause==0)Printer::blockAll=true;
+        if(cause==1)commandsBlocked=true;
+        if(cause==2)homed=false;
+        if(cause==3)terminal=true;
+        const auto old=asserts[0];
+        assert(StepExecutor::performDirectMove()==1000 && d.task==DIRECT_IDLE);
+        assert(asserts[0]==old && !directions && !pulses && finishes==1);
+        assert(StepExecutor::stepsPerTimerCall==1);
         ++count;
     }
     // Queue activation may not freeze an executing slot or consume a path
