@@ -74,6 +74,7 @@ void set(Color color) {
 
 void serviceAlarm(uint32_t now) {
     // 512 ms each phase, wrap-safe. No delays or new scheduler state.
-    set((now & 512UL) ? Red : Black);
+    // Pass scalar channel values instead of selecting an addressable RGB constant.
+    set({uint8_t((now & 512UL) ? 255 : 0), 0, 0});
 }
 }
