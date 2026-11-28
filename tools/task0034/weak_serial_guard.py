@@ -1,11 +1,12 @@
 """Conservative zero-value tracking for optional weak Arduino serialEventRun.
 
-Track AVR ABI zero register r1 and callee-saved r16/r17, r28/r29.
-Branches remain unconstrained except a witnessed CP/CPC/BREQ or
-SBIW r28,0/BREQ on known zero operands. Unknown operations clear facts. Assumes ABI-
+Track AVR ABI zero register r1 and callee-saved r16/r17, r28/r29,
+and caller-clobbered r24/r25 (invalidated at calls). Branches remain
+unconstrained except witnessed CP/CPC/BREQ, SBIW r28,0/BREQ or
+OR r24,r25/BREQ on known zero operands. Unknown operations clear facts. Assumes ABI-
 conforming callees/interrupts and intact CPU state, as the frame walk does.
 """
-TRACK={1:1,16:2,17:4,28:8,29:16}
+TRACK={1:1,16:2,17:4,28:8,29:16,24:32,25:64}
 
 def zero_transfer(op,arg,mask,phase):
     a=arg.split(';')[0].strip();t=a.split(', ')
@@ -18,6 +19,7 @@ def zero_transfer(op,arg,mask,phase):
     if op=='sbiw' and t==['r28','0x00'] and mask&24==24:return mask,2
     if op=='cp' and t==['r16','r1'] and mask&3==3:return mask,1
     if op=='cpc' and t==['r17','r1'] and phase==1 and mask&5==5:return mask,2
+    if op=='or' and t==['r24','r25'] and mask&96==96:return mask,2
     if op=='ldi':setbit(t[0],int(t[1],0)==0)
     elif op in ('clr','eor') and (op=='clr' or t[0]==t[1]):setbit(t[0],True)
     elif op=='mov':setbit(t[0],known(t[1]))
@@ -30,7 +32,7 @@ def zero_transfer(op,arg,mask,phase):
         d=int(t[0][1:]);setbit(t[0],False);setbit('r'+str(d+1),False)
     elif op in ('call','rcall','icall','eicall'):
         # Preserve only facts already known for AVR GCC ABI registers.
-        pass
+        mask &= ~96
     elif op in ('adc','add','and','andi','asr','bld','com','dec','eor','inc','in','ld','ldd','lds','lsl','lsr','neg','or','ori','pop','ror','sbc','sbci','ser','sub','subi','swap','rol'):
         setbit(t[0],False)
     elif op in ('lpm','elpm'):
