@@ -186,7 +186,12 @@ def candidate(fw):
         "    static void checkAndPushCommand(GCode& command,const ResendEnvelope& evidence);")
     s=once(s,'#include "UsbSerial.h"','#include "UsbSerial.h"\n#include "ResendPolicy.h"\n#include "ResendEnvelope.h"')
     pending=ack["CANDIDATE"].split("void stagedAck()")[0]
-    s=once(s,"} // namespace\n",pending+STATE+"\n} // namespace\n")
+    # GCodeInput also has a later anonymous namespace for typed scripts.
+    # Insert only in the first receiver-state owner.
+    assert s.count("} // namespace\n")==2
+    i=s.index("} // namespace\n")
+    assert s.index("} serialReceive;")<i<s.index("uint8_t GCodeInput::computeBinarySize")
+    s=s[:i]+pending+STATE+"\n"+s[i:]
     # Keep physical loss terminal in every receiver entry, including
     # thermal promotion. The protocol-fatal latch joins the same guard.
     s=s.replace("UsbSerial::transportFailed()","GCodeInput::transportFailed()")
