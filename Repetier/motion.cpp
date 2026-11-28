@@ -225,8 +225,20 @@ GuardedMoveResult PrintLine::runGuardedMoveTo(uint8_t axis, int32_t targetSteps,
     if (!delta)
         return {GuardedMoveStatus::PositionReached, origin};
 
-    const float feedrate = stepsPerSecond * Printer::mmPerStep(axis);
-    if (!(feedrate > 0) || !isfinite(feedrate))
+    const float mmPerStep = Printer::mmPerStep(axis);
+    const float feedrate = stepsPerSecond * mmPerStep;
+    const float axisLimit = Printer::axisMaxFeedrate(axis);
+    if (!(feedrate > 0) || !isfinite(feedrate) ||
+        !(axisLimit > 0) || !isfinite(axisLimit))
+        return {GuardedMoveStatus::Denied, origin};
+    // The existing planner stores duration in signed 32-bit timer ticks
+    // and speed in integer steps/s. Reject unrepresentable calibration
+    // requests before reserving the slot, rather than wrapping either.
+    const float distanceMM = static_cast<float>(delta > 0 ? delta : -delta) * mmPerStep;
+    const float requestedTicks = float(F_CPU) * distanceMM / feedrate;
+    const float limitedTicks = float(F_CPU) * distanceMM / axisLimit;
+    if (!(requestedTicks < 2147483648.0f && limitedTicks < 2147483648.0f &&
+          axisLimit >= mmPerStep))
         return {GuardedMoveStatus::Denied, origin};
     int32_t steps[4] = {};
     steps[axis] = static_cast<int32_t>(delta);
