@@ -27,7 +27,7 @@ bool stopped = false;
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
 bool thermalLocked=false;
 uint8_t txFree=63;
-unsigned liveRequests=0,replayRequests=0;
+unsigned liveRequests=0,replayRequests=0,historyRequests=0;
 #endif
 unsigned flushes = 0;
 unsigned dispatchedCommands = 0, statusCommands = 0, stopRequests = 0;
@@ -55,6 +55,11 @@ bool UsbSerial::tryWriteSpan(const char* bytes,uint8_t count) {
 namespace ThermalEmergency {
 void requestLiveReport(){++liveRequests;}
 void requestDiagnosticReplay(){++replayRequests;}
+}
+namespace DiagnosticHistory {
+constexpr uint16_t ReadCommand=3950;
+void request(){++historyRequests;}
+void service(){}
 }
 #endif
 namespace HAL {
@@ -218,6 +223,7 @@ void dispatchMachine(GCode* code) {
 }
 }
 namespace Extruder { void selectExtruderById(uint8_t, bool) { ++dispatchedCommands; } }
+namespace EEPROM { bool settingsReady(){return !settingsBlocked;} }
 #include "legacy-dispatch.inc"
 #include "gcode-receiver.inc"
 
@@ -570,28 +576,28 @@ void legacyStream(const std::string& scenario) {
 void strictEepromSyntax() {
     // Exhaust both signed alias neighborhoods before the 8-bit/16-bit conversion.
     for(int32_t type=-65536;type<=65536;++type){
-        const std::string line="M206 T"+std::to_string(type)+" P107 "+(type==3?"X1":"S80");
+        const std::string line="M206 T"+std::to_string(type)+" P2307 "+(type==3?"X1":"S80");
         assert(validEepromAscii(line.c_str())==(type>=0&&type<=3));
     }
     for(int32_t pos=-65536;pos<=65536;++pos){
         const std::string line="M206 T0 P"+std::to_string(pos)+" S80";
-        assert(validEepromAscii(line.c_str())==(pos>=0&&pos<2048));
+        assert(validEepromAscii(line.c_str())==(pos>=2048&&pos<3072));
     }
-    for(const char* valid:{"M206 T0 P107 S80","m206p107t0s80","N1 M206 T3 P108 X1.25*12",
-                          "M206 T3 P108 X-1.25e+2","M206 T2 P79 S2147483647",
-                          "M206 T2 P79 S-2147483648","T0 M206 P107 S+80",
-                          "M206 T0 P107 S80 ; comment"})assert(validEepromAscii(valid));
-    for(const char* invalid:{"M206 T256 P107 S80","M206 T-256 P107 S80","M206 T P107 S80",
-        "M206 T0 P S80","M206 T0 P107 S","M206 T0 P107 S1.5","M206 T0 P107 S2147483648",
-        "M206 T0 P107 S-2147483649","M65742 T0 P107 S80","M206 T0 P65643 S80",
-        "M206 T3 P108 X","M206 T3 P108 X1e","M206 T3 P108 X1.2.3",
-        "M206 T0 T0 P107 S80","M206 T0 P107 P108 S80","M206 T0 P107 S80 X1",
-        "M206 T0 P107 S80*0 T1","M206 T3 P108 S1","M206 T0 P107 X1",
-        "M206 P107 S80","M206 T0 P107","M206 T3 P108 Xnan"})
+    for(const char* valid:{"M206 T0 P2307 S80","m206p2307t0s80","N1 M206 T3 P2308 X1.25*12",
+                          "M206 T3 P2308 X-1.25e+2","M206 T2 P2723 S2147483647",
+                          "M206 T2 P2723 S-2147483648","T0 M206 P2307 S+80",
+                          "M206 T0 P2307 S80 ; comment"})assert(validEepromAscii(valid));
+    for(const char* invalid:{"M206 T0 P107 S80","M206 T0 P3072 S80","M206 T256 P2307 S80","M206 T-256 P2307 S80","M206 T P2307 S80",
+        "M206 T0 P S80","M206 T0 P2307 S","M206 T0 P2307 S1.5","M206 T0 P2307 S2147483648",
+        "M206 T0 P2307 S-2147483649","M65742 T0 P2307 S80","M206 T0 P67843 S80",
+        "M206 T3 P2308 X","M206 T3 P2308 X1e","M206 T3 P2308 X1.2.3",
+        "M206 T0 T0 P2307 S80","M206 T0 P2307 P2308 S80","M206 T0 P2307 S80 X1",
+        "M206 T0 P2307 S80*0 T1","M206 T3 P2308 S1","M206 T0 P2307 X1",
+        "M206 P2307 S80","M206 T0 P2307","M206 T3 P2308 Xnan"})
         assert(!validEepromAscii(invalid));
     // Ordinary unnumbered commands use the existing numbered-style ACK (current N=0).
-    feed("M206 T0 P107 S80\n");readReply("ok 0\r\n");popM(206);
-    feed("M206 T256 P107 S80\n");
+    feed("M206 T0 P2307 S80\n");readReply("ok 0\r\n");popM(206);
+    feed("M206 T256 P2307 S80\n");
     for(unsigned i=0;i<8;++i)GCodeInput::readFromSerial();
     assert(!GCodeInput::peekCurrentCommand());
     assert(replies.find("Invalid M206 syntax")!=std::string::npos);
@@ -622,6 +628,8 @@ void thermalEmergency() {
     assert(liveRequests==2);
     feed(binary({0x85,0x00,0x07,0x00,1}));readReply("Error: THERMAL EMERGENCY\r\nok 7\r\n");
     feed(numbered("N8 M110"));readReply("ok\r\n");
+    feed(numbered("N9 M3950"));readReply("ok 9\r\n");
+    assert(historyRequests==1);
     GCodeInput::executeHardFilament(false);
     assert(!GCodeInput::executeOutputProgram() && internalEvents.empty());
     assert(!GCodeInput::peekCurrentCommand()&&dispatchedCommands==0&&heaterRequests==0&&flushes==0);

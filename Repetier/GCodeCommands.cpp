@@ -105,7 +105,7 @@ void dispatchMachine(GCode* com) {
         return reportEeprom();
     case 206: return setEepromValue(com);
     case 360: return reportConfiguration();
-#if defined(RF_THERMAL_EMERGENCY_EXPERIMENT) && defined(RF_EEPROM_ZONE_EXPERIMENT)
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     case DiagnosticHistory::ReadCommand: return DiagnosticHistory::request();
 #endif
     case 502: return restoreConfigurationDefaults();
@@ -133,7 +133,6 @@ __attribute__((noinline)) void Commands::executeGCode(GCode* com) {
         Com::printErrorFLN(PSTR("Job rejected; stop host and restart printer."));
         return;
     }
-#ifdef RF_EEPROM_ZONE_EXPERIMENT
     if(!EEPROM::settingsReady()) {
         // Retain diagnostics and explicit settings recovery; no ordinary
         // motion, heating, scan or script entry while settings are untrusted.
@@ -149,7 +148,6 @@ __attribute__((noinline)) void Commands::executeGCode(GCode* com) {
             return;
         }
     }
-#endif
     if (com->hasG()) {
         GCodeCommands::dispatchMotion(com);
     } else if (com->hasM()) // Process M Code

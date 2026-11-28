@@ -30,9 +30,7 @@ void Commands::commandLoop() {
         checkForPeriodicalActions(NotBusy);
         GCodeInput::readFromSerial();
         GCodeInput::popCurrentCommand(); // old admitted work, never execute
-#if defined(RF_EEPROM_ZONE_EXPERIMENT)
         DiagnosticHistory::service();
-#endif
         return;
     }
 #endif
@@ -57,7 +55,7 @@ void Commands::commandLoop() {
     // admitted commands have retired. A terminal thermal phase never outputs.
     if (!GCodeInput::peekCurrentCommand())
         Printer::printJob.servicePendingOutput(HAL::timeInMilliseconds());
-#if defined(RF_THERMAL_EMERGENCY_EXPERIMENT) && defined(RF_EEPROM_ZONE_EXPERIMENT)
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
     DiagnosticHistory::service();
 #endif
 } // commandLoop

@@ -3,7 +3,7 @@
 
 // Diagnostic history has no authority over the active fault latch, heater
 // admission or settings recovery. Only the top-level command loop services it.
-#if defined(RF_THERMAL_EMERGENCY_EXPERIMENT) && defined(RF_EEPROM_ZONE_EXPERIMENT)
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
 enum class ScanAbort : uint8_t;
 namespace DiagnosticHistory {
 constexpr uint16_t ReadCommand=3950;

@@ -174,11 +174,7 @@ static bool validEepromAscii(const char* p) {
         int32_t value;
         if(!eepromInteger(p,value))return false;
         if(bit==M&&value!=206)return false;
-#ifdef RF_EEPROM_ZONE_EXPERIMENT
         if(bit==P&&(value<2048||value>=3072))return false;
-#else
-        if(bit==P&&(value<0||value>=2048))return false;
-#endif
         if(bit==T){if(value<0||value>3)return false;type=uint8_t(value);}
     }
     return (seen&(M|P|T))==(M|P|T)&&(seen&(S|X))==(type==3?X:S);
@@ -412,12 +408,10 @@ void GCodeInput::checkAndPushCommand(GCode& command) {
             // firmware capability reply in the terminal state.
             ThermalEmergency::requestDiagnosticReplay();
             emergencyOk(true);
-#ifdef RF_EEPROM_ZONE_EXPERIMENT
         }else if(!command.hasG() && command.hasM() && command.M==DiagnosticHistory::ReadCommand) {
             // Read-only history must not enter the machine command queue.
             DiagnosticHistory::request();
             emergencyOk(true);
-#endif
         }else {
             ThermalEmergency::ReportLine line;
             line.text(PSTR("Error: THERMAL EMERGENCY\r\nok "));

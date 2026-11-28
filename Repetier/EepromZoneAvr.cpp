@@ -31,7 +31,7 @@ void AvrDevice::service() {
 }
 }
 
-#if defined(RF_THERMAL_EMERGENCY_EXPERIMENT) && defined(RF_EEPROM_ZONE_EXPERIMENT)
+#ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
 #include "DiagnosticHistory.h"
 #include "AvrEventStore.h"
 #include "EventLogService.h"
