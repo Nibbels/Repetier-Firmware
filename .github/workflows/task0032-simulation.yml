@@ -700,3 +700,50 @@ jobs:
           path: ${{ runner.temp }}/task0032-current-combined
           retention-days: 7
           if-no-files-found: error
+
+
+  current-transport-stage1:
+    if: github.head_ref == 'task/Task0032-resend-preflight'
+    needs: [current-drive-combined-preflight]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-current-combined-${{ github.sha }}
+          path: ${{ runner.temp }}/combined-input
+      - name: Materialize terminal transport stage on qualified composition
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-current-transport"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          p0=c31b4d391cc4d2b9cca9ab3f8e236bed805716d9
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$RUNNER_TEMP/current-transport-p0" "$p0"
+          sha256sum tools/task0032/{current-transport-preflight,current-drive-combined,transport-terminal-preflight,transport-terminal-dispatch,transport-terminal-trigger,resend-ring-preflight,loss-gate-replay,tx-blocking-preflight}.py tools/task0032/resend-policy.h > "$out/source-sha256.txt"
+          python3 tools/task0032/current-transport-preflight.py --source "$RUNNER_TEMP/current-transport-p0" --combined "$RUNNER_TEMP/combined-input/combined.diff" --out "$out" | tee "$out/replay.log"
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Four recovery links of stage 1 only
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-current-transport"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          cd "$RUNNER_TEMP/current-transport-p0"
+          git add Repetier tests
+          git -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Disposable combined Drive and terminal transport stage 1"
+          git rev-parse HEAD > "$out/local-candidate-sha.txt"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" --avr-only | tee "$out/canonical.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-current-transport-${{ github.sha }}
+          path: ${{ runner.temp }}/task0032-current-transport
+          retention-days: 7
+          if-no-files-found: error
