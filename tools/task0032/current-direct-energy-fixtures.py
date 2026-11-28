@@ -99,6 +99,43 @@ uint16_t integerSqrt(int32_t x) {
     return uint16_t(sqrt(double(x))+0.5);
 }''')
     path.write_text(s)
+    # Retire the obsolete Visual Micro check in this historical disposable
+    # checkout too; the qualified P0 successor already removed it.
+    for obsolete in ('tests/task0013-visual-micro.py','Repetier/Repetier.vcxproj','Repetier/Repetier.vcxproj.filters'):
+        (a.source/obsolete).unlink()
+    path=t/'task0034-stop-tail.py';s=path.read_text()
+    s=once(s,'Compare the actual optimized direct-stop refit to the historical formula.',
+        'Compare the retained generic ramp refit to its historical formula.')
+    s=once(s,'void PrintLine::limitToStopTail(','void PrintLine::fitRampToRemainingSteps(')
+    s=once(s,'    void limitToStopTail(bool);\n','')
+    s=once(s,'    p.limitToStopTail(refit);',
+        '    if(p.stepsRemaining>32){\n        p.stepsRemaining=32;\n        if(refit)p.fitRampToRemainingSteps();\n    }')
+    path.write_text(s)
+    path=t/'task0034-direct-enable.py';s=path.read_text()
+    s=once(s,'DIRECT_RUNNING=4,DIRECT_RUNNING_STOPPABLE=5,FOR_DIRECT=0;',
+        'DIRECT_RUNNING=4,DIRECT_RUNNING_STOPPABLE=5,DIRECT_PREPARED_CANCELLED=10,FOR_DIRECT=0;')
+    s=once(s,'    float fullSpeed=60;','    struct { bool valid=true; } directProfile;\n    float fullSpeed=60;')
+    s=once(s,'struct Clock { int peak=42;','struct Clock { uint32_t ticks=0; int peak=42;')
+    s=once(s,'    static void finishMove(PrintLine&,bool){assert(false);}',
+        '    static void finishMove(PrintLine& d,bool queued){assert(!queued);d.task=0;}\n'
+        '    static uint32_t armDirectStep(PrintLine& d){assert(irq && timer1Masked && d.directProfile.valid);return 1234;}')
+    s=once(s,'        if(task==DIRECT_PREPARED_STOPPABLE && ticks==5)\n            PrintLine::direct.stepsRemaining=32;','')
+    s=once(s,'        assert(StepExecutor::performDirectMove()==5000);',
+        '        assert(StepExecutor::performDirectMove()==1234);')
+    s=once(s,'        assert(!irq && timer1Masked && enabled==28 && directions==1 && advance==1 && !pulses && ticks==27);',
+        '        assert(irq && timer1Masked && enabled==28 && directions==1 && advance==0 && !pulses && ticks==27);')
+    s=once(s,'        assert(PrintLine::direct.stepsRemaining==(task==DIRECT_PREPARED_STOPPABLE?32:120));',
+        '        assert(PrintLine::direct.stepsRemaining==120);\n        irq=false;')
+    s=once(s,'    for (uint8_t flags :',
+        '''    // Release before readiness: no driver activation or pulse after cancellation.
+    irq=false; enabled=directions=advance=pulses=ticks=0;
+    PrintLine::direct=PrintLine(); PrintLine::direct.task=DIRECT_PREPARED_STOPPABLE;
+    for(ticks=0;ticks<5;++ticks)assert(StepExecutor::performDirectMove()==2000);
+    PrintLine::direct.task=DIRECT_PREPARED_CANCELLED;
+    assert(StepExecutor::performDirectMove()==1000);
+    assert(PrintLine::direct.task==0 && enabled==5 && !directions && !advance && !pulses);
+    for (uint8_t flags :''')
+    path.write_text(s)
     print("Canonical direct preparation and guarded/scan fixtures migrated; prior assertions outside changed contract retained.")
 
 if __name__=='__main__':main()
