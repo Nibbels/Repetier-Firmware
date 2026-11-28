@@ -120,6 +120,31 @@ private:
     uint32_t since_ = 0;
 };
 
+// Actual software-ring retirement progress, not TXC or receipt by host.
+// The UART producer provides a 16-bit monotonically incrementing byte
+// count minus current occupancy. Foreground-only sampling. At fixed
+// 250000 baud 8N1, 65536 retirements require >2.62 s; the integration must
+// establish a service interval below that, independently of this timer.
+// No ISR counter or extra queue. An unchanged occupancy after refill
+// does NOT imply no drain.
+class TxRetirementDeadline {
+public:
+    bool poll(uint16_t retired, bool nonempty, uint32_t now) {
+        if (!nonempty) { active_ = false; return false; }
+        if (!active_ || retired != last_) {
+            active_ = true;
+            last_ = retired;
+            since_ = now;
+            return false;
+        }
+        return uint32_t(now - since_) >= ResendPolicy::txStallMs;
+    }
+private:
+    uint32_t since_ = 0;
+    uint16_t last_ = 0;
+    bool active_ = false;
+};
+
 // Exact legacy wire reply (including the leading CRLF and control ok).
 // The temporary span is never visible to the ISR until publication succeeds.
 // A common formatter can replace this cold-path implementation at integration.
