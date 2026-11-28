@@ -108,17 +108,27 @@ def diagnostic(frame, phase=False):
     edges = defaultdict(list)
     guard_callers = defaultdict(set)
     worker_callers = defaultdict(set)
+    # A tail transfer shares the stack frame but may otherwise hide an
+    # admission boundary. Refuse cross-function jumps into any guarded
+    # worker or LCD recursion frame rather than silently dropping a guard.
+    for jump in frame["tailTransfers"]:
+        target = jump["physicalTarget"]
+        assert not any(target.startswith(prefix) for prefix, _ in guards_spec), ("unreviewed tail guard entry", jump)
+        assert not target.startswith("UIDisplay::parse("), ("unreviewed tail LCD entry", jump)
     for edge in frame["calls"]:
         a, b = edge["caller"], edge["callee"]
-        for i, (prefix, allowed) in enumerate(guards_spec):
-            if names[b].startswith(prefix):
-                assert names[a].startswith(allowed), ("unreviewed guard caller", names[a], names[b])
-                if i == 4:
-                    worker = next(k for k in PROGRAM_WORKERS if names[b].startswith(k))
-                    assert names[a].startswith(PROGRAM_WORKERS[worker]), (worker, names[a])
-                    worker_callers[worker].add(names[a])
-                guard_callers[i].add(names[a])
         for site in edge["sites"]:
+            # Stack bytes belong to the root frame; admission is reviewed
+            # against the actual instruction's containing linked symbol.
+            caller = site["physicalCaller"]
+            for i, (prefix, allowed) in enumerate(guards_spec):
+                if names[b].startswith(prefix):
+                    assert caller.startswith(allowed), ("unreviewed guard caller", names[a], caller, names[b], site["pc"])
+                    if i == 4:
+                        worker = next(k for k in PROGRAM_WORKERS if names[b].startswith(k))
+                        assert caller.startswith(PROGRAM_WORKERS[worker]), (worker, caller)
+                        worker_callers[worker].add(caller)
+                    guard_callers[i].add(caller)
             edges[a].append((b, site["pc"], site["callerBytes"]))
     assert all(guard_callers[i] for i in range(len(guards_spec))), "missing reviewed linked guard"
     assert set(worker_callers) == set(PROGRAM_WORKERS), "missing internal worker"
