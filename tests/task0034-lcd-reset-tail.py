@@ -4,6 +4,9 @@ from pathlib import Path
 import importlib.util
 import sys
 
+# The canonical evidence capture requires an unchanged checkout.
+sys.dont_write_bytecode = True
+
 tool = Path(__file__).resolve().parents[1] / "tools" / "task0034"
 sys.path.insert(0,str(tool))
 spec=importlib.util.spec_from_file_location("fg",tool/"foreground-stack-depth.py")
