@@ -102,6 +102,7 @@ PRELUDE=r'''
 #define RF_THERMAL_EMERGENCY_EXPERIMENT 1
 #define RF_EEPROM_ZONE_EXPERIMENT 1
 #include "PrintJob.h"
+using millis_t=uint32_t;
 enum FirmwareState {NotBusy,Processing,Paused,WaitHeater};
 enum Point {None,Read,Execute,KeepAlive,CompUi,Comp,Temperature,PrintTemperature,TempUi,Dms,Features,Scan};
 static Point inject;
@@ -153,6 +154,7 @@ void loopFeatures(){visit(Features);}
 void handleScanWorkTasks(bool){visit(Scan);}
 namespace DiagnosticHistory{void service(){++historyVisits;}}
 namespace Commands {
+void commandLoop();
 void checkForPeriodicalActions(FirmwareState);
 void executeGCode(GCode*){++executes;visit(Execute);}
 void printTemperatures(){visit(PrintTemperature);}
