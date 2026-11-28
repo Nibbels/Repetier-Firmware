@@ -829,10 +829,16 @@ void UIDisplay::menuEsc() {
         menuLevel--;
 }
 
+// The durable acknowledgment can service periodic work and owns a storage
+// transaction frame. Keep that lifetime off ordinary key dispatch.
+__attribute__((noinline)) void UIDisplay::acknowledgeRecoveryDialog() {
+    if(EEPROM::acknowledgeRecovery())menuEsc();
+}
+
 void UIDisplay::okAction() {
     if(menuLevel && menu[menuLevel]==&ui_menu_message &&
        messageLine2==EEPROM::recoveryDialogTag() && EEPROM::recoveryPending()) {
-        if(EEPROM::acknowledgeRecovery())menuEsc();
+        acknowledgeRecoveryDialog();
         return;
     }
     if (Printer::isUIErrorMessage()) {

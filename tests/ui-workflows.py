@@ -214,8 +214,10 @@ void setHeatedBedTemperature(int v) { bed=v; }
 namespace EEPROM {
 void storePreheatProfiles(); void storeManualZOffset();
 const char* recoveryDialogTag(){return "EEPROM recovery";}
-bool recoveryPending(){return false;}
-bool acknowledgeRecovery(){assert(false);return false;}
+bool pending=false, ackOK=false;
+unsigned ackCalls=0;
+bool recoveryPending(){return pending;}
+bool acknowledgeRecovery(){assert(pending);++ackCalls;return ackOK;}
 }
 using EepromZones::Patch;
 using EepromZones::Field;
@@ -290,7 +292,7 @@ struct UIDisplay {
     void executeMenuCommand(int action) { executed=action; }
     void finishAction(int action) { finished=action; }
     void pushMenu(void*,bool);
-    void menuEsc(); void okAction();
+    void menuEsc(); void okAction(); void acknowledgeRecoveryDialog();
     bool normalCharacters_=true;
     void loadNormalCharacters() { normalCharacters_=true; }
     static constexpr int LCD_CLEAR = 1;
@@ -588,7 +590,32 @@ static void directRows() {
     }
     assert(cases==UI_ROWS*(MAX_COLS+1)*(MAX_COLS+1));
 }
-int main() { preheat(); offset(); navigation(); visibility(); directRows(); }
+// Recovery acknowledgment is a physical-OK operation on the tagged
+// dialog, not a string comparison or a generic menu action.
+static void recoveryDialog() {
+    UIDisplay u;
+    char sameText[]="EEPROM recovery";
+    for (unsigned bits=0;bits<16;++bits) {
+        const bool tagged=bits&1, pending=bits&2, accepted=bits&4, uiError=bits&8;
+        u.menuLevel=2; u.menu[2]=&ui_menu_message; u.menuPos[2]=0;
+        u.messageLine2=tagged?EEPROM::recoveryDialogTag():sameText;
+        EEPROM::pending=pending; EEPROM::ackOK=accepted; EEPROM::ackCalls=0;
+        Printer::uiError=uiError; u.finished=0; u.executed=0;
+        u.okAction();
+        if (tagged && pending) {
+            assert(EEPROM::ackCalls==1 && !u.finished && !u.executed);
+            assert(u.menuLevel==(accepted?1:2));
+            assert(Printer::uiError==uiError);
+        } else {
+            assert(EEPROM::ackCalls==0 && !u.executed);
+            assert(!Printer::uiError);
+            assert(u.menuLevel==(uiError?2:1));
+            assert(u.finished==(uiError?0:UI_ACTION_DUMMY));
+        }
+    }
+    EEPROM::pending=false; EEPROM::ackOK=false; EEPROM::ackCalls=0; Printer::uiError=false;
+}
+int main() { preheat(); offset(); navigation(); visibility(); directRows(); recoveryDialog(); }
 '''
 
 

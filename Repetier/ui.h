@@ -357,6 +357,7 @@ private:
     void executeCommandAction(int action);
     void executeMenuCommand(int action);
     void finishBedCutoff();
+    void acknowledgeRecoveryDialog();
     void changeSetting(int action, int8_t increment);
     void changeMicrostepSetting(int action, int8_t increment);
     void changeMotionSetting(int action, int8_t increment);
