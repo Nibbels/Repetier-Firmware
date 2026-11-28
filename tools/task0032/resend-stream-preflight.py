@@ -68,7 +68,9 @@ void streamVisit(uint32_t now) {
     }
     if(UsbSerial::lossFlags())researchFault();
     researchAck.service();
-    if(researchAckDeadline.expired(researchAck.pending,now))researchRecovery.failTx();
+    if(researchAckDeadline.expired(researchAck.pending,now) ||
+       researchTxDeadline.poll(UsbSerial::transmitRetired(),UsbSerial::transmitFree()!=63,now))
+        researchRecovery.failTx();
     researchRecovery.service(now,receiveReady(),!researchAck.pending,[](uint32_t expected){
         // Reserve conservatively for the whole maximum-length span before
         // discarding RX. No other foreground TX producer in this visit.
@@ -82,6 +84,10 @@ void streamVisit(uint32_t now) {
         assert(publishResend<UsbSerial>(expected));
         return true;
     });
+    // Arm on the same visit as a newly published ACK/Resend. At most
+    // software-ring retirement is proved; physical TXC remains separate.
+    if(researchTxDeadline.poll(UsbSerial::transmitRetired(),UsbSerial::transmitFree()!=63,now))
+        researchRecovery.failTx();
     if(researchRecovery.phase()==Phase::Fatal && !stopped) {
         ++researchStops;stopped=true; // test seam, not actuator cleanup
     }
@@ -233,6 +239,29 @@ void streamAckStall(bool borrowed, bool lost) {
     streamVisit(start+2001);
     assert(researchStops==1 && drainTx().empty());
 }
+
+void streamPublishedStall(bool resend) {
+    researchStreamActive=true;
+    const uint32_t start=0xffffff00;
+    if(resend) {
+        startStream(false);
+        corruptStream(streamPacket(2),2,_BV(FE0));
+    } else {
+        uartFeed(streamPacket(1));
+    }
+    streamVisit(start);
+    assert(!researchAck.pending && UsbSerial::transmitFree()<63);
+    assert(researchRecovery.requests()==(resend?1:0));
+    streamVisit(start+1999);assert(!researchStops);
+    streamVisit(start+2000);
+    assert(researchStops==1 && researchRecovery.phase()==ResendPolicy::Phase::Fatal
+           && researchRecovery.cause()==ResendPolicy::Cause::TxStall);
+    assert(researchRecovery.requests()==(resend?1:0)); // no extra resend
+    assert(drainTx()==(resend?resend2:"ok 1\r\n"));
+    streamVisit(start+2001);
+    assert(researchStops==1 && drainTx().empty());
+}
+
 void streamAckResume() {
     researchStreamActive=true;
     const uint32_t start=0xfffffff0;
@@ -289,7 +318,7 @@ def patch_receiver(s):
     helper=frames["HELPERS"].replace("return researchBoundary && !Printer",
         "return researchBoundary && (!researchStreamActive || !UsbSerial::lossFlags()) && !Printer")
     pending=ack["CANDIDATE"].split("void stagedAck()")[0]
-    s=once(s,"} // namespace\n",helper+pending+"\nPendingAck researchAck;\nAckPublicationDeadline researchAckDeadline;\n"+STREAM_HELPERS+"\n} // namespace\n")
+    s=once(s,"} // namespace\n",helper+pending+"\nPendingAck researchAck;\nAckPublicationDeadline researchAckDeadline;\nTxRetirementDeadline researchTxDeadline;\n"+STREAM_HELPERS+"\n} // namespace\n")
     for binary,anchor in [(True,"                if (parseBinary(command, frame.bytes, frame.expectedLength))"),
                           (False,"                if (parseAscii(command, (char*)frame.bytes, true))")]:
         branch=frames["recovery_branch"](binary)
@@ -358,6 +387,8 @@ def main():
             '    else if (scenario == "stream-ack-stall") streamAckStall(false,false);\n'
             '    else if (scenario == "stream-ack-text-stall") streamAckStall(true,false);\n'
             '    else if (scenario == "stream-ack-loss-stall") streamAckStall(true,true);\n'
+            '    else if (scenario == "stream-published-ack-stall") streamPublishedStall(false);\n'
+            '    else if (scenario == "stream-published-resend-stall") streamPublishedStall(true);\n'
             '    else if (scenario == "stream-ack-resume") streamAckResume();\n'
             '    else if (scenario == "stream-text") streamBorrowed();\n'
             '    else if (scenario == "stream-fatal") streamFatal(true);\n'
@@ -368,7 +399,7 @@ def main():
         # replay's mock TX. Keep that independent two-mode suite in the
         # frame preflight; run all ordinary serial cases plus stream here.
         path=tests/"serial-protocol.py";s=path.read_text()
-        names='"stream-a0","stream-a1","stream-a2","stream-b0","stream-b1","stream-b2","stream-sweep-a","stream-sweep-b","stream-ack","stream-ack-stall","stream-ack-text-stall","stream-ack-loss-stall","stream-ack-resume","stream-text","stream-fatal","stream-ambiguous",'
+        names='"stream-a0","stream-a1","stream-a2","stream-b0","stream-b1","stream-b2","stream-sweep-a","stream-sweep-b","stream-ack","stream-ack-stall","stream-ack-text-stall","stream-ack-loss-stall","stream-ack-resume","stream-published-ack-stall","stream-published-resend-stall","stream-text","stream-fatal","stream-ambiguous",'
         s=once(s,'for scenario in ("numbered",','for scenario in ('+names+'"numbered",')
         start=s.index('        subprocess.run(compiler + ["-DRF_THERMAL_EMERGENCY_EXPERIMENT')
         end=s.index('        uart_replay =',start)
