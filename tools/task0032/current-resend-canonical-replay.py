@@ -210,7 +210,30 @@ void strictEepromSyntax()''')
     else if (scenario == "legacy-corrupt") legacyCorrupt();''')
     return s
 
-def run(source,fixture,out):
+def uart_cpp(s):
+    # Preserve the original exhaustive cursor/occupancy/span tests. The
+    # positive RX wrap may no longer include a deliberately lost byte.
+    s=once(s,"enum { U2X0 = 1,","enum { FE0=4, DOR0=3, UPE0=2, U2X0 = 1,")
+    s=once(s,'#include "usb-serial-firmware.inc"',
+        'volatile uint8_t SREG=0x80;\nvoid cli(){SREG&=0x7f;}\n#include "usb-serial-firmware.inc"')
+    s=once(s,"byte <= UsbSerial::receiveCapacity","byte < UsbSerial::receiveCapacity")
+    s=once(s,"} // namespace\n\nint main()",r'''void stickyOverflow() {
+    assert(!UsbSerial::available() && !UsbSerial::lossFlags());
+    for(unsigned n=0;n<=UsbSerial::receiveCapacity;++n){
+        UCSR0A=0;UDR0=uint8_t(n);USART0_RX_vect();
+    }
+    assert(UsbSerial::lossFlags()==1 && UsbSerial::transportFailed());
+    for(unsigned n=0;n<UsbSerial::receiveCapacity;++n)
+        assert(UsbSerial::read()==int(n));
+    UDR0=0x55;USART0_RX_vect();
+    assert(!UsbSerial::available() && UsbSerial::read()==-1 && UsbSerial::lossFlags()==1);
+}
+} // namespace
+
+int main()''')
+    return once(s,"    nonblockingSpan();","    nonblockingSpan();\n    stickyOverflow();")
+
+def run(source,fixture,out,install_fixtures=False):
     out.mkdir(parents=True,exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="task0032-canonical-serial-") as d:
         root=Path(d);fw=root/"Repetier";tests=root/"tests"
@@ -220,17 +243,28 @@ def run(source,fixture,out):
         py,n=re.subn(r"        for scenario in \([^\n]+\):",
             "        for scenario in "+repr(MODES)+":",py)
         assert n==1
-        (tests/"serial-protocol.cpp").write_text(cpp)
-        (tests/"serial-protocol.py").write_text(py)
-        (out/"serial-protocol.cpp").write_text(cpp)
-        (out/"serial-protocol.py").write_text(py)
+        py=once(py,'            subprocess.run([str(replay), scenario], check=True, timeout=10)',
+            '''            subprocess.run([str(replay), scenario], check=True, timeout=10)
+        uart_replay=build/"uart-replay"
+        subprocess.run(compiler+[str(tests/"usb-serial.cpp"),"-o",str(uart_replay)],check=True)
+        subprocess.run([str(uart_replay)],check=True,timeout=10)''')
+        uart=uart_cpp((source/"tests/usb-serial.cpp").read_text())
+        fixtures={"serial-protocol.cpp":cpp,"serial-protocol.py":py,"usb-serial.cpp":uart}
+        for name,data in fixtures.items():
+            (tests/name).write_text(data)
+            (out/name).write_text(data)
         subprocess.run([sys.executable,str(tests/"serial-protocol.py")],check=True)
-        print("Canonical serial coverage migrated:",len(MODES),"scenarios PASS",flush=True)
+        if install_fixtures:
+            assert subprocess.run(["git","-C",str(source),"symbolic-ref","-q","HEAD"],
+                capture_output=True).returncode==1
+            for name,data in fixtures.items():(source/"tests"/name).write_text(data)
+        print("Canonical serial coverage migrated:",len(MODES),"scenarios and standalone UART PASS",flush=True)
 
 if __name__=="__main__":
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument("--source",type=Path,required=True)
     p.add_argument("--fixture",type=Path,required=True)
     p.add_argument("--out",type=Path,required=True)
+    p.add_argument("--install-fixtures",action="store_true")
     a=p.parse_args()
-    run(a.source,a.fixture,a.out)
+    run(a.source,a.fixture,a.out,a.install_fixtures)
