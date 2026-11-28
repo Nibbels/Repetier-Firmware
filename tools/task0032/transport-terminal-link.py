@@ -19,7 +19,8 @@ P0=dispatch["P0"]
 
 PATTERN=re.compile(r"\b(?:emergencyLocked|thermalEmergency|transportEmergency|"
                    r"beginThermalEmergency|beginTransportEmergency|stopForThermalFault|"
-                   r"stopForTransportFault|latchOutputInhibit|heatingInhibited)\s*\(")
+                   r"stopForTransportFault|latchOutputInhibit|heatingInhibited|"
+                   r"blockingTxFailed|serviceTransportFailure)\s*\(")
 
 def git(source,*args):
     return subprocess.check_output(["git","-C",str(source),*args],text=True).strip()
@@ -39,6 +40,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source",type=Path,required=True)
     parser.add_argument("--out",type=Path,required=True)
+    parser.add_argument("--with-tx-trigger",action="store_true")
     args=parser.parse_args()
     source=args.source.resolve();out=args.out.resolve()
     assert source not in out.parents and source!=out
@@ -49,7 +51,9 @@ def main():
                           capture_output=True).returncode==1
     out.mkdir(parents=True,exist_ok=True)
     fw=source/"Repetier"
-    files=dispatch["candidate"](fw)
+    generator=(runpy.run_path(str(Path(__file__).with_name("transport-terminal-trigger.py")))
+               if args.with_tx_trigger else dispatch)
+    files=generator["candidate"](fw)
     before=inventory(fw,{})
     after=inventory(fw,files)
     for name,s in files.items():(fw/name).write_text(s)
@@ -64,7 +68,9 @@ def main():
     summary={"p0":P0,"changed":changed,"patch_sha256":hashlib.sha256(patch).hexdigest(),
              "source_sha256":{n:hashlib.sha256((fw/n).read_bytes()).hexdigest() for n in files},
              "before_guard_rows":len(before),"after_guard_rows":len(after),
-             "qualification":"lexical inventory and disposable terminal-only patch; no UART/pump detection integration"}
+             "with_tx_trigger":args.with_tx_trigger,
+             "qualification":"lexical inventory and disposable patch; bounded legacy TX trigger only, no RX resend integration"
+                 if args.with_tx_trigger else "lexical inventory and disposable terminal-only patch; no UART/pump detection integration"}
     (out/"candidate.json").write_text(json.dumps(summary,indent=2)+"\n")
     print(json.dumps(summary,indent=2))
 
