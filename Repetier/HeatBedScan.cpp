@@ -501,6 +501,8 @@ void HeatBedScan::warmupAndHome() {
 
     // start at the home position
     Printer::homeAxis(true, true, true);
+    if (Calibration::scanSession.aborting())
+        return;
     if (!Commands::waitForMotion(Commands::MotionWait::QueueAndZ, Commands::PauseWait::Resume))
         return;
 
@@ -603,6 +605,8 @@ void HeatBedScan::retryHomeY() {
     if (!Calibration::moveZ(long(Printer::stepsPerMm(Z_AXIS) * Calibration::probeSettings().startLiftMm)))
         return;
     Printer::homeAxis(false, true, false);                             //Home Y
+    if (Calibration::scanSession.aborting())
+        return;
 
     Calibration::scanSession.consumeRetry();
     phase_ = Phase::RetryHomeZ;
@@ -612,6 +616,8 @@ void HeatBedScan::retryHomeY() {
 void HeatBedScan::retryHomeZ() {
     // home the z-axis in order to find the starting point again
     Printer::homeAxis(false, false, true);                             // Neben Bett: Home Z
+    if (Calibration::scanSession.aborting())
+        return;
     if (!Calibration::moveZ(long(Printer::stepsPerMm(Z_AXIS) * Calibration::probeSettings().startLiftMm)))
         return;
     Calibration::scanProbe.forgetPreviousPoint();
@@ -713,6 +719,8 @@ void HeatBedScan::homeAfterMesh() {
 
     // move back to the home position
     Printer::homeAxis(true, true, true);
+    if (Calibration::scanSession.aborting())
+        return;
 
     if (mode_ == HeatBedScanMode::Standard) {
         // disable all heaters
@@ -851,6 +859,8 @@ void HeatBedScan::thermalRetryHomeY() {
     if (!Calibration::moveZ(long(Printer::stepsPerMm(Z_AXIS) * Calibration::probeSettings().startLiftMm)))
         return;
     Printer::homeAxis(false, true, false);                             //Home Y
+    if (Calibration::scanSession.aborting())
+        return;
 
     Calibration::scanSession.consumeRetry();
     phase_ = Phase::ThermalRetryHomeZ;
@@ -860,6 +870,8 @@ void HeatBedScan::thermalRetryHomeY() {
 void HeatBedScan::thermalRetryHomeZ() {
     // home the z-axis in order to find the starting point again
     Printer::homeAxis(false, false, true);                             // Neben Bett: Home Z
+    if (Calibration::scanSession.aborting())
+        return;
     if (!Calibration::moveZ(long(Printer::stepsPerMm(Z_AXIS) * Calibration::probeSettings().startLiftMm)))
         return;
     Calibration::scanProbe.forgetPreviousPoint();
@@ -911,6 +923,8 @@ void HeatBedScan::homeAfterThermalProbe() {
 
     // move back to the home position
     Printer::homeAxis(true, true, true);
+    if (Calibration::scanSession.aborting())
+        return;
     phase_ = Phase::SwitchOffAfterScan;
 }
 

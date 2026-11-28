@@ -237,6 +237,8 @@ void ZOffsetScan::homeForProbe() {
 
     // start at the home position
     Printer::homeAxis(true, true, true); //home z resets ZCMP
+    if (Calibration::scanSession.aborting())
+        return;
     phase_ = Phase::LiftForProbe;
 }
 
@@ -398,6 +400,8 @@ void ZOffsetScan::continueLeveling() {
     if (!Calibration::moveZ(Printer::stepsPerMm(Z_AXIS)))
         return;
     Printer::homeAxis(true, true, false);
+    if (Calibration::scanSession.aborting())
+        return;
     if (!Calibration::moveZ(-Printer::zMotion.scanSteps()))
         return;
     BedMatrix::report(1);
@@ -407,6 +411,8 @@ void ZOffsetScan::retreatForFinish() {
     if (!Calibration::moveZ(Printer::stepsPerMm(Z_AXIS)))
         return;
     Printer::homeAxis(false, true, false);
+    if (Calibration::scanSession.aborting())
+        return;
     if (!Calibration::moveZ(-Printer::zMotion.scanSteps()))
         return;
     phase_ = Phase::ReportScrewAdjustment;    // No AUTO_MATRIX_LEVELING

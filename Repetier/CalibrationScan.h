@@ -60,7 +60,8 @@ public:
     }
 
     static bool retreatOnly(ScanAbort reason) {
-        return reason == ScanAbort::DmsUnavailable || reason == ScanAbort::DmsOverload;
+        return reason == ScanAbort::DmsUnavailable || reason == ScanAbort::DmsOverload ||
+               reason == ScanAbort::EndstopProtection;
     }
 
     void requestAbort(ScanAbort reason) {

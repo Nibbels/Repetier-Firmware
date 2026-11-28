@@ -16,6 +16,7 @@
 */
 
 #include "Repetier.h"
+#include "ScanProbe.h"
 
 int8_t Printer::anyHomeDir(uint8_t axis) {
     return axis <= Z_AXIS ? -1 : 0;
@@ -279,14 +280,16 @@ __attribute__((noinline)) void Printer::homeAxis(bool xaxis, bool yaxis, bool za
     UIDisplay::ScopedActionExclusion panelExclusion(uid);
     Printer::idleStatus.cancel();
 
-    // Bei beliebiger user interaktion oder Homing soll G1 etc. erlaubt werden. Dann ist der Drucker nicht abgestürzt, sondern bedient worden.
-    allowMovement();
+    // Drain queued, direct and Advance output before invalidating references.
+    // Do not wait for a paused print to resume inside homing.
+    bool ok = Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Cancel);
+    if (ok)
+        allowMovement();
 
     // Stop the sequence at the first unverified reference. In particular,
     // do not approach Z when the preceding clearance-related Y home failed.
     const bool requireY = !yaxis && zaxis && !Printer::isZHomeSafe();
-    bool ok = true;
-    if (requireY) {
+    if (ok && requireY) {
         homeYAxis();
         ok = isAxisHomed(Y_AXIS);
     }
@@ -305,6 +308,8 @@ __attribute__((noinline)) void Printer::homeAxis(bool xaxis, bool yaxis, bool za
 
     if (!ok) {
         lockMovement();
+        if (Calibration::scanSession.dispatching())
+            Calibration::scanSession.requestAbort(ScanAbort::EndstopProtection);
         Com::printFLN(PSTR("Error: Homing switch sequence failed"));
     } else if (xaxis && yaxis && zaxis) {
         Printer::homeDigits();
