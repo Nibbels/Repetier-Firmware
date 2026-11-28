@@ -11,7 +11,6 @@ code=r"""
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
-#define RF_THERMAL_EMERGENCY_EXPERIMENT 1
 #define PSTR(x) x
 #include "PrintJob.h"
 static unsigned effects;

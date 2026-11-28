@@ -82,6 +82,7 @@ struct Controller {
     float target=0;
     void setTargetTemperature(float v){target=v;}
     void updateTempControlVars(){}
+    int16_t maximumTargetC()const{return 140;}
 } heatedBedController;
 using TemperatureController=Controller;
 struct Extruder {float stepsPerMM=0,maxFeedrate=0,maxEJerk=0,maxAcceleration=0,offsetMM[2]{},advanceL=0; uint8_t coolerSpeed=0; Controller tempControl; static Extruder* current; static void applyCurrentSettings(){} static void initHeatedBed(){} } extruder[2]; Extruder* Extruder::current=extruder;

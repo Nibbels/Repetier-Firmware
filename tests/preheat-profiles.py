@@ -44,10 +44,9 @@ def main():
             encoding="utf-8")
         for columns in (16,20):
             executable = build / "preheat"
-            extra=["-DRF_THERMAL_EMERGENCY_EXPERIMENT=1"]
             subprocess.run([
                 os.environ.get("CXX", "c++"), "-std=c++11", "-O2", "-Wall", "-Wextra", "-Werror",
-                *extra, "-I", str(build), "-I", str(firmware), f"-DUI_COLS={columns}", str(tests / "preheat-profiles.cpp"),
+                "-I", str(build), "-I", str(firmware), f"-DUI_COLS={columns}", str(tests / "preheat-profiles.cpp"),
                 "-o", str(executable),
             ], check=True)
             subprocess.run([str(executable)], check=True, timeout=10)

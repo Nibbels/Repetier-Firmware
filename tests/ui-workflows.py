@@ -98,9 +98,7 @@ def main():
         + section(settings, "    case UI_ACTION_PREHEAT_A_BED:", "    case UI_ACTION_FANSPEED:")
         + "default: assert(false); } }\n"
         + section(epr, "void EEPROM::storePreheatProfiles()", "void EEPROM::storeSenseOffsetSettings(")
-        + "\n#define RF_THERMAL_EMERGENCY_EXPERIMENT 1\n"
         + read("PreheatProfiles.cpp")[read("PreheatProfiles.cpp").index("namespace {"):]
-        + "\n#undef RF_THERMAL_EMERGENCY_EXPERIMENT\n"
     )
     # Compile the complete real tree, not synthetic copies of the filtered lists.
     menu_defs = menu.replace("(unsigned int)&entries", "(uintptr_t)&entries")
