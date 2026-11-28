@@ -353,15 +353,64 @@ def candidate_uart(header, source):
         "    UDR0 = byte;\n    if(resyncGate_ && tx_.tail==resyncTxMarker_)resyncGate_=false;\n}")
     return header,source
 
+
+def packed_candidate(header, source):
+    # FE/DOR/UPE and SW-full occupy only low bits. Pack the transient
+    # request fence in bit 7, preserving separate public loss semantics.
+    # Both USART vectors are ordinary non-nested ISRs; foreground changes
+    # remain SREG-protected. No new read-modify-write across nested ISRs.
+    header=once(header,"return lossFlags_;","return lossFlags_ & 0x7f;")
+    header=once(header,"    static volatile bool resyncGate_;\n","")
+    source=once(source,"volatile bool UsbSerial::resyncGate_ = false;\n","")
+    source=once(source,"    lossFlags_=0;\n    resyncTxMarker_=","    resyncTxMarker_=")
+    source=once(source,"    resyncGate_=true;","    lossFlags_=0x80;")
+    source=once(source,"    const uint8_t observed = lossFlags_;","    const uint8_t observed = lossFlags_ & 0x7f;")
+    source=once(source,"    resyncGate_ = false;\n","")
+    old="""    if(resyncGate_)return;
+    const uint8_t error = status & (_BV(FE0) | _BV(DOR0) | _BV(UPE0));
+    if (error) {
+        lossFlags_ |= error;
+        return;
+    }
+    if (lossFlags_) return;"""
+    new="""    const uint8_t state=lossFlags_;
+    if(state&0x80)return;
+    const uint8_t loss=state | (status & (_BV(FE0) | _BV(DOR0) | _BV(UPE0)));
+    if(loss) { lossFlags_=loss; return; }"""
+    source=once(source,old,new)
+    # Reuse the earlier cached-cursor TX form and avoid a second tail load
+    # on the request completion path; no extra ISR counter.
+    old="""    if (tx_.head == tx_.tail) {
+        UCSR0B &= ~_BV(UDRIE0);
+        return;
+    }
+    const uint8_t byte = tx_.bytes[tx_.tail];
+    tx_.tail = tx_.next(tx_.tail);
+    UDR0 = byte;
+    if(resyncGate_ && tx_.tail==resyncTxMarker_)resyncGate_=false;"""
+    new="""    const uint8_t tail=tx_.tail;
+    if(tx_.head==tail) {
+        UCSR0B &= ~_BV(UDRIE0);
+        return;
+    }
+    UDR0=tx_.bytes[tail];
+    const uint8_t next=tx_.next(tail);
+    tx_.tail=next;
+    if((lossFlags_&0x80) && next==resyncTxMarker_)lossFlags_=0;"""
+    source=once(source,old,new)
+    return header,source
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--packed-gate",action="store_true")
     args = parser.parse_args()
     args.out.mkdir(parents=True,exist_ok=True)
     assert subprocess.check_output(["git","-C",str(args.source),"rev-parse","HEAD"],text=True).strip()==P0
     header,source=candidate_uart((args.source/"Repetier/UsbSerial.h").read_text(),
                                  (args.source/"Repetier/UsbSerial.cpp").read_text())
+    if args.packed_gate:header,source=packed_candidate(header,source)
     test=(args.source/"tests/usb-serial.cpp").read_text()
     test=once(test,"enum { U2X0 = 1,","enum { FE0=4, DOR0=3, UPE0=2, U2X0 = 1,")
     test=once(test,'#include "usb-serial-firmware.inc"',
