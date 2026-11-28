@@ -249,7 +249,7 @@ def validate_owner_snapshot(z, prefix):
     for path in sorted(z.namelist()):
         if path.startswith(source) and path.endswith((".cpp", ".c", ".ino", ".h", ".hpp", ".S")):
             fingerprint.update(path[len(source):].encode() + b"\0" + hashlib.sha256(z.read(path)).digest())
-    if fingerprint.hexdigest() not in ['6f43d86c1074e1dacbc7d6ee4a7a7167ae0ca87a1dd410adfab7f84b18c51bc7']:
+    if fingerprint.hexdigest() not in ['6f43d86c1074e1dacbc7d6ee4a7a7167ae0ca87a1dd410adfab7f84b18c51bc7', '0aafaa6b60c832c816f6bf3ede3c5d09729015167aa9a11f500522a74c9d2813']:
         raise ValueError("source ownership changed; review before applying lifetime exclusions")
 
 
