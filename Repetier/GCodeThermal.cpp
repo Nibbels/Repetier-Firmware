@@ -315,10 +315,13 @@ static bool prepareFilamentProgram() {
     }
     // The periodic pump can change admission while waiting. The program
     // must actually acquire ownership before touching the E coordinate.
-    if (Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Cancel)) {
+    if (Commands::waitForMotion(Commands::MotionWait::AllOutputs, Commands::PauseWait::Cancel) &&
+        !isAnyScanRunning() && !Printer::heatingInhibited() && Extruder::current->tempControl.pidCalibrationValid()) {
+        // Calibration, settings and sensor-fault publication above are
+        // foreground-owned. Keep floating PID validation outside CLI;
+        // only the ISR-visible pause/job admission needs the short lock.
         InterruptProtectedBlock lock;
-        if (!isAnyScanRunning() && !Printer::pause.isPaused() && !Printer::heatingInhibited() &&
-            Extruder::current->tempControl.pidCalibrationValid() && Printer::printJob.beginFilamentService())
+        if (!Printer::pause.isPaused() && Printer::printJob.beginFilamentService())
             return true;
     }
     Com::printFLN(PSTR("Filament program requires settled, unpaused motion"));
