@@ -20,11 +20,14 @@ namespace PrintLine {
     bool directMoveActive(){return active;}
 }
 namespace Printer { bool blockAll=false; }
+static bool scanActive=false;
+static bool isAnyScanRunning(){return scanActive;}
 struct PrintPause {
     enum class Phase : uint8_t { Running,RetractRequested,RetractAndParkRequested,ParkRequested,ReturnRequested,Parking };
     enum class Destination : uint8_t { InPlace,Park };
     Phase phase_=Phase::Running;
     bool servicingMotion_=false;
+    bool isPaused() const {return phase_!=Phase::Running;}
     int calls=0, last=0;
     bool inject=true;
     void serviceMotion();
@@ -57,7 +60,9 @@ int main(){
         p.phase_=i==1?P::RetractRequested:i==2?P::RetractAndParkRequested:i==3?P::ParkRequested:P::ReturnRequested;
         PrintLine::active=true;p.serviceMotion();assert(!p.calls&&!p.servicingMotion_);
         PrintLine::active=false;Printer::blockAll=true;p.serviceMotion();assert(!p.calls&&!p.servicingMotion_);
-        Printer::blockAll=false;p.serviceMotion();
+        Printer::blockAll=false;
+        scanActive=true;p.serviceMotion();assert(!p.calls&&!p.servicingMotion_);
+        scanActive=false;p.serviceMotion();
         assert(p.calls==1&&p.last==i&&!p.servicingMotion_&&p.phase_==P::ReturnRequested);
         p.serviceMotion();assert(p.calls==2&&p.last==4&&!p.servicingMotion_);
         p.serviceMotion();assert(p.calls==2);

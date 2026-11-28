@@ -158,7 +158,7 @@ __attribute__((noinline)) void handleScanWorkTasks(bool tickDue) {
         discardScans();
         return;
     }
-    if (Printer::pause.isPaused())
+    if (!Printer::printJob.isIdle() || Printer::pause.blocksCalibration())
         return;
 
     Calibration::scanSession.beginDispatch();

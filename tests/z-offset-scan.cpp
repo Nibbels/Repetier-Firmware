@@ -76,7 +76,7 @@ namespace Printer {
 ScanStrainGauge strainGauge;
 bool blockAll = false;
 struct { bool busy=false, blocked=false; bool isIdle() const { return !busy && !blocked; } bool isBusy() const { return busy; } bool commandsBlocked() const { return blocked; } } printJob;
-struct { bool paused=false; bool isPaused() const { return paused; } } pause;
+struct { bool paused=false, servicing=false; bool isPaused() const { return paused; } bool blocksCalibration() const { return paused || servicing; } } pause;
 struct { void cancel() {} void schedule(uint32_t) {} } idleStatus;
 struct { void recordActivity(uint32_t) {} } inactivity;
 struct {
@@ -249,6 +249,10 @@ int main(int argc, char** argv) {
         zOffsetScan.startOrCancel(false);
         assert(!zOffsetScan.active() && !homedZ && !homedXY);
         Printer::pause.paused=false;
+        Printer::pause.servicing=true;
+        zOffsetScan.startOrCancel(false);
+        assert(!zOffsetScan.active() && !homedZ && !homedXY);
+        Printer::pause.servicing=false;
         injectPauseAtAdmission=true;
         zOffsetScan.startOrCancel(false);
         assert(!injectPauseAtAdmission && Printer::pause.paused);

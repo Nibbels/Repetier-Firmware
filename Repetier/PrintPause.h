@@ -10,6 +10,8 @@ public:
     // The step timer reads one byte to decide whether the print queue may run.
     bool allowsQueueAdvance() const { return phase_ == Phase::Running; }
     bool isPaused() const { return !allowsQueueAdvance(); }
+    // Foreground only: cancel can clear the phase before the owner unwinds.
+    bool blocksCalibration() const { return isPaused() || servicingMotion_; }
     bool isSettled() const {
         const Phase phase = phase_;
         return phase == Phase::Paused || phase == Phase::Standby;
