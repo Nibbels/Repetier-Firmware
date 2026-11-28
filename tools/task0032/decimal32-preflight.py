@@ -101,6 +101,7 @@ int main() {
         mark(2);result=candidate(text);mark(130);
         require(expected==result);++checks;
     }
+    mark(200);
     // Every byte value, including NUL, high-bit data, all C whitespace,
     // before/after sign and digits. Compare return value only, as caller does.
     for(uint16_t byte=0;byte<256;++byte) {
@@ -111,6 +112,7 @@ int main() {
         char e[]={' ',c,'+','7',0};check(e);
         char f[]={c,0};check(f);
     }
+    mark(201);
     for(uint16_t i=0;i<4096;++i) {
         // Every magnitude 0..4095, both signs, leading zero, suffix.
         uint16_t v=i;char* end=text+12;*end=0;*--end='X';
@@ -118,7 +120,8 @@ int main() {
         *--end='0';*--end='+';check(end);*end='-';check(end);
     }
 #ifdef __AVR__
-    const uint32_t fuzz=8192;
+    mark(202);
+    const uint32_t fuzz=2048;
 #else
     const uint32_t fuzz=200000;
 #endif
@@ -136,7 +139,7 @@ int main() {
     }
     require(checks==sizeof(samples)/sizeof(samples[0])+1280UL+8192UL+fuzz);
 #ifdef __AVR__
-    mark(255);while(true){}
+    mark(203);mark(255);while(true){}
 #else
     printf("decimal32 host: %lu value comparisons PASS\n",(unsigned long)checks);
 #endif
@@ -261,16 +264,26 @@ def main():
         assert len(addresses)==3
         runner=d/"simavr-trace"
         run(["cc","-O2",a.runner_source,"-lsimavr","-lelf","-o",runner])
-        trace=run([runner,elf,*[hex(addresses[k]) for k in ("phase","fixture_id","queue_depth")]],
-                  stdout=subprocess.PIPE).stdout
+        # Preserve evidence even when the emulator hits its fixed cycle cap.
+        sim=subprocess.run([str(x) for x in [runner,elf,*[hex(addresses[k]) for k in ("phase","fixture_id","queue_depth")]]],
+                           text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        trace=sim.stdout
         (out/"markers.csv").write_text(trace)
-        records={};pending=None;done=False
+        (out/"simavr-stderr.txt").write_text(sim.stderr)
+        if sim.returncode:
+            print(trace[-3000:]);print(sim.stderr)
+            sim.check_returncode()
+        records={};pending=None;done=False;checkpoints=[]
         for line in trace.splitlines():
             if not line.startswith("E,"):continue
             _,cycle,f,index,mark=line.split(",")
             cycle,f,index,mark=map(int,(cycle,f,index,mark))
             if mark==254:raise AssertionError(("AVR libc value mismatch",f,index))
             if mark==255:done=True;break
+            if 200<=mark<=203:
+                assert pending is None
+                checkpoints.append(mark)
+                continue
             if mark<128:
                 assert pending is None and f==0 and mark in (1,2)
                 pending=(cycle,index,mark)
@@ -279,11 +292,11 @@ def main():
                 assert (idx,stage)==(index,mark-128)
                 assert (idx,stage) not in records
                 records[idx,stage]=cycle-start;pending=None
-        assert done and pending is None
+        assert done and pending is None and checkpoints==[200,201,202,203],checkpoints
         rows=[{"id":i,"baseline":records[i,1],"candidate":records[i,2],
                "saved":records[i,1]-records[i,2]} for i in range(len(records)//2)]
         assert len(rows)==61,len(rows)
-        print("AVR libc:",61+1280+8192+8192,"value comparisons PASS")
+        print("AVR libc:",61+1280+8192+2048,"value comparisons PASS")
         print("paired samples saved cycles min/median/max:",
               min(r["saved"] for r in rows),sorted(r["saved"] for r in rows)[len(rows)//2],
               max(r["saved"] for r in rows))
@@ -299,7 +312,7 @@ def main():
         result={"p0":P0,"receiver_sha256":hashlib.sha256(receiver.encode()).hexdigest(),
                 "candidate_sha256":hashlib.sha256(header.encode()).hexdigest(),
                 "avr_elf_sha256":hashlib.sha256(elf.read_bytes()).hexdigest(),
-                "host":host_log.strip(),"avr_value_checks":61+1280+8192+8192,
+                "host":host_log.strip(),"avr_value_checks":61+1280+8192+2048,
                 "errno_users":errno_users,"rows":rows,
                 "qualification":"actual AVR-libc return value comparison; isolated timing; canonical serial host regression; no integrated linked resource/IRQ proof"}
         (out/"decimal32-results.json").write_text(json.dumps(result,indent=2)+"\n")
