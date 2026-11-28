@@ -159,7 +159,19 @@ inline bool StepExecutor::enableSteppers(PrintLine& move) {
     # a not-yet-executing stop tail rather than race a half-started clock.
     old=region(get(p),"        direct.task = (direct.task == DIRECT_PREPARED_STOPPABLE","        directionOwner = DirectionOwner::Direct;")
     assert "FLAG_SCAN_PATH" in old and "enableSteppers(direct);" in old
-    edit(p,old,"""        if (direct.flags & FLAG_SCAN_PATH) {
+    edit(p,old,"""        // Cancellation is also a startup gate. A guarded request can lose
+        // its reference or command admission while waiting for motor wake.
+        // Never energize a stale request just to cancel it at the next pulse.
+        const bool guardedStartup = direct.flags & FLAG_GUARDED_STOP_MASK;
+        if (guardedStartup)
+            stepsPerTimerCall = 1;
+        if (!(direct.flags & FLAG_SCAN_PATH) &&
+            (Printer::blockAll || (guardedStartup &&
+             (Printer::printJob.commandsBlocked() || !Printer::isAxisHomed(direct.primaryAxis))))) {
+            finishMove(direct, false);
+            return 1000;
+        }
+        if (direct.flags & FLAG_SCAN_PATH) {
             // Scan/retreat may never wake a motor. A pending ordinary wake
             // is not a settled driver, even though its pin is already high.
             if (!Printer::zStepperEnabled()) {
