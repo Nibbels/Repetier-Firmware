@@ -207,12 +207,30 @@ def measure(mod,img,delta,rate,start,acceleration,stop_after,negative=False):
         cruise_samples=cruise_samples,cruise_elapsed=cruise_elapsed,cruise_cost=cruise_cost,
         elapsed_ticks=epoch,request_energy=request_energy)
 
+def vector_prefix(evidence, board):
+    # This is a lower bound, not a sampled shortest pulse path. The
+    # unconditional contiguous prologue executes before any STEP GPIO.
+    # Reject unexpected instructions rather than count arbitrary code.
+    path=evidence/board/"disassembly.txt"
+    data=path.read_text()
+    start=data.index("<__vector_17>:")
+    cycles=0
+    for line in data[start:].splitlines()[1:]:
+        m=re.match(r"\s*[0-9a-f]+:\s+(?:[0-9a-f]{2} )+\s*(\w+)\b",line)
+        if not m:continue
+        op=m[1]
+        if op not in ("push","in","eor"):break
+        cycles+=2 if op=="push" else 1
+    assert cycles>=51,("primary edge entry-prefix contract",board,cycles)
+    return cycles
+
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument("--evidence",type=Path,required=True)
     p.add_argument("--out",type=Path,required=True)
     p.add_argument("--optimized",action="store_true")
     p.add_argument("--extended",action="store_true")
+    p.add_argument("--phase-anchor",action="store_true")
     a=p.parse_args()
     global FAST_PROFILE
     FAST_PROFILE=a.optimized
@@ -236,12 +254,15 @@ def main():
                     assert row["request_energy"]==rate*rate and row["tail"]<max(delta)-800,row
                     rows.append(row)
                 rows.append(measure(mod,img,(600,0,0,0),15238,990,228570,50,negative=True))
+            if a.phase_anchor:meta[board]["unconditional_vector_prefix_cycles"]=vector_prefix(a.evidence,board)
             result["boards"][board]={"metadata":meta[board],"paths":rows}
             print(board,"calls",sum(r["calls"] for r in rows),
                 "max_cycles",max(r["max_cycles"] for r in rows),
                 "max_mask",max(r["max_mask"] for r in rows),
                 "short_gaps",sum(r["short_gaps"] for r in rows),flush=True)
             a.out.write_text(json.dumps(result,indent=2)+"\n")
+        if a.phase_anchor:
+            assert all(v>=31 for b in result["boards"].values() for row in b["paths"] for k in ("high_min","low_min") for v in row[k].values()), "electrical STEP minimum"
         if a.optimized:
             # Measured minimum is required, not just recorded.
             assert all(not row["short_gaps"] for b in result["boards"].values() for row in b["paths"]), "short physical primary gap"

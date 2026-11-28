@@ -1401,9 +1401,8 @@ jobs:
           if-no-files-found: error
 
   current-energy-z-compose:
-    # First combined source/AVR candidate after the exact #232/#234 gate.
-    # This composes physical edge ownership, NOT final shared Z scheduling.
-    if: github.head_ref == 'task/Task0032-resend-preflight'
+    # Reproduction of the qualified #235 combined edge owner.
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -1476,5 +1475,74 @@ jobs:
         with:
           name: task0032-energy-z-compose-${{ github.sha }}
           path: ${{ runner.temp }}/energy-z
+          retention-days: 7
+          if-no-files-found: error
+
+
+  current-primary-edge-anchor:
+    if: github.head_ref == 'task/Task0032-resend-preflight'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-energy-z-compose-d131b30c416bc3a1fcd4bf6d355c09845fc23191
+          run-id: 46170438722
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/primary-anchor-input
+      - name: Reconstruct exact #235 tree and prepare phase-aware direct timing
+        shell: bash
+        run: |
+          set -euo pipefail
+          input="$RUNNER_TEMP/primary-anchor-input"
+          source="$RUNNER_TEMP/primary-anchor-source"
+          out="$RUNNER_TEMP/primary-anchor"
+          p0=c31b4d391cc4d2b9cca9ab3f8e236bed805716d9
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          sha256sum tools/task0032/current-primary-edge-anchor.py tools/task0032/current-direct-energy-linked.py > "$out/tool-sha256.txt"
+          echo "d4ebf8c864e8618fe4536dc6870f0e98a3d09e2efaf366fba530b55337372000  $input/energy-z.diff" | sha256sum -c
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$source" "$p0"
+          git -C "$source" apply --index "$input/energy-z.diff"
+          test "$(git -C "$source" write-tree)" = a7f8996d06d307b1657b4bcfa7147a022d0062f0
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Reconstruct qualified energy Z owner"
+          python3 tools/task0032/current-primary-edge-anchor.py --source "$source/Repetier" --out "$out/candidate"
+          cp "$out/candidate/StepExecutor.cpp" "$source/Repetier/StepExecutor.cpp"
+          python3 tools/task0032/current-direct-energy-replay.py --source "$source/Repetier" --candidate "$source/Repetier" --out "$out/replay" | tee "$out/replay.log"
+          git -C "$source" add Repetier
+          git -C "$source" diff --cached --check
+          git -C "$source" -c user.name=Task0032 -c user.email=task0032@localhost commit -m "Primary edge phase-aware direct compare"
+          git -C "$source" rev-parse HEAD > "$out/local-candidate-sha.txt"
+          git -C "$source" rev-parse 'HEAD^{tree}' > "$out/local-candidate-tree.txt"
+          git -C "$source" diff --binary "$p0" HEAD > "$out/primary-anchor.diff"
+          (cd "$out"; sha256sum primary-anchor.diff > primary-anchor.diff.sha256)
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Canonical host and four AVR recovery links
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/primary-anchor"
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.8.6
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
+          cd "$RUNNER_TEMP/primary-anchor-source"
+          python3 tools/task0003-baseline.py "$out/candidate-evidence" | tee "$out/canonical.log"
+      - name: Measure actual edge spacing and prove unconditional vector prefix
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/primary-anchor"
+          python3 tools/task0032/current-direct-energy-linked.py --optimized --extended --phase-anchor --evidence "$out/candidate-evidence" --out "$out/linked-energy.json" | tee "$out/linked-energy.log"
+          python3 tools/task0032/current-transport-linked.py --evidence "$out/candidate-evidence" --out "$out/linked-transport.json" | tee "$out/linked-transport.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-primary-anchor-${{ github.sha }}
+          path: ${{ runner.temp }}/primary-anchor
           retention-days: 7
           if-no-files-found: error
