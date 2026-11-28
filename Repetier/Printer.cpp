@@ -267,7 +267,7 @@ static bool applyGCodeExtrusion(float e) {
 static bool publishGCodeMove(bool isXYZMove, bool isEMove, bool internal) {
     if (!isXYZMove && !isEMove)
         return false;
-    const bool published = PrintLine::prepareQueueMove(false, true, Printer::feedrate, isXYZMove);
+    const bool published = PrintLine::prepareQueueMove(false, true, Printer::requestedFeedrate(), isXYZMove);
     if (published && !internal)
         Printer::printJob.admitPrintMotion();
     return published;

@@ -29,6 +29,7 @@ struct GCode {
 };
 namespace Printer {
     MoveTarget moveTarget;GCodeModes gcodeModes;float feedrate;int feedrateMultiply;
+    float requestedFeedrate(){return feedrate;}
     float flowMultiplier(){return flow;}bool heatingInhibited(){return inhibited;}
     struct {float extrusionFactor(){return digit;}} digitCompensation;
     struct {void admitPrintMotion(){++admitted;}} printJob;
