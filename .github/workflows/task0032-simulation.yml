@@ -1290,7 +1290,7 @@ jobs:
 
   current-direct-energy-fast:
     # Exact #228 source tree, no repeated UART/stop-tail qualification chain.
-    if: github.head_ref == 'task/Task0032-resend-preflight'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -1358,5 +1358,44 @@ jobs:
         with:
           name: task0032-fast-energy-${{ github.sha }}
           path: ${{ runner.temp }}/fast-energy
+          retention-days: 7
+          if-no-files-found: error
+
+  current-direct-energy-fast-measure:
+    # Reuse the exact four linked recovery binaries from #232. Only the
+    # instruction model changed; no need to rebuild the candidate.
+    if: github.head_ref == 'task/Task0032-resend-preflight'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: task0032-fast-energy-0413e175148eb592a9b99b752017a1001fd4ea9f
+          run-id: 46169622834
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/fast-energy-input
+      - name: Verify and measure exact #232 binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          input="$RUNNER_TEMP/fast-energy-input"
+          out="$RUNNER_TEMP/fast-energy-measure"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          sha256sum research/task0032-step-output/linked_timer1.py tools/task0032/current-direct-energy-linked.py tools/task0032/current-transport-linked.py > "$out/tool-sha256.txt"
+          echo "35300bd30f4cfd517b74399f112e9a7fb76bf854bea121f27bfb5e6832e71773  $input/fast-energy.diff" | sha256sum -c
+          test "$(cat "$input/local-candidate-sha.txt")" = 47716e034417375da42bdfd564731a5db6a61777
+          test "$(cat "$input/local-candidate-tree.txt")" = c8c6cd0df52986cc21c07241f37109b4758995c7
+          python3 tools/task0032/current-direct-energy-linked.py --optimized --extended --evidence "$input/candidate-evidence" --out "$out/linked-energy.json" | tee "$out/linked-energy.log"
+          python3 tools/task0032/current-transport-linked.py --evidence "$input/candidate-evidence" --out "$out/linked-transport.json" | tee "$out/linked-transport.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-fast-energy-measure-${{ github.sha }}
+          path: ${{ runner.temp }}/fast-energy-measure
           retention-days: 7
           if-no-files-found: error
