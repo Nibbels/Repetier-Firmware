@@ -68,6 +68,7 @@ void streamVisit(uint32_t now) {
     }
     if(UsbSerial::lossFlags())researchFault();
     researchAck.service();
+    if(researchAckDeadline.expired(researchAck.pending,now))researchRecovery.failTx();
     researchRecovery.service(now,receiveReady(),!researchAck.pending,[](uint32_t expected){
         // Reserve conservatively for the whole maximum-length span before
         // discarding RX. No other foreground TX producer in this visit.
@@ -209,6 +210,46 @@ void streamAckOrder() {
     assert(drainTx()=="ok 2\r\n");expectCommand(2);
     assert(researchRecovery.phase()==ResendPolicy::Phase::Healthy);
 }
+
+void streamAckStall(bool borrowed, bool lost) {
+    researchStreamActive=true;
+    const uint32_t start=0xffffff00u;
+    for(unsigned i=0;i<63;++i)assert(UsbSerial::tryWrite(uint8_t(i)));
+    uartFeed(borrowed?numbered("N1 M117 retained message"):streamPacket(1));
+    streamVisit(start);
+    assert(researchAck.pending && GCodeInput::peekCurrentCommand());
+    if(lost)corruptStream(streamPacket(2),2,_BV(FE0));
+    // No fresh receive storage is needed for ACK progress. A missing ACK
+    // must not hang forever just because admitted borrowed text owns frame.
+    for(unsigned i=1;i<2000;++i) {
+        streamVisit(start+i);
+        assert(!researchStops && researchAck.pending);
+    }
+    streamVisit(start+2000);
+    assert(researchRecovery.phase()==ResendPolicy::Phase::Fatal
+           && researchRecovery.cause()==ResendPolicy::Cause::TxStall);
+    assert(researchStops==1 && researchRecovery.requests()==0);
+    assert(drainTx().size()==63);
+    streamVisit(start+2001);
+    assert(researchStops==1 && drainTx().empty());
+}
+void streamAckResume() {
+    researchStreamActive=true;
+    const uint32_t start=0xfffffff0;
+    for(unsigned i=0;i<63;++i)assert(UsbSerial::tryWrite(uint8_t(i)));
+    uartFeed(numbered("N1 M117 retained message"));streamVisit(start);
+    streamVisit(start+1998);
+    assert(researchAck.pending && !researchStops);
+    assert(drainTx().size()==63);
+    streamVisit(start+1999);
+    assert(drainTx()=="ok 1\r\n" && !researchAck.pending && !researchStops);
+    auto* msg=GCodeInput::peekCurrentCommand();
+    assert(msg && msg->text==std::string("retained message"));
+    expectCommand(1);
+    streamVisit(start+90000);
+    assert(!researchStops && researchRecovery.phase()==ResendPolicy::Phase::Healthy);
+}
+
 void streamBorrowed() {
     researchStreamActive=true;
     uartFeed(numbered("N1 M117 retained message"));streamVisit(0);
@@ -248,7 +289,7 @@ def patch_receiver(s):
     helper=frames["HELPERS"].replace("return researchBoundary && !Printer",
         "return researchBoundary && (!researchStreamActive || !UsbSerial::lossFlags()) && !Printer")
     pending=ack["CANDIDATE"].split("void stagedAck()")[0]
-    s=once(s,"} // namespace\n",helper+pending+"\nPendingAck researchAck;\n"+STREAM_HELPERS+"\n} // namespace\n")
+    s=once(s,"} // namespace\n",helper+pending+"\nPendingAck researchAck;\nAckPublicationDeadline researchAckDeadline;\n"+STREAM_HELPERS+"\n} // namespace\n")
     for binary,anchor in [(True,"                if (parseBinary(command, frame.bytes, frame.expectedLength))"),
                           (False,"                if (parseAscii(command, (char*)frame.bytes, true))")]:
         branch=frames["recovery_branch"](binary)
@@ -263,7 +304,7 @@ def patch_receiver(s):
         "void GCodeInput::checkAndPushCommand(GCode& command) {\n"
         "    if(researchStreamActive && UsbSerial::lossFlags()){researchFault();return;}")
     s=once(s,"    Com::printFLN(Com::tOkSpace, serialReceive.currentLineNumber);",
-        "    if(researchStreamActive) {assert(researchAck.stage(serialReceive.currentLineNumber));}\n"
+        "    if(researchStreamActive) {assert(researchAck.stage(serialReceive.currentLineNumber));researchAckDeadline.staged(HAL::timeInMilliseconds());}\n"
         "    else Com::printFLN(Com::tOkSpace, serialReceive.currentLineNumber);")
     s=once(s,"void GCodeInput::readFromSerial() {","void GCodeInput::readFromSerial() {\n"
         "    if(researchStreamActive && (UsbSerial::lossFlags() || researchAck.pending ||\n"
@@ -314,6 +355,10 @@ def main():
             '    else if (scenario == "stream-sweep-a") streamSweep(false);\n'
             '    else if (scenario == "stream-sweep-b") streamSweep(true);\n'
             '    else if (scenario == "stream-ack") streamAckOrder();\n'
+            '    else if (scenario == "stream-ack-stall") streamAckStall(false,false);\n'
+            '    else if (scenario == "stream-ack-text-stall") streamAckStall(true,false);\n'
+            '    else if (scenario == "stream-ack-loss-stall") streamAckStall(true,true);\n'
+            '    else if (scenario == "stream-ack-resume") streamAckResume();\n'
             '    else if (scenario == "stream-text") streamBorrowed();\n'
             '    else if (scenario == "stream-fatal") streamFatal(true);\n'
             '    else if (scenario == "stream-ambiguous") streamFatal(false);\n'
@@ -323,7 +368,7 @@ def main():
         # replay's mock TX. Keep that independent two-mode suite in the
         # frame preflight; run all ordinary serial cases plus stream here.
         path=tests/"serial-protocol.py";s=path.read_text()
-        names='"stream-a0","stream-a1","stream-a2","stream-b0","stream-b1","stream-b2","stream-sweep-a","stream-sweep-b","stream-ack","stream-text","stream-fatal","stream-ambiguous",'
+        names='"stream-a0","stream-a1","stream-a2","stream-b0","stream-b1","stream-b2","stream-sweep-a","stream-sweep-b","stream-ack","stream-ack-stall","stream-ack-text-stall","stream-ack-loss-stall","stream-ack-resume","stream-text","stream-fatal","stream-ambiguous",'
         s=once(s,'for scenario in ("numbered",','for scenario in ('+names+'"numbered",')
         start=s.index('        subprocess.run(compiler + ["-DRF_THERMAL_EMERGENCY_EXPERIMENT')
         end=s.index('        uart_replay =',start)
