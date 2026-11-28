@@ -384,6 +384,7 @@ def patch_receiver(s):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source",type=Path,required=True)
+    parser.add_argument("--packed-gate",action="store_true")
     args=parser.parse_args()
     assert subprocess.check_output(["git","-C",str(args.source),"rev-parse","HEAD"],text=True).strip()==P0
     with TemporaryDirectory(prefix="task0032-resend-stream-") as d:
@@ -393,6 +394,7 @@ def main():
         for name in ("serial-protocol.cpp","serial-protocol.py","usb-serial.cpp"):
             shutil.copyfile(args.source/"tests"/name,tests/name)
         header,source=ring["candidate_uart"]((fw/"UsbSerial.h").read_text(),(fw/"UsbSerial.cpp").read_text())
+        if args.packed_gate:header,source=ring["packed_candidate"](header,source)
         (fw/"UsbSerial.h").write_text(header);(fw/"UsbSerial.cpp").write_text(source)
         path=fw/"GCodeInput.cpp";path.write_text(patch_receiver(path.read_text()))
         path=tests/"serial-protocol.cpp";s=path.read_text()
