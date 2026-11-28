@@ -487,3 +487,30 @@ jobs:
           path: ${{ runner.temp }}/task0032-resend-isr
           retention-days: 7
           if-no-files-found: error
+
+
+  transport-terminal-preflight:
+    if: github.head_ref == 'task/Task0032-resend-preflight'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Replay pinned P0 terminal transition and shared cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/task0032-transport-terminal"
+          mkdir -p "$out"
+          git rev-parse HEAD > "$out/checkout-sha.txt"
+          p0=962e9b6b5152e2c3972896f5a93981bdaed61422
+          git fetch --no-tags --depth=1 origin "$p0"
+          git worktree add --detach "$RUNNER_TEMP/transport-terminal-p0" "$p0"
+          sha256sum tools/task0032/transport-terminal-preflight.py > "$out/source-sha256.txt"
+          python3 tools/task0032/transport-terminal-preflight.py --source "$RUNNER_TEMP/transport-terminal-p0" --out "$out" | tee "$out/replay.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task0032-transport-terminal-${{ github.sha }}
+          path: ${{ runner.temp }}/task0032-transport-terminal
+          retention-days: 7
+          if-no-files-found: error
