@@ -24,6 +24,8 @@ The [GitHub Actions firmware checks](https://github.com/Nibbels/Repetier-Firmwar
 
 Supported models and retrofit variants remain RF1000, RF2000, RF2000v2 and RF2000-X44. See the [board connector documentation](docs/board-connectors.md) and [build audit](coordination/audits/final-cleanup.md). The [last revision containing milling code](https://github.com/Nibbels/Repetier-Firmware/tree/7e2e08b7f6da7677007dfddd06f8fc5adeb7d709) remains in repository history.
 
+Visual Studio / Visual Micro is retired; the legacy solution, IDE manifests and manifest-completeness test are no longer maintained. The Arduino sketch and CMake sources remain available; the canonical qualified build remains the recovery-linked Arduino CLI pipeline above.
+
 ## Preheat profiles
 
 Set the bed and hotend temperatures for profiles A and B under **Configuration → Preheat profiles**. Each edit is saved in the controller EEPROM. Choose A or B in **Extruder**, where the label shows the bed temperature first. A target of 0 turns off that heater. Factory values are 60/180 °C for A and 100/210 °C for B.

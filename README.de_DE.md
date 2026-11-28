@@ -24,6 +24,8 @@ Die [GitHub Actions Firmware-Prüfungen](https://github.com/Nibbels/Repetier-Fir
 
 Die unterstützten Modelle und Umbauvarianten bleiben RF1000, RF2000, RF2000v2 und RF2000-X44. Siehe die [Anschlussübersicht](docs/board-connectors.md) und den [Build-Audit](coordination/audits/final-cleanup.md). Der [letzte Stand mit Fräscode](https://github.com/Nibbels/Repetier-Firmware/tree/7e2e08b7f6da7677007dfddd06f8fc5adeb7d709) liegt im Repository-Verlauf.
 
+Visual Studio / Visual Micro ist eingestellt; die alte Solution, IDE-Projektlisten und der zugehörige Vollständigkeitstest werden nicht mehr gepflegt. Arduino-Sketch und CMake bleiben erhalten; maßgeblich für die Qualifikation ist weiterhin der oben beschriebene Recovery-Build mit Arduino CLI.
+
 ## Vorheizprofile
 
 Unter **Configuration → Preheat profiles** stellst du Bett- und Extrudertemperatur für Profil A und B ein. Der Drucker speichert jede Änderung im internen EEPROM. Unter **Extruder** startest du das Profil anhand der angezeigten Temperaturen. Das Bett steht zuerst. Mit 0 °C schaltest du die jeweilige Heizung aus. Die Werkseinstellungen sind 60/180 °C für A und 100/210 °C für B.
