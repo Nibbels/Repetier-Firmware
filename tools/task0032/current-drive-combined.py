@@ -12,7 +12,7 @@ import hashlib
 import json
 import subprocess
 
-P0 = "bb4456ffec2c7c1caef5fae68721797352ab9695"
+P0 = "2eeeb010ece4f4421fb860f0c506d81939f06f05"
 
 def git(source, *args):
     return subprocess.check_output(["git", "-C", str(source), *args], text=True).strip()
@@ -22,7 +22,57 @@ def edit(path, old, new):
     assert s.count(old)==1,(str(path),old,s.count(old))
     path.write_text(s.replace(old,new))
 
+def adapt_homing(source):
+    # G28 gained these checks after the independently tested wake pin.
+    # Require settled physical readiness, not a second software mirror.
+    t=source/"Repetier/Homing.cpp"
+    s=t.read_text()
+    for axis,mask in (("X",1),("Y",2)):
+        old=f"enabledStepper[{axis}_AXIS]"
+        assert s.count(old)==2,(axis,s.count(old))
+        s=s.replace(old,f"motorWake.readyFor({mask})")
+    t.write_text(s)
+    for p in (source/"Repetier").glob("*"):
+        if p.suffix in (".h",".cpp",".ino"):
+            assert "enabledStepper" not in p.read_text(),p
+
 def adapt_tests(source):
+    # DRV reset trace: run the real readiness reset, preserve GPIO trace.
+    t=source/"tests/drv8711-trace.py"
+    edit(t,"static Trace actual;",'''static Trace actual;
+#include "MotorWake.h"
+MotorWake motorWake;''')
+    edit(t,"    drv8711Init();",'''    motorWake.afterAsserted(0x1f,0);
+    motorWake.service(27);
+    assert(motorWake.readyFor(0x1f));
+    drv8711Init();
+    assert(motorWake.awakeMask()==0 && motorWake.readyMask()==0);''')
+    # Advance handoff test deliberately models activation of the new E
+    # channel at the point where it simulates the first real E move.
+    t=source/"tests/pause-sense-offset.cpp"
+    edit(t,'#include "pause-sense-offset-firmware.inc"','#include "MotorWake.h"\nMotorWake motorWake;\n#include "pause-sense-offset-firmware.inc"')
+    edit(t,"    extruder[0].enabled = true;",'''    motorWake.reset();
+    motorWake.afterAsserted(8,0);
+    motorWake.service(27);''')
+    edit(t,"    assert(!extruder[0].enabled && extruder[0].deliveredSteps == 2);",
+        "    assert(motorWake.readyFor(8) && !motorWake.readyFor(16) && extruder[0].deliveredSteps == 2);")
+    edit(t,"    advance.addSteps(-2);\n    tick();\n    tick();\n    tick();",'''    assert(advance.blocked());
+    motorWake.afterAsserted(16,27);
+    motorWake.service(54);
+    assert(motorWake.readyFor(16));
+    advance.allow(ExtrusionOutput::Inhibit::MotorsDisabled);
+    advance.addSteps(-2);
+    tick();
+    tick();
+    tick();''')
+    # The isolated Z ledger suite intentionally starts with a settled
+    # motor. The independent wake fixture covers pending motor startup.
+    t=source/"tests/z-motion.cpp"
+    edit(t,'#include "ZMotion.h"','#include "MotorWake.h"\nMotorWake motorWake;\n#include "ZMotion.h"')
+    edit(t,"bool needsCMPwait();","bool isAxisHomed(uint8_t axis) { assert(axis==Z_AXIS); return zMotion.isHomed(); }\nbool needsCMPwait();")
+    edit(t,"    static void stepSlowedZCompensation();","    static bool ensureMotorsReady(uint8_t mask) { assert(motorWake.readyFor(mask)); return true; }\n    static void stepSlowedZCompensation();")
+    edit(t,"    zMotion.configureTravel(100.0f, 10.0f);","    motorWake.reset();\n    motorWake.afterAsserted(4,0);\n    motorWake.service(27);\n    zMotion.configureTravel(100.0f, 10.0f);")
+
     t=source/"tests/task0034-guarded-drive.cpp"
     edit(t,"""void StepExecutor::enableSteppers(PrintLine&) {
     assert(!scanRunning);
@@ -104,6 +154,7 @@ def main():
         patches[name]=hashlib.sha256(raw).hexdigest()
         subprocess.run(["git","-C",str(source),"apply","--check",str(p)],check=True)
         subprocess.run(["git","-C",str(source),"apply",str(p)],check=True)
+    adapt_homing(source)
     adapt_tests(source)
     subprocess.run(["git","-C",str(source),"add","-N","Repetier/MotorWake.h"],check=True)
     subprocess.run(["git","-C",str(source),"diff","--check"],check=True)
