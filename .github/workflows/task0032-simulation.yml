@@ -1050,7 +1050,7 @@ jobs:
           done
 
   current-p0-forward-reconcile:
-    if: github.head_ref == 'task/Task0032-resend-preflight'
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'task/Task0032-resend-preflight' && inputs.historical
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -1194,6 +1194,10 @@ jobs:
           sudo apt-get install -y --no-install-recommends libsimavr-dev libelf-dev
           cd "$RUNNER_TEMP/direct-energy-p0"
           python3 tools/task0003-baseline.py "$out/candidate-evidence" | tee "$out/canonical.log"
+      - name: Observe actual linked energy ramp and STEP spacing
+        run: |
+          out="$RUNNER_TEMP/task0032-direct-energy"
+          python3 tools/task0032/current-direct-energy-linked.py --evidence "$out/candidate-evidence" --out "$out/linked-energy.json"
       - name: Recheck linked transport after composition
         run: |
           set -euo pipefail
