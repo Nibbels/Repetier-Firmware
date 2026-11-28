@@ -196,6 +196,8 @@ namespace HAL {''')
                 r'assert(replies.empty() && txDrain()=="ok 0\r\n");')
             scenarios=once(scenarios,'assert(commandQueue.full());replies.clear();',
                 r'assert(commandQueue.full() && txDrain()=="ok 1\r\nok 2\r\n");replies.clear();')
+            scenarios=once(scenarios,"transportStops==1 && UsbSerial::transportFailed()",
+                "transportStops==1 && GCodeInput::transportFailed()")
             scenarios+="\n"+stage2["SCENARIOS"]
             modes+=stage2["MODES"]
         s=once(s,"void numberedLines() {",scenarios+"\nvoid numberedLines() {")
