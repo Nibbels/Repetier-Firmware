@@ -3,7 +3,11 @@
 
 GAP marks unresolved sensor validity behavior, not a safety requirement.
 Software duty requests and simulated pin transitions are distinct; this is
-not physical sensor/relay or AVR timing certification.
+not physical sensor/relay or AVR timing certification. The controller clock
+is deliberately accelerated in long PID scenarios; the modeled Timer3/5
+register clocks advance separately per publication. Exact modular deadline,
+wrap, expiry and reset tests remain in heater-lease-integrated.py. This replay
+uses the actual ticket/grant, PWM and watchdog handshake implementations.
 """
 import os
 from pathlib import Path
@@ -68,12 +72,44 @@ static uint8_t pins[8];
 #define READ(pin) (pins[pin])
 static uint16_t PWM_OCR;
 static millis_t now;
+#define F_CPU 16000000UL
+#define _BV(n) (1U << (n))
+#define OCIE3A 1
+#define OCIE3B 2
+#define OCIE3C 3
+#define OCF3A 1
+#define OCF3B 2
+#define OCF3C 3
+#define TOV3 0
+#define CS32 2
+#define CS52 2
+#define OCF5A 1
+static uint8_t TIMSK3,TCCR3A,TCCR3B,TCCR3C;
+static uint16_t TCNT3,OCR3A,OCR3B,OCR3C;
+static uint8_t TIMSK5,TCCR5A,TCCR5B,TCCR5C;
+static uint16_t TCNT5,OCR5A;
+struct W1C {
+    uint8_t bits=0;
+    operator uint8_t() const {return bits;}
+    void operator=(uint8_t mask){bits &= uint8_t(~mask);}
+} TIFR3,TIFR5;
+static uint32_t heaterResetCookie;
+constexpr uint32_t heaterLiveCookie=0xd39a6c51UL;
+static unsigned watchdogFeeds;
+static millis_t lastWatchdogFeed;
+#define wdt_reset() do { ++watchdogFeeds; lastWatchdogFeed=now; } while(0)
 constexpr uint8_t TemperatureAdcCount = NUM_TEMPERATURE_LOOPS;
 #include "adc-state.inc"
 static int stalledChannel = -1;
 static void publishAdc() {
+    // Abstract ADC publication events, not elapsed hardware time.
+    // The logical controller clock can jump seconds in identification tests.
+    if(++TCNT3==0) TIFR3.bits|=_BV(TOV3);
+    ++TCNT5;
     for (uint8_t i = 0; i < TemperatureAdcCount; ++i) {
         if (i != stalledChannel) {
+            heaterBatchStart=TCNT3;heaterBatchValid=true;heaterBatchPrevious=false;
+            publishHeaterSample(i,temperatureAdcValues[i]);
             temperatureAdcPublishedAt[i] = now;
             temperatureAdcReady[i] = true;
         }
@@ -92,7 +128,10 @@ struct HAL {
                                      ,uint32_t* publication=nullptr
 #endif
     );
-    static void setHeaterDuty(uint8_t, uint8_t);
+    #include "ticket-decl.inc"
+    static bool heaterLeaseFault();
+    static void completeThermalWatchdogPass(bool);
+    static void completeAutotuneWatchdogPass();
     static uint8_t outputDuty(uint8_t);
     static void tellWatchdogOk();
     static bool takeScanTick();
@@ -134,7 +173,6 @@ static TemperatureController* tempController[NUM_TEMPERATURE_LOOPS] = {
 #define INLINE inline
 #define EXTRUDER_TIMSK advanceTimerMask
 #define EXTRUDER_OCIE 1
-#define _BV(n) (1U << (n))
 static uint8_t advanceTimerMask;
 #include "ExtrusionOutput.h"
 void ExtrusionOutput::startTimer(int16_t pending, uint8_t mask) {
@@ -211,6 +249,16 @@ struct Commands {
 static void reportTempsensorAndHeaterErrors();
 #include "conversion.inc"
 #include "hal.inc"
+// Explicit fixture injection of an already active lease, for fault tests
+// that start with an invalid/stale sample. Never use a ticketless positive
+// HAL setter to arrange the fixture; production cannot do this.
+static void seedDuty(uint8_t channel,uint8_t duty) {
+    assert(channel<=NUM_EXTRUDER && duty);
+    writeLeaseDeadline(channel,uint16_t(TCNT3+heaterLeaseDuration));
+    TIFR3=leaseMask(channel);
+    requestedDuty[channel]=duty;
+    TIMSK3|=leaseMask(channel);
+}
 namespace GCodeInput { bool flashScriptActive(); }
 #include "control.inc"
 #include "bed-setter.inc"
@@ -230,7 +278,6 @@ namespace GCodeInput {
         assert(visits < 100000);
         now += stride;
         if (injection == Injection::Stale) stalledChannel = tuned->sensorPin;
-        publishAdc();
         scanTick = true;
         if (postTemperature) temperatureTick = true;
         if (injection == Injection::Reach && visits == 3) {
@@ -272,7 +319,7 @@ namespace GCodeInput {
         if (injection == Injection::PowerChange) tuned->pidMax = 10;
         if (injection == Injection::OtherFault)
             assert(tuned != &bed); // bed already has 10 consecutive invalid samples
-
+        publishAdc();
     }
 }
 static struct {
@@ -313,6 +360,9 @@ static void allOff() {
 int main(int argc, char** argv) {
     assert(argc == 2);
     const char* name = argv[1];
+    beginHeaterLease();
+    beginWatchdogProgress();
+    watchdogActive=true;
     auto& c = extruder[0].tempControl;
     for (auto* t : tempController) {
         t->sensorType = 60;
@@ -346,7 +396,7 @@ int main(int argc, char** argv) {
         assert(bed.effectiveCutoffC()==90 && bed.maximumTargetC()==80);
         bed.setTargetTemperature(80);
         assert(bed.targetTemperatureC==80);
-        HAL::setHeaterDuty(bed.pwmIndex,255);
+        seedDuty(bed.pwmIndex, 255);
         assert(bed.setBedEmergencyCutoff(0));
         assert(!bed.targetTemperatureC && !HAL::outputDuty(bed.pwmIndex));
         assert(bed.effectiveCutoffC()==90 && bed.maximumTargetC()==0);
@@ -562,7 +612,7 @@ int main(int argc, char** argv) {
     } else if (!std::strcmp(name, "unpublished")) {
         temperatureAdcReady[c.sensorPin] = false;
         stalledChannel = c.sensorPin;
-        HAL::setHeaterDuty(c.pwmIndex, 255);
+        seedDuty(c.pwmIndex, 255);
         service();
         assert(HAL::outputDuty(c.pwmIndex) == 0 && HAL::outputDuty(bed.pwmIndex) == 255);
         assert(!Printer::isAnyTempsensorDefect() && !c.pidHistoryValid);
@@ -579,7 +629,7 @@ int main(int argc, char** argv) {
         c.sensorType = 14;
         temperatureAdcValues[0] = 4092;
         for (int i = 0; i < 10; ++i) {
-            HAL::setHeaterDuty(0, 255);
+            seedDuty(0, 255);
             service();
             assert(c.currentTemperatureC < MIN_DEFECT_TEMPERATURE);
             assert(!Printer::isAnyTempsensorDefect() && HAL::outputDuty(0) == 0);
@@ -609,7 +659,7 @@ int main(int argc, char** argv) {
         for (int i = 0; i < 10; ++i) service();
         assert(!Printer::isAnyTempsensorDefect());
         c.waitForTargetTemperature();
-        assert(visits == 1 && watchdogHeartbeat == now);
+        assert(visits == 1 && watchdogFeeds && lastWatchdogFeed == now);
         allOff();
         for (auto mask : {0, 7, 255}) {
             Printer::debugLevel = mask;
@@ -628,7 +678,7 @@ int main(int argc, char** argv) {
         c.setDecoupleFull();
         c.invalidatePidCalibration();
         c.targetTemperatureC = 180;
-        HAL::setHeaterDuty(c.pwmIndex, 180);
+        seedDuty(c.pwmIndex, 180);
         autotuneIndex = c.pwmIndex;
         autotuneAbortRequested = false;
         delayAutotuneAdmission = true;
@@ -666,21 +716,21 @@ int main(int argc, char** argv) {
     } else if (!std::strcmp(name, "disabled")) {
         c.sensorType = 0;
         bed.sensorType = 0;
-        HAL::setHeaterDuty(0, 255);
-        HAL::setHeaterDuty(bed.pwmIndex, 255);
+        seedDuty(0, 255);
+        seedDuty(bed.pwmIndex, 255);
         service();
         assert(!Printer::isAnyTempsensorDefect() && HAL::outputDuty(0) == 0 && HAL::outputDuty(bed.pwmIndex) == 0);
     } else if (!std::strcmp(name, "invalid-high")) {
         c.sensorType = 60;
         temperatureAdcValues[0] = 4092;
-        HAL::setHeaterDuty(0, 255);
+        seedDuty(0, 255);
         service();
         assert(c.currentTemperatureC > MAX_DEFECT_TEMPERATURE);
         assert(!Printer::isAnyTempsensorDefect() && HAL::outputDuty(0) == 0 && !c.pidHistoryValid);
     } else if (!std::strcmp(name, "bed-invalid")) {
         bed.sensorType = 14;
         temperatureAdcValues[bed.sensorPin] = 4092;
-        HAL::setHeaterDuty(bed.pwmIndex, 255);
+        seedDuty(bed.pwmIndex, 255);
         service();
         assert(HAL::outputDuty(bed.pwmIndex) == 0 && HAL::outputDuty(0) == 255 && !Printer::isAnyTempsensorDefect());
     } else if (!std::strcmp(name, "dual-invalid")) {
@@ -688,7 +738,7 @@ int main(int argc, char** argv) {
         auto& second = extruder[1].tempControl;
         second.sensorType = 14;
         temperatureAdcValues[second.sensorPin] = 4092;
-        HAL::setHeaterDuty(second.pwmIndex, 255);
+        seedDuty(second.pwmIndex, 255);
         service();
         assert(HAL::outputDuty(second.pwmIndex) == 0 && HAL::outputDuty(0) == 255
             && HAL::outputDuty(bed.pwmIndex) == 255 && !Printer::isAnyTempsensorDefect());
@@ -720,7 +770,7 @@ int main(int argc, char** argv) {
 #endif
     } else if (!std::strcmp(name, "unsupported")) {
         c.sensorType = 255;
-        HAL::setHeaterDuty(0, 255);
+        seedDuty(0, 255);
         for (int i = 0; i < 10; ++i) {
             service();
             assert(HAL::outputDuty(0) == 0 && !Printer::isAnyTempsensorDefect());
@@ -752,7 +802,7 @@ int main(int argc, char** argv) {
         }
 #endif
     } else if (!std::strcmp(name, "pwm")) {
-        for (auto* t : tempController) HAL::setHeaterDuty(t->pwmIndex, 255);
+        for (auto* t : tempController) seedDuty(t->pwmIndex, 255);
         pwmSlice();
         for (auto* t : tempController) {
             assert(pins[t->pwmIndex] == HIGH);
@@ -769,15 +819,24 @@ int main(int argc, char** argv) {
         watchdogActive = true;
         now = 100;
         Commands::checkForPeriodicalActions(NotBusy);
-        assert(watchdogHeartbeat == 0);
+        assert(watchdogFeeds == 0);
         scanTick = true;
         Commands::checkForPeriodicalActions(NotBusy);
-        assert(watchdogHeartbeat == now && !temperatureTick);
+        assert(watchdogFeeds == 0 && !temperatureTick);
+        HAL::completeAutotuneWatchdogPass();
+        assert(watchdogFeeds == 0);
+        publishAdc();
+        temperatureTick=true;
+        Commands::checkForPeriodicalActions(NotBusy);
+        assert(watchdogFeeds == 1 && lastWatchdogFeed == now);
         pingWatchdog();
         assert(pins[WATCHDOG_PIN] == 1);
-        now += WATCHDOG_MAIN_LOOP_TIMEOUT;
+        TCNT5=OCR5A;
+        TIFR5.bits|=_BV(OCF5A);
         pingWatchdog();
         assert(pins[WATCHDOG_PIN] == 1);
+        HAL::completeThermalWatchdogPass(true);
+        assert(watchdogFeeds == 1);
     } else if (!std::strcmp(name, "wait")) {
         c.sensorType = 13;
         temperatureAdcValues[0] = 4092;
@@ -785,7 +844,7 @@ int main(int argc, char** argv) {
         c.setTargetTemperature(25);
         injection = Injection::Reach;
         c.waitForTargetTemperature();
-        assert(visits == 3 && watchdogHeartbeat == now);
+        assert(visits == 3 && watchdogFeeds && lastWatchdogFeed == now);
         assert(std::fabs(c.currentTemperatureC - 25) <= TEMP_TOLERANCE && HAL::outputDuty(0) == 0);
     } else if (!std::strncmp(name, "autotune-", 9)) {
         const bool useBed = std::strstr(name, "-bed-") != nullptr;
@@ -793,7 +852,7 @@ int main(int argc, char** argv) {
         auto& t = *tuned;
         for (auto* other : tempController) other->setTargetTemperature(0);
         t.setTargetTemperature(100); // must not restart normal heating after autotune
-        HAL::setHeaterDuty(t.pwmIndex, 255);
+        seedDuty(t.pwmIndex, 255);
         t.sensorType = 60;
         temperatureAdcValues[t.sensorPin] = 330;
         float target = 100;
@@ -885,10 +944,13 @@ int main(int argc, char** argv) {
             t.invalidatePidCalibration();
         }
         if (wrongProfile || busy) t.setTargetTemperature(0);
+        const unsigned feedsBefore=watchdogFeeds;
         t.autotunePID(target, id, 5, store, method);
         assert(autotuneIndex == 255 && HAL::outputDuty(t.pwmIndex) == 0 && t.targetTemperatureC == 0);
         if (entry || lowMax || wrongProfile || busy) assert(visits == 0);
-        else assert(visits > 0 && watchdogHeartbeat == now);
+        else assert(visits > 0);
+        if(!postTemperature) assert(watchdogFeeds==feedsBefore);
+        if(expectSuccess) assert(watchdogFeeds>feedsBefore);
 #ifdef RF_THERMAL_EMERGENCY_EXPERIMENT
         assert(relayReports==unsigned(expectSuccess)&&relayUnavailable==0);
 #else
@@ -965,6 +1027,7 @@ def main():
         "printer-safety.inc": "\n".join(re.findall(r"^#define PRINTER_FLAG0_(?:LEGACY_SIMULATION_REJECTED|TEMPSENSOR_DEFECT)[^\n]+", printer, re.M))
             + "\n" + section(printer, "    static void latchOutputInhibit(", "\n    static INLINE bool isManualMoveMode()"),
         "adc-state.inc": section(hal, "volatile uint16_t temperatureAdcValues", "inline __attribute__((always_inline)) void serviceTemperatureAdc"),
+        "ticket-decl.inc": section((FW / "HAL.h").read_text(), "    class HeaterSample {", "    static bool heaterLeaseFault();"),
         "controller.inc": section(header, "#define TEMPERATURE_CONTROLLER_FLAG_DECOUPLE_FULL", "}; // TemperatureController") + "};",
         "conversion.inc": conversion.split(include, 1)[1],
         "control.inc": control.split(include, 1)[1].replace('#include "UsbSerial.h"', '').replace('#include "GCodeInput.h"', ''),
@@ -972,11 +1035,13 @@ def main():
         "scheduler.inc": section(commands, "static void serviceThermalEmergency()", "bool Commands::waitForMotion("),
         "com.inc": "\n".join("constexpr int " + n + " = 0;" for n in sorted(set(re.findall(r"Com::(t[A-Z]\w*)", control)))),
         "hal.inc": (
-            "namespace {\n" + section(hal, "#ifndef RF_HEATER_RESET_WDT_EXPERIMENT\nvolatile unsigned long watchdogHeartbeat", "HAL::HAL()")
+            "namespace {\n" + section(hal, "volatile bool watchdogActive = false;", "HAL::HAL()")
             + section(hal, "uint16_t HAL::temperatureAdcSample(", "void HAL::analogStart(")
             + section(hal, "void HAL::tellWatchdogOk()", "\n}") + "\n}\n"
             + section(hal, "constexpr uint8_t heaterPwmStep", "constexpr uint8_t partFanPwmStep")
             + "static volatile uint8_t requestedDuty[NUM_EXTRUDER + 3];\n"
+            + section(hal, "// Non-release candidate: /256", "#endif\n} // namespace")
+            + section(hal, "bool HAL::heaterLeaseFault()", "ISR(TIMER3_COMPA_vect)")
             + section(hal, "uint8_t HAL::outputDuty(", "void HAL::setBoardFan(")
             + "void pwmSlice() {\n"
             + section(hal, "    static uint8_t pwm_count_heater", "    pwm_count_cooler += coolerPwmStep;")
@@ -1024,7 +1089,8 @@ def main():
             defines["NUM_EXTRUDER"] = str(tools)
             for emergency in (True,):
                 exe = work / "replay"
-                extra = ["-DRF_THERMAL_EMERGENCY_EXPERIMENT=1"] if emergency else []
+                extra = ["-DRF_THERMAL_EMERGENCY_EXPERIMENT=1", "-DRF_HEATER_LEASE_EXPERIMENT=1",
+                         "-DRF_HEATER_RESET_WDT_EXPERIMENT=1"] if emergency else []
                 subprocess.run([os.environ.get("CXX", "c++"), "-std=c++11", "-O2", *extra,
                                 *[f"-D{k}={v}" for k, v in defines.items()],
                                 "-I", str(FW), str(work / "replay.cpp"), "-o", str(exe)], check=True)
