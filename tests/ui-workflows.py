@@ -260,8 +260,7 @@ const uint8_t LCDLineOffsets[] = UI_LINE_OFFSETS;
 struct UIDisplay {
     uint8_t col=0,menuLevel=0,menuPos[6]={},menuTop[6]={};
     int shift=0,activeAction=0;
-    millis_t lastSwitch=0,lastNextPrev=0,autoReturnTime_=0;
-    float lastNextAccumul=0;
+    millis_t lastSwitch=0,autoReturnTime_=0;
     char confirmation_=0;
     uint8_t bedCutoffCandidate_=0;
     const char* messageLine2=nullptr;

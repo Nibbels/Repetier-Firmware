@@ -1015,20 +1015,6 @@ void UIDisplay::nextPreviousAction(int8_t next) {
         Printer::setUIErrorMessage(false);
         return;
     }
-    millis_t actTime = HAL::timeInMilliseconds();
-    millis_t dtReal;
-    millis_t dt = dtReal = actTime - lastNextPrev;
-    lastNextPrev = actTime;
-
-    if (dt < SPEED_MAX_MILLIS)
-        dt = SPEED_MAX_MILLIS;
-    if (dt > SPEED_MIN_MILLIS) {
-        dt = SPEED_MIN_MILLIS;
-        lastNextAccumul = 1;
-    }
-    float f = (float)(SPEED_MIN_MILLIS - dt) / (float)(SPEED_MIN_MILLIS - SPEED_MAX_MILLIS);
-    lastNextAccumul = 1.0f + (float)SPEED_MAGNIFICATION * f * f * f;
-
     if (menuLevel == 0) {
         lastSwitch = HAL::timeInMilliseconds();
         if (next > 0) {

@@ -270,8 +270,6 @@ public:
     millis_t lastSwitch; // Last time display switched pages
     millis_t lastRefresh;
     millis_t nextRepeat;   // Time of next autorepeat
-    millis_t lastNextPrev; // for increasing speed settings
-    float lastNextAccumul; // Accumulated value
     int repeatDuration;    // Time beween to actions if autorepeat is enabled
     char printCols[MAX_COLS + 1];
 
