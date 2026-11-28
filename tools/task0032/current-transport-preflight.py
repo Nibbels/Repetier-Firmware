@@ -33,6 +33,18 @@ def candidate(fw):
     h,s=ring["packed_candidate"](h,s)
     s=once(s,"void UsbSerial::begin(unsigned long baud) {","void UsbSerial::begin() {")
     h,s=writer["bounded_writer"](h,s)
+    # Foreground and USART ISR use SPSC rings. Volatile cursors alone
+    # do not order nonvolatile payload memory across compiler scheduling.
+    # No cli: payload ownership changes only at the one-byte cursor.
+    s=once(s,"""    const uint8_t byte = rx_.bytes[rx_.tail];
+    rx_.tail = rx_.next(rx_.tail);""",
+        """    asm volatile("" ::: "memory");
+    const uint8_t tail=rx_.tail;
+    const uint8_t byte=rx_.bytes[tail];
+    asm volatile("" ::: "memory");
+    rx_.tail=rx_.next(tail);""")
+    s=once(s,"    tx_.bytes[tx_.head] = byte;\n    tx_.head = next;",
+        "    tx_.bytes[tx_.head] = byte;\n    asm volatile(\"\" ::: \"memory\");\n    tx_.head = next;")
     # Reopening an ambiguous physical loss is not a permitted operation.
     # Retain only the request-prefix fence, and never let it erase errors
     # arriving before, during or after its short atomic publication.
